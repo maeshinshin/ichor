@@ -91,7 +91,7 @@ func Render(
 		return nil, "", err
 	}
 
-	ordered, err := selectPatches(cluster, m, candidates)
+	ordered, err := SelectPatches(cluster, m, candidates)
 	if err != nil {
 		return nil, "", err
 	}
@@ -163,7 +163,7 @@ func baseConfig(
 }
 
 // orderedPatch is a TalosConfigPatch that applies to the machine being
-// rendered, carrying the sort key selectPatches computes for it.
+// rendered, carrying the sort key SelectPatches computes for it.
 type orderedPatch struct {
 	layer    int
 	priority int32
@@ -171,13 +171,17 @@ type orderedPatch struct {
 	patch    *ichorv1alpha1.TalosConfigPatch
 }
 
-// selectPatches implements Configuration reconcile step 3 (which patches
+// SelectPatches implements Configuration reconcile step 3 (which patches
 // apply to this machine) and the layer/priority half of step 2: it filters
 // candidates down to the ones that apply to m, then returns them in the
 // order they must be applied -- bottom-up by layer, then by priority within
 // a layer, then by name as a stable tie-break so that the result does not
 // depend on the order candidates arrived in.
-func selectPatches(
+//
+// Exported so callers that need to know exactly which inputs fed a render
+// (the drift check in internal/controller) can ask the same question
+// Render itself answers, instead of re-deriving patch applicability.
+func SelectPatches(
 	cluster *ichorv1alpha1.TalosCluster,
 	m *ichorv1alpha1.TalosMachine,
 	candidates []ichorv1alpha1.TalosConfigPatch,

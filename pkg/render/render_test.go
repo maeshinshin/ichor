@@ -335,6 +335,28 @@ func TestControlPlaneTaint(t *testing.T) {
 	})
 }
 
+// TestControlPlaneSchedulableRejectsOutOfEnum checks that Render refuses a
+// controlPlane.schedulable value outside {true, false} -- "auto" is gone and the renderer must reject rather than
+// guess which side to
+// pick -- with an error that names the field and the accepted values.
+func TestControlPlaneSchedulableRejectsOutOfEnum(t *testing.T) {
+	bundle := testBundle(t)
+	m := testMachine("cp-a", roleControlPlane, nil)
+
+	_, _, err := Render(testCluster("auto"), m, bundle, nil)
+	if err == nil {
+		t.Fatal("expected an error for controlPlane.schedulable \"auto\", got none")
+	}
+
+	if !strings.Contains(err.Error(), "controlPlane.schedulable") {
+		t.Fatalf("expected error to name the field controlPlane.schedulable, got: %v", err)
+	}
+
+	if !strings.Contains(err.Error(), "true") || !strings.Contains(err.Error(), "false") {
+		t.Fatalf("expected error to name the accepted values true/false, got: %v", err)
+	}
+}
+
 // TestRenderBundleLeak forces every render error path this test can reach
 // and asserts that none of the bundle's secret material appears in the
 // error string. See the function body for the paths this could not force:

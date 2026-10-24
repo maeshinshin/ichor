@@ -22,7 +22,18 @@ test-e2e-prereqs: ## Verify KUBECONFIG points at a cluster with KubeVirt, CDI an
 		exit 1; \
 	}
 
-# setup-test-e2e and cleanup-test-e2e are CI's provisioner for the talosctl-qemu harness: a throwaway Talos cluster on the runner, not the KubeVirt path above. Each
-# does exactly one thing and is safe to call on its own - test-e2e itself never calls
-# either, it only ever runs against whatever KUBECONFIG already points at.
-TEST_E2E_KUBECONFIG ?= $(LOCALBIN)/test-e2e.kubeconfig
+# Neither harness may provision inside the specs: a KubeVirt VM is meaningless
+# on a CI runner with no KubeVirt, and talosctl's qemu provisioner is meaningless on the
+# real cluster. So each harness gets its own setup/cleanup pair, each doing exactly one
+# thing and safe to call on its own - test-e2e itself never calls either, it only ever
+# runs against whatever KUBECONFIG and ICHOR_E2E_TALOS_NODES already point at.
+
+# --- KubeVirt harness (talos-cluster01, by hand or in CI against that cluster) ---
+
+.PHONY: setup-test-e2e-kubevirt
+setup-test-e2e-kubevirt: test-e2e-prereqs ## Boot the e2e Talos node as a KubeVirt VM; prints its address, export it as ICHOR_E2E_TALOS_NODES
+	go run ./test/harness/kubevirt up
+
+.PHONY: cleanup-test-e2e-kubevirt
+cleanup-test-e2e-kubevirt: ## Tear down the VM and DataVolumes setup-test-e2e-kubevirt created; a no-op if there is nothing to tear down
+	go run ./test/harness/kubevirt down

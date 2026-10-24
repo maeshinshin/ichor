@@ -75,10 +75,16 @@ test-e2e: test-e2e-prereqs manifests generate fmt vet ## Run the PR-sized (short
 test-e2e-nightly: test-e2e-prereqs manifests generate fmt vet ## Run the full (short + nightly) e2e set against the cluster given by KUBECONFIG.
 	go test -tags=e2e ./test/e2e/ -v -ginkgo.v -ginkgo.label-filter="short || nightly"
 
+# --- talosctl-qemu harness (CI, GitHub's ubuntu-24.04 runners) ---
+TEST_E2E_KUBECONFIG ?= $(LOCALBIN)/test-e2e.kubeconfig
+
 .PHONY: setup-test-e2e
-setup-test-e2e: ## Provision the throwaway qemu Talos cluster CI's e2e job runs against; writes its kubeconfig to TEST_E2E_KUBECONFIG
-	KUBECONFIG=$(TEST_E2E_KUBECONFIG) talosctl cluster create qemu --name ichor-test-e2e
+setup-test-e2e: ## Provision the throwaway qemu Talos cluster CI's e2e job runs against; publishes KUBECONFIG and ICHOR_E2E_TALOS_NODES
+	KUBECONFIG=$(TEST_E2E_KUBECONFIG) talosctl cluster create qemu --name ichor-test-e2e --workers 1 | tee $(LOCALBIN)/test-e2e-create.log
 	@if [ -n "$$GITHUB_ENV" ]; then echo "KUBECONFIG=$(TEST_E2E_KUBECONFIG)" >> "$$GITHUB_ENV"; fi
+	$(eval TEST_E2E_WORKER := $(shell grep -i worker $(LOCALBIN)/test-e2e-create.log | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1))
+	talosctl --context ichor-test-e2e reset --nodes $(TEST_E2E_WORKER) --graceful=false --reboot --wait
+	@if [ -n "$$GITHUB_ENV" ]; then echo "ICHOR_E2E_TALOS_NODES=$(TEST_E2E_WORKER)" >> "$$GITHUB_ENV"; fi
 
 .PHONY: cleanup-test-e2e
 cleanup-test-e2e: ## Tear down the cluster setup-test-e2e provisioned; a no-op if there is nothing to tear down

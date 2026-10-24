@@ -22,10 +22,14 @@
     name: webhook-server
     protocol: TCP
 
-# Add the volume configuration for the webhook certificates
+# Add the volume configuration for the webhook certificates. optional: true because
+# cert-controller writes this Secret from inside this same Pod (ADR 0006); a
+# non-optional Secret volume would leave a fresh install in FailedMount forever,
+# since the kubelet never starts a Pod whose required Secret doesn't exist yet.
 - op: add
   path: /spec/template/spec/volumes/-
   value:
     name: webhook-certs
     secret:
       secretName: webhook-server-cert
+      optional: true

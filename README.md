@@ -41,6 +41,18 @@ storage, monitoring — is bootstrapped once and then handed over to Argo CD.
 | `ichor-controller` | The only thing that talks to Talos nodes. Reconciles the CRDs. |
 | `ichor-ui` | Web UI (Preact) and its backend. Talks to the API server, never directly to nodes. |
 
+## Security
+
+Approving a node talks to Talos's maintenance-mode API, which does not
+authenticate the node at the other end. Ichor assumes you keep a separate
+provisioning network for that reason — it's not something Ichor itself
+enforces. Only the controller holds an `os:admin`-equivalent Talos identity;
+the UI backend's is read-only, and the browser holds no credentials at all.
+The secrets bundle (Talos, Kubernetes and etcd CA keys) is the root of trust
+and lives in a Secret, never in a custom resource. See the Trust section of
+[docs/design/architecture.md](docs/design/architecture.md) for the full
+picture.
+
 ## Development
 
 Everything runs inside `nix develop`. See [CONTRIBUTING.md](CONTRIBUTING.md).

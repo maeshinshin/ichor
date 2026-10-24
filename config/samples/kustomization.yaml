@@ -1,0 +1,6 @@
+## Append samples of your project ##
+resources:
+- ichor_v1alpha1_taloscluster.yaml
+- ichor_v1alpha1_talosmachine.yaml
+- ichor_v1alpha1_talosconfigpatch.yaml
+# +kubebuilder:scaffold:manifestskustomizesamples

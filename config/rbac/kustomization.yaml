@@ -18,3 +18,17 @@ resources:
 - metrics_auth_role.yaml
 - metrics_auth_role_binding.yaml
 - metrics_reader_role.yaml
+# For each CRD, "Admin", "Editor" and "Viewer" roles are scaffolded by
+# default, aiding admins in cluster management. Those roles are
+# not used by the ichor itself. You can comment the following lines
+# if you do not want those helpers be installed with your Project.
+- talosconfigpatch_admin_role.yaml
+- talosconfigpatch_editor_role.yaml
+- talosconfigpatch_viewer_role.yaml
+- talosmachine_admin_role.yaml
+- talosmachine_editor_role.yaml
+- talosmachine_viewer_role.yaml
+- taloscluster_admin_role.yaml
+- taloscluster_editor_role.yaml
+- taloscluster_viewer_role.yaml
+

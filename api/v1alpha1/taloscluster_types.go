@@ -89,6 +89,21 @@ type TalosClusterSpec struct {
 	// controlPlane configures the control-plane topology.
 	// +required
 	ControlPlane TalosClusterControlPlane `json:"controlPlane"`
+
+	// driftPolicy controls what the reconciler does when a node's live configuration no
+	// longer matches what Ichor last rendered for it, and nothing on Ichor's side (this
+	// TalosCluster, a TalosConfigPatch, or the TalosMachine) has changed since Ichor last
+	// confirmed the two matched: warnOnly leaves the node as it is and reports the drift
+	// through a condition; autoCorrect re-applies, but only when every changed field is
+	// reboot-free (pkg/fieldmeta) -- a reboot-requiring or install-time-only drift is always
+	// just reported, regardless of this setting. Defaults to warnOnly: unlike
+	// controlPlane.schedulable (ADR 0008), the two values here are not wrong half the
+	// time each -- silently changing a node is the one that can surprise, so it is never
+	// the default.
+	// +kubebuilder:validation:Enum=warnOnly;autoCorrect
+	// +kubebuilder:default=warnOnly
+	// +optional
+	DriftPolicy string `json:"driftPolicy,omitempty"`
 }
 
 // TalosClusterStatus defines the observed state of TalosCluster.

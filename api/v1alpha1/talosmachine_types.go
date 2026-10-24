@@ -92,6 +92,16 @@ type TalosMachineStatus struct {
 	// It is a hash only, never the rendered configuration itself (principles 1 and 3).
 	// +optional
 	AppliedConfigHash string `json:"appliedConfigHash,omitempty"`
+
+	// observedInputsHash hashes the generations of every object that fed the rendered
+	// configuration last confirmed to match the node: the TalosCluster, this TalosMachine,
+	// and every TalosConfigPatch that applies to it. It is only updated when the node is
+	// confirmed converged, so comparing it against the current generations is how the
+	// reconciler tells a desired-state change (a generation moved) apart from drift (none
+	// did, so the node must have). A hash only, never the generations or config themselves
+	// (principle 3).
+	// +optional
+	ObservedInputsHash string `json:"observedInputsHash,omitempty"`
 }
 
 // +kubebuilder:object:root=true

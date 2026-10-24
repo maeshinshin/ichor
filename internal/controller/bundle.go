@@ -1,0 +1,66 @@
+/*
+Copyright 2026 maeshinshin.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package controller
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+
+	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+)
+
+// bundleSecretKey is the key under which the secrets bundle's JSON
+// encoding is stored in the Secret TalosCluster.spec.secretsRef names.
+// secrets.Bundle documents itself as "marshalled/unmarshalled to/from JSON
+// in various projects", so JSON -- rather than talosctl's own YAML dump --
+// is the encoding this controller reads and (once `ichor init` exists to
+// write it) expects.
+const bundleSecretKey = "bundle"
+
+// loadBundle implements design step 1's "load the bundle from the Secret":
+// it reads the Secret cluster.Spec.SecretsRef names, in cluster's
+// namespace, and decodes bundleSecretKey as a secrets.Bundle. It returns
+// the bundle to the caller and stores nothing else about it (principle 2:
+// secrets are referenced, never embedded) -- in particular, every error
+// path below is structural (missing Secret, missing key, malformed JSON)
+// and never includes the Secret's data in its message.
+func loadBundle(ctx context.Context, c client.Client, cluster *ichorv1alpha1.TalosCluster) (*secrets.Bundle, error) {
+	var secret corev1.Secret
+
+	key := types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Spec.SecretsRef.Name}
+	if err := c.Get(ctx, key, &secret); err != nil {
+		return nil, fmt.Errorf("getting secrets bundle Secret %q: %w", key, err)
+	}
+
+	raw, ok := secret.Data[bundleSecretKey]
+	if !ok {
+		return nil, fmt.Errorf("secrets bundle Secret %q has no %q key", key, bundleSecretKey)
+	}
+
+	var bundle secrets.Bundle
+	if err := json.Unmarshal(raw, &bundle); err != nil {
+		return nil, fmt.Errorf("decoding secrets bundle from Secret %q: %w", key, err)
+	}
+
+	return &bundle, nil
+}

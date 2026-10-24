@@ -5,6 +5,14 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - admissionregistration.k8s.io
   resourceNames:
   - ichor-validating-webhook-configuration
@@ -15,6 +23,27 @@ rules:
   - list
   - patch
   - update
+  - watch
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosclusters
+  - talosconfigpatches
+  verbs:
+  - get
+  - list
   - watch
 - apiGroups:
   - ichor.maesh.dev

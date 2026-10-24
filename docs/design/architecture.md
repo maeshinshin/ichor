@@ -366,12 +366,14 @@ transiently during a change and shown as "transitioning", during which the
 cluster lock blocks other disruptive work. Workers can be zero; control-plane-
 only clusters are a supported configuration, not a corner case.
 
-`controlPlane.schedulable` is `auto`, `true` or `false`. `auto` resolves at
-creation: schedulable if there are no workers, tainted otherwise, and then
-stays fixed — adding workers later doesn't silently move your pods. Making
-control planes unschedulable with zero workers is rejected. Presets:
-`single` (1+0), `compact-ha` (3+0), `standard` (3+n, recommended), `large`
-(5+n).
+`controlPlane.schedulable` is `true` or `false`, and required. It has no
+`auto`: nothing on the object can resolve one, since a cluster is created
+before any machine exists and the topology preset that carries the intent is a
+flag on `ichor init`, not a field. `init` sets it from the preset,
+and adding workers later never retaints the control planes underneath running
+pods. Making control planes unschedulable with zero workers is rejected.
+Presets: `single` (1+0, schedulable), `compact-ha` (3+0, schedulable),
+`standard` (3+n, tainted, recommended), `large` (5+n, tainted).
 
 Small clusters get specific treatment: single-node upgrades can't drain
 anywhere, so the UI says there will be downtime and asks; a missing backup

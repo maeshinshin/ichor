@@ -33,5 +33,7 @@ go.work
 # Kubeconfig might contain secrets
 *.kubeconfig
 
-# Generated release artifacts (make build-installer writes dist/install.yaml)
-dist/
+# Generated release artifacts (make build-installer writes dist/install.yaml).
+# dist/chart is also generated (kubebuilder edit --plugins=helm/v2-alpha from
+# dist/install.yaml) but is a committed distributable, so it is not ignored.
+dist/install.yaml

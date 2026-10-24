@@ -1276,7 +1276,7 @@ Components:
     Copyright 2009 The Go Authors.
 - golang.org/x/tools@v0.41.0
     Copyright 2009 The Go Authors.
-- Go standard library go1.26.0
+- Go standard library go1.27.3
     Copyright 2009 The Go Authors.
 
 --------------------------------------------------------------------------------
@@ -1565,7 +1565,7 @@ Components:
 - golang.org/x/time@v0.14.0
 - golang.org/x/tools@v0.41.0
 - google.golang.org/protobuf@v1.36.12-0.20260120151049-f2248ac996af
-- Go standard library go1.26.0
+- Go standard library go1.27.3
 
 --------------------------------------------------------------------------------
 ISC

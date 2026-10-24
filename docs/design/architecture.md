@@ -547,8 +547,15 @@ Grafana, Hubble, Longhorn and Argo CD when their URLs are registered.
 
 ## Testing
 
-e2e runs against throwaway clusters from `talosctl cluster create` (QEMU
-primarily) from the first phase onwards. Scenarios follow the features:
+e2e runs against throwaway clusters from `talosctl cluster create qemu` from
+the first phase onwards. QEMU is not a preference but a requirement for most of
+it: the Docker provisioner is capped at one control plane, has no disks, and
+its own documentation excludes the `upgrade` and `reset` APIs, so install, disk
+roles, reboot-requiring patches, removal, topology changes and upgrades can
+only run under QEMU. Docker stays useful for the cheap half — config applies
+that need no reboot, and drift. Node discovery needs a node that is up but
+unconfigured, which `--presets maintenance` provides. Scenarios follow the
+features:
 bootstrap and join, patches with and without reboot, drift, removal and
 replacement, topology changes including the even-count rejection, CNI
 bootstrap and hand-over per preset, Argo CD bootstrap, PR and strict modes,

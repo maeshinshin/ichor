@@ -18,7 +18,7 @@ func pinnedVersionContract() string { return "v1.14" }
 // referencePage is the Talos configuration reference page of one root kind, for the pinned version contract.
 func referencePage(r rootKind) string {
 	return fmt.Sprintf("https://docs.siderolabs.com/talos/%s/reference/configuration/%s/%s",
-		pinnedVersionContract(), path.Base(r.pkgPath), strings.ToLower(strings.TrimSuffix(r.typeName, "V1Alpha1")))
+		pinnedVersionContract(), path.Base(r.pkgPath), strings.ToLower(r.kind))
 }
 
 // addPage records page on d and on every struct reachable from it.

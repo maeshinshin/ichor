@@ -21,5 +21,7 @@ limitations under the License.
 // table conversions in substitution.go lean on. See
 // docs/adr/0003-typed-config-mirror-types.md.
 //
+// +kubebuilder:object:generate=true
+//
 //go:generate go run ../../internal/tools/mirrorgen
 package typedconfig

@@ -34,7 +34,7 @@ rules:
 - apiGroups:
   - ""
   resourceNames:
-  - webhook-server-cert
+  - ichor-webhook-server-cert
   resources:
   - secrets
   verbs:

@@ -135,6 +135,12 @@ spec:
           status:
             description: status defines the observed state of TalosMachine
             properties:
+              appliedConfigHash:
+                description: |-
+                  appliedConfigHash is the sha256 of the rendered configuration last confirmed applied to
+                  the node (pkg/render's hash format), used for the convergence check on later reconciles.
+                  It is a hash only, never the rendered configuration itself (principles 1 and 3).
+                type: string
               conditions:
                 description: conditions represent the current state of the TalosMachine
                   resource, kstatus-compatible.

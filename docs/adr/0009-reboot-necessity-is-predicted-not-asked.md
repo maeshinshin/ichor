@@ -95,6 +95,8 @@ kernel was up with nothing listening — and did not return within the test
 window. Cluster pods were confirmed to have egress to `factory.talos.dev`, so
 it is not obviously a network block, and it was not root-caused.
 
-Phase 3 cannot test discovery through install and join until that is
-understood, so it is the first thing to look at there, and it is a real
-dependency of the image-distribution work rather than a curiosity.
+**Resolved.** It was not KubeVirt and not the install: Talos's certificate
+controller blocks apid on a reachable control-plane endpoint for *worker*
+nodes only, so an isolated worker never starts apid at all. A control-plane
+config comes up normally. The details, and the four other harness
+requirements the same investigation turned up, are in ADR 0007.

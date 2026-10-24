@@ -1,0 +1,453 @@
+package main
+
+import (
+	"fmt"
+	"os"
+	"path"
+	"slices"
+	"strings"
+)
+
+func (d *structDef) machExpr() string {
+	return machImportAlias(d.pkgPath) + "." + d.name
+}
+
+// pinnedVersionContract is the Talos version contract the references point at; pkg/release does not exist yet to read it from.
+func pinnedVersionContract() string { return "v1.14" }
+
+// referencePage is the Talos configuration reference page of one root kind, for the pinned version contract.
+func referencePage(r rootKind) string {
+	return fmt.Sprintf("https://docs.siderolabs.com/talos/%s/reference/configuration/%s/%s",
+		pinnedVersionContract(), path.Base(r.pkgPath), strings.ToLower(strings.TrimSuffix(r.typeName, "V1Alpha1")))
+}
+
+// addPage records page on d and on every struct reachable from it.
+func (d *structDef) addPage(page string) {
+	if d.pages[page] {
+		return
+	}
+
+	if d.pages == nil {
+		d.pages = map[string]bool{}
+	}
+
+	d.pages[page] = true
+
+	for _, f := range d.fields {
+		for m := f.mapping; m != nil; m = m.elem {
+			if m.structDef != nil {
+				m.structDef.addPage(page)
+			}
+		}
+	}
+}
+
+// talosPkgPrefix is the import-path prefix of Talos's own packages.
+const talosPkgPrefix = "github.com/siderolabs/talos/"
+
+// reference is the one-line pointer to the upstream type, named after the package that really defines it.
+// A Talos struct shared by several root kinds has no single page, so it gets the symbol alone.
+func (d *structDef) reference() string {
+	switch {
+	case d.pkgPath == "github.com/opencontainers/runtime-spec/specs-go":
+		return "OCI runtime-spec: " + d.name + " — https://github.com/opencontainers/runtime-spec"
+	case !strings.HasPrefix(d.pkgPath, talosPkgPrefix):
+		return d.pkgPath + ": " + d.name
+	}
+
+	for page := range d.pages {
+		if len(d.pages) == 1 {
+			return "Talos: " + d.name + " — " + page
+		}
+	}
+
+	return "Talos: " + d.name
+}
+
+// mirrorTypeExprOf is the Go type expression for m on the generated mirror
+// side. Nested structs are always pointers on the mirror side, whether or
+// not machinery itself used a pointer there (ToMachinery/FromMachinery
+// below reconcile the difference).
+func mirrorTypeExprOf(m *typeMapping) string {
+	switch m.kind {
+	case kStruct:
+		return "*" + m.structDef.name
+	case kPointer:
+		if m.elem.kind == kStruct {
+			return "*" + m.elem.structDef.name
+		}
+
+		return "*" + mirrorTypeExprOf(m.elem)
+	case kSlice:
+		return "[]" + mirrorTypeExprOf(m.elem)
+	case kMap:
+		return "map[string]" + mirrorTypeExprOf(m.elem)
+	case kPassthrough, kCast, kSubstScalar, kSubstArgValue:
+		return m.mirrorExpr
+	case kBytesCast:
+		return "[]byte"
+	}
+
+	fatalf("mirrorTypeExprOf: unhandled kind %d", m.kind)
+
+	return ""
+}
+
+// machTypeExprOf is the Go type expression for m on the machinery side,
+// exactly as machinery declares it (pointer-ness and all).
+func machTypeExprOf(m *typeMapping) string {
+	switch m.kind {
+	case kStruct:
+		return m.structDef.machExpr()
+	case kPointer:
+		return "*" + machTypeExprOf(m.elem)
+	case kSlice:
+		return "[]" + machTypeExprOf(m.elem)
+	case kMap:
+		return "map[string]" + machTypeExprOf(m.elem)
+	case kPassthrough:
+		return m.machExpr
+	case kCast, kBytesCast, kSubstScalar, kSubstArgValue:
+		return m.machExpr
+	}
+
+	fatalf("machTypeExprOf: unhandled kind %d", m.kind)
+
+	return ""
+}
+
+// emitConvert appends the statements to convert src into dst for mapping m,
+// in the direction given by toMachinery. src/dst are Go expressions (not
+// necessarily simple identifiers); depth disambiguates loop variable names
+// across nesting. fieldPath is used only for error-wrapping context.
+func emitConvert(b *strings.Builder, m *typeMapping, src, dst string, toMachinery bool, depth int, fieldPath string) {
+	switch m.kind {
+	case kPassthrough:
+		fmt.Fprintf(b, "\t%s = %s\n", dst, src)
+
+	case kCast, kBytesCast:
+		target := m.machExpr
+		if !toMachinery {
+			target = mirrorTypeExprOf(m)
+		}
+
+		fmt.Fprintf(b, "\t%s = %s(%s)\n", dst, target, src)
+
+	case kSubstScalar:
+		emitSubstScalar(b, m, src, dst, toMachinery, depth, fieldPath)
+
+	case kSubstArgValue:
+		emitSubstArgValue(b, src, dst, toMachinery, depth, fieldPath)
+
+	case kStruct:
+		// Reached directly (not through kPointer, which emitPointerConvert
+		// handles on its own): the machinery side is a plain struct value,
+		// not a pointer.
+		emitStructConvert(b, m, src, dst, toMachinery, depth, fieldPath, true)
+
+	case kPointer:
+		emitPointerConvert(b, m, src, dst, toMachinery, depth, fieldPath)
+
+	case kSlice:
+		emitContainerConvert(b, m, src, dst, toMachinery, depth, fieldPath, true)
+
+	case kMap:
+		emitContainerConvert(b, m, src, dst, toMachinery, depth, fieldPath, false)
+
+	default:
+		fatalf("emitConvert: unhandled kind %d for %s", m.kind, fieldPath)
+	}
+}
+
+func emitSubstScalar(b *strings.Builder, m *typeMapping, src, dst string, toMachinery bool, depth int, fieldPath string) {
+	v := fmt.Sprintf("v%d", depth)
+
+	if toMachinery {
+		fmt.Fprintf(b, "\t%s, err := mirrorToMachineryScalar[%s](%s)\n", v, m.machExpr, src)
+	} else {
+		fmt.Fprintf(b, "\t%s, err := machineryToMirrorScalar(%s)\n", v, src)
+	}
+
+	fmt.Fprintf(b, "\tif err != nil {\n\t\treturn nil, fmt.Errorf(%q+\": %%w\", err)\n\t}\n", fieldPath)
+	fmt.Fprintf(b, "\t%s = %s\n", dst, v)
+}
+
+func emitSubstArgValue(b *strings.Builder, src, dst string, toMachinery bool, depth int, fieldPath string) {
+	v := fmt.Sprintf("v%d", depth)
+
+	if toMachinery {
+		fmt.Fprintf(b, "\t%s, err := argValueToMachinery(%s)\n", v, src)
+	} else {
+		fmt.Fprintf(b, "\t%s, err := argValueFromMachinery(%s)\n", v, src)
+	}
+
+	fmt.Fprintf(b, "\tif err != nil {\n\t\treturn nil, fmt.Errorf(%q+\": %%w\", err)\n\t}\n", fieldPath)
+	fmt.Fprintf(b, "\t%s = %s\n", dst, v)
+}
+
+// emitStructConvert handles a struct reached without (valueMachinery=false,
+// the common case: machinery used a pointer, or this is the slice/map
+// element case which is always driven through the pointer-returning
+// methods) or with (valueMachinery=true) an intervening value (non-pointer)
+// on the machinery side.
+func emitStructConvert(b *strings.Builder, m *typeMapping, src, dst string, toMachinery bool, depth int, fieldPath string, valueMachinery bool) {
+	t := fmt.Sprintf("t%d", depth)
+
+	if toMachinery {
+		fmt.Fprintf(b, "\t%s, err := (%s).ToMachinery()\n", t, src)
+		fmt.Fprintf(b, "\tif err != nil {\n\t\treturn nil, fmt.Errorf(%q+\": %%w\", err)\n\t}\n", fieldPath)
+
+		if valueMachinery {
+			fmt.Fprintf(b, "\tif %s != nil {\n\t\t%s = *%s\n\t}\n", t, dst, t)
+		} else {
+			fmt.Fprintf(b, "\t%s = %s\n", dst, t)
+		}
+
+		return
+	}
+
+	srcAddr := src
+	if valueMachinery {
+		srcAddr = "&(" + src + ")"
+	}
+
+	fmt.Fprintf(b, "\t%s, err := %sFromMachinery(%s)\n", t, m.structDef.name, srcAddr)
+	fmt.Fprintf(b, "\tif err != nil {\n\t\treturn nil, fmt.Errorf(%q+\": %%w\", err)\n\t}\n", fieldPath)
+	fmt.Fprintf(b, "\t%s = %s\n", dst, t)
+}
+
+// emitPointerConvert handles a *elem field. elem==kStruct is delegated to
+// emitStructConvert directly (ToMachinery/FromMachinery are already
+// nil-safe, so no extra nil check is needed there). elem==kPassthrough is a
+// direct pointer assignment, since the pointee type is identical on both
+// sides. Everything else needs a fresh value to point the new pointer at.
+func emitPointerConvert(b *strings.Builder, m *typeMapping, src, dst string, toMachinery bool, depth int, fieldPath string) {
+	elem := m.elem
+
+	if elem.kind == kStruct {
+		emitStructConvert(b, elem, src, dst, toMachinery, depth, fieldPath, false)
+
+		return
+	}
+
+	if elem.kind == kPassthrough {
+		fmt.Fprintf(b, "\t%s = %s\n", dst, src)
+
+		return
+	}
+
+	v := fmt.Sprintf("p%dVal", depth)
+	valType := machTypeExprOf(elem)
+
+	if !toMachinery {
+		valType = mirrorTypeExprOf(elem)
+	}
+
+	fmt.Fprintf(b, "\tif %s != nil {\n", src)
+	fmt.Fprintf(b, "\t\tvar %s %s\n", v, valType)
+
+	var inner strings.Builder
+	emitConvert(&inner, elem, "*"+src, v, toMachinery, depth+1, fieldPath)
+
+	for line := range strings.SplitSeq(strings.TrimRight(inner.String(), "\n"), "\n") {
+		fmt.Fprintf(b, "\t%s\n", line)
+	}
+
+	fmt.Fprintf(b, "\t\t%s = &%s\n", dst, v)
+	fmt.Fprintf(b, "\t}\n")
+}
+
+func emitContainerConvert(b *strings.Builder, m *typeMapping, src, dst string, toMachinery bool, depth int, fieldPath string, isSlice bool) {
+	elem := m.elem
+
+	if elem.kind == kPassthrough && m.machNamedCast == "" {
+		fmt.Fprintf(b, "\t%s = %s\n", dst, src)
+
+		return
+	}
+
+	tmp := fmt.Sprintf("c%d", depth)
+	key := fmt.Sprintf("k%d", depth)
+	val := fmt.Sprintf("e%d", depth)
+
+	elemType := machTypeExprOf(elem)
+	if !toMachinery {
+		elemType = mirrorTypeExprOf(elem)
+	}
+
+	fmt.Fprintf(b, "\tif %s != nil {\n", src)
+
+	if isSlice {
+		fmt.Fprintf(b, "\t\t%s := make([]%s, len(%s))\n", tmp, elemType, src)
+		fmt.Fprintf(b, "\t\tfor %s, %s := range %s {\n", key, val, src)
+	} else {
+		fmt.Fprintf(b, "\t\t%s := make(map[string]%s, len(%s))\n", tmp, elemType, src)
+		fmt.Fprintf(b, "\t\tfor %s, %s := range %s {\n", key, val, src)
+	}
+
+	var inner strings.Builder
+
+	elemDst := tmp + "[" + key + "]"
+	emitConvert(&inner, elem, val, elemDst, toMachinery, depth+1, fieldPath)
+
+	for line := range strings.SplitSeq(strings.TrimRight(inner.String(), "\n"), "\n") {
+		fmt.Fprintf(b, "\t\t%s\n", line)
+	}
+
+	fmt.Fprintf(b, "\t\t}\n")
+
+	if toMachinery && m.machNamedCast != "" {
+		fmt.Fprintf(b, "\t\t%s = %s(%s)\n", dst, m.machNamedCast, tmp)
+	} else {
+		fmt.Fprintf(b, "\t\t%s = %s\n", dst, tmp)
+	}
+
+	fmt.Fprintf(b, "\t}\n")
+}
+
+// --- file writers -----------------------------------------------------
+
+const header = `// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+//
+// Copyright 2026 maeshinshin.
+
+// Code generated by mirrorgen. DO NOT EDIT.
+`
+
+func (g *generator) sortedOrder() []*structDef {
+	order := slices.Clone(g.order)
+	slices.SortFunc(order, func(a, b *structDef) int { return strings.Compare(a.name, b.name) })
+
+	return order
+}
+
+func (g *generator) writeMirror(filename string) {
+	var b strings.Builder
+
+	b.WriteString(header)
+	b.WriteString("\npackage typedconfig\n")
+
+	for _, def := range g.sortedOrder() {
+		writeMirrorStruct(&b, def)
+	}
+
+	mustWriteFile(filename, b.String())
+}
+
+func writeMirrorStruct(b *strings.Builder, def *structDef) {
+	b.WriteString("\n")
+
+	fmt.Fprintf(b, "// %s\n", def.reference())
+
+	fmt.Fprintf(b, "type %s struct {\n", def.name)
+
+	for _, f := range def.fields {
+
+		if f.optional {
+			fmt.Fprintf(b, "\t// +optional\n")
+		} else {
+			fmt.Fprintf(b, "\t// +required\n")
+		}
+
+		jsonTag := f.jsonName
+		if f.optional {
+			jsonTag += ",omitempty"
+		}
+
+		fmt.Fprintf(b, "\t%s %s `json:\"%s\"`\n", f.name, mirrorTypeExprOf(f.mapping), jsonTag)
+	}
+
+	b.WriteString("}\n")
+}
+
+func (g *generator) writeConversion(filename string) {
+	var b strings.Builder
+
+	b.WriteString(header)
+	b.WriteString(`
+package typedconfig
+
+import (
+	"fmt"
+
+	mx509 "github.com/siderolabs/crypto/x509"
+	mmeta "github.com/siderolabs/talos/pkg/machinery/config/types/meta"
+	mruntime "github.com/siderolabs/talos/pkg/machinery/config/types/runtime"
+	mv1alpha1 "github.com/siderolabs/talos/pkg/machinery/config/types/v1alpha1"
+	"time"
+)
+`)
+
+	for _, def := range g.sortedOrder() {
+		writeStructConversion(&b, def)
+	}
+
+	mustWriteFile(filename, b.String())
+}
+
+func writeStructConversion(b *strings.Builder, def *structDef) {
+	mach := def.machExpr()
+
+	// ToMachinery
+	fmt.Fprintf(b, "\n// ToMachinery converts m to the machinery %s type.\n", mach)
+	fmt.Fprintf(b, "func (m *%s) ToMachinery() (*%s, error) {\n", def.name, mach)
+	b.WriteString("\tif m == nil {\n\t\treturn nil, nil\n\t}\n")
+	fmt.Fprintf(b, "\tout := &%s{}\n", mach)
+
+	if def.isRoot && def.rootKind.kindConst != "" {
+		fmt.Fprintf(b, "\tout.Meta = mmeta.Meta{MetaKind: %s, MetaAPIVersion: %q}\n", def.rootKind.kindConst, def.rootKind.apiVersion)
+	}
+
+	for i, f := range def.fields {
+		emitConvert(b, f.mapping, "m."+f.name, "out."+f.name, true, i+1, def.name+"."+f.jsonName)
+	}
+
+	b.WriteString("\treturn out, nil\n}\n")
+
+	// FromMachinery
+	fmt.Fprintf(b, "\n// %sFromMachinery converts a machinery %s document to the mirror type.\n", def.name, mach)
+	fmt.Fprintf(b, "func %sFromMachinery(src *%s) (*%s, error) {\n", def.name, mach, def.name)
+	b.WriteString("\tif src == nil {\n\t\treturn nil, nil\n\t}\n")
+	fmt.Fprintf(b, "\tout := &%s{}\n", def.name)
+
+	for i, f := range def.fields {
+		emitConvert(b, f.mapping, "src."+f.name, "out."+f.name, false, i+1, def.name+"."+f.jsonName)
+	}
+
+	b.WriteString("\treturn out, nil\n}\n")
+}
+
+func mustWriteFile(name, content string) {
+	if err := os.WriteFile(name, []byte(content), 0o644); err != nil {
+		fatalf("writing %s: %v", name, err)
+	}
+}
+
+func (g *generator) report() {
+	fmt.Println("mirrorgen: generated", len(g.order), "mirror types")
+
+	if len(g.subst) > 0 {
+		names := make([]string, 0, len(g.subst))
+		for n := range g.subst {
+			names = append(names, n)
+		}
+
+		slices.Sort(names)
+
+		fmt.Println("mirrorgen: substituted types (no faithful structural-schema representation):")
+
+		for _, n := range names {
+			fmt.Println("  -", n)
+		}
+	}
+
+	if len(g.dropped) > 0 {
+		fmt.Println("mirrorgen: dropped fields (meta.Unstructured; would reintroduce the raw-YAML hatch):")
+
+		for _, d := range g.dropped {
+			fmt.Printf("  - %s.%s (yaml %q)\n", d.Struct, d.Field, d.YAML)
+		}
+	}
+}

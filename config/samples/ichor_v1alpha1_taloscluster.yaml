@@ -1,0 +1,9 @@
+apiVersion: ichor.maesh.dev/v1alpha1
+kind: TalosCluster
+metadata:
+  labels:
+    app.kubernetes.io/name: ichor
+    app.kubernetes.io/managed-by: kustomize
+  name: taloscluster-sample
+spec:
+  # TODO(user): Add fields here

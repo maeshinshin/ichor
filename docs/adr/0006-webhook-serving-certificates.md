@@ -1,0 +1,100 @@
+# 0006. Webhook serving certificates without cert-manager, failing closed
+
+Status: Accepted · Date: 2026-10-25 · Design section: 4.5, 5.2.7
+
+## Context
+
+Ichor needs validating webhooks from phase 1 on — deletion protection first,
+then topology and immutability checks. Two project rules bear on how their
+serving certificates work: the default install must not require cert-manager,
+and nothing in the chart may produce a diff on every Argo CD sync. kubebuilder
+4.15.0 scaffolds a `config/certmanager/` Issuer and assumes cert-manager at
+runtime; it offers no alternative.
+
+What the investigation established:
+
+- controller-runtime v0.24.1 only *reloads* certificates. `certwatcher` watches
+  files and `webhook.Server` points at `CertDir`; nothing in it generates a CA
+  or a serving certificate.
+- `caBundle` cannot be avoided. It is optional in the API, but when it is
+  absent the API server falls back to its own system trust roots — not the
+  cluster CA. None of the built-in CSR signers in 1.36
+  (`kube-apiserver-client`, `kube-apiserver-client-kubelet`,
+  `kubelet-serving`, `legacy-unknown`) issues a serving certificate the API
+  server will trust for an admission webhook. So for a self-signed setup some
+  component has to write `caBundle` at runtime.
+- `github.com/open-policy-agent/cert-controller` (Apache-2.0) does exactly
+  that job as a library: generates a self-signed CA and serving certificate
+  into a Secret, rotates ahead of expiry, and injects `caBundle` into
+  validating and mutating webhook configurations, CRD conversion webhooks and
+  APIServices. It builds against controller-runtime v0.24.1. Its last feature
+  release is v0.16.0 (March 2025); since then it is dependency bumps only.
+- Gatekeeper's chart — cert-controller's own reference consumer — ships the
+  webhook configuration with no `caBundle` key at all and no Secret, and
+  creates both at runtime from inside the controller pod.
+- On the Argo CD side, `ignoreDifferences` alone only hides the diff; self-heal
+  still overwrites the field unless the Application also sets
+  `RespectIgnoreDifferences=true`. Keying the exception on
+  `managedFieldsManagers` requires the writer to set a field manager name.
+
+## Decision
+
+- Run `open-policy-agent/cert-controller` in-process in `ichor-controller`,
+  with `CertRotator.FieldOwner` set to `ichor-controller`, the field manager
+  the naming conventions already assign to it. Serving certificates are read
+  from the mounted Secret by controller-runtime's `certwatcher`, so the two
+  compose and Ichor owns no cryptography.
+- The chart and the Kustomize base ship the `ValidatingWebhookConfiguration`
+  **without a `caBundle` key**, and ship no certificate Secret. Nothing
+  cert-shaped is templated, so no generated value can differ on a re-sync.
+- **`failurePolicy: Fail`**, which is where Ichor departs from Gatekeeper's
+  `Ignore`, deliberately. Gatekeeper validates the whole cluster, so a webhook
+  that is down must not block everything. Ichor's webhooks match only
+  `ichor.maesh.dev` resources, so failing closed blocks Ichor operations and
+  nothing else — and the thing they mostly protect is deletion of
+  `TalosCluster` and `TalosMachine`, where failing open lets an Argo CD prune
+  cascade into node resets. A deletion guard that opens when the controller is
+  down is not a guard.
+- Ship, with the chart, an `ignoreDifferences` entry for the webhook
+  configuration's `caBundle` keyed on `managedFieldsManagers:
+  [ichor-controller]`, together with the `RespectIgnoreDifferences=true` sync
+  option, and say in the docs that both are needed — the first one alone
+  leaves self-heal to clobber the field.
+- cert-manager stays available as an opt-in: a chart value turns the in-process
+  rotator off. The design requires only that it not be the default.
+
+## Consequences
+
+- Until the controller is running and has written `caBundle`, writes to Ichor's
+  CRs are refused. That is the right order regardless — the sync waves already
+  place Ichor's CRDs and controller ahead of Ichor's CRs — but `ichor init`
+  has to wait for the webhook to answer before it creates the first CRs, and
+  the bootstrap path must treat "webhook not ready yet" as something to wait
+  on rather than an error.
+- If the Secret is deleted while the webhook configuration still carries the
+  old `caBundle`, cert-controller's retries exhaust, `Start` returns an error
+  and the manager exits, so the pod crash-loops rather than serving with a
+  stale certificate. With `failurePolicy: Fail` that means Ichor operations
+  stop until it recovers. That is the intended direction of failure, and
+  `ichor` CLI recovery paths must not depend on the webhook.
+- Neither library exposes certificate expiry as a metric or a condition.
+  Ichor's own expiry gauge lands with the rest of the metrics in phase 9; until
+  then expiry is visible only in logs. Recorded as a known gap, not a surprise.
+- cert-controller is maintained but not developed. The surface Ichor uses is one
+  function and one struct, so if it stops building against a future
+  controller-runtime, replacing it with an in-house rotator is a contained
+  change rather than a rewrite.
+
+## Alternatives considered
+
+**cert-manager as the default.** Ruled out by the design, which wants the
+default install to carry no such dependency.
+
+**Our own rotator.** Roughly 200 lines of certificate generation, rotation
+windows and failure handling that cert-controller already has, in exchange for
+one fewer dependency and metrics from day one. Kept as the fallback.
+
+**A Helm-hook Job (`kube-webhook-certgen`-style).** Well established, used by
+ingress-nginx, and needs no Go code from us — but it is a point-in-time Job
+with no continuous rotation, and it adds hook-ordering bookkeeping under Argo
+CD that the in-process rotator does not need.

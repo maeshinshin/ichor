@@ -163,24 +163,30 @@ needs are expressed on `TalosCluster`, `TalosMachine` and `TalosStorage`.
 
 ### Typed configuration
 
-`TalosConfigPatch.spec.documents[]` embeds the config document types from the
-Talos machinery library, restricted to an allow-list of kinds. There is no
-raw-YAML field. The reasons:
+`TalosConfigPatch.spec.documents[]` holds the Talos config documents as typed
+fields, restricted to an allow-list of kinds. There is no raw-YAML field. The
+reasons:
 
-- The machinery types are Talos's own definition; we don't maintain a parallel
+- Machinery's types are Talos's own definition; we don't maintain a parallel
   catalogue that drifts.
-- The CRD schema comes for free, so the API server rejects unknown fields.
-- A newer machinery can still render config for older Talos versions when a
-  version contract is set, so pinning one machinery version is fine.
+- A CRD schema means the API server rejects unknown fields.
+- A newer machinery renders config for older Talos versions when a version
+  contract is set. The reverse doesn't hold, so supporting a newly released
+  Talos means bumping machinery.
+
+The types cannot be embedded directly. Machinery is YAML-first and carries no
+JSON tags, so controller-gen refuses them outright, and several field types
+(`ByteSize`, CEL expressions, the `netip` wrappers in the network documents)
+have no exported fields to describe. Instead the mirror types are generated
+from machinery with a `go generate` tool, together with conversion in both
+directions and a round-trip test per kind; machinery stays the only place
+where the field catalogue lives. The evidence and the shape of the generator
+are in `../adr/0003-typed-config-mirror-types.md`.
 
 Ichor adds what the types can't carry — whether a field needs a reboot,
 whether it can only be set at install time, which Talos version introduced
 it — in a table keyed by field path. Unknown paths are treated as
 reboot-required.
-
-Whether the machinery types pass through kubebuilder's generators unchanged is
-the first thing to verify. If they don't, mirror types are generated from them;
-either way nothing is hand-maintained.
 
 `adopt` reads existing node configs with the same types, so an existing cluster
 imports as-is. Kinds outside the allow-list are listed, and the user chooses
@@ -556,8 +562,8 @@ resumption works. A short set runs per PR, the full set nightly.
 
 1. CRDs and the kubebuilder project, Helm chart and Kustomize base, deletion
    protection, e2e scaffolding.
-2. Typed config (verify the machinery types through the generators first),
-   rendering and apply, drift, the cluster lock.
+2. Typed config (the mirror-type generator first), rendering and apply, drift,
+   the cluster lock.
 3. Discovery, approval, disk roles, removal, topology.
 4. `init` and `adopt`, CNI presets (flannel, cilium, custom), Argo CD
    bootstrap, hand-over, repository skeleton.
@@ -574,8 +580,10 @@ resumption works. A short set runs per PR, the full set nightly.
 
 ## Open questions
 
-- Do the Talos machinery config types pass through kubebuilder's generators
-  unchanged, and does the resulting CRD stay within size limits?
+- How large is the CRD once the mirror for the v1alpha1 `Config` document is
+  inlined, and does the allow-list have to be split across several CRDs to
+  stay under etcd's request-size ceiling? (Whether the machinery types survive
+  the generators is settled: they don't — ADR 0003.)
 - What exactly does the Talos Upgrade API do about cordon and drain, per
   version?
 - Does a single-node Talos upgrade need the etcd-preserving flag?

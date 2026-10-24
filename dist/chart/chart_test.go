@@ -26,11 +26,20 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"reflect"
+	"slices"
+	"strings"
 	"testing"
 
 	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
 )
+
+// crdSourceDir is config/crd/bases, the controller-gen output dist/chart's
+// CRD templates are generated from (CONTRIBUTING.md's chart warning).
+const crdSourceDir = "../../config/crd/bases"
 
 const (
 	kindService                        = "Service"
@@ -38,6 +47,7 @@ const (
 	kindRole                           = "Role"
 	kindRoleBinding                    = "RoleBinding"
 	kindValidatingWebhookConfiguration = "ValidatingWebhookConfiguration"
+	kindCustomResourceDefinition       = "CustomResourceDefinition"
 )
 
 const (
@@ -58,6 +68,7 @@ func TestChartInvariants(t *testing.T) {
 			checkNoCABundle(t, release, docs)
 			checkCertSecretHasNoData(t, release, docs)
 			checkSecretsRoleAndBinding(t, release, docs)
+			checkCRDsMatchConfig(t, release, docs)
 		})
 	}
 }
@@ -340,4 +351,124 @@ func findRoleBindingTo(docs []map[string]any, roleName string) map[string]any {
 		}
 	}
 	return nil
+}
+
+// checkCRDsMatchConfig guards against the drift that shipped a
+// TalosConfigPatch CRD chart users could not use typed configuration with:
+// every CRD generated into config/crd/bases/ must appear in the rendered
+// chart with an equivalent schema. It compares parsed objects, not raw text,
+// so the chart's "{{- if .Values.crd.enabled }}" wrapper and reindentation
+// never cause a false failure.
+func checkCRDsMatchConfig(t *testing.T, release string, docs []map[string]any) {
+	t.Helper()
+
+	entries, err := os.ReadDir(crdSourceDir)
+	if err != nil {
+		t.Fatalf("reading %s: %v", crdSourceDir, err)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".yaml") {
+			continue
+		}
+		path := filepath.Join(crdSourceDir, entry.Name())
+
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("reading %s: %v", path, err)
+		}
+		var want map[string]any
+		if err := k8syaml.NewYAMLOrJSONDecoder(bytes.NewReader(data), 4096).Decode(&want); err != nil {
+			t.Fatalf("decoding %s: %v", path, err)
+		}
+
+		name := nameOf(want)
+		got := find(docs, kindCustomResourceDefinition, name)
+		if got == nil {
+			t.Fatalf("%s", crdDriftMsg(release, name, path, "is missing from the chart entirely"))
+			continue
+		}
+
+		for _, detail := range diffCRDSchemas(want, got) {
+			t.Errorf("%s", crdDriftMsg(release, name, path, detail))
+		}
+	}
+}
+
+// crdDriftMsg builds the failure message checkCRDsMatchConfig reports: it
+// names the CRD and the detail, says dist/chart is generated from config/
+// and the fix is to re-sync it, and points at CONTRIBUTING.md's chart
+// warning.
+func crdDriftMsg(release, name, sourcePath, detail string) string {
+	return "helm template " + release + " .: CustomResourceDefinition " + name + " " + detail +
+		"; dist/chart is generated from config/ (see CONTRIBUTING.md's chart warning) " +
+		"and has drifted out of sync with " + sourcePath + "; re-sync it"
+}
+
+// diffCRDSchemas compares, for each version, the full schema and (for a
+// more specific message) the set of top-level spec properties keys. It
+// returns one detail string per mismatch found, or nil if the CRDs agree.
+func diffCRDSchemas(want, got map[string]any) []string {
+	var details []string
+
+	wantVersions := crdVersions(want)
+	gotVersions := crdVersions(got)
+
+	for name, wantVersion := range wantVersions {
+		gotVersion, ok := gotVersions[name]
+		if !ok {
+			details = append(details, "is missing version "+name+" in the chart")
+			continue
+		}
+
+		wantSchema, _ := wantVersion["schema"].(map[string]any)
+		gotSchema, _ := gotVersion["schema"].(map[string]any)
+		if reflect.DeepEqual(wantSchema, gotSchema) {
+			continue
+		}
+
+		wantKeys := specPropertyKeys(wantSchema)
+		gotKeys := specPropertyKeys(gotSchema)
+		if !reflect.DeepEqual(wantKeys, gotKeys) {
+			details = append(details, "version "+name+"'s spec properties are "+
+				strings.Join(gotKeys, ",")+" in the chart but "+strings.Join(wantKeys, ",")+
+				" in config/crd/bases")
+			continue
+		}
+
+		details = append(details, "version "+name+"'s schema differs from config/crd/bases "+
+			"even though its top-level spec properties match")
+	}
+
+	return details
+}
+
+// crdVersions indexes a decoded CRD's spec.versions by version name.
+func crdVersions(doc map[string]any) map[string]map[string]any {
+	spec, _ := doc["spec"].(map[string]any)
+	versions, _ := spec["versions"].([]any)
+
+	out := make(map[string]map[string]any, len(versions))
+	for _, v := range versions {
+		vm, _ := v.(map[string]any)
+		name, _ := vm["name"].(string)
+		out[name] = vm
+	}
+	return out
+}
+
+// specPropertyKeys returns the sorted set of top-level spec.properties keys
+// a CRD version's schema declares.
+func specPropertyKeys(schema map[string]any) []string {
+	openAPI, _ := schema["openAPIV3Schema"].(map[string]any)
+	props, _ := openAPI["properties"].(map[string]any)
+	specProp, _ := props["spec"].(map[string]any)
+	specProps, _ := specProp["properties"].(map[string]any)
+
+	keys := make([]string, 0, len(specProps))
+	for k := range specProps {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+	return keys
 }

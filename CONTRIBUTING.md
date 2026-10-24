@@ -41,7 +41,11 @@ the shell or not. If you see that, `rm -rf bin` and run it again inside
   carry hand-edits for exactly this kind of thing that regeneration would
   revert with no other signal; `dist/chart/chart_test.go` renders the chart
   with `helm template` and guards those edits, runs on every PR via `make
-  test`.
+  test`. Another controller-gen trap, this time in the CRDs it generates:
+  `+kubebuilder:validation:Enum=true;false` (unquoted) emits YAML *booleans*
+  into a `type: string` schema, which the API server then rejects even for
+  the literal string `"true"`; quote the values instead
+  (`Enum="true";"false"`).
 - The UI is Vite + Preact + [preactcn](https://maeshinshin.github.io/preactcn/).
   Add components with `npx shadcn@latest add @preactcn/<name>`. No React,
   no `preact/compat`.

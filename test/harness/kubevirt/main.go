@@ -172,9 +172,14 @@ func up() error {
 		if err != nil {
 			return fmt.Errorf("opening GITHUB_ENV: %w", err)
 		}
-		defer f.Close()
+		// We wrote to f, so a failed Close (e.g. a flush error) can mean the write never
+		// reached disk - that must surface, not be discarded.
 		if _, err := fmt.Fprintf(f, "ICHOR_E2E_TALOS_NODES=%s\n", ip); err != nil {
+			_ = f.Close()
 			return fmt.Errorf("writing GITHUB_ENV: %w", err)
+		}
+		if err := f.Close(); err != nil {
+			return fmt.Errorf("closing GITHUB_ENV: %w", err)
 		}
 	}
 	return nil

@@ -17,50 +17,73 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
-// TalosConfigPatchSpec defines the desired state of TalosConfigPatch
-type TalosConfigPatchSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-	// The following markers will use OpenAPI v3 schema to validate the value
-	// More info: https://book.kubebuilder.io/reference/markers/crd-validation.html
-
-	// foo is an example field of TalosConfigPatch. Edit talosconfigpatch_types.go to remove/update
+// TalosConfigPatchTarget narrows which machines a patch applies to; exactly one field must be set.
+type TalosConfigPatchTarget struct {
+	// role targets every machine with this role.
+	// +kubebuilder:validation:Enum=controlplane;worker
 	// +optional
-	Foo *string `json:"foo,omitempty"`
+	Role string `json:"role,omitempty"`
+
+	// labelSelector targets machines whose Kubernetes Node labels match.
+	// +optional
+	LabelSelector *metav1.LabelSelector `json:"labelSelector,omitempty"`
+
+	// machineRef targets a single named TalosMachine.
+	// +kubebuilder:validation:XValidation:rule="self.name != ''",message="machineRef.name is required"
+	// +optional
+	MachineRef *corev1.LocalObjectReference `json:"machineRef,omitempty"`
+}
+
+// TalosConfigPatchSpec defines the desired state of TalosConfigPatch.
+// +kubebuilder:validation:XValidation:rule="!has(self.target) || (has(self.target.role) ? 1 : 0) + (has(self.target.labelSelector) ? 1 : 0) + (has(self.target.machineRef) ? 1 : 0) == 1",message="target must set exactly one of role, labelSelector or machineRef"
+// +kubebuilder:validation:XValidation:rule="self.layer == 'cluster' ? !has(self.target) : has(self.target)",message="layer 'cluster' requires target to be absent; layer 'role', 'selector' or 'machine' requires target to be present"
+type TalosConfigPatchSpec struct {
+	// clusterRef names the TalosCluster this patch applies to.
+	// +kubebuilder:validation:XValidation:rule="self.name != ''",message="clusterRef.name is required"
+	// +required
+	ClusterRef corev1.LocalObjectReference `json:"clusterRef"`
+
+	// layer is where this patch applies in the bottom-up stack; "system" is absent because Ichor generates that layer itself (ADR 0004).
+	// +kubebuilder:validation:Enum=cluster;role;selector;machine
+	// +required
+	Layer string `json:"layer"`
+
+	// priority orders patches within the same layer.
+	// +kubebuilder:default=0
+	// +optional
+	Priority int32 `json:"priority"`
+
+	// target narrows which machines this patch applies to; required for every layer but "cluster".
+	// +optional
+	Target *TalosConfigPatchTarget `json:"target,omitempty"`
 }
 
 // TalosConfigPatchStatus defines the observed state of TalosConfigPatch.
 type TalosConfigPatchStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// For Kubernetes API conventions, see:
-	// https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties
-
-	// conditions represent the current state of the TalosConfigPatch resource.
-	// Each condition has a unique type and reflects the status of a specific aspect of the resource.
-	//
-	// Standard condition types include:
-	// - "Available": the resource is fully functional
-	// - "Progressing": the resource is being created or updated
-	// - "Degraded": the resource failed to reach or maintain its desired state
-	//
-	// The status of each condition is one of True, False, or Unknown.
+	// conditions represent the current state of the TalosConfigPatch resource, kstatus-compatible.
+	// +patchMergeKey=type
+	// +patchStrategy=merge
 	// +listType=map
 	// +listMapKey=type
 	// +optional
-	Conditions []metav1.Condition `json:"conditions,omitempty"`
+	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
+
+	// observedGeneration is the most recent generation the controller has reconciled.
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:resource:shortName=tcp
+// +kubebuilder:printcolumn:name="Layer",type=string,JSONPath=".spec.layer"
+// +kubebuilder:printcolumn:name="Priority",type=integer,JSONPath=".spec.priority"
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=".metadata.creationTimestamp"
 
 // TalosConfigPatch is the Schema for the talosconfigpatches API
 type TalosConfigPatch struct {

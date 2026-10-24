@@ -80,10 +80,11 @@ What the investigation established:
   a disruptive operation — and costs nothing, since both replicas need the
   Secret before they can serve anyway.
 - Ship, with the chart, an `ignoreDifferences` entry for the webhook
-  configuration's `caBundle` keyed on `managedFieldsManagers:
-  [ichor-controller]`, together with the `RespectIgnoreDifferences=true` sync
-  option, and say in the docs that both are needed — the first one alone
-  leaves self-heal to clobber the field.
+  configuration's `caBundle` and one for the certificate Secret, both keyed on
+  `managedFieldsManagers: [ichor-controller]`, together with the
+  `RespectIgnoreDifferences=true` sync option, and say in the docs that both
+  are needed — the first one alone leaves self-heal to clobber the field.
+  Example: `dist/chart/examples/argocd-application.yaml`.
 - cert-manager stays available as an opt-in: a chart value turns the in-process
   rotator off. The design requires only that it not be the default.
 

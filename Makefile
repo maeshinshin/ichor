@@ -52,8 +52,10 @@ third-party-notices: ## Regenerate THIRD-PARTY-NOTICES from go.mod, the Go modul
 	go run ./internal/tools/thirdpartynotices
 
 .PHONY: generate
-generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
+generate: controller-gen ## Generate mirror types (go generate) plus DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
+	go generate ./...
 	"$(CONTROLLER_GEN)" object:headerFile="hack/boilerplate.go.txt",year=$(YEAR) paths="./..."
+	"$(CONTROLLER_GEN)" object:headerFile="hack/boilerplate.typedconfig.go.txt",year=$(YEAR) paths="./pkg/typedconfig"
 
 .PHONY: fmt
 fmt: ## Run go fmt against code.

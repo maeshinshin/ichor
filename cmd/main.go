@@ -19,13 +19,17 @@ package main
 import (
 	"crypto/tls"
 	"flag"
+	"fmt"
 	"os"
+
+	"github.com/open-policy-agent/cert-controller/pkg/rotator"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -40,10 +44,23 @@ import (
 	// +kubebuilder:scaffold:imports
 )
 
+// webhookSecretName, webhookServiceName and validatingWebhookConfigName name the
+// resources the in-process certificate rotator maintains; the service and webhook
+// configuration names come from the kustomize namePrefix in config/default.
+const (
+	webhookSecretName           = "webhook-server-cert"
+	webhookServiceName          = "ichor-webhook-service"
+	validatingWebhookConfigName = "ichor-validating-webhook-configuration"
+)
+
 var (
 	scheme   = runtime.NewScheme()
 	setupLog = ctrl.Log.WithName("setup")
 )
+
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch
+// +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,verbs=get;list;watch
+// +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,verbs=update;patch
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
@@ -70,7 +87,8 @@ func main() {
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.BoolVar(&secureMetrics, "metrics-secure", true,
 		"If set, the metrics endpoint is served securely via HTTPS. Use --metrics-secure=false to use HTTP instead.")
-	flag.StringVar(&webhookCertPath, "webhook-cert-path", "", "The directory that contains the webhook certificate.")
+	flag.StringVar(&webhookCertPath, "webhook-cert-path", "/tmp/k8s-webhook-server/serving-certs",
+		"The directory that contains the webhook certificate.")
 	flag.StringVar(&webhookCertName, "webhook-cert-name", "tls.crt", "The name of the webhook certificate file.")
 	flag.StringVar(&webhookCertKey, "webhook-cert-key", "tls.key", "The name of the webhook key file.")
 	flag.StringVar(&metricsCertPath, "metrics-cert-path", "",
@@ -178,19 +196,42 @@ func main() {
 		os.Exit(1)
 	}
 
-	// nolint:goconst
 	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
-		if err := webhookv1alpha1.SetupTalosClusterWebhookWithManager(mgr); err != nil {
-			setupLog.Error(err, "Failed to create webhook", "webhook", "TalosCluster")
+		// The webhook serving certificate has no caBundle and no Secret shipped with the
+		// chart: it is generated at runtime by cert-controller and read back by
+		// controller-runtime's certwatcher via webhookCertPath/CertName/KeyName above. The
+		// webhook handlers are registered only once the rotator reports the certificate is
+		// in place, so the webhook server never starts serving with nothing to present.
+		certsReady := make(chan struct{})
+		if err := rotator.AddRotator(mgr, &rotator.CertRotator{
+			SecretKey:      types.NamespacedName{Namespace: os.Getenv("POD_NAMESPACE"), Name: webhookSecretName},
+			CertDir:        webhookCertPath,
+			CertName:       webhookCertName,
+			KeyName:        webhookCertKey,
+			CAName:         "ichor-ca",
+			CAOrganization: "ichor",
+			DNSName:        fmt.Sprintf("%s.%s.svc", webhookServiceName, os.Getenv("POD_NAMESPACE")),
+			IsReady:        certsReady,
+			FieldOwner:     "ichor-controller",
+			Webhooks: []rotator.WebhookInfo{
+				{Name: validatingWebhookConfigName, Type: rotator.Validating},
+			},
+		}); err != nil {
+			setupLog.Error(err, "Failed to set up webhook certificate rotation")
 			os.Exit(1)
 		}
-	}
-	// nolint:goconst
-	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
-		if err := webhookv1alpha1.SetupTalosMachineWebhookWithManager(mgr); err != nil {
-			setupLog.Error(err, "Failed to create webhook", "webhook", "TalosMachine")
-			os.Exit(1)
-		}
+
+		go func() {
+			<-certsReady
+			if err := webhookv1alpha1.SetupTalosClusterWebhookWithManager(mgr); err != nil {
+				setupLog.Error(err, "Failed to create webhook", "webhook", "TalosCluster")
+				os.Exit(1)
+			}
+			if err := webhookv1alpha1.SetupTalosMachineWebhookWithManager(mgr); err != nil {
+				setupLog.Error(err, "Failed to create webhook", "webhook", "TalosMachine")
+				os.Exit(1)
+			}
+		}()
 	}
 	// +kubebuilder:scaffold:builder
 

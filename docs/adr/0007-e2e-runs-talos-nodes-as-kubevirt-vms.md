@@ -26,8 +26,15 @@ have given:
 
 - A VM booting the Image Factory `metal-amd64.iso` for Talos 1.14.3 reaches
   `MachineStatus` `STAGE: maintenance, READY: true`.
-- The insecure maintenance API answers on port 50000 through an ordinary
-  `kubectl port-forward`.
+- The insecure maintenance API answers on port 50000 from any pod in the
+  cluster. It is **not** reachable through `kubectl port-forward`: with
+  `bridge` binding the pod IP belongs to the guest, so the virt-launcher pod's
+  own network namespace has no listener for port-forward to dial, and the
+  attempt is refused. (Port-forward does work under `masquerade`, which is how
+  this was first measured before the binding changed — a detail that cost a
+  debugging cycle downstream.) Tests therefore reach the Talos API from a
+  one-shot pod inside the cluster, which is also how the controller will reach
+  nodes in production.
 - `get systeminformation` returns an SMBIOS UUID and serial number — exactly
   the primary key `TalosMachine.spec.identity` is built on — with
   `manufacturer: KubeVirt`.
@@ -89,3 +96,10 @@ Three facts worth keeping, each of which cost a debugging cycle:
   already provides, and **Multus is not needed**.
 - The e2e suite must not assume it created the cluster, which is the right
   shape anyway: it is also how `adopt` will be tested later.
+- **Nor may it assume it created the nodes.** Two harnesses means the suite
+  cannot contain the provisioning of either: a KubeVirt VM is meaningless on a
+  CI runner that has no KubeVirt, and `talosctl cluster create qemu --presets
+  maintenance` is meaningless here. So the suite consumes a cluster through
+  `KUBECONFIG` *and* a set of maintenance-mode node endpoints through the
+  environment, failing loudly when either is absent, and each harness's setup
+  target supplies them its own way. One set of specs runs on both.

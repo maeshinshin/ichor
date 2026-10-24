@@ -17,6 +17,13 @@ controller-gen, kustomize, setup-envtest and golangci-lint are deliberately
 versions it pins. Don't add them to `flake.nix` — see
 [ADR 0005](docs/adr/0005-build-tools-come-from-the-makefile.md).
 
+Because those four are built and cached in `./bin`, running a Makefile target
+from outside `nix develop` poisons the cache: the host toolchain builds the
+binary, and `make lint` then fails with "the Go language version used to build
+golangci-lint is lower than the targeted Go version" on every later run, inside
+the shell or not. If you see that, `rm -rf bin` and run it again inside
+`nix develop`.
+
 ## Project conventions
 
 - The controller is a [kubebuilder](https://book.kubebuilder.io/) project.

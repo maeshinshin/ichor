@@ -89,3 +89,46 @@ Facts worth keeping, each of which cost a debugging cycle:
   `KUBECONFIG` *and* a set of maintenance-mode node endpoints through the
   environment, failing loudly when either is absent, and each harness's setup
   target supplies them its own way. One set of specs runs on both.
+
+## Past maintenance mode, resolved
+
+A single-node Talos **control plane**
+installs, reboots, serves an authenticated API with RBAC, bootstraps, and
+reports `stage: running, ready: true` with etcd healthy.
+
+Five things the harness has to get right, each of which cost a debugging cycle:
+
+- **Use a control-plane config, not a worker.** This was the hang. Talos's
+  certificate controller, *for workers only*, blocks on `k8s.Endpoint` being
+  non-empty — the address of a real control-plane apiserver — before it will
+  mint apid's serving certificate. An isolated worker never satisfies that, so
+  apid and trustd never start: the kernel is up, containerd and the kubelet are
+  up, and 50000/50001 are refused forever. The
+  control-plane certificate path needs only local secrets, and comes up about
+  two seconds into the second boot. Any single-node Talos-API-reachability
+  fixture must therefore be control-plane shaped; that is a Talos constraint,
+  not something a harness can work around.
+- **Pin the cluster endpoint to the node's own address.** `talosctl gen config`'s
+  placeholder endpoint resolved through the pod gateway to the **host cluster's
+  real kube-apiserver**, and Talos's endpoint controllers dialled it repeatedly
+  on their own. Every attempt was rejected by TLS verification — the test CA
+  does not match — so nothing was read or written, but a node on this
+  bridge-bound pod network can reach the production control plane's apiserver
+  port, and the harness must never leave that endpoint at a default.
+- **Give the inner cluster non-overlapping subnets.** The defaults,
+  `10.244.0.0/16` and `10.96.0.0/12`, collide with the host cluster's pod
+  network, which is where the node's own address comes from. Talos raises an
+  `address-overlap` diagnostic and warns that it cannot find a suitable node IP.
+- **Console output needs two separate settings.** A schematic's
+  `extraKernelArgs: [console=ttyS0,115200n8]` affects only the ISO and PXE
+  media — the Factory ignores kernel arguments for installer images. To keep
+  the console after the install reboots, the machine config needs its own
+  `machine.install.extraKernelArgs`, which is mutually exclusive with
+  `grubUseUKICmdline`, so that has to be false as well. Without this the
+  harness is blind: Talos writes to the VGA framebuffer only and the serial log
+  stays empty, which is what made the original hang take three attempts to
+  understand.
+- **Detach the ISO after install.** It happens to work without doing so,
+  because Talos's own first-boot detection finds the STATE partition and runs
+  the boot sequence rather than reinstalling. That is incidental and not worth
+  relying on.

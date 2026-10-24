@@ -1,0 +1,59 @@
+# Release config for the `ichor` CLI (cobra, cmd/ichor). cmd/ichor doesn't
+# exist yet — the CLI is a later phase — so CI only runs `goreleaser check`
+# (schema validation) against this file, never `goreleaser build`/`release`.
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+
+version: 2
+
+builds:
+  - id: ichor
+    main: ./cmd/ichor
+    binary: ichor
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+
+archives:
+  - formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    files:
+      - LICENSE
+      - NOTICE
+      - README.md
+      - THIRD-PARTY-NOTICES
+
+changelog:
+  sort: asc
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: Fixes
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: Others
+      order: 999
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+release:
+  # No git remote is configured on purpose (see CLAUDE.md); name the repo
+  # explicitly so goreleaser doesn't need to read it from `git remote`.
+  github:
+    owner: maeshinshin
+    name: ichor
+  footer: >-
+    ---
+
+    Released by [GoReleaser](https://github.com/goreleaser/goreleaser).

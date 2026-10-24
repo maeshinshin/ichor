@@ -29,9 +29,11 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
+	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -93,20 +95,22 @@ type TalosMachineReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 
-	// TalosClient opens the Talos API boundary for m. nil means node
-	// connectivity isn't wired up yet: Reconcile reports that plainly in
-	// status (reasonTalosClientNotConfigured) instead of panicking.
+	// TalosClient opens the Talos API boundary for m, using cluster and the
+	// already-loaded bundle (NewMachineryTalosClient is the real
+	// implementation cmd/main.go wires in). nil means node connectivity
+	// isn't wired up at all: Reconcile reports that plainly in status
+	// (reasonTalosClientNotConfigured) instead of panicking -- the same is
+	// true if bundle itself failed to load, since that's checked first and
+	// this field is never reached in that case.
 	//
-	// ponytail: which credential a reconcile should use -- the insecure,
-	// unauthenticated connection approval uses for a node still in
-	// maintenance mode, versus the os:admin certificate an already-joined
-	// node expects -- is a connectivity concern this unit doesn't own
-	// (it belongs with discovery/approval and with client certificate
-	// renewal, phases 3 and 5 on the roadmap). Wiring a real
-	// implementation here before that exists would mean guessing which
-	// credential to use; the boundary stays unimplemented, and explicit
-	// about why, until that's settled.
-	TalosClient func(ctx context.Context, m *ichorv1alpha1.TalosMachine) (TalosClient, error)
+	// There is only one credential this ever needs: design 5.6 only runs
+	// against an approved machine that already has a configuration, i.e.
+	// one that has already joined and already trusts the bundle's CA. The
+	// insecure, unauthenticated path Talos's maintenance mode offers is
+	// discovery's problem (phase 3), not this reconciler's.
+	TalosClient func(
+		ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, bundle *secrets.Bundle,
+	) (TalosClient, error)
 }
 
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosmachines,verbs=get;list;watch;create;update;patch;delete
@@ -175,12 +179,20 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			"no Talos API connectivity is configured for this controller")
 	}
 
-	talos, err := r.TalosClient(ctx, &m)
+	talos, err := r.TalosClient(ctx, &cluster, &m, bundle)
 	if err != nil {
 		log.Error(err, "connecting to Talos API")
 
 		return ctrl.Result{}, r.ready(ctx, &m, metav1.ConditionFalse, reasonTalosConnectFailed,
 			"connecting to the node's Talos API failed")
+	}
+
+	// TalosClient is three methods, no Close (the fake test double has
+	// nothing to close); a real implementation's connection is closed here,
+	// through the same optional-capability check client code uses for
+	// io.Closer elsewhere, rather than growing the interface for it.
+	if closer, ok := talos.(io.Closer); ok {
+		defer closer.Close() //nolint:errcheck
 	}
 
 	// Step 2: read the node's current configuration and compare hashes.

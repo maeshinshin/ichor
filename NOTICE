@@ -1,0 +1,13 @@
+Ichor
+Copyright 2026 maeshinshin
+
+This product includes software developed by Sidero Labs, Inc.
+(https://github.com/siderolabs/talos), licensed under the Mozilla Public
+License 2.0. A file that contains content derived from that project is
+covered by MPL-2.0 and carries its notice, or, where a file cannot carry a
+header, is named here. The rest of Ichor is under the Apache License 2.0.
+
+Source code for the MPL-2.0 covered files in this distribution is available at
+https://github.com/maeshinshin/ichor, at the Git tag that matches the version
+of the artifact (a release archive, a container image or the Helm chart) this
+NOTICE came with.

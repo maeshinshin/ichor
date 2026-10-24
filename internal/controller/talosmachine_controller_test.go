@@ -18,7 +18,6 @@ package controller
 
 import (
 	"context"
-	"encoding/json"
 	"reflect"
 	"time"
 
@@ -28,6 +27,7 @@ import (
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	"github.com/siderolabs/talos/pkg/machinery/constants"
+	yaml "go.yaml.in/yaml/v4"
 	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -85,8 +85,12 @@ func (f *fakeTalosClient) ApplyNoReboot(_ context.Context, cfg []byte) error {
 	return f.applyErr
 }
 
-func clientFactory(fake *fakeTalosClient) func(context.Context, *ichorv1alpha1.TalosMachine) (TalosClient, error) {
-	return func(context.Context, *ichorv1alpha1.TalosMachine) (TalosClient, error) { return fake, nil }
+func clientFactory(fake *fakeTalosClient) func(
+	context.Context, *ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine, *secrets.Bundle,
+) (TalosClient, error) {
+	return func(context.Context, *ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine, *secrets.Bundle) (TalosClient, error) {
+		return fake, nil
+	}
 }
 
 func newTestBundle(versionContract string) *secrets.Bundle {
@@ -100,7 +104,7 @@ func newTestBundle(versionContract string) *secrets.Bundle {
 }
 
 func newTestSecret(bundle *secrets.Bundle) *corev1.Secret {
-	raw, err := json.Marshal(bundle)
+	raw, err := yaml.Marshal(bundle)
 	Expect(err).NotTo(HaveOccurred())
 
 	secret := &corev1.Secret{

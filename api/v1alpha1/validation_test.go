@@ -24,6 +24,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 
@@ -35,6 +36,7 @@ const (
 	testNamespace       = "default"
 	literalCluster      = "cluster"
 	literalControlPlane = "controlplane"
+	literalSecrets      = "secrets"
 
 	kindSysctlConfig       = "SysctlConfig"
 	kindKernelModuleConfig = "KernelModuleConfig"
@@ -214,7 +216,7 @@ var _ = Describe("TalosConfigPatchDocument", func() {
 	})
 })
 
-func newCluster(secretsRef corev1.LocalObjectReference, count int32) *TalosCluster {
+func newCluster(secretsRef corev1.LocalObjectReference, count int32, schedulable string) *TalosCluster {
 	return &TalosCluster{
 		GenerateName: "cluster-",
 		Namespace:    testNamespace,
@@ -224,19 +226,19 @@ func newCluster(secretsRef corev1.LocalObjectReference, count int32) *TalosClust
 			KubernetesVersion: "v1.36.0",
 			VersionContract:   "v1.14",
 			SecretsRef:        secretsRef,
-			ControlPlane:      TalosClusterControlPlane{Count: count},
+			ControlPlane:      TalosClusterControlPlane{Count: count, Schedulable: schedulable},
 		},
 	}
 }
 
 var _ = Describe("TalosCluster", func() {
 	It("rejects an empty secretsRef", func() {
-		Expect(k8sClient.Create(context.Background(), newCluster(corev1.LocalObjectReference{}, 3))).NotTo(Succeed())
+		Expect(k8sClient.Create(context.Background(), newCluster(corev1.LocalObjectReference{}, 3, "true"))).NotTo(Succeed())
 	})
 
 	DescribeTable("controlPlane.count",
 		func(count int32, accepted bool) {
-			err := k8sClient.Create(context.Background(), newCluster(corev1.LocalObjectReference{Name: "secrets"}, count))
+			err := k8sClient.Create(context.Background(), newCluster(corev1.LocalObjectReference{Name: literalSecrets}, count, "true"))
 			if accepted {
 				Expect(err).NotTo(HaveOccurred())
 			} else {
@@ -249,4 +251,45 @@ var _ = Describe("TalosCluster", func() {
 		Entry("2 is rejected", int32(2), false),
 		Entry("4 is rejected", int32(4), false),
 	)
+
+	// ADR 0008: schedulable has no "auto" -- nothing on the object can resolve
+	// it before any machine exists, so the field is required and limited to
+	// true/false, and any other value (including empty) is refused.
+	DescribeTable("controlPlane.schedulable",
+		func(schedulable string, accepted bool) {
+			err := k8sClient.Create(context.Background(), newCluster(corev1.LocalObjectReference{Name: literalSecrets}, 3, schedulable))
+			if accepted {
+				Expect(err).NotTo(HaveOccurred())
+			} else {
+				Expect(err).To(HaveOccurred())
+			}
+		},
+		Entry("true is accepted", "true", true),
+		Entry("false is accepted", "false", true),
+		Entry("auto is rejected", "auto", false),
+		Entry("empty string is rejected", "", false),
+	)
+
+	It("rejects a TalosCluster with controlPlane.schedulable omitted entirely", func() {
+		u := &unstructured.Unstructured{
+			Object: map[string]any{
+				"apiVersion": GroupVersion.String(),
+				"kind":       "TalosCluster",
+				"metadata": map[string]any{
+					"generateName": "cluster-",
+					"namespace":    testNamespace,
+				},
+				"spec": map[string]any{
+					"endpoint":          map[string]any{"type": "vip", "address": "10.0.0.1"},
+					"talosVersion":      "v1.14.3",
+					"kubernetesVersion": "v1.36.0",
+					"versionContract":   "v1.14",
+					"secretsRef":        map[string]any{"name": literalSecrets},
+					"controlPlane":      map[string]any{"count": int64(3)},
+				},
+			},
+		}
+
+		Expect(k8sClient.Create(context.Background(), u)).NotTo(Succeed())
+	})
 })

@@ -74,17 +74,16 @@ spec:
                     format: int32
                     type: integer
                   schedulable:
-                    default: auto
                     description: schedulable controls whether control planes accept
-                      workloads; auto taints them only when workers exist, then stays
-                      fixed.
+                      workloads; required with no default because nothing on the object
+                      can resolve an auto value before any machine exists (ADR 0008).
                     enum:
-                    - auto
-                    - true
-                    - false
+                    - "true"
+                    - "false"
                     type: string
                 required:
                 - count
+                - schedulable
                 type: object
               endpoint:
                 description: endpoint is the cluster's control-plane endpoint.

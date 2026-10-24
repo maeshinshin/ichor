@@ -66,7 +66,7 @@ func newTestCluster(runID string, count int32) *v1alpha1.TalosCluster {
 			KubernetesVersion: "v1.36.0",
 			VersionContract:   "v1.14",
 			SecretsRef:        corev1.LocalObjectReference{Name: "ichor-e2e-secrets"},
-			ControlPlane:      v1alpha1.TalosClusterControlPlane{Count: count},
+			ControlPlane:      v1alpha1.TalosClusterControlPlane{Count: count, Schedulable: "true"},
 		},
 	}
 }

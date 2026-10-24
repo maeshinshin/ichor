@@ -36,7 +36,7 @@ func newTestCluster() *ichorv1alpha1.TalosCluster {
 			KubernetesVersion: "v1.36.0",
 			VersionContract:   "v1.14",
 			SecretsRef:        corev1.LocalObjectReference{Name: "secrets"},
-			ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: 1},
+			ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: 1, Schedulable: "true"},
 		},
 	}
 }

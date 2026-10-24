@@ -18,6 +18,7 @@ field names and the documentation text derived from them), and are covered by
 MPL-2.0 without a header, because a generated manifest cannot carry one:
 
 config/crd/bases/ichor.maesh.dev_talosconfigpatches.yaml
+dist/chart/templates/crd/talosconfigpatches.ichor.maesh.dev.yaml
 
 Source code for the MPL-2.0 covered files in this distribution is available
 at https://github.com/maeshinshin/ichor, at the Git tag that matches the

@@ -213,6 +213,9 @@ func main() {
 			DNSName:        fmt.Sprintf("%s.%s.svc", webhookServiceName, os.Getenv("POD_NAMESPACE")),
 			IsReady:        certsReady,
 			FieldOwner:     "ichor-controller",
+			// Two replicas race to generate a CA on a cold start otherwise; one writer
+			// for this disruptive operation follows principle 6 (ADR 0006 amendment).
+			RequireLeaderElection: true,
 			Webhooks: []rotator.WebhookInfo{
 				{Name: validatingWebhookConfigName, Type: rotator.Validating},
 			},

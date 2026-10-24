@@ -58,9 +58,14 @@ var (
 	setupLog = ctrl.Log.WithName("setup")
 )
 
-// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch
-// +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,verbs=get;list;watch
-// +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,verbs=update;patch
+// The cert-controller rotator only ever touches the single Secret named by SecretKey,
+// in this controller's own namespace (ADR 0006). Kubernetes RBAC cannot restrict list,
+// watch or create by resourceNames (the request has no single object name to check), so
+// those stay namespace-scoped; get, update and patch are restricted to that one Secret.
+// +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,resourceNames=webhook-server-cert,verbs=get;update;patch
+// +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,verbs=list;watch;create
+// +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,resourceNames=ichor-validating-webhook-configuration,verbs=get;list;watch
+// +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,resourceNames=ichor-validating-webhook-configuration,verbs=update;patch
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))

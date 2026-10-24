@@ -50,6 +50,9 @@ linters:
           - lll
         path: api/*
       - linters:
+          - lll
+        path: cmd/*
+      - linters:
           - dupl
           - lll
         path: internal/*

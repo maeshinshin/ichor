@@ -5,18 +5,9 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
-  - ""
-  resources:
-  - secrets
-  verbs:
-  - create
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
   - admissionregistration.k8s.io
+  resourceNames:
+  - ichor-validating-webhook-configuration
   resources:
   - validatingwebhookconfigurations
   verbs:
@@ -25,3 +16,28 @@ rules:
   - patch
   - update
   - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: manager-role
+  namespace: ichor-system
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resourceNames:
+  - webhook-server-cert
+  resources:
+  - secrets
+  verbs:
+  - get
+  - patch
+  - update

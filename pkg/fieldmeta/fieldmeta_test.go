@@ -1,0 +1,188 @@
+/*
+Copyright 2026 maeshinshin.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package fieldmeta
+
+import (
+	"reflect"
+	"testing"
+
+	machineryconfig "github.com/siderolabs/talos/pkg/machinery/config"
+)
+
+// Paths reused across several test cases below.
+const (
+	pathClusterProxyDisabled = "cluster.proxy.disabled"     // uncovered on purpose, see architecture.md's open questions
+	pathMachineNetworkIfaces = "machine.network.interfaces" // uncovered on purpose: NIC changes stay reboot-required
+	pathMachineInstallDisk   = "machine.install.disk"
+	pathSysctlForward        = "SysctlConfig.params.net.ipv4.ip_forward"
+)
+
+func TestAssess_UnknownPathIsRebootRequired(t *testing.T) {
+	impact := Assess([]string{pathClusterProxyDisabled}, nil)
+
+	if !impact.RebootRequired {
+		t.Fatalf("Assess(unknown path) = %+v, want RebootRequired true", impact)
+	}
+	if len(impact.InstallTimeOnly) != 0 {
+		t.Fatalf("Assess(unknown path) = %+v, want no InstallTimeOnly", impact)
+	}
+}
+
+// TestAssess_Rules covers every rule in the table: one path that matches it
+// and a sibling path that does not (and so stays reboot-required).
+func TestAssess_Rules(t *testing.T) {
+	cases := []struct {
+		name           string
+		match          string
+		nonMatch       string
+		wantInstallSet bool
+	}{
+		{name: "SysctlConfig is safe", match: pathSysctlForward, nonMatch: "KernelModuleConfig.parameters"},
+		{name: "machine.time is safe", match: "machine.time.servers", nonMatch: "machine.network.hostname"},
+		{
+			name: "machine.network.nameservers is safe", match: "machine.network.nameservers",
+			nonMatch: pathMachineNetworkIfaces,
+		},
+		{
+			name: "machine.network.searchDomains is safe", match: "machine.network.searchDomains",
+			nonMatch: pathMachineNetworkIfaces,
+		},
+		{
+			name: "machine.network.disableSearchDomain is safe", match: "machine.network.disableSearchDomain",
+			nonMatch: pathMachineNetworkIfaces,
+		},
+		{name: "cluster.apiServer is safe", match: "cluster.apiServer.extraArgs", nonMatch: pathClusterProxyDisabled},
+		{
+			name: "cluster.controllerManager is safe", match: "cluster.controllerManager.extraArgs",
+			nonMatch: pathClusterProxyDisabled,
+		},
+		{name: "cluster.scheduler is safe", match: "cluster.scheduler.extraArgs", nonMatch: pathClusterProxyDisabled},
+		{
+			name: "machine.install is install-time-only, not reboot", match: pathMachineInstallDisk,
+			nonMatch: "machine.installer.anything", wantInstallSet: true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			matchImpact := Assess([]string{tc.match}, nil)
+			if matchImpact.RebootRequired {
+				t.Errorf("Assess(%q).RebootRequired = true, want false", tc.match)
+			}
+			if tc.wantInstallSet && !reflect.DeepEqual(matchImpact.InstallTimeOnly, []string{tc.match}) {
+				t.Errorf("Assess(%q).InstallTimeOnly = %v, want [%q]", tc.match, matchImpact.InstallTimeOnly, tc.match)
+			}
+			if !tc.wantInstallSet && len(matchImpact.InstallTimeOnly) != 0 {
+				t.Errorf("Assess(%q).InstallTimeOnly = %v, want empty", tc.match, matchImpact.InstallTimeOnly)
+			}
+
+			nonMatchImpact := Assess([]string{tc.nonMatch}, nil)
+			if !nonMatchImpact.RebootRequired {
+				t.Errorf("Assess(%q) (sibling, uncovered) = %+v, want RebootRequired true", tc.nonMatch, nonMatchImpact)
+			}
+			if len(nonMatchImpact.InstallTimeOnly) != 0 {
+				t.Errorf("Assess(%q) (sibling) = %+v, want no InstallTimeOnly", tc.nonMatch, nonMatchImpact)
+			}
+		})
+	}
+}
+
+func TestAssess_InstallTimeOnlyIsDistinctFromRebootRequired(t *testing.T) {
+	installImpact := Assess([]string{pathMachineInstallDisk}, nil)
+	rebootImpact := Assess([]string{pathClusterProxyDisabled}, nil)
+
+	if installImpact.RebootRequired {
+		t.Fatalf("install-time-only path: RebootRequired = true, want false " +
+			"(needs reset+reinstall, a reboot alone does not help)")
+	}
+	if len(installImpact.InstallTimeOnly) != 1 {
+		t.Fatalf("install-time-only path: InstallTimeOnly = %v, want one entry", installImpact.InstallTimeOnly)
+	}
+
+	if !rebootImpact.RebootRequired {
+		t.Fatalf("unknown path: RebootRequired = false, want true")
+	}
+	if len(rebootImpact.InstallTimeOnly) != 0 {
+		t.Fatalf("unknown path: InstallTimeOnly = %v, want empty", rebootImpact.InstallTimeOnly)
+	}
+
+	// The two outcomes must be told apart by the same struct.
+	if installImpact.RebootRequired == rebootImpact.RebootRequired {
+		t.Fatalf("install-time-only and reboot-required paths produced the same RebootRequired value")
+	}
+}
+
+func TestAssess_VersionFloor(t *testing.T) {
+	cases := []struct {
+		name            string
+		pinned          *machineryconfig.VersionContract
+		wantUnsupported bool
+	}{
+		{name: "older than introduced", pinned: machineryconfig.TalosVersion1_12, wantUnsupported: true},
+		{name: "exactly the floor version", pinned: machineryconfig.TalosVersion1_13, wantUnsupported: true},
+		{name: "newer than introduced", pinned: machineryconfig.TalosVersion1_14, wantUnsupported: false},
+		{name: "nil pinned means current, always supported", pinned: nil, wantUnsupported: false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			impact := Assess([]string{pathSysctlForward}, tc.pinned)
+			gotUnsupported := len(impact.Unsupported) == 1
+			if gotUnsupported != tc.wantUnsupported {
+				t.Fatalf("Assess(pinned=%v).Unsupported = %v, want unsupported=%v",
+					tc.pinned, impact.Unsupported, tc.wantUnsupported)
+			}
+		})
+	}
+
+	// A path with no known version floor (the legacy Config document) is
+	// never reported unsupported, regardless of how old the pinned version
+	// is.
+	impact := Assess([]string{pathMachineInstallDisk}, machineryconfig.TalosVersion1_0)
+	if len(impact.Unsupported) != 0 {
+		t.Fatalf("Assess(path with no version floor) = %+v, want no Unsupported entries", impact)
+	}
+}
+
+func TestAssess_SafeAndUnsupportedAreIndependent(t *testing.T) {
+	// SysctlConfig is both "safe" (no reboot) and version-gated: on an old
+	// pinned version it's unsupported *and* would need no reboot if it were
+	// supported. The two facts don't override each other.
+	impact := Assess([]string{pathSysctlForward}, machineryconfig.TalosVersion1_12)
+
+	if impact.RebootRequired {
+		t.Fatalf("Assess(SysctlConfig path).RebootRequired = true, want false")
+	}
+	if len(impact.Unsupported) != 1 {
+		t.Fatalf("Assess(SysctlConfig path on Talos 1.12).Unsupported = %v, want one entry", impact.Unsupported)
+	}
+}
+
+func TestAssess_AggregatesAcrossMultiplePaths(t *testing.T) {
+	impact := Assess([]string{
+		"machine.time.servers",   // safe
+		pathClusterProxyDisabled, // reboot-required (unknown/uncertain)
+		pathMachineInstallDisk,   // install-time-only
+	}, nil)
+
+	if !impact.RebootRequired {
+		t.Fatalf("Assess(mixed paths).RebootRequired = false, want true (cluster.proxy.disabled is unknown)")
+	}
+	if len(impact.InstallTimeOnly) != 1 || impact.InstallTimeOnly[0] != pathMachineInstallDisk {
+		t.Fatalf("Assess(mixed paths).InstallTimeOnly = %v, want [%s]", impact.InstallTimeOnly, pathMachineInstallDisk)
+	}
+}

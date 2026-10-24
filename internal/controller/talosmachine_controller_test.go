@@ -270,6 +270,37 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(got.Status.AppliedConfigHash).To(BeEmpty())
 	})
 
+	It("reports ClusterNotFound when the referenced TalosCluster does not exist", func() {
+		cluster := newTestCluster("does-not-exist", "v1.14")
+		m := newTestMachine(cluster.Name, true)
+		m.Spec.ClusterRef.Name = "no-such-cluster"
+		Expect(k8sClient.Update(ctx, m)).To(Succeed())
+
+		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
+		_, err := reconcileMachine(r, m)
+		Expect(err).NotTo(HaveOccurred())
+
+		cond := readyCondition(fetchMachine(m))
+		Expect(cond).NotTo(BeNil())
+		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(cond.Reason).To(Equal(reasonClusterNotFound))
+		Expect(cond.Message).To(ContainSubstring("no-such-cluster"))
+	})
+
+	It("reports SecretsBundleUnavailable when the secrets Secret does not exist", func() {
+		cluster := newTestCluster("no-such-secret", "v1.14")
+		m := newTestMachine(cluster.Name, true)
+
+		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
+		_, err := reconcileMachine(r, m)
+		Expect(err).NotTo(HaveOccurred())
+
+		cond := readyCondition(fetchMachine(m))
+		Expect(cond).NotTo(BeNil())
+		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(cond.Reason).To(Equal(reasonSecretsBundleUnavailable))
+	})
+
 	It("records convergence and attempts no apply when hashes match", func() {
 		bundle := newTestBundle("v1.14")
 		secret := newTestSecret(bundle)

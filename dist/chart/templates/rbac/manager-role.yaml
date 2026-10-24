@@ -11,6 +11,14 @@ metadata:
   name: {{ include "ichor.resourceName" (dict "suffix" "manager-role" "context" $) }}
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - admissionregistration.k8s.io
   resourceNames:
   - ichor-validating-webhook-configuration
@@ -22,3 +30,50 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosclusters
+  - talosconfigpatches
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosmachines
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosmachines/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosmachines/status
+  verbs:
+  - get
+  - patch
+  - update

@@ -593,9 +593,12 @@ resumption works. A short set runs per PR, the full set nightly.
 
 ## Open questions
 
-- How large is the CRD once the mirror for the v1alpha1 `Config` document is
-  inlined, and does the allow-list have to be split across several CRDs to
-  stay under etcd's request-size ceiling?
+- Should the eleven `meta.Unstructured` fields the generator drops stay
+  absent? Each is a pass-through to another project's schema — kubelet's
+  configuration, audit policy, scheduler config — so for them the choice is
+  pass-through or absent, not typed or raw. `machine.kubelet.extraConfig` is
+  the one users will miss. (CRD size is settled: the `Config`
+  mirror is 114 KB against a 1.5 MiB ceiling.)
 - What exactly does the Talos Upgrade API do about cordon and drain, per
   version?
 - Does a single-node Talos upgrade need the etcd-preserving flag?

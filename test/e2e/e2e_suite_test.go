@@ -22,16 +22,32 @@ package e2e
 import (
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
-// TestE2E runs the e2e test suite against the cluster given by KUBECONFIG (ADR 0007).
-// The suite does not create or tear down that cluster, and does not build or load a
-// manager image - phase 1's e2e proves the CRDs and CEL rules against a real API
-// server and a real Talos node, nothing else.
+// talosNodesEnvVar names the comma-separated list of maintenance-mode Talos node
+// addresses the suite reads its node to probe from. Neither harness provisions nodes
+// itself (ADR 0007): the KubeVirt harness's "setup-test-e2e-kubevirt" and the
+// talosctl-qemu harness's "setup-test-e2e" each create one their own way and publish it
+// here, so one set of specs runs unchanged against either.
+const talosNodesEnvVar = "ICHOR_E2E_TALOS_NODES"
+
+// talosNodes holds the parsed node addresses, set once in BeforeSuite.
+var talosNodes []string
+
+// talosNode is the node this run's specs probe.
+func talosNode() string {
+	return talosNodes[0]
+}
+
+// TestE2E runs the e2e test suite against the cluster given by KUBECONFIG, and the Talos
+// node(s) given by ICHOR_E2E_TALOS_NODES (ADR 0007). The suite does not create or tear
+// down either itself, and does not build or load a manager image - phase 1's e2e proves
+// the CRDs and CEL rules against a real API server and a real Talos node, nothing else.
 //
 // To enable kubectl kuberc (use custom kubectl configurations), set: KUBECTL_KUBERC=true
 // By default, kuberc is disabled to ensure consistent test behavior across different environments.
@@ -43,6 +59,18 @@ func TestE2E(t *testing.T) {
 
 var _ = BeforeSuite(func() {
 	configureKubectlKubeRC()
+
+	raw := os.Getenv(talosNodesEnvVar)
+	if strings.TrimSpace(raw) == "" {
+		Fail(fmt.Sprintf("%s is not set. The harness's setup target must publish its "+
+			"maintenance-mode node endpoint(s) through it before the suite runs (see docs/adr/0007).",
+			talosNodesEnvVar))
+	}
+	for _, n := range strings.Split(raw, ",") {
+		if n = strings.TrimSpace(n); n != "" {
+			talosNodes = append(talosNodes, n)
+		}
+	}
 })
 
 // Disable kubectl kuberc by default for test isolation.

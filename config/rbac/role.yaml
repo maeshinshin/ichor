@@ -16,6 +16,32 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosmachines
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosmachines/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosmachines/status
+  verbs:
+  - get
+  - patch
+  - update
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role

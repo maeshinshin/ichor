@@ -21,8 +21,12 @@ have given:
 
 - A node booting the Image Factory `metal-amd64.iso` for Talos 1.14.3 reaches
   `MachineStatus` `STAGE: maintenance, READY: true`.
-- The insecure maintenance API answers on port 50000 through an ordinary
-  `kubectl port-forward`.
+- The insecure maintenance API answers on port 50000 from any pod in the
+  cluster. (Port-forward does work under `masquerade`, which is how
+  this was first measured before the binding changed — a detail that cost a
+  debugging cycle downstream.) Tests therefore reach the Talos API from a
+  one-shot pod inside the cluster, which is also how the controller will reach
+  nodes in production.
 - `get disks` shows the ISO as `sr0` and a writable 11 GB `vda`, so there is a
   real install target, and `get links` shows a real NIC plus bond and dummy
   devices.
@@ -69,3 +73,7 @@ Facts worth keeping, each of which cost a debugging cycle:
   already provides, and **Multus is not needed**.
 - The e2e suite must not assume it created the cluster, which is the right
   shape anyway: it is also how `adopt` will be tested later.
+- **Nor may it assume it created the nodes.** So the suite consumes a cluster through
+  `KUBECONFIG` *and* a set of maintenance-mode node endpoints through the
+  environment, failing loudly when either is absent, and each harness's setup
+  target supplies them its own way. One set of specs runs on both.

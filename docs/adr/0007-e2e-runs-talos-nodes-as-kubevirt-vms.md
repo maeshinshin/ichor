@@ -94,6 +94,18 @@ Three facts worth keeping, each of which cost a debugging cycle:
   real state in maintenance mode, where only apid is listening, not a filter.
   VM-to-VM traffic therefore reduces to pod-to-pod traffic, which Cilium
   already provides, and **Multus is not needed**.
+- **The QEMU harness is written but unverified.** It creates a cluster with one
+  worker and resets that worker back into maintenance mode, because
+  `--presets maintenance` would leave no cluster at all and the specs need
+  both a cluster and a maintenance node. The part that cannot be tested here is
+  how it learns the worker's address: it scrapes `talosctl cluster create`'s
+  human-readable summary, a format that is not a documented interface and was
+  never observed, because running the provisioner needs root this environment
+  does not have. It is marked with a `shortcut:` comment and fails loudly
+  rather than silently when the scrape comes back empty, so the first CI run on
+  a QEMU-capable runner is its test. That is a deliberate trade: splitting the
+  spec set to avoid the risk would have narrowed what CI checks, which costs
+  more than a red build does.
 - The e2e suite must not assume it created the cluster, which is the right
   shape anyway: it is also how `adopt` will be tested later.
 - **Nor may it assume it created the nodes.** Two harnesses means the suite

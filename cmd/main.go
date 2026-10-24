@@ -45,10 +45,10 @@ import (
 )
 
 // webhookSecretName, webhookServiceName and validatingWebhookConfigName name the
-// resources the in-process certificate rotator maintains; the service and webhook
-// configuration names come from the kustomize namePrefix in config/default.
+// resources the in-process certificate rotator maintains; all three names come from
+// the kustomize namePrefix in config/default.
 const (
-	webhookSecretName           = "webhook-server-cert"
+	webhookSecretName           = "ichor-webhook-server-cert"
 	webhookServiceName          = "ichor-webhook-service"
 	validatingWebhookConfigName = "ichor-validating-webhook-configuration"
 )
@@ -62,7 +62,7 @@ var (
 // in this controller's own namespace. Kubernetes RBAC cannot restrict list,
 // watch or create by resourceNames (the request has no single object name to check), so
 // those stay namespace-scoped; get, update and patch are restricted to that one Secret.
-// +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,resourceNames=webhook-server-cert,verbs=get;update;patch
+// +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,resourceNames=ichor-webhook-server-cert,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,verbs=list;watch;create
 // +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,resourceNames=ichor-validating-webhook-configuration,verbs=get;list;watch
 // +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,resourceNames=ichor-validating-webhook-configuration,verbs=update;patch

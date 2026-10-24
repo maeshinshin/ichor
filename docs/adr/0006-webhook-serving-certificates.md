@@ -30,8 +30,15 @@ What the investigation established:
   APIServices. It builds against controller-runtime v0.24.1. Its last feature
   release is v0.16.0 (March 2025); since then it is dependency bumps only.
 - Gatekeeper's chart — cert-controller's own reference consumer — ships the
-  webhook configuration with no `caBundle` key at all and no Secret, and
-  creates both at runtime from inside the controller pod.
+  webhook configuration with no `caBundle` key, and `caBundle` is written at
+  runtime. It does, however, ship the certificate **Secret**, as metadata with
+  no `data`, and that turns out to be load-bearing: cert-controller v0.16.0
+  contains no `Create` call anywhere. `refreshCertIfNeeded` does
+  `reader.Get` on the Secret and returns a wrapped error if that fails, so on
+  a cluster where the Secret does not exist the rotator errors out, the manager
+  runnable fails and the process exits — on every restart. The empty Secret is
+  what makes `Get` succeed; `secret.Data == nil` is then what triggers
+  generation, and `Update` fills it in.
 - On the Argo CD side, `ignoreDifferences` alone only hides the diff; self-heal
   still overwrites the field unless the Application also sets
   `RespectIgnoreDifferences=true`. Keying the exception on
@@ -45,8 +52,17 @@ What the investigation established:
   from the mounted Secret by controller-runtime's `certwatcher`, so the two
   compose and Ichor owns no cryptography.
 - The chart and the Kustomize base ship the `ValidatingWebhookConfiguration`
-  **without a `caBundle` key**, and ship no certificate Secret. Nothing
-  cert-shaped is templated, so no generated value can differ on a re-sync.
+  **without a `caBundle` key**, and ship the certificate Secret as **metadata
+  only, with no `data`**. No key material is templated, so no generated value
+  can differ on a re-sync, but the object exists — which is what lets the
+  rotator's `Get` succeed and its `Update` fill it in. Shipping it in Git has a
+  second benefit: if the Secret is ever deleted, Argo CD puts the empty one
+  back and the controller refills it, instead of the operator having to.
+- The volume that mounts it is `optional: true` as well. With the Secret
+  shipped this is belt and braces, but it changes the failure mode if the
+  Secret goes missing: the pod starts and crash-loops with the reason in its
+  logs, rather than sitting in `FailedMount` where the cause is far less
+  visible.
 - **`failurePolicy: Fail`**, which is where Ichor departs from Gatekeeper's
   `Ignore`, deliberately. Gatekeeper validates the whole cluster, so a webhook
   that is down must not block everything. Ichor's webhooks match only
@@ -80,9 +96,10 @@ What the investigation established:
   the bootstrap path must treat "webhook not ready yet" as something to wait
   on rather than an error.
 - If the Secret is deleted while the webhook configuration still carries the
-  old `caBundle`, cert-controller's retries exhaust, `Start` returns an error
-  and the manager exits, so the pod crash-loops rather than serving with a
-  stale certificate. With `failurePolicy: Fail` that means Ichor operations
+  old `caBundle`, the rotator's `Get` fails, `Start` returns an error and the
+  manager exits, so the pod crash-loops rather than serving with a stale
+  certificate. Under Argo CD the empty Secret comes back on the next sync and
+  the controller refills it. With `failurePolicy: Fail` that means Ichor operations
   stop until it recovers. That is the intended direction of failure, and
   `ichor` CLI recovery paths must not depend on the webhook.
 - Neither library exposes certificate expiry as a metric or a condition.

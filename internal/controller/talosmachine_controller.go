@@ -22,6 +22,29 @@ limitations under the License.
 // does nothing. It never writes TalosMachine.spec (principle 5); status
 // holds only hashes and condition state (principle 3), never the rendered
 // configuration itself.
+//
+// A hash mismatch alone cannot tell a desired-state change (the user edited
+// a TalosConfigPatch) apart from drift (someone changed the node): both
+// produce one. Reconcile tells them apart with desiredInputsHash, a
+// fingerprint of the generations of TalosCluster, this TalosMachine and
+// every applicable TalosConfigPatch, recorded in
+// TalosMachine.status.observedInputsHash only when the node is confirmed to
+// match what was rendered. If the current fingerprint still matches the
+// recorded one, nothing that feeds the render has moved, so the mismatch
+// must be the node; otherwise the desired state moved, and the usual apply
+// path runs regardless of drift policy. An empty recorded fingerprint (a
+// machine's first reconcile) is never treated as drift, for the same
+// reason: there is nothing to have converged against yet.
+//
+// One sharp edge of using the whole object's metadata.generation: it
+// advances on *any* spec change, including TalosCluster.spec.driftPolicy
+// itself, which does not feed the render at all. Flipping driftPolicy (or
+// editing any other cluster field) on the same reconcile cycle as a
+// pre-existing, unrelated node drift makes that one cycle look like a
+// desired-state change instead, so it applies once instead of warning.
+// Subsequent reconciles see a stable fingerprint again and behave
+// correctly. This is a known coarseness of generation-based tracking, not a
+// heuristic bolted on to paper over it.
 package controller
 
 import (
@@ -88,7 +111,15 @@ const (
 	reasonRebootRequired           = "RebootRequired"
 	reasonClusterLockHeld          = "ClusterLockHeld"
 	reasonDryRunWarnings           = "DryRunWarnings"
+	reasonNodeDrifted              = "NodeDrifted"
+	reasonDriftCorrected           = "DriftCorrected"
 )
+
+// driftPolicyAutoCorrect is the one TalosCluster.spec.driftPolicy value that
+// allows the reconciler to re-apply on drift. Anything else -- including the
+// zero value, for a cluster the CRD default hasn't reached yet -- is
+// treated as warnOnly, the safe side (design 5.6 step 5).
+const driftPolicyAutoCorrect = "autoCorrect"
 
 // TalosMachineReconciler reconciles a TalosMachine object.
 type TalosMachineReconciler struct {
@@ -174,6 +205,23 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			"rendering machine configuration failed")
 	}
 
+	// inputsHash fingerprints every object that just fed Render: this
+	// TalosCluster, this TalosMachine, and whichever TalosConfigPatches
+	// render.SelectPatches decided apply to it -- the same decision Render
+	// itself just made, not a second guess at it. previousInputsHash is
+	// whatever was recorded the last time the node was confirmed to match
+	// what was rendered; empty on a machine's first reconcile, since there
+	// is no previous convergence yet.
+	inputsHash, err := desiredInputsHash(&cluster, &m, patches.Items)
+	if err != nil {
+		log.Error(err, "hashing render inputs")
+
+		return ctrl.Result{}, r.ready(ctx, &m, metav1.ConditionFalse, reasonRenderFailed,
+			"rendering machine configuration failed")
+	}
+
+	previousInputsHash := m.Status.ObservedInputsHash
+
 	if r.TalosClient == nil {
 		return ctrl.Result{}, r.ready(ctx, &m, metav1.ConditionFalse, reasonTalosClientNotConfigured,
 			"no Talos API connectivity is configured for this controller")
@@ -206,10 +254,20 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	if hashConfig(current) == hash {
 		m.Status.AppliedConfigHash = hash
+		m.Status.ObservedInputsHash = inputsHash
 
 		return ctrl.Result{}, r.ready(ctx, &m, metav1.ConditionTrue, reasonConverged,
 			"node configuration matches the rendered configuration")
 	}
+
+	// drifted is true only when nothing that feeds the render has changed
+	// since Ichor last confirmed the node matched it: the mismatch just
+	// found above then has only one explanation left, the node moved on its
+	// own (design 5.6 step 5). previousInputsHash is empty on a machine's
+	// first reconcile, which is deliberately not drift -- there is no prior
+	// convergence to compare against, so a first-time mismatch is treated
+	// the same as any other desired-state change, below.
+	drifted := previousInputsHash != "" && previousInputsHash == inputsHash
 
 	// Step 3: work out which field paths changed and what that implies.
 	paths, err := changedPaths(current, rendered)
@@ -242,20 +300,37 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	r.setWarnings(&m, warnings)
 
-	// Step 5: apply, refuse, or stop, depending on what step 3 found.
+	// Step 5: apply, refuse, or stop, depending on what step 3 found -- and,
+	// now, on whether this is drift. A reboot-requiring, install-time-only
+	// or unsupported change is always just reported, never applied,
+	// regardless of drift or driftPolicy: those paths already do the right
+	// thing, drift only changes what their message says. The one new
+	// outcome is a safe drift left alone because driftPolicy is warnOnly
+	// (the default): design 5.6 step 5 wants drift visible, not silently
+	// corrected.
+	driftNote := ""
+	if drifted {
+		driftNote = "node configuration has drifted from the rendered configuration; "
+	}
+
 	switch {
 	case len(impact.Unsupported) > 0:
 		return ctrl.Result{}, r.ready(ctx, &m, metav1.ConditionFalse, reasonUnsupportedTalosVersion,
-			fmt.Sprintf("needs a newer Talos version than the pinned contract %s: %s",
-				cluster.Spec.VersionContract, strings.Join(impact.Unsupported, ", ")))
+			fmt.Sprintf("%sneeds a newer Talos version than the pinned contract %s: %s",
+				driftNote, cluster.Spec.VersionContract, strings.Join(impact.Unsupported, ", ")))
 
 	case len(impact.InstallTimeOnly) > 0:
 		return ctrl.Result{}, r.ready(ctx, &m, metav1.ConditionFalse, reasonInstallTimeOnlyChange,
-			fmt.Sprintf("needs a reset and reinstall, not an apply (install-time-only fields changed: %s)",
-				strings.Join(impact.InstallTimeOnly, ", ")))
+			fmt.Sprintf("%sneeds a reset and reinstall, not an apply (install-time-only fields changed: %s)",
+				driftNote, strings.Join(impact.InstallTimeOnly, ", ")))
 
 	case impact.RebootRequired:
-		return ctrl.Result{}, r.refuseReboot(ctx, &m, &cluster)
+		return ctrl.Result{}, r.refuseReboot(ctx, &m, &cluster, driftNote)
+
+	case drifted && cluster.Spec.DriftPolicy != driftPolicyAutoCorrect:
+		return ctrl.Result{}, r.ready(ctx, &m, metav1.ConditionFalse, reasonNodeDrifted,
+			fmt.Sprintf("%sdriftPolicy is warnOnly, so it was left unchanged (changed paths: %s)",
+				driftNote, strings.Join(paths, ", ")))
 
 	default:
 		if err := talos.ApplyNoReboot(ctx, rendered); err != nil {
@@ -266,10 +341,44 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		}
 
 		m.Status.AppliedConfigHash = hash
+		m.Status.ObservedInputsHash = inputsHash
 
-		return ctrl.Result{}, r.ready(ctx, &m, metav1.ConditionTrue, reasonApplied,
-			"applied configuration without a reboot")
+		reason, message := reasonApplied, "applied configuration without a reboot"
+		if drifted {
+			reason = reasonDriftCorrected
+			message = "node configuration had drifted; re-applied because driftPolicy is autoCorrect " +
+				"and every changed path is reboot-free"
+		}
+
+		return ctrl.Result{}, r.ready(ctx, &m, metav1.ConditionTrue, reason, message)
 	}
+}
+
+// desiredInputsHash fingerprints the generation of every object that fed
+// this reconcile's render: cluster, m, and whichever of candidates
+// render.SelectPatches decides apply to m -- the same question Render
+// itself just answered, asked again rather than guessed at separately, so
+// a patch unrelated to m never perturbs the fingerprint. The result is a
+// hash only (principle 3): generations are not secret, but a plain join of
+// them is unnecessary detail no caller needs to parse back out.
+func desiredInputsHash(
+	cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, candidates []ichorv1alpha1.TalosConfigPatch,
+) (string, error) {
+	applicable, err := render.SelectPatches(cluster, m, candidates)
+	if err != nil {
+		return "", fmt.Errorf("selecting applicable patches: %w", err)
+	}
+
+	parts := make([]string, 0, len(applicable)+2)
+	parts = append(parts, fmt.Sprintf("cluster=%d", cluster.Generation), fmt.Sprintf("machine=%d", m.Generation))
+
+	for _, p := range applicable {
+		parts = append(parts, fmt.Sprintf("patch:%s=%d", p.Name, p.Generation))
+	}
+
+	sum := sha256.Sum256([]byte(strings.Join(parts, ";")))
+
+	return fmt.Sprintf("sha256:%x", sum), nil
 }
 
 // refuseReboot implements the reboot-needed branch of design step 5: take
@@ -278,7 +387,7 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 // rule 4); applying or rebooting without them would take workloads down, so
 // the only correct move here is a visible, lock-protected refusal.
 func (r *TalosMachineReconciler) refuseReboot(
-	ctx context.Context, m *ichorv1alpha1.TalosMachine, cluster *ichorv1alpha1.TalosCluster,
+	ctx context.Context, m *ichorv1alpha1.TalosMachine, cluster *ichorv1alpha1.TalosCluster, driftNote string,
 ) error {
 	log := logf.FromContext(ctx)
 
@@ -300,7 +409,7 @@ func (r *TalosMachineReconciler) refuseReboot(
 	}()
 
 	return r.ready(ctx, m, metav1.ConditionFalse, reasonRebootRequired,
-		"configuration change needs a reboot; this phase does not reboot nodes -- "+
+		driftNote+"configuration change needs a reboot; this phase does not reboot nodes -- "+
 			"draining, the node-operation hook and etcd checks that must precede a reboot are later work")
 }
 

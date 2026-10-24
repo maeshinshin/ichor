@@ -86,6 +86,12 @@ type TalosMachineStatus struct {
 	// observedGeneration is the most recent generation the controller has reconciled.
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
+	// appliedConfigHash is the sha256 of the rendered configuration last confirmed applied to
+	// the node (pkg/render's hash format), used for the convergence check on later reconciles.
+	// It is a hash only, never the rendered configuration itself (principles 1 and 3).
+	// +optional
+	AppliedConfigHash string `json:"appliedConfigHash,omitempty"`
 }
 
 // +kubebuilder:object:root=true

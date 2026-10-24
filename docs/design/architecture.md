@@ -448,7 +448,10 @@ Application until the Talos side is ready.
 2. Collect patches by layer and priority and apply them.
 3. Validate, hash, and compare with the node's current config via COSI.
 4. If different, apply. The mode (try, no-reboot, reboot, staged) is derived
-   from the diff. Reboot-requiring changes take the cluster lock and go one
+   from the diff, because Talos will not derive it for us — its `AUTO` mode is
+   a hardcoded alias for `NO_REBOOT` and never inspects the change (ADR 0009).
+   A dry run first is still worth it: it is side-effect free and returns
+   validation warnings worth surfacing. Reboot-requiring changes take the cluster lock and go one
    node at a time through the operation hook and drain, control planes with
    etcd checks in between.
 5. Watch COSI for state and drift. Drift handling is per cluster: warn only

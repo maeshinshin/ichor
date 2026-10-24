@@ -17,8 +17,6 @@ limitations under the License.
 package utils
 
 import (
-	"bufio"
-	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -47,20 +45,6 @@ func Run(cmd *exec.Cmd) (string, error) {
 	return string(output), nil
 }
 
-// GetNonEmptyLines converts given command output string into individual objects
-// according to line breakers, and ignores the empty elements in it.
-func GetNonEmptyLines(output string) []string {
-	var res []string
-	elements := strings.SplitSeq(output, "\n")
-	for element := range elements {
-		if element != "" {
-			res = append(res, element)
-		}
-	}
-
-	return res
-}
-
 // GetProjectDir will return the directory where the project is
 func GetProjectDir() (string, error) {
 	wd, err := os.Getwd()
@@ -69,56 +53,4 @@ func GetProjectDir() (string, error) {
 	}
 	wd = strings.ReplaceAll(wd, "/test/e2e", "")
 	return wd, nil
-}
-
-// UncommentCode searches for target in the file and remove the comment prefix
-// of the target content. The target content may span multiple lines.
-func UncommentCode(filename, target, prefix string) error {
-	// false positive
-	// nolint:gosec
-	content, err := os.ReadFile(filename)
-	if err != nil {
-		return fmt.Errorf("failed to read file %q: %w", filename, err)
-	}
-	strContent := string(content)
-
-	idx := strings.Index(strContent, target)
-	if idx < 0 {
-		return fmt.Errorf("unable to find the code %q to be uncommented", target)
-	}
-
-	out := new(bytes.Buffer)
-	_, err = out.Write(content[:idx])
-	if err != nil {
-		return fmt.Errorf("failed to write to output: %w", err)
-	}
-
-	scanner := bufio.NewScanner(bytes.NewBufferString(target))
-	if !scanner.Scan() {
-		return nil
-	}
-	for {
-		if _, err = out.WriteString(strings.TrimPrefix(scanner.Text(), prefix)); err != nil {
-			return fmt.Errorf("failed to write to output: %w", err)
-		}
-		// Avoid writing a newline in case the previous line was the last in target.
-		if !scanner.Scan() {
-			break
-		}
-		if _, err = out.WriteString("\n"); err != nil {
-			return fmt.Errorf("failed to write to output: %w", err)
-		}
-	}
-
-	if _, err = out.Write(content[idx+len(target):]); err != nil {
-		return fmt.Errorf("failed to write to output: %w", err)
-	}
-
-	// false positive
-	// nolint:gosec
-	if err = os.WriteFile(filename, out.Bytes(), 0644); err != nil {
-		return fmt.Errorf("failed to write file %q: %w", filename, err)
-	}
-
-	return nil
 }

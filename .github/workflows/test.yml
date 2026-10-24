@@ -2,6 +2,7 @@ name: Tests
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 permissions: {}
@@ -25,14 +26,18 @@ jobs:
         run: |
           # shellcheck disable=SC2016 # the single-quoted script is meant for the inner bash -c, not this shell
           nix develop --command bash -c '
+            want=$(sed -n "s/^go //p" go.mod)
             have=$(go env GOVERSION | sed "s/^go//")
-            want=1.27.3
+            if ! echo "$have" | grep -Eq "^[0-9]+\.[0-9]+\.[0-9]+$"; then
+              echo "devShell Go \"$have\" is not a plain release (pre-release/rc?), cannot compare to the go.mod floor of $want" >&2
+              exit 1
+            fi
             latest=$(printf "%s\n%s\n" "$want" "$have" | sort -V | tail -1)
             if [ "$latest" != "$have" ]; then
               echo "devShell Go $have is older than go.mods floor of $want" >&2
               exit 1
             fi
-            echo "devShell Go $have satisfies the $want floor"
+            echo "devShell Go $have satisfies the go.mod floor of $want"
           '
 
       - name: Running Tests

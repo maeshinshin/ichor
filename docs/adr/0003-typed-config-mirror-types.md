@@ -64,10 +64,9 @@ machinery types. Nothing about the Talos field catalogue is hand-maintained.
   keyed by type is what keeps this table from growing with Talos's field count:
   roughly ten entries, not a thousand fields.
 - Fields typed `meta.Unstructured` (`map[string]any`, an arbitrary-YAML hatch
-  inside Talos's own types — `MachinePods`,
-  `MachineBaseRuntimeSpecOverrides`) are dropped by the generator and
-  reported. Carrying them would reintroduce exactly the raw-YAML escape hatch
-  that principle 1 and the typed-only decision rule out.
+  inside Talos's own types) are dropped by the generator and reported.
+  Carrying them would reintroduce exactly the raw-YAML escape hatch that
+  principle 1 and the typed-only decision rule out.
 - Conversion is generated in both directions: mirror to machinery for
   rendering, machinery to mirror for `adopt`.
 - The generator's correctness check is a **round-trip test per allowed kind**:
@@ -75,12 +74,51 @@ machinery types. Nothing about the Talos field catalogue is hand-maintained.
   YAML-identical. A machinery upgrade that removes or retypes a field then
   fails to compile or fails that test, instead of silently changing the API.
 - The kind allow-list drives generation, so the CRD's size is a function of a
-  decision we control. The size of each allowed kind is measured before the
-  list is fixed. If the v1alpha1 `Config` document alone does not fit, the
-  kinds are split across separate CRDs (`TalosNetworkPatch` and friends), which
-  section 4.4 already allows.
+  decision we control. **Measured, and the answer is comfortable**: the mirror
+  for the v1alpha1 `Config` document renders a 114,115-byte CRD, 7.3% of etcd's
+  1,572,864-byte `--max-request-bytes` ceiling; all three of phase 2's allowed
+  kinds in one CRD come to 122,353 bytes. No splitting into
+  `TalosNetworkPatch`-style CRDs is needed, and there is room for the remaining
+  52 kinds many times over.
 - Phase 1 ships `TalosConfigPatch` without `documents[]`; the generator is the
   first work item of phase 2. The rest of phase 1 does not depend on it.
+
+## What the generator actually dropped
+
+Walking `v1alpha1.Config` found **eleven** `meta.Unstructured` fields, not the
+two this ADR first guessed at:
+
+`KubeletConfig.KubeletExtraConfig`, `KubeletConfig.KubeletCredentialProviderConfig`,
+`MachineConfig.MachinePods`, `MachineSeccompProfile.MachineSeccompProfileValue`,
+`MachineConfig.MachineBaseRuntimeSpecOverrides`,
+`AdmissionPluginConfig.PluginConfiguration`, `APIServerConfig.AuditPolicyConfig`,
+`ResourcesConfig.Requests`, `ResourcesConfig.Limits`,
+`AuthorizationConfigAuthorizerConfig.AuthorizerWebhook`,
+`SchedulerConfig.SchedulerConfig`.
+
+They have one thing in common: every one is a pass-through to **another
+project's** schema — kubelet's `KubeletConfiguration`, Kubernetes' audit
+policy, the scheduler's component config, a seccomp profile, a resource list.
+Talos types them as unstructured precisely so it need not depend on those
+schemas. So this is not Talos being careless; it is a real property of its API,
+and it collides with Ichor's typed-only rule in a way worth naming: for these
+fields the choice is not "typed or raw", it is "pass-through or absent".
+
+Phase 2 leaves them absent. The cost is expressiveness, and it is **not
+silently paid** — the field is missing from the CRD, so the API server rejects
+it with a clear error rather than dropping a value the user thought they set.
+The most consequential one is `machine.kubelet.extraConfig`, which is a
+commonly used field in hand-written Talos configuration; a user who needs it
+cannot express it through Ichor today.
+
+If that gap needs closing, the options in increasing cost are: mirror
+`ResourcesConfig.Requests`/`Limits` as `corev1.ResourceList`, which Ichor
+already depends on and which is one table entry rather than a catalogue; take
+dependencies on the `k8s.io/kubelet`, `k8s.io/apiserver` and
+`k8s.io/kube-scheduler` component-config modules to mirror four more; or revisit
+the typed-only decision for pass-through fields specifically. The first is
+cheap and uncontroversial. The last is a scope change and not the
+implementation's call.
 
 ## Consequences
 

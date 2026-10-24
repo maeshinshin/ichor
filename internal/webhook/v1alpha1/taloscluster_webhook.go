@@ -24,6 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/deleteguard"
 )
 
 // nolint:unused
@@ -37,26 +38,18 @@ func SetupTalosClusterWebhookWithManager(mgr ctrl.Manager) error {
 		Complete()
 }
 
-// TODO(user): EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-
-// TODO(user): change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
-// NOTE: If you want to customise the 'path', use the flags '--defaulting-path' or '--validation-path'.
-// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-taloscluster,mutating=false,failurePolicy=fail,sideEffects=None,groups=ichor.maesh.dev,resources=talosclusters,verbs=create;update,versions=v1alpha1,name=vtaloscluster-v1alpha1.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-taloscluster,mutating=false,failurePolicy=fail,sideEffects=None,groups=ichor.maesh.dev,resources=talosclusters,verbs=create;update;delete,versions=v1alpha1,name=vtaloscluster-v1alpha1.kb.io,admissionReviewVersions=v1
 
 // TalosClusterCustomValidator struct is responsible for validating the TalosCluster resource
 // when it is created, updated, or deleted.
 //
 // NOTE: The +kubebuilder:object:generate=false marker prevents controller-gen from generating DeepCopy methods,
 // as this struct is used only for temporary operations and does not need to be deeply copied.
-type TalosClusterCustomValidator struct {
-	// TODO(user): Add more fields as needed for validation
-}
+type TalosClusterCustomValidator struct{}
 
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type TalosCluster.
 func (v *TalosClusterCustomValidator) ValidateCreate(_ context.Context, obj *ichorv1alpha1.TalosCluster) (admission.Warnings, error) {
 	talosclusterlog.Info("Validation for TalosCluster upon creation", "name", obj.GetName())
-
-	// TODO(user): fill in your validation logic upon object creation.
 
 	return nil, nil
 }
@@ -65,8 +58,6 @@ func (v *TalosClusterCustomValidator) ValidateCreate(_ context.Context, obj *ich
 func (v *TalosClusterCustomValidator) ValidateUpdate(_ context.Context, oldObj, newObj *ichorv1alpha1.TalosCluster) (admission.Warnings, error) {
 	talosclusterlog.Info("Validation for TalosCluster upon update", "name", newObj.GetName())
 
-	// TODO(user): fill in your validation logic upon object update.
-
 	return nil, nil
 }
 
@@ -74,7 +65,5 @@ func (v *TalosClusterCustomValidator) ValidateUpdate(_ context.Context, oldObj, 
 func (v *TalosClusterCustomValidator) ValidateDelete(_ context.Context, obj *ichorv1alpha1.TalosCluster) (admission.Warnings, error) {
 	talosclusterlog.Info("Validation for TalosCluster upon deletion", "name", obj.GetName())
 
-	// TODO(user): fill in your validation logic upon object deletion.
-
-	return nil, nil
+	return nil, deleteguard.CheckDelete(obj.GetAnnotations())
 }

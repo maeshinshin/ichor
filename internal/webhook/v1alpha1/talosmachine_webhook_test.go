@@ -20,51 +20,60 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	corev1 "k8s.io/api/core/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
-	// TODO (user): Add any additional imports if needed
+	"github.com/maeshinshin/ichor/pkg/deleteguard"
 )
 
+func newTestMachine() *ichorv1alpha1.TalosMachine {
+	return &ichorv1alpha1.TalosMachine{
+		GenerateName: "machine-", Namespace: "default",
+		Spec: ichorv1alpha1.TalosMachineSpec{
+			ClusterRef: corev1.LocalObjectReference{Name: "cluster"},
+			Identity:   ichorv1alpha1.TalosMachineIdentity{UUID: "00000000-0000-0000-0000-000000000001"},
+			Endpoint:   "10.0.0.2:50000",
+			Role:       "worker",
+		},
+	}
+}
+
 var _ = Describe("TalosMachine Webhook", func() {
-	var (
-		obj       *ichorv1alpha1.TalosMachine
-		oldObj    *ichorv1alpha1.TalosMachine
-		validator TalosMachineCustomValidator
-	)
+	var obj *ichorv1alpha1.TalosMachine
 
 	BeforeEach(func() {
-		obj = &ichorv1alpha1.TalosMachine{}
-		oldObj = &ichorv1alpha1.TalosMachine{}
-		validator = TalosMachineCustomValidator{}
-		Expect(validator).NotTo(BeNil(), "Expected validator to be initialized")
-		Expect(oldObj).NotTo(BeNil(), "Expected oldObj to be initialized")
-		Expect(obj).NotTo(BeNil(), "Expected obj to be initialized")
+		obj = newTestMachine()
+		Expect(k8sClient.Create(ctx, obj)).To(Succeed())
 	})
 
 	AfterEach(func() {
-		// TODO (user): Add any teardown logic common to all tests
+		if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(obj), obj); err != nil {
+			return
+		}
+		obj.Annotations = map[string]string{deleteguard.AllowDeleteAnnotation: deleteguard.AllowDeleteValue}
+		Expect(k8sClient.Update(ctx, obj)).To(Succeed())
+		Expect(k8sClient.Delete(ctx, obj)).To(Succeed())
 	})
 
-	Context("When creating or updating TalosMachine under Validating Webhook", func() {
-		// TODO (user): Add logic for validating webhooks
-		// Example:
-		// It("Should deny creation if a required field is missing", func() {
-		//     By("simulating an invalid creation scenario")
-		//     obj.SomeRequiredField = ""
-		//     Expect(validator.ValidateCreate(ctx, obj)).Error().To(HaveOccurred())
-		// })
-		//
-		// It("Should admit creation if all required fields are present", func() {
-		//     By("simulating an invalid creation scenario")
-		//     obj.SomeRequiredField = "valid_value"
-		//     Expect(validator.ValidateCreate(ctx, obj)).To(BeNil())
-		// })
-		//
-		// It("Should validate updates correctly", func() {
-		//     By("simulating a valid update scenario")
-		//     oldObj.SomeRequiredField = "updated_value"
-		//     obj.SomeRequiredField = "updated_value"
-		//     Expect(validator.ValidateUpdate(ctx, oldObj, obj)).To(BeNil())
-		// })
+	It("admits create", func() {
+		// obj was already created in BeforeEach; nothing further to assert.
 	})
 
+	It("admits update", func() {
+		obj.Spec.Hostname = "worker-1"
+		Expect(k8sClient.Update(ctx, obj)).To(Succeed())
+	})
+
+	It("refuses deletion without the allow-delete annotation", func() {
+		err := k8sClient.Delete(ctx, obj)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(deleteguard.AllowDeleteAnnotation))
+	})
+
+	It("allows deletion with ichor.maesh.dev/allow-delete: \"true\"", func() {
+		obj.Annotations = map[string]string{deleteguard.AllowDeleteAnnotation: deleteguard.AllowDeleteValue}
+		Expect(k8sClient.Update(ctx, obj)).To(Succeed())
+		Expect(k8sClient.Delete(ctx, obj)).To(Succeed())
+	})
 })

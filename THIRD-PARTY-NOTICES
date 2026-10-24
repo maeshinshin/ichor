@@ -15,6 +15,11 @@ upstream repository (the version tag) and from the Go module proxy (https://prox
 2. Upstream NOTICE texts
 ================================================================================
 
+github.com/open-policy-agent/cert-controller@v0.16.0: NOTICE
+
+cert-controller
+Copyright 2018-2020 The Gatekeeper Authors
+
 github.com/prometheus/client_golang@v1.23.2: NOTICE
 
 Prometheus instrumentation library for Go applications
@@ -370,16 +375,17 @@ Components:
 - github.com/go-logr/stdr@v1.2.2
 - github.com/go-logr/zapr@v1.3.0
 - github.com/go-openapi/jsonpointer@v0.21.0
-- github.com/go-openapi/jsonreference@v0.20.2
+- github.com/go-openapi/jsonreference@v0.21.0
 - github.com/go-openapi/swag@v0.23.0
 - github.com/google/cel-go@v0.26.0
     Copyright (c) 2018 The Go Authors. All rights reserved.
 - github.com/google/gnostic-models@v0.7.0
-- github.com/google/pprof@v0.0.0-20250403155104-27863c87afa6
+- github.com/google/pprof@v0.0.0-20260115054156-294ebfa9ad83
 - github.com/inconshreveable/mousetrap@v1.1.0
     Copyright 2022 Alan Shreve (@inconshreveable)
 - github.com/modern-go/concurrent@v0.0.0-20180306012644-bacd9c7ef1dd
 - github.com/modern-go/reflect2@v1.0.3-0.20250322232337-35a7c28c31ee
+- github.com/open-policy-agent/cert-controller@v0.16.0
 - github.com/prometheus/client_golang@v1.23.2
 - github.com/prometheus/client_model@v0.6.2
 - github.com/prometheus/common@v0.67.5
@@ -1226,6 +1232,35 @@ Components:
     Copyright (c) 2011-2019 Canonical Ltd
 
 --------------------------------------------------------------------------------
+BSD-2-Clause
+--------------------------------------------------------------------------------
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+* Redistributions of source code must retain the above copyright notice, this
+  list of conditions and the following disclaimer.
+
+* Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
+  and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Components:
+- github.com/pkg/errors@v0.9.1
+    Copyright (c) 2015, Dave Cheney <dave@cheney.net> All rights reserved.
+
+--------------------------------------------------------------------------------
 BSD-3-Clause (variant 1 of 8)
 --------------------------------------------------------------------------------
 
@@ -1636,14 +1671,16 @@ Components:
     Copyright (c) 2016 json-iterator
 - github.com/mailru/easyjson@v0.7.7
     Copyright (c) 2016 Mail.Ru Group
-- github.com/onsi/ginkgo/v2@v2.27.4
+- github.com/onsi/ginkgo/v2@v2.28.0
     Copyright (c) 2013-2014 Onsi Fakhouri
-- github.com/onsi/gomega@v1.39.0
+- github.com/onsi/gomega@v1.39.1
     Copyright (c) 2013-2014 Onsi Fakhouri
 - github.com/stoewer/go-strcase@v1.3.0
     Copyright (c) 2017, Adrian Stoewer <adrian.stoewer@rz.ifi.lmu.de>
 - github.com/x448/float16@v0.8.4
     Copyright (c) 2019 Montgomery Edwards⁴⁴⁸ and Faye Amacker
+- go.uber.org/atomic@v1.11.0
+    Copyright (c) 2016 Uber Technologies, Inc.
 - go.uber.org/multierr@v1.11.0
     Copyright (c) 2017-2021 Uber Technologies, Inc.
 - go.uber.org/zap@v1.27.1

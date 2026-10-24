@@ -30,6 +30,14 @@ the shell or not. If you see that, `rm -rf bin` and run it again inside
   build with the Makefile targets (`make manifests generate test build`).
   Don't call controller-gen, kustomize or envtest by hand.
 - The CLI uses cobra; add commands with `cobra-cli add`.
+- The Helm chart in `dist/chart` is generated from `config/` by
+  `kubebuilder edit --plugins=helm/v2-alpha`; everything under
+  `dist/chart/templates/` is overwritten on every run. One trap: controller-gen
+  names the `ClusterRole` and the namespaced `Role` it generates both
+  `manager-role`, and the Helm plugin can only convert one of them under that
+  shared name — so a new RBAC rule in the wrong scope is silently dropped from
+  the chart while kustomize still renders it. After any RBAC change, render the
+  chart and check the rules are actually there.
 - The UI is Vite + Preact + [preactcn](https://maeshinshin.github.io/preactcn/).
   Add components with `npx shadcn@latest add @preactcn/<name>`. No React,
   no `preact/compat`.

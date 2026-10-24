@@ -40,6 +40,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/controller"
 	webhookv1alpha1 "github.com/maeshinshin/ichor/internal/webhook/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
@@ -240,6 +241,13 @@ func main() {
 				os.Exit(1)
 			}
 		}()
+	}
+	if err := (&controller.TalosMachineReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "Failed to create controller", "controller", "talosmachine")
+		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
 

@@ -50,11 +50,11 @@ type TalosClusterControlPlane struct {
 	// +required
 	Count int32 `json:"count"`
 
-	// schedulable controls whether control planes accept workloads; auto taints them only when workers exist, then stays fixed.
-	// +kubebuilder:validation:Enum=auto;true;false
-	// +kubebuilder:default=auto
-	// +optional
-	Schedulable string `json:"schedulable,omitempty"`
+	// schedulable controls whether control planes accept workloads; required with no default because nothing on the
+	// object can resolve an auto value before any machine exists.
+	// +kubebuilder:validation:Enum="true";"false"
+	// +required
+	Schedulable string `json:"schedulable"`
 }
 
 // TalosClusterSpec defines the desired state of TalosCluster.

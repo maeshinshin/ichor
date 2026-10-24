@@ -87,9 +87,10 @@ spec:
         {{- range .Values.manager.args }}
         - {{ . }}
         {{- end }}
-        {{- if .Values.certManager.enabled }}
+        # Unconditional, not gated on certManager.enabled: cert-controller fills
+        # this path in-process, regardless of that toggle. Matches
+        # config/default/manager_webhook_patch.yaml, which patches it in always.
         - --webhook-cert-path=/tmp/k8s-webhook-server/serving-certs
-        {{- end }}
         command:
         - /manager
         env:
@@ -146,11 +147,10 @@ spec:
           {{- if .Values.manager.extraVolumeMounts }}
           {{- toYaml .Values.manager.extraVolumeMounts | nindent 10 }}
           {{- end }}
-          {{- if .Values.certManager.enabled }}
+          # Unconditional, not gated on certManager.enabled: see the arg above.
           - mountPath: /tmp/k8s-webhook-server/serving-certs
             name: webhook-certs
             readOnly: true
-          {{- end }}
       securityContext:
         {{- if .Values.manager.podSecurityContext }}
         {{- toYaml .Values.manager.podSecurityContext | nindent 8 }}
@@ -168,5 +168,6 @@ spec:
       - name: webhook-certs
         secret:
           optional: true
-          secretName: {{ include "ichor.resourceName" (dict "suffix" "webhook-server-cert" "context" $) }}
+          # Fixed name: matches the Secret's own fixed name (extras/webhook-server-cert.yaml).
+          secretName: ichor-webhook-server-cert
 {{- end }}

@@ -2,13 +2,17 @@
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
 metadata:
-  name: {{ include "ichor.resourceName" (dict "suffix" "validating-webhook-configuration" "context" $) }}
+  # Fixed names, not release-templated: Ichor is one installation per
+  # cluster (design 4.1), this resource is cluster-scoped regardless of
+  # release name, and cmd/main.go's cert rotator already hardcodes both
+  # this name and the webhook Service's.
+  name: ichor-validating-webhook-configuration
 webhooks:
 - admissionReviewVersions:
   - v1
   clientConfig:
     service:
-      name: {{ include "ichor.resourceName" (dict "suffix" "webhook-service" "context" $) }}
+      name: ichor-webhook-service
       namespace: {{ .Release.Namespace }}
       path: /validate-ichor-maesh-dev-v1alpha1-taloscluster
   failurePolicy: Fail
@@ -27,7 +31,7 @@ webhooks:
   - v1
   clientConfig:
     service:
-      name: {{ include "ichor.resourceName" (dict "suffix" "webhook-service" "context" $) }}
+      name: ichor-webhook-service
       namespace: {{ .Release.Namespace }}
       path: /validate-ichor-maesh-dev-v1alpha1-talosmachine
   failurePolicy: Fail

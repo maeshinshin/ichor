@@ -368,6 +368,42 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(held).To(BeFalse(), "cluster lock should have been released")
 	})
 
+	It("reports the lock's holder and leaves it alone when another identity already holds it", func() {
+		bundle := newTestBundle("v1.14")
+		secret := newTestSecret(bundle)
+		cluster := newTestCluster(secret.Name, "v1.14")
+		m := newTestMachine(cluster.Name, true)
+
+		current := renderWithConfig(cluster, m, bundle, layerCluster, nil, minimalConfigSkeleton())
+
+		disabled := true
+		desired := minimalConfigSkeleton()
+		desired.ClusterConfig.ProxyConfig = &typedconfig.ProxyConfig{Disabled: &disabled}
+		newTestPatch(cluster.Name, layerCluster, nil, desired)
+
+		lock := clusterlock.New(k8sClient, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0)
+		Expect(lock.Acquire(ctx, "someone-else")).To(Succeed())
+
+		fake := &fakeTalosClient{current: current}
+		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), TalosClient: clientFactory(fake)}
+
+		_, err := reconcileMachine(r, m)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(fake.applyCalls).To(BeEmpty())
+
+		cond := readyCondition(fetchMachine(m))
+		Expect(cond).NotTo(BeNil())
+		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(cond.Reason).To(Equal(reasonClusterLockHeld))
+		Expect(cond.Message).To(ContainSubstring("someone-else"))
+
+		holder, held, err := lock.Holder(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(held).To(BeTrue(), "the other identity's lock must not be released by a failed Acquire")
+		Expect(holder).To(Equal("someone-else"))
+	})
+
 	It("applies nothing and reports reset-and-reinstall for an install-time-only change", func() {
 		bundle := newTestBundle("v1.14")
 		secret := newTestSecret(bundle)

@@ -2,6 +2,7 @@ name: E2E Tests
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 permissions: {}
@@ -12,7 +13,7 @@ jobs:
       contents: read
     name: Run on Ubuntu
     # ubuntu-24.04 GitHub-hosted runners provide /dev/kvm and passwordless
-    # sudo, which talosctl's QEMU provisioner needs.
+    # sudo, which the QEMU cluster `setup-test-e2e` provisions below needs.
     runs-on: ubuntu-24.04
     steps:
       - name: Clone the code

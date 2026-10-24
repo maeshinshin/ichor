@@ -11,28 +11,29 @@ jobs:
     permissions:
       contents: read
     name: Run on Ubuntu
-    runs-on: ubuntu-latest
+    # ubuntu-24.04 GitHub-hosted runners provide /dev/kvm and passwordless
+    # sudo, which talosctl's QEMU provisioner needs.
+    runs-on: ubuntu-24.04
     steps:
       - name: Clone the code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
 
-      - name: Setup Go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
-        with:
-          go-version-file: go.mod
+      - name: Install Nix
+        uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # 31.11.3
 
-      - name: Install the latest version of kind
-        run: |
-          curl -Lo ./kind https://kind.sigs.k8s.io/dl/latest/kind-linux-$(go env GOARCH)
-          chmod +x ./kind
-          sudo mv ./kind /usr/local/bin/kind
-
-      - name: Verify kind installation
-        run: kind version
+      # --- cluster provisioning (the one place ADR 0007's rewrite replaces) ---
+      # `setup-test-e2e` is expected to stand up the cluster and publish a
+      # kubeconfig for it via $GITHUB_ENV (KUBECONFIG=<path>) so later steps
+      # can reach it; the e2e run below must not create its own cluster.
+      - name: Provision the e2e cluster
+        run: nix develop --command make setup-test-e2e
+      # --- end cluster provisioning ---
 
       - name: Running Test e2e
-        run: |
-          go mod tidy
-          make test-e2e
+        run: nix develop --command bash -c "go mod tidy && make test-e2e"
+
+      - name: Tear down the e2e cluster
+        if: always()
+        run: nix develop --command make cleanup-test-e2e

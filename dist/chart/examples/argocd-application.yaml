@@ -1,0 +1,51 @@
+# Example Argo CD Application for the Ichor chart. Not applied by
+# anything in this repo; adapt repoURL/targetRevision/destination and apply by
+# hand, or add it to your own GitOps repository's apps/ichor/.
+#
+# The webhook serving certificate has no caBundle, and the Secret that holds
+# it ships as metadata only, no data: cert-controller, running
+# in-process in ichor-controller, writes both at runtime with field manager
+# "ichor-controller" — caBundle into the ValidatingWebhookConfiguration, and
+# the key material into the Secret. Without the settings below, Argo CD's
+# self-heal overwrites both back to what Git describes (empty) on every sync:
+#
+#   - ignoreDifferences hides each diff from the UI and from OutOfSync
+#     status, but on its own does nothing during an actual sync.
+#   - syncOptions: RespectIgnoreDifferences=true is also required: it makes
+#     Argo CD pre-patch the desired state before applying it, so the sync
+#     itself leaves the fields alone instead of just hiding the diff.
+#
+# Both settings are needed together; either one alone still lets self-heal
+# clobber the caBundle and blank the Secret back out.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ichor
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/maeshinshin/ichor.git
+    targetRevision: HEAD
+    path: dist/chart
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ichor-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - RespectIgnoreDifferences=true
+  ignoreDifferences:
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+      name: ichor-validating-webhook-configuration
+      managedFieldsManagers:
+        - ichor-controller
+    - group: ""
+      kind: Secret
+      name: ichor-webhook-server-cert
+      managedFieldsManagers:
+        - ichor-controller

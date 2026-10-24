@@ -171,11 +171,14 @@ metrics:
   # Note: Metrics authn/authz needs ClusterRole access.
   secure: true
 
-## Cert-manager integration for TLS certificates.
-## Required for webhook certificates and metrics endpoint certificates.
+## Cert-manager integration for the metrics endpoint's TLS certificate.
+## Default is off (ADR 0006): the webhook serving certificate never uses
+## this toggle (it's generated at runtime, in-process, by cert-controller,
+## via the always-mounted ichor-webhook-server-cert Secret), so this only
+## affects metrics.secure + prometheus.enabled's TLS verification.
 ##
 certManager:
-  enabled: true
+  enabled: false
 
 ## Webhook server configuration
 ##

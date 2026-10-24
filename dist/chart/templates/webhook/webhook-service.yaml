@@ -7,7 +7,11 @@ metadata:
     app.kubernetes.io/name: {{ include "ichor.name" . }}
     helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
     app.kubernetes.io/instance: {{ .Release.Name }}
-  name: {{ include "ichor.resourceName" (dict "suffix" "webhook-service" "context" $) }}
+  # Fixed name, not release-templated: Ichor is one installation per cluster
+  # (design 4.1), the ValidatingWebhookConfiguration below is cluster-scoped
+  # regardless of release name, and cmd/main.go's cert rotator already
+  # hardcodes this name.
+  name: ichor-webhook-service
   namespace: {{ .Release.Namespace }}
 spec:
   ports:

@@ -6,5 +6,9 @@ metadata:
     app.kubernetes.io/name: {{ include "ichor.name" . }}
     helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
     app.kubernetes.io/instance: {{ .Release.Name }}
-  name: {{ include "ichor.resourceName" (dict "suffix" "webhook-server-cert" "context" $) }}
+  # Fixed name, not release-templated: cmd/main.go's cert rotator hardcodes
+  # this Secret's name, same reason as the webhook Service and
+  # ValidatingWebhookConfiguration (Ichor is one installation per cluster,
+  # design 4.1). No data: cert-controller fills it in at runtime (ADR 0006).
+  name: ichor-webhook-server-cert
   namespace: {{ .Release.Namespace }}

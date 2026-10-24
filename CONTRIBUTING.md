@@ -48,7 +48,8 @@ the shell or not. If you see that, `rm -rf bin` and run it again inside
   into one commit, and don't commit broken intermediate states.
 - Use [Conventional Commits](https://www.conventionalcommits.org/) for commit
   messages and PR titles (`feat:`, `fix:`, `docs:`, `test:`, `chore:`,
-  `refactor:`). The changelog is generated from them.
+  `refactor:`, `build:`, `ci:`). The changelog is generated from them, and CI
+  checks PR titles against this list.
 - One PR per task. `main` is protected; CI (lint, unit tests, a short e2e run)
   has to pass.
 - Say in the PR description which docs you consulted and which version.

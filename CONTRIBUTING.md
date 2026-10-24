@@ -12,6 +12,10 @@ All tools (Go, Node, kubebuilder, talosctl, helm, buf, goreleaser, QEMU, …)
 come from `flake.nix`. If something is missing, add it there rather than
 installing it some other way.
 
+controller-gen, kustomize, setup-envtest and golangci-lint are deliberately
+*not* in the devShell: the Makefile installs them into `./bin` at the
+versions it pins. Don't add them to `flake.nix`.
+
 ## Project conventions
 
 - The controller is a [kubebuilder](https://book.kubebuilder.io/) project.

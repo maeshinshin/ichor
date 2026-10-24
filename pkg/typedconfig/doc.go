@@ -20,5 +20,7 @@ limitations under the License.
 // (zz_generated.conversion.go) and the small, hand-written substitution
 // table conversions in substitution.go lean on.
 //
+// +kubebuilder:object:generate=true
+//
 //go:generate go run ../../internal/tools/mirrorgen
 package typedconfig

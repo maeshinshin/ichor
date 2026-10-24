@@ -27,10 +27,20 @@ const (
 
 // rootKind is one allow-listed machinery document kind to mirror. Adding a
 // kind here is the only way to grow the generated API surface (rule 0: no
-// CLI flags, no config file).
+// CLI flags, no config file). This is also the allow-list half of the pair
+// "P2-2" calls for: api/v1alpha1.TalosConfigPatchDocument's "kind"
+// enum is the other half. They can't be the same Go value -- the enum is a
+// +kubebuilder:validation:Enum marker, plain text controller-gen reads from
+// a source comment -- so main_test.go checks the two agree against the
+// generated CRD instead.
 type rootKind struct {
 	pkgPath  string
 	typeName string
+	// kind is the discriminator value TalosConfigPatchDocument uses for
+	// this root: Talos's own document kind string, or, for the legacy
+	// v1alpha1.Config document which carries none, the name it is
+	// referred to by.
+	kind string
 	// kindConst/apiVersion set the embedded meta.Meta on render, if the root
 	// type embeds one. Config does not, so both are empty for it.
 	kindConst  string
@@ -38,9 +48,9 @@ type rootKind struct {
 }
 
 var roots = []rootKind{
-	{pkgRuntime, "SysctlConfigV1Alpha1", "mruntime.SysctlConfigKind", "v1alpha1"},
-	{pkgRuntime, "KernelModuleConfigV1Alpha1", "mruntime.KernelModuleConfigKind", "v1alpha1"},
-	{pkgV1Alpha1, "Config", "", ""},
+	{pkgRuntime, "SysctlConfigV1Alpha1", "SysctlConfig", "mruntime.SysctlConfigKind", "v1alpha1"},
+	{pkgRuntime, "KernelModuleConfigV1Alpha1", "KernelModuleConfig", "mruntime.KernelModuleConfigKind", "v1alpha1"},
+	{pkgV1Alpha1, "Config", "Config", "", ""},
 }
 
 // substKind says how a substituted-by-type field converts to and from its

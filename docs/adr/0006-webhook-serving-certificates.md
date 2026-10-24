@@ -55,6 +55,14 @@ What the investigation established:
   `TalosCluster` and `TalosMachine`, where failing open lets an Argo CD prune
   cascade into node resets. A deletion guard that opens when the controller is
   down is not a guard.
+- Set `RequireLeaderElection` on the rotator. The controller runs two
+  replicas, and without it both run the rotator: on a cold start both can see
+  no Secret and generate a different CA each. `FieldOwner` only decides who
+  writes last, so the losing replica would serve a certificate signed by a CA
+  the live `caBundle` does not name until the mounted Secret resyncs. Letting
+  only the leader rotate is the same instinct as principle 6 — one writer for
+  a disruptive operation — and costs nothing, since both replicas need the
+  Secret before they can serve anyway.
 - Ship, with the chart, an `ignoreDifferences` entry for the webhook
   configuration's `caBundle` keyed on `managedFieldsManagers:
   [ichor-controller]`, together with the `RespectIgnoreDifferences=true` sync

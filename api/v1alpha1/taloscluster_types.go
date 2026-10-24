@@ -17,50 +17,105 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+// TalosClusterEndpoint is the cluster's control-plane endpoint.
+type TalosClusterEndpoint struct {
+	// type is the kind of address the endpoint resolves through.
+	// +kubebuilder:validation:Enum=vip;loadBalancer;dns;node
+	// +required
+	Type string `json:"type"`
 
-// TalosClusterSpec defines the desired state of TalosCluster
-type TalosClusterSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-	// The following markers will use OpenAPI v3 schema to validate the value
-	// More info: https://book.kubebuilder.io/reference/markers/crd-validation.html
+	// address is the endpoint's address: an IP for vip/node, or a hostname for loadBalancer/dns.
+	// +kubebuilder:validation:MinLength=1
+	// +required
+	Address string `json:"address"`
+}
 
-	// foo is an example field of TalosCluster. Edit taloscluster_types.go to remove/update
+// TalosClusterSchematic references the Image Factory schematic used for this cluster's installer image.
+type TalosClusterSchematic struct {
+	// id is the Image Factory schematic ID.
+	// +kubebuilder:validation:MinLength=1
+	// +required
+	ID string `json:"id"`
+}
+
+// TalosClusterControlPlane configures the control-plane topology.
+type TalosClusterControlPlane struct {
+	// count is the number of control-plane nodes; 2 and 4 are rejected because they don't improve etcd availability over 1 or 3.
+	// +kubebuilder:validation:Enum=1;3;5
+	// +required
+	Count int32 `json:"count"`
+
+	// schedulable controls whether control planes accept workloads; auto taints them only when workers exist, then stays fixed.
+	// +kubebuilder:validation:Enum=auto;true;false
+	// +kubebuilder:default=auto
 	// +optional
-	Foo *string `json:"foo,omitempty"`
+	Schedulable string `json:"schedulable,omitempty"`
+}
+
+// TalosClusterSpec defines the desired state of TalosCluster.
+type TalosClusterSpec struct {
+	// endpoint is the cluster's control-plane endpoint.
+	// +required
+	Endpoint TalosClusterEndpoint `json:"endpoint"`
+
+	// talosVersion is the Talos release this cluster renders configuration for.
+	// +kubebuilder:validation:Pattern=`^v\d+\.\d+\.\d+$`
+	// +required
+	TalosVersion string `json:"talosVersion"`
+
+	// kubernetesVersion is the Kubernetes release this cluster runs.
+	// +kubebuilder:validation:Pattern=`^v\d+\.\d+\.\d+$`
+	// +required
+	KubernetesVersion string `json:"kubernetesVersion"`
+
+	// versionContract is required rather than defaulted, so that a machinery bump cannot silently change what gets
+	// applied (principle 4).
+	// +kubebuilder:validation:Pattern=`^v\d+\.\d+$`
+	// +required
+	VersionContract string `json:"versionContract"`
+
+	// schematic is the Image Factory schematic used for this cluster's installer image.
+	// +optional
+	Schematic *TalosClusterSchematic `json:"schematic,omitempty"`
+
+	// secretsRef names the Secret holding the Talos, Kubernetes and etcd CA bundle, in this TalosCluster's namespace.
+	// +kubebuilder:validation:XValidation:rule="self.name != ''",message="secretsRef.name is required"
+	// +required
+	SecretsRef corev1.LocalObjectReference `json:"secretsRef"`
+
+	// controlPlane configures the control-plane topology.
+	// +required
+	ControlPlane TalosClusterControlPlane `json:"controlPlane"`
 }
 
 // TalosClusterStatus defines the observed state of TalosCluster.
 type TalosClusterStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// For Kubernetes API conventions, see:
-	// https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties
-
-	// conditions represent the current state of the TalosCluster resource.
-	// Each condition has a unique type and reflects the status of a specific aspect of the resource.
-	//
-	// Standard condition types include:
-	// - "Available": the resource is fully functional
-	// - "Progressing": the resource is being created or updated
-	// - "Degraded": the resource failed to reach or maintain its desired state
-	//
-	// The status of each condition is one of True, False, or Unknown.
+	// conditions represent the current state of the TalosCluster resource, kstatus-compatible.
+	// +patchMergeKey=type
+	// +patchStrategy=merge
 	// +listType=map
 	// +listMapKey=type
 	// +optional
-	Conditions []metav1.Condition `json:"conditions,omitempty"`
+	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
+
+	// observedGeneration is the most recent generation the controller has reconciled.
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:resource:shortName=tcl
+// +kubebuilder:printcolumn:name="Talos",type=string,JSONPath=".spec.talosVersion"
+// +kubebuilder:printcolumn:name="Kubernetes",type=string,JSONPath=".spec.kubernetesVersion"
+// +kubebuilder:printcolumn:name="Control Plane",type=integer,JSONPath=".spec.controlPlane.count"
+// +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=".status.conditions[?(@.type=='Ready')].status"
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=".metadata.creationTimestamp"
 
 // TalosCluster is the Schema for the talosclusters API
 type TalosCluster struct {

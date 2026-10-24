@@ -17,50 +17,85 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+// TalosMachineIdentity identifies the physical machine backing a TalosMachine.
+type TalosMachineIdentity struct {
+	// uuid is the machine's SMBIOS UUID, the primary key for identity.
+	// +kubebuilder:validation:MinLength=1
+	// +required
+	UUID string `json:"uuid"`
 
-// TalosMachineSpec defines the desired state of TalosMachine
-type TalosMachineSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-	// The following markers will use OpenAPI v3 schema to validate the value
-	// More info: https://book.kubebuilder.io/reference/markers/crd-validation.html
-
-	// foo is an example field of TalosMachine. Edit talosmachine_types.go to remove/update
+	// serial is the machine's SMBIOS serial number, used as an identity hint.
 	// +optional
-	Foo *string `json:"foo,omitempty"`
+	Serial string `json:"serial,omitempty"`
+
+	// macAddresses are the machine's NIC MAC addresses, used as an identity hint.
+	// +optional
+	MACAddresses []string `json:"macAddresses,omitempty"`
+}
+
+// TalosMachineSpec defines the desired state of TalosMachine.
+type TalosMachineSpec struct {
+	// clusterRef names the TalosCluster this machine belongs to.
+	// +kubebuilder:validation:XValidation:rule="self.name != ''",message="clusterRef.name is required"
+	// +required
+	ClusterRef corev1.LocalObjectReference `json:"clusterRef"`
+
+	// identity identifies the physical machine backing this resource.
+	// +required
+	Identity TalosMachineIdentity `json:"identity"`
+
+	// endpoint is the machine's Talos API address.
+	// +kubebuilder:validation:MinLength=1
+	// +required
+	Endpoint string `json:"endpoint"`
+
+	// role is the machine's role in the cluster.
+	// +kubebuilder:validation:Enum=controlplane;worker
+	// +required
+	Role string `json:"role"`
+
+	// nodeLabels are applied to the Kubernetes Node, not to this resource, which is why the field isn't called "labels".
+	// +optional
+	NodeLabels map[string]string `json:"nodeLabels,omitempty"`
+
+	// hostname overrides the Kubernetes Node name; Talos derives one from the machine if unset.
+	// +optional
+	Hostname string `json:"hostname,omitempty"`
+
+	// approved allows the controller to render and apply configuration to this machine.
+	// +kubebuilder:default=false
+	// +optional
+	Approved bool `json:"approved,omitempty"`
 }
 
 // TalosMachineStatus defines the observed state of TalosMachine.
 type TalosMachineStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// For Kubernetes API conventions, see:
-	// https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties
-
-	// conditions represent the current state of the TalosMachine resource.
-	// Each condition has a unique type and reflects the status of a specific aspect of the resource.
-	//
-	// Standard condition types include:
-	// - "Available": the resource is fully functional
-	// - "Progressing": the resource is being created or updated
-	// - "Degraded": the resource failed to reach or maintain its desired state
-	//
-	// The status of each condition is one of True, False, or Unknown.
+	// conditions represent the current state of the TalosMachine resource, kstatus-compatible.
+	// +patchMergeKey=type
+	// +patchStrategy=merge
 	// +listType=map
 	// +listMapKey=type
 	// +optional
-	Conditions []metav1.Condition `json:"conditions,omitempty"`
+	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
+
+	// observedGeneration is the most recent generation the controller has reconciled.
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:resource:shortName=tm
+// +kubebuilder:printcolumn:name="Role",type=string,JSONPath=".spec.role"
+// +kubebuilder:printcolumn:name="Approved",type=boolean,JSONPath=".spec.approved"
+// +kubebuilder:printcolumn:name="Endpoint",type=string,JSONPath=".spec.endpoint"
+// +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=".status.conditions[?(@.type=='Ready')].status"
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=".metadata.creationTimestamp"
 
 // TalosMachine is the Schema for the talosmachines API
 type TalosMachine struct {

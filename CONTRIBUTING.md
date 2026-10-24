@@ -37,7 +37,11 @@ the shell or not. If you see that, `rm -rf bin` and run it again inside
   `manager-role`, and the Helm plugin can only convert one of them under that
   shared name — so a new RBAC rule in the wrong scope is silently dropped from
   the chart while kustomize still renders it. After any RBAC change, render the
-  chart and check the rules are actually there.
+  chart and check the rules are actually there. Several `templates/` files
+  carry hand-edits for exactly this kind of thing that regeneration would
+  revert with no other signal; `dist/chart/chart_test.go` renders the chart
+  with `helm template` and guards those edits, runs on every PR via `make
+  test`.
 - The UI is Vite + Preact + [preactcn](https://maeshinshin.github.io/preactcn/).
   Add components with `npx shadcn@latest add @preactcn/<name>`. No React,
   no `preact/compat`.

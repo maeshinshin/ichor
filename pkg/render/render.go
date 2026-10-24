@@ -129,12 +129,26 @@ func baseConfig(
 	contract *coreconfig.VersionContract,
 	machineType machine.Type,
 ) (coreconfig.Provider, error) {
+	schedulable := cluster.Spec.ControlPlane.Schedulable
+
+	var allowScheduling bool
+
+	switch schedulable {
+	case "true":
+		allowScheduling = true
+	case "false":
+		allowScheduling = false
+	default:
+		return nil, fmt.Errorf("render: controlPlane.schedulable %q is invalid: must be %q or %q",
+			schedulable, "true", "false")
+	}
+
 	endpoint := fmt.Sprintf("https://%s:%d", cluster.Spec.Endpoint.Address, constants.DefaultControlPlanePort)
 
 	input, err := generate.NewInput(cluster.Name, endpoint, cluster.Spec.KubernetesVersion,
 		generate.WithVersionContract(contract),
 		generate.WithSecretsBundle(bundle),
-		generate.WithAllowSchedulingOnControlPlanes(cluster.Spec.ControlPlane.Schedulable == "true"),
+		generate.WithAllowSchedulingOnControlPlanes(allowScheduling),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("render: preparing generator input: %w", err)

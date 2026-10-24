@@ -522,6 +522,184 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(warn.Message).To(ContainSubstring("deprecated field migrated: example"))
 	})
 
+	It("applies on the first reconcile even with driftPolicy warnOnly, since there is no prior convergence to compare against", func() {
+		// "Sensibly" here means: a hash mismatch with nothing recorded yet
+		// in status.observedInputsHash is treated as a desired-state
+		// change, exactly like the "applies a non-reboot change" test
+		// above -- never as drift, since drift requires a previous
+		// convergence to compare against and this machine has none.
+		bundle := newTestBundle("v1.14")
+		secret := newTestSecret(bundle)
+		cluster := newTestCluster(secret.Name, "v1.14")
+		Expect(cluster.Spec.DriftPolicy).To(Equal("warnOnly"), "CRD default")
+		m := newTestMachine(cluster.Name, true)
+
+		current := renderWithConfig(cluster, m, bundle, layerCluster, nil, minimalConfigSkeleton())
+
+		desired := extraArgsConfig()
+		patch := newTestPatch(cluster.Name, layerCluster, nil, desired)
+		wantRendered, wantHash, err := render.Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{*patch})
+		Expect(err).NotTo(HaveOccurred())
+
+		fake := &fakeTalosClient{current: current}
+		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), TalosClient: clientFactory(fake)}
+
+		_, err = reconcileMachine(r, m)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(fake.applyCalls).To(HaveLen(1))
+		Expect(fake.applyCalls[0]).To(Equal(wantRendered))
+
+		got := fetchMachine(m)
+		Expect(got.Status.AppliedConfigHash).To(Equal(wantHash))
+		Expect(got.Status.ObservedInputsHash).NotTo(BeEmpty())
+
+		cond := readyCondition(got)
+		Expect(cond).NotTo(BeNil())
+		Expect(cond.Status).To(Equal(metav1.ConditionTrue))
+		Expect(cond.Reason).To(Equal(reasonApplied))
+	})
+
+	It("reports drift and applies nothing when driftPolicy is warnOnly and the node moved on its own", func() {
+		bundle := newTestBundle("v1.14")
+		secret := newTestSecret(bundle)
+		cluster := newTestCluster(secret.Name, "v1.14")
+		m := newTestMachine(cluster.Name, true)
+
+		patch := newTestPatch(cluster.Name, layerCluster, nil, extraArgsConfig())
+		wantRendered, wantHash, err := render.Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{*patch})
+		Expect(err).NotTo(HaveOccurred())
+
+		fake := &fakeTalosClient{current: wantRendered}
+		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), TalosClient: clientFactory(fake)}
+
+		// First reconcile converges: nothing to apply, but it records the
+		// fingerprint of what fed this render (cluster, machine, patch).
+		_, err = reconcileMachine(r, m)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(fetchMachine(m).Status.AppliedConfigHash).To(Equal(wantHash))
+
+		// Now the node drifts on its own: a safe field (cluster.apiServer,
+		// per pkg/fieldmeta) changes directly on the node, with nothing on
+		// Ichor's side touched -- cluster, the patch and the machine all
+		// keep the same generation.
+		drifted := extraArgsConfig()
+		drifted.ClusterConfig.APIServerConfig.ExtraArgsConfig["foo"] = []string{"c"}
+		driftedCurrent := renderWithConfig(cluster, m, bundle, layerCluster, nil, drifted)
+		fake.current = driftedCurrent
+
+		_, err = reconcileMachine(r, m)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(fake.applyCalls).To(BeEmpty())
+
+		got := fetchMachine(m)
+		Expect(got.Status.AppliedConfigHash).To(Equal(wantHash), "left at the last known-good hash, not the node's drifted one")
+
+		cond := readyCondition(got)
+		Expect(cond).NotTo(BeNil())
+		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(cond.Reason).To(Equal(reasonNodeDrifted))
+		Expect(cond.Message).To(ContainSubstring("cluster.apiServer.extraArgs.foo"))
+		Expect(cond.Message).To(ContainSubstring("warnOnly"))
+	})
+
+	It("corrects drift when driftPolicy is autoCorrect and every changed path is reboot-free", func() {
+		bundle := newTestBundle("v1.14")
+		secret := newTestSecret(bundle)
+		cluster := newTestCluster(secret.Name, "v1.14")
+		m := newTestMachine(cluster.Name, true)
+
+		// driftPolicy is set before the converging reconcile below, not
+		// between it and the drift reconcile: a later change would itself
+		// bump cluster.Generation and be indistinguishable, by this
+		// mechanism, from a render-affecting change (see the package doc
+		// comment's note on this). Setting it up front keeps this test
+		// about drift, not about that edge case.
+		cluster.Spec.DriftPolicy = "autoCorrect"
+		Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
+
+		patch := newTestPatch(cluster.Name, layerCluster, nil, extraArgsConfig())
+		wantRendered, wantHash, err := render.Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{*patch})
+		Expect(err).NotTo(HaveOccurred())
+
+		fake := &fakeTalosClient{current: wantRendered}
+		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), TalosClient: clientFactory(fake)}
+
+		_, err = reconcileMachine(r, m)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(fetchMachine(m).Status.AppliedConfigHash).To(Equal(wantHash))
+
+		drifted := extraArgsConfig()
+		drifted.ClusterConfig.APIServerConfig.ExtraArgsConfig["foo"] = []string{"c"}
+		fake.current = renderWithConfig(cluster, m, bundle, layerCluster, nil, drifted)
+
+		_, err = reconcileMachine(r, m)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(fake.applyCalls).To(HaveLen(1))
+		Expect(fake.applyCalls[0]).To(Equal(wantRendered), "re-applied the rendered configuration, correcting the drift")
+
+		got := fetchMachine(m)
+		Expect(got.Status.AppliedConfigHash).To(Equal(wantHash))
+
+		cond := readyCondition(got)
+		Expect(cond).NotTo(BeNil())
+		Expect(cond.Status).To(Equal(metav1.ConditionTrue))
+		Expect(cond.Reason).To(Equal(reasonDriftCorrected))
+	})
+
+	It("reports drift and applies nothing when driftPolicy is autoCorrect but a changed path needs a reboot", func() {
+		bundle := newTestBundle("v1.14")
+		secret := newTestSecret(bundle)
+		cluster := newTestCluster(secret.Name, "v1.14")
+		m := newTestMachine(cluster.Name, true)
+
+		// See the "corrects drift" test above: driftPolicy is set before the
+		// converging reconcile, not after, so flipping it doesn't itself
+		// look like a render-affecting change.
+		cluster.Spec.DriftPolicy = "autoCorrect"
+		Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
+
+		baseline, baseHash, err := render.Render(cluster, m, bundle, nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		fake := &fakeTalosClient{current: baseline}
+		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), TalosClient: clientFactory(fake)}
+
+		_, err = reconcileMachine(r, m)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(fetchMachine(m).Status.AppliedConfigHash).To(Equal(baseHash))
+
+		// cluster.proxy.disabled is deliberately uncovered by pkg/fieldmeta's
+		// table, so it stays reboot-required by default (see the existing
+		// reboot test above) -- drift there must still refuse to apply even
+		// though the policy is autoCorrect.
+		disabled := true
+		driftedCfg := minimalConfigSkeleton()
+		driftedCfg.ClusterConfig.ProxyConfig = &typedconfig.ProxyConfig{Disabled: &disabled}
+		fake.current = renderWithConfig(cluster, m, bundle, layerCluster, nil, driftedCfg)
+
+		_, err = reconcileMachine(r, m)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(fake.applyCalls).To(BeEmpty())
+
+		got := fetchMachine(m)
+		Expect(got.Status.AppliedConfigHash).To(Equal(baseHash))
+
+		cond := readyCondition(got)
+		Expect(cond).NotTo(BeNil())
+		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(cond.Reason).To(Equal(reasonRebootRequired))
+		Expect(cond.Message).To(ContainSubstring("drifted"))
+
+		lock := clusterlock.New(k8sClient, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0)
+		_, held, err := lock.Holder(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(held).To(BeFalse(), "cluster lock should have been released")
+	})
+
 	It("never modifies spec on any object it touches", func() {
 		bundle := newTestBundle("v1.14")
 		secret := newTestSecret(bundle)

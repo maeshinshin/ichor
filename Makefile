@@ -95,16 +95,32 @@ test-e2e: test-e2e-prereqs manifests generate fmt vet ## Run the PR-sized (short
 test-e2e-nightly: test-e2e-prereqs manifests generate fmt vet ## Run the full (short + nightly) e2e set against the cluster given by KUBECONFIG.
 	go test -tags=e2e ./test/e2e/ -v -ginkgo.v -ginkgo.label-filter="short || nightly"
 
-# setup-test-e2e and cleanup-test-e2e are CI's provisioner for the talosctl-qemu harness
-# (ADR 0007): a throwaway Talos cluster on the runner, not the KubeVirt path above. Each
-# does exactly one thing and is safe to call on its own - test-e2e itself never calls
-# either, it only ever runs against whatever KUBECONFIG already points at.
+# Neither harness may provision inside the specs (ADR 0007): a KubeVirt VM is meaningless
+# on a CI runner with no KubeVirt, and talosctl's qemu provisioner is meaningless on the
+# real cluster. So each harness gets its own setup/cleanup pair, each doing exactly one
+# thing and safe to call on its own - test-e2e itself never calls either, it only ever
+# runs against whatever KUBECONFIG and ICHOR_E2E_TALOS_NODES already point at.
+
+# --- KubeVirt harness (talos-cluster01, by hand or in CI against that cluster) ---
+
+.PHONY: setup-test-e2e-kubevirt
+setup-test-e2e-kubevirt: test-e2e-prereqs ## Boot the e2e Talos node as a KubeVirt VM; prints its address, export it as ICHOR_E2E_TALOS_NODES
+	go run ./test/harness/kubevirt up
+
+.PHONY: cleanup-test-e2e-kubevirt
+cleanup-test-e2e-kubevirt: ## Tear down the VM and DataVolumes setup-test-e2e-kubevirt created; a no-op if there is nothing to tear down
+	go run ./test/harness/kubevirt down
+
+# --- talosctl-qemu harness (CI, GitHub's ubuntu-24.04 runners) ---
 TEST_E2E_KUBECONFIG ?= $(LOCALBIN)/test-e2e.kubeconfig
 
 .PHONY: setup-test-e2e
-setup-test-e2e: ## Provision the throwaway qemu Talos cluster CI's e2e job runs against; writes its kubeconfig to TEST_E2E_KUBECONFIG
-	KUBECONFIG=$(TEST_E2E_KUBECONFIG) talosctl cluster create qemu --name ichor-test-e2e
+setup-test-e2e: ## Provision the throwaway qemu Talos cluster CI's e2e job runs against; publishes KUBECONFIG and ICHOR_E2E_TALOS_NODES
+	KUBECONFIG=$(TEST_E2E_KUBECONFIG) talosctl cluster create qemu --name ichor-test-e2e --workers 1 | tee $(LOCALBIN)/test-e2e-create.log
 	@if [ -n "$$GITHUB_ENV" ]; then echo "KUBECONFIG=$(TEST_E2E_KUBECONFIG)" >> "$$GITHUB_ENV"; fi
+	$(eval TEST_E2E_WORKER := $(shell grep -i worker $(LOCALBIN)/test-e2e-create.log | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1))
+	talosctl --context ichor-test-e2e reset --nodes $(TEST_E2E_WORKER) --graceful=false --reboot --wait
+	@if [ -n "$$GITHUB_ENV" ]; then echo "ICHOR_E2E_TALOS_NODES=$(TEST_E2E_WORKER)" >> "$$GITHUB_ENV"; fi
 
 .PHONY: cleanup-test-e2e
 cleanup-test-e2e: ## Tear down the cluster setup-test-e2e provisioned; a no-op if there is nothing to tear down

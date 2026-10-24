@@ -43,15 +43,20 @@ func bundleSecretMaterial(bundle *secrets.Bundle) []string {
 	}
 }
 
-// TestTalosMachineBundleLeak forces every reconcile error/status path this
-// test can reach and asserts that none of the bundle's secret material
+// TestTalosMachineBundleLeak forces every reconcile error/status path that
+// has real bundle material loaded nearby and asserts that none of it
 // appears in the resulting condition messages, in the spirit of
-// pkg/render's own TestRenderBundleLeak. What it could not force: a render
-// failure (render's own inputs are all CRD-validated by the time they
-// reach this controller, so there is no reachable way to make
-// render.Render itself fail through the Kubernetes API) and "render
-// failed" from an invalid versionContract (same reason -- the CRD's own
-// pattern validation rejects it before a reconcile ever sees it).
+// pkg/render's own TestRenderBundleLeak. Branches that fail before a
+// bundle is ever loaded ("cluster not found", "secrets Secret missing")
+// have nothing that could leak and belong with the functional tests in
+// talosmachine_controller_test.go instead -- a leak check with no secret
+// material anywhere nearby cannot fail, which reads like coverage without
+// being any. What this file could not force: a render failure (render's
+// own inputs are all CRD-validated by the time they reach this
+// controller, so there is no reachable way to make render.Render itself
+// fail through the Kubernetes API) and "render failed" from an invalid
+// versionContract (same reason -- the CRD's own pattern validation
+// rejects it before a reconcile ever sees it).
 var _ = Describe("TalosMachineReconciler bundle leak", func() {
 	assertNoLeak := func(m *ichorv1alpha1.TalosMachine, secretsMaterial []string) {
 		cond := readyCondition(m)
@@ -66,37 +71,12 @@ var _ = Describe("TalosMachineReconciler bundle leak", func() {
 		}
 	}
 
-	It("cluster not found", func() {
+	It("secrets bundle YAML malformed", func() {
 		bundle := newTestBundle("v1.14")
 		secret := newTestSecret(bundle)
-		cluster := newTestCluster(secret.Name, "v1.14")
-		m := newTestMachine(cluster.Name, true)
-		m.Spec.ClusterRef.Name = "does-not-exist"
-		Expect(k8sClient.Update(ctx, m)).To(Succeed())
-
-		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
-		_, err := reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
-
-		assertNoLeak(fetchMachine(m), bundleSecretMaterial(bundle))
-	})
-
-	It("secrets bundle Secret missing", func() {
-		bundle := newTestBundle("v1.14")
-		cluster := newTestCluster("does-not-exist", "v1.14")
-		m := newTestMachine(cluster.Name, true)
-
-		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
-		_, err := reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
-
-		assertNoLeak(fetchMachine(m), bundleSecretMaterial(bundle))
-	})
-
-	It("secrets bundle JSON malformed", func() {
-		bundle := newTestBundle("v1.14")
-		secret := newTestSecret(bundle)
-		secret.Data[bundleSecretKey] = append(secret.Data[bundleSecretKey], []byte("}}}not json")...)
+		// A leading tab is never valid YAML indentation, so this is
+		// guaranteed to fail decoding rather than parse as something else.
+		secret.Data[bundleSecretKey] = append([]byte("\tnot valid yaml\n"), secret.Data[bundleSecretKey]...)
 		Expect(k8sClient.Update(ctx, secret)).To(Succeed())
 
 		cluster := newTestCluster(secret.Name, "v1.14")
@@ -106,7 +86,9 @@ var _ = Describe("TalosMachineReconciler bundle leak", func() {
 		_, err := reconcileMachine(r, m)
 		Expect(err).NotTo(HaveOccurred())
 
-		assertNoLeak(fetchMachine(m), bundleSecretMaterial(bundle))
+		got := fetchMachine(m)
+		Expect(readyCondition(got).Reason).To(Equal(reasonSecretsBundleUnavailable))
+		assertNoLeak(got, bundleSecretMaterial(bundle))
 	})
 
 	It("Talos client not configured", func() {
@@ -130,7 +112,7 @@ var _ = Describe("TalosMachineReconciler bundle leak", func() {
 
 		r := &TalosMachineReconciler{
 			Client: k8sClient, Scheme: k8sClient.Scheme(),
-			TalosClient: func(context.Context, *ichorv1alpha1.TalosMachine) (TalosClient, error) {
+			TalosClient: func(context.Context, *ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine, *secrets.Bundle) (TalosClient, error) {
 				return nil, errors.New("dial refused")
 			},
 		}

@@ -20,369 +20,355 @@ limitations under the License.
 package e2e
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"os"
+	"io"
 	"os/exec"
-	"path/filepath"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
+
+	"github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/test/utils"
 )
 
-// namespace where the project is deployed in
-const namespace = "ichor-system"
+// namespace is the only namespace this suite creates anything in (ADR 0007).
+const namespace = "ichor-e2e"
 
-// serviceAccountName created for the project
-const serviceAccountName = "ichor-controller-manager"
+// e2eLabel marks every object this run creates, so AfterAll can find and delete exactly
+// what it made without touching the pre-existing talos-probe VM or netprobe pod.
+const e2eLabel = "ichor.maesh.dev/e2e-run"
 
-// metricsServiceName is the name of the metrics service of the project
-const metricsServiceName = "ichor-controller-manager-metrics-service"
+// talosFactorySchematic is the bare, no-extensions Image Factory schematic for the
+// metal-amd64 ISO (ADR 0007).
+const talosFactorySchematic = "376567988ad370138ad8b2698212367b8edcb69b5fd68c80be1f2ec7d603b4ba"
 
-// metricsRoleBindingName is the name of the RBAC that will be created to allow get the metrics data
-const metricsRoleBindingName = "ichor-metrics-binding"
+// talosVersion is the Talos release the e2e VM boots.
+const talosVersion = "v1.14.3"
 
-var _ = Describe("Manager", Ordered, func() {
-	var controllerPodName string
+// talosctlImage runs talosctl for us from inside the cluster. The workstation running
+// `go test` cannot route to the VM's pod IP, and plain `kubectl port-forward` to the
+// virt-launcher pod can't reach it either: with KubeVirt's bridge binding the pod's own
+// network namespace has no listener on localhost, only the guest does (bridge delegates
+// the pod IP to the VM itself, it does not proxy it onto the pod's loopback - confirmed
+// by hand against the real talos-probe VM, where port-forward to virt-launcher gets
+// "connection refused" on localhost while a pod-to-pod connection to the same IP
+// succeeds). So every talosctl call below runs as a one-shot Pod inside ichor-e2e,
+// which can reach the VM's pod IP directly, and we read its result back with
+// `kubectl logs`.
+const talosctlImage = "ghcr.io/siderolabs/talosctl:" + talosVersion
 
-	// Before running the tests, set up the environment by creating the namespace,
-	// enforce the restricted security policy to the namespace, installing CRDs,
-	// and deploying the controller.
+const vmManifestTmpl = `apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: %[1]s
+  namespace: ichor-e2e
+  labels:
+    ichor.maesh.dev/e2e-run: %[2]s
+spec:
+  runStrategy: Always
+  dataVolumeTemplates:
+    - metadata:
+        name: %[1]s-iso
+      spec:
+        source:
+          http:
+            url: https://factory.talos.dev/image/%[3]s/%[4]s/metal-amd64.iso
+        storage:
+          accessModes: [ReadWriteOnce]
+          volumeMode: Filesystem
+          resources:
+            requests:
+              storage: 1Gi
+          storageClassName: ceph-block
+    - metadata:
+        name: %[1]s-system
+      spec:
+        source:
+          blank: {}
+        storage:
+          accessModes: [ReadWriteOnce]
+          volumeMode: Filesystem
+          resources:
+            requests:
+              storage: 10Gi
+          storageClassName: ceph-block
+  template:
+    metadata:
+      labels:
+        ichor.maesh.dev/e2e-run: %[2]s
+    spec:
+      domain:
+        cpu:
+          cores: 2
+        memory:
+          guest: 2560Mi
+        devices:
+          disks:
+            - name: iso
+              cdrom:
+                bus: sata
+              bootOrder: 1
+            - name: system
+              disk:
+                bus: virtio
+              bootOrder: 2
+          interfaces:
+            - name: default
+              bridge: {}
+      networks:
+        - name: default
+          pod: {}
+      volumes:
+        - name: iso
+          dataVolume:
+            name: %[1]s-iso
+        - name: system
+          dataVolume:
+            name: %[1]s-system
+`
+
+// talosctlPodManifestTmpl runs a single talosctl command insecurely against a node and exits.
+const talosctlPodManifestTmpl = `apiVersion: v1
+kind: Pod
+metadata:
+  name: %[1]s
+  namespace: ichor-e2e
+spec:
+  restartPolicy: Never
+  containers:
+    - name: talosctl
+      image: %[2]s
+      command: ["/talosctl", "get", "%[3]s", "-o", "json", "--insecure", "--nodes", "%[4]s"]
+`
+
+// applyManifest applies a YAML manifest via stdin, matching the kubectl-exec style the
+// rest of this suite uses instead of adding a typed client for resources (KubeVirt, CDI)
+// this repo has no Go dependency on.
+func applyManifest(manifest string) error {
+	cmd := exec.Command("kubectl", "apply", "-f", "-")
+	cmd.Stdin = strings.NewReader(manifest)
+	_, err := utils.Run(cmd)
+	return err
+}
+
+// talosctlGet runs `talosctl get <resource> -o json --insecure` against ip from a
+// one-shot Pod inside the cluster and returns its raw (possibly multi-object) JSON output.
+func talosctlGet(ip, resource string) (string, error) {
+	podName := fmt.Sprintf("talosctl-%s-%d", resource, time.Now().UnixNano())
+	manifest := fmt.Sprintf(talosctlPodManifestTmpl, podName, talosctlImage, resource, ip)
+	defer func() {
+		_, _ = utils.Run(exec.Command("kubectl", "-n", namespace, "delete", "pod", podName,
+			"--wait=false", "--ignore-not-found"))
+	}()
+
+	if err := applyManifest(manifest); err != nil {
+		return "", err
+	}
+	if _, err := utils.Run(exec.Command("kubectl", "-n", namespace, "wait", "pod/"+podName,
+		"--for=jsonpath={.status.phase}=Succeeded", "--timeout=60s")); err != nil {
+		return "", err
+	}
+	return utils.Run(exec.Command("kubectl", "-n", namespace, "logs", podName))
+}
+
+// decodeAll decodes the concatenated JSON objects talosctl prints for multi-instance
+// resources (it is not a JSON array) into a slice of maps.
+func decodeAll(raw string) ([]map[string]any, error) {
+	dec := json.NewDecoder(strings.NewReader(raw))
+	var out []map[string]any
+	for {
+		var obj map[string]any
+		if err := dec.Decode(&obj); err != nil {
+			if err == io.EOF {
+				return out, nil
+			}
+			return nil, err
+		}
+		out = append(out, obj)
+	}
+}
+
+func specField(obj map[string]any, field string) any {
+	spec, _ := obj["spec"].(map[string]any)
+	return spec[field]
+}
+
+func metadataID(obj map[string]any) any {
+	metadata, _ := obj["metadata"].(map[string]any)
+	return metadata["id"]
+}
+
+// testObjectMeta names a CEL-fixture object for this run's namespace and labels it so
+// AfterAll can delete exactly what this run created.
+func testObjectMeta(runID string) metav1.ObjectMeta {
+	return metav1.ObjectMeta{
+		GenerateName: "e2e-" + runID + "-",
+		Namespace:    namespace,
+		Labels:       map[string]string{e2eLabel: runID},
+	}
+}
+
+func newTestCluster(runID string, count int32) *v1alpha1.TalosCluster {
+	return &v1alpha1.TalosCluster{
+		ObjectMeta: testObjectMeta(runID),
+		Spec: v1alpha1.TalosClusterSpec{
+			Endpoint:          v1alpha1.TalosClusterEndpoint{Type: "vip", Address: "10.0.0.1"},
+			TalosVersion:      talosVersion,
+			KubernetesVersion: "v1.36.0",
+			VersionContract:   "v1.14",
+			SecretsRef:        corev1.LocalObjectReference{Name: "ichor-e2e-secrets"},
+			ControlPlane:      v1alpha1.TalosClusterControlPlane{Count: count},
+		},
+	}
+}
+
+func newTestPatch(runID, layer string, target *v1alpha1.TalosConfigPatchTarget) *v1alpha1.TalosConfigPatch {
+	return &v1alpha1.TalosConfigPatch{
+		ObjectMeta: testObjectMeta(runID),
+		Spec: v1alpha1.TalosConfigPatchSpec{
+			ClusterRef: corev1.LocalObjectReference{Name: "cluster"},
+			Layer:      layer,
+			Target:     target,
+		},
+	}
+}
+
+var _ = Describe("short", Label("short"), Ordered, func() {
+	runID := fmt.Sprintf("short-%d", time.Now().Unix())
+	vmName := "ichor-e2e-" + runID
+	var vmPodIP string
+	var k8sClient client.Client
+
 	BeforeAll(func() {
-		By("creating manager namespace")
-		cmd := exec.Command("kubectl", "create", "ns", namespace)
-		_, err := utils.Run(cmd)
-		Expect(err).NotTo(HaveOccurred(), "Failed to create namespace")
+		cfg, err := config.GetConfig()
+		Expect(err).NotTo(HaveOccurred(), "could not load a kubeconfig; set KUBECONFIG")
 
-		By("labeling the namespace to enforce the restricted security policy")
-		cmd = exec.Command("kubectl", "label", "--overwrite", "ns", namespace,
-			"pod-security.kubernetes.io/enforce=restricted")
-		_, err = utils.Run(cmd)
-		Expect(err).NotTo(HaveOccurred(), "Failed to label namespace with restricted policy")
+		scheme := runtime.NewScheme()
+		Expect(v1alpha1.AddToScheme(scheme)).To(Succeed())
+		k8sClient, err = client.New(cfg, client.Options{Scheme: scheme})
+		Expect(err).NotTo(HaveOccurred())
 
-		By("installing CRDs")
-		cmd = exec.Command("make", "install")
-		_, err = utils.Run(cmd)
-		Expect(err).NotTo(HaveOccurred(), "Failed to install CRDs")
-
-		By("deploying the controller-manager")
-		cmd = exec.Command("make", "deploy", fmt.Sprintf("IMG=%s", managerImage))
-		_, err = utils.Run(cmd)
-		Expect(err).NotTo(HaveOccurred(), "Failed to deploy the controller-manager")
+		By("creating the Talos node as a KubeVirt VM")
+		Expect(applyManifest(fmt.Sprintf(vmManifestTmpl, vmName, runID, talosFactorySchematic, talosVersion))).
+			To(Succeed())
 	})
 
-	// After all tests have been executed, clean up by undeploying the controller, uninstalling CRDs,
-	// and deleting the namespace.
 	AfterAll(func() {
-		By("cleaning up the curl pod for metrics")
-		cmd := exec.Command("kubectl", "delete", "pod", "curl-metrics", "-n", namespace)
-		_, _ = utils.Run(cmd)
+		By("tearing down the VM and its DataVolumes")
+		_, _ = utils.Run(exec.Command("kubectl", "-n", namespace, "delete", "vm", vmName,
+			"--wait=true", "--timeout=120s", "--ignore-not-found"))
+		_, _ = utils.Run(exec.Command("kubectl", "-n", namespace, "delete", "dv",
+			vmName+"-iso", vmName+"-system", "--wait=true", "--timeout=120s", "--ignore-not-found"))
 
-		By("undeploying the controller-manager")
-		cmd = exec.Command("make", "undeploy")
-		_, _ = utils.Run(cmd)
-
-		By("uninstalling CRDs")
-		cmd = exec.Command("make", "uninstall")
-		_, _ = utils.Run(cmd)
-
-		By("removing manager namespace")
-		cmd = exec.Command("kubectl", "delete", "ns", namespace)
-		_, _ = utils.Run(cmd)
+		By("deleting the CEL validation fixtures created by this run")
+		ctx := context.Background()
+		Expect(client.IgnoreNotFound(k8sClient.DeleteAllOf(ctx, &v1alpha1.TalosConfigPatch{},
+			client.InNamespace(namespace), client.MatchingLabels{e2eLabel: runID}))).To(Succeed())
+		Expect(client.IgnoreNotFound(k8sClient.DeleteAllOf(ctx, &v1alpha1.TalosCluster{},
+			client.InNamespace(namespace), client.MatchingLabels{e2eLabel: runID}))).To(Succeed())
 	})
 
-	// After each test, check for failures and collect logs, events,
-	// and pod descriptions for debugging.
-	AfterEach(func() {
-		specReport := CurrentSpecReport()
-		if specReport.Failed() {
-			By("Fetching controller manager pod logs")
-			cmd := exec.Command("kubectl", "logs", controllerPodName, "-n", namespace)
-			controllerLogs, err := utils.Run(cmd)
-			if err == nil {
-				_, _ = fmt.Fprintf(GinkgoWriter, "Controller logs:\n %s", controllerLogs)
-			} else {
-				_, _ = fmt.Fprintf(GinkgoWriter, "Failed to get Controller logs: %s", err)
-			}
+	It("boots the VM and reaches Talos maintenance mode", func() {
+		By("waiting for the VMI to report a pod IP")
+		Eventually(func(g Gomega) {
+			out, err := utils.Run(exec.Command("kubectl", "-n", namespace, "get", "vmi", vmName,
+				"-o", "jsonpath={.status.interfaces[0].ipAddress}"))
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(out).NotTo(BeEmpty())
+			vmPodIP = strings.TrimSpace(out)
+		}, 3*time.Minute, 5*time.Second).Should(Succeed())
 
-			By("Fetching Kubernetes events")
-			cmd = exec.Command("kubectl", "get", "events", "-n", namespace, "--sort-by=.lastTimestamp")
-			eventsOutput, err := utils.Run(cmd)
-			if err == nil {
-				_, _ = fmt.Fprintf(GinkgoWriter, "Kubernetes events:\n%s", eventsOutput)
-			} else {
-				_, _ = fmt.Fprintf(GinkgoWriter, "Failed to get Kubernetes events: %s", err)
-			}
+		By("waiting for MachineStatus stage to reach maintenance")
+		Eventually(func(g Gomega) {
+			out, err := talosctlGet(vmPodIP, "machinestatus")
+			g.Expect(err).NotTo(HaveOccurred())
+			objs, err := decodeAll(out)
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(objs).To(HaveLen(1))
+			g.Expect(specField(objs[0], "stage")).To(Equal("maintenance"))
+		}, 5*time.Minute, 10*time.Second).Should(Succeed())
+	})
 
-			By("Fetching curl-metrics logs")
-			cmd = exec.Command("kubectl", "logs", "curl-metrics", "-n", namespace)
-			metricsOutput, err := utils.Run(cmd)
-			if err == nil {
-				_, _ = fmt.Fprintf(GinkgoWriter, "Metrics logs:\n %s", metricsOutput)
-			} else {
-				_, _ = fmt.Fprintf(GinkgoWriter, "Failed to get curl-metrics logs: %s", err)
-			}
+	It("reads systeminformation, disks and links over the insecure maintenance API", func() {
+		By("systeminformation: SMBIOS UUID and serial, the primary key TalosMachine.spec.identity is built on")
+		out, err := talosctlGet(vmPodIP, "systeminformation")
+		Expect(err).NotTo(HaveOccurred())
+		objs, err := decodeAll(out)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(objs).To(HaveLen(1))
+		Expect(specField(objs[0], "uuid")).NotTo(BeEmpty())
+		Expect(specField(objs[0], "manufacturer")).To(Equal("KubeVirt"))
 
-			By("Fetching controller manager pod description")
-			cmd = exec.Command("kubectl", "describe", "pod", controllerPodName, "-n", namespace)
-			podDescription, err := utils.Run(cmd)
-			if err == nil {
-				fmt.Println("Pod description:\n", podDescription)
-			} else {
-				fmt.Println("Failed to describe controller pod")
-			}
+		By("disks: the blank system disk shows up as a writable vda")
+		out, err = talosctlGet(vmPodIP, "disks")
+		Expect(err).NotTo(HaveOccurred())
+		objs, err = decodeAll(out)
+		Expect(err).NotTo(HaveOccurred())
+		devPaths := make([]any, 0, len(objs))
+		for _, obj := range objs {
+			devPaths = append(devPaths, specField(obj, "dev_path"))
+		}
+		Expect(devPaths).To(ContainElement("/dev/vda"))
+
+		By("links: a real NIC plus the bond and dummy devices Talos always creates")
+		out, err = talosctlGet(vmPodIP, "links")
+		Expect(err).NotTo(HaveOccurred())
+		objs, err = decodeAll(out)
+		Expect(err).NotTo(HaveOccurred())
+		ids := make([]any, 0, len(objs))
+		for _, obj := range objs {
+			ids = append(ids, metadataID(obj))
+		}
+		Expect(ids).To(ContainElement("bond0"))
+	})
+
+	It("installs the CRDs and they reach Established", func() {
+		_, err := utils.Run(exec.Command("make", "install"))
+		Expect(err).NotTo(HaveOccurred())
+
+		for _, crd := range []string{
+			"talosclusters.ichor.maesh.dev",
+			"talosmachines.ichor.maesh.dev",
+			"talosconfigpatches.ichor.maesh.dev",
+		} {
+			_, err := utils.Run(exec.Command("kubectl", "wait", "crd/"+crd,
+				"--for=condition=Established", "--timeout=60s"))
+			Expect(err).NotTo(HaveOccurred(), "CRD %s did not reach Established", crd)
 		}
 	})
 
-	SetDefaultEventuallyTimeout(2 * time.Minute)
-	SetDefaultEventuallyPollingInterval(time.Second)
+	It("enforces the CEL validation rules server-side", func() {
+		ctx := context.Background()
 
-	Context("Manager", func() {
-		It("should run successfully", func() {
-			By("validating that the controller-manager pod is running as expected")
-			verifyControllerUp := func(g Gomega) {
-				By("getting the name of the controller-manager pod")
-				cmd := exec.Command("kubectl", "get",
-					"pods", "-l", "control-plane=controller-manager",
-					"-o", "go-template={{ range .items }}"+
-						"{{ if not .metadata.deletionTimestamp }}"+
-						"{{ .metadata.name }}"+
-						"{{ \"\\n\" }}{{ end }}{{ end }}",
-					"-n", namespace,
-				)
+		By("rejecting controlPlane.count: 2")
+		Expect(k8sClient.Create(ctx, newTestCluster(runID, 2))).NotTo(Succeed())
 
-				podOutput, err := utils.Run(cmd)
-				g.Expect(err).NotTo(HaveOccurred(), "Failed to retrieve controller-manager pod information")
-				podNames := utils.GetNonEmptyLines(podOutput)
-				g.Expect(podNames).To(HaveLen(1), "expected 1 controller pod running")
-				controllerPodName = podNames[0]
-				g.Expect(controllerPodName).To(ContainSubstring("controller-manager"))
+		By("accepting a valid TalosCluster")
+		Expect(k8sClient.Create(ctx, newTestCluster(runID, 3))).To(Succeed())
 
-				By("validating the pod's status")
-				cmd = exec.Command("kubectl", "get",
-					"pods", controllerPodName, "-o", "jsonpath={.status.phase}",
-					"-n", namespace,
-				)
-				output, err := utils.Run(cmd)
-				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(output).To(Equal("Running"), "Incorrect controller-manager pod status")
-			}
-			Eventually(verifyControllerUp).Should(Succeed())
-		})
+		By("rejecting a TalosConfigPatch with two of three target fields set")
+		Expect(k8sClient.Create(ctx, newTestPatch(runID, "role", &v1alpha1.TalosConfigPatchTarget{
+			Role: "worker", MachineRef: &corev1.LocalObjectReference{Name: "m"},
+		}))).NotTo(Succeed())
 
-		It("should ensure the metrics endpoint is serving metrics", func() {
-			By("creating a ClusterRoleBinding for the service account to allow access to metrics")
-			cmd := exec.Command("kubectl", "create", "clusterrolebinding", metricsRoleBindingName,
-				"--clusterrole=ichor-metrics-reader",
-				fmt.Sprintf("--serviceaccount=%s:%s", namespace, serviceAccountName),
-			)
-			_, err := utils.Run(cmd)
-			Expect(err).NotTo(HaveOccurred(), "Failed to create ClusterRoleBinding")
+		By("rejecting layer cluster with a target")
+		Expect(k8sClient.Create(ctx, newTestPatch(runID, "cluster", &v1alpha1.TalosConfigPatchTarget{
+			Role: "controlplane",
+		}))).NotTo(Succeed())
 
-			By("validating that the metrics service is available")
-			cmd = exec.Command("kubectl", "get", "service", metricsServiceName, "-n", namespace)
-			_, err = utils.Run(cmd)
-			Expect(err).NotTo(HaveOccurred(), "Metrics service should exist")
-
-			By("getting the service account token")
-			token, err := serviceAccountToken()
-			Expect(err).NotTo(HaveOccurred())
-			Expect(token).NotTo(BeEmpty())
-
-			By("ensuring the controller pod is ready")
-			verifyControllerPodReady := func(g Gomega) {
-				cmd := exec.Command("kubectl", "get", "pod", controllerPodName, "-n", namespace,
-					"-o", "jsonpath={.status.conditions[?(@.type=='Ready')].status}")
-				output, err := utils.Run(cmd)
-				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(output).To(Equal("True"), "Controller pod not ready")
-			}
-			Eventually(verifyControllerPodReady, 3*time.Minute, time.Second).Should(Succeed())
-
-			By("verifying that the controller manager is serving the metrics server")
-			verifyMetricsServerStarted := func(g Gomega) {
-				cmd := exec.Command("kubectl", "logs", controllerPodName, "-n", namespace)
-				output, err := utils.Run(cmd)
-				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(output).To(ContainSubstring("Serving metrics server"),
-					"Metrics server not yet started")
-			}
-			Eventually(verifyMetricsServerStarted, 3*time.Minute, time.Second).Should(Succeed())
-
-			By("waiting for the webhook service endpoints to be ready")
-			verifyWebhookEndpointsReady := func(g Gomega) {
-				cmd := exec.Command("kubectl", "get", "endpointslices.discovery.k8s.io", "-n", namespace,
-					"-l", "kubernetes.io/service-name=ichor-webhook-service",
-					"-o", "jsonpath={range .items[*]}{range .endpoints[*]}{.addresses[*]}{end}{end}")
-				output, err := utils.Run(cmd)
-				g.Expect(err).NotTo(HaveOccurred(), "Webhook endpoints should exist")
-				g.Expect(output).ShouldNot(BeEmpty(), "Webhook endpoints not yet ready")
-			}
-			Eventually(verifyWebhookEndpointsReady, 3*time.Minute, time.Second).Should(Succeed())
-
-			By("verifying the validating webhook server is ready")
-			verifyValidatingWebhookReady := func(g Gomega) {
-				cmd := exec.Command("kubectl", "get", "validatingwebhookconfigurations.admissionregistration.k8s.io",
-					"ichor-validating-webhook-configuration",
-					"-o", "jsonpath={.webhooks[0].clientConfig.caBundle}")
-				output, err := utils.Run(cmd)
-				g.Expect(err).NotTo(HaveOccurred(), "ValidatingWebhookConfiguration should exist")
-				g.Expect(output).ShouldNot(BeEmpty(), "Validating webhook CA bundle not yet injected")
-			}
-			Eventually(verifyValidatingWebhookReady, 3*time.Minute, time.Second).Should(Succeed())
-
-			By("waiting additional time for webhook server to stabilize")
-			time.Sleep(5 * time.Second)
-
-			// +kubebuilder:scaffold:e2e-metrics-webhooks-readiness
-
-			By("creating the curl-metrics pod to access the metrics endpoint")
-			cmd = exec.Command("kubectl", "run", "curl-metrics", "--restart=Never",
-				"--namespace", namespace,
-				"--image=curlimages/curl:latest",
-				"--overrides",
-				fmt.Sprintf(`{
-					"spec": {
-						"containers": [{
-							"name": "curl",
-							"image": "curlimages/curl:latest",
-							"command": ["/bin/sh", "-c"],
-							"args": [
-								"for i in $(seq 1 30); do curl -v -k -H 'Authorization: Bearer %s' https://%s.%s.svc.cluster.local:8443/metrics && exit 0 || sleep 2; done; exit 1"
-							],
-							"securityContext": {
-								"readOnlyRootFilesystem": true,
-								"allowPrivilegeEscalation": false,
-								"capabilities": {
-									"drop": ["ALL"]
-								},
-								"runAsNonRoot": true,
-								"runAsUser": 1000,
-								"seccompProfile": {
-									"type": "RuntimeDefault"
-								}
-							}
-						}],
-						"serviceAccountName": "%s"
-					}
-				}`, token, metricsServiceName, namespace, serviceAccountName))
-			_, err = utils.Run(cmd)
-			Expect(err).NotTo(HaveOccurred(), "Failed to create curl-metrics pod")
-
-			By("waiting for the curl-metrics pod to complete.")
-			verifyCurlUp := func(g Gomega) {
-				cmd := exec.Command("kubectl", "get", "pods", "curl-metrics",
-					"-o", "jsonpath={.status.phase}",
-					"-n", namespace)
-				output, err := utils.Run(cmd)
-				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(output).To(Equal("Succeeded"), "curl pod in wrong status")
-			}
-			Eventually(verifyCurlUp, 5*time.Minute).Should(Succeed())
-
-			By("getting the metrics by checking curl-metrics logs")
-			verifyMetricsAvailable := func(g Gomega) {
-				metricsOutput, err := getMetricsOutput()
-				g.Expect(err).NotTo(HaveOccurred(), "Failed to retrieve logs from curl pod")
-				g.Expect(metricsOutput).NotTo(BeEmpty())
-				g.Expect(metricsOutput).To(ContainSubstring("< HTTP/1.1 200 OK"))
-			}
-			Eventually(verifyMetricsAvailable, 2*time.Minute).Should(Succeed())
-		})
-
-		It("should provisioned cert-manager", func() {
-			By("validating that cert-manager has the certificate Secret")
-			verifyCertManager := func(g Gomega) {
-				cmd := exec.Command("kubectl", "get", "secrets", "webhook-server-cert", "-n", namespace)
-				_, err := utils.Run(cmd)
-				g.Expect(err).NotTo(HaveOccurred())
-			}
-			Eventually(verifyCertManager).Should(Succeed())
-		})
-
-		It("should have CA injection for validating webhooks", func() {
-			By("checking CA injection for validating webhooks")
-			verifyCAInjection := func(g Gomega) {
-				cmd := exec.Command("kubectl", "get",
-					"validatingwebhookconfigurations.admissionregistration.k8s.io",
-					"ichor-validating-webhook-configuration",
-					"-o", "go-template={{ range .webhooks }}{{ .clientConfig.caBundle }}{{ end }}")
-				vwhOutput, err := utils.Run(cmd)
-				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(len(vwhOutput)).To(BeNumerically(">", 10))
-			}
-			Eventually(verifyCAInjection).Should(Succeed())
-		})
-
-		// +kubebuilder:scaffold:e2e-webhooks-checks
-
-		// TODO: Customize the e2e test suite with scenarios specific to your project.
-		// Consider applying sample/CR(s) and check their status and/or verifying
-		// the reconciliation by using the metrics, i.e.:
-		// metricsOutput, err := getMetricsOutput()
-		// Expect(err).NotTo(HaveOccurred(), "Failed to retrieve logs from curl pod")
-		// Expect(metricsOutput).To(ContainSubstring(
-		//    fmt.Sprintf(`controller_runtime_reconcile_total{controller="%s",result="success"} 1`,
-		//    strings.ToLower(<Kind>),
-		// ))
+		By("accepting a valid TalosConfigPatch")
+		Expect(k8sClient.Create(ctx, newTestPatch(runID, "role", &v1alpha1.TalosConfigPatchTarget{
+			Role: "worker",
+		}))).To(Succeed())
 	})
 })
-
-// serviceAccountToken returns a token for the specified service account in the given namespace.
-// It uses the Kubernetes TokenRequest API to generate a token by directly sending a request
-// and parsing the resulting token from the API response.
-func serviceAccountToken() (string, error) {
-	const tokenRequestRawString = `{
-		"apiVersion": "authentication.k8s.io/v1",
-		"kind": "TokenRequest"
-	}`
-
-	By("creating temporary file to store the token request")
-	secretName := fmt.Sprintf("%s-token-request", serviceAccountName)
-	tokenRequestFile := filepath.Join("/tmp", secretName)
-	err := os.WriteFile(tokenRequestFile, []byte(tokenRequestRawString), os.FileMode(0o644))
-	if err != nil {
-		return "", err
-	}
-
-	var out string
-	verifyTokenCreation := func(g Gomega) {
-		By("executing kubectl command to create the token")
-		cmd := exec.Command("kubectl", "create", "--raw", fmt.Sprintf(
-			"/api/v1/namespaces/%s/serviceaccounts/%s/token",
-			namespace,
-			serviceAccountName,
-		), "-f", tokenRequestFile)
-
-		output, err := cmd.CombinedOutput()
-		g.Expect(err).NotTo(HaveOccurred())
-
-		By("parsing the JSON output to extract the token")
-		var token tokenRequest
-		err = json.Unmarshal(output, &token)
-		g.Expect(err).NotTo(HaveOccurred())
-
-		out = token.Status.Token
-	}
-	Eventually(verifyTokenCreation).Should(Succeed())
-
-	return out, err
-}
-
-// getMetricsOutput retrieves and returns the logs from the curl pod used to access the metrics endpoint.
-func getMetricsOutput() (string, error) {
-	By("getting the curl-metrics logs")
-	cmd := exec.Command("kubectl", "logs", "curl-metrics", "-n", namespace)
-	return utils.Run(cmd)
-}
-
-// tokenRequest is a simplified representation of the Kubernetes TokenRequest API response,
-// containing only the token field that we need to extract.
-type tokenRequest struct {
-	Status struct {
-		Token string `json:"token"`
-	} `json:"status"`
-}

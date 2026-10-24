@@ -74,12 +74,26 @@ machinery types. Nothing about the Talos field catalogue is hand-maintained.
   YAML-identical. A machinery upgrade that removes or retypes a field then
   fails to compile or fails that test, instead of silently changing the API.
 - The kind allow-list drives generation, so the CRD's size is a function of a
-  decision we control. **Measured, and the answer is comfortable**: the mirror
-  for the v1alpha1 `Config` document renders a 114,115-byte CRD, 7.3% of etcd's
-  1,572,864-byte `--max-request-bytes` ceiling; all three of phase 2's allowed
-  kinds in one CRD come to 122,353 bytes. No splitting into
-  `TalosNetworkPatch`-style CRDs is needed, and there is room for the remaining
-  52 kinds many times over.
+  decision we control. **Measured, and the answer is comfortable.** Two numbers
+  matter and they are not the same thing: the generated YAML file for
+  `talosconfigpatches` is 151,887 bytes, while the object a running API server
+  actually serves — which is what etcd stores and what
+  `--max-request-bytes` limits — is **69,455 bytes, 4.4% of the 1,572,864-byte
+  ceiling**. Serialized JSON is roughly half the file's size because the file
+  carries indentation and block scalars for every inherited Talos doc comment.
+  Quote the served size when deciding anything; the file size is the
+  pessimistic reading. No splitting into `TalosNetworkPatch`-style CRDs is
+  needed, and there is room for the remaining 52 kinds many times over.
+- `documents[]` is a **discriminated union**: a required `kind` field carrying
+  `+unionDiscriminator` and an enum of the allowed kinds, plus one optional
+  field per kind, with two CEL rules enforcing that exactly one field is
+  populated and that it is the one `kind` names. The alternative — inferring
+  the kind from whichever field is set — was rejected because Talos's own
+  documents carry a kind, so this way the YAML reads like a Talos config
+  document and the validation error says which kind it expected.
+  The legacy v1alpha1 document has no `kind` string in Talos itself, so its
+  discriminator value is **`Config`**, matching the Go type name. That is now
+  published API surface.
 - Phase 1 ships `TalosConfigPatch` without `documents[]`; the generator is the
   first work item of phase 2. The rest of phase 1 does not depend on it.
 

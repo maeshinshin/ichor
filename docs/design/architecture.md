@@ -574,7 +574,10 @@ resumption works. A short set runs per PR, the full set nightly.
    protection, e2e scaffolding.
 2. Typed config (the mirror-type generator first), rendering and apply, drift,
    the cluster lock.
-3. Discovery, approval, disk roles, removal, topology.
+3. Discovery, approval, disk roles, removal, topology. The deletion guard
+   phase 1 ships only checks for the `allow-delete` annotation; the quorum and
+   last-control-plane rules land here, and an explicit test has to show that
+   the annotation alone does **not** let the last control plane go.
 4. `init` and `adopt`, CNI presets (flannel, cilium, custom), Argo CD
    bootstrap, hand-over, repository skeleton.
 5. Read-only UI, approval UI, backup and restore, client certificate renewal.

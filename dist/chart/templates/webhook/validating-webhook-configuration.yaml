@@ -1,0 +1,45 @@
+{{- if .Values.webhook.enabled }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: {{ include "ichor.resourceName" (dict "suffix" "validating-webhook-configuration" "context" $) }}
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: {{ include "ichor.resourceName" (dict "suffix" "webhook-service" "context" $) }}
+      namespace: {{ .Release.Namespace }}
+      path: /validate-ichor-maesh-dev-v1alpha1-taloscluster
+  failurePolicy: Fail
+  name: vtaloscluster-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - ichor.maesh.dev
+    apiVersions:
+    - v1alpha1
+    operations:
+    - DELETE
+    resources:
+    - talosclusters
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: {{ include "ichor.resourceName" (dict "suffix" "webhook-service" "context" $) }}
+      namespace: {{ .Release.Namespace }}
+      path: /validate-ichor-maesh-dev-v1alpha1-talosmachine
+  failurePolicy: Fail
+  name: vtalosmachine-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - ichor.maesh.dev
+    apiVersions:
+    - v1alpha1
+    operations:
+    - DELETE
+    resources:
+    - talosmachines
+  sideEffects: None
+{{- end }}

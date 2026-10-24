@@ -13,7 +13,11 @@ manager:
   ##
   enabled: true
 
-  replicas: 1
+  ## Two replicas by default (design 2.4). Single-node clusters should set
+  ## this to 1 and turn off manager.podDisruptionBudget.enabled below; the
+  ## automatic switch is an installer feature, not phase 1.
+  ##
+  replicas: 2
 
   image:
     repository: controller
@@ -75,6 +79,13 @@ manager:
   ##
   affinity: {}
 
+  ## PodDisruptionBudget for the controller (design 2.4). Single-node
+  ## clusters should disable this alongside setting replicas: 1 above.
+  ##
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
   ## Manager pod's node selector
   ##
   nodeSelector: {}
@@ -95,9 +106,18 @@ manager:
   ##
   # priorityClassName: ""
 
-  ## Topology spread constraints
+  ## Topology spread constraints: placement across nodes by default (design
+  ## 2.4). topologySpreadConstraints over podAntiAffinity because
+  ## whenUnsatisfiable: ScheduleAnyway degrades to co-located replicas on a
+  ## single-node cluster instead of leaving the second one Pending forever.
   ##
-  # topologySpreadConstraints: []
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          control-plane: controller-manager
 
   ## Termination grace period seconds
   ##

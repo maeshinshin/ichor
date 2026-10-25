@@ -18,6 +18,7 @@ package uiapi
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -40,8 +41,31 @@ const bundleSecretKey = secretsbundle.SecretKey
 // never to put the Secret's data into an error message (principle 2),
 // enforced in the one place both callers share rather than two
 // independently-written copies that could drift on that guarantee without
-// either side's own leak tests noticing -- this package had none of its
-// own before this.
-func loadBundle(ctx context.Context, c client.Client, cluster *ichorv1alpha1.TalosCluster) (*secrets.Bundle, error) {
-	return secretsbundle.Load(ctx, c, cluster.Namespace, cluster.Spec.SecretsRef.Name)
+// either side's own leak tests noticing.
+//
+// namespace is the backend's own namespace (ControllerNamespace --
+// POD_NAMESPACE in practice, see cmd/ichor-ui/main.go), never
+// cluster.Namespace: a TalosCluster may live in any namespace this
+// backend watches, but Kubernetes RBAC cannot express "the Secret this
+// TalosCluster names, wherever that TalosCluster happens to live" at
+// anything narrower than cluster-wide Secret read, so this package
+// resolves in its own fixed namespace instead, exactly the reasoning ADR
+// 0011 already settled for internal/controller's own loadBundle -- this
+// function used to read cluster.Namespace directly instead, which is
+// wrong for the same reason and only went unnoticed because every test
+// fixture happened to put the TalosCluster and the Secret in the same
+// namespace.
+//
+// namespace must be non-empty: Secret is a namespaced resource, and an
+// empty namespace is never treated as "all namespaces" here -- that
+// would turn a missing POD_NAMESPACE into a silent, far broader read than
+// intended.
+func loadBundle(
+	ctx context.Context, c client.Client, namespace string, cluster *ichorv1alpha1.TalosCluster,
+) (*secrets.Bundle, error) {
+	if namespace == "" {
+		return nil, fmt.Errorf("loading secrets bundle: controller namespace is empty (is POD_NAMESPACE set?)")
+	}
+
+	return secretsbundle.Load(ctx, c, namespace, cluster.Spec.SecretsRef.Name)
 }

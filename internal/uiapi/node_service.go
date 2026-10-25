@@ -119,7 +119,7 @@ func (s *Server) GetEffectiveConfig(
 			fmt.Errorf("machine %q has no role yet; approve it before requesting its effective configuration", namespacedName(ref)))
 	}
 
-	bundle, err := loadBundle(ctx, s.Client, cluster)
+	bundle, err := loadBundle(ctx, s.Client, s.ControllerNamespace, cluster)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -232,7 +232,7 @@ func (s *Server) dialNode(
 	var bundle *secrets.Bundle
 
 	if m.Spec.IsApproved() {
-		b, err := loadBundle(ctx, s.Client, cluster)
+		b, err := loadBundle(ctx, s.Client, s.ControllerNamespace, cluster)
 		if err != nil {
 			return nil, nil, connect.NewError(connect.CodeInternal, err)
 		}

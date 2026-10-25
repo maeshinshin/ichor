@@ -82,7 +82,7 @@ var _ = Describe("TalosMachineReconciler bundle leak", func() {
 		cluster := newTestCluster(secret.Name, "v1.14")
 		m := newTestMachine(cluster.Name, true)
 
-		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), ControllerNamespace: tmNamespace}
+		r := &TalosMachineReconciler{Client: k8sClient, ControllerNamespace: tmNamespace}
 		_, err := reconcileMachine(r, m)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -97,7 +97,7 @@ var _ = Describe("TalosMachineReconciler bundle leak", func() {
 		cluster := newTestCluster(secret.Name, "v1.14")
 		m := newTestMachine(cluster.Name, true)
 
-		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), ControllerNamespace: tmNamespace}
+		r := &TalosMachineReconciler{Client: k8sClient, ControllerNamespace: tmNamespace}
 		_, err := reconcileMachine(r, m)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -111,7 +111,7 @@ var _ = Describe("TalosMachineReconciler bundle leak", func() {
 		m := newTestMachine(cluster.Name, true)
 
 		r := &TalosMachineReconciler{
-			Client: k8sClient, Scheme: k8sClient.Scheme(), ControllerNamespace: tmNamespace,
+			Client: k8sClient, ControllerNamespace: tmNamespace,
 			TalosClient: func(context.Context, *ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine, *secrets.Bundle) (TalosClient, error) {
 				return nil, errors.New("dial refused")
 			},
@@ -129,7 +129,7 @@ var _ = Describe("TalosMachineReconciler bundle leak", func() {
 		m := newTestMachine(cluster.Name, true)
 
 		fake := &fakeTalosClient{currentErr: errors.New("read failed")}
-		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
+		r := &TalosMachineReconciler{Client: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
 		_, err := reconcileMachine(r, m)
 		Expect(err).NotTo(HaveOccurred())
@@ -144,7 +144,7 @@ var _ = Describe("TalosMachineReconciler bundle leak", func() {
 		m := newTestMachine(cluster.Name, true)
 
 		fake := &fakeTalosClient{current: []byte("{{{not valid yaml")}
-		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
+		r := &TalosMachineReconciler{Client: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
 		_, err := reconcileMachine(r, m)
 		Expect(err).NotTo(HaveOccurred())
@@ -164,7 +164,7 @@ var _ = Describe("TalosMachineReconciler bundle leak", func() {
 		newTestPatch(cluster.Name, layerCluster, nil, desired)
 
 		fake := &fakeTalosClient{current: current, dryRunErr: errors.New("dry run failed")}
-		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
+		r := &TalosMachineReconciler{Client: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
 		_, err := reconcileMachine(r, m)
 		Expect(err).NotTo(HaveOccurred())
@@ -184,7 +184,7 @@ var _ = Describe("TalosMachineReconciler bundle leak", func() {
 		newTestPatch(cluster.Name, layerCluster, nil, desired)
 
 		fake := &fakeTalosClient{current: current, applyErr: errors.New("apply failed")}
-		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
+		r := &TalosMachineReconciler{Client: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
 		_, err := reconcileMachine(r, m)
 		Expect(err).NotTo(HaveOccurred())

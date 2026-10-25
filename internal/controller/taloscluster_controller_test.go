@@ -49,7 +49,7 @@ var _ = Describe("TalosClusterReconciler", func() {
 		}
 
 		r := &TalosClusterReconciler{
-			Client: k8sClient, Scheme: k8sClient.Scheme(),
+			Client:    k8sClient,
 			Discovery: &DiscoveryReconciler{Client: k8sClient, MaintenanceClient: factory},
 		}
 
@@ -60,7 +60,7 @@ var _ = Describe("TalosClusterReconciler", func() {
 	})
 
 	It("ignores a TalosCluster that no longer exists", func() {
-		r := &TalosClusterReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
+		r := &TalosClusterReconciler{Client: k8sClient}
 
 		result, err := r.Reconcile(ctx, ctrl.Request{Namespace: tmNamespace, Name: "no-such-cluster"})
 		Expect(err).NotTo(HaveOccurred())
@@ -79,7 +79,7 @@ var _ = Describe("TalosClusterReconciler", func() {
 		}
 
 		r := &TalosClusterReconciler{
-			Client: k8sClient, Scheme: k8sClient.Scheme(),
+			Client:    k8sClient,
 			Discovery: &DiscoveryReconciler{Client: k8sClient, MaintenanceClient: factory},
 		}
 

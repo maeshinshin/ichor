@@ -255,7 +255,6 @@ func main() {
 
 	if err := (&controller.TalosMachineReconciler{
 		Client:              mgr.GetClient(),
-		Scheme:              mgr.GetScheme(),
 		ControllerNamespace: os.Getenv("POD_NAMESPACE"),
 		TalosClient:         controller.NewMachineryTalosClient,
 		KubeClient:          kubeClient,
@@ -265,7 +264,6 @@ func main() {
 	}
 	if err := (&controller.TalosClusterReconciler{
 		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
 		Discovery: &controller.DiscoveryReconciler{
 			Client: mgr.GetClient(),
 			// GetEventRecorderFor is deprecated in favor of the newer events/v1

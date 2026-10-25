@@ -149,3 +149,52 @@ Five things the harness has to get right, each of which cost a debugging cycle:
   because Talos's own first-boot detection finds the STATE partition and runs
   the boot sequence rather than reinstalling. That is incidental and not worth
   relying on.
+
+## Re-verified end to end; six more things it took
+
+The whole flow — ISO boot, install, bootstrap, etcd healthy, the e2e spec set
+against the inner cluster, teardown — was run for real multiple times on
+`talos-cluster01` to confirm the above still holds and that cleanup actually
+leaves `ichor-e2e` empty. It does, but getting there cost six more cycles:
+
+- **`talosctl bootstrap` can race its own prerequisite.** Immediately after the
+  authenticated API starts answering `machinestatus` (the harness's own signal
+  that install finished), bootstrap can still return `FailedPrecondition:
+  bootstrap is not available yet` — apid being reachable doesn't mean etcd's
+  bootstrap RPC is registered yet. Retry it like every other condition the
+  harness polls for, instead of treating it as fatal.
+- **`MachineStatus.ready` is not where it looks.** It lives at
+  `spec.status.ready`, not `spec.ready` — confirmed against a real node's JSON.
+  Both the harness's running/ready wait and the e2e spec's own assertion had
+  the wrong path, so the check was always false and either hung or always
+  passed trivially depending on how it was written. Worth remembering for any
+  other MachineStatus field: `spec.status` is itself an object, not a
+  flattening of its parent.
+- **The inner cluster needs its own `ichor-e2e` namespace.** The harness only
+  gets the node and the CRDs up; nothing creates a namespace of that name on
+  the *inner* cluster, and the e2e spec's CEL fixtures assume one exists
+  there. Easy to miss because the name collides with the *outer* cluster's
+  namespace, which does pre-exist — two different clusters, same name,
+  one of them actually needs creating.
+- **`nix develop` owns the name `out`.** It exports `out=<store path>` by
+  convention (every Nix derivation builder gets one), and `make install`/
+  `uninstall` reused that exact name for the kustomize-rendered CRD YAML
+  without `export -n`. The variable kept the export attribute from the
+  shell's own setup, so every subsequent subprocess in that shell inherited a
+  170KB+ environment variable, until some later `exec` (observed: `kubectl`)
+  hit the kernel's combined argv+envp limit with "Argument list too long" —
+  nowhere near the command that actually assigned the value. Renaming the
+  local variable is the whole fix; nothing about the CRDs or kustomize was
+  wrong.
+- **Cleanup must check its target as carefully as setup does.** Observed for real: a dangling `kind-kind` context
+  left over from before this project moved off Kind made cleanup fail
+  outright (connection refused) instead of silently targeting the wrong
+  cluster — but "fails outright" was luck, not a guarantee, for a target that
+  could just as easily have been a live cluster with its own `ichor-e2e`
+  namespace. Both targets now share the same prerequisite check, and the
+  harness binary itself refuses to run at all (`up` or `down`) when
+  `KUBECONFIG` is unset, rather than fall back to kubectl's ambient context.
+- **`go run` cannot be trusted with a signal-triggered cleanup.** The harness
+  traps SIGINT/SIGTERM to run `down()` before exiting, so a killed `up` can't
+  strand the node. Any harness step whose correctness depends on catching a
+  signal has to run as the actual binary, not under `go run`.

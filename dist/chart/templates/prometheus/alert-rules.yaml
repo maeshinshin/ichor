@@ -1,0 +1,42 @@
+{{- if .Values.prometheus.rules.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/name: {{ include "ichor.name" . }}
+    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  name: {{ include "ichor.resourceName" (dict "suffix" "alert-rules" "context" $) }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  groups:
+  - name: ichor
+    rules:
+    # The controller is the only writer of Talos nodes and the only enforcer of
+    # deletion protection (architecture.md "Trust"); if it is down, nothing it
+    # guards is being reconciled or protected. Worth paging on -- everything else
+    # below is "investigate during business hours", this one is not.
+    - alert: IchorControllerDown
+      expr: up{service="{{ include "ichor.resourceName" (dict "suffix" "controller-manager-metrics-service" "context" $) }}"} == 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "The Ichor controller has not been scrapeable for 5 minutes."
+        description: "No Talos configuration is being reconciled and deletion protection is not running while the controller manager is down."
+    # A sustained, nonzero reconcile error rate (as opposed to a single blip) usually
+    # means something the controller depends on -- a Talos node, the Kubernetes
+    # apiserver, a malformed CR -- is persistently unreachable or wrong, not a
+    # transient retry. controller_runtime_reconcile_errors_total is exported
+    # unconditionally by controller-runtime itself (ADR 0040); this rule is the
+    # only thing Ichor adds on top of it.
+    - alert: IchorReconcileErrorsPersisting
+      expr: sum by (controller) (rate(controller_runtime_reconcile_errors_total[15m])) > 0
+      for: 15m
+      labels:
+        severity: warning
+      annotations:
+        summary: "{{`{{ $labels.controller }}`}} has been failing reconciles for 15 minutes."
+        description: "Check the controller's logs for the resources it keeps failing to reconcile."
+{{- end }}

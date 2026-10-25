@@ -1,0 +1,111 @@
+{{- if .Values.grafana.dashboards.enabled }}
+# One dashboard, not a set: docs/adr/0040-ui-backend-and-controller-metrics-options.md
+# weighs more against a JSON blob that rots the moment a panel's metric name changes,
+# not for maximizing panel count. Discovered by Grafana's sidecar-ConfigMap convention
+# (grafana_dashboard: "1"), which both kube-prometheus-stack's and Bitnami's Grafana
+# charts support -- Ichor ships no Grafana itself (architecture.md "Monitoring and air
+# gap"), so this ConfigMap is inert unless the cluster's own Grafana runs that sidecar.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/name: {{ include "ichor.name" . }}
+    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    grafana_dashboard: "1"
+  name: {{ include "ichor.resourceName" (dict "suffix" "grafana-dashboard" "context" $) }}
+  namespace: {{ .Release.Namespace }}
+data:
+  ichor-overview.json: |-
+    {
+      "title": "Ichor overview",
+      "uid": "ichor-overview",
+      "schemaVersion": 39,
+      "timezone": "",
+      "editable": true,
+      "time": { "from": "now-6h", "to": "now" },
+      "templating": {
+        "list": [
+          {
+            "name": "datasource",
+            "type": "datasource",
+            "query": "prometheus",
+            "current": {}
+          }
+        ]
+      },
+      "panels": [
+        {
+          "id": 1,
+          "title": "Reconciles / sec, by controller and result",
+          "type": "timeseries",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+          "targets": [
+            {
+              "datasource": "${datasource}",
+              "expr": "sum by (controller, result) (rate(controller_runtime_reconcile_total[5m]))",
+              "legendFormat": "{{"{{"}}controller{{"}}"}}/{{"{{"}}result{{"}}"}}"
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "title": "Reconcile errors / sec, by controller",
+          "type": "timeseries",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+          "targets": [
+            {
+              "datasource": "${datasource}",
+              "expr": "sum by (controller) (rate(controller_runtime_reconcile_errors_total[5m]))",
+              "legendFormat": "{{"{{"}}controller{{"}}"}}"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "title": "Reconcile duration p99, by controller",
+          "type": "timeseries",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+          "targets": [
+            {
+              "datasource": "${datasource}",
+              "expr": "histogram_quantile(0.99, sum by (le, controller) (rate(controller_runtime_reconcile_time_seconds_bucket[5m])))",
+              "legendFormat": "{{"{{"}}controller{{"}}"}}"
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "title": "ichor-ui RPC latency p99, by procedure",
+          "type": "timeseries",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+          "targets": [
+            {
+              "datasource": "${datasource}",
+              "expr": "histogram_quantile(0.99, sum by (le, procedure) (rate(ichor_uiapi_rpc_duration_seconds_bucket[5m])))",
+              "legendFormat": "{{"{{"}}procedure{{"}}"}}"
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "title": "ichor-ui RPC errors / sec, by procedure and code",
+          "type": "timeseries",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+          "targets": [
+            {
+              "datasource": "${datasource}",
+              "expr": "sum by (procedure, code) (rate(ichor_uiapi_rpc_duration_seconds_count{code!=\"ok\"}[5m]))",
+              "legendFormat": "{{"{{"}}procedure{{"}}"}}/{{"{{"}}code{{"}}"}}"
+            }
+          ]
+        }
+      ]
+    }
+{{- end }}

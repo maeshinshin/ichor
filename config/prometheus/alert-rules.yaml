@@ -1,0 +1,33 @@
+# Deliberately few: docs/adr/0040-ui-backend-and-controller-metrics-options.md asks
+# "what would really wake someone up" and rejects anything that answers "investigate
+# during business hours" instead. Mirrors dist/chart/templates/prometheus/
+# alert-rules.yaml (CONTRIBUTING.md's config/<->chart mirroring rule); keep both in
+# sync by hand.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    app.kubernetes.io/name: ichor
+    app.kubernetes.io/managed-by: kustomize
+  name: alert-rules
+  namespace: system
+spec:
+  groups:
+    - name: ichor
+      rules:
+        - alert: IchorControllerDown
+          expr: up{service="ichor-controller-manager-metrics-service"} == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "The Ichor controller has not been scrapeable for 5 minutes."
+            description: "No Talos configuration is being reconciled and deletion protection is not running while the controller manager is down."
+        - alert: IchorReconcileErrorsPersisting
+          expr: sum by (controller) (rate(controller_runtime_reconcile_errors_total[15m])) > 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.controller }} has been failing reconciles for 15 minutes."
+            description: "Check the controller's logs for the resources it keeps failing to reconcile."

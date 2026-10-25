@@ -8,7 +8,10 @@ metadata:
   namespace: system
 spec:
   ports:
-    - port: 8080
+    # Named so ../prometheus/ui-monitor.yaml's ServiceMonitor can target it by name,
+    # mirroring dist/chart/templates/ui/ui-service.yaml.
+    - name: http
+      port: 8080
       protocol: TCP
       targetPort: 8080
   selector:

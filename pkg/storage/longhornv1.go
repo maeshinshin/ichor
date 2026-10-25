@@ -156,3 +156,18 @@ func (longhornV1) CheckConsistency(live LiveConfig) error {
 
 	return nil
 }
+
+// BeginEvacuation implements EvacuationHook. Verified against
+// longhorn-manager v1.9.1's own types and admission webhook:
+// NodeSpec and DiskSpec both carry allowScheduling and evictionRequested,
+// and the webhook rejects evictionRequested=true while allowScheduling is
+// still true -- so these two values must land as two separate writes, in
+// this order, never one combined patch.
+func (longhornV1) BeginEvacuation() (allowScheduling, evictionRequested bool) {
+	return false, true
+}
+
+// EndEvacuation implements EvacuationHook.
+func (longhornV1) EndEvacuation() (allowScheduling, evictionRequested bool) {
+	return true, false
+}

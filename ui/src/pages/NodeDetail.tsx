@@ -11,6 +11,7 @@ import { enumLabel } from '@/lib/enum'
 import { describeError } from '@/lib/errors'
 import { formatBytes, formatTimestamp } from '@/lib/format'
 import { streamWithResume } from '@/lib/resumableStream'
+import { Link } from '@/router'
 
 type ErrorShape = { title: string; detail: string }
 
@@ -211,7 +212,11 @@ function EffectiveConfigSection({ namespace, name }: { namespace: string; name: 
       <CardContent className="space-y-4">
         <p class="text-sm text-muted-foreground">
           Read-only: this is what the controller last rendered for this node, grouped by the
-          layer each value came from. Editing a patch isn't available from this screen yet.
+          layer each value came from. Edit the patch that sets a value from{' '}
+          <Link to="/patches" class="underline">
+            the patches screen
+          </Link>
+          , not from here.
         </p>
         {error && <ErrorAlert {...error} />}
         {!error && !values && <p class="text-sm text-muted-foreground">Loading…</p>}

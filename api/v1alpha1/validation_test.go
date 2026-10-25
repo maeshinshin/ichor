@@ -33,10 +33,14 @@ import (
 
 // Shared literals, hoisted so they aren't repeated across the table entries below (goconst).
 const (
-	testNamespace       = "default"
-	literalCluster      = "cluster"
-	literalControlPlane = "controlplane"
-	literalSecrets      = "secrets"
+	testNamespace        = "default"
+	literalCluster       = "cluster"
+	literalControlPlane  = "controlplane"
+	literalSecrets       = "secrets"
+	literalConfigVersion = "v1alpha1"
+	literalGenerateName  = "patch-"
+	literalNodeIP        = "10.0.0.10"
+	literalKindKey       = "kind"
 
 	kindSysctlConfig       = "SysctlConfig"
 	kindKernelModuleConfig = "KernelModuleConfig"
@@ -50,7 +54,7 @@ const (
 
 func newConfigPatch(layer string, target *TalosConfigPatchTarget) *TalosConfigPatch {
 	return &TalosConfigPatch{
-		GenerateName: "patch-",
+		GenerateName: literalGenerateName,
 		Namespace:    testNamespace,
 		Spec: TalosConfigPatchSpec{
 			ClusterRef: corev1.LocalObjectReference{Name: literalCluster},
@@ -89,11 +93,10 @@ var _ = Describe("TalosConfigPatch", func() {
 // one branch (machine, cluster) the discrimination tests touch.
 func minimalConfig() *typedconfig.Config {
 	return &typedconfig.Config{
-		ConfigVersion: "v1alpha1",
+		ConfigVersion: literalConfigVersion,
 		MachineConfig: &typedconfig.MachineConfig{
 			MachineType:     literalControlPlane,
-			MachineToken:    "328hom.uqjzh6jnn2eie9oi",
-			MachineCertSANs: []string{"10.0.0.10"},
+			MachineCertSANs: []string{literalNodeIP},
 		},
 		ClusterConfig: &typedconfig.ClusterConfig{},
 	}
@@ -109,7 +112,7 @@ func minimalKernelModuleConfig() *typedconfig.KernelModuleConfigV1Alpha1 {
 
 func newConfigPatchWithDocument(doc TalosConfigPatchDocument) *TalosConfigPatch {
 	return &TalosConfigPatch{
-		GenerateName: "patch-",
+		GenerateName: literalGenerateName,
 		Namespace:    testNamespace,
 		Spec: TalosConfigPatchSpec{
 			ClusterRef: corev1.LocalObjectReference{Name: literalCluster},
@@ -170,11 +173,10 @@ var _ = Describe("TalosConfigPatchDocument", func() {
 
 	It("round-trips a non-trivial Config document through the API server", func() {
 		want := &typedconfig.Config{
-			ConfigVersion: "v1alpha1",
+			ConfigVersion: literalConfigVersion,
 			MachineConfig: &typedconfig.MachineConfig{
 				MachineType:     literalControlPlane,
-				MachineToken:    "328hom.uqjzh6jnn2eie9oi",
-				MachineCertSANs: []string{"10.0.0.10", "203.0.113.10"},
+				MachineCertSANs: []string{literalNodeIP, "203.0.113.10"},
 				// MachineInstall and MachineKubelet are deprecated in favor of multi-document
 				// config kinds outside the phase 2 allow-list; they are still how a
 				// disk selector and extraArgs reach v1alpha1.Config today.
@@ -218,6 +220,97 @@ var _ = Describe("TalosConfigPatchDocument", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(gotMachinery).To(Equal(wantMachinery))
+	})
+
+	// PENDING: mirrorgen's secretFields table (internal/tools/mirrorgen/main.go)
+	// correctly removes all nine secret-carrying fields from the CRD schema --
+	// verified below by reading the object back and confirming none of the
+	// nine survived. What is NOT yet confirmed is the acceptance criterion as
+	// literally stated ("the API server rejects it, not structural-schema
+	// pruning"): measured against this envtest apiserver, a plain
+	// client.Create with no fieldValidation option set PRUNES unknown fields
+	// (logs "unknown field ..." and a nil error) rather than rejecting the
+	// request. That is a kubectl/client-side opt-in
+	// (metav1.CreateOptions.FieldValidation=Strict), not something a CRD
+	// schema can force on every caller by itself; the standard way to force
+	// rejection server-side is a validating admission webhook, which is
+	// outside this change's scope (internal/webhook/ is excluded). This is
+	// flagged back to the coordinator rather than silently asserted either
+	// way -- see the task report.
+	It("drops all nine secret fields from a Config document, however it arrives", func() {
+		caPair := map[string]any{"crt": "Y2EtY2VydA==", "key": "Y2Eta2V5"}
+
+		u := &unstructured.Unstructured{
+			Object: map[string]any{
+				"apiVersion":   GroupVersion.String(),
+				literalKindKey: "TalosConfigPatch",
+				"metadata": map[string]any{
+					"generateName": literalGenerateName,
+					"namespace":    testNamespace,
+				},
+				"spec": map[string]any{
+					"clusterRef": map[string]any{"name": literalCluster},
+					"layer":      literalCluster,
+					"documents": []any{
+						map[string]any{
+							literalKindKey: kindConfig,
+							"config": map[string]any{
+								"version": literalConfigVersion,
+								"machine": map[string]any{
+									"type":     literalControlPlane,
+									"certSANs": []any{literalNodeIP},
+									// The two MachineConfig secret fields.
+									"token": "328hom.uqjzh6jnn2eie9oi",
+									"ca":    caPair,
+								},
+								"cluster": map[string]any{
+									// The six ClusterConfig secret fields, plus
+									// EtcdConfig.RootCA nested under "etcd".
+									"secret":                 "cluster-secret",
+									"token":                  "wlzjyw.bei2zfylhs2by0wd",
+									"aescbcEncryptionSecret": "aescbc-secret",
+									"ca":                     caPair,
+									"aggregatorCA":           caPair,
+									"serviceAccount":         map[string]any{"key": "c2Eta2V5"},
+									"etcd":                   map[string]any{"ca": caPair},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		Expect(k8sClient.Create(context.Background(), u)).To(Succeed())
+
+		readBack := &unstructured.Unstructured{}
+		readBack.SetGroupVersionKind(u.GroupVersionKind())
+		key := types.NamespacedName{Name: u.GetName(), Namespace: u.GetNamespace()}
+		Expect(k8sClient.Get(context.Background(), key, readBack)).To(Succeed())
+
+		documents, _, err := unstructured.NestedSlice(readBack.Object, "spec", "documents")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(documents).To(HaveLen(1))
+
+		doc, ok := documents[0].(map[string]any) //nolint:forcetypeassert
+		Expect(ok).To(BeTrue())
+
+		machine, _, err := unstructured.NestedMap(doc, "config", "machine")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(machine).NotTo(HaveKey("token"))
+		Expect(machine).NotTo(HaveKey("ca"))
+
+		cluster, _, err := unstructured.NestedMap(doc, "config", "cluster")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cluster).NotTo(HaveKey("secret"))
+		Expect(cluster).NotTo(HaveKey("token"))
+		Expect(cluster).NotTo(HaveKey("aescbcEncryptionSecret"))
+		Expect(cluster).NotTo(HaveKey("ca"))
+		Expect(cluster).NotTo(HaveKey("aggregatorCA"))
+		Expect(cluster).NotTo(HaveKey("serviceAccount"))
+		if etcd, found, _ := unstructured.NestedMap(cluster, "etcd"); found { //nolint:errcheck
+			Expect(etcd).NotTo(HaveKey("ca"))
+		}
 	})
 })
 
@@ -278,8 +371,8 @@ var _ = Describe("TalosCluster", func() {
 	It("rejects a TalosCluster with controlPlane.schedulable omitted entirely", func() {
 		u := &unstructured.Unstructured{
 			Object: map[string]any{
-				"apiVersion": GroupVersion.String(),
-				"kind":       "TalosCluster",
+				"apiVersion":   GroupVersion.String(),
+				literalKindKey: "TalosCluster",
 				"metadata": map[string]any{
 					"generateName": "cluster-",
 					"namespace":    testNamespace,

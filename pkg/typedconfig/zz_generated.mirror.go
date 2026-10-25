@@ -18,6 +18,12 @@ limitations under the License.
 
 package typedconfig
 
+import (
+	corev1 "k8s.io/api/core/v1"
+	apiserverv1 "k8s.io/apiserver/pkg/apis/apiserver/v1"
+	auditv1 "k8s.io/apiserver/pkg/apis/audit/v1"
+)
+
 // APIServerConfig represents the kube apiserver configuration options.
 type APIServerConfig struct {
 	// The container image used in the API server manifest.
@@ -41,6 +47,9 @@ type APIServerConfig struct {
 	// docgen:nodoc Deprecated: Use `KubeAdmissionControlConfig` instead.
 	// +optional
 	AdmissionControlConfig []*AdmissionPluginConfig `json:"admissionControl,omitempty"`
+	// docgen:nodoc Deprecated: Use `KubeAuditPolicyConfig` instead.
+	// +optional
+	AuditPolicyConfig *auditv1.Policy `json:"auditPolicy,omitempty"`
 	// Configure the API server resources.
 	// +optional
 	ResourcesConfig *ResourcesConfig `json:"resources,omitempty"`
@@ -73,6 +82,9 @@ type AuthorizationConfigAuthorizerConfig struct {
 	// Name is used to describe the authorizer.
 	// +required
 	AuthorizerName string `json:"name"`
+	// webhook is the configuration for the webhook authorizer.
+	// +optional
+	AuthorizerWebhook *apiserverv1.WebhookConfiguration `json:"webhook,omitempty"`
 }
 
 // Bond contains the various options for configuring a bonded interface. docgen:nodoc
@@ -240,9 +252,6 @@ type ClusterConfig struct {
 	// docgen:nodoc Deprecated: Use 'DiscoveryIdentityConfig' document instead.
 	// +optional
 	ClusterID string `json:"id,omitempty"`
-	// docgen:nodoc Deprecated: Use 'DiscoveryIdentityConfig' document instead.
-	// +optional
-	ClusterSecret string `json:"secret,omitempty"`
 	// docgen:nodoc Deprecated: Use `KubeClusterConfig` instead.
 	// +optional
 	ControlPlane *ControlPlaneConfig `json:"controlPlane,omitempty"`
@@ -252,27 +261,12 @@ type ClusterConfig struct {
 	// docgen:nodoc Deprecated: Use `KubeNetworkConfig` and `KubeFlannelCNIConfig` instead.
 	// +optional
 	ClusterNetwork *ClusterNetworkConfig `json:"network,omitempty"`
-	// The [bootstrap token](https://kubernetes.io/docs/reference/access-authn-authz/bootstrap-tokens/) used to join the cluster.
-	// +optional
-	BootstrapToken string `json:"token,omitempty"`
-	// docgen:nodoc Deprecated: Use `KubeEtcdEncryptionConfig` instead.
-	// +optional
-	ClusterAESCBCEncryptionSecret string `json:"aescbcEncryptionSecret,omitempty"`
 	// docgen:nodoc Deprecated: Use `KubeEtcdEncryptionConfig` instead.
 	// +optional
 	ClusterSecretboxEncryptionSecret string `json:"secretboxEncryptionSecret,omitempty"`
 	// docgen:nodoc Deprecated: Use `KubeAPIServerCAConfig` instead.
 	// +optional
-	ClusterCA *PEMEncodedCertificateAndKey `json:"ca,omitempty"`
-	// docgen:nodoc Deprecated: Use `KubeAPIServerCAConfig` instead.
-	// +optional
 	ClusterAcceptedCAs []*PEMEncodedCertificate `json:"acceptedCAs,omitempty"`
-	// docgen:nodoc Deprecated: Use `KubeAPIServerAggregatorCAConfig` instead.
-	// +optional
-	ClusterAggregatorCA *PEMEncodedCertificateAndKey `json:"aggregatorCA,omitempty"`
-	// docgen:nodoc Deprecated: Use `KubeServiceAccountConfig` instead.
-	// +optional
-	ClusterServiceAccount *PEMEncodedKey `json:"serviceAccount,omitempty"`
 	// docgen:nodoc Deprecated: Use `KubeAPIServerConfig` instead.
 	// +optional
 	APIServerConfig *APIServerConfig `json:"apiServer,omitempty"`
@@ -670,10 +664,6 @@ type EtcdConfig struct {
 	// The container image used to create the etcd service.
 	// +optional
 	ContainerImage string `json:"image,omitempty"`
-	// The `ca` is the root certificate authority of the PKI.
-	// It is composed of a base64 encoded `crt` and `key`.
-	// +required
-	RootCA *PEMEncodedCertificateAndKey `json:"ca"`
 	// Extra arguments to supply to etcd.
 	// Note that the following args are not allowed:
 	//
@@ -1076,14 +1066,6 @@ type MachineConfig struct {
 	// This node type was previously known as "join"; that value is still supported but deprecated.
 	// +required
 	MachineType string `json:"type"`
-	// The `token` is used by a machine to join the PKI of the cluster.
-	// Using this token, a machine will create a certificate signing request (CSR), and request a certificate that will be used as its' identity.
-	// +required
-	MachineToken string `json:"token"`
-	// The root certificate authority of the PKI.
-	// It is composed of a base64 encoded `crt` and `key`.
-	// +optional
-	MachineCA *PEMEncodedCertificateAndKey `json:"ca,omitempty"`
 	// The certificates issued by certificate authorities are accepted in addition to issuing 'ca'.
 	// It is composed of a base64 encoded `crt``.
 	// +optional
@@ -1209,6 +1191,9 @@ type MachineSeccompProfile struct {
 	// The `name` field is used to provide the file name of the seccomp profile.
 	// +required
 	MachineSeccompProfileName string `json:"name"`
+	// The `value` field is used to provide the seccomp profile.
+	// +required
+	MachineSeccompProfileValue *SeccompProfile `json:"value"`
 }
 
 // NetworkConfig represents the machine's networking config values. Deprecated: all fields in NetworkConfig are deprecated, use corresponding multi-doc config types instead.
@@ -1307,12 +1292,6 @@ type PEMEncodedCertificate struct {
 type PEMEncodedCertificateAndKey struct {
 	// +required
 	Crt []byte `json:"crt"`
-	// +required
-	Key []byte `json:"key"`
-}
-
-// PEMEncodedKey represents a PEM encoded private key.
-type PEMEncodedKey struct {
 	// +required
 	Key []byte `json:"key"`
 }
@@ -1445,6 +1424,12 @@ type RegistryTLSConfig struct {
 
 // ResourcesConfig represents the pod resources.
 type ResourcesConfig struct {
+	// Requests configures the reserved cpu/memory resources.
+	// +optional
+	Requests corev1.ResourceList `json:"requests,omitempty"`
+	// Limits configures the maximum cpu/memory resources a container can use.
+	// +optional
+	Limits corev1.ResourceList `json:"limits,omitempty"`
 }
 
 // Route represents a network route. docgen:nodoc

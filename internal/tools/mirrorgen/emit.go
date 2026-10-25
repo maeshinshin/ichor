@@ -31,6 +31,12 @@ func mirrorTypeExprOf(m *typeMapping) string {
 		return "map[string]" + mirrorTypeExprOf(m.elem)
 	case kPassthrough, kCast, kSubstScalar, kSubstArgValue:
 		return m.mirrorExpr
+	case kOverride:
+		if m.overridePtr {
+			return "*" + m.mirrorExpr
+		}
+
+		return m.mirrorExpr
 	case kBytesCast:
 		return "[]byte"
 	}
@@ -54,7 +60,7 @@ func machTypeExprOf(m *typeMapping) string {
 		return "map[string]" + machTypeExprOf(m.elem)
 	case kPassthrough:
 		return m.machExpr
-	case kCast, kBytesCast, kSubstScalar, kSubstArgValue:
+	case kCast, kBytesCast, kSubstScalar, kSubstArgValue, kOverride:
 		return m.machExpr
 	}
 
@@ -85,6 +91,9 @@ func emitConvert(b *strings.Builder, m *typeMapping, src, dst string, toMachiner
 
 	case kSubstArgValue:
 		emitSubstArgValue(b, src, dst, toMachinery, depth, fieldPath)
+
+	case kOverride:
+		emitOverrideConvert(b, m, src, dst, toMachinery, depth, fieldPath)
 
 	case kStruct:
 		// Reached directly (not through kPointer, which emitPointerConvert
@@ -130,6 +139,48 @@ func emitSubstArgValue(b *strings.Builder, src, dst string, toMachinery bool, de
 
 	fmt.Fprintf(b, "\tif err != nil {\n\t\treturn nil, fmt.Errorf(%q+\": %%w\", err)\n\t}\n", fieldPath)
 	fmt.Fprintf(b, "\t%s = %s\n", dst, v)
+}
+
+// emitOverrideConvert handles a fieldOverrides entry: mirror is an upstream
+// type, machinery is always a plain meta.Unstructured value (never a
+// pointer, whatever m.overridePtr says about the mirror side -- see its
+// doc). Map-shaped overrides (overridePtr false, e.g. corev1.ResourceList)
+// are symmetric values on both sides and round-trip a nil mirror value to a
+// nil Object on their own. Struct-shaped overrides (overridePtr true) need
+// an explicit nil/empty guard instead: marshaling a zero-value Go struct is
+// not the same as "unset" (it still emits every non-omitempty field), so
+// without the guard an absent field would come back as a populated one.
+func emitOverrideConvert(b *strings.Builder, m *typeMapping, src, dst string, toMachinery bool, depth int, fieldPath string) {
+	v := fmt.Sprintf("v%d", depth)
+
+	if !m.overridePtr {
+		if toMachinery {
+			fmt.Fprintf(b, "\t%s, err := mirrorToMachineryUnstructured(%s)\n", v, src)
+		} else {
+			fmt.Fprintf(b, "\t%s, err := machineryToMirrorUnstructured[%s](%s)\n", v, m.mirrorExpr, src)
+		}
+
+		fmt.Fprintf(b, "\tif err != nil {\n\t\treturn nil, fmt.Errorf(%q+\": %%w\", err)\n\t}\n", fieldPath)
+		fmt.Fprintf(b, "\t%s = %s\n", dst, v)
+
+		return
+	}
+
+	if toMachinery {
+		fmt.Fprintf(b, "\tif %s != nil {\n", src)
+		fmt.Fprintf(b, "\t\t%s, err := mirrorToMachineryUnstructured(*%s)\n", v, src)
+		fmt.Fprintf(b, "\t\tif err != nil {\n\t\t\treturn nil, fmt.Errorf(%q+\": %%w\", err)\n\t\t}\n", fieldPath)
+		fmt.Fprintf(b, "\t\t%s = %s\n", dst, v)
+		fmt.Fprintf(b, "\t}\n")
+
+		return
+	}
+
+	fmt.Fprintf(b, "\tif len(%s.Object) > 0 {\n", src)
+	fmt.Fprintf(b, "\t\t%s, err := machineryToMirrorUnstructured[%s](%s)\n", v, m.mirrorExpr, src)
+	fmt.Fprintf(b, "\t\tif err != nil {\n\t\t\treturn nil, fmt.Errorf(%q+\": %%w\", err)\n\t\t}\n", fieldPath)
+	fmt.Fprintf(b, "\t\t%s = &%s\n", dst, v)
+	fmt.Fprintf(b, "\t}\n")
 }
 
 // emitStructConvert handles a struct reached without (valueMachinery=false,
@@ -284,7 +335,15 @@ func (g *generator) writeMirror(filename string) {
 	var b strings.Builder
 
 	b.WriteString(header)
-	b.WriteString("\npackage typedconfig\n")
+	b.WriteString(`
+package typedconfig
+
+import (
+	corev1 "k8s.io/api/core/v1"
+	auditv1 "k8s.io/apiserver/pkg/apis/audit/v1"
+	apiserverv1 "k8s.io/apiserver/pkg/apis/apiserver/v1"
+)
+`)
 
 	for _, def := range g.sortedOrder() {
 		writeMirrorStruct(&b, def)
@@ -344,6 +403,9 @@ package typedconfig
 import (
 	"fmt"
 
+	corev1 "k8s.io/api/core/v1"
+	auditv1 "k8s.io/apiserver/pkg/apis/audit/v1"
+	apiserverv1 "k8s.io/apiserver/pkg/apis/apiserver/v1"
 	mx509 "github.com/siderolabs/crypto/x509"
 	mmeta "github.com/siderolabs/talos/pkg/machinery/config/types/meta"
 	mruntime "github.com/siderolabs/talos/pkg/machinery/config/types/runtime"
@@ -415,11 +477,31 @@ func (g *generator) report() {
 		}
 	}
 
+	if len(g.overridden) > 0 {
+		overridden := slices.Clone(g.overridden)
+		slices.Sort(overridden)
+
+		fmt.Println("mirrorgen: field overrides (meta.Unstructured mirrored as an upstream type):")
+
+		for _, f := range overridden {
+			ov := fieldOverrides[f]
+			fmt.Printf("  - %s -> %s.%s\n", f, ov.pkgPath, ov.typeName)
+		}
+	}
+
 	if len(g.dropped) > 0 {
 		fmt.Println("mirrorgen: dropped fields (meta.Unstructured; would reintroduce the raw-YAML hatch):")
 
 		for _, d := range g.dropped {
 			fmt.Printf("  - %s.%s (yaml %q)\n", d.Struct, d.Field, d.YAML)
+		}
+	}
+
+	if len(g.droppedSecret) > 0 {
+		fmt.Println("mirrorgen: dropped fields (secret material; must not be representable, not just hard to represent):")
+
+		for _, d := range g.droppedSecret {
+			fmt.Printf("  - %s.%s (yaml %q): %s\n", d.Struct, d.Field, d.YAML, d.Why)
 		}
 	}
 }

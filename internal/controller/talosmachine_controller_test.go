@@ -194,7 +194,6 @@ func minimalConfigSkeleton() *typedconfig.Config {
 		ConfigVersion: "v1alpha1",
 		MachineConfig: &typedconfig.MachineConfig{
 			MachineType:     roleWorker,
-			MachineToken:    "328hom.uqjzh6jnn2eie9oi",
 			MachineCertSANs: []string{"10.0.0.10"},
 		},
 		ClusterConfig: &typedconfig.ClusterConfig{},

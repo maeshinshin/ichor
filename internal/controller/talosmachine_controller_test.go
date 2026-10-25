@@ -52,9 +52,11 @@ const (
 
 	// Shared across every TalosCluster fixture in this package (goconst):
 	// the exact values never matter to what each test is actually about.
-	testEndpointType = "vip"
-	testTalosVersion = "v1.14.3"
-	testSchedulable  = "true"
+	testEndpointType    = "vip"
+	testTalosVersion    = "v1.14.3"
+	testSchedulable     = "true"
+	testClusterAddress  = "10.0.0.5"
+	testClusterGenerate = "cluster-"
 )
 
 // fakeTalosClient is the Talos API boundary test double (unit rule 2: no
@@ -124,9 +126,9 @@ func newTestSecret(bundle *secrets.Bundle) *corev1.Secret {
 
 func newTestCluster(secretName, versionContract string) *ichorv1alpha1.TalosCluster {
 	cluster := &ichorv1alpha1.TalosCluster{
-		GenerateName: "cluster-", Namespace: tmNamespace,
+		GenerateName: testClusterGenerate, Namespace: tmNamespace,
 		Spec: ichorv1alpha1.TalosClusterSpec{
-			Endpoint:          ichorv1alpha1.TalosClusterEndpoint{Type: testEndpointType, Address: "10.0.0.5"},
+			Endpoint:          ichorv1alpha1.TalosClusterEndpoint{Type: testEndpointType, Address: testClusterAddress},
 			TalosVersion:      testTalosVersion,
 			KubernetesVersion: "v" + constants.DefaultKubernetesVersion,
 			VersionContract:   versionContract,

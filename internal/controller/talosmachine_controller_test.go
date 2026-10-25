@@ -134,14 +134,19 @@ func newTestCluster(secretName, versionContract string) *ichorv1alpha1.TalosClus
 }
 
 func newTestMachine(clusterName string, approved bool) *ichorv1alpha1.TalosMachine {
+	state := ichorv1alpha1.MachineApprovalStatePending
+	if approved {
+		state = ichorv1alpha1.MachineApprovalStateApproved
+	}
+
 	m := &ichorv1alpha1.TalosMachine{
 		GenerateName: "machine-", Namespace: tmNamespace,
 		Spec: ichorv1alpha1.TalosMachineSpec{
-			ClusterRef: corev1.LocalObjectReference{Name: clusterName},
-			Identity:   ichorv1alpha1.TalosMachineIdentity{UUID: "uuid-" + clusterName},
-			Endpoint:   "10.0.0.10:50000",
-			Role:       roleWorker,
-			Approved:   approved,
+			ClusterRef:    corev1.LocalObjectReference{Name: clusterName},
+			Identity:      ichorv1alpha1.TalosMachineIdentity{UUID: "uuid-" + clusterName},
+			Endpoint:      "10.0.0.10:50000",
+			Role:          roleWorker,
+			ApprovalState: state,
 		},
 	}
 	Expect(k8sClient.Create(ctx, m)).To(Succeed())

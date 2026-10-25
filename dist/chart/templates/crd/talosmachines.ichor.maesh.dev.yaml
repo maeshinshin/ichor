@@ -23,9 +23,9 @@ spec:
     - jsonPath: .spec.role
       name: Role
       type: string
-    - jsonPath: .spec.approved
-      name: Approved
-      type: boolean
+    - jsonPath: .spec.approvalState
+      name: Approval
+      type: string
     - jsonPath: .spec.endpoint
       name: Endpoint
       type: string
@@ -60,11 +60,21 @@ spec:
           spec:
             description: spec defines the desired state of TalosMachine
             properties:
-              approved:
-                default: false
-                description: approved allows the controller to render and apply configuration
-                  to this machine.
-                type: boolean
+              approvalState:
+                default: pending
+                description: |-
+                  approvalState records the human decision on this machine: pending (the
+                  default, awaiting a decision), approved (the controller renders and
+                  applies configuration), or rejected (an operator explicitly turned it
+                  away; re-approving reverses it). This replaces an
+                  earlier plain "approved" bool, which had no way to represent
+                  "rejected" without a second field claiming the same truth -- one
+                  field is the source of truth for this machine's approval status.
+                enum:
+                - pending
+                - approved
+                - rejected
+                type: string
               clusterRef:
                 description: clusterRef names the TalosCluster this machine belongs
                   to.

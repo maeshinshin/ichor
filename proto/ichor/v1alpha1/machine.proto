@@ -61,6 +61,21 @@ enum MachineRole {
   MACHINE_ROLE_WORKER = 2;
 }
 
+// MachineApprovalState mirrors TalosMachine.spec.approvalState:
+// the human decision on a machine, a tri-state a single bool cannot carry.
+// PENDING is default (discovered, awaiting a decision); APPROVED lets the
+// controller render and apply configuration; REJECTED means an operator
+// explicitly turned the machine away. REJECTED is distinct from PENDING so
+// a rejected machine does not keep showing up as a fresh approval request
+// in ListMachines. Re-approving a REJECTED machine is allowed and reverses
+// it -- ApproveMachine only refuses a machine that is already APPROVED.
+enum MachineApprovalState {
+  MACHINE_APPROVAL_STATE_UNSPECIFIED = 0;
+  MACHINE_APPROVAL_STATE_PENDING = 1;
+  MACHINE_APPROVAL_STATE_APPROVED = 2;
+  MACHINE_APPROVAL_STATE_REJECTED = 3;
+}
+
 // MachineIdentity mirrors TalosMachine.spec.identity: the tuple Ichor keys a
 // node on, since the SMBIOS UUID alone is not trustworthy
 // (architecture.md, "Nodes").
@@ -79,10 +94,15 @@ message Machine {
   MachineRole role = 5;
   map<string, string> node_labels = 6;
   string hostname = 7;
-  bool approved = 8;
+  reserved 8;
+  reserved "approved";
   repeated Condition conditions = 9;
   // stage is Talos's own MachineStatus stage as reported text (e.g.
   // "maintenance", "installing", "rebooting", "running"), shown as-is rather
   // than re-encoded into a parallel enum.
   string stage = 10;
+  // approval_state replaces the removed bool "approved" (field 8): a bool
+  // cannot represent "rejected" without a second field claiming the same
+  // truth, which this design specifically avoids.
+  MachineApprovalState approval_state = 11;
 }

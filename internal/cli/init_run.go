@@ -111,7 +111,7 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) error {
 			// init is the special case of approving the first control
 			// plane (architecture.md's "Bootstrap": "Adding later nodes
 			// goes through the normal approval flow").
-			Approved: true,
+			ApprovalState: ichorv1alpha1.MachineApprovalStateApproved,
 		},
 	}
 

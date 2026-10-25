@@ -196,50 +196,80 @@ function EffectiveConfigSection({ namespace, name }: { namespace: string; name: 
     }
   }, [namespace, name])
 
+  // Grouped bottom-up (architecture.md, "Patch layers": "Patches apply
+  // bottom-up: 1. System ... 2. Cluster, 3. role, 4. selector, 5.
+  // machine"), which is also ConfigLayer's own numeric order - "The
+  // effective-config view in the UI shows which layer each value came
+  // from" is this section's one explicit design requirement.
+  const groups = groupByLayer(values ?? [])
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Effective config</CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
+        <p class="text-sm text-muted-foreground">
+          Read-only: this is what the controller last rendered for this node, grouped by the
+          layer each value came from. Editing a patch isn't available from this screen yet.
+        </p>
         {error && <ErrorAlert {...error} />}
         {!error && !values && <p class="text-sm text-muted-foreground">Loading…</p>}
         {values && values.length === 0 && <p class="text-sm text-muted-foreground">No values reported.</p>}
-        {values && values.length > 0 && (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Path</TableHead>
-                <TableHead>Value</TableHead>
-                <TableHead>Origin</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {values.map((v) => (
-                <TableRow key={v.path}>
-                  <TableCell className="font-mono text-xs">{v.path}</TableCell>
-                  <TableCell className="font-mono text-xs">
-                    {v.value}
-                    {/* The server masks any secret value before it reaches the browser
-                        (EffectiveConfigValue.secret) - there is nothing here
-                        that can or should reveal it. */}
-                    {v.secret && (
-                      <Badge variant="outline" className="ml-2">
-                        secret
-                      </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    {v.origin ? `${enumLabel(ConfigLayer, v.origin.layer)}: ${v.origin.source}` : '-'}
-                  </TableCell>
+        {groups.map(([layer, group]) => (
+          <div key={layer}>
+            <h4 class="mb-1 text-sm font-medium">{enumLabel(ConfigLayer, layer)}</h4>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Path</TableHead>
+                  <TableHead>Value</TableHead>
+                  <TableHead>Source</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
+              </TableHeader>
+              <TableBody>
+                {group.map((v) => (
+                  <TableRow key={v.path}>
+                    <TableCell className="font-mono text-xs">{v.path}</TableCell>
+                    <TableCell className="font-mono text-xs">
+                      {v.value}
+                      {/* The server masks any secret value before it reaches the browser
+                          (EffectiveConfigValue.secret) - there is nothing here
+                          that can or should reveal it. */}
+                      {v.secret && (
+                        <Badge variant="outline" className="ml-2">
+                          secret
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{v.origin?.source || '-'}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        ))}
       </CardContent>
     </Card>
   )
+}
+
+// groupByLayer buckets values by origin.layer (ConfigLayer.UNSPECIFIED for
+// a value with no origin at all) and returns the groups in ConfigLayer's
+// own numeric order, which is already the bottom-up order the design
+// describes - no separate sort table to maintain.
+function groupByLayer(values: EffectiveConfigValue[]): [number, EffectiveConfigValue[]][] {
+  const byLayer = new Map<number, EffectiveConfigValue[]>()
+  for (const v of values) {
+    const layer = v.origin?.layer ?? ConfigLayer.UNSPECIFIED
+    const group = byLayer.get(layer)
+    if (group) {
+      group.push(v)
+    } else {
+      byLayer.set(layer, [v])
+    }
+  }
+  return [...byLayer.entries()].sort((a, b) => a[0] - b[0])
 }
 
 // Known Talos service names (node.proto's own comment); "kernel" is this screen's own sentinel for the empty-string

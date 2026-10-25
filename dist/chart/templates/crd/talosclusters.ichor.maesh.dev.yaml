@@ -2000,6 +2000,36 @@ spec:
                 - count
                 - schedulable
                 type: object
+              discovery:
+                description: |-
+                  discovery lists maintenance-mode candidates for the controller to probe directly. Empty (the
+                  default) disables discovery: the controller opens no connection at all.
+                properties:
+                  addresses:
+                    description: addresses are specific IPv4 candidates to probe,
+                      each on Talos's fixed maintenance API port.
+                    items:
+                      maxLength: 15
+                      type: string
+                    maxItems: 64
+                    type: array
+                    x-kubernetes-validations:
+                    - message: addresses must be IPv4 addresses
+                      rule: self.all(a, isIP(a) && ip(a).family() == 4)
+                  cidrs:
+                    description: |-
+                      cidrs are IPv4 address ranges to probe, one maintenance-mode connection attempt per address
+                      in range. Each must be /24 or smaller (at most 256 addresses).
+                    items:
+                      maxLength: 18
+                      type: string
+                    maxItems: 4
+                    type: array
+                    x-kubernetes-validations:
+                    - message: cidrs must be IPv4 and /24 or smaller
+                      rule: self.all(c, isCIDR(c) && cidr(c).ip().family() == 4 &&
+                        cidr(c).prefixLength() >= 24)
+                type: object
               driftPolicy:
                 default: warnOnly
                 description: |-

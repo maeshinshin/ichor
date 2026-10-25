@@ -25,16 +25,19 @@ limitations under the License.
 // happens under the per-cluster lock, where a second concurrent removal of
 // a sibling has to wait its turn rather than racing.
 //
-// Deliberately not implemented here: removing the etcd member and the
-// Talos reset itself. Both need TalosClient widened past the three methods
-// its own doc comment calls "the one interface rule 0 allows" -- a design
-// decision referred back, not made here. So a control plane that passes
-// the safety check here is drained (k8s.io/kubectl's own helper, cordon
-// then evict -- architecture.md: "Draining uses k8s.io/kubectl's own drain
-// helper rather than a hand-written eviction loop") and then keeps its
-// finalizer regardless of the verdict -- refused, or confirmed-safe and
-// drained -- rather than letting deletion complete while the physical node
-// may still be configured and still an etcd member.
+// A control plane that fails the safety check above keeps its finalizer
+// and nothing else happens. One that passes is drained (k8s.io/kubectl's
+// own helper, cordon then evict -- architecture.md: "Draining uses
+// k8s.io/kubectl's own drain helper rather than a hand-written eviction
+// loop"), then has its etcd member removed (ADR 0032: the departing
+// machine's own graceful EtcdLeaveCluster first, a surviving sibling's
+// EtcdRemoveMemberByID as fallback), then -- only if its removal opted in,
+// since Reset is irreversible -- reset back to maintenance mode (ADR
+// 0038: STATE and EPHEMERAL by label, never the whole system disk). Only
+// once every step that ran actually succeeded does the finalizer clear;
+// any failure along the way holds it instead of letting deletion complete
+// while the physical node might still be configured, still an etcd
+// member, or still credentialed.
 package controller
 
 import (
@@ -92,7 +95,29 @@ const (
 	reasonDrainFailed          = "DrainFailed"
 	reasonRemovalApproved      = "RemovalApproved"
 	reasonEtcdMemberRemoveFail = "EtcdMemberRemovalFailed"
+	reasonResetRequested       = "ResetRequested"
+	reasonResetFailed          = "ResetFailed"
 )
+
+// resetOnDeleteAnnotation opts a TalosMachine's removal into also
+// resetting its physical node (ADR 0042), the same shape
+// deleteguard.AllowDeleteAnnotation already uses: a deliberate,
+// explicit, per-object opt-in rather than a default, because Reset is
+// irreversible and an operator may want the disk left alone to inspect
+// or to reuse for something else. Its absence leaves removal exactly
+// where ADR 0032 left it: etcd member removed, finalizer cleared, and
+// NodeStillHasClusterCredentials said the node still holds the cluster's
+// PKI.
+const resetOnDeleteAnnotation = "ichor.maesh.dev/reset-on-delete"
+
+// resetOnDeleteValue is the only resetOnDeleteAnnotation value that opts in.
+const resetOnDeleteValue = "true"
+
+// resetRequested reports whether m's removal opted into also resetting
+// the physical node.
+func resetRequested(m *ichorv1alpha1.TalosMachine) bool {
+	return m.Annotations[resetOnDeleteAnnotation] == resetOnDeleteValue
+}
 
 // reasonNodeStillHasClusterCredentials is the Event reason removal.go
 // emits in the same breath as clearing machineRemovalFinalizer (ADR 0032).
@@ -305,24 +330,43 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 		return r.removalCondition(ctx, m, metav1.ConditionFalse, reasonEtcdMemberRemoveFail, err.Error())
 	}
 
-	return r.completeRemoval(ctx, m)
+	reset := resetRequested(m)
+	if reset {
+		if err := r.resetNode(ctx, &cluster, m); err != nil {
+			log.Error(err, "resetting node")
+
+			return r.removalCondition(ctx, m, metav1.ConditionFalse, reasonResetFailed, err.Error())
+		}
+	}
+
+	return r.completeRemoval(ctx, m, reset)
 }
 
 // completeRemoval records the Removal condition's terminal success message,
-// emits the Event ADR 0032 requires so the PKI caveat survives the object
-// disappearing, then clears machineRemovalFinalizer -- in that order, so a
-// crash between the two leaves the finalizer still held (removeEtcdMember's
-// own idempotent check-then-act means the next reconcile finds the member
-// already gone and comes straight back here, not back to a redundant
-// removal attempt).
-func (r *TalosMachineReconciler) completeRemoval(ctx context.Context, m *ichorv1alpha1.TalosMachine) error {
-	if err := r.removalCondition(ctx, m, metav1.ConditionTrue, reasonRemovalApproved,
-		"removal passed the quorum, last-control-plane and declared-count checks, the node was "+
-			"drained, and its etcd member was removed"); err != nil {
+// then clears machineRemovalFinalizer -- in that order, so a crash between
+// the two leaves the finalizer still held (removeEtcdMember's own
+// idempotent check-then-act, and resetNode's own already-requested check,
+// mean the next reconcile finds the earlier work already done and comes
+// straight back here, not back to a redundant removal or reset attempt).
+//
+// reset is true only when this removal opted into ADR 0042's Reset step
+// and it succeeded: the Warning Event ADR 0032 requires -- the one that
+// survives the object's own disappearance to say a decommissioned node
+// still holds the cluster's PKI -- is skipped in that case, because it is
+// no longer true: Reset wiped the STATE partition those credentials lived
+// on. The event fires exactly when it did before ADR 0042 existed.
+func (r *TalosMachineReconciler) completeRemoval(ctx context.Context, m *ichorv1alpha1.TalosMachine, reset bool) error {
+	message := "removal passed the quorum, last-control-plane and declared-count checks, the node was " +
+		"drained, and its etcd member was removed"
+	if reset {
+		message += "; the node was reset and is rebooting back to maintenance mode"
+	}
+
+	if err := r.removalCondition(ctx, m, metav1.ConditionTrue, reasonRemovalApproved, message); err != nil {
 		return err
 	}
 
-	if r.Recorder != nil {
+	if !reset && r.Recorder != nil {
 		r.Recorder.Eventf(m, corev1.EventTypeWarning, reasonNodeStillHasClusterCredentials,
 			nodeStillHasClusterCredentialsMessage, m.Name)
 	}
@@ -330,6 +374,50 @@ func (r *TalosMachineReconciler) completeRemoval(ctx context.Context, m *ichorv1
 	controllerutil.RemoveFinalizer(m, machineRemovalFinalizer)
 
 	return r.Update(ctx, m)
+}
+
+// resetNode asks m's own node to reset (ADR 0042): wipe STATE and
+// EPHEMERAL and reboot back to maintenance mode. Idempotent the only way
+// a fire-and-forget RPC can be: conditionRemoval already carrying
+// reasonResetRequested means Talos already accepted this request on an
+// earlier reconcile, so this returns immediately without asking again --
+// architecture.md's own fix for "a resumed reconcile fires a second
+// concurrent reset at the same node." The record is written immediately
+// after Reset's own RPC acknowledges the request, not before: Reset
+// returns once Talos has accepted it and started the sequence in the
+// background, not once the wipe finishes, so acknowledging is the
+// earliest point at which "a reset was requested" is actually true.
+func (r *TalosMachineReconciler) resetNode(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
+) error {
+	if apimeta.IsStatusConditionTrue(m.Status.Conditions, conditionRemoval) {
+		return nil
+	}
+
+	if r.TalosClient == nil {
+		return fmt.Errorf("no Talos API connectivity is configured for this controller")
+	}
+
+	bundle, err := loadBundle(ctx, r.Client, r.ControllerNamespace, cluster)
+	if err != nil {
+		return fmt.Errorf("loading secrets bundle to reset %q: %w", m.Name, err)
+	}
+
+	resetCtx, cancel := context.WithTimeout(ctx, etcdDialTimeout)
+	defer cancel()
+
+	talos, err := r.TalosClient(resetCtx, cluster, m, bundle)
+	if err != nil {
+		return fmt.Errorf("dialing %q to reset it: %w", m.Name, err)
+	}
+	defer closeTalosClient(talos)
+
+	if err := talos.Reset(resetCtx); err != nil {
+		return fmt.Errorf("reset request to %q failed: %w", m.Name, err)
+	}
+
+	return r.removalCondition(ctx, m, metav1.ConditionTrue, reasonResetRequested,
+		"reset requested: the node's STATE and EPHEMERAL partitions are being wiped and it will reboot to maintenance mode")
 }
 
 // removeEtcdMember removes m from etcd, preferring m's own graceful

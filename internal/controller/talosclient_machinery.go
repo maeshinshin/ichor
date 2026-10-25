@@ -26,6 +26,7 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/client"
 	clientconfig "github.com/siderolabs/talos/pkg/machinery/client/config"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
+	"github.com/siderolabs/talos/pkg/machinery/constants"
 	configres "github.com/siderolabs/talos/pkg/machinery/resources/config"
 	"github.com/siderolabs/talos/pkg/machinery/role"
 
@@ -149,4 +150,22 @@ func (t *machineryTalosClient) EtcdLeaveCluster(ctx context.Context) error {
 // this client's own node.
 func (t *machineryTalosClient) EtcdRemoveMemberByID(ctx context.Context, memberID uint64) error {
 	return t.c.EtcdRemoveMemberByID(ctx, &machineapi.EtcdRemoveMemberByIDRequest{MemberId: memberID})
+}
+
+// Reset wipes this node's STATE and EPHEMERAL partitions by label (never
+// Mode: USER_DISKS, which the server rejects alongside a non-empty
+// SystemPartitionsToWipe, and never the implicit "wipe everything" that
+// an empty SystemPartitionsToWipe would mean) and reboots it back to
+// maintenance mode. Graceful: false -- the caller has already drained and
+// left etcd itself (ADR 0032) by the time this is ever called, so Talos's
+// own graceful pre-reset routine would find nothing left to do.
+func (t *machineryTalosClient) Reset(ctx context.Context) error {
+	return t.c.ResetGeneric(ctx, &machineapi.ResetRequest{
+		Graceful: false,
+		Reboot:   true,
+		SystemPartitionsToWipe: []*machineapi.ResetPartitionSpec{
+			{Label: constants.StatePartitionLabel, Wipe: true},
+			{Label: constants.EphemeralPartitionLabel, Wipe: true},
+		},
+	})
 }

@@ -83,6 +83,10 @@ type fakeTalosClient struct {
 	etcdLeaveCalls int
 	etcdRemoveErr  error
 	etcdRemoveIDs  []uint64
+
+	// reset-related fields: etcd_removal_test.go's fixtures for resetNode (ADR 0042).
+	resetErr   error
+	resetCalls int
 }
 
 func (f *fakeTalosClient) CurrentConfig(context.Context) ([]byte, error) {
@@ -115,6 +119,12 @@ func (f *fakeTalosClient) EtcdRemoveMemberByID(_ context.Context, memberID uint6
 	f.etcdRemoveIDs = append(f.etcdRemoveIDs, memberID)
 
 	return f.etcdRemoveErr
+}
+
+func (f *fakeTalosClient) Reset(context.Context) error {
+	f.resetCalls++
+
+	return f.resetErr
 }
 
 func clientFactory(fake *fakeTalosClient) func(

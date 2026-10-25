@@ -37,3 +37,4 @@ row here in the same PR that adds the ADR.
 | 0023 | Keep `TalosStorage` to layer 1 only -- a `longhorn-v1` preset emitting the Talos-side config a node needs, never the storage system itself | Accepted |
 | 0024 | No CNI hand-over registry (one real member); removal happens at render time off a status condition; a separate controller | Accepted |
 | 0025 | Layer 4's storage-system side: `EvacuationHook` (write side) plus a preset-independent `EvacuationStatus` function (read side), both verified against longhorn-manager v1.9.1's own controller source | Accepted |
+| 0027 | Private registry auth through `TalosCluster.spec.registries[].authSecretRef`, resolved and injected as the system layer by `pkg/render` | Accepted |

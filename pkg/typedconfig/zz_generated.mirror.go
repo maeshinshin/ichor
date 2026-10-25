@@ -20,8 +20,9 @@ package typedconfig
 
 import (
 	corev1 "k8s.io/api/core/v1"
-	apiserverv1 "k8s.io/apiserver/pkg/apis/apiserver/v1"
 	auditv1 "k8s.io/apiserver/pkg/apis/audit/v1"
+	apiserverv1 "k8s.io/apiserver/pkg/apis/apiserver/v1"
+	kubeletv1 "k8s.io/kubelet/config/v1"
 )
 
 // APIServerConfig represents the kube apiserver configuration options.
@@ -1029,6 +1030,9 @@ type KubeletConfig struct {
 	// docgen:nodoc Deprecated: removed in multi-doc config.
 	// +optional
 	KubeletExtraMounts []*ExtraMount `json:"extraMounts,omitempty"`
+	// The `KubeletCredentialProviderConfig` field is used to provide kubelet credential configuration.
+	// +optional
+	KubeletCredentialProviderConfig *kubeletv1.CredentialProviderConfig `json:"credentialProviderConfig,omitempty"`
 	// docgen:nodoc Deprecated: use `KubeletConfig` instead.
 	// +optional
 	KubeletDefaultRuntimeSeccompProfileEnabled *bool `json:"defaultRuntimeSeccompProfileEnabled,omitempty"`

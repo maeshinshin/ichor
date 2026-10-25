@@ -342,6 +342,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	auditv1 "k8s.io/apiserver/pkg/apis/audit/v1"
 	apiserverv1 "k8s.io/apiserver/pkg/apis/apiserver/v1"
+	kubeletv1 "k8s.io/kubelet/config/v1"
 )
 `)
 
@@ -406,6 +407,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	auditv1 "k8s.io/apiserver/pkg/apis/audit/v1"
 	apiserverv1 "k8s.io/apiserver/pkg/apis/apiserver/v1"
+	kubeletv1 "k8s.io/kubelet/config/v1"
 	mcel "github.com/siderolabs/talos/pkg/machinery/cel"
 	mx509 "github.com/siderolabs/crypto/x509"
 	mblock "github.com/siderolabs/talos/pkg/machinery/config/types/block"

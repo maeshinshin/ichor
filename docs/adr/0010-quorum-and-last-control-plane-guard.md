@@ -550,18 +550,95 @@ this one function.
 ### Enforcing that nothing bypasses it
 
 The same mechanical technique as `TestAcquireDisruptiveLockIsTheOnlyAcquireCallSite`
-applies again: `TestCountApprovedControlPlanesIsTheOnlyListSite`
-(`pkg/deleteguard/countplanes_guard_test.go`) parses every non-test `*.go`
-file in `pkg/deleteguard` with `go/parser` and fails if a call to a method
-named `List` appears outside `CountApprovedControlPlanes`'s own body --
-closing off a second, hand-rolled counting loop reappearing in the one
-package built to prevent that. It does not, and structurally cannot,
-verify that the `client.Reader` value passed in at a given call site is
-actually an uncached one (`mgr.GetAPIReader()` vs. `mgr.GetClient()`,
-both of which satisfy the same `client.Reader` interface) -- that half
-still depends on `cmd/main.go`'s wiring being reviewed, the same way the
-`Acquire` guard trusts `acquireDisruptiveLock`'s own body once it knows
-nothing else can reach `Acquire` at all.
+applies again, but it took two attempts to land somewhere that actually
+checks anything.
+
+The first version, `TestCountApprovedControlPlanesIsTheOnlyListSite`, lived
+in `pkg/deleteguard` and globbed only that package's own `*.go` files,
+matching any call to a method named `List` outside
+`CountApprovedControlPlanes`'s own body. That is the wrong place: the
+original bug was two *other* packages (`internal/webhook/v1alpha1` and
+`internal/controller/removal.go`) each independently re-listing
+`TalosMachineList` to count; `pkg/deleteguard` structurally has exactly one
+`List` call site after the fix, so a guard that only looks there can never
+observe a second one reappearing -- it passes, permanently, having checked
+nothing a regression could ever trip.
+
+The replacement, `TestTalosMachineListCountingStaysCentralized`
+(`internal/controller/countplanes_guard_test.go`), scans the two packages
+the bug actually lived in: `internal/controller` itself, plus
+`internal/webhook/v1alpha1` via a relative path
+(`../webhook/v1alpha1/*.go`) -- the same cross-directory technique
+`dist/chart/chart_test.go` already uses for `../../config/crd/bases`.
+`deleteguard.CountApprovedControlPlanes` lives in a third package outside
+both scanned directories, so the guard needs no self-exemption the way
+`acquireDisruptiveLock`'s guard exempts its own body.
+
+It also matches more precisely than the first version did: on the
+declared *type* of a listed variable (`ichorv1alpha1.TalosMachineList`),
+not on a call to a method named `List`. Both scanned packages legitimately
+call `List` for plenty of other object kinds (listing `TalosCluster`s,
+other webhooks' own lookups, and -- as of this same change --
+`TalosOperationReconciler.candidateMachines`'s own, different,
+legitimate `TalosMachineList` listing; see below). Matching on the bare
+method name would have forced every one of those into a growing
+exception list, and a future violation hidden behind some other call
+shape would slip through a method-name match that a type-shape match
+still catches. `countplanesAllowedFuncs` is the explicit, reviewable
+exception list this version actually needs -- today, just
+`candidateMachines`.
+
+Verified the same way the `Acquire` guard was: a throwaway second counting
+function was added to `internal/controller` (and, separately, to
+`internal/webhook/v1alpha1`, to confirm the cross-directory glob really
+reaches it) and confirmed to fail --
+
+```
+countplanes_guard_test.go:114: talosoperation_controller.go:404: scratchSecondCountForGuardTest declares a
+TalosMachineList to count or select machines by hand; a control-plane count must go through
+deleteguard.CountApprovedControlPlanes -- if this is a different, legitimate purpose, add
+"scratchSecondCountForGuardTest" to countplanesAllowedFuncs with why, in that function's own doc comment
+```
+
+-- then removed immediately after.
+
+Like the `Acquire` guard, this one does not and structurally cannot verify
+that the `client.Reader` value passed in at a given call site is actually
+an uncached one (`mgr.GetAPIReader()` vs. `mgr.GetClient()`, both of which
+satisfy the same `client.Reader` interface) -- that half still depends on
+`cmd/main.go`'s wiring, and on `CountApprovedControlPlanes`'s own body,
+being reviewed.
+
+### A third `TalosMachineList` listing site, and why it is not a fourth count
+
+`TalosOperationReconciler.candidateMachines`
+(`internal/controller/talosoperation_controller.go`, added alongside this
+fix -- ADR 0026) lists `TalosMachineList` too, through `r.Client` (the
+manager's cache), not `r.APIReader`. This looks, at a glance, exactly like
+the bug this ADR exists to close -- and the guard above would have flagged
+it as one, had it not been added to `countplanesAllowedFuncs` with this
+reasoning:
+
+`acquireDisruptiveLock`'s count gates whether a disruptive action is
+*allowed to start at all* -- a safety invariant, where a stale, too-high
+read lets something through that should have been refused.
+`candidateMachines` gates nothing: it only picks *which already-authorized
+machine* an in-progress operation advances next. A cache lag here has two
+possible failure shapes, neither one the quorum problem's "an action
+proceeds that should have been refused": a machine deleted a moment ago
+can still appear, which just means the (not-yet-built) per-kind executor
+is asked to act on a machine that no longer exists -- a visible,
+reportable error through the same pause-on-failure path any other
+`Advance` failure takes, not a silent wrong one; a machine approved a
+moment ago can be briefly absent, which only defers it to the next
+reconcile this level-triggered loop runs regardless. Neither shape can
+make "one control plane at a time" or "`maxUnavailable` workers" actually
+be violated, because `Reconcile` truncates the slice `candidateMachines`
+returns itself -- a stale or incomplete candidate list changes *which*
+machine is picked, never *how many*. `TalosOperationReconciler.APIReader`
+exists only for `acquireDisruptiveLock`'s own count; its doc comment and
+`candidateMachines`'s both say so, so the two no longer read as a warning
+and a violation sitting in the same file.
 
 ### Consequences
 
@@ -584,3 +661,11 @@ nothing else can reach `Acquire` at all.
   the same permissions already granted for `list`/`watch` on
   `talosmachines`; it is a different code path to the same API server,
   not a different credential.
+- Three go/parser guards now exist across this codebase
+  (`TestFixtureUUIDsAreUnique`, `TestAcquireDisruptiveLockIsTheOnlyAcquireCallSite`,
+  `TestTalosMachineListCountingStaysCentralized`), with near-identical
+  glob/parse/walk scaffolding and, for the latter two, the same "method
+  or type allowed from exactly one place" rule. Not shared into a common
+  helper: doing so needs a fourth, test-only package for three ~100-line
+  files to import, which costs more than the scaffolding duplication it
+  would remove. Worth revisiting if a fourth guard shows up.

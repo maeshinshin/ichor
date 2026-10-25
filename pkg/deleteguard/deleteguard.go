@@ -113,13 +113,16 @@ func CheckControlPlaneCount(currentControlPlanes int, desiredCount int) error {
 // actually break quorum -- unlike undercounting, which only over-refuses.
 // See ADR 0010's appendix.
 //
-// This is the only place in the codebase that lists TalosMachines to count
-// control planes -- enforced by TestCountApprovedControlPlanesIsTheOnlyListSite,
-// the same go/parser technique internal/controller's
-// TestAcquireDisruptiveLockIsTheOnlyAcquireCallSite and
-// TestFixtureUUIDsAreUnique already use. If a quorum/removal test ever
-// flakes, suspect this function's read path before the environment -- that
-// is exactly how the cached-read bug above was found.
+// This is meant to be the only place in the codebase that lists
+// TalosMachines to count control planes; enforced not here (this package
+// structurally has only one List call site after the fix, so a guard
+// scanning only it could never observe a regression) but in the two
+// packages a second count could actually reappear in --
+// internal/controller.TestTalosMachineListCountingStaysCentralized, which
+// also scans internal/webhook/v1alpha1 (ADR 0010's appendix). If a
+// quorum/removal test ever flakes, suspect this function's read path
+// before the environment -- that is exactly how the cached-read bug above
+// was found.
 func CountApprovedControlPlanes(ctx context.Context, reader client.Reader, namespace, clusterName string) (int, error) {
 	var siblings ichorv1alpha1.TalosMachineList
 	if err := reader.List(ctx, &siblings, client.InNamespace(namespace)); err != nil {

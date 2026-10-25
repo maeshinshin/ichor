@@ -82,11 +82,17 @@ func (v *TalosMachineCustomValidator) ValidateDelete(ctx context.Context, obj *i
 	}
 
 	// shortcut: two concurrent deletes of different control planes in the
-	// same cluster can both read this count before either write lands, so
-	// both can be admitted even though together they break quorum. Fixing
-	// that needs pkg/clusterlock serializing this check, which is out of
-	// scope here; acceptable while deletions are an operator doing them one
-	// at a time rather than a controller firing several at once.
+	// same cluster can both List before either delete commits, so both see
+	// the pre-deletion count and both get admitted, together breaking
+	// quorum. This is not a lock problem: admission is never serialized
+	// with the commit it's gatekeeping, so no lock around this List closes
+	// it -- counting objects can't enforce a cross-request invariant by
+	// itself. The real fix is the removal operation from design's "Nodes"
+	// section (phase 3's ordered delete sequence): once control-plane
+	// removal only happens as a step of that serialized operation, this
+	// webhook's job becomes "refuse a delete that isn't part of it," and
+	// the operation does the counting instead. Acceptable until then
+	// because deletions today are an operator acting one at a time.
 	var siblings ichorv1alpha1.TalosMachineList
 	if err := v.Client.List(ctx, &siblings, client.InNamespace(obj.Namespace)); err != nil {
 		return nil, err

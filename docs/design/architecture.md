@@ -173,7 +173,10 @@ reasons:
 
 - Machinery's types are Talos's own definition; we don't maintain a parallel
   catalogue that drifts.
-- A CRD schema means the API server rejects unknown fields.
+- A CRD schema keeps an unknown field out of storage — by default the API
+  server prunes it (logs a warning, persists the object without it) rather
+  than rejecting the request, but either way the value a field's absence was
+  meant to keep out never reaches a node.
 - A newer machinery renders config for older Talos versions when a version
   contract is set. The reverse doesn't hold, so supporting a newly released
   Talos means bumping machinery.
@@ -185,6 +188,26 @@ have no exported fields to describe. Instead the mirror types are generated
 from machinery with a `go generate` tool, together with conversion in both
 directions and a round-trip test per kind; machinery stays the only place
 where the field catalogue lives.
+
+A handful of fields need the generator's type-keyed substitution and drop
+rules to be overridden per field instead, because the type alone can't say
+what to do with them:
+
+- Eleven fields are `meta.Unstructured` — Talos's own escape hatch for a
+  pass-through to another project's schema (kubelet's configuration, an
+  audit policy, a resource list, a seccomp profile). A type-keyed rule can
+  only drop all eleven or none; a field-level override table drops six
+  (new dependency, controller-gen errors, or no single schema to mirror) and
+  mirrors five as their upstream type instead, with no new dependency.
+- Nine more fields are plain strings or certificate pairs, not
+  `meta.Unstructured`, but carry cluster secret material — join tokens, CA
+  key pairs, encryption keys. These are dropped unconditionally, by a
+  separate table, for a different reason than the eleven above: not because
+  they can't be represented, but because a `TalosConfigPatch` must not be
+  able to overwrite the real values the secrets bundle generates, however
+  narrowly the patch claims to be scoped.
+
+Both are the follow-up.
 
 Ichor adds what the types can't carry — whether a field needs a reboot,
 whether it can only be set at install time, which Talos version introduced
@@ -700,12 +723,16 @@ resumption works. A short set runs per PR, the full set nightly.
 
 ## Open questions
 
-- Should the eleven `meta.Unstructured` fields the generator drops stay
-  absent? Each is a pass-through to another project's schema — kubelet's
-  configuration, audit policy, scheduler config — so for them the choice is
-  pass-through or absent, not typed or raw. `machine.kubelet.extraConfig` is
-  the one users will miss. (CRD size is settled: the `Config`
-  mirror is 114 KB against a 1.5 MiB ceiling.)
+- Should `machine.kubelet.extraConfig` (`KubeletConfig.KubeletExtraConfig`)
+  gain a field override anyway, by taking on the new `k8s.io/kubelet`
+  dependency its clean generation needs? It is the one dropped field users
+  will actually miss day to day..
+- Should Ichor add a validating admission webhook that rejects (not prunes)
+  a `TalosConfigPatch` carrying one of the nine secret fields
+  (`internal/tools/mirrorgen/main.go`'s `secretFields`)? Dropping them from
+  the CRD schema already keeps the value out of storage; what it does not
+  do, without a webhook, is turn that into a loud error for a caller that
+  didn't ask for strict field validation itself..
 - What exactly does the Talos Upgrade API do about cordon and drain, per
   version?
 - Does a single-node Talos upgrade need the etcd-preserving flag?

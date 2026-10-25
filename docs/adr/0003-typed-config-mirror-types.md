@@ -167,12 +167,178 @@ Everything except `MachinePods` and `PluginConfiguration` would land the CRD
 around 192 KB served, 12% of the ceiling — so headroom is not the constraint.
 Generation friction and the generator's type-keyed design are.
 
+## Follow-up: field-level overrides close five of the eleven
+
+The measurement above is now acted on. mirrorgen gained a second table,
+`fieldOverrides` (`internal/tools/mirrorgen/main.go`), consulted before
+`mapType` ever sees a field's static type. It exists because the type-keyed
+`substTable` *can't* express this: all eleven dropped fields are
+`meta.Unstructured`, so a table keyed by Go type can only say "drop
+`meta.Unstructured`" or "don't" — never "drop ten of them, keep one." Keying
+by `"StructName.FieldName"` instead is unambiguous and stays a five-row table,
+not a rewrite of the generator.
+
+Five fields now mirror as their upstream type, with no new dependency and a
+clean CRD schema, exactly as measured:
+
+| Field | Mirrors as |
+|---|---|
+| `ResourcesConfig.Requests` | `corev1.ResourceList` |
+| `ResourcesConfig.Limits` | `corev1.ResourceList` |
+| `MachineSeccompProfile.MachineSeccompProfileValue` | `specs.LinuxSeccomp` (OCI runtime-spec) |
+| `APIServerConfig.AuditPolicyConfig` | `audit/v1.Policy` |
+| `AuthorizationConfigAuthorizerConfig.AuthorizerWebhook` | `apiserver/v1.WebhookConfiguration` |
+
+Conversion goes through two new generic helpers in `pkg/typedconfig/substitution.go`
+(`mirrorToMachineryUnstructured` / `machineryToMirrorUnstructured`): marshal
+the mirror value through its own JSON tags, land the result in
+`meta.Unstructured.Object`, and back. This is a different shape from the
+scalar substitutions above — those round-trip through machinery's own
+YAML/TextMarshaler because the ten-entry table's types *define* their own
+wire form; these five don't have a machinery-defined wire form to defer to
+(the whole reason they were `meta.Unstructured`), so JSON — the form every
+upstream schema here already commits to — is what both directions agree on.
+
+The remaining six stay dropped, for the reasons already measured: `KubeletExtraConfig`
+and `SchedulerConfig` need `allowDangerousTypes` (a `float32`, package-wide, not
+field-scoped); `MachineBaseRuntimeSpecOverrides` has untagged fields and an
+`interface{}`; `MachinePods` is ~332 KB served on its own; `PluginConfiguration`
+has no single schema. `KubeletCredentialProviderConfig` is the one that
+generates cleanly but needs a new dependency (`k8s.io/kubelet`) — left dropped
+because whether that dependency is worth adding is a product call, not a
+generator one; the table entry is a one-line addition whenever that call gets
+made.
+
+**The one override that wasn't clean: `MachineSeccompProfileValue`.** Its CRD
+schema generates fine, but `controller-gen object:generate` (DeepCopy) doesn't:
+`specs.LinuxSeccomp` has pointer and slice fields but, unlike the other four
+overrides (all Kubernetes API types), no `DeepCopy`/`DeepCopyInto` of its own.
+deepcopy-gen's fallback for a struct-shaped field type it doesn't otherwise
+recognize is to assume one exists; true for every Kubernetes-ecosystem type,
+false here, and it errors at `go build` rather than at generation time. The
+fix is a hand-written `DeepCopyInto`/`DeepCopy`, but not on `MachineSeccompProfile`
+itself: that type is reached through `MachineConfig.MachineSeccompProfiles
+[]*MachineSeccompProfile`, and deepcopy-gen's generated code for a slice of
+pointers to a type with a *known* `DeepCopy` method assumes a value-typed
+element and double-dereferences — a second, independent limitation. The
+methods live one level down instead, on `pkg/typedconfig.SeccompProfile`, a
+local type with `specs.LinuxSeccomp`'s exact field layout (so the JSON shape,
+and therefore the CRD schema and the generic conversion helpers, are
+unaffected) that appears only through a plain pointer field. This is the only
+hand-maintained deep copy in `pkg/typedconfig`; it needs revisiting only if
+specs-go's `LinuxSeccomp`/`LinuxSyscall` shape changes.
+
+## Follow-up: nine fields that must not be representable
+
+A security review of this same drop mechanism found a second, unrelated
+reason to drop a field: not because it can't be represented, but because it
+must not be. Nine machinery fields carry cluster secret material — join
+tokens, CA key pairs, etcd and service-account encryption keys — reachable
+through the legacy `Config` document the same as everything else:
+
+`ClusterConfig.ClusterSecret`, `ClusterConfig.BootstrapToken`,
+`ClusterConfig.ClusterAESCBCEncryptionSecret`, `ClusterConfig.ClusterCA`,
+`ClusterConfig.ClusterAggregatorCA`, `ClusterConfig.ClusterServiceAccount`,
+`EtcdConfig.RootCA`, `MachineConfig.MachineToken`, `MachineConfig.MachineCA`.
+
+None of these are `meta.Unstructured` — most are plain strings or
+`*x509.PEMEncodedCertificateAndKey` — so they would mirror cleanly. The
+problem is what carrying them would let a `TalosConfigPatch` author do: any
+patch, however narrowly scoped (a `role`-layer sysctl tweak, say), could set
+one of these and have `configpatcher.Apply`'s strategic merge overwrite the
+real value the secrets bundle generated, reaching a node as a cluster
+takeover rather than a config error. This directly contradicts design
+principle 1, "secrets are referenced, never embedded."
+
+A third table, `secretFields` (`internal/tools/mirrorgen/main.go`, next to
+`fieldOverrides`), drops these nine unconditionally — before the field's
+static type is even inspected, unlike every other table here. It is kept
+separate from `fieldOverrides` and from the type-keyed drop rule in `mapNamed`
+on purpose, and the generator reports it separately
+(`mirrorgen: dropped fields (secret material; ...)` vs. `(meta.Unstructured; ...)`):
+the two tables answer different questions — *can't represent this* vs.
+*must not represent this* — and a future contributor adding a row needs that
+distinction to pick the right table.
+
+**Side effect for `ichor adopt`:** `MachineConfig.MachineToken` dropping out
+of the schema removes a constraint the CLI had flagged — `machine.token` had
+no `omitempty` in machinery, so a sparse `Config` document (one that doesn't
+carry every field a full machine config would) could never validate against
+the mirror while that field stayed required, which stood in the way of
+`adopt` capturing a legacy `Config` document sparsely. With the field gone
+entirely, a sparse `Config` document is representable. This is outside this
+change's scope (`adopt`'s CLI is a different component); noted here so the
+CLI side can pick it up.
+
+**CEL was considered and rejected.** A `+kubebuilder:validation:XValidation`
+rule guarding these nine fields would only run against whatever the CRD
+schema already let through; it protects only the fields someone remembered
+to name in the rule, including every field `machinery` adds in a future
+Talos release. Dropping the field from the schema entirely means there is no
+path to forget.
+
+**What "dropped" actually buys, measured rather than assumed.** It was tempting
+to describe this as "the API server structurally rejects the request," matching
+how this ADR already describes dropped fields in [Consequences](#consequences)
+below. Measured against envtest's apiserver (same methodology as the size
+numbers above: a real running API server, not a schema reading), that is not
+what happens by default: a plain `client.Create` with no `fieldValidation`
+option set logs `unknown field "..."` and returns a **nil** error — the nine
+fields are *pruned*, not rejected, and the object is persisted without them.
+`api/v1alpha1/validation_test.go`'s `"drops all nine secret fields..."` test
+asserts exactly this (create succeeds, read-back has none of the nine) rather
+than asserting rejection, because asserting rejection would currently be
+asserting something false.
+
+The security property Ichor actually needs — the attacker's value can never
+reach a node — holds either way: pruned or rejected, the value never persists,
+so `configpatcher.Apply` never sees it. What pruning does *not* give is a loud
+failure the submitter can see; strict, server-side rejection of unknown fields
+is a client-chosen request option (`fieldValidation=Strict`) that Ichor cannot
+force on third-party callers (`kubectl`, Argo CD, Flux) writing a
+`TalosConfigPatch` directly, and the standard Kubernetes-native way to force
+it server-side — a validating admission webhook inspecting the raw request
+body before pruning happens — was out of scope for this change (`internal/webhook/`
+is excluded). **Left open:** whether that gap is acceptable as-is, given the
+takeover is already prevented, or whether a follow-up should add such a
+webhook.
+
+**Round-trip test treatment.** `pkg/typedconfig`'s per-kind round-trip test
+(machinery → mirror → machinery, YAML-identical) does not set any of these
+nine fields, for the same reason it never set the other six always-dropped
+`meta.Unstructured` fields: a value the mirror does not carry does not come
+back out, so setting one in the fixture would fail the test on a field it was
+never trying to cover. The trade-off this narrows: the generic round-trip test
+no longer says anything about these nine fields specifically — it would pass
+just as well if `ToMachinery`/`FromMachinery` mishandled them, because they're
+simply absent from both sides of the comparison. That gap is covered instead,
+and more precisely, by the schema-presence test above (the field cannot be
+set at all) rather than by a round-trip equality the field was dropped to
+avoid satisfying. `adopt`'s read path (machinery → mirror, reading an existing
+cluster's config) is affected the same way: these nine fields are silently
+omitted from the mirror it produces, which is the intended outcome — adopting
+a running cluster must not copy its secrets into a `TalosConfigPatch` either.
+
+## Measured again: served CRD size, with both follow-ups applied
+
+`config/crd/bases/ichor.maesh.dev_talosconfigpatches.yaml` is now 180,091
+bytes on disk. Measured the same way as before — a real envtest apiserver,
+GET on the `CustomResourceDefinition` object itself, not a schema reading —
+it serves **81,965 bytes, 5.2% of the 1,572,864-byte ceiling** (up from
+69,455 bytes / 4.4%; the five new fields' schemas account for the
+difference). Headroom remains in no way the constraint.
+
 ## Consequences
 
 - Ichor owns a code generator and a conversion layer it would not have needed
   if embedding had worked. That was the cost the design accepted when it named
-  this fallback, and it buys back the CRD schema, apiserver-side rejection of
-  unknown fields, and schema-driven UI forms.
+  this fallback, and it buys back the CRD schema and schema-driven UI forms.
+  "Apiserver-side rejection of unknown fields" needs a correction, measured in
+  the secret-fields follow-up above: by default the apiserver *prunes* an
+  unknown field (logs a warning, persists the object without it) rather than
+  rejecting the request; the value is kept out of storage either way, but a
+  caller does not get a loud error unless it opts into strict field
+  validation itself.
 - Machinery upgrades become: regenerate, run the round-trip tests, read the
   diff. Field additions are backwards compatible; removals and retypes surface
   as build or test failures, which is what the self-upgrade pre-check in 5.7.3

@@ -1,0 +1,174 @@
+# 0026. `TalosOperation`: the backbone every upgrade kind shares, with none of their execution
+
+Status: Accepted · Date: 2026-10-25 · Design section: Upgrades
+
+## Context
+
+`docs/design/architecture.md`'s "Upgrades" section opens with what all three
+upgrade kinds (Talos, Kubernetes, Ichor) share:
+
+> All three upgrade kinds share the lock, the status-held state machine,
+> pause-on-failure (no automatic cluster-wide rollback), `paused`,
+> `maxUnavailable` for workers, a per-machine hold annotation, label-based
+> ordering, and a progress view.
+
+This unit builds exactly that list, scaffolded with `kubebuilder create api
+--group ichor --version v1alpha1 --kind TalosOperation --resource
+--controller`, and nothing else: no Talos Upgrade API call, no Kubernetes
+upgrade execution, no Ichor self-upgrade, no UI, no `ichor` CLI command.
+Each of those is a separate, later unit.
+
+## Decision: an injected `AdvanceMachineFunc`, not a per-kind branch
+
+`spec.kind` (`talos`/`kubernetes`/`ichor`) is stored and reported, never
+branched on. `TalosOperationReconciler.Advance` is a single function field
+-- `func(ctx, cluster, machine, op) (done bool, err error)` -- that performs
+one disruptive step for one machine and reports whether that step finished.
+`nil` (the default, until a later unit wires a real implementation into
+`cmd/main.go`) means "pause with `NoExecutor`," not a panic.
+
+Declared in `internal/controller`, the consumer, not in `pkg/upgrade`: ADR
+0022 left exactly this kind of interface undeclared on purpose, because its
+consumer didn't exist yet ("Go interfaces belong to their consumer, declared
+where they're consumed"). This reconciler is that consumer. Each upgrade
+kind's own implementation -- calling Talos's Upgrade API, driving a
+Kubernetes upgrade, launching Ichor's installer Job -- is later, separate
+work that plugs into this one seam; the state machine itself never needs to
+know which kind it is running.
+
+## Decision: the lock, reused exactly as built, never called directly
+
+`TalosOperationReconciler.acquireDisruptiveLock` is a second function with
+that exact name (`internal/controller/talosoperation_controller.go`),
+alongside `TalosMachineReconciler`'s own
+(`internal/controller/removal.go`). `TestAcquireDisruptiveLockIsTheOnlyAcquireCallSite`
+matches on the enclosing function's *name*, not its receiver type, so a
+second, independently-named-the-same function satisfies the guard exactly
+the way the first one does -- no change to that test was needed.
+
+It refuses the same way `refuseReboot`'s call does: recompute the live,
+approved control-plane count (now via
+`deleteguard.CountApprovedControlPlanes`, read directly rather than through
+the manager's cache -- see the companion fix landed just before this unit,
+ADR 0010's appendix), and refuse with `*transitioningError` if it is even,
+before ever calling `Acquire`. Unlike `reconcileRemoval`, `TalosOperation`
+has no `completesTransition` exception: there is no scenario where an
+upgrade operation is itself the step that resolves a control-plane
+replacement, so this call always passes `false` (implemented by simply never
+exposing the parameter).
+
+`pkg/clusterlock.Lock.Renew` -- already built, documented, but with no
+caller until removal.go's `renewWhile` gave it one -- gets a second: once
+per reconcile batch, after selecting which machine(s) to advance and before
+calling `Advance` on any of them, comfortably inside `DefaultDuration`'s five
+minutes for the handful of calls one reconcile pass makes.
+
+## Decision: status holds the whole state machine
+
+`TalosOperationStatus` carries `phase` (`Pending`/`InProgress`/`Paused`/
+`Completed`) and `machines` (`[]{name, phase: InProgress|Completed}`) --
+nothing is kept in the reconciler's memory. A name's *absence* from
+`machines` means "never selected" (held, not yet its turn, or the operation
+finished before reaching it), not a third phase value forcing every reader
+to special-case it.
+
+This is what makes resumption automatic rather than a feature to build:
+`Reconcile` always starts by reading `op.status` fresh and recomputing which
+machines are still pending from it, so a killed and restarted controller
+(or a second, independently constructed reconciler, which is what the test
+for this uses to simulate one) picks up exactly where the persisted status
+says the operation was, with no separate recovery path -- the same shape
+`removal.go`'s own resumability section already documents for
+`clusterlock.Lock.Acquire`'s self-resumption.
+
+## Decision: pause-on-failure stops advancing, never undoes
+
+A machine's `Advance` call returning an error sets `phase: Paused` and
+`failureReason`, and returns. It does not touch any other machine's status
+-- there is no code path that could revert an already-`Completed` entry,
+because nothing ever removes an entry from `machines` or demotes its phase.
+Once `phase == Paused` *and* `failureReason != ""` (distinguishing a failure
+from `spec.paused`), `Reconcile`'s very next check short-circuits before
+calling `Advance` again on anything: a paused-by-failure operation never
+retries automatically. The only way out, in this unit's scope, is whatever
+the operator does next (fix the underlying cause and -- once a later unit
+adds the mechanism -- clear the failure); nothing here guesses at a retry
+policy nobody asked for.
+
+`spec.paused` is the separate, operator-driven halt: it sets `phase: Paused`
+with a different reason (`OperatorPaused`) and, critically, *still holds the
+cluster lock* -- the operation is not finished, only halted, so releasing
+the lock would let an unrelated disruptive operation start on a cluster
+that is mid-upgrade in every sense except "currently calling `Advance`."
+
+## Decision: control planes first and alone, workers within `maxUnavailable`
+
+Every reconcile computes `pendingMachines` for control planes first; as
+long as any control plane has not reached `Completed`, exactly one of them
+(not more) is the whole batch for that reconcile, and workers are never
+touched. Only once every control plane shows `Completed` do workers become
+eligible, up to `spec.maxUnavailable` (default 1) per reconcile. This is a
+single `if/else` on "any control plane pending", not a counter or a phase
+of its own -- the state already recorded per-machine is sufficient to derive
+it fresh every time, consistent with principle 1.
+
+## Decision: hold and ordering are machine-level, not operation-level
+
+`ichorv1alpha1.TalosMachineUpgradeHoldAnnotation`
+(`ichor.maesh.dev/upgrade-hold`) and
+`ichorv1alpha1.TalosMachineUpgradeOrderLabel`
+(`ichor.maesh.dev/upgrade-order`) are new constants in `api/v1alpha1`,
+read off `TalosMachine` objects, not `TalosOperation` fields -- an operator
+marks the machine, once, and every `TalosOperation` that ever touches it
+honors the mark. A held machine is filtered out before it is ever a
+candidate at all: it never appears in `status.machines`, and does not block
+an operation from reaching `Completed` (completion only waits on machines
+that were actually candidates). The order label sorts within a tier
+(`sortByUpgradeOrder`, `slices.SortFunc`) by string value, a missing label
+sorting last, with the object's own name as the final, deterministic
+tiebreak -- which matters for tests more than production, since
+`GenerateName`-assigned object names are not something a test should ever
+rely on for ordering (a real bug this unit's own tests hit once, fixed by
+setting the label explicitly rather than depending on name order).
+
+## Decision: no Conditions populated, on purpose, for now
+
+`TalosOperationStatus.Conditions` exists (the same `[]metav1.Condition`
+shape every other reconciled CRD here carries) but nothing in this unit
+ever calls `apimeta.SetStatusCondition` on it. `phase`, `machines` and
+`failureReason` already say everything this unit needs to say, and nothing
+in the acceptance criteria asks for a condition-shaped signal on top of
+them. The field stays in the schema (removing it would be a disruptive
+schema change for whichever later unit decides it wants one) but is
+inert until something actually needs it -- deletion-by-default, not
+speculative API surface.
+
+## Decision: not tracked in Git, and why that is this type's own doc comment, not a mechanism
+
+`docs/design/architecture.md`'s "GitOps and Argo CD" section lists
+`TalosOperation`s under "What doesn't [go in Git]" alongside Secrets: it is
+a record of an imperative action in progress, not a declarative desired
+state. `TalosOperation`'s own Go doc comment says so explicitly and points
+at `ichor gitops export` as the thing responsible for excluding it --
+that command, and its own exclusion logic, belong to a different agent's
+work entirely. This type cannot enforce its own absence from a Git
+repository; the most it can do is tell the next reader why, which is what
+the doc comment does.
+
+## Consequences
+
+- `pkg/deleteguard.CountApprovedControlPlanes` (landed just before this
+  unit, fixing a cached-read bug -- see ADR 0010's appendix) is reused
+  directly by `TalosOperationReconciler.acquireDisruptiveLock`, via a new
+  `APIReader client.Reader` field wired from `mgr.GetAPIReader()` in
+  `cmd/main.go` -- the same pattern `TalosMachineReconciler` and the
+  `TalosMachine` webhook now both use, so this new reconciler never
+  reintroduces the trap that fix closed.
+- `TalosOperationReconciler` is registered as its own controller in
+  `cmd/main.go`, not folded into `TalosClusterReconciler` or
+  `TalosMachineReconciler`, for the same work-queue-isolation reason ADR
+  0024 gives for `CNIHandoverReconciler`.
+- Not built here, and explicitly out of scope: any call to Talos's Upgrade
+  API, Kubernetes upgrade execution, Ichor's self-upgrade, the UI's progress
+  view, and the `ichor` CLI's own upgrade commands. `AdvanceMachineFunc`'s
+  only implementation in this unit is test fakes.

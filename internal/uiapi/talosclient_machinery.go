@@ -21,15 +21,18 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/cosi-project/runtime/pkg/resource"
 	"github.com/cosi-project/runtime/pkg/safe"
 	"github.com/cosi-project/runtime/pkg/state"
+	"github.com/siderolabs/talos/pkg/machinery/api/common"
 	"github.com/siderolabs/talos/pkg/machinery/client"
 	clientconfig "github.com/siderolabs/talos/pkg/machinery/client/config"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
+	"github.com/siderolabs/talos/pkg/machinery/constants"
 	"github.com/siderolabs/talos/pkg/machinery/resources/block"
 	"github.com/siderolabs/talos/pkg/machinery/resources/hardware"
 	"github.com/siderolabs/talos/pkg/machinery/resources/network"
@@ -252,20 +255,47 @@ func (t *machineryNodeTalosClient) ResourceUsage(ctx context.Context) (*pb.Resou
 	return usage, nil
 }
 
-// StreamLogs tails Talos's kernel log (Dmesg) -- the only per-machine log
-// StreamNodeLogsRequest's shape can mean, since it carries no
-// service/container selector (NodeTalosClient's own doc comment) -- and
-// calls onLine for every line after since.
+// dataStream is the common shape of Dmesg's and Logs' response streams
+// (both are grpc.ServerStreamingClient[common.Data] -- confirmed by reading
+// api/machine/machine_grpc.pb.go in the vendored module), factored out so
+// StreamLogs reads either one through the same loop.
+type dataStream interface {
+	Recv() (*common.Data, error)
+}
+
+// StreamLogs tails one log, calling onLine for every line after since.
+// service empty means Talos's kernel log (Dmesg); any other value is a
+// Talos service name, read through Logs in the "system" containerd
+// namespace with the containerd driver -- the same namespace/driver
+// `talosctl logs <service>` uses by default (confirmed by reading
+// cmd/talosctl/cmd/talos/{logs,image,root}.go in the vendored module). Both RPCs are confirmed readable
+// by role.Reader, so a failure to open either is wrapped
+// with that fact stated plainly, in case a future Talos version changes
+// it.
 //
 // shortcut: Dmesg's lines are not timestamped in wall-clock time in the
 // vendored module's resource shape (no controller source ships with it to
 // check against), so every line's LogLine.Time is when this method
 // observed it, not a time parsed from the line itself -- see LogLine's own
-// doc comment on why that is still a valid resume key.
-func (t *machineryNodeTalosClient) StreamLogs(ctx context.Context, since time.Time, onLine func(LogLine) error) error {
-	stream, err := t.c.Dmesg(ctx, true, true)
+// doc comment on why that is still a valid resume key. Logs' lines (a
+// container's stdout/stderr, framed by containerd) are not either.
+func (t *machineryNodeTalosClient) StreamLogs(ctx context.Context, service string, since time.Time, onLine func(LogLine) error) error {
+	var (
+		stream dataStream
+		err    error
+		what   string
+	)
+
+	if service == "" {
+		stream, err = t.c.Dmesg(ctx, true, true)
+		what = "kernel log"
+	} else {
+		stream, err = t.c.Logs(ctx, constants.SystemContainerdNamespace, common.ContainerDriver_CONTAINERD, service, true, -1)
+		what = "service " + strconv.Quote(service) + "'s log"
+	}
+
 	if err != nil {
-		return fmt.Errorf("opening dmesg stream: %w", err)
+		return fmt.Errorf("opening %s with this backend's read-only (role.Reader) Talos identity: %w", what, err)
 	}
 
 	var pending bytes.Buffer
@@ -277,7 +307,7 @@ func (t *machineryNodeTalosClient) StreamLogs(ctx context.Context, since time.Ti
 				return nil
 			}
 
-			return fmt.Errorf("reading dmesg stream: %w", err)
+			return fmt.Errorf("reading %s with this backend's read-only (role.Reader) Talos identity: %w", what, err)
 		}
 
 		pending.Write(resp.GetBytes())

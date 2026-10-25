@@ -31,17 +31,24 @@ import (
 )
 
 // recordingUpdateClient wraps a real client.Client and records what
-// FieldValidation the last Update call actually resolved to, so a test can
-// check what ApproveMachine/RejectMachine request without needing an
-// unknown field on the wire to see a difference.
+// FieldValidation the last Update (and, since PatchService also creates
+// objects, Create) call actually resolved to, so a test can check what a
+// handler requests without needing an unknown field on the wire to see a
+// difference.
 type recordingUpdateClient struct {
 	client.Client
 	lastUpdateOptions client.UpdateOptions
+	lastCreateOptions client.CreateOptions
 }
 
 func (c *recordingUpdateClient) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 	c.lastUpdateOptions = *(&client.UpdateOptions{}).ApplyOptions(opts)
 	return c.Client.Update(ctx, obj, opts...)
+}
+
+func (c *recordingUpdateClient) Create(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
+	c.lastCreateOptions = *(&client.CreateOptions{}).ApplyOptions(opts)
+	return c.Client.Create(ctx, obj, opts...)
 }
 
 // architecture.md, "Typed configuration": no admission webhook rejects an

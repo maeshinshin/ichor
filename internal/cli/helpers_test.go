@@ -92,6 +92,11 @@ const (
 
 	// testRoleWorker is the machine role fixture shared across tests.
 	testRoleWorker = "worker"
+
+	// testAPIVersion is the ichorv1alpha1 group/version string, shared by
+	// every fixture that needs to name it literally (an unstructured
+	// object, a managedFields entry) rather than through the typed API.
+	testAPIVersion = "ichor.maesh.dev/v1alpha1"
 )
 
 func newTestBundle(t *testing.T) *secrets.Bundle {

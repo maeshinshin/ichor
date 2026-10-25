@@ -77,7 +77,7 @@ func TestNewKubeClientForConfig_RejectsUnknownField(t *testing.T) {
 	}
 
 	patch := &unstructured.Unstructured{Object: map[string]any{
-		"apiVersion": "ichor.maesh.dev/v1alpha1",
+		"apiVersion": testAPIVersion,
 		"kind":       "TalosConfigPatch",
 		"metadata": map[string]any{
 			"name":      "stale-field",

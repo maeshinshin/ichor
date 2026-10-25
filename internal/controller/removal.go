@@ -109,6 +109,60 @@ func transitioningControlPlanes(controlPlanes int) bool {
 	return controlPlanes > 0 && controlPlanes%2 == 0
 }
 
+// transitioningError is acquireDisruptiveLock's refusal when the cluster's
+// live control-plane count is even and the caller is not the operation
+// resolving that transition. Distinguished from clusterlock.HeldError so
+// callers can report the right condition reason for each.
+type transitioningError struct {
+	controlPlanes int
+}
+
+func (e *transitioningError) Error() string {
+	return fmt.Sprintf("cluster has %d approved control planes (even -- a replacement is in progress)", e.controlPlanes)
+}
+
+// acquireDisruptiveLock is the only place in this package that calls
+// clusterlock.Lock.Acquire -- enforced by TestAcquireDisruptiveLockIsTheOnlyAcquireCallSite,
+// a go/parser check in the same spirit as TestFixtureUUIDsAreUnique. Every
+// disruptive operation (refuseReboot today; a future upgrade or CA
+// rotation) goes through it, so the control-plane-transitioning refusal
+// lives in exactly one place instead of being a safety net each new call
+// site has to remember to add -- the same way the secrets RBAC marker
+// regressed once already by not being centralized (ADR 0011).
+//
+// The live control-plane count is recomputed fresh here, under m's
+// cluster, rather than trusting TalosCluster.status's own Transitioning
+// condition, which could be one reconcile stale. If it is even,
+// acquireDisruptiveLock refuses with a *transitioningError before ever
+// calling Acquire -- unless completesTransition is true, the one
+// legitimate exception: the removal that completes a 3->4->3 replacement
+// necessarily runs while the count is still even, and refusing it here
+// would make that replacement impossible to ever finish. Removal still
+// has its own, more precise quorum/last-control-plane/declared-count
+// checks after the lock is held; this is only the generic gate every
+// other disruptive operation needs.
+func (r *TalosMachineReconciler) acquireDisruptiveLock(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
+	identity string, completesTransition bool,
+) (*clusterlock.Lock, error) {
+	if !completesTransition {
+		controlPlanes, err := r.countApprovedControlPlanes(ctx, m)
+		if err != nil {
+			return nil, err
+		}
+		if transitioningControlPlanes(controlPlanes) {
+			return nil, &transitioningError{controlPlanes: controlPlanes}
+		}
+	}
+
+	lock := clusterlock.New(r.Client, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0)
+	if err := lock.Acquire(ctx, identity); err != nil {
+		return nil, err
+	}
+
+	return lock, nil
+}
+
 // updateTransitioning recomputes conditionTransitioning on cluster from
 // controlPlanes and persists it. Called from wherever this file already
 // counts control planes for another reason (reconcileRemoval, and
@@ -170,9 +224,12 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 		return err
 	}
 
-	lock := clusterlock.New(r.Client, clusterKey, 0)
-
-	if err := lock.Acquire(ctx, controllerIdentity); err != nil {
+	// completesTransition is true: this is the removal that can bring the
+	// live count back to the declared one (3->4->3's last step), so it
+	// must be allowed to proceed while the count is still even -- refusing
+	// it here would make that replacement impossible to ever finish.
+	lock, err := r.acquireDisruptiveLock(ctx, &cluster, m, controllerIdentity, true)
+	if err != nil {
 		if held, ok := errors.AsType[*clusterlock.HeldError](err); ok {
 			return r.removalCondition(ctx, m, metav1.ConditionFalse, reasonClusterLockHeld,
 				fmt.Sprintf("cluster lock held by %q; removal deferred", held.Holder))

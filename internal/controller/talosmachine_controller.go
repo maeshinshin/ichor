@@ -428,25 +428,15 @@ func (r *TalosMachineReconciler) refuseReboot(
 ) error {
 	log := logf.FromContext(ctx)
 
-	// architecture.md's "Nodes": while the cluster has an even number of
-	// approved control planes (a replacement in progress, 3->4->3), the
-	// cluster lock is supposed to block other disruptive work -- but the
-	// lock itself is only held for the brief window around each individual
-	// add or remove, not for the whole human-paced transition between
-	// them. Recomputed fresh rather than trusting TalosCluster.status's
-	// own Transitioning condition, which could be one reconcile stale.
-	if controlPlanes, err := r.countApprovedControlPlanes(ctx, m); err != nil {
-		return err
-	} else if transitioningControlPlanes(controlPlanes) {
-		return r.ready(ctx, m, metav1.ConditionFalse, reasonClusterTransitioning,
-			fmt.Sprintf("%scluster has %d approved control planes (even -- a replacement is in progress); "+
-				"other disruptive work is refused until it returns to the declared odd count",
-				driftNote, controlPlanes))
-	}
-
-	lock := clusterlock.New(r.Client, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0)
-
-	if err := lock.Acquire(ctx, controllerIdentity); err != nil {
+	// A reboot-causing apply never itself completes a control-plane
+	// transition, so completesTransition is always false here.
+	lock, err := r.acquireDisruptiveLock(ctx, cluster, m, controllerIdentity, false)
+	if err != nil {
+		if transitioning, ok := errors.AsType[*transitioningError](err); ok {
+			return r.ready(ctx, m, metav1.ConditionFalse, reasonClusterTransitioning,
+				fmt.Sprintf("%s%s; other disruptive work is refused until it returns to the declared odd count",
+					driftNote, transitioning.Error()))
+		}
 		if held, ok := errors.AsType[*clusterlock.HeldError](err); ok {
 			return r.ready(ctx, m, metav1.ConditionFalse, reasonClusterLockHeld,
 				fmt.Sprintf("cluster lock held by %q; reboot-requiring change deferred", held.Holder))

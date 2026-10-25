@@ -31,6 +31,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -96,10 +97,24 @@ func TestChartInvariants(t *testing.T) {
 // decodes every rendered object into a generic map.
 func renderChart(t *testing.T, release string) []map[string]any {
 	t.Helper()
+	return renderChartWithValues(t, release)
+}
 
-	out, err := exec.Command("helm", "template", release, ".").CombinedOutput()
+// renderChartWithValues is renderChart plus --set overrides, for invariants that only apply
+// once a feature flag is on: certManager.enabled's metrics Secret and the ServiceMonitor TLS
+// config referencing it don't exist at all under the suite's default (flags-off) render.
+func renderChartWithValues(t *testing.T, release string, sets ...string) []map[string]any {
+	t.Helper()
+
+	args := make([]string, 0, 3+2*len(sets))
+	args = append(args, "template", release, ".")
+	for _, s := range sets {
+		args = append(args, "--set", s)
+	}
+
+	out, err := exec.Command("helm", args...).CombinedOutput()
 	if err != nil {
-		t.Fatalf("helm template %s .: %v\n%s", release, err, out)
+		t.Fatalf("helm %s: %v\n%s", strings.Join(args, " "), err, out)
 	}
 
 	var docs []map[string]any
@@ -110,14 +125,14 @@ func renderChart(t *testing.T, release string) []map[string]any {
 			if errors.Is(err, io.EOF) {
 				break
 			}
-			t.Fatalf("decoding helm template %s . output: %v", release, err)
+			t.Fatalf("decoding helm %s output: %v", strings.Join(args, " "), err)
 		}
 		if doc != nil {
 			docs = append(docs, doc)
 		}
 	}
 	if len(docs) == 0 {
-		t.Fatalf("helm template %s . produced no documents", release)
+		t.Fatalf("helm %s produced no documents", strings.Join(args, " "))
 	}
 	return docs
 }
@@ -643,6 +658,76 @@ func crdVersions(doc map[string]any) map[string]map[string]any {
 		out[name] = vm
 	}
 	return out
+}
+
+// metricsCertSecretName is cmd/main.go's second cert-controller rotator's fixed Secret name --
+// extras/metrics-server-cert.yaml must ship it under this exact name,
+// and the ServiceMonitor's tlsConfig must reference this exact name back, or Prometheus
+// Operator resolves a certificate that was never created.
+const metricsCertSecretName = "ichor-metrics-server-cert"
+
+// TestMetricsCertManagerEnabled guards certManager.enabled=true, which renders nothing at all
+// under TestChartInvariants's default-values render: the Secret cert-controller's second
+// rotator writes into, and the ServiceMonitor's tlsConfig referencing it, must name the exact
+// same Secret -- caught empirically once, by actually rendering with the flag on rather than
+// reading the templates statically (the ServiceMonitor used to hardcode the unprefixed
+// "metrics-server-cert" while the Secret shipped as "ichor-metrics-server-cert").
+func TestMetricsCertManagerEnabled(t *testing.T) {
+	docs := renderChartWithValues(t, "ichor", "certManager.enabled=true", "prometheus.enabled=true")
+
+	secret := find(docs, kindSecret, metricsCertSecretName)
+	if secret == nil {
+		t.Fatalf("helm template . --set certManager.enabled=true: expected a %s named %q",
+			kindSecret, metricsCertSecretName)
+	}
+	if data, ok := secret["data"]; ok {
+		t.Errorf("helm template . --set certManager.enabled=true: %q has a data key; cert-controller's "+
+			"rotator has no Create path, only Update, so this must ship empty; got data=%v",
+			metricsCertSecretName, data)
+	}
+
+	monitor := find(docs, "ServiceMonitor", "ichor-controller-manager-metrics-monitor")
+	if monitor == nil {
+		t.Fatalf("helm template . --set certManager.enabled=true,prometheus.enabled=true: " +
+			"expected a ServiceMonitor named \"ichor-controller-manager-metrics-monitor\"")
+	}
+	const nameKey = "name"
+	tlsConfigPath := []string{"spec", "endpoints", "0", "tlsConfig"}
+	for _, suffix := range [][]string{
+		{"ca", "secret", nameKey},
+		{"cert", "secret", nameKey},
+		{"keySecret", nameKey},
+	} {
+		path := append(append([]string{}, tlsConfigPath...), suffix...)
+		got := walkPath(monitor, path)
+		if got != metricsCertSecretName {
+			t.Errorf("ServiceMonitor %s: want %q, got %q; it must name the same Secret "+
+				"extras/metrics-server-cert.yaml ships (%q)",
+				strings.Join(path, "."), metricsCertSecretName, got, metricsCertSecretName)
+		}
+	}
+}
+
+// walkPath descends a decoded document through nested maps and, for a numeric segment, a
+// slice index, returning "" if any step doesn't match.
+func walkPath(doc map[string]any, path []string) string {
+	var cur any = doc
+	for _, p := range path {
+		switch v := cur.(type) {
+		case map[string]any:
+			cur = v[p]
+		case []any:
+			i, err := strconv.Atoi(p)
+			if err != nil || i < 0 || i >= len(v) {
+				return ""
+			}
+			cur = v[i]
+		default:
+			return ""
+		}
+	}
+	s, _ := cur.(string)
+	return s
 }
 
 // specPropertyKeys returns the sorted set of top-level spec.properties keys

@@ -1,10 +1,17 @@
-# Patch for Prometheus ServiceMonitor to enable secure TLS configuration
-# using certificates managed by an external certificate manager
+# Patch for Prometheus ServiceMonitor to enable secure TLS configuration, verified against
+# cert-controller's second in-process rotator, not an external certificate
+# manager -- Ichor ships no cluster-wide certificate-issuing dependency.
+#
+# serverName is hardcoded, not substituted by a kustomize replacement (this project installs
+# once per cluster with fixed names throughout, same reasoning as webhookServiceName in
+# cmd/main.go): it must match the metrics Service's DNS name after namePrefix (config/default/
+# metrics_service.yaml's "controller-manager-metrics-service" becomes
+# "ichor-controller-manager-metrics-service" with the "ichor-" prefix config/default's
+# kustomization.yaml sets) and its namespace after the "ichor-system" namespace transform.
 - op: replace
   path: /spec/endpoints/0/tlsConfig
   value:
-    # SERVICE_NAME and SERVICE_NAMESPACE will be substituted by kustomize
-    serverName: SERVICE_NAME.SERVICE_NAMESPACE.svc
+    serverName: ichor-controller-manager-metrics-service.ichor-system.svc
     insecureSkipVerify: false
     ca:
       secret:

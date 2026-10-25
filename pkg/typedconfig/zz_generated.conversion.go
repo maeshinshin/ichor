@@ -12,9 +12,12 @@ import (
 	"fmt"
 
 	mx509 "github.com/siderolabs/crypto/x509"
+	mcel "github.com/siderolabs/talos/pkg/machinery/cel"
+	mblock "github.com/siderolabs/talos/pkg/machinery/config/types/block"
 	mmeta "github.com/siderolabs/talos/pkg/machinery/config/types/meta"
 	mruntime "github.com/siderolabs/talos/pkg/machinery/config/types/runtime"
 	mv1alpha1 "github.com/siderolabs/talos/pkg/machinery/config/types/v1alpha1"
+	rblock "github.com/siderolabs/talos/pkg/machinery/resources/block"
 	corev1 "k8s.io/api/core/v1"
 	apiserverv1 "k8s.io/apiserver/pkg/apis/apiserver/v1"
 	auditv1 "k8s.io/apiserver/pkg/apis/audit/v1"
@@ -1275,6 +1278,34 @@ func DiskPartitionFromMachinery(src *mv1alpha1.DiskPartition) (*DiskPartition, e
 	return out, nil
 }
 
+// ToMachinery converts m to the machinery mblock.DiskSelector type.
+func (m *DiskSelector) ToMachinery() (*mblock.DiskSelector, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mblock.DiskSelector{}
+	v1, err := mirrorToMachineryScalar[mcel.Expression](m.Match)
+	if err != nil {
+		return nil, fmt.Errorf("DiskSelector.match"+": %w", err)
+	}
+	out.Match = v1
+	return out, nil
+}
+
+// DiskSelectorFromMachinery converts a machinery mblock.DiskSelector document to the mirror type.
+func DiskSelectorFromMachinery(src *mblock.DiskSelector) (*DiskSelector, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &DiskSelector{}
+	v1, err := machineryToMirrorScalar(src.Match)
+	if err != nil {
+		return nil, fmt.Errorf("DiskSelector.match"+": %w", err)
+	}
+	out.Match = v1
+	return out, nil
+}
+
 // ToMachinery converts m to the machinery mv1alpha1.EncryptionConfig type.
 func (m *EncryptionConfig) ToMachinery() (*mv1alpha1.EncryptionConfig, error) {
 	if m == nil {
@@ -1331,27 +1362,22 @@ func (m *EncryptionKey) ToMachinery() (*mv1alpha1.EncryptionKey, error) {
 		return nil, nil
 	}
 	out := &mv1alpha1.EncryptionKey{}
-	t1, err := (m.KeyStatic).ToMachinery()
-	if err != nil {
-		return nil, fmt.Errorf("EncryptionKey.static"+": %w", err)
-	}
-	out.KeyStatic = t1
-	t2, err := (m.KeyNodeID).ToMachinery()
+	t1, err := (m.KeyNodeID).ToMachinery()
 	if err != nil {
 		return nil, fmt.Errorf("EncryptionKey.nodeID"+": %w", err)
 	}
-	out.KeyNodeID = t2
-	t3, err := (m.KeyKMS).ToMachinery()
+	out.KeyNodeID = t1
+	t2, err := (m.KeyKMS).ToMachinery()
 	if err != nil {
 		return nil, fmt.Errorf("EncryptionKey.kms"+": %w", err)
 	}
-	out.KeyKMS = t3
+	out.KeyKMS = t2
 	out.KeySlot = m.KeySlot
-	t5, err := (m.KeyTPM).ToMachinery()
+	t4, err := (m.KeyTPM).ToMachinery()
 	if err != nil {
 		return nil, fmt.Errorf("EncryptionKey.tpm"+": %w", err)
 	}
-	out.KeyTPM = t5
+	out.KeyTPM = t4
 	return out, nil
 }
 
@@ -1361,27 +1387,22 @@ func EncryptionKeyFromMachinery(src *mv1alpha1.EncryptionKey) (*EncryptionKey, e
 		return nil, nil
 	}
 	out := &EncryptionKey{}
-	t1, err := EncryptionKeyStaticFromMachinery(src.KeyStatic)
-	if err != nil {
-		return nil, fmt.Errorf("EncryptionKey.static"+": %w", err)
-	}
-	out.KeyStatic = t1
-	t2, err := EncryptionKeyNodeIDFromMachinery(src.KeyNodeID)
+	t1, err := EncryptionKeyNodeIDFromMachinery(src.KeyNodeID)
 	if err != nil {
 		return nil, fmt.Errorf("EncryptionKey.nodeID"+": %w", err)
 	}
-	out.KeyNodeID = t2
-	t3, err := EncryptionKeyKMSFromMachinery(src.KeyKMS)
+	out.KeyNodeID = t1
+	t2, err := EncryptionKeyKMSFromMachinery(src.KeyKMS)
 	if err != nil {
 		return nil, fmt.Errorf("EncryptionKey.kms"+": %w", err)
 	}
-	out.KeyKMS = t3
+	out.KeyKMS = t2
 	out.KeySlot = src.KeySlot
-	t5, err := EncryptionKeyTPMFromMachinery(src.KeyTPM)
+	t4, err := EncryptionKeyTPMFromMachinery(src.KeyTPM)
 	if err != nil {
 		return nil, fmt.Errorf("EncryptionKey.tpm"+": %w", err)
 	}
-	out.KeyTPM = t5
+	out.KeyTPM = t4
 	return out, nil
 }
 
@@ -1423,18 +1444,18 @@ func EncryptionKeyNodeIDFromMachinery(src *mv1alpha1.EncryptionKeyNodeID) (*Encr
 	return out, nil
 }
 
-// ToMachinery converts m to the machinery mv1alpha1.EncryptionKeyStatic type.
-func (m *EncryptionKeyStatic) ToMachinery() (*mv1alpha1.EncryptionKeyStatic, error) {
+// ToMachinery converts m to the machinery mblock.EncryptionKeyStatic type.
+func (m *EncryptionKeyStatic) ToMachinery() (*mblock.EncryptionKeyStatic, error) {
 	if m == nil {
 		return nil, nil
 	}
-	out := &mv1alpha1.EncryptionKeyStatic{}
+	out := &mblock.EncryptionKeyStatic{}
 	out.KeyData = m.KeyData
 	return out, nil
 }
 
-// EncryptionKeyStaticFromMachinery converts a machinery mv1alpha1.EncryptionKeyStatic document to the mirror type.
-func EncryptionKeyStaticFromMachinery(src *mv1alpha1.EncryptionKeyStatic) (*EncryptionKeyStatic, error) {
+// EncryptionKeyStaticFromMachinery converts a machinery mblock.EncryptionKeyStatic document to the mirror type.
+func EncryptionKeyStaticFromMachinery(src *mblock.EncryptionKeyStatic) (*EncryptionKeyStatic, error) {
 	if src == nil {
 		return nil, nil
 	}
@@ -1460,6 +1481,88 @@ func EncryptionKeyTPMFromMachinery(src *mv1alpha1.EncryptionKeyTPM) (*Encryption
 	}
 	out := &EncryptionKeyTPM{}
 	out.TPMCheckSecurebootStatusOnEnroll = src.TPMCheckSecurebootStatusOnEnroll
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mblock.EncryptionKeyTPMOptions type.
+func (m *EncryptionKeyTPMOptions) ToMachinery() (*mblock.EncryptionKeyTPMOptions, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mblock.EncryptionKeyTPMOptions{}
+	out.PCRs = m.PCRs
+	return out, nil
+}
+
+// EncryptionKeyTPMOptionsFromMachinery converts a machinery mblock.EncryptionKeyTPMOptions document to the mirror type.
+func EncryptionKeyTPMOptionsFromMachinery(src *mblock.EncryptionKeyTPMOptions) (*EncryptionKeyTPMOptions, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &EncryptionKeyTPMOptions{}
+	out.PCRs = src.PCRs
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mblock.EncryptionSpec type.
+func (m *EncryptionSpec) ToMachinery() (*mblock.EncryptionSpec, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mblock.EncryptionSpec{}
+	v1, err := mirrorToMachineryScalar[rblock.EncryptionProviderType](m.EncryptionProvider)
+	if err != nil {
+		return nil, fmt.Errorf("EncryptionSpec.provider"+": %w", err)
+	}
+	out.EncryptionProvider = v1
+	if m.EncryptionKeys != nil {
+		c2 := make([]mblock.EncryptionKey, len(m.EncryptionKeys))
+		for k2, e2 := range m.EncryptionKeys {
+			t3, err := (e2).ToMachinery()
+			if err != nil {
+				return nil, fmt.Errorf("EncryptionSpec.keys"+": %w", err)
+			}
+			if t3 != nil {
+				c2[k2] = *t3
+			}
+		}
+		out.EncryptionKeys = c2
+	}
+	out.EncryptionCipher = m.EncryptionCipher
+	out.EncryptionKeySize = m.EncryptionKeySize
+	out.EncryptionBlockSize = m.EncryptionBlockSize
+	out.EncryptionPerfOptions = m.EncryptionPerfOptions
+	out.EncryptionAllowDiscards = m.EncryptionAllowDiscards
+	return out, nil
+}
+
+// EncryptionSpecFromMachinery converts a machinery mblock.EncryptionSpec document to the mirror type.
+func EncryptionSpecFromMachinery(src *mblock.EncryptionSpec) (*EncryptionSpec, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &EncryptionSpec{}
+	v1, err := machineryToMirrorScalar(src.EncryptionProvider)
+	if err != nil {
+		return nil, fmt.Errorf("EncryptionSpec.provider"+": %w", err)
+	}
+	out.EncryptionProvider = v1
+	if src.EncryptionKeys != nil {
+		c2 := make([]*VolumeEncryptionKey, len(src.EncryptionKeys))
+		for k2, e2 := range src.EncryptionKeys {
+			t3, err := VolumeEncryptionKeyFromMachinery(&(e2))
+			if err != nil {
+				return nil, fmt.Errorf("EncryptionSpec.keys"+": %w", err)
+			}
+			c2[k2] = t3
+		}
+		out.EncryptionKeys = c2
+	}
+	out.EncryptionCipher = src.EncryptionCipher
+	out.EncryptionKeySize = src.EncryptionKeySize
+	out.EncryptionBlockSize = src.EncryptionBlockSize
+	out.EncryptionPerfOptions = src.EncryptionPerfOptions
+	out.EncryptionAllowDiscards = src.EncryptionAllowDiscards
 	return out, nil
 }
 
@@ -1694,6 +1797,46 @@ func FeaturesConfigFromMachinery(src *mv1alpha1.FeaturesConfig) (*FeaturesConfig
 	}
 	out.ImageCacheSupport = t8
 	out.FeatureNodeAddressSortAlgorithm = src.FeatureNodeAddressSortAlgorithm
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mblock.FilesystemSpec type.
+func (m *FilesystemSpec) ToMachinery() (*mblock.FilesystemSpec, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mblock.FilesystemSpec{}
+	v1, err := mirrorToMachineryScalar[rblock.FilesystemType](m.FilesystemType)
+	if err != nil {
+		return nil, fmt.Errorf("FilesystemSpec.type"+": %w", err)
+	}
+	out.FilesystemType = v1
+	out.ProjectQuotaSupportConfig = m.ProjectQuotaSupportConfig
+	t3, err := (m.XFSSpec).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("FilesystemSpec.xfs"+": %w", err)
+	}
+	out.XFSSpec = t3
+	return out, nil
+}
+
+// FilesystemSpecFromMachinery converts a machinery mblock.FilesystemSpec document to the mirror type.
+func FilesystemSpecFromMachinery(src *mblock.FilesystemSpec) (*FilesystemSpec, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &FilesystemSpec{}
+	v1, err := machineryToMirrorScalar(src.FilesystemType)
+	if err != nil {
+		return nil, fmt.Errorf("FilesystemSpec.type"+": %w", err)
+	}
+	out.FilesystemType = v1
+	out.ProjectQuotaSupportConfig = src.ProjectQuotaSupportConfig
+	t3, err := XFSSpecFromMachinery(src.XFSSpec)
+	if err != nil {
+		return nil, fmt.Errorf("FilesystemSpec.xfs"+": %w", err)
+	}
+	out.XFSSpec = t3
 	return out, nil
 }
 
@@ -2688,6 +2831,28 @@ func MachineSeccompProfileFromMachinery(src *mv1alpha1.MachineSeccompProfile) (*
 	return out, nil
 }
 
+// ToMachinery converts m to the machinery mblock.MountSpec type.
+func (m *MountSpec) ToMachinery() (*mblock.MountSpec, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mblock.MountSpec{}
+	out.MountSecure = m.MountSecure
+	out.MountDisableAccessTime = m.MountDisableAccessTime
+	return out, nil
+}
+
+// MountSpecFromMachinery converts a machinery mblock.MountSpec document to the mirror type.
+func MountSpecFromMachinery(src *mblock.MountSpec) (*MountSpec, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &MountSpec{}
+	out.MountSecure = src.MountSecure
+	out.MountDisableAccessTime = src.MountDisableAccessTime
+	return out, nil
+}
+
 // ToMachinery converts m to the machinery mv1alpha1.NetworkConfig type.
 func (m *NetworkConfig) ToMachinery() (*mv1alpha1.NetworkConfig, error) {
 	if m == nil {
@@ -2878,6 +3043,58 @@ func PEMEncodedCertificateAndKeyFromMachinery(src *mx509.PEMEncodedCertificateAn
 	return out, nil
 }
 
+// ToMachinery converts m to the machinery mblock.ProvisioningSpec type.
+func (m *ProvisioningSpec) ToMachinery() (*mblock.ProvisioningSpec, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mblock.ProvisioningSpec{}
+	t1, err := (m.DiskSelectorSpec).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("ProvisioningSpec.diskSelector"+": %w", err)
+	}
+	if t1 != nil {
+		out.DiskSelectorSpec = *t1
+	}
+	out.ProvisioningGrow = m.ProvisioningGrow
+	v3, err := mirrorToMachineryScalar[mblock.ByteSize](m.ProvisioningMinSize)
+	if err != nil {
+		return nil, fmt.Errorf("ProvisioningSpec.minSize"+": %w", err)
+	}
+	out.ProvisioningMinSize = v3
+	v4, err := mirrorToMachineryScalar[mblock.Size](m.ProvisioningMaxSize)
+	if err != nil {
+		return nil, fmt.Errorf("ProvisioningSpec.maxSize"+": %w", err)
+	}
+	out.ProvisioningMaxSize = v4
+	return out, nil
+}
+
+// ProvisioningSpecFromMachinery converts a machinery mblock.ProvisioningSpec document to the mirror type.
+func ProvisioningSpecFromMachinery(src *mblock.ProvisioningSpec) (*ProvisioningSpec, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &ProvisioningSpec{}
+	t1, err := DiskSelectorFromMachinery(&(src.DiskSelectorSpec))
+	if err != nil {
+		return nil, fmt.Errorf("ProvisioningSpec.diskSelector"+": %w", err)
+	}
+	out.DiskSelectorSpec = t1
+	out.ProvisioningGrow = src.ProvisioningGrow
+	v3, err := machineryToMirrorScalar(src.ProvisioningMinSize)
+	if err != nil {
+		return nil, fmt.Errorf("ProvisioningSpec.minSize"+": %w", err)
+	}
+	out.ProvisioningMinSize = v3
+	v4, err := machineryToMirrorScalar(src.ProvisioningMaxSize)
+	if err != nil {
+		return nil, fmt.Errorf("ProvisioningSpec.maxSize"+": %w", err)
+	}
+	out.ProvisioningMaxSize = v4
+	return out, nil
+}
+
 // ToMachinery converts m to the machinery mv1alpha1.ProxyConfig type.
 func (m *ProxyConfig) ToMachinery() (*mv1alpha1.ProxyConfig, error) {
 	if m == nil {
@@ -2921,6 +3138,51 @@ func ProxyConfigFromMachinery(src *mv1alpha1.ProxyConfig) (*ProxyConfig, error) 
 		}
 		out.ExtraArgsConfig = c4
 	}
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mblock.RawVolumeConfigV1Alpha1 type.
+func (m *RawVolumeConfigV1Alpha1) ToMachinery() (*mblock.RawVolumeConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mblock.RawVolumeConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mblock.RawVolumeConfigKind, MetaAPIVersion: "v1alpha1"}
+	out.MetaName = m.MetaName
+	t2, err := (m.ProvisioningSpec).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("RawVolumeConfigV1Alpha1.provisioning"+": %w", err)
+	}
+	if t2 != nil {
+		out.ProvisioningSpec = *t2
+	}
+	t3, err := (m.EncryptionSpec).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("RawVolumeConfigV1Alpha1.encryption"+": %w", err)
+	}
+	if t3 != nil {
+		out.EncryptionSpec = *t3
+	}
+	return out, nil
+}
+
+// RawVolumeConfigV1Alpha1FromMachinery converts a machinery mblock.RawVolumeConfigV1Alpha1 document to the mirror type.
+func RawVolumeConfigV1Alpha1FromMachinery(src *mblock.RawVolumeConfigV1Alpha1) (*RawVolumeConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &RawVolumeConfigV1Alpha1{}
+	out.MetaName = src.MetaName
+	t2, err := ProvisioningSpecFromMachinery(&(src.ProvisioningSpec))
+	if err != nil {
+		return nil, fmt.Errorf("RawVolumeConfigV1Alpha1.provisioning"+": %w", err)
+	}
+	out.ProvisioningSpec = t2
+	t3, err := EncryptionSpecFromMachinery(&(src.EncryptionSpec))
+	if err != nil {
+		return nil, fmt.Errorf("RawVolumeConfigV1Alpha1.encryption"+": %w", err)
+	}
+	out.EncryptionSpec = t3
 	return out, nil
 }
 
@@ -3312,6 +3574,36 @@ func SchedulerConfigFromMachinery(src *mv1alpha1.SchedulerConfig) (*SchedulerCon
 	return out, nil
 }
 
+// ToMachinery converts m to the machinery mblock.ScrubConfig type.
+func (m *ScrubConfig) ToMachinery() (*mblock.ScrubConfig, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mblock.ScrubConfig{}
+	out.ScrubEnabled = m.ScrubEnabled
+	v2, err := mirrorToMachineryScalar[time.Duration](m.ScrubInterval)
+	if err != nil {
+		return nil, fmt.Errorf("ScrubConfig.interval"+": %w", err)
+	}
+	out.ScrubInterval = v2
+	return out, nil
+}
+
+// ScrubConfigFromMachinery converts a machinery mblock.ScrubConfig document to the mirror type.
+func ScrubConfigFromMachinery(src *mblock.ScrubConfig) (*ScrubConfig, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &ScrubConfig{}
+	out.ScrubEnabled = src.ScrubEnabled
+	v2, err := machineryToMirrorScalar(src.ScrubInterval)
+	if err != nil {
+		return nil, fmt.Errorf("ScrubConfig.interval"+": %w", err)
+	}
+	out.ScrubInterval = v2
+	return out, nil
+}
+
 // ToMachinery converts m to the machinery mruntime.SysctlConfigV1Alpha1 type.
 func (m *SysctlConfigV1Alpha1) ToMachinery() (*mruntime.SysctlConfigV1Alpha1, error) {
 	if m == nil {
@@ -3371,6 +3663,34 @@ func SystemDiskEncryptionConfigFromMachinery(src *mv1alpha1.SystemDiskEncryption
 	return out, nil
 }
 
+// ToMachinery converts m to the machinery mblock.SystemVolumeFilesystemSpec type.
+func (m *SystemVolumeFilesystemSpec) ToMachinery() (*mblock.SystemVolumeFilesystemSpec, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mblock.SystemVolumeFilesystemSpec{}
+	t1, err := (m.XFSSpec).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("SystemVolumeFilesystemSpec.xfs"+": %w", err)
+	}
+	out.XFSSpec = t1
+	return out, nil
+}
+
+// SystemVolumeFilesystemSpecFromMachinery converts a machinery mblock.SystemVolumeFilesystemSpec document to the mirror type.
+func SystemVolumeFilesystemSpecFromMachinery(src *mblock.SystemVolumeFilesystemSpec) (*SystemVolumeFilesystemSpec, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &SystemVolumeFilesystemSpec{}
+	t1, err := XFSSpecFromMachinery(src.XFSSpec)
+	if err != nil {
+		return nil, fmt.Errorf("SystemVolumeFilesystemSpec.xfs"+": %w", err)
+	}
+	out.XFSSpec = t1
+	return out, nil
+}
+
 // ToMachinery converts m to the machinery mv1alpha1.TimeConfig type.
 func (m *TimeConfig) ToMachinery() (*mv1alpha1.TimeConfig, error) {
 	if m == nil {
@@ -3403,6 +3723,36 @@ func TimeConfigFromMachinery(src *mv1alpha1.TimeConfig) (*TimeConfig, error) {
 	return out, nil
 }
 
+// ToMachinery converts m to the machinery mblock.TrimConfig type.
+func (m *TrimConfig) ToMachinery() (*mblock.TrimConfig, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mblock.TrimConfig{}
+	out.TrimEnabled = m.TrimEnabled
+	v2, err := mirrorToMachineryScalar[time.Duration](m.TrimInterval)
+	if err != nil {
+		return nil, fmt.Errorf("TrimConfig.interval"+": %w", err)
+	}
+	out.TrimInterval = v2
+	return out, nil
+}
+
+// TrimConfigFromMachinery converts a machinery mblock.TrimConfig document to the mirror type.
+func TrimConfigFromMachinery(src *mblock.TrimConfig) (*TrimConfig, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &TrimConfig{}
+	out.TrimEnabled = src.TrimEnabled
+	v2, err := machineryToMirrorScalar(src.TrimInterval)
+	if err != nil {
+		return nil, fmt.Errorf("TrimConfig.interval"+": %w", err)
+	}
+	out.TrimInterval = v2
+	return out, nil
+}
+
 // ToMachinery converts m to the machinery mv1alpha1.UdevConfig type.
 func (m *UdevConfig) ToMachinery() (*mv1alpha1.UdevConfig, error) {
 	if m == nil {
@@ -3420,6 +3770,135 @@ func UdevConfigFromMachinery(src *mv1alpha1.UdevConfig) (*UdevConfig, error) {
 	}
 	out := &UdevConfig{}
 	out.UdevRules = src.UdevRules
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mblock.UserMountSpec type.
+func (m *UserMountSpec) ToMachinery() (*mblock.UserMountSpec, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mblock.UserMountSpec{}
+	out.MountDisableAccessTime = m.MountDisableAccessTime
+	out.MountSecure = m.MountSecure
+	return out, nil
+}
+
+// UserMountSpecFromMachinery converts a machinery mblock.UserMountSpec document to the mirror type.
+func UserMountSpecFromMachinery(src *mblock.UserMountSpec) (*UserMountSpec, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &UserMountSpec{}
+	out.MountDisableAccessTime = src.MountDisableAccessTime
+	out.MountSecure = src.MountSecure
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mblock.UserVolumeConfigV1Alpha1 type.
+func (m *UserVolumeConfigV1Alpha1) ToMachinery() (*mblock.UserVolumeConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mblock.UserVolumeConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mblock.UserVolumeConfigKind, MetaAPIVersion: "v1alpha1"}
+	out.MetaName = m.MetaName
+	if m.VolumeType != nil {
+		var p2Val rblock.VolumeType
+		v3, err := mirrorToMachineryScalar[rblock.VolumeType](*m.VolumeType)
+		if err != nil {
+			return nil, fmt.Errorf("UserVolumeConfigV1Alpha1.volumeType"+": %w", err)
+		}
+		p2Val = v3
+		out.VolumeType = &p2Val
+	}
+	t3, err := (m.ProvisioningSpec).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("UserVolumeConfigV1Alpha1.provisioning"+": %w", err)
+	}
+	if t3 != nil {
+		out.ProvisioningSpec = *t3
+	}
+	t4, err := (m.FilesystemSpec).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("UserVolumeConfigV1Alpha1.filesystem"+": %w", err)
+	}
+	if t4 != nil {
+		out.FilesystemSpec = *t4
+	}
+	t5, err := (m.EncryptionSpec).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("UserVolumeConfigV1Alpha1.encryption"+": %w", err)
+	}
+	if t5 != nil {
+		out.EncryptionSpec = *t5
+	}
+	t6, err := (m.MountSpec).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("UserVolumeConfigV1Alpha1.mount"+": %w", err)
+	}
+	if t6 != nil {
+		out.MountSpec = *t6
+	}
+	t7, err := (m.TrimSpec).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("UserVolumeConfigV1Alpha1.trim"+": %w", err)
+	}
+	out.TrimSpec = t7
+	t8, err := (m.ScrubSpec).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("UserVolumeConfigV1Alpha1.scrub"+": %w", err)
+	}
+	out.ScrubSpec = t8
+	return out, nil
+}
+
+// UserVolumeConfigV1Alpha1FromMachinery converts a machinery mblock.UserVolumeConfigV1Alpha1 document to the mirror type.
+func UserVolumeConfigV1Alpha1FromMachinery(src *mblock.UserVolumeConfigV1Alpha1) (*UserVolumeConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &UserVolumeConfigV1Alpha1{}
+	out.MetaName = src.MetaName
+	if src.VolumeType != nil {
+		var p2Val string
+		v3, err := machineryToMirrorScalar(*src.VolumeType)
+		if err != nil {
+			return nil, fmt.Errorf("UserVolumeConfigV1Alpha1.volumeType"+": %w", err)
+		}
+		p2Val = v3
+		out.VolumeType = &p2Val
+	}
+	t3, err := ProvisioningSpecFromMachinery(&(src.ProvisioningSpec))
+	if err != nil {
+		return nil, fmt.Errorf("UserVolumeConfigV1Alpha1.provisioning"+": %w", err)
+	}
+	out.ProvisioningSpec = t3
+	t4, err := FilesystemSpecFromMachinery(&(src.FilesystemSpec))
+	if err != nil {
+		return nil, fmt.Errorf("UserVolumeConfigV1Alpha1.filesystem"+": %w", err)
+	}
+	out.FilesystemSpec = t4
+	t5, err := EncryptionSpecFromMachinery(&(src.EncryptionSpec))
+	if err != nil {
+		return nil, fmt.Errorf("UserVolumeConfigV1Alpha1.encryption"+": %w", err)
+	}
+	out.EncryptionSpec = t5
+	t6, err := UserMountSpecFromMachinery(&(src.MountSpec))
+	if err != nil {
+		return nil, fmt.Errorf("UserVolumeConfigV1Alpha1.mount"+": %w", err)
+	}
+	out.MountSpec = t6
+	t7, err := TrimConfigFromMachinery(src.TrimSpec)
+	if err != nil {
+		return nil, fmt.Errorf("UserVolumeConfigV1Alpha1.trim"+": %w", err)
+	}
+	out.TrimSpec = t7
+	t8, err := ScrubConfigFromMachinery(src.ScrubSpec)
+	if err != nil {
+		return nil, fmt.Errorf("UserVolumeConfigV1Alpha1.scrub"+": %w", err)
+	}
+	out.ScrubSpec = t8
 	return out, nil
 }
 
@@ -3533,6 +4012,225 @@ func VlanFromMachinery(src *mv1alpha1.Vlan) (*Vlan, error) {
 	return out, nil
 }
 
+// ToMachinery converts m to the machinery mblock.VolumeConfigV1Alpha1 type.
+func (m *VolumeConfigV1Alpha1) ToMachinery() (*mblock.VolumeConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mblock.VolumeConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mblock.VolumeConfigKind, MetaAPIVersion: "v1alpha1"}
+	out.MetaName = m.MetaName
+	t2, err := (m.ProvisioningSpec).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("VolumeConfigV1Alpha1.provisioning"+": %w", err)
+	}
+	if t2 != nil {
+		out.ProvisioningSpec = *t2
+	}
+	t3, err := (m.FilesystemSpec).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("VolumeConfigV1Alpha1.filesystem"+": %w", err)
+	}
+	if t3 != nil {
+		out.FilesystemSpec = *t3
+	}
+	t4, err := (m.EncryptionSpec).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("VolumeConfigV1Alpha1.encryption"+": %w", err)
+	}
+	if t4 != nil {
+		out.EncryptionSpec = *t4
+	}
+	t5, err := (m.MountSpec).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("VolumeConfigV1Alpha1.mount"+": %w", err)
+	}
+	if t5 != nil {
+		out.MountSpec = *t5
+	}
+	t6, err := (m.TrimSpec).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("VolumeConfigV1Alpha1.trim"+": %w", err)
+	}
+	out.TrimSpec = t6
+	t7, err := (m.ScrubSpec).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("VolumeConfigV1Alpha1.scrub"+": %w", err)
+	}
+	out.ScrubSpec = t7
+	return out, nil
+}
+
+// VolumeConfigV1Alpha1FromMachinery converts a machinery mblock.VolumeConfigV1Alpha1 document to the mirror type.
+func VolumeConfigV1Alpha1FromMachinery(src *mblock.VolumeConfigV1Alpha1) (*VolumeConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &VolumeConfigV1Alpha1{}
+	out.MetaName = src.MetaName
+	t2, err := ProvisioningSpecFromMachinery(&(src.ProvisioningSpec))
+	if err != nil {
+		return nil, fmt.Errorf("VolumeConfigV1Alpha1.provisioning"+": %w", err)
+	}
+	out.ProvisioningSpec = t2
+	t3, err := SystemVolumeFilesystemSpecFromMachinery(&(src.FilesystemSpec))
+	if err != nil {
+		return nil, fmt.Errorf("VolumeConfigV1Alpha1.filesystem"+": %w", err)
+	}
+	out.FilesystemSpec = t3
+	t4, err := EncryptionSpecFromMachinery(&(src.EncryptionSpec))
+	if err != nil {
+		return nil, fmt.Errorf("VolumeConfigV1Alpha1.encryption"+": %w", err)
+	}
+	out.EncryptionSpec = t4
+	t5, err := MountSpecFromMachinery(&(src.MountSpec))
+	if err != nil {
+		return nil, fmt.Errorf("VolumeConfigV1Alpha1.mount"+": %w", err)
+	}
+	out.MountSpec = t5
+	t6, err := TrimConfigFromMachinery(src.TrimSpec)
+	if err != nil {
+		return nil, fmt.Errorf("VolumeConfigV1Alpha1.trim"+": %w", err)
+	}
+	out.TrimSpec = t6
+	t7, err := ScrubConfigFromMachinery(src.ScrubSpec)
+	if err != nil {
+		return nil, fmt.Errorf("VolumeConfigV1Alpha1.scrub"+": %w", err)
+	}
+	out.ScrubSpec = t7
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mblock.EncryptionKey type.
+func (m *VolumeEncryptionKey) ToMachinery() (*mblock.EncryptionKey, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mblock.EncryptionKey{}
+	out.KeySlot = m.KeySlot
+	t2, err := (m.KeyStatic).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("VolumeEncryptionKey.static"+": %w", err)
+	}
+	out.KeyStatic = t2
+	t3, err := (m.KeyNodeID).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("VolumeEncryptionKey.nodeID"+": %w", err)
+	}
+	out.KeyNodeID = t3
+	t4, err := (m.KeyKMS).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("VolumeEncryptionKey.kms"+": %w", err)
+	}
+	out.KeyKMS = t4
+	t5, err := (m.KeyTPM).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("VolumeEncryptionKey.tpm"+": %w", err)
+	}
+	out.KeyTPM = t5
+	out.KeyLockToSTATE = m.KeyLockToSTATE
+	return out, nil
+}
+
+// VolumeEncryptionKeyFromMachinery converts a machinery mblock.EncryptionKey document to the mirror type.
+func VolumeEncryptionKeyFromMachinery(src *mblock.EncryptionKey) (*VolumeEncryptionKey, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &VolumeEncryptionKey{}
+	out.KeySlot = src.KeySlot
+	t2, err := EncryptionKeyStaticFromMachinery(src.KeyStatic)
+	if err != nil {
+		return nil, fmt.Errorf("VolumeEncryptionKey.static"+": %w", err)
+	}
+	out.KeyStatic = t2
+	t3, err := VolumeEncryptionKeyNodeIDFromMachinery(src.KeyNodeID)
+	if err != nil {
+		return nil, fmt.Errorf("VolumeEncryptionKey.nodeID"+": %w", err)
+	}
+	out.KeyNodeID = t3
+	t4, err := VolumeEncryptionKeyKMSFromMachinery(src.KeyKMS)
+	if err != nil {
+		return nil, fmt.Errorf("VolumeEncryptionKey.kms"+": %w", err)
+	}
+	out.KeyKMS = t4
+	t5, err := VolumeEncryptionKeyTPMFromMachinery(src.KeyTPM)
+	if err != nil {
+		return nil, fmt.Errorf("VolumeEncryptionKey.tpm"+": %w", err)
+	}
+	out.KeyTPM = t5
+	out.KeyLockToSTATE = src.KeyLockToSTATE
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mblock.EncryptionKeyKMS type.
+func (m *VolumeEncryptionKeyKMS) ToMachinery() (*mblock.EncryptionKeyKMS, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mblock.EncryptionKeyKMS{}
+	out.KMSEndpoint = m.KMSEndpoint
+	return out, nil
+}
+
+// VolumeEncryptionKeyKMSFromMachinery converts a machinery mblock.EncryptionKeyKMS document to the mirror type.
+func VolumeEncryptionKeyKMSFromMachinery(src *mblock.EncryptionKeyKMS) (*VolumeEncryptionKeyKMS, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &VolumeEncryptionKeyKMS{}
+	out.KMSEndpoint = src.KMSEndpoint
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mblock.EncryptionKeyNodeID type.
+func (m *VolumeEncryptionKeyNodeID) ToMachinery() (*mblock.EncryptionKeyNodeID, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mblock.EncryptionKeyNodeID{}
+	return out, nil
+}
+
+// VolumeEncryptionKeyNodeIDFromMachinery converts a machinery mblock.EncryptionKeyNodeID document to the mirror type.
+func VolumeEncryptionKeyNodeIDFromMachinery(src *mblock.EncryptionKeyNodeID) (*VolumeEncryptionKeyNodeID, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &VolumeEncryptionKeyNodeID{}
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mblock.EncryptionKeyTPM type.
+func (m *VolumeEncryptionKeyTPM) ToMachinery() (*mblock.EncryptionKeyTPM, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mblock.EncryptionKeyTPM{}
+	t1, err := (m.TPMOptions).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("VolumeEncryptionKeyTPM.options"+": %w", err)
+	}
+	out.TPMOptions = t1
+	out.TPMCheckSecurebootStatusOnEnroll = m.TPMCheckSecurebootStatusOnEnroll
+	return out, nil
+}
+
+// VolumeEncryptionKeyTPMFromMachinery converts a machinery mblock.EncryptionKeyTPM document to the mirror type.
+func VolumeEncryptionKeyTPMFromMachinery(src *mblock.EncryptionKeyTPM) (*VolumeEncryptionKeyTPM, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &VolumeEncryptionKeyTPM{}
+	t1, err := EncryptionKeyTPMOptionsFromMachinery(src.TPMOptions)
+	if err != nil {
+		return nil, fmt.Errorf("VolumeEncryptionKeyTPM.options"+": %w", err)
+	}
+	out.TPMOptions = t1
+	out.TPMCheckSecurebootStatusOnEnroll = src.TPMCheckSecurebootStatusOnEnroll
+	return out, nil
+}
+
 // ToMachinery converts m to the machinery mv1alpha1.VolumeMountConfig type.
 func (m *VolumeMountConfig) ToMachinery() (*mv1alpha1.VolumeMountConfig, error) {
 	if m == nil {
@@ -3554,5 +4252,33 @@ func VolumeMountConfigFromMachinery(src *mv1alpha1.VolumeMountConfig) (*VolumeMo
 	out.VolumeHostPath = src.VolumeHostPath
 	out.VolumeMountPath = src.VolumeMountPath
 	out.VolumeReadOnly = src.VolumeReadOnly
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mblock.XFSSpec type.
+func (m *XFSSpec) ToMachinery() (*mblock.XFSSpec, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mblock.XFSSpec{}
+	v1, err := mirrorToMachineryScalar[mblock.ByteSize](m.MinAllocationGroupSizeConfig)
+	if err != nil {
+		return nil, fmt.Errorf("XFSSpec.minAllocationGroupSize"+": %w", err)
+	}
+	out.MinAllocationGroupSizeConfig = v1
+	return out, nil
+}
+
+// XFSSpecFromMachinery converts a machinery mblock.XFSSpec document to the mirror type.
+func XFSSpecFromMachinery(src *mblock.XFSSpec) (*XFSSpec, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &XFSSpec{}
+	v1, err := machineryToMirrorScalar(src.MinAllocationGroupSizeConfig)
+	if err != nil {
+		return nil, fmt.Errorf("XFSSpec.minAllocationGroupSize"+": %w", err)
+	}
+	out.MinAllocationGroupSizeConfig = v1
 	return out, nil
 }

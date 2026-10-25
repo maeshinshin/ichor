@@ -47,12 +47,12 @@ type TalosConfigPatchTarget struct {
 // document is. mirrorgen's roots (internal/tools/mirrorgen/main.go) names the same kinds this
 // enum does; TestAllowListMatchesCRDEnum there checks the two agree, since a kubebuilder marker
 // is plain text and can't reference that Go value directly.
-// +kubebuilder:validation:XValidation:rule="(has(self.sysctlConfig) ? 1 : 0) + (has(self.kernelModuleConfig) ? 1 : 0) + (has(self.config) ? 1 : 0) == 1",message="exactly one of sysctlConfig, kernelModuleConfig or config must be set"
-// +kubebuilder:validation:XValidation:rule="self.kind == 'SysctlConfig' ? has(self.sysctlConfig) : self.kind == 'KernelModuleConfig' ? has(self.kernelModuleConfig) : has(self.config)",message="kind must match the populated field"
+// +kubebuilder:validation:XValidation:rule="(has(self.sysctlConfig) ? 1 : 0) + (has(self.kernelModuleConfig) ? 1 : 0) + (has(self.config) ? 1 : 0) + (has(self.volumeConfig) ? 1 : 0) + (has(self.userVolumeConfig) ? 1 : 0) + (has(self.rawVolumeConfig) ? 1 : 0) == 1",message="exactly one of sysctlConfig, kernelModuleConfig, config, volumeConfig, userVolumeConfig or rawVolumeConfig must be set"
+// +kubebuilder:validation:XValidation:rule="self.kind == 'SysctlConfig' ? has(self.sysctlConfig) : self.kind == 'KernelModuleConfig' ? has(self.kernelModuleConfig) : self.kind == 'Config' ? has(self.config) : self.kind == 'VolumeConfig' ? has(self.volumeConfig) : self.kind == 'UserVolumeConfig' ? has(self.userVolumeConfig) : has(self.rawVolumeConfig)",message="kind must match the populated field"
 // +kubebuilder:object:generate=false
 type TalosConfigPatchDocument struct {
 	// kind selects which of the fields below is populated.
-	// +kubebuilder:validation:Enum=SysctlConfig;KernelModuleConfig;Config
+	// +kubebuilder:validation:Enum=SysctlConfig;KernelModuleConfig;Config;VolumeConfig;UserVolumeConfig;RawVolumeConfig
 	// +unionDiscriminator
 	// +required
 	Kind string `json:"kind"`
@@ -68,6 +68,20 @@ type TalosConfigPatchDocument struct {
 	// config is a Talos v1alpha1 Config document; populated when kind is "Config".
 	// +optional
 	Config *typedconfig.Config `json:"config,omitempty"`
+
+	// volumeConfig is a Talos VolumeConfig document (a system volume, e.g. STATE or EPHEMERAL,
+	// placed on its own disk); populated when kind is "VolumeConfig".
+	// +optional
+	VolumeConfig *typedconfig.VolumeConfigV1Alpha1 `json:"volumeConfig,omitempty"`
+
+	// userVolumeConfig is a Talos UserVolumeConfig document; populated when kind is "UserVolumeConfig".
+	// +optional
+	UserVolumeConfig *typedconfig.UserVolumeConfigV1Alpha1 `json:"userVolumeConfig,omitempty"`
+
+	// rawVolumeConfig is a Talos RawVolumeConfig document (an unformatted partition for a CSI
+	// provisioner); populated when kind is "RawVolumeConfig".
+	// +optional
+	RawVolumeConfig *typedconfig.RawVolumeConfigV1Alpha1 `json:"rawVolumeConfig,omitempty"`
 }
 
 // DeepCopyInto copies the receiver into out. in must be non-nil.
@@ -86,6 +100,21 @@ func (in *TalosConfigPatchDocument) DeepCopyInto(out *TalosConfigPatchDocument) 
 	if in.Config != nil {
 		in, out := &in.Config, &out.Config
 		*out = new(typedconfig.Config)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.VolumeConfig != nil {
+		in, out := &in.VolumeConfig, &out.VolumeConfig
+		*out = new(typedconfig.VolumeConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.UserVolumeConfig != nil {
+		in, out := &in.UserVolumeConfig, &out.UserVolumeConfig
+		*out = new(typedconfig.UserVolumeConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.RawVolumeConfig != nil {
+		in, out := &in.RawVolumeConfig, &out.RawVolumeConfig
+		*out = new(typedconfig.RawVolumeConfigV1Alpha1)
 		(*in).DeepCopyInto(*out)
 	}
 }

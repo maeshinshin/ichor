@@ -107,8 +107,12 @@ func (s *Server) getMachine(ctx context.Context, ref *pb.ObjectRef) (*ichorv1alp
 //     time, not by trying to detect which edits are "intended."
 //     Re-configuring an approved machine is config-editing, a different,
 //     later unit (roadmap phase 6).
-//  4. (RejectMachine, not this method) a rejected machine is never deleted,
-//     so it can never be rediscovered as a fresh pending machine.
+//  4. (RejectMachine, not this method) a rejected machine is recorded as
+//     rejected, never deleted, so it can never be rediscovered as a fresh
+//     pending machine. Approving a rejected machine is allowed -- that is
+//     how a rejection is reversed -- so this method's own refusal list
+//     above has nothing to say about a REJECTED state; only APPROVED
+//     blocks it.
 func (s *Server) ApproveMachine(
 	ctx context.Context, req *connect.Request[pb.ApproveMachineRequest],
 ) (*connect.Response[pb.ApproveMachineResponse], error) {
@@ -119,7 +123,7 @@ func (s *Server) ApproveMachine(
 		return nil, err
 	}
 
-	if m.Spec.Approved {
+	if m.Spec.IsApproved() {
 		return nil, connect.NewError(connect.CodeFailedPrecondition,
 			fmt.Errorf("machine %q is already approved; approving it again would risk an unintended "+
 				"reconfiguration, which this API refuses -- edit its configuration instead", namespacedName(ref)))
@@ -136,10 +140,13 @@ func (s *Server) ApproveMachine(
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("role is required to approve a machine"))
 	}
 
+	// A rejected machine can be approved: this is how a rejection is undone. The only state ApproveMachine refuses to
+	// touch is
+	// already-approved, checked above.
 	m.Spec.Role = machineRoleToSpec(role)
 	m.Spec.NodeLabels = req.Msg.GetNodeLabels()
 	m.Spec.Hostname = req.Msg.GetHostname()
-	m.Spec.Approved = true
+	m.Spec.ApprovalState = ichorv1alpha1.MachineApprovalStateApproved
 
 	if err := s.Update(ctx, m); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("approving machine %q: %w", namespacedName(ref), err))
@@ -152,14 +159,17 @@ func (s *Server) ApproveMachine(
 	return connect.NewResponse(&pb.ApproveMachineResponse{Machine: machineToPB(m), Audit: audit}), nil
 }
 
-// RejectMachine records that a pending machine was turned away. It never
-// mutates or deletes the TalosMachine: deleting it would let the next
-// discovery pass recreate it as fresh and pending again, which would make the rejection meaningless the moment the
-// node's
-// own discovery loop runs again. Rejecting an already-approved machine is
+// RejectMachine records that a pending machine was turned away by setting
+// ApprovalState to rejected -- distinct from pending, so a rejected machine
+// stops showing up as a fresh approval request. It never
+// deletes the TalosMachine: deleting it would let the next discovery pass
+// recreate it as fresh and pending again,
+// which would make the rejection meaningless the moment the node's own
+// discovery loop runs again. Rejecting an already-approved machine is
 // refused -- "reject" has no meaning once a machine is under management;
 // removing one is a different, later operation (architecture.md "Nodes",
-// the removal sequence).
+// the removal sequence). Rejecting an already-rejected machine is allowed
+// and simply records the new reason.
 func (s *Server) RejectMachine(
 	ctx context.Context, req *connect.Request[pb.RejectMachineRequest],
 ) (*connect.Response[pb.RejectMachineResponse], error) {
@@ -170,9 +180,15 @@ func (s *Server) RejectMachine(
 		return nil, err
 	}
 
-	if m.Spec.Approved {
+	if m.Spec.IsApproved() {
 		return nil, connect.NewError(connect.CodeFailedPrecondition,
 			fmt.Errorf("machine %q is already approved; reject only applies to a pending machine", namespacedName(ref)))
+	}
+
+	m.Spec.ApprovalState = ichorv1alpha1.MachineApprovalStateRejected
+
+	if err := s.Update(ctx, m); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("rejecting machine %q: %w", namespacedName(ref), err))
 	}
 
 	audit := &pb.AuditRecord{

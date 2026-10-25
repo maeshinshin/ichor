@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
@@ -64,7 +65,7 @@ var _ = Describe("GetEffectiveConfig masking", func() {
 		bundle := newTestBundle()
 		secret := newTestSecret(bundle)
 		cluster := newTestCluster(secret.Name)
-		m := newTestMachine(cluster.Name, strongTestIdentity("uuid-effcfg"), roleControlPlane, true)
+		m := newTestMachine(cluster.Name, strongTestIdentity("uuid-effcfg"), roleControlPlane, ichorv1alpha1.MachineApprovalStateApproved)
 
 		s := &Server{Client: k8sClient}
 		resp, err := s.GetEffectiveConfig(ctx, connect.NewRequest(&pb.GetEffectiveConfigRequest{
@@ -129,7 +130,7 @@ var _ = Describe("GetEffectiveConfig masking", func() {
 		bundle := newTestBundle()
 		secret := newTestSecret(bundle)
 		cluster := newTestCluster(secret.Name)
-		m := newTestMachine(cluster.Name, strongTestIdentity("uuid-origin"), roleWorker, true)
+		m := newTestMachine(cluster.Name, strongTestIdentity("uuid-origin"), roleWorker, ichorv1alpha1.MachineApprovalStateApproved)
 
 		patch := newTestPatch(cluster.Name, layerCluster, nil, 0, extraArgsConfig(roleWorker))
 
@@ -166,7 +167,7 @@ var _ = Describe("GetEffectiveConfig masking", func() {
 		bundle := newTestBundle()
 		secret := newTestSecret(bundle)
 		cluster := newTestCluster(secret.Name)
-		m := newTestMachine(cluster.Name, strongTestIdentity("uuid-norole-eff"), "", false)
+		m := newTestMachine(cluster.Name, strongTestIdentity("uuid-norole-eff"), "", ichorv1alpha1.MachineApprovalStatePending)
 
 		s := &Server{Client: k8sClient}
 		_, err := s.GetEffectiveConfig(ctx, connect.NewRequest(&pb.GetEffectiveConfigRequest{

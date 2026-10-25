@@ -38,6 +38,24 @@ type TalosMachineIdentity struct {
 	MACAddresses []string `json:"macAddresses,omitempty"`
 }
 
+// Values for TalosMachineSpec.ApprovalState.
+const (
+	// MachineApprovalStatePending is the default: discovered, awaiting a
+	// human decision. The controller renders and applies nothing for it.
+	MachineApprovalStatePending = "pending"
+
+	// MachineApprovalStateApproved lets the controller render and apply
+	// configuration (TalosMachineReconciler's own gate, via IsApproved).
+	MachineApprovalStateApproved = "approved"
+
+	// MachineApprovalStateRejected means an operator explicitly turned this
+	// machine away. It is distinct from pending so a rejected machine does
+	// not keep showing up as a fresh approval request: ListMachines reports it, but it is never recreated
+	// by discovery (which keys on identity, not approval state) and never
+	// rendered. Re-approving a rejected machine is allowed and reverses it.
+	MachineApprovalStateRejected = "rejected"
+)
+
 // TalosMachineSpec defines the desired state of TalosMachine.
 type TalosMachineSpec struct {
 	// clusterRef names the TalosCluster this machine belongs to.
@@ -69,10 +87,25 @@ type TalosMachineSpec struct {
 	// +optional
 	Hostname string `json:"hostname,omitempty"`
 
-	// approved allows the controller to render and apply configuration to this machine.
-	// +kubebuilder:default=false
+	// approvalState records the human decision on this machine: pending (the
+	// default, awaiting a decision), approved (the controller renders and
+	// applies configuration), or rejected (an operator explicitly turned it
+	// away; re-approving reverses it). This replaces an
+	// earlier plain "approved" bool, which had no way to represent
+	// "rejected" without a second field claiming the same truth -- one
+	// field is the source of truth for this machine's approval status.
+	// +kubebuilder:validation:Enum=pending;approved;rejected
+	// +kubebuilder:default=pending
 	// +optional
-	Approved bool `json:"approved,omitempty"`
+	ApprovalState string `json:"approvalState,omitempty"`
+}
+
+// IsApproved reports whether the controller may render and apply
+// configuration to this machine -- TalosMachineReconciler's own gate, and
+// the one place that check should be made rather than comparing
+// ApprovalState's string value directly.
+func (s TalosMachineSpec) IsApproved() bool {
+	return s.ApprovalState == MachineApprovalStateApproved
 }
 
 // TalosMachineStatus defines the observed state of TalosMachine.
@@ -110,7 +143,7 @@ type TalosMachineStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:shortName=tm
 // +kubebuilder:printcolumn:name="Role",type=string,JSONPath=".spec.role"
-// +kubebuilder:printcolumn:name="Approved",type=boolean,JSONPath=".spec.approved"
+// +kubebuilder:printcolumn:name="Approval",type=string,JSONPath=".spec.approvalState"
 // +kubebuilder:printcolumn:name="Endpoint",type=string,JSONPath=".spec.endpoint"
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=".metadata.creationTimestamp"

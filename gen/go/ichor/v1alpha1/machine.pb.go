@@ -76,6 +76,66 @@ func (MachineRole) EnumDescriptor() ([]byte, []int) {
 	return file_ichor_v1alpha1_machine_proto_rawDescGZIP(), []int{0}
 }
 
+// MachineApprovalState mirrors TalosMachine.spec.approvalState:
+// the human decision on a machine, a tri-state a single bool cannot carry.
+// PENDING is default (discovered, awaiting a decision); APPROVED lets the
+// controller render and apply configuration; REJECTED means an operator
+// explicitly turned the machine away. REJECTED is distinct from PENDING so
+// a rejected machine does not keep showing up as a fresh approval request
+// in ListMachines. Re-approving a REJECTED machine is allowed and reverses
+// it -- ApproveMachine only refuses a machine that is already APPROVED.
+type MachineApprovalState int32
+
+const (
+	MachineApprovalState_MACHINE_APPROVAL_STATE_UNSPECIFIED MachineApprovalState = 0
+	MachineApprovalState_MACHINE_APPROVAL_STATE_PENDING     MachineApprovalState = 1
+	MachineApprovalState_MACHINE_APPROVAL_STATE_APPROVED    MachineApprovalState = 2
+	MachineApprovalState_MACHINE_APPROVAL_STATE_REJECTED    MachineApprovalState = 3
+)
+
+// Enum value maps for MachineApprovalState.
+var (
+	MachineApprovalState_name = map[int32]string{
+		0: "MACHINE_APPROVAL_STATE_UNSPECIFIED",
+		1: "MACHINE_APPROVAL_STATE_PENDING",
+		2: "MACHINE_APPROVAL_STATE_APPROVED",
+		3: "MACHINE_APPROVAL_STATE_REJECTED",
+	}
+	MachineApprovalState_value = map[string]int32{
+		"MACHINE_APPROVAL_STATE_UNSPECIFIED": 0,
+		"MACHINE_APPROVAL_STATE_PENDING":     1,
+		"MACHINE_APPROVAL_STATE_APPROVED":    2,
+		"MACHINE_APPROVAL_STATE_REJECTED":    3,
+	}
+)
+
+func (x MachineApprovalState) Enum() *MachineApprovalState {
+	p := new(MachineApprovalState)
+	*p = x
+	return p
+}
+
+func (x MachineApprovalState) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (MachineApprovalState) Descriptor() protoreflect.EnumDescriptor {
+	return file_ichor_v1alpha1_machine_proto_enumTypes[1].Descriptor()
+}
+
+func (MachineApprovalState) Type() protoreflect.EnumType {
+	return &file_ichor_v1alpha1_machine_proto_enumTypes[1]
+}
+
+func (x MachineApprovalState) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use MachineApprovalState.Descriptor instead.
+func (MachineApprovalState) EnumDescriptor() ([]byte, []int) {
+	return file_ichor_v1alpha1_machine_proto_rawDescGZIP(), []int{1}
+}
+
 type ListMachinesRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// cluster filters to one TalosCluster's machines; unset lists across all
@@ -543,12 +603,15 @@ type Machine struct {
 	Role       MachineRole       `protobuf:"varint,5,opt,name=role,proto3,enum=ichor.v1alpha1.MachineRole" json:"role,omitempty"`
 	NodeLabels map[string]string `protobuf:"bytes,6,rep,name=node_labels,json=nodeLabels,proto3" json:"node_labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	Hostname   string            `protobuf:"bytes,7,opt,name=hostname,proto3" json:"hostname,omitempty"`
-	Approved   bool              `protobuf:"varint,8,opt,name=approved,proto3" json:"approved,omitempty"`
 	Conditions []*Condition      `protobuf:"bytes,9,rep,name=conditions,proto3" json:"conditions,omitempty"`
 	// stage is Talos's own MachineStatus stage as reported text (e.g.
 	// "maintenance", "installing", "rebooting", "running"), shown as-is rather
 	// than re-encoded into a parallel enum.
-	Stage         string `protobuf:"bytes,10,opt,name=stage,proto3" json:"stage,omitempty"`
+	Stage string `protobuf:"bytes,10,opt,name=stage,proto3" json:"stage,omitempty"`
+	// approval_state replaces the removed bool "approved" (field 8): a bool
+	// cannot represent "rejected" without a second field claiming the same
+	// truth, which this design specifically avoids.
+	ApprovalState MachineApprovalState `protobuf:"varint,11,opt,name=approval_state,json=approvalState,proto3,enum=ichor.v1alpha1.MachineApprovalState" json:"approval_state,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -632,13 +695,6 @@ func (x *Machine) GetHostname() string {
 	return ""
 }
 
-func (x *Machine) GetApproved() bool {
-	if x != nil {
-		return x.Approved
-	}
-	return false
-}
-
 func (x *Machine) GetConditions() []*Condition {
 	if x != nil {
 		return x.Conditions
@@ -651,6 +707,13 @@ func (x *Machine) GetStage() string {
 		return x.Stage
 	}
 	return ""
+}
+
+func (x *Machine) GetApprovalState() MachineApprovalState {
+	if x != nil {
+		return x.ApprovalState
+	}
+	return MachineApprovalState_MACHINE_APPROVAL_STATE_UNSPECIFIED
 }
 
 var File_ichor_v1alpha1_machine_proto protoreflect.FileDescriptor
@@ -686,7 +749,7 @@ const file_ichor_v1alpha1_machine_proto_rawDesc = "" +
 	"\x0fMachineIdentity\x12\x12\n" +
 	"\x04uuid\x18\x01 \x01(\tR\x04uuid\x12\x16\n" +
 	"\x06serial\x18\x02 \x01(\tR\x06serial\x12#\n" +
-	"\rmac_addresses\x18\x03 \x03(\tR\fmacAddresses\"\x87\x04\n" +
+	"\rmac_addresses\x18\x03 \x03(\tR\fmacAddresses\"\xc8\x04\n" +
 	"\aMachine\x12+\n" +
 	"\x03ref\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\x03ref\x123\n" +
 	"\acluster\x18\x02 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x12;\n" +
@@ -695,20 +758,25 @@ const file_ichor_v1alpha1_machine_proto_rawDesc = "" +
 	"\x04role\x18\x05 \x01(\x0e2\x1b.ichor.v1alpha1.MachineRoleR\x04role\x12H\n" +
 	"\vnode_labels\x18\x06 \x03(\v2'.ichor.v1alpha1.Machine.NodeLabelsEntryR\n" +
 	"nodeLabels\x12\x1a\n" +
-	"\bhostname\x18\a \x01(\tR\bhostname\x12\x1a\n" +
-	"\bapproved\x18\b \x01(\bR\bapproved\x129\n" +
+	"\bhostname\x18\a \x01(\tR\bhostname\x129\n" +
 	"\n" +
 	"conditions\x18\t \x03(\v2\x19.ichor.v1alpha1.ConditionR\n" +
 	"conditions\x12\x14\n" +
 	"\x05stage\x18\n" +
-	" \x01(\tR\x05stage\x1a=\n" +
+	" \x01(\tR\x05stage\x12K\n" +
+	"\x0eapproval_state\x18\v \x01(\x0e2$.ichor.v1alpha1.MachineApprovalStateR\rapprovalState\x1a=\n" +
 	"\x0fNodeLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01*d\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\b\x10\tR\bapproved*d\n" +
 	"\vMachineRole\x12\x1c\n" +
 	"\x18MACHINE_ROLE_UNSPECIFIED\x10\x00\x12\x1e\n" +
 	"\x1aMACHINE_ROLE_CONTROL_PLANE\x10\x01\x12\x17\n" +
-	"\x13MACHINE_ROLE_WORKER\x10\x022\xff\x02\n" +
+	"\x13MACHINE_ROLE_WORKER\x10\x02*\xac\x01\n" +
+	"\x14MachineApprovalState\x12&\n" +
+	"\"MACHINE_APPROVAL_STATE_UNSPECIFIED\x10\x00\x12\"\n" +
+	"\x1eMACHINE_APPROVAL_STATE_PENDING\x10\x01\x12#\n" +
+	"\x1fMACHINE_APPROVAL_STATE_APPROVED\x10\x02\x12#\n" +
+	"\x1fMACHINE_APPROVAL_STATE_REJECTED\x10\x032\xff\x02\n" +
 	"\x0eMachineService\x12Y\n" +
 	"\fListMachines\x12#.ichor.v1alpha1.ListMachinesRequest\x1a$.ichor.v1alpha1.ListMachinesResponse\x12S\n" +
 	"\n" +
@@ -729,57 +797,59 @@ func file_ichor_v1alpha1_machine_proto_rawDescGZIP() []byte {
 	return file_ichor_v1alpha1_machine_proto_rawDescData
 }
 
-var file_ichor_v1alpha1_machine_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_ichor_v1alpha1_machine_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
 var file_ichor_v1alpha1_machine_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_ichor_v1alpha1_machine_proto_goTypes = []any{
 	(MachineRole)(0),               // 0: ichor.v1alpha1.MachineRole
-	(*ListMachinesRequest)(nil),    // 1: ichor.v1alpha1.ListMachinesRequest
-	(*ListMachinesResponse)(nil),   // 2: ichor.v1alpha1.ListMachinesResponse
-	(*GetMachineRequest)(nil),      // 3: ichor.v1alpha1.GetMachineRequest
-	(*GetMachineResponse)(nil),     // 4: ichor.v1alpha1.GetMachineResponse
-	(*ApproveMachineRequest)(nil),  // 5: ichor.v1alpha1.ApproveMachineRequest
-	(*ApproveMachineResponse)(nil), // 6: ichor.v1alpha1.ApproveMachineResponse
-	(*RejectMachineRequest)(nil),   // 7: ichor.v1alpha1.RejectMachineRequest
-	(*RejectMachineResponse)(nil),  // 8: ichor.v1alpha1.RejectMachineResponse
-	(*MachineIdentity)(nil),        // 9: ichor.v1alpha1.MachineIdentity
-	(*Machine)(nil),                // 10: ichor.v1alpha1.Machine
-	nil,                            // 11: ichor.v1alpha1.ApproveMachineRequest.NodeLabelsEntry
-	nil,                            // 12: ichor.v1alpha1.Machine.NodeLabelsEntry
-	(*ObjectRef)(nil),              // 13: ichor.v1alpha1.ObjectRef
-	(*AuditRecord)(nil),            // 14: ichor.v1alpha1.AuditRecord
-	(*Condition)(nil),              // 15: ichor.v1alpha1.Condition
+	(MachineApprovalState)(0),      // 1: ichor.v1alpha1.MachineApprovalState
+	(*ListMachinesRequest)(nil),    // 2: ichor.v1alpha1.ListMachinesRequest
+	(*ListMachinesResponse)(nil),   // 3: ichor.v1alpha1.ListMachinesResponse
+	(*GetMachineRequest)(nil),      // 4: ichor.v1alpha1.GetMachineRequest
+	(*GetMachineResponse)(nil),     // 5: ichor.v1alpha1.GetMachineResponse
+	(*ApproveMachineRequest)(nil),  // 6: ichor.v1alpha1.ApproveMachineRequest
+	(*ApproveMachineResponse)(nil), // 7: ichor.v1alpha1.ApproveMachineResponse
+	(*RejectMachineRequest)(nil),   // 8: ichor.v1alpha1.RejectMachineRequest
+	(*RejectMachineResponse)(nil),  // 9: ichor.v1alpha1.RejectMachineResponse
+	(*MachineIdentity)(nil),        // 10: ichor.v1alpha1.MachineIdentity
+	(*Machine)(nil),                // 11: ichor.v1alpha1.Machine
+	nil,                            // 12: ichor.v1alpha1.ApproveMachineRequest.NodeLabelsEntry
+	nil,                            // 13: ichor.v1alpha1.Machine.NodeLabelsEntry
+	(*ObjectRef)(nil),              // 14: ichor.v1alpha1.ObjectRef
+	(*AuditRecord)(nil),            // 15: ichor.v1alpha1.AuditRecord
+	(*Condition)(nil),              // 16: ichor.v1alpha1.Condition
 }
 var file_ichor_v1alpha1_machine_proto_depIdxs = []int32{
-	13, // 0: ichor.v1alpha1.ListMachinesRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
-	10, // 1: ichor.v1alpha1.ListMachinesResponse.machines:type_name -> ichor.v1alpha1.Machine
-	13, // 2: ichor.v1alpha1.GetMachineRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
-	10, // 3: ichor.v1alpha1.GetMachineResponse.machine:type_name -> ichor.v1alpha1.Machine
-	13, // 4: ichor.v1alpha1.ApproveMachineRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
+	14, // 0: ichor.v1alpha1.ListMachinesRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	11, // 1: ichor.v1alpha1.ListMachinesResponse.machines:type_name -> ichor.v1alpha1.Machine
+	14, // 2: ichor.v1alpha1.GetMachineRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
+	11, // 3: ichor.v1alpha1.GetMachineResponse.machine:type_name -> ichor.v1alpha1.Machine
+	14, // 4: ichor.v1alpha1.ApproveMachineRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
 	0,  // 5: ichor.v1alpha1.ApproveMachineRequest.role:type_name -> ichor.v1alpha1.MachineRole
-	11, // 6: ichor.v1alpha1.ApproveMachineRequest.node_labels:type_name -> ichor.v1alpha1.ApproveMachineRequest.NodeLabelsEntry
-	10, // 7: ichor.v1alpha1.ApproveMachineResponse.machine:type_name -> ichor.v1alpha1.Machine
-	14, // 8: ichor.v1alpha1.ApproveMachineResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
-	13, // 9: ichor.v1alpha1.RejectMachineRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
-	14, // 10: ichor.v1alpha1.RejectMachineResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
-	13, // 11: ichor.v1alpha1.Machine.ref:type_name -> ichor.v1alpha1.ObjectRef
-	13, // 12: ichor.v1alpha1.Machine.cluster:type_name -> ichor.v1alpha1.ObjectRef
-	9,  // 13: ichor.v1alpha1.Machine.identity:type_name -> ichor.v1alpha1.MachineIdentity
+	12, // 6: ichor.v1alpha1.ApproveMachineRequest.node_labels:type_name -> ichor.v1alpha1.ApproveMachineRequest.NodeLabelsEntry
+	11, // 7: ichor.v1alpha1.ApproveMachineResponse.machine:type_name -> ichor.v1alpha1.Machine
+	15, // 8: ichor.v1alpha1.ApproveMachineResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
+	14, // 9: ichor.v1alpha1.RejectMachineRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
+	15, // 10: ichor.v1alpha1.RejectMachineResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
+	14, // 11: ichor.v1alpha1.Machine.ref:type_name -> ichor.v1alpha1.ObjectRef
+	14, // 12: ichor.v1alpha1.Machine.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	10, // 13: ichor.v1alpha1.Machine.identity:type_name -> ichor.v1alpha1.MachineIdentity
 	0,  // 14: ichor.v1alpha1.Machine.role:type_name -> ichor.v1alpha1.MachineRole
-	12, // 15: ichor.v1alpha1.Machine.node_labels:type_name -> ichor.v1alpha1.Machine.NodeLabelsEntry
-	15, // 16: ichor.v1alpha1.Machine.conditions:type_name -> ichor.v1alpha1.Condition
-	1,  // 17: ichor.v1alpha1.MachineService.ListMachines:input_type -> ichor.v1alpha1.ListMachinesRequest
-	3,  // 18: ichor.v1alpha1.MachineService.GetMachine:input_type -> ichor.v1alpha1.GetMachineRequest
-	5,  // 19: ichor.v1alpha1.MachineService.ApproveMachine:input_type -> ichor.v1alpha1.ApproveMachineRequest
-	7,  // 20: ichor.v1alpha1.MachineService.RejectMachine:input_type -> ichor.v1alpha1.RejectMachineRequest
-	2,  // 21: ichor.v1alpha1.MachineService.ListMachines:output_type -> ichor.v1alpha1.ListMachinesResponse
-	4,  // 22: ichor.v1alpha1.MachineService.GetMachine:output_type -> ichor.v1alpha1.GetMachineResponse
-	6,  // 23: ichor.v1alpha1.MachineService.ApproveMachine:output_type -> ichor.v1alpha1.ApproveMachineResponse
-	8,  // 24: ichor.v1alpha1.MachineService.RejectMachine:output_type -> ichor.v1alpha1.RejectMachineResponse
-	21, // [21:25] is the sub-list for method output_type
-	17, // [17:21] is the sub-list for method input_type
-	17, // [17:17] is the sub-list for extension type_name
-	17, // [17:17] is the sub-list for extension extendee
-	0,  // [0:17] is the sub-list for field type_name
+	13, // 15: ichor.v1alpha1.Machine.node_labels:type_name -> ichor.v1alpha1.Machine.NodeLabelsEntry
+	16, // 16: ichor.v1alpha1.Machine.conditions:type_name -> ichor.v1alpha1.Condition
+	1,  // 17: ichor.v1alpha1.Machine.approval_state:type_name -> ichor.v1alpha1.MachineApprovalState
+	2,  // 18: ichor.v1alpha1.MachineService.ListMachines:input_type -> ichor.v1alpha1.ListMachinesRequest
+	4,  // 19: ichor.v1alpha1.MachineService.GetMachine:input_type -> ichor.v1alpha1.GetMachineRequest
+	6,  // 20: ichor.v1alpha1.MachineService.ApproveMachine:input_type -> ichor.v1alpha1.ApproveMachineRequest
+	8,  // 21: ichor.v1alpha1.MachineService.RejectMachine:input_type -> ichor.v1alpha1.RejectMachineRequest
+	3,  // 22: ichor.v1alpha1.MachineService.ListMachines:output_type -> ichor.v1alpha1.ListMachinesResponse
+	5,  // 23: ichor.v1alpha1.MachineService.GetMachine:output_type -> ichor.v1alpha1.GetMachineResponse
+	7,  // 24: ichor.v1alpha1.MachineService.ApproveMachine:output_type -> ichor.v1alpha1.ApproveMachineResponse
+	9,  // 25: ichor.v1alpha1.MachineService.RejectMachine:output_type -> ichor.v1alpha1.RejectMachineResponse
+	22, // [22:26] is the sub-list for method output_type
+	18, // [18:22] is the sub-list for method input_type
+	18, // [18:18] is the sub-list for extension type_name
+	18, // [18:18] is the sub-list for extension extendee
+	0,  // [0:18] is the sub-list for field type_name
 }
 
 func init() { file_ichor_v1alpha1_machine_proto_init() }
@@ -793,7 +863,7 @@ func file_ichor_v1alpha1_machine_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_ichor_v1alpha1_machine_proto_rawDesc), len(file_ichor_v1alpha1_machine_proto_rawDesc)),
-			NumEnums:      1,
+			NumEnums:      2,
 			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   1,

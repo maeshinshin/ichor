@@ -1,5 +1,14 @@
 resources:
 - monitor.yaml
+# ichor-ui's own ServiceMonitor and the alert rules both ship
+# bundled with the controller's own ServiceMonitor above, behind the one [PROMETHEUS]
+# toggle in ../default/kustomization.yaml -- dist/chart/templates splits these into
+# separate values.yaml flags (prometheus.enabled, prometheus.rules.enabled) because a
+# Helm user turning on monitoring may still not want a PrometheusRule installed (e.g.
+# no prometheus-operator PrometheusRule CRD yet); kustomize's coarser one-toggle
+# convention here doesn't need that granularity to stay useful for local dev.
+- ui-monitor.yaml
+- alert-rules.yaml
 
 # [PROMETHEUS-WITH-CERTS] The following patch configures the ServiceMonitor in ../prometheus to
 # securely reference the certificate cert-controller's second in-process rotator provisions -- not an external certificate manager; Ichor ships no certificate-issuing

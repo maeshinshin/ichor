@@ -1,0 +1,29 @@
+{{- if and .Values.prometheus.enabled .Values.ichorUI.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/name: {{ include "ichor.name" . }}
+    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    control-plane: ui-backend
+  # Fixed name, not release-templated: matches ichor-ui-service's own fixed name
+  # (templates/ui/ui-service.yaml's own comment).
+  name: ichor-ui-metrics-monitor
+  namespace: {{ .Release.Namespace }}
+spec:
+  endpoints:
+  - path: /metrics
+    port: http
+    # ichor-ui serves /metrics on the same plain-HTTP port and mux as its Connect API
+    # (cmd/ichor-ui/main.go): the UI backend is reached only in-cluster today
+    # (architecture.md "Trust"), the same trust boundary this scrape already crosses,
+    # so there is no second TLS story to configure here the way the controller's
+    # metricsCert.enabled one exists for.
+    scheme: http
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "ichor.name" . }}
+      control-plane: ui-backend
+{{- end }}

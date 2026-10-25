@@ -24,6 +24,7 @@ package chart
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -52,6 +53,7 @@ const ichorUIConfigRolePath = "../../config/rbac/ichor-ui/role.yaml"
 const (
 	kindService                        = "Service"
 	kindSecret                         = "Secret"
+	kindConfigMap                      = "ConfigMap"
 	kindServiceAccount                 = "ServiceAccount"
 	kindRole                           = "Role"
 	kindRoleBinding                    = "RoleBinding"
@@ -105,7 +107,92 @@ func TestChartInvariants(t *testing.T) {
 			checkKubeProxySwitchPolicy(t, release, docs)
 			checkUIBackendRBACIsSeparate(t, release, docs)
 			checkUIBackendRBACMatchesConfig(t, release, docs)
+			checkMonitoringOptionsOffByDefault(t, release, docs)
 		})
+	}
+}
+
+// ichorUIMetricsMonitorName is templates/prometheus/ichor-ui-metrics-monitor.yaml's
+// fixed name, mirroring ichorUIServiceAccountName's own fixed-not-templated
+// reasoning: it matches ichor-ui-service's own fixed name.
+const ichorUIMetricsMonitorName = "ichor-ui-metrics-monitor"
+
+// grafanaDashboardConfigMapName is templates/grafana/dashboard-configmap.yaml's fixed name.
+const grafanaDashboardConfigMapName = "ichor-grafana-dashboard"
+
+// checkMonitoringOptionsOffByDefault guards the "off by default" half
+// chart options -- prometheus.enabled, prometheus.rules.enabled and
+// grafana.dashboards.enabled must each render nothing under the suite's default
+// render, the same contract TestMetricsCertEnabled's own comment documents for
+// metricsCert.enabled.
+func checkMonitoringOptionsOffByDefault(t *testing.T, release string, docs []map[string]any) {
+	t.Helper()
+
+	for _, kind := range []string{"ServiceMonitor", "PrometheusRule"} {
+		if got := findAll(docs, kind); len(got) != 0 {
+			t.Errorf("helm template %s .: expected no %s by default (prometheus.enabled and "+
+				"prometheus.rules.enabled both default false); got %d",
+				release, kind, len(got))
+		}
+	}
+	if got := find(docs, kindConfigMap, grafanaDashboardConfigMapName); got != nil {
+		t.Errorf("helm template %s .: expected no ConfigMap named %q by default "+
+			"(grafana.dashboards.enabled defaults false)", release, grafanaDashboardConfigMapName)
+	}
+}
+
+// TestMonitoringOptionsEnabled guards the "actually renders, and renders something
+// usable" half's chart options: ichor-ui's own ServiceMonitor, the
+// PrometheusRule's two alerts, and the Grafana dashboard ConfigMap's JSON payload.
+func TestMonitoringOptionsEnabled(t *testing.T) {
+	docs := renderChartWithValues(t, "ichor",
+		"prometheus.enabled=true", "prometheus.rules.enabled=true", "grafana.dashboards.enabled=true")
+
+	if find(docs, "ServiceMonitor", ichorUIMetricsMonitorName) == nil {
+		t.Errorf("helm template ichor . --set prometheus.enabled=true: expected a ServiceMonitor "+
+			"named %q for ichor-ui", ichorUIMetricsMonitorName)
+	}
+
+	const ruleName = "ichor-alert-rules"
+	rule := find(docs, "PrometheusRule", ruleName)
+	if rule == nil {
+		t.Fatalf("helm template ichor . --set prometheus.rules.enabled=true: expected a "+
+			"PrometheusRule named %q", ruleName)
+	}
+	wantAlerts := map[string]bool{"IchorControllerDown": false, "IchorReconcileErrorsPersisting": false}
+	spec, _ := rule["spec"].(map[string]any)
+	groups, _ := spec["groups"].([]any)
+	for _, g := range groups {
+		gm, _ := g.(map[string]any)
+		rules, _ := gm["rules"].([]any)
+		for _, r := range rules {
+			rm, _ := r.(map[string]any)
+			if name, _ := rm["alert"].(string); name != "" {
+				wantAlerts[name] = true
+			}
+		}
+	}
+	for name, found := range wantAlerts {
+		if !found {
+			t.Errorf("PrometheusRule %q: expected an alert named %q", ruleName, name)
+		}
+	}
+
+	cm := find(docs, kindConfigMap, grafanaDashboardConfigMapName)
+	if cm == nil {
+		t.Fatalf("helm template ichor . --set grafana.dashboards.enabled=true: expected a ConfigMap "+
+			"named %q", grafanaDashboardConfigMapName)
+	}
+	data, _ := cm["data"].(map[string]any)
+	raw, _ := data["ichor-overview.json"].(string)
+	var dashboard struct {
+		Panels []any `json:"panels"`
+	}
+	if err := json.Unmarshal([]byte(raw), &dashboard); err != nil {
+		t.Fatalf("ConfigMap %q's ichor-overview.json is not valid JSON: %v", grafanaDashboardConfigMapName, err)
+	}
+	if len(dashboard.Panels) == 0 {
+		t.Errorf("ConfigMap %q's ichor-overview.json has no panels", grafanaDashboardConfigMapName)
 	}
 }
 

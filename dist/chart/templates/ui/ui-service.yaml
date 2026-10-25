@@ -14,7 +14,10 @@ metadata:
   namespace: {{ .Release.Namespace }}
 spec:
   ports:
-  - port: {{ .Values.ichorUI.port }}
+  # Named so prometheus/ichor-ui-metrics-monitor.yaml's ServiceMonitor can target it
+  # by name, the same way metrics/controller-manager-metrics-service.yaml's port is.
+  - name: http
+    port: {{ .Values.ichorUI.port }}
     protocol: TCP
     targetPort: {{ .Values.ichorUI.port }}
   selector:

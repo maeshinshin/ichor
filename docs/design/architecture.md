@@ -845,7 +845,6 @@ resumption works. A short set runs per PR, the full set nightly.
 
 ## Open questions
 
-- Exact Longhorn node label/annotation and evacuation field names per version.
 - The Cilium and Calico values that avoid perpetual OutOfSync under Argo CD.
 
 ## Alternatives considered

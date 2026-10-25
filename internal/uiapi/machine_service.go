@@ -24,6 +24,7 @@ import (
 	"connectrpc.com/connect"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
@@ -35,6 +36,16 @@ import (
 // comes later so that RBAC and audit apply per user") -- so "who" is
 // honestly the backend's own identity, not a person, until that lands.
 const actor = "ichor-ui"
+
+// strictFieldValidation is passed to every write this package makes
+// (architecture.md, "Typed configuration": no admission webhook rejects an
+// unknown field; instead "Ichor's own clients ask for strict field
+// validation ... so the CLI and the UI backend report the field loudly").
+// Without it, the API server's default behavior is to silently prune an
+// unknown or duplicate field -- the object is still persisted, just
+// without that field, logged only as a server-side warning the caller
+// never sees. Strict turns that into a rejected write instead.
+var strictFieldValidation = client.FieldValidation(metav1.FieldValidationStrict)
 
 // ListMachines returns every TalosMachine the backend can list, pending
 // machines included unconditionally (machine.proto's own doc comment),
@@ -154,7 +165,7 @@ func (s *Server) ApproveMachine(
 		Actor: actor, Reason: req.Msg.GetReason(), At: metav1.NewTime(now),
 	}
 
-	if err := s.Update(ctx, m); err != nil {
+	if err := s.Update(ctx, m, strictFieldValidation); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("approving machine %q: %w", namespacedName(ref), err))
 	}
 
@@ -199,7 +210,7 @@ func (s *Server) RejectMachine(
 		Actor: actor, Reason: req.Msg.GetReason(), At: metav1.NewTime(now),
 	}
 
-	if err := s.Update(ctx, m); err != nil {
+	if err := s.Update(ctx, m, strictFieldValidation); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("rejecting machine %q: %w", namespacedName(ref), err))
 	}
 

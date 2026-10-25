@@ -285,6 +285,13 @@ func main() {
 		setupLog.Error(err, "Failed to create controller", "controller", "cnihandover")
 		os.Exit(1)
 	}
+	if err := (&controller.TalosOperationReconciler{
+		Client:    mgr.GetClient(),
+		APIReader: mgr.GetAPIReader(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "Failed to create controller", "controller", "talosoperation")
+		os.Exit(1)
+	}
 	// +kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

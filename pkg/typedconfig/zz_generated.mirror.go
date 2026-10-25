@@ -575,6 +575,13 @@ type DiskPartition struct {
 	DiskMountPoint string `json:"mountpoint,omitempty"`
 }
 
+// DiskSelector selects a disk for the volume.
+type DiskSelector struct {
+	// The Common Expression Language (CEL) expression to match the disk.
+	// +optional
+	Match string `json:"match,omitempty"`
+}
+
 // EncryptionConfig represents partition encryption settings.
 type EncryptionConfig struct {
 	// Encryption provider to use for the encryption.
@@ -600,9 +607,6 @@ type EncryptionConfig struct {
 
 // EncryptionKey represents configuration for disk encryption key.
 type EncryptionKey struct {
-	// Key which value is stored in the configuration file.
-	// +optional
-	KeyStatic *EncryptionKeyStatic `json:"static,omitempty"`
 	// Deterministically generated key from the node UUID and PartitionLabel.
 	// +optional
 	KeyNodeID *EncryptionKeyNodeID `json:"nodeID,omitempty"`
@@ -657,6 +661,43 @@ type EncryptionKeyTPM struct {
 	// after the initial enrollment will make the key unusable.
 	// +optional
 	TPMCheckSecurebootStatusOnEnroll *bool `json:"checkSecurebootStatusOnEnroll,omitempty"`
+}
+
+// EncryptionKeyTPMOptions represents the options for TPM-based key protection.
+type EncryptionKeyTPMOptions struct {
+	// List of PCRs to bind the key to.
+	// If not set, defaults to PCR 7, can be disabled by passing an empty list.
+	// +optional
+	PCRs []int `json:"pcrs,omitempty"`
+}
+
+// EncryptionSpec represents volume encryption settings.
+type EncryptionSpec struct {
+	// Encryption provider to use for the encryption.
+	// +required
+	EncryptionProvider string `json:"provider"`
+	// Defines the encryption keys generation and storage method.
+	// +required
+	EncryptionKeys []*VolumeEncryptionKey `json:"keys"`
+	// Cipher to use for the encryption.
+	// Depends on the encryption provider.
+	// +optional
+	EncryptionCipher string `json:"cipher,omitempty"`
+	// Defines the encryption key length.
+	// +optional
+	EncryptionKeySize uint `json:"keySize,omitempty"`
+	// Defines the encryption sector size.
+	// +optional
+	EncryptionBlockSize uint64 `json:"blockSize,omitempty"`
+	// Additional --perf parameters for the LUKS2 encryption.
+	// +optional
+	EncryptionPerfOptions []string `json:"options,omitempty"`
+	// Allow TRIM/discard requests to be passed through to the underlying device
+	// when the encrypted volume is opened.
+	//
+	// Defaults to false.
+	// +optional
+	EncryptionAllowDiscards *bool `json:"allowDiscards,omitempty"`
 }
 
 // EtcdConfig represents the etcd configuration options.
@@ -785,6 +826,21 @@ type FeaturesConfig struct {
 	// If unset, defaults to 'v1'.
 	// +optional
 	FeatureNodeAddressSortAlgorithm string `json:"nodeAddressSortAlgorithm,omitempty"`
+}
+
+// FilesystemSpec configures the filesystem for the volume.
+type FilesystemSpec struct {
+	// Filesystem type. Default is `xfs`.
+	// +optional
+	FilesystemType string `json:"type,omitempty"`
+	// Enables project quota support, valid only for 'xfs' filesystem.
+	//
+	// Note: changing this value might require a full remount of the filesystem.
+	// +optional
+	ProjectQuotaSupportConfig *bool `json:"projectQuotaSupport,omitempty"`
+	// XFS-specific filesystem options, valid only for 'xfs' filesystem.
+	// +optional
+	XFSSpec *XFSSpec `json:"xfs,omitempty"`
 }
 
 // FlannelCNIConfig represents the Flannel CNI configuration options. docgen:nodoc
@@ -1196,6 +1252,23 @@ type MachineSeccompProfile struct {
 	MachineSeccompProfileValue *SeccompProfile `json:"value"`
 }
 
+// MountSpec describes how the volume is mounted.
+type MountSpec struct {
+	// Enable secure mount options (nosuid, nodev).
+	//
+	// For dedicated ETCD and LOG volumes, this also enables noexec.
+	//
+	// Defaults to true for better security.
+	// Supported for EPHEMERAL and dedicated ETCD, CRI, KUBELET and LOG volumes.
+	// +optional
+	MountSecure *bool `json:"secure,omitempty"`
+	// If true, disable file access time updates.
+	//
+	// Supported only for EPHEMERAL volume.
+	// +optional
+	MountDisableAccessTime *bool `json:"disableAccessTime,omitempty"`
+}
+
 // NetworkConfig represents the machine's networking config values. Deprecated: all fields in NetworkConfig are deprecated, use corresponding multi-doc config types instead.
 type NetworkConfig struct {
 	// docgen:nodoc Deprecated: use `HostnameConfig` instead.
@@ -1296,6 +1369,27 @@ type PEMEncodedCertificateAndKey struct {
 	Key []byte `json:"key"`
 }
 
+// ProvisioningSpec describes how the volume is provisioned.
+type ProvisioningSpec struct {
+	// The disk selector expression.
+	// +optional
+	DiskSelectorSpec *DiskSelector `json:"diskSelector,omitempty"`
+	// Should the volume grow to the size of the disk (if possible).
+	// +optional
+	ProvisioningGrow *bool `json:"grow,omitempty"`
+	// The minimum size of the volume.
+	//
+	// Size is specified in bytes, but can be expressed in human readable format, e.g. 100MB.
+	// +optional
+	ProvisioningMinSize string `json:"minSize,omitempty"`
+	// The maximum size of the volume, if not specified the volume can grow to the size of the
+	// disk.
+	//
+	// Size is specified in bytes or in percents. It can be expressed in human readable format, e.g. 100MB.
+	// +optional
+	ProvisioningMaxSize string `json:"maxSize,omitempty"`
+}
+
 // ProxyConfig represents the kube proxy configuration options. Deprecated: use KubeProxyConfig instead. docgen:nodoc
 type ProxyConfig struct {
 	// Disable kube-proxy deployment on cluster bootstrap.
@@ -1311,6 +1405,25 @@ type ProxyConfig struct {
 	// Extra arguments to supply to kube-proxy.
 	// +optional
 	ExtraArgsConfig map[string][]string `json:"extraArgs,omitempty"`
+}
+
+// Raw volumes allow to create partitions without formatting them.
+// If you want to use local storage, user volumes is a better choice,
+// raw volumes are intended to be used with CSI provisioners.
+// The partition label is automatically generated as `r-<name>`.
+type RawVolumeConfigV1Alpha1 struct {
+	// Name of the volume.
+	//
+	// Name might be between 1 and 34 characters long and can only contain:
+	// lowercase and uppercase ASCII letters, digits, and hyphens.
+	// +required
+	MetaName string `json:"name"`
+	// The provisioning describes how the volume is provisioned.
+	// +optional
+	ProvisioningSpec *ProvisioningSpec `json:"provisioning,omitempty"`
+	// The encryption describes how the volume is encrypted.
+	// +optional
+	EncryptionSpec *EncryptionSpec `json:"encryption,omitempty"`
 }
 
 // RegistriesConfig represents the image pull options. docgen:nodoc
@@ -1477,6 +1590,18 @@ type SchedulerConfig struct {
 	ResourcesConfig *ResourcesConfig `json:"resources,omitempty"`
 }
 
+// ScrubConfig describes per-volume filesystem scrub configuration. It overrides the global FilesystemScrubConfig for the volume.
+type ScrubConfig struct {
+	// Enable or disable scrubbing for this volume.
+	//
+	// If not set, scrubbing is enabled by default when scrub section is present.
+	// +optional
+	ScrubEnabled *bool `json:"enabled,omitempty"`
+	// The interval at which the volume is scrubbed, overriding the global scrub interval.
+	// +optional
+	ScrubInterval string `json:"interval,omitempty"`
+}
+
 // SysctlConfigV1Alpha1 configures Linux kernel sysctl values.
 type SysctlConfigV1Alpha1 struct {
 	// Used to configure the machine's sysctls (kernel parameters under `/proc/sys`).
@@ -1494,6 +1619,13 @@ type SystemDiskEncryptionConfig struct {
 	// Ephemeral partition encryption.
 	// +optional
 	EphemeralPartition *EncryptionConfig `json:"ephemeral,omitempty"`
+}
+
+// SystemVolumeFilesystemSpec describes how the system volume is formatted. The filesystem type is fixed for system volumes, and project quota support is configured via machine features, so only the filesystem-specific tunables are exposed here.
+type SystemVolumeFilesystemSpec struct {
+	// XFS-specific filesystem options.
+	// +optional
+	XFSSpec *XFSSpec `json:"xfs,omitempty"`
 }
 
 // TimeConfig represents the options for configuring time on a machine.
@@ -1516,11 +1648,68 @@ type TimeConfig struct {
 	TimeBootTimeout string `json:"bootTimeout,omitempty"`
 }
 
+// TrimConfig describes per-volume filesystem trim (fstrim) configuration. It overrides the global FilesystemTrimConfig for the volume.
+type TrimConfig struct {
+	// Enable or disable trimming for this volume.
+	//
+	// If not set, trimming is enabled when the global FilesystemTrimConfig is present.
+	// +optional
+	TrimEnabled *bool `json:"enabled,omitempty"`
+	// The interval at which the volume is trimmed, overriding the global trim interval.
+	// +optional
+	TrimInterval string `json:"interval,omitempty"`
+}
+
 // UdevConfig describes how the udev system should be configured. docgen:nodoc Deprecated: Use `UdevRulesConfig` instead.
 type UdevConfig struct {
 	// List of udev rules to apply to the udev system
 	// +optional
 	UdevRules []string `json:"rules,omitempty"`
+}
+
+// UserMountSpec describes how the volume is mounted.
+type UserMountSpec struct {
+	// If true, disable file access time updates.
+	// +optional
+	MountDisableAccessTime *bool `json:"disableAccessTime,omitempty"`
+	// Enable secure mount options (nosuid, nodev, noexec).
+	//
+	// Defaults to true for better security.
+	// +optional
+	MountSecure *bool `json:"secure,omitempty"`
+}
+
+// User volume is automatically allocated as a partition on the specified disk
+// and mounted under `/var/mnt/<name>`.
+// The partition label is automatically generated as `u-<name>`.
+type UserVolumeConfigV1Alpha1 struct {
+	// Name of the volume.
+	//
+	// Name might be between 1 and 34 characters long and can only contain:
+	// lowercase and uppercase ASCII letters, digits, and hyphens.
+	// +required
+	MetaName string `json:"name"`
+	// Volume type.
+	// +optional
+	VolumeType *string `json:"volumeType,omitempty"`
+	// The provisioning describes how the volume is provisioned.
+	// +optional
+	ProvisioningSpec *ProvisioningSpec `json:"provisioning,omitempty"`
+	// The filesystem describes how the volume is formatted.
+	// +optional
+	FilesystemSpec *FilesystemSpec `json:"filesystem,omitempty"`
+	// The encryption describes how the volume is encrypted.
+	// +optional
+	EncryptionSpec *EncryptionSpec `json:"encryption,omitempty"`
+	// The mount describes additional mount options.
+	// +optional
+	MountSpec *UserMountSpec `json:"mount,omitempty"`
+	// The trim describes the per-volume filesystem trim (fstrim) configuration.
+	// +optional
+	TrimSpec *TrimConfig `json:"trim,omitempty"`
+	// The scrub describes the per-volume filesystem scrub configuration.
+	// +optional
+	ScrubSpec *ScrubConfig `json:"scrub,omitempty"`
 }
 
 // VIPEquinixMetalConfig contains settings for Equinix Metal VIP management. docgen:nodoc
@@ -1566,6 +1755,71 @@ type Vlan struct {
 	VlanDHCPOptions *DHCPOptions `json:"dhcpOptions,omitempty"`
 }
 
+// Note: at the moment, only `STATE`, `EPHEMERAL`, `IMAGECACHE`, `ETCD`, `CRI`, `KUBELET` and `LOG`
+// system volumes are supported. The `ETCD`, `CRI`, `KUBELET` and `LOG` volumes default to a
+// directory under `EPHEMERAL`, and can be placed on a dedicated partition by specifying
+// `provisioning`. The backing of these volumes (directory vs. dedicated partition) can only be
+// chosen at cluster creation time: changing it on an already-provisioned node is not supported.
+type VolumeConfigV1Alpha1 struct {
+	// Name of the volume.
+	// +required
+	MetaName string `json:"name"`
+	// The provisioning describes how the volume is provisioned.
+	// +optional
+	ProvisioningSpec *ProvisioningSpec `json:"provisioning,omitempty"`
+	// The filesystem describes how the volume is formatted.
+	//
+	// Note: this only takes effect at the time the volume is formatted.
+	// +optional
+	FilesystemSpec *SystemVolumeFilesystemSpec `json:"filesystem,omitempty"`
+	// The encryption describes how the volume is encrypted.
+	// +optional
+	EncryptionSpec *EncryptionSpec `json:"encryption,omitempty"`
+	// The mount describes additional mount options.
+	// +optional
+	MountSpec *MountSpec `json:"mount,omitempty"`
+	// The trim describes the per-volume filesystem trim (fstrim) configuration.
+	// +optional
+	TrimSpec *TrimConfig `json:"trim,omitempty"`
+	// The scrub describes the per-volume filesystem scrub configuration.
+	// +optional
+	ScrubSpec *ScrubConfig `json:"scrub,omitempty"`
+}
+
+// EncryptionKey represents configuration for disk encryption key.
+type VolumeEncryptionKey struct {
+	// +required
+	KeySlot int `json:"slot"`
+	// +optional
+	KeyStatic *EncryptionKeyStatic `json:"static,omitempty"`
+	// +optional
+	KeyNodeID *VolumeEncryptionKeyNodeID `json:"nodeID,omitempty"`
+	// +optional
+	KeyKMS *VolumeEncryptionKeyKMS `json:"kms,omitempty"`
+	// +optional
+	KeyTPM *VolumeEncryptionKeyTPM `json:"tpm,omitempty"`
+	// +optional
+	KeyLockToSTATE *bool `json:"lockToState,omitempty"`
+}
+
+// EncryptionKeyKMS represents a key that is generated and then sealed/unsealed by the KMS server.
+type VolumeEncryptionKeyKMS struct {
+	// +required
+	KMSEndpoint string `json:"endpoint"`
+}
+
+// EncryptionKeyNodeID represents deterministically generated key from the node UUID and PartitionLabel.
+type VolumeEncryptionKeyNodeID struct {
+}
+
+// EncryptionKeyTPM represents a key that is generated and then sealed/unsealed by the TPM.
+type VolumeEncryptionKeyTPM struct {
+	// +optional
+	TPMOptions *EncryptionKeyTPMOptions `json:"options,omitempty"`
+	// +optional
+	TPMCheckSecurebootStatusOnEnroll *bool `json:"checkSecurebootStatusOnEnroll,omitempty"`
+}
+
 // VolumeMountConfig struct describes extra volume mount for the static pods.
 type VolumeMountConfig struct {
 	// Path on the host.
@@ -1577,4 +1831,22 @@ type VolumeMountConfig struct {
 	// Mount the volume read only.
 	// +optional
 	VolumeReadOnly bool `json:"readonly,omitempty"`
+}
+
+// XFSSpec configures XFS-specific filesystem options.
+type XFSSpec struct {
+	// The minimum size of an XFS allocation group.
+	//
+	// On non-rotational devices `mkfs.xfs` sizes the allocation group count to the number of
+	// CPUs, which on machines with many cores and a modest disk yields hundreds of tiny
+	// allocation groups. Talos bounds the allocation group size from below to keep the geometry
+	// sane; this option overrides that bound.
+	//
+	// Set to zero to use the `mkfs.xfs` defaults unchanged.
+	//
+	// Note: this only affects volumes at the time they are formatted.
+	//
+	// Size is specified in bytes, but can be expressed in human readable format, e.g. 100MB.
+	// +optional
+	MinAllocationGroupSizeConfig string `json:"minAllocationGroupSize,omitempty"`
 }

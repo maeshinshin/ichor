@@ -23,6 +23,15 @@ const (
 	pkgRuntime  = "github.com/siderolabs/talos/pkg/machinery/config/types/runtime"
 	pkgV1Alpha1 = "github.com/siderolabs/talos/pkg/machinery/config/types/v1alpha1"
 	pkgMeta     = "github.com/siderolabs/talos/pkg/machinery/config/types/meta"
+	// pkgBlock holds the volume config document kinds (phase 3: disk roles).
+	pkgBlock = "github.com/siderolabs/talos/pkg/machinery/config/types/block"
+	// pkgResourcesBlock is a different package from pkgBlock (also named
+	// "block") that some of pkgBlock's own fields are typed in, e.g.
+	// block.EncryptionProviderType -- the resources/block package.
+	pkgResourcesBlock = "github.com/siderolabs/talos/pkg/machinery/resources/block"
+	// pkgCel holds cel.Expression, the compiled-CEL type volume disk
+	// selectors are written in; see substTable below.
+	pkgCel = "github.com/siderolabs/talos/pkg/machinery/cel"
 )
 
 // Packages fieldOverrides (below) points into. None of these are new
@@ -61,6 +70,12 @@ var roots = []rootKind{
 	{pkgRuntime, "SysctlConfigV1Alpha1", "SysctlConfig", "mruntime.SysctlConfigKind", "v1alpha1"},
 	{pkgRuntime, "KernelModuleConfigV1Alpha1", "KernelModuleConfig", "mruntime.KernelModuleConfigKind", "v1alpha1"},
 	{pkgV1Alpha1, "Config", "Config", "", ""},
+	// Phase 3 (disk roles): placing EPHEMERAL or STATE on their own disk, a
+	// user volume, and a raw volume handed to a CSI provisioner are each a
+	// separate modern document kind, not a v1alpha1.Config field.
+	{pkgBlock, "VolumeConfigV1Alpha1", "VolumeConfig", "mblock.VolumeConfigKind", "v1alpha1"},
+	{pkgBlock, "UserVolumeConfigV1Alpha1", "UserVolumeConfig", "mblock.UserVolumeConfigKind", "v1alpha1"},
+	{pkgBlock, "RawVolumeConfigV1Alpha1", "RawVolumeConfig", "mblock.RawVolumeConfigKind", "v1alpha1"},
 }
 
 // substKind says how a substituted-by-type field converts to and from its
@@ -102,6 +117,18 @@ var substTable = map[string]substKind{
 	// URL string) and was only discovered by walking v1alpha1.Config. Same
 	// treatment as the rest of the table (rule 4: add and report).
 	pkgV1Alpha1 + ".Endpoint": substScalar,
+	// Phase 3 additions, same reasoning as the rest of the table: each is a
+	// struct with no usable exported fields (cel.Expression holds a
+	// compiled AST; block.Size/ByteSize hold private fields) behind a
+	// TextMarshaler/TextUnmarshaler, or a plain int enum behind one
+	// (block.VolumeType etc.) -- round-tripping the text form is more
+	// useful on the wire than the enum's bare ordinal would be.
+	pkgCel + ".Expression":                        substScalar,
+	pkgBlock + ".Size":                            substScalar,
+	pkgBlock + ".ByteSize":                        substScalar,
+	pkgResourcesBlock + ".VolumeType":             substScalar,
+	pkgResourcesBlock + ".FilesystemType":         substScalar,
+	pkgResourcesBlock + ".EncryptionProviderType": substScalar,
 }
 
 // fieldOverride names the upstream type one specific field mirrors as,
@@ -174,6 +201,32 @@ var secretFields = map[string]string{ // "Struct.Field" -> what it carries
 	"EtcdConfig.RootCA":                           "etcd CA key pair",
 	"MachineConfig.MachineToken":                  "machine join token",
 	"MachineConfig.MachineCA":                     "machine CA key pair",
+	// Phase 3 (disk roles): EncryptionSpec.EncryptionKeys[].static is a disk
+	// encryption passphrase embedded directly in the document -- Talos's own
+	// EncryptionSpec.Redact method targets exactly this field for the same
+	// reason. The whole "static" key source is dropped, not just its one
+	// field, because an empty "static: {}" left behind is unusable and only
+	// confusing. KMS/TPM/nodeID key sources carry no secret (an endpoint
+	// URL, hardware-sealed, or derived), so they stay. This key is shared by
+	// the legacy v1alpha1.EncryptionKey and the modern block.EncryptionKey
+	// (same field name, both struct literals below have an identically
+	// named and shaped "EncryptionKeyStatic" type), so one entry drops both.
+	"EncryptionKey.KeyStatic": "disk encryption static passphrase",
+}
+
+// typeRenames is the disambiguation table for the handful of block types
+// whose bare name collides with an existing, unrelated legacy v1alpha1
+// mirror struct of the same name (EncryptionKey and friends: v1alpha1 has
+// its own, older disk-encryption-key type family). Mirror struct names are
+// one flat namespace (zz_generated.mirror.go), so a real collision --
+// unlike the "same meta.Unstructured type" problem fieldOverrides solves --
+// has to be resolved by renaming one side; the legacy v1alpha1 names stay
+// put; the newer, less-established block ones take the "Volume" prefix.
+var typeRenames = map[string]string{
+	pkgBlock + ".EncryptionKey":       "VolumeEncryptionKey",
+	pkgBlock + ".EncryptionKeyKMS":    "VolumeEncryptionKeyKMS",
+	pkgBlock + ".EncryptionKeyTPM":    "VolumeEncryptionKeyTPM",
+	pkgBlock + ".EncryptionKeyNodeID": "VolumeEncryptionKeyNodeID",
 }
 
 func fatalf(format string, args ...any) {
@@ -187,7 +240,7 @@ func main() {
 			packages.NeedSyntax | packages.NeedDeps | packages.NeedImports,
 	}
 
-	pkgs, err := packages.Load(cfg, pkgRuntime, pkgV1Alpha1, pkgCoreV1, pkgSpecs, pkgAuditV1, pkgAPIServerV1)
+	pkgs, err := packages.Load(cfg, pkgRuntime, pkgV1Alpha1, pkgBlock, pkgCoreV1, pkgSpecs, pkgAuditV1, pkgAPIServerV1)
 	if err != nil {
 		fatalf("loading packages: %v", err)
 	}

@@ -2449,15 +2449,6 @@ spec:
                                             description: Key slot number for LUKS2
                                               encryption.
                                             type: integer
-                                          static:
-                                            description: Key which value is stored
-                                              in the configuration file.
-                                            properties:
-                                              passphrase:
-                                                description: Defines the static passphrase
-                                                  value.
-                                                type: string
-                                            type: object
                                           tpm:
                                             description: Enable TPM based disk encryption.
                                             properties:
@@ -2541,15 +2532,6 @@ spec:
                                             description: Key slot number for LUKS2
                                               encryption.
                                             type: integer
-                                          static:
-                                            description: Key which value is stored
-                                              in the configuration file.
-                                            properties:
-                                              passphrase:
-                                                description: Defines the static passphrase
-                                                  value.
-                                                type: string
-                                            type: object
                                           tpm:
                                             description: Enable TPM based disk encryption.
                                             properties:
@@ -2670,7 +2652,149 @@ spec:
                       - SysctlConfig
                       - KernelModuleConfig
                       - Config
+                      - VolumeConfig
+                      - UserVolumeConfig
+                      - RawVolumeConfig
                       type: string
+                    rawVolumeConfig:
+                      description: |-
+                        rawVolumeConfig is a Talos RawVolumeConfig document (an unformatted partition for a CSI
+                        provisioner); populated when kind is "RawVolumeConfig".
+                      properties:
+                        encryption:
+                          description: The encryption describes how the volume is
+                            encrypted.
+                          properties:
+                            allowDiscards:
+                              description: |-
+                                Allow TRIM/discard requests to be passed through to the underlying device
+                                when the encrypted volume is opened.
+
+                                Defaults to false.
+                              type: boolean
+                            blockSize:
+                              description: Defines the encryption sector size.
+                              format: int64
+                              type: integer
+                            cipher:
+                              description: |-
+                                Cipher to use for the encryption.
+                                Depends on the encryption provider.
+                              type: string
+                            keySize:
+                              description: Defines the encryption key length.
+                              type: integer
+                            keys:
+                              description: Defines the encryption keys generation
+                                and storage method.
+                              items:
+                                description: EncryptionKey represents configuration
+                                  for disk encryption key.
+                                properties:
+                                  kms:
+                                    description: EncryptionKeyKMS represents a key
+                                      that is generated and then sealed/unsealed by
+                                      the KMS server.
+                                    properties:
+                                      endpoint:
+                                        type: string
+                                    required:
+                                    - endpoint
+                                    type: object
+                                  lockToState:
+                                    type: boolean
+                                  nodeID:
+                                    description: EncryptionKeyNodeID represents deterministically
+                                      generated key from the node UUID and PartitionLabel.
+                                    type: object
+                                  slot:
+                                    type: integer
+                                  static:
+                                    description: EncryptionKeyStatic represents throw
+                                      away key type.
+                                    properties:
+                                      passphrase:
+                                        description: Defines the static passphrase
+                                          value.
+                                        type: string
+                                    type: object
+                                  tpm:
+                                    description: EncryptionKeyTPM represents a key
+                                      that is generated and then sealed/unsealed by
+                                      the TPM.
+                                    properties:
+                                      checkSecurebootStatusOnEnroll:
+                                        type: boolean
+                                      options:
+                                        description: EncryptionKeyTPMOptions represents
+                                          the options for TPM-based key protection.
+                                        properties:
+                                          pcrs:
+                                            description: |-
+                                              List of PCRs to bind the key to.
+                                              If not set, defaults to PCR 7, can be disabled by passing an empty list.
+                                            items:
+                                              type: integer
+                                            type: array
+                                        type: object
+                                    type: object
+                                required:
+                                - slot
+                                type: object
+                              type: array
+                            options:
+                              description: Additional --perf parameters for the LUKS2
+                                encryption.
+                              items:
+                                type: string
+                              type: array
+                            provider:
+                              description: Encryption provider to use for the encryption.
+                              type: string
+                          required:
+                          - keys
+                          - provider
+                          type: object
+                        name:
+                          description: |-
+                            Name of the volume.
+
+                            Name might be between 1 and 34 characters long and can only contain:
+                            lowercase and uppercase ASCII letters, digits, and hyphens.
+                          type: string
+                        provisioning:
+                          description: The provisioning describes how the volume is
+                            provisioned.
+                          properties:
+                            diskSelector:
+                              description: The disk selector expression.
+                              properties:
+                                match:
+                                  description: The Common Expression Language (CEL)
+                                    expression to match the disk.
+                                  type: string
+                              type: object
+                            grow:
+                              description: Should the volume grow to the size of the
+                                disk (if possible).
+                              type: boolean
+                            maxSize:
+                              description: |-
+                                The maximum size of the volume, if not specified the volume can grow to the size of the
+                                disk.
+
+                                Size is specified in bytes or in percents. It can be expressed in human readable format, e.g. 100MB.
+                              type: string
+                            minSize:
+                              description: |-
+                                The minimum size of the volume.
+
+                                Size is specified in bytes, but can be expressed in human readable format, e.g. 100MB.
+                              type: string
+                          type: object
+                      required:
+                      - name
+                      type: object
                     sysctlConfig:
                       description: sysctlConfig is a Talos SysctlConfig document;
                         populated when kind is "SysctlConfig".
@@ -2686,18 +2810,450 @@ spec:
                       required:
                       - params
                       type: object
+                    userVolumeConfig:
+                      description: userVolumeConfig is a Talos UserVolumeConfig document;
+                        populated when kind is "UserVolumeConfig".
+                      properties:
+                        encryption:
+                          description: The encryption describes how the volume is
+                            encrypted.
+                          properties:
+                            allowDiscards:
+                              description: |-
+                                Allow TRIM/discard requests to be passed through to the underlying device
+                                when the encrypted volume is opened.
+
+                                Defaults to false.
+                              type: boolean
+                            blockSize:
+                              description: Defines the encryption sector size.
+                              format: int64
+                              type: integer
+                            cipher:
+                              description: |-
+                                Cipher to use for the encryption.
+                                Depends on the encryption provider.
+                              type: string
+                            keySize:
+                              description: Defines the encryption key length.
+                              type: integer
+                            keys:
+                              description: Defines the encryption keys generation
+                                and storage method.
+                              items:
+                                description: EncryptionKey represents configuration
+                                  for disk encryption key.
+                                properties:
+                                  kms:
+                                    description: EncryptionKeyKMS represents a key
+                                      that is generated and then sealed/unsealed by
+                                      the KMS server.
+                                    properties:
+                                      endpoint:
+                                        type: string
+                                    required:
+                                    - endpoint
+                                    type: object
+                                  lockToState:
+                                    type: boolean
+                                  nodeID:
+                                    description: EncryptionKeyNodeID represents deterministically
+                                      generated key from the node UUID and PartitionLabel.
+                                    type: object
+                                  slot:
+                                    type: integer
+                                  static:
+                                    description: EncryptionKeyStatic represents throw
+                                      away key type.
+                                    properties:
+                                      passphrase:
+                                        description: Defines the static passphrase
+                                          value.
+                                        type: string
+                                    type: object
+                                  tpm:
+                                    description: EncryptionKeyTPM represents a key
+                                      that is generated and then sealed/unsealed by
+                                      the TPM.
+                                    properties:
+                                      checkSecurebootStatusOnEnroll:
+                                        type: boolean
+                                      options:
+                                        description: EncryptionKeyTPMOptions represents
+                                          the options for TPM-based key protection.
+                                        properties:
+                                          pcrs:
+                                            description: |-
+                                              List of PCRs to bind the key to.
+                                              If not set, defaults to PCR 7, can be disabled by passing an empty list.
+                                            items:
+                                              type: integer
+                                            type: array
+                                        type: object
+                                    type: object
+                                required:
+                                - slot
+                                type: object
+                              type: array
+                            options:
+                              description: Additional --perf parameters for the LUKS2
+                                encryption.
+                              items:
+                                type: string
+                              type: array
+                            provider:
+                              description: Encryption provider to use for the encryption.
+                              type: string
+                          required:
+                          - keys
+                          - provider
+                          type: object
+                        filesystem:
+                          description: The filesystem describes how the volume is
+                            formatted.
+                          properties:
+                            projectQuotaSupport:
+                              description: |-
+                                Enables project quota support, valid only for 'xfs' filesystem.
+
+                                Note: changing this value might require a full remount of the filesystem.
+                              type: boolean
+                            type:
+                              description: Filesystem type. Default is `xfs`.
+                              type: string
+                            xfs:
+                              description: XFS-specific filesystem options, valid
+                                only for 'xfs' filesystem.
+                              properties:
+                                minAllocationGroupSize:
+                                  description: |-
+                                    The minimum size of an XFS allocation group.
+
+                                    On non-rotational devices `mkfs.xfs` sizes the allocation group count to the number of
+                                    CPUs, which on machines with many cores and a modest disk yields hundreds of tiny
+                                    allocation groups. Talos bounds the allocation group size from below to keep the geometry
+                                    sane; this option overrides that bound.
+
+                                    Set to zero to use the `mkfs.xfs` defaults unchanged.
+
+                                    Note: this only affects volumes at the time they are formatted.
+
+                                    Size is specified in bytes, but can be expressed in human readable format, e.g. 100MB.
+                                  type: string
+                              type: object
+                          type: object
+                        mount:
+                          description: The mount describes additional mount options.
+                          properties:
+                            disableAccessTime:
+                              description: If true, disable file access time updates.
+                              type: boolean
+                            secure:
+                              description: |-
+                                Enable secure mount options (nosuid, nodev, noexec).
+
+                                Defaults to true for better security.
+                              type: boolean
+                          type: object
+                        name:
+                          description: |-
+                            Name of the volume.
+
+                            Name might be between 1 and 34 characters long and can only contain:
+                            lowercase and uppercase ASCII letters, digits, and hyphens.
+                          type: string
+                        provisioning:
+                          description: The provisioning describes how the volume is
+                            provisioned.
+                          properties:
+                            diskSelector:
+                              description: The disk selector expression.
+                              properties:
+                                match:
+                                  description: The Common Expression Language (CEL)
+                                    expression to match the disk.
+                                  type: string
+                              type: object
+                            grow:
+                              description: Should the volume grow to the size of the
+                                disk (if possible).
+                              type: boolean
+                            maxSize:
+                              description: |-
+                                The maximum size of the volume, if not specified the volume can grow to the size of the
+                                disk.
+
+                                Size is specified in bytes or in percents. It can be expressed in human readable format, e.g. 100MB.
+                              type: string
+                            minSize:
+                              description: |-
+                                The minimum size of the volume.
+
+                                Size is specified in bytes, but can be expressed in human readable format, e.g. 100MB.
+                              type: string
+                          type: object
+                        scrub:
+                          description: The scrub describes the per-volume filesystem
+                            scrub configuration.
+                          properties:
+                            enabled:
+                              description: |-
+                                Enable or disable scrubbing for this volume.
+
+                                If not set, scrubbing is enabled by default when scrub section is present.
+                              type: boolean
+                            interval:
+                              description: The interval at which the volume is scrubbed,
+                                overriding the global scrub interval.
+                              type: string
+                          type: object
+                        trim:
+                          description: The trim describes the per-volume filesystem
+                            trim (fstrim) configuration.
+                          properties:
+                            enabled:
+                              description: |-
+                                Enable or disable trimming for this volume.
+
+                                If not set, trimming is enabled when the global FilesystemTrimConfig is present.
+                              type: boolean
+                            interval:
+                              description: The interval at which the volume is trimmed,
+                                overriding the global trim interval.
+                              type: string
+                          type: object
+                        volumeType:
+                          description: Volume type.
+                          type: string
+                      required:
+                      - name
+                      type: object
+                    volumeConfig:
+                      description: |-
+                        volumeConfig is a Talos VolumeConfig document (a system volume, e.g. STATE or EPHEMERAL,
+                        placed on its own disk); populated when kind is "VolumeConfig".
+                      properties:
+                        encryption:
+                          description: The encryption describes how the volume is
+                            encrypted.
+                          properties:
+                            allowDiscards:
+                              description: |-
+                                Allow TRIM/discard requests to be passed through to the underlying device
+                                when the encrypted volume is opened.
+
+                                Defaults to false.
+                              type: boolean
+                            blockSize:
+                              description: Defines the encryption sector size.
+                              format: int64
+                              type: integer
+                            cipher:
+                              description: |-
+                                Cipher to use for the encryption.
+                                Depends on the encryption provider.
+                              type: string
+                            keySize:
+                              description: Defines the encryption key length.
+                              type: integer
+                            keys:
+                              description: Defines the encryption keys generation
+                                and storage method.
+                              items:
+                                description: EncryptionKey represents configuration
+                                  for disk encryption key.
+                                properties:
+                                  kms:
+                                    description: EncryptionKeyKMS represents a key
+                                      that is generated and then sealed/unsealed by
+                                      the KMS server.
+                                    properties:
+                                      endpoint:
+                                        type: string
+                                    required:
+                                    - endpoint
+                                    type: object
+                                  lockToState:
+                                    type: boolean
+                                  nodeID:
+                                    description: EncryptionKeyNodeID represents deterministically
+                                      generated key from the node UUID and PartitionLabel.
+                                    type: object
+                                  slot:
+                                    type: integer
+                                  static:
+                                    description: EncryptionKeyStatic represents throw
+                                      away key type.
+                                    properties:
+                                      passphrase:
+                                        description: Defines the static passphrase
+                                          value.
+                                        type: string
+                                    type: object
+                                  tpm:
+                                    description: EncryptionKeyTPM represents a key
+                                      that is generated and then sealed/unsealed by
+                                      the TPM.
+                                    properties:
+                                      checkSecurebootStatusOnEnroll:
+                                        type: boolean
+                                      options:
+                                        description: EncryptionKeyTPMOptions represents
+                                          the options for TPM-based key protection.
+                                        properties:
+                                          pcrs:
+                                            description: |-
+                                              List of PCRs to bind the key to.
+                                              If not set, defaults to PCR 7, can be disabled by passing an empty list.
+                                            items:
+                                              type: integer
+                                            type: array
+                                        type: object
+                                    type: object
+                                required:
+                                - slot
+                                type: object
+                              type: array
+                            options:
+                              description: Additional --perf parameters for the LUKS2
+                                encryption.
+                              items:
+                                type: string
+                              type: array
+                            provider:
+                              description: Encryption provider to use for the encryption.
+                              type: string
+                          required:
+                          - keys
+                          - provider
+                          type: object
+                        filesystem:
+                          description: |-
+                            The filesystem describes how the volume is formatted.
+
+                            Note: this only takes effect at the time the volume is formatted.
+                          properties:
+                            xfs:
+                              description: XFS-specific filesystem options.
+                              properties:
+                                minAllocationGroupSize:
+                                  description: |-
+                                    The minimum size of an XFS allocation group.
+
+                                    On non-rotational devices `mkfs.xfs` sizes the allocation group count to the number of
+                                    CPUs, which on machines with many cores and a modest disk yields hundreds of tiny
+                                    allocation groups. Talos bounds the allocation group size from below to keep the geometry
+                                    sane; this option overrides that bound.
+
+                                    Set to zero to use the `mkfs.xfs` defaults unchanged.
+
+                                    Note: this only affects volumes at the time they are formatted.
+
+                                    Size is specified in bytes, but can be expressed in human readable format, e.g. 100MB.
+                                  type: string
+                              type: object
+                          type: object
+                        mount:
+                          description: The mount describes additional mount options.
+                          properties:
+                            disableAccessTime:
+                              description: |-
+                                If true, disable file access time updates.
+
+                                Supported only for EPHEMERAL volume.
+                              type: boolean
+                            secure:
+                              description: |-
+                                Enable secure mount options (nosuid, nodev).
+
+                                For dedicated ETCD and LOG volumes, this also enables noexec.
+
+                                Defaults to true for better security.
+                                Supported for EPHEMERAL and dedicated ETCD, CRI, KUBELET and LOG volumes.
+                              type: boolean
+                          type: object
+                        name:
+                          description: Name of the volume.
+                          type: string
+                        provisioning:
+                          description: The provisioning describes how the volume is
+                            provisioned.
+                          properties:
+                            diskSelector:
+                              description: The disk selector expression.
+                              properties:
+                                match:
+                                  description: The Common Expression Language (CEL)
+                                    expression to match the disk.
+                                  type: string
+                              type: object
+                            grow:
+                              description: Should the volume grow to the size of the
+                                disk (if possible).
+                              type: boolean
+                            maxSize:
+                              description: |-
+                                The maximum size of the volume, if not specified the volume can grow to the size of the
+                                disk.
+
+                                Size is specified in bytes or in percents. It can be expressed in human readable format, e.g. 100MB.
+                              type: string
+                            minSize:
+                              description: |-
+                                The minimum size of the volume.
+
+                                Size is specified in bytes, but can be expressed in human readable format, e.g. 100MB.
+                              type: string
+                          type: object
+                        scrub:
+                          description: The scrub describes the per-volume filesystem
+                            scrub configuration.
+                          properties:
+                            enabled:
+                              description: |-
+                                Enable or disable scrubbing for this volume.
+
+                                If not set, scrubbing is enabled by default when scrub section is present.
+                              type: boolean
+                            interval:
+                              description: The interval at which the volume is scrubbed,
+                                overriding the global scrub interval.
+                              type: string
+                          type: object
+                        trim:
+                          description: The trim describes the per-volume filesystem
+                            trim (fstrim) configuration.
+                          properties:
+                            enabled:
+                              description: |-
+                                Enable or disable trimming for this volume.
+
+                                If not set, trimming is enabled when the global FilesystemTrimConfig is present.
+                              type: boolean
+                            interval:
+                              description: The interval at which the volume is trimmed,
+                                overriding the global trim interval.
+                              type: string
+                          type: object
+                      required:
+                      - name
+                      type: object
                   required:
                   - kind
                   type: object
                   x-kubernetes-validations:
-                  - message: exactly one of sysctlConfig, kernelModuleConfig or config
-                      must be set
+                  - message: exactly one of sysctlConfig, kernelModuleConfig, config,
+                      volumeConfig, userVolumeConfig or rawVolumeConfig must be set
                     rule: '(has(self.sysctlConfig) ? 1 : 0) + (has(self.kernelModuleConfig)
-                      ? 1 : 0) + (has(self.config) ? 1 : 0) == 1'
+                      ? 1 : 0) + (has(self.config) ? 1 : 0) + (has(self.volumeConfig)
+                      ? 1 : 0) + (has(self.userVolumeConfig) ? 1 : 0) + (has(self.rawVolumeConfig)
+                      ? 1 : 0) == 1'
                   - message: kind must match the populated field
                     rule: 'self.kind == ''SysctlConfig'' ? has(self.sysctlConfig)
                       : self.kind == ''KernelModuleConfig'' ? has(self.kernelModuleConfig)
-                      : has(self.config)'
+                      : self.kind == ''Config'' ? has(self.config) : self.kind ==
+                      ''VolumeConfig'' ? has(self.volumeConfig) : self.kind == ''UserVolumeConfig''
+                      ? has(self.userVolumeConfig) : has(self.rawVolumeConfig)'
                 type: array
               layer:
                 description: layer is where this patch applies in the bottom-up stack;

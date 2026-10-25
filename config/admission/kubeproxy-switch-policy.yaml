@@ -1,0 +1,48 @@
+# Enforces docs/design/architecture.md's "CNI" section: switching
+# TalosCluster.spec.cni.kubeProxy between "enabled" and "replaced" on an
+# existing cluster is refused unless annotated, because the switch has to run
+# in one safe order -- new side up on every node, verify, then old side down
+# -- that nothing at this layer does for the caller automatically.
+#
+# This is a ValidatingAdmissionPolicy rather than a CRD x-kubernetes-validations
+# rule (like the sibling preset-immutability rule in
+# api/v1alpha1/taloscluster_types.go) because CRD-embedded CEL only exposes
+# metadata.name and metadata.generateName on self/oldSelf -- not annotations.
+# It is not a controller-runtime webhook (internal/webhook/) either: that
+# package is out of this change's scope.
+#
+# Hand-maintained, not controller-gen output: there is no CRD or RBAC marker
+# for a ValidatingAdmissionPolicy. It is wired into config/default's
+# kustomization so a real deploy installs it; it is not yet mirrored into
+# dist/chart.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: cni-kubeproxy-switch
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["ichor.maesh.dev"]
+        apiVersions: ["v1alpha1"]
+        operations: ["UPDATE"]
+        resources: ["talosclusters"]
+  validations:
+    - expression: >-
+        object.spec.cni.kubeProxy == oldObject.spec.cni.kubeProxy ||
+        (has(object.metadata.annotations) &&
+         "ichor.maesh.dev/confirm-kube-proxy-switch" in object.metadata.annotations)
+      message: >-
+        switching spec.cni.kubeProxy requires the
+        ichor.maesh.dev/confirm-kube-proxy-switch annotation, since the switch
+        must run new-side-up, verify, old-side-down and nothing here does that
+        automatically
+      reason: Invalid
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: cni-kubeproxy-switch-binding
+spec:
+  policyName: cni-kubeproxy-switch
+  validationActions: ["Deny"]

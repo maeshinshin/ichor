@@ -52,7 +52,7 @@ manifests: controller-gen manifests-ichor-ui ## Generate WebhookConfiguration, C
 
 .PHONY: sync-crds
 sync-crds: ## Sync config/crd/bases/ into dist/chart/templates/crd/ (CONTRIBUTING.md explains why, in place of kubebuilder edit --plugins=helm/v2-alpha).
-	python3 hack/sync-crds.py
+	go run ./internal/tools/synccrds
 
 .PHONY: third-party-notices
 third-party-notices: ui-install ## Regenerate THIRD-PARTY-NOTICES from go.mod, the Go module cache, ui/package-lock.json and the embedded Cilium chart.

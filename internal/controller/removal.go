@@ -75,6 +75,17 @@ const machineRemovalFinalizer = "ichor.maesh.dev/machine-removal"
 // to renew late once and still not lose the lock.
 const removalRenewInterval = time.Minute
 
+// etcdDialTimeout bounds every dial and RPC removeEtcdMember/removeEtcdMemberFromSurvivor
+// make. Confirmed necessary for real: a node that just left etcd can itself
+// go unreachable moments later, and an unbounded context on an unreachable target blocks
+// for as long as Reconcile's own ctx lives -- with one worker per controller
+// (SetupWithManager's default), that wedges every other TalosMachine's reconcile behind
+// it, not just this one's retry. 15s is generous for a healthy node's own API (normally
+// sub-second) while still bounding a dead one's hang to something a human waits out
+// rather than a human who gives up and kills the process not knowing it would have
+// recovered on its own eventually.
+const etcdDialTimeout = 15 * time.Second
+
 const (
 	conditionRemoval           = "Removal"
 	reasonRemovalRefused       = "RemovalRefused"
@@ -347,25 +358,46 @@ func (r *TalosMachineReconciler) removeEtcdMember(
 		return fmt.Errorf("loading secrets bundle for etcd member removal: %w", err)
 	}
 
-	self, selfErr := r.TalosClient(ctx, cluster, m, bundle)
-	if selfErr == nil {
-		defer closeTalosClient(self)
-
-		members, listErr := self.EtcdMemberList(ctx)
-		if listErr == nil {
-			if !etcdMemberPresent(members, m.Spec.Hostname) {
-				return nil // already gone: the resumption case above
-			}
-
-			if leaveErr := self.EtcdLeaveCluster(ctx); leaveErr == nil {
-				return nil
-			}
-			// Dialed and listed fine, but leaving itself failed: fall through
-			// to the survivor path below rather than giving up here.
-		}
+	if r.trySelfLeave(ctx, cluster, m, bundle) {
+		return nil
 	}
 
 	return r.removeEtcdMemberFromSurvivor(ctx, cluster, m, bundle)
+}
+
+// trySelfLeave attempts removeEtcdMember's first-choice path (self-dial, list, leave) and
+// reports whether m is now confirmed gone from etcd -- either because it already was, or
+// because EtcdLeaveCluster just succeeded. false covers every other outcome (unreachable,
+// listed but leave itself failed), for which removeEtcdMember falls back to a survivor.
+//
+// etcdDialTimeout bounds this whole attempt: confirmed for real that a node
+// which just left etcd can itself go unreachable moments later (its own apiserver and
+// Talos API both stopped answering), and grpc's lazy dial means the first RPC on an
+// unreachable target blocks for as long as ctx allows -- which, without this, is however
+// long Reconcile's own ctx happens to live, wedging this package's one worker on every
+// other TalosMachine behind it.
+func (r *TalosMachineReconciler) trySelfLeave(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, bundle *secrets.Bundle,
+) bool {
+	selfCtx, cancel := context.WithTimeout(ctx, etcdDialTimeout)
+	defer cancel()
+
+	self, err := r.TalosClient(selfCtx, cluster, m, bundle)
+	if err != nil {
+		return false
+	}
+	defer closeTalosClient(self)
+
+	members, err := self.EtcdMemberList(selfCtx)
+	if err != nil {
+		return false
+	}
+
+	if !etcdMemberPresent(members, m.Spec.Hostname) {
+		return true // already gone: the resumption case above
+	}
+
+	return self.EtcdLeaveCluster(selfCtx) == nil
 }
 
 // removeEtcdMemberFromSurvivor is removeEtcdMember's fallback: dial a
@@ -382,13 +414,16 @@ func (r *TalosMachineReconciler) removeEtcdMemberFromSurvivor(
 		return err
 	}
 
-	sc, err := r.TalosClient(ctx, cluster, survivor, bundle)
+	survivorCtx, cancel := context.WithTimeout(ctx, etcdDialTimeout)
+	defer cancel()
+
+	sc, err := r.TalosClient(survivorCtx, cluster, survivor, bundle)
 	if err != nil {
 		return fmt.Errorf("dialing a surviving control plane to remove %q from etcd: %w", m.Name, err)
 	}
 	defer closeTalosClient(sc)
 
-	members, err := sc.EtcdMemberList(ctx)
+	members, err := sc.EtcdMemberList(survivorCtx)
 	if err != nil {
 		return fmt.Errorf("listing etcd members from a surviving control plane: %w", err)
 	}
@@ -398,7 +433,7 @@ func (r *TalosMachineReconciler) removeEtcdMemberFromSurvivor(
 		return nil // already gone
 	}
 
-	return sc.EtcdRemoveMemberByID(ctx, id)
+	return sc.EtcdRemoveMemberByID(survivorCtx, id)
 }
 
 // findEtcdSurvivor finds another approved control-plane TalosMachine in m's

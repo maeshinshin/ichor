@@ -719,6 +719,23 @@ image source, a self-hosted Image Factory URL, and `ichor images list` to
 print everything that needs mirroring for a given version set. The pre-checks
 can verify mirror reachability before an upgrade.
 
+What `ichor images list` has to print for a self-hosted Image Factory is
+settled, from the Factory's own `docs/sources.md` and `docs/air-gapped.md`.
+It pulls from `ghcr.io` unless given `-image-registry`, and needs
+`siderolabs/imager`, `siderolabs/installer-base` (`siderolabs/installer`
+below Talos 1.10.0), `siderolabs/extensions`, `siderolabs/overlays` and
+`siderolabs/talosctl-all` (Talos 1.11.0 and up). Mirroring is
+`hack/copy-artifacts.sh`, which copies signatures as well as images, and the
+Factory is pointed at the result with `artifacts.core.registry` plus an
+optional `artifacts.core.namespace` for registries that prefix paths.
+
+The part that is easy to get wrong, and so the part `ichor images list` exists
+for: `extensions` and `overlays` are *catalogs*. Mirroring them does not
+mirror what they name — every extension and overlay image they reference has
+to be mirrored too, and the `namespace` prefix applies to those as well. A
+mirror that holds the five images above and nothing else looks complete and
+fails at the first schematic that asks for an extension.
+
 ## CLI and UI
 
 The rule is parity. Both write CRs; both share the same Go packages for
@@ -797,7 +814,6 @@ resumption works. A short set runs per PR, the full set nightly.
 - Does a single-node Talos upgrade need the etcd-preserving flag?
 - Exact Longhorn node label/annotation and evacuation field names per version.
 - The Cilium and Calico values that avoid perpetual OutOfSync under Argo CD.
-- What a self-hosted Image Factory needs to reach, and how to mirror it.
 
 ## Alternatives considered
 

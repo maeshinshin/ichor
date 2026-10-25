@@ -334,3 +334,86 @@ Given that stack and the time already spent standing the cluster up, it was left
 dedicated pass rather than attempted inline here. Verified and cleaned up instead: the
 part that needed real hardware and nothing else -- three control planes, real etcd,
 real quorum.
+
+## The controller's webhook, reachable from the inner apiserver: confirmed working
+
+The proposal above (a controller pod inside `ichor-e2e`, on the same pod network the nodes
+use) is no longer untested. Scope on purpose: reachability only, stopping at seeing
+admission refuse one delete. Quorum, last-control-plane, removal ordering,
+`transitioning` and chaos-resume are still deferred to a dedicated pass.
+
+**Confirmed for real**, against a single-node inner cluster: a `TalosMachine` deleted
+without `ichor.maesh.dev/allow-delete` is refused by the live admission webhook, and the
+identical object deletes cleanly once annotated:
+
+```
+$ kubectl delete talosmachine wh-machine
+Error from server (Forbidden): admission webhook "vtalosmachine-v1alpha1.kb.io" denied the request: delete refused: set the annotation ichor.maesh.dev/allow-delete="true" to allow it
+
+$ kubectl annotate talosmachine wh-machine ichor.maesh.dev/allow-delete=true
+talosmachine.ichor.maesh.dev/wh-machine annotated
+$ kubectl delete talosmachine wh-machine
+talosmachine.ichor.maesh.dev "wh-machine" deleted from default namespace
+```
+
+That first error travelled the whole real path: the inner apiserver dialled
+`https://<pod IP>:9443/validate-...` over TLS, verified the leaf certificate against the
+`caBundle` in the `ValidatingWebhookConfiguration`, and the real `cmd/main.go` binary
+(statically built, `kubectl cp`'d in, no image) ran `deleteguard.CheckDelete` and
+returned the refusal.
+
+### How it was built, one piece per trap
+
+- **A pod anywhere in `ichor-e2e`, not a Service.** `alpine:3` running `sleep infinity`,
+  `kubectl cp`'d the statically-built `bin/manager` binary and the inner cluster's
+  kubeconfig into it, then `kubectl exec`'d the binary with that kubeconfig and
+  `POD_NAMESPACE=default`. No image build (out of scope). A Service was never an option
+  for the inner apiserver to reach: a `ClusterIP` is only routable within the cluster
+  whose own kube-proxy/Cilium programmed it -- the inner cluster has no idea the outer
+  one's Services exist, flat pod network or not. The pod's own IP, on that same flat
+  network, is the only address that means anything to both sides.
+- **The kubeconfig that reaches the pod is not the one the harness publishes.**
+  `publish()` rewrites the node's own endpoint to `127.0.0.1:<relayLocalPort>` for the
+  *workstation's* port-forward tunnel (ADR 0007's existing boundary). A pod on the outer
+  cluster's own pod network needs the opposite: the node's real address
+  (`https://<node pod IP>:6443`), which a one-line `sed` restores from the published
+  kubeconfig before copying it in.
+- **Leader election's namespace is not `POD_NAMESPACE`.** The rotator's `SecretKey`
+  namespace comes from `POD_NAMESPACE` (set to `default`, a namespace the fresh inner
+  cluster already has); `ctrl.Options.LeaderElectionNamespace` is unset in `cmd/main.go`
+  and auto-detects from the pod's own mounted service-account namespace file --
+  `ichor-e2e`, since that is the *outer* pod's namespace, not a namespace on the inner
+  cluster at all. `leaderelection.go: Error retrieving lease lock` against the inner
+  apiserver, repeating forever, was the symptom. Fixed by creating an `ichor-e2e`
+  namespace on the inner cluster too -- harmless, the inner cluster is fully disposable,
+  and leader election stops caring once the namespace exists.
+- **The webhook cert `Secret` must already exist, empty.** Confirmed by reading
+  `config/webhook/secret.yaml` (ships metadata-only, matching `dist/chart/
+  chart_test.go`'s own `checkCertSecretHasNoData`): `rotator.CertRotator` only ever
+  `Get`s then `Update`s a Secret; it never creates one, so a cluster with no such Secret
+  gets `Secret "ichor-webhook-server-cert" not found` forever. One
+  `kubectl create secret generic ichor-webhook-server-cert` in the inner cluster's
+  `default` namespace fixed it.
+- **`open-policy-agent/cert-controller`'s `CertRotator` cannot produce an IP-SAN
+  certificate, and never writes to disk at all.** Read the vendored source
+  (`pkg/rotator/rotator.go`, v0.16.0) to confirm both: `generateCert`'s `x509.Certificate`
+  template sets `DNSNames` only, never `IPAddresses` -- `ExtraDNSNames` exists but is
+  still a DNS name, and Go's TLS client verifies an IP dial target against
+  `IPAddresses`, not `DNSNames`, so a cert from this library can never satisfy a
+  `https://<pod IP>` URL no matter how it's configured. And there is no `os.WriteFile`
+  anywhere in the package -- `ensureCertsMounted` only *polls* `CertDir` for files to
+  already exist; the real deployment's `manager.yaml` populates them by mounting the
+  Secret as a volume, which this one-off pod has no way to do. Fix: read `ca.crt`/
+  `ca.key` straight out of the Secret `rotator` already wrote, mint a new leaf for the
+  pod's own IP signed by that same CA key (a ~70-line scratch Go program, not part of the
+  repo), and `kubectl cp` `tls.crt`/`tls.key` into `/tmp/k8s-webhook-server/serving-certs/`
+  myself. `controller-runtime`'s own `certwatcher` picked the files up and started
+  serving within its normal poll interval -- no code in `cmd/main.go` needed to change;
+  this cert never goes through the rotator at all; the rotator just happens to be the
+  Secret's owner. Verified empirically before committing to this: a first `kubectl
+  delete` attempt got `connection refused` on port 9443 (reachable, nothing listening
+  yet -- a useful intermediate signal that the network path itself was already correct),
+  and the webhook server started serving the moment the hand-placed cert files appeared.
+
+### Cleanup, verified including the new pieces
+

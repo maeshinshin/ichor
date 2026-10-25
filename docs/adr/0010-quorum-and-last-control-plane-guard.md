@@ -342,3 +342,64 @@ module's `k8s.io/*` dependencies (`go get k8s.io/kubectl/pkg/drain@v0.36.0`
 specifically, not a bare `go get`, which resolves to kubectl's latest and
 drags every `k8s.io/*` dependency in this module up with it -- caught
 before it reached `go.sum`, not after).
+
+## `Transitioning`: the live control-plane count, not the declared one
+
+Architecture.md's "Nodes" section makes one more claim this ADR's work
+touches directly: "Even counts are allowed only transiently during a
+change and shown as 'transitioning', during which the cluster lock blocks
+other disruptive work." `spec.controlPlane.count`'s `Enum=1;3;5` is the
+*declared* state and never becomes even -- so "transitioning" has to be a
+fact about something else: the live count of approved control-plane
+`TalosMachine`s, which does pass through 2 or 4 during an add-then-remove
+replacement (3->4->3).
+
+### Where it lives, and why
+
+`TalosCluster.status.conditions` carries a `Transitioning` condition,
+not a new CRD. Two reasons:
+
+- It is a derived fact about objects that already exist (`TalosMachine`s),
+  recomputed fresh every time, not a record of an imperative action in
+  progress -- nothing here corresponds to "a `TalosOperation` is running"
+  (that CRD, per the API table in architecture.md, is for one-off
+  imperative actions like reboot/reset/snapshot/rollback; a control-plane
+  replacement today is two separate operator actions -- approve one
+  machine, delete another -- with no single operation object spanning
+  both of them to hold a condition on).
+- `TalosCluster` is the object whose topology the condition describes, and
+  it already has a `Status.Conditions` field (ADR 0010's own quorum work
+  needed nothing new there either).
+
+`countApprovedControlPlanes` -- already counting control planes for the
+quorum/count checks above -- is reused to compute it, from two places: the
+removal operation (after every `reconcileRemoval` recount) and
+`TalosMachineReconciler.Reconcile`'s main path (after every approved
+machine's reconcile, of any role, since the fact being reported is
+cluster-wide, not specific to the machine that happened to trigger it).
+Piggybacking on counts these call sites already pay for means the
+condition stays reasonably current without a dedicated watch or poll of
+its own.
+
+### How it actually blocks other disruptive work
+
+The lock itself is not continuously held for the whole, human-paced
+window between "approve the replacement" and "remove the original" --
+only briefly, around each individual step, same as every other disruptive
+operation in this codebase. So "the cluster lock blocks other disruptive
+work" during a transition is implemented as an explicit check, not solely
+the lock's own mutual exclusion: `refuseReboot` recomputes the live count
+fresh (not trusting the stored `Transitioning` condition, which could be
+one reconcile stale) and refuses before ever attempting the lock if the
+count is even. The only other disruptive-operation path that exists today
+is `refuseReboot`; a future upgrade or CA-rotation operation gets the same
+treatment by calling the same `transitioningControlPlanes` check.
+
+### Tests
+
+`internal/controller/removal_test.go`'s "TalosCluster transitioning
+status" group covers: a stable (odd) count reports `Transitioning: False`
+(`StableControlPlaneCount`); approving a fourth control plane flips it to
+`True` (`EvenControlPlaneCount`); and a reboot-requiring change on *any*
+machine (not just a control plane) in a transitioning cluster is refused
+with `ClusterTransitioning`, before the cluster lock is ever taken.

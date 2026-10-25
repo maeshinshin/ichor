@@ -113,6 +113,7 @@ const (
 	reasonDryRunWarnings           = "DryRunWarnings"
 	reasonNodeDrifted              = "NodeDrifted"
 	reasonDriftCorrected           = "DriftCorrected"
+	reasonClusterTransitioning     = "ClusterTransitioning"
 )
 
 // driftPolicyAutoCorrect is the one TalosCluster.spec.driftPolicy value that
@@ -160,6 +161,7 @@ type TalosMachineReconciler struct {
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosmachines/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosmachines/finalizers,verbs=update
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters,verbs=get;list;watch
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosconfigpatches,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,verbs=get;list;watch
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;watch;create;update;patch;delete
@@ -206,6 +208,14 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 				fmt.Sprintf("TalosCluster %q not found", clusterKey.Name))
 		}
 
+		return ctrl.Result{}, err
+	}
+
+	// Refreshed here, on every approved machine's reconcile, rather than on
+	// its own schedule: architecture.md's "Nodes" wants the cluster's
+	// Transitioning status kept current, not just recomputed when a
+	// removal happens to run.
+	if err := r.refreshTransitioning(ctx, &cluster, &m); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -417,6 +427,22 @@ func (r *TalosMachineReconciler) refuseReboot(
 	ctx context.Context, m *ichorv1alpha1.TalosMachine, cluster *ichorv1alpha1.TalosCluster, driftNote string,
 ) error {
 	log := logf.FromContext(ctx)
+
+	// architecture.md's "Nodes": while the cluster has an even number of
+	// approved control planes (a replacement in progress, 3->4->3), the
+	// cluster lock is supposed to block other disruptive work -- but the
+	// lock itself is only held for the brief window around each individual
+	// add or remove, not for the whole human-paced transition between
+	// them. Recomputed fresh rather than trusting TalosCluster.status's
+	// own Transitioning condition, which could be one reconcile stale.
+	if controlPlanes, err := r.countApprovedControlPlanes(ctx, m); err != nil {
+		return err
+	} else if transitioningControlPlanes(controlPlanes) {
+		return r.ready(ctx, m, metav1.ConditionFalse, reasonClusterTransitioning,
+			fmt.Sprintf("%scluster has %d approved control planes (even -- a replacement is in progress); "+
+				"other disruptive work is refused until it returns to the declared odd count",
+				driftNote, controlPlanes))
+	}
 
 	lock := clusterlock.New(r.Client, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0)
 

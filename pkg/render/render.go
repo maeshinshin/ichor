@@ -82,9 +82,17 @@ func Render(
 		return nil, "", fmt.Errorf("render: encoding rendered config: %w", err)
 	}
 
-	sum := sha256.Sum256(out)
+	return out, Hash(out), nil
+}
 
-	return out, fmt.Sprintf("sha256:%x", sum), nil
+// Hash returns data's hash in the "sha256:<hex>" format Render's own hash,
+// TalosMachineReconciler's desiredInputsHash and hashConfig all use, so a
+// config and whatever it's compared against are hashed identically no
+// matter which of those three call sites produced either side.
+func Hash(data []byte) string {
+	sum := sha256.Sum256(data)
+
+	return fmt.Sprintf("sha256:%x", sum)
 }
 
 // BuildConfig runs every step of Render up to (and including) validation,

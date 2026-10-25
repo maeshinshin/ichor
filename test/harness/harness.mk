@@ -36,5 +36,5 @@ setup-test-e2e-kubevirt: test-e2e-prereqs ## Boot a single-node Talos control pl
 	go run ./test/harness/kubevirt up
 
 .PHONY: cleanup-test-e2e-kubevirt
-cleanup-test-e2e-kubevirt: ## Tear down the VM, its relay pod and port-forward, and the DataVolumes setup-test-e2e-kubevirt created; a no-op if there is nothing to tear down
+cleanup-test-e2e-kubevirt: test-e2e-prereqs ## Tear down the VM, its relay pod and port-forward, and the DataVolumes setup-test-e2e-kubevirt created; a no-op if there is nothing to tear down
 	go run ./test/harness/kubevirt down

@@ -158,6 +158,15 @@ func main() {
 		os.Exit(2)
 	}
 
+	// Every kubectl call below (up and down) carries no --context: it targets whatever
+	// KUBECONFIG resolves to. Falling back to kubectl's ambient current-context on an
+	// unset KUBECONFIG means "down" can delete a VM on a cluster this run never created
+	// one on - refuse rather than guess (observed for real: a dangling kind-kind context).
+	if os.Getenv("KUBECONFIG") == "" {
+		fmt.Fprintln(os.Stderr, "kubevirt harness: KUBECONFIG is not set; refusing to guess which cluster to target")
+		os.Exit(1)
+	}
+
 	var err error
 	if os.Args[1] == "up" {
 		// A killed "up" (Ctrl-C, CI cancellation, a wrapping `timeout`) must not leave the

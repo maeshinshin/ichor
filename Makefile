@@ -48,6 +48,11 @@ help: ## Display this help.
 .PHONY: manifests
 manifests: controller-gen manifests-ichor-ui ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
 	"$(CONTROLLER_GEN)" rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+	$(MAKE) sync-crds
+
+.PHONY: sync-crds
+sync-crds: ## Sync config/crd/bases/ into dist/chart/templates/crd/ (CONTRIBUTING.md explains why, in place of kubebuilder edit --plugins=helm/v2-alpha).
+	python3 hack/sync-crds.py
 
 .PHONY: third-party-notices
 third-party-notices: ui-install ## Regenerate THIRD-PARTY-NOTICES from go.mod, the Go module cache, ui/package-lock.json and the embedded Cilium chart.

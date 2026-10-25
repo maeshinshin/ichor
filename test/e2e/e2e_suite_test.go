@@ -29,15 +29,33 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-// talosNodesEnvVar names the comma-separated list of maintenance-mode Talos node
-// addresses the suite reads its node to probe from. Neither harness provisions nodes
-// itself: the KubeVirt harness's "setup-test-e2e-kubevirt" and the
-// talosctl-qemu harness's "setup-test-e2e" each create one their own way and publish it
-// here, so one set of specs runs unchanged against either.
+// talosNodesEnvVar names the comma-separated list of Talos node addresses the suite reads
+// its node to probe from. Neither harness provisions nodes itself: the KubeVirt
+// harness's "setup-test-e2e-kubevirt" and the talosctl-qemu harness's "setup-test-e2e" each
+// create one their own way and publish it here, so one set of specs runs unchanged against
+// either.
 const talosNodesEnvVar = "ICHOR_E2E_TALOS_NODES"
+
+// innerKubeconfigEnvVar names the path to the kubeconfig for the inner cluster the CRD and
+// CEL specs must run against, not the (possibly production) cluster KUBECONFIG points at
+// (P2-8): the harness that created talosNode() also stood up a cluster on it.
+const innerKubeconfigEnvVar = "ICHOR_E2E_INNER_KUBECONFIG"
+
+// talosconfigEnvVar names the path to the admin talosconfig for talosNode()'s authenticated
+// API, published alongside innerKubeconfigEnvVar once the harness has applied a
+// configuration (P2-8).
+const talosconfigEnvVar = "ICHOR_E2E_TALOSCONFIG"
 
 // talosNodes holds the parsed node addresses, set once in BeforeSuite.
 var talosNodes []string
+
+// innerKubeconfig and talosconfig hold the paths read from innerKubeconfigEnvVar and
+// talosconfigEnvVar, and talosconfigBytes their contents, all set once in BeforeSuite.
+var (
+	innerKubeconfig  string
+	talosconfig      string
+	talosconfigBytes []byte
+)
 
 // talosNode is the node this run's specs probe.
 func talosNode() string {
@@ -71,6 +89,23 @@ var _ = BeforeSuite(func() {
 			talosNodes = append(talosNodes, n)
 		}
 	}
+
+	innerKubeconfig = os.Getenv(innerKubeconfigEnvVar)
+	if strings.TrimSpace(innerKubeconfig) == "" {
+		Fail(fmt.Sprintf("%s is not set. The harness's setup target must publish the inner "+
+			"cluster's kubeconfig through it before the suite runs.",
+			innerKubeconfigEnvVar))
+	}
+
+	talosconfig = os.Getenv(talosconfigEnvVar)
+	if strings.TrimSpace(talosconfig) == "" {
+		Fail(fmt.Sprintf("%s is not set. The harness's setup target must publish an admin "+
+			"talosconfig for the node through it before the suite runs.",
+			talosconfigEnvVar))
+	}
+	var err error
+	talosconfigBytes, err = os.ReadFile(talosconfig)
+	Expect(err).NotTo(HaveOccurred(), "could not read %s=%s", talosconfigEnvVar, talosconfig)
 })
 
 // Disable kubectl kuberc by default for test isolation.

@@ -47,4 +47,35 @@ type TalosClient interface {
 	// The reconciler only ever calls this once pkg/fieldmeta has said the
 	// change needs neither a reboot nor a reinstall.
 	ApplyNoReboot(ctx context.Context, cfg []byte) error
+
+	// EtcdMemberList lists etcd members as seen by the node this client is
+	// dialed to (removal.go: queried on the departing machine's own client
+	// first, and on a surviving sibling's client as a fallback, to decide
+	// whether the departing machine is still a member at all -- the check
+	// half of removal.go's idempotent check-then-act, since
+	// architecture.md records that "removing an already-removed etcd
+	// member reports not-found, which counts as success").
+	EtcdMemberList(ctx context.Context) ([]EtcdMember, error)
+
+	// EtcdLeaveCluster asks the node this client is dialed to to leave the
+	// etcd cluster gracefully. Call it on the departing machine's own
+	// client: Talos's own `talosctl etcd leave` is explicit that this is
+	// always preferred over EtcdRemoveMemberByID.
+	EtcdLeaveCluster(ctx context.Context) error
+
+	// EtcdRemoveMemberByID forcibly removes memberID from etcd, as decided
+	// by the node this client is dialed to. Call it on a surviving
+	// sibling's client when the departing machine cannot be dialed at all
+	// (architecture.md's forceRemove case: the node is dead or
+	// unreachable, so it can never call EtcdLeaveCluster on itself).
+	EtcdRemoveMemberByID(ctx context.Context, memberID uint64) error
+}
+
+// EtcdMember is the one piece of each etcd member EtcdMemberList's callers
+// need: enough to find the member matching a TalosMachine's
+// Spec.Hostname (etcd reports the Node's own hostname, not an Ichor
+// identity) and the numeric ID EtcdRemoveMemberByID takes.
+type EtcdMember struct {
+	ID       uint64
+	Hostname string
 }

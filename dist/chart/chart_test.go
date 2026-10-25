@@ -44,9 +44,12 @@ const crdSourceDir = "../../config/crd/bases"
 const (
 	kindService                        = "Service"
 	kindSecret                         = "Secret"
+	kindServiceAccount                 = "ServiceAccount"
 	kindRole                           = "Role"
 	kindRoleBinding                    = "RoleBinding"
 	kindClusterRole                    = "ClusterRole"
+	kindClusterRoleBinding             = "ClusterRoleBinding"
+	kindDeployment                     = "Deployment"
 	kindValidatingWebhookConfiguration = "ValidatingWebhookConfiguration"
 	kindCustomResourceDefinition       = "CustomResourceDefinition"
 	kindValidatingAdmissionPolicy      = "ValidatingAdmissionPolicy"
@@ -60,6 +63,13 @@ const (
 
 	kubeProxySwitchPolicyName  = "ichor-cni-kubeproxy-switch"
 	kubeProxySwitchBindingName = "ichor-cni-kubeproxy-switch-binding"
+
+	// ichor-ui's own RBAC: fixed names, mirroring
+	// config/rbac/ichor-ui/, unlike the controller's own release-templated ones.
+	ichorUIServiceAccountName = "ichor-ui"
+	ichorUIRoleName           = "ichor-ui-role"
+	ichorUIRoleBindingName    = "ichor-ui-rolebinding"
+	ichorUIDeploymentName     = "ichor-ui"
 )
 
 // TestChartInvariants renders the committed chart under both the
@@ -77,6 +87,7 @@ func TestChartInvariants(t *testing.T) {
 			checkNoClusterWideSecretsRead(t, release, docs)
 			checkCRDsMatchConfig(t, release, docs)
 			checkKubeProxySwitchPolicy(t, release, docs)
+			checkUIBackendRBACIsSeparate(t, release, docs)
 		})
 	}
 }
@@ -253,6 +264,101 @@ func checkKubeProxySwitchPolicy(t *testing.T, release string, docs []map[string]
 			)
 		}
 	}
+}
+
+// checkUIBackendRBACIsSeparate guards architecture.md "Trust": "only the controller
+// holds an os:admin-equivalent Talos identity[;] the UI backend holds a read-only one."
+// Collapsing the two -- the UI Deployment running as the controller's own
+// ServiceAccount, or the UI's ClusterRole merged into manager-role -- would erase that
+// boundary with no other signal, since both would still "work". Checks the whole chain:
+// ichor-ui's Deployment runs as its own ServiceAccount, that ServiceAccount is bound only
+// to ichor-ui's own ClusterRole, and at least one other ServiceAccount/ClusterRoleBinding
+// pair exists (the controller's) that names neither.
+func checkUIBackendRBACIsSeparate(t *testing.T, release string, docs []map[string]any) {
+	t.Helper()
+
+	uiDeployment := find(docs, kindDeployment, ichorUIDeploymentName)
+	if uiDeployment == nil {
+		t.Fatalf("helm template %s .: expected a %s named %q",
+			release, kindDeployment, ichorUIDeploymentName)
+	}
+	if sa := deploymentServiceAccountName(uiDeployment); sa != ichorUIServiceAccountName {
+		t.Errorf(
+			"helm template %s .: %s %q runs as ServiceAccount %q, want %q (its own identity, "+
+				"separate from the controller's)",
+			release, kindDeployment, ichorUIDeploymentName, sa, ichorUIServiceAccountName,
+		)
+	}
+
+	if find(docs, kindServiceAccount, ichorUIServiceAccountName) == nil {
+		t.Fatalf("helm template %s .: expected a %s named %q",
+			release, kindServiceAccount, ichorUIServiceAccountName)
+	}
+	if find(docs, kindClusterRole, ichorUIRoleName) == nil {
+		t.Fatalf("helm template %s .: expected a %s named %q",
+			release, kindClusterRole, ichorUIRoleName)
+	}
+
+	binding := find(docs, kindClusterRoleBinding, ichorUIRoleBindingName)
+	if binding == nil {
+		t.Fatalf("helm template %s .: expected a %s named %q",
+			release, kindClusterRoleBinding, ichorUIRoleBindingName)
+	}
+	roleRef, subject := clusterRoleBindingRefs(binding)
+	if roleRef != ichorUIRoleName || subject != ichorUIServiceAccountName {
+		t.Errorf(
+			"helm template %s .: %s %q binds ClusterRole %q to ServiceAccount %q, want %q to %q",
+			release, kindClusterRoleBinding, ichorUIRoleBindingName, roleRef, subject,
+			ichorUIRoleName, ichorUIServiceAccountName,
+		)
+	}
+
+	// At least one other ClusterRoleBinding must exist (the controller's own) whose
+	// ClusterRole and ServiceAccount are neither of ichor-ui's -- otherwise the two
+	// identities could have silently become the same one.
+	foundDistinctOther := false
+	for _, b := range findAll(docs, kindClusterRoleBinding) {
+		if nameOf(b) == ichorUIRoleBindingName {
+			continue
+		}
+		roleRef, subject := clusterRoleBindingRefs(b)
+		if roleRef != ichorUIRoleName && subject != ichorUIServiceAccountName {
+			foundDistinctOther = true
+			break
+		}
+	}
+	if !foundDistinctOther {
+		t.Errorf(
+			"helm template %s .: expected at least one other %s (the controller's own) binding "+
+				"neither ClusterRole %q nor ServiceAccount %q; the controller and the UI backend "+
+				"must keep separate identities",
+			release, kindClusterRoleBinding, ichorUIRoleName, ichorUIServiceAccountName,
+		)
+	}
+}
+
+// deploymentServiceAccountName reads spec.template.spec.serviceAccountName from a decoded
+// Deployment.
+func deploymentServiceAccountName(deployment map[string]any) string {
+	spec, _ := deployment["spec"].(map[string]any)
+	template, _ := spec["template"].(map[string]any)
+	podSpec, _ := template["spec"].(map[string]any)
+	sa, _ := podSpec["serviceAccountName"].(string)
+	return sa
+}
+
+// clusterRoleBindingRefs reads a decoded ClusterRoleBinding's roleRef.name and its first
+// subject's name.
+func clusterRoleBindingRefs(binding map[string]any) (roleRef, subject string) {
+	ref, _ := binding["roleRef"].(map[string]any)
+	roleRef, _ = ref["name"].(string)
+
+	subjects, _ := binding["subjects"].([]any)
+	if len(subjects) > 0 {
+		sm, _ := subjects[0].(map[string]any)
+		subject, _ = sm["name"].(string)
+	}
+	return roleRef, subject
 }
 
 // checkNoCABundle guards the other half: no caBundle may be

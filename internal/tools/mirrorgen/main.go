@@ -34,14 +34,19 @@ const (
 	pkgCel = "github.com/siderolabs/talos/pkg/machinery/cel"
 )
 
-// Packages fieldOverrides (below) points into. None of these are new
-// dependencies: all four modules are already in go.mod, pulled in
-// transitively by controller-runtime/client-go.
+// Packages fieldOverrides (below) points into. None of these four are new
+// dependencies: all are already in go.mod, pulled in transitively by
+// controller-runtime/client-go.
 const (
 	pkgCoreV1      = "k8s.io/api/core/v1"
 	pkgSpecs       = "github.com/opencontainers/runtime-spec/specs-go"
 	pkgAuditV1     = "k8s.io/apiserver/pkg/apis/audit/v1"
 	pkgAPIServerV1 = "k8s.io/apiserver/pkg/apis/apiserver/v1"
+	// pkgKubeletV1 is the one fieldOverrides entry that IS a new direct
+	// dependency ("KubeletCredentialProviderConfig gets an
+	// override"): k8s.io/kubelet wasn't pulled in transitively by anything
+	// already in go.mod.
+	pkgKubeletV1 = "k8s.io/kubelet/config/v1"
 )
 
 // rootKind is one allow-listed machinery document kind to mirror. Adding a
@@ -176,6 +181,11 @@ var fieldOverrides = map[string]fieldOverride{
 	"MachineSeccompProfile.MachineSeccompProfileValue":      {pkgPath: pkgSpecs, typeName: "LinuxSeccomp", localWrapper: "SeccompProfile"},
 	"APIServerConfig.AuditPolicyConfig":                     {pkgPath: pkgAuditV1, typeName: "Policy"},
 	"AuthorizationConfigAuthorizerConfig.AuthorizerWebhook": {pkgPath: pkgAPIServerV1, typeName: "WebhookConfiguration"},
+	// Sixth override "KubeletCredentialProviderConfig gets an
+	// override" follow-up: generates a clean CRD schema like the five above,
+	// but (unlike them) needs a new direct dependency, k8s.io/kubelet --
+	// that was the only thing holding it back, not the generator.
+	"KubeletConfig.KubeletCredentialProviderConfig": {pkgPath: pkgKubeletV1, typeName: "CredentialProviderConfig"},
 }
 
 // secretFields are machinery fields that carry cluster secret material --
@@ -243,7 +253,7 @@ func main() {
 			packages.NeedDeps | packages.NeedImports,
 	}
 
-	pkgs, err := packages.Load(cfg, pkgRuntime, pkgV1Alpha1, pkgBlock, pkgCoreV1, pkgSpecs, pkgAuditV1, pkgAPIServerV1)
+	pkgs, err := packages.Load(cfg, pkgRuntime, pkgV1Alpha1, pkgBlock, pkgCoreV1, pkgSpecs, pkgAuditV1, pkgAPIServerV1, pkgKubeletV1)
 	if err != nil {
 		fatalf("loading packages: %v", err)
 	}

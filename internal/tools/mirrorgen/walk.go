@@ -181,6 +181,8 @@ func machImportAlias(pkgPath string) string {
 		return "auditv1"
 	case pkgAPIServerV1:
 		return "apiserverv1"
+	case pkgKubeletV1:
+		return "kubeletv1"
 	case pkgBlock:
 		return "mblock"
 	case pkgResourcesBlock:

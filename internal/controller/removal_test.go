@@ -139,17 +139,16 @@ var _ = Describe("TalosMachineReconciler removal", func() {
 	})
 
 	// The four failure modes docs/design/architecture.md's "Nodes" names for
-	// the removal sequence. Two are Reset's alone (naming the partitions to
-	// wipe; the fire-and-forget double-reset) and still do not apply here:
-	// Keeps Reset a separate unit, so no code in this package ever
-	// calls it -- TestTalosClientHasNoResetMethod below is the guard that
-	// a future addition cannot silently reintroduce either failure without
-	// this file noticing. The other two are exactly what these specs show
-	// cannot be stepped into: a refusal still never reaches Talos at all
-	// (checked before drain or removeEtcdMember), and removeEtcdMember's
-	// own idempotency (etcd_removal_test.go) is this phase's answer to
-	// "removing an already-removed etcd member reports not-found, which
-	// counts as success."
+	// the removal sequence, and how each is answered now that Reset has landed too: naming the partitions to wipe is
+	// machineryTalosClient.Reset's own fixed SystemPartitionsToWipe list
+	// (STATE, EPHEMERAL -- never empty, never the implicit wipe-everything);
+	// the fire-and-forget double-reset is resetNode's own
+	// already-requested check (reset_test.go); a refusal still never
+	// reaches Talos at all (checked before drain, removeEtcdMember or
+	// resetNode); and removeEtcdMember's own idempotency
+	// (etcd_removal_test.go) is this phase's answer to "removing an
+	// already-removed etcd member reports not-found, which counts as
+	// success."
 	Describe("the four failure modes architecture.md calls out", func() {
 		It("refuses on its own refusal, never by asking Talos (there is no Talos call here at all)", func() {
 			cluster := newTestClusterWithCount(1, "does-not-exist")

@@ -29,7 +29,7 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
-const uuidClusterReconcile = "70707070-7070-7070-7070-707070707070"
+const uuidClusterReconcile = "7c7c7c7c-7c7c-7c7c-7c7c-7c7c7c7c7c7c"
 
 var errFactoryMustNotBeCalled = errors.New("must never be called")
 

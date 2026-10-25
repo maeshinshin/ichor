@@ -19,7 +19,14 @@ limitations under the License.
 // later, the UI backend (design principle 10).
 package deleteguard
 
-import "fmt"
+import (
+	"context"
+	"fmt"
+
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+)
 
 // AllowDeleteAnnotation, set to AllowDeleteValue, permits deleting a
 // TalosCluster or TalosMachine. Its absence stops an Argo CD prune from
@@ -88,4 +95,43 @@ func CheckControlPlaneCount(currentControlPlanes int, desiredCount int) error {
 			currentControlPlanes, after, desiredCount)
 	}
 	return nil
+}
+
+// CountApprovedControlPlanes lists approved control-plane TalosMachines in
+// namespace belonging to the TalosCluster named clusterName, for
+// CheckControlPlaneQuorum/CheckControlPlaneCount's currentControlPlanes
+// argument.
+//
+// reader must be a direct, uncached read -- a manager's APIReader
+// (mgr.GetAPIReader()), never its cached Client (mgr.GetClient()). This
+// count gates two independent delete paths (the webhook's admission check
+// and removal.go's own recount under the cluster lock), and both used the
+// cached client until a load-dependent test failure traced back to it: a
+// cached read can still report a control plane that was deleted moments
+// ago, drifting the count *high*. High is the dangerous direction here --
+// it is what lets a second, concurrent deletion look safe when it would
+// actually break quorum -- unlike undercounting, which only over-refuses.
+// See's appendix.
+//
+// This is the only place in the codebase that lists TalosMachines to count
+// control planes -- enforced by TestCountApprovedControlPlanesIsTheOnlyListSite,
+// the same go/parser technique internal/controller's
+// TestAcquireDisruptiveLockIsTheOnlyAcquireCallSite and
+// TestFixtureUUIDsAreUnique already use. If a quorum/removal test ever
+// flakes, suspect this function's read path before the environment -- that
+// is exactly how the cached-read bug above was found.
+func CountApprovedControlPlanes(ctx context.Context, reader client.Reader, namespace, clusterName string) (int, error) {
+	var siblings ichorv1alpha1.TalosMachineList
+	if err := reader.List(ctx, &siblings, client.InNamespace(namespace)); err != nil {
+		return 0, err
+	}
+
+	count := 0
+	for _, m := range siblings.Items {
+		if m.Spec.Role == "controlplane" && m.Spec.IsApproved() && m.Spec.ClusterRef.Name == clusterName {
+			count++
+		}
+	}
+
+	return count, nil
 }

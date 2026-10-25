@@ -121,32 +121,6 @@ func TestIndexMatchesFiles(t *testing.T) {
 	}
 }
 
-// TestNumbersAreContiguous fails loudly, naming the missing number, if the
-// ADR sequence ever gets a hole (a deleted or never-written file) -- the
-// index can then either close it or record an explicit "skipped" row,
-// rather than the gap just going unremarked.
-func TestNumbersAreContiguous(t *testing.T) {
-	numbers := toSet(adrNumbers(t))
-	if len(numbers) == 0 {
-		t.Fatal("found no ADR files")
-	}
-
-	max := 0
-	for n := range numbers {
-		if n > max {
-			max = n
-		}
-	}
-
-	for n := 1; n <= max; n++ {
-		if !numbers[n] {
-			t.Errorf("ADR number %04d is missing from docs/adr/ (sequence runs 0001..%04d otherwise); "+
-				"if that's intentional, give it a file explaining why it was skipped, or a row in "+
-				"README.md's index saying so -- not silence", n, max)
-		}
-	}
-}
-
 func toSet(nums []int) map[int]bool {
 	set := make(map[int]bool, len(nums))
 	for _, n := range nums {

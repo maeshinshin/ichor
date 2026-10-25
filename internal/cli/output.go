@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	sigsyaml "sigs.k8s.io/yaml"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -63,5 +64,47 @@ func writeOutput(w io.Writer, format string, patches []ichorv1alpha1.TalosConfig
 		return nil
 	default:
 		return fmt.Errorf("adopt: invalid output format %q", format)
+	}
+}
+
+// writeOutputObjects is writeOutput's init counterpart: adopt only ever
+// creates one kind of object, but init creates a TalosCluster, a
+// TalosMachine and zero or more TalosConfigPatches, so this takes
+// whatever client.Object values the caller built instead of one typed
+// slice. Same two formats, same rule: every object printed is a CR init
+// is creating or just created, never the secrets bundle or a rendered
+// machine configuration.
+func writeOutputObjects(w io.Writer, format string, objs []client.Object) error {
+	switch format {
+	case outputJSON:
+		enc := json.NewEncoder(w)
+		enc.SetIndent("", "  ")
+
+		if err := enc.Encode(objs); err != nil {
+			return fmt.Errorf("init: encoding output as JSON: %w", err)
+		}
+
+		return nil
+	case outputYAML:
+		for i, obj := range objs {
+			if i > 0 {
+				if _, err := fmt.Fprintln(w, "---"); err != nil {
+					return err
+				}
+			}
+
+			out, err := sigsyaml.Marshal(obj)
+			if err != nil {
+				return fmt.Errorf("init: encoding output as YAML: %w", err)
+			}
+
+			if _, err := w.Write(out); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	default:
+		return fmt.Errorf("init: invalid output format %q", format)
 	}
 }

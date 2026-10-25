@@ -49,7 +49,6 @@ package controller
 
 import (
 	"context"
-	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
@@ -382,9 +381,7 @@ func desiredInputsHash(
 		parts = append(parts, fmt.Sprintf("patch:%s=%d", p.Name, p.Generation))
 	}
 
-	sum := sha256.Sum256([]byte(strings.Join(parts, ";")))
-
-	return fmt.Sprintf("sha256:%x", sum), nil
+	return render.Hash([]byte(strings.Join(parts, ";"))), nil
 }
 
 // refuseReboot implements the reboot-needed branch of design step 5: take
@@ -456,9 +453,7 @@ func (r *TalosMachineReconciler) setWarnings(m *ichorv1alpha1.TalosMachine, warn
 // hashConfig hashes cfg the same way pkg/render.Render hashes its output,
 // so the two are comparable.
 func hashConfig(cfg []byte) string {
-	sum := sha256.Sum256(cfg)
-
-	return fmt.Sprintf("sha256:%x", sum)
+	return render.Hash(cfg)
 }
 
 // SetupWithManager sets up the controller with the Manager.

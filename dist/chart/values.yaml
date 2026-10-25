@@ -292,17 +292,24 @@ metrics:
   # Note: Metrics authn/authz needs ClusterRole access.
   secure: true
 
-## The metrics endpoint's TLS certificate. Despite the name, this is not an external
-## cert-manager integration -- Ichor ships no certificate-issuing dependency.
-## true provisions a real, verifiable certificate via cert-controller's second
-## in-process rotator; false (the default) leaves the metrics server on
-## controller-runtime's own ephemeral self-signed one, and prometheus.enabled's
-## ServiceMonitor scrapes it with insecureSkipVerify instead of a trusted CA. The
-## webhook serving certificate never uses this toggle -- it's generated in-process by
-## cert-controller's first rotator unconditionally, via the always-mounted
-## ichor-webhook-server-cert Secret.
+## The metrics endpoint's TLS certificate. Not cert-manager: Ichor ships no
+## certificate-issuing dependency and no cert-manager Certificate resource
+## -- true provisions a real, verifiable certificate via cert-controller's second
+## in-process rotator instead, the same mechanism the webhook serving
+## certificate already uses unconditionally, via its own always-mounted
+## ichor-webhook-server-cert Secret. false (the default) leaves the metrics server
+## on controller-runtime's own ephemeral self-signed certificate, and
+## prometheus.enabled's ServiceMonitor scrapes it with insecureSkipVerify instead of
+## a trusted CA. Off by default not because it's unsafe to turn on, but because
+## cert-controller has no Create path (only Update): enabling this makes
+## --metrics-cert-path non-empty, and controller-runtime's metrics server checks for
+## that cert file once, at startup, with no retry -- on a cluster where the rotator
+## hasn't written it yet, the manager's own Start() fails and the whole controller
+## (not just metrics) crash-loops until it wins that race, the same already-accepted
+## failure mode of the webhook certificate, just not yet worth
+## taking on by default for a metrics-TLS nicety.
 ##
-certManager:
+metricsCert:
   enabled: false
 
 ## Webhook server configuration

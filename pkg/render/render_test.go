@@ -53,6 +53,15 @@ const (
 	labelEnv = "env"
 
 	sysctlKey = "ichor.test.render"
+
+	kindConfig            = "Config"
+	configVersionV1Alpha1 = "v1alpha1"
+
+	// handoverCompleteReason mirrors internal/controller's
+	// reasonHandoverComplete -- duplicated here, not imported, since this
+	// package cannot depend on internal/controller.
+	handoverCompleteReason  = "Complete"
+	handoverCompleteMessage = "handed over"
 )
 
 func testContract(t *testing.T) *coreconfig.VersionContract {
@@ -469,8 +478,8 @@ func TestRenderBundleLeak(t *testing.T) {
 
 	t.Run("duplicate v1alpha1.Config document in one patch", func(t *testing.T) {
 		doc := ichorv1alpha1.TalosConfigPatchDocument{
-			Kind:   "Config",
-			Config: &typedconfig.Config{ConfigVersion: "v1alpha1"},
+			Kind:   kindConfig,
+			Config: &typedconfig.Config{ConfigVersion: configVersionV1Alpha1},
 		}
 		patch := ichorv1alpha1.TalosConfigPatch{
 			Namespace: testNamespace, Name: "p3",
@@ -486,9 +495,9 @@ func TestRenderBundleLeak(t *testing.T) {
 
 	t.Run("etcd config on a worker fails validation", func(t *testing.T) {
 		doc := ichorv1alpha1.TalosConfigPatchDocument{
-			Kind: "Config",
+			Kind: kindConfig,
 			Config: &typedconfig.Config{
-				ConfigVersion: "v1alpha1",
+				ConfigVersion: configVersionV1Alpha1,
 				ClusterConfig: &typedconfig.ClusterConfig{
 					EtcdConfig: &typedconfig.EtcdConfig{},
 				},
@@ -521,9 +530,9 @@ func inlineManifestPatch(patchName, manifestName string) ichorv1alpha1.TalosConf
 			Layer:      layerCluster,
 			Documents: []ichorv1alpha1.TalosConfigPatchDocument{
 				{
-					Kind: "Config",
+					Kind: kindConfig,
 					Config: &typedconfig.Config{
-						ConfigVersion: "v1alpha1",
+						ConfigVersion: configVersionV1Alpha1,
 						ClusterConfig: &typedconfig.ClusterConfig{
 							ClusterInlineManifests: []*typedconfig.ClusterInlineManifest{
 								{InlineManifestName: manifestName, InlineManifestContents: "kind: Nothing\n"},
@@ -576,7 +585,8 @@ func TestCNIHandoverDropsInlineManifest(t *testing.T) {
 	t.Run("condition true drops only the CNI entry", func(t *testing.T) {
 		cluster := testCluster("true")
 		apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-			Type: ConditionCNIHandover, Status: metav1.ConditionTrue, Reason: "Complete", Message: "handed over",
+			Type: ConditionCNIHandover, Status: metav1.ConditionTrue,
+			Reason: handoverCompleteReason, Message: handoverCompleteMessage,
 		})
 
 		out := mustRender(t, cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{patch})
@@ -596,7 +606,8 @@ func TestCNIHandoverDropsInlineManifest(t *testing.T) {
 	t.Run("does not mutate the caller's patch", func(t *testing.T) {
 		cluster := testCluster("true")
 		apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-			Type: ConditionCNIHandover, Status: metav1.ConditionTrue, Reason: "Complete", Message: "handed over",
+			Type: ConditionCNIHandover, Status: metav1.ConditionTrue,
+			Reason: handoverCompleteReason, Message: handoverCompleteMessage,
 		})
 
 		before := patch.DeepCopy()
@@ -615,7 +626,8 @@ func TestCNIHandoverDropsInlineManifest(t *testing.T) {
 	t.Run("a patch without the entry is passed through unchanged (not deep-copied)", func(t *testing.T) {
 		cluster := testCluster("true")
 		apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-			Type: ConditionCNIHandover, Status: metav1.ConditionTrue, Reason: "Complete", Message: "handed over",
+			Type: ConditionCNIHandover, Status: metav1.ConditionTrue,
+			Reason: handoverCompleteReason, Message: handoverCompleteMessage,
 		})
 
 		plain := sysctlPatch("plain", layerCluster, 0, nil, "1")

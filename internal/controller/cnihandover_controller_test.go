@@ -47,7 +47,7 @@ import (
 // exactly the "Argo CD not installed" case CNIHandoverReconciler must not
 // hang on.
 var testArgoApplicationCRD = &apiextensionsv1.CustomResourceDefinition{
-	ObjectMeta: metav1.ObjectMeta{Name: "applications.argoproj.io"},
+	Name: "applications.argoproj.io",
 	Spec: apiextensionsv1.CustomResourceDefinitionSpec{
 		Group: "argoproj.io",
 		Names: apiextensionsv1.CustomResourceDefinitionNames{
@@ -75,29 +75,30 @@ func installArgoApplicationCRD() {
 	_, err := envtest.InstallCRDs(cfg, envtest.CRDInstallOptions{CRDs: []*apiextensionsv1.CustomResourceDefinition{testArgoApplicationCRD}})
 	Expect(err).NotTo(HaveOccurred())
 
-	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "argocd"}}
+	ns := &corev1.Namespace{Name: "argocd"}
 	Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, ns))).To(Succeed())
 }
 
 func reconcileHandover(r *CNIHandoverReconciler, namespace, name string) (ctrl.Result, error) {
-	return r.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: namespace, Name: name}})
+	return r.Reconcile(ctx, ctrl.Request{Namespace: namespace, Name: name})
 }
 
-// newTestClusterWithCNI is newTestCluster plus a CNI preset/handover mode set
-// before Create -- spec.cni.preset is immutable once a TalosCluster exists
-// (the CEL rule on TalosClusterCNI), so unlike every other field in these
-// tests it cannot be changed with a follow-up Update.
-func newTestClusterWithCNI(preset, handover string) *ichorv1alpha1.TalosCluster {
+// newTestCiliumCluster is newTestCluster with the CNI preset set to cilium
+// (and handover to the given mode) before Create -- spec.cni.preset is
+// immutable once a TalosCluster exists (the CEL rule on TalosClusterCNI), so
+// unlike every other field in these tests it cannot be changed with a
+// follow-up Update.
+func newTestCiliumCluster(handover string) *ichorv1alpha1.TalosCluster {
 	cluster := &ichorv1alpha1.TalosCluster{
-		GenerateName: "cluster-", Namespace: tmNamespace,
+		GenerateName: testClusterGenerate, Namespace: tmNamespace,
 		Spec: ichorv1alpha1.TalosClusterSpec{
-			Endpoint:          ichorv1alpha1.TalosClusterEndpoint{Type: testEndpointType, Address: "10.0.0.5"},
+			Endpoint:          ichorv1alpha1.TalosClusterEndpoint{Type: testEndpointType, Address: testClusterAddress},
 			TalosVersion:      testTalosVersion,
 			KubernetesVersion: "v" + constants.DefaultKubernetesVersion,
 			VersionContract:   "v1.14",
 			SecretsRef:        corev1.LocalObjectReference{Name: "does-not-exist"},
 			ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: 1, Schedulable: testSchedulable},
-			CNI:               ichorv1alpha1.TalosClusterCNI{Preset: preset, Handover: handover},
+			CNI:               ichorv1alpha1.TalosClusterCNI{Preset: "cilium", Handover: handover},
 		},
 	}
 	Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
@@ -132,7 +133,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 	})
 
 	It("sets Disabled and never requeues when spec.cni.handover is disabled", func() {
-		cluster := newTestClusterWithCNI("cilium", "disabled")
+		cluster := newTestCiliumCluster("disabled")
 
 		r := &CNIHandoverReconciler{Client: k8sClient}
 		result, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
@@ -148,7 +149,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 	})
 
 	It("sets ManualPending and never requeues when spec.cni.handover is manual", func() {
-		cluster := newTestClusterWithCNI("cilium", "manual")
+		cluster := newTestCiliumCluster("manual")
 
 		r := &CNIHandoverReconciler{Client: k8sClient}
 		result, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
@@ -164,7 +165,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 	})
 
 	It("waits and requeues, without erroring, when Argo CD is not installed at all", func() {
-		cluster := newTestClusterWithCNI("cilium", "")
+		cluster := newTestCiliumCluster("")
 
 		// This package's envtest apiserver never loads Argo CD's CRD
 		// (suite_test.go only loads config/crd/bases), so this exercises
@@ -198,7 +199,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		})
 
 		It("waits and requeues while the Application exists but is not Synced and Healthy", func() {
-			cluster := newTestClusterWithCNI("cilium", "")
+			cluster := newTestCiliumCluster("")
 
 			app, err := cilium.New().ArgoCDApplication("enabled")
 			Expect(err).NotTo(HaveOccurred())
@@ -223,7 +224,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 
 		It("sets Complete, with no requeue, once the Application is Synced and Healthy -- "+
 			"at exactly the Name/Namespace preset.ArgoCDApplication itself returns", func() {
-			cluster := newTestClusterWithCNI("cilium", "")
+			cluster := newTestCiliumCluster("")
 
 			app, err := cilium.New().ArgoCDApplication("enabled")
 			Expect(err).NotTo(HaveOccurred())

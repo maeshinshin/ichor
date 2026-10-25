@@ -47,7 +47,7 @@ import (
 )
 
 // ConditionCNIHandover is the TalosCluster.status condition type the CNI
-// hand-over reconciler (internal/controller, ADR 0023) writes once Argo CD
+// hand-over reconciler (internal/controller, ADR 0024) writes once Argo CD
 // reports the CNI's Application Synced and Healthy. Render reads it
 // directly, rather than taking a new parameter every caller would have to
 // thread through, to decide whether to keep rendering the CNI's
@@ -362,7 +362,9 @@ func dropHandedOverInlineManifest(ordered []*ichorv1alpha1.TalosConfigPatch) []*
 // withoutInlineManifest returns manifests without any entry named name, as
 // a fresh slice (never manifests' own backing array, which dropHandedOverInlineManifest's
 // caller may still hold a pointer to via the original, unmodified patch).
-func withoutInlineManifest(manifests []*typedconfig.ClusterInlineManifest, name string) []*typedconfig.ClusterInlineManifest {
+func withoutInlineManifest(
+	manifests []*typedconfig.ClusterInlineManifest, name string,
+) []*typedconfig.ClusterInlineManifest {
 	var kept []*typedconfig.ClusterInlineManifest
 
 	for _, entry := range manifests {

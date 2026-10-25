@@ -35,7 +35,7 @@ import (
 // unexported there and duplicated here because that package and this
 // one's callers -- pkg/render, internal/controller -- have no shared home
 // below internal/cli that isn't a layering violation). The hand-over
-// reconciler (ADR 0023) matches on this exact name to know which
+// reconciler (ADR 0024) matches on this exact name to know which
 // inlineManifests entry to stop rendering once Argo CD has adopted it.
 const InlineManifestName = "cni"
 

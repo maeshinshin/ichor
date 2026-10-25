@@ -66,7 +66,7 @@ const (
 // inject-through-cluster.inlineManifests-then-remove path. Ichor itself is applied
 // directly through the API server, never inlined, and Argo CD is never installed by Ichor
 // at all (ADR 0019) -- so neither one ever needs this path, and there is nothing left to
-// register. ADR 0023 records why that means no registry abstraction here, for one member.
+// register. ADR 0024 records why that means no registry abstraction here, for one member.
 //
 // A separate controller from TalosClusterReconciler on purpose: that reconciler's own doc
 // comment already warns DiscoverAll can block a TalosCluster's reconcile for up to ~68s at
@@ -75,7 +75,7 @@ const (
 // watching the same Kind each get their own work queue, so a slow discovery pass in one
 // never delays the other -- raising TalosClusterReconciler's MaxConcurrentReconciles would
 // not have helped, since a single TalosCluster only ever has one in-flight reconcile
-// through one controller's queue regardless of that setting (ADR 0023).
+// through one controller's queue regardless of that setting (ADR 0024).
 type CNIHandoverReconciler struct {
 	client.Client
 }

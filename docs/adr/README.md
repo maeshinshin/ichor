@@ -43,3 +43,4 @@ same way it catches a stale chart.
 | 0028 | `ichor gitops export`'s allow-list of CR kinds, its Argo CD/Flux tracked-resource warning, and `ichor gitops handoff`'s one-field `TalosCluster` patch | Accepted |
 | 0029 | Generate `docs/adr/README.md`'s index table from a `Decided:`/`Status:` line in each ADR's own header (`internal/tools/adrindex`) instead of a shared, hand-edited table | Accepted |
 | 0030 | `ichor ui` discovers ichor-ui pods through the `ichor-ui-service` Service's own selector/port and reforwards to another ready pod (same local port) whenever the tunnel ends, instead of targeting one pod name | Accepted |
+| 0031 | made `config/samples/*.yaml` minimal, valid and apply-tested instead of deleting them, and gave the metrics endpoint a real certificate via a second cert-controller rotator instead of leaving `insecureSkipVerify`'s documented escape hatch wired to nothing. | Accepted |

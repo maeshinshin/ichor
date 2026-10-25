@@ -72,47 +72,9 @@ func Render(
 	bundle *secrets.Bundle,
 	candidates []ichorv1alpha1.TalosConfigPatch,
 ) ([]byte, string, error) {
-	if bundle == nil {
-		return nil, "", fmt.Errorf("render: secrets bundle is required")
-	}
-
-	contract, err := coreconfig.ParseContractFromVersion(cluster.Spec.VersionContract)
-	if err != nil {
-		return nil, "", fmt.Errorf("render: parsing versionContract: %w", err)
-	}
-
-	// machine.ParseType treats "" as TypeWorker, not an error -- it exists
-	// to parse config documents, where an absent machineType field has
-	// always meant worker. TalosMachineSpec.Role is different: it is left
-	// empty by discovery before approval assigns one (ADR 0011), and an
-	// approved machine with no role must never silently render as a worker.
-	// Checked explicitly, ahead of ParseType, for exactly that reason.
-	if m.Spec.Role == "" {
-		return nil, "", fmt.Errorf("render: machine role is not set")
-	}
-
-	machineType, err := machine.ParseType(m.Spec.Role)
-	if err != nil {
-		return nil, "", fmt.Errorf("render: parsing machine role: %w", err)
-	}
-
-	cfg, err := baseConfig(cluster, bundle, contract, machineType)
+	cfg, err := BuildConfig(cluster, m, bundle, candidates)
 	if err != nil {
 		return nil, "", err
-	}
-
-	ordered, err := SelectPatches(cluster, m, candidates)
-	if err != nil {
-		return nil, "", err
-	}
-
-	cfg, err = applyPatches(cfg, ordered)
-	if err != nil {
-		return nil, "", fmt.Errorf("render: applying patches: %w", err)
-	}
-
-	if _, err := cfg.ValidateAsClient(clientRuntimeMode{}); err != nil {
-		return nil, "", fmt.Errorf("render: validating rendered config: %w", err)
 	}
 
 	out, err := cfg.EncodeBytes(encoder.WithComments(encoder.CommentsDisabled))
@@ -123,6 +85,66 @@ func Render(
 	sum := sha256.Sum256(out)
 
 	return out, fmt.Sprintf("sha256:%x", sum), nil
+}
+
+// BuildConfig runs every step of Render up to (and including) validation,
+// but stops short of encoding: it returns the validated coreconfig.Provider
+// itself rather than bytes. Render is the only caller that needs the final
+// bytes and hash; a caller that needs the Provider instead -- the UI
+// backend's effective-config view, which calls Provider.RedactSecrets
+// before encoding so a secret is never serialized unmasked (ADR 0016, ADR
+// 0018) -- calls BuildConfig directly instead of re-deriving the base
+// config, patch selection and merge Render already does.
+func BuildConfig(
+	cluster *ichorv1alpha1.TalosCluster,
+	m *ichorv1alpha1.TalosMachine,
+	bundle *secrets.Bundle,
+	candidates []ichorv1alpha1.TalosConfigPatch,
+) (coreconfig.Provider, error) {
+	if bundle == nil {
+		return nil, fmt.Errorf("render: secrets bundle is required")
+	}
+
+	contract, err := coreconfig.ParseContractFromVersion(cluster.Spec.VersionContract)
+	if err != nil {
+		return nil, fmt.Errorf("render: parsing versionContract: %w", err)
+	}
+
+	// machine.ParseType treats "" as TypeWorker, not an error -- it exists
+	// to parse config documents, where an absent machineType field has
+	// always meant worker. TalosMachineSpec.Role is different: it is left
+	// empty by discovery before approval assigns one (ADR 0011), and an
+	// approved machine with no role must never silently render as a worker.
+	// Checked explicitly, ahead of ParseType, for exactly that reason.
+	if m.Spec.Role == "" {
+		return nil, fmt.Errorf("render: machine role is not set")
+	}
+
+	machineType, err := machine.ParseType(m.Spec.Role)
+	if err != nil {
+		return nil, fmt.Errorf("render: parsing machine role: %w", err)
+	}
+
+	cfg, err := baseConfig(cluster, bundle, contract, machineType)
+	if err != nil {
+		return nil, err
+	}
+
+	ordered, err := SelectPatches(cluster, m, candidates)
+	if err != nil {
+		return nil, err
+	}
+
+	cfg, err = applyPatches(cfg, ordered)
+	if err != nil {
+		return nil, fmt.Errorf("render: applying patches: %w", err)
+	}
+
+	if _, err := cfg.ValidateAsClient(clientRuntimeMode{}); err != nil {
+		return nil, fmt.Errorf("render: validating rendered config: %w", err)
+	}
+
+	return cfg, nil
 }
 
 // baseConfig generates the role-specific base config from the bundle
@@ -287,7 +309,7 @@ func applyPatches(cfg coreconfig.Provider, ordered []*ichorv1alpha1.TalosConfigP
 		docs := make([]config.Document, 0, len(p.Spec.Documents))
 
 		for _, d := range p.Spec.Documents {
-			doc, err := documentFromPatch(d)
+			doc, err := DocumentFromPatch(d)
 			if err != nil {
 				return nil, fmt.Errorf("render: patch %q: %w", p.Name, err)
 			}
@@ -315,13 +337,18 @@ func applyPatches(cfg coreconfig.Provider, ordered []*ichorv1alpha1.TalosConfigP
 	return out.Config()
 }
 
-// documentFromPatch converts one TalosConfigPatchDocument to the machinery
+// DocumentFromPatch converts one TalosConfigPatchDocument to the machinery
 // document its kind selects, through the typedconfig mirror type's own
 // ToMachinery conversion (ADR 0003). The CRD's discriminator validation
 // guarantees exactly one of the fields below is populated and that it
 // matches Kind; the default case only guards against a value that bypassed
 // that validation (e.g. in a unit test).
-func documentFromPatch(d ichorv1alpha1.TalosConfigPatchDocument) (config.Document, error) {
+//
+// Exported so the UI backend's effective-config view (ADR 0018) can encode
+// one patch's own documents in isolation -- to learn which field paths that
+// patch contributes, for the view's per-value origin -- without
+// re-implementing this kind switch.
+func DocumentFromPatch(d ichorv1alpha1.TalosConfigPatchDocument) (config.Document, error) {
 	switch d.Kind {
 	case "SysctlConfig":
 		doc, err := d.SysctlConfig.ToMachinery()

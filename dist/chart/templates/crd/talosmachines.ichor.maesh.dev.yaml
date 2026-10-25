@@ -60,6 +60,34 @@ spec:
           spec:
             description: spec defines the desired state of TalosMachine
             properties:
+              approvalDecision:
+                description: |-
+                  approvalDecision records who made the current approvalState decision,
+                  when, and why. It is kept separate from approvalState, not folded
+                  into it, so approvalState alone remains this machine's single source
+                  of truth for approval status -- this struct asserts no approved/
+                  rejected state of its own, only the record behind whichever state
+                  approvalState already carries. Unset until the first approve/reject.
+                properties:
+                  actor:
+                    description: |-
+                      actor identifies who made the decision. Fixed to the backend's own
+                      identity until OIDC login lands (ADR 0018); the field is added now
+                      rather than later so every decision from here on has an actor
+                      recorded, instead of leaving earlier decisions with none once a
+                      real per-person identity exists to fill it.
+                    type: string
+                  at:
+                    description: at is when the decision was made.
+                    format: date-time
+                    type: string
+                  reason:
+                    description: |-
+                      reason is optional free text, symmetric between approve and reject --
+                      AuditRecord's own wire comment already documents "reason" as "mainly
+                      used for rejections," not exclusive to them.
+                    type: string
+                type: object
               approvalState:
                 default: pending
                 description: |-

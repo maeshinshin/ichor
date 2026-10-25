@@ -40,4 +40,4 @@ package uiapi
 
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters;talosconfigpatches,verbs=get;list
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosmachines,verbs=get;list;update
-// +kubebuilder:rbac:groups="",resources=secrets,verbs=get
+// +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,verbs=get

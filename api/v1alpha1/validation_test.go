@@ -51,6 +51,9 @@ const (
 	kubeProxyEnabled  = "enabled"
 	kubeProxyReplaced = "replaced"
 	testCIDR          = "192.0.2.0/24"
+
+	testRegistryHost   = "registry.example.com"
+	testMirrorEndpoint = "https://mirror.example.com"
 )
 
 func newConfigPatch(layer string, target *TalosConfigPatchTarget) *TalosConfigPatch {
@@ -440,6 +443,57 @@ var _ = Describe("TalosCluster", func() {
 		Entry("a 5th CIDR is rejected (MaxItems=4)",
 			[]string{testCIDR, "192.0.3.0/24", "192.0.4.0/24", "192.0.5.0/24", "192.0.6.0/24"}, false),
 	)
+
+	// ADR 0027: spec.registries is the reference form for a private registry's mirror and pull
+	// credentials -- a plain typed field for everything that isn't secret, authSecretRef for
+	// everything that is.
+	It("accepts a TalosCluster with no registries declared at all (the default)", func() {
+		c := newCluster(corev1.LocalObjectReference{Name: literalSecrets}, 3, "true")
+		Expect(k8sClient.Create(context.Background(), c)).To(Succeed())
+		Expect(c.Spec.Registries).To(BeNil())
+	})
+
+	It("accepts an anonymous mirror with no authSecretRef", func() {
+		c := newCluster(corev1.LocalObjectReference{Name: literalSecrets}, 3, "true")
+		c.Spec.Registries = []TalosClusterRegistry{
+			{Host: testRegistryHost, Endpoints: []string{testMirrorEndpoint}},
+		}
+		Expect(k8sClient.Create(context.Background(), c)).To(Succeed())
+	})
+
+	It("accepts a mirror with a username and an authSecretRef", func() {
+		c := newCluster(corev1.LocalObjectReference{Name: literalSecrets}, 3, "true")
+		c.Spec.Registries = []TalosClusterRegistry{
+			{
+				Host:          testRegistryHost,
+				Endpoints:     []string{testMirrorEndpoint},
+				Username:      "deploy",
+				AuthSecretRef: &corev1.LocalObjectReference{Name: "registry-creds"},
+			},
+		}
+		Expect(k8sClient.Create(context.Background(), c)).To(Succeed())
+	})
+
+	It("rejects a registries entry with no host", func() {
+		c := newCluster(corev1.LocalObjectReference{Name: literalSecrets}, 3, "true")
+		c.Spec.Registries = []TalosClusterRegistry{{Endpoints: []string{testMirrorEndpoint}}}
+		Expect(k8sClient.Create(context.Background(), c)).NotTo(Succeed())
+	})
+
+	It("rejects a registries entry with no endpoints", func() {
+		c := newCluster(corev1.LocalObjectReference{Name: literalSecrets}, 3, "true")
+		c.Spec.Registries = []TalosClusterRegistry{{Host: testRegistryHost}}
+		Expect(k8sClient.Create(context.Background(), c)).NotTo(Succeed())
+	})
+
+	It("rejects two registries entries with the same host", func() {
+		c := newCluster(corev1.LocalObjectReference{Name: literalSecrets}, 3, "true")
+		c.Spec.Registries = []TalosClusterRegistry{
+			{Host: testRegistryHost, Endpoints: []string{testMirrorEndpoint + "-a"}},
+			{Host: testRegistryHost, Endpoints: []string{testMirrorEndpoint + "-b"}},
+		}
+		Expect(k8sClient.Create(context.Background(), c)).NotTo(Succeed())
+	})
 })
 
 // newClusterWithCNI is newCluster plus an explicit spec.cni, for the CNI preset/kubeProxy tests

@@ -1,0 +1,155 @@
+syntax = "proto3";
+
+// NodeService backs the node detail page (hardware, disks, network, live
+// resource usage, Kubernetes state, effective config) and the merged
+// multi-node log viewer (architecture.md, "CLI and UI"). It never carries a
+// raw Talos API type: the backend talks to the Talos API read-only and
+// the browser talks only to the backend.
+package ichor.v1alpha1;
+
+import "google/protobuf/timestamp.proto";
+import "ichor/v1alpha1/common.proto";
+
+service NodeService {
+  rpc GetNode(GetNodeRequest) returns (GetNodeResponse);
+  rpc GetEffectiveConfig(GetEffectiveConfigRequest) returns (GetEffectiveConfigResponse);
+  // StreamNodeLogs streams one machine's log (the node page) or several
+  // (the merged viewer) from the same call. It resumes from a token carrying
+  // the last log timestamp seen per machine (architecture.md: "streams that
+  // resume from a token"), surviving a backend drain.
+  rpc StreamNodeLogs(StreamNodeLogsRequest) returns (stream StreamNodeLogsResponse);
+}
+
+message GetNodeRequest {
+  ObjectRef machine = 1;
+}
+
+message GetNodeResponse {
+  NodeDetail node = 1;
+}
+
+message GetEffectiveConfigRequest {
+  ObjectRef machine = 1;
+}
+
+message GetEffectiveConfigResponse {
+  EffectiveConfig config = 1;
+}
+
+message Hardware {
+  string manufacturer = 1;
+  string model = 2;
+  string serial_number = 3;
+  int32 cpu_cores = 4;
+  int64 memory_total_bytes = 5;
+}
+
+// DiskRole mirrors the role a disk is assigned (architecture.md, "Nodes").
+enum DiskRole {
+  DISK_ROLE_UNSPECIFIED = 0;
+  DISK_ROLE_SYSTEM = 1;
+  DISK_ROLE_EPHEMERAL = 2;
+  DISK_ROLE_STORAGE = 3;
+  DISK_ROLE_USER_VOLUME = 4;
+  DISK_ROLE_UNUSED = 5;
+}
+
+// Disk reports the identification fallback chain architecture.md describes
+// (WWID, serial, by-id path, bus path): any of the first three may be
+// empty, so the screen has to be able to show "nothing stable to key on"
+// rather than treat it as missing data.
+message Disk {
+  string wwid = 1;
+  string serial = 2;
+  string by_id_path = 3;
+  string bus_path = 4;
+  int64 size_bytes = 5;
+  DiskRole role = 6;
+}
+
+message NetworkInterface {
+  // name is the current kernel interface name, which can change across
+  // boots; alias is the stable LinkAliasConfig name when one is assigned.
+  string name = 1;
+  string alias = 2;
+  string permanent_mac = 3;
+  bool up = 4;
+  repeated string addresses = 5;
+}
+
+message ResourceUsage {
+  double cpu_cores_used = 1;
+  int64 memory_used_bytes = 2;
+  int64 memory_total_bytes = 3;
+  int64 filesystem_used_bytes = 4;
+  int64 filesystem_total_bytes = 5;
+}
+
+message KubernetesNodeStatus {
+  string node_name = 1;
+  bool ready = 2;
+  string kubelet_version = 3;
+  bool schedulable = 4;
+}
+
+message NodeDetail {
+  ObjectRef machine = 1;
+  Hardware hardware = 2;
+  repeated Disk disks = 3;
+  repeated NetworkInterface network_interfaces = 4;
+  ResourceUsage resource_usage = 5;
+  KubernetesNodeStatus kubernetes = 6;
+}
+
+// ConfigLayer is one of the patch layers in architecture.md, "Patch layers".
+enum ConfigLayer {
+  CONFIG_LAYER_UNSPECIFIED = 0;
+  CONFIG_LAYER_SYSTEM = 1;
+  CONFIG_LAYER_CLUSTER = 2;
+  CONFIG_LAYER_ROLE = 3;
+  CONFIG_LAYER_SELECTOR = 4;
+  CONFIG_LAYER_MACHINE = 5;
+}
+
+message ConfigOrigin {
+  ConfigLayer layer = 1;
+  // source names the object the value came from: a TalosConfigPatch name,
+  // or "system"/"cluster" for values Ichor generates rather than a patch.
+  string source = 2;
+}
+
+// EffectiveConfigValue is one field of the effective-config view. Masking is
+// the server's responsibility: the server must never populate "value" with
+// a real secret, only with the mask, so a secret is never sent to the
+// browser in the first place (architecture.md, "secrets masked").
+message EffectiveConfigValue {
+  // path is the field path in pkg/fieldmeta's keying.
+  string path = 1;
+  // value is the JSON-encoded rendered value, or a fixed mask ("***") when
+  // secret is true.
+  string value = 2;
+  bool secret = 3;
+  ConfigOrigin origin = 4;
+}
+
+message EffectiveConfig {
+  ObjectRef machine = 1;
+  repeated EffectiveConfigValue values = 2;
+}
+
+message StreamNodeLogsRequest {
+  // machines is one entry for a single node's log tail, several for the
+  // merged multi-node viewer.
+  repeated ObjectRef machines = 1;
+  // resume_token is opaque; omit it to start from the current tail.
+  string resume_token = 2;
+}
+
+message StreamNodeLogsResponse {
+  ObjectRef machine = 1;
+  google.protobuf.Timestamp time = 2;
+  string message = 3;
+  // resume_token checkpoints this entry; the caller replays the latest one
+  // received to resume the stream after a disconnect.
+  string resume_token = 4;
+}

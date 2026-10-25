@@ -1,0 +1,80 @@
+syntax = "proto3";
+
+// ClusterService backs the cluster list and cluster detail screens: status,
+// rollout progress and hand-over state (architecture.md, "CLI and UI").
+// Read-only: nothing here writes a TalosCluster.
+package ichor.v1alpha1;
+
+import "google/protobuf/timestamp.proto";
+import "ichor/v1alpha1/common.proto";
+
+service ClusterService {
+  rpc ListClusters(ListClustersRequest) returns (ListClustersResponse);
+  rpc GetCluster(GetClusterRequest) returns (GetClusterResponse);
+}
+
+message ListClustersRequest {}
+
+message ListClustersResponse {
+  repeated Cluster clusters = 1;
+}
+
+message GetClusterRequest {
+  ObjectRef cluster = 1;
+}
+
+message GetClusterResponse {
+  Cluster cluster = 1;
+}
+
+// RolloutKind identifies which of the three upgrade kinds a RolloutProgress
+// describes (architecture.md, "Upgrades": Talos, Kubernetes, Ichor all share
+// the same lock and progress view).
+enum RolloutKind {
+  ROLLOUT_KIND_UNSPECIFIED = 0;
+  ROLLOUT_KIND_TALOS = 1;
+  ROLLOUT_KIND_KUBERNETES = 2;
+  ROLLOUT_KIND_ICHOR = 3;
+}
+
+// RolloutProgress is present only while a rollout is in flight.
+message RolloutProgress {
+  RolloutKind kind = 1;
+  string target_version = 2;
+  bool paused = 3;
+  int32 nodes_total = 4;
+  int32 nodes_done = 5;
+  // current_phase is a short human-readable status, e.g. "draining node-3".
+  string current_phase = 6;
+}
+
+// HandoverPhase tracks a bootstrapped component (CNI, Argo CD, Ichor itself)
+// on its way from injected manifest to an Argo CD Application
+// (architecture.md, "Hand-over").
+enum HandoverPhase {
+  HANDOVER_PHASE_UNSPECIFIED = 0;
+  HANDOVER_PHASE_PENDING = 1;
+  HANDOVER_PHASE_INJECTED = 2;
+  HANDOVER_PHASE_ADOPTED = 3;
+  HANDOVER_PHASE_HANDED_OVER = 4;
+}
+
+message HandoverState {
+  // component is the component registry name, e.g. "cni", "argocd", "ichor".
+  string component = 1;
+  HandoverPhase phase = 2;
+  google.protobuf.Timestamp last_transition_time = 3;
+}
+
+message Cluster {
+  ObjectRef ref = 1;
+  string talos_version = 2;
+  string kubernetes_version = 3;
+  string endpoint = 4;
+  int32 control_plane_count = 5;
+  bool control_plane_schedulable = 6;
+  repeated Condition conditions = 7;
+  // rollout is unset when no rollout is in progress.
+  RolloutProgress rollout = 8;
+  repeated HandoverState handovers = 9;
+}

@@ -339,12 +339,44 @@ needed) through typed forms; no YAML required. The controller then renders the
 config, applies it insecurely, and follows the node through install, reboot
 and join.
 
-Disks are identified by WWID, serial or by-id path, not `/dev/sdX`. Each gets a
-role: `system` (install target plus EPHEMERAL — the recommended layout is one
-dedicated disk for Talos), `ephemeral` (EPHEMERAL on its own disk), `storage`
-(prepared for a storage system via a preset), `userVolume`, or `unused`.
+Disks are identified by WWID, serial or by-id path, not `/dev/sdX` — but all
+three can be absent. Talos fills WWID and serial from sysfs, with a udev
+fallback only for `ata` and `scsi` transports, so NVMe is reliable while a plain
+`virtio-blk` disk usually has neither, and without one udev creates no by-id
+link either. That is not an exotic case: it is what Ichor's own KubeVirt test
+nodes look like. So identification falls back through WWID, serial, by-id path
+and finally bus path, and "nothing stable to key on" is a state the approval
+form has to show rather than treat as an error.
+
+Each disk gets a role: `system` (install target plus EPHEMERAL — the recommended
+layout is one dedicated disk for Talos), `ephemeral` (EPHEMERAL on its own
+disk), `storage` (prepared for a storage system via a preset), `userVolume`, or
+`unused`. A role becomes `machine.install` for `system` and a
+`VolumeConfig`/`UserVolumeConfig`/`RawVolumeConfig` document for the rest,
+each selecting its disk with a CEL expression over the disk's reported fields.
+None of those documents are on the mirror allow-list yet, so disk roles begin
+with generator work, not controller work.
+
+Two things about editing a disk role after the fact, both verified against
+Talos's volume manager. **A changed selector on a volume that already exists
+does nothing, and nothing says so**: Talos locates EPHEMERAL by its partition
+label before it ever consults the selector, and config validation accepts the
+edit regardless. Ichor has to detect that itself and report "accepted, no
+effect" rather than letting it look applied. Likewise a *lowered* `maxSize` is
+silently ignored — partitions only ever grow. (A negative `maxSize` is
+meaningful rather than invalid: it reserves that much free space instead of
+consuming it.)
+
+The confirmation before wiping a disk matters most for the install target,
+because `machine.install.wipe` defaults to **true** — Talos wipes the install
+disk unless told not to. For every other disk Talos is the opposite: it refuses
+to provision over any existing partition table or filesystem, so Ichor's
+confirmation there explains why provisioning will not happen rather than
+guarding against loss.
 Single-disk nodes can use `systemDiskLayout: shared`, which caps EPHEMERAL and
-leaves the rest for storage; it is supported but discouraged and warned about,
+leaves the rest for storage — Talos makes that work through partition waves,
+with EPHEMERAL claiming its region before user volumes, and EPHEMERAL's own
+minimum is 2 GiB; it is supported but discouraged and warned about,
 especially on control planes where etcd would share I/O with storage. Disk
 roles are fixed at install time because Talos ignores volume config changes
 after provisioning; changing `system` or `ephemeral` later is a reset-and-

@@ -435,8 +435,8 @@ disk), `storage` (prepared for a storage system via a preset), `userVolume`, or
 `unused`. A role becomes `machine.install` for `system` and a
 `VolumeConfig`/`UserVolumeConfig`/`RawVolumeConfig` document for the rest,
 each selecting its disk with a CEL expression over the disk's reported fields.
-None of those documents are on the mirror allow-list yet, so disk roles begin
-with generator work, not controller work.
+All three documents are on the mirror allow-list, so a role is expressible
+today; what is still missing is the controller that sets one.
 
 Two things about editing a disk role after the fact, both verified against
 Talos's volume manager. **A changed selector on a volume that already exists
@@ -445,8 +445,15 @@ label before it ever consults the selector, and config validation accepts the
 edit regardless. Ichor has to detect that itself and report "accepted, no
 effect" rather than letting it look applied. Likewise a *lowered* `maxSize` is
 silently ignored — partitions only ever grow. (A negative `maxSize` is
-meaningful rather than invalid: it reserves that much free space instead of
-consuming it.)
+meaningful rather than invalid, and `PartitionSpec.ResolveMaxSize` in Talos
+v1.14.3 says exactly what it means: the value is *space to leave free*, so the
+volume gets `available - value`. A relative one is a percentage of available,
+not of the disk -- `-25%` of 200 GiB available leaves 50 GiB free and takes
+150. If the reservation exceeds what is available the call fails with
+"partition size cannot be negative"; it does not clamp, so the volume simply
+does not provision. That is the mechanism for sharing a disk: EPHEMERAL
+reserves with a negative `maxSize`, and the user volume provisions in what is
+left.)
 
 The confirmation before wiping a disk matters most for the install target,
 because `machine.install.wipe` defaults to **true** — Talos wipes the install
@@ -773,8 +780,6 @@ resumption works. A short set runs per PR, the full set nightly.
 - What exactly does the Talos Upgrade API do about cordon and drain, per
   version?
 - Does a single-node Talos upgrade need the etcd-preserving flag?
-- How do a user volume and EPHEMERAL coexist on one disk, including negative
-  `maxSize`, across the supported Talos versions?
 - Exact Longhorn node label/annotation and evacuation field names per version.
 - The Cilium and Calico values that avoid perpetual OutOfSync under Argo CD.
 - Argo CD tracking method detection (label, annotation, both) and the Flux

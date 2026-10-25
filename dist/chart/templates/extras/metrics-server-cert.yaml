@@ -1,4 +1,4 @@
-{{- if .Values.certManager.enabled }}
+{{- if .Values.metricsCert.enabled }}
 apiVersion: v1
 kind: Secret
 metadata:

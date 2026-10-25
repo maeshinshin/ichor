@@ -152,13 +152,31 @@ spec:
       args: ["TCP-LISTEN:6443,fork,reuseaddr", "TCP:%[2]s:6443"]
 `
 
+// upFns and downFns pair each mode with its own up/down, so main's dispatch, the
+// failed-up cleanup and the signal handler all share one place that knows which "down"
+// undoes which "up" - "up-ha"/"down-ha" (ha.go) is the three-control-plane scenario; "up"/"down" is the short e2e
+// set's proven single-node one.
+var (
+	upFns = map[string]func() error{
+		"up":    up,
+		"up-ha": upHA,
+	}
+	downFns = map[string]func() error{
+		"up":      down,
+		"down":    down,
+		"up-ha":   downHA,
+		"down-ha": downHA,
+	}
+)
+
 func main() {
-	if len(os.Args) != 2 || (os.Args[1] != "up" && os.Args[1] != "down") {
-		fmt.Fprintln(os.Stderr, "usage: kubevirt up|down")
+	if len(os.Args) != 2 || downFns[os.Args[1]] == nil {
+		fmt.Fprintln(os.Stderr, "usage: kubevirt up|down|up-ha|down-ha")
 		os.Exit(2)
 	}
+	mode := os.Args[1]
 
-	// Every kubectl call below (up and down) carries no --context: it targets whatever
+	// Every kubectl call below (every mode) carries no --context: it targets whatever
 	// KUBECONFIG resolves to. Falling back to kubectl's ambient current-context on an
 	// unset KUBECONFIG means "down" can delete a VM on a cluster this run never created
 	// one on - refuse rather than guess (observed for real: a dangling kind-kind context).
@@ -167,18 +185,21 @@ func main() {
 		os.Exit(1)
 	}
 
+	up, isUp := upFns[mode]
+	down := downFns[mode]
+
 	var err error
-	if os.Args[1] == "up" {
-		// A killed "up" (Ctrl-C, CI cancellation, a wrapping `timeout`) must not leave the
-		// VM/DataVolumes/relay behind either - that is the other way a run can end partway
-		// through.
-		cleanUpOnSignal()
+	if isUp {
+		// A killed "up"/"up-ha" (Ctrl-C, CI cancellation, a wrapping `timeout`) must not
+		// leave the VM(s)/DataVolume(s)/relay behind either - that is the other way a run
+		// can end partway through.
+		cleanUpOnSignal(down)
 		if err = up(); err != nil {
 			// A half-finished "up" must not leave the VM, its DataVolumes or the relay
 			// pod behind: that keeps Ceph storage pinned for nothing. Clean up before reporting the failure.
-			fmt.Fprintln(os.Stderr, "kubevirt harness: up failed, cleaning up:", err)
+			fmt.Fprintln(os.Stderr, "kubevirt harness:", mode, "failed, cleaning up:", err)
 			if cleanupErr := down(); cleanupErr != nil {
-				fmt.Fprintln(os.Stderr, "kubevirt harness: cleanup after failed up also failed:", cleanupErr)
+				fmt.Fprintln(os.Stderr, "kubevirt harness: cleanup after failed", mode, "also failed:", cleanupErr)
 			}
 		}
 	} else {
@@ -192,7 +213,7 @@ func main() {
 
 // cleanUpOnSignal runs down() if the process receives SIGINT or SIGTERM, so a killed "up"
 // never leaves the VM, its DataVolumes or the relay behind.
-func cleanUpOnSignal() {
+func cleanUpOnSignal(down func() error) {
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
@@ -223,9 +244,7 @@ func up() error {
 // maintenance, and prints the maintenance-mode resources.
 func bootToMaintenance() (string, error) {
 	manifest := fmt.Sprintf(vmManifestTmpl, vmName, talosFactorySchematic, talosVersion)
-	cmd := exec.Command("kubectl", "apply", "-f", "-")
-	cmd.Stdin = strings.NewReader(manifest)
-	if _, err := utils.Run(cmd); err != nil {
+	if err := applyManifest(manifest); err != nil {
 		return "", fmt.Errorf("creating the VM: %w", err)
 	}
 
@@ -268,7 +287,7 @@ func bootToMaintenance() (string, error) {
 // reboots it), waits for the authenticated API, bootstraps etcd, and waits for the node to
 // report running/ready. It returns the admin talosconfig that authenticates against it.
 func installAndBootstrap(ip string) ([]byte, error) {
-	cfg, err := generateControlPlaneConfig(vmName, ip)
+	cfg, err := generateControlPlaneConfig(vmName, []string{ip})
 	if err != nil {
 		return nil, err
 	}
@@ -440,9 +459,7 @@ func down() error {
 // the lifetime of the whole e2e run, which is a separate `make` invocation.
 func startRelay(nodeIP string) error {
 	manifest := fmt.Sprintf(relayManifestTmpl, relayName, nodeIP)
-	cmd := exec.Command("kubectl", "apply", "-f", "-")
-	cmd.Stdin = strings.NewReader(manifest)
-	if _, err := utils.Run(cmd); err != nil {
+	if err := applyManifest(manifest); err != nil {
 		return fmt.Errorf("creating the relay pod: %w", err)
 	}
 	if _, err := utils.Run(exec.Command("kubectl", "-n", namespace, "wait", "pod/"+relayName,

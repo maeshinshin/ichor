@@ -45,3 +45,15 @@ setup-test-e2e-kubevirt: test-e2e-prereqs kubevirt-harness ## Boot a single-node
 .PHONY: cleanup-test-e2e-kubevirt
 cleanup-test-e2e-kubevirt: test-e2e-prereqs kubevirt-harness ## Tear down the VM, its relay pod and port-forward, and the DataVolumes setup-test-e2e-kubevirt created; a no-op if there is nothing to tear down
 	"$(LOCALBIN)/kubevirt-harness" down
+
+# --- KubeVirt harness, three control planes (nightly only: ~40Gi of Ceph for a few
+# minutes, for the removal-ordering scenarios design's "Nodes" section describes that need
+# real etcd membership and a real kubelet drain -- envtest has neither) ---
+
+.PHONY: setup-test-e2e-kubevirt-ha
+setup-test-e2e-kubevirt-ha: test-e2e-prereqs kubevirt-harness ## Boot three Talos control planes as KubeVirt VMs, configure and bootstrap them; export ICHOR_E2E_HA_TALOSCONFIG and ICHOR_E2E_HA_KUBECONFIG
+	"$(LOCALBIN)/kubevirt-harness" up-ha
+
+.PHONY: cleanup-test-e2e-kubevirt-ha
+cleanup-test-e2e-kubevirt-ha: test-e2e-prereqs kubevirt-harness ## Tear down the three VMs and their DataVolumes (including the shared ISO); a no-op if there is nothing to tear down
+	"$(LOCALBIN)/kubevirt-harness" down-ha

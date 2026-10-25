@@ -48,20 +48,27 @@ type generatedConfig struct {
 	talosconfig   *clientconfig.Config
 }
 
-// generateControlPlaneConfig builds a single-node control-plane config for nodeIP using the
-// Talos config generator - the same library talosctl gen config uses - rather than talosctl
-// itself, so the endpoint and subnets can be set precisely through the documents it emits
-// instead of patched into the legacy v1alpha1 section afterwards. The install
-// disk/image match the Image Factory schematic and version the VM already booted from the
-// ISO, so there is nothing left to resolve at install time.
-func generateControlPlaneConfig(clusterName, nodeIP string) (*generatedConfig, error) {
-	endpoint := fmt.Sprintf("https://%s:6443", nodeIP)
+// generateControlPlaneConfig builds a control-plane config for a cluster whose control
+// planes are nodeIPs, using the Talos config generator - the same library talosctl gen
+// config uses - rather than talosctl itself, so the endpoint and subnets can be set
+// precisely through the documents it emits instead of patched into the legacy v1alpha1
+// section afterwards. The install disk/image match the Image Factory schematic
+// and version the VM already booted from the ISO, so there is nothing left to resolve at
+// install time.
+//
+// Talos control-plane configs carry no per-node fields, so the same rendered bytes apply
+// to every control plane in nodeIPs unchanged - callers with more than one node apply this
+// once per node, not once per node's own config. The cluster endpoint pins to nodeIPs[0]
+// (this harness has no VIP/load balancer); WithEndpointList carries every node so Talos's
+// own endpoint controllers, and talosctl, know about all of them.
+func generateControlPlaneConfig(clusterName string, nodeIPs []string) (*generatedConfig, error) {
+	endpoint := fmt.Sprintf("https://%s:6443", nodeIPs[0])
 	installImage := fmt.Sprintf("factory.talos.dev/metal-installer/%s:%s", talosFactorySchematic, talosVersion)
 
 	input, err := generate.NewInput(clusterName, endpoint, constants.DefaultKubernetesVersion,
 		generate.WithInstallDisk("/dev/vda"),
 		generate.WithInstallImage(installImage),
-		generate.WithEndpointList([]string{nodeIP}),
+		generate.WithEndpointList(nodeIPs),
 		generate.WithAdditionalSubjectAltNames(localhostSANs),
 	)
 	if err != nil {

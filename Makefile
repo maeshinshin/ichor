@@ -54,6 +54,10 @@ manifests: controller-gen manifests-ichor-ui ## Generate WebhookConfiguration, C
 sync-crds: ## Sync config/crd/bases/ into dist/chart/templates/crd/ (CONTRIBUTING.md explains why, in place of kubebuilder edit --plugins=helm/v2-alpha).
 	go run ./internal/tools/synccrds
 
+.PHONY: adr-index
+adr-index: ## Regenerate docs/adr/README.md's index table from each ADR's own Decided:/Status: line.
+	go run ./internal/tools/adrindex
+
 .PHONY: third-party-notices
 third-party-notices: ui-install ## Regenerate THIRD-PARTY-NOTICES from go.mod, the Go module cache, ui/package-lock.json and the embedded Cilium chart.
 	go run ./internal/tools/thirdpartynotices

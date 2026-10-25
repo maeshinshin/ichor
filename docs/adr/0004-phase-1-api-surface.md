@@ -2,6 +2,8 @@
 
 Status: Accepted · Date: 2026-10-25 · Design section: 4.1, 4.2, roadmap item 1
 
+Decided: Phase 1 scaffolds only `TalosCluster`, `TalosMachine` and `TalosConfigPatch`, with no controllers yet
+
 ## Context
 
 The API table lists seven kinds. Roadmap item 1 asks for "CRDs and the

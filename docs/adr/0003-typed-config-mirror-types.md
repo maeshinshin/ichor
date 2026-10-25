@@ -2,6 +2,8 @@
 
 Status: Accepted · Date: 2026-10-24 · Design section: 4.4 (Typed configuration)
 
+Decided: Generate the Talos machinery mirror types instead of hand-maintaining a parallel field catalogue
+
 ## Context
 
 The design assumed that `TalosConfigPatch.spec.documents[]` could embed the

@@ -2,6 +2,8 @@
 
 Status: Accepted · Date: 2026-10-25 · Design section: 5.3.4 (topology)
 
+Decided: `controlPlane.schedulable` takes a required `true`/`false`; dropped `auto`
+
 ## Context
 
 The design gives `TalosCluster.spec.controlPlane.schedulable` three values —

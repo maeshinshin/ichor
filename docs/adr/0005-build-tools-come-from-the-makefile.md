@@ -2,6 +2,8 @@
 
 Status: Accepted · Date: 2026-10-25 · Design section: 0.2, 0.3 · Amends ADR 0002
 
+Decided: Moved controller-gen, kustomize, setup-envtest and golangci-lint out of `flake.nix` and into Makefile-managed `./bin`
+
 ## Context
 
 ADR 0002 put all four of kubebuilder's build tools in the devShell and

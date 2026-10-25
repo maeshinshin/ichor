@@ -81,6 +81,70 @@ const (
 	reasonRemovalApproved = "RemovalApproved"
 )
 
+// conditionTransitioning and its two reasons implement
+// docs/design/architecture.md's "Nodes" section: "Even counts are allowed
+// only transiently during a change and shown as 'transitioning', during
+// which the cluster lock blocks other disruptive work." spec.controlPlane.count
+// is the desired state and stays an odd enum (1, 3 or 5) throughout --
+// nothing about that field ever becomes even. The *actual* count of
+// approved control-plane TalosMachines does, for exactly as long as a
+// replacement is being added before the one it replaces is removed
+// (architecture.md: "3->4->3, never 3->2"), and that is a fact about the
+// cluster's live state, not its spec -- TalosCluster.status is where it
+// belongs (and this is a derived fact about TalosMachine
+// objects that already exist, not a record of an imperative action).
+const (
+	conditionTransitioning        = "Transitioning"
+	reasonEvenControlPlaneCount   = "EvenControlPlaneCount"
+	reasonStableControlPlaneCount = "StableControlPlaneCount"
+)
+
+// transitioningControlPlanes reports whether controlPlanes control planes
+// -- a live count, not spec.controlPlane.count's declared one -- is itself
+// evidence of an in-progress control-plane replacement. Zero is not
+// transitioning: that is "no control planes exist yet" (a brand-new
+// cluster before its first approval), not a change in progress.
+func transitioningControlPlanes(controlPlanes int) bool {
+	return controlPlanes > 0 && controlPlanes%2 == 0
+}
+
+// updateTransitioning recomputes conditionTransitioning on cluster from
+// controlPlanes and persists it. Called from wherever this file already
+// counts control planes for another reason (reconcileRemoval, and
+// TalosMachineReconciler.Reconcile's main path for every approved
+// machine's reconcile), rather than on its own schedule, so it costs no
+// extra List beyond what that caller already pays for.
+func (r *TalosMachineReconciler) updateTransitioning(ctx context.Context, cluster *ichorv1alpha1.TalosCluster, controlPlanes int) error {
+	status, reason := metav1.ConditionFalse, reasonStableControlPlaneCount
+	if transitioningControlPlanes(controlPlanes) {
+		status, reason = metav1.ConditionTrue, reasonEvenControlPlaneCount
+	}
+
+	apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+		Type: conditionTransitioning, Status: status, Reason: reason,
+		Message: fmt.Sprintf("%d control planes approved right now", controlPlanes),
+	})
+
+	return r.Status().Update(ctx, cluster)
+}
+
+// refreshTransitioning counts cluster's approved control planes (the same
+// List countApprovedControlPlanes always does) and updates its
+// Transitioning condition from the result. Pulled out of Reconcile's main
+// path as its own call, rather than inlined, purely to keep that
+// function's branching down -- it has no other reason to exist separately
+// from updateTransitioning.
+func (r *TalosMachineReconciler) refreshTransitioning(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
+) error {
+	controlPlanes, err := r.countApprovedControlPlanes(ctx, m)
+	if err != nil {
+		return err
+	}
+
+	return r.updateTransitioning(ctx, cluster, controlPlanes)
+}
+
 // reconcileRemoval runs when m.DeletionTimestamp is set. A machine without
 // machineRemovalFinalizer was never intercepted (never approved as a
 // control plane) and is left alone -- nothing to coordinate, the API
@@ -127,6 +191,10 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 	// reflected -- the race the webhook's admission-time count cannot see.
 	siblings, err := r.countApprovedControlPlanes(ctx, m)
 	if err != nil {
+		return err
+	}
+
+	if err := r.updateTransitioning(ctx, &cluster, siblings); err != nil {
 		return err
 	}
 

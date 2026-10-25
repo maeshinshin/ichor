@@ -70,6 +70,15 @@ rules:
 - apiGroups:
   - ichor.maesh.dev
   resources:
+  - talosclusters/status
+  - talosmachines/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
   - talosmachines
   verbs:
   - create
@@ -84,14 +93,6 @@ rules:
   resources:
   - talosmachines/finalizers
   verbs:
-  - update
-- apiGroups:
-  - ichor.maesh.dev
-  resources:
-  - talosmachines/status
-  verbs:
-  - get
-  - patch
   - update
 - apiGroups:
   - policy

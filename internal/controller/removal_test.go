@@ -24,11 +24,13 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/clusterlock"
+	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
 
 // clusterKeyOf returns the NamespacedName clusterlock.New keys its Lease by
@@ -305,5 +307,113 @@ var _ = Describe("renewWhile", func() {
 		Eventually(func() error {
 			return lock.Acquire(ctx, "someone-else")
 		}, 2*time.Second, shortDuration).Should(Succeed())
+	})
+})
+
+// fetchCluster fetches cluster fresh, for checking its Transitioning
+// condition after a reconcile.
+func fetchCluster(cluster *ichorv1alpha1.TalosCluster) *ichorv1alpha1.TalosCluster {
+	var got ichorv1alpha1.TalosCluster
+	Expect(k8sClient.Get(ctx, clusterKeyOf2(cluster), &got)).To(Succeed())
+
+	return &got
+}
+
+func clusterKeyOf2(cluster *ichorv1alpha1.TalosCluster) types.NamespacedName {
+	return types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}
+}
+
+var _ = Describe("TalosCluster transitioning status", func() {
+	It("reports a stable (odd) control-plane count as not transitioning", func() {
+		cluster := newTestClusterWithCount(3)
+		cp1 := newTestControlPlane(cluster.Name, "20")
+		cp2 := newTestControlPlane(cluster.Name, "21")
+		cp3 := newTestControlPlane(cluster.Name, "22")
+
+		r := &TalosMachineReconciler{Client: k8sClient, ControllerNamespace: tmNamespace}
+		for _, cp := range []*ichorv1alpha1.TalosMachine{cp1, cp2, cp3} {
+			// First reconcile only adds the removal finalizer and returns;
+			// the transitioning update happens on the pass after that,
+			// once the machine reconcile proceeds past the finalizer-add
+			// branch.
+			_, err := reconcileMachine(r, cp)
+			Expect(err).NotTo(HaveOccurred())
+			_, err = reconcileMachine(r, cp)
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		cond := apimeta.FindStatusCondition(fetchCluster(cluster).Status.Conditions, conditionTransitioning)
+		Expect(cond).NotTo(BeNil())
+		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(cond.Reason).To(Equal(reasonStableControlPlaneCount))
+	})
+
+	It("reports an even control-plane count as transitioning, once a replacement is approved", func() {
+		cluster := newTestClusterWithCount(3)
+		cp1 := newTestControlPlane(cluster.Name, "23")
+		cp2 := newTestControlPlane(cluster.Name, "24")
+		cp3 := newTestControlPlane(cluster.Name, "25")
+
+		r := &TalosMachineReconciler{Client: k8sClient, ControllerNamespace: tmNamespace}
+		for _, cp := range []*ichorv1alpha1.TalosMachine{cp1, cp2, cp3} {
+			_, err := reconcileMachine(r, cp)
+			Expect(err).NotTo(HaveOccurred())
+			_, err = reconcileMachine(r, cp)
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		cp4 := newTestControlPlane(cluster.Name, "26")
+		_, err := reconcileMachine(r, cp4)
+		Expect(err).NotTo(HaveOccurred())
+		_, err = reconcileMachine(r, cp4)
+		Expect(err).NotTo(HaveOccurred())
+
+		cond := apimeta.FindStatusCondition(fetchCluster(cluster).Status.Conditions, conditionTransitioning)
+		Expect(cond).NotTo(BeNil())
+		Expect(cond.Status).To(Equal(metav1.ConditionTrue))
+		Expect(cond.Reason).To(Equal(reasonEvenControlPlaneCount))
+		Expect(cond.Message).To(ContainSubstring("4"))
+	})
+
+	It("refuses a reboot-requiring change on any machine while the cluster is transitioning", func() {
+		bundle := newTestBundle("v1.14")
+		secret := newTestSecret(bundle)
+		cluster := newTestCluster(secret.Name, "v1.14")
+
+		r := &TalosMachineReconciler{Client: k8sClient, ControllerNamespace: tmNamespace}
+
+		cp1 := newTestControlPlane(cluster.Name, "27")
+		cp2 := newTestControlPlane(cluster.Name, "28")
+		cp3 := newTestControlPlane(cluster.Name, "29")
+		cp4 := newTestControlPlane(cluster.Name, "30")
+		for _, cp := range []*ichorv1alpha1.TalosMachine{cp1, cp2, cp3, cp4} {
+			_, err := reconcileMachine(r, cp)
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		worker := newTestMachine(cluster.Name, true)
+		current := renderWithConfig(cluster, worker, bundle, layerCluster, nil, minimalConfigSkeleton())
+
+		disabled := true
+		desired := minimalConfigSkeleton()
+		desired.ClusterConfig.ProxyConfig = &typedconfig.ProxyConfig{Disabled: &disabled}
+		newTestPatch(cluster.Name, layerCluster, nil, desired)
+
+		fake := &fakeTalosClient{current: current}
+		r.TalosClient = clientFactory(fake)
+
+		_, err := reconcileMachine(r, worker)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(fake.applyCalls).To(BeEmpty())
+
+		cond := readyCondition(fetchMachine(worker))
+		Expect(cond).NotTo(BeNil())
+		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(cond.Reason).To(Equal(reasonClusterTransitioning))
+
+		lock := clusterlock.New(k8sClient, clusterKeyOf2(cluster), 0)
+		_, held, err := lock.Holder(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(held).To(BeFalse(), "refuseReboot's transitioning check returns before ever taking the lock")
 	})
 })

@@ -649,6 +649,22 @@ evacuation, wait until no replica lives only there (with a timeout that pauses
 the rollout rather than proceeding), then drain; afterwards, re-enable
 scheduling. The hook is an interface so other integrations can use it.
 
+For `longhorn-v1` the write side of that hook is settled, from
+longhorn-manager v1.9.1's own type declarations rather than from the UI's
+labels: `nodes.longhorn.io/v1beta2`'s `NodeSpec` carries `allowScheduling`
+(bool) and `evictionRequested` (bool), and `DiskSpec` carries the same two
+under `spec.disks[<name>]`, so a hook can evict a whole node or one disk.
+The order is not a preference: Longhorn's own documentation states eviction
+only takes effect on a node or disk whose scheduling is already disabled, so
+`allowScheduling: false` has to land first.
+
+The read side is *not* settled. Longhorn's documentation describes completion
+as the replica count reaching zero in its UI, and the status field behind that
+has not been verified -- so "wait until no replica lives only there" still
+needs one lookup before the hook can be written. That lookup belongs to the
+hook's own unit of work, and it should be taken from the CRD's status type the
+same way the two spec fields were, not from the UI.
+
 `TalosStorage` reports health so Argo CD's sync waves can hold the storage
 Application until the Talos side is ready.
 

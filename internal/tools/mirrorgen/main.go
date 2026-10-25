@@ -66,16 +66,20 @@ type rootKind struct {
 	apiVersion string
 }
 
+// apiVersionV1Alpha1 is every allow-listed kind's document API version today;
+// Config has none (see rootKind.apiVersion's doc).
+const apiVersionV1Alpha1 = "v1alpha1"
+
 var roots = []rootKind{
-	{pkgRuntime, "SysctlConfigV1Alpha1", "SysctlConfig", "mruntime.SysctlConfigKind", "v1alpha1"},
-	{pkgRuntime, "KernelModuleConfigV1Alpha1", "KernelModuleConfig", "mruntime.KernelModuleConfigKind", "v1alpha1"},
+	{pkgRuntime, "SysctlConfigV1Alpha1", "SysctlConfig", "mruntime.SysctlConfigKind", apiVersionV1Alpha1},
+	{pkgRuntime, "KernelModuleConfigV1Alpha1", "KernelModuleConfig", "mruntime.KernelModuleConfigKind", apiVersionV1Alpha1},
 	{pkgV1Alpha1, "Config", "Config", "", ""},
 	// Phase 3 (disk roles): placing EPHEMERAL or STATE on their own disk, a
 	// user volume, and a raw volume handed to a CSI provisioner are each a
 	// separate modern document kind, not a v1alpha1.Config field.
-	{pkgBlock, "VolumeConfigV1Alpha1", "VolumeConfig", "mblock.VolumeConfigKind", "v1alpha1"},
-	{pkgBlock, "UserVolumeConfigV1Alpha1", "UserVolumeConfig", "mblock.UserVolumeConfigKind", "v1alpha1"},
-	{pkgBlock, "RawVolumeConfigV1Alpha1", "RawVolumeConfig", "mblock.RawVolumeConfigKind", "v1alpha1"},
+	{pkgBlock, "VolumeConfigV1Alpha1", "VolumeConfig", "mblock.VolumeConfigKind", apiVersionV1Alpha1},
+	{pkgBlock, "UserVolumeConfigV1Alpha1", "UserVolumeConfig", "mblock.UserVolumeConfigKind", apiVersionV1Alpha1},
+	{pkgBlock, "RawVolumeConfigV1Alpha1", "RawVolumeConfig", "mblock.RawVolumeConfigKind", apiVersionV1Alpha1},
 }
 
 // substKind says how a substituted-by-type field converts to and from its

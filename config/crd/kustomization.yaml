@@ -5,6 +5,7 @@ resources:
 - bases/ichor.maesh.dev_talosclusters.yaml
 - bases/ichor.maesh.dev_talosmachines.yaml
 - bases/ichor.maesh.dev_talosconfigpatches.yaml
+- bases/ichor.maesh.dev_talosstorages.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:

@@ -198,3 +198,57 @@ leaves `ichor-e2e` empty. It does, but getting there cost six more cycles:
   traps SIGINT/SIGTERM to run `down()` before exiting, so a killed `up` can't
   strand the node. Any harness step whose correctness depends on catching a
   signal has to run as the actual binary, not under `go run`.
+
+## Phase 3: no new scenario was added, and why
+
+Design's "Testing" section lists phase-3 features as e2e candidates: the
+delete guard's quorum/last-control-plane refusal (ADR 0010), the CNI preset
+rules (preset immutability, flannel cannot replace kube-proxy, the
+kube-proxy-switch confirmation annotation), `spec.discovery`'s CEL limits, and
+the nine secret fields being pruned rather than rejected (ADR 0003). The
+roadmap names one of these explicitly: "an explicit test has to show that the
+annotation alone does not let the last control plane go."
+
+All four already exist against a real apiserver, so none were duplicated
+into this harness:
+
+- **Deletion guard quorum**, including the exact sequential case the roadmap
+  asks for (three control planes, delete one — allowed, delete another —
+  refused for quorum, even with `allow-delete` set): `internal/webhook/v1alpha1/
+  talosmachine_webhook_test.go`, `Describe("TalosMachine Webhook
+  control-plane quorum")`, run under `webhook_suite_test.go`'s envtest
+  environment with the real webhook server and its TLS serving certificate —
+  the actual admission path, not a bare function call.
+- **CNI preset immutability, the kube-proxy-switch `ValidatingAdmissionPolicy`,
+  and `spec.discovery`'s CEL limits** (IPv4-only, `/24` ceiling, `MaxItems=4`
+  CIDRs): `api/v1alpha1/validation_test.go`, under `api/v1alpha1/
+  suite_test.go`'s envtest environment. That suite's own comment says why the
+  VAP is included even though it isn't controller-gen output: it loads
+  `config/admission/kubeproxy-switch-policy.yaml` verbatim, "so the test
+  exercises the exact manifest a real deploy installs rather than a copy that
+  could drift from it."
+- **The nine secret fields being pruned, not rejected**: the same file,
+  `It("drops all nine secret fields from a Config document, however it
+  arrives")`.
+
+envtest runs a real `kube-apiserver` and `etcd` binary — CRD-embedded CEL,
+`ValidatingAdmissionPolicy` and structural-schema pruning are all apiserver
+features, identical under envtest's apiserver and this harness's inner one.
+None of these four checks involves the controller (the quorum rule is the
+only webhook among them, and envtest already stands up the real webhook
+server over TLS), so re-running them against a node would exercise the
+same apiserver code path a second time, slower and more fragile, for no new
+confidence — exactly what "don't duplicate what a unit/envtest suite already
+covers" rules out.
+
+## Fixed `vmName`/`relayLocalPort`: why the collision risk was left as-is
+
+`vmName` and `relayLocalPort` are fixed, not generated, because `up` and
+`down` are separate process invocations with no shared state between them
+(see `vmName`'s own doc comment). Two concurrent runs against the same
+cluster would collide on both. Left as-is: every caller of this harness —
+`make test-e2e`'s short set, and a human running `setup`/`test-e2e`/`cleanup`
+by hand — runs one invocation at a time against `ichor-e2e`; nothing here
+runs two. Making the names unique would need a state file handed from `up` to
+`down` across those separate invocations, for concurrency nobody has asked
+this harness to support.

@@ -1,0 +1,9 @@
+apiVersion: ichor.maesh.dev/v1alpha1
+kind: TalosStorage
+metadata:
+  labels:
+    app.kubernetes.io/name: ichor
+    app.kubernetes.io/managed-by: kustomize
+  name: talosstorage-sample
+spec:
+  # TODO(user): Add fields here

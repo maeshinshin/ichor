@@ -287,6 +287,46 @@ func TestRenderWithRegistryAuthNoRegistries(t *testing.T) {
 	}
 }
 
+// TestRenderRefusesRegistriesWithoutAuthPath checks the guard added after review: Render
+// and BuildConfig must refuse outright when cluster.Spec.Registries is non-empty, rather than
+// silently rendering a mirror with no credentials. Before this guard, calling the wrong entry
+// point produced a cluster that simply could not pull from its private registry, with no error
+// and nothing in Ichor's own output pointing at why -- a loud failure here is what replaces that
+// silent one.
+func TestRenderRefusesRegistriesWithoutAuthPath(t *testing.T) {
+	cluster := registryCluster(ichorv1alpha1.TalosClusterRegistry{
+		Host: registryHost, Endpoints: []string{registryMirrorEndpoint},
+	})
+	m := testMachine("node-a", roleWorker, nil)
+	bundle := testBundle(t)
+
+	t.Run("BuildConfig", func(t *testing.T) {
+		_, err := BuildConfig(cluster, m, bundle, nil)
+		assertNamesAuthEntryPoints(t, err)
+	})
+
+	t.Run("Render", func(t *testing.T) {
+		_, _, err := Render(cluster, m, bundle, nil)
+		assertNamesAuthEntryPoints(t, err)
+	})
+}
+
+// assertNamesAuthEntryPoints checks that err is non-nil and names both of the entry points a
+// caller with registries declared must use instead.
+func assertNamesAuthEntryPoints(t *testing.T, err error) {
+	t.Helper()
+
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	for _, want := range []string{"BuildConfigWithRegistryAuth", "RenderWithRegistryAuth"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("expected the error to name %q, got: %v", want, err)
+		}
+	}
+}
+
 // TestRegistryAuthLeak mirrors TestRenderBundleLeak's discipline for this package's second
 // secret-bearing input: no error ResolveRegistryAuth or RenderWithRegistryAuth can return, on any
 // path this test can force, may contain the registry's resolved credential.

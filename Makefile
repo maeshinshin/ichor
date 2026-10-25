@@ -105,13 +105,20 @@ test-e2e-nightly: test-e2e-prereqs manifests generate fmt vet ## Run the full (s
 
 # --- KubeVirt harness (talos-cluster01, by hand or in CI against that cluster) ---
 
+.PHONY: kubevirt-harness
+kubevirt-harness: ## Build the KubeVirt e2e harness binary
+	go build -o "$(LOCALBIN)/kubevirt-harness" ./test/harness/kubevirt
+
 .PHONY: setup-test-e2e-kubevirt
-setup-test-e2e-kubevirt: test-e2e-prereqs ## Boot a single-node Talos control plane as a KubeVirt VM, configure and bootstrap it; export ICHOR_E2E_TALOS_NODES, ICHOR_E2E_INNER_KUBECONFIG and ICHOR_E2E_TALOSCONFIG
-	go run ./test/harness/kubevirt up
+setup-test-e2e-kubevirt: test-e2e-prereqs kubevirt-harness ## Boot a single-node Talos control plane as a KubeVirt VM, configure and bootstrap it; export ICHOR_E2E_TALOS_NODES, ICHOR_E2E_INNER_KUBECONFIG and ICHOR_E2E_TALOSCONFIG
+	# Not "go run": it wraps the binary in its own process and does not reliably forward
+	# SIGTERM to it (observed for real - the harness's own signal-triggered cleanup never
+	# ran), which is exactly the case that must not leave the VM/DataVolumes behind.
+	"$(LOCALBIN)/kubevirt-harness" up
 
 .PHONY: cleanup-test-e2e-kubevirt
-cleanup-test-e2e-kubevirt: test-e2e-prereqs ## Tear down the VM, its relay pod and port-forward, and the DataVolumes setup-test-e2e-kubevirt created; a no-op if there is nothing to tear down
-	go run ./test/harness/kubevirt down
+cleanup-test-e2e-kubevirt: test-e2e-prereqs kubevirt-harness ## Tear down the VM, its relay pod and port-forward, and the DataVolumes setup-test-e2e-kubevirt created; a no-op if there is nothing to tear down
+	"$(LOCALBIN)/kubevirt-harness" down
 
 # --- talosctl-qemu harness (CI, GitHub's ubuntu-24.04 runners) ---
 TEST_E2E_KUBECONFIG ?= $(LOCALBIN)/test-e2e.kubeconfig

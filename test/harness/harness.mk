@@ -57,3 +57,16 @@ setup-test-e2e-kubevirt-ha: test-e2e-prereqs kubevirt-harness ## Boot three Talo
 .PHONY: cleanup-test-e2e-kubevirt-ha
 cleanup-test-e2e-kubevirt-ha: test-e2e-prereqs kubevirt-harness ## Tear down the three VMs and their DataVolumes (including the shared ISO); a no-op if there is nothing to tear down
 	"$(LOCALBIN)/kubevirt-harness" down-ha
+
+# --- Running the real controller against the inner cluster: no path to deploy
+# it inside the inner cluster yet, and no docker in this sandbox to build an image with,
+# so it runs as a plain Pod on the outer cluster's own pod network, its statically built
+# binary copied in rather than an image. Needs setup-test-e2e-kubevirt-ha first.
+
+.PHONY: setup-test-e2e-kubevirt-controller
+setup-test-e2e-kubevirt-controller: test-e2e-prereqs kubevirt-harness controller-static ## Run the real controller against the inner HA cluster, with its admission webhook reachable from the inner apiserver
+	"$(LOCALBIN)/kubevirt-harness" up-controller
+
+.PHONY: cleanup-test-e2e-kubevirt-controller
+cleanup-test-e2e-kubevirt-controller: test-e2e-prereqs kubevirt-harness ## Tear down the controller pod and the inner cluster's ValidatingWebhookConfiguration; a no-op if there is nothing to tear down
+	"$(LOCALBIN)/kubevirt-harness" down-controller

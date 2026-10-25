@@ -129,12 +129,30 @@ plane is deleting the `TalosCluster`, which answers a different question
   turns out to be wrong in practice (a control plane counted as live but
   actually down), the fix is a live etcd member query before removal, which
   is explicitly out of scope here and would need its own design pass.
-- The count-then-decide check is not serialized: two concurrent `DELETE`s for
-  different control planes in the same cluster can both list the same
-  pre-deletion count and both be admitted, even though applied together they
-  break quorum (marked `shortcut:` at the list call in
-  `talosmachine_webhook.go`). Closing that needs the two admissions to take
-  `pkg/clusterlock` around the count-and-decide, which is more than this
-  phase's scope; acceptable for now because deletions are expected to be an
-  operator acting one at a time, not a controller firing several removals at
-  once.
+- Counting objects at admission time cannot enforce an invariant across
+  concurrent requests, and no amount of locking around the count changes
+  that: two concurrent `DELETE`s for different control planes in the same
+  cluster can each `List` before either delete commits, so both see the
+  pre-deletion count and both get admitted, even though applied together
+  they break quorum (marked `shortcut:` at the list call in
+  `talosmachine_webhook.go`). This is not a missing lock -- an admission
+  webhook is never serialized with the commit it is gatekeeping, so
+  `pkg/clusterlock` around this check would still let both webhook calls run
+  (and both pass) before either deletion lands; it closes nothing. The real
+  fix is the removal operation described in design's "Nodes" section: once
+  control-plane removal only happens as a step inside that serialized,
+  ordered sequence, the webhook's job changes from "count and decide" to
+  "refuse a delete that isn't part of the operation," and the operation
+  itself -- which *is* serialized -- does the counting. That's phase 3's
+  removal work, not yet built. Acceptable for now because today's deletions
+  are an operator acting one at a time, not several removals fired at once.
+
+### What this guard protects, and what it doesn't
+
+It protects against a single, unaccompanied delete accidentally breaking
+quorum or taking the last control plane -- the case the roadmap's
+acceptance test asks for, and the only case a webhook that only sees one
+request at a time can actually decide. It does not protect against several
+such deletes landing concurrently and jointly breaking quorum, each one
+individually legal by this check's own math; closing that gap needs the
+ordered removal operation above, and stays open until that lands.

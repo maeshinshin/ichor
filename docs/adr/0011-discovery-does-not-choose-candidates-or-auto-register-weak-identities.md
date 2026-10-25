@@ -94,80 +94,125 @@ that cannot represent the state this phase needs to create. `role` is now
   next (registration CLI, subnet scanner, or both) implements it as a
   caller of `Discover`, not a change to `Discover` itself.
 
-## A second, unrelated finding in the same file
+## A second finding in the same file: the bundle Secret's namespace
 
 While working in `internal/controller/talosmachine_controller.go`, a
-regression was found in its RBAC markers, not introduced by this phase but
-sitting in the same file this phase was already editing.
-
-### Context
-
-Commit `823b04f` ("fix: narrow controller RBAC off cluster-wide secrets
-access") removed a `ClusterRole` rule granting unrestricted
-`get;list;watch` on every `Secret` in every namespace, moving the one Secret
-the controller actually needs (`ichor-webhook-server-cert`, which lives in
-the controller's own namespace) into a namespaced `Role`. Commit `645f5be`
-("feat(controller): reconcile TalosMachine configuration"), which added
-`loadBundle`'s read of `TalosCluster.spec.secretsRef`, reintroduced the
-identical marker:
+cluster-wide `ClusterRole` rule granting unrestricted `get;list;watch` on
+every `Secret` in every namespace was found reintroduced by commit
+`645f5be` ("feat(controller): reconcile TalosMachine configuration"),
+which added `loadBundle`'s read of `TalosCluster.spec.secretsRef`. Commit
+`823b04f` had already removed an identical rule once, for a different
+Secret (`ichor-webhook-server-cert`), by moving it into a namespace-scoped
+`Role`. `645f5be`'s marker --
 
 ```go
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 ```
 
-`make manifests` turns this into the same cluster-wide `ClusterRole` rule
-823b04f removed, confirmed by inspecting the regenerated
-`config/rbac/role.yaml`.
+-- regenerates the same cluster-wide rule, confirmed by inspecting
+`config/rbac/role.yaml` after `make manifests`.
 
-### Why the obvious fix (`namespace=ichor-system`) does not work here
+### Why this one could not be narrowed the same way
 
-Adding `namespace=ichor-system` to the marker -- the fix that worked for the
-webhook certificate Secret -- was proposed and checked against this
-codebase before applying it, because the two Secrets are not alike:
-`ichor-webhook-server-cert` always lives in the controller's own namespace
-(`POD_NAMESPACE`), but the Secret `loadBundle` reads is named by
-`TalosCluster.spec.secretsRef` and looked up in `cluster.Namespace` --
-*whatever namespace that particular `TalosCluster` lives in*, which is not
-fixed to the controller's install namespace.
+`823b04f`'s fix works because `ichor-webhook-server-cert` always lives in
+the controller's own namespace. The bundle Secret did not: `loadBundle`
+resolved it in `cluster.Namespace` -- *whichever namespace that particular
+`TalosCluster` happens to live in* -- and `test/e2e/e2e_test.go` creates its
+`TalosCluster` in `ichor-e2e`, not the controller's namespace, proving this
+is not hypothetical. A `Role` scoped to one fixed namespace can never grant
+access to a Secret whose namespace varies per `TalosCluster`; Kubernetes RBAC
+has no way to express "the Secret this field names, wherever its owner
+lives" below cluster scope.
 
-This is not hypothetical: `test/e2e/e2e_test.go` creates its `TalosCluster`
-in the `ichor-e2e` namespace (`const namespace = "ichor-e2e"`), with
-`SecretsRef: corev1.LocalObjectReference{Name: "ichor-e2e-secrets"}` --
-a `LocalObjectReference`, resolved in `ichor-e2e`, not `ichor-system`. A
-`Role` scoped to `namespace=ichor-system` can never grant access to that
-Secret; applying the proposed fix as given would have made `loadBundle`
-return `SecretsBundleUnavailable` for every `TalosCluster` not created in
-the controller's own namespace, the e2e suite's own cluster included.
+### Decision: resolve the bundle Secret in the controller's own namespace, not the `TalosCluster`'s
 
-The companion suggestion -- flip the Helm chart's `rbac.namespaced` default
-to `true` -- was checked the same way and has the same problem at a larger
-scale: that toggle (a stock kubebuilder/Helm-plugin setting, not specific to
-secrets) turns *every* rule in `manager-role`, not only the secrets one,
-into a `Role` scoped to the release namespace. Defaulting it to `true` would
-silently stop the controller from managing any `TalosCluster` or
-`TalosMachine` outside its own install namespace by default -- a much larger
-behavioural change than narrowing one Secret rule, and one this phase's
-author is not positioned to decide unilaterally.
+`### Deployment` already describes the default placement:
 
-### Decision
+> The default is self-managed: Ichor runs inside the cluster it manages.
+> ... A hub mode, where Ichor manages clusters from outside, is left open
+> by the API but not built first.
 
-Not resolved here. Kubernetes RBAC cannot express "the Secret named by
-`cluster.Spec.SecretsRef` in `cluster.Namespace`, for any `TalosCluster` the
-controller is watching" at anything narrower than cluster scope, *given the
-current design*, where a `TalosCluster` (and so its bundle Secret) may live
-in any namespace. Closing this gap for real needs one prior decision this
-ADR defers rather than makes: either (a) restrict `TalosCluster` to the
-controller's own namespace -- which breaks the multi-namespace pattern the
-e2e suite already exercises and needs its own sign-off, webhook
-enforcement, doc and sample updates -- or (b) accept cluster-wide
-`get;list;watch` on Secrets as consistent with "Trust"'s own statement that
-the controller already holds an `os:admin`-equivalent Talos identity and is
-the most privileged component in the system, and look for mitigation
-elsewhere (NetworkPolicy, a narrower ServiceAccount boundary, audit alerts
-on unexpected Secret reads) instead of RBAC.
+One controller, one namespace, by default. Resolving `secretsRef` against
+*that* namespace rather than the `TalosCluster`'s turns the open question
+above into a non-issue: the Secret's location is now fixed and known at
+manifest-generation time, so the RBAC marker can carry
+`namespace=ichor-system` (the same literal the webhook certificate markers
+already use) and `make manifests` emits a namespace-scoped `Role`, not a
+`ClusterRole`.
 
-No code, chart or test changes were made for this half of the finding. The
-marker in `talosmachine_controller.go` is unchanged from `645f5be`; dist/chart
-was touched only for the `role` field sync this ADR's other half needed,
-not for RBAC. This finding and the evidence above are handed back to the
-design for the real decision.
+This is a change in meaning for a public field, not just an
+implementation detail: `TalosClusterSpec.SecretsRef` used to mean "the
+Secret in this TalosCluster's namespace" and now means "the Secret in the
+controller's own namespace." The `TalosCluster` itself is unaffected -- it
+may still live in any namespace the controller watches; only the bundle
+Secret's location changed. The field's doc comment in
+`api/v1alpha1/taloscluster_types.go` says so.
+
+`loadBundle` takes the controller's namespace as an explicit parameter
+(`TalosMachineReconciler.ControllerNamespace`, set from `POD_NAMESPACE` in
+`cmd/main.go`, the same downward-API variable the webhook certificate
+rotator already uses) and fails outright if it is empty, rather than
+letting an empty namespace resolve against every namespace by accident.
+
+`dist/chart/chart_test.go` gained a standing guard,
+`checkNoClusterWideSecretsRead`, asserting that no rendered `ClusterRole`
+grants `get`, `list` or `watch` on `secrets` without `resourceNames`. Run
+against the regression this ADR describes (the marker without
+`namespace=`), it fails with:
+
+```
+ClusterRole "ichor-manager-role" grants [get list watch] on secrets across every namespace with no
+resourceNames; the bundle Secret is resolved in the controller's own namespace (ADR 0011), so this
+permission must live in a namespace-scoped Role instead
+```
+
+`rbac.namespaced`'s default is unchanged (`false`): that toggle scopes
+*every* rule in `manager-role`, not only the secrets one, to the release
+namespace, and nothing about this decision needs the rest of the
+controller's RBAC narrowed.
+
+### Consequence for hub mode
+
+This decision is deliberately tied to the self-managed default. If hub
+mode (`TalosCluster` objects managed from outside the clusters they
+describe, "Deployment") is ever built, "the controller's own namespace"
+stops being a safe place to assume every managed cluster's bundle lives --
+a hub managing clusters across teams or tenants is exactly the case a
+single shared namespace of Secrets was meant to avoid. Hub mode's design
+has to revisit this RBAC shape explicitly: a namespace-scoped `Role` per
+managed namespace (one per tenant), or an explicit opt-in `ClusterRole`
+for operators who accept the wider blast radius -- not a silent
+cluster-wide grant by default. This is called out here so that whoever
+designs hub mode does not have to rediscover it.
+
+## A third finding: `role` must not be silently defaulted
+
+`TalosMachineSpec.Role` becoming optional (this ADR's main decision) raised
+the question of what happens when an *approved* machine still has no role
+-- discovery never sets one, and approval is not built yet. The assumption
+when `Role` was loosened was that `pkg/render`'s existing
+`machine.ParseType` call would fail closed on an empty string.
+
+It does not. Talos machinery's `machine.ParseType("")` returns
+`TypeWorker, nil` -- not an error -- because it exists to parse config
+documents, where an absent `machineType` field has always defaulted to
+worker. Used on `TalosMachineSpec.Role` directly, that default is wrong: an
+approved machine with no role would have silently rendered (and applied) a
+worker configuration instead of failing visibly.
+
+`pkg/render.Render` now checks `m.Spec.Role == ""` explicitly, ahead of
+`ParseType`, and fails with `"render: machine role is not set"`. The
+reconciler's existing `RenderFailed` condition path (unchanged) is what
+surfaces this to an operator, the same way any other render failure does.
+`pkg/render/render_test.go`'s `TestRenderBundleLeak` gained an `"empty
+role"` case alongside its existing `"unparseable role"` one, confirming the
+explicit failure and that no bundle material leaks into its message.
+
+Enforcing this earlier -- at admission, when a machine is approved without
+a role -- was considered and not done: `TalosMachineCustomValidator` is
+registered for `verbs=delete` only (ADR 0006, guarded by
+`chart_test.go`'s `checkWebhookInvariants`), and widening it to
+create/update is a bigger, deliberate scope change that ADR made on
+purpose. The render-time check is sufficient for this phase's guarantee --
+nothing ever applies a worker configuration to a machine that was not
+explicitly given that role -- without reopening ADR 0006.

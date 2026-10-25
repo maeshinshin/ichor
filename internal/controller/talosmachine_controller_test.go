@@ -259,7 +259,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		cluster := newTestCluster("does-not-exist", "v1.14")
 		m := newTestMachine(cluster.Name, false)
 
-		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
+		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), ControllerNamespace: tmNamespace}
 
 		_, err := reconcileMachine(r, m)
 		Expect(err).NotTo(HaveOccurred())
@@ -276,7 +276,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		m.Spec.ClusterRef.Name = "no-such-cluster"
 		Expect(k8sClient.Update(ctx, m)).To(Succeed())
 
-		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
+		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), ControllerNamespace: tmNamespace}
 		_, err := reconcileMachine(r, m)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -291,7 +291,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		cluster := newTestCluster("no-such-secret", "v1.14")
 		m := newTestMachine(cluster.Name, true)
 
-		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
+		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), ControllerNamespace: tmNamespace}
 		_, err := reconcileMachine(r, m)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -311,7 +311,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		fake := &fakeTalosClient{current: current}
-		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), TalosClient: clientFactory(fake)}
+		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
 		_, err = reconcileMachine(r, m)
 		Expect(err).NotTo(HaveOccurred())
@@ -343,7 +343,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		fake := &fakeTalosClient{current: current}
-		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), TalosClient: clientFactory(fake)}
+		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
 		_, err = reconcileMachine(r, m)
 		Expect(err).NotTo(HaveOccurred())
@@ -382,7 +382,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		newTestPatch(cluster.Name, layerCluster, nil, desired)
 
 		fake := &fakeTalosClient{current: current}
-		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), TalosClient: clientFactory(fake)}
+		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
 		_, err := reconcileMachine(r, m)
 		Expect(err).NotTo(HaveOccurred())
@@ -420,7 +420,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(lock.Acquire(ctx, "someone-else")).To(Succeed())
 
 		fake := &fakeTalosClient{current: current}
-		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), TalosClient: clientFactory(fake)}
+		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
 		_, err := reconcileMachine(r, m)
 		Expect(err).NotTo(HaveOccurred())
@@ -454,7 +454,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		newTestPatch(cluster.Name, "machine", target, desired)
 
 		fake := &fakeTalosClient{current: current}
-		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), TalosClient: clientFactory(fake)}
+		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
 		_, err := reconcileMachine(r, m)
 		Expect(err).NotTo(HaveOccurred())
@@ -483,7 +483,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		newTestSysctlPatch(cluster.Name, map[string]string{"net.ipv4.ip_forward": "1"})
 
 		fake := &fakeTalosClient{current: current}
-		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), TalosClient: clientFactory(fake)}
+		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
 		_, err = reconcileMachine(r, m)
 		Expect(err).NotTo(HaveOccurred())
@@ -510,7 +510,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		newTestPatch(cluster.Name, layerCluster, nil, desired)
 
 		fake := &fakeTalosClient{current: current, warnings: []string{"deprecated field migrated: example"}}
-		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), TalosClient: clientFactory(fake)}
+		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
 		_, err := reconcileMachine(r, m)
 		Expect(err).NotTo(HaveOccurred())
@@ -542,7 +542,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		fake := &fakeTalosClient{current: current}
-		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), TalosClient: clientFactory(fake)}
+		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
 		_, err = reconcileMachine(r, m)
 		Expect(err).NotTo(HaveOccurred())
@@ -571,7 +571,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		fake := &fakeTalosClient{current: wantRendered}
-		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), TalosClient: clientFactory(fake)}
+		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
 		// First reconcile converges: nothing to apply, but it records the
 		// fingerprint of what fed this render (cluster, machine, patch).
@@ -624,7 +624,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		fake := &fakeTalosClient{current: wantRendered}
-		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), TalosClient: clientFactory(fake)}
+		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
 		_, err = reconcileMachine(r, m)
 		Expect(err).NotTo(HaveOccurred())
@@ -665,7 +665,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		fake := &fakeTalosClient{current: baseline}
-		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), TalosClient: clientFactory(fake)}
+		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
 		_, err = reconcileMachine(r, m)
 		Expect(err).NotTo(HaveOccurred())
@@ -716,7 +716,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		wantPatchSpec := patch.Spec.DeepCopy()
 
 		fake := &fakeTalosClient{current: current}
-		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), TalosClient: clientFactory(fake)}
+		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
 		_, err := reconcileMachine(r, m)
 		Expect(err).NotTo(HaveOccurred())

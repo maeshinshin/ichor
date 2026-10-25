@@ -81,6 +81,16 @@ func Render(
 		return nil, "", fmt.Errorf("render: parsing versionContract: %w", err)
 	}
 
+	// machine.ParseType treats "" as TypeWorker, not an error -- it exists
+	// to parse config documents, where an absent machineType field has
+	// always meant worker. TalosMachineSpec.Role is different: it is left
+	// empty by discovery before approval assigns one, and an
+	// approved machine with no role must never silently render as a worker.
+	// Checked explicitly, ahead of ParseType, for exactly that reason.
+	if m.Spec.Role == "" {
+		return nil, "", fmt.Errorf("render: machine role is not set")
+	}
+
 	machineType, err := machine.ParseType(m.Spec.Role)
 	if err != nil {
 		return nil, "", fmt.Errorf("render: parsing machine role: %w", err)

@@ -44,6 +44,11 @@ dist/install.yaml
 ui/node_modules/
 cmd/ichor-ui/dist/
 
+# `make build-ichor-embed`'s copy of dist/install.yaml, embedded with
+# -tags installembed; never committed, same reasoning as
+# dist/install.yaml itself above.
+internal/installmanifest/install.yaml
+
 # goreleaser's own output directory (.goreleaser.yaml sets dist: to this,
 # instead of the default "dist/", so that "goreleaser build --clean" never
 # wipes the committed dist/chart above).

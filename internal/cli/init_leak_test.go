@@ -227,7 +227,7 @@ func TestInitNeverLeaksSecrets(t *testing.T) {
 
 		stdout, stderr, err := run(t, func(o *initOptions) {
 			o.ArgoCD = true
-			o.RepoURL = "https://example.invalid/repo.git"
+			o.RepoURL = testRepoURL
 			o.GitOpsDir = gitopsDir
 		}, func(d *initDeps) { d.Output = outputJSON })
 		if err != nil {

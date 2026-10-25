@@ -1,9 +1,18 @@
-# Release config for the `ichor` CLI (cobra, cmd/ichor). cmd/ichor doesn't
-# exist yet — the CLI is a later phase — so CI only runs `goreleaser check`
-# (schema validation) against this file, never `goreleaser build`/`release`.
+# Release config for the `ichor` CLI (cobra, cmd/ichor). cmd/ichor now
+# exists: `goreleaser build --snapshot --clean` succeeds locally,
+# so CI can run `goreleaser build` in addition to the `goreleaser check` it
+# already runs, whenever that's wired up.
 # yaml-language-server: $schema=https://goreleaser.com/static/schema.json
 
 version: 2
+
+# goreleaser's own output directory defaults to "dist/", which collides with
+# this repo's committed dist/chart (the Helm chart dist-chart-plugin writes,
+# unrelated to this release config). "goreleaser build --clean" wipes
+# whatever "dist:" points at before writing to it, so without this override
+# a release build would delete the committed chart. Keep this out of
+# "dist/" entirely rather than trying to carve out a shared subdirectory.
+dist: .goreleaser-dist
 
 builds:
   - id: ichor

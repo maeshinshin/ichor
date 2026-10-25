@@ -111,6 +111,10 @@ lint-config: golangci-lint ## Verify golangci-lint linter configuration
 build: manifests generate fmt vet ## Build manager binary.
 	go build -o bin/manager cmd/main.go
 
+.PHONY: build-ichor
+build-ichor: fmt vet ## Build the ichor CLI binary.
+	go build -o bin/ichor ./cmd/ichor
+
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./cmd/main.go

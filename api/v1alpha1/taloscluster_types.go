@@ -153,12 +153,21 @@ type TalosClusterRegistry struct {
 	// config (RegistryConfig.tls) uses the same key but never the "*" fallback; this field
 	// carries both mirror and auth, so "*" is only meaningful when authSecretRef is unset.
 	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=255
+	// +kubebuilder:validation:XValidation:rule="self == '*' || self.matches('^[a-zA-Z0-9.-]+(:[0-9]{1,5})?$')",message="host must be \"*\" or a hostname[:port]"
 	// +required
 	Host string `json:"host"`
 
 	// endpoints are the mirror endpoint URLs for host (RegistryMirrorConfig.endpoints) -- not
-	// secret, so they stay a plain typed field here rather than behind a reference.
+	// secret, so they stay a plain typed field here rather than behind a reference. Checked
+	// here, not left to machinery: pkg/machinery/config/types/v1alpha1's own ValidateAtRuntime
+	// has no validator at all for RegistryMirrorConfig/RegistryConfig, so an
+	// endpoint shaped wrong would otherwise reach a node's machine config unexamined, exactly
+	// the gap spec.discovery's own CEL above already closes for its addresses.
 	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=8
+	// +kubebuilder:validation:items:MaxLength=2048
+	// +kubebuilder:validation:XValidation:rule="self.all(e, isURL(e))",message="endpoints must be valid URLs"
 	// +required
 	Endpoints []string `json:"endpoints"`
 

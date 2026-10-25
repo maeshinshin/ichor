@@ -2632,11 +2632,20 @@ spec:
                     endpoints:
                       description: |-
                         endpoints are the mirror endpoint URLs for host (RegistryMirrorConfig.endpoints) -- not
-                        secret, so they stay a plain typed field here rather than behind a reference.
+                        secret, so they stay a plain typed field here rather than behind a reference. Checked
+                        here, not left to machinery: pkg/machinery/config/types/v1alpha1's own ValidateAtRuntime
+                        has no validator at all for RegistryMirrorConfig/RegistryConfig, so an
+                        endpoint shaped wrong would otherwise reach a node's machine config unexamined, exactly
+                        the gap spec.discovery's own CEL above already closes for its addresses.
                       items:
+                        maxLength: 2048
                         type: string
+                      maxItems: 8
                       minItems: 1
                       type: array
+                      x-kubernetes-validations:
+                      - message: endpoints must be valid URLs
+                        rule: self.all(e, isURL(e))
                     host:
                       description: |-
                         host is the registry host (and port, if not the default) this entry's mirror and
@@ -2644,8 +2653,12 @@ spec:
                         image reference, "docker.io" being the default one, or "*" for a fallback mirror. TLS
                         config (RegistryConfig.tls) uses the same key but never the "*" fallback; this field
                         carries both mirror and auth, so "*" is only meaningful when authSecretRef is unset.
+                      maxLength: 255
                       minLength: 1
                       type: string
+                      x-kubernetes-validations:
+                      - message: host must be "*" or a hostname[:port]
+                        rule: self == '*' || self.matches('^[a-zA-Z0-9.-]+(:[0-9]{1,5})?$')
                     username:
                       description: |-
                         username is this registry's non-secret auth username (RegistryAuthConfig.username). Optional: some private

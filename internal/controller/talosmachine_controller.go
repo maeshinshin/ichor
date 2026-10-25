@@ -358,7 +358,7 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			"dry-run apply failed")
 	}
 
-	r.setWarnings(&m, warnings)
+	r.setWarnings(&m, bundle, warnings)
 
 	// Step 5: apply, refuse, or stop, depending on what step 3 found -- and,
 	// now, on whether this is drift. A reboot-requiring, install-time-only
@@ -497,13 +497,19 @@ func (r *TalosMachineReconciler) ready(
 // actually happened this reconcile, so a reconcile that fails before that
 // point leaves a previous ConfigWarnings condition alone rather than
 // erasing it.
-func (r *TalosMachineReconciler) setWarnings(m *ichorv1alpha1.TalosMachine, warnings []string) {
+//
+// warnings is free-form text from Talos (machined's ValidateAtRuntime),
+// never validated as safe to surface as-is -- redactBundleMaterial strips
+// anything matching bundle's own secret-shaped scalars before it reaches
+// this Condition, which internal/uiapi and anyone with talosmachines:get
+// can read, a far wider readership than Secret RBAC allows.
+func (r *TalosMachineReconciler) setWarnings(m *ichorv1alpha1.TalosMachine, bundle *secrets.Bundle, warnings []string) {
 	status := metav1.ConditionFalse
 	message := "dry run reported no warnings"
 
 	if len(warnings) > 0 {
 		status = metav1.ConditionTrue
-		message = strings.Join(warnings, "; ")
+		message = redactBundleMaterial(strings.Join(warnings, "; "), bundle)
 	}
 
 	apimeta.SetStatusCondition(&m.Status.Conditions, metav1.Condition{

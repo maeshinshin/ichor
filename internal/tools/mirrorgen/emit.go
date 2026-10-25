@@ -9,7 +9,7 @@ import (
 )
 
 func (d *structDef) machExpr() string {
-	return machImportAlias(d.pkgPath) + "." + d.name
+	return machImportAlias(d.pkgPath) + "." + d.machName
 }
 
 // pinnedVersionContract is the Talos version contract the references point at; pkg/release does not exist yet to read it from.
@@ -50,18 +50,18 @@ const talosPkgPrefix = "github.com/siderolabs/talos/"
 func (d *structDef) reference() string {
 	switch {
 	case d.pkgPath == pkgSpecs:
-		return "OCI runtime-spec: " + d.name + " — https://github.com/opencontainers/runtime-spec"
+		return "OCI runtime-spec: " + d.machName + " — https://github.com/opencontainers/runtime-spec"
 	case !strings.HasPrefix(d.pkgPath, talosPkgPrefix):
-		return d.pkgPath + ": " + d.name
+		return d.pkgPath + ": " + d.machName
 	}
 
 	for page := range d.pages {
 		if len(d.pages) == 1 {
-			return "Talos: " + d.name + " — " + page
+			return "Talos: " + d.machName + " — " + page
 		}
 	}
 
-	return "Talos: " + d.name
+	return "Talos: " + d.machName
 }
 
 // mirrorTypeExprOf is the Go type expression for m on the generated mirror
@@ -434,10 +434,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	auditv1 "k8s.io/apiserver/pkg/apis/audit/v1"
 	apiserverv1 "k8s.io/apiserver/pkg/apis/apiserver/v1"
+	mcel "github.com/siderolabs/talos/pkg/machinery/cel"
 	mx509 "github.com/siderolabs/crypto/x509"
+	mblock "github.com/siderolabs/talos/pkg/machinery/config/types/block"
 	mmeta "github.com/siderolabs/talos/pkg/machinery/config/types/meta"
 	mruntime "github.com/siderolabs/talos/pkg/machinery/config/types/runtime"
 	mv1alpha1 "github.com/siderolabs/talos/pkg/machinery/config/types/v1alpha1"
+	rblock "github.com/siderolabs/talos/pkg/machinery/resources/block"
 	"time"
 )
 `)

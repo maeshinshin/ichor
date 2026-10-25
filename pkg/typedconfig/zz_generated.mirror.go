@@ -366,6 +366,12 @@ type DiskPartition struct {
 	DiskMountPoint string `json:"mountpoint,omitempty"`
 }
 
+// Talos: DiskSelector
+type DiskSelector struct {
+	// +optional
+	Match string `json:"match,omitempty"`
+}
+
 // Talos: EncryptionConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type EncryptionConfig struct {
 	// +required
@@ -384,8 +390,6 @@ type EncryptionConfig struct {
 
 // Talos: EncryptionKey — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type EncryptionKey struct {
-	// +optional
-	KeyStatic *EncryptionKeyStatic `json:"static,omitempty"`
 	// +optional
 	KeyNodeID *EncryptionKeyNodeID `json:"nodeID,omitempty"`
 	// +optional
@@ -406,7 +410,7 @@ type EncryptionKeyKMS struct {
 type EncryptionKeyNodeID struct {
 }
 
-// Talos: EncryptionKeyStatic — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
+// Talos: EncryptionKeyStatic
 type EncryptionKeyStatic struct {
 	// +optional
 	KeyData string `json:"passphrase,omitempty"`
@@ -416,6 +420,30 @@ type EncryptionKeyStatic struct {
 type EncryptionKeyTPM struct {
 	// +optional
 	TPMCheckSecurebootStatusOnEnroll *bool `json:"checkSecurebootStatusOnEnroll,omitempty"`
+}
+
+// Talos: EncryptionKeyTPMOptions
+type EncryptionKeyTPMOptions struct {
+	// +optional
+	PCRs []int `json:"pcrs,omitempty"`
+}
+
+// Talos: EncryptionSpec
+type EncryptionSpec struct {
+	// +required
+	EncryptionProvider string `json:"provider"`
+	// +required
+	EncryptionKeys []*VolumeEncryptionKey `json:"keys"`
+	// +optional
+	EncryptionCipher string `json:"cipher,omitempty"`
+	// +optional
+	EncryptionKeySize uint `json:"keySize,omitempty"`
+	// +optional
+	EncryptionBlockSize uint64 `json:"blockSize,omitempty"`
+	// +optional
+	EncryptionPerfOptions []string `json:"options,omitempty"`
+	// +optional
+	EncryptionAllowDiscards *bool `json:"allowDiscards,omitempty"`
 }
 
 // Talos: EtcdConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
@@ -484,6 +512,16 @@ type FeaturesConfig struct {
 	ImageCacheSupport *ImageCacheConfig `json:"imageCache,omitempty"`
 	// +optional
 	FeatureNodeAddressSortAlgorithm string `json:"nodeAddressSortAlgorithm,omitempty"`
+}
+
+// Talos: FilesystemSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/uservolumeconfig
+type FilesystemSpec struct {
+	// +optional
+	FilesystemType string `json:"type,omitempty"`
+	// +optional
+	ProjectQuotaSupportConfig *bool `json:"projectQuotaSupport,omitempty"`
+	// +optional
+	XFSSpec *XFSSpec `json:"xfs,omitempty"`
 }
 
 // Talos: FlannelCNIConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
@@ -760,6 +798,14 @@ type MachineSeccompProfile struct {
 	MachineSeccompProfileValue *SeccompProfile `json:"value"`
 }
 
+// Talos: MountSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/volumeconfig
+type MountSpec struct {
+	// +optional
+	MountSecure *bool `json:"secure,omitempty"`
+	// +optional
+	MountDisableAccessTime *bool `json:"disableAccessTime,omitempty"`
+}
+
 // Talos: NetworkConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type NetworkConfig struct {
 	// +optional
@@ -824,6 +870,18 @@ type PEMEncodedCertificateAndKey struct {
 	Key []byte `json:"key"`
 }
 
+// Talos: ProvisioningSpec
+type ProvisioningSpec struct {
+	// +optional
+	DiskSelectorSpec *DiskSelector `json:"diskSelector,omitempty"`
+	// +optional
+	ProvisioningGrow *bool `json:"grow,omitempty"`
+	// +optional
+	ProvisioningMinSize string `json:"minSize,omitempty"`
+	// +optional
+	ProvisioningMaxSize string `json:"maxSize,omitempty"`
+}
+
 // Talos: ProxyConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type ProxyConfig struct {
 	// +optional
@@ -834,6 +892,16 @@ type ProxyConfig struct {
 	ModeConfig string `json:"mode,omitempty"`
 	// +optional
 	ExtraArgsConfig map[string][]string `json:"extraArgs,omitempty"`
+}
+
+// Talos: RawVolumeConfigV1Alpha1 — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/rawvolumeconfig
+type RawVolumeConfigV1Alpha1 struct {
+	// +required
+	MetaName string `json:"name"`
+	// +optional
+	ProvisioningSpec *ProvisioningSpec `json:"provisioning,omitempty"`
+	// +optional
+	EncryptionSpec *EncryptionSpec `json:"encryption,omitempty"`
 }
 
 // Talos: RegistriesConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
@@ -940,6 +1008,14 @@ type SchedulerConfig struct {
 	ResourcesConfig *ResourcesConfig `json:"resources,omitempty"`
 }
 
+// Talos: ScrubConfig
+type ScrubConfig struct {
+	// +optional
+	ScrubEnabled *bool `json:"enabled,omitempty"`
+	// +optional
+	ScrubInterval string `json:"interval,omitempty"`
+}
+
 // Talos: SysctlConfigV1Alpha1 — https://docs.siderolabs.com/talos/v1.14/reference/configuration/runtime/sysctlconfig
 type SysctlConfigV1Alpha1 struct {
 	// +required
@@ -954,6 +1030,12 @@ type SystemDiskEncryptionConfig struct {
 	EphemeralPartition *EncryptionConfig `json:"ephemeral,omitempty"`
 }
 
+// Talos: SystemVolumeFilesystemSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/volumeconfig
+type SystemVolumeFilesystemSpec struct {
+	// +optional
+	XFSSpec *XFSSpec `json:"xfs,omitempty"`
+}
+
 // Talos: TimeConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type TimeConfig struct {
 	// +optional
@@ -964,10 +1046,46 @@ type TimeConfig struct {
 	TimeBootTimeout string `json:"bootTimeout,omitempty"`
 }
 
+// Talos: TrimConfig
+type TrimConfig struct {
+	// +optional
+	TrimEnabled *bool `json:"enabled,omitempty"`
+	// +optional
+	TrimInterval string `json:"interval,omitempty"`
+}
+
 // Talos: UdevConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type UdevConfig struct {
 	// +optional
 	UdevRules []string `json:"rules,omitempty"`
+}
+
+// Talos: UserMountSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/uservolumeconfig
+type UserMountSpec struct {
+	// +optional
+	MountDisableAccessTime *bool `json:"disableAccessTime,omitempty"`
+	// +optional
+	MountSecure *bool `json:"secure,omitempty"`
+}
+
+// Talos: UserVolumeConfigV1Alpha1 — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/uservolumeconfig
+type UserVolumeConfigV1Alpha1 struct {
+	// +required
+	MetaName string `json:"name"`
+	// +optional
+	VolumeType *string `json:"volumeType,omitempty"`
+	// +optional
+	ProvisioningSpec *ProvisioningSpec `json:"provisioning,omitempty"`
+	// +optional
+	FilesystemSpec *FilesystemSpec `json:"filesystem,omitempty"`
+	// +optional
+	EncryptionSpec *EncryptionSpec `json:"encryption,omitempty"`
+	// +optional
+	MountSpec *UserMountSpec `json:"mount,omitempty"`
+	// +optional
+	TrimSpec *TrimConfig `json:"trim,omitempty"`
+	// +optional
+	ScrubSpec *ScrubConfig `json:"scrub,omitempty"`
 }
 
 // Talos: VIPEquinixMetalConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
@@ -1002,6 +1120,58 @@ type Vlan struct {
 	VlanDHCPOptions *DHCPOptions `json:"dhcpOptions,omitempty"`
 }
 
+// Talos: VolumeConfigV1Alpha1 — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/volumeconfig
+type VolumeConfigV1Alpha1 struct {
+	// +required
+	MetaName string `json:"name"`
+	// +optional
+	ProvisioningSpec *ProvisioningSpec `json:"provisioning,omitempty"`
+	// +optional
+	FilesystemSpec *SystemVolumeFilesystemSpec `json:"filesystem,omitempty"`
+	// +optional
+	EncryptionSpec *EncryptionSpec `json:"encryption,omitempty"`
+	// +optional
+	MountSpec *MountSpec `json:"mount,omitempty"`
+	// +optional
+	TrimSpec *TrimConfig `json:"trim,omitempty"`
+	// +optional
+	ScrubSpec *ScrubConfig `json:"scrub,omitempty"`
+}
+
+// Talos: EncryptionKey
+type VolumeEncryptionKey struct {
+	// +required
+	KeySlot int `json:"slot"`
+	// +optional
+	KeyStatic *EncryptionKeyStatic `json:"static,omitempty"`
+	// +optional
+	KeyNodeID *VolumeEncryptionKeyNodeID `json:"nodeID,omitempty"`
+	// +optional
+	KeyKMS *VolumeEncryptionKeyKMS `json:"kms,omitempty"`
+	// +optional
+	KeyTPM *VolumeEncryptionKeyTPM `json:"tpm,omitempty"`
+	// +optional
+	KeyLockToSTATE *bool `json:"lockToState,omitempty"`
+}
+
+// Talos: EncryptionKeyKMS
+type VolumeEncryptionKeyKMS struct {
+	// +required
+	KMSEndpoint string `json:"endpoint"`
+}
+
+// Talos: EncryptionKeyNodeID
+type VolumeEncryptionKeyNodeID struct {
+}
+
+// Talos: EncryptionKeyTPM
+type VolumeEncryptionKeyTPM struct {
+	// +optional
+	TPMOptions *EncryptionKeyTPMOptions `json:"options,omitempty"`
+	// +optional
+	TPMCheckSecurebootStatusOnEnroll *bool `json:"checkSecurebootStatusOnEnroll,omitempty"`
+}
+
 // Talos: VolumeMountConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type VolumeMountConfig struct {
 	// +required
@@ -1010,4 +1180,10 @@ type VolumeMountConfig struct {
 	VolumeMountPath string `json:"mountPath"`
 	// +optional
 	VolumeReadOnly bool `json:"readonly,omitempty"`
+}
+
+// Talos: XFSSpec
+type XFSSpec struct {
+	// +optional
+	MinAllocationGroupSizeConfig string `json:"minAllocationGroupSize,omitempty"`
 }

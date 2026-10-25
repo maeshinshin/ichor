@@ -1708,13 +1708,6 @@ spec:
                                             type: object
                                           slot:
                                             type: integer
-                                          static:
-                                            description: 'Talos: EncryptionKeyStatic
-                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
-                                            properties:
-                                              passphrase:
-                                                type: string
-                                            type: object
                                           tpm:
                                             description: 'Talos: EncryptionKeyTPM
                                               — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
@@ -1765,13 +1758,6 @@ spec:
                                             type: object
                                           slot:
                                             type: integer
-                                          static:
-                                            description: 'Talos: EncryptionKeyStatic
-                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
-                                            properties:
-                                              passphrase:
-                                                type: string
-                                            type: object
                                           tpm:
                                             description: 'Talos: EncryptionKeyTPM
                                               — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
@@ -1848,7 +1834,101 @@ spec:
                       - SysctlConfig
                       - KernelModuleConfig
                       - Config
+                      - VolumeConfig
+                      - UserVolumeConfig
+                      - RawVolumeConfig
                       type: string
+                    rawVolumeConfig:
+                      description: |-
+                        rawVolumeConfig is a Talos RawVolumeConfig document (an unformatted partition for a CSI
+                        provisioner); populated when kind is "RawVolumeConfig".
+                      properties:
+                        encryption:
+                          description: 'Talos: EncryptionSpec'
+                          properties:
+                            allowDiscards:
+                              type: boolean
+                            blockSize:
+                              format: int64
+                              type: integer
+                            cipher:
+                              type: string
+                            keySize:
+                              type: integer
+                            keys:
+                              items:
+                                description: 'Talos: EncryptionKey'
+                                properties:
+                                  kms:
+                                    description: 'Talos: EncryptionKeyKMS'
+                                    properties:
+                                      endpoint:
+                                        type: string
+                                    required:
+                                    - endpoint
+                                    type: object
+                                  lockToState:
+                                    type: boolean
+                                  nodeID:
+                                    description: 'Talos: EncryptionKeyNodeID'
+                                    type: object
+                                  slot:
+                                    type: integer
+                                  static:
+                                    description: 'Talos: EncryptionKeyStatic'
+                                    properties:
+                                      passphrase:
+                                        type: string
+                                    type: object
+                                  tpm:
+                                    description: 'Talos: EncryptionKeyTPM'
+                                    properties:
+                                      checkSecurebootStatusOnEnroll:
+                                        type: boolean
+                                      options:
+                                        description: 'Talos: EncryptionKeyTPMOptions'
+                                        properties:
+                                          pcrs:
+                                            items:
+                                              type: integer
+                                            type: array
+                                        type: object
+                                    type: object
+                                required:
+                                - slot
+                                type: object
+                              type: array
+                            options:
+                              items:
+                                type: string
+                              type: array
+                            provider:
+                              type: string
+                          required:
+                          - keys
+                          - provider
+                          type: object
+                        name:
+                          type: string
+                        provisioning:
+                          description: 'Talos: ProvisioningSpec'
+                          properties:
+                            diskSelector:
+                              description: 'Talos: DiskSelector'
+                              properties:
+                                match:
+                                  type: string
+                              type: object
+                            grow:
+                              type: boolean
+                            maxSize:
+                              type: string
+                            minSize:
+                              type: string
+                          type: object
+                      required:
+                      - name
+                      type: object
                     sysctlConfig:
                       description: sysctlConfig is a Talos SysctlConfig document;
                         populated when kind is "SysctlConfig".
@@ -1860,18 +1940,277 @@ spec:
                       required:
                       - params
                       type: object
+                    userVolumeConfig:
+                      description: userVolumeConfig is a Talos UserVolumeConfig document;
+                        populated when kind is "UserVolumeConfig".
+                      properties:
+                        encryption:
+                          description: 'Talos: EncryptionSpec'
+                          properties:
+                            allowDiscards:
+                              type: boolean
+                            blockSize:
+                              format: int64
+                              type: integer
+                            cipher:
+                              type: string
+                            keySize:
+                              type: integer
+                            keys:
+                              items:
+                                description: 'Talos: EncryptionKey'
+                                properties:
+                                  kms:
+                                    description: 'Talos: EncryptionKeyKMS'
+                                    properties:
+                                      endpoint:
+                                        type: string
+                                    required:
+                                    - endpoint
+                                    type: object
+                                  lockToState:
+                                    type: boolean
+                                  nodeID:
+                                    description: 'Talos: EncryptionKeyNodeID'
+                                    type: object
+                                  slot:
+                                    type: integer
+                                  static:
+                                    description: 'Talos: EncryptionKeyStatic'
+                                    properties:
+                                      passphrase:
+                                        type: string
+                                    type: object
+                                  tpm:
+                                    description: 'Talos: EncryptionKeyTPM'
+                                    properties:
+                                      checkSecurebootStatusOnEnroll:
+                                        type: boolean
+                                      options:
+                                        description: 'Talos: EncryptionKeyTPMOptions'
+                                        properties:
+                                          pcrs:
+                                            items:
+                                              type: integer
+                                            type: array
+                                        type: object
+                                    type: object
+                                required:
+                                - slot
+                                type: object
+                              type: array
+                            options:
+                              items:
+                                type: string
+                              type: array
+                            provider:
+                              type: string
+                          required:
+                          - keys
+                          - provider
+                          type: object
+                        filesystem:
+                          description: 'Talos: FilesystemSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/uservolumeconfig'
+                          properties:
+                            projectQuotaSupport:
+                              type: boolean
+                            type:
+                              type: string
+                            xfs:
+                              description: 'Talos: XFSSpec'
+                              properties:
+                                minAllocationGroupSize:
+                                  type: string
+                              type: object
+                          type: object
+                        mount:
+                          description: 'Talos: UserMountSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/uservolumeconfig'
+                          properties:
+                            disableAccessTime:
+                              type: boolean
+                            secure:
+                              type: boolean
+                          type: object
+                        name:
+                          type: string
+                        provisioning:
+                          description: 'Talos: ProvisioningSpec'
+                          properties:
+                            diskSelector:
+                              description: 'Talos: DiskSelector'
+                              properties:
+                                match:
+                                  type: string
+                              type: object
+                            grow:
+                              type: boolean
+                            maxSize:
+                              type: string
+                            minSize:
+                              type: string
+                          type: object
+                        scrub:
+                          description: 'Talos: ScrubConfig'
+                          properties:
+                            enabled:
+                              type: boolean
+                            interval:
+                              type: string
+                          type: object
+                        trim:
+                          description: 'Talos: TrimConfig'
+                          properties:
+                            enabled:
+                              type: boolean
+                            interval:
+                              type: string
+                          type: object
+                        volumeType:
+                          type: string
+                      required:
+                      - name
+                      type: object
+                    volumeConfig:
+                      description: |-
+                        volumeConfig is a Talos VolumeConfig document (a system volume, e.g. STATE or EPHEMERAL,
+                        placed on its own disk); populated when kind is "VolumeConfig".
+                      properties:
+                        encryption:
+                          description: 'Talos: EncryptionSpec'
+                          properties:
+                            allowDiscards:
+                              type: boolean
+                            blockSize:
+                              format: int64
+                              type: integer
+                            cipher:
+                              type: string
+                            keySize:
+                              type: integer
+                            keys:
+                              items:
+                                description: 'Talos: EncryptionKey'
+                                properties:
+                                  kms:
+                                    description: 'Talos: EncryptionKeyKMS'
+                                    properties:
+                                      endpoint:
+                                        type: string
+                                    required:
+                                    - endpoint
+                                    type: object
+                                  lockToState:
+                                    type: boolean
+                                  nodeID:
+                                    description: 'Talos: EncryptionKeyNodeID'
+                                    type: object
+                                  slot:
+                                    type: integer
+                                  static:
+                                    description: 'Talos: EncryptionKeyStatic'
+                                    properties:
+                                      passphrase:
+                                        type: string
+                                    type: object
+                                  tpm:
+                                    description: 'Talos: EncryptionKeyTPM'
+                                    properties:
+                                      checkSecurebootStatusOnEnroll:
+                                        type: boolean
+                                      options:
+                                        description: 'Talos: EncryptionKeyTPMOptions'
+                                        properties:
+                                          pcrs:
+                                            items:
+                                              type: integer
+                                            type: array
+                                        type: object
+                                    type: object
+                                required:
+                                - slot
+                                type: object
+                              type: array
+                            options:
+                              items:
+                                type: string
+                              type: array
+                            provider:
+                              type: string
+                          required:
+                          - keys
+                          - provider
+                          type: object
+                        filesystem:
+                          description: 'Talos: SystemVolumeFilesystemSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/volumeconfig'
+                          properties:
+                            xfs:
+                              description: 'Talos: XFSSpec'
+                              properties:
+                                minAllocationGroupSize:
+                                  type: string
+                              type: object
+                          type: object
+                        mount:
+                          description: 'Talos: MountSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/volumeconfig'
+                          properties:
+                            disableAccessTime:
+                              type: boolean
+                            secure:
+                              type: boolean
+                          type: object
+                        name:
+                          type: string
+                        provisioning:
+                          description: 'Talos: ProvisioningSpec'
+                          properties:
+                            diskSelector:
+                              description: 'Talos: DiskSelector'
+                              properties:
+                                match:
+                                  type: string
+                              type: object
+                            grow:
+                              type: boolean
+                            maxSize:
+                              type: string
+                            minSize:
+                              type: string
+                          type: object
+                        scrub:
+                          description: 'Talos: ScrubConfig'
+                          properties:
+                            enabled:
+                              type: boolean
+                            interval:
+                              type: string
+                          type: object
+                        trim:
+                          description: 'Talos: TrimConfig'
+                          properties:
+                            enabled:
+                              type: boolean
+                            interval:
+                              type: string
+                          type: object
+                      required:
+                      - name
+                      type: object
                   required:
                   - kind
                   type: object
                   x-kubernetes-validations:
-                  - message: exactly one of sysctlConfig, kernelModuleConfig or config
-                      must be set
+                  - message: exactly one of sysctlConfig, kernelModuleConfig, config,
+                      volumeConfig, userVolumeConfig or rawVolumeConfig must be set
                     rule: '(has(self.sysctlConfig) ? 1 : 0) + (has(self.kernelModuleConfig)
-                      ? 1 : 0) + (has(self.config) ? 1 : 0) == 1'
+                      ? 1 : 0) + (has(self.config) ? 1 : 0) + (has(self.volumeConfig)
+                      ? 1 : 0) + (has(self.userVolumeConfig) ? 1 : 0) + (has(self.rawVolumeConfig)
+                      ? 1 : 0) == 1'
                   - message: kind must match the populated field
                     rule: 'self.kind == ''SysctlConfig'' ? has(self.sysctlConfig)
                       : self.kind == ''KernelModuleConfig'' ? has(self.kernelModuleConfig)
-                      : has(self.config)'
+                      : self.kind == ''Config'' ? has(self.config) : self.kind ==
+                      ''VolumeConfig'' ? has(self.volumeConfig) : self.kind == ''UserVolumeConfig''
+                      ? has(self.userVolumeConfig) : has(self.rawVolumeConfig)'
                 type: array
               layer:
                 description: layer is where this patch applies in the bottom-up stack;

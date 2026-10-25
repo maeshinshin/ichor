@@ -391,9 +391,9 @@ work" during a transition is implemented as an explicit check, not solely
 the lock's own mutual exclusion: `refuseReboot` recomputes the live count
 fresh (not trusting the stored `Transitioning` condition, which could be
 one reconcile stale) and refuses before ever attempting the lock if the
-count is even. The only other disruptive-operation path that exists today
-is `refuseReboot`; a future upgrade or CA-rotation operation gets the same
-treatment by calling the same `transitioningControlPlanes` check.
+count is even. (This was later centralized into `acquireDisruptiveLock` --
+see "The gate moved to where the lock is acquired" below -- rather than
+left as a check each disruptive-operation call site repeats for itself.)
 
 ### Tests
 
@@ -403,3 +403,81 @@ status" group covers: a stable (odd) count reports `Transitioning: False`
 `True` (`EvenControlPlaneCount`); and a reboot-requiring change on *any*
 machine (not just a control plane) in a transitioning cluster is refused
 with `ClusterTransitioning`, before the cluster lock is ever taken.
+
+## The gate moved to where the lock is acquired
+
+The first version of the transitioning check lived inside `refuseReboot`
+itself: recompute the live count, refuse if even, otherwise take the
+lock. That is exactly the shape of safety net this project has already
+watched rot once -- ADR 0011 records a secrets RBAC marker regressing
+from namespace-scoped back to cluster-wide because the fix lived at one
+call site and a later change added another one without knowing the rule
+existed. A check a future call site has to remember to repeat is a check
+that will eventually not get repeated.
+
+### Decision
+
+`acquireDisruptiveLock` (`internal/controller/removal.go`) is now the
+only function in this package allowed to call
+`clusterlock.Lock.Acquire`. It takes the `TalosCluster`, the triggering
+`TalosMachine`, the lock identity, and one more argument:
+`completesTransition bool`. With it false, it recomputes the live
+control-plane count and refuses with a `*transitioningError` before ever
+calling `Acquire` if the count is even; with it true, it skips that
+check and acquires unconditionally. `refuseReboot` is the first caller,
+passing `false` -- a reboot-causing apply never itself resolves a
+control-plane transition.
+
+`completesTransition` exists because the gate cannot be unconditional:
+`reconcileRemoval` also needs `acquireDisruptiveLock`, and it is
+reached *while the count is still even* for exactly the removal that
+would bring it back down to the declared count (3->4->3's last step).
+Refusing that removal because the count is even would make the
+replacement it is completing impossible to ever finish -- the
+transitioning gate exists to block *other* disruptive work during a
+transition, not the transition's own remaining step. `reconcileRemoval`
+passes `true`, and keeps its own, more precise
+quorum/last-control-plane/declared-count checks (this ADR's main
+sections) once the lock is held -- `acquireDisruptiveLock`'s gate is the
+generic one every disruptive operation needs; it is not a substitute for
+removal's specific ones.
+
+### Deliberately not moved into `pkg/clusterlock`
+
+`clusterlock.Lock` stays a generic Lease-backed mutex with no knowledge
+of control planes, quorum, or transitions. Teaching it about this
+cluster's topology would couple a package meant to be reusable for any
+disruptive operation (reboot-causing applies today; upgrades and CA
+rotation later, none of which share a vocabulary) to one specific rule
+from one specific feature. The rule belongs with the thing that has the
+domain knowledge to evaluate it -- `internal/controller`, which already
+owns `countApprovedControlPlanes` and `transitioningControlPlanes` --
+not with the lock primitive underneath it.
+
+### Enforcing that nothing bypasses it
+
+A rule that says "always call `acquireDisruptiveLock`, never
+`Acquire` directly" is exactly as easy to violate by accident as the
+one this section opens with, unless something checks it mechanically.
+`TestAcquireDisruptiveLockIsTheOnlyAcquireCallSite`
+(`internal/controller/acquire_guard_test.go`) parses every non-test
+`*.go` file in the package with `go/parser` -- the same technique
+`TestFixtureUUIDsAreUnique` already uses for the UUID-collision guard --
+and fails if any call to a method named `Acquire` appears outside
+`acquireDisruptiveLock`'s own body. Verified by deliberately adding a
+second call site (a throwaway function calling `clusterlock.New(...).
+Acquire(...)` directly) and confirming the failure:
+
+```
+taloscluster_controller.go:37: calls Acquire directly from scratchAcquireForGuardTest; disruptive
+operations must go through acquireDisruptiveLock -- the even-control-plane-count refusal lives there
+```
+
+-- a message that says what rule was broken and which function to call
+instead, not just that something failed. The scratch call site was
+removed immediately after; the guard is what stays.
+
+This is also why `pkg/clusterlock` was left alone rather than touched to
+"help" enforce this: the guard's whole premise is that this package has
+exactly one legitimate caller of `Acquire`, which is only true because
+the domain check lives here and not inside `clusterlock` itself.

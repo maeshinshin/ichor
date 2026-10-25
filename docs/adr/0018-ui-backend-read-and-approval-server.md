@@ -324,7 +324,7 @@ rather than making that stream wait out the whole shutdown window.
 ## Consequences
 
 - Nine RPCs across three services are implemented and tested against
-  envtest (`internal/uiapi/*_test.go`, 18 Ginkgo specs plus plain-Go tests
+  envtest (`internal/uiapi/*_test.go`, 20 Ginkgo specs plus plain-Go tests
   for `strongIdentity` and the resume token). `make build test lint` passes
   unchanged for the rest of the repository.
 - The masking guarantee rests on `config.Provider.RedactSecrets`, not on
@@ -340,12 +340,13 @@ rather than making that stream wait out the whole shutdown window.
 - `config/rbac/ichor-ui/` exists but is not deployed by any kustomization
   yet; wiring it in is the job of whichever work unit adds `ichor-ui`'s
   Deployment/Service manifests.
-- Gaps reported rather than silently worked around: no proto-level
-  "rejected" state for a `TalosMachine` (noted above); `StreamNodeLogs` has
-  no way to select a specific service/container log, only the whole-machine
-  kernel log; `AuditRecord.actor` is a fixed placeholder pending OIDC
-  (roadmap phase 9); `ResourceUsage.cpu_cores_used`'s formula is unverified
-  against a live node.
+- Gaps reported rather than silently worked around, two of which the
+  amendment below closes: no proto-level "rejected" state for a
+  `TalosMachine` (closed), and `StreamNodeLogs` having no way to select a
+  specific service/container log (closed). Still open: `AuditRecord.actor`
+  is a fixed placeholder pending OIDC (roadmap phase 9);
+  `ResourceUsage.cpu_cores_used`'s formula is unverified against a live
+  node.
 
 ## A build-tag file is not type-checked by default, and two gaps that let it drift silently
 
@@ -400,3 +401,106 @@ Two related gaps closed in the same pass, both CI-level rather than
   unregenerated field to `TalosClusterSpec` and running the same two
   commands fails with exactly that diff and message; reverting the field
   makes it pass again.
+
+## Amendment (same date): approval tri-state and service-selectable logs
+
+Two gaps this ADR originally reported back were handed back as real work:
+`RejectMachine`'s own design (never deleting the machine) left no way to
+record *that* it had been rejected, and `StreamNodeLogs` could only ever
+mean the kernel log. Both proto messages change; both changes are additive
+or a pre-release breaking change the design explicitly authorized (v1alpha1,
+not yet shipped to any real client).
+
+### `TalosMachineSpec.Approved` (bool) becomes `ApprovalState` (tri-state)
+
+A bool cannot represent pending/approved/rejected without a second field
+claiming the same truth, which is exactly the anti-pattern to avoid: two
+fields that can both answer "is this approved," with nothing stopping them
+from disagreeing. `api/v1alpha1/talosmachine_types.go` removes `Approved
+bool` and adds `ApprovalState string` (`pending`/`approved`/`rejected`,
+enum-validated, defaulting to `pending`), plus an `IsApproved()` method so
+every caller asks the same one question the same one way rather than
+comparing the string literal directly. `machine.proto`'s `Machine.approved`
+(field 8) is replaced the same way: `reserved 8; reserved "approved";` plus
+a new `MachineApprovalState approval_state = 11` enum field, mirroring the
+CRD's three states exactly.
+
+This is a real breaking change to both the CRD and the wire type, pre-
+authorized for exactly this reason (pre-release, nothing depends on the old
+shape yet). `make proto-breaking` confirms it as the one and only breaking
+finding (`Previously present field "8" with name "approved" on message
+"Machine" was deleted`) -- the new `approval_state` field and
+`StreamNodeLogsRequest.service` (below) are both pure additions and `buf
+breaking` reports nothing for either, exactly as expected.
+
+Every caller of the old `Spec.Approved`/`Machine.approved` had to move to
+the new shape: `internal/controller` (`talosmachine_controller.go`'s
+approval gate, `discovery_test.go`'s assertion), `internal/webhook/v1alpha1`
+(the quorum-counting delete guard and its fixtures), `internal/cli`
+(`init_run.go`'s first-control-plane approval and its test), and this
+package's own `convert.go`/`machine_service.go`/`node_service.go` and their
+tests. Every one of these is the same one-line mechanical swap
+(`m.Spec.Approved` -> `m.Spec.IsApproved()`, or setting `ApprovalState`
+instead of `Approved`); none changes behavior.
+
+### Reversibility: rejecting is not permanent
+
+`RejectMachine` sets `ApprovalState` to `rejected` (never deletes the
+object, for the same reason as before -- deleting it would let discovery
+recreate it as fresh and pending, making the rejection meaningless the
+moment discovery runs again; `internal/uiapi/discovery_integration_test.go`
+drives the real, exported `controller.DiscoveryReconciler.Discover` against
+a rejected fixture to prove this directly rather than trusting the
+reasoning). `ApproveMachine`'s only refusal is an *already-approved*
+machine; a *rejected* one is not approved, so approving it succeeds and
+moves it straight to `approved` -- this is the entire mechanism by which a
+rejection is undone, and it needed no new RPC or field.
+
+Decision: **reversible**. The alternative -- a rejection that can never be
+undone -- turns a misclick into a permanent dead end for that piece of
+hardware, with no UI gesture this phase defines for "undo." Ichor's own
+design leans the other way throughout (drift policy, lock re-acquisition,
+`forceRemove`, reuse after reset): operator mistakes get a way back, not a
+one-way door. The cost is that "rejected" means "not currently wanted,"
+not "permanently barred" -- acceptable, since nothing in the design asks
+for the stronger guarantee, and a stronger one (a reject that really can
+never be undone) is easy to add later as an annotation or a second state if
+a real incident ever calls for it.
+
+`RejectMachine` refuses to touch an already-*approved* machine (removal is
+the correct operation there, a different and later one); rejecting an
+already-*rejected* machine is allowed and simply records the newest reason.
+
+### `StreamNodeLogsRequest.service`: resolving architecture.md's open question
+
+Added as an optional `string service = 3`: empty means Talos's kernel log
+(`Dmesg`, the only source this RPC could reach before), any other value is
+a Talos service name (`kubelet`, `etcd`, `trustd`, `apid`, `machined`, ...),
+read through Talos's `Logs` API. `NodeTalosClient.StreamLogs` gained the
+same parameter; `talosclient_machinery.go` branches on it, using
+`constants.SystemContainerdNamespace` with `common.ContainerDriver_CONTAINERD`
+for the non-empty case -- confirmed, not guessed, by reading
+`cmd/talosctl/cmd/talos/{logs,root,image}.go` in the vendored
+`github.com/siderolabs/talos` source (not just `pkg/machinery`): that is
+exactly the namespace/driver `talosctl logs <service>` resolves to with no
+flags given, and the RPC's `id` parameter is the service name verbatim.
+
+**Architecture.md's open question -- "Can `os:reader` read logs, or does
+the UI backend need more?" -- is answered: yes, for both RPCs this unit
+uses.** `internal/app/machined/pkg/system/services/machined.go` in the same
+vendored source carries the authoritative per-method role table (not
+`pkg/machinery`, which ships no server-side policy at all), and both
+entries read:
+
+```
+"/machine.MachineService/Dmesg": role.MakeSet(role.Admin, role.Operator, role.Reader),
+"/machine.MachineService/Logs":  role.MakeSet(role.Admin, role.Operator, role.Reader),
+```
+
+`role.Reader` is in both sets. The UI backend's read-only identity
+(`role.MakeSet(role.Reader)`, `talosclient_machinery.go`) needs nothing
+more for either RPC. This is recorded here, not left as a runtime surprise:
+if a future Talos version narrows either table, `StreamLogs`'s error
+wrapping states plainly that it was using "this backend's read-only
+(role.Reader) Talos identity" when the call failed, so a `PermissionDenied`
+reads as a Talos policy change, not a mystery.

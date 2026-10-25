@@ -29,7 +29,7 @@ import (
 
 func newTestCluster() *ichorv1alpha1.TalosCluster {
 	return &ichorv1alpha1.TalosCluster{
-		GenerateName: "cluster-", Namespace: "default",
+		GenerateName: "cluster-", Namespace: testNamespace,
 		Spec: ichorv1alpha1.TalosClusterSpec{
 			Endpoint:          ichorv1alpha1.TalosClusterEndpoint{Type: "vip", Address: "10.0.0.1"},
 			TalosVersion:      "v1.14.3",

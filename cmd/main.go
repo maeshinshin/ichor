@@ -329,6 +329,7 @@ func main() {
 		ControllerNamespace: os.Getenv("POD_NAMESPACE"),
 		TalosClient:         controller.NewMachineryTalosClient,
 		KubeClient:          kubeClient,
+		Recorder:            mgr.GetEventRecorderFor("ichor-controller"), //nolint:staticcheck
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "talosmachine")
 		os.Exit(1)

@@ -300,7 +300,7 @@ func (r *TalosOperationReconciler) candidateMachines(
 		}
 
 		switch m.Spec.Role {
-		case "controlplane":
+		case roleControlPlane:
 			controlPlanes = append(controlPlanes, m)
 		case "worker":
 			workers = append(workers, m)

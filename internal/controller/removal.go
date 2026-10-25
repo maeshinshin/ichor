@@ -44,6 +44,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	"k8s.io/kubectl/pkg/drain"
 
 	corev1 "k8s.io/api/core/v1"
@@ -51,6 +52,7 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -74,11 +76,30 @@ const machineRemovalFinalizer = "ichor.maesh.dev/machine-removal"
 const removalRenewInterval = time.Minute
 
 const (
-	conditionRemoval      = "Removal"
-	reasonRemovalRefused  = "RemovalRefused"
-	reasonDrainFailed     = "DrainFailed"
-	reasonRemovalApproved = "RemovalApproved"
+	conditionRemoval           = "Removal"
+	reasonRemovalRefused       = "RemovalRefused"
+	reasonDrainFailed          = "DrainFailed"
+	reasonRemovalApproved      = "RemovalApproved"
+	reasonEtcdMemberRemoveFail = "EtcdMemberRemovalFailed"
 )
+
+// reasonNodeStillHasClusterCredentials is the Event reason removal.go
+// emits in the same breath as clearing machineRemovalFinalizer (ADR 0032).
+// The condition that would normally carry this message disappears with the
+// object the moment the finalizer clears, so the Event -- a separate
+// object with its own lifetime -- is what keeps the caveat visible to an
+// operator afterward, instead of it passing silently.
+const reasonNodeStillHasClusterCredentials = "NodeStillHasClusterCredentials"
+
+// nodeStillHasClusterCredentialsMessage is deliberately explicit rather
+// than folded into reasonRemovalApproved's own message: ADR 0032 records
+// that Reset is a separate unit (a partition-wipe argument it is not this
+// code's job to get wrong), so a removed TalosMachine's physical node still
+// holds this cluster's PKI until something resets it -- it cannot rejoin
+// as a trusted etcd member, but it is not safe to repurpose or discard
+// either.
+const nodeStillHasClusterCredentialsMessage = "control plane %q was removed from etcd, but its physical node was never reset " +
+	"and still holds this cluster's PKI; it cannot rejoin etcd, but do not repurpose or discard the hardware until it is reset"
 
 // conditionTransitioning and its two reasons implement
 // docs/design/architecture.md's "Nodes" section: "Even counts are allowed
@@ -267,10 +288,183 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 		return r.removalCondition(ctx, m, metav1.ConditionFalse, reasonDrainFailed, drainErr.Error())
 	}
 
-	return r.removalCondition(ctx, m, metav1.ConditionTrue, reasonRemovalApproved,
-		"removal passed the quorum, last-control-plane and declared-count checks and the node was "+
-			"drained; etcd member removal and reset are not implemented yet, so the finalizer is held "+
-			"rather than letting deletion complete while the node may still be an etcd member")
+	if err := r.removeEtcdMember(ctx, &cluster, m); err != nil {
+		log.Error(err, "removing etcd member")
+
+		return r.removalCondition(ctx, m, metav1.ConditionFalse, reasonEtcdMemberRemoveFail, err.Error())
+	}
+
+	return r.completeRemoval(ctx, m)
+}
+
+// completeRemoval records the Removal condition's terminal success message,
+// emits the Event ADR 0032 requires so the PKI caveat survives the object
+// disappearing, then clears machineRemovalFinalizer -- in that order, so a
+// crash between the two leaves the finalizer still held (removeEtcdMember's
+// own idempotent check-then-act means the next reconcile finds the member
+// already gone and comes straight back here, not back to a redundant
+// removal attempt).
+func (r *TalosMachineReconciler) completeRemoval(ctx context.Context, m *ichorv1alpha1.TalosMachine) error {
+	if err := r.removalCondition(ctx, m, metav1.ConditionTrue, reasonRemovalApproved,
+		"removal passed the quorum, last-control-plane and declared-count checks, the node was "+
+			"drained, and its etcd member was removed"); err != nil {
+		return err
+	}
+
+	if r.Recorder != nil {
+		r.Recorder.Eventf(m, corev1.EventTypeWarning, reasonNodeStillHasClusterCredentials,
+			nodeStillHasClusterCredentialsMessage, m.Name)
+	}
+
+	controllerutil.RemoveFinalizer(m, machineRemovalFinalizer)
+
+	return r.Update(ctx, m)
+}
+
+// removeEtcdMember removes m from etcd, preferring m's own graceful
+// EtcdLeaveCluster -- talosctl's own "etcd leave" command says plainly to
+// "always prefer etcd leave over" removing a member by ID -- and falling
+// back to EtcdRemoveMemberByID from a surviving sibling only when m cannot
+// be dialed or cannot leave on its own (architecture.md's forceRemove case:
+// the node is dead or unreachable).
+//
+// Idempotent by construction, not by catching a particular error string:
+// architecture.md records that "removing an already-removed etcd member
+// reports not-found, which counts as success", so both branches check the
+// live member list first and return nil immediately if m is already gone.
+// That is also how this resumes correctly after a crash between a
+// completed removal and the finalizer clearing in completeRemoval: the
+// next reconcile re-lists rather than trusting any local memory of what it
+// already did.
+func (r *TalosMachineReconciler) removeEtcdMember(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
+) error {
+	if r.TalosClient == nil {
+		return fmt.Errorf("no Talos API connectivity is configured for this controller")
+	}
+
+	bundle, err := loadBundle(ctx, r.Client, r.ControllerNamespace, cluster)
+	if err != nil {
+		return fmt.Errorf("loading secrets bundle for etcd member removal: %w", err)
+	}
+
+	self, selfErr := r.TalosClient(ctx, cluster, m, bundle)
+	if selfErr == nil {
+		defer closeTalosClient(self)
+
+		members, listErr := self.EtcdMemberList(ctx)
+		if listErr == nil {
+			if !etcdMemberPresent(members, m.Spec.Hostname) {
+				return nil // already gone: the resumption case above
+			}
+
+			if leaveErr := self.EtcdLeaveCluster(ctx); leaveErr == nil {
+				return nil
+			}
+			// Dialed and listed fine, but leaving itself failed: fall through
+			// to the survivor path below rather than giving up here.
+		}
+	}
+
+	return r.removeEtcdMemberFromSurvivor(ctx, cluster, m, bundle)
+}
+
+// removeEtcdMemberFromSurvivor is removeEtcdMember's fallback: dial a
+// different approved control-plane TalosMachine in the same cluster and
+// use its view of etcd to remove m by ID. Returns a descriptive error if no
+// survivor can be found or dialed at all -- reconcileRemoval holds the
+// finalizer and retries later rather than treating that as "already
+// removed".
+func (r *TalosMachineReconciler) removeEtcdMemberFromSurvivor(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, bundle *secrets.Bundle,
+) error {
+	survivor, err := r.findEtcdSurvivor(ctx, m)
+	if err != nil {
+		return err
+	}
+
+	sc, err := r.TalosClient(ctx, cluster, survivor, bundle)
+	if err != nil {
+		return fmt.Errorf("dialing a surviving control plane to remove %q from etcd: %w", m.Name, err)
+	}
+	defer closeTalosClient(sc)
+
+	members, err := sc.EtcdMemberList(ctx)
+	if err != nil {
+		return fmt.Errorf("listing etcd members from a surviving control plane: %w", err)
+	}
+
+	id, found := etcdMemberID(members, m.Spec.Hostname)
+	if !found {
+		return nil // already gone
+	}
+
+	return sc.EtcdRemoveMemberByID(ctx, id)
+}
+
+// findEtcdSurvivor finds another approved control-plane TalosMachine in m's
+// cluster that is not itself being deleted, to dial as the "a surviving
+// node says remove this member" side of EtcdRemoveMemberByID. Uses
+// r.APIReader, the same direct read deleteguard.CountApprovedControlPlanes
+// requires, for the same reason: a cached read could still show a sibling
+// that has, moments ago, started its own removal.
+func (r *TalosMachineReconciler) findEtcdSurvivor(
+	ctx context.Context, m *ichorv1alpha1.TalosMachine,
+) (*ichorv1alpha1.TalosMachine, error) {
+	var siblings ichorv1alpha1.TalosMachineList
+	if err := r.APIReader.List(ctx, &siblings, client.InNamespace(m.Namespace)); err != nil {
+		return nil, err
+	}
+
+	for i := range siblings.Items {
+		s := &siblings.Items[i]
+		if s.Name == m.Name {
+			continue
+		}
+		if s.Spec.Role == roleControlPlane && s.Spec.IsApproved() && s.Spec.ClusterRef.Name == m.Spec.ClusterRef.Name &&
+			s.DeletionTimestamp.IsZero() {
+			return s, nil
+		}
+	}
+
+	return nil, fmt.Errorf("no surviving control plane found to remove %q from etcd", m.Name)
+}
+
+// etcdMemberPresent reports whether hostname appears in members.
+func etcdMemberPresent(members []EtcdMember, hostname string) bool {
+	_, found := etcdMemberID(members, hostname)
+
+	return found
+}
+
+// etcdMemberID finds the etcd member ID matching hostname -- etcd reports
+// the Node's own hostname, which is TalosMachineSpec.Hostname's job to
+// carry (architecture.md: Talos derives one when it is left unset, but
+// nothing here can discover that derived name, so an unset Hostname can
+// never be found and removeEtcdMember's caller holds the finalizer and
+// retries rather than guessing).
+func etcdMemberID(members []EtcdMember, hostname string) (uint64, bool) {
+	if hostname == "" {
+		return 0, false
+	}
+
+	for _, member := range members {
+		if member.Hostname == hostname {
+			return member.ID, true
+		}
+	}
+
+	return 0, false
+}
+
+// closeTalosClient closes talos if it is an io.Closer, the same optional
+// capability check talosmachine_controller.go's main path already uses --
+// the fake test double has nothing to close, so the interface itself stays
+// at the methods design 5.6 and ADR 0032 actually need.
+func closeTalosClient(talos TalosClient) {
+	if closer, ok := talos.(io.Closer); ok {
+		_ = closer.Close()
+	}
 }
 
 // removalCondition records reconcileRemoval's verdict as the Removal

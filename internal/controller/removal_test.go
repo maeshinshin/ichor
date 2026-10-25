@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -59,8 +60,11 @@ func newTestControlPlane(clusterName, suffix string) *ichorv1alpha1.TalosMachine
 }
 
 // newTestClusterWithCount is newTestCluster with an explicit
-// controlPlane.count, for the count-guard tests below.
-func newTestClusterWithCount(count int32) *ichorv1alpha1.TalosCluster {
+// controlPlane.count, for the count-guard tests below. secretName is
+// almost always "does-not-exist": every refusal case in this file is
+// decided before removeEtcdMember ever loads a bundle, so only the tests
+// that expect a removal to actually reach RemovalApproved pass a real one.
+func newTestClusterWithCount(count int32, secretName string) *ichorv1alpha1.TalosCluster {
 	cluster := &ichorv1alpha1.TalosCluster{
 		GenerateName: testClusterGenerate, Namespace: tmNamespace,
 		Spec: ichorv1alpha1.TalosClusterSpec{
@@ -68,7 +72,7 @@ func newTestClusterWithCount(count int32) *ichorv1alpha1.TalosCluster {
 			TalosVersion:      testTalosVersion,
 			KubernetesVersion: "v1.34.0",
 			VersionContract:   "v1.14",
-			SecretsRef:        corev1.LocalObjectReference{Name: "does-not-exist"},
+			SecretsRef:        corev1.LocalObjectReference{Name: secretName},
 			ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: count, Schedulable: testSchedulable},
 		},
 	}
@@ -77,9 +81,29 @@ func newTestClusterWithCount(count int32) *ichorv1alpha1.TalosCluster {
 	return cluster
 }
 
+// removalReadyReconciler returns a TalosMachineReconciler whose TalosClient
+// always reports the departing machine already absent from etcd (the
+// simplest fake that lets a removal that passes its quorum/count checks
+// reach completeRemoval, for tests that are about those checks, not about
+// removeEtcdMember's own behavior -- that gets its own tests below), and
+// the real secrets bundle Secret's name its caller's TalosCluster needs to
+// reference for loadBundle to succeed.
+func removalReadyReconciler() (*TalosMachineReconciler, string) {
+	fake := &fakeTalosClient{}
+	bundle := newTestBundle("v1.14")
+	secret := newTestSecret(bundle)
+
+	r := &TalosMachineReconciler{
+		Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace,
+		TalosClient: clientFactory(fake),
+	}
+
+	return r, secret.Name
+}
+
 var _ = Describe("TalosMachineReconciler removal", func() {
 	It("gives an approved control plane the removal finalizer on its first reconcile, and nothing else", func() {
-		cluster := newTestClusterWithCount(1)
+		cluster := newTestClusterWithCount(1, "does-not-exist")
 		cp := newTestControlPlane(cluster.Name, "1")
 
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace}
@@ -115,15 +139,20 @@ var _ = Describe("TalosMachineReconciler removal", func() {
 	})
 
 	// The four failure modes docs/design/architecture.md's "Nodes" names for
-	// the removal sequence: the two that need a real Reset/etcd-removal call
-	// (naming the partitions to wipe; the fire-and-forget double-reset) do
-	// not apply here, because neither call exists in this phase (ADR 0010's
-	// appendix explains why, and that this is a deliberate scope cut, not an
-	// oversight). The other two are exactly what these specs show cannot be
-	// stepped into.
+	// the removal sequence. Two are Reset's alone (naming the partitions to
+	// wipe; the fire-and-forget double-reset) and still do not apply here:
+	// ADR 0032 keeps Reset a separate unit, so no code in this package ever
+	// calls it -- TestTalosClientHasNoResetMethod below is the guard that
+	// a future addition cannot silently reintroduce either failure without
+	// this file noticing. The other two are exactly what these specs show
+	// cannot be stepped into: a refusal still never reaches Talos at all
+	// (checked before drain or removeEtcdMember), and removeEtcdMember's
+	// own idempotency (etcd_removal_test.go) is this phase's answer to
+	// "removing an already-removed etcd member reports not-found, which
+	// counts as success."
 	Describe("the four failure modes architecture.md calls out", func() {
 		It("refuses on its own refusal, never by asking Talos (there is no Talos call here at all)", func() {
-			cluster := newTestClusterWithCount(1)
+			cluster := newTestClusterWithCount(1, "does-not-exist")
 			cp := newTestControlPlane(cluster.Name, "3")
 
 			r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace}
@@ -145,7 +174,7 @@ var _ = Describe("TalosMachineReconciler removal", func() {
 		})
 
 		It("is resumable from status: a fresh reconciler picking up mid-operation does not fail or double-act", func() {
-			cluster := newTestClusterWithCount(1)
+			cluster := newTestClusterWithCount(1, "does-not-exist")
 			cp1 := newTestControlPlane(cluster.Name, "4")
 			cp2 := newTestControlPlane(cluster.Name, "5")
 
@@ -181,32 +210,33 @@ var _ = Describe("TalosMachineReconciler removal", func() {
 	})
 
 	It("refuses a removal that would break quorum, and allows one that doesn't", func() {
-		cluster := newTestClusterWithCount(1)
+		r, secretName := removalReadyReconciler()
+		cluster := newTestClusterWithCount(1, secretName)
 		cp1 := newTestControlPlane(cluster.Name, "6")
 		cp2 := newTestControlPlane(cluster.Name, "7")
 		cp3 := newTestControlPlane(cluster.Name, "8")
 
-		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace}
 		for _, cp := range []*ichorv1alpha1.TalosMachine{cp1, cp2, cp3} {
 			_, err := reconcileMachine(r, cp)
 			Expect(err).NotTo(HaveOccurred())
 		}
 
 		// 3 -> 2: quorum of 3 is 2, allowed (desiredCount is 1, so the count
-		// guard doesn't refuse it either).
+		// guard doesn't refuse it either). cp1 has no Hostname set, so
+		// removeEtcdMember's fake sees it as already absent from etcd
+		// (etcdMemberID("") never matches) and the removal completes in
+		// full: the object is actually gone, not left holding a
+		// "RemovalApproved" condition the way an unimplemented etcd
+		// removal used to leave it.
 		Expect(k8sClient.Delete(ctx, cp1)).To(Succeed())
 		_, err := reconcileMachine(r, cp1)
 		Expect(err).NotTo(HaveOccurred())
-		cond := apimeta.FindStatusCondition(fetchMachine(cp1).Status.Conditions, conditionRemoval)
-		Expect(cond.Reason).To(Equal(reasonRemovalApproved))
+		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Namespace: cp1.Namespace, Name: cp1.Name}, &ichorv1alpha1.TalosMachine{}))).
+			To(BeTrue(), "a removal that passes every check now completes for real")
 
-		// A separate pair, independent of cp1 above: cp1 is still counted
-		// (by design -- nothing in this phase actually removes a machine,
-		// see this file's package comment, so a "RemovalApproved" sibling
-		// still counts as a live control plane until something finishes
-		// it), so testing "2 -> 1 refused" needs its own cluster rather
-		// than reusing cp2/cp3 from the group cp1 came from.
-		cluster2 := newTestClusterWithCount(1)
+		// A separate pair: cp1 is gone now, so this needs fresh machines
+		// rather than reusing cp2/cp3 from the group cp1 came from.
+		cluster2 := newTestClusterWithCount(1, "does-not-exist")
 		cpA := newTestControlPlane(cluster2.Name, "6b")
 		cpB := newTestControlPlane(cluster2.Name, "7b")
 		for _, cp := range []*ichorv1alpha1.TalosMachine{cpA, cpB} {
@@ -218,18 +248,18 @@ var _ = Describe("TalosMachineReconciler removal", func() {
 		Expect(k8sClient.Delete(ctx, cpA)).To(Succeed())
 		_, err = reconcileMachine(r, cpA)
 		Expect(err).NotTo(HaveOccurred())
-		cond = apimeta.FindStatusCondition(fetchMachine(cpA).Status.Conditions, conditionRemoval)
+		cond := apimeta.FindStatusCondition(fetchMachine(cpA).Status.Conditions, conditionRemoval)
 		Expect(cond.Reason).To(Equal(reasonRemovalRefused))
 		Expect(cond.Message).To(ContainSubstring("quorum"))
 	})
 
 	It("refuses dropping below spec.controlPlane.count, and allows the add-then-remove replacement", func() {
-		cluster := newTestClusterWithCount(3)
+		r, secretName := removalReadyReconciler()
+		cluster := newTestClusterWithCount(3, secretName)
 		cp1 := newTestControlPlane(cluster.Name, "9")
 		cp2 := newTestControlPlane(cluster.Name, "10")
 		cp3 := newTestControlPlane(cluster.Name, "11")
 
-		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace}
 		for _, cp := range []*ichorv1alpha1.TalosMachine{cp1, cp2, cp3} {
 			_, err := reconcileMachine(r, cp)
 			Expect(err).NotTo(HaveOccurred())
@@ -253,12 +283,14 @@ var _ = Describe("TalosMachineReconciler removal", func() {
 		Expect(k8sClient.Delete(ctx, cp1)).To(Succeed())
 		_, err = reconcileMachine(r, cp1)
 		Expect(err).NotTo(HaveOccurred())
-		cond = apimeta.FindStatusCondition(fetchMachine(cp1).Status.Conditions, conditionRemoval)
-		Expect(cond.Reason).To(Equal(reasonRemovalApproved))
+		// cp1 has no Hostname set, so removeEtcdMember's fake sees it as
+		// already absent and the removal completes in full this time.
+		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Namespace: cp1.Namespace, Name: cp1.Name}, &ichorv1alpha1.TalosMachine{}))).
+			To(BeTrue(), "4 -> 3 meets the declared count, so this removal completes for real")
 	})
 
 	It("defers removal while another identity holds the cluster lock, and does not touch the finalizer", func() {
-		cluster := newTestClusterWithCount(1)
+		cluster := newTestClusterWithCount(1, "does-not-exist")
 		cp := newTestControlPlane(cluster.Name, "13")
 
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace}
@@ -284,7 +316,7 @@ var _ = Describe("TalosMachineReconciler removal", func() {
 
 var _ = Describe("renewWhile", func() {
 	It("keeps a short-lived lock alive past its own duration, then lets it expire once stopped", func() {
-		cluster := newTestClusterWithCount(1)
+		cluster := newTestClusterWithCount(1, "does-not-exist")
 		cp := newTestControlPlane(cluster.Name, "14")
 
 		// A duration shorter than the test itself: without renewal, this
@@ -326,7 +358,7 @@ func clusterKeyOf2(cluster *ichorv1alpha1.TalosCluster) types.NamespacedName {
 
 var _ = Describe("TalosCluster transitioning status", func() {
 	It("reports a stable (odd) control-plane count as not transitioning", func() {
-		cluster := newTestClusterWithCount(3)
+		cluster := newTestClusterWithCount(3, "does-not-exist")
 		cp1 := newTestControlPlane(cluster.Name, "20")
 		cp2 := newTestControlPlane(cluster.Name, "21")
 		cp3 := newTestControlPlane(cluster.Name, "22")
@@ -350,7 +382,7 @@ var _ = Describe("TalosCluster transitioning status", func() {
 	})
 
 	It("reports an even control-plane count as transitioning, once a replacement is approved", func() {
-		cluster := newTestClusterWithCount(3)
+		cluster := newTestClusterWithCount(3, "does-not-exist")
 		cp1 := newTestControlPlane(cluster.Name, "23")
 		cp2 := newTestControlPlane(cluster.Name, "24")
 		cp3 := newTestControlPlane(cluster.Name, "25")

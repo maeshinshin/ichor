@@ -118,3 +118,35 @@ func (t *machineryTalosClient) ApplyNoReboot(ctx context.Context, cfg []byte) er
 
 	return err
 }
+
+// EtcdMemberList lists etcd members as this node's own machined sees them
+// (etcd's membership is raft-replicated, so any member -- not only a
+// control plane the request happens to be "about" -- reports the same
+// list).
+func (t *machineryTalosClient) EtcdMemberList(ctx context.Context) ([]EtcdMember, error) {
+	resp, err := t.c.EtcdMemberList(ctx, &machineapi.EtcdMemberListRequest{QueryLocal: true})
+	if err != nil {
+		return nil, err
+	}
+
+	var members []EtcdMember
+
+	for _, msg := range resp.GetMessages() {
+		for _, m := range msg.GetMembers() {
+			members = append(members, EtcdMember{ID: m.GetId(), Hostname: m.GetHostname()})
+		}
+	}
+
+	return members, nil
+}
+
+// EtcdLeaveCluster asks this client's own node to leave etcd.
+func (t *machineryTalosClient) EtcdLeaveCluster(ctx context.Context) error {
+	return t.c.EtcdLeaveCluster(ctx, &machineapi.EtcdLeaveClusterRequest{})
+}
+
+// EtcdRemoveMemberByID forcibly removes memberID from etcd, as decided by
+// this client's own node.
+func (t *machineryTalosClient) EtcdRemoveMemberByID(ctx context.Context, memberID uint64) error {
+	return t.c.EtcdRemoveMemberByID(ctx, &machineapi.EtcdRemoveMemberByIDRequest{MemberId: memberID})
+}

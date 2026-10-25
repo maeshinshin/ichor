@@ -75,6 +75,14 @@ type fakeTalosClient struct {
 
 	dryRunCalls int
 	applyCalls  [][]byte
+
+	// etcd-related fields: removal_test.go's fixtures for removeEtcdMember.
+	etcdMembers    []EtcdMember
+	etcdMembersErr error
+	etcdLeaveErr   error
+	etcdLeaveCalls int
+	etcdRemoveErr  error
+	etcdRemoveIDs  []uint64
 }
 
 func (f *fakeTalosClient) CurrentConfig(context.Context) ([]byte, error) {
@@ -91,6 +99,22 @@ func (f *fakeTalosClient) ApplyNoReboot(_ context.Context, cfg []byte) error {
 	f.applyCalls = append(f.applyCalls, cfg)
 
 	return f.applyErr
+}
+
+func (f *fakeTalosClient) EtcdMemberList(context.Context) ([]EtcdMember, error) {
+	return f.etcdMembers, f.etcdMembersErr
+}
+
+func (f *fakeTalosClient) EtcdLeaveCluster(context.Context) error {
+	f.etcdLeaveCalls++
+
+	return f.etcdLeaveErr
+}
+
+func (f *fakeTalosClient) EtcdRemoveMemberByID(_ context.Context, memberID uint64) error {
+	f.etcdRemoveIDs = append(f.etcdRemoveIDs, memberID)
+
+	return f.etcdRemoveErr
 }
 
 func clientFactory(fake *fakeTalosClient) func(

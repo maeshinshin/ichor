@@ -61,6 +61,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -78,6 +79,11 @@ import (
 // manager for this component (cmd/main.go uses the same literal for the
 // webhook cert rotator's FieldOwner).
 const controllerIdentity = "ichor-controller"
+
+// roleControlPlane is TalosMachineSpec.Role's control-plane value, shared
+// across this package's own uses of it (talosoperation_controller.go and
+// removal.go) rather than each repeating the literal.
+const roleControlPlane = "controlplane"
 
 // conditionReady and conditionConfigWarnings are the two condition types
 // this reconciler writes to TalosMachine.status.conditions. Ready mirrors
@@ -166,6 +172,13 @@ type TalosMachineReconciler struct {
 	// the usual environment-noise direction). Wired from
 	// mgr.GetAPIReader() in cmd/main.go.
 	APIReader client.Reader
+
+	// Recorder emits the Event removal.go's completeRemoval raises in the
+	// same breath as clearing machineRemovalFinalizer -- the only record
+	// that survives the TalosMachine's own disappearance to tell an
+	// operator its physical node still holds this cluster's PKI (ADR
+	// 0032). nil skips the Event, not the removal itself.
+	Recorder record.EventRecorder
 }
 
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosmachines,verbs=get;list;watch;create;update;patch;delete
@@ -205,7 +218,7 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	// operation (it's the only role ADR 0010's quorum/last-control-plane/
 	// count checks apply to); a worker or an unapproved machine gets no
 	// finalizer and deletes exactly as before.
-	if m.Spec.Role == "controlplane" && !controllerutil.ContainsFinalizer(&m, machineRemovalFinalizer) {
+	if m.Spec.Role == roleControlPlane && !controllerutil.ContainsFinalizer(&m, machineRemovalFinalizer) {
 		controllerutil.AddFinalizer(&m, machineRemovalFinalizer)
 		return ctrl.Result{}, r.Update(ctx, &m)
 	}

@@ -91,7 +91,8 @@ func CheckControlPlaneCount(currentControlPlanes int, desiredCount int) error {
 	after := currentControlPlanes - 1
 	if after < desiredCount {
 		return fmt.Errorf("delete refused: control planes %d -> %d, below the declared count of %d; "+
-			"approve a replacement control plane before removing this one",
+			"either approve a replacement control plane first (then remove this one), "+
+			"or lower spec.controlPlane.count first (to 1, 3 or 5) if you mean to shrink the cluster",
 			currentControlPlanes, after, desiredCount)
 	}
 	return nil

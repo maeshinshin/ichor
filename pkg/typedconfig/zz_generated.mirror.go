@@ -20,8 +20,8 @@ package typedconfig
 
 import (
 	corev1 "k8s.io/api/core/v1"
-	auditv1 "k8s.io/apiserver/pkg/apis/audit/v1"
 	apiserverv1 "k8s.io/apiserver/pkg/apis/apiserver/v1"
+	auditv1 "k8s.io/apiserver/pkg/apis/audit/v1"
 	kubeletv1 "k8s.io/kubelet/config/v1"
 )
 

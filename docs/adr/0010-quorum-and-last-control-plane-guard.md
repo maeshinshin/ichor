@@ -2,6 +2,8 @@
 
 Status: Accepted · Date: 2026-10-25 · Design section: Nodes (removal), Roadmap phase 3
 
+Decided: Added `CheckControlPlaneQuorum` as a pure guard stronger than the `allow-delete` annotation alone
+
 ## Context
 
 Phase 1 of the deletion guard (`pkg/deleteguard.CheckDelete`) only checks the

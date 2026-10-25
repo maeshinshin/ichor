@@ -1,6 +1,8 @@
 # 0020. Giving ichor-ui a shipping path
 
-Status: Accepted · Date: 2026-10-25 · Design section: Deployment, Trust
+Status: Accepted, amended · Date: 2026-10-25 · Design section: Deployment, Trust
+
+Decided: Gave `ichor-ui` a Dockerfile, a chart Deployment/Service reusing the controller's own mechanism, and RBAC wired into `config/default`
 
 ## Context
 

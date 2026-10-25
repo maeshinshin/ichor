@@ -2,6 +2,8 @@
 
 Status: Accepted · Date: 2026-10-26 · Design section: GitOps and Argo CD
 
+Decided: `ichor gitops export`'s allow-list of CR kinds, its Argo CD/Flux tracked-resource warning, and `ichor gitops handoff`'s one-field `TalosCluster` patch
+
 ## Context
 
 ADR 0024 built the CNI hand-over reconciler and its CR field

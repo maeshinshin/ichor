@@ -2,6 +2,8 @@
 
 Status: Accepted · Date: 2026-10-25 · Design section: "Nodes" (discovery and approval)
 
+Decided: Made `TalosMachineSpec.Role` optional; discovery never picks a role or auto-registers a weak identity
+
 ## Context
 
 Phase 3 asked for the half of "Nodes" that runs before approval: read a

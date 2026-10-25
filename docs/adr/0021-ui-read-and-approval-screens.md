@@ -1,6 +1,8 @@
 # 0021. UI: read and approval screens on the generated TS client
 
-Status: Accepted · Date: 2026-10-25 · Design section: CLI and UI, roadmap item 5
+Status: Accepted, amended twice · Date: 2026-10-25 · Design section: CLI and UI, roadmap item 5
+
+Decided: Built the four read/approval UI screens on a committed, generated TS client, with the approval dialog disclosing identity/hardware/role before use
 
 ## Context
 

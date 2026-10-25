@@ -54,6 +54,10 @@ manifests: controller-gen manifests-ichor-ui ## Generate WebhookConfiguration, C
 sync-crds: ## Sync config/crd/bases/ into dist/chart/templates/crd/ (CONTRIBUTING.md explains why, in place of kubebuilder edit --plugins=helm/v2-alpha).
 	go run ./internal/tools/synccrds
 
+.PHONY: adr-index
+adr-index: ## Regenerate docs/adr/README.md's index table from each ADR's own Decided:/Status: line.
+	go run ./internal/tools/adrindex
+
 .PHONY: generate
 generate: controller-gen ## Generate mirror types (go generate) plus DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	go generate ./...

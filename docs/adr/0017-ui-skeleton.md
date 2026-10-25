@@ -2,6 +2,8 @@
 
 Status: Accepted · Date: 2026-10-25 · Design section: CLI and UI
 
+Decided: Settled `ui/`'s directory, `cmd/ichor-ui` as a second binary, and how the Go side builds without the UI present
+
 ## Context
 
 Phase 5 is the UI skeleton only: scaffolding, not screens. The design

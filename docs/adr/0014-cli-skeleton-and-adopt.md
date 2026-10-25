@@ -2,6 +2,8 @@
 
 Status: Accepted · Date: 2026-10-25 · Design section: CLI and UI; Bootstrap (`ichor adopt`)
 
+Decided: Settled `cmd/ichor`'s package layout and how `ichor adopt` guarantees zero drift
+
 ## Context
 
 Phase 4 is the CLI. `docs/design/architecture.md`'s "CLI and UI" section sets

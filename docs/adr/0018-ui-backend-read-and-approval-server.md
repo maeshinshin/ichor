@@ -1,6 +1,8 @@
 # 0018. UI backend: the read and approval server implementation
 
-Status: Accepted · Date: 2026-10-25 · Design section: CLI and UI, roadmap item 5
+Status: Accepted, amended · Date: 2026-10-25 · Design section: CLI and UI, roadmap item 5
+
+Decided: One `Server` type implements all three handler interfaces over a single uncached client; settled the four approval refusals
 
 ## Context
 

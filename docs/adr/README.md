@@ -30,7 +30,7 @@ same way it catches a stale chart.
 | 0015 | Built GitOps `Application` as a hand-rolled type (`pkg/gitops`) behind one constructor, plus a policy-free repo skeleton | Accepted |
 | 0016 | Split the Connect read/approval API into `ClusterService`/`MachineService`/`NodeService` and fixed their message shapes | Accepted |
 | 0017 | Settled `ui/`'s directory, `cmd/ichor-ui` as a second binary, and how the Go side builds without the UI present | Accepted |
-| 0018 | One `Server` type implements all three handler interfaces over a single uncached client; settled the four approval refusals | Accepted, amended |
+| 0018 | One `Server` type implements all three handler interfaces over a single uncached client; settled the four approval refusals; fixed `loadBundle` resolving the TalosCluster's own namespace instead of the backend's, the same bug ADR 0011 had already fixed on the controller side | Accepted, amended twice |
 | 0019 | `ichor init`: VIP recommended not required, Ichor applied through the API server not inlined, topology presets carry count/schedulable | Accepted |
 | 0020 | Gave `ichor-ui` a Dockerfile, a chart Deployment/Service reusing the controller's own mechanism, and RBAC wired into `config/default` | Accepted, amended |
 | 0021 | Built the four read/approval UI screens on a committed, generated TS client, with the approval dialog disclosing identity/hardware/role before use | Accepted, amended twice |

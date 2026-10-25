@@ -101,9 +101,12 @@ func Kubeconfig(namespace, node string, talosconfig []byte) ([]byte, error) {
 // components and every control-plane node to report healthy across the whole cluster --
 // not just one node's own view.
 func Health(namespace string, controlPlaneNodes []string, talosconfig []byte) (string, error) {
-	nodeList := strings.Join(controlPlaneNodes, ",")
+	// --nodes (-n) targets exactly one node to run the check from; --control-plane-nodes
+	// is the list health checks against. Confirmed for real: "command health requires
+	// exactly one node" when --nodes carried the full list too.
 	return run(namespace,
-		[]string{"health", "--control-plane-nodes", nodeList, talosconfigFlag, talosconfigMount, nodesFlag, nodeList},
+		[]string{"health", "--control-plane-nodes", strings.Join(controlPlaneNodes, ","),
+			talosconfigFlag, talosconfigMount, nodesFlag, controlPlaneNodes[0]},
 		map[string]string{talosconfigKey: string(talosconfig)}, 3*time.Minute)
 }
 

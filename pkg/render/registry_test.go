@@ -367,7 +367,24 @@ func TestRegistryAuthLeak(t *testing.T) {
 		assertNoLeak(t, err)
 	})
 
-	t.Run("render fails downstream after resolving a real credential", func(t *testing.T) {
+	// This forces RenderWithRegistryAuth to fail with a real credential
+	// already resolved (auth), but not inside injectRegistries itself: an
+	// invalid versionContract fails earlier, at buildConfig's own
+	// coreconfig.ParseContractFromVersion call (render.go), before
+	// injectRegistries -- and the real credential it carries -- is ever
+	// reached. What this test file could not force, for the same reason
+	// TestRenderBundleLeak names for its own two unreachable paths: either
+	// of injectRegistries's own two error returns (registry.go).
+	// container.New(doc) is called with exactly one, already-typed
+	// in-process Go document, so its only failure modes (duplicate or
+	// conflicting document) cannot trigger against itself.
+	// configpatcher.Apply merges that same document onto cfg, a config
+	// baseConfig just generated fresh via machinery's own generator, so
+	// there is no reachable way through this package's public API to make
+	// either call actually fail -- confirmed by reading both
+	// (pkg/machinery/config/container/container.go's New,
+	// pkg/machinery/config/configpatcher's Apply) rather than assumed.
+	t.Run("render fails before registries are ever touched (invalid versionContract)", func(t *testing.T) {
 		m := testMachine("node-a", roleWorker, nil)
 		bundle := testBundle(t)
 		auth := map[string]RegistryAuth{registryHost: {Password: secretValue}}

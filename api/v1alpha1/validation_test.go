@@ -474,6 +474,27 @@ var _ = Describe("TalosCluster", func() {
 		Expect(k8sClient.Create(context.Background(), c)).To(Succeed())
 	})
 
+	It("accepts \"*\" as host, and a host with an explicit port", func() {
+		c := newCluster(corev1.LocalObjectReference{Name: literalSecrets}, 3, "true")
+		c.Spec.Registries = []TalosClusterRegistry{
+			{Host: "*", Endpoints: []string{testMirrorEndpoint}},
+			{Host: testRegistryHost + ":5000", Endpoints: []string{testMirrorEndpoint + "-port"}},
+		}
+		Expect(k8sClient.Create(context.Background(), c)).To(Succeed())
+	})
+
+	It("rejects a host that is neither \"*\" nor a hostname[:port] (ADR 0041)", func() {
+		c := newCluster(corev1.LocalObjectReference{Name: literalSecrets}, 3, "true")
+		c.Spec.Registries = []TalosClusterRegistry{{Host: "not a host/with slash", Endpoints: []string{testMirrorEndpoint}}}
+		Expect(k8sClient.Create(context.Background(), c)).NotTo(Succeed())
+	})
+
+	It("rejects an endpoint that is not a URL (ADR 0041)", func() {
+		c := newCluster(corev1.LocalObjectReference{Name: literalSecrets}, 3, "true")
+		c.Spec.Registries = []TalosClusterRegistry{{Host: testRegistryHost, Endpoints: []string{"not a url"}}}
+		Expect(k8sClient.Create(context.Background(), c)).NotTo(Succeed())
+	})
+
 	It("rejects a registries entry with no host", func() {
 		c := newCluster(corev1.LocalObjectReference{Name: literalSecrets}, 3, "true")
 		c.Spec.Registries = []TalosClusterRegistry{{Endpoints: []string{testMirrorEndpoint}}}

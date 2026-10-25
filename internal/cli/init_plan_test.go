@@ -130,6 +130,7 @@ func TestBuildInitPlan_Errors(t *testing.T) {
 		name   string
 		mutate func(*initPlanInput)
 	}{
+		{"cluster name is not a valid Kubernetes object name", func(in *initPlanInput) { in.Cluster = "../../../tmp/evil" }},
 		{"unsupported preset", func(in *initPlanInput) { in.Preset = "minimal" }},
 		{"invalid cni", func(in *initPlanInput) { in.CNIPreset = "calico" }},
 		{"invalid endpoint type", func(in *initPlanInput) { in.EndpointType = "carrier-pigeon" }},

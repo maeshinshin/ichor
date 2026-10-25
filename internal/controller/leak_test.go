@@ -24,24 +24,10 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
-
-// bundleSecretMaterial lists every sensitive scalar in bundle, the same way
-// pkg/render's own leak test does for its bundle.
-func bundleSecretMaterial(bundle *secrets.Bundle) []string {
-	return []string{
-		bundle.Secrets.BootstrapToken,
-		bundle.TrustdInfo.Token,
-		bundle.Cluster.ID,
-		bundle.Cluster.Secret,
-		string(bundle.Certs.OS.Crt),
-		string(bundle.Certs.OS.Key),
-		string(bundle.Certs.K8s.Crt),
-		string(bundle.Certs.K8s.Key),
-	}
-}
 
 // TestTalosMachineBundleLeak forces every reconcile error/status path that
 // has real bundle material loaded nearby and asserts that none of it
@@ -190,5 +176,43 @@ var _ = Describe("TalosMachineReconciler bundle leak", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		assertNoLeak(fetchMachine(m), bundleSecretMaterial(bundle))
+	})
+
+	// TestTalosMachineBundleLeak's own routes above all force an error; none
+	// of them has anything to say about setWarnings, the one *success* path
+	// that still writes free-form text (Talos's own dry-run warnings) into a
+	// status Condition. Verified against Talos v1.14.3's actual source
+	// (ADR 0041) that no warning it generates today echoes a submitted
+	// value -- but that is a fact about today's machinery version, not
+	// about this code, so this does not rely on it: it feeds setWarnings
+	// the bundle's own secret material directly (standing in for whatever a
+	// future Talos version might start echoing) and asserts
+	// redactBundleMaterial still caught it.
+	It("dry run warnings echo bundle material", func() {
+		bundle := newTestBundle("v1.14")
+		secret := newTestSecret(bundle)
+		cluster := newTestCluster(secret.Name, "v1.14")
+		m := newTestMachine(cluster.Name, true)
+
+		current := renderWithConfig(cluster, m, bundle, layerCluster, nil, minimalConfigSkeleton())
+
+		fake := &fakeTalosClient{current: current, warnings: bundleSecretMaterial(bundle)}
+		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
+
+		_, err := reconcileMachine(r, m)
+		Expect(err).NotTo(HaveOccurred())
+
+		got := fetchMachine(m)
+		warn := warningsCondition(got)
+		Expect(warn).NotTo(BeNil())
+		Expect(warn.Status).To(Equal(metav1.ConditionTrue), "non-empty warnings must still surface as a Condition")
+
+		for _, s := range bundleSecretMaterial(bundle) {
+			if s == "" {
+				continue
+			}
+
+			Expect(warn.Message).NotTo(ContainSubstring(s), "ConfigWarnings condition message leaked bundle material")
+		}
 	})
 })

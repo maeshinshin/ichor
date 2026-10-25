@@ -505,6 +505,26 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
+github.com/moby/spdystream@v0.5.1: NOTICE
+
+SpdyStream
+Copyright 2014-2021 Docker Inc.
+
+This product includes software developed at
+Docker Inc. (https://www.docker.com/).
+
+SPDY implementation (spdy/)
+
+The spdy directory contains code derived from the Go project (golang.org/x/net).
+
+Copyright 2009-2013 The Go Authors.
+Licensed under the BSD 3-Clause License.
+
+Modifications Copyright 2014-2021 Docker Inc.
+
+The BSD license text and Go patent grant are included in
+spdy/LICENSE and spdy/PATENTS.
+
 github.com/open-policy-agent/cert-controller@v0.16.0: NOTICE
 
 cert-controller
@@ -914,6 +934,7 @@ Components:
 - github.com/google/pprof@v0.0.0-20260115054156-294ebfa9ad83
 - github.com/inconshreveable/mousetrap@v1.1.0
     Copyright 2022 Alan Shreve (@inconshreveable)
+- github.com/moby/spdystream@v0.5.1
 - github.com/moby/term@v0.5.0
     Copyright 2013-2018 Docker, Inc.
 - github.com/modern-go/concurrent@v0.0.0-20180306012644-bacd9c7ef1dd
@@ -1783,7 +1804,7 @@ Components:
     Copyright (c) 2011-2019 Canonical Ltd
 
 --------------------------------------------------------------------------------
-BSD-2-Clause (variant 1 of 2)
+BSD-2-Clause (variant 1 of 3)
 --------------------------------------------------------------------------------
 
 Redistribution and use in source and binary forms, with or without
@@ -1814,7 +1835,7 @@ Components:
     Copyright (c) 2015, Dave Cheney <dave@cheney.net> All rights reserved.
 
 --------------------------------------------------------------------------------
-BSD-2-Clause (variant 2 of 2)
+BSD-2-Clause (variant 2 of 3)
 --------------------------------------------------------------------------------
 
 Blackfriday is distributed under the Simplified BSD License:
@@ -1849,6 +1870,35 @@ Blackfriday is distributed under the Simplified BSD License:
 
 Components:
 - github.com/russross/blackfriday/v2@v2.1.0
+
+--------------------------------------------------------------------------------
+BSD-2-Clause (variant 3 of 3)
+--------------------------------------------------------------------------------
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+  Redistributions of source code must retain the above copyright notice, this
+  list of conditions and the following disclaimer.
+
+  Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
+  and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Components:
+- github.com/gorilla/websocket@v1.5.4-0.20250319132907-e064f32e3674
+    Copyright (c) 2013 The Gorilla WebSocket Authors. All rights reserved.
 
 --------------------------------------------------------------------------------
 BSD-3-Clause (variant 1 of 10)

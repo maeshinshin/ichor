@@ -42,3 +42,39 @@ jobs:
 
       - name: Running Tests
         run: nix develop --command bash -c "go mod tidy && make test"
+
+  # Catches drift between source (api/v1alpha1 types, +kubebuilder:rbac markers) and
+  # what's generated from it (config/crd/bases, config/rbac/*, zz_generated.*.go): one
+  # regenerate-and-diff covers every generated artifact at once, rather than a check per
+  # artifact kind. Runs in its own job so it starts in parallel with "test" above -- drift
+  # is cheap to catch and there's no reason to wait on the rest of the suite first.
+  manifests-drift:
+    permissions:
+      contents: read
+    name: Generated manifests are up to date
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # 31.11.3
+
+      # "fmt" is part of this, not an extra step: controller-gen/mirrorgen's raw output
+      # isn't always import-sorted the way gofmt leaves it (observed for real -- a bare
+      # "make manifests generate" reordered an unrelated, already-correct import block in
+      # pkg/typedconfig/zz_generated.*.go, pure noise that "go fmt" immediately undoes).
+      # Skipping fmt here would make this job flag committed files as "out of date" when
+      # they match what `make build`/`make test` (which both depend on fmt too) actually
+      # produce.
+      - name: Regenerate manifests and mirror types
+        run: nix develop --command make manifests generate fmt
+
+      - name: Fail if regenerating produced a diff
+        run: |
+          if ! git diff --exit-code; then
+            echo "::error::Generated files are out of date with their source (api/v1alpha1 types and/or +kubebuilder:rbac markers). Run 'make manifests generate fmt' locally and commit the result." >&2
+            exit 1
+          fi

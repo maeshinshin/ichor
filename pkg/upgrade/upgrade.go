@@ -19,9 +19,12 @@ limitations under the License.
 // Kubernetes version supported with a given Talos version, and does a
 // Kubernetes version change respect Kubernetes' own skew policy. It is a
 // pure package: every function here takes version strings and returns an
-// error, nothing talks to a cluster. The two pre-checks that do need a
-// running cluster (etcd health, node readiness) are declared as interfaces
-// only (see checks.go); implementing them is the state machine's job, not this package's.
+// error, nothing talks to a cluster. The other two pre-checks design
+// section "Upgrades" lists -- etcd health, node readiness -- need a
+// running cluster and are deliberately not declared here, not even as
+// interfaces: Go interfaces belong to their consumer, declared where
+// they're consumed, and the consumer (the upgrade state machine) does not
+// exist yet.
 //
 // Talos upgrade paths and the Talos/Kubernetes pairing are not
 // reimplemented here: pkg/machinery/compatibility already carries exactly

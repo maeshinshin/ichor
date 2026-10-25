@@ -39,6 +39,14 @@ import (
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
+//
+// `make test` boots five of these envtest instances (one per package:
+// api/v1alpha1, internal/controller, internal/webhook/v1alpha1,
+// internal/uiapi, pkg/clusterlock), run concurrently by go test's own
+// package-level parallelism. Observed wall-clock time for this package
+// alone has ranged 64s-130s depending on host load. If you see a
+// timing-sensitive failure, suspect this first before the code under
+// test.
 
 var (
 	ctx       context.Context

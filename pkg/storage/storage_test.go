@@ -39,14 +39,23 @@ func TestNewPreset(t *testing.T) {
 func TestLonghornV1_CheckExtensions(t *testing.T) {
 	p := longhornV1{}
 
+	const (
+		iscsi     = "siderolabs/iscsi-tools"
+		utilLinux = "siderolabs/util-linux-tools"
+	)
+
 	cases := []struct {
 		name      string
 		installed []string
 		wantErr   bool
 	}{
-		{name: "both required extensions present", installed: []string{"siderolabs/iscsi-tools", "siderolabs/util-linux-tools"}, wantErr: false},
-		{name: "extra extensions alongside the required ones", installed: []string{"siderolabs/iscsi-tools", "siderolabs/util-linux-tools", "siderolabs/qemu-guest-agent"}, wantErr: false},
-		{name: "missing util-linux-tools", installed: []string{"siderolabs/iscsi-tools"}, wantErr: true},
+		{name: "both required extensions present", installed: []string{iscsi, utilLinux}, wantErr: false},
+		{
+			name:      "extra extensions alongside the required ones",
+			installed: []string{iscsi, utilLinux, "siderolabs/qemu-guest-agent"},
+			wantErr:   false,
+		},
+		{name: "missing util-linux-tools", installed: []string{iscsi}, wantErr: true},
 		{name: "missing both", installed: nil, wantErr: true},
 	}
 
@@ -91,7 +100,8 @@ func TestLonghornV1_TalosPatches(t *testing.T) {
 		t.Errorf("UserVolumeConfig.MetaName = %q, want %q", userVolume.UserVolumeConfig.MetaName, longhornVolumeName)
 	}
 
-	if userVolume.UserVolumeConfig.ProvisioningSpec == nil || userVolume.UserVolumeConfig.ProvisioningSpec.DiskSelectorSpec == nil {
+	provisioning := userVolume.UserVolumeConfig.ProvisioningSpec
+	if provisioning == nil || provisioning.DiskSelectorSpec == nil {
 		t.Fatal("UserVolumeConfig.ProvisioningSpec.DiskSelectorSpec is nil")
 	}
 
@@ -104,7 +114,8 @@ func TestLonghornV1_TalosPatches(t *testing.T) {
 		t.Fatalf("docs[1].Kind = %q, want %q", kubeletPatch.Kind, "Config")
 	}
 
-	if kubeletPatch.Config == nil || kubeletPatch.Config.MachineConfig == nil || kubeletPatch.Config.MachineConfig.MachineKubelet == nil {
+	if kubeletPatch.Config == nil || kubeletPatch.Config.MachineConfig == nil ||
+		kubeletPatch.Config.MachineConfig.MachineKubelet == nil {
 		t.Fatal("docs[1].Config.MachineConfig.MachineKubelet is nil")
 	}
 

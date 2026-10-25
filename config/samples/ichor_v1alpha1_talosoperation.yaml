@@ -6,4 +6,6 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: talosoperation-sample
 spec:
-  # TODO(user): Add fields here
+  clusterRef:
+    name: taloscluster-sample
+  kind: talos

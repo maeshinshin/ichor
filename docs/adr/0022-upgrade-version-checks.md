@@ -71,11 +71,23 @@ minor version") and independently confirmed by `go-kubernetes`'s own hardcoded t
 in it is exactly this rule, as established above) — two independent sources agreeing, not one
 read taken on faith.
 
-**The two cluster-dependent pre-checks are interfaces only** (`checks.go`):
-`EtcdHealthChecker.EtcdHealthy(ctx) error` and `NodeReadinessChecker.NodeReady(ctx, node) error`.
-No implementation lives here; whatever drives the actual upgrade state machine implements and
-calls them. `Impact`-style result aggregation (the shape `pkg/fieldmeta.Assess` uses) was
-considered and not added: the three pure checks (`TalosPath`, `KubernetesPairing`,
+**The two cluster-dependent pre-checks (etcd health, node readiness) are not declared here at
+all — not as an implementation, and not as an interface either.** An earlier draft of this ADR
+declared `EtcdHealthChecker`/`NodeReadinessChecker` interface types with no implementation and no
+caller, reasoning that the package should at least name the shape. That was wrong, caught in
+review, and removed (the deleted `checks.go` is this paragraph's reason for existing). Go's own
+convention is that interfaces are declared by the consumer, at the point of consumption ("accept
+interfaces, return structs") — the consumer here is the upgrade state machine, which does not
+exist yet. Declaring the interface anyway means guessing both its method set and where it
+belongs before anything calls it: whoever writes that state machine will declare exactly the
+methods they call, in their own package, and there is no reason to expect `EtcdHealthy(ctx)
+error` matches what they actually need (per node or cluster-wide? a bool, an error, or a
+structured result? synchronous or progress-reporting?). Deleting it costs nothing the design
+still needs: "pre-checks cover etcd health ... and node readiness" stays exactly as said in
+design section "Upgrades", unchanged by this ADR either way — what the paragraph above describes
+is a requirement on the eventual state machine, not a Go declaration this package owed it.
+`Impact`-style result aggregation (the shape `pkg/fieldmeta.Assess` uses) was also considered and
+not added, for an unrelated reason: the three pure checks (`TalosPath`, `KubernetesPairing`,
 `KubernetesSkew`) answer three genuinely different questions with different inputs (Talos-to-
 Talos, Kubernetes-to-Talos, Kubernetes-to-Kubernetes), so there is no single changed-paths-style
 list to aggregate over the way fieldmeta's field paths are; combining them into one call would

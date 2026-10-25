@@ -60,6 +60,2424 @@ spec:
           spec:
             description: spec defines the desired state of TalosCluster
             properties:
+              cni:
+                description: |-
+                  cni configures which CNI preset this cluster bootstraps and how kube-proxy is split
+                  between Talos and the CNI (docs/design/architecture.md, "CNI").
+                properties:
+                  custom:
+                    description: |-
+                      custom declares the chart/manifest source and Talos-side settings for a user-supplied CNI;
+                      set when, and only when, preset is "custom".
+                    properties:
+                      documents:
+                        description: |-
+                          documents are the Talos-side config documents this CNI needs (ADR 0003's allow-list),
+                          applied as a cluster-layer patch -- e.g. disabling kube-proxy when kubeProxy is "replaced".
+                        items:
+                          description: |-
+                            TalosConfigPatchDocument carries exactly one Talos config document, restricted to Ichor's
+                            allow-list of kinds (ADR 0003). kind is a discriminator: it says which of the fields below is
+                            populated, the same way a Talos config document's own "kind" field says what the rest of the
+                            document is. mirrorgen's roots (internal/tools/mirrorgen/main.go) names the same kinds this
+                            enum does; TestAllowListMatchesCRDEnum there checks the two agree, since a kubebuilder marker
+                            is plain text and can't reference that Go value directly.
+                          properties:
+                            config:
+                              description: config is a Talos v1alpha1 Config document;
+                                populated when kind is "Config".
+                              properties:
+                                cluster:
+                                  description: Provides cluster specific configuration
+                                    options.
+                                  properties:
+                                    acceptedCAs:
+                                      description: 'docgen:nodoc Deprecated: Use `KubeAPIServerCAConfig`
+                                        instead.'
+                                      items:
+                                        description: PEMEncodedCertificate represents
+                                          a PEM encoded certificate.
+                                        properties:
+                                          crt:
+                                            format: byte
+                                            type: string
+                                        required:
+                                        - crt
+                                        type: object
+                                      type: array
+                                    adminKubeconfig:
+                                      description: |-
+                                        Settings for admin kubeconfig generation.
+                                        Certificate lifetime can be configured.
+                                      properties:
+                                        certLifetime:
+                                          description: |-
+                                            Admin kubeconfig certificate lifetime (default is 1 year).
+                                            Field format accepts any Go time.Duration format ('1h' for one hour, '10m' for ten minutes).
+                                          type: string
+                                      type: object
+                                    aescbcEncryptionSecret:
+                                      description: 'docgen:nodoc Deprecated: Use `KubeEtcdEncryptionConfig`
+                                        instead.'
+                                      type: string
+                                    aggregatorCA:
+                                      description: 'docgen:nodoc Deprecated: Use `KubeAPIServerAggregatorCAConfig`
+                                        instead.'
+                                      properties:
+                                        crt:
+                                          format: byte
+                                          type: string
+                                        key:
+                                          format: byte
+                                          type: string
+                                      required:
+                                      - crt
+                                      - key
+                                      type: object
+                                    allowSchedulingOnControlPlanes:
+                                      description: 'docgen:nodoc Deprecated: use `KubeNodeConfig`
+                                        instead.'
+                                      type: boolean
+                                    allowSchedulingOnMasters:
+                                      description: 'docgen:nodoc Deprecated: use `KubeNodeConfig`
+                                        instead.'
+                                      type: boolean
+                                    apiServer:
+                                      description: 'docgen:nodoc Deprecated: Use `KubeAPIServerConfig`
+                                        instead.'
+                                      properties:
+                                        admissionControl:
+                                          description: 'docgen:nodoc Deprecated: Use
+                                            `KubeAdmissionControlConfig` instead.'
+                                          items:
+                                            description: AdmissionPluginConfig represents
+                                              the API server admission plugin configuration.
+                                            properties:
+                                              name:
+                                                description: |-
+                                                  Name is the name of the admission controller.
+                                                  It must match the registered admission plugin name.
+                                                type: string
+                                            required:
+                                            - name
+                                            type: object
+                                          type: array
+                                        authorizationConfig:
+                                          description: 'docgen:nodoc Deprecated: Use
+                                            `KubeAuthorizerConfig` instead.'
+                                          items:
+                                            description: AuthorizationConfigAuthorizerConfig
+                                              represents the API server authorization
+                                              config authorizer configuration.
+                                            properties:
+                                              name:
+                                                description: Name is used to describe
+                                                  the authorizer.
+                                                type: string
+                                              type:
+                                                description: Type is the name of the
+                                                  authorizer. Allowed values are `Node`,
+                                                  `RBAC`, and `Webhook`.
+                                                type: string
+                                            required:
+                                            - name
+                                            - type
+                                            type: object
+                                          type: array
+                                        certSANs:
+                                          description: Extra certificate subject alternative
+                                            names for the API server's certificate.
+                                          items:
+                                            type: string
+                                          type: array
+                                        disablePodSecurityPolicy:
+                                          description: docgen:nodoc
+                                          type: boolean
+                                        env:
+                                          additionalProperties:
+                                            type: string
+                                          description: The `env` field allows for
+                                            the addition of environment variables
+                                            for the control plane component.
+                                          type: object
+                                        extraArgs:
+                                          additionalProperties:
+                                            items:
+                                              type: string
+                                            type: array
+                                          description: Extra arguments to supply to
+                                            the API server.
+                                          type: object
+                                        extraVolumes:
+                                          description: Extra volumes to mount to the
+                                            API server static pod.
+                                          items:
+                                            description: VolumeMountConfig struct
+                                              describes extra volume mount for the
+                                              static pods.
+                                            properties:
+                                              hostPath:
+                                                description: Path on the host.
+                                                type: string
+                                              mountPath:
+                                                description: Path in the container.
+                                                type: string
+                                              readonly:
+                                                description: Mount the volume read
+                                                  only.
+                                                type: boolean
+                                            required:
+                                            - hostPath
+                                            - mountPath
+                                            type: object
+                                          type: array
+                                        image:
+                                          description: The container image used in
+                                            the API server manifest.
+                                          type: string
+                                        resources:
+                                          description: Configure the API server resources.
+                                          type: object
+                                      type: object
+                                    ca:
+                                      description: 'docgen:nodoc Deprecated: Use `KubeAPIServerCAConfig`
+                                        instead.'
+                                      properties:
+                                        crt:
+                                          format: byte
+                                          type: string
+                                        key:
+                                          format: byte
+                                          type: string
+                                      required:
+                                      - crt
+                                      - key
+                                      type: object
+                                    clusterName:
+                                      description: 'docgen:nodoc Deprecated: Use `KubeClusterConfig`
+                                        instead.'
+                                      type: string
+                                    controlPlane:
+                                      description: 'docgen:nodoc Deprecated: Use `KubeClusterConfig`
+                                        instead.'
+                                      properties:
+                                        endpoint:
+                                          description: |-
+                                            Endpoint is the canonical controlplane endpoint, which can be an IP address or a DNS hostname.
+                                            It is single-valued, and may optionally include a port number.
+                                          type: string
+                                        localAPIServerPort:
+                                          description: 'docgen:nodoc Deprecated: Use
+                                            `KubeAPIServerConfig` instead.'
+                                          type: integer
+                                      required:
+                                      - endpoint
+                                      type: object
+                                    controllerManager:
+                                      description: 'docgen:nodoc Deprecated: Use `KubeControllerManagerConfig`
+                                        instead.'
+                                      properties:
+                                        env:
+                                          additionalProperties:
+                                            type: string
+                                          description: The `env` field allows for
+                                            the addition of environment variables
+                                            for the control plane component.
+                                          type: object
+                                        extraArgs:
+                                          additionalProperties:
+                                            items:
+                                              type: string
+                                            type: array
+                                          description: Extra arguments to supply to
+                                            the controller manager.
+                                          type: object
+                                        extraVolumes:
+                                          description: Extra volumes to mount to the
+                                            controller manager static pod.
+                                          items:
+                                            description: VolumeMountConfig struct
+                                              describes extra volume mount for the
+                                              static pods.
+                                            properties:
+                                              hostPath:
+                                                description: Path on the host.
+                                                type: string
+                                              mountPath:
+                                                description: Path in the container.
+                                                type: string
+                                              readonly:
+                                                description: Mount the volume read
+                                                  only.
+                                                type: boolean
+                                            required:
+                                            - hostPath
+                                            - mountPath
+                                            type: object
+                                          type: array
+                                        image:
+                                          description: The container image used in
+                                            the controller manager manifest.
+                                          type: string
+                                        resources:
+                                          description: Configure the controller manager
+                                            resources.
+                                          type: object
+                                      type: object
+                                    coreDNS:
+                                      description: 'docgen:nodoc Deprecated: Use `KubeCoreDNSConfig`
+                                        instead.'
+                                      properties:
+                                        disabled:
+                                          description: Disable coredns deployment
+                                            on cluster bootstrap.
+                                          type: boolean
+                                        image:
+                                          description: The `image` field is an override
+                                            to the default coredns image.
+                                          type: string
+                                      type: object
+                                    discovery:
+                                      description: 'docgen:nodoc Deprecated: Use ''DiscoveryServiceConfig''
+                                        instead'
+                                      properties:
+                                        enabled:
+                                          description: |-
+                                            Enable the cluster membership discovery feature.
+                                            Cluster discovery is based on individual registries which are configured under the registries field.
+                                          type: boolean
+                                        registries:
+                                          description: Configure registries used for
+                                            cluster member discovery.
+                                          properties:
+                                            kubernetes:
+                                              description: |-
+                                                Kubernetes registry uses Kubernetes API server to discover cluster members and stores additional information
+                                                as annotations on the Node resources.
+
+                                                This feature is deprecated as it is not compatible with Kubernetes 1.32+.
+                                                See https://github.com/siderolabs/talos/issues/9980 for more information.
+                                              properties:
+                                                disabled:
+                                                  description: Disable Kubernetes
+                                                    discovery registry.
+                                                  type: boolean
+                                              type: object
+                                            service:
+                                              description: Service registry is using
+                                                an external service to push and pull
+                                                information about cluster members.
+                                              properties:
+                                                disabled:
+                                                  description: Disable external service
+                                                    discovery registry.
+                                                  type: boolean
+                                                endpoint:
+                                                  description: External service endpoint.
+                                                  type: string
+                                              type: object
+                                          required:
+                                          - kubernetes
+                                          - service
+                                          type: object
+                                      required:
+                                      - registries
+                                      type: object
+                                    etcd:
+                                      description: Etcd specific configuration options.
+                                      properties:
+                                        advertisedSubnets:
+                                          description: |-
+                                            The `advertisedSubnets` field configures the networks to pick etcd advertised IP from.
+
+                                            IPs can be excluded from the list by using negative match with `!`, e.g `!10.0.0.0/8`.
+                                            Negative subnet matches should be specified last to filter out IPs picked by positive matches.
+                                            If not specified, advertised IP is selected as the first routable address of the node.
+                                          items:
+                                            type: string
+                                          type: array
+                                        ca:
+                                          description: |-
+                                            The `ca` is the root certificate authority of the PKI.
+                                            It is composed of a base64 encoded `crt` and `key`.
+                                          properties:
+                                            crt:
+                                              format: byte
+                                              type: string
+                                            key:
+                                              format: byte
+                                              type: string
+                                          required:
+                                          - crt
+                                          - key
+                                          type: object
+                                        extraArgs:
+                                          additionalProperties:
+                                            items:
+                                              type: string
+                                            type: array
+                                          description: |-
+                                            Extra arguments to supply to etcd.
+                                            Note that the following args are not allowed:
+
+                                            - `name`
+                                            - `data-dir`
+                                            - `initial-cluster-state`
+                                            - `listen-peer-urls`
+                                            - `listen-client-urls`
+                                            - `cert-file`
+                                            - `key-file`
+                                            - `trusted-ca-file`
+                                            - `peer-client-cert-auth`
+                                            - `peer-cert-file`
+                                            - `peer-trusted-ca-file`
+                                            - `peer-key-file`
+                                          type: object
+                                        image:
+                                          description: The container image used to
+                                            create the etcd service.
+                                          type: string
+                                        listenSubnets:
+                                          description: |-
+                                            The `listenSubnets` field configures the networks for the etcd to listen for peer and client connections.
+
+                                            If `listenSubnets` is not set, but `advertisedSubnets` is set, `listenSubnets` defaults to
+                                            `advertisedSubnets`.
+
+                                            If neither `advertisedSubnets` nor `listenSubnets` is set, `listenSubnets` defaults to listen on all addresses.
+
+                                            IPs can be excluded from the list by using negative match with `!`, e.g `!10.0.0.0/8`.
+                                            Negative subnet matches should be specified last to filter out IPs picked by positive matches.
+                                            If not specified, advertised IP is selected as the first routable address of the node.
+                                          items:
+                                            type: string
+                                          type: array
+                                        subnet:
+                                          description: 'docgen:nodoc Deprecated: use
+                                            EtcdAdvertistedSubnets'
+                                          type: string
+                                      required:
+                                      - ca
+                                      type: object
+                                    externalCloudProvider:
+                                      description: External cloud provider configuration.
+                                      properties:
+                                        enabled:
+                                          description: Enable external cloud provider.
+                                          type: boolean
+                                        manifests:
+                                          description: |-
+                                            A list of urls that point to additional manifests for an external cloud provider.
+                                            These will get automatically deployed as part of the bootstrap.
+                                          items:
+                                            type: string
+                                          type: array
+                                      type: object
+                                    extraManifestHeaders:
+                                      additionalProperties:
+                                        type: string
+                                      description: 'docgen:nodoc Deprecated: Use `KubeExternalManifestConfig`
+                                        instead.'
+                                      type: object
+                                    extraManifests:
+                                      description: 'docgen:nodoc Deprecated: Use `KubeExternalManifestConfig`
+                                        instead.'
+                                      items:
+                                        type: string
+                                      type: array
+                                    id:
+                                      description: 'docgen:nodoc Deprecated: Use ''DiscoveryIdentityConfig''
+                                        document instead.'
+                                      type: string
+                                    inlineManifests:
+                                      description: 'docgen:nodoc Deprecated: Use `KubeInlineManifestConfig`
+                                        instead.'
+                                      items:
+                                        description: 'ClusterInlineManifest struct
+                                          describes inline bootstrap manifests for
+                                          the user. docgen:nodoc Deprecated: Use `KubeInlineManifestConfig`
+                                          instead.'
+                                        properties:
+                                          contents:
+                                            description: Manifest contents as a string.
+                                            type: string
+                                          name:
+                                            description: |-
+                                              Name of the manifest.
+                                              Name should be unique.
+                                            type: string
+                                        required:
+                                        - contents
+                                        - name
+                                        type: object
+                                      type: array
+                                    network:
+                                      description: 'docgen:nodoc Deprecated: Use `KubeNetworkConfig`
+                                        and `KubeFlannelCNIConfig` instead.'
+                                      properties:
+                                        cni:
+                                          description: |-
+                                            The CNI used.
+                                            Composed of "name" and "urls".
+                                            The "name" key supports the following options: "flannel", "custom", and "none".
+                                            "flannel" uses Talos-managed Flannel CNI, and that's the default option.
+                                            "custom" uses custom manifests that should be provided in "urls".
+                                            "none" indicates that Talos will not manage any CNI installation.
+                                          properties:
+                                            flannel:
+                                              description: FlannelCNIConfig represents
+                                                the Flannel CNI configuration options.
+                                                docgen:nodoc
+                                              properties:
+                                                extraArgs:
+                                                  description: Extra arguments for
+                                                    'flanneld'.
+                                                  items:
+                                                    type: string
+                                                  type: array
+                                                kubeNetworkPoliciesEnabled:
+                                                  description: |-
+                                                    Deploys kube-network-policies along with Flannel.
+
+                                                    This enables Kubernetes Network Policies support in the cluster.
+                                                  type: boolean
+                                              type: object
+                                            name:
+                                              description: Name of CNI to use.
+                                              type: string
+                                            urls:
+                                              description: |-
+                                                URLs containing manifests to apply for the CNI.
+                                                Should be present for "custom", must be empty for "flannel" and "none".
+                                              items:
+                                                type: string
+                                              type: array
+                                          type: object
+                                        dnsDomain:
+                                          description: |-
+                                            The domain used by Kubernetes DNS.
+                                            The default is `cluster.local`
+                                          type: string
+                                        podSubnets:
+                                          description: The pod subnet CIDR.
+                                          items:
+                                            type: string
+                                          type: array
+                                        serviceSubnets:
+                                          description: The service subnet CIDR.
+                                          items:
+                                            type: string
+                                          type: array
+                                      required:
+                                      - dnsDomain
+                                      - podSubnets
+                                      - serviceSubnets
+                                      type: object
+                                    proxy:
+                                      description: 'docgen:nodoc Deprecated: use `KubeProxyConfig`
+                                        instead.'
+                                      properties:
+                                        disabled:
+                                          description: Disable kube-proxy deployment
+                                            on cluster bootstrap.
+                                          type: boolean
+                                        extraArgs:
+                                          additionalProperties:
+                                            items:
+                                              type: string
+                                            type: array
+                                          description: Extra arguments to supply to
+                                            kube-proxy.
+                                          type: object
+                                        image:
+                                          description: The container image used in
+                                            the kube-proxy manifest.
+                                          type: string
+                                        mode:
+                                          description: |-
+                                            proxy mode of kube-proxy.
+                                            The default is 'iptables'.
+                                          type: string
+                                      type: object
+                                    scheduler:
+                                      description: 'docgen:nodoc Deprecated: Use `KubeSchedulerConfig`
+                                        instead.'
+                                      properties:
+                                        env:
+                                          additionalProperties:
+                                            type: string
+                                          description: The `env` field allows for
+                                            the addition of environment variables
+                                            for the control plane component.
+                                          type: object
+                                        extraArgs:
+                                          additionalProperties:
+                                            items:
+                                              type: string
+                                            type: array
+                                          description: Extra arguments to supply to
+                                            the scheduler.
+                                          type: object
+                                        extraVolumes:
+                                          description: Extra volumes to mount to the
+                                            scheduler static pod.
+                                          items:
+                                            description: VolumeMountConfig struct
+                                              describes extra volume mount for the
+                                              static pods.
+                                            properties:
+                                              hostPath:
+                                                description: Path on the host.
+                                                type: string
+                                              mountPath:
+                                                description: Path in the container.
+                                                type: string
+                                              readonly:
+                                                description: Mount the volume read
+                                                  only.
+                                                type: boolean
+                                            required:
+                                            - hostPath
+                                            - mountPath
+                                            type: object
+                                          type: array
+                                        image:
+                                          description: The container image used in
+                                            the scheduler manifest.
+                                          type: string
+                                        resources:
+                                          description: Configure the scheduler resources.
+                                          type: object
+                                      type: object
+                                    secret:
+                                      description: 'docgen:nodoc Deprecated: Use ''DiscoveryIdentityConfig''
+                                        document instead.'
+                                      type: string
+                                    secretboxEncryptionSecret:
+                                      description: 'docgen:nodoc Deprecated: Use `KubeEtcdEncryptionConfig`
+                                        instead.'
+                                      type: string
+                                    serviceAccount:
+                                      description: 'docgen:nodoc Deprecated: Use `KubeServiceAccountConfig`
+                                        instead.'
+                                      properties:
+                                        key:
+                                          format: byte
+                                          type: string
+                                      required:
+                                      - key
+                                      type: object
+                                    token:
+                                      description: The [bootstrap token](https://kubernetes.io/docs/reference/access-authn-authz/bootstrap-tokens/)
+                                        used to join the cluster.
+                                      type: string
+                                  type: object
+                                debug:
+                                  description: |-
+                                    Enable verbose logging to the console.
+                                    All system containers logs will flow into serial console.
+
+                                    **Note:** To avoid breaking Talos bootstrap flow enable this option only if serial console can handle high message throughput.
+                                  type: boolean
+                                machine:
+                                  description: Provides machine specific configuration
+                                    options.
+                                  properties:
+                                    acceptedCAs:
+                                      description: |-
+                                        The certificates issued by certificate authorities are accepted in addition to issuing 'ca'.
+                                        It is composed of a base64 encoded `crt``.
+                                      items:
+                                        description: PEMEncodedCertificate represents
+                                          a PEM encoded certificate.
+                                        properties:
+                                          crt:
+                                            format: byte
+                                            type: string
+                                        required:
+                                        - crt
+                                        type: object
+                                      type: array
+                                    ca:
+                                      description: |-
+                                        The root certificate authority of the PKI.
+                                        It is composed of a base64 encoded `crt` and `key`.
+                                      properties:
+                                        crt:
+                                          format: byte
+                                          type: string
+                                        key:
+                                          format: byte
+                                          type: string
+                                      required:
+                                      - crt
+                                      - key
+                                      type: object
+                                    certSANs:
+                                      description: |-
+                                        Extra certificate subject alternative names for the machine's certificate.
+                                        By default, all non-loopback interface IPs are automatically added to the certificate's SANs.
+                                      items:
+                                        type: string
+                                      type: array
+                                    controlPlane:
+                                      description: 'docgen:nodoc Deprecated: Use `KubeControllerManagerConfig`/`KubeSchedulerConfig`
+                                        instead.'
+                                      properties:
+                                        controllerManager:
+                                          description: 'docgen:nodoc Deprecated: Use
+                                            `KubeControllerManagerConfig` instead.'
+                                          properties:
+                                            disabled:
+                                              description: Disable kube-controller-manager
+                                                on the node.
+                                              type: boolean
+                                          type: object
+                                        scheduler:
+                                          description: 'docgen:nodoc Deprecated: Use
+                                            `KubeSchedulerConfig` instead.'
+                                          properties:
+                                            disabled:
+                                              description: Disable kube-scheduler
+                                                on the node.
+                                              type: boolean
+                                          type: object
+                                      type: object
+                                    disks:
+                                      description: 'docgen:nodoc Deprecated: Use ''UserVolumeConfig''
+                                        instead.'
+                                      items:
+                                        description: MachineDisk represents the options
+                                          available for partitioning, formatting,
+                                          and mounting extra disks. docgen:nodoc
+                                        properties:
+                                          device:
+                                            description: The name of the disk to use.
+                                            type: string
+                                          partitions:
+                                            description: A list of partitions to create
+                                              on the disk.
+                                            items:
+                                              description: DiskPartition represents
+                                                the options for a disk partition.
+                                                docgen:nodoc
+                                              properties:
+                                                mountpoint:
+                                                  description: Where to mount the
+                                                    partition.
+                                                  type: string
+                                                size:
+                                                  description: |-
+                                                    The size of partition: either bytes or human readable representation. If `size:`
+                                                    is omitted, the partition is sized to occupy the full disk.
+                                                  type: string
+                                              type: object
+                                            type: array
+                                        type: object
+                                      type: array
+                                    env:
+                                      additionalProperties:
+                                        type: string
+                                      description: 'docgen:nodoc Deprecated: Use ''EnvironmentConfig''
+                                        instead.'
+                                      type: object
+                                    features:
+                                      description: Features describe individual Talos
+                                        features that can be switched on or off.
+                                      properties:
+                                        apidCheckExtKeyUsage:
+                                          description: docgen:nodoc
+                                          type: boolean
+                                        diskQuotaSupport:
+                                          description: |-
+                                            Enable XFS project quota support for EPHEMERAL partition and user disks.
+                                            Also enables kubelet tracking of ephemeral disk usage in the kubelet via quota.
+                                          type: boolean
+                                        hostDNS:
+                                          description: 'docgen:nodoc Deprecated: Use
+                                            ResolverConfig document instead.'
+                                          properties:
+                                            enabled:
+                                              description: Enable host DNS caching
+                                                resolver.
+                                              type: boolean
+                                            forwardKubeDNSToHost:
+                                              description: |-
+                                                Use the host DNS resolver as upstream for Kubernetes CoreDNS pods.
+
+                                                When enabled, CoreDNS pods use host DNS server as the upstream DNS (instead of
+                                                using configured upstream DNS resolvers directly).
+                                              type: boolean
+                                            resolveMemberNames:
+                                              description: |-
+                                                Resolve member hostnames using the host DNS resolver.
+
+                                                When enabled, cluster member hostnames and node names are resolved using the host DNS resolver.
+                                                This requires service discovery to be enabled.
+                                              type: boolean
+                                          type: object
+                                        imageCache:
+                                          description: 'docgen:nodoc Deprecated: Use
+                                            ImageCacheConfig document instead.'
+                                          properties:
+                                            localEnabled:
+                                              description: Enable local image cache.
+                                              type: boolean
+                                          type: object
+                                        kubePrism:
+                                          description: 'docgen:nodoc Deprecated: Use
+                                            KubePrismConfig document instead.'
+                                          properties:
+                                            enabled:
+                                              description: Enable KubePrism support
+                                                - will start local load balancing
+                                                proxy.
+                                              type: boolean
+                                            port:
+                                              description: KubePrism port.
+                                              type: integer
+                                          type: object
+                                        kubernetesTalosAPIAccess:
+                                          description: 'docgen:nodoc Deprecated: use
+                                            KubeTalosAPIAccessConfig instead.'
+                                          properties:
+                                            allowedKubernetesNamespaces:
+                                              description: The list of Kubernetes
+                                                namespaces Talos API access is available
+                                                from.
+                                              items:
+                                                type: string
+                                              type: array
+                                            allowedRoles:
+                                              description: |-
+                                                The list of Talos API roles which can be granted for access from Kubernetes pods.
+
+                                                Empty list means that no roles can be granted, so access is blocked.
+                                              items:
+                                                type: string
+                                              type: array
+                                            enabled:
+                                              description: Enable Talos API access
+                                                from Kubernetes pods.
+                                              type: boolean
+                                          type: object
+                                        nodeAddressSortAlgorithm:
+                                          description: |-
+                                            Select the node address sort algorithm.
+                                            The 'v1' algorithm sorts addresses by the address itself.
+                                            The 'v2' algorithm prefers more specific prefixes.
+                                            If unset, defaults to 'v1'.
+                                          type: string
+                                        rbac:
+                                          description: docgen:nodoc
+                                          type: boolean
+                                        stableHostname:
+                                          description: 'docgen:nodoc Deprecated: use
+                                            HostConfig instead.'
+                                          type: boolean
+                                      type: object
+                                    files:
+                                      description: 'docgen:nodoc Deprecated: Use dedicated
+                                        configuration documents such as EtcFileConfig
+                                        and CRICustomizationConfig instead.'
+                                      items:
+                                        description: MachineFile represents a file
+                                          to write to disk.
+                                        properties:
+                                          content:
+                                            description: The contents of the file.
+                                            type: string
+                                          op:
+                                            description: The operation to use
+                                            type: string
+                                          path:
+                                            description: The path of the file.
+                                            type: string
+                                          permissions:
+                                            description: The file's permissions in
+                                              octal.
+                                            type: string
+                                        required:
+                                        - content
+                                        - op
+                                        - path
+                                        - permissions
+                                        type: object
+                                      type: array
+                                    install:
+                                      description: 'docgen:nodoc Deprecated: Use the
+                                        ''UnattendedInstall'' multi-document config
+                                        instead.'
+                                      properties:
+                                        bootloader:
+                                          description: 'docgen:nodoc Deprecated: It
+                                            never worked.'
+                                          type: boolean
+                                        disk:
+                                          description: The disk used for installations.
+                                          type: string
+                                        diskSelector:
+                                          description: |-
+                                            Look up disk using disk attributes like model, size, serial and others.
+                                            Always has priority over `disk`.
+                                          properties:
+                                            busPath:
+                                              description: Disk bus path.
+                                              type: string
+                                            modalias:
+                                              description: Disk modalias `/sys/block/<dev>/device/modalias`.
+                                              type: string
+                                            model:
+                                              description: Disk model `/sys/block/<dev>/device/model`.
+                                              type: string
+                                            name:
+                                              description: Disk name `/sys/block/<dev>/device/name`.
+                                              type: string
+                                            serial:
+                                              description: Disk serial number `/sys/block/<dev>/serial`.
+                                              type: string
+                                            size:
+                                              description: Disk size.
+                                              type: string
+                                            type:
+                                              description: Disk Type.
+                                              type: string
+                                            uuid:
+                                              description: Disk UUID `/sys/block/<dev>/uuid`.
+                                              type: string
+                                            wwid:
+                                              description: Disk WWID `/sys/block/<dev>/wwid`.
+                                              type: string
+                                          type: object
+                                        extensions:
+                                          description: 'docgen:nodoc Deprecated: Use
+                                            custom `InstallImage` instead.'
+                                          items:
+                                            description: InstallExtensionConfig represents
+                                              a configuration for a system extension.
+                                              docgen:nodoc
+                                            properties:
+                                              image:
+                                                description: System extension image.
+                                                type: string
+                                            required:
+                                            - image
+                                            type: object
+                                          type: array
+                                        extraKernelArgs:
+                                          description: 'docgen:nodoc Deprecated: Use
+                                            Image Factory/imager instead to build
+                                            a proper installer.'
+                                          items:
+                                            type: string
+                                          type: array
+                                        grubUseUKICmdline:
+                                          description: |-
+                                            Indicates if legacy GRUB bootloader should use kernel cmdline from the UKI instead of building it on the host.
+                                            This changes the way cmdline is managed with GRUB bootloader to be more consistent with UKI/systemd-boot.
+                                          type: boolean
+                                        image:
+                                          description: |-
+                                            Allows for supplying the image used to perform the installation.
+                                            Image reference for each Talos release can be found on
+                                            [GitHub releases page](https://github.com/siderolabs/talos/releases).
+                                          type: string
+                                        legacyBIOSSupport:
+                                          description: |-
+                                            Indicates if MBR partition should be marked as bootable (active).
+                                            Should be enabled only for the systems with legacy BIOS that doesn't support GPT partitioning scheme.
+                                          type: boolean
+                                        wipe:
+                                          description: |-
+                                            Indicates if the installation disk should be wiped at installation time.
+                                            Defaults to `true`.
+                                          type: boolean
+                                      required:
+                                      - wipe
+                                      type: object
+                                    kernel:
+                                      description: 'docgen:nodoc Deprecated: Use ''KernelModuleConfig''
+                                        instead.'
+                                      properties:
+                                        modules:
+                                          description: Kernel modules to load.
+                                          items:
+                                            description: 'KernelModuleConfig struct
+                                              configures Linux kernel modules to load.
+                                              docgen:nodoc Deprecated: Use multi-doc
+                                              `KernelModuleConfig` instead.'
+                                            properties:
+                                              name:
+                                                description: Module name.
+                                                type: string
+                                              parameters:
+                                                description: Module parameters, changes
+                                                  applied after reboot.
+                                                items:
+                                                  type: string
+                                                type: array
+                                            required:
+                                            - name
+                                            type: object
+                                          type: array
+                                      type: object
+                                    kubelet:
+                                      description: 'docgen:nodoc Deprecated: Use `KubeletConfig`
+                                        instead.'
+                                      properties:
+                                        clusterDNS:
+                                          description: 'docgen:nodoc Deprecated: use
+                                            `KubeletConfig` instead.'
+                                          items:
+                                            type: string
+                                          type: array
+                                        defaultRuntimeSeccompProfileEnabled:
+                                          description: 'docgen:nodoc Deprecated: use
+                                            `KubeletConfig` instead.'
+                                          type: boolean
+                                        disableManifestsDirectory:
+                                          description: 'docgen:nodoc Deprecated: locked
+                                            to true in multi-doc config.'
+                                          type: boolean
+                                        extraArgs:
+                                          additionalProperties:
+                                            items:
+                                              type: string
+                                            type: array
+                                          description: 'docgen:nodoc Deprecated: use
+                                            `KubeletConfig` instead.'
+                                          type: object
+                                        extraMounts:
+                                          description: 'docgen:nodoc Deprecated: removed
+                                            in multi-doc config.'
+                                          items:
+                                            description: ExtraMount wraps OCI Mount
+                                              specification.
+                                            properties:
+                                              destination:
+                                                description: Destination is the absolute
+                                                  path where the mount will be placed
+                                                  in the container.
+                                                type: string
+                                              gidMappings:
+                                                description: |-
+                                                  UID/GID mappings used for changing file owners w/o calling chown, fs should support it.
+
+                                                  Every mount point could have its own mapping.
+                                                items:
+                                                  description: LinuxIDMapping represents
+                                                    the Linux ID mapping.
+                                                  properties:
+                                                    containerID:
+                                                      description: ContainerID is
+                                                        the starting UID/GID in the
+                                                        container.
+                                                      format: int32
+                                                      type: integer
+                                                    hostID:
+                                                      description: HostID is the starting
+                                                        UID/GID on the host to be
+                                                        mapped to 'ContainerID'.
+                                                      format: int32
+                                                      type: integer
+                                                    size:
+                                                      description: Size is the number
+                                                        of IDs to be mapped.
+                                                      format: int32
+                                                      type: integer
+                                                  required:
+                                                  - containerID
+                                                  - hostID
+                                                  - size
+                                                  type: object
+                                                type: array
+                                              options:
+                                                description: Options are fstab style
+                                                  mount options.
+                                                items:
+                                                  type: string
+                                                type: array
+                                              source:
+                                                description: Source specifies the
+                                                  source path of the mount.
+                                                type: string
+                                              type:
+                                                description: Type specifies the mount
+                                                  kind.
+                                                type: string
+                                              uidMappings:
+                                                description: |-
+                                                  UID/GID mappings used for changing file owners w/o calling chown, fs should support it.
+
+                                                  Every mount point could have its own mapping.
+                                                items:
+                                                  description: LinuxIDMapping represents
+                                                    the Linux ID mapping.
+                                                  properties:
+                                                    containerID:
+                                                      description: ContainerID is
+                                                        the starting UID/GID in the
+                                                        container.
+                                                      format: int32
+                                                      type: integer
+                                                    hostID:
+                                                      description: HostID is the starting
+                                                        UID/GID on the host to be
+                                                        mapped to 'ContainerID'.
+                                                      format: int32
+                                                      type: integer
+                                                    size:
+                                                      description: Size is the number
+                                                        of IDs to be mapped.
+                                                      format: int32
+                                                      type: integer
+                                                  required:
+                                                  - containerID
+                                                  - hostID
+                                                  - size
+                                                  type: object
+                                                type: array
+                                            required:
+                                            - destination
+                                            type: object
+                                          type: array
+                                        image:
+                                          description: 'docgen:nodoc Deprecated: use
+                                            `KubeletConfig` instead.'
+                                          type: string
+                                        nodeIP:
+                                          description: 'docgen:nodoc Deprecated: use
+                                            `KubeNodeConfig` instead.'
+                                          properties:
+                                            validSubnets:
+                                              description: |-
+                                                The `validSubnets` field configures the networks to pick kubelet node IP from.
+                                                For dual stack configuration, there should be two subnets: one for IPv4, another for IPv6.
+                                                IPs can be excluded from the list by using negative match with `!`, e.g `!10.0.0.0/8`.
+                                                Negative subnet matches should be specified last to filter out IPs picked by positive matches.
+                                                If not specified, node IP is picked based on cluster podCIDRs: IPv4/IPv6 address or both.
+                                              items:
+                                                type: string
+                                              type: array
+                                          type: object
+                                        registerWithFQDN:
+                                          description: 'docgen:nodoc Deprecated: use
+                                            `KubeNodeConfig` instead.'
+                                          type: boolean
+                                        skipNodeRegistration:
+                                          description: 'docgen:nodoc Deprecated: use
+                                            `KubeNodeConfig` instead.'
+                                          type: boolean
+                                      type: object
+                                    logging:
+                                      description: Configures the logging system.
+                                      properties:
+                                        destinations:
+                                          description: Logging destination.
+                                          items:
+                                            description: LoggingDestination struct
+                                              configures Talos logging destination.
+                                            properties:
+                                              endpoint:
+                                                description: Where to send logs. Supported
+                                                  protocols are "tcp" and "udp".
+                                                type: string
+                                              extraTags:
+                                                additionalProperties:
+                                                  type: string
+                                                description: Extra tags (key-value)
+                                                  pairs to attach to every log message
+                                                  sent.
+                                                type: object
+                                              format:
+                                                description: Logs format.
+                                                type: string
+                                            required:
+                                            - endpoint
+                                            - format
+                                            type: object
+                                          type: array
+                                      required:
+                                      - destinations
+                                      type: object
+                                    network:
+                                      description: 'docgen:nodoc Deprecated: All fields
+                                        within NetworkConfig are deprecated. Use multi-document
+                                        network config types instead: HostnameConfig,
+                                        NetworkDeviceConfig, ResolverConfig, StaticHostConfig,
+                                        KubeSpanConfig.'
+                                      properties:
+                                        disableSearchDomain:
+                                          description: 'docgen:nodoc Deprecated: Use
+                                            `ResolverConfig` instead.'
+                                          type: boolean
+                                        extraHostEntries:
+                                          description: 'docgen:nodoc Deprecated: Use
+                                            `StaticHostConfig` instead.'
+                                          items:
+                                            description: ExtraHost represents a host
+                                              entry in /etc/hosts. docgen:nodoc
+                                            properties:
+                                              aliases:
+                                                description: The host alias.
+                                                items:
+                                                  type: string
+                                                type: array
+                                              ip:
+                                                description: The IP of the host.
+                                                type: string
+                                            required:
+                                            - aliases
+                                            - ip
+                                            type: object
+                                          type: array
+                                        hostname:
+                                          description: 'docgen:nodoc Deprecated: use
+                                            `HostnameConfig` instead.'
+                                          type: string
+                                        interfaces:
+                                          description: 'docgen:nodoc Deprecated: use
+                                            multi-doc network config.'
+                                          items:
+                                            description: Device represents a network
+                                              interface. docgen:nodoc
+                                            properties:
+                                              addresses:
+                                                description: |-
+                                                  Assigns static IP addresses to the interface.
+                                                  An address can be specified either in proper CIDR notation or as a standalone address (netmask of all ones is assumed).
+                                                items:
+                                                  type: string
+                                                type: array
+                                              bond:
+                                                description: Bond specific options.
+                                                properties:
+                                                  adActorSysPrio:
+                                                    description: |-
+                                                      A bond option.
+                                                      Please see the official kernel documentation.
+                                                    type: integer
+                                                  adActorSystem:
+                                                    description: |-
+                                                      A bond option.
+                                                      Please see the official kernel documentation.
+                                                      Not supported at the moment.
+                                                    type: string
+                                                  adSelect:
+                                                    description: |-
+                                                      A bond option.
+                                                      Please see the official kernel documentation.
+                                                    type: string
+                                                  adUserPortKey:
+                                                    description: |-
+                                                      A bond option.
+                                                      Please see the official kernel documentation.
+                                                    type: integer
+                                                  allSlavesActive:
+                                                    description: |-
+                                                      A bond option.
+                                                      Please see the official kernel documentation.
+                                                    type: integer
+                                                  arpAllTargets:
+                                                    description: |-
+                                                      A bond option.
+                                                      Please see the official kernel documentation.
+                                                    type: string
+                                                  arpIPTarget:
+                                                    description: |-
+                                                      A bond option.
+                                                      Please see the official kernel documentation.
+                                                      Not supported at the moment.
+                                                    items:
+                                                      type: string
+                                                    type: array
+                                                  arpInterval:
+                                                    description: |-
+                                                      A bond option.
+                                                      Please see the official kernel documentation.
+                                                    format: int32
+                                                    type: integer
+                                                  arpValidate:
+                                                    description: |-
+                                                      A bond option.
+                                                      Please see the official kernel documentation.
+                                                    type: string
+                                                  deviceSelectors:
+                                                    description: |-
+                                                      Picks a network device using the selector.
+                                                      Mutually exclusive with `interfaces`.
+                                                      Supports partial match using wildcard syntax.
+                                                    items:
+                                                      description: NetworkDeviceSelector
+                                                        struct describes network device
+                                                        selector. docgen:nodoc
+                                                      properties:
+                                                        busPath:
+                                                          description: PCI, USB bus
+                                                            prefix, supports matching
+                                                            by wildcard.
+                                                          type: string
+                                                        driver:
+                                                          description: Kernel driver,
+                                                            supports matching by wildcard.
+                                                          type: string
+                                                        hardwareAddr:
+                                                          description: Device hardware
+                                                            (MAC) address, supports
+                                                            matching by wildcard.
+                                                          type: string
+                                                        pciID:
+                                                          description: PCI ID (vendor
+                                                            ID, product ID), supports
+                                                            matching by wildcard.
+                                                          type: string
+                                                        permanentAddr:
+                                                          description: |-
+                                                            Device permanent hardware address, supports matching by wildcard.
+                                                            The permanent address doesn't change when the link is enslaved to a bond,
+                                                            so it's recommended to use this field for bond members.
+                                                          type: string
+                                                        physical:
+                                                          description: Select only
+                                                            physical devices.
+                                                          type: boolean
+                                                      type: object
+                                                    type: array
+                                                  downdelay:
+                                                    description: |-
+                                                      A bond option.
+                                                      Please see the official kernel documentation.
+                                                    format: int32
+                                                    type: integer
+                                                  failOverMac:
+                                                    description: |-
+                                                      A bond option.
+                                                      Please see the official kernel documentation.
+                                                    type: string
+                                                  interfaces:
+                                                    description: The interfaces that
+                                                      make up the bond.
+                                                    items:
+                                                      type: string
+                                                    type: array
+                                                  lacpRate:
+                                                    description: |-
+                                                      A bond option.
+                                                      Please see the official kernel documentation.
+                                                    type: string
+                                                  lpInterval:
+                                                    description: |-
+                                                      A bond option.
+                                                      Please see the official kernel documentation.
+                                                    format: int32
+                                                    type: integer
+                                                  miimon:
+                                                    description: |-
+                                                      A bond option.
+                                                      Please see the official kernel documentation.
+                                                    format: int32
+                                                    type: integer
+                                                  minLinks:
+                                                    description: |-
+                                                      A bond option.
+                                                      Please see the official kernel documentation.
+                                                    format: int32
+                                                    type: integer
+                                                  mode:
+                                                    description: |-
+                                                      A bond option.
+                                                      Please see the official kernel documentation.
+                                                    type: string
+                                                  numPeerNotif:
+                                                    description: |-
+                                                      A bond option.
+                                                      Please see the official kernel documentation.
+                                                    type: integer
+                                                  packetsPerSlave:
+                                                    description: |-
+                                                      A bond option.
+                                                      Please see the official kernel documentation.
+                                                    format: int32
+                                                    type: integer
+                                                  peerNotifyDelay:
+                                                    description: |-
+                                                      A bond option.
+                                                      Please see the official kernel documentation.
+                                                    format: int32
+                                                    type: integer
+                                                  primary:
+                                                    description: |-
+                                                      A bond option.
+                                                      Please see the official kernel documentation.
+                                                    type: string
+                                                  primaryReselect:
+                                                    description: |-
+                                                      A bond option.
+                                                      Please see the official kernel documentation.
+                                                    type: string
+                                                  resendIgmp:
+                                                    description: |-
+                                                      A bond option.
+                                                      Please see the official kernel documentation.
+                                                    format: int32
+                                                    type: integer
+                                                  tlbDynamicLb:
+                                                    description: |-
+                                                      A bond option.
+                                                      Please see the official kernel documentation.
+                                                    type: integer
+                                                  updelay:
+                                                    description: |-
+                                                      A bond option.
+                                                      Please see the official kernel documentation.
+                                                    format: int32
+                                                    type: integer
+                                                  useCarrier:
+                                                    description: |-
+                                                      A bond option.
+                                                      Please see the official kernel documentation.
+                                                    type: boolean
+                                                  xmitHashPolicy:
+                                                    description: |-
+                                                      A bond option.
+                                                      Please see the official kernel documentation.
+                                                    type: string
+                                                required:
+                                                - interfaces
+                                                - mode
+                                                type: object
+                                              bridge:
+                                                description: Bridge specific options.
+                                                properties:
+                                                  interfaces:
+                                                    description: The interfaces that
+                                                      make up the bridge.
+                                                    items:
+                                                      type: string
+                                                    type: array
+                                                  stp:
+                                                    description: |-
+                                                      Enable STP on this bridge.
+                                                      Please see the official kernel documentation.
+                                                    properties:
+                                                      enabled:
+                                                        description: Whether Spanning
+                                                          Tree Protocol (STP) is enabled.
+                                                        type: boolean
+                                                    type: object
+                                                  vlan:
+                                                    description: |-
+                                                      Enable VLAN-awareness on this bridge.
+                                                      Please see the official kernel documentation.
+                                                    properties:
+                                                      vlanFiltering:
+                                                        description: Whether VLAN
+                                                          filtering is enabled.
+                                                        type: boolean
+                                                    type: object
+                                                required:
+                                                - interfaces
+                                                type: object
+                                              bridgePort:
+                                                description: |-
+                                                  Configure this device as a bridge port.
+                                                  This can be used to dynamically assign network interfaces to a bridge.
+                                                properties:
+                                                  master:
+                                                    description: The name of the bridge
+                                                      master interface
+                                                    type: string
+                                                type: object
+                                              cidr:
+                                                description: docgen:nodoc
+                                                type: string
+                                              deviceSelector:
+                                                description: |-
+                                                  Picks a network device using the selector.
+                                                  Mutually exclusive with `interface`.
+                                                  Supports partial match using wildcard syntax.
+                                                properties:
+                                                  busPath:
+                                                    description: PCI, USB bus prefix,
+                                                      supports matching by wildcard.
+                                                    type: string
+                                                  driver:
+                                                    description: Kernel driver, supports
+                                                      matching by wildcard.
+                                                    type: string
+                                                  hardwareAddr:
+                                                    description: Device hardware (MAC)
+                                                      address, supports matching by
+                                                      wildcard.
+                                                    type: string
+                                                  pciID:
+                                                    description: PCI ID (vendor ID,
+                                                      product ID), supports matching
+                                                      by wildcard.
+                                                    type: string
+                                                  permanentAddr:
+                                                    description: |-
+                                                      Device permanent hardware address, supports matching by wildcard.
+                                                      The permanent address doesn't change when the link is enslaved to a bond,
+                                                      so it's recommended to use this field for bond members.
+                                                    type: string
+                                                  physical:
+                                                    description: Select only physical
+                                                      devices.
+                                                    type: boolean
+                                                type: object
+                                              dhcp:
+                                                description: |-
+                                                  Indicates if DHCP should be used to configure the interface.
+                                                  The following DHCP options are supported:
+
+                                                  - `OptionClasslessStaticRoute`
+                                                  - `OptionDomainNameServer`
+                                                  - `OptionDNSDomainSearchList`
+                                                  - `OptionHostName`
+                                                type: boolean
+                                              dhcpOptions:
+                                                description: |-
+                                                  DHCP specific options.
+                                                  `dhcp` *must* be set to true for these to take effect.
+                                                properties:
+                                                  duidv6:
+                                                    description: Set client DUID (hex
+                                                      string).
+                                                    type: string
+                                                  ipv4:
+                                                    description: Enables DHCPv4 protocol
+                                                      for the interface (default is
+                                                      enabled).
+                                                    type: boolean
+                                                  ipv6:
+                                                    description: Enables DHCPv6 protocol
+                                                      for the interface (default is
+                                                      disabled).
+                                                    type: boolean
+                                                  routeMetric:
+                                                    description: The priority of all
+                                                      routes received via DHCP.
+                                                    format: int32
+                                                    type: integer
+                                                required:
+                                                - routeMetric
+                                                type: object
+                                              dummy:
+                                                description: |-
+                                                  Indicates if the interface is a dummy interface.
+                                                  `dummy` is used to specify that this interface should be a virtual-only, dummy interface.
+                                                type: boolean
+                                              ignore:
+                                                description: Indicates if the interface
+                                                  should be ignored (skips configuration).
+                                                type: boolean
+                                              interface:
+                                                description: |-
+                                                  The interface name.
+                                                  Mutually exclusive with `deviceSelector`.
+                                                type: string
+                                              mtu:
+                                                description: |-
+                                                  The interface's MTU.
+                                                  If used in combination with DHCP, this will override any MTU settings returned from DHCP server.
+                                                type: integer
+                                              routes:
+                                                description: |-
+                                                  A list of routes associated with the interface.
+                                                  If used in combination with DHCP, these routes will be appended to routes returned by DHCP server.
+                                                items:
+                                                  description: Route represents a
+                                                    network route. docgen:nodoc
+                                                  properties:
+                                                    gateway:
+                                                      description: The route's gateway
+                                                        (if empty, creates link scope
+                                                        route).
+                                                      type: string
+                                                    metric:
+                                                      description: The optional metric
+                                                        for the route.
+                                                      format: int32
+                                                      type: integer
+                                                    mtu:
+                                                      description: The optional MTU
+                                                        for the route.
+                                                      format: int32
+                                                      type: integer
+                                                    network:
+                                                      description: The route's network
+                                                        (destination).
+                                                      type: string
+                                                    source:
+                                                      description: The route's source
+                                                        address (optional).
+                                                      type: string
+                                                  required:
+                                                  - gateway
+                                                  - network
+                                                  type: object
+                                                type: array
+                                              vip:
+                                                description: Virtual (shared) IP address
+                                                  configuration.
+                                                properties:
+                                                  equinixMetal:
+                                                    description: Specifies the Equinix
+                                                      Metal API settings to assign
+                                                      VIP to the node.
+                                                    properties:
+                                                      apiToken:
+                                                        description: Specifies the
+                                                          Equinix Metal API Token.
+                                                        type: string
+                                                    required:
+                                                    - apiToken
+                                                    type: object
+                                                  hcloud:
+                                                    description: Specifies the Hetzner
+                                                      Cloud API settings to assign
+                                                      VIP to the node.
+                                                    properties:
+                                                      apiToken:
+                                                        description: Specifies the
+                                                          Hetzner Cloud API Token.
+                                                        type: string
+                                                    required:
+                                                    - apiToken
+                                                    type: object
+                                                  ip:
+                                                    description: Specifies the IP
+                                                      address to be used.
+                                                    type: string
+                                                type: object
+                                              vlans:
+                                                description: VLAN specific options.
+                                                items:
+                                                  description: Vlan represents vlan
+                                                    settings for a device. docgen:nodoc
+                                                  properties:
+                                                    addresses:
+                                                      description: The addresses in
+                                                        CIDR notation or as plain
+                                                        IPs to use.
+                                                      items:
+                                                        type: string
+                                                      type: array
+                                                    cidr:
+                                                      description: docgen:nodoc
+                                                      type: string
+                                                    dhcp:
+                                                      description: Indicates if DHCP
+                                                        should be used.
+                                                      type: boolean
+                                                    dhcpOptions:
+                                                      description: |-
+                                                        DHCP specific options.
+                                                        `dhcp` *must* be set to true for these to take effect.
+                                                      properties:
+                                                        duidv6:
+                                                          description: Set client
+                                                            DUID (hex string).
+                                                          type: string
+                                                        ipv4:
+                                                          description: Enables DHCPv4
+                                                            protocol for the interface
+                                                            (default is enabled).
+                                                          type: boolean
+                                                        ipv6:
+                                                          description: Enables DHCPv6
+                                                            protocol for the interface
+                                                            (default is disabled).
+                                                          type: boolean
+                                                        routeMetric:
+                                                          description: The priority
+                                                            of all routes received
+                                                            via DHCP.
+                                                          format: int32
+                                                          type: integer
+                                                      required:
+                                                      - routeMetric
+                                                      type: object
+                                                    mtu:
+                                                      description: The VLAN's MTU.
+                                                      format: int32
+                                                      type: integer
+                                                    routes:
+                                                      description: A list of routes
+                                                        associated with the VLAN.
+                                                      items:
+                                                        description: Route represents
+                                                          a network route. docgen:nodoc
+                                                        properties:
+                                                          gateway:
+                                                            description: The route's
+                                                              gateway (if empty, creates
+                                                              link scope route).
+                                                            type: string
+                                                          metric:
+                                                            description: The optional
+                                                              metric for the route.
+                                                            format: int32
+                                                            type: integer
+                                                          mtu:
+                                                            description: The optional
+                                                              MTU for the route.
+                                                            format: int32
+                                                            type: integer
+                                                          network:
+                                                            description: The route's
+                                                              network (destination).
+                                                            type: string
+                                                          source:
+                                                            description: The route's
+                                                              source address (optional).
+                                                            type: string
+                                                        required:
+                                                        - gateway
+                                                        - network
+                                                        type: object
+                                                      type: array
+                                                    vip:
+                                                      description: The VLAN's virtual
+                                                        IP address configuration.
+                                                      properties:
+                                                        equinixMetal:
+                                                          description: Specifies the
+                                                            Equinix Metal API settings
+                                                            to assign VIP to the node.
+                                                          properties:
+                                                            apiToken:
+                                                              description: Specifies
+                                                                the Equinix Metal
+                                                                API Token.
+                                                              type: string
+                                                          required:
+                                                          - apiToken
+                                                          type: object
+                                                        hcloud:
+                                                          description: Specifies the
+                                                            Hetzner Cloud API settings
+                                                            to assign VIP to the node.
+                                                          properties:
+                                                            apiToken:
+                                                              description: Specifies
+                                                                the Hetzner Cloud
+                                                                API Token.
+                                                              type: string
+                                                          required:
+                                                          - apiToken
+                                                          type: object
+                                                        ip:
+                                                          description: Specifies the
+                                                            IP address to be used.
+                                                          type: string
+                                                      type: object
+                                                    vlanId:
+                                                      description: The VLAN's ID.
+                                                      type: integer
+                                                  required:
+                                                  - routes
+                                                  - vlanId
+                                                  type: object
+                                                type: array
+                                              wireguard:
+                                                description: |-
+                                                  Wireguard specific configuration.
+                                                  Includes things like private key, listen port, peers.
+                                                properties:
+                                                  firewallMark:
+                                                    description: Specifies a device's
+                                                      firewall mark.
+                                                    type: integer
+                                                  listenPort:
+                                                    description: Specifies a device's
+                                                      listening port.
+                                                    type: integer
+                                                  peers:
+                                                    description: Specifies a list
+                                                      of peer configurations to apply
+                                                      to a device.
+                                                    items:
+                                                      description: DeviceWireguardPeer
+                                                        a WireGuard device peer configuration.
+                                                        docgen:nodoc
+                                                      properties:
+                                                        allowedIPs:
+                                                          description: AllowedIPs
+                                                            specifies a list of allowed
+                                                            IP addresses in CIDR notation
+                                                            for this peer.
+                                                          items:
+                                                            type: string
+                                                          type: array
+                                                        endpoint:
+                                                          description: Specifies the
+                                                            endpoint of this peer
+                                                            entry.
+                                                          type: string
+                                                        persistentKeepaliveInterval:
+                                                          description: |-
+                                                            Specifies the persistent keepalive interval for this peer.
+                                                            Field format accepts any Go time.Duration format ('1h' for one hour, '10m' for ten minutes).
+                                                          type: string
+                                                        publicKey:
+                                                          description: |-
+                                                            Specifies the public key of this peer.
+                                                            Can be extracted from private key by running `wg pubkey < private.key > public.key && cat public.key`.
+                                                          type: string
+                                                      type: object
+                                                    type: array
+                                                  privateKey:
+                                                    description: |-
+                                                      Specifies a private key configuration (base64 encoded).
+                                                      Can be generated by `wg genkey`.
+                                                    type: string
+                                                type: object
+                                            type: object
+                                          type: array
+                                        kubespan:
+                                          description: 'docgen:nodoc Deprecated: Use
+                                            `KubeSpanConfig` document instead.'
+                                          properties:
+                                            advertiseKubernetesNetworks:
+                                              description: |-
+                                                Control whether Kubernetes pod CIDRs are announced over KubeSpan from the node.
+                                                If disabled, CNI handles encapsulating pod-to-pod traffic into some node-to-node tunnel,
+                                                and KubeSpan handles the node-to-node traffic.
+                                                If enabled, KubeSpan will take over pod-to-pod traffic and send it over KubeSpan directly.
+                                                When enabled, KubeSpan should have a way to detect complete pod CIDRs of the node which
+                                                is not always the case with CNIs not relying on Kubernetes for IPAM.
+                                              type: boolean
+                                            allowDownPeerBypass:
+                                              description: |-
+                                                Skip sending traffic via KubeSpan if the peer connection state is not up.
+                                                This provides configurable choice between connectivity and security: either traffic is always
+                                                forced to go via KubeSpan (even if Wireguard peer connection is not up), or traffic can go directly
+                                                to the peer if Wireguard connection can't be established.
+                                              type: boolean
+                                            enabled:
+                                              description: |-
+                                                Enable the KubeSpan feature.
+                                                Cluster discovery should be enabled with .cluster.discovery.enabled for KubeSpan to be enabled.
+                                              type: boolean
+                                            filters:
+                                              description: |-
+                                                KubeSpan advanced filtering of network addresses .
+
+                                                Settings in this section are optional, and settings apply only to the node.
+                                              properties:
+                                                endpoints:
+                                                  description: |-
+                                                    Filter node addresses which will be advertised as KubeSpan endpoints for peer-to-peer Wireguard connections.
+
+                                                    By default, all addresses are advertised, and KubeSpan cycles through all endpoints until it finds one that works.
+
+                                                    Default value: no filtering.
+                                                  items:
+                                                    type: string
+                                                  type: array
+                                                excludeAdvertisedNetworks:
+                                                  description: |-
+                                                    Filter networks (e.g., host addresses, pod CIDRs if enabled) which will be advertised over KubeSpan.
+
+                                                    By default, all networks are advertised.
+                                                    Use this filter to exclude some networks from being advertised.
+
+                                                    Note: excluded networks will not be reachable over KubeSpan, so make sure
+                                                    these networks are still reachable via some other route (e.g., direct connection).
+
+                                                    Default value: no filtering.
+                                                  items:
+                                                    type: string
+                                                  type: array
+                                              type: object
+                                            harvestExtraEndpoints:
+                                              description: |-
+                                                KubeSpan can collect and publish extra endpoints for each member of the cluster
+                                                based on Wireguard endpoint information for each peer.
+                                                This feature is disabled by default, don't enable it
+                                                with high number of peers (>50) in the KubeSpan network (performance issues).
+                                              type: boolean
+                                            mtu:
+                                              description: |-
+                                                KubeSpan link MTU size.
+                                                Default value is 1420.
+                                              format: int32
+                                              type: integer
+                                          type: object
+                                        nameservers:
+                                          description: 'docgen:nodoc Deprecated: Use
+                                            `ResolverConfig` instead.'
+                                          items:
+                                            type: string
+                                          type: array
+                                        searchDomains:
+                                          description: 'docgen:nodoc Deprecated: Use
+                                            `ResolverConfig` instead.'
+                                          items:
+                                            type: string
+                                          type: array
+                                      type: object
+                                    nodeAnnotations:
+                                      additionalProperties:
+                                        type: string
+                                      description: 'docgen:nodoc Deprecated: use `KubeNodeConfig`
+                                        instead.'
+                                      type: object
+                                    nodeLabels:
+                                      additionalProperties:
+                                        type: string
+                                      description: 'docgen:nodoc Deprecated: use `KubeNodeConfig`
+                                        instead.'
+                                      type: object
+                                    nodeTaints:
+                                      additionalProperties:
+                                        type: string
+                                      description: 'docgen:nodoc Deprecated: use `KubeNodeConfig`
+                                        instead.'
+                                      type: object
+                                    registries:
+                                      description: 'docgen:nodoc Deprecated: Use `Registry*Config`
+                                        instead.'
+                                      properties:
+                                        config:
+                                          additionalProperties:
+                                            description: RegistryConfig specifies
+                                              auth & TLS config per registry. docgen:nodoc
+                                            properties:
+                                              auth:
+                                                description: |-
+                                                  The auth configuration for this registry.
+                                                  Note: changes to the registry auth will not be picked up by the CRI containerd plugin without a reboot.
+                                                properties:
+                                                  auth:
+                                                    description: |-
+                                                      Optional registry authentication.
+                                                      The meaning of each field is the same with the corresponding field in [`.docker/config.json`](https://docs.docker.com/engine/api/v1.41/#section/Authentication).
+                                                    type: string
+                                                  identityToken:
+                                                    description: |-
+                                                      Optional registry authentication.
+                                                      The meaning of each field is the same with the corresponding field in [`.docker/config.json`](https://docs.docker.com/engine/api/v1.41/#section/Authentication).
+                                                    type: string
+                                                  password:
+                                                    description: |-
+                                                      Optional registry authentication.
+                                                      The meaning of each field is the same with the corresponding field in [`.docker/config.json`](https://docs.docker.com/engine/api/v1.41/#section/Authentication).
+                                                    type: string
+                                                  username:
+                                                    description: |-
+                                                      Optional registry authentication.
+                                                      The meaning of each field is the same with the corresponding field in [`.docker/config.json`](https://docs.docker.com/engine/api/v1.41/#section/Authentication).
+                                                    type: string
+                                                type: object
+                                              tls:
+                                                description: The TLS configuration
+                                                  for the registry.
+                                                properties:
+                                                  ca:
+                                                    description: |-
+                                                      CA registry certificate to add the list of trusted certificates.
+                                                      Certificate should be base64-encoded.
+                                                    format: byte
+                                                    type: string
+                                                  clientIdentity:
+                                                    description: |-
+                                                      Enable mutual TLS authentication with the registry.
+                                                      Client certificate and key should be base64-encoded.
+                                                    properties:
+                                                      crt:
+                                                        format: byte
+                                                        type: string
+                                                      key:
+                                                        format: byte
+                                                        type: string
+                                                    required:
+                                                    - crt
+                                                    - key
+                                                    type: object
+                                                  insecureSkipVerify:
+                                                    description: Skip TLS server certificate
+                                                      verification (not recommended).
+                                                    type: boolean
+                                                type: object
+                                            type: object
+                                          description: |-
+                                            Specifies TLS & auth configuration for HTTPS image registries.
+                                            Mutual TLS can be enabled with 'clientIdentity' option.
+
+                                            The full hostname and port (if not using a default port 443)
+                                            should be used as the key.
+                                            The fallback key `*` can't be used for TLS configuration.
+
+                                            TLS configuration can be skipped if registry has trusted
+                                            server certificate.
+                                          type: object
+                                        mirrors:
+                                          additionalProperties:
+                                            description: RegistryMirrorConfig represents
+                                              mirror configuration for a registry.
+                                              docgen:nodoc
+                                            properties:
+                                              endpoints:
+                                                description: |-
+                                                  List of endpoints (URLs) for registry mirrors to use.
+                                                  Endpoint configures HTTP/HTTPS access mode, host name,
+                                                  port and path (if path is not set, it defaults to `/v2`).
+                                                items:
+                                                  type: string
+                                                type: array
+                                              overridePath:
+                                                description: |-
+                                                  Use the exact path specified for the endpoint (don't append /v2/).
+                                                  This setting is often required for setting up multiple mirrors
+                                                  on a single instance of a registry.
+                                                type: boolean
+                                              skipFallback:
+                                                description: |-
+                                                  Skip fallback to the upstream endpoint, for example the mirror configuration
+                                                  for `docker.io` will not fallback to `registry-1.docker.io`.
+                                                type: boolean
+                                            required:
+                                            - endpoints
+                                            type: object
+                                          description: |-
+                                            Specifies mirror configuration for each registry host namespace.
+                                            This setting allows to configure local pull-through caching registires,
+                                            air-gapped installations, etc.
+
+                                            For example, when pulling an image with the reference `example.com:123/image:v1`,
+                                            the `example.com:123` key will be used to lookup the mirror configuration.
+
+                                            Optionally the `*` key can be used to configure a fallback mirror.
+
+                                            Registry name is the first segment of image identifier, with 'docker.io'
+                                            being default one.
+                                          type: object
+                                      type: object
+                                    seccompProfiles:
+                                      description: Configures the seccomp profiles
+                                        for the machine.
+                                      items:
+                                        description: MachineSeccompProfile defines
+                                          seccomp profiles for the machine.
+                                        properties:
+                                          name:
+                                            description: The `name` field is used
+                                              to provide the file name of the seccomp
+                                              profile.
+                                            type: string
+                                        required:
+                                        - name
+                                        type: object
+                                      type: array
+                                    sysctls:
+                                      additionalProperties:
+                                        type: string
+                                      description: 'docgen:nodoc Deprecated: Use ''SysctlConfig''
+                                        instead.'
+                                      type: object
+                                    sysfs:
+                                      additionalProperties:
+                                        type: string
+                                      description: 'docgen:nodoc Deprecated: Use ''SysfsConfig''
+                                        instead.'
+                                      type: object
+                                    systemDiskEncryption:
+                                      description: 'docgen:nodoc Deprecated: Use `VolumeConfig`
+                                        instead.'
+                                      properties:
+                                        ephemeral:
+                                          description: Ephemeral partition encryption.
+                                          properties:
+                                            blockSize:
+                                              description: Defines the encryption
+                                                sector size.
+                                              format: int64
+                                              type: integer
+                                            cipher:
+                                              description: |-
+                                                Cipher kind to use for the encryption.
+                                                Depends on the encryption provider.
+                                              type: string
+                                            keySize:
+                                              description: Defines the encryption
+                                                key length.
+                                              type: integer
+                                            keys:
+                                              description: Defines the encryption
+                                                keys generation and storage method.
+                                              items:
+                                                description: EncryptionKey represents
+                                                  configuration for disk encryption
+                                                  key.
+                                                properties:
+                                                  kms:
+                                                    description: KMS managed encryption
+                                                      key.
+                                                    properties:
+                                                      endpoint:
+                                                        description: |-
+                                                          KMS endpoint to Seal/Unseal the key.
+
+                                                          The endpoint should be specified as a URL with an explicit scheme, e.g. `https://kms.example.com:4443`.
+                                                          With the `https://` scheme, the connection to the KMS server is established over TLS, and the server certificate
+                                                          is verified against the trusted root CAs.
+
+                                                          WARNING: if the scheme is omitted (e.g. `kms.example.com:4443`) or set to `grpc://`, the connection
+                                                          to the KMS server is established without TLS, and the disk encryption key material is transmitted in plaintext.
+                                                          Use plaintext endpoints only on fully trusted networks.
+
+                                                          Note: when encrypting the `STATE` volume, custom trusted root CAs from the machine configuration
+                                                          might not be available when unlocking the volume (as the machine configuration is stored on `STATE`),
+                                                          so the KMS server certificate should be signed by a CA trusted by default.
+                                                        type: string
+                                                    required:
+                                                    - endpoint
+                                                    type: object
+                                                  nodeID:
+                                                    description: Deterministically
+                                                      generated key from the node
+                                                      UUID and PartitionLabel.
+                                                    type: object
+                                                  slot:
+                                                    description: Key slot number for
+                                                      LUKS2 encryption.
+                                                    type: integer
+                                                  static:
+                                                    description: Key which value is
+                                                      stored in the configuration
+                                                      file.
+                                                    properties:
+                                                      passphrase:
+                                                        description: Defines the static
+                                                          passphrase value.
+                                                        type: string
+                                                    type: object
+                                                  tpm:
+                                                    description: Enable TPM based
+                                                      disk encryption.
+                                                    properties:
+                                                      checkSecurebootStatusOnEnroll:
+                                                        description: |-
+                                                          Check that Secureboot is enabled in the EFI firmware.
+
+                                                          If Secureboot is not enabled, the enrollment of the key will fail.
+                                                          As the TPM key is anyways bound to the value of PCR 7,
+                                                          changing Secureboot status or configuration
+                                                          after the initial enrollment will make the key unusable.
+                                                        type: boolean
+                                                    type: object
+                                                required:
+                                                - slot
+                                                type: object
+                                              type: array
+                                            options:
+                                              description: Additional --perf parameters
+                                                for the LUKS2 encryption.
+                                              items:
+                                                type: string
+                                              type: array
+                                            provider:
+                                              description: Encryption provider to
+                                                use for the encryption.
+                                              type: string
+                                          required:
+                                          - keys
+                                          - provider
+                                          type: object
+                                        state:
+                                          description: State partition encryption.
+                                          properties:
+                                            blockSize:
+                                              description: Defines the encryption
+                                                sector size.
+                                              format: int64
+                                              type: integer
+                                            cipher:
+                                              description: |-
+                                                Cipher kind to use for the encryption.
+                                                Depends on the encryption provider.
+                                              type: string
+                                            keySize:
+                                              description: Defines the encryption
+                                                key length.
+                                              type: integer
+                                            keys:
+                                              description: Defines the encryption
+                                                keys generation and storage method.
+                                              items:
+                                                description: EncryptionKey represents
+                                                  configuration for disk encryption
+                                                  key.
+                                                properties:
+                                                  kms:
+                                                    description: KMS managed encryption
+                                                      key.
+                                                    properties:
+                                                      endpoint:
+                                                        description: |-
+                                                          KMS endpoint to Seal/Unseal the key.
+
+                                                          The endpoint should be specified as a URL with an explicit scheme, e.g. `https://kms.example.com:4443`.
+                                                          With the `https://` scheme, the connection to the KMS server is established over TLS, and the server certificate
+                                                          is verified against the trusted root CAs.
+
+                                                          WARNING: if the scheme is omitted (e.g. `kms.example.com:4443`) or set to `grpc://`, the connection
+                                                          to the KMS server is established without TLS, and the disk encryption key material is transmitted in plaintext.
+                                                          Use plaintext endpoints only on fully trusted networks.
+
+                                                          Note: when encrypting the `STATE` volume, custom trusted root CAs from the machine configuration
+                                                          might not be available when unlocking the volume (as the machine configuration is stored on `STATE`),
+                                                          so the KMS server certificate should be signed by a CA trusted by default.
+                                                        type: string
+                                                    required:
+                                                    - endpoint
+                                                    type: object
+                                                  nodeID:
+                                                    description: Deterministically
+                                                      generated key from the node
+                                                      UUID and PartitionLabel.
+                                                    type: object
+                                                  slot:
+                                                    description: Key slot number for
+                                                      LUKS2 encryption.
+                                                    type: integer
+                                                  static:
+                                                    description: Key which value is
+                                                      stored in the configuration
+                                                      file.
+                                                    properties:
+                                                      passphrase:
+                                                        description: Defines the static
+                                                          passphrase value.
+                                                        type: string
+                                                    type: object
+                                                  tpm:
+                                                    description: Enable TPM based
+                                                      disk encryption.
+                                                    properties:
+                                                      checkSecurebootStatusOnEnroll:
+                                                        description: |-
+                                                          Check that Secureboot is enabled in the EFI firmware.
+
+                                                          If Secureboot is not enabled, the enrollment of the key will fail.
+                                                          As the TPM key is anyways bound to the value of PCR 7,
+                                                          changing Secureboot status or configuration
+                                                          after the initial enrollment will make the key unusable.
+                                                        type: boolean
+                                                    type: object
+                                                required:
+                                                - slot
+                                                type: object
+                                              type: array
+                                            options:
+                                              description: Additional --perf parameters
+                                                for the LUKS2 encryption.
+                                              items:
+                                                type: string
+                                              type: array
+                                            provider:
+                                              description: Encryption provider to
+                                                use for the encryption.
+                                              type: string
+                                          required:
+                                          - keys
+                                          - provider
+                                          type: object
+                                      type: object
+                                    time:
+                                      description: 'docgen:nodoc Deprecated: Use ''TimeSyncConfig''
+                                        instead.'
+                                      properties:
+                                        bootTimeout:
+                                          description: |-
+                                            Specifies the timeout when the node time is considered to be in sync unlocking the boot sequence.
+                                            NTP sync will be still running in the background.
+                                            Defaults to "infinity" (waiting forever for time sync)
+                                          type: string
+                                        disabled:
+                                          description: |-
+                                            Indicates if the time service is disabled for the machine.
+                                            Defaults to `false`.
+                                          type: boolean
+                                        servers:
+                                          description: |-
+                                            Specifies time (NTP) servers to use for setting the system time.
+                                            Defaults to `time.cloudflare.com`.
+
+                                            Talos can also sync to the PTP time source (e.g provided by the hypervisor),
+                                            provide the path to the PTP device as "/dev/ptp0" or "/dev/ptp_kvm".
+                                          items:
+                                            type: string
+                                          type: array
+                                      type: object
+                                    token:
+                                      description: |-
+                                        The `token` is used by a machine to join the PKI of the cluster.
+                                        Using this token, a machine will create a certificate signing request (CSR), and request a certificate that will be used as its' identity.
+                                      type: string
+                                    type:
+                                      description: |-
+                                        Defines the role of the machine within the cluster.
+
+                                        **Control Plane**
+
+                                        Control Plane node type designates the node as a control plane member.
+                                        This means it will host etcd along with the Kubernetes controlplane components such as API Server, Controller Manager, Scheduler.
+
+                                        **Worker**
+
+                                        Worker node type designates the node as a worker node.
+                                        This means it will be an available compute node for scheduling workloads.
+
+                                        This node type was previously known as "join"; that value is still supported but deprecated.
+                                      type: string
+                                    udev:
+                                      description: Configures the udev system.
+                                      properties:
+                                        rules:
+                                          description: List of udev rules to apply
+                                            to the udev system
+                                          items:
+                                            type: string
+                                          type: array
+                                      type: object
+                                  required:
+                                  - certSANs
+                                  - token
+                                  - type
+                                  type: object
+                                persist:
+                                  description: 'docgen:nodoc Deprecated: Not supported
+                                    anymore.'
+                                  type: boolean
+                                version:
+                                  description: Indicates the schema used to decode
+                                    the contents.
+                                  type: string
+                              required:
+                              - cluster
+                              - machine
+                              - version
+                              type: object
+                            kernelModuleConfig:
+                              description: kernelModuleConfig is a Talos KernelModuleConfig
+                                document; populated when kind is "KernelModuleConfig".
+                              properties:
+                                name:
+                                  description: Module name.
+                                  type: string
+                                parameters:
+                                  description: Module parameters, changes applied
+                                    after reboot.
+                                  items:
+                                    type: string
+                                  type: array
+                              required:
+                              - name
+                              type: object
+                            kind:
+                              description: kind selects which of the fields below
+                                is populated.
+                              enum:
+                              - SysctlConfig
+                              - KernelModuleConfig
+                              - Config
+                              type: string
+                            sysctlConfig:
+                              description: sysctlConfig is a Talos SysctlConfig document;
+                                populated when kind is "SysctlConfig".
+                              properties:
+                                params:
+                                  additionalProperties:
+                                    type: string
+                                  description: |-
+                                    Used to configure the machine's sysctls (kernel parameters under `/proc/sys`).
+                                    Values from this document are merged with the deprecated v1alpha1 machine.sysctls values (if set),
+                                    with this document taking precedence on key conflicts.
+                                  type: object
+                              required:
+                              - params
+                              type: object
+                          required:
+                          - kind
+                          type: object
+                          x-kubernetes-validations:
+                          - message: exactly one of sysctlConfig, kernelModuleConfig
+                              or config must be set
+                            rule: '(has(self.sysctlConfig) ? 1 : 0) + (has(self.kernelModuleConfig)
+                              ? 1 : 0) + (has(self.config) ? 1 : 0) == 1'
+                          - message: kind must match the populated field
+                            rule: 'self.kind == ''SysctlConfig'' ? has(self.sysctlConfig)
+                              : self.kind == ''KernelModuleConfig'' ? has(self.kernelModuleConfig)
+                              : has(self.config)'
+                        type: array
+                      source:
+                        description: source points Argo CD at the chart or manifests
+                          for this CNI.
+                        properties:
+                          chart:
+                            description: chart is a Helm chart name within repoURL;
+                              set instead of path.
+                            type: string
+                          path:
+                            description: path is a directory within repoURL holding
+                              plain manifests; set instead of chart.
+                            type: string
+                          repoURL:
+                            description: repoURL is the Git or Helm repository Argo
+                              CD syncs from.
+                            minLength: 1
+                            type: string
+                          targetRevision:
+                            description: targetRevision is the Git ref or chart version
+                              Argo CD syncs.
+                            minLength: 1
+                            type: string
+                        required:
+                        - repoURL
+                        - targetRevision
+                        type: object
+                        x-kubernetes-validations:
+                        - message: exactly one of chart or path must be set
+                          rule: '(has(self.chart) ? 1 : 0) + (has(self.path) ? 1 :
+                            0) == 1'
+                    required:
+                    - source
+                    type: object
+                  kubeProxy:
+                    default: enabled
+                    description: |-
+                      kubeProxy is enabled (Talos's own default) or replaced by the CNI. Replacing it splits the
+                      setting across two owners -- Talos (cluster.proxy.disabled, written by Ichor) and the CNI
+                      (written by Argo CD) -- so a consistency check reads the CNI's live configuration and
+                      reports a mismatch as a health failure.
+                    enum:
+                    - enabled
+                    - replaced
+                    type: string
+                  preset:
+                    default: flannel
+                    description: |-
+                      preset selects the CNI this cluster bootstraps: flannel (Talos's own default; Ichor does
+                      nothing), cilium (Helm, with Talos-recommended values built in), or custom (your chart or
+                      manifests; you declare the Talos-side settings).
+                    enum:
+                    - flannel
+                    - cilium
+                    - custom
+                    type: string
+                type: object
+                x-kubernetes-validations:
+                - message: cni.preset cannot change after the cluster is created;
+                    swapping a CNI takes the network down
+                  rule: self.preset == oldSelf.preset
+                - message: custom must be set when, and only when, preset is custom
+                  rule: 'self.preset == ''custom'' ? has(self.custom) : !has(self.custom)'
+                - message: flannel cannot replace kube-proxy
+                  rule: self.preset != 'flannel' || self.kubeProxy == 'enabled'
               controlPlane:
                 description: controlPlane configures the control-plane topology.
                 properties:

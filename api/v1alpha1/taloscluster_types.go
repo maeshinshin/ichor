@@ -56,6 +56,77 @@ type TalosClusterControlPlane struct {
 	Schedulable string `json:"schedulable"`
 }
 
+// TalosClusterCNICustomSource is an Argo CD Application source for a user-supplied CNI: a Helm
+// chart or a directory of plain manifests in a Git repository. Exactly one of chart or path is
+// set, matching Argo CD's own ApplicationSource union.
+// +kubebuilder:validation:XValidation:rule="(has(self.chart) ? 1 : 0) + (has(self.path) ? 1 : 0) == 1",message="exactly one of chart or path must be set"
+type TalosClusterCNICustomSource struct {
+	// repoURL is the Git or Helm repository Argo CD syncs from.
+	// +kubebuilder:validation:MinLength=1
+	// +required
+	RepoURL string `json:"repoURL"`
+
+	// path is a directory within repoURL holding plain manifests; set instead of chart.
+	// +optional
+	Path string `json:"path,omitempty"`
+
+	// chart is a Helm chart name within repoURL; set instead of path.
+	// +optional
+	Chart string `json:"chart,omitempty"`
+
+	// targetRevision is the Git ref or chart version Argo CD syncs.
+	// +kubebuilder:validation:MinLength=1
+	// +required
+	TargetRevision string `json:"targetRevision"`
+}
+
+// TalosClusterCNICustom declares a user-supplied CNI's chart/manifest source and the Talos-side
+// settings it needs -- the two things a "custom" preset cannot infer on its own, since Ichor
+// does not know what the CNI is (docs/design/architecture.md, "CNI").
+type TalosClusterCNICustom struct {
+	// source points Argo CD at the chart or manifests for this CNI.
+	// +required
+	Source TalosClusterCNICustomSource `json:"source"`
+
+	// documents are the Talos-side config documents this CNI needs (ADR 0003's allow-list),
+	// applied as a cluster-layer patch -- e.g. disabling kube-proxy when kubeProxy is "replaced".
+	// +optional
+	Documents []TalosConfigPatchDocument `json:"documents,omitempty"`
+}
+
+// TalosClusterCNI configures which CNI preset this cluster bootstraps and how kube-proxy is
+// split between Talos and the CNI (docs/design/architecture.md, "CNI"). preset is immutable:
+// swapping a CNI takes the network down and is out of scope. Switching kubeProxy between
+// "enabled" and "replaced" on an existing cluster needs the
+// ichor.maesh.dev/confirm-kube-proxy-switch annotation (enforced on TalosCluster itself, below,
+// since only there is metadata visible to the rule).
+// +kubebuilder:validation:XValidation:rule="self.preset == oldSelf.preset",message="cni.preset cannot change after the cluster is created; swapping a CNI takes the network down"
+// +kubebuilder:validation:XValidation:rule="self.preset == 'custom' ? has(self.custom) : !has(self.custom)",message="custom must be set when, and only when, preset is custom"
+// +kubebuilder:validation:XValidation:rule="self.preset != 'flannel' || self.kubeProxy == 'enabled'",message="flannel cannot replace kube-proxy"
+type TalosClusterCNI struct {
+	// preset selects the CNI this cluster bootstraps: flannel (Talos's own default; Ichor does
+	// nothing), cilium (Helm, with Talos-recommended values built in), or custom (your chart or
+	// manifests; you declare the Talos-side settings).
+	// +kubebuilder:validation:Enum=flannel;cilium;custom
+	// +kubebuilder:default=flannel
+	// +optional
+	Preset string `json:"preset,omitempty"`
+
+	// kubeProxy is enabled (Talos's own default) or replaced by the CNI. Replacing it splits the
+	// setting across two owners -- Talos (cluster.proxy.disabled, written by Ichor) and the CNI
+	// (written by Argo CD) -- so a consistency check reads the CNI's live configuration and
+	// reports a mismatch as a health failure.
+	// +kubebuilder:validation:Enum=enabled;replaced
+	// +kubebuilder:default=enabled
+	// +optional
+	KubeProxy string `json:"kubeProxy,omitempty"`
+
+	// custom declares the chart/manifest source and Talos-side settings for a user-supplied CNI;
+	// set when, and only when, preset is "custom".
+	// +optional
+	Custom *TalosClusterCNICustom `json:"custom,omitempty"`
+}
+
 // TalosClusterSpec defines the desired state of TalosCluster.
 type TalosClusterSpec struct {
 	// endpoint is the cluster's control-plane endpoint.
@@ -104,6 +175,11 @@ type TalosClusterSpec struct {
 	// +kubebuilder:default=warnOnly
 	// +optional
 	DriftPolicy string `json:"driftPolicy,omitempty"`
+
+	// cni configures which CNI preset this cluster bootstraps and how kube-proxy is split
+	// between Talos and the CNI (docs/design/architecture.md, "CNI").
+	// +optional
+	CNI TalosClusterCNI `json:"cni,omitempty"`
 }
 
 // TalosClusterStatus defines the observed state of TalosCluster.
@@ -120,6 +196,20 @@ type TalosClusterStatus struct {
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
+
+// TalosClusterConfirmKubeProxySwitchAnnotation, when present on a TalosCluster, allows
+// spec.cni.kubeProxy to change on an update that would otherwise be rejected. The guard itself
+// is not a CRD x-kubernetes-validations rule: CRD-embedded CEL only exposes metadata.name and
+// metadata.generateName on self/oldSelf, never annotations (confirmed against envtest: a rule
+// referencing self.metadata.annotations fails CRD creation with "undefined field
+// 'annotations'"). It is a ValidatingAdmissionPolicy instead
+// (config/admission/kubeproxy-switch-policy.yaml), which sees the whole object including
+// annotations; see ADR 0013 for the full reasoning, including why this isn't a
+// controller-runtime webhook. The controller is not a writer of this annotation and does not
+// act on it by itself: it only unblocks the API-level guard; running the switch in the one
+// safe order -- new side up on every node, verify, then old side down -- is the reconciler's
+// job and out of this package's scope.
+const TalosClusterConfirmKubeProxySwitchAnnotation = "ichor.maesh.dev/confirm-kube-proxy-switch"
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status

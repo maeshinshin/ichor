@@ -76,6 +76,20 @@ additive entry points that pass a real map through. Wiring either of
 loop is `internal/controller`'s call to make and is left for whoever next touches that package;
 this ADR's scope is the capability, built and tested against its public API, not the call site.
 
+**Two entry points for one render, closed with a refusal rather than left as a silent trap.**
+Keeping `Render`/`BuildConfig` working unchanged means there are now two ways to render a
+machine's config, and nothing stopped a caller with `cluster.Spec.Registries` set from calling
+the one that never resolves or injects auth: the render would still succeed, the config would
+still apply, and the resulting cluster simply could not pull from its private registry -- no
+error, no log, the worst kind of failure to track down because nothing says it happened. Caught
+in review and closed the same day: `BuildConfig` (and so `Render`, which calls it) now refuses
+outright when `cluster.Spec.Registries` is non-empty, naming both
+`BuildConfigWithRegistryAuth` and `RenderWithRegistryAuth` in the error so the caller is told
+which one to use instead of just that it chose wrong. `TestRenderRefusesRegistriesWithoutAuthPath`
+covers both `BuildConfig` and `Render`. This turns "silently wrong" into "loudly wrong," which is
+the entire point -- it does not turn "two entry points" into "one"; see Consequences below for
+why that reduction is `internal/controller`'s to make, not this ADR's.
+
 **The injected document is built directly from machinery's types, not through a
 `TalosConfigPatch`.** The password-shaped fields have no mirror-type representation at all --
 that is the entire reason `authSecretRef` exists -- so there is no typedconfig document kind this
@@ -123,11 +137,29 @@ for the secrets bundle.
   `machine.registries.config.<host>.auth.password` and never either password's value --
   confirming `TalosMachine.status` (which only ever carries `ChangedPaths`'s output, never the
   rendered config) cannot carry a registry credential either.
-- Known cross-worktree numbering note: this ADR was assigned number 0027 while this unit of work
-  was developed in an isolated worktree where ADR 0026 does not yet exist (a different concurrent
-  change owns it). `docs/adr/index_test.go`'s `TestNumbersAreContiguous` will report ADR 0026
-  missing until that other change lands; this is expected and not a defect in this change's own
-  numbering, but it means `go test ./docs/adr/...` fails in isolation here until both land.
+- **Debt: `BuildConfig`/`Render` (no-auth) and `BuildConfigWithRegistryAuth`/`RenderWithRegistryAuth`
+  are two entry points for what should eventually be one call site.** They exist side by side only
+  because `internal/controller`'s reconcile loop could not be touched by this unit of work. Once
+  `TalosMachineReconciler` is wired to call `ResolveRegistryAuth` and the `*WithRegistryAuth`
+  entry points on every render, the no-auth `BuildConfig`/`Render` pair (and the refusal guard
+  they now carry) should be deleted and every remaining caller (`internal/cli`, `internal/uiapi`)
+  moved onto the auth-aware pair -- passing an empty map costs them nothing when a cluster has no
+  registries. Leaving both indefinitely keeps the refusal guard as a permanent patch over a
+  bifurcation that should not outlive the migration; this bullet is that migration's tracking
+  note, not a design this ADR intends to keep.
+- **Debt: this feature is built on a field machinery itself marks deprecated.**
+  `injectRegistries` nests its output under the legacy
+  `v1alpha1.Config.MachineConfig.MachineRegistries` (`//nolint:staticcheck` suppresses the
+  `SA1019` warning at the call site), not under the modern standalone `RegistryMirrorConfig`/
+  `RegistryAuthConfig` documents (package `config/types/cri`) machinery's own doc comment points
+  to instead. That was the right call for this change -- the modern documents are not in Ichor's
+  mirror-type allow-list, and adding them is a mirrorgen-root-sized change (ADR 0012's shape),
+  not a render-time-injection-sized one -- but it means this feature depends on a deprecated
+  field today, not merely declines to use a nicer one. Migrating `injectRegistries` (and, if the
+  allow-list grows to include them, `TalosConfigPatch` authors generally) onto the standalone
+  documents is follow-up work this ADR creates, not a closed question; until it happens, a
+  future machinery release that actually removes the deprecated field breaks this feature, not
+  just produces a louder lint warning.
 - Out of scope, same as the removal that produced this follow-up: `VIPEquinixMetalConfig.apiToken`,
   `VIPHCloudConfig.apiToken`, `WireguardDevice.privateKey` stay dropped with no replacement --
   nothing in any current phase uses them. `ichor images list` and mirror-reachability checks

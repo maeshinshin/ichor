@@ -43,37 +43,19 @@ const haCount = 3
 // from it, fixed like vmName (see its own comment) for the same cross-invocation reason.
 const haCluster = "ichor-e2e-ha"
 
-// haISOName is the one ISO DataVolume all haCount VMs share (ReadOnlyMany): they boot the
-// identical Factory image, so there is no reason to pay for haCount separate copies of it.
-const haISOName = haCluster + "-iso"
-
 func haVMName(i int) string { return fmt.Sprintf("%s-%d", haCluster, i) }
 
-// haISOManifestTmpl is a standalone DataVolume (not a VM's own dataVolumeTemplate) so every
-// VM's manifest can reference the same one by name instead of each creating its own copy.
-const haISOManifestTmpl = `apiVersion: cdi.kubevirt.io/v1beta1
-kind: DataVolume
-metadata:
-  name: %[1]s
-  namespace: ichor-e2e
-  labels:
-    ichor.maesh.dev/e2e-harness: kubevirt-ha
-spec:
-  source:
-    http:
-      url: https://factory.talos.dev/image/%[2]s/%[3]s/metal-amd64.iso
-  storage:
-    accessModes: [ReadOnlyMany]
-    volumeMode: Filesystem
-    resources:
-      requests:
-        storage: 1Gi
-    storageClassName: ceph-block
-`
-
-// haVMManifestTmpl is vmManifestTmpl with the ISO moved out of dataVolumeTemplates (which
-// always creates a VM-owned copy) into a plain volume reference to the shared DataVolume
-// named by %[2]s.
+// haVMManifestTmpl is vmManifestTmpl (main.go) with the fixed name templated: each of the
+// haCount VMs gets its own ISO and system DataVolume, one dataVolumeTemplate pair per VM.
+//
+// A single ISO DataVolume shared read-only across all three was tried first and does not
+// work on this cluster's storage: rook-ceph's RBD CSI driver rejects ReadOnlyMany for a
+// plain CDI HTTP import outright ("readOnly accessMode is supported only with content
+// source" - confirmed against a real DataVolume), since ReadOnlyMany there is
+// only for a PVC cloned from an existing content source, not a fresh import. Cloning one
+// VM's own ISO DataVolume into the other two as a ROX clone would work but is a second CDI
+// mechanism and a second failure mode to debug, for 2Gi x 2 saved on a cluster with
+// terabytes free - not worth it for a nightly-only scenario.
 const haVMManifestTmpl = `apiVersion: kubevirt.io/v1
 kind: VirtualMachine
 metadata:
@@ -84,6 +66,19 @@ metadata:
 spec:
   runStrategy: Always
   dataVolumeTemplates:
+    - metadata:
+        name: %[1]s-iso
+      spec:
+        source:
+          http:
+            url: https://factory.talos.dev/image/%[2]s/%[3]s/metal-amd64.iso
+        storage:
+          accessModes: [ReadWriteOnce]
+          volumeMode: Filesystem
+          resources:
+            requests:
+              storage: 1Gi
+          storageClassName: ceph-block
     - metadata:
         name: %[1]s-system
       spec:
@@ -125,7 +120,7 @@ spec:
       volumes:
         - name: iso
           dataVolume:
-            name: %[2]s
+            name: %[1]s-iso
         - name: system
           dataVolume:
             name: %[1]s-system
@@ -146,20 +141,9 @@ func upHA() error {
 // bootHAToMaintenance creates the shared ISO DataVolume and haCount VMs referencing it,
 // and waits for every VM to report a pod IP and reach maintenance.
 func bootHAToMaintenance() ([]string, error) {
-	if err := applyManifest(fmt.Sprintf(haISOManifestTmpl, haISOName, talosFactorySchematic, talosVersion)); err != nil {
-		return nil, fmt.Errorf("creating the shared ISO DataVolume: %w", err)
-	}
-	if _, err := pollFor("waiting for the shared ISO DataVolume to import", 3*time.Minute, func() (string, bool) {
-		out, err := utils.Run(exec.Command("kubectl", "-n", namespace, "get", "dv", haISOName,
-			"-o", "jsonpath={.status.phase}"))
-		return "", err == nil && strings.TrimSpace(out) == "Succeeded"
-	}); err != nil {
-		return nil, err
-	}
-
 	for i := range haCount {
 		name := haVMName(i)
-		if err := applyManifest(fmt.Sprintf(haVMManifestTmpl, name, haISOName)); err != nil {
+		if err := applyManifest(fmt.Sprintf(haVMManifestTmpl, name, talosFactorySchematic, talosVersion)); err != nil {
 			return nil, fmt.Errorf("creating VM %s: %w", name, err)
 		}
 	}
@@ -309,10 +293,10 @@ func publishHA(ips []string, talosconfigYAML []byte) error {
 // downHA tears down every object upHA creates, in the reverse order, exactly like down().
 func downHA() error {
 	names := make([]string, haCount)
-	systemDVs := make([]string, haCount)
+	dvs := make([]string, 0, haCount*2)
 	for i := range haCount {
 		names[i] = haVMName(i)
-		systemDVs[i] = haVMName(i) + "-system"
+		dvs = append(dvs, haVMName(i)+"-iso", haVMName(i)+"-system")
 	}
 
 	args := append([]string{"-n", namespace, "delete", "vm"}, names...)
@@ -321,8 +305,8 @@ func downHA() error {
 		return fmt.Errorf("deleting the VMs: %w", err)
 	}
 
-	args = append([]string{"-n", namespace, "delete", "dv"}, systemDVs...)
-	args = append(args, haISOName, "--wait=true", "--timeout=120s", "--ignore-not-found")
+	args = append([]string{"-n", namespace, "delete", "dv"}, dvs...)
+	args = append(args, "--wait=true", "--timeout=120s", "--ignore-not-found")
 	if _, err := utils.Run(exec.Command("kubectl", args...)); err != nil {
 		return fmt.Errorf("deleting the DataVolumes: %w", err)
 	}

@@ -21,7 +21,9 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 
+	"github.com/go-logr/logr"
 	"github.com/open-policy-agent/cert-controller/pkg/rotator"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -82,6 +84,26 @@ func init() {
 
 	utilruntime.Must(ichorv1alpha1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
+}
+
+// logCertStatusBeforeStart logs, once, whether certDir/certName already exists right before
+// mgr.Start below. It is not a guess: controller-runtime's own manager
+// internals confirm that server's own Runnable starts its listener concurrently with the
+// cert-controller rotator that (eventually) writes this file, and that the listener does not
+// retry if it loses that race -- only Kubernetes' pod restart does, by trying again from
+// scratch. Without this line, a brand-new install's first restart or two shows up as
+// CrashLoopBackOff plus a "no such file" TLS error with nothing in the logs saying that is
+// expected, which is indistinguishable from a real misconfiguration.
+func logCertStatusBeforeStart(log logr.Logger, server, certDir, certName string) {
+	path := filepath.Join(certDir, certName)
+	if _, err := os.Stat(path); err != nil {
+		log.Info("certificate not written yet for this server; this is expected on a brand-new "+
+			"install and resolves on its own once cert-controller's rotator writes the Secret and "+
+			"the mounted volume picks it up -- if this server's listener loses that race, the "+
+			"process exits and Kubernetes restarts it, which is one or two expected restarts, not "+
+			"a failure",
+			"server", server, "path", path)
+	}
 }
 
 // nolint:gocyclo
@@ -349,6 +371,13 @@ func main() {
 	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
 		setupLog.Error(err, "Failed to set up ready check")
 		os.Exit(1)
+	}
+
+	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+		logCertStatusBeforeStart(setupLog, "webhook", webhookCertPath, webhookCertName)
+	}
+	if len(metricsCertPath) > 0 {
+		logCertStatusBeforeStart(setupLog, "metrics", metricsCertPath, metricsCertName)
 	}
 
 	setupLog.Info("Starting manager")

@@ -148,22 +148,48 @@ it does not touch `internal/webhook/`.
 matching `UPDATE`s to `talosclusters.ichor.maesh.dev` and denying any
 update that changes `spec.cni.kubeProxy` unless the annotation is present.
 It is wired into `config/default/kustomization.yaml`, so a kustomize-based
-deploy installs it; `api/v1alpha1/suite_test.go` loads the exact same file
-(not a copy) before the CNI specs run, so the test and a real deploy enforce
-the same rule. **It is not yet mirrored into `dist/chart`.** Doing that
-properly needs a values toggle and `_helpers.tpl` namespace templating the
-same way the existing hand-edited chart files do, which is packaging work
-for the Helm chart, not CNI-preset work -- flagged here rather than rushed,
-since a wrong half of it (installed via kustomize, silently absent from a
-Helm install) is worse than an acknowledged gap. Follow-up: add it to
-`dist/chart/templates/`, covered by a drift check the way
-`dist/chart/chart_test.go` already covers the CRDs.
+deploy installs it, and mirrored -- identical below the
+`apiVersion`/`kind`/`metadata.name` lines -- into
+`dist/chart/templates/admission/kubeproxy-switch-policy.yaml`, gated by a
+new `admission.enabled` value (default `true`, independent of
+`webhook.enabled`: this guard is enforced by the apiserver itself, not the
+controller-runtime webhook server, so it still holds while the controller
+is down). `dist/chart/chart_test.go`'s `checkKubeProxySwitchPolicy` guards
+both halves the same way the existing checks guard the webhook
+configuration: it fails if either the `ValidatingAdmissionPolicy` or its
+`ValidatingAdmissionPolicyBinding` is missing from the rendered chart, and
+fails if the Binding's `spec.policyName` doesn't name the Policy this chart
+ships -- a Policy with no Binding, or a Binding naming the wrong Policy,
+guards nothing. Verified by deliberately breaking each half (removing the
+template; retargeting `policyName` to a name that doesn't exist) and
+confirming `go test ./dist/chart/...` fails with a message naming the exact
+drift, then restoring it and confirming the suite is green again -- the
+same bar `dist/chart/chart_test.go`'s own doc comment sets, and the one the
+CRD-`documents[]` chart-drift incident shows matters: an invariant nobody
+has watched fail is not a tested invariant. `api/v1alpha1/suite_test.go`
+also loads `config/admission/kubeproxy-switch-policy.yaml` directly (not a
+copy) before the CNI specs run, so the kustomize path is tested too.
 
-The annotation unblocks the API-level guard only. Running the switch in the
-one safe order -- new side up on every node, verify, then old side down --
-is the reconciler's job, which is out of this change's scope (the
-acceptance bar here is "declare the hand-over workloads and the
-consistency check," not "execute the switch").
+Because a cluster below Kubernetes 1.30 would otherwise install this chart
+successfully with the guard silently absent, `dist/chart/Chart.yaml` now
+declares `kubeVersion: ">=1.30.0-0"` -- `ValidatingAdmissionPolicy` is
+stable, enabled by default, from exactly that version
+(kubernetes.io/docs/reference/access-authn-authz/validating-admission-policy/,
+retrieved 2026-10-25), so an older cluster now fails the install outright
+instead of silently shipping without the guard.
+
+**The annotation unblocks the API-level guard; it does not run the safe
+switch.** `ichor.maesh.dev/confirm-kube-proxy-switch` only lets the
+`kubeProxy` update through admission -- nothing in this change (or
+anywhere else in the codebase yet) brings the new side up on every node,
+verifies it, and then turns the old side off, which is the one safe order
+the design requires once a switch is allowed. Until that exists (the
+reconciler's job, out of this change's scope -- the bar here was "declare
+the hand-over workloads and the consistency check," not "execute the
+switch"), adding the annotation and flipping `kubeProxy` only clears the
+admission guard; actually carrying out the switch safely is a manual,
+unassisted operation. Do not read the annotation's existence as a
+statement that switching is safe to automate yet.
 
 ## Consequences
 
@@ -174,7 +200,13 @@ consistency check," not "execute the switch").
   (1.18.0) that will drift from upstream recommendations over time; bumping
   it is a values.go change plus re-reading the same two source pages, not a
   structural one.
-- The `ValidatingAdmissionPolicy`'s absence from `dist/chart` is a known,
-  tracked gap (above), not a silent one: a cluster installed through the
-  Helm chart today does not enforce the kube-proxy-switch guard; one
-  installed through `make deploy`/`kustomize build config/default` does.
+- The kube-proxy-switch guard now ships identically through both install
+  paths -- `make deploy`/`kustomize build config/default` and the Helm
+  chart -- and `dist/chart/chart_test.go` fails loudly if the two drift
+  again, the same way it already does for the CRDs.
+- A chart install against a pre-1.30 Kubernetes now fails outright
+  (`kubeVersion`), rather than silently shipping without the guard.
+- The annotation is a necessary, not sufficient, condition for a safe
+  `kubeProxy` switch: it only clears admission. Nothing executes the
+  design's required new-side-up/verify/old-side-down sequence yet, so a
+  switch today is a manual operation even once the annotation is set.

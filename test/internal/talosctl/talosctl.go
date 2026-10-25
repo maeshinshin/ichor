@@ -97,6 +97,25 @@ func Kubeconfig(namespace, node string, talosconfig []byte) ([]byte, error) {
 	return []byte(out), err
 }
 
+// Health runs the authenticated `talosctl health`, waiting for etcd, Kubernetes
+// components and every control-plane node to report healthy across the whole cluster --
+// not just one node's own view.
+func Health(namespace string, controlPlaneNodes []string, talosconfig []byte) (string, error) {
+	nodeList := strings.Join(controlPlaneNodes, ",")
+	return run(namespace,
+		[]string{"health", "--control-plane-nodes", nodeList, talosconfigFlag, talosconfigMount, nodesFlag, nodeList},
+		map[string]string{talosconfigKey: string(talosconfig)}, 3*time.Minute)
+}
+
+// EtcdMembers runs the authenticated `talosctl etcd members` against node, listing etcd's
+// own view of cluster membership -- direct evidence of a membership change, not a count
+// derived from TalosMachine objects.
+func EtcdMembers(namespace, node string, talosconfig []byte) (string, error) {
+	return run(namespace,
+		[]string{"etcd", "members", talosconfigFlag, talosconfigMount, nodesFlag, node},
+		map[string]string{talosconfigKey: string(talosconfig)}, time.Minute)
+}
+
 // DecodeAll decodes the concatenated JSON objects talosctl prints for multi-instance
 // resources (it is not a JSON array) into a slice of maps.
 func DecodeAll(raw string) ([]map[string]any, error) {

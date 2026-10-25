@@ -37,11 +37,25 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	"github.com/siderolabs/talos/pkg/machinery/config/machine"
 	"github.com/siderolabs/talos/pkg/machinery/constants"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/cni"
+	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
+
+// ConditionCNIHandover is the TalosCluster.status condition type the CNI
+// hand-over reconciler (internal/controller, ADR 0023) writes once Argo CD
+// reports the CNI's Application Synced and Healthy. Render reads it
+// directly, rather than taking a new parameter every caller would have to
+// thread through, to decide whether to keep rendering the CNI's
+// cluster.inlineManifests entry (see dropHandedOverInlineManifest):
+// Talos's own ManifestApplyController re-applies inlineManifests during a
+// Kubernetes upgrade, so a stale entry would roll the CNI back to
+// whatever Ichor originally inlined it as.
+const ConditionCNIHandover = "CNIHandover"
 
 // layerOrder maps a TalosConfigPatch's layer to its position in the
 // bottom-up patch stack ("Patch layers" in docs/design/architecture.md).
@@ -141,6 +155,10 @@ func BuildConfig(
 	ordered, err := SelectPatches(cluster, m, candidates)
 	if err != nil {
 		return nil, err
+	}
+
+	if apimeta.IsStatusConditionTrue(cluster.Status.Conditions, ConditionCNIHandover) {
+		ordered = dropHandedOverInlineManifest(ordered)
 	}
 
 	cfg, err = applyPatches(cfg, ordered)
@@ -305,6 +323,55 @@ func selectorMatches(p *ichorv1alpha1.TalosConfigPatch, m *ichorv1alpha1.TalosMa
 	}
 
 	return sel.Matches(labels.Set(m.Spec.NodeLabels)), nil
+}
+
+// dropHandedOverInlineManifest returns ordered with the CNI's
+// cni.InlineManifestName entry removed from every Config document's
+// ClusterConfig.ClusterInlineManifests. It never mutates the caller's own
+// TalosConfigPatch objects (principle 5: the controller renders from
+// ingredients, it does not rewrite them) -- a patch is only ever
+// deep-copied if it actually carries the entry; every other patch passes
+// through as the same pointer.
+func dropHandedOverInlineManifest(ordered []*ichorv1alpha1.TalosConfigPatch) []*ichorv1alpha1.TalosConfigPatch {
+	out := make([]*ichorv1alpha1.TalosConfigPatch, len(ordered))
+
+	for i, p := range ordered {
+		out[i] = p
+
+		for di, doc := range p.Spec.Documents {
+			if doc.Config == nil || doc.Config.ClusterConfig == nil {
+				continue
+			}
+
+			kept := withoutInlineManifest(doc.Config.ClusterConfig.ClusterInlineManifests, cni.InlineManifestName)
+			if len(kept) == len(doc.Config.ClusterConfig.ClusterInlineManifests) {
+				continue // this document never carried the entry
+			}
+
+			if out[i] == p {
+				out[i] = p.DeepCopy()
+			}
+
+			out[i].Spec.Documents[di].Config.ClusterConfig.ClusterInlineManifests = kept
+		}
+	}
+
+	return out
+}
+
+// withoutInlineManifest returns manifests without any entry named name, as
+// a fresh slice (never manifests' own backing array, which dropHandedOverInlineManifest's
+// caller may still hold a pointer to via the original, unmodified patch).
+func withoutInlineManifest(manifests []*typedconfig.ClusterInlineManifest, name string) []*typedconfig.ClusterInlineManifest {
+	var kept []*typedconfig.ClusterInlineManifest
+
+	for _, entry := range manifests {
+		if entry.InlineManifestName != name {
+			kept = append(kept, entry)
+		}
+	}
+
+	return kept
 }
 
 // applyPatches merges each patch's documents onto cfg in the given order,

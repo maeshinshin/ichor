@@ -1,0 +1,97 @@
+/*
+Copyright 2026 maeshinshin.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package controller
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/cosi-project/runtime/pkg/resource"
+	"github.com/cosi-project/runtime/pkg/safe"
+	"github.com/cosi-project/runtime/pkg/state"
+	"github.com/siderolabs/talos/pkg/machinery/client"
+	"github.com/siderolabs/talos/pkg/machinery/resources/hardware"
+	"github.com/siderolabs/talos/pkg/machinery/resources/network"
+)
+
+// NewMachineryMaintenanceClient dials endpoint's Talos API in maintenance
+// mode -- unauthenticated, which is all a node with no configuration yet can
+// offer (docs/design/architecture.md "Nodes") -- and adapts the connection
+// to MaintenanceClient. It is what cmd/main.go wires into
+// DiscoveryReconciler.MaintenanceClient.
+func NewMachineryMaintenanceClient(ctx context.Context, endpoint string) (MaintenanceClient, error) {
+	c, err := client.New(ctx, client.WithMaintenanceMode(endpoint, nil))
+	if err != nil {
+		return nil, fmt.Errorf("dialing maintenance Talos API: %w", err)
+	}
+
+	return &machineryMaintenanceClient{c: c}, nil
+}
+
+// machineryMaintenanceClient adapts a real *client.Client, connected in
+// maintenance mode, to MaintenanceClient.
+type machineryMaintenanceClient struct {
+	c *client.Client
+}
+
+// Close releases the gRPC connection, through the same io.Closer convention
+// talosclient_machinery.go uses.
+func (m *machineryMaintenanceClient) Close() error {
+	return m.c.Close()
+}
+
+// Identity reads hardware.SystemInformation for the SMBIOS UUID, serial
+// number and manufacturer, and network.LinkStatus for the permanent MAC
+// address of every physical link. A missing SystemInformation resource (not
+// every platform reports SMBIOS data) is not an error here: it leaves the
+// identity's UUID and serial empty, which DiscoveryReconciler's
+// strongIdentity treats as a weak key, exactly as architecture.md's "Nodes"
+// requires.
+func (m *machineryMaintenanceClient) Identity(ctx context.Context) (HardwareIdentity, error) {
+	var id HardwareIdentity
+
+	sysInfo, err := safe.StateGet[*hardware.SystemInformation](ctx, m.c.COSI, resource.NewMetadata(
+		hardware.NamespaceName, hardware.SystemInformationType, hardware.SystemInformationID, resource.VersionUndefined,
+	))
+
+	switch {
+	case err == nil:
+		spec := sysInfo.TypedSpec()
+		id.UUID, id.Serial, id.Manufacturer = spec.UUID, spec.SerialNumber, spec.Manufacturer
+	case state.IsNotFoundError(err):
+		// No SMBIOS data on this platform (e.g. virtio-blk-style virtualized
+		// nodes); id stays empty, which is correctly a weak key.
+	default:
+		return id, fmt.Errorf("reading system information: %w", err)
+	}
+
+	links, err := safe.StateListAll[*network.LinkStatus](ctx, m.c.COSI)
+	if err != nil {
+		return id, fmt.Errorf("listing link status: %w", err)
+	}
+
+	for i := range links.Len() {
+		spec := links.Get(i).TypedSpec()
+		if !spec.Physical() || len(spec.PermanentAddr) == 0 {
+			continue
+		}
+
+		id.MACAddresses = append(id.MACAddresses, spec.PermanentAddr.String())
+	}
+
+	return id, nil
+}

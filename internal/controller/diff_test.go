@@ -80,13 +80,13 @@ func TestChangedPaths_NoDifference(t *testing.T) {
 		t.Fatalf("Render: %v", err)
 	}
 
-	paths, err := changedPaths(cfg, cfg)
+	paths, err := ChangedPaths(cfg, cfg)
 	if err != nil {
 		t.Fatalf("changedPaths: %v", err)
 	}
 
 	if len(paths) != 0 {
-		t.Fatalf("changedPaths(identical configs) = %v, want none", paths)
+		t.Fatalf("ChangedPaths(identical configs) = %v, want none", paths)
 	}
 }
 
@@ -112,7 +112,7 @@ func TestChangedPaths_LegacyFieldChange(t *testing.T) {
 		t.Fatalf("Render(after): %v", err)
 	}
 
-	paths, err := changedPaths(before, after)
+	paths, err := ChangedPaths(before, after)
 	if err != nil {
 		t.Fatalf("changedPaths: %v", err)
 	}
@@ -149,7 +149,7 @@ func TestChangedPaths_StandaloneDocumentAdded(t *testing.T) {
 		t.Fatalf("Render(after): %v", err)
 	}
 
-	paths, err := changedPaths(before, after)
+	paths, err := ChangedPaths(before, after)
 	if err != nil {
 		t.Fatalf("changedPaths: %v", err)
 	}
@@ -160,7 +160,7 @@ func TestChangedPaths_StandaloneDocumentAdded(t *testing.T) {
 }
 
 func TestChangedPaths_MalformedYAML(t *testing.T) {
-	if _, err := changedPaths([]byte("{{{not valid yaml"), []byte("{{{not valid yaml")); err == nil {
-		t.Fatal("changedPaths(malformed YAML) = nil error, want one")
+	if _, err := ChangedPaths([]byte("{{{not valid yaml"), []byte("{{{not valid yaml")); err == nil {
+		t.Fatal("ChangedPaths(malformed YAML) = nil error, want one")
 	}
 }

@@ -113,6 +113,80 @@ kinds added, it is **96,792 bytes served, 6.2% of the ceiling** (210,130 bytes o
 remains in no way the constraint — the three new kinds added about 15 KB served between them,
 and there is room for the rest of Talos's modern document kinds many times over.
 
+## Follow-up: pkg/fieldmeta rules for the three new kinds
+
+Making the three kinds representable means a user can now write a path `pkg/fieldmeta` has no
+rule for, which would silently fall through to its reboot-required default. The default being
+*safe* does not make it *correct*: the dangerous direction is an install-time-only field left at
+reboot-required, since a reboot that cannot possibly take effect gets re-detected as drift and
+rebooted again -- a loop. The safe-but-wasteful direction is a live-safe field left at
+reboot-required: an unneeded reboot, not a loop, since the reboot (if performed) still leaves the
+node converged with the rendered config afterwards.
+
+**Verified, not guessed, and cited:**
+
+- Talos's own documented no-reboot allow-list (`docs.siderolabs.com`, "Edit Machine
+  Configuration" guide, v1.13) lists exact config paths (`.machine.network`, `.machine.kubelet`,
+  `.cluster`, …) that a no-reboot apply accepts; it says plainly that anything outside that list
+  makes a no-reboot apply "fail[] if the change contains any fields that can not be updated
+  without a reboot." None of `VolumeConfig`, `UserVolumeConfig` or `RawVolumeConfig` appear on it
+  at all. That alone rules out marking any of their paths `safe`.
+- Talos's own volume manager
+  (`internal/app/machined/pkg/controllers/block/volume_manager.go`'s `processVolumeConfig`) runs
+  a state machine per volume: `Missing`/`Waiting` → `LocateAndProvision` (consults the disk
+  selector) → `Located` → `Grow` → `Provisioned` → `HandleEncryption` → `Prepared` → `Format` →
+  `Ready`, where `Ready` does nothing further. The disk selector and the grow step are only ever
+  reached on the way to a volume's *first* `Ready`; nothing re-enters that path afterwards. This
+  directly confirms, for all three kinds (the state machine is shared, not system-volume-specific
+  -- see `internal/.../volumeconfig/user_volumes.go`'s `UserVolumeTransformer`, which feeds the
+  same `VolumeConfig` resource type), the behavior architecture.md already documents for
+  `EPHEMERAL` specifically: a selector change on an already-provisioned volume does nothing.
+- `internal/controller/talosmachine_controller.go` (read, not modified — out of scope) was read to
+  check the loop concern directly: its `switch` on `impact` handles `InstallTimeOnly` *before*
+  `RebootRequired`, and that case returns through `r.ready(...)` with `ConditionFalse` and a
+  "needs a reset and reinstall" message — it never calls `r.refuseReboot` (the only path that
+  actually reboots a node). **Confirmed: an install-time-only classification cannot cause a
+  reboot loop**, here or for any existing rule; it is purely reported.
+
+**Classified, with the reasoning above:** `VolumeConfig.provisioning` (disk selector, min/max
+size, grow) is `installTimeOnly` — the same classification `machine.install` already has, for the
+matching reason architecture.md gives: changing which disk a system volume lives on is a
+reset-and-reinstall operation. This is the only new rule added.
+
+**Deliberately left at the reboot-required default, because it was not verified rather than
+because it was verified safe:**
+
+- `VolumeConfig.filesystem`, `.encryption` and `.mount`. The same state machine gates `Format` and
+  `HandleEncryption` the same way it gates provisioning, which is suggestive, but changing
+  encryption or filesystem settings is consequential enough that a suggestive read did not seem
+  like enough to act on within this change.
+- `VolumeConfig.trim` and `.scrub`. These are read by their own continuously-scheduled
+  controllers (`volume_trim.go`, `fs_scrub.go`), outside the provisioning state machine entirely,
+  which argues for `safe` — but that is inference from a different controller's shape, not a
+  statement this change found anywhere, so it stays at the default too.
+- Any `UserVolumeConfig` or `RawVolumeConfig` path. Architecture.md states that assigning
+  `storage` or `userVolume` to a previously unused disk does *not* need a reset, which rules out
+  `installTimeOnly`; the no-reboot allow-list finding above rules out `safe`. Reboot-required is
+  each kind's correct classification by elimination, needing no rule at all —
+  `TestAssess_UserAndRawVolumeConfigStayRebootRequired` pins this so a future change does not
+  "fix" it into something wrong.
+
+**`Unsupported` was considered for the maxSize-shrink case and rejected.** Architecture.md records
+that a *lowered* `maxSize` on an existing volume is silently ignored (partitions only ever grow) —
+a real gap, but not one `Impact.Unsupported` can hold without changing its meaning:
+`Unsupported` is specifically "needs a newer Talos version than the cluster's pinned contract"
+(`Assess`'s own doc comment, and every existing use of it), a per-*path*, version-gated question.
+Whether a `maxSize` change is a no-op is a per-*value* question — the same shrink value is a no-op
+on an existing volume and a perfectly normal initial size on a brand-new one — and `Assess` only
+ever sees changed paths, never old/new values or whether the volume already exists. Overloading
+`Unsupported` (or `RebootRequired`, or a new field) to mean "this specific value won't do what you
+asked" would conflate two different failure modes behind one boolean, which is the kind of
+silent-wrongness this project otherwise tries hard to avoid. The gap stays exactly where
+architecture.md already put it: a controller-side detection problem ("Ichor has to detect that
+itself and report 'accepted, no effect'"), explicitly out of this change's scope
+(`internal/controller/` untouched). `Impact`'s three fields were sufficient for what this change
+needed to express; no fourth field or new axis was added.
+
 ## Consequences
 
 - Disk roles have a typed, schema-validated representation for everything except the

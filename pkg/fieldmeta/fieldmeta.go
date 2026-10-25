@@ -116,6 +116,42 @@ var rules = []rule{
 	{prefix: "cluster.apiServer", safe: true},
 	{prefix: "cluster.controllerManager", safe: true},
 	{prefix: "cluster.scheduler", safe: true},
+
+	// VolumeConfig.provisioning (which disk a system volume -- STATE or
+	// EPHEMERAL -- lives on, and its min/max size) is install-time-only,
+	// the same as machine.install and for the same underlying reason:
+	// architecture.md's "Nodes" section says plainly that changing which
+	// disk `system` or `ephemeral` lives on later is a reset-and-reinstall
+	// operation. Confirmed independently in Talos's own source
+	// (internal/app/machined/pkg/controllers/block/volume_manager.go's
+	// processVolumeConfig): the disk selector is only consulted, and the
+	// partition only grown, while a volume is in the Waiting/Missing/
+	// Located phase; once a volume reaches VolumePhaseReady the state
+	// machine does nothing further, so neither a later selector nor size
+	// change does anything until the volume is reset back to missing.
+	//
+	// VolumeConfig.filesystem, .encryption and .mount are deliberately NOT
+	// included: whether changing them on an already-provisioned volume is
+	// live, reboot-sufficient or install-time-only was not verified (the
+	// state machine's Format/HandleEncryption steps are gated the same way
+	// provisioning is, which suggests install-time-only, but changing
+	// encryption or filesystem settings is consequential enough that a
+	// suggestive read isn't enough to act on), so they stay at the
+	// reboot-required default. .trim and .scrub are also excluded on
+	// purpose: both are read by their own continuously-scheduled
+	// controllers (volume_trim.go, fs_scrub.go), not this provisioning
+	// state machine, and so are very likely live -- but that is also not
+	// independently confirmed, so they too stay at the default rather than
+	// being guessed into "safe".
+	//
+	// UserVolumeConfig and RawVolumeConfig deliberately have no entry:
+	// architecture.md says assigning `storage` or `userVolume` to a
+	// previously unused disk does not need a reset, and Talos's own
+	// documented no-reboot allow-list (docs.siderolabs.com, "Edit Machine
+	// Configuration") does not mention any volume config kind, so the
+	// reboot-required default -- not installTimeOnly, not safe -- is each
+	// kind's correct classification already, with no rule needed.
+	{prefix: "VolumeConfig.provisioning", installTimeOnly: true},
 }
 
 func matchesPrefix(path, prefix string) bool {

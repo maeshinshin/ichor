@@ -89,6 +89,9 @@ const (
 	// CEL selector fixtures shared across disk-role tests.
 	testEphemeralDiskSelector = `disk.wwid == "eph"`
 	testStorageDiskSelector   = `disk.wwid == "store"`
+
+	// testRoleWorker is the machine role fixture shared across tests.
+	testRoleWorker = "worker"
 )
 
 func newTestBundle(t *testing.T) *secrets.Bundle {
@@ -128,7 +131,7 @@ func newTestMachine(clusterName string) *ichorv1alpha1.TalosMachine {
 			ClusterRef:    corev1.LocalObjectReference{Name: clusterName},
 			Identity:      ichorv1alpha1.TalosMachineIdentity{UUID: testInitMachineUUID},
 			Endpoint:      "10.0.0.10:50000",
-			Role:          "worker",
+			Role:          testRoleWorker,
 			ApprovalState: ichorv1alpha1.MachineApprovalStateApproved,
 		},
 	}
@@ -143,7 +146,7 @@ func sysctlPatch(clusterName string, params map[string]string) ichorv1alpha1.Tal
 		Name: "fixture-sysctl", Namespace: testNamespace,
 		Spec: ichorv1alpha1.TalosConfigPatchSpec{
 			ClusterRef: corev1.LocalObjectReference{Name: clusterName},
-			Layer:      "cluster",
+			Layer:      cniPatchLayer,
 			Documents: []ichorv1alpha1.TalosConfigPatchDocument{{
 				Kind:         kindSysctlConfig,
 				SysctlConfig: &typedconfig.SysctlConfigV1Alpha1{Params: params},
@@ -165,7 +168,7 @@ func legacyConfigPatch(clusterName string) ichorv1alpha1.TalosConfigPatch {
 	cfg := &typedconfig.Config{
 		ConfigVersion: "v1alpha1",
 		MachineConfig: &typedconfig.MachineConfig{
-			MachineType:     "worker",
+			MachineType:     testRoleWorker,
 			MachineCertSANs: []string{"10.0.0.10"},
 		},
 		ClusterConfig: &typedconfig.ClusterConfig{
@@ -177,7 +180,7 @@ func legacyConfigPatch(clusterName string) ichorv1alpha1.TalosConfigPatch {
 		Name: "fixture-legacy", Namespace: testNamespace,
 		Spec: ichorv1alpha1.TalosConfigPatchSpec{
 			ClusterRef: corev1.LocalObjectReference{Name: clusterName},
-			Layer:      "cluster",
+			Layer:      cniPatchLayer,
 			Documents:  []ichorv1alpha1.TalosConfigPatchDocument{{Kind: "Config", Config: cfg}},
 		},
 	}

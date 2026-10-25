@@ -18,6 +18,7 @@ package cli
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -80,11 +81,23 @@ func newKubeClientFromBytes(data []byte) (client.Client, error) {
 	return newKubeClientForConfig(cfg)
 }
 
+// newKubeClientForConfig is the one place every CLI command's
+// Kubernetes client comes from. It requests strict field validation
+// (architecture.md's "Typed configuration" section: no admission webhook
+// for this, "Ichor's own client" is strict instead) -- the API server's
+// plain behavior for an unknown field is to prune it silently (an "x-kubernetes-
+// pruning"-generated warning header, not an error; confirmed by trying
+// it, not assumed), which would let a typo or a since-dropped field name
+// (e.g. one of the nine secret fields removed from the Config mirror
+// type) disappear into a CR with no sign anything was wrong. kubectl
+// already defaults to strict, so a human applying the same YAML by hand
+// is already covered; this is the one gap that was `ichor`'s own clients
+// specifically.
 func newKubeClientForConfig(cfg *rest.Config) (client.Client, error) {
 	scheme, err := cliScheme()
 	if err != nil {
 		return nil, err
 	}
 
-	return client.New(cfg, client.Options{Scheme: scheme})
+	return client.New(cfg, client.Options{Scheme: scheme, FieldValidation: metav1.FieldValidationStrict})
 }

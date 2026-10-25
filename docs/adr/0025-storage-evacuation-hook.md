@@ -2,6 +2,8 @@
 
 Status: Accepted · Date: 2026-10-25 · Design section: 4.4 (Storage)
 
+Decided: Layer 4's storage-system side: `EvacuationHook` (write side) plus a preset-independent `EvacuationStatus` function (read side), both verified against longhorn-manager v1.9.1's own controller source
+
 ## Context
 
 ADR 0023 built layer 1 of the design's four-layer storage split (Talos-side preparation) and

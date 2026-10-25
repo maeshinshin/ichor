@@ -2,6 +2,8 @@
 
 Status: Accepted · Date: 2026-10-25 · Design section: CLI and UI, roadmap item 5
 
+Decided: Split the Connect read/approval API into `ClusterService`/`MachineService`/`NodeService` and fixed their message shapes
+
 ## Context
 
 Phase 5 is "read-only UI, approval UI, backup and restore, client

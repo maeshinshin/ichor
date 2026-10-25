@@ -2,6 +2,8 @@
 
 Status: Accepted · Date: 2026-10-25 · Design section: "Typed configuration", "Monitoring and air gap"
 
+Decided: Private registry auth through `TalosCluster.spec.registries[].authSecretRef`, resolved and injected as the system layer by `pkg/render`
+
 ## Context
 
 ADR 0003's secret-fields follow-up dropped `RegistryAuthConfig.{password,auth,identityToken}`

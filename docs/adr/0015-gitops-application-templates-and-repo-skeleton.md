@@ -2,6 +2,8 @@
 
 Status: Accepted · Date: 2026-10-25 · Design section: "GitOps and Argo CD" (and "Bootstrap")
 
+Decided: Built GitOps `Application` as a hand-rolled type (`pkg/gitops`) behind one constructor, plus a policy-free repo skeleton
+
 ## Context
 
 Phase 4 needed two things out of `pkg/gitops`: a way to build Argo CD

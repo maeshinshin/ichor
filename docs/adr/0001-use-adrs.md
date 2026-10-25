@@ -2,6 +2,8 @@
 
 Status: Accepted · Date: 2026-10-24 · Design section: —
 
+Decided: Record decisions as one-file-per-decision ADRs, linked from the PR that makes them
+
 ## Context
 
 The design document leaves defaults, naming and library choices to whoever

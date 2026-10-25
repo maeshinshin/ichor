@@ -18,6 +18,9 @@ package controller
 
 import (
 	"context"
+	"errors"
+	"sync/atomic"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -77,10 +80,18 @@ const (
 	uuidLink      = "30303030-3030-3030-3030-303030303030"
 	uuidCollision = "40404040-4040-4040-4040-404040404040"
 	uuidApproval  = "50505050-5050-5050-5050-505050505050"
+	uuidMixed     = "60606060-6060-6060-6060-606060606060"
 
 	// testMAC is the permanent MAC address every test below that doesn't
 	// care about its specific value reuses.
 	testMAC = "aa:bb:cc:dd:ee:ff"
+
+	// testCIDR is RFC 5737's TEST-NET-1, reused by every EnumerateCandidates/DiscoverAll test
+	// that needs a full /24 -- documentation-only address space, never a real network.
+	testCIDR = "192.0.2.0/24"
+
+	// testAddr is one address out of testCIDR, reused by tests that only need a single candidate.
+	testAddr = "192.0.2.1"
 )
 
 var _ = Describe("strongIdentity", func() {
@@ -221,5 +232,158 @@ var _ = Describe("DiscoveryReconciler.Discover", func() {
 		got := fetchMachine(m)
 		Expect(got.Status.Conditions).To(BeEmpty())
 		Expect(got.Status.AppliedConfigHash).To(BeEmpty())
+	})
+})
+
+// None of the tests below ever construct the real MaintenanceClient
+// (NewMachineryMaintenanceClient): every MaintenanceClient factory here is
+// a fake that cannot, even by accident, open a socket. That matters more
+// than usual for this file -- EnumerateCandidates and DiscoverAll exist
+// specifically to turn declared ranges into connection attempts, on a
+// workstation that can also reach a real network.
+var _ = Describe("EnumerateCandidates", func() {
+	It("returns nothing when discovery is not declared at all", func() {
+		Expect(EnumerateCandidates(&ichorv1alpha1.TalosCluster{})).To(BeEmpty())
+	})
+
+	It("pairs each address with Talos's fixed maintenance port", func() {
+		cluster := &ichorv1alpha1.TalosCluster{Spec: ichorv1alpha1.TalosClusterSpec{
+			Discovery: &ichorv1alpha1.TalosClusterDiscovery{Addresses: []string{"192.0.2.10", "192.0.2.11"}},
+		}}
+
+		Expect(EnumerateCandidates(cluster)).To(ConsistOf("192.0.2.10:50000", "192.0.2.11:50000"))
+	})
+
+	It("expands a /24 CIDR to every address in it, same fixed port", func() {
+		cluster := &ichorv1alpha1.TalosCluster{Spec: ichorv1alpha1.TalosClusterSpec{
+			Discovery: &ichorv1alpha1.TalosClusterDiscovery{CIDRs: []string{testCIDR}},
+		}}
+
+		got := EnumerateCandidates(cluster)
+		Expect(got).To(HaveLen(256))
+		Expect(got).To(ContainElement("192.0.2.0:50000"))
+		Expect(got).To(ContainElement("192.0.2.255:50000"))
+	})
+
+	It("combines addresses and cidrs", func() {
+		cluster := &ichorv1alpha1.TalosCluster{Spec: ichorv1alpha1.TalosClusterSpec{
+			Discovery: &ichorv1alpha1.TalosClusterDiscovery{
+				Addresses: []string{"198.51.100.5"},
+				CIDRs:     []string{testCIDR},
+			},
+		}}
+
+		Expect(EnumerateCandidates(cluster)).To(HaveLen(257))
+	})
+})
+
+var _ = Describe("DiscoveryReconciler.DiscoverAll", func() {
+	It("opens no connection at all when discovery is not declared (the default)", func() {
+		cluster := &ichorv1alpha1.TalosCluster{Namespace: tmNamespace, Name: "no-discovery"}
+
+		var calls atomic.Int32
+		factory := func(context.Context, string) (MaintenanceClient, error) {
+			calls.Add(1)
+
+			return nil, errors.New("must never be called")
+		}
+
+		r := &DiscoveryReconciler{Client: k8sClient, MaintenanceClient: factory}
+
+		results, err := r.DiscoverAll(ctx, cluster)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(results).To(BeEmpty())
+		Expect(calls.Load()).To(BeZero())
+	})
+
+	It("never runs more than discoveryConcurrency connection attempts at once", func() {
+		cluster := &ichorv1alpha1.TalosCluster{Namespace: tmNamespace, Name: "concurrency", Spec: ichorv1alpha1.TalosClusterSpec{
+			Discovery: &ichorv1alpha1.TalosClusterDiscovery{CIDRs: []string{testCIDR}}, // 256 candidates
+		}}
+
+		var inFlight, maxInFlight atomic.Int32
+		factory := func(context.Context, string) (MaintenanceClient, error) {
+			n := inFlight.Add(1)
+			defer inFlight.Add(-1)
+
+			for {
+				m := maxInFlight.Load()
+				if n <= m || maxInFlight.CompareAndSwap(m, n) {
+					break
+				}
+			}
+
+			time.Sleep(5 * time.Millisecond) // simulated work only -- never a real dial.
+
+			return nil, errors.New("simulated unreachable")
+		}
+
+		r := &DiscoveryReconciler{Client: k8sClient, MaintenanceClient: factory}
+
+		_, err := r.DiscoverAll(ctx, cluster)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(int(maxInFlight.Load())).To(BeNumerically("<=", discoveryConcurrency))
+	})
+
+	It("does not hang on an address that never answers", func() {
+		cluster := &ichorv1alpha1.TalosCluster{Namespace: tmNamespace, Name: "slow", Spec: ichorv1alpha1.TalosClusterSpec{
+			Discovery: &ichorv1alpha1.TalosClusterDiscovery{Addresses: []string{testAddr, "192.0.2.2"}},
+		}}
+
+		factory := func(ctx context.Context, _ string) (MaintenanceClient, error) {
+			<-ctx.Done() // a real dial against a silent address blocks the same way.
+
+			return nil, ctx.Err()
+		}
+
+		r := &DiscoveryReconciler{Client: k8sClient, MaintenanceClient: factory}
+
+		start := time.Now()
+		results, err := r.DiscoverAll(ctx, cluster)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(results).To(BeEmpty())
+		Expect(time.Since(start)).To(BeNumerically("<", 5*time.Second))
+	})
+
+	It("records nothing -- no event, no error -- for an address that fails to connect", func() {
+		cluster := &ichorv1alpha1.TalosCluster{Namespace: tmNamespace, Name: "silent", Spec: ichorv1alpha1.TalosClusterSpec{
+			Discovery: &ichorv1alpha1.TalosClusterDiscovery{Addresses: []string{testAddr}},
+		}}
+
+		recorder := record.NewFakeRecorder(10)
+		factory := func(context.Context, string) (MaintenanceClient, error) {
+			return nil, errors.New("connection refused")
+		}
+
+		r := &DiscoveryReconciler{Client: k8sClient, Recorder: recorder, MaintenanceClient: factory}
+
+		results, err := r.DiscoverAll(ctx, cluster)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(results).To(BeEmpty())
+		Consistently(recorder.Events).ShouldNot(Receive())
+	})
+
+	It("returns the machines it does discover alongside many that never answer", func() {
+		cluster := &ichorv1alpha1.TalosCluster{Namespace: tmNamespace, Name: "mixed", Spec: ichorv1alpha1.TalosClusterSpec{
+			Discovery: &ichorv1alpha1.TalosClusterDiscovery{Addresses: []string{testAddr, "192.0.2.2", "192.0.2.3"}},
+		}}
+
+		const reachable = "192.0.2.2:50000"
+		factory := func(_ context.Context, endpoint string) (MaintenanceClient, error) {
+			if endpoint != reachable {
+				return nil, errors.New("connection refused")
+			}
+
+			return &fakeMaintenanceClient{identity: HardwareIdentity{
+				UUID: uuidMixed, Serial: "S1", MACAddresses: []string{testMAC},
+			}}, nil
+		}
+
+		r := &DiscoveryReconciler{Client: k8sClient, MaintenanceClient: factory}
+
+		results, err := r.DiscoverAll(ctx, cluster)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(results).To(HaveLen(1))
+		Expect(results[0].Name).To(Equal(uuidMixed))
 	})
 })

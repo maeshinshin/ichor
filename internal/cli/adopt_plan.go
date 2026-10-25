@@ -25,7 +25,6 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	mruntime "github.com/siderolabs/talos/pkg/machinery/config/types/runtime"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/controller"
@@ -102,10 +101,8 @@ func buildAdoptPlan(
 	}
 
 	candidate := ichorv1alpha1.TalosConfigPatch{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "adopt-" + m.Name,
-			Namespace: cluster.Namespace,
-		},
+		Name:      "adopt-" + m.Name,
+		Namespace: cluster.Namespace,
 		Spec: ichorv1alpha1.TalosConfigPatchSpec{
 			ClusterRef: corev1.LocalObjectReference{Name: cluster.Name},
 			Layer:      "machine",
@@ -139,8 +136,8 @@ func buildAdoptPlan(
 func groupChangedPaths(paths []string) (wantSysctl, wantKernelModule bool, legacy []string) {
 	for _, p := range paths {
 		kind := p
-		if i := strings.IndexByte(p, '.'); i >= 0 {
-			kind = p[:i]
+		if before, _, ok := strings.Cut(p, "."); ok {
+			kind = before
 		}
 
 		switch kind {

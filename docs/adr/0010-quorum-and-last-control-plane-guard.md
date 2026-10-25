@@ -663,11 +663,74 @@ and a violation sitting in the same file.
   the same permissions already granted for `list`/`watch` on
   `talosmachines`; it is a different code path to the same API server,
   not a different credential.
-- Three go/parser guards now exist across this codebase
+- Three go/parser guards existed across this codebase at this point
   (`TestFixtureUUIDsAreUnique`, `TestAcquireDisruptiveLockIsTheOnlyAcquireCallSite`,
   `TestTalosMachineListCountingStaysCentralized`), with near-identical
   glob/parse/walk scaffolding and, for the latter two, the same "method
   or type allowed from exactly one place" rule. Not shared into a common
-  helper: doing so needs a fourth, test-only package for three ~100-line
-  files to import, which costs more than the scaffolding duplication it
-  would remove. Worth revisiting if a fourth guard shows up.
+  helper at the time: doing so needed a fourth, test-only package for
+  three ~100-line files to import, which cost more than the scaffolding
+  duplication it would remove. Flagged to revisit if a fourth guard
+  showed up -- see the section below for what happened when one did.
+
+### A fourth guard, and why consolidating it did not pay for itself
+
+A fourth go/parser guard, `TestAPIReaderIsAlwaysTheDirectReader`, was
+added right after this one: both `client.Client` (cached) and
+`client.Reader`'s direct implementation satisfy the same `client.Reader`
+interface every `APIReader` field is typed as, so `APIReader:
+mgr.GetClient()` compiles and runs, silently reopening every hole this
+ADR's appendix closes, with no signal from the type system at all. It
+scans `cmd/main.go` and `internal/webhook/v1alpha1` (the only two places
+an `APIReader` field is ever wired) for any value assigned to a field or
+key named `APIReader` that is not exactly a call to `GetAPIReader`.
+Verified the same way as the others: `APIReader: mgr.GetAPIReader()` was
+deliberately changed to `APIReader: mgr.GetClient()` in both `cmd/main.go`
+and the webhook's `SetupTalosMachineWebhookWithManager`, confirmed to
+fail in each case, then reverted.
+
+With a fourth guard landed, the reason consolidation had been deferred --
+"needs a fourth, test-only package" -- no longer held: all four guards
+now live in the same package (`internal/controller`), so a shared helper
+needs nothing more than an ordinary file in that same package, no new
+package at all. That changed condition was reason enough to actually try
+it, not just note it again.
+
+The attempt: a `forEachParsedFile(t, fset, dirs, pattern, skip, visit)`
+helper, in its own file, doing the glob-and-parse loop every guard
+repeated, with `isTestFile` moved alongside it; each of the four guards
+rewritten to supply only its own rule as `visit`. All four were
+re-verified exactly as before -- each deliberately broken again, in the
+already-refactored form, and confirmed to still fail with the same
+message, before being reverted back to passing.
+
+The result did not pay for itself. Measured in lines:
+
+| | before | after |
+|---|---|---|
+| `acquire_guard_test.go` | 103 | 85 |
+| `countplanes_guard_test.go` | 131 | 114 |
+| `uuid_guard_test.go` | 118 | 109 |
+| `apireader_guard_test.go` | 129 | 112 |
+| `guard_scaffold_test.go` (new) | -- | 73 |
+| **total** | **481** | **493** |
+
+Each guard did shrink -- the shared loop is real, and saves something
+every time -- but the four savings together (18 + 17 + 9 + 17 = 61 lines)
+were smaller than the new helper file's own cost (73 lines: a license
+header, the doc comment explaining why it exists and which four tests
+use it, and the function itself). Four callers were not enough for this
+particular helper to earn its own file. The consolidation was reverted;
+all four guards stayed self-contained, as they were before this section,
+and were re-verified once more (deliberately broken, confirmed failing,
+reverted) in that same self-contained form to confirm the revert itself
+introduced no regression.
+
+This is the opposite conclusion from `acquireDisruptiveLock`'s own
+centralization earlier in this ADR, and deliberately so: that
+consolidation wasn't justified by a line count at all, but by a safety
+property no amount of line-counting captures -- one function is either
+reviewed or it isn't, where two independently-written copies can each
+look reviewed and still disagree. Test *scaffolding* has no equivalent
+property to protect; it is not itself a safety rule, so it is fair to
+judge purely on whether it makes the code smaller, and here it did not.

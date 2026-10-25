@@ -355,4 +355,16 @@ ui-ci: ui-typecheck ui-lint ui-build ## Install, type-check, lint and build the 
 build-ichor-ui: ui-build ## Build the ichor-ui binary with the real UI embedded.
 	go build -tags uiembed -o bin/ichor-ui ./cmd/ichor-ui
 
+##@ ichor-ui RBAC
+
+# internal/uiapi's own +kubebuilder:rbac markers live behind the ichorui_rbac build tag
+# (see internal/uiapi/rbac_markers.go) so the `manifests` target above -- which scans
+# paths="./..." with no special tags -- never sees them and never merges them into
+# manager-role. This target is the only one that passes --load-build-tags=ichorui_rbac,
+# so the UI backend's ClusterRole stays in its own file, generated on its own.
+
+.PHONY: manifests-ichor-ui
+manifests-ichor-ui: controller-gen ## Generate the UI backend's own ClusterRole, kept separate from manager-role.
+	"$(CONTROLLER_GEN)" --load-build-tags=ichorui_rbac rbac:roleName=ichor-ui-role paths="./internal/uiapi/..." output:dir=config/rbac/ichor-ui
+
 include test/harness/harness.mk

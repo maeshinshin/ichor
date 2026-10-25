@@ -120,11 +120,24 @@ nav this skeleton doesn't build.
   for being well-documented and exactly reproducible, not reviewed for
   Ichor's actual visual identity. Expected to be revisited once there's a
   real screen to look at.
-- `cmd/ichor-ui` has no tests. Nothing in it has branches worth asserting on
-  yet (`spaHandler`'s fallback logic is the one candidate, and it was
-  exercised manually against the built binary for this ADR, not under `go
-  test`); a table test for the fallback belongs with the first real handler
-  this binary gets.
+- `spaHandler`'s fallback branch is covered by a table test
+  (`cmd/ichor-ui/main_test.go`, `TestSpaHandler`) against a synthetic
+  `testing/fstest.MapFS` — an existing path is served as-is, an unknown path
+  falls back to `index.html` with `200`. It doesn't depend on either
+  `embed.FS` variant, so it runs the same under the default build and
+  `-tags uiembed`.
+- There is currently no path that ships `ichor-ui` anywhere. `-tags uiembed`
+  is wired into exactly one place, `make build-ichor-ui`; `.goreleaser.yaml`
+  builds only `./cmd/ichor`, and no container image or chart `Deployment`
+  references `ichor-ui` at all. That's correct for a skeleton phase — there's
+  nothing worth shipping yet — but it means today's repo can produce a
+  `bin/manager` and a CLI release without ever touching the UI, and a
+  `build-ichor-ui` run that silently used the default tag would ship the
+  placeholder page instead of an error. The phase that actually ships the UI
+  needs to add `ichor-ui` to goreleaser, a container image, and a
+  `Deployment` in the chart (with the two-replica/PDB/anti-affinity shape
+  "CLI and UI" describes), and should make building it the wrong way loud
+  rather than silent.
 
 ## Alternatives considered
 

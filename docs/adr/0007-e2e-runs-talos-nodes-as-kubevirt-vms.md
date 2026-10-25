@@ -289,3 +289,100 @@ by hand — runs one invocation at a time against `ichor-e2e`; nothing here
 runs two. Making the names unique would need a state file handed from `up` to
 `down` across those separate invocations, for concurrency nobody has asked
 this harness to support.
+
+
+## Three control planes: etcd healthy, confirmed; removal ordering, not yet
+
+The harness now has a second pair, `up-ha`/`down-ha` (`test/harness/kubevirt/ha.go`),
+booting three control planes instead of one -- the smallest topology where a
+single-member removal is allowed at all (ADR 0010: 3 -> 2 keeps quorum; 2 -> 1 does
+not) and where "transitioning" (an even live control-plane count) means anything.
+Separate from `up`/`down`: the short e2e set's single-node path is untouched, and three
+VMs (~40Gi of Ceph for a few minutes) is nightly-only.
+
+**Confirmed for real** (`talos-cluster01`, three VMs, bootstrap on the first, the other
+two joining on their own): all three reach `running`/`ready`, and `talosctl health
+--control-plane-nodes <all three>` passes every check through "all k8s nodes to report
+schedulable". `talosctl etcd members` against any one of them shows all three as
+voters, not learners:
+
+```
+NODE           ID                 HOSTNAME         PEER URLS                   CLIENT URLS                 LEARNER
+10.244.1.223   42e7cb66e97d0e6b   ichor-e2e-ha-2   https://10.244.1.226:2380   https://10.244.1.226:2379   false
+10.244.1.223   c1a928177d9c3bd5   ichor-e2e-ha-0   https://10.244.1.223:2380   https://10.244.1.223:2379   false
+10.244.1.223   f80ae7490b84eb49   ichor-e2e-ha-1   https://10.244.1.173:2380   https://10.244.1.173:2379   false
+```
+
+Cleanup verified by tearing the cluster down after this success and confirming
+`ichor-e2e` empty (`kubectl get vm,vmi,pod,dv,pvc` -> "No resources found"), the same
+check `down`/`downHA` already run on every failure and every SIGTERM (ADR 0007's own
+cleanup guarantee, now also exercised for three VMs instead of one).
+
+Two things cost a debugging cycle each, both already fixed in the harness:
+
+- **A single ISO DataVolume shared read-only across all three VMs does not work on
+  this cluster's storage.** Tried first, to avoid three copies of the identical Factory
+  image: rook-ceph's RBD CSI driver refused the `ReadOnlyMany` PVC outright --
+  `rpc error: code = InvalidArgument desc = readOnly accessMode is supported only with
+  content source` -- confirmed against a real, standalone `DataVolume`. `ReadOnlyMany`
+  on this storage class is only for a PVC *cloned* from an existing content source
+  (a snapshot or another PVC), not a fresh CDI HTTP import. Back to one ISO
+  `DataVolume` per VM (2Gi x 3); cloning one VM's own ISO into the other two as a ROX
+  clone would get the Ceph usage down but is a second CDI mechanism and a second
+  failure mode, not worth it for a nightly-only scenario.
+- **`talosctl health`'s `--nodes` takes exactly one node, not the list.**
+  `--control-plane-nodes` is the list to check; `--nodes` (`-n`) is the single node the
+  check runs *from*. Passing the same three-node list to both failed outright
+  ("command health requires exactly one node (got 3)") -- confirmed for real, fixed by
+  passing `controlPlaneNodes[0]` to `--nodes`.
+
+**Not attempted this round: the removal-ordering scenarios themselves** (quorum/
+last-control-plane admission refusal, a single removal completing in order, the
+transitioning lock, killing the controller mid-removal and resuming). All of them need
+the real controller reconciling against this inner cluster, which surfaces a boundary
+"run outside the inner cluster" doesn't resolve on its own:
+
+- **The controller's webhook cannot be reached from "the workstation."** The inner
+  apiserver (inside a bridge-bound VM on `talos-cluster01`'s pod network) has to dial
+  the controller's webhook port for every `TalosMachine` admission request. A controller
+  process running on the machine driving this harness is not reachable from that pod
+  network at all -- the same one-way boundary ADR 0007 already states for `kubectl
+  port-forward` ("the workstation running this harness cannot reach the VM's pod IP
+  directly"), just in the opposite direction this time: nothing on that pod network can
+  reach *back* to the workstation either. A kubeconfig pointed at the inner cluster
+  lets the controller's own API calls go out through a tunnel; it does nothing for the
+  inner apiserver's calls back in.
+- **The fix is where the controller runs, not what it's pointed at.** A pod inside
+  `ichor-e2e` on `talos-cluster01` sits on the same flat pod network the VMs do --
+  exactly how the existing `talosctl` one-shot pods already reach a VM's maintenance
+  API directly by IP, no relay needed. A controller pod there, given the inner
+  cluster's admin kubeconfig (from `talosctl kubeconfig`, already has full access --
+  no separate RBAC setup needed on either cluster) and with the webhook config's
+  `clientConfig.url` pointed at that pod's own IP, would be reachable both ways without
+  a tunnel in either direction.
+- **This sandbox has no `docker`/`podman`**, confirmed (`which docker` finds nothing),
+  so there is no image to run that pod from through the normal path
+  (`docker-build`/`Dockerfile`). The workable alternative is `kubectl cp`-ing a
+  statically built `bin/manager` into a running pod on a minimal base image and
+  `exec`-ing it there, which also needs the webhook `ValidatingWebhookConfiguration`
+  and cert `Secret` applied to the inner cluster under the exact names
+  `cmd/main.go`'s cert-controller hardcodes (`ichor-validating-webhook-configuration`,
+  `ichor-webhook-server-cert` -- `config/webhook/`'s own files ship prefix-less,
+  relying on `config/default`'s `namePrefix` to add it, which this path would have to
+  do by hand instead).
+- **Separately, running the real reconciler at all means it starts managing these
+  already-configured nodes for real** -- `TalosMachineReconciler.Reconcile` renders and
+  applies a config for every approved control-plane `TalosMachine` unconditionally,
+  the same step that also adds the removal finalizer. Making the `TalosCluster`/
+  `TalosMachine` specs match what `upHA` already applied closely enough that this is a
+  safe no-op sync rather than a surprise reconfiguration of a live three-node etcd
+  cluster is its own piece of care, not a given.
+
+None of this is a dead end -- the pod-on-the-outer-cluster shape above is a concrete,
+believable path -- but it is three new pieces of infrastructure (image delivery, webhook
+TLS/naming, a config that matches reality closely enough) stacked on top of a live,
+Ceph-backed three-VM cluster, each a plausible place to fail twice and have to stop.
+Given that stack and the time already spent standing the cluster up, it was left for a
+dedicated pass rather than attempted inline here. Verified and cleaned up instead: the
+part that needed real hardware and nothing else -- three control planes, real etcd,
+real quorum.

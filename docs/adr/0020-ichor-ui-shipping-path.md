@@ -110,37 +110,51 @@ patches' `target` now also carries `name: controller-manager`. Verified:
 still carries its webhook volume/mount/port and metrics arg, and `ichor-ui`'s
 is untouched by either patch.
 
-## Reported gap, not silently worked around: the chart's ichor-ui secrets Role diverges from `config/rbac/ichor-ui/role.yaml`
+## Resolved gap: the chart's ichor-ui secrets Role no longer diverges from `config/rbac/ichor-ui/role.yaml`
 
-`internal/uiapi/rbac_markers.go`'s secrets marker (`+kubebuilder:rbac:
-groups="",resources=secrets,verbs=get`) carries no `namespace=` qualifier,
-unlike the controller's three equivalent markers (`cmd/main.go:66-67`,
-`internal/controller/talosmachine_controller.go:158`, all
-`namespace=ichor-system`). Controller-gen therefore folds this rule into
+`internal/uiapi/rbac_markers.go`'s secrets marker originally carried no
+`namespace=` qualifier (`+kubebuilder:rbac:groups="",resources=secrets,
+verbs=get`), unlike the controller's three equivalent markers
+(`cmd/main.go:66-67`, `internal/controller/talosmachine_controller.go:158`,
+all `namespace=ichor-system`). Controller-gen folded that rule into
 `ichor-ui-role`'s cluster-scoped `ClusterRole`, where the controller's
 equivalent rule is split into a separate namespaced `Role`
 (`manager-secrets-role.yaml`) specifically so it isn't cluster-wide.
 `dist/chart/chart_test.go`'s `checkNoClusterWideSecretsRead` — written
-earlier to guard a real regression in the controller's own role — correctly
-flags this as the same pattern: an unrestricted `secrets: get` with no
-`resourceNames`, readable as literally any Secret in the cluster if its name
-is known.
+earlier to guard a real regression in the controller's own role, and
+generic over every `ClusterRole` the chart renders, not controller-specific
+— correctly flagged this as the same pattern: an unrestricted `secrets: get`
+with no `resourceNames`, readable as literally any Secret in the cluster if
+its name is known.
 
-The one-line fix is `internal/uiapi/rbac_markers.go`'s own file, out of this
-change's permitted paths. Rather than leave the chart shipping the wider
-permission, or weaken the test that caught it, **the chart's RBAC
-intentionally diverges from `config/rbac/ichor-ui/role.yaml` here**:
-`templates/rbac/ichor-ui-role.yaml`'s `ClusterRole` drops the secrets rule,
-and a new `templates/rbac/ichor-ui-secrets-{role,rolebinding}.yaml` carries
-it as a namespace-scoped `Role`, mirroring `manager-secrets-role.yaml`
-exactly. This is narrower than what `config/rbac/ichor-ui/` currently ships
-via kustomize, never wider, so the divergence is safe in the direction it
-goes. It should be deleted the moment `rbac_markers.go` gains
-`namespace=ichor-system` on that one marker: the generated
-`config/rbac/ichor-ui/role.yaml` would then stop carrying the rule, and the
-chart's extra `Role`/`RoleBinding` pair would just need folding back into
-`ichor-ui-role.yaml` the way the controller's own Role already lives beside
-its ClusterRole in `config/rbac/role.yaml`.
+At the time this ADR was first written, fixing the marker was out of that
+change's permitted paths, so the chart's RBAC was made to intentionally
+diverge from `config/rbac/ichor-ui/role.yaml`: `templates/rbac/
+ichor-ui-role.yaml`'s `ClusterRole` dropped the secrets rule, and `templates/
+rbac/ichor-ui-secrets-{role,rolebinding}.yaml` carried it as a namespace-
+scoped `Role`, mirroring `manager-secrets-role.yaml`/
+`manager-secrets-rolebinding.yaml` exactly. That was narrower than what
+`config/rbac/ichor-ui/` shipped via kustomize at the time, never wider, so
+the divergence was safe in the direction it went.
+
+**The marker has since gained `namespace=ichor-system`** on that one line.
+`make manifests-ichor-ui` now generates `config/rbac/ichor-ui/role.yaml` as
+the same two-object shape `config/rbac/role.yaml` already has for the
+controller: a cluster-scoped `ClusterRole` (`talosclusters`,
+`talosconfigpatches`, `talosmachines` — no secrets) and a namespaced `Role`
+named `ichor-ui-role` in `ichor-system` (`secrets: get`, nothing else). A
+new `config/rbac/ichor-ui/secrets_role_binding.yaml` binds that `Role` to
+the `ichor-ui` `ServiceAccount` (`config/rbac/ichor-ui/kustomization.yaml`
+now lists it), the same way `config/rbac/manager_secrets_role_binding.yaml`
+already does for the controller. The chart's own `ichor-ui-secrets-
+{role,rolebinding}.yaml` templates are **not deleted or folded into
+`ichor-ui-role.yaml`**: they already matched the controller's own chart
+pattern (`manager-role.yaml` and `manager-secrets-role.yaml` are separate
+files too, not one multi-document file), so there was nothing left to
+converge once the generated kustomize output reached the same shape. The
+two deployment paths (chart, kustomize) now agree structurally: a
+`ClusterRole` without secrets, plus a namespace-scoped `Role`/`RoleBinding`
+pair that grants only `get` on `secrets` in `ichor-system`, in both.
 
 ## Decision: `.goreleaser.yaml` stays as-is
 
@@ -173,6 +187,10 @@ target this ADR already built would be a second way to do the same thing.
   the mismatch, then reverting.
 - Real-cluster deployment and verification remain open, same as the
   controller's own image today — not a new gap this ADR introduces.
-- The secrets-rule divergence above is the one loose end: safe (narrower,
-  never wider) but asymmetric between `config/` and the chart until
-  `rbac_markers.go` gets its one-line fix.
+- The secrets-rule divergence above is resolved: `rbac_markers.go`'s one-
+  line fix (`namespace=ichor-system`) landed, `config/rbac/ichor-ui/` and
+  the chart now grant the identical, namespace-scoped `secrets: get`, and
+  `checkNoClusterWideSecretsRead` passes for `ichor-ui-role` the same way
+  it already did for `manager-role` — confirmed by deliberately
+  reintroducing an unrestricted `secrets: get` into `ichor-ui-role.yaml`'s
+  `ClusterRole` and watching the test fail naming it, then reverting.

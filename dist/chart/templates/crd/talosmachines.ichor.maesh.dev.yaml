@@ -121,7 +121,10 @@ spec:
                   0004).
                 type: object
               role:
-                description: role is the machine's role in the cluster.
+                description: |-
+                  role is the machine's role in the cluster. Left unset by discovery, which
+                  does not know it yet (ADR 0011); approval must set it before the
+                  configuration reconciler can render anything for this machine.
                 enum:
                 - controlplane
                 - worker
@@ -130,7 +133,6 @@ spec:
             - clusterRef
             - endpoint
             - identity
-            - role
             type: object
           status:
             description: status defines the observed state of TalosMachine

@@ -54,10 +54,12 @@ type TalosMachineSpec struct {
 	// +required
 	Endpoint string `json:"endpoint"`
 
-	// role is the machine's role in the cluster.
+	// role is the machine's role in the cluster. Left unset by discovery, which
+	// does not know it yet (ADR 0011); approval must set it before the
+	// configuration reconciler can render anything for this machine.
 	// +kubebuilder:validation:Enum=controlplane;worker
-	// +required
-	Role string `json:"role"`
+	// +optional
+	Role string `json:"role,omitempty"`
 
 	// nodeLabels are applied to the Kubernetes Node, not to this resource, which is why the field isn't called "labels" (ADR 0004).
 	// +optional

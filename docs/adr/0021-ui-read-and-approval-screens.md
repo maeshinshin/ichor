@@ -276,3 +276,44 @@ reach for one.
 
 **A `Tabs` component for `NodeDetail`.** See "Screens" above - stacked
 `Card`s instead.
+
+## Amendment (same date): approval tri-state and service-selectable logs
+
+ADR 0018's own amendment (same date) landed on `main` while this unit was
+in flight, changing the two proto messages this unit's screens read:
+`Machine.approved` (bool) became `Machine.approval_state`
+(`MachineApprovalState`: pending/approved/rejected), and
+`StreamNodeLogsRequest` gained `service` (empty selects the kernel log,
+otherwise a Talos service name). `ui/src/gen` was regenerated against the
+new `proto/`; no `buf.gen.yaml`/plugin change was needed, since both are
+ordinary field changes the existing `target=ts` + `erasable_syntax=true`
+generation already handles.
+
+`MachineList` now has three buckets - pending, rejected, approved - instead
+of two. This closes the exact gap "the approval screen" section above
+documents working around: a rejected machine used to have no distinct
+state, so this screen's own copy warned that rejecting could look like it
+"did nothing" the next time the list loaded. With `approval_state`, a
+rejected machine gets its own section and stops reappearing as "pending."
+Approve and Reject both stay available on a rejected row - re-approving is
+the only "un-reject" this design defines (ADR 0018's amendment: reversible
+by design, not a dead end for a misclick), and re-rejecting an
+already-rejected machine is allowed server-side and just records the
+newest reason. The Reject dialog's copy changed to match: it no longer
+claims there's no durable rejected state, since there now is one.
+
+`NodeDetail`'s log tail gained a source `Select` (kernel/kubelet/etcd/
+trustd/apid/machined, the names node.proto's own comment lists) above the
+log view. Switching it resets the resume token and restarts
+`streamWithResume` against the new `service` value - a different log
+source is a different stream, not a resumable continuation of the old
+one. `"kernel"` is this component's own sentinel for the wire value `""`:
+`@preactcn/select`'s own convention reserves an empty string for "nothing
+selected" (confirmed earlier in this unit, debugging the role picker in
+the approve dialog - see the git history for that fix), so a legitimate
+empty-string wire value needs a non-empty UI-side stand-in, mapped back to
+`""` only when building the request.
+
+No further proto gaps were found while making this change: both new fields
+were exactly what the two screens needed, with nothing extra to add and
+nothing missing to report.

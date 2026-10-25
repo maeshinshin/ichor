@@ -150,29 +150,47 @@ current-config fixture).
 Step 5 also has to not leak secrets, which drove the scope decision in
 `adopt_plan.go`: **only `SysctlConfig` and `KernelModuleConfig` documents are
 ever captured automatically.** The legacy v1alpha1 `Config` document is
-deliberately never captured, for a reason specific to this CRD's generated
-schema, not a general Talos limitation: `TalosConfigPatchDocument`'s
-`config.machine` object requires `type`, `token` and `certSANs`
-(`config/crd/bases/ichor.maesh.dev_talosconfigpatches.yaml`, confirmed by
-reading the generated `required:` lists, not assumed) on *any* Config
-document, sparse or not — there is no way to patch, say,
-`cluster.network.cni.name` without also restating `machine.token`, and that
-field mirrors the secrets bundle (the same material `pkg/render`'s and
-`internal/controller`'s own leak tests track as sensitive). Adding a way
-around that would mean changing the CRD's schema, which is out of this
-unit's scope (`api/v1alpha1` belongs to another unit) — and even if it
-weren't, "never write secret material into a CR" (principles 1 and 3,
-`pkg/render`'s own package doc) is not a tradeoff this command gets to make
-unilaterally.
+deliberately never captured.
 
-The consequence: a difference confined to the legacy Config document comes
-back from `buildAdoptPlan` as `UnrepresentablePaths` — field *names* only,
-safe to print — with no patch, rather than a patch that would not actually
-achieve zero drift, or one that would leak. `runAdopt` reports these and
-leaves that machine's drift for the operator to patch by hand. This is
-covered by `TestBuildAdoptPlan_LegacyDiffIsNeverAutoPatched` and is the one
+**Update, same day:** the reason this ADR originally gave no longer holds,
+and is recorded here rather than silently deleted so the history is
+honest. The original reason was schema-specific: `TalosConfigPatchDocument`'s
+`config.machine` object required `type`, `token` and `certSANs` on *any*
+Config document, sparse or not, and `token` mirrored the secrets bundle —
+there was no way to patch e.g. `cluster.network.cni.name` without also
+restating it. A same-day mirrorgen change (see ADR 0003's update) dropped
+`machine.token`, `machine.ca`, `cluster.ca` and six other secret-bearing
+fields from the mirror type and the CRD schema entirely, closing a real
+hole (`configpatcher.Apply`'s strategic merge meant a `Config` document
+could already overwrite a cluster's CA through a `TalosConfigPatch`). The
+two fields `config.machine` still requires — `type` and `certSANs` — are
+not secrets: `type` is the role already on `TalosMachine.Spec.Role`,
+`certSANs` the machine's own address. A sparse Config document is now
+representable without touching anything sensitive.
+
+**This command still does not capture it, but the reason is different
+now: nobody has built the sparse-reconstruction path, not that it is
+unsafe.** Turning a legacy-document diff into a sparse patch means walking
+`ChangedPaths`' dot-separated output back into a partial
+`typedconfig.Config` value with every untouched field left at its Go zero
+value (so `configpatcher`'s merge — "skip a zero value on the right" —
+leaves the base's value alone), which is a different, fiddlier kind of code
+than the whole-document capture `SysctlConfig`/`KernelModuleConfig` already
+get; building it well enough to trust needs its own pass, not a few lines
+bolted onto this one while finishing `ichor init`. `UnrepresentablePaths`
+still exists and is still correct — it just no longer means "this is
+secret," only "adopt doesn't build this kind of patch yet."
+
+The consequence is unchanged in practice today, only in reason: a
+difference confined to the legacy Config document still comes back from
+`buildAdoptPlan` as `UnrepresentablePaths` — field *names* only, safe to
+print — with no patch. `runAdopt` reports these and leaves that machine's
+drift for the operator to patch by hand. This is covered by
+`TestBuildAdoptPlan_LegacyDiffIsNeverAutoPatched` and is the one
 `TestAdoptNeverLeaksSecrets` subtest ("legacy diff reported, not patched")
-that proves the refusal itself never leaks either.
+that proves the refusal itself never leaks either — that test is still
+meaningful: whatever the future sparse-capture path ends up setting still
+has to prove it never reaches outside what actually changed.
 
 ### Confirmation and output
 
@@ -192,11 +210,12 @@ full rendered machine configuration.
   (`cmd/<name>.go` at the module root) until/unless a future cobra-cli
   version restores a way to target a subdirectory; every new subcommand
   needs the same by-hand move this ADR describes for `adopt.go`.
-- adopt's zero-drift guarantee has a known, intentional gap: differences
-  confined to the legacy Config document are reported, not patched. Closing
-  it would need either a CRD change (a different unit's scope) or a
-  different document representation; until then, `ichor adopt` is complete
-  for sysctl/kernel-module drift and honest about everything else.
+- adopt's zero-drift guarantee has a known gap: differences confined to the
+  legacy Config document are reported, not patched. This no longer needs a
+  CRD change to close (the schema now allows a sparse Config document); it
+  needs a sparse-reconstruction function nobody has written yet. Until then,
+  `ichor adopt` is complete for sysctl/kernel-module drift and honest about
+  everything else.
 - `.goreleaser.yaml`'s `dist:` override means any future tooling that reads
   goreleaser's own output has to know to look in `.goreleaser-dist`, not
   `dist/`.

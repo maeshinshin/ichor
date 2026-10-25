@@ -34,6 +34,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	apiserverv1 "k8s.io/apiserver/pkg/apis/apiserver/v1"
 	auditv1 "k8s.io/apiserver/pkg/apis/audit/v1"
+	kubeletv1 "k8s.io/kubelet/config/v1"
 )
 
 // These are the generator's correctness check: a machinery
@@ -84,7 +85,7 @@ func TestRoundTripConfig(t *testing.T) {
 	boolTrue := true
 	boolFalse := false
 
-	// The five fieldOverrides entries (internal/tools/mirrorgen/main.go):
+	// The six fieldOverrides entries (internal/tools/mirrorgen/main.go):
 	// building these through mirrorToMachineryUnstructured, the same helper
 	// ToMachinery itself calls, guarantees the fixture is exactly the shape a
 	// real round trip would produce, including every field the upstream
@@ -133,6 +134,21 @@ func TestRoundTripConfig(t *testing.T) {
 		t.Fatalf("seeding seccomp profile: %v", err)
 	}
 
+	// credentialProviderConfig exercises the sixth fieldOverrides entry.
+	credentialProviderConfig, err := mirrorToMachineryUnstructured(kubeletv1.CredentialProviderConfig{
+		Providers: []kubeletv1.CredentialProvider{
+			{
+				Name:                 "ecr-credential-provider",
+				MatchImages:          []string{"*.dkr.ecr.*.amazonaws.com"},
+				DefaultCacheDuration: &metav1.Duration{Duration: 12 * time.Hour},
+				APIVersion:           "credentialprovider.kubelet.k8s.io/v1",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("seeding kubelet credential provider config: %v", err)
+	}
+
 	orig := &mv1alpha1.Config{
 		ConfigVersion: apiVersionV1Alpha1,
 		ConfigDebug:   &boolFalse,
@@ -163,6 +179,7 @@ func TestRoundTripConfig(t *testing.T) {
 					"feature-gates": mmeta.NewArgValue("AllBeta=true", nil),
 					"node-labels":   mmeta.NewArgValue("", []string{"foo=bar", "baz=qux"}),
 				},
+				KubeletCredentialProviderConfig: credentialProviderConfig,
 			},
 			MachineFiles: []*mv1alpha1.MachineFile{ //nolint:staticcheck // see comment above
 				{
@@ -173,7 +190,7 @@ func TestRoundTripConfig(t *testing.T) {
 				},
 			},
 			// MachineSeccompProfiles exercises MachineSeccompProfile.MachineSeccompProfileValue,
-			// one of the five fieldOverrides entries.
+			// one of the six fieldOverrides entries.
 			MachineSeccompProfiles: []*mv1alpha1.MachineSeccompProfile{
 				{
 					MachineSeccompProfileName:  "audit.json",

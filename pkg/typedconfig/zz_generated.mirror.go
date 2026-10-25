@@ -10,8 +10,9 @@ package typedconfig
 
 import (
 	corev1 "k8s.io/api/core/v1"
-	apiserverv1 "k8s.io/apiserver/pkg/apis/apiserver/v1"
 	auditv1 "k8s.io/apiserver/pkg/apis/audit/v1"
+	apiserverv1 "k8s.io/apiserver/pkg/apis/apiserver/v1"
+	kubeletv1 "k8s.io/kubelet/config/v1"
 )
 
 // Talos: APIServerConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
@@ -646,6 +647,8 @@ type KubeletConfig struct {
 	KubeletExtraArgs map[string][]string `json:"extraArgs,omitempty"`
 	// +optional
 	KubeletExtraMounts []*ExtraMount `json:"extraMounts,omitempty"`
+	// +optional
+	KubeletCredentialProviderConfig *kubeletv1.CredentialProviderConfig `json:"credentialProviderConfig,omitempty"`
 	// +optional
 	KubeletDefaultRuntimeSeccompProfileEnabled *bool `json:"defaultRuntimeSeccompProfileEnabled,omitempty"`
 	// +optional

@@ -113,7 +113,7 @@ func renderChart(t *testing.T, release string) []map[string]any {
 }
 
 // renderChartWithValues is renderChart plus --set overrides, for invariants that only apply
-// once a feature flag is on: certManager.enabled's metrics Secret and the ServiceMonitor TLS
+// once a feature flag is on: metricsCert.enabled's metrics Secret and the ServiceMonitor TLS
 // config referencing it don't exist at all under the suite's default (flags-off) render.
 func renderChartWithValues(t *testing.T, release string, sets ...string) []map[string]any {
 	t.Helper()
@@ -678,29 +678,29 @@ func crdVersions(doc map[string]any) map[string]map[string]any {
 // Operator resolves a certificate that was never created.
 const metricsCertSecretName = "ichor-metrics-server-cert"
 
-// TestMetricsCertManagerEnabled guards certManager.enabled=true, which renders nothing at all
+// TestMetricsCertEnabled guards metricsCert.enabled=true, which renders nothing at all
 // under TestChartInvariants's default-values render: the Secret cert-controller's second
 // rotator writes into, and the ServiceMonitor's tlsConfig referencing it, must name the exact
 // same Secret -- caught empirically once, by actually rendering with the flag on rather than
 // reading the templates statically (the ServiceMonitor used to hardcode the unprefixed
 // "metrics-server-cert" while the Secret shipped as "ichor-metrics-server-cert").
-func TestMetricsCertManagerEnabled(t *testing.T) {
-	docs := renderChartWithValues(t, "ichor", "certManager.enabled=true", "prometheus.enabled=true")
+func TestMetricsCertEnabled(t *testing.T) {
+	docs := renderChartWithValues(t, "ichor", "metricsCert.enabled=true", "prometheus.enabled=true")
 
 	secret := find(docs, kindSecret, metricsCertSecretName)
 	if secret == nil {
-		t.Fatalf("helm template . --set certManager.enabled=true: expected a %s named %q; see %s",
+		t.Fatalf("helm template . --set metricsCert.enabled=true: expected a %s named %q; see %s",
 			kindSecret, metricsCertSecretName, adr0020Doc)
 	}
 	if data, ok := secret["data"]; ok {
-		t.Errorf("helm template . --set certManager.enabled=true: %q has a data key; cert-controller's "+
+		t.Errorf("helm template . --set metricsCert.enabled=true: %q has a data key; cert-controller's "+
 			"rotator has no Create path, only Update, so this must ship empty; got data=%v",
 			metricsCertSecretName, data)
 	}
 
 	monitor := find(docs, "ServiceMonitor", "ichor-controller-manager-metrics-monitor")
 	if monitor == nil {
-		t.Fatalf("helm template . --set certManager.enabled=true,prometheus.enabled=true: " +
+		t.Fatalf("helm template . --set metricsCert.enabled=true,prometheus.enabled=true: " +
 			"expected a ServiceMonitor named \"ichor-controller-manager-metrics-monitor\"")
 	}
 	const nameKey = "name"

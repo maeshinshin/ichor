@@ -77,7 +77,7 @@ func TestInitArgoCD_RepoURLWithEmbeddedCredentialRejected(t *testing.T) {
 
 	var stderr bytes.Buffer
 
-	err := initArgoCD(context.Background(), opts, cluster, machine, nil, k8sClient, &stderr)
+	err := initArgoCD(context.Background(), opts, cluster, machine, nil, nil, k8sClient, &stderr)
 	if err == nil {
 		t.Fatal("expected an error for a repoURL with embedded credentials, got nil")
 	}
@@ -99,7 +99,7 @@ func TestInitArgoCD_RepoURLWithEmbeddedCredentialRejected(t *testing.T) {
 func TestSkeletonWrite_RefusesSecret(t *testing.T) {
 	cluster := newTestCluster()
 
-	skeleton := buildSkeleton(cluster, nil, map[string]any{"oops.yaml": &corev1.Secret{}})
+	skeleton := buildSkeleton(cluster, nil, nil, map[string]any{"oops.yaml": &corev1.Secret{}})
 
 	if err := skeleton.Write(t.TempDir()); err == nil {
 		t.Fatal("expected pkg/gitops.WriteObject to refuse a Secret, got nil error")

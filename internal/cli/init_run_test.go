@@ -169,7 +169,12 @@ func TestRunInit_GitOpsDirWritesSkeleton(t *testing.T) {
 		t.Fatalf("runInit: %v", err)
 	}
 
-	for _, rel := range []string{"bootstrap/root-app.yaml", "clusters/" + testInitClusterName + "/talos-cluster.yaml", "clusters/" + testInitClusterName + "/talos-machine.yaml"} {
+	for _, rel := range []string{
+		"bootstrap/root-app.yaml",
+		"apps/cni/application.yaml", // the cilium CNI's own Argo CD Application (pkg/cni now returns pkg/gitops's typed Application)
+		"clusters/" + testInitClusterName + "/talos-cluster.yaml",
+		"clusters/" + testInitClusterName + "/talos-machine.yaml",
+	} {
 		if _, err := os.Stat(gitopsDir + "/" + rel); err != nil {
 			t.Fatalf("expected %s to exist: %v", rel, err)
 		}

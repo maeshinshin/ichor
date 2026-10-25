@@ -96,19 +96,22 @@ func buildRepoSecret(namespace, repoURL, username, password string) (*corev1.Sec
 }
 
 // buildSkeleton assembles the pkg/gitops.Skeleton design step 5 writes
-// with --gitops-dir: the cluster's CRs under clusters/<cluster>/, and the
-// root Application under bootstrap/root-app.yaml when one was built.
-//
-// It does not yet write apps/cni/application.yaml: pkg/cni.Preset's
-// ArgoCDApplication returns *unstructured.Unstructured, and
-// pkg/gitops.Skeleton.Apps takes gitops.Application -- two different,
-// independently-owned representations of an Argo CD Application with no
-// conversion between them today. Writing the CNI's Application into the
-// GitOps skeleton needs that conversion to exist first.
-func buildSkeleton(cluster *ichorv1alpha1.TalosCluster, rootApp *gitops.Application, crs map[string]any) gitops.Skeleton {
+// with --gitops-dir: the cluster's CRs under clusters/<cluster>/, the root
+// Application under bootstrap/root-app.yaml when one was built, and the
+// CNI's own Application under apps/cni/application.yaml when the preset
+// has one (pkg/cni.Preset.ArgoCDApplication now returns pkg/gitops's own
+// typed Application, so this needs no conversion).
+func buildSkeleton(cluster *ichorv1alpha1.TalosCluster, rootApp, cniApp *gitops.Application, crs map[string]any) gitops.Skeleton {
+	var apps map[string]*gitops.Application
+
+	if cniApp != nil {
+		apps = map[string]*gitops.Application{cniKey: cniApp}
+	}
+
 	return gitops.Skeleton{
 		Cluster: cluster.Name,
 		RootApp: rootApp,
+		Apps:    apps,
 		CRs:     crs,
 	}
 }
@@ -130,6 +133,7 @@ func initArgoCD(
 	cluster *ichorv1alpha1.TalosCluster,
 	machine *ichorv1alpha1.TalosMachine,
 	candidates []ichorv1alpha1.TalosConfigPatch,
+	cniApp *gitops.Application,
 	k8sClient client.Client,
 	warn io.Writer,
 ) error {
@@ -176,7 +180,7 @@ func initArgoCD(
 		crs[fmt.Sprintf("talos-config-patch-%d.yaml", i)] = &p
 	}
 
-	skeleton := buildSkeleton(cluster, rootApp, crs)
+	skeleton := buildSkeleton(cluster, rootApp, cniApp, crs)
 
 	if err := skeleton.Write(opts.GitOpsDir); err != nil {
 		return fmt.Errorf("init: writing the gitops repository skeleton: %w", err)

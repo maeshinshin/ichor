@@ -485,78 +485,77 @@ func (m *ClusterConfig) ToMachinery() (*mv1alpha1.ClusterConfig, error) {
 		return nil, fmt.Errorf("ClusterConfig.network"+": %w", err)
 	}
 	out.ClusterNetwork = t4
-	out.ClusterSecretboxEncryptionSecret = m.ClusterSecretboxEncryptionSecret
 	if m.ClusterAcceptedCAs != nil {
-		c6 := make([]*mx509.PEMEncodedCertificate, len(m.ClusterAcceptedCAs))
-		for k6, e6 := range m.ClusterAcceptedCAs {
-			t7, err := (e6).ToMachinery()
+		c5 := make([]*mx509.PEMEncodedCertificate, len(m.ClusterAcceptedCAs))
+		for k5, e5 := range m.ClusterAcceptedCAs {
+			t6, err := (e5).ToMachinery()
 			if err != nil {
 				return nil, fmt.Errorf("ClusterConfig.acceptedCAs"+": %w", err)
 			}
-			c6[k6] = t7
+			c5[k5] = t6
 		}
-		out.ClusterAcceptedCAs = c6
+		out.ClusterAcceptedCAs = c5
 	}
-	t7, err := (m.APIServerConfig).ToMachinery()
+	t6, err := (m.APIServerConfig).ToMachinery()
 	if err != nil {
 		return nil, fmt.Errorf("ClusterConfig.apiServer"+": %w", err)
 	}
-	out.APIServerConfig = t7
-	t8, err := (m.ControllerManagerConfig).ToMachinery()
+	out.APIServerConfig = t6
+	t7, err := (m.ControllerManagerConfig).ToMachinery()
 	if err != nil {
 		return nil, fmt.Errorf("ClusterConfig.controllerManager"+": %w", err)
 	}
-	out.ControllerManagerConfig = t8
-	t9, err := (m.ProxyConfig).ToMachinery()
+	out.ControllerManagerConfig = t7
+	t8, err := (m.ProxyConfig).ToMachinery()
 	if err != nil {
 		return nil, fmt.Errorf("ClusterConfig.proxy"+": %w", err)
 	}
-	out.ProxyConfig = t9
-	t10, err := (m.SchedulerConfig).ToMachinery()
+	out.ProxyConfig = t8
+	t9, err := (m.SchedulerConfig).ToMachinery()
 	if err != nil {
 		return nil, fmt.Errorf("ClusterConfig.scheduler"+": %w", err)
 	}
-	out.SchedulerConfig = t10
-	t11, err := (m.ClusterDiscoveryConfig).ToMachinery()
+	out.SchedulerConfig = t9
+	t10, err := (m.ClusterDiscoveryConfig).ToMachinery()
 	if err != nil {
 		return nil, fmt.Errorf("ClusterConfig.discovery"+": %w", err)
 	}
-	out.ClusterDiscoveryConfig = t11
-	t12, err := (m.EtcdConfig).ToMachinery()
+	out.ClusterDiscoveryConfig = t10
+	t11, err := (m.EtcdConfig).ToMachinery()
 	if err != nil {
 		return nil, fmt.Errorf("ClusterConfig.etcd"+": %w", err)
 	}
-	out.EtcdConfig = t12
-	t13, err := (m.CoreDNSConfig).ToMachinery()
+	out.EtcdConfig = t11
+	t12, err := (m.CoreDNSConfig).ToMachinery()
 	if err != nil {
 		return nil, fmt.Errorf("ClusterConfig.coreDNS"+": %w", err)
 	}
-	out.CoreDNSConfig = t13
-	t14, err := (m.ExternalCloudProviderConfig).ToMachinery()
+	out.CoreDNSConfig = t12
+	t13, err := (m.ExternalCloudProviderConfig).ToMachinery()
 	if err != nil {
 		return nil, fmt.Errorf("ClusterConfig.externalCloudProvider"+": %w", err)
 	}
-	out.ExternalCloudProviderConfig = t14
+	out.ExternalCloudProviderConfig = t13
 	out.ExtraManifests = m.ExtraManifests
 	out.ExtraManifestHeaders = m.ExtraManifestHeaders
 	if m.ClusterInlineManifests != nil {
-		c17 := make([]mv1alpha1.ClusterInlineManifest, len(m.ClusterInlineManifests))
-		for k17, e17 := range m.ClusterInlineManifests {
-			t18, err := (e17).ToMachinery()
+		c16 := make([]mv1alpha1.ClusterInlineManifest, len(m.ClusterInlineManifests))
+		for k16, e16 := range m.ClusterInlineManifests {
+			t17, err := (e16).ToMachinery()
 			if err != nil {
 				return nil, fmt.Errorf("ClusterConfig.inlineManifests"+": %w", err)
 			}
-			if t18 != nil {
-				c17[k17] = *t18
+			if t17 != nil {
+				c16[k16] = *t17
 			}
 		}
-		out.ClusterInlineManifests = mv1alpha1.ClusterInlineManifests(c17)
+		out.ClusterInlineManifests = mv1alpha1.ClusterInlineManifests(c16)
 	}
-	t18, err := (m.AdminKubeconfigConfig).ToMachinery()
+	t17, err := (m.AdminKubeconfigConfig).ToMachinery()
 	if err != nil {
 		return nil, fmt.Errorf("ClusterConfig.adminKubeconfig"+": %w", err)
 	}
-	out.AdminKubeconfigConfig = t18
+	out.AdminKubeconfigConfig = t17
 	out.AllowSchedulingOnMasters = m.AllowSchedulingOnMasters
 	out.AllowSchedulingOnControlPlanes = m.AllowSchedulingOnControlPlanes
 	return out, nil
@@ -580,76 +579,75 @@ func ClusterConfigFromMachinery(src *mv1alpha1.ClusterConfig) (*ClusterConfig, e
 		return nil, fmt.Errorf("ClusterConfig.network"+": %w", err)
 	}
 	out.ClusterNetwork = t4
-	out.ClusterSecretboxEncryptionSecret = src.ClusterSecretboxEncryptionSecret
 	if src.ClusterAcceptedCAs != nil {
-		c6 := make([]*PEMEncodedCertificate, len(src.ClusterAcceptedCAs))
-		for k6, e6 := range src.ClusterAcceptedCAs {
-			t7, err := PEMEncodedCertificateFromMachinery(e6)
+		c5 := make([]*PEMEncodedCertificate, len(src.ClusterAcceptedCAs))
+		for k5, e5 := range src.ClusterAcceptedCAs {
+			t6, err := PEMEncodedCertificateFromMachinery(e5)
 			if err != nil {
 				return nil, fmt.Errorf("ClusterConfig.acceptedCAs"+": %w", err)
 			}
-			c6[k6] = t7
+			c5[k5] = t6
 		}
-		out.ClusterAcceptedCAs = c6
+		out.ClusterAcceptedCAs = c5
 	}
-	t7, err := APIServerConfigFromMachinery(src.APIServerConfig)
+	t6, err := APIServerConfigFromMachinery(src.APIServerConfig)
 	if err != nil {
 		return nil, fmt.Errorf("ClusterConfig.apiServer"+": %w", err)
 	}
-	out.APIServerConfig = t7
-	t8, err := ControllerManagerConfigFromMachinery(src.ControllerManagerConfig)
+	out.APIServerConfig = t6
+	t7, err := ControllerManagerConfigFromMachinery(src.ControllerManagerConfig)
 	if err != nil {
 		return nil, fmt.Errorf("ClusterConfig.controllerManager"+": %w", err)
 	}
-	out.ControllerManagerConfig = t8
-	t9, err := ProxyConfigFromMachinery(src.ProxyConfig)
+	out.ControllerManagerConfig = t7
+	t8, err := ProxyConfigFromMachinery(src.ProxyConfig)
 	if err != nil {
 		return nil, fmt.Errorf("ClusterConfig.proxy"+": %w", err)
 	}
-	out.ProxyConfig = t9
-	t10, err := SchedulerConfigFromMachinery(src.SchedulerConfig)
+	out.ProxyConfig = t8
+	t9, err := SchedulerConfigFromMachinery(src.SchedulerConfig)
 	if err != nil {
 		return nil, fmt.Errorf("ClusterConfig.scheduler"+": %w", err)
 	}
-	out.SchedulerConfig = t10
-	t11, err := ClusterDiscoveryConfigFromMachinery(src.ClusterDiscoveryConfig)
+	out.SchedulerConfig = t9
+	t10, err := ClusterDiscoveryConfigFromMachinery(src.ClusterDiscoveryConfig)
 	if err != nil {
 		return nil, fmt.Errorf("ClusterConfig.discovery"+": %w", err)
 	}
-	out.ClusterDiscoveryConfig = t11
-	t12, err := EtcdConfigFromMachinery(src.EtcdConfig)
+	out.ClusterDiscoveryConfig = t10
+	t11, err := EtcdConfigFromMachinery(src.EtcdConfig)
 	if err != nil {
 		return nil, fmt.Errorf("ClusterConfig.etcd"+": %w", err)
 	}
-	out.EtcdConfig = t12
-	t13, err := CoreDNSFromMachinery(src.CoreDNSConfig)
+	out.EtcdConfig = t11
+	t12, err := CoreDNSFromMachinery(src.CoreDNSConfig)
 	if err != nil {
 		return nil, fmt.Errorf("ClusterConfig.coreDNS"+": %w", err)
 	}
-	out.CoreDNSConfig = t13
-	t14, err := ExternalCloudProviderConfigFromMachinery(src.ExternalCloudProviderConfig)
+	out.CoreDNSConfig = t12
+	t13, err := ExternalCloudProviderConfigFromMachinery(src.ExternalCloudProviderConfig)
 	if err != nil {
 		return nil, fmt.Errorf("ClusterConfig.externalCloudProvider"+": %w", err)
 	}
-	out.ExternalCloudProviderConfig = t14
+	out.ExternalCloudProviderConfig = t13
 	out.ExtraManifests = src.ExtraManifests
 	out.ExtraManifestHeaders = src.ExtraManifestHeaders
 	if src.ClusterInlineManifests != nil {
-		c17 := make([]*ClusterInlineManifest, len(src.ClusterInlineManifests))
-		for k17, e17 := range src.ClusterInlineManifests {
-			t18, err := ClusterInlineManifestFromMachinery(&(e17))
+		c16 := make([]*ClusterInlineManifest, len(src.ClusterInlineManifests))
+		for k16, e16 := range src.ClusterInlineManifests {
+			t17, err := ClusterInlineManifestFromMachinery(&(e16))
 			if err != nil {
 				return nil, fmt.Errorf("ClusterConfig.inlineManifests"+": %w", err)
 			}
-			c17[k17] = t18
+			c16[k16] = t17
 		}
-		out.ClusterInlineManifests = c17
+		out.ClusterInlineManifests = c16
 	}
-	t18, err := AdminKubeconfigConfigFromMachinery(src.AdminKubeconfigConfig)
+	t17, err := AdminKubeconfigConfigFromMachinery(src.AdminKubeconfigConfig)
 	if err != nil {
 		return nil, fmt.Errorf("ClusterConfig.adminKubeconfig"+": %w", err)
 	}
-	out.AdminKubeconfigConfig = t18
+	out.AdminKubeconfigConfig = t17
 	out.AllowSchedulingOnMasters = src.AllowSchedulingOnMasters
 	out.AllowSchedulingOnControlPlanes = src.AllowSchedulingOnControlPlanes
 	return out, nil
@@ -1143,19 +1141,18 @@ func (m *DeviceWireguardConfig) ToMachinery() (*mv1alpha1.DeviceWireguardConfig,
 		return nil, nil
 	}
 	out := &mv1alpha1.DeviceWireguardConfig{}
-	out.WireguardPrivateKey = m.WireguardPrivateKey
 	out.WireguardListenPort = m.WireguardListenPort
 	out.WireguardFirewallMark = m.WireguardFirewallMark
 	if m.WireguardPeers != nil {
-		c4 := make([]*mv1alpha1.DeviceWireguardPeer, len(m.WireguardPeers))
-		for k4, e4 := range m.WireguardPeers {
-			t5, err := (e4).ToMachinery()
+		c3 := make([]*mv1alpha1.DeviceWireguardPeer, len(m.WireguardPeers))
+		for k3, e3 := range m.WireguardPeers {
+			t4, err := (e3).ToMachinery()
 			if err != nil {
 				return nil, fmt.Errorf("DeviceWireguardConfig.peers"+": %w", err)
 			}
-			c4[k4] = t5
+			c3[k3] = t4
 		}
-		out.WireguardPeers = c4
+		out.WireguardPeers = c3
 	}
 	return out, nil
 }
@@ -1166,19 +1163,18 @@ func DeviceWireguardConfigFromMachinery(src *mv1alpha1.DeviceWireguardConfig) (*
 		return nil, nil
 	}
 	out := &DeviceWireguardConfig{}
-	out.WireguardPrivateKey = src.WireguardPrivateKey
 	out.WireguardListenPort = src.WireguardListenPort
 	out.WireguardFirewallMark = src.WireguardFirewallMark
 	if src.WireguardPeers != nil {
-		c4 := make([]*DeviceWireguardPeer, len(src.WireguardPeers))
-		for k4, e4 := range src.WireguardPeers {
-			t5, err := DeviceWireguardPeerFromMachinery(e4)
+		c3 := make([]*DeviceWireguardPeer, len(src.WireguardPeers))
+		for k3, e3 := range src.WireguardPeers {
+			t4, err := DeviceWireguardPeerFromMachinery(e3)
 			if err != nil {
 				return nil, fmt.Errorf("DeviceWireguardConfig.peers"+": %w", err)
 			}
-			c4[k4] = t5
+			c3[k3] = t4
 		}
-		out.WireguardPeers = c4
+		out.WireguardPeers = c3
 	}
 	return out, nil
 }
@@ -1452,26 +1448,6 @@ func EncryptionKeyNodeIDFromMachinery(src *mv1alpha1.EncryptionKeyNodeID) (*Encr
 		return nil, nil
 	}
 	out := &EncryptionKeyNodeID{}
-	return out, nil
-}
-
-// ToMachinery converts m to the machinery mblock.EncryptionKeyStatic type.
-func (m *EncryptionKeyStatic) ToMachinery() (*mblock.EncryptionKeyStatic, error) {
-	if m == nil {
-		return nil, nil
-	}
-	out := &mblock.EncryptionKeyStatic{}
-	out.KeyData = m.KeyData
-	return out, nil
-}
-
-// EncryptionKeyStaticFromMachinery converts a machinery mblock.EncryptionKeyStatic document to the mirror type.
-func EncryptionKeyStaticFromMachinery(src *mblock.EncryptionKeyStatic) (*EncryptionKeyStatic, error) {
-	if src == nil {
-		return nil, nil
-	}
-	out := &EncryptionKeyStatic{}
-	out.KeyData = src.KeyData
 	return out, nil
 }
 
@@ -3280,9 +3256,6 @@ func (m *RegistryAuthConfig) ToMachinery() (*mv1alpha1.RegistryAuthConfig, error
 	}
 	out := &mv1alpha1.RegistryAuthConfig{}
 	out.RegistryUsername = m.RegistryUsername
-	out.RegistryPassword = m.RegistryPassword
-	out.RegistryAuth = m.RegistryAuth
-	out.RegistryIdentityToken = m.RegistryIdentityToken
 	return out, nil
 }
 
@@ -3293,9 +3266,6 @@ func RegistryAuthConfigFromMachinery(src *mv1alpha1.RegistryAuthConfig) (*Regist
 	}
 	out := &RegistryAuthConfig{}
 	out.RegistryUsername = src.RegistryUsername
-	out.RegistryPassword = src.RegistryPassword
-	out.RegistryAuth = src.RegistryAuth
-	out.RegistryIdentityToken = src.RegistryIdentityToken
 	return out, nil
 }
 
@@ -3933,7 +3903,6 @@ func (m *VIPEquinixMetalConfig) ToMachinery() (*mv1alpha1.VIPEquinixMetalConfig,
 		return nil, nil
 	}
 	out := &mv1alpha1.VIPEquinixMetalConfig{}
-	out.EquinixMetalAPIToken = m.EquinixMetalAPIToken
 	return out, nil
 }
 
@@ -3943,7 +3912,6 @@ func VIPEquinixMetalConfigFromMachinery(src *mv1alpha1.VIPEquinixMetalConfig) (*
 		return nil, nil
 	}
 	out := &VIPEquinixMetalConfig{}
-	out.EquinixMetalAPIToken = src.EquinixMetalAPIToken
 	return out, nil
 }
 
@@ -3953,7 +3921,6 @@ func (m *VIPHCloudConfig) ToMachinery() (*mv1alpha1.VIPHCloudConfig, error) {
 		return nil, nil
 	}
 	out := &mv1alpha1.VIPHCloudConfig{}
-	out.HCloudAPIToken = m.HCloudAPIToken
 	return out, nil
 }
 
@@ -3963,7 +3930,6 @@ func VIPHCloudConfigFromMachinery(src *mv1alpha1.VIPHCloudConfig) (*VIPHCloudCon
 		return nil, nil
 	}
 	out := &VIPHCloudConfig{}
-	out.HCloudAPIToken = src.HCloudAPIToken
 	return out, nil
 }
 
@@ -4133,26 +4099,21 @@ func (m *VolumeEncryptionKey) ToMachinery() (*mblock.EncryptionKey, error) {
 	}
 	out := &mblock.EncryptionKey{}
 	out.KeySlot = m.KeySlot
-	t2, err := (m.KeyStatic).ToMachinery()
-	if err != nil {
-		return nil, fmt.Errorf("VolumeEncryptionKey.static"+": %w", err)
-	}
-	out.KeyStatic = t2
-	t3, err := (m.KeyNodeID).ToMachinery()
+	t2, err := (m.KeyNodeID).ToMachinery()
 	if err != nil {
 		return nil, fmt.Errorf("VolumeEncryptionKey.nodeID"+": %w", err)
 	}
-	out.KeyNodeID = t3
-	t4, err := (m.KeyKMS).ToMachinery()
+	out.KeyNodeID = t2
+	t3, err := (m.KeyKMS).ToMachinery()
 	if err != nil {
 		return nil, fmt.Errorf("VolumeEncryptionKey.kms"+": %w", err)
 	}
-	out.KeyKMS = t4
-	t5, err := (m.KeyTPM).ToMachinery()
+	out.KeyKMS = t3
+	t4, err := (m.KeyTPM).ToMachinery()
 	if err != nil {
 		return nil, fmt.Errorf("VolumeEncryptionKey.tpm"+": %w", err)
 	}
-	out.KeyTPM = t5
+	out.KeyTPM = t4
 	out.KeyLockToSTATE = m.KeyLockToSTATE
 	return out, nil
 }
@@ -4164,26 +4125,21 @@ func VolumeEncryptionKeyFromMachinery(src *mblock.EncryptionKey) (*VolumeEncrypt
 	}
 	out := &VolumeEncryptionKey{}
 	out.KeySlot = src.KeySlot
-	t2, err := EncryptionKeyStaticFromMachinery(src.KeyStatic)
-	if err != nil {
-		return nil, fmt.Errorf("VolumeEncryptionKey.static"+": %w", err)
-	}
-	out.KeyStatic = t2
-	t3, err := VolumeEncryptionKeyNodeIDFromMachinery(src.KeyNodeID)
+	t2, err := VolumeEncryptionKeyNodeIDFromMachinery(src.KeyNodeID)
 	if err != nil {
 		return nil, fmt.Errorf("VolumeEncryptionKey.nodeID"+": %w", err)
 	}
-	out.KeyNodeID = t3
-	t4, err := VolumeEncryptionKeyKMSFromMachinery(src.KeyKMS)
+	out.KeyNodeID = t2
+	t3, err := VolumeEncryptionKeyKMSFromMachinery(src.KeyKMS)
 	if err != nil {
 		return nil, fmt.Errorf("VolumeEncryptionKey.kms"+": %w", err)
 	}
-	out.KeyKMS = t4
-	t5, err := VolumeEncryptionKeyTPMFromMachinery(src.KeyTPM)
+	out.KeyKMS = t3
+	t4, err := VolumeEncryptionKeyTPMFromMachinery(src.KeyTPM)
 	if err != nil {
 		return nil, fmt.Errorf("VolumeEncryptionKey.tpm"+": %w", err)
 	}
-	out.KeyTPM = t5
+	out.KeyTPM = t4
 	out.KeyLockToSTATE = src.KeyLockToSTATE
 	return out, nil
 }

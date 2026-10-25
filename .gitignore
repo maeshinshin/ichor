@@ -37,3 +37,9 @@ go.work
 # dist/chart is also generated (kubebuilder edit --plugins=helm/v2-alpha from
 # dist/install.yaml) but is a committed distributable, so it is not ignored.
 dist/install.yaml
+
+# UI: npm dependencies and the Vite build. The build lands in
+# cmd/ichor-ui/dist, which `go:embed` picks up with -tags uiembed; it is
+# never committed, same as any other build output.
+ui/node_modules/
+cmd/ichor-ui/dist/

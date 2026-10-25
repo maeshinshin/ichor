@@ -22,6 +22,7 @@ import (
 	clientconfig "github.com/siderolabs/talos/pkg/machinery/client/config"
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate"
+	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	"github.com/siderolabs/talos/pkg/machinery/config/machine"
 	"github.com/siderolabs/talos/pkg/machinery/constants"
 )
@@ -41,11 +42,18 @@ const (
 // pod IP is unreachable from the workstation running the suite).
 var localhostSANs = []string{"127.0.0.1", "localhost"}
 
-// generatedConfig is a single node's control-plane machine config and the admin talosconfig
-// that authenticates against it.
+// generatedConfig is a single node's control-plane machine config, the admin talosconfig
+// that authenticates against it, and the secrets bundle both were generated from.
 type generatedConfig struct {
 	machineConfig []byte
 	talosconfig   *clientconfig.Config
+
+	// secretsBundle is the same *secrets.Bundle the controller's loadBundle reads out
+	// of a Secret: publishHA writes it to disk in that exact shape so a
+	// TalosCluster fixture pointed at the real nodes this config was rendered for can
+	// dial their real Talos API with credentials that actually authenticate, instead
+	// of a fresh, unrelated bundle that never would.
+	secretsBundle *secrets.Bundle
 }
 
 // generateControlPlaneConfig builds a control-plane config for a cluster whose control
@@ -96,7 +104,9 @@ func generateControlPlaneConfig(clusterName string, nodeIPs []string) (*generate
 		return nil, fmt.Errorf("generating talosconfig: %w", err)
 	}
 
-	return &generatedConfig{machineConfig: machineConfig, talosconfig: talosCfg}, nil
+	return &generatedConfig{
+		machineConfig: machineConfig, talosconfig: talosCfg, secretsBundle: input.Options.SecretsBundle,
+	}, nil
 }
 
 // assertEndpoint fails loudly if cfg's Kubernetes cluster endpoint is not want. A previous

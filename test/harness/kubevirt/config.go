@@ -1,0 +1,107 @@
+/*
+Copyright 2026 maeshinshin.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package main
+
+import (
+	"fmt"
+
+	clientconfig "github.com/siderolabs/talos/pkg/machinery/client/config"
+	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
+	"github.com/siderolabs/talos/pkg/machinery/config/generate"
+	"github.com/siderolabs/talos/pkg/machinery/config/machine"
+	"github.com/siderolabs/talos/pkg/machinery/constants"
+)
+
+// podSubnet and serviceSubnet are the inner cluster's Kubernetes networks. They must not
+// overlap the host cluster's own pod network, which is where the VM's address comes from:
+// talos-cluster01 uses 10.244.0.0/16 (confirmed via `kubectl get nodes -o
+// jsonpath={.spec.podCIDR}`), so these are pinned elsewhere.
+const (
+	podSubnet     = "10.248.0.0/16"
+	serviceSubnet = "10.249.0.0/16"
+)
+
+// localhostSANs lets the e2e suite reach the inner cluster's API server through a
+// kubectl port-forward tunnel terminating on 127.0.0.1, which needs to be a valid SAN on the
+// apiserver's serving certificate for TLS verification to pass (Boundaries: a VM's
+// pod IP is unreachable from the workstation running the suite).
+var localhostSANs = []string{"127.0.0.1", "localhost"}
+
+// generatedConfig is a single node's control-plane machine config and the admin talosconfig
+// that authenticates against it.
+type generatedConfig struct {
+	machineConfig []byte
+	talosconfig   *clientconfig.Config
+}
+
+// generateControlPlaneConfig builds a single-node control-plane config for nodeIP using the
+// Talos config generator - the same library talosctl gen config uses - rather than talosctl
+// itself, so the endpoint and subnets can be set precisely through the documents it emits
+// instead of patched into the legacy v1alpha1 section afterwards. The install
+// disk/image match the Image Factory schematic and version the VM already booted from the
+// ISO, so there is nothing left to resolve at install time.
+func generateControlPlaneConfig(clusterName, nodeIP string) (*generatedConfig, error) {
+	endpoint := fmt.Sprintf("https://%s:6443", nodeIP)
+	installImage := fmt.Sprintf("factory.talos.dev/metal-installer/%s:%s", talosFactorySchematic, talosVersion)
+
+	input, err := generate.NewInput(clusterName, endpoint, constants.DefaultKubernetesVersion,
+		generate.WithInstallDisk("/dev/vda"),
+		generate.WithInstallImage(installImage),
+		generate.WithEndpointList([]string{nodeIP}),
+		generate.WithAdditionalSubjectAltNames(localhostSANs),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("building config generator input: %w", err)
+	}
+	// Plain struct fields, not options: the generator has no With* for them.
+	input.PodNet = []string{podSubnet}
+	input.ServiceNet = []string{serviceSubnet}
+
+	cfg, err := input.Config(machine.TypeControlPlane)
+	if err != nil {
+		return nil, fmt.Errorf("generating control-plane config: %w", err)
+	}
+	if err := assertEndpoint(cfg, endpoint); err != nil {
+		return nil, err
+	}
+
+	machineConfig, err := cfg.Bytes()
+	if err != nil {
+		return nil, fmt.Errorf("marshaling control-plane config: %w", err)
+	}
+
+	talosCfg, err := input.Talosconfig()
+	if err != nil {
+		return nil, fmt.Errorf("generating talosconfig: %w", err)
+	}
+
+	return &generatedConfig{machineConfig: machineConfig, talosconfig: talosCfg}, nil
+}
+
+// assertEndpoint fails loudly if cfg's Kubernetes cluster endpoint is not want. A previous
+// attempt left it at talosctl's placeholder, which resolved through the pod gateway to the
+// host cluster's own kube-apiserver and got dialled unprompted by Talos's endpoint
+// controllers; every call was rejected by TLS verification, but it must never be left at a
+// default. This reads the endpoint back out of the documents the generator
+// actually produced, not the input that asked for them.
+func assertEndpoint(cfg coreconfig.Provider, want string) error {
+	got := cfg.K8sClusterConfig().ClusterEndpoint()
+	if got == nil || got.String() != want {
+		return fmt.Errorf("refusing to use this config: cluster endpoint is %v, want %q (the VM's own address)", got, want)
+	}
+	return nil
+}

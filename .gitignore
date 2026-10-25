@@ -43,3 +43,7 @@ dist/install.yaml
 # never committed, same as any other build output.
 ui/node_modules/
 cmd/ichor-ui/dist/
+# goreleaser's own output directory (.goreleaser.yaml sets dist: to this,
+# instead of the default "dist/", so that "goreleaser build --clean" never
+# wipes the committed dist/chart above).
+.goreleaser-dist/

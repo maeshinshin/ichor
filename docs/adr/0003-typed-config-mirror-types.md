@@ -199,15 +199,15 @@ wire form; these five don't have a machinery-defined wire form to defer to
 (the whole reason they were `meta.Unstructured`), so JSON — the form every
 upstream schema here already commits to — is what both directions agree on.
 
-The remaining six stay dropped, for the reasons already measured: `KubeletExtraConfig`
-and `SchedulerConfig` need `allowDangerousTypes` (a `float32`, package-wide, not
-field-scoped); `MachineBaseRuntimeSpecOverrides` has untagged fields and an
-`interface{}`; `MachinePods` is ~332 KB served on its own; `PluginConfiguration`
-has no single schema. `KubeletCredentialProviderConfig` is the one that
-generates cleanly but needs a new dependency (`k8s.io/kubelet`) — left dropped
-because whether that dependency is worth adding is a product call, not a
-generator one; the table entry is a one-line addition whenever that call gets
-made.
+Five of the remaining six stay dropped, for the reasons already measured:
+`KubeletExtraConfig` and `SchedulerConfig` need `allowDangerousTypes` (a
+`float32`, package-wide, not field-scoped); `MachineBaseRuntimeSpecOverrides`
+has untagged fields and an `interface{}`; `MachinePods` is ~332 KB served on
+its own; `PluginConfiguration` has no single schema. `KubeletCredentialProviderConfig`
+was the one that generates cleanly but needed a new dependency
+(`k8s.io/kubelet`) — left dropped at the time because whether that
+dependency was worth adding was a product call, not a generator one. A
+later follow-up below makes that call and takes it.
 
 **The one override that wasn't clean: `MachineSeccompProfileValue`.** Its CRD
 schema generates fine, but `controller-gen object:generate` (DeepCopy) doesn't:
@@ -327,6 +327,77 @@ GET on the `CustomResourceDefinition` object itself, not a schema reading —
 it serves **81,965 bytes, 5.2% of the 1,572,864-byte ceiling** (up from
 69,455 bytes / 4.4%; the five new fields' schemas account for the
 difference). Headroom remains in no way the constraint.
+
+## Follow-up: KubeletCredentialProviderConfig gets its override
+
+The measurement table above left one question open: `KubeletCredentialProviderConfig`
+was the one field that generates a clean CRD schema but needs a new direct
+dependency (`k8s.io/kubelet`), and whether that dependency was worth taking
+was flagged as a product call rather than a generator one. That call is now
+made: take it. `fieldOverrides` gets a sixth entry,
+`KubeletConfig.KubeletCredentialProviderConfig` mirrors as
+`k8s.io/kubelet/config/v1.CredentialProviderConfig`, pinned at `v0.36.0` to
+match every other `k8s.io/*` module already in `go.mod` (`k8s.io/api`,
+`k8s.io/apiserver`, `k8s.io/client-go`, etc. — all `v0.36.0`; a mismatched
+`k8s.io/kubelet` would otherwise double up Kubernetes' own types in the
+build).
+
+The reasoning the sketch above already laid out holds exactly: under a
+typed-only API, "absent" means "inexpressible," not "dependency saved."
+`machine.kubelet.credentialProviderConfig` is a commonly used field in
+hand-written Talos configuration (image-pull credentials for ECR, GCR,
+ACR-style registries), so leaving it dropped was a product gap, not a
+saved dependency — the same class of gap the ADR's own wording used for
+`extraConfig`. `k8s.io/kubelet` is one more official `k8s.io/*` staging
+module, versioned in lockstep with Kubernetes the same way the five
+already-mirrored overrides' modules are (`k8s.io/api`,
+`k8s.io/apiserver`'s two packages); it carries no transitive dependency of
+its own that Ichor doesn't already have.
+
+`machine.kubelet.extraConfig` is **not** touched by this change and stays
+dropped, for the reason the measurement table already gave: what blocks it
+was never the dependency, it was a `float32` field deep in
+`kubelet/config/v1beta1`, which controller-gen only emits under
+`allowDangerousTypes` — and that flag is package-wide, not field-scoped, so
+taking it for one field would relax type safety across every CRD
+controller-gen touches. `KubeletCredentialProviderConfig` has no such field;
+that is precisely why it, and not `extraConfig`, was the one worth taking.
+
+**DeepCopy, checked as the known trap.** `k8s.io/kubelet/config/v1` is a
+Kubernetes API type (`+k8s:deepcopy-gen` generated, same family as the four
+existing overrides' modules), and its `zz_generated.deepcopy.go` does carry
+`DeepCopy`/`DeepCopyInto`/`DeepCopyObject` for `CredentialProviderConfig`
+and every type nested under it. `MachineSeccompProfileValue`'s hand-written
+wrapper (above) was needed only because OCI's `runtime-spec` has no such
+generated methods; that is not this case, and no local wrapper or
+`localWrapper` entry is needed here. `go generate` and
+`controller-gen object:generate` both ran clean with no new workaround.
+
+**Round-trip coverage.** `TestRoundTripConfig` (`pkg/typedconfig/roundtrip_test.go`)
+now sets `MachineKubelet.KubeletCredentialProviderConfig` to a non-trivial
+`CredentialProviderConfig` (one provider, `defaultCacheDuration` and
+`apiVersion` set) built through `mirrorToMachineryUnstructured`, the same
+helper the generated `ToMachinery` conversion itself calls — so the fixture
+takes the field through the override's full round trip, not just an empty
+placeholder.
+
+**Measured again: served CRD size, with this override applied.**
+`config/crd/bases/ichor.maesh.dev_talosconfigpatches.yaml` is now 227,641
+bytes on disk; served (same envtest-apiserver GET as every measurement
+above) it is **106,077 bytes, 6.7% of the 1,572,864-byte ceiling** — up from
+81,965 bytes / 5.2%, a 24,112-byte increase. That increase is well above the
+~6.5 KB the measurement table estimated: that number was `controller-gen`'s
+file-to-served ratio applied to the field generated in isolation, and
+`CredentialProviderConfig` pulls in `CredentialProvider`,
+`ServiceAccountTokenAttributes` and `ExecEnvVar` nested underneath it, each
+carrying the same long upstream doc comments (several paragraphs per field,
+explaining cache semantics and image-matching rules) that CRD schemas
+inline at every use site with no `$ref` sharing — the same size mechanism
+ADR 0003's opening section already identified, just realized on a type with
+unusually verbose upstream docs rather than a flat one. Headroom remains in
+no way the constraint: 106,077 bytes is still 6.7% of the ceiling, with the
+remaining five dropped `meta.Unstructured` fields and 52 kinds outside the
+allow-list still comfortably inside it.
 
 ## Consequences
 

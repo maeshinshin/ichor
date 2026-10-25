@@ -196,9 +196,19 @@ what to do with them:
 - Eleven fields are `meta.Unstructured` — Talos's own escape hatch for a
   pass-through to another project's schema (kubelet's configuration, an
   audit policy, a resource list, a seccomp profile). A type-keyed rule can
-  only drop all eleven or none; a field-level override table drops six
-  (new dependency, controller-gen errors, or no single schema to mirror) and
-  mirrors five as their upstream type instead, with no new dependency.
+  only drop all eleven or none; a field-level override table drops five
+  (controller-gen errors, or no single schema to mirror) and mirrors six as
+  their upstream type instead: five with no new dependency, plus
+  `machine.kubelet.credentialProviderConfig`, which takes one (`k8s.io/kubelet`,
+  an official `k8s.io/*` staging module versioned in lockstep with
+  Kubernetes, the same class of dependency the other five come from). Under
+  a typed-only API an absent field is an inexpressible one, so a commonly
+  wanted field being absent is a product gap, not a saved dependency —
+  that's why this one took the dependency where the other five didn't need
+  to. `machine.kubelet.extraConfig` still gets nothing: what blocks it was
+  never a dependency but a `float32`, which controller-gen only emits under
+  `allowDangerousTypes` — and that flag applies to the whole API package, so
+  one field would relax the type safety of every CRD in it.
 - Nine more fields are plain strings or certificate pairs, not
   `meta.Unstructured`, but carry cluster secret material — join tokens, CA
   key pairs, encryption keys. These are dropped unconditionally, by a
@@ -208,21 +218,6 @@ what to do with them:
   narrowly the patch claims to be scoped.
 
 Both are the follow-up.
-
-Two questions that table left open are now settled.
-
-`machine.kubelet.credentialProviderConfig` gets an override and takes the
-`k8s.io/kubelet` dependency it needs, moving it out of the dropped six. It
-generates cleanly and measures about 6.5 KB served; under a typed-only API
-an absent field is an inexpressible one, so a commonly wanted absent field
-is a product gap rather than a saved dependency. One official `k8s.io/*`
-staging module, versioned in lockstep with Kubernetes, is the same class of
-dependency the already-mirrored five come from. The counts above describe
-what the generator does today, before that lands.
-`machine.kubelet.extraConfig` still gets nothing: what blocks it was never
-the dependency but a `float32`, which controller-gen only emits under
-`allowDangerousTypes` — and that flag applies to the whole API package, so
-one field would relax the type safety of every CRD in it.
 
 No validating admission webhook rejects a `TalosConfigPatch` carrying a
 secret field. Dropping the fields from the schema is what keeps the value

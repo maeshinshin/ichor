@@ -686,10 +686,25 @@ because of the bootstrap-manifest re-apply.
 Talos: change `spec.talosVersion` or the schematic. Pre-checks cover etcd
 health, node readiness, the supported upgrade path and the Kubernetes pairing.
 Control planes go first, one at a time; workers follow within
-`maxUnavailable`. Per node: hook → cordon/drain → Upgrade API → reboot →
-verify version, readiness and etcd membership → uncordon. A node that falls
-back to the previous A/B slot counts as a failure. The version contract is
-never bumped automatically.
+`maxUnavailable`. Per node: hook → Upgrade API → reboot → verify version,
+readiness and etcd membership. Cordon and drain are not Ichor's to do here:
+Talos's own Upgrade sequence already cordons (a controller does it reactively
+once the upgrade actor starts) and drains (via the kubelet's own kubeconfig,
+the standard eviction API) before it stops services and reboots, and
+uncordons the same way once the upgrade clears — confirmed in Talos 1.14.3's
+source (`Sequencer.Upgrade`'s `"drain"` phase, `CordonAndDrainNode`, and
+`NodeApplyController.ApplyCordoned`). Doing it again on Ichor's side would
+only be redundant, not more correct, and would blur which side's cordon
+"owns" the uncordon afterwards; the one thing still Ichor's to do beforehand
+is the storage-evacuation hook, which Talos has no notion of. No
+etcd-preserving flag handling is needed either: `UpgradeRequest.Preserve` is
+explicitly deprecated in that same source ("only used for legacy upgrade
+path, to be removed in Talos 1.18"), and the installer ignores it in upgrade
+mode ("system disk wipe on upgrade is not supported anymore, option
+ignored") — a plain upgrade reboots in place and never touches the etcd data
+directory, for one member or many. A node that falls back to the previous
+A/B slot counts as a failure. The version contract is never bumped
+automatically.
 
 Kubernetes: change `spec.kubernetesVersion`, one minor at a time within the
 skew policy. Warn about removed APIs in use, pre-pull images, switch the
@@ -834,9 +849,6 @@ resumption works. A short set runs per PR, the full set nightly.
 
 ## Open questions
 
-- What exactly does the Talos Upgrade API do about cordon and drain, per
-  version?
-- Does a single-node Talos upgrade need the etcd-preserving flag?
 - Exact Longhorn node label/annotation and evacuation field names per version.
 - The Cilium and Calico values that avoid perpetual OutOfSync under Argo CD.
 

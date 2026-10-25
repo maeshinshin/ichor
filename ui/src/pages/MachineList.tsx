@@ -22,7 +22,7 @@ import { clusterClient, machineClient, nodeClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
 import { describeError } from '@/lib/errors'
 import { isStrongIdentity } from '@/lib/identity'
-import { formatBytes } from '@/lib/format'
+import { formatBytes, formatTimestamp } from '@/lib/format'
 import { objectRefPath, Link } from '@/router'
 
 type ErrorShape = { title: string; detail: string }
@@ -128,8 +128,8 @@ export function MachineList() {
                 <TableRow>
                   <TableHead>Identity</TableHead>
                   <TableHead>Cluster</TableHead>
-                  <TableHead>Endpoint</TableHead>
-                  <TableHead>Stage</TableHead>
+                  <TableHead>Reason</TableHead>
+                  <TableHead>When</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -138,8 +138,11 @@ export function MachineList() {
                   <TableRow key={refKey(m)}>
                     <TableCell>{identitySummary(m)}</TableCell>
                     <TableCell>{m.cluster ? clusterNames[`${m.cluster.namespace}/${m.cluster.name}`] ?? m.cluster.name : '-'}</TableCell>
-                    <TableCell>{m.endpoint || '-'}</TableCell>
-                    <TableCell>{m.stage || '-'}</TableCell>
+                    {/* The decision record (ADR 0021's amendment): recorded on the CR
+                        itself, not just a one-shot RPC response, so it's still here the
+                        next time anyone loads this list. */}
+                    <TableCell>{m.approvalDecision?.reason || '-'}</TableCell>
+                    <TableCell>{formatTimestamp(m.approvalDecision?.at)}</TableCell>
                     <TableCell>
                       <div class="flex gap-2">
                         {/* Rejection is reversible (ADR 0018's amendment): approving a
@@ -218,6 +221,7 @@ function ApproveDialog({ machine, onApproved }: { machine: Machine; onApproved: 
   const [nodeError, setNodeError] = useState<string | null>(null)
   const [role, setRole] = useState<MachineRole>(MachineRole.UNSPECIFIED)
   const [hostname, setHostname] = useState(machine.hostname)
+  const [reason, setReason] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<ErrorShape | null>(null)
 
@@ -234,6 +238,7 @@ function ApproveDialog({ machine, onApproved }: { machine: Machine; onApproved: 
     // Reset the form each time the dialog is reopened.
     setRole(MachineRole.UNSPECIFIED)
     setHostname(machine.hostname)
+    setReason('')
     setSubmitError(null)
   }, [open])
 
@@ -247,6 +252,7 @@ function ApproveDialog({ machine, onApproved }: { machine: Machine; onApproved: 
         role,
         hostname,
         nodeLabels: {},
+        reason,
       })
       if (res.machine) onApproved(res.machine)
       setOpen(false)
@@ -330,6 +336,19 @@ function ApproveDialog({ machine, onApproved }: { machine: Machine; onApproved: 
               id="approve-hostname"
               value={hostname}
               onInput={(e) => setHostname((e.target as HTMLInputElement).value)}
+            />
+          </section>
+
+          <section class="space-y-1">
+            <Label htmlFor="approve-reason">Reason (optional)</Label>
+            {/* Symmetric with reject's reason: approving rarely needs a justification -
+                identity, hardware and role above already say what's being approved -
+                but one can still be recorded, e.g. "replacing node-3, same role". */}
+            <Textarea
+              id="approve-reason"
+              value={reason}
+              onInput={(e) => setReason((e.target as HTMLTextAreaElement).value)}
+              placeholder="Why, if it isn't obvious from the above"
             />
           </section>
 

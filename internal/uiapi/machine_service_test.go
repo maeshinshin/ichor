@@ -72,6 +72,8 @@ var _ = Describe("MachineService", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(resp.Msg.GetMachine().GetApprovalState()).To(Equal(pb.MachineApprovalState_MACHINE_APPROVAL_STATE_PENDING))
 		Expect(resp.Msg.GetMachine().GetRole()).To(Equal(pb.MachineRole_MACHINE_ROLE_UNSPECIFIED))
+		Expect(resp.Msg.GetMachine().GetApprovalDecision()).To(BeNil(),
+			"a machine nobody has approved or rejected yet has no decision to report")
 	})
 
 	Describe("ApproveMachine", func() {
@@ -93,10 +95,29 @@ var _ = Describe("MachineService", func() {
 			Expect(audit.GetActor()).NotTo(BeEmpty())
 			Expect(audit.GetAt()).NotTo(BeNil())
 
+			// The decision is recorded on the CR itself (ADR 0021's amendment), not
+			// only in this one-shot response, so it survives to the next read.
+			Expect(resp.Msg.GetMachine().GetApprovalDecision().GetActor()).NotTo(BeEmpty())
+			Expect(resp.Msg.GetMachine().GetApprovalDecision().GetAt()).NotTo(BeNil())
+
 			got := fetchTestMachine(m)
 			Expect(got.Spec.IsApproved()).To(BeTrue())
 			Expect(got.Spec.Role).To(Equal(roleWorker))
 			Expect(got.Spec.Hostname).To(Equal("node-1"))
+			Expect(got.Spec.ApprovalDecision).NotTo(BeNil())
+			Expect(got.Spec.ApprovalDecision.Actor).NotTo(BeEmpty())
+
+			list, err := s.ListMachines(ctx, connect.NewRequest(&pb.ListMachinesRequest{}))
+			Expect(err).NotTo(HaveOccurred())
+			var listed *pb.Machine
+			for _, wm := range list.Msg.GetMachines() {
+				if wm.GetRef().GetName() == m.Name {
+					listed = wm
+				}
+			}
+			Expect(listed).NotTo(BeNil())
+			Expect(listed.GetApprovalDecision().GetActor()).NotTo(BeEmpty(),
+				"ListMachines must surface the decision record, not just ApproveMachine's own response")
 		})
 
 		It("condition 1: refuses a weak identity", func() {
@@ -166,6 +187,13 @@ var _ = Describe("MachineService", func() {
 			got := fetchTestMachine(m)
 			Expect(got.Spec.ApprovalState).To(Equal(ichorv1alpha1.MachineApprovalStateRejected))
 			Expect(got.Spec.IsApproved()).To(BeFalse())
+
+			// The reason and actor behind "rejected" are recorded on the machine
+			// itself (ADR 0021's amendment) -- not just this one-shot AuditRecord --
+			// so a person revisiting the Rejected list later can still see why.
+			Expect(got.Spec.ApprovalDecision).NotTo(BeNil())
+			Expect(got.Spec.ApprovalDecision.Reason).To(Equal("wrong hardware"))
+			Expect(got.Spec.ApprovalDecision.Actor).NotTo(BeEmpty())
 
 			// condition 4: the machine must still exist under its own identity, so a
 			// future discovery pass finds it unchanged rather than recreating it as

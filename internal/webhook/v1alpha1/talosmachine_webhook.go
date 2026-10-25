@@ -35,7 +35,7 @@ var talosmachinelog = logf.Log.WithName("talosmachine-resource")
 // SetupTalosMachineWebhookWithManager registers the webhook for TalosMachine in the manager.
 func SetupTalosMachineWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr, &ichorv1alpha1.TalosMachine{}).
-		WithValidator(&TalosMachineCustomValidator{Client: mgr.GetClient()}).
+		WithValidator(&TalosMachineCustomValidator{APIReader: mgr.GetAPIReader()}).
 		Complete()
 }
 
@@ -47,9 +47,14 @@ func SetupTalosMachineWebhookWithManager(mgr ctrl.Manager) error {
 // NOTE: The +kubebuilder:object:generate=false marker prevents controller-gen from generating DeepCopy methods,
 // as this struct is used only for temporary operations and does not need to be deeply copied.
 type TalosMachineCustomValidator struct {
-	// Client lists sibling TalosMachines to count live control planes for
-	// the quorum check. ValidateDelete is the only method that uses it.
-	Client client.Client
+	// APIReader lists sibling TalosMachines to count live control planes
+	// for the quorum check, bypassing the manager's cache: a cached read
+	// can still report a control plane deleted moments ago, drifting the
+	// count high -- the dangerous direction, since it is what lets a
+	// second, concurrent deletion look safe when it is not. ValidateDelete is the only method that uses it, via
+	// deleteguard.CountApprovedControlPlanes, the one place in the
+	// codebase this count is computed.
+	APIReader client.Reader
 }
 
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type TalosMachine.
@@ -100,16 +105,9 @@ func (v *TalosMachineCustomValidator) ValidateDelete(ctx context.Context, obj *i
 	// removal.go's check is the authoritative one for the case this one
 	// cannot see -- concurrent deletes of different control planes -- and
 	// is what actually decides whether the object ever stops existing.
-	var siblings ichorv1alpha1.TalosMachineList
-	if err := v.Client.List(ctx, &siblings, client.InNamespace(obj.Namespace)); err != nil {
+	controlPlanes, err := deleteguard.CountApprovedControlPlanes(ctx, v.APIReader, obj.Namespace, obj.Spec.ClusterRef.Name)
+	if err != nil {
 		return nil, err
-	}
-
-	controlPlanes := 0
-	for _, m := range siblings.Items {
-		if m.Spec.Role == "controlplane" && m.Spec.IsApproved() && m.Spec.ClusterRef.Name == obj.Spec.ClusterRef.Name {
-			controlPlanes++
-		}
 	}
 
 	return nil, deleteguard.CheckControlPlaneQuorum(controlPlanes)

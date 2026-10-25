@@ -481,3 +481,106 @@ This is also why `pkg/clusterlock` was left alone rather than touched to
 "help" enforce this: the guard's whole premise is that this package has
 exactly one legitimate caller of `Acquire`, which is only true because
 the domain check lives here and not inside `clusterlock` itself.
+
+## A second mechanism, same dangerous direction: the cached client
+
+The concurrent-admission gap this ADR already names ("Counting objects at
+admission time cannot enforce an invariant across concurrent requests...")
+is about *when* two requests are counted relative to each other. A second,
+independent mechanism can drift the count the same dangerous way even for
+a single request: *what* the count is read through.
+
+### What was found, and how
+
+A `TalosMachine` Webhook control-plane-quorum spec started failing
+intermittently -- always passing alone, failing only as part of the full
+suite. The easy, wrong conclusion is "flaky test, environment noise."
+Looking at *which direction* it failed ruled that out: every failure was
+`Expected an error to have occurred. Got: <nil>` -- a deletion that should
+have been refused was allowed. That is only possible if the quorum count
+came out too *high* (an already-gone control plane still counted), never
+too low (which would only ever over-refuse, the safe side).
+
+Both counters -- `TalosMachineCustomValidator.ValidateDelete` (the webhook)
+and `TalosMachineReconciler.countApprovedControlPlanes` (`removal.go`,
+the authoritative recount under the cluster lock this ADR's "ordered
+removal operation" section describes) -- listed through
+`mgr.GetClient()`, controller-runtime's cache-backed client, in both the
+real manager and the envtest-backed suites. A watch-based cache can still
+report an object for a short window after its delete has actually
+committed to etcd; the gap is normally small enough not to matter, but it
+widens under load (the exact condition "passes alone, fails in the full
+suite" describes) and skews in exactly one direction: toward *more*
+objects, never fewer. For a quorum count, more is unconditionally the
+dangerous direction -- it is what lets a second, concurrent (or merely
+closely-timed) deletion look safe when the first one already brought the
+cluster to the edge.
+
+This is a different mechanism from the admission/commit race the earlier
+section documents (that one is about ordering between two requests; this
+one is about staleness within reading for one request), but it opens the
+same shape of hole, in the same direction, against the same check. If a
+future quorum- or removal-related test flakes, suspect the count's read
+path -- cached vs. direct -- before the environment. That is exactly how
+this one was found.
+
+### Decision
+
+Both counters now read directly from the API server, bypassing the
+manager's cache entirely, via `mgr.GetAPIReader()` rather than
+`mgr.GetClient()`. Correctness wins over cache efficiency here because
+both call sites are rare (an admission request, one step of a removal
+sequence) and tolerant of the extra latency a direct read costs; what a
+too-high count permits -- an avoidable, irrecoverable loss of etcd
+quorum -- is not something a cache hit's savings are worth risking.
+
+The counting logic itself was also centralized, for the same reason
+`acquireDisruptiveLock` was centralized above: two independently-written
+copies of "list and filter for approved control planes" is exactly how a
+fix like "read directly, not through the cache" gets applied to one copy
+and silently misses the other the next time either changes.
+`pkg/deleteguard.CountApprovedControlPlanes(ctx, reader client.Reader,
+namespace, clusterName string)` is now the only implementation; the
+webhook's `APIReader` field and `TalosMachineReconciler`'s new
+`APIReader` field (distinct from each struct's existing, still
+cache-backed `Client`, used for everything else) are both wired from
+`mgr.GetAPIReader()` in `cmd/main.go`, and both counters call through to
+this one function.
+
+### Enforcing that nothing bypasses it
+
+The same mechanical technique as `TestAcquireDisruptiveLockIsTheOnlyAcquireCallSite`
+applies again: `TestCountApprovedControlPlanesIsTheOnlyListSite`
+(`pkg/deleteguard/countplanes_guard_test.go`) parses every non-test `*.go`
+file in `pkg/deleteguard` with `go/parser` and fails if a call to a method
+named `List` appears outside `CountApprovedControlPlanes`'s own body --
+closing off a second, hand-rolled counting loop reappearing in the one
+package built to prevent that. It does not, and structurally cannot,
+verify that the `client.Reader` value passed in at a given call site is
+actually an uncached one (`mgr.GetAPIReader()` vs. `mgr.GetClient()`,
+both of which satisfy the same `client.Reader` interface) -- that half
+still depends on `cmd/main.go`'s wiring being reviewed, the same way the
+`Acquire` guard trusts `acquireDisruptiveLock`'s own body once it knows
+nothing else can reach `Acquire` at all.
+
+### Consequences
+
+- `TalosMachineCustomValidator.Client` (webhook) is renamed to
+  `APIReader client.Reader`; it had no other use. `TalosMachineReconciler`
+  gains a second field, `APIReader client.Reader`, alongside its existing
+  `Client`, since that reconciler's `Client` is still legitimately
+  cache-backed for everything else it does.
+- Every test construction of `TalosMachineReconciler` in
+  `internal/controller` now sets `APIReader` to the same `client.New(cfg,
+  ...)` value the suite already used for `Client` -- that constructor
+  builds a direct, uncached client (no informer, no watch), so these
+  were never actually exposed to this bug; only the *production* manager's
+  `mgr.GetClient()` is cache-backed. This is also why the webhook suite's
+  envtest failure was reproducible at all: its validator is wired through
+  a real `ctrl.Manager` (`SetupTalosMachineWebhookWithManager`), which
+  defaults to the same cached client production uses, independently of
+  whatever direct client a test's own assertions happen to use.
+- No RBAC change: `mgr.GetAPIReader()` reads the same resources through
+  the same permissions already granted for `list`/`watch` on
+  `talosmachines`; it is a different code path to the same API server,
+  not a different credential.

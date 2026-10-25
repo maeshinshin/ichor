@@ -21,7 +21,7 @@ spec:
     {{- if .Values.metrics.secure }}
     tlsConfig:
       serverName: {{ include "ichor.resourceName" (dict "suffix" "controller-manager-metrics-service" "context" $) }}.{{ .Release.Namespace }}.svc
-      {{- if .Values.certManager.enabled }}
+      {{- if .Values.metricsCert.enabled }}
       # Fixed name, not release-templated: matches extras/metrics-server-cert.yaml's own
       # fixed name, same reasoning as the webhook Secret.
       ca:

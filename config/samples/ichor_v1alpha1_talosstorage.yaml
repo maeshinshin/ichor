@@ -6,4 +6,10 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: talosstorage-sample
 spec:
-  # TODO(user): Add fields here
+  clusterRef:
+    name: taloscluster-sample
+  nodes:
+    matchLabels:
+      storage: "true"
+  diskPreset: longhorn-v1
+  diskSelector: disk.transport == "nvme"

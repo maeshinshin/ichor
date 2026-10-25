@@ -6,4 +6,11 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: talosmachine-sample
 spec:
-  # TODO(user): Add fields here
+  clusterRef:
+    name: taloscluster-sample
+  identity:
+    uuid: 00000000-0000-0000-0000-000000000001
+    serial: sample-serial-001
+    macAddresses:
+    - "52:54:00:aa:bb:cc"
+  endpoint: 10.0.0.11:50000

@@ -312,7 +312,18 @@ metrics:
 metricsCert:
   enabled: false
 
-## Webhook server configuration
+## Webhook server configuration.
+##
+## On a brand-new install, expect the controller pod to restart once or twice before it
+## stays up: the webhook's serving certificate is written by cert-controller's in-process
+## rotator (ADR 0006) only after the pod starts, and the webhook server's own listener does
+## not wait for or retry past a missing certificate -- Kubernetes' own pod restart is what
+## retries. The pod's logs name this explicitly ("certificate not written yet... this is
+## expected on a brand-new install") rather than leaving it to look like a misconfiguration;
+## see ADR 0031 for why this is logged rather than fixed (a self-signed bootstrap certificate
+## written before the real one would silently keep DELETE requests rejected forever if the
+## rotator's own write ever failed, which is a worse failure mode than a loud, short-lived
+## crash-loop).
 ##
 webhook:
   enabled: true

@@ -1,8 +1,8 @@
 # 0031. Fixing two kubebuilder scaffold remnants that actually ship
 
-Status: Accepted, amended · Date: 2026-10-26 · Design section: 4.4 (Typed configuration), Monitoring
+Status: Accepted, amended twice · Date: 2026-10-26 · Design section: 4.4 (Typed configuration), Monitoring
 
-Decided: made `config/samples/*.yaml` minimal, valid and apply-tested instead of deleting them; gave the metrics endpoint a real, opt-in certificate named `metricsCert.enabled` (not `certManager`, and not the default) via a second cert-controller rotator instead of leaving `insecureSkipVerify`'s documented escape hatch wired to nothing; and confirmed the webhook certificate has the same cold-start race the metrics one does.
+Decided: made `config/samples/*.yaml` minimal, valid and apply-tested instead of deleting them; gave the metrics endpoint a real, opt-in certificate named `metricsCert.enabled` (not `certManager`, and not the default) via a second cert-controller rotator instead of leaving `insecureSkipVerify`'s documented escape hatch wired to nothing; confirmed the webhook certificate has the same cold-start race the metrics one does; and logged that race instead of papering over it with a bootstrap certificate, which would trade a loud failure for a silent one.
 
 ## Context
 
@@ -253,6 +253,45 @@ construction (it does not today -- confirmed above, a one-time `os.Stat`
 with no retry and no readiness hook), which would let a cold start wait
 instead of crash-loop.
 
+## Amendment (same date): the cold-start race is logged, not fixed
+
+Considered actually closing the race rather than only confirming where it
+lives: have `cmd/main.go` write a throwaway, self-signed bootstrap
+certificate straight into `CertDir` before `mgr.Start()`, so the webhook
+and metrics listeners always find *something* on disk, real or not.
+**Rejected.** Two reasons, weighed against the status quo:
+
+- The crash-loop already self-heals. Kubernetes retries a failing
+  container with backoff, and each fresh container mount reads the
+  Secret's then-current content from scratch (no stale-volume wait the
+  way an *already-mounted* Secret picking up a *later* change would need)
+  -- in practice this converges within the first one or two restarts,
+  comfortably under a minute, every time cert-controller's own write
+  succeeds before the listener's next attempt.
+- A bootstrap certificate trades a loud, short-lived failure for a silent
+  one that can last forever. If cert-controller's rotator ever can't
+  write the real Secret -- RBAC drift, a quota, anything -- the listener
+  would keep serving the self-signed bootstrap certificate indefinitely,
+  nothing would be visibly wrong (no crash, no restart, healthy-looking
+  probes), and `failurePolicy: Fail` would keep rejecting every DELETE
+  against a certificate nobody actually trusts, with no signal pointing
+  at why. A new code path on the single most security-sensitive part of
+  startup, to buy a failure mode strictly worse than the one already
+  accepted (ADR 0006's "Consequences": crash-loop is the intended
+  direction).
+
+**Decision: log it instead.** `cmd/main.go`'s `logCertStatusBeforeStart`
+checks, once, right before `mgr.Start()`, whether each enabled server's
+cert file already exists, and if not, logs the exact, confirmed mechanism
+(not a guess) in one line: that this is expected on a brand-new install,
+and that it resolves on its own once the rotator's write reaches the
+Secret and the mounted volume. The chart's `values.yaml` carries the same
+note next to `webhook.enabled`, for whoever reads values before looking at
+pod logs. No test pins the log line itself down (a one-time startup
+message, not behavior with a caller to break) — the thing worth getting
+right is that the message states both halves (expected-on-fresh-install,
+and what resolves it), checked by hand against the function's own text.
+
 ## Consequences
 
 - `config/samples/*.yaml` apply as committed; `api/v1alpha1/samples_test.go`
@@ -277,5 +316,14 @@ instead of crash-loop.
   registration prevents the webhook server's listener from racing the
   rotator's first write; it states the actual, measured mechanism and
   points at ADR 0006's already-accepted crash-loop consequence instead.
+- `cmd/main.go`'s `logCertStatusBeforeStart` logs, once per enabled server,
+  right before `mgr.Start()`, whether that server's certificate file
+  already exists -- and if not, states plainly that a restart or two is
+  expected on a brand-new install and names what resolves it. `dist/
+  chart/values.yaml` carries the same note next to `webhook.enabled`.
+  The race itself is not fixed: a bootstrap self-signed certificate was
+  considered and rejected, since it would trade this loud, self-healing
+  failure for a silent one that can reject every DELETE forever if the
+  rotator's own write ever fails for an unrelated reason.
 - `internal/controller/`, `internal/cli/`, `internal/uiapi/`, `pkg/`,
   `test/`, `ui/` and `proto/` are untouched by this unit.

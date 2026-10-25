@@ -6,4 +6,14 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: taloscluster-sample
 spec:
-  # TODO(user): Add fields here
+  endpoint:
+    type: vip
+    address: 10.0.0.10
+  talosVersion: v1.11.3
+  kubernetesVersion: v1.34.0
+  versionContract: v1.11
+  secretsRef:
+    name: taloscluster-sample-secrets
+  controlPlane:
+    count: 3
+    schedulable: "false"

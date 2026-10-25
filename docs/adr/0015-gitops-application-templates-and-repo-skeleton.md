@@ -168,6 +168,28 @@ for where it sits in the hand-over order, and `Skeleton.Apps["cni"]` as
 where its output lands in the repo tree. Nothing CNI-specific — not a preset
 name, not a chart reference — lives in `pkg/gitops`.
 
+**Update (ADR 0019's `ichor init` work): `pkg/cni.Preset.ArgoCDApplication`
+now returns `*gitops.Application` directly, built through `gitops.New`,**
+rather than `*unstructured.Unstructured` with its own hand-assembled map
+(ADR 0013's update records the `pkg/cni` side of this). `pkg/cni` depends
+on `pkg/gitops` as a result — the direction this ADR's "nothing CNI-specific
+lives in `pkg/gitops`" sentence above did not rule out; it is `pkg/gitops`
+depending on `pkg/cni`, or CNI-specific content living in `pkg/gitops`,
+that would be backwards. The practical effect is that every Application
+`pkg/cni` builds now goes through this package's own guards (the `RepoURL`
+credential check, the `ServerSideApply`/`ignoreDifferences` pairing) instead
+of a caller having to notice an `unstructured.Unstructured` carries none of
+them, and `ichor init --gitops-dir` writes `pkg/cni/cilium`'s Application
+straight into `Skeleton.Apps["cni"]` with no conversion step.
+
+This did need one addition here: `ApplicationSourceHelm` gained a `Values`
+field (`spec.source.helm.values`, inline Helm values as a YAML string —
+argo-cd.readthedocs.io's Helm page, retrieved 2026-10-25) to carry what
+Cilium's unstructured map previously put at the same path. `ReleaseName`
+and `ValueFiles` were already there for a `--gitops-dir`-authored
+`ApplicationSource`; `Values` is for a preset that already rendered its
+own values document and has nothing to reference by path.
+
 One pitfall from the task brief is explicitly **not** addressed here: Cilium
 generating its Hubble certificates through a CronJob rather than Helm (so
 sync doesn't see a diff every time). That is Cilium-preset content, i.e.
@@ -191,7 +213,8 @@ already written down here for `pkg/cni` to read.
   unless they already know to check `config/crd/bases/` for
   surprises. There is no lint rule for this; it is only written down here
   and in `pkg/gitops/application.go`'s comment on `Application`.
-- `ichor init --gitops-dir` and `ichor gitops export` (both separate work)
-  decide *which* components go in `Skeleton.Apps` and what each
-  `Application`'s source/values look like; they call `gitops.New` and
+- `ichor init --gitops-dir` (`ichor gitops export` is still separate work)
+  decides *which* components go in `Skeleton.Apps`: today, just `"cni"`,
+  from whatever `pkg/cni.Preset.ArgoCDApplication` returned for the
+  cluster's chosen preset. It calls `gitops.New` (via `pkg/cni`) and
   `Skeleton.Write` rather than reimplementing either.

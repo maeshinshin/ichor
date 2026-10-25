@@ -26,9 +26,8 @@ import (
 	"context"
 	"fmt"
 
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/gitops"
 )
 
 // KubeProxyMode is TalosCluster.spec.cni.kubeProxy: kube-proxy stays Talos's
@@ -103,8 +102,13 @@ type Preset interface {
 
 	// ArgoCDApplication renders the Argo CD Application that takes over
 	// from the bootstrap manifest. A preset Ichor never hands to Argo CD
-	// (flannel) returns nil.
-	ArgoCDApplication(kubeProxy KubeProxyMode) (*unstructured.Unstructured, error)
+	// (flannel) returns nil. Returning pkg/gitops's own typed Application,
+	// rather than *unstructured.Unstructured, means every Application this
+	// package builds goes through pkg/gitops's guards (RepoURL credential
+	// checks, the ServerSideApply/ignoreDifferences pitfalls, Secret
+	// write refusal) instead of a caller having to re-check an
+	// unstructured value by hand.
+	ArgoCDApplication(kubeProxy KubeProxyMode) (*gitops.Application, error)
 
 	// SupportsKubeProxyReplacement reports whether this preset can run
 	// with kube-proxy replaced.

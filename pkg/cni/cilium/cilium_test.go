@@ -22,8 +22,6 @@ import (
 	"strings"
 	"testing"
 
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-
 	"github.com/maeshinshin/ichor/pkg/cni"
 )
 
@@ -106,25 +104,22 @@ func TestArgoCDApplication(t *testing.T) {
 		t.Fatal("ArgoCDApplication = nil, want a rendered Application")
 	}
 
-	if got := app.GetAPIVersion(); got != "argoproj.io/v1alpha1" {
+	if got := app.APIVersion; got != "argoproj.io/v1alpha1" {
 		t.Errorf("apiVersion = %q, want argoproj.io/v1alpha1", got)
 	}
-	if got := app.GetKind(); got != "Application" {
+	if got := app.Kind; got != "Application" {
 		t.Errorf("kind = %q, want Application", got)
 	}
 
-	syncOptions, found, err := unstructured.NestedStringSlice(app.Object, "spec", "syncPolicy", "syncOptions")
-	if err != nil || !found {
-		t.Fatalf("spec.syncPolicy.syncOptions: found=%v err=%v", found, err)
-	}
-	if !slices.Contains(syncOptions, "ServerSideApply=true") {
-		t.Errorf("syncOptions = %v, want ServerSideApply=true (large CRD set pitfall)", syncOptions)
+	if app.Spec.SyncPolicy == nil || !slices.Contains(app.Spec.SyncPolicy.SyncOptions, "ServerSideApply=true") {
+		t.Errorf("syncOptions = %v, want ServerSideApply=true (large CRD set pitfall)", app.Spec.SyncPolicy)
 	}
 
-	values, found, err := unstructured.NestedString(app.Object, "spec", "source", "helm", "values")
-	if err != nil || !found {
-		t.Fatalf("spec.source.helm.values: found=%v err=%v", found, err)
+	if app.Spec.Source == nil || app.Spec.Source.Helm == nil {
+		t.Fatal("spec.source.helm is nil")
 	}
+
+	values := app.Spec.Source.Helm.Values
 	if !strings.Contains(values, "method: cronJob") {
 		t.Errorf("spec.source.helm.values missing Hubble's cronJob certificate method:\n%s", values)
 	}

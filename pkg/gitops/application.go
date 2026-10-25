@@ -113,6 +113,12 @@ type ApplicationSource struct {
 type ApplicationSourceHelm struct {
 	ReleaseName string   `json:"releaseName,omitempty"`
 	ValueFiles  []string `json:"valueFiles,omitempty"`
+
+	// Values is an inline block of Helm values, as YAML text
+	// (argo-cd.readthedocs.io, "Helm", retrieved 2026-10-25): the whole
+	// values document a caller already rendered, rather than a path to one
+	// in the chart's own repository.
+	Values string `json:"values,omitempty"`
 }
 
 // ApplicationSourceDir is Application.spec.source.directory, used by the

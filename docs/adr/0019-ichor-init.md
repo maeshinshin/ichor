@@ -103,19 +103,20 @@ credentials Secret that are ready for use *once* Argo CD exists on the
 cluster by some other means (installed by hand, or by a future unit) --
 not a cluster where Argo CD is already running.
 
-**The CNI's Argo CD Application is not written into the GitOps
-skeleton's `apps/` directory.** `pkg/cni.Preset.ArgoCDApplication` returns
-`*unstructured.Unstructured`; `pkg/gitops.Skeleton.Apps` takes
-`map[string]*gitops.Application`, a different, independently-owned typed
-representation designed (ADR 0015) specifically to avoid depending on
-Argo CD's own Go module. There is no conversion between the two today.
-Writing one here, in `internal/cli`, would mean either reimplementing
-`unstructured`-to-`gitops.Application` field mapping (knowledge that
-belongs with one of those two packages, not with the command that merely
-calls them) or weakening `pkg/gitops`'s typed `Apps` field to accept
-`any`, which is `pkg/gitops`'s decision to make, not `ichor init`'s.
-`buildSkeleton`'s doc comment names this gap at the point it would
-otherwise silently drop the CNI's Application.
+**Closed, same day: the CNI's Argo CD Application now lands in the GitOps
+skeleton's `apps/cni/application.yaml`.** The gap as first flagged was
+real -- `pkg/cni.Preset.ArgoCDApplication` returned
+`*unstructured.Unstructured`, and `pkg/gitops.Skeleton.Apps` takes
+`map[string]*gitops.Application`, with no conversion between the two. The
+fix landed in `pkg/cni` itself, not here: `ArgoCDApplication` now returns
+`*gitops.Application` directly (ADR 0013's and ADR 0015's updates), so
+`runInit`/`initArgoCD` pass `cniBoot.ArgoCDApplication` straight into
+`buildSkeleton`'s `Apps` map with no conversion to write. This was a
+deliberate call made above this command's level: `pkg/cni` depending on
+`pkg/gitops` is the correct direction (the package building an Argo CD
+Application depends on the package modeling what one is), not something
+`internal/cli` should have patched around by weakening either package's
+types.
 
 **Disk roles for the first node are not set.** Named in the design's step
 2, but `TalosMachineSpec` carries no field for them (the volume allow-list
@@ -143,11 +144,12 @@ ignoring the flag.
   credentials Secret, but does not itself bring Argo CD up. An operator
   following this path installs Argo CD by some other means before its
   root Application can do anything.
-- The three gaps above are a natural shape for follow-up units:
+- The two remaining gaps are a natural shape for follow-up units:
   "Ichor-itself and Argo-CD-itself bootstrap manifest sourcing" (one
-  decision, affecting both), "a `pkg/gitops` or `pkg/cni` conversion for
-  CNI Applications," and "disk roles on `TalosMachineSpec`" (already
-  being built by another unit, per the brief that scoped this phase).
+  decision, affecting both) and "disk roles on `TalosMachineSpec`"
+  (already being built by another unit, per the brief that scoped this
+  phase). The third -- the CNI Application/GitOps-skeleton type
+  mismatch -- is closed, above.
 - Hub mode, if built later, will need `ichor init` (or whatever supersedes
   it) to take the controller's namespace and this `TalosCluster`'s
   namespace as two separate flags; today's single `--namespace` is

@@ -20,12 +20,12 @@ import (
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
 	"github.com/maeshinshin/ichor/pkg/cni/flannel"
+	"github.com/maeshinshin/ichor/pkg/gitops"
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
 
@@ -64,8 +64,10 @@ type cniBootstrap struct {
 
 	// ArgoCDApplication is the CNI's hand-over Application, built only
 	// when the caller asks for it (--argocd); nil otherwise, and nil for
-	// any preset that is never handed to Argo CD (flannel).
-	ArgoCDApplication *unstructured.Unstructured
+	// any preset that is never handed to Argo CD (flannel). pkg/cni now
+	// returns pkg/gitops's own typed Application, so
+	// this is directly usable as a Skeleton.Apps entry.
+	ArgoCDApplication *gitops.Application
 }
 
 // buildCNIBootstrap calls preset's three bootstrap-relevant methods and
@@ -81,7 +83,7 @@ func buildCNIBootstrap(preset cni.Preset, clusterName, namespace string, wantArg
 
 	if len(manifest) > 0 {
 		out.InlineManifest = &typedconfig.ClusterInlineManifest{
-			InlineManifestName:     "cni",
+			InlineManifestName:     cniKey,
 			InlineManifestContents: string(manifest),
 		}
 	}

@@ -138,6 +138,53 @@ type TalosClusterCNI struct {
 	Handover string `json:"handover,omitempty"`
 }
 
+// TalosClusterRegistry declares one private registry mirror this cluster's nodes pull through,
+// and where its pull credentials live. The mirror endpoints and (non-secret) username are typed
+// fields, same as any other machine-config value; the password-shaped credentials
+// (RegistryAuthConfig.{password,auth,identityToken}) are not, because they would let this value
+// -- carried on TalosCluster, a CR that lives in Git -- put a registry password in Git (design
+// principle 2). authSecretRef points at a Kubernetes Secret
+// instead; the render-time injection that resolves it never writes the resolved value back onto
+// any CR (pkg/render.ResolveRegistryAuth, pkg/render.RenderWithRegistryAuth).
+type TalosClusterRegistry struct {
+	// host is the registry host (and port, if not the default) this entry's mirror and
+	// credentials apply to, matching RegistriesConfig's own map key: the first segment of an
+	// image reference, "docker.io" being the default one, or "*" for a fallback mirror. TLS
+	// config (RegistryConfig.tls) uses the same key but never the "*" fallback; this field
+	// carries both mirror and auth, so "*" is only meaningful when authSecretRef is unset.
+	// +kubebuilder:validation:MinLength=1
+	// +required
+	Host string `json:"host"`
+
+	// endpoints are the mirror endpoint URLs for host (RegistryMirrorConfig.endpoints) -- not
+	// secret, so they stay a plain typed field here rather than behind a reference.
+	// +kubebuilder:validation:MinItems=1
+	// +required
+	Endpoints []string `json:"endpoints"`
+
+	// username is this registry's non-secret auth username (RegistryAuthConfig.username). Optional: some private
+	// registries authenticate on password/token alone.
+	// +optional
+	Username string `json:"username,omitempty"`
+
+	// authSecretRef names a Secret, read in the controller's own namespace (the same reasoning
+	// as secretsRef below: RBAC cannot scope a Secret read to "wherever this TalosCluster
+	// happens to live" below cluster-wide), holding this registry's password-shaped
+	// credentials. Unset means an anonymous mirror -- a public registry needing no credentials
+	// at all, not an error. Set but unresolvable (Secret missing, or present but carrying none
+	// of its three recognized keys) is: pkg/render.ResolveRegistryAuth fails the render rather
+	// than silently producing a mirror with no auth, since that would look identical to a
+	// working one until the first pull fails on the node. A corev1.LocalObjectReference, not a
+	// SecretKeySelector: machinery's RegistryAuthConfig carries three mutually-exclusive
+	// credential shapes (password, auth, identityToken, matching docker config.json's own auth
+	// forms) that one registry's credentials pick at most one of, so one reference to a Secret
+	// with those three well-known keys covers it -- same shape secretsRef already uses for
+	// bundleSecretKey, rather than three separate single-key selectors for a value that is, in
+	// practice, one secret.
+	// +optional
+	AuthSecretRef *corev1.LocalObjectReference `json:"authSecretRef,omitempty"`
+}
+
 // TalosClusterDiscovery lists maintenance-mode candidates for the controller to probe directly.
 // Empty (the default, on both fields) disables discovery entirely: the controller opens no
 // connection at all. Ichor never finds this range itself -- no subnet scan, no listening for a
@@ -222,6 +269,21 @@ type TalosClusterSpec struct {
 	// default) disables discovery: the controller opens no connection at all.
 	// +optional
 	Discovery *TalosClusterDiscovery `json:"discovery,omitempty"`
+
+	// registries declares this cluster's private registry mirrors and where their pull
+	// credentials live, pushed to every node through the system layer (docs/design/architecture.md "Monitoring and air
+	// gap"). Empty (the default) configures no
+	// mirrors at all -- air-gap support stays entirely optional. listType=map on host (rather
+	// than a CEL uniqueness rule, same as status.conditions below) is what the structural schema
+	// itself rejects a duplicate host under -- a CEL self.exists_one rule over this list was
+	// tried first and rejected by envtest's apiserver: with MaxItems=32 its estimated cost
+	// exceeds the per-field budget by 32x (quadratic in list length), and still contributed
+	// enough to blow the whole-schema budget by 3.3x alongside this CRD's existing CEL rules.
+	// +kubebuilder:validation:MaxItems=32
+	// +listType=map
+	// +listMapKey=host
+	// +optional
+	Registries []TalosClusterRegistry `json:"registries,omitempty"`
 }
 
 // TalosClusterStatus defines the observed state of TalosCluster.

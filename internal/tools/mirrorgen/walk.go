@@ -22,6 +22,7 @@ const (
 	kMap                            // map[string]elem
 	kSubstScalar                    // substitution-table entry: mirror is a string
 	kSubstArgValue                  // substitution-table entry: meta.ArgValue, mirror is []string
+	kOverride                       // field-override-table entry: meta.Unstructured mirrored as an upstream type
 	kDropped                        // meta.Unstructured, or a container of nothing but dropped fields
 )
 
@@ -38,6 +39,15 @@ type typeMapping struct {
 	// slice/map: ToMachinery must cast the assembled plain container into
 	// it.
 	machNamedCast string
+
+	// overridePtr is set for kOverride entries whose upstream type is a
+	// struct (not a map): the mirror side is a pointer to it even though
+	// machinery's side is always a plain meta.Unstructured value, so that
+	// omitempty can tell "unset" apart from the type's zero value (see
+	// emitOverrideConvert). Map-shaped overrides (e.g. corev1.ResourceList)
+	// don't need this: a nil map already round-trips through
+	// meta.Unstructured{Object: nil} and omitempty on its own.
+	overridePtr bool
 
 	elem      *typeMapping // for kPointer, kSlice, kMap
 	structDef *structDef   // for kStruct
@@ -66,14 +76,24 @@ type droppedField struct {
 	Struct, Field, YAML string
 }
 
+// droppedSecretField is a secretFields entry actually hit while walking, for
+// the report. It carries Why (what the field holds) rather than reusing
+// droppedField, so the report can say *why* in a way that reads differently
+// from "can't represent this" -- see secretFields' doc comment in main.go.
+type droppedSecretField struct {
+	Struct, Field, YAML, Why string
+}
+
 type generator struct {
-	pkgs      []*packages.Package
-	byPath    map[string]*packages.Package
-	structs   map[*types.Named]*structDef
-	nameOwner map[string]*types.Named // collision detection: mirror struct name -> source type
-	order     []*structDef            // emission order, first-seen
-	dropped   []droppedField
-	subst     map[string]bool // qualified type names substituted, for the report
+	pkgs          []*packages.Package
+	byPath        map[string]*packages.Package
+	structs       map[*types.Named]*structDef
+	nameOwner     map[string]*types.Named // collision detection: mirror struct name -> source type
+	order         []*structDef            // emission order, first-seen
+	dropped       []droppedField
+	droppedSecret []droppedSecretField
+	subst         map[string]bool // qualified type names substituted, for the report
+	overridden    []string        // "Struct.Field" entries from fieldOverrides actually used, for the report
 }
 
 func newGenerator(pkgs []*packages.Package) *generator {
@@ -147,6 +167,14 @@ func machImportAlias(pkgPath string) string {
 		return "mx509"
 	case "time":
 		return "time"
+	case pkgCoreV1:
+		return "corev1"
+	case pkgSpecs:
+		return "specs"
+	case pkgAuditV1:
+		return "auditv1"
+	case pkgAPIServerV1:
+		return "apiserverv1"
 	default:
 		fatalf("package %s has no registered import alias; add one in walk.go", pkgPath)
 		return ""
@@ -280,6 +308,30 @@ func (g *generator) mapNamed(n *types.Named) *typeMapping {
 	return nil
 }
 
+// overrideMapping builds the typeMapping for a fieldOverrides entry: the
+// field's machinery type is meta.Unstructured (every entry in that table is,
+// by construction -- see main.go), and the mirror type is the upstream type
+// named there instead, converted through the generic JSON helpers in
+// substitution.go rather than recursing into it.
+func (g *generator) overrideMapping(fieldKey string, ov fieldOverride) *typeMapping {
+	named := g.lookupType(ov.pkgPath, ov.typeName)
+	g.overridden = append(g.overridden, fieldKey)
+
+	_, isMap := named.Underlying().(*types.Map)
+
+	mirrorExpr := g.qualify(named)
+	if ov.localWrapper != "" {
+		mirrorExpr = ov.localWrapper
+	}
+
+	return &typeMapping{
+		kind:        kOverride,
+		mirrorExpr:  mirrorExpr,
+		machExpr:    machImportAlias(pkgMeta) + ".Unstructured",
+		overridePtr: !isMap,
+	}
+}
+
 func isMetaMeta(t types.Type) bool {
 	n, ok := t.(*types.Named)
 
@@ -321,7 +373,21 @@ func (g *generator) structMapping(named *types.Named, st *types.Struct) *typeMap
 			continue
 		}
 
-		mapping := g.mapType(fld.Type())
+		fieldKey := name + "." + fld.Name()
+
+		if why, ok := secretFields[fieldKey]; ok {
+			g.droppedSecret = append(g.droppedSecret, droppedSecretField{Struct: name, Field: fld.Name(), YAML: yamlName, Why: why})
+
+			continue
+		}
+
+		var mapping *typeMapping
+		if ov, ok := fieldOverrides[fieldKey]; ok {
+			mapping = g.overrideMapping(fieldKey, ov)
+		} else {
+			mapping = g.mapType(fld.Type())
+		}
+
 		if mapping.kind == kDropped {
 			g.dropped = append(g.dropped, droppedField{Struct: name, Field: fld.Name(), YAML: yamlName})
 

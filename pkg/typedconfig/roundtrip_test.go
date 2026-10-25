@@ -20,11 +20,16 @@ import (
 	"testing"
 	"time"
 
-	mx509 "github.com/siderolabs/crypto/x509"
+	specs "github.com/opencontainers/runtime-spec/specs-go"
 	mmeta "github.com/siderolabs/talos/pkg/machinery/config/types/meta"
 	mruntime "github.com/siderolabs/talos/pkg/machinery/config/types/runtime"
 	mv1alpha1 "github.com/siderolabs/talos/pkg/machinery/config/types/v1alpha1"
 	yaml "go.yaml.in/yaml/v4"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	apiserverv1 "k8s.io/apiserver/pkg/apis/apiserver/v1"
+	auditv1 "k8s.io/apiserver/pkg/apis/audit/v1"
 )
 
 // These are the generator's correctness check (ADR 0003): a machinery
@@ -75,13 +80,66 @@ func TestRoundTripConfig(t *testing.T) {
 	boolTrue := true
 	boolFalse := false
 
+	// The five fieldOverrides entries (internal/tools/mirrorgen/main.go):
+	// building these through mirrorToMachineryUnstructured, the same helper
+	// ToMachinery itself calls, guarantees the fixture is exactly the shape a
+	// real round trip would produce, including every field the upstream
+	// type requires with no omitempty.
+	requests, err := mirrorToMachineryUnstructured(corev1.ResourceList{
+		corev1.ResourceCPU:    resource.MustParse("1"),
+		corev1.ResourceMemory: resource.MustParse("2Gi"),
+	})
+	if err != nil {
+		t.Fatalf("seeding resources requests: %v", err)
+	}
+
+	limits, err := mirrorToMachineryUnstructured(corev1.ResourceList{
+		corev1.ResourceCPU:    resource.MustParse("2"),
+		corev1.ResourceMemory: resource.MustParse("4Gi"),
+	})
+	if err != nil {
+		t.Fatalf("seeding resources limits: %v", err)
+	}
+
+	auditPolicy, err := mirrorToMachineryUnstructured(auditv1.Policy{
+		Rules: []auditv1.PolicyRule{{Level: auditv1.LevelMetadata}},
+	})
+	if err != nil {
+		t.Fatalf("seeding audit policy: %v", err)
+	}
+
+	webhook, err := mirrorToMachineryUnstructured(apiserverv1.WebhookConfiguration{
+		AuthorizedTTL:                            metav1.Duration{Duration: 5 * time.Minute},
+		UnauthorizedTTL:                          metav1.Duration{Duration: 30 * time.Second},
+		Timeout:                                  metav1.Duration{Duration: 30 * time.Second},
+		SubjectAccessReviewVersion:               "v1",
+		MatchConditionSubjectAccessReviewVersion: "v1",
+		FailurePolicy:                            "NoOpinion",
+		ConnectionInfo:                           apiserverv1.WebhookConnectionInfo{Type: "InClusterConfig"},
+	})
+	if err != nil {
+		t.Fatalf("seeding authorizer webhook: %v", err)
+	}
+
+	seccomp, err := mirrorToMachineryUnstructured(specs.LinuxSeccomp{
+		DefaultAction: specs.ActAllow,
+		Architectures: []specs.Arch{specs.ArchX86_64},
+	})
+	if err != nil {
+		t.Fatalf("seeding seccomp profile: %v", err)
+	}
+
 	orig := &mv1alpha1.Config{
 		ConfigVersion: apiVersionV1Alpha1,
 		ConfigDebug:   &boolFalse,
 		MachineConfig: &mv1alpha1.MachineConfig{
-			MachineType:     "controlplane",
-			MachineToken:    "328hom.uqjzh6jnn2eie9oi",
-			MachineCA:       &mx509.PEMEncodedCertificateAndKey{Crt: []byte("ca-cert-bytes"), Key: []byte("ca-key-bytes")},
+			MachineType: "controlplane",
+			// MachineToken and MachineCA are deliberately left unset: both are on
+			// mirrorgen's secretFields drop table (ADR 0003's follow-up), so the
+			// mirror never carries them and a round trip that set them here would
+			// not come back out. See roundtrip_test.go's package doc note, and
+			// TestConfigRejectsSecretFields in api/v1alpha1 for the field-presence
+			// side of that.
 			MachineCertSANs: []string{"10.0.0.10", "203.0.113.10"},
 			// MachineInstall, MachineKubelet and MachineFiles are deprecated in
 			// favor of multi-document config kinds outside the phase 2 allow-list
@@ -110,6 +168,14 @@ func TestRoundTripConfig(t *testing.T) {
 					FileOp:          "create",
 				},
 			},
+			// MachineSeccompProfiles exercises MachineSeccompProfile.MachineSeccompProfileValue,
+			// one of the five fieldOverrides entries.
+			MachineSeccompProfiles: []*mv1alpha1.MachineSeccompProfile{
+				{
+					MachineSeccompProfileName:  "audit.json",
+					MachineSeccompProfileValue: seccomp,
+				},
+			},
 		},
 		ClusterConfig: &mv1alpha1.ClusterConfig{
 			// ClusterName and ControlPlane are deprecated in favor of
@@ -122,6 +188,25 @@ func TestRoundTripConfig(t *testing.T) {
 			},
 			AdminKubeconfigConfig: &mv1alpha1.AdminKubeconfigConfig{
 				AdminKubeconfigCertLifetime: 87600 * time.Hour,
+			},
+			// APIServerConfig is deprecated in favor of KubeAPIServerConfig, outside the
+			// phase 2 allow-list; it is still how the remaining three fieldOverrides entries
+			// (ResourcesConfig.Requests/Limits, APIServerConfig.AuditPolicyConfig and
+			// AuthorizationConfigAuthorizerConfig.AuthorizerWebhook) reach v1alpha1.Config today.
+			APIServerConfig: &mv1alpha1.APIServerConfig{ //nolint:staticcheck // see comment above
+				ResourcesConfig: &mv1alpha1.ResourcesConfig{
+					Requests: requests,
+					Limits:   limits,
+				},
+				AuditPolicyConfig: auditPolicy, //nolint:staticcheck // see comment above
+				//nolint:staticcheck // see comment above
+				AuthorizationConfigConfig: mv1alpha1.AuthorizationConfigAuthorizerConfigList{
+					{
+						AuthorizerType:    "Webhook",
+						AuthorizerName:    "example",
+						AuthorizerWebhook: webhook,
+					},
+				},
 			},
 		},
 	}

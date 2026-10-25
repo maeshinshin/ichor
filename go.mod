@@ -8,6 +8,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.28.0
 	github.com/onsi/gomega v1.39.1
 	github.com/open-policy-agent/cert-controller v0.16.0
+	github.com/opencontainers/runtime-spec v1.3.0
 	github.com/siderolabs/crypto v0.6.5
 	github.com/siderolabs/talos/pkg/machinery v1.14.3
 	go.yaml.in/yaml/v4 v4.0.0-rc.6
@@ -16,6 +17,7 @@ require (
 	k8s.io/api v0.36.0
 	k8s.io/apiextensions-apiserver v0.36.0
 	k8s.io/apimachinery v0.36.0
+	k8s.io/apiserver v0.36.0
 	k8s.io/client-go v0.36.0
 	k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2
 	sigs.k8s.io/controller-runtime v0.24.1
@@ -85,7 +87,6 @@ require (
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
-	github.com/opencontainers/runtime-spec v1.3.0 // indirect
 	github.com/petermattis/goid v0.0.0-20260713124913-97594f28f5ca // indirect
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c // indirect
 	github.com/pkg/errors v0.9.1 // indirect
@@ -137,7 +138,6 @@ require (
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	k8s.io/apiserver v0.36.0 // indirect
 	k8s.io/component-base v0.36.0 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20260317180543-43fb72c5454a // indirect

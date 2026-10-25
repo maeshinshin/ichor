@@ -24,6 +24,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/maeshinshin/ichor/internal/controller"
+	"github.com/maeshinshin/ichor/internal/installmanifest"
 )
 
 var initOpts initOptions
@@ -71,6 +72,7 @@ change to this cluster goes through the controller, by writing CRs.`,
 			DialMaintenance: dialMaintenance,
 			DialAdmin:       dialAdmin,
 			NewK8sClient:    newKubeClientFromBytes,
+			IchorManifest:   installmanifest.Manifest,
 			Stdout:          cmd.OutOrStdout(),
 			Stderr:          cmd.ErrOrStderr(),
 			Stdin:           cmd.InOrStdin(),
@@ -104,9 +106,13 @@ func init() {
 
 	flags := initCmd.Flags()
 	flags.StringVar(&initOpts.Cluster, flagCluster, "", "name of the TalosCluster to create (required)")
-	flags.StringVarP(&initOpts.Namespace, "namespace", "n", "default",
-		"namespace the TalosCluster, its TalosMachine and the secrets bundle Secret live in")
-	flags.StringVar(&initOpts.Preset, "preset", supportedPreset, "topology preset; only \"standard\" is supported today")
+	flags.StringVarP(&initOpts.Namespace, "namespace", "n", ichorControllerNamespace,
+		"namespace the TalosCluster, its TalosMachine and the secrets bundle Secret live in; "+
+			"Ichor's own install manifest always deploys its controller to \""+ichorControllerNamespace+"\"")
+	flags.StringVar(&initOpts.Preset, "preset", defaultPreset,
+		"topology preset: single (1 node, schedulable), compact-ha (3 control planes, schedulable), "+
+			"standard (3 control planes + workers added later, tainted; recommended), or "+
+			"large (5 control planes + workers added later, tainted)")
 	flags.StringVar(&initOpts.CNIPreset, "cni", "", "CNI preset: flannel or cilium (required)")
 	flags.StringVar(&initOpts.EndpointType, "endpoint-type", "vip", "cluster endpoint type: vip, loadBalancer, dns or node")
 	flags.StringVar(&initOpts.EndpointAddress, "endpoint-address", "", "cluster endpoint address (required)")
@@ -115,8 +121,7 @@ func init() {
 	flags.StringVar(&initOpts.TalosVersion, "talos-version", "", "Talos release this cluster renders configuration for (required, vX.Y.Z)")
 	flags.StringVar(&initOpts.KubernetesVersion, "kubernetes-version", "v"+constants.DefaultKubernetesVersion, "Kubernetes release this cluster runs")
 	flags.StringVar(&initOpts.VersionContract, "version-contract", "", "Talos version contract (required, vX.Y)")
-	flags.Int32Var(&initOpts.ControlPlaneCount, "control-plane-count", 1, "desired control-plane count: 1, 3 or 5")
-	flags.StringVar(&initOpts.Schedulable, "schedulable", "", "whether control planes accept workloads (required, true or false)")
+	flags.StringVar(&initOpts.InstallDisk, "install-disk", "", "the first node's install disk, e.g. /dev/sda (required)")
 
 	flags.BoolVar(&initOpts.ArgoCD, "argocd", false, "bootstrap Argo CD's repository credentials and GitOps CRs for this cluster")
 	flags.StringVar(&initOpts.ArgoCDNamespace, "argocd-namespace", "argocd", "namespace Argo CD runs in (for the repository credentials Secret)")
@@ -127,7 +132,7 @@ func init() {
 
 	flags.StringVar(&initOpts.GitOpsDir, "gitops-dir", "", "write the GitOps repository skeleton to this local directory")
 
-	for _, name := range []string{flagCluster, cniKey, "endpoint-address", "node-endpoint", "talos-version", "version-contract", "schedulable"} {
+	for _, name := range []string{flagCluster, cniKey, "endpoint-address", "node-endpoint", "talos-version", "version-contract", "install-disk"} {
 		_ = initCmd.MarkFlagRequired(name)
 	}
 }

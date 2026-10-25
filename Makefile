@@ -119,8 +119,13 @@ build: manifests generate fmt vet ## Build manager binary.
 	go build -o bin/manager cmd/main.go
 
 .PHONY: build-ichor
-build-ichor: fmt vet ## Build the ichor CLI binary.
+build-ichor: fmt vet ## Build the ichor CLI binary (placeholder install manifest; see build-ichor-embed).
 	go build -o bin/ichor ./cmd/ichor
+
+.PHONY: build-ichor-embed
+build-ichor-embed: build-installer ## Build the ichor CLI with Ichor's own install manifest embedded (what `ichor init` applies).
+	cp dist/install.yaml internal/installmanifest/install.yaml
+	go build -tags installembed -o bin/ichor ./cmd/ichor
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.

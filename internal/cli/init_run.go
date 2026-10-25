@@ -58,6 +58,11 @@ type initDeps struct {
 	DialAdmin       func(ctx context.Context, cluster *ichorv1alpha1.TalosCluster, endpoint string, bundle *secrets.Bundle) (bootstrapClient, error)
 	NewK8sClient    func(kubeconfig []byte) (client.Client, error)
 
+	// IchorManifest is applied to the new cluster right after the bundle
+	// Secret (design step 3/4): production wires
+	// installmanifest.Manifest; a test supplies its own fixture bytes.
+	IchorManifest []byte
+
 	Stdout io.Writer
 	Stderr io.Writer
 	Stdin  io.Reader
@@ -136,7 +141,7 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) error {
 	nagBackup(deps.Stderr, bundlePath)
 
 	// Step 3: render the first control plane's configuration.
-	candidates := candidatePatches(cluster, machine, cniBoot, opts.NodeEndpoint)
+	candidates := candidatePatches(cluster, machine, cniBoot, opts.NodeEndpoint, opts.InstallDisk)
 
 	rendered, _, err := render.Render(cluster, machine, bundle, candidates)
 	if err != nil {
@@ -204,7 +209,36 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) error {
 		return fmt.Errorf("init: creating the secrets bundle Secret: %w", err)
 	}
 
+	// Ichor itself, applied through the API server now that kubeconfig is
+	// in hand -- not inlined into the node's boot config: its
+	// CRDs must exist before step 5 can create any of them.
+	if err := applyIchorManifest(ctx, k8sClient, deps.IchorManifest, deps.Stderr); err != nil {
+		return err
+	}
+
 	// Step 5: create the CRs.
+	if err := createCRs(ctx, k8sClient, cluster, machine, candidates, deps.Stdout, deps.Output); err != nil {
+		return err
+	}
+
+	if opts.ArgoCD {
+		if err := initArgoCD(ctx, opts, cluster, machine, candidates, cniBoot.ArgoCDApplication, k8sClient, deps.Stderr); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// createCRs implements design step 5, "create the CRs": the
+// TalosCluster, the first control plane's TalosMachine, and every
+// candidate TalosConfigPatch, then prints what it created in the
+// requested output format (design: "-o yaml|json").
+func createCRs(
+	ctx context.Context, k8sClient client.Client,
+	cluster *ichorv1alpha1.TalosCluster, machine *ichorv1alpha1.TalosMachine, candidates []ichorv1alpha1.TalosConfigPatch,
+	stdout io.Writer, output string,
+) error {
 	if err := k8sClient.Create(ctx, cluster); err != nil {
 		return fmt.Errorf("init: creating TalosCluster: %w", err)
 	}
@@ -224,17 +258,7 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) error {
 		out = append(out, &candidates[i])
 	}
 
-	if err := writeOutputObjects(deps.Stdout, deps.Output, out); err != nil {
-		return err
-	}
-
-	if opts.ArgoCD {
-		if err := initArgoCD(ctx, opts, cluster, machine, candidates, cniBoot.ArgoCDApplication, k8sClient, deps.Stderr); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return writeOutputObjects(stdout, output, out)
 }
 
 // candidatePatches collects every TalosConfigPatch init creates alongside
@@ -242,7 +266,7 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) error {
 // and the inline-manifests patch carrying the CNI's bootstrap manifest
 // (if the preset has one).
 func candidatePatches(
-	cluster *ichorv1alpha1.TalosCluster, machine *ichorv1alpha1.TalosMachine, cniBoot *cniBootstrap, nodeEndpoint string,
+	cluster *ichorv1alpha1.TalosCluster, machine *ichorv1alpha1.TalosMachine, cniBoot *cniBootstrap, nodeEndpoint, installDisk string,
 ) []ichorv1alpha1.TalosConfigPatch {
 	var out []ichorv1alpha1.TalosConfigPatch
 
@@ -250,9 +274,14 @@ func candidatePatches(
 		out = append(out, *cniBoot.Patch)
 	}
 
+	var manifests []*typedconfig.ClusterInlineManifest
 	if cniBoot.InlineManifest != nil {
-		out = append(out, buildInlineManifestsPatch(cluster, machine, nodeEndpoint, []*typedconfig.ClusterInlineManifest{cniBoot.InlineManifest}))
+		manifests = []*typedconfig.ClusterInlineManifest{cniBoot.InlineManifest}
 	}
+
+	// Always built, even for flannel (no inline manifest) or a CNI with
+	// no TalosPatches: the install disk is required on every node.
+	out = append(out, buildInlineManifestsPatch(cluster, machine, nodeEndpoint, installDisk, manifests))
 
 	return out
 }
@@ -270,7 +299,7 @@ func candidatePatches(
 // machine.required) get real, correct values -- the node's own role and
 // address -- never placeholders.
 func buildInlineManifestsPatch(
-	cluster *ichorv1alpha1.TalosCluster, machine *ichorv1alpha1.TalosMachine, nodeEndpoint string,
+	cluster *ichorv1alpha1.TalosCluster, machine *ichorv1alpha1.TalosMachine, nodeEndpoint, installDisk string,
 	manifests []*typedconfig.ClusterInlineManifest,
 ) ichorv1alpha1.TalosConfigPatch {
 	host := nodeEndpoint
@@ -290,6 +319,7 @@ func buildInlineManifestsPatch(
 					MachineConfig: &typedconfig.MachineConfig{
 						MachineType:     machine.Spec.Role,
 						MachineCertSANs: []string{host},
+						MachineInstall:  &typedconfig.InstallConfig{InstallDisk: installDisk},
 					},
 					ClusterConfig: &typedconfig.ClusterConfig{ClusterInlineManifests: manifests},
 				},

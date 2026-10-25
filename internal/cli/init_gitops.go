@@ -141,6 +141,18 @@ func initArgoCD(
 		return fmt.Errorf("init: --repo is required with --argocd")
 	}
 
+	// Init never installs Argo CD itself -- fetching a
+	// third-party install manifest during bootstrap would mean this
+	// command deciding which version, signed by whom, from where, which
+	// is not its call to make. Say so plainly: the root Application and
+	// the repository credentials this produces do nothing on their own.
+	_, _ = fmt.Fprintf(warn,
+		"init: --argocd prepared the root Application and repository credentials, but did NOT install "+
+			"Argo CD itself -- that is a separate, deliberate choice, not an oversight. The root "+
+			"Application will do nothing until Argo CD is installed on this cluster by some other means. "+
+			"This command's Application/sync-option shape was verified against the Argo CD v3.5.x docs "+
+			"(argo-cd.readthedocs.io); other v3.x releases should be compatible.\n")
+
 	// Build (and so validate) the root Application before creating
 	// anything: gitops.New rejects a RepoURL carrying embedded userinfo
 	// (pkg/gitops/application.go's checkRepoURL), which is the second of

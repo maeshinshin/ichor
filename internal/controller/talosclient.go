@@ -69,6 +69,16 @@ type TalosClient interface {
 	// (architecture.md's forceRemove case: the node is dead or
 	// unreachable, so it can never call EtcdLeaveCluster on itself).
 	EtcdRemoveMemberByID(ctx context.Context, memberID uint64) error
+
+	// Reset wipes this client's node back to maintenance mode: its STATE
+	// and EPHEMERAL partitions only, never the whole system disk (boot and EFI
+	// included, unless told which partitions to name) and never
+	// graceful (removal.go has already drained and left etcd itself by
+	// the time this is ever called, so there is nothing left for Talos's
+	// own graceful pre-reset routine to do). Opt-in per removal, and
+	// fire-and-forget on Talos's side: this returns once the request is
+	// accepted, not once the wipe finishes.
+	Reset(ctx context.Context) error
 }
 
 // EtcdMember is the one piece of each etcd member EtcdMemberList's callers

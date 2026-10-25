@@ -1,4 +1,4 @@
-# 0023. CNI hand-over: no registry, render-time removal, a separate controller
+# 0024. CNI hand-over: no registry, render-time removal, a separate controller
 
 Status: Accepted · Date: 2026-10-25 · Design section: GitOps and Argo CD
 

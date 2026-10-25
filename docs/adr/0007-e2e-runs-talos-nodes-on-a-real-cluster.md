@@ -119,15 +119,21 @@ Five things the harness has to get right, each of which cost a debugging cycle:
   `10.244.0.0/16` and `10.96.0.0/12`, collide with the host cluster's pod
   network, which is where the node's own address comes from. Talos raises an
   `address-overlap` diagnostic and warns that it cannot find a suitable node IP.
-- **Console output needs two separate settings.** A schematic's
-  `extraKernelArgs: [console=ttyS0,115200n8]` affects only the ISO and PXE
-  media — the Factory ignores kernel arguments for installer images. To keep
-  the console after the install reboots, the machine config needs its own
-  `machine.install.extraKernelArgs`, which is mutually exclusive with
-  `grubUseUKICmdline`, so that has to be false as well. Without this the
-  harness is blind: Talos writes to the VGA framebuffer only and the serial log
-  stays empty, which is what made the original hang take three attempts to
-  understand.
+- **Console output on the ISO, and only there.** A schematic's
+  `extraKernelArgs: [console=ttyS0,115200n8]` gives a serial console for the
+  ISO boot, which is what made the original hang understandable after three
+  blind attempts. Keeping it *past* the install reboot would need
+  `machine.install.extraKernelArgs` and `grubUseUKICmdline: false` in the
+  machine config — and on Talos 1.14 that means hand-editing the legacy
+  v1alpha1 section of a config whose install and network settings live in their
+  own documents (`UnattendedInstallConfig`, `KubeNetworkConfig`,
+  `KubeFlannelCNIConfig`), which the API rejects as incompatible.
+  **So the harness does not try.** The post-install console was a debugging aid
+  from when the cause was unknown; now that it is known, it is a nicety that
+  was blocking the actual goal. Configure the inner cluster through the
+  documents the generator emits rather than against them, and mark the missing
+  post-install console with a `shortcut:` naming the Talos release that
+  requires the trade.
 - **Detach the ISO after install.** It happens to work without doing so,
   because Talos's own first-boot detection finds the STATE partition and runs
   the boot sequence rather than reinstalling. That is incidental and not worth

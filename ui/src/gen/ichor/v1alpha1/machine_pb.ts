@@ -18,7 +18,7 @@ import type { Message, UnknownEnum } from "@bufbuild/protobuf";
  * Describes the file ichor/v1alpha1/machine.proto.
  */
 export const file_ichor_v1alpha1_machine: GenFile = /*@__PURE__*/
-  fileDesc("ChxpY2hvci92MWFscGhhMS9tYWNoaW5lLnByb3RvEg5pY2hvci52MWFscGhhMSJBChNMaXN0TWFjaGluZXNSZXF1ZXN0EioKB2NsdXN0ZXIYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYiQQoUTGlzdE1hY2hpbmVzUmVzcG9uc2USKQoIbWFjaGluZXMYASADKAsyFy5pY2hvci52MWFscGhhMS5NYWNoaW5lIj8KEUdldE1hY2hpbmVSZXF1ZXN0EioKB21hY2hpbmUYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYiPgoSR2V0TWFjaGluZVJlc3BvbnNlEigKB21hY2hpbmUYASABKAsyFy5pY2hvci52MWFscGhhMS5NYWNoaW5lIv8BChVBcHByb3ZlTWFjaGluZVJlcXVlc3QSKgoHbWFjaGluZRgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhIpCgRyb2xlGAIgASgOMhsuaWNob3IudjFhbHBoYTEuTWFjaGluZVJvbGUSSgoLbm9kZV9sYWJlbHMYAyADKAsyNS5pY2hvci52MWFscGhhMS5BcHByb3ZlTWFjaGluZVJlcXVlc3QuTm9kZUxhYmVsc0VudHJ5EhAKCGhvc3RuYW1lGAQgASgJGjEKD05vZGVMYWJlbHNFbnRyeRILCgNrZXkYASABKAkSDQoFdmFsdWUYAiABKAk6AjgBIm4KFkFwcHJvdmVNYWNoaW5lUmVzcG9uc2USKAoHbWFjaGluZRgBIAEoCzIXLmljaG9yLnYxYWxwaGExLk1hY2hpbmUSKgoFYXVkaXQYAiABKAsyGy5pY2hvci52MWFscGhhMS5BdWRpdFJlY29yZCJSChRSZWplY3RNYWNoaW5lUmVxdWVzdBIqCgdtYWNoaW5lGAEgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmEg4KBnJlYXNvbhgCIAEoCSJDChVSZWplY3RNYWNoaW5lUmVzcG9uc2USKgoFYXVkaXQYASABKAsyGy5pY2hvci52MWFscGhhMS5BdWRpdFJlY29yZCJGCg9NYWNoaW5lSWRlbnRpdHkSDAoEdXVpZBgBIAEoCRIOCgZzZXJpYWwYAiABKAkSFQoNbWFjX2FkZHJlc3NlcxgDIAMoCSKgAwoHTWFjaGluZRImCgNyZWYYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYSKgoHY2x1c3RlchgCIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhIxCghpZGVudGl0eRgDIAEoCzIfLmljaG9yLnYxYWxwaGExLk1hY2hpbmVJZGVudGl0eRIQCghlbmRwb2ludBgEIAEoCRIpCgRyb2xlGAUgASgOMhsuaWNob3IudjFhbHBoYTEuTWFjaGluZVJvbGUSPAoLbm9kZV9sYWJlbHMYBiADKAsyJy5pY2hvci52MWFscGhhMS5NYWNoaW5lLk5vZGVMYWJlbHNFbnRyeRIQCghob3N0bmFtZRgHIAEoCRIQCghhcHByb3ZlZBgIIAEoCBItCgpjb25kaXRpb25zGAkgAygLMhkuaWNob3IudjFhbHBoYTEuQ29uZGl0aW9uEg0KBXN0YWdlGAogASgJGjEKD05vZGVMYWJlbHNFbnRyeRILCgNrZXkYASABKAkSDQoFdmFsdWUYAiABKAk6AjgBKmQKC01hY2hpbmVSb2xlEhwKGE1BQ0hJTkVfUk9MRV9VTlNQRUNJRklFRBAAEh4KGk1BQ0hJTkVfUk9MRV9DT05UUk9MX1BMQU5FEAESFwoTTUFDSElORV9ST0xFX1dPUktFUhACMv8CCg5NYWNoaW5lU2VydmljZRJZCgxMaXN0TWFjaGluZXMSIy5pY2hvci52MWFscGhhMS5MaXN0TWFjaGluZXNSZXF1ZXN0GiQuaWNob3IudjFhbHBoYTEuTGlzdE1hY2hpbmVzUmVzcG9uc2USUwoKR2V0TWFjaGluZRIhLmljaG9yLnYxYWxwaGExLkdldE1hY2hpbmVSZXF1ZXN0GiIuaWNob3IudjFhbHBoYTEuR2V0TWFjaGluZVJlc3BvbnNlEl8KDkFwcHJvdmVNYWNoaW5lEiUuaWNob3IudjFhbHBoYTEuQXBwcm92ZU1hY2hpbmVSZXF1ZXN0GiYuaWNob3IudjFhbHBoYTEuQXBwcm92ZU1hY2hpbmVSZXNwb25zZRJcCg1SZWplY3RNYWNoaW5lEiQuaWNob3IudjFhbHBoYTEuUmVqZWN0TWFjaGluZVJlcXVlc3QaJS5pY2hvci52MWFscGhhMS5SZWplY3RNYWNoaW5lUmVzcG9uc2VCvQEKEmNvbS5pY2hvci52MWFscGhhMUIMTWFjaGluZVByb3RvUAFaQGdpdGh1Yi5jb20vbWFlc2hpbnNoaW4vaWNob3IvZ2VuL2dvL2ljaG9yL3YxYWxwaGExO2ljaG9ydjFhbHBoYTGiAgNJWFiqAg5JY2hvci5WMWFscGhhMcoCDkljaG9yXFYxYWxwaGEx4gIaSWNob3JcVjFhbHBoYTFcR1BCTWV0YWRhdGHqAg9JY2hvcjo6VjFhbHBoYTFiBnByb3RvMw", [file_ichor_v1alpha1_common]);
+  fileDesc("ChxpY2hvci92MWFscGhhMS9tYWNoaW5lLnByb3RvEg5pY2hvci52MWFscGhhMSJBChNMaXN0TWFjaGluZXNSZXF1ZXN0EioKB2NsdXN0ZXIYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYiQQoUTGlzdE1hY2hpbmVzUmVzcG9uc2USKQoIbWFjaGluZXMYASADKAsyFy5pY2hvci52MWFscGhhMS5NYWNoaW5lIj8KEUdldE1hY2hpbmVSZXF1ZXN0EioKB21hY2hpbmUYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYiPgoSR2V0TWFjaGluZVJlc3BvbnNlEigKB21hY2hpbmUYASABKAsyFy5pY2hvci52MWFscGhhMS5NYWNoaW5lIv8BChVBcHByb3ZlTWFjaGluZVJlcXVlc3QSKgoHbWFjaGluZRgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhIpCgRyb2xlGAIgASgOMhsuaWNob3IudjFhbHBoYTEuTWFjaGluZVJvbGUSSgoLbm9kZV9sYWJlbHMYAyADKAsyNS5pY2hvci52MWFscGhhMS5BcHByb3ZlTWFjaGluZVJlcXVlc3QuTm9kZUxhYmVsc0VudHJ5EhAKCGhvc3RuYW1lGAQgASgJGjEKD05vZGVMYWJlbHNFbnRyeRILCgNrZXkYASABKAkSDQoFdmFsdWUYAiABKAk6AjgBIm4KFkFwcHJvdmVNYWNoaW5lUmVzcG9uc2USKAoHbWFjaGluZRgBIAEoCzIXLmljaG9yLnYxYWxwaGExLk1hY2hpbmUSKgoFYXVkaXQYAiABKAsyGy5pY2hvci52MWFscGhhMS5BdWRpdFJlY29yZCJSChRSZWplY3RNYWNoaW5lUmVxdWVzdBIqCgdtYWNoaW5lGAEgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmEg4KBnJlYXNvbhgCIAEoCSJDChVSZWplY3RNYWNoaW5lUmVzcG9uc2USKgoFYXVkaXQYASABKAsyGy5pY2hvci52MWFscGhhMS5BdWRpdFJlY29yZCJGCg9NYWNoaW5lSWRlbnRpdHkSDAoEdXVpZBgBIAEoCRIOCgZzZXJpYWwYAiABKAkSFQoNbWFjX2FkZHJlc3NlcxgDIAMoCSLcAwoHTWFjaGluZRImCgNyZWYYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYSKgoHY2x1c3RlchgCIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhIxCghpZGVudGl0eRgDIAEoCzIfLmljaG9yLnYxYWxwaGExLk1hY2hpbmVJZGVudGl0eRIQCghlbmRwb2ludBgEIAEoCRIpCgRyb2xlGAUgASgOMhsuaWNob3IudjFhbHBoYTEuTWFjaGluZVJvbGUSPAoLbm9kZV9sYWJlbHMYBiADKAsyJy5pY2hvci52MWFscGhhMS5NYWNoaW5lLk5vZGVMYWJlbHNFbnRyeRIQCghob3N0bmFtZRgHIAEoCRItCgpjb25kaXRpb25zGAkgAygLMhkuaWNob3IudjFhbHBoYTEuQ29uZGl0aW9uEg0KBXN0YWdlGAogASgJEjwKDmFwcHJvdmFsX3N0YXRlGAsgASgOMiQuaWNob3IudjFhbHBoYTEuTWFjaGluZUFwcHJvdmFsU3RhdGUaMQoPTm9kZUxhYmVsc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAFKBAgIEAlSCGFwcHJvdmVkKmQKC01hY2hpbmVSb2xlEhwKGE1BQ0hJTkVfUk9MRV9VTlNQRUNJRklFRBAAEh4KGk1BQ0hJTkVfUk9MRV9DT05UUk9MX1BMQU5FEAESFwoTTUFDSElORV9ST0xFX1dPUktFUhACKqwBChRNYWNoaW5lQXBwcm92YWxTdGF0ZRImCiJNQUNISU5FX0FQUFJPVkFMX1NUQVRFX1VOU1BFQ0lGSUVEEAASIgoeTUFDSElORV9BUFBST1ZBTF9TVEFURV9QRU5ESU5HEAESIwofTUFDSElORV9BUFBST1ZBTF9TVEFURV9BUFBST1ZFRBACEiMKH01BQ0hJTkVfQVBQUk9WQUxfU1RBVEVfUkVKRUNURUQQAzL/AgoOTWFjaGluZVNlcnZpY2USWQoMTGlzdE1hY2hpbmVzEiMuaWNob3IudjFhbHBoYTEuTGlzdE1hY2hpbmVzUmVxdWVzdBokLmljaG9yLnYxYWxwaGExLkxpc3RNYWNoaW5lc1Jlc3BvbnNlElMKCkdldE1hY2hpbmUSIS5pY2hvci52MWFscGhhMS5HZXRNYWNoaW5lUmVxdWVzdBoiLmljaG9yLnYxYWxwaGExLkdldE1hY2hpbmVSZXNwb25zZRJfCg5BcHByb3ZlTWFjaGluZRIlLmljaG9yLnYxYWxwaGExLkFwcHJvdmVNYWNoaW5lUmVxdWVzdBomLmljaG9yLnYxYWxwaGExLkFwcHJvdmVNYWNoaW5lUmVzcG9uc2USXAoNUmVqZWN0TWFjaGluZRIkLmljaG9yLnYxYWxwaGExLlJlamVjdE1hY2hpbmVSZXF1ZXN0GiUuaWNob3IudjFhbHBoYTEuUmVqZWN0TWFjaGluZVJlc3BvbnNlQr0BChJjb20uaWNob3IudjFhbHBoYTFCDE1hY2hpbmVQcm90b1ABWkBnaXRodWIuY29tL21hZXNoaW5zaGluL2ljaG9yL2dlbi9nby9pY2hvci92MWFscGhhMTtpY2hvcnYxYWxwaGExogIDSVhYqgIOSWNob3IuVjFhbHBoYTHKAg5JY2hvclxWMWFscGhhMeICGkljaG9yXFYxYWxwaGExXEdQQk1ldGFkYXRh6gIPSWNob3I6OlYxYWxwaGExYgZwcm90bzM", [file_ichor_v1alpha1_common]);
 
 /**
  * @generated from message ichor.v1alpha1.ListMachinesRequest
@@ -257,11 +257,6 @@ export type Machine = Message<"ichor.v1alpha1.Machine"> & {
   hostname: string;
 
   /**
-   * @generated from field: bool approved = 8;
-   */
-  approved: boolean;
-
-  /**
    * @generated from field: repeated ichor.v1alpha1.Condition conditions = 9;
    */
   conditions: Condition[];
@@ -274,6 +269,15 @@ export type Machine = Message<"ichor.v1alpha1.Machine"> & {
    * @generated from field: string stage = 10;
    */
   stage: string;
+
+  /**
+   * approval_state replaces the removed bool "approved" (field 8): a bool
+   * cannot represent "rejected" without a second field claiming the same
+   * truth, which this design specifically avoids.
+   *
+   * @generated from field: ichor.v1alpha1.MachineApprovalState approval_state = 11;
+   */
+  approvalState: MachineApprovalState;
 };
 
 /**
@@ -313,6 +317,60 @@ export type MachineRole = (typeof MachineRole)[keyof typeof MachineRole] | Unkno
  */
 export const MachineRoleSchema: GenEnum<MachineRole> = /*@__PURE__*/
   enumDesc(file_ichor_v1alpha1_machine, 0);
+
+/**
+ * MachineApprovalState mirrors TalosMachine.spec.approvalState:
+ * the human decision on a machine, a tri-state a single bool cannot carry.
+ * PENDING is default (discovered, awaiting a decision); APPROVED lets the
+ * controller render and apply configuration; REJECTED means an operator
+ * explicitly turned the machine away. REJECTED is distinct from PENDING so
+ * a rejected machine does not keep showing up as a fresh approval request
+ * in ListMachines. Re-approving a REJECTED machine is allowed and reverses
+ * it -- ApproveMachine only refuses a machine that is already APPROVED.
+ *
+ * @generated from enum ichor.v1alpha1.MachineApprovalState
+ */
+export const MachineApprovalState = {
+  /**
+   * @generated from enum value: MACHINE_APPROVAL_STATE_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED: 0,
+
+  /**
+   * @generated from enum value: MACHINE_APPROVAL_STATE_PENDING = 1;
+   */
+  PENDING: 1,
+
+  /**
+   * @generated from enum value: MACHINE_APPROVAL_STATE_APPROVED = 2;
+   */
+  APPROVED: 2,
+
+  /**
+   * @generated from enum value: MACHINE_APPROVAL_STATE_REJECTED = 3;
+   */
+  REJECTED: 3,
+} as const;
+
+/**
+ * MachineApprovalState mirrors TalosMachine.spec.approvalState:
+ * the human decision on a machine, a tri-state a single bool cannot carry.
+ * PENDING is default (discovered, awaiting a decision); APPROVED lets the
+ * controller render and apply configuration; REJECTED means an operator
+ * explicitly turned the machine away. REJECTED is distinct from PENDING so
+ * a rejected machine does not keep showing up as a fresh approval request
+ * in ListMachines. Re-approving a REJECTED machine is allowed and reverses
+ * it -- ApproveMachine only refuses a machine that is already APPROVED.
+ *
+ * @generated from enum ichor.v1alpha1.MachineApprovalState
+ */
+export type MachineApprovalState = (typeof MachineApprovalState)[keyof typeof MachineApprovalState] | UnknownEnum;
+
+/**
+ * Describes the enum ichor.v1alpha1.MachineApprovalState.
+ */
+export const MachineApprovalStateSchema: GenEnum<MachineApprovalState> = /*@__PURE__*/
+  enumDesc(file_ichor_v1alpha1_machine, 1);
 
 /**
  * @generated from service ichor.v1alpha1.MachineService

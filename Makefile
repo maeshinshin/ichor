@@ -44,7 +44,7 @@ help: ## Display this help.
 ##@ Development
 
 .PHONY: manifests
-manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
+manifests: controller-gen manifests-ichor-ui ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
 	"$(CONTROLLER_GEN)" rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
 .PHONY: third-party-notices
@@ -64,6 +64,11 @@ fmt: ## Run go fmt against code.
 .PHONY: vet
 vet: ## Run go vet against code.
 	go vet ./...
+	# internal/uiapi/rbac_markers.go lives behind the ichorui_rbac build tag so
+	# make manifests never merges its markers into manager-role; that tag also means the
+	# file is never type-checked by a plain "go vet ./..." (or "go build"/"go test"). This
+	# is the one place that compiles it, so a syntax or type error in it is still caught.
+	go vet -tags ichorui_rbac ./internal/uiapi/...
 
 .PHONY: test
 test: manifests generate fmt vet setup-envtest ## Run tests.

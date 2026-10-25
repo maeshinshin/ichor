@@ -2555,8 +2555,11 @@ spec:
                 - id
                 type: object
               secretsRef:
-                description: secretsRef names the Secret holding the Talos, Kubernetes
-                  and etcd CA bundle, in this TalosCluster's namespace.
+                description: |-
+                  secretsRef names the Secret holding the Talos, Kubernetes and etcd CA bundle. The Secret lives in the
+                  controller's own namespace (not necessarily this TalosCluster's), because Kubernetes RBAC cannot restrict
+                  Secret reads to "wherever the referencing TalosCluster happens to live" at anything narrower than
+                  cluster-wide (ADR 0011).
                 properties:
                   name:
                     default: ""

@@ -152,7 +152,10 @@ type TalosClusterSpec struct {
 	// +optional
 	Schematic *TalosClusterSchematic `json:"schematic,omitempty"`
 
-	// secretsRef names the Secret holding the Talos, Kubernetes and etcd CA bundle, in this TalosCluster's namespace.
+	// secretsRef names the Secret holding the Talos, Kubernetes and etcd CA bundle. The Secret lives in the
+	// controller's own namespace (not necessarily this TalosCluster's), because Kubernetes RBAC cannot restrict
+	// Secret reads to "wherever the referencing TalosCluster happens to live" at anything narrower than
+	// cluster-wide (ADR 0011).
 	// +kubebuilder:validation:XValidation:rule="self.name != ''",message="secretsRef.name is required"
 	// +required
 	SecretsRef corev1.LocalObjectReference `json:"secretsRef"`

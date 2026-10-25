@@ -243,9 +243,10 @@ func main() {
 		}()
 	}
 	if err := (&controller.TalosMachineReconciler{
-		Client:      mgr.GetClient(),
-		Scheme:      mgr.GetScheme(),
-		TalosClient: controller.NewMachineryTalosClient,
+		Client:              mgr.GetClient(),
+		Scheme:              mgr.GetScheme(),
+		ControllerNamespace: os.Getenv("POD_NAMESPACE"),
+		TalosClient:         controller.NewMachineryTalosClient,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "talosmachine")
 		os.Exit(1)

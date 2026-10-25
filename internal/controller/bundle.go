@@ -40,18 +40,34 @@ import (
 const bundleSecretKey = "secrets.yaml"
 
 // loadBundle implements design step 1's "load the bundle from the Secret":
-// it reads the Secret cluster.Spec.SecretsRef names, in cluster's
-// namespace, and decodes bundleSecretKey as a secrets.Bundle. It returns
-// the bundle to the caller and stores nothing else about it (principle 2:
-// secrets are referenced, never embedded) -- in particular, every error
-// path below is structural (missing Secret, missing key, malformed YAML)
-// and never includes the Secret's data in its message.
-func loadBundle(ctx context.Context, c client.Client, cluster *ichorv1alpha1.TalosCluster) (*secrets.Bundle, error) {
+// it reads the Secret cluster.Spec.SecretsRef names, in the controller's own
+// namespace (namespace -- POD_NAMESPACE in practice, see cmd/main.go), and
+// decodes bundleSecretKey as a secrets.Bundle. A TalosCluster may live in any
+// namespace the controller watches, but Kubernetes RBAC cannot express "the
+// Secret this TalosCluster names, wherever that TalosCluster happens to
+// live" at anything narrower than cluster-wide Secret read; resolving in the
+// controller's fixed namespace instead is what lets the RBAC marker on
+// Reconcile stay namespace-scoped (ADR 0011). It returns the bundle to the
+// caller and stores nothing else about it (principle 2: secrets are
+// referenced, never embedded) -- in particular, every error path below is
+// structural (missing Secret, missing key, malformed YAML) and never
+// includes the Secret's data in its message.
+//
+// namespace must be non-empty: Secret is a namespaced resource, and an empty
+// namespace is never treated as "all namespaces" here -- that would turn a
+// missing POD_NAMESPACE into a silent, far broader read than intended.
+func loadBundle(
+	ctx context.Context, c client.Client, namespace string, cluster *ichorv1alpha1.TalosCluster,
+) (*secrets.Bundle, error) {
+	if namespace == "" {
+		return nil, fmt.Errorf("loading secrets bundle: controller namespace is empty (is POD_NAMESPACE set?)")
+	}
+
 	var secret corev1.Secret
 
-	key := types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Spec.SecretsRef.Name}
+	key := types.NamespacedName{Namespace: namespace, Name: cluster.Spec.SecretsRef.Name}
 	if err := c.Get(ctx, key, &secret); err != nil {
-		return nil, fmt.Errorf("getting secrets bundle Secret %q: %w", key, err)
+		return nil, fmt.Errorf("getting secrets bundle Secret %q in the controller's own namespace: %w", key, err)
 	}
 
 	raw, ok := secret.Data[bundleSecretKey]

@@ -126,6 +126,12 @@ type TalosMachineReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 
+	// ControllerNamespace is the namespace loadBundle reads the secrets
+	// bundle Secret from -- the controller's own namespace (POD_NAMESPACE in
+	// cmd/main.go), not the TalosCluster's (ADR 0011). Required: loadBundle
+	// fails explicitly rather than guessing if this is empty.
+	ControllerNamespace string
+
 	// TalosClient opens the Talos API boundary for m, using cluster and the
 	// already-loaded bundle (NewMachineryTalosClient is the real
 	// implementation cmd/main.go wires in). nil means node connectivity
@@ -149,7 +155,7 @@ type TalosMachineReconciler struct {
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosmachines/finalizers,verbs=update
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters,verbs=get;list;watch
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosconfigpatches,verbs=get;list;watch
-// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,verbs=get;list;watch
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile implements design 5.6's five numbered steps for one
@@ -184,7 +190,7 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	// render. Neither the bundle nor the rendered bytes are ever logged,
 	// returned in an error string, or written to status below (principle
 	// 3; pkg/render's own leak-test discipline).
-	bundle, err := loadBundle(ctx, r.Client, &cluster)
+	bundle, err := loadBundle(ctx, r.Client, r.ControllerNamespace, &cluster)
 	if err != nil {
 		log.Error(err, "loading secrets bundle")
 

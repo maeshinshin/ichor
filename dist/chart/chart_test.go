@@ -49,6 +49,7 @@ const (
 	kindSecret                         = "Secret"
 	kindRole                           = "Role"
 	kindRoleBinding                    = "RoleBinding"
+	kindClusterRole                    = "ClusterRole"
 	kindValidatingWebhookConfiguration = "ValidatingWebhookConfiguration"
 	kindCustomResourceDefinition       = "CustomResourceDefinition"
 )
@@ -71,6 +72,7 @@ func TestChartInvariants(t *testing.T) {
 			checkNoCABundle(t, release, docs)
 			checkCertSecretHasNoData(t, release, docs)
 			checkSecretsRoleAndBinding(t, release, docs)
+			checkNoClusterWideSecretsRead(t, release, docs)
 			checkCRDsMatchConfig(t, release, docs)
 		})
 	}
@@ -354,6 +356,41 @@ func findRoleBindingTo(docs []map[string]any, roleName string) map[string]any {
 		}
 	}
 	return nil
+}
+
+// checkNoClusterWideSecretsRead guards the regression ADR 0011 records
+// (commit 645f5be reintroduced a ClusterRole rule granting unrestricted
+// get/list/watch on every Secret in every namespace, which 823b04f had
+// already removed once): no ClusterRole in the rendered chart may grant
+// get, list or watch on secrets without resourceNames to restrict it. The
+// toggled manager-role template renders as a Role instead of a ClusterRole
+// under rbac.namespaced: true, but the default (false, checked here) is
+// exactly the case that regressed.
+func checkNoClusterWideSecretsRead(t *testing.T, release string, docs []map[string]any) {
+	t.Helper()
+
+	for _, cr := range findAll(docs, kindClusterRole) {
+		rules, _ := cr["rules"].([]any)
+		for _, r := range rules {
+			rm, _ := r.(map[string]any)
+			if _, hasNames := rm["resourceNames"]; hasNames {
+				continue
+			}
+
+			if !containsStr(rm["resources"], "secrets") {
+				continue
+			}
+
+			if containsStr(rm["verbs"], "get") || containsStr(rm["verbs"], "list") || containsStr(rm["verbs"], "watch") {
+				t.Errorf(
+					"helm template %s .: ClusterRole %q grants %v on secrets across every namespace with no "+
+						"resourceNames; the bundle Secret is resolved in the controller's own namespace (ADR "+
+						"0011), so this permission must live in a namespace-scoped Role instead",
+					release, nameOf(cr), rm["verbs"],
+				)
+			}
+		}
+	}
 }
 
 // checkCRDsMatchConfig guards against the drift that shipped a

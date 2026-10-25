@@ -1,0 +1,23 @@
+{{- if .Values.ichorUI.enabled }}
+# ClusterIP (the default, unset here): architecture.md "Trust" says the UI is reached
+# through "ichor ui" (a port-forward) in the first release, not an externally exposed
+# Service. Fixed name, not release-templated -- see this file's sibling, ui.yaml.
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/name: {{ include "ichor.name" . }}
+    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  name: ichor-ui-service
+  namespace: {{ .Release.Namespace }}
+spec:
+  ports:
+  - port: {{ .Values.ichorUI.port }}
+    protocol: TCP
+    targetPort: {{ .Values.ichorUI.port }}
+  selector:
+    app.kubernetes.io/name: {{ include "ichor.name" . }}
+    control-plane: ui-backend
+{{- end }}

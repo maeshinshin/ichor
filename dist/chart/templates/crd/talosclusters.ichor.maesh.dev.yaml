@@ -109,22 +109,6 @@ spec:
                                         certLifetime:
                                           type: string
                                       type: object
-                                    aescbcEncryptionSecret:
-                                      type: string
-                                    aggregatorCA:
-                                      description: 'github.com/siderolabs/crypto/x509:
-                                        PEMEncodedCertificateAndKey'
-                                      properties:
-                                        crt:
-                                          format: byte
-                                          type: string
-                                        key:
-                                          format: byte
-                                          type: string
-                                      required:
-                                      - crt
-                                      - key
-                                      type: object
                                     allowSchedulingOnControlPlanes:
                                       type: boolean
                                     allowSchedulingOnMasters:
@@ -143,6 +127,189 @@ spec:
                                             - name
                                             type: object
                                           type: array
+                                        auditPolicy:
+                                          description: |-
+                                            Policy defines the configuration of audit logging, and the rules for how different request
+                                            categories are logged.
+                                          properties:
+                                            apiVersion:
+                                              description: |-
+                                                APIVersion defines the versioned schema of this representation of an object.
+                                                Servers should convert recognized schemas to the latest internal value, and
+                                                may reject unrecognized values.
+                                                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+                                              type: string
+                                            kind:
+                                              description: |-
+                                                Kind is a string value representing the REST resource this object represents.
+                                                Servers may infer this from the endpoint the client submits requests to.
+                                                Cannot be updated.
+                                                In CamelCase.
+                                                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+                                              type: string
+                                            metadata:
+                                              description: ObjectMeta is included
+                                                for interoperability with API infrastructure.
+                                              type: object
+                                            omitManagedFields:
+                                              description: |-
+                                                OmitManagedFields indicates whether to omit the managed fields of the request
+                                                and response bodies from being written to the API audit log.
+                                                This is used as a global default - a value of 'true' will omit the managed fileds,
+                                                otherwise the managed fields will be included in the API audit log.
+                                                Note that this can also be specified per rule in which case the value specified
+                                                in a rule will override the global default.
+                                              type: boolean
+                                            omitStages:
+                                              description: |-
+                                                OmitStages is a list of stages for which no events are created. Note that this can also
+                                                be specified per rule in which case the union of both are omitted.
+                                              items:
+                                                description: Stage defines the stages
+                                                  in request handling that audit events
+                                                  may be generated.
+                                                type: string
+                                              type: array
+                                              x-kubernetes-list-type: atomic
+                                            rules:
+                                              description: |-
+                                                Rules specify the audit Level a request should be recorded at.
+                                                A request may match multiple rules, in which case the FIRST matching rule is used.
+                                                The default audit level is None, but can be overridden by a catch-all rule at the end of the list.
+                                                PolicyRules are strictly ordered.
+                                              items:
+                                                description: |-
+                                                  PolicyRule maps requests based off metadata to an audit Level.
+                                                  Requests must match the rules of every field (an intersection of rules).
+                                                properties:
+                                                  level:
+                                                    description: The Level that requests
+                                                      matching this rule are recorded
+                                                      at.
+                                                    type: string
+                                                  namespaces:
+                                                    description: |-
+                                                      Namespaces that this rule matches.
+                                                      The empty string "" matches non-namespaced resources.
+                                                      An empty list implies every namespace.
+                                                    items:
+                                                      type: string
+                                                    type: array
+                                                    x-kubernetes-list-type: atomic
+                                                  nonResourceURLs:
+                                                    description: |-
+                                                      NonResourceURLs is a set of URL paths that should be audited.
+                                                      `*`s are allowed, but only as the full, final step in the path.
+                                                      Examples:
+                                                      - `/metrics` - Log requests for apiserver metrics
+                                                      - `/healthz*` - Log all health checks
+                                                    items:
+                                                      type: string
+                                                    type: array
+                                                    x-kubernetes-list-type: atomic
+                                                  omitManagedFields:
+                                                    description: |-
+                                                      OmitManagedFields indicates whether to omit the managed fields of the request
+                                                      and response bodies from being written to the API audit log.
+                                                      - a value of 'true' will drop the managed fields from the API audit log
+                                                      - a value of 'false' indicates that the managed fileds should be included
+                                                        in the API audit log
+                                                      Note that the value, if specified, in this rule will override the global default
+                                                      If a value is not specified then the global default specified in
+                                                      Policy.OmitManagedFields will stand.
+                                                    type: boolean
+                                                  omitStages:
+                                                    description: |-
+                                                      OmitStages is a list of stages for which no events are created. Note that this can also
+                                                      be specified policy wide in which case the union of both are omitted.
+                                                      An empty list means no restrictions will apply.
+                                                    items:
+                                                      description: Stage defines the
+                                                        stages in request handling
+                                                        that audit events may be generated.
+                                                      type: string
+                                                    type: array
+                                                    x-kubernetes-list-type: atomic
+                                                  resources:
+                                                    description: Resources that this
+                                                      rule matches. An empty list
+                                                      implies all kinds in all API
+                                                      groups.
+                                                    items:
+                                                      description: GroupResources
+                                                        represents resource kinds
+                                                        in an API group.
+                                                      properties:
+                                                        group:
+                                                          description: |-
+                                                            Group is the name of the API group that contains the resources.
+                                                            The empty string represents the core API group.
+                                                            `*` matches all groups
+                                                          type: string
+                                                        resourceNames:
+                                                          description: |-
+                                                            ResourceNames is a list of resource instance names that the policy matches.
+                                                            Using this field requires Resources to be specified.
+                                                            An empty list implies that every instance of the resource is matched.
+                                                          items:
+                                                            type: string
+                                                          type: array
+                                                          x-kubernetes-list-type: atomic
+                                                        resources:
+                                                          description: |-
+                                                            Resources is a list of resources this rule applies to.
+
+                                                            For example:
+                                                            - `pods` matches pods.
+                                                            - `pods/log` matches the log subresource of pods.
+                                                            - `*` matches all resources and their subresources.
+                                                            - `pods/*` matches all subresources of pods.
+                                                            - `*/scale` matches all scale subresources.
+
+                                                            If wildcard is present, the validation rule will ensure resources do not
+                                                            overlap with each other.
+
+                                                            An empty list implies all resources and subresources in this API groups apply.
+                                                          items:
+                                                            type: string
+                                                          type: array
+                                                          x-kubernetes-list-type: atomic
+                                                      type: object
+                                                    type: array
+                                                    x-kubernetes-list-type: atomic
+                                                  userGroups:
+                                                    description: |-
+                                                      The user groups this rule applies to. A user is considered matching
+                                                      if it is a member of any of the UserGroups.
+                                                      An empty list implies every user group.
+                                                    items:
+                                                      type: string
+                                                    type: array
+                                                    x-kubernetes-list-type: atomic
+                                                  users:
+                                                    description: |-
+                                                      The users (by authenticated user name) this rule applies to.
+                                                      An empty list implies every user.
+                                                    items:
+                                                      type: string
+                                                    type: array
+                                                    x-kubernetes-list-type: atomic
+                                                  verbs:
+                                                    description: |-
+                                                      The verbs that match this rule.
+                                                      An empty list implies every verb.
+                                                    items:
+                                                      type: string
+                                                    type: array
+                                                    x-kubernetes-list-type: atomic
+                                                required:
+                                                - level
+                                                type: object
+                                              type: array
+                                              x-kubernetes-list-type: atomic
+                                          required:
+                                          - rules
+                                          type: object
                                         authorizationConfig:
                                           items:
                                             description: 'Talos: AuthorizationConfigAuthorizerConfig
@@ -152,6 +319,135 @@ spec:
                                                 type: string
                                               type:
                                                 type: string
+                                              webhook:
+                                                properties:
+                                                  authorizedTTL:
+                                                    description: |-
+                                                      The duration to cache 'authorized' responses from the webhook
+                                                      authorizer.
+                                                      Same as setting `--authorization-webhook-cache-authorized-ttl` flag
+                                                      Default: 5m0s
+                                                    type: string
+                                                  cacheAuthorizedRequests:
+                                                    description: |-
+                                                      CacheAuthorizedRequests specifies whether authorized requests should be cached.
+                                                      If set to true, the TTL for cached decisions can be configured via the
+                                                      AuthorizedTTL field.
+                                                      Default: true
+                                                    type: boolean
+                                                  cacheUnauthorizedRequests:
+                                                    description: |-
+                                                      CacheUnauthorizedRequests specifies whether unauthorized requests should be cached.
+                                                      If set to true, the TTL for cached decisions can be configured via the
+                                                      UnauthorizedTTL field.
+                                                      Default: true
+                                                    type: boolean
+                                                  connectionInfo:
+                                                    description: ConnectionInfo defines
+                                                      how we talk to the webhook
+                                                    properties:
+                                                      kubeConfigFile:
+                                                        description: |-
+                                                          Path to KubeConfigFile for connection info
+                                                          Required, if connectionInfo.Type is KubeConfig
+                                                        type: string
+                                                      type:
+                                                        description: |-
+                                                          Controls how the webhook should communicate with the server.
+                                                          Valid values:
+                                                          - KubeConfigFile: use the file specified in kubeConfigFile to locate the
+                                                            server.
+                                                          - InClusterConfig: use the in-cluster configuration to call the
+                                                            SubjectAccessReview API hosted by kube-apiserver. This mode is not
+                                                            allowed for kube-apiserver.
+                                                        type: string
+                                                    required:
+                                                    - kubeConfigFile
+                                                    - type
+                                                    type: object
+                                                  failurePolicy:
+                                                    description: |-
+                                                      Controls the authorization decision when a webhook request fails to
+                                                      complete or returns a malformed response or errors evaluating
+                                                      matchConditions.
+                                                      Valid values:
+                                                        - NoOpinion: continue to subsequent authorizers to see if one of
+                                                          them allows the request
+                                                        - Deny: reject the request without consulting subsequent authorizers
+                                                      Required, with no default.
+                                                    type: string
+                                                  matchConditionSubjectAccessReviewVersion:
+                                                    description: |-
+                                                      MatchConditionSubjectAccessReviewVersion specifies the SubjectAccessReview
+                                                      version the CEL expressions are evaluated against
+                                                      Valid values: v1
+                                                      Required, no default value
+                                                    type: string
+                                                  matchConditions:
+                                                    description: |-
+                                                      matchConditions is a list of conditions that must be met for a request to be sent to this
+                                                      webhook. An empty list of matchConditions matches all requests.
+                                                      There are a maximum of 64 match conditions allowed.
+
+                                                      The exact matching logic is (in order):
+                                                        1. If at least one matchCondition evaluates to FALSE, then the webhook is skipped.
+                                                        2. If ALL matchConditions evaluate to TRUE, then the webhook is called.
+                                                        3. If at least one matchCondition evaluates to an error (but none are FALSE):
+                                                           - If failurePolicy=Deny, then the webhook rejects the request
+                                                           - If failurePolicy=NoOpinion, then the error is ignored and the webhook is skipped
+                                                    items:
+                                                      properties:
+                                                        expression:
+                                                          description: |-
+                                                            expression represents the expression which will be evaluated by CEL. Must evaluate to bool.
+                                                            CEL expressions have access to the contents of the SubjectAccessReview in v1 version.
+                                                            If version specified by subjectAccessReviewVersion in the request variable is v1beta1,
+                                                            the contents would be converted to the v1 version before evaluating the CEL expression.
+
+                                                            - 'resourceAttributes' describes information for a resource access request and is unset for non-resource requests. e.g. has(request.resourceAttributes) && request.resourceAttributes.namespace == 'default'
+                                                            - 'nonResourceAttributes' describes information for a non-resource access request and is unset for resource requests. e.g. has(request.nonResourceAttributes) && request.nonResourceAttributes.path == '/healthz'.
+                                                            - 'user' is the user to test for. e.g. request.user == 'alice'
+                                                            - 'groups' is the groups to test for. e.g. ('group1' in request.groups)
+                                                            - 'extra' corresponds to the user.Info.GetExtra() method from the authenticator.
+                                                            - 'uid' is the information about the requesting user. e.g. request.uid == '1'
+
+                                                            Documentation on CEL: https://kubernetes.io/docs/reference/using-api/cel/
+                                                          type: string
+                                                      required:
+                                                      - expression
+                                                      type: object
+                                                    type: array
+                                                  subjectAccessReviewVersion:
+                                                    description: |-
+                                                      The API version of the authorization.k8s.io SubjectAccessReview to
+                                                      send to and expect from the webhook.
+                                                      Same as setting `--authorization-webhook-version` flag
+                                                      Valid values: v1beta1, v1
+                                                      Required, no default value
+                                                    type: string
+                                                  timeout:
+                                                    description: |-
+                                                      Timeout for the webhook request
+                                                      Maximum allowed value is 30s.
+                                                      Required, no default value.
+                                                    type: string
+                                                  unauthorizedTTL:
+                                                    description: |-
+                                                      The duration to cache 'unauthorized' responses from the webhook
+                                                      authorizer.
+                                                      Same as setting `--authorization-webhook-cache-unauthorized-ttl` flag
+                                                      Default: 30s
+                                                    type: string
+                                                required:
+                                                - authorizedTTL
+                                                - connectionInfo
+                                                - failurePolicy
+                                                - matchConditionSubjectAccessReviewVersion
+                                                - matchConditions
+                                                - subjectAccessReviewVersion
+                                                - timeout
+                                                - unauthorizedTTL
+                                                type: object
                                             required:
                                             - name
                                             - type
@@ -193,21 +489,28 @@ spec:
                                           type: string
                                         resources:
                                           description: 'Talos: ResourcesConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                          properties:
+                                            limits:
+                                              additionalProperties:
+                                                anyOf:
+                                                - type: integer
+                                                - type: string
+                                                pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                                x-kubernetes-int-or-string: true
+                                              description: ResourceList is a set of
+                                                (resource name, quantity) pairs.
+                                              type: object
+                                            requests:
+                                              additionalProperties:
+                                                anyOf:
+                                                - type: integer
+                                                - type: string
+                                                pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                                x-kubernetes-int-or-string: true
+                                              description: ResourceList is a set of
+                                                (resource name, quantity) pairs.
+                                              type: object
                                           type: object
-                                      type: object
-                                    ca:
-                                      description: 'github.com/siderolabs/crypto/x509:
-                                        PEMEncodedCertificateAndKey'
-                                      properties:
-                                        crt:
-                                          format: byte
-                                          type: string
-                                        key:
-                                          format: byte
-                                          type: string
-                                      required:
-                                      - crt
-                                      - key
                                       type: object
                                     clusterName:
                                       type: string
@@ -255,6 +558,27 @@ spec:
                                           type: string
                                         resources:
                                           description: 'Talos: ResourcesConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                          properties:
+                                            limits:
+                                              additionalProperties:
+                                                anyOf:
+                                                - type: integer
+                                                - type: string
+                                                pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                                x-kubernetes-int-or-string: true
+                                              description: ResourceList is a set of
+                                                (resource name, quantity) pairs.
+                                              type: object
+                                            requests:
+                                              additionalProperties:
+                                                anyOf:
+                                                - type: integer
+                                                - type: string
+                                                pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                                x-kubernetes-int-or-string: true
+                                              description: ResourceList is a set of
+                                                (resource name, quantity) pairs.
+                                              type: object
                                           type: object
                                       type: object
                                     coreDNS:
@@ -305,20 +629,6 @@ spec:
                                           items:
                                             type: string
                                           type: array
-                                        ca:
-                                          description: 'github.com/siderolabs/crypto/x509:
-                                            PEMEncodedCertificateAndKey'
-                                          properties:
-                                            crt:
-                                              format: byte
-                                              type: string
-                                            key:
-                                              format: byte
-                                              type: string
-                                          required:
-                                          - crt
-                                          - key
-                                          type: object
                                         extraArgs:
                                           additionalProperties:
                                             items:
@@ -333,8 +643,6 @@ spec:
                                           type: array
                                         subnet:
                                           type: string
-                                      required:
-                                      - ca
                                       type: object
                                     externalCloudProvider:
                                       description: 'Talos: ExternalCloudProviderConfig
@@ -460,23 +768,30 @@ spec:
                                           type: string
                                         resources:
                                           description: 'Talos: ResourcesConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                          properties:
+                                            limits:
+                                              additionalProperties:
+                                                anyOf:
+                                                - type: integer
+                                                - type: string
+                                                pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                                x-kubernetes-int-or-string: true
+                                              description: ResourceList is a set of
+                                                (resource name, quantity) pairs.
+                                              type: object
+                                            requests:
+                                              additionalProperties:
+                                                anyOf:
+                                                - type: integer
+                                                - type: string
+                                                pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                                x-kubernetes-int-or-string: true
+                                              description: ResourceList is a set of
+                                                (resource name, quantity) pairs.
+                                              type: object
                                           type: object
                                       type: object
-                                    secret:
-                                      type: string
                                     secretboxEncryptionSecret:
-                                      type: string
-                                    serviceAccount:
-                                      description: 'github.com/siderolabs/crypto/x509:
-                                        PEMEncodedKey'
-                                      properties:
-                                        key:
-                                          format: byte
-                                          type: string
-                                      required:
-                                      - key
-                                      type: object
-                                    token:
                                       type: string
                                   type: object
                                 debug:
@@ -496,20 +811,6 @@ spec:
                                         - crt
                                         type: object
                                       type: array
-                                    ca:
-                                      description: 'github.com/siderolabs/crypto/x509:
-                                        PEMEncodedCertificateAndKey'
-                                      properties:
-                                        crt:
-                                          format: byte
-                                          type: string
-                                        key:
-                                          format: byte
-                                          type: string
-                                      required:
-                                      - crt
-                                      - key
-                                      type: object
                                     certSANs:
                                       items:
                                         type: string
@@ -1299,8 +1600,104 @@ spec:
                                         properties:
                                           name:
                                             type: string
+                                          value:
+                                            description: |-
+                                              SeccompProfile is MachineSeccompProfile.MachineSeccompProfileValue's mirror
+                                              type (internal/tools/mirrorgen/main.go's fieldOverrides): byte-for-byte the
+                                              same fields and JSON tags as specs.LinuxSeccomp (github.com/opencontainers/
+                                              runtime-spec), under a local name so DeepCopyInto/DeepCopy can be
+                                              hand-written below. The generic conversion helpers in substitution.go and
+                                              the generated CRD schema are unaffected by the rename -- both work off the
+                                              JSON shape, which is identical.
+
+                                              Why hand-written: specs.LinuxSeccomp has pointer and slice fields but,
+                                              unlike the other four field overrides (all Kubernetes API types), no
+                                              DeepCopy of its own; controller-gen's object:generate step assumes one
+                                              exists for any struct-shaped field type it doesn't otherwise recognize,
+                                              and errors at compile time rather than generation time when it doesn't.
+                                              The methods can't live on specs.LinuxSeccomp directly -- Go forbids
+                                              methods on types from another package -- and can't live one level up, on
+                                              MachineSeccompProfile itself, either: MachineConfig holds
+                                              MachineSeccompProfiles []*MachineSeccompProfile, and controller-gen's
+                                              generated code for a slice of pointers to a type with a *known* DeepCopy
+                                              method assumes a value-typed element and double-dereferences, which
+                                              doesn't compile. Putting the hand-written methods here, one level down,
+                                              avoids both problems: SeccompProfile is reached only through a plain
+                                              pointer field, never through a pointer slice.
+                                            properties:
+                                              architectures:
+                                                items:
+                                                  description: Arch used for additional
+                                                    architectures
+                                                  type: string
+                                                type: array
+                                              defaultAction:
+                                                description: LinuxSeccompAction taken
+                                                  upon Seccomp rule match
+                                                type: string
+                                              defaultErrnoRet:
+                                                type: integer
+                                              flags:
+                                                items:
+                                                  description: LinuxSeccompFlag is
+                                                    a flag to pass to seccomp(2).
+                                                  type: string
+                                                type: array
+                                              listenerMetadata:
+                                                type: string
+                                              listenerPath:
+                                                type: string
+                                              syscalls:
+                                                items:
+                                                  description: LinuxSyscall is used
+                                                    to match a syscall in Seccomp
+                                                  properties:
+                                                    action:
+                                                      description: LinuxSeccompAction
+                                                        taken upon Seccomp rule match
+                                                      type: string
+                                                    args:
+                                                      items:
+                                                        description: LinuxSeccompArg
+                                                          used for matching specific
+                                                          syscall arguments in Seccomp
+                                                        properties:
+                                                          index:
+                                                            type: integer
+                                                          op:
+                                                            description: LinuxSeccompOperator
+                                                              used to match syscall
+                                                              arguments in Seccomp
+                                                            type: string
+                                                          value:
+                                                            format: int64
+                                                            type: integer
+                                                          valueTwo:
+                                                            format: int64
+                                                            type: integer
+                                                        required:
+                                                        - index
+                                                        - op
+                                                        - value
+                                                        type: object
+                                                      type: array
+                                                    errnoRet:
+                                                      type: integer
+                                                    names:
+                                                      items:
+                                                        type: string
+                                                      type: array
+                                                  required:
+                                                  - action
+                                                  - names
+                                                  type: object
+                                                type: array
+                                            required:
+                                            - defaultAction
+                                            type: object
                                         required:
                                         - name
+                                        - value
                                         type: object
                                       type: array
                                     sysctls:
@@ -1446,8 +1843,6 @@ spec:
                                             type: string
                                           type: array
                                       type: object
-                                    token:
-                                      type: string
                                     type:
                                       type: string
                                     udev:
@@ -1460,7 +1855,6 @@ spec:
                                       type: object
                                   required:
                                   - certSANs
-                                  - token
                                   - type
                                   type: object
                                 persist:

@@ -79,11 +79,15 @@ type AdvanceMachineFunc func(
 type TalosOperationReconciler struct {
 	client.Client
 
-	// APIReader counts approved control planes directly, bypassing the
-	// manager's cache -- the same cached-read trap
-	// deleteguard.CountApprovedControlPlanes documents. An upgrade must not proceed while a control-plane
-	// replacement is mid-flight, and that check has to see the live count,
-	// not a stale one. Wired from mgr.GetAPIReader() in cmd/main.go.
+	// APIReader is used by acquireDisruptiveLock alone, for the
+	// transitioning-control-plane count that gates whether this operation
+	// is allowed to acquire the cluster lock at all -- the same
+	// cached-read trap deleteguard.CountApprovedControlPlanes documents. That check is a safety gate on a disruptive
+	// action, so it has to see the live count, not a stale one. Wired
+	// from mgr.GetAPIReader() in cmd/main.go.
+	//
+	// candidateMachines below deliberately does NOT use this field --
+	// see its own doc comment for why a cached read is fine there.
 	APIReader client.Reader
 
 	// Advance performs one disruptive step for a single machine. nil (the
@@ -259,6 +263,23 @@ func (r *TalosOperationReconciler) setPhase(ctx context.Context, op *ichorv1alph
 // ordered within each tier by ichorv1alpha1.TalosMachineUpgradeOrderLabel
 // (the design's "label-based ordering"; a missing label sorts last), with
 // name as the deterministic tiebreak.
+//
+// Reads through r.Client (the manager's cache), not r.APIReader, on
+// purpose: unlike acquireDisruptiveLock's control-plane count, nothing
+// here gates whether a disruptive action is allowed at all -- it only
+// picks which already-authorized machine goes next. A cache lag has two
+// possible failure shapes, neither one of them the quorum problem's "an
+// action proceeds that should have been refused": a machine deleted a
+// moment ago can still appear here, which just means Advance is called on
+// a machine that no longer exists (a visible, reportable error, not a
+// silent wrong one -- the existing pause-on-failure path handles it the
+// same as any other Advance failure); a machine approved a moment ago can
+// be briefly absent, which only defers it to the next reconcile this
+// level-triggered loop will run regardless. Either way nothing here can
+// make "one control plane at a time" or "maxUnavailable workers" actually
+// be violated, since Reconcile truncates the slice this returns itself --
+// a stale or incomplete candidate list changes which machine is picked,
+// never how many.
 func (r *TalosOperationReconciler) candidateMachines(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster,
 ) (controlPlanes, workers []*ichorv1alpha1.TalosMachine, err error) {

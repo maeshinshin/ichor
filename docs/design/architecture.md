@@ -328,16 +328,48 @@ the nodes Argo CD runs on. The CLI keeps a way out of every corner:
 ### Nodes
 
 Discovery starts from a node in maintenance mode: either registered by IP or
-found by scanning a subnet for the Talos API port. The controller reads
-hardware identity (SMBIOS UUID and serial as the primary key, MACs as a hint),
-disks and NICs over an insecure connection and creates a pending
-`TalosMachine`.
+found by scanning a subnet for the Talos API port. Scanning really is the only
+option — Talos offers no beacon, mDNS or announcement to listen for — and it is
+tractable because an unconfigured node brings up a DHCP client on every
+physical link by itself, so it has an address before anyone looks for it.
+
+The controller reads hardware identity, disks and NICs over an insecure
+connection and creates a pending `TalosMachine`. The identity is the tuple of
+**SMBIOS UUID, serial number and the permanent MAC addresses**, not the UUID
+alone. Talos does not trust the UUID either: it ships two META keys to work
+around it, and the doc comment on one of them says plainly that the UUID "may
+repeat or be filled with zeros". Both need an admin-level connection to write,
+which a maintenance-mode connection never has — it is read-only by
+construction — so at the one moment Ichor keys a new resource off this
+identity, it has no way to detect or repair a collision from the node's side.
+The MACs are in the tuple because they are hardware-level, present when the
+UUID is not, and survive a reset.
+
+So **Ichor does not auto-register on a weak identity**. An empty UUID, or one
+that already maps to a live `TalosMachine`, produces a pending entry that an
+operator has to resolve — the same machine returning, or a different one — with
+the address, MACs, serial and manufacturer shown to decide on. Writing a
+disambiguating token to the node is not a fix: it needs an authenticated
+connection Ichor only has after approval, and a reset wipes META anyway. The
+durable record is Ichor's own `TalosMachine.spec.identity`, which is consistent
+with the controller owning durable state rather than the node.
 
 Approval, in the UI or `ichor machine approve`, sets the role, labels, disk
 roles and basic networking (which NIC, DHCP or static, VLAN or bond if
-needed) through typed forms; no YAML required. The controller then renders the
-config, applies it insecurely, and follows the node through install, reboot
-and join.
+needed) through typed forms; no YAML required. "Which NIC" is expressed as a
+`LinkAliasConfig` whose CEL selector matches the permanent MAC discovered
+earlier, and the other documents refer to that alias — which is also the fix
+for kernel interface names changing across boots. Bond members take names or
+aliases rather than selectors, so a form that picks members by MAC emits one
+alias per member.
+
+The controller then renders the config, applies it insecurely, and follows the
+node through install, reboot and join. "Follows" is load-bearing: the apply RPC
+returns **before** the install starts, because Talos's own controllers react to
+the stored config asynchronously. The approval flow therefore watches
+`MachineStatus`'s stage move from maintenance through installing and rebooting
+to running, and treats the RPC returning as nothing more than "the config was
+stored".
 
 Disks are identified by WWID, serial or by-id path, not `/dev/sdX` — but all
 three can be absent. Talos fills WWID and serial from sysfs, with a udev

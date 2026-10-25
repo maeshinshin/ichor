@@ -87,12 +87,19 @@ func (v *TalosMachineCustomValidator) ValidateDelete(ctx context.Context, obj *i
 	// quorum. This is not a lock problem: admission is never serialized
 	// with the commit it's gatekeeping, so no lock around this List closes
 	// it -- counting objects can't enforce a cross-request invariant by
-	// itself. The real fix is the removal operation from design's "Nodes"
-	// section (phase 3's ordered delete sequence): once control-plane
-	// removal only happens as a step of that serialized operation, this
-	// webhook's job becomes "refuse a delete that isn't part of it," and
-	// the operation does the counting instead. Acceptable until then
-	// because deletions today are an operator acting one at a time.
+	// itself.
+	//
+	// The real fix -- design's "Nodes" ordered removal sequence -- now
+	// exists (internal/controller/removal.go): a finalizer intercepts the
+	// actual deletion and recounts under the per-cluster lock, where a
+	// concurrent sibling removal has to wait its turn rather than racing.
+	// This check stays anyway (not replaced):
+	// it is the only one of the two that can refuse synchronously, at
+	// admission time, with a message `kubectl delete` shows immediately,
+	// and it still correctly refuses the single-delete case on its own.
+	// removal.go's check is the authoritative one for the case this one
+	// cannot see -- concurrent deletes of different control planes -- and
+	// is what actually decides whether the object ever stops existing.
 	var siblings ichorv1alpha1.TalosMachineList
 	if err := v.Client.List(ctx, &siblings, client.InNamespace(obj.Namespace)); err != nil {
 		return nil, err

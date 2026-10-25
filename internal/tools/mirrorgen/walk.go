@@ -86,8 +86,15 @@ type droppedField struct {
 // the report. It carries Why (what the field holds) rather than reusing
 // droppedField, so the report can say *why* in a way that reads differently
 // from "can't represent this" -- see secretFields' doc comment in main.go.
+// Scalar records the dropped field's own shape (string/bool/number vs.
+// struct) so a CRD-schema check matching by YAML name can also require the
+// shape to match: two unrelated fields can legitimately share a YAML name
+// at different schema depths (RegistryConfig.auth, an object, vs.
+// RegistryAuthConfig.RegistryAuth, a dropped string, both tagged "auth"),
+// and shape is what tells them apart without tracking full paths.
 type droppedSecretField struct {
 	Struct, Field, YAML, Why string
+	Scalar                   bool
 }
 
 type generator struct {
@@ -213,6 +220,27 @@ func isByteSlice(t types.Type) bool {
 	b, ok := sl.Elem().(*types.Basic)
 
 	return ok && b.Kind() == types.Byte
+}
+
+// isScalarType reports whether t renders as a JSON scalar (string, bool,
+// number) rather than an object or array -- used to tell a dropped
+// secretFields entry's own shape, so a CRD-schema check can require a
+// candidate match to have the same shape, not just the same YAML name.
+func isScalarType(t types.Type) bool {
+	for {
+		switch tt := t.(type) {
+		case *types.Alias:
+			t = types.Unalias(tt)
+		case *types.Pointer:
+			t = tt.Elem()
+		case *types.Named:
+			t = tt.Underlying()
+		case *types.Basic:
+			return true
+		default:
+			return false // struct, slice, map: object- or array-shaped
+		}
+	}
 }
 
 // mapType computes the mirror representation of a machinery Go type.
@@ -389,10 +417,22 @@ func (g *generator) structMapping(named *types.Named, st *types.Struct) *typeMap
 			continue
 		}
 
-		fieldKey := name + "." + fld.Name()
+		// Keyed on named.Obj().Name() -- the real machinery type name --
+		// not the possibly-renamed mirror name in "name": secretFields and
+		// fieldOverrides are both written against machinery's own type
+		// names (that's what a contributor reads when deciding whether a
+		// field needs a row), and typeRenames exists precisely because a
+		// mirror name can differ from it. Keying on "name" here silently
+		// stops matching the moment a type gets renamed -- which is
+		// exactly what happened to block.EncryptionKey.KeyStatic (renamed
+		// to VolumeEncryptionKey) until this was fixed.
+		fieldKey := named.Obj().Name() + "." + fld.Name()
 
 		if why, ok := secretFields[fieldKey]; ok {
-			g.droppedSecret = append(g.droppedSecret, droppedSecretField{Struct: name, Field: fld.Name(), YAML: yamlName, Why: why})
+			g.droppedSecret = append(g.droppedSecret, droppedSecretField{
+				Struct: name, Field: fld.Name(), YAML: yamlName, Why: why,
+				Scalar: isScalarType(fld.Type()),
+			})
 
 			continue
 		}

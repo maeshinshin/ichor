@@ -1,8 +1,8 @@
 # 0018. UI backend: the read and approval server implementation
 
-Status: Accepted, amended · Date: 2026-10-25 · Design section: CLI and UI, roadmap item 5
+Status: Accepted, amended twice · Date: 2026-10-25 · Design section: CLI and UI, roadmap item 5
 
-Decided: One `Server` type implements all three handler interfaces over a single uncached client; settled the four approval refusals
+Decided: One `Server` type implements all three handler interfaces over a single uncached client; settled the four approval refusals; fixed `loadBundle` resolving the TalosCluster's own namespace instead of the backend's, the same bug ADR 0011 had already fixed on the controller side
 
 ## Context
 
@@ -509,3 +509,45 @@ if a future Talos version narrows either table, `StreamLogs`'s error
 wrapping states plainly that it was using "this backend's read-only
 (role.Reader) Talos identity" when the call failed, so a `PermissionDenied`
 reads as a Talos policy change, not a mystery.
+
+## Amendment (2026-10-26): `loadBundle` was resolving the wrong namespace
+
+Found live, not in review: `internal/uiapi/bundle.go`'s `loadBundle` read
+`cluster.Namespace` to find the secrets bundle Secret, instead of this
+backend's own namespace. ADR 0011 settled this exact question for
+`internal/controller`'s own `loadBundle` -- a `TalosCluster` may live in
+any namespace the reader watches, but Kubernetes RBAC cannot express "the
+Secret this `TalosCluster` names, wherever it happens to live" at
+anything narrower than cluster-wide `Secret` read, so the Secret is
+resolved in the reader's own fixed namespace instead, and
+`internal/uiapi/rbac_markers.go`'s own marker already only grants
+`get`/`update`/`patch` on `ichor-webhook-server-cert`/
+`ichor-metrics-server-cert` plus namespace-scoped `list`/`watch`/`create`
+in `ichor-system` -- never a cluster-wide `Secret` read. `internal/
+uiapi`'s copy of `loadBundle` never got the matching fix when ADR 0011
+landed on the controller side: it read `cluster.Namespace` directly,
+which is wrong for the identical reason and was invisible in every
+existing test because every fixture happened to put the `TalosCluster`
+and the Secret in the same namespace (`testNamespace`, "default").
+
+A `TalosCluster` outside the backend's own namespace would have made
+`GetEffectiveConfig` fail with `Forbidden` (RBAC permits reads only in
+`ichor-system`); one living inside it only worked by coincidence, not
+because the code resolved the right namespace on purpose.
+
+Fixed to match `internal/controller`'s own shape exactly:
+`Server.ControllerNamespace` (set from `POD_NAMESPACE` in `cmd/ichor-ui/
+main.go`, the same env var `cmd/main.go` already reads for the
+controller) is what `loadBundle` resolves against now, never `cluster.
+Namespace`; an empty `ControllerNamespace` fails loudly
+("controller namespace is empty (is POD_NAMESPACE set?)") rather than
+risking a broader read than intended, the same discipline `internal/
+controller/bundle.go` already has. `internal/uiapi/bundle_test.go` is new
+and mirrors `internal/controller/bundle_test.go` directly: resolves the
+Secret in the given namespace even when the `TalosCluster`'s differs,
+fails explicitly when the namespace is empty, names the namespace it
+looked in when the Secret is missing. `effectiveconfig_test.go` gained a
+fourth test creating the `TalosCluster` and the Secret in two different,
+real namespaces end to end through `Server.GetEffectiveConfig` itself
+(not just the `loadBundle` unit), to show the whole RPC path, not only
+the helper, resolves correctly now.

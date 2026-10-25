@@ -100,9 +100,13 @@ func main() {
 	draining := make(chan struct{})
 
 	server := &uiapi.Server{
-		Client:          c,
-		NodeTalosClient: uiapi.NewMachineryNodeTalosClient,
-		Draining:        draining,
+		Client: c,
+		// Same meaning as TalosMachineReconciler.ControllerNamespace on the
+		// controller side: where loadBundle resolves the secrets
+		// bundle Secret, never the TalosCluster's own namespace.
+		ControllerNamespace: os.Getenv("POD_NAMESPACE"),
+		NodeTalosClient:     uiapi.NewMachineryNodeTalosClient,
+		Draining:            draining,
 	}
 
 	mux := http.NewServeMux()

@@ -49,12 +49,17 @@ const (
 	kindClusterRole                    = "ClusterRole"
 	kindValidatingWebhookConfiguration = "ValidatingWebhookConfiguration"
 	kindCustomResourceDefinition       = "CustomResourceDefinition"
+	kindValidatingAdmissionPolicy      = "ValidatingAdmissionPolicy"
+	kindValidatingAdmissionPolicyBind  = "ValidatingAdmissionPolicyBinding"
 )
 
 const (
 	webhookServiceName = "ichor-webhook-service"
 	webhookConfigName  = "ichor-validating-webhook-configuration"
 	certSecretName     = "ichor-webhook-server-cert"
+
+	kubeProxySwitchPolicyName  = "ichor-cni-kubeproxy-switch"
+	kubeProxySwitchBindingName = "ichor-cni-kubeproxy-switch-binding"
 )
 
 // TestChartInvariants renders the committed chart under both the
@@ -71,6 +76,7 @@ func TestChartInvariants(t *testing.T) {
 			checkSecretsRoleAndBinding(t, release, docs)
 			checkNoClusterWideSecretsRead(t, release, docs)
 			checkCRDsMatchConfig(t, release, docs)
+			checkKubeProxySwitchPolicy(t, release, docs)
 		})
 	}
 }
@@ -206,6 +212,45 @@ func checkWebhookInvariants(t *testing.T, release string, docs []map[string]any)
 				t.Errorf("webhook %q: expected operations: [DELETE] only; got %v",
 					name, ops)
 			}
+		}
+	}
+}
+
+// checkKubeProxySwitchPolicy guards's kube-proxy-switch guard: the
+// chart must install both the ValidatingAdmissionPolicy and its Binding --
+// a Policy without a Binding enforces nothing, and a Binding naming a
+// Policy that doesn't exist is equally inert, so neither half alone is a
+// working guard. It also checks the Binding actually points at the Policy
+// this chart ships, not a stale or mistyped name.
+func checkKubeProxySwitchPolicy(t *testing.T, release string, docs []map[string]any) {
+	t.Helper()
+
+	policy := find(docs, kindValidatingAdmissionPolicy, kubeProxySwitchPolicyName)
+	if policy == nil {
+		t.Errorf(
+			"helm template %s .: expected a %s named %q (kube-proxy-switch guard); not found",
+			release, kindValidatingAdmissionPolicy, kubeProxySwitchPolicyName,
+		)
+	}
+
+	binding := find(docs, kindValidatingAdmissionPolicyBind, kubeProxySwitchBindingName)
+	if binding == nil {
+		t.Errorf(
+			"helm template %s .: expected a %s named %q (kube-proxy-switch guard); not found",
+			release, kindValidatingAdmissionPolicyBind, kubeProxySwitchBindingName,
+		)
+	}
+
+	if binding != nil {
+		spec, _ := binding["spec"].(map[string]any)
+		policyName, _ := spec["policyName"].(string)
+		if policyName != kubeProxySwitchPolicyName {
+			t.Errorf(
+				"helm template %s .: %s %q has spec.policyName %q, want %q; "+
+					"a binding to the wrong policy name enforces nothing",
+				release, kindValidatingAdmissionPolicyBind, kubeProxySwitchBindingName, policyName,
+				kubeProxySwitchPolicyName,
+			)
 		}
 	}
 }

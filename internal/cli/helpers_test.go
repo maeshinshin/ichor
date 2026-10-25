@@ -17,7 +17,9 @@ limitations under the License.
 package cli
 
 import (
+	"bytes"
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -26,8 +28,10 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/constants"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/controller"
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
 
@@ -67,6 +71,17 @@ func dialerFor(reader talosConfigReader, dialErr error) func(context.Context, st
 // pulled out once rather than repeated at every call site.
 const testVersionContract = "v1.14"
 
+// Fixture literals shared across adopt's and init's test files.
+const (
+	testEndpointTypeVIP = "vip"
+	testEndpointAddr    = "10.0.0.5"
+	testTalosVersion    = "v1.14.3"
+	testSchedulableTrue = "true"
+	testInitMachineUUID = "uuid-node-a"
+	testInitClusterName = "my-cluster"
+	testCNICilium       = "cilium"
+)
+
 func newTestBundle(t *testing.T) *secrets.Bundle {
 	t.Helper()
 
@@ -87,12 +102,12 @@ func newTestCluster() *ichorv1alpha1.TalosCluster {
 	return &ichorv1alpha1.TalosCluster{
 		Name: "adopt-cluster", Namespace: testNamespace,
 		Spec: ichorv1alpha1.TalosClusterSpec{
-			Endpoint:          ichorv1alpha1.TalosClusterEndpoint{Type: "vip", Address: "10.0.0.5"},
-			TalosVersion:      "v1.14.3",
+			Endpoint:          ichorv1alpha1.TalosClusterEndpoint{Type: testEndpointTypeVIP, Address: testEndpointAddr},
+			TalosVersion:      testTalosVersion,
 			KubernetesVersion: "v" + constants.DefaultKubernetesVersion,
 			VersionContract:   testVersionContract,
 			SecretsRef:        corev1.LocalObjectReference{Name: "unused"},
-			ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: 1, Schedulable: "true"},
+			ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: 1, Schedulable: testSchedulableTrue},
 		},
 	}
 }
@@ -102,7 +117,7 @@ func newTestMachine(clusterName string) *ichorv1alpha1.TalosMachine {
 		Name: "node-a", Namespace: testNamespace,
 		Spec: ichorv1alpha1.TalosMachineSpec{
 			ClusterRef: corev1.LocalObjectReference{Name: clusterName},
-			Identity:   ichorv1alpha1.TalosMachineIdentity{UUID: "uuid-node-a"},
+			Identity:   ichorv1alpha1.TalosMachineIdentity{UUID: testInitMachineUUID},
 			Endpoint:   "10.0.0.10:50000",
 			Role:       "worker",
 			Approved:   true,
@@ -163,6 +178,10 @@ func newTestScheme(t *testing.T) *runtime.Scheme {
 	t.Helper()
 
 	s := runtime.NewScheme()
+	if err := corev1.AddToScheme(s); err != nil {
+		t.Fatalf("adding corev1 to scheme: %v", err)
+	}
+
 	if err := ichorv1alpha1.AddToScheme(s); err != nil {
 		t.Fatalf("adding ichorv1alpha1 to scheme: %v", err)
 	}
@@ -183,4 +202,89 @@ func bundleSecretMaterial(bundle *secrets.Bundle) []string {
 		string(bundle.Certs.K8s.Crt),
 		string(bundle.Certs.K8s.Key),
 	}
+}
+
+// fakeMaintenanceApplier is the maintenanceApplier test double (unit rule
+// 2: no call in these tests ever reaches a real Talos node).
+type fakeMaintenanceApplier struct {
+	applied   []byte
+	applyErr  error
+	callCount int
+}
+
+func (f *fakeMaintenanceApplier) ApplyInsecure(_ context.Context, cfg []byte) error {
+	f.callCount++
+	f.applied = cfg
+
+	return f.applyErr
+}
+
+// fakeBootstrapClient is the bootstrapClient test double.
+type fakeBootstrapClient struct {
+	bootstrapCalled bool
+	bootstrapErr    error
+	kubeconfig      []byte
+	kubeconfigErr   error
+}
+
+func (f *fakeBootstrapClient) Bootstrap(context.Context) error {
+	f.bootstrapCalled = true
+
+	return f.bootstrapErr
+}
+
+func (f *fakeBootstrapClient) Kubeconfig(context.Context) ([]byte, error) {
+	return f.kubeconfig, f.kubeconfigErr
+}
+
+// validInitOptions returns an initOptions that passes buildInitPlan and
+// drives runInit end to end against a cilium CNI, so tests get a
+// TalosConfigPatch to assert on alongside the TalosCluster/TalosMachine.
+func validInitOptions() initOptions {
+	return initOptions{
+		Cluster:           testInitClusterName,
+		Namespace:         testNamespace,
+		Preset:            "standard",
+		CNIPreset:         testCNICilium,
+		EndpointType:      testEndpointTypeVIP,
+		EndpointAddress:   testEndpointAddr,
+		TalosVersion:      testTalosVersion,
+		KubernetesVersion: "v1.33.0",
+		VersionContract:   testVersionContract,
+		ControlPlaneCount: 1,
+		Schedulable:       testSchedulableTrue,
+		NodeEndpoint:      "10.0.0.10:50000",
+	}
+}
+
+// newFakeInitDeps builds an initDeps wired to fakes: identity always
+// succeeds with a fixed UUID, maintenance apply and bootstrap are
+// recorded on the returned fakes, and NewK8sClient always returns the
+// same fake controller-runtime client regardless of the kubeconfig bytes
+// handed to it.
+func newFakeInitDeps(t *testing.T, k8sClient client.Client) (
+	initDeps, *fakeMaintenanceApplier, *fakeBootstrapClient,
+) {
+	t.Helper()
+
+	maint := &fakeMaintenanceApplier{}
+	boot := &fakeBootstrapClient{kubeconfig: []byte("apiVersion: v1\nkind: Config\n")}
+
+	deps := initDeps{
+		Identity: func(context.Context, string) (controller.HardwareIdentity, error) {
+			return controller.HardwareIdentity{UUID: testInitMachineUUID, Serial: "serial-1"}, nil
+		},
+		DialMaintenance: func(context.Context, string) (maintenanceApplier, error) { return maint, nil },
+		DialAdmin: func(context.Context, *ichorv1alpha1.TalosCluster, string, *secrets.Bundle) (bootstrapClient, error) {
+			return boot, nil
+		},
+		NewK8sClient: func([]byte) (client.Client, error) { return k8sClient, nil },
+		Stdout:       &bytes.Buffer{},
+		Stderr:       &bytes.Buffer{},
+		Stdin:        strings.NewReader(""),
+		AssumeYes:    true,
+		Output:       outputYAML,
+	}
+
+	return deps, maint, boot
 }

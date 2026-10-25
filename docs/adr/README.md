@@ -34,3 +34,4 @@ row here in the same PR that adds the ADR.
 | 0020 | Gave `ichor-ui` a Dockerfile, a chart Deployment/Service reusing the controller's own mechanism, and RBAC wired into `config/default` | Accepted, amended |
 | 0021 | Built the four read/approval UI screens on a committed, generated TS client, with the approval dialog disclosing identity/hardware/role before use | Accepted, amended twice |
 | 0022 | Delegate the Talos/Kubernetes compatibility matrix to `pkg/machinery/compatibility` instead of reimplementing it | Accepted |
+| 0023 | Keep `TalosStorage` to layer 1 only -- a `longhorn-v1` preset emitting the Talos-side config a node needs, never the storage system itself | Accepted |

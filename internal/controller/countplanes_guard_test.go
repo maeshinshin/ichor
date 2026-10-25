@@ -53,6 +53,13 @@ var countplanesScanDirs = []string{".", "../webhook/v1alpha1"}
 // comment, not just to silence this test.
 var countplanesAllowedFuncs = map[string]bool{
 	"candidateMachines": true,
+	// findEtcdSurvivor (removal.go) lists siblings to pick one to dial as
+	// the "a surviving node says remove this member" side of
+	// EtcdRemoveMemberByID -- it selects a peer, it does not decide
+	// whether a removal may proceed. It already reads through APIReader
+	// for the same staleness reason the canonical count does, and says so
+	// in its own doc comment.
+	"findEtcdSurvivor": true,
 }
 
 // TestTalosMachineListCountingStaysCentralized parses every non-test

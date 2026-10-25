@@ -1,0 +1,228 @@
+/*
+Copyright 2026 maeshinshin.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package cli
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"slices"
+	"strings"
+	"time"
+
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+)
+
+// uiPollInterval is how often runUI re-lists pods while waiting for a
+// ready one -- long enough not to hammer the API server, short enough
+// that a rollout's new pod is picked up quickly. A var, not a const, so
+// tests can shrink it instead of running at wall-clock speed.
+var uiPollInterval = 2 * time.Second
+
+// uiOptions is uiCmd's flags, kept as its own type (mirroring
+// gitopsExportOptions/gitopsHandoffOptions) so a test can build one
+// without going through cobra.
+type uiOptions struct {
+	Namespace   string
+	LocalPort   int
+	OpenBrowser bool
+}
+
+// uiDeps is runUI's dependencies. Forward and OpenBrowser are the two
+// seams a test replaces: the real ones (ui_portforward.go, ui_browser.go)
+// need an actual cluster and an actual browser, neither of which a unit
+// test has.
+type uiDeps struct {
+	K8s client.Client
+
+	// Forward opens a tunnel to pod's remotePort on localhost:localPort
+	// and blocks until it ends (the context is cancelled, or the
+	// connection is lost -- a deleted or evicted pod looks the same as a
+	// lost connection from here). It closes ready once the tunnel is
+	// actually up.
+	Forward func(ctx context.Context, pod *corev1.Pod, localPort, remotePort int32, ready chan struct{}) error
+
+	// OpenBrowser opens url in the user's default browser.
+	OpenBrowser func(url string) error
+
+	Stdout, Stderr io.Writer
+}
+
+// podReady reports whether pod is a forwarding target: running, marked
+// Ready, and not already on its way out.
+func podReady(pod *corev1.Pod) bool {
+	if pod.DeletionTimestamp != nil {
+		return false
+	}
+
+	if pod.Status.Phase != corev1.PodRunning {
+		return false
+	}
+
+	for _, c := range pod.Status.Conditions {
+		if c.Type == corev1.PodReady {
+			return c.Status == corev1.ConditionTrue
+		}
+	}
+
+	return false
+}
+
+// selectPod is the re-forward decision itself, kept pure and separate
+// from any Kubernetes call so it can be tested directly: among pods's
+// ready members, prefer one other than exclude (the pod that just
+// disappeared or lost its connection), falling back to exclude itself if
+// it is the only ready pod there is. Picking the lowest name among ties
+// keeps the result deterministic instead of depending on API list order.
+func selectPod(pods []corev1.Pod, exclude string) (*corev1.Pod, bool) {
+	var ready []corev1.Pod
+
+	for i := range pods {
+		if podReady(&pods[i]) {
+			ready = append(ready, pods[i])
+		}
+	}
+
+	if len(ready) == 0 {
+		return nil, false
+	}
+
+	slices.SortFunc(ready, func(a, b corev1.Pod) int { return strings.Compare(a.Name, b.Name) })
+
+	for i := range ready {
+		if ready[i].Name != exclude {
+			return &ready[i], true
+		}
+	}
+
+	return &ready[0], true
+}
+
+// waitForReadyPod polls k8sClient until selectPod finds a target or ctx
+// is done, printing one "waiting" line (not one per poll) so the command
+// never looks hung.
+func waitForReadyPod(
+	ctx context.Context, k8sClient client.Client, namespace string, selector map[string]string, exclude string, stderr io.Writer,
+) (*corev1.Pod, error) {
+	printedWaiting := false
+
+	for {
+		var pods corev1.PodList
+		if err := k8sClient.List(ctx, &pods, client.InNamespace(namespace), client.MatchingLabels(selector)); err != nil {
+			return nil, fmt.Errorf("ui: listing ichor-ui pods: %w", err)
+		}
+
+		if pod, ok := selectPod(pods.Items, exclude); ok {
+			return pod, nil
+		}
+
+		if !printedWaiting {
+			_, _ = fmt.Fprintf(stderr, "ichor ui: waiting for a ready ichor-ui pod in namespace %s...\n", namespace)
+			printedWaiting = true
+		}
+
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(uiPollInterval):
+		}
+	}
+}
+
+// runUI is uiCmd's RunE, factored out so a test can drive it against a
+// fake client.Client and a fake Forward instead of a real cluster and a
+// real browser. It never returns an error for a clean Ctrl-C: ctx being
+// cancelled is the expected way this loop ends.
+func runUI(ctx context.Context, opts uiOptions, deps uiDeps) error {
+	var svc corev1.Service
+	if err := deps.K8s.Get(ctx, types.NamespacedName{Namespace: opts.Namespace, Name: uiServiceName}, &svc); err != nil {
+		return fmt.Errorf("ui: fetching Service %s/%s: %w", opts.Namespace, uiServiceName, err)
+	}
+
+	if len(svc.Spec.Ports) == 0 {
+		return fmt.Errorf("ui: Service %s/%s has no ports", opts.Namespace, uiServiceName)
+	}
+
+	if len(svc.Spec.Selector) == 0 {
+		return fmt.Errorf("ui: Service %s/%s has no selector", opts.Namespace, uiServiceName)
+	}
+
+	remotePort := svc.Spec.Ports[0].Port
+
+	localPort := int32(opts.LocalPort)
+	if localPort == 0 {
+		localPort = remotePort
+	}
+
+	opened := false
+	lastPod := ""
+
+	for {
+		pod, err := waitForReadyPod(ctx, deps.K8s, opts.Namespace, svc.Spec.Selector, lastPod, deps.Stderr)
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
+
+			return err
+		}
+
+		if lastPod == "" {
+			_, _ = fmt.Fprintf(deps.Stderr, "ichor ui: forwarding localhost:%d -> pod/%s (namespace %s)\n", localPort, pod.Name, opts.Namespace)
+		} else {
+			_, _ = fmt.Fprintf(deps.Stderr, "ichor ui: re-established the port-forward -> pod/%s\n", pod.Name)
+		}
+
+		lastPod = pod.Name
+
+		ready := make(chan struct{})
+		done := make(chan error, 1)
+
+		go func() { done <- deps.Forward(ctx, pod, localPort, remotePort, ready) }()
+
+		select {
+		case <-ready:
+			if !opened {
+				_, _ = fmt.Fprintf(deps.Stderr, "ichor ui: open http://localhost:%d/ in your browser\n", localPort)
+
+				if opts.OpenBrowser {
+					if err := deps.OpenBrowser(fmt.Sprintf("http://localhost:%d/", localPort)); err != nil {
+						_, _ = fmt.Fprintf(deps.Stderr, "ichor ui: could not open a browser automatically: %v\n", err)
+					}
+				}
+
+				opened = true
+			}
+
+			err = <-done
+		case err = <-done:
+			// Forward ended before ever becoming ready.
+		}
+
+		if ctx.Err() != nil {
+			return nil
+		}
+
+		if err != nil {
+			_, _ = fmt.Fprintf(deps.Stderr, "ichor ui: lost the port-forward to pod/%s (%v); looking for another pod...\n", pod.Name, err)
+		} else {
+			_, _ = fmt.Fprintf(deps.Stderr, "ichor ui: the port-forward to pod/%s ended; looking for another pod...\n", pod.Name)
+		}
+	}
+}

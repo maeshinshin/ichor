@@ -30,14 +30,16 @@ limitations under the License.
 // --load-build-tags=ichorui_rbac, so this file -- and the ClusterRole it
 // produces -- stays entirely separate from the controller's.
 //
-// Kept minimal and read-centric (design principle: "the UI backend holds a
-// read-only [Talos] identity"; this is its Kubernetes-API counterpart):
-// get/list on the CRDs GetEffectiveConfig and the list/detail screens need
-// to read, get on the one Secret kind the bundle lives in, and update --
-// never create, patch or delete -- on talosmachines, the one write this
-// package ever makes (ApproveMachine, RejectMachine).
+// Kept minimal (design principle: "the UI backend holds a read-only
+// [Talos] identity"; this is its Kubernetes-API counterpart, not a claim
+// that every verb here is read-only): get/list on talosclusters, get/
+// list/update on talosmachines (ApproveMachine, RejectMachine), and now
+// get/list/create/update/delete on talosconfigpatches (PatchService, ADR
+// 0035, roadmap phase 6 -- the one CRD this package actually creates and
+// deletes, not just updates).
 package uiapi
 
-// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters;talosconfigpatches,verbs=get;list
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters,verbs=get;list
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosconfigpatches,verbs=get;list;create;update;delete
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosmachines,verbs=get;list;update
 // +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,verbs=get

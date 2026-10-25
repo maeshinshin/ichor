@@ -1,0 +1,164 @@
+syntax = "proto3";
+
+// PatchService backs config editing by layer (architecture.md, "CLI and
+// UI": "config editing by layer ... impact preview before applying").
+// Every write here is a change to a TalosConfigPatch, same as every other
+// write in this API (architecture.md, "Data flow": "every write ... is a
+// change to a custom resource. The controller is the only thing that
+// turns those into Talos API calls"); this service never talks to a node.
+package ichor.v1alpha1;
+
+import "ichor/v1alpha1/common.proto";
+import "ichor/v1alpha1/node.proto";
+
+service PatchService {
+  rpc ListPatches(ListPatchesRequest) returns (ListPatchesResponse);
+  rpc GetPatch(GetPatchRequest) returns (GetPatchResponse);
+  rpc CreatePatch(CreatePatchRequest) returns (CreatePatchResponse);
+  rpc UpdatePatch(UpdatePatchRequest) returns (UpdatePatchResponse);
+  rpc DeletePatch(DeletePatchRequest) returns (DeletePatchResponse);
+  // PreviewImpact classifies a proposed patch's own fields (pkg/fieldmeta)
+  // without writing anything: whether applying it needs a reboot, which
+  // fields are install-time-only (a reset and reinstall -- a reboot does
+  // nothing for these), and which need a newer Talos version than the
+  // cluster is pinned to. It assesses every path the proposed patch sets,
+  // not a diff against what is currently applied: the safe direction
+  // (pkg/fieldmeta's own doc comment) is to show impact for a field even
+  // if an edit happens to leave its value unchanged, not to under-report
+  // by computing a path-level diff this preview does not attempt.
+  rpc PreviewImpact(PreviewImpactRequest) returns (PreviewImpactResponse);
+}
+
+message ListPatchesRequest {
+  // cluster filters to one TalosCluster's patches; unset lists across all
+  // clusters the caller can see, matching ListMachinesRequest's own
+  // convention.
+  ObjectRef cluster = 1;
+}
+
+message ListPatchesResponse {
+  repeated Patch patches = 1;
+}
+
+message GetPatchRequest {
+  ObjectRef patch = 1;
+}
+
+message GetPatchResponse {
+  Patch patch = 1;
+}
+
+message CreatePatchRequest {
+  // patch.ref.name is required: this service does not generate one on the
+  // caller's behalf.
+  Patch patch = 1;
+}
+
+message CreatePatchResponse {
+  Patch patch = 1;
+  AuditRecord audit = 2;
+}
+
+message UpdatePatchRequest {
+  // Full replace: patch.ref identifies which TalosConfigPatch, and every
+  // other field on patch replaces that object's spec wholesale, the same
+  // "no partial-field merge" simplicity CreatePatch has.
+  Patch patch = 1;
+}
+
+message UpdatePatchResponse {
+  Patch patch = 1;
+  AuditRecord audit = 2;
+}
+
+message DeletePatchRequest {
+  ObjectRef patch = 1;
+}
+
+message DeletePatchResponse {
+  AuditRecord audit = 1;
+}
+
+message PreviewImpactRequest {
+  // patch need not exist yet (CreatePatch's own proposed value) or may be
+  // an edit of one that does (UpdatePatch's proposed value) -- either way
+  // this call never writes it.
+  Patch patch = 1;
+}
+
+message PreviewImpactResponse {
+  // reboot_required is true if any field the patch sets needs a plain
+  // reboot to take effect.
+  bool reboot_required = 1;
+  // install_time_only lists the field paths that need a reset and
+  // reinstall rather than any kind of apply or reboot -- shown separately
+  // from reboot_required because a reboot does nothing for these; a
+  // caller must not offer "reboot to apply" as if it covered both.
+  repeated string install_time_only = 2;
+  // unsupported lists the field paths that need a newer Talos version
+  // than the cluster's pinned version contract supports.
+  repeated string unsupported = 3;
+}
+
+// LabelSelectorRequirement mirrors metav1.LabelSelectorRequirement.
+message LabelSelectorRequirement {
+  string key = 1;
+  // operator is one of In, NotIn, Exists, DoesNotExist, matching
+  // metav1.LabelSelectorOperator's own values verbatim.
+  string operator = 2;
+  repeated string values = 3;
+}
+
+// LabelSelector mirrors metav1.LabelSelector -- modeled directly, not
+// behind the typed-config mirror generator (ADR 0003), because this is
+// Kubernetes' own well-known, finite API shape, not a Talos field this
+// project would otherwise have to catalogue a second time.
+message LabelSelector {
+  map<string, string> match_labels = 1;
+  repeated LabelSelectorRequirement match_expressions = 2;
+}
+
+// PatchTarget mirrors TalosConfigPatchTarget (api/v1alpha1/
+// talosconfigpatch_types.go): exactly one of role, label_selector or
+// machine_ref is set, enforced by the CRD's own CEL rule on write, not
+// re-validated here.
+message PatchTarget {
+  string role = 1;
+  LabelSelector label_selector = 2;
+  // machine_ref names a single TalosMachine in the patch's own namespace
+  // (TalosConfigPatchTarget.MachineRef, a corev1.LocalObjectReference).
+  string machine_ref = 3;
+}
+
+// PatchDocument mirrors TalosConfigPatchDocument (ADR 0003's allow-list).
+// document is deliberately opaque JSON, not one typed field per Talos
+// mirror type: modeling every typed-config field a third time (Go mirror
+// type, CRD schema, now protobuf) would be exactly the parallel catalogue
+// ADR 0003's generator exists to avoid. The shape for a given kind is the
+// CRD's own generated OpenAPI schema (config/crd/bases/
+// ichor.maesh.dev_talosconfigpatches.yaml), which a schema-driven form
+// renders directly -- no second RPC needed to serve it.
+message PatchDocument {
+  // kind selects which allow-listed Talos document this is: SysctlConfig,
+  // KernelModuleConfig, Config, VolumeConfig, UserVolumeConfig or
+  // RawVolumeConfig.
+  string kind = 1;
+  // document is kind's own fields, JSON-encoded exactly as
+  // TalosConfigPatchDocument's matching Go field would unmarshal it (e.g.
+  // {"params":{"net.core.somaxconn":"1024"}} for a SysctlConfig).
+  string document = 2;
+}
+
+message Patch {
+  ObjectRef ref = 1;
+  ObjectRef cluster = 2;
+  // layer is one of cluster, role, selector or machine; CONFIG_LAYER_SYSTEM
+  // is never a valid value here -- that layer is generated by Ichor itself
+  // and is not user-writable (architecture.md, "Patch layers").
+  ConfigLayer layer = 3;
+  int32 priority = 4;
+  // target is required for every layer but "cluster" (TalosConfigPatchSpec's
+  // own CEL rule).
+  PatchTarget target = 5;
+  repeated PatchDocument documents = 6;
+}

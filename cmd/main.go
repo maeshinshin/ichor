@@ -212,11 +212,19 @@ func main() {
 	}
 
 	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
-		// The webhook serving certificate has no caBundle and no Secret shipped with the
-		// chart (ADR 0006): it is generated at runtime by cert-controller and read back by
-		// controller-runtime's certwatcher via webhookCertPath/CertName/KeyName above. The
-		// webhook handlers are registered only once the rotator reports the certificate is
-		// in place, so the webhook server never starts serving with nothing to present.
+		// The webhook serving certificate has no caBundle and no Secret data shipped with
+		// the chart (ADR 0006): it is generated at runtime by cert-controller and read back
+		// by controller-runtime's certwatcher via webhookCertPath/CertName/KeyName above.
+		// certsReady only delays SetupTalosClusterWebhookWithManager -- *admission handler
+		// registration*, not the webhook server's own listener, which controller-runtime
+		// starts regardless and which needs the cert file to exist the moment it does (no
+		// retry if it doesn't). On a cold start (Secret shipped empty, no data yet) that is
+		// a real race against this rotator's own first write, not something this gate
+		// prevents; ADR 0006's "Consequences" already accepts the resulting crash-loop as
+		// the intended failure direction (framed there around the Secret being deleted, the
+		// same mechanism as a cold start), and ADR 0031 confirmed it against
+		// controller-runtime's actual manager internals rather than taking this comment's
+		// older claim on faith.
 		certsReady := make(chan struct{})
 		if err := rotator.AddRotator(mgr, &rotator.CertRotator{
 			SecretKey:      types.NamespacedName{Namespace: os.Getenv("POD_NAMESPACE"), Name: webhookSecretName},

@@ -1,0 +1,130 @@
+# 0023. CNI hand-over: no registry, render-time removal, a separate controller
+
+Status: Accepted · Date: 2026-10-25 · Design section: GitOps and Argo CD
+
+## Context
+
+ADR 0019 built `ichor init` through step 5 and deliberately excluded step 6
+(hand-over): "it is a continuous reconciliation loop against Argo CD's own
+status (watch, poll, retry) ... It belongs to the controller, as a later
+unit's work." This is that unit.
+
+The design document's "GitOps and Argo CD" section originally described
+hand-over as "one mechanism with a component registry, not three special
+cases," implying three components (CNI, Ichor, Argo CD) each go through
+inject-into-`cluster.inlineManifests` → adopted by Argo CD → removed. Building
+`ichor init` (ADR 0019) showed that isn't what actually happens:
+
+- **Ichor** is applied directly through the API server (`applyIchorManifest`),
+  never inlined. It never needs hand-over.
+- **Argo CD** is never installed by Ichor at all.
+- **The CNI** is the only one that genuinely has to be inlined (a node isn't
+  Ready and nothing can be scheduled before a CNI exists), and the only one
+  Argo CD later adopts.
+
+So the registry would have exactly one member.
+
+## Decision: no registry
+
+Ponytail's own rule applies directly here: don't build an abstraction over a
+single implementation. `pkg/cni.Preset` already declares everything a CNI
+hand-over needs (`BootstrapManifest`, `ArgoCDApplication`,
+`HandoverWorkloads`) as part of the one interface every CNI implements. A
+"component registry" would be a second interface wrapping the first for no
+caller that exists. The hand-over reconciler calls `preset.ArgoCDApplication`
+directly to get the Name/Namespace it needs to look up; there is nothing to
+register.
+
+## Decision: removal happens at render time, not by rewriting a `TalosConfigPatch`
+
+Why removal has to actually happen, not just "Argo CD adopting it": Talos's
+`ManifestApplyController` (checked against Talos v1.14.3's source) only ever
+server-side-applies `cluster.inlineManifests` and re-applies them on every
+Kubernetes upgrade -- it has no delete path. If the CNI's inlined entry were
+left in place, an upgrade would silently roll the CNI back to whatever Ichor
+originally inlined, overwriting anything Argo CD has since changed. The same
+controller refuses to apply over an object carrying another controller's
+inventory annotation, which sounds like protection -- but Argo CD's own
+tracking marker (configured by `argocd-cm`'s `application.resourceTrackingMethod`,
+read rather than assumed, per the design doc) is not that annotation, so
+adoption alone does not stop the re-apply.
+
+Given that, removing the entry has to be a real, visible state change, not an
+implicit side effect of Argo CD's status. It is implemented in
+`pkg/render.BuildConfig`: once `TalosCluster.status` carries the
+`CNIHandover` condition as `True`, every patch's
+`ClusterConfig.ClusterInlineManifests` has the entry named
+`cni.InlineManifestName` filtered out before merging
+(`dropHandedOverInlineManifest`/`withoutInlineManifest`,
+`pkg/render/render.go`). This follows the design's existing precedent
+(control-plane taint folding already happens in render, not as a stored
+patch) and principle 5 (the controller renders from ingredients; it does not
+rewrite them): no `TalosConfigPatch` object is ever mutated -- a patch
+carrying the entry is deep-copied only for the filtered copy that gets
+merged, and every other patch passes through as the original pointer
+(verified in `pkg/render/render_test.go`'s
+`TestCNIHandoverDropsInlineManifest`, including a pointer-identity check).
+
+## Decision: automatic / manual / disabled, as a CR field only
+
+`TalosClusterCNI.Handover` (`api/v1alpha1/taloscluster_types.go`) is one of
+`automatic` (default), `manual`, or `disabled`, matching the design's "Hand-over
+can be automatic, manual (`ichor gitops handoff cni`), or disabled when Argo CD
+isn't used." This unit only builds the field and the reconciler's branching on
+it: `disabled` and `manual` both set the `CNIHandover` condition `False` (with
+a reason naming which) and never requeue. The `ichor gitops handoff cni` CLI
+command that would flip a manual cluster to adopted is explicitly another
+agent's work and is not built here.
+
+## Decision: a separate controller, not a bump to `TalosClusterReconciler`
+
+`CNIHandoverReconciler` (`internal/controller/cnihandover_controller.go`) is
+its own controller watching `TalosCluster`, not folded into
+`TalosClusterReconciler`. `TalosClusterReconciler`'s own doc comment already
+warns `DiscoverAll` can block a single `TalosCluster`'s reconcile for up to
+~68s at `spec.discovery`'s caps. Raising that reconciler's
+`MaxConcurrentReconciles` would not have helped: controller-runtime's
+workqueue deduplicates and serializes by object key *within one controller*,
+so a single `TalosCluster` only ever has one in-flight reconcile through one
+controller's queue regardless of concurrency settings -- a slow discovery
+pass would still block a hand-over check sharing the same queue. Two
+controllers watching the same Kind each get an independent work queue, so a
+slow `DiscoverAll` reconcile in one never delays the other.
+
+## Decision: Argo CD absent is "not here yet," never a hang or a hard error
+
+`automatic` mode reads the CNI's Argo CD `Application` as
+`unstructured.Unstructured` (the standard controller-runtime pattern for a
+foreign CRD this project neither owns nor vendors Go types for) at the exact
+Name/Namespace `preset.ArgoCDApplication` itself returns -- which is also how
+"adoption produces no diff" is satisfied: the same template that was injected
+is the only thing ever looked up, so there's no second, independently-guessed
+shape to drift from (`pkg/cni/cilium`'s `TestArgoCDApplication` already
+covers the template's own content; this reconciler's test
+(`internal/controller/cnihandover_controller_test.go`) covers that the lookup
+uses that template's Name/Namespace).
+
+Both `apierrors.IsNotFound` (Argo CD exists but hasn't adopted the Application
+yet) and `apimeta.IsNoMatchError` (Argo CD's CRDs aren't installed at all --
+the realistic "this cluster doesn't run Argo CD" case) are treated
+identically: the `CNIHandover` condition is set `False` with reason
+`WaitingForArgoCD`, and the reconcile returns a bounded `RequeueAfter`
+(`handoverRequeueInterval`, 30s), never a blocking wait or an error. A cluster
+that genuinely never runs Argo CD should set `spec.cni.handover: disabled` to
+stop this polling; left at the `automatic` default it polls forever and says
+so plainly, which satisfies "does not break" (nothing blocks, nothing retries
+in a tight loop) without guessing that the operator meant `disabled`.
+
+## Consequences
+
+- `pkg/cni.InlineManifestName` is a new exported constant duplicating
+  `internal/cli`'s own unexported `cniKey`: both `pkg/render` and
+  `internal/controller` need the exact string Ichor inlined the manifest
+  under, and `internal/cli` is off-limits to this unit, so there is no
+  shared home below it. `pkg/cni` is safe for both to import (its own
+  subpackages `cilium`/`flannel` import it, not the reverse).
+- `CNIHandoverReconciler.cniPresetFor` duplicates `internal/cli`'s own preset
+  switch (`"cilium"`/`"flannel"`, `"custom"` deliberately absent, same as ADR
+  0013) for the same reason: a controller cannot import the CLI package.
+- Not built here: the `ichor gitops handoff cni` CLI command; any change to
+  `internal/cli`, `internal/uiapi`, `pkg/upgrade`, or the e2e suite.

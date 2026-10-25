@@ -661,12 +661,23 @@ The order is not a preference: Longhorn's own documentation states eviction
 only takes effect on a node or disk whose scheduling is already disabled, so
 `allowScheduling: false` has to land first.
 
-The read side is *not* settled. Longhorn's documentation describes completion
-as the replica count reaching zero in its UI, and the status field behind that
-has not been verified -- so "wait until no replica lives only there" still
-needs one lookup before the hook can be written. That lookup belongs to the
-hook's own unit of work, and it should be taken from the CRD's status type the
-same way the two spec fields were, not from the UI.
+The read side is now settled too, from longhorn-manager v1.9.1's own
+controller source rather than from the UI's replica count: there is no
+dedicated "eviction done" status field. `DiskStatus.ScheduledReplica` (the
+status map that looked like the obvious candidate) is the scheduler's
+capacity bookkeeping -- it is read for free space, not for residency, and
+does not reliably go to zero when eviction finishes. The actual mechanism
+is in `VolumeController.cleanupEvictionRequestedReplicas`: once a volume
+has a healthy, non-evicting replica elsewhere, it deletes the `Replica`
+object whose `spec.evictionRequested` is true. So "no replica lives only
+there" is "no `replicas.longhorn.io` object remains with
+`spec.nodeID` (whole-node eviction) or `spec.diskID` (one-disk eviction)
+still naming the target" -- an absence of objects, not a counter reaching
+zero. `EvacuationStatus` (`pkg/storage/evacuation.go`) takes that count
+already read by the caller, plus elapsed time against
+`TalosStorage.spec.evacuationTimeout`, and returns done, still-waiting, or
+paused -- paused, never proceeding to drain, once the timeout is reached
+with replicas still remaining (ADR 0025).
 
 `TalosStorage` reports health so Argo CD's sync waves can hold the storage
 Application until the Talos side is ready.

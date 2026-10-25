@@ -36,3 +36,4 @@ row here in the same PR that adds the ADR.
 | 0022 | Delegate the Talos/Kubernetes compatibility matrix to `pkg/machinery/compatibility` instead of reimplementing it | Accepted |
 | 0023 | Keep `TalosStorage` to layer 1 only -- a `longhorn-v1` preset emitting the Talos-side config a node needs, never the storage system itself | Accepted |
 | 0024 | No CNI hand-over registry (one real member); removal happens at render time off a status condition; a separate controller | Accepted |
+| 0025 | Layer 4's storage-system side: `EvacuationHook` (write side) plus a preset-independent `EvacuationStatus` function (read side), both verified against longhorn-manager v1.9.1's own controller source | Accepted |

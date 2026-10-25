@@ -111,6 +111,21 @@ func specApprovalStateToPB(state string) pb.MachineApprovalState {
 	}
 }
 
+// approvalDecisionToPB converts TalosMachineSpec.spec.approvalDecision to
+// the wire message, nil-safe: unset until the first approve/reject
+// (ApproveMachine/RejectMachine both set it; see machine_service.go).
+func approvalDecisionToPB(d *ichorv1alpha1.TalosMachineApprovalDecision) *pb.MachineApprovalDecision {
+	if d == nil {
+		return nil
+	}
+
+	return &pb.MachineApprovalDecision{
+		Actor:  d.Actor,
+		Reason: d.Reason,
+		At:     timestamppb.New(d.At.Time),
+	}
+}
+
 // machineToPB converts a TalosMachine to the wire Machine message
 // MachineService's four methods all return (machine.proto's doc comment:
 // "One Machine message serves both" the list and the detail view).
@@ -123,13 +138,14 @@ func machineToPB(m *ichorv1alpha1.TalosMachine) *pb.Machine {
 			Serial:       m.Spec.Identity.Serial,
 			MacAddresses: m.Spec.Identity.MACAddresses,
 		},
-		Endpoint:      m.Spec.Endpoint,
-		Role:          specRoleToMachineRole(m.Spec.Role),
-		NodeLabels:    m.Spec.NodeLabels,
-		Hostname:      m.Spec.Hostname,
-		ApprovalState: specApprovalStateToPB(m.Spec.ApprovalState),
-		Conditions:    conditions(m.Status.Conditions),
-		Stage:         "", // Talos's own MachineStatus stage: not read by this phase (GetNode's job); see docs/adr/0018.
+		Endpoint:         m.Spec.Endpoint,
+		Role:             specRoleToMachineRole(m.Spec.Role),
+		NodeLabels:       m.Spec.NodeLabels,
+		Hostname:         m.Spec.Hostname,
+		ApprovalState:    specApprovalStateToPB(m.Spec.ApprovalState),
+		ApprovalDecision: approvalDecisionToPB(m.Spec.ApprovalDecision),
+		Conditions:       conditions(m.Status.Conditions),
+		Stage:            "", // Talos's own MachineStatus stage: not read by this phase (GetNode's job); see docs/adr/0018.
 	}
 }
 

@@ -7,6 +7,7 @@ syntax = "proto3";
 // join this request message, additively, once they land on the CRD.
 package ichor.v1alpha1;
 
+import "google/protobuf/timestamp.proto";
 import "ichor/v1alpha1/common.proto";
 
 service MachineService {
@@ -39,6 +40,11 @@ message ApproveMachineRequest {
   MachineRole role = 2;
   map<string, string> node_labels = 3;
   string hostname = 4;
+  // reason is optional free text, symmetric with RejectMachineRequest.reason
+  // below -- AuditRecord.reason already documents itself as "mainly used
+  // for rejections," not exclusive to them, so a caller that does have a
+  // reason to approve (e.g. "replacing node-3, same role") can record it.
+  string reason = 5;
 }
 
 message ApproveMachineResponse {
@@ -85,6 +91,18 @@ message MachineIdentity {
   repeated string mac_addresses = 3;
 }
 
+// MachineApprovalDecision records who decided approval_state, when, and
+// why -- kept beside approval_state rather than folded into it, so
+// approval_state alone stays the single source of truth for status; this
+// message asserts no approved/rejected state of its own. actor is the
+// backend's own fixed identity until OIDC login lands (ADR 0018); unset
+// (nil) on a machine nobody has approved or rejected yet.
+message MachineApprovalDecision {
+  string actor = 1;
+  string reason = 2;
+  google.protobuf.Timestamp at = 3;
+}
+
 message Machine {
   ObjectRef ref = 1;
   ObjectRef cluster = 2;
@@ -105,4 +123,6 @@ message Machine {
   // cannot represent "rejected" without a second field claiming the same
   // truth, which this design specifically avoids.
   MachineApprovalState approval_state = 11;
+  // approval_decision is unset until the first approve/reject decision.
+  MachineApprovalDecision approval_decision = 12;
 }

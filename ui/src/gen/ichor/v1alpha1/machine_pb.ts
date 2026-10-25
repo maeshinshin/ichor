@@ -10,6 +10,8 @@
 
 import type { GenEnum, GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
 import { enumDesc, fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
+import type { Timestamp } from "@bufbuild/protobuf/wkt";
+import { file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
 import type { AuditRecord, Condition, ObjectRef } from "./common_pb";
 import { file_ichor_v1alpha1_common } from "./common_pb";
 import type { Message, UnknownEnum } from "@bufbuild/protobuf";
@@ -18,7 +20,7 @@ import type { Message, UnknownEnum } from "@bufbuild/protobuf";
  * Describes the file ichor/v1alpha1/machine.proto.
  */
 export const file_ichor_v1alpha1_machine: GenFile = /*@__PURE__*/
-  fileDesc("ChxpY2hvci92MWFscGhhMS9tYWNoaW5lLnByb3RvEg5pY2hvci52MWFscGhhMSJBChNMaXN0TWFjaGluZXNSZXF1ZXN0EioKB2NsdXN0ZXIYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYiQQoUTGlzdE1hY2hpbmVzUmVzcG9uc2USKQoIbWFjaGluZXMYASADKAsyFy5pY2hvci52MWFscGhhMS5NYWNoaW5lIj8KEUdldE1hY2hpbmVSZXF1ZXN0EioKB21hY2hpbmUYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYiPgoSR2V0TWFjaGluZVJlc3BvbnNlEigKB21hY2hpbmUYASABKAsyFy5pY2hvci52MWFscGhhMS5NYWNoaW5lIv8BChVBcHByb3ZlTWFjaGluZVJlcXVlc3QSKgoHbWFjaGluZRgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhIpCgRyb2xlGAIgASgOMhsuaWNob3IudjFhbHBoYTEuTWFjaGluZVJvbGUSSgoLbm9kZV9sYWJlbHMYAyADKAsyNS5pY2hvci52MWFscGhhMS5BcHByb3ZlTWFjaGluZVJlcXVlc3QuTm9kZUxhYmVsc0VudHJ5EhAKCGhvc3RuYW1lGAQgASgJGjEKD05vZGVMYWJlbHNFbnRyeRILCgNrZXkYASABKAkSDQoFdmFsdWUYAiABKAk6AjgBIm4KFkFwcHJvdmVNYWNoaW5lUmVzcG9uc2USKAoHbWFjaGluZRgBIAEoCzIXLmljaG9yLnYxYWxwaGExLk1hY2hpbmUSKgoFYXVkaXQYAiABKAsyGy5pY2hvci52MWFscGhhMS5BdWRpdFJlY29yZCJSChRSZWplY3RNYWNoaW5lUmVxdWVzdBIqCgdtYWNoaW5lGAEgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmEg4KBnJlYXNvbhgCIAEoCSJDChVSZWplY3RNYWNoaW5lUmVzcG9uc2USKgoFYXVkaXQYASABKAsyGy5pY2hvci52MWFscGhhMS5BdWRpdFJlY29yZCJGCg9NYWNoaW5lSWRlbnRpdHkSDAoEdXVpZBgBIAEoCRIOCgZzZXJpYWwYAiABKAkSFQoNbWFjX2FkZHJlc3NlcxgDIAMoCSLcAwoHTWFjaGluZRImCgNyZWYYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYSKgoHY2x1c3RlchgCIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhIxCghpZGVudGl0eRgDIAEoCzIfLmljaG9yLnYxYWxwaGExLk1hY2hpbmVJZGVudGl0eRIQCghlbmRwb2ludBgEIAEoCRIpCgRyb2xlGAUgASgOMhsuaWNob3IudjFhbHBoYTEuTWFjaGluZVJvbGUSPAoLbm9kZV9sYWJlbHMYBiADKAsyJy5pY2hvci52MWFscGhhMS5NYWNoaW5lLk5vZGVMYWJlbHNFbnRyeRIQCghob3N0bmFtZRgHIAEoCRItCgpjb25kaXRpb25zGAkgAygLMhkuaWNob3IudjFhbHBoYTEuQ29uZGl0aW9uEg0KBXN0YWdlGAogASgJEjwKDmFwcHJvdmFsX3N0YXRlGAsgASgOMiQuaWNob3IudjFhbHBoYTEuTWFjaGluZUFwcHJvdmFsU3RhdGUaMQoPTm9kZUxhYmVsc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAFKBAgIEAlSCGFwcHJvdmVkKmQKC01hY2hpbmVSb2xlEhwKGE1BQ0hJTkVfUk9MRV9VTlNQRUNJRklFRBAAEh4KGk1BQ0hJTkVfUk9MRV9DT05UUk9MX1BMQU5FEAESFwoTTUFDSElORV9ST0xFX1dPUktFUhACKqwBChRNYWNoaW5lQXBwcm92YWxTdGF0ZRImCiJNQUNISU5FX0FQUFJPVkFMX1NUQVRFX1VOU1BFQ0lGSUVEEAASIgoeTUFDSElORV9BUFBST1ZBTF9TVEFURV9QRU5ESU5HEAESIwofTUFDSElORV9BUFBST1ZBTF9TVEFURV9BUFBST1ZFRBACEiMKH01BQ0hJTkVfQVBQUk9WQUxfU1RBVEVfUkVKRUNURUQQAzL/AgoOTWFjaGluZVNlcnZpY2USWQoMTGlzdE1hY2hpbmVzEiMuaWNob3IudjFhbHBoYTEuTGlzdE1hY2hpbmVzUmVxdWVzdBokLmljaG9yLnYxYWxwaGExLkxpc3RNYWNoaW5lc1Jlc3BvbnNlElMKCkdldE1hY2hpbmUSIS5pY2hvci52MWFscGhhMS5HZXRNYWNoaW5lUmVxdWVzdBoiLmljaG9yLnYxYWxwaGExLkdldE1hY2hpbmVSZXNwb25zZRJfCg5BcHByb3ZlTWFjaGluZRIlLmljaG9yLnYxYWxwaGExLkFwcHJvdmVNYWNoaW5lUmVxdWVzdBomLmljaG9yLnYxYWxwaGExLkFwcHJvdmVNYWNoaW5lUmVzcG9uc2USXAoNUmVqZWN0TWFjaGluZRIkLmljaG9yLnYxYWxwaGExLlJlamVjdE1hY2hpbmVSZXF1ZXN0GiUuaWNob3IudjFhbHBoYTEuUmVqZWN0TWFjaGluZVJlc3BvbnNlQr0BChJjb20uaWNob3IudjFhbHBoYTFCDE1hY2hpbmVQcm90b1ABWkBnaXRodWIuY29tL21hZXNoaW5zaGluL2ljaG9yL2dlbi9nby9pY2hvci92MWFscGhhMTtpY2hvcnYxYWxwaGExogIDSVhYqgIOSWNob3IuVjFhbHBoYTHKAg5JY2hvclxWMWFscGhhMeICGkljaG9yXFYxYWxwaGExXEdQQk1ldGFkYXRh6gIPSWNob3I6OlYxYWxwaGExYgZwcm90bzM", [file_ichor_v1alpha1_common]);
+  fileDesc("ChxpY2hvci92MWFscGhhMS9tYWNoaW5lLnByb3RvEg5pY2hvci52MWFscGhhMSJBChNMaXN0TWFjaGluZXNSZXF1ZXN0EioKB2NsdXN0ZXIYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYiQQoUTGlzdE1hY2hpbmVzUmVzcG9uc2USKQoIbWFjaGluZXMYASADKAsyFy5pY2hvci52MWFscGhhMS5NYWNoaW5lIj8KEUdldE1hY2hpbmVSZXF1ZXN0EioKB21hY2hpbmUYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYiPgoSR2V0TWFjaGluZVJlc3BvbnNlEigKB21hY2hpbmUYASABKAsyFy5pY2hvci52MWFscGhhMS5NYWNoaW5lIo8CChVBcHByb3ZlTWFjaGluZVJlcXVlc3QSKgoHbWFjaGluZRgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhIpCgRyb2xlGAIgASgOMhsuaWNob3IudjFhbHBoYTEuTWFjaGluZVJvbGUSSgoLbm9kZV9sYWJlbHMYAyADKAsyNS5pY2hvci52MWFscGhhMS5BcHByb3ZlTWFjaGluZVJlcXVlc3QuTm9kZUxhYmVsc0VudHJ5EhAKCGhvc3RuYW1lGAQgASgJEg4KBnJlYXNvbhgFIAEoCRoxCg9Ob2RlTGFiZWxzRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4ASJuChZBcHByb3ZlTWFjaGluZVJlc3BvbnNlEigKB21hY2hpbmUYASABKAsyFy5pY2hvci52MWFscGhhMS5NYWNoaW5lEioKBWF1ZGl0GAIgASgLMhsuaWNob3IudjFhbHBoYTEuQXVkaXRSZWNvcmQiUgoUUmVqZWN0TWFjaGluZVJlcXVlc3QSKgoHbWFjaGluZRgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhIOCgZyZWFzb24YAiABKAkiQwoVUmVqZWN0TWFjaGluZVJlc3BvbnNlEioKBWF1ZGl0GAEgASgLMhsuaWNob3IudjFhbHBoYTEuQXVkaXRSZWNvcmQiRgoPTWFjaGluZUlkZW50aXR5EgwKBHV1aWQYASABKAkSDgoGc2VyaWFsGAIgASgJEhUKDW1hY19hZGRyZXNzZXMYAyADKAkiYAoXTWFjaGluZUFwcHJvdmFsRGVjaXNpb24SDQoFYWN0b3IYASABKAkSDgoGcmVhc29uGAIgASgJEiYKAmF0GAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCKgBAoHTWFjaGluZRImCgNyZWYYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYSKgoHY2x1c3RlchgCIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhIxCghpZGVudGl0eRgDIAEoCzIfLmljaG9yLnYxYWxwaGExLk1hY2hpbmVJZGVudGl0eRIQCghlbmRwb2ludBgEIAEoCRIpCgRyb2xlGAUgASgOMhsuaWNob3IudjFhbHBoYTEuTWFjaGluZVJvbGUSPAoLbm9kZV9sYWJlbHMYBiADKAsyJy5pY2hvci52MWFscGhhMS5NYWNoaW5lLk5vZGVMYWJlbHNFbnRyeRIQCghob3N0bmFtZRgHIAEoCRItCgpjb25kaXRpb25zGAkgAygLMhkuaWNob3IudjFhbHBoYTEuQ29uZGl0aW9uEg0KBXN0YWdlGAogASgJEjwKDmFwcHJvdmFsX3N0YXRlGAsgASgOMiQuaWNob3IudjFhbHBoYTEuTWFjaGluZUFwcHJvdmFsU3RhdGUSQgoRYXBwcm92YWxfZGVjaXNpb24YDCABKAsyJy5pY2hvci52MWFscGhhMS5NYWNoaW5lQXBwcm92YWxEZWNpc2lvbhoxCg9Ob2RlTGFiZWxzRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4AUoECAgQCVIIYXBwcm92ZWQqZAoLTWFjaGluZVJvbGUSHAoYTUFDSElORV9ST0xFX1VOU1BFQ0lGSUVEEAASHgoaTUFDSElORV9ST0xFX0NPTlRST0xfUExBTkUQARIXChNNQUNISU5FX1JPTEVfV09SS0VSEAIqrAEKFE1hY2hpbmVBcHByb3ZhbFN0YXRlEiYKIk1BQ0hJTkVfQVBQUk9WQUxfU1RBVEVfVU5TUEVDSUZJRUQQABIiCh5NQUNISU5FX0FQUFJPVkFMX1NUQVRFX1BFTkRJTkcQARIjCh9NQUNISU5FX0FQUFJPVkFMX1NUQVRFX0FQUFJPVkVEEAISIwofTUFDSElORV9BUFBST1ZBTF9TVEFURV9SRUpFQ1RFRBADMv8CCg5NYWNoaW5lU2VydmljZRJZCgxMaXN0TWFjaGluZXMSIy5pY2hvci52MWFscGhhMS5MaXN0TWFjaGluZXNSZXF1ZXN0GiQuaWNob3IudjFhbHBoYTEuTGlzdE1hY2hpbmVzUmVzcG9uc2USUwoKR2V0TWFjaGluZRIhLmljaG9yLnYxYWxwaGExLkdldE1hY2hpbmVSZXF1ZXN0GiIuaWNob3IudjFhbHBoYTEuR2V0TWFjaGluZVJlc3BvbnNlEl8KDkFwcHJvdmVNYWNoaW5lEiUuaWNob3IudjFhbHBoYTEuQXBwcm92ZU1hY2hpbmVSZXF1ZXN0GiYuaWNob3IudjFhbHBoYTEuQXBwcm92ZU1hY2hpbmVSZXNwb25zZRJcCg1SZWplY3RNYWNoaW5lEiQuaWNob3IudjFhbHBoYTEuUmVqZWN0TWFjaGluZVJlcXVlc3QaJS5pY2hvci52MWFscGhhMS5SZWplY3RNYWNoaW5lUmVzcG9uc2VCvQEKEmNvbS5pY2hvci52MWFscGhhMUIMTWFjaGluZVByb3RvUAFaQGdpdGh1Yi5jb20vbWFlc2hpbnNoaW4vaWNob3IvZ2VuL2dvL2ljaG9yL3YxYWxwaGExO2ljaG9ydjFhbHBoYTGiAgNJWFiqAg5JY2hvci5WMWFscGhhMcoCDkljaG9yXFYxYWxwaGEx4gIaSWNob3JcVjFhbHBoYTFcR1BCTWV0YWRhdGHqAg9JY2hvcjo6VjFhbHBoYTFiBnByb3RvMw", [file_google_protobuf_timestamp, file_ichor_v1alpha1_common]);
 
 /**
  * @generated from message ichor.v1alpha1.ListMachinesRequest
@@ -114,6 +116,16 @@ export type ApproveMachineRequest = Message<"ichor.v1alpha1.ApproveMachineReques
    * @generated from field: string hostname = 4;
    */
   hostname: string;
+
+  /**
+   * reason is optional free text, symmetric with RejectMachineRequest.reason
+   * below -- AuditRecord.reason already documents itself as "mainly used
+   * for rejections," not exclusive to them, so a caller that does have a
+   * reason to approve (e.g. "replacing node-3, same role") can record it.
+   *
+   * @generated from field: string reason = 5;
+   */
+  reason: string;
 };
 
 /**
@@ -216,6 +228,40 @@ export const MachineIdentitySchema: GenMessage<MachineIdentity> = /*@__PURE__*/
   messageDesc(file_ichor_v1alpha1_machine, 8);
 
 /**
+ * MachineApprovalDecision records who decided approval_state, when, and
+ * why -- kept beside approval_state rather than folded into it, so
+ * approval_state alone stays the single source of truth for status; this
+ * message asserts no approved/rejected state of its own. actor is the
+ * backend's own fixed identity until OIDC login lands (ADR 0018); unset
+ * (nil) on a machine nobody has approved or rejected yet.
+ *
+ * @generated from message ichor.v1alpha1.MachineApprovalDecision
+ */
+export type MachineApprovalDecision = Message<"ichor.v1alpha1.MachineApprovalDecision"> & {
+  /**
+   * @generated from field: string actor = 1;
+   */
+  actor: string;
+
+  /**
+   * @generated from field: string reason = 2;
+   */
+  reason: string;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp at = 3;
+   */
+  at?: Timestamp | undefined;
+};
+
+/**
+ * Describes the message ichor.v1alpha1.MachineApprovalDecision.
+ * Use `create(MachineApprovalDecisionSchema)` to create a new message.
+ */
+export const MachineApprovalDecisionSchema: GenMessage<MachineApprovalDecision> = /*@__PURE__*/
+  messageDesc(file_ichor_v1alpha1_machine, 9);
+
+/**
  * @generated from message ichor.v1alpha1.Machine
  */
 export type Machine = Message<"ichor.v1alpha1.Machine"> & {
@@ -278,6 +324,13 @@ export type Machine = Message<"ichor.v1alpha1.Machine"> & {
    * @generated from field: ichor.v1alpha1.MachineApprovalState approval_state = 11;
    */
   approvalState: MachineApprovalState;
+
+  /**
+   * approval_decision is unset until the first approve/reject decision.
+   *
+   * @generated from field: ichor.v1alpha1.MachineApprovalDecision approval_decision = 12;
+   */
+  approvalDecision?: MachineApprovalDecision | undefined;
 };
 
 /**
@@ -285,7 +338,7 @@ export type Machine = Message<"ichor.v1alpha1.Machine"> & {
  * Use `create(MachineSchema)` to create a new message.
  */
 export const MachineSchema: GenMessage<Machine> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_machine, 9);
+  messageDesc(file_ichor_v1alpha1_machine, 10);
 
 /**
  * @generated from enum ichor.v1alpha1.MachineRole

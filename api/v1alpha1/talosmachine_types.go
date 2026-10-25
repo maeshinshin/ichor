@@ -99,6 +99,38 @@ type TalosMachineSpec struct {
 	// +kubebuilder:default=pending
 	// +optional
 	ApprovalState string `json:"approvalState,omitempty"`
+
+	// approvalDecision records who made the current approvalState decision,
+	// when, and why. It is kept separate from approvalState, not folded
+	// into it, so approvalState alone remains this machine's single source
+	// of truth for approval status -- this struct asserts no approved/
+	// rejected state of its own, only the record behind whichever state
+	// approvalState already carries. Unset until the first approve/reject.
+	// +optional
+	ApprovalDecision *TalosMachineApprovalDecision `json:"approvalDecision,omitempty"`
+}
+
+// TalosMachineApprovalDecision is who decided a TalosMachine's current
+// approvalState, when, and why -- not a second place that state can be
+// read from (see TalosMachineSpec.ApprovalDecision's own comment).
+type TalosMachineApprovalDecision struct {
+	// actor identifies who made the decision. Fixed to the backend's own
+	// identity until OIDC login lands (ADR 0018); the field is added now
+	// rather than later so every decision from here on has an actor
+	// recorded, instead of leaving earlier decisions with none once a
+	// real per-person identity exists to fill it.
+	// +optional
+	Actor string `json:"actor,omitempty"`
+
+	// reason is optional free text, symmetric between approve and reject --
+	// AuditRecord's own wire comment already documents "reason" as "mainly
+	// used for rejections," not exclusive to them.
+	// +optional
+	Reason string `json:"reason,omitempty"`
+
+	// at is when the decision was made.
+	// +optional
+	At metav1.Time `json:"at,omitempty"`
 }
 
 // IsApproved reports whether the controller may render and apply

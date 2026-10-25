@@ -419,3 +419,45 @@ returned the refusal.
 
 ### Cleanup, verified including the new pieces
 
+### The ~70-line scratch program became real harness code
+
+Promoted the manual leaf-minting procedure above into `test/harness/webhookcert`
+(`MintLeafForIP`), with tests that verify the leaf against the CA and against the wrong
+IP/wrong CA.
+
+Getting this orchestration code to actually run clean against the live 3-control-plane
+cluster took five real-hardware attempts, each a genuinely different bug:
+
+1. `Secret "ichor-webhook-server-cert" not found` -- the `create secret` call was missing
+   `-n`/`--namespace`, so it landed in the kubeconfig's default namespace instead of the
+   leader-election namespace the manager actually reads from.
+2. The `ValidatingWebhookConfiguration` manifest was being applied with the shared
+   `applyManifest` helper, which targets wherever the harness's own `KUBECONFIG` points
+   (the outer cluster) -- caught by code review before it was even hardware-tested,
+   fixed by adding an `applyInnerManifest` that runs `kubectl apply -f -` from inside the
+   pod, against the inner apiserver.
+3. `webhookcert: no PEM block found in the CA certificate` -- a Go shadowing bug:
+   `waitForWebhookCert() (caBundle string, err error)` discarded `pollFor`'s real return
+   value into `_` and returned the never-assigned named return instead, because the
+   closure's own `caBundle, ok := ...` created a new local variable in its own scope
+   rather than assigning the outer one. Always returned `("", nil)`. Fixed by dropping the
+   named returns and returning `pollFor`'s result directly.
+4. `error: failed to create secret secrets "...already exists"` on a retry after a
+   previous failed run had already created it -- the code was checking for the API's
+   machine-readable `AlreadyExists` reason, which the CLI's own printed text (lowercase,
+   human-readable) never contains, so the check could never have caught this reliably.
+   Fixed by rewriting the setup step to `kubectl apply` a small inline Namespace+Secret
+   manifest, which is naturally idempotent and needs no exists-check at all.
+5. `error: no objects passed to apply` -- the real one, found only once the first four
+   were out of the way. `kubectl exec <pod> -- <cmd>` does **not** forward the local
+   process's stdin to the remote command unless the outer invocation itself is given
+   `-i`/`--stdin`; setting `cmd.Stdin` on the local `exec.Cmd` only feeds the local
+   `kubectl exec` process's own stdin, which `kubectl exec` then drops on the floor
+   without `-i`. Every `applyInnerManifest` call piped a manifest into
+   `innerKubectl("apply", "-f", "-")`, whose remote `kubectl apply` therefore always saw
+   an immediately-closed, empty stdin. Fixed by adding `-i` to the one shared `podExec`
+   that every inner-cluster call goes through.
+
+(The log also shows the expected `no matches for kind "TalosMachine"`
+error repeating -- CRDs are not yet installed on this inner cluster at this point in the
+sequence, which is next.)

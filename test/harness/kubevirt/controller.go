@@ -151,8 +151,11 @@ func upController() error {
 		return err
 	}
 
+	// Applied to the *inner* cluster, not wherever KUBECONFIG points (the outer one): this
+	// webhook has to be registered on the apiserver that will actually see TalosMachine
+	// deletes, which is the inner cluster's own.
 	webhookManifest := fmt.Sprintf(controllerWebhookManifestTmpl, controllerValidatingWebhookConfig, podIP, caBundle)
-	if err := applyManifest(webhookManifest); err != nil {
+	if err := applyInnerManifest(webhookManifest); err != nil {
 		return fmt.Errorf("applying the ValidatingWebhookConfiguration: %w", err)
 	}
 
@@ -230,13 +233,23 @@ func createControllerPod(binaryPath, kubeconfigPath, kubectlPath string) (string
 // ignores), and an empty webhook cert Secret (cert-controller's rotator only ever Gets
 // then Updates one, never creates it).
 func prepareInnerClusterForController() error {
-	if out, err := innerKubectl("create", "namespace", controllerLeaderElectionNamespace).CombinedOutput(); err != nil &&
-		!strings.Contains(string(out), "AlreadyExists") {
-		return fmt.Errorf("creating the inner cluster's %s namespace: %w: %s", controllerLeaderElectionNamespace, err, out)
-	}
-	if out, err := innerKubectl("create", "secret", "generic", controllerWebhookCertSecret).CombinedOutput(); err != nil &&
-		!strings.Contains(string(out), "AlreadyExists") {
-		return fmt.Errorf("creating the inner cluster's webhook cert secret: %w: %s", err, out)
+	// "apply", not "create": naturally idempotent across repeated harness runs, unlike
+	// "create" (which errors the second time -- observed for real, and the CLI's own
+	// error text is the lowercase "already exists", not the API reason "AlreadyExists",
+	// so matching on that string was never going to catch it reliably either).
+	manifest := fmt.Sprintf(`apiVersion: v1
+kind: Namespace
+metadata:
+  name: %[1]s
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: %[2]s
+  namespace: %[1]s
+`, controllerLeaderElectionNamespace, controllerWebhookCertSecret)
+	if err := applyInnerManifest(manifest); err != nil {
+		return fmt.Errorf("preparing the inner cluster for the controller: %w", err)
 	}
 	return nil
 }
@@ -262,9 +275,10 @@ func startController(bin string) error {
 // (confirming it got far enough to generate a CA, even though the leaf it writes is never
 // used -- see package webhookcert) and returns the CA certificate's own base64 PEM, read
 // straight out of the Secret's "ca.crt" data key exactly as caBundle wants it.
-func waitForWebhookCert() (caBundle string, err error) {
-	_, err = pollFor("waiting for cert-controller to generate the webhook CA", 90*time.Second, func() (string, bool) {
-		out, runErr := innerKubectl("get", "secret", controllerWebhookCertSecret, "-o", "json").CombinedOutput()
+func waitForWebhookCert() (string, error) {
+	return pollFor("waiting for cert-controller to generate the webhook CA", 90*time.Second, func() (string, bool) {
+		out, runErr := innerKubectl("get", "secret", controllerWebhookCertSecret,
+			"-n", controllerLeaderElectionNamespace, "-o", "json").CombinedOutput()
 		if runErr != nil {
 			return "", false
 		}
@@ -277,14 +291,14 @@ func waitForWebhookCert() (caBundle string, err error) {
 		caBundle, ok := secret.Data["ca.crt"]
 		return caBundle, ok && caBundle != ""
 	})
-	return caBundle, err
 }
 
 // mintAndInstallLeafCert fetches the CA cert-controller generated (cert and key) and
 // drops a new leaf for podIP, signed by that CA, into the pod's CertDir -- see package
 // webhookcert for why this cannot be cert-controller's own leaf.
 func mintAndInstallLeafCert(bin, podIP, caBundleB64 string) error {
-	out, err := innerKubectl("get", "secret", controllerWebhookCertSecret, "-o", "json").CombinedOutput()
+	out, err := innerKubectl("get", "secret", controllerWebhookCertSecret,
+		"-n", controllerLeaderElectionNamespace, "-o", "json").CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("reading the webhook cert secret: %w: %s", err, out)
 	}
@@ -336,9 +350,24 @@ func mintAndInstallLeafCert(bin, podIP, caBundleB64 string) error {
 	return nil
 }
 
-// podExec runs args inside the controller pod.
+// applyInnerManifest runs "kubectl apply -f -" against the inner cluster, from inside the
+// controller pod (a workstation has no route to the inner cluster's node IP,
+// let alone its apiserver).
+func applyInnerManifest(manifest string) error {
+	cmd := innerKubectl("apply", "-f", "-")
+	cmd.Stdin = strings.NewReader(manifest)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("%w: %s", err, out)
+	}
+	return nil
+}
+
+// podExec runs args inside the controller pod. "-i" is required for "kubectl exec" to
+// forward the local process's stdin to the remote command at all -- without it, anything
+// piped via cmd.Stdin (e.g. applyInnerManifest's "kubectl apply -f -") reaches the remote
+// side as an already-closed, empty stdin.
 func podExec(args ...string) *exec.Cmd {
-	return exec.Command("kubectl", append([]string{"-n", namespace, "exec", controllerPodName, "--"}, args...)...)
+	return exec.Command("kubectl", append([]string{"-n", namespace, "exec", "-i", controllerPodName, "--"}, args...)...)
 }
 
 // podExecWithKubeconfig runs /manager inside the controller pod with the inner cluster's

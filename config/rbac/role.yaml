@@ -80,6 +80,7 @@ rules:
   resources:
   - talosclusters/status
   - talosmachines/status
+  - talosoperations/status
   verbs:
   - get
   - patch
@@ -102,6 +103,16 @@ rules:
   - talosmachines/finalizers
   verbs:
   - update
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosoperations
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
 - apiGroups:
   - policy
   resources:

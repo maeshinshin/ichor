@@ -379,6 +379,27 @@ func DocumentFromPatch(d ichorv1alpha1.TalosConfigPatchDocument) (config.Documen
 		}
 
 		return doc, nil
+	case "VolumeConfig":
+		doc, err := d.VolumeConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("volumeConfig: %w", err)
+		}
+
+		return doc, nil
+	case "UserVolumeConfig":
+		doc, err := d.UserVolumeConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("userVolumeConfig: %w", err)
+		}
+
+		return doc, nil
+	case "RawVolumeConfig":
+		doc, err := d.RawVolumeConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("rawVolumeConfig: %w", err)
+		}
+
+		return doc, nil
 	default:
 		return nil, fmt.Errorf("unknown document kind %q", d.Kind)
 	}

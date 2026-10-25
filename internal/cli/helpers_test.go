@@ -84,6 +84,11 @@ const (
 	// testRepoURL is a credential-free, unreachable (.invalid TLD) repo
 	// URL shared by every --argocd test fixture.
 	testRepoURL = "https://example.invalid/repo.git"
+
+	// testEphemeralDiskSelector and testStorageDiskSelector are disk-role
+	// CEL selector fixtures shared across disk-role tests.
+	testEphemeralDiskSelector = `disk.wwid == "eph"`
+	testStorageDiskSelector   = `disk.wwid == "store"`
 )
 
 func newTestBundle(t *testing.T) *secrets.Bundle {

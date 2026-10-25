@@ -117,6 +117,52 @@ func TestRunInit_Success(t *testing.T) {
 	}
 }
 
+// TestRunInit_DiskRoles proves the optional disk-role selectors
+// (architecture.md's "Nodes": each disk gets a role) land in the same
+// TalosConfigPatch as the install disk, as VolumeConfig/RawVolumeConfig/
+// UserVolumeConfig documents.
+func TestRunInit_DiskRoles(t *testing.T) {
+	withTempHome(t)
+
+	k8sClient := fake.NewClientBuilder().WithScheme(newTestScheme(t)).Build()
+	deps, _, _ := newFakeInitDeps(t, k8sClient)
+
+	opts := validInitOptions()
+	opts.DiskRoles = diskRoleOptions{
+		EphemeralDiskSelector:  testEphemeralDiskSelector,
+		StorageDiskSelector:    testStorageDiskSelector,
+		UserVolumeDiskSelector: `disk.wwid == "data"`,
+	}
+
+	if err := runInit(context.Background(), opts, deps); err != nil {
+		t.Fatalf("runInit: %v", err)
+	}
+
+	var patches ichorv1alpha1.TalosConfigPatchList
+	if err := k8sClient.List(context.Background(), &patches); err != nil {
+		t.Fatalf("listing TalosConfigPatches: %v", err)
+	}
+
+	var found struct{ ephemeral, storage, userVolume bool }
+
+	for _, p := range patches.Items {
+		for _, d := range p.Spec.Documents {
+			switch d.Kind {
+			case "VolumeConfig":
+				found.ephemeral = true
+			case "RawVolumeConfig":
+				found.storage = true
+			case "UserVolumeConfig":
+				found.userVolume = true
+			}
+		}
+	}
+
+	if !found.ephemeral || !found.storage || !found.userVolume {
+		t.Fatalf("expected all three disk-role documents across the created patches, got %+v", patches.Items)
+	}
+}
+
 // TestRunInit_Flannel proves architecture.md's "unless flannel": the
 // CNI itself contributes no TalosConfigPatch when the preset is
 // flannel. The one patch init always creates regardless of CNI --

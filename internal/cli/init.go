@@ -122,6 +122,13 @@ func init() {
 	flags.StringVar(&initOpts.KubernetesVersion, "kubernetes-version", "v"+constants.DefaultKubernetesVersion, "Kubernetes release this cluster runs")
 	flags.StringVar(&initOpts.VersionContract, "version-contract", "", "Talos version contract (required, vX.Y)")
 	flags.StringVar(&initOpts.InstallDisk, "install-disk", "", "the first node's install disk, e.g. /dev/sda (required)")
+	flags.StringVar(&initOpts.DiskRoles.EphemeralDiskSelector, "ephemeral-disk-selector", "",
+		"CEL disk selector (e.g. disk.wwid == \"...\") for a dedicated EPHEMERAL disk, separate from --install-disk")
+	flags.StringVar(&initOpts.DiskRoles.StorageDiskSelector, "storage-disk-selector", "",
+		"CEL disk selector for a disk prepared for a storage system (RawVolumeConfig)")
+	flags.StringVar(&initOpts.DiskRoles.StorageVolumeName, "storage-volume-name", "", "name for --storage-disk-selector's volume (default \"storage\")")
+	flags.StringVar(&initOpts.DiskRoles.UserVolumeDiskSelector, "user-volume-disk-selector", "", "CEL disk selector for a UserVolumeConfig disk")
+	flags.StringVar(&initOpts.DiskRoles.UserVolumeName, "user-volume-name", "", "name for --user-volume-disk-selector's volume (default \"data\")")
 
 	flags.BoolVar(&initOpts.ArgoCD, "argocd", false, "bootstrap Argo CD's repository credentials and GitOps CRs for this cluster")
 	flags.StringVar(&initOpts.ArgoCDNamespace, "argocd-namespace", "argocd", "namespace Argo CD runs in (for the repository credentials Secret)")

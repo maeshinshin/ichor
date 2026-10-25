@@ -42,10 +42,19 @@ import (
 // e2e nodes boot.
 const Image = "ghcr.io/siderolabs/talosctl:v1.14.3"
 
+// nodesFlag, talosconfigFlag and talosconfigKey name the repeated CLI flag and secret-data
+// key every authenticated call below shares (goconst).
+const (
+	nodesFlag        = "--nodes"
+	talosconfigFlag  = "--talosconfig"
+	talosconfigMount = "/secrets/talosconfig"
+	talosconfigKey   = "talosconfig"
+)
+
 // Get runs `talosctl get <resource>` against node's insecure maintenance API from a one-shot
 // Pod in namespace, and returns its raw (possibly multi-object) JSON output.
 func Get(namespace, node, resource string) (string, error) {
-	return run(namespace, []string{"get", resource, "-o", "json", "--insecure", "--nodes", node}, nil, time.Minute)
+	return run(namespace, []string{"get", resource, "-o", "json", "--insecure", nodesFlag, node}, nil, time.Minute)
 }
 
 // GetAuthenticated is Get against a configured node's authenticated API, using talosconfig
@@ -53,8 +62,8 @@ func Get(namespace, node, resource string) (string, error) {
 // maintenance service.
 func GetAuthenticated(namespace, node, resource string, talosconfig []byte) (string, error) {
 	return run(namespace,
-		[]string{"get", resource, "-o", "json", "--talosconfig", "/secrets/talosconfig", "--nodes", node},
-		map[string]string{"talosconfig": string(talosconfig)}, time.Minute)
+		[]string{"get", resource, "-o", "json", talosconfigFlag, talosconfigMount, nodesFlag, node},
+		map[string]string{talosconfigKey: string(talosconfig)}, time.Minute)
 }
 
 // Apply applies machineConfig to node's insecure maintenance API, which installs Talos and
@@ -62,29 +71,29 @@ func GetAuthenticated(namespace, node, resource string, talosconfig []byte) (str
 // before the node can write it to disk.
 func Apply(namespace, node string, machineConfig []byte) (string, error) {
 	return run(namespace,
-		[]string{"apply-config", "--insecure", "--nodes", node, "-f", "/secrets/config.yaml"},
+		[]string{"apply-config", "--insecure", nodesFlag, node, "-f", "/secrets/config.yaml"},
 		map[string]string{"config.yaml": string(machineConfig)}, 5*time.Minute)
 }
 
 // Bootstrap bootstraps etcd on node's authenticated API.
 func Bootstrap(namespace, node string, talosconfig []byte) (string, error) {
 	return run(namespace,
-		[]string{"bootstrap", "--talosconfig", "/secrets/talosconfig", "--nodes", node},
-		map[string]string{"talosconfig": string(talosconfig)}, time.Minute)
+		[]string{"bootstrap", talosconfigFlag, talosconfigMount, nodesFlag, node},
+		map[string]string{talosconfigKey: string(talosconfig)}, time.Minute)
 }
 
 // Version runs the authenticated `talosctl version` (no --insecure) against node.
 func Version(namespace, node string, talosconfig []byte) (string, error) {
 	return run(namespace,
-		[]string{"version", "--talosconfig", "/secrets/talosconfig", "--nodes", node},
-		map[string]string{"talosconfig": string(talosconfig)}, time.Minute)
+		[]string{"version", talosconfigFlag, talosconfigMount, nodesFlag, node},
+		map[string]string{talosconfigKey: string(talosconfig)}, time.Minute)
 }
 
 // Kubeconfig downloads the admin kubeconfig from node's authenticated API, unmerged.
 func Kubeconfig(namespace, node string, talosconfig []byte) ([]byte, error) {
 	out, err := run(namespace,
-		[]string{"kubeconfig", "-", "--merge=false", "--talosconfig", "/secrets/talosconfig", "--nodes", node, "--endpoints", node},
-		map[string]string{"talosconfig": string(talosconfig)}, time.Minute)
+		[]string{"kubeconfig", "-", "--merge=false", talosconfigFlag, talosconfigMount, nodesFlag, node, "--endpoints", node},
+		map[string]string{talosconfigKey: string(talosconfig)}, time.Minute)
 	return []byte(out), err
 }
 

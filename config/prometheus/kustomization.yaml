@@ -1,10 +1,11 @@
 resources:
 - monitor.yaml
 
-# [PROMETHEUS-WITH-CERTS] The following patch configures the ServiceMonitor in ../prometheus
-# to securely reference certificates created and managed by an external certificate manager.
-# Additionally, ensure that you uncomment the [METRICS WITH CERTS] patch under config/default/kustomization.yaml
-# to mount the "metrics-server-cert" secret in the Manager Deployment.
+# [PROMETHEUS-WITH-CERTS] The following patch configures the ServiceMonitor in ../prometheus to
+# securely reference the certificate cert-controller's second in-process rotator provisions -- not an external certificate manager; Ichor ships no certificate-issuing
+# dependency. Additionally, ensure you uncomment the [METRICS-WITH-CERTS] resource and patch under
+# config/default/kustomization.yaml, which ship the empty Secret this reads and mount it into the
+# Manager Deployment.
 #patches:
 #  - path: monitor_tls_patch.yaml
 #    target:

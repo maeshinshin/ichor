@@ -87,6 +87,10 @@ var layerOrder = map[string]int{
 // order is whatever this function's own deterministic merge sequence
 // produced, and struct field order is fixed by the Go type -- so identical
 // inputs always encode to identical bytes, in this process or any other.
+//
+// Refuses, through BuildConfig, when cluster.Spec.Registries is non-empty
+// (ADR 0027) -- this entry point never resolves or injects registry auth,
+// so use RenderWithRegistryAuth instead.
 func Render(
 	cluster *ichorv1alpha1.TalosCluster,
 	m *ichorv1alpha1.TalosMachine,
@@ -103,8 +107,10 @@ func Render(
 // machine.registries can still override it. auth is the resolved-credential
 // map ResolveRegistryAuth returns, keyed by TalosClusterRegistry.Host; a
 // host with no entry (or no credentials in its entry) renders as an
-// anonymous mirror. Render itself is untouched and keeps working for every
-// existing caller that has no registries to inject.
+// anonymous mirror. Render itself keeps working unchanged for every
+// existing caller that has no registries to inject; it now refuses outright
+// for one that does (BuildConfig's doc comment), which is this function's
+// reason to exist.
 func RenderWithRegistryAuth(
 	cluster *ichorv1alpha1.TalosCluster,
 	m *ichorv1alpha1.TalosMachine,
@@ -150,12 +156,26 @@ func Hash(data []byte) string {
 // before encoding so a secret is never serialized unmasked (ADR 0016, ADR
 // 0018) -- calls BuildConfig directly instead of re-deriving the base
 // config, patch selection and merge Render already does.
+//
+// It refuses outright when cluster.Spec.Registries is non-empty (ADR 0027):
+// this entry point never resolves or injects registry auth, so rendering
+// anyway would silently produce a config whose mirrors carry no credentials
+// -- no error, no log, a cluster that simply cannot pull from its private
+// registry, with nothing pointing at why. A caller that has registries
+// declared must go through BuildConfigWithRegistryAuth/RenderWithRegistryAuth
+// instead, even if every one of them turns out to be anonymous.
 func BuildConfig(
 	cluster *ichorv1alpha1.TalosCluster,
 	m *ichorv1alpha1.TalosMachine,
 	bundle *secrets.Bundle,
 	candidates []ichorv1alpha1.TalosConfigPatch,
 ) (coreconfig.Provider, error) {
+	if len(cluster.Spec.Registries) > 0 {
+		return nil, fmt.Errorf(
+			"render: cluster.Spec.Registries is set; BuildConfig never resolves or injects registry auth -- " +
+				"use BuildConfigWithRegistryAuth (or Render's RenderWithRegistryAuth) instead")
+	}
+
 	return buildConfig(cluster, m, bundle, candidates, nil)
 }
 

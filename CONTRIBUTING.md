@@ -30,22 +30,72 @@ the shell or not. If you see that, `rm -rf bin` and run it again inside
   build with the Makefile targets (`make manifests generate test build`).
   Don't call controller-gen, kustomize or envtest by hand.
 - The CLI uses cobra; add commands with `cobra-cli add`.
-- The Helm chart in `dist/chart` is generated from `config/` by
-  `kubebuilder edit --plugins=helm/v2-alpha`; everything under
-  `dist/chart/templates/` is overwritten on every run. One trap: controller-gen
-  names the `ClusterRole` and the namespaced `Role` it generates both
-  `manager-role`, and the Helm plugin can only convert one of them under that
-  shared name — so a new RBAC rule in the wrong scope is silently dropped from
-  the chart while kustomize still renders it. After any RBAC change, render the
-  chart and check the rules are actually there. Several `templates/` files
-  carry hand-edits for exactly this kind of thing that regeneration would
-  revert with no other signal; `dist/chart/chart_test.go` renders the chart
-  with `helm template` and guards those edits, runs on every PR via `make
-  test`. Another controller-gen trap, this time in the CRDs it generates:
-  `+kubebuilder:validation:Enum=true;false` (unquoted) emits YAML *booleans*
-  into a `type: string` schema, which the API server then rejects even for
-  the literal string `"true"`; quote the values instead
-  (`Enum="true";"false"`).
+- **Do not run `kubebuilder edit --plugins=helm/v2-alpha`.** It regenerates
+  every file under `dist/chart/templates/` from `config/`, and `dist/chart/`
+  carries hand-edits the plugin knows nothing about — the webhook's fixed
+  resource names, the `ValidatingAdmissionPolicy`, the UI backend's RBAC kept
+  separate from the controller's, the namespaced secrets `Role` split out of
+  `manager-role`, and more. Running the plugin reverted five of them in one
+  pass; the next time, on an unrelated change, it reverted roughly ten —
+  the whole template tree, not just the files that should have changed. A
+  generator that needs most of its own output hand-restored after every run
+  is not saving anyone anything. Instead:
+  - **CRD schemas**: `make sync-crds` (also run by `make manifests`) copies
+    each file's `spec:` block from `config/crd/bases/` into
+    `dist/chart/templates/crd/`, verbatim, leaving the Helm wrapper around it
+    (`{{- if .Values.crd.enabled }}`, the `{{- if .Values.crd.keep }}`
+    annotation, the trailing `{{- end }}`) untouched. This one piece actually
+    is mechanical — a CRD's schema has no hand-edits to lose — so it's the
+    one piece still automated. See `hack/sync-crds.py`.
+  - **Everything else in `dist/chart/templates/`** (RBAC, the manager and
+    ichor-ui `Deployment`s/`Service`s/`PodDisruptionBudget`s, the webhook
+    config, the admission policy) is maintained by hand, mirroring the
+    matching `config/` base when one exists. After any change that touches
+    RBAC, a `Deployment`, or anything with a `config/` equivalent, render the
+    chart (`helm template ichor dist/chart`) and check it did what you
+    expect — the plugin's job of "look at the result" doesn't go away just
+    because the plugin does.
+  - **`dist/chart/chart_test.go` is the actual contract**, not a backstop:
+    it renders the chart with `helm template` under two different release
+    names and checks every invariant hand-maintenance must preserve, runs on
+    every PR via `make test`. If you're hand-editing a template and wondering
+    whether something will notice if you get it wrong, this is the thing
+    that notices:
+    - `checkFixedNames`: the webhook `Service`, its `ValidatingWebhookConfiguration`,
+      and the cert `Secret` keep their fixed names under any release name.
+    - `checkWebhookInvariants`: both webhooks keep `failurePolicy: Fail` and
+      match `DELETE` only.
+    - `checkKubeProxySwitchPolicy`: the kube-proxy-switch `ValidatingAdmissionPolicy`
+      and its `Binding` both exist, and the `Binding` points at the right `Policy`.
+    - `checkUIBackendRBACIsSeparate`: the UI backend's `Deployment` runs as its
+      own `ServiceAccount`, bound only to its own `ClusterRole`, with the
+      controller's own binding naming neither.
+    - `checkNoCABundle`: no `caBundle` anywhere (cert-controller injects it
+      at runtime; a templated one would drift on every sync).
+    - `checkCertSecretHasNoData`: the webhook cert `Secret` ships metadata
+      only, never a `data` key.
+    - `checkSecretsRoleAndBinding`: the controller's namespaced secrets `Role`
+      and its `RoleBinding` both exist and are linked.
+    - `checkNoClusterWideSecretsRead`: no `ClusterRole` anywhere in the chart
+      grants unrestricted `get`/`list`/`watch` on `secrets` with no
+      `resourceNames` — a regression that shipped twice already.
+    - `checkCRDsMatchConfig`: every CRD in `config/crd/bases/` has an
+      equivalent, schema-identical CRD in the rendered chart.
+  - Add a new invariant to `chart_test.go` instead of trusting memory, the
+    next time a hand-edit needs protecting the way these already are.
+  - **Why hand-maintenance over "run the plugin, then re-apply a patch
+    script"**: a re-apply script needs its own list of what to patch back,
+    maintained separately from the hand-edits themselves — today that list
+    only exists in git history. Hand-
+    maintaining the templates directly needs no second list: the edit and
+    the file it lives in are the same thing, and `chart_test.go` is what
+    would have caught the patch script going stale anyway. Fewer places to
+    keep in sync wins.
+  - Separately, a controller-gen trap in the CRDs it generates:
+    `+kubebuilder:validation:Enum=true;false` (unquoted) emits YAML *booleans*
+    into a `type: string` schema, which the API server then rejects even for
+    the literal string `"true"`; quote the values instead
+    (`Enum="true";"false"`).
 - The UI is Vite + Preact + [preactcn](https://maeshinshin.github.io/preactcn/).
   Add components with `npx shadcn@latest add @preactcn/<name>`. No React,
   no `preact/compat`.

@@ -148,6 +148,23 @@ setup-test-e2e-kubevirt-ha: test-e2e-prereqs kubevirt-harness ## Boot three Talo
 cleanup-test-e2e-kubevirt-ha: test-e2e-prereqs kubevirt-harness ## Tear down the three VMs and their DataVolumes (including the shared ISO); a no-op if there is nothing to tear down
 	"$(LOCALBIN)/kubevirt-harness" down-ha
 
+# --- Running the real controller against the inner cluster (ADR 0007): no path to deploy
+# it inside the inner cluster yet, and no docker in this sandbox to build an image with,
+# so it runs as a plain Pod on the outer cluster's own pod network, its statically built
+# binary copied in rather than an image. Needs setup-test-e2e-kubevirt-ha first.
+
+.PHONY: controller-static
+controller-static: ## Build a statically linked controller binary to copy into the verification pod (not an image)
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o "$(LOCALBIN)/manager-static" cmd/main.go
+
+.PHONY: setup-test-e2e-kubevirt-controller
+setup-test-e2e-kubevirt-controller: test-e2e-prereqs kubevirt-harness controller-static ## Run the real controller against the inner HA cluster, with its admission webhook reachable from the inner apiserver
+	"$(LOCALBIN)/kubevirt-harness" up-controller
+
+.PHONY: cleanup-test-e2e-kubevirt-controller
+cleanup-test-e2e-kubevirt-controller: test-e2e-prereqs kubevirt-harness ## Tear down the controller pod and the inner cluster's ValidatingWebhookConfiguration; a no-op if there is nothing to tear down
+	"$(LOCALBIN)/kubevirt-harness" down-controller
+
 # --- talosctl-qemu harness (CI, GitHub's ubuntu-24.04 runners) ---
 TEST_E2E_KUBECONFIG ?= $(LOCALBIN)/test-e2e.kubeconfig
 

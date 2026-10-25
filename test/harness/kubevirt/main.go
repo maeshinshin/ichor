@@ -158,20 +158,23 @@ spec:
 // 0007 describes; "up"/"down" is the short e2e set's proven single-node one.
 var (
 	upFns = map[string]func() error{
-		"up":    up,
-		"up-ha": upHA,
+		"up":            up,
+		"up-ha":         upHA,
+		"up-controller": upController,
 	}
 	downFns = map[string]func() error{
-		"up":      down,
-		"down":    down,
-		"up-ha":   downHA,
-		"down-ha": downHA,
+		"up":              down,
+		"down":            down,
+		"up-ha":           downHA,
+		"down-ha":         downHA,
+		"up-controller":   downController,
+		"down-controller": downController,
 	}
 )
 
 func main() {
 	if len(os.Args) != 2 || downFns[os.Args[1]] == nil {
-		fmt.Fprintln(os.Stderr, "usage: kubevirt up|down|up-ha|down-ha")
+		fmt.Fprintln(os.Stderr, "usage: kubevirt up|down|up-ha|down-ha|up-controller|down-controller")
 		os.Exit(2)
 	}
 	mode := os.Args[1]

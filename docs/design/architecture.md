@@ -307,6 +307,21 @@ Applications for CNI, Argo CD, Ichor and anything else. What doesn't: Secrets,
 writes at runtime on Nodes and on the storage system's node objects. Putting
 those in Git makes Argo CD and Ichor fight; Ichor warns if it sees them tracked.
 
+Detecting "tracked" is two different questions, not one with two keys.
+Argo CD marks the resource: `application.resourceTrackingMethod` in
+`argocd-cm` picks `annotation` (`argocd.argoproj.io/tracking-id`, whose value
+is `<app>:<group>/<kind>:<namespace>/<name>`), `label`
+(`app.kubernetes.io/instance`), or `annotation+label`, and
+`application.instanceLabelKey` can replace the label key outright. A resource
+marked under one method is not detected under another, and the default has
+moved between releases — so Ichor reads that ConfigMap rather than looking for
+a marker it guessed. Flux marks nothing on the resource: ownership lives in
+the owning Kustomization's `.status.inventory`, so the same question becomes
+"list the Kustomizations and search their inventories", and the field-manager
+name to look for in managed fields is `flux-client-side-apply`. Two code
+paths, with different cost: a lookup on the object for Argo CD, a scan over
+owners for Flux.
+
 Two modes on `TalosCluster.spec.gitops.mode`:
 
 - `relaxed` (default): approving a node writes the `TalosMachine` directly;
@@ -782,8 +797,6 @@ resumption works. A short set runs per PR, the full set nightly.
 - Does a single-node Talos upgrade need the etcd-preserving flag?
 - Exact Longhorn node label/annotation and evacuation field names per version.
 - The Cilium and Calico values that avoid perpetual OutOfSync under Argo CD.
-- Argo CD tracking method detection (label, annotation, both) and the Flux
-  equivalent.
 - What a self-hosted Image Factory needs to reach, and how to mirror it.
 
 ## Alternatives considered

@@ -30,6 +30,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
+	yaml "go.yaml.in/yaml/v4"
+
 	"github.com/maeshinshin/ichor/test/internal/talosctl"
 	"github.com/maeshinshin/ichor/test/utils"
 )
@@ -131,11 +134,11 @@ func upHA() error {
 	if err != nil {
 		return err
 	}
-	talosconfigYAML, err := configureAndBootstrapHA(ips)
+	talosconfigYAML, bundle, err := configureAndBootstrapHA(ips)
 	if err != nil {
 		return err
 	}
-	return publishHA(ips, talosconfigYAML)
+	return publishHA(ips, talosconfigYAML, bundle)
 }
 
 // bootHAToMaintenance creates the shared ISO DataVolume and haCount VMs referencing it,
@@ -187,15 +190,17 @@ func bootHAToMaintenance() ([]string, error) {
 // configureAndBootstrapHA applies one control-plane config to every node in ips, waits
 // for each one's authenticated API, bootstraps once on ips[0], and waits for every node
 // to report running/ready. It returns the admin talosconfig that authenticates against
-// the whole cluster.
-func configureAndBootstrapHA(ips []string) ([]byte, error) {
+// the whole cluster, and the secrets bundle it (and every node's machine config) was
+// generated from -- the removal-ordering verification needs the real bundle to
+// dial these same nodes' real Talos API, not a fresh unrelated one.
+func configureAndBootstrapHA(ips []string) ([]byte, *secrets.Bundle, error) {
 	cfg, err := generateControlPlaneConfig(haCluster, ips)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	talosconfigYAML, err := cfg.talosconfig.Bytes()
 	if err != nil {
-		return nil, fmt.Errorf("marshaling talosconfig: %w", err)
+		return nil, nil, fmt.Errorf("marshaling talosconfig: %w", err)
 	}
 
 	// The same rendered control-plane config applies to every node (config.go's own
@@ -204,7 +209,7 @@ func configureAndBootstrapHA(ips []string) ([]byte, error) {
 		fmt.Printf("--- applying the control-plane config to %s (installs and reboots) ---\n", haVMName(i))
 		out, err := talosctl.Apply(namespace, ip, cfg.machineConfig)
 		if err != nil {
-			return nil, fmt.Errorf("applying config to %s: %w: %s", ip, err, out)
+			return nil, nil, fmt.Errorf("applying config to %s: %w: %s", ip, err, out)
 		}
 	}
 
@@ -214,7 +219,7 @@ func configureAndBootstrapHA(ips []string) ([]byte, error) {
 			_, err := talosctl.GetAuthenticated(namespace, ip, "machinestatus", talosconfigYAML)
 			return "", err == nil
 		}); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
@@ -226,7 +231,7 @@ func configureAndBootstrapHA(ips []string) ([]byte, error) {
 		return out, err == nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	fmt.Println("--- bootstrap (on", haVMName(0), ") ---")
 	fmt.Println(bootstrapOut)
@@ -244,15 +249,15 @@ func configureAndBootstrapHA(ips []string) ([]byte, error) {
 			}
 			return "", talosctl.SpecField(objs[0], "stage") == "running" && talosctl.MachineStatusReady(objs[0])
 		}); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
-	return talosconfigYAML, nil
+	return talosconfigYAML, cfg.secretsBundle, nil
 }
 
 // publishHA prints the cluster-health evidence (talosctl health, etcd members) and writes
 // the talosconfig/kubeconfig files the removal-ordering verification reads afterwards.
-func publishHA(ips []string, talosconfigYAML []byte) error {
+func publishHA(ips []string, talosconfigYAML []byte, bundle *secrets.Bundle) error {
 	healthOut, err := talosctl.Health(namespace, ips, talosconfigYAML)
 	fmt.Println("--- talosctl health ---")
 	fmt.Println(healthOut)
@@ -284,8 +289,22 @@ func publishHA(ips []string, talosconfigYAML []byte) error {
 		return fmt.Errorf("writing kubeconfig: %w", err)
 	}
 
+	// The real secrets bundle these nodes were configured from, in the same shape
+	// internal/controller/bundle.go's loadBundle reads out of a Secret: a TalosCluster fixture referencing it can dial
+	// these nodes' real
+	// Talos API with credentials that actually authenticate.
+	secretsYAML, err := yaml.Marshal(bundle)
+	if err != nil {
+		return fmt.Errorf("marshaling secrets bundle: %w", err)
+	}
+	secretsPath := filepath.Join(bin, "test-e2e-kubevirt-ha-secrets.yaml")
+	if err := os.WriteFile(secretsPath, secretsYAML, 0o600); err != nil {
+		return fmt.Errorf("writing secrets bundle: %w", err)
+	}
+
 	fmt.Println(strings.Join(ips, ","))
 	fmt.Println("ICHOR_E2E_HA_TALOSCONFIG=" + talosconfigPath)
+	fmt.Println("ICHOR_E2E_HA_SECRETS=" + secretsPath)
 	fmt.Println("ICHOR_E2E_HA_KUBECONFIG=" + kubeconfigPath)
 	return nil
 }

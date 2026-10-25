@@ -8,6 +8,12 @@
 
 package typedconfig
 
+import (
+	corev1 "k8s.io/api/core/v1"
+	apiserverv1 "k8s.io/apiserver/pkg/apis/apiserver/v1"
+	auditv1 "k8s.io/apiserver/pkg/apis/audit/v1"
+)
+
 // Talos: APIServerConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type APIServerConfig struct {
 	// +optional
@@ -24,6 +30,8 @@ type APIServerConfig struct {
 	DisablePodSecurityPolicyConfig *bool `json:"disablePodSecurityPolicy,omitempty"`
 	// +optional
 	AdmissionControlConfig []*AdmissionPluginConfig `json:"admissionControl,omitempty"`
+	// +optional
+	AuditPolicyConfig *auditv1.Policy `json:"auditPolicy,omitempty"`
 	// +optional
 	ResourcesConfig *ResourcesConfig `json:"resources,omitempty"`
 	// +optional
@@ -48,6 +56,8 @@ type AuthorizationConfigAuthorizerConfig struct {
 	AuthorizerType string `json:"type"`
 	// +required
 	AuthorizerName string `json:"name"`
+	// +optional
+	AuthorizerWebhook *apiserverv1.WebhookConfiguration `json:"webhook,omitempty"`
 }
 
 // Talos: Bond — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
@@ -147,27 +157,15 @@ type ClusterConfig struct {
 	// +optional
 	ClusterID string `json:"id,omitempty"`
 	// +optional
-	ClusterSecret string `json:"secret,omitempty"`
-	// +optional
 	ControlPlane *ControlPlaneConfig `json:"controlPlane,omitempty"`
 	// +optional
 	ClusterName string `json:"clusterName,omitempty"`
 	// +optional
 	ClusterNetwork *ClusterNetworkConfig `json:"network,omitempty"`
 	// +optional
-	BootstrapToken string `json:"token,omitempty"`
-	// +optional
-	ClusterAESCBCEncryptionSecret string `json:"aescbcEncryptionSecret,omitempty"`
-	// +optional
 	ClusterSecretboxEncryptionSecret string `json:"secretboxEncryptionSecret,omitempty"`
 	// +optional
-	ClusterCA *PEMEncodedCertificateAndKey `json:"ca,omitempty"`
-	// +optional
 	ClusterAcceptedCAs []*PEMEncodedCertificate `json:"acceptedCAs,omitempty"`
-	// +optional
-	ClusterAggregatorCA *PEMEncodedCertificateAndKey `json:"aggregatorCA,omitempty"`
-	// +optional
-	ClusterServiceAccount *PEMEncodedKey `json:"serviceAccount,omitempty"`
 	// +optional
 	APIServerConfig *APIServerConfig `json:"apiServer,omitempty"`
 	// +optional
@@ -424,8 +422,6 @@ type EncryptionKeyTPM struct {
 type EtcdConfig struct {
 	// +optional
 	ContainerImage string `json:"image,omitempty"`
-	// +required
-	RootCA *PEMEncodedCertificateAndKey `json:"ca"`
 	// +optional
 	EtcdExtraArgs map[string][]string `json:"extraArgs,omitempty"`
 	// +optional
@@ -670,10 +666,6 @@ type LoggingDestination struct {
 type MachineConfig struct {
 	// +required
 	MachineType string `json:"type"`
-	// +required
-	MachineToken string `json:"token"`
-	// +optional
-	MachineCA *PEMEncodedCertificateAndKey `json:"ca,omitempty"`
 	// +optional
 	MachineAcceptedCAs []*PEMEncodedCertificate `json:"acceptedCAs,omitempty"`
 	// +required
@@ -764,6 +756,8 @@ type MachineSchedulerConfig struct {
 type MachineSeccompProfile struct {
 	// +required
 	MachineSeccompProfileName string `json:"name"`
+	// +required
+	MachineSeccompProfileValue *SeccompProfile `json:"value"`
 }
 
 // Talos: NetworkConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
@@ -826,12 +820,6 @@ type PEMEncodedCertificate struct {
 type PEMEncodedCertificateAndKey struct {
 	// +required
 	Crt []byte `json:"crt"`
-	// +required
-	Key []byte `json:"key"`
-}
-
-// github.com/siderolabs/crypto/x509: PEMEncodedKey
-type PEMEncodedKey struct {
 	// +required
 	Key []byte `json:"key"`
 }
@@ -912,6 +900,10 @@ type RegistryTLSConfig struct {
 
 // Talos: ResourcesConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type ResourcesConfig struct {
+	// +optional
+	Requests corev1.ResourceList `json:"requests,omitempty"`
+	// +optional
+	Limits corev1.ResourceList `json:"limits,omitempty"`
 }
 
 // Talos: Route — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config

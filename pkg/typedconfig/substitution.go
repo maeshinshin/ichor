@@ -17,6 +17,7 @@ limitations under the License.
 package typedconfig
 
 import (
+	"encoding/json"
 	"fmt"
 
 	mmeta "github.com/siderolabs/talos/pkg/machinery/config/types/meta"
@@ -83,6 +84,44 @@ func argValueFromMachinery(v mmeta.ArgValue) ([]string, error) {
 	}
 
 	return []string{node.Value}, nil
+}
+
+// mirrorToMachineryUnstructured renders v -- one of the five field-override
+// types in internal/tools/mirrorgen/main.go's fieldOverrides table -- through
+// its own JSON tags into the map[string]any shape machinery's
+// meta.Unstructured carries on the wire. Unlike the scalar substitutions
+// above, these fields have no faithful machinery-side type to round-trip
+// through (that's the whole reason they were meta.Unstructured); JSON is the
+// shape every upstream schema here (Kubernetes, OCI, kubelet) already
+// commits to.
+func mirrorToMachineryUnstructured[T any](v T) (mmeta.Unstructured, error) {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return mmeta.Unstructured{}, fmt.Errorf("encoding %T: %w", v, err)
+	}
+
+	var obj map[string]any
+	if err := json.Unmarshal(data, &obj); err != nil {
+		return mmeta.Unstructured{}, fmt.Errorf("decoding %T as unstructured: %w", v, err)
+	}
+
+	return mmeta.Unstructured{Object: obj}, nil
+}
+
+// machineryToMirrorUnstructured is mirrorToMachineryUnstructured's inverse.
+func machineryToMirrorUnstructured[T any](u mmeta.Unstructured) (T, error) {
+	var out T
+
+	data, err := json.Marshal(u.Object)
+	if err != nil {
+		return out, fmt.Errorf("encoding unstructured: %w", err)
+	}
+
+	if err := json.Unmarshal(data, &out); err != nil {
+		return out, fmt.Errorf("decoding unstructured as %T: %w", out, err)
+	}
+
+	return out, nil
 }
 
 func argValueToMachinery(s []string) (mmeta.ArgValue, error) {

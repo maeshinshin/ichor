@@ -40,6 +40,12 @@ import specs "github.com/opencontainers/runtime-spec/specs-go"
 // doesn't compile. Putting the hand-written methods here, one level down,
 // avoids both problems: SeccompProfile is reached only through a plain
 // pointer field, never through a pointer slice.
+//
+// deepCopyLinuxSeccomp and deepCopyLinuxSyscall below copy their known
+// pointer/slice fields by name rather than reflecting over the upstream
+// type, so they go stale -- silently, by sharing instead of copying -- if
+// specs-go ever adds one. seccomp_test.go's TestLinuxSeccompShape guards
+// against that by pinning the exact field set each one assumes.
 type SeccompProfile specs.LinuxSeccomp
 
 // DeepCopyInto copies the receiver into out.

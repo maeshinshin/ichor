@@ -21,37 +21,34 @@ import (
 	"fmt"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
-	yaml "go.yaml.in/yaml/v4"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/secretsbundle"
 )
 
-// bundleSecretKey is the key under which the secrets bundle lives in the
-// Secret TalosCluster.spec.secretsRef names, encoded exactly the way
-// `talosctl gen secrets` writes it and `ichor init` keeps it locally at
-// `~/.ichor/clusters/<name>/secrets.yaml` (architecture.md's "Trust"
-// section): YAML, under the key "secrets.yaml". That makes the local
-// backup and the Secret's content the same bytes -- `kubectl create secret
-// generic --from-file=secrets.yaml` works, and a recovery reading the
-// Secret back out gets a file talosctl already understands.
-const bundleSecretKey = "secrets.yaml"
+// bundleSecretKey is secretsbundle.SecretKey under this package's own
+// name, kept so existing fixtures (leak_test.go,
+// talosmachine_controller_test.go) that build a Secret keyed on it don't
+// need to change -- it is an alias, not a second definition: there is
+// still exactly one literal value, in internal/secretsbundle.
+const bundleSecretKey = secretsbundle.SecretKey
 
 // loadBundle implements design step 1's "load the bundle from the Secret":
 // it reads the Secret cluster.Spec.SecretsRef names, in the controller's own
-// namespace (namespace -- POD_NAMESPACE in practice, see cmd/main.go), and
-// decodes bundleSecretKey as a secrets.Bundle. A TalosCluster may live in any
-// namespace the controller watches, but Kubernetes RBAC cannot express "the
-// Secret this TalosCluster names, wherever that TalosCluster happens to
-// live" at anything narrower than cluster-wide Secret read; resolving in the
-// controller's fixed namespace instead is what lets the RBAC marker on
-// Reconcile stay namespace-scoped. It returns the bundle to the
-// caller and stores nothing else about it (principle 2: secrets are
-// referenced, never embedded) -- in particular, every error path below is
-// structural (missing Secret, missing key, malformed YAML) and never
-// includes the Secret's data in its message.
+// namespace (namespace -- POD_NAMESPACE in practice, see cmd/main.go), via
+// internal/secretsbundle.Load, which is what actually enforces
+// that a failure to read or decode it never puts the Secret's data into an
+// error message (principle 2: secrets are referenced, never embedded) --
+// shared with internal/uiapi's own copy of this same call, rather than two
+// independently-written decoders that could drift on that guarantee without
+// either side's leak tests noticing.
+//
+// A TalosCluster may live in any namespace the controller watches, but
+// Kubernetes RBAC cannot express "the Secret this TalosCluster names,
+// wherever that TalosCluster happens to live" at anything narrower than
+// cluster-wide Secret read; resolving in the controller's fixed namespace
+// instead is what lets the RBAC marker on Reconcile stay namespace-scoped.
 //
 // namespace must be non-empty: Secret is a namespaced resource, and an empty
 // namespace is never treated as "all namespaces" here -- that would turn a
@@ -63,22 +60,5 @@ func loadBundle(
 		return nil, fmt.Errorf("loading secrets bundle: controller namespace is empty (is POD_NAMESPACE set?)")
 	}
 
-	var secret corev1.Secret
-
-	key := types.NamespacedName{Namespace: namespace, Name: cluster.Spec.SecretsRef.Name}
-	if err := c.Get(ctx, key, &secret); err != nil {
-		return nil, fmt.Errorf("getting secrets bundle Secret %q in the controller's own namespace: %w", key, err)
-	}
-
-	raw, ok := secret.Data[bundleSecretKey]
-	if !ok {
-		return nil, fmt.Errorf("secrets bundle Secret %q has no %q key", key, bundleSecretKey)
-	}
-
-	var bundle secrets.Bundle
-	if err := yaml.Unmarshal(raw, &bundle); err != nil {
-		return nil, fmt.Errorf("decoding secrets bundle from Secret %q: %w", key, err)
-	}
-
-	return &bundle, nil
+	return secretsbundle.Load(ctx, c, namespace, cluster.Spec.SecretsRef.Name)
 }

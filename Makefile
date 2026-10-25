@@ -320,5 +320,35 @@ proto-breaking: ## Check proto/ for breaking changes against main; a no-op until
 	else \
 		echo "proto-breaking: proto/ does not exist on main yet; nothing to compare"; \
 	fi
+##@ UI
+
+# ui/ (Vite + Preact + TypeScript, preactcn components) is embedded into the
+# ichor-ui binary. None of these targets are prerequisites of the
+# existing `build`/`test`/`lint` targets above: cmd/ichor-ui builds against a
+# committed placeholder (see cmd/ichor-ui/webfs_dev.go) when the UI hasn't
+# been built, so Go-only workflows never need npm.
+
+.PHONY: ui-install
+ui-install: ## Install UI dependencies (npm ci).
+	cd ui && npm ci
+
+.PHONY: ui-build
+ui-build: ui-install ## Build the UI; Vite writes straight into cmd/ichor-ui/dist.
+	cd ui && npm run build
+
+.PHONY: ui-typecheck
+ui-typecheck: ui-install ## Type-check the UI (tsc --noEmit).
+	cd ui && npm run typecheck
+
+.PHONY: ui-lint
+ui-lint: ui-install ## Lint the UI (eslint).
+	cd ui && npm run lint
+
+.PHONY: ui-ci
+ui-ci: ui-typecheck ui-lint ui-build ## Install, type-check, lint and build the UI, in order.
+
+.PHONY: build-ichor-ui
+build-ichor-ui: ui-build ## Build the ichor-ui binary with the real UI embedded.
+	go build -tags uiembed -o bin/ichor-ui ./cmd/ichor-ui
 
 include test/harness/harness.mk

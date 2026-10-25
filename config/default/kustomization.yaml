@@ -41,6 +41,10 @@ resources:
 #- ../prometheus
 # [METRICS] Expose the controller manager metrics service.
 - metrics_service.yaml
+# [METRICS-WITH-CERTS] Shipped empty; cmd/main.go's second cert-controller rotator (ADR 0006,
+# ADR 0031) fills it in at runtime once --metrics-cert-path is set below. Uncomment together with
+# cert_metrics_manager_patch.yaml under patches: -- that patch is what actually sets the flag.
+#- metrics_server_cert_secret.yaml
 # [NETWORK POLICY] Protect the /metrics endpoint and Webhook Server with NetworkPolicy.
 # Only Pod(s) running a namespace labeled with 'metrics: enabled' will be able to gather the metrics.
 # Only CR(s) which requires webhooks and are applied on namespaces labeled with 'webhooks: enabled' will
@@ -61,9 +65,11 @@ patches:
     kind: Deployment
     name: controller-manager
 
-# Uncomment the patches line if you enable Metrics and CertManager
-# [METRICS-WITH-CERTS] To enable metrics protected with certManager, uncomment the following line.
-# This patch will protect the metrics with certManager self-signed certs.
+# [METRICS-WITH-CERTS] To scrape metrics over a verifiable TLS certificate instead of the
+# ephemeral self-signed one controller-runtime generates by default, uncomment this patch
+# together with metrics_server_cert_secret.yaml above; both are needed, same as [WEBHOOK]'s two
+# files. No certManager/ directory and no external cert-issuing dependency either way (ADR 0006):
+# the certificate is cert-controller's second in-process rotator (ADR 0031), not an external one.
 #- path: cert_metrics_manager_patch.yaml
 #  target:
 #    kind: Deployment

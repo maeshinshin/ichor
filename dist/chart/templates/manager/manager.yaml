@@ -91,6 +91,14 @@ spec:
         # this path in-process (ADR 0006), regardless of that toggle. Matches
         # config/default/manager_webhook_patch.yaml, which patches it in always.
         - --webhook-cert-path=/tmp/k8s-webhook-server/serving-certs
+        {{- if .Values.certManager.enabled }}
+        # Gated, unlike the webhook path above: a real metrics certificate is optional
+        # (controller-runtime's own ephemeral self-signed one is the default, see
+        # cmd/main.go). cert-controller's second in-process rotator (ADR 0006, ADR 0031)
+        # fills this path in when requested. Matches
+        # config/default/cert_metrics_manager_patch.yaml.
+        - --metrics-cert-path=/tmp/k8s-metrics-server/metrics-certs
+        {{- end }}
         command:
         - /manager
         env:
@@ -151,6 +159,11 @@ spec:
           - mountPath: /tmp/k8s-webhook-server/serving-certs
             name: webhook-certs
             readOnly: true
+          {{- if .Values.certManager.enabled }}
+          - mountPath: /tmp/k8s-metrics-server/metrics-certs
+            name: metrics-certs
+            readOnly: true
+          {{- end }}
       securityContext:
         {{- if .Values.manager.podSecurityContext }}
         {{- toYaml .Values.manager.podSecurityContext | nindent 8 }}
@@ -170,4 +183,11 @@ spec:
           optional: true
           # Fixed name: matches the Secret's own fixed name (extras/webhook-server-cert.yaml).
           secretName: ichor-webhook-server-cert
+      {{- if .Values.certManager.enabled }}
+      - name: metrics-certs
+        secret:
+          optional: true
+          # Fixed name: matches the Secret's own fixed name (extras/metrics-server-cert.yaml).
+          secretName: ichor-metrics-server-cert
+      {{- end }}
 {{- end }}

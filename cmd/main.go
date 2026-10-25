@@ -53,6 +53,13 @@ const (
 	webhookSecretName           = "ichor-webhook-server-cert"
 	webhookServiceName          = "ichor-webhook-service"
 	validatingWebhookConfigName = "ichor-validating-webhook-configuration"
+
+	// metricsSecretName and metricsServiceName name the second cert-controller rotator's
+	// Secret and the metrics Service its certificate's DNSName matches (config/default/
+	// metrics_server_cert_secret.yaml, config/default/metrics_service.yaml) -- opt-in,
+	// gated on --metrics-cert-path actually being set, unlike the webhook rotator above.
+	metricsSecretName  = "ichor-metrics-server-cert"
+	metricsServiceName = "ichor-controller-manager-metrics-service"
 )
 
 var (
@@ -65,6 +72,7 @@ var (
 // watch or create by resourceNames (the request has no single object name to check), so
 // those stay namespace-scoped; get, update and patch are restricted to that one Secret.
 // +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,resourceNames=ichor-webhook-server-cert,verbs=get;update;patch
+// +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,resourceNames=ichor-metrics-server-cert,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,verbs=list;watch;create
 // +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,resourceNames=ichor-validating-webhook-configuration,verbs=get;list;watch
 // +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,resourceNames=ichor-validating-webhook-configuration,verbs=update;patch
@@ -243,6 +251,38 @@ func main() {
 			}
 		}()
 	}
+
+	// The metrics endpoint's serving certificate, provisioned the same way as the webhook's
+	// above (ADR 0006): a second cert-controller rotator in the same process. CertRotator's
+	// own ControllerName doc comment says this is supported ("allows registering multiple
+	// cert-rotator controllers... unless rotating multiple certificate secrets") -- each
+	// instance keeps its own reader/writer/channels, so nothing but the controller name (which
+	// addController registers on the manager, and would collide on the shared default) needs
+	// to differ. Gated on metricsCertPath, the same signal metricsServerOptions.CertDir above
+	// already uses for "a real certificate was requested" -- unset (the default) leaves the
+	// metrics server on controller-runtime's own ephemeral self-signed cert, untouched.
+	// cert-controller v0.16.0 has no Create path (ADR 0006's own recorded gotcha, confirmed to
+	// apply here too by reading pkg/rotator.writeSecret, which only ever calls Update): the
+	// Secret this targets must already exist, empty, shipped by config/default/
+	// metrics_server_cert_secret.yaml.
+	if len(metricsCertPath) > 0 {
+		if err := rotator.AddRotator(mgr, &rotator.CertRotator{
+			SecretKey:             types.NamespacedName{Namespace: os.Getenv("POD_NAMESPACE"), Name: metricsSecretName},
+			CertDir:               metricsCertPath,
+			CertName:              metricsCertName,
+			KeyName:               metricsCertKey,
+			CAName:                "ichor-ca",
+			CAOrganization:        "ichor",
+			DNSName:               fmt.Sprintf("%s.%s.svc", metricsServiceName, os.Getenv("POD_NAMESPACE")),
+			FieldOwner:            "ichor-controller",
+			ControllerName:        "ichor-metrics-cert-rotator",
+			RequireLeaderElection: true,
+		}); err != nil {
+			setupLog.Error(err, "Failed to set up metrics certificate rotation")
+			os.Exit(1)
+		}
+	}
+
 	// Only removal.go's drain step needs a raw Clientset (k8s.io/kubectl's
 	// drain helper takes kubernetes.Interface, not controller-runtime's
 	// cached client.Client); a failure here is fatal rather than leaving

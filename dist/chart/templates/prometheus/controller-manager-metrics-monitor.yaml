@@ -22,16 +22,18 @@ spec:
     tlsConfig:
       serverName: {{ include "ichor.resourceName" (dict "suffix" "controller-manager-metrics-service" "context" $) }}.{{ .Release.Namespace }}.svc
       {{- if .Values.certManager.enabled }}
+      # Fixed name, not release-templated: matches extras/metrics-server-cert.yaml's own
+      # fixed name, same reasoning as the webhook Secret (ADR 0006, ADR 0031).
       ca:
         secret:
-          name: metrics-server-cert
+          name: ichor-metrics-server-cert
           key: ca.crt
       cert:
         secret:
-          name: metrics-server-cert
+          name: ichor-metrics-server-cert
           key: tls.crt
       keySecret:
-        name: metrics-server-cert
+        name: ichor-metrics-server-cert
         key: tls.key
       {{- else }}
       insecureSkipVerify: true

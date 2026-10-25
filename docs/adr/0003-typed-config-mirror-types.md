@@ -399,6 +399,166 @@ no way the constraint: 106,077 bytes is still 6.7% of the ceiling, with the
 remaining five dropped `meta.Unstructured` fields and 52 kinds outside the
 allow-list still comfortably inside it.
 
+## Follow-up: a rename silently un-dropped a secret field
+
+Phase 3 (disk roles, ADR 0012) added `typeRenames`, a third type-keyed table
+(after `fieldOverrides` and `secretFields`), to resolve the generator's
+first real mirror-struct name collision: `block.EncryptionKey` and three
+sibling types share a bare name with the already-mirrored, unrelated
+legacy `v1alpha1.EncryptionKey` family, so the `block` versions are renamed
+`VolumeEncryptionKey` and so on on the mirror side. `secretFields`'s
+`"EncryptionKey.KeyStatic"` entry was written, and reviewed, on the claim
+that one entry drops the field from both the legacy and the modern type,
+since they share the same bare name and shape. That claim was false, and
+shipped false: `secretFields` is matched during the struct walk against
+whatever `name` currently holds at that point, and `typeRenames` is applied
+to `name` *before* the field loop runs — so the lookup key for
+`block.EncryptionKey.KeyStatic` was already `"VolumeEncryptionKey.KeyStatic"`
+by the time it was built, which `secretFields` has no entry for. The legacy
+side matched and dropped correctly, because it was never renamed; the
+modern side silently kept `KeyStatic` (and so the passphrase nested inside
+it) in the CRD schema, for all three kinds that embed it
+(`VolumeConfig`, `UserVolumeConfig`, `RawVolumeConfig`) — the exact category
+of hole `secretFields` exists to close, reopened by the mechanism meant to
+keep mirror names unique.
+
+**The fix is structural, not another row.** `fieldKey` is now built from
+`named.Obj().Name()` — the real machinery type name, read directly off the
+type being walked — instead of `name`, which may already have been
+overwritten by `typeRenames`. `secretFields` and `fieldOverrides` are both
+written against machinery's own names, because that is what a contributor
+reads when deciding whether a field needs a row; matching them against a
+name a *different*, unrelated table might have rewritten was the actual
+bug, and would recur on the next rename if "add a second entry under the
+new name" were taken as the fix instead. All three tables
+(`fieldOverrides`, `secretFields`, `typeRenames`) are keyed by Go type or
+struct-field name; `typeRenames` is now the only one of the three allowed
+to see the post-rename name, since renaming is its entire job.
+
+**Guarded going forward, not just fixed once.**
+`TestSecretFieldsAreNotInCRD` (`internal/tools/mirrorgen/main_test.go`) runs
+the real generator, takes the YAML name each `secretFields` entry reports
+dropping, and confirms none of them exist anywhere in the real generated
+CRD under a matching shape (object vs. scalar — see the "missed sibling"
+follow-up below for why shape, not just name, matters). Adding a
+`secretFields` row needs no change to this test to stay covered; reverting
+the `fieldKey` fix to reproduce the original bug makes it fail with
+`CRD schema still has a property secretFields says it dropped: ["static" (EncryptionKey.KeyStatic: disk encryption static passphrase) ...]`
+(three occurrences, one per kind embedding the renamed type), confirmed by
+deliberately reverting it and running the test before restoring the fix.
+
+**Disk encryption is still representable — the premise that it wasn't was
+wrong.** Talos's disk encryption has four key sources: `KeyStatic` (a
+passphrase written directly into the document), `KeyKMS` (an endpoint,
+sealed/unsealed by a remote KMS server), `KeyTPM` (sealed by the node's own
+TPM), and `KeyNodeID` (deterministically derived from the node's UUID and
+partition label). Only `KeyStatic` carries a secret in the document itself;
+the generated CRD (confirmed on the real schema, not assumed) has `kms`,
+`tpm` and `nodeID` all present and usable on `UserVolumeConfig`,
+`RawVolumeConfig` and `VolumeConfig`'s `EncryptionSpec.keys[]`. Dropping
+`KeyStatic` does not make disk encryption inexpressible through Ichor; it
+leaves exactly the three key sources that never put a secret in a CR in the
+first place, which is the outcome `secretFields`' whole design is for. This
+corrects a premise `internal/cli`'s `init` command was built on (that no
+safe key type remained, so encryption support was skipped there) — that
+premise was never true; `internal/cli` is outside this ADR's scope to fix,
+but the premise behind it is recorded here as wrong so it is not inherited
+into the next thing built on it.
+
+## Follow-up: a missed sibling, four credentials, and a safety net
+
+Fixing the `typeRenames` lookup bug closed the one hole it reopened, but
+exposed that `secretFields` itself was never complete, in two different
+ways.
+
+**A missed sibling.** `ClusterConfig.ClusterAESCBCEncryptionSecret` (etcd's
+AES-CBC encryption key) was in `secretFields`; its sibling
+`ClusterConfig.ClusterSecretboxEncryptionSecret` — etcd's other supported
+encryption key, same struct, same shape, same reason to drop it — was not,
+found by the CLI engineer during unrelated `adopt` work. There was no
+mechanism that would have caught this; it was simply never looked for.
+Added as `"ClusterConfig.ClusterSecretboxEncryptionSecret"`, same table,
+same reasoning.
+
+**Four credentials that violate design principle 2.** Design principle 2
+is "Secrets are referenced, never embedded." Before this round,
+`RegistryAuthConfig.{RegistryPassword, RegistryAuth, RegistryIdentityToken}`
+(private registry pull auth), `VIPEquinixMetalConfig.EquinixMetalAPIToken`,
+`VIPHCloudConfig.HCloudAPIToken` (cloud provider API tokens for VIP
+election), and `DeviceWireguardConfig.WireguardPrivateKey` were all plain
+mirrored fields — representable, and so writable into a
+`TalosConfigPatch`, which the GitOps design treats as something that lives
+in Git. These are different in kind from every existing `secretFields`
+entry: the other entries exist to stop a `TalosConfigPatch` from
+overriding a value the bundle generates (a join token, a CA key pair, a
+disk encryption passphrase) — none of these nine are something a user
+would ever *want* to write in a patch. These four are the opposite: a user
+legitimately wants to set a private registry password, a cloud API token,
+or a WireGuard key. That does not make embedding them in a document Git
+sees any less a violation of principle 2. Dropped, in the same table, with
+the reason text distinguishing the two cases so a future reader does not
+mistake one for the other: the nine read "etcd cluster bootstrap token" /
+"disk encryption static passphrase" / etc. (bundle-value override
+prevention); these four read "(user credential, not a bundle value)".
+
+**What dropping registry auth costs, and what it doesn't.** VIP tokens and
+the WireGuard key need no replacement — nothing in any current phase uses
+them. Private registry auth is different: phase 10 (air-gap) needs to pull
+images from an authenticated private registry, and dropping
+`RegistryAuthConfig`'s credential fields with no replacement makes that
+inexpressible through Ichor. The fix is a reference form — a field shaped
+like `TalosCluster.spec.secretsRef` already is, pointing at a Kubernetes
+Secret the controller reads and injects, never a value the patch document
+carries directly — but building that reference form, and whatever
+controller-side plumbing reads it, is explicitly a separate, later work
+unit, not part of this fix.
+
+**A mechanical safety net for the next missed sibling.**
+`ClusterSecretboxEncryptionSecret` was found by a human noticing a sibling
+field by hand; that does not scale. `suspiciousSurvivors()`
+(`internal/tools/mirrorgen/suspicious.go`) walks every mirrored field after
+the real drop decisions are made and reports — to `go generate`'s stdout,
+not by removing anything — any field whose Go or YAML name contains
+`secret`, `token`, `key`, `password`, `passphrase` or `privatekey`
+case-insensitively, and is not already in `secretFields`. It is a report,
+not an enforcement mechanism, deliberately: a false positive here costs a
+human one line to read and dismiss (it already does — `EncryptionKey.KeyKMS/
+KeyTPM/KeyNodeID/KeySlot/KeyLockToSTATE`, `DeviceWireguardPeer.
+WireguardPublicKey`, `Bond.BondADUserPortKey`, `FeaturesConfig.
+ApidCheckExtKeyUsage`, and `EncryptionConfig`/`EncryptionSpec`'s
+`EncryptionKeySize`/`EncryptionKeys` are all reported and all confirmed
+safe — none hold secret material, they just have "key" in the name), while
+a false positive in the drop table costs a field silently disappearing
+from the CRD. One open item it surfaced and this round deliberately leaves
+unresolved: `PEMEncodedCertificateAndKey.Key` — not decided one way or the
+other here, left for a future reviewer to judge on its own.
+
+**Widening the guard test for scalar-shaped drops.**
+`TestSecretFieldsAreNotInCRD` originally only matched object-shaped CRD
+properties, because every `secretFields` entry at the time was struct-shaped
+(an x509 key pair, a static-key wrapper object) and matching bare scalars
+hit a real false positive: `machine.registries.*.tls.ca` is an unrelated,
+legitimate plain base64 string also named `ca`. Every one of this round's
+new entries is a plain string, which that design would have silently never
+checked at all — worse than a false positive, a drop the test could never
+catch regardless of whether it worked. Rather than add a second, separate
+check for scalars, `droppedSecretField` now records the dropped field's own
+shape (`Scalar bool`, computed from the Go field's type during the walk),
+and the test requires a candidate CRD property to match both the YAML name
+*and* the shape. This is a stricter, more general rule than "skip bare
+scalars," and it was needed for exactly the reason it sounds like it would
+be: widening the walk to also visit scalars immediately produced a second
+real false positive, not a hypothetical one — `RegistryConfig`'s own `auth`
+field (the object wrapping `RegistryAuthConfig`, which legitimately still
+has a `username` property) collides on bare name with the now-dropped
+*scalar* `RegistryAuthConfig.RegistryAuth` (also tagged `auth`, one level
+deeper inside that same object). Shape distinguishes them: the wrapper is
+an object, the dropped field is a scalar, so they no longer match each
+other. Verified by hand-inserting a fake scalar `secretboxEncryptionSecret`
+property into the generated CRD YAML and confirming the test fails with
+`CRD schema still has a property secretFields says it dropped: ["secretboxEncryptionSecret" (ClusterConfig.ClusterSecretboxEncryptionSecret: etcd secretbox encryption key)]`,
+then reverting the edit and confirming it passes again.
+
 ## Consequences
 
 - Ichor owns a code generator and a conversion layer it would not have needed

@@ -773,8 +773,6 @@ spec:
                                       type: object
                                   type: object
                               type: object
-                            secretboxEncryptionSecret:
-                              type: string
                           type: object
                         debug:
                           type: boolean
@@ -1508,20 +1506,10 @@ spec:
                                           equinixMetal:
                                             description: 'Talos: VIPEquinixMetalConfig
                                               — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
-                                            properties:
-                                              apiToken:
-                                                type: string
-                                            required:
-                                            - apiToken
                                             type: object
                                           hcloud:
                                             description: 'Talos: VIPHCloudConfig —
                                               https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
-                                            properties:
-                                              apiToken:
-                                                type: string
-                                            required:
-                                            - apiToken
                                             type: object
                                           ip:
                                             type: string
@@ -1584,20 +1572,10 @@ spec:
                                                 equinixMetal:
                                                   description: 'Talos: VIPEquinixMetalConfig
                                                     — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
-                                                  properties:
-                                                    apiToken:
-                                                      type: string
-                                                  required:
-                                                  - apiToken
                                                   type: object
                                                 hcloud:
                                                   description: 'Talos: VIPHCloudConfig
                                                     — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
-                                                  properties:
-                                                    apiToken:
-                                                      type: string
-                                                  required:
-                                                  - apiToken
                                                   type: object
                                                 ip:
                                                   type: string
@@ -1634,8 +1612,6 @@ spec:
                                                   type: string
                                               type: object
                                             type: array
-                                          privateKey:
-                                            type: string
                                         type: object
                                     type: object
                                   type: array
@@ -1698,12 +1674,6 @@ spec:
                                         description: 'Talos: RegistryAuthConfig —
                                           https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         properties:
-                                          auth:
-                                            type: string
-                                          identityToken:
-                                            type: string
-                                          password:
-                                            type: string
                                           username:
                                             type: string
                                         type: object
@@ -2066,12 +2036,6 @@ spec:
                                     type: object
                                   slot:
                                     type: integer
-                                  static:
-                                    description: 'Talos: EncryptionKeyStatic'
-                                    properties:
-                                      passphrase:
-                                        type: string
-                                    type: object
                                   tpm:
                                     description: 'Talos: EncryptionKeyTPM'
                                     properties:
@@ -2167,12 +2131,6 @@ spec:
                                     type: object
                                   slot:
                                     type: integer
-                                  static:
-                                    description: 'Talos: EncryptionKeyStatic'
-                                    properties:
-                                      passphrase:
-                                        type: string
-                                    type: object
                                   tpm:
                                     description: 'Talos: EncryptionKeyTPM'
                                     properties:
@@ -2298,12 +2256,6 @@ spec:
                                     type: object
                                   slot:
                                     type: integer
-                                  static:
-                                    description: 'Talos: EncryptionKeyStatic'
-                                    properties:
-                                      passphrase:
-                                        type: string
-                                    type: object
                                   tpm:
                                     description: 'Talos: EncryptionKeyTPM'
                                     properties:

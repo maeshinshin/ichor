@@ -164,8 +164,6 @@ type ClusterConfig struct {
 	// +optional
 	ClusterNetwork *ClusterNetworkConfig `json:"network,omitempty"`
 	// +optional
-	ClusterSecretboxEncryptionSecret string `json:"secretboxEncryptionSecret,omitempty"`
-	// +optional
 	ClusterAcceptedCAs []*PEMEncodedCertificate `json:"acceptedCAs,omitempty"`
 	// +optional
 	APIServerConfig *APIServerConfig `json:"apiServer,omitempty"`
@@ -330,8 +328,6 @@ type DeviceVIPConfig struct {
 // Talos: DeviceWireguardConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type DeviceWireguardConfig struct {
 	// +optional
-	WireguardPrivateKey string `json:"privateKey,omitempty"`
-	// +optional
 	WireguardListenPort int `json:"listenPort,omitempty"`
 	// +optional
 	WireguardFirewallMark int `json:"firewallMark,omitempty"`
@@ -409,12 +405,6 @@ type EncryptionKeyKMS struct {
 
 // Talos: EncryptionKeyNodeID — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type EncryptionKeyNodeID struct {
-}
-
-// Talos: EncryptionKeyStatic
-type EncryptionKeyStatic struct {
-	// +optional
-	KeyData string `json:"passphrase,omitempty"`
 }
 
 // Talos: EncryptionKeyTPM — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
@@ -919,12 +909,6 @@ type RegistriesConfig struct {
 type RegistryAuthConfig struct {
 	// +optional
 	RegistryUsername string `json:"username,omitempty"`
-	// +optional
-	RegistryPassword string `json:"password,omitempty"`
-	// +optional
-	RegistryAuth string `json:"auth,omitempty"`
-	// +optional
-	RegistryIdentityToken string `json:"identityToken,omitempty"`
 }
 
 // Talos: RegistryConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
@@ -1093,14 +1077,10 @@ type UserVolumeConfigV1Alpha1 struct {
 
 // Talos: VIPEquinixMetalConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type VIPEquinixMetalConfig struct {
-	// +required
-	EquinixMetalAPIToken string `json:"apiToken"`
 }
 
 // Talos: VIPHCloudConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type VIPHCloudConfig struct {
-	// +required
-	HCloudAPIToken string `json:"apiToken"`
 }
 
 // Talos: Vlan — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
@@ -1145,8 +1125,6 @@ type VolumeConfigV1Alpha1 struct {
 type VolumeEncryptionKey struct {
 	// +required
 	KeySlot int `json:"slot"`
-	// +optional
-	KeyStatic *EncryptionKeyStatic `json:"static,omitempty"`
 	// +optional
 	KeyNodeID *VolumeEncryptionKeyNodeID `json:"nodeID,omitempty"`
 	// +optional

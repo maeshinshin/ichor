@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -242,11 +243,22 @@ func main() {
 			}
 		}()
 	}
+	// Only removal.go's drain step needs a raw Clientset (k8s.io/kubectl's
+	// drain helper takes kubernetes.Interface, not controller-runtime's
+	// cached client.Client); a failure here is fatal rather than leaving
+	// removal silently unable to drain.
+	kubeClient, err := kubernetes.NewForConfig(mgr.GetConfig())
+	if err != nil {
+		setupLog.Error(err, "Failed to create Kubernetes client")
+		os.Exit(1)
+	}
+
 	if err := (&controller.TalosMachineReconciler{
 		Client:              mgr.GetClient(),
 		Scheme:              mgr.GetScheme(),
 		ControllerNamespace: os.Getenv("POD_NAMESPACE"),
 		TalosClient:         controller.NewMachineryTalosClient,
+		KubeClient:          kubeClient,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "talosmachine")
 		os.Exit(1)

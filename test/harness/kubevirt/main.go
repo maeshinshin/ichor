@@ -27,6 +27,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -159,7 +160,18 @@ func main() {
 
 	var err error
 	if os.Args[1] == "up" {
-		err = up()
+		// A killed "up" (Ctrl-C, CI cancellation, a wrapping `timeout`) must not leave the
+		// VM/DataVolumes/relay behind either - that is the other way a run can end partway
+		// through.
+		cleanUpOnSignal()
+		if err = up(); err != nil {
+			// A half-finished "up" must not leave the VM, its DataVolumes or the relay
+			// pod behind: that keeps Ceph storage pinned for nothing. Clean up before reporting the failure.
+			fmt.Fprintln(os.Stderr, "kubevirt harness: up failed, cleaning up:", err)
+			if cleanupErr := down(); cleanupErr != nil {
+				fmt.Fprintln(os.Stderr, "kubevirt harness: cleanup after failed up also failed:", cleanupErr)
+			}
+		}
 	} else {
 		err = down()
 	}
@@ -169,12 +181,43 @@ func main() {
 	}
 }
 
+// cleanUpOnSignal runs down() if the process receives SIGINT or SIGTERM, so a killed "up"
+// never leaves the VM, its DataVolumes or the relay behind.
+func cleanUpOnSignal() {
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		sig := <-ch
+		fmt.Fprintln(os.Stderr, "kubevirt harness: received", sig, "- cleaning up before exit")
+		if err := down(); err != nil {
+			fmt.Fprintln(os.Stderr, "kubevirt harness: cleanup after signal failed:", err)
+		}
+		os.Exit(1)
+	}()
+}
+
 func up() error {
+	ip, err := bootToMaintenance()
+	if err != nil {
+		return err
+	}
+
+	talosconfigYAML, err := installAndBootstrap(ip)
+	if err != nil {
+		return err
+	}
+
+	return publish(ip, talosconfigYAML)
+}
+
+// bootToMaintenance creates the VM, waits for its pod IP and for MachineStatus to reach
+// maintenance, and prints the maintenance-mode resources.
+func bootToMaintenance() (string, error) {
 	manifest := fmt.Sprintf(vmManifestTmpl, vmName, talosFactorySchematic, talosVersion)
 	cmd := exec.Command("kubectl", "apply", "-f", "-")
 	cmd.Stdin = strings.NewReader(manifest)
 	if _, err := utils.Run(cmd); err != nil {
-		return fmt.Errorf("creating the VM: %w", err)
+		return "", fmt.Errorf("creating the VM: %w", err)
 	}
 
 	ip, err := pollFor("waiting for the VMI to report a pod IP", 3*time.Minute, func() (string, bool) {
@@ -184,7 +227,7 @@ func up() error {
 		return ip, err == nil && ip != ""
 	})
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	if _, err := pollFor("waiting for MachineStatus stage to reach maintenance", 5*time.Minute, func() (string, bool) {
@@ -198,31 +241,37 @@ func up() error {
 		}
 		return ip, talosctl.SpecField(objs[0], "stage") == "maintenance"
 	}); err != nil {
-		return err
+		return "", err
 	}
 
 	fmt.Println("--- maintenance mode: machinestatus, disks, systeminformation ---")
 	for _, resource := range []string{"machinestatus", "disks", "systeminformation"} {
 		out, err := talosctl.Get(namespace, ip, resource)
 		if err != nil {
-			return fmt.Errorf("get %s in maintenance mode: %w", resource, err)
+			return "", fmt.Errorf("get %s in maintenance mode: %w", resource, err)
 		}
 		fmt.Println(out)
 	}
+	return ip, nil
+}
 
+// installAndBootstrap applies a control-plane config to the node at ip (which installs and
+// reboots it), waits for the authenticated API, bootstraps etcd, and waits for the node to
+// report running/ready. It returns the admin talosconfig that authenticates against it.
+func installAndBootstrap(ip string) ([]byte, error) {
 	cfg, err := generateControlPlaneConfig(vmName, ip)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	talosconfigYAML, err := cfg.talosconfig.Bytes()
 	if err != nil {
-		return fmt.Errorf("marshaling talosconfig: %w", err)
+		return nil, fmt.Errorf("marshaling talosconfig: %w", err)
 	}
 
 	fmt.Println("--- applying the control-plane config (installs and reboots) ---")
 	out, err := talosctl.Apply(namespace, ip, cfg.machineConfig)
 	if err != nil {
-		return fmt.Errorf("applying config: %w: %s", err, out)
+		return nil, fmt.Errorf("applying config: %w: %s", err, out)
 	}
 	fmt.Println(out)
 
@@ -230,19 +279,19 @@ func up() error {
 		_, err := talosctl.GetAuthenticated(namespace, ip, "machinestatus", talosconfigYAML)
 		return "", err == nil
 	}); err != nil {
-		return err
+		return nil, err
 	}
 
 	versionOut, err := talosctl.Version(namespace, ip, talosconfigYAML)
 	if err != nil {
-		return fmt.Errorf("authenticated version check: %w: %s", err, versionOut)
+		return nil, fmt.Errorf("authenticated version check: %w: %s", err, versionOut)
 	}
 	fmt.Println("--- authenticated talosctl version ---")
 	fmt.Println(versionOut)
 
 	bootstrapOut, err := talosctl.Bootstrap(namespace, ip, talosconfigYAML)
 	if err != nil {
-		return fmt.Errorf("bootstrap: %w: %s", err, bootstrapOut)
+		return nil, fmt.Errorf("bootstrap: %w: %s", err, bootstrapOut)
 	}
 	fmt.Println("--- bootstrap ---")
 	fmt.Println(bootstrapOut)
@@ -258,15 +307,21 @@ func up() error {
 		}
 		return "", talosctl.SpecField(objs[0], "stage") == "running" && talosctl.SpecField(objs[0], "ready") == true
 	}); err != nil {
-		return err
+		return nil, err
 	}
 	fmt.Println("--- machinestatus: running, ready ---")
 	finalStatus, err := talosctl.GetAuthenticated(namespace, ip, "machinestatus", talosconfigYAML)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	fmt.Println(finalStatus)
+	return talosconfigYAML, nil
+}
 
+// publish fetches the inner cluster's kubeconfig, starts the relay tunnel, rewrites the
+// kubeconfig to go through it, writes both config files, waits for the node to report
+// Ready through the tunnel, and publishes everything the e2e suite needs.
+func publish(ip string, talosconfigYAML []byte) error {
 	kubeconfigYAML, err := talosctl.Kubeconfig(namespace, ip, talosconfigYAML)
 	if err != nil {
 		return fmt.Errorf("fetching kubeconfig: %w", err)
@@ -313,21 +368,29 @@ func up() error {
 	fmt.Println(ip)
 	fmt.Println("ICHOR_E2E_INNER_KUBECONFIG=" + innerKubeconfigPath)
 	fmt.Println("ICHOR_E2E_TALOSCONFIG=" + talosconfigPath)
-	if envFile := os.Getenv("GITHUB_ENV"); envFile != "" {
-		f, err := os.OpenFile(envFile, os.O_APPEND|os.O_WRONLY, 0o644)
-		if err != nil {
-			return fmt.Errorf("opening GITHUB_ENV: %w", err)
-		}
-		// We wrote to f, so a failed Close (e.g. a flush error) can mean the write never
-		// reached disk - that must surface, not be discarded.
-		if _, err := fmt.Fprintf(f, "ICHOR_E2E_TALOS_NODES=%s\nICHOR_E2E_INNER_KUBECONFIG=%s\nICHOR_E2E_TALOSCONFIG=%s\n",
-			ip, innerKubeconfigPath, talosconfigPath); err != nil {
-			_ = f.Close()
-			return fmt.Errorf("writing GITHUB_ENV: %w", err)
-		}
-		if err := f.Close(); err != nil {
-			return fmt.Errorf("closing GITHUB_ENV: %w", err)
-		}
+	return writeGithubEnv(ip, innerKubeconfigPath, talosconfigPath)
+}
+
+// writeGithubEnv appends this run's published variables to GITHUB_ENV, if set; a no-op
+// outside CI.
+func writeGithubEnv(ip, innerKubeconfigPath, talosconfigPath string) error {
+	envFile := os.Getenv("GITHUB_ENV")
+	if envFile == "" {
+		return nil
+	}
+	f, err := os.OpenFile(envFile, os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		return fmt.Errorf("opening GITHUB_ENV: %w", err)
+	}
+	// We wrote to f, so a failed Close (e.g. a flush error) can mean the write never
+	// reached disk - that must surface, not be discarded.
+	if _, err := fmt.Fprintf(f, "ICHOR_E2E_TALOS_NODES=%s\nICHOR_E2E_INNER_KUBECONFIG=%s\nICHOR_E2E_TALOSCONFIG=%s\n",
+		ip, innerKubeconfigPath, talosconfigPath); err != nil {
+		_ = f.Close()
+		return fmt.Errorf("writing GITHUB_ENV: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("closing GITHUB_ENV: %w", err)
 	}
 	return nil
 }

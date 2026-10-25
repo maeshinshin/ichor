@@ -141,7 +141,7 @@ func (s *Server) ApproveMachine(
 				"reconfiguration, which this API refuses -- edit its configuration instead", namespacedName(ref)))
 	}
 
-	if !strongIdentity(m.Spec.Identity) {
+	if !m.Spec.Identity.IsStrongIdentity() {
 		return nil, connect.NewError(connect.CodeFailedPrecondition,
 			fmt.Errorf("machine %q has a weak identity (missing UUID, serial number or permanent MAC "+
 				"address) and cannot be approved (docs/adr/0011)", namespacedName(ref)))

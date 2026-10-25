@@ -120,6 +120,16 @@ func SpecField(obj map[string]any, field string) any {
 	return spec[field]
 }
 
+// MachineStatusReady reports a decoded MachineStatus resource's readiness. It is nested at
+// spec.status.ready, not spec.ready - confirmed against a real node's output (ADR 0007):
+// spec.stage is a plain string field, but spec.status is itself an object carrying ready and
+// unmetConditions.
+func MachineStatusReady(obj map[string]any) bool {
+	status, _ := SpecField(obj, "status").(map[string]any)
+	ready, _ := status["ready"].(bool)
+	return ready
+}
+
 // MetadataID reads a decoded resource's "metadata.id".
 func MetadataID(obj map[string]any) any {
 	metadata, _ := obj["metadata"].(map[string]any)

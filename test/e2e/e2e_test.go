@@ -96,8 +96,14 @@ var _ = Describe("short", Label("short"), Ordered, func() {
 
 		scheme := runtime.NewScheme()
 		Expect(v1alpha1.AddToScheme(scheme)).To(Succeed())
+		Expect(corev1.AddToScheme(scheme)).To(Succeed())
 		k8sClient, err = client.New(cfg, client.Options{Scheme: scheme})
 		Expect(err).NotTo(HaveOccurred())
+
+		// The harness only brings up the node and the CRDs; the inner cluster is otherwise
+		// empty, so the namespace the fixtures below land in has to be created here.
+		ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}
+		Expect(client.IgnoreAlreadyExists(k8sClient.Create(context.Background(), ns))).To(Succeed())
 	})
 
 	AfterAll(func() {
@@ -122,7 +128,7 @@ var _ = Describe("short", Label("short"), Ordered, func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(objs).To(HaveLen(1))
 		Expect(talosctl.SpecField(objs[0], "stage")).To(Equal("running"))
-		Expect(talosctl.SpecField(objs[0], "ready")).To(BeTrue())
+		Expect(talosctl.MachineStatusReady(objs[0])).To(BeTrue())
 
 		By("systeminformation: SMBIOS UUID and serial, the primary key TalosMachine.spec.identity is built on")
 		out, err = talosctl.GetAuthenticated(namespace, node, "systeminformation", talosconfigBytes)

@@ -299,25 +299,36 @@ func installAndBootstrap(ip string) ([]byte, error) {
 	fmt.Println("--- authenticated talosctl version ---")
 	fmt.Println(versionOut)
 
-	bootstrapOut, err := talosctl.Bootstrap(namespace, ip, talosconfigYAML)
-	if err != nil {
-		return nil, fmt.Errorf("bootstrap: %w: %s", err, bootstrapOut)
+	// The authenticated API answering machinestatus doesn't mean etcd's bootstrap RPC is
+	// registered yet: observed on real hardware returning "FailedPrecondition: bootstrap
+	// is not available yet" right after the version check above succeeded. Retry rather
+	// than treat it as fatal.
+	var bootstrapOut string
+	var bootstrapErr error
+	if _, err := pollFor("waiting for bootstrap to become available", 2*time.Minute, func() (string, bool) {
+		bootstrapOut, bootstrapErr = talosctl.Bootstrap(namespace, ip, talosconfigYAML)
+		return "", bootstrapErr == nil
+	}); err != nil {
+		return nil, fmt.Errorf("bootstrap: %w: %s (last attempt: %v)", err, bootstrapOut, bootstrapErr)
 	}
 	fmt.Println("--- bootstrap ---")
 	fmt.Println(bootstrapOut)
 
+	var lastStatus string
 	if _, err := pollFor("waiting for machinestatus stage=running ready=true", 5*time.Minute, func() (string, bool) {
 		out, err := talosctl.GetAuthenticated(namespace, ip, "machinestatus", talosconfigYAML)
 		if err != nil {
+			lastStatus = err.Error()
 			return "", false
 		}
+		lastStatus = out
 		objs, err := talosctl.DecodeAll(out)
 		if err != nil || len(objs) != 1 {
 			return "", false
 		}
-		return "", talosctl.SpecField(objs[0], "stage") == "running" && talosctl.SpecField(objs[0], "ready") == true
+		return "", talosctl.SpecField(objs[0], "stage") == "running" && talosctl.MachineStatusReady(objs[0])
 	}); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w (last machinestatus: %s)", err, lastStatus)
 	}
 	fmt.Println("--- machinestatus: running, ready ---")
 	finalStatus, err := talosctl.GetAuthenticated(namespace, ip, "machinestatus", talosconfigYAML)

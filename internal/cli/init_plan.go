@@ -19,8 +19,10 @@ package cli
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/validation"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -157,6 +159,18 @@ func secretsRefName(cluster string) string {
 // flag for each just to say something is wired would not actually cover
 // what an operator needs.
 func buildInitPlan(in initPlanInput, warn io.Writer) (*ichorv1alpha1.TalosCluster, error) {
+	// --cluster becomes the TalosCluster's own metadata.name, so it has to
+	// be a valid Kubernetes object name regardless; checking that here,
+	// before runInit's step 1 writes the secrets bundle to
+	// ~/.ichor/clusters/<cluster>/ (bundlefile.go), means a bad value is
+	// refused before it reaches a filesystem path built from it, not
+	// after -- the same constraint, just applied at the point that can
+	// still refuse cleanly instead of writing to the wrong place first.
+	if errs := validation.IsDNS1123Subdomain(in.Cluster); len(errs) > 0 {
+		return nil, fmt.Errorf("init: --cluster %q is invalid: %s (it becomes the TalosCluster's own Kubernetes object name)",
+			in.Cluster, strings.Join(errs, "; "))
+	}
+
 	top, ok := presetTopology[in.Preset]
 	if !ok {
 		return nil, fmt.Errorf("init: --preset %q is invalid: must be one of single, compact-ha, standard (recommended) or large", in.Preset)

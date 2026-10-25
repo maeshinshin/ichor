@@ -126,6 +126,16 @@ type TalosClusterCNI struct {
 	// set when, and only when, preset is "custom".
 	// +optional
 	Custom *TalosClusterCNICustom `json:"custom,omitempty"`
+
+	// handover controls how the CNI's cluster.inlineManifests entry is removed once Argo CD reports
+	// it Synced and Healthy (docs/design/architecture.md, "GitOps and Argo CD"): automatic (the
+	// controller removes it on its own), manual (removed only through an operator-triggered
+	// `ichor gitops handoff cni`, not built by this field), or disabled (never removed
+	// automatically, for a cluster that does not run Argo CD).
+	// +kubebuilder:validation:Enum=automatic;manual;disabled
+	// +kubebuilder:default=automatic
+	// +optional
+	Handover string `json:"handover,omitempty"`
 }
 
 // TalosClusterDiscovery lists maintenance-mode candidates for the controller to probe directly.

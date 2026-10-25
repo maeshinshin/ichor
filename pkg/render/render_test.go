@@ -25,9 +25,11 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	"github.com/siderolabs/talos/pkg/machinery/constants"
 	corev1 "k8s.io/api/core/v1"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
 
@@ -503,5 +505,127 @@ func TestRenderBundleLeak(t *testing.T) {
 		// m is a worker; etcd config is only valid on control plane machines.
 		_, _, err := Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{patch})
 		assertNoLeak(t, err)
+	})
+}
+
+// inlineManifestPatch builds a TalosConfigPatch carrying a single Config
+// document whose ClusterConfig.ClusterInlineManifests holds one entry named
+// name, alongside an unrelated EtcdConfig document -- so a test can check
+// that dropping the inline manifest entry never disturbs a sibling document
+// in the same patch.
+func inlineManifestPatch(patchName, manifestName string) ichorv1alpha1.TalosConfigPatch {
+	return ichorv1alpha1.TalosConfigPatch{
+		Namespace: testNamespace, Name: patchName,
+		Spec: ichorv1alpha1.TalosConfigPatchSpec{
+			ClusterRef: corev1.LocalObjectReference{Name: testClusterName},
+			Layer:      layerCluster,
+			Documents: []ichorv1alpha1.TalosConfigPatchDocument{
+				{
+					Kind: "Config",
+					Config: &typedconfig.Config{
+						ConfigVersion: "v1alpha1",
+						ClusterConfig: &typedconfig.ClusterConfig{
+							ClusterInlineManifests: []*typedconfig.ClusterInlineManifest{
+								{InlineManifestName: manifestName, InlineManifestContents: "kind: Nothing\n"},
+							},
+							ExtraManifests: []string{"https://example.invalid/unrelated.yaml"},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+// TestCNIHandoverDropsInlineManifest checks that Render stops emitting the
+// CNI's cluster.inlineManifests entry once (and only once)
+// render.ConditionCNIHandover is True on the cluster -- the mechanism that makes hand-over actually stick: Talos's own
+// ManifestApplyController re-applies cluster.inlineManifests on every
+// upgrade and has no delete path, so the entry must stop being rendered, not
+// merely be adopted by Argo CD.
+func TestCNIHandoverDropsInlineManifest(t *testing.T) {
+	bundle := testBundle(t)
+	m := testMachine("node-a", roleWorker, nil)
+	patch := inlineManifestPatch("cni-manifests", cni.InlineManifestName)
+
+	const (
+		cniManifest       = "name: " + cni.InlineManifestName
+		unrelatedManifest = "unrelated.yaml"
+	)
+
+	t.Run("condition absent keeps the entry", func(t *testing.T) {
+		out := mustRender(t, testCluster("true"), m, bundle, []ichorv1alpha1.TalosConfigPatch{patch})
+		if !strings.Contains(out, cniManifest) {
+			t.Fatalf("expected the CNI inline manifest to still be rendered, got:\n%s", out)
+		}
+	})
+
+	t.Run("condition false keeps the entry", func(t *testing.T) {
+		cluster := testCluster("true")
+		apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+			Type: ConditionCNIHandover, Status: metav1.ConditionFalse, Reason: "WaitingForSync", Message: "not yet",
+		})
+
+		out := mustRender(t, cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{patch})
+		if !strings.Contains(out, cniManifest) {
+			t.Fatalf("expected the CNI inline manifest to still be rendered, got:\n%s", out)
+		}
+	})
+
+	t.Run("condition true drops only the CNI entry", func(t *testing.T) {
+		cluster := testCluster("true")
+		apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+			Type: ConditionCNIHandover, Status: metav1.ConditionTrue, Reason: "Complete", Message: "handed over",
+		})
+
+		out := mustRender(t, cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{patch})
+		if strings.Contains(out, cniManifest) {
+			t.Fatalf("expected the CNI inline manifest to be dropped, got:\n%s", out)
+		}
+
+		if !strings.Contains(out, unrelatedManifest) {
+			t.Fatalf("expected the sibling extraManifests entry to survive untouched, got:\n%s", out)
+		}
+	})
+
+	// The original patch object handed to Render must never be mutated: a
+	// caller (TalosClusterReconciler, re-rendering every machine in a loop)
+	// reuses the same candidate slice across calls, and the condition can be
+	// true for one reconcile and absent in a cached copy for another.
+	t.Run("does not mutate the caller's patch", func(t *testing.T) {
+		cluster := testCluster("true")
+		apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+			Type: ConditionCNIHandover, Status: metav1.ConditionTrue, Reason: "Complete", Message: "handed over",
+		})
+
+		before := patch.DeepCopy()
+
+		if _, _, err := Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{patch}); err != nil {
+			t.Fatalf("Render: %v", err)
+		}
+
+		manifests := patch.Spec.Documents[0].Config.ClusterConfig.ClusterInlineManifests
+		if len(manifests) != len(before.Spec.Documents[0].Config.ClusterConfig.ClusterInlineManifests) {
+			t.Fatalf("Render mutated the caller's TalosConfigPatch: got %d inline manifests, want %d",
+				len(manifests), len(before.Spec.Documents[0].Config.ClusterConfig.ClusterInlineManifests))
+		}
+	})
+
+	t.Run("a patch without the entry is passed through unchanged (not deep-copied)", func(t *testing.T) {
+		cluster := testCluster("true")
+		apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+			Type: ConditionCNIHandover, Status: metav1.ConditionTrue, Reason: "Complete", Message: "handed over",
+		})
+
+		plain := sysctlPatch("plain", layerCluster, 0, nil, "1")
+		ordered, err := SelectPatches(cluster, m, []ichorv1alpha1.TalosConfigPatch{plain})
+		if err != nil {
+			t.Fatalf("SelectPatches: %v", err)
+		}
+
+		dropped := dropHandedOverInlineManifest(ordered)
+		if len(dropped) != 1 || dropped[0] != ordered[0] {
+			t.Fatalf("expected the untouched patch to pass through as the same pointer, got a copy")
+		}
 	})
 }

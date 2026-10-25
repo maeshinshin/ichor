@@ -30,6 +30,15 @@ import (
 	"github.com/maeshinshin/ichor/pkg/gitops"
 )
 
+// InlineManifestName is the name `ichor init` writes the CNI's bootstrap
+// manifest under in cluster.inlineManifests (internal/cli's own cniKey,
+// unexported there and duplicated here because that package and this
+// one's callers -- pkg/render, internal/controller -- have no shared home
+// below internal/cli that isn't a layering violation). The hand-over
+// reconciler matches on this exact name to know which
+// inlineManifests entry to stop rendering once Argo CD has adopted it.
+const InlineManifestName = "cni"
+
 // KubeProxyMode is TalosCluster.spec.cni.kubeProxy: kube-proxy stays Talos's
 // own, or the CNI replaces it.
 type KubeProxyMode string

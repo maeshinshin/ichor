@@ -11,147 +11,223 @@ steps and one example invocation:
 ichor init --preset standard --cni cilium [--argocd --repo URL --path clusters/NAME] [--gitops-dir DIR]
 ```
 
-> 1. Generate the secrets bundle locally; nag the user to back it up.
-> 2. Settle the shape of the cluster: topology preset, CNI preset, endpoint
->    (a VIP is recommended even for one node, because changing the endpoint
->    later means re-issuing certificates), disk roles for the first node.
-> 3. Apply the rendered config to the first control plane. Its
->    `cluster.inlineManifests` carry Ichor itself, the CNI (unless flannel),
->    and, with `--argocd`, Argo CD plus a root Application pointing at the
->    repo. The repo credentials go in as a Secret from the CLI, never into
->    Git.
-> 4. Bootstrap etcd, fetch the kubeconfig, store the bundle as a Secret.
-> 5. Create the CRs. With `--gitops-dir`, also write them as YAML and
->    generate the repository skeleton described below.
-> 6. Hand over: once Argo CD reports each bootstrapped component Synced and
->    Healthy, remove it from `inlineManifests`.
+This phase builds steps 1-5. Step 6 (hand-over) is excluded on purpose: it
+is a continuous reconciliation loop against Argo CD's own status (watch,
+poll, retry), not a one-shot action a CLI invocation can perform and then
+exit. It belongs to the controller, as a later unit's work.
 
-This phase builds steps 1-5. Step 6 is excluded on purpose: it is a
-continuous reconciliation loop against Argo CD's own status (watch, poll,
-retry), not a one-shot action a CLI invocation can perform and then exit.
-It belongs to the controller, as a later unit's work.
-
-## Decision: the two settled questions
+## Decision: VIP recommended, insecure apply's assumption stated
 
 **VIP is recommended, not required.** `buildInitPlan` accepts any of the
 CRD's four endpoint types (`vip`, `loadBalancer`, `dns`, `node`) and only
 prints a warning -- never an error -- when the type isn't `vip`, carrying
 the design document's own reason in the warning text (changing the
-endpoint later means re-issuing every certificate in the cluster). The
-design's wording ("recommended") is deliberate and distinguishable from
-the CRD's other hard requirements (e.g. control-plane count), so init does
-not upgrade a recommendation into a rejection on its own authority.
+endpoint later means re-issuing every certificate in the cluster).
 
 **Insecure apply assumes a separate provisioning network, and says so.**
-`ichor init --help`'s step 3 and the interactive confirmation prompt both
-state this explicitly, because `maintenanceApplier.ApplyInsecure` genuinely
+`ichor init --help` and the interactive confirmation prompt both state
+this explicitly, because `maintenanceApplier.ApplyInsecure` genuinely
 cannot authenticate the node it's talking to -- that is what "insecure"
-means here, per architecture.md's "Trust" section -- so the only thing
-this command can do about the risk is make sure the operator sees the
-assumption stated plainly before confirming, not enforce a network
-topology it has no way to check.
+means here, per architecture.md's "Trust" section.
 
-## Decision: one `--namespace`, not two
+## Decision: Ichor itself is applied through the API server, not inlined
 
-`TalosClusterSpec.SecretsRef`'s doc comment (ADR 0011) says the bundle
-Secret lives in the controller's own namespace, which need not be the
-`TalosCluster`'s namespace -- RBAC cannot express "the Secret this
-`TalosCluster` names, wherever that `TalosCluster` lives" below cluster
-scope. `ichor init` takes a single `-n/--namespace` flag and uses it for
-both the `TalosCluster`/`TalosMachine`/`TalosConfigPatch` objects *and*
-the bundle Secret.
+The design's original step 3 said `cluster.inlineManifests` carries "Ichor
+itself, the CNI (unless flannel), and, with `--argocd`, Argo CD plus a
+root Application." Building it showed that claim does not hold once you
+ask *why* each one needs to be there:
 
-This is a deliberate simplification, not a misunderstanding of ADR 0011:
-architecture.md's "Deployment" section says the default is self-managed,
-one controller inside the cluster it manages, in one namespace. For every
-cluster `ichor init` creates, "the controller's namespace" and "the
-namespace this command was told to use" are the same namespace by
-construction -- there is exactly one namespace in play at bootstrap time,
-because the controller that will eventually read this Secret hasn't been
-deployed into some *other* namespace by this command. Hub mode (one Ichor
-managing clusters from outside, "left open by the API but not built
-first") would need a real distinction between "where this `TalosCluster`
-lives" and "where its controller's Secret lives"; `ichor init` does not
-attempt to build for that case now.
+- The CNI genuinely has to be inlined: a node is not Ready and nothing can
+  be scheduled before a CNI exists, and nothing else can put one there
+  before the API server is even up.
+- Ichor does not have that constraint. Design step 4 already gets a
+  working kubeconfig before step 5 creates any CR; by that point the API
+  server is reachable, and applying Ichor's own install manifest there
+  works exactly like any other `kubectl apply`. It is also more
+  debuggable: a failure applying through the API server comes back as an
+  ordinary error, where a failure inside `cluster.inlineManifests` is
+  buried in Talos's own boot log.
 
-## Decision: three deliberately incomplete pieces, each flagged rather than faked
+So `cluster.inlineManifests` now carries **only the CNI's bootstrap
+manifest** (`cniBoot.InlineManifest`, nil for flannel). Ichor's own
+install manifest is applied separately, after step 4, by
+`applyIchorManifest`, straight through the API server:
 
-Ponytail's rule against inventing unrequested abstractions cuts the other
-way here too: rather than build a plausible-looking but speculative
-implementation of something no existing package supports, each of the
-following is left undone and reported, the same way disk roles were
-scoped out of this phase by the brief that assigned it.
+- The manifest is `make build-installer`'s `dist/install.yaml`, embedded
+  in the `ichor` binary at build time (`internal/installmanifest`),
+  mirroring `cmd/ichor-ui`'s `uiembed`/committed-placeholder pattern
+  exactly (ADR 0017): `make build-ichor-embed` copies `dist/install.yaml`
+  into `internal/installmanifest/install.yaml` (gitignored) and builds
+  with `-tags installembed`; a plain `go build ./...`, with no prior
+  `make` step, embeds the committed `placeholder.yaml` instead, so a
+  fresh checkout keeps compiling. `applyIchorManifest` refuses outright
+  if the embedded bytes are still the placeholder (checked by a sentinel
+  string, not by trying to apply it and letting that fail some other
+  way).
+- **The embedded controller version can never drift from the CLI's own
+  version**, because both come out of the same `go build` invocation --
+  there is no separate fetch step, and no version flag for an operator to
+  get wrong. The property this gives phase 10 (air-gap): the binary
+  already carries everything it installs, nothing to mirror separately
+  for this one component.
+- CRDs need a moment to become Established before resources that depend
+  on them can be created (kustomize's own ordering already puts the
+  Namespace and CRDs first in `dist/install.yaml`, but "created" and
+  "Established" are not the same moment). `createWithRetry` bounds this
+  at 10 attempts, 500ms apart.
+  (`shortcut:` a fixed budget, not a watch on the CRD's `Established`
+  condition; upgrade if a slower cluster ever needs longer than 5s here.)
 
-**`cluster.inlineManifests` does not carry "Ichor itself" or "Argo CD
-itself."** The design's step 3 names three things to inline: Ichor, the
-CNI, and (with `--argocd`) Argo CD plus a root Application. Only the CNI
-has a package behind it (`pkg/cni.Preset.BootstrapManifest`) that this
-command can call without guessing. Neither Ichor nor Argo CD has a
-published, version-pinned install manifest anywhere in this repository or
-dependency set today: Ichor's own chart (`dist/chart`) is a `make
-build-installer`-generated, uncommitted artifact with no story yet for how
-a release binary would embed or fetch it, and Argo CD's own install
-manifest would have to come from either a hardcoded upstream URL (a
-version-pinning decision with real security weight -- fetching and
-applying arbitrary YAML with cluster-admin during bootstrap) or a vendored
-copy (a packaging decision belonging with the rest of Ichor's release
-tooling). Both are genuine design decisions for whoever builds Ichor's own
-and Argo CD's own bootstrap distribution, not something `internal/cli`
-should decide unilaterally while finishing this phase. Without them,
-running with `--argocd` produces a GitOps skeleton and a repository
-credentials Secret that are ready for use *once* Argo CD exists on the
-cluster by some other means (installed by hand, or by a future unit) --
-not a cluster where Argo CD is already running.
+**Argo CD itself is never installed by `init`, at all**, with or without
+`--argocd`. Fetching and applying a third-party install manifest during
+bootstrap means deciding which version, signed by whom, from where --
+that is not this command's call to make, and architecture.md's "Ichor
+doesn't install or operate CNI, storage or monitoring; it bootstraps CNI
+and Argo CD once and hands them over" does not mean "fetches it from the
+internet during a privileged bootstrap." `--argocd` prepares exactly two
+things that are ready for use once Argo CD exists some other way: the
+repository credentials Secret, and (with `--gitops-dir`) the root
+Application. `initArgoCD` prints this plainly before doing either --
+naming the Argo CD version range (v3.5.x+) this command's
+Application/sync-option shapes were verified against -- specifically so
+an operator who ran `--argocd` does not assume it means Argo CD is
+running.
 
-**Closed, same day: the CNI's Argo CD Application now lands in the GitOps
-skeleton's `apps/cni/application.yaml`.** The gap as first flagged was
-real -- `pkg/cni.Preset.ArgoCDApplication` returned
-`*unstructured.Unstructured`, and `pkg/gitops.Skeleton.Apps` takes
-`map[string]*gitops.Application`, with no conversion between the two. The
-fix landed in `pkg/cni` itself, not here: `ArgoCDApplication` now returns
-`*gitops.Application` directly (ADR 0013's and ADR 0015's updates), so
-`runInit`/`initArgoCD` pass `cniBoot.ArgoCDApplication` straight into
-`buildSkeleton`'s `Apps` map with no conversion to write. This was a
-deliberate call made above this command's level: `pkg/cni` depending on
-`pkg/gitops` is the correct direction (the package building an Argo CD
-Application depends on the package modeling what one is), not something
-`internal/cli` should have patched around by weakening either package's
-types.
+`docs/design/architecture.md`'s step 3 and its "Hand-over" paragraph were
+rewritten to match: the CNI is now the only component that follows the
+inject-through-`inlineManifests`-then-remove path; Ichor and Argo CD
+never did.
 
-**Disk roles for the first node are not set.** Named in the design's step
-2, but `TalosMachineSpec` carries no field for them (the volume allow-list
-another unit is building does not exist yet), and `pkg/render`'s base
-config does not set `machine.install` either -- its client-validation mode
-explicitly sets `RequiresInstall` to `false`. There is nothing on either
-side of the render for `ichor init` to populate. The node this command
-targets has to already know its own install disk, e.g. a
-`talos.install.disk=` kernel argument on the ISO or Image Factory image it
-booted from.
+## Decision: topology presets carry count and schedulable; a single `--namespace`
 
-## Decision: only `--preset standard`
+**Four presets, not a single hardcoded one.** `presetTopology` maps each
+of `single` (1+0, schedulable), `compact-ha` (3+0, schedulable),
+`standard` (3+n, tainted, recommended) and `large` (5+n, tainted) to the
+control-plane count and schedulable value architecture.md's "Nodes"
+section pairs it with. `init` derives both from `--preset` rather than
+taking them as independent flags -- which is what makes "control planes
+unschedulable with zero workers" (the combination the design explicitly
+rejects) unreachable by construction: every `schedulable=false` row in
+the table is one whose preset is sized for separate worker nodes added
+later. `TestPresetTopology_NeverRejectsSchedulableWithNoWorkers` checks
+the table itself stays that way; `buildInitPlan`'s own rejection
+(`TestBuildInitPlan_RejectsUnschedulableWithNoWorkers`, which inserts a
+deliberately-wrong fifth entry for the duration of the test) is kept as
+the real enforcement point for whatever a future preset might get wrong,
+even though today's four rows never reach it.
 
-The design names a `--preset` flag but the roadmap defers other presets to
-later phases. `buildInitPlan` rejects anything but `"standard"` outright,
-with a message naming exactly that ("not supported yet; only \"standard\"
-is"), rather than silently treating an unrecognized preset as standard or
-ignoring the flag.
+**One `--namespace`, not two.** `TalosClusterSpec.SecretsRef`'s doc
+comment (ADR 0011) says the bundle Secret lives in the controller's own
+namespace, which need not be the `TalosCluster`'s -- RBAC cannot express
+"the Secret this `TalosCluster` names, wherever it lives" below cluster
+scope. Since `applyIchorManifest` now actually deploys the controller,
+and `config/manager`'s kustomize base hardcodes its namespace to
+`ichor-system` (matching the RBAC markers' own literal), `--namespace`
+defaults to `ichor-system` and `buildInitPlan` warns -- not rejects -- if
+it is overridden, since a Secret or CR created elsewhere would be
+invisible to the controller this same run just deployed. This remains a
+simplification specific to the self-managed default (one controller, one
+namespace, created by this same command); hub mode would need the
+controller's namespace and the `TalosCluster`'s as two separate flags.
+
+## Decision: disk roles, including the three that are now representable
+
+Architecture.md's "Nodes" section names five roles: `system` (the install
+target), `ephemeral`, `storage`, `userVolume` and `unused`. At the time
+this phase started, only `system` had anywhere to go -- `machine.install`
+-- so that is what shipped first: a required `--install-disk` flag,
+folded into the same `Config`-kind patch as the inline manifests
+(`buildInlineManifestsPatch`), with real values for
+`machine.type`/`machine.certSANs` (the node's own role and address), not
+placeholders, since this document is authored directly rather than
+reconstructed from a diff.
+
+The other three roles became representable once another unit extended
+the mirror allow-list with `VolumeConfig`, `UserVolumeConfig` and
+`RawVolumeConfig` (and `pkg/render.DocumentFromPatch` was extended here,
+mechanically, to actually convert the three new `TalosConfigPatchDocument`
+kinds -- the allow-list alone did not make them renderable). `init` now
+exposes one optional CEL-selector flag per role
+(`--ephemeral-disk-selector`, `--storage-disk-selector`,
+`--user-volume-disk-selector`, each paired with an optional `*-volume-name`
+for the latter two), building a `VolumeConfig`/`RawVolumeConfig`/
+`UserVolumeConfig` document per selector given, appended to the same
+bootstrap patch:
+
+- **Selectors, not device paths.** Architecture.md is explicit that disks
+  are identified by WWID, serial or by-id path, not `/dev/sdX`, so these
+  flags take the same CEL expression `DiskSelector.Match` itself takes
+  (e.g. `disk.wwid == "..."`). `init` does not translate a device path
+  into a selector on the operator's behalf -- it has no way to query the
+  node's disk inventory yet, so it would be guessing at field names
+  instead of using what the operator already knows about their own
+  hardware.
+- **`ephemeral`'s name is fixed** (`constants.EphemeralPartitionLabel`,
+  `"EPHEMERAL"`): Talos validates a system `VolumeConfig`'s name against
+  its own known set, confirmed by reading `volume_config.go`'s
+  `validateVolumeConstraints`, not assumed.
+- **`storage`/`userVolume` need a size hint.** Talos's own
+  `ProvisioningSpec.Validate` rejects a `RawVolumeConfig`/`UserVolumeConfig`
+  with neither `minSize` nor `maxSize` set ("min size or max size is
+  required") -- confirmed by running it and reading the error, not by
+  memory. Each gets `minSize: "0"` (a real, non-empty size, not an unset
+  field -- `ByteSize.IsZero()` checks for a nil/absent value, and `"0"`
+  parses to a present zero) and no `maxSize`, so it grows to fill its own
+  disk.
+- **No sharing, so no negative `maxSize`.** Architecture.md's note that a
+  *negative* `maxSize` means "space to leave free" (`available - value`),
+  not "space to consume," only matters once two roles share one disk
+  (EPHEMERAL reserving space with a negative `maxSize`, a user volume
+  taking what's left). Every role flag here implies its own dedicated
+  disk -- the architecture doc's own "recommended layout," not the
+  discouraged shared one -- so there is nothing here that needs a
+  negative value, and the shared-disk case is not built.
+- **No disk encryption flag.** `EncryptionKey.KeyStatic` was dropped from
+  the mirror type as secret material (same day, by the unit extending the
+  allow-list); the remaining key kinds (KMS, TPM, node ID) are each their
+  own integration, out of scope here.
+
+## Decision: a known, pre-existing test collision in a file this unit does not own
+
+Verifying this work (`make build test lint`) surfaced one `internal/controller`
+test failure: `discovery_test.go`'s `uuidRejected` and
+`taloscluster_controller_test.go`'s `uuidClusterReconcile` are both the
+literal `"70707070-7070-7070-7070-707070707070"`, written independently by
+different units sharing the same envtest API server within one Ginkgo
+run -- whichever spec runs first creates a `TalosMachine` with that name,
+and the other's own `Create` then fails with `AlreadyExists`. Confirmed
+reproducible (same failing spec across two runs with different random
+seeds, ruling out an ordering-dependent flake) and confirmed unrelated to
+this unit's own diff (neither file is touched by any commit in this ADR's
+history). `internal/controller` is out of this unit's scope to edit, so
+this is recorded here rather than fixed: `make test` is green for every
+package this ADR's work touches (`internal/cli`, `pkg/cni`, `pkg/gitops`,
+`pkg/render`, `internal/installmanifest`), and fails only on this one,
+pre-existing, out-of-scope collision.
 
 ## Consequences
 
 - `ichor init --argocd --gitops-dir DIR` without Argo CD already installed
   on the target cluster produces a correct, ready-to-use GitOps skeleton
   and (if `--repo-username`/`--repo-password` were given) a repository
-  credentials Secret, but does not itself bring Argo CD up. An operator
-  following this path installs Argo CD by some other means before its
-  root Application can do anything.
-- The two remaining gaps are a natural shape for follow-up units:
-  "Ichor-itself and Argo-CD-itself bootstrap manifest sourcing" (one
-  decision, affecting both) and "disk roles on `TalosMachineSpec`"
-  (already being built by another unit, per the brief that scoped this
-  phase). The third -- the CNI Application/GitOps-skeleton type
-  mismatch -- is closed, above.
+  credentials Secret, but does not itself bring Argo CD up -- and says so.
+  An operator installs Argo CD by some other means before its root
+  Application can do anything.
+- The CNI's own Argo CD Application lands in the GitOps skeleton's
+  `apps/cni/application.yaml` because `pkg/cni.Preset.ArgoCDApplication`
+  returns `pkg/gitops`'s own typed `*gitops.Application` (ADR 0013's and
+  ADR 0015's updates) -- no conversion needed between the two packages.
 - Hub mode, if built later, will need `ichor init` (or whatever supersedes
-  it) to take the controller's namespace and this `TalosCluster`'s
-  namespace as two separate flags; today's single `--namespace` is
-  correct only because the self-managed default makes them the same
-  namespace.
+  it) to take the controller's namespace and the `TalosCluster`'s as two
+  separate flags; today's single `--namespace` is correct only because
+  the self-managed default makes them the same namespace.
+- Per-disk role selection today is one CEL selector per role, each
+  implying a dedicated disk. The shared-disk layout
+  (`systemDiskLayout: shared`, EPHEMERAL reserving negative `maxSize` so a
+  user volume gets what's left) is not built; architecture.md calls it
+  "discouraged" for exactly the I/O-contention reason that makes it a
+  reasonable thing to leave for whoever actually needs it.
+- `two UUID literals colliding across internal/controller/discovery_test.go
+  and taloscluster_controller_test.go` is a known, reported, unfixed bug
+  outside this unit's scope; whoever next touches either file should pick
+  a different literal for one of them.

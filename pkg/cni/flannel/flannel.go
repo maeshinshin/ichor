@@ -25,10 +25,9 @@ import (
 	"context"
 	"fmt"
 
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/cni"
+	"github.com/maeshinshin/ichor/pkg/gitops"
 )
 
 // Preset implements cni.Preset for flannel. Every method is a no-op: the
@@ -58,7 +57,7 @@ func (Preset) BootstrapManifest(cni.KubeProxyMode) ([]byte, error) {
 }
 
 // ArgoCDApplication returns nil: flannel is never handed to Argo CD.
-func (Preset) ArgoCDApplication(cni.KubeProxyMode) (*unstructured.Unstructured, error) {
+func (Preset) ArgoCDApplication(cni.KubeProxyMode) (*gitops.Application, error) {
 	return nil, nil
 }
 

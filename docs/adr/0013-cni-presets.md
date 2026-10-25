@@ -23,7 +23,7 @@ mode changes the answer:
 type Preset interface {
 	TalosPatches(kubeProxy KubeProxyMode) ([]ichorv1alpha1.TalosConfigPatchDocument, error)
 	BootstrapManifest(kubeProxy KubeProxyMode) ([]byte, error)
-	ArgoCDApplication(kubeProxy KubeProxyMode) (*unstructured.Unstructured, error)
+	ArgoCDApplication(kubeProxy KubeProxyMode) (*gitops.Application, error)
 	SupportsKubeProxyReplacement() bool
 	CheckConsistency(ctx context.Context, live LiveConfig, kubeProxy KubeProxyMode) error
 	HandoverWorkloads() []WorkloadRef
@@ -34,13 +34,29 @@ No extra methods, no constructor argument beyond what each preset needs
 internally. `TalosPatches` returns `TalosConfigPatchDocument` directly --
 the same type a cluster-layer `TalosConfigPatch` already carries -- so a
 future caller applies it exactly the way `pkg/render` already applies any
-other patch, instead of inventing a second patch shape. `ArgoCDApplication`
-returns `*unstructured.Unstructured` rather than a typed Argo CD
-`Application`: pulling in `argoproj/argo-cd`'s Go module for one struct's
-field names is a dependency for a few lines (CONTRIBUTING.md's chart
-warning is a reminder of how easily a vendored shape drifts from what's
-actually installed); `unstructured.Unstructured`, already a transitive
-dependency, says exactly as much and no more.
+other patch, instead of inventing a second patch shape.
+
+**Update (ADR 0019's `ichor init` work):** `ArgoCDApplication` originally
+returned `*unstructured.Unstructured`, for the reason above -- pulling in
+`argoproj/argo-cd`'s Go module for one struct's field names is a dependency
+for a few lines, and `unstructured.Unstructured` was already a transitive
+one. That reasoning held right up until a caller needed to *use* the
+result: `ichor init --gitops-dir` writes every Argo CD Application it
+builds through `pkg/gitops.Skeleton`, and `pkg/gitops` is where the actual
+protections against writing a credential into Git live -- the `RepoURL`
+userinfo check (twice: once in `gitops.New`, once again in
+`Skeleton.Write` for an `Application` that reached it some other way) and
+the refusal to write a `*corev1.Secret`. An `*unstructured.Unstructured`
+carries none of that; a caller handed one has to re-derive whatever
+`pkg/gitops` already guarantees, or (worse) skip it. `ArgoCDApplication`
+now returns `*gitops.Application` -- `pkg/cni` depends on `pkg/gitops`,
+which is the right direction: the package that builds an Argo CD
+Application for a specific CNI depends on the package that models what an
+Argo CD Application is, not the other way around. `pkg/gitops` gained one
+field it didn't have yet to carry this (`ApplicationSourceHelm.Values`,
+`spec.source.helm.values` per argo-cd.readthedocs.io's Helm page, retrieved
+2026-10-25) -- Cilium's rendered values document goes there now, exactly
+as it did in the unstructured map before.
 
 `flannel.Preset` is the zero-value proof that "Ichor does nothing" is
 literal: every method either returns `nil, nil` or, where the design implies

@@ -229,7 +229,7 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) error {
 	}
 
 	if opts.ArgoCD {
-		if err := initArgoCD(ctx, opts, cluster, machine, candidates, k8sClient, deps.Stderr); err != nil {
+		if err := initArgoCD(ctx, opts, cluster, machine, candidates, cniBoot.ArgoCDApplication, k8sClient, deps.Stderr); err != nil {
 			return err
 		}
 	}

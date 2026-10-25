@@ -30,6 +30,12 @@ import (
 // broadest layer, since neither applies to just one machine.
 const cniPatchLayer = "cluster"
 
+// cniKey names the CNI consistently wherever init refers to it by a
+// short key rather than a full flag name: the "--cni" flag itself, the
+// cluster.inlineManifests entry's name, and the GitOps skeleton's
+// apps/cni/ directory.
+const cniKey = "cni"
+
 // supportedPreset is the only topology preset this phase implements
 // (architecture.md's "Bootstrap" names `--preset standard`; the roadmap's
 // other presets are future work). Anything else is a clear, immediate

@@ -38,6 +38,8 @@ type initOptions struct {
 	initPlanInput
 	NodeEndpoint string
 
+	DiskRoles diskRoleOptions
+
 	ArgoCD          bool
 	ArgoCDNamespace string
 	RepoURL         string
@@ -141,7 +143,7 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) error {
 	nagBackup(deps.Stderr, bundlePath)
 
 	// Step 3: render the first control plane's configuration.
-	candidates := candidatePatches(cluster, machine, cniBoot, opts.NodeEndpoint, opts.InstallDisk)
+	candidates := candidatePatches(cluster, machine, cniBoot, opts.NodeEndpoint, opts.InstallDisk, opts.DiskRoles)
 
 	rendered, _, err := render.Render(cluster, machine, bundle, candidates)
 	if err != nil {
@@ -267,6 +269,7 @@ func createCRs(
 // (if the preset has one).
 func candidatePatches(
 	cluster *ichorv1alpha1.TalosCluster, machine *ichorv1alpha1.TalosMachine, cniBoot *cniBootstrap, nodeEndpoint, installDisk string,
+	diskRoles diskRoleOptions,
 ) []ichorv1alpha1.TalosConfigPatch {
 	var out []ichorv1alpha1.TalosConfigPatch
 
@@ -281,7 +284,9 @@ func candidatePatches(
 
 	// Always built, even for flannel (no inline manifest) or a CNI with
 	// no TalosPatches: the install disk is required on every node.
-	out = append(out, buildInlineManifestsPatch(cluster, machine, nodeEndpoint, installDisk, manifests))
+	bootstrap := buildInlineManifestsPatch(cluster, machine, nodeEndpoint, installDisk, manifests)
+	bootstrap.Spec.Documents = append(bootstrap.Spec.Documents, buildDiskRoleDocuments(diskRoles)...)
+	out = append(out, bootstrap)
 
 	return out
 }

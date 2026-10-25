@@ -22,6 +22,7 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"time"
 
@@ -31,8 +32,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	"github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/test/internal/talosctl"
@@ -87,8 +88,11 @@ var _ = Describe("short", Label("short"), Ordered, func() {
 	var k8sClient client.Client
 
 	BeforeAll(func() {
-		cfg, err := config.GetConfig()
-		Expect(err).NotTo(HaveOccurred(), "could not load a kubeconfig; set KUBECONFIG")
+		// The CRD and CEL checks below must land on the inner cluster the harness stood up
+		// on talosNode(), not on whatever KUBECONFIG points at - which may be production
+		// (P2-8).
+		cfg, err := clientcmd.BuildConfigFromFlags("", innerKubeconfig)
+		Expect(err).NotTo(HaveOccurred(), "could not load the inner kubeconfig at %s=%s", innerKubeconfigEnvVar, innerKubeconfig)
 
 		scheme := runtime.NewScheme()
 		Expect(v1alpha1.AddToScheme(scheme)).To(Succeed())
@@ -105,19 +109,23 @@ var _ = Describe("short", Label("short"), Ordered, func() {
 			client.InNamespace(namespace), client.MatchingLabels{e2eLabel: runID}))).To(Succeed())
 	})
 
-	It("confirms Talos maintenance mode and reads systeminformation, disks and links", func() {
+	It("confirms the node is configured and running, and reads systeminformation, disks and links", func() {
 		node := talosNode()
 
-		By("machinestatus: the node the harness handed us is in maintenance mode")
-		out, err := talosctl.Get(namespace, node, "machinestatus")
+		// The harness has already applied a control-plane config and bootstrapped etcd
+		// (P2-8), so the node is no longer in maintenance mode by the time the
+		// suite runs: it is authenticated-only from here, via talosconfigBytes.
+		By("machinestatus: the node the harness handed us is running and ready")
+		out, err := talosctl.GetAuthenticated(namespace, node, "machinestatus", talosconfigBytes)
 		Expect(err).NotTo(HaveOccurred())
 		objs, err := talosctl.DecodeAll(out)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(objs).To(HaveLen(1))
-		Expect(talosctl.SpecField(objs[0], "stage")).To(Equal("maintenance"))
+		Expect(talosctl.SpecField(objs[0], "stage")).To(Equal("running"))
+		Expect(talosctl.SpecField(objs[0], "ready")).To(BeTrue())
 
 		By("systeminformation: SMBIOS UUID and serial, the primary key TalosMachine.spec.identity is built on")
-		out, err = talosctl.Get(namespace, node, "systeminformation")
+		out, err = talosctl.GetAuthenticated(namespace, node, "systeminformation", talosconfigBytes)
 		Expect(err).NotTo(HaveOccurred())
 		objs, err = talosctl.DecodeAll(out)
 		Expect(err).NotTo(HaveOccurred())
@@ -126,7 +134,7 @@ var _ = Describe("short", Label("short"), Ordered, func() {
 		Expect(talosctl.SpecField(objs[0], "manufacturer")).To(Equal("KubeVirt"))
 
 		By("disks: a writable install target")
-		out, err = talosctl.Get(namespace, node, "disks")
+		out, err = talosctl.GetAuthenticated(namespace, node, "disks", talosconfigBytes)
 		Expect(err).NotTo(HaveOccurred())
 		objs, err = talosctl.DecodeAll(out)
 		Expect(err).NotTo(HaveOccurred())
@@ -137,7 +145,7 @@ var _ = Describe("short", Label("short"), Ordered, func() {
 		Expect(devPaths).To(ContainElement(ContainSubstring("vd")))
 
 		By("links: a real NIC plus the bond and dummy devices Talos always creates")
-		out, err = talosctl.Get(namespace, node, "links")
+		out, err = talosctl.GetAuthenticated(namespace, node, "links", talosconfigBytes)
 		Expect(err).NotTo(HaveOccurred())
 		objs, err = talosctl.DecodeAll(out)
 		Expect(err).NotTo(HaveOccurred())
@@ -149,6 +157,20 @@ var _ = Describe("short", Label("short"), Ordered, func() {
 	})
 
 	It("installs the CRDs and they reach Established", func() {
+		// make install and kubectl wait both resolve their cluster from the KUBECONFIG
+		// env var; point it at the inner cluster for the duration of this spec only, so the
+		// CRDs land there and not on whatever the ambient KUBECONFIG points at (P2-8) - restored immediately after so
+		// nothing downstream is affected.
+		outerKubeconfig, hadOuter := os.LookupEnv("KUBECONFIG")
+		Expect(os.Setenv("KUBECONFIG", innerKubeconfig)).To(Succeed())
+		defer func() {
+			if hadOuter {
+				_ = os.Setenv("KUBECONFIG", outerKubeconfig)
+			} else {
+				_ = os.Unsetenv("KUBECONFIG")
+			}
+		}()
+
 		_, err := utils.Run(exec.Command("make", "install"))
 		Expect(err).NotTo(HaveOccurred())
 

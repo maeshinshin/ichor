@@ -207,6 +207,15 @@ webhook:
   # Webhook server port
   port: 9443
 
+## ValidatingAdmissionPolicy guarding TalosCluster.spec.cni.kubeProxy
+## switches. Independent of webhook.enabled above: it is
+## enforced by the apiserver itself (stable since Kubernetes 1.30, this
+## chart's kubeVersion floor), not the controller-runtime webhook server,
+## so it still protects the cluster while the controller is down.
+##
+admission:
+  enabled: true
+
 ## Prometheus ServiceMonitor for metrics scraping.
 ## Requires prometheus-operator to be installed in the cluster.
 ##

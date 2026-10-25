@@ -13,12 +13,16 @@
 #
 # Hand-maintained, not controller-gen output: there is no CRD or RBAC marker
 # for a ValidatingAdmissionPolicy. It is wired into config/default's
-# kustomization so a real deploy installs it; it is not yet mirrored into
-# dist/chart.
+# kustomization so a kustomize-based deploy installs it, and mirrored into
+# dist/chart/templates/admission/ (kept byte-for-byte identical below the
+# apiVersion/kind/metadata.name lines) so a Helm-based install enforces the
+# same rule. Fixed names, not release-templated: cluster-scoped, and Ichor
+# is one installation per cluster (design 4.1), the same reasoning the
+# webhook configuration's fixed name already uses.
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
-  name: cni-kubeproxy-switch
+  name: ichor-cni-kubeproxy-switch
 spec:
   failurePolicy: Fail
   matchConstraints:
@@ -42,7 +46,7 @@ spec:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
-  name: cni-kubeproxy-switch-binding
+  name: ichor-cni-kubeproxy-switch-binding
 spec:
-  policyName: cni-kubeproxy-switch
+  policyName: ichor-cni-kubeproxy-switch
   validationActions: ["Deny"]

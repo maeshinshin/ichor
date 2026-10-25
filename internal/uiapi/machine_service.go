@@ -23,6 +23,7 @@ import (
 
 	"connectrpc.com/connect"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
@@ -143,17 +144,22 @@ func (s *Server) ApproveMachine(
 	// A rejected machine can be approved: this is how a rejection is undone. The only state ApproveMachine refuses to
 	// touch is
 	// already-approved, checked above.
+	now := s.now()
+
 	m.Spec.Role = machineRoleToSpec(role)
 	m.Spec.NodeLabels = req.Msg.GetNodeLabels()
 	m.Spec.Hostname = req.Msg.GetHostname()
 	m.Spec.ApprovalState = ichorv1alpha1.MachineApprovalStateApproved
+	m.Spec.ApprovalDecision = &ichorv1alpha1.TalosMachineApprovalDecision{
+		Actor: actor, Reason: req.Msg.GetReason(), At: metav1.NewTime(now),
+	}
 
 	if err := s.Update(ctx, m); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("approving machine %q: %w", namespacedName(ref), err))
 	}
 
 	audit := &pb.AuditRecord{
-		Actor: actor, At: timestamppb.New(s.now()), Action: "approve", Target: objectRef(m.Namespace, m.Name),
+		Actor: actor, At: timestamppb.New(now), Action: "approve", Target: objectRef(m.Namespace, m.Name), Reason: req.Msg.GetReason(),
 	}
 
 	return connect.NewResponse(&pb.ApproveMachineResponse{Machine: machineToPB(m), Audit: audit}), nil
@@ -185,14 +191,19 @@ func (s *Server) RejectMachine(
 			fmt.Errorf("machine %q is already approved; reject only applies to a pending machine", namespacedName(ref)))
 	}
 
+	now := s.now()
+
 	m.Spec.ApprovalState = ichorv1alpha1.MachineApprovalStateRejected
+	m.Spec.ApprovalDecision = &ichorv1alpha1.TalosMachineApprovalDecision{
+		Actor: actor, Reason: req.Msg.GetReason(), At: metav1.NewTime(now),
+	}
 
 	if err := s.Update(ctx, m); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("rejecting machine %q: %w", namespacedName(ref), err))
 	}
 
 	audit := &pb.AuditRecord{
-		Actor: actor, At: timestamppb.New(s.now()), Action: "reject",
+		Actor: actor, At: timestamppb.New(now), Action: "reject",
 		Target: objectRef(m.Namespace, m.Name), Reason: req.Msg.GetReason(),
 	}
 

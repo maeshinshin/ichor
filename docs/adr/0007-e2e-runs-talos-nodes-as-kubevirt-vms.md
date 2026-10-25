@@ -119,9 +119,20 @@ Three facts worth keeping, each of which cost a debugging cycle:
 ## Past maintenance mode, resolved
 
 The install hang recorded in ADR 0009 was root-caused and fixed, so KubeVirt is
-viable for more than maintenance mode. A single-node Talos **control plane**
-installs, reboots, serves an authenticated API with RBAC, bootstraps, and
-reports `stage: running, ready: true` with etcd healthy.
+viable for more than maintenance mode. **The ISO path works end to end, and was
+observed working**: booted from the Factory ISO, a control-plane config applied,
+the console showed the install pull the installer image, write to `/dev/vda` and
+log `install successful`, then reboot; the new boot read its configuration from
+the STATE partition and ran the boot sequence rather than reinstalling, with
+apid and trustd listening about two seconds in. From there the authenticated API
+answered with RBAC, `talosctl bootstrap` succeeded, and `get machinestatus`
+returned `stage: running, ready: true` with etcd Running and healthy.
+
+Keep the ISO as the boot source. The Factory also publishes a pre-installed
+`metal-amd64.raw.xz`, and booting that would skip the install entirely — which
+sounds attractive until you notice that **phase 3's whole flow *is* install**:
+discover a node in maintenance mode, approve it, install, join. A harness that
+boots pre-installed disks cannot exercise any of it.
 
 Five things the harness has to get right, each of which cost a debugging cycle:
 

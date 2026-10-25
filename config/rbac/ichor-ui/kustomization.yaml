@@ -1,9 +1,11 @@
-# The UI backend's own RBAC base, deliberately not a resource of
-# ../kustomization.yaml: that file feeds config/default, which deploys the
-# controller. ichor-ui has no Deployment/Service manifests yet (a later work unit);
-# wiring this base in before that exists would deploy RBAC for nothing to use it.
-# `make manifests-ichor-ui` regenerates role.yaml; it never touches ../role.yaml or anything controller-gen's main `make manifests` invocation owns.
+# The UI backend's own RBAC base, wired into config/default as its
+# own resource entry, never merged with ../rbac: the controller's and the
+# UI backend's ServiceAccount/ClusterRole must stay separate (architecture.md "Trust").
+# `make manifests-ichor-ui` regenerates role.yaml from internal/uiapi/rbac_markers.go;
+# it never touches ../role.yaml or anything controller-gen's main `make manifests`
+# invocation owns.
 resources:
 - service_account.yaml
 - role.yaml
 - role_binding.yaml
+- secrets_role_binding.yaml

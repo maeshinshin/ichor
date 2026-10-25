@@ -1,8 +1,8 @@
 # 0018. UI backend: the read and approval server implementation
 
-Status: Accepted, amended three times · Date: 2026-10-25 · Design section: CLI and UI, roadmap item 5
+Status: Accepted, amended four times · Date: 2026-10-25 · Design section: CLI and UI, roadmap item 5
 
-Decided: One `Server` type implements all three handler interfaces over a single uncached client; settled the four approval refusals; fixed `loadBundle` resolving the TalosCluster's own namespace instead of the backend's, the same bug ADR 0011 had already fixed on the controller side; granted the `nodes` get/list `findKubernetesNode` had always read without
+Decided: One `Server` type implements all three handler interfaces over a single uncached client; settled the four approval refusals; fixed `loadBundle` resolving the TalosCluster's own namespace instead of the backend's, the same bug ADR 0011 had already fixed on the controller side; granted the `nodes` get/list `findKubernetesNode` had always read without it; added a chart-vs-`config/` RBAC drift test after the chart's own copy of this `ClusterRole` was found silently narrower than `config/rbac/ichor-ui/role.yaml`
 
 ## Context
 
@@ -600,3 +600,65 @@ writing a second list of "every client-go type this package touches" to
 diff against `rbac_markers.go`'s markers, which is exactly the kind of
 parallel bookkeeping that drifts the same way the markers themselves just
 did. Left unfixed and reported here instead.
+
+## Amendment (2026-10-26): the chart's `ClusterRole` had silently fallen behind `config/`, and nothing would have caught it a third time
+
+The previous amendment's own report named this exact risk: "dist/chart's
+templates and config/'s manifests have no automatic drift check tying them
+together... a future hand-edit of either alone would go unnoticed by any
+test." It was not hypothetical. `dist/chart/templates/rbac/ichor-ui-role.yaml`
+had `talosclusters` and `talosconfigpatches` sharing one `apiGroups` entry
+with only `get`/`list`, while `config/rbac/ichor-ui/role.yaml` (regenerated
+from `rbac_markers.go` when `PatchService`, ADR 0035, added
+`create`/`update`/`delete` on `talosconfigpatches`) had moved on. A Helm
+install granted none of the three: every `TalosConfigPatch` create, update
+or delete `PatchService` makes came back `Forbidden`, surfaced to the UI as
+`CodeInternal`. The chart's hand-written copy had not tracked the generated
+one since `PatchService` landed.
+
+Fixed in the chart (`dist/chart/templates/rbac/ichor-ui-role.yaml`): split
+`talosconfigpatches` back into its own `apiGroups` entry carrying
+`create`/`delete`/`get`/`list`/`update`, matching `config/rbac/ichor-ui/
+role.yaml` exactly. The comment explaining why the `secrets` rule lives in
+its own file (`ichor-ui-secrets-role.yaml`) instead was left untouched --
+that split is deliberate packaging, not drift, and stays.
+
+**The fix is a test, not a sync.** `config/rbac/ichor-ui/role.yaml` is a
+generated manifest; `dist/chart/templates/rbac/ichor-ui-role.yaml` is a Helm
+template carrying `{{ .Release }}` substitutions and its own grouping of
+`apiGroups` entries -- there is no byte-identical form to propagate the way
+`checkCRDsMatchConfig` already propagates `config/crd/bases` into the
+chart's CRD templates. Hand-mirroring was the original design (this ADR's
+"RBAC" section above) and it had now drifted twice (the `nodes` rule in the
+previous amendment, `talosconfigpatches`'s verbs here) with no CI signal
+either time. The decision is not to give up on keeping the chart in sync by
+hand -- a generator can't produce Helm template syntax from a plain
+manifest -- but to make a drift between them fail loudly instead of
+shipping silently. `dist/chart/chart_test.go` gained
+`checkUIBackendRBACMatchesConfig`: it loads `config/rbac/ichor-ui/role.yaml`
+from disk, renders the chart the same way every other check in that file
+already does, and compares both the `ClusterRole`'s and the namespaced
+`Role`'s rules as a set of (apiGroup, resource, verb) triples -- not YAML
+text, so grouping resources or verbs into one `apiGroups` entry versus
+several never causes a false failure. The namespaced `Role` is matched by
+rule content, not by name: `config/`'s copy names it `ichor-ui-role` (same
+name as the `ClusterRole`, disambiguated only by kind), while the chart
+gives it its own fixed name, `ichor-ui-secrets-role`, for the packaging
+reason that file's own comment already explains; nothing about that name
+difference is itself drift, so the test does not fail on it.
+
+Proven to actually fail, not just reasoned to: removing `update` from the
+chart's `talosconfigpatches` verbs and running `go test ./dist/chart/...
+-run TestChartInvariants -count=1` produced
+
+```
+chart_test.go:119: helm template ichor .: ClusterRole ichor-ui-role is
+missing ichor.maesh.dev/talosconfigpatches:update (present in
+../../config/rbac/ichor-ui/role.yaml); add it to
+dist/chart/templates/rbac/ichor-ui-role.yaml
+```
+
+for both the `ichor` and `something-else` release-name subtests, naming the
+exact missing grant and which file to fix. Restoring the verb made the
+suite pass again. `checkNoClusterWideSecretsRead` and
+`checkUIBackendRBACIsSeparate` both still pass unchanged.

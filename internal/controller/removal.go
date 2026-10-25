@@ -51,7 +51,6 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -306,20 +305,11 @@ func checkControlPlaneRemoval(currentControlPlanes, desiredCount int) error {
 // countApprovedControlPlanes counts, the same way
 // internal/webhook/v1alpha1/talosmachine_webhook.go's ValidateDelete does,
 // every approved control-plane TalosMachine in m's namespace and cluster,
-// including m itself.
+// including m itself -- via r.APIReader, not r.Client, so this stays
+// correct under the same cached-read trap deleteguard.CountApprovedControlPlanes
+// documents.
 func (r *TalosMachineReconciler) countApprovedControlPlanes(ctx context.Context, m *ichorv1alpha1.TalosMachine) (int, error) {
-	var siblings ichorv1alpha1.TalosMachineList
-	if err := r.List(ctx, &siblings, client.InNamespace(m.Namespace)); err != nil {
-		return 0, err
-	}
-
-	count := 0
-	for _, s := range siblings.Items {
-		if s.Spec.Role == "controlplane" && s.Spec.IsApproved() && s.Spec.ClusterRef.Name == m.Spec.ClusterRef.Name {
-			count++
-		}
-	}
-	return count, nil
+	return deleteguard.CountApprovedControlPlanes(ctx, r.APIReader, m.Namespace, m.Spec.ClusterRef.Name)
 }
 
 // drainNode cordons and drains the Kubernetes Node named hostname, the

@@ -155,6 +155,16 @@ type TalosMachineReconciler struct {
 	// never touch this field, so a cluster without it wired up still gets
 	// the safety guarantee, just without the drain step.
 	KubeClient kubernetes.Interface
+
+	// APIReader counts approved control planes for the quorum checks in
+	// removal.go, bypassing the manager's cache that Client (above) reads
+	// through everywhere else. A cached read can lag the deletion of a
+	// control plane that just committed, drifting the count high -- the
+	// dangerous direction here, since it is what lets a second, concurrent
+	// deletion look safe when it is not (not
+	// the usual environment-noise direction). Wired from
+	// mgr.GetAPIReader() in cmd/main.go.
+	APIReader client.Reader
 }
 
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosmachines,verbs=get;list;watch;create;update;patch;delete

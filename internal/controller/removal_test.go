@@ -1,0 +1,309 @@
+/*
+Copyright 2026 maeshinshin.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package controller
+
+import (
+	"time"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
+	corev1 "k8s.io/api/core/v1"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/clusterlock"
+)
+
+// clusterKeyOf returns the NamespacedName clusterlock.New keys its Lease by
+// for m's cluster: same namespace, cluster's own name.
+func clusterKeyOf(m *ichorv1alpha1.TalosMachine) types.NamespacedName {
+	return types.NamespacedName{Namespace: m.Namespace, Name: m.Spec.ClusterRef.Name}
+}
+
+// newTestControlPlane creates an approved control-plane TalosMachine in
+// clusterName, distinct per suffix so several can coexist in one test and
+// be counted correctly by countApprovedControlPlanes.
+func newTestControlPlane(clusterName, suffix string) *ichorv1alpha1.TalosMachine {
+	m := &ichorv1alpha1.TalosMachine{
+		GenerateName: "cp-", Namespace: tmNamespace,
+		Spec: ichorv1alpha1.TalosMachineSpec{
+			ClusterRef:    corev1.LocalObjectReference{Name: clusterName},
+			Identity:      ichorv1alpha1.TalosMachineIdentity{UUID: "uuid-cp-" + clusterName + "-" + suffix},
+			Endpoint:      "10.0.2." + suffix + ":50000",
+			Role:          "controlplane",
+			ApprovalState: ichorv1alpha1.MachineApprovalStateApproved,
+		},
+	}
+	Expect(k8sClient.Create(ctx, m)).To(Succeed())
+
+	return m
+}
+
+// newTestClusterWithCount is newTestCluster with an explicit
+// controlPlane.count, for the count-guard tests below.
+func newTestClusterWithCount(count int32) *ichorv1alpha1.TalosCluster {
+	cluster := &ichorv1alpha1.TalosCluster{
+		GenerateName: "cluster-", Namespace: tmNamespace,
+		Spec: ichorv1alpha1.TalosClusterSpec{
+			Endpoint:          ichorv1alpha1.TalosClusterEndpoint{Type: testEndpointType, Address: "10.0.0.6"},
+			TalosVersion:      testTalosVersion,
+			KubernetesVersion: "v1.34.0",
+			VersionContract:   "v1.14",
+			SecretsRef:        corev1.LocalObjectReference{Name: "does-not-exist"},
+			ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: count, Schedulable: testSchedulable},
+		},
+	}
+	Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
+
+	return cluster
+}
+
+var _ = Describe("TalosMachineReconciler removal", func() {
+	It("gives an approved control plane the removal finalizer on its first reconcile, and nothing else", func() {
+		cluster := newTestClusterWithCount(1)
+		cp := newTestControlPlane(cluster.Name, "1")
+
+		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), ControllerNamespace: tmNamespace}
+		_, err := reconcileMachine(r, cp)
+		Expect(err).NotTo(HaveOccurred())
+
+		got := fetchMachine(cp)
+		Expect(controllerutil.ContainsFinalizer(got, machineRemovalFinalizer)).To(BeTrue())
+		Expect(got.Status.Conditions).To(BeEmpty())
+	})
+
+	It("never gives a worker or an unapproved machine the removal finalizer", func() {
+		cluster := newTestCluster("does-not-exist", "v1.14")
+		worker := newTestMachine(cluster.Name, true)
+		pending := newTestControlPlane(cluster.Name, "2")
+		pending.Spec.ApprovalState = ichorv1alpha1.MachineApprovalStatePending
+		Expect(k8sClient.Update(ctx, pending)).To(Succeed())
+
+		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), ControllerNamespace: tmNamespace}
+		_, err := reconcileMachine(r, worker)
+		Expect(err).NotTo(HaveOccurred())
+		_, err = reconcileMachine(r, pending)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(controllerutil.ContainsFinalizer(fetchMachine(worker), machineRemovalFinalizer)).To(BeFalse())
+		Expect(controllerutil.ContainsFinalizer(fetchMachine(pending), machineRemovalFinalizer)).To(BeFalse())
+
+		// Both delete immediately: no finalizer ever intercepts them.
+		Expect(k8sClient.Delete(ctx, worker)).To(Succeed())
+		Expect(k8sClient.Delete(ctx, pending)).To(Succeed())
+		_, err = reconcileMachine(r, worker)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	// The four failure modes docs/design/architecture.md's "Nodes" names for
+	// the removal sequence: the two that need a real Reset/etcd-removal call
+	// (naming the partitions to wipe; the fire-and-forget double-reset) do
+	// not apply here, because neither call exists in this phase (and that this is a deliberate scope cut, not an
+	// oversight). The other two are exactly what these specs show cannot be
+	// stepped into.
+	Describe("the four failure modes architecture.md calls out", func() {
+		It("refuses on its own refusal, never by asking Talos (there is no Talos call here at all)", func() {
+			cluster := newTestClusterWithCount(1)
+			cp := newTestControlPlane(cluster.Name, "3")
+
+			r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), ControllerNamespace: tmNamespace}
+			_, err := reconcileMachine(r, cp)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(k8sClient.Delete(ctx, cp)).To(Succeed())
+			_, err = reconcileMachine(r, cp)
+			Expect(err).NotTo(HaveOccurred())
+
+			got := fetchMachine(cp)
+			cond := apimeta.FindStatusCondition(got.Status.Conditions, conditionRemoval)
+			Expect(cond).NotTo(BeNil())
+			Expect(cond.Reason).To(Equal(reasonRemovalRefused))
+			Expect(cond.Message).To(ContainSubstring("last control plane"))
+
+			// The finalizer is still there: refusing means staying, not disappearing.
+			Expect(controllerutil.ContainsFinalizer(got, machineRemovalFinalizer)).To(BeTrue())
+		})
+
+		It("is resumable from status: a fresh reconciler picking up mid-operation does not fail or double-act", func() {
+			cluster := newTestClusterWithCount(1)
+			cp1 := newTestControlPlane(cluster.Name, "4")
+			cp2 := newTestControlPlane(cluster.Name, "5")
+
+			r1 := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), ControllerNamespace: tmNamespace}
+			_, err := reconcileMachine(r1, cp1)
+			Expect(err).NotTo(HaveOccurred())
+			_, err = reconcileMachine(r1, cp2)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(k8sClient.Delete(ctx, cp1)).To(Succeed())
+
+			// Simulate the lock surviving a crash: acquire it as if r1's
+			// first reconcile pass got as far as taking the lock, then
+			// "restart" as a brand new reconciler instance (r2) with no
+			// memory of r1 at all, same identity (clusterlock's own
+			// contract: identity, not process, is what resumption keys on).
+			lock := clusterlock.New(k8sClient, clusterKeyOf(cp1), 0)
+			Expect(lock.Acquire(ctx, controllerIdentity)).To(Succeed())
+
+			r2 := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), ControllerNamespace: tmNamespace}
+			_, err = reconcileMachine(r2, cp1)
+			Expect(err).NotTo(HaveOccurred(), "a fresh reconciler must resume its own identity's lock, not be told it's held")
+
+			got := fetchMachine(cp1)
+			cond := apimeta.FindStatusCondition(got.Status.Conditions, conditionRemoval)
+			Expect(cond).NotTo(BeNil())
+			// 2 -> 1 is quorum of 2, refused -- cp1 and cp2 coexist, so this
+			// resumed reconcile reaches a verdict rather than erroring out.
+			Expect(cond.Reason).To(Equal(reasonRemovalRefused))
+
+			Expect(lock.Release(ctx, controllerIdentity)).To(Succeed())
+		})
+	})
+
+	It("refuses a removal that would break quorum, and allows one that doesn't", func() {
+		cluster := newTestClusterWithCount(1)
+		cp1 := newTestControlPlane(cluster.Name, "6")
+		cp2 := newTestControlPlane(cluster.Name, "7")
+		cp3 := newTestControlPlane(cluster.Name, "8")
+
+		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), ControllerNamespace: tmNamespace}
+		for _, cp := range []*ichorv1alpha1.TalosMachine{cp1, cp2, cp3} {
+			_, err := reconcileMachine(r, cp)
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		// 3 -> 2: quorum of 3 is 2, allowed (desiredCount is 1, so the count
+		// guard doesn't refuse it either).
+		Expect(k8sClient.Delete(ctx, cp1)).To(Succeed())
+		_, err := reconcileMachine(r, cp1)
+		Expect(err).NotTo(HaveOccurred())
+		cond := apimeta.FindStatusCondition(fetchMachine(cp1).Status.Conditions, conditionRemoval)
+		Expect(cond.Reason).To(Equal(reasonRemovalApproved))
+
+		// A separate pair, independent of cp1 above: cp1 is still counted
+		// (by design -- nothing in this phase actually removes a machine,
+		// see this file's package comment, so a "RemovalApproved" sibling
+		// still counts as a live control plane until something finishes
+		// it), so testing "2 -> 1 refused" needs its own cluster rather
+		// than reusing cp2/cp3 from the group cp1 came from.
+		cluster2 := newTestClusterWithCount(1)
+		cpA := newTestControlPlane(cluster2.Name, "6b")
+		cpB := newTestControlPlane(cluster2.Name, "7b")
+		for _, cp := range []*ichorv1alpha1.TalosMachine{cpA, cpB} {
+			_, err := reconcileMachine(r, cp)
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		// 2 -> 1: quorum of 2 is 2, refused.
+		Expect(k8sClient.Delete(ctx, cpA)).To(Succeed())
+		_, err = reconcileMachine(r, cpA)
+		Expect(err).NotTo(HaveOccurred())
+		cond = apimeta.FindStatusCondition(fetchMachine(cpA).Status.Conditions, conditionRemoval)
+		Expect(cond.Reason).To(Equal(reasonRemovalRefused))
+		Expect(cond.Message).To(ContainSubstring("quorum"))
+	})
+
+	It("refuses dropping below spec.controlPlane.count, and allows the add-then-remove replacement", func() {
+		cluster := newTestClusterWithCount(3)
+		cp1 := newTestControlPlane(cluster.Name, "9")
+		cp2 := newTestControlPlane(cluster.Name, "10")
+		cp3 := newTestControlPlane(cluster.Name, "11")
+
+		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), ControllerNamespace: tmNamespace}
+		for _, cp := range []*ichorv1alpha1.TalosMachine{cp1, cp2, cp3} {
+			_, err := reconcileMachine(r, cp)
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		// 3 -> 2, below the declared count of 3: refused even though quorum
+		// of 3 (which is 2) would itself allow it.
+		Expect(k8sClient.Delete(ctx, cp1)).To(Succeed())
+		_, err := reconcileMachine(r, cp1)
+		Expect(err).NotTo(HaveOccurred())
+		cond := apimeta.FindStatusCondition(fetchMachine(cp1).Status.Conditions, conditionRemoval)
+		Expect(cond.Reason).To(Equal(reasonRemovalRefused))
+		Expect(cond.Message).To(ContainSubstring("declared count"))
+
+		// Approve a 4th control plane first (3 -> 4), then removing one of
+		// the original three (4 -> 3) meets the declared count.
+		cp4 := newTestControlPlane(cluster.Name, "12")
+		_, err = reconcileMachine(r, cp4)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(k8sClient.Delete(ctx, cp1)).To(Succeed())
+		_, err = reconcileMachine(r, cp1)
+		Expect(err).NotTo(HaveOccurred())
+		cond = apimeta.FindStatusCondition(fetchMachine(cp1).Status.Conditions, conditionRemoval)
+		Expect(cond.Reason).To(Equal(reasonRemovalApproved))
+	})
+
+	It("defers removal while another identity holds the cluster lock, and does not touch the finalizer", func() {
+		cluster := newTestClusterWithCount(1)
+		cp := newTestControlPlane(cluster.Name, "13")
+
+		r := &TalosMachineReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), ControllerNamespace: tmNamespace}
+		_, err := reconcileMachine(r, cp)
+		Expect(err).NotTo(HaveOccurred())
+
+		lock := clusterlock.New(k8sClient, clusterKeyOf(cp), 0)
+		Expect(lock.Acquire(ctx, "someone-else")).To(Succeed())
+
+		Expect(k8sClient.Delete(ctx, cp)).To(Succeed())
+		_, err = reconcileMachine(r, cp)
+		Expect(err).NotTo(HaveOccurred())
+
+		got := fetchMachine(cp)
+		cond := apimeta.FindStatusCondition(got.Status.Conditions, conditionRemoval)
+		Expect(cond).NotTo(BeNil())
+		Expect(cond.Reason).To(Equal(reasonClusterLockHeld))
+		Expect(controllerutil.ContainsFinalizer(got, machineRemovalFinalizer)).To(BeTrue())
+
+		Expect(lock.Release(ctx, "someone-else")).To(Succeed())
+	})
+})
+
+var _ = Describe("renewWhile", func() {
+	It("keeps a short-lived lock alive past its own duration, then lets it expire once stopped", func() {
+		cluster := newTestClusterWithCount(1)
+		cp := newTestControlPlane(cluster.Name, "14")
+
+		// A duration shorter than the test itself: without renewal, this
+		// lock would expire well within the window below on its own.
+		const shortDuration = 150 * time.Millisecond
+
+		lock := clusterlock.New(k8sClient, clusterKeyOf(cp), shortDuration)
+		Expect(lock.Acquire(ctx, controllerIdentity)).To(Succeed())
+
+		stop := renewWhile(ctx, lock, controllerIdentity, 40*time.Millisecond)
+
+		// Outlives shortDuration several times over -- only possible if
+		// renewWhile's ticker actually called Renew repeatedly.
+		Consistently(func() error {
+			return lock.Acquire(ctx, "someone-else")
+		}, 400*time.Millisecond, 20*time.Millisecond).Should(HaveOccurred())
+
+		stop()
+
+		// Nothing renews it anymore, so it expires and transfers.
+		Eventually(func() error {
+			return lock.Acquire(ctx, "someone-else")
+		}, 2*time.Second, shortDuration).Should(Succeed())
+	})
+})

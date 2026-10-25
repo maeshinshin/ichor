@@ -156,3 +156,189 @@ request at a time can actually decide. It does not protect against several
 such deletes landing concurrently and jointly breaking quorum, each one
 individually legal by this check's own math; closing that gap needs the
 ordered removal operation above, and stays open until that lands.
+
+## The ordered removal operation closes the gap above
+
+The previous section named the real fix and left it open: "once
+control-plane removal only happens as a step inside that serialized,
+ordered sequence, the webhook's job changes from 'count and decide' to
+'refuse a delete that isn't part of it,' and the operation itself -- which
+*is* serialized -- does the counting." `internal/controller/removal.go`
+is that operation.
+
+### What it does
+
+An approved control-plane `TalosMachine` gets a finalizer
+(`ichor.maesh.dev/machine-removal`) on its first reconcile -- nothing else
+does, since a worker or an unapproved machine was never an etcd member and
+has nothing here to protect. Deleting one no longer removes it
+immediately: `TalosMachineReconciler.Reconcile` sees the
+`deletionTimestamp`, finds the finalizer, and hands off to
+`reconcileRemoval`, which:
+
+1. Acquires the cluster's `pkg/clusterlock` Lease with the controller's
+   own stable identity (the same `controllerIdentity` and the same Lease
+   `refuseReboot` already takes for reboot-causing applies -- one lock per
+   cluster, shared across every disruptive operation, principle 6). Held
+   by someone else: report it and stop, finalizer untouched, exactly the
+   way `refuseReboot` already reports `ClusterLockHeld` without a
+   `RequeueAfter` -- the next trigger is whatever next touches this object,
+   not a timer.
+2. Recounts approved control-plane siblings *under the lock*. A second,
+   concurrent removal of a different control plane in the same cluster has
+   to take the same lock to reach this point, so it either already
+   finished its own count-and-decide (and this reconcile sees the result)
+   or is still waiting its turn -- never racing the same `List` the webhook
+   above cannot serialize.
+3. Runs every refusal docs/design/architecture.md's "Nodes" names for the
+   etcd-member-removal step: `deleteguard.CheckControlPlaneQuorum`
+   (last-control-plane and quorum, unchanged from the first section of
+   this ADR) and the new `deleteguard.CheckControlPlaneCount`, which closes
+   the gap the first section of this ADR left open on purpose ("the third
+   [refusal]... belongs to the replace/topology-change flow that doesn't
+   exist yet"). That flow still doesn't exist as a first-class thing, but
+   the check it needs does now: `CheckControlPlaneCount` refuses removing a
+   control plane when doing so would leave fewer control planes than
+   `spec.controlPlane.count` declares, which is exactly what forces
+   "3->4->3, never 3->2" (architecture.md) -- getting back to the declared
+   count after a removal requires approving a replacement *first*.
+4. If every check passes, drains the corresponding Kubernetes Node
+   (`k8s.io/kubectl`'s own helper, cordon then evict -- architecture.md:
+   "Draining uses `k8s.io/kubectl`'s own drain helper rather than a
+   hand-written eviction loop"), renewing the lock every minute while that
+   runs (see "Renew gets its first caller" below).
+
+### The webhook's check is kept, not replaced
+
+`TalosMachineCustomValidator.ValidateDelete`'s admission-time count (first
+section of this ADR) stays exactly as it was. Two things made "keep both"
+the right call over "replace it":
+
+- It is the only one of the two that can refuse **synchronously, at
+  admission**, with a message `kubectl delete` shows immediately. The
+  reconcile-level check can only report through a condition after the
+  fact, which is strictly slower feedback for the common case (one
+  operator, one delete at a time -- the case ADR 0010's own "Acceptable
+  for now" already named).
+- It is not *wrong* for that case, only incomplete for the concurrent one.
+  Removing it would make the single-delete path strictly worse (slower
+  refusal, no change in safety) to fix a gap it was never going to close
+  anyway.
+
+So the shape is: the webhook is a fast, synchronous, best-effort check
+that happens to already be correct for the overwhelmingly common case; the
+reconcile-level check inside the lock is the authoritative one, and the
+only one a concurrent pair of deletes cannot slip past. Nothing about this
+ADR's "no way to override [the quorum guard] through the webhook" changes
+-- removal.go enforces the identical rules, just serialized.
+
+### The finalizer never clears in this phase, on purpose
+
+Removing the etcd member and running the Talos `Reset` that returns a node
+to maintenance mode both need `TalosClient` widened past the three methods
+its own doc comment calls "the one interface rule 0 allows" -- a design
+decision, referred back rather than made here (per the task that asked for
+this: widening `TalosClient` is explicitly a refer-to-main trigger).
+Without the reset, letting the `TalosMachine` disappear would be a lie:
+the physical node would still be configured and still an etcd member.
+So `reconcileRemoval` never clears the finalizer on the safe path either
+-- it drains and reports `RemovalApproved`, and stops. Only two things can
+end the `Terminating` state today: a human break-glass removal of the
+finalizer (already how the design treats this general problem --
+"Refusing finalizer removal except through break-glass belongs with the
+other dangerous-operation checks" -- unchanged by this work), or a future
+change that adds the etcd-removal and reset steps on top of this
+foundation and then clears the finalizer once they succeed.
+
+One consequence worth naming plainly: because nothing ever truly
+disappears in this phase, a control plane that reached `RemovalApproved`
+still counts toward every later removal's quorum/count check (it is
+still, genuinely, an undisturbed etcd member). This is the conservative,
+correct choice -- excluding it early would be pretending a drain-only step
+already finished the job -- but it does mean several "approved" removals
+in the same cluster can accumulate without any of them actually reducing
+risk, since none of them do anything irreversible yet. That stops being
+true the moment the deferred etcd-removal/reset step lands and starts
+actually completing removals; whoever adds it should also decide whether
+an object already mid-removal should be excluded from a *different*
+machine's count, which this phase does not need to answer because nothing
+here is irreversible yet.
+
+### What the four failure modes mean for this slice
+
+Architecture.md's "Nodes" names four things about the removal sequence
+that are "easy to get fatally wrong," verified against Talos 1.14.3's
+source. Two are about the `Reset` call specifically -- naming the
+partitions to wipe, and the fire-and-forget double-reset hazard -- and do
+not apply to this slice at all, because there is no `Reset` call in it;
+that is the direct consequence of referring `TalosClient`'s widening back
+rather than building it now. The other two are exactly what this slice
+delivers and tests:
+
+- "Ichor's refusals are Ichor's alone." `reconcileRemoval` never asks
+  Talos anything -- there is no Talos API call anywhere in it. Every
+  refusal comes from `pkg/deleteguard`, run twice (webhook, then
+  reconcile) against nothing but counted `TalosMachine` objects.
+- "A graceful reset already drains and already leaves etcd" -- the reason
+  this phase's own drain and (deferred) etcd-removal are belts, not
+  trousers, for a live node. Draining here anyway is still worth it on its
+  own terms (it is the one step of the sequence that needs no `TalosClient`
+  change and is independently safe and reversible -- cordon and evict,
+  nothing deleted, pods reschedule), which is why it is implemented even
+  though the step that would make it strictly necessary (`Reset`) is not.
+
+### Resumability
+
+A crash mid-removal is survivable without any new state machine, because
+every step `reconcileRemoval` takes is already idempotent or safely
+resumable on its own:
+
+- `clusterlock.Lock.Acquire` resumes its own identity's lock rather than
+  erroring (its own doc comment: "if identity already holds it, that's
+  resumption") -- a restarted controller re-reconciling the same
+  `Terminating` object (which it will: client-go's informer re-lists every
+  object with a pending finalizer on startup, no special code needed)
+  picks the lock back up rather than being told it's held.
+- Recounting siblings and re-running the three checks is a pure
+  read-then-decide with no side effect to double up on.
+- Re-draining an already-drained (or partially drained) node is harmless
+  (architecture.md says so directly: "re-draining a cordoned node is
+  harmless"), and `k8s.io/kubectl`'s own cordon/evict helpers are written
+  to be re-run.
+- The `Removal` status condition (distinct from `Ready`, which this path
+  never touches) records the last verdict reached, so the object's status
+  reflects reality again the moment the resumed reconcile finishes --
+  satisfying architecture.md's chaos-case requirement that progress
+  resume from status, without needing a dedicated phase field to do it.
+
+Tested directly: acquiring the same cluster's lock as a second,
+independently-constructed `TalosMachineReconciler` (simulating a fresh
+process with no memory of the first) succeeds rather than erroring, and
+the removal verdict it reaches afterward is correct.
+
+### Renew gets its first caller
+
+`pkg/clusterlock.Lock.Renew` existed since the lock package was written,
+documented ("the reconciler is expected to call Renew well inside this
+window on every step") but never called from production code until this
+file's `renewWhile`, which renews every minute (`removalRenewInterval`,
+comfortably inside `DefaultDuration`'s five) for as long as the drain step
+is running, stopping the moment it returns. Tested by giving a `Lock` a
+deliberately short duration, running `renewWhile` against it, and showing
+the lock survives several multiples of that duration -- which only holds
+if `Renew` is really being called repeatedly, not just once at the start --
+and that it expires normally once `renewWhile` is stopped.
+
+### RBAC this added
+
+Draining needs a `kubernetes.Interface` Clientset (`k8s.io/kubectl`'s drain
+helper takes one, not controller-runtime's cached `client.Client`), wired
+in `cmd/main.go` from the manager's own config. The new RBAC it needs --
+`get`/`list`/`watch`/`patch` on `nodes`, `get`/`list`/`delete` on `pods`,
+`create` on `pods/eviction`, `get`/`list` on `poddisruptionbudgets` -- is
+additive only; nothing already granted was widened or removed.
+`k8s.io/kubectl` is pinned to the same `v0.36.0` line as the rest of this
+module's `k8s.io/*` dependencies (`go get k8s.io/kubectl/pkg/drain@v0.36.0`
+specifically, not a bare `go get`, which resolves to kubectl's latest and
+drags every `k8s.io/*` dependency in this module up with it -- caught
+before it reached `go.sum`, not after).

@@ -66,3 +66,26 @@ func CheckControlPlaneQuorum(currentControlPlanes int) error {
 	}
 	return nil
 }
+
+// CheckControlPlaneCount refuses removing a control plane when doing so
+// would leave fewer control planes than desiredCount declares
+// (docs/design/architecture.md, "Nodes": refused "if the count would drop
+// below spec.controlPlane.count"). currentControlPlanes counts the same way
+// CheckControlPlaneQuorum does: every control-plane TalosMachine the
+// cluster has right now, including the one being removed.
+//
+// This is what makes replacing a control plane add-then-remove rather than
+// remove-then-add: shrinking from desiredCount to desiredCount-1 is always
+// refused here, so getting back to desiredCount after a removal requires
+// approving a replacement first (desiredCount+1 -> desiredCount), never the
+// other order (architecture.md: "a 3-node cluster replacing a member goes
+// 3->4->3, never 3->2").
+func CheckControlPlaneCount(currentControlPlanes int, desiredCount int) error {
+	after := currentControlPlanes - 1
+	if after < desiredCount {
+		return fmt.Errorf("delete refused: control planes %d -> %d, below the declared count of %d; "+
+			"approve a replacement control plane before removing this one",
+			currentControlPlanes, after, desiredCount)
+	}
+	return nil
+}

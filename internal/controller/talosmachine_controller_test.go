@@ -49,6 +49,12 @@ const (
 	roleWorker   = "worker"
 	layerCluster = "cluster"
 	kindConfig   = "Config"
+
+	// Shared across every TalosCluster fixture in this package (goconst):
+	// the exact values never matter to what each test is actually about.
+	testEndpointType = "vip"
+	testTalosVersion = "v1.14.3"
+	testSchedulable  = "true"
 )
 
 // fakeTalosClient is the Talos API boundary test double (unit rule 2: no
@@ -120,12 +126,12 @@ func newTestCluster(secretName, versionContract string) *ichorv1alpha1.TalosClus
 	cluster := &ichorv1alpha1.TalosCluster{
 		GenerateName: "cluster-", Namespace: tmNamespace,
 		Spec: ichorv1alpha1.TalosClusterSpec{
-			Endpoint:          ichorv1alpha1.TalosClusterEndpoint{Type: "vip", Address: "10.0.0.5"},
-			TalosVersion:      "v1.14.3",
+			Endpoint:          ichorv1alpha1.TalosClusterEndpoint{Type: testEndpointType, Address: "10.0.0.5"},
+			TalosVersion:      testTalosVersion,
 			KubernetesVersion: "v" + constants.DefaultKubernetesVersion,
 			VersionContract:   versionContract,
 			SecretsRef:        corev1.LocalObjectReference{Name: secretName},
-			ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: 1, Schedulable: "true"},
+			ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: 1, Schedulable: testSchedulable},
 		},
 	}
 	Expect(k8sClient.Create(ctx, cluster)).To(Succeed())

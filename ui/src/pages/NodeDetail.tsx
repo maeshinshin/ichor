@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import type { EffectiveConfigValue } from '@/gen/ichor/v1alpha1/node_pb'
@@ -241,11 +242,26 @@ function EffectiveConfigSection({ namespace, name }: { namespace: string; name: 
   )
 }
 
+// Known Talos service names (node.proto's own comment, ADR 0018's
+// amendment); "kernel" is this screen's own sentinel for the empty-string
+// wire value (Talos's Dmesg log) - Select can't use "" as a real item
+// value, since empty string is its own placeholder-vs-selected signal.
+const LOG_SOURCES = [
+  { value: 'kernel', label: 'Kernel (dmesg)', wire: '' },
+  { value: 'kubelet', label: 'kubelet', wire: 'kubelet' },
+  { value: 'etcd', label: 'etcd', wire: 'etcd' },
+  { value: 'trustd', label: 'trustd', wire: 'trustd' },
+  { value: 'apid', label: 'apid', wire: 'apid' },
+  { value: 'machined', label: 'machined', wire: 'machined' },
+]
+
 function LogsSection({ namespace, name }: { namespace: string; name: string }) {
+  const [source, setSource] = useState('kernel')
   const [lines, setLines] = useState<StreamNodeLogsResponse[]>([])
   const [error, setError] = useState<ErrorShape | null>(null)
   const [reconnecting, setReconnecting] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const service = LOG_SOURCES.find((s) => s.value === source)?.wire ?? ''
 
   useEffect(() => {
     const controller = new AbortController()
@@ -257,7 +273,10 @@ function LogsSection({ namespace, name }: { namespace: string; name: string }) {
     async function run() {
       const call = (resumeToken: string) => {
         setReconnecting(resumeToken !== '')
-        return nodeClient.streamNodeLogs({ machines: [{ namespace, name }], resumeToken }, { signal: controller.signal })
+        return nodeClient.streamNodeLogs(
+          { machines: [{ namespace, name }], resumeToken, service },
+          { signal: controller.signal },
+        )
       }
       try {
         for await (const line of streamWithResume(call, (l) => l.resumeToken)) {
@@ -275,7 +294,7 @@ function LogsSection({ namespace, name }: { namespace: string; name: string }) {
       cancelled = true
       controller.abort()
     }
-  }, [namespace, name])
+  }, [namespace, name, service])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: 'end' })
@@ -290,6 +309,20 @@ function LogsSection({ namespace, name }: { namespace: string; name: string }) {
         </CardTitle>
       </CardHeader>
       <CardContent>
+        <div class="mb-2 w-48">
+          <Select value={source} onValueChange={setSource}>
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {LOG_SOURCES.map((s) => (
+                <SelectItem key={s.value} value={s.value}>
+                  {s.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         {error && <ErrorAlert {...error} />}
         <div class="max-h-96 overflow-y-auto rounded-md bg-muted/40 p-2 font-mono text-xs">
           {lines.length === 0 && !error && <p class="text-muted-foreground">Waiting for log lines…</p>}

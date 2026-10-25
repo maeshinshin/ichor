@@ -17,7 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import type { NodeDetail } from '@/gen/ichor/v1alpha1/node_pb'
-import { MachineRole, type Machine } from '@/gen/ichor/v1alpha1/machine_pb'
+import { MachineApprovalState, MachineRole, type Machine } from '@/gen/ichor/v1alpha1/machine_pb'
 import { clusterClient, machineClient, nodeClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
 import { describeError } from '@/lib/errors'
@@ -66,8 +66,13 @@ export function MachineList() {
   if (error) return <ErrorAlert {...error} />
   if (!machines) return <p class="mt-10 text-center text-sm text-muted-foreground">Loading machines…</p>
 
-  const pending = machines.filter((m) => !m.approved)
-  const approved = machines.filter((m) => m.approved)
+  // approval_state is a tri-state (ADR 0018's amendment): a rejected
+  // machine is its own bucket, not "pending" - that's the whole point of
+  // the state existing, so it stops reappearing as a fresh approval
+  // request every time this list loads.
+  const pending = machines.filter((m) => m.approvalState !== MachineApprovalState.APPROVED && m.approvalState !== MachineApprovalState.REJECTED)
+  const rejected = machines.filter((m) => m.approvalState === MachineApprovalState.REJECTED)
+  const approved = machines.filter((m) => m.approvalState === MachineApprovalState.APPROVED)
 
   return (
     <div class="mt-6 space-y-4">
@@ -98,6 +103,48 @@ export function MachineList() {
                     <TableCell>{m.stage || '-'}</TableCell>
                     <TableCell>
                       <div class="flex gap-2">
+                        <ApproveDialog machine={m} onApproved={replaceMachine} />
+                        <RejectDialog machine={m} onRejected={reload} />
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Rejected ({rejected.length})</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {rejected.length === 0 ? (
+            <p class="text-sm text-muted-foreground">Nothing has been turned away.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Identity</TableHead>
+                  <TableHead>Cluster</TableHead>
+                  <TableHead>Endpoint</TableHead>
+                  <TableHead>Stage</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rejected.map((m) => (
+                  <TableRow key={refKey(m)}>
+                    <TableCell>{identitySummary(m)}</TableCell>
+                    <TableCell>{m.cluster ? clusterNames[`${m.cluster.namespace}/${m.cluster.name}`] ?? m.cluster.name : '-'}</TableCell>
+                    <TableCell>{m.endpoint || '-'}</TableCell>
+                    <TableCell>{m.stage || '-'}</TableCell>
+                    <TableCell>
+                      <div class="flex gap-2">
+                        {/* Rejection is reversible (ADR 0018's amendment): approving a
+                            rejected machine simply moves it to approved, no separate
+                            "un-reject" action exists. */}
                         <ApproveDialog machine={m} onApproved={replaceMachine} />
                         <RejectDialog machine={m} onRejected={reload} />
                       </div>
@@ -334,10 +381,9 @@ function RejectDialog({ machine, onRejected }: { machine: Machine; onRejected: (
         <DialogHeader>
           <DialogTitle>Reject {machine.ref?.name}?</DialogTitle>
           <DialogDescription>
-            Rejecting records who rejected it, when, and why; it does not delete or otherwise change this
-            machine. There is currently no durable "rejected" state on it (only "approved" or not), so if
-            its own discovery loop runs again, it can reappear in this pending list looking exactly like a
-            machine that was never looked at.
+            Rejecting records who rejected it, when, and why, and marks it rejected; it is not deleted and
+            its own discovery loop running again will not bring it back to "pending". This isn't permanent:
+            approving a rejected machine later simply reverses it - there's no separate "un-reject" action.
           </DialogDescription>
         </DialogHeader>
 

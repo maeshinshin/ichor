@@ -77,7 +77,7 @@ func (v *TalosMachineCustomValidator) ValidateDelete(ctx context.Context, obj *i
 	// Only an approved control plane has ever joined etcd (design: approval is
 	// what lets the controller render and apply config); any other machine
 	// cannot affect quorum, so the annotation check above is the whole story.
-	if obj.Spec.Role != "controlplane" || !obj.Spec.Approved {
+	if obj.Spec.Role != "controlplane" || !obj.Spec.IsApproved() {
 		return nil, nil
 	}
 
@@ -100,7 +100,7 @@ func (v *TalosMachineCustomValidator) ValidateDelete(ctx context.Context, obj *i
 
 	controlPlanes := 0
 	for _, m := range siblings.Items {
-		if m.Spec.Role == "controlplane" && m.Spec.Approved && m.Spec.ClusterRef.Name == obj.Spec.ClusterRef.Name {
+		if m.Spec.Role == "controlplane" && m.Spec.IsApproved() && m.Spec.ClusterRef.Name == obj.Spec.ClusterRef.Name {
 			controlPlanes++
 		}
 	}

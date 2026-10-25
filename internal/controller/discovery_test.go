@@ -81,6 +81,7 @@ const (
 	uuidCollision = "40404040-4040-4040-4040-404040404040"
 	uuidApproval  = "50505050-5050-5050-5050-505050505050"
 	uuidMixed     = "60606060-6060-6060-6060-606060606060"
+	uuidRejected  = "70707070-7070-7070-7070-707070707070"
 
 	// testMAC is the permanent MAC address every test below that doesn't
 	// care about its specific value reuses.
@@ -140,7 +141,7 @@ var _ = Describe("DiscoveryReconciler.Discover", func() {
 		Expect(m).NotTo(BeNil())
 
 		Expect(m.Name).To(Equal(uuidCreate))
-		Expect(m.Spec.Approved).To(BeFalse())
+		Expect(m.Spec.IsApproved()).To(BeFalse())
 		Expect(m.Spec.Role).To(BeEmpty())
 		Expect(m.Spec.Endpoint).To(Equal("10.0.0.21:50000"))
 		Expect(m.Spec.Identity).To(Equal(ichorv1alpha1.TalosMachineIdentity{
@@ -204,6 +205,46 @@ var _ = Describe("DiscoveryReconciler.Discover", func() {
 		Expect(got).NotTo(BeNil())
 		Expect(got.Spec.Identity.Serial).To(Equal("original"))
 		Expect(got.Spec.Endpoint).To(Equal("10.0.0.30:50000"))
+	})
+
+	It("returns a rejected machine unchanged rather than recreating it as fresh and pending", func() {
+		cluster := newTestCluster("does-not-exist", "v1.14")
+
+		rejected := &ichorv1alpha1.TalosMachine{
+			Name: uuidRejected, Namespace: cluster.Namespace,
+			Spec: ichorv1alpha1.TalosMachineSpec{
+				ClusterRef: corev1.LocalObjectReference{Name: cluster.Name},
+				Identity: ichorv1alpha1.TalosMachineIdentity{
+					UUID: uuidRejected, Serial: "S-rejected", MACAddresses: []string{"cc:cc:cc:cc:cc:cc"},
+				},
+				Endpoint:      "10.0.0.40:50000",
+				ApprovalState: ichorv1alpha1.MachineApprovalStateRejected,
+			},
+		}
+		Expect(k8sClient.Create(ctx, rejected)).To(Succeed())
+
+		// The same hardware presenting itself again -- identical serial and
+		// MAC, same UUID -- is exactly the "same machine returning" branch:
+		// a reject must not be undone by the node simply existing on the
+		// network, or RejectMachine's whole point (stopping it from showing
+		// up as a fresh approval request) would be defeated the next time
+		// discovery runs.
+		fake := &fakeMaintenanceClient{identity: HardwareIdentity{
+			UUID: uuidRejected, Serial: "S-rejected", MACAddresses: []string{"cc:cc:cc:cc:cc:cc"},
+		}}
+
+		r := &DiscoveryReconciler{Client: k8sClient, MaintenanceClient: maintenanceFactory(fake)}
+
+		m, err := r.Discover(ctx, cluster, "10.0.0.40:50000")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(m).NotTo(BeNil())
+
+		Expect(m.Name).To(Equal(rejected.Name))
+		Expect(m.ResourceVersion).To(Equal(rejected.ResourceVersion), "Discover must not write to an existing machine it only looked up")
+		Expect(m.Spec.ApprovalState).To(Equal(ichorv1alpha1.MachineApprovalStateRejected))
+
+		got := getMachine(cluster.Namespace, uuidRejected)
+		Expect(got.Spec.ApprovalState).To(Equal(ichorv1alpha1.MachineApprovalStateRejected))
 	})
 
 	It("never applies configuration to a discovered machine before it is approved", func() {

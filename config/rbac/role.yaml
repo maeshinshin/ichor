@@ -12,14 +12,6 @@ rules:
   - create
   - patch
 - apiGroups:
-  - ""
-  resources:
-  - secrets
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
   - admissionregistration.k8s.io
   resourceNames:
   - ichor-validating-webhook-configuration
@@ -91,6 +83,7 @@ rules:
   - secrets
   verbs:
   - create
+  - get
   - list
   - watch
 - apiGroups:

@@ -417,6 +417,18 @@ func TestRenderBundleLeak(t *testing.T) {
 		assertNoLeak(t, err)
 	})
 
+	// machine.ParseType("") is TypeWorker, not an error -- a config
+	// document's absent machineType has always meant worker. Render must
+	// not inherit that for TalosMachineSpec.Role: discovery creates a
+	// machine with no role, and rendering one before approval
+	// sets it must fail explicitly rather than silently produce a worker
+	// configuration.
+	t.Run("empty role", func(t *testing.T) {
+		bad := testMachine("node-a", "", nil)
+		_, _, err := Render(cluster, bad, bundle, nil)
+		assertNoLeak(t, err)
+	})
+
 	t.Run("unknown machine type", func(t *testing.T) {
 		bad := testMachine("node-a", "unknown", nil)
 		_, _, err := Render(cluster, bad, bundle, nil)

@@ -339,11 +339,33 @@ webhook:
 admission:
   enabled: true
 
-## Prometheus ServiceMonitor for metrics scraping.
-## Requires prometheus-operator to be installed in the cluster.
+## Prometheus ServiceMonitors for scraping the controller manager's and (when
+## ichorUI.enabled) ichor-ui's /metrics endpoints. Requires prometheus-operator's
+## ServiceMonitor CRD to be installed in the cluster. Ichor ships no Prometheus itself
+## (docs/design/architecture.md, "Monitoring and air gap").
 ##
 prometheus:
   enabled: false
+
+  ## A PrometheusRule carrying the controller-manager alerts documented in
+  ## Deliberately few,
+  ## restricted to events worth paging someone over. Independent of enabled above --
+  ## the ServiceMonitor and the alerts are each optional on their own -- but requires
+  ## the same prometheus-operator CRD (PrometheusRule) to exist in the cluster.
+  ##
+  rules:
+    enabled: false
+
+## A ConfigMap carrying one Grafana dashboard for the metrics above, labeled
+## "grafana_dashboard: \"1\"" -- the sidecar-discovery convention both
+## kube-prometheus-stack's and Bitnami's Grafana charts support out of the box. Ichor
+## ships no Grafana (docs/design/architecture.md, "Monitoring and air gap"): this
+## ConfigMap does nothing unless the cluster's own Grafana deployment already runs
+## that sidecar.
+##
+grafana:
+  dashboards:
+    enabled: false
 
 ## Network policies for controlling traffic flow.
 ## Enable to restrict ingress to the controller manager.

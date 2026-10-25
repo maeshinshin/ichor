@@ -88,7 +88,7 @@ func saveBundleFile(cluster string, bundle *secrets.Bundle) (string, error) {
 	}
 
 	path := filepath.Join(dir, bundleSecretKey)
-	if err := writeFileAtomic(path, out, bundleFilePerm); err != nil {
+	if err := writeFileAtomic(path, out); err != nil {
 		return "", fmt.Errorf("writing %s: %w", path, err)
 	}
 
@@ -116,7 +116,7 @@ func saveKubeconfigFile(cluster string, kubeconfig []byte) (string, error) {
 	}
 
 	path := filepath.Join(dir, kubeconfigFilename)
-	if err := writeFileAtomic(path, kubeconfig, bundleFilePerm); err != nil {
+	if err := writeFileAtomic(path, kubeconfig); err != nil {
 		return "", fmt.Errorf("writing %s: %w", path, err)
 	}
 
@@ -145,11 +145,39 @@ func buildBundleSecret(cluster *ichorv1alpha1.TalosCluster, bundle *secrets.Bund
 	}, nil
 }
 
-// writeFileAtomic writes data to path via a temp file in the same
-// directory plus a rename, so a crash mid-write can never leave a
-// truncated secrets bundle behind -- the one file in this whole command
-// that must never be partially written.
-func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
+// fsyncFile lets a test observe that the fsync call site below is
+// actually reached on the happy path, without needing to reproduce a
+// crash: the default is just f.Sync(); a test swaps it for a spy and
+// restores it afterward.
+var fsyncFile = func(f *os.File) error { return f.Sync() }
+
+// writeFileAtomic writes data to path, at bundleFilePerm (0600 -- every
+// caller is the secrets bundle or the kubeconfig next to it, nothing
+// else needs this function), via a temp file in the same directory,
+// fsyncs both the temp file's data and (after the rename) the directory
+// entry, so a crash mid-write can never leave a truncated secrets bundle
+// behind -- the one file in this whole command that must never be
+// partially written.
+//
+// What this guards against: a process kill (SIGKILL/power loss/kernel
+// panic) at any point up to and including right after this function
+// returns leaves either the old content at path (if it existed) or
+// nothing -- never a truncated or garbage file. Without the two fsyncs
+// below, a kill between the rename and its directory entry reaching disk
+// is the classic failure this exists to close: the data blocks never hit
+// disk, but the rename looked complete, so the write silently loses the
+// file it just claimed to have written -- worse than no backup at all,
+// since the operator believes one exists. Rename itself is atomic (POSIX,
+// same filesystem, same directory) so there is no window where path
+// exists but is half-written; what the fsyncs add is that the *new*
+// content (not stale content, not nothing) is what survives power loss.
+// What this does not guard against: a filesystem that lies about fsync
+// (some network filesystems, some misconfigured block devices, a disk
+// with write caching enabled and no battery/capacitor backing) -- there
+// is no portable way to detect that from userspace, so this function
+// trusts the kernel's fsync contract the same way every other program
+// that cares about durability does.
+func writeFileAtomic(path string, data []byte) error {
 	dir := filepath.Dir(path)
 
 	tmp, err := os.CreateTemp(dir, filepath.Base(path)+".tmp-*")
@@ -169,15 +197,47 @@ func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
 		return err
 	}
 
+	// Sync before Close: the data has to reach disk while this function
+	// still holds the file open, not left to whenever the OS feels like
+	// flushing a page cache it has already forgotten was ours to track.
+	if err := fsyncFile(tmp); err != nil {
+		_ = tmp.Close()
+
+		return fmt.Errorf("syncing %s: %w", tmpPath, err)
+	}
+
 	if err := tmp.Close(); err != nil {
 		return err
 	}
 
-	if err := os.Chmod(tmpPath, perm); err != nil {
+	if err := os.Chmod(tmpPath, bundleFilePerm); err != nil {
 		return err
 	}
 
-	return os.Rename(tmpPath, path)
+	if err := os.Rename(tmpPath, path); err != nil {
+		return err
+	}
+
+	return fsyncDir(dir)
+}
+
+// fsyncDir fsyncs dir itself, so the directory entry the preceding rename
+// just created or replaced is durable too -- a renamed-but-not-yet-synced
+// directory entry is exactly the kind of loss a crash right after
+// writeFileAtomic returns could otherwise cause.
+func fsyncDir(dir string) error {
+	d, err := os.Open(dir)
+	if err != nil {
+		return fmt.Errorf("opening %s to sync it: %w", dir, err)
+	}
+
+	defer func() { _ = d.Close() }()
+
+	if err := d.Sync(); err != nil {
+		return fmt.Errorf("syncing directory %s: %w", dir, err)
+	}
+
+	return nil
 }
 
 // backupNagWriter is satisfied by any io.Writer; kept as a named type only

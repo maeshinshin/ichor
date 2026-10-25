@@ -25,12 +25,16 @@ import (
 	"testing"
 )
 
+// osWindows names the one platform these permission-bit assertions don't
+// apply to.
+const osWindows = "windows"
+
 // TestSaveBundleFile_PermissionsAndRoundTrip proves architecture.md's
 // "Trust" section's two requirements at once: the file and its directory
 // end up 0600/0700, and loadBundleFile reads back exactly what was
 // written.
 func TestSaveBundleFile_PermissionsAndRoundTrip(t *testing.T) {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == osWindows {
 		t.Skip("POSIX permission bits don't apply on windows")
 	}
 
@@ -82,7 +86,7 @@ func TestSaveBundleFile_PermissionsAndRoundTrip(t *testing.T) {
 // against a directory some earlier, looser process left behind: the
 // permission still ends up 0700, not whatever it was.
 func TestSaveBundleFile_FixesLooseExistingDirectory(t *testing.T) {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == osWindows {
 		t.Skip("POSIX permission bits don't apply on windows")
 	}
 
@@ -109,6 +113,115 @@ func TestSaveBundleFile_FixesLooseExistingDirectory(t *testing.T) {
 
 	if got := fi.Mode().Perm(); got != bundleDirPerm {
 		t.Fatalf("dir mode = %o, want %o (saveBundleFile should have tightened it)", got, bundleDirPerm)
+	}
+}
+
+// TestWriteFileAtomic_SyncsFileBeforeClose proves the fsync call site
+// writeFileAtomic's doc comment promises is actually reached on the
+// happy path: swap fsyncFile for a spy, write once, and check it was
+// called exactly once, on the temp file, before any error could have
+// swallowed it silently. A real crash cannot be reproduced in a unit
+// test; this is the part that can be: the code path to fsyncFile runs
+// every time, not just when someone remembers to call it.
+func TestWriteFileAtomic_SyncsFileBeforeClose(t *testing.T) {
+	var syncedPaths []string
+
+	orig := fsyncFile
+	fsyncFile = func(f *os.File) error {
+		syncedPaths = append(syncedPaths, f.Name())
+		return orig(f)
+	}
+
+	t.Cleanup(func() { fsyncFile = orig })
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "out.txt")
+
+	if err := writeFileAtomic(path, []byte("hello")); err != nil {
+		t.Fatalf("writeFileAtomic: %v", err)
+	}
+
+	if len(syncedPaths) != 1 {
+		t.Fatalf("fsyncFile called %d times, want 1 (got %v)", len(syncedPaths), syncedPaths)
+	}
+
+	if got := filepath.Dir(syncedPaths[0]); got != filepath.Clean(dir) {
+		t.Fatalf("synced file %q is not in the target directory %q", syncedPaths[0], dir)
+	}
+}
+
+// fakeSyncError is a test-only error type injected via fsyncFile, so
+// TestWriteFileAtomic_PropagatesSyncError can assert on it by identity
+// rather than by matching an OS-specific message string.
+type fakeSyncError struct{}
+
+func (*fakeSyncError) Error() string { return "fake sync failure injected by a test" }
+
+var errFakeSync error = &fakeSyncError{}
+
+// TestWriteFileAtomic_PropagatesSyncError proves a failing fsync fails
+// the whole write rather than being swallowed: the file must never end
+// up renamed into place if its data was never confirmed durable.
+func TestWriteFileAtomic_PropagatesSyncError(t *testing.T) {
+	orig := fsyncFile
+	fsyncFile = func(*os.File) error { return errFakeSync }
+	t.Cleanup(func() { fsyncFile = orig })
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "out.txt")
+
+	err := writeFileAtomic(path, []byte("hello"))
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if !strings.Contains(err.Error(), errFakeSync.Error()) {
+		t.Fatalf("expected the sync error to propagate, got: %v", err)
+	}
+
+	if _, statErr := os.Stat(path); statErr == nil {
+		t.Fatal("expected no file at path when fsync fails, but one exists")
+	}
+}
+
+// TestWriteFileAtomic_RoundTrip is the ordinary case: content and
+// permissions survive the write.
+func TestWriteFileAtomic_RoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "out.txt")
+
+	if err := writeFileAtomic(path, []byte("hello")); err != nil {
+		t.Fatalf("writeFileAtomic: %v", err)
+	}
+
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading back %s: %v", path, err)
+	}
+
+	if string(got) != "hello" {
+		t.Fatalf("content = %q, want hello", got)
+	}
+
+	if runtime.GOOS != osWindows {
+		fi, err := os.Stat(path)
+		if err != nil {
+			t.Fatalf("stat: %v", err)
+		}
+
+		if got := fi.Mode().Perm(); got != 0o600 {
+			t.Fatalf("mode = %o, want 0600", got)
+		}
+	}
+}
+
+// TestFsyncDir_ErrorsOnMissingDir proves fsyncDir's own failure path is
+// reachable and returns a clear error rather than panicking or
+// succeeding silently.
+func TestFsyncDir_ErrorsOnMissingDir(t *testing.T) {
+	err := fsyncDir(filepath.Join(t.TempDir(), "does-not-exist"))
+	if err == nil {
+		t.Fatal("expected an error for a missing directory, got nil")
 	}
 }
 

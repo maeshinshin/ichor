@@ -251,6 +251,23 @@ func main() {
 		setupLog.Error(err, "Failed to create controller", "controller", "talosmachine")
 		os.Exit(1)
 	}
+	if err := (&controller.TalosClusterReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+		Discovery: &controller.DiscoveryReconciler{
+			Client: mgr.GetClient(),
+			// GetEventRecorderFor is deprecated in favor of the newer events/v1
+			// API, but DiscoveryReconciler.Recorder (and its fakes in
+			// discovery_test.go) are typed against record.EventRecorder, the
+			// older interface this returns; migrating both is a separate,
+			// unrelated change.
+			Recorder:          mgr.GetEventRecorderFor("ichor-controller"), //nolint:staticcheck
+			MaintenanceClient: controller.NewMachineryMaintenanceClient,
+		},
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "Failed to create controller", "controller", "taloscluster")
+		os.Exit(1)
+	}
 	// +kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

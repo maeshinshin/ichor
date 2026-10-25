@@ -479,3 +479,57 @@ through the existing, already-proven `make cleanup-test-e2e-kubevirt`. Confirmed
 `kubectl get talosmachines,talosclusters,secrets,validatingwebhookconfigurations -A`
 against the inner cluster showing nothing of this run's left (its stock `kube-system`
 bootstrap-token Secret aside).
+
+### The ~70-line scratch program became real harness code
+
+Promoted the manual leaf-minting procedure above into `test/harness/webhookcert`
+(`MintLeafForIP`), with tests that verify the leaf against the CA and against the wrong
+IP/wrong CA. Also wired the whole reachability sequence (pod creation, binary/kubeconfig/
+`kubectl` copy-in, cert-controller CA wait, leaf mint-and-install, webhook registration)
+into `test/harness/kubevirt/controller.go` as `make setup-test-e2e-kubevirt-controller` /
+`cleanup-test-e2e-kubevirt-controller` -- code, not a runbook, callable from the harness's
+`up`/`down` dispatch like every other scenario.
+
+Getting this orchestration code to actually run clean against the live 3-control-plane
+cluster took five real-hardware attempts, each a genuinely different bug:
+
+1. `Secret "ichor-webhook-server-cert" not found` -- the `create secret` call was missing
+   `-n`/`--namespace`, so it landed in the kubeconfig's default namespace instead of the
+   leader-election namespace the manager actually reads from.
+2. The `ValidatingWebhookConfiguration` manifest was being applied with the shared
+   `applyManifest` helper, which targets wherever the harness's own `KUBECONFIG` points
+   (the outer cluster) -- caught by code review before it was even hardware-tested,
+   fixed by adding an `applyInnerManifest` that runs `kubectl apply -f -` from inside the
+   pod, against the inner apiserver.
+3. `webhookcert: no PEM block found in the CA certificate` -- a Go shadowing bug:
+   `waitForWebhookCert() (caBundle string, err error)` discarded `pollFor`'s real return
+   value into `_` and returned the never-assigned named return instead, because the
+   closure's own `caBundle, ok := ...` created a new local variable in its own scope
+   rather than assigning the outer one. Always returned `("", nil)`. Fixed by dropping the
+   named returns and returning `pollFor`'s result directly.
+4. `error: failed to create secret secrets "...already exists"` on a retry after a
+   previous failed run had already created it -- the code was checking for the API's
+   machine-readable `AlreadyExists` reason, which the CLI's own printed text (lowercase,
+   human-readable) never contains, so the check could never have caught this reliably.
+   Fixed by rewriting the setup step to `kubectl apply` a small inline Namespace+Secret
+   manifest, which is naturally idempotent and needs no exists-check at all.
+5. `error: no objects passed to apply` -- the real one, found only once the first four
+   were out of the way. `kubectl exec <pod> -- <cmd>` does **not** forward the local
+   process's stdin to the remote command unless the outer invocation itself is given
+   `-i`/`--stdin`; setting `cmd.Stdin` on the local `exec.Cmd` only feeds the local
+   `kubectl exec` process's own stdin, which `kubectl exec` then drops on the floor
+   without `-i`. Every `applyInnerManifest` call piped a manifest into
+   `innerKubectl("apply", "-f", "-")`, whose remote `kubectl apply` therefore always saw
+   an immediately-closed, empty stdin. Fixed by adding `-i` to the one shared `podExec`
+   that every inner-cluster call goes through.
+
+After fix 5, `make setup-test-e2e-kubevirt-controller` ran clean end to end against the
+real 3-node cluster (`ichor-e2e-ha-0/1/2`, pod IPs `10.244.1.157`/`10.244.1.26`/
+`10.244.1.179`, Node `talos01`): controller pod `ichor-e2e-controller` reached `Running`
+on pod IP `10.244.2.235`; the local log shows
+`controller-runtime.webhook  Serving webhook server  {"host": "", "port": 9443}`; and
+from inside the pod, `kubectl get validatingwebhookconfigurations` against the inner
+cluster shows `ichor-validating-webhook-configuration` with `WEBHOOKS: 2`, registered
+successfully. (The log also shows the expected `no matches for kind "TalosMachine"`
+error repeating -- CRDs are not yet installed on this inner cluster at this point in the
+sequence, which is next.)

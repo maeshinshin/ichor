@@ -53,13 +53,16 @@ honest about what it actually needs (`get`/`list`, never `watch`).
    refuses outright, so "approving an already-approved machine causes no
    reconfiguration" holds by construction rather than by a diff that could
    itself be wrong.
-2. **Weak identity** -- `strongIdentity` (`identity.go`) re-applies ADR
-   0011's rule (UUID, serial and at least one permanent MAC all present) to
-   the `TalosMachine`'s already-recorded `spec.identity`. This is a
-   deliberate second check, not reuse of `internal/controller`'s: that
-   version is unexported and keyed on its own `HardwareIdentity`, not the
-   CRD type, and discovery refusing to auto-register a weak identity does
-   not guarantee every `TalosMachine` this server ever sees went through
+2. **Weak identity** -- re-applies ADR 0011's rule (UUID, serial and at
+   least one permanent MAC all present) to the `TalosMachine`'s
+   already-recorded `spec.identity`, via
+   `ichorv1alpha1.TalosMachineIdentity.IsStrongIdentity` (`identity.go`
+   itself was later deleted once the rule moved there; see ADR 0033).
+   This is a deliberate second *check*, not a second *rule*:
+   `internal/controller`'s own call site converts its own
+   `HardwareIdentity` to the CRD type and calls the same method, and
+   discovery refusing to auto-register a weak identity does not
+   guarantee every `TalosMachine` this server ever sees went through
    discovery (a future registration path, or a hand-written fixture, might
    not have).
 3. **`MACHINE_ROLE_UNSPECIFIED`** -- `CodeInvalidArgument`. The wire enum's

@@ -38,6 +38,19 @@ type TalosMachineIdentity struct {
 	MACAddresses []string `json:"macAddresses,omitempty"`
 }
 
+// IsStrongIdentity reports whether m has every element of
+// docs/design/architecture.md's "Nodes" identity tuple -- SMBIOS UUID,
+// serial number, and at least one permanent MAC address. Any missing
+// element is a weak key, and Ichor does not auto-register on one
+// (discovery, internal/controller) or let approval depend on discovery
+// having already enforced it (internal/uiapi) --
+// both call this one method rather than each keeping its own copy of the
+// rule, so a change to what counts as "strong" cannot update
+// one gate and silently miss the other.
+func (m TalosMachineIdentity) IsStrongIdentity() bool {
+	return m.UUID != "" && m.Serial != "" && len(m.MACAddresses) > 0
+}
+
 // Values for TalosMachineSpec.ApprovalState.
 const (
 	// MachineApprovalStatePending is the default: discovered, awaiting a

@@ -15,10 +15,11 @@ limitations under the License.
 */
 
 // ichor-ui is the Go backend that embeds the Preact SPA (docs/design/architecture.md,
-// "CLI and UI"). Phase 5 only builds the skeleton: static asset serving with an
-// SPA fallback. It holds no Talos or kube credentials yet and has no
-// Connect API client wired in; that lands with the API server and its generated
-// types, which this package intentionally does not depend on.
+// "CLI and UI"). It serves the SPA's static assets and, from internal/uiapi, the Connect API's ClusterService,
+// MachineService and NodeService:
+// phase 5's read and approval surface. It holds a read-only Talos identity and reads
+// and writes TalosMachine CRs; it never talks to a Talos node's mutating API
+// (architecture.md "Trust").
 package main
 
 import (
@@ -33,7 +34,24 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	runtime "k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1/ichorv1alpha1connect"
+	"github.com/maeshinshin/ichor/internal/uiapi"
 )
+
+var scheme = runtime.NewScheme()
+
+func init() {
+	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
+	utilruntime.Must(ichorv1alpha1.AddToScheme(scheme))
+}
 
 // mustSub roots an embedded FS at dir so callers can address files the way the
 // browser does ("index.html", "assets/app.js"), regardless of which build tag
@@ -70,8 +88,34 @@ func main() {
 	addr := flag.String("addr", ":8080", "address ichor-ui listens on")
 	flag.Parse()
 
+	c, err := client.New(ctrl.GetConfigOrDie(), client.Options{Scheme: scheme})
+	if err != nil {
+		log.Fatalf("ichor-ui: building Kubernetes client: %v", err)
+	}
+
+	// draining is closed once, right when shutdown starts, so every in-flight
+	// StreamNodeLogs call notices on its next select and returns
+	// CodeUnavailable -- "graceful termination that asks clients to
+	// reconnect" (architecture.md "CLI and UI").
+	draining := make(chan struct{})
+
+	server := &uiapi.Server{
+		Client:          c,
+		NodeTalosClient: uiapi.NewMachineryNodeTalosClient,
+		Draining:        draining,
+	}
+
 	mux := http.NewServeMux()
 	mux.Handle("/", spaHandler(webFS))
+
+	for _, register := range []func() (string, http.Handler){
+		func() (string, http.Handler) { return ichorv1alpha1connect.NewClusterServiceHandler(server) },
+		func() (string, http.Handler) { return ichorv1alpha1connect.NewMachineServiceHandler(server) },
+		func() (string, http.Handler) { return ichorv1alpha1connect.NewNodeServiceHandler(server) },
+	} {
+		path, handler := register()
+		mux.Handle(path, handler)
+	}
 
 	srv := &http.Server{
 		Addr:              *addr,
@@ -90,12 +134,12 @@ func main() {
 	}()
 
 	<-ctx.Done()
+	close(draining)
 
-	// shortcut: graceful shutdown here only stops accepting new connections
-	// and waits out in-flight requests. Architecture's "asks clients to
-	// reconnect" and "streams that resume from a token" apply once this
-	// backend has streaming endpoints (logs, watches) to drain; nothing to
-	// drain yet in the phase-5 skeleton.
+	// srv.Shutdown stops accepting new connections and waits out in-flight
+	// requests; closing draining above is what makes an in-flight
+	// StreamNodeLogs call actually finish promptly instead of running until
+	// this timeout.
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {

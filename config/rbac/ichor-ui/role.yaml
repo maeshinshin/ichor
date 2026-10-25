@@ -5,6 +5,13 @@ metadata:
   name: ichor-ui-role
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - get
+  - list
+- apiGroups:
   - ichor.maesh.dev
   resources:
   - talosclusters

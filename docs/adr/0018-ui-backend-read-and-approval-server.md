@@ -1,8 +1,8 @@
 # 0018. UI backend: the read and approval server implementation
 
-Status: Accepted, amended twice · Date: 2026-10-25 · Design section: CLI and UI, roadmap item 5
+Status: Accepted, amended three times · Date: 2026-10-25 · Design section: CLI and UI, roadmap item 5
 
-Decided: One `Server` type implements all three handler interfaces over a single uncached client; settled the four approval refusals; fixed `loadBundle` resolving the TalosCluster's own namespace instead of the backend's, the same bug ADR 0011 had already fixed on the controller side
+Decided: One `Server` type implements all three handler interfaces over a single uncached client; settled the four approval refusals; fixed `loadBundle` resolving the TalosCluster's own namespace instead of the backend's, the same bug ADR 0011 had already fixed on the controller side; granted the `nodes` get/list `findKubernetesNode` had always read without
 
 ## Context
 
@@ -551,3 +551,52 @@ fourth test creating the `TalosCluster` and the Secret in two different,
 real namespaces end to end through `Server.GetEffectiveConfig` itself
 (not just the `loadBundle` unit), to show the whole RPC path, not only
 the helper, resolves correctly now.
+
+## Amendment (2026-10-26): the `ClusterRole` had no `nodes` rule, so every `GetNode` was `Forbidden`
+
+Found by a security review, not in use: `node_service.go`'s
+`findKubernetesNode` -- `GetNode`'s lookup of the `corev1.Node` behind a
+`TalosMachine`, by `Get` on `Spec.Hostname` or, failing that, a `List` over
+every `Node` matched against the Talos endpoint address -- was there from
+this ADR's first version, but `rbac_markers.go` never carried a matching
+`+kubebuilder:rbac` marker for `nodes`. Nothing caught it: envtest does not
+enforce RBAC, so every existing test against a fake client passed
+regardless of what the generated `ClusterRole` actually said; only a real
+deployment's `Get`/`List` would have returned `Forbidden`, surfaced to the
+UI as `CodeInternal` (`GetNode`'s own error wrapping). Fixed by adding
+
+```
+// +kubebuilder:rbac:groups="",resources=nodes,verbs=get;list
+```
+
+to `rbac_markers.go` and regenerating (`make manifests`, which calls
+`manifests-ichor-ui`): `config/rbac/ichor-ui/role.yaml` and
+`dist/chart/templates/rbac/ichor-ui-role.yaml` both gained the rule, in the
+same `ClusterRole` as `talosclusters`/`talosconfigpatches`/`talosmachines`
+-- never `namespace=`, since a `Node` is cluster-scoped in the Kubernetes
+API itself and has no namespace a `Role` could qualify into. This is the
+one marker in the file where that is not a choice: every other ClusterRole
+rule here could, in principle, have been narrowed to a Role if some other
+design decision had fixed its resource to one namespace (`secrets`'s own
+`namespace=ichor-system` is exactly that, chosen once `loadBundle` stopped
+reading `TalosCluster.spec.secretsRef`'s namespace -- see ADR 0011, which
+also records this same shape regressing into a cluster-wide grant twice
+before). `nodes` has no such escape; `get;list` only, matching exactly the
+two calls `findKubernetesNode` makes and nothing wider (no `watch`, since
+this package keeps no informer cache, consistent with the rest of this
+ADR's "RBAC: kept out of `manager-role`" section above).
+
+`dist/chart/chart_test.go`'s `checkNoClusterWideSecretsRead` guards only
+rules naming `secrets`; it does not, and should not, fire on this `nodes`
+rule, and `go test ./dist/chart/...` confirms it doesn't.
+
+**No new mechanism added to catch a missing marker itself.** envtest's own
+non-enforcement of RBAC is a real gap -- a marker can be deleted or never
+written, and every test in this package still passes -- but closing it
+would mean either standing up a real API server with RBAC turned on (a
+different, heavier test setup change than this fix, and one that would
+affect every other `internal/uiapi` test, not just this file) or hand-
+writing a second list of "every client-go type this package touches" to
+diff against `rbac_markers.go`'s markers, which is exactly the kind of
+parallel bookkeeping that drifts the same way the markers themselves just
+did. Left unfixed and reported here instead.

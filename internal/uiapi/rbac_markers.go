@@ -33,13 +33,28 @@ limitations under the License.
 // Kept minimal (design principle: "the UI backend holds a read-only
 // [Talos] identity"; this is its Kubernetes-API counterpart, not a claim
 // that every verb here is read-only): get/list on talosclusters, get/
-// list/update on talosmachines (ApproveMachine, RejectMachine), and now
-// get/list/create/update/delete on talosconfigpatches (PatchService, roadmap phase 6 -- the one CRD this package
-// actually creates and
-// deletes, not just updates).
+// list/update on talosmachines (ApproveMachine, RejectMachine), get/list
+// on the Kubernetes Node findKubernetesNode looks up (node_service.go),
+// and get/list/create/update/delete on talosconfigpatches (PatchService, roadmap phase 6 -- the one CRD this package
+// actually creates
+// and deletes, not just updates).
 package uiapi
 
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters,verbs=get;list
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosconfigpatches,verbs=get;list;create;update;delete
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosmachines,verbs=get;list;update
 // +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,verbs=get
+
+// corev1.Node is itself a cluster-scoped Kubernetes type, unlike the secrets
+// rule above: that one only needs the namespace= qualifier (and so only
+// becomes a Role instead of this package's ClusterRole) because
+// TalosCluster.spec.secretsRef happens to resolve to a fixed namespace --
+// a design choice. A Node has
+// no namespace to qualify into; namespace= on this marker would not narrow
+// the grant, controller-gen would simply ignore it. So, unlike every other
+// line here, this one has no narrower form to prefer -- ClusterRole is the
+// only thing a Node read can ever be, not a convenience taken. get;list
+// only (no watch: findKubernetesNode issues one Get or one List per GetNode
+// call, never an informer) backs that lookup of the Node matching a
+// TalosMachine's hostname or endpoint address.
+// +kubebuilder:rbac:groups="",resources=nodes,verbs=get;list

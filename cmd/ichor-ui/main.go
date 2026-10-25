@@ -36,6 +36,8 @@ import (
 	"syscall"
 	"time"
 
+	"connectrpc.com/connect"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -113,11 +115,28 @@ func main() {
 	mux := http.NewServeMux()
 	mux.Handle("/", spaHandler(webFS))
 
+	// /metrics, on the same mux and port as every Connect handler below: ichor-ui is
+	// only ever reached in-cluster (architecture.md "Trust": a port-forward, no exposed
+	// Service today), the same trust boundary the Connect API itself already sits
+	// behind, so a second port and its own TLS/auth story (the controller's secure
+	// metrics server, cmd/main.go) would buy nothing here. rpcInterceptor below is what
+	// the exported RPC-latency series comes from.
+	mux.Handle("/metrics", promhttp.Handler())
+
+	rpcInterceptor := connect.WithInterceptors(uiapi.MetricsInterceptor())
 	for _, register := range []func() (string, http.Handler){
-		func() (string, http.Handler) { return ichorv1alpha1connect.NewClusterServiceHandler(server) },
-		func() (string, http.Handler) { return ichorv1alpha1connect.NewMachineServiceHandler(server) },
-		func() (string, http.Handler) { return ichorv1alpha1connect.NewNodeServiceHandler(server) },
-		func() (string, http.Handler) { return ichorv1alpha1connect.NewPatchServiceHandler(server) },
+		func() (string, http.Handler) {
+			return ichorv1alpha1connect.NewClusterServiceHandler(server, rpcInterceptor)
+		},
+		func() (string, http.Handler) {
+			return ichorv1alpha1connect.NewMachineServiceHandler(server, rpcInterceptor)
+		},
+		func() (string, http.Handler) {
+			return ichorv1alpha1connect.NewNodeServiceHandler(server, rpcInterceptor)
+		},
+		func() (string, http.Handler) {
+			return ichorv1alpha1connect.NewPatchServiceHandler(server, rpcInterceptor)
+		},
 	} {
 		path, handler := register()
 		mux.Handle(path, handler)

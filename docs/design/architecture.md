@@ -210,6 +210,32 @@ what to do with them:
 
 Both are ADR 0003's follow-up.
 
+Two questions that table left open are now settled.
+
+`machine.kubelet.credentialProviderConfig` gets an override and takes the
+`k8s.io/kubelet` dependency it needs, moving it out of the dropped six. It
+generates cleanly and measures about 6.5 KB served; under a typed-only API
+an absent field is an inexpressible one, so a commonly wanted absent field
+is a product gap rather than a saved dependency. One official `k8s.io/*`
+staging module, versioned in lockstep with Kubernetes, is the same class of
+dependency the already-mirrored five come from. The counts above describe
+what the generator does today, before that lands.
+`machine.kubelet.extraConfig` still gets nothing: what blocks it was never
+the dependency but a `float32`, which controller-gen only emits under
+`allowDangerousTypes` — and that flag applies to the whole API package, so
+one field would relax the type safety of every CRD in it.
+
+No validating admission webhook rejects a `TalosConfigPatch` carrying a
+secret field. Dropping the fields from the schema is what keeps the value
+out of storage, and that holds whatever the caller does, so a webhook adds
+nothing to the security property and only improves the error message. In
+exchange it would put `failurePolicy` on the write path: `Fail` means a
+controller outage blocks every configuration change, `Ignore` means the
+guard is absent exactly when it is invoked. Ichor's own clients ask for
+strict field validation instead, so the CLI and the UI backend report the
+field loudly, and `kubectl` is strict by default. A client that opts out of
+strict validation gets pruning, which is the safe outcome anyway.
+
 Ichor adds what the types can't carry — whether a field needs a reboot,
 whether it can only be set at install time, which Talos version introduced
 it — in a table keyed by field path. Unknown paths are treated as
@@ -744,16 +770,6 @@ resumption works. A short set runs per PR, the full set nightly.
 
 ## Open questions
 
-- Should `machine.kubelet.extraConfig` (`KubeletConfig.KubeletExtraConfig`)
-  gain a field override anyway, by taking on the new `k8s.io/kubelet`
-  dependency its clean generation needs? It is the one dropped field users
-  will actually miss day to day. See ADR 0003's follow-up.
-- Should Ichor add a validating admission webhook that rejects (not prunes)
-  a `TalosConfigPatch` carrying one of the nine secret fields
-  (`internal/tools/mirrorgen/main.go`'s `secretFields`)? Dropping them from
-  the CRD schema already keeps the value out of storage; what it does not
-  do, without a webhook, is turn that into a loud error for a caller that
-  didn't ask for strict field validation itself. See ADR 0003's follow-up.
 - What exactly does the Talos Upgrade API do about cordon and drain, per
   version?
 - Does a single-node Talos upgrade need the etcd-preserving flag?

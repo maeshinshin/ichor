@@ -16,9 +16,10 @@ limitations under the License.
 
 // ichor-ui is the Go backend that embeds the Preact SPA (docs/design/architecture.md,
 // "CLI and UI"). It serves the SPA's static assets and, from internal/uiapi, the Connect API's ClusterService,
-// MachineService and NodeService:
-// phase 5's read and approval surface. It holds a read-only Talos identity and reads
-// and writes TalosMachine CRs; it never talks to a Talos node's mutating API
+// MachineService,
+// NodeService and PatchService: phase 5's read and approval surface, plus phase 6's
+// config-editing backend. It holds a read-only Talos identity and reads and writes
+// TalosMachine and TalosConfigPatch CRs; it never talks to a Talos node's mutating API
 // (architecture.md "Trust").
 package main
 
@@ -116,6 +117,7 @@ func main() {
 		func() (string, http.Handler) { return ichorv1alpha1connect.NewClusterServiceHandler(server) },
 		func() (string, http.Handler) { return ichorv1alpha1connect.NewMachineServiceHandler(server) },
 		func() (string, http.Handler) { return ichorv1alpha1connect.NewNodeServiceHandler(server) },
+		func() (string, http.Handler) { return ichorv1alpha1connect.NewPatchServiceHandler(server) },
 	} {
 		path, handler := register()
 		mux.Handle(path, handler)

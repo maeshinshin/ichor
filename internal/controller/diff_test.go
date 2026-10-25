@@ -50,7 +50,7 @@ func diffTestFixtures(t *testing.T, versionContract string) (*ichorv1alpha1.Talo
 	cluster := &ichorv1alpha1.TalosCluster{
 		Namespace: tmNamespace, Name: "c",
 		Spec: ichorv1alpha1.TalosClusterSpec{
-			Endpoint:          ichorv1alpha1.TalosClusterEndpoint{Type: testEndpointType, Address: "10.0.0.5"},
+			Endpoint:          ichorv1alpha1.TalosClusterEndpoint{Type: testEndpointType, Address: testClusterAddress},
 			TalosVersion:      testTalosVersion,
 			KubernetesVersion: constants.DefaultKubernetesVersion,
 			VersionContract:   versionContract,

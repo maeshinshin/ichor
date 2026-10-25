@@ -62,7 +62,7 @@ func newTestControlPlane(clusterName, suffix string) *ichorv1alpha1.TalosMachine
 // controlPlane.count, for the count-guard tests below.
 func newTestClusterWithCount(count int32) *ichorv1alpha1.TalosCluster {
 	cluster := &ichorv1alpha1.TalosCluster{
-		GenerateName: "cluster-", Namespace: tmNamespace,
+		GenerateName: testClusterGenerate, Namespace: tmNamespace,
 		Spec: ichorv1alpha1.TalosClusterSpec{
 			Endpoint:          ichorv1alpha1.TalosClusterEndpoint{Type: testEndpointType, Address: "10.0.0.6"},
 			TalosVersion:      testTalosVersion,

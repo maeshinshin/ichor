@@ -362,7 +362,9 @@ func dropHandedOverInlineManifest(ordered []*ichorv1alpha1.TalosConfigPatch) []*
 // withoutInlineManifest returns manifests without any entry named name, as
 // a fresh slice (never manifests' own backing array, which dropHandedOverInlineManifest's
 // caller may still hold a pointer to via the original, unmodified patch).
-func withoutInlineManifest(manifests []*typedconfig.ClusterInlineManifest, name string) []*typedconfig.ClusterInlineManifest {
+func withoutInlineManifest(
+	manifests []*typedconfig.ClusterInlineManifest, name string,
+) []*typedconfig.ClusterInlineManifest {
 	var kept []*typedconfig.ClusterInlineManifest
 
 	for _, entry := range manifests {

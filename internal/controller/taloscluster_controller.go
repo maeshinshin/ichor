@@ -20,7 +20,6 @@ import (
 	"context"
 	"time"
 
-	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -41,9 +40,16 @@ const discoveryRequeueInterval = 5 * time.Minute
 // pending TalosMachine, a WeakIdentity/IdentityCollision Event) already
 // lands on the right object -- and exists only to decide *when*
 // DiscoverAll runs.
+//
+// DiscoverAll runs synchronously inside Reconcile and can take up to its
+// own worst case (see discoveryRequeueInterval) before returning.
+// controller-runtime's default MaxConcurrentReconciles is 1 per controller,
+// so a slow discovery pass blocks every other TalosCluster this controller
+// would otherwise reconcile for that long. Nothing latency-sensitive
+// belongs in this reconciler for that reason -- phase 4's hand-over is
+// TalosCluster-level work and would be an easy, wrong place to add it.
 type TalosClusterReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
 
 	// Discovery runs the actual probe (EnumerateCandidates + Discover per
 	// candidate); this reconciler only decides when to call it.

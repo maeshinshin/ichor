@@ -15,17 +15,21 @@ limitations under the License.
 */
 
 // Command kubevirt is the KubeVirt harness's setup/cleanup for e2e (ADR 0007): it boots a
-// Talos node as a KubeVirt VM in ichor-e2e and waits for Talos maintenance mode ("up"), or
-// tears that VM and its DataVolumes down ("down"). The e2e specs never create or delete
-// this VM themselves - they only consume the node endpoint this prints, through
-// ICHOR_E2E_TALOS_NODES, exactly as the talosctl-qemu harness's own setup/cleanup do for CI.
+// Talos node as a KubeVirt VM in ichor-e2e, waits for maintenance mode, applies a
+// control-plane configuration, waits for the authenticated API, bootstraps etcd, and hands
+// back an inner-cluster kubeconfig and the node's address ("up") - or tears everything down
+// ("down"). The e2e specs never provision any of this themselves; they only consume what
+// "up" publishes, exactly as the talosctl-qemu harness's own setup/cleanup do for CI.
 package main
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/maeshinshin/ichor/test/internal/talosctl"
@@ -38,6 +42,19 @@ const namespace = "ichor-e2e"
 // `make`/CI steps) with no shared state between them, so cleanup must be able to find what
 // setup created without being told a generated name.
 const vmName = "ichor-e2e-short"
+
+// relayName is a plain (non-bridge-bound) Pod that proxies TCP to the VM's own address: the
+// workstation running this harness cannot reach the VM's pod IP directly, and
+// `kubectl port-forward` refuses bridge-bound pods, but it works fine against an ordinary
+// one like this (ADR 0007, Boundaries).
+const relayName = vmName + "-relay"
+
+// relayLocalPort is the fixed local port the harness port-forwards to the relay on.
+//
+// shortcut: a fixed port risks colliding with something else already using it on the host
+// running the harness; upgrade to an ephemeral port (parsed from `kubectl port-forward`'s own
+// "Forwarding from 127.0.0.1:NNNNN" output) the first time that happens.
+const relayLocalPort = "16443"
 
 // talosFactorySchematic is the bare, no-extensions Image Factory schematic for the
 // metal-amd64 ISO (ADR 0007).
@@ -116,6 +133,24 @@ spec:
             name: %[1]s-system
 `
 
+// relayManifestTmpl is a plain pod (no KubeVirt involved) that relays TCP :6443 to the VM's
+// own address, so the harness can reach it from the workstation through a normal
+// `kubectl port-forward` (see relayName).
+const relayManifestTmpl = `apiVersion: v1
+kind: Pod
+metadata:
+  name: %[1]s
+  namespace: ichor-e2e
+  labels:
+    ichor.maesh.dev/e2e-harness: kubevirt
+spec:
+  restartPolicy: Never
+  containers:
+    - name: relay
+      image: alpine/socat
+      args: ["TCP-LISTEN:6443,fork,reuseaddr", "TCP:%[2]s:6443"]
+`
+
 func main() {
 	if len(os.Args) != 2 || (os.Args[1] != "up" && os.Args[1] != "down") {
 		fmt.Fprintln(os.Stderr, "usage: kubevirt up|down")
@@ -166,7 +201,118 @@ func up() error {
 		return err
 	}
 
+	fmt.Println("--- maintenance mode: machinestatus, disks, systeminformation ---")
+	for _, resource := range []string{"machinestatus", "disks", "systeminformation"} {
+		out, err := talosctl.Get(namespace, ip, resource)
+		if err != nil {
+			return fmt.Errorf("get %s in maintenance mode: %w", resource, err)
+		}
+		fmt.Println(out)
+	}
+
+	cfg, err := generateControlPlaneConfig(vmName, ip)
+	if err != nil {
+		return err
+	}
+	talosconfigYAML, err := cfg.talosconfig.Bytes()
+	if err != nil {
+		return fmt.Errorf("marshaling talosconfig: %w", err)
+	}
+
+	fmt.Println("--- applying the control-plane config (installs and reboots) ---")
+	out, err := talosctl.Apply(namespace, ip, cfg.machineConfig)
+	if err != nil {
+		return fmt.Errorf("applying config: %w: %s", err, out)
+	}
+	fmt.Println(out)
+
+	if _, err := pollFor("waiting for the authenticated API to come up", 10*time.Minute, func() (string, bool) {
+		_, err := talosctl.GetAuthenticated(namespace, ip, "machinestatus", talosconfigYAML)
+		return "", err == nil
+	}); err != nil {
+		return err
+	}
+
+	versionOut, err := talosctl.Version(namespace, ip, talosconfigYAML)
+	if err != nil {
+		return fmt.Errorf("authenticated version check: %w: %s", err, versionOut)
+	}
+	fmt.Println("--- authenticated talosctl version ---")
+	fmt.Println(versionOut)
+
+	bootstrapOut, err := talosctl.Bootstrap(namespace, ip, talosconfigYAML)
+	if err != nil {
+		return fmt.Errorf("bootstrap: %w: %s", err, bootstrapOut)
+	}
+	fmt.Println("--- bootstrap ---")
+	fmt.Println(bootstrapOut)
+
+	if _, err := pollFor("waiting for machinestatus stage=running ready=true", 5*time.Minute, func() (string, bool) {
+		out, err := talosctl.GetAuthenticated(namespace, ip, "machinestatus", talosconfigYAML)
+		if err != nil {
+			return "", false
+		}
+		objs, err := talosctl.DecodeAll(out)
+		if err != nil || len(objs) != 1 {
+			return "", false
+		}
+		return "", talosctl.SpecField(objs[0], "stage") == "running" && talosctl.SpecField(objs[0], "ready") == true
+	}); err != nil {
+		return err
+	}
+	fmt.Println("--- machinestatus: running, ready ---")
+	finalStatus, err := talosctl.GetAuthenticated(namespace, ip, "machinestatus", talosconfigYAML)
+	if err != nil {
+		return err
+	}
+	fmt.Println(finalStatus)
+
+	kubeconfigYAML, err := talosctl.Kubeconfig(namespace, ip, talosconfigYAML)
+	if err != nil {
+		return fmt.Errorf("fetching kubeconfig: %w", err)
+	}
+
+	if err := startRelay(ip); err != nil {
+		return err
+	}
+
+	// The node's own endpoint is what we pinned the cluster to (ADR 0007); the inner
+	// kubeconfig's server field is set to the same value, so rewriting it to the local
+	// tunnel is a plain substring replace.
+	nodeEndpoint := fmt.Sprintf("https://%s:6443", ip)
+	localEndpoint := fmt.Sprintf("https://127.0.0.1:%s", relayLocalPort)
+	kubeconfigYAML = []byte(strings.ReplaceAll(string(kubeconfigYAML), nodeEndpoint, localEndpoint))
+
+	bin, err := projectBin()
+	if err != nil {
+		return err
+	}
+	innerKubeconfigPath := filepath.Join(bin, "test-e2e-kubevirt.kubeconfig")
+	talosconfigPath := filepath.Join(bin, "test-e2e-kubevirt.talosconfig")
+	if err := os.WriteFile(innerKubeconfigPath, kubeconfigYAML, 0o600); err != nil {
+		return fmt.Errorf("writing inner kubeconfig: %w", err)
+	}
+	if err := os.WriteFile(talosconfigPath, talosconfigYAML, 0o600); err != nil {
+		return fmt.Errorf("writing talosconfig: %w", err)
+	}
+
+	if _, err := pollFor("waiting for one Ready node through the tunnel", 3*time.Minute, func() (string, bool) {
+		out, err := utils.Run(exec.Command("kubectl", "--kubeconfig", innerKubeconfigPath, "get", "nodes",
+			"-o", "jsonpath={.items[*].status.conditions[?(@.type==\"Ready\")].status}"))
+		return out, err == nil && strings.TrimSpace(out) == "True"
+	}); err != nil {
+		return err
+	}
+	nodesOut, err := utils.Run(exec.Command("kubectl", "--kubeconfig", innerKubeconfigPath, "get", "nodes"))
+	if err != nil {
+		return err
+	}
+	fmt.Println("--- kubectl get nodes (inner cluster) ---")
+	fmt.Println(nodesOut)
+
 	fmt.Println(ip)
+	fmt.Println("ICHOR_E2E_INNER_KUBECONFIG=" + innerKubeconfigPath)
+	fmt.Println("ICHOR_E2E_TALOSCONFIG=" + talosconfigPath)
 	if envFile := os.Getenv("GITHUB_ENV"); envFile != "" {
 		f, err := os.OpenFile(envFile, os.O_APPEND|os.O_WRONLY, 0o644)
 		if err != nil {
@@ -174,7 +320,8 @@ func up() error {
 		}
 		// We wrote to f, so a failed Close (e.g. a flush error) can mean the write never
 		// reached disk - that must surface, not be discarded.
-		if _, err := fmt.Fprintf(f, "ICHOR_E2E_TALOS_NODES=%s\n", ip); err != nil {
+		if _, err := fmt.Fprintf(f, "ICHOR_E2E_TALOS_NODES=%s\nICHOR_E2E_INNER_KUBECONFIG=%s\nICHOR_E2E_TALOSCONFIG=%s\n",
+			ip, innerKubeconfigPath, talosconfigPath); err != nil {
 			_ = f.Close()
 			return fmt.Errorf("writing GITHUB_ENV: %w", err)
 		}
@@ -186,6 +333,14 @@ func up() error {
 }
 
 func down() error {
+	if pid, err := os.ReadFile(portForwardPIDPath()); err == nil {
+		killPortForward(strings.TrimSpace(string(pid)))
+		_ = os.Remove(portForwardPIDPath())
+	}
+	if _, err := utils.Run(exec.Command("kubectl", "-n", namespace, "delete", "pod", relayName,
+		"--wait=false", "--ignore-not-found")); err != nil {
+		return fmt.Errorf("deleting the relay pod: %w", err)
+	}
 	if _, err := utils.Run(exec.Command("kubectl", "-n", namespace, "delete", "vm", vmName,
 		"--wait=true", "--timeout=120s", "--ignore-not-found")); err != nil {
 		return fmt.Errorf("deleting the VM: %w", err)
@@ -195,6 +350,81 @@ func down() error {
 		return fmt.Errorf("deleting the DataVolumes: %w", err)
 	}
 	return nil
+}
+
+// startRelay creates the relay pod pointed at nodeIP, waits for it to run, and starts a
+// detached `kubectl port-forward` to it that outlives this process - it has to stay up for
+// the lifetime of the whole e2e run, which is a separate `make` invocation.
+func startRelay(nodeIP string) error {
+	manifest := fmt.Sprintf(relayManifestTmpl, relayName, nodeIP)
+	cmd := exec.Command("kubectl", "apply", "-f", "-")
+	cmd.Stdin = strings.NewReader(manifest)
+	if _, err := utils.Run(cmd); err != nil {
+		return fmt.Errorf("creating the relay pod: %w", err)
+	}
+	if _, err := utils.Run(exec.Command("kubectl", "-n", namespace, "wait", "pod/"+relayName,
+		"--for=condition=Ready", "--timeout=60s")); err != nil {
+		return fmt.Errorf("waiting for the relay pod: %w", err)
+	}
+
+	dir, err := utils.GetProjectDir()
+	if err != nil {
+		return err
+	}
+	pf := exec.Command("kubectl", "-n", namespace, "port-forward", "pod/"+relayName,
+		relayLocalPort+":6443", "--address=127.0.0.1")
+	pf.Dir = dir
+	logFile, err := os.Create(filepath.Join(dir, "bin", "test-e2e-kubevirt.portforward.log"))
+	if err != nil {
+		return fmt.Errorf("creating port-forward log: %w", err)
+	}
+	pf.Stdout = logFile
+	pf.Stderr = logFile
+	pf.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	if err := pf.Start(); err != nil {
+		return fmt.Errorf("starting port-forward: %w", err)
+	}
+	if err := os.WriteFile(portForwardPIDPath(), []byte(fmt.Sprintf("%d", pf.Process.Pid)), 0o600); err != nil {
+		return fmt.Errorf("recording port-forward pid: %w", err)
+	}
+
+	_, err = pollFor("waiting for the port-forward tunnel to accept connections", 30*time.Second, func() (string, bool) {
+		conn, err := net.DialTimeout("tcp", "127.0.0.1:"+relayLocalPort, 2*time.Second)
+		if err != nil {
+			return "", false
+		}
+		_ = conn.Close()
+		return "", true
+	})
+	return err
+}
+
+func killPortForward(pid string) {
+	var p int
+	if _, err := fmt.Sscanf(pid, "%d", &p); err != nil || p <= 0 {
+		return
+	}
+	_ = syscall.Kill(p, syscall.SIGTERM)
+}
+
+func portForwardPIDPath() string {
+	dir, err := utils.GetProjectDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(dir, "bin", "test-e2e-kubevirt.portforward.pid")
+}
+
+func projectBin() (string, error) {
+	dir, err := utils.GetProjectDir()
+	if err != nil {
+		return "", err
+	}
+	bin := filepath.Join(dir, "bin")
+	if err := os.MkdirAll(bin, 0o755); err != nil {
+		return "", fmt.Errorf("creating %s: %w", bin, err)
+	}
+	return bin, nil
 }
 
 // pollFor retries check until it reports ready, returning its value, or fails after timeout.

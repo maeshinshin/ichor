@@ -100,16 +100,17 @@ test-e2e-nightly: test-e2e-prereqs manifests generate fmt vet ## Run the full (s
 # on a CI runner with no KubeVirt, and talosctl's qemu provisioner is meaningless on the
 # real cluster. So each harness gets its own setup/cleanup pair, each doing exactly one
 # thing and safe to call on its own - test-e2e itself never calls either, it only ever
-# runs against whatever KUBECONFIG and ICHOR_E2E_TALOS_NODES already point at.
+# runs against whatever KUBECONFIG, ICHOR_E2E_TALOS_NODES, ICHOR_E2E_INNER_KUBECONFIG and
+# ICHOR_E2E_TALOSCONFIG already point at.
 
 # --- KubeVirt harness (talos-cluster01, by hand or in CI against that cluster) ---
 
 .PHONY: setup-test-e2e-kubevirt
-setup-test-e2e-kubevirt: test-e2e-prereqs ## Boot the e2e Talos node as a KubeVirt VM; prints its address, export it as ICHOR_E2E_TALOS_NODES
+setup-test-e2e-kubevirt: test-e2e-prereqs ## Boot a single-node Talos control plane as a KubeVirt VM, configure and bootstrap it; export ICHOR_E2E_TALOS_NODES, ICHOR_E2E_INNER_KUBECONFIG and ICHOR_E2E_TALOSCONFIG
 	go run ./test/harness/kubevirt up
 
 .PHONY: cleanup-test-e2e-kubevirt
-cleanup-test-e2e-kubevirt: ## Tear down the VM and DataVolumes setup-test-e2e-kubevirt created; a no-op if there is nothing to tear down
+cleanup-test-e2e-kubevirt: ## Tear down the VM, its relay pod and port-forward, and the DataVolumes setup-test-e2e-kubevirt created; a no-op if there is nothing to tear down
 	go run ./test/harness/kubevirt down
 
 # --- talosctl-qemu harness (CI, GitHub's ubuntu-24.04 runners) ---

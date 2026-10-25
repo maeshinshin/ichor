@@ -14,8 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package talosctl runs talosctl against a Talos node's insecure maintenance API from a
-// one-shot Pod inside the cluster.
+// Package talosctl runs talosctl against a Talos node from a one-shot Pod inside the
+// cluster.
 //
 // Neither the workstation running `go test`/`go run` nor plain `kubectl port-forward` to
 // the node's pod can reach it: with KubeVirt's `bridge` binding the pod IP belongs to the
@@ -27,6 +27,7 @@ limitations under the License.
 package talosctl
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -41,39 +42,50 @@ import (
 // e2e nodes boot (ADR 0007 pins v1.14.3).
 const Image = "ghcr.io/siderolabs/talosctl:v1.14.3"
 
-const podManifestTmpl = `apiVersion: v1
-kind: Pod
-metadata:
-  name: %[1]s
-  namespace: %[2]s
-spec:
-  restartPolicy: Never
-  containers:
-    - name: talosctl
-      image: %[3]s
-      command: ["/talosctl", "get", "%[4]s", "-o", "json", "--insecure", "--nodes", "%[5]s"]
-`
-
-// Get runs `talosctl get <resource> -o json --insecure --nodes <node>` against node from a
-// one-shot Pod in namespace, and returns its raw (possibly multi-object) JSON output.
+// Get runs `talosctl get <resource>` against node's insecure maintenance API from a one-shot
+// Pod in namespace, and returns its raw (possibly multi-object) JSON output.
 func Get(namespace, node, resource string) (string, error) {
-	podName := fmt.Sprintf("talosctl-%s-%d", resource, time.Now().UnixNano())
-	manifest := fmt.Sprintf(podManifestTmpl, podName, namespace, Image, resource, node)
-	defer func() {
-		_, _ = utils.Run(exec.Command("kubectl", "-n", namespace, "delete", "pod", podName,
-			"--wait=false", "--ignore-not-found"))
-	}()
+	return run(namespace, []string{"get", resource, "-o", "json", "--insecure", "--nodes", node}, nil, time.Minute)
+}
 
-	cmd := exec.Command("kubectl", "apply", "-f", "-")
-	cmd.Stdin = strings.NewReader(manifest)
-	if _, err := utils.Run(cmd); err != nil {
-		return "", err
-	}
-	if _, err := utils.Run(exec.Command("kubectl", "-n", namespace, "wait", "pod/"+podName,
-		"--for=jsonpath={.status.phase}=Succeeded", "--timeout=60s")); err != nil {
-		return "", err
-	}
-	return utils.Run(exec.Command("kubectl", "-n", namespace, "logs", podName))
+// GetAuthenticated is Get against a configured node's authenticated API, using talosconfig
+// (an admin talosconfig's YAML, as produced by the config generator) instead of the insecure
+// maintenance service.
+func GetAuthenticated(namespace, node, resource string, talosconfig []byte) (string, error) {
+	return run(namespace,
+		[]string{"get", resource, "-o", "json", "--talosconfig", "/secrets/talosconfig", "--nodes", node},
+		map[string]string{"talosconfig": string(talosconfig)}, time.Minute)
+}
+
+// Apply applies machineConfig to node's insecure maintenance API, which installs Talos and
+// reboots into it (ADR 0007). It can take a while: the installer image has to be pulled
+// before the node can write it to disk.
+func Apply(namespace, node string, machineConfig []byte) (string, error) {
+	return run(namespace,
+		[]string{"apply-config", "--insecure", "--nodes", node, "-f", "/secrets/config.yaml"},
+		map[string]string{"config.yaml": string(machineConfig)}, 5*time.Minute)
+}
+
+// Bootstrap bootstraps etcd on node's authenticated API.
+func Bootstrap(namespace, node string, talosconfig []byte) (string, error) {
+	return run(namespace,
+		[]string{"bootstrap", "--talosconfig", "/secrets/talosconfig", "--nodes", node},
+		map[string]string{"talosconfig": string(talosconfig)}, time.Minute)
+}
+
+// Version runs the authenticated `talosctl version` (no --insecure) against node.
+func Version(namespace, node string, talosconfig []byte) (string, error) {
+	return run(namespace,
+		[]string{"version", "--talosconfig", "/secrets/talosconfig", "--nodes", node},
+		map[string]string{"talosconfig": string(talosconfig)}, time.Minute)
+}
+
+// Kubeconfig downloads the admin kubeconfig from node's authenticated API, unmerged.
+func Kubeconfig(namespace, node string, talosconfig []byte) ([]byte, error) {
+	out, err := run(namespace,
+		[]string{"kubeconfig", "-", "--merge=false", "--talosconfig", "/secrets/talosconfig", "--nodes", node, "--endpoints", node},
+		map[string]string{"talosconfig": string(talosconfig)}, time.Minute)
+	return []byte(out), err
 }
 
 // DecodeAll decodes the concatenated JSON objects talosctl prints for multi-instance
@@ -103,4 +115,103 @@ func SpecField(obj map[string]any, field string) any {
 func MetadataID(obj map[string]any) any {
 	metadata, _ := obj["metadata"].(map[string]any)
 	return metadata["id"]
+}
+
+// run creates a one-shot Pod in namespace running talosctl with args, optionally mounting
+// secretData (written to a throwaway Secret, one file per key under /secrets) read-only,
+// waits up to timeout for the pod to reach a terminal phase, and returns its combined
+// stdout/stderr. The Pod and any Secret are deleted before returning.
+func run(namespace string, args []string, secretData map[string]string, timeout time.Duration) (string, error) {
+	id := fmt.Sprintf("talosctl-%d", time.Now().UnixNano())
+
+	var secretName string
+	if len(secretData) > 0 {
+		secretName = id + "-secrets"
+		if err := applySecret(namespace, secretName, secretData); err != nil {
+			return "", fmt.Errorf("creating secret: %w", err)
+		}
+		defer deleteSecret(namespace, secretName)
+	}
+
+	cmd := exec.Command("kubectl", "apply", "-f", "-")
+	cmd.Stdin = strings.NewReader(podManifest(id, namespace, args, secretName))
+	if _, err := utils.Run(cmd); err != nil {
+		return "", err
+	}
+	defer func() {
+		_, _ = utils.Run(exec.Command("kubectl", "-n", namespace, "delete", "pod", id, "--wait=false", "--ignore-not-found"))
+	}()
+
+	phase, waitErr := waitTerminal(namespace, id, timeout)
+	logs, logErr := utils.Run(exec.Command("kubectl", "-n", namespace, "logs", id))
+	if waitErr != nil {
+		return logs, waitErr
+	}
+	if logErr != nil {
+		return "", logErr
+	}
+	if phase != "Succeeded" {
+		return logs, fmt.Errorf("talosctl %v failed (pod phase %s): %s", args, phase, logs)
+	}
+	return logs, nil
+}
+
+// waitTerminal polls the pod's phase until it reaches Succeeded or Failed, or times out.
+func waitTerminal(namespace, podName string, timeout time.Duration) (string, error) {
+	deadline := time.Now().Add(timeout)
+	for {
+		phase, _ := utils.Run(exec.Command("kubectl", "-n", namespace, "get", "pod", podName,
+			"-o", "jsonpath={.status.phase}"))
+		phase = strings.TrimSpace(phase)
+		if phase == "Succeeded" || phase == "Failed" {
+			return phase, nil
+		}
+		if time.Now().After(deadline) {
+			return phase, fmt.Errorf("pod %s did not reach a terminal phase within %s (last phase %q)", podName, timeout, phase)
+		}
+		time.Sleep(3 * time.Second)
+	}
+}
+
+// podManifest renders a one-shot talosctl Pod. When secretName is non-empty, that Secret
+// (already created in the same namespace) is mounted read-only at /secrets.
+func podManifest(podName, namespace string, args []string, secretName string) string {
+	cmdJSON, _ := json.Marshal(append([]string{"/talosctl"}, args...))
+
+	var mounts, volumes string
+	if secretName != "" {
+		mounts = "\n      volumeMounts:\n        - name: secrets\n          mountPath: /secrets\n          readOnly: true"
+		volumes = fmt.Sprintf("\n  volumes:\n    - name: secrets\n      secret:\n        secretName: %s", secretName)
+	}
+
+	return fmt.Sprintf(`apiVersion: v1
+kind: Pod
+metadata:
+  name: %s
+  namespace: %s
+spec:
+  restartPolicy: Never
+  containers:
+    - name: talosctl
+      image: %s
+      command: %s%s%s
+`, podName, namespace, Image, cmdJSON, mounts, volumes)
+}
+
+// applySecret creates an Opaque Secret named name in namespace with one base64-encoded data
+// entry per key in data.
+func applySecret(namespace, name string, data map[string]string) error {
+	var b strings.Builder
+	fmt.Fprintf(&b, "apiVersion: v1\nkind: Secret\nmetadata:\n  name: %s\n  namespace: %s\ntype: Opaque\ndata:\n", name, namespace)
+	for k, v := range data {
+		fmt.Fprintf(&b, "  %s: %s\n", k, base64.StdEncoding.EncodeToString([]byte(v)))
+	}
+	cmd := exec.Command("kubectl", "apply", "-f", "-")
+	cmd.Stdin = strings.NewReader(b.String())
+	_, err := utils.Run(cmd)
+	return err
+}
+
+func deleteSecret(namespace, name string) {
+	_, _ = utils.Run(exec.Command("kubectl", "-n", namespace, "delete", "secret", name, "--wait=false", "--ignore-not-found"))
 }

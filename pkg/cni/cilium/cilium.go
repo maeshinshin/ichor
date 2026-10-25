@@ -27,13 +27,23 @@ import (
 	"context"
 	"fmt"
 
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/utils/ptr"
 	sigsyaml "sigs.k8s.io/yaml"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/cni"
+	"github.com/maeshinshin/ichor/pkg/gitops"
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
+)
+
+// argoCDApplicationNamespace and argoCDDestinationServer are where the
+// cilium Application resource itself lives, and the in-cluster API server
+// address it targets -- the same two literals the Application's own
+// metadata.namespace and spec.destination.server carried before this was
+// a typed gitops.Application.
+const (
+	argoCDApplicationNamespace = "argocd"
+	argoCDDestinationServer    = "https://kubernetes.default.svc"
 )
 
 // namespace is where Cilium's chart installs, and where the live
@@ -93,7 +103,7 @@ func (Preset) BootstrapManifest(kubeProxy cni.KubeProxyMode) ([]byte, error) {
 // (argo-cd.readthedocs.io, "Sync Options", retrieved 2026-10-25) -- and the
 // Hubble CronJob setting already in Values (values.go), so Argo CD never
 // sees a diff Helm itself introduced.
-func (Preset) ArgoCDApplication(kubeProxy cni.KubeProxyMode) (*unstructured.Unstructured, error) {
+func (Preset) ArgoCDApplication(kubeProxy cni.KubeProxyMode) (*gitops.Application, error) {
 	if err := kubeProxy.Validate(); err != nil {
 		return nil, err
 	}
@@ -103,31 +113,25 @@ func (Preset) ArgoCDApplication(kubeProxy cni.KubeProxyMode) (*unstructured.Unst
 		return nil, fmt.Errorf("cilium: rendering Helm values: %w", err)
 	}
 
-	return &unstructured.Unstructured{Object: map[string]any{
-		"apiVersion": "argoproj.io/v1alpha1",
-		"kind":       "Application",
-		"metadata": map[string]any{
-			"name":      "cilium",
-			"namespace": "argocd",
+	app, err := gitops.New(gitops.Options{
+		Name:      "cilium",
+		Namespace: argoCDApplicationNamespace,
+		Source: &gitops.ApplicationSource{
+			RepoURL:        ChartRepoURL,
+			Chart:          ChartName,
+			TargetRevision: ChartVersion,
+			Helm:           &gitops.ApplicationSourceHelm{Values: string(valuesYAML)},
 		},
-		"spec": map[string]any{
-			"destination": map[string]any{
-				"server":    "https://kubernetes.default.svc",
-				"namespace": namespace,
-			},
-			"source": map[string]any{
-				"repoURL":        ChartRepoURL,
-				"chart":          ChartName,
-				"targetRevision": ChartVersion,
-				"helm": map[string]any{
-					"values": string(valuesYAML),
-				},
-			},
-			"syncPolicy": map[string]any{
-				"syncOptions": []any{"ServerSideApply=true", "CreateNamespace=true"},
-			},
-		},
-	}}, nil
+		Destination:      gitops.ApplicationDestination{Server: argoCDDestinationServer, Namespace: namespace},
+		ServerSideApply:  true,
+		ExtraSyncOptions: []string{"CreateNamespace=true"},
+		SyncWave:         gitops.SyncWaveCNI,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("cilium: building Argo CD Application: %w", err)
+	}
+
+	return app, nil
 }
 
 // SupportsKubeProxyReplacement is always true: Cilium can run without

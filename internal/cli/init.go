@@ -127,7 +127,7 @@ func init() {
 
 	flags.StringVar(&initOpts.GitOpsDir, "gitops-dir", "", "write the GitOps repository skeleton to this local directory")
 
-	for _, name := range []string{flagCluster, "cni", "endpoint-address", "node-endpoint", "talos-version", "version-contract", "schedulable"} {
+	for _, name := range []string{flagCluster, cniKey, "endpoint-address", "node-endpoint", "talos-version", "version-contract", "schedulable"} {
 		_ = initCmd.MarkFlagRequired(name)
 	}
 }

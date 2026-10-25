@@ -19,6 +19,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"strings"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -26,7 +27,7 @@ import (
 )
 
 func TestBuildRepoSecret_NoCredentialIsNilNotEmpty(t *testing.T) {
-	secret, err := buildRepoSecret("argocd", "https://example.invalid/repo.git", "", "")
+	secret, err := buildRepoSecret("argocd", testRepoURL, "", "")
 	if err != nil {
 		t.Fatalf("buildRepoSecret: %v", err)
 	}
@@ -37,7 +38,7 @@ func TestBuildRepoSecret_NoCredentialIsNilNotEmpty(t *testing.T) {
 }
 
 func TestBuildRepoSecret_WithCredential(t *testing.T) {
-	secret, err := buildRepoSecret("argocd", "https://example.invalid/repo.git", "alice", "token123")
+	secret, err := buildRepoSecret("argocd", testRepoURL, "alice", "token123")
 	if err != nil {
 		t.Fatalf("buildRepoSecret: %v", err)
 	}
@@ -103,5 +104,30 @@ func TestSkeletonWrite_RefusesSecret(t *testing.T) {
 
 	if err := skeleton.Write(t.TempDir()); err == nil {
 		t.Fatal("expected pkg/gitops.WriteObject to refuse a Secret, got nil error")
+	}
+}
+
+// TestInitArgoCD_DisclaimsArgoCDItselfIsNotInstalled proves ADR 0019's
+// decision not to install Argo CD itself is surfaced to the operator,
+// not just recorded in a doc nobody reads at the moment it matters.
+func TestInitArgoCD_DisclaimsArgoCDItselfIsNotInstalled(t *testing.T) {
+	cluster := newTestCluster()
+	machine := newTestMachine(cluster.Name)
+
+	k8sClient := fake.NewClientBuilder().WithScheme(newTestScheme(t)).Build()
+
+	opts := validInitOptions()
+	opts.ArgoCD = true
+	opts.RepoURL = testRepoURL
+
+	var stderr bytes.Buffer
+
+	if err := initArgoCD(context.Background(), opts, cluster, machine, nil, nil, k8sClient, &stderr); err != nil {
+		t.Fatalf("initArgoCD: %v", err)
+	}
+
+	msg := stderr.String()
+	if !strings.Contains(msg, "did NOT install") && !strings.Contains(msg, "did not install") {
+		t.Fatalf("expected a clear disclaimer that Argo CD itself was not installed, got: %s", msg)
 	}
 }

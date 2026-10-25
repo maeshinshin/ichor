@@ -25,16 +25,15 @@ import (
 func validInitPlanInput() initPlanInput {
 	return initPlanInput{
 		Cluster:           testInitClusterName,
-		Namespace:         "default",
-		Preset:            "standard",
+		Namespace:         ichorControllerNamespace,
+		Preset:            defaultPreset,
 		CNIPreset:         testCNICilium,
 		EndpointType:      testEndpointTypeVIP,
 		EndpointAddress:   testEndpointAddr,
 		TalosVersion:      testTalosVersion,
 		KubernetesVersion: "v1.33.0",
 		VersionContract:   "v1.14",
-		ControlPlaneCount: 1,
-		Schedulable:       testSchedulableTrue,
+		InstallDisk:       "/dev/sda",
 	}
 }
 
@@ -47,11 +46,11 @@ func TestBuildInitPlan_Success(t *testing.T) {
 	}
 
 	if warn.Len() != 0 {
-		t.Fatalf("expected no warning for a vip endpoint, got: %s", warn.String())
+		t.Fatalf("expected no warning for a vip endpoint in the controller's own namespace, got: %s", warn.String())
 	}
 
-	if cluster.Name != testInitClusterName || cluster.Namespace != "default" {
-		t.Fatalf("cluster name/namespace = %q/%q, want my-cluster/default", cluster.Name, cluster.Namespace)
+	if cluster.Name != testInitClusterName || cluster.Namespace != ichorControllerNamespace {
+		t.Fatalf("cluster name/namespace = %q/%q, want %s/%s", cluster.Name, cluster.Namespace, testInitClusterName, ichorControllerNamespace)
 	}
 
 	if cluster.Spec.SecretsRef.Name != testInitClusterName+"-secrets" {
@@ -60,6 +59,49 @@ func TestBuildInitPlan_Success(t *testing.T) {
 
 	if cluster.Spec.CNI.Preset != testCNICilium || cluster.Spec.CNI.KubeProxy != "enabled" {
 		t.Fatalf("cni = %+v, want preset cilium, kubeProxy enabled", cluster.Spec.CNI)
+	}
+
+	if cluster.Spec.ControlPlane.Count != 3 || cluster.Spec.ControlPlane.Schedulable != schedulableFalse {
+		t.Fatalf("controlPlane = %+v, want standard's count=3, schedulable=false", cluster.Spec.ControlPlane)
+	}
+}
+
+// TestBuildInitPlan_PresetTopology proves each of the four presets sets
+// the control-plane count and schedulable value architecture.md's
+// "Nodes" section pairs it with.
+func TestBuildInitPlan_PresetTopology(t *testing.T) {
+	for preset, want := range presetTopology {
+		t.Run(preset, func(t *testing.T) {
+			in := validInitPlanInput()
+			in.Preset = preset
+
+			var warn bytes.Buffer
+
+			cluster, err := buildInitPlan(in, &warn)
+			if err != nil {
+				t.Fatalf("buildInitPlan(%s): %v", preset, err)
+			}
+
+			if cluster.Spec.ControlPlane.Count != want.ControlPlaneCount || cluster.Spec.ControlPlane.Schedulable != want.Schedulable {
+				t.Fatalf("buildInitPlan(%s) controlPlane = %+v, want %+v", preset, cluster.Spec.ControlPlane, want)
+			}
+		})
+	}
+}
+
+// TestPresetTopology_NeverRejectsSchedulableWithNoWorkers is the
+// structural check presetTopology's own doc comment promises: no preset
+// in the table pairs schedulable=false with a topology that never adds
+// workers (architecture.md's "Making control planes unschedulable with
+// zero workers is rejected"). If this ever fails, buildInitPlan's own
+// defensive check (TestBuildInitPlan_Errors' "would-be unschedulable
+// preset with no workers" case) is the only thing stopping that preset
+// from shipping a cluster that could never run a workload.
+func TestPresetTopology_NeverRejectsSchedulableWithNoWorkers(t *testing.T) {
+	for preset, top := range presetTopology {
+		if top.Schedulable == schedulableFalse && !presetHasWorkers(preset) {
+			t.Fatalf("preset %q is schedulable=false but presetHasWorkers says it never gets workers", preset)
+		}
 	}
 }
 
@@ -92,8 +134,7 @@ func TestBuildInitPlan_Errors(t *testing.T) {
 		{"invalid cni", func(in *initPlanInput) { in.CNIPreset = "calico" }},
 		{"invalid endpoint type", func(in *initPlanInput) { in.EndpointType = "carrier-pigeon" }},
 		{"empty endpoint address", func(in *initPlanInput) { in.EndpointAddress = "" }},
-		{"invalid control plane count", func(in *initPlanInput) { in.ControlPlaneCount = 2 }},
-		{"invalid schedulable", func(in *initPlanInput) { in.Schedulable = "maybe" }},
+		{"empty install disk", func(in *initPlanInput) { in.InstallDisk = "" }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			in := validInitPlanInput()
@@ -105,5 +146,53 @@ func TestBuildInitPlan_Errors(t *testing.T) {
 				t.Fatal("expected an error, got nil")
 			}
 		})
+	}
+}
+
+// TestBuildInitPlan_RejectsUnschedulableWithNoWorkers is the direct,
+// reachable proof of architecture.md's "Making control planes
+// unschedulable with zero workers is rejected": presetTopology's own
+// four rows never produce this (every schedulable=false entry has
+// presetHasWorkers true), so this calls buildInitPlan's actual
+// enforcement point by adding a fifth, deliberately invalid entry for
+// the duration of the test, standing in for a future preset that got
+// the pairing wrong.
+func TestBuildInitPlan_RejectsUnschedulableWithNoWorkers(t *testing.T) {
+	const badPreset = "test-only-unschedulable-no-workers"
+
+	presetTopology[badPreset] = topology{ControlPlaneCount: 1, Schedulable: schedulableFalse}
+	t.Cleanup(func() { delete(presetTopology, badPreset) })
+
+	in := validInitPlanInput()
+	in.Preset = badPreset
+
+	var warn bytes.Buffer
+
+	if _, err := buildInitPlan(in, &warn); err == nil {
+		t.Fatal("expected buildInitPlan to reject an unschedulable preset with no workers, got nil error")
+	}
+}
+
+// TestBuildInitPlan_NonControllerNamespaceWarnsButSucceeds proves
+// ADR 0019's namespace decision is enforced as a warning, not a
+// rejection: --namespace can still differ from ichorControllerNamespace,
+// but the operator is told why that is almost always wrong.
+func TestBuildInitPlan_NonControllerNamespaceWarnsButSucceeds(t *testing.T) {
+	in := validInitPlanInput()
+	in.Namespace = "default"
+
+	var warn bytes.Buffer
+
+	cluster, err := buildInitPlan(in, &warn)
+	if err != nil {
+		t.Fatalf("buildInitPlan: %v", err)
+	}
+
+	if cluster.Namespace != "default" {
+		t.Fatalf("cluster.Namespace = %q, want default", cluster.Namespace)
+	}
+
+	if !strings.Contains(warn.String(), ichorControllerNamespace) {
+		t.Fatalf("expected a warning naming %q, got: %s", ichorControllerNamespace, warn.String())
 	}
 }

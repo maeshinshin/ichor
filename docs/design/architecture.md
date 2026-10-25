@@ -283,14 +283,24 @@ ichor init --preset standard --cni cilium [--argocd --repo URL --path clusters/N
    (a VIP is recommended even for one node, because changing the endpoint
    later means re-issuing certificates), disk roles for the first node.
 3. Apply the rendered config to the first control plane. Its
-   `cluster.inlineManifests` carry Ichor itself, the CNI (unless flannel), and,
-   with `--argocd`, Argo CD plus a root Application pointing at the repo. The
-   repo credentials go in as a Secret from the CLI, never into Git.
+   `cluster.inlineManifests` carry only the CNI (unless flannel) -- the one
+   component Kubernetes itself cannot start without, since nodes never go
+   Ready and nothing can be scheduled before it exists. Ichor itself is not
+   inlined: once step 4 below gets a working kubeconfig, Ichor applies its
+   own install manifest (CRDs, RBAC, the controller Deployment) directly
+   through the API server, the same build's binary carries it (no fetch, no
+   version to get wrong), and a failure there is an ordinary, visible error
+   instead of something buried in Talos's boot log. Argo CD itself is never
+   installed by `init` either -- deciding which third-party release to fetch
+   and trust during bootstrap is not this command's call to make; with
+   `--argocd` it only prepares the root Application (pointing at the repo)
+   and the repository credentials, as a Secret from the CLI, never into Git,
+   ready for whenever Argo CD is installed by some other means.
 4. Bootstrap etcd, fetch the kubeconfig, store the bundle as a Secret.
 5. Create the CRs. With `--gitops-dir`, also write them as YAML and generate
    the repository skeleton described below.
-6. Hand over: once Argo CD reports each bootstrapped component Synced and
-   Healthy, remove it from `inlineManifests`.
+6. Hand over: once Argo CD reports the CNI Synced and Healthy, remove it from
+   `inlineManifests`.
 
 Adding later nodes goes through the normal approval flow; `init` is the
 special case of approving the first control plane. `ichor adopt` brings an
@@ -345,40 +355,31 @@ Break-glass exists for incidents: a permission-gated direct write that also
 opens the matching PR, so Git catches up. Ichor never touches an Application's
 sync policy.
 
-Hand-over is one mechanism with a component registry, not three special
-cases. Each component declares its main workloads, how it gets in, and an
-Argo CD Application template that matches what went in (same release name,
-namespace and values) so adoption produces no diff. Hand-over can be
-automatic, manual (`ichor gitops handoff <component>`), or disabled when
-Argo CD isn't used.
+Hand-over. The CNI is the only component that follows the inlined-then-removed
+path: injected through `inlineManifests` at bootstrap (it has to be, since
+nothing can schedule before it exists), then adopted by Argo CD, then removed
+from `inlineManifests` once Argo CD reports it Synced and Healthy. It declares
+its main workloads and emits an Argo CD Application template that matches
+what was injected (same release name, namespace and values) so adoption
+produces no diff. Removing the entry matters: Talos re-applies bootstrap
+manifests during Kubernetes upgrades, and a stale entry would roll the CNI
+back. Hand-over can be automatic, manual (`ichor gitops handoff cni`), or
+disabled when Argo CD isn't used.
 
-What varies per component is only how it is injected, and that is a field on
-the registry entry rather than a fork in the logic:
+Ichor itself and Argo CD do not go through this path (`### Bootstrap` above):
+Ichor is applied once, directly, through the API server, never through
+`inlineManifests`, so it has no stale-entry risk to guard against on a
+Kubernetes upgrade; Argo CD is never installed by Ichor at all. "One
+mechanism with a component registry, not three special cases" turned out to
+describe only one component once the other two were actually built -- see
+ADR 0019.
 
-- **CNI** goes in through `cluster.inlineManifests`, because it is the one
-  component that has to exist before the API server is usable — without it
-  nodes never become Ready and nothing can be applied.
-- **Ichor itself** is applied after bootstrap through the kubeconfig step 4
-  already fetched, from a plain-YAML installer embedded in the CLI at build
-  time. Its Deployment simply stays Pending until the CNI is up. Two reasons
-  over `inlineManifests`: a failed apply comes back as an error instead of
-  being buried in Talos's boot log, and the stale-entry hazard below never
-  applies to it at all. The CLI installs the Ichor it was built from, which
-  is also what air-gap needs.
-- **Argo CD** Ichor does not install. Fetching and pinning a third party's
-  install manifest during bootstrap would make Ichor decide which build of
-  someone else's software a cluster runs. `--argocd` creates the repository
-  credentials Secret and the root Application and says plainly that Argo CD
-  itself is not there yet.
-
-Removing the entry is the step that matters, and only for what was injected:
-Talos re-applies bootstrap manifests during Kubernetes upgrades, so a stale
-`inlineManifests` entry rolls that component back. Verified in Talos v1.14.3:
-`ManifestApplyController` server-side applies and never deletes, and it
-refuses to apply over an object carrying a *foreign* inventory annotation
-rather than fighting for it — but Argo CD's tracking marker is not that
-annotation, so adoption alone does not stop the re-apply. Handing over
-without removing the entry looks finished and is not.
+Why removing the entry is what matters, verified in Talos v1.14.3:
+`ManifestApplyController` only ever server-side applies and has no delete
+path, and it refuses to apply over an object carrying a *foreign* inventory
+annotation rather than fighting for it -- but Argo CD's tracking marker is
+not that annotation, so adoption alone does not stop the re-apply. Handing
+over without removing the entry looks finished and is not.
 
 Repository skeleton (`ichor gitops export`):
 

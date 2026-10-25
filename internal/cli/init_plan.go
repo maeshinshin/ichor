@@ -36,11 +36,68 @@ const cniPatchLayer = "cluster"
 // apps/cni/ directory.
 const cniKey = "cni"
 
-// supportedPreset is the only topology preset this phase implements
-// (architecture.md's "Bootstrap" names `--preset standard`; the roadmap's
-// other presets are future work). Anything else is a clear, immediate
-// error rather than a silently wrong topology.
-const supportedPreset = "standard"
+// defaultPreset is the preset architecture.md's "Nodes" section marks
+// "recommended" and the one `--preset`'s flag default uses.
+const defaultPreset = "standard"
+
+// ichorControllerNamespace is the fixed namespace Ichor's own install
+// manifest (internal/installmanifest) always deploys the controller
+// into -- config/manager's kustomize base names it literally, matching
+// the RBAC markers' own "ichor-system" literal (ADR 0011). init's
+// --namespace flag defaults to this and warns if overridden, since a
+// Secret or CR created anywhere else is one the deployed controller
+// cannot see (it resolves the bundle Secret in its own namespace, not
+// the TalosCluster's).
+const ichorControllerNamespace = "ichor-system"
+
+// schedulableTrue and schedulableFalse are TalosClusterControlPlane.
+// Schedulable's two valid string values (ADR 0008: no default).
+const (
+	schedulableTrue  = "true"
+	schedulableFalse = "false"
+)
+
+// topology is one entry of presetTopology: the control-plane count and
+// schedulable value a preset implies.
+type topology struct {
+	ControlPlaneCount int32
+	Schedulable       string // schedulableTrue or schedulableFalse
+}
+
+// presetTopology maps each of the four topology presets
+// architecture.md's "Nodes" section names to the control-plane count and
+// schedulable value it implies:
+//
+//	single      (1+0, schedulable)
+//	compact-ha  (3+0, schedulable)
+//	standard    (3+n, tainted) -- recommended
+//	large       (5+n, tainted)
+//
+// "+0"/"+n" is workers: single and compact-ha never have any (the control
+// plane is the whole cluster, so it has to accept workloads or nothing
+// could ever run); standard and large are sized for separate worker
+// nodes added later through the normal approval flow, so their control
+// planes are tainted. This pairing is also what keeps this table from
+// ever producing the one combination the design explicitly rejects --
+// "making control planes unschedulable with zero workers" -- every
+// schedulable=false entry here is one whose preset promises workers;
+// TestPresetTopology_NeverRejectsSchedulableWithNoWorkers checks the
+// table itself, not just today's four rows, stays that way.
+var presetTopology = map[string]topology{
+	"single":     {ControlPlaneCount: 1, Schedulable: schedulableTrue},
+	"compact-ha": {ControlPlaneCount: 3, Schedulable: schedulableTrue},
+	"standard":   {ControlPlaneCount: 3, Schedulable: schedulableFalse},
+	"large":      {ControlPlaneCount: 5, Schedulable: schedulableFalse},
+}
+
+// presetHasWorkers reports whether preset's topology is sized for
+// separate worker nodes ("+n" above) -- the only presets allowed to pair
+// with schedulable=false, since a control plane that is both
+// unschedulable and the only kind of node in the cluster could never run
+// a workload.
+func presetHasWorkers(preset string) bool {
+	return preset == "standard" || preset == "large"
+}
 
 // initPlanInput bundles the raw flag values initCmd's RunE collects, so
 // buildInitPlan is driven by plain values a test can construct directly,
@@ -59,8 +116,11 @@ type initPlanInput struct {
 	KubernetesVersion string
 	VersionContract   string
 
-	ControlPlaneCount int32
-	Schedulable       string // "true" or "false", ADR 0008: no default
+	// InstallDisk is the first node's install disk (machine.install.disk,
+	// the "system" role -- TalosMachineSpec still carries no field for
+	// the other three roles; see buildInitPlan's doc comment). Required:
+	// without it the node cannot install itself non-interactively.
+	InstallDisk string
 }
 
 // secretsRefName is the Secret name buildInitPlan assigns to
@@ -73,24 +133,42 @@ func secretsRefName(cluster string) string {
 
 // buildInitPlan implements Bootstrap step 2, "settle the shape of the
 // cluster": it validates in and returns the TalosCluster object init will
-// render against and create. It writes a warning (never an error) to warn
-// when the endpoint type is not "vip", per architecture.md's "Design":
-// "(a VIP is recommended even for one node, because changing the endpoint
-// later means re-issuing certificates)" -- recommended, not required, so
-// this never rejects a valid-but-not-recommended choice.
+// render against and create, with controlPlane.count/schedulable derived
+// from --preset (architecture.md's "Nodes": "the topology preset that
+// carries the intent is a flag on ichor init, not a field (ADR 0008);
+// init sets it from the preset"). It writes a warning (never an error) to
+// warn when the endpoint type is not "vip" or the namespace is not
+// ichorControllerNamespace, per architecture.md's "Design" ("a VIP is
+// recommended... because changing the endpoint later means re-issuing
+// certificates") and ADR 0019 (the fixed controller namespace) --
+// recommended, not required, so this never rejects a valid-but-unusual
+// choice on its own.
 //
-// Disk roles for the first node (also named in step 2) are not set here:
-// TalosMachineSpec carries no disk field yet (the allow-list another unit
-// is extending does not cover volumes), and pkg/render's own base config
-// does not set machine.install either (its ValidateAsClient runtime mode
-// explicitly sets RequiresInstall to false, "Ichor does not render
-// disk/install configuration yet"). The node this command targets must
-// already know its own install disk -- e.g. a `talos.install.disk=`
-// kernel argument on the ISO/Image Factory image it booted -- since
-// nothing on the Ichor side supplies one yet.
+// Of step 2's named disk roles, only "system" (the install disk) is set
+// here -- it is folded into the legacy Config patch alongside the
+// cluster.inlineManifests entry, in buildInlineManifestsPatch, since
+// machine.install and cluster.inlineManifests are both on the same
+// document. The other three roles (ephemeral/userVolume/storage,
+// VolumeConfigV1Alpha1/UserVolumeConfigV1Alpha1/RawVolumeConfigV1Alpha1)
+// are now representable in the mirror type's allow-list, but init does
+// not expose flags for them yet: a useful per-disk role selection UI is
+// a larger, separate piece of work than fits alongside finishing this
+// phase, and leaving it unbuilt is honest; inventing a narrow one-disk
+// flag for each just to say something is wired would not actually cover
+// what an operator needs. See ADR 0019.
 func buildInitPlan(in initPlanInput, warn io.Writer) (*ichorv1alpha1.TalosCluster, error) {
-	if in.Preset != supportedPreset {
-		return nil, fmt.Errorf("init: --preset %q is not supported yet; only %q is", in.Preset, supportedPreset)
+	top, ok := presetTopology[in.Preset]
+	if !ok {
+		return nil, fmt.Errorf("init: --preset %q is invalid: must be one of single, compact-ha, standard (recommended) or large", in.Preset)
+	}
+
+	if top.Schedulable == schedulableFalse && !presetHasWorkers(in.Preset) {
+		// Unreachable through presetTopology's own four rows today (see
+		// its doc comment); kept as the actual enforcement point in case
+		// that table is ever edited incorrectly, so the rejection
+		// architecture.md requires has somewhere real to live.
+		return nil, fmt.Errorf(
+			"init: preset %q would make control planes unschedulable with no workers ever added; rejected", in.Preset)
 	}
 
 	switch in.CNIPreset {
@@ -116,16 +194,15 @@ func buildInitPlan(in initPlanInput, warn io.Writer) (*ichorv1alpha1.TalosCluste
 		return nil, fmt.Errorf("init: --endpoint-address is required")
 	}
 
-	switch in.ControlPlaneCount {
-	case 1, 3, 5:
-	default:
-		return nil, fmt.Errorf("init: --control-plane-count %d is invalid: must be 1, 3 or 5", in.ControlPlaneCount)
+	if in.Namespace != ichorControllerNamespace {
+		_, _ = fmt.Fprintf(warn,
+			"warning: --namespace %q is not %q. Ichor's own install manifest always deploys the "+
+				"controller to %q; a Secret or CR created elsewhere will not be visible to it.\n",
+			in.Namespace, ichorControllerNamespace, ichorControllerNamespace)
 	}
 
-	switch in.Schedulable {
-	case "true", "false":
-	default:
-		return nil, fmt.Errorf("init: --schedulable %q is invalid: must be %q or %q", in.Schedulable, "true", "false")
+	if in.InstallDisk == "" {
+		return nil, fmt.Errorf("init: --install-disk is required")
 	}
 
 	return &ichorv1alpha1.TalosCluster{
@@ -136,7 +213,7 @@ func buildInitPlan(in initPlanInput, warn io.Writer) (*ichorv1alpha1.TalosCluste
 			KubernetesVersion: in.KubernetesVersion,
 			VersionContract:   in.VersionContract,
 			SecretsRef:        corev1.LocalObjectReference{Name: secretsRefName(in.Cluster)},
-			ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: in.ControlPlaneCount, Schedulable: in.Schedulable},
+			ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: top.ControlPlaneCount, Schedulable: top.Schedulable},
 			CNI:               ichorv1alpha1.TalosClusterCNI{Preset: in.CNIPreset, KubeProxy: "enabled"},
 		},
 	}, nil

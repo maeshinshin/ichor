@@ -80,6 +80,10 @@ const (
 	testInitMachineUUID = "uuid-node-a"
 	testInitClusterName = "my-cluster"
 	testCNICilium       = "cilium"
+
+	// testRepoURL is a credential-free, unreachable (.invalid TLD) repo
+	// URL shared by every --argocd test fixture.
+	testRepoURL = "https://example.invalid/repo.git"
 )
 
 func newTestBundle(t *testing.T) *secrets.Bundle {
@@ -244,18 +248,34 @@ func validInitOptions() initOptions {
 	return initOptions{
 		Cluster:           testInitClusterName,
 		Namespace:         testNamespace,
-		Preset:            "standard",
+		Preset:            defaultPreset,
 		CNIPreset:         testCNICilium,
 		EndpointType:      testEndpointTypeVIP,
 		EndpointAddress:   testEndpointAddr,
 		TalosVersion:      testTalosVersion,
 		KubernetesVersion: "v1.33.0",
 		VersionContract:   testVersionContract,
-		ControlPlaneCount: 1,
-		Schedulable:       testSchedulableTrue,
+		InstallDisk:       "/dev/sda",
 		NodeEndpoint:      "10.0.0.10:50000",
 	}
 }
+
+// testIchorManifest stands in for installmanifest.Manifest in tests: a
+// real (if tiny), decodable, non-placeholder multi-document manifest, so
+// applyIchorManifest's own logic -- decode, create each object, refuse
+// the placeholder -- is exercised the same way the real one would be,
+// without this test package needing the installembed build tag.
+const testIchorManifest = `apiVersion: v1
+kind: Namespace
+metadata:
+  name: ichor-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ichor-controller
+  namespace: ichor-system
+`
 
 // newFakeInitDeps builds an initDeps wired to fakes: identity always
 // succeeds with a fixed UUID, maintenance apply and bootstrap are
@@ -278,12 +298,13 @@ func newFakeInitDeps(t *testing.T, k8sClient client.Client) (
 		DialAdmin: func(context.Context, *ichorv1alpha1.TalosCluster, string, *secrets.Bundle) (bootstrapClient, error) {
 			return boot, nil
 		},
-		NewK8sClient: func([]byte) (client.Client, error) { return k8sClient, nil },
-		Stdout:       &bytes.Buffer{},
-		Stderr:       &bytes.Buffer{},
-		Stdin:        strings.NewReader(""),
-		AssumeYes:    true,
-		Output:       outputYAML,
+		NewK8sClient:  func([]byte) (client.Client, error) { return k8sClient, nil },
+		IchorManifest: []byte(testIchorManifest),
+		Stdout:        &bytes.Buffer{},
+		Stderr:        &bytes.Buffer{},
+		Stdin:         strings.NewReader(""),
+		AssumeYes:     true,
+		Output:        outputYAML,
 	}
 
 	return deps, maint, boot

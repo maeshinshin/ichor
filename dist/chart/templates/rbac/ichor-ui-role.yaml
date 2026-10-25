@@ -27,10 +27,19 @@ rules:
   - ichor.maesh.dev
   resources:
   - talosclusters
-  - talosconfigpatches
   verbs:
   - get
   - list
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosconfigpatches
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - update
 - apiGroups:
   - ichor.maesh.dev
   resources:

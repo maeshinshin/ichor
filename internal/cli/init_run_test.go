@@ -60,6 +60,13 @@ func TestRunInit_Success(t *testing.T) {
 		t.Fatalf("expected exactly one non-empty insecure apply, got callCount=%d len=%d", maint.callCount, len(maint.applied))
 	}
 
+	// Ichor's own install manifest (testIchorManifest) was applied through
+	// kubeconfig, not inlined into the node's boot config.
+	var ns corev1.Namespace
+	if err := k8sClient.Get(context.Background(), types.NamespacedName{Name: ichorControllerNamespace}, &ns); err != nil {
+		t.Fatalf("expected Ichor's own install manifest to have been applied: %v", err)
+	}
+
 	if !boot.bootstrapCalled {
 		t.Fatal("expected Bootstrap to be called")
 	}
@@ -110,8 +117,10 @@ func TestRunInit_Success(t *testing.T) {
 	}
 }
 
-// TestRunInit_Flannel proves architecture.md's "unless flannel": no
-// TalosConfigPatch is created for the CNI when the preset is flannel.
+// TestRunInit_Flannel proves architecture.md's "unless flannel": the
+// CNI itself contributes no TalosConfigPatch when the preset is
+// flannel. The one patch init always creates regardless of CNI --
+// carrying the install disk -- still shows up.
 func TestRunInit_Flannel(t *testing.T) {
 	withTempHome(t)
 
@@ -130,8 +139,16 @@ func TestRunInit_Flannel(t *testing.T) {
 		t.Fatalf("listing TalosConfigPatches: %v", err)
 	}
 
-	if len(patches.Items) != 0 {
-		t.Fatalf("expected no TalosConfigPatch for flannel, got %+v", patches.Items)
+	if len(patches.Items) != 1 {
+		t.Fatalf("expected exactly one TalosConfigPatch (install disk, no CNI content) for flannel, got %+v", patches.Items)
+	}
+
+	if patches.Items[0].Spec.Documents[0].Config.ClusterConfig.ClusterInlineManifests != nil {
+		t.Fatalf("expected no inline manifests for flannel, got %+v", patches.Items[0].Spec.Documents[0].Config.ClusterConfig)
+	}
+
+	if got := patches.Items[0].Spec.Documents[0].Config.MachineConfig.MachineInstall.InstallDisk; got != opts.InstallDisk {
+		t.Fatalf("installDisk = %q, want %q", got, opts.InstallDisk)
 	}
 }
 
@@ -162,7 +179,7 @@ func TestRunInit_GitOpsDirWritesSkeleton(t *testing.T) {
 
 	opts := validInitOptions()
 	opts.ArgoCD = true
-	opts.RepoURL = "https://example.invalid/repo.git"
+	opts.RepoURL = testRepoURL
 	opts.GitOpsDir = gitopsDir
 
 	if err := runInit(context.Background(), opts, deps); err != nil {

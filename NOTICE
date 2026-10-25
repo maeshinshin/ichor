@@ -22,6 +22,10 @@ config/crd/bases/ichor.maesh.dev_talosconfigpatches.yaml
 dist/chart/templates/crd/talosclusters.ichor.maesh.dev.yaml
 dist/chart/templates/crd/talosconfigpatches.ichor.maesh.dev.yaml
 
+The install manifest embedded in the ichor command and in the installer
+image contains the two CustomResourceDefinitions above and is covered in the
+same way.
+
 Source code for the MPL-2.0 covered files in this distribution is available
 at https://github.com/maeshinshin/ichor, at the Git tag that matches the
 version of the artifact (a release archive, a container image or the Helm

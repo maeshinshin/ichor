@@ -10,12 +10,17 @@ export default tseslint.config(
   js.configs.recommended,
   tseslint.configs.recommended,
   {
-    // src/lib/radix is preactcn's vendored Radix-for-Preact interop shim
-    // (installed by `npx shadcn add`, not hand-written); its generic
-    // ref-forwarding needs `any` and isn't ours to restyle.
-    files: ['src/lib/radix/**/*.{ts,tsx}'],
+    // src/lib/radix (preactcn's vendored Radix-for-Preact interop shim) and
+    // src/components/ui (the preactcn components themselves) are both
+    // written by `npx shadcn add`, never by hand - generic ref-forwarding,
+    // a documented prop-spread cast, and an internal collection type all
+    // need rules this project would otherwise enforce, and none of it is
+    // ours to restyle.
+    files: ['src/lib/radix/**/*.{ts,tsx}', 'src/components/ui/**/*.{ts,tsx}'],
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-empty-object-type': 'off',
+      '@typescript-eslint/no-unused-vars': 'off',
     },
   },
 )

@@ -51,7 +51,7 @@ const (
 // DiscoveryReconciler turns a maintenance-mode node's hardware identity into
 // a pending, unapproved TalosMachine (docs/design/architecture.md "Nodes":
 // "The controller reads hardware identity ... and creates a pending
-// TalosMachine"). It never sets TalosMachineSpec.Approved, so a discovered
+// TalosMachine"). It leaves TalosMachineSpec.ApprovalState at its "pending" default, so a discovered
 // machine gets no configuration applied until a human approves it --
 // TalosMachineReconciler's own first line already refuses to touch an
 // unapproved machine, so that guarantee lives in one place, not two.

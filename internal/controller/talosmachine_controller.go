@@ -61,8 +61,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -147,6 +149,13 @@ type TalosMachineReconciler struct {
 	TalosClient func(
 		ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, bundle *secrets.Bundle,
 	) (TalosClient, error)
+
+	// KubeClient drains a control-plane TalosMachine's Node during removal
+	// (removal.go). nil skips draining rather than failing the reconcile:
+	// the quorum/last-control-plane/count checks that actually gate removal
+	// never touch this field, so a cluster without it wired up still gets
+	// the safety guarantee, just without the drain step.
+	KubeClient kubernetes.Interface
 }
 
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosmachines,verbs=get;list;watch;create;update;patch;delete
@@ -156,6 +165,10 @@ type TalosMachineReconciler struct {
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosconfigpatches,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,verbs=get;list;watch
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch;patch
+// +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;delete
+// +kubebuilder:rbac:groups="",resources=pods/eviction,verbs=create
+// +kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;list
 
 // Reconcile implements design 5.6's five numbered steps for one
 // TalosMachine. A machine that isn't approved is left untouched entirely --
@@ -169,8 +182,20 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	if !m.DeletionTimestamp.IsZero() {
+		return ctrl.Result{}, r.reconcileRemoval(ctx, &m)
+	}
+
 	if !m.Spec.IsApproved() {
 		return ctrl.Result{}, nil
+	}
+
+	// Only an approved control plane needs removal.go's ordered removal
+	// operation; a worker or an unapproved machine gets no
+	// finalizer and deletes exactly as before.
+	if m.Spec.Role == "controlplane" && !controllerutil.ContainsFinalizer(&m, machineRemovalFinalizer) {
+		controllerutil.AddFinalizer(&m, machineRemovalFinalizer)
+		return ctrl.Result{}, r.Update(ctx, &m)
 	}
 
 	var cluster ichorv1alpha1.TalosCluster

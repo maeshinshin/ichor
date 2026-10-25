@@ -88,6 +88,34 @@ func TestCheckControlPlaneQuorum(t *testing.T) {
 	}
 }
 
+func TestCheckControlPlaneCount(t *testing.T) {
+	cases := []struct {
+		current, desired int
+		wantErr          bool
+	}{
+		{current: 3, desired: 3, wantErr: true},  // 3 -> 2, below the declared 3
+		{current: 4, desired: 3, wantErr: false}, // 4 -> 3, meets the declared 3 (the add-then-remove case)
+		{current: 1, desired: 1, wantErr: true},  // 1 -> 0, below the declared 1
+		{current: 5, desired: 5, wantErr: true},  // 5 -> 4, below the declared 5
+		{current: 6, desired: 5, wantErr: false}, // 6 -> 5, meets the declared 5
+	}
+
+	for _, tc := range cases {
+		t.Run(fmt.Sprintf("current=%d,desired=%d", tc.current, tc.desired), func(t *testing.T) {
+			err := CheckControlPlaneCount(tc.current, tc.desired)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("CheckControlPlaneCount(%d, %d) = nil, want error", tc.current, tc.desired)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("CheckControlPlaneCount(%d, %d) = %v, want nil", tc.current, tc.desired, err)
+			}
+		})
+	}
+}
+
 // TestAllowDeleteDoesNotOverrideQuorum is the roadmap's explicit requirement:
 // the allow-delete annotation alone must not let the last control plane (or
 // any quorum-breaking deletion) go. CheckDelete and CheckControlPlaneQuorum

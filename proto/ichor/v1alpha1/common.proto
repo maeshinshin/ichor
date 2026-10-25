@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+// Types shared by every ichor.v1alpha1 service: references to the Kubernetes
+// custom resources the backend is a read-only or approval-only view onto, a
+// kstatus-compatible condition, and the audit record every approve/reject
+// call returns.
+package ichor.v1alpha1;
+
+import "google/protobuf/timestamp.proto";
+
+// ObjectRef names a namespaced Kubernetes custom resource (TalosCluster,
+// TalosMachine, ...). The browser never sees more of the Kubernetes object
+// than this service exposes; it never talks to the API server directly.
+message ObjectRef {
+  string namespace = 1;
+  string name = 2;
+}
+
+// Condition mirrors the kstatus-compatible conditions carried on Ichor's
+// custom resources (metav1.Condition), trimmed to what a screen displays.
+message Condition {
+  string type = 1;
+  string status = 2;
+  string reason = 3;
+  string message = 4;
+  google.protobuf.Timestamp last_transition_time = 5;
+}
+
+// AuditRecord is returned by ApproveMachine and RejectMachine so the caller
+// can confirm what was recorded: who did it, when, against what, and why.
+// "actor" comes from the caller's authenticated identity, not from the
+// request body.
+message AuditRecord {
+  string actor = 1;
+  google.protobuf.Timestamp at = 2;
+  // action is "approve" or "reject".
+  string action = 3;
+  ObjectRef target = 4;
+  // reason is optional free text, mainly used for rejections.
+  string reason = 5;
+}

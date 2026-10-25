@@ -129,16 +129,19 @@ func sysctlPatch(clusterName string, params map[string]string) ichorv1alpha1.Tal
 }
 
 // legacyConfigPatch builds an unsubmitted "cluster"-layer legacy Config
-// patch carrying a non-secret cluster.apiServer.extraArgs value, alongside
-// the dummy (not bundle-derived) machine.token/type/certSANs the CRD's
-// schema requires any Config document to carry. Used only to render a
-// "current" fixture simulating drift adopt cannot safely auto-patch -- never created through the fake client.
+// patch carrying a non-secret cluster.apiServer.extraArgs value. It used to
+// carry a dummy machine.token too, because the mirror schema made that field
+// required on any Config document; machine.token (and
+// eight other secret-bearing fields) has since been dropped from the schema entirely, so a sparse
+// Config document is now expressible. Used only to render a "current" fixture
+// simulating drift adopt cannot safely auto-patch -- never created
+// through the fake client. Whether that premise still holds now that sparse
+// capture is possible is the to revisit.
 func legacyConfigPatch(clusterName string) ichorv1alpha1.TalosConfigPatch {
 	cfg := &typedconfig.Config{
 		ConfigVersion: "v1alpha1",
 		MachineConfig: &typedconfig.MachineConfig{
 			MachineType:     "worker",
-			MachineToken:    "328hom.uqjzh6jnn2eie9oi",
 			MachineCertSANs: []string{"10.0.0.10"},
 		},
 		ClusterConfig: &typedconfig.ClusterConfig{

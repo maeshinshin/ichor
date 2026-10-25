@@ -41,6 +41,11 @@ const (
 	kindSysctlConfig       = "SysctlConfig"
 	kindKernelModuleConfig = "KernelModuleConfig"
 	kindConfig             = "Config"
+
+	cniPresetFlannel  = "flannel"
+	cniPresetCilium   = "cilium"
+	kubeProxyEnabled  = "enabled"
+	kubeProxyReplaced = "replaced"
 )
 
 func newConfigPatch(layer string, target *TalosConfigPatchTarget) *TalosConfigPatch {
@@ -291,5 +296,99 @@ var _ = Describe("TalosCluster", func() {
 		}
 
 		Expect(k8sClient.Create(context.Background(), u)).NotTo(Succeed())
+	})
+})
+
+// newClusterWithCNI is newCluster plus an explicit spec.cni, for the CNI preset/kubeProxy tests
+// below (docs/design/architecture.md, "CNI").
+func newClusterWithCNI(cniSpec TalosClusterCNI) *TalosCluster {
+	c := newCluster(corev1.LocalObjectReference{Name: literalSecrets}, 3, "true")
+	c.Spec.CNI = cniSpec
+	return c
+}
+
+func customCNISource() TalosClusterCNICustomSource {
+	return TalosClusterCNICustomSource{
+		RepoURL:        "https://example.com/charts",
+		Chart:          "my-cni",
+		TargetRevision: "1.0.0",
+	}
+}
+
+var _ = Describe("TalosCluster.spec.cni", func() {
+	It("defaults preset to flannel and kubeProxy to enabled when cni is omitted entirely", func() {
+		created := newCluster(corev1.LocalObjectReference{Name: literalSecrets}, 3, "true")
+		Expect(k8sClient.Create(context.Background(), created)).To(Succeed())
+
+		readBack := &TalosCluster{}
+		key := types.NamespacedName{Name: created.Name, Namespace: created.Namespace}
+		Expect(k8sClient.Get(context.Background(), key, readBack)).To(Succeed())
+
+		Expect(readBack.Spec.CNI.Preset).To(Equal(cniPresetFlannel))
+		Expect(readBack.Spec.CNI.KubeProxy).To(Equal(kubeProxyEnabled))
+	})
+
+	DescribeTable("preset/kubeProxy/custom combinations at creation",
+		func(cniSpec TalosClusterCNI, accepted bool) {
+			err := k8sClient.Create(context.Background(), newClusterWithCNI(cniSpec))
+			if accepted {
+				Expect(err).NotTo(HaveOccurred())
+			} else {
+				Expect(err).To(HaveOccurred())
+			}
+		},
+		Entry("flannel with kubeProxy enabled", TalosClusterCNI{Preset: cniPresetFlannel, KubeProxy: kubeProxyEnabled}, true),
+		Entry("flannel with kubeProxy replaced is rejected: flannel has no kube-proxy-free mode",
+			TalosClusterCNI{Preset: cniPresetFlannel, KubeProxy: kubeProxyReplaced}, false),
+		Entry("cilium with kubeProxy replaced", TalosClusterCNI{Preset: cniPresetCilium, KubeProxy: kubeProxyReplaced}, true),
+		Entry("custom without custom populated is rejected",
+			TalosClusterCNI{Preset: "custom", KubeProxy: kubeProxyEnabled}, false),
+		Entry("custom with custom populated", TalosClusterCNI{
+			Preset: "custom", KubeProxy: kubeProxyEnabled,
+			Custom: &TalosClusterCNICustom{Source: customCNISource()},
+		}, true),
+		Entry("flannel with custom populated is rejected: custom must be set only when preset is custom",
+			TalosClusterCNI{
+				Preset: cniPresetFlannel, KubeProxy: kubeProxyEnabled,
+				Custom: &TalosClusterCNICustom{Source: customCNISource()},
+			}, false),
+	)
+
+	// The preset cannot be changed after the cluster exists: swapping a CNI takes the network
+	// down and is out of scope (docs/design/architecture.md, "CNI").
+	It("rejects changing preset after creation", func() {
+		created := newClusterWithCNI(TalosClusterCNI{Preset: cniPresetCilium, KubeProxy: kubeProxyEnabled})
+		Expect(k8sClient.Create(context.Background(), created)).To(Succeed())
+
+		created.Spec.CNI.Preset = cniPresetFlannel
+		Expect(k8sClient.Update(context.Background(), created)).NotTo(Succeed())
+	})
+
+	It("accepts an update that leaves preset unchanged", func() {
+		created := newClusterWithCNI(TalosClusterCNI{Preset: cniPresetCilium, KubeProxy: kubeProxyEnabled})
+		Expect(k8sClient.Create(context.Background(), created)).To(Succeed())
+
+		created.Labels = map[string]string{"touched": "true"}
+		Expect(k8sClient.Update(context.Background(), created)).To(Succeed())
+	})
+
+	// Switching kubeProxy is refused unless annotated, since the switch must run in the one safe
+	// order -- new side up, verify, old side down -- which nothing at this layer does for the
+	// caller automatically (docs/design/architecture.md, "CNI").
+	It("rejects switching kubeProxy without the confirmation annotation", func() {
+		created := newClusterWithCNI(TalosClusterCNI{Preset: cniPresetCilium, KubeProxy: kubeProxyEnabled})
+		Expect(k8sClient.Create(context.Background(), created)).To(Succeed())
+
+		created.Spec.CNI.KubeProxy = kubeProxyReplaced
+		Expect(k8sClient.Update(context.Background(), created)).NotTo(Succeed())
+	})
+
+	It("accepts switching kubeProxy with the confirmation annotation", func() {
+		created := newClusterWithCNI(TalosClusterCNI{Preset: cniPresetCilium, KubeProxy: kubeProxyEnabled})
+		Expect(k8sClient.Create(context.Background(), created)).To(Succeed())
+
+		created.Annotations = map[string]string{TalosClusterConfirmKubeProxySwitchAnnotation: "true"}
+		created.Spec.CNI.KubeProxy = kubeProxyReplaced
+		Expect(k8sClient.Update(context.Background(), created)).To(Succeed())
 	})
 })

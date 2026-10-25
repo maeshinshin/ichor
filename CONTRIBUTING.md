@@ -47,7 +47,7 @@ the shell or not. If you see that, `rm -rf bin` and run it again inside
     (`{{- if .Values.crd.enabled }}`, the `{{- if .Values.crd.keep }}`
     annotation, the trailing `{{- end }}`) untouched. This one piece actually
     is mechanical — a CRD's schema has no hand-edits to lose — so it's the
-    one piece still automated. See `hack/sync-crds.py`.
+    one piece still automated, as a `internal/tools/` Go command (the same pattern `internal/tools/mirrorgen` already uses for `pkg/typedconfig`'s generator), not a script in a scripting language this repo otherwise has no use for. See `internal/tools/synccrds/`.
   - **Everything else in `dist/chart/templates/`** (RBAC, the manager and
     ichor-ui `Deployment`s/`Service`s/`PodDisruptionBudget`s, the webhook
     config, the admission policy) is maintained by hand, mirroring the

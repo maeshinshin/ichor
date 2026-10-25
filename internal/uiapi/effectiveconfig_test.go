@@ -23,6 +23,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
+	yaml "go.yaml.in/yaml/v4"
+	corev1 "k8s.io/api/core/v1"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
@@ -67,7 +69,7 @@ var _ = Describe("GetEffectiveConfig masking", func() {
 		cluster := newTestCluster(secret.Name)
 		m := newTestMachine(cluster.Name, strongTestIdentity("uuid-effcfg"), roleControlPlane, ichorv1alpha1.MachineApprovalStateApproved)
 
-		s := &Server{Client: k8sClient}
+		s := &Server{Client: k8sClient, ControllerNamespace: testNamespace}
 		resp, err := s.GetEffectiveConfig(ctx, connect.NewRequest(&pb.GetEffectiveConfigRequest{
 			Machine: objectRef(m.Namespace, m.Name),
 		}))
@@ -134,7 +136,7 @@ var _ = Describe("GetEffectiveConfig masking", func() {
 
 		patch := newTestPatch(cluster.Name, layerCluster, nil, 0, extraArgsConfig(roleWorker))
 
-		s := &Server{Client: k8sClient}
+		s := &Server{Client: k8sClient, ControllerNamespace: testNamespace}
 		resp, err := s.GetEffectiveConfig(ctx, connect.NewRequest(&pb.GetEffectiveConfigRequest{
 			Machine: objectRef(m.Namespace, m.Name),
 		}))
@@ -169,11 +171,45 @@ var _ = Describe("GetEffectiveConfig masking", func() {
 		cluster := newTestCluster(secret.Name)
 		m := newTestMachine(cluster.Name, strongTestIdentity("uuid-norole-eff"), "", ichorv1alpha1.MachineApprovalStatePending)
 
-		s := &Server{Client: k8sClient}
+		s := &Server{Client: k8sClient, ControllerNamespace: testNamespace}
 		_, err := s.GetEffectiveConfig(ctx, connect.NewRequest(&pb.GetEffectiveConfigRequest{
 			Machine: objectRef(m.Namespace, m.Name),
 		}))
 		Expect(err).To(HaveOccurred())
 		Expect(connect.CodeOf(err)).To(Equal(connect.CodeFailedPrecondition))
+	})
+})
+
+// Server.ControllerNamespace, not the TalosCluster's own namespace, is
+// where the secrets bundle Secret is resolved (restated for this package in bundle.go's loadBundle): GetEffectiveConfig
+// used to read cluster.Namespace directly instead, which happened to work
+// in every other test in this file only because the fixtures put the
+// TalosCluster and the Secret in the same namespace. This test deliberately
+// does not.
+var _ = Describe("GetEffectiveConfig namespace resolution", func() {
+	It("renders a machine whose TalosCluster lives outside the controller's own namespace", func() {
+		const controllerNamespace = "ichor-system-effcfg"
+		Expect(k8sClient.Create(ctx, &corev1.Namespace{Name: controllerNamespace})).To(Succeed())
+
+		bundle := newTestBundle()
+		raw, err := yaml.Marshal(bundle)
+		Expect(err).NotTo(HaveOccurred())
+		secret := &corev1.Secret{
+			GenerateName: "bundle-", Namespace: controllerNamespace,
+			Data: map[string][]byte{bundleSecretKey: raw},
+		}
+		Expect(k8sClient.Create(ctx, secret)).To(Succeed())
+
+		// cluster lives in testNamespace ("default"), deliberately not
+		// controllerNamespace -- the whole point of this test.
+		cluster := newTestCluster(secret.Name)
+		m := newTestMachine(cluster.Name, strongTestIdentity("uuid-crossns"), roleWorker, ichorv1alpha1.MachineApprovalStateApproved)
+
+		s := &Server{Client: k8sClient, ControllerNamespace: controllerNamespace}
+		resp, err := s.GetEffectiveConfig(ctx, connect.NewRequest(&pb.GetEffectiveConfigRequest{
+			Machine: objectRef(m.Namespace, m.Name),
+		}))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(resp.Msg.GetConfig().GetValues()).NotTo(BeEmpty())
 	})
 })

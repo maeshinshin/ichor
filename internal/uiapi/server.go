@@ -39,6 +39,15 @@ import (
 type Server struct {
 	client.Client
 
+	// ControllerNamespace is this backend's own namespace (POD_NAMESPACE in
+	// practice, see cmd/ichor-ui/main.go), the same meaning
+	// TalosMachineReconciler.ControllerNamespace has on the controller side: loadBundle resolves the secrets bundle
+	// Secret here, never
+	// in the TalosCluster's own namespace, since RBAC cannot scope a Secret
+	// read to "wherever that TalosCluster happens to live" at anything
+	// narrower than cluster-wide.
+	ControllerNamespace string
+
 	// Now returns the current time. nil means time.Now -- tests inject a
 	// fixed clock so audit timestamps and log resume tokens are
 	// deterministic, the same reason pkg/render's tests use

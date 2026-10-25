@@ -92,7 +92,8 @@ func (f *fakeNodeTalosClient) StreamLogs(ctx context.Context, service string, si
 
 func newTestNodeServer(fake *fakeNodeTalosClient, draining <-chan struct{}) (ichorv1alpha1connect.NodeServiceClient, func()) {
 	s := &Server{
-		Client: k8sClient,
+		Client:              k8sClient,
+		ControllerNamespace: testNamespace,
 		NodeTalosClient: func(context.Context, *ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine, *secrets.Bundle) (NodeTalosClient, error) {
 			if fake == nil {
 				return nil, errNoTalosClient

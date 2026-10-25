@@ -188,22 +188,43 @@ var fieldOverrides = map[string]fieldOverride{
 	"KubeletConfig.KubeletCredentialProviderConfig": {pkgPath: pkgKubeletV1, typeName: "CredentialProviderConfig"},
 }
 
-// secretFields are machinery fields that carry cluster secret material --
-// certificates, tokens, encryption keys -- keyed "StructName.FieldName"
-// like fieldOverrides above, but for a different reason: these are dropped
-// regardless of their Go type (most are plain strings or *x509 pointers,
-// not meta.Unstructured), because they must not be representable, not
-// because they can't be. A TalosConfigPatch author scoped to an unrelated
-// layer (e.g. a sysctl tweak) could otherwise set one of these and have
-// configpatcher.Apply's strategic merge overwrite the real value the
-// secrets bundle generated, reaching a node as a cluster takeover rather
-// than a config error.
+// secretFields are machinery fields that carry secret material, keyed
+// "StructName.FieldName" like fieldOverrides above, but for a different
+// reason than fieldOverrides: these are dropped regardless of their Go
+// type (most are plain strings or *x509 pointers, not meta.Unstructured),
+// because they must not be representable, not because they can't be.
+// Each entry's value names what it carries; entries fall into two groups
+// for two different reasons, both tagged in the value string below so
+// the generator's own report says which:
 //
-// A CEL validation rule was considered and rejected: it only guards
-// whatever code path remembers to check it, including every kind and every
-// field machinery adds in the future. Leaving the field out of the CRD
-// schema entirely means the API server rejects it structurally -- there is
-// no path to forget.
+//   - Most entries: a TalosConfigPatch author scoped to an unrelated layer
+//     (e.g. a sysctl tweak) could otherwise set one of these and have
+//     configpatcher.Apply's strategic merge overwrite the real value the
+//     secrets bundle generated, reaching a node as a cluster takeover
+//     rather than a config error.
+//   - Entries tagged "(user credential, not a bundle value)": these are
+//     not bundle-generated at all -- a private registry password, a cloud
+//     API token, a WireGuard private key -- so the takeover reasoning
+//     above does not apply to them; they are dropped instead because
+//     design principle 2 ("secrets are referenced, never embedded") rules
+//     out writing a user's own credential into a TalosConfigPatch, which
+//     the GitOps design explicitly puts in Git. A reference form
+//     (TalosCluster.spec.secretsRef's shape: point at a Kubernetes Secret,
+//     have the controller resolve it at render time) is the replacement
+//     for the ones that need one's follow-up for which do.
+//
+// A CEL validation rule was considered and rejected for either group: it
+// only guards whatever code path remembers to check it, including every
+// kind and every field machinery adds in the future. Leaving the field out
+// of the CRD schema entirely means the API server rejects it structurally
+// -- there is no path to forget.
+//
+// suspiciousFields (suspicious.go) is this table's safety net: it reports,
+// rather than drops, every surviving field whose name suggests a secret
+// and isn't listed here, so a sibling field this table missed (it has
+// happened) or a new credential-shaped field a future machinery bump adds
+// shows up in `go generate`'s output for a human to triage, instead of
+// shipping silently.
 var secretFields = map[string]string{ // "Struct.Field" -> what it carries
 	"ClusterConfig.ClusterSecret":                 "cluster discovery secret",
 	"ClusterConfig.BootstrapToken":                "etcd cluster bootstrap token",
@@ -214,16 +235,51 @@ var secretFields = map[string]string{ // "Struct.Field" -> what it carries
 	"EtcdConfig.RootCA":                           "etcd CA key pair",
 	"MachineConfig.MachineToken":                  "machine join token",
 	"MachineConfig.MachineCA":                     "machine CA key pair",
+	// Sibling of ClusterAESCBCEncryptionSecret above (same purpose, the
+	// other supported etcd encryption cipher) -- missed in the original
+	// pass because nothing checked for it until suspiciousSurvivors did.
+	"ClusterConfig.ClusterSecretboxEncryptionSecret": "etcd secretbox encryption key",
+	// User credentials, not bundle values -- design principle 2 ("secrets
+	// are referenced, never embedded"); see this var's doc comment above.
+	// Dropping these makes private-registry authentication inexpressible
+	// through Ichor today's follow-up records that cost and the
+	// reference-form replacement it needs (a separate work unit).
+	"RegistryAuthConfig.RegistryPassword":      "registry password (user credential, not a bundle value)",
+	"RegistryAuthConfig.RegistryAuth":          "registry auth string (user credential, not a bundle value)",
+	"RegistryAuthConfig.RegistryIdentityToken": "registry identity token (user credential, not a bundle value)",
+	// Cloud provider API tokens and a WireGuard private key: also user
+	// credentials under principle 2, but for features outside every
+	// current phase, so unlike the registry ones above these need no
+	// reference-form replacement yet -- dropping and recording is enough.
+	"VIPEquinixMetalConfig.EquinixMetalAPIToken": "Equinix Metal API token (user credential, not a bundle value)",
+	"VIPHCloudConfig.HCloudAPIToken":             "Hetzner Cloud API token (user credential, not a bundle value)",
+	"DeviceWireguardConfig.WireguardPrivateKey":  "WireGuard private key (user credential, not a bundle value)",
 	// Phase 3 (disk roles): EncryptionSpec.EncryptionKeys[].static is a disk
 	// encryption passphrase embedded directly in the document -- Talos's own
 	// EncryptionSpec.Redact method targets exactly this field for the same
 	// reason. The whole "static" key source is dropped, not just its one
 	// field, because an empty "static: {}" left behind is unusable and only
 	// confusing. KMS/TPM/nodeID key sources carry no secret (an endpoint
-	// URL, hardware-sealed, or derived), so they stay. This key is shared by
-	// the legacy v1alpha1.EncryptionKey and the modern block.EncryptionKey
-	// (same field name, both struct literals below have an identically
-	// named and shaped "EncryptionKeyStatic" type), so one entry drops both.
+	// URL, hardware-sealed, or derived) and are representable without this
+	// problem, so they stay -- dropping KeyStatic does not make disk
+	// encryption impossible, it leaves only the key types that keep the
+	// secret out of the CR in the first place.
+	//
+	// This key is "EncryptionKey.KeyStatic" -- the bare machinery type
+	// name, not whatever the mirror ends up calling it -- because both the
+	// legacy v1alpha1.EncryptionKey and the modern block.EncryptionKey
+	// share that name and field, and secretFields/fieldOverrides are both
+	// matched against the walk's machinery name (walk.go builds fieldKey
+	// from named.Obj().Name(), before typeRenames below is applied), not
+	// the mirror name a struct ends up with after a rename. Getting that
+	// backwards is exactly how this stopped working once: block.EncryptionKey
+	// is renamed to VolumeEncryptionKey by typeRenames below, so this entry
+	// only matched the legacy, unrenamed side until the lookup was fixed to
+	// key on the machinery name -- the modern side (embedded in VolumeConfig/
+	// UserVolumeConfig/RawVolumeConfig) silently kept its passphrase field.
+	// One entry still drops both, but only because the lookup is keyed
+	// correctly now; a table keyed by mirror name would need two entries
+	// and break again on the next rename..
 	"EncryptionKey.KeyStatic": "disk encryption static passphrase",
 }
 
@@ -247,7 +303,13 @@ func fatalf(format string, args ...any) {
 	os.Exit(1)
 }
 
-func main() {
+// generate walks every allow-listed root and returns the populated
+// generator -- everything main does except reporting and writing files,
+// factored out so tests can inspect what the walk actually dropped
+// (g.droppedSecret, in particular) against the real machinery source,
+// instead of a second hand-maintained copy of what secretFields should
+// have caught.
+func generate() *generator {
 	cfg := &packages.Config{
 		Mode: packages.NeedName | packages.NeedTypes | packages.NeedTypesInfo |
 			packages.NeedSyntax | packages.NeedDeps | packages.NeedImports,
@@ -280,6 +342,12 @@ func main() {
 		def.isRoot = true
 		def.rootKind = r
 	}
+
+	return g
+}
+
+func main() {
+	g := generate()
 
 	g.report()
 	g.writeMirror("zz_generated.mirror.go")

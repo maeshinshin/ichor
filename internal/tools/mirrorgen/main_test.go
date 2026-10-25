@@ -18,6 +18,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"slices"
 	"testing"
@@ -80,5 +81,84 @@ func TestAllowListMatchesCRDEnum(t *testing.T) {
 		if !slices.Equal(want, got) {
 			t.Errorf("version %s: CRD documents[].kind enum %v does not match mirrorgen's allow-list %v", v.Name, got, want)
 		}
+	}
+}
+
+// TestSecretFieldsAreNotInCRD is secretFields' own correctness check,
+// the same role the round-trip tests play for substTable: run the real
+// generator (not a hand-maintained second copy of what it should have
+// dropped) and confirm that none of the YAML names it reports dropping
+// for secretFields reasons appear anywhere in the real generated CRD,
+// with a matching shape. This is what should have caught
+// EncryptionKey.KeyStatic silently surviving under its renamed mirror
+// name (VolumeEncryptionKey): the generator's own report already said
+// "KeyStatic (yaml "static")" correctly, but nothing checked the CRD
+// actually agreed. Run "make manifests" before this test; adding a
+// secretFields row needs no change here to stay covered.
+//
+// Matching requires the candidate property's shape (object vs. scalar) to
+// match the dropped field's own shape, not just the bare YAML name: two
+// unrelated fields can legitimately share a YAML name at different schema
+// depths. This test actually hit both directions once each --
+// machine.registries.*.tls.ca is an unrelated, legitimate scalar also
+// named "ca" (the dropped ClusterCA/MachineCA/RootCA are object-shaped key
+// pairs); RegistryConfig's own "auth" field is an unrelated, legitimate
+// object (still has "username") also named "auth" (the dropped
+// RegistryAuthConfig.RegistryAuth is a scalar, one level deeper inside
+// that same object) -- shape is what tells each pair apart without
+// tracking full schema paths.
+func TestSecretFieldsAreNotInCRD(t *testing.T) {
+	g := generate()
+
+	if len(g.droppedSecret) == 0 {
+		t.Fatal("generate() reported no secretFields drops; secretFields is empty or the walk didn't run")
+	}
+
+	raw, err := os.ReadFile(crdPath)
+	if err != nil {
+		t.Fatalf("reading generated CRD (run `make manifests` first): %v", err)
+	}
+
+	var crd apiextensionsv1.CustomResourceDefinition
+	if err := yaml.Unmarshal(raw, &crd); err != nil {
+		t.Fatalf("parsing CRD: %v", err)
+	}
+
+	for _, v := range crd.Spec.Versions {
+		var found []string
+		schemaProperties(v.Schema.OpenAPIV3Schema, func(name string, isObject bool) {
+			for _, d := range g.droppedSecret {
+				if name == d.YAML && isObject == !d.Scalar {
+					found = append(found, fmt.Sprintf("%q (%s.%s: %s)", d.YAML, d.Struct, d.Field, d.Why))
+				}
+			}
+		})
+
+		if len(found) > 0 {
+			t.Errorf("version %s: CRD schema still has a property secretFields says it dropped: %v", v.Name, found)
+		}
+	}
+}
+
+// schemaProperties calls visit with every property name anywhere in
+// schema's tree, along with whether that property is itself an object (has
+// its own nested properties) rather than a scalar, recursing through
+// nested objects, array items and additionalProperties.
+func schemaProperties(schema *apiextensionsv1.JSONSchemaProps, visit func(name string, isObject bool)) {
+	if schema == nil {
+		return
+	}
+
+	for name, prop := range schema.Properties {
+		visit(name, len(prop.Properties) > 0)
+		schemaProperties(&prop, visit)
+	}
+
+	if schema.Items != nil {
+		schemaProperties(schema.Items.Schema, visit)
+	}
+
+	if schema.AdditionalProperties != nil {
+		schemaProperties(schema.AdditionalProperties.Schema, visit)
 	}
 }

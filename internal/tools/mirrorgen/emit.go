@@ -509,4 +509,13 @@ func (g *generator) report() {
 			fmt.Printf("  - %s.%s (yaml %q): %s\n", d.Struct, d.Field, d.YAML, d.Why)
 		}
 	}
+
+	if survivors := g.suspiciousSurvivors(); len(survivors) > 0 {
+		fmt.Println("mirrorgen: fields whose name suggests a secret, still in the mirror " +
+			"(not in secretFields -- review each, see suspicious.go):")
+
+		for _, s := range survivors {
+			fmt.Println("  -", s)
+		}
+	}
 }

@@ -2,6 +2,8 @@
 
 Status: Accepted · Date: 2026-10-25 · Design section: GitOps and Argo CD
 
+Decided: No CNI hand-over registry (one real member); removal happens at render time off a status condition; a separate controller
+
 ## Context
 
 ADR 0019 built `ichor init` through step 5 and deliberately excluded step 6

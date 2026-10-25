@@ -1,6 +1,8 @@
 # 0002. Nix devShell and Go pin
 
-Status: Accepted, amended 2026-10-25 · Date: 2026-10-24 · Design section: —
+Status: Accepted, amended · Date: 2026-10-24 · Design section: —
+
+Decided: Pinned `nixpkgs` to `nixpkgs-unstable` and committed `flake.lock` for a reproducible shell
 
 ## Context
 

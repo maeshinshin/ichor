@@ -2,6 +2,8 @@
 
 Status: Accepted · Date: 2026-10-25 · Design section: 7 (Testing)
 
+Decided: e2e runs Talos nodes as KubeVirt VMs on a real cluster, not `talosctl cluster create qemu`
+
 ## Context
 
 The design says e2e creates throwaway clusters with `talosctl cluster create

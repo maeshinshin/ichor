@@ -2,6 +2,8 @@
 
 Status: Accepted · Date: 2026-10-25 · Design section: "Upgrades"
 
+Decided: Delegate the Talos/Kubernetes compatibility matrix to `pkg/machinery/compatibility` instead of reimplementing it
+
 ## Context
 
 Design section "Upgrades" lists, among the per-node pre-checks for a Talos upgrade, "the

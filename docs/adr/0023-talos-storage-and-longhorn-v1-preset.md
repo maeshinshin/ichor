@@ -2,6 +2,8 @@
 
 Status: Accepted · Date: 2026-10-25 · Design section: 4.4 (Storage)
 
+Decided: Keep `TalosStorage` to layer 1 only -- a `longhorn-v1` preset emitting the Talos-side config a node needs, never the storage system itself
+
 ## Context
 
 The design's `### Storage` section splits storage work into four layers and gives Ichor the

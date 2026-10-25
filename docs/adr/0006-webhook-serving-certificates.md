@@ -2,6 +2,8 @@
 
 Status: Accepted · Date: 2026-10-25 · Design section: 4.5, 5.2.7
 
+Decided: Run `cert-controller` in-process for the webhook serving certificate instead of depending on cert-manager
+
 ## Context
 
 Ichor needs validating webhooks from phase 1 on — deletion protection first,

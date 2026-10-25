@@ -5,10 +5,11 @@ Write one when you pick something the design doesn't pin down: a default, a
 library, a metric name, a workaround. Keep it short. Don't rewrite accepted
 records; supersede them.
 
-The table below must list every file in this directory (`0000-template.md`
-excepted) and no others, with no gaps in the numbering; `index_test.go`
-checks both and fails naming the exact mismatch or missing number. Add a
-row here in the same PR that adds the ADR.
+The table below is generated from each file's `Decided:`/`Status:` header
+line by `internal/tools/adrindex` (`make adr-index`) -- never hand-edit it.
+Give a new ADR a `Decided:` line (`0000-template.md` shows where) and
+regenerate; CI's generated-artifact drift check catches a stale table the
+same way it catches a stale chart.
 
 | # | Decided | Status |
 |---|---|---|
@@ -40,3 +41,4 @@ row here in the same PR that adds the ADR.
 | 0026 | `TalosOperation`: the backbone every upgrade kind shares (lock, status-held state machine, pause-on-failure, paused, maxUnavailable, hold annotation, ordering), with none of their execution | Accepted |
 | 0027 | Private registry auth through `TalosCluster.spec.registries[].authSecretRef`, resolved and injected as the system layer by `pkg/render` | Accepted |
 | 0028 | `ichor gitops export`'s allow-list of CR kinds, its Argo CD/Flux tracked-resource warning, and `ichor gitops handoff`'s one-field `TalosCluster` patch | Accepted |
+| 0029 | Generate `docs/adr/README.md`'s index table from a `Decided:`/`Status:` line in each ADR's own header (`internal/tools/adrindex`) instead of a shared, hand-edited table | Accepted |

@@ -2,6 +2,8 @@
 
 Status: Accepted · Date: 2026-10-25 · Design section: 5.6 (configuration reconcile)
 
+Decided: Keep predicting reboot necessity from `pkg/fieldmeta`'s field-path table; Talos itself won't answer the question
+
 ## Context
 
 `pkg/fieldmeta` predicts, from a small table keyed by field path, whether a

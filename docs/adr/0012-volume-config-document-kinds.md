@@ -2,6 +2,8 @@
 
 Status: Accepted · Date: 2026-10-25 · Design section: 4.4 (Typed configuration), ### Nodes
 
+Decided: Mirror `VolumeConfig`/`UserVolumeConfig`/`RawVolumeConfig` as three more mirrorgen roots, for disk roles
+
 ## Context
 
 Phase 3 (disk roles, `### Nodes` in `docs/design/architecture.md`) assigns each disk a role:

@@ -2,6 +2,8 @@
 
 Status: Accepted · Date: 2026-10-25 · Design section: CNI
 
+Decided: Settled the `cni.Preset` interface, `custom`'s required fields, Hubble's certificate handling, and where the two immutability guards live
+
 ## Context
 
 The design names six responsibilities a CNI preset carries and says a new

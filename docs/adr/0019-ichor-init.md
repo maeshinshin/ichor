@@ -2,6 +2,8 @@
 
 Status: Accepted · Date: 2026-10-25 · Design section: Bootstrap (`ichor init`)
 
+Decided: `ichor init`: VIP recommended not required, Ichor applied through the API server not inlined, topology presets carry count/schedulable
+
 ## Context
 
 `docs/design/architecture.md`'s "Bootstrap" section gives `ichor init` six

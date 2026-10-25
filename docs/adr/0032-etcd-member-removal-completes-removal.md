@@ -1,6 +1,7 @@
 # 0032. Etcd member removal completes the removal sequence; Reset stays a separate unit
 
 Status: Accepted · Date: 2026-10-26 · Design section: Nodes (removal)
+Decided: Complete a TalosMachine deletion by removing its etcd member -- self-leave first, a survivor removing it by ID as fallback -- clearing the finalizer only after that succeeds, and warning that the node keeps the cluster's credentials until it is reset
 
 ## Context
 

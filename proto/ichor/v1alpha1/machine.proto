@@ -1,0 +1,88 @@
+syntax = "proto3";
+
+// MachineService backs the machine list (including pending approvals) and
+// the approve/reject actions (architecture.md, "CLI and UI" and "Nodes").
+// Approval here sets only the fields TalosMachine.spec already models today
+// (role, nodeLabels, hostname); disk roles and network link configuration
+// join this request message, additively, once they land on the CRD.
+package ichor.v1alpha1;
+
+import "ichor/v1alpha1/common.proto";
+
+service MachineService {
+  rpc ListMachines(ListMachinesRequest) returns (ListMachinesResponse);
+  rpc GetMachine(GetMachineRequest) returns (GetMachineResponse);
+  rpc ApproveMachine(ApproveMachineRequest) returns (ApproveMachineResponse);
+  rpc RejectMachine(RejectMachineRequest) returns (RejectMachineResponse);
+}
+
+message ListMachinesRequest {
+  // cluster filters to one TalosCluster's machines; unset lists across all
+  // clusters the caller can see, pending machines included.
+  ObjectRef cluster = 1;
+}
+
+message ListMachinesResponse {
+  repeated Machine machines = 1;
+}
+
+message GetMachineRequest {
+  ObjectRef machine = 1;
+}
+
+message GetMachineResponse {
+  Machine machine = 1;
+}
+
+message ApproveMachineRequest {
+  ObjectRef machine = 1;
+  MachineRole role = 2;
+  map<string, string> node_labels = 3;
+  string hostname = 4;
+}
+
+message ApproveMachineResponse {
+  Machine machine = 1;
+  AuditRecord audit = 2;
+}
+
+message RejectMachineRequest {
+  ObjectRef machine = 1;
+  string reason = 2;
+}
+
+message RejectMachineResponse {
+  AuditRecord audit = 1;
+}
+
+enum MachineRole {
+  MACHINE_ROLE_UNSPECIFIED = 0;
+  MACHINE_ROLE_CONTROL_PLANE = 1;
+  MACHINE_ROLE_WORKER = 2;
+}
+
+// MachineIdentity mirrors TalosMachine.spec.identity: the tuple Ichor keys a
+// node on, since the SMBIOS UUID alone is not trustworthy
+// (architecture.md, "Nodes").
+message MachineIdentity {
+  string uuid = 1;
+  string serial = 2;
+  repeated string mac_addresses = 3;
+}
+
+message Machine {
+  ObjectRef ref = 1;
+  ObjectRef cluster = 2;
+  MachineIdentity identity = 3;
+  string endpoint = 4;
+  // role is unset for a pending machine still awaiting approval.
+  MachineRole role = 5;
+  map<string, string> node_labels = 6;
+  string hostname = 7;
+  bool approved = 8;
+  repeated Condition conditions = 9;
+  // stage is Talos's own MachineStatus stage as reported text (e.g.
+  // "maintenance", "installing", "rebooting", "running"), shown as-is rather
+  // than re-encoded into a parallel enum.
+  string stage = 10;
+}

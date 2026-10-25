@@ -56,7 +56,13 @@ type typeMapping struct {
 // structDef is one mirror struct the generator emits, plus everything the
 // conversion codegen needs to rebuild the corresponding machinery struct.
 type structDef struct {
-	name     string // Go identifier, shared between mirror and machinery sides
+	name string // mirror-side Go identifier
+	// machName is the machinery-side identifier, normally the same as name;
+	// it differs only for the handful of typeRenames entries (main.go),
+	// where name collides with an unrelated existing mirror struct and had
+	// to change on the mirror side while the machinery type obviously can't
+	// be renamed to match.
+	machName string
 	pkgPath  string // machinery package path this struct comes from
 	doc      string
 	fields   []*fieldDef
@@ -175,6 +181,12 @@ func machImportAlias(pkgPath string) string {
 		return "auditv1"
 	case pkgAPIServerV1:
 		return "apiserverv1"
+	case pkgBlock:
+		return "mblock"
+	case pkgResourcesBlock:
+		return "rblock"
+	case pkgCel:
+		return "mcel"
 	default:
 		fatalf("package %s has no registered import alias; add one in walk.go", pkgPath)
 		return ""
@@ -344,13 +356,17 @@ func (g *generator) structMapping(named *types.Named, st *types.Struct) *typeMap
 	}
 
 	name := named.Obj().Name()
+	if renamed, ok := typeRenames[qualifiedName(named)]; ok {
+		name = renamed
+	}
+
 	if owner, ok := g.nameOwner[name]; ok && owner != named {
 		fatalf("mirror struct name collision on %q between %s and %s", name, qualifiedName(owner), qualifiedName(named))
 	}
 
 	g.nameOwner[name] = named
 
-	def := &structDef{name: name, pkgPath: named.Obj().Pkg().Path()}
+	def := &structDef{name: name, machName: named.Obj().Name(), pkgPath: named.Obj().Pkg().Path()}
 	g.structs[named] = def // register before recursing, in case of cycles
 	g.order = append(g.order, def)
 

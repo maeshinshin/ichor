@@ -88,6 +88,10 @@ test-e2e: test-e2e-prereqs manifests generate fmt vet ## Run the PR-sized (short
 test-e2e-nightly: test-e2e-prereqs manifests generate fmt vet ## Run the full (short + nightly) e2e set against the cluster given by KUBECONFIG.
 	go test -tags=e2e ./test/e2e/ -v -ginkgo.v -ginkgo.label-filter="short || nightly"
 
+.PHONY: controller-static
+controller-static: ## Build a statically linked controller binary to copy into the verification pod (not an image)
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o "$(LOCALBIN)/manager-static" cmd/main.go
+
 # --- talosctl-qemu harness (CI, GitHub's ubuntu-24.04 runners) ---
 TEST_E2E_KUBECONFIG ?= $(LOCALBIN)/test-e2e.kubeconfig
 

@@ -420,9 +420,48 @@ Removal is a finalizer-driven sequence: storage evacuation hook (if
 configured) → cordon and drain with a timeout → remove the etcd member if it's
 a control plane (refused if quorum would break, if the count would drop below
 `spec.controlPlane.count`, or if it's the last one) → graceful Talos reset →
-delete the Node. The machine reappears as pending and can be reused.
-`forceRemove` skips drain and reset for dead hardware. Control planes are
-replaced add-then-remove, never the other way round.
+delete the Node, in that order. The machine reappears as pending and can be
+reused. `forceRemove` skips drain and reset for dead hardware. Control planes
+are replaced add-then-remove, never the other way round — a 3-node cluster
+replacing a member goes 3→4→3, never 3→2, because four members tolerate one
+failure while two tolerate none.
+
+Four things about that sequence, each verified against Talos 1.14.3's source
+and each easy to get fatally wrong:
+
+- **The reset must name the partitions to wipe.** With its default mode and no
+  partitions named, `Reset` wipes the *entire system disk*, boot and EFI
+  included, which means a reinstall rather than a return to maintenance mode.
+  Passing `STATE` and `EPHEMERAL` explicitly is what leaves the installed
+  system in place and brings the node back up with no configuration — which is
+  the behaviour the reuse story depends on.
+- **Ichor's refusals are Ichor's alone.** Talos's member-removal call requires
+  only that a leader exists right now; it does not ask whether the remaining
+  members can still reach quorum. The one quorum guard Talos ships refuses at
+  exactly two members and only on the upgrade path. So the three refusals above
+  live in shared code, as principle 10 requires, and are the thing most worth
+  testing before any of this points at real hardware.
+- **A graceful reset already drains and already leaves etcd.** Ichor's own
+  drain and member removal are therefore belts rather than the trousers for a
+  live node: they matter for `forceRemove`, where the node cannot run its own
+  sequence, and for refusing *before* Talos is asked to do anything.
+- **Reset is fire-and-forget.** It returns an actor id immediately and the
+  sequence runs asynchronously, so status has to record that a reset was
+  requested *before* the controller can crash — otherwise a resumed reconcile
+  fires a second concurrent reset at the same node. Every other step is
+  naturally idempotent: re-draining a cordoned node is harmless, and removing
+  an already-removed etcd member reports not-found, which counts as success.
+
+The finalizer cannot defend against one thing: a person removing it by hand
+mid-sequence. That deletes the resource immediately and orphans whatever state
+existed — a cordoned node, possibly still an etcd voter, with nothing left to
+resume it. Refusing finalizer removal except through break-glass belongs with
+the other dangerous-operation checks.
+
+Draining uses `k8s.io/kubectl`'s own drain helper rather than a hand-written
+eviction loop: it already encodes the DaemonSet, mirror-pod, local-storage and
+PodDisruptionBudget rules, and it reports a timeout as an error, which is
+exactly the "pause, don't escalate" signal the design wants.
 
 Topology. Control-plane count is 1, 3 or 5. Two is rejected: with two
 members etcd needs both to be up, so it is strictly less available than one.

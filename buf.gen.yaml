@@ -13,3 +13,16 @@ plugins:
     out: gen/go
     opt:
       - paths=source_relative
+  # TypeScript client for ui/ (ADR 0021). protoc-gen-es v2 generates both
+  # messages and the service definitions createClient() needs directly, so
+  # no separate connect-es plugin is required. Resolved from ui/'s own npm
+  # install, not nix: run `make ui-install` (or `cd ui && npm ci`) first.
+  - local: ./ui/node_modules/.bin/protoc-gen-es
+    out: ui/src/gen
+    opt:
+      - target=ts
+      # ui/tsconfig.app.json sets erasableSyntaxOnly (type-stripping, no
+      # transform, so src/ can also run directly under `node --test`); a
+      # real TS `enum` isn't erasable, so generated enums must be the
+      # `as const` object form instead.
+      - erasable_syntax=true

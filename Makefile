@@ -419,3 +419,13 @@ build-ichor-ui: ui-build ## Build the ichor-ui binary with the real UI embedded.
 .PHONY: manifests-ichor-ui
 manifests-ichor-ui: controller-gen ## Generate the UI backend's own ClusterRole, kept separate from manager-role.
 	"$(CONTROLLER_GEN)" --load-build-tags=ichorui_rbac rbac:roleName=ichor-ui-role paths="./internal/uiapi/..." output:dir=config/rbac/ichor-ui
+
+##@ UI screens (ADR 0021)
+
+.PHONY: ui-test
+ui-test: ui-install ## Run the UI's own unit tests (node --test; no test framework dependency added).
+	cd ui && npm test
+
+.PHONY: ui-proto-generate
+ui-proto-generate: ui-install ## Regenerate the TS Connect client into ui/src/gen (ADR 0021). Run before plain `buf generate`/`make proto-generate` if ui/node_modules is missing - buf.gen.yaml's TS plugin resolves to ui/node_modules/.bin/protoc-gen-es.
+	buf generate

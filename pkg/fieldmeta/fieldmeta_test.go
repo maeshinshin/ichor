@@ -29,6 +29,15 @@ const (
 	pathMachineNetworkIfaces = "machine.network.interfaces" // uncovered on purpose: NIC changes stay reboot-required
 	pathMachineInstallDisk   = "machine.install.disk"
 	pathSysctlForward        = "SysctlConfig.params.net.ipv4.ip_forward"
+
+	pathVolumeConfigSelector = "VolumeConfig.provisioning.diskSelector.match"
+	// Uncovered on purpose: trim is read by its own scheduled controller,
+	// not the provisioning state machine, see fieldmeta.go.
+	pathVolumeConfigTrim = "VolumeConfig.trim.enabled"
+	// Uncovered on purpose: architecture.md says assigning a previously
+	// unused disk to these roles does not need a reset.
+	pathUserVolumeConfigSelector = "UserVolumeConfig.provisioning.diskSelector.match"
+	pathRawVolumeConfigSelector  = "RawVolumeConfig.provisioning.diskSelector.match"
 )
 
 func TestAssess_UnknownPathIsRebootRequired(t *testing.T) {
@@ -39,6 +48,27 @@ func TestAssess_UnknownPathIsRebootRequired(t *testing.T) {
 	}
 	if len(impact.InstallTimeOnly) != 0 {
 		t.Fatalf("Assess(unknown path) = %+v, want no InstallTimeOnly", impact)
+	}
+}
+
+// TestAssess_UserAndRawVolumeConfigStayRebootRequired pins a deliberate
+// choice, not an oversight: unlike VolumeConfig (system volumes),
+// UserVolumeConfig and RawVolumeConfig have no fieldmeta rule at all, since
+// architecture.md says assigning one of their roles to a previously unused
+// disk does not need a reset. The reboot-required default is already their
+// correct classification; this test is what would fail if a future change
+// added an (incorrect) installTimeOnly or safe rule for either.
+func TestAssess_UserAndRawVolumeConfigStayRebootRequired(t *testing.T) {
+	for _, path := range []string{pathUserVolumeConfigSelector, pathRawVolumeConfigSelector} {
+		impact := Assess([]string{path}, nil)
+
+		if !impact.RebootRequired {
+			t.Errorf("Assess(%q).RebootRequired = false, want true", path)
+		}
+
+		if len(impact.InstallTimeOnly) != 0 {
+			t.Errorf("Assess(%q).InstallTimeOnly = %v, want empty", path, impact.InstallTimeOnly)
+		}
 	}
 }
 
@@ -74,6 +104,10 @@ func TestAssess_Rules(t *testing.T) {
 		{
 			name: "machine.install is install-time-only, not reboot", match: pathMachineInstallDisk,
 			nonMatch: "machine.installer.anything", wantInstallSet: true,
+		},
+		{
+			name: "VolumeConfig.provisioning is install-time-only, not reboot", match: pathVolumeConfigSelector,
+			nonMatch: pathVolumeConfigTrim, wantInstallSet: true,
 		},
 	}
 

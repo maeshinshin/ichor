@@ -169,7 +169,7 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	if !m.Spec.Approved {
+	if !m.Spec.IsApproved() {
 		return ctrl.Result{}, nil
 	}
 

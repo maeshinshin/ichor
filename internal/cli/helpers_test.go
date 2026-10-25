@@ -116,11 +116,11 @@ func newTestMachine(clusterName string) *ichorv1alpha1.TalosMachine {
 	return &ichorv1alpha1.TalosMachine{
 		Name: "node-a", Namespace: testNamespace,
 		Spec: ichorv1alpha1.TalosMachineSpec{
-			ClusterRef: corev1.LocalObjectReference{Name: clusterName},
-			Identity:   ichorv1alpha1.TalosMachineIdentity{UUID: testInitMachineUUID},
-			Endpoint:   "10.0.0.10:50000",
-			Role:       "worker",
-			Approved:   true,
+			ClusterRef:    corev1.LocalObjectReference{Name: clusterName},
+			Identity:      ichorv1alpha1.TalosMachineIdentity{UUID: testInitMachineUUID},
+			Endpoint:      "10.0.0.10:50000",
+			Role:          "worker",
+			ApprovalState: ichorv1alpha1.MachineApprovalStateApproved,
 		},
 	}
 }

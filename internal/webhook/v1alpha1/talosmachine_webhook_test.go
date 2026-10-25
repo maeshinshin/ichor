@@ -52,11 +52,11 @@ func newTestControlPlane(clusterName, uuidSuffix string) *ichorv1alpha1.TalosMac
 	return &ichorv1alpha1.TalosMachine{
 		GenerateName: "cp-", Namespace: testNamespace,
 		Spec: ichorv1alpha1.TalosMachineSpec{
-			ClusterRef: corev1.LocalObjectReference{Name: clusterName},
-			Identity:   ichorv1alpha1.TalosMachineIdentity{UUID: fmt.Sprintf("00000000-0000-0000-0000-0000000000%s", uuidSuffix)},
-			Endpoint:   fmt.Sprintf("10.0.1.%s:50000", uuidSuffix),
-			Role:       "controlplane",
-			Approved:   true,
+			ClusterRef:    corev1.LocalObjectReference{Name: clusterName},
+			Identity:      ichorv1alpha1.TalosMachineIdentity{UUID: fmt.Sprintf("00000000-0000-0000-0000-0000000000%s", uuidSuffix)},
+			Endpoint:      fmt.Sprintf("10.0.1.%s:50000", uuidSuffix),
+			Role:          "controlplane",
+			ApprovalState: ichorv1alpha1.MachineApprovalStateApproved,
 		},
 	}
 }
@@ -163,7 +163,7 @@ var _ = Describe("TalosMachine Webhook control-plane quorum", func() {
 	It("does not count an unapproved control plane toward quorum", func() {
 		clusterName := "quorum-unapproved"
 		cp := newTestControlPlane(clusterName, "21")
-		cp.Spec.Approved = false
+		cp.Spec.ApprovalState = ichorv1alpha1.MachineApprovalStatePending
 		Expect(k8sClient.Create(ctx, cp)).To(Succeed())
 		allowDelete(cp)
 		Expect(k8sClient.Update(ctx, cp)).To(Succeed())

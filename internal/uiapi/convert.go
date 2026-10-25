@@ -92,6 +92,25 @@ func specRoleToMachineRole(role string) pb.MachineRole {
 	}
 }
 
+// specApprovalStateToPB converts TalosMachineSpec.spec.approvalState to the
+// wire enum (ADR 0018). The CRD's own default ("pending") means an empty
+// string here is read the same way the CRD itself reads it, not as
+// UNSPECIFIED -- only a value outside the CRD's enum (impossible through
+// the API server's own validation, but not through this function's type)
+// falls through to UNSPECIFIED.
+func specApprovalStateToPB(state string) pb.MachineApprovalState {
+	switch state {
+	case ichorv1alpha1.MachineApprovalStatePending, "":
+		return pb.MachineApprovalState_MACHINE_APPROVAL_STATE_PENDING
+	case ichorv1alpha1.MachineApprovalStateApproved:
+		return pb.MachineApprovalState_MACHINE_APPROVAL_STATE_APPROVED
+	case ichorv1alpha1.MachineApprovalStateRejected:
+		return pb.MachineApprovalState_MACHINE_APPROVAL_STATE_REJECTED
+	default:
+		return pb.MachineApprovalState_MACHINE_APPROVAL_STATE_UNSPECIFIED
+	}
+}
+
 // machineToPB converts a TalosMachine to the wire Machine message
 // MachineService's four methods all return (machine.proto's doc comment:
 // "One Machine message serves both" the list and the detail view).
@@ -104,13 +123,13 @@ func machineToPB(m *ichorv1alpha1.TalosMachine) *pb.Machine {
 			Serial:       m.Spec.Identity.Serial,
 			MacAddresses: m.Spec.Identity.MACAddresses,
 		},
-		Endpoint:   m.Spec.Endpoint,
-		Role:       specRoleToMachineRole(m.Spec.Role),
-		NodeLabels: m.Spec.NodeLabels,
-		Hostname:   m.Spec.Hostname,
-		Approved:   m.Spec.Approved,
-		Conditions: conditions(m.Status.Conditions),
-		Stage:      "", // Talos's own MachineStatus stage: not read by this phase (GetNode's job); see docs/adr/0018.
+		Endpoint:      m.Spec.Endpoint,
+		Role:          specRoleToMachineRole(m.Spec.Role),
+		NodeLabels:    m.Spec.NodeLabels,
+		Hostname:      m.Spec.Hostname,
+		ApprovalState: specApprovalStateToPB(m.Spec.ApprovalState),
+		Conditions:    conditions(m.Status.Conditions),
+		Stage:         "", // Talos's own MachineStatus stage: not read by this phase (GetNode's job); see docs/adr/0018.
 	}
 }
 

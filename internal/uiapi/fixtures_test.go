@@ -106,15 +106,15 @@ func strongTestIdentity(uuid string) ichorv1alpha1.TalosMachineIdentity {
 	return ichorv1alpha1.TalosMachineIdentity{UUID: uuid, Serial: "serial-" + uuid, MACAddresses: []string{testMAC}}
 }
 
-func newTestMachine(clusterName string, identity ichorv1alpha1.TalosMachineIdentity, role string, approved bool) *ichorv1alpha1.TalosMachine {
+func newTestMachine(clusterName string, identity ichorv1alpha1.TalosMachineIdentity, role, approvalState string) *ichorv1alpha1.TalosMachine {
 	m := &ichorv1alpha1.TalosMachine{
 		GenerateName: "machine-", Namespace: testNamespace,
 		Spec: ichorv1alpha1.TalosMachineSpec{
-			ClusterRef: corev1.LocalObjectReference{Name: clusterName},
-			Identity:   identity,
-			Endpoint:   "10.0.0.10:50000",
-			Role:       role,
-			Approved:   approved,
+			ClusterRef:    corev1.LocalObjectReference{Name: clusterName},
+			Identity:      identity,
+			Endpoint:      "10.0.0.10:50000",
+			Role:          role,
+			ApprovalState: approvalState,
 		},
 	}
 	Expect(k8sClient.Create(ctx, m)).To(Succeed())

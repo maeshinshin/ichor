@@ -20,8 +20,14 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
+	"net/netip"
 	"slices"
+	"strconv"
+	"sync"
+	"time"
 
+	"github.com/siderolabs/talos/pkg/machinery/constants"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
@@ -208,4 +214,102 @@ func sameIdentity(existing ichorv1alpha1.TalosMachineIdentity, hw HardwareIdenti
 	slices.Sort(b)
 
 	return slices.Equal(a, b)
+}
+
+// discoveryConcurrency and discoveryDialTimeout bound one DiscoverAll call's
+// worst case. The CRD caps spec.discovery at 64 addresses plus four /24
+// CIDRs (256 addresses each), so at most 64+4*256=1088 candidates exist to
+// probe. The per-candidate deadline covers the whole of Discover -- the
+// insecure maintenance-mode dial and identity read *and* the Kubernetes API
+// calls that follow for a strong identity -- so it has to be generous
+// enough that ordinary API latency never gets mistaken for an unreachable
+// node; 2s does that while still keeping the worst case (1088 candidates /
+// 32 workers * 2s ≈ 68s) well short of "hangs." Neither number is
+// configurable -- nobody asked for that knob, and a fixed worst case is the
+// property that matters.
+const (
+	discoveryConcurrency = 32
+	discoveryDialTimeout = 2 * time.Second
+)
+
+// EnumerateCandidates expands cluster.Spec.Discovery into the maintenance
+// endpoints to probe, each address (direct or from a CIDR) paired with
+// Talos's fixed apid port -- the only port this ever dials (ADR 0011). A
+// nil or empty Discovery enumerates to nothing: Ichor never finds a range
+// on its own, only ever the one declared.
+func EnumerateCandidates(cluster *ichorv1alpha1.TalosCluster) []string {
+	d := cluster.Spec.Discovery
+	if d == nil {
+		return nil
+	}
+
+	candidates := make([]string, 0, len(d.Addresses))
+
+	for _, a := range d.Addresses {
+		candidates = append(candidates, net.JoinHostPort(a, strconv.Itoa(constants.ApidPort)))
+	}
+
+	for _, c := range d.CIDRs {
+		prefix, err := netip.ParsePrefix(c)
+		if err != nil {
+			continue // the CRD's own CEL validation already rejects this; defensive only.
+		}
+
+		for addr := prefix.Masked().Addr(); prefix.Contains(addr); addr = addr.Next() {
+			candidates = append(candidates, net.JoinHostPort(addr.String(), strconv.Itoa(constants.ApidPort)))
+		}
+	}
+
+	return candidates
+}
+
+// DiscoverAll enumerates cluster.Spec.Discovery's declared candidates and
+// calls Discover on each, bounded by discoveryConcurrency and
+// discoveryDialTimeout. An address that never answers -- most of a
+// provisioning network, by design -- fails silently and is skipped: logging
+// or eventing every miss would bury the one candidate that matters in
+// noise, which is why neither this function nor Discover's own connect/read
+// error paths log anything for that case. Discover's own identity
+// classification and events still run normally for whatever does answer.
+func (r *DiscoveryReconciler) DiscoverAll(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster,
+) ([]*ichorv1alpha1.TalosMachine, error) {
+	candidates := EnumerateCandidates(cluster)
+	if len(candidates) == 0 {
+		return nil, nil
+	}
+
+	sem := make(chan struct{}, discoveryConcurrency)
+
+	var (
+		wg      sync.WaitGroup
+		mu      sync.Mutex
+		results []*ichorv1alpha1.TalosMachine
+	)
+
+	for _, endpoint := range candidates {
+		wg.Add(1)
+		sem <- struct{}{}
+
+		go func(endpoint string) {
+			defer wg.Done()
+			defer func() { <-sem }()
+
+			cctx, cancel := context.WithTimeout(ctx, discoveryDialTimeout)
+			defer cancel()
+
+			m, err := r.Discover(cctx, cluster, endpoint)
+			if err != nil || m == nil {
+				return
+			}
+
+			mu.Lock()
+			results = append(results, m)
+			mu.Unlock()
+		}(endpoint)
+	}
+
+	wg.Wait()
+
+	return results, nil
 }

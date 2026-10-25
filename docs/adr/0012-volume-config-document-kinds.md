@@ -24,6 +24,12 @@ Add three roots to `internal/tools/mirrorgen/main.go`'s `roots`:
 provisioners," which is exactly what a storage preset is. `unused` needs no document at all: the
 absence of an assignment is the representation.
 
+`VolumeConfig.MetaName` (which system volume this document configures) mirrors as a plain,
+unrestricted `string` — Talos's own type carries no enum here either, since `VolumeConfig` also
+names volumes phase 2 never touches. **Both `STATE` and `EPHEMERAL` are representable**, the same
+way, through the same field; `TestRoundTripVolumeConfig` exercises it with `EPHEMERAL` (the role
+the design calls out), and nothing about the mechanism is specific to that name.
+
 Walking these three surfaced the same two kinds of problem ADR 0003 already has tables for, plus
 one the generator didn't have a table for yet:
 

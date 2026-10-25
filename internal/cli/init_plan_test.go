@@ -179,7 +179,7 @@ func TestBuildInitPlan_RejectsUnschedulableWithNoWorkers(t *testing.T) {
 // but the operator is told why that is almost always wrong.
 func TestBuildInitPlan_NonControllerNamespaceWarnsButSucceeds(t *testing.T) {
 	in := validInitPlanInput()
-	in.Namespace = "default"
+	in.Namespace = testNamespace
 
 	var warn bytes.Buffer
 

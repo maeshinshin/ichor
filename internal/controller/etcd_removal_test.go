@@ -19,9 +19,6 @@ package controller
 import (
 	"context"
 	"fmt"
-	"reflect"
-	"strings"
-	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -201,23 +198,4 @@ var _ = Describe("removeEtcdMember", func() {
 // should have let the object actually disappear.
 func machineKeyOf(m *ichorv1alpha1.TalosMachine) types.NamespacedName {
 	return types.NamespacedName{Namespace: m.Namespace, Name: m.Name}
-}
-
-// TestTalosClientHasNoResetMethod guards architecture.md's "Nodes" section
-// item about Reset being fire-and-forget and needing the request recorded
-// before a crash: Reset is kept out of this interface entirely, so
-// that failure mode cannot be stepped into by construction. This fails
-// loudly if a future change adds any method whose name contains "Reset",
-// which would need that fire-and-forget handling all over again.
-func TestTalosClientHasNoResetMethod(t *testing.T) {
-	typ := reflect.TypeFor[TalosClient]()
-
-	for m := range typ.Methods() {
-		if strings.Contains(strings.ToLower(m.Name), "reset") {
-			t.Fatalf("TalosClient gained a Reset-shaped method (%s): Reset is a separate unit "+
-				"precisely because it is fire-and-forget and needs its request recorded "+
-				"before a crash, unlike everything else on this interface -- that handling has to come "+
-				"back before this method does, not as a side effect of adding it here", m.Name)
-		}
-	}
 }

@@ -308,4 +308,22 @@ helm-history: ## Show Helm release history.
 helm-rollback: ## Rollback to previous Helm release.
 	$(HELM) rollback $(HELM_RELEASE) --namespace $(HELM_NAMESPACE)
 
+##@ Connect API (proto)
+
+.PHONY: proto-generate
+proto-generate: ## Regenerate Go types and Connect handlers/clients from proto/ into gen/go.
+	buf generate
+
+.PHONY: proto-lint
+proto-lint: ## Lint the proto/ sources with buf.
+	buf lint
+
+.PHONY: proto-breaking
+proto-breaking: ## Check proto/ for breaking changes against main; a no-op until proto/ lands on main.
+	@if git cat-file -e main:proto 2>/dev/null; then \
+		buf breaking proto --against '.git#branch=main,subdir=proto'; \
+	else \
+		echo "proto-breaking: proto/ does not exist on main yet; nothing to compare"; \
+	fi
+
 include test/harness/harness.mk

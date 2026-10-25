@@ -27,14 +27,21 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/secretsbundle"
 )
 
-// bundleSecretKey is the key the bundle Secret carries the bundle's bytes
-// under (internal/controller/bundle.go's bundleSecretKey, unexported
-// there; duplicated here as a literal, not logic, since it is the fixed
-// filename convention `talosctl gen secrets` itself uses, not something
-// derived by either package).
-const bundleSecretKey = "secrets.yaml"
+// bundleSecretKey is secretsbundle.SecretKey under this package's own
+// name (the same alias internal/controller/bundle.go and
+// internal/uiapi/bundle.go use): there is exactly one literal
+// value, in internal/secretsbundle, not a fourth copy of it here.
+//
+// This package also uses it below as the local backup file's name, and
+// that is deliberate, not a coincidence worth splitting apart:
+// secretsbundle.SecretKey's own doc comment says the local file and the
+// Secret's content are meant to be the same bytes under the same name,
+// so `kubectl create secret generic --from-file=secrets.yaml` round-trips
+// and a recovery reading either back gets identical bytes.
+const bundleSecretKey = secretsbundle.SecretKey
 
 // bundleDirPerm and bundleFilePerm are the permissions
 // docs/design/architecture.md's "Trust" section requires for the local

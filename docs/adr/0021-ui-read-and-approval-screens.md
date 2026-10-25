@@ -317,3 +317,46 @@ empty-string wire value needs a non-empty UI-side stand-in, mapped back to
 No further proto gaps were found while making this change: both new fields
 were exactly what the two screens needed, with nothing extra to add and
 nothing missing to report.
+
+## Second amendment (same date): the decision record lives on the CR, not only in the RPC response
+
+A rejected machine's reason was visible exactly once, in `RejectMachine`'s
+own `AuditRecord` response - gone the next time anyone loaded the list, so
+revisiting a rejected machine later showed *that* it was rejected but
+never *why*. Closed the way `approval_state` itself was closed (ADR
+0018's amendment): on the CR, the single source of truth every reader
+(this UI, the CLI, `kubectl get -o yaml`) agrees on, not duplicated per-
+caller state that only the original caller ever saw.
+
+`TalosMachineSpec.ApprovalDecision` (`api/v1alpha1/talosmachine_types.go`,
+a new `*TalosMachineApprovalDecision{Actor, Reason, At}`) sits beside
+`ApprovalState`, not inside it: the struct asserts no approved/rejected
+state of its own, so `ApprovalState` stays the only field a reader needs
+to check for that. `ApproveMachine` and `RejectMachine`
+(`internal/uiapi/machine_service.go`) both set it now; `IsApproved()`'s
+own behavior is untouched. `actor` stays the fixed `"ichor-ui"` string
+(ADR 0018) - added now, not deferred, so no decision recorded from here on
+is ever missing an actor once a real per-person one exists to fill it.
+
+**Symmetric reason, by design.** `ApproveMachineRequest` gained an
+optional `reason` field alongside `RejectMachineRequest`'s existing one,
+additive on the wire (`buf breaking` reports nothing). Rejecting almost
+always benefits from a stated reason; approving usually doesn't - the
+dialog already discloses identity, hardware and role before the button is
+even clickable, so the "why" is usually self-evident. But
+`AuditRecord.reason` was never documented as reject-only ("mainly used
+for rejections," ADR 0016 - not exclusive to them), and giving approve a
+reason field costs one optional string, not a parallel code path.
+Asymmetry would have meant writing down a reason why only one half of a
+symmetric action could explain itself, which this had no good answer for.
+
+`MachineList`'s Rejected section shows `Reason` and `When` per row now,
+read straight from `Machine.approval_decision`. The approve dialog gained
+its own optional, non-blocking `Reason` textarea for the same symmetry.
+
+`proto/`, `api/v1alpha1/talosmachine_types.go` and `internal/uiapi/` were
+all in scope for this amendment specifically (widened from this unit's
+original boundary, which had treated them as read-only) - `internal/
+controller/` was not touched, and `IsApproved()`'s meaning did not
+change, both confirmed by `internal/controller`'s own test suite passing
+unchanged.

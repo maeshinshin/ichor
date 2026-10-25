@@ -979,7 +979,13 @@ type StreamNodeLogsRequest struct {
 	// merged multi-node viewer.
 	Machines []*ObjectRef `protobuf:"bytes,1,rep,name=machines,proto3" json:"machines,omitempty"`
 	// resume_token is opaque; omit it to start from the current tail.
-	ResumeToken   string `protobuf:"bytes,2,opt,name=resume_token,json=resumeToken,proto3" json:"resume_token,omitempty"`
+	ResumeToken string `protobuf:"bytes,2,opt,name=resume_token,json=resumeToken,proto3" json:"resume_token,omitempty"`
+	// service selects which log: a Talos service name (e.g. "kubelet",
+	// "etcd", "trustd", "apid", "machined"), read through Talos's Logs API.
+	// Empty selects the machine's kernel log (Talos's Dmesg API) -- the
+	// whole-machine log this field's absence used to mean before it existed
+	// (docs/adr/0018).
+	Service       string `protobuf:"bytes,3,opt,name=service,proto3" json:"service,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1024,6 +1030,13 @@ func (x *StreamNodeLogsRequest) GetMachines() []*ObjectRef {
 func (x *StreamNodeLogsRequest) GetResumeToken() string {
 	if x != nil {
 		return x.ResumeToken
+	}
+	return ""
+}
+
+func (x *StreamNodeLogsRequest) GetService() string {
+	if x != nil {
+		return x.Service
 	}
 	return ""
 }
@@ -1163,10 +1176,11 @@ const file_ichor_v1alpha1_node_proto_rawDesc = "" +
 	"\x06origin\x18\x04 \x01(\v2\x1c.ichor.v1alpha1.ConfigOriginR\x06origin\"\x84\x01\n" +
 	"\x0fEffectiveConfig\x123\n" +
 	"\amachine\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\amachine\x12<\n" +
-	"\x06values\x18\x02 \x03(\v2$.ichor.v1alpha1.EffectiveConfigValueR\x06values\"q\n" +
+	"\x06values\x18\x02 \x03(\v2$.ichor.v1alpha1.EffectiveConfigValueR\x06values\"\x8b\x01\n" +
 	"\x15StreamNodeLogsRequest\x125\n" +
 	"\bmachines\x18\x01 \x03(\v2\x19.ichor.v1alpha1.ObjectRefR\bmachines\x12!\n" +
-	"\fresume_token\x18\x02 \x01(\tR\vresumeToken\"\xba\x01\n" +
+	"\fresume_token\x18\x02 \x01(\tR\vresumeToken\x12\x18\n" +
+	"\aservice\x18\x03 \x01(\tR\aservice\"\xba\x01\n" +
 	"\x16StreamNodeLogsResponse\x123\n" +
 	"\amachine\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\amachine\x12.\n" +
 	"\x04time\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x04time\x12\x18\n" +

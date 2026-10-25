@@ -742,7 +742,6 @@ resumption works. A short set runs per PR, the full set nightly.
   toggled on a running cluster?
 - How do a user volume and EPHEMERAL coexist on one disk, including negative
   `maxSize`, across the supported Talos versions?
-- Can `os:reader` read logs, or does the UI backend need more?
 - Exact Longhorn node label/annotation and evacuation field names per version.
 - The Cilium and Calico values that avoid perpetual OutOfSync under Argo CD.
 - Argo CD tracking method detection (label, annotation, both) and the Flux

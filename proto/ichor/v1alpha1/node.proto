@@ -143,6 +143,12 @@ message StreamNodeLogsRequest {
   repeated ObjectRef machines = 1;
   // resume_token is opaque; omit it to start from the current tail.
   string resume_token = 2;
+  // service selects which log: a Talos service name (e.g. "kubelet",
+  // "etcd", "trustd", "apid", "machined"), read through Talos's Logs API.
+  // Empty selects the machine's kernel log (Talos's Dmesg API) -- the
+  // whole-machine log this field's absence used to mean before it existed
+  // (docs/adr/0018).
+  string service = 3;
 }
 
 message StreamNodeLogsResponse {

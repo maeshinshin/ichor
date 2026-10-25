@@ -56,13 +56,24 @@ type NodeTalosClient interface {
 	// ResourceUsage reads a live CPU/memory/filesystem snapshot.
 	ResourceUsage(ctx context.Context) (*pb.ResourceUsage, error)
 
-	// StreamLogs tails the machine's kernel log (Talos's Dmesg API) --
-	// StreamNodeLogsRequest carries no service/container selector, so the
-	// whole-machine system log is the only log this RPC's shape can mean --
-	// calling onLine for every line until ctx is done or ReadLogs returns.
-	// since drops any line observed at or before it, the mechanism
-	// StreamNodeLogs's resume token relies on.
-	StreamLogs(ctx context.Context, since time.Time, onLine func(LogLine) error) error
+	// StreamLogs tails one log and calls onLine for every line after since
+	// (the mechanism StreamNodeLogs's resume token relies on) until ctx is
+	// done or the underlying stream ends. service selects which log:
+	// empty means the machine's kernel log (Talos's Dmesg API); any other
+	// value is a Talos service name (e.g. "kubelet", "etcd", "trustd",
+	// "apid", "machined"), read through Talos's Logs API in the "system"
+	// containerd namespace -- the same namespace/driver talosctl's own
+	// `logs <service>` uses by default (docs/adr/0018).
+	//
+	// Both APIs are confirmed readable by a role.Reader identity (same
+	// role set as role.Admin/role.Operator, per
+	// internal/app/machined/pkg/system/services/machined.go's RBAC table
+	// in the vendored Talos source) -- this answers architecture.md's open
+	// question "Can os:reader read logs?": yes. A PermissionDenied from
+	// Talos regardless is surfaced as connect.CodePermissionDenied, not
+	// swallowed, so a future Talos version narrowing that table fails
+	// loudly instead of silently returning nothing.
+	StreamLogs(ctx context.Context, service string, since time.Time, onLine func(LogLine) error) error
 }
 
 // LogLine is one line NodeTalosClient.StreamLogs delivers. Time is when the

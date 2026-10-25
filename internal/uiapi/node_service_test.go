@@ -50,6 +50,11 @@ type fakeNodeTalosClient struct {
 	// needs to have something to interrupt.
 	block bool
 
+	// gotService records the last service StreamLogs was called with, so a
+	// test can assert the request's service field reached NodeTalosClient
+	// unchanged.
+	gotService string
+
 	closed bool
 }
 
@@ -63,7 +68,9 @@ func (f *fakeNodeTalosClient) ResourceUsage(context.Context) (*pb.ResourceUsage,
 }
 func (f *fakeNodeTalosClient) Close() error { f.closed = true; return nil }
 
-func (f *fakeNodeTalosClient) StreamLogs(ctx context.Context, since time.Time, onLine func(LogLine) error) error {
+func (f *fakeNodeTalosClient) StreamLogs(ctx context.Context, service string, since time.Time, onLine func(LogLine) error) error {
+	f.gotService = service
+
 	for _, l := range f.lines {
 		if !l.Time.After(since) {
 			continue
@@ -109,7 +116,7 @@ func newTestNodeServer(fake *fakeNodeTalosClient, draining <-chan struct{}) (ich
 var _ = Describe("NodeService", func() {
 	It("returns hardware, disks, network interfaces, usage and Kubernetes status", func() {
 		cluster := newTestClusterWithBundle()
-		m := newTestMachine(cluster.Name, strongTestIdentity("uuid-getnode"), roleWorker, true)
+		m := newTestMachine(cluster.Name, strongTestIdentity("uuid-getnode"), roleWorker, ichorv1alpha1.MachineApprovalStateApproved)
 		m.Spec.Hostname = "node-getnode"
 		Expect(k8sClient.Update(ctx, m)).To(Succeed())
 
@@ -147,7 +154,7 @@ var _ = Describe("NodeService", func() {
 
 	It("reports CodeUnavailable when no NodeTalosClient is configured", func() {
 		cluster := newTestClusterWithBundle()
-		m := newTestMachine(cluster.Name, strongTestIdentity("uuid-notalos"), roleWorker, true)
+		m := newTestMachine(cluster.Name, strongTestIdentity("uuid-notalos"), roleWorker, ichorv1alpha1.MachineApprovalStateApproved)
 
 		client, closeFn := newTestNodeServer(nil, nil)
 		defer closeFn()
@@ -159,8 +166,8 @@ var _ = Describe("NodeService", func() {
 
 	It("streams logs from multiple machines merged onto one stream, and resumes from a token", func() {
 		cluster := newTestClusterWithBundle()
-		m1 := newTestMachine(cluster.Name, strongTestIdentity("uuid-log1"), roleWorker, true)
-		m2 := newTestMachine(cluster.Name, strongTestIdentity("uuid-log2"), roleWorker, true)
+		m1 := newTestMachine(cluster.Name, strongTestIdentity("uuid-log1"), roleWorker, ichorv1alpha1.MachineApprovalStateApproved)
+		m2 := newTestMachine(cluster.Name, strongTestIdentity("uuid-log2"), roleWorker, ichorv1alpha1.MachineApprovalStateApproved)
 
 		t0 := time.Now().Add(-time.Minute)
 		fake := &fakeNodeTalosClient{lines: []LogLine{
@@ -204,9 +211,43 @@ var _ = Describe("NodeService", func() {
 		Expect(replayed).To(BeEmpty(), "resuming from the latest token must not replay already-seen lines")
 	})
 
+	It("passes the requested service through to NodeTalosClient, empty meaning the kernel log", func() {
+		cluster := newTestClusterWithBundle()
+		m := newTestMachine(cluster.Name, strongTestIdentity("uuid-logsvc"), roleWorker, ichorv1alpha1.MachineApprovalStateApproved)
+
+		fake := &fakeNodeTalosClient{}
+		client, closeFn := newTestNodeServer(fake, nil)
+		defer closeFn()
+
+		stream, err := client.StreamNodeLogs(ctx, connect.NewRequest(&pb.StreamNodeLogsRequest{
+			Machines: []*pb.ObjectRef{objectRef(m.Namespace, m.Name)},
+			Service:  "kubelet",
+		}))
+		Expect(err).NotTo(HaveOccurred())
+
+		for stream.Receive() { //nolint:revive // no lines to drain; just reach the stream's end
+		}
+		Expect(stream.Err()).NotTo(HaveOccurred())
+		Expect(fake.gotService).To(Equal("kubelet"))
+
+		// Unset must reach NodeTalosClient as "" (the kernel log), not some
+		// other default this handler might have been tempted to substitute.
+		fake.gotService = "sentinel-untouched"
+
+		stream2, err := client.StreamNodeLogs(ctx, connect.NewRequest(&pb.StreamNodeLogsRequest{
+			Machines: []*pb.ObjectRef{objectRef(m.Namespace, m.Name)},
+		}))
+		Expect(err).NotTo(HaveOccurred())
+
+		for stream2.Receive() { //nolint:revive // no lines to drain; just reach the stream's end
+		}
+		Expect(stream2.Err()).NotTo(HaveOccurred())
+		Expect(fake.gotService).To(BeEmpty())
+	})
+
 	It("ends an in-flight stream and tells the client to reconnect once draining starts", func() {
 		cluster := newTestClusterWithBundle()
-		m := newTestMachine(cluster.Name, strongTestIdentity("uuid-drain"), roleWorker, true)
+		m := newTestMachine(cluster.Name, strongTestIdentity("uuid-drain"), roleWorker, ichorv1alpha1.MachineApprovalStateApproved)
 
 		fake := &fakeNodeTalosClient{block: true}
 		draining := make(chan struct{})

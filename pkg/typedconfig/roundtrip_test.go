@@ -21,9 +21,13 @@ import (
 	"time"
 
 	specs "github.com/opencontainers/runtime-spec/specs-go"
+	mcel "github.com/siderolabs/talos/pkg/machinery/cel"
+	"github.com/siderolabs/talos/pkg/machinery/cel/celenv"
+	mblock "github.com/siderolabs/talos/pkg/machinery/config/types/block"
 	mmeta "github.com/siderolabs/talos/pkg/machinery/config/types/meta"
 	mruntime "github.com/siderolabs/talos/pkg/machinery/config/types/runtime"
 	mv1alpha1 "github.com/siderolabs/talos/pkg/machinery/config/types/v1alpha1"
+	rblock "github.com/siderolabs/talos/pkg/machinery/resources/block"
 	yaml "go.yaml.in/yaml/v4"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -213,6 +217,77 @@ func TestRoundTripConfig(t *testing.T) {
 
 	assertRoundTrip(t, orig, func() (machineryConverter[mv1alpha1.Config], error) {
 		return ConfigFromMachinery(orig)
+	})
+}
+
+// Phase 3 (disk roles): the three volume document kinds. selectorFor builds a
+// disk selector CEL expression the same way the approval flow would for a
+// disk with none of WWID, serial or a by-id link -- architecture.md's
+// documented fallback chain's last link, and exactly what Ichor's own
+// KubeVirt e2e nodes look like (virtio-blk). bus_path is always present, so
+// this is the selector a virtio-blk disk actually gets matched by.
+func selectorFor(expr string) mcel.Expression {
+	return mcel.MustExpression(mcel.ParseBooleanExpression(expr, celenv.DiskLocator()))
+}
+
+func TestRoundTripVolumeConfig(t *testing.T) {
+	orig := &mblock.VolumeConfigV1Alpha1{
+		MetaKind: mblock.VolumeConfigKind, MetaAPIVersion: apiVersionV1Alpha1,
+		MetaName: "EPHEMERAL",
+		ProvisioningSpec: mblock.ProvisioningSpec{
+			DiskSelectorSpec: mblock.DiskSelector{
+				Match: selectorFor(`disk.bus_path == "/pci0000:00/0000:00:0a.0/virtio5/"`),
+			},
+			// A negative maxSize reserves free space rather than consuming it
+			// (architecture.md); round-tripping one checks the sign survives.
+			ProvisioningMaxSize: mblock.MustSize("-10GiB"),
+		},
+		FilesystemSpec: mblock.SystemVolumeFilesystemSpec{
+			XFSSpec: &mblock.XFSSpec{MinAllocationGroupSizeConfig: mblock.MustByteSize("128MiB")},
+		},
+	}
+
+	assertRoundTrip(t, orig, func() (machineryConverter[mblock.VolumeConfigV1Alpha1], error) {
+		return VolumeConfigV1Alpha1FromMachinery(orig)
+	})
+}
+
+func TestRoundTripUserVolumeConfig(t *testing.T) {
+	volumeType := rblock.VolumeTypeDisk
+
+	orig := &mblock.UserVolumeConfigV1Alpha1{
+		MetaKind: mblock.UserVolumeConfigKind, MetaAPIVersion: apiVersionV1Alpha1,
+		MetaName:   "local-data",
+		VolumeType: &volumeType,
+		ProvisioningSpec: mblock.ProvisioningSpec{
+			DiskSelectorSpec: mblock.DiskSelector{
+				Match: selectorFor(`disk.bus_path == "/pci0000:00/0000:00:0a.0/virtio5/" && !system_disk`),
+			},
+			ProvisioningMaxSize: mblock.MustSize("50GiB"),
+		},
+		FilesystemSpec: mblock.FilesystemSpec{
+			FilesystemType: rblock.FilesystemTypeXFS,
+		},
+	}
+
+	assertRoundTrip(t, orig, func() (machineryConverter[mblock.UserVolumeConfigV1Alpha1], error) {
+		return UserVolumeConfigV1Alpha1FromMachinery(orig)
+	})
+}
+
+func TestRoundTripRawVolumeConfig(t *testing.T) {
+	orig := &mblock.RawVolumeConfigV1Alpha1{
+		MetaKind: mblock.RawVolumeConfigKind, MetaAPIVersion: apiVersionV1Alpha1,
+		MetaName: "ceph-osd",
+		ProvisioningSpec: mblock.ProvisioningSpec{
+			DiskSelectorSpec: mblock.DiskSelector{
+				Match: selectorFor(`disk.transport == "nvme" && !system_disk`),
+			},
+		},
+	}
+
+	assertRoundTrip(t, orig, func() (machineryConverter[mblock.RawVolumeConfigV1Alpha1], error) {
+		return RawVolumeConfigV1Alpha1FromMachinery(orig)
 	})
 }
 

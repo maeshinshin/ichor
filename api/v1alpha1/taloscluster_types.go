@@ -127,6 +127,30 @@ type TalosClusterCNI struct {
 	Custom *TalosClusterCNICustom `json:"custom,omitempty"`
 }
 
+// TalosClusterDiscovery lists maintenance-mode candidates for the controller to probe directly.
+// Empty (the default, on both fields) disables discovery entirely: the controller opens no
+// connection at all. Ichor never finds this range itself -- no subnet scan, no listening for a
+// beacon -- it only ever dials what is declared here, each on Talos's fixed maintenance API port
+// (ADR 0011). "### Trust" already assumes a separate provisioning network exists; this is where
+// that network is named.
+type TalosClusterDiscovery struct {
+	// addresses are specific IPv4 candidates to probe, each on Talos's fixed maintenance API port.
+	// +kubebuilder:validation:MaxItems=64
+	// +kubebuilder:validation:items:MaxLength=15
+	// +kubebuilder:validation:XValidation:rule="self.all(a, isIP(a) && ip(a).family() == 4)",message="addresses must be IPv4 addresses"
+	// +optional
+	Addresses []string `json:"addresses,omitempty"`
+
+	// cidrs are IPv4 address ranges to probe, one maintenance-mode connection attempt per address
+	// in range. Each must be /24 or smaller (at most 256 addresses); see docs/adr/0011 for why
+	// larger ranges are rejected rather than accepted.
+	// +kubebuilder:validation:MaxItems=4
+	// +kubebuilder:validation:items:MaxLength=18
+	// +kubebuilder:validation:XValidation:rule="self.all(c, isCIDR(c) && cidr(c).ip().family() == 4 && cidr(c).prefixLength() >= 24)",message="cidrs must be IPv4 and /24 or smaller"
+	// +optional
+	CIDRs []string `json:"cidrs,omitempty"`
+}
+
 // TalosClusterSpec defines the desired state of TalosCluster.
 type TalosClusterSpec struct {
 	// endpoint is the cluster's control-plane endpoint.
@@ -183,6 +207,10 @@ type TalosClusterSpec struct {
 	// between Talos and the CNI (docs/design/architecture.md, "CNI").
 	// +optional
 	CNI TalosClusterCNI `json:"cni,omitempty"`
+	// discovery lists maintenance-mode candidates for the controller to probe directly. Empty (the
+	// default) disables discovery: the controller opens no connection at all (ADR 0011).
+	// +optional
+	Discovery *TalosClusterDiscovery `json:"discovery,omitempty"`
 }
 
 // TalosClusterStatus defines the observed state of TalosCluster.

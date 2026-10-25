@@ -50,6 +50,7 @@ const (
 	cniPresetCilium   = "cilium"
 	kubeProxyEnabled  = "enabled"
 	kubeProxyReplaced = "replaced"
+	testCIDR          = "192.0.2.0/24"
 )
 
 func newConfigPatch(layer string, target *TalosConfigPatchTarget) *TalosConfigPatch {
@@ -390,6 +391,55 @@ var _ = Describe("TalosCluster", func() {
 
 		Expect(k8sClient.Create(context.Background(), u)).NotTo(Succeed())
 	})
+
+	It("accepts a TalosCluster with no discovery declared at all (the default)", func() {
+		c := newCluster(corev1.LocalObjectReference{Name: literalSecrets}, 3, "true")
+		Expect(k8sClient.Create(context.Background(), c)).To(Succeed())
+		Expect(c.Spec.Discovery).To(BeNil())
+	})
+
+	DescribeTable("discovery.addresses",
+		func(addresses []string, accepted bool) {
+			c := newCluster(corev1.LocalObjectReference{Name: literalSecrets}, 3, "true")
+			c.Spec.Discovery = &TalosClusterDiscovery{Addresses: addresses}
+
+			err := k8sClient.Create(context.Background(), c)
+			if accepted {
+				Expect(err).NotTo(HaveOccurred())
+			} else {
+				Expect(err).To(HaveOccurred())
+			}
+		},
+		Entry("a bare IPv4 address is accepted", []string{"192.0.2.10"}, true),
+		Entry("several IPv4 addresses are accepted", []string{"192.0.2.10", "192.0.2.11"}, true),
+		Entry("a hostname is rejected", []string{"node-a.example"}, false),
+		Entry("an address with a port is rejected", []string{"192.0.2.10:50000"}, false),
+		Entry("a CIDR is rejected here", []string{testCIDR}, false),
+		Entry("an IPv6 address is rejected", []string{"::1"}, false),
+	)
+
+	DescribeTable("discovery.cidrs",
+		func(cidrs []string, accepted bool) {
+			c := newCluster(corev1.LocalObjectReference{Name: literalSecrets}, 3, "true")
+			c.Spec.Discovery = &TalosClusterDiscovery{CIDRs: cidrs}
+
+			err := k8sClient.Create(context.Background(), c)
+			if accepted {
+				Expect(err).NotTo(HaveOccurred())
+			} else {
+				Expect(err).To(HaveOccurred())
+			}
+		},
+		Entry("a /24 is accepted", []string{testCIDR}, true),
+		Entry("a /32 is accepted", []string{"192.0.2.10/32"}, true),
+		Entry("a /23 is rejected (larger than /24)", []string{"192.0.2.0/23"}, false),
+		Entry("a /16 is rejected", []string{"192.0.0.0/16"}, false),
+		Entry("a /8 is rejected", []string{"10.0.0.0/8"}, false),
+		Entry("a bare address, not a CIDR, is rejected", []string{"192.0.2.0"}, false),
+		Entry("an IPv6 CIDR is rejected", []string{"::1/128"}, false),
+		Entry("a 5th CIDR is rejected (MaxItems=4)",
+			[]string{testCIDR, "192.0.3.0/24", "192.0.4.0/24", "192.0.5.0/24", "192.0.6.0/24"}, false),
+	)
 })
 
 // newClusterWithCNI is newCluster plus an explicit spec.cni, for the CNI preset/kubeProxy tests

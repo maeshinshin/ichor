@@ -6,6 +6,14 @@ type: application
 version: 0.1.0
 appVersion: "0.1.0"
 
+# ValidatingAdmissionPolicy (templates/admission/, ADR 0013) is stable --
+# enabled by default, no feature gate -- only from Kubernetes 1.30 onward
+# (kubernetes.io/docs/reference/access-authn-authz/validating-admission-policy/,
+# retrieved 2026-10-25: "Feature state: Stable since Kubernetes v1.30").
+# Without this floor, an older cluster would silently install the chart
+# with no kube-proxy-switch guard at all instead of failing the install.
+kubeVersion: ">=1.30.0-0"
+
 keywords:
   - kubernetes
   - operator

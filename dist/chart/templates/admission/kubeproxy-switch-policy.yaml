@@ -1,0 +1,39 @@
+{{- if .Values.admission.enabled }}
+# Mirrors config/admission/kubeproxy-switch-policy.yaml (ADR 0013): guards
+# TalosCluster.spec.cni.kubeProxy switches the same way whether this cluster
+# was installed through kustomize or through this chart. Independent of
+# .Values.webhook: it is a ValidatingAdmissionPolicy, enforced by the
+# apiserver itself, not the controller-runtime webhook server -- it still
+# works while the controller is down.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: ichor-cni-kubeproxy-switch
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["ichor.maesh.dev"]
+        apiVersions: ["v1alpha1"]
+        operations: ["UPDATE"]
+        resources: ["talosclusters"]
+  validations:
+    - expression: >-
+        object.spec.cni.kubeProxy == oldObject.spec.cni.kubeProxy ||
+        (has(object.metadata.annotations) &&
+         "ichor.maesh.dev/confirm-kube-proxy-switch" in object.metadata.annotations)
+      message: >-
+        switching spec.cni.kubeProxy requires the
+        ichor.maesh.dev/confirm-kube-proxy-switch annotation, since the switch
+        must run new-side-up, verify, old-side-down and nothing here does that
+        automatically
+      reason: Invalid
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: ichor-cni-kubeproxy-switch-binding
+spec:
+  policyName: ichor-cni-kubeproxy-switch
+  validationActions: ["Deny"]
+{{- end }}

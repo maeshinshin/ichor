@@ -220,22 +220,7 @@ func patchOrigins(
 		layer := configLayerToPB(p.Spec.Layer)
 
 		for _, d := range p.Spec.Documents {
-			doc, err := render.DocumentFromPatch(d)
-			if err != nil {
-				return nil, fmt.Errorf("patch %q: %w", p.Name, err)
-			}
-
-			c, err := container.New(doc)
-			if err != nil {
-				return nil, fmt.Errorf("patch %q: %w", p.Name, err)
-			}
-
-			out, err := c.EncodeBytes(encoder.WithComments(encoder.CommentsDisabled))
-			if err != nil {
-				return nil, fmt.Errorf("patch %q: %w", p.Name, err)
-			}
-
-			paths, err := leafPaths(out)
+			paths, err := documentLeafPaths(d)
 			if err != nil {
 				return nil, fmt.Errorf("patch %q: %w", p.Name, err)
 			}
@@ -247,6 +232,32 @@ func patchOrigins(
 	}
 
 	return origin, nil
+}
+
+// documentLeafPaths renders one TalosConfigPatchDocument in isolation --
+// never merged with any other patch or the base config, the same
+// render.DocumentFromPatch call patchOrigins always used -- and flattens
+// it to the field paths it sets. Shared by patchOrigins above (origin
+// attribution) and patch_service.go's PreviewImpact (pkg/fieldmeta
+// classification): both need exactly "what paths does this one document
+// set," computed once rather than twice.
+func documentLeafPaths(d ichorv1alpha1.TalosConfigPatchDocument) (map[string]string, error) {
+	doc, err := render.DocumentFromPatch(d)
+	if err != nil {
+		return nil, err
+	}
+
+	c, err := container.New(doc)
+	if err != nil {
+		return nil, err
+	}
+
+	out, err := c.EncodeBytes(encoder.WithComments(encoder.CommentsDisabled))
+	if err != nil {
+		return nil, err
+	}
+
+	return leafPaths(out)
 }
 
 // configLayerToPB converts a TalosConfigPatchSpec.layer value to the wire

@@ -1,0 +1,83 @@
+/*
+Copyright 2026 maeshinshin.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package cli
+
+import (
+	"fmt"
+	"os"
+
+	"github.com/spf13/cobra"
+)
+
+// Global flags every subcommand shares (docs/design/architecture.md, "CLI
+// and UI": "The CLI offers -o yaml|json ... and interactive confirmation
+// with --yes"). kubeconfig and talosconfig follow kubectl's and talosctl's
+// own conventions -- an empty default lets client-go's and machinery's own
+// loaders resolve $KUBECONFIG/$TALOSCONFIG and the well-known file paths,
+// instead of this command guessing at them a second time (ADR 0014).
+const (
+	outputYAML = "yaml"
+	outputJSON = "json"
+)
+
+var (
+	kubeconfigPath  string
+	talosconfigPath string
+	outputFormat    string
+	assumeYes       bool
+)
+
+// rootCmd is the base command when ichor is called without any subcommands.
+var rootCmd = &cobra.Command{
+	Use:   "ichor",
+	Short: "Manage a Talos Linux cluster through Ichor's CRDs",
+	Long: `ichor is the CLI half of Ichor's CLI/UI parity (docs/design/architecture.md,
+"CLI and UI"): it changes the world by writing the same custom resources
+the UI and controller use, never by talking to a Talos node directly to
+mutate it.`,
+	SilenceUsage: true,
+}
+
+// Execute adds all child commands to the root command and sets flags appropriately.
+// This is called by main.main(). It only needs to happen once to the rootCmd.
+func Execute() {
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+
+func init() {
+	rootCmd.PersistentFlags().StringVar(&kubeconfigPath, "kubeconfig", "",
+		"path to the kubeconfig for the cluster's Kubernetes API; defaults to $KUBECONFIG, then ~/.kube/config")
+	rootCmd.PersistentFlags().StringVar(&talosconfigPath, "talosconfig", "",
+		"path to the talosconfig used to reach each node's Talos API; defaults to $TALOSCONFIG, then ~/.talos/config")
+	rootCmd.PersistentFlags().StringVarP(&outputFormat, "output", "o", outputYAML,
+		fmt.Sprintf("output format: %q or %q", outputYAML, outputJSON))
+	rootCmd.PersistentFlags().BoolVar(&assumeYes, "yes", false,
+		"skip interactive confirmation before a dangerous operation")
+}
+
+// validateOutputFormat rejects anything but the two formats the design
+// document promises ("-o yaml|json"), before a command does any real work.
+func validateOutputFormat(format string) error {
+	if format != outputYAML && format != outputJSON {
+		return fmt.Errorf("invalid --output %q: must be %q or %q", format, outputYAML, outputJSON)
+	}
+
+	return nil
+}

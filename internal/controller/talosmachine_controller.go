@@ -270,7 +270,7 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	drifted := previousInputsHash != "" && previousInputsHash == inputsHash
 
 	// Step 3: work out which field paths changed and what that implies.
-	paths, err := changedPaths(current, rendered)
+	paths, err := ChangedPaths(current, rendered)
 	if err != nil {
 		log.Error(err, "diffing current and rendered configuration")
 

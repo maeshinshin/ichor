@@ -27,7 +27,7 @@ import (
 	yaml "go.yaml.in/yaml/v4"
 )
 
-// changedPaths implements design step 3 (configuration reconcile): it
+// ChangedPaths implements design step 3 (configuration reconcile): it
 // reports which field paths differ between a node's current configuration
 // and the freshly rendered one, spelled the way pkg/fieldmeta expects --
 // dot-separated, rooted at "machine"/"cluster" for the legacy v1alpha1
@@ -39,7 +39,11 @@ import (
 // Config document) and, for named documents, its "name" field are the only
 // things it needs to know, and both are Talos's own document discriminators
 // (config.NamedDocument), not something this function invents.
-func changedPaths(oldCfg, newCfg []byte) ([]string, error) {
+//
+// Exported so cmd/ichor's "adopt" can ask the same question this package's
+// own reconciler asks (which fields differ between a node's live
+// configuration and a fresh render) without re-deriving the diff (ADR 0014).
+func ChangedPaths(oldCfg, newCfg []byte) ([]string, error) {
 	oldDocs, err := decodeDocs(oldCfg)
 	if err != nil {
 		return nil, fmt.Errorf("decoding current configuration: %w", err)

@@ -1,0 +1,43 @@
+/*
+Copyright 2026 maeshinshin.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package controller
+
+import "context"
+
+// MaintenanceClient is the maintenance-mode Talos API surface discovery
+// needs: just enough to read a node's hardware identity over the
+// unauthenticated connection maintenance mode offers
+// (docs/design/architecture.md "Nodes": "reads hardware identity, disks and
+// NICs over an insecure connection"). Disks and the rest of "Nodes" are later
+// phases' concern (disk roles, topology); this interface carries only what
+// identity strength needs.
+type MaintenanceClient interface {
+	// Identity reads the node's SMBIOS UUID, serial number and permanent MAC
+	// addresses -- the identity tuple architecture.md's "Nodes" section
+	// defines -- plus the manufacturer, shown to an operator resolving a weak
+	// or colliding identity but never itself part of the tuple.
+	Identity(ctx context.Context) (HardwareIdentity, error)
+}
+
+// HardwareIdentity is what MaintenanceClient.Identity reads from a node's
+// maintenance API.
+type HardwareIdentity struct {
+	UUID         string
+	Serial       string
+	MACAddresses []string
+	Manufacturer string
+}

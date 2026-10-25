@@ -59,7 +59,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -125,7 +124,6 @@ const driftPolicyAutoCorrect = "autoCorrect"
 // TalosMachineReconciler reconciles a TalosMachine object.
 type TalosMachineReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
 
 	// ControllerNamespace is the namespace loadBundle reads the secrets
 	// bundle Secret from -- the controller's own namespace (POD_NAMESPACE in

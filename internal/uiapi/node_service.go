@@ -141,13 +141,15 @@ func (s *Server) GetEffectiveConfig(
 	}), nil
 }
 
-// StreamNodeLogs tails one or more machines' Talos kernel log, merging them
-// onto one stream (node.proto's own doc comment: the node page's
-// single-machine tail and the merged multi-node viewer are "the same
-// mechanism at different cardinality"). It stops and asks the client to
-// reconnect when the backend starts draining (architecture.md: "graceful
-// termination that asks clients to reconnect"), surviving that drain
-// through resume_token.
+// StreamNodeLogs tails one or more machines' log, merging them onto one
+// stream (node.proto's own doc comment: the node page's single-machine
+// tail and the merged multi-node viewer are "the same mechanism at
+// different cardinality"). service selects which log -- empty means
+// Talos's kernel log (Dmesg), any other value a Talos service name
+// (kubelet, etcd, trustd, apid, machined, ...), read through Talos's Logs
+// API. It stops and asks the client to reconnect when the
+// backend starts draining (architecture.md: "graceful termination that
+// asks clients to reconnect"), surviving that drain through resume_token.
 func (s *Server) StreamNodeLogs(
 	ctx context.Context, req *connect.Request[pb.StreamNodeLogsRequest], stream *connect.ServerStream[pb.StreamNodeLogsResponse],
 ) error {
@@ -159,6 +161,8 @@ func (s *Server) StreamNodeLogs(
 	if len(refs) == 0 {
 		return connect.NewError(connect.CodeInvalidArgument, errors.New("machines is required"))
 	}
+
+	service := req.Msg.GetService()
 
 	tok := decodeResumeToken(req.Msg.GetResumeToken())
 
@@ -200,7 +204,7 @@ func (s *Server) StreamNodeLogs(
 			since := tok[namespacedName(ref).String()].Time
 			mu.Unlock()
 
-			return tc.StreamLogs(gctx, since, func(line LogLine) error { return send(ref, line) })
+			return tc.StreamLogs(gctx, service, since, func(line LogLine) error { return send(ref, line) })
 		})
 	}
 
@@ -227,7 +231,7 @@ func (s *Server) dialNode(
 ) (NodeTalosClient, func(), error) {
 	var bundle *secrets.Bundle
 
-	if m.Spec.Approved {
+	if m.Spec.IsApproved() {
 		b, err := loadBundle(ctx, s.Client, cluster)
 		if err != nil {
 			return nil, nil, connect.NewError(connect.CodeInternal, err)

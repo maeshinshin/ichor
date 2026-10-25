@@ -18,49 +18,30 @@ package uiapi
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
-	yaml "go.yaml.in/yaml/v4"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/secretsbundle"
 )
 
-// bundleSecretKey must stay byte-for-byte the same key
-// internal/controller/bundle.go reads: both decode the one Secret
-// TalosCluster.spec.secretsRef names, under the same "secrets.yaml" key
-// architecture.md's "Trust" section fixes.
-//
-// shortcut: duplicated rather than imported, since internal/controller's
-// loadBundle is unexported and internal/controller is the controller's own
-// package, not a shared one; if the two ever drift, the symptom is loud
-// (every render this package attempts fails to decode) rather than silent.
-const bundleSecretKey = "secrets.yaml"
+// bundleSecretKey is secretsbundle.SecretKey under this package's own
+// name, kept so fixtures_test.go's existing fixture, keyed on it, doesn't
+// need to change -- it is an alias, not a second definition: there is
+// still exactly one literal value, in internal/secretsbundle.
+const bundleSecretKey = secretsbundle.SecretKey
 
-// loadBundle reads cluster's secrets bundle the same way
-// internal/controller.loadBundle does, so GetEffectiveConfig and
-// NodeTalosClient dialing (a read-only identity minted from the same CA)
-// render and connect against the same bundle the controller applied.
+// loadBundle reads cluster's secrets bundle via internal/secretsbundle.Load -- the same function
+// internal/controller.loadBundle calls --
+// so GetEffectiveConfig and NodeTalosClient dialing (a read-only identity
+// minted from the same CA) render and connect against the same bundle the
+// controller applied, and so a failure to read or decode it is guaranteed
+// never to put the Secret's data into an error message (principle 2),
+// enforced in the one place both callers share rather than two
+// independently-written copies that could drift on that guarantee without
+// either side's own leak tests noticing -- this package had none of its
+// own before this.
 func loadBundle(ctx context.Context, c client.Client, cluster *ichorv1alpha1.TalosCluster) (*secrets.Bundle, error) {
-	var secret corev1.Secret
-
-	key := types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Spec.SecretsRef.Name}
-	if err := c.Get(ctx, key, &secret); err != nil {
-		return nil, fmt.Errorf("getting secrets bundle Secret %q: %w", key, err)
-	}
-
-	raw, ok := secret.Data[bundleSecretKey]
-	if !ok {
-		return nil, fmt.Errorf("secrets bundle Secret %q has no %q key", key, bundleSecretKey)
-	}
-
-	var bundle secrets.Bundle
-	if err := yaml.Unmarshal(raw, &bundle); err != nil {
-		return nil, fmt.Errorf("decoding secrets bundle from Secret %q: %w", key, err)
-	}
-
-	return &bundle, nil
+	return secretsbundle.Load(ctx, c, cluster.Namespace, cluster.Spec.SecretsRef.Name)
 }

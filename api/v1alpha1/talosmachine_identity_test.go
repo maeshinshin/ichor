@@ -14,37 +14,40 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package uiapi
+package v1alpha1
 
-import (
-	"testing"
+import "testing"
 
-	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
-)
+// TestIsStrongIdentity is the canonical test's identity-tuple
+// rule, moved here from internal/uiapi when the rule itself
+// moved here: internal/controller.strongIdentity and
+// internal/uiapi.machine_service.go's own call both exercise this same
+// method now, so this is the one place its truth table needs testing.
+func TestIsStrongIdentity(t *testing.T) {
+	const testMAC = "aa:bb:cc:dd:ee:ff"
 
-func TestStrongIdentity(t *testing.T) {
 	cases := []struct {
 		name     string
-		identity ichorv1alpha1.TalosMachineIdentity
+		identity TalosMachineIdentity
 		want     bool
 	}{
-		{"complete tuple", ichorv1alpha1.TalosMachineIdentity{
+		{"complete tuple", TalosMachineIdentity{
 			UUID: "u", Serial: "s", MACAddresses: []string{testMAC},
 		}, true},
-		{"missing UUID", ichorv1alpha1.TalosMachineIdentity{
+		{"missing UUID", TalosMachineIdentity{
 			Serial: "s", MACAddresses: []string{testMAC},
 		}, false},
-		{"missing serial", ichorv1alpha1.TalosMachineIdentity{
+		{"missing serial", TalosMachineIdentity{
 			UUID: "u", MACAddresses: []string{testMAC},
 		}, false},
-		{"missing every MAC", ichorv1alpha1.TalosMachineIdentity{UUID: "u", Serial: "s"}, false},
-		{"everything empty", ichorv1alpha1.TalosMachineIdentity{}, false},
+		{"missing every MAC", TalosMachineIdentity{UUID: "u", Serial: "s"}, false},
+		{"everything empty", TalosMachineIdentity{}, false},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := strongIdentity(tc.identity); got != tc.want {
-				t.Fatalf("strongIdentity(%+v) = %v, want %v", tc.identity, got, tc.want)
+			if got := tc.identity.IsStrongIdentity(); got != tc.want {
+				t.Fatalf("IsStrongIdentity(%+v) = %v, want %v", tc.identity, got, tc.want)
 			}
 		})
 	}

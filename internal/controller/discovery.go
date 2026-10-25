@@ -191,11 +191,18 @@ func (r *DiscoveryReconciler) reportWeak(
 }
 
 // strongIdentity reports whether hw has every element of
-// docs/design/architecture.md's "Nodes" identity tuple -- SMBIOS UUID,
-// serial number, and at least one permanent MAC address. Any missing
-// element is a weak key, and Ichor does not auto-register on one.
+// docs/design/architecture.md's "Nodes" identity tuple, via
+// ichorv1alpha1.TalosMachineIdentity.IsStrongIdentity -- the one place
+// that rule is written, shared with internal/uiapi's own,
+// separate call site on the TalosMachine's already-recorded identity.
+// HardwareIdentity, not TalosMachineIdentity, is what Discover has in
+// hand at this point (the CRD type is only built once a strong identity
+// clears this check, a few lines below), so this converts rather than
+// calling the method on a type this package doesn't have yet.
 func strongIdentity(hw HardwareIdentity) bool {
-	return hw.UUID != "" && hw.Serial != "" && len(hw.MACAddresses) > 0
+	return ichorv1alpha1.TalosMachineIdentity{
+		UUID: hw.UUID, Serial: hw.Serial, MACAddresses: hw.MACAddresses,
+	}.IsStrongIdentity()
 }
 
 // sameIdentity reports whether existing and hw describe the same physical

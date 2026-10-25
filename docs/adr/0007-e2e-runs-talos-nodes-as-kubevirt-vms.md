@@ -533,3 +533,133 @@ cluster shows `ichor-validating-webhook-configuration` with `WEBHOOKS: 2`, regis
 successfully. (The log also shows the expected `no matches for kind "TalosMachine"`
 error repeating -- CRDs are not yet installed on this inner cluster at this point in the
 sequence, which is next.)
+
+### Removal ordering, verified as far as current code allows
+
+With the controller reachable, installed all five CRDs (not just TalosCluster/
+TalosMachine) on the inner cluster and restarted `/manager`: the first attempt with only
+two CRDs installed crashed outright --
+`Failed to run manager  {"error": "failed to wait for talosoperation caches to sync..."}`
+-- because the manager waits for every informer it starts (TalosOperation and
+TalosStorage included) to sync before `Start` returns, not just the ones a given test
+cares about. Then created a `TalosCluster` (`e2e-ha`, `controlPlane.count: 3`) and three
+`TalosMachine` fixtures (role `controlplane`, `approvalState: approved`, endpoints
+matching the three real node pod IPs) deliberately without a working `secretsRef` Secret
+-- confirmed safe again: all three landed on `Ready=False/SecretsBundleUnavailable`
+without ever touching the real Talos API, and all three picked up
+`ichor.maesh.dev/machine-removal` on their first reconcile, matching
+`talosmachine_controller.go`'s "only an approved control plane gets the finalizer" rule.
+
+**Quorum-breaking delete, refused via admission even with `allow-delete` set.** A real
+finding changed how this had to be tested: `CountApprovedControlPlanes` lists every
+TalosMachine matching role/approval/cluster with no filter on `DeletionTimestamp`, and
+`reconcileRemoval`'s only `RemoveFinalizer` call is the "TalosCluster already gone"
+branch -- the "confirmed safe, drained" success path never clears it either (removal.go's
+own doc comment: etcd member removal and the Talos reset are "deliberately not
+implemented here"). So a deleted control plane never actually leaves the count, which
+means the webhook can never observe a real "3 -> 2 already happened, now try a 2nd" --
+every attempt at a cluster's nominal size sees the same nominal count. Isolating the
+quorum math this item actually asks about therefore needed one explicit, labeled bypass:
+cleared `e2e-ha-0`'s finalizer directly (`kubectl patch ... finalizers: null`, no
+`DeletionTimestamp` on it yet, so it just vanished) to get a *real* two-machine count,
+simulating "a prior removal already finished" without exercising removal.go's own
+(incomplete) sequence. With that real two-machine state:
+```
+$ kubectl delete talosmachine e2e-ha-1   # annotated allow-delete=true first
+Error from server (Forbidden): admission webhook "vtalosmachine-v1alpha1.kb.io" denied
+the request: delete refused: control planes 2 -> 1, below etcd quorum of 2 for 2 members
+```
+refused by `CheckControlPlaneQuorum` at the webhook, annotation notwithstanding -- exactly
+the claim this item makes, confirmed for real, with the one caveat above about how the
+"2 remaining" state had to be reached.
+
+A second, unplanned finding from the *first* real delete attempt (`e2e-ha-0`, 3 -> 2,
+while all three originals were still present and `controlPlane.count` was still 3):
+admission allowed it (quorum alone passes 3 -> 2), but `reconcileRemoval`'s own recheck
+refused it anyway, for a *different* reason than quorum:
+```
+"delete refused: control planes 3 -> 2, below the declared count of 3; approve a
+replacement control plane before removing this one"
+```
+The webhook's `ValidateDelete` only ever calls `CheckControlPlaneQuorum`, never
+`CheckControlPlaneCount` -- so admission alone is not sufficient evidence that a removal
+will actually proceed; the controller's own post-admission recheck inside the lock is a
+second, stricter gate (declared count, not just quorum), and it is this second gate --
+not quorum -- that refuses *every* removal attempted while a cluster sits at its declared
+size. The architecture doc's "3->4->3, never 3->2" is enforced right here.
+
+**Last control plane cannot be deleted.** Continuing the bypass (cleared `e2e-ha-1`'s
+finalizer too, dropped its `approvalState` to `rejected` so it would stop counting, then
+deleted it for real -- leaving `e2e-ha-2` as the cluster's only approved control plane),
+then:
+```
+$ kubectl delete talosmachine e2e-ha-2   # annotated allow-delete=true first
+Error from server (Forbidden): admission webhook "vtalosmachine-v1alpha1.kb.io" denied
+the request: delete refused: last control plane (1 -> 0); delete the TalosCluster instead
+```
+Refused at admission, exactly as architecture.md names it. (The `e2e-ha-1` deletion
+attempt along the way produced the same refusal one layer later, in `reconcileRemoval`
+itself -- "last control plane (1 -> 0)" again, because by the time its own
+`DeletionTimestamp` got processed its `approvalState` had already flipped to `rejected`,
+so it stopped counting itself and saw only `e2e-ha-2` left. Real, but a messier path to
+the same evidence than the direct `e2e-ha-2` attempt above.)
+
+**A single deletion "completing in order," ending with etcd at 2 members: not achievable
+with current code, confirmed rather than assumed.** Set up the one scenario
+`checkControlPlaneRemoval` can actually pass -- added three more approved control-plane
+`TalosMachine`s (`e2e-ha-3/4/5`) alongside the one real-node-mapped survivor (`e2e-ha-2`),
+bringing the live approved count to 4 against a declared count of 3. Confirmed the
+`TalosCluster`'s own `Transitioning` condition came up correctly from that real data:
+`{"reason":"EvenControlPlaneCount","status":"True","message":"4 control planes approved
+right now"}`. Set `e2e-ha-2.spec.hostname` to the real Node name `ichor-e2e-ha-2` and
+deleted it (annotated): `checkControlPlaneRemoval(4, 3)` passed both quorum and declared-
+count, and `drainNode` ran for real against the real inner-cluster Node -- cordoned it
+(`spec.unschedulable: true`) and began evicting a real Pod placed there for the test. It
+reached:
+```
+"removal passed the quorum, last-control-plane and declared-count checks and the node was
+drained; etcd member removal and reset are not implemented yet, so the finalizer is held
+rather than letting deletion complete while the node may still be an etcd member"
+reason: RemovalApproved, status: True
+```
+-- the actual terminal state this code can reach, and etcd stayed a healthy 3-member
+cluster throughout (checked with `talosctl etcd members` via `test/internal/talosctl`'s
+one-shot-pod pattern, before and after). It never dropped to 2 members, and the
+`TalosMachine` kept its finalizer (still present after `RemovalApproved`) -- precisely
+what the package doc comment already says, now confirmed against a real 3-member etcd
+rather than taken on faith.
+
+**`transitioning` blocking a concurrent disruptive operation: the live signal was
+confirmed real; the refusal itself was not separately re-verified against real hardware
+this pass.** The `Transitioning` condition above came from a genuine List against a real
+apiserver, not a mock -- that much is now real-hardware evidence. Exercising the actual
+refusal (`refuseReboot`'s `acquireDisruptiveLock(..., completesTransition=false)`) needs
+the main reconcile path to get as far as detecting a reboot-requiring drift, which needs
+a working secrets bundle Secret -- setting one up correctly (the full Talos/Kubernetes/
+etcd CA bundle `pkg/render.BuildConfig` expects) is a materially bigger lift than
+anything else in this pass, and `internal/controller/acquire_guard_test.go` and
+`removal_test.go` already cover `acquireDisruptiveLock`'s transitioning refusal against a
+real (envtest) apiserver. Deferred rather than rushed.
+
+**Killing the controller mid-removal and confirming it resumes correctly from status --
+the highest-value item, fully confirmed.** Mid the `e2e-ha-2` drain above, polled until
+the Node showed `unschedulable: true` and the test Pod showed a `deletionTimestamp` while
+still `Running` (it traps `SIGTERM` and ignores it, so eviction's grace period keeps it
+alive long enough to interrupt) -- a real, observed mid-drain window, not a guess at
+timing. At that point:
+```
+$ kubectl exec ichor-e2e-controller -- kill -9 293   # /manager's pid
+```
+Confirmed etcd healthy and unchanged (still the same 3 members) with the controller dead.
+Restarted `/manager` the same way it was started originally; it re-acquired the leader
+lease under its own stable identity (`ichor-controller`) after the old lease expired (~17s,
+consistent with the standard 15s lease duration) -- no `HeldError`, exactly
+`clusterlock.Lock.Acquire`'s documented self-resumption case. It then picked `e2e-ha-2`
+back up, recomputed `checkControlPlaneRemoval` from scratch (still passing: the live count
+never changed while it was dead, for the same reason noted above), re-ran `drainNode`
+against the real Node, and reached the same `RemovalApproved` terminal condition quoted
+above on its own, with no manual nudge beyond retriggering its reconcile queue. etcd was
+checked again afterward and was still the same healthy 3-member cluster
+(`ichor-e2e-ha-0/1/2`, no learners) it had been before the kill. The interrupted deletion
+did not touch, let alone break, the real etcd cluster underneath it -- confirmed, not
+inferred from the code's own doc comment alone.

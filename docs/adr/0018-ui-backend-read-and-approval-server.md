@@ -346,3 +346,57 @@ rather than making that stream wait out the whole shutdown window.
   kernel log; `AuditRecord.actor` is a fixed placeholder pending OIDC
   (roadmap phase 9); `ResourceUsage.cpu_cores_used`'s formula is unverified
   against a live node.
+
+## A build-tag file is not type-checked by default, and two gaps that let it drift silently
+
+Found auditing this ADR's own mechanism, not while building it: putting
+`rbac_markers.go`'s content behind `//go:build ichorui_rbac` correctly keeps
+its markers out of `manager-role` (the stated goal), but it has a side
+effect nobody had named yet -- `go build ./...`, `go test ./...`, `go vet
+./...` and golangci-lint's default run **never compile that file at all**,
+since none of them ever sets that tag:
+
+```
+$ go list -f '{{.GoFiles}}' ./internal/uiapi/
+[bundle.go cluster_service.go ... ]      # rbac_markers.go absent
+$ go list -tags ichorui_rbac -f '{{.GoFiles}}' ./internal/uiapi/
+[... rbac_markers.go]                    # present only with the tag
+```
+
+A syntax or type error in that file would pass every check in the repo
+silently. `rbac_markers.go` is comment-only today so this never bit, but the
+next file anyone puts behind a build tag for the same "keep it out of a
+default scan" reason will hit this the first time it has an actual mistake
+in it. Fixed in `make vet`, the one place now: a second `go vet -tags
+ichorui_rbac ./internal/uiapi/...` pass after the untagged one, so the file
+is compiled on every `make test`/CI run without the tag ever reaching
+`manifests`, `build`, or anything that produces a binary. One place, not
+two: golangci-lint's own build-tag config was considered and rejected so
+that only `make vet`'s recipe needs to know this tag exists.
+
+Two related gaps closed in the same pass, both CI-level rather than
+`internal/uiapi`-level:
+
+- **`manifests-ichor-ui` was defined but never called from anywhere** --
+  not `manifests`, not CI. `config/rbac/ichor-ui/role.yaml` could silently
+  fall behind `rbac_markers.go`'s actual markers indefinitely; nothing
+  would ever regenerate it except a developer remembering the target's
+  name. `manifests` now depends on `manifests-ichor-ui`, so one `make
+  manifests` run (or the CI job below) regenerates both `ClusterRole`s
+  together.
+- **No CI step compared generated output against what's committed, for
+  anything** -- `config/crd/bases`, `config/rbac/*` (including
+  `ichor-ui/role.yaml` once wired in above), and `pkg/typedconfig`'s
+  `zz_generated.*.go` could all drift from their source silently; only
+  `dist/chart/chart_test.go`'s chart-vs-`config/` check existed, one layer
+  short of source-vs-`config/`. Added as `manifests-drift`, a job in
+  `.github/workflows/test.yml` run in parallel with `test`: `make manifests
+  generate fmt` (`fmt`, not just `generate` -- see its own comment: raw
+  `controller-gen`/mirrorgen output isn't always import-sorted the way
+  `go fmt` leaves it, and skipping it produced a false positive against
+  already-correct, already-committed files during this change), then `git
+  diff --exit-code`, failing with a message naming the fix
+  (`make manifests generate fmt`, then commit). Verified by hand: adding an
+  unregenerated field to `TalosClusterSpec` and running the same two
+  commands fails with exactly that diff and message; reverting the field
+  makes it pass again.

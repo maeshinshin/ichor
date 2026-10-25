@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -61,4 +62,49 @@ func loadBundle(
 	}
 
 	return secretsbundle.Load(ctx, c, namespace, cluster.Spec.SecretsRef.Name)
+}
+
+// bundleSecretMaterial lists every sensitive scalar in bundle. The one
+// list leak_test.go's own assertions and redactBundleMaterial below both
+// use, so the two can never silently check (or redact) a different set
+// of fields than each other.
+func bundleSecretMaterial(bundle *secrets.Bundle) []string {
+	return []string{
+		bundle.Secrets.BootstrapToken,
+		bundle.TrustdInfo.Token,
+		bundle.Cluster.ID,
+		bundle.Cluster.Secret,
+		string(bundle.Certs.OS.Crt),
+		string(bundle.Certs.OS.Key),
+		string(bundle.Certs.K8s.Crt),
+		string(bundle.Certs.K8s.Key),
+	}
+}
+
+// redactBundleMaterial replaces any of bundle's own secret-shaped scalars
+// found verbatim in message with a fixed placeholder.
+//
+// This exists for exactly one caller: setWarnings, which joins Talos's own
+// dry-run warning strings into a TalosMachine status Condition -- a field
+// read far more broadly than Secret RBAC allows. Verified against Talos
+// v1.14.3's actual source (pkg/machinery/config/container/validate.go's
+// validate/runtimeValidate, and every warning string machinery's own
+// v1alpha1 config validators generate) that no warning today ever echoes
+// a submitted value back, only field names, deprecation notices and
+// Talos's own constants. That
+// finding is about today's warning text, not about this field: a future
+// Talos release could start echoing a value without this package's own
+// code changing at all, and a redaction step that only runs when today's
+// known-safe assumption breaks is a redaction step that was never
+// actually exercised. Unconditional, so it stays exercised.
+func redactBundleMaterial(message string, bundle *secrets.Bundle) string {
+	for _, material := range bundleSecretMaterial(bundle) {
+		if material == "" {
+			continue
+		}
+
+		message = strings.ReplaceAll(message, material, "[redacted]")
+	}
+
+	return message
 }

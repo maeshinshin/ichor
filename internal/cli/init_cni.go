@@ -96,7 +96,7 @@ func buildCNIBootstrap(preset cni.Preset, clusterName, namespace string, wantArg
 			Name: clusterName + "-cni", Namespace: namespace,
 			Spec: ichorv1alpha1.TalosConfigPatchSpec{
 				ClusterRef: corev1.LocalObjectReference{Name: clusterName},
-				Layer:      "cluster",
+				Layer:      cniPatchLayer,
 				Documents:  docs,
 			},
 		}

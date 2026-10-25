@@ -24,17 +24,17 @@ import (
 
 func validInitPlanInput() initPlanInput {
 	return initPlanInput{
-		Cluster:           "my-cluster",
+		Cluster:           testInitClusterName,
 		Namespace:         "default",
 		Preset:            "standard",
-		CNIPreset:         "cilium",
-		EndpointType:      "vip",
-		EndpointAddress:   "10.0.0.5",
-		TalosVersion:      "v1.14.3",
+		CNIPreset:         testCNICilium,
+		EndpointType:      testEndpointTypeVIP,
+		EndpointAddress:   testEndpointAddr,
+		TalosVersion:      testTalosVersion,
 		KubernetesVersion: "v1.33.0",
 		VersionContract:   "v1.14",
 		ControlPlaneCount: 1,
-		Schedulable:       "true",
+		Schedulable:       testSchedulableTrue,
 	}
 }
 
@@ -50,15 +50,15 @@ func TestBuildInitPlan_Success(t *testing.T) {
 		t.Fatalf("expected no warning for a vip endpoint, got: %s", warn.String())
 	}
 
-	if cluster.Name != "my-cluster" || cluster.Namespace != "default" {
+	if cluster.Name != testInitClusterName || cluster.Namespace != "default" {
 		t.Fatalf("cluster name/namespace = %q/%q, want my-cluster/default", cluster.Name, cluster.Namespace)
 	}
 
-	if cluster.Spec.SecretsRef.Name != "my-cluster-secrets" {
+	if cluster.Spec.SecretsRef.Name != testInitClusterName+"-secrets" {
 		t.Fatalf("secretsRef.name = %q, want my-cluster-secrets", cluster.Spec.SecretsRef.Name)
 	}
 
-	if cluster.Spec.CNI.Preset != "cilium" || cluster.Spec.CNI.KubeProxy != "enabled" {
+	if cluster.Spec.CNI.Preset != testCNICilium || cluster.Spec.CNI.KubeProxy != "enabled" {
 		t.Fatalf("cni = %+v, want preset cilium, kubeProxy enabled", cluster.Spec.CNI)
 	}
 }

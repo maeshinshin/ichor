@@ -32,6 +32,10 @@ import (
 const (
 	outputYAML = "yaml"
 	outputJSON = "json"
+
+	// flagCluster is the "--cluster" flag name every subcommand that names
+	// a TalosCluster uses (adopt and init so far).
+	flagCluster = "cluster"
 )
 
 var (

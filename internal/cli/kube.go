@@ -17,6 +17,7 @@ limitations under the License.
 package cli
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -37,18 +38,51 @@ func loadKubeconfig(path string) (*rest.Config, error) {
 	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(rules, &clientcmd.ConfigOverrides{}).ClientConfig()
 }
 
-// newKubeClient builds a controller-runtime client scoped to Ichor's own
-// CRDs -- adopt reads and writes TalosCluster, TalosMachine and
-// TalosConfigPatch only, never a core resource, so that is all the scheme
-// needs to know about.
+// cliScheme is every type a CLI command needs a typed client for: Ichor's
+// own CRDs (TalosCluster, TalosMachine, TalosConfigPatch, ...) plus
+// corev1, since init creates the secrets bundle Secret and, with
+// --argocd, a repository credentials Secret.
+func cliScheme() (*runtime.Scheme, error) {
+	scheme := runtime.NewScheme()
+
+	if err := corev1.AddToScheme(scheme); err != nil {
+		return nil, err
+	}
+
+	if err := ichorv1alpha1.AddToScheme(scheme); err != nil {
+		return nil, err
+	}
+
+	return scheme, nil
+}
+
+// newKubeClient builds a controller-runtime client from the kubeconfig at
+// kubeconfigPath (adopt's path: the cluster it is adopting already has
+// one).
 func newKubeClient(kubeconfigPath string) (client.Client, error) {
 	cfg, err := loadKubeconfig(kubeconfigPath)
 	if err != nil {
 		return nil, err
 	}
 
-	scheme := runtime.NewScheme()
-	if err := ichorv1alpha1.AddToScheme(scheme); err != nil {
+	return newKubeClientForConfig(cfg)
+}
+
+// newKubeClientFromBytes builds a controller-runtime client from raw
+// kubeconfig bytes (init's path: the kubeconfig came back from
+// Kubeconfig(), the node Talos just bootstrapped, not a file on disk).
+func newKubeClientFromBytes(data []byte) (client.Client, error) {
+	cfg, err := clientcmd.RESTConfigFromKubeConfig(data)
+	if err != nil {
+		return nil, err
+	}
+
+	return newKubeClientForConfig(cfg)
+}
+
+func newKubeClientForConfig(cfg *rest.Config) (client.Client, error) {
+	scheme, err := cliScheme()
+	if err != nil {
 		return nil, err
 	}
 

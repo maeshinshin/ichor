@@ -125,14 +125,47 @@ The most consequential one is `machine.kubelet.extraConfig`, which is a
 commonly used field in hand-written Talos configuration; a user who needs it
 cannot express it through Ichor today.
 
-If that gap needs closing, the options in increasing cost are: mirror
-`ResourcesConfig.Requests`/`Limits` as `corev1.ResourceList`, which Ichor
-already depends on and which is one table entry rather than a catalogue; take
-dependencies on the `k8s.io/kubelet`, `k8s.io/apiserver` and
-`k8s.io/kube-scheduler` component-config modules to mirror four more; or revisit
-the typed-only decision for pass-through fields specifically. The first is
-cheap and uncontroversial. The last is a scope change and not the
-implementation's call.
+What closing the gap would actually cost was measured with controller-gen
+v0.21.0 against the real candidate types. Served sizes use this CRD's own
+file-to-served ratio.
+
+| Field | Upstream type | New dep | Served | Generates? | Needed |
+|---|---|---|---|---|---|
+| `ResourcesConfig.Requests`/`Limits` | `corev1.ResourceList` | no | ~430 B | clean | common |
+| `MachineSeccompProfileValue` | `specs.LinuxSeccomp` | no | ~1.3 KB | clean | occasional |
+| `AuthorizerWebhook` | `apiserver.WebhookConfiguration` | no | ~3.4 KB | clean | rare |
+| `AuditPolicyConfig` | `audit/v1.Policy` | no | ~4.7 KB | clean | occasional |
+| `KubeletCredentialProviderConfig` | `kubelet/config/v1` | `k8s.io/kubelet` | ~6.5 KB | clean | common |
+| `SchedulerConfig` | `kube-scheduler/config/v1` | `k8s.io/kube-scheduler` | ~35 KB | **errors** | occasional |
+| `KubeletExtraConfig` | `kubelet/config/v1beta1` | `k8s.io/kubelet` | ~34 KB | **errors** | **common** |
+| `MachineBaseRuntimeSpecOverrides` | `specs.Spec` | no | ~37 KB | **errors** | rare |
+| `MachinePods` | `[]corev1.Pod` | no | **~332 KB** | clean | rare |
+| `PluginConfiguration` | none — per-plugin | — | — | not mirrorable | occasional |
+
+Four things that sketch had wrong or missing:
+
+- **The generator cannot tell these eleven apart.** The substitution table and
+  the drop rule are keyed by Go type, and all eleven *are* `meta.Unstructured`.
+  So even the free, clean, commonly-wanted one needs a per-field override —
+  new generator machinery, not a table row. That is the real floor on any of
+  this.
+- **Three of them do not generate cleanly**, and for the same reason this ADR
+  exists: types never written with CRD embedding in mind. `specs.Spec` has
+  untagged fields and an `interface{}`; the kubelet and scheduler
+  configurations carry a `float32`, which controller-gen only emits under
+  `allowDangerousTypes`, and the scheduler type also trips `listType` three
+  times. Each needs either that flag and the risk, or hand-pruning.
+- **`MachinePods` is disqualified by size alone** — one optional field at
+  ~332 KB served is a fifth of etcd's ceiling and nearly five times the whole
+  current CRD.
+- **There is no fourth option.** Every one of the eleven is still
+  `meta.Unstructured` in Talos's *modern*, non-deprecated documents too, so
+  moving the allow-list off the legacy `Config` document would relocate this
+  wall rather than remove it.
+
+Everything except `MachinePods` and `PluginConfiguration` would land the CRD
+around 192 KB served, 12% of the ceiling — so headroom is not the constraint.
+Generation friction and the generator's type-keyed design are.
 
 ## Consequences
 

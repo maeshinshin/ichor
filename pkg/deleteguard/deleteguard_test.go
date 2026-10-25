@@ -17,11 +17,45 @@ limitations under the License.
 package deleteguard
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
 	"testing"
+
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
+
+func newCountTestScheme(t *testing.T) *runtime.Scheme {
+	t.Helper()
+
+	s := runtime.NewScheme()
+	if err := corev1.AddToScheme(s); err != nil {
+		t.Fatalf("adding corev1 to scheme: %v", err)
+	}
+	if err := ichorv1alpha1.AddToScheme(s); err != nil {
+		t.Fatalf("adding ichorv1alpha1 to scheme: %v", err)
+	}
+
+	return s
+}
+
+func newCountTestMachine(namespace, name, clusterName, role, approvalState string) *ichorv1alpha1.TalosMachine {
+	return &ichorv1alpha1.TalosMachine{
+		Namespace: namespace, Name: name,
+		Spec: ichorv1alpha1.TalosMachineSpec{
+			ClusterRef:    corev1.LocalObjectReference{Name: clusterName},
+			Identity:      ichorv1alpha1.TalosMachineIdentity{UUID: "00000000-0000-0000-0000-00000000" + name},
+			Role:          role,
+			ApprovalState: approvalState,
+		},
+	}
+}
 
 func TestCheckDelete(t *testing.T) {
 	cases := []struct {
@@ -134,5 +168,44 @@ func TestAllowDeleteDoesNotOverrideQuorum(t *testing.T) {
 
 	if err := CheckControlPlaneQuorum(2); err == nil {
 		t.Fatal("CheckControlPlaneQuorum(2) = nil, want error for a quorum-breaking delete despite the annotation")
+	}
+}
+
+// TestCountApprovedControlPlanes checks every exclusion the quorum count
+// depends on: role, approval state, cluster and namespace. Uses a fake
+// client (uncached by construction, like the real callers' APIReader)
+// rather than envtest, since this is pure List-and-filter logic with no
+// webhook or controller behavior to exercise.
+func TestCountApprovedControlPlanes(t *testing.T) {
+	scheme := newCountTestScheme(t)
+
+	const (
+		cp       = "controlplane"
+		worker   = "worker"
+		approved = ichorv1alpha1.MachineApprovalStateApproved
+		pending  = ichorv1alpha1.MachineApprovalStatePending
+	)
+
+	objs := []client.Object{
+		newCountTestMachine("default", "cp1", "west", cp, approved),
+		newCountTestMachine("default", "cp2", "west", cp, approved),
+		newCountTestMachine("default", "cp3", "west", cp, pending),
+		newCountTestMachine("default", "worker1", "west", worker, approved),
+		newCountTestMachine("default", "cp-other-cluster", "east", cp, approved),
+		newCountTestMachine("other-ns", "cp-other-ns", "west", cp, approved),
+	}
+
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(objs...).Build()
+
+	got, err := CountApprovedControlPlanes(context.Background(), fakeClient, "default", "west")
+	if err != nil {
+		t.Fatalf("CountApprovedControlPlanes: %v", err)
+	}
+
+	// Only cp1 and cp2 qualify: cp3 is pending, worker1 is not a control
+	// plane, cp-other-cluster belongs to "east", and cp-other-ns is in a
+	// different namespace.
+	if got != 2 {
+		t.Fatalf("CountApprovedControlPlanes = %d, want 2", got)
 	}
 }

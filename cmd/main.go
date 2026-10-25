@@ -255,6 +255,7 @@ func main() {
 
 	if err := (&controller.TalosMachineReconciler{
 		Client:              mgr.GetClient(),
+		APIReader:           mgr.GetAPIReader(),
 		ControllerNamespace: os.Getenv("POD_NAMESPACE"),
 		TalosClient:         controller.NewMachineryTalosClient,
 		KubeClient:          kubeClient,

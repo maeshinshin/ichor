@@ -82,7 +82,7 @@ var _ = Describe("TalosMachineReconciler removal", func() {
 		cluster := newTestClusterWithCount(1)
 		cp := newTestControlPlane(cluster.Name, "1")
 
-		r := &TalosMachineReconciler{Client: k8sClient, ControllerNamespace: tmNamespace}
+		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace}
 		_, err := reconcileMachine(r, cp)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -98,7 +98,7 @@ var _ = Describe("TalosMachineReconciler removal", func() {
 		pending.Spec.ApprovalState = ichorv1alpha1.MachineApprovalStatePending
 		Expect(k8sClient.Update(ctx, pending)).To(Succeed())
 
-		r := &TalosMachineReconciler{Client: k8sClient, ControllerNamespace: tmNamespace}
+		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace}
 		_, err := reconcileMachine(r, worker)
 		Expect(err).NotTo(HaveOccurred())
 		_, err = reconcileMachine(r, pending)
@@ -126,7 +126,7 @@ var _ = Describe("TalosMachineReconciler removal", func() {
 			cluster := newTestClusterWithCount(1)
 			cp := newTestControlPlane(cluster.Name, "3")
 
-			r := &TalosMachineReconciler{Client: k8sClient, ControllerNamespace: tmNamespace}
+			r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace}
 			_, err := reconcileMachine(r, cp)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -149,7 +149,7 @@ var _ = Describe("TalosMachineReconciler removal", func() {
 			cp1 := newTestControlPlane(cluster.Name, "4")
 			cp2 := newTestControlPlane(cluster.Name, "5")
 
-			r1 := &TalosMachineReconciler{Client: k8sClient, ControllerNamespace: tmNamespace}
+			r1 := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace}
 			_, err := reconcileMachine(r1, cp1)
 			Expect(err).NotTo(HaveOccurred())
 			_, err = reconcileMachine(r1, cp2)
@@ -165,7 +165,7 @@ var _ = Describe("TalosMachineReconciler removal", func() {
 			lock := clusterlock.New(k8sClient, clusterKeyOf(cp1), 0)
 			Expect(lock.Acquire(ctx, controllerIdentity)).To(Succeed())
 
-			r2 := &TalosMachineReconciler{Client: k8sClient, ControllerNamespace: tmNamespace}
+			r2 := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace}
 			_, err = reconcileMachine(r2, cp1)
 			Expect(err).NotTo(HaveOccurred(), "a fresh reconciler must resume its own identity's lock, not be told it's held")
 
@@ -186,7 +186,7 @@ var _ = Describe("TalosMachineReconciler removal", func() {
 		cp2 := newTestControlPlane(cluster.Name, "7")
 		cp3 := newTestControlPlane(cluster.Name, "8")
 
-		r := &TalosMachineReconciler{Client: k8sClient, ControllerNamespace: tmNamespace}
+		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace}
 		for _, cp := range []*ichorv1alpha1.TalosMachine{cp1, cp2, cp3} {
 			_, err := reconcileMachine(r, cp)
 			Expect(err).NotTo(HaveOccurred())
@@ -229,7 +229,7 @@ var _ = Describe("TalosMachineReconciler removal", func() {
 		cp2 := newTestControlPlane(cluster.Name, "10")
 		cp3 := newTestControlPlane(cluster.Name, "11")
 
-		r := &TalosMachineReconciler{Client: k8sClient, ControllerNamespace: tmNamespace}
+		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace}
 		for _, cp := range []*ichorv1alpha1.TalosMachine{cp1, cp2, cp3} {
 			_, err := reconcileMachine(r, cp)
 			Expect(err).NotTo(HaveOccurred())
@@ -261,7 +261,7 @@ var _ = Describe("TalosMachineReconciler removal", func() {
 		cluster := newTestClusterWithCount(1)
 		cp := newTestControlPlane(cluster.Name, "13")
 
-		r := &TalosMachineReconciler{Client: k8sClient, ControllerNamespace: tmNamespace}
+		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace}
 		_, err := reconcileMachine(r, cp)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -331,7 +331,7 @@ var _ = Describe("TalosCluster transitioning status", func() {
 		cp2 := newTestControlPlane(cluster.Name, "21")
 		cp3 := newTestControlPlane(cluster.Name, "22")
 
-		r := &TalosMachineReconciler{Client: k8sClient, ControllerNamespace: tmNamespace}
+		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace}
 		for _, cp := range []*ichorv1alpha1.TalosMachine{cp1, cp2, cp3} {
 			// First reconcile only adds the removal finalizer and returns;
 			// the transitioning update happens on the pass after that,
@@ -355,7 +355,7 @@ var _ = Describe("TalosCluster transitioning status", func() {
 		cp2 := newTestControlPlane(cluster.Name, "24")
 		cp3 := newTestControlPlane(cluster.Name, "25")
 
-		r := &TalosMachineReconciler{Client: k8sClient, ControllerNamespace: tmNamespace}
+		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace}
 		for _, cp := range []*ichorv1alpha1.TalosMachine{cp1, cp2, cp3} {
 			_, err := reconcileMachine(r, cp)
 			Expect(err).NotTo(HaveOccurred())
@@ -381,7 +381,7 @@ var _ = Describe("TalosCluster transitioning status", func() {
 		secret := newTestSecret(bundle)
 		cluster := newTestCluster(secret.Name, "v1.14")
 
-		r := &TalosMachineReconciler{Client: k8sClient, ControllerNamespace: tmNamespace}
+		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace}
 
 		cp1 := newTestControlPlane(cluster.Name, "27")
 		cp2 := newTestControlPlane(cluster.Name, "28")

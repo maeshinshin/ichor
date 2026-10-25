@@ -262,7 +262,7 @@ var _ = Describe("DiscoveryReconciler.Discover", func() {
 		// if the configuration reconciler ever reached it for an unapproved
 		// machine, this test would see it.
 		talosFake := &fakeTalosClient{}
-		cr := &TalosMachineReconciler{Client: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(talosFake)}
+		cr := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(talosFake)}
 
 		_, err = reconcileMachine(cr, m)
 		Expect(err).NotTo(HaveOccurred())

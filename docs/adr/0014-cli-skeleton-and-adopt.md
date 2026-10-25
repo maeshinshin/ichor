@@ -168,29 +168,64 @@ not secrets: `type` is the role already on `TalosMachine.Spec.Role`,
 `certSANs` the machine's own address. A sparse Config document is now
 representable without touching anything sensitive.
 
-**This command still does not capture it, but the reason is different
-now: nobody has built the sparse-reconstruction path, not that it is
-unsafe.** Turning a legacy-document diff into a sparse patch means walking
-`ChangedPaths`' dot-separated output back into a partial
-`typedconfig.Config` value with every untouched field left at its Go zero
-value (so `configpatcher`'s merge — "skip a zero value on the right" —
-leaves the base's value alone), which is a different, fiddlier kind of code
-than the whole-document capture `SysctlConfig`/`KernelModuleConfig` already
-get; building it well enough to trust needs its own pass, not a few lines
-bolted onto this one while finishing `ichor init`. `UnrepresentablePaths`
-still exists and is still correct — it just no longer means "this is
-secret," only "adopt doesn't build this kind of patch yet."
+**Second update, same day, this one final: it still does not capture it,
+and now for a design reason rather than a missing-code one.** The question
+was asked directly: now that a sparse `Config` document is representable
+without the schema forcing a secret into it, should adopt actually build
+the sparse-reconstruction path? The answer is no, and the reason is a
+specific, checked fact about the `Config` document's own schema, not
+"nobody got to it yet."
 
-The consequence is unchanged in practice today, only in reason: a
-difference confined to the legacy Config document still comes back from
-`buildAdoptPlan` as `UnrepresentablePaths` — field *names* only, safe to
-print — with no patch. `runAdopt` reports these and leaves that machine's
-drift for the operator to patch by hand. This is covered by
+**The nine fields the same-day mirrorgen change dropped are not the only
+secret-shaped fields the `Config` document can carry.** That cleanup
+removed exactly the fields that mirror `secrets.Bundle` — the CAs, the
+join/bootstrap tokens, the etcd encryption key, the service-account
+signing key — because those are Ichor's own root of trust. It was never
+meant to, and did not, sweep the rest of Talos's own config surface for
+every other field that happens to be a credential. Reading the generated
+mirror type for exactly this (not assumed) turns up several, live in the
+schema today, that have nothing to do with Ichor's bundle and so were
+never in scope for that pass:
+
+- `RegistryAuthConfig.{password,auth,identityToken}` — private
+  registry pull credentials, reachable from `machine.registries.*` and
+  `cluster.*` registry config.
+- `VIPEquinixMetalConfig.apiToken` / `VIPHCloudConfig.apiToken` — cloud
+  provider API tokens, under `machine.network`'s VIP config.
+- `WireguardDevice.privateKey` (`machine.network`'s WireGuard device
+  config) — a WireGuard private key.
+- `ClusterConfig.secretboxEncryptionSecret` — apparently missed by the
+  same-day cleanup entirely: it is the secretbox sibling of
+  `aescbcEncryptionSecret`, which *was* dropped, and is exactly the same
+  kind of etcd encryption secret the other one is. Flagged back to
+  whoever owns that cleanup; not something this unit can fix, since
+  `pkg/typedconfig` is out of scope here.
+
+None of these come from `secrets.Bundle`, so no amount of extending that
+one cleanup closes them — they are a different, open-ended category:
+whatever credential-shaped field Talos's own schema happens to carry
+*this version*, for a use case (private registries, cloud VIPs, WireGuard
+KubeSpan) an adopted cluster may well have configured. A sparse-diff
+mechanism that captures "whatever changed" has no way to tell "a harmless
+field changed" from "someone's registry password changed" without a
+field-by-field allow/deny list over the entire `Config` document — and
+that list would need maintaining forever as Talos's own schema grows,
+which is a standing commitment this command should not make unilaterally
+just to widen what `adopt` can automate. `SysctlConfig` and
+`KernelModuleConfig` don't have this problem because their entire field
+surface is kernel parameters and module names — there is no credential
+shape anywhere in either one to worry about missing.
+
+The consequence is unchanged in practice, now for the reason that will
+actually last: a difference confined to the legacy Config document comes
+back from `buildAdoptPlan` as `UnrepresentablePaths` — field *names*
+only, safe to print — with no patch. `runAdopt` reports these and leaves
+that machine's drift for the operator to patch by hand, through a
+`TalosConfigPatch` they write themselves and can see the contents of
+before it goes anywhere. This is covered by
 `TestBuildAdoptPlan_LegacyDiffIsNeverAutoPatched` and is the one
 `TestAdoptNeverLeaksSecrets` subtest ("legacy diff reported, not patched")
-that proves the refusal itself never leaks either — that test is still
-meaningful: whatever the future sparse-capture path ends up setting still
-has to prove it never reaches outside what actually changed.
+that proves the refusal itself never leaks either.
 
 ### Confirmation and output
 
@@ -210,12 +245,20 @@ full rendered machine configuration.
   (`cmd/<name>.go` at the module root) until/unless a future cobra-cli
   version restores a way to target a subdirectory; every new subcommand
   needs the same by-hand move this ADR describes for `adopt.go`.
-- adopt's zero-drift guarantee has a known gap: differences confined to the
-  legacy Config document are reported, not patched. This no longer needs a
-  CRD change to close (the schema now allows a sparse Config document); it
-  needs a sparse-reconstruction function nobody has written yet. Until then,
-  `ichor adopt` is complete for sysctl/kernel-module drift and honest about
-  everything else.
+- adopt's zero-drift guarantee has a known, now-permanent-by-design gap:
+  differences confined to the legacy Config document are reported, not
+  patched. This is not a missing function waiting to be written; it is a
+  deliberate refusal, because the Config document's field surface has no
+  stable boundary between "safe to auto-capture" and "a credential" --
+  registry passwords, cloud API tokens and a WireGuard private key are
+  live examples found by reading the schema, not hypothetical. `ichor
+  adopt` is complete for sysctl/kernel-module drift (no such fields exist
+  there) and honest about everything else.
+- A second, unrelated finding from the same reading: `ClusterConfig`'s
+  `secretboxEncryptionSecret` looks like it was missed by the same-day
+  cleanup that dropped its sibling `aescbcEncryptionSecret` -- both are
+  etcd encryption secrets, only one was removed. Flagged for whoever owns
+  `pkg/typedconfig`; out of this unit's scope to fix directly.
 - `.goreleaser.yaml`'s `dist:` override means any future tooling that reads
   goreleaser's own output has to know to look in `.goreleaser-dist`, not
   `dist/`.

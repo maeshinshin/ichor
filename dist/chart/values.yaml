@@ -137,6 +137,107 @@ manager:
   #   labels: {}
   #   annotations: {}
 
+## Configure the ichor-ui deployment. It holds a read-only Kubernetes
+## identity, separate from the controller's own ServiceAccount (architecture.md "Trust"):
+## see config/rbac/ichor-ui/ and templates/rbac/ichor-ui-*.yaml.
+##
+ichorUI:
+  ## Set to false to skip ichor-ui installation
+  ##
+  enabled: true
+
+  ## Two replicas by default, same reasoning as manager.replicas above (design 2.4).
+  ## Single-node clusters should set this to 1 and turn off
+  ## ichorUI.podDisruptionBudget.enabled below.
+  ##
+  replicas: 2
+
+  image:
+    repository: ichor-ui
+    ## Image tag (defaults to Chart.appVersion if not set)
+    ##
+    # tag: ""
+    pullPolicy: IfNotPresent
+
+  ## Address ichor-ui listens on (cmd/ichor-ui's own -addr flag default).
+  ##
+  port: 8080
+
+  ## Pod-level security settings
+  ##
+  podSecurityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+
+  ## Container-level security settings
+  ##
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+      - ALL
+    readOnlyRootFilesystem: true
+
+  ## Resource limits and requests
+  ##
+  resources:
+    limits:
+      cpu: 500m
+      memory: 128Mi
+    requests:
+      cpu: 10m
+      memory: 64Mi
+
+  ## Pod's affinity
+  ##
+  affinity: {}
+
+  ## PodDisruptionBudget for ichor-ui (design 2.4). Single-node clusters should disable
+  ## this alongside setting replicas: 1 above.
+  ##
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+  ## Pod's node selector
+  ##
+  nodeSelector: {}
+
+  ## Pod's tolerations
+  ##
+  tolerations: []
+
+  ## Topology spread constraints: placement across nodes by default (design 2.4), same
+  ## reasoning as manager.topologySpreadConstraints above (topologySpreadConstraints over
+  ## podAntiAffinity so a single-node cluster still schedules both replicas).
+  ##
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          control-plane: ui-backend
+
+  ## Termination grace period seconds
+  ##
+  terminationGracePeriodSeconds: 10
+
+  ## Custom Deployment labels
+  ##
+  # labels: {}
+
+  ## Custom Deployment annotations
+  ##
+  # annotations: {}
+
+  ## Custom Pod labels and annotations
+  ##
+  # pod:
+  #   labels: {}
+  #   annotations: {}
+
 ## RBAC configuration
 ##
 rbac:

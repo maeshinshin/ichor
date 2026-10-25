@@ -24,6 +24,9 @@ import (
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	yaml "go.yaml.in/yaml/v4"
+	corev1 "k8s.io/api/core/v1"
+
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
 // bundleSecretKey is the key the bundle Secret carries the bundle's bytes
@@ -90,6 +93,56 @@ func saveBundleFile(cluster string, bundle *secrets.Bundle) (string, error) {
 	}
 
 	return path, nil
+}
+
+// kubeconfigFilename is the file saveKubeconfigFile writes next to the
+// secrets bundle, in the same ~/.ichor/clusters/<cluster>/ directory --
+// the same convention talosctl itself follows after a bootstrap.
+const kubeconfigFilename = "kubeconfig"
+
+// saveKubeconfigFile writes the kubeconfig design step 4 fetches
+// ("Bootstrap etcd, fetch the kubeconfig, store the bundle as a Secret")
+// to ~/.ichor/clusters/<cluster>/kubeconfig, at the same 0600 the bundle
+// gets: it carries a client certificate and key, not a Talos secret, but
+// still a credential this command should not leave world-readable.
+func saveKubeconfigFile(cluster string, kubeconfig []byte) (string, error) {
+	dir, err := bundleDir(cluster)
+	if err != nil {
+		return "", err
+	}
+
+	if err := os.MkdirAll(dir, bundleDirPerm); err != nil {
+		return "", fmt.Errorf("creating %s: %w", dir, err)
+	}
+
+	path := filepath.Join(dir, kubeconfigFilename)
+	if err := writeFileAtomic(path, kubeconfig, bundleFilePerm); err != nil {
+		return "", fmt.Errorf("writing %s: %w", path, err)
+	}
+
+	return path, nil
+}
+
+// buildBundleSecret builds the Secret design step 4 stores the bundle in
+// ("store the bundle as a Secret"), named after
+// cluster.Spec.SecretsRef.Name and keyed the same way the local file is
+// (bundleSecretKey), so a recovery reading either back gets identical
+// bytes. It lives in cluster.Namespace: ADR 0011 resolves the bundle
+// Secret in the controller's own namespace rather than the TalosCluster's,
+// and the default self-managed deployment (one controller, one
+// namespace, architecture.md's "Deployment") makes those the same
+// namespace for a cluster `ichor init` creates -- the --namespace flag
+// this command takes is that one namespace, used for both.
+func buildBundleSecret(cluster *ichorv1alpha1.TalosCluster, bundle *secrets.Bundle) (*corev1.Secret, error) {
+	raw, err := yaml.Marshal(bundle)
+	if err != nil {
+		return nil, fmt.Errorf("encoding secrets bundle: %w", err)
+	}
+
+	return &corev1.Secret{
+		Name: cluster.Spec.SecretsRef.Name, Namespace: cluster.Namespace,
+		Data: map[string][]byte{bundleSecretKey: raw},
+	}, nil
 }
 
 // writeFileAtomic writes data to path via a temp file in the same

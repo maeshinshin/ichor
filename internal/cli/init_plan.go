@@ -25,6 +25,11 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
+// cniPatchLayer is the TalosConfigPatch layer every patch init builds for
+// the CNI or the inline-manifests bootstrap carries: "cluster", the
+// broadest layer, since neither applies to just one machine.
+const cniPatchLayer = "cluster"
+
 // supportedPreset is the only topology preset this phase implements
 // (architecture.md's "Bootstrap" names `--preset standard`; the roadmap's
 // other presets are future work). Anything else is a clear, immediate

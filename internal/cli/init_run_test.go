@@ -1,0 +1,235 @@
+/*
+Copyright 2026 maeshinshin.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package cli
+
+import (
+	"context"
+	"os"
+	"strings"
+	"testing"
+
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/controller"
+)
+
+func withTempHome(t *testing.T) string {
+	t.Helper()
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	return home
+}
+
+// TestRunInit_Success exercises steps 1-5 end to end against fakes: the
+// node is applied to insecurely, etcd is bootstrapped, a kubeconfig is
+// fetched and saved, and the TalosCluster, TalosMachine, secrets bundle
+// Secret and the CNI's bootstrap-manifest TalosConfigPatch all land in
+// the (fake) Kubernetes API.
+func TestRunInit_Success(t *testing.T) {
+	home := withTempHome(t)
+
+	k8sClient := fake.NewClientBuilder().WithScheme(newTestScheme(t)).Build()
+	deps, maint, boot := newFakeInitDeps(t, k8sClient)
+
+	opts := validInitOptions()
+
+	if err := runInit(context.Background(), opts, deps); err != nil {
+		t.Fatalf("runInit: %v", err)
+	}
+
+	if maint.callCount != 1 || len(maint.applied) == 0 {
+		t.Fatalf("expected exactly one non-empty insecure apply, got callCount=%d len=%d", maint.callCount, len(maint.applied))
+	}
+
+	if !boot.bootstrapCalled {
+		t.Fatal("expected Bootstrap to be called")
+	}
+
+	var cluster ichorv1alpha1.TalosCluster
+	if err := k8sClient.Get(context.Background(), types.NamespacedName{Namespace: testNamespace, Name: testInitClusterName}, &cluster); err != nil {
+		t.Fatalf("getting created TalosCluster: %v", err)
+	}
+
+	var machine ichorv1alpha1.TalosMachine
+	if err := k8sClient.Get(context.Background(), types.NamespacedName{Namespace: testNamespace, Name: testInitMachineUUID}, &machine); err != nil {
+		t.Fatalf("getting created TalosMachine: %v", err)
+	}
+
+	if machine.Spec.Role != "controlplane" || !machine.Spec.Approved {
+		t.Fatalf("machine spec = %+v, want role controlplane and approved", machine.Spec)
+	}
+
+	var secret corev1.Secret
+	if err := k8sClient.Get(context.Background(), types.NamespacedName{Namespace: testNamespace, Name: cluster.Spec.SecretsRef.Name}, &secret); err != nil {
+		t.Fatalf("getting created secrets bundle Secret: %v", err)
+	}
+
+	if len(secret.Data[bundleSecretKey]) == 0 {
+		t.Fatal("expected the secrets bundle Secret to carry data under the bundleSecretKey")
+	}
+
+	var patches ichorv1alpha1.TalosConfigPatchList
+	if err := k8sClient.List(context.Background(), &patches); err != nil {
+		t.Fatalf("listing TalosConfigPatches: %v", err)
+	}
+
+	if len(patches.Items) == 0 {
+		t.Fatal("expected at least one TalosConfigPatch for the cilium CNI's bootstrap manifest")
+	}
+
+	// Local files: the secrets bundle and the kubeconfig, both 0600.
+	for _, name := range []string{"secrets.yaml", "kubeconfig"} {
+		path := home + "/.ichor/clusters/" + testInitClusterName + "/" + name
+		fi, err := os.Stat(path)
+		if err != nil {
+			t.Fatalf("stat %s: %v", path, err)
+		}
+
+		if got := fi.Mode().Perm(); got != 0o600 {
+			t.Fatalf("%s mode = %o, want 0600", path, got)
+		}
+	}
+}
+
+// TestRunInit_Flannel proves architecture.md's "unless flannel": no
+// TalosConfigPatch is created for the CNI when the preset is flannel.
+func TestRunInit_Flannel(t *testing.T) {
+	withTempHome(t)
+
+	k8sClient := fake.NewClientBuilder().WithScheme(newTestScheme(t)).Build()
+	deps, _, _ := newFakeInitDeps(t, k8sClient)
+
+	opts := validInitOptions()
+	opts.CNIPreset = "flannel"
+
+	if err := runInit(context.Background(), opts, deps); err != nil {
+		t.Fatalf("runInit: %v", err)
+	}
+
+	var patches ichorv1alpha1.TalosConfigPatchList
+	if err := k8sClient.List(context.Background(), &patches); err != nil {
+		t.Fatalf("listing TalosConfigPatches: %v", err)
+	}
+
+	if len(patches.Items) != 0 {
+		t.Fatalf("expected no TalosConfigPatch for flannel, got %+v", patches.Items)
+	}
+}
+
+// TestRunInit_ArgoCDWithoutRepoRejected proves --argocd needs --repo.
+func TestRunInit_ArgoCDWithoutRepoRejected(t *testing.T) {
+	withTempHome(t)
+
+	k8sClient := fake.NewClientBuilder().WithScheme(newTestScheme(t)).Build()
+	deps, _, _ := newFakeInitDeps(t, k8sClient)
+
+	opts := validInitOptions()
+	opts.ArgoCD = true
+
+	if err := runInit(context.Background(), opts, deps); err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+}
+
+// TestRunInit_GitOpsDirWritesSkeleton proves --gitops-dir calls
+// pkg/gitops.Skeleton.Write with this run's CRs.
+func TestRunInit_GitOpsDirWritesSkeleton(t *testing.T) {
+	withTempHome(t)
+
+	k8sClient := fake.NewClientBuilder().WithScheme(newTestScheme(t)).Build()
+	deps, _, _ := newFakeInitDeps(t, k8sClient)
+
+	gitopsDir := t.TempDir()
+
+	opts := validInitOptions()
+	opts.ArgoCD = true
+	opts.RepoURL = "https://example.invalid/repo.git"
+	opts.GitOpsDir = gitopsDir
+
+	if err := runInit(context.Background(), opts, deps); err != nil {
+		t.Fatalf("runInit: %v", err)
+	}
+
+	for _, rel := range []string{"bootstrap/root-app.yaml", "clusters/" + testInitClusterName + "/talos-cluster.yaml", "clusters/" + testInitClusterName + "/talos-machine.yaml"} {
+		if _, err := os.Stat(gitopsDir + "/" + rel); err != nil {
+			t.Fatalf("expected %s to exist: %v", rel, err)
+		}
+	}
+}
+
+// TestRunInit_ConfirmationDeclined proves --yes's gate: declining aborts
+// before the irreversible apply, and nothing in the (fake) cluster API
+// is ever created.
+func TestRunInit_ConfirmationDeclined(t *testing.T) {
+	withTempHome(t)
+
+	k8sClient := fake.NewClientBuilder().WithScheme(newTestScheme(t)).Build()
+	deps, maint, boot := newFakeInitDeps(t, k8sClient)
+	deps.AssumeYes = false
+	deps.Stdin = strings.NewReader("n\n")
+
+	opts := validInitOptions()
+
+	if err := runInit(context.Background(), opts, deps); err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if maint.callCount != 0 {
+		t.Fatalf("expected ApplyInsecure to never be called, got callCount=%d", maint.callCount)
+	}
+
+	if boot.bootstrapCalled {
+		t.Fatal("expected Bootstrap to never be called")
+	}
+
+	var clusters ichorv1alpha1.TalosClusterList
+	if err := k8sClient.List(context.Background(), &clusters); err != nil {
+		t.Fatalf("listing TalosClusters: %v", err)
+	}
+
+	if len(clusters.Items) != 0 {
+		t.Fatalf("expected no TalosCluster to be created, got %+v", clusters.Items)
+	}
+}
+
+// TestRunInit_WeakIdentityRejected proves init refuses to bootstrap a
+// node whose hardware identity is weak (no SMBIOS UUID), the same rule
+// ADR 0011 applies to discovery.
+func TestRunInit_WeakIdentityRejected(t *testing.T) {
+	withTempHome(t)
+
+	k8sClient := fake.NewClientBuilder().WithScheme(newTestScheme(t)).Build()
+	deps, maint, _ := newFakeInitDeps(t, k8sClient)
+	deps.Identity = func(context.Context, string) (controller.HardwareIdentity, error) {
+		return controller.HardwareIdentity{}, nil
+	}
+
+	opts := validInitOptions()
+
+	if err := runInit(context.Background(), opts, deps); err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if maint.callCount != 0 {
+		t.Fatalf("expected ApplyInsecure to never be called, got callCount=%d", maint.callCount)
+	}
+}

@@ -92,11 +92,11 @@ only ever writes TalosConfigPatch objects to the Kubernetes API.`,
 func init() {
 	rootCmd.AddCommand(adoptCmd)
 
-	adoptCmd.Flags().StringVar(&adoptCluster, "cluster", "", "name of the TalosCluster to adopt (required)")
+	adoptCmd.Flags().StringVar(&adoptCluster, flagCluster, "", "name of the TalosCluster to adopt (required)")
 	adoptCmd.Flags().StringVarP(&adoptNamespace, "namespace", "n", "default", "namespace the TalosCluster and its TalosMachines live in")
 	adoptCmd.Flags().StringVar(&adoptSecretsBundle, "secrets-bundle", "",
 		"path to the cluster's existing secrets bundle (the file produced by 'talosctl gen secrets'; required)")
 
-	_ = adoptCmd.MarkFlagRequired("cluster")
+	_ = adoptCmd.MarkFlagRequired(flagCluster)
 	_ = adoptCmd.MarkFlagRequired("secrets-bundle")
 }

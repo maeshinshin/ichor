@@ -79,5 +79,18 @@ func Load(ctx context.Context, c client.Client, namespace, name string) (*secret
 		return nil, fmt.Errorf("decoding secrets bundle from Secret %q: %w", key, err)
 	}
 
+	// Bundle.Clock carries "yaml:\"-\"" (it is behavior, not data) and the machinery
+	// package's own populate() is the only other place that fills it in -- which only
+	// runs while building a brand-new bundle, never while decoding an existing one back
+	// out of a Secret. Left nil, the first GenerateTalosAPIClientCertificate call on it
+	// panics on a nil-interface Clock.Now() -- confirmed for real (ADR 0032):
+	// internal/controller.NewMachineryTalosClient dialing with a bundle loaded exactly
+	// this way. No test anywhere had exercised that combination before: every existing
+	// test faked the Talos client entirely, and every real-hardware pass before ADR
+	// 0032 either had no bundle or never got a working one.
+	if bundle.Clock == nil {
+		bundle.Clock = secrets.NewClock()
+	}
+
 	return &bundle, nil
 }

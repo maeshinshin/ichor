@@ -24,6 +24,7 @@ import (
 
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
+	"github.com/siderolabs/talos/pkg/machinery/role"
 	yaml "go.yaml.in/yaml/v4"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -122,6 +123,39 @@ func TestLoadRoundTrip(t *testing.T) {
 
 	if got.Cluster.ID != bundle.Cluster.ID {
 		t.Fatalf("Load round-tripped a different bundle: got Cluster.ID %q, want %q", got.Cluster.ID, bundle.Cluster.ID)
+	}
+}
+
+// TestLoadFillsClock guards ADR 0032's finding: Bundle.Clock carries
+// yaml:"-" and nothing refills it on decode except the machinery
+// package's own populate(), which only runs while building a brand-new
+// bundle. Confirmed for real that leaving it nil panics the first time
+// GenerateTalosAPIClientCertificate is called on a bundle loaded this
+// way, with a nil-interface Clock.Now().
+func TestLoadFillsClock(t *testing.T) {
+	bundle := newTestBundle(t)
+
+	raw, err := yaml.Marshal(bundle)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+
+	secret := &corev1.Secret{
+		Namespace: testNamespace, Name: testName,
+		Data: map[string][]byte{SecretKey: raw},
+	}
+
+	got, err := Load(context.Background(), newFakeClient(t, secret), testNamespace, testName)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if got.Clock == nil {
+		t.Fatal("Load left Clock nil; the first GenerateTalosAPIClientCertificate call would panic")
+	}
+
+	if _, err := got.GenerateTalosAPIClientCertificate(role.MakeSet(role.Admin)); err != nil {
+		t.Fatalf("GenerateTalosAPIClientCertificate: %v", err)
 	}
 }
 

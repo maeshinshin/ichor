@@ -52,7 +52,7 @@ manifests: controller-gen manifests-ichor-ui ## Generate WebhookConfiguration, C
 
 .PHONY: sync-crds
 sync-crds: ## Sync config/crd/bases/ into dist/chart/templates/crd/ (CONTRIBUTING.md explains why, in place of kubebuilder edit --plugins=helm/v2-alpha).
-	python3 hack/sync-crds.py
+	go run ./internal/tools/synccrds
 
 .PHONY: generate
 generate: controller-gen ## Generate mirror types (go generate) plus DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.

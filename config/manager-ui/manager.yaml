@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ichor-ui
+  namespace: system
+  labels:
+    control-plane: ui-backend
+    app.kubernetes.io/name: ichor
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  selector:
+    matchLabels:
+      control-plane: ui-backend
+      app.kubernetes.io/name: ichor
+  # Plain single replica, no PodDisruptionBudget or topologySpreadConstraints: this base
+  # mirrors ../manager's own simplicity (2 replicas/PDB/anti-affinity is a Helm-chart-only
+  # enrichment).
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        control-plane: ui-backend
+        app.kubernetes.io/name: ichor
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - command:
+        - /ichor-ui
+        args:
+          - --addr=:8080
+        image: ichor-ui:latest
+        name: ichor-ui
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        securityContext:
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - "ALL"
+        livenessProbe:
+          tcpSocket:
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 20
+        readinessProbe:
+          tcpSocket:
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          limits:
+            cpu: 500m
+            memory: 128Mi
+          requests:
+            cpu: 10m
+            memory: 64Mi
+      # Fixed name, matching ../rbac/ichor-ui/service_account.yaml: the UI
+      # backend's identity must stay separate from the controller's own.
+      serviceAccountName: ichor-ui
+      terminationGracePeriodSeconds: 10

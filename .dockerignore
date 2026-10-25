@@ -9,3 +9,11 @@
 # Re-include Go module files
 !go.mod
 !go.sum
+
+# Re-include the UI's own source tree: Dockerfile.ichor-ui's ui-builder stage needs it
+# to run "npm run build" (Vite writes straight into cmd/ichor-ui/dist). node_modules and
+# dist are excluded again so the image always installs/builds fresh rather than copying
+# whatever happens to exist on the host.
+!ui/**
+ui/node_modules
+ui/dist

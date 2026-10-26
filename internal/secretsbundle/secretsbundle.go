@@ -61,7 +61,7 @@ const SecretKey = "secrets.yaml"
 // the read-and-decode logic here does not require centralizing that
 // choice too, so this function takes the resolved namespace and name
 // directly rather than a *TalosCluster it would have to resolve itself.
-func Load(ctx context.Context, c client.Client, namespace, name string) (*secrets.Bundle, error) {
+func Load(ctx context.Context, c client.Reader, namespace, name string) (*secrets.Bundle, error) {
 	var secret corev1.Secret
 
 	key := types.NamespacedName{Namespace: namespace, Name: name}

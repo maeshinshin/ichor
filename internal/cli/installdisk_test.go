@@ -36,7 +36,7 @@ func TestParseInstallDisk(t *testing.T) {
 		{"wwid:naa.5000c500", ichorv1alpha1.TalosMachineDisk{WWID: "naa.5000c500"}},
 		{"serial:S3Z9", ichorv1alpha1.TalosMachineDisk{Serial: "S3Z9"}},
 		{"/dev/disk/by-id/nvme-X", ichorv1alpha1.TalosMachineDisk{ByIDPath: "/dev/disk/by-id/nvme-X"}},
-		{"/dev/sda", ichorv1alpha1.TalosMachineDisk{DevPath: "/dev/sda"}},
+		{testInstallDisk, ichorv1alpha1.TalosMachineDisk{DevPath: testInstallDisk}},
 		{"/pci0000:00/0000:00:17.0/ata1", ichorv1alpha1.TalosMachineDisk{BusPath: "/pci0000:00/0000:00:17.0/ata1"}},
 	} {
 		got, err := parseInstallDisk(tc.in)

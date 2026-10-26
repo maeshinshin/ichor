@@ -36,7 +36,10 @@ import (
 )
 
 // testNamespace is the namespace every fixture below lives in.
-const testNamespace = "default"
+const (
+	testNamespace   = "default"
+	testInstallDisk = "/dev/sda"
+)
 
 // testSysctlKey is the one sysctl every fixture's SysctlConfig document
 // sets, reused across every test that needs a non-secret, auto-patchable
@@ -268,7 +271,7 @@ func validInitOptions() initOptions {
 		TalosVersion:      testTalosVersion,
 		KubernetesVersion: "v1.33.0",
 		VersionContract:   testVersionContract,
-		InstallDisk:       "/dev/sda",
+		InstallDisk:       testInstallDisk,
 		NodeEndpoint:      "10.0.0.10:50000",
 	}
 }

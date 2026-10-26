@@ -362,6 +362,12 @@ func main() {
 		setupLog.Error(err, "Failed to create controller", "controller", "cnihandover")
 		os.Exit(1)
 	}
+	if err := (&controller.TalosStorageReconciler{
+		Client: mgr.GetClient(), APIReader: mgr.GetAPIReader(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "Failed to create controller", "controller", "talosstorage")
+		os.Exit(1)
+	}
 	// talosUpgradeAdvance is TalosOperationKindTalos's own AdvanceMachineFunc: the backbone (TalosOperationReconciler)
 	// never branches on spec.kind
 	// itself, so that one-of-three-kinds selection happens here, in the

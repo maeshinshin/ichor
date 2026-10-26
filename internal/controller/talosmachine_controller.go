@@ -65,7 +65,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/clusterlock"
@@ -191,6 +193,7 @@ type TalosMachineReconciler struct {
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters,verbs=get;list;watch
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosconfigpatches,verbs=get;list;watch
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosstorages,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,verbs=get;list;watch
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch;patch
@@ -263,7 +266,17 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, err
 	}
 
-	rendered, hash, err := r.renderMachine(ctx, &cluster, &m, bundle, patches.Items)
+	// The system layer's inputs (registry credentials, TalosStorages), read once so that the
+	// render and the fingerprint below see the same TalosStorages.
+	sys, err := render.ResolveSystemInputs(ctx, r.Client, r.ControllerNamespace, &cluster)
+	if err != nil {
+		log.Error(err, "resolving system-layer inputs")
+
+		return ctrl.Result{}, r.ready(ctx, &m, metav1.ConditionFalse, reasonRenderFailed,
+			"rendering machine configuration failed")
+	}
+
+	rendered, hash, err := render.Render(&cluster, &m, bundle, patches.Items, sys)
 	if err != nil {
 		log.Error(err, "rendering machine configuration")
 
@@ -278,7 +291,7 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	// whatever was recorded the last time the node was confirmed to match
 	// what was rendered; empty on a machine's first reconcile, since there
 	// is no previous convergence yet.
-	inputsHash, err := desiredInputsHash(&cluster, &m, patches.Items)
+	inputsHash, err := desiredInputsHash(&cluster, &m, patches.Items, sys.Storage)
 	if err != nil {
 		log.Error(err, "hashing render inputs")
 
@@ -429,6 +442,7 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 // them is unnecessary detail no caller needs to parse back out.
 func desiredInputsHash(
 	cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, candidates []ichorv1alpha1.TalosConfigPatch,
+	storages []ichorv1alpha1.TalosStorage,
 ) (string, error) {
 	applicable, err := render.SelectPatches(cluster, m, candidates)
 	if err != nil {
@@ -440,6 +454,17 @@ func desiredInputsHash(
 
 	for _, p := range applicable {
 		parts = append(parts, fmt.Sprintf("patch:%s=%d", p.Name, p.Generation))
+	}
+
+	// The TalosStorage governing m feeds the render too; a change to it must read as
+	// a desired-state change, not as drift.
+	chosen, err := render.StorageFor(cluster, m, storages)
+	if err != nil {
+		return "", fmt.Errorf("selecting governing TalosStorage: %w", err)
+	}
+
+	if chosen != nil {
+		parts = append(parts, fmt.Sprintf("storage:%s=%d", chosen.Name, chosen.Generation))
 	}
 
 	return render.Hash([]byte(strings.Join(parts, ";"))), nil
@@ -523,22 +548,6 @@ func (r *TalosMachineReconciler) setWarnings(m *ichorv1alpha1.TalosMachine, bund
 	})
 }
 
-// renderMachine resolves cluster's registry credentials and renders m. The Secrets are read in
-// ControllerNamespace, the same fixed namespace as loadBundle and never the TalosCluster's own; a registry whose
-// Secret cannot be resolved fails the render like any
-// other render failure, and ResolveRegistryAuth's errors name the Secret, never its data.
-func (r *TalosMachineReconciler) renderMachine(
-	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
-	bundle *secrets.Bundle, patches []ichorv1alpha1.TalosConfigPatch,
-) ([]byte, string, error) {
-	sys, err := render.ResolveSystemInputs(ctx, r.Client, r.ControllerNamespace, cluster)
-	if err != nil {
-		return nil, "", err
-	}
-
-	return render.Render(cluster, m, bundle, patches, sys)
-}
-
 // hashConfig hashes cfg the same way pkg/render.Render hashes its output,
 // so the two are comparable.
 func hashConfig(cfg []byte) string {
@@ -549,6 +558,32 @@ func hashConfig(cfg []byte) string {
 func (r *TalosMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&ichorv1alpha1.TalosMachine{}).
+		// A TalosStorage is a render input: creating or editing one re-reconciles
+		// the machines of its cluster, which is how layer 1 reaches already-converged nodes.
+		Watches(&ichorv1alpha1.TalosStorage{}, handler.EnqueueRequestsFromMapFunc(r.machinesForStorage)).
 		Named("talosmachine").
 		Complete(r)
+}
+
+// machinesForStorage maps a TalosStorage to every TalosMachine of its cluster.
+func (r *TalosMachineReconciler) machinesForStorage(ctx context.Context, obj client.Object) []reconcile.Request {
+	ts, ok := obj.(*ichorv1alpha1.TalosStorage)
+	if !ok {
+		return nil
+	}
+
+	var list ichorv1alpha1.TalosMachineList
+	if err := r.List(ctx, &list, client.InNamespace(ts.Namespace)); err != nil {
+		return nil
+	}
+
+	var reqs []reconcile.Request
+
+	for i := range list.Items {
+		if list.Items[i].Spec.ClusterRef.Name == ts.Spec.ClusterRef.Name {
+			reqs = append(reqs, reconcile.Request{NamespacedName: client.ObjectKeyFromObject(&list.Items[i])})
+		}
+	}
+
+	return reqs
 }

@@ -41,7 +41,7 @@ func TestArgoCDHealthScripts(t *testing.T) {
 	ready := func(status, reason string) string { return machine("1", "1", cond("Ready", status, reason)) }
 	const (
 		hP, hH, hD = "Progressing", "Healthy", "Degraded"
-		m, c       = "TalosMachine", "TalosCluster"
+		m, c, st   = "TalosMachine", "TalosCluster", "TalosStorage"
 	)
 	deleting := `{metadata={generation=1,deletionTimestamp="2026-01-01T00:00:00Z"}}`
 	warn := cond("ConfigWarnings", "True", "DryRunWarnings")
@@ -60,6 +60,15 @@ func TestArgoCDHealthScripts(t *testing.T) {
 		{m, "reboot required", ready("False", "RebootRequired"), hD},
 		{m, "drifted", ready("False", "NodeDrifted"), hD},
 		{m, "other condition ignored", machine("1", "1", warn, cond("Ready", "True", "Converged")), hH},
+		{st, "no status yet", `{metadata={generation=1}}`, hP},
+		{st, "deleting", deleting, hP},
+		{st, "stale generation", machine("2", "1", cond("Ready", "True", "Prepared")), hP},
+		{st, "prepared", ready("True", "Prepared"), hH},
+		{st, "nodes not converged is a wait", ready("False", "NodesNotConverged"), hP},
+		{st, "no nodes selected holds the wave", ready("False", "NoNodesSelected"), hP},
+		{st, "cluster missing", ready("False", "ClusterNotFound"), hD},
+		{st, "storage system mismatch never gates",
+			machine("1", "1", cond("Ready", "True", "Prepared"), cond("StorageSystemConsistent", "False", "SettingDisabled")), hH},
 		{c, "no status", `{}`, hH},
 		{c, "stable", cluster(cond("Transitioning", "False", "StableControlPlaneCount")), hH},
 		{c, "CNI handover false is normal", cluster(cond("CNIHandover", "False", "ManualPending")), hH},
@@ -86,7 +95,7 @@ func TestArgoCDHealthOption(t *testing.T) {
 		t.Fatalf("argocdHealth.enabled=true: no ConfigMap %s", healthConfigMap)
 	}
 	data, _ := cm["data"].(map[string]any)
-	for _, kind := range []string{"TalosCluster", "TalosMachine"} {
+	for _, kind := range []string{"TalosCluster", "TalosMachine", "TalosStorage"} {
 		src, err := os.ReadFile("files/argocd-health/" + kind + ".lua")
 		if err != nil {
 			t.Fatal(err)
@@ -96,7 +105,7 @@ func TestArgoCDHealthOption(t *testing.T) {
 			t.Errorf("%s: rendered key missing or differs from the .lua file", kind)
 		}
 	}
-	if len(data) != 2 {
-		t.Errorf("want exactly 2 keys (TalosConfigPatch/TalosStorage/TalosOperation get none), got %d", len(data))
+	if len(data) != 3 {
+		t.Errorf("want exactly 3 keys (TalosConfigPatch/TalosOperation get none), got %d", len(data))
 	}
 }

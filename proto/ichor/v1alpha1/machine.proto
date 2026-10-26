@@ -193,6 +193,8 @@ message Machine {
   MachineApprovalDecision approval_decision = 12;
   // install is unset until an install target is declared.
   MachineInstall install = 13;
+  // deleting is true while the machine is being removed (its deletion timestamp is set).
+  bool deleting = 14;
 }
 
 message RemoveMachineRequest {

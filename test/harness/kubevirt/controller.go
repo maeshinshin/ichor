@@ -96,7 +96,7 @@ webhooks:
       - apiGroups: ["ichor.maesh.dev"]
         apiVersions: ["v1alpha1"]
         resources: ["talosmachines"]
-        operations: ["DELETE"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
   - name: vtaloscluster-v1alpha1.kb.io
     admissionReviewVersions: ["v1"]
     sideEffects: None
@@ -108,7 +108,7 @@ webhooks:
       - apiGroups: ["ichor.maesh.dev"]
         apiVersions: ["v1alpha1"]
         resources: ["talosclusters"]
-        operations: ["DELETE"]
+        operations: ["UPDATE", "DELETE"]
 `
 
 func upController() error {

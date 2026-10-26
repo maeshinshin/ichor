@@ -20,6 +20,7 @@ import (
 	"context"
 
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
@@ -34,18 +35,22 @@ var talosclusterlog = logf.Log.WithName("taloscluster-resource")
 // SetupTalosClusterWebhookWithManager registers the webhook for TalosCluster in the manager.
 func SetupTalosClusterWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr, &ichorv1alpha1.TalosCluster{}).
-		WithValidator(&TalosClusterCustomValidator{}).
+		WithValidator(&TalosClusterCustomValidator{APIReader: mgr.GetAPIReader()}).
 		Complete()
 }
 
-// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-taloscluster,mutating=false,failurePolicy=fail,sideEffects=None,groups=ichor.maesh.dev,resources=talosclusters,verbs=delete,versions=v1alpha1,name=vtaloscluster-v1alpha1.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-taloscluster,mutating=false,failurePolicy=fail,sideEffects=None,groups=ichor.maesh.dev,resources=talosclusters,verbs=update;delete,versions=v1alpha1,name=vtaloscluster-v1alpha1.kb.io,admissionReviewVersions=v1
 
 // TalosClusterCustomValidator struct is responsible for validating the TalosCluster resource
 // when it is created, updated, or deleted.
 //
 // NOTE: The +kubebuilder:object:generate=false marker prevents controller-gen from generating DeepCopy methods,
 // as this struct is used only for temporary operations and does not need to be deeply copied.
-type TalosClusterCustomValidator struct{}
+type TalosClusterCustomValidator struct {
+	// APIReader counts approved workers for the schedulable check, uncached
+	// for the same reason as TalosMachineCustomValidator.APIReader.
+	APIReader client.Reader
+}
 
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type TalosCluster.
 func (v *TalosClusterCustomValidator) ValidateCreate(_ context.Context, obj *ichorv1alpha1.TalosCluster) (admission.Warnings, error) {
@@ -55,8 +60,20 @@ func (v *TalosClusterCustomValidator) ValidateCreate(_ context.Context, obj *ich
 }
 
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type TalosCluster.
-func (v *TalosClusterCustomValidator) ValidateUpdate(_ context.Context, oldObj, newObj *ichorv1alpha1.TalosCluster) (admission.Warnings, error) {
+func (v *TalosClusterCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj *ichorv1alpha1.TalosCluster) (admission.Warnings, error) {
 	talosclusterlog.Info("Validation for TalosCluster upon update", "name", newObj.GetName())
+
+	// Only the transition to "false" is checked: a cluster created
+	// unschedulable has no workers yet (they are discovered afterwards), and
+	// unrelated edits to one that lost its workers must not be blocked.
+	if oldObj.Spec.ControlPlane.Schedulable != "false" && newObj.Spec.ControlPlane.Schedulable == "false" {
+		workers, err := deleteguard.CountApprovedWorkers(ctx, v.APIReader, newObj.Namespace, newObj.Name)
+		if err != nil {
+			return nil, err
+		}
+
+		return nil, deleteguard.CheckLastWorker(newObj.Spec.ControlPlane.Schedulable, workers)
+	}
 
 	return nil, nil
 }

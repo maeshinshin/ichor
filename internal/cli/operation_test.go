@@ -1,0 +1,268 @@
+/*
+Copyright 2026 maeshinshin.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package cli
+
+import (
+	"bytes"
+	"context"
+	"strings"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
+)
+
+const (
+	opTestCluster = "adopt-cluster"
+	opNewVersion  = "v1.14.4"
+)
+
+func opTestObjects() []client.Object {
+	cp := newTestMachine(opTestCluster)
+	cp.Name, cp.Spec.Role = "cp1", "controlplane"
+
+	return []client.Object{newTestCluster(), cp, newTestMachine(opTestCluster)}
+}
+
+func opTestOps(t *testing.T, k8s client.Client) []ichorv1alpha1.TalosOperation {
+	t.Helper()
+
+	var l ichorv1alpha1.TalosOperationList
+	if err := k8s.List(context.Background(), &l); err != nil {
+		t.Fatal(err)
+	}
+
+	return l.Items
+}
+
+func opTestVersion(t *testing.T, k8s client.Client) string {
+	t.Helper()
+
+	var c ichorv1alpha1.TalosCluster
+	if err := k8s.Get(context.Background(), types.NamespacedName{Namespace: testNamespace, Name: opTestCluster}, &c); err != nil {
+		t.Fatal(err)
+	}
+
+	return c.Spec.TalosVersion
+}
+
+func TestUpgradeTalosAsksWhichMachinesRebootInWhichOrderAndDeclineWritesNothing(t *testing.T) {
+	setAPITestFlags(t, false)
+
+	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(opTestObjects()...).Build()
+	c := localClients(apiOpts, apiDeps{K8s: k8s})
+
+	var prompt bytes.Buffer
+
+	err := runStartOperation(context.Background(), c, strings.NewReader("n\n"), &bytes.Buffer{}, &prompt,
+		startSpec{Kind: pb.OperationKind_OPERATION_KIND_TALOS, Target: opNewVersion})
+	if err == nil || !strings.Contains(err.Error(), "aborted") {
+		t.Fatalf("want aborted, got %v", err)
+	}
+
+	for _, want := range []string{"REBOOTS", "2 machine(s)", "1. cp1 (controlplane)", "2. " + testMachineName + " (worker)", testTalosVersion, opNewVersion} {
+		if !strings.Contains(prompt.String(), want) {
+			t.Errorf("prompt lacks %q:\n%s", want, prompt.String())
+		}
+	}
+
+	if opTestVersion(t, k8s) != testTalosVersion || len(opTestOps(t, k8s)) != 0 {
+		t.Fatal("a declined upgrade wrote something")
+	}
+}
+
+func TestUpgradeTalosWithYesSkipsThePromptAndWritesSpecThenOperation(t *testing.T) {
+	setAPITestFlags(t, true)
+
+	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(opTestObjects()...).Build()
+	c := localClients(apiOpts, apiDeps{K8s: k8s})
+
+	var out, prompt bytes.Buffer
+	if err := runStartOperation(context.Background(), c, strings.NewReader(""), &out, &prompt,
+		startSpec{Kind: pb.OperationKind_OPERATION_KIND_TALOS, Target: opNewVersion}); err != nil {
+		t.Fatal(err)
+	}
+
+	if prompt.Len() != 0 {
+		t.Fatalf("--yes must not prompt: %q", prompt.String())
+	}
+
+	ops := opTestOps(t, k8s)
+	if opTestVersion(t, k8s) != opNewVersion || len(ops) != 1 || ops[0].Spec.Kind != "talos" {
+		t.Fatalf("version=%s ops=%+v", opTestVersion(t, k8s), ops)
+	}
+
+	if !strings.Contains(out.String(), actorCLI) {
+		t.Fatalf("the audit record must name the CLI path: %s", out.String())
+	}
+}
+
+func TestStartThroughTheBackendAndWithoutItDoTheSame(t *testing.T) {
+	setAPITestFlags(t, true)
+
+	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(append(uiBackendObjects(), opTestObjects()...)...).Build()
+
+	var forwards atomic.Int32
+
+	c, err := connectAPI(context.Background(), apiOpts, backendFor(t, k8s, &forwards, nil), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer c.Close()
+
+	if c.Local {
+		t.Fatal("expected the backend")
+	}
+
+	if err := runStartOperation(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{},
+		startSpec{Kind: pb.OperationKind_OPERATION_KIND_CNI, Target: "replaced"}); err != nil {
+		t.Fatal(err)
+	}
+
+	var cl ichorv1alpha1.TalosCluster
+	if err := k8s.Get(context.Background(), types.NamespacedName{Namespace: testNamespace, Name: opTestCluster}, &cl); err != nil {
+		t.Fatal(err)
+	}
+
+	if cl.Spec.CNI.KubeProxy != "replaced" || cl.Annotations[ichorv1alpha1.TalosClusterConfirmKubeProxySwitchAnnotation] != "" {
+		t.Fatalf("cluster = %+v", cl)
+	}
+
+	if len(opTestOps(t, k8s)) != 1 {
+		t.Fatal("no operation")
+	}
+}
+
+func TestShutdownPromptSaysEveryMachineIsPoweredOff(t *testing.T) {
+	setAPITestFlags(t, false)
+
+	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(opTestObjects()...).Build()
+	c := localClients(apiOpts, apiDeps{K8s: k8s})
+
+	var prompt bytes.Buffer
+
+	_ = runStartOperation(context.Background(), c, strings.NewReader("n\n"), &bytes.Buffer{}, &prompt,
+		startSpec{Kind: pb.OperationKind_OPERATION_KIND_SHUTDOWN, Cluster: opTestCluster})
+
+	for _, want := range []string{"SHUT DOWN", "POWERED OFF", "1. " + testMachineName + " (worker)", "2. cp1 (controlplane)"} {
+		if !strings.Contains(prompt.String(), want) {
+			t.Errorf("prompt lacks %q:\n%s", want, prompt.String())
+		}
+	}
+}
+
+func TestStartNeedsAClusterNameWhenThereIsNotExactlyOne(t *testing.T) {
+	setAPITestFlags(t, true)
+
+	second := newTestCluster()
+	second.Name = "other"
+	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(append(opTestObjects(), second)...).Build()
+	c := localClients(apiOpts, apiDeps{K8s: k8s})
+
+	err := runStartOperation(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{},
+		startSpec{Kind: pb.OperationKind_OPERATION_KIND_TALOS, Target: opNewVersion})
+	if err == nil || !strings.Contains(err.Error(), "--cluster") {
+		t.Fatalf("want a --cluster hint, got %v", err)
+	}
+}
+
+func TestOperationDeleteAsksUnlessYes(t *testing.T) {
+	setAPITestFlags(t, false)
+
+	op := &ichorv1alpha1.TalosOperation{}
+	op.Name, op.Namespace = "x", testNamespace
+	op.Spec.ClusterRef.Name, op.Spec.Kind = opTestCluster, "talos"
+
+	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(append(opTestObjects(), op)...).Build()
+	c := localClients(apiOpts, apiDeps{K8s: k8s})
+
+	if err := runOperationDelete(context.Background(), c, strings.NewReader("n\n"), &bytes.Buffer{}, &bytes.Buffer{}, "x"); err == nil || len(opTestOps(t, k8s)) != 1 {
+		t.Fatalf("declined delete: err=%v", err)
+	}
+
+	if err := runOperationDelete(context.Background(), c, strings.NewReader("y\n"), &bytes.Buffer{}, &bytes.Buffer{}, "x"); err != nil || len(opTestOps(t, k8s)) != 0 {
+		t.Fatalf("confirmed delete: err=%v", err)
+	}
+}
+
+func TestWatchEndsWithAnErrorWhenAMachineFailedAndPrintsProgress(t *testing.T) {
+	setAPITestFlags(t, true)
+
+	old := opWatchInterval
+	opWatchInterval = time.Millisecond
+
+	t.Cleanup(func() { opWatchInterval = old })
+
+	op := &ichorv1alpha1.TalosOperation{}
+	op.Name, op.Namespace = "x", testNamespace
+	op.Spec.ClusterRef.Name, op.Spec.Kind = opTestCluster, "talos"
+	op.Status = ichorv1alpha1.TalosOperationStatus{
+		Phase: "Paused", FailureReason: "boom",
+		Machines: []ichorv1alpha1.TalosOperationMachineStatus{{Name: "cp1", Phase: "Completed"}, {Name: "w", Phase: "InProgress"}},
+	}
+
+	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(op).WithStatusSubresource(op).Build()
+	c := localClients(apiOpts, apiDeps{K8s: k8s})
+
+	var out, errw bytes.Buffer
+
+	err := watchOperation(context.Background(), c, objectRef(testNamespace, "x"), &out, &errw)
+	if err == nil || !strings.Contains(err.Error(), "boom") {
+		t.Fatalf("want the failure as the error, got %v", err)
+	}
+
+	if !strings.Contains(errw.String(), "1 done, 1 in progress") || !strings.Contains(out.String(), "failureReason") {
+		t.Fatalf("progress=%q out=%q", errw.String(), out.String())
+	}
+}
+
+func TestStartCommandsAreMarkedAsWrites(t *testing.T) {
+	for name, ann := range map[string]string{
+		"talos": upgradeTalosCmd.Annotations[writesAnnotation], "kubernetes": upgradeKubernetesCmd.Annotations[writesAnnotation],
+		"ichor": upgradeIchorCmd.Annotations[writesAnnotation], "kube-proxy": cniKubeProxyCmd.Annotations[writesAnnotation],
+		"shutdown": clusterShutdownCmd.Annotations[writesAnnotation], "pause": operationPauseCmd.Annotations[writesAnnotation],
+		"resume": operationResumeCmd.Annotations[writesAnnotation], "delete": operationDeleteCmd.Annotations[writesAnnotation],
+	} {
+		if ann != "true" {
+			t.Errorf("%s is not marked as a write", name)
+		}
+	}
+}
+
+func TestPlanTextMentionsHeldMachinesAndTheBlastRadius(t *testing.T) {
+	p := &pb.PlanOperationResponse{
+		Effect: pb.OperationEffect_OPERATION_EFFECT_RESTART_COMPONENTS, Current: "v1.36.0", Target: "v1.36.1", MaxUnavailable: 2,
+		Held: []string{"w9"},
+		Machines: []*pb.PlannedMachine{
+			{Name: "cp1", Role: "controlplane", Step: 1}, {Name: "w1", Role: "worker", Step: 2}, {Name: "w2", Role: "worker", Step: 2},
+		},
+	}
+
+	got := planText(pb.OperationKind_OPERATION_KIND_KUBERNETES, "c", p)
+	for _, want := range []string{"without a reboot", "3 machine(s) (1 control plane, 2 worker)", "at most 2 at once", "2. w1, w2 (worker)", "Held", "w9", "nothing is rolled back"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("text lacks %q:\n%s", want, got)
+		}
+	}
+}

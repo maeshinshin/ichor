@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"flag"
 	"fmt"
@@ -356,9 +357,30 @@ func main() {
 		setupLog.Error(err, "Failed to create controller", "controller", "cnihandover")
 		os.Exit(1)
 	}
+	// talosUpgradeAdvance is TalosOperationKindTalos's own AdvanceMachineFunc: the backbone (TalosOperationReconciler)
+	// never branches on spec.kind
+	// itself, so that one-of-three-kinds selection happens here, in the
+	// wiring, not inside the reconciler. Kubernetes and Ichor upgrades are
+	// separate, later units; until one wires its own executor in here, an
+	// operation of that kind pauses immediately with a plain "not implemented"
+	// error -- never silently treated as a Talos upgrade.
+	talosUpgradeAdvance := controller.NewTalosUpgradeAdvancer(
+		mgr.GetClient(), os.Getenv("POD_NAMESPACE"), controller.NewMachineryTalosClient,
+		&controller.LonghornEvacuator{Client: mgr.GetClient()},
+	)
+
 	if err := (&controller.TalosOperationReconciler{
 		Client:    mgr.GetClient(),
 		APIReader: mgr.GetAPIReader(),
+		Advance: func(
+			ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, op *ichorv1alpha1.TalosOperation,
+		) (bool, error) {
+			if op.Spec.Kind != ichorv1alpha1.TalosOperationKindTalos {
+				return false, fmt.Errorf("no executor wired up for operation kind %q yet", op.Spec.Kind)
+			}
+
+			return talosUpgradeAdvance(ctx, cluster, m, op)
+		},
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "talosoperation")
 		os.Exit(1)

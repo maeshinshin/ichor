@@ -45,18 +45,18 @@ const (
 // DataVolume names, so a bad value is refused before anything is created or deleted.
 var demoPrefixPattern = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]{0,30}[a-z0-9])?$`)
 
-// demoNames returns the prefix and the control-plane and worker VM names.
-func demoNames() (prefix, cp, worker string, err error) {
-	prefix = os.Getenv(demoPrefixEnv)
+// demoNames returns the control-plane and worker VM names.
+func demoNames() (cp, worker string, err error) {
+	prefix := os.Getenv(demoPrefixEnv)
 	if prefix == "" {
 		prefix = defaultDemoPrefix
 	}
 
 	if !demoPrefixPattern.MatchString(prefix) {
-		return "", "", "", fmt.Errorf("%s=%q must be a lowercase DNS label of at most 32 characters", demoPrefixEnv, prefix)
+		return "", "", fmt.Errorf("%s=%q must be a lowercase DNS label of at most 32 characters", demoPrefixEnv, prefix)
 	}
 
-	return prefix, prefix + "-cp", prefix + "-w", nil
+	return prefix + "-cp", prefix + "-w", nil
 }
 
 func demoVMManifest(name string) string {
@@ -67,7 +67,7 @@ func demoVMManifest(name string) string {
 }
 
 func upDemo() error {
-	_, cp, worker, err := demoNames()
+	cp, worker, err := demoNames()
 	if err != nil {
 		return err
 	}
@@ -117,7 +117,7 @@ func upDemo() error {
 }
 
 func downDemo() error {
-	_, cp, worker, err := demoNames()
+	cp, worker, err := demoNames()
 	if err != nil {
 		return err
 	}

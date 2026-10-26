@@ -92,7 +92,7 @@ func TestUpgradeTalosAsksWhichMachinesRebootInWhichOrderAndDeclineWritesNothing(
 	}
 }
 
-func TestUpgradeTalosWithYesSkipsThePromptAndWritesSpecThenOperation(t *testing.T) {
+func TestUpgradeTalosWithYesPrintsThePlanSkipsThePromptAndWritesSpecThenOperation(t *testing.T) {
 	setAPITestFlags(t, true)
 
 	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(opTestObjects()...).Build()
@@ -104,8 +104,12 @@ func TestUpgradeTalosWithYesSkipsThePromptAndWritesSpecThenOperation(t *testing.
 		t.Fatal(err)
 	}
 
-	if prompt.Len() != 0 {
+	if strings.Contains(prompt.String(), "Proceed?") {
 		t.Fatalf("--yes must not prompt: %q", prompt.String())
+	}
+
+	if !strings.Contains(prompt.String(), "REBOOTS") || !strings.Contains(prompt.String(), opNewVersion) {
+		t.Fatalf("--yes must still print the plan: %q", prompt.String())
 	}
 
 	ops := opTestOps(t, k8s)

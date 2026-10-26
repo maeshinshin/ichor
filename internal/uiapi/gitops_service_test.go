@@ -30,6 +30,8 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
+const testAppName = "prod-root"
+
 // Tests for the GitOps screen's backend: fake client, an
 // httptest Git host, nothing real.
 
@@ -40,7 +42,7 @@ func setAppStatus(t *testing.T, e *prEnv, sync, health string) {
 
 	app.SetGroupVersionKind(argoApplicationGVK)
 
-	if err := e.k8s.Get(context.Background(), types.NamespacedName{Namespace: trackedArgoNS, Name: "prod-root"}, &app); err != nil {
+	if err := e.k8s.Get(context.Background(), types.NamespacedName{Namespace: trackedArgoNS, Name: testAppName}, &app); err != nil {
 		t.Fatal(err)
 	}
 
@@ -75,7 +77,7 @@ func TestListGitOpsReportsApplicationState(t *testing.T) {
 	items := gitOpsItems(t, e)
 
 	m := items["GIT_OPS_KIND_MACHINE/m1"]
-	if m.GetTrackedBy() != "Argo CD" || m.GetApplication().GetName() != "prod-root" ||
+	if m.GetTrackedBy() != "Argo CD" || m.GetApplication().GetName() != testAppName ||
 		m.GetSyncStatus() != "OutOfSync" || m.GetHealthStatus() != "Degraded" || m.GetError() != "" {
 		t.Fatalf("machine row = %v", m)
 	}
@@ -96,7 +98,7 @@ func TestListGitOpsMissingApplicationIsARowErrorNotAFailure(t *testing.T) {
 	var app unstructured.Unstructured
 
 	app.SetGroupVersionKind(argoApplicationGVK)
-	app.SetName("prod-root")
+	app.SetName(testAppName)
 	app.SetNamespace(trackedArgoNS)
 
 	if err := e.k8s.Delete(context.Background(), &app); err != nil {
@@ -104,7 +106,7 @@ func TestListGitOpsMissingApplicationIsARowErrorNotAFailure(t *testing.T) {
 	}
 
 	m := gitOpsItems(t, e)["GIT_OPS_KIND_MACHINE/m1"]
-	if m.GetError() == "" || m.GetSyncStatus() != "" || m.GetApplication().GetName() != "prod-root" {
+	if m.GetError() == "" || m.GetSyncStatus() != "" || m.GetApplication().GetName() != testAppName {
 		t.Fatalf("machine row = %v", m)
 	}
 }

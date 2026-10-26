@@ -52,16 +52,21 @@ rules:
   - create
 - apiGroups:
   - admissionregistration.k8s.io
+  resources:
+  - validatingwebhookconfigurations
+  verbs:
+  - list
+  - watch
+- apiGroups:
+  - admissionregistration.k8s.io
   resourceNames:
   - ichor-validating-webhook-configuration
   resources:
   - validatingwebhookconfigurations
   verbs:
   - get
-  - list
   - patch
   - update
-  - watch
 - apiGroups:
   - apps
   resources:

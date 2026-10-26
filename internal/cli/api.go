@@ -134,6 +134,9 @@ type apiClients struct {
 	Patch     ichorv1alpha1connect.PatchServiceClient
 	Operation ichorv1alpha1connect.OperationServiceClient
 
+	// Diagnostics serves the three downloads.
+	Diagnostics ichorv1alpha1connect.DiagnosticsServiceClient
+
 	// Local is true when the clients are the in-process fallback.
 	Local bool
 
@@ -234,8 +237,12 @@ func localClients(opts apiOptions, deps apiDeps) *apiClients {
 		CallerCredentials: true,
 	}
 
+	// The downloads dial Talos from this machine with the secrets bundle the caller may read.
+	s.DownloadTalosClient = uiapi.NewMachineryDownloadTalosClient
+	diag := &localDiagnostics{srv: s}
+
 	return &apiClients{
-		Cluster: s, Machine: s, Patch: s, Operation: s, Node: localNode{s}, Local: true, Close: func() {},
+		Cluster: s, Machine: s, Patch: s, Operation: s, Node: localNode{s}, Diagnostics: diag, Local: true, Close: diag.close,
 	}
 }
 
@@ -332,12 +339,13 @@ func dialBackend(ctx context.Context, opts apiOptions, deps apiDeps) (*apiClient
 	h := http.DefaultClient
 
 	return &apiClients{
-		Cluster:   ichorv1alpha1connect.NewClusterServiceClient(h, base),
-		Machine:   ichorv1alpha1connect.NewMachineServiceClient(h, base),
-		Node:      ichorv1alpha1connect.NewNodeServiceClient(h, base),
-		Patch:     ichorv1alpha1connect.NewPatchServiceClient(h, base),
-		Operation: ichorv1alpha1connect.NewOperationServiceClient(h, base),
-		Close:     stop,
+		Cluster:     ichorv1alpha1connect.NewClusterServiceClient(h, base),
+		Machine:     ichorv1alpha1connect.NewMachineServiceClient(h, base),
+		Node:        ichorv1alpha1connect.NewNodeServiceClient(h, base),
+		Patch:       ichorv1alpha1connect.NewPatchServiceClient(h, base),
+		Operation:   ichorv1alpha1connect.NewOperationServiceClient(h, base),
+		Diagnostics: ichorv1alpha1connect.NewDiagnosticsServiceClient(h, base),
+		Close:       stop,
 	}, nil
 }
 

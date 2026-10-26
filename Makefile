@@ -52,7 +52,7 @@ help: ## Display this help.
 
 .PHONY: manifests
 manifests: controller-gen manifests-ichor-ui ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
-	"$(CONTROLLER_GEN)" rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+	"$(CONTROLLER_GEN)" rbac:roleName=manager-role crd webhook paths="$(CONTROLLER_GEN_PATHS)" output:crd:artifacts:config=config/crd/bases
 	$(MAKE) sync-crds
 
 .PHONY: sync-crds
@@ -66,7 +66,7 @@ adr-index: ## Regenerate docs/adr/README.md's index table from each ADR's own De
 .PHONY: generate
 generate: controller-gen ## Generate mirror types (go generate) plus DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	go generate ./...
-	"$(CONTROLLER_GEN)" object:headerFile="hack/boilerplate.go.txt",year=$(YEAR) paths="./..."
+	"$(CONTROLLER_GEN)" object:headerFile="hack/boilerplate.go.txt",year=$(YEAR) paths="$(CONTROLLER_GEN_PATHS)"
 
 .PHONY: fmt
 fmt: ## Run go fmt against code.
@@ -230,6 +230,10 @@ $(LOCALBIN):
 ## Tool Binaries
 KUBECTL ?= kubectl
 KUSTOMIZE ?= $(LOCALBIN)/kustomize
+# controller-gen (unlike `go list ./...`) descends into dot directories, so "./..." would walk
+# .claude/worktrees/*, whose nested go.mod files may be broken (missing go.sum) and fail
+# the whole run. List the real code roots instead; "{a,b}" is its multi-path syntax.
+CONTROLLER_GEN_PATHS ?= {./api/...,./cmd/...,./internal/...,./pkg/...}
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 GOLANGCI_LINT ?= $(LOCALBIN)/golangci-lint
@@ -401,7 +405,7 @@ build-ichor-ui: ui-build ## Build the ichor-ui binary with the real UI embedded.
 
 # internal/uiapi's own +kubebuilder:rbac markers live behind the ichorui_rbac build tag
 # (see internal/uiapi/rbac_markers.go) so the `manifests` target above -- which scans
-# paths="./..." with no special tags -- never sees them and never merges them into
+# CONTROLLER_GEN_PATHS with no special tags -- never sees them and never merges them into
 # manager-role. This target is the only one that passes --load-build-tags=ichorui_rbac,
 # so the UI backend's ClusterRole stays in its own file, generated on its own.
 

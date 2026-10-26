@@ -123,7 +123,8 @@ func TestNew_KindOnlyIgnoreDoesNotRespect(t *testing.T) {
 	}
 
 	if app.Spec.SyncPolicy != nil && slices.Contains(app.Spec.SyncPolicy.SyncOptions, syncOptionRespectIgnoreDiffs) {
-		t.Errorf("syncOptions = %v, want no RespectIgnoreDifferences=true for a kind-only entry", app.Spec.SyncPolicy.SyncOptions)
+		t.Errorf("syncOptions = %v, want no RespectIgnoreDifferences=true for a kind-only entry",
+			app.Spec.SyncPolicy.SyncOptions)
 	}
 
 	if len(app.Spec.IgnoreDifferences) != 1 {

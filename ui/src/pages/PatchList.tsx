@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ErrorAlert } from '@/components/ErrorAlert'
+import { PullRequestNotice } from '@/components/PullRequestNotice'
 import { ConfigLayer } from '@/gen/ichor/v1alpha1/node_pb'
 import type { Patch } from '@/gen/ichor/v1alpha1/patch_pb'
 import { clusterClient, patchClient } from '@/lib/connect'
@@ -141,13 +142,19 @@ function DeleteDialog({ patch, onDeleted }: { patch: Patch; onDeleted: () => voi
   const [open, setOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<ErrorShape | null>(null)
+  const [pullRequestUrl, setPullRequestUrl] = useState<string | null>(null)
 
   async function submit() {
     if (!patch.ref) return
     setSubmitting(true)
     setError(null)
     try {
-      await patchClient.deletePatch({ patch: patch.ref })
+      const res = await patchClient.deletePatch({ patch: patch.ref })
+      if (res.pullRequestUrl) {
+        // Tracked by Argo CD: the removal is a pull request, nothing was deleted.
+        setPullRequestUrl(res.pullRequestUrl)
+        return
+      }
       setOpen(false)
       onDeleted()
     } catch (err) {
@@ -165,6 +172,17 @@ function DeleteDialog({ patch, onDeleted }: { patch: Patch; onDeleted: () => voi
         </Button>
       </DialogTrigger>
       <DialogContent>
+        {pullRequestUrl ? (
+          <>
+            <PullRequestNotice url={pullRequestUrl} />
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setOpen(false)}>
+                Close
+              </Button>
+            </DialogFooter>
+          </>
+        ) : (
+          <>
         <DialogHeader>
           <DialogTitle>Delete {patch.ref?.name}?</DialogTitle>
           <DialogDescription>
@@ -182,6 +200,8 @@ function DeleteDialog({ patch, onDeleted }: { patch: Patch; onDeleted: () => voi
             {submitting ? 'Deleting…' : 'Delete'}
           </Button>
         </DialogFooter>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   )

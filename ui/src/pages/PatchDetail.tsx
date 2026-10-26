@@ -449,12 +449,18 @@ function DeleteButton({ namespace, name }: { namespace: string; name: string }) 
   const [open, setOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<ErrorShape | null>(null)
+  const [pullRequestUrl, setPullRequestUrl] = useState<string | null>(null)
 
   async function submit() {
     setSubmitting(true)
     setError(null)
     try {
-      await patchClient.deletePatch({ patch: { namespace, name } })
+      const res = await patchClient.deletePatch({ patch: { namespace, name } })
+      if (res.pullRequestUrl) {
+        // Tracked by Argo CD: the removal is a pull request, nothing was deleted.
+        setPullRequestUrl(res.pullRequestUrl)
+        return
+      }
       navigate('/patches')
     } catch (err) {
       setError(describeError(err))
@@ -469,6 +475,17 @@ function DeleteButton({ namespace, name }: { namespace: string; name: string }) 
         <Button variant="destructive">Delete</Button>
       </DialogTrigger>
       <DialogContent>
+        {pullRequestUrl ? (
+          <>
+            <PullRequestNotice url={pullRequestUrl} />
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setOpen(false)}>
+                Close
+              </Button>
+            </DialogFooter>
+          </>
+        ) : (
+          <>
         <DialogHeader>
           <DialogTitle>Delete {name}?</DialogTitle>
           <DialogDescription>
@@ -485,6 +502,8 @@ function DeleteButton({ namespace, name }: { namespace: string; name: string }) 
             {submitting ? 'Deleting…' : 'Delete'}
           </Button>
         </DialogFooter>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   )

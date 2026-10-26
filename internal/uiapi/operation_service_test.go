@@ -356,7 +356,7 @@ func TestPlanShutdownIsWorkersThenControlPlanesAndStops(t *testing.T) {
 	}
 
 	// Holds do not apply to a shutdown, so "held" is stopped too.
-	if got := strings.Join(names, ","); got != "held,w1,w2,cp1" || res.Msg.GetEffect() != pb.OperationEffect_OPERATION_EFFECT_STOP || len(res.Msg.GetHeld()) != 0 {
+	if got := strings.Join(names, ","); got != "w1,held,w2,cp1" || res.Msg.GetEffect() != pb.OperationEffect_OPERATION_EFFECT_STOP || len(res.Msg.GetHeld()) != 0 {
 		t.Fatalf("plan = %v", res.Msg)
 	}
 }

@@ -149,7 +149,7 @@ func mustRender(
 ) string {
 	t.Helper()
 
-	out, _, err := Render(cluster, m, bundle, patches)
+	out, _, err := Render(cluster, m, bundle, patches, nil)
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -279,12 +279,12 @@ func TestRenderHashStable(t *testing.T) {
 		sysctlPatch("p-b", layerRole, 0, roleTarget, "2"),
 	}
 
-	out1, hash1, err := Render(cluster, m, bundle, patches)
+	out1, hash1, err := Render(cluster, m, bundle, patches, nil)
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
 
-	out2, hash2, err := Render(cluster, m, bundle, patches)
+	out2, hash2, err := Render(cluster, m, bundle, patches, nil)
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -299,7 +299,7 @@ func TestRenderHashStable(t *testing.T) {
 
 	reordered := []ichorv1alpha1.TalosConfigPatch{patches[1], patches[0]}
 
-	_, hash3, err := Render(cluster, m, bundle, reordered)
+	_, hash3, err := Render(cluster, m, bundle, reordered, nil)
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -313,7 +313,7 @@ func TestRenderHashStable(t *testing.T) {
 		sysctlPatch("p-b", layerRole, 0, roleTarget, "different"),
 	}
 
-	_, hash4, err := Render(cluster, m, bundle, changed)
+	_, hash4, err := Render(cluster, m, bundle, changed, nil)
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -354,7 +354,7 @@ func TestControlPlaneSchedulableRejectsOutOfEnum(t *testing.T) {
 	bundle := testBundle(t)
 	m := testMachine("cp-a", roleControlPlane, nil)
 
-	_, _, err := Render(testCluster("auto"), m, bundle, nil)
+	_, _, err := Render(testCluster("auto"), m, bundle, nil, nil)
 	if err == nil {
 		t.Fatal("expected an error for controlPlane.schedulable \"auto\", got none")
 	}
@@ -411,20 +411,20 @@ func TestRenderBundleLeak(t *testing.T) {
 	m := testMachine("node-a", roleWorker, nil)
 
 	t.Run("nil bundle", func(t *testing.T) {
-		_, _, err := Render(cluster, m, nil, nil)
+		_, _, err := Render(cluster, m, nil, nil, nil)
 		assertNoLeak(t, err)
 	})
 
 	t.Run("invalid version contract", func(t *testing.T) {
 		bad := testCluster("true")
 		bad.Spec.VersionContract = "not-a-version"
-		_, _, err := Render(bad, m, bundle, nil)
+		_, _, err := Render(bad, m, bundle, nil, nil)
 		assertNoLeak(t, err)
 	})
 
 	t.Run("unparseable role", func(t *testing.T) {
 		bad := testMachine("node-a", "not-a-role", nil)
-		_, _, err := Render(cluster, bad, bundle, nil)
+		_, _, err := Render(cluster, bad, bundle, nil, nil)
 		assertNoLeak(t, err)
 	})
 
@@ -436,20 +436,20 @@ func TestRenderBundleLeak(t *testing.T) {
 	// configuration.
 	t.Run("empty role", func(t *testing.T) {
 		bad := testMachine("node-a", "", nil)
-		_, _, err := Render(cluster, bad, bundle, nil)
+		_, _, err := Render(cluster, bad, bundle, nil, nil)
 		assertNoLeak(t, err)
 	})
 
 	t.Run("unknown machine type", func(t *testing.T) {
 		bad := testMachine("node-a", "unknown", nil)
-		_, _, err := Render(cluster, bad, bundle, nil)
+		_, _, err := Render(cluster, bad, bundle, nil, nil)
 		assertNoLeak(t, err)
 	})
 
 	t.Run("empty kubernetes version", func(t *testing.T) {
 		bad := testCluster("true")
 		bad.Spec.KubernetesVersion = ""
-		_, _, err := Render(bad, m, bundle, nil)
+		_, _, err := Render(bad, m, bundle, nil, nil)
 		assertNoLeak(t, err)
 	})
 
@@ -459,7 +459,7 @@ func TestRenderBundleLeak(t *testing.T) {
 				MatchExpressions: []metav1.LabelSelectorRequirement{{Key: labelEnv, Operator: "NotAnOperator"}},
 			},
 		}, "x")
-		_, _, err := Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{patch})
+		_, _, err := Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{patch}, nil)
 		assertNoLeak(t, err)
 	})
 
@@ -472,7 +472,7 @@ func TestRenderBundleLeak(t *testing.T) {
 				Documents:  []ichorv1alpha1.TalosConfigPatchDocument{{Kind: "NotARealKind"}},
 			},
 		}
-		_, _, err := Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{patch})
+		_, _, err := Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{patch}, nil)
 		assertNoLeak(t, err)
 	})
 
@@ -489,7 +489,7 @@ func TestRenderBundleLeak(t *testing.T) {
 				Documents:  []ichorv1alpha1.TalosConfigPatchDocument{doc, doc},
 			},
 		}
-		_, _, err := Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{patch})
+		_, _, err := Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{patch}, nil)
 		assertNoLeak(t, err)
 	})
 
@@ -512,7 +512,7 @@ func TestRenderBundleLeak(t *testing.T) {
 			},
 		}
 		// m is a worker; etcd config is only valid on control plane machines.
-		_, _, err := Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{patch})
+		_, _, err := Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{patch}, nil)
 		assertNoLeak(t, err)
 	})
 }
@@ -611,7 +611,7 @@ func TestCNIHandoverDropsInlineManifest(t *testing.T) {
 
 		before := patch.DeepCopy()
 
-		if _, _, err := Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{patch}); err != nil {
+		if _, _, err := Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{patch}, nil); err != nil {
 			t.Fatalf("Render: %v", err)
 		}
 

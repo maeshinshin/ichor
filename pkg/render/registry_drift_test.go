@@ -85,14 +85,14 @@ func TestRegistryAuthDriftPathsNeverLeakValue(t *testing.T) {
 	oldAuth := map[string]render.RegistryAuth{host: {Password: oldSecret}}
 	newAuth := map[string]render.RegistryAuth{host: {Password: newSecret}}
 
-	oldCfg, _, err := render.RenderWithRegistryAuth(cluster, m, bundle, nil, oldAuth)
+	oldCfg, _, err := render.Render(cluster, m, bundle, nil, oldAuth)
 	if err != nil {
-		t.Fatalf("RenderWithRegistryAuth (old): %v", err)
+		t.Fatalf("Render (old): %v", err)
 	}
 
-	newCfg, _, err := render.RenderWithRegistryAuth(cluster, m, bundle, nil, newAuth)
+	newCfg, _, err := render.Render(cluster, m, bundle, nil, newAuth)
 	if err != nil {
-		t.Fatalf("RenderWithRegistryAuth (new): %v", err)
+		t.Fatalf("Render (new): %v", err)
 	}
 
 	paths, err := controller.ChangedPaths(oldCfg, newCfg)

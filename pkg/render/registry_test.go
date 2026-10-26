@@ -182,11 +182,11 @@ func TestResolveRegistryAuth(t *testing.T) {
 	})
 }
 
-// TestRenderWithRegistryAuth checks that RenderWithRegistryAuth actually injects what
+// TestRenderRegistries checks that Render actually injects what
 // ResolveRegistryAuth resolved -- mirrors, username and the resolved credential all land in the
 // rendered config -- and that the injection is the system layer: a cluster-layer
 // TalosConfigPatch that also sets machine.registries.mirrors for the same host still wins.
-func TestRenderWithRegistryAuth(t *testing.T) {
+func TestRenderRegistries(t *testing.T) {
 	cluster := registryCluster(ichorv1alpha1.TalosClusterRegistry{
 		Host:      registryHost,
 		Endpoints: []string{registryMirrorEndpoint},
@@ -196,9 +196,9 @@ func TestRenderWithRegistryAuth(t *testing.T) {
 	bundle := testBundle(t)
 	auth := map[string]RegistryAuth{registryHost: {Password: "s3cr3t-pw"}}
 
-	out, _, err := RenderWithRegistryAuth(cluster, m, bundle, nil, auth)
+	out, _, err := Render(cluster, m, bundle, nil, auth)
 	if err != nil {
-		t.Fatalf("RenderWithRegistryAuth: %v", err)
+		t.Fatalf("Render: %v", err)
 	}
 
 	for _, want := range []string{registryHost, "mirror.example.com", "username: deploy", "password: s3cr3t-pw"} {
@@ -239,9 +239,9 @@ func TestRenderWithRegistryAuth(t *testing.T) {
 			},
 		}
 
-		out, _, err := RenderWithRegistryAuth(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{patch}, auth)
+		out, _, err := Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{patch}, auth)
 		if err != nil {
-			t.Fatalf("RenderWithRegistryAuth: %v", err)
+			t.Fatalf("Render: %v", err)
 		}
 
 		if !strings.Contains(string(out), "username: overridden-user") {
@@ -259,76 +259,42 @@ func TestRenderWithRegistryAuth(t *testing.T) {
 	})
 }
 
-// TestRenderWithRegistryAuthNoRegistries checks that RenderWithRegistryAuth is a drop-in
-// replacement for Render when there is nothing to inject: no registries declared produces byte-
-// identical output to the existing Render path, same as BuildConfig/BuildConfigWithRegistryAuth
-// sharing one implementation underneath promises.
-func TestRenderWithRegistryAuthNoRegistries(t *testing.T) {
+// TestResolveRegistryAuthNoRegistries checks that a cluster with no registries resolves to an
+// empty map without reading anything (the client has no objects, and the namespace may even be
+// empty: nothing is looked up), and that rendering with it is identical to rendering with nil.
+func TestResolveRegistryAuthNoRegistries(t *testing.T) {
 	cluster := testCluster("true")
 	m := testMachine("node-a", roleWorker, nil)
 	bundle := testBundle(t)
 
-	plain, plainHash, err := Render(cluster, m, bundle, nil)
+	k8sClient := fake.NewClientBuilder().WithScheme(registryTestScheme(t)).Build()
+
+	auth, err := ResolveRegistryAuth(context.Background(), k8sClient, "", cluster)
+	if err != nil {
+		t.Fatalf("ResolveRegistryAuth: %v", err)
+	}
+
+	if len(auth) != 0 {
+		t.Fatalf("expected no resolved auth, got %d entries", len(auth))
+	}
+
+	plain, plainHash, err := Render(cluster, m, bundle, nil, nil)
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
 
-	withAuth, withAuthHash, err := RenderWithRegistryAuth(cluster, m, bundle, nil, nil)
+	withAuth, withAuthHash, err := Render(cluster, m, bundle, nil, auth)
 	if err != nil {
-		t.Fatalf("RenderWithRegistryAuth: %v", err)
+		t.Fatalf("Render: %v", err)
 	}
 
-	if string(plain) != string(withAuth) {
+	if string(plain) != string(withAuth) || plainHash != withAuthHash {
 		t.Fatalf("expected identical output with no registries declared")
-	}
-
-	if plainHash != withAuthHash {
-		t.Fatalf("expected identical hash with no registries declared")
-	}
-}
-
-// TestRenderRefusesRegistriesWithoutAuthPath checks the guard added after review: Render
-// and BuildConfig must refuse outright when cluster.Spec.Registries is non-empty, rather than
-// silently rendering a mirror with no credentials. Before this guard, calling the wrong entry
-// point produced a cluster that simply could not pull from its private registry, with no error
-// and nothing in Ichor's own output pointing at why -- a loud failure here is what replaces that
-// silent one.
-func TestRenderRefusesRegistriesWithoutAuthPath(t *testing.T) {
-	cluster := registryCluster(ichorv1alpha1.TalosClusterRegistry{
-		Host: registryHost, Endpoints: []string{registryMirrorEndpoint},
-	})
-	m := testMachine("node-a", roleWorker, nil)
-	bundle := testBundle(t)
-
-	t.Run("BuildConfig", func(t *testing.T) {
-		_, err := BuildConfig(cluster, m, bundle, nil)
-		assertNamesAuthEntryPoints(t, err)
-	})
-
-	t.Run("Render", func(t *testing.T) {
-		_, _, err := Render(cluster, m, bundle, nil)
-		assertNamesAuthEntryPoints(t, err)
-	})
-}
-
-// assertNamesAuthEntryPoints checks that err is non-nil and names both of the entry points a
-// caller with registries declared must use instead.
-func assertNamesAuthEntryPoints(t *testing.T, err error) {
-	t.Helper()
-
-	if err == nil {
-		t.Fatal("expected an error, got nil")
-	}
-
-	for _, want := range []string{"BuildConfigWithRegistryAuth", "RenderWithRegistryAuth"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Fatalf("expected the error to name %q, got: %v", want, err)
-		}
 	}
 }
 
 // TestRegistryAuthLeak mirrors TestRenderBundleLeak's discipline for this package's second
-// secret-bearing input: no error ResolveRegistryAuth or RenderWithRegistryAuth can return, on any
+// secret-bearing input: no error ResolveRegistryAuth or Render can return, on any
 // path this test can force, may contain the registry's resolved credential.
 func TestRegistryAuthLeak(t *testing.T) {
 	const secretValue = "leak-canary-s3cr3t-pw-should-never-appear"
@@ -367,7 +333,7 @@ func TestRegistryAuthLeak(t *testing.T) {
 		assertNoLeak(t, err)
 	})
 
-	// This forces RenderWithRegistryAuth to fail with a real credential
+	// This forces Render to fail with a real credential
 	// already resolved (auth), but not inside injectRegistries itself: an
 	// invalid versionContract fails earlier, at buildConfig's own
 	// coreconfig.ParseContractFromVersion call (render.go), before
@@ -392,7 +358,7 @@ func TestRegistryAuthLeak(t *testing.T) {
 		bad := registryCluster(cluster.Spec.Registries...)
 		bad.Spec.VersionContract = "not-a-version"
 
-		_, _, err := RenderWithRegistryAuth(bad, m, bundle, nil, auth)
+		_, _, err := Render(bad, m, bundle, nil, auth)
 		assertNoLeak(t, err)
 	})
 }

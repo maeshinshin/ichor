@@ -213,3 +213,49 @@ var _ = Describe("GetEffectiveConfig namespace resolution", func() {
 		Expect(resp.Msg.GetConfig().GetValues()).NotTo(BeEmpty())
 	})
 })
+
+// A TalosCluster that declares registries must render in the effective-config view, with the
+// authSecretRef Secret resolved in Server.ControllerNamespace -- not the cluster's own
+// namespace -- and the resolved password never reaching the wire unmasked.
+var _ = Describe("GetEffectiveConfig with spec.registries", func() {
+	It("resolves authSecretRef in the controller's namespace and masks the credential", func() {
+		const (
+			controllerNamespace = "ichor-system-effcfg-reg"
+			registryHost        = "registry.example.com"
+			password            = "s3cr3t-registry-pw"
+		)
+
+		Expect(k8sClient.Create(ctx, &corev1.Namespace{Name: controllerNamespace})).To(Succeed())
+
+		raw, err := yaml.Marshal(newTestBundle())
+		Expect(err).NotTo(HaveOccurred())
+		bundleSecret := &corev1.Secret{
+			GenerateName: "regbundle-", Namespace: controllerNamespace,
+			Data: map[string][]byte{bundleSecretKey: raw},
+		}
+		Expect(k8sClient.Create(ctx, bundleSecret)).To(Succeed())
+
+		authSecret := &corev1.Secret{
+			GenerateName: "regauth-", Namespace: controllerNamespace,
+			Data: map[string][]byte{"password": []byte(password)},
+		}
+		Expect(k8sClient.Create(ctx, authSecret)).To(Succeed())
+
+		cluster := newTestCluster(bundleSecret.Name)
+		cluster.Spec.Registries = []ichorv1alpha1.TalosClusterRegistry{{
+			Host: registryHost, Endpoints: []string{"https://private.example.com"}, Username: "deploy",
+			AuthSecretRef: &corev1.LocalObjectReference{Name: authSecret.Name},
+		}}
+		Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
+
+		m := newTestMachine(cluster.Name, strongTestIdentity("uuid-registries"), roleWorker, ichorv1alpha1.MachineApprovalStateApproved)
+
+		s := &Server{Client: k8sClient, ControllerNamespace: controllerNamespace}
+		resp, err := s.GetEffectiveConfig(ctx, connect.NewRequest(&pb.GetEffectiveConfigRequest{
+			Machine: objectRef(m.Namespace, m.Name),
+		}))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(resp.Msg.String()).To(ContainSubstring(registryHost))
+		Expect(resp.Msg.String()).NotTo(ContainSubstring(password))
+	})
+})

@@ -137,6 +137,84 @@ type TalosClusterCNI struct {
 	Handover string `json:"handover,omitempty"`
 }
 
+// TalosClusterGitRepository is the repository connection PR mode and strict GitOps open pull requests
+// against (docs/adr/0056): which host, where its API and clone URL are, which branch pull requests
+// target, and a reference to the Secret holding the access token. The token itself is never a field
+// here -- this value lives in Git -- and the Secret is read in the UI backend's own namespace (ADR 0011).
+type TalosClusterGitRepository struct {
+	// host is the Git hosting API pull requests are opened through.
+	// +kubebuilder:validation:Enum=github;gitlab;gitea
+	// +required
+	Host string `json:"host"`
+
+	// apiURL is the host's API root, e.g. https://api.github.com or https://gitlab.example.com. https
+	// only: the token is sent to it.
+	// +kubebuilder:validation:MaxLength=2048
+	// +kubebuilder:validation:XValidation:rule="isURL(self) && self.startsWith('https://')",message="apiURL must be an https URL"
+	// +required
+	APIURL string `json:"apiURL"`
+
+	// owner is the user, organization or (GitLab) group path that owns the repository.
+	// +kubebuilder:validation:MaxLength=255
+	// +kubebuilder:validation:Pattern=`^[A-Za-z0-9][A-Za-z0-9._-]*(/[A-Za-z0-9][A-Za-z0-9._-]*)*$`
+	// +required
+	Owner string `json:"owner"`
+
+	// repo is the repository name.
+	// +kubebuilder:validation:MaxLength=255
+	// +kubebuilder:validation:Pattern=`^[A-Za-z0-9][A-Za-z0-9._-]*$`
+	// +required
+	Repo string `json:"repo"`
+
+	// cloneURL is what git clones and pushes to. https only: the token is sent to it.
+	// +kubebuilder:validation:MaxLength=2048
+	// +kubebuilder:validation:XValidation:rule="isURL(self) && self.startsWith('https://')",message="cloneURL must be an https URL"
+	// +required
+	CloneURL string `json:"cloneURL"`
+
+	// baseBranch is the branch pull requests target and new files are added to. An Argo CD
+	// Application's own targetRevision wins for a CR it already tracks.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=255
+	// +kubebuilder:default=main
+	// +optional
+	BaseBranch string `json:"baseBranch,omitempty"`
+
+	// tokenSecretRef selects the key of a Secret holding an access token that can push branches and
+	// open pull requests. The Secret is read in the UI backend's own namespace, never in this
+	// TalosCluster's.
+	// +required
+	TokenSecretRef corev1.SecretKeySelector `json:"tokenSecretRef"`
+
+	// machinesPath is the directory (relative to the repository root) new TalosMachine files are
+	// added to by a strict-mode approval. Required in strict mode.
+	// +kubebuilder:validation:MaxLength=512
+	// +kubebuilder:validation:Pattern=`^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$`
+	// +kubebuilder:validation:XValidation:rule="!self.split('/').exists(s, s == '.' || s == '..')",message="machinesPath must not contain . or .. segments"
+	// +optional
+	MachinesPath string `json:"machinesPath,omitempty"`
+}
+
+// TalosClusterGitOps selects how changes reach this cluster's CRs (docs/design/architecture.md,
+// "GitOps and Argo CD"; docs/adr/0056).
+// +kubebuilder:validation:XValidation:rule="!has(self.mode) || self.mode != 'strict' || (has(self.repository) && has(self.repository.machinesPath))",message="strict mode needs repository with machinesPath: approving a node is a pull request that adds its TalosMachine"
+type TalosClusterGitOps struct {
+	// mode is relaxed (the default: approving a node writes the TalosMachine directly) or strict
+	// (approving a node opens a pull request that adds it; the node stays pending until that merges
+	// and syncs). In either mode a change to a CR Argo CD tracks goes through a pull request when a
+	// repository is set. Changing mode rewrites nothing: CRs written directly under relaxed stay,
+	// and `ichor gitops export` is how they reach Git.
+	// +kubebuilder:validation:Enum=relaxed;strict
+	// +kubebuilder:default=relaxed
+	// +optional
+	Mode string `json:"mode,omitempty"`
+
+	// repository is the repository connection. Unset means a tracked CR is read-only with an export
+	// button.
+	// +optional
+	Repository *TalosClusterGitRepository `json:"repository,omitempty"`
+}
+
 // TalosClusterRegistry declares one private registry mirror this cluster's nodes pull through,
 // and where its pull credentials live. The mirror endpoints and (non-secret) username are typed
 // fields, same as any other machine-config value; the password-shaped credentials
@@ -294,6 +372,11 @@ type TalosClusterSpec struct {
 	// +listMapKey=host
 	// +optional
 	Registries []TalosClusterRegistry `json:"registries,omitempty"`
+
+	// gitops selects relaxed or strict GitOps and carries the repository connection pull requests
+	// are opened against (docs/adr/0056). Unset behaves as mode relaxed with no repository.
+	// +optional
+	GitOps *TalosClusterGitOps `json:"gitops,omitempty"`
 }
 
 // TalosClusterStatus defines the observed state of TalosCluster.

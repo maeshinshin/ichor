@@ -3634,6 +3634,123 @@ spec:
                 - address
                 - type
                 type: object
+              gitops:
+                description: |-
+                  gitops selects relaxed or strict GitOps and carries the repository connection pull requests
+                  are opened against (docs/adr/0056). Unset behaves as mode relaxed with no repository.
+                properties:
+                  mode:
+                    default: relaxed
+                    description: |-
+                      mode is relaxed (the default: approving a node writes the TalosMachine directly) or strict
+                      (approving a node opens a pull request that adds it; the node stays pending until that merges
+                      and syncs). In either mode a change to a CR Argo CD tracks goes through a pull request when a
+                      repository is set. Changing mode rewrites nothing: CRs written directly under relaxed stay,
+                      and `ichor gitops export` is how they reach Git.
+                    enum:
+                    - relaxed
+                    - strict
+                    type: string
+                  repository:
+                    description: |-
+                      repository is the repository connection. Unset means a tracked CR is read-only with an export
+                      button.
+                    properties:
+                      apiURL:
+                        description: |-
+                          apiURL is the host's API root, e.g. https://api.github.com or https://gitlab.example.com. https
+                          only: the token is sent to it.
+                        maxLength: 2048
+                        type: string
+                        x-kubernetes-validations:
+                        - message: apiURL must be an https URL
+                          rule: isURL(self) && self.startsWith('https://')
+                      baseBranch:
+                        default: main
+                        description: |-
+                          baseBranch is the branch pull requests target and new files are added to. An Argo CD
+                          Application's own targetRevision wins for a CR it already tracks.
+                        maxLength: 255
+                        minLength: 1
+                        type: string
+                      cloneURL:
+                        description: 'cloneURL is what git clones and pushes to. https
+                          only: the token is sent to it.'
+                        maxLength: 2048
+                        type: string
+                        x-kubernetes-validations:
+                        - message: cloneURL must be an https URL
+                          rule: isURL(self) && self.startsWith('https://')
+                      host:
+                        description: host is the Git hosting API pull requests are
+                          opened through.
+                        enum:
+                        - github
+                        - gitlab
+                        - gitea
+                        type: string
+                      machinesPath:
+                        description: |-
+                          machinesPath is the directory (relative to the repository root) new TalosMachine files are
+                          added to by a strict-mode approval. Required in strict mode.
+                        maxLength: 512
+                        pattern: ^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$
+                        type: string
+                        x-kubernetes-validations:
+                        - message: machinesPath must not contain . or .. segments
+                          rule: '!self.split(''/'').exists(s, s == ''.'' || s == ''..'')'
+                      owner:
+                        description: owner is the user, organization or (GitLab) group
+                          path that owns the repository.
+                        maxLength: 255
+                        pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*(/[A-Za-z0-9][A-Za-z0-9._-]*)*$
+                        type: string
+                      repo:
+                        description: repo is the repository name.
+                        maxLength: 255
+                        pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+                        type: string
+                      tokenSecretRef:
+                        description: |-
+                          tokenSecretRef selects the key of a Secret holding an access token that can push branches and
+                          open pull requests. The Secret is read in the UI backend's own namespace, never in this
+                          TalosCluster's.
+                        properties:
+                          key:
+                            description: The key of the secret to select from.  Must
+                              be a valid secret key.
+                            type: string
+                          name:
+                            default: ""
+                            description: |-
+                              Name of the referent.
+                              This field is effectively required, but due to backwards compatibility is
+                              allowed to be empty. Instances of this type with an empty value here are
+                              almost certainly wrong.
+                              More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                            type: string
+                          optional:
+                            description: Specify whether the Secret or its key must
+                              be defined
+                            type: boolean
+                        required:
+                        - key
+                        type: object
+                        x-kubernetes-map-type: atomic
+                    required:
+                    - apiURL
+                    - cloneURL
+                    - host
+                    - owner
+                    - repo
+                    - tokenSecretRef
+                    type: object
+                type: object
+                x-kubernetes-validations:
+                - message: 'strict mode needs repository with machinesPath: approving
+                    a node is a pull request that adds its TalosMachine'
+                  rule: '!has(self.mode) || self.mode != ''strict'' || (has(self.repository)
+                    && has(self.repository.machinesPath))'
               kubernetesVersion:
                 description: kubernetesVersion is the Kubernetes release this cluster
                   runs.

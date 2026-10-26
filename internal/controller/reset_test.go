@@ -48,6 +48,9 @@ func optIntoReset(m *ichorv1alpha1.TalosMachine) {
 	Expect(k8sClient.Delete(ctx, got)).To(Succeed())
 }
 
+// resetTestNode is the node name the fake reports: the machines here have no spec.hostname.
+const resetTestNode = "reset-node"
+
 var _ = Describe("resetNode (ADR 0042)", func() {
 	It("does not reset, and still warns about lingering credentials, when the removal did not opt in", func() {
 		bundle := newTestBundle("v1.14")
@@ -57,7 +60,7 @@ var _ = Describe("resetNode (ADR 0042)", func() {
 		cp2 := newTestControlPlane(cluster.Name, "r2")
 		cp3 := newTestControlPlane(cluster.Name, "r3")
 
-		fake := &fakeTalosClient{nodeName: "reset-node"}
+		fake := &fakeTalosClient{nodeName: resetTestNode}
 		recorder := record.NewFakeRecorder(10)
 		r := &TalosMachineReconciler{
 			Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace,
@@ -88,7 +91,7 @@ var _ = Describe("resetNode (ADR 0042)", func() {
 		cp2 := newTestControlPlane(cluster.Name, "r5")
 		cp3 := newTestControlPlane(cluster.Name, "r6")
 
-		fake := &fakeTalosClient{nodeName: "reset-node"}
+		fake := &fakeTalosClient{nodeName: resetTestNode}
 		recorder := record.NewFakeRecorder(10)
 		r := &TalosMachineReconciler{
 			Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace,
@@ -119,7 +122,7 @@ var _ = Describe("resetNode (ADR 0042)", func() {
 		cp2 := newTestControlPlane(cluster.Name, "r8")
 		cp3 := newTestControlPlane(cluster.Name, "r9")
 
-		fake := &fakeTalosClient{nodeName: "reset-node", resetErr: fmt.Errorf("reset failed")}
+		fake := &fakeTalosClient{nodeName: resetTestNode, resetErr: fmt.Errorf("reset failed")}
 		r := &TalosMachineReconciler{
 			Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace,
 			TalosClient: clientFactory(fake),
@@ -148,7 +151,7 @@ var _ = Describe("resetNode (ADR 0042)", func() {
 		cp2 := newTestControlPlane(cluster.Name, "r11")
 		cp3 := newTestControlPlane(cluster.Name, "r12")
 
-		fake := &fakeTalosClient{nodeName: "reset-node"}
+		fake := &fakeTalosClient{nodeName: resetTestNode}
 		r := &TalosMachineReconciler{
 			Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace,
 			TalosClient: clientFactory(fake),

@@ -2,7 +2,7 @@
 
 Status: Accepted, amended · Date: 2026-10-26 · Design section: GitOps and Argo CD
 
-Decided: `ichor gitops export`'s allow-list of CR kinds, its Argo CD/Flux tracked-resource warning, and `ichor gitops handoff`'s one-field `TalosCluster` patch
+Decided: `ichor gitops export`'s allow-list of CR kinds and of the fields it writes for each (no status or server-assigned metadata), its Argo CD/Flux tracked-resource warning, and `ichor gitops handoff`'s one-field `TalosCluster` patch
 
 ## Context
 
@@ -94,6 +94,69 @@ one-entry slice (`handoffComponents = []string{"cni"}`) rather than a fixed
 `cobra.ExactArgs` plus a hardcoded string check, so the day a second
 hand-over reconciler exists, adding its name to that slice -- and its own
 field-patch branch -- is the only change `gitops handoff` needs.
+
+## Decision: export writes the declared form of each CR, not the live object
+
+The first version marshalled the objects it had read from the cluster as-is.
+Against a real cluster that put `status`, `resourceVersion`, `uid`,
+`generation`, `creationTimestamp`, `managedFields` and friends into Git (and,
+because a list result carries no `TypeMeta`, wrote no `apiVersion`/`kind`
+either). `resourceVersion` makes Argo CD's apply fail its optimistic-concurrency
+check and `uid` makes the files unrestorable on another cluster. The fake-client
+tests could not see this because a freshly built fixture has none of those
+fields set.
+
+`declaredForm` (`internal/cli/gitops_export.go`) is the single place every
+exported CR passes through, after `runGitopsExport` has collected them,
+whatever the kind. It is an allow-list: `apiVersion`, `kind` (from the
+client's scheme), `metadata.{name,namespace,labels,annotations}` and `spec`.
+Everything else is dropped, so a field a future API version adds stays out of
+Git until someone decides it is declared state.
+
+Dropped: `status`; `metadata.resourceVersion`, `uid`, `generation`,
+`creationTimestamp`, `deletionTimestamp`, `deletionGracePeriodSeconds`,
+`managedFields`, `finalizers`, `ownerReferences`, `selfLink`; and the
+annotations `kubectl.kubernetes.io/last-applied-configuration` and
+`argocd.argoproj.io/tracking-id` (they record how the object reached this
+cluster; a restored cluster would claim an Application it is not in).
+
+What about "the labels and annotations Ichor writes at runtime"? Reading the
+code, Ichor writes none on its own CRs: the controller never calls
+`SetLabels`/`SetAnnotations` or assigns into `Labels`/`Annotations` on a
+`Talos*` object (the design section is about labels on Kubernetes `Node`s and
+the storage system's node objects, which export never lists). Every
+`ichor.maesh.dev/` label or annotation on a CR is therefore the operator's
+own and stays:
+
+| Key | Kind | Who writes it | Exported |
+|---|---|---|---|
+| `ichor.maesh.dev/allow-delete` | TalosCluster, TalosMachine | operator | yes |
+| `ichor.maesh.dev/reset-on-delete` | TalosMachine | operator | yes |
+| `ichor.maesh.dev/upgrade-hold` | TalosMachine | operator | yes |
+| `ichor.maesh.dev/upgrade-order` (label) | TalosMachine | operator | yes |
+| `ichor.maesh.dev/confirm-kube-proxy-switch` | TalosCluster | operator | yes |
+| `ichor.maesh.dev/machine-removal` (finalizer) | TalosMachine | controller | no (finalizers dropped) |
+| `kubectl.kubernetes.io/last-applied-configuration` | any | kubectl | no |
+| `argocd.argoproj.io/tracking-id` | any | Argo CD | no |
+| any other label or annotation | any | operator or another tool | yes |
+
+Argo CD's instance label (`app.kubernetes.io/instance`, key configurable in
+`argocd-cm`) is kept: it cannot be told apart from an operator label without
+reading `argocd-cm`, and with annotation tracking (the default) it is absent.
+
+`gitops.WriteObject`'s refusal of a `corev1.Secret` no longer sees the typed
+object for CRs, since they are now plain maps; the guard that matters is
+unchanged, `export` never lists a Secret.
+
+The three near-identical `exportConfigPatches`/`exportStorages`/
+`exportEtcdBackups` became one `exportClusterKinds`, driven by a table of
+(file prefix, list type, `clusterRef` accessor). `exportMachines` stays
+separate: it has the approval check and the tracked warning.
+
+"Ichor warns if it sees them tracked" (architecture.md) is not implemented.
+`gitopstracking.IsTracked` is called only for unapproved `TalosMachine`s;
+nothing looks for runtime labels or annotations in tracked Node or storage
+objects. Not built here.
 
 ## Consequences
 

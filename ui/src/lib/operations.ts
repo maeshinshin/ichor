@@ -1,8 +1,6 @@
 // Pure helpers for the operations screens (docs/adr/0068). No import from
 // "@/gen": these run directly under `node --test` (docs/adr/0045).
 
-export type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline'
-
 // The kinds an operation can have, as the screens name them.
 export type OpKind = 'talos' | 'kubernetes' | 'ichor' | 'cni' | 'shutdown' | 'ca-rotation' | 'config'
 
@@ -24,19 +22,6 @@ export function operationState(phase: string, failureReason: string): OpState {
       return 'running'
     default:
       return 'pending'
-  }
-}
-
-export function stateBadge(state: OpState): BadgeVariant {
-  switch (state) {
-    case 'failed':
-      return 'destructive'
-    case 'done':
-      return 'secondary'
-    case 'running':
-      return 'default'
-    default:
-      return 'outline'
   }
 }
 

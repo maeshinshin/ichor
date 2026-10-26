@@ -25,7 +25,6 @@ import (
 
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestRotationRoundTripAndApply(t *testing.T) {
@@ -88,7 +87,7 @@ func TestParseRotationErrorsCarryNoContent(t *testing.T) {
 }
 
 func TestLoadRotationAbsentAndPresent(t *testing.T) {
-	secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName}, Data: map[string][]byte{}}
+	secret := &corev1.Secret{Namespace: testNamespace, Name: testName, Data: map[string][]byte{}}
 	c := newFakeClient(t, secret)
 
 	got, err := LoadRotation(context.Background(), c, testNamespace, testName)

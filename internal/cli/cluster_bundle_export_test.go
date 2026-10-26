@@ -20,13 +20,13 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"maps"
 	"strings"
 	"testing"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	yaml "go.yaml.in/yaml/v4"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -34,6 +34,8 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
 )
+
+const exportBundleSecret = "export-bundle"
 
 func bundleExportFixture(t *testing.T, bundle *secrets.Bundle, extra map[string][]byte) (client.Client, string) {
 	t.Helper()
@@ -44,14 +46,12 @@ func bundleExportFixture(t *testing.T, bundle *secrets.Bundle, extra map[string]
 	}
 
 	data := map[string][]byte{secretsbundle.SecretKey: raw}
-	for k, v := range extra {
-		data[k] = v
-	}
+	maps.Copy(data, extra)
 
 	cluster := newTestCluster()
-	cluster.Spec.SecretsRef.Name = "bundle"
+	cluster.Spec.SecretsRef.Name = exportBundleSecret
 
-	secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "bundle"}, Data: data}
+	secret := &corev1.Secret{Namespace: testNamespace, Name: exportBundleSecret, Data: data}
 
 	return fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(cluster, secret).Build(), cluster.Name
 }

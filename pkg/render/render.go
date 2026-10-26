@@ -87,18 +87,18 @@ var layerOrder = map[string]int{
 // produced, and struct field order is fixed by the Go type -- so identical
 // inputs always encode to identical bytes, in this process or any other.
 //
-// auth is the resolved pull-credential map ResolveRegistryAuth returns for
-// cluster.Spec.Registries (ADR 0027), keyed by TalosClusterRegistry.Host. It
-// is a required argument rather than a second entry point, so a caller cannot
-// forget to resolve it; nil is right for a cluster with no registries.
+// sys carries the system layer's cluster-read inputs (ADR 0027, ADR 0048): resolved registry
+// credentials and the TalosStorages. Production callers build it with ResolveSystemInputs. It is
+// a required argument rather than a second entry point, so a caller cannot forget it; nil is
+// right for a cluster with neither registries nor storage.
 func Render(
 	cluster *ichorv1alpha1.TalosCluster,
 	m *ichorv1alpha1.TalosMachine,
 	bundle *secrets.Bundle,
 	candidates []ichorv1alpha1.TalosConfigPatch,
-	auth map[string]RegistryAuth,
+	sys *SystemInputs,
 ) ([]byte, string, error) {
-	return encodeAndHash(BuildConfig(cluster, m, bundle, candidates, auth))
+	return encodeAndHash(BuildConfig(cluster, m, bundle, candidates, sys))
 }
 
 // encodeAndHash encodes the validated Provider BuildConfig produced and
@@ -136,7 +136,7 @@ func Hash(data []byte) string {
 // config, patch selection and merge Render already does.
 //
 // cluster.Spec.Registries' mirror endpoints and the resolved credentials in
-// auth are merged in as the system layer (ADR 0027): they land below every
+// sys are merged in as the system layer (ADR 0027): they land below every
 // TalosConfigPatch layer, so a cluster, role, selector or machine patch that
 // also touches machine.registries can still override them. A host with no
 // entry in auth renders as an anonymous mirror.
@@ -145,7 +145,7 @@ func BuildConfig(
 	m *ichorv1alpha1.TalosMachine,
 	bundle *secrets.Bundle,
 	candidates []ichorv1alpha1.TalosConfigPatch,
-	auth map[string]RegistryAuth,
+	sys *SystemInputs,
 ) (coreconfig.Provider, error) {
 	if bundle == nil {
 		return nil, fmt.Errorf("render: secrets bundle is required")
@@ -181,7 +181,14 @@ func BuildConfig(
 	// taint above -- Ichor-generated, not patch-shaped, and the lowest
 	// layer in the bottom-up stack so a cluster/role/selector/machine patch
 	// that also sets machine.registries still wins.
-	cfg, err = injectRegistries(cfg, cluster, auth)
+	cfg, err = injectRegistries(cfg, cluster, sys.registryAuth())
+	if err != nil {
+		return nil, err
+	}
+
+	// Storage preparation (layer 1, ADR 0048) is system layer too, above the registries and
+	// below every patch.
+	cfg, err = injectStorage(cfg, contract, cluster, m, sys)
 	if err != nil {
 		return nil, err
 	}

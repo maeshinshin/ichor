@@ -19,8 +19,6 @@ package controller
 import (
 	"context"
 	"fmt"
-	"slices"
-	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -28,7 +26,6 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -127,33 +124,15 @@ func (e *LonghornEvacuator) Resolve(
 		return nil, err
 	}
 
-	var matches []*ichorv1alpha1.TalosStorage
-
-	for i := range storages.Items {
-		s := &storages.Items[i]
-		if s.Spec.ClusterRef.Name != cluster.Name {
-			continue
-		}
-
-		sel, err := metav1.LabelSelectorAsSelector(&s.Spec.Nodes)
-		if err != nil {
-			return nil, fmt.Errorf("parsing TalosStorage %q's node selector: %w", s.Name, err)
-		}
-
-		if sel.Matches(labels.Set(n.Labels)) {
-			matches = append(matches, s)
-		}
+	// The one selection rule, shared with pkg/render's layer-1 injection (ADR 0048).
+	chosen, err := storage.Select(cluster, storages.Items, n.Labels)
+	if err != nil {
+		return nil, err
 	}
 
-	if len(matches) == 0 {
+	if chosen == nil {
 		return nil, nil
 	}
-
-	// More than one TalosStorage selecting the same node is a
-	// misconfiguration this does not reject, just resolves the same way on
-	// every reconcile: sorted by name, first wins.
-	slices.SortFunc(matches, func(a, b *ichorv1alpha1.TalosStorage) int { return strings.Compare(a.Name, b.Name) })
-	chosen := matches[0]
 
 	hook, err := storage.NewEvacuationHook(chosen.Spec.DiskPreset)
 	if err != nil {

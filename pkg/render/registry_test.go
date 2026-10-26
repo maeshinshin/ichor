@@ -196,7 +196,7 @@ func TestRenderRegistries(t *testing.T) {
 	bundle := testBundle(t)
 	auth := map[string]RegistryAuth{registryHost: {Password: "s3cr3t-pw"}}
 
-	out, _, err := Render(cluster, m, bundle, nil, auth)
+	out, _, err := Render(cluster, m, bundle, nil, &SystemInputs{RegistryAuth: auth})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -239,7 +239,7 @@ func TestRenderRegistries(t *testing.T) {
 			},
 		}
 
-		out, _, err := Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{patch}, auth)
+		out, _, err := Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{patch}, &SystemInputs{RegistryAuth: auth})
 		if err != nil {
 			t.Fatalf("Render: %v", err)
 		}
@@ -283,7 +283,7 @@ func TestResolveRegistryAuthNoRegistries(t *testing.T) {
 		t.Fatalf("Render: %v", err)
 	}
 
-	withAuth, withAuthHash, err := Render(cluster, m, bundle, nil, auth)
+	withAuth, withAuthHash, err := Render(cluster, m, bundle, nil, &SystemInputs{RegistryAuth: auth})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -358,7 +358,7 @@ func TestRegistryAuthLeak(t *testing.T) {
 		bad := registryCluster(cluster.Spec.Registries...)
 		bad.Spec.VersionContract = "not-a-version"
 
-		_, _, err := Render(bad, m, bundle, nil, auth)
+		_, _, err := Render(bad, m, bundle, nil, &SystemInputs{RegistryAuth: auth})
 		assertNoLeak(t, err)
 	})
 }

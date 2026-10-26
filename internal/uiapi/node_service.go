@@ -132,12 +132,12 @@ func (s *Server) GetEffectiveConfig(
 
 	// Server.ControllerNamespace, not the TalosCluster's: same fixed namespace as loadBundle
 	// above and as the controller's own resolution (ADR 0018, ADR 0027).
-	auth, err := render.ResolveRegistryAuth(ctx, s.Client, s.ControllerNamespace, cluster)
+	sys, err := render.ResolveSystemInputs(ctx, s.Client, s.ControllerNamespace, cluster)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	values, err := effectiveConfigValues(cluster, m, bundle, patches.Items, auth)
+	values, err := effectiveConfigValues(cluster, m, bundle, patches.Items, sys)
 	if err != nil {
 		// A machine with no role yet (unapproved) or any other input the
 		// renderer rejects is this machine's own state, not a server fault.

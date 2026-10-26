@@ -71,9 +71,9 @@ const secretMask = "***"
 func effectiveConfigValues(
 	cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
 	bundle *secrets.Bundle, candidates []ichorv1alpha1.TalosConfigPatch,
-	auth map[string]render.RegistryAuth,
+	sys *render.SystemInputs,
 ) ([]*pb.EffectiveConfigValue, error) {
-	cfg, err := render.BuildConfig(cluster, m, bundle, candidates, auth)
+	cfg, err := render.BuildConfig(cluster, m, bundle, candidates, sys)
 	if err != nil {
 		return nil, err
 	}

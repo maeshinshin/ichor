@@ -1,0 +1,174 @@
+/*
+Copyright 2026 maeshinshin.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package render
+
+import (
+	"context"
+	"fmt"
+
+	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
+	"github.com/siderolabs/talos/pkg/machinery/config/config"
+	"github.com/siderolabs/talos/pkg/machinery/config/configpatcher"
+	"github.com/siderolabs/talos/pkg/machinery/config/container"
+	"github.com/siderolabs/talos/pkg/machinery/config/types/k8s"
+	mv1alpha1 "github.com/siderolabs/talos/pkg/machinery/config/types/v1alpha1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/storage"
+)
+
+// SystemInputs is everything Render needs that Ichor itself contributes below the
+// TalosConfigPatch layers (the "system" layer, ADR 0027, ADR 0048) and that has to be read from
+// the cluster: resolved registry credentials and the TalosStorage objects whose layer-1
+// preparation may apply. It is one argument so that a new system-layer input extends this
+// struct instead of adding a parameter every caller must remember.
+//
+// A nil *SystemInputs means "none": no registry credentials and no storage. That is right for a
+// cluster with neither, and for tests; production callers always use ResolveSystemInputs.
+type SystemInputs struct {
+	// RegistryAuth is ResolveRegistryAuth's result, keyed by TalosClusterRegistry.Host.
+	RegistryAuth map[string]RegistryAuth
+
+	// Storage is every TalosStorage in the cluster's namespace (any cluster; storage.Select
+	// filters). Order does not matter.
+	Storage []ichorv1alpha1.TalosStorage
+}
+
+// ResolveSystemInputs reads what Render's system layer needs: registry credentials from
+// secretNamespace (ResolveRegistryAuth) and the TalosStorages in the cluster's own namespace.
+func ResolveSystemInputs(
+	ctx context.Context, c client.Client, secretNamespace string, cluster *ichorv1alpha1.TalosCluster,
+) (*SystemInputs, error) {
+	auth, err := ResolveRegistryAuth(ctx, c, secretNamespace, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var storages ichorv1alpha1.TalosStorageList
+	if err := c.List(ctx, &storages, client.InNamespace(cluster.Namespace)); err != nil {
+		return nil, fmt.Errorf("listing TalosStorages: %w", err)
+	}
+
+	return &SystemInputs{RegistryAuth: auth, Storage: storages.Items}, nil
+}
+
+func (s *SystemInputs) registryAuth() map[string]RegistryAuth {
+	if s == nil {
+		return nil
+	}
+
+	return s.RegistryAuth
+}
+
+// StorageFor returns the TalosStorage governing m (storage.Select over m's declared
+// spec.nodeLabels, the labels Talos stamps onto its Node), or nil. It is the single entry point
+// for "does layer 1 apply to this machine": Render, the machine controller's input fingerprint
+// and the TalosStorage status controller all call it.
+func StorageFor(
+	cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, storages []ichorv1alpha1.TalosStorage,
+) (*ichorv1alpha1.TalosStorage, error) {
+	return storage.Select(cluster, storages, m.Spec.NodeLabels)
+}
+
+// injectStorage merges the governing TalosStorage's preset documents (volume, kubelet mount,
+// Node label and annotation) into cfg as part of the system layer. Applied before any
+// TalosConfigPatch, so a patch that touches the same fields wins (ADR 0048).
+func injectStorage(
+	cfg coreconfig.Provider, contract *coreconfig.VersionContract, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, sys *SystemInputs,
+) (coreconfig.Provider, error) {
+	if sys == nil {
+		return cfg, nil
+	}
+
+	chosen, err := StorageFor(cluster, m, sys.Storage)
+	if err != nil || chosen == nil {
+		return cfg, err
+	}
+
+	preset, err := storage.NewPreset(chosen.Spec.DiskPreset)
+	if err != nil {
+		return nil, fmt.Errorf("render: TalosStorage %q: %w", chosen.Name, err)
+	}
+
+	patches, err := preset.TalosPatches(chosen.Spec.DiskSelector)
+	if err != nil {
+		return nil, fmt.Errorf("render: TalosStorage %q: %w", chosen.Name, err)
+	}
+
+	docs := make([]config.Document, 0, len(patches))
+
+	for _, d := range patches {
+		doc, err := DocumentFromPatch(d)
+		if err != nil {
+			return nil, fmt.Errorf("render: TalosStorage %q: %w", chosen.Name, err)
+		}
+
+		docs = append(docs, doc)
+	}
+
+	// Node registration and kubelet mounts are not TalosConfigPatch documents: which Talos
+	// document carries them depends on the version contract.
+	docs = append(docs, nodeRegistrationDocs(contract, preset)...)
+
+	c, err := container.New(docs...)
+	if err != nil {
+		return nil, fmt.Errorf("render: TalosStorage %q: %w", chosen.Name, err)
+	}
+
+	out, err := configpatcher.Apply(configpatcher.WithConfig(cfg),
+		[]configpatcher.Patch{configpatcher.NewStrategicMergePatch(c)})
+	if err != nil {
+		return nil, fmt.Errorf("render: applying TalosStorage %q: %w", chosen.Name, err)
+	}
+
+	return out.Config()
+}
+
+// nodeRegistrationDocs returns the Node label and annotation that register the disk with the
+// storage system, plus the kubelet mounts, in whichever form contract allows. From Talos 1.14
+// (MultidocKubernetesConfigSupported) labels and annotations live in the standalone KubeNodeConfig
+// document, and a legacy machine.nodeLabels / machine.kubelet next to the base config's
+// multi-document form fails validation. The standalone KubeletConfig document has no
+// extraMounts field at all (Talos bind-mounts /var/mnt into the kubelet itself), so under that
+// contract the preset's KubeletMounts are not rendered (ADR 0048).
+func nodeRegistrationDocs(contract *coreconfig.VersionContract, preset storage.Preset) []config.Document {
+	if contract.MultidocKubernetesConfigSupported() {
+		doc := k8s.NewKubeNodeConfigV1Alpha1()
+		doc.LabelsConfig = preset.NodeLabels()
+		doc.AnnotationsConfig = preset.NodeAnnotations()
+
+		return []config.Document{doc}
+	}
+
+	mounts := make([]mv1alpha1.ExtraMount, 0, len(preset.KubeletMounts()))
+
+	for _, km := range preset.KubeletMounts() {
+		mounts = append(mounts, mv1alpha1.ExtraMount{
+			Destination: km.Destination, Source: km.Source, Type: km.Type, Options: km.Options,
+		})
+	}
+
+	return []config.Document{&mv1alpha1.Config{
+		ConfigVersion: mv1alpha1.Version,
+		MachineConfig: &mv1alpha1.MachineConfig{
+			MachineNodeLabels:      preset.NodeLabels(),                                  //nolint:staticcheck // legacy form for pre-1.14 contracts
+			MachineNodeAnnotations: preset.NodeAnnotations(),                             //nolint:staticcheck // legacy form for pre-1.14 contracts
+			MachineKubelet:         &mv1alpha1.KubeletConfig{KubeletExtraMounts: mounts}, //nolint:staticcheck // legacy form
+		},
+	}}
+}

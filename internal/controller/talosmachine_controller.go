@@ -534,12 +534,12 @@ func (r *TalosMachineReconciler) renderMachine(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
 	bundle *secrets.Bundle, patches []ichorv1alpha1.TalosConfigPatch,
 ) ([]byte, string, error) {
-	auth, err := render.ResolveRegistryAuth(ctx, r.Client, r.ControllerNamespace, cluster)
+	sys, err := render.ResolveSystemInputs(ctx, r.Client, r.ControllerNamespace, cluster)
 	if err != nil {
 		return nil, "", err
 	}
 
-	return render.Render(cluster, m, bundle, patches, auth)
+	return render.Render(cluster, m, bundle, patches, sys)
 }
 
 // hashConfig hashes cfg the same way pkg/render.Render hashes its output,

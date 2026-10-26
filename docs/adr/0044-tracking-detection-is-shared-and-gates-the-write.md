@@ -1,7 +1,7 @@
 # 0044. Tracking detection moves to `pkg/gitopstracking`; `pkg/prmode.Decide` turns it into a write-vs-PR gate
 
 Status: Accepted · Date: 2026-10-26 · Design section: GitOps and Argo CD ("PR mode")
-Decided: moved `isTracked` from `internal/cli` to a new `pkg/gitopstracking` package unchanged in behavior except for a corrected Flux signal (`kustomize-controller`/`helm-controller`, not `flux-client-side-apply`), and added a pure `pkg/prmode.Decide(trackedBy, hasRepoConnection) Mode` so "tracked → don't write, open a PR instead" has one place to live rather than zero
+Decided: moved `isTracked` from `internal/cli` to a new `pkg/gitopstracking` package with Flux detection corrected to an inventory scan (the field manager is only a first signal; `flux-client-side-apply` was never Flux's), and added a pure `pkg/prmode.Decide(trackedBy, hasRepoConnection) Mode` so "tracked → don't write, open a PR instead" has one place to live rather than zero
 
 ## Context
 
@@ -22,74 +22,62 @@ here there was no second copy yet -- the second caller didn't exist. The
 job was to make the rule reachable before a second copy could appear, not
 to un-drift two already-diverging ones.
 
-## Question 1: is the cheap Flux check (a field-manager lookup) still enough when it gates a write, not just a warning?
+## Question 1: is a field-manager lookup enough for Flux when it gates a write?
 
-`isTracked`'s own doc comment justified checking one field manager name,
-`flux-client-side-apply`, over listing every Kustomization and searching
-its `.status.inventory`, on the grounds that this function only ever fed a
-warning: an ambiguous case could default to "check anyway" for free, and a
-miss cost nothing a human skimming export's warnings wouldn't still catch
-by other means. Used as a write gate instead, a miss means Ichor writes
-directly to a CR Flux currently owns -- the exact fight PR mode exists to
-prevent. The question the task asked was whether this promotion in stakes
-also promotes the cost-benefit case for scanning inventory instead.
+`isTracked`'s old doc comment justified checking one field manager name,
+`flux-client-side-apply`, over listing Kustomizations, because the function
+only fed a warning. Used as a write gate, a miss means Ichor writes directly
+to a CR Flux owns, the fight PR mode exists to prevent. Two things were
+checked against primary sources (fluxcd.io docs and kustomize-controller
+source, 2026-10-26).
 
-**It does not, but only after fixing a real bug the promotion exposed.**
-Checked against fluxcd.io's current docs (kustomize-controller's
-"Kustomization" page and the project FAQ, both fetched 2026-10-26, Flux
-v2.7-2.9 generation) rather than trusted from the existing comment:
+**`flux-client-side-apply` is not a Flux signal.** fluxcd.io's FAQ and
+Kustomization page document it as the field manager name a *user* must give
+their own `kubectl` edits for Flux to preserve them. It is the opposite of
+"Flux applied this"; the old code and architecture.md had it wrong.
 
-- Flux has used server-side apply by default since well before this
-  generation. Under SSA, the field manager a Flux controller registers in
-  `managedFields` when it applies a resource is the controller's own name:
-  `kustomize-controller` for a `Kustomization`'s applies, `helm-controller`
-  for a `HelmRelease`'s (the kustomize-controller docs page shows this
-  directly in an example event: "kustomize-controller Service/default/podinfo
-  created"; a web search corroborated `helm-controller` independently,
-  itself consistent with upstream Helm's own field-manager convention).
-- `flux-client-side-apply` -- the one string the old code checked -- is
-  documented on fluxcd.io's own FAQ as the **opposite** signal: "In order
-  for Flux to preserve fields added with `kubectl`, ... you have to specify
-  a field manager named `flux-client-side-apply`." It is the reserved name
-  an *operator's own* manual edit must use so Flux's drift detection
-  tolerates it, not a name Flux's controllers register when applying a
-  resource themselves. No source found supports it ever being Flux's own
-  manager name under either apply strategy for the versions this project
-  can run against.
-- Net effect: the pre-existing code's Flux branch, used as a decision
-  gate, would false-negative on essentially every current Flux-managed
-  resource (it checks a string that is not Flux's apply signal) while also
-  being able to false-positive on an unrelated object a human happened to
-  `kubectl apply --field-manager=flux-client-side-apply` once. **This is a
-  bug the warning-only version already shipped with, caught only because
-  this task asked the stakes question seriously.**
+**`kustomize-controller` is a guess too.** kustomize-controller builds its
+resource manager with `ssa.Owner{Field: r.ControllerName, ...}`, and the
+controller name is configurable, so `kustomize-controller` is only the
+default. A deployment that changes `--field-manager` never shows that name,
+and Ichor would write directly to Flux-managed CRs. That is the reason
+architecture.md has Ichor read `argocd-cm` instead of guessing an Argo CD
+marker, and it applies equally here. (An earlier draft of this ADR concluded
+the lookup was enough because the name is fixed; that was wrong.)
 
-With the field manager corrected to `kustomize-controller`/`helm-controller`,
-is the lookup -- one read on the object already in hand -- now sufficient
-for a gate, or does gating still demand the inventory scan? The only
-failure mode found that a lookup can miss and a scan would not: a resource
-Flux applied in the past, whose `managedFields` entry survives after Flux
-stopped reconciling it (removed from the Kustomization's source, prune
-disabled) -- `.status.inventory` would no longer list it, while
-`managedFields` still would. That is a **false positive**: Ichor treats an
-actually-abandoned resource as still tracked and routes it to a PR it
-didn't strictly need. It fails toward caution, not toward a direct write
-colliding with a live Flux reconcile -- the dangerous direction this gate
-exists to prevent. The dangerous direction -- a resource Flux *currently*
-owns carrying neither field-manager string -- was not found to occur under
-normal operation (the controller name is not configurable; `--override-manager`
-only lets a *different* manager pre-empt Flux's own fields, it does not
-rename Flux's own identity). The one window where it could happen (another
-writer displaces every field Flux owns between two reconciles) is not
-closed by scanning the inventory either: `.status.inventory` is only as
-fresh as Flux's last successful reconcile, the same staleness bound the
-field-manager entry has. Scanning gains nothing against the actual risk and
-costs an `unstructured`-based list-every-Kustomization-and-search-its-inventory
-path (plus, eventually, the same again for `HelmRelease`) for a case the
-lookup already covers as well as the scan would.
+Flux also puts no label or annotation on what it applies; ownership is the
+Kustomization's `.status.inventory`. So the authoritative check is the scan.
 
-**Decided: the field-manager lookup, corrected, is enough. No inventory
-scan was built.**
+**Decided: scan inventories, keep the field manager as a first signal only.**
+`IsTracked` order: managed fields naming `kustomize-controller` or
+`helm-controller` (a hit is enough; a stale hit errs toward a PR, the safe
+direction), then Argo CD via `argocd-cm`, then the Flux inventory scan, which
+runs whenever the first two find nothing. A miss on the first signal never
+means "not tracked".
+
+Inventory shape, from the kustomize-controller `api/v1` `ResourceRef` doc
+comment: `.status.inventory.entries[].id` is
+`<namespace>_<name>_<group>_<kind>`, with the version in a separate `v` field.
+fluxcd.io's prose says `..._<kind>_<version>`, but its own example ids
+(`default_podinfo__Service`, `default_podinfo_apps_Deployment`, with `v`
+alone carrying the version) match the source, so the source wins. The code
+reads Kustomizations as `unstructured`; Ichor takes no Flux Go dependency.
+
+Flux not installed (`NoKindMatch` or `NotFound` on the list) means "not
+tracked", not an error and not "unknown". Any other list error (for example
+forbidden) is returned as an error: for a gate, "cannot tell" must not become
+"go ahead and write".
+
+**Warning and decision stay one function.** The scan is one List, reached only
+when nothing cheaper matched. `gitops export` already turns an `IsTracked`
+error into a printed warning and continues, so a failed scan degrades it
+gracefully, and a second, weaker function would be a second rule that can
+drift (the problem ADR 0033 fixed). `internal/cli`'s existing tests are
+unchanged in behavior.
+
+Not covered: `HelmRelease` ownership. Only the first-signal manager name sees
+it; whether a HelmRelease exposes an inventory to scan was not verified.
+Deferred.
 
 ## Question 2: where does the shared rule live?
 
@@ -124,9 +112,8 @@ package-local constants as one-line aliases/delegation to the new
 package -- exactly ADR 0033's `bundleSecretKey` pattern -- so
 `gitops_tracking_test.go` and `gitops_export_test.go` needed no edits at
 all: both reference the lowercase symbols by name, not by literal value,
-so the Flux fix underneath is invisible to them while still being exercised
-by them (`TestIsTracked_FluxManagedFieldsEntry` sets `Manager:
-fluxFieldManager`, which now aliases `kustomize-controller`).
+so they are unaffected (`TestIsTracked_FluxManagedFieldsEntry` sets
+`Manager: fluxFieldManager`, which aliases `kustomize-controller`).
 
 `pkg/prmode.Decide` (`decide.go`) is new:
 
@@ -173,7 +160,6 @@ already named.
   `pkg/gitopstracking.IsTracked` are both now importable from
   `internal/uiapi`, but nothing in `internal/uiapi` calls either yet --
   that caller is a later unit's job.
-- `pkg/gitopstracking` has no Argo CD or Flux Go module dependency, same as
-  `pkg/gitops` before it: `IsTracked`'s Flux branch stayed a `managedFields`
-  string comparison, its Argo CD branch stayed a `corev1.ConfigMap` read,
-  neither needing `unstructured` or a new dependency.
+- `pkg/gitopstracking` has no Argo CD or Flux Go module dependency: the Flux
+  inventory scan uses `unstructured`, the Argo CD branch a `corev1.ConfigMap`
+  read.

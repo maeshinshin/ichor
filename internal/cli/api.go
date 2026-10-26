@@ -18,6 +18,7 @@ package cli
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -31,9 +32,12 @@ import (
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	authv1 "k8s.io/api/authentication/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
+	authv1client "k8s.io/client-go/kubernetes/typed/authentication/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	sigsyaml "sigs.k8s.io/yaml"
 
@@ -112,6 +116,13 @@ type apiDeps struct {
 	FreePort func() (int32, error)
 
 	Stderr io.Writer
+
+	// WhoAmI is the caller's own name from a SelfSubjectReview on the
+	// kubeconfig; nil or failing means the audit actor stays actorCLI.
+	WhoAmI func(ctx context.Context) (string, error)
+
+	// actor is set by connectAPI for the in-process clients.
+	actor string
 }
 
 // apiClients is the Connect surface every API-backed command uses, whether
@@ -136,6 +147,15 @@ type apiClients struct {
 // returns when ichor-ui is unreachable or --local was given.
 var errBackendRequired = errors.New("this command needs ichor-ui, because only the backend holds the read-only " +
 	"Talos identity (the CLI never talks to a node directly); run it without --local while ichor-ui is reachable")
+
+// errOIDCBackend is what a backend-only command returns while ichor-ui
+// requires OIDC: the CLI does not forward its kubeconfig credentials and has no
+// ID token to send (point 5).
+var errOIDCBackend = errors.New("ichor-ui requires OIDC login and the CLI cannot present an OIDC token yet " +
+	"(it never forwards kubeconfig credentials), so this command, which only the backend can serve, is unavailable")
+
+// errBackendOIDC is dialBackend's signal that /auth/config said enabled.
+var errBackendOIDC = errors.New("ichor-ui has OIDC enabled")
 
 // connectAPI returns clients for one command invocation. It tries ichor-ui
 // first; only when ichor-ui cannot be reached at all (no Service, no ready
@@ -162,13 +182,26 @@ func connectAPI(ctx context.Context, opts apiOptions, deps apiDeps, requireBacke
 			return c, nil
 		}
 
-		if requireBackend {
+		switch {
+		case errors.Is(err, errBackendOIDC) && requireBackend:
+			return nil, errOIDCBackend
+		case errors.Is(err, errBackendOIDC):
+			_, _ = fmt.Fprintln(deps.Stderr, "ichor: ichor-ui requires OIDC; using your own kubeconfig and RBAC in this process instead")
+		case requireBackend:
 			return nil, fmt.Errorf("%w (ichor-ui: %v)", errBackendRequired, err)
+		default:
+			_, _ = fmt.Fprintf(deps.Stderr, "ichor: ichor-ui is not reachable (%v); computing from the Kubernetes API directly\n", err)
 		}
-
-		_, _ = fmt.Fprintf(deps.Stderr, "ichor: ichor-ui is not reachable (%v); computing from the Kubernetes API directly\n", err)
 	} else if requireBackend {
 		return nil, errBackendRequired
+	}
+
+	deps.actor = actorCLI
+
+	if deps.WhoAmI != nil {
+		if name, err := deps.WhoAmI(ctx); err == nil && name != "" {
+			deps.actor = name
+		}
 	}
 
 	return localClients(opts, deps), nil
@@ -181,7 +214,7 @@ func connectAPI(ctx context.Context, opts apiOptions, deps apiDeps, requireBacke
 // GetEffectiveConfig -- is the same code, not a copy of it.
 func localClients(opts apiOptions, deps apiDeps) *apiClients {
 	s := &uiapi.Server{
-		Client: deps.K8s, ControllerNamespace: opts.IchorNamespace, ArgoCDNamespace: opts.ArgoCDNamespace, Actor: actorCLI,
+		Client: deps.K8s, ControllerNamespace: opts.IchorNamespace, ArgoCDNamespace: opts.ArgoCDNamespace, Actor: cmp.Or(deps.actor, actorCLI),
 		CallerCredentials: true,
 	}
 
@@ -262,6 +295,12 @@ func dialBackend(ctx context.Context, opts apiOptions, deps apiDeps) (*apiClient
 		return nil, fmt.Errorf("probing ichor-ui through the tunnel: %w", err)
 	}
 
+	if oidcEnabled(dctx, base) {
+		stop()
+
+		return nil, errBackendOIDC
+	}
+
 	h := http.DefaultClient
 
 	return &apiClients{
@@ -287,6 +326,44 @@ func probe(ctx context.Context, base string) error {
 	}
 
 	return resp.Body.Close()
+}
+
+// oidcEnabled reads ichor-ui's GET /auth/config. Anything but a
+// 200 JSON answer with enabled:true -- an older backend, an unparseable body --
+// counts as off: the backend then rejects an unauthenticated call itself.
+func oidcEnabled(ctx context.Context, base string) bool {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/auth/config", nil)
+	if err != nil {
+		return false
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return false
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	var cfg struct {
+		Enabled bool `json:"enabled"`
+	}
+
+	if resp.StatusCode != http.StatusOK || json.NewDecoder(io.LimitReader(resp.Body, 1<<16)).Decode(&cfg) != nil {
+		return false
+	}
+
+	return cfg.Enabled
+}
+
+// selfSubjectName asks the API server who the kubeconfig's credentials are.
+// Only the username is kept; nothing of the credential is read.
+func selfSubjectName(ctx context.Context, c authv1client.SelfSubjectReviewInterface) (string, error) {
+	r, err := c.Create(ctx, &authv1.SelfSubjectReview{}, metav1.CreateOptions{})
+	if err != nil {
+		return "", err
+	}
+
+	return r.Status.UserInfo.Username, nil
 }
 
 // freePort asks the kernel for an unused local port.
@@ -318,7 +395,11 @@ func newAPIDeps(cmd *cobra.Command) (apiDeps, error) {
 		return apiDeps{}, err
 	}
 
-	return apiDeps{K8s: k8sClient, Forward: portForwardToPod(cfg, clientset), FreePort: freePort, Stderr: cmd.ErrOrStderr()}, nil
+	return apiDeps{K8s: k8sClient, Forward: portForwardToPod(cfg, clientset), FreePort: freePort, Stderr: cmd.ErrOrStderr(),
+		WhoAmI: func(ctx context.Context) (string, error) {
+			return selfSubjectName(ctx, clientset.AuthenticationV1().SelfSubjectReviews())
+		},
+	}, nil
 }
 
 // runAPI is every command's shell: validate -o, connect, run, close.

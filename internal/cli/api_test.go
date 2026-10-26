@@ -31,7 +31,6 @@ import (
 	"connectrpc.com/connect"
 	yaml "go.yaml.in/yaml/v4"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -42,6 +41,13 @@ import (
 	"github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1/ichorv1alpha1connect"
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
 	"github.com/maeshinshin/ichor/internal/uiapi"
+)
+
+const (
+	testUIApp       = "ichor-ui"
+	testUIActor     = "ichor-ui"
+	testMachineName = "node-a"
+	testPatchName   = "cli-patch"
 )
 
 // setAPITestFlags points the package-level flag state at the test
@@ -74,15 +80,15 @@ func strongMachine(name string) *ichorv1alpha1.TalosMachine {
 
 // uiBackendObjects is what dialBackend finds: the Service and one ready pod.
 func uiBackendObjects() []client.Object {
-	sel := map[string]string{"app": "ichor-ui"}
+	sel := map[string]string{"app": testUIApp}
 
 	return []client.Object{
 		&corev1.Service{
-			ObjectMeta: metav1.ObjectMeta{Name: uiServiceName, Namespace: ichorControllerNamespace},
-			Spec:       corev1.ServiceSpec{Selector: sel, Ports: []corev1.ServicePort{{Port: 8080}}},
+			Name: uiServiceName, Namespace: ichorControllerNamespace,
+			Spec: corev1.ServiceSpec{Selector: sel, Ports: []corev1.ServicePort{{Port: 8080}}},
 		},
 		&corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{Name: "ichor-ui-0", Namespace: ichorControllerNamespace, Labels: sel},
+			Name: "ichor-ui-0", Namespace: ichorControllerNamespace, Labels: sel,
 			Status: corev1.PodStatus{
 				Phase: corev1.PodRunning, Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}},
 			},
@@ -176,7 +182,7 @@ func TestApproveThroughBackendRunsTheBackendsChecks(t *testing.T) {
 	}
 
 	got := getMachine(t, k8s, "strong")
-	if !got.Spec.IsApproved() || got.Spec.ApprovalDecision.Actor != "ichor-ui" {
+	if !got.Spec.IsApproved() || got.Spec.ApprovalDecision.Actor != testUIActor {
 		t.Fatalf("want approved by ichor-ui, got %+v", got.Spec)
 	}
 
@@ -282,7 +288,7 @@ func TestPatchWriteAndPreviewLocally(t *testing.T) {
 	c := localClients(apiOpts, apiDeps{K8s: k8s})
 
 	p := sysctlPatch(cluster.Name, map[string]string{testSysctlKey: "1"})
-	p.Name = "cli-patch"
+	p.Name = testPatchName
 	p.Spec.Layer = "cluster"
 
 	raw, err := sigsyaml.Marshal(&p)
@@ -305,7 +311,7 @@ func TestPatchWriteAndPreviewLocally(t *testing.T) {
 	}
 
 	var stored ichorv1alpha1.TalosConfigPatch
-	if err := k8s.Get(context.Background(), types.NamespacedName{Namespace: testNamespace, Name: "cli-patch"}, &stored); err != nil {
+	if err := k8s.Get(context.Background(), types.NamespacedName{Namespace: testNamespace, Name: testPatchName}, &stored); err != nil {
 		t.Fatal(err)
 	}
 
@@ -315,15 +321,15 @@ func TestPatchWriteAndPreviewLocally(t *testing.T) {
 	}
 
 	out.Reset()
-	if err := runPatchList(context.Background(), c, &out, cluster.Name); err != nil || !strings.Contains(out.String(), "cli-patch") {
+	if err := runPatchList(context.Background(), c, &out, cluster.Name); err != nil || !strings.Contains(out.String(), testPatchName) {
 		t.Fatalf("list: err=%v out=%s", err, out.String())
 	}
 
-	if err := runPatchDelete(context.Background(), c, strings.NewReader(""), &out, &bytes.Buffer{}, "cli-patch"); err != nil {
+	if err := runPatchDelete(context.Background(), c, strings.NewReader(""), &out, &bytes.Buffer{}, testPatchName); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := k8s.Get(context.Background(), types.NamespacedName{Namespace: testNamespace, Name: "cli-patch"}, &stored); err == nil {
+	if err := k8s.Get(context.Background(), types.NamespacedName{Namespace: testNamespace, Name: testPatchName}, &stored); err == nil {
 		t.Fatal("patch still exists after delete")
 	}
 }
@@ -358,15 +364,15 @@ func TestEffectiveConfigFallbackMasksSecrets(t *testing.T) {
 	cluster.Spec.SecretsRef = corev1.LocalObjectReference{Name: "bundle"}
 
 	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: "bundle", Namespace: ichorControllerNamespace},
-		Data:       map[string][]byte{secretsbundle.SecretKey: raw},
+		Name: "bundle", Namespace: ichorControllerNamespace,
+		Data: map[string][]byte{secretsbundle.SecretKey: raw},
 	}
 
 	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(cluster, newTestMachine(cluster.Name), secret).Build()
 	c := localClients(apiOpts, apiDeps{K8s: k8s})
 
 	var out bytes.Buffer
-	if err := runConfigEffective(context.Background(), c, &out, "node-a"); err != nil {
+	if err := runConfigEffective(context.Background(), c, &out, testMachineName); err != nil {
 		t.Fatal(err)
 	}
 
@@ -438,7 +444,7 @@ func TestNodeLogsFollowResumesAfterDrain(t *testing.T) {
 
 	go func() {
 		done <- runNodeLogs(ctx, func(ctx context.Context) (*apiClients, error) { return connectAPI(ctx, apiOpts, deps, true) },
-			&out, &bytes.Buffer{}, []string{"node-a"}, nodeLogsOptions{Follow: true})
+			&out, &bytes.Buffer{}, []string{testMachineName}, nodeLogsOptions{Follow: true})
 	}()
 
 	deadline := time.After(5 * time.Second)
@@ -482,7 +488,7 @@ func TestNodeLogsWithoutFollowStopsWhenIdle(t *testing.T) {
 	var out syncBuffer
 
 	err := runNodeLogs(context.Background(), func(ctx context.Context) (*apiClients, error) { return connectAPI(ctx, apiOpts, deps, true) },
-		&out, &bytes.Buffer{}, []string{"node-a"}, nodeLogsOptions{Idle: 200 * time.Millisecond})
+		&out, &bytes.Buffer{}, []string{testMachineName}, nodeLogsOptions{Idle: 200 * time.Millisecond})
 	if err != nil || out.String() != "three\n" {
 		t.Fatalf("err=%v out=%q", err, out.String())
 	}

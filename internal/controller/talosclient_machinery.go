@@ -35,6 +35,7 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/constants"
 	configres "github.com/siderolabs/talos/pkg/machinery/resources/config"
 	k8sres "github.com/siderolabs/talos/pkg/machinery/resources/k8s"
+	runtimeres "github.com/siderolabs/talos/pkg/machinery/resources/runtime"
 	"github.com/siderolabs/talos/pkg/machinery/role"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -49,12 +50,9 @@ const bootIDPath = "/proc/sys/kernel/random/boot_id"
 // identity and adapts the connection to TalosClient. It is what cmd/main.go
 // wires into TalosMachineReconciler.TalosClient.
 //
-// The insecure, unauthenticated path Talos's maintenance mode offers is not
-// an option this reconciler needs: design 5.6's configuration reconcile
-// only ever runs against a machine that is already approved and already
-// has a configuration, which means it has already joined and already
-// trusts the bundle's CA. A node with no configuration yet is discovery's
-// problem (phase 3), not this one's.
+// This client is the authenticated path only: it works once the node trusts
+// the bundle's CA. A node still in maintenance mode is reached through
+// MaintenanceClient instead (talosmachine_provision.go).
 func NewMachineryTalosClient(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, bundle *secrets.Bundle,
 ) (TalosClient, error) {
@@ -114,6 +112,19 @@ func (t *machineryTalosClient) CurrentConfig(ctx context.Context) ([]byte, error
 	}
 
 	return res.Provider().Bytes()
+}
+
+// MachineStage reads the MachineStatus resource's stage ("running", "installing",
+// "rebooting", ...), implementing MachineStager.
+func (t *machineryTalosClient) MachineStage(ctx context.Context) (string, error) {
+	md := resource.NewMetadata(runtimeres.NamespaceName, runtimeres.MachineStatusType, runtimeres.MachineStatusID, resource.VersionUndefined)
+
+	res, err := safe.StateGet[*runtimeres.MachineStatus](ctx, t.c.COSI, md)
+	if err != nil {
+		return "", fmt.Errorf("reading machine status: %w", err)
+	}
+
+	return res.TypedSpec().Stage.String(), nil
 }
 
 // DryRunApply validates cfg without applying it and collects every

@@ -25,6 +25,7 @@ import (
 
 const (
 	contractV113 = "v1.13"
+	devVDA       = "/dev/vda"
 
 	docKubeNetwork  = "kind: KubeNetworkConfig"
 	docFlannel      = "kind: KubeFlannelCNIConfig"
@@ -38,8 +39,13 @@ const (
 	presetCiliumStr = "cilium"
 )
 
+type (
+	disk     = ichorv1alpha1.TalosMachineDisk
+	mutation = func(*ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine)
+)
+
 func renderFor(
-	t *testing.T, contract string, mutate func(*ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine),
+	t *testing.T, contract string, mutate mutation,
 ) string {
 	t.Helper()
 
@@ -119,7 +125,7 @@ func TestSubnetsFollowTheContract(t *testing.T) {
 }
 
 func TestTalosFlannelOnlyForTheFlannelPreset(t *testing.T) {
-	preset := func(p string) func(*ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine) {
+	preset := func(p string) mutation {
 		return func(c *ichorv1alpha1.TalosCluster, _ *ichorv1alpha1.TalosMachine) {
 			c.Spec.CNI.Preset = p
 		}
@@ -159,7 +165,7 @@ func TestTalosFlannelOnlyForTheFlannelPreset(t *testing.T) {
 }
 
 func TestInstallTargetFollowsTheContract(t *testing.T) {
-	install := func(d ichorv1alpha1.TalosMachineDisk, image string) func(*ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine) {
+	install := func(d disk, image string) mutation {
 		return func(_ *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine) {
 			m.Spec.Install = &ichorv1alpha1.TalosMachineInstall{Disk: d, Image: image}
 		}
@@ -173,20 +179,20 @@ func TestInstallTargetFollowsTheContract(t *testing.T) {
 
 	for _, tc := range []struct {
 		name string
-		disk ichorv1alpha1.TalosMachineDisk
+		d    disk
 		want string
 	}{
-		{"wwid", ichorv1alpha1.TalosMachineDisk{WWID: "naa.5000c500a1b2c3d4"}, `disk.wwid == "naa.5000c500a1b2c3d4"`},
-		{"serial", ichorv1alpha1.TalosMachineDisk{Serial: "S3Z9NX0M"}, `disk.serial == "S3Z9NX0M"`},
+		{"wwid", disk{WWID: "naa.5000c500a1b2c3d4"}, `disk.wwid == "naa.5000c500a1b2c3d4"`},
+		{"serial", disk{Serial: "S3Z9NX0M"}, `disk.serial == "S3Z9NX0M"`},
 		{
-			"by-id", ichorv1alpha1.TalosMachineDisk{ByIDPath: "/dev/disk/by-id/nvme-X1"},
+			"by-id", disk{ByIDPath: "/dev/disk/by-id/nvme-X1"},
 			`"/dev/disk/by-id/nvme-X1" in disk.symlinks`,
 		},
-		{"bus path", ichorv1alpha1.TalosMachineDisk{BusPath: "/pci0000:00/0000:00:17.0/ata1"}, `disk.bus_path == "/pci0000:00/0000:00:17.0/ata1"`},
-		{"dev path", ichorv1alpha1.TalosMachineDisk{DevPath: "/dev/vda"}, `disk.dev_path == "/dev/vda"`},
+		{"bus path", disk{BusPath: "/pci0000:00/x"}, `disk.bus_path == "/pci0000:00/x"`},
+		{"dev path", disk{DevPath: devVDA}, `disk.dev_path == "/dev/vda"`},
 	} {
 		t.Run("v1.14 "+tc.name, func(t *testing.T) {
-			out := renderFor(t, versionContract, install(tc.disk, image))
+			out := renderFor(t, versionContract, install(tc.d, image))
 			requireAll(t, out, docUnattended, image)
 			// The CEL expression is quoted by YAML, so compare with the inner quotes escaped or not.
 			if !strings.Contains(out, tc.want) && !strings.Contains(out, strings.ReplaceAll(tc.want, `"`, `\"`)) {
@@ -198,24 +204,27 @@ func TestInstallTargetFollowsTheContract(t *testing.T) {
 	}
 
 	t.Run("v1.14 without an image still renders", func(t *testing.T) {
-		requireAll(t, renderFor(t, versionContract, install(ichorv1alpha1.TalosMachineDisk{DevPath: "/dev/vda"}, "")), docUnattended)
+		out := renderFor(t, versionContract, install(disk{DevPath: devVDA}, ""))
+		requireAll(t, out, docUnattended)
 	})
 
 	t.Run("v1.13 wwid", func(t *testing.T) {
-		out := renderFor(t, contractV113, install(ichorv1alpha1.TalosMachineDisk{WWID: "naa.1"}, image))
+		out := renderFor(t, contractV113, install(disk{WWID: "naa.1"}, image))
 		requireAll(t, out, legacyInstall, "diskSelector:", "wwid: naa.1", image)
 		requireNone(t, out, docUnattended)
 	})
 
 	t.Run("v1.13 serial and bus path", func(t *testing.T) {
-		requireAll(t, renderFor(t, contractV113, install(ichorv1alpha1.TalosMachineDisk{Serial: "S1"}, "")), "serial: S1")
-		requireAll(t, renderFor(t, contractV113, install(ichorv1alpha1.TalosMachineDisk{BusPath: "/pci0000:00/x"}, "")), "busPath: /pci0000:00/x")
+		requireAll(t, renderFor(t, contractV113, install(disk{Serial: "S1"}, "")), "serial: S1")
+		out := renderFor(t, contractV113, install(disk{BusPath: "/pci0000:00/x"}, ""))
+		requireAll(t, out, "busPath: /pci0000:00/x")
 	})
 
 	t.Run("v1.13 by-id and dev path are installDisk", func(t *testing.T) {
-		requireAll(t, renderFor(t, contractV113, install(ichorv1alpha1.TalosMachineDisk{ByIDPath: "/dev/disk/by-id/x"}, "")),
+		requireAll(t, renderFor(t, contractV113, install(disk{ByIDPath: "/dev/disk/by-id/x"}, "")),
 			"disk: /dev/disk/by-id/x")
-		requireAll(t, renderFor(t, contractV113, install(ichorv1alpha1.TalosMachineDisk{DevPath: "/dev/vda"}, "")), "disk: /dev/vda")
+		out := renderFor(t, contractV113, install(disk{DevPath: devVDA}, ""))
+		requireAll(t, out, "disk: /dev/vda")
 	})
 
 	t.Run("an empty selector is an error, not a silent no-op", func(t *testing.T) {

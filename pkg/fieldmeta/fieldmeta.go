@@ -95,6 +95,12 @@ var rules = []rule{
 	// reset-and-reinstall operation").
 	{prefix: "machine.install", installTimeOnly: true},
 
+	// UnattendedInstallConfig is the v1.14 form of machine.install and is read at the
+	// same moment. KubeNetworkConfig and KubeFlannelCNIConfig deliberately have no rule: the
+	// subnets are fixed at creation and removing the flannel document is not verified to be
+	// reboot-free, so both keep the reboot-required default.
+	{prefix: "UnattendedInstallConfig", installTimeOnly: true},
+
 	// The time syncer restarts itself when its config changes; confirmed
 	// live, no reboot (siderolabs/talos time-sync docs and engineering
 	// discussion: "time, resolver and sysctl changes apply live without

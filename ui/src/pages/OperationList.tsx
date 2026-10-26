@@ -2,6 +2,7 @@ import { useEffect, useState } from 'preact/hooks'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { EmptyNote, PageSkeleton } from '@/components/PageStates'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { OperationControls } from '@/components/OperationControls'
 import { OperationKind, type Operation } from '@/gen/ichor/v1alpha1/operation_pb'
@@ -40,16 +41,16 @@ export function OperationList() {
   }, [])
 
   if (error) return <ErrorAlert {...error} />
-  if (!ops) return <p class="mt-10 text-center text-sm text-muted-foreground">{t('ops.loading')}</p>
+  if (!ops) return <PageSkeleton label={t('ops.loading')} />
 
   return (
-    <Card className="mt-6">
+    <Card>
       <CardHeader>
         <CardTitle>{t('ops.title')}</CardTitle>
       </CardHeader>
       <CardContent>
         {ops.length === 0 ? (
-          <p class="text-sm text-muted-foreground">{t('ops.empty')}</p>
+          <EmptyNote>{t('ops.empty')}</EmptyNote>
         ) : (
           <Table>
             <TableHeader>

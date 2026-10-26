@@ -36,6 +36,7 @@ const (
 	testNamespace        = "default"
 	literalCluster       = "cluster"
 	literalControlPlane  = "controlplane"
+	literalWorker        = "worker"
 	literalSecrets       = "secrets"
 	literalConfigVersion = "v1alpha1"
 	literalGenerateName  = "patch-"
@@ -77,7 +78,7 @@ var _ = Describe("TalosConfigPatch", func() {
 			Expect(k8sClient.Create(context.Background(), newConfigPatch(layer, target))).NotTo(Succeed())
 		},
 		Entry("two of three target fields set", "role",
-			&TalosConfigPatchTarget{Role: "worker", MachineRef: &corev1.LocalObjectReference{Name: "m"}}),
+			&TalosConfigPatchTarget{Role: literalWorker, MachineRef: &corev1.LocalObjectReference{Name: "m"}}),
 		Entry("target set but none of its fields chosen", "role", &TalosConfigPatchTarget{}),
 		Entry("layer cluster with a target", literalCluster, &TalosConfigPatchTarget{Role: literalControlPlane}),
 		Entry("layer machine without a target", "machine", nil),
@@ -85,8 +86,8 @@ var _ = Describe("TalosConfigPatch", func() {
 			&TalosConfigPatchTarget{MachineRef: &corev1.LocalObjectReference{Name: "m"}}),
 		Entry("layer role with a labelSelector target", "role",
 			&TalosConfigPatchTarget{LabelSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"k": "v"}}}),
-		Entry("layer selector with a role target", "selector", &TalosConfigPatchTarget{Role: "worker"}),
-		Entry("layer machine with a role target", "machine", &TalosConfigPatchTarget{Role: "worker"}),
+		Entry("layer selector with a role target", "selector", &TalosConfigPatchTarget{Role: literalWorker}),
+		Entry("layer machine with a role target", "machine", &TalosConfigPatchTarget{Role: literalWorker}),
 		Entry("layer machine with a labelSelector target", "machine",
 			&TalosConfigPatchTarget{LabelSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"k": "v"}}}),
 	)
@@ -96,7 +97,7 @@ var _ = Describe("TalosConfigPatch", func() {
 			Expect(k8sClient.Create(context.Background(), newConfigPatch(layer, target))).To(Succeed())
 		},
 		Entry("layer cluster without a target", literalCluster, nil),
-		Entry("layer role targeting a role", "role", &TalosConfigPatchTarget{Role: "worker"}),
+		Entry("layer role targeting a role", "role", &TalosConfigPatchTarget{Role: literalWorker}),
 		Entry("layer selector targeting labels", "selector",
 			&TalosConfigPatchTarget{LabelSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"k": "v"}}}),
 		Entry("layer machine targeting a machine", "machine",

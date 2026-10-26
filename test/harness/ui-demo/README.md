@@ -66,7 +66,7 @@ sed s/__PREFIX__/$P/ test/harness/ui-demo/outer-service.yaml | kubectl --context
 ```sh
 kubectl --context $C -n ichor-e2e port-forward svc/$P-registry 5000:5000 &   # only ever this service
 make demo-images VERSION=v0.0.8-$(git rev-parse --short HEAD) REGISTRY=localhost:5000
-KUBECONFIG=bin/ui-demo.kubeconfig ichor upgrade ichor v0.0.8-<the same short sha> --cluster $P
+bin/ichor upgrade ichor v0.0.8-<the same short sha> --cluster $P -n ichor-system --kubeconfig bin/ui-demo.kubeconfig --yes --follow
 ```
 
 `demo-images` leaves the git tree unchanged and fails if a binary is not freshly built with that `VERSION`.

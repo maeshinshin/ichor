@@ -101,7 +101,11 @@ spec:
           requests:
             cpu: 10m
             memory: 64Mi
-        volumeMounts: []
-      volumes: []
+        volumeMounts:
+        - name: backup-spool
+          mountPath: /var/spool/ichor
+      volumes:
+      - name: backup-spool
+        emptyDir: {}
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10

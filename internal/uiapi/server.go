@@ -79,6 +79,12 @@ type Server struct {
 	// tracks a CR (docs/adr/0051). Empty means "argocd".
 	ArgoCDNamespace string
 
+	// Links are the external tool URLs from the chart's values (docs/adr/0061).
+	// Empty means "not registered".
+	Links Links
+
+	prs prCache
+
 	// Draining is closed when the process is shutting down, so a
 	// StreamNodeLogs call in flight stops and tells its client to
 	// reconnect elsewhere instead of being cut off mid-write

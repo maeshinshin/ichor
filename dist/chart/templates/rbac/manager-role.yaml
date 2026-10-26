@@ -12,6 +12,14 @@ metadata:
 rules:
 - apiGroups:
   - ""
+  resourceNames:
+  - argocd-cm
+  resources:
+  - configmaps
+  verbs:
+  - get
+- apiGroups:
+  - ""
   resources:
   - events
   verbs:
@@ -81,6 +89,7 @@ rules:
 - apiGroups:
   - ichor.maesh.dev
   resources:
+  - ichorinstallations
   - talosclusters
   - talosconfigpatches
   - talosetcdbackups
@@ -110,6 +119,7 @@ rules:
 - apiGroups:
   - ichor.maesh.dev
   resources:
+  - ichorinstallations/status
   - talosclusters/status
   - talosetcdbackups/status
   - talosmachines/status
@@ -129,6 +139,12 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - kustomize.toolkit.fluxcd.io
+  resources:
+  - kustomizations
+  verbs:
+  - list
 - apiGroups:
   - longhorn.io
   resources:

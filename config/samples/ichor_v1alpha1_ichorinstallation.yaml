@@ -1,0 +1,7 @@
+apiVersion: ichor.maesh.dev/v1alpha1
+kind: IchorInstallation
+metadata:
+  name: ichor
+spec:
+  managementMode: ichor
+  version: v0.1.0

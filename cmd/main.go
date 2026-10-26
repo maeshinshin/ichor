@@ -37,6 +37,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
@@ -369,9 +370,8 @@ func main() {
 		os.Exit(1)
 	}
 	// The backbone (TalosOperationReconciler) never branches on spec.kind itself, so the kind-to-executor selection
-	// happens here, in the wiring: Talos and Kubernetes. The Ichor kind is a separate, later unit;
-	// until it is wired an operation of that kind pauses immediately with a plain
-	// "not implemented" error -- never silently treated as another kind.
+	// happens here, in the wiring: Talos, Kubernetes and Ichor. An unknown kind pauses
+	// immediately with a plain error -- never silently treated as another kind.
 	talosUpgradeAdvance := controller.NewTalosUpgradeAdvancer(
 		mgr.GetClient(), os.Getenv("POD_NAMESPACE"), controller.NewMachineryTalosClient,
 		&controller.LonghornEvacuator{Client: mgr.GetClient()},
@@ -380,6 +380,8 @@ func main() {
 		mgr.GetClient(), mgr.GetAPIReader(), os.Getenv("POD_NAMESPACE"), controller.NewMachineryTalosClient,
 		controller.NewKubernetesAdmin(),
 	)
+
+	ichorUpgradeAdvance := controller.NewIchorUpgradeAdvancer(mgr.GetClient(), os.Getenv("POD_NAMESPACE"))
 
 	if err := (&controller.TalosOperationReconciler{
 		Client:    mgr.GetClient(),
@@ -392,6 +394,8 @@ func main() {
 				return talosUpgradeAdvance(ctx, cluster, m, op)
 			case ichorv1alpha1.TalosOperationKindKubernetes:
 				return kubernetesUpgradeAdvance(ctx, cluster, m, op)
+			case ichorv1alpha1.TalosOperationKindIchor:
+				return ichorUpgradeAdvance(ctx, cluster, m, op)
 			default:
 				return false, fmt.Errorf("no executor wired up for operation kind %q yet", op.Spec.Kind)
 			}
@@ -407,6 +411,24 @@ func main() {
 		SpoolDir:            backupSpoolDir,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "talosetcdbackup")
+		os.Exit(1)
+	}
+	directClient, err := client.New(mgr.GetConfig(), client.Options{Scheme: mgr.GetScheme()})
+	if err != nil {
+		setupLog.Error(err, "Failed to create uncached client")
+		os.Exit(1)
+	}
+	argoCDNamespace := os.Getenv("ICHOR_ARGOCD_NAMESPACE")
+	if argoCDNamespace == "" {
+		argoCDNamespace = "argocd"
+	}
+	if err := (&controller.IchorInstallationReconciler{
+		Client:              mgr.GetClient(),
+		Direct:              directClient,
+		ControllerNamespace: os.Getenv("POD_NAMESPACE"),
+		ArgoCDNamespace:     argoCDNamespace,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "Failed to create controller", "controller", "ichorinstallation")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder

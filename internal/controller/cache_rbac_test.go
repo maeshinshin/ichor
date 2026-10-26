@@ -29,7 +29,6 @@ import (
 	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -46,6 +45,8 @@ import (
 // controller reads through the cached client syncs. A namespaced-only grant read through an
 // unscoped informer ("jobs.batch is forbidden ... at the cluster scope", ADR 0081) fails here
 // instead of on a live cluster.
+const clusterRoleKind = "ClusterRole"
+
 var _ = Describe("manager cache against the generated RBAC", func() {
 	const (
 		user       = "system:serviceaccount:ichor-system:ichor-controller-manager"
@@ -57,7 +58,7 @@ var _ = Describe("manager cache against the generated RBAC", func() {
 
 	BeforeEach(func() {
 		Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{Name: controlNS},
+			Name: controlNS,
 		}))).To(Succeed())
 
 		raw, err := os.ReadFile("../../config/rbac/role.yaml")
@@ -70,15 +71,15 @@ var _ = Describe("manager cache against the generated RBAC", func() {
 			subject := []rbacv1.Subject{{APIGroup: rbacv1.GroupName, Kind: "User", Name: user}}
 
 			switch meta.Kind {
-			case "ClusterRole":
+			case clusterRoleKind:
 				var cr rbacv1.ClusterRole
 				Expect(yaml.Unmarshal([]byte(doc), &cr)).To(Succeed())
 				cr.Name = "manager-role-test"
 				Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, &cr))).To(Succeed())
 				Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, &rbacv1.ClusterRoleBinding{
-					ObjectMeta: metav1.ObjectMeta{Name: "manager-binding-test"},
-					RoleRef:    rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: cr.Name},
-					Subjects:   subject,
+					Name:     "manager-binding-test",
+					RoleRef:  rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: clusterRoleKind, Name: cr.Name},
+					Subjects: subject,
 				}))).To(Succeed())
 			case "Role":
 				var r rbacv1.Role
@@ -86,9 +87,9 @@ var _ = Describe("manager cache against the generated RBAC", func() {
 				r.Namespace, r.Name = controlNS, "manager-role-test"
 				Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, &r))).To(Succeed())
 				Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, &rbacv1.RoleBinding{
-					ObjectMeta: metav1.ObjectMeta{Name: "manager-binding-test", Namespace: controlNS},
-					RoleRef:    rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "Role", Name: r.Name},
-					Subjects:   subject,
+					Name: "manager-binding-test", Namespace: controlNS,
+					RoleRef:  rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "Role", Name: r.Name},
+					Subjects: subject,
 				}))).To(Succeed())
 			}
 		}

@@ -161,6 +161,17 @@ func collapseDocumentPaths(oldCfg, newCfg []byte, paths []string) ([]string, err
 	return out, nil
 }
 
+// reportablePaths is collapseDocumentPaths that falls back to paths as they are, because a
+// report is never worth failing the reconcile for.
+func reportablePaths(oldCfg, newCfg []byte, paths []string) []string {
+	out, err := collapseDocumentPaths(oldCfg, newCfg, paths)
+	if err != nil {
+		return paths
+	}
+
+	return out
+}
+
 // configDoc is one decoded Talos config document.
 type configDoc struct {
 	// root is the fieldmeta path prefix for this document: "" for the

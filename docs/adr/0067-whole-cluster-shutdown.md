@@ -113,3 +113,5 @@ cluster is off; the next successful snapshot after power-on clears it, so it was
   drain is stuck behind a PodDisruptionBudget keeps stage 1 waiting (Talos's own drain timeout applies; delete the
   operation to give up).
 - Not tested here, deliberately: real machines (no real node or `kubectl` is touched by the tests).
+
+- `ichor cluster shutdown` and the UI button landed in ADR 0068.

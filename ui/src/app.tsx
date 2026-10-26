@@ -10,6 +10,8 @@ import { ClusterList } from '@/pages/ClusterList'
 import { GitOps } from '@/pages/GitOps'
 import { MachineList } from '@/pages/MachineList'
 import { NodeDetail } from '@/pages/NodeDetail'
+import { OperationDetail } from '@/pages/OperationDetail'
+import { OperationList } from '@/pages/OperationList'
 import { PatchDetail } from '@/pages/PatchDetail'
 import { PatchList } from '@/pages/PatchList'
 import { Placeholder } from '@/pages/Placeholder'
@@ -26,6 +28,7 @@ const navRoutes: { path: string; label: Key }[] = [
   { path: '/', label: 'nav.clusters' },
   { path: '/machines', label: 'nav.machines' },
   { path: '/patches', label: 'nav.patches' },
+  { path: '/operations', label: 'nav.operations' },
   { path: '/gitops', label: 'nav.gitops' },
 ]
 
@@ -92,12 +95,16 @@ function renderRoute(path: string, notFound: string) {
   if (path === '/patches') return <PatchList />
   if (path === '/patches/new') return <PatchDetail />
   if (path === '/gitops') return <GitOps />
+  if (path === '/operations') return <OperationList />
 
   const cluster = matchRoute('/clusters/:namespace/:name', path)
   if (cluster) return <ClusterDetail namespace={cluster.namespace} name={cluster.name} />
 
   const node = matchRoute('/nodes/:namespace/:name', path)
   if (node) return <NodeDetail namespace={node.namespace} name={node.name} />
+
+  const operation = matchRoute('/operations/:namespace/:name', path)
+  if (operation) return <OperationDetail namespace={operation.namespace} name={operation.name} />
 
   const patch = matchRoute('/patches/:namespace/:name', path)
   if (patch) return <PatchDetail namespace={patch.namespace} name={patch.name} />

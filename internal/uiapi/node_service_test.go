@@ -52,6 +52,13 @@ type fakeNodeTalosClient struct {
 	talosExtensions *pb.TalosExtensionsSection
 	talosErr        map[string]error
 
+	// Runtime sections (GetNodeTalosRuntime).
+	runtimeEtcd       *pb.TalosEtcdSection
+	runtimeProcesses  *pb.TalosProcessesSection
+	runtimeContainers *pb.TalosContainersSection
+	runtimeNetwork    *pb.TalosNetworkStateSection
+	runtimeModules    *pb.TalosKernelModulesSection
+
 	lines []LogLine
 	// block, if set, makes StreamLogs wait for ctx to be cancelled after
 	// sending lines, standing in for a real Dmesg follow stream that never
@@ -97,6 +104,26 @@ func (f *fakeNodeTalosClient) TalosServices(context.Context) (*pb.TalosServicesS
 
 func (f *fakeNodeTalosClient) TalosExtensions(context.Context) (*pb.TalosExtensionsSection, error) {
 	return f.talosExtensions, f.talosErr["extensions"]
+}
+
+func (f *fakeNodeTalosClient) TalosEtcd(context.Context) (*pb.TalosEtcdSection, error) {
+	return f.runtimeEtcd, f.talosErr["etcd"]
+}
+
+func (f *fakeNodeTalosClient) TalosProcesses(context.Context) (*pb.TalosProcessesSection, error) {
+	return f.runtimeProcesses, f.talosErr["processes"]
+}
+
+func (f *fakeNodeTalosClient) TalosContainers(context.Context) (*pb.TalosContainersSection, error) {
+	return f.runtimeContainers, f.talosErr["containers"]
+}
+
+func (f *fakeNodeTalosClient) TalosNetworkState(context.Context) (*pb.TalosNetworkStateSection, error) {
+	return f.runtimeNetwork, f.talosErr["networkstate"]
+}
+
+func (f *fakeNodeTalosClient) TalosKernelModules(context.Context) (*pb.TalosKernelModulesSection, error) {
+	return f.runtimeModules, f.talosErr["modules"]
 }
 
 func (f *fakeNodeTalosClient) StreamLogs(ctx context.Context, service string, since time.Time, opts LogOptions, onLine func(LogLine) error) error {

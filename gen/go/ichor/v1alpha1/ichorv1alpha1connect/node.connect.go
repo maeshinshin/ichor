@@ -46,6 +46,9 @@ const (
 	// NodeServiceGetNodeTalosDetailsProcedure is the fully-qualified name of the NodeService's
 	// GetNodeTalosDetails RPC.
 	NodeServiceGetNodeTalosDetailsProcedure = "/ichor.v1alpha1.NodeService/GetNodeTalosDetails"
+	// NodeServiceGetNodeTalosRuntimeProcedure is the fully-qualified name of the NodeService's
+	// GetNodeTalosRuntime RPC.
+	NodeServiceGetNodeTalosRuntimeProcedure = "/ichor.v1alpha1.NodeService/GetNodeTalosRuntime"
 	// NodeServiceStreamNodeLogsProcedure is the fully-qualified name of the NodeService's
 	// StreamNodeLogs RPC.
 	NodeServiceStreamNodeLogsProcedure = "/ichor.v1alpha1.NodeService/StreamNodeLogs"
@@ -59,6 +62,10 @@ type NodeServiceClient interface {
 	// network, disks, services, extensions) read-only, one independently
 	// failing section at a time.
 	GetNodeTalosDetails(context.Context, *connect.Request[v1alpha1.GetNodeTalosDetailsRequest]) (*connect.Response[v1alpha1.GetNodeTalosDetailsResponse], error)
+	// GetNodeTalosRuntime reads a machine's live state read-only: etcd, top
+	// processes, containers, routes, discovery, kernel modules and the
+	// Kubernetes view of the node.
+	GetNodeTalosRuntime(context.Context, *connect.Request[v1alpha1.GetNodeTalosRuntimeRequest]) (*connect.Response[v1alpha1.GetNodeTalosRuntimeResponse], error)
 	// StreamNodeLogs streams one machine's log (the node page) or several
 	// (the merged viewer) from the same call. It resumes from a token carrying
 	// the last log timestamp seen per machine (architecture.md: "streams that
@@ -95,6 +102,12 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(nodeServiceMethods.ByName("GetNodeTalosDetails")),
 			connect.WithClientOptions(opts...),
 		),
+		getNodeTalosRuntime: connect.NewClient[v1alpha1.GetNodeTalosRuntimeRequest, v1alpha1.GetNodeTalosRuntimeResponse](
+			httpClient,
+			baseURL+NodeServiceGetNodeTalosRuntimeProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("GetNodeTalosRuntime")),
+			connect.WithClientOptions(opts...),
+		),
 		streamNodeLogs: connect.NewClient[v1alpha1.StreamNodeLogsRequest, v1alpha1.StreamNodeLogsResponse](
 			httpClient,
 			baseURL+NodeServiceStreamNodeLogsProcedure,
@@ -109,6 +122,7 @@ type nodeServiceClient struct {
 	getNode             *connect.Client[v1alpha1.GetNodeRequest, v1alpha1.GetNodeResponse]
 	getEffectiveConfig  *connect.Client[v1alpha1.GetEffectiveConfigRequest, v1alpha1.GetEffectiveConfigResponse]
 	getNodeTalosDetails *connect.Client[v1alpha1.GetNodeTalosDetailsRequest, v1alpha1.GetNodeTalosDetailsResponse]
+	getNodeTalosRuntime *connect.Client[v1alpha1.GetNodeTalosRuntimeRequest, v1alpha1.GetNodeTalosRuntimeResponse]
 	streamNodeLogs      *connect.Client[v1alpha1.StreamNodeLogsRequest, v1alpha1.StreamNodeLogsResponse]
 }
 
@@ -127,6 +141,11 @@ func (c *nodeServiceClient) GetNodeTalosDetails(ctx context.Context, req *connec
 	return c.getNodeTalosDetails.CallUnary(ctx, req)
 }
 
+// GetNodeTalosRuntime calls ichor.v1alpha1.NodeService.GetNodeTalosRuntime.
+func (c *nodeServiceClient) GetNodeTalosRuntime(ctx context.Context, req *connect.Request[v1alpha1.GetNodeTalosRuntimeRequest]) (*connect.Response[v1alpha1.GetNodeTalosRuntimeResponse], error) {
+	return c.getNodeTalosRuntime.CallUnary(ctx, req)
+}
+
 // StreamNodeLogs calls ichor.v1alpha1.NodeService.StreamNodeLogs.
 func (c *nodeServiceClient) StreamNodeLogs(ctx context.Context, req *connect.Request[v1alpha1.StreamNodeLogsRequest]) (*connect.ServerStreamForClient[v1alpha1.StreamNodeLogsResponse], error) {
 	return c.streamNodeLogs.CallServerStream(ctx, req)
@@ -140,6 +159,10 @@ type NodeServiceHandler interface {
 	// network, disks, services, extensions) read-only, one independently
 	// failing section at a time.
 	GetNodeTalosDetails(context.Context, *connect.Request[v1alpha1.GetNodeTalosDetailsRequest]) (*connect.Response[v1alpha1.GetNodeTalosDetailsResponse], error)
+	// GetNodeTalosRuntime reads a machine's live state read-only: etcd, top
+	// processes, containers, routes, discovery, kernel modules and the
+	// Kubernetes view of the node.
+	GetNodeTalosRuntime(context.Context, *connect.Request[v1alpha1.GetNodeTalosRuntimeRequest]) (*connect.Response[v1alpha1.GetNodeTalosRuntimeResponse], error)
 	// StreamNodeLogs streams one machine's log (the node page) or several
 	// (the merged viewer) from the same call. It resumes from a token carrying
 	// the last log timestamp seen per machine (architecture.md: "streams that
@@ -172,6 +195,12 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(nodeServiceMethods.ByName("GetNodeTalosDetails")),
 		connect.WithHandlerOptions(opts...),
 	)
+	nodeServiceGetNodeTalosRuntimeHandler := connect.NewUnaryHandler(
+		NodeServiceGetNodeTalosRuntimeProcedure,
+		svc.GetNodeTalosRuntime,
+		connect.WithSchema(nodeServiceMethods.ByName("GetNodeTalosRuntime")),
+		connect.WithHandlerOptions(opts...),
+	)
 	nodeServiceStreamNodeLogsHandler := connect.NewServerStreamHandler(
 		NodeServiceStreamNodeLogsProcedure,
 		svc.StreamNodeLogs,
@@ -186,6 +215,8 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 			nodeServiceGetEffectiveConfigHandler.ServeHTTP(w, r)
 		case NodeServiceGetNodeTalosDetailsProcedure:
 			nodeServiceGetNodeTalosDetailsHandler.ServeHTTP(w, r)
+		case NodeServiceGetNodeTalosRuntimeProcedure:
+			nodeServiceGetNodeTalosRuntimeHandler.ServeHTTP(w, r)
 		case NodeServiceStreamNodeLogsProcedure:
 			nodeServiceStreamNodeLogsHandler.ServeHTTP(w, r)
 		default:
@@ -207,6 +238,10 @@ func (UnimplementedNodeServiceHandler) GetEffectiveConfig(context.Context, *conn
 
 func (UnimplementedNodeServiceHandler) GetNodeTalosDetails(context.Context, *connect.Request[v1alpha1.GetNodeTalosDetailsRequest]) (*connect.Response[v1alpha1.GetNodeTalosDetailsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.NodeService.GetNodeTalosDetails is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) GetNodeTalosRuntime(context.Context, *connect.Request[v1alpha1.GetNodeTalosRuntimeRequest]) (*connect.Response[v1alpha1.GetNodeTalosRuntimeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.NodeService.GetNodeTalosRuntime is not implemented"))
 }
 
 func (UnimplementedNodeServiceHandler) StreamNodeLogs(context.Context, *connect.Request[v1alpha1.StreamNodeLogsRequest], *connect.ServerStream[v1alpha1.StreamNodeLogsResponse]) error {

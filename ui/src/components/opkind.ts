@@ -16,5 +16,7 @@ export function wireKindOf(k: OpKind): OperationKind {
       return OperationKindValues.SHUTDOWN
     case 'ca-rotation':
       return OperationKindValues.CA_ROTATION
+    case 'config':
+      return OperationKindValues.CONFIG
   }
 }

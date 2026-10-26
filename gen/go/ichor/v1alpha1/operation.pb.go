@@ -41,6 +41,9 @@ const (
 	OperationKind_OPERATION_KIND_SHUTDOWN    OperationKind = 5
 	// CA_ROTATION replaces the Talos API and Kubernetes API CAs.
 	OperationKind_OPERATION_KIND_CA_ROTATION OperationKind = 6
+	// CONFIG applies the pending reboot-requiring configuration changes, one
+	// machine at a time with a reboot each.
+	OperationKind_OPERATION_KIND_CONFIG OperationKind = 7
 )
 
 // Enum value maps for OperationKind.
@@ -53,6 +56,7 @@ var (
 		4: "OPERATION_KIND_CNI",
 		5: "OPERATION_KIND_SHUTDOWN",
 		6: "OPERATION_KIND_CA_ROTATION",
+		7: "OPERATION_KIND_CONFIG",
 	}
 	OperationKind_value = map[string]int32{
 		"OPERATION_KIND_UNSPECIFIED": 0,
@@ -62,6 +66,7 @@ var (
 		"OPERATION_KIND_CNI":         4,
 		"OPERATION_KIND_SHUTDOWN":    5,
 		"OPERATION_KIND_CA_ROTATION": 6,
+		"OPERATION_KIND_CONFIG":      7,
 	}
 )
 
@@ -526,7 +531,10 @@ type PlannedMachine struct {
 	Name  string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	Role  string                 `protobuf:"bytes,2,opt,name=role,proto3" json:"role,omitempty"` // controlplane or worker
 	// step is 1-based; machines with the same step may be handled together.
-	Step          int32 `protobuf:"varint,3,opt,name=step,proto3" json:"step,omitempty"`
+	Step int32 `protobuf:"varint,3,opt,name=step,proto3" json:"step,omitempty"`
+	// reboot_fields are the configuration field paths whose pending change needs
+	// the reboot (config kind only; TalosMachine.status.rebootPaths).
+	RebootFields  []string `protobuf:"bytes,4,rep,name=reboot_fields,json=rebootFields,proto3" json:"reboot_fields,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -582,12 +590,20 @@ func (x *PlannedMachine) GetStep() int32 {
 	return 0
 }
 
+func (x *PlannedMachine) GetRebootFields() []string {
+	if x != nil {
+		return x.RebootFields
+	}
+	return nil
+}
+
 type PlanOperationRequest struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Cluster *ObjectRef             `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
 	Kind    OperationKind          `protobuf:"varint,2,opt,name=kind,proto3,enum=ichor.v1alpha1.OperationKind" json:"kind,omitempty"`
 	// target is the version to move to (talos, kubernetes, ichor), the kube-proxy
-	// mode "enabled" or "replaced" (cni), and must be empty for shutdown. For
+	// mode "enabled" or "replaced" (cni), and must be empty for shutdown,
+	// ca-rotation and config. For
 	// the kinds with a version or mode, empty means "the cluster's spec already
 	// says it": the operation is created without changing the spec.
 	Target string `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
@@ -1141,11 +1157,12 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\x13GetOperationRequest\x127\n" +
 	"\toperation\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\toperation\"O\n" +
 	"\x14GetOperationResponse\x127\n" +
-	"\toperation\x18\x01 \x01(\v2\x19.ichor.v1alpha1.OperationR\toperation\"L\n" +
+	"\toperation\x18\x01 \x01(\v2\x19.ichor.v1alpha1.OperationR\toperation\"q\n" +
 	"\x0ePlannedMachine\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04role\x18\x02 \x01(\tR\x04role\x12\x12\n" +
-	"\x04step\x18\x03 \x01(\x05R\x04step\"\xbf\x01\n" +
+	"\x04step\x18\x03 \x01(\x05R\x04step\x12#\n" +
+	"\rreboot_fields\x18\x04 \x03(\tR\frebootFields\"\xbf\x01\n" +
 	"\x14PlanOperationRequest\x123\n" +
 	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x121\n" +
 	"\x04kind\x18\x02 \x01(\x0e2\x1d.ichor.v1alpha1.OperationKindR\x04kind\x12\x16\n" +
@@ -1181,7 +1198,7 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\x16DeleteOperationRequest\x127\n" +
 	"\toperation\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\toperation\"L\n" +
 	"\x17DeleteOperationResponse\x121\n" +
-	"\x05audit\x18\x01 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit*\xd7\x01\n" +
+	"\x05audit\x18\x01 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit*\xf2\x01\n" +
 	"\rOperationKind\x12\x1e\n" +
 	"\x1aOPERATION_KIND_UNSPECIFIED\x10\x00\x12\x18\n" +
 	"\x14OPERATION_KIND_TALOS\x10\x01\x12\x1d\n" +
@@ -1189,7 +1206,8 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\x14OPERATION_KIND_ICHOR\x10\x03\x12\x16\n" +
 	"\x12OPERATION_KIND_CNI\x10\x04\x12\x1b\n" +
 	"\x17OPERATION_KIND_SHUTDOWN\x10\x05\x12\x1e\n" +
-	"\x1aOPERATION_KIND_CA_ROTATION\x10\x06*\xd1\x01\n" +
+	"\x1aOPERATION_KIND_CA_ROTATION\x10\x06\x12\x19\n" +
+	"\x15OPERATION_KIND_CONFIG\x10\a*\xd1\x01\n" +
 	"\x0fOperationEffect\x12 \n" +
 	"\x1cOPERATION_EFFECT_UNSPECIFIED\x10\x00\x12\x1b\n" +
 	"\x17OPERATION_EFFECT_REBOOT\x10\x01\x12'\n" +

@@ -85,6 +85,7 @@ func runMachineApprove(
 
 	resp, err := c.Machine.ApproveMachine(ctx, connect.NewRequest(&pb.ApproveMachineRequest{
 		Machine: ref, Role: role, NodeLabels: opts.Labels, Hostname: opts.Hostname, Reason: opts.Reason,
+		BreakGlass: breakGlassOf(apiOpts),
 	}))
 	if err != nil {
 		return err

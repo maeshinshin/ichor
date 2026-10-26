@@ -34,6 +34,7 @@ import (
 )
 
 const (
+	testS3Prefix    = "clusters/lost"
 	testS3AccessKey = "AKIA-test-access-key"
 	testS3SecretKey = "test-s3-secret-key-value"
 )
@@ -107,7 +108,7 @@ func (f *fakeRecover) BootstrapRecover(context.Context) error {
 func goodSnapshot(t *testing.T) []byte {
 	t.Helper()
 
-	body := make([]byte, 2048)
+	body := make([]byte, 2048, 2048+sha256.Size)
 	if _, err := rand.Read(body); err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +118,7 @@ func goodSnapshot(t *testing.T) []byte {
 	return append(body, sum[:]...)
 }
 
-func putSnapshot(t *testing.T, s *memStore, prefix string, at time.Time, plain []byte, bundle *secrets.Bundle) string {
+func putSnapshot(t *testing.T, s *memStore, at time.Time, plain []byte, bundle *secrets.Bundle) {
 	t.Helper()
 
 	pass, err := etcdbackup.Passphrase(bundle)
@@ -140,12 +141,11 @@ func putSnapshot(t *testing.T, s *memStore, prefix string, at time.Time, plain [
 		t.Fatal(err)
 	}
 
-	key := prefix + "/" + etcdbackup.ObjectName(at)
+	key := testS3Prefix + "/" + etcdbackup.ObjectName(at)
 	if err := s.Put(context.Background(), key, &enc, int64(enc.Len())); err != nil {
 		t.Fatal(err)
 	}
 
-	return key
 }
 
 type restoreHarness struct {
@@ -172,7 +172,7 @@ func newRestoreHarness(t *testing.T) *restoreHarness {
 
 	env := map[string]string{"ICHOR_S3_ACCESS_KEY_ID": testS3AccessKey, "ICHOR_S3_SECRET_ACCESS_KEY": testS3SecretKey}
 	h.opts = restoreOptions{
-		RecoverCluster: true, Cluster: "lost", NodeEndpoint: "10.0.0.9:50000", S3Prefix: "clusters/lost",
+		RecoverCluster: true, Cluster: "lost", NodeEndpoint: "10.0.0.9:50000", S3Prefix: testS3Prefix,
 		S3: etcdbackup.S3Config{Endpoint: "https://s3.example", Bucket: "b"},
 	}
 	h.deps = restoreDeps{
@@ -213,8 +213,8 @@ func (h *restoreHarness) assertNoLeak(t *testing.T, err error) {
 func TestRestoreRoundTripNewestSnapshot(t *testing.T) {
 	h := newRestoreHarness(t)
 	older, newest := goodSnapshot(t), goodSnapshot(t)
-	putSnapshot(t, h.store, "clusters/lost", time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), older, h.bundle)
-	putSnapshot(t, h.store, "clusters/lost", time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC), newest, h.bundle)
+	putSnapshot(t, h.store, time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), older, h.bundle)
+	putSnapshot(t, h.store, time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC), newest, h.bundle)
 
 	err := h.run()
 	if err != nil {
@@ -236,8 +236,8 @@ func TestRestoreNamedSnapshot(t *testing.T) {
 	h := newRestoreHarness(t)
 	older := goodSnapshot(t)
 	t1 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	putSnapshot(t, h.store, "clusters/lost", t1, older, h.bundle)
-	putSnapshot(t, h.store, "clusters/lost", t1.Add(24*time.Hour), goodSnapshot(t), h.bundle)
+	putSnapshot(t, h.store, t1, older, h.bundle)
+	putSnapshot(t, h.store, t1.Add(24*time.Hour), goodSnapshot(t), h.bundle)
 
 	h.opts.Snapshot = etcdbackup.ObjectName(t1)
 
@@ -263,8 +263,8 @@ func TestRestoreSkipsCorruptNewestButNeverSendsIt(t *testing.T) {
 	h := newRestoreHarness(t)
 	good := goodSnapshot(t)
 	t1 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	putSnapshot(t, h.store, "clusters/lost", t1, good, h.bundle)
-	putSnapshot(t, h.store, "clusters/lost", t1.Add(time.Hour), corruptSnapshot(t), h.bundle)
+	putSnapshot(t, h.store, t1, good, h.bundle)
+	putSnapshot(t, h.store, t1.Add(time.Hour), corruptSnapshot(t), h.bundle)
 
 	if err := h.run(); err != nil {
 		t.Fatal(err)
@@ -282,8 +282,8 @@ func TestRestoreSkipsCorruptNewestButNeverSendsIt(t *testing.T) {
 func TestRestoreCorruptNamedSnapshotIsRefused(t *testing.T) {
 	h := newRestoreHarness(t)
 	t1 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	putSnapshot(t, h.store, "clusters/lost", t1, corruptSnapshot(t), h.bundle)
-	putSnapshot(t, h.store, "clusters/lost", t1.Add(time.Hour), goodSnapshot(t), h.bundle)
+	putSnapshot(t, h.store, t1, corruptSnapshot(t), h.bundle)
+	putSnapshot(t, h.store, t1.Add(time.Hour), goodSnapshot(t), h.bundle)
 	h.opts.Snapshot = etcdbackup.ObjectName(t1)
 
 	err := h.run()
@@ -297,7 +297,7 @@ func TestRestoreCorruptNamedSnapshotIsRefused(t *testing.T) {
 func TestRestoreWrongBundleCannotDecrypt(t *testing.T) {
 	h := newRestoreHarness(t)
 	other := newTestBundle(t)
-	putSnapshot(t, h.store, "clusters/lost", time.Now(), goodSnapshot(t), other)
+	putSnapshot(t, h.store, time.Now(), goodSnapshot(t), other)
 
 	err := h.run()
 	if err == nil || len(h.talos.order) != 0 {
@@ -309,7 +309,7 @@ func TestRestoreWrongBundleCannotDecrypt(t *testing.T) {
 
 func TestRestoreDeclinedConfirmationSendsNothing(t *testing.T) {
 	h := newRestoreHarness(t)
-	putSnapshot(t, h.store, "clusters/lost", time.Now(), goodSnapshot(t), h.bundle)
+	putSnapshot(t, h.store, time.Now(), goodSnapshot(t), h.bundle)
 	h.deps.AssumeYes = false
 	h.deps.Stdin = strings.NewReader("n\n")
 
@@ -336,7 +336,7 @@ func TestRestoreErrorsScrubCredentials(t *testing.T) {
 	h.assertNoLeak(t, err)
 
 	h = newRestoreHarness(t)
-	putSnapshot(t, h.store, "clusters/lost", time.Now(), goodSnapshot(t), h.bundle)
+	putSnapshot(t, h.store, time.Now(), goodSnapshot(t), h.bundle)
 	h.talos.recErr = errors.New("upload failed " + testS3SecretKey)
 
 	err = h.run()

@@ -1,0 +1,349 @@
+/*
+Copyright 2026 maeshinshin.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package cli
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"time"
+
+	"connectrpc.com/connect"
+	"github.com/spf13/cobra"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	sigsyaml "sigs.k8s.io/yaml"
+
+	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
+	"github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1/ichorv1alpha1connect"
+	"github.com/maeshinshin/ichor/internal/uiapi"
+)
+
+// actorCLI is the audit actor the in-process fallback records, so an
+// AuditRecord says which path wrote the CR.
+const actorCLI = "ichor-cli"
+
+// apiConnectTimeout bounds how long reaching ichor-ui may take (finding a
+// ready pod, bringing the tunnel up, one probe request) before the CLI
+// concludes the backend is unreachable. A var so tests can shrink it.
+var apiConnectTimeout = 5 * time.Second
+
+// apiOpts is the flag state every API-backed command group shares.
+var apiOpts apiOptions
+
+type apiOptions struct {
+	// Namespace is where the CRs a command names live.
+	Namespace string
+	// IchorNamespace is where Ichor is installed: ichor-ui's Service and
+	// the secrets bundle Secret (uiapi.Server.ControllerNamespace).
+	IchorNamespace string
+	// Local skips ichor-ui and computes from the Kubernetes API.
+	Local bool
+}
+
+// addAPIFlags registers the shared flags on a command group.
+func addAPIFlags(cmd *cobra.Command) {
+	f := cmd.PersistentFlags()
+	f.StringVarP(&apiOpts.Namespace, "namespace", "n", ichorControllerNamespace, "namespace of the Ichor resources the command names")
+	f.StringVar(&apiOpts.IchorNamespace, "ichor-namespace", ichorControllerNamespace,
+		"namespace Ichor is installed in (where ichor-ui runs and the secrets bundle lives)")
+	f.BoolVar(&apiOpts.Local, "local", false, "do not use ichor-ui; compute from the Kubernetes API directly")
+}
+
+// apiDeps is connectAPI's dependencies. Forward and FreePort are the seams
+// a test replaces; the real ones need a cluster.
+type apiDeps struct {
+	K8s client.Client
+
+	// Forward is uiDeps.Forward: ichor ui's own tunnel.
+	Forward func(ctx context.Context, pod *corev1.Pod, localPort, remotePort int32, ready chan struct{}) error
+
+	// FreePort picks the local port the tunnel listens on.
+	FreePort func() (int32, error)
+
+	Stderr io.Writer
+}
+
+// apiClients is the Connect surface every API-backed command uses, whether
+// it is backed by ichor-ui over the tunnel or by a uiapi.Server running in
+// this process on the user's own Kubernetes credentials.
+type apiClients struct {
+	Cluster ichorv1alpha1connect.ClusterServiceClient
+	Machine ichorv1alpha1connect.MachineServiceClient
+	Node    ichorv1alpha1connect.NodeServiceClient
+	Patch   ichorv1alpha1connect.PatchServiceClient
+
+	// Local is true when the clients are the in-process fallback.
+	Local bool
+
+	// Close tears the tunnel down; never nil.
+	Close func()
+}
+
+// errBackendRequired is what a command that must go through ichor-ui
+// (the read-only Talos identity lives there; the CLI never touches a node)
+// returns when ichor-ui is unreachable or --local was given.
+var errBackendRequired = errors.New("this command needs ichor-ui, because only the backend holds the read-only " +
+	"Talos identity (the CLI never talks to a node directly); run it without --local while ichor-ui is reachable")
+
+// connectAPI returns clients for one command invocation. It tries ichor-ui
+// first; only when ichor-ui cannot be reached at all (no Service, no ready
+// pod, the tunnel fails, nothing answers) does it fall back to a
+// uiapi.Server in this process. The decision is made once, up front, and
+// is never revisited after a call has been sent: an error the backend
+// returns -- a refused approval, a rejected patch -- is the answer, not a
+// reason to retry the same write through another path.
+//
+// requireBackend turns the fallback into errBackendRequired, for the
+// commands that need the backend's Talos identity.
+func connectAPI(ctx context.Context, opts apiOptions, deps apiDeps, requireBackend bool) (*apiClients, error) {
+	if !opts.Local {
+		c, err := dialBackend(ctx, opts, deps)
+		if err == nil {
+			return c, nil
+		}
+
+		if requireBackend {
+			return nil, fmt.Errorf("%w (ichor-ui: %v)", errBackendRequired, err)
+		}
+
+		_, _ = fmt.Fprintf(deps.Stderr, "ichor: ichor-ui is not reachable (%v); computing from the Kubernetes API directly\n", err)
+	} else if requireBackend {
+		return nil, errBackendRequired
+	}
+
+	return localClients(opts, deps), nil
+}
+
+// localClients is the fallback: the very handlers ichor-ui serves, run
+// in-process over the CLI's own Kubernetes client. Because it is the same
+// uiapi.Server, every check -- ApproveMachine's identity-strength and role
+// rules, strict field validation on every write, the secret masking in
+// GetEffectiveConfig -- is the same code, not a copy of it.
+func localClients(opts apiOptions, deps apiDeps) *apiClients {
+	s := &uiapi.Server{Client: deps.K8s, ControllerNamespace: opts.IchorNamespace, Actor: actorCLI}
+
+	return &apiClients{
+		Cluster: s, Machine: s, Patch: s, Node: localNode{s}, Local: true, Close: func() {},
+	}
+}
+
+// localNode serves only GetEffectiveConfig, which needs no Talos call.
+type localNode struct{ s *uiapi.Server }
+
+func (l localNode) GetEffectiveConfig(
+	ctx context.Context, req *connect.Request[pb.GetEffectiveConfigRequest],
+) (*connect.Response[pb.GetEffectiveConfigResponse], error) {
+	return l.s.GetEffectiveConfig(ctx, req)
+}
+
+func (localNode) GetNode(context.Context, *connect.Request[pb.GetNodeRequest]) (*connect.Response[pb.GetNodeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnavailable, errBackendRequired)
+}
+
+func (localNode) StreamNodeLogs(
+	context.Context, *connect.Request[pb.StreamNodeLogsRequest],
+) (*connect.ServerStreamForClient[pb.StreamNodeLogsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnavailable, errBackendRequired)
+}
+
+// dialBackend reuses ichor ui's discovery: the ichor-ui-service
+// Service's selector finds a ready pod, the same tunnel code forwards to
+// it, and one HTTP request proves something is answering before any RPC is
+// sent.
+func dialBackend(ctx context.Context, opts apiOptions, deps apiDeps) (*apiClients, error) {
+	var svc corev1.Service
+	if err := deps.K8s.Get(ctx, types.NamespacedName{Namespace: opts.IchorNamespace, Name: uiServiceName}, &svc); err != nil {
+		return nil, fmt.Errorf("fetching Service %s/%s: %w", opts.IchorNamespace, uiServiceName, err)
+	}
+
+	if len(svc.Spec.Ports) == 0 || len(svc.Spec.Selector) == 0 {
+		return nil, fmt.Errorf("Service %s/%s has no port or selector", opts.IchorNamespace, uiServiceName)
+	}
+
+	dctx, cancel := context.WithTimeout(ctx, apiConnectTimeout)
+	defer cancel()
+
+	pod, err := waitForReadyPod(dctx, deps.K8s, opts.IchorNamespace, svc.Spec.Selector, "", deps.Stderr)
+	if err != nil {
+		return nil, fmt.Errorf("no ready ichor-ui pod: %w", err)
+	}
+
+	port, err := deps.FreePort()
+	if err != nil {
+		return nil, err
+	}
+
+	fctx, stop := context.WithCancel(ctx)
+	ready := make(chan struct{})
+	done := make(chan error, 1)
+
+	go func() { done <- deps.Forward(fctx, pod, port, svc.Spec.Ports[0].Port, ready) }()
+
+	select {
+	case <-ready:
+	case err := <-done:
+		stop()
+
+		return nil, fmt.Errorf("port-forward to pod/%s ended before it was ready: %v", pod.Name, err)
+	case <-dctx.Done():
+		stop()
+
+		return nil, fmt.Errorf("port-forward to pod/%s: %w", pod.Name, dctx.Err())
+	}
+
+	base := fmt.Sprintf("http://localhost:%d", port)
+
+	if err := probe(dctx, base); err != nil {
+		stop()
+
+		return nil, fmt.Errorf("probing ichor-ui through the tunnel: %w", err)
+	}
+
+	h := http.DefaultClient
+
+	return &apiClients{
+		Cluster: ichorv1alpha1connect.NewClusterServiceClient(h, base),
+		Machine: ichorv1alpha1connect.NewMachineServiceClient(h, base),
+		Node:    ichorv1alpha1connect.NewNodeServiceClient(h, base),
+		Patch:   ichorv1alpha1connect.NewPatchServiceClient(h, base),
+		Close:   stop,
+	}, nil
+}
+
+// probe succeeds on any HTTP response: ichor-ui serves its SPA at "/".
+func probe(ctx context.Context, base string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/", nil)
+	if err != nil {
+		return err
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+
+	return resp.Body.Close()
+}
+
+// freePort asks the kernel for an unused local port.
+func freePort() (int32, error) {
+	l, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		return 0, err
+	}
+
+	defer func() { _ = l.Close() }()
+
+	return int32(l.Addr().(*net.TCPAddr).Port), nil //nolint:errcheck,forcetypeassert // a tcp listener's Addr is a *net.TCPAddr
+}
+
+// newAPIDeps builds the real dependencies from the kubeconfig.
+func newAPIDeps(cmd *cobra.Command) (apiDeps, error) {
+	cfg, err := loadKubeconfig(kubeconfigPath)
+	if err != nil {
+		return apiDeps{}, err
+	}
+
+	k8sClient, err := newKubeClientForConfig(cfg)
+	if err != nil {
+		return apiDeps{}, err
+	}
+
+	clientset, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		return apiDeps{}, err
+	}
+
+	return apiDeps{K8s: k8sClient, Forward: portForwardToPod(cfg, clientset), FreePort: freePort, Stderr: cmd.ErrOrStderr()}, nil
+}
+
+// runAPI is every command's shell: validate -o, connect, run, close.
+func runAPI(cmd *cobra.Command, requireBackend bool, fn func(ctx context.Context, c *apiClients) error) error {
+	if err := validateOutputFormat(outputFormat); err != nil {
+		return err
+	}
+
+	deps, err := newAPIDeps(cmd)
+	if err != nil {
+		return err
+	}
+
+	c, err := connectAPI(cmd.Context(), apiOpts, deps, requireBackend)
+	if err != nil {
+		return err
+	}
+
+	defer c.Close()
+
+	return fn(cmd.Context(), c)
+}
+
+// writeMessage prints a wire message in the requested format. Everything
+// printed was already masked by the server.
+func writeMessage(w io.Writer, format string, msg proto.Message) error {
+	raw, err := protojson.MarshalOptions{UseProtoNames: false}.Marshal(msg)
+	if err != nil {
+		return err
+	}
+
+	switch format {
+	case outputJSON:
+		var buf bytes.Buffer
+		if err := json.Indent(&buf, raw, "", "  "); err != nil {
+			return err
+		}
+
+		buf.WriteByte('\n')
+		_, err = w.Write(buf.Bytes())
+
+		return err
+	case outputYAML:
+		out, err := sigsyaml.JSONToYAML(raw)
+		if err != nil {
+			return err
+		}
+
+		_, err = w.Write(out)
+
+		return err
+	default:
+		return fmt.Errorf("invalid output format %q", format)
+	}
+}
+
+func objectRef(namespace, name string) *pb.ObjectRef {
+	return &pb.ObjectRef{Namespace: namespace, Name: name}
+}
+
+// clusterFilter turns an optional --cluster value into the request filter.
+func clusterFilter(namespace, name string) *pb.ObjectRef {
+	if name == "" {
+		return nil
+	}
+
+	return objectRef(namespace, name)
+}

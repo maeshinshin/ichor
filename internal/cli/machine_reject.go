@@ -13,39 +13,56 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
 package cli
 
 import (
+	"context"
 	"fmt"
+	"io"
 
+	"connectrpc.com/connect"
 	"github.com/spf13/cobra"
+
+	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
-// machineRejectCmd represents the machineReject command
-var machineRejectCmd = &cobra.Command{
-	Use:   "machineReject",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
+var machineRejectReason string
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("machineReject called")
+var machineRejectCmd = &cobra.Command{
+	Use:   "reject NAME",
+	Short: "Reject a pending machine (recorded, never deleted)",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
+			return runMachineReject(ctx, c, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), args[0], machineRejectReason)
+		})
 	},
+}
+
+func runMachineReject(ctx context.Context, c *apiClients, in io.Reader, out, errw io.Writer, name, reason string) error {
+	if !assumeYes {
+		ok, err := confirm(in, errw, fmt.Sprintf("Reject machine %s/%s? [y/N] ", apiOpts.Namespace, name))
+		if err != nil {
+			return fmt.Errorf("machine reject: reading confirmation: %w", err)
+		}
+
+		if !ok {
+			return fmt.Errorf("machine reject: aborted")
+		}
+	}
+
+	resp, err := c.Machine.RejectMachine(ctx, connect.NewRequest(&pb.RejectMachineRequest{
+		Machine: objectRef(apiOpts.Namespace, name), Reason: reason,
+	}))
+	if err != nil {
+		return err
+	}
+
+	return writeMessage(out, outputFormat, resp.Msg)
 }
 
 func init() {
 	machineCmd.AddCommand(machineRejectCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// machineRejectCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// machineRejectCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	machineRejectCmd.Flags().StringVar(&machineRejectReason, "reason", "", "recorded with the rejection")
 }

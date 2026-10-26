@@ -104,7 +104,7 @@ func drainForReboot(ctx context.Context, kube kubernetes.Interface, name string)
 	} else {
 		annotations := map[string]string{drainStartedAnnotation: started.UTC().Format(time.RFC3339)}
 		if !node.Spec.Unschedulable {
-			annotations[cordonedByIchorAnnotation] = "true"
+			annotations[cordonedByIchorAnnotation] = "rollout"
 		}
 
 		if node, err = patchNodeAnnotations(ctx, kube, name, annotations); err != nil {

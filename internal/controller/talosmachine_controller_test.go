@@ -122,13 +122,13 @@ type fakeTalosClient struct {
 	pullErr error
 
 	// stage and stageErr serve talosmachine_provision_test.go (MachineStage).
-	stage      string
-	stageErr   error
+	stage    string
+	stageErr error
 	// nodeName and nodeNameErr serve NodeName: the Kubernetes node name the node reports.
 	nodeName    string
 	nodeNameErr error
-	kubeconfig []byte
-	manifests  []map[string]any
+	kubeconfig  []byte
+	manifests   []map[string]any
 }
 
 func (f *fakeTalosClient) NodeName(context.Context) (string, error) {

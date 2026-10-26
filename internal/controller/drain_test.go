@@ -38,17 +38,17 @@ import (
 
 func drainTestNode(name string, unschedulable bool) *corev1.Node {
 	return &corev1.Node{
-		ObjectMeta: metav1.ObjectMeta{Name: name},
-		Spec:       corev1.NodeSpec{Unschedulable: unschedulable},
-		Status:     corev1.NodeStatus{Conditions: []corev1.NodeCondition{{Type: corev1.NodeReady, Status: corev1.ConditionTrue}}},
+		Name:   name,
+		Spec:   corev1.NodeSpec{Unschedulable: unschedulable},
+		Status: corev1.NodeStatus{Conditions: []corev1.NodeCondition{{Type: corev1.NodeReady, Status: corev1.ConditionTrue}}},
 	}
 }
 
 func drainTestPod(name, node, ownerKind string, mirror bool) *corev1.Pod {
 	p := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: name, Annotations: map[string]string{}},
-		Spec:       corev1.PodSpec{NodeName: node},
-		Status:     corev1.PodStatus{Phase: corev1.PodRunning},
+		Namespace: "default", Name: name, Annotations: map[string]string{},
+		Spec:   corev1.PodSpec{NodeName: node},
+		Status: corev1.PodStatus{Phase: corev1.PodRunning},
 	}
 
 	if ownerKind != "" {
@@ -76,7 +76,7 @@ type drainFake struct {
 
 func newDrainFake(rebootCalls func() int, objs ...runtime.Object) *drainFake {
 	f := &drainFake{Clientset: kubefake.NewSimpleClientset(objs...), blocked: map[string]bool{}}
-	f.Fake.Resources = []*metav1.APIResourceList{{GroupVersion: "v1", APIResources: []metav1.APIResource{
+	f.Resources = []*metav1.APIResourceList{{GroupVersion: "v1", APIResources: []metav1.APIResource{
 		{Name: "pods/eviction", Kind: "Eviction", Group: "policy", Version: "v1"},
 	}}}
 
@@ -127,7 +127,7 @@ func drainRolloutAdvancer(fake *fakeTalosClient, kube *drainFake) *configRollout
 }
 
 var _ = Describe("configRolloutAdvancer drain", func() {
-	owner := &appsv1.DaemonSet{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "owner"}}
+	owner := &appsv1.DaemonSet{Namespace: "default", Name: "owner"}
 
 	It("cordons and drains before the reboot, skips DaemonSet and mirror pods, and uncordons once the node is back", func() {
 		f := newRolloutFixture()
@@ -203,7 +203,7 @@ var _ = Describe("configRolloutAdvancer drain", func() {
 
 		node := drainTestNode("node-dr-late", true)
 		node.Annotations = map[string]string{
-			cordonedByIchorAnnotation: "true",
+			cordonedByIchorAnnotation: "rollout",
 			drainStartedAnnotation:    time.Now().Add(-2 * drainTimeout).UTC().Format(time.RFC3339),
 		}
 

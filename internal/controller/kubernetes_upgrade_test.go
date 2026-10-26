@@ -298,6 +298,22 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		Expect(fake.applyCalls).To(HaveLen(1))
 	})
 
+	It("gives the apply its own long deadline, not what is left of the 15s dial bound", func() {
+		cluster := k8sCluster(testK8sTarget)
+		w := newK8sWorker(cluster.Name, "budget1")
+		newK8sNode(w.Spec.Hostname, testK8sOld, true)
+
+		fake := &fakeTalosClient{version: testTalosVersion, current: renderAt(cluster, w, testK8sOld)}
+		adv := newKubernetesAdvancer(fake, &fakeKubernetesAdmin{})
+
+		_, err := adv.Advance(ctx, cluster, w, nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(fake.applyCalls).To(HaveLen(1))
+		Expect(fake.applyBudget).To(BeNumerically(">", 4*etcdDialTimeout),
+			"Talos restarts static pods during the apply; the call must outlive the %s dial bound", etcdDialTimeout)
+		Expect(fake.dryRunBudget).To(BeNumerically(">", 0))
+	})
+
 	It("refuses to start on a node that is not Ready", func() {
 		cluster := k8sCluster(testK8sTarget)
 		w := newK8sWorker(cluster.Name, "nr1")

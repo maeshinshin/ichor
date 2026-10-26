@@ -18,90 +18,32 @@ package cli
 
 import (
 	"context"
-	"fmt"
 
-	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/maeshinshin/ichor/pkg/gitopstracking"
 )
 
-// argoTrackingAnnotation and argoDefaultInstanceLabelKey are Argo CD's own
-// defaults (argocd-cm's application.resourceTrackingMethod and
-// application.instanceLabelKey, read from that ConfigMap rather than
-// guessed -- architecture.md's "GitOps and Argo CD": "the default has
-// moved between releases").
+// argoTrackingAnnotation and the rest of these are package-local aliases
+// to pkg/gitopstracking's exported constants of the same meaning, kept
+// purely so this package's own existing test fixtures (gitops_tracking_test.go)
+// did not need editing when the rule itself moved -- the same pattern
+// docs/adr/0033 used for bundleSecretKey. An alias cannot drift from the
+// constant it points at, so this is not a second definition.
 const (
-	argoTrackingAnnotation      = "argocd.argoproj.io/tracking-id"
-	argoDefaultInstanceLabelKey = "app.kubernetes.io/instance"
-	argoConfigMapName           = "argocd-cm"
-	fluxFieldManager            = "flux-client-side-apply"
-	resourceTrackingMethodKey   = "application.resourceTrackingMethod"
-	applicationInstanceLabelKey = "application.instanceLabelKey"
+	argoTrackingAnnotation      = gitopstracking.ArgoTrackingAnnotation
+	argoDefaultInstanceLabelKey = gitopstracking.ArgoDefaultInstanceLabelKey
+	argoConfigMapName           = gitopstracking.ArgoConfigMapName
+	fluxFieldManager            = gitopstracking.FluxKustomizeControllerFieldManager
+	resourceTrackingMethodKey   = gitopstracking.ResourceTrackingMethodKey
+	applicationInstanceLabelKey = gitopstracking.ApplicationInstanceLabelKey
 )
 
-// isTracked reports whether obj is already tracked by Argo CD or Flux, so
-// a caller can warn about one of the kinds architecture.md's "GitOps and
-// Argo CD" section says must never be in Git (a Secret, a TalosOperation,
-// an unapproved TalosMachine, Ichor's own runtime labels/annotations)
-// showing up there anyway. It never errors just because Argo CD or Flux
-// isn't installed -- a missing argocd-cm ConfigMap, or no managed field
-// at all, both mean "not tracked", not "unknown".
-//
-// Argo CD: read argocd-cm's own resourceTrackingMethod and
-// instanceLabelKey rather than assuming either -- a resource marked under
-// one method is not detected under another. If the ConfigMap exists but
-// does not set resourceTrackingMethod, both the annotation and the label
-// are checked: this function only ever feeds a warning, so treating an
-// ambiguous default as "check both" costs nothing and a missed true
-// positive would.
-//
-// Flux: it marks nothing on the resource itself -- ownership lives in the
-// owning Kustomization's .status.inventory -- but every object Flux
-// applies also carries a managedFields entry for the
-// "flux-client-side-apply" field manager (architecture.md's own
-// reason for naming it), which is one field read on the object already
-// in hand instead of listing every Kustomization and searching its
-// inventory for this one entry.
+// isTracked reports whether obj is already tracked by Argo CD or Flux.
+// The rule itself now lives in pkg/gitopstracking.IsTracked (docs/adr/0044),
+// shared with pkg/prmode's write-vs-PR decision; this is a one-line
+// delegation so every existing call site in this package (gitops_export.go)
+// and its own tests needed no changes beyond this file.
 func isTracked(ctx context.Context, k8sClient client.Client, argoCDNamespace string, obj client.Object) (tracked bool, by string, err error) {
-	for _, mf := range obj.GetManagedFields() {
-		if mf.Manager == fluxFieldManager {
-			return true, "Flux", nil
-		}
-	}
-
-	var cm corev1.ConfigMap
-
-	err = k8sClient.Get(ctx, types.NamespacedName{Namespace: argoCDNamespace, Name: argoConfigMapName}, &cm)
-	if apierrors.IsNotFound(err) {
-		return false, "", nil
-	}
-
-	if err != nil {
-		return false, "", fmt.Errorf("reading %s/%s: %w", argoCDNamespace, argoConfigMapName, err)
-	}
-
-	method := cm.Data[resourceTrackingMethodKey]
-
-	checkAnnotation := method == "" || method == "annotation" || method == "annotation+label"
-	checkLabel := method == "" || method == "label" || method == "annotation+label"
-
-	if checkAnnotation {
-		if _, ok := obj.GetAnnotations()[argoTrackingAnnotation]; ok {
-			return true, "Argo CD", nil
-		}
-	}
-
-	if checkLabel {
-		labelKey := cm.Data[applicationInstanceLabelKey]
-		if labelKey == "" {
-			labelKey = argoDefaultInstanceLabelKey
-		}
-
-		if _, ok := obj.GetLabels()[labelKey]; ok {
-			return true, "Argo CD", nil
-		}
-	}
-
-	return false, "", nil
+	return gitopstracking.IsTracked(ctx, k8sClient, argoCDNamespace, obj)
 }

@@ -46,7 +46,7 @@ func withVersion(v string) {
 
 func createInstallation(mode, ver string) *ichorv1alpha1.IchorInstallation {
 	inst := &ichorv1alpha1.IchorInstallation{
-		ObjectMeta: metav1.ObjectMeta{Name: ichorv1alpha1.IchorInstallationName},
+		Name: ichorv1alpha1.IchorInstallationName,
 		Spec: ichorv1alpha1.IchorInstallationSpec{
 			ManagementMode: mode, Version: ver, InstallerRepository: "registry.example/ichor-installer",
 		},
@@ -60,8 +60,8 @@ func createInstallation(mode, ver string) *ichorv1alpha1.IchorInstallation {
 var _ = Describe("IchorInstallation", func() {
 	It("is a singleton named ichor", func() {
 		bad := &ichorv1alpha1.IchorInstallation{
-			ObjectMeta: metav1.ObjectMeta{Name: "second"},
-			Spec:       ichorv1alpha1.IchorInstallationSpec{Version: "v0.1.0"},
+			Name: "second",
+			Spec: ichorv1alpha1.IchorInstallationSpec{Version: "v0.1.0"},
 		}
 		Expect(k8sClient.Create(ctx, bad)).To(MatchError(ContainSubstring("must be named ichor")))
 	})
@@ -76,7 +76,7 @@ var _ = Describe("IchorInstallation", func() {
 
 	Context("controller", func() {
 		reconcileOnce := func(r *IchorInstallationReconciler) *ichorv1alpha1.IchorInstallation {
-			_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}})
+			_, err := r.Reconcile(ctx, reconcile.Request{Name: ichorv1alpha1.IchorInstallationName})
 			Expect(err).NotTo(HaveOccurred())
 
 			var got ichorv1alpha1.IchorInstallation
@@ -106,10 +106,9 @@ var _ = Describe("IchorInstallation", func() {
 			createInstallation(ichorv1alpha1.IchorManagementModeIchor, "v0.1.0")
 
 			dep := &appsv1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace: testIchorNamespace, Name: controllerDeploymentName,
-					Annotations: map[string]string{gitopstracking.ArgoTrackingAnnotation: "ichor:apps/Deployment:default/x"},
-				},
+				Namespace:   testIchorNamespace,
+				Name:        controllerDeploymentName,
+				Annotations: map[string]string{gitopstracking.ArgoTrackingAnnotation: "ichor:apps/Deployment:default/x"},
 				Spec: appsv1.DeploymentSpec{
 					Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"a": "b"}},
 					Template: corev1.PodTemplateSpec{
@@ -122,7 +121,7 @@ var _ = Describe("IchorInstallation", func() {
 			DeferCleanup(func() { Expect(k8sClient.Delete(ctx, dep)).To(Succeed()) })
 
 			// argocd-cm is what says the tracking method; without it nothing is "tracked".
-			cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: testIchorNamespace, Name: gitopstracking.ArgoConfigMapName}}
+			cm := &corev1.ConfigMap{Namespace: testIchorNamespace, Name: gitopstracking.ArgoConfigMapName}
 			Expect(k8sClient.Create(ctx, cm)).To(Succeed())
 			DeferCleanup(func() { Expect(k8sClient.Delete(ctx, cm)).To(Succeed()) })
 
@@ -138,7 +137,7 @@ var _ = Describe("IchorInstallation", func() {
 		const jobNs = testIchorNamespace
 
 		op := func() *ichorv1alpha1.TalosOperation {
-			return &ichorv1alpha1.TalosOperation{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "upgrade"}}
+			return &ichorv1alpha1.TalosOperation{Namespace: "ns", Name: "upgrade"}
 		}
 
 		jobs := func() []batchv1.Job {

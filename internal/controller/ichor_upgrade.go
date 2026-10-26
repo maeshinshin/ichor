@@ -27,7 +27,6 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -152,12 +151,10 @@ func newInstallerJob(ns, name string, op *ichorv1alpha1.TalosOperation, inst *ic
 	sum := sha256.Sum256([]byte(op.Namespace + "/" + op.Name))
 
 	return &batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace:   ns,
-			Name:        name,
-			Labels:      map[string]string{"app.kubernetes.io/name": "ichor-installer", ichorInstallerOperationLabel: hex.EncodeToString(sum[:])[:32]},
-			Annotations: map[string]string{IchorInstallerTargetAnnotation: inst.Spec.Version},
-		},
+		Namespace:   ns,
+		Name:        name,
+		Labels:      map[string]string{"app.kubernetes.io/name": "ichor-installer", ichorInstallerOperationLabel: hex.EncodeToString(sum[:])[:32]},
+		Annotations: map[string]string{IchorInstallerTargetAnnotation: inst.Spec.Version},
 		Spec: batchv1.JobSpec{
 			// One attempt: a retry after a rollback would redo a failed upgrade without anyone
 			// having looked at why. The operation pauses instead.

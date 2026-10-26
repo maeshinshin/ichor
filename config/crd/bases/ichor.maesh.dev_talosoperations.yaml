@@ -86,16 +86,18 @@ spec:
                 description: |-
                   kind names which upgrade this is: talos (spec.talosVersion/schematic),
                   kubernetes (spec.kubernetesVersion), or ichor (the controller/CRDs/UI
-                  install), cni (a spec.cni.kubeProxy switch), or shutdown (a
-                  planned stop of the whole cluster). This CRD and its controller only
+                  install), cni (a spec.cni.kubeProxy switch), shutdown (a
+                  planned stop of the whole cluster), or ca-rotation (the Talos API and
+                  Kubernetes API CAs). This CRD and its controller only
                   store and report it -- each kind's own execution is a separate unit's work.
-                  shutdown is the exception: it runs its own state machine.
+                  shutdown and ca-rotation are the exceptions: each runs its own state machine.
                 enum:
                 - talos
                 - kubernetes
                 - ichor
                 - cni
                 - shutdown
+                - ca-rotation
                 type: string
               maxUnavailable:
                 default: 1
@@ -126,6 +128,63 @@ spec:
           status:
             description: status defines the observed state of TalosOperation
             properties:
+              caRotation:
+                description: |-
+                  caRotation is the ca-rotation kind's state machine: which stage every node is being taken
+                  to, and which CA is accepted and which issues in it. Public fingerprints only.
+                properties:
+                  certificates:
+                    description: |-
+                      certificates lists the two rotated CAs and, for the current stage, which fingerprint issues
+                      and which are accepted.
+                    items:
+                      description: |-
+                        CARotationCertificate is one rotated CA. Fingerprints are the SHA-256 of the certificate's DER,
+                        hex encoded; none of this is secret.
+                      properties:
+                        accepted:
+                          description: accepted lists the CAs, besides the issuing
+                            one, that nodes accept in the current stage.
+                          items:
+                            type: string
+                          type: array
+                        issuing:
+                          description: issuing is the CA that issues certificates
+                            in the current stage.
+                          type: string
+                        name:
+                          description: name is talos (the Talos API CA) or kubernetes
+                            (the Kubernetes API CA).
+                          type: string
+                        next:
+                          description: |-
+                            next is the new CA, whose key is in the bundle Secret's rotation.yaml until the rotation
+                            is finalized.
+                          type: string
+                        previous:
+                          description: previous is the CA the rotation started from.
+                          type: string
+                      required:
+                      - name
+                      - next
+                      - previous
+                      type: object
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - name
+                    x-kubernetes-list-type: map
+                  stage:
+                    description: |-
+                      stage is the stage every node is being taken to; see the CARotationStage* constants.
+                      Empty until the new CAs have been generated and saved.
+                    enum:
+                    - Accepting
+                    - Issuing
+                    - Dropping
+                    - Finalizing
+                    - Done
+                    type: string
+                type: object
               conditions:
                 description: conditions represent the current state of the TalosOperation
                   resource.

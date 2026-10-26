@@ -160,4 +160,34 @@ this ADR did not change.
 
 ## Real-hardware verification
 
-(filled in after the real-hardware pass below)
+Run on 2026-10-26 against the 3-VM KubeVirt HA cluster (Talos v1.14.3,
+`ichor-e2e` namespace, the real controller binary running as a pod, ADR
+0007). One node, `ichor-e2e-ha-1`, was used for both cases in turn: it had
+already left etcd in an earlier run (etcd listed only `ha-0`), so deleting
+its `TalosMachine` exercised the drain, the etcd-already-gone path and,
+when opted in, Reset, without touching quorum. A `TalosMachine` is created
+approved with `allow-delete`, waited on until the removal finalizer is
+present, then deleted. State was read over the Talos API from a pod, with
+the cluster's own admin credentials.
+
+- **Without the annotation.** Before: `ha-1` `machinestatus` stage
+  `running`, `STATE` and `EPHEMERAL` volumes `ready`. After the delete
+  completed: a new `NodeStillHasClusterCredentials` Warning Event on the new
+  object (new UID), and the node was unchanged -- stage `running`, `STATE`
+  and `EPHEMERAL` still `ready`, the admin credentials still authenticating.
+  This is what "opt-in" means: nothing is wiped and the Event keeps firing.
+- **With `ichor.maesh.dev/reset-on-delete: "true"`.** The delete completed
+  and no `NodeStillHasClusterCredentials` Event was emitted for the new
+  object (the Event list held exactly the two earlier ones). The node came
+  back in stage `maintenance` with `STATE` `missing` (`META` still `ready`),
+  and the admin credentials were refused with `x509: certificate signed by
+  unknown authority`: it no longer holds the cluster's PKI, and the disk was
+  not reinstalled (the node rebooted to maintenance rather than needing an
+  install), as the named-partitions design intends. `EPHEMERAL` is not
+  listed in maintenance; it was `ready` before.
+
+Not observed: the `Removal` condition's `ResetRequested` reason (the object
+is gone once the finalizer clears and nobody was watching mid-flight), the
+`ResetFailed` hold (no failing node was available), and the
+second-call-is-a-no-op path against a live node. Those stay covered by
+`internal/controller/reset_test.go` only.

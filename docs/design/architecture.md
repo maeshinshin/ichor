@@ -320,12 +320,18 @@ is `<app>:<group>/<kind>:<namespace>/<name>`), `label`
 `application.instanceLabelKey` can replace the label key outright. A resource
 marked under one method is not detected under another, and the default has
 moved between releases — so Ichor reads that ConfigMap rather than looking for
-a marker it guessed. Flux marks nothing on the resource: ownership lives in
-the owning Kustomization's `.status.inventory`, so the same question becomes
-"list the Kustomizations and search their inventories", and the field-manager
-name to look for in managed fields is `flux-client-side-apply`. Two code
-paths, with different cost: a lookup on the object for Argo CD, a scan over
-owners for Flux.
+a marker it guessed. Flux marks nothing permanent on the resource's intent:
+ownership lives in the owning Kustomization's or HelmRelease's
+`.status.inventory`, but every object a Flux controller applies (server-side
+apply, Flux's default) also carries a managed-fields entry naming that
+controller — `kustomize-controller` or `helm-controller`, not
+`flux-client-side-apply` (that name is Flux's own reserved field manager for
+an operator's manual `kubectl` edits it should preserve, the opposite
+signal — see ADR 0044, which also found this was a bug in the one place that
+had checked it). Ichor reads that one field on the object already in hand
+for both Argo CD and Flux, rather than listing every Kustomization/HelmRelease
+and searching its inventory; ADR 0044 records why the lookup is enough even
+once it gates a write and not just a warning.
 
 Two modes on `TalosCluster.spec.gitops.mode`:
 

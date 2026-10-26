@@ -20,11 +20,16 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
 // ArgoTrackingAnnotation and ArgoDefaultInstanceLabelKey are Argo CD's own
@@ -40,21 +45,24 @@ const (
 	ApplicationInstanceLabelKey = "application.instanceLabelKey"
 )
 
-// FluxKustomizeControllerFieldManager and FluxHelmControllerFieldManager
-// are the field managers Flux's own controllers register under
-// managedFields when they apply a resource with server-side apply (the
-// default since Flux v2; checked against fluxcd.io's current
-// kustomize-controller and helm-controller docs, 2026-10-26): one for a
-// Kustomization's applies, one for a HelmRelease's.
+// TrackedBy values IsTracked returns (and prmode.Decide consumes).
+const (
+	TrackedByFlux   = "Flux"
+	TrackedByArgoCD = "Argo CD"
+)
+
+// FluxKustomizeControllerFieldManager and FluxHelmControllerFieldManager are
+// the field managers Flux's controllers register in managedFields when they
+// server-side-apply a resource. They are only a fast FIRST signal, never
+// proof of absence: a miss falls through to the authoritative inventory scan
+// (fluxTrackedByInventory), because the name is not something Ichor may
+// assume -- the same reason Argo CD's tracking method is read from argocd-cm
+// instead of guessed (docs/adr/0044).
 //
 // "flux-client-side-apply" -- what this package checked before
-// docs/adr/0044 -- is NOT one of these: fluxcd.io's own FAQ documents it as
-// the field manager name an operator must use on their *own* `kubectl`
-// edits for Flux to preserve them across reconciliation, the opposite of a
-// signal that Flux itself owns the resource. Checking for it here matched
-// client-side-apply-era Flux (pre server-side-apply default) at best, and
-// a resource a human hand-edited under that reserved name at worst -- never
-// evidence of current Flux ownership. See docs/adr/0044 for the sources.
+// docs/adr/0044 -- is NOT a Flux-applied signal: fluxcd.io's FAQ documents it
+// as the field manager name an operator must use on their *own* `kubectl`
+// edits for Flux to preserve them, the opposite of "Flux owns this".
 const (
 	FluxKustomizeControllerFieldManager = "kustomize-controller"
 	FluxHelmControllerFieldManager      = "helm-controller"
@@ -62,53 +70,60 @@ const (
 
 var fluxFieldManagers = []string{FluxKustomizeControllerFieldManager, FluxHelmControllerFieldManager}
 
-// IsTracked reports whether obj is already tracked by Argo CD or Flux, so
-// a caller can either warn (gitops export) or refuse to write it directly
-// (pkg/prmode.Decide, docs/adr/0044) about one of the kinds
-// architecture.md's "GitOps and Argo CD" section says must never be in
-// Git (a Secret, a TalosOperation, an unapproved TalosMachine, Ichor's own
-// runtime labels/annotations) showing up there anyway. It never errors
-// just because Argo CD or Flux isn't installed -- a missing argocd-cm
-// ConfigMap, or no managed field at all, both mean "not tracked", not
-// "unknown".
-//
-// Argo CD: read argocd-cm's own resourceTrackingMethod and
-// instanceLabelKey rather than assuming either -- a resource marked under
-// one method is not detected under another. If the ConfigMap exists but
-// does not set resourceTrackingMethod, both the annotation and the label
-// are checked: an ambiguous default is treated as "check both" rather than
-// guessed at, so a missed true positive never costs more than a redundant
-// check.
-//
-// Flux: it marks nothing permanent on the resource's intent -- ownership
-// lives in the owning Kustomization's or HelmRelease's .status.inventory
-// -- but every object a Flux controller applies also carries a
-// managedFields entry naming that controller (fluxFieldManagers above),
-// which is one field read on the object already in hand instead of
-// listing every Kustomization/HelmRelease and searching its inventory for
-// this one entry. docs/adr/0044 records why this lookup, not an inventory
-// scan, is enough even though this function now gates a write rather than
-// only a warning.
-func IsTracked(
-	ctx context.Context, k8sClient client.Client, argoCDNamespace string, obj client.Object,
-) (tracked bool, by string, err error) {
-	for _, mf := range obj.GetManagedFields() {
-		if slices.Contains(fluxFieldManagers, mf.Manager) {
-			return true, "Flux", nil
+// Flux's Kustomization is read as unstructured so Ichor takes no Flux Go
+// module dependency. Inventory entry ids are "<namespace>_<name>_<group>_<kind>"
+// (kustomize-controller api/v1 ResourceRef doc comment, checked 2026-10-26;
+// an empty group, as for core kinds, leaves an empty field), at
+// .status.inventory.entries[].id. The version is a separate "v" field.
+const (
+	fluxKustomizeGroup       = "kustomize.toolkit.fluxcd.io"
+	fluxKustomizeVersion     = "v1"
+	fluxKustomizationList    = "KustomizationList"
+	fluxInventoryIDSeparator = "_"
+)
+
+// fluxTrackedByInventory is the authoritative Flux check: list every
+// Kustomization and search .status.inventory for obj. A cluster without
+// Flux's CRD (no-match / not-found) is "not tracked", not an error.
+func fluxTrackedByInventory(ctx context.Context, k8sClient client.Client, obj client.Object) (bool, error) {
+	gvk, err := apiutil.GVKForObject(obj, k8sClient.Scheme())
+	if err != nil {
+		return false, fmt.Errorf("resolving the kind of %T: %w", obj, err)
+	}
+
+	id := strings.Join([]string{obj.GetNamespace(), obj.GetName(), gvk.Group, gvk.Kind}, fluxInventoryIDSeparator)
+
+	var list unstructured.UnstructuredList
+
+	list.SetGroupVersionKind(schema.GroupVersionKind{
+		Group: fluxKustomizeGroup, Version: fluxKustomizeVersion, Kind: fluxKustomizationList,
+	})
+
+	if err := k8sClient.List(ctx, &list); err != nil {
+		if meta.IsNoMatchError(err) || apierrors.IsNotFound(err) {
+			return false, nil
+		}
+
+		return false, fmt.Errorf("listing Flux Kustomizations: %w", err)
+	}
+
+	for i := range list.Items {
+		entries, _, _ := unstructured.NestedSlice(list.Items[i].Object, "status", "inventory", "entries")
+		for _, e := range entries {
+			if m, ok := e.(map[string]any); ok && m["id"] == id {
+				return true, nil
+			}
 		}
 	}
 
-	var cm corev1.ConfigMap
+	return false, nil
+}
 
-	err = k8sClient.Get(ctx, types.NamespacedName{Namespace: argoCDNamespace, Name: ArgoConfigMapName}, &cm)
-	if apierrors.IsNotFound(err) {
-		return false, "", nil
-	}
-
-	if err != nil {
-		return false, "", fmt.Errorf("reading %s/%s: %w", argoCDNamespace, ArgoConfigMapName, err)
-	}
-
+// argoTracked reports whether obj carries Argo CD's marker under the
+// tracking method cm declares. If cm does not set resourceTrackingMethod,
+// both the annotation and the label are checked: an ambiguous default is
+// treated as "check both" rather than guessed at.
+func argoTracked(cm *corev1.ConfigMap, obj client.Object) bool {
 	method := cm.Data[ResourceTrackingMethodKey]
 
 	checkAnnotation := method == "" || method == "annotation" || method == "annotation+label"
@@ -116,7 +131,7 @@ func IsTracked(
 
 	if checkAnnotation {
 		if _, ok := obj.GetAnnotations()[ArgoTrackingAnnotation]; ok {
-			return true, "Argo CD", nil
+			return true
 		}
 	}
 
@@ -127,8 +142,53 @@ func IsTracked(
 		}
 
 		if _, ok := obj.GetLabels()[labelKey]; ok {
-			return true, "Argo CD", nil
+			return true
 		}
+	}
+
+	return false
+}
+
+// IsTracked reports whether obj is already tracked by Argo CD or Flux, so a
+// caller can warn (gitops export) or refuse to write it directly
+// (pkg/prmode.Decide, docs/adr/0044). It never errors just because Argo CD or
+// Flux isn't installed -- a missing argocd-cm, or a missing Flux CRD, means
+// "not tracked", not "unknown". One function serves both the warning and the
+// write gate on purpose (docs/adr/0044).
+//
+// Order, cheapest first: a Flux field manager on the object (a hit is
+// enough); Argo CD via argocd-cm's own resourceTrackingMethod/
+// instanceLabelKey; finally the Flux inventory scan, the authoritative
+// owner-side answer, reached whenever the first two find nothing.
+func IsTracked(
+	ctx context.Context, k8sClient client.Client, argoCDNamespace string, obj client.Object,
+) (tracked bool, by string, err error) {
+	for _, mf := range obj.GetManagedFields() {
+		if slices.Contains(fluxFieldManagers, mf.Manager) {
+			return true, TrackedByFlux, nil
+		}
+	}
+
+	var cm corev1.ConfigMap
+
+	err = k8sClient.Get(ctx, types.NamespacedName{Namespace: argoCDNamespace, Name: ArgoConfigMapName}, &cm)
+
+	switch {
+	case err == nil:
+		if argoTracked(&cm, obj) {
+			return true, TrackedByArgoCD, nil
+		}
+	case !apierrors.IsNotFound(err):
+		return false, "", fmt.Errorf("reading %s/%s: %w", argoCDNamespace, ArgoConfigMapName, err)
+	}
+
+	byInventory, err := fluxTrackedByInventory(ctx, k8sClient, obj)
+	if err != nil {
+		return false, "", err
+	}
+
+	if byInventory {
+		return true, TrackedByFlux, nil
 	}
 
 	return false, "", nil

@@ -21,9 +21,15 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
 const (
@@ -86,7 +92,7 @@ func TestIsTracked_FluxKustomizeControllerManagedFieldsEntry(t *testing.T) {
 		t.Fatalf("IsTracked: %v", err)
 	}
 
-	if !tracked || by != "Flux" {
+	if !tracked || by != TrackedByFlux {
 		t.Fatalf("expected tracked by Flux, got tracked=%v by=%q", tracked, by)
 	}
 }
@@ -108,7 +114,7 @@ func TestIsTracked_FluxHelmControllerManagedFieldsEntry(t *testing.T) {
 		t.Fatalf("IsTracked: %v", err)
 	}
 
-	if !tracked || by != "Flux" {
+	if !tracked || by != TrackedByFlux {
 		t.Fatalf("expected tracked by Flux, got tracked=%v by=%q", tracked, by)
 	}
 }
@@ -156,7 +162,7 @@ func TestIsTracked_ArgoCDAnnotationMethod(t *testing.T) {
 		t.Fatalf("IsTracked: %v", err)
 	}
 
-	if !tracked || by != "Argo CD" {
+	if !tracked || by != TrackedByArgoCD {
 		t.Fatalf("expected tracked by Argo CD, got tracked=%v by=%q", tracked, by)
 	}
 }
@@ -184,7 +190,7 @@ func TestIsTracked_ArgoCDLabelMethodCustomKey(t *testing.T) {
 		t.Fatalf("IsTracked: %v", err)
 	}
 
-	if !tracked || by != "Argo CD" {
+	if !tracked || by != TrackedByArgoCD {
 		t.Fatalf("expected tracked by Argo CD via the custom label key, got tracked=%v by=%q", tracked, by)
 	}
 
@@ -220,5 +226,104 @@ func TestIsTracked_ArgoCDConfigMapMissingIsNotTracked(t *testing.T) {
 
 	if tracked {
 		t.Fatal("expected not tracked when argocd-cm does not exist, got tracked")
+	}
+}
+
+// fluxKustomization builds an unstructured Flux Kustomization whose
+// .status.inventory lists ids, the shape kustomize-controller writes.
+func fluxKustomization(ids ...string) *unstructured.Unstructured {
+	entries := make([]any, 0, len(ids))
+	for _, id := range ids {
+		entries = append(entries, map[string]any{"id": id, "v": "v1"})
+	}
+
+	k := &unstructured.Unstructured{}
+	k.SetGroupVersionKind(schema.GroupVersionKind{
+		Group: fluxKustomizeGroup, Version: fluxKustomizeVersion, Kind: "Kustomization",
+	})
+	k.SetName("apps")
+	k.SetNamespace("flux-system")
+
+	_ = unstructured.SetNestedSlice(k.Object, entries, "status", "inventory", "entries")
+
+	return k
+}
+
+// TestIsTracked_FluxInventoryHitWithoutFieldManager is the case the cheap
+// signal misses: no managedFields entry at all, yet a Kustomization's
+// inventory owns the object (docs/adr/0044).
+func TestIsTracked_FluxInventoryHitWithoutFieldManager(t *testing.T) {
+	// a ConfigMap is core/ConfigMap, so its id has an empty group.
+	k := fluxKustomization("default_tracking-fixture__ConfigMap")
+	k8sClient := fake.NewClientBuilder().WithScheme(trackingTestScheme(t)).WithObjects(k).Build()
+
+	tracked, by, err := IsTracked(context.Background(), k8sClient, trackingTestArgoCDNamespace, trackingTestObject())
+	if err != nil {
+		t.Fatalf("IsTracked: %v", err)
+	}
+
+	if !tracked || by != TrackedByFlux {
+		t.Fatalf("expected tracked by Flux via inventory, got tracked=%v by=%q", tracked, by)
+	}
+}
+
+// TestIsTracked_FluxInventoryMiss proves an inventory that lists other
+// objects does not mark this one tracked.
+func TestIsTracked_FluxInventoryMiss(t *testing.T) {
+	k := fluxKustomization("default_someone-else__ConfigMap")
+	k8sClient := fake.NewClientBuilder().WithScheme(trackingTestScheme(t)).WithObjects(k).Build()
+
+	tracked, by, err := IsTracked(context.Background(), k8sClient, trackingTestArgoCDNamespace, trackingTestObject())
+	if err != nil {
+		t.Fatalf("IsTracked: %v", err)
+	}
+
+	if tracked {
+		t.Fatalf("expected not tracked, got tracked by %q", by)
+	}
+}
+
+// listFails returns a client whose every list fails with err.
+func listFails(t *testing.T, err error) client.Client {
+	t.Helper()
+
+	return interceptor.NewClient(fake.NewClientBuilder().WithScheme(trackingTestScheme(t)).Build(), interceptor.Funcs{
+		List: func(_ context.Context, _ client.WithWatch, _ client.ObjectList, _ ...client.ListOption) error {
+			return err
+		},
+	})
+}
+
+// TestIsTracked_FluxNotInstalledIsNotTracked proves a missing Flux CRD (the
+// RESTMapper's no-match error, or a not-found) is "not tracked", not an
+// error -- the same discipline as a missing argocd-cm.
+func TestIsTracked_FluxNotInstalledIsNotTracked(t *testing.T) {
+	gk := schema.GroupKind{Group: fluxKustomizeGroup, Kind: "Kustomization"}
+	gr := schema.GroupResource{Group: fluxKustomizeGroup, Resource: "kustomizations"}
+
+	for name, listErr := range map[string]error{
+		"no match":  &meta.NoKindMatchError{GroupKind: gk},
+		"not found": apierrors.NewNotFound(gr, ""),
+	} {
+		t.Run(name, func(t *testing.T) {
+			k8sClient := listFails(t, listErr)
+
+			tracked, _, err := IsTracked(context.Background(), k8sClient, trackingTestArgoCDNamespace, trackingTestObject())
+			if err != nil || tracked {
+				t.Fatalf("expected (not tracked, no error), got tracked=%v err=%v", tracked, err)
+			}
+		})
+	}
+}
+
+// TestIsTracked_FluxListFailureIsAnError proves any other list failure is
+// surfaced, not silently read as "not tracked": a write gate must not guess.
+func TestIsTracked_FluxListFailureIsAnError(t *testing.T) {
+	forbidden := apierrors.NewForbidden(schema.GroupResource{}, "", nil)
+
+	c := listFails(t, forbidden)
+	_, _, err := IsTracked(context.Background(), c, trackingTestArgoCDNamespace, trackingTestObject())
+	if err == nil {
+		t.Fatal("expected an error when listing Kustomizations is forbidden")
 	}
 }

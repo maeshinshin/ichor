@@ -51,9 +51,11 @@ func TestIsTracked_NeitherArgoCDNorFlux(t *testing.T) {
 	}
 }
 
-// TestIsTracked_FluxManagedFieldsEntry proves the Flux path: a
-// managedFields entry naming "flux-client-side-apply" is enough on its
-// own, with no argocd-cm involved at all.
+// TestIsTracked_FluxManagedFieldsEntry proves the Flux fast path: a
+// managedFields entry naming Flux's own field manager (fluxFieldManager,
+// kustomize-controller, Flux's default and only a first signal) is enough on
+// its own, with no argocd-cm involved at all. The reserved name a user's own
+// kubectl edits use is deliberately not Flux's applying name (docs/adr/0044).
 func TestIsTracked_FluxManagedFieldsEntry(t *testing.T) {
 	k8sClient := fake.NewClientBuilder().WithScheme(newTestScheme(t)).Build()
 

@@ -24,6 +24,7 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/config/config"
 	"github.com/siderolabs/talos/pkg/machinery/config/configpatcher"
 	"github.com/siderolabs/talos/pkg/machinery/config/container"
+	"github.com/siderolabs/talos/pkg/machinery/config/machine"
 	"github.com/siderolabs/talos/pkg/machinery/config/types/k8s"
 	mv1alpha1 "github.com/siderolabs/talos/pkg/machinery/config/types/v1alpha1"
 
@@ -97,6 +98,12 @@ func injectKubeProxy(
 	case mode == cni.KubeProxyReplaced:
 	case fromStatus && mode == cni.KubeProxyEnabled:
 	default:
+		return cfg, nil
+	}
+
+	// Talos validates KubeProxyConfig as control-plane-only (the bootstrap manifests that carry
+	// kube-proxy are rendered by the control planes), so a worker gets no document at v1.14.
+	if contract.MultidocKubernetesConfigSupported() && cfg.Machine().Type() == machine.TypeWorker {
 		return cfg, nil
 	}
 

@@ -106,6 +106,15 @@ func TestKubeProxyModeIsRenderedByIchor(t *testing.T) {
 		}
 	})
 
+	t.Run("a worker renders no KubeProxyConfig: Talos allows the document on control planes only", func(t *testing.T) {
+		worker := testMachine("node-w", roleWorker, nil)
+
+		out := mustRender(t, clusterFor(cni.KubeProxyReplaced, cni.KubeProxyReplaced), worker, bundle, nil)
+		if strings.Contains(out, "kind: KubeProxyConfig") {
+			t.Fatalf("a worker must not carry the document, got:\n%s", out)
+		}
+	})
+
 	t.Run("status wins over spec in both directions, and over a patch", func(t *testing.T) {
 		out := mustRender(t, clusterFor(cni.KubeProxyReplaced, cni.KubeProxyEnabled), m, bundle, patches)
 		if !strings.Contains(proxyDoc(out), proxyOn) {

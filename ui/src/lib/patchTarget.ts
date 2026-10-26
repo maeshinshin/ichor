@@ -68,33 +68,63 @@ export function parseLabelSelector(text: string): LabelSelectorLike {
   }
 }
 
-// buildPatchTarget turns the form's target fields into the wire target.
-// requiresTarget is false for the cluster layer (no target). Throws
-// parseLabelSelector's error on malformed JSON, so the caller can refuse to
-// send anything: the one client-side check that stops a bad request.
-export function buildPatchTarget(
-  requiresTarget: boolean,
-  kind: TargetKind,
-  role: string,
-  labelSelectorText: string,
-  machineRef: string,
-): TargetLike | undefined {
-  if (!requiresTarget) return undefined
-  if (kind === 'role') return { role, labelSelector: undefined, machineRef: '' }
-  if (kind === 'machineRef') return { role: '', labelSelector: undefined, machineRef }
-  if (kind === 'labelSelector') return { role: '', labelSelector: parseLabelSelector(labelSelectorText), machineRef: '' }
-  return undefined
+// The layer drives the target: the CRD accepts role <-> target.role,
+// selector <-> target.labelSelector, machine <-> target.machineRef and cluster
+// <-> no target, nothing else. The page maps its ConfigLayer enum to this key
+// (this file takes no ui/src/gen import).
+export type LayerKey = 'unset' | 'cluster' | 'role' | 'selector' | 'machine'
+
+export function targetKindForLayer(layer: LayerKey): TargetKind {
+  switch (layer) {
+    case 'role':
+      return 'role'
+    case 'selector':
+      return 'labelSelector'
+    case 'machine':
+      return 'machineRef'
+    default:
+      return 'none'
+  }
 }
 
-// canSavePatch gates the Save button: layerSet and clusterLayer are the
-// caller's reading of the ConfigLayer enum (kept out of here so this file
-// stays free of ui/src/gen imports).
-export function canSavePatch(f: {
-  name: string
-  hasCluster: boolean
-  layerSet: boolean
-  clusterLayer: boolean
-  targetKind: TargetKind
-}): boolean {
-  return f.name !== '' && f.hasCluster && f.layerSet && (f.clusterLayer || f.targetKind !== 'none')
+// targetFieldsFor loads an existing patch's target into the form fields for
+// its layer: only the field the layer uses is filled, so an incompatible
+// leftover can never be sent back. Also the "clear" a layer change applies
+// (call it with undefined).
+export function targetFieldsFor(
+  layer: LayerKey,
+  target: TargetLike | undefined,
+): { role: string; labelSelectorText: string; machineRef: string } {
+  const kind = targetKindForLayer(layer)
+  return {
+    role: kind === 'role' ? (target?.role ?? '') : '',
+    labelSelectorText: stringifyLabelSelector(kind === 'labelSelector' ? target?.labelSelector : undefined),
+    machineRef: kind === 'machineRef' ? (target?.machineRef ?? '') : '',
+  }
+}
+
+// buildPatchTarget turns the form's target fields into the wire target for
+// the layer; the cluster layer has none. Throws parseLabelSelector's error on
+// malformed JSON, so the caller can refuse to send anything: the one
+// client-side check that stops a bad request.
+export function buildPatchTarget(layer: LayerKey, role: string, labelSelectorText: string, machineRef: string): TargetLike | undefined {
+  switch (targetKindForLayer(layer)) {
+    case 'role':
+      return { role, labelSelector: undefined, machineRef: '' }
+    case 'machineRef':
+      return { role: '', labelSelector: undefined, machineRef }
+    case 'labelSelector':
+      return { role: '', labelSelector: parseLabelSelector(labelSelectorText), machineRef: '' }
+    default:
+      return undefined
+  }
+}
+
+// canSavePatch gates the Save button: a layer is chosen and the target value
+// that layer asks for is filled (a selector always has a value: its JSON).
+export function canSavePatch(f: { name: string; hasCluster: boolean; layer: LayerKey; role: string; machineRef: string }): boolean {
+  if (f.name === '' || !f.hasCluster || f.layer === 'unset') return false
+  if (f.layer === 'role') return f.role !== ''
+  if (f.layer === 'machine') return f.machineRef !== ''
+  return true
 }

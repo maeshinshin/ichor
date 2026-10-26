@@ -25,7 +25,7 @@ import { PullRequestNotice } from '@/components/PullRequestNotice'
 import type { Cluster } from '@/gen/ichor/v1alpha1/cluster_pb'
 import { ConfigLayer } from '@/gen/ichor/v1alpha1/node_pb'
 import { PatchSchema } from '@/gen/ichor/v1alpha1/patch_pb'
-import { clusterClient, patchClient } from '@/lib/connect'
+import { clusterClient, machineClient, patchClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
 import { offersBreakGlass } from '@/lib/breakGlass'
 import { describeError } from '@/lib/errors'
@@ -33,7 +33,8 @@ import { useT } from '@/lib/useT'
 import type { Key } from '@/lib/i18n'
 import { PatchDocumentCard, type DocItem } from '@/components/PatchDocumentCard'
 import { defaultDocument, previewKey } from '@/lib/patchDocs'
-import { buildPatchTarget, canSavePatch, stringifyLabelSelector, targetKindOf, type TargetKind } from '@/lib/patchTarget'
+import type { Machine } from '@/gen/ichor/v1alpha1/machine_pb'
+import { buildPatchTarget, canSavePatch, stringifyLabelSelector, targetFieldsFor, type LayerKey } from '@/lib/patchTarget'
 import { navigate } from '@/router'
 
 type ErrorShape = { title: string; detail: string }
@@ -55,6 +56,23 @@ const EDITABLE_LAYERS: { layer: ConfigLayer; descKey: Key }[] = [
   { layer: ConfigLayer.MACHINE, descKey: 'patch.layerDesc.machine' },
 ]
 
+// The layer decides which target the patch has, so the form has no
+// separate "target kind": lib/patchTarget works from this key.
+function layerKeyOf(layer: ConfigLayer): LayerKey {
+  switch (layer) {
+    case ConfigLayer.CLUSTER:
+      return 'cluster'
+    case ConfigLayer.ROLE:
+      return 'role'
+    case ConfigLayer.SELECTOR:
+      return 'selector'
+    case ConfigLayer.MACHINE:
+      return 'machine'
+    default:
+      return 'unset'
+  }
+}
+
 let nextDocId = 1
 
 // PatchDetail is both the create form (/patches/new, namespace and name
@@ -74,7 +92,7 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
   const [cluster, setCluster] = useState<{ namespace: string; name: string } | undefined>(undefined)
   const [layer, setLayer] = useState<ConfigLayer>(ConfigLayer.UNSPECIFIED)
   const [priority, setPriority] = useState(0)
-  const [targetKind, setTargetKind] = useState<TargetKind>('none')
+  const [machines, setMachines] = useState<Machine[]>([])
   const [role, setRole] = useState('')
   const [labelSelectorText, setLabelSelectorText] = useState(stringifyLabelSelector(undefined))
   const [machineRef, setMachineRef] = useState('')
@@ -100,6 +118,22 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
     )
   }, [])
 
+  // The machine picker lists the chosen cluster's machines.
+  useEffect(() => {
+    if (!cluster) {
+      setMachines([])
+      return
+    }
+    let cancelled = false
+    machineClient.listMachines({ cluster }).then(
+      (res) => !cancelled && setMachines(res.machines),
+      () => !cancelled && setMachines([]),
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [cluster?.namespace, cluster?.name])
+
   useEffect(() => {
     if (isNew) return
     let cancelled = false
@@ -115,11 +149,7 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
         setCluster(p.cluster ? { namespace: p.cluster.namespace, name: p.cluster.name } : undefined)
         setLayer(p.layer)
         setPriority(p.priority)
-        const kind = targetKindOf(p.target)
-        setTargetKind(kind)
-        if (kind === 'role') setRole(p.target?.role ?? '')
-        if (kind === 'labelSelector') setLabelSelectorText(stringifyLabelSelector(p.target?.labelSelector))
-        if (kind === 'machineRef') setMachineRef(p.target?.machineRef ?? '')
+        applyTargetFields(targetFieldsFor(layerKeyOf(p.layer), p.target))
         setDocuments(p.documents.map((d) => ({ id: nextDocId++, kind: d.kind, document: d.document })))
         setLoaded(true)
       },
@@ -135,6 +165,12 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
     }
   }, [isNew, namespace, name])
 
+  function applyTargetFields(f: { role: string; labelSelectorText: string; machineRef: string }) {
+    setRole(f.role)
+    setLabelSelectorText(f.labelSelectorText)
+    setMachineRef(f.machineRef)
+  }
+
   // buildWire returns null (after setting saveError/previewError itself)
   // when a label selector's JSON can't be parsed - the one place client-
   // side validation exists, because LabelSelector is a structured wire
@@ -149,7 +185,7 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
     }
     let target: PatchInit['target']
     try {
-      target = buildPatchTarget(layer !== ConfigLayer.CLUSTER, targetKind, role, labelSelectorText, machineRef)
+      target = buildPatchTarget(layerKeyOf(layer), role, labelSelectorText, machineRef)
     } catch (err) {
       const reason = (err as { reason?: string }).reason
       setErr(reason === 'selectorNotJson' ? t('error.selectorNotJson') : reason === 'selectorNotObject' ? t('error.selectorNotObject') : err instanceof Error ? err.message : String(err))
@@ -231,7 +267,7 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
     cluster: cluster ? `${cluster.namespace}/${cluster.name}` : '',
     layer,
     priority,
-    target: `${targetKind}|${role}|${machineRef}|${labelSelectorText}`,
+    target: `${role}|${machineRef}|${labelSelectorText}`,
     documents,
   })
   const previewFresh = previewedKey === currentKey
@@ -242,9 +278,9 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
   const canSave = canSavePatch({
     name: patchName,
     hasCluster: !!cluster,
-    layerSet: layer !== ConfigLayer.UNSPECIFIED,
-    clusterLayer: layer === ConfigLayer.CLUSTER,
-    targetKind,
+    layer: layerKeyOf(layer),
+    role,
+    machineRef,
   })
 
   return (
@@ -292,6 +328,7 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
                 onValueChange={(v) => {
                   const [ns, n] = v.split('/')
                   setCluster({ namespace: ns, name: n })
+                  setMachineRef('')
                 }}
               >
                 <SelectTrigger id="patch-cluster" className="w-full">
@@ -316,7 +353,8 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
                 onValueChange={(v) => {
                   const l = Number(v) as ConfigLayer
                   setLayer(l)
-                  if (l === ConfigLayer.CLUSTER) setTargetKind('none')
+                  // The layer picks the target: drop the old one.
+                  applyTargetFields(targetFieldsFor(layerKeyOf(l), undefined))
                 }}
               >
                 <SelectTrigger id="patch-layer" className="w-full">
@@ -351,51 +389,51 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
             </div>
           </div>
 
-          {layer !== ConfigLayer.CLUSTER && layer !== ConfigLayer.UNSPECIFIED && (
+          {layer === ConfigLayer.ROLE && (
             <div class="space-y-2 rounded-md border p-3">
-              <Label htmlFor="patch-target-kind">{t('patch.target')}</Label>
-              <Select value={targetKind} onValueChange={(v) => setTargetKind(v as TargetKind)}>
-                <SelectTrigger id="patch-target-kind" className="w-full">
-                  <SelectValue placeholder={t('patch.selectTargetKind')} />
+              <Label htmlFor="patch-target-role">{t('patch.target')}</Label>
+              <Select value={role} onValueChange={setRole}>
+                <SelectTrigger id="patch-target-role" className="w-full">
+                  <SelectValue placeholder={t('approve.selectRole')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="role">{t('patch.targetKindRole')}</SelectItem>
-                  <SelectItem value="labelSelector">{t('patch.targetKindSelector')}</SelectItem>
-                  <SelectItem value="machineRef">{t('patch.targetKindMachine')}</SelectItem>
+                  <SelectItem value="controlplane">{t('role.controlPlane')}</SelectItem>
+                  <SelectItem value="worker">{t('role.worker')}</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+          )}
 
-              {targetKind === 'role' && (
-                <Select value={role} onValueChange={setRole}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder={t('approve.selectRole')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="controlplane">{t('role.controlPlane')}</SelectItem>
-                    <SelectItem value="worker">{t('role.worker')}</SelectItem>
-                  </SelectContent>
-                </Select>
-              )}
+          {layer === ConfigLayer.SELECTOR && (
+            <div class="space-y-1 rounded-md border p-3">
+              <Label htmlFor="patch-target-selector">{t('patch.target')}</Label>
+              <p class="text-xs text-muted-foreground">{t('patch.selectorHint')}</p>
+              <Textarea
+                id="patch-target-selector"
+                className="font-mono text-xs"
+                rows={5}
+                value={labelSelectorText}
+                onInput={(e) => setLabelSelectorText((e.target as HTMLTextAreaElement).value)}
+              />
+            </div>
+          )}
 
-              {targetKind === 'machineRef' && (
-                <Input
-                  value={machineRef}
-                  placeholder={t('patch.machinePlaceholder')}
-                  onInput={(e) => setMachineRef((e.target as HTMLInputElement).value)}
-                />
-              )}
-
-              {targetKind === 'labelSelector' && (
-                <div class="space-y-1">
-                  <p class="text-xs text-muted-foreground">{t('patch.selectorHint')}</p>
-                  <Textarea
-                    className="font-mono text-xs"
-                    rows={5}
-                    value={labelSelectorText}
-                    onInput={(e) => setLabelSelectorText((e.target as HTMLTextAreaElement).value)}
-                  />
-                </div>
-              )}
+          {layer === ConfigLayer.MACHINE && (
+            <div class="space-y-2 rounded-md border p-3">
+              <Label htmlFor="patch-target-machine">{t('patch.target')}</Label>
+              <Select value={machineRef} onValueChange={setMachineRef}>
+                <SelectTrigger id="patch-target-machine" className="w-full">
+                  <SelectValue placeholder={t('patch.selectMachine')} />
+                </SelectTrigger>
+                <SelectContent>
+                  {[...new Set([...(machineRef ? [machineRef] : []), ...machines.map((m) => m.ref?.name ?? '').filter(Boolean)])].map((n) => (
+                    <SelectItem key={n} value={n}>
+                      {n}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {machines.length === 0 && <p class="text-xs text-muted-foreground">{t('patch.noMachines')}</p>}
             </div>
           )}
         </CardContent>

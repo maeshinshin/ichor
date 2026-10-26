@@ -111,3 +111,27 @@ as `...:vv1.36.0`. The `v` is now trimmed before the call, with a regression tes
   purpose (above).
 - Deferred: kubelet-only rolls on a worker do not drain or evacuate (a kubelet restart does not evict pods); the
   `Ichor` kind is still unwired.
+
+## E2E observation (2026-10-26, through `ichor upgrade kubernetes`)
+
+KubeVirt harness, 3 control planes + 1 worker, Talos v1.14.3, Cilium 1.18.0 (`handover: disabled`), controller run
+in the cluster. No newer patch than v1.37.1 exists on registry.k8s.io, so the cluster booted at v1.36.4 and the
+target was v1.36.5. The cluster's configs were rendered by Ichor itself (all four machines `Converged`, i.e. zero
+drift) at `versionContract` v1.13: at v1.14 the typed patches cannot express pod/service subnets, the install disk
+or "no flannel" (those are separate documents, rejected when combined with the legacy `Config` fields).
+
+- The confirmation text appeared as designed: "Upgrade Kubernetes on cluster ... from v1.36.4 to v1.36.5 ...
+  4 machine(s) (3 control plane, 1 worker): control planes one at a time, then workers (at most 1 at once), in this
+  order: ...". Answering `n` aborted with nothing written.
+- **The `vv` fix holds**: after the first control plane, `kube-apiserver`, `kube-controller-manager` and
+  `kube-scheduler` ran `registry.k8s.io/...:v1.36.5`, the kubelet reported v1.36.5, the three pods were Ready.
+- **Bug (not fixed here; `internal/controller` belongs to another change): the step fails with
+  `rpc error: code = DeadlineExceeded` from `ApplyNoReboot`.** `begin` runs the version query, the removed-API
+  scrape, the dry run and the apply all under the one 15 s `etcdDialTimeout` context (`dialCtx`). Two runs, the
+  first failed on the first control plane (nothing changed on the node), the second succeeded on it and failed on
+  the second. Each leaves the operation `Paused`; a failed machine is not retried (ADR 0026), delete and start
+  again. The apply of a control-plane image change blocks while Talos restarts the static pods, the same shape as
+  the `upgradeCallTimeout` bug in ADR 0043. Needs its own bound for the apply. Stopped after the second failure;
+  the cluster was finished with `talosctl upgrade-k8s`, which is outside the product.
+- Not observed: the bootstrap-manifest sync and the worker step (the operation never got past the second control
+  plane).

@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"google.golang.org/grpc/codes"
@@ -163,6 +164,39 @@ func waitForAPIServer(ctx context.Context, c ctrlclient.Client, wait, interval t
 		}
 
 		_, _ = fmt.Fprintf(progress, "init: waiting for the API server: %v\n", err)
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(interval):
+		}
+	}
+}
+
+// createWhenWebhooksUp creates obj, retrying while the API server cannot reach Ichor's
+// admission webhooks (failurePolicy Fail; the controller serving them was started moments
+// ago by the manifest init applied) for up to wait.
+func createWhenWebhooksUp(
+	ctx context.Context, c ctrlclient.Client, obj ctrlclient.Object, wait, interval time.Duration, progress io.Writer,
+) error {
+	if wait <= 0 {
+		wait = defaultBootstrapWait
+	}
+
+	if interval <= 0 {
+		interval = defaultBootstrapInterval
+	}
+
+	deadline := time.Now().Add(wait)
+
+	for {
+		err := c.Create(ctx, obj)
+		if err == nil || !apierrors.IsInternalError(err) || !strings.Contains(err.Error(), "webhook") ||
+			!time.Now().Add(interval).Before(deadline) {
+			return err
+		}
+
+		_, _ = fmt.Fprintf(progress, "init: waiting for Ichor's webhooks: %v\n", err)
 
 		select {
 		case <-ctx.Done():

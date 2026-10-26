@@ -110,6 +110,23 @@ func (f *fakeStorageEvacuator) End(context.Context, *evacuationTarget, string) e
 }
 
 var _ = Describe("talosUpgradeAdvancer", func() {
+	It("gives the Upgrade RPC far more time than the 15s dial bound, since it blocks while the node pulls the installer", func() {
+		secret := newTestSecret(newTestBundle("v1.14"))
+		cluster := newTestCluster(secret.Name, "v1.14")
+		cp := newTestControlPlane(cluster.Name, "to1")
+		setHostname(cp, "node-to1")
+		newTestNode("node-to1", true)
+
+		fake := &fakeTalosClient{version: testOldTalosVersion, bootID: testBootIDBefore}
+		adv := newUpgradeAdvancer(fake, nil)
+
+		_, err := adv.Advance(ctx, cluster, fetchMachine(cp), nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(fake.upgradeCalls).To(HaveLen(1))
+		Expect(fake.upgradeBudget).To(BeNumerically(">", 4*etcdDialTimeout),
+			"the Upgrade RPC's context must not inherit the %s dial bound", etcdDialTimeout)
+	})
+
 	It("fails (never succeeds) when the node reboots but is still running its previous version -- an A/B slot rollback", func() {
 		secret := newTestSecret(newTestBundle("v1.14"))
 		cluster := newTestCluster(secret.Name, "v1.14")

@@ -99,6 +99,8 @@ type fakeTalosClient struct {
 	bootIDErr    error
 	upgradeErr   error
 	upgradeCalls []string
+	// upgradeBudget is the time left on the Upgrade call's context when it arrived.
+	upgradeBudget time.Duration
 
 	// kubernetes-upgrade fields: kubernetes_upgrade_test.go's fixtures.
 	pulled     []string
@@ -153,7 +155,10 @@ func (f *fakeTalosClient) BootID(context.Context) (string, error) {
 	return f.bootID, f.bootIDErr
 }
 
-func (f *fakeTalosClient) Upgrade(_ context.Context, image string) error {
+func (f *fakeTalosClient) Upgrade(ctx context.Context, image string) error {
+	if dl, ok := ctx.Deadline(); ok {
+		f.upgradeBudget = time.Until(dl)
+	}
 	f.upgradeCalls = append(f.upgradeCalls, image)
 
 	return f.upgradeErr

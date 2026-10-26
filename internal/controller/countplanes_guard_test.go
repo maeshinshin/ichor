@@ -75,6 +75,12 @@ var countplanesAllowedFuncs = map[string]bool{
 	// finished before the cluster-wide tail runs; it counts no quorum, and reads through the
 	// uncached Reader so a freshly approved machine is not missed (see its doc comment).
 	"othersDone": true,
+	// shutdownPlan and awaitPowerOn (shutdown.go) list the machines of a cluster to stop and to
+	// wait for. They count nothing against a quorum, and say so in their own doc comments; the
+	// shutdown deliberately ends quorum, and the lock that gates it still goes through
+	// acquireDisruptiveLock's canonical count. Both read through APIReader when it is set.
+	"shutdownPlan": true,
+	"awaitPowerOn": true,
 }
 
 // TestTalosMachineListCountingStaysCentralized parses every non-test

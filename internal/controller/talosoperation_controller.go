@@ -135,8 +135,19 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, err
 	}
 
-	lock, err := r.acquireDisruptiveLock(ctx, &cluster)
+	// A shutdown that has asked every machine to stop only waits for the
+	// operator to power them on; it holds no lock (shutdown.go).
+	if op.Spec.Kind == ichorv1alpha1.TalosOperationKindShutdown && op.Status.Phase == ichorv1alpha1.TalosOperationPhaseShutDown {
+		return r.awaitPowerOn(ctx, &op, &cluster)
+	}
+
+	lock, err := r.acquireDisruptiveLock(ctx, &cluster, &op)
 	if err != nil {
+		if shuttingDown, ok := errors.AsType[*shuttingDownError](err); ok {
+			return ctrl.Result{RequeueAfter: operationRequeueInterval},
+				r.setPhase(ctx, &op, ichorv1alpha1.TalosOperationPhasePaused, reasonOperationShuttingDown, shuttingDown.Error())
+		}
+
 		if transitioning, ok := errors.AsType[*transitioningError](err); ok {
 			return ctrl.Result{RequeueAfter: operationRequeueInterval},
 				r.setPhase(ctx, &op, ichorv1alpha1.TalosOperationPhasePaused, reasonOperationTransitioning, transitioning.Error())
@@ -160,6 +171,10 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	// "pause-on-failure (no automatic cluster-wide rollback)".
 	if op.Status.Phase == ichorv1alpha1.TalosOperationPhasePaused && op.Status.FailureReason != "" {
 		return ctrl.Result{}, nil
+	}
+
+	if op.Spec.Kind == ichorv1alpha1.TalosOperationKindShutdown {
+		return r.advanceShutdown(ctx, &op, &cluster, lock)
 	}
 
 	if r.Advance == nil {
@@ -379,7 +394,14 @@ func pendingMachines(
 // other disruptive operation already goes through; TalosOperation has no
 // analogue of removal's own completesTransition exception, so this never
 // bypasses the check.
-func (r *TalosOperationReconciler) acquireDisruptiveLock(ctx context.Context, cluster *ichorv1alpha1.TalosCluster) (*clusterlock.Lock, error) {
+func (r *TalosOperationReconciler) acquireDisruptiveLock(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, op *ichorv1alpha1.TalosOperation,
+) (*clusterlock.Lock, error) {
+	// A cluster being shut down accepts no other disruptive work.
+	if err := shutdownBlocker(ctx, readerOrClient(r.APIReader, r.Client), cluster.Namespace, cluster.Name, op); err != nil {
+		return nil, err
+	}
+
 	controlPlanes, err := deleteguard.CountApprovedControlPlanes(ctx, r.APIReader, cluster.Namespace, cluster.Name)
 	if err != nil {
 		return nil, err

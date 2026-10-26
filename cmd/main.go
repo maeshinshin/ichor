@@ -394,9 +394,16 @@ func main() {
 		controller.NewKubeProxyAdmin(),
 	)
 
+	// The shutdown kind is not a rollout and has no Advance entry: the backbone
+	// dispatches it to its own state machine, which needs a Talos dialer, the bundle's
+	// namespace, and the node this pod runs on (NODE_NAME, from the downward API) so that
+	// node can be stopped last.
 	if err := (&controller.TalosOperationReconciler{
-		Client:    mgr.GetClient(),
-		APIReader: mgr.GetAPIReader(),
+		Client:              mgr.GetClient(),
+		APIReader:           mgr.GetAPIReader(),
+		TalosClient:         controller.NewMachineryTalosClient,
+		ControllerNamespace: os.Getenv("POD_NAMESPACE"),
+		NodeName:            os.Getenv("NODE_NAME"),
 		Advance: func(
 			ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, op *ichorv1alpha1.TalosOperation,
 		) (bool, error) {

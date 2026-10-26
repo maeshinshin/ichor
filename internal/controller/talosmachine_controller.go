@@ -126,6 +126,7 @@ const (
 	reasonNodeDrifted              = "NodeDrifted"
 	reasonDriftCorrected           = "DriftCorrected"
 	reasonClusterTransitioning     = "ClusterTransitioning"
+	reasonClusterShuttingDown      = reasonOperationShuttingDown
 	reasonControlPlaneOverCap      = "ControlPlaneOverCap"
 )
 
@@ -533,6 +534,10 @@ func (r *TalosMachineReconciler) refuseReboot(
 	lock, err := r.acquireDisruptiveLock(ctx, cluster, m, controllerIdentity, false)
 	if err != nil {
 		// The transition ending or the lock being released enqueues nothing, so both poll.
+		if shuttingDown, ok := errors.AsType[*shuttingDownError](err); ok {
+			return r.retryLater(ctx, m, reasonClusterShuttingDown,
+				fmt.Sprintf("%s%s; reboot-requiring change deferred", driftNote, shuttingDown.Error()))
+		}
 		if transitioning, ok := errors.AsType[*transitioningError](err); ok {
 			return r.retryLater(ctx, m, reasonClusterTransitioning,
 				fmt.Sprintf("%s%s; other disruptive work is refused until it returns to the declared odd count",

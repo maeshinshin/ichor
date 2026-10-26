@@ -180,6 +180,7 @@ func main() {
 	mux.Handle(ichorv1alpha1connect.NewNodeServiceHandler(server, rpcInterceptor))
 	mux.Handle(ichorv1alpha1connect.NewPatchServiceHandler(server, rpcInterceptor))
 	mux.Handle(ichorv1alpha1connect.NewGitOpsServiceHandler(server, rpcInterceptor))
+	mux.Handle(ichorv1alpha1connect.NewOperationServiceHandler(server, rpcInterceptor))
 
 	srv := &http.Server{
 		Addr:              *addr,

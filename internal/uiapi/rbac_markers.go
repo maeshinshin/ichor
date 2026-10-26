@@ -40,7 +40,12 @@ limitations under the License.
 // and deletes, not just updates).
 package uiapi
 
-// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters,verbs=get;list
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters,verbs=get;list;update
+// OperationService (docs/adr/0068): starting an upgrade changes the spec it names and creates the
+// TalosOperation; pausing/deleting writes it. With OIDC on these run as the user (ADR 0058), so
+// the ServiceAccount needs them only for the OIDC-off case.
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosoperations,verbs=get;list;create;update;delete
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=ichorinstallations,verbs=get;update
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosconfigpatches,verbs=get;list;create;update;delete
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosmachines,verbs=get;list;update
 // +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,verbs=get

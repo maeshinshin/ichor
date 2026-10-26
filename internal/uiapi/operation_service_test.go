@@ -39,8 +39,8 @@ import (
 // writes, who makes them, and what is refused before anything is written.
 
 const (
-	opNS      = "default"
-	opCluster = "c"
+	opNS       = "default"
+	opCluster  = "c"
 	opOldTalos = "v1.14.3"
 	opNewTalos = "v1.14.4"
 )
@@ -254,7 +254,7 @@ func TestCreateKubeProxySwitchSetsAndThenRemovesTheConfirmationAnnotation(t *tes
 			_, has := cl.Annotations[ichorv1alpha1.TalosClusterConfirmKubeProxySwitchAnnotation]
 
 			switch {
-			case has && cl.Spec.CNI != nil && cl.Spec.CNI.KubeProxy == "replaced":
+			case has && cl.Spec.CNI.KubeProxy == "replaced":
 				annotated = true
 			case !has && annotated:
 				cleared = true

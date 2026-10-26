@@ -3,11 +3,13 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { ErrorAlert } from '@/components/ErrorAlert'
+import { StartOperationDialog } from '@/components/StartOperationDialog'
 import { HandoverPhase, RolloutKind, type Cluster } from '@/gen/ichor/v1alpha1/cluster_pb'
 import { clusterClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
 import { describeError } from '@/lib/errors'
 import { useT } from '@/lib/useT'
+import { Link } from '@/router'
 
 export function ClusterDetail({ namespace, name }: { namespace: string; name: string }) {
   const t = useT()
@@ -82,6 +84,21 @@ export function ClusterDetail({ namespace, name }: { namespace: string; name: st
           ) : (
             <p class="text-muted-foreground">{t('cluster.noRollout')}</p>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex items-center justify-between">
+          <CardTitle>{t('cluster.operations')}</CardTitle>
+          <Link to="/operations" class="text-sm text-muted-foreground hover:underline">
+            {t('ops.title')}
+          </Link>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2">
+          {cluster.ref &&
+            (['talos', 'kubernetes', 'ichor', 'cni', 'shutdown'] as const).map((kind) => (
+              <StartOperationDialog key={kind} kind={kind} cluster={cluster.ref!} />
+            ))}
         </CardContent>
       </Card>
 

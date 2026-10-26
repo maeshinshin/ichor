@@ -14,6 +14,27 @@ webhooks:
     service:
       name: ichor-webhook-service
       namespace: {{ .Release.Namespace }}
+      path: /validate-ichor-maesh-dev-v1alpha1-breakglass
+  failurePolicy: Fail
+  name: vbreakglass-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - ichor.maesh.dev
+    apiVersions:
+    - v1alpha1
+    operations:
+    - UPDATE
+    - DELETE
+    resources:
+    - talosmachines
+    - talosconfigpatches
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: ichor-webhook-service
+      namespace: {{ .Release.Namespace }}
       path: /validate-ichor-maesh-dev-v1alpha1-taloscluster
   failurePolicy: Fail
   name: vtaloscluster-v1alpha1.kb.io

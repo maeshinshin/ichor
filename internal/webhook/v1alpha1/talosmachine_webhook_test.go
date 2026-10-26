@@ -37,7 +37,7 @@ func newTestMachine() *ichorv1alpha1.TalosMachine {
 	return &ichorv1alpha1.TalosMachine{
 		GenerateName: "machine-", Namespace: testNamespace,
 		Spec: ichorv1alpha1.TalosMachineSpec{
-			ClusterRef: corev1.LocalObjectReference{Name: "cluster"},
+			ClusterRef: corev1.LocalObjectReference{Name: testClusterName},
 			Identity:   ichorv1alpha1.TalosMachineIdentity{UUID: "00000000-0000-0000-0000-000000000001"},
 			Endpoint:   "10.0.0.2:50000",
 			Role:       "worker",

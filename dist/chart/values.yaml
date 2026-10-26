@@ -163,6 +163,12 @@ ichorUI:
   ##
   port: 8080
 
+  ## Namespace Argo CD runs in. ichor-ui reads argocd-cm there to refuse
+  ## writes to CRs Argo CD tracks; it reaches the container as ICHOR_ARGOCD_NAMESPACE.
+  ## Change this if Argo CD is not installed in the default "argocd" namespace.
+  ##
+  argocdNamespace: argocd
+
   ## Pod-level security settings
   ##
   podSecurityContext:

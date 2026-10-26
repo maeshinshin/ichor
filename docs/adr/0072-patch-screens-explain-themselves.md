@@ -14,6 +14,7 @@ The page from ADR 0039 was correct but bare: four fields, a JSON box per documen
 - **Cards, not always-open editors.** A loaded document is collapsed to its kind and a summary (`summarizeDocument`); a new document opens in its editor. Documents get a client-side id so removing one does not shift another's open state.
 - **The preview is a nudge.** The page remembers the form state a preview was run for (`previewKey`). A missing or stale preview shows a line in the preview card and a reminder above Save. Save is never disabled by it: a preview is a round trip that can fail for reasons unrelated to the patch.
 - **List page machines.** The "Applies to" column shows the patch's target as written, not computed machine names, so the UI never re-implements the controller's selection: every machine for a cluster-layer patch, `Role: <role>`, `Machine: <name>`, or "Machines matching the selector" for a label selector.
+- **The layer decides the target.** `role` takes `target.role`, `selector` takes `target.labelSelector`, `machine` takes `target.machineRef`, `cluster` takes no target. The CRD enforces it in CEL (before, only "target present iff not cluster" was checked, and `pkg/render` silently matched nothing for a mismatch); the form has no separate target-kind control, choosing a layer shows that one input and clears the old target, and the machine picker lists the chosen cluster's machines.
 
 ## Consequences
 

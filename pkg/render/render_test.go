@@ -18,6 +18,7 @@ package render
 
 import (
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -75,15 +76,25 @@ func testContract(t *testing.T) *coreconfig.VersionContract {
 	return contract
 }
 
+var (
+	sharedBundleOnce sync.Once
+	sharedBundle     *secrets.Bundle
+)
+
+// testBundle returns one shared, read-only bundle: generating one costs a 4096-bit RSA key.
 func testBundle(t *testing.T) *secrets.Bundle {
 	t.Helper()
 
-	bundle, err := secrets.NewBundle(secrets.NewFixedClock(time.Now()), testContract(t))
-	if err != nil {
-		t.Fatalf("NewBundle: %v", err)
-	}
+	sharedBundleOnce.Do(func() {
+		bundle, err := secrets.NewBundle(secrets.NewFixedClock(time.Now()), testContract(t))
+		if err != nil {
+			t.Fatalf("NewBundle: %v", err)
+		}
 
-	return bundle
+		sharedBundle = bundle
+	})
+
+	return sharedBundle
 }
 
 func testCluster(schedulable string) *ichorv1alpha1.TalosCluster {

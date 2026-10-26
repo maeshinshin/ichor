@@ -97,7 +97,7 @@ func TestBundleExportDoesNotAcknowledgeWhatItCouldNotSave(t *testing.T) {
 	k8s, name := bundleExportFixture(t, newTestBundle(t), nil)
 
 	// A file that does not hold the live bundle (here: some other bundle) must not be acknowledged.
-	other := newTestBundle(t)
+	other := newFreshTestBundle(t)
 	deps := bundleExportDeps{
 		K8s: k8s, Stdout: &bytes.Buffer{},
 		Save: func(cluster string, _ *secrets.Bundle) (string, error) { return saveBundleFile(cluster, other) },

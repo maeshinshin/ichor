@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"reflect"
+	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -212,7 +213,29 @@ func clientFactory(fake *fakeTalosClient) func(
 	}
 }
 
+var (
+	testBundleMu    sync.Mutex
+	testBundleCache = map[string]*secrets.Bundle{}
+)
+
+// newTestBundle returns one shared bundle per version contract: generating one costs a 4096-bit RSA
+// key, which dominates the suite under CPU contention. Callers must treat it as read-only; a spec
+// that needs its own (or a distinct) bundle calls newFreshTestBundle.
 func newTestBundle(versionContract string) *secrets.Bundle {
+	testBundleMu.Lock()
+	defer testBundleMu.Unlock()
+
+	if b, ok := testBundleCache[versionContract]; ok {
+		return b
+	}
+
+	b := newFreshTestBundle(versionContract)
+	testBundleCache[versionContract] = b
+
+	return b
+}
+
+func newFreshTestBundle(versionContract string) *secrets.Bundle {
 	contract, err := coreconfig.ParseContractFromVersion(versionContract)
 	Expect(err).NotTo(HaveOccurred())
 

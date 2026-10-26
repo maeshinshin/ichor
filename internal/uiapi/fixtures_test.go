@@ -17,6 +17,7 @@ limitations under the License.
 package uiapi
 
 import (
+	"sync"
 	"time"
 
 	. "github.com/onsi/gomega"
@@ -51,7 +52,10 @@ const (
 	testVersionContract = "v1.14"
 )
 
-func newTestBundle() *secrets.Bundle {
+// newTestBundle returns one shared, read-only bundle: generating one costs a 4096-bit RSA key.
+var newTestBundle = sync.OnceValue(newFreshTestBundle)
+
+func newFreshTestBundle() *secrets.Bundle {
 	contract, err := coreconfig.ParseContractFromVersion(testVersionContract)
 	Expect(err).NotTo(HaveOccurred())
 

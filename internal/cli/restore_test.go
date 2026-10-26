@@ -296,7 +296,7 @@ func TestRestoreCorruptNamedSnapshotIsRefused(t *testing.T) {
 
 func TestRestoreWrongBundleCannotDecrypt(t *testing.T) {
 	h := newRestoreHarness(t)
-	other := newTestBundle(t)
+	other := newFreshTestBundle(t)
 	putSnapshot(t, h.store, time.Now(), goodSnapshot(t), other)
 
 	err := h.run()

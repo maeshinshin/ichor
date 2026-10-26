@@ -15,6 +15,7 @@ import { OperationList } from '@/pages/OperationList'
 import { PatchDetail } from '@/pages/PatchDetail'
 import { PatchList } from '@/pages/PatchList'
 import { Placeholder } from '@/pages/Placeholder'
+import { ThemeSwitch } from '@/components/ThemeSwitch'
 import { Link, matchRoute, usePath } from '@/router'
 import type { Key } from '@/lib/i18n'
 import { t as translateNow } from '@/lib/i18n'
@@ -73,6 +74,7 @@ export function App() {
           ))}
         </nav>
         <div class="ml-auto">
+          <ThemeSwitch />
         </div>
       </header>
       <Separator />

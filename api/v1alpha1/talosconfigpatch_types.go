@@ -86,6 +86,7 @@ type TalosConfigPatchDocument struct {
 // TalosConfigPatchSpec defines the desired state of TalosConfigPatch.
 // +kubebuilder:validation:XValidation:rule="!has(self.target) || (has(self.target.role) ? 1 : 0) + (has(self.target.labelSelector) ? 1 : 0) + (has(self.target.machineRef) ? 1 : 0) == 1",message="target must set exactly one of role, labelSelector or machineRef"
 // +kubebuilder:validation:XValidation:rule="self.layer == 'cluster' ? !has(self.target) : has(self.target)",message="layer 'cluster' requires target to be absent; layer 'role', 'selector' or 'machine' requires target to be present"
+// +kubebuilder:validation:XValidation:rule="!has(self.target) || (self.layer == 'role' ? has(self.target.role) : (self.layer == 'selector' ? has(self.target.labelSelector) : (self.layer == 'machine' ? has(self.target.machineRef) : true)))",message="the target must match the layer: layer 'role' takes target.role, 'selector' takes target.labelSelector, 'machine' takes target.machineRef"
 type TalosConfigPatchSpec struct {
 	// clusterRef names the TalosCluster this patch applies to.
 	// +kubebuilder:validation:XValidation:rule="self.name != ''",message="clusterRef.name is required"
@@ -102,7 +103,7 @@ type TalosConfigPatchSpec struct {
 	// +optional
 	Priority int32 `json:"priority"`
 
-	// target narrows which machines this patch applies to; required for every layer but "cluster".
+	// target narrows which machines this patch applies to; required for every layer but "cluster", and its kind follows the layer: role -> role, selector -> labelSelector, machine -> machineRef.
 	// +optional
 	Target *TalosConfigPatchTarget `json:"target,omitempty"`
 

@@ -131,6 +131,20 @@ var _ = Describe("PatchService", func() {
 			Expect(connect.CodeOf(err)).To(Equal(connect.CodeInvalidArgument))
 		})
 
+		It("refuses a target whose kind does not match the layer, naming the rule", func() {
+			cluster := newTestCluster("does-not-exist")
+
+			wire := sysctlPatchWire("patch-invalid-mismatch", cluster.Name)
+			wire.Layer = pb.ConfigLayer_CONFIG_LAYER_ROLE
+			wire.Target = &pb.PatchTarget{MachineRef: "m1"}
+
+			s := &Server{Client: k8sClient}
+			_, err := s.CreatePatch(ctx, connect.NewRequest(&pb.CreatePatchRequest{Patch: wire}))
+			Expect(err).To(HaveOccurred())
+			Expect(connect.CodeOf(err)).To(Equal(connect.CodeInvalidArgument))
+			Expect(err.Error()).To(ContainSubstring("the target must match the layer"))
+		})
+
 		It("refuses a layer that isn't cluster, role, selector or machine", func() {
 			cluster := newTestCluster("does-not-exist")
 

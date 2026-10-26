@@ -3382,8 +3382,9 @@ spec:
                 format: int32
                 type: integer
               target:
-                description: target narrows which machines this patch applies to;
-                  required for every layer but "cluster".
+                description: 'target narrows which machines this patch applies to;
+                  required for every layer but "cluster", and its kind follows the
+                  layer: role -> role, selector -> labelSelector, machine -> machineRef.'
                 properties:
                   labelSelector:
                     description: labelSelector targets machines whose Kubernetes Node
@@ -3467,6 +3468,11 @@ spec:
             - message: layer 'cluster' requires target to be absent; layer 'role',
                 'selector' or 'machine' requires target to be present
               rule: 'self.layer == ''cluster'' ? !has(self.target) : has(self.target)'
+            - message: 'the target must match the layer: layer ''role'' takes target.role,
+                ''selector'' takes target.labelSelector, ''machine'' takes target.machineRef'
+              rule: '!has(self.target) || (self.layer == ''role'' ? has(self.target.role)
+                : (self.layer == ''selector'' ? has(self.target.labelSelector) : (self.layer
+                == ''machine'' ? has(self.target.machineRef) : true)))'
           status:
             description: status defines the observed state of TalosConfigPatch
             properties:

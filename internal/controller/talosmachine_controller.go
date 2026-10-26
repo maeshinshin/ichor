@@ -201,14 +201,19 @@ type TalosMachineReconciler struct {
 	// true if bundle itself failed to load, since that's checked first and
 	// this field is never reached in that case.
 	//
-	// There is only one credential this ever needs: design 5.6 only runs
-	// against an approved machine that already has a configuration, i.e.
-	// one that has already joined and already trusts the bundle's CA. The
-	// insecure, unauthenticated path Talos's maintenance mode offers is
-	// discovery's problem (phase 3), not this reconciler's.
+	// This is the authenticated credential: it works once the node trusts
+	// the bundle's CA. A node still in maintenance mode does not, and is
+	// provisioned through MaintenanceClient below (talosmachine_provision.go).
 	TalosClient func(
 		ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, bundle *secrets.Bundle,
 	) (TalosClient, error)
+
+	// MaintenanceClient opens the insecure maintenance-mode connection used
+	// to give an approved machine its first configuration
+	// (NewMachineryMaintenanceClient is the real implementation). nil turns
+	// provisioning off: a machine the authenticated client cannot reach then
+	// just reports CurrentConfigUnavailable.
+	MaintenanceClient func(ctx context.Context, endpoint string) (MaintenanceClient, error)
 
 	// KubeClient drains a control-plane TalosMachine's Node during removal
 	// (removal.go). nil skips draining rather than failing the reconcile:
@@ -372,12 +377,27 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 
 	// Step 2: read the node's current configuration and compare hashes.
-	current, err := talos.CurrentConfig(ctx)
+	readCtx, cancelRead := context.WithTimeout(ctx, talosCallTimeout)
+	current, err := talos.CurrentConfig(readCtx)
+
+	cancelRead()
+
 	if err != nil {
 		log.Error(err, "reading current machine configuration")
 
+		// A machine that has never converged and cannot be read with the bundle's identity may
+		// still be in maintenance mode: that is what talosmachine_provision.go finds out, by
+		// asking the insecure API rather than by interpreting this error.
+		if r.MaintenanceClient != nil && m.Status.AppliedConfigHash == "" {
+			return r.provision(ctx, &cluster, &m, rendered, hash)
+		}
+
 		return r.retryLater(ctx, &m, reasonCurrentConfigUnavailable,
 			"reading the node's current configuration failed")
+	}
+
+	if res, stop, err := r.followStage(ctx, talos, &m); stop {
+		return res, err
 	}
 
 	if hashConfig(current) == hash {
@@ -559,22 +579,7 @@ func (r *TalosMachineReconciler) refuseReboot(
 	// transition, so completesTransition is always false here.
 	lock, err := r.acquireDisruptiveLock(ctx, cluster, m, controllerIdentity, false)
 	if err != nil {
-		// The transition ending or the lock being released enqueues nothing, so both poll.
-		if shuttingDown, ok := errors.AsType[*shuttingDownError](err); ok {
-			return r.retryLater(ctx, m, shuttingDown.reason(),
-				fmt.Sprintf("%s%s; reboot-requiring change deferred", driftNote, shuttingDown.Error()))
-		}
-		if transitioning, ok := errors.AsType[*transitioningError](err); ok {
-			return r.retryLater(ctx, m, reasonClusterTransitioning,
-				fmt.Sprintf("%s%s; other disruptive work is refused until it returns to the declared odd count",
-					driftNote, transitioning.Error()))
-		}
-		if held, ok := errors.AsType[*clusterlock.HeldError](err); ok {
-			return r.retryLater(ctx, m, reasonClusterLockHeld,
-				fmt.Sprintf("cluster lock held by %q; reboot-requiring change deferred", held.Holder))
-		}
-
-		return ctrl.Result{}, err
+		return r.lockRefusal(ctx, m, err, driftNote, "reboot-requiring change deferred")
 	}
 
 	defer func() {
@@ -586,6 +591,29 @@ func (r *TalosMachineReconciler) refuseReboot(
 	return ctrl.Result{}, r.ready(ctx, m, metav1.ConditionFalse, reasonRebootRequired,
 		driftNote+"configuration change needs a reboot; this phase does not reboot nodes -- "+
 			"draining, the node-operation hook and etcd checks that must precede a reboot are later work")
+}
+
+// lockRefusal turns an acquireDisruptiveLock error into a visible, retried refusal; deferred
+// names what is being put off ("reboot-requiring change deferred"). The transition ending or the
+// lock being released enqueues nothing, so all of these poll. Any other error is returned as is.
+func (r *TalosMachineReconciler) lockRefusal(
+	ctx context.Context, m *ichorv1alpha1.TalosMachine, err error, note, deferred string,
+) (ctrl.Result, error) {
+	if shuttingDown, ok := errors.AsType[*shuttingDownError](err); ok {
+		return r.retryLater(ctx, m, shuttingDown.reason(), fmt.Sprintf("%s%s; %s", note, shuttingDown.Error(), deferred))
+	}
+
+	if transitioning, ok := errors.AsType[*transitioningError](err); ok {
+		return r.retryLater(ctx, m, reasonClusterTransitioning,
+			fmt.Sprintf("%s%s; other disruptive work is refused until it returns to the declared odd count",
+				note, transitioning.Error()))
+	}
+
+	if held, ok := errors.AsType[*clusterlock.HeldError](err); ok {
+		return r.retryLater(ctx, m, reasonClusterLockHeld, fmt.Sprintf("cluster lock held by %q; %s", held.Holder, deferred))
+	}
+
+	return ctrl.Result{}, err
 }
 
 // retryLater records a False Ready for a failure that time can fix and asks to be reconciled again

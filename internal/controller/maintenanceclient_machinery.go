@@ -23,6 +23,7 @@ import (
 	"github.com/cosi-project/runtime/pkg/resource"
 	"github.com/cosi-project/runtime/pkg/safe"
 	"github.com/cosi-project/runtime/pkg/state"
+	machineapi "github.com/siderolabs/talos/pkg/machinery/api/machine"
 	"github.com/siderolabs/talos/pkg/machinery/client"
 	"github.com/siderolabs/talos/pkg/machinery/resources/hardware"
 	"github.com/siderolabs/talos/pkg/machinery/resources/network"
@@ -52,6 +53,18 @@ type machineryMaintenanceClient struct {
 // talosclient_machinery.go uses.
 func (m *machineryMaintenanceClient) Close() error {
 	return m.c.Close()
+}
+
+// ApplyConfiguration sends cfg over the insecure connection with mode AUTO, the mode `talosctl
+// apply-config --insecure` uses: in maintenance mode the node installs and reboots as the
+// configuration requires. It returns once the node has stored the configuration, not once the
+// install is done.
+func (m *machineryMaintenanceClient) ApplyConfiguration(ctx context.Context, cfg []byte) error {
+	_, err := m.c.ApplyConfiguration(ctx, &machineapi.ApplyConfigurationRequest{
+		Data: cfg, Mode: machineapi.ApplyConfigurationRequest_AUTO,
+	})
+
+	return err
 }
 
 // Identity reads hardware.SystemInformation for the SMBIOS UUID, serial

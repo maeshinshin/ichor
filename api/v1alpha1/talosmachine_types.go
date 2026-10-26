@@ -182,6 +182,19 @@ type TalosMachineStatus struct {
 	// (principle 3).
 	// +optional
 	ObservedInputsHash string `json:"observedInputsHash,omitempty"`
+
+	// stage is the last stage the node was seen in on its way from maintenance mode to
+	// running: maintenance, installing, rebooting or running (Talos's MachineStatus stages).
+	// installing and rebooting right after the initial apply are inferred (the apply RPC only
+	// means "stored"); running is read from the node.
+	// +optional
+	Stage string `json:"stage,omitempty"`
+
+	// configStoredAt is when the node accepted its initial configuration over the insecure
+	// maintenance API. Once set, Ichor never applies to this node insecurely again; it only
+	// follows the node to running. Empty for a node that has not been provisioned by Ichor.
+	// +optional
+	ConfigStoredAt *metav1.Time `json:"configStoredAt,omitempty"`
 }
 
 // +kubebuilder:object:root=true

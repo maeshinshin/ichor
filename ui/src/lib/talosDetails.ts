@@ -30,3 +30,12 @@ export function timeSyncLabel(synced: boolean, disabled: boolean): 'synced' | 'n
   if (disabled) return 'sync disabled'
   return synced ? 'synced' : 'not synced'
 }
+
+// Volume types that are backed by a disk partition. Directory, overlay,
+// symlink and tmpfs volumes are Talos's own mounts, always present and
+// size-less, so they are hidden until the person asks for all of them.
+const DISK_BACKED_VOLUME_TYPES = new Set(['partition', 'disk'])
+
+export function visibleVolumes<T extends { type: string }>(volumes: readonly T[], showAll: boolean): T[] {
+  return showAll ? [...volumes] : volumes.filter((v) => DISK_BACKED_VOLUME_TYPES.has(v.type))
+}

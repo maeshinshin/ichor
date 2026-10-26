@@ -198,4 +198,6 @@ message KubernetesNodeSection {
   repeated KubernetesPod pods = 8;
   bool pods_truncated = 9;
   string pods_error = 10;
+  string kubelet_version = 11;
+  bool unschedulable = 12;
 }

@@ -36,7 +36,7 @@ func planText(kind pb.OperationKind, cluster string, p *pb.PlanOperationResponse
 	switch p.GetEffect() {
 	case pb.OperationEffect_OPERATION_EFFECT_REBOOT:
 		if kind == pb.OperationKind_OPERATION_KIND_CONFIG {
-			b.WriteString("Each machine below gets its rendered configuration staged and REBOOTS (Talos cordons and drains it first).\n")
+			b.WriteString("Each machine below gets its rendered configuration staged and REBOOTS (Ichor cordons and drains it first, since Talos does not on a reboot).\n")
 		} else {
 			b.WriteString("Each machine is upgraded and REBOOTS.\n")
 		}
@@ -56,6 +56,10 @@ func planText(kind pb.OperationKind, cluster string, p *pb.PlanOperationResponse
 		b.WriteString(orderText(kind, p))
 	} else if p.GetEffect() != pb.OperationEffect_OPERATION_EFFECT_NONE {
 		b.WriteString("No approved machine is selected, so nothing would be changed.\n")
+	}
+
+	if p.GetKubernetesApiUnavailable() {
+		b.WriteString("This cluster has one control plane: the Kubernetes API is UNAVAILABLE while it reboots.\n")
 	}
 
 	if h := p.GetHeld(); len(h) > 0 {

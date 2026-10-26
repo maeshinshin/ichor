@@ -773,6 +773,8 @@ Application until the Talos side is ready.
    etcd checks in between. They never start by themselves: the machine reports
    `RebootRequired` with the fields, and a `config` operation, started from
    `ichor config apply` or the cluster page after a plan, rolls them out.
+   Talos's `Reboot` does not cordon or drain (unlike its `Upgrade` and `Shutdown`),
+   so the rollout does both itself before the reboot and uncordons afterwards.
 5. Watch COSI for state and drift. Drift handling is per cluster: warn only
    (default), or auto-correct non-reboot differences.
 

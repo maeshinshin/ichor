@@ -205,6 +205,12 @@ function PlanView({ kind, plan, clusterName }: { kind: OpKind; plan: PlanOperati
       ) : (
         plan.effect !== OperationEffect.NONE && <p>{t('ops.plan.noMachines')}</p>
       )}
+      {plan.kubernetesApiUnavailable && (
+        <Alert>
+          <AlertTitle>{t('ops.plan.apiDownTitle')}</AlertTitle>
+          <AlertDescription>{t('ops.plan.apiDown')}</AlertDescription>
+        </Alert>
+      )}
       {plan.replacesSecretsBundle && (
         <Alert>
           <AlertTitle>{t('ops.plan.bundleStaleTitle')}</AlertTitle>

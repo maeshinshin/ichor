@@ -425,6 +425,42 @@ func TestPlanConfigListsOnlyMachinesWithAPendingRebootAndTheirFields(t *testing.
 	}
 }
 
+func TestPlanSaysTheKubernetesAPIGoesDownWhenTheOnlyControlPlaneReboots(t *testing.T) {
+	plan := func(objs ...client.Object) *pb.PlanOperationResponse {
+		srv, _ := opServer(t, objs...)
+
+		res, err := srv.PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{
+			Cluster: objectRef(opNS, opCluster), Kind: pb.OperationKind_OPERATION_KIND_CONFIG,
+		}))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		return res.Msg
+	}
+
+	if !plan(configObjects()...).GetKubernetesApiUnavailable() {
+		t.Fatal("one approved control plane that reboots: the plan must say the Kubernetes API is unavailable")
+	}
+
+	twoPlanes := append(configObjects(), rebootPending(opMachine("cp2", "controlplane", nil, nil), "machine.network.interfaces"))
+	if plan(twoPlanes...).GetKubernetesApiUnavailable() {
+		t.Fatal("with a second control plane the API stays up")
+	}
+
+	workerOnly := []client.Object{
+		&ichorv1alpha1.TalosCluster{
+			Name: opCluster, Namespace: opNS,
+			Spec: ichorv1alpha1.TalosClusterSpec{TalosVersion: opOldTalos, KubernetesVersion: "v1.36.0"},
+		},
+		rebootPending(opMachine("w2", "worker", nil, nil), "machine.network.interfaces"),
+		opMachine("cp1", "controlplane", nil, nil),
+	}
+	if plan(workerOnly...).GetKubernetesApiUnavailable() {
+		t.Fatal("the control plane does not reboot in this plan, so the API stays up")
+	}
+}
+
 func TestPlanConfigIsBlockedWhenNothingNeedsAReboot(t *testing.T) {
 	srv, _ := opServer(t, opObjects()...)
 

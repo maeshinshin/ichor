@@ -522,6 +522,29 @@ func TestUIArgoCDNamespaceEnv(t *testing.T) {
 	}
 }
 
+// TestUILinksEnv pins ichorUI.links to ICHOR_LINK_*: nothing registered means
+// no env at all, and a registered tool reaches the container under its upper-case name.
+func TestUILinksEnv(t *testing.T) {
+	off := find(renderChartWithValues(t, "ichor"), kindDeployment, ichorUIDeploymentName)
+	for _, n := range []string{"ARGOCD", "GRAFANA", "HUBBLE", "LONGHORN"} {
+		if _, found := containerEnvValue(off, "ichor-ui", "ICHOR_LINK_"+n); found {
+			t.Errorf("ICHOR_LINK_%s is set by default", n)
+		}
+	}
+
+	on := find(renderChartWithValues(t, "ichor", "ichorUI.links.argocd=https://argo.example", "ichorUI.links.hubble=https://hubble.example"),
+		kindDeployment, ichorUIDeploymentName)
+	if got, _ := containerEnvValue(on, "ichor-ui", "ICHOR_LINK_ARGOCD"); got != "https://argo.example" {
+		t.Errorf("ICHOR_LINK_ARGOCD = %q", got)
+	}
+	if got, _ := containerEnvValue(on, "ichor-ui", "ICHOR_LINK_HUBBLE"); got != "https://hubble.example" {
+		t.Errorf("ICHOR_LINK_HUBBLE = %q", got)
+	}
+	if _, found := containerEnvValue(on, "ichor-ui", "ICHOR_LINK_GRAFANA"); found {
+		t.Error("ICHOR_LINK_GRAFANA is set though no URL was registered")
+	}
+}
+
 // TestUIOIDC pins: OIDC is off by default (no env, no impersonate grant), and when on the
 // env reaches the container, the role equals the generated one including impersonate, and a
 // narrowed impersonate list becomes resourceNames.

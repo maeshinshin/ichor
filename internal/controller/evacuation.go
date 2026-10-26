@@ -338,9 +338,7 @@ func endMachineEvacuation(
 func setEvacuationCondition(
 	ctx context.Context, c client.Client, m *ichorv1alpha1.TalosMachine, status metav1.ConditionStatus, reason, message string,
 ) error {
-	apimeta.SetStatusCondition(&m.Status.Conditions, metav1.Condition{
+	return setMachineCondition(ctx, c, c, m, metav1.Condition{
 		Type: conditionStorageEvacuation, Status: status, Reason: reason, Message: message,
 	})
-
-	return c.Status().Update(ctx, m)
 }

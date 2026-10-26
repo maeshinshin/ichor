@@ -75,6 +75,8 @@ type fakeTalosClient struct {
 	applyErr error
 
 	dryRunCalls int
+	// dryRunHook runs inside DryRunApply: a concurrent writer touching the machine mid-operation.
+	dryRunHook func()
 	// dryRunBudget and applyBudget are the time left on each call's context when it arrived.
 	dryRunBudget, applyBudget time.Duration
 	applyCalls                [][]byte
@@ -154,6 +156,9 @@ func (f *fakeTalosClient) CurrentConfig(context.Context) ([]byte, error) {
 
 func (f *fakeTalosClient) DryRunApply(ctx context.Context, _ []byte) ([]string, error) {
 	f.dryRunCalls++
+	if f.dryRunHook != nil {
+		f.dryRunHook()
+	}
 	if dl, ok := ctx.Deadline(); ok {
 		f.dryRunBudget = time.Until(dl)
 	}

@@ -420,6 +420,29 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		Expect(apimeta.IsStatusConditionTrue(fetchMachine(w).Status.Conditions, conditionKubernetesUpgrade)).To(BeFalse())
 	})
 
+	It("records the applied marker even when something else wrote the machine's status during the long calls", func() {
+		cluster := k8sCluster(testK8sTarget)
+		w := newK8sWorker(cluster.Name, "conf1")
+		newK8sNode(w.Spec.Hostname, testK8sOld, true)
+
+		fake := &fakeTalosClient{version: testTalosVersion, current: renderAt(cluster, w, testK8sOld)}
+		fake.dryRunHook = func() {
+			other := fetchMachine(w)
+			apimeta.SetStatusCondition(&other.Status.Conditions, metav1.Condition{
+				Type: "Other", Status: metav1.ConditionTrue, Reason: "Concurrent",
+			})
+			Expect(k8sClient.Status().Update(ctx, other)).To(Succeed())
+		}
+		adv := newKubernetesAdvancer(fake, &fakeKubernetesAdmin{})
+
+		_, err := adv.Advance(ctx, cluster, w, nil)
+		Expect(err).NotTo(HaveOccurred(), "a stale object must not pause the upgrade")
+
+		got := fetchMachine(w)
+		Expect(apimeta.IsStatusConditionTrue(got.Status.Conditions, conditionKubernetesUpgrade)).To(BeTrue())
+		Expect(apimeta.IsStatusConditionTrue(got.Status.Conditions, "Other")).To(BeTrue(), "the other writer's condition survives")
+	})
+
 	It("pauses (errors) when the node never converges within the verification timeout", func() {
 		cluster := k8sCluster(testK8sTarget)
 		w := newK8sWorker(cluster.Name, "to1")

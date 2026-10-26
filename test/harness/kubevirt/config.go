@@ -18,9 +18,12 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	clientconfig "github.com/siderolabs/talos/pkg/machinery/client/config"
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
+	talosdoc "github.com/siderolabs/talos/pkg/machinery/config/config"
+	"github.com/siderolabs/talos/pkg/machinery/config/container"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	"github.com/siderolabs/talos/pkg/machinery/config/machine"
@@ -93,6 +96,11 @@ func generateControlPlaneConfig(clusterName string, nodeIPs []string) (*generate
 	if err := assertEndpoint(cfg, endpoint); err != nil {
 		return nil, err
 	}
+	if os.Getenv(cniEnv) == cniNone {
+		if cfg, err = withoutFlannel(cfg); err != nil {
+			return nil, err
+		}
+	}
 
 	machineConfig, err := cfg.Bytes()
 	if err != nil {
@@ -121,4 +129,24 @@ func assertEndpoint(cfg coreconfig.Provider, want string) error {
 		return fmt.Errorf("refusing to use this config: cluster endpoint is %v, want %q (the VM's own address)", got, want)
 	}
 	return nil
+}
+
+// cniEnv selects the inner cluster's CNI. "none" drops the flannel document the generator
+// emits, so the cluster comes up with no CNI and a test installs its own (Cilium, for the
+// Argo CD hand-over check, ADR 0055). Unset keeps Talos's default flannel.
+const (
+	cniEnv  = "ICHOR_E2E_CNI"
+	cniNone = "none"
+)
+
+// withoutFlannel returns cfg with its KubeFlannelCNIConfig document removed.
+func withoutFlannel(cfg coreconfig.Provider) (coreconfig.Provider, error) {
+	var kept []talosdoc.Document
+	for _, d := range cfg.Documents() {
+		if d.Kind() == "KubeFlannelCNIConfig" {
+			continue
+		}
+		kept = append(kept, d)
+	}
+	return container.New(kept...)
 }

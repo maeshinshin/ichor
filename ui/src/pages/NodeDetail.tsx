@@ -11,6 +11,7 @@ import { StatusText } from '@/components/Status'
 import { Section, SectionLayout, type SectionLink } from '@/components/SectionNav'
 import { NodeLogs } from '@/components/NodeLogs'
 import { TalosDetails } from '@/components/TalosDetails'
+import { TalosRuntime } from '@/components/TalosRuntime'
 import type { EffectiveConfigValue } from '@/gen/ichor/v1alpha1/node_pb'
 import { ConfigLayer, DiskRole, type NodeDetail as NodeDetailMessage } from '@/gen/ichor/v1alpha1/node_pb'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -95,6 +96,12 @@ export function NodeDetail({ namespace, name }: { namespace: string; name: strin
     { id: 'usage', label: t('node.usage') },
     { id: 'kubernetes', label: t('node.kubernetes') },
     { id: 'talos', label: t('talos.title') },
+    { id: 'etcd', label: t('rt.etcd') },
+    { id: 'processes', label: t('rt.processes') },
+    { id: 'containers', label: t('rt.containers') },
+    { id: 'k8s-node', label: t('rt.k8s') },
+    { id: 'netstate', label: t('rt.netstate') },
+    { id: 'kernel', label: t('rt.kernel') },
     { id: 'config', label: t('node.config') },
     { id: 'logs', label: t('node.logs') },
   ]
@@ -261,6 +268,7 @@ export function NodeDetail({ namespace, name }: { namespace: string; name: strin
         <div id="talos" class="scroll-mt-24">
           <TalosDetails namespace={namespace} name={name} />
         </div>
+        <TalosRuntime namespace={namespace} name={name} />
         <EffectiveConfigSection namespace={namespace} name={name} />
         <div id="logs" class="scroll-mt-24">
           <NodeLogs namespace={namespace} name={name} />

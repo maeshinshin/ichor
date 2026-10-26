@@ -1,7 +1,7 @@
 # 0056. `TalosCluster.spec.gitops`: a repository connection, strict mode, and the UI/CLI opening PRs
 
 Status: Accepted · Date: 2026-10-26 · Design section: GitOps and Argo CD
-Decided: `TalosCluster.spec.gitops` carries `mode` (`relaxed` default, `strict`) and an optional `repository` connection (host, https API URL, owner/repo, https clone URL, base branch, a `tokenSecretRef` read in the UI backend's own namespace, `machinesPath` required for strict); `Server.requireUntracked` becomes `planWrite`, which sends a CR Argo CD tracks to a pull request when a connection exists and refuses otherwise, and sends a strict approval to a pull request that adds the `TalosMachine` file; changing `mode` rewrites nothing; the response carries `pull_request_url` and the audit action gets a `-pr` suffix
+Decided: `TalosCluster.spec.gitops` carries `mode` (`relaxed` default, `strict`) and an optional `repository` connection (host, https API URL, owner/repo, https clone URL, base branch, a `tokenSecretRef` read in the UI backend's own namespace, `machinesPath` required for strict); `Server.requireUntracked` becomes `planWrite`, which sends a CR Argo CD tracks to a pull request when a connection exists and refuses otherwise, and sends a strict approval to a pull request that adds the `TalosMachine` file; changing `mode` rewrites nothing; the response carries `pull_request_url` and the audit action gets a `-pr` suffix; amended 2026-10-26: the PR branch is `ichor/<verb>-<name>` and a request whose head branch already has an open PR returns that PR instead of opening another, and deleting a tracked `TalosConfigPatch` becomes a PR that removes its document (or its file)
 
 ## Context
 
@@ -52,8 +52,7 @@ with the wrong token), uses the Application's `targetRevision` as the base branc
 `spec.approvalState`, `approvalDecision`, and `role`/`hostname`/`nodeLabels` when set (`prmode.Patch` now adds a
 missing leaf key; a missing parent is still an error); `UpdatePatch` replaces the file's `spec` node whole,
 matching its full-replace semantics, so comments inside that node are lost (shortcut). `DeletePatch` of a tracked
-patch stays refused even with a connection: removing a file is a different edit and Argo CD prune semantics
-decide the rest. Flux stays read-only (ADR 0037). A cluster that cannot be read (not found) is "relaxed, no
+patch is a PR too (decision 6). Flux stays read-only (ADR 0037). A cluster that cannot be read (not found) is "relaxed, no
 repository" so an untracked write is never newly blocked; any other read error refuses.
 
 The PR description carries the requester and an impact section: for a patch, its layer/target and
@@ -67,6 +66,35 @@ screen follows the PR.
 **5. Requester.** `AuditRecord.actor` is still the fixed `ichor-ui` / `ichor-cli` string (OIDC is phase 9). The
 PR says "Requested by: ichor-ui". When OIDC lands the same value will be the user, with no change here.
 
+**6. One open PR per change, and deleting by PR (amendment).** The first version named branches
+`ichor/<verb>-<name>-<unix time>`, so every click on a still-pending machine opened another PR that conflicted
+with the first on merge.
+
+- *Identity.* The branch is now `ichor/<verb>-<name>` (`approve`, `reject`, `update`, `delete`). Before cloning,
+  `prmode.SubmitPR` asks the host for an open PR with that head and the same base (`FindOpenPullRequest`); if
+  there is one it returns its URL and pushes nothing. The UI needs no change for this: the response already
+  carries `pull_request_url`, so the existing notice shows the URL of the PR that is already open. No screen
+  lists open PRs.
+- *A second request with different content* (approving again with another role) gets the open PR back; it is
+  not amended or force-pushed under a reviewer. To change it, close that PR (or edit its branch) and ask again.
+  The PR body keeps the request it was opened with.
+- *A lookup that fails is an error*, never "none", since "none" would open a duplicate. Its error text is
+  scrubbed of the token like any other.
+- *A branch left behind* (the earlier PR was closed or merged and the branch kept) has no open PR, so the push
+  that follows replaces it with `--force`. The `ichor/` branches are Ichor's own; a person's work does not
+  belong on one.
+- *Host calls* (verified against the docs 2026-10-26). GitHub: `GET /repos/{owner}/{repo}/pulls?state=open&head={owner}:{branch}&base={base}`
+  (docs.github.com/en/rest/pulls/pulls). GitLab: `GET /api/v4/projects/:id/merge_requests?state=opened&source_branch=&target_branch=`
+  (docs.gitlab.com/api/merge_requests). Gitea/Forgejo: the list endpoint has no head filter, so `GET
+  /api/v1/repos/{owner}/{repo}/pulls/{base}/{head}` ("get a pull request by base and head", 404 when none;
+  docs.gitea.com/api/1.22). Anything not `open` counts as none. Same `net/http` shape as the create calls.
+- *Deleting.* `SubmitPRRequest.Delete` locates the file as an edit does and `prmode.RemoveDocument` drops the
+  one matching document with its `---`; every other byte, comments and spacing included, stays as it was. When
+  nothing but comments is left, the file is removed (`git rm`). `DeletePatch` returns `pull_request_url`
+  (`DeletePatchResponse` field 2, audit action `delete-pr`) and writes nothing to the cluster. Whether Argo CD
+  prunes the live object after the merge is the Application's setting. The UI's delete dialog shows the notice
+  in place of navigating away.
+
 ## Token handling
 
 The token goes to git only through `GIT_CONFIG_*` `http.extraHeader` in the environment (`prmode.gitAuthEnv`) and
@@ -77,9 +105,12 @@ error, the PR body, the response and the pushed file.
 
 ## Consequences
 
-- A PR is opened per click: branches are `ichor/<verb>-<name>-<unix time>`, so two clicks open two PRs. Nothing
-  tracks them or de-duplicates; following a PR to merge is a separate unit. Until it merges the machine stays
-  pending and the UI would offer approval again.
+- Until a strict-approval PR merges the machine stays pending and the UI still offers approval; a click now
+  returns the open PR's URL (decision 6). Nothing follows a PR to merge, and the UI does not mark a machine
+  as having one open.
+- Two objects with the same name and verb in different namespaces share a branch name, so the second asks for
+  the first's PR. Namespaces are not in the name; a layout with the same name in several namespaces of one
+  repository would need them added.
 - `machinesPath` is one directory for every cluster's machines in that connection; a layout that needs more is
   later work.
 - The new-file manifest carries no labels or annotations from the live `TalosMachine`.

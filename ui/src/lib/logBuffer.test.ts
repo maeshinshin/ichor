@@ -6,13 +6,25 @@ test('keeps only the newest lines once over capacity', () => {
   const b = new LogBuffer<number>(3)
   b.push([1, 2])
   b.push([3, 4, 5])
-  assert.deepEqual(b.snapshot(), [3, 4, 5])
+  assert.deepEqual(
+    b.entries().map((e) => e.item),
+    [3, 4, 5],
+  )
 })
 
-test('a single push larger than the capacity keeps its tail', () => {
+test('a single push larger than the capacity keeps its tail with increasing ids', () => {
   const b = new LogBuffer<number>(2)
   b.push([1, 2, 3, 4, 5])
-  assert.deepEqual(b.snapshot(), [4, 5])
+  const entries = b.entries()
+  assert.deepEqual(
+    entries.map((e) => e.item),
+    [4, 5],
+  )
+  assert.ok(entries[0].id < entries[1].id, 'ids increase')
+  assert.deepEqual(
+    entries.map((e) => e.id),
+    [3, 4],
+  )
 })
 
 test('ids keep growing across eviction so list keys stay stable', () => {
@@ -28,7 +40,7 @@ test('clear empties the buffer', () => {
   const b = new LogBuffer<number>(2)
   b.push([1])
   b.clear()
-  assert.deepEqual(b.snapshot(), [])
+  assert.deepEqual(b.entries(), [])
 })
 
 test('truncateMessage leaves short messages and cuts long ones', () => {

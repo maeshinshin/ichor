@@ -223,6 +223,20 @@ ichorUI:
       users: []
       groups: []
 
+  ## Who may download a support bundle, an etcd snapshot or a packet capture from a node
+  ## (docs/adr/0083). Each file can hold secrets: the etcd snapshot holds every Kubernetes
+  ## Secret. Nobody may by default, including ichor-ui's own ServiceAccount, so with OIDC off
+  ## the downloads are refused. Ichor checks the "download" verb on talosmachines/support-bundle,
+  ## talosmachines/etcd-snapshot and talosmachines/packet-capture as the signed-in user.
+  ##
+  diagnostics:
+    ## Groups to grant the verb to, with ichorUI.oidc.groupsPrefix applied, for example
+    ## ["oidc:platform-admins"]. Only meaningful with ichorUI.oidc.enabled.
+    groups: []
+    ## Grant the verb to ichor-ui's own ServiceAccount. This is the only way to download with
+    ## OIDC off, and it lets anyone who can reach ichor-ui download secrets. Leave false.
+    serviceAccount: false
+
   ## Pod-level security settings
   ##
   podSecurityContext:

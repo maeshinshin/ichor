@@ -1,0 +1,31 @@
+{{- if and .Values.ichorUI.enabled (or .Values.ichorUI.diagnostics.groups .Values.ichorUI.diagnostics.serviceAccount) }}
+# Opt-in grants of the diagnostics download verb (ADR 0083). With OIDC on, name the groups whose
+# members may download (as the IdP names them plus ichorUI.oidc.groupsPrefix, for example
+# "oidc:platform-admins"). With OIDC off, ichor-ui acts as its own ServiceAccount, so only
+# ichorUI.diagnostics.serviceAccount=true lets anyone download, and then anyone who can reach
+# ichor-ui can.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/name: {{ include "ichor.name" . }}
+    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  name: {{ include "ichor.resourceName" (dict "suffix" "diagnostics-rolebinding" "context" $) }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "ichor.resourceName" (dict "suffix" "diagnostics-role" "context" $) }}
+subjects:
+{{- range .Values.ichorUI.diagnostics.groups }}
+- apiGroup: rbac.authorization.k8s.io
+  kind: Group
+  name: {{ . | quote }}
+{{- end }}
+{{- if .Values.ichorUI.diagnostics.serviceAccount }}
+- kind: ServiceAccount
+  name: ichor-ui
+  namespace: {{ .Release.Namespace }}
+{{- end }}
+{{- end }}

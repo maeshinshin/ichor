@@ -1288,3 +1288,65 @@ func allRules(doc map[string]any) []any {
 
 	return rules
 }
+
+// TestUIDiagnosticsDownloadVerb guards ADR 0083: the download verb on talosmachines'
+// support-bundle, etcd-snapshot and packet-capture subresources is granted to nobody by
+// default, not to the ichor-ui ServiceAccount's own role, and only bound when the values say so.
+func TestUIDiagnosticsDownloadVerb(t *testing.T) {
+	const roleName = "ichor-diagnostics-role"
+
+	grants := func(role map[string]any) bool {
+		return strings.Contains(fmt.Sprint(role["rules"]), "download")
+	}
+
+	bindingsTo := func(docs []map[string]any) []map[string]any {
+		var out []map[string]any
+		for _, b := range findAll(docs, kindClusterRoleBinding) {
+			if ref, _ := clusterRoleBindingRefs(b); ref == roleName {
+				out = append(out, b)
+			}
+		}
+		return out
+	}
+
+	off := renderChartWithValues(t, "ichor")
+	if find(off, kindClusterRole, roleName) != nil {
+		t.Errorf("ClusterRole %q rendered by default; it is a helper role (rbac.helpers.enabled)", roleName)
+	}
+
+	helpers := renderChartWithValues(t, "ichor", "rbac.helpers.enabled=true")
+	role := find(helpers, kindClusterRole, roleName)
+	if role == nil || !grants(role) {
+		t.Fatalf("expected ClusterRole %q granting the download verb; got %v", roleName, role)
+	}
+	for _, sub := range []string{"talosmachines/support-bundle", "talosmachines/etcd-snapshot", "talosmachines/packet-capture"} {
+		if !strings.Contains(fmt.Sprint(role["rules"]), sub) {
+			t.Errorf("ClusterRole %q lacks %s", roleName, sub)
+		}
+	}
+	if b := bindingsTo(helpers); len(b) != 0 {
+		t.Errorf("the download verb is bound by default: %v", b)
+	}
+	if ui := find(off, kindClusterRole, ichorUIRoleName); ui == nil || grants(ui) {
+		t.Errorf("ichor-ui-role must not hold the download verb")
+	}
+
+	groups := renderChartWithValues(t, "ichor", "ichorUI.diagnostics.groups={oidc:platform-admins}")
+	bs := bindingsTo(groups)
+	if len(bs) != 1 || !strings.Contains(fmt.Sprint(bs[0]["subjects"]), "oidc:platform-admins") ||
+		strings.Contains(fmt.Sprint(bs[0]["subjects"]), "ServiceAccount") {
+		t.Errorf("ichorUI.diagnostics.groups must bind only those groups, got %v", bs)
+	}
+
+	sa := renderChartWithValues(t, "ichor", "ichorUI.diagnostics.serviceAccount=true")
+	bs = bindingsTo(sa)
+	if len(bs) != 1 || !strings.Contains(fmt.Sprint(bs[0]["subjects"]), ichorUIServiceAccountName) {
+		t.Errorf("ichorUI.diagnostics.serviceAccount must bind the ichor-ui ServiceAccount, got %v", bs)
+	}
+
+	// The role is rendered, and bound, even when the RBAC helper roles are off.
+	noHelpers := renderChartWithValues(t, "ichor", "ichorUI.diagnostics.groups={oidc:platform-admins}")
+	if find(noHelpers, kindClusterRole, roleName) == nil || len(bindingsTo(noHelpers)) != 1 {
+		t.Errorf("a bound diagnostics role must render without the helper roles")
+	}
+}

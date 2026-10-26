@@ -1,0 +1,23 @@
+# Not bound to anyone. Bind it to the people who may download a support bundle, an etcd
+# snapshot or a packet capture from a node (docs/adr/0083). Every one of those files can
+# hold secrets: the etcd snapshot holds every Kubernetes Secret. Ichor checks this verb with
+# a SelfSubjectAccessReview made as the user. Roles with verbs '*' on talosmachines
+# (the talosmachine_*_role.yaml helpers) do not include it, because the three are
+# subresources of their own.
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: ichor
+    app.kubernetes.io/managed-by: kustomize
+  name: ichor-diagnostics-role
+rules:
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosmachines/etcd-snapshot
+  - talosmachines/packet-capture
+  - talosmachines/support-bundle
+  verbs:
+  - download

@@ -45,4 +45,4 @@ resources:
 - taloscluster_editor_role.yaml
 - taloscluster_viewer_role.yaml
 - break_glass_role.yaml
-
+- diagnostics_role.yaml

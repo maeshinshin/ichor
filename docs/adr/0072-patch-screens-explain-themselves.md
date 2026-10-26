@@ -1,7 +1,7 @@
 # 0072. The patch screens explain themselves; documents are cards, and the preview nudges without blocking
 
 Status: Accepted · Date: 2026-10-26 · Design section: CLI and UI, Patch layers
-Decided: The patch edit page opens with a short explanation of what a patch is, describes each layer and the priority rule next to the fields, shows each document as a card (kind and key fields, with Edit and Remove) whose editor says what the chosen kind configures and names its fields, and reminds the user to run the impact preview when it is missing or out of date, without ever blocking Save; the list adds the machines a patch applies to
+Decided: The patch edit page opens with a short explanation of what a patch is, describes each layer and the priority rule next to the fields, shows each document as a card (kind and key fields, with Edit and Remove) whose editor says what the chosen kind configures and names its fields, and reminds the user to run the impact preview when it is missing or out of date, without ever blocking Save; the list adds what each patch targets, as written
 
 ## Context
 

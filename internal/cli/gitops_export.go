@@ -63,8 +63,9 @@ var exportCmd = &cobra.Command{
 	Use:   "export",
 	Short: "Write the cluster's CRs as a GitOps repository skeleton",
 	Long: `export writes the subset of an existing cluster's CRs that belongs in Git
--- the TalosCluster, its approved TalosMachines, TalosConfigPatches and
-TalosStorages, and the CNI's own Argo CD Application -- to --dir, in the
+-- the TalosCluster, its approved TalosMachines, TalosConfigPatches,
+TalosStorages and TalosEtcdBackups, and the CNI's own Argo CD Application
+-- to --dir, in the
 same bootstrap/, apps/, clusters/<cluster>/ layout 'ichor init --gitops-dir'
 produces for a brand-new cluster.
 
@@ -118,6 +119,10 @@ func runGitopsExport(ctx context.Context, opts gitopsExportOptions, k8sClient cl
 	}
 
 	if err := exportStorages(ctx, k8sClient, opts, crs); err != nil {
+		return err
+	}
+
+	if err := exportEtcdBackups(ctx, k8sClient, opts, crs); err != nil {
 		return err
 	}
 
@@ -222,6 +227,27 @@ func exportStorages(ctx context.Context, k8sClient client.Client, opts gitopsExp
 		}
 
 		crs["talos-storage-"+s.Name+".yaml"] = s
+	}
+
+	return nil
+}
+
+// exportEtcdBackups adds one entry per TalosEtcdBackup belonging to
+// opts.Cluster to crs. Its spec carries only references (the S3 Secret's
+// name, never its contents), so it is safe to commit as-is.
+func exportEtcdBackups(ctx context.Context, k8sClient client.Client, opts gitopsExportOptions, crs map[string]any) error {
+	var backups ichorv1alpha1.TalosEtcdBackupList
+	if err := k8sClient.List(ctx, &backups, client.InNamespace(opts.Namespace)); err != nil {
+		return fmt.Errorf("gitops export: listing TalosEtcdBackups: %w", err)
+	}
+
+	for i := range backups.Items {
+		b := &backups.Items[i]
+		if b.Spec.ClusterRef.Name != opts.Cluster {
+			continue
+		}
+
+		crs["talos-etcd-backup-"+b.Name+".yaml"] = b
 	}
 
 	return nil

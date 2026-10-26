@@ -1,6 +1,6 @@
 # 0028. `ichor gitops export`/`handoff`: an allow-list, two tracking checks, a one-field patch
 
-Status: Accepted · Date: 2026-10-26 · Design section: GitOps and Argo CD
+Status: Accepted, amended · Date: 2026-10-26 · Design section: GitOps and Argo CD
 
 Decided: `ichor gitops export`'s allow-list of CR kinds, its Argo CD/Flux tracked-resource warning, and `ichor gitops handoff`'s one-field `TalosCluster` patch
 
@@ -106,6 +106,8 @@ field-patch branch -- is the only change `gitops handoff` needs.
   no CNI `Application` in the skeleton: a custom CNI has no `pkg/cni.Preset`
   implementation to compute one from (ADR 0013), the same way `ichor init
   --argocd` already leaves it out for a custom preset.
+- Amended: `TalosEtcdBackup` (ADR 0047) joined the allow-list, listed by
+  `exportEtcdBackups` the same way `exportStorages` lists `TalosStorage`.
 - Not built here: PR mode (design phase 8), strict mode, break-glass, and
   `ichor ui` port-forwarding -- none of which this unit's two commands touch.
 - `docs/adr/README.md`'s index briefly shows a gap at 0026/0027: those

@@ -818,6 +818,16 @@ UI, runs post-checks, and rolls back from the snapshot on failure. In
 away from the server; the UI backend sends its version in a header so a stale
 SPA prompts a reload.
 
+Shutdown: a `TalosOperation` of kind `shutdown` stops the whole cluster for
+planned downtime (ADR 0067). Workers go first, in parallel and drained by Talos's
+own `Shutdown` sequence; then every control plane, and the controller's own node
+last, in one forced burst, so quorum is lost only in that last stage and a
+self-managed controller needs to live only until the requests are sent. A
+shutdown does not remove etcd members, so power-on loses no data. While the
+operation has not completed, the cluster lock refuses every other disruptive
+operation. Ichor cannot power machines on: the operation waits, and completes by
+itself once every machine answers on a new boot, which lifts the refusal.
+
 ### Backup, recovery, certificates
 
 `TalosEtcdBackup` takes snapshots on a schedule from a healthy non-leader

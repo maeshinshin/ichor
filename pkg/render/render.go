@@ -193,6 +193,12 @@ func BuildConfig(
 		return nil, err
 	}
 
+	// spec.nodeLabels is the machine's own intent, applied over the storage preset's labels.
+	cfg, err = injectNodeLabels(cfg, contract, m)
+	if err != nil {
+		return nil, err
+	}
+
 	ordered, err := SelectPatches(cluster, m, candidates)
 	if err != nil {
 		return nil, err

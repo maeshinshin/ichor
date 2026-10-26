@@ -26,10 +26,9 @@ by the input fingerprint and the status controller) both call it. The label *sou
 on purpose: evacuation matches the live Kubernetes Node (it needs the Node to exist);
 rendering matches `TalosMachine.spec.nodeLabels`, the declared labels, because at first render
 no Node exists and a render that depended on live Node state would flap. A selector should
-therefore use labels set through `spec.nodeLabels`. Today `spec.nodeLabels` is only used for
-selector-layer patch matching and is not rendered into `machine.nodeLabels`/`KubeNodeConfig`;
-that gap is pre-existing and outside this change, so a selector on a label no one stamps
-onto the Node makes layer 1 and layer 4 disagree.
+therefore use labels set through `spec.nodeLabels`. (When this ADR was written
+`spec.nodeLabels` was not rendered onto the Node, so layer 1 and layer 4 could disagree;
+ADR 0052 renders it.)
 
 **3. `Render`'s input.** The `auth` parameter became `sys *SystemInputs` (registry
 credentials plus the namespace's `TalosStorage`s), built by `render.ResolveSystemInputs`.

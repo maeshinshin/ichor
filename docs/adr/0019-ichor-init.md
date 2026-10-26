@@ -233,3 +233,5 @@ pre-existing, out-of-scope collision.
   and taloscluster_controller_test.go` is a known, reported, unfixed bug
   outside this unit's scope; whoever next touches either file should pick
   a different literal for one of them.
+
+- `--discover-address` and `--discover-cidr` (repeatable) fill `spec.discovery` with the same IPv4 and /24-or-smaller limits the CRD enforces, so nodes booted into maintenance mode after init are found without a hand patch (ADR 0011); unset leaves discovery off.

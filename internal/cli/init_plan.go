@@ -133,6 +133,42 @@ type initPlanInput struct {
 	// RegistryMirrors are "HOST=URL" pairs for spec.registries: anonymous mirrors only, since
 	// a new cluster has no Secret to read credentials from yet.
 	RegistryMirrors []string
+
+	// DiscoverAddresses and DiscoverCIDRs set TalosCluster.spec.discovery (ADR 0011), so nodes
+	// booted into maintenance mode after init are found; empty leaves discovery off.
+	DiscoverAddresses []string
+	DiscoverCIDRs     []string
+}
+
+// CRD limits of spec.discovery, checked here the way its CEL rules do.
+const (
+	maxDiscoverAddresses = 64
+	maxDiscoverCIDRs     = 4
+	minDiscoverPrefix    = 24
+)
+
+func validateDiscovery(addresses, cidrs []string) error {
+	if len(addresses) > maxDiscoverAddresses {
+		return fmt.Errorf("init: --discover-address takes at most %d addresses", maxDiscoverAddresses)
+	}
+
+	if len(cidrs) > maxDiscoverCIDRs {
+		return fmt.Errorf("init: --discover-cidr takes at most %d CIDRs", maxDiscoverCIDRs)
+	}
+
+	for _, a := range addresses {
+		if ip, err := netip.ParseAddr(a); err != nil || !ip.Is4() {
+			return fmt.Errorf("init: --discover-address %q is not an IPv4 address", a)
+		}
+	}
+
+	for _, c := range cidrs {
+		if p, err := netip.ParsePrefix(c); err != nil || !p.Addr().Is4() || p.Bits() < minDiscoverPrefix {
+			return fmt.Errorf("init: --discover-cidr %q must be an IPv4 CIDR of /%d or smaller", c, minDiscoverPrefix)
+		}
+	}
+
+	return nil
 }
 
 // maxSubnetsPerRange is the CRD's limit: one CIDR per IP family.
@@ -274,6 +310,15 @@ func buildInitPlan(in initPlanInput, warn io.Writer) (*ichorv1alpha1.TalosCluste
 		return nil, err
 	}
 
+	if err := validateDiscovery(in.DiscoverAddresses, in.DiscoverCIDRs); err != nil {
+		return nil, err
+	}
+
+	var discovery *ichorv1alpha1.TalosClusterDiscovery
+	if len(in.DiscoverAddresses) > 0 || len(in.DiscoverCIDRs) > 0 {
+		discovery = &ichorv1alpha1.TalosClusterDiscovery{Addresses: in.DiscoverAddresses, CIDRs: in.DiscoverCIDRs}
+	}
+
 	var network *ichorv1alpha1.TalosClusterNetwork
 	if len(in.PodSubnets) > 0 || len(in.ServiceSubnets) > 0 {
 		network = &ichorv1alpha1.TalosClusterNetwork{PodSubnets: in.PodSubnets, ServiceSubnets: in.ServiceSubnets}
@@ -284,6 +329,7 @@ func buildInitPlan(in initPlanInput, warn io.Writer) (*ichorv1alpha1.TalosCluste
 		Spec: ichorv1alpha1.TalosClusterSpec{
 			Network:           network,
 			Registries:        registries,
+			Discovery:         discovery,
 			Endpoint:          ichorv1alpha1.TalosClusterEndpoint{Type: in.EndpointType, Address: in.EndpointAddress},
 			TalosVersion:      in.TalosVersion,
 			KubernetesVersion: in.KubernetesVersion,

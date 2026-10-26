@@ -46,25 +46,27 @@ rules:
 - apiGroups:
   - ichor.maesh.dev
   resources:
-  - talosclusters
+  - ichorinstallations
   verbs:
   - get
-  - list
+  - update
 - apiGroups:
   - ichor.maesh.dev
   resources:
-  - talosconfigpatches
+  - talosclusters
+  - talosmachines
   verbs:
-  - create
-  - delete
   - get
   - list
   - update
 - apiGroups:
   - ichor.maesh.dev
   resources:
-  - talosmachines
+  - talosconfigpatches
+  - talosoperations
   verbs:
+  - create
+  - delete
   - get
   - list
   - update

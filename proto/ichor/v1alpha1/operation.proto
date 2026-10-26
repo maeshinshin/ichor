@@ -104,6 +104,9 @@ message PlanOperationRequest {
   // the kinds with a version or mode, empty means "the cluster's spec already
   // says it": the operation is created without changing the spec.
   string target = 3;
+  // max_unavailable is how many workers would be handled at once; 0 is the
+  // CRD default (1).
+  int32 max_unavailable = 4;
 }
 
 message PlanOperationResponse {

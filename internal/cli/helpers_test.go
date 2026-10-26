@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -102,7 +103,22 @@ const (
 	testAPIVersion = "ichor.maesh.dev/v1alpha1"
 )
 
+var (
+	sharedBundleOnce sync.Once
+	sharedBundle     *secrets.Bundle
+)
+
+// newTestBundle returns one shared, read-only bundle: generating one costs a 4096-bit RSA key. A
+// test that needs a bundle distinct from another calls newFreshTestBundle.
 func newTestBundle(t *testing.T) *secrets.Bundle {
+	t.Helper()
+
+	sharedBundleOnce.Do(func() { sharedBundle = newFreshTestBundle(t) })
+
+	return sharedBundle
+}
+
+func newFreshTestBundle(t *testing.T) *secrets.Bundle {
 	t.Helper()
 
 	contract, err := coreconfig.ParseContractFromVersion(testVersionContract)

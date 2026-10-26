@@ -185,12 +185,19 @@ func (s *Server) gitOpsItem(
 
 // prVerbs are the changes PR mode proposes for each kind (gitops_pr_ops.go),
 // which is also the set of head branches ichor/<verb>-<name> to look for.
+const (
+	verbApprove = "approve"
+	verbReject  = "reject"
+	verbUpdate  = "update"
+	verbDelete  = "delete"
+)
+
 func prVerbs(kind pb.GitOpsKind) []string {
 	switch kind {
 	case pb.GitOpsKind_GIT_OPS_KIND_MACHINE:
-		return []string{"approve", "reject"}
+		return []string{verbApprove, verbReject}
 	case pb.GitOpsKind_GIT_OPS_KIND_PATCH:
-		return []string{"update", "delete"}
+		return []string{verbUpdate, verbDelete}
 	default:
 		return nil
 	}

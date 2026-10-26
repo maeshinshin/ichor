@@ -513,7 +513,7 @@ func TestUIArgoCDNamespaceEnv(t *testing.T) {
 			if deployment == nil {
 				t.Fatalf("helm template . %v: no %s %q", tc.sets, kindDeployment, ichorUIDeploymentName)
 			}
-			got, found := containerEnvValue(deployment, "ichor-ui", envName)
+			got, found := containerEnvValue(deployment, envName)
 			if !found || got != tc.want {
 				t.Errorf("helm template . %v: %s = %q (found=%v), want %q",
 					tc.sets, envName, got, found, tc.want)
@@ -527,20 +527,21 @@ func TestUIArgoCDNamespaceEnv(t *testing.T) {
 func TestUILinksEnv(t *testing.T) {
 	off := find(renderChartWithValues(t, "ichor"), kindDeployment, ichorUIDeploymentName)
 	for _, n := range []string{"ARGOCD", "GRAFANA", "HUBBLE", "LONGHORN"} {
-		if _, found := containerEnvValue(off, "ichor-ui", "ICHOR_LINK_"+n); found {
+		if _, found := containerEnvValue(off, "ICHOR_LINK_"+n); found {
 			t.Errorf("ICHOR_LINK_%s is set by default", n)
 		}
 	}
 
-	on := find(renderChartWithValues(t, "ichor", "ichorUI.links.argocd=https://argo.example", "ichorUI.links.hubble=https://hubble.example"),
-		kindDeployment, ichorUIDeploymentName)
-	if got, _ := containerEnvValue(on, "ichor-ui", "ICHOR_LINK_ARGOCD"); got != "https://argo.example" {
+	rendered := renderChartWithValues(t, "ichor",
+		"ichorUI.links.argocd=https://argo.example", "ichorUI.links.hubble=https://hubble.example")
+	on := find(rendered, kindDeployment, ichorUIDeploymentName)
+	if got, _ := containerEnvValue(on, "ICHOR_LINK_ARGOCD"); got != "https://argo.example" {
 		t.Errorf("ICHOR_LINK_ARGOCD = %q", got)
 	}
-	if got, _ := containerEnvValue(on, "ichor-ui", "ICHOR_LINK_HUBBLE"); got != "https://hubble.example" {
+	if got, _ := containerEnvValue(on, "ICHOR_LINK_HUBBLE"); got != "https://hubble.example" {
 		t.Errorf("ICHOR_LINK_HUBBLE = %q", got)
 	}
-	if _, found := containerEnvValue(on, "ichor-ui", "ICHOR_LINK_GRAFANA"); found {
+	if _, found := containerEnvValue(on, "ICHOR_LINK_GRAFANA"); found {
 		t.Error("ICHOR_LINK_GRAFANA is set though no URL was registered")
 	}
 }
@@ -551,14 +552,14 @@ func TestUILinksEnv(t *testing.T) {
 func TestUIOIDC(t *testing.T) {
 	off := renderChartWithValues(t, "ichor")
 	offDep := find(off, kindDeployment, ichorUIDeploymentName)
-	if _, found := containerEnvValue(offDep, "ichor-ui", "ICHOR_OIDC_ISSUER"); found {
+	if _, found := containerEnvValue(offDep, "ICHOR_OIDC_ISSUER"); found {
 		t.Error("OIDC env present by default; it must be off")
 	}
 
 	on := renderChartWithValues(t, "ichor", "ichorUI.oidc.enabled=true",
 		"ichorUI.oidc.issuer=https://idp.example", "ichorUI.oidc.clientId=ichor")
 	onDep := find(on, kindDeployment, ichorUIDeploymentName)
-	if got, _ := containerEnvValue(onDep, "ichor-ui", "ICHOR_OIDC_ISSUER"); got != "https://idp.example" {
+	if got, _ := containerEnvValue(onDep, "ICHOR_OIDC_ISSUER"); got != "https://idp.example" {
 		t.Errorf("ICHOR_OIDC_ISSUER = %q", got)
 	}
 	checkUIBackendRBACMatchesConfig(t, "ichor", on, true)
@@ -572,16 +573,16 @@ func TestUIOIDC(t *testing.T) {
 	}
 }
 
-// containerEnvValue returns the value of env var name on the named container of a decoded
+// containerEnvValue returns the value of env var name on the ichor-ui container of a decoded
 // Deployment, and whether it is set.
-func containerEnvValue(deployment map[string]any, container, name string) (string, bool) {
+func containerEnvValue(deployment map[string]any, name string) (string, bool) {
 	spec, _ := deployment["spec"].(map[string]any)
 	template, _ := spec["template"].(map[string]any)
 	podSpec, _ := template["spec"].(map[string]any)
 	containers, _ := podSpec["containers"].([]any)
 	for _, c := range containers {
 		cm, _ := c.(map[string]any)
-		if cm["name"] != container {
+		if cm["name"] != "ichor-ui" {
 			continue
 		}
 		envs, _ := cm["env"].([]any)

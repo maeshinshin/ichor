@@ -24,6 +24,7 @@ import { enumLabel } from '@/lib/enum'
 import { describeError } from '@/lib/errors'
 import { canApprove, isStrongIdentity } from '@/lib/identity'
 import { formatBytes, formatTimestamp } from '@/lib/format'
+import { useT } from '@/lib/useT'
 import { objectRefPath, Link } from '@/router'
 
 type ErrorShape = { title: string; detail: string }
@@ -32,6 +33,7 @@ type ErrorShape = { title: string; detail: string }
 // (architecture.md, "CLI and UI"; machine.proto's own doc comment), with
 // the approve/reject actions.
 export function MachineList() {
+  const t = useT()
   const [machines, setMachines] = useState<Machine[] | null>(null)
   const [error, setError] = useState<ErrorShape | null>(null)
   const [clusterNames, setClusterNames] = useState<Record<string, string>>({})
@@ -66,7 +68,7 @@ export function MachineList() {
   }
 
   if (error) return <ErrorAlert {...error} />
-  if (!machines) return <p class="mt-10 text-center text-sm text-muted-foreground">Loading machines…</p>
+  if (!machines) return <p class="mt-10 text-center text-sm text-muted-foreground">{t('machines.loading')}</p>
 
   // approval_state is a tri-state (ADR 0018's amendment): a rejected
   // machine is its own bucket, not "pending" - that's the whole point of
@@ -81,26 +83,26 @@ export function MachineList() {
       {pullRequestUrl && <PullRequestNotice url={pullRequestUrl} />}
       <Card>
         <CardHeader>
-          <CardTitle>Pending approval ({pending.length})</CardTitle>
+          <CardTitle>{t('machines.pending', { n: pending.length })}</CardTitle>
         </CardHeader>
         <CardContent>
           {pending.length === 0 ? (
-            <p class="text-sm text-muted-foreground">Nothing is waiting on a decision.</p>
+            <p class="text-sm text-muted-foreground">{t('machines.pendingEmpty')}</p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Identity</TableHead>
-                  <TableHead>Cluster</TableHead>
-                  <TableHead>Endpoint</TableHead>
-                  <TableHead>Stage</TableHead>
-                  <TableHead>Actions</TableHead>
+                  <TableHead>{t('col.identity')}</TableHead>
+                  <TableHead>{t('col.cluster')}</TableHead>
+                  <TableHead>{t('col.endpoint')}</TableHead>
+                  <TableHead>{t('col.stage')}</TableHead>
+                  <TableHead>{t('col.actions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {pending.map((m) => (
                   <TableRow key={refKey(m)}>
-                    <TableCell>{identitySummary(m)}</TableCell>
+                    <TableCell>{identitySummary(m, t('machines.unknown'))}</TableCell>
                     <TableCell>{m.cluster ? clusterNames[`${m.cluster.namespace}/${m.cluster.name}`] ?? m.cluster.name : '-'}</TableCell>
                     <TableCell>{m.endpoint || '-'}</TableCell>
                     <TableCell>{m.stage || '-'}</TableCell>
@@ -120,26 +122,26 @@ export function MachineList() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Rejected ({rejected.length})</CardTitle>
+          <CardTitle>{t('machines.rejected', { n: rejected.length })}</CardTitle>
         </CardHeader>
         <CardContent>
           {rejected.length === 0 ? (
-            <p class="text-sm text-muted-foreground">Nothing has been turned away.</p>
+            <p class="text-sm text-muted-foreground">{t('machines.rejectedEmpty')}</p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Identity</TableHead>
-                  <TableHead>Cluster</TableHead>
-                  <TableHead>Reason</TableHead>
-                  <TableHead>When</TableHead>
-                  <TableHead>Actions</TableHead>
+                  <TableHead>{t('col.identity')}</TableHead>
+                  <TableHead>{t('col.cluster')}</TableHead>
+                  <TableHead>{t('machines.colReason')}</TableHead>
+                  <TableHead>{t('machines.colWhen')}</TableHead>
+                  <TableHead>{t('col.actions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {rejected.map((m) => (
                   <TableRow key={refKey(m)}>
-                    <TableCell>{identitySummary(m)}</TableCell>
+                    <TableCell>{identitySummary(m, t('machines.unknown'))}</TableCell>
                     <TableCell>{m.cluster ? clusterNames[`${m.cluster.namespace}/${m.cluster.name}`] ?? m.cluster.name : '-'}</TableCell>
                     {/* The decision record (ADR 0021's amendment): recorded on the CR
                         itself, not just a one-shot RPC response, so it's still here the
@@ -165,19 +167,19 @@ export function MachineList() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Approved ({approved.length})</CardTitle>
+          <CardTitle>{t('machines.approved', { n: approved.length })}</CardTitle>
         </CardHeader>
         <CardContent>
           {approved.length === 0 ? (
-            <p class="text-sm text-muted-foreground">No approved machines yet.</p>
+            <p class="text-sm text-muted-foreground">{t('machines.approvedEmpty')}</p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Hostname</TableHead>
-                  <TableHead>Cluster</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Stage</TableHead>
+                  <TableHead>{t('machines.colHostname')}</TableHead>
+                  <TableHead>{t('col.cluster')}</TableHead>
+                  <TableHead>{t('col.role')}</TableHead>
+                  <TableHead>{t('col.stage')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -214,8 +216,8 @@ function refKey(m: Machine): string {
   return `${m.ref?.namespace}/${m.ref?.name}`
 }
 
-function identitySummary(m: Machine): string {
-  return m.identity?.uuid || m.ref?.name || 'unknown'
+function identitySummary(m: Machine, unknown: string): string {
+  return m.identity?.uuid || m.ref?.name || unknown
 }
 
 function ApproveDialog({
@@ -227,6 +229,7 @@ function ApproveDialog({
   onApproved: (m: Machine) => void
   onPullRequest: (url: string) => void
 }) {
+  const t = useT()
   const [open, setOpen] = useState(false)
   const [node, setNode] = useState<NodeDetail | null>(null)
   const [nodeError, setNodeError] = useState<string | null>(null)
@@ -278,72 +281,70 @@ function ApproveDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm">Approve</Button>
+        <Button size="sm">{t('approve.button')}</Button>
       </DialogTrigger>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Approve {machine.ref?.name}?</DialogTitle>
-          <DialogDescription>
-            Approving hands this machine to the controller, which starts applying configuration to it right
-            away. There is no "un-approve"; changing its configuration afterwards is a separate, later
-            action, not something this dialog does.
-          </DialogDescription>
+          <DialogTitle>{t('approve.title', { name: machine.ref?.name ?? '' })}</DialogTitle>
+          <DialogDescription>{t('approve.description')}</DialogDescription>
         </DialogHeader>
 
         <div class="space-y-3 text-sm">
           <section>
-            <h4 class="font-medium">Identity</h4>
+            <h4 class="font-medium">{t('approve.identity')}</h4>
             <dl class="mt-1 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-muted-foreground">
-              <dt>UUID</dt>
-              <dd class="text-foreground">{machine.identity?.uuid || 'missing'}</dd>
-              <dt>Serial</dt>
-              <dd class="text-foreground">{machine.identity?.serial || 'missing'}</dd>
-              <dt>MAC addresses</dt>
+              <dt>{t('approve.uuid')}</dt>
+              <dd class="text-foreground">{machine.identity?.uuid || t('approve.missing')}</dd>
+              <dt>{t('approve.serial')}</dt>
+              <dd class="text-foreground">{machine.identity?.serial || t('approve.missing')}</dd>
+              <dt>{t('approve.mac')}</dt>
               <dd class="text-foreground">
-                {machine.identity?.macAddresses.length ? machine.identity.macAddresses.join(', ') : 'none'}
+                {machine.identity?.macAddresses.length ? machine.identity.macAddresses.join(', ') : t('common.none')}
               </dd>
             </dl>
             {!strong && (
               <p class="mt-2 rounded-md border border-destructive/30 bg-destructive/10 p-2 text-destructive">
-                Weak identity: a UUID, a serial number and at least one permanent MAC address are all
-                required (ADR 0011). This machine cannot be reliably told apart from another next time it's
-                seen, so approval is refused.
+                {t('approve.weakIdentity')}
               </p>
             )}
           </section>
 
           <section>
-            <h4 class="font-medium">Found address</h4>
-            <p class="text-muted-foreground">{machine.endpoint || 'none reported'}</p>
+            <h4 class="font-medium">{t('approve.foundAddress')}</h4>
+            <p class="text-muted-foreground">{machine.endpoint || t('approve.noAddress')}</p>
           </section>
 
           <section>
-            <h4 class="font-medium">Hardware</h4>
-            {nodeError && <p class="text-muted-foreground">Could not load hardware details: {nodeError}</p>}
-            {!nodeError && !node && <p class="text-muted-foreground">Loading…</p>}
+            <h4 class="font-medium">{t('approve.hardware')}</h4>
+            {nodeError && <p class="text-muted-foreground">{t('approve.hardwareFailed', { detail: nodeError })}</p>}
+            {!nodeError && !node && <p class="text-muted-foreground">{t('common.loading')}</p>}
             {node?.hardware && (
               <p class="text-muted-foreground">
-                {node.hardware.manufacturer} {node.hardware.model} - {node.hardware.cpuCores} cores,{' '}
-                {formatBytes(node.hardware.memoryTotalBytes)} RAM
+                {t('approve.hardwareSummary', {
+                  manufacturer: node.hardware.manufacturer,
+                  model: node.hardware.model,
+                  cores: node.hardware.cpuCores,
+                  ram: formatBytes(node.hardware.memoryTotalBytes),
+                })}
               </p>
             )}
           </section>
 
           <section class="space-y-1">
-            <Label htmlFor="approve-role">Role</Label>
+            <Label htmlFor="approve-role">{t('approve.role')}</Label>
             <Select value={role ? String(role) : ''} onValueChange={(v) => setRole(Number(v) as MachineRole)}>
               <SelectTrigger id="approve-role" className="w-full">
-                <SelectValue placeholder="Select a role" />
+                <SelectValue placeholder={t('approve.selectRole')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={String(MachineRole.CONTROL_PLANE)}>Control plane</SelectItem>
-                <SelectItem value={String(MachineRole.WORKER)}>Worker</SelectItem>
+                <SelectItem value={String(MachineRole.CONTROL_PLANE)}>{t('role.controlPlane')}</SelectItem>
+                <SelectItem value={String(MachineRole.WORKER)}>{t('role.worker')}</SelectItem>
               </SelectContent>
             </Select>
           </section>
 
           <section class="space-y-1">
-            <Label htmlFor="approve-hostname">Hostname</Label>
+            <Label htmlFor="approve-hostname">{t('approve.hostname')}</Label>
             <Input
               id="approve-hostname"
               value={hostname}
@@ -352,7 +353,7 @@ function ApproveDialog({
           </section>
 
           <section class="space-y-1">
-            <Label htmlFor="approve-reason">Reason (optional)</Label>
+            <Label htmlFor="approve-reason">{t('approve.reason')}</Label>
             {/* Symmetric with reject's reason: approving rarely needs a justification -
                 identity, hardware and role above already say what's being approved -
                 but one can still be recorded, e.g. "replacing node-3, same role". */}
@@ -360,7 +361,7 @@ function ApproveDialog({
               id="approve-reason"
               value={reason}
               onInput={(e) => setReason((e.target as HTMLTextAreaElement).value)}
-              placeholder="Why, if it isn't obvious from the above"
+              placeholder={t('approve.reasonPlaceholder')}
             />
           </section>
 
@@ -369,10 +370,10 @@ function ApproveDialog({
 
         <DialogFooter>
           <Button variant="ghost" onClick={() => setOpen(false)}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button disabled={!canApprove(machine.identity, role !== MachineRole.UNSPECIFIED) || submitting} onClick={submit}>
-            {submitting ? 'Approving…' : 'Approve'}
+            {submitting ? t('approve.submitting') : t('approve.button')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -389,6 +390,7 @@ function RejectDialog({
   onRejected: () => void
   onPullRequest: (url: string) => void
 }) {
+  const t = useT()
   const [open, setOpen] = useState(false)
   const [reason, setReason] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -414,26 +416,22 @@ function RejectDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button size="sm" variant="outline">
-          Reject
+          {t('reject.button')}
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Reject {machine.ref?.name}?</DialogTitle>
-          <DialogDescription>
-            Rejecting records who rejected it, when, and why, and marks it rejected; it is not deleted and
-            its own discovery loop running again will not bring it back to "pending". This isn't permanent:
-            approving a rejected machine later simply reverses it - there's no separate "un-reject" action.
-          </DialogDescription>
+          <DialogTitle>{t('reject.title', { name: machine.ref?.name ?? '' })}</DialogTitle>
+          <DialogDescription>{t('reject.description')}</DialogDescription>
         </DialogHeader>
 
         <div class="space-y-1">
-          <Label htmlFor="reject-reason">Reason</Label>
+          <Label htmlFor="reject-reason">{t('reject.reason')}</Label>
           <Textarea
             id="reject-reason"
             value={reason}
             onInput={(e) => setReason((e.target as HTMLTextAreaElement).value)}
-            placeholder="Why is this machine being turned away?"
+            placeholder={t('reject.reasonPlaceholder')}
           />
         </div>
 
@@ -441,10 +439,10 @@ function RejectDialog({
 
         <DialogFooter>
           <Button variant="ghost" onClick={() => setOpen(false)}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button variant="destructive" disabled={submitting} onClick={submit}>
-            {submitting ? 'Rejecting…' : 'Reject'}
+            {submitting ? t('reject.submitting') : t('reject.button')}
           </Button>
         </DialogFooter>
       </DialogContent>

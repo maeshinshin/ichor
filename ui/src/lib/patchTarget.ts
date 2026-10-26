@@ -47,15 +47,21 @@ export function stringifyLabelSelector(ls: LabelSelectorLike | undefined): strin
   )
 }
 
+// The message stays English for logs and tests; `reason` is what the screen
+// translates (docs/adr/0064).
+function selectorError(message: string, reason: 'selectorNotJson' | 'selectorNotObject'): Error {
+  return Object.assign(new Error(message), { reason })
+}
+
 export function parseLabelSelector(text: string): LabelSelectorLike {
   let parsed: unknown
   try {
     parsed = JSON.parse(text)
   } catch {
-    throw new Error('Label selector must be valid JSON')
+    throw selectorError('Label selector must be valid JSON', 'selectorNotJson')
   }
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    throw new Error('Label selector must be a JSON object with "matchLabels" and/or "matchExpressions"')
+    throw selectorError('Label selector must be a JSON object with "matchLabels" and/or "matchExpressions"', 'selectorNotObject')
   }
   const obj = parsed as Record<string, unknown>
   return {

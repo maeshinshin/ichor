@@ -11,6 +11,8 @@ import { enumLabel } from '@/lib/enum'
 import { describeError } from '@/lib/errors'
 import { formatBytes, formatTimestamp } from '@/lib/format'
 import { streamWithResume } from '@/lib/resumableStream'
+import { useT } from '@/lib/useT'
+import type { Key } from '@/lib/i18n'
 import { Link } from '@/router'
 
 type ErrorShape = { title: string; detail: string }
@@ -19,6 +21,7 @@ type ErrorShape = { title: string; detail: string }
 // state, effective config (origin-annotated, secrets masked) and logs
 // (architecture.md, "CLI and UI").
 export function NodeDetail({ namespace, name }: { namespace: string; name: string }) {
+  const t = useT()
   const [node, setNode] = useState<NodeDetailMessage | null>(null)
   const [error, setError] = useState<ErrorShape | null>(null)
 
@@ -40,7 +43,7 @@ export function NodeDetail({ namespace, name }: { namespace: string; name: strin
   }, [namespace, name])
 
   if (error) return <ErrorAlert {...error} />
-  if (!node) return <p class="mt-10 text-center text-sm text-muted-foreground">Loading node…</p>
+  if (!node) return <p class="mt-10 text-center text-sm text-muted-foreground">{t('node.loading')}</p>
 
   return (
     <div class="mt-6 space-y-4">
@@ -49,34 +52,34 @@ export function NodeDetail({ namespace, name }: { namespace: string; name: strin
           <CardTitle>{name}</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-          <Field label="Manufacturer" value={node.hardware?.manufacturer} />
-          <Field label="Model" value={node.hardware?.model} />
-          <Field label="Serial number" value={node.hardware?.serialNumber} />
-          <Field label="CPU cores" value={node.hardware ? String(node.hardware.cpuCores) : undefined} />
-          <Field label="Memory" value={node.hardware ? formatBytes(node.hardware.memoryTotalBytes) : undefined} />
+          <Field label={t('node.manufacturer')} value={node.hardware?.manufacturer} />
+          <Field label={t('node.model')} value={node.hardware?.model} />
+          <Field label={t('node.serialNumber')} value={node.hardware?.serialNumber} />
+          <Field label={t('node.cpuCores')} value={node.hardware ? String(node.hardware.cpuCores) : undefined} />
+          <Field label={t('node.memory')} value={node.hardware ? formatBytes(node.hardware.memoryTotalBytes) : undefined} />
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Disks</CardTitle>
+          <CardTitle>{t('node.disks')}</CardTitle>
         </CardHeader>
         <CardContent>
           {node.disks.length === 0 ? (
-            <p class="text-sm text-muted-foreground">No disks reported.</p>
+            <p class="text-sm text-muted-foreground">{t('node.noDisks')}</p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Identification</TableHead>
-                  <TableHead>Size</TableHead>
-                  <TableHead>Role</TableHead>
+                  <TableHead>{t('node.colIdentification')}</TableHead>
+                  <TableHead>{t('node.colSize')}</TableHead>
+                  <TableHead>{t('col.role')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {node.disks.map((d, i) => (
                   <TableRow key={i}>
-                    <TableCell>{diskIdentification(d)}</TableCell>
+                    <TableCell>{diskIdentification(d, t('node.noStableDiskId'))}</TableCell>
                     <TableCell>{formatBytes(d.sizeBytes)}</TableCell>
                     <TableCell>
                       <Badge variant="outline">{enumLabel(DiskRole, d.role)}</Badge>
@@ -91,19 +94,19 @@ export function NodeDetail({ namespace, name }: { namespace: string; name: strin
 
       <Card>
         <CardHeader>
-          <CardTitle>Network</CardTitle>
+          <CardTitle>{t('node.network')}</CardTitle>
         </CardHeader>
         <CardContent>
           {node.networkInterfaces.length === 0 ? (
-            <p class="text-sm text-muted-foreground">No network interfaces reported.</p>
+            <p class="text-sm text-muted-foreground">{t('node.noNetwork')}</p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Interface</TableHead>
-                  <TableHead>MAC</TableHead>
-                  <TableHead>Up</TableHead>
-                  <TableHead>Addresses</TableHead>
+                  <TableHead>{t('node.colInterface')}</TableHead>
+                  <TableHead>{t('node.colMac')}</TableHead>
+                  <TableHead>{t('node.colUp')}</TableHead>
+                  <TableHead>{t('node.colAddresses')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -112,7 +115,7 @@ export function NodeDetail({ namespace, name }: { namespace: string; name: strin
                     <TableCell>{n.alias || n.name}</TableCell>
                     <TableCell>{n.permanentMac || '-'}</TableCell>
                     <TableCell>
-                      <Badge variant={n.up ? 'secondary' : 'outline'}>{n.up ? 'up' : 'down'}</Badge>
+                      <Badge variant={n.up ? 'secondary' : 'outline'}>{n.up ? t('node.up') : t('node.down')}</Badge>
                     </TableCell>
                     <TableCell>{n.addresses.length ? n.addresses.join(', ') : '-'}</TableCell>
                   </TableRow>
@@ -125,41 +128,41 @@ export function NodeDetail({ namespace, name }: { namespace: string; name: strin
 
       <Card>
         <CardHeader>
-          <CardTitle>Resource usage</CardTitle>
+          <CardTitle>{t('node.usage')}</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
           {node.resourceUsage ? (
             <>
-              <Field label="CPU cores used" value={node.resourceUsage.cpuCoresUsed.toFixed(2)} />
+              <Field label={t('node.cpuUsed')} value={node.resourceUsage.cpuCoresUsed.toFixed(2)} />
               <Field
-                label="Memory"
+                label={t('node.memory')}
                 value={`${formatBytes(node.resourceUsage.memoryUsedBytes)} / ${formatBytes(node.resourceUsage.memoryTotalBytes)}`}
               />
               <Field
-                label="Filesystem"
+                label={t('node.filesystem')}
                 value={`${formatBytes(node.resourceUsage.filesystemUsedBytes)} / ${formatBytes(node.resourceUsage.filesystemTotalBytes)}`}
               />
             </>
           ) : (
-            <p class="text-sm text-muted-foreground">No resource usage reported.</p>
+            <p class="text-sm text-muted-foreground">{t('node.noUsage')}</p>
           )}
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Kubernetes</CardTitle>
+          <CardTitle>{t('node.kubernetes')}</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
           {node.kubernetes ? (
             <>
-              <Field label="Node name" value={node.kubernetes.nodeName} />
-              <Field label="Ready" value={node.kubernetes.ready ? 'yes' : 'no'} />
-              <Field label="Kubelet version" value={node.kubernetes.kubeletVersion} />
-              <Field label="Schedulable" value={node.kubernetes.schedulable ? 'yes' : 'no'} />
+              <Field label={t('node.k8sName')} value={node.kubernetes.nodeName} />
+              <Field label={t('node.k8sReady')} value={node.kubernetes.ready ? t('common.yes') : t('common.no')} />
+              <Field label={t('node.k8sKubelet')} value={node.kubernetes.kubeletVersion} />
+              <Field label={t('node.k8sSchedulable')} value={node.kubernetes.schedulable ? t('common.yes') : t('common.no')} />
             </>
           ) : (
-            <p class="text-sm text-muted-foreground">Not joined to Kubernetes yet.</p>
+            <p class="text-sm text-muted-foreground">{t('node.notJoined')}</p>
           )}
         </CardContent>
       </Card>
@@ -170,13 +173,14 @@ export function NodeDetail({ namespace, name }: { namespace: string; name: strin
   )
 }
 
-function diskIdentification(d: { wwid: string; serial: string; byIdPath: string; busPath: string }): string {
+function diskIdentification(d: { wwid: string; serial: string; byIdPath: string; busPath: string }, none: string): string {
   // architecture.md's own fallback chain: WWID, then serial, then by-id
   // path; any of the first three may be empty (node.proto's own comment).
-  return d.wwid || d.serial || d.byIdPath || d.busPath || 'nothing stable to key on'
+  return d.wwid || d.serial || d.byIdPath || d.busPath || none
 }
 
 function EffectiveConfigSection({ namespace, name }: { namespace: string; name: string }) {
+  const t = useT()
   const [values, setValues] = useState<EffectiveConfigValue[] | null>(null)
   const [error, setError] = useState<ErrorShape | null>(null)
 
@@ -207,29 +211,28 @@ function EffectiveConfigSection({ namespace, name }: { namespace: string; name: 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Effective config</CardTitle>
+        <CardTitle>{t('node.config')}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <p class="text-sm text-muted-foreground">
-          Read-only: this is what the controller last rendered for this node, grouped by the
-          layer each value came from. Edit the patch that sets a value from{' '}
+          {t('node.configIntroBefore')}
           <Link to="/patches" class="underline">
-            the patches screen
+            {t('node.configIntroLink')}
           </Link>
-          , not from here.
+          {t('node.configIntroAfter')}
         </p>
         {error && <ErrorAlert {...error} />}
-        {!error && !values && <p class="text-sm text-muted-foreground">Loading…</p>}
-        {values && values.length === 0 && <p class="text-sm text-muted-foreground">No values reported.</p>}
+        {!error && !values && <p class="text-sm text-muted-foreground">{t('common.loading')}</p>}
+        {values && values.length === 0 && <p class="text-sm text-muted-foreground">{t('node.configEmpty')}</p>}
         {groups.map(([layer, group]) => (
           <div key={layer}>
             <h4 class="mb-1 text-sm font-medium">{enumLabel(ConfigLayer, layer)}</h4>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Path</TableHead>
-                  <TableHead>Value</TableHead>
-                  <TableHead>Source</TableHead>
+                  <TableHead>{t('node.colPath')}</TableHead>
+                  <TableHead>{t('node.colValue')}</TableHead>
+                  <TableHead>{t('node.colSource')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -243,7 +246,7 @@ function EffectiveConfigSection({ namespace, name }: { namespace: string; name: 
                           that can or should reveal it. */}
                       {v.secret && (
                         <Badge variant="outline" className="ml-2">
-                          secret
+                          {t('node.secret')}
                         </Badge>
                       )}
                     </TableCell>
@@ -281,8 +284,8 @@ function groupByLayer(values: EffectiveConfigValue[]): [number, EffectiveConfigV
 // amendment); "kernel" is this screen's own sentinel for the empty-string
 // wire value (Talos's Dmesg log) - Select can't use "" as a real item
 // value, since empty string is its own placeholder-vs-selected signal.
-const LOG_SOURCES = [
-  { value: 'kernel', label: 'Kernel (dmesg)', wire: '' },
+const LOG_SOURCES: { value: string; label: Key | string; wire: string }[] = [
+  { value: 'kernel', label: 'node.logKernel', wire: '' },
   { value: 'kubelet', label: 'kubelet', wire: 'kubelet' },
   { value: 'etcd', label: 'etcd', wire: 'etcd' },
   { value: 'trustd', label: 'trustd', wire: 'trustd' },
@@ -291,6 +294,7 @@ const LOG_SOURCES = [
 ]
 
 function LogsSection({ namespace, name }: { namespace: string; name: string }) {
+  const t = useT()
   const [source, setSource] = useState('kernel')
   const [lines, setLines] = useState<StreamNodeLogsResponse[]>([])
   const [error, setError] = useState<ErrorShape | null>(null)
@@ -339,8 +343,8 @@ function LogsSection({ namespace, name }: { namespace: string; name: string }) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          Logs
-          {reconnecting && <Badge variant="outline">reconnecting…</Badge>}
+          {t('node.logs')}
+          {reconnecting && <Badge variant="outline">{t('node.reconnecting')}</Badge>}
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -352,7 +356,7 @@ function LogsSection({ namespace, name }: { namespace: string; name: string }) {
             <SelectContent>
               {LOG_SOURCES.map((s) => (
                 <SelectItem key={s.value} value={s.value}>
-                  {s.label}
+                  {s.label.startsWith('node.') ? t(s.label as Key) : s.label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -360,7 +364,7 @@ function LogsSection({ namespace, name }: { namespace: string; name: string }) {
         </div>
         {error && <ErrorAlert {...error} />}
         <div class="max-h-96 overflow-y-auto rounded-md bg-muted/40 p-2 font-mono text-xs">
-          {lines.length === 0 && !error && <p class="text-muted-foreground">Waiting for log lines…</p>}
+          {lines.length === 0 && !error && <p class="text-muted-foreground">{t('node.logWaiting')}</p>}
           {lines.map((l, i) => (
             <div key={i}>
               <span class="text-muted-foreground">{formatTimestamp(l.time)}</span> {l.message}

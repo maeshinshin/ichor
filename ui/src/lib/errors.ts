@@ -1,4 +1,5 @@
 import { Code, ConnectError } from '@connectrpc/connect'
+import { t } from './lang.ts'
 
 // Turns a Connect error into something a person reads, instead of the raw
 // wire error (the task's own instruction for the approve/reject screen,
@@ -6,24 +7,22 @@ import { Code, ConnectError } from '@connectrpc/connect'
 // (internal/uiapi) already writes its refusal messages in plain English
 // (see ApproveMachine/RejectMachine, ADR 0018); this only adds a short,
 // code-specific headline above that message so the kind of problem is
-// clear at a glance before reading the detail.
+// clear at a glance before reading the detail. The headline is in the current
+// language (ADR 0064); the server's message is never translated.
 export function describeError(err: unknown): { title: string; detail: string } {
   if (err instanceof ConnectError) {
     switch (err.code) {
       case Code.FailedPrecondition:
-        return { title: 'Not allowed right now', detail: err.rawMessage }
+        return { title: t('error.notAllowed'), detail: err.rawMessage }
       case Code.InvalidArgument:
-        return { title: 'Missing or invalid input', detail: err.rawMessage }
+        return { title: t('error.invalidInput'), detail: err.rawMessage }
       case Code.NotFound:
-        return { title: 'Not found', detail: err.rawMessage }
+        return { title: t('common.notFound'), detail: err.rawMessage }
       case Code.Unavailable:
-        return {
-          title: 'Backend unavailable',
-          detail: 'The UI backend is restarting or draining. Reconnecting automatically; try the action again in a moment.',
-        }
+        return { title: t('error.unavailable'), detail: t('error.unavailableDetail') }
       default:
-        return { title: 'Request failed', detail: err.rawMessage }
+        return { title: t('error.requestFailed'), detail: err.rawMessage }
     }
   }
-  return { title: 'Request failed', detail: err instanceof Error ? err.message : String(err) }
+  return { title: t('error.requestFailed'), detail: err instanceof Error ? err.message : String(err) }
 }

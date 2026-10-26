@@ -24,6 +24,7 @@ import { PatchSchema } from '@/gen/ichor/v1alpha1/patch_pb'
 import { clusterClient, patchClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
 import { describeError } from '@/lib/errors'
+import { useT } from '@/lib/useT'
 import { buildPatchTarget, canSavePatch, stringifyLabelSelector, targetKindOf, type TargetKind } from '@/lib/patchTarget'
 import { navigate } from '@/router'
 
@@ -50,6 +51,7 @@ const DOCUMENT_KINDS = ['SysctlConfig', 'KernelModuleConfig', 'Config', 'VolumeC
 // documents a patch carries are edited as opaque JSON per document, not
 // through a generic schema-driven renderer - see that ADR for why).
 export function PatchDetail({ namespace, name }: { namespace?: string; name?: string }) {
+  const t = useT()
   const isNew = namespace === undefined || name === undefined
 
   const [loaded, setLoaded] = useState(isNew)
@@ -91,7 +93,7 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
         if (cancelled) return
         const p = res.patch
         if (!p) {
-          setLoadError({ title: 'Not found', detail: 'No patch was returned.' })
+          setLoadError({ title: t('common.notFound'), detail: t('patch.noPatch') })
           return
         }
         setPatchName(p.ref?.name ?? name)
@@ -128,14 +130,15 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
   // server's own rejection).
   function buildWire(setErr: (e: string | null) => void): PatchInit | null {
     if (!cluster) {
-      setErr('Choose a cluster first.')
+      setErr(t('patch.chooseCluster'))
       return null
     }
     let target: PatchInit['target']
     try {
       target = buildPatchTarget(layer !== ConfigLayer.CLUSTER, targetKind, role, labelSelectorText, machineRef)
     } catch (err) {
-      setErr(err instanceof Error ? err.message : String(err))
+      const reason = (err as { reason?: string }).reason
+      setErr(reason === 'selectorNotJson' ? t('error.selectorNotJson') : reason === 'selectorNotObject' ? t('error.selectorNotObject') : err instanceof Error ? err.message : String(err))
       return null
     }
     setErr(null)
@@ -198,7 +201,7 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
   }
 
   if (loadError) return <ErrorAlert {...loadError} />
-  if (!loaded) return <p class="mt-10 text-center text-sm text-muted-foreground">Loading patch…</p>
+  if (!loaded) return <p class="mt-10 text-center text-sm text-muted-foreground">{t('patch.loading')}</p>
 
   const canSave = canSavePatch({
     name: patchName,
@@ -212,12 +215,12 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
     <div class="mt-6 space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle>{isNew ? 'New patch' : `Edit ${name}`}</CardTitle>
+          <CardTitle>{isNew ? t('patch.newTitle') : t('patch.editTitle', { name })}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div class="grid gap-3 sm:grid-cols-2">
             <div class="space-y-1">
-              <Label htmlFor="patch-name">Name</Label>
+              <Label htmlFor="patch-name">{t('col.name')}</Label>
               <Input
                 id="patch-name"
                 value={patchName}
@@ -226,7 +229,7 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
               />
             </div>
             <div class="space-y-1">
-              <Label htmlFor="patch-cluster">Cluster</Label>
+              <Label htmlFor="patch-cluster">{t('col.cluster')}</Label>
               <Select
                 value={cluster ? `${cluster.namespace}/${cluster.name}` : ''}
                 onValueChange={(v) => {
@@ -235,7 +238,7 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
                 }}
               >
                 <SelectTrigger id="patch-cluster" className="w-full">
-                  <SelectValue placeholder="Select a cluster" />
+                  <SelectValue placeholder={t('patch.selectCluster')} />
                 </SelectTrigger>
                 <SelectContent>
                   {clusters
@@ -249,7 +252,7 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
               </Select>
             </div>
             <div class="space-y-1">
-              <Label htmlFor="patch-layer">Layer</Label>
+              <Label htmlFor="patch-layer">{t('patch.layer')}</Label>
               <Select
                 value={layer ? String(layer) : ''}
                 onValueChange={(v) => {
@@ -259,7 +262,7 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
                 }}
               >
                 <SelectTrigger id="patch-layer" className="w-full">
-                  <SelectValue placeholder="Select a layer" />
+                  <SelectValue placeholder={t('patch.selectLayer')} />
                 </SelectTrigger>
                 <SelectContent>
                   {EDITABLE_LAYERS.map((l) => (
@@ -271,7 +274,7 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
               </Select>
             </div>
             <div class="space-y-1">
-              <Label htmlFor="patch-priority">Priority</Label>
+              <Label htmlFor="patch-priority">{t('patch.priority')}</Label>
               <Input
                 id="patch-priority"
                 type="number"
@@ -283,26 +286,26 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
 
           {layer !== ConfigLayer.CLUSTER && layer !== ConfigLayer.UNSPECIFIED && (
             <div class="space-y-2 rounded-md border p-3">
-              <Label htmlFor="patch-target-kind">Target</Label>
+              <Label htmlFor="patch-target-kind">{t('patch.target')}</Label>
               <Select value={targetKind} onValueChange={(v) => setTargetKind(v as TargetKind)}>
                 <SelectTrigger id="patch-target-kind" className="w-full">
-                  <SelectValue placeholder="Select how to target machines" />
+                  <SelectValue placeholder={t('patch.selectTargetKind')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="role">Role</SelectItem>
-                  <SelectItem value="labelSelector">Label selector</SelectItem>
-                  <SelectItem value="machineRef">Machine reference</SelectItem>
+                  <SelectItem value="role">{t('patch.targetKindRole')}</SelectItem>
+                  <SelectItem value="labelSelector">{t('patch.targetKindSelector')}</SelectItem>
+                  <SelectItem value="machineRef">{t('patch.targetKindMachine')}</SelectItem>
                 </SelectContent>
               </Select>
 
               {targetKind === 'role' && (
                 <Select value={role} onValueChange={setRole}>
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select a role" />
+                    <SelectValue placeholder={t('approve.selectRole')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="controlplane">Control plane</SelectItem>
-                    <SelectItem value="worker">Worker</SelectItem>
+                    <SelectItem value="controlplane">{t('role.controlPlane')}</SelectItem>
+                    <SelectItem value="worker">{t('role.worker')}</SelectItem>
                   </SelectContent>
                 </Select>
               )}
@@ -310,17 +313,14 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
               {targetKind === 'machineRef' && (
                 <Input
                   value={machineRef}
-                  placeholder="TalosMachine name"
+                  placeholder={t('patch.machinePlaceholder')}
                   onInput={(e) => setMachineRef((e.target as HTMLInputElement).value)}
                 />
               )}
 
               {targetKind === 'labelSelector' && (
                 <div class="space-y-1">
-                  <p class="text-xs text-muted-foreground">
-                    JSON with "matchLabels" (a map) and/or "matchExpressions" (metav1.LabelSelector's own shape) -
-                    checked by the apiserver on save, not here.
-                  </p>
+                  <p class="text-xs text-muted-foreground">{t('patch.selectorHint')}</p>
                   <Textarea
                     className="font-mono text-xs"
                     rows={5}
@@ -336,13 +336,13 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
 
       <Card>
         <CardHeader className="flex items-center justify-between">
-          <CardTitle>Documents</CardTitle>
+          <CardTitle>{t('patch.documents')}</CardTitle>
           <Button size="sm" variant="outline" onClick={addDocument}>
-            Add document
+            {t('patch.addDocument')}
           </Button>
         </CardHeader>
         <CardContent className="space-y-3">
-          {documents.length === 0 && <p class="text-sm text-muted-foreground">No documents yet.</p>}
+          {documents.length === 0 && <p class="text-sm text-muted-foreground">{t('patch.noDocuments')}</p>}
           {documents.map((d, i) => (
             <div key={i} class="space-y-2 rounded-md border p-3">
               <div class="flex items-center gap-2">
@@ -359,7 +359,7 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
                   </SelectContent>
                 </Select>
                 <Button size="sm" variant="ghost" onClick={() => removeDocument(i)}>
-                  Remove
+                  {t('patch.removeDocument')}
                 </Button>
               </div>
               {/* document is opaque JSON on the wire (patch.proto) - shaped
@@ -380,27 +380,24 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
 
       <Card>
         <CardHeader className="flex items-center justify-between">
-          <CardTitle>Impact preview</CardTitle>
+          <CardTitle>{t('patch.impact')}</CardTitle>
           <Button size="sm" variant="outline" disabled={previewing} onClick={runPreview}>
-            {previewing ? 'Checking…' : 'Preview impact'}
+            {previewing ? t('patch.previewing') : t('patch.previewButton')}
           </Button>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
-          <p class="text-muted-foreground">
-            Classifies every field path this patch sets, not a diff against what's currently applied - run it
-            again after editing, it does not update automatically.
-          </p>
-          {previewError && (typeof previewError === 'string' ? <ErrorAlert title="Invalid target" detail={previewError} /> : <ErrorAlert {...previewError} />)}
+          <p class="text-muted-foreground">{t('patch.impactNote')}</p>
+          {previewError && (typeof previewError === 'string' ? <ErrorAlert title={t('error.invalidTarget')} detail={previewError} /> : <ErrorAlert {...previewError} />)}
           {preview && (
             <div class="space-y-1">
               <div class="flex items-center gap-2">
-                <span>Reboot required:</span>
-                <Badge variant={preview.rebootRequired ? 'secondary' : 'outline'}>{preview.rebootRequired ? 'yes' : 'no'}</Badge>
+                <span>{t('patch.rebootRequired')}</span>
+                <Badge variant={preview.rebootRequired ? 'secondary' : 'outline'}>{preview.rebootRequired ? t('common.yes') : t('common.no')}</Badge>
               </div>
               <div>
-                <span>Install-time only (needs reset and reinstall, a reboot does nothing for these):</span>{' '}
+                <span>{t('patch.installTimeOnly')}</span>{' '}
                 {preview.installTimeOnly.length === 0 ? (
-                  <span class="text-muted-foreground">none</span>
+                  <span class="text-muted-foreground">{t('common.none')}</span>
                 ) : (
                   <div class="mt-1 flex flex-wrap gap-1">
                     {preview.installTimeOnly.map((p) => (
@@ -412,9 +409,9 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
                 )}
               </div>
               <div>
-                <span>Unsupported by this cluster's pinned Talos version:</span>{' '}
+                <span>{t('patch.unsupported')}</span>{' '}
                 {preview.unsupported.length === 0 ? (
-                  <span class="text-muted-foreground">none</span>
+                  <span class="text-muted-foreground">{t('common.none')}</span>
                 ) : (
                   <div class="mt-1 flex flex-wrap gap-1">
                     {preview.unsupported.map((p) => (
@@ -431,15 +428,15 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
       </Card>
 
       {pullRequestUrl && <PullRequestNotice url={pullRequestUrl} />}
-      {saveError && (typeof saveError === 'string' ? <ErrorAlert title="Invalid target" detail={saveError} /> : <ErrorAlert {...saveError} />)}
+      {saveError && (typeof saveError === 'string' ? <ErrorAlert title={t('error.invalidTarget')} detail={saveError} /> : <ErrorAlert {...saveError} />)}
 
       <div class="flex items-center justify-between">
         <div class="flex gap-2">
           <Button disabled={!canSave || saving} onClick={save}>
-            {saving ? 'Saving…' : isNew ? 'Create' : 'Save'}
+            {saving ? t('patch.saving') : isNew ? t('patch.create') : t('patch.save')}
           </Button>
           <Button variant="ghost" onClick={() => navigate('/patches')}>
-            Cancel
+            {t('common.cancel')}
           </Button>
         </div>
         {!isNew && <DeleteButton namespace={namespace!} name={name!} />}
@@ -449,6 +446,7 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
 }
 
 function DeleteButton({ namespace, name }: { namespace: string; name: string }) {
+  const t = useT()
   const [open, setOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<ErrorShape | null>(null)
@@ -475,7 +473,7 @@ function DeleteButton({ namespace, name }: { namespace: string; name: string }) 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="destructive">Delete</Button>
+        <Button variant="destructive">{t('patches.delete')}</Button>
       </DialogTrigger>
       <DialogContent>
         {pullRequestUrl ? (
@@ -483,26 +481,23 @@ function DeleteButton({ namespace, name }: { namespace: string; name: string }) 
             <PullRequestNotice url={pullRequestUrl} />
             <DialogFooter>
               <Button variant="ghost" onClick={() => setOpen(false)}>
-                Close
+                {t('common.close')}
               </Button>
             </DialogFooter>
           </>
         ) : (
           <>
         <DialogHeader>
-          <DialogTitle>Delete {name}?</DialogTitle>
-          <DialogDescription>
-            This removes the TalosConfigPatch outright. Nodes it targets stop receiving its values the next
-            time the controller renders their configuration.
-          </DialogDescription>
+          <DialogTitle>{t('patches.deleteTitle', { name })}</DialogTitle>
+          <DialogDescription>{t('patch.deleteDescription')}</DialogDescription>
         </DialogHeader>
         {error && <ErrorAlert {...error} />}
         <DialogFooter>
           <Button variant="ghost" onClick={() => setOpen(false)}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button variant="destructive" disabled={submitting} onClick={submit}>
-            {submitting ? 'Deleting…' : 'Delete'}
+            {submitting ? t('patches.deleting') : t('patches.delete')}
           </Button>
         </DialogFooter>
           </>

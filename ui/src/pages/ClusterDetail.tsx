@@ -7,8 +7,10 @@ import { HandoverPhase, RolloutKind, type Cluster } from '@/gen/ichor/v1alpha1/c
 import { clusterClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
 import { describeError } from '@/lib/errors'
+import { useT } from '@/lib/useT'
 
 export function ClusterDetail({ namespace, name }: { namespace: string; name: string }) {
+  const t = useT()
   const [cluster, setCluster] = useState<Cluster | null>(null)
   const [error, setError] = useState<{ title: string; detail: string } | null>(null)
 
@@ -30,7 +32,7 @@ export function ClusterDetail({ namespace, name }: { namespace: string; name: st
   }, [namespace, name])
 
   if (error) return <ErrorAlert {...error} />
-  if (!cluster) return <p class="mt-10 text-center text-sm text-muted-foreground">Loading cluster…</p>
+  if (!cluster) return <p class="mt-10 text-center text-sm text-muted-foreground">{t('cluster.loading')}</p>
 
   return (
     <div class="mt-6 space-y-4">
@@ -39,21 +41,21 @@ export function ClusterDetail({ namespace, name }: { namespace: string; name: st
           <CardTitle>{cluster.ref?.name}</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-          <Field label="Namespace" value={cluster.ref?.namespace} />
-          <Field label="Talos version" value={cluster.talosVersion} />
-          <Field label="Kubernetes version" value={cluster.kubernetesVersion} />
-          <Field label="Endpoint" value={cluster.endpoint} />
-          <Field label="Control plane count" value={String(cluster.controlPlaneCount)} />
-          <Field label="Control plane schedulable" value={cluster.controlPlaneSchedulable ? 'yes' : 'no'} />
+          <Field label={t('cluster.namespace')} value={cluster.ref?.namespace} />
+          <Field label={t('cluster.talosVersion')} value={cluster.talosVersion} />
+          <Field label={t('cluster.kubernetesVersion')} value={cluster.kubernetesVersion} />
+          <Field label={t('cluster.endpoint')} value={cluster.endpoint} />
+          <Field label={t('cluster.cpCount')} value={String(cluster.controlPlaneCount)} />
+          <Field label={t('cluster.cpSchedulable')} value={cluster.controlPlaneSchedulable ? t('common.yes') : t('common.no')} />
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Conditions</CardTitle>
+          <CardTitle>{t('cluster.conditions')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
-          {cluster.conditions.length === 0 && <p class="text-muted-foreground">No conditions reported.</p>}
+          {cluster.conditions.length === 0 && <p class="text-muted-foreground">{t('cluster.noConditions')}</p>}
           {cluster.conditions.map((c) => (
             <div key={c.type} class="flex flex-wrap items-center gap-2">
               <Badge variant={c.status === 'True' ? 'secondary' : 'outline'}>{c.type}</Badge>
@@ -66,29 +68,29 @@ export function ClusterDetail({ namespace, name }: { namespace: string; name: st
 
       <Card>
         <CardHeader>
-          <CardTitle>Rollout</CardTitle>
+          <CardTitle>{t('cluster.rollout')}</CardTitle>
         </CardHeader>
         <CardContent className="text-sm">
           {cluster.rollout ? (
             <dl class="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <Field label="Kind" value={enumLabel(RolloutKind, cluster.rollout.kind)} />
-              <Field label="Target version" value={cluster.rollout.targetVersion} />
-              <Field label="Paused" value={cluster.rollout.paused ? 'yes' : 'no'} />
-              <Field label="Progress" value={`${cluster.rollout.nodesDone}/${cluster.rollout.nodesTotal}`} />
-              <Field label="Current phase" value={cluster.rollout.currentPhase} />
+              <Field label={t('cluster.rolloutKind')} value={enumLabel(RolloutKind, cluster.rollout.kind)} />
+              <Field label={t('cluster.rolloutTarget')} value={cluster.rollout.targetVersion} />
+              <Field label={t('cluster.rolloutPaused')} value={cluster.rollout.paused ? t('common.yes') : t('common.no')} />
+              <Field label={t('cluster.rolloutProgress')} value={`${cluster.rollout.nodesDone}/${cluster.rollout.nodesTotal}`} />
+              <Field label={t('cluster.rolloutPhase')} value={cluster.rollout.currentPhase} />
             </dl>
           ) : (
-            <p class="text-muted-foreground">No rollout in progress.</p>
+            <p class="text-muted-foreground">{t('cluster.noRollout')}</p>
           )}
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Hand-over</CardTitle>
+          <CardTitle>{t('cluster.handover')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
-          {cluster.handovers.length === 0 && <p class="text-muted-foreground">No hand-over components tracked.</p>}
+          {cluster.handovers.length === 0 && <p class="text-muted-foreground">{t('cluster.noHandover')}</p>}
           {cluster.handovers.map((h, i) => (
             <div key={h.component}>
               {i > 0 && <Separator className="my-2" />}

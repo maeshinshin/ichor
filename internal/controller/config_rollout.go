@@ -43,7 +43,6 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
-	"github.com/maeshinshin/ichor/pkg/fieldmeta"
 	"github.com/maeshinshin/ichor/pkg/storage"
 
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
@@ -213,7 +212,7 @@ func (a *configRolloutAdvancer) begin(
 		return fmt.Errorf("invalid versionContract %q: %w", cluster.Spec.VersionContract, err)
 	}
 
-	impact := fieldmeta.Assess(paths, contract)
+	impact := assessChange(ctx, talos, m.Spec.Hostname, paths, contract)
 
 	switch {
 	case len(impact.Unsupported) > 0:

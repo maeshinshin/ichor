@@ -121,7 +121,7 @@ func (s *Server) updatePatchByPR(
 
 	url, err := s.openPR(ctx, plan, prChange{
 		verb: "update", name: p.Name, target: patchTarget(p),
-		updates: []prmode.FieldUpdate{{Path: []string{"spec"}, Value: spec}},
+		updates: []prmode.FieldUpdate{{Path: []string{specKey}, Value: spec}},
 		title:   "Update patch " + p.Name, impact: impact,
 	})
 	if err != nil {

@@ -80,4 +80,21 @@ func TestBuildCNIBootstrap_Cilium(t *testing.T) {
 	if withArgoCD.ArgoCDApplication == nil {
 		t.Fatal("expected an Argo CD Application when wantArgoCD is true")
 	}
+
+	// Without syncPolicy.automated Argo CD never syncs it and the
+	// hand-over never completes (ADR 0055 addendum).
+	sp := withArgoCD.ArgoCDApplication.Spec.SyncPolicy
+	if sp == nil || sp.Automated == nil || !sp.Automated.Prune || !sp.Automated.SelfHeal {
+		t.Fatalf("cilium syncPolicy = %+v, want automated {prune: true, selfHeal: true}", sp)
+	}
+
+	root, err := buildRootApplication(testRepoURL, "clusters/c")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sp = root.Spec.SyncPolicy
+	if sp == nil || sp.Automated == nil || !sp.Automated.Prune || !sp.Automated.SelfHeal {
+		t.Fatalf("root syncPolicy = %+v, want automated {prune: true, selfHeal: true}", sp)
+	}
 }

@@ -219,3 +219,21 @@ func TestHandoverWorkloads(t *testing.T) {
 		t.Fatalf("HandoverWorkloads() = %v, want a DaemonSet (agent) and a Deployment (operator)", workloads)
 	}
 }
+
+// ADR 0055 addendum: without syncPolicy.automated Argo CD never syncs the
+// Application and the hand-over (ADR 0024) never completes.
+func TestArgoCDApplication_AutomatedSync(t *testing.T) {
+	app, err := New().ArgoCDApplication(cni.KubeProxyReplaced)
+	if err != nil {
+		t.Fatalf("ArgoCDApplication: %v", err)
+	}
+
+	sp := app.Spec.SyncPolicy
+	if sp == nil || sp.Automated == nil || !sp.Automated.Prune || !sp.Automated.SelfHeal {
+		t.Fatalf("syncPolicy = %+v, want automated {prune: true, selfHeal: true}", sp)
+	}
+
+	if !slices.Contains(sp.SyncOptions, "PruneLast=true") {
+		t.Errorf("syncOptions = %v, want PruneLast=true", sp.SyncOptions)
+	}
+}

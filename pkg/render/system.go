@@ -89,7 +89,8 @@ func StorageFor(
 // Node label and annotation) into cfg as part of the system layer. Applied before any
 // TalosConfigPatch, so a patch that touches the same fields wins.
 func injectStorage(
-	cfg coreconfig.Provider, contract *coreconfig.VersionContract, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, sys *SystemInputs,
+	cfg coreconfig.Provider, contract *coreconfig.VersionContract,
+	cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, sys *SystemInputs,
 ) (coreconfig.Provider, error) {
 	if sys == nil {
 		return cfg, nil
@@ -163,12 +164,13 @@ func nodeRegistrationDocs(contract *coreconfig.VersionContract, preset storage.P
 		})
 	}
 
+	//nolint:staticcheck // the legacy blocks are the only form a pre-1.14 contract accepts
 	return []config.Document{&mv1alpha1.Config{
 		ConfigVersion: mv1alpha1.Version,
 		MachineConfig: &mv1alpha1.MachineConfig{
-			MachineNodeLabels:      preset.NodeLabels(),                                  //nolint:staticcheck // legacy form for pre-1.14 contracts
-			MachineNodeAnnotations: preset.NodeAnnotations(),                             //nolint:staticcheck // legacy form for pre-1.14 contracts
-			MachineKubelet:         &mv1alpha1.KubeletConfig{KubeletExtraMounts: mounts}, //nolint:staticcheck // legacy form
+			MachineNodeLabels:      preset.NodeLabels(),
+			MachineNodeAnnotations: preset.NodeAnnotations(),
+			MachineKubelet:         &mv1alpha1.KubeletConfig{KubeletExtraMounts: mounts},
 		},
 	}}
 }

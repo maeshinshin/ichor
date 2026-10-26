@@ -28,7 +28,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -41,6 +40,8 @@ const (
 	storageNodeKey   = "ichor.test/storage"
 	storageNodeValue = "yes"
 	storageDisk      = "disk.transport == 'nvme'"
+
+	storageTestEndpoint = "10.0.0.10:50000"
 )
 
 // fakeSettingReader stands in for the storage system's own API: the envtest apiserver has no
@@ -72,7 +73,7 @@ func newStorageTestMachine(clusterName string, nodeLabels map[string]string) *ic
 		Spec: ichorv1alpha1.TalosMachineSpec{
 			ClusterRef:    corev1.LocalObjectReference{Name: clusterName},
 			Identity:      ichorv1alpha1.TalosMachineIdentity{UUID: "uuid-" + clusterName},
-			Endpoint:      "10.0.0.10:50000",
+			Endpoint:      storageTestEndpoint,
 			Role:          roleWorker,
 			ApprovalState: ichorv1alpha1.MachineApprovalStateApproved,
 			NodeLabels:    nodeLabels,
@@ -114,7 +115,7 @@ func convergeMachine(
 }
 
 func reconcileStorage(r *TalosStorageReconciler, s *ichorv1alpha1.TalosStorage) *ichorv1alpha1.TalosStorage {
-	_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: s.Namespace, Name: s.Name}})
+	_, err := r.Reconcile(ctx, ctrl.Request{Namespace: s.Namespace, Name: s.Name})
 	Expect(err).NotTo(HaveOccurred())
 
 	var got ichorv1alpha1.TalosStorage

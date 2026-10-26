@@ -25,6 +25,11 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
+const (
+	selRoleKey = "role"
+	selRoleVal = "storage"
+)
+
 func selStorage(ns, name, cluster string, match map[string]string) ichorv1alpha1.TalosStorage {
 	return ichorv1alpha1.TalosStorage{
 		Namespace: ns, Name: name,
@@ -37,13 +42,13 @@ func selStorage(ns, name, cluster string, match map[string]string) ichorv1alpha1
 
 func TestSelect(t *testing.T) {
 	cluster := &ichorv1alpha1.TalosCluster{Namespace: "ns", Name: "c1"}
-	nodeLabels := map[string]string{"role": "storage"}
+	nodeLabels := map[string]string{selRoleKey: selRoleVal}
 	storages := []ichorv1alpha1.TalosStorage{
-		selStorage("ns", "b", "c1", map[string]string{"role": "storage"}),
-		selStorage("ns", "a", "c1", map[string]string{"role": "storage"}),
-		selStorage("ns", "other-cluster", "c2", map[string]string{"role": "storage"}),
-		selStorage("other-ns", "other-ns", "c1", map[string]string{"role": "storage"}),
-		selStorage("ns", "no-match", "c1", map[string]string{"role": "compute"}),
+		selStorage("ns", "b", "c1", map[string]string{selRoleKey: selRoleVal}),
+		selStorage("ns", "a", "c1", map[string]string{selRoleKey: selRoleVal}),
+		selStorage("ns", "other-cluster", "c2", map[string]string{selRoleKey: selRoleVal}),
+		selStorage("other-ns", "other-ns", "c1", map[string]string{selRoleKey: selRoleVal}),
+		selStorage("ns", "no-match", "c1", map[string]string{selRoleKey: "compute"}),
 	}
 
 	got, err := Select(cluster, storages, nodeLabels)
@@ -51,13 +56,15 @@ func TestSelect(t *testing.T) {
 		t.Fatalf("Select = %v, %v; want the first match by name, \"a\"", got, err)
 	}
 
-	got, err = Select(cluster, storages, map[string]string{"role": "gpu"})
+	got, err = Select(cluster, storages, map[string]string{selRoleKey: "gpu"})
 	if err != nil || got != nil {
 		t.Fatalf("Select(non-matching labels) = %v, %v; want nil, nil", got, err)
 	}
 
 	bad := selStorage("ns", "bad", "c1", nil)
-	bad.Spec.Nodes = metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: "k", Operator: "bogus"}}}
+	bad.Spec.Nodes = metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{
+		{Key: "k", Operator: "bogus"},
+	}}
 
 	if _, err = Select(cluster, []ichorv1alpha1.TalosStorage{bad}, nodeLabels); err == nil {
 		t.Fatal("Select with an invalid selector returned no error")

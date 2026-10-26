@@ -24,12 +24,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
+const testUIServiceName = "ichor-ichor-ui-service"
+
 // TestFindUIService_ByLabelNotName proves a kustomize-installed Service
 // (namePrefix makes it ichor-ichor-ui-service) is found through its component
 // label, and an unlabelled look-alike is not.
 func TestFindUIService_ByLabelNotName(t *testing.T) {
 	c := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(
-		&corev1.Service{Name: "ichor-ichor-ui-service", Namespace: "ichor-system", Labels: map[string]string{uiComponentLabel: uiComponentValue}},
+		&corev1.Service{Name: testUIServiceName, Namespace: "ichor-system", Labels: map[string]string{uiComponentLabel: uiComponentValue}},
 		&corev1.Service{Name: "ichor-ui-service", Namespace: "other"},
 	).Build()
 
@@ -38,7 +40,7 @@ func TestFindUIService_ByLabelNotName(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if svc.Name != "ichor-ichor-ui-service" {
+	if svc.Name != testUIServiceName {
 		t.Fatalf("found %s", svc.Name)
 	}
 

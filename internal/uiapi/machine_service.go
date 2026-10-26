@@ -132,7 +132,7 @@ func (s *Server) ApproveMachine(
 		return nil, err
 	}
 
-	plan, err := s.planWrite(ctx, m, m.Spec.ClusterRef.Name, true)
+	plan, err := s.planWrite(ctx, m, m.Spec.ClusterRef.Name, true, req.Msg.GetBreakGlass())
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +168,7 @@ func (s *Server) ApproveMachine(
 		Actor: s.actorName(ctx), Reason: req.Msg.GetReason(), At: metav1.NewTime(now),
 	}
 
-	if plan != nil {
+	if plan != nil && plan.bg == nil {
 		return s.approveByPR(ctx, plan, m, stored, now, req.Msg.GetReason())
 	}
 
@@ -180,7 +180,16 @@ func (s *Server) ApproveMachine(
 		Actor: s.actorName(ctx), At: timestamppb.New(now), Action: "approve", Target: objectRef(m.Namespace, m.Name), Reason: req.Msg.GetReason(),
 	}
 
-	return connect.NewResponse(&pb.ApproveMachineResponse{Machine: machineToPB(m), Audit: audit}), nil
+	url, notice := s.afterBreakGlass(ctx, plan, m, audit, func() (string, error) {
+		r, err := s.approveByPR(ctx, plan, m, stored, now, req.Msg.GetReason())
+		if err != nil {
+			return "", err
+		}
+
+		return r.Msg.GetPullRequestUrl(), nil
+	})
+
+	return connect.NewResponse(&pb.ApproveMachineResponse{Machine: machineToPB(m), Audit: audit, PullRequestUrl: url, Notice: notice}), nil
 }
 
 // RejectMachine records that a pending machine was turned away by setting
@@ -207,7 +216,7 @@ func (s *Server) RejectMachine(
 	// A rejection is never a strict "add" (allowStrictAdd false): a pending
 	// machine nobody approved is a discovery record, not something that
 	// belongs in Git.
-	plan, err := s.planWrite(ctx, m, m.Spec.ClusterRef.Name, false)
+	plan, err := s.planWrite(ctx, m, m.Spec.ClusterRef.Name, false, req.Msg.GetBreakGlass())
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +234,7 @@ func (s *Server) RejectMachine(
 		Actor: s.actorName(ctx), Reason: req.Msg.GetReason(), At: metav1.NewTime(now),
 	}
 
-	if plan != nil {
+	if plan != nil && plan.bg == nil {
 		return s.rejectByPR(ctx, plan, m, stored, now, req.Msg.GetReason())
 	}
 
@@ -238,5 +247,14 @@ func (s *Server) RejectMachine(
 		Target: objectRef(m.Namespace, m.Name), Reason: req.Msg.GetReason(),
 	}
 
-	return connect.NewResponse(&pb.RejectMachineResponse{Audit: audit}), nil
+	url, notice := s.afterBreakGlass(ctx, plan, m, audit, func() (string, error) {
+		r, err := s.rejectByPR(ctx, plan, m, stored, now, req.Msg.GetReason())
+		if err != nil {
+			return "", err
+		}
+
+		return r.Msg.GetPullRequestUrl(), nil
+	})
+
+	return connect.NewResponse(&pb.RejectMachineResponse{Audit: audit, PullRequestUrl: url, Notice: notice}), nil
 }

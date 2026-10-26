@@ -209,3 +209,47 @@ func TestCountApprovedControlPlanes(t *testing.T) {
 		t.Fatalf("CountApprovedControlPlanes = %d, want 2", got)
 	}
 }
+
+func TestCheckControlPlaneApproval(t *testing.T) {
+	for _, tc := range []struct {
+		current, desired int
+		wantErr          bool
+	}{
+		{0, 1, false}, {1, 1, false}, // first approval, then the replacement slot
+		{2, 1, true},
+		{2, 3, false}, {3, 3, false}, // scale-up and 3->4
+		{4, 3, true},
+		{5, 5, false}, {6, 5, true},
+	} {
+		if err := CheckControlPlaneApproval(tc.current, tc.desired); (err != nil) != tc.wantErr {
+			t.Errorf("CheckControlPlaneApproval(%d, %d) = %v, wantErr %v", tc.current, tc.desired, err, tc.wantErr)
+		}
+	}
+}
+
+func TestCheckLastWorker(t *testing.T) {
+	for _, tc := range []struct {
+		schedulable string
+		after       int
+		wantErr     bool
+	}{
+		{"false", 0, true}, {"false", 1, false}, {"true", 0, false},
+	} {
+		if err := CheckLastWorker(tc.schedulable, tc.after); (err != nil) != tc.wantErr {
+			t.Errorf("CheckLastWorker(%q, %d) = %v, wantErr %v", tc.schedulable, tc.after, err, tc.wantErr)
+		}
+	}
+}
+
+func TestCountApprovedWorkers(t *testing.T) {
+	c := fake.NewClientBuilder().WithScheme(newCountTestScheme(t)).WithObjects(
+		newCountTestMachine("default", "w1", "west", "worker", ichorv1alpha1.MachineApprovalStateApproved),
+		newCountTestMachine("default", "w2", "west", "worker", ichorv1alpha1.MachineApprovalStatePending),
+		newCountTestMachine("default", "cp1", "west", "controlplane", ichorv1alpha1.MachineApprovalStateApproved),
+	).Build()
+
+	got, err := CountApprovedWorkers(context.Background(), c, "default", "west")
+	if err != nil || got != 1 {
+		t.Fatalf("CountApprovedWorkers = %d, %v; want 1", got, err)
+	}
+}

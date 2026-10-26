@@ -39,7 +39,7 @@ func SetupTalosMachineWebhookWithManager(mgr ctrl.Manager) error {
 		Complete()
 }
 
-// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-talosmachine,mutating=false,failurePolicy=fail,sideEffects=None,groups=ichor.maesh.dev,resources=talosmachines,verbs=delete,versions=v1alpha1,name=vtalosmachine-v1alpha1.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-talosmachine,mutating=false,failurePolicy=fail,sideEffects=None,groups=ichor.maesh.dev,resources=talosmachines,verbs=create;update;delete,versions=v1alpha1,name=vtalosmachine-v1alpha1.kb.io,admissionReviewVersions=v1
 
 // TalosMachineCustomValidator struct is responsible for validating the TalosMachine resource
 // when it is created, updated, or deleted.
@@ -51,24 +51,106 @@ type TalosMachineCustomValidator struct {
 	// for the quorum check, bypassing the manager's cache: a cached read
 	// can still report a control plane deleted moments ago, drifting the
 	// count high -- the dangerous direction, since it is what lets a
-	// second, concurrent deletion look safe when it is not. ValidateDelete is the only method that uses it, via
-	// deleteguard.CountApprovedControlPlanes, the one place in the
-	// codebase this count is computed.
+	// second, concurrent deletion look safe when it is not. Every count goes through pkg/deleteguard's Count*
+	// functions, the one place machines are listed for counting. It also
+	// reads the machine's TalosCluster (count, schedulable).
 	APIReader client.Reader
 }
 
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type TalosMachine.
-func (v *TalosMachineCustomValidator) ValidateCreate(_ context.Context, obj *ichorv1alpha1.TalosMachine) (admission.Warnings, error) {
+func (v *TalosMachineCustomValidator) ValidateCreate(ctx context.Context, obj *ichorv1alpha1.TalosMachine) (admission.Warnings, error) {
 	talosmachinelog.Info("Validation for TalosMachine upon creation", "name", obj.GetName())
+
+	// A machine created already approved (GitOps) is an approval too.
+	return nil, v.checkApprovalCap(ctx, nil, obj)
+}
+
+// ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type TalosMachine.
+func (v *TalosMachineCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj *ichorv1alpha1.TalosMachine) (admission.Warnings, error) {
+	talosmachinelog.Info("Validation for TalosMachine upon update", "name", newObj.GetName())
+
+	if err := v.checkApprovalCap(ctx, oldObj, newObj); err != nil {
+		return nil, err
+	}
+
+	// An approved worker that stops being one (rejected, re-roled, moved to
+	// another cluster) leaves its old cluster just like a delete does.
+	if isApprovedRole(oldObj, roleWorker) && !(isApprovedRole(newObj, roleWorker) && sameCluster(oldObj, newObj)) {
+		return nil, v.checkWorkerLeaves(ctx, oldObj)
+	}
 
 	return nil, nil
 }
 
-// ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type TalosMachine.
-func (v *TalosMachineCustomValidator) ValidateUpdate(_ context.Context, oldObj, newObj *ichorv1alpha1.TalosMachine) (admission.Warnings, error) {
-	talosmachinelog.Info("Validation for TalosMachine upon update", "name", newObj.GetName())
+const (
+	roleControlPlane = "controlplane"
+	roleWorker       = "worker"
+)
 
-	return nil, nil
+func isApprovedRole(m *ichorv1alpha1.TalosMachine, role string) bool {
+	return m != nil && m.Spec.Role == role && m.Spec.IsApproved()
+}
+
+func sameCluster(a, b *ichorv1alpha1.TalosMachine) bool {
+	return a.Spec.ClusterRef.Name == b.Spec.ClusterRef.Name
+}
+
+// getCluster reads the machine's TalosCluster directly. A missing or
+// deleting cluster returns nil, nil: there is nothing to compare against, and
+// a cluster teardown must be able to cascade into its machines.
+func (v *TalosMachineCustomValidator) getCluster(ctx context.Context, m *ichorv1alpha1.TalosMachine) (*ichorv1alpha1.TalosCluster, error) {
+	var c ichorv1alpha1.TalosCluster
+	if err := v.APIReader.Get(ctx, client.ObjectKey{Namespace: m.Namespace, Name: m.Spec.ClusterRef.Name}, &c); err != nil {
+		return nil, client.IgnoreNotFound(err)
+	}
+	if !c.DeletionTimestamp.IsZero() {
+		return nil, nil
+	}
+
+	return &c, nil
+}
+
+// checkApprovalCap enforces "no approving more control planes than
+// configured": only on the transition into an approved
+// control plane of a cluster (oldObj nil on create).
+func (v *TalosMachineCustomValidator) checkApprovalCap(ctx context.Context, oldObj, newObj *ichorv1alpha1.TalosMachine) error {
+	if !isApprovedRole(newObj, roleControlPlane) {
+		return nil
+	}
+	if isApprovedRole(oldObj, roleControlPlane) && sameCluster(oldObj, newObj) {
+		return nil
+	}
+
+	cluster, err := v.getCluster(ctx, newObj)
+	if err != nil || cluster == nil {
+		return err
+	}
+
+	// newObj is not stored as an approved control plane yet, so the count
+	// excludes it.
+	current, err := deleteguard.CountApprovedControlPlanes(ctx, v.APIReader, newObj.Namespace, newObj.Spec.ClusterRef.Name)
+	if err != nil {
+		return err
+	}
+
+	return deleteguard.CheckControlPlaneApproval(current, int(cluster.Spec.ControlPlane.Count))
+}
+
+// checkWorkerLeaves refuses removing the last approved worker of a cluster
+// whose control planes are unschedulable. m is stored approved, so the count
+// includes it.
+func (v *TalosMachineCustomValidator) checkWorkerLeaves(ctx context.Context, m *ichorv1alpha1.TalosMachine) error {
+	cluster, err := v.getCluster(ctx, m)
+	if err != nil || cluster == nil || cluster.Spec.ControlPlane.Schedulable != "false" {
+		return err
+	}
+
+	workers, err := deleteguard.CountApprovedWorkers(ctx, v.APIReader, m.Namespace, m.Spec.ClusterRef.Name)
+	if err != nil {
+		return err
+	}
+
+	return deleteguard.CheckLastWorker(cluster.Spec.ControlPlane.Schedulable, workers-1)
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type TalosMachine.
@@ -79,10 +161,14 @@ func (v *TalosMachineCustomValidator) ValidateDelete(ctx context.Context, obj *i
 		return nil, err
 	}
 
+	if isApprovedRole(obj, roleWorker) {
+		return nil, v.checkWorkerLeaves(ctx, obj)
+	}
+
 	// Only an approved control plane has ever joined etcd (design: approval is
 	// what lets the controller render and apply config); any other machine
 	// cannot affect quorum, so the annotation check above is the whole story.
-	if obj.Spec.Role != "controlplane" || !obj.Spec.IsApproved() {
+	if !isApprovedRole(obj, roleControlPlane) {
 		return nil, nil
 	}
 

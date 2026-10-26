@@ -170,3 +170,7 @@ and CoreDNS kinds, `VolumeConfig`/`FilesystemTrimConfig` beyond
 `provisioning`, and registry TLS (the host sits inside the path, so a prefix
 rule cannot name it). Ichor's inputs never vary most of these after the first
 apply.
+
+## Addendum: an unchanged hostname needs no reboot
+
+fieldmeta stays path-only, so `HostnameConfig.*` and `machine.network.hostname` are reboot-required. `assessChange` (`internal/controller/hostname_noop.go`) drops those paths when `spec.hostname` equals the node's current Nodename, so the release that began rendering `spec.hostname` does not demand a reboot of every existing node; a real rename stays reboot-required and its message says the Kubernetes node keeps its old name until the reboot.

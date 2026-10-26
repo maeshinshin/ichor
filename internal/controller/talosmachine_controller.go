@@ -75,7 +75,6 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/clusterlock"
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
-	"github.com/maeshinshin/ichor/pkg/fieldmeta"
 	"github.com/maeshinshin/ichor/pkg/render"
 )
 
@@ -424,7 +423,7 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			"invalid versionContract")
 	}
 
-	impact := fieldmeta.Assess(paths, contract)
+	impact := assessChange(ctx, talos, m.Spec.Hostname, paths, contract)
 
 	// Step 4: dry run first, always -- side-effect free, and its warnings
 	// are worth surfacing regardless of which way step 5 goes (ADR 0009).
@@ -618,7 +617,7 @@ func (r *TalosMachineReconciler) refuseReboot(
 
 	return ctrl.Result{}, r.ready(ctx, m, metav1.ConditionFalse, reasonRebootRequired,
 		driftNote+"configuration change needs a reboot (fields: "+summarizePaths(paths, rebootPathsInMessage)+
-			"); nothing reboots a node on its own -- start a config rollout (ichor config apply, or the cluster page) to apply it")
+			")"+renameNote(paths)+"; nothing reboots a node on its own -- start a config rollout (ichor config apply, or the cluster page) to apply it")
 }
 
 // rebootPathsInMessage caps how many field paths a Ready message lists; status.rebootPaths has all.

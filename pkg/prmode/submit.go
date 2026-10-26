@@ -21,7 +21,58 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
+
+// patchedFileContent is the edit-in-place half of SubmitPR: find Target's
+// file, apply Updates, and return its path relative to dir with the
+// before/after bytes.
+func patchedFileContent(dir string, req SubmitPRRequest) (relPath string, oldData, newData []byte, err error) {
+	file, err := Locate(dir, req.SourcePath, req.Target)
+	if err != nil {
+		return "", nil, nil, err
+	}
+
+	oldData, err = os.ReadFile(file)
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("prmode: reading %s: %w", file, err)
+	}
+
+	newData, err = Patch(oldData, req.Target, req.Updates)
+	if err != nil {
+		return "", nil, nil, err
+	}
+
+	relPath, err = filepath.Rel(dir, file)
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("prmode: %s is not under the checkout: %w", file, err)
+	}
+
+	return relPath, oldData, newData, nil
+}
+
+// newFileContent is the add-a-file half: check that nf.Path stays inside
+// dir and names a file that does not exist yet, and create its directory.
+func newFileContent(dir string, nf *NewFile) (relPath string, newData []byte, err error) {
+	clean := filepath.Clean(nf.Path)
+	sep := string(filepath.Separator)
+
+	if nf.Path == "" || filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+sep) ||
+		clean == ".git" || strings.HasPrefix(clean, ".git"+sep) {
+		return "", nil, fmt.Errorf("prmode: new file path %q must be a relative path inside the repository", nf.Path)
+	}
+
+	full := filepath.Join(dir, clean)
+	if _, statErr := os.Stat(full); statErr == nil {
+		return "", nil, fmt.Errorf("prmode: %s already exists in the repository", clean)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+		return "", nil, fmt.Errorf("prmode: creating the directory for %s: %w", clean, err)
+	}
+
+	return clean, nf.Content, nil
+}
 
 // SubmitPRRequest is everything SubmitPR needs to go from "a tracked CR
 // and a new value for one of its fields" to an open pull/merge request.
@@ -51,9 +102,21 @@ type SubmitPRRequest struct {
 	Target     Target
 	Updates    []FieldUpdate
 
+	// NewFile, when set, adds a file instead of editing one: SourcePath,
+	// Target and Updates are ignored. This is strict-mode GitOps (ADR
+	// 0056), where the CR is not in Git yet, so Locate has nothing to find.
+	NewFile *NewFile
+
 	Title         string
 	Requester     string
 	ImpactPreview string
+}
+
+// NewFile is a file SubmitPR adds: Path is relative to the repository
+// root and must not exist yet.
+type NewFile struct {
+	Path    string
+	Content []byte
 }
 
 // SubmitPR clones req's repository at BaseBranch, locates Target's file
@@ -74,24 +137,19 @@ func SubmitPR(ctx context.Context, req SubmitPRRequest) (PRResult, error) {
 		return PRResult{}, err
 	}
 
-	file, err := Locate(dir, req.SourcePath, req.Target)
+	var (
+		relPath          string
+		oldData, newData []byte
+	)
+
+	if req.NewFile != nil {
+		relPath, newData, err = newFileContent(dir, req.NewFile)
+	} else {
+		relPath, oldData, newData, err = patchedFileContent(dir, req)
+	}
+
 	if err != nil {
 		return PRResult{}, err
-	}
-
-	oldData, err := os.ReadFile(file)
-	if err != nil {
-		return PRResult{}, fmt.Errorf("prmode: reading %s: %w", file, err)
-	}
-
-	newData, err := Patch(oldData, req.Target, req.Updates)
-	if err != nil {
-		return PRResult{}, err
-	}
-
-	relPath, err := filepath.Rel(dir, file)
-	if err != nil {
-		return PRResult{}, fmt.Errorf("prmode: %s is not under the checkout: %w", file, err)
 	}
 
 	message := req.Title

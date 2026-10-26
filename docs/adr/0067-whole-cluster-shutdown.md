@@ -115,3 +115,24 @@ cluster is off; the next successful snapshot after power-on clears it, so it was
 - Not tested here, deliberately: real machines (no real node or `kubectl` is touched by the tests).
 
 - `ichor cluster shutdown` and the UI button landed in ADR 0068.
+
+## E2E observation (2026-10-26, through `ichor cluster shutdown`)
+
+- Confirmation text: "SHUT DOWN cluster ... Every machine is POWERED OFF and stays off until you start it again ...
+  workers first, drained and stopped together, then the control planes at once: 1. worker  2. cp, cp, cp".
+- Started 19:09:20. The worker's node ended at 19:09:37 (about 17 s), the Kubernetes API was gone at about 19:10:11,
+  control planes `ha-0` and `ha-2` stopped by 19:10:50 and `ha-1` by 19:11:24. So the worker went first and the
+  control planes after it. **The controller's own node (`ha-0`) was not the last to stop**; the order in which Talos
+  finishes stopping is not the order the requests were sent in, and the operation's status could not be read
+  afterwards (etcd was off), so what the order of the requests was was not observed.
+- Starting an upgrade while the shutdown was `InProgress` was refused by `ichor upgrade kubernetes 1.37.1`:
+  `failed_precondition: operation "shutdown-qdr77" (shutdown) on this cluster is not finished (phase "InProgress")`
+  (the operation-in-flight check of ADR 0068, not the `ClusterShuttingDown` pause of `acquireDisruptiveLock`).
+- **Power-on did not complete, and this harness cannot test it as it is.** Starting the nodes again created new
+  launcher pods with different pod IPs (`10.244.1.44/.96/.90/.197` became `10.244.1.250`, `10.244.0.54`,
+  `10.244.1.144`, `10.244.2.150`). Every address in the cluster (etcd peer URLs, the cluster endpoint, the
+  TalosMachine endpoints, the certificate SANs) is the old pod IP, so a three-member etcd cannot form quorum after
+  a power cycle on this network. In addition no Talos port (50000, 6443, 10250) answered on the new addresses for
+  more than 20 minutes after the start, and I had no console to see why. "The operation becomes `Completed` by
+  itself" was therefore **not observed**. A test needs node addresses that survive a stop and start (a secondary
+  interface with static addresses, which the outer cluster does not have, or a single-node cluster).

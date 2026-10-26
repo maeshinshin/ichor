@@ -23,6 +23,8 @@ import (
 	"time"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
@@ -42,6 +44,9 @@ import (
 // this is "come back soon enough that status doesn't look stalled," not a
 // tight poll.
 const operationRequeueInterval = 30 * time.Second
+
+// conditionOperationPaused is the TalosOperation condition that says why setPhase paused it.
+const conditionOperationPaused = "Paused"
 
 const (
 	reasonOperationNoExecutor    = "NoExecutor"
@@ -330,6 +335,17 @@ func (r *TalosOperationReconciler) setPhase(ctx context.Context, op *ichorv1alph
 		op.Status.FailureReason = message
 	} else if phase != ichorv1alpha1.TalosOperationPhasePaused {
 		op.Status.FailureReason = ""
+	}
+
+	// Every pause says why. failureReason cannot carry the transient causes (a transitioning
+	// cluster, a held lock, spec.paused): it also means "a step failed, never retry" to this
+	// controller, the CLI and the UI, and would turn a self-resuming pause into a stuck one.
+	if phase == ichorv1alpha1.TalosOperationPhasePaused {
+		apimeta.SetStatusCondition(&op.Status.Conditions, metav1.Condition{
+			Type: conditionOperationPaused, Status: metav1.ConditionTrue, Reason: reason, Message: message,
+		})
+	} else {
+		apimeta.RemoveStatusCondition(&op.Status.Conditions, conditionOperationPaused)
 	}
 
 	return r.Status().Update(ctx, op)

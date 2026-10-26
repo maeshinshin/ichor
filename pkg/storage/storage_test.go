@@ -83,8 +83,8 @@ func TestLonghornV1_TalosPatches(t *testing.T) {
 		t.Fatalf("TalosPatches(%q) error: %v", selector, err)
 	}
 
-	if len(docs) != 2 {
-		t.Fatalf("TalosPatches(%q) returned %d documents, want 2", selector, len(docs))
+	if len(docs) != 1 {
+		t.Fatalf("TalosPatches(%q) returned %d documents, want 1", selector, len(docs))
 	}
 
 	userVolume := docs[0]
@@ -109,23 +109,15 @@ func TestLonghornV1_TalosPatches(t *testing.T) {
 		t.Errorf("UserVolumeConfig disk selector = %q, want %q", got, selector)
 	}
 
-	kubeletPatch := docs[1]
-	if kubeletPatch.Kind != "Config" {
-		t.Fatalf("docs[1].Kind = %q, want %q", kubeletPatch.Kind, "Config")
+	if provisioning.ProvisioningMaxSize != "100%" {
+		t.Errorf("maxSize = %q, want 100%% (Talos requires a size bound)", provisioning.ProvisioningMaxSize)
 	}
+}
 
-	if kubeletPatch.Config == nil || kubeletPatch.Config.MachineConfig == nil ||
-		kubeletPatch.Config.MachineConfig.MachineKubelet == nil {
-		t.Fatal("docs[1].Config.MachineConfig.MachineKubelet is nil")
-	}
-
-	mounts := kubeletPatch.Config.MachineConfig.MachineKubelet.KubeletExtraMounts
-	if len(mounts) != 1 {
-		t.Fatalf("KubeletExtraMounts has %d entries, want 1", len(mounts))
-	}
-
-	if mounts[0].Destination != longhornMountPath || mounts[0].Source != longhornMountPath {
-		t.Errorf("kubelet extra mount = %+v, want destination and source %q", mounts[0], longhornMountPath)
+func TestLonghornV1_KubeletMounts(t *testing.T) {
+	mounts := longhornV1{}.KubeletMounts()
+	if len(mounts) != 1 || mounts[0].Destination != longhornMountPath || mounts[0].Source != longhornMountPath {
+		t.Fatalf("KubeletMounts() = %+v, want one bind mount of %q", mounts, longhornMountPath)
 	}
 }
 

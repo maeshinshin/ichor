@@ -90,10 +90,10 @@ func (p longhornV1) CheckExtensions(installed []string) error {
 }
 
 // TalosPatches implements Preset. It returns a UserVolumeConfig document
-// provisioning the disk diskSelector matches, and a Config document adding
-// the kubelet bind mount Longhorn's Talos Linux support doc's example
-// shows alongside it -- without the mount, the volume UserVolumeConfig
-// provisions is invisible to the kubelet, and so to Longhorn.
+// provisioning the disk diskSelector matches. The kubelet bind mount
+// Longhorn's Talos Linux support doc shows alongside it is KubeletMounts, not
+// a document here: how (and whether) it can be expressed depends on the
+// version contract.
 func (longhornV1) TalosPatches(diskSelector string) ([]ichorv1alpha1.TalosConfigPatchDocument, error) {
 	if diskSelector == "" {
 		return nil, fmt.Errorf("storage: diskSelector is required")
@@ -106,27 +106,22 @@ func (longhornV1) TalosPatches(diskSelector string) ([]ichorv1alpha1.TalosConfig
 				MetaName: longhornVolumeName,
 				ProvisioningSpec: &typedconfig.ProvisioningSpec{
 					DiskSelectorSpec: &typedconfig.DiskSelector{Match: diskSelector},
-				},
-			},
-		},
-		{
-			Kind: "Config",
-			Config: &typedconfig.Config{
-				MachineConfig: &typedconfig.MachineConfig{
-					MachineKubelet: &typedconfig.KubeletConfig{
-						KubeletExtraMounts: []*typedconfig.ExtraMount{
-							{
-								Destination: longhornMountPath,
-								Type:        "bind",
-								Source:      longhornMountPath,
-								Options:     []string{"bind", "rshared", "rw"},
-							},
-						},
-					},
+					// Talos rejects a UserVolumeConfig with neither minSize nor maxSize;
+					// Longhorn is handed the whole disk.
+					ProvisioningMaxSize: "100%",
 				},
 			},
 		},
 	}, nil
+}
+
+// KubeletMounts implements Preset: the bind mount Longhorn's Talos Linux support doc shows, so
+// the volume UserVolumeConfig provisions is visible to the kubelet.
+func (longhornV1) KubeletMounts() []KubeletMount {
+	return []KubeletMount{{
+		Destination: longhornMountPath, Source: longhornMountPath, Type: "bind",
+		Options: []string{"bind", "rshared", "rw"},
+	}}
 }
 
 // NodeLabels implements Preset.

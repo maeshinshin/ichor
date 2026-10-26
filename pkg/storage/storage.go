@@ -51,6 +51,14 @@ type LiveConfig struct {
 	CreateDefaultDiskOnLabeledNodes bool
 }
 
+// KubeletMount is one kubelet extra mount (machine.kubelet.extraMounts' shape).
+type KubeletMount struct {
+	Destination string
+	Source      string
+	Type        string
+	Options     []string
+}
+
 // Preset is a storage system's layer-1 shape: the system extensions its
 // disk handling needs, the Talos-side config documents that provision and
 // mount the disk, the node label and annotation that register the
@@ -79,6 +87,13 @@ type Preset interface {
 	// provisioning.diskSelector.match uses), meant to be applied as a
 	// TalosConfigPatch. It returns an error if diskSelector is empty.
 	TalosPatches(diskSelector string) ([]ichorv1alpha1.TalosConfigPatchDocument, error)
+
+	// KubeletMounts returns the bind mounts the kubelet needs to see the volumes
+	// TalosPatches provisions. Kept apart from TalosPatches because Talos expresses
+	// kubelet extra mounts only in the legacy machine.kubelet block: a cluster whose
+	// version contract uses the standalone KubeletConfig document (Talos 1.14+) has no
+	// field for them, and pkg/render decides per contract whether and how to apply these.
+	KubeletMounts() []KubeletMount
 
 	// NodeLabels returns the Kubernetes Node labels that register a node
 	// with the storage system through its own label mechanism.

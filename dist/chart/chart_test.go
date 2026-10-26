@@ -1145,22 +1145,24 @@ func specPropertyKeys(schema map[string]any) []string {
 	return keys
 }
 
-// installerConfigRolePath is config/rbac/ichor-installer/role.yaml (hand-written, ADR 0058):
+// installerConfigRolePath is config/rbac/ichor-installer/role.yaml (hand-written, ADR 0059):
 // the installer Job's ClusterRole and namespaced Role, whose chart copy
 // templates/rbac/ichor-installer.yaml checkInstallerRBAC compares as rule sets.
 const installerConfigRolePath = "../../config/rbac/ichor-installer/role.yaml"
 
 const adr0058Doc = "docs/adr/0058-ichor-installation-and-self-upgrade.md"
 
-// TestInstallerRBAC pins the installer Job's identity (ADR 0058): absent unless
+// TestInstallerRBAC pins the installer Job's identity (ADR 0059): absent unless
 // installer.enabled (a chart-installed Ichor is normally Argo CD's, and nothing should hold
 // the cluster-role escalation the installer needs), present and equal to config/rbac/ichor-
 // installer when enabled, and never able to touch a Secret.
 func TestInstallerRBAC(t *testing.T) {
 	t.Run("absent by default", func(t *testing.T) {
 		docs := renderChartWithValues(t, "ichor")
-		if find(docs, kindServiceAccount, "ichor-installer") != nil || find(docs, kindClusterRole, "ichor-installer-role") != nil {
-			t.Errorf("the installer's ServiceAccount/ClusterRole render by default; they must need installer.enabled=true; see %s", adr0058Doc)
+		if find(docs, kindServiceAccount, "ichor-installer") != nil ||
+			find(docs, kindClusterRole, "ichor-installer-role") != nil {
+			t.Errorf("the installer's ServiceAccount/ClusterRole render by default; "+
+				"they must need installer.enabled=true; see %s", adr0058Doc)
 		}
 	})
 
@@ -1169,7 +1171,8 @@ func TestInstallerRBAC(t *testing.T) {
 		configDocs := loadYAMLDocs(t, installerConfigRolePath)
 
 		if find(docs, kindServiceAccount, "ichor-installer") == nil {
-			t.Fatalf("installer.enabled=true renders no ServiceAccount ichor-installer, the name the controller puts in the Job; see %s", adr0058Doc)
+			t.Fatalf("installer.enabled=true renders no ServiceAccount ichor-installer, "+
+				"the name the controller puts in the Job; see %s", adr0058Doc)
 		}
 
 		clusterRole := find(docs, kindClusterRole, "ichor-installer-role")
@@ -1195,7 +1198,8 @@ func TestInstallerRBAC(t *testing.T) {
 
 		for triple := range rbacTriples(append(allRules(clusterRole), allRules(role)...)) {
 			if triple.resource == "secrets" || triple.resource == "*" || triple.verb == "*" {
-				t.Errorf("the installer is granted %s; it must never read or write a Secret or hold a wildcard; see %s", triple, adr0058Doc)
+				t.Errorf("the installer is granted %s; it must never read or write a Secret "+
+					"or hold a wildcard; see %s", triple, adr0058Doc)
 			}
 		}
 	})

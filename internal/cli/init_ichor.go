@@ -26,7 +26,6 @@ import (
 	"golang.org/x/mod/semver"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -136,8 +135,9 @@ func createIchorInstallation(ctx context.Context, k8sClient client.Client, warn 
 	}
 
 	content, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&ichorv1alpha1.IchorInstallation{
-		TypeMeta:   metav1.TypeMeta{APIVersion: ichorv1alpha1.GroupVersion.String(), Kind: "IchorInstallation"},
-		ObjectMeta: metav1.ObjectMeta{Name: ichorv1alpha1.IchorInstallationName},
+		APIVersion: ichorv1alpha1.GroupVersion.String(),
+		Kind:       "IchorInstallation",
+		Name:       ichorv1alpha1.IchorInstallationName,
 		Spec: ichorv1alpha1.IchorInstallationSpec{
 			ManagementMode: ichorv1alpha1.IchorManagementModeIchor, Version: version.Version,
 		},

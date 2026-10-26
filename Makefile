@@ -2,7 +2,7 @@
 IMG ?= controller:latest
 # Image URL for the ichor-ui image target (ADR 0020)
 IMG_UI ?= ichor-ui:latest
-# Image URL for the installer image target (ADR 0058)
+# Image URL for the installer image target (ADR 0059)
 IMG_INSTALLER ?= ichor-installer:latest
 # VERSION is linked into every Ichor binary (internal/version); "dev" means unversioned.
 VERSION ?= dev
@@ -243,7 +243,7 @@ docker-push: ## Push docker image with the manager.
 	$(CONTAINER_TOOL) push ${IMG}
 
 .PHONY: docker-build-installer
-docker-build-installer: build-installer ## Build the installer image: the ichor binary with this tree's install manifest embedded (ADR 0058).
+docker-build-installer: build-installer ## Build the installer image: the ichor binary with this tree's install manifest embedded (ADR 0059).
 	cp dist/install.yaml internal/installmanifest/install.yaml
 	$(CONTAINER_TOOL) build -f Dockerfile.installer --build-arg VERSION=$(VERSION) -t ${IMG_INSTALLER} .
 

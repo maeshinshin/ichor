@@ -137,7 +137,7 @@ manager:
   #   labels: {}
   #   annotations: {}
 
-## The installer Job's identity (ADR 0058), used only when IchorInstallation.spec.managementMode
+## The installer Job's identity (ADR 0059), used only when IchorInstallation.spec.managementMode
 ## is "ichor". Off by default: a chart-installed Ichor is normally owned by Argo CD (mode
 ## "external"), and then nothing should hold the cluster-role escalation this ServiceAccount
 ## carries. See config/rbac/ichor-installer/role.yaml.

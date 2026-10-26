@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 // Package version carries the version every Ichor binary was built as, and the one
-// comparison rule built on it (ADR 0058).
+// comparison rule built on it (ADR 0059).
 package version
 
 import (

@@ -21,12 +21,14 @@ import (
 	"strings"
 	"testing"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
+
+// testServerV04 is the server version most skew cases are measured from.
+const testServerV04 = "v0.4.0"
 
 func serverAt(t *testing.T, installed string) client.Reader {
 	t.Helper()
@@ -39,8 +41,8 @@ func serverAt(t *testing.T, installed string) client.Reader {
 	b := fake.NewClientBuilder().WithScheme(scheme)
 	if installed != "" {
 		b = b.WithObjects(&ichorv1alpha1.IchorInstallation{
-			ObjectMeta: metav1.ObjectMeta{Name: ichorv1alpha1.IchorInstallationName},
-			Status:     ichorv1alpha1.IchorInstallationStatus{InstalledVersion: installed},
+			Name:   ichorv1alpha1.IchorInstallationName,
+			Status: ichorv1alpha1.IchorInstallationStatus{InstalledVersion: installed},
 		})
 	}
 
@@ -53,14 +55,14 @@ func TestCheckServerSkew(t *testing.T) {
 		wantErr           bool
 	}{
 		{name: "same version", cli: "v0.4.2", server: "v0.4.2"},
-		{name: "patch apart", cli: "v0.4.9", server: "v0.4.0"},
-		{name: "one minor ahead", cli: "v0.5.0", server: "v0.4.0"},
-		{name: "one minor behind", cli: "v0.3.0", server: "v0.4.0"},
-		{name: "two minors ahead", cli: "v0.6.0", server: "v0.4.0", wantErr: true},
-		{name: "two minors behind", cli: "v0.2.0", server: "v0.4.0", wantErr: true},
-		{name: "a dev CLI cannot be judged", cli: "dev", server: "v0.4.0"},
+		{name: "patch apart", cli: "v0.4.9", server: testServerV04},
+		{name: "one minor ahead", cli: "v0.5.0", server: testServerV04},
+		{name: "one minor behind", cli: "v0.3.0", server: testServerV04},
+		{name: "two minors ahead", cli: "v0.6.0", server: testServerV04, wantErr: true},
+		{name: "two minors behind", cli: "v0.2.0", server: testServerV04, wantErr: true},
+		{name: "a dev CLI cannot be judged", cli: "dev", server: testServerV04},
 		{name: "a server that reports nothing cannot be judged", cli: "v0.6.0", server: ""},
-		{name: "different majors cannot be compared", cli: "v2.0.0", server: "v0.4.0"},
+		{name: "different majors cannot be compared", cli: "v2.0.0", server: testServerV04},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := checkServerSkew(context.Background(), serverAt(t, tc.server), tc.cli)

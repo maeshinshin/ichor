@@ -371,7 +371,7 @@ func main() {
 	}
 	// The backbone (TalosOperationReconciler) never branches on spec.kind itself (ADR
 	// 0026), so the kind-to-executor selection happens here, in the wiring: Talos
-	// (ADR 0043), Kubernetes (ADR 0057) and Ichor (ADR 0058). An unknown kind pauses
+	// (ADR 0043), Kubernetes (ADR 0057) and Ichor (ADR 0059). An unknown kind pauses
 	// immediately with a plain error -- never silently treated as another kind.
 	talosUpgradeAdvance := controller.NewTalosUpgradeAdvancer(
 		mgr.GetClient(), os.Getenv("POD_NAMESPACE"), controller.NewMachineryTalosClient,

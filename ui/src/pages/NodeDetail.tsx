@@ -1,17 +1,17 @@
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useState } from 'preact/hooks'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ConditionList, StatusBadge } from '@/components/ConditionList'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { Field, Fields, PageHeader } from '@/components/PageHeader'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
 import { Section, SectionLayout, type SectionLink } from '@/components/SectionNav'
+import { NodeLogs } from '@/components/NodeLogs'
 import { TalosDetails } from '@/components/TalosDetails'
 import type { EffectiveConfigValue } from '@/gen/ichor/v1alpha1/node_pb'
-import { ConfigLayer, DiskRole, type NodeDetail as NodeDetailMessage, type StreamNodeLogsResponse } from '@/gen/ichor/v1alpha1/node_pb'
+import { ConfigLayer, DiskRole, type NodeDetail as NodeDetailMessage } from '@/gen/ichor/v1alpha1/node_pb'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { type BreakGlassRun } from '@/components/BreakGlassDialog'
 import { PullRequestNotice } from '@/components/PullRequestNotice'
@@ -22,10 +22,8 @@ import { clusterClient, machineClient, nodeClient } from '@/lib/connect'
 import { needsInstallDisk } from '@/lib/installDisk'
 import { enumLabel } from '@/lib/enum'
 import { describeError } from '@/lib/errors'
-import { formatBytes, formatTimestamp } from '@/lib/format'
-import { streamWithResume } from '@/lib/resumableStream'
+import { formatBytes } from '@/lib/format'
 import { useT } from '@/lib/useT'
-import type { Key } from '@/lib/i18n'
 import { Link, objectRefPath } from '@/router'
 
 type ErrorShape = { title: string; detail: string }
@@ -272,7 +270,9 @@ export function NodeDetail({ namespace, name }: { namespace: string; name: strin
           <TalosDetails namespace={namespace} name={name} />
         </div>
         <EffectiveConfigSection namespace={namespace} name={name} />
-        <LogsSection namespace={namespace} name={name} />
+        <div id="logs" class="scroll-mt-24">
+          <NodeLogs namespace={namespace} name={name} />
+        </div>
       </SectionLayout>
     </>
   )
@@ -378,102 +378,4 @@ function groupByLayer(values: EffectiveConfigValue[]): [number, EffectiveConfigV
     }
   }
   return [...byLayer.entries()].sort((a, b) => a[0] - b[0])
-}
-
-// Known Talos service names (node.proto's own comment); "kernel" is this screen's own sentinel for the empty-string
-// wire value (Talos's Dmesg log) - Select can't use "" as a real item
-// value, since empty string is its own placeholder-vs-selected signal.
-const LOG_SOURCES: { value: string; label: Key | string; wire: string }[] = [
-  { value: 'kernel', label: 'node.logKernel', wire: '' },
-  { value: 'kubelet', label: 'kubelet', wire: 'kubelet' },
-  { value: 'etcd', label: 'etcd', wire: 'etcd' },
-  { value: 'trustd', label: 'trustd', wire: 'trustd' },
-  { value: 'apid', label: 'apid', wire: 'apid' },
-  { value: 'machined', label: 'machined', wire: 'machined' },
-]
-
-function LogsSection({ namespace, name }: { namespace: string; name: string }) {
-  const t = useT()
-  const [source, setSource] = useState('kernel')
-  const [lines, setLines] = useState<StreamNodeLogsResponse[]>([])
-  const [error, setError] = useState<ErrorShape | null>(null)
-  const [reconnecting, setReconnecting] = useState(false)
-  const bottomRef = useRef<HTMLDivElement>(null)
-  const service = LOG_SOURCES.find((s) => s.value === source)?.wire ?? ''
-
-  useEffect(() => {
-    const controller = new AbortController()
-    let cancelled = false
-    setLines([])
-    setError(null)
-    setReconnecting(false)
-
-    async function run() {
-      const call = (resumeToken: string) => {
-        setReconnecting(resumeToken !== '')
-        return nodeClient.streamNodeLogs(
-          { machines: [{ namespace, name }], resumeToken, service },
-          { signal: controller.signal },
-        )
-      }
-      try {
-        for await (const line of streamWithResume(call, (l) => l.resumeToken)) {
-          if (cancelled) return
-          setReconnecting(false)
-          setLines((prev) => [...prev.slice(-499), line])
-        }
-      } catch (err) {
-        if (!cancelled) setError(describeError(err))
-      }
-    }
-
-    run()
-    return () => {
-      cancelled = true
-      controller.abort()
-    }
-  }, [namespace, name, service])
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ block: 'end' })
-  }, [lines.length])
-
-  return (
-    <Section
-      id="logs"
-      title={
-        <>
-          {t('node.logs')}
-          {reconnecting && <Badge variant="outline">{t('node.reconnecting')}</Badge>}
-        </>
-      }
-    >
-      <div>
-        <div class="mb-2 w-48">
-          <Select value={source} onValueChange={setSource}>
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {LOG_SOURCES.map((s) => (
-                <SelectItem key={s.value} value={s.value}>
-                  {s.label.startsWith('node.') ? t(s.label as Key) : s.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        {error && <ErrorAlert {...error} />}
-        <div class="max-h-96 overflow-y-auto rounded-md bg-muted/40 p-2 font-mono text-xs">
-          {lines.length === 0 && !error && <p class="text-muted-foreground">{t('node.logWaiting')}</p>}
-          {lines.map((l, i) => (
-            <div key={i}>
-              <span class="text-muted-foreground">{formatTimestamp(l.time)}</span> {l.message}
-            </div>
-          ))}
-          <div ref={bottomRef} />
-        </div>
-      </div>
-    </Section>
-  )
 }

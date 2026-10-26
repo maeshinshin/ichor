@@ -237,6 +237,11 @@ export const en = {
   'node.reconnecting': 'reconnecting…',
   'node.logKernel': 'Kernel (dmesg)',
   'node.logWaiting': 'Waiting for log lines…',
+  'node.logPause': 'Pause',
+  'node.logResume': 'Resume',
+  'node.logPaused': 'paused',
+  'node.logExpand': 'show all',
+  'node.logCollapse': 'show less',
   'talos.title': 'Talos details',
   'talos.intro': 'Read from the node through the Talos API. Nothing here is configuration or a secret.',
   'talos.maintenance':

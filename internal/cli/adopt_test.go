@@ -380,14 +380,38 @@ func TestReportPlans_ExplainsUnrepresentablePaths(t *testing.T) {
 	reportPlans(&out, []*adoptPlan{{
 		Machine: "node-a",
 		UnrepresentablePaths: []string{
-			"KubeNetworkConfig.podSubnets", "UnattendedInstallConfig.installer.image", "KubeFlannelCNIConfig.backendType",
+			"KubeNetworkConfig.podSubnets", "KubeNetworkConfig.serviceSubnets", "UnattendedInstallConfig.installer.image",
+			"KubeFlannelCNIConfig.backendType",
 			"machine.certSANs",
 		},
 	}})
 
-	for _, want := range []string{"pod and service subnets", "install disk and image", "flannel", "no TalosConfigPatch kind"} {
+	for _, want := range []string{
+		"KubeNetworkConfig.podSubnets: set TalosCluster spec.network.podSubnets",
+		"KubeNetworkConfig.serviceSubnets: set TalosCluster spec.network.serviceSubnets",
+		"UnattendedInstallConfig.installer.image: set TalosMachine spec.install.disk",
+		"KubeFlannelCNIConfig.backendType: Talos's flannel is rendered for spec.cni.preset flannel only",
+		"write a TalosConfigPatch for the other fields by hand",
+	} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("report lacks %q:\n%s", want, out.String())
 		}
+	}
+}
+
+// The legacy paths of a pre-1.14 node name the same spec fields.
+func TestExplainUnrepresentable_LegacyPaths(t *testing.T) {
+	got := strings.Join(explainUnrepresentable([]string{
+		"cluster.network.podSubnets", "cluster.network.serviceSubnets", "machine.install.disk", "cluster.network.cni.name",
+	}), "\n")
+
+	for _, want := range []string{"spec.network.podSubnets", "spec.network.serviceSubnets", "spec.install.disk", "spec.cni.preset"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("legacy report lacks %q:\n%s", want, got)
+		}
+	}
+
+	if strings.Contains(got, "by hand") {
+		t.Errorf("every path above has a spec field, but the report says to write a patch:\n%s", got)
 	}
 }

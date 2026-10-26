@@ -35,3 +35,15 @@ The shell was first viewed in headless Chromium (`make ui-shots`, `hack/ui-shots
 5. The theme switch was compared with the preactcn site's `ThemeToggle.tsx`: same markup (ghost icon `Button`, `Sun hidden dark:block`, `Moon dark:hidden`); only the storage key differs (`ichor-ui-theme`, ADR 0070).
 6. `ICHOR_API=http://host npx vite` (and `vite preview`) proxy the Connect services and `/auth/config` to a running backend for screenshots.
 7. **The UI says "Node", not "Machine"**: the sidebar entry, page titles, breadcrumbs, Overview tile and table headers, dialogs and kind labels read "Node" (`lib/i18n.ts`). The `/machines` route, the i18n key names, the protos and the `TalosMachine` CRD keep their names.
+
+## Amendment: the cluster page's Operations section shows context (2026-10-27)
+
+The section was a row of seven buttons with no context. It is now `components/OperationsPanel.tsx`:
+
+1. **Current operation** on top, when one of the cluster is not finished: kind, state, "n of m nodes done", the node in progress, the failure text, a link to the operation page, and pause or resume (`OperationControls` with `showDelete={false}`). It is read every 5 seconds. "Not finished" is the server's own rule (`unfinishedOperation`: not Completed, except a node that was shut down), kept in `lib/clusterOps.ts`.
+2. **Three groups**, each action a row with a short description, the state now and one button. *Versions*: Talos, Kubernetes and Ichor with the installed version ("Upgrade…"). *Configuration*: apply pending config (how many nodes wait for a reboot, and which), kube-proxy mode ("Switch…"), certificate authorities with their expiry dates, marked when under 30 days or past ("Rotate…"). *Danger zone*: shut down the cluster.
+3. **A button is off, with the reason written next to it**, in two cases: another operation is not finished, and "apply pending config" when no node waits. The server still refuses the same cases; this only saves the trip.
+4. **The upgrade dialog** starts with the installed version in the field, shows "Now vX. Enter a newer version." and keeps "Review" off until the target is a semantic version newer than the installed one (`versionProblem`; the server refuses a downgrade too). The kube-proxy dialog starts on the other mode. Review (the plan) and Start are unchanged.
+5. **The last five operations** of the cluster, newest first, with a state icon and a link.
+6. **Data**: the Cluster message gained `kube_proxy_mode` and `certificates` (status.certificates, ADR 0063), the Machine message `reboot_paths` (status.rebootPaths, ADR 0080). The installed Ichor version comes from `PlanOperation` (kind ichor, no target), so no new RPC. A node counts as waiting when `reboot_paths` is set or its Ready reason is RebootRequired. "Update available" for Ichor is not shown: nothing in the cluster knows the latest release.
+7. Phone: groups are cards, the button drops under the text; no horizontal scroll.

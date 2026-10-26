@@ -67,7 +67,9 @@ test('an unknown current version only checks the shape', () => {
 })
 
 test('nodes that wait for a reboot are counted', () => {
-  assert.equal(rebootPendingCount([{ rebootPaths: [] }, { rebootPaths: ['machine.install'] }, { rebootPaths: ['a', 'b'] }]), 2)
+  const m = (rebootPaths: string[], readyReason = '') => ({ rebootPaths, readyReason })
+  assert.equal(rebootPendingCount([m([]), m(['machine.install']), m(['a', 'b'])]), 2)
+  assert.equal(rebootPendingCount([m([], 'RebootRequired'), m([], 'Ready')]), 1)
   assert.equal(rebootPendingCount([]), 0)
 })
 

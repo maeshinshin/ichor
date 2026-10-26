@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import type { MessageInitShape } from '@bufbuild/protobuf'
 import { ErrorAlert } from '@/components/ErrorAlert'
+import { PullRequestNotice } from '@/components/PullRequestNotice'
 import type { Cluster } from '@/gen/ichor/v1alpha1/cluster_pb'
 import { ConfigLayer } from '@/gen/ichor/v1alpha1/node_pb'
 import { PatchSchema } from '@/gen/ichor/v1alpha1/patch_pb'
@@ -66,6 +67,7 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
 
   const [saveError, setSaveError] = useState<ErrorShape | string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [pullRequestUrl, setPullRequestUrl] = useState<string | null>(null)
 
   const [preview, setPreview] = useState<{ rebootRequired: boolean; installTimeOnly: string[]; unsupported: string[] } | null>(null)
   const [previewError, setPreviewError] = useState<ErrorShape | string | null>(null)
@@ -153,7 +155,11 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
       if (isNew) {
         await patchClient.createPatch({ patch: wire })
       } else {
-        await patchClient.updatePatch({ patch: wire })
+        const res = await patchClient.updatePatch({ patch: wire })
+        if (res.pullRequestUrl) {
+          setPullRequestUrl(res.pullRequestUrl)
+          return
+        }
       }
       navigate('/patches')
     } catch (err) {
@@ -421,6 +427,7 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
         </CardContent>
       </Card>
 
+      {pullRequestUrl && <PullRequestNotice url={pullRequestUrl} />}
       {saveError && (typeof saveError === 'string' ? <ErrorAlert title="Invalid target" detail={saveError} /> : <ErrorAlert {...saveError} />)}
 
       <div class="flex items-center justify-between">

@@ -171,9 +171,9 @@ func planMachine(
 	sys *render.SystemInputs,
 	dial func(ctx context.Context, endpoint string) (talosConfigReader, error),
 ) (*adoptPlan, error) {
-	talos, err := dial(ctx, m.Spec.Endpoint)
+	talos, err := dial(ctx, m.DialEndpoint())
 	if err != nil {
-		return nil, fmt.Errorf("adopt: dialing machine %q at %q: %w", m.Name, m.Spec.Endpoint, err)
+		return nil, fmt.Errorf("adopt: dialing machine %q at %q: %w", m.Name, m.DialEndpoint(), err)
 	}
 
 	current, err := talos.CurrentConfig(ctx)

@@ -405,7 +405,7 @@ func TestPlanConfigListsOnlyMachinesWithAPendingRebootAndTheirFields(t *testing.
 		t.Fatal(err)
 	}
 
-	var names []string
+	names := make([]string, 0, len(res.Msg.GetMachines()))
 
 	for _, m := range res.Msg.GetMachines() {
 		names = append(names, m.GetName())

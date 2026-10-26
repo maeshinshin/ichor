@@ -28,6 +28,7 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/gitops"
+	"github.com/maeshinshin/ichor/pkg/gitopstracking"
 )
 
 // exportOpts backs `ichor gitops export`'s flags.
@@ -153,7 +154,7 @@ func runGitopsExport(ctx context.Context, opts gitopsExportOptions, k8sClient cl
 // exportMachines adds one entry per approved TalosMachine belonging to
 // opts.Cluster to crs. An unapproved machine is never added -- it is not
 // yet part of the cluster's committed state -- but if it already looks
-// tracked by Argo CD or Flux (isTracked, gitops_tracking.go), that is
+// tracked by Argo CD or Flux (gitopstracking.IsTracked), that is
 // surprising enough on its own to warn about even though export still
 // leaves it out.
 func exportMachines(ctx context.Context, k8sClient client.Client, opts gitopsExportOptions, crs map[string]any, warn io.Writer) error {
@@ -169,7 +170,7 @@ func exportMachines(ctx context.Context, k8sClient client.Client, opts gitopsExp
 		}
 
 		if !m.Spec.IsApproved() {
-			if tracked, by, err := isTracked(ctx, k8sClient, opts.ArgoCDNamespace, m); err != nil {
+			if tracked, by, err := gitopstracking.IsTracked(ctx, k8sClient, opts.ArgoCDNamespace, m); err != nil {
 				_, _ = fmt.Fprintf(warn, "gitops export: warning: checking whether TalosMachine %s is tracked: %v\n", m.Name, err)
 			} else if tracked {
 				_, _ = fmt.Fprintf(warn,

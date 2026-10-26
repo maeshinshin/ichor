@@ -4,6 +4,7 @@
 //
 //   node hack/ui-shots.mjs <outDir> <baseURL> [path ...]
 //
+// FULL=1 captures the whole page height (up to 4000px), not just the viewport.
 // Paths default to the list pages. Read-only: it only navigates (GET).
 import { spawn } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
@@ -67,7 +68,13 @@ try {
         })
         await s('Page.navigate', { url: new URL(p, base).href })
         await sleep(3500) // data fetches and the skeleton settle
-        const { data } = await s('Page.captureScreenshot', { format: 'png' })
+        const shot = { format: 'png' }
+        if (process.env.FULL) {
+          const { cssContentSize } = await s('Page.getLayoutMetrics')
+          shot.captureBeyondViewport = true
+          shot.clip = { x: 0, y: 0, width, height: Math.min(Math.ceil(cssContentSize.height), 4000), scale: 1 }
+        }
+        const { data } = await s('Page.captureScreenshot', shot)
         const slug = (p === '/' ? 'home' : p.replace(/^\/+/, '').replace(/[^a-zA-Z0-9]+/g, '-')) || 'home'
         const file = join(outDir, `${slug}.${sizeName}.${theme}.png`)
         writeFileSync(file, Buffer.from(data, 'base64'))

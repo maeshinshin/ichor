@@ -16,7 +16,7 @@ service MachineService {
   rpc ApproveMachine(ApproveMachineRequest) returns (ApproveMachineResponse);
   rpc RejectMachine(RejectMachineRequest) returns (RejectMachineResponse);
   // RemoveMachine deletes an approved machine through the removal flow: drain, etcd
-  // member removal for a control plane, then the TalosMachine goes (ADR 0032, 0083). The
+  // member removal for a control plane, then the TalosMachine goes (ADR 0032, 0084). The
   // node is not wiped; reset is a node action.
   rpc RemoveMachine(RemoveMachineRequest) returns (RemoveMachineResponse);
   // SetMachineInstall writes only TalosMachine.spec.install of an approved

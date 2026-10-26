@@ -65,7 +65,7 @@ type MachineServiceClient interface {
 	ApproveMachine(context.Context, *connect.Request[v1alpha1.ApproveMachineRequest]) (*connect.Response[v1alpha1.ApproveMachineResponse], error)
 	RejectMachine(context.Context, *connect.Request[v1alpha1.RejectMachineRequest]) (*connect.Response[v1alpha1.RejectMachineResponse], error)
 	// RemoveMachine deletes an approved machine through the removal flow: drain, etcd
-	// member removal for a control plane, then the TalosMachine goes (ADR 0032, 0083). The
+	// member removal for a control plane, then the TalosMachine goes (ADR 0032, 0084). The
 	// node is not wiped; reset is a node action.
 	RemoveMachine(context.Context, *connect.Request[v1alpha1.RemoveMachineRequest]) (*connect.Response[v1alpha1.RemoveMachineResponse], error)
 	// SetMachineInstall writes only TalosMachine.spec.install of an approved
@@ -171,7 +171,7 @@ type MachineServiceHandler interface {
 	ApproveMachine(context.Context, *connect.Request[v1alpha1.ApproveMachineRequest]) (*connect.Response[v1alpha1.ApproveMachineResponse], error)
 	RejectMachine(context.Context, *connect.Request[v1alpha1.RejectMachineRequest]) (*connect.Response[v1alpha1.RejectMachineResponse], error)
 	// RemoveMachine deletes an approved machine through the removal flow: drain, etcd
-	// member removal for a control plane, then the TalosMachine goes (ADR 0032, 0083). The
+	// member removal for a control plane, then the TalosMachine goes (ADR 0032, 0084). The
 	// node is not wiped; reset is a node action.
 	RemoveMachine(context.Context, *connect.Request[v1alpha1.RemoveMachineRequest]) (*connect.Response[v1alpha1.RemoveMachineResponse], error)
 	// SetMachineInstall writes only TalosMachine.spec.install of an approved

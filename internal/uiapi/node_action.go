@@ -33,7 +33,7 @@ import (
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
 )
 
-// Node actions (docs/adr/0083): one TalosOperation of kind node per action, planned and created
+// Node actions (docs/adr/0084): one TalosOperation of kind node per action, planned and created
 // through OperationService like every other disruptive operation. This file only describes and
 // writes; the controller is the only writer to the node.
 

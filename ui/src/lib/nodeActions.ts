@@ -1,4 +1,4 @@
-// Pure helpers for the node actions menu (docs/adr/0083). No import from "@/gen": these run
+// Pure helpers for the node actions menu (docs/adr/0084). No import from "@/gen": these run
 // directly under `node --test` (docs/adr/0045).
 
 export type NodeActionId =

@@ -353,7 +353,7 @@ func (a *configRolloutAdvancer) checkEtcd(
 }
 
 // etcdAllMembersPresent is the quorum guard of every action that takes a control plane's etcd
-// member away for a while (ADR 0010, 0080, 0083): talos's etcd must list every approved control
+// member away for a while (ADR 0010, 0080, 0084): talos's etcd must list every approved control
 // plane. doing completes the refusal ("rebooting", "stopping").
 func etcdAllMembersPresent(
 	ctx, dialCtx context.Context, reader client.Reader, talos TalosClient, cluster *ichorv1alpha1.TalosCluster,

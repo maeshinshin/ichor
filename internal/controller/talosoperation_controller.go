@@ -117,7 +117,7 @@ type TalosOperationReconciler struct {
 	NodesReady NodesReadyFunc
 	Recorder   record.EventRecorder
 
-	// KubeClient, Evacuator serve the node kind alone (node_action.go, ADR 0083): KubeClient
+	// KubeClient, Evacuator serve the node kind alone (node_action.go, ADR 0084): KubeClient
 	// cordons, drains and reads Node readiness live (nil skips the drain and reads the cache),
 	// Evacuator is the storage hook run before a node is taken away (nil skips it).
 	KubeClient kubernetes.Interface
@@ -281,7 +281,7 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 // restingPhase handles the phases that hold no cluster lock. A shutdown that has asked every machine
 // to stop only waits for the operator to power them on (shutdown.go, ADR 0067); so does a node
-// shutdown, and a node reset waits for the removal flow, which takes the cluster lock itself (ADR 0083).
+// shutdown, and a node reset waits for the removal flow, which takes the cluster lock itself (ADR 0084).
 func (r *TalosOperationReconciler) restingPhase(
 	ctx context.Context, op *ichorv1alpha1.TalosOperation, cluster *ichorv1alpha1.TalosCluster,
 ) (res ctrl.Result, handled bool, err error) {

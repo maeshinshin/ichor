@@ -30,7 +30,7 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
-// Node actions (docs/adr/0083): each starts one TalosOperation of kind node, or, for remove, deletes
+// Node actions (docs/adr/0084): each starts one TalosOperation of kind node, or, for remove, deletes
 // the machine through the removal flow. The CLI only writes those CRs; the controller does the work.
 
 var nodeActionOpts struct {

@@ -35,7 +35,7 @@ import (
 )
 
 // nodeFixture is a cluster whose machines each have a faked Talos API and a Kubernetes Node in a
-// fake clientset (ADR 0083). machines[i] is named hostnames[i] as a Node and as an etcd member.
+// fake clientset (ADR 0084). machines[i] is named hostnames[i] as a Node and as an etcd member.
 type nodeFixture struct {
 	cluster  *ichorv1alpha1.TalosCluster
 	machines map[string]*ichorv1alpha1.TalosMachine

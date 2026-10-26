@@ -670,7 +670,7 @@ export const OperationKind = {
   CONFIG: 7,
 
   /**
-   * NODE runs one NodeAction on one machine (ADR 0083).
+   * NODE runs one NodeAction on one machine (ADR 0084).
    *
    * @generated from enum value: OPERATION_KIND_NODE = 8;
    */
@@ -689,7 +689,7 @@ export const OperationKindSchema: GenEnum<OperationKind> = /*@__PURE__*/
   enumDesc(file_ichor_v1alpha1_operation, 0);
 
 /**
- * NodeAction is what a node-kind operation does to its one machine (ADR 0083).
+ * NodeAction is what a node-kind operation does to its one machine (ADR 0084).
  *
  * @generated from enum ichor.v1alpha1.NodeAction
  */
@@ -741,7 +741,7 @@ export const NodeAction = {
 } as const;
 
 /**
- * NodeAction is what a node-kind operation does to its one machine (ADR 0083).
+ * NodeAction is what a node-kind operation does to its one machine (ADR 0084).
  *
  * @generated from enum ichor.v1alpha1.NodeAction
  */

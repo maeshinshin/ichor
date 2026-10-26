@@ -696,8 +696,6 @@ export const en = {
   'node.action.starting': 'Starting…',
   'node.action.started': 'Started “{action}” on {node}.',
   'node.action.removed': 'Removing {node}. The controller drains it and, for a control plane, removes its etcd member.',
-  'node.action.viewOperation': 'View the operation',
-  'node.action.dismiss': 'Dismiss',
   'node.action.nodeLabel': 'Node',
   'node.action.actionLabel': 'Action',
   'node.action.progress': 'Progress',

@@ -20,6 +20,14 @@ rules:
   - get
 - apiGroups:
   - ""
+  resourceNames:
+  - cilium-config
+  resources:
+  - configmaps
+  verbs:
+  - get
+- apiGroups:
+  - ""
   resources:
   - events
   verbs:

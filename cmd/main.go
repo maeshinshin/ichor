@@ -377,7 +377,7 @@ func main() {
 		os.Exit(1)
 	}
 	// The backbone (TalosOperationReconciler) never branches on spec.kind itself, so the kind-to-executor selection
-	// happens here, in the wiring: Talos, Kubernetes and Ichor. An unknown kind pauses
+	// happens here, in the wiring: Talos, Kubernetes, Ichor and the CNI kube-proxy switch. An unknown kind pauses
 	// immediately with a plain error -- never silently treated as another kind.
 	talosUpgradeAdvance := controller.NewTalosUpgradeAdvancer(
 		mgr.GetClient(), os.Getenv("POD_NAMESPACE"), controller.NewMachineryTalosClient,
@@ -389,6 +389,10 @@ func main() {
 	)
 
 	ichorUpgradeAdvance := controller.NewIchorUpgradeAdvancer(mgr.GetClient(), os.Getenv("POD_NAMESPACE"))
+	cniKubeProxyAdvance := controller.NewCNIKubeProxyAdvancer(
+		mgr.GetClient(), mgr.GetAPIReader(), os.Getenv("POD_NAMESPACE"), controller.NewMachineryTalosClient,
+		controller.NewKubeProxyAdmin(),
+	)
 
 	if err := (&controller.TalosOperationReconciler{
 		Client:    mgr.GetClient(),
@@ -403,6 +407,8 @@ func main() {
 				return kubernetesUpgradeAdvance(ctx, cluster, m, op)
 			case ichorv1alpha1.TalosOperationKindIchor:
 				return ichorUpgradeAdvance(ctx, cluster, m, op)
+			case ichorv1alpha1.TalosOperationKindCNI:
+				return cniKubeProxyAdvance(ctx, cluster, m, op)
 			default:
 				return false, fmt.Errorf("no executor wired up for operation kind %q yet", op.Spec.Kind)
 			}

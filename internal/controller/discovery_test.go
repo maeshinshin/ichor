@@ -39,10 +39,20 @@ import (
 type fakeMaintenanceClient struct {
 	identity HardwareIdentity
 	err      error
+
+	// applyErr and applyCalls serve talosmachine_provision_test.go.
+	applyErr   error
+	applyCalls [][]byte
 }
 
 func (f *fakeMaintenanceClient) Identity(context.Context) (HardwareIdentity, error) {
 	return f.identity, f.err
+}
+
+func (f *fakeMaintenanceClient) ApplyConfiguration(_ context.Context, cfg []byte) error {
+	f.applyCalls = append(f.applyCalls, cfg)
+
+	return f.applyErr
 }
 
 func maintenanceFactory(fake *fakeMaintenanceClient) func(context.Context, string) (MaintenanceClient, error) {

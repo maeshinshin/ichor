@@ -353,6 +353,7 @@ func main() {
 		APIReader:           mgr.GetAPIReader(),
 		ControllerNamespace: os.Getenv("POD_NAMESPACE"),
 		TalosClient:         controller.NewMachineryTalosClient,
+		MaintenanceClient:   controller.NewMachineryMaintenanceClient,
 		KubeClient:          kubeClient,
 		Evacuator:           &controller.LonghornEvacuator{Client: mgr.GetClient()},
 		Recorder:            mgr.GetEventRecorderFor("ichor-controller"), //nolint:staticcheck

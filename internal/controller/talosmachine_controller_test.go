@@ -109,8 +109,12 @@ type fakeTalosClient struct {
 	shutdownCalls []bool // the force argument of each call, in order
 
 	// kubernetes-upgrade fields: kubernetes_upgrade_test.go's fixtures.
-	pulled     []string
-	pullErr    error
+	pulled  []string
+	pullErr error
+
+	// stage and stageErr serve talosmachine_provision_test.go (MachineStager).
+	stage      string
+	stageErr   error
 	kubeconfig []byte
 	manifests  []map[string]any
 }
@@ -163,6 +167,10 @@ func (f *fakeTalosClient) Shutdown(_ context.Context, force bool) error {
 	f.shutdownCalls = append(f.shutdownCalls, force)
 
 	return f.shutdownErr
+}
+
+func (f *fakeTalosClient) MachineStage(context.Context) (string, error) {
+	return f.stage, f.stageErr
 }
 
 func (f *fakeTalosClient) Version(context.Context) (string, error) {

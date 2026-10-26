@@ -368,10 +368,10 @@ Needs the "download" verb on talosmachines/packet-capture. The file is written w
 	},
 }
 
-// etcdCmd groups the etcd commands that read from a node.
+// etcdCmd groups the etcd commands: reading a snapshot (here) and the maintenance actions (node_actions.go).
 var etcdCmd = &cobra.Command{
 	Use:   "etcd",
-	Short: "Read etcd data from a control plane node",
+	Short: "Download an etcd snapshot from, or run an etcd maintenance action on, a control plane node",
 }
 
 var etcdSnapshotCmd = &cobra.Command{

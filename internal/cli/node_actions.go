@@ -243,10 +243,6 @@ var (
 			return nodeActionSpec{Machine: a[0], Service: a[1]}
 		})
 
-	etcdCmd = &cobra.Command{
-		Use:   "etcd",
-		Short: "Run an etcd maintenance action on a control plane node",
-	}
 	etcdDefragCmd = newNodeActionCmd("defrag", "Defragment the etcd member of a control plane node",
 		pb.NodeAction_NODE_ACTION_ETCD_DEFRAG, cobra.NoArgs, func([]string) nodeActionSpec {
 			return nodeActionSpec{Machine: nodeActionOpts.Node, AllowLeader: nodeActionOpts.AllowLeader}
@@ -259,8 +255,6 @@ var (
 
 func init() {
 	nodeCmd.AddCommand(nodeRebootCmd, nodeShutdownCmd, nodeResetCmd, nodeRemoveCmd, nodeRestartServiceCmd)
-	rootCmd.AddCommand(etcdCmd)
-	addAPIFlags(etcdCmd)
 	etcdCmd.AddCommand(etcdDefragCmd, etcdForfeitCmd)
 
 	for _, c := range []*cobra.Command{etcdDefragCmd, etcdForfeitCmd} {

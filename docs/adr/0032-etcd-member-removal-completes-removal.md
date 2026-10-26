@@ -286,3 +286,5 @@ future pass; the machinery-client call itself is the same verified
 `client.Client` wrapper `EtcdLeaveCluster` already proved out, and
 `etcd_removal_test.go`'s fake-backed test already covers the control flow.
 
+Update: removal now evacuates storage before the drain (shared with the Talos
+upgrade, see ADR 0043), so the order is evacuation, drain, etcd member, reset.

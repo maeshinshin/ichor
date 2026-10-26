@@ -62,6 +62,7 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/clusterlock"
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
+	"github.com/maeshinshin/ichor/pkg/storage"
 )
 
 // machineRemovalFinalizer is added to an approved control-plane TalosMachine
@@ -93,6 +94,8 @@ const (
 	conditionRemoval           = "Removal"
 	reasonRemovalRefused       = "RemovalRefused"
 	reasonDrainFailed          = "DrainFailed"
+	reasonEvacuationPending    = "StorageEvacuationPending"
+	reasonEvacuationFailed     = "StorageEvacuationFailed"
 	reasonRemovalApproved      = "RemovalApproved"
 	reasonEtcdMemberRemoveFail = "EtcdMemberRemovalFailed"
 	reasonResetRequested       = "ResetRequested"
@@ -313,6 +316,37 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 
 	if err := checkControlPlaneRemoval(siblings, int(cluster.Spec.ControlPlane.Count)); err != nil {
 		return r.removalCondition(ctx, m, metav1.ConditionFalse, reasonRemovalRefused, err.Error())
+	}
+
+	// Storage evacuation comes before the drain (architecture.md, "Nodes":
+	// evacuation hook, drain, etcd member, reset, Node delete), through the
+	// same evacuateMachine the Talos upgrade uses. Its progress lives in
+	// the StorageEvacuation condition, so a restarted controller resumes
+	// from status; a timeout stops the removal here and never advances it.
+	progress, err := evacuateMachine(ctx, r.Client, r.Evacuator, &cluster, m, "removal")
+	if err != nil {
+		return r.removalCondition(ctx, m, metav1.ConditionFalse, reasonEvacuationFailed, err.Error())
+	}
+
+	switch progress {
+	case storage.EvacuationWaiting:
+		msg := fmt.Sprintf("waiting for storage replicas to move off node %q before draining it", m.Spec.Hostname)
+		if err := r.removalCondition(ctx, m, metav1.ConditionFalse, reasonEvacuationPending, msg); err != nil {
+			return err
+		}
+		// An error, not nil: Reconcile requeues only on error (nothing
+		// else changes on this object while a replica rebuilds elsewhere).
+		return errors.New(msg)
+	case storage.EvacuationPaused:
+		msg := fmt.Sprintf("evacuating node %q timed out with storage replicas still on it; "+
+			"removal is stopped and scheduling was re-enabled (retrying evacuation)", m.Spec.Hostname)
+		if err := r.removalCondition(ctx, m, metav1.ConditionFalse, reasonEvacuationFailed, msg); err != nil {
+			return err
+		}
+		if r.Recorder != nil {
+			r.Recorder.Event(m, corev1.EventTypeWarning, reasonEvacuationFailed, msg)
+		}
+		return errors.New(msg)
 	}
 
 	stop := renewWhile(ctx, lock, controllerIdentity, removalRenewInterval)

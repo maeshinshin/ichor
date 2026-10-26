@@ -231,7 +231,7 @@ var _ = Describe("talosUpgradeAdvancer", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		evacuator := &fakeStorageEvacuator{
-			target:    &evacuationTarget{hook: hook, timeout: time.Minute, namespace: "longhorn-system"},
+			target:    &evacuationTarget{hook: hook, timeout: time.Minute, namespace: defaultLonghornNamespace},
 			remaining: 3,
 		}
 
@@ -272,7 +272,7 @@ var _ = Describe("talosUpgradeAdvancer", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		evacuator := &fakeStorageEvacuator{
-			target: &evacuationTarget{hook: hook, timeout: time.Minute, namespace: "longhorn-system"},
+			target: &evacuationTarget{hook: hook, timeout: time.Minute, namespace: defaultLonghornNamespace},
 		}
 
 		fake := &fakeTalosClient{version: testOldTalosVersion, bootID: testBootIDBefore}

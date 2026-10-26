@@ -30,18 +30,21 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
-const fakeSecret = "s3cr3t-value"
+const (
+	fakeSecret = "s3cr3t-value"
+	argQuiet   = "quiet"
+)
 
 var _ = Describe("redactKernelArgs", func() {
 	It("masks the value of any argument that could carry a credential and keeps the rest", func() {
 		got := redactKernelArgs([]string{
-			"console=ttyS0", "quiet", "talos.platform=metal",
+			"console=ttyS0", argQuiet, "talos.platform=metal",
 			"talos.config=https://host/cfg?token=" + fakeSecret,
 			"siderolink.api=https://h?jointoken=" + fakeSecret,
 			"talos.config.auth.token=" + fakeSecret,
 		})
 		Expect(got).To(Equal([]string{
-			"console=ttyS0", "quiet", "talos.platform=metal",
+			"console=ttyS0", argQuiet, "talos.platform=metal",
 			"talos.config=***", "siderolink.api=***", "talos.config.auth.token=***",
 		}))
 	})
@@ -91,7 +94,7 @@ var _ = Describe("NodeService.GetNodeTalosDetails", func() {
 		fake := &fakeNodeTalosClient{
 			talosSystem: &pb.TalosSystemSection{
 				Version: "v1.14.3", Stage: "running", Ready: true,
-				KernelArgs: []string{"quiet", "talos.config=https://x?token=" + fakeSecret},
+				KernelArgs: []string{argQuiet, "talos.config=https://x?token=" + fakeSecret},
 			},
 			talosNetwork:    &pb.TalosNetworkSection{DefaultGateways: []string{"10.0.0.1"}, TimeSynced: true},
 			talosStorage:    &pb.TalosStorageSection{Disks: []*pb.TalosDisk{{Id: "sda", SystemDisk: true}}},

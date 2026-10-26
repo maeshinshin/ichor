@@ -71,6 +71,10 @@ var countplanesAllowedFuncs = map[string]bool{
 	// their own doc comments, and a cached read is right for both (a late event is re-queued).
 	"machinesOfCluster": true,
 	"readyCondition":    true,
+	// othersDone (cni_kubeproxy_switch.go) checks that every other machine of a kube-proxy switch has
+	// finished before the cluster-wide tail runs; it counts no quorum, and reads through the
+	// uncached Reader so a freshly approved machine is not missed (see its doc comment).
+	"othersDone": true,
 }
 
 // TestTalosMachineListCountingStaysCentralized parses every non-test

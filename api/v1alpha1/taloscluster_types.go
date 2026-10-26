@@ -403,12 +403,12 @@ type TalosClusterStatus struct {
 	// +optional
 	Certificates []CertificateExpiry `json:"certificates,omitempty" patchStrategy:"merge" patchMergeKey:"name"`
 
-	// cni is the observed CNI state that is not a spec ingredient (ADR 0064).
+	// cni is the observed CNI state that is not a spec ingredient (ADR 0066).
 	// +optional
 	CNI *TalosClusterCNIStatus `json:"cni,omitempty"`
 }
 
-// TalosClusterCNIStatus holds what the kube-proxy switch (ADR 0064) has done to the Talos side.
+// TalosClusterCNIStatus holds what the kube-proxy switch (ADR 0066) has done to the Talos side.
 type TalosClusterCNIStatus struct {
 	// kubeProxy is the mode the Talos side (cluster.proxy.disabled) is rendered for. Unset until
 	// a kube-proxy switch first runs, which means "render whatever the patches say"; once set,

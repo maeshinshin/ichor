@@ -49,7 +49,7 @@ func proxyDisabledPatch() ichorv1alpha1.TalosConfigPatch {
 	}
 }
 
-// TestKubeProxyModeIsRenderedByIchor checks ADR 0064: the Talos side follows status.cni.kubeProxy
+// TestKubeProxyModeIsRenderedByIchor checks ADR 0066: the Talos side follows status.cni.kubeProxy
 // once a switch set it, spec.cni.kubeProxy before that, and never a patch; a cluster that is
 // enabled and never switched keeps Talos's default (nothing rendered).
 func TestKubeProxyModeIsRenderedByIchor(t *testing.T) {
@@ -94,6 +94,15 @@ func TestKubeProxyModeIsRenderedByIchor(t *testing.T) {
 		out := proxyDoc(mustRender(t, clusterFor(cni.KubeProxyEnabled, ""), m, bundle, nil))
 		if strings.Contains(out, proxyOff) || strings.Contains(out, proxyOn) {
 			t.Fatalf("an unswitched enabled cluster must not render the flag, got:\n%s", out)
+		}
+	})
+
+	t.Run("spec enabled and never switched still honours a patch", func(t *testing.T) {
+		worker := testMachine("node-w", roleWorker, nil)
+
+		out := mustRender(t, clusterFor(cni.KubeProxyEnabled, ""), worker, bundle, patches)
+		if !strings.Contains(out, "disabled: true") {
+			t.Fatalf("an unswitched enabled cluster renders as before, got:\n%s", out)
 		}
 	})
 

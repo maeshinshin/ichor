@@ -32,7 +32,7 @@ import (
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
 
-// KubeProxyMode is the mode the Talos side of the kube-proxy split renders (ADR 0064):
+// KubeProxyMode is the mode the Talos side of the kube-proxy split renders (ADR 0066):
 // status.cni.kubeProxy while a switch has started, otherwise spec.cni.kubeProxy. The second
 // return is true only when status.cni.kubeProxy is what decided it.
 func KubeProxyMode(cluster *ichorv1alpha1.TalosCluster) (mode cni.KubeProxyMode, fromStatus bool) {
@@ -41,6 +41,15 @@ func KubeProxyMode(cluster *ichorv1alpha1.TalosCluster) (mode cni.KubeProxyMode,
 	}
 
 	return cni.KubeProxyMode(cluster.Spec.CNI.KubeProxy), false
+}
+
+// kubeProxyOwned reports whether Ichor, not the patches, decides cluster.proxy.disabled: from the
+// moment the cluster replaces kube-proxy or a switch has set the status. A cluster that is enabled
+// and never switched renders exactly as before, whatever its patches say.
+func kubeProxyOwned(cluster *ichorv1alpha1.TalosCluster) bool {
+	mode, fromStatus := KubeProxyMode(cluster)
+
+	return fromStatus || mode == cni.KubeProxyReplaced
 }
 
 // dropProxyDisabled returns ordered with cluster.proxy.disabled cleared from every Config

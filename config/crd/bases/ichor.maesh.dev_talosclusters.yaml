@@ -3932,7 +3932,7 @@ spec:
                 x-kubernetes-list-type: map
               cni:
                 description: cni is the observed CNI state that is not a spec ingredient
-                  (ADR 0064).
+                  (ADR 0066).
                 properties:
                   kubeProxy:
                     description: |-

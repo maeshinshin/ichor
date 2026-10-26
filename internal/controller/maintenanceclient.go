@@ -31,6 +31,14 @@ type MaintenanceClient interface {
 	// defines -- plus the manufacturer, shown to an operator resolving a weak
 	// or colliding identity but never itself part of the tuple.
 	Identity(ctx context.Context) (HardwareIdentity, error)
+
+	// ApplyConfiguration hands cfg to a node that is still in maintenance mode
+	// (the insecure path; the same boundary discovery reads identity over). A nil error means only that the node stored
+	// the
+	// configuration: its install, reboot and join happen afterwards, which is
+	// why the reconciler follows the node's stage instead of trusting this
+	// return. A node that already has a configuration refuses it.
+	ApplyConfiguration(ctx context.Context, cfg []byte) error
 }
 
 // HardwareIdentity is what MaintenanceClient.Identity reads from a node's

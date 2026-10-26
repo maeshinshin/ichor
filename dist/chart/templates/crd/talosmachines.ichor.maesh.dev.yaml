@@ -241,6 +241,13 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              configStoredAt:
+                description: |-
+                  configStoredAt is when the node accepted its initial configuration over the insecure
+                  maintenance API. Once set, Ichor never applies to this node insecurely again; it only
+                  follows the node to running. Empty for a node that has not been provisioned by Ichor.
+                format: date-time
+                type: string
               observedGeneration:
                 description: observedGeneration is the most recent generation the
                   controller has reconciled.
@@ -255,6 +262,13 @@ spec:
                   reconciler tells a desired-state change (a generation moved) apart from drift (none
                   did, so the node must have). A hash only, never the generations or config themselves
                   (principle 3).
+                type: string
+              stage:
+                description: |-
+                  stage is the last stage the node was seen in on its way from maintenance mode to
+                  running: maintenance, installing, rebooting or running (Talos's MachineStatus stages).
+                  installing and rebooting right after the initial apply are inferred (the apply RPC only
+                  means "stored"); running is read from the node.
                 type: string
             type: object
         required:

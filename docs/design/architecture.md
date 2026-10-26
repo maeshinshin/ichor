@@ -417,6 +417,45 @@ the nodes Argo CD runs on. The CLI keeps a way out of every corner:
 `ichor cni recover`, `ichor self-upgrade --local`,
 `ichor restore --recover-cluster`.
 
+#### Kokumi as the delivery layer in front of Argo CD (designed, not built)
+
+`ichor init` gains a choice for the Argo CD hand-off: plain repository
+(today's behaviour) or Kokumi (`--delivery kokumi`; the flag name is open). Kokumi (`kokumi.dev`, Apache-2.0, self-described as experimental)
+is an OCI-first delivery operator: each render becomes an immutable,
+content-addressed OCI artifact (a Preparation), gated by approvals, and a
+Serving creates or updates an Argo CD `Application` in the `argocd`
+namespace whose `spec.source.repoURL` is that artifact and whose
+`targetRevision` is its exact digest. It sits in front of Argo CD and does
+not replace it.
+
+What choosing it changes, as far as Kokumi's published docs say:
+
+- Argo CD still has to exist first (Kokumi requires Argo CD 3.3 or newer in
+  `argocd`, installed before Kokumi). Ichor still installs neither.
+- Ichor installs Kokumi no more than it installs Argo CD, for the same
+  reason: Kokumi ships as a release `install.yaml` applied with `kubectl`,
+  and choosing which third-party release to fetch and trust is not a
+  bootstrap command's call. `init` prepares the inputs and says plainly that
+  Kokumi is not running.
+- `init` additionally prepares the Argo CD repo-creds Secret Kokumi's
+  getting-started guide describes (`argocd.argoproj.io/secret-type:
+  repo-creds`, `type: oci`, `url` of Kokumi's registry,
+  `insecureOCIForceHttp` while that registry serves plain HTTP), created
+  from the CLI and never written to Git, like the existing repository
+  credentials.
+- The root Application's source stops being the repository for what Kokumi
+  delivers: that content arrives through Kokumi-created Applications
+  instead. Which of Ichor's own CRs move to that path, and how the root
+  Application and a Kokumi-created Application coexist, is not settled.
+- The tracking-detection rules above are unchanged: Applications Kokumi
+  creates are ordinary Argo CD Applications, so `argocd-cm` is still what
+  Ichor reads.
+
+Air gap: Kokumi's artifacts are OCI and its docs say its dependencies can be
+mirrored to a private registry, so they plausibly ride the same mirror path
+as `ichor images list`. Which images and artifacts Kokumi itself needs is
+not in the pages read, so `images list` would not yet print them.
+
 ### Nodes
 
 Discovery starts from a node in maintenance mode: either registered by IP or

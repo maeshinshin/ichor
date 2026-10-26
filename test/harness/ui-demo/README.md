@@ -31,17 +31,9 @@ go build -o bin/kubevirt-harness ./test/harness/kubevirt
 # 1. registry + images (no container runtime: crane appends the binaries to a distroless base)
 sed s/__PREFIX__/$P/ test/harness/ui-demo/registry.yaml | kubectl --context $C -n ichor-e2e apply -f -
 REG=$(kubectl --context $C -n ichor-e2e get svc $P-registry -o jsonpath={.spec.clusterIP})
-make build-ichor-ui
-CGO_ENABLED=0 go build -tags uiembed -o bin/img/ichor-ui/ichor-ui ./cmd/ichor-ui
-CGO_ENABLED=0 go build -ldflags "-X github.com/maeshinshin/ichor/internal/version.Version=v0.0.0-demo" -o bin/img/manager/manager cmd/main.go
-# tar each binary (named manager / ichor-ui, mode 755) and `crane append --insecure -b gcr.io/distroless/static:nonroot
-# -f X.tar -t localhost:PORT/maeshinshin/ichor-controller:demo` (and ichor-ui) through
-# `kubectl port-forward svc/$P-registry PORT:5000`
-
-# 2. ichor with the install manifest pointing at those names; undo the kustomization edits afterwards
-make build-ichor-embed VERSION=v0.0.0-demo IMG=ghcr.io/maeshinshin/ichor-controller:demo IMG_UI=ghcr.io/maeshinshin/ichor-ui:demo
-git checkout config/manager/kustomization.yaml config/manager-ui/kustomization.yaml
-CGO_ENABLED=0 go build -tags installembed -ldflags "-X github.com/maeshinshin/ichor/internal/version.Version=v0.0.0-demo" -o bin/ichor-static ./cmd/ichor
+kubectl --context $C -n ichor-e2e port-forward svc/$P-registry 5000:5000 &   # leave it running while you push
+make demo-images VERSION=v0.0.0-demo REGISTRY=localhost:5000   # builds and pushes manager, ichor-ui, installer; prints digests
+cp bin/img/ichor/ichor bin/ichor-static   # the installembed ichor demo-images built
 
 # 3. VMs in maintenance mode (prints CP_IP and WORKER_IP)
 ./bin/kubevirt-harness up-demo
@@ -68,6 +60,16 @@ sed s/__PREFIX__/$P/ test/harness/ui-demo/outer-service.yaml | kubectl --context
 # kubeconfig: init's, with server https://192.168.0.69:6443 and tls-server-name: $CP_IP (a certSAN)
 # written to bin/ui-demo.kubeconfig; `kubectl --kubeconfig bin/ui-demo.kubeconfig get nodes`
 ```
+
+## Update to the current tree
+
+```sh
+kubectl --context $C -n ichor-e2e port-forward svc/$P-registry 5000:5000 &   # only ever this service
+make demo-images VERSION=v0.0.8-$(git rev-parse --short HEAD) REGISTRY=localhost:5000
+KUBECONFIG=bin/ui-demo.kubeconfig ichor upgrade ichor v0.0.8-<the same short sha> --cluster $P
+```
+
+`demo-images` leaves the git tree unchanged and fails if a binary is not freshly built with that `VERSION`.
 
 Gotchas: the endpoint is the VM's pod IP and changes if the VM restarts (re-run init);
 `ichor init` cannot be re-run against a node that already took its config, so after a failed

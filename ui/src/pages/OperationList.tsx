@@ -103,7 +103,7 @@ function OperationRow({ op, onChanged }: { op: Operation; onChanged: () => void 
       <TableCell>
         <StatusText tone={opStateTone(state)}>{t(`ops.state.${state}`)}</StatusText>
       </TableCell>
-      <TableCell>{t('ops.progress', { done, running })}</TableCell>
+      <TableCell>{op.machines.length === 0 ? '–' : t('ops.progress', { done, running })}</TableCell>
       <TableCell>
         <OperationControls op={op} onChanged={onChanged} onDeleted={onChanged} />
       </TableCell>

@@ -78,3 +78,16 @@ func TestPlanKubernetesWarnsAboutANodeEndpointOnAMinorUpgradeOfSeveralControlPla
 		}
 	}
 }
+
+func TestOperationToPBCarriesTheKubernetesStage(t *testing.T) {
+	op := &ichorv1alpha1.TalosOperation{}
+	op.Spec.Kind = ichorv1alpha1.TalosOperationKindKubernetes
+	op.Status.Kubernetes = &ichorv1alpha1.TalosOperationKubernetesStatus{Stage: ichorv1alpha1.KubernetesStageKubeProxy}
+
+	if got := operationToPB(op).GetKubernetesStage(); got != "KubeProxy" {
+		t.Fatalf("kubernetes stage = %q, want KubeProxy", got)
+	}
+	if got := operationToPB(&ichorv1alpha1.TalosOperation{}).GetKubernetesStage(); got != "" {
+		t.Fatalf("kubernetes stage without status = %q, want empty", got)
+	}
+}

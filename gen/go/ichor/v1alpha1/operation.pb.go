@@ -402,11 +402,14 @@ type Operation struct {
 	CaRotationStage string `protobuf:"bytes,11,opt,name=ca_rotation_stage,json=caRotationStage,proto3" json:"ca_rotation_stage,omitempty"`
 	// node_action, node_machine and node_message describe a node-kind operation: what it
 	// does, to which machine, and what it is doing or waiting for now.
-	NodeAction    NodeAction `protobuf:"varint,12,opt,name=node_action,json=nodeAction,proto3,enum=ichor.v1alpha1.NodeAction" json:"node_action,omitempty"`
-	NodeMachine   *ObjectRef `protobuf:"bytes,13,opt,name=node_machine,json=nodeMachine,proto3" json:"node_machine,omitempty"`
-	NodeMessage   string     `protobuf:"bytes,14,opt,name=node_message,json=nodeMessage,proto3" json:"node_message,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	NodeAction  NodeAction `protobuf:"varint,12,opt,name=node_action,json=nodeAction,proto3,enum=ichor.v1alpha1.NodeAction" json:"node_action,omitempty"`
+	NodeMachine *ObjectRef `protobuf:"bytes,13,opt,name=node_machine,json=nodeMachine,proto3" json:"node_machine,omitempty"`
+	NodeMessage string     `protobuf:"bytes,14,opt,name=node_message,json=nodeMessage,proto3" json:"node_message,omitempty"`
+	// kubernetes_stage is status.kubernetes.stage of a kubernetes operation (ControlPlanes,
+	// KubeProxy, Kubelets); empty before the first stage is recorded, and for every other kind.
+	KubernetesStage string `protobuf:"bytes,15,opt,name=kubernetes_stage,json=kubernetesStage,proto3" json:"kubernetes_stage,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *Operation) Reset() {
@@ -533,6 +536,13 @@ func (x *Operation) GetNodeMachine() *ObjectRef {
 func (x *Operation) GetNodeMessage() string {
 	if x != nil {
 		return x.NodeMessage
+	}
+	return ""
+}
+
+func (x *Operation) GetKubernetesStage() string {
+	if x != nil {
+		return x.KubernetesStage
 	}
 	return ""
 }
@@ -1390,7 +1400,7 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"breakGlass\"<\n" +
 	"\x10OperationMachine\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
-	"\x05phase\x18\x02 \x01(\tR\x05phase\"\x9c\x05\n" +
+	"\x05phase\x18\x02 \x01(\tR\x05phase\"\xc7\x05\n" +
 	"\tOperation\x12+\n" +
 	"\x03ref\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\x03ref\x123\n" +
 	"\acluster\x18\x02 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x121\n" +
@@ -1410,7 +1420,8 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\vnode_action\x18\f \x01(\x0e2\x1a.ichor.v1alpha1.NodeActionR\n" +
 	"nodeAction\x12<\n" +
 	"\fnode_machine\x18\r \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\vnodeMachine\x12!\n" +
-	"\fnode_message\x18\x0e \x01(\tR\vnodeMessage\"L\n" +
+	"\fnode_message\x18\x0e \x01(\tR\vnodeMessage\x12)\n" +
+	"\x10kubernetes_stage\x18\x0f \x01(\tR\x0fkubernetesStage\"L\n" +
 	"\x15ListOperationsRequest\x123\n" +
 	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\"S\n" +
 	"\x16ListOperationsResponse\x129\n" +

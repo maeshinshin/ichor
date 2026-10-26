@@ -118,6 +118,9 @@ hands.
 - Check the docs for the version of a library you're using before writing
   against it.
 - Read `docs/design/architecture.md` before changing behaviour.
+- Never pass `paths="./..."` to controller-gen: unlike `go list ./...` it descends into
+  dot directories such as `.claude/worktrees/`, and a broken nested `go.mod` there fails
+  `make manifests`. Use `CONTROLLER_GEN_PATHS` in the Makefile (new top-level code roots go there).
 
 ## Commits and pull requests
 

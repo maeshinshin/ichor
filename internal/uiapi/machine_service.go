@@ -162,7 +162,7 @@ func (s *Server) ApproveMachine(
 	m.Spec.Hostname = req.Msg.GetHostname()
 	m.Spec.ApprovalState = ichorv1alpha1.MachineApprovalStateApproved
 	m.Spec.ApprovalDecision = &ichorv1alpha1.TalosMachineApprovalDecision{
-		Actor: actor, Reason: req.Msg.GetReason(), At: metav1.NewTime(now),
+		Actor: s.actorName(), Reason: req.Msg.GetReason(), At: metav1.NewTime(now),
 	}
 
 	if err := s.Update(ctx, m, strictFieldValidation); err != nil {
@@ -170,7 +170,7 @@ func (s *Server) ApproveMachine(
 	}
 
 	audit := &pb.AuditRecord{
-		Actor: actor, At: timestamppb.New(now), Action: "approve", Target: objectRef(m.Namespace, m.Name), Reason: req.Msg.GetReason(),
+		Actor: s.actorName(), At: timestamppb.New(now), Action: "approve", Target: objectRef(m.Namespace, m.Name), Reason: req.Msg.GetReason(),
 	}
 
 	return connect.NewResponse(&pb.ApproveMachineResponse{Machine: machineToPB(m), Audit: audit}), nil
@@ -206,7 +206,7 @@ func (s *Server) RejectMachine(
 
 	m.Spec.ApprovalState = ichorv1alpha1.MachineApprovalStateRejected
 	m.Spec.ApprovalDecision = &ichorv1alpha1.TalosMachineApprovalDecision{
-		Actor: actor, Reason: req.Msg.GetReason(), At: metav1.NewTime(now),
+		Actor: s.actorName(), Reason: req.Msg.GetReason(), At: metav1.NewTime(now),
 	}
 
 	if err := s.Update(ctx, m, strictFieldValidation); err != nil {
@@ -214,7 +214,7 @@ func (s *Server) RejectMachine(
 	}
 
 	audit := &pb.AuditRecord{
-		Actor: actor, At: timestamppb.New(now), Action: "reject",
+		Actor: s.actorName(), At: timestamppb.New(now), Action: "reject",
 		Target: objectRef(m.Namespace, m.Name), Reason: req.Msg.GetReason(),
 	}
 

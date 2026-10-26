@@ -65,6 +65,12 @@ type Server struct {
 		ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, bundle *secrets.Bundle,
 	) (NodeTalosClient, error)
 
+	// Actor is the name recorded on every AuditRecord. Empty means the
+	// package default "ichor-ui"; the CLI's in-process fallback
+	// (internal/cli) sets "ichor-cli" so the audit trail says which path
+	// wrote the CR.
+	Actor string
+
 	// Draining is closed when the process is shutting down, so a
 	// StreamNodeLogs call in flight stops and tells its client to
 	// reconnect elsewhere instead of being cut off mid-write
@@ -72,6 +78,14 @@ type Server struct {
 	// reconnect"). nil (the zero value) is valid and never closes, which
 	// is what every non-streaming test wants.
 	Draining <-chan struct{}
+}
+
+func (s *Server) actorName() string {
+	if s.Actor != "" {
+		return s.Actor
+	}
+
+	return actor
 }
 
 func (s *Server) now() time.Time {

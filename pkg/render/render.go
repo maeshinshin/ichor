@@ -171,7 +171,19 @@ func BuildConfig(
 		return nil, fmt.Errorf("render: parsing machine role: %w", err)
 	}
 
-	cfg, err := baseConfig(cluster, bundle, contract, machineType)
+	// A CA rotation in progress changes which CA the base configuration is generated from and
+	// which CAs are accepted besides it.
+	baseBundle, accepted, err := sys.caRotation().apply(bundle)
+	if err != nil {
+		return nil, err
+	}
+
+	cfg, err := baseConfig(cluster, baseBundle, contract, machineType)
+	if err != nil {
+		return nil, err
+	}
+
+	cfg, err = injectAcceptedCAs(cfg, accepted)
 	if err != nil {
 		return nil, err
 	}

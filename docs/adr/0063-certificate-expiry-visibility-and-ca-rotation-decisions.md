@@ -117,11 +117,10 @@ holding the lock through `acquireDisruptiveLock`.
 Decisions 2 to 5 stand. Decision 5 said what the executor needed; this is how each part was built, and where the build
 differs from what was sketched.
 
-**Entry.** `TalosOperation.spec.kind: ca-rotation`, started by `ichor cluster rotate-ca NAME` (confirmation, then it writes the
-operation through the kubeconfig, as `ichor init` writes its CRs). The operation entry points of ADR 0068 (`PlanOperation`,
-`CreateOperation`) do not carry the kind: that needs a new `OperationKind` in `proto/`, regenerated into `gen/go` and `ui/src/gen`,
-and `ui/` belongs to another unit. Until then the UI and `ichor operation list` show the kind as unspecified; everything else about
-the operation (phase, pause, conditions, status) is shown as for any operation.
+**Entry.** `TalosOperation.spec.kind: ca-rotation`, started through `OperationService` like every other kind (ADR 0068, Decision 7):
+`ichor cluster rotate-ca NAME` (plan, confirmation, `CreateOperation`; backend or in-process fallback) and the UI's "Rotate CAs"
+button on the cluster page. The command no longer writes the custom resource through the kubeconfig; there is one path. The UI's
+progress page shows `status.caRotation.stage` and, once complete, that the secrets bundle on the user's machine is stale.
 
 **State machine (`internal/controller/ca_rotation.go`).** Like shutdown, the backbone takes the cluster lock through
 `acquireDisruptiveLock` (the only `Acquire`) and then dispatches to `advanceCARotation`. Everything is in
@@ -212,7 +211,6 @@ and returned error for any bundle or CA material (and that the redaction happene
 
 **Not built, and the limits.**
 
-- The UI and the Connect operation entry points (the proto enum, above).
 - Between Issuing and Finalizing the bundle in the Secret names the old CAs while nodes serve the new ones, so the other controllers
   that dial with it (etcd backup, discovery, the UI backend's read-only client) fail to connect and retry until Finalizing. Only the
   machine controller is quiesced explicitly. A backup that falls in that window fails and is taken by the next schedule.

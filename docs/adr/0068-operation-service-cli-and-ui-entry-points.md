@@ -98,6 +98,30 @@ are marked as writes for the version-skew check (ADR 0059, point 6). Scaffolded 
 module and moved (ADR 0014). `ichor upgrade ichor` also names a cluster: the operation backbone needs one for its
 lock, though the target is `IchorInstallation.spec.version`.
 
+## Decision 7: the `ca-rotation` kind (ADR 0063)
+
+`OperationKind` gains `OPERATION_KIND_CA_ROTATION`, `OperationEffect` gains `OPERATION_EFFECT_CA_ROTATION`, `Operation` carries
+`ca_rotation_stage` (`status.caRotation.stage`, empty before the new CAs are saved), and `PlanOperationResponse` carries `stages`
+(`Accepting`, `Issuing`, `Dropping`) and `replaces_secrets_bundle`. The rest is the discipline of the other kinds: `CreateOperation`
+writes as the caller, refuses while an operation on the cluster is unfinished, runs the dry-run create first, and takes no target
+(a target is `InvalidArgument`) and writes no spec, so a tracked cluster is not refused (nothing in the spec changes).
+
+The plan lists every approved machine, control planes first and then workers, one at a time, in the executor's order
+(`upgrade.SortByOrder`). A machine with `upgrade-hold` is not skipped and `held` is empty: a machine left out would be locked out
+when the old CA is dropped (ADR 0063). The confirmation says that each machine is reconfigured once per pass without a reboot, that
+the kubelet restarts on each machine in the passes that change the Kubernetes CA, and that when the rotation completes the secrets
+bundle in the cluster is replaced and the copy on the user's machine is stale: run `ichor cluster bundle-export NAME`. The CLI and
+the UI build this from the same plan fields; the CLI also prints the bundle-export reminder after the start, and `--follow` and
+`operation get --watch` print the stage.
+
+`ichor cluster rotate-ca` now calls `runStartOperation` like `ichor cluster shutdown`; the earlier direct write
+through the kubeconfig (and its own already-running check) is removed, so the same refusals run on the CLI, the UI and the
+in-process fallback. The UI dialog is the two-step Review/Start of the other kinds and, like a shutdown, asks for the cluster name to
+be typed before Start. The progress page shows "Pass n of 5: <stage>" from `caStageProgress`.
+
+Not done: the operation page does not read the cluster's `BundleBackupStale` condition (a completed rotation says what to run);
+the stage is shown, not a per-machine view inside a stage (`status.machines` already shows the stage under way).
+
 ## UI
 
 `/operations` (list: kind, cluster, state, progress, pause/resume/delete) and `/operations/:namespace/:name` (the

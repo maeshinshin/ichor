@@ -120,4 +120,24 @@ var _ = Describe("ichor-ui generated RBAC", func() {
 		Expect(resp.Msg.GetKubernetes().GetPodsError()).To(BeEmpty(), "the ServiceAccount must be allowed to list pods")
 		Expect(resp.Msg.GetKubernetes().GetNodeName()).To(Equal(node.Name))
 	})
+
+	// The three downloads are never granted to the ServiceAccount by the generated role, so with
+	// OIDC off a default install refuses them; the Event that audits an allowed one can still be created.
+	It("refuses every diagnostics download to the ServiceAccount, and still records their Events", func() {
+		cluster := newTestClusterWithBundle()
+		m := newTestMachine(cluster.Name, strongTestIdentity("uuid-rbac-diag"), roleControlPlane, ichorv1alpha1.MachineApprovalStateApproved)
+		s := &Server{Client: saClient, ControllerNamespace: testNamespace}
+
+		for _, scope := range []DownloadScope{ScopeSupportBundle, ScopeEtcdSnapshot, ScopePacketCapture} {
+			err := s.authorizeDownload(ctx, m, scope)
+			Expect(err).To(HaveOccurred(), string(scope))
+			Expect(connect.CodeOf(err)).To(Equal(connect.CodePermissionDenied), string(scope))
+		}
+
+		resp, err := s.GetDiagnosticsPermissions(ctx, connect.NewRequest(&pb.GetDiagnosticsPermissionsRequest{Machine: objectRef(m.Namespace, m.Name)}))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(resp.Msg.GetSupportBundle() || resp.Msg.GetEtcdSnapshot() || resp.Msg.GetPacketCapture()).To(BeFalse())
+
+		Expect(s.emitDownloadEvent(ctx, m, ScopeEtcdSnapshot, "")).To(Succeed())
+	})
 })

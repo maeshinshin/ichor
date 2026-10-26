@@ -120,7 +120,10 @@ func main() {
 		// Where argocd-cm lives; empty means "argocd".
 		ArgoCDNamespace: os.Getenv("ICHOR_ARGOCD_NAMESPACE"),
 		NodeTalosClient: uiapi.NewMachineryNodeTalosClient,
-		Draining:        draining,
+		// Support bundle, etcd snapshot and packet capture downloads, each
+		// gated by a Kubernetes RBAC verb of the caller's own.
+		DownloadTalosClient: uiapi.NewMachineryDownloadTalosClient,
+		Draining:            draining,
 		// External tool links registered in the chart; empty means not registered.
 		Links: uiapi.Links{
 			ArgoCD: os.Getenv("ICHOR_LINK_ARGOCD"), Grafana: os.Getenv("ICHOR_LINK_GRAFANA"),
@@ -181,6 +184,7 @@ func main() {
 	mux.Handle(ichorv1alpha1connect.NewPatchServiceHandler(server, rpcInterceptor))
 	mux.Handle(ichorv1alpha1connect.NewGitOpsServiceHandler(server, rpcInterceptor))
 	mux.Handle(ichorv1alpha1connect.NewOperationServiceHandler(server, rpcInterceptor))
+	mux.Handle(ichorv1alpha1connect.NewDiagnosticsServiceHandler(server, rpcInterceptor))
 
 	srv := &http.Server{
 		Addr:              *addr,

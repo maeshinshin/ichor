@@ -19,6 +19,7 @@ package uiapi
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"connectrpc.com/connect"
@@ -89,7 +90,16 @@ type Server struct {
 	// Empty means "not registered".
 	Links Links
 
+	// DownloadTalosClient opens the connection for the support bundle, etcd
+	// snapshot and packet capture downloads, each with the
+	// least Talos role its call needs. NewMachineryDownloadTalosClient is the
+	// real one; nil answers Unavailable.
+	DownloadTalosClient DownloadTalosClientFactory
+
 	prs prCache
+
+	diag     diagnostics
+	diagOnce sync.Once
 
 	// Draining is closed when the process is shutting down, so a
 	// StreamNodeLogs call in flight stops and tells its client to

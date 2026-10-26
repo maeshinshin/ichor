@@ -1,0 +1,133 @@
+syntax = "proto3";
+
+// Messages for NodeService.GetNodeTalosDetails, the read-only "Talos details"
+// view of one machine. Every field is picked from the Talos API
+// explicitly; no machine configuration document, certificate, key or token is
+// ever carried.
+package ichor.v1alpha1;
+
+import "ichor/v1alpha1/common.proto";
+
+message GetNodeTalosDetailsRequest {
+  ObjectRef machine = 1;
+}
+
+message GetNodeTalosDetailsResponse {
+  // maintenance_mode is true for a machine that has not been approved: it is
+  // read over Talos's insecure maintenance API, which allows fewer calls, so
+  // some sections may carry an error instead of data.
+  bool maintenance_mode = 1;
+  // Each section loads independently; a section's error is set instead of its
+  // data when that one call failed or timed out.
+  TalosSystemSection system = 2;
+  TalosNetworkSection network = 3;
+  TalosStorageSection storage = 4;
+  TalosServicesSection services = 5;
+  TalosExtensionsSection extensions = 6;
+}
+
+message TalosUnmetCondition {
+  string name = 1;
+  string reason = 2;
+}
+
+message TalosSystemSection {
+  string error = 1;
+  string version = 2;
+  string arch = 3;
+  string platform = 4;
+  string platform_mode = 5;
+  string hostname = 6;
+  string domainname = 7;
+  // stage is Talos's machine stage (booting, running, installing, ...).
+  string stage = 8;
+  bool ready = 9;
+  repeated TalosUnmetCondition unmet_conditions = 10;
+  // kubernetes_nodename is the Kubernetes node name Talos registers the
+  // machine under, when it reports one.
+  string kubernetes_nodename = 11;
+  // kernel_args are the kernel command line arguments with the value of any
+  // argument that could carry a credential replaced by "***".
+  repeated string kernel_args = 12;
+}
+
+message TalosLink {
+  string name = 1;
+  string mac = 2;
+  // operational_state is the kernel operational state (up, down, ...).
+  string operational_state = 3;
+  bool link_up = 4;
+  uint32 mtu = 5;
+  int32 speed_mbit = 6;
+  // kind is empty for a physical link, otherwise the virtual kind (bridge,
+  // bond, vlan, ...).
+  string kind = 7;
+  string driver = 8;
+}
+
+message TalosNetworkSection {
+  string error = 1;
+  repeated string addresses = 2;
+  repeated TalosLink links = 3;
+  repeated string default_gateways = 4;
+  int32 route_count = 5;
+  repeated string dns_servers = 6;
+  repeated string search_domains = 7;
+  repeated string time_servers = 8;
+  bool time_synced = 9;
+  bool time_sync_disabled = 10;
+}
+
+message TalosDisk {
+  string id = 1;
+  string dev_path = 2;
+  string model = 3;
+  string serial = 4;
+  int64 size_bytes = 5;
+  // type is nvme, ssd, hdd, cdrom or the transport when none of those fit.
+  string type = 6;
+  bool system_disk = 7;
+  bool read_only = 8;
+}
+
+message TalosVolume {
+  string id = 1;
+  string type = 2;
+  string phase = 3;
+  string location = 4;
+  string mount_location = 5;
+  int64 size_bytes = 6;
+  string filesystem = 7;
+  bool encrypted = 8;
+  string error_message = 9;
+}
+
+message TalosStorageSection {
+  string error = 1;
+  repeated TalosDisk disks = 2;
+  repeated TalosVolume volumes = 3;
+}
+
+message TalosService {
+  string id = 1;
+  string state = 2;
+  bool health_unknown = 3;
+  bool healthy = 4;
+  string health_message = 5;
+}
+
+message TalosServicesSection {
+  string error = 1;
+  repeated TalosService services = 2;
+}
+
+message TalosExtension {
+  string name = 1;
+  string version = 2;
+  string author = 3;
+}
+
+message TalosExtensionsSection {
+  string error = 1;
+  repeated TalosExtension extensions = 2;
+}

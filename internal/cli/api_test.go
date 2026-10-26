@@ -145,7 +145,7 @@ func getMachine(t *testing.T, k8s client.Client, name string) ichorv1alpha1.Talo
 	return m
 }
 
-var approveWorker = machineApproveOptions{Role: "worker", Reason: "test"}
+var approveWorker = machineApproveOptions{Role: testRoleWorker, Reason: "test"}
 
 func TestApproveThroughBackendRunsTheBackendsChecks(t *testing.T) {
 	setAPITestFlags(t, true)

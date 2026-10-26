@@ -24,7 +24,6 @@ import (
 	"connectrpc.com/connect"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -47,7 +46,7 @@ const (
 
 func opMachine(name, role string, labels, annotations map[string]string) *ichorv1alpha1.TalosMachine {
 	return &ichorv1alpha1.TalosMachine{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: opNS, Labels: labels, Annotations: annotations},
+		Name: name, Namespace: opNS, Labels: labels, Annotations: annotations,
 		Spec: ichorv1alpha1.TalosMachineSpec{
 			ClusterRef: corev1.LocalObjectReference{Name: opCluster}, Role: role,
 			ApprovalState: ichorv1alpha1.MachineApprovalStateApproved,
@@ -58,8 +57,8 @@ func opMachine(name, role string, labels, annotations map[string]string) *ichorv
 func opObjects() []client.Object {
 	return []client.Object{
 		&ichorv1alpha1.TalosCluster{
-			ObjectMeta: metav1.ObjectMeta{Name: opCluster, Namespace: opNS},
-			Spec:       ichorv1alpha1.TalosClusterSpec{TalosVersion: opOldTalos, KubernetesVersion: "v1.36.0"},
+			Name: opCluster, Namespace: opNS,
+			Spec: ichorv1alpha1.TalosClusterSpec{TalosVersion: opOldTalos, KubernetesVersion: "v1.36.0"},
 		},
 		opMachine("w2", "worker", nil, nil),
 		opMachine("w1", "worker", map[string]string{ichorv1alpha1.TalosMachineUpgradeOrderLabel: "1"}, nil),
@@ -165,7 +164,7 @@ func TestCreateRefusedWhenTheCallerMayNotCreateOperationsLeavesTheSpecAlone(t *t
 	base := fake.NewClientBuilder().WithScheme(trackedScheme(t)).WithObjects(opObjects()...).Build()
 	user := interceptor.NewClient(base, interceptor.Funcs{
 		Create: func(_ context.Context, _ client.WithWatch, obj client.Object, _ ...client.CreateOption) error {
-			return apierrors.NewForbidden(schema.GroupResource{Group: "ichor.maesh.dev", Resource: "talosoperations"}, obj.GetName(), nil)
+			return apierrors.NewForbidden(schema.GroupResource{Group: ichorv1alpha1.SchemeGroupVersion.Group, Resource: "talosoperations"}, obj.GetName(), nil)
 		},
 	})
 	srv := &Server{Client: base, Impersonate: func(Identity) (client.Client, error) { return user, nil }}
@@ -188,7 +187,7 @@ func TestCreateRefusedWhenTheCallerMayNotUpdateTheCluster(t *testing.T) {
 	base := fake.NewClientBuilder().WithScheme(trackedScheme(t)).WithObjects(opObjects()...).Build()
 	user := interceptor.NewClient(base, interceptor.Funcs{
 		Update: func(_ context.Context, _ client.WithWatch, obj client.Object, _ ...client.UpdateOption) error {
-			return apierrors.NewForbidden(schema.GroupResource{Group: "ichor.maesh.dev", Resource: "talosclusters"}, obj.GetName(), nil)
+			return apierrors.NewForbidden(schema.GroupResource{Group: ichorv1alpha1.SchemeGroupVersion.Group, Resource: "talosclusters"}, obj.GetName(), nil)
 		},
 	})
 	srv := &Server{Client: base, Impersonate: func(Identity) (client.Client, error) { return user, nil }}
@@ -205,9 +204,9 @@ func TestCreateRefusedWhenTheCallerMayNotUpdateTheCluster(t *testing.T) {
 
 func TestCreateRefusedWhileAnotherOperationIsUnfinished(t *testing.T) {
 	running := &ichorv1alpha1.TalosOperation{
-		ObjectMeta: metav1.ObjectMeta{Name: "x", Namespace: opNS},
-		Spec:       ichorv1alpha1.TalosOperationSpec{ClusterRef: corev1.LocalObjectReference{Name: opCluster}, Kind: "talos"},
-		Status:     ichorv1alpha1.TalosOperationStatus{Phase: ichorv1alpha1.TalosOperationPhaseInProgress},
+		Name: "x", Namespace: opNS,
+		Spec:   ichorv1alpha1.TalosOperationSpec{ClusterRef: corev1.LocalObjectReference{Name: opCluster}, Kind: ichorv1alpha1.TalosOperationKindTalos},
+		Status: ichorv1alpha1.TalosOperationStatus{Phase: ichorv1alpha1.TalosOperationPhaseInProgress},
 	}
 	srv, k8s := opServer(t, append(opObjects(), running)...)
 
@@ -326,7 +325,7 @@ func TestPlanTalosListsControlPlanesFirstThenWorkersByOrderLabelAndSkipsHeld(t *
 		t.Fatal(err)
 	}
 
-	var names []string
+	names := make([]string, 0, len(res.Msg.GetMachines()))
 	for _, m := range res.Msg.GetMachines() {
 		names = append(names, m.GetName())
 	}
@@ -351,7 +350,7 @@ func TestPlanShutdownIsWorkersThenControlPlanesAndStops(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var names []string
+	names := make([]string, 0, len(res.Msg.GetMachines()))
 	for _, m := range res.Msg.GetMachines() {
 		names = append(names, m.GetName())
 	}
@@ -364,8 +363,8 @@ func TestPlanShutdownIsWorkersThenControlPlanesAndStops(t *testing.T) {
 
 func TestPlanSaysWhyCreateWouldBeRefused(t *testing.T) {
 	running := &ichorv1alpha1.TalosOperation{
-		ObjectMeta: metav1.ObjectMeta{Name: "x", Namespace: opNS},
-		Spec:       ichorv1alpha1.TalosOperationSpec{ClusterRef: corev1.LocalObjectReference{Name: opCluster}, Kind: "talos"},
+		Name: "x", Namespace: opNS,
+		Spec: ichorv1alpha1.TalosOperationSpec{ClusterRef: corev1.LocalObjectReference{Name: opCluster}, Kind: ichorv1alpha1.TalosOperationKindTalos},
 	}
 	srv, _ := opServer(t, append(opObjects(), running)...)
 
@@ -379,8 +378,8 @@ func TestPlanSaysWhyCreateWouldBeRefused(t *testing.T) {
 
 func TestPauseResumeAndDeleteAreMadeAsTheCaller(t *testing.T) {
 	op := &ichorv1alpha1.TalosOperation{
-		ObjectMeta: metav1.ObjectMeta{Name: "x", Namespace: opNS},
-		Spec:       ichorv1alpha1.TalosOperationSpec{ClusterRef: corev1.LocalObjectReference{Name: opCluster}, Kind: "talos"},
+		Name: "x", Namespace: opNS,
+		Spec: ichorv1alpha1.TalosOperationSpec{ClusterRef: corev1.LocalObjectReference{Name: opCluster}, Kind: ichorv1alpha1.TalosOperationKindTalos},
 	}
 	srv, k8s := opServer(t, append(opObjects(), op)...)
 	ctx := context.Background()
@@ -397,7 +396,7 @@ func TestPauseResumeAndDeleteAreMadeAsTheCaller(t *testing.T) {
 
 	denied := interceptor.NewClient(k8s.(client.WithWatch), interceptor.Funcs{
 		Delete: func(_ context.Context, _ client.WithWatch, obj client.Object, _ ...client.DeleteOption) error {
-			return apierrors.NewForbidden(schema.GroupResource{Group: "ichor.maesh.dev", Resource: "talosoperations"}, obj.GetName(), nil)
+			return apierrors.NewForbidden(schema.GroupResource{Group: ichorv1alpha1.SchemeGroupVersion.Group, Resource: "talosoperations"}, obj.GetName(), nil)
 		},
 	})
 	srv.Impersonate = func(Identity) (client.Client, error) { return denied, nil }
@@ -415,8 +414,8 @@ func TestPauseResumeAndDeleteAreMadeAsTheCaller(t *testing.T) {
 
 func TestListAndGetReturnStatusMachinesAsTheyAre(t *testing.T) {
 	op := &ichorv1alpha1.TalosOperation{
-		ObjectMeta: metav1.ObjectMeta{Name: "x", Namespace: opNS},
-		Spec:       ichorv1alpha1.TalosOperationSpec{ClusterRef: corev1.LocalObjectReference{Name: opCluster}, Kind: "talos"},
+		Name: "x", Namespace: opNS,
+		Spec: ichorv1alpha1.TalosOperationSpec{ClusterRef: corev1.LocalObjectReference{Name: opCluster}, Kind: ichorv1alpha1.TalosOperationKindTalos},
 		Status: ichorv1alpha1.TalosOperationStatus{
 			Phase: ichorv1alpha1.TalosOperationPhasePaused, FailureReason: "boom",
 			Machines: []ichorv1alpha1.TalosOperationMachineStatus{{Name: "cp1", Phase: "Completed"}, {Name: "w1", Phase: "InProgress"}},

@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -36,10 +37,9 @@ type kubeconfigKubeProxyAdmin struct{}
 // NewKubeProxyAdmin returns the KubeProxyAdmin cmd/main.go wires in.
 func NewKubeProxyAdmin() KubeProxyAdmin { return kubeconfigKubeProxyAdmin{} }
 
-// RemoveKubeProxy deletes the four kinds of object Talos v1.14.3's ManifestController renders
-// for kube-proxy (the "10-kube-proxy" manifest): the DaemonSet, ServiceAccount and
-// ClusterRoleBinding by their fixed name, and the checksum-named ConfigMaps by their labels.
-// ManifestApplyController has no delete path, so nothing else will.
+// RemoveKubeProxy deletes what Talos v1.14.3's ManifestController renders for kube-proxy (the
+// "10-kube-proxy" manifest); see removeKubeProxyObjects. talos must be a control plane's client:
+// workers have no admin kubeconfig to give.
 //
 // ponytail: the nftables/iptables rules kube-proxy already programmed stay on each node until the
 // node reboots; there is no per-node cleanup.
@@ -54,6 +54,14 @@ func (kubeconfigKubeProxyAdmin) RemoveKubeProxy(ctx context.Context, talos Talos
 		return fmt.Errorf("building a client from the admin kubeconfig: %w", err)
 	}
 
+	return removeKubeProxyObjects(ctx, c)
+}
+
+// removeKubeProxyObjects deletes the DaemonSet, ServiceAccount and ClusterRoleBinding named
+// kube-proxy and the ConfigMaps named kube-proxy or kube-proxy-<checksum>, each by its name:
+// nothing is selected by label. ManifestApplyController has no delete path, so nothing else will.
+// Idempotent.
+func removeKubeProxyObjects(ctx context.Context, c client.Client) error {
 	meta := metav1.ObjectMeta{Namespace: kubeSystemNamespace, Name: kubeProxyName}
 	background := client.PropagationPolicy(metav1.DeletePropagationBackground)
 
@@ -67,9 +75,21 @@ func (kubeconfigKubeProxyAdmin) RemoveKubeProxy(ctx context.Context, talos Talos
 		}
 	}
 
-	if err := c.DeleteAllOf(ctx, &corev1.ConfigMap{}, client.InNamespace(kubeSystemNamespace),
-		client.MatchingLabels{labelK8sApp: kubeProxyName, "tier": "node"}); err != nil {
-		return fmt.Errorf("deleting the kube-proxy ConfigMaps: %w", err)
+	var maps corev1.ConfigMapList
+	if err := c.List(ctx, &maps, client.InNamespace(kubeSystemNamespace)); err != nil {
+		return fmt.Errorf("listing the kube-system ConfigMaps: %w", err)
+	}
+
+	for i := range maps.Items {
+		name := maps.Items[i].Name
+		if name != kubeProxyName && !strings.HasPrefix(name, kubeProxyName+"-") {
+			continue
+		}
+
+		if err := c.Delete(ctx, &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: kubeSystemNamespace, Name: name}}); err != nil &&
+			!apierrors.IsNotFound(err) {
+			return fmt.Errorf("deleting ConfigMap %q: %w", name, err)
+		}
 	}
 
 	return nil

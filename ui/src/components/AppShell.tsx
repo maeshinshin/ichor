@@ -156,9 +156,6 @@ export function AppShell({
                   </Tooltip>
                 </SidebarMenuItem>
               )}
-              <SidebarMenuItem>
-                <ThemeSwitch />
-              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarFooter>
           <SidebarRail />
@@ -168,6 +165,9 @@ export function AppShell({
             <SidebarTrigger className="-ml-1" />
             <Separator orientation="vertical" className="mr-1 h-4" />
             <Crumbs path={path} />
+            <div className="ml-auto shrink-0">
+              <ThemeSwitch />
+            </div>
           </header>
           <div class="min-w-0 flex-1 p-4 sm:p-6">{children}</div>
         </SidebarInset>

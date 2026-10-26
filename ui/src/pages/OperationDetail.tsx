@@ -65,7 +65,7 @@ export function OperationDetail({ namespace, name }: { namespace: string; name: 
         {t('ops.back')}
       </Link>
       <Card>
-        <CardHeader className="flex items-center justify-between">
+        <CardHeader className="flex flex-wrap items-center justify-between gap-2">
           <CardTitle>{op.ref?.name}</CardTitle>
           <OperationControls op={op} onChanged={setOp} onDeleted={() => navigate('/operations')} />
         </CardHeader>

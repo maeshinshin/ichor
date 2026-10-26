@@ -67,7 +67,7 @@ export function PatchList() {
 
   return (
     <Card className="mt-6">
-      <CardHeader className="flex items-center justify-between">
+      <CardHeader className="flex flex-wrap items-center justify-between gap-2">
         <CardTitle>{t('patches.title')}</CardTitle>
         <Button asChild size="sm">
           <Link to="/patches/new">{t('patches.new')}</Link>

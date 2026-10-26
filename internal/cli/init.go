@@ -128,6 +128,10 @@ func init() {
 		"service CIDRs (spec.network.serviceSubnets); unset keeps Talos's default 10.96.0.0/12. Fixed once the cluster exists")
 	flags.StringArrayVar(&initOpts.RegistryMirrors, "registry-mirror", nil,
 		"anonymous registry mirror as HOST=URL (spec.registries), e.g. ghcr.io=http://10.0.0.5:5000; repeatable")
+	flags.StringArrayVar(&initOpts.DiscoverAddresses, "discover-address", nil,
+		"IPv4 address of a node booted into maintenance mode for the controller to probe (spec.discovery.addresses); repeatable")
+	flags.StringArrayVar(&initOpts.DiscoverCIDRs, "discover-cidr", nil,
+		"IPv4 CIDR (/24 or smaller) of maintenance-mode nodes for the controller to probe (spec.discovery.cidrs); repeatable")
 	flags.StringVar(&initOpts.DiskRoles.EphemeralDiskSelector, "ephemeral-disk-selector", "",
 		"CEL disk selector (e.g. disk.wwid == \"...\") for a dedicated EPHEMERAL disk, separate from --install-disk")
 	flags.StringVar(&initOpts.DiskRoles.StorageDiskSelector, "storage-disk-selector", "",

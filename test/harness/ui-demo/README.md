@@ -52,13 +52,13 @@ kubectl --context $C -n ichor-e2e cp bin/ichor-static $P-tools:/tmp/ichor
 kubectl --context $C -n ichor-e2e exec $P-tools -- env HOME=/tmp/home /tmp/ichor init --yes \
   --cluster $P --preset single --cni flannel --endpoint-type node --endpoint-address $CP_IP \
   --node-endpoint $CP_IP:50000 --talos-version v1.14.3 --version-contract v1.14 --install-disk /dev/vda \
-  --pod-subnets 10.248.0.0/16 --service-subnets 10.249.0.0/16 --registry-mirror ghcr.io=http://$REG:5000
+  --pod-subnets 10.248.0.0/16 --service-subnets 10.249.0.0/16 --registry-mirror ghcr.io=http://$REG:5000 \
+  --discover-address $WORKER_IP
 # init waits for the node, the API server and the webhooks; allow 10-15 minutes. The secrets bundle and
 # kubeconfig are under /tmp/home/.ichor/clusters/$P/ in the pod: copy them to bin/ (gitignored) at once.
 
-# 5. the worker: init sets no spec.discovery, so write it, wait for the pending TalosMachine, approve it.
+# 5. the worker: init's --discover-address set spec.discovery, so wait for the pending TalosMachine, approve it.
 #    (inside the pod, KUBECONFIG=/tmp/kc, with a static kubectl copied in)
-kubectl -n ichor-system patch taloscluster $P --type merge -p '{"spec":{"discovery":{"addresses":["'$WORKER_IP'"]}}}'
 KUBECONFIG=/tmp/kc ichor machine approve <pending machine name> --role worker --install-disk /dev/vda --hostname $P-w --yes
 # both TalosMachines go Ready=True and `get nodes` shows two Ready nodes after a few minutes
 

@@ -23,7 +23,7 @@ import { PatchSchema } from '@/gen/ichor/v1alpha1/patch_pb'
 import { clusterClient, patchClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
 import { describeError } from '@/lib/errors'
-import { parseLabelSelector, stringifyLabelSelector, targetKindOf, type TargetKind } from '@/lib/patchTarget'
+import { buildPatchTarget, canSavePatch, stringifyLabelSelector, targetKindOf, type TargetKind } from '@/lib/patchTarget'
 import { navigate } from '@/router'
 
 type ErrorShape = { title: string; detail: string }
@@ -130,19 +130,11 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
       return null
     }
     let target: PatchInit['target']
-    if (layer !== ConfigLayer.CLUSTER) {
-      if (targetKind === 'role') {
-        target = { role, labelSelector: undefined, machineRef: '' }
-      } else if (targetKind === 'machineRef') {
-        target = { role: '', labelSelector: undefined, machineRef }
-      } else if (targetKind === 'labelSelector') {
-        try {
-          target = { role: '', labelSelector: parseLabelSelector(labelSelectorText), machineRef: '' }
-        } catch (err) {
-          setErr(err instanceof Error ? err.message : String(err))
-          return null
-        }
-      }
+    try {
+      target = buildPatchTarget(layer !== ConfigLayer.CLUSTER, targetKind, role, labelSelectorText, machineRef)
+    } catch (err) {
+      setErr(err instanceof Error ? err.message : String(err))
+      return null
     }
     setErr(null)
     return {
@@ -202,7 +194,13 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
   if (loadError) return <ErrorAlert {...loadError} />
   if (!loaded) return <p class="mt-10 text-center text-sm text-muted-foreground">Loading patch…</p>
 
-  const canSave = patchName !== '' && !!cluster && layer !== ConfigLayer.UNSPECIFIED && (layer === ConfigLayer.CLUSTER || targetKind !== 'none')
+  const canSave = canSavePatch({
+    name: patchName,
+    hasCluster: !!cluster,
+    layerSet: layer !== ConfigLayer.UNSPECIFIED,
+    clusterLayer: layer === ConfigLayer.CLUSTER,
+    targetKind,
+  })
 
   return (
     <div class="mt-6 space-y-4">

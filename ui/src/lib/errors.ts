@@ -11,18 +11,18 @@ export function describeError(err: unknown): { title: string; detail: string } {
   if (err instanceof ConnectError) {
     switch (err.code) {
       case Code.FailedPrecondition:
-        return { title: 'Not allowed right now', detail: err.message }
+        return { title: 'Not allowed right now', detail: err.rawMessage }
       case Code.InvalidArgument:
-        return { title: 'Missing or invalid input', detail: err.message }
+        return { title: 'Missing or invalid input', detail: err.rawMessage }
       case Code.NotFound:
-        return { title: 'Not found', detail: err.message }
+        return { title: 'Not found', detail: err.rawMessage }
       case Code.Unavailable:
         return {
           title: 'Backend unavailable',
           detail: 'The UI backend is restarting or draining. Reconnecting automatically; try the action again in a moment.',
         }
       default:
-        return { title: 'Request failed', detail: err.message }
+        return { title: 'Request failed', detail: err.rawMessage }
     }
   }
   return { title: 'Request failed', detail: err instanceof Error ? err.message : String(err) }

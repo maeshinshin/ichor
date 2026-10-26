@@ -1,10 +1,7 @@
-import { useEffect, useState } from 'preact/hooks'
-import type { Key, Params } from './i18n.ts'
-import { getLang, subscribeLang, t } from './lang.ts'
+import { t } from './i18n.ts'
 
-// useT returns t, and redraws the calling component when the language changes.
+// useT returns t. Kept so components read their wording the same way they
+// always have; there is one language, so there is nothing to subscribe to.
 export function useT(): typeof t {
-  const [, setLang] = useState(getLang())
-  useEffect(() => subscribeLang(() => setLang(getLang())), [])
-  return (key: Key, params?: Params) => t(key, params)
+  return t
 }

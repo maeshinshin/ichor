@@ -15,10 +15,9 @@ import { OperationList } from '@/pages/OperationList'
 import { PatchDetail } from '@/pages/PatchDetail'
 import { PatchList } from '@/pages/PatchList'
 import { Placeholder } from '@/pages/Placeholder'
-import { LanguageSwitch } from '@/components/LanguageSwitch'
 import { Link, matchRoute, usePath } from '@/router'
 import type { Key } from '@/lib/i18n'
-import { t as translateNow } from '@/lib/lang'
+import { t as translateNow } from '@/lib/i18n'
 
 // Top-level nav. Cluster detail (/clusters/:namespace/:name), node detail
 // (/nodes/:namespace/:name) and patch edit (/patches/:namespace/:name) are
@@ -74,7 +73,6 @@ export function App() {
           ))}
         </nav>
         <div class="ml-auto">
-          <LanguageSwitch />
         </div>
       </header>
       <Separator />

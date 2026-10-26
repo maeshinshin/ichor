@@ -3,9 +3,7 @@ import { test } from 'node:test'
 import { Code, ConnectError } from '@connectrpc/connect'
 import { breakGlassRequest, offersBreakGlass, reasonIsValid } from './breakGlass.ts'
 import { describeError } from './errors.ts'
-import { setLang } from './lang.ts'
 
-setLang('en')
 
 test('an empty or blank reason cannot be sent', () => {
   assert.equal(reasonIsValid(''), false)

@@ -357,6 +357,13 @@ func main() {
 		setupLog.Error(err, "Failed to create controller", "controller", "taloscluster")
 		os.Exit(1)
 	}
+	if err := (&controller.CertExpiryReconciler{
+		Client:              mgr.GetClient(),
+		ControllerNamespace: os.Getenv("POD_NAMESPACE"),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "Failed to create controller", "controller", "certexpiry")
+		os.Exit(1)
+	}
 	if err := (&controller.CNIHandoverReconciler{
 		Client: mgr.GetClient(),
 	}).SetupWithManager(mgr); err != nil {

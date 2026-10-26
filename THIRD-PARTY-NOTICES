@@ -956,6 +956,7 @@ Components:
 - github.com/google/pprof@v0.0.0-20260115054156-294ebfa9ad83
 - github.com/inconshreveable/mousetrap@v1.1.0
     Copyright 2022 Alan Shreve (@inconshreveable)
+- github.com/kylelemons/godebug@v1.1.0
 - github.com/minio/crc64nvme@v1.1.1
 - github.com/minio/md5-simd@v1.1.2
 - github.com/minio/minio-go/v7@v7.4.1

@@ -8,7 +8,7 @@ import { EmptyNote, PageSkeleton } from '@/components/PageStates'
 import { Section } from '@/components/SectionNav'
 import { StatusText } from '@/components/Status'
 import { OperationControls } from '@/components/OperationControls'
-import { OperationKind, type Operation } from '@/gen/ichor/v1alpha1/operation_pb'
+import { NodeAction, OperationKind, type Operation } from '@/gen/ichor/v1alpha1/operation_pb'
 import { operationClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
 import { describeError } from '@/lib/errors'
@@ -81,7 +81,20 @@ export function OperationDetail({ namespace, name }: { namespace: string; name: 
             label: t('ops.cluster'),
             value: op.cluster ? <Link to={objectRefPath('/clusters', op.cluster)} class="hover:underline">{op.cluster.name}</Link> : undefined,
           },
-          { label: t('ops.maxUnavailable'), value: String(op.maxUnavailable || 1) },
+          ...(op.kind === OperationKind.NODE
+            ? [
+                { label: t('node.action.actionLabel'), value: enumLabel(NodeAction, op.nodeAction) },
+                {
+                  label: t('node.action.nodeLabel'),
+                  value: op.nodeMachine ? (
+                    <Link to={objectRefPath('/nodes', op.nodeMachine)} class="hover:underline">
+                      {op.nodeMachine.name}
+                    </Link>
+                  ) : undefined,
+                },
+                { label: t('node.action.progress'), value: op.nodeMessage },
+              ]
+            : [{ label: t('ops.maxUnavailable'), value: String(op.maxUnavailable || 1) }]),
         ]}
         actions={<OperationControls op={op} onChanged={setOp} onDeleted={() => navigate('/operations')} />}
       />

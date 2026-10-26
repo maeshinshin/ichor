@@ -35,7 +35,6 @@ import (
 	authv1 "k8s.io/api/authentication/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	authv1client "k8s.io/client-go/kubernetes/typed/authentication/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -251,13 +250,13 @@ func (localNode) StreamNodeLogs(
 // it, and one HTTP request proves something is answering before any RPC is
 // sent.
 func dialBackend(ctx context.Context, opts apiOptions, deps apiDeps) (*apiClients, error) {
-	var svc corev1.Service
-	if err := deps.K8s.Get(ctx, types.NamespacedName{Namespace: opts.IchorNamespace, Name: uiServiceName}, &svc); err != nil {
-		return nil, fmt.Errorf("fetching Service %s/%s: %w", opts.IchorNamespace, uiServiceName, err)
+	svc, err := findUIService(ctx, deps.K8s, opts.IchorNamespace)
+	if err != nil {
+		return nil, err
 	}
 
 	if len(svc.Spec.Ports) == 0 || len(svc.Spec.Selector) == 0 {
-		return nil, fmt.Errorf("service %s/%s has no port or selector", opts.IchorNamespace, uiServiceName)
+		return nil, fmt.Errorf("service %s/%s has no port or selector", svc.Namespace, svc.Name)
 	}
 
 	dctx, cancel := context.WithTimeout(ctx, apiConnectTimeout)

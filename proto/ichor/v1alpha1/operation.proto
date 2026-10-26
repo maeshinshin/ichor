@@ -31,6 +31,8 @@ enum OperationKind {
   OPERATION_KIND_ICHOR = 3;
   OPERATION_KIND_CNI = 4;
   OPERATION_KIND_SHUTDOWN = 5;
+  // CA_ROTATION replaces the Talos API and Kubernetes API CAs (ADR 0063).
+  OPERATION_KIND_CA_ROTATION = 6;
 }
 
 // OperationMachine is TalosOperation.status.machines[] as it is: a machine
@@ -56,6 +58,10 @@ message Operation {
   repeated OperationMachine machines = 8;
   repeated Condition conditions = 9;
   google.protobuf.Timestamp created_at = 10;
+  // ca_rotation_stage is status.caRotation.stage of a ca-rotation operation
+  // (Accepting, Issuing, Dropping, Finalizing, Done); empty before the new CAs
+  // are saved, and for every other kind.
+  string ca_rotation_stage = 11;
 }
 
 message ListOperationsRequest {
@@ -87,6 +93,9 @@ enum OperationEffect {
   OPERATION_EFFECT_STOP = 3;
   // NONE: no machine is touched (an Ichor self-upgrade runs as a Job).
   OPERATION_EFFECT_NONE = 4;
+  // CA_ROTATION: every machine is reconfigured once per stage (no reboot); the
+  // kubelet restarts on each machine in the stages that change the Kubernetes CA.
+  OPERATION_EFFECT_CA_ROTATION = 5;
 }
 
 message PlannedMachine {
@@ -125,6 +134,13 @@ message PlanOperationResponse {
   bool spec_changes = 7;
   // blocked is non-empty when CreateOperation would be refused, and says why.
   string blocked = 8;
+  // stages are the passes a ca-rotation makes over every machine, in order;
+  // empty for the other kinds.
+  repeated string stages = 9;
+  // replaces_secrets_bundle is true when the operation ends by replacing the
+  // cluster's secrets bundle, so the copy on the user's machine is stale and
+  // `ichor cluster bundle-export` is needed.
+  bool replaces_secrets_bundle = 10;
 }
 
 message CreateOperationRequest {

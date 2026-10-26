@@ -19,6 +19,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -309,5 +310,84 @@ func TestGroupChangedPaths(t *testing.T) {
 
 	if len(legacy) != 2 {
 		t.Errorf("legacy = %v, want 2 entries", legacy)
+	}
+}
+
+// TestRunAdopt_SkipsMachinesThatAreNotApproved: a pending or rejected machine is in maintenance
+// mode (or otherwise has no credentials), so dialing it fails with a TLS error. adopt must not
+// dial it, must say it skipped it, and must still adopt the approved machines.
+func TestRunAdopt_SkipsMachinesThatAreNotApproved(t *testing.T) {
+	bundle := newTestBundle(t)
+	cluster := newTestCluster()
+	machine := newTestMachine(cluster.Name)
+
+	pending := newTestMachine(cluster.Name)
+	pending.Name = "node-pending"
+	pending.Spec.Endpoint = "10.0.0.99:50000"
+	pending.Spec.Role = ""
+	pending.Spec.ApprovalState = ichorv1alpha1.MachineApprovalStatePending
+
+	rejected := newTestMachine(cluster.Name)
+	rejected.Name = "node-rejected"
+	rejected.Spec.Endpoint = "10.0.0.98:50000"
+	rejected.Spec.ApprovalState = ichorv1alpha1.MachineApprovalStateRejected
+
+	currentCfg, _, err := render.Render(cluster, machine, bundle, nil, nil)
+	if err != nil {
+		t.Fatalf("rendering current-config fixture: %v", err)
+	}
+
+	dialed := map[string]bool{}
+	dial := func(_ context.Context, endpoint string) (talosConfigReader, error) {
+		dialed[endpoint] = true
+
+		if endpoint != machine.Spec.Endpoint {
+			return nil, errors.New("tls: certificate required (maintenance mode)")
+		}
+
+		return &fakeTalosReader{current: currentCfg}, nil
+	}
+
+	k8sClient := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(cluster, machine, pending, rejected).Build()
+
+	var stdout, stderr bytes.Buffer
+
+	deps := adoptDeps{
+		K8s: k8sClient, Bundle: bundle, DialTalos: dial,
+		Stdout: &stdout, Stderr: &stderr, Stdin: strings.NewReader(""), AssumeYes: true, Output: outputYAML,
+	}
+
+	if err := runAdopt(context.Background(), cluster.Name, testNamespace, deps); err != nil {
+		t.Fatalf("runAdopt: %v (stderr: %s)", err, stderr.String())
+	}
+
+	if dialed[pending.Spec.Endpoint] || dialed[rejected.Spec.Endpoint] {
+		t.Fatalf("adopt dialed a machine that is not approved: %v", dialed)
+	}
+
+	for _, name := range []string{"node-pending", "node-rejected"} {
+		if !strings.Contains(stderr.String(), `machine "`+name+`": skipped`) {
+			t.Fatalf("stderr does not say %s was skipped:\n%s", name, stderr.String())
+		}
+	}
+}
+
+// TestReportPlans_ExplainsUnrepresentablePaths: a v1.14 field that lives in its own document is
+// named with that document and why adopt cannot capture it, not just listed as "cannot patch".
+func TestReportPlans_ExplainsUnrepresentablePaths(t *testing.T) {
+	var out bytes.Buffer
+
+	reportPlans(&out, []*adoptPlan{{
+		Machine: "node-a",
+		UnrepresentablePaths: []string{
+			"KubeNetworkConfig.podSubnets", "UnattendedInstallConfig.installer.image", "KubeFlannelCNIConfig.backendType",
+			"machine.certSANs",
+		},
+	}})
+
+	for _, want := range []string{"pod and service subnets", "install disk and image", "flannel", "no TalosConfigPatch kind"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("report lacks %q:\n%s", want, out.String())
+		}
 	}
 }

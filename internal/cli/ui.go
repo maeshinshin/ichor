@@ -17,17 +17,40 @@ limitations under the License.
 package cli
 
 import (
+	"context"
+	"fmt"
+
 	"os/signal"
 	"syscall"
 
 	"github.com/spf13/cobra"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// uiServiceName is dist/chart/templates/ui/ui-service.yaml's fixed
-// (never release-templated) Service name: a port-forward target needs a
-// predictable name the same way the Deployment's own comment explains.
-const uiServiceName = "ichor-ui-service"
+// uiComponentLabel/Value select the ichor-ui Service on every install path:
+// config/manager-ui/service.yaml (whose name kustomize prefixes, so it is
+// ichor-ichor-ui-service) and dist/chart/templates/ui/ui-service.yaml both set
+// it, so the CLI never depends on a name.
+const (
+	uiComponentLabel = "app.kubernetes.io/component"
+	uiComponentValue = "ui"
+)
+
+// findUIService returns the ichor-ui Service in ns, found by label.
+func findUIService(ctx context.Context, c client.Client, ns string) (*corev1.Service, error) {
+	var list corev1.ServiceList
+	if err := c.List(ctx, &list, client.InNamespace(ns), client.MatchingLabels{uiComponentLabel: uiComponentValue}); err != nil {
+		return nil, fmt.Errorf("listing ichor-ui Services in %s: %w", ns, err)
+	}
+
+	if len(list.Items) == 0 {
+		return nil, fmt.Errorf("no Service labelled %s=%s in namespace %s", uiComponentLabel, uiComponentValue, ns)
+	}
+
+	return &list.Items[0], nil
+}
 
 var uiOpts uiOptions
 
@@ -41,7 +64,7 @@ var uiCmd = &cobra.Command{
 	Use:   "ui",
 	Short: "Open the Ichor UI through a port-forward to ichor-ui",
 	Long: `ui opens a port-forward to one of the ichor-ui Deployment's pods (found
-through the ichor-ui-service Service, never a hardcoded pod name) and opens
+through the ichor-ui Service (found by its component label), never a hardcoded pod name) and opens
 it in your default browser.
 
 If the pod currently forwarded to disappears -- a rollout, a drain, an

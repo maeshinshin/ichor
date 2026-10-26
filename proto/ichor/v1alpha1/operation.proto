@@ -36,11 +36,11 @@ enum OperationKind {
   // CONFIG applies the pending reboot-requiring configuration changes, one
   // machine at a time with a reboot each (ADR 0080).
   OPERATION_KIND_CONFIG = 7;
-  // NODE runs one NodeAction on one machine (ADR 0084).
+  // NODE runs one NodeAction on one machine (ADR 0085).
   OPERATION_KIND_NODE = 8;
 }
 
-// NodeAction is what a node-kind operation does to its one machine (ADR 0084).
+// NodeAction is what a node-kind operation does to its one machine (ADR 0085).
 enum NodeAction {
   NODE_ACTION_UNSPECIFIED = 0;
   NODE_ACTION_REBOOT = 1;

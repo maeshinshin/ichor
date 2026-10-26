@@ -438,7 +438,7 @@ func main() {
 		// state machine: it needs the Kubernetes Node readiness check and an Event recorder.
 		NodesReady: controller.NewNodesReady(),
 		Recorder:   mgr.GetEventRecorderFor("ichor-controller"), //nolint:staticcheck // typed against record.EventRecorder, as above
-		// The node kind (ADR 0084) drains with the same clientset and storage hook as the
+		// The node kind (ADR 0085) drains with the same clientset and storage hook as the
 		// config rollout.
 		KubeClient: kubeClient,
 		Evacuator:  &controller.LonghornEvacuator{Client: mgr.GetClient()},

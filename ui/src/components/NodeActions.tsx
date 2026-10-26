@@ -11,6 +11,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -20,12 +21,30 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { diagnosticsClient, nodeClient } from '@/lib/connect'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { ErrorAlert } from '@/components/ErrorAlert'
+import { NodeAction, OperationKind, type PlanOperationResponse } from '@/gen/ichor/v1alpha1/operation_pb'
+import { diagnosticsClient, machineClient, nodeClient, operationClient } from '@/lib/connect'
+import { notifyDone } from '@/lib/notify'
+import {
+  availableActions as availableNodeActions,
+  canStart,
+  restartableServices,
+  type NodeActionDef,
+  type NodeActionId,
+} from '@/lib/nodeActions'
 import {
   availableActions,
   captureInterfaces,
@@ -39,11 +58,38 @@ import { describeError } from '@/lib/errors'
 import { useT } from '@/lib/useT'
 
 type Ref = { namespace: string; name: string }
+type ErrorShape = { title: string; detail: string }
 
-// The node page's Actions menu (docs/adr/0084): three downloads, each shown only when Kubernetes RBAC
-// lets this user start it, and each behind a warning that the file may contain secrets. It renders
-// nothing for a user who may do none of them, or when the permission check fails.
-export function NodeActions({ machine, controlPlane }: { machine: Ref; controlPlane: boolean }) {
+const wireAction: Record<NodeActionId, NodeAction> = {
+  reboot: NodeAction.REBOOT,
+  shutdown: NodeAction.SHUTDOWN,
+  'restart-service': NodeAction.RESTART_SERVICE,
+  'etcd-defrag': NodeAction.ETCD_DEFRAG,
+  'etcd-forfeit-leadership': NodeAction.ETCD_FORFEIT_LEADERSHIP,
+  reset: NodeAction.RESET,
+  remove: NodeAction.REMOVE,
+}
+
+
+// The node page's one Actions menu, in three groups. Downloads (docs/adr/0084): three downloads, each
+// shown only when Kubernetes RBAC lets this user start it, and each behind a warning that the file may
+// contain secrets. Node and Danger zone (docs/adr/0085): the node actions, each opening a dialog with the
+// server's plan; choosing an item writes nothing, only the dialog's own button does. The UI only writes
+// custom resources (an operation, or the deletion of the machine); the controller works on the node.
+// Actions that cannot apply to the node are not offered, and the whole menu is absent when none is.
+export function NodeActions({
+  machine,
+  controlPlane,
+  approved,
+  deleting,
+  onStarted,
+}: {
+  machine: Ref
+  controlPlane: boolean
+  approved: boolean
+  deleting: boolean
+  onStarted: () => void
+}) {
   const t = useT()
   const [perms, setPerms] = useState<Permissions | undefined>()
   // The download waiting for the user's confirmation, with its request when it has parameters.
@@ -66,8 +112,12 @@ export function NodeActions({ machine, controlPlane }: { machine: Ref; controlPl
     }
   }, [machine.namespace, machine.name])
 
+  const [active, setActive] = useState<NodeActionDef | null>(null)
   const actions = availableActions(perms, controlPlane)
-  if (actions.length === 0) return null
+  const nodeDefs = availableNodeActions({ approved, deleting, role: controlPlane ? 'controlplane' : 'worker' })
+  const safeDefs = nodeDefs.filter((d) => !d.destructive)
+  const dangerDefs = nodeDefs.filter((d) => d.destructive)
+  if (actions.length === 0 && nodeDefs.length === 0) return null
 
   async function run(req: DownloadRequest) {
     setPending(null)
@@ -98,7 +148,10 @@ export function NodeActions({ machine, controlPlane }: { machine: Ref; controlPl
             <ChevronDownIcon class="size-4" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuContent align="end" className="w-auto min-w-56">
+          {actions.length > 0 && (
+            <>
+              <DropdownMenuLabel>{t('actions.groupDownloads')}</DropdownMenuLabel>
           {actions.includes('support-bundle') && (
             <DropdownMenuItem onSelect={() => start('support-bundle')}>{t('actions.supportBundle')}</DropdownMenuItem>
           )}
@@ -108,8 +161,45 @@ export function NodeActions({ machine, controlPlane }: { machine: Ref; controlPl
           {actions.includes('packet-capture') && (
             <DropdownMenuItem onSelect={() => start('packet-capture')}>{t('actions.capture')}</DropdownMenuItem>
           )}
+            </>
+          )}
+          {safeDefs.length > 0 && (
+            <>
+              {actions.length > 0 && <DropdownMenuSeparator />}
+              <DropdownMenuLabel>{t('actions.groupNode')}</DropdownMenuLabel>
+              {safeDefs.map((d) => (
+                <DropdownMenuItem key={d.id} onSelect={() => setActive(d)}>
+                  {t(`node.action.${d.id}`)}
+                </DropdownMenuItem>
+              ))}
+            </>
+          )}
+          {dangerDefs.length > 0 && (
+            <>
+              {(actions.length > 0 || safeDefs.length > 0) && <DropdownMenuSeparator />}
+              <DropdownMenuLabel>{t('actions.groupDanger')}</DropdownMenuLabel>
+              {dangerDefs.map((d) => (
+                <DropdownMenuItem key={d.id} variant="destructive" onSelect={() => setActive(d)}>
+                  {t(`node.action.${d.id}`)}
+                </DropdownMenuItem>
+              ))}
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
+
+      {active && (
+        <NodeActionDialog
+          key={active.id}
+          def={active}
+          machine={machine}
+          onClose={() => setActive(null)}
+          onStarted={() => {
+            setActive(null)
+            onStarted()
+          }}
+        />
+      )}
 
       <CaptureDialog
         machine={machine}
@@ -263,3 +353,182 @@ function CaptureDialog({
     </Dialog>
   )
 }
+
+function NodeActionDialog({
+  def,
+  machine,
+  onClose,
+  onStarted,
+}: {
+  def: NodeActionDef
+  machine: { namespace: string; name: string }
+  onClose: () => void
+  onStarted: () => void
+}) {
+  const t = useT()
+  const [service, setService] = useState(def.id === 'restart-service' ? restartableServices[0] : '')
+  const [allowLeader, setAllowLeader] = useState(false)
+  const [typed, setTyped] = useState('')
+  const [reason, setReason] = useState('')
+  const [plan, setPlan] = useState<PlanOperationResponse | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<ErrorShape | null>(null)
+  const latest = useRef(0)
+
+  const request = (confirm: string) => ({
+    machine: { namespace: machine.namespace, name: machine.name },
+    action: wireAction[def.id],
+    service: def.id === 'restart-service' ? service : '',
+    allowLeader: def.id === 'etcd-defrag' && allowLeader,
+    confirm,
+    breakGlass: def.breakGlass && reason.trim() !== '' ? { reason: reason.trim() } : undefined,
+  })
+
+  // The plan is asked for as soon as the dialog opens, and again when an option that changes it
+  // does. Only the answer to the latest question is shown.
+  useEffect(() => {
+    const mine = ++latest.current
+    setPlan(null)
+    setError(null)
+    operationClient.planOperation({ kind: OperationKind.NODE, node: request('') }).then(
+      (res) => {
+        if (latest.current === mine) setPlan(res)
+      },
+      (err) => {
+        if (latest.current === mine) setError(describeError(err))
+      },
+    )
+  }, [service, allowLeader])
+
+  const confirmName = plan?.confirmName ?? ''
+  const startable = canStart({
+    def,
+    blocked: plan?.blocked ?? '',
+    planned: plan !== null,
+    confirmName,
+    typed,
+    nodeName: machine.name,
+    reason,
+    service,
+    busy,
+  })
+
+  async function start() {
+    setBusy(true)
+    setError(null)
+    try {
+      const label = t(`node.action.go.${def.id}`)
+      if (def.id === 'remove') {
+        await machineClient.removeMachine({ machine: { namespace: machine.namespace, name: machine.name }, confirm: typed.trim() })
+        notifyDone(t('node.action.removed', { node: machine.name }))
+        onStarted()
+        return
+      }
+      await operationClient.createOperation({ kind: OperationKind.NODE, node: request(typed.trim()) })
+      notifyDone(t('node.action.started', { action: label, node: machine.name }))
+      onStarted()
+    } catch (err) {
+      setError(describeError(err))
+      setBusy(false)
+    }
+  }
+
+  return (
+    <ConfirmDialog
+      open
+      onOpenChange={(open) => !open && !busy && onClose()}
+      title={t('node.action.title', { action: t(`node.action.${def.id}`).replace('…', ''), node: machine.name })}
+      description={plan === null && !error ? t('node.action.checking') : undefined}
+      confirm={{
+        label: busy ? t('node.action.starting') : t(`node.action.go.${def.id}`),
+        onClick: () => void start(),
+        disabled: !startable,
+        destructive: def.destructive,
+      }}
+    >
+
+        {def.id === 'restart-service' && (
+          <div class="space-y-2">
+            <Label htmlFor="node-action-service">{t('node.action.service')}</Label>
+            <select
+              id="node-action-service"
+              class="h-9 w-full rounded-md border bg-background px-2 text-sm"
+              value={service}
+              onChange={(e) => setService((e.currentTarget as HTMLSelectElement).value)}
+            >
+              {restartableServices.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {def.id === 'etcd-defrag' && (
+          <label class="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              class="mt-1"
+              checked={allowLeader}
+              onChange={(e) => setAllowLeader((e.currentTarget as HTMLInputElement).checked)}
+            />
+            <span>{t('node.action.allowLeader')}</span>
+          </label>
+        )}
+
+        {plan && plan.blocked !== '' && (
+          <Alert variant="destructive">
+            <AlertTitle>{t('node.action.cannot')}</AlertTitle>
+            <AlertDescription>{plan.blocked}</AlertDescription>
+          </Alert>
+        )}
+
+        {plan && plan.blocked === '' && (
+          <div class="space-y-3 text-sm">
+            <div>
+              <p class="mb-1 font-medium">{t('node.action.stepsTitle')}</p>
+              <ol class="list-inside list-decimal space-y-0.5">
+                {plan.steps.map((s) => (
+                  <li key={s}>{s}</li>
+                ))}
+              </ol>
+            </div>
+            {plan.kubernetesApiUnavailable && (
+              <Alert variant="destructive">
+                <AlertTitle>{t('node.action.apiDown')}</AlertTitle>
+              </Alert>
+            )}
+            {plan.warning !== '' && (
+              <Alert variant={def.destructive ? 'destructive' : 'default'}>
+                <AlertTitle>{t('node.action.warning')}</AlertTitle>
+                <AlertDescription>{plan.warning}</AlertDescription>
+              </Alert>
+            )}
+            {confirmName !== '' && (
+              <div class="space-y-2">
+                <Label htmlFor="node-action-name">{t('node.action.typeName', { name: machine.name })}</Label>
+                <Input
+                  id="node-action-name"
+                  autoComplete="off"
+                  value={typed}
+                  onInput={(e) => setTyped((e.currentTarget as HTMLInputElement).value)}
+                />
+              </div>
+            )}
+            {plan.breakGlassRequired && (
+              <div class="space-y-2">
+                <Label htmlFor="node-action-reason">{t('node.action.reason')}</Label>
+                <Textarea id="node-action-reason" value={reason} onInput={(e) => setReason((e.currentTarget as HTMLTextAreaElement).value)} />
+                <p class="text-xs text-muted-foreground">{t('node.action.reasonHint')}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {error && <ErrorAlert {...error} />}
+
+    </ConfirmDialog>
+  )
+}
+

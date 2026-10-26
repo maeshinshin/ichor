@@ -124,7 +124,7 @@ type fakeTalosClient struct {
 	// stage and stageErr serve talosmachine_provision_test.go (MachineStage).
 	stage    string
 	stageErr error
-	// node-action fields (ADR 0084).
+	// node-action fields (ADR 0085).
 	serviceRestarts   []string
 	serviceRestartErr error
 	etcdStatus        EtcdStatus
@@ -1001,7 +1001,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 	})
 })
 
-// node-action fields (node_action_test.go, ADR 0084).
+// node-action fields (node_action_test.go, ADR 0085).
 func (f *fakeTalosClient) ServiceRestart(_ context.Context, id string) error {
 	f.serviceRestarts = append(f.serviceRestarts, id)
 

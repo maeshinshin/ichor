@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// This file implements the TalosOperationKindNode state machine (ADR 0084): one action on one
+// This file implements the TalosOperationKindNode state machine (ADR 0085): one action on one
 // machine. Like shutdown it is dispatched by TalosOperationReconciler after the cluster lock is
 // taken, and every step is recorded in op.status before the next call, so a restarted controller
 // (including one whose own node the action reboots) resumes where the status says it was and never

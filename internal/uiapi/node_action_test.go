@@ -32,7 +32,7 @@ import (
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
 )
 
-// Node actions over a fake client (docs/adr/0084): what the plan says, what is refused before
+// Node actions over a fake client (docs/adr/0085): what the plan says, what is refused before
 // anything is written, and what the TalosOperation looks like.
 
 const nodeTestCP = "cp1"

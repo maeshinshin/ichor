@@ -44,7 +44,7 @@ const (
 	// CONFIG applies the pending reboot-requiring configuration changes, one
 	// machine at a time with a reboot each (ADR 0080).
 	OperationKind_OPERATION_KIND_CONFIG OperationKind = 7
-	// NODE runs one NodeAction on one machine (ADR 0084).
+	// NODE runs one NodeAction on one machine (ADR 0085).
 	OperationKind_OPERATION_KIND_NODE OperationKind = 8
 )
 
@@ -101,7 +101,7 @@ func (OperationKind) EnumDescriptor() ([]byte, []int) {
 	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{0}
 }
 
-// NodeAction is what a node-kind operation does to its one machine (ADR 0084).
+// NodeAction is what a node-kind operation does to its one machine (ADR 0085).
 type NodeAction int32
 
 const (

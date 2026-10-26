@@ -49,7 +49,7 @@ const (
 	// a reboot (ADR 0080). Nothing reboots a node for a configuration change without one.
 	TalosOperationKindConfig = "config"
 
-	// TalosOperationKindNode runs one action on exactly one machine (spec.node, ADR 0084): a
+	// TalosOperationKindNode runs one action on exactly one machine (spec.node, ADR 0085): a
 	// reboot, a shutdown, a service restart, an etcd defragmentation or leadership handover, or a
 	// reset. Like shutdown it runs its own state machine, held in status.node.
 	TalosOperationKindNode = "node"
@@ -199,7 +199,7 @@ type TalosOperationSpec struct {
 	MaxUnavailable int32 `json:"maxUnavailable,omitempty"`
 }
 
-// TalosOperationNodeSpec is one action on one machine (ADR 0084). One action per operation.
+// TalosOperationNodeSpec is one action on one machine (ADR 0085). One action per operation.
 // +kubebuilder:validation:XValidation:rule="self.action == 'restart-service' ? has(self.service) : !has(self.service)",message="service is required for restart-service and only allowed there"
 // +kubebuilder:validation:XValidation:rule="self.action != 'reset' || (has(self.confirm) && self.confirm == self.machineRef.name)",message="reset needs confirm equal to the machine name"
 // +kubebuilder:validation:XValidation:rule="!self.allowLeader || self.action == 'etcd-defrag'",message="allowLeader only applies to etcd-defrag"

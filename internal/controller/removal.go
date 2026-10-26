@@ -314,7 +314,7 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 	// same point, so whichever of two concurrent removals gets here second
 	// sees the first's finalizer (or its completed deletion) already
 	// reflected -- the race the webhook's admission-time count cannot see.
-	// A worker only reaches here when a reset gave it the finalizer (ADR 0084); it was never an
+	// A worker only reaches here when a reset gave it the finalizer (ADR 0085); it was never an
 	// etcd member and is not counted toward quorum, so only the drain and the reset apply to it.
 	isControlPlane := m.Spec.Role == roleControlPlane
 

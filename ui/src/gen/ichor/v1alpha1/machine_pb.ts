@@ -718,7 +718,7 @@ export const MachineService: GenService<{
   },
   /**
    * RemoveMachine deletes an approved machine through the removal flow: drain, etcd
-   * member removal for a control plane, then the TalosMachine goes (ADR 0032, 0084). The
+   * member removal for a control plane, then the TalosMachine goes (ADR 0032, 0085). The
    * node is not wiped; reset is a node action.
    *
    * @generated from rpc ichor.v1alpha1.MachineService.RemoveMachine

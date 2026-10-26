@@ -156,7 +156,7 @@ type TalosClient interface {
 	NodeName(ctx context.Context) (string, error)
 
 	// ServiceRestart restarts one Talos service on this node. Callers pass only ids from
-	// nodeActionServices (ADR 0084); the interface does not enforce the allowlist.
+	// nodeActionServices (ADR 0085); the interface does not enforce the allowlist.
 	ServiceRestart(ctx context.Context, id string) error
 
 	// EtcdStatus reports this node's own etcd member: its ID and the ID of the member it

@@ -112,7 +112,7 @@ type fakeTalosClient struct {
 	pulled  []string
 	pullErr error
 
-	// stage and stageErr serve talosmachine_provision_test.go (MachineStager).
+	// stage and stageErr serve talosmachine_provision_test.go (MachineStage).
 	stage      string
 	stageErr   error
 	kubeconfig []byte

@@ -115,7 +115,7 @@ func (t *machineryTalosClient) CurrentConfig(ctx context.Context) ([]byte, error
 }
 
 // MachineStage reads the MachineStatus resource's stage ("running", "installing",
-// "rebooting", ...), implementing MachineStager.
+// "rebooting", ...).
 func (t *machineryTalosClient) MachineStage(ctx context.Context) (string, error) {
 	md := resource.NewMetadata(runtimeres.NamespaceName, runtimeres.MachineStatusType, runtimeres.MachineStatusID, resource.VersionUndefined)
 

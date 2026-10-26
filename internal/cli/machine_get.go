@@ -13,39 +13,37 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
 package cli
 
 import (
-	"fmt"
+	"context"
+	"io"
 
+	"connectrpc.com/connect"
 	"github.com/spf13/cobra"
+
+	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
-// machineGetCmd represents the machineGet command
 var machineGetCmd = &cobra.Command{
-	Use:   "machineGet",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("machineGet called")
+	Use:   "get NAME",
+	Short: "Show one machine",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
+			return runMachineGet(ctx, c, cmd.OutOrStdout(), args[0])
+		})
 	},
 }
 
-func init() {
-	machineCmd.AddCommand(machineGetCmd)
+func runMachineGet(ctx context.Context, c *apiClients, out io.Writer, name string) error {
+	resp, err := c.Machine.GetMachine(ctx, connect.NewRequest(&pb.GetMachineRequest{Machine: objectRef(apiOpts.Namespace, name)}))
+	if err != nil {
+		return err
+	}
 
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// machineGetCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// machineGetCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	return writeMessage(out, outputFormat, resp.Msg)
 }
+
+func init() { machineCmd.AddCommand(machineGetCmd) }

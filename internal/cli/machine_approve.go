@@ -13,39 +13,93 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
 package cli
 
 import (
+	"context"
 	"fmt"
+	"io"
 
+	"connectrpc.com/connect"
 	"github.com/spf13/cobra"
+
+	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
-// machineApproveCmd represents the machineApprove command
-var machineApproveCmd = &cobra.Command{
-	Use:   "machineApprove",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
+var machineApproveOpts machineApproveOptions
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("machineApprove called")
+type machineApproveOptions struct {
+	Role     string
+	Labels   map[string]string
+	Hostname string
+	Reason   string
+}
+
+var machineApproveCmd = &cobra.Command{
+	Use:   "approve NAME --role controlplane|worker",
+	Short: "Approve a pending machine so the controller starts configuring it",
+	Long: `approve sets the role (and optionally node labels and a hostname) of a
+discovered machine and marks it approved; the controller then renders and
+applies its configuration. It is refused for a machine whose identity is
+weak (missing UUID, serial number or permanent MAC) and for one already
+approved -- by ichor-ui, or, when ichor-ui is unreachable, by the same
+checks running in this process. It asks for confirmation unless --yes.`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
+			return runMachineApprove(ctx, c, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), args[0], machineApproveOpts)
+		})
 	},
+}
+
+func runMachineApprove(
+	ctx context.Context, c *apiClients, in io.Reader, out, errw io.Writer, name string, opts machineApproveOptions,
+) error {
+	role, err := parseRole(opts.Role)
+	if err != nil {
+		return err
+	}
+
+	ref := objectRef(apiOpts.Namespace, name)
+
+	if !assumeYes {
+		got, err := c.Machine.GetMachine(ctx, connect.NewRequest(&pb.GetMachineRequest{Machine: ref}))
+		if err != nil {
+			return err
+		}
+
+		m := got.Msg.GetMachine()
+
+		ok, err := confirm(in, errw, fmt.Sprintf(
+			"Approve machine %s/%s (uuid %q, endpoint %s) as %s? The controller will start configuring it. [y/N] ",
+			ref.GetNamespace(), name, m.GetIdentity().GetUuid(), m.GetEndpoint(), opts.Role))
+		if err != nil {
+			return fmt.Errorf("machine approve: reading confirmation: %w", err)
+		}
+
+		if !ok {
+			return fmt.Errorf("machine approve: aborted")
+		}
+	}
+
+	resp, err := c.Machine.ApproveMachine(ctx, connect.NewRequest(&pb.ApproveMachineRequest{
+		Machine: ref, Role: role, NodeLabels: opts.Labels, Hostname: opts.Hostname, Reason: opts.Reason,
+	}))
+	if err != nil {
+		return err
+	}
+
+	return writeMessage(out, outputFormat, resp.Msg)
 }
 
 func init() {
 	machineCmd.AddCommand(machineApproveCmd)
 
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// machineApproveCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// machineApproveCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	f := machineApproveCmd.Flags()
+	f.StringVar(&machineApproveOpts.Role, "role", "", "controlplane or worker (required)")
+	f.StringToStringVar(&machineApproveOpts.Labels, "label", nil, "node label KEY=VALUE (repeatable)")
+	f.StringVar(&machineApproveOpts.Hostname, "hostname", "", "hostname to set")
+	f.StringVar(&machineApproveOpts.Reason, "reason", "", "recorded with the approval")
+	_ = machineApproveCmd.MarkFlagRequired("role")
 }

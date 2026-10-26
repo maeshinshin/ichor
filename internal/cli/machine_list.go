@@ -13,39 +13,44 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
 package cli
 
 import (
-	"fmt"
+	"context"
+	"io"
 
+	"connectrpc.com/connect"
 	"github.com/spf13/cobra"
+
+	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
-// machineListCmd represents the machineList command
-var machineListCmd = &cobra.Command{
-	Use:   "machineList",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
+var machineListCluster string
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("machineList called")
+var machineListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List machines, pending ones included",
+	Args:  cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
+			return runMachineList(ctx, c, cmd.OutOrStdout(), machineListCluster)
+		})
 	},
+}
+
+func runMachineList(ctx context.Context, c *apiClients, out io.Writer, cluster string) error {
+	resp, err := c.Machine.ListMachines(ctx, connect.NewRequest(&pb.ListMachinesRequest{
+		Cluster: clusterFilter(apiOpts.Namespace, cluster),
+	}))
+	if err != nil {
+		return err
+	}
+
+	return writeMessage(out, outputFormat, resp.Msg)
 }
 
 func init() {
 	machineCmd.AddCommand(machineListCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// machineListCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// machineListCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	machineListCmd.Flags().StringVar(&machineListCluster, flagCluster, "", "only machines of this TalosCluster")
 }

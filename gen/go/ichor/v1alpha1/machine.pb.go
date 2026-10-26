@@ -1041,7 +1041,9 @@ type Machine struct {
 	// approval_decision is unset until the first approve/reject decision.
 	ApprovalDecision *MachineApprovalDecision `protobuf:"bytes,12,opt,name=approval_decision,json=approvalDecision,proto3" json:"approval_decision,omitempty"`
 	// install is unset until an install target is declared.
-	Install       *MachineInstall `protobuf:"bytes,13,opt,name=install,proto3" json:"install,omitempty"`
+	Install *MachineInstall `protobuf:"bytes,13,opt,name=install,proto3" json:"install,omitempty"`
+	// deleting is true while the machine is being removed (its deletion timestamp is set).
+	Deleting      bool `protobuf:"varint,14,opt,name=deleting,proto3" json:"deleting,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1158,6 +1160,13 @@ func (x *Machine) GetInstall() *MachineInstall {
 		return x.Install
 	}
 	return nil
+}
+
+func (x *Machine) GetDeleting() bool {
+	if x != nil {
+		return x.Deleting
+	}
+	return false
 }
 
 type RemoveMachineRequest struct {
@@ -1325,7 +1334,7 @@ const file_ichor_v1alpha1_machine_proto_rawDesc = "" +
 	"\x17MachineApprovalDecision\x12\x14\n" +
 	"\x05actor\x18\x01 \x01(\tR\x05actor\x12\x16\n" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\x12*\n" +
-	"\x02at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x02at\"\xd8\x05\n" +
+	"\x02at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x02at\"\xf4\x05\n" +
 	"\aMachine\x12+\n" +
 	"\x03ref\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\x03ref\x123\n" +
 	"\acluster\x18\x02 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x12;\n" +
@@ -1342,7 +1351,8 @@ const file_ichor_v1alpha1_machine_proto_rawDesc = "" +
 	" \x01(\tR\x05stage\x12K\n" +
 	"\x0eapproval_state\x18\v \x01(\x0e2$.ichor.v1alpha1.MachineApprovalStateR\rapprovalState\x12T\n" +
 	"\x11approval_decision\x18\f \x01(\v2'.ichor.v1alpha1.MachineApprovalDecisionR\x10approvalDecision\x128\n" +
-	"\ainstall\x18\r \x01(\v2\x1e.ichor.v1alpha1.MachineInstallR\ainstall\x1a=\n" +
+	"\ainstall\x18\r \x01(\v2\x1e.ichor.v1alpha1.MachineInstallR\ainstall\x12\x1a\n" +
+	"\bdeleting\x18\x0e \x01(\bR\bdeleting\x1a=\n" +
 	"\x0fNodeLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\b\x10\tR\bapproved\"e\n" +

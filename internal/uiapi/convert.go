@@ -150,6 +150,7 @@ func machineToPB(m *ichorv1alpha1.TalosMachine) *pb.Machine {
 		ApprovalState:    specApprovalStateToPB(m.Spec.ApprovalState),
 		ApprovalDecision: approvalDecisionToPB(m.Spec.ApprovalDecision),
 		Conditions:       conditions(m.Status.Conditions),
+		Deleting:         !m.DeletionTimestamp.IsZero(),
 		Stage:            "", // Talos's own MachineStatus stage: not read by this phase (GetNode's job); see docs/adr/0018.
 	}
 }

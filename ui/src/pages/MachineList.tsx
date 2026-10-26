@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 import { BreakGlassDialog, type BreakGlassRun } from '@/components/BreakGlassDialog'
+import { StatusBadge } from '@/components/ConditionList'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { PullRequestNotice } from '@/components/PullRequestNotice'
 import type { NodeDetail } from '@/gen/ichor/v1alpha1/node_pb'
@@ -97,7 +98,6 @@ export function MachineList() {
                   <TableHead>{t('col.identity')}</TableHead>
                   <TableHead>{t('col.cluster')}</TableHead>
                   <TableHead>{t('col.endpoint')}</TableHead>
-                  <TableHead>{t('col.stage')}</TableHead>
                   <TableHead>{t('col.actions')}</TableHead>
                 </TableRow>
               </TableHeader>
@@ -107,7 +107,6 @@ export function MachineList() {
                     <TableCell>{identitySummary(m, t('machines.unknown'))}</TableCell>
                     <TableCell>{m.cluster ? clusterNames[`${m.cluster.namespace}/${m.cluster.name}`] ?? m.cluster.name : '-'}</TableCell>
                     <TableCell>{m.endpoint || '-'}</TableCell>
-                    <TableCell>{m.stage || '-'}</TableCell>
                     <TableCell>
                       <div class="flex gap-2">
                         <ApproveDialog machine={m} onApproved={replaceMachine} onPullRequest={(url, run) => setPullRequest({ url, run })} />
@@ -181,7 +180,7 @@ export function MachineList() {
                   <TableHead>{t('machines.colHostname')}</TableHead>
                   <TableHead>{t('col.cluster')}</TableHead>
                   <TableHead>{t('col.role')}</TableHead>
-                  <TableHead>{t('col.stage')}</TableHead>
+                  <TableHead>{t('col.ready')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -198,7 +197,9 @@ export function MachineList() {
                     </TableCell>
                     <TableCell>{m.cluster ? clusterNames[`${m.cluster.namespace}/${m.cluster.name}`] ?? m.cluster.name : '-'}</TableCell>
                     <TableCell>{enumLabel(MachineRole, m.role)}</TableCell>
-                    <TableCell>{m.stage || '-'}</TableCell>
+                    <TableCell>
+                      <ReadyCell machine={m} />
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -207,6 +208,19 @@ export function MachineList() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+// ReadyCell shows the machine's Ready condition (status and reason), which the
+// controller does record; Talos's own stage is not read for the list.
+function ReadyCell({ machine }: { machine: Machine }) {
+  const ready = machine.conditions.find((c) => c.type === 'Ready')
+  if (!ready) return <>-</>
+  return (
+    <span class="inline-flex items-center gap-2">
+      <StatusBadge type={ready.type} status={ready.status} />
+      {ready.reason && <span class="text-xs text-muted-foreground">{ready.reason}</span>}
+    </span>
   )
 }
 

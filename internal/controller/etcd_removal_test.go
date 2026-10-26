@@ -26,7 +26,9 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -191,6 +193,65 @@ var _ = Describe("removeEtcdMember", func() {
 		cond := apimeta.FindStatusCondition(got.Status.Conditions, conditionRemoval)
 		Expect(cond.Reason).To(Equal(reasonEtcdMemberRemoveFail))
 		Expect(got.Finalizers).To(ContainElement(machineRemovalFinalizer), "a failed etcd removal must not clear the finalizer")
+	})
+})
+
+var _ = Describe("removal of a control plane with an empty spec.hostname", func() {
+	It("resolves the node name from the node's own report and leaves etcd under that name", func() {
+		bundle := newTestBundle("v1.14")
+		secret := newTestSecret(bundle)
+		cluster := newTestClusterWithCount(1, secret.Name)
+		cp1 := newTestControlPlane(cluster.Name, "h1")
+		cp2 := newTestControlPlane(cluster.Name, "h2")
+		cp3 := newTestControlPlane(cluster.Name, "h3")
+
+		self := &fakeTalosClient{nodeName: "talos-abc-def", etcdMembers: []EtcdMember{{ID: 7, Hostname: "talos-abc-def"}}}
+		r := &TalosMachineReconciler{
+			Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace,
+			TalosClient: perMachineClientFactory(map[string]*fakeTalosClient{cp1.Name: self}),
+		}
+		for _, cp := range []*ichorv1alpha1.TalosMachine{cp1, cp2, cp3} {
+			_, err := reconcileMachine(r, cp)
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		Expect(k8sClient.Delete(ctx, cp1)).To(Succeed())
+		_, err := reconcileMachine(r, cp1)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(self.etcdLeaveCalls).To(Equal(1), "the member must be found under the resolved name, not skipped")
+	})
+
+	It("refuses the removal, keeping the finalizer, when the node name cannot be resolved", func() {
+		bundle := newTestBundle("v1.14")
+		secret := newTestSecret(bundle)
+		cluster := newTestClusterWithCount(1, secret.Name)
+		cp1 := newTestControlPlane(cluster.Name, "h4")
+		cp2 := newTestControlPlane(cluster.Name, "h5")
+		cp3 := newTestControlPlane(cluster.Name, "h6")
+
+		self := &fakeTalosClient{nodeNameErr: fmt.Errorf("node is down")}
+		recorder := record.NewFakeRecorder(10)
+		r := &TalosMachineReconciler{
+			Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, Recorder: recorder,
+			TalosClient: perMachineClientFactory(map[string]*fakeTalosClient{cp1.Name: self}),
+		}
+		for _, cp := range []*ichorv1alpha1.TalosMachine{cp1, cp2, cp3} {
+			_, err := reconcileMachine(r, cp)
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		Expect(k8sClient.Delete(ctx, cp1)).To(Succeed())
+		_, _ = reconcileMachine(r, cp1)
+
+		got := fetchMachine(cp1)
+		cond := apimeta.FindStatusCondition(got.Status.Conditions, conditionRemoval)
+		Expect(cond).NotTo(BeNil())
+		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(cond.Reason).To(Equal(reasonNodeNameUnresolved))
+		Expect(got.Finalizers).To(ContainElement(machineRemovalFinalizer))
+		Expect(self.etcdLeaveCalls).To(Equal(0))
+		Expect(recorder.Events).To(BeEmpty(), "no event may claim an etcd removal that did not happen")
 	})
 })
 

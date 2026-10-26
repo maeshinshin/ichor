@@ -57,7 +57,7 @@ var _ = Describe("resetNode", func() {
 		cp2 := newTestControlPlane(cluster.Name, "r2")
 		cp3 := newTestControlPlane(cluster.Name, "r3")
 
-		fake := &fakeTalosClient{}
+		fake := &fakeTalosClient{nodeName: "reset-node"}
 		recorder := record.NewFakeRecorder(10)
 		r := &TalosMachineReconciler{
 			Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace,
@@ -88,7 +88,7 @@ var _ = Describe("resetNode", func() {
 		cp2 := newTestControlPlane(cluster.Name, "r5")
 		cp3 := newTestControlPlane(cluster.Name, "r6")
 
-		fake := &fakeTalosClient{}
+		fake := &fakeTalosClient{nodeName: "reset-node"}
 		recorder := record.NewFakeRecorder(10)
 		r := &TalosMachineReconciler{
 			Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace,
@@ -119,7 +119,7 @@ var _ = Describe("resetNode", func() {
 		cp2 := newTestControlPlane(cluster.Name, "r8")
 		cp3 := newTestControlPlane(cluster.Name, "r9")
 
-		fake := &fakeTalosClient{resetErr: fmt.Errorf("reset failed")}
+		fake := &fakeTalosClient{nodeName: "reset-node", resetErr: fmt.Errorf("reset failed")}
 		r := &TalosMachineReconciler{
 			Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace,
 			TalosClient: clientFactory(fake),
@@ -148,7 +148,7 @@ var _ = Describe("resetNode", func() {
 		cp2 := newTestControlPlane(cluster.Name, "r11")
 		cp3 := newTestControlPlane(cluster.Name, "r12")
 
-		fake := &fakeTalosClient{}
+		fake := &fakeTalosClient{nodeName: "reset-node"}
 		r := &TalosMachineReconciler{
 			Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace,
 			TalosClient: clientFactory(fake),

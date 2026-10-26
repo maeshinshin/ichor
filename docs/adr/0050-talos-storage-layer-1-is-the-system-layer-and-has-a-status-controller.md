@@ -1,4 +1,4 @@
-# 0049. `TalosStorage` layer 1 renders as the system layer, selected by one shared rule, with a status controller
+# 0050. `TalosStorage` layer 1 renders as the system layer, selected by one shared rule, with a status controller
 
 Status: Accepted · Date: 2026-10-26 · Design section: Storage, Patch layers
 Decided: Render a `TalosStorage`'s Talos-side preparation as part of the system layer (below every patch), choose the governing `TalosStorage` with one `storage.Select` shared with the evacuation hook, hand `Render` a single `*SystemInputs` instead of a growing argument list, and report `Ready` from the convergence of the machines it governs

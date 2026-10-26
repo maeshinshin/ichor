@@ -119,9 +119,9 @@ as the kind of placeholder ponytail mode rules out: an empty reconciler is not l
 a watch and an RBAC surface for nothing, and the next change that actually needs one can scaffold
 it then.
 
-## Amendment (ADR 0049)
+## Amendment (ADR 0050)
 
 Layer 1 is now rendered into node configs as the system layer and `TalosStorage` has a status controller
-(ADR 0049). Wiring it to Talos 1.14.3's validator changed the preset: `TalosPatches` returns only the
+(ADR 0050). Wiring it to Talos 1.14.3's validator changed the preset: `TalosPatches` returns only the
 `UserVolumeConfig` (now with `maxSize: 100%`, which Talos requires), the kubelet mount moved to
 `KubeletMounts()`, and node registration is rendered per version contract.

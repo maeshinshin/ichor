@@ -288,6 +288,34 @@ var _ = Describe("TalosMachineReconciler removal", func() {
 			To(BeTrue(), "4 -> 3 meets the declared count, so this removal completes for real")
 	})
 
+	It("does not count another control plane that is already being deleted toward the declared count", func() {
+		r, secretName := removalReadyReconciler()
+		cluster := newTestClusterWithCount(3, secretName)
+		cp1 := newTestControlPlane(cluster.Name, "13")
+		cp2 := newTestControlPlane(cluster.Name, "14")
+		cp3 := newTestControlPlane(cluster.Name, "15")
+		cp4 := newTestControlPlane(cluster.Name, "16")
+
+		for _, cp := range []*ichorv1alpha1.TalosMachine{cp1, cp2, cp3, cp4} {
+			_, err := reconcileMachine(r, cp)
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		// cp1 is deleted but never reconciled again, so its finalizer keeps
+		// it in the API: a removal that is stuck mid-way.
+		Expect(k8sClient.Delete(ctx, cp1)).To(Succeed())
+		Expect(fetchMachine(cp1).DeletionTimestamp.IsZero()).To(BeFalse())
+
+		// 4 listed, but only 3 are staying. Removing cp2 would leave 2.
+		Expect(k8sClient.Delete(ctx, cp2)).To(Succeed())
+		_, err := reconcileMachine(r, cp2)
+		Expect(err).NotTo(HaveOccurred())
+		cond := apimeta.FindStatusCondition(fetchMachine(cp2).Status.Conditions, conditionRemoval)
+		Expect(cond).NotTo(BeNil(), "cp2's removal must be refused, not completed")
+		Expect(cond.Reason).To(Equal(reasonRemovalRefused))
+		Expect(cond.Message).To(ContainSubstring("declared count"))
+	})
+
 	It("defers removal while another identity holds the cluster lock, and does not touch the finalizer", func() {
 		cluster := newTestClusterWithCount(1, "does-not-exist")
 		cp := newTestControlPlane(cluster.Name, "13")

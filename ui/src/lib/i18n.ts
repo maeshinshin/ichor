@@ -267,9 +267,7 @@ export const en = {
   'patches.intro':
     'A patch is a set of Talos config documents applied to the machines it selects (by cluster, layer and target). Where patches overlap, the one on the higher layer wins, then the one with the higher priority.',
   'patches.docCount': '{count} document(s)',
-  'patches.machinesAll': 'All machines in the cluster ({count})',
-  'patches.machinesSome': '{names}',
-  'patches.machinesNone': 'No machines match yet',
+  'patches.machinesEvery': 'Every machine in the cluster',
   'patches.machinesSelector': 'Machines matching the selector',
   'patches.edit': 'Edit',
   'patches.delete': 'Delete',

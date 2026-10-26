@@ -7,7 +7,6 @@ import {
   parseSysctlParams,
   previewKey,
   summarizeDocument,
-  targetedMachines,
 } from './patchDocs.ts'
 import { en } from './i18n.ts'
 
@@ -55,17 +54,4 @@ test('defaultDocument starts each kind on the right skeleton', () => {
   assert.equal(defaultDocument('SysctlConfig'), '{"params":{}}')
   assert.equal(defaultDocument('UserVolumeConfig'), '{"name":""}')
   assert.equal(defaultDocument('Config'), '{}')
-})
-
-test('targetedMachines picks the machines a patch applies to, or null when it cannot tell', () => {
-  const ms = [
-    { name: 'cp-1', cluster: 'ns/c', role: 'controlplane' },
-    { name: 'w-1', cluster: 'ns/c', role: 'worker' },
-    { name: 'w-2', cluster: 'ns/other', role: 'worker' },
-  ]
-  const base = { cluster: 'ns/c', clusterLayer: false, targetKind: 'role' as const, role: 'worker', machineRef: '' }
-  assert.deepEqual(targetedMachines({ ...base, clusterLayer: true, targetKind: 'none' }, ms), ['cp-1', 'w-1'])
-  assert.deepEqual(targetedMachines(base, ms), ['w-1'])
-  assert.deepEqual(targetedMachines({ ...base, targetKind: 'machineRef', machineRef: 'cp-1' }, ms), ['cp-1'])
-  assert.equal(targetedMachines({ ...base, targetKind: 'labelSelector' }, ms), null)
 })

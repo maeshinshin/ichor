@@ -30,6 +30,7 @@ const (
 	TalosOperationKindTalos      = "talos"
 	TalosOperationKindKubernetes = "kubernetes"
 	TalosOperationKindIchor      = "ichor"
+	TalosOperationKindCNI        = "cni"
 )
 
 // Values for TalosOperationStatus.Phase.
@@ -85,9 +86,9 @@ type TalosOperationSpec struct {
 
 	// kind names which upgrade this is: talos (spec.talosVersion/schematic),
 	// kubernetes (spec.kubernetesVersion), or ichor (the controller/CRDs/UI
-	// install). This CRD and its controller only store and report it --
+	// install), or cni (a spec.cni.kubeProxy switch). This CRD and its controller only store and report it --
 	// each kind's own execution is a separate unit's work.
-	// +kubebuilder:validation:Enum=talos;kubernetes;ichor
+	// +kubebuilder:validation:Enum=talos;kubernetes;ichor;cni
 	// +required
 	Kind string `json:"kind"`
 

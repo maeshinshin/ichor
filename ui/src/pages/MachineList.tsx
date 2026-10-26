@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 import { ErrorAlert } from '@/components/ErrorAlert'
+import { PullRequestNotice } from '@/components/PullRequestNotice'
 import type { NodeDetail } from '@/gen/ichor/v1alpha1/node_pb'
 import { MachineApprovalState, MachineRole, type Machine } from '@/gen/ichor/v1alpha1/machine_pb'
 import { clusterClient, machineClient, nodeClient } from '@/lib/connect'
@@ -34,6 +35,7 @@ export function MachineList() {
   const [machines, setMachines] = useState<Machine[] | null>(null)
   const [error, setError] = useState<ErrorShape | null>(null)
   const [clusterNames, setClusterNames] = useState<Record<string, string>>({})
+  const [pullRequestUrl, setPullRequestUrl] = useState<string | null>(null)
 
   async function reload() {
     try {
@@ -76,6 +78,7 @@ export function MachineList() {
 
   return (
     <div class="mt-6 space-y-4">
+      {pullRequestUrl && <PullRequestNotice url={pullRequestUrl} />}
       <Card>
         <CardHeader>
           <CardTitle>Pending approval ({pending.length})</CardTitle>
@@ -103,8 +106,8 @@ export function MachineList() {
                     <TableCell>{m.stage || '-'}</TableCell>
                     <TableCell>
                       <div class="flex gap-2">
-                        <ApproveDialog machine={m} onApproved={replaceMachine} />
-                        <RejectDialog machine={m} onRejected={reload} />
+                        <ApproveDialog machine={m} onApproved={replaceMachine} onPullRequest={setPullRequestUrl} />
+                        <RejectDialog machine={m} onRejected={reload} onPullRequest={setPullRequestUrl} />
                       </div>
                     </TableCell>
                   </TableRow>
@@ -148,8 +151,8 @@ export function MachineList() {
                         {/* Rejection is reversible (ADR 0018's amendment): approving a
                             rejected machine simply moves it to approved, no separate
                             "un-reject" action exists. */}
-                        <ApproveDialog machine={m} onApproved={replaceMachine} />
-                        <RejectDialog machine={m} onRejected={reload} />
+                        <ApproveDialog machine={m} onApproved={replaceMachine} onPullRequest={setPullRequestUrl} />
+                        <RejectDialog machine={m} onRejected={reload} onPullRequest={setPullRequestUrl} />
                       </div>
                     </TableCell>
                   </TableRow>
@@ -215,7 +218,15 @@ function identitySummary(m: Machine): string {
   return m.identity?.uuid || m.ref?.name || 'unknown'
 }
 
-function ApproveDialog({ machine, onApproved }: { machine: Machine; onApproved: (m: Machine) => void }) {
+function ApproveDialog({
+  machine,
+  onApproved,
+  onPullRequest,
+}: {
+  machine: Machine
+  onApproved: (m: Machine) => void
+  onPullRequest: (url: string) => void
+}) {
   const [open, setOpen] = useState(false)
   const [node, setNode] = useState<NodeDetail | null>(null)
   const [nodeError, setNodeError] = useState<string | null>(null)
@@ -254,7 +265,8 @@ function ApproveDialog({ machine, onApproved }: { machine: Machine; onApproved: 
         nodeLabels: {},
         reason,
       })
-      if (res.machine) onApproved(res.machine)
+      if (res.pullRequestUrl) onPullRequest(res.pullRequestUrl)
+      else if (res.machine) onApproved(res.machine)
       setOpen(false)
     } catch (err) {
       setSubmitError(describeError(err))
@@ -368,7 +380,15 @@ function ApproveDialog({ machine, onApproved }: { machine: Machine; onApproved: 
   )
 }
 
-function RejectDialog({ machine, onRejected }: { machine: Machine; onRejected: () => void }) {
+function RejectDialog({
+  machine,
+  onRejected,
+  onPullRequest,
+}: {
+  machine: Machine
+  onRejected: () => void
+  onPullRequest: (url: string) => void
+}) {
   const [open, setOpen] = useState(false)
   const [reason, setReason] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -379,7 +399,8 @@ function RejectDialog({ machine, onRejected }: { machine: Machine; onRejected: (
     setSubmitting(true)
     setSubmitError(null)
     try {
-      await machineClient.rejectMachine({ machine: machine.ref, reason })
+      const res = await machineClient.rejectMachine({ machine: machine.ref, reason })
+      if (res.pullRequestUrl) onPullRequest(res.pullRequestUrl)
       setOpen(false)
       onRejected()
     } catch (err) {

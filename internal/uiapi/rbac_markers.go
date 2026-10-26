@@ -69,3 +69,11 @@ package uiapi
 // else -- no cluster-wide ConfigMap or Secret read.
 // +kubebuilder:rbac:groups="",resources=configmaps,resourceNames=argocd-cm,verbs=get
 // +kubebuilder:rbac:groups=kustomize.toolkit.fluxcd.io,resources=kustomizations,verbs=list
+
+// PR mode (docs/adr/0056) reads the one Argo CD Application that tracks the CR
+// being changed, to find the repository path its manifests live in. get only:
+// the name comes from the CR's own tracking marker, never from a list. Cluster
+// scoped for the same reason as the rules above (Argo CD's namespace is
+// configurable). The repository token Secret needs no new rule: it is read in
+// the backend's own namespace through the namespaced secrets rule at the top.
+// +kubebuilder:rbac:groups=argoproj.io,resources=applications,verbs=get

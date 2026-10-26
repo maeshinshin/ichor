@@ -240,21 +240,10 @@ func (r *TalosMachineReconciler) updateTransitioning(ctx context.Context, cluste
 
 	apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
 		Type: conditionTransitioning, Status: status, Reason: reason,
-		Message: transitioningMessage(controlPlanes),
+		Message: fmt.Sprintf("approved control planes right now: %d", controlPlanes),
 	})
 
 	return r.Status().Update(ctx, cluster)
-}
-
-// transitioningMessage is the Transitioning condition's message, with the
-// noun agreeing in number ("1 control plane", not "1 control planes").
-func transitioningMessage(controlPlanes int) string {
-	noun := "control planes"
-	if controlPlanes == 1 {
-		noun = "control plane"
-	}
-
-	return fmt.Sprintf("%d %s approved right now", controlPlanes, noun)
 }
 
 // refreshTransitioning counts cluster's approved control planes (the same

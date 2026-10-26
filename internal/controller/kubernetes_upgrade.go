@@ -19,8 +19,10 @@ limitations under the License.
 // is not hand-written component by component: Ichor already renders a
 // machine's configuration from spec.kubernetesVersion, so a node's step is
 // "apply the freshly rendered configuration, whose only differences are the
-// component images", then watch the node converge. TalosOperationReconciler
-// supplies everything else.
+// component images", then watch the node converge. The operation visits each
+// machine in up to three stages, and the configuration rendered
+// for a stage pins the kubelet and kube-proxy to the node's current version
+// until their stage. TalosOperationReconciler supplies everything else.
 package controller
 
 import (

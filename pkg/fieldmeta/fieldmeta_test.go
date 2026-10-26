@@ -31,6 +31,7 @@ const (
 	pathSysctlForward        = "SysctlConfig.params.net.ipv4.ip_forward"
 	pathKubeletMounts        = "machine.kubelet.extraMounts"
 	pathKubeProxyArgs        = "KubeProxyConfig.extraArgs"
+	pathUnattendedSelector   = "UnattendedInstallConfig.provisioning.diskSelector.match"
 
 	pathVolumeConfigSelector = "VolumeConfig.provisioning.diskSelector.match"
 	// Uncovered on purpose: trim is read by its own scheduled controller,
@@ -108,7 +109,8 @@ func TestAssess_Rules(t *testing.T) {
 			nonMatch: "machine.installer.anything", wantInstallSet: true,
 		},
 		{
-			name: "UnattendedInstallConfig is install-time-only, not reboot", match: "UnattendedInstallConfig.provisioning.diskSelector.match",
+			name:     "UnattendedInstallConfig is install-time-only, not reboot",
+			match:    pathUnattendedSelector,
 			nonMatch: "KubeFlannelCNIConfig.backendType", wantInstallSet: true,
 		},
 		{

@@ -33,7 +33,7 @@ func validInitPlanInput() initPlanInput {
 		TalosVersion:      testTalosVersion,
 		KubernetesVersion: "v1.33.0",
 		VersionContract:   "v1.14",
-		InstallDisk:       "/dev/sda",
+		InstallDisk:       testInstallDisk,
 	}
 }
 

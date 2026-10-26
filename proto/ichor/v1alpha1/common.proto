@@ -26,6 +26,17 @@ message Condition {
   google.protobuf.Timestamp last_transition_time = 5;
 }
 
+// BreakGlass asks for an emergency direct write. Setting it
+// on a request means "if this change would be a pull request or is refused
+// because Argo CD tracks the resource, write it now and open the matching pull
+// request". The backend allows it only to a signed-in user whose Kubernetes RBAC
+// grants the break-glass verb on the resource, and refuses it otherwise.
+message BreakGlass {
+  // reason is required: it is recorded in the audit record, the Kubernetes
+  // Event and the pull request description.
+  string reason = 1;
+}
+
 // AuditRecord is returned by ApproveMachine and RejectMachine so the caller
 // can confirm what was recorded: who did it, when, against what, and why.
 // "actor" comes from the caller's authenticated identity, not from the

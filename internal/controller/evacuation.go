@@ -109,7 +109,7 @@ var (
 
 // Longhorn's own objects, read and written in whichever namespace it is installed in. The
 // verbs are the ones Begin/End/ReplicasRemaining use and no more; talosstorages is read by
-// Resolve. (ADR 0049 notes these were missing from the controller's role until now.)
+// Resolve. (ADR 0050 notes these were missing from the controller's role until now.)
 //
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosstorages,verbs=get;list;watch
 // +kubebuilder:rbac:groups=longhorn.io,resources=nodes,verbs=get;update
@@ -132,7 +132,7 @@ func (e *LonghornEvacuator) Resolve(
 		return nil, err
 	}
 
-	// The one selection rule, shared with pkg/render's layer-1 injection (ADR 0049).
+	// The one selection rule, shared with pkg/render's layer-1 injection (ADR 0050).
 	chosen, err := storage.Select(cluster, storages.Items, n.Labels)
 	if err != nil {
 		return nil, err

@@ -65,6 +65,12 @@ var countplanesAllowedFuncs = map[string]bool{
 	// many there are. A stale cached list only means dialing a node that is
 	// gone, which fails and moves on to the next, so the cached client is fine.
 	"snapshotCandidates": true,
+	// machinesForStorage (talosmachine_controller.go) maps a TalosStorage event to the machines
+	// to re-reconcile, and readyCondition (talosstorage_controller.go) reports which machines
+	// have converged. Neither counts control planes or gates a disruptive action; both say so in
+	// their own doc comments, and a cached read is right for both (a late event is re-queued).
+	"machinesForStorage": true,
+	"readyCondition":     true,
 }
 
 // TestTalosMachineListCountingStaysCentralized parses every non-test

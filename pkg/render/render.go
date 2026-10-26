@@ -87,7 +87,7 @@ var layerOrder = map[string]int{
 // produced, and struct field order is fixed by the Go type -- so identical
 // inputs always encode to identical bytes, in this process or any other.
 //
-// sys carries the system layer's cluster-read inputs (ADR 0027, ADR 0049): resolved registry
+// sys carries the system layer's cluster-read inputs (ADR 0027, ADR 0050): resolved registry
 // credentials and the TalosStorages. Production callers build it with ResolveSystemInputs. It is
 // a required argument rather than a second entry point, so a caller cannot forget it; nil is
 // right for a cluster with neither registries nor storage.
@@ -186,7 +186,7 @@ func BuildConfig(
 		return nil, err
 	}
 
-	// Storage preparation (layer 1, ADR 0049) is system layer too, above the registries and
+	// Storage preparation (layer 1, ADR 0050) is system layer too, above the registries and
 	// below every patch.
 	cfg, err = injectStorage(cfg, contract, cluster, m, sys)
 	if err != nil {

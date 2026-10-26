@@ -31,6 +31,8 @@ const (
 	storageDiskSelector = `disk.transport == "nvme"`
 	storageRoleLabel    = "storage"
 	longhornDiskLabel   = "node.longhorn.io/create-default-disk"
+	storageSelectorKey  = "role"
+	kindUserVolume      = "UserVolumeConfig"
 )
 
 func testStorage(name string, sel map[string]string) ichorv1alpha1.TalosStorage {
@@ -46,15 +48,15 @@ func testStorage(name string, sel map[string]string) ichorv1alpha1.TalosStorage 
 }
 
 // TestRenderStorage: layer 1 lands in the config of a machine the TalosStorage selects, and in
-// no other machine's (ADR 0049).
+// no other machine's (ADR 0050).
 func TestRenderStorage(t *testing.T) {
 	cluster := testCluster("true")
 	bundle := testBundle(t)
 	sys := &SystemInputs{Storage: []ichorv1alpha1.TalosStorage{
-		testStorage("longhorn", map[string]string{"role": storageRoleLabel}),
+		testStorage("longhorn", map[string]string{storageSelectorKey: storageRoleLabel}),
 	}}
-	selected := testMachine("node-a", roleWorker, map[string]string{"role": storageRoleLabel})
-	other := testMachine("node-b", roleWorker, map[string]string{"role": "compute"})
+	selected := testMachine("node-a", roleWorker, map[string]string{storageSelectorKey: storageRoleLabel})
+	other := testMachine("node-b", roleWorker, map[string]string{storageSelectorKey: "compute"})
 
 	out, _, err := Render(cluster, selected, bundle, nil, sys)
 	if err != nil {
@@ -62,7 +64,7 @@ func TestRenderStorage(t *testing.T) {
 	}
 
 	for _, want := range []string{
-		"UserVolumeConfig", "name: longhorn", storageDiskSelector,
+		kindUserVolume, "name: longhorn", storageDiskSelector,
 		"/var/mnt/longhorn", longhornDiskLabel, "node.longhorn.io/default-disks-config",
 	} {
 		if !strings.Contains(string(out), want) {
@@ -75,14 +77,14 @@ func TestRenderStorage(t *testing.T) {
 		t.Fatalf("Render(other): %v", err)
 	}
 
-	for _, bad := range []string{"UserVolumeConfig", "longhorn"} {
+	for _, bad := range []string{kindUserVolume, "longhorn"} {
 		if strings.Contains(string(out), bad) {
 			t.Errorf("unselected machine's config contains %q:\n%s", bad, out)
 		}
 	}
 
 	t.Run("another cluster's TalosStorage never applies", func(t *testing.T) {
-		foreign := testStorage("foreign", map[string]string{"role": storageRoleLabel})
+		foreign := testStorage("foreign", map[string]string{storageSelectorKey: storageRoleLabel})
 		foreign.Spec.ClusterRef.Name = "someone-else"
 
 		out, _, err := Render(cluster, selected, bundle, nil, &SystemInputs{Storage: []ichorv1alpha1.TalosStorage{foreign}})
@@ -90,7 +92,7 @@ func TestRenderStorage(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if strings.Contains(string(out), "UserVolumeConfig") {
+		if strings.Contains(string(out), kindUserVolume) {
 			t.Fatalf("a foreign cluster's TalosStorage rendered:\n%s", out)
 		}
 	})
@@ -103,7 +105,7 @@ func TestRenderStorage(t *testing.T) {
 				Layer:      layerMachine,
 				Target:     &ichorv1alpha1.TalosConfigPatchTarget{MachineRef: &corev1.LocalObjectReference{Name: "node-a"}},
 				Documents: []ichorv1alpha1.TalosConfigPatchDocument{{
-					Kind: "UserVolumeConfig",
+					Kind: kindUserVolume,
 					UserVolumeConfig: &typedconfig.UserVolumeConfigV1Alpha1{
 						MetaName: "longhorn",
 						ProvisioningSpec: &typedconfig.ProvisioningSpec{
@@ -126,7 +128,7 @@ func TestRenderStorage(t *testing.T) {
 
 	// Under a pre-1.14 contract the base config uses the legacy machine.* blocks, so layer 1
 	// renders its labels, annotations and the kubelet mount there; under 1.14+ the standalone
-	// documents carry no kubelet mount field, so the mount is absent by design (ADR 0049).
+	// documents carry no kubelet mount field, so the mount is absent by design (ADR 0050).
 	t.Run("pre-1.14 contract renders the legacy kubelet mount", func(t *testing.T) {
 		legacy := testCluster("true")
 		legacy.Spec.VersionContract = "v1.12"

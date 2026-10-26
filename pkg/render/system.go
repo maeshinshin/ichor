@@ -33,7 +33,7 @@ import (
 )
 
 // SystemInputs is everything Render needs that Ichor itself contributes below the
-// TalosConfigPatch layers (the "system" layer, ADR 0027, ADR 0049) and that has to be read from
+// TalosConfigPatch layers (the "system" layer, ADR 0027, ADR 0050) and that has to be read from
 // the cluster: resolved registry credentials and the TalosStorage objects whose layer-1
 // preparation may apply. It is one argument so that a new system-layer input extends this
 // struct instead of adding a parameter every caller must remember.
@@ -87,9 +87,10 @@ func StorageFor(
 
 // injectStorage merges the governing TalosStorage's preset documents (volume, kubelet mount,
 // Node label and annotation) into cfg as part of the system layer. Applied before any
-// TalosConfigPatch, so a patch that touches the same fields wins (ADR 0049).
+// TalosConfigPatch, so a patch that touches the same fields wins (ADR 0050).
 func injectStorage(
-	cfg coreconfig.Provider, contract *coreconfig.VersionContract, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, sys *SystemInputs,
+	cfg coreconfig.Provider, contract *coreconfig.VersionContract,
+	cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, sys *SystemInputs,
 ) (coreconfig.Provider, error) {
 	if sys == nil {
 		return cfg, nil
@@ -145,7 +146,7 @@ func injectStorage(
 // document, and a legacy machine.nodeLabels / machine.kubelet next to the base config's
 // multi-document form fails validation. The standalone KubeletConfig document has no
 // extraMounts field at all (Talos bind-mounts /var/mnt into the kubelet itself), so under that
-// contract the preset's KubeletMounts are not rendered (ADR 0049).
+// contract the preset's KubeletMounts are not rendered (ADR 0050).
 func nodeRegistrationDocs(contract *coreconfig.VersionContract, preset storage.Preset) []config.Document {
 	if contract.MultidocKubernetesConfigSupported() {
 		doc := k8s.NewKubeNodeConfigV1Alpha1()
@@ -163,12 +164,13 @@ func nodeRegistrationDocs(contract *coreconfig.VersionContract, preset storage.P
 		})
 	}
 
+	//nolint:staticcheck // the legacy blocks are the only form a pre-1.14 contract accepts
 	return []config.Document{&mv1alpha1.Config{
 		ConfigVersion: mv1alpha1.Version,
 		MachineConfig: &mv1alpha1.MachineConfig{
-			MachineNodeLabels:      preset.NodeLabels(),                                  //nolint:staticcheck // legacy form for pre-1.14 contracts
-			MachineNodeAnnotations: preset.NodeAnnotations(),                             //nolint:staticcheck // legacy form for pre-1.14 contracts
-			MachineKubelet:         &mv1alpha1.KubeletConfig{KubeletExtraMounts: mounts}, //nolint:staticcheck // legacy form
+			MachineNodeLabels:      preset.NodeLabels(),
+			MachineNodeAnnotations: preset.NodeAnnotations(),
+			MachineKubelet:         &mv1alpha1.KubeletConfig{KubeletExtraMounts: mounts},
 		},
 	}}
 }

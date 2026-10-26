@@ -40,7 +40,7 @@ import (
 	"github.com/maeshinshin/ichor/pkg/storage"
 )
 
-// TalosStorage status condition types and reasons (ADR 0049).
+// TalosStorage status condition types and reasons (ADR 0050).
 const (
 	// conditionStorageReady is the condition Argo CD's health check reads: True once every
 	// approved machine this TalosStorage governs has converged on a render that includes it.
@@ -125,7 +125,9 @@ func (r *TalosStorageReconciler) Reconcile(ctx context.Context, req ctrl.Request
 // machine is converged. "Governed" is render.StorageFor -- the same call Render makes, over the
 // same TalosStorages -- and "converged" is the machine's Ready condition plus an
 // observedInputsHash equal to the one TalosMachineReconciler would compute now (so a machine
-// that converged before this TalosStorage existed or changed does not count).
+// that converged before this TalosStorage existed or changed does not count). It lists machines
+// to report on, not to count control planes or gate a disruptive action, so a cached read is
+// fine (countplanes_guard_test.go).
 func (r *TalosStorageReconciler) readyCondition(
 	ctx context.Context, ts *ichorv1alpha1.TalosStorage,
 ) (metav1.Condition, error) {

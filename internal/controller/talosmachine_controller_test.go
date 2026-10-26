@@ -425,7 +425,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		auth, err := render.ResolveRegistryAuth(ctx, k8sClient, tmNamespace, cluster)
 		Expect(err).NotTo(HaveOccurred())
 
-		current, hash, err := render.Render(cluster, m, bundle, nil, auth)
+		current, hash, err := render.Render(cluster, m, bundle, nil, &render.SystemInputs{RegistryAuth: auth})
 		Expect(err).NotTo(HaveOccurred())
 
 		fake := &fakeTalosClient{current: current}

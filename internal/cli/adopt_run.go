@@ -62,7 +62,7 @@ func runAdopt(ctx context.Context, clusterName, namespace string, deps adoptDeps
 
 	// The controller's fixed namespace, not --namespace: that is where the controller reads
 	// authSecretRef Secrets from, so the CLI resolves the same ones.
-	auth, err := render.ResolveRegistryAuth(ctx, deps.K8s, ichorControllerNamespace, &cluster)
+	sys, err := render.ResolveSystemInputs(ctx, deps.K8s, ichorControllerNamespace, &cluster)
 	if err != nil {
 		return fmt.Errorf("adopt: %w", err)
 	}
@@ -93,7 +93,7 @@ func runAdopt(ctx context.Context, clusterName, namespace string, deps adoptDeps
 			continue
 		}
 
-		plan, err := planMachine(ctx, &cluster, m, deps.Bundle, existing, auth, deps.DialTalos)
+		plan, err := planMachine(ctx, &cluster, m, deps.Bundle, existing, sys, deps.DialTalos)
 		if err != nil {
 			return err
 		}
@@ -154,7 +154,7 @@ func planMachine(
 	m *ichorv1alpha1.TalosMachine,
 	bundle *secrets.Bundle,
 	existing []ichorv1alpha1.TalosConfigPatch,
-	auth map[string]render.RegistryAuth,
+	sys *render.SystemInputs,
 	dial func(ctx context.Context, endpoint string) (talosConfigReader, error),
 ) (*adoptPlan, error) {
 	talos, err := dial(ctx, m.Spec.Endpoint)
@@ -167,7 +167,7 @@ func planMachine(
 		return nil, fmt.Errorf("adopt: reading machine %q's current configuration: %w", m.Name, err)
 	}
 
-	return buildAdoptPlan(cluster, m, bundle, existing, current, auth)
+	return buildAdoptPlan(cluster, m, bundle, existing, current, sys)
 }
 
 // reportPlans writes a one-line-per-machine summary to w and returns the

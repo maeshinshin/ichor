@@ -358,6 +358,33 @@ func TestSnapshotIsKeptWhenARunIsRepeated(t *testing.T) {
 	}
 }
 
+// Kustomize prefixes every name with ichor-, so the UI objects are ichor-ichor-ui-*; the
+// installer's own objects must land with the controller, not the UI.
+func TestClassifySplitsByKindThenUIName(t *testing.T) {
+	mk := func(kind, name string) *unstructured.Unstructured {
+		u := &unstructured.Unstructured{}
+		u.SetKind(kind)
+		u.SetName(name)
+
+		return u
+	}
+
+	p := classify([]*unstructured.Unstructured{
+		mk("Namespace", "ichor-system"),
+		mk(kindCRD, "talosclusters.ichor.maesh.dev"),
+		mk("ClusterRole", "ichor-ichor-ui-role"),
+		mk("Deployment", "ichor-ichor-ui"),
+		mk("Service", "ichor-ichor-ui-service"),
+		mk("ServiceAccount", "ichor-installer"),
+		mk(kindSecret, "ichor-webhook-server-cert"),
+		mk("Deployment", "ichor-controller-manager"),
+	})
+
+	if len(p.crds) != 1 || len(p.ui) != 3 || len(p.controller) != 3 {
+		t.Errorf("crds/ui/controller = %d/%d/%d, want 1/3/3 (the Secret is in none)", len(p.crds), len(p.ui), len(p.controller))
+	}
+}
+
 func TestRolloutDone(t *testing.T) {
 	d := func(gen, observed, replicas, updated, total, available int64) *unstructured.Unstructured {
 		u := &unstructured.Unstructured{Object: map[string]any{

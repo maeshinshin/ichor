@@ -17,3 +17,6 @@
 !ui/**
 ui/node_modules
 ui/dist
+
+# The installer image embeds this tree's install manifest; make docker-build-installer writes it.
+!internal/installmanifest/install.yaml

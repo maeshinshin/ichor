@@ -30,7 +30,11 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
-const testAppName = "prod-root"
+const (
+	testAppName   = "prod-root"
+	testOutOfSync = "OutOfSync"
+	testDegraded  = "Degraded"
+)
 
 // Tests for the GitOps screen's backend (docs/adr/0061): fake client, an
 // httptest Git host, nothing real.
@@ -72,17 +76,17 @@ func gitOpsItems(t *testing.T, e *prEnv) map[string]*pb.GitOpsItem {
 
 func TestListGitOpsReportsApplicationState(t *testing.T) {
 	e := newPREnv(t, prOpts{tracked: true})
-	setAppStatus(t, e, "OutOfSync", "Degraded")
+	setAppStatus(t, e, testOutOfSync, testDegraded)
 
 	items := gitOpsItems(t, e)
 
 	m := items["GIT_OPS_KIND_MACHINE/m1"]
 	if m.GetTrackedBy() != "Argo CD" || m.GetApplication().GetName() != testAppName ||
-		m.GetSyncStatus() != "OutOfSync" || m.GetHealthStatus() != "Degraded" || m.GetError() != "" {
+		m.GetSyncStatus() != testOutOfSync || m.GetHealthStatus() != testDegraded || m.GetError() != "" {
 		t.Fatalf("machine row = %v", m)
 	}
 
-	if p := items["GIT_OPS_KIND_PATCH/p1"]; p.GetSyncStatus() != "OutOfSync" {
+	if p := items["GIT_OPS_KIND_PATCH/p1"]; p.GetSyncStatus() != testOutOfSync {
 		t.Fatalf("patch row = %v", p)
 	}
 

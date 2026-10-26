@@ -96,7 +96,7 @@ func listGitOpsAs(ctx context.Context, t *testing.T, e *prEnv) map[string]*pb.Gi
 
 func TestListGitOpsHidesApplicationStateFromACallerWhoCannotReadIt(t *testing.T) {
 	e := newPREnv(t, prOpts{tracked: true})
-	setAppStatus(t, e, "OutOfSync", "Degraded")
+	setAppStatus(t, e, testOutOfSync, testDegraded)
 	e.impersonateWith(denyApplications(e.k8s))
 
 	items := listGitOpsAs(asUser(context.Background()), t, e)
@@ -118,11 +118,11 @@ func TestListGitOpsHidesApplicationStateFromACallerWhoCannotReadIt(t *testing.T)
 
 func TestListGitOpsShowsApplicationStateToACallerWhoMayRead(t *testing.T) {
 	e := newPREnv(t, prOpts{tracked: true})
-	setAppStatus(t, e, "OutOfSync", "Degraded")
+	setAppStatus(t, e, testOutOfSync, testDegraded)
 	e.impersonateWith(e.k8s)
 
 	m := listGitOpsAs(asUser(context.Background()), t, e)["GIT_OPS_KIND_MACHINE/m1"]
-	if m.GetPermissionDenied() || m.GetSyncStatus() != "OutOfSync" || m.GetHealthStatus() != "Degraded" {
+	if m.GetPermissionDenied() || m.GetSyncStatus() != testOutOfSync || m.GetHealthStatus() != testDegraded {
 		t.Fatalf("machine row = %v", m)
 	}
 }

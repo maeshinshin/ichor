@@ -1,27 +1,26 @@
-import { useState } from 'preact/hooks'
-import { MoonIcon, SunIcon } from 'lucide-preact'
-import { SidebarMenuButton } from '@/components/ui/sidebar'
+import { Moon, Sun } from 'lucide-preact'
+import { Button } from '@/components/ui/button'
 import { applyTheme, currentTheme, saveTheme, type Theme } from '@/lib/theme'
 import { useT } from '@/lib/useT'
 
-// The light/dark switch, as a sidebar footer entry that stays
-// an icon when the sidebar is collapsed. It names the mode it switches to.
+// The light/dark switch, as an icon button at the right end of
+// the top bar, the same as the preactcn site. Both icons are rendered and CSS
+// picks one: the sun in dark mode (the one to switch to), the moon in light.
 export function ThemeSwitch() {
   const t = useT()
-  const [theme, setTheme] = useState<Theme>(currentTheme)
-  const next: Theme = theme === 'dark' ? 'light' : 'dark'
-  const label = next === 'dark' ? t('theme.toDark') : t('theme.toLight')
   return (
-    <SidebarMenuButton
-      tooltip={label}
+    <Button
+      variant="ghost"
+      size="icon"
+      aria-label={t('theme.toggle')}
       onClick={() => {
+        const next: Theme = currentTheme() === 'dark' ? 'light' : 'dark'
         applyTheme(next)
         saveTheme(next)
-        setTheme(next)
       }}
     >
-      {next === 'dark' ? <MoonIcon /> : <SunIcon />}
-      <span>{label}</span>
-    </SidebarMenuButton>
+      <Sun class="hidden dark:block" />
+      <Moon class="dark:hidden" />
+    </Button>
   )
 }

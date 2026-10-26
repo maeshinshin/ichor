@@ -135,6 +135,10 @@ func (s *Server) ApproveMachine(
 		return nil, err
 	}
 
+	if err := s.requireUntracked(ctx, m); err != nil {
+		return nil, err
+	}
+
 	if m.Spec.IsApproved() {
 		return nil, connect.NewError(connect.CodeFailedPrecondition,
 			fmt.Errorf("machine %q is already approved; approving it again would risk an unintended "+
@@ -195,6 +199,10 @@ func (s *Server) RejectMachine(
 
 	m, err := s.getMachine(ctx, ref)
 	if err != nil {
+		return nil, err
+	}
+
+	if err := s.requireUntracked(ctx, m); err != nil {
 		return nil, err
 	}
 

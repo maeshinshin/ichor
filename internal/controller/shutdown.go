@@ -43,13 +43,16 @@ import (
 	"slices"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/clusterlock"
+	"github.com/maeshinshin/ichor/pkg/deleteguard"
 )
 
 const (
@@ -142,18 +145,18 @@ func recorded(op *ichorv1alpha1.TalosOperation, name string) (ichorv1alpha1.Talo
 func (r *TalosOperationReconciler) shutdownPlan(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster,
 ) (workers, last []*ichorv1alpha1.TalosMachine, err error) {
-	var list ichorv1alpha1.TalosMachineList
-	if err := readerOrClient(r.APIReader, r.Client).List(ctx, &list, client.InNamespace(cluster.Namespace)); err != nil {
+	// IncludeDeleting: a stop of the whole cluster must not leave a running node
+	// behind just because its removal has begun.
+	list, err := deleteguard.ApprovedMachines(ctx, readerOrClient(r.APIReader, r.Client), cluster.Namespace, cluster.Name,
+		deleteguard.MachineFilter{IncludeDeleting: true})
+	if err != nil {
 		return nil, nil, err
 	}
 
 	var own []*ichorv1alpha1.TalosMachine
 
-	for i := range list.Items {
-		m := &list.Items[i]
-		if m.Spec.ClusterRef.Name != cluster.Name || !m.Spec.IsApproved() {
-			continue
-		}
+	for i := range list {
+		m := &list[i]
 
 		switch {
 		case r.NodeName != "" && m.Spec.Hostname == r.NodeName:
@@ -363,8 +366,8 @@ func (r *TalosOperationReconciler) advanceShutdown(
 // flight; the mark is what refuses other work). A machine is back when it
 // answers on a boot other than the one recorded, or, if it was already down
 // when the operation looked, when it answers at all. All of them back
-// completes the operation, which lifts the mark. The machine list is only a
-// lookup from a recorded name to its Talos endpoint, never a count.
+// completes the operation, which lifts the mark. Each recorded name is read by Get, only as a
+// lookup to its Talos endpoint, never a count.
 func (r *TalosOperationReconciler) awaitPowerOn(
 	ctx context.Context, op *ichorv1alpha1.TalosOperation, cluster *ichorv1alpha1.TalosCluster,
 ) (ctrl.Result, error) {
@@ -377,11 +380,7 @@ func (r *TalosOperationReconciler) awaitPowerOn(
 		return ctrl.Result{}, fmt.Errorf("loading secrets bundle for %q: %w", cluster.Name, err)
 	}
 
-	var list ichorv1alpha1.TalosMachineList
-	if err := readerOrClient(r.APIReader, r.Client).List(ctx, &list, client.InNamespace(cluster.Namespace)); err != nil {
-		return ctrl.Result{}, err
-	}
-
+	reader := readerOrClient(r.APIReader, r.Client)
 	pending := 0
 
 	for i := range op.Status.Machines {
@@ -390,19 +389,18 @@ func (r *TalosOperationReconciler) awaitPowerOn(
 			continue
 		}
 
-		var m *ichorv1alpha1.TalosMachine
+		m := &ichorv1alpha1.TalosMachine{}
 
-		for j := range list.Items {
-			if list.Items[j].Name == rec.Name {
-				m = &list.Items[j]
-			}
-		}
-
+		err := reader.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: rec.Name}, m)
 		// A machine deleted meanwhile is not waited for.
-		if m == nil {
+		if apierrors.IsNotFound(err) {
 			rec.Phase = ichorv1alpha1.TalosOperationMachinePhaseCompleted
 
 			continue
+		}
+
+		if err != nil {
+			return ctrl.Result{}, err
 		}
 
 		talos, id, err := r.probe(ctx, cluster, m, bundle)

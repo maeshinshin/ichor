@@ -55,7 +55,6 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -577,19 +576,15 @@ func (r *TalosMachineReconciler) removeEtcdMemberFromSurvivor(
 func (r *TalosMachineReconciler) findEtcdSurvivor(
 	ctx context.Context, m *ichorv1alpha1.TalosMachine,
 ) (*ichorv1alpha1.TalosMachine, error) {
-	var siblings ichorv1alpha1.TalosMachineList
-	if err := r.APIReader.List(ctx, &siblings, client.InNamespace(m.Namespace)); err != nil {
+	siblings, err := deleteguard.ApprovedMachines(ctx, r.APIReader, m.Namespace, m.Spec.ClusterRef.Name,
+		deleteguard.MachineFilter{Role: roleControlPlane})
+	if err != nil {
 		return nil, err
 	}
 
-	for i := range siblings.Items {
-		s := &siblings.Items[i]
-		if s.Name == m.Name {
-			continue
-		}
-		if s.Spec.Role == roleControlPlane && s.Spec.IsApproved() && s.Spec.ClusterRef.Name == m.Spec.ClusterRef.Name &&
-			s.DeletionTimestamp.IsZero() {
-			return s, nil
+	for i := range siblings {
+		if siblings[i].Name != m.Name {
+			return &siblings[i], nil
 		}
 	}
 
@@ -666,11 +661,15 @@ func checkControlPlaneRemoval(currentControlPlanes, desiredCount int) error {
 // countApprovedControlPlanes counts, the same way
 // internal/webhook/v1alpha1/talosmachine_webhook.go's ValidateDelete does,
 // every approved control-plane TalosMachine in m's namespace and cluster,
-// including m itself -- via r.APIReader, not r.Client, so this stays
+// including m itself (which is being deleted) but not another control plane
+// that is also being deleted's addendum -- via r.APIReader, not r.Client, so this stays
 // correct under the same cached-read trap deleteguard.CountApprovedControlPlanes
 // documents.
 func (r *TalosMachineReconciler) countApprovedControlPlanes(ctx context.Context, m *ichorv1alpha1.TalosMachine) (int, error) {
-	return deleteguard.CountApprovedControlPlanes(ctx, r.APIReader, m.Namespace, m.Spec.ClusterRef.Name)
+	cps, err := deleteguard.ApprovedMachines(ctx, r.APIReader, m.Namespace, m.Spec.ClusterRef.Name,
+		deleteguard.MachineFilter{Role: roleControlPlane, KeepDeleting: m.Name})
+
+	return len(cps), err
 }
 
 // drainNode cordons and drains the Kubernetes Node named hostname, the

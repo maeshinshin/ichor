@@ -83,9 +83,10 @@ two steps, "Review" (which calls the plan and writes nothing) and a separate "St
 cluster name to be typed.
 
 Two shapes were weighed for the plan: computing it in the client from `ListMachines` (duplicates the controller's
-ordering in TypeScript and Go) or one server function. The ordering (`sortedByUpgradeOrder`) is still a copy of the
-controller's `sortByUpgradeOrder`; sharing it needs a package both can import. ponytail: move it to `pkg/` when a
-third caller appears.
+ordering in TypeScript and Go) or one server function. The ordering is one function, `upgrade.SortByOrder` in
+`pkg/upgrade`, called by the executor (rollouts and shutdown) and by the plan, so the order a person confirms is the
+order that runs. `TestPlanOperationOrderMatchesTheExecutorsCandidateOrder` holds the two together. The plan had first
+sorted a shutdown by name alone; the executor orders it by the same label, so the plan now does too.
 
 ## Decision 6: commands
 

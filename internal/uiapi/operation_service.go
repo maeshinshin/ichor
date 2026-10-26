@@ -33,6 +33,7 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/gitopstracking"
+	"github.com/maeshinshin/ichor/pkg/upgrade"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -257,24 +258,6 @@ func normalizeTarget(kind, target string) (string, error) {
 	return target, nil
 }
 
-func sortedByUpgradeOrder(ms []*ichorv1alpha1.TalosMachine) {
-	slices.SortFunc(ms, func(a, b *ichorv1alpha1.TalosMachine) int {
-		av, aok := a.Labels[ichorv1alpha1.TalosMachineUpgradeOrderLabel]
-		bv, bok := b.Labels[ichorv1alpha1.TalosMachineUpgradeOrderLabel]
-
-		switch {
-		case aok && !bok:
-			return -1
-		case !aok && bok:
-			return 1
-		case av != bv:
-			return strings.Compare(av, bv)
-		default:
-			return strings.Compare(a.Name, b.Name)
-		}
-	})
-}
-
 // trackedBy names the tool tracking obj, or "". A spec write to a tracked CR
 // belongs in its repository; "cannot tell" refuses too.
 func (s *Server) trackedBy(ctx context.Context, obj client.Object) (string, error) {
@@ -401,10 +384,9 @@ func (s *Server) planMachines(ctx context.Context, p *opPlan, cluster *ichorv1al
 	}
 
 	if p.kind == ichorv1alpha1.TalosOperationKindShutdown {
-		// Workers together first, then every control plane in one burst.
-		byName := func(a, b *ichorv1alpha1.TalosMachine) int { return strings.Compare(a.Name, b.Name) }
-		slices.SortFunc(workers, byName)
-		slices.SortFunc(cps, byName)
+		// Workers together first, then every control plane in one burst, each in the executor's order.
+		upgrade.SortByOrder(workers)
+		upgrade.SortByOrder(cps)
 
 		for _, m := range workers {
 			add(m, 1)
@@ -417,8 +399,8 @@ func (s *Server) planMachines(ctx context.Context, p *opPlan, cluster *ichorv1al
 		return nil
 	}
 
-	sortedByUpgradeOrder(cps)
-	sortedByUpgradeOrder(workers)
+	upgrade.SortByOrder(cps)
+	upgrade.SortByOrder(workers)
 
 	step := int32(0)
 

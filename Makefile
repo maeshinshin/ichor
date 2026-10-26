@@ -111,6 +111,7 @@ setup-test-e2e: ## Provision the throwaway qemu Talos cluster CI's e2e job runs 
 	# it with the provisioner's state directory under ~/.talos/clusters/<name>/ or a
 	# machine-readable talosctl output if one exists by then.
 	$(eval TEST_E2E_WORKER := $(shell grep -i worker $(LOCALBIN)/test-e2e-create.log | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1))
+	@test -n "$(TEST_E2E_WORKER)" || { echo "setup-test-e2e: no worker address found in $(LOCALBIN)/test-e2e-create.log; refusing to run talosctl reset without an explicit node"; exit 1; }
 	talosctl --context ichor-test-e2e reset --nodes $(TEST_E2E_WORKER) --graceful=false --reboot --wait
 	@if [ -n "$$GITHUB_ENV" ]; then echo "ICHOR_E2E_TALOS_NODES=$(TEST_E2E_WORKER)" >> "$$GITHUB_ENV"; fi
 

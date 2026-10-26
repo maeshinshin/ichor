@@ -4,7 +4,7 @@
 # - KUBECTL_KUBERC=true
 
 .PHONY: test-e2e-prereqs
-test-e2e-prereqs: ## Verify KUBECONFIG points at a cluster with KubeVirt, CDI and the ichor-e2e namespace
+test-e2e-prereqs: ## Verify KUBECONFIG and ICHOR_E2E_KUBE_CONTEXT point at a cluster with KubeVirt, CDI and the ichor-e2e namespace
 	@test -n "$$KUBECONFIG" || { \
 		echo "test-e2e: KUBECONFIG is not set. e2e takes the cluster it is given through KUBECONFIG; export it before running."; \
 		exit 1; \
@@ -13,11 +13,19 @@ test-e2e-prereqs: ## Verify KUBECONFIG points at a cluster with KubeVirt, CDI an
 		echo "test-e2e: KUBECONFIG=$$KUBECONFIG is not a readable kubeconfig file."; \
 		exit 1; \
 	}
-	@$(KUBECTL) get namespace ichor-e2e >/dev/null 2>&1 || { \
+	@test -n "$$ICHOR_E2E_KUBE_CONTEXT" || { \
+		echo "test-e2e: ICHOR_E2E_KUBE_CONTEXT is not set. Every e2e kubectl call is pinned to that context and never falls back to the current-context; export it before running."; \
+		exit 1; \
+	}
+	@$(KUBECTL) config get-contexts "$$ICHOR_E2E_KUBE_CONTEXT" -o name >/dev/null 2>&1 || { \
+		echo "test-e2e: ICHOR_E2E_KUBE_CONTEXT=$$ICHOR_E2E_KUBE_CONTEXT is not a context in KUBECONFIG=$$KUBECONFIG."; \
+		exit 1; \
+	}
+	@$(KUBECTL) --context "$$ICHOR_E2E_KUBE_CONTEXT" get namespace ichor-e2e >/dev/null 2>&1 || { \
 		echo "test-e2e: namespace 'ichor-e2e' was not found on the cluster at KUBECONFIG=$$KUBECONFIG. Create it before running e2e."; \
 		exit 1; \
 	}
-	@$(KUBECTL) get crd virtualmachines.kubevirt.io datavolumes.cdi.kubevirt.io >/dev/null 2>&1 || { \
+	@$(KUBECTL) --context "$$ICHOR_E2E_KUBE_CONTEXT" get crd virtualmachines.kubevirt.io datavolumes.cdi.kubevirt.io >/dev/null 2>&1 || { \
 		echo "test-e2e: KubeVirt and/or CDI CRDs were not found on the cluster at KUBECONFIG=$$KUBECONFIG. e2e runs Talos nodes as KubeVirt VMs and needs both installed."; \
 		exit 1; \
 	}

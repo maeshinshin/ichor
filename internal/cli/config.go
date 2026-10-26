@@ -69,9 +69,11 @@ Ready=False, reason RebootRequired, and the message names the fields. apply star
 config operation that rolls those changes out, one machine at a time: control planes
 first, one at a time with an etcd membership check before each, then workers (at most
 --max-unavailable at once), and the machine this controller runs on last. Per machine:
-storage evacuation hook, the configuration is staged, the node reboots (Talos cordons and
-drains it first), and the step finishes when the node runs the configuration, is Ready and
-(control planes) is back in etcd. A machine that fails pauses the operation; nothing is
+storage evacuation hook, the node is cordoned and drained (evictions respect
+PodDisruptionBudgets; DaemonSet and mirror pods stay), the configuration is staged, the node
+reboots, and the step finishes when the node runs the configuration, is Ready, is
+uncordoned and (control planes) is back in etcd. On a cluster with one control plane the
+Kubernetes API is unavailable while it reboots. A machine that fails pauses the operation; nothing is
 rolled back. Machines held with upgrade-hold are skipped.
 
 It shows which machines reboot, which fields need it and in which order, and asks for

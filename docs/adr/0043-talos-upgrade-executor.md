@@ -80,3 +80,13 @@ dry-ran it (`RebootRequired`, not applied).
   (no TalosStorage), only the pass-through path.
 - Drain/cordon is Talos's own; the node showed SchedulingDisabled during
   its turn.
+
+## Amendment (real hardware, Talos v1.14.3)
+
+The drain assumption above holds for `Upgrade` and is re-checked against the source: `Sequencer.Upgrade`
+(`internal/app/machined/pkg/runtime/v1alpha1/v1alpha1_sequencer.go:440-455`) runs the `drain` phase
+(`CordonAndDrainNode`, which drains through `pkg/kubernetes/kubernetes.go:242`, a five-minute bound, DaemonSet and
+mirror pods skipped) unless node registration is skipped, and the upgrading stage cordons the node
+(`controllers/k8s/node_cordoned_spec.go:73-76`). It does not hold for `Reboot`, which ADR 0080 now drains itself. The
+executor also no longer requires `spec.hostname`: the node name comes from the node's `Nodename` resource when the
+field is unset (ADR 0080, "Observed on hardware").

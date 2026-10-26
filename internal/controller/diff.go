@@ -23,6 +23,7 @@ import (
 	"io"
 	"reflect"
 	"slices"
+	"strings"
 
 	yaml "go.yaml.in/yaml/v4"
 )
@@ -89,6 +90,75 @@ func ChangedPaths(oldCfg, newCfg []byte) ([]string, error) {
 	slices.Sort(paths)
 
 	return paths, nil
+}
+
+// collapseDocumentPaths is the reporting form of paths: every path under a document that exists
+// on only one side (a newly added or removed standalone document, which has no legacy-style
+// field to point at) is replaced by one entry naming the document, "KernelModuleConfig
+// br_netfilter (added)", so status.rebootPaths and the RebootRequired message never list a
+// document's apiVersion and kind on their own. Classification (pkg/fieldmeta) still runs on the
+// raw paths.
+func collapseDocumentPaths(oldCfg, newCfg []byte, paths []string) ([]string, error) {
+	oldDocs, err := decodeDocs(oldCfg)
+	if err != nil {
+		return nil, fmt.Errorf("decoding current configuration: %w", err)
+	}
+
+	newDocs, err := decodeDocs(newCfg)
+	if err != nil {
+		return nil, fmt.Errorf("decoding rendered configuration: %w", err)
+	}
+
+	whole := map[string][]string{} // kind -> entries for its one-sided documents
+
+	note := func(docs, other map[string]configDoc, verb string) {
+		for k, d := range docs {
+			if _, both := other[k]; both || d.root == "" {
+				continue
+			}
+
+			_, name, _ := strings.Cut(k, ":")
+			entry := strings.TrimSpace(d.root+" "+name) + " (" + verb + ")"
+			whole[d.root] = append(whole[d.root], entry)
+		}
+	}
+
+	note(newDocs, oldDocs, "added")
+	note(oldDocs, newDocs, "removed")
+
+	// Paths carry the kind but not the name, so a kind that also has a document present on both
+	// sides cannot be told apart from it: its paths stay as they are.
+	for _, docs := range []map[string]configDoc{oldDocs, newDocs} {
+		for k, d := range docs {
+			if _, inOld := oldDocs[k]; inOld {
+				if _, inNew := newDocs[k]; inNew {
+					delete(whole, d.root)
+				}
+			}
+		}
+	}
+
+	var out []string
+
+	emitted := map[string]bool{}
+
+	for _, p := range paths {
+		kind, _, _ := strings.Cut(p, ".")
+		if entries, ok := whole[kind]; ok {
+			for _, e := range entries {
+				if !emitted[e] {
+					emitted[e] = true
+					out = append(out, e)
+				}
+			}
+
+			continue
+		}
+
+		out = append(out, p)
+	}
+
+	return out, nil
 }
 
 // configDoc is one decoded Talos config document.

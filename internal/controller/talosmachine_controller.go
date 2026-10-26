@@ -462,7 +462,12 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 				driftNote, strings.Join(impact.InstallTimeOnly, ", ")))
 
 	case impact.RebootRequired:
-		return r.refuseReboot(ctx, &m, driftNote, impact.RebootPaths)
+		reportPaths, err := collapseDocumentPaths(current, rendered, impact.RebootPaths)
+		if err != nil {
+			reportPaths = impact.RebootPaths
+		}
+
+		return r.refuseReboot(ctx, &m, driftNote, reportPaths)
 
 	case drifted && cluster.Spec.DriftPolicy != driftPolicyAutoCorrect:
 		return ctrl.Result{}, r.ready(ctx, &m, metav1.ConditionFalse, reasonNodeDrifted,

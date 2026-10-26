@@ -31,6 +31,13 @@ const (
 	TalosOperationKindKubernetes = "kubernetes"
 	TalosOperationKindIchor      = "ichor"
 	TalosOperationKindCNI        = "cni"
+
+	// TalosOperationKindShutdown stops every machine of the cluster in an
+	// order that keeps the Kubernetes API up as long as possible (ADR 0067).
+	// Unlike the upgrade kinds it is not a rollout: TalosOperationReconciler
+	// dispatches it to its own state machine, and while it has not
+	// Completed every other disruptive operation on the cluster is refused.
+	TalosOperationKindShutdown = "shutdown"
 )
 
 // Values for TalosOperationStatus.Phase.
@@ -46,6 +53,13 @@ const (
 	// step failed (pause-on-failure): no further machine is advanced, but
 	// nothing already completed is undone.
 	TalosOperationPhasePaused = "Paused"
+
+	// TalosOperationPhaseShutDown is the shutdown kind's resting phase:
+	// every machine has been asked to stop and the operation is waiting for
+	// the operator to power them back on. The cluster is still marked as
+	// shutting down; the operation becomes Completed, and the mark goes
+	// away, once every machine answers again on a new boot.
+	TalosOperationPhaseShutDown = "ShutDown"
 
 	// TalosOperationPhaseCompleted means every eligible machine finished;
 	// the cluster lock has been released.
@@ -86,9 +100,11 @@ type TalosOperationSpec struct {
 
 	// kind names which upgrade this is: talos (spec.talosVersion/schematic),
 	// kubernetes (spec.kubernetesVersion), or ichor (the controller/CRDs/UI
-	// install), or cni (a spec.cni.kubeProxy switch, ADR 0066). This CRD and its controller only store and report it --
-	// each kind's own execution is a separate unit's work.
-	// +kubebuilder:validation:Enum=talos;kubernetes;ichor;cni
+	// install), cni (a spec.cni.kubeProxy switch, ADR 0066), or shutdown (a
+	// planned stop of the whole cluster, ADR 0067). This CRD and its controller only
+	// store and report it -- each kind's own execution is a separate unit's work.
+	// shutdown is the exception: it runs its own state machine.
+	// +kubebuilder:validation:Enum=talos;kubernetes;ichor;cni;shutdown
 	// +required
 	Kind string `json:"kind"`
 
@@ -124,6 +140,13 @@ type TalosOperationMachineStatus struct {
 	// +kubebuilder:validation:Enum=InProgress;Completed
 	// +required
 	Phase string `json:"phase"`
+
+	// bootID is the machine's boot ID recorded just before it was asked to
+	// stop (shutdown kind only; empty for the other kinds, and for a machine
+	// that was already unreachable). A different boot ID later is how the
+	// operation knows the machine has been powered back on.
+	// +optional
+	BootID string `json:"bootID,omitempty"`
 }
 
 // TalosOperationStatus defines the observed state of TalosOperation.
@@ -134,7 +157,7 @@ type TalosOperationStatus struct {
 	// this value and the machines list below, not from scratch
 	// (docs/design/architecture.md, "Upgrades": "the status-held state
 	// machine").
-	// +kubebuilder:validation:Enum=Pending;InProgress;Paused;Completed
+	// +kubebuilder:validation:Enum=Pending;InProgress;Paused;ShutDown;Completed
 	// +optional
 	Phase string `json:"phase,omitempty"`
 

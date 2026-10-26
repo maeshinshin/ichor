@@ -102,6 +102,10 @@ type fakeTalosClient struct {
 	// upgradeBudget is the time left on the Upgrade call's context when it arrived.
 	upgradeBudget time.Duration
 
+	// shutdown-related fields: shutdown_test.go's fixtures (ADR 0065).
+	shutdownErr   error
+	shutdownCalls []bool // the force argument of each call, in order
+
 	// kubernetes-upgrade fields: kubernetes_upgrade_test.go's fixtures.
 	pulled     []string
 	pullErr    error
@@ -145,6 +149,12 @@ func (f *fakeTalosClient) Reset(context.Context) error {
 	f.resetCalls++
 
 	return f.resetErr
+}
+
+func (f *fakeTalosClient) Shutdown(_ context.Context, force bool) error {
+	f.shutdownCalls = append(f.shutdownCalls, force)
+
+	return f.shutdownErr
 }
 
 func (f *fakeTalosClient) Version(context.Context) (string, error) {

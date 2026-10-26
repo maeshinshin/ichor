@@ -82,6 +82,14 @@ type TalosClient interface {
 	// accepted, not once the wipe finishes.
 	Reset(ctx context.Context) error
 
+	// Shutdown powers this node off. force=false lets Talos cordon and
+	// drain the node first (Sequencer.Shutdown, Talos 1.14.3: the drain
+	// phase runs only when !force) and needs the Kubernetes API; force=true
+	// skips that. Shutdown does not leave etcd (LeaveEtcd runs only in the
+	// Reset sequence), so a stopped control plane stays an etcd member. The
+	// RPC returns once the request is accepted, not once the node is down.
+	Shutdown(ctx context.Context, force bool) error
+
 	// Version reports this node's current Talos release tag (e.g.
 	// "v1.14.3"), the "from" half of a Talos upgrade's pre-checks
 	// (pkg/upgrade.TalosPath) and the signal talos_upgrade.go polls to tell

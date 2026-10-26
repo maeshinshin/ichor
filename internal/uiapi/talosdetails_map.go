@@ -30,7 +30,7 @@ import (
 // GetNodeTalosDetails. Each one copies named fields into a fresh message: a
 // spec is never marshalled or embedded whole, so a field Talos adds later (or
 // one that carries a key, like WireguardSpec.PrivateKey or a volume's
-// encryption keys) cannot reach the browser by accident (docs/adr/0071).
+// encryption keys) cannot reach the browser by accident (docs/adr/0073).
 
 const redactedValue = "***"
 

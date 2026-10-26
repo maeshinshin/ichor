@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ErrorAlert } from '@/components/ErrorAlert'
+import { TalosDetails } from '@/components/TalosDetails'
 import type { EffectiveConfigValue } from '@/gen/ichor/v1alpha1/node_pb'
 import { ConfigLayer, DiskRole, type NodeDetail as NodeDetailMessage, type StreamNodeLogsResponse } from '@/gen/ichor/v1alpha1/node_pb'
 import { nodeClient } from '@/lib/connect'
@@ -169,6 +170,7 @@ export function NodeDetail({ namespace, name }: { namespace: string; name: strin
         </CardContent>
       </Card>
 
+      <TalosDetails namespace={namespace} name={name} />
       <EffectiveConfigSection namespace={namespace} name={name} />
       <LogsSection namespace={namespace} name={name} />
     </div>

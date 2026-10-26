@@ -5,7 +5,7 @@
 // source: ichor/v1alpha1/talosdetails.proto
 
 // Messages for NodeService.GetNodeTalosDetails, the read-only "Talos details"
-// view of one machine (docs/adr/0071). Every field is picked from the Talos API
+// view of one machine (docs/adr/0073). Every field is picked from the Talos API
 // explicitly; no machine configuration document, certificate, key or token is
 // ever carried.
 

@@ -153,8 +153,8 @@ func (t *machineryNodeTalosClient) TalosNetwork(ctx context.Context) (*pb.TalosN
 	}
 
 	for r := range resolvers.All() {
-		for _, s := range r.TypedSpec().DNSServers {
-			out.DnsServers = append(out.DnsServers, s.String())
+		for _, s := range r.TypedSpec().NameServers {
+			out.DnsServers = append(out.DnsServers, s.Addr.String())
 		}
 
 		out.SearchDomains = append(out.SearchDomains, r.TypedSpec().SearchDomains...)

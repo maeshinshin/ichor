@@ -34,7 +34,7 @@ const (
 )
 
 // GetNodeTalosDetails reads one machine's Talos-side facts, read-only
-// (docs/adr/0071). Authorization is the same as GetNode: the machine and
+// (docs/adr/0073). Authorization is the same as GetNode: the machine and
 // cluster are read as the caller (getMachineAndCluster), so a caller who may
 // not see the TalosMachine gets no Talos data either. Sections run
 // concurrently and fail independently: a failed section carries its error
@@ -65,16 +65,12 @@ func (s *Server) GetNodeTalosDetails(
 	var wg sync.WaitGroup
 
 	run := func(read func(context.Context)) {
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			cctx, cancel := context.WithTimeout(ctx, talosDetailsTimeout)
 			defer cancel()
 
 			read(cctx)
-		}()
+		})
 	}
 
 	run(func(c context.Context) {

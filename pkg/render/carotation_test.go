@@ -160,7 +160,7 @@ func TestCARotationLastStagesEqualTheFinalConfiguration(t *testing.T) {
 			}
 
 			if got != final {
-				t.Errorf("%s: the %s configuration differs from the replaced bundle's, so the machine controller would see drift", role, stage)
+				t.Errorf("%s: the %s configuration differs from the replaced bundle's (drift)", role, stage)
 			}
 		}
 

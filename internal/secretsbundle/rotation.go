@@ -154,12 +154,12 @@ func BundleFingerprint(bundle *secrets.Bundle) (string, error) {
 
 	talos, err := Fingerprint(bundle.Certs.OS.Crt)
 	if err != nil {
-		return "", fmt.Errorf("Talos CA: %w", err)
+		return "", fmt.Errorf("talos CA: %w", err)
 	}
 
 	k8s, err := Fingerprint(bundle.Certs.K8s.Crt)
 	if err != nil {
-		return "", fmt.Errorf("Kubernetes CA: %w", err)
+		return "", fmt.Errorf("kubernetes CA: %w", err)
 	}
 
 	sum := sha256.Sum256([]byte(talos + "/" + k8s))

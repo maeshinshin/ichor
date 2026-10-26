@@ -301,28 +301,9 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, err
 	}
 
-	// The webhook's cap can be raced past, so recount here and hold the
-	// newest approvals beyond count+1 before anything is rendered or applied.
-	if stop, err := r.holdIfOverCap(ctx, &cluster, &m); stop {
-		return ctrl.Result{RequeueAfter: overCapRecheck}, err
-	}
-
-	// A CA rotation moves every node through stages the secrets bundle does not describe: the
-	// bundle names the old CAs while the nodes already trust the new ones. Rendering from it,
-	// dialing with it or applying it would fight the rotation (and could undo a stage), so the
-	// machine is left alone until the rotation is done. Read uncached: it gates an apply.
-	rotation, err := activeCARotation(ctx, readerOrClient(r.APIReader, r.Client), m.Namespace, cluster.Name)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-
-	if rotation != "" {
-		if err := r.ready(ctx, &m, metav1.ConditionUnknown, reasonCARotationInProgress,
-			fmt.Sprintf("TalosOperation %q is rotating the cluster's CAs; this machine is not reconciled until it completes", rotation)); err != nil {
-			return ctrl.Result{}, err
-		}
-
-		return ctrl.Result{RequeueAfter: transientRecheck}, nil
+	// Gates that keep the machine from being rendered or applied this round.
+	if res, stop, err := r.holdUntilEligible(ctx, &cluster, &m); stop {
+		return res, err
 	}
 
 	// Step 1: load the bundle and gather this cluster's patches, then
@@ -499,6 +480,32 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 		return ctrl.Result{}, r.ready(ctx, &m, metav1.ConditionTrue, reason, message)
 	}
+}
+
+// holdUntilEligible runs the checks that stop m from being rendered or applied this round, before
+// anything is read or dialed. stop=true also on an error, as holdIfOverCap does.
+//
+// The webhook's cap can be raced past, so recount here and hold the newest approvals
+// beyond count+1.
+//
+// A CA rotation moves every node through stages the secrets bundle does not describe --
+// the bundle names the old CAs while the nodes already trust the new ones -- so rendering from it,
+// dialing with it or applying it would fight the rotation and could undo a stage. The machine is
+// left alone until the rotation is done. Read uncached: it gates an apply.
+func (r *TalosMachineReconciler) holdUntilEligible(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
+) (res ctrl.Result, stop bool, err error) {
+	if stop, err := r.holdIfOverCap(ctx, cluster, m); stop {
+		return ctrl.Result{RequeueAfter: overCapRecheck}, true, err
+	}
+
+	rotation, err := activeCARotation(ctx, readerOrClient(r.APIReader, r.Client), m.Namespace, cluster.Name)
+	if err != nil || rotation == "" {
+		return ctrl.Result{}, err != nil, err
+	}
+
+	return ctrl.Result{RequeueAfter: transientRecheck}, true, r.ready(ctx, m, metav1.ConditionUnknown, reasonCARotationInProgress,
+		fmt.Sprintf("TalosOperation %q is rotating the cluster's CAs; this machine is not reconciled until it completes", rotation))
 }
 
 // desiredInputsHash fingerprints the generation of every object that fed

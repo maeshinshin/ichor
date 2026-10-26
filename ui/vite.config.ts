@@ -4,8 +4,16 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 
+// ICHOR_API=http://host points `vite` and `vite preview` at a running
+// ichor-ui backend, so a local build can be looked at against live data.
+const api = process.env.ICHOR_API
+const proxyTo = { target: api, changeOrigin: true }
+const proxy = api ? { '/ichor.': proxyTo, '/auth/config': proxyTo } : undefined
+
 // https://vite.dev/config/
 export default defineConfig({
+  server: { proxy },
+  preview: { proxy },
   plugins: [
     preact(),
     tailwindcss(),

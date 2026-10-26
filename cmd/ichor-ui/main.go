@@ -108,8 +108,10 @@ func main() {
 		// controller side: where loadBundle resolves the secrets
 		// bundle Secret, never the TalosCluster's own namespace.
 		ControllerNamespace: os.Getenv("POD_NAMESPACE"),
-		NodeTalosClient:     uiapi.NewMachineryNodeTalosClient,
-		Draining:            draining,
+		// Where argocd-cm lives; empty means "argocd".
+		ArgoCDNamespace: os.Getenv("ICHOR_ARGOCD_NAMESPACE"),
+		NodeTalosClient: uiapi.NewMachineryNodeTalosClient,
+		Draining:        draining,
 	}
 
 	mux := http.NewServeMux()

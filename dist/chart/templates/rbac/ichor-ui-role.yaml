@@ -18,6 +18,14 @@ metadata:
 rules:
 - apiGroups:
   - ""
+  resourceNames:
+  - argocd-cm
+  resources:
+  - configmaps
+  verbs:
+  - get
+- apiGroups:
+  - ""
   resources:
   - nodes
   verbs:
@@ -48,4 +56,10 @@ rules:
   - get
   - list
   - update
+- apiGroups:
+  - kustomize.toolkit.fluxcd.io
+  resources:
+  - kustomizations
+  verbs:
+  - list
 {{- end }}

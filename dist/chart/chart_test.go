@@ -380,9 +380,16 @@ func checkWebhookInvariants(t *testing.T, release string, docs []map[string]any)
 		for _, r := range rules {
 			rm, _ := r.(map[string]any)
 			ops, _ := rm["operations"].([]any)
-			if len(ops) != 1 || ops[0] != "DELETE" {
-				t.Errorf("webhook %q: expected operations: [DELETE] only; see %s; got %v",
-					name, adrDoc, ops)
+			// ADR 0053 widened these from DELETE-only: the approval cap
+			// needs CREATE/UPDATE on TalosMachine, the schedulable check
+			// UPDATE on TalosCluster. Anything else would be a new decision.
+			want := map[string][]any{
+				"vtalosmachine-v1alpha1.kb.io": {"CREATE", "UPDATE", "DELETE"},
+				"vtaloscluster-v1alpha1.kb.io": {"UPDATE", "DELETE"},
+			}[name]
+			if !reflect.DeepEqual(ops, want) {
+				t.Errorf("webhook %q: expected operations %v; see %s; got %v",
+					name, want, adrDoc, ops)
 			}
 		}
 	}

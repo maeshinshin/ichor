@@ -21,6 +21,7 @@ package deleteguard
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -125,6 +126,17 @@ func CheckControlPlaneCount(currentControlPlanes int, desiredCount int) error {
 // before the environment -- that is exactly how the cached-read bug above
 // was found.
 func CountApprovedControlPlanes(ctx context.Context, reader client.Reader, namespace, clusterName string) (int, error) {
+	return countApproved(ctx, reader, namespace, clusterName, "controlplane")
+}
+
+// CountApprovedWorkers is CountApprovedControlPlanes for role "worker", for
+// CheckLastWorker. The same direct-read rule applies: a stale high count is
+// the dangerous direction (it lets the last worker's removal look safe).
+func CountApprovedWorkers(ctx context.Context, reader client.Reader, namespace, clusterName string) (int, error) {
+	return countApproved(ctx, reader, namespace, clusterName, "worker")
+}
+
+func countApproved(ctx context.Context, reader client.Reader, namespace, clusterName, role string) (int, error) {
 	var siblings ichorv1alpha1.TalosMachineList
 	if err := reader.List(ctx, &siblings, client.InNamespace(namespace)); err != nil {
 		return 0, err
@@ -132,10 +144,38 @@ func CountApprovedControlPlanes(ctx context.Context, reader client.Reader, names
 
 	count := 0
 	for _, m := range siblings.Items {
-		if m.Spec.Role == "controlplane" && m.Spec.IsApproved() && m.Spec.ClusterRef.Name == clusterName {
+		if m.Spec.Role == role && m.Spec.IsApproved() && m.Spec.ClusterRef.Name == clusterName {
 			count++
 		}
 	}
 
 	return count, nil
+}
+
+// CheckControlPlaneApproval refuses approving one more control plane when
+// that would leave more than desiredCount+1 approved. currentControlPlanes
+// excludes the machine being approved. The +1 is the replacement slack
+// (architecture.md "Nodes": 3->4->3, add before remove): desiredCount is odd
+// (1, 3 or 5), so desiredCount+1 is the one even, "transitioning" count the
+// design allows, and a second extra approval has no replacement to belong to.
+// ADR 0053 covers the race this admission-time check cannot close.
+func CheckControlPlaneApproval(currentControlPlanes int, desiredCount int) error {
+	if currentControlPlanes > desiredCount {
+		return fmt.Errorf("approve refused: %d control planes are already approved against spec.controlPlane.count %d; "+
+			"one extra is allowed only while replacing a member, so remove one first or raise spec.controlPlane.count (to 1, 3 or 5)",
+			currentControlPlanes, desiredCount)
+	}
+	return nil
+}
+
+// CheckLastWorker refuses leaving a cluster whose control planes are
+// unschedulable (schedulable == "false") with no approved worker: nothing
+// could run workloads. workersAfter is the approved-worker count after the
+// operation. Used when schedulable turns false and when a worker leaves.
+func CheckLastWorker(schedulable string, workersAfter int) error {
+	if schedulable == "false" && workersAfter < 1 {
+		return errors.New("refused: spec.controlPlane.schedulable is \"false\" and the cluster would have no approved worker; " +
+			"approve a worker first, or set schedulable to \"true\"")
+	}
+	return nil
 }

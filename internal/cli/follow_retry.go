@@ -48,8 +48,7 @@ func isTransient(err error) bool {
 		return false
 	}
 
-	var ce *connect.Error
-	if errors.As(err, &ce) {
+	if ce, ok := errors.AsType[*connect.Error](err); ok {
 		switch ce.Code() {
 		case connect.CodeUnavailable, connect.CodeDeadlineExceeded:
 			return true

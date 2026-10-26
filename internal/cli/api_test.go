@@ -84,7 +84,7 @@ func uiBackendObjects() []client.Object {
 
 	return []client.Object{
 		&corev1.Service{
-			Name: "ichor-ichor-ui-service", Namespace: ichorControllerNamespace, Labels: map[string]string{uiComponentLabel: uiComponentValue},
+			Name: testUIServiceName, Namespace: ichorControllerNamespace, Labels: map[string]string{uiComponentLabel: uiComponentValue},
 			Spec: corev1.ServiceSpec{Selector: sel, Ports: []corev1.ServicePort{{Port: 8080}}},
 		},
 		&corev1.Pod{
@@ -292,7 +292,7 @@ func TestPatchCreatePrintsItsImpact(t *testing.T) {
 
 	p := sysctlPatch(cluster.Name, map[string]string{testSysctlKey: "1"})
 	p.Name = testPatchName
-	p.Spec.Layer = "cluster"
+	p.Spec.Layer = cniPatchLayer
 
 	var out, errw bytes.Buffer
 	if err := runPatchWrite(context.Background(), c, strings.NewReader(""), &out, &errw, &p, false); err != nil {

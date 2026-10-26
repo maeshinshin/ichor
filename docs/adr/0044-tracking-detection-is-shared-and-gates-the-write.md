@@ -163,3 +163,5 @@ already named.
 - `pkg/gitopstracking` has no Argo CD or Flux Go module dependency: the Flux
   inventory scan uses `unstructured`, the Argo CD branch a `corev1.ConfigMap`
   read.
+
+- ADR 0051 wires the first caller: `internal/uiapi` now runs `IsTracked` and `Decide` before every write to an existing CR.

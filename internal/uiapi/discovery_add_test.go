@@ -28,6 +28,8 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
+const knownAddr = "10.0.0.55"
+
 func discoveryCluster(annotations map[string]string, d *ichorv1alpha1.TalosClusterDiscovery) *ichorv1alpha1.TalosCluster {
 	return &ichorv1alpha1.TalosCluster{
 		Name: "c", Namespace: trackedTestNS, Annotations: annotations,
@@ -42,11 +44,11 @@ func addAddrReq(addr string, bg *pb.BreakGlass) *connect.Request[pb.AddDiscovery
 }
 
 func TestAddDiscoveryAddressAppendsOnlyThatAddress(t *testing.T) {
-	c := discoveryCluster(nil, &ichorv1alpha1.TalosClusterDiscovery{Addresses: []string{"10.0.0.5"}, CIDRs: []string{"10.1.0.0/24"}})
+	c := discoveryCluster(nil, &ichorv1alpha1.TalosClusterDiscovery{Addresses: []string{knownAddr}, CIDRs: []string{"10.1.0.0/24"}})
 	k8s := fake.NewClientBuilder().WithScheme(trackedScheme(t)).WithObjects(c, argoCM()).Build()
 	s := &Server{Client: k8s}
 
-	resp, err := s.AddDiscoveryAddress(context.Background(), addAddrReq(" 10.0.0.6 ", nil))
+	resp, err := s.AddDiscoveryAddress(context.Background(), addAddrReq(" 10.0.0.56 ", nil))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +63,7 @@ func TestAddDiscoveryAddressAppendsOnlyThatAddress(t *testing.T) {
 	}
 
 	d := got.Spec.Discovery
-	if d == nil || len(d.Addresses) != 2 || d.Addresses[1] != "10.0.0.6" || len(d.CIDRs) != 1 {
+	if d == nil || len(d.Addresses) != 2 || d.Addresses[1] != "10.0.0.56" || len(d.CIDRs) != 1 {
 		t.Fatalf("want one address appended and the CIDRs kept, got %+v", d)
 	}
 
@@ -88,11 +90,11 @@ func TestAddDiscoveryAddressCreatesTheDiscoveryBlock(t *testing.T) {
 }
 
 func TestAddDiscoveryAddressRefusesBadInput(t *testing.T) {
-	c := discoveryCluster(nil, &ichorv1alpha1.TalosClusterDiscovery{Addresses: []string{"10.0.0.5"}})
+	c := discoveryCluster(nil, &ichorv1alpha1.TalosClusterDiscovery{Addresses: []string{knownAddr}})
 	k8s := fake.NewClientBuilder().WithScheme(trackedScheme(t)).WithObjects(c, argoCM()).Build()
 	s := &Server{Client: k8s}
 
-	for _, bad := range []string{"", "not-an-ip", "10.0.0.0/24", "fe80::1", "10.0.0.5", "300.1.1.1"} {
+	for _, bad := range []string{"", "not-an-ip", "10.0.0.0/24", "fe80::1", knownAddr, "300.1.1.1"} {
 		_, err := s.AddDiscoveryAddress(context.Background(), addAddrReq(bad, nil))
 		if connect.CodeOf(err) != connect.CodeInvalidArgument {
 			t.Fatalf("%q: want InvalidArgument, got %v", bad, err)

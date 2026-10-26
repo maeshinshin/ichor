@@ -75,6 +75,12 @@ type Server struct {
 	// ServiceAccount.
 	Impersonate func(Identity) (client.Client, error)
 
+	// CallerCredentials is true when Client carries the caller's own
+	// Kubernetes credentials (the CLI's in-process fallback)
+	// rather than the backend's ServiceAccount. Break-glass is allowed to ask
+	// Client "may I?" only then, or through Impersonate.
+	CallerCredentials bool
+
 	// ArgoCDNamespace is where argocd-cm is read to tell whether Argo CD
 	// tracks a CR. Empty means "argocd".
 	ArgoCDNamespace string

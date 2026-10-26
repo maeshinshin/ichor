@@ -40,6 +40,11 @@ import (
 	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
 )
 
+const (
+	opUpdate = "UPDATE"
+	opDelete = "DELETE"
+)
+
 // crdSourceDir is config/crd/bases, the controller-gen output dist/chart's
 // CRD templates are generated from (CONTRIBUTING.md's chart warning).
 const crdSourceDir = "../../config/crd/bases"
@@ -371,8 +376,10 @@ func checkWebhookInvariants(t *testing.T, release string, docs []map[string]any)
 			// needs CREATE/UPDATE on TalosMachine, the schedulable check
 			// UPDATE on TalosCluster. Anything else would be a new decision.
 			want := map[string][]any{
-				"vtalosmachine-v1alpha1.kb.io": {"CREATE", "UPDATE", "DELETE"},
-				"vtaloscluster-v1alpha1.kb.io": {"UPDATE", "DELETE"},
+				"vtalosmachine-v1alpha1.kb.io": {"CREATE", opUpdate, opDelete},
+				"vtaloscluster-v1alpha1.kb.io": {opUpdate, opDelete},
+				// Break-glass checks writes to existing CRs only.
+				"vbreakglass-v1alpha1.kb.io": {opUpdate, opDelete},
 			}[name]
 			if !reflect.DeepEqual(ops, want) {
 				t.Errorf("webhook %q: expected operations %v; got %v",

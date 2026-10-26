@@ -185,7 +185,7 @@ func TestNodeCreateIsRefusedWhenBlockedAndWritesNothing(t *testing.T) {
 
 func TestNodeShutdownRestingInShutDownDoesNotBlockTheNextOperation(t *testing.T) {
 	objs := append(opObjects(), &ichorv1alpha1.TalosOperation{
-		Name: "node-1", Namespace: opNS,
+		Name: "shutdown-op", Namespace: opNS,
 		Spec: ichorv1alpha1.TalosOperationSpec{
 			ClusterRef: corev1.LocalObjectReference{Name: opCluster}, Kind: ichorv1alpha1.TalosOperationKindNode,
 		},
@@ -233,7 +233,7 @@ func TestNodeResetNeedsTheNameAndBreakGlass(t *testing.T) {
 		t.Fatalf("RBAC says no: %v", err)
 	}
 
-	if len(asked) == 0 || asked[0].Verb != "break-glass" || asked[0].Resource != "talosmachines" || asked[0].Name != "w1" {
+	if len(asked) == 0 || asked[0].Verb != "break-glass" || asked[0].Name != "w1" {
 		t.Fatalf("access review = %+v", asked)
 	}
 

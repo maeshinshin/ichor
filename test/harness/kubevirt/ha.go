@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -64,6 +65,16 @@ func machineRunning(out string, needReady bool) bool {
 // haCluster names every object this scenario creates; haVMName derives each VM's own name
 // from it, fixed like vmName (see its own comment) for the same cross-invocation reason.
 const haCluster = "ichor-e2e-ha"
+
+// haMaxVMs bounds the names "down-ha" deletes (--ignore-not-found), so a run started with
+// workers is cleaned up without being told how many it had.
+const haMaxVMs = 8
+
+// haTotal is the control planes plus ICHOR_E2E_HA_WORKERS workers.
+func haTotal() int {
+	n, _ := strconv.Atoi(os.Getenv(workersEnv))
+	return haCount + min(max(n, 0), haMaxVMs-haCount)
+}
 
 func haVMName(i int) string { return fmt.Sprintf("%s-%d", haCluster, i) }
 
@@ -163,15 +174,15 @@ func upHA() error {
 // bootHAToMaintenance creates the shared ISO DataVolume and haCount VMs referencing it,
 // and waits for every VM to report a pod IP and reach maintenance.
 func bootHAToMaintenance() ([]string, error) {
-	for i := range haCount {
+	for i := range haTotal() {
 		name := haVMName(i)
 		if err := applyManifest(fmt.Sprintf(haVMManifestTmpl, name, talosFactorySchematic, talosVersion)); err != nil {
 			return nil, fmt.Errorf("creating VM %s: %w", name, err)
 		}
 	}
 
-	ips := make([]string, haCount)
-	for i := range haCount {
+	ips := make([]string, haTotal())
+	for i := range haTotal() {
 		name := haVMName(i)
 		step := "waiting for " + name + "'s VMI to report a pod IP"
 		ip, err := pollFor(step, 3*time.Minute, func() (string, bool) {
@@ -209,7 +220,7 @@ func bootHAToMaintenance() ([]string, error) {
 // generated from -- the removal-ordering verification needs the real bundle to
 // dial these same nodes' real Talos API, not a fresh unrelated one.
 func configureAndBootstrapHA(ips []string) ([]byte, *secrets.Bundle, error) {
-	cfg, err := generateControlPlaneConfig(haCluster, ips)
+	cfg, err := generateControlPlaneConfig(haCluster, ips[:haCount])
 	if err != nil {
 		return nil, nil, err
 	}
@@ -222,7 +233,11 @@ func configureAndBootstrapHA(ips []string) ([]byte, *secrets.Bundle, error) {
 	// comment): no per-node fields differ.
 	for i, ip := range ips {
 		fmt.Printf("--- applying the control-plane config to %s (installs and reboots) ---\n", haVMName(i))
-		out, err := talosctl.Apply(namespace, ip, cfg.machineConfig)
+		config := cfg.machineConfig
+		if i >= haCount {
+			config = cfg.workerConfig
+		}
+		out, err := talosctl.Apply(namespace, ip, config)
 		if err != nil {
 			return nil, nil, fmt.Errorf("applying config to %s: %w: %s", ip, err, out)
 		}
@@ -328,9 +343,9 @@ func publishHA(ips []string, talosconfigYAML []byte, bundle *secrets.Bundle) err
 
 // downHA tears down every object upHA creates, in the reverse order, exactly like down().
 func downHA() error {
-	names := make([]string, haCount)
-	dvs := make([]string, 0, haCount*2)
-	for i := range haCount {
+	names := make([]string, haMaxVMs)
+	dvs := make([]string, 0, haMaxVMs*2)
+	for i := range haMaxVMs {
 		names[i] = haVMName(i)
 		dvs = append(dvs, haVMName(i)+"-iso", haVMName(i)+"-system")
 	}

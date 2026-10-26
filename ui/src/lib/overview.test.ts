@@ -1,11 +1,17 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { clusterReadiness, machineCounts, operationCounts, operationsLine } from './overview.ts'
+import { clusterIsReady, clusterReadiness, machineCounts, operationCounts, operationsLine } from './overview.ts'
 
-test('clusterReadiness counts the clusters whose Ready condition is True', () => {
-  assert.deepEqual(clusterReadiness(['True', 'True']), { total: 2, ready: 2 })
-  assert.deepEqual(clusterReadiness(['True', 'False', '']), { total: 3, ready: 1 })
+test('clusterReadiness uses Ready when there is one, else steady and not unhealthy', () => {
+  const ready = (status: string) => [{ type: 'Ready', status }]
+  assert.deepEqual(clusterReadiness([ready('True'), ready('True')]), { total: 2, ready: 2 })
+  assert.deepEqual(clusterReadiness([ready('True'), ready('False'), ready('Unknown')]), { total: 3, ready: 1 })
   assert.deepEqual(clusterReadiness([]), { total: 0, ready: 0 })
+  // No Ready condition: a steady cluster counts, a transitioning or unhealthy one does not.
+  assert.equal(clusterIsReady([{ type: 'Transitioning', status: 'False' }]), true)
+  assert.equal(clusterIsReady([]), true)
+  assert.equal(clusterIsReady([{ type: 'Transitioning', status: 'True' }]), false)
+  assert.equal(clusterIsReady([{ type: 'Available', status: 'False' }]), false)
 })
 
 test('operationsLine says what a person wants to know first', () => {

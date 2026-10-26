@@ -101,8 +101,8 @@ func FindOpenPullRequest(ctx context.Context, host Host, req PRRequest) (PRResul
 // slot, never computed here -- that backend does not exist yet (see
 // docs/adr/0038) -- included verbatim when non-empty so a later unit can
 // supply it with no change to this function's signature. requester is
-// AuditRecord.actor's value, today always a fixed string (OIDC identity
-// is phase 9); diff is Diff's or Patch's own before/after rendering.
+// AuditRecord.actor's value, the authenticated user's Kubernetes username when ichor-ui has OIDC enabled
+// (docs/adr/0058), otherwise a fixed string; diff is Diff's or Patch's own before/after rendering.
 func buildPRBody(requester, diff, impactPreview string) string {
 	var b strings.Builder
 

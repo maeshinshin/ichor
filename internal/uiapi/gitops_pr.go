@@ -172,7 +172,7 @@ func (s *Server) planEdit(
 
 	app.SetGroupVersionKind(argoApplicationGVK)
 
-	if err := s.Get(ctx, appKey, &app); err != nil {
+	if err := s.Client.Get(ctx, appKey, &app); err != nil {
 		return nil, connect.NewError(connect.CodeFailedPrecondition,
 			fmt.Errorf("%q is tracked by Argo CD Application %q, which cannot be read, so it is read-only here: %w", key, appKey, err))
 	}
@@ -251,7 +251,7 @@ func (s *Server) openPR(ctx context.Context, plan *prPlan, change prChange) (str
 		HeadBranch: fmt.Sprintf("ichor/%s-%s", change.verb, change.name),
 		SourcePath: plan.sourcePath, Target: change.target, Updates: change.updates, NewFile: change.newFile,
 		Delete: change.remove,
-		Title:  change.title, Requester: s.actorName(), ImpactPreview: change.impact,
+		Title:  change.title, Requester: s.actorName(ctx), ImpactPreview: change.impact,
 	}
 
 	res, err := prmode.SubmitPR(ctx, req)
@@ -290,7 +290,7 @@ func (s *Server) gitToken(ctx context.Context, repo *ichorv1alpha1.TalosClusterG
 
 	var sec corev1.Secret
 
-	if err := s.Get(ctx, key, &sec); err != nil {
+	if err := s.Client.Get(ctx, key, &sec); err != nil {
 		// The error names the Secret, never its data.
 		return "", connect.NewError(connect.CodeFailedPrecondition,
 			fmt.Errorf("reading repository token Secret %q: %w", key, err))

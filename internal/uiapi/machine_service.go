@@ -30,11 +30,8 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
-// actor is recorded on every AuditRecord this package returns. There is no
-// per-caller identity yet -- OIDC login and Kubernetes impersonation are
-// roadmap phase 9 ("CLI and UI": "OIDC login with Kubernetes impersonation
-// comes later so that RBAC and audit apply per user") -- so "who" is
-// honestly the backend's own identity, not a person, until that lands.
+// actor is the AuditRecord actor when the caller has no authenticated identity
+// (OIDC disabled, docs/adr/0058); otherwise Identity.User is recorded.
 const actor = "ichor-ui"
 
 // strictFieldValidation is passed to every write this package makes
@@ -168,7 +165,7 @@ func (s *Server) ApproveMachine(
 	m.Spec.Hostname = req.Msg.GetHostname()
 	m.Spec.ApprovalState = ichorv1alpha1.MachineApprovalStateApproved
 	m.Spec.ApprovalDecision = &ichorv1alpha1.TalosMachineApprovalDecision{
-		Actor: s.actorName(), Reason: req.Msg.GetReason(), At: metav1.NewTime(now),
+		Actor: s.actorName(ctx), Reason: req.Msg.GetReason(), At: metav1.NewTime(now),
 	}
 
 	if plan != nil {
@@ -180,7 +177,7 @@ func (s *Server) ApproveMachine(
 	}
 
 	audit := &pb.AuditRecord{
-		Actor: s.actorName(), At: timestamppb.New(now), Action: "approve", Target: objectRef(m.Namespace, m.Name), Reason: req.Msg.GetReason(),
+		Actor: s.actorName(ctx), At: timestamppb.New(now), Action: "approve", Target: objectRef(m.Namespace, m.Name), Reason: req.Msg.GetReason(),
 	}
 
 	return connect.NewResponse(&pb.ApproveMachineResponse{Machine: machineToPB(m), Audit: audit}), nil
@@ -226,7 +223,7 @@ func (s *Server) RejectMachine(
 
 	m.Spec.ApprovalState = ichorv1alpha1.MachineApprovalStateRejected
 	m.Spec.ApprovalDecision = &ichorv1alpha1.TalosMachineApprovalDecision{
-		Actor: s.actorName(), Reason: req.Msg.GetReason(), At: metav1.NewTime(now),
+		Actor: s.actorName(ctx), Reason: req.Msg.GetReason(), At: metav1.NewTime(now),
 	}
 
 	if plan != nil {
@@ -238,7 +235,7 @@ func (s *Server) RejectMachine(
 	}
 
 	audit := &pb.AuditRecord{
-		Actor: s.actorName(), At: timestamppb.New(now), Action: "reject",
+		Actor: s.actorName(ctx), At: timestamppb.New(now), Action: "reject",
 		Target: objectRef(m.Namespace, m.Name), Reason: req.Msg.GetReason(),
 	}
 

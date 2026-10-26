@@ -71,6 +71,10 @@ type Server struct {
 	// wrote the CR.
 	Actor string
 
+	// Impersonate returns a client that acts as id against the Kubernetes API
+	// (docs/adr/0058). nil means calls always use Client, the ServiceAccount.
+	Impersonate func(Identity) (client.Client, error)
+
 	// ArgoCDNamespace is where argocd-cm is read to tell whether Argo CD
 	// tracks a CR (docs/adr/0051). Empty means "argocd".
 	ArgoCDNamespace string
@@ -84,7 +88,11 @@ type Server struct {
 	Draining <-chan struct{}
 }
 
-func (s *Server) actorName() string {
+func (s *Server) actorName(ctx context.Context) string {
+	if id, ok := IdentityFrom(ctx); ok {
+		return id.User
+	}
+
 	if s.Actor != "" {
 		return s.Actor
 	}

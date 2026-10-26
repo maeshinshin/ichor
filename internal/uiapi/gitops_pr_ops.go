@@ -70,7 +70,7 @@ func (s *Server) approveByPR(
 	}
 
 	audit := &pb.AuditRecord{
-		Actor: s.actorName(), At: timestamppb.New(now), Action: "approve-pr", Target: objectRef(m.Namespace, m.Name), Reason: reason,
+		Actor: s.actorName(ctx), At: timestamppb.New(now), Action: "approve-pr", Target: objectRef(m.Namespace, m.Name), Reason: reason,
 	}
 
 	return connect.NewResponse(&pb.ApproveMachineResponse{Machine: machineToPB(stored), Audit: audit, PullRequestUrl: url}), nil
@@ -97,7 +97,7 @@ func (s *Server) rejectByPR(
 	}
 
 	audit := &pb.AuditRecord{
-		Actor: s.actorName(), At: timestamppb.New(now), Action: "reject-pr", Target: objectRef(m.Namespace, m.Name), Reason: reason,
+		Actor: s.actorName(ctx), At: timestamppb.New(now), Action: "reject-pr", Target: objectRef(m.Namespace, m.Name), Reason: reason,
 	}
 
 	return connect.NewResponse(&pb.RejectMachineResponse{Audit: audit, PullRequestUrl: url}), nil
@@ -133,7 +133,7 @@ func (s *Server) updatePatchByPR(
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	audit := &pb.AuditRecord{Actor: s.actorName(), At: timestamppb.New(s.now()), Action: "update-pr", Target: objectRef(p.Namespace, p.Name)}
+	audit := &pb.AuditRecord{Actor: s.actorName(ctx), At: timestamppb.New(s.now()), Action: "update-pr", Target: objectRef(p.Namespace, p.Name)}
 
 	return connect.NewResponse(&pb.UpdatePatchResponse{Patch: out, Audit: audit, PullRequestUrl: url}), nil
 }
@@ -154,7 +154,7 @@ func (s *Server) deletePatchByPR(
 		return nil, err
 	}
 
-	audit := &pb.AuditRecord{Actor: s.actorName(), At: timestamppb.New(s.now()), Action: "delete-pr", Target: ref}
+	audit := &pb.AuditRecord{Actor: s.actorName(ctx), At: timestamppb.New(s.now()), Action: "delete-pr", Target: ref}
 
 	return connect.NewResponse(&pb.DeletePatchResponse{Audit: audit, PullRequestUrl: url}), nil
 }

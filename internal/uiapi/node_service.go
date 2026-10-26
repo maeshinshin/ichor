@@ -269,7 +269,7 @@ func (s *Server) dialNode(
 func (s *Server) findKubernetesNode(ctx context.Context, m *ichorv1alpha1.TalosMachine) (*corev1.Node, error) {
 	if m.Spec.Hostname != "" {
 		var node corev1.Node
-		if err := s.Get(ctx, client.ObjectKey{Name: m.Spec.Hostname}, &node); err == nil {
+		if err := s.Client.Get(ctx, client.ObjectKey{Name: m.Spec.Hostname}, &node); err == nil {
 			return &node, nil
 		}
 	}
@@ -280,7 +280,7 @@ func (s *Server) findKubernetesNode(ctx context.Context, m *ichorv1alpha1.TalosM
 	}
 
 	var list corev1.NodeList
-	if err := s.List(ctx, &list); err != nil {
+	if err := s.Client.List(ctx, &list); err != nil {
 		return nil, err
 	}
 

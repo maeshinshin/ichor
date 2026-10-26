@@ -27,7 +27,6 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -104,7 +103,7 @@ var _ = Describe("ichor-ui generated RBAC", func() {
 		m.Spec.Hostname = "node-rbac-rt"
 		Expect(k8sClient.Update(ctx, m)).To(Succeed())
 
-		node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: m.Spec.Hostname}}
+		node := &corev1.Node{Name: m.Spec.Hostname}
 		Expect(k8sClient.Create(ctx, node)).To(Succeed())
 
 		s := &Server{

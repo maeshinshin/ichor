@@ -77,6 +77,24 @@ func OpenPullRequest(ctx context.Context, host Host, req PRRequest) (PRResult, e
 	}
 }
 
+// FindOpenPullRequest reports the open pull/merge request whose head is
+// req.HeadBranch and whose base is req.BaseBranch, if any. It is how a
+// repeated request for the same change finds the PR the first one opened
+// instead of opening another (docs/adr/0056). Merged and closed ones do
+// not count.
+func FindOpenPullRequest(ctx context.Context, host Host, req PRRequest) (PRResult, bool, error) {
+	switch host {
+	case HostGitHub:
+		return findGitHubPR(ctx, req)
+	case HostGitLab:
+		return findGitLabPR(ctx, req)
+	case HostGitea:
+		return findGiteaPR(ctx, req)
+	default:
+		return PRResult{}, false, fmt.Errorf("prmode: unknown host %v", host)
+	}
+}
+
 // buildPRBody is the PR description architecture.md asks for: "a PR
 // whose description includes the impact preview (affected nodes, reboot
 // required or not) and who asked". impactPreview is an opaque string

@@ -20,10 +20,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 // titleKey is the one request-body field name every host spells the
@@ -78,6 +80,164 @@ func postJSON(ctx context.Context, urlStr string, headers map[string]string, bod
 	}
 
 	return nil
+}
+
+// errNotFound is getJSON's answer for a 404, which only the Gitea lookup
+// reads as "no such pull request".
+var errNotFound = errors.New("prmode: not found")
+
+// getJSON GETs urlStr with headers and decodes the JSON response into
+// result. Like postJSON, its errors name the status and never the headers.
+func getJSON(ctx context.Context, urlStr string, headers map[string]string, result any) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, urlStr, nil)
+	if err != nil {
+		return fmt.Errorf("prmode: building request: %w", err)
+	}
+
+	req.Header.Set("Accept", "application/json")
+
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("prmode: %s %s: %w", req.Method, req.URL.Path, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("prmode: reading response from %s: %w", req.URL.Path, err)
+	}
+
+	if resp.StatusCode == http.StatusNotFound {
+		return errNotFound
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("prmode: %s %s: status %d: %s", req.Method, req.URL.Path, resp.StatusCode, respBody)
+	}
+
+	if err := json.Unmarshal(respBody, result); err != nil {
+		return fmt.Errorf("prmode: decoding response from %s: %w", req.URL.Path, err)
+	}
+
+	return nil
+}
+
+// findGitHubPR implements "List pull requests"
+// (docs.github.com/en/rest/pulls/pulls#list-pull-requests, verified
+// 2026-10-26): GET /repos/{owner}/{repo}/pulls?state=open&head=
+// {owner}:{branch}&base={base} -> [{html_url, state}]. head is
+// "user:ref-name" and is required in that form to filter.
+func findGitHubPR(ctx context.Context, req PRRequest) (PRResult, bool, error) {
+	base := req.APIBaseURL
+	if base == "" {
+		base = defaultGitHubAPI
+	}
+
+	q := url.Values{"state": {"open"}, "head": {req.Owner + ":" + req.HeadBranch}, "base": {req.BaseBranch}}
+	urlStr := base + "/repos/" + url.PathEscape(req.Owner) + "/" + url.PathEscape(req.Repo) + "/pulls?" + q.Encode()
+
+	headers := map[string]string{
+		"Authorization":        "Bearer " + req.Token,
+		"Accept":               "application/vnd.github+json",
+		"X-GitHub-Api-Version": "2022-11-28",
+	}
+
+	var list []struct {
+		HTMLURL string `json:"html_url"`
+		State   string `json:"state"`
+	}
+
+	if err := getJSON(ctx, urlStr, headers, &list); err != nil {
+		return PRResult{}, false, err
+	}
+
+	for _, pr := range list {
+		if pr.State == "open" && pr.HTMLURL != "" {
+			return PRResult{URL: pr.HTMLURL}, true, nil
+		}
+	}
+
+	return PRResult{}, false, nil
+}
+
+// findGitLabPR implements "List project merge requests"
+// (docs.gitlab.com/api/merge_requests, verified 2026-10-26): GET
+// /api/v4/projects/:id/merge_requests?state=opened&source_branch=
+// &target_branch= -> [{web_url, state}].
+func findGitLabPR(ctx context.Context, req PRRequest) (PRResult, bool, error) {
+	if req.APIBaseURL == "" {
+		return PRResult{}, false, fmt.Errorf("prmode: GitLab requires --api-base-url (no public default)")
+	}
+
+	q := url.Values{"state": {"opened"}, "source_branch": {req.HeadBranch}, "target_branch": {req.BaseBranch}}
+	urlStr := req.APIBaseURL + "/api/v4/projects/" + url.PathEscape(req.Owner+"/"+req.Repo) + "/merge_requests?" + q.Encode()
+
+	var list []struct {
+		WebURL string `json:"web_url"`
+		State  string `json:"state"`
+	}
+
+	if err := getJSON(ctx, urlStr, map[string]string{"PRIVATE-TOKEN": req.Token}, &list); err != nil {
+		return PRResult{}, false, err
+	}
+
+	for _, mr := range list {
+		if mr.State == "opened" && mr.WebURL != "" {
+			return PRResult{URL: mr.WebURL}, true, nil
+		}
+	}
+
+	return PRResult{}, false, nil
+}
+
+// findGiteaPR implements "Get a pull request by base and head"
+// (docs.gitea.com/api/1.22/operations/repo-get-pull-request-by-base-head,
+// verified 2026-10-26): GET /api/v1/repos/{owner}/{repo}/pulls/{base}/
+// {head} -> PullRequest, or 404. The list endpoint has no head filter, so
+// this is the lookup; a PR that is not "open" (the docs do not say which
+// one is returned when several share the branches) counts as none.
+func findGiteaPR(ctx context.Context, req PRRequest) (PRResult, bool, error) {
+	if req.APIBaseURL == "" {
+		return PRResult{}, false, fmt.Errorf("prmode: Gitea/Forgejo requires --api-base-url (no public default)")
+	}
+
+	urlStr := req.APIBaseURL + "/api/v1/repos/" + url.PathEscape(req.Owner) + "/" + url.PathEscape(req.Repo) +
+		"/pulls/" + escapeRef(req.BaseBranch) + "/" + escapeRef(req.HeadBranch)
+
+	var pr struct {
+		HTMLURL string `json:"html_url"`
+		State   string `json:"state"`
+	}
+
+	err := getJSON(ctx, urlStr, map[string]string{"Authorization": "token " + req.Token}, &pr)
+	if errors.Is(err, errNotFound) {
+		return PRResult{}, false, nil
+	}
+
+	if err != nil {
+		return PRResult{}, false, err
+	}
+
+	if pr.State != "open" || pr.HTMLURL == "" {
+		return PRResult{}, false, nil
+	}
+
+	return PRResult{URL: pr.HTMLURL}, true, nil
+}
+
+// escapeRef escapes each "/"-separated segment of a branch name but keeps
+// the slashes, as Gitea's wildcard route expects.
+func escapeRef(ref string) string {
+	parts := strings.Split(ref, "/")
+	for i, p := range parts {
+		parts[i] = url.PathEscape(p)
+	}
+
+	return strings.Join(parts, "/")
 }
 
 // openGitHubPR implements "Create a pull request"

@@ -51,6 +51,37 @@ func patchedFileContent(dir string, req SubmitPRRequest) (relPath string, oldDat
 	return relPath, oldData, newData, nil
 }
 
+// removedFileContent is the delete half: find Target's file and remove just
+// Target's document. newData is nil when the file held nothing else, which
+// CommitAndPush reads as "remove the file".
+func removedFileContent(dir string, req SubmitPRRequest) (relPath string, oldData, newData []byte, err error) {
+	file, err := Locate(dir, req.SourcePath, req.Target)
+	if err != nil {
+		return "", nil, nil, err
+	}
+
+	oldData, err = os.ReadFile(file)
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("prmode: reading %s: %w", file, err)
+	}
+
+	newData, remaining, err := RemoveDocument(oldData, req.Target)
+	if err != nil {
+		return "", nil, nil, err
+	}
+
+	if !remaining {
+		newData = nil
+	}
+
+	relPath, err = filepath.Rel(dir, file)
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("prmode: %s is not under the checkout: %w", file, err)
+	}
+
+	return relPath, oldData, newData, nil
+}
+
 // newFileContent is the add-a-file half: check that nf.Path stays inside
 // dir and names a file that does not exist yet, and create its directory.
 func newFileContent(dir string, nf *NewFile) (relPath string, newData []byte, err error) {
@@ -107,6 +138,11 @@ type SubmitPRRequest struct {
 	// 0056), where the CR is not in Git yet, so Locate has nothing to find.
 	NewFile *NewFile
 
+	// Delete removes Target: its whole file when it is the only document,
+	// otherwise just its document, every other byte kept (ADR 0056).
+	// Updates and NewFile are ignored.
+	Delete bool
+
 	Title         string
 	Requester     string
 	ImpactPreview string
@@ -126,6 +162,19 @@ type NewFile struct {
 // path architecture.md describes, short of actually merging it (never
 // done here, matching "the backend only opens PRs, never merges").
 func SubmitPR(ctx context.Context, req SubmitPRRequest) (PRResult, error) {
+	// A repeated request finds the PR the first one opened. Asked before
+	// cloning, so a duplicate costs one API call.
+	probe := PRRequest{
+		APIBaseURL: req.APIBaseURL, Owner: req.Owner, Repo: req.Repo, Token: req.Token,
+		BaseBranch: req.BaseBranch, HeadBranch: req.HeadBranch,
+	}
+
+	if existing, found, err := FindOpenPullRequest(ctx, req.Host, probe); err != nil {
+		return PRResult{}, err
+	} else if found {
+		return existing, nil
+	}
+
 	dir, err := os.MkdirTemp("", "ichor-prmode-*")
 	if err != nil {
 		return PRResult{}, fmt.Errorf("prmode: creating a checkout directory: %w", err)
@@ -142,9 +191,12 @@ func SubmitPR(ctx context.Context, req SubmitPRRequest) (PRResult, error) {
 		oldData, newData []byte
 	)
 
-	if req.NewFile != nil {
+	switch {
+	case req.NewFile != nil:
 		relPath, newData, err = newFileContent(dir, req.NewFile)
-	} else {
+	case req.Delete:
+		relPath, oldData, newData, err = removedFileContent(dir, req)
+	default:
 		relPath, oldData, newData, err = patchedFileContent(dir, req)
 	}
 
@@ -157,7 +209,7 @@ func SubmitPR(ctx context.Context, req SubmitPRRequest) (PRResult, error) {
 		message = fmt.Sprintf("Update %s/%s", req.Target.Kind, req.Target.Name)
 	}
 
-	files := map[string][]byte{relPath: newData}
+	files := map[string][]byte{relPath: newData} // nil newData removes the file
 	if err := CommitAndPush(ctx, dir, req.HeadBranch, req.Token, message, files); err != nil {
 		return PRResult{}, err
 	}

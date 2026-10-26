@@ -31,6 +31,12 @@ func giteaServer(t *testing.T, got *map[string]string) *httptest.Server {
 	t.Helper()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet { // the lookup for an open PR: none
+			http.NotFound(w, r)
+
+			return
+		}
+
 		_ = json.NewDecoder(r.Body).Decode(got)
 
 		w.WriteHeader(http.StatusCreated)

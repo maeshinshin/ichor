@@ -78,6 +78,7 @@ rules:
   - talosclusters
   - talosconfigpatches
   - talosetcdbackups
+  - talosstorages
   verbs:
   - get
   - list
@@ -107,6 +108,7 @@ rules:
   - talosetcdbackups/status
   - talosmachines/status
   - talosoperations/status
+  - talosstorages/status
   verbs:
   - get
   - patch
@@ -121,6 +123,27 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - longhorn.io
+  resources:
+  - nodes
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - longhorn.io
+  resources:
+  - replicas
+  verbs:
+  - list
+- apiGroups:
+  - longhorn.io
+  resourceNames:
+  - create-default-disk-labeled-nodes
+  resources:
+  - settings
+  verbs:
+  - get
 - apiGroups:
   - policy
   resources:

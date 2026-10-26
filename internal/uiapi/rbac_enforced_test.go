@@ -24,7 +24,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	rbacv1 "k8s.io/api/rbac/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -47,7 +46,7 @@ var _ = Describe("ichor-ui generated RBAC", func() {
 		raw, err := os.ReadFile("../../config/rbac/ichor-ui/role.yaml")
 		Expect(err).NotTo(HaveOccurred())
 
-		for _, doc := range strings.Split(string(raw), "\n---\n") {
+		for doc := range strings.SplitSeq(string(raw), "\n---\n") {
 			var meta struct{ Kind string }
 			Expect(yaml.Unmarshal([]byte(doc), &meta)).To(Succeed())
 
@@ -58,9 +57,9 @@ var _ = Describe("ichor-ui generated RBAC", func() {
 				cr.Name = "ichor-ui-role-test"
 				Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, &cr))).To(Succeed())
 				Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, &rbacv1.ClusterRoleBinding{
-					ObjectMeta: metav1.ObjectMeta{Name: "ichor-ui-binding-test"},
-					RoleRef:    rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: cr.Name},
-					Subjects:   []rbacv1.Subject{{APIGroup: rbacv1.GroupName, Kind: "User", Name: user}},
+					Name:     "ichor-ui-binding-test",
+					RoleRef:  rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: cr.Name},
+					Subjects: []rbacv1.Subject{{APIGroup: rbacv1.GroupName, Kind: "User", Name: user}},
 				}))).To(Succeed())
 			case "Role":
 				// The Role lives in ichor-system; the specs run with the controller namespace
@@ -70,9 +69,9 @@ var _ = Describe("ichor-ui generated RBAC", func() {
 				r.Namespace, r.Name = testNamespace, "ichor-ui-role-test"
 				Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, &r))).To(Succeed())
 				Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, &rbacv1.RoleBinding{
-					ObjectMeta: metav1.ObjectMeta{Name: "ichor-ui-binding-test", Namespace: testNamespace},
-					RoleRef:    rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "Role", Name: r.Name},
-					Subjects:   []rbacv1.Subject{{APIGroup: rbacv1.GroupName, Kind: "User", Name: user}},
+					Name: "ichor-ui-binding-test", Namespace: testNamespace,
+					RoleRef:  rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "Role", Name: r.Name},
+					Subjects: []rbacv1.Subject{{APIGroup: rbacv1.GroupName, Kind: "User", Name: user}},
 				}))).To(Succeed())
 			}
 		}

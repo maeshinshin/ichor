@@ -107,6 +107,14 @@ var (
 	longhornReplicaListGVK = schema.GroupVersionKind{Group: "longhorn.io", Version: "v1beta2", Kind: "ReplicaList"}
 )
 
+// Longhorn's own objects, read and written in whichever namespace it is installed in. The
+// verbs are the ones Begin/End/ReplicasRemaining use and no more; talosstorages is read by
+// Resolve. (ADR 0049 notes these were missing from the controller's role until now.)
+//
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosstorages,verbs=get;list;watch
+// +kubebuilder:rbac:groups=longhorn.io,resources=nodes,verbs=get;update
+// +kubebuilder:rbac:groups=longhorn.io,resources=replicas,verbs=list
+
 // Resolve implements StorageEvacuator. It only reads TalosStorage and the
 // Kubernetes Node, neither Longhorn-specific, so (unlike Begin/
 // ReplicasRemaining/End) it needs no real Longhorn CRDs to exercise in a
@@ -124,7 +132,7 @@ func (e *LonghornEvacuator) Resolve(
 		return nil, err
 	}
 
-	// The one selection rule, shared with pkg/render's layer-1 injection (ADR 0048).
+	// The one selection rule, shared with pkg/render's layer-1 injection (ADR 0049).
 	chosen, err := storage.Select(cluster, storages.Items, n.Labels)
 	if err != nil {
 		return nil, err

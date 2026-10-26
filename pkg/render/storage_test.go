@@ -46,7 +46,7 @@ func testStorage(name string, sel map[string]string) ichorv1alpha1.TalosStorage 
 }
 
 // TestRenderStorage: layer 1 lands in the config of a machine the TalosStorage selects, and in
-// no other machine's (ADR 0048).
+// no other machine's (ADR 0049).
 func TestRenderStorage(t *testing.T) {
 	cluster := testCluster("true")
 	bundle := testBundle(t)
@@ -126,7 +126,7 @@ func TestRenderStorage(t *testing.T) {
 
 	// Under a pre-1.14 contract the base config uses the legacy machine.* blocks, so layer 1
 	// renders its labels, annotations and the kubelet mount there; under 1.14+ the standalone
-	// documents carry no kubelet mount field, so the mount is absent by design (ADR 0048).
+	// documents carry no kubelet mount field, so the mount is absent by design (ADR 0049).
 	t.Run("pre-1.14 contract renders the legacy kubelet mount", func(t *testing.T) {
 		legacy := testCluster("true")
 		legacy.Spec.VersionContract = "v1.12"

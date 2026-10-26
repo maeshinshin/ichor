@@ -374,7 +374,7 @@ networkPolicy:
   enabled: false
 
 
-## Argo CD health checks (Lua) for Ichor's TalosCluster and TalosMachine (ADR 0046), rendered as a
+## Argo CD health checks (Lua) for Ichor's TalosCluster, TalosMachine and TalosStorage (ADR 0046, ADR 0049), rendered as a
 ## ConfigMap whose keys are exactly argocd-cm's resource.customizations.health.<group>_<kind>
 ## keys. Ichor never edits argocd-cm: merge the keys into your own. false (the default) renders
 ## nothing.

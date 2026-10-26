@@ -1,0 +1,160 @@
+syntax = "proto3";
+
+// OperationService backs the operations screens and the `ichor upgrade`,
+// `ichor cluster shutdown`, `ichor cni` and `ichor operation` commands:
+// every disruptive, machine-by-machine action Ichor performs is a
+// TalosOperation CR, and this service is how the UI and CLI list,
+// plan, start, pause and delete one. Reads and writes are made
+// as the signed-in user, so Kubernetes RBAC decides who may start
+// a rollout.
+package ichor.v1alpha1;
+
+import "google/protobuf/timestamp.proto";
+import "ichor/v1alpha1/common.proto";
+
+service OperationService {
+  rpc ListOperations(ListOperationsRequest) returns (ListOperationsResponse);
+  rpc GetOperation(GetOperationRequest) returns (GetOperationResponse);
+  // PlanOperation says which machines a CreateOperation would touch, in which
+  // order and with what effect, without writing anything. Both the CLI's and
+  // the UI's confirmation text come from it.
+  rpc PlanOperation(PlanOperationRequest) returns (PlanOperationResponse);
+  rpc CreateOperation(CreateOperationRequest) returns (CreateOperationResponse);
+  rpc SetOperationPaused(SetOperationPausedRequest) returns (SetOperationPausedResponse);
+  rpc DeleteOperation(DeleteOperationRequest) returns (DeleteOperationResponse);
+}
+
+enum OperationKind {
+  OPERATION_KIND_UNSPECIFIED = 0;
+  OPERATION_KIND_TALOS = 1;
+  OPERATION_KIND_KUBERNETES = 2;
+  OPERATION_KIND_ICHOR = 3;
+  OPERATION_KIND_CNI = 4;
+  OPERATION_KIND_SHUTDOWN = 5;
+}
+
+// OperationMachine is TalosOperation.status.machines[] as it is: a machine
+// that does not appear has not been reached (or is held).
+message OperationMachine {
+  string name = 1;
+  // phase is InProgress or Completed.
+  string phase = 2;
+}
+
+message Operation {
+  ObjectRef ref = 1;
+  ObjectRef cluster = 2;
+  OperationKind kind = 3;
+  bool paused = 4;
+  int32 max_unavailable = 5;
+  // phase is Pending, InProgress, Paused, ShutDown or Completed; empty before
+  // the controller has seen the operation.
+  string phase = 6;
+  // failure_reason is set when the operation paused itself because a
+  // machine's step failed; paused with no failure_reason was the operator.
+  string failure_reason = 7;
+  repeated OperationMachine machines = 8;
+  repeated Condition conditions = 9;
+  google.protobuf.Timestamp created_at = 10;
+}
+
+message ListOperationsRequest {
+  // cluster narrows the list; unset lists every operation the caller may list.
+  ObjectRef cluster = 1;
+}
+
+message ListOperationsResponse {
+  repeated Operation operations = 1;
+}
+
+message GetOperationRequest {
+  ObjectRef operation = 1;
+}
+
+message GetOperationResponse {
+  Operation operation = 1;
+}
+
+// OperationEffect is what the operation does to each machine it reaches.
+enum OperationEffect {
+  OPERATION_EFFECT_UNSPECIFIED = 0;
+  // REBOOT: the machine is upgraded and restarts.
+  OPERATION_EFFECT_REBOOT = 1;
+  // RESTART_COMPONENTS: configuration is applied without a reboot; kubelet
+  // and control plane components restart.
+  OPERATION_EFFECT_RESTART_COMPONENTS = 2;
+  // STOP: the machine is powered down and stays down until a person starts it.
+  OPERATION_EFFECT_STOP = 3;
+  // NONE: no machine is touched (an Ichor self-upgrade runs as a Job).
+  OPERATION_EFFECT_NONE = 4;
+}
+
+message PlannedMachine {
+  string name = 1;
+  string role = 2; // controlplane or worker
+  // step is 1-based; machines with the same step may be handled together.
+  int32 step = 3;
+}
+
+message PlanOperationRequest {
+  ObjectRef cluster = 1;
+  OperationKind kind = 2;
+  // target is the version to move to (talos, kubernetes, ichor), the kube-proxy
+  // mode "enabled" or "replaced" (cni), and must be empty for shutdown. For
+  // the kinds with a version or mode, empty means "the cluster's spec already
+  // says it": the operation is created without changing the spec.
+  string target = 3;
+}
+
+message PlanOperationResponse {
+  OperationEffect effect = 1;
+  // machines are in the order they are handled.
+  repeated PlannedMachine machines = 2;
+  // held are approved machines a rollout skips (upgrade-hold annotation).
+  repeated string held = 3;
+  // max_unavailable is how many workers are handled at once.
+  int32 max_unavailable = 4;
+  // current is what the spec says now (version or mode); target is what it
+  // would say.
+  string current = 5;
+  string target = 6;
+  // spec_changes is true when CreateOperation would change a spec first.
+  bool spec_changes = 7;
+  // blocked is non-empty when CreateOperation would be refused, and says why.
+  string blocked = 8;
+}
+
+message CreateOperationRequest {
+  ObjectRef cluster = 1;
+  OperationKind kind = 2;
+  // target: see PlanOperationRequest.
+  string target = 3;
+  // max_unavailable caps parallel workers; 0 keeps the CRD default.
+  int32 max_unavailable = 4;
+}
+
+message CreateOperationResponse {
+  Operation operation = 1;
+  AuditRecord audit = 2;
+  // spec_changed is true when the cluster's (or the installation's) spec was
+  // changed to the target before the operation was created.
+  bool spec_changed = 3;
+}
+
+message SetOperationPausedRequest {
+  ObjectRef operation = 1;
+  bool paused = 2;
+}
+
+message SetOperationPausedResponse {
+  Operation operation = 1;
+  AuditRecord audit = 2;
+}
+
+message DeleteOperationRequest {
+  ObjectRef operation = 1;
+}
+
+message DeleteOperationResponse {
+  AuditRecord audit = 1;
+}

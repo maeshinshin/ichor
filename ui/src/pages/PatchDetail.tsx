@@ -18,6 +18,9 @@ import { Textarea } from '@/components/ui/textarea'
 import type { MessageInitShape } from '@bufbuild/protobuf'
 import { BreakGlassDialog, type BreakGlassRun } from '@/components/BreakGlassDialog'
 import { ErrorAlert } from '@/components/ErrorAlert'
+import { PageHeader } from '@/components/PageHeader'
+import { PageSkeleton } from '@/components/PageStates'
+import { SectionLayout } from '@/components/SectionNav'
 import { PullRequestNotice } from '@/components/PullRequestNotice'
 import type { Cluster } from '@/gen/ichor/v1alpha1/cluster_pb'
 import { ConfigLayer } from '@/gen/ichor/v1alpha1/node_pb'
@@ -236,7 +239,7 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
   const previewFresh = previewedKey === currentKey
 
   if (loadError) return <ErrorAlert {...loadError} />
-  if (!loaded) return <p class="mt-10 text-center text-sm text-muted-foreground">{t('patch.loading')}</p>
+  if (!loaded) return <PageSkeleton label={t('patch.loading')} />
 
   const canSave = canSavePatch({
     name: patchName,
@@ -247,10 +250,29 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
   })
 
   return (
-    <div class="mt-6 space-y-4">
-      <Card>
+    <>
+      <PageHeader
+        title={isNew ? t('patch.newTitle') : name!}
+        kind={t('kind.patch')}
+        badges={
+          !isNew && (
+            <>
+              <Badge variant="outline">{enumLabel(ConfigLayer, layer)}</Badge>
+              <Badge variant="secondary">{cluster?.name}</Badge>
+            </>
+          )
+        }
+      />
+      <SectionLayout
+        sections={[
+          { id: 'basics', label: t('patch.basics') },
+          { id: 'documents', label: t('patch.documents') },
+          { id: 'impact', label: t('patch.impact') },
+        ]}
+      >
+      <Card id="basics" className="scroll-mt-24">
         <CardHeader>
-          <CardTitle>{isNew ? t('patch.newTitle') : t('patch.editTitle', { name })}</CardTitle>
+          <CardTitle>{t('patch.basics')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <p class="text-sm text-muted-foreground">{t('patch.intro')}</p>
@@ -381,7 +403,7 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="documents" className="scroll-mt-24">
         <CardHeader className="flex items-center justify-between">
           <div class="space-y-1">
             <CardTitle>{t('patch.documents')}</CardTitle>
@@ -405,7 +427,7 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="impact" className="scroll-mt-24">
         <CardHeader className="flex items-center justify-between">
           <CardTitle>{t('patch.impact')}</CardTitle>
           <Button size="sm" variant="outline" disabled={previewing} onClick={runPreview}>
@@ -475,7 +497,8 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
         </div>
         {!isNew && <DeleteButton namespace={namespace!} name={name!} />}
       </div>
-    </div>
+      </SectionLayout>
+    </>
   )
 }
 

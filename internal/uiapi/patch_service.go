@@ -146,12 +146,24 @@ func (s *Server) UpdatePatch(
 		return nil, err
 	}
 
-	if err := s.requireUntracked(ctx, p); err != nil {
+	plan, err := s.planWrite(ctx, p, p.Spec.ClusterRef.Name, false)
+	if err != nil {
 		return nil, err
 	}
 
+	stored := p.DeepCopy()
+
 	if err := applyPatchSpec(&p.Spec, wire); err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+
+	if plan != nil {
+		var cluster ichorv1alpha1.TalosCluster
+		if err := s.Get(ctx, types.NamespacedName{Namespace: p.Namespace, Name: p.Spec.ClusterRef.Name}, &cluster); err != nil {
+			return nil, mapGetError(fmt.Sprintf("cluster %q", p.Spec.ClusterRef.Name), err)
+		}
+
+		return s.updatePatchByPR(ctx, plan, &cluster, p, stored)
 	}
 
 	if err := s.Update(ctx, p, strictFieldValidation); err != nil {
@@ -183,8 +195,15 @@ func (s *Server) DeletePatch(
 		return nil, err
 	}
 
-	if err := s.requireUntracked(ctx, p); err != nil {
+	plan, err := s.planWrite(ctx, p, p.Spec.ClusterRef.Name, false)
+	if err != nil {
 		return nil, err
+	}
+
+	if plan != nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition,
+			fmt.Errorf("%q is tracked by Argo CD: deleting it through a pull request is not supported; "+
+				"remove its file in Git", namespacedName(ref)))
 	}
 
 	if err := s.Delete(ctx, p); err != nil {

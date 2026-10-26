@@ -37,6 +37,12 @@ func TestSubmitPR_EndToEnd(t *testing.T) {
 	var gotBody map[string]string
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			http.NotFound(w, r)
+
+			return
+		}
+
 		if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
 			t.Fatalf("decoding PR request body: %v", err)
 		}
@@ -108,6 +114,12 @@ func TestSubmitPR_TargetNotFoundFailsLoudlyAndNeverOpensAPR(t *testing.T) {
 	called := false
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			http.NotFound(w, r)
+
+			return
+		}
+
 		called = true
 		w.WriteHeader(http.StatusCreated)
 		_ = json.NewEncoder(w).Encode(map[string]string{htmlURLKey: "unexpected"})

@@ -95,7 +95,11 @@ func Clone(ctx context.Context, cloneURL, ref, token, dir string) error {
 // CommitAndPush checks out a new branch in dir (an existing checkout,
 // e.g. from Clone), writes files (path relative to dir -> new content),
 // commits them with message, and pushes the branch to the clone's
-// origin, authenticating with token.
+// origin, authenticating with token. A nil content removes the file.
+//
+// The push is forced: callers name the branch deterministically, so one that
+// already exists on the remote is a leftover of a closed or merged PR (the
+// caller looked for an open one first), and is replaced.
 func CommitAndPush(ctx context.Context, dir, branch, token, message string, files map[string][]byte) error {
 	if err := runGit(ctx, dir, token, "checkout", "-b", branch); err != nil {
 		return err
@@ -103,6 +107,14 @@ func CommitAndPush(ctx context.Context, dir, branch, token, message string, file
 
 	for relPath, content := range files {
 		path := filepath.Join(dir, relPath)
+
+		if content == nil {
+			if err := runGit(ctx, dir, token, "rm", "-q", "--", relPath); err != nil {
+				return err
+			}
+
+			continue
+		}
 
 		if err := os.WriteFile(path, content, 0o644); err != nil {
 			return fmt.Errorf("prmode: writing %s: %w", path, err)
@@ -117,5 +129,5 @@ func CommitAndPush(ctx context.Context, dir, branch, token, message string, file
 		return err
 	}
 
-	return runGit(ctx, dir, token, "push", "origin", branch)
+	return runGit(ctx, dir, token, "push", "--force", "origin", branch)
 }

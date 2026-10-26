@@ -107,6 +107,60 @@ func Patch(data []byte, target Target, updates []FieldUpdate) ([]byte, error) {
 		target.APIVersion, target.Kind, target.Namespace, target.Name)
 }
 
+// RemoveDocument finds the document in data that equals target, as Patch
+// does, and removes just that document: its `---` separator and its bytes.
+// Every other byte is kept as it was. remaining is false when no real
+// document is left (only comments or nothing), so the caller can delete the
+// file instead of committing an empty one. A target that matches nothing is
+// an error, as for Patch.
+func RemoveDocument(data []byte, target Target) (out []byte, remaining bool, err error) {
+	segments := splitDocuments(data)
+	idx := -1
+
+	for i, seg := range segments {
+		doc, err := decodeDocument(seg.content)
+		if err != nil {
+			return nil, false, err
+		}
+
+		if doc != nil && matches(doc, target) {
+			idx = i
+
+			break
+		}
+	}
+
+	if idx < 0 {
+		return nil, false, fmt.Errorf("prmode: no document matches %s %s (namespace %s, name %s)",
+			target.APIVersion, target.Kind, target.Namespace, target.Name)
+	}
+
+	var buf bytes.Buffer
+
+	for j, s := range segments {
+		if j == idx {
+			continue
+		}
+
+		// The first document went, so the next one becomes the first and
+		// loses the separator that introduced it.
+		if !(idx == 0 && j == 1) {
+			buf.Write(s.sep)
+		}
+
+		buf.Write(s.content)
+
+		doc, err := decodeDocument(s.content)
+		if err != nil {
+			return nil, false, err
+		}
+
+		remaining = remaining || doc != nil
+	}
+
+	return buf.Bytes(), remaining, nil
+}
+
 // encodeDocument re-renders doc using the same indent width original
 // (the document's own, pre-mutation bytes) was written with, so an
 // untouched sibling field's indentation does not shift just because a

@@ -11,7 +11,6 @@ import { StatusText } from '@/components/Status'
 import { Section, SectionLayout, type SectionLink } from '@/components/SectionNav'
 import { NodeActions } from '@/components/NodeActions'
 import { NodeLogs } from '@/components/NodeLogs'
-import { NodeActionsMenu } from '@/components/NodeActionsMenu'
 import { TalosDetails } from '@/components/TalosDetails'
 import { TalosRuntime } from '@/components/TalosRuntime'
 import type { EffectiveConfigValue } from '@/gen/ichor/v1alpha1/node_pb'
@@ -154,16 +153,12 @@ export function NodeDetail({ namespace, name }: { namespace: string; name: strin
                 <Link to={objectRefPath('/clusters', machine.cluster)}>{t('node.openCluster')}</Link>
               </Button>
             )}
-            {machine && <NodeActions machine={{ namespace, name }} controlPlane={machine.role === MachineRole.CONTROL_PLANE} />}
             {machine && (
-              <NodeActionsMenu
-                machine={{
-                  namespace,
-                  name,
-                  approved: machine.approvalState === MachineApprovalState.APPROVED,
-                  deleting: machine.deleting,
-                  role: machine.role === MachineRole.CONTROL_PLANE ? 'controlplane' : 'worker',
-                }}
+              <NodeActions
+                machine={{ namespace, name }}
+                controlPlane={machine.role === MachineRole.CONTROL_PLANE}
+                approved={machine.approvalState === MachineApprovalState.APPROVED}
+                deleting={machine.deleting}
                 onStarted={loadMachine}
               />
             )}

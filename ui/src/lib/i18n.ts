@@ -665,8 +665,6 @@ export const en = {
   'ops.plan.specChanges': 'The spec is changed to {to} first; the operation is created after that.',
   'ops.plan.blocked': 'Cannot start',
 
-  'node.actions.menu': 'Actions',
-  'node.actions.menuLabel': 'Node actions',
   'node.action.restart-service': 'Restart a service…',
   'node.action.etcd-defrag': 'Defragment etcd…',
   'node.action.etcd-forfeit-leadership': 'Hand etcd leadership over…',
@@ -722,6 +720,9 @@ export const en = {
   'enum.TALOS': 'Talos',
   'enum.KUBERNETES': 'Kubernetes',
   'actions.menu': 'Actions',
+  'actions.groupDownloads': 'Downloads',
+  'actions.groupNode': 'Node',
+  'actions.groupDanger': 'Danger zone',
   'actions.menuLabel': 'Node actions',
   'actions.supportBundle': 'Download support bundle',
   'actions.etcdSnapshot': 'Download etcd snapshot',

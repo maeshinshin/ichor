@@ -11,6 +11,7 @@ import { OperationEffect, type PlanOperationResponse } from '@/gen/ichor/v1alpha
 import { operationClient } from '@/lib/connect'
 import { notifyDone } from '@/lib/notify'
 import { describeError } from '@/lib/errors'
+import { versionProblem } from '@/lib/clusterOps'
 import { confirmMatches, kindNeedsTarget, kindNeedsTypedName, planCounts, planSteps, targetError, type OpKind } from '@/lib/operations'
 import { useT } from '@/lib/useT'
 import { navigate, objectRefPath } from '@/router'
@@ -28,13 +29,23 @@ const startedByDefault: Record<OpKind, boolean> = { talos: true, kubernetes: tru
 export function StartOperationDialog({
   kind,
   cluster,
+  current = '',
+  disabled = false,
+  label,
 }: {
   kind: OpKind
   cluster: { namespace: string; name: string }
+  // current is the version (or kube-proxy mode) the spec says now; the target is checked against it.
+  current?: string
+  disabled?: boolean
+  // label is the trigger's text; the dialog's own title always uses the full action name.
+  label?: string
 }) {
   const t = useT()
   const [open, setOpen] = useState(false)
-  const [target, setTarget] = useState(kind === 'cni' ? 'replaced' : '')
+  // A version starts as the current one, so a person edits the last digits; a mode starts as the other one.
+  const [target, setTarget] = useState(kind === 'cni' ? (current === 'replaced' ? 'enabled' : 'replaced') : current)
+  const [touched, setTouched] = useState(false)
   const [typed, setTyped] = useState('')
   const [plan, setPlan] = useState<PlanOperationResponse | null>(null)
   const [busy, setBusy] = useState(false)
@@ -42,7 +53,7 @@ export function StartOperationDialog({
 
   const needsTarget = kindNeedsTarget(kind)
   const needsName = kindNeedsTypedName(kind)
-  const targetProblem = needsTarget ? targetError(kind, target) : null
+  const targetProblem = needsTarget ? checkTarget(kind, current, target) : null
   const startable =
     plan !== null && plan.blocked === '' && (!needsName || confirmMatches(typed, cluster.name)) && !busy
 
@@ -52,6 +63,7 @@ export function StartOperationDialog({
       setPlan(null)
       setError(null)
       setTyped('')
+      setTouched(false)
     }
   }
 
@@ -91,8 +103,8 @@ export function StartOperationDialog({
       open={open}
       onOpenChange={reset}
       trigger={
-        <Button size="sm" variant={kind === 'shutdown' ? 'destructive' : 'outline'}>
-          {t(`ops.start.${kind}`)}
+        <Button size="sm" variant={kind === 'shutdown' ? 'destructive' : 'outline'} disabled={disabled} aria-label={label ? t(`ops.start.${kind}`) : undefined}>
+          {label ?? t(`ops.start.${kind}`)}
         </Button>
       }
       title={t('ops.dialog.title', { action: t(`ops.start.${kind}`), cluster: cluster.name })}
@@ -127,7 +139,10 @@ export function StartOperationDialog({
               id={`op-target-${kind}`}
               class="h-9 w-full rounded-md border bg-background px-2 text-sm"
               value={target}
-              onChange={(e) => setTarget((e.currentTarget as HTMLSelectElement).value)}
+              onChange={(e) => {
+                setTouched(true)
+                setTarget((e.currentTarget as HTMLSelectElement).value)
+              }}
             >
               <option value="replaced">{t('ops.dialog.modeReplaced')}</option>
               <option value="enabled">{t('ops.dialog.modeEnabled')}</option>
@@ -136,14 +151,14 @@ export function StartOperationDialog({
             <Input
               id={`op-target-${kind}`}
               value={target}
-              onInput={(e) => setTarget((e.currentTarget as HTMLInputElement).value)}
+              onInput={(e) => {
+                setTouched(true)
+                setTarget((e.currentTarget as HTMLInputElement).value)
+              }}
             />
           )}
-          {target !== '' && targetProblem && (
-            <p class="text-xs text-destructive">
-              {t(targetProblem === 'required' ? 'ops.dialog.errRequired' : 'ops.dialog.errInvalid')}
-            </p>
-          )}
+          {current !== '' && <p class="text-xs text-muted-foreground">{t(kind === 'cni' ? 'ops.modeHint' : 'ops.versionHint', { current })}</p>}
+          {touched && targetProblem && <p class="text-xs text-destructive">{problemText(t, kind, targetProblem, current)}</p>}
         </div>
       )}
 
@@ -167,6 +182,30 @@ export function StartOperationDialog({
 
     </ConfirmDialog>
   )
+}
+
+type TargetProblem = 'required' | 'invalid' | 'same' | 'older'
+
+// checkTarget: the shape rules of the kind, and, with a current value known, that
+// the target is a change (a mode) or newer (a version).
+function checkTarget(kind: OpKind, current: string, target: string): TargetProblem | null {
+  const shape = targetError(kind, target)
+  if (shape) return shape
+  if (kind === 'cni') return current !== '' && target.trim() === current ? 'same' : null
+  return versionProblem(current, target)
+}
+
+function problemText(t: ReturnType<typeof useT>, kind: OpKind, problem: TargetProblem, current: string): string {
+  switch (problem) {
+    case 'required':
+      return t('ops.dialog.errRequired')
+    case 'same':
+      return t(kind === 'cni' ? 'ops.dialog.errSameMode' : 'ops.dialog.errSame')
+    case 'older':
+      return t('ops.dialog.errOlder', { current })
+    default:
+      return t('ops.dialog.errInvalid')
+  }
 }
 
 // PlanView says what the server's plan will do, in the words of the screen's

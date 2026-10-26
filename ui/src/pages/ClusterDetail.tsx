@@ -10,7 +10,7 @@ import { EmptyNote, PageSkeleton } from '@/components/PageStates'
 import { Section, SectionLayout, type SectionLink } from '@/components/SectionNav'
 import { ReadyCell } from '@/components/ReadyCell'
 import { StatusText } from '@/components/Status'
-import { StartOperationDialog } from '@/components/StartOperationDialog'
+import { OperationsPanel } from '@/components/OperationsPanel'
 import { HandoverPhase, RolloutKind, type Cluster } from '@/gen/ichor/v1alpha1/cluster_pb'
 import { MachineApprovalState, MachineRole, type Machine } from '@/gen/ichor/v1alpha1/machine_pb'
 import { clusterClient, machineClient, nodeClient } from '@/lib/connect'
@@ -56,6 +56,18 @@ export function ClusterDetail({ namespace, name }: { namespace: string; name: st
       cancelled = true
     }
   }, [namespace, name])
+
+  // refresh reads the cluster and its nodes again without blanking the page (an operation just finished).
+  function refresh() {
+    clusterClient.getCluster({ cluster: { namespace, name } }).then(
+      (res) => setCluster(res.cluster ?? null),
+      () => {},
+    )
+    machineClient.listMachines({ cluster: { namespace, name } }).then(
+      (res) => setMachines(res.machines),
+      () => {},
+    )
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -228,12 +240,7 @@ export function ClusterDetail({ namespace, name }: { namespace: string; name: st
             </Link>
           }
         >
-          <div class="flex flex-wrap gap-2">
-            {cluster.ref &&
-              (['talos', 'kubernetes', 'ichor', 'cni', 'config', 'ca-rotation', 'shutdown'] as const).map((kind) => (
-                <StartOperationDialog key={kind} kind={kind} cluster={cluster.ref!} />
-              ))}
-          </div>
+          {cluster.ref && <OperationsPanel cluster={cluster} machines={machines === null ? null : approved} onSettled={refresh} />}
         </Section>
 
         <Section id="handover" title={t('cluster.handover')}>

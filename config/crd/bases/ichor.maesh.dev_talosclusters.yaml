@@ -2507,6 +2507,37 @@ spec:
                 - count
                 - schedulable
                 type: object
+              controlPlaneMetrics:
+                description: |-
+                  controlPlaneMetrics exposes the control-plane metrics Talos binds locally and restricts
+                  scraping to a CIDR. Unset (the default) leaves the Talos defaults alone.
+                properties:
+                  allowedCIDRs:
+                    description: |-
+                      allowedCIDRs are the only sources that may reach the metrics ports (TCP 10257, 10259 and
+                      2381) on control-plane nodes. Every other port keeps Talos's default firewall action
+                      (accept). A prefix length of 0 is rejected: that would be no restriction at all.
+                    items:
+                      maxLength: 43
+                      type: string
+                    maxItems: 8
+                    type: array
+                    x-kubernetes-validations:
+                    - message: allowedCIDRs must be valid CIDRs with a prefix length
+                        above 0
+                      rule: self.all(c, isCIDR(c) && cidr(c).prefixLength() > 0)
+                  enabled:
+                    default: false
+                    description: |-
+                      enabled binds the metrics endpoints on all addresses and adds ingress firewall rules that
+                      drop connections to those ports from any source outside allowedCIDRs.
+                    type: boolean
+                type: object
+                x-kubernetes-validations:
+                - message: 'allowedCIDRs needs at least one CIDR when enabled: the
+                    metrics are never exposed without a source restriction'
+                  rule: '!self.enabled || (has(self.allowedCIDRs) && self.allowedCIDRs.size()
+                    > 0)'
               discovery:
                 description: |-
                   discovery lists maintenance-mode candidates for the controller to probe directly. Empty (the

@@ -197,6 +197,16 @@ var rules = []rule{
 	{prefix: "KubeControllerManagerConfig.image"},
 	{prefix: "KubeSchedulerConfig", safe: true},
 	{prefix: "KubeSchedulerConfig.image"},
+
+	// The ingress firewall. NfTablesChainConfigController
+	// (internal/app/machined/pkg/controllers/network/nftables_chain_config.go) takes the active
+	// MachineConfig as a watched input and rewrites the nftables chains on every change, and
+	// ApplyConfiguration's no-reboot mode persists the config without restarting anything. Both
+	// kinds feed that one controller. cluster.etcd.* is deliberately absent: the etcd service reads
+	// its extra arguments once, when it starts (services/etcd.go), so a changed listen-metrics-urls
+	// stays reboot-required.
+	{prefix: "NetworkRuleConfig", safe: true},
+	{prefix: "NetworkDefaultActionConfig", safe: true},
 }
 
 func matchesPrefix(path, prefix string) bool {

@@ -205,6 +205,13 @@ func BuildConfig(
 		return nil, err
 	}
 
+	// Control-plane metrics exposure and its source restriction: system layer, so a
+	// patch can still narrow what it renders.
+	cfg, err = injectControlPlaneMetrics(cfg, contract, cluster, machineType)
+	if err != nil {
+		return nil, err
+	}
+
 	// spec.nodeLabels is the machine's own intent, applied over the storage preset's labels.
 	cfg, err = injectNodeLabels(cfg, contract, m)
 	if err != nil {

@@ -1220,6 +1220,53 @@ func TestInstallerRBAC(t *testing.T) {
 	})
 }
 
+// TestPodNamespaceFromDownwardAPI pins POD_NAMESPACE on both the manager and ichor-ui
+// containers to the downward API: ichor-ui resolves the secrets bundle in
+// it, and an empty value fails every machine page with "controller namespace is empty".
+func TestPodNamespaceFromDownwardAPI(t *testing.T) {
+	seen := map[string]bool{}
+	for _, d := range findAll(renderChartWithValues(t, "ichor"), kindDeployment) {
+		spec, _ := d["spec"].(map[string]any)
+		template, _ := spec["template"].(map[string]any)
+		podSpec, _ := template["spec"].(map[string]any)
+		containers, _ := podSpec["containers"].([]any)
+		for _, c := range containers {
+			cm, _ := c.(map[string]any)
+			name, _ := cm["name"].(string)
+			if name != "manager" && name != ichorUIDeploymentName {
+				continue
+			}
+			seen[name] = true
+			if got := envFieldPath(cm, "POD_NAMESPACE"); got != "metadata.namespace" {
+				t.Errorf("%s container: POD_NAMESPACE fieldRef = %q, want metadata.namespace", name, got)
+			}
+		}
+	}
+	for _, name := range []string{"manager", ichorUIDeploymentName} {
+		if !seen[name] {
+			t.Errorf("no %q container rendered", name)
+		}
+	}
+}
+
+// envFieldPath returns the downward-API fieldPath of env var name on a decoded container.
+func envFieldPath(container map[string]any, name string) string {
+	envs, _ := container["env"].([]any)
+	for _, e := range envs {
+		em, _ := e.(map[string]any)
+		if em["name"] != name {
+			continue
+		}
+		from, _ := em["valueFrom"].(map[string]any)
+		ref, _ := from["fieldRef"].(map[string]any)
+		p, _ := ref["fieldPath"].(string)
+
+		return p
+	}
+
+	return ""
+}
+
 func allRules(doc map[string]any) []any {
 	rules, _ := doc["rules"].([]any)
 

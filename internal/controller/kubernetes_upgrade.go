@@ -146,13 +146,44 @@ func NewKubernetesUpgradeAdvancer(
 	return a.Advance
 }
 
-// Advance performs one machine's step of a Kubernetes upgrade. The decision is re-derived on every
-// call from live state: if the node's configuration differs from the rendered one the step has not
-// been applied yet (pre-checks, pre-pull, apply); if they are equal it is applied and the call
-// only verifies, so a restarted controller resumes exactly where the node says it was.
+// kubernetesStageOf is the stage of a Kubernetes upgrade the executor acts in. An
+// operation with no recorded stage is unstaged: the final one, the whole rendered configuration.
+func kubernetesStageOf(op *ichorv1alpha1.TalosOperation) string {
+	if op == nil || op.Status.Kubernetes == nil || op.Status.Kubernetes.Stage == "" {
+		return ichorv1alpha1.KubernetesStageKubelets
+	}
+
+	return op.Status.Kubernetes.Stage
+}
+
+// stagedFor is what the render pins for m in stage. The control-plane components always follow
+// the spec; until the Kubelets stage the kubelet stays on the version its node runs (it is never
+// newer than any API server), and kube-proxy stays on it until the KubeProxy stage. Neither
+// version is stored: until the Kubelets stage the node's kubelet has not been touched, so it is
+// the same on every call.
+func stagedFor(stage string, node *corev1.Node) *render.StagedKubernetes {
+	v := node.Status.NodeInfo.KubeletVersion
+
+	switch stage {
+	case ichorv1alpha1.KubernetesStageControlPlanes:
+		return &render.StagedKubernetes{KubeletVersion: v, KubeProxyVersion: v}
+	case ichorv1alpha1.KubernetesStageKubeProxy:
+		return &render.StagedKubernetes{KubeletVersion: v}
+	default:
+		return nil
+	}
+}
+
+// Advance performs one machine's step of a Kubernetes upgrade in the operation's stage. The decision is re-derived
+// on every call from live state: if the node's configuration
+// differs from the configuration rendered for this stage the step has not been applied yet
+// (pre-checks, pre-pull, apply); if they are equal it is applied and the call only verifies, so a
+// restarted controller resumes exactly where the node says it was.
 func (a *kubernetesUpgradeAdvancer) Advance(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, op *ichorv1alpha1.TalosOperation,
 ) (bool, error) {
+	stage := kubernetesStageOf(op)
+
 	bundle, err := loadBundle(ctx, a.Client, a.ControllerNamespace, cluster)
 	if err != nil {
 		return false, fmt.Errorf("loading secrets bundle to upgrade %q: %w", m.Name, err)
@@ -161,12 +192,6 @@ func (a *kubernetesUpgradeAdvancer) Advance(
 	var patches ichorv1alpha1.TalosConfigPatchList
 	if err := a.List(ctx, &patches, client.InNamespace(m.Namespace)); err != nil {
 		return false, err
-	}
-
-	rendered, hash, _, err := (&TalosMachineReconciler{Client: a.Client, ControllerNamespace: a.ControllerNamespace}).
-		renderMachine(ctx, cluster, m, bundle, patches.Items)
-	if err != nil {
-		return false, fmt.Errorf("rendering %q's configuration: %w", m.Name, err)
 	}
 
 	dialCtx, cancel := context.WithTimeout(ctx, etcdDialTimeout)
@@ -182,6 +207,37 @@ func (a *kubernetesUpgradeAdvancer) Advance(
 	}
 	defer closeTalosClient(talos)
 
+	// The node is read first: what its kubelet runs is what the staged render pins.
+	nodeName, err := resolveNodeName(ctx, a.Reader, talos, m)
+	if err != nil {
+		if apimeta.IsStatusConditionTrue(m.Status.Conditions, conditionKubernetesUpgrade) {
+			return false, a.waiting(ctx, m, cluster, err.Error())
+		}
+
+		return false, err
+	}
+
+	var node corev1.Node
+	if err := a.Reader.Get(ctx, types.NamespacedName{Name: nodeName}, &node); err != nil {
+		if apimeta.IsStatusConditionTrue(m.Status.Conditions, conditionKubernetesUpgrade) {
+			return false, a.waiting(ctx, m, cluster, fmt.Sprintf("reading node %q: %v", nodeName, err)) // API server restarting
+		}
+
+		return false, fmt.Errorf("reading %q's Kubernetes node: %w", m.Name, err)
+	}
+
+	sys, err := render.ResolveSystemInputs(ctx, a.Client, a.ControllerNamespace, cluster)
+	if err != nil {
+		return false, fmt.Errorf("rendering %q's configuration: %w", m.Name, err)
+	}
+
+	sys.Staged = stagedFor(stage, &node)
+
+	rendered, hash, err := render.Render(cluster, m, bundle, patches.Items, sys)
+	if err != nil {
+		return false, fmt.Errorf("rendering %q's configuration: %w", m.Name, err)
+	}
+
 	current, err := talos.CurrentConfig(dialCtx)
 	if err != nil {
 		if apimeta.IsStatusConditionTrue(m.Status.Conditions, conditionKubernetesUpgrade) {
@@ -192,10 +248,10 @@ func (a *kubernetesUpgradeAdvancer) Advance(
 	}
 
 	if hashConfig(current) != hash {
-		return false, a.begin(ctx, talos, cluster, m, op, current, rendered)
+		return false, a.begin(ctx, talos, cluster, m, op, &node, stage, current, rendered)
 	}
 
-	return a.verify(ctx, talos, cluster, m)
+	return a.verify(ctx, talos, cluster, m, nodeName, stage)
 }
 
 // begin runs the pre-checks for one node, pre-pulls the new images, and applies the rendered
@@ -206,19 +262,9 @@ func (a *kubernetesUpgradeAdvancer) Advance(
 // Talos is still restarting the static pods.
 func (a *kubernetesUpgradeAdvancer) begin(
 	ctx context.Context, talos TalosClient, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
-	op *ichorv1alpha1.TalosOperation, current, rendered []byte,
+	op *ichorv1alpha1.TalosOperation, node *corev1.Node, stage string, current, rendered []byte,
 ) error {
 	target := cluster.Spec.KubernetesVersion
-
-	nodeName, err := resolveNodeName(ctx, a.Reader, talos, m)
-	if err != nil {
-		return err
-	}
-
-	var node corev1.Node
-	if err := a.Reader.Get(ctx, types.NamespacedName{Name: nodeName}, &node); err != nil {
-		return fmt.Errorf("reading %q's Kubernetes node: %w", m.Name, err)
-	}
 
 	from := node.Status.NodeInfo.KubeletVersion
 	if from == "" {
@@ -245,7 +291,7 @@ func (a *kubernetesUpgradeAdvancer) begin(
 		return fmt.Errorf("kubernetes %s is not supported with talos %s: %w", target, talosVersion, err)
 	}
 
-	if !nodeIsReady(&node) {
+	if !nodeIsReady(node) {
 		return fmt.Errorf("node %q is not Ready; refusing to start a Kubernetes upgrade", node.Name)
 	}
 
@@ -312,7 +358,7 @@ func (a *kubernetesUpgradeAdvancer) begin(
 
 	if err := setMachineCondition(ctx, a.Reader, a.Client, m, metav1.Condition{
 		Type: conditionKubernetesUpgrade, Status: metav1.ConditionTrue, Reason: reasonKubernetesApplied,
-		Message: "applied the configuration for Kubernetes " + target,
+		Message: "applied the " + stage + " configuration for Kubernetes " + target,
 	}); err != nil {
 		return fmt.Errorf("recording the applied configuration for %q: %w", m.Name, err)
 	}
@@ -410,44 +456,33 @@ func valueAtPath(docs map[string]configDoc, path string) any {
 	return v
 }
 
-// verify checks that the node converged on the target: kubelet version and readiness, then for a
-// control plane its three static pods, and, once every control plane runs the target, the
-// cluster-wide tail (bootstrap manifests, kube-proxy). Anything not yet true is "still settling"
-// until kubernetesVerifyTimeout.
+// verify checks that the node converged in stage: its Ready condition, for a control plane its
+// three static pods on the target, the kubelet on the target once the Kubelets stage applies it,
+// and in the KubeProxy stage the bootstrap manifests and kube-proxy's rollout. Anything not yet
+// true is "still settling" until kubernetesVerifyTimeout.
 func (a *kubernetesUpgradeAdvancer) verify(
 	ctx context.Context, talos TalosClient, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
+	nodeName, stage string,
 ) (bool, error) {
 	target := cluster.Spec.KubernetesVersion
 
-	nodeName, err := resolveNodeName(ctx, a.Reader, talos, m)
-	if err != nil {
-		return false, a.waiting(ctx, m, cluster, err.Error())
-	}
-
-	if reason := a.nodeNotConverged(ctx, m, nodeName, target); reason != "" {
+	if reason := a.nodeNotConverged(ctx, m, nodeName, target, stage); reason != "" {
 		return false, a.waiting(ctx, m, cluster, reason)
 	}
 
-	if m.Spec.Role == roleControlPlane {
-		allDone, reason := a.controlPlanesDone(ctx, target)
-		if reason != "" {
-			return false, a.waiting(ctx, m, cluster, reason)
+	if m.Spec.Role == roleControlPlane && stage == ichorv1alpha1.KubernetesStageKubeProxy {
+		// Every control plane runs the target apiserver by now, and this one has just been given
+		// the target kube-proxy image, so the manifests it generates are the ones to apply. Talos
+		// does this after the kubelets; Ichor does it before them: kube-proxy may be newer than a
+		// kubelet but not than the API server. Server-side apply is idempotent, so each control
+		// plane may repeat it.
+		if err := a.Admin.SyncBootstrapManifests(ctx, talos); err != nil {
+			return false, fmt.Errorf("syncing the bootstrap manifests: %w", err)
 		}
 
-		if allDone {
-			// Last control plane: sync the bootstrap manifests (CoreDNS, kube-proxy, ...) now.
-			// Talos does it after the kubelets, ichor does it before the workers: the manifests
-			// are generated by the control planes, which are all on the target here, and a worker
-			// still on the old kubelet keeps running with the new kube-proxy, which is within
-			// kube-proxy's skew (it may be newer than kubelet, not newer than the apiserver).
-			if err := a.Admin.SyncBootstrapManifests(ctx, talos); err != nil {
-				return false, fmt.Errorf("syncing the bootstrap manifests: %w", err)
-			}
-
-			if cluster.Spec.CNI.KubeProxy != string(cni.KubeProxyReplaced) {
-				if reason := a.kubeProxyNotReady(ctx, cluster.Spec.KubernetesVersion); reason != "" {
-					return false, a.waiting(ctx, m, cluster, reason)
-				}
+		if mode, _ := render.KubeProxyMode(cluster); mode != cni.KubeProxyReplaced {
+			if reason := a.kubeProxyNotReady(ctx, target); reason != "" {
+				return false, a.waiting(ctx, m, cluster, reason)
 			}
 		}
 	}
@@ -455,7 +490,7 @@ func (a *kubernetesUpgradeAdvancer) verify(
 	if cond := apimeta.FindStatusCondition(m.Status.Conditions, conditionKubernetesUpgrade); cond != nil && cond.Status == metav1.ConditionTrue {
 		if err := setMachineCondition(ctx, a.Reader, a.Client, m, metav1.Condition{
 			Type: conditionKubernetesUpgrade, Status: metav1.ConditionFalse, Reason: reasonKubernetesConverged,
-			Message: "running Kubernetes " + target,
+			Message: "finished the " + stage + " stage for Kubernetes " + target,
 		}); err != nil {
 			return false, err
 		}
@@ -466,14 +501,15 @@ func (a *kubernetesUpgradeAdvancer) verify(
 
 // nodeNotConverged returns why m's node is not on target yet, or "".
 func (a *kubernetesUpgradeAdvancer) nodeNotConverged(
-	ctx context.Context, m *ichorv1alpha1.TalosMachine, nodeName, target string,
+	ctx context.Context, m *ichorv1alpha1.TalosMachine, nodeName, target, stage string,
 ) string {
 	var node corev1.Node
 	if err := a.Reader.Get(ctx, types.NamespacedName{Name: nodeName}, &node); err != nil {
 		return fmt.Sprintf("reading node %q: %v", nodeName, err) // API server restarting
 	}
 
-	if v := node.Status.NodeInfo.KubeletVersion; v != target {
+	// Until the Kubelets stage the kubelet is deliberately left where it is.
+	if v := node.Status.NodeInfo.KubeletVersion; stage == ichorv1alpha1.KubernetesStageKubelets && v != target {
 		return fmt.Sprintf("node %q runs kubelet %s, want %s", node.Name, v, target)
 	}
 
@@ -532,29 +568,6 @@ func (a *kubernetesUpgradeAdvancer) componentPods(ctx context.Context, component
 	}
 
 	return live, nil
-}
-
-// controlPlanesDone reports whether every API server pod in the cluster runs target and is Ready,
-// read from the API server pods themselves (not from a list of TalosMachines: deciding "may the
-// cluster-wide tail run" from observed state keeps this resumable and keeps control-plane
-// counting in one place, countplanes_guard_test.go).
-func (a *kubernetesUpgradeAdvancer) controlPlanesDone(ctx context.Context, target string) (done bool, reason string) {
-	pods, err := a.componentPods(ctx, "kube-apiserver")
-	if err != nil {
-		return false, err.Error()
-	}
-
-	if len(pods) == 0 {
-		return false, "no kube-apiserver pods found"
-	}
-
-	for i := range pods {
-		if imageTag(&pods[i]) != target || !podIsReady(&pods[i]) {
-			return false, ""
-		}
-	}
-
-	return true, ""
 }
 
 // kubeProxyNotReady returns why the kube-proxy DaemonSet has not finished rolling out target.

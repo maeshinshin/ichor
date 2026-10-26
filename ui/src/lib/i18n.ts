@@ -47,6 +47,20 @@ export const en = {
   'pr.title': 'Pull request opened',
   'pr.body': 'Nothing was changed in the cluster. The change applies once this pull request is merged and synced:',
 
+  'breakGlass.button': 'Emergency: write directly',
+  'breakGlass.title': 'Write directly (break-glass)',
+  'breakGlass.description':
+    'Use this only in an incident. The change is written to the cluster now, and the matching pull request is opened too so the repository catches up. You need the break-glass permission on this resource; if you do not have it, Kubernetes refuses.',
+  'breakGlass.selfHeal':
+    'If the Argo CD Application tracking this resource has selfHeal on, Argo CD can revert the change before the pull request is merged. Pause selfHeal on that Application until it is merged.',
+  'breakGlass.reason': 'Reason (required)',
+  'breakGlass.reasonPlaceholder': 'Why this cannot wait for the pull request',
+  'breakGlass.submit': 'Write directly',
+  'breakGlass.submitting': 'Writing...',
+  'breakGlass.done': 'Written directly',
+  'breakGlass.prBody': 'The change is already in the cluster. Merge this pull request so the repository matches it:',
+  'breakGlass.noticeTitle': 'Read this',
+
   'col.cluster': 'Cluster',
   'col.name': 'Name',
   'col.role': 'Role',
@@ -392,6 +406,20 @@ export const ja: Dict = {
 
   'pr.title': 'プルリクエストを作成しました',
   'pr.body': 'クラスタには何も変更を加えていません。このプルリクエストがマージされ、同期された時点で変更が適用されます:',
+
+  'breakGlass.button': '緊急: 直接書き込む',
+  'breakGlass.title': '直接書き込む (break-glass)',
+  'breakGlass.description':
+    '障害対応のときだけ使ってください。変更はいまクラスタに書き込まれ、リポジトリが追いつけるよう対応するプルリクエストも作成されます。このリソースに対する break-glass 権限が必要です。権限がなければ Kubernetes が拒否します。',
+  'breakGlass.selfHeal':
+    'このリソースを管理する Argo CD の Application で selfHeal が有効な場合、プルリクエストがマージされる前に Argo CD が変更を巻き戻すことがあります。マージされるまで、その Application の selfHeal を一時停止してください。',
+  'breakGlass.reason': '理由 (必須)',
+  'breakGlass.reasonPlaceholder': 'プルリクエストを待てない理由',
+  'breakGlass.submit': '直接書き込む',
+  'breakGlass.submitting': '書き込み中...',
+  'breakGlass.done': '直接書き込みました',
+  'breakGlass.prBody': '変更はすでにクラスタに入っています。リポジトリを一致させるため、このプルリクエストをマージしてください:',
+  'breakGlass.noticeTitle': '必ず確認してください',
 
   'col.cluster': 'クラスタ',
   'col.name': '名前',

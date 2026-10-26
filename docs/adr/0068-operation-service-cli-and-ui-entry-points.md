@@ -139,3 +139,17 @@ start buttons are on the cluster page. All wording is in `en`/`ja` (the type for
   start again.
 - No end-to-end run against a cluster; the service is tested over a fake client and the CLI over both the
   in-process and the httptest backends.
+
+## E2E observation (2026-10-26)
+
+All three commands were run through the CLI's in-process fallback (the UI was not deployed): `upgrade kubernetes`,
+`cni kube-proxy replaced`, `cluster shutdown`, with `--yes`, `--follow` and without. `operation get`, `operation
+delete` and `operation resume` also ran. See ADRs 0057, 0066 and 0067 for what each did.
+
+- The plan text and the `n` answer worked for all three; nothing was written on `n`.
+- `--follow` printed the status and exited with an error when the operation paused after a failure, as designed.
+- `operation resume` on an operation paused after a failed machine did nothing (it stayed `Paused` with the same
+  failure for ten minutes), which matches "delete and start again", but the command accepts it silently.
+- The spec-first order showed its cost: after a failed first attempt the spec already named the new version.
+  Starting the command again created a new operation without rewriting the spec, as described.
+- The UI screens and `operation list` / `get --watch` were not exercised.

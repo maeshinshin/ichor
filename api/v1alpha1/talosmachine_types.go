@@ -98,8 +98,17 @@ type TalosMachineSpec struct {
 	NodeLabels map[string]string `json:"nodeLabels,omitempty"`
 
 	// hostname overrides the Kubernetes Node name; Talos derives one from the machine if unset.
+	// It must be an RFC 1123 DNS label or subdomain (lower-case alphanumerics, '-' and '.').
+	// +kubebuilder:validation:MaxLength=253
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
 	// +optional
 	Hostname string `json:"hostname,omitempty"`
+
+	// install is where Talos installs itself on this machine (the design's `system` disk role,
+	// ADR 0076). Unset renders no install configuration, which leaves a machine that boots from
+	// an installed disk alone but gives a maintenance-mode machine nothing to install onto.
+	// +optional
+	Install *TalosMachineInstall `json:"install,omitempty"`
 
 	// approvalState records the human decision on this machine: pending (the
 	// default, awaiting a decision), approved (the controller renders and
@@ -121,6 +130,56 @@ type TalosMachineSpec struct {
 	// approvalState already carries. Unset until the first approve/reject.
 	// +optional
 	ApprovalDecision *TalosMachineApprovalDecision `json:"approvalDecision,omitempty"`
+}
+
+// TalosMachineInstall is the install target of one machine, rendered by pkg/render as the
+// UnattendedInstallConfig document from the v1.14 contract and as machine.install before.
+type TalosMachineInstall struct {
+	// disk selects the system disk by a stable identifier.
+	// +optional
+	Disk *TalosMachineDisk `json:"disk,omitempty"`
+
+	// image is the installer image reference. Unset lets Talos use the installer of the
+	// schematic it booted from, which only works when it booted an Image Factory asset.
+	// +kubebuilder:validation:MaxLength=512
+	// +optional
+	Image string `json:"image,omitempty"`
+}
+
+// TalosMachineDisk selects one disk. Exactly one field is set. The first four follow the
+// design's identification fallback chain (WWID, serial, by-id path, bus path); devPath is the
+// last resort, because the kernel can renumber it between boots.
+// +kubebuilder:validation:XValidation:rule="(has(self.wwid) ? 1 : 0) + (has(self.serial) ? 1 : 0) + (has(self.byIDPath) ? 1 : 0) + (has(self.busPath) ? 1 : 0) + (has(self.devPath) ? 1 : 0) == 1",message="exactly one of wwid, serial, byIDPath, busPath or devPath must be set"
+type TalosMachineDisk struct {
+	// wwid is the disk's World Wide Identifier.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=256
+	// +optional
+	WWID string `json:"wwid,omitempty"`
+
+	// serial is the disk's serial number.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=256
+	// +optional
+	Serial string `json:"serial,omitempty"`
+
+	// byIDPath is a /dev/disk/by-id/ symlink of the disk.
+	// +kubebuilder:validation:Pattern=`^/dev/disk/by-id/[^/\s"]+$`
+	// +kubebuilder:validation:MaxLength=256
+	// +optional
+	ByIDPath string `json:"byIDPath,omitempty"`
+
+	// busPath is the disk's bus path, e.g. /pci0000:00/0000:00:17.0/ata1/host0/target0:0:0/0:0:0:0.
+	// +kubebuilder:validation:Pattern=`^/[^"\s]+$`
+	// +kubebuilder:validation:MaxLength=256
+	// +optional
+	BusPath string `json:"busPath,omitempty"`
+
+	// devPath is the kernel device path, e.g. /dev/sda. Not stable across boots; prefer the others.
+	// +kubebuilder:validation:Pattern=`^/dev/[^"\s]+$`
+	// +kubebuilder:validation:MaxLength=256
+	// +optional
+	DevPath string `json:"devPath,omitempty"`
 }
 
 // TalosMachineApprovalDecision is who decided a TalosMachine's current

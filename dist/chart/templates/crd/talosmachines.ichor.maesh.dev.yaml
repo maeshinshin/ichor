@@ -126,8 +126,11 @@ spec:
                 minLength: 1
                 type: string
               hostname:
-                description: hostname overrides the Kubernetes Node name; Talos derives
-                  one from the machine if unset.
+                description: |-
+                  hostname overrides the Kubernetes Node name; Talos derives one from the machine if unset.
+                  It must be an RFC 1123 DNS label or subdomain (lower-case alphanumerics, '-' and '.').
+                maxLength: 253
+                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                 type: string
               identity:
                 description: identity identifies the physical machine backing this
@@ -150,6 +153,56 @@ spec:
                     type: string
                 required:
                 - uuid
+                type: object
+              install:
+                description: |-
+                  install is where Talos installs itself on this machine (the design's `system` disk role,
+                  ADR 0076). Unset renders no install configuration, which leaves a machine that boots from
+                  an installed disk alone but gives a maintenance-mode machine nothing to install onto.
+                properties:
+                  disk:
+                    description: disk selects the system disk by a stable identifier.
+                    properties:
+                      busPath:
+                        description: busPath is the disk's bus path, e.g. /pci0000:00/0000:00:17.0/ata1/host0/target0:0:0/0:0:0:0.
+                        maxLength: 256
+                        pattern: ^/[^"\s]+$
+                        type: string
+                      byIDPath:
+                        description: byIDPath is a /dev/disk/by-id/ symlink of the
+                          disk.
+                        maxLength: 256
+                        pattern: ^/dev/disk/by-id/[^/\s"]+$
+                        type: string
+                      devPath:
+                        description: devPath is the kernel device path, e.g. /dev/sda.
+                          Not stable across boots; prefer the others.
+                        maxLength: 256
+                        pattern: ^/dev/[^"\s]+$
+                        type: string
+                      serial:
+                        description: serial is the disk's serial number.
+                        maxLength: 256
+                        minLength: 1
+                        type: string
+                      wwid:
+                        description: wwid is the disk's World Wide Identifier.
+                        maxLength: 256
+                        minLength: 1
+                        type: string
+                    type: object
+                    x-kubernetes-validations:
+                    - message: exactly one of wwid, serial, byIDPath, busPath or devPath
+                        must be set
+                      rule: '(has(self.wwid) ? 1 : 0) + (has(self.serial) ? 1 : 0)
+                        + (has(self.byIDPath) ? 1 : 0) + (has(self.busPath) ? 1 :
+                        0) + (has(self.devPath) ? 1 : 0) == 1'
+                  image:
+                    description: |-
+                      image is the installer image reference. Unset lets Talos use the installer of the
+                      schematic it booted from, which only works when it booted an Image Factory asset.
+                    maxLength: 512
+                    type: string
                 type: object
               nodeLabels:
                 additionalProperties:

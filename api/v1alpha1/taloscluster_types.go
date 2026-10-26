@@ -318,6 +318,29 @@ type TalosClusterControlPlaneMetrics struct {
 	AllowedCIDRs []string `json:"allowedCIDRs,omitempty"`
 }
 
+// TalosClusterNetwork is the cluster's pod and service address ranges (ADR 0076). Both lists
+// are optional; an empty list keeps Talos's default for that range (10.244.0.0/16 for pods,
+// 10.96.0.0/12 for services). The ranges are fixed when the cluster is created: Kubernetes
+// cannot renumber a live cluster, so the whole field is immutable once set (a cluster that
+// never declared network may set it once, to record what an adopted cluster already runs).
+type TalosClusterNetwork struct {
+	// podSubnets are the pod CIDRs, at most one per IP family.
+	// +kubebuilder:validation:MaxItems=2
+	// +kubebuilder:validation:items:MaxLength=43
+	// +kubebuilder:validation:XValidation:rule="self.all(c, isCIDR(c))",message="podSubnets must be valid CIDRs"
+	// +listType=atomic
+	// +optional
+	PodSubnets []string `json:"podSubnets,omitempty"`
+
+	// serviceSubnets are the service CIDRs, at most one per IP family.
+	// +kubebuilder:validation:MaxItems=2
+	// +kubebuilder:validation:items:MaxLength=43
+	// +kubebuilder:validation:XValidation:rule="self.all(c, isCIDR(c))",message="serviceSubnets must be valid CIDRs"
+	// +listType=atomic
+	// +optional
+	ServiceSubnets []string `json:"serviceSubnets,omitempty"`
+}
+
 // TalosClusterSpec defines the desired state of TalosCluster.
 type TalosClusterSpec struct {
 	// endpoint is the cluster's control-plane endpoint.
@@ -374,6 +397,13 @@ type TalosClusterSpec struct {
 	// between Talos and the CNI (docs/design/architecture.md, "CNI").
 	// +optional
 	CNI TalosClusterCNI `json:"cni,omitempty"`
+
+	// network sets the pod and service subnets (ADR 0076). Unset keeps Talos's defaults. It
+	// cannot change once set.
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="network cannot change after it is set; Kubernetes cannot renumber a live cluster"
+	// +optional
+	Network *TalosClusterNetwork `json:"network,omitempty"`
+
 	// discovery lists maintenance-mode candidates for the controller to probe directly. Empty (the
 	// default) disables discovery: the controller opens no connection at all (ADR 0011).
 	// +optional

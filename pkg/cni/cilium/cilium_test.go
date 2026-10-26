@@ -119,6 +119,29 @@ func TestArgoCDApplication(t *testing.T) {
 		t.Fatal("spec.source.helm is nil")
 	}
 
+	if got := app.Spec.IgnoreDifferences; len(got) != 1 || got[0].Group != "cilium.io" || got[0].Kind != "CiliumIdentity" {
+		t.Errorf("ignoreDifferences = %+v, want exactly cilium.io/CiliumIdentity", got)
+	}
+	if slices.Contains(app.Spec.SyncPolicy.SyncOptions, "RespectIgnoreDifferences=true") {
+		t.Errorf("syncOptions = %v, want no RespectIgnoreDifferences=true", app.Spec.SyncPolicy.SyncOptions)
+	}
+	if !slices.Contains(app.Spec.SyncPolicy.SyncOptions, "CreateNamespace=true") {
+		t.Errorf("syncOptions = %v, want CreateNamespace=true kept", app.Spec.SyncPolicy.SyncOptions)
+	}
+
+	// The handed-over Application renders the same values as the
+	// bootstrap manifest, so there is no diff at hand-over.
+	boot, err := p.BootstrapManifest(cni.KubeProxyReplaced)
+	if err != nil {
+		t.Fatalf("BootstrapManifest: %v", err)
+	}
+	if app.Spec.Source.Helm.Values != string(boot) {
+		t.Errorf("Application values differ from BootstrapManifest values:\n%s\n---\n%s", app.Spec.Source.Helm.Values, boot)
+	}
+	if app.Spec.Destination.Namespace != "kube-system" {
+		t.Errorf("destination namespace = %q, want kube-system", app.Spec.Destination.Namespace)
+	}
+
 	values := app.Spec.Source.Helm.Values
 	if !strings.Contains(values, "method: cronJob") {
 		t.Errorf("spec.source.helm.values missing Hubble's cronJob certificate method:\n%s", values)
@@ -153,6 +176,24 @@ func TestCheckConsistency(t *testing.T) {
 				t.Fatalf("CheckConsistency(%+v, %s) error = %v, wantErr %v", tc.live, tc.mode, err, tc.wantErr)
 			}
 		})
+	}
+}
+
+// TestValues_TalosRequiredFive pins the five settings Cilium needs on Talos: ipam, kubeProxyReplacement,
+// securityContext.capabilities,
+// cgroup, and KubePrism's k8sServiceHost/Port.
+func TestValues_TalosRequiredFive(t *testing.T) {
+	out, err := New().BootstrapManifest(cni.KubeProxyReplaced)
+	if err != nil {
+		t.Fatalf("BootstrapManifest: %v", err)
+	}
+	for _, want := range []string{
+		"mode: kubernetes", "kubeProxyReplacement: true", "ciliumAgent:", "cleanCiliumState:", "SYS_ADMIN",
+		"enabled: false", "hostRoot: /sys/fs/cgroup", "k8sServiceHost: localhost", "k8sServicePort: 7445",
+	} {
+		if !strings.Contains(string(out), want) {
+			t.Errorf("values missing %q:\n%s", want, out)
+		}
 	}
 }
 

@@ -541,13 +541,15 @@ func TestUIArgoCDNamespaceEnv(t *testing.T) {
 // narrowed impersonate list becomes resourceNames.
 func TestUIOIDC(t *testing.T) {
 	off := renderChartWithValues(t, "ichor")
-	if _, found := containerEnvValue(find(off, kindDeployment, ichorUIDeploymentName), "ichor-ui", "ICHOR_OIDC_ISSUER"); found {
+	offDep := find(off, kindDeployment, ichorUIDeploymentName)
+	if _, found := containerEnvValue(offDep, "ichor-ui", "ICHOR_OIDC_ISSUER"); found {
 		t.Error("OIDC env present by default; ADR 0058 requires it off")
 	}
 
 	on := renderChartWithValues(t, "ichor", "ichorUI.oidc.enabled=true",
 		"ichorUI.oidc.issuer=https://idp.example", "ichorUI.oidc.clientId=ichor")
-	if got, _ := containerEnvValue(find(on, kindDeployment, ichorUIDeploymentName), "ichor-ui", "ICHOR_OIDC_ISSUER"); got != "https://idp.example" {
+	onDep := find(on, kindDeployment, ichorUIDeploymentName)
+	if got, _ := containerEnvValue(onDep, "ichor-ui", "ICHOR_OIDC_ISSUER"); got != "https://idp.example" {
 		t.Errorf("ICHOR_OIDC_ISSUER = %q", got)
 	}
 	checkUIBackendRBACMatchesConfig(t, "ichor", on, true)

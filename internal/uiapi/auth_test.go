@@ -34,7 +34,6 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -43,7 +42,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-const testClientID = "ichor-ui"
+const (
+	testClientID = "ichor-ui"
+	testGroupDev = "oidc:dev"
+	testUserBob  = "oidc:bob"
+)
 
 // fakeIdP is an httptest OIDC provider: discovery plus a JWKS, and a way to
 // mint signed ID tokens. It never talks to a real IdP.
@@ -139,9 +142,9 @@ func TestAuthenticateAcceptsAValidTokenAndPrefixesIdentity(t *testing.T) {
 	if id.User != "oidc:alice@example.com" {
 		t.Errorf("user = %q", id.User)
 	}
-	// "system:masters" must be dropped even with the prefix in front of it
-	// being "oidc:" -- and a bare system: group would be too.
-	if want := []string{"oidc:dev", "oidc:system:masters"}; !slices.Equal(id.Groups, want) {
+	// A group is only ever sent with the prefix, so "system:masters" from the
+	// IdP cannot become the built-in group.
+	if want := []string{testGroupDev, "oidc:system:masters"}; !slices.Equal(id.Groups, want) {
 		t.Errorf("groups = %v, want %v", id.Groups, want)
 	}
 }
@@ -244,9 +247,10 @@ func TestInterceptorDisabledPassesThroughWithoutIdentity(t *testing.T) {
 }
 
 func cmClient(name string) client.Client {
-	return fake.NewClientBuilder().WithScheme(clientgoscheme.Scheme).
-		WithObjects(&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "x", Namespace: "d"}, Data: map[string]string{"by": name}}).
-		Build()
+	cm := &corev1.ConfigMap{Data: map[string]string{"by": name}}
+	cm.Name, cm.Namespace = "x", "d"
+
+	return fake.NewClientBuilder().WithScheme(clientgoscheme.Scheme).WithObjects(cm).Build()
 }
 
 func TestServerUsesImpersonatedClientAndNamesTheUserAsActor(t *testing.T) {
@@ -271,16 +275,16 @@ func TestServerUsesImpersonatedClientAndNamesTheUserAsActor(t *testing.T) {
 		t.Errorf("actor without identity = %q", got)
 	}
 
-	ctx := context.WithValue(context.Background(), identityKey{}, Identity{User: "oidc:bob", Groups: []string{"g"}})
+	ctx := context.WithValue(context.Background(), identityKey{}, Identity{User: testUserBob, Groups: []string{"g"}})
 	if err := s.Get(ctx, key, &cm); err != nil || cm.Data["by"] != "user" {
 		t.Fatalf("identity must use the impersonated client: %v %v", err, cm.Data)
 	}
 
-	if len(seen) != 1 || seen[0].User != "oidc:bob" {
+	if len(seen) != 1 || seen[0].User != testUserBob {
 		t.Errorf("impersonated as %v", seen)
 	}
 
-	if got := s.actorName(ctx); got != "oidc:bob" {
+	if got := s.actorName(ctx); got != testUserBob {
 		t.Errorf("actor = %q", got)
 	}
 	// The SA-only path (secrets bundle, Argo CD) must ignore the identity.
@@ -311,7 +315,7 @@ func TestImpersonatorSendsImpersonationHeaders(t *testing.T) {
 	_ = clientgoscheme.AddToScheme(scheme)
 
 	c, err := NewImpersonator(&rest.Config{Host: api.URL, BearerToken: "sa-token"}, client.Options{Scheme: scheme, Mapper: mapper})(
-		Identity{User: "oidc:alice", Groups: []string{"oidc:dev", "oidc:ops"}})
+		Identity{User: "oidc:alice", Groups: []string{testGroupDev, "oidc:ops"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -328,7 +332,7 @@ func TestImpersonatorSendsImpersonationHeaders(t *testing.T) {
 		t.Errorf("Impersonate-User = %q", hdr.Get("Impersonate-User"))
 	}
 
-	if !slices.Equal(hdr.Values("Impersonate-Group"), []string{"oidc:dev", "oidc:ops"}) {
+	if !slices.Equal(hdr.Values("Impersonate-Group"), []string{testGroupDev, "oidc:ops"}) {
 		t.Errorf("Impersonate-Group = %v", hdr.Values("Impersonate-Group"))
 	}
 }

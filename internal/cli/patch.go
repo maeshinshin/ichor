@@ -13,39 +13,254 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
 package cli
 
 import (
+	"context"
 	"fmt"
+	"io"
+	"os"
+	"strings"
 
+	"connectrpc.com/connect"
 	"github.com/spf13/cobra"
+	sigsyaml "sigs.k8s.io/yaml"
+
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/uiapi"
 )
 
-// patchCmd represents the patch command
+// patchFile is --filename on create, update and preview.
+var patchFile, patchListCluster string
+
+// patchCmd groups the TalosConfigPatch subcommands. Patches are typed
+// TalosConfigPatch manifests (spec.documents[] with the Talos machinery
+// types); there is no raw-YAML path (CLAUDE.md).
 var patchCmd = &cobra.Command{
 	Use:   "patch",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
+	Short: "List, inspect, create, update, delete or preview TalosConfigPatches",
+}
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("patch called")
+func patchFileCmd(use, short string, run func(ctx context.Context, c *apiClients, cmd *cobra.Command, p *ichorv1alpha1.TalosConfigPatch) error) *cobra.Command {
+	cmd := &cobra.Command{
+		Use: use, Short: short, Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			p, err := readPatchFile(cmd.InOrStdin(), patchFile, apiOpts.Namespace)
+			if err != nil {
+				return err
+			}
+
+			return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error { return run(ctx, c, cmd, p) })
+		},
+	}
+	cmd.Flags().StringVarP(&patchFile, "filename", "f", "", "TalosConfigPatch manifest (YAML or JSON); - reads stdin (required)")
+	_ = cmd.MarkFlagRequired("filename")
+
+	return cmd
+}
+
+var patchListCmd = &cobra.Command{
+	Use: "list", Short: "List patches", Args: cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
+			return runPatchList(ctx, c, cmd.OutOrStdout(), patchListCluster)
+		})
 	},
+}
+
+var patchGetCmd = &cobra.Command{
+	Use: "get NAME", Short: "Show one patch", Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
+			return runPatchGet(ctx, c, cmd.OutOrStdout(), args[0])
+		})
+	},
+}
+
+var patchDeleteCmd = &cobra.Command{
+	Use: "delete NAME", Short: "Delete a patch", Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
+			return runPatchDelete(ctx, c, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), args[0])
+		})
+	},
+}
+
+var patchPreviewCmd = patchFileCmd("preview -f FILE", "Show a patch's impact (reboot, install-time-only fields) without writing it",
+	func(ctx context.Context, c *apiClients, cmd *cobra.Command, p *ichorv1alpha1.TalosConfigPatch) error {
+		return runPatchPreview(ctx, c, cmd.OutOrStdout(), p)
+	})
+
+var patchCreateCmd = patchFileCmd("create -f FILE", "Create a patch (shows its impact first; confirms if it needs a reboot or reinstall)",
+	func(ctx context.Context, c *apiClients, cmd *cobra.Command, p *ichorv1alpha1.TalosConfigPatch) error {
+		return runPatchWrite(ctx, c, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), p, false)
+	})
+
+var patchUpdateCmd = patchFileCmd("update -f FILE", "Replace an existing patch's spec (shows its impact first; confirms if it needs a reboot or reinstall)",
+	func(ctx context.Context, c *apiClients, cmd *cobra.Command, p *ichorv1alpha1.TalosConfigPatch) error {
+		return runPatchWrite(ctx, c, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), p, true)
+	})
+
+// readPatchFile decodes path ("-" is stdin) into a TalosConfigPatch with
+// unknown fields rejected, the same strictness the API server applies on
+// the write (a typo is an error here, not a silently dropped field).
+func readPatchFile(stdin io.Reader, path, defaultNamespace string) (*ichorv1alpha1.TalosConfigPatch, error) {
+	var (
+		raw []byte
+		err error
+	)
+
+	if path == "-" {
+		raw, err = io.ReadAll(stdin)
+	} else {
+		raw, err = os.ReadFile(path)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("patch: reading %s: %w", path, err)
+	}
+
+	var p ichorv1alpha1.TalosConfigPatch
+	if err := sigsyaml.UnmarshalStrict(raw, &p); err != nil {
+		return nil, fmt.Errorf("patch: decoding %s as a TalosConfigPatch: %w", path, err)
+	}
+
+	if p.Kind != "" && p.Kind != "TalosConfigPatch" {
+		return nil, fmt.Errorf("patch: %s is a %s, not a TalosConfigPatch", path, p.Kind)
+	}
+
+	if p.Name == "" {
+		return nil, fmt.Errorf("patch: %s has no metadata.name", path)
+	}
+
+	if p.Namespace == "" {
+		p.Namespace = defaultNamespace
+	}
+
+	return &p, nil
+}
+
+func runPatchList(ctx context.Context, c *apiClients, out io.Writer, cluster string) error {
+	resp, err := c.Patch.ListPatches(ctx, connect.NewRequest(&pb.ListPatchesRequest{Cluster: clusterFilter(apiOpts.Namespace, cluster)}))
+	if err != nil {
+		return err
+	}
+
+	return writeMessage(out, outputFormat, resp.Msg)
+}
+
+func runPatchGet(ctx context.Context, c *apiClients, out io.Writer, name string) error {
+	resp, err := c.Patch.GetPatch(ctx, connect.NewRequest(&pb.GetPatchRequest{Patch: objectRef(apiOpts.Namespace, name)}))
+	if err != nil {
+		return err
+	}
+
+	return writeMessage(out, outputFormat, resp.Msg)
+}
+
+func runPatchDelete(ctx context.Context, c *apiClients, in io.Reader, out, errw io.Writer, name string) error {
+	if !assumeYes {
+		ok, err := confirm(in, errw, fmt.Sprintf("Delete patch %s/%s? The controller will re-render the machines it applied to. [y/N] ", apiOpts.Namespace, name))
+		if err != nil {
+			return fmt.Errorf("patch delete: reading confirmation: %w", err)
+		}
+
+		if !ok {
+			return fmt.Errorf("patch delete: aborted")
+		}
+	}
+
+	resp, err := c.Patch.DeletePatch(ctx, connect.NewRequest(&pb.DeletePatchRequest{Patch: objectRef(apiOpts.Namespace, name)}))
+	if err != nil {
+		return err
+	}
+
+	return writeMessage(out, outputFormat, resp.Msg)
+}
+
+func runPatchPreview(ctx context.Context, c *apiClients, out io.Writer, p *ichorv1alpha1.TalosConfigPatch) error {
+	wire, err := uiapi.PatchToWire(p)
+	if err != nil {
+		return err
+	}
+
+	resp, err := c.Patch.PreviewImpact(ctx, connect.NewRequest(&pb.PreviewImpactRequest{Patch: wire}))
+	if err != nil {
+		return err
+	}
+
+	return writeMessage(out, outputFormat, resp.Msg)
+}
+
+// runPatchWrite is create (update=false) or update (update=true). It
+// previews first and asks before a write that needs a reboot, touches an
+// install-time-only field (a reset and reinstall) or one this cluster's
+// Talos is too old for -- the same impact the UI shows before saving.
+func runPatchWrite(
+	ctx context.Context, c *apiClients, in io.Reader, out, errw io.Writer, p *ichorv1alpha1.TalosConfigPatch, update bool,
+) error {
+	wire, err := uiapi.PatchToWire(p)
+	if err != nil {
+		return err
+	}
+
+	impact, err := c.Patch.PreviewImpact(ctx, connect.NewRequest(&pb.PreviewImpactRequest{Patch: wire}))
+	if err != nil {
+		return err
+	}
+
+	if warn := impactWarning(impact.Msg); warn != "" && !assumeYes {
+		ok, err := confirm(in, errw, fmt.Sprintf("Patch %s/%s: %s Continue? [y/N] ", p.Namespace, p.Name, warn))
+		if err != nil {
+			return fmt.Errorf("patch: reading confirmation: %w", err)
+		}
+
+		if !ok {
+			return fmt.Errorf("patch: aborted")
+		}
+	}
+
+	if update {
+		resp, err := c.Patch.UpdatePatch(ctx, connect.NewRequest(&pb.UpdatePatchRequest{Patch: wire}))
+		if err != nil {
+			return err
+		}
+
+		return writeMessage(out, outputFormat, resp.Msg)
+	}
+
+	resp, err := c.Patch.CreatePatch(ctx, connect.NewRequest(&pb.CreatePatchRequest{Patch: wire}))
+	if err != nil {
+		return err
+	}
+
+	return writeMessage(out, outputFormat, resp.Msg)
+}
+
+// impactWarning is "" when the patch needs nothing special.
+func impactWarning(r *pb.PreviewImpactResponse) string {
+	var parts []string
+
+	if r.GetRebootRequired() {
+		parts = append(parts, "applying it needs a reboot.")
+	}
+
+	if len(r.GetInstallTimeOnly()) > 0 {
+		parts = append(parts, "these fields only take effect at install time (a reset and reinstall): "+strings.Join(r.GetInstallTimeOnly(), ", ")+".")
+	}
+
+	if len(r.GetUnsupported()) > 0 {
+		parts = append(parts, "these fields need a newer Talos than the cluster is pinned to: "+strings.Join(r.GetUnsupported(), ", ")+".")
+	}
+
+	return strings.Join(parts, " ")
 }
 
 func init() {
 	rootCmd.AddCommand(patchCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// patchCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// patchCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	addAPIFlags(patchCmd)
+	patchListCmd.Flags().StringVar(&patchListCluster, flagCluster, "", "only patches of this TalosCluster")
+	patchCmd.AddCommand(patchListCmd, patchGetCmd, patchCreateCmd, patchUpdateCmd, patchDeleteCmd, patchPreviewCmd)
 }

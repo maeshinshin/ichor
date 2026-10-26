@@ -13,39 +13,40 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
 package cli
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
+
+	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
-// machineCmd represents the machine command
+// machineCmd groups the TalosMachine subcommands. They go through the same
+// Connect API as the UI, so approving here runs the very
+// checks approving in the UI does.
 var machineCmd = &cobra.Command{
 	Use:   "machine",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("machine called")
-	},
+	Short: "List, inspect, approve or reject machines",
 }
 
 func init() {
 	rootCmd.AddCommand(machineCmd)
+	addAPIFlags(machineCmd)
+}
 
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// machineCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// machineCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+// parseRole maps the CLI's role spelling (the TalosMachine spec's own) to
+// the wire enum. Anything else is refused here, not guessed.
+func parseRole(s string) (pb.MachineRole, error) {
+	switch strings.ToLower(s) {
+	case "controlplane":
+		return pb.MachineRole_MACHINE_ROLE_CONTROL_PLANE, nil
+	case "worker":
+		return pb.MachineRole_MACHINE_ROLE_WORKER, nil
+	default:
+		return pb.MachineRole_MACHINE_ROLE_UNSPECIFIED, fmt.Errorf("invalid --role %q: must be controlplane or worker", s)
+	}
 }

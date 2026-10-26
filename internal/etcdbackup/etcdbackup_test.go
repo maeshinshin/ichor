@@ -218,3 +218,26 @@ func TestNewS3StoreRejectsBadInput(t *testing.T) {
 		t.Fatal("garbage CA accepted")
 	}
 }
+
+// A CA rotation replaces the bundle's certificates (talosctl rotate-ca consumes
+// only Certs.OS and Certs.K8s of a fresh bundle, Talos v1.14.3
+// cmd/talosctl/cmd/talos/rotate-ca.go) and leaves Cluster alone, so snapshots
+// taken before it must stay decryptable after it.
+func TestPassphraseSurvivesCARotation(t *testing.T) {
+	before := testBundle(t, "s3cr3t-one")
+
+	fresh, err := secrets.NewBundle(secrets.NewFixedClock(time.Now()), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	after := testBundle(t, "s3cr3t-one")
+	after.Certs = fresh.Certs
+
+	a, _ := Passphrase(before)
+
+	b, _ := Passphrase(after)
+	if a != b {
+		t.Fatal("rotating the CAs changed the backup key: older snapshots would no longer decrypt")
+	}
+}

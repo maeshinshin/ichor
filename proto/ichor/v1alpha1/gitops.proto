@@ -61,6 +61,11 @@ message GitOpsItem {
   // error says why the state is missing (the Application cannot be named or
   // read). It never carries a credential.
   string error = 8;
+  // permission_denied is true when the caller may not read the tracking
+  // Application: the row then carries no sync or health, and
+  // that is not an error. tracked_by and application still say which
+  // Application it is, because both come from the CR the caller can read.
+  bool permission_denied = 9;
 }
 
 message FindPullRequestsRequest {

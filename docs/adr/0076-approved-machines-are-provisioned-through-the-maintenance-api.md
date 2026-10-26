@@ -43,6 +43,20 @@ os:admin identity, which a node in maintenance mode does not trust, so an approv
   The install is followed by requeue, never a long call.
 - **Schema.** `TalosMachine.status` gains `stage` and `configStoredAt` (status only; no spec change).
 
+## Follow-ups from the first hardware run
+
+- **UI backend reads.** `GetNode`, `GetNodeTalosDetails` and the log stream dial an approved machine with the bundle
+  identity, which a node in maintenance mode does not trust. `dialNode` now applies the same rule as the controller:
+  for an approved machine with an empty `status.appliedConfigHash` it probes the authenticated connection (a hardware
+  read) and, if that fails, reconnects over the maintenance API; `GetNodeTalosDetails.maintenance_mode` is true then.
+  A machine that has converged never falls back.
+- **Setting the install disk later.** A machine approved without `spec.install` sits at `InstallDiskUnknown`. The new
+  `MachineService.SetMachineInstall` writes only `spec.install` (as the user, with the usual GitOps-tracked refusal,
+  pull request and break-glass handling) and is refused for a pending machine or one that already has an applied
+  configuration. The machine page offers it, with the approval form's disk picker, while that reason is set.
+- **Log level.** The failed authenticated read that hands a never-converged machine to the provisioning path is logged
+  at V(1) without a stack; `ERROR` is kept for the case where nothing takes over.
+
 ## Consequences and open questions
 
 - A node stuck in maintenance after the store is never re-applied automatically (conservative); recovery is to reset or

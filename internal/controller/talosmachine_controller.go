@@ -381,26 +381,8 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 
 	// Step 2: read the node's current configuration and compare hashes.
-	readCtx, cancelRead := context.WithTimeout(ctx, talosCallTimeout)
-	current, err := talos.CurrentConfig(readCtx)
-
-	cancelRead()
-
-	if err != nil {
-		log.Error(err, "reading current machine configuration")
-
-		// A machine that has never converged and cannot be read with the bundle's identity may
-		// still be in maintenance mode: that is what talosmachine_provision.go finds out, by
-		// asking the insecure API rather than by interpreting this error.
-		if r.MaintenanceClient != nil && m.Status.AppliedConfigHash == "" {
-			return r.provision(ctx, &cluster, &m, rendered, hash)
-		}
-
-		return r.retryLater(ctx, &m, reasonCurrentConfigUnavailable,
-			"reading the node's current configuration failed")
-	}
-
-	if res, stop, err := r.followStage(ctx, talos, &m); stop {
+	current, res, stop, err := r.readNode(ctx, &cluster, &m, talos, rendered, hash)
+	if stop {
 		return res, err
 	}
 
@@ -504,6 +486,41 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 		return ctrl.Result{}, r.ready(ctx, &m, metav1.ConditionTrue, reason, message)
 	}
+}
+
+// readNode reads the node's current configuration with the bundle's identity (step 2). stop=true
+// means the reconcile is over for this round, with res and err as the result: the node could not be
+// read, was provisioned or is still being followed to running (talosmachine_provision.go).
+func (r *TalosMachineReconciler) readNode(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
+	talos TalosClient, rendered []byte, hash string,
+) (current []byte, res ctrl.Result, stop bool, err error) {
+	readCtx, cancelRead := context.WithTimeout(ctx, talosCallTimeout)
+	current, err = talos.CurrentConfig(readCtx)
+
+	cancelRead()
+
+	if err != nil {
+		logf.FromContext(ctx).Error(err, "reading current machine configuration")
+
+		// A machine that has never converged and cannot be read with the bundle's identity may
+		// still be in maintenance mode: provision finds out by asking the insecure API, not by
+		// interpreting this error.
+		if r.MaintenanceClient != nil && m.Status.AppliedConfigHash == "" {
+			res, err = r.provision(ctx, cluster, m, rendered, hash)
+
+			return nil, res, true, err
+		}
+
+		res, err = r.retryLater(ctx, m, reasonCurrentConfigUnavailable,
+			"reading the node's current configuration failed")
+
+		return nil, res, true, err
+	}
+
+	res, stop, err = r.followStage(ctx, talos, m)
+
+	return current, res, stop, err
 }
 
 // holdUntilEligible runs the checks that stop m from being rendered or applied this round, before

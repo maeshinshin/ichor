@@ -53,3 +53,6 @@ internal/installmanifest/install.yaml
 # instead of the default "dist/", so that "goreleaser build --clean" never
 # wipes the committed dist/chart above).
 .goreleaser-dist/
+
+# Screenshots from `make ui-shots`.
+.ui-shots/

@@ -23,8 +23,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"sort"
+	"slices"
 	"strconv"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -112,12 +113,11 @@ func takeSnapshot(ctx context.Context, c client.Client, ns, runID string, objs [
 		chunk := data[i*snapshotChunkBytes : min((i+1)*snapshotChunkBytes, len(data))]
 
 		cm := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: ns, Name: snapshotName(runID, i),
-				Labels:      map[string]string{SnapshotLabel: runID},
-				Annotations: map[string]string{SnapshotLabel + "-parts": strconv.Itoa(parts)},
-			},
-			BinaryData: map[string][]byte{snapshotKey: chunk},
+			Namespace:   ns,
+			Name:        snapshotName(runID, i),
+			Labels:      map[string]string{SnapshotLabel: runID},
+			Annotations: map[string]string{SnapshotLabel + "-parts": strconv.Itoa(parts)},
+			BinaryData:  map[string][]byte{snapshotKey: chunk},
 		}
 		if err := c.Create(ctx, cm); err != nil {
 			return nil, fmt.Errorf("saving snapshot part %d of %d: %w", i+1, parts, err)
@@ -138,7 +138,7 @@ func loadSnapshot(ctx context.Context, c client.Client, ns, runID string) ([]ent
 		return nil, nil
 	}
 
-	sort.Slice(list.Items, func(i, j int) bool { return list.Items[i].Name < list.Items[j].Name })
+	slices.SortFunc(list.Items, func(a, b corev1.ConfigMap) int { return strings.Compare(a.Name, b.Name) })
 
 	want, _ := strconv.Atoi(list.Items[0].Annotations[SnapshotLabel+"-parts"])
 	if want != len(list.Items) {

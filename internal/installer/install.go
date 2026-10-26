@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -177,9 +178,7 @@ func failWithRollback(c client.Client, opts Options, snap []entry, cause error) 
 func rollback(ctx context.Context, c client.Client, snap []entry) error {
 	var errs []error
 
-	for i := len(snap) - 1; i >= 0; i-- {
-		e := snap[i]
-
+	for _, e := range slices.Backward(snap) {
 		live := &unstructured.Unstructured{}
 		live.SetAPIVersion(e.APIVersion)
 		live.SetKind(e.Kind)

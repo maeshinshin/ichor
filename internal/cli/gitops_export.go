@@ -20,10 +20,14 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"maps"
 
 	"github.com/spf13/cobra"
+	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/cni"
@@ -114,16 +118,23 @@ func runGitopsExport(ctx context.Context, opts gitopsExportOptions, k8sClient cl
 		return err
 	}
 
-	if err := exportConfigPatches(ctx, k8sClient, opts, crs); err != nil {
+	if err := exportClusterKinds(ctx, k8sClient, opts, crs); err != nil {
 		return err
 	}
 
-	if err := exportStorages(ctx, k8sClient, opts, crs); err != nil {
-		return err
-	}
+	// The one place every exported CR passes through, whatever its kind.
+	for name, obj := range crs {
+		co, ok := obj.(client.Object)
+		if !ok {
+			return fmt.Errorf("gitops export: %s is a %T, not a client.Object", name, obj)
+		}
 
-	if err := exportEtcdBackups(ctx, k8sClient, opts, crs); err != nil {
-		return err
+		declared, err := declaredForm(k8sClient.Scheme(), co)
+		if err != nil {
+			return err
+		}
+
+		crs[name] = declared
 	}
 
 	cniApp, err := exportCNIApplication(&cluster)
@@ -192,65 +203,129 @@ func exportMachines(ctx context.Context, k8sClient client.Client, opts gitopsExp
 	return nil
 }
 
-// exportConfigPatches adds one entry per TalosConfigPatch belonging to
-// opts.Cluster to crs.
-func exportConfigPatches(ctx context.Context, k8sClient client.Client, opts gitopsExportOptions, crs map[string]any) error {
-	var patches ichorv1alpha1.TalosConfigPatchList
-	if err := k8sClient.List(ctx, &patches, client.InNamespace(opts.Namespace)); err != nil {
-		return fmt.Errorf("gitops export: listing TalosConfigPatches: %w", err)
-	}
+// clusterKind describes one CR kind that export lists and filters by
+// spec.clusterRef.name. Go generics cannot reach a field, so each kind
+// supplies a small accessor instead of getting its own copy of the loop.
+type clusterKind struct {
+	filePrefix string
+	list       client.ObjectList
+	clusterRef func(client.Object) string
+}
 
-	for i := range patches.Items {
-		p := &patches.Items[i]
-		if p.Spec.ClusterRef.Name != opts.Cluster {
-			continue
+// refOf adapts a typed spec.clusterRef.name accessor to clusterKind's
+// untyped one.
+func refOf[T client.Object](f func(T) string) func(client.Object) string {
+	return func(o client.Object) string {
+		t, ok := o.(T)
+		if !ok {
+			return ""
 		}
 
-		crs["talos-config-patch-"+p.Name+".yaml"] = p
+		return f(t)
+	}
+}
+
+// clusterKinds is the allow-list of kinds, besides the TalosCluster itself
+// and the approved TalosMachines, that export writes. TalosEtcdBackup's spec
+// carries only references (the S3 Secret's name, never its contents), so it
+// is safe to commit as-is.
+func clusterKinds() []clusterKind {
+	return []clusterKind{
+		{"talos-config-patch-", &ichorv1alpha1.TalosConfigPatchList{},
+			refOf(func(o *ichorv1alpha1.TalosConfigPatch) string { return o.Spec.ClusterRef.Name })},
+		{"talos-storage-", &ichorv1alpha1.TalosStorageList{},
+			refOf(func(o *ichorv1alpha1.TalosStorage) string { return o.Spec.ClusterRef.Name })},
+		{"talos-etcd-backup-", &ichorv1alpha1.TalosEtcdBackupList{},
+			refOf(func(o *ichorv1alpha1.TalosEtcdBackup) string { return o.Spec.ClusterRef.Name })},
+	}
+}
+
+// exportClusterKinds adds one entry per object of each clusterKinds() kind
+// belonging to opts.Cluster to crs.
+func exportClusterKinds(ctx context.Context, k8sClient client.Client, opts gitopsExportOptions, crs map[string]any) error {
+	for _, k := range clusterKinds() {
+		if err := k8sClient.List(ctx, k.list, client.InNamespace(opts.Namespace)); err != nil {
+			return fmt.Errorf("gitops export: listing %T: %w", k.list, err)
+		}
+
+		items, err := meta.ExtractList(k.list)
+		if err != nil {
+			return fmt.Errorf("gitops export: reading %T: %w", k.list, err)
+		}
+
+		for _, item := range items {
+			obj, ok := item.(client.Object)
+			if !ok || k.clusterRef(obj) != opts.Cluster {
+				continue
+			}
+
+			crs[k.filePrefix+obj.GetName()+".yaml"] = obj
+		}
 	}
 
 	return nil
 }
 
-// exportStorages adds one entry per TalosStorage belonging to
-// opts.Cluster to crs.
-func exportStorages(ctx context.Context, k8sClient client.Client, opts gitopsExportOptions, crs map[string]any) error {
-	var storages ichorv1alpha1.TalosStorageList
-	if err := k8sClient.List(ctx, &storages, client.InNamespace(opts.Namespace)); err != nil {
-		return fmt.Errorf("gitops export: listing TalosStorages: %w", err)
-	}
-
-	for i := range storages.Items {
-		s := &storages.Items[i]
-		if s.Spec.ClusterRef.Name != opts.Cluster {
-			continue
-		}
-
-		crs["talos-storage-"+s.Name+".yaml"] = s
-	}
-
-	return nil
+// Annotations another tool stamps on a live object. They describe how the
+// object got to the cluster, not what the operator declared, and would
+// make a restored cluster claim an Argo CD Application it is not in.
+var strippedAnnotations = []string{
+	"kubectl.kubernetes.io/last-applied-configuration",
+	gitopstracking.ArgoTrackingAnnotation,
 }
 
-// exportEtcdBackups adds one entry per TalosEtcdBackup belonging to
-// opts.Cluster to crs. Its spec carries only references (the S3 Secret's
-// name, never its contents), so it is safe to commit as-is.
-func exportEtcdBackups(ctx context.Context, k8sClient client.Client, opts gitopsExportOptions, crs map[string]any) error {
-	var backups ichorv1alpha1.TalosEtcdBackupList
-	if err := k8sClient.List(ctx, &backups, client.InNamespace(opts.Namespace)); err != nil {
-		return fmt.Errorf("gitops export: listing TalosEtcdBackups: %w", err)
+// declaredForm reduces a live object to what belongs in Git: apiVersion,
+// kind, metadata.{name,namespace,labels,annotations} and spec. Everything
+// else -- status; resourceVersion, uid, generation, creationTimestamp,
+// deletionTimestamp, managedFields, finalizers, ownerReferences; and the
+// strippedAnnotations -- is the cluster's own state. It is an allow-list on
+// purpose: a field a later API version adds stays out until someone decides
+// it is declared state. Ichor writes no labels or annotations on its own
+// CRs, so the operator's own, such as allow-delete, are kept.
+func declaredForm(scheme *runtime.Scheme, obj client.Object) (map[string]any, error) {
+	gvk, err := apiutil.GVKForObject(obj, scheme)
+	if err != nil {
+		return nil, fmt.Errorf("gitops export: kind of %T: %w", obj, err)
 	}
 
-	for i := range backups.Items {
-		b := &backups.Items[i]
-		if b.Spec.ClusterRef.Name != opts.Cluster {
-			continue
-		}
-
-		crs["talos-etcd-backup-"+b.Name+".yaml"] = b
+	full, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
+	if err != nil {
+		return nil, fmt.Errorf("gitops export: converting %s %s: %w", gvk.Kind, obj.GetName(), err)
 	}
 
-	return nil
+	md := map[string]any{"name": obj.GetName()}
+	if ns := obj.GetNamespace(); ns != "" {
+		md["namespace"] = ns
+	}
+
+	if l := obj.GetLabels(); len(l) > 0 {
+		md["labels"] = toAnyMap(l)
+	}
+
+	ann := maps.Clone(obj.GetAnnotations())
+	for _, k := range strippedAnnotations {
+		delete(ann, k)
+	}
+
+	if len(ann) > 0 {
+		md["annotations"] = toAnyMap(ann)
+	}
+
+	out := map[string]any{"apiVersion": gvk.GroupVersion().String(), "kind": gvk.Kind, "metadata": md}
+	if spec, ok := full["spec"]; ok {
+		out["spec"] = spec
+	}
+
+	return out, nil
+}
+
+func toAnyMap(m map[string]string) map[string]any {
+	out := make(map[string]any, len(m))
+	for k, v := range m {
+		out[k] = v
+	}
+
+	return out
 }
 
 // exportCNIApplication returns the CNI's own Argo CD Application, the

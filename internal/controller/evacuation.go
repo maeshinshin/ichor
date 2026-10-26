@@ -24,6 +24,8 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
@@ -237,4 +239,121 @@ func (e *LonghornEvacuator) ReplicasRemaining(ctx context.Context, target *evacu
 	}
 
 	return count, nil
+}
+
+// conditionStorageEvacuation is a TalosMachine status condition, True from
+// BeginEvacuation's write until EvacuationStatus reports paused (or the
+// caller ends it). LastTransitionTime is evacuateMachine's own "elapsed"
+// clock start. Shared by the Talos upgrade (talos_upgrade.go) and node
+// removal (removal.go): both are node operations that must go through the
+// same evacuation hook (architecture.md, "Storage"), so the decision lives
+// here once.
+const (
+	conditionStorageEvacuation = "StorageEvacuation"
+	reasonEvacuating           = "Evacuating"
+	reasonEvacuationStopped    = "EvacuationStopped"
+)
+
+// evacuateMachine drives one storage.EvacuationStatus step for m's node:
+// Begin on the first call (returning EvacuationWaiting so the caller keeps
+// reconciling), then ReplicasRemaining against the elapsed time since
+// conditionStorageEvacuation's own LastTransitionTime on every call after.
+// On EvacuationPaused it also calls End (a paused evacuation gives up and
+// re-enables scheduling). On EvacuationDone it deliberately does NOT call
+// End: what follows (a drain and reboot, or a removal) decides when
+// scheduling is meaningful again. purpose completes "evacuating node X
+// before <purpose>" in the condition message.
+//
+// ev nil, no matching TalosStorage, or the Kubernetes Node already gone
+// all mean there is nothing to evacuate: EvacuationDone, not an error.
+func evacuateMachine(
+	ctx context.Context, c client.Client, ev StorageEvacuator,
+	cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, purpose string,
+) (storage.EvacuationProgress, error) {
+	if ev == nil {
+		return storage.EvacuationDone, nil
+	}
+
+	target, err := ev.Resolve(ctx, cluster, m.Spec.Hostname)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return storage.EvacuationDone, nil // no Node object: no replicas to move off it
+		}
+
+		return 0, err
+	}
+
+	if target == nil {
+		return storage.EvacuationDone, nil
+	}
+
+	cond := apimeta.FindStatusCondition(m.Status.Conditions, conditionStorageEvacuation)
+	if cond == nil || cond.Status != metav1.ConditionTrue {
+		if err := ev.Begin(ctx, target, m.Spec.Hostname); err != nil {
+			return 0, err
+		}
+
+		if err := setEvacuationCondition(ctx, c, m, metav1.ConditionTrue, reasonEvacuating,
+			fmt.Sprintf("evacuating node %q before %s", m.Spec.Hostname, purpose)); err != nil {
+			return 0, err
+		}
+
+		return storage.EvacuationWaiting, nil
+	}
+
+	elapsed := time.Since(cond.LastTransitionTime.Time)
+
+	remaining, err := ev.ReplicasRemaining(ctx, target, m.Spec.Hostname)
+	if err != nil {
+		return 0, err
+	}
+
+	progress := storage.EvacuationStatus(remaining, elapsed, target.timeout)
+	if progress == storage.EvacuationPaused {
+		if err := endMachineEvacuation(ctx, c, ev, cluster, m); err != nil {
+			return 0, err
+		}
+	}
+
+	return progress, nil
+}
+
+// endMachineEvacuation undoes a pending evacuation (re-enables scheduling),
+// a no-op if conditionStorageEvacuation is not currently True -- covering
+// both "evacuation was never needed for this node" and "it was already
+// ended".
+func endMachineEvacuation(
+	ctx context.Context, c client.Client, ev StorageEvacuator,
+	cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
+) error {
+	if ev == nil || !apimeta.IsStatusConditionTrue(m.Status.Conditions, conditionStorageEvacuation) {
+		return nil
+	}
+
+	target, err := ev.Resolve(ctx, cluster, m.Spec.Hostname)
+	if err != nil {
+		return err
+	}
+
+	if target == nil {
+		return nil
+	}
+
+	if err := ev.End(ctx, target, m.Spec.Hostname); err != nil {
+		return err
+	}
+
+	return setEvacuationCondition(ctx, c, m, metav1.ConditionFalse, reasonEvacuationStopped,
+		fmt.Sprintf("scheduling re-enabled on node %q", m.Spec.Hostname))
+}
+
+// setEvacuationCondition writes conditionStorageEvacuation and persists m's status.
+func setEvacuationCondition(
+	ctx context.Context, c client.Client, m *ichorv1alpha1.TalosMachine, status metav1.ConditionStatus, reason, message string,
+) error {
+	apimeta.SetStatusCondition(&m.Status.Conditions, metav1.Condition{
+		Type: conditionStorageEvacuation, Status: status, Reason: reason, Message: message,
+	})
+
+	return c.Status().Update(ctx, m)
 }

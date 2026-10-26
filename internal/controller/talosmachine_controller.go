@@ -162,6 +162,12 @@ type TalosMachineReconciler struct {
 	// the safety guarantee, just without the drain step.
 	KubeClient kubernetes.Interface
 
+	// Evacuator moves storage replicas off a control plane's node before
+	// removal.go drains it (the same StorageEvacuator the Talos upgrade
+	// uses). nil skips evacuation: a cluster with no storage system has
+	// nothing to coordinate.
+	Evacuator StorageEvacuator
+
 	// APIReader counts approved control planes for the quorum checks in
 	// removal.go, bypassing the manager's cache that Client (above) reads
 	// through everywhere else. A cached read can lag the deletion of a

@@ -31,16 +31,16 @@ func TestClusterToPBCarriesKubeProxyModeAndCertificateExpiry(t *testing.T) {
 	notAfter := time.Date(2036, 1, 2, 3, 4, 5, 0, time.UTC)
 	c := &ichorv1alpha1.TalosCluster{}
 	c.Name, c.Namespace = "c", "ns"
-	c.Spec.CNI.KubeProxy = "replaced"
-	c.Status.Certificates = []ichorv1alpha1.CertificateExpiry{{Name: "talos", NotAfter: metav1.NewTime(notAfter)}}
+	c.Spec.CNI.KubeProxy = kubeProxyReplaced
+	c.Status.Certificates = []ichorv1alpha1.CertificateExpiry{{Name: "kubernetes-aggregator", NotAfter: metav1.NewTime(notAfter)}}
 
 	got := clusterToPB(c)
-	if got.GetKubeProxyMode() != "replaced" {
+	if got.GetKubeProxyMode() != kubeProxyReplaced {
 		t.Fatalf("kube-proxy mode = %q", got.GetKubeProxyMode())
 	}
 
 	certs := got.GetCertificates()
-	if len(certs) != 1 || certs[0].GetName() != "talos" || !certs[0].GetNotAfter().AsTime().Equal(notAfter) {
+	if len(certs) != 1 || certs[0].GetName() != "kubernetes-aggregator" || !certs[0].GetNotAfter().AsTime().Equal(notAfter) {
 		t.Fatalf("certificates = %v", certs)
 	}
 }

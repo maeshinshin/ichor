@@ -153,3 +153,5 @@ delete` and `operation resume` also ran. See ADRs 0057, 0066 and 0067 for what e
 - The spec-first order showed its cost: after a failed first attempt the spec already named the new version.
   Starting the command again created a new operation without rewriting the spec, as described.
 - The UI screens and `operation list` / `get --watch` were not exercised.
+
+- `--follow` / `--watch` (one shared helper, `retryTransient`) retry transient API errors (connection refused/reset, Unavailable, EOF, timeouts) with backoff for up to 10 minutes, printing `API unreachable, retrying`, and re-open a dead ichor-ui tunnel. NotFound, PermissionDenied and the like still end the command.

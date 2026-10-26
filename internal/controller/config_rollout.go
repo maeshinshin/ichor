@@ -349,12 +349,22 @@ func (a *configRolloutAdvancer) stageAndReboot(
 func (a *configRolloutAdvancer) checkEtcd(
 	ctx, dialCtx context.Context, talos TalosClient, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
 ) error {
+	return etcdAllMembersPresent(ctx, dialCtx, a.Client, talos, cluster, m, "rebooting")
+}
+
+// etcdAllMembersPresent is the quorum guard of every action that takes a control plane's etcd
+// member away for a while (ADR 0010, 0080, 0083): talos's etcd must list every approved control
+// plane. doing completes the refusal ("rebooting", "stopping").
+func etcdAllMembersPresent(
+	ctx, dialCtx context.Context, reader client.Reader, talos TalosClient, cluster *ichorv1alpha1.TalosCluster,
+	m *ichorv1alpha1.TalosMachine, doing string,
+) error {
 	members, err := talos.EtcdMemberList(dialCtx)
 	if err != nil {
 		return fmt.Errorf("listing %q's etcd members: %w", m.Name, err)
 	}
 
-	planes, err := deleteguard.ApprovedMachines(ctx, a.Client, cluster.Namespace, cluster.Name, deleteguard.MachineFilter{})
+	planes, err := deleteguard.ApprovedMachines(ctx, reader, cluster.Namespace, cluster.Name, deleteguard.MachineFilter{})
 	if err != nil {
 		return err
 	}
@@ -372,13 +382,13 @@ func (a *configRolloutAdvancer) checkEtcd(
 		// A control plane without spec.hostname is counted below instead: its name is only known
 		// to its own node, and dialing every sibling here would make a reboot depend on all of them.
 		if cp.Spec.Hostname != "" && !etcdMemberPresent(members, cp.Spec.Hostname) {
-			return fmt.Errorf("etcd member %q is missing; rebooting %q could lose quorum", cp.Spec.Hostname, m.Name)
+			return fmt.Errorf("etcd member %q is missing; %s %q could lose quorum", cp.Spec.Hostname, doing, m.Name)
 		}
 	}
 
 	if len(members) < planeCount {
-		return fmt.Errorf("etcd lists %d members for %d approved control planes; rebooting %q could lose quorum",
-			len(members), planeCount, m.Name)
+		return fmt.Errorf("etcd lists %d members for %d approved control planes; %s %q could lose quorum",
+			len(members), planeCount, doing, m.Name)
 	}
 
 	return nil

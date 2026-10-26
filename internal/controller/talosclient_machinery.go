@@ -332,3 +332,60 @@ func (t *machineryTalosClient) BootstrapManifests(ctx context.Context) ([]map[st
 
 	return objects, nil
 }
+
+// ServiceRestart restarts the Talos service id.
+func (t *machineryTalosClient) ServiceRestart(ctx context.Context, id string) error {
+	_, err := t.c.ServiceRestart(ctx, id)
+
+	return err
+}
+
+// EtcdStatus reads this node's own etcd member status.
+func (t *machineryTalosClient) EtcdStatus(ctx context.Context) (EtcdStatus, error) {
+	resp, err := t.c.EtcdStatus(ctx)
+	if err != nil {
+		return EtcdStatus{}, err
+	}
+
+	for _, msg := range resp.GetMessages() {
+		if ms := msg.GetMemberStatus(); ms != nil {
+			return EtcdStatus{MemberID: ms.GetMemberId(), LeaderID: ms.GetLeader(), DBSize: ms.GetDbSize(), DBSizeInUse: ms.GetDbSizeInUse()}, nil
+		}
+	}
+
+	return EtcdStatus{}, fmt.Errorf("talos: etcd status response carried no member status")
+}
+
+// EtcdAlarms lists the alarms etcd reports, named as etcd does.
+func (t *machineryTalosClient) EtcdAlarms(ctx context.Context) ([]string, error) {
+	resp, err := t.c.EtcdAlarmList(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var alarms []string
+
+	for _, msg := range resp.GetMessages() {
+		for _, a := range msg.GetMemberAlarms() {
+			if a.GetAlarm() != machineapi.EtcdMemberAlarm_NONE {
+				alarms = append(alarms, a.GetAlarm().String())
+			}
+		}
+	}
+
+	return alarms, nil
+}
+
+// EtcdDefragment defragments this node's own member.
+func (t *machineryTalosClient) EtcdDefragment(ctx context.Context) error {
+	_, err := t.c.EtcdDefragment(ctx)
+
+	return err
+}
+
+// EtcdForfeitLeadership asks this node's member to hand leadership over.
+func (t *machineryTalosClient) EtcdForfeitLeadership(ctx context.Context) error {
+	_, err := t.c.EtcdForfeitLeadership(ctx, &machineapi.EtcdForfeitLeadershipRequest{})
+
+	return err
+}

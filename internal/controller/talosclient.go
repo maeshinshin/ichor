@@ -155,6 +155,25 @@ type TalosClient interface {
 	// and etcd member of a machine whose spec.hostname, an optional override, is unset.
 	NodeName(ctx context.Context) (string, error)
 
+	// ServiceRestart restarts one Talos service on this node. Callers pass only ids from
+	// nodeActionServices (ADR 0083); the interface does not enforce the allowlist.
+	ServiceRestart(ctx context.Context, id string) error
+
+	// EtcdStatus reports this node's own etcd member: its ID and the ID of the member it
+	// believes leads, so the caller can tell whether it is the leader.
+	EtcdStatus(ctx context.Context) (EtcdStatus, error)
+
+	// EtcdAlarms lists the etcd alarms set cluster-wide as this node's member sees them
+	// ("NOSPACE", "CORRUPT"); empty when there are none.
+	EtcdAlarms(ctx context.Context) ([]string, error)
+
+	// EtcdDefragment defragments this node's own etcd member. It blocks until the member is done.
+	EtcdDefragment(ctx context.Context) error
+
+	// EtcdForfeitLeadership asks this node's etcd member, if it leads, to hand leadership to
+	// another member.
+	EtcdForfeitLeadership(ctx context.Context) error
+
 	// MachineStage reads the node's MachineStatus stage ("running",
 	// "installing", "rebooting", ...), which followStage uses to follow a
 	// node Ichor provisioned until it is running.
@@ -169,3 +188,14 @@ type EtcdMember struct {
 	ID       uint64
 	Hostname string
 }
+
+// EtcdStatus is the part of a member's status a node action decides on.
+type EtcdStatus struct {
+	// MemberID is the queried member's own ID; LeaderID the ID of the member it sees as leader.
+	MemberID, LeaderID uint64
+	// DBSize and DBSizeInUse are bytes.
+	DBSize, DBSizeInUse int64
+}
+
+// IsLeader reports whether the queried member leads.
+func (s EtcdStatus) IsLeader() bool { return s.MemberID != 0 && s.MemberID == s.LeaderID }

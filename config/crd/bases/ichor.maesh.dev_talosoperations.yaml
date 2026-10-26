@@ -101,6 +101,7 @@ spec:
                 - shutdown
                 - ca-rotation
                 - config
+                - node
                 type: string
               maxUnavailable:
                 default: 1
@@ -112,6 +113,74 @@ spec:
                 format: int32
                 minimum: 1
                 type: integer
+              node:
+                description: 'node is the action of a node-kind operation: which machine
+                  and what to do to it.'
+                properties:
+                  action:
+                    description: |-
+                      action is what to do: reboot, shutdown, restart-service, etcd-defrag (control planes),
+                      etcd-forfeit-leadership (the control plane that leads etcd), or reset (the removal flow with
+                      the node wiped, ADR 0042). etcd member removal is not an action: it is part of removal (ADR 0032).
+                    enum:
+                    - reboot
+                    - shutdown
+                    - restart-service
+                    - etcd-defrag
+                    - etcd-forfeit-leadership
+                    - reset
+                    type: string
+                  allowLeader:
+                    default: false
+                    description: |-
+                      allowLeader lets etcd-defrag run on the member that currently leads a multi-member etcd.
+                      By default it is refused there.
+                    type: boolean
+                  confirm:
+                    description: confirm must equal the machine's name for reset,
+                      the typed confirmation of an irreversible action.
+                    type: string
+                  machineRef:
+                    description: machineRef names the TalosMachine the action runs
+                      on.
+                    properties:
+                      name:
+                        default: ""
+                        description: |-
+                          Name of the referent.
+                          This field is effectively required, but due to backwards compatibility is
+                          allowed to be empty. Instances of this type with an empty value here are
+                          almost certainly wrong.
+                          More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                        type: string
+                    type: object
+                    x-kubernetes-map-type: atomic
+                    x-kubernetes-validations:
+                    - message: machineRef.name is required
+                      rule: self.name != ''
+                  service:
+                    description: |-
+                      service is the Talos service restart-service restarts. Only kubelet, containerd and cri
+                      are allowed; etcd, apid, trustd and machined never are.
+                    enum:
+                    - kubelet
+                    - containerd
+                    - cri
+                    type: string
+                required:
+                - action
+                - machineRef
+                type: object
+                x-kubernetes-validations:
+                - message: service is required for restart-service and only allowed
+                    there
+                  rule: 'self.action == ''restart-service'' ? has(self.service) :
+                    !has(self.service)'
+                - message: reset needs confirm equal to the machine name
+                  rule: self.action != 'reset' || (has(self.confirm) && self.confirm
+                    == self.machineRef.name)
+                - message: allowLeader only applies to etcd-defrag
+                  rule: '!self.allowLeader || self.action == ''etcd-defrag'''
               paused:
                 default: false
                 description: |-
@@ -128,6 +197,11 @@ spec:
               rule: self.clusterRef == oldSelf.clusterRef
             - message: kind cannot change after creation
               rule: self.kind == oldSelf.kind
+            - message: spec.node is required for the node kind and only allowed there
+              rule: (self.kind == 'node') == has(self.node)
+            - message: node cannot change after creation
+              rule: has(self.node) == has(oldSelf.node) && (!has(self.node) || self.node
+                == oldSelf.node)
           status:
             description: status defines the observed state of TalosOperation
             properties:
@@ -294,6 +368,27 @@ spec:
                 x-kubernetes-list-map-keys:
                 - name
                 x-kubernetes-list-type: map
+              node:
+                description: node is the node kind's state machine.
+                properties:
+                  message:
+                    description: message is a plain-English line about what the operation
+                      is doing or waiting for.
+                    type: string
+                  requestedAt:
+                    description: requestedAt is when the action was sent; the wait
+                      for its effect is bounded from it.
+                    format: date-time
+                    type: string
+                  step:
+                    description: |-
+                      step is empty until the action was sent, then Requested (waiting for its effect) or
+                      Removing (a reset waiting for the removal flow).
+                    enum:
+                    - Requested
+                    - Removing
+                    type: string
+                type: object
               phase:
                 description: |-
                   phase is this operation's own state-machine phase (see the

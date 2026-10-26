@@ -124,6 +124,19 @@ type fakeTalosClient struct {
 	// stage and stageErr serve talosmachine_provision_test.go (MachineStage).
 	stage    string
 	stageErr error
+	// node-action fields (ADR 0083).
+	serviceRestarts   []string
+	serviceRestartErr error
+	etcdStatus        EtcdStatus
+	etcdStatusErr     error
+	etcdAlarms        []string
+	etcdAlarmsErr     error
+	defragCalls       int
+	defragErr         error
+	forfeitCalls      int
+	forfeitErr        error
+	forfeitHook       func()
+
 	// nodeName and nodeNameErr serve NodeName: the Kubernetes node name the node reports.
 	nodeName    string
 	nodeNameErr error
@@ -987,3 +1000,33 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(reflect.DeepEqual(&gotPatch.Spec, wantPatchSpec)).To(BeTrue(), "TalosConfigPatch.spec was modified")
 	})
 })
+
+// node-action fields (node_action_test.go, ADR 0083).
+func (f *fakeTalosClient) ServiceRestart(_ context.Context, id string) error {
+	f.serviceRestarts = append(f.serviceRestarts, id)
+
+	return f.serviceRestartErr
+}
+
+func (f *fakeTalosClient) EtcdStatus(context.Context) (EtcdStatus, error) {
+	return f.etcdStatus, f.etcdStatusErr
+}
+
+func (f *fakeTalosClient) EtcdAlarms(context.Context) ([]string, error) {
+	return f.etcdAlarms, f.etcdAlarmsErr
+}
+
+func (f *fakeTalosClient) EtcdDefragment(context.Context) error {
+	f.defragCalls++
+
+	return f.defragErr
+}
+
+func (f *fakeTalosClient) EtcdForfeitLeadership(context.Context) error {
+	f.forfeitCalls++
+	if f.forfeitHook != nil {
+		f.forfeitHook()
+	}
+
+	return f.forfeitErr
+}

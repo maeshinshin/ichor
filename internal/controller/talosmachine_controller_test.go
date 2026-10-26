@@ -102,7 +102,7 @@ type fakeTalosClient struct {
 	// upgradeBudget is the time left on the Upgrade call's context when it arrived.
 	upgradeBudget time.Duration
 
-	// shutdown-related fields: shutdown_test.go's fixtures (ADR 0065).
+	// shutdown-related fields: shutdown_test.go's fixtures (ADR 0067).
 	shutdownErr   error
 	shutdownCalls []bool // the force argument of each call, in order
 

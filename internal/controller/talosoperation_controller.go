@@ -101,7 +101,7 @@ type TalosOperationReconciler struct {
 	Advance AdvanceMachineFunc
 
 	// TalosClient, ControllerNamespace and NodeName serve the shutdown kind
-	// alone (shutdown.go, ADR 0065). TalosClient opens the Talos API of one
+	// alone (shutdown.go, ADR 0067). TalosClient opens the Talos API of one
 	// machine; ControllerNamespace is where the secrets bundle lives; NodeName
 	// is the Kubernetes node this controller runs on ("" when it runs outside
 	// the cluster it manages), so its own node can be stopped last.
@@ -138,7 +138,7 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	// A shutdown that has asked every machine to stop only waits for the
-	// operator to power them on; it holds no lock (shutdown.go, ADR 0065).
+	// operator to power them on; it holds no lock (shutdown.go, ADR 0067).
 	if op.Spec.Kind == ichorv1alpha1.TalosOperationKindShutdown && op.Status.Phase == ichorv1alpha1.TalosOperationPhaseShutDown {
 		return r.awaitPowerOn(ctx, &op, &cluster)
 	}
@@ -399,7 +399,7 @@ func pendingMachines(
 func (r *TalosOperationReconciler) acquireDisruptiveLock(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, op *ichorv1alpha1.TalosOperation,
 ) (*clusterlock.Lock, error) {
-	// A cluster being shut down accepts no other disruptive work (ADR 0065).
+	// A cluster being shut down accepts no other disruptive work (ADR 0067).
 	if err := shutdownBlocker(ctx, readerOrClient(r.APIReader, r.Client), cluster.Namespace, cluster.Name, op); err != nil {
 		return nil, err
 	}

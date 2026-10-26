@@ -356,8 +356,12 @@ connection the CR is read-only with an export button. GitHub, GitLab and
 Gitea/Forgejo are supported; the backend only opens PRs, never merges.
 
 Break-glass exists for incidents: a permission-gated direct write that also
-opens the matching PR, so Git catches up. Ichor never touches an Application's
-sync policy.
+opens the matching PR, so Git catches up. Ichor never changes the sync policy of
+an Application that already exists, the user's or anyone else's. The
+Applications Ichor itself generates when Argo CD is chosen (the CNI hand-over
+and the root app of apps) are created with automated sync, prune and selfHeal,
+because the hand-over waits for Synced and Healthy and would never finish
+without it (ADR 0055).
 
 Hand-over. The CNI is the only component that follows the inlined-then-removed
 path: injected through `inlineManifests` at bootstrap (it has to be, since

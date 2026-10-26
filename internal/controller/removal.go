@@ -205,7 +205,7 @@ func (r *TalosMachineReconciler) acquireDisruptiveLock(
 	identity string, completesTransition bool,
 ) (*clusterlock.Lock, error) {
 	// A cluster being shut down accepts no other disruptive work, not even the
-	// removal that would complete a replacement (ADR 0065).
+	// removal that would complete a replacement (ADR 0067).
 	if err := shutdownBlocker(ctx, readerOrClient(r.APIReader, r.Client), cluster.Namespace, cluster.Name, nil); err != nil {
 		return nil, err
 	}

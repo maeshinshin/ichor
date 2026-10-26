@@ -210,35 +210,14 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	// Control planes go one at a time, and only once every one of them is
 	// done do workers start -- never interleaved with workers.
-	toAdvance := pendingMachines(controlPlanes, op.Status.Machines)
-	if len(toAdvance) > 0 {
-		toAdvance = toAdvance[:1]
-	} else {
-		pendingWorkers := pendingMachines(workers, op.Status.Machines)
-		pendingOwn := pendingMachines(own, op.Status.Machines)
-
-		switch {
-		case len(pendingWorkers) > 0:
-			maxUnavailable := op.Spec.MaxUnavailable
-			if maxUnavailable <= 0 {
-				maxUnavailable = 1
-			}
-
-			if int32(len(pendingWorkers)) > maxUnavailable {
-				pendingWorkers = pendingWorkers[:maxUnavailable]
-			}
-
-			toAdvance = pendingWorkers
-		case len(pendingOwn) > 0:
-			toAdvance = pendingOwn[:1]
-		default:
-			if err := lock.Release(ctx, controllerIdentity); err != nil {
-				return ctrl.Result{}, err
-			}
-
-			return ctrl.Result{}, r.setPhase(ctx, &op, ichorv1alpha1.TalosOperationPhaseCompleted,
-				reasonOperationComplete, "every eligible machine finished")
+	toAdvance := nextBatch(controlPlanes, workers, own, op.Status.Machines, op.Spec.MaxUnavailable)
+	if len(toAdvance) == 0 {
+		if err := lock.Release(ctx, controllerIdentity); err != nil {
+			return ctrl.Result{}, err
 		}
+
+		return ctrl.Result{}, r.setPhase(ctx, &op, ichorv1alpha1.TalosOperationPhaseCompleted,
+			reasonOperationComplete, "every eligible machine finished")
 	}
 
 	// The long-operation half of "the lock": renewed once per batch, the
@@ -358,6 +337,29 @@ func (r *TalosOperationReconciler) candidateMachines(
 	upgrade.SortByOrder(workers)
 
 	return controlPlanes, workers, nil
+}
+
+// nextBatch picks the machines to advance now: one pending control plane, else up to
+// maxUnavailable pending workers, else one pending machine of own; empty when all are done.
+func nextBatch(
+	controlPlanes, workers, own []*ichorv1alpha1.TalosMachine, recorded []ichorv1alpha1.TalosOperationMachineStatus,
+	maxUnavailable int32,
+) []*ichorv1alpha1.TalosMachine {
+	if pending := pendingMachines(controlPlanes, recorded); len(pending) > 0 {
+		return pending[:1]
+	}
+
+	if pending := pendingMachines(workers, recorded); len(pending) > 0 {
+		maxUnavailable = max(maxUnavailable, 1)
+
+		return pending[:min(int32(len(pending)), maxUnavailable)]
+	}
+
+	if pending := pendingMachines(own, recorded); len(pending) > 0 {
+		return pending[:1]
+	}
+
+	return nil
 }
 
 // holdOwnNodeLast takes the machine whose Kubernetes node is nodeName (the one this controller

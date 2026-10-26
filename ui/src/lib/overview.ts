@@ -1,3 +1,4 @@
+import { conditionTone } from './conditions.ts'
 import type { OpState } from './operations.ts'
 
 export type MachineLite = { approval: 'approved' | 'pending' | 'rejected'; ready: string }
@@ -16,9 +17,21 @@ export function machineCounts(ms: readonly MachineLite[]) {
   return c
 }
 
-// clusterReadiness counts the clusters whose Ready condition is True.
-export function clusterReadiness(readies: readonly string[]) {
-  return { total: readies.length, ready: readies.filter((r) => r === 'True').length }
+type Cond = { type: string; status: string }
+
+// clusterIsReady: the Ready condition when the cluster reports one. A TalosCluster
+// reports Transitioning but no Ready today, so then it is ready when it is not
+// transitioning and no health-style condition (Available, Healthy ...) is False.
+export function clusterIsReady(conds: readonly Cond[]): boolean {
+  const ready = conds.find((c) => c.type === 'Ready')
+  if (ready) return ready.status === 'True'
+  if (conds.some((c) => c.type === 'Transitioning' && c.status === 'True')) return false
+  return !conds.some((c) => conditionTone(c.type, c.status) === 'bad')
+}
+
+// clusterReadiness counts the ready clusters.
+export function clusterReadiness(clusters: readonly (readonly Cond[])[]) {
+  return { total: clusters.length, ready: clusters.filter(clusterIsReady).length }
 }
 
 // operationsLine lists which statements the Operations tile shows, in order.

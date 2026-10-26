@@ -229,7 +229,7 @@ function Discovery({
         <div class="flex gap-2">
           <Input
             id="discovery-address"
-            class="max-w-xs font-mono"
+            className="max-w-xs font-mono"
             placeholder="192.168.0.50"
             value={address}
             onInput={(e) => setAddress((e.target as HTMLInputElement).value)}

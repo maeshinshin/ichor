@@ -292,6 +292,7 @@ export const en = {
     'It does not retry by itself and nothing was rolled back. Fix the cause, then delete this operation and start a new one.',
   'ops.cluster': 'Cluster',
   'ops.maxUnavailable': 'Workers at once',
+  'ops.caStage': 'Pass {n} of {total}: {stage}',
 
   'cluster.operations': 'Operations',
   'cluster.operationsHint': 'Each of these asks for confirmation and shows which machines are affected.',
@@ -301,6 +302,7 @@ export const en = {
   'ops.start.ichor': 'Upgrade Ichor',
   'ops.start.cni': 'Switch kube-proxy',
   'ops.start.shutdown': 'Shut down cluster',
+  'ops.start.ca-rotation': 'Rotate CAs',
 
   'ops.dialog.title': '{action}: {cluster}',
   'ops.dialog.targetVersion': 'Target version (for example v1.2.3)',
@@ -321,12 +323,20 @@ export const en = {
   'ops.plan.ichor': 'Upgrade Ichor itself from {from} to {to}.',
   'ops.plan.cni': 'Switch kube-proxy from {from} to {to}.',
   'ops.plan.shutdown': 'Shut down the whole cluster.',
+  'ops.plan.ca-rotation': 'Replace the Talos API and Kubernetes API certificate authorities.',
   'ops.plan.effectReboot': 'Each machine is upgraded and reboots.',
   'ops.plan.effectRestart':
     'Configuration is applied without a reboot; the kubelet and control plane components restart on each machine.',
   'ops.plan.effectStop':
     'Every machine is powered off and stays off until you start it again. The Kubernetes API goes down.',
   'ops.plan.effectNone': 'No machine is touched; a Job applies the new install manifest.',
+  'ops.plan.effectCARotation':
+    'Every machine is reconfigured once per pass, without a reboot. The kubelet restarts on each machine in the passes that change the Kubernetes CA.',
+  'ops.plan.stages': 'Passes over every machine, each verified before the next: {stages}.',
+  'ops.plan.orderCARotation': 'One machine at a time, control planes first; every machine is visited in each pass:',
+  'ops.plan.bundleStaleTitle': 'Your secrets bundle becomes stale',
+  'ops.plan.bundleStale':
+    'When the rotation completes, the secrets bundle in the cluster is replaced and the copy on your machine is out of date. Run "ichor cluster bundle-export {name}" and keep the file safe. Machines held with upgrade-hold are not skipped.',
   'ops.plan.counts': '{total} machine(s): {controlPlanes} control plane, {workers} worker.',
   'ops.plan.orderRollout': 'Control planes one at a time, then workers (at most {n} at once):',
   'ops.plan.orderShutdown': 'Workers first, stopped together; then the control planes at once:',
@@ -341,6 +351,7 @@ export const en = {
 
   'enum.CNI': 'CNI',
   'enum.SHUTDOWN': 'Shutdown',
+  'enum.CA_ROTATION': 'CA rotation',
 
   // Names of the values of the proto enums, keyed by the enum's own value
   // name. Different enums share a name only where the meaning is the same.
@@ -673,6 +684,7 @@ export const ja: Dict = {
     '自動では再試行せず、元に戻すこともしていません。原因を直してから、この操作を削除して新しく開始してください。',
   'ops.cluster': 'クラスタ',
   'ops.maxUnavailable': '同時に処理するワーカー数',
+  'ops.caStage': '第 {n} 段 / 全 {total} 段: {stage}',
 
   'cluster.operations': '操作',
   'cluster.operationsHint': 'どれも確認を求め、影響を受けるマシンを表示します。',
@@ -682,6 +694,7 @@ export const ja: Dict = {
   'ops.start.ichor': 'Ichor をアップグレード',
   'ops.start.cni': 'kube-proxy を切り替え',
   'ops.start.shutdown': 'クラスタを停止',
+  'ops.start.ca-rotation': 'CA をローテーション',
 
   'ops.dialog.title': '{action}: {cluster}',
   'ops.dialog.targetVersion': '移行先のバージョン（例: v1.2.3）',
@@ -702,12 +715,20 @@ export const ja: Dict = {
   'ops.plan.ichor': 'Ichor 自身を {from} から {to} へアップグレードします。',
   'ops.plan.cni': 'kube-proxy を {from} から {to} へ切り替えます。',
   'ops.plan.shutdown': 'クラスタ全体を停止します。',
+  'ops.plan.ca-rotation': 'Talos API と Kubernetes API の認証局（CA）を入れ替えます。',
   'ops.plan.effectReboot': '各マシンがアップグレードされ、再起動します。',
   'ops.plan.effectRestart':
     '設定は再起動なしで適用されます。各マシンで kubelet とコントロールプレーンのコンポーネントが再起動します。',
   'ops.plan.effectStop':
     'すべてのマシンの電源が切れ、再び起動するまで停止したままです。Kubernetes API も使えなくなります。',
   'ops.plan.effectNone': 'どのマシンにも触れません。Job が新しいインストールマニフェストを適用します。',
+  'ops.plan.effectCARotation':
+    '各マシンの設定を段ごとに 1 回ずつ、再起動なしで変更します。Kubernetes の CA が変わる段では、各マシンで kubelet が再起動します。',
+  'ops.plan.stages': 'すべてのマシンを順に回る段（次の段に進む前に毎回検証します）: {stages}。',
+  'ops.plan.orderCARotation': '1 台ずつ、コントロールプレーンから。各段ですべてのマシンを回ります:',
+  'ops.plan.bundleStaleTitle': '手元のシークレットバンドルが古くなります',
+  'ops.plan.bundleStale':
+    'ローテーションが完了すると、クラスタ内のシークレットバンドルが入れ替わり、手元のコピーは古くなります。「ichor cluster bundle-export {name}」を実行し、そのファイルを安全に保管してください。upgrade-hold を付けたマシンも対象から外れません。',
   'ops.plan.counts': '{total} 台（コントロールプレーン {controlPlanes} 台、ワーカー {workers} 台）。',
   'ops.plan.orderRollout': 'コントロールプレーンを 1 台ずつ、その後ワーカーを（同時に最大 {n} 台）:',
   'ops.plan.orderShutdown': '先にワーカーをまとめて停止し、その後コントロールプレーンを一斉に停止します:',
@@ -722,6 +743,7 @@ export const ja: Dict = {
 
   'enum.CNI': 'CNI',
   'enum.SHUTDOWN': '停止',
+  'enum.CA_ROTATION': 'CA のローテーション',
 }
 
 export type Lang = 'en' | 'ja'

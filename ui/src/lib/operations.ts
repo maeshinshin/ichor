@@ -4,7 +4,7 @@
 export type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline'
 
 // The kinds an operation can have, as the screens name them.
-export type OpKind = 'talos' | 'kubernetes' | 'ichor' | 'cni' | 'shutdown'
+export type OpKind = 'talos' | 'kubernetes' | 'ichor' | 'cni' | 'shutdown' | 'ca-rotation'
 
 export type OpState = 'pending' | 'running' | 'paused' | 'failed' | 'shutdown' | 'done'
 
@@ -102,6 +102,7 @@ export function targetError(kind: OpKind, input: string): 'required' | 'invalid'
   const v = input.trim()
   switch (kind) {
     case 'shutdown':
+    case 'ca-rotation':
       return null
     case 'cni':
       return v === '' ? 'required' : v === 'enabled' || v === 'replaced' ? null : 'invalid'
@@ -114,4 +115,25 @@ export function targetError(kind: OpKind, input: string): 'required' | 'invalid'
 // to be typed.
 export function confirmMatches(typed: string, name: string): boolean {
   return name !== '' && typed.trim() === name
+}
+
+// kindNeedsTarget is false for the kinds that start without a version or mode.
+export function kindNeedsTarget(kind: OpKind): boolean {
+  return kind !== 'shutdown' && kind !== 'ca-rotation'
+}
+
+// kindNeedsTypedName: the kinds that take every machine through a disruptive
+// change ask for the cluster's name to be typed.
+export function kindNeedsTypedName(kind: OpKind): boolean {
+  return kind === 'shutdown' || kind === 'ca-rotation'
+}
+
+// The stages status.caRotation.stage goes through, in order.
+const caStages = ['Accepting', 'Issuing', 'Dropping', 'Finalizing', 'Done'] as const
+
+// caStageProgress is where a rotation is, as a 1-based position; null before
+// the new CAs are saved (empty stage) or for a stage this UI does not know.
+export function caStageProgress(stage: string): { index: number; total: number } | null {
+  const i = (caStages as readonly string[]).indexOf(stage)
+  return i < 0 ? null : { index: i + 1, total: caStages.length }
 }

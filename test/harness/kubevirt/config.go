@@ -19,6 +19,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	clientconfig "github.com/siderolabs/talos/pkg/machinery/client/config"
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
@@ -49,7 +50,9 @@ var localhostSANs = []string{"127.0.0.1", "localhost"}
 // that authenticates against it, and the secrets bundle both were generated from.
 type generatedConfig struct {
 	machineConfig []byte
-	talosconfig   *clientconfig.Config
+	// workerConfig is the matching worker config from the same input (same secrets bundle).
+	workerConfig []byte
+	talosconfig  *clientconfig.Config
 
 	// secretsBundle is the same *secrets.Bundle the controller's loadBundle reads out
 	// of a Secret (ADR 0032): publishHA writes it to disk in that exact shape so a
@@ -78,13 +81,17 @@ func generateControlPlaneConfig(
 	endpoint := fmt.Sprintf("https://%s:6443", nodeIPs[0])
 	installImage := fmt.Sprintf("factory.talos.dev/metal-installer/%s:%s", talosFactorySchematic, talosVersion)
 
+	k8sVersion := constants.DefaultKubernetesVersion
+	if v := os.Getenv(k8sVersionEnv); v != "" {
+		k8sVersion = strings.TrimPrefix(v, "v")
+	}
 	opts := append([]generate.Option{
 		generate.WithInstallDisk("/dev/vda"),
 		generate.WithInstallImage(installImage),
 		generate.WithEndpointList(nodeIPs),
 		generate.WithAdditionalSubjectAltNames(localhostSANs),
 	}, extra...)
-	input, err := generate.NewInput(clusterName, endpoint, constants.DefaultKubernetesVersion, opts...)
+	input, err := generate.NewInput(clusterName, endpoint, k8sVersion, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("building config generator input: %w", err)
 	}
@@ -110,13 +117,27 @@ func generateControlPlaneConfig(
 		return nil, fmt.Errorf("marshaling control-plane config: %w", err)
 	}
 
+	wcfg, err := input.Config(machine.TypeWorker)
+	if err != nil {
+		return nil, fmt.Errorf("generating worker config: %w", err)
+	}
+	if os.Getenv(cniEnv) == cniNone {
+		if wcfg, err = withoutFlannel(wcfg); err != nil {
+			return nil, err
+		}
+	}
+	workerConfig, err := wcfg.Bytes()
+	if err != nil {
+		return nil, fmt.Errorf("marshaling worker config: %w", err)
+	}
+
 	talosCfg, err := input.Talosconfig()
 	if err != nil {
 		return nil, fmt.Errorf("generating talosconfig: %w", err)
 	}
 
 	return &generatedConfig{
-		machineConfig: machineConfig, talosconfig: talosCfg, secretsBundle: input.Options.SecretsBundle,
+		machineConfig: machineConfig, workerConfig: workerConfig, talosconfig: talosCfg, secretsBundle: input.Options.SecretsBundle,
 	}, nil
 }
 
@@ -141,6 +162,13 @@ const (
 	cniEnv  = "ICHOR_E2E_CNI"
 	cniNone = "none"
 )
+
+// k8sVersionEnv overrides the Kubernetes version the inner cluster boots with (vX.Y.Z or X.Y.Z),
+// so an upgrade run can start one patch or minor behind the newest release.
+const k8sVersionEnv = "ICHOR_E2E_K8S_VERSION"
+
+// workersEnv is how many worker VMs "up-ha" adds after the three control planes (default 0).
+const workersEnv = "ICHOR_E2E_HA_WORKERS"
 
 // withoutFlannel returns cfg with its KubeFlannelCNIConfig document removed.
 func withoutFlannel(cfg coreconfig.Provider) (coreconfig.Provider, error) {

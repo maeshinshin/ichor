@@ -173,6 +173,10 @@ func (r *TalosMachineReconciler) holdIfOverCap(
 // overCapRecheck is how often a machine held for ControlPlaneOverCap looks again.
 const overCapRecheck = 15 * time.Second
 
+// transientRecheck is how often a machine whose Ready=False has a cause that time can fix (node
+// unreachable, Secret not yet created, lock held ...) looks again. docs/adr/0059.
+const transientRecheck = 30 * time.Second
+
 const driftPolicyAutoCorrect = "autoCorrect"
 
 // TalosMachineReconciler reconciles a TalosMachine object.
@@ -281,7 +285,7 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	clusterKey := types.NamespacedName{Namespace: m.Namespace, Name: m.Spec.ClusterRef.Name}
 	if err := r.Get(ctx, clusterKey, &cluster); err != nil {
 		if apierrors.IsNotFound(err) {
-			return ctrl.Result{}, r.ready(ctx, &m, metav1.ConditionFalse, reasonClusterNotFound,
+			return r.retryLater(ctx, &m, reasonClusterNotFound,
 				fmt.Sprintf("TalosCluster %q not found", clusterKey.Name))
 		}
 
@@ -310,7 +314,7 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	if err != nil {
 		log.Error(err, "loading secrets bundle")
 
-		return ctrl.Result{}, r.ready(ctx, &m, metav1.ConditionFalse, reasonSecretsBundleUnavailable,
+		return r.retryLater(ctx, &m, reasonSecretsBundleUnavailable,
 			"secrets bundle unavailable")
 	}
 
@@ -325,7 +329,7 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	if err != nil {
 		log.Error(err, "rendering machine configuration")
 
-		return ctrl.Result{}, r.ready(ctx, &m, metav1.ConditionFalse, reasonRenderFailed,
+		return r.retryLater(ctx, &m, reasonRenderFailed,
 			"rendering machine configuration failed")
 	}
 
@@ -340,7 +344,7 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	if err != nil {
 		log.Error(err, "hashing render inputs")
 
-		return ctrl.Result{}, r.ready(ctx, &m, metav1.ConditionFalse, reasonRenderFailed,
+		return r.retryLater(ctx, &m, reasonRenderFailed,
 			"rendering machine configuration failed")
 	}
 
@@ -355,7 +359,7 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	if err != nil {
 		log.Error(err, "connecting to Talos API")
 
-		return ctrl.Result{}, r.ready(ctx, &m, metav1.ConditionFalse, reasonTalosConnectFailed,
+		return r.retryLater(ctx, &m, reasonTalosConnectFailed,
 			"connecting to the node's Talos API failed")
 	}
 
@@ -372,7 +376,7 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	if err != nil {
 		log.Error(err, "reading current machine configuration")
 
-		return ctrl.Result{}, r.ready(ctx, &m, metav1.ConditionFalse, reasonCurrentConfigUnavailable,
+		return r.retryLater(ctx, &m, reasonCurrentConfigUnavailable,
 			"reading the node's current configuration failed")
 	}
 
@@ -398,13 +402,13 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	if err != nil {
 		log.Error(err, "diffing current and rendered configuration")
 
-		return ctrl.Result{}, r.ready(ctx, &m, metav1.ConditionFalse, reasonConfigDiffFailed,
+		return r.retryLater(ctx, &m, reasonConfigDiffFailed,
 			"comparing current and rendered configuration failed")
 	}
 
 	contract, err := coreconfig.ParseContractFromVersion(cluster.Spec.VersionContract)
 	if err != nil {
-		return ctrl.Result{}, r.ready(ctx, &m, metav1.ConditionFalse, reasonRenderFailed,
+		return r.retryLater(ctx, &m, reasonRenderFailed,
 			"invalid versionContract")
 	}
 
@@ -418,7 +422,7 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	if err != nil {
 		log.Error(err, "dry-run applying rendered configuration")
 
-		return ctrl.Result{}, r.ready(ctx, &m, metav1.ConditionFalse, reasonDryRunFailed,
+		return r.retryLater(ctx, &m, reasonDryRunFailed,
 			"dry-run apply failed")
 	}
 
@@ -449,7 +453,7 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 				driftNote, strings.Join(impact.InstallTimeOnly, ", ")))
 
 	case impact.RebootRequired:
-		return ctrl.Result{}, r.refuseReboot(ctx, &m, &cluster, driftNote)
+		return r.refuseReboot(ctx, &m, &cluster, driftNote)
 
 	case drifted && cluster.Spec.DriftPolicy != driftPolicyAutoCorrect:
 		return ctrl.Result{}, r.ready(ctx, &m, metav1.ConditionFalse, reasonNodeDrifted,
@@ -460,7 +464,7 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		if err := talos.ApplyNoReboot(ctx, rendered); err != nil {
 			log.Error(err, "applying rendered configuration")
 
-			return ctrl.Result{}, r.ready(ctx, &m, metav1.ConditionFalse, reasonApplyFailed,
+			return r.retryLater(ctx, &m, reasonApplyFailed,
 				"applying rendered configuration failed")
 		}
 
@@ -522,24 +526,25 @@ func desiredInputsHash(
 // the only correct move here is a visible, lock-protected refusal.
 func (r *TalosMachineReconciler) refuseReboot(
 	ctx context.Context, m *ichorv1alpha1.TalosMachine, cluster *ichorv1alpha1.TalosCluster, driftNote string,
-) error {
+) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
 	// A reboot-causing apply never itself completes a control-plane
 	// transition, so completesTransition is always false here.
 	lock, err := r.acquireDisruptiveLock(ctx, cluster, m, controllerIdentity, false)
 	if err != nil {
+		// The transition ending or the lock being released enqueues nothing, so both poll.
 		if transitioning, ok := errors.AsType[*transitioningError](err); ok {
-			return r.ready(ctx, m, metav1.ConditionFalse, reasonClusterTransitioning,
+			return r.retryLater(ctx, m, reasonClusterTransitioning,
 				fmt.Sprintf("%s%s; other disruptive work is refused until it returns to the declared odd count",
 					driftNote, transitioning.Error()))
 		}
 		if held, ok := errors.AsType[*clusterlock.HeldError](err); ok {
-			return r.ready(ctx, m, metav1.ConditionFalse, reasonClusterLockHeld,
+			return r.retryLater(ctx, m, reasonClusterLockHeld,
 				fmt.Sprintf("cluster lock held by %q; reboot-requiring change deferred", held.Holder))
 		}
 
-		return err
+		return ctrl.Result{}, err
 	}
 
 	defer func() {
@@ -548,9 +553,24 @@ func (r *TalosMachineReconciler) refuseReboot(
 		}
 	}()
 
-	return r.ready(ctx, m, metav1.ConditionFalse, reasonRebootRequired,
+	return ctrl.Result{}, r.ready(ctx, m, metav1.ConditionFalse, reasonRebootRequired,
 		driftNote+"configuration change needs a reboot; this phase does not reboot nodes -- "+
 			"draining, the node-operation hook and etcd checks that must precede a reboot are later work")
+}
+
+// retryLater records a False Ready for a failure that time can fix and asks to be reconciled again
+// after transientRecheck. It is a Result, not an error: the status written here is the report (an
+// error would add a stack to the log and the exponential backoff, up to ~17 minutes, would stretch
+// recovery after a whole-cluster restart). If the status write itself fails, that error wins and
+// controller-runtime backs off, as for any other.
+func (r *TalosMachineReconciler) retryLater(
+	ctx context.Context, m *ichorv1alpha1.TalosMachine, reason, message string,
+) (ctrl.Result, error) {
+	if err := r.ready(ctx, m, metav1.ConditionFalse, reason, message); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	return ctrl.Result{RequeueAfter: transientRecheck}, nil
 }
 
 // ready sets the Ready condition, keeps observedGeneration honest

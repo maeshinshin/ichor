@@ -38,7 +38,43 @@ const (
 	// dispatches it to its own state machine, and while it has not
 	// Completed every other disruptive operation on the cluster is refused.
 	TalosOperationKindShutdown = "shutdown"
+
+	// TalosOperationKindCARotation replaces the Talos API CA and the Kubernetes API CA in the three
+	// passes of ADR 0063 (accept the new CA, make it the issuer, drop the old one). Like shutdown it
+	// runs its own state machine, held in status.caRotation, instead of the per-machine rollout.
+	TalosOperationKindCARotation = "ca-rotation"
 )
+
+// Values for TalosOperationCARotationStatus.Stage, in the order they run. The stage names which CA
+// every node is being given: it is the whole answer to "which CA is accepted and which issues".
+const (
+	// CARotationStageAccepting: the new CAs are added to every node's accepted CAs; the old CAs
+	// still issue. The new CAs' keys are already in the bundle Secret's rotation.yaml.
+	CARotationStageAccepting = "Accepting"
+
+	// CARotationStageIssuing: the new CAs issue on every node; the old CAs are still accepted.
+	CARotationStageIssuing = "Issuing"
+
+	// CARotationStageDropping: the old CAs are removed from every node's accepted CAs.
+	CARotationStageDropping = "Dropping"
+
+	// CARotationStageFinalizing: every node runs on the new CAs alone. The bundle Secret's
+	// secrets.yaml is replaced by the new CAs and rotation.yaml removed, then Ichor's own dial is
+	// checked against the replaced bundle.
+	CARotationStageFinalizing = "Finalizing"
+
+	// CARotationStageDone: the rotation is complete.
+	CARotationStageDone = "Done"
+)
+
+// ConditionBundleBackupStale is the TalosCluster condition that is True from the end of a CA
+// rotation until the user has exported the new secrets bundle (ADR 0063).
+const ConditionBundleBackupStale = "BundleBackupStale"
+
+// BundleExportedAnnotation, set on a TalosCluster by `ichor cluster bundle-export` after it has saved
+// the bundle, holds the fingerprint (secretsbundle.Fingerprint) of the bundle it saved. When it
+// equals the live bundle's fingerprint the controller clears BundleBackupStale.
+const BundleExportedAnnotation = "ichor.maesh.dev/bundle-exported"
 
 // Values for TalosOperationStatus.Phase.
 const (
@@ -100,11 +136,12 @@ type TalosOperationSpec struct {
 
 	// kind names which upgrade this is: talos (spec.talosVersion/schematic),
 	// kubernetes (spec.kubernetesVersion), or ichor (the controller/CRDs/UI
-	// install), cni (a spec.cni.kubeProxy switch, ADR 0066), or shutdown (a
-	// planned stop of the whole cluster, ADR 0067). This CRD and its controller only
+	// install), cni (a spec.cni.kubeProxy switch, ADR 0066), shutdown (a
+	// planned stop of the whole cluster, ADR 0067), or ca-rotation (the Talos API and
+	// Kubernetes API CAs, ADR 0063). This CRD and its controller only
 	// store and report it -- each kind's own execution is a separate unit's work.
-	// shutdown is the exception: it runs its own state machine.
-	// +kubebuilder:validation:Enum=talos;kubernetes;ichor;cni;shutdown
+	// shutdown and ca-rotation are the exceptions: each runs its own state machine.
+	// +kubebuilder:validation:Enum=talos;kubernetes;ichor;cni;shutdown;ca-rotation
 	// +required
 	Kind string `json:"kind"`
 
@@ -175,11 +212,59 @@ type TalosOperationStatus struct {
 	// +optional
 	FailureReason string `json:"failureReason,omitempty"`
 
+	// caRotation is the ca-rotation kind's state machine: which stage every node is being taken
+	// to, and which CA is accepted and which issues in it. Public fingerprints only.
+	// +optional
+	CARotation *TalosOperationCARotationStatus `json:"caRotation,omitempty"`
+
 	// conditions represent the current state of the TalosOperation resource.
 	// +listType=map
 	// +listMapKey=type
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
+}
+
+// TalosOperationCARotationStatus is the whole state of a CA rotation. Nothing else holds it: a
+// restarted controller continues from stage, and per-node progress inside a stage is re-derived
+// from what each node reports.
+type TalosOperationCARotationStatus struct {
+	// stage is the stage every node is being taken to; see the CARotationStage* constants.
+	// Empty until the new CAs have been generated and saved.
+	// +kubebuilder:validation:Enum=Accepting;Issuing;Dropping;Finalizing;Done
+	// +optional
+	Stage string `json:"stage,omitempty"`
+
+	// certificates lists the two rotated CAs and, for the current stage, which fingerprint issues
+	// and which are accepted.
+	// +listType=map
+	// +listMapKey=name
+	// +optional
+	Certificates []CARotationCertificate `json:"certificates,omitempty"`
+}
+
+// CARotationCertificate is one rotated CA. Fingerprints are the SHA-256 of the certificate's DER,
+// hex encoded; none of this is secret.
+type CARotationCertificate struct {
+	// name is talos (the Talos API CA) or kubernetes (the Kubernetes API CA).
+	// +required
+	Name string `json:"name"`
+
+	// previous is the CA the rotation started from.
+	// +required
+	Previous string `json:"previous"`
+
+	// next is the new CA, whose key is in the bundle Secret's rotation.yaml until the rotation
+	// is finalized.
+	// +required
+	Next string `json:"next"`
+
+	// issuing is the CA that issues certificates in the current stage.
+	// +optional
+	Issuing string `json:"issuing,omitempty"`
+
+	// accepted lists the CAs, besides the issuing one, that nodes accept in the current stage.
+	// +optional
+	Accepted []string `json:"accepted,omitempty"`
 }
 
 // +kubebuilder:object:root=true

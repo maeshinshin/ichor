@@ -1,0 +1,230 @@
+/*
+Copyright 2026 maeshinshin.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package render
+
+import (
+	"strings"
+	"testing"
+
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+)
+
+const (
+	contractV113 = "v1.13"
+
+	docKubeNetwork  = "kind: KubeNetworkConfig"
+	docFlannel      = "kind: KubeFlannelCNIConfig"
+	docUnattended   = "kind: UnattendedInstallConfig"
+	defaultPodNet   = "10.244.0.0/16"
+	defaultSvcNet   = "10.96.0.0/12"
+	customPodNet    = "10.200.0.0/16"
+	customSvcNet    = "10.201.0.0/16"
+	legacyCNINone   = "name: none"
+	legacyInstall   = "install:"
+	presetCiliumStr = "cilium"
+)
+
+func renderFor(
+	t *testing.T, contract string, mutate func(*ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine),
+) string {
+	t.Helper()
+
+	c := testCluster("true")
+	c.Spec.VersionContract = contract
+	m := testMachine("node-a", roleControlPlane, nil)
+
+	if mutate != nil {
+		mutate(c, m)
+	}
+
+	return mustRender(t, c, m, testBundle(t), nil)
+}
+
+func requireAll(t *testing.T, out string, want ...string) {
+	t.Helper()
+
+	for _, w := range want {
+		if !strings.Contains(out, w) {
+			t.Errorf("rendered config lacks %q:\n%s", w, out)
+		}
+	}
+}
+
+func requireNone(t *testing.T, out string, unwanted ...string) {
+	t.Helper()
+
+	for _, w := range unwanted {
+		if strings.Contains(out, w) {
+			t.Errorf("rendered config must not contain %q:\n%s", w, out)
+		}
+	}
+}
+
+func TestSubnetsFollowTheContract(t *testing.T) {
+	withNet := func(c *ichorv1alpha1.TalosCluster, _ *ichorv1alpha1.TalosMachine) {
+		c.Spec.Network = &ichorv1alpha1.TalosClusterNetwork{
+			PodSubnets: []string{customPodNet}, ServiceSubnets: []string{customSvcNet},
+		}
+	}
+
+	t.Run("v1.14 renders the KubeNetworkConfig document", func(t *testing.T) {
+		out := renderFor(t, versionContract, withNet)
+		requireAll(t, out, docKubeNetwork, customPodNet, customSvcNet)
+		requireNone(t, out, defaultPodNet, defaultSvcNet, "podSubnets: []")
+	})
+
+	t.Run("v1.14 without spec.network keeps Talos's defaults", func(t *testing.T) {
+		requireAll(t, renderFor(t, versionContract, nil), docKubeNetwork, defaultPodNet, defaultSvcNet)
+	})
+
+	t.Run("v1.14 sets one range and keeps the other default", func(t *testing.T) {
+		out := renderFor(t, versionContract, func(c *ichorv1alpha1.TalosCluster, _ *ichorv1alpha1.TalosMachine) {
+			c.Spec.Network = &ichorv1alpha1.TalosClusterNetwork{PodSubnets: []string{customPodNet}}
+		})
+		requireAll(t, out, customPodNet, defaultSvcNet)
+		requireNone(t, out, defaultPodNet)
+	})
+
+	t.Run("v1.13 renders cluster.network", func(t *testing.T) {
+		out := renderFor(t, contractV113, withNet)
+		requireAll(t, out, "podSubnets:", customPodNet, "serviceSubnets:", customSvcNet)
+		requireNone(t, out, docKubeNetwork, defaultPodNet, defaultSvcNet)
+	})
+
+	t.Run("v1.13 without spec.network keeps Talos's defaults", func(t *testing.T) {
+		requireAll(t, renderFor(t, contractV113, nil), defaultPodNet, defaultSvcNet)
+	})
+
+	t.Run("a worker gets the same subnets", func(t *testing.T) {
+		out := renderFor(t, versionContract, func(c *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine) {
+			withNet(c, m)
+			m.Spec.Role = roleWorker
+		})
+		requireAll(t, out, docKubeNetwork, customPodNet)
+	})
+}
+
+func TestTalosFlannelOnlyForTheFlannelPreset(t *testing.T) {
+	preset := func(p string) func(*ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine) {
+		return func(c *ichorv1alpha1.TalosCluster, _ *ichorv1alpha1.TalosMachine) {
+			c.Spec.CNI.Preset = p
+		}
+	}
+
+	t.Run("v1.14 flannel keeps the flannel document", func(t *testing.T) {
+		requireAll(t, renderFor(t, versionContract, preset("flannel")), docFlannel)
+	})
+
+	t.Run("v1.14 unset preset is flannel", func(t *testing.T) {
+		requireAll(t, renderFor(t, versionContract, nil), docFlannel)
+	})
+
+	for _, p := range []string{presetCiliumStr, "custom"} {
+		t.Run("v1.14 "+p+" drops the flannel document", func(t *testing.T) {
+			out := renderFor(t, versionContract, preset(p))
+			requireNone(t, out, docFlannel)
+			requireAll(t, out, docKubeNetwork)
+		})
+
+		t.Run("v1.13 "+p+" sets cni none", func(t *testing.T) {
+			requireAll(t, renderFor(t, contractV113, preset(p)), legacyCNINone)
+		})
+	}
+
+	t.Run("v1.13 flannel does not set cni none", func(t *testing.T) {
+		requireNone(t, renderFor(t, contractV113, preset("flannel")), legacyCNINone)
+	})
+
+	t.Run("a worker has no flannel document either way", func(t *testing.T) {
+		out := renderFor(t, versionContract, func(c *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine) {
+			preset(presetCiliumStr)(c, m)
+			m.Spec.Role = roleWorker
+		})
+		requireNone(t, out, docFlannel)
+	})
+}
+
+func TestInstallTargetFollowsTheContract(t *testing.T) {
+	install := func(d ichorv1alpha1.TalosMachineDisk, image string) func(*ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine) {
+		return func(_ *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine) {
+			m.Spec.Install = &ichorv1alpha1.TalosMachineInstall{Disk: d, Image: image}
+		}
+	}
+
+	const image = "factory.talos.dev/metal-installer/abc:v1.14.3"
+
+	t.Run("no spec.install renders no install configuration at v1.14", func(t *testing.T) {
+		requireNone(t, renderFor(t, versionContract, nil), docUnattended)
+	})
+
+	for _, tc := range []struct {
+		name string
+		disk ichorv1alpha1.TalosMachineDisk
+		want string
+	}{
+		{"wwid", ichorv1alpha1.TalosMachineDisk{WWID: "naa.5000c500a1b2c3d4"}, `disk.wwid == "naa.5000c500a1b2c3d4"`},
+		{"serial", ichorv1alpha1.TalosMachineDisk{Serial: "S3Z9NX0M"}, `disk.serial == "S3Z9NX0M"`},
+		{
+			"by-id", ichorv1alpha1.TalosMachineDisk{ByIDPath: "/dev/disk/by-id/nvme-X1"},
+			`"/dev/disk/by-id/nvme-X1" in disk.symlinks`,
+		},
+		{"bus path", ichorv1alpha1.TalosMachineDisk{BusPath: "/pci0000:00/0000:00:17.0/ata1"}, `disk.bus_path == "/pci0000:00/0000:00:17.0/ata1"`},
+		{"dev path", ichorv1alpha1.TalosMachineDisk{DevPath: "/dev/vda"}, `disk.dev_path == "/dev/vda"`},
+	} {
+		t.Run("v1.14 "+tc.name, func(t *testing.T) {
+			out := renderFor(t, versionContract, install(tc.disk, image))
+			requireAll(t, out, docUnattended, image)
+			// The CEL expression is quoted by YAML, so compare with the inner quotes escaped or not.
+			if !strings.Contains(out, tc.want) && !strings.Contains(out, strings.ReplaceAll(tc.want, `"`, `\"`)) {
+				t.Errorf("want selector %s in:\n%s", tc.want, out)
+			}
+
+			requireNone(t, out, legacyInstall)
+		})
+	}
+
+	t.Run("v1.14 without an image still renders", func(t *testing.T) {
+		requireAll(t, renderFor(t, versionContract, install(ichorv1alpha1.TalosMachineDisk{DevPath: "/dev/vda"}, "")), docUnattended)
+	})
+
+	t.Run("v1.13 wwid", func(t *testing.T) {
+		out := renderFor(t, contractV113, install(ichorv1alpha1.TalosMachineDisk{WWID: "naa.1"}, image))
+		requireAll(t, out, legacyInstall, "diskSelector:", "wwid: naa.1", image)
+		requireNone(t, out, docUnattended)
+	})
+
+	t.Run("v1.13 serial and bus path", func(t *testing.T) {
+		requireAll(t, renderFor(t, contractV113, install(ichorv1alpha1.TalosMachineDisk{Serial: "S1"}, "")), "serial: S1")
+		requireAll(t, renderFor(t, contractV113, install(ichorv1alpha1.TalosMachineDisk{BusPath: "/pci0000:00/x"}, "")), "busPath: /pci0000:00/x")
+	})
+
+	t.Run("v1.13 by-id and dev path are installDisk", func(t *testing.T) {
+		requireAll(t, renderFor(t, contractV113, install(ichorv1alpha1.TalosMachineDisk{ByIDPath: "/dev/disk/by-id/x"}, "")),
+			"disk: /dev/disk/by-id/x")
+		requireAll(t, renderFor(t, contractV113, install(ichorv1alpha1.TalosMachineDisk{DevPath: "/dev/vda"}, "")), "disk: /dev/vda")
+	})
+
+	t.Run("an empty selector is an error, not a silent no-op", func(t *testing.T) {
+		c := testCluster("true")
+		m := testMachine("node-a", roleControlPlane, nil)
+		m.Spec.Install = &ichorv1alpha1.TalosMachineInstall{}
+
+		if _, _, err := Render(c, m, testBundle(t), nil, nil); err == nil {
+			t.Fatal("want an error for an install with no disk")
+		}
+	})
+}

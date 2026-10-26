@@ -731,7 +731,7 @@ var _ = Describe("TalosMachine", func() {
 	DescribeTable("install.disk",
 		func(disk *TalosMachineDisk, accepted bool) {
 			m := newMachine()
-			m.Spec.Install = &TalosMachineInstall{Disk: disk}
+			m.Spec.Install = &TalosMachineInstall{Disk: *disk}
 
 			err := k8sClient.Create(context.Background(), m)
 			if accepted {

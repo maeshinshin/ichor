@@ -46,6 +46,9 @@ type adoptPlan struct {
 	Machine              string
 	Patch                *ichorv1alpha1.TalosConfigPatch
 	UnrepresentablePaths []string
+
+	// Skipped, when set, is why adopt did not look at this machine at all.
+	Skipped string
 }
 
 // buildAdoptPlan diffs m's live configuration (currentCfg, as read from the

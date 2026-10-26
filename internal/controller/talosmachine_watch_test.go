@@ -24,7 +24,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/utils/ptr"
@@ -67,7 +66,7 @@ var _ = Describe("TalosMachine re-reconcile on render inputs", func() {
 	BeforeEach(func() {
 		Expect(settle).To(BeNumerically("<", transientRecheck))
 
-		nsObj := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{GenerateName: "watch-"}}
+		nsObj := &corev1.Namespace{GenerateName: "watch-"}
 		Expect(k8sClient.Create(ctx, nsObj)).To(Succeed())
 
 		ns = nsObj.Name
@@ -77,23 +76,23 @@ var _ = Describe("TalosMachine re-reconcile on render inputs", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		secret := &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{GenerateName: "bundle-", Namespace: ns},
-			Data:       map[string][]byte{bundleSecretKey: raw},
+			GenerateName: "bundle-", Namespace: ns,
+			Data: map[string][]byte{bundleSecretKey: raw},
 		}
 		Expect(k8sClient.Create(ctx, secret)).To(Succeed())
 
 		clus = &ichorv1alpha1.TalosCluster{
-			ObjectMeta: metav1.ObjectMeta{GenerateName: testClusterGenerate, Namespace: ns},
-			Spec:       newClusterSpec(secret.Name, "v1.14"),
+			GenerateName: testClusterGenerate, Namespace: ns,
+			Spec: newClusterSpec(secret.Name, "v1.14"),
 		}
 		Expect(k8sClient.Create(ctx, clus)).To(Succeed())
 
 		m = &ichorv1alpha1.TalosMachine{
-			ObjectMeta: metav1.ObjectMeta{GenerateName: "machine-", Namespace: ns},
+			GenerateName: machinePrefix, Namespace: ns,
 			Spec: ichorv1alpha1.TalosMachineSpec{
 				ClusterRef:    corev1.LocalObjectReference{Name: clus.Name},
 				Identity:      ichorv1alpha1.TalosMachineIdentity{UUID: "uuid-" + clus.Name},
-				Endpoint:      "10.0.0.10:50000",
+				Endpoint:      storageTestEndpoint,
 				Role:          roleWorker,
 				ApprovalState: ichorv1alpha1.MachineApprovalStateApproved,
 			},
@@ -136,12 +135,12 @@ var _ = Describe("TalosMachine re-reconcile on render inputs", func() {
 		before := appliedHash()
 
 		Expect(k8sClient.Create(ctx, &ichorv1alpha1.TalosConfigPatch{
-			ObjectMeta: metav1.ObjectMeta{GenerateName: "patch-", Namespace: ns},
+			GenerateName: patchPrefix, Namespace: ns,
 			Spec: ichorv1alpha1.TalosConfigPatchSpec{
 				ClusterRef: corev1.LocalObjectReference{Name: clus.Name},
 				Layer:      layerCluster,
 				Documents: []ichorv1alpha1.TalosConfigPatchDocument{{
-					Kind:         "SysctlConfig",
+					Kind:         kindSysctl,
 					SysctlConfig: &typedconfig.SysctlConfigV1Alpha1{Params: map[string]string{"net.core.somaxconn": "4096"}},
 				}},
 			},
@@ -150,9 +149,7 @@ var _ = Describe("TalosMachine re-reconcile on render inputs", func() {
 		Eventually(appliedHash, settle, pollGap).ShouldNot(Equal(before))
 	})
 
-	It("applies a TalosCluster spec change that is a render input", func() {
-		before := appliedHash()
-
+	It("re-renders a TalosCluster spec change that is a render input", func() {
 		var latest ichorv1alpha1.TalosCluster
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: clus.Name}, &latest)).To(Succeed())
 
@@ -161,7 +158,11 @@ var _ = Describe("TalosMachine re-reconcile on render inputs", func() {
 		}}
 		Expect(k8sClient.Update(ctx, &latest)).To(Succeed())
 
-		Eventually(appliedHash, settle, pollGap).ShouldNot(Equal(before))
+		// A registry mirror needs a reboot on a Talos node, so what proves the machine was
+		// re-reconciled is its Ready reason leaving Converged for RebootRequired.
+		Eventually(func() string {
+			return readyCondition(fetchMachineIn(ns, m.Name)).Reason
+		}, settle, pollGap).Should(Equal(reasonRebootRequired))
 	})
 })
 
@@ -177,3 +178,17 @@ func newClusterSpec(secretName, versionContract string) ichorv1alpha1.TalosClust
 		ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: 1, Schedulable: testSchedulable},
 	}
 }
+
+func fetchMachineIn(ns, name string) *ichorv1alpha1.TalosMachine {
+	var got ichorv1alpha1.TalosMachine
+	Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &got)).To(Succeed())
+
+	return &got
+}
+
+// Literals shared by the fixtures in this file and talosmachine_controller_test.go (goconst).
+const (
+	machinePrefix = "machine-"
+	patchPrefix   = "patch-"
+	kindSysctl    = "SysctlConfig"
+)

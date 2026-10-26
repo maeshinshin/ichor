@@ -64,3 +64,5 @@ each already returns `RequeueAfter` for waiting states (storage 2m, discovery 5m
 handover 30s, operation 30s for lock and transition) and returns a real error otherwise. The deliberate no-requeue
 cases (`TalosOperation` paused or failed step, suspended or invalid-schedule backup, handover `disabled` or
 `manual`) wait for a spec edit, which is an event.
+
+Update (ADR 0061): reaching an already converged machine is the watch's job; the requeue here is for failures only.

@@ -90,14 +90,13 @@ func orderText(kind pb.OperationKind, p *pb.PlanOperationResponse) string {
 	var (
 		b     strings.Builder
 		cps   int
-		steps []string
 		roles []string
 		names = map[int32][]string{}
 		order []int32
 	)
 
 	for _, m := range p.GetMachines() {
-		if m.GetRole() == "controlplane" {
+		if m.GetRole() == roleControlPlane {
 			cps++
 		}
 
@@ -108,6 +107,8 @@ func orderText(kind pb.OperationKind, p *pb.PlanOperationResponse) string {
 
 		names[m.GetStep()] = append(names[m.GetStep()], m.GetName())
 	}
+
+	steps := make([]string, 0, len(order))
 
 	for i, s := range order {
 		steps = append(steps, fmt.Sprintf("  %d. %s (%s)", i+1, strings.Join(names[s], ", "), roles[i]))

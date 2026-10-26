@@ -35,11 +35,12 @@ import (
 const (
 	opTestCluster = "adopt-cluster"
 	opNewVersion  = "v1.14.4"
+	opCP          = "cp1"
 )
 
 func opTestObjects() []client.Object {
 	cp := newTestMachine(opTestCluster)
-	cp.Name, cp.Spec.Role = "cp1", "controlplane"
+	cp.Name, cp.Spec.Role = opCP, roleControlPlane
 
 	return []client.Object{newTestCluster(), cp, newTestMachine(opTestCluster)}
 }
@@ -80,7 +81,7 @@ func TestUpgradeTalosAsksWhichMachinesRebootInWhichOrderAndDeclineWritesNothing(
 		t.Fatalf("want aborted, got %v", err)
 	}
 
-	for _, want := range []string{"REBOOTS", "2 machine(s)", "1. cp1 (controlplane)", "2. " + testMachineName + " (worker)", testTalosVersion, opNewVersion} {
+	for _, want := range []string{"REBOOTS", "2 machine(s)", "1. " + opCP + " (controlplane)", "2. " + testMachineName + " (worker)", testTalosVersion, opNewVersion} {
 		if !strings.Contains(prompt.String(), want) {
 			t.Errorf("prompt lacks %q:\n%s", want, prompt.String())
 		}
@@ -108,7 +109,7 @@ func TestUpgradeTalosWithYesSkipsThePromptAndWritesSpecThenOperation(t *testing.
 	}
 
 	ops := opTestOps(t, k8s)
-	if opTestVersion(t, k8s) != opNewVersion || len(ops) != 1 || ops[0].Spec.Kind != "talos" {
+	if opTestVersion(t, k8s) != opNewVersion || len(ops) != 1 || ops[0].Spec.Kind != ichorv1alpha1.TalosOperationKindTalos {
 		t.Fatalf("version=%s ops=%+v", opTestVersion(t, k8s), ops)
 	}
 
@@ -165,7 +166,7 @@ func TestShutdownPromptSaysEveryMachineIsPoweredOff(t *testing.T) {
 	_ = runStartOperation(context.Background(), c, strings.NewReader("n\n"), &bytes.Buffer{}, &prompt,
 		startSpec{Kind: pb.OperationKind_OPERATION_KIND_SHUTDOWN, Cluster: opTestCluster})
 
-	for _, want := range []string{"SHUT DOWN", "POWERED OFF", "1. " + testMachineName + " (worker)", "2. cp1 (controlplane)"} {
+	for _, want := range []string{"SHUT DOWN", "POWERED OFF", "1. " + testMachineName + " (worker)", "2. " + opCP + " (controlplane)"} {
 		if !strings.Contains(prompt.String(), want) {
 			t.Errorf("prompt lacks %q:\n%s", want, prompt.String())
 		}
@@ -192,7 +193,7 @@ func TestOperationDeleteAsksUnlessYes(t *testing.T) {
 
 	op := &ichorv1alpha1.TalosOperation{}
 	op.Name, op.Namespace = "x", testNamespace
-	op.Spec.ClusterRef.Name, op.Spec.Kind = opTestCluster, "talos"
+	op.Spec.ClusterRef.Name, op.Spec.Kind = opTestCluster, ichorv1alpha1.TalosOperationKindTalos
 
 	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(append(opTestObjects(), op)...).Build()
 	c := localClients(apiOpts, apiDeps{K8s: k8s})
@@ -216,7 +217,7 @@ func TestWatchEndsWithAnErrorWhenAMachineFailedAndPrintsProgress(t *testing.T) {
 
 	op := &ichorv1alpha1.TalosOperation{}
 	op.Name, op.Namespace = "x", testNamespace
-	op.Spec.ClusterRef.Name, op.Spec.Kind = opTestCluster, "talos"
+	op.Spec.ClusterRef.Name, op.Spec.Kind = opTestCluster, ichorv1alpha1.TalosOperationKindTalos
 	op.Status = ichorv1alpha1.TalosOperationStatus{
 		Phase: "Paused", FailureReason: "boom",
 		Machines: []ichorv1alpha1.TalosOperationMachineStatus{{Name: "cp1", Phase: "Completed"}, {Name: "w", Phase: "InProgress"}},
@@ -255,7 +256,7 @@ func TestPlanTextMentionsHeldMachinesAndTheBlastRadius(t *testing.T) {
 		Effect: pb.OperationEffect_OPERATION_EFFECT_RESTART_COMPONENTS, Current: "v1.36.0", Target: "v1.36.1", MaxUnavailable: 2,
 		Held: []string{"w9"},
 		Machines: []*pb.PlannedMachine{
-			{Name: "cp1", Role: "controlplane", Step: 1}, {Name: "w1", Role: "worker", Step: 2}, {Name: "w2", Role: "worker", Step: 2},
+			{Name: opCP, Role: roleControlPlane, Step: 1}, {Name: "w1", Role: testRoleWorker, Step: 2}, {Name: "w2", Role: testRoleWorker, Step: 2},
 		},
 	}
 

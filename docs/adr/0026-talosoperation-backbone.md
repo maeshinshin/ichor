@@ -176,3 +176,5 @@ the doc comment does.
   only implementation in this unit is test fakes.
 
 - `IchorInstallation` and the `kind: ichor` executor landed in ADR 0059; the installer Job is a separate process, so the backbone is unchanged (the executor is idempotent per operation).
+
+- The entry points landed in ADR 0068: `OperationService`, `ichor upgrade|cni|cluster shutdown|operation`, and the operations screens.

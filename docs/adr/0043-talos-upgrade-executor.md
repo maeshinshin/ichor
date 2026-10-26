@@ -40,5 +40,9 @@ is what fills it for `kind: Talos`.
 
 ## Consequences
 
-`pkg/storage` has its first caller here. Node removal (`removal.go`) still
-performs no evacuation; that is a separate unit.
+`pkg/storage` has its first caller here. Node removal (`removal.go`) now runs
+the same evacuation before its drain: the decision lives once in
+`evacuateMachine` / `endMachineEvacuation` (`evacuation.go`), which both the
+upgrade and removal call, with the same `StorageEvacuation` condition as the
+resume marker and timeout clock. A removal-side timeout stops the removal
+(scheduling re-enabled, Warning Event) and retries evacuation; it never drains.

@@ -43,6 +43,9 @@ const (
 	// NodeServiceGetEffectiveConfigProcedure is the fully-qualified name of the NodeService's
 	// GetEffectiveConfig RPC.
 	NodeServiceGetEffectiveConfigProcedure = "/ichor.v1alpha1.NodeService/GetEffectiveConfig"
+	// NodeServiceGetNodeTalosDetailsProcedure is the fully-qualified name of the NodeService's
+	// GetNodeTalosDetails RPC.
+	NodeServiceGetNodeTalosDetailsProcedure = "/ichor.v1alpha1.NodeService/GetNodeTalosDetails"
 	// NodeServiceStreamNodeLogsProcedure is the fully-qualified name of the NodeService's
 	// StreamNodeLogs RPC.
 	NodeServiceStreamNodeLogsProcedure = "/ichor.v1alpha1.NodeService/StreamNodeLogs"
@@ -52,6 +55,10 @@ const (
 type NodeServiceClient interface {
 	GetNode(context.Context, *connect.Request[v1alpha1.GetNodeRequest]) (*connect.Response[v1alpha1.GetNodeResponse], error)
 	GetEffectiveConfig(context.Context, *connect.Request[v1alpha1.GetEffectiveConfigRequest]) (*connect.Response[v1alpha1.GetEffectiveConfigResponse], error)
+	// GetNodeTalosDetails reads a machine's Talos-side facts (version, stage,
+	// network, disks, services, extensions) read-only, one independently
+	// failing section at a time.
+	GetNodeTalosDetails(context.Context, *connect.Request[v1alpha1.GetNodeTalosDetailsRequest]) (*connect.Response[v1alpha1.GetNodeTalosDetailsResponse], error)
 	// StreamNodeLogs streams one machine's log (the node page) or several
 	// (the merged viewer) from the same call. It resumes from a token carrying
 	// the last log timestamp seen per machine (architecture.md: "streams that
@@ -82,6 +89,12 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(nodeServiceMethods.ByName("GetEffectiveConfig")),
 			connect.WithClientOptions(opts...),
 		),
+		getNodeTalosDetails: connect.NewClient[v1alpha1.GetNodeTalosDetailsRequest, v1alpha1.GetNodeTalosDetailsResponse](
+			httpClient,
+			baseURL+NodeServiceGetNodeTalosDetailsProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("GetNodeTalosDetails")),
+			connect.WithClientOptions(opts...),
+		),
 		streamNodeLogs: connect.NewClient[v1alpha1.StreamNodeLogsRequest, v1alpha1.StreamNodeLogsResponse](
 			httpClient,
 			baseURL+NodeServiceStreamNodeLogsProcedure,
@@ -93,9 +106,10 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 
 // nodeServiceClient implements NodeServiceClient.
 type nodeServiceClient struct {
-	getNode            *connect.Client[v1alpha1.GetNodeRequest, v1alpha1.GetNodeResponse]
-	getEffectiveConfig *connect.Client[v1alpha1.GetEffectiveConfigRequest, v1alpha1.GetEffectiveConfigResponse]
-	streamNodeLogs     *connect.Client[v1alpha1.StreamNodeLogsRequest, v1alpha1.StreamNodeLogsResponse]
+	getNode             *connect.Client[v1alpha1.GetNodeRequest, v1alpha1.GetNodeResponse]
+	getEffectiveConfig  *connect.Client[v1alpha1.GetEffectiveConfigRequest, v1alpha1.GetEffectiveConfigResponse]
+	getNodeTalosDetails *connect.Client[v1alpha1.GetNodeTalosDetailsRequest, v1alpha1.GetNodeTalosDetailsResponse]
+	streamNodeLogs      *connect.Client[v1alpha1.StreamNodeLogsRequest, v1alpha1.StreamNodeLogsResponse]
 }
 
 // GetNode calls ichor.v1alpha1.NodeService.GetNode.
@@ -108,6 +122,11 @@ func (c *nodeServiceClient) GetEffectiveConfig(ctx context.Context, req *connect
 	return c.getEffectiveConfig.CallUnary(ctx, req)
 }
 
+// GetNodeTalosDetails calls ichor.v1alpha1.NodeService.GetNodeTalosDetails.
+func (c *nodeServiceClient) GetNodeTalosDetails(ctx context.Context, req *connect.Request[v1alpha1.GetNodeTalosDetailsRequest]) (*connect.Response[v1alpha1.GetNodeTalosDetailsResponse], error) {
+	return c.getNodeTalosDetails.CallUnary(ctx, req)
+}
+
 // StreamNodeLogs calls ichor.v1alpha1.NodeService.StreamNodeLogs.
 func (c *nodeServiceClient) StreamNodeLogs(ctx context.Context, req *connect.Request[v1alpha1.StreamNodeLogsRequest]) (*connect.ServerStreamForClient[v1alpha1.StreamNodeLogsResponse], error) {
 	return c.streamNodeLogs.CallServerStream(ctx, req)
@@ -117,6 +136,10 @@ func (c *nodeServiceClient) StreamNodeLogs(ctx context.Context, req *connect.Req
 type NodeServiceHandler interface {
 	GetNode(context.Context, *connect.Request[v1alpha1.GetNodeRequest]) (*connect.Response[v1alpha1.GetNodeResponse], error)
 	GetEffectiveConfig(context.Context, *connect.Request[v1alpha1.GetEffectiveConfigRequest]) (*connect.Response[v1alpha1.GetEffectiveConfigResponse], error)
+	// GetNodeTalosDetails reads a machine's Talos-side facts (version, stage,
+	// network, disks, services, extensions) read-only, one independently
+	// failing section at a time.
+	GetNodeTalosDetails(context.Context, *connect.Request[v1alpha1.GetNodeTalosDetailsRequest]) (*connect.Response[v1alpha1.GetNodeTalosDetailsResponse], error)
 	// StreamNodeLogs streams one machine's log (the node page) or several
 	// (the merged viewer) from the same call. It resumes from a token carrying
 	// the last log timestamp seen per machine (architecture.md: "streams that
@@ -143,6 +166,12 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(nodeServiceMethods.ByName("GetEffectiveConfig")),
 		connect.WithHandlerOptions(opts...),
 	)
+	nodeServiceGetNodeTalosDetailsHandler := connect.NewUnaryHandler(
+		NodeServiceGetNodeTalosDetailsProcedure,
+		svc.GetNodeTalosDetails,
+		connect.WithSchema(nodeServiceMethods.ByName("GetNodeTalosDetails")),
+		connect.WithHandlerOptions(opts...),
+	)
 	nodeServiceStreamNodeLogsHandler := connect.NewServerStreamHandler(
 		NodeServiceStreamNodeLogsProcedure,
 		svc.StreamNodeLogs,
@@ -155,6 +184,8 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 			nodeServiceGetNodeHandler.ServeHTTP(w, r)
 		case NodeServiceGetEffectiveConfigProcedure:
 			nodeServiceGetEffectiveConfigHandler.ServeHTTP(w, r)
+		case NodeServiceGetNodeTalosDetailsProcedure:
+			nodeServiceGetNodeTalosDetailsHandler.ServeHTTP(w, r)
 		case NodeServiceStreamNodeLogsProcedure:
 			nodeServiceStreamNodeLogsHandler.ServeHTTP(w, r)
 		default:
@@ -172,6 +203,10 @@ func (UnimplementedNodeServiceHandler) GetNode(context.Context, *connect.Request
 
 func (UnimplementedNodeServiceHandler) GetEffectiveConfig(context.Context, *connect.Request[v1alpha1.GetEffectiveConfigRequest]) (*connect.Response[v1alpha1.GetEffectiveConfigResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.NodeService.GetEffectiveConfig is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) GetNodeTalosDetails(context.Context, *connect.Request[v1alpha1.GetNodeTalosDetailsRequest]) (*connect.Response[v1alpha1.GetNodeTalosDetailsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.NodeService.GetNodeTalosDetails is not implemented"))
 }
 
 func (UnimplementedNodeServiceHandler) StreamNodeLogs(context.Context, *connect.Request[v1alpha1.StreamNodeLogsRequest], *connect.ServerStream[v1alpha1.StreamNodeLogsResponse]) error {

@@ -43,6 +43,14 @@ type fakeNodeTalosClient struct {
 	ifaces   []*pb.NetworkInterface
 	usage    *pb.ResourceUsage
 
+	// Talos details sections; talosErr fails one section by name.
+	talosSystem     *pb.TalosSystemSection
+	talosNetwork    *pb.TalosNetworkSection
+	talosStorage    *pb.TalosStorageSection
+	talosServices   *pb.TalosServicesSection
+	talosExtensions *pb.TalosExtensionsSection
+	talosErr        map[string]error
+
 	lines []LogLine
 	// block, if set, makes StreamLogs wait for ctx to be cancelled after
 	// sending lines, standing in for a real Dmesg follow stream that never
@@ -67,6 +75,26 @@ func (f *fakeNodeTalosClient) ResourceUsage(context.Context) (*pb.ResourceUsage,
 	return f.usage, nil
 }
 func (f *fakeNodeTalosClient) Close() error { f.closed = true; return nil }
+
+func (f *fakeNodeTalosClient) TalosSystem(context.Context) (*pb.TalosSystemSection, error) {
+	return f.talosSystem, f.talosErr["system"]
+}
+
+func (f *fakeNodeTalosClient) TalosNetwork(context.Context) (*pb.TalosNetworkSection, error) {
+	return f.talosNetwork, f.talosErr["network"]
+}
+
+func (f *fakeNodeTalosClient) TalosStorage(context.Context) (*pb.TalosStorageSection, error) {
+	return f.talosStorage, f.talosErr["storage"]
+}
+
+func (f *fakeNodeTalosClient) TalosServices(context.Context) (*pb.TalosServicesSection, error) {
+	return f.talosServices, f.talosErr["services"]
+}
+
+func (f *fakeNodeTalosClient) TalosExtensions(context.Context) (*pb.TalosExtensionsSection, error) {
+	return f.talosExtensions, f.talosErr["extensions"]
+}
 
 func (f *fakeNodeTalosClient) StreamLogs(ctx context.Context, service string, since time.Time, onLine func(LogLine) error) error {
 	f.gotService = service

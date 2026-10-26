@@ -39,6 +39,9 @@ bootstrap. Doing that on a workstation with no container runtime and no registry
    behind `cluster-admin` and `ENABLE_WEBHOOKS=false`). The Secret informer is now confined to `POD_NAMESPACE`, and `list`/`watch` on
    `validatingwebhookconfigurations` are granted without `resourceNames` (an informer cannot name its object); `get`/`update`/`patch` stay
    restricted to Ichor's one configuration. This widens the controller's read access to webhook configurations cluster-wide, read-only.
+7. **ichor-ui needs `POD_NAMESPACE`.** `cmd/ichor-ui` resolves the secrets bundle in `POD_NAMESPACE`, but neither the chart nor
+   `config/manager-ui` set it (the old hand-built demo did, hiding it), so every machine page failed with "controller namespace is empty".
+   Both now set it from the downward API, and `TestPodNamespaceFromDownwardAPI` pins it on the manager and ichor-ui containers.
 
 ## Not done
 

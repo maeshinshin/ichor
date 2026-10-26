@@ -402,6 +402,21 @@ type TalosClusterStatus struct {
 	// +listMapKey=name
 	// +optional
 	Certificates []CertificateExpiry `json:"certificates,omitempty" patchStrategy:"merge" patchMergeKey:"name"`
+
+	// cni is the observed CNI state that is not a spec ingredient (ADR 0064).
+	// +optional
+	CNI *TalosClusterCNIStatus `json:"cni,omitempty"`
+}
+
+// TalosClusterCNIStatus holds what the kube-proxy switch (ADR 0064) has done to the Talos side.
+type TalosClusterCNIStatus struct {
+	// kubeProxy is the mode the Talos side (cluster.proxy.disabled) is rendered for. Unset until
+	// a kube-proxy switch first runs, which means "render whatever the patches say"; once set,
+	// pkg/render appends it as the last patch, so it wins over any patch. Only the
+	// TalosOperation of kind cni writes it, and only after the new side is verified.
+	// +kubebuilder:validation:Enum=enabled;replaced
+	// +optional
+	KubeProxy string `json:"kubeProxy,omitempty"`
 }
 
 // CertificateExpiry is one certificate authority's end of validity.

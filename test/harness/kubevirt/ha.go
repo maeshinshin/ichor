@@ -249,7 +249,8 @@ func configureAndBootstrapHA(ips []string) ([]byte, *secrets.Bundle, error) {
 			}
 			// With no CNI the node cannot report ready (its Kubernetes node stays NotReady), so only
 			// the stage is awaited; the test installs the CNI afterwards.
-			return "", talosctl.SpecField(objs[0], "stage") == "running" && (os.Getenv(cniEnv) == cniNone || talosctl.MachineStatusReady(objs[0]))
+			running := talosctl.SpecField(objs[0], "stage") == "running"
+			return "", running && (os.Getenv(cniEnv) == cniNone || talosctl.MachineStatusReady(objs[0]))
 		}); err != nil {
 			return nil, nil, err
 		}

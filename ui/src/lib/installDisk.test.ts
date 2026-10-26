@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Disk } from '@/gen/ichor/v1alpha1/node_pb'
-import { diskKey, diskSelector, isValidHostname } from './installDisk.ts'
+import { diskKey, diskSelector, installChoice, isValidHostname, needsInstallDisk } from './installDisk.ts'
 
 const disk = (d: Partial<Disk>) => d as Disk
 
@@ -23,4 +23,25 @@ test('a disk is selected by the most stable identifier it has', () => {
 
 test('two disks never share a form key', () => {
   assert.notEqual(diskKey(disk({ wwid: 'a' })), diskKey(disk({ wwid: 'b' })))
+})
+
+test('the picker prefers a listed disk and only accepts a typed device path when none are listed', () => {
+  const d = disk({ wwid: 'w' })
+  assert.deepEqual(installChoice({ disks: [d], key: diskKey(d), typed: '/dev/x', image: ' img ' }).install, {
+    disk: { wwid: 'w' },
+    image: 'img',
+  })
+  assert.equal(installChoice({ disks: [d], key: '', typed: '', image: '' }).install, undefined)
+  const typed = installChoice({ disks: [], key: '', typed: ' /dev/sda ', image: '' })
+  assert.deepEqual(typed.install, { disk: { devPath: '/dev/sda' }, image: '' })
+  assert.equal(typed.ok, true)
+  assert.equal(installChoice({ disks: [], key: '', typed: 'sda', image: '' }).ok, false)
+})
+
+test('only an approved machine without install and waiting for a disk offers to set one', () => {
+  const waiting = [{ type: 'Ready', reason: 'InstallDiskUnknown' }]
+  assert.equal(needsInstallDisk({ approved: true, conditions: waiting }), true)
+  assert.equal(needsInstallDisk({ approved: true, install: {}, conditions: waiting }), false)
+  assert.equal(needsInstallDisk({ approved: false, conditions: waiting }), false)
+  assert.equal(needsInstallDisk({ approved: true, conditions: [{ type: 'Ready', reason: 'NodeJoined' }] }), false)
 })

@@ -1,0 +1,21 @@
+# Applied to the OUTER cluster (talos-cluster01), namespace ichor-e2e only. Cilium's
+# existing ip-pool hands this Service an address from 192.168.0.64/26 and l2-policy
+# announces it. With the bridge binding the virt-launcher pod's IP is the guest's IP, so
+# the Service reaches the Talos VM directly: port 80 -> the inner NodePort 30080
+# (ichor-system/ichor-ui-nodeport), where kube-proxy forwards to ichor-ui.
+apiVersion: v1
+kind: Service
+metadata:
+  name: ichor-ui-demo
+  namespace: ichor-e2e
+  labels:
+    ichor.maesh.dev/e2e-harness: kubevirt-ui-demo
+spec:
+  type: LoadBalancer
+  selector:
+    vm.kubevirt.io/name: ichor-ui-demo-cp
+  ports:
+    - name: http
+      port: 80
+      targetPort: 30080
+      protocol: TCP

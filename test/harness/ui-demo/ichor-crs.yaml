@@ -1,0 +1,48 @@
+# Ichor CRs for the demo cluster, applied to the INNER cluster. CP_IP, WORKER_IP, CP_UUID,
+# CP_SERIAL and CP_MAC are substituted by the caller. The control plane is created
+# pending, then `ichor adopt` records its live config as a patch with zero drift, and only
+# then is it approved (so the controller never applies a render over a node that was
+# installed by the harness). The worker is not created here: discovery finds it.
+apiVersion: ichor.maesh.dev/v1alpha1
+kind: TalosCluster
+metadata:
+  name: ichor-ui-demo
+  namespace: ichor-system
+spec:
+  endpoint:
+    type: node
+    address: CP_IP
+  talosVersion: v1.14.3
+  kubernetesVersion: v1.37.1
+  versionContract: v1.14
+  schematic:
+    id: 376567988ad370138ad8b2698212367b8edcb69b5fd68c80be1f2ec7d603b4ba
+  secretsRef:
+    name: ichor-ui-demo-secrets
+  controlPlane:
+    count: 1
+    schedulable: "true"
+  cni:
+    preset: flannel
+    kubeProxy: enabled
+    handover: disabled
+  discovery:
+    addresses:
+      - WORKER_IP
+---
+apiVersion: ichor.maesh.dev/v1alpha1
+kind: TalosMachine
+metadata:
+  name: ichor-ui-demo-cp
+  namespace: ichor-system
+spec:
+  clusterRef:
+    name: ichor-ui-demo
+  role: controlplane
+  hostname: ichor-ui-demo-cp
+  identity:
+    uuid: CP_UUID
+    serial: CP_SERIAL
+    macAddresses:
+      - CP_MAC
+  endpoint: CP_IP:50000

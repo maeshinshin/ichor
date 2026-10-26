@@ -145,7 +145,7 @@ type TalosClusterCNI struct {
 // -- carried on TalosCluster, a CR that lives in Git -- put a registry password in Git (design
 // principle 2). authSecretRef points at a Kubernetes Secret
 // instead; the render-time injection that resolves it never writes the resolved value back onto
-// any CR (pkg/render.ResolveRegistryAuth, pkg/render.RenderWithRegistryAuth).
+// any CR (pkg/render.ResolveRegistryAuth, pkg/render.Render).
 type TalosClusterRegistry struct {
 	// host is the registry host (and port, if not the default) this entry's mirror and
 	// credentials apply to, matching RegistriesConfig's own map key: the first segment of an

@@ -301,7 +301,7 @@ func renderWithConfig(
 		},
 	}
 
-	b, _, err := render.Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{patch})
+	b, _, err := render.Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{patch}, nil)
 	Expect(err).NotTo(HaveOccurred())
 
 	return b
@@ -379,7 +379,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		cluster := newTestCluster(secret.Name, "v1.14")
 		m := newTestMachine(cluster.Name, true)
 
-		current, hash, err := render.Render(cluster, m, bundle, nil)
+		current, hash, err := render.Render(cluster, m, bundle, nil, nil)
 		Expect(err).NotTo(HaveOccurred())
 
 		fake := &fakeTalosClient{current: current}
@@ -401,6 +401,47 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(cond.Reason).To(Equal(reasonConverged))
 	})
 
+	It("reconciles a TalosCluster that declares registries, resolving auth from the controller namespace", func() {
+		bundle := newTestBundle("v1.14")
+		secret := newTestSecret(bundle)
+		authSecret := &corev1.Secret{
+			GenerateName: "regauth-", Namespace: tmNamespace,
+			Data: map[string][]byte{"password": []byte("s3cr3t-pw")},
+		}
+		Expect(k8sClient.Create(ctx, authSecret)).To(Succeed())
+
+		cluster := newTestCluster(secret.Name, "v1.14")
+		cluster.Spec.Registries = []ichorv1alpha1.TalosClusterRegistry{
+			{Host: "docker.io", Endpoints: []string{"https://mirror.example.com"}},
+			{
+				Host: "registry.example.com", Endpoints: []string{"https://private.example.com"}, Username: "deploy",
+				AuthSecretRef: &corev1.LocalObjectReference{Name: authSecret.Name},
+			},
+		}
+		Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
+
+		m := newTestMachine(cluster.Name, true)
+
+		auth, err := render.ResolveRegistryAuth(ctx, k8sClient, tmNamespace, cluster)
+		Expect(err).NotTo(HaveOccurred())
+
+		current, hash, err := render.Render(cluster, m, bundle, nil, auth)
+		Expect(err).NotTo(HaveOccurred())
+
+		fake := &fakeTalosClient{current: current}
+		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
+
+		_, err = reconcileMachine(r, m)
+		Expect(err).NotTo(HaveOccurred())
+
+		got := fetchMachine(m)
+		cond := readyCondition(got)
+		Expect(cond).NotTo(BeNil())
+		Expect(cond.Reason).To(Equal(reasonConverged), "message: %s", cond.Message)
+		Expect(got.Status.AppliedConfigHash).To(Equal(hash))
+		Expect(fake.applyCalls).To(BeEmpty())
+	})
+
 	It("applies a non-reboot change with NO_REBOOT and converges hash and observedGeneration", func() {
 		bundle := newTestBundle("v1.14")
 		secret := newTestSecret(bundle)
@@ -411,7 +452,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 
 		desired := extraArgsConfig()
 		patch := newTestPatch(cluster.Name, layerCluster, nil, desired)
-		wantRendered, wantHash, err := render.Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{*patch})
+		wantRendered, wantHash, err := render.Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{*patch}, nil)
 		Expect(err).NotTo(HaveOccurred())
 
 		fake := &fakeTalosClient{current: current}
@@ -547,7 +588,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		cluster := newTestCluster(secret.Name, "v1.9")
 		m := newTestMachine(cluster.Name, true)
 
-		current, _, err := render.Render(cluster, m, bundle, nil)
+		current, _, err := render.Render(cluster, m, bundle, nil, nil)
 		Expect(err).NotTo(HaveOccurred())
 
 		// SysctlConfig as its own document is only valid from Talos >1.13
@@ -610,7 +651,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 
 		desired := extraArgsConfig()
 		patch := newTestPatch(cluster.Name, layerCluster, nil, desired)
-		wantRendered, wantHash, err := render.Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{*patch})
+		wantRendered, wantHash, err := render.Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{*patch}, nil)
 		Expect(err).NotTo(HaveOccurred())
 
 		fake := &fakeTalosClient{current: current}
@@ -639,7 +680,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		m := newTestMachine(cluster.Name, true)
 
 		patch := newTestPatch(cluster.Name, layerCluster, nil, extraArgsConfig())
-		wantRendered, wantHash, err := render.Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{*patch})
+		wantRendered, wantHash, err := render.Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{*patch}, nil)
 		Expect(err).NotTo(HaveOccurred())
 
 		fake := &fakeTalosClient{current: wantRendered}
@@ -692,7 +733,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
 
 		patch := newTestPatch(cluster.Name, layerCluster, nil, extraArgsConfig())
-		wantRendered, wantHash, err := render.Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{*patch})
+		wantRendered, wantHash, err := render.Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{*patch}, nil)
 		Expect(err).NotTo(HaveOccurred())
 
 		fake := &fakeTalosClient{current: wantRendered}
@@ -733,7 +774,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		cluster.Spec.DriftPolicy = "autoCorrect"
 		Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
 
-		baseline, baseHash, err := render.Render(cluster, m, bundle, nil)
+		baseline, baseHash, err := render.Render(cluster, m, bundle, nil, nil)
 		Expect(err).NotTo(HaveOccurred())
 
 		fake := &fakeTalosClient{current: baseline}

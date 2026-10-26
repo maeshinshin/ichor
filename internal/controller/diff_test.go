@@ -75,7 +75,7 @@ func diffTestFixtures(t *testing.T, versionContract string) (*ichorv1alpha1.Talo
 func TestChangedPaths_NoDifference(t *testing.T) {
 	cluster, m, bundle := diffTestFixtures(t, "v1.14")
 
-	cfg, _, err := render.Render(cluster, m, bundle, nil)
+	cfg, _, err := render.Render(cluster, m, bundle, nil, nil)
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestChangedPaths_NoDifference(t *testing.T) {
 func TestChangedPaths_LegacyFieldChange(t *testing.T) {
 	cluster, m, bundle := diffTestFixtures(t, "v1.14")
 
-	before, _, err := render.Render(cluster, m, bundle, nil)
+	before, _, err := render.Render(cluster, m, bundle, nil, nil)
 	if err != nil {
 		t.Fatalf("Render(before): %v", err)
 	}
@@ -107,7 +107,7 @@ func TestChangedPaths_LegacyFieldChange(t *testing.T) {
 		},
 	}
 
-	after, _, err := render.Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{patch})
+	after, _, err := render.Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{patch}, nil)
 	if err != nil {
 		t.Fatalf("Render(after): %v", err)
 	}
@@ -127,7 +127,7 @@ func TestChangedPaths_LegacyFieldChange(t *testing.T) {
 func TestChangedPaths_StandaloneDocumentAdded(t *testing.T) {
 	cluster, m, bundle := diffTestFixtures(t, "v1.14")
 
-	before, _, err := render.Render(cluster, m, bundle, nil)
+	before, _, err := render.Render(cluster, m, bundle, nil, nil)
 	if err != nil {
 		t.Fatalf("Render(before): %v", err)
 	}
@@ -144,7 +144,7 @@ func TestChangedPaths_StandaloneDocumentAdded(t *testing.T) {
 		},
 	}
 
-	after, _, err := render.Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{patch})
+	after, _, err := render.Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{patch}, nil)
 	if err != nil {
 		t.Fatalf("Render(after): %v", err)
 	}

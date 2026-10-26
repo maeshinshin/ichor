@@ -257,7 +257,7 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, err
 	}
 
-	rendered, hash, err := render.Render(&cluster, &m, bundle, patches.Items)
+	rendered, hash, err := r.renderMachine(ctx, &cluster, &m, bundle, patches.Items)
 	if err != nil {
 		log.Error(err, "rendering machine configuration")
 
@@ -515,6 +515,22 @@ func (r *TalosMachineReconciler) setWarnings(m *ichorv1alpha1.TalosMachine, bund
 	apimeta.SetStatusCondition(&m.Status.Conditions, metav1.Condition{
 		Type: conditionConfigWarnings, Status: status, Reason: reasonDryRunWarnings, Message: message,
 	})
+}
+
+// renderMachine resolves cluster's registry credentials and renders m. The Secrets are read in
+// ControllerNamespace, the same fixed namespace as loadBundle and never the TalosCluster's own; a registry whose
+// Secret cannot be resolved fails the render like any
+// other render failure, and ResolveRegistryAuth's errors name the Secret, never its data.
+func (r *TalosMachineReconciler) renderMachine(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
+	bundle *secrets.Bundle, patches []ichorv1alpha1.TalosConfigPatch,
+) ([]byte, string, error) {
+	auth, err := render.ResolveRegistryAuth(ctx, r.Client, r.ControllerNamespace, cluster)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return render.Render(cluster, m, bundle, patches, auth)
 }
 
 // hashConfig hashes cfg the same way pkg/render.Render hashes its output,

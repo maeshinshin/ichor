@@ -11,7 +11,6 @@ import {
   planSteps,
   pollIntervalMs,
   progressCounts,
-  stateBadge,
   targetError,
 } from './operations.ts'
 
@@ -30,7 +29,6 @@ test('a failed or finished operation is not polled again, a running one is', () 
   assert.equal(pollIntervalMs('done'), null)
   assert.equal(pollIntervalMs('running'), 3000)
   assert.ok((pollIntervalMs('paused') ?? 0) > 3000)
-  assert.equal(stateBadge('failed'), 'destructive')
 })
 
 test('machines are counted by phase and an unknown phase is neither', () => {

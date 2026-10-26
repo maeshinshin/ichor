@@ -99,6 +99,10 @@ message NodeDetail {
   repeated NetworkInterface network_interfaces = 4;
   ResourceUsage resource_usage = 5;
   KubernetesNodeStatus kubernetes = 6;
+  // kubernetes_permission_denied is true when the caller may not read the
+  // Kubernetes Node behind this machine (docs/adr/0062); kubernetes is then
+  // unset, which does not mean the machine has not joined.
+  bool kubernetes_permission_denied = 7;
 }
 
 // ConfigLayer is one of the patch layers in architecture.md, "Patch layers".

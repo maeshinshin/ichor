@@ -181,9 +181,14 @@ type GitOpsItem struct {
 	HealthStatus string `protobuf:"bytes,7,opt,name=health_status,json=healthStatus,proto3" json:"health_status,omitempty"`
 	// error says why the state is missing (the Application cannot be named or
 	// read). It never carries a credential.
-	Error         string `protobuf:"bytes,8,opt,name=error,proto3" json:"error,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Error string `protobuf:"bytes,8,opt,name=error,proto3" json:"error,omitempty"`
+	// permission_denied is true when the caller may not read the tracking
+	// Application (docs/adr/0062): the row then carries no sync or health, and
+	// that is not an error. tracked_by and application still say which
+	// Application it is, because both come from the CR the caller can read.
+	PermissionDenied bool `protobuf:"varint,9,opt,name=permission_denied,json=permissionDenied,proto3" json:"permission_denied,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *GitOpsItem) Reset() {
@@ -270,6 +275,13 @@ func (x *GitOpsItem) GetError() string {
 		return x.Error
 	}
 	return ""
+}
+
+func (x *GitOpsItem) GetPermissionDenied() bool {
+	if x != nil {
+		return x.PermissionDenied
+	}
+	return false
 }
 
 type FindPullRequestsRequest struct {
@@ -554,7 +566,7 @@ const file_ichor_v1alpha1_gitops_proto_rawDesc = "" +
 	"\x1bichor/v1alpha1/gitops.proto\x12\x0eichor.v1alpha1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1bichor/v1alpha1/common.proto\"\x13\n" +
 	"\x11ListGitOpsRequest\"F\n" +
 	"\x12ListGitOpsResponse\x120\n" +
-	"\x05items\x18\x01 \x03(\v2\x1a.ichor.v1alpha1.GitOpsItemR\x05items\"\xbb\x02\n" +
+	"\x05items\x18\x01 \x03(\v2\x1a.ichor.v1alpha1.GitOpsItemR\x05items\"\xe8\x02\n" +
 	"\n" +
 	"GitOpsItem\x12.\n" +
 	"\x04kind\x18\x01 \x01(\x0e2\x1a.ichor.v1alpha1.GitOpsKindR\x04kind\x12+\n" +
@@ -566,7 +578,8 @@ const file_ichor_v1alpha1_gitops_proto_rawDesc = "" +
 	"\vsync_status\x18\x06 \x01(\tR\n" +
 	"syncStatus\x12#\n" +
 	"\rhealth_status\x18\a \x01(\tR\fhealthStatus\x12\x14\n" +
-	"\x05error\x18\b \x01(\tR\x05error\"v\n" +
+	"\x05error\x18\b \x01(\tR\x05error\x12+\n" +
+	"\x11permission_denied\x18\t \x01(\bR\x10permissionDenied\"v\n" +
 	"\x17FindPullRequestsRequest\x12.\n" +
 	"\x04kind\x18\x01 \x01(\x0e2\x1a.ichor.v1alpha1.GitOpsKindR\x04kind\x12+\n" +
 	"\x03ref\x18\x02 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\x03ref\"7\n" +

@@ -78,7 +78,7 @@ func (r *TalosMachineReconciler) provision(
 ) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
-	hw, mc, err := r.probeMaintenance(ctx, m.Spec.Endpoint)
+	hw, mc, err := r.probeMaintenance(ctx, m.DialEndpoint())
 	if err != nil {
 		log.V(1).Info("node is not answering the maintenance API", "error", err.Error())
 

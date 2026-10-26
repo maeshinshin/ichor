@@ -33,14 +33,15 @@ import (
 // reader to catch up with the write that caused the conflict.
 var machineStatusBackoff = wait.Backoff{Steps: 6, Duration: 50 * time.Millisecond, Factor: 2, Jitter: 0.1}
 
-// setMachineCondition sets cond on m's status and persists it. The executors read m before long
-// calls (dial, dry run, image pre-pull, apply, a reboot) while the machine reconciler writes the
-// same status in parallel, so a plain Status().Update of that copy loses with "the object has
-// been modified" and pauses the operation. Instead the machine is re-read (rd, preferably an
-// uncached reader) and only cond is applied to the fresh copy, retrying on conflict; the other
-// writer's conditions survive. m is refreshed from the result.
-func setMachineCondition(
-	ctx context.Context, rd client.Reader, c client.Client, m *ichorv1alpha1.TalosMachine, cond metav1.Condition,
+// updateMachineStatus applies mutate to a fresh copy of m and persists its status. The executors
+// read m before long calls (dial, dry run, image pre-pull, apply, a reboot) while the machine
+// reconciler writes the same status in parallel, so a plain Status().Update of that copy loses
+// with "the object has been modified" and pauses the operation. Instead the machine is re-read
+// (rd, preferably an uncached reader) and only mutate's change is applied to the fresh copy,
+// retrying on conflict; the other writer's fields survive. m is refreshed from the result.
+func updateMachineStatus(
+	ctx context.Context, rd client.Reader, c client.Client, m *ichorv1alpha1.TalosMachine,
+	mutate func(*ichorv1alpha1.TalosMachine),
 ) error {
 	return retry.RetryOnConflict(machineStatusBackoff, func() error {
 		var fresh ichorv1alpha1.TalosMachine
@@ -48,7 +49,7 @@ func setMachineCondition(
 			return err
 		}
 
-		apimeta.SetStatusCondition(&fresh.Status.Conditions, cond)
+		mutate(&fresh)
 
 		if err := c.Status().Update(ctx, &fresh); err != nil {
 			return err
@@ -57,5 +58,25 @@ func setMachineCondition(
 		fresh.DeepCopyInto(m)
 
 		return nil
+	})
+}
+
+// setMachineCondition sets cond on m's status and persists it (see updateMachineStatus).
+func setMachineCondition(
+	ctx context.Context, rd client.Reader, c client.Client, m *ichorv1alpha1.TalosMachine, cond metav1.Condition,
+) error {
+	return updateMachineStatus(ctx, rd, c, m, func(fresh *ichorv1alpha1.TalosMachine) {
+		apimeta.SetStatusCondition(&fresh.Status.Conditions, cond)
+	})
+}
+
+// recordObservedEndpoint stores the address m answers at in its status (never in spec: the
+// controller does not mutate spec) and persists it.
+func recordObservedEndpoint(
+	ctx context.Context, rd client.Reader, c client.Client, m *ichorv1alpha1.TalosMachine, address string,
+) error {
+	return updateMachineStatus(ctx, rd, c, m, func(fresh *ichorv1alpha1.TalosMachine) {
+		fresh.Status.ObservedEndpoint = address
+		fresh.Status.ObservedEndpointFor = fresh.Spec.Endpoint
 	})
 }

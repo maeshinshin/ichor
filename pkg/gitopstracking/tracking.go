@@ -43,6 +43,9 @@ const (
 	ArgoConfigMapName           = "argocd-cm"
 	ResourceTrackingMethodKey   = "application.resourceTrackingMethod"
 	ApplicationInstanceLabelKey = "application.instanceLabelKey"
+
+	// methodAnnotationAndLabel is the resourceTrackingMethod that sets both markers.
+	methodAnnotationAndLabel = "annotation+label"
 )
 
 // TrackedBy values IsTracked returns (and prmode.Decide consumes).
@@ -126,8 +129,8 @@ func fluxTrackedByInventory(ctx context.Context, k8sClient client.Client, obj cl
 func argoTracked(cm *corev1.ConfigMap, obj client.Object) bool {
 	method := cm.Data[ResourceTrackingMethodKey]
 
-	checkAnnotation := method == "" || method == "annotation" || method == "annotation+label"
-	checkLabel := method == "" || method == "label" || method == "annotation+label"
+	checkAnnotation := method == "" || method == "annotation" || method == methodAnnotationAndLabel
+	checkLabel := method == "" || method == "label" || method == methodAnnotationAndLabel
 
 	if checkAnnotation {
 		if _, ok := obj.GetAnnotations()[ArgoTrackingAnnotation]; ok {
@@ -206,13 +209,14 @@ func ArgoApplicationOf(
 ) (types.NamespacedName, error) {
 	var cm corev1.ConfigMap
 
-	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: argoCDNamespace, Name: ArgoConfigMapName}, &cm); err != nil {
+	cmKey := types.NamespacedName{Namespace: argoCDNamespace, Name: ArgoConfigMapName}
+	if err := k8sClient.Get(ctx, cmKey, &cm); err != nil {
 		return types.NamespacedName{}, fmt.Errorf("reading %s/%s: %w", argoCDNamespace, ArgoConfigMapName, err)
 	}
 
 	method := cm.Data[ResourceTrackingMethodKey]
 
-	if method == "" || method == "annotation" || method == "annotation+label" {
+	if method == "" || method == "annotation" || method == methodAnnotationAndLabel {
 		if v, ok := obj.GetAnnotations()[ArgoTrackingAnnotation]; ok {
 			app, _, _ := strings.Cut(v, ":")
 
@@ -220,7 +224,7 @@ func ArgoApplicationOf(
 		}
 	}
 
-	if method == "" || method == "label" || method == "annotation+label" {
+	if method == "" || method == "label" || method == methodAnnotationAndLabel {
 		labelKey := cm.Data[ApplicationInstanceLabelKey]
 		if labelKey == "" {
 			labelKey = ArgoDefaultInstanceLabelKey

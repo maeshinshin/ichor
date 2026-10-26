@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -251,5 +252,47 @@ func TestCountApprovedWorkers(t *testing.T) {
 	got, err := CountApprovedWorkers(context.Background(), c, "default", "west")
 	if err != nil || got != 1 {
 		t.Fatalf("CountApprovedWorkers = %d, %v; want 1", got, err)
+	}
+}
+
+// TestApprovedMachinesDeleting pins how a machine that is being deleted counts:
+// not at all by default, back in for the machine whose own removal is decided,
+// and in for callers that want everything (a whole-cluster stop).
+func TestApprovedMachinesDeleting(t *testing.T) {
+	const (
+		cp       = "controlplane"
+		approved = ichorv1alpha1.MachineApprovalStateApproved
+	)
+
+	now := metav1.Now()
+	leaving := newCountTestMachine("default", "cp1", "west", cp, approved)
+	leaving.DeletionTimestamp, leaving.Finalizers = &now, []string{"test/hold"}
+
+	c := fake.NewClientBuilder().WithScheme(newCountTestScheme(t)).WithObjects(
+		leaving,
+		newCountTestMachine("default", "cp2", "west", cp, approved),
+		newCountTestMachine("default", "cp3", "west", cp, approved),
+		newCountTestMachine("default", "w1", "west", "worker", approved),
+	).Build()
+
+	for _, tc := range []struct {
+		name string
+		f    MachineFilter
+		want int
+	}{
+		{"default leaves the deleting one out", MachineFilter{Role: cp}, 2},
+		{"the machine being removed counts itself", MachineFilter{Role: cp, KeepDeleting: "cp1"}, 3},
+		{"another machine's name keeps nothing", MachineFilter{Role: cp, KeepDeleting: "cp2"}, 2},
+		{"IncludeDeleting keeps it", MachineFilter{Role: cp, IncludeDeleting: true}, 3},
+		{"no role means every role", MachineFilter{}, 3},
+	} {
+		got, err := ApprovedMachines(context.Background(), c, "default", "west", tc.f)
+		if err != nil || len(got) != tc.want {
+			t.Errorf("%s: got %d, %v; want %d", tc.name, len(got), err, tc.want)
+		}
+	}
+
+	if n, err := CountApprovedControlPlanes(context.Background(), c, "default", "west"); err != nil || n != 2 {
+		t.Errorf("CountApprovedControlPlanes = %d, %v; want 2 (the deleting control plane is not staying)", n, err)
 	}
 }

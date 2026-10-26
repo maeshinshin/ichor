@@ -182,7 +182,11 @@ func progressLine(op *pb.Operation) string {
 		parts = append(parts, m.GetName()+"="+m.GetPhase())
 	}
 
-	line := fmt.Sprintf("%s %s: phase %s, %d done, %d in progress", kindName(op.GetKind()), op.GetRef().GetName(), orDash(op.GetPhase()), done, running)
+	line := fmt.Sprintf("%s %s: phase %s", kindName(op.GetKind()), op.GetRef().GetName(), orDash(op.GetPhase()))
+	if len(parts) > 0 {
+		line += fmt.Sprintf(", %d done, %d in progress", done, running)
+	}
+
 	if st := op.GetCaRotationStage(); st != "" {
 		line += ", stage " + st
 	}
@@ -290,7 +294,7 @@ func resolveCluster(ctx context.Context, c *apiClients, name string) (*pb.Object
 }
 
 // runStartOperation is the shared body of `upgrade`, `cni kube-proxy` and
-// `cluster shutdown`: ask the server for the plan, show it, confirm, create.
+// `cluster shutdown`: ask the server for the plan, show it, confirm (unless --yes), create.
 // The server changes the spec first and creates the operation second, and
 // refuses everything it can before the first write.
 func runStartOperation(ctx context.Context, c *apiClients, in io.Reader, out, errw io.Writer, s startSpec) error {
@@ -299,19 +303,23 @@ func runStartOperation(ctx context.Context, c *apiClients, in io.Reader, out, er
 		return err
 	}
 
-	if !assumeYes {
-		plan, err := c.Operation.PlanOperation(ctx, connect.NewRequest(&pb.PlanOperationRequest{
-			Cluster: cluster, Kind: s.Kind, Target: s.Target, MaxUnavailable: s.MaxUnavailable,
-		}))
-		if err != nil {
-			return err
-		}
+	plan, err := c.Operation.PlanOperation(ctx, connect.NewRequest(&pb.PlanOperationRequest{
+		Cluster: cluster, Kind: s.Kind, Target: s.Target, MaxUnavailable: s.MaxUnavailable,
+	}))
+	if err != nil {
+		return err
+	}
 
-		if b := plan.Msg.GetBlocked(); b != "" {
-			return fmt.Errorf("%s: %s", kindName(s.Kind), b)
-		}
+	if b := plan.Msg.GetBlocked(); b != "" {
+		return fmt.Errorf("%s: %s", kindName(s.Kind), b)
+	}
 
-		ok, err := confirm(in, errw, planText(s.Kind, cluster.GetName(), plan.Msg)+"Proceed? [y/N] ")
+	// --yes skips only the question; the plan is always shown.
+	text := planText(s.Kind, cluster.GetName(), plan.Msg)
+	if assumeYes {
+		_, _ = fmt.Fprint(errw, text)
+	} else {
+		ok, err := confirm(in, errw, text+"Proceed? [y/N] ")
 		if err != nil {
 			return fmt.Errorf("%s: reading confirmation: %w", kindName(s.Kind), err)
 		}

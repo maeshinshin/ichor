@@ -99,3 +99,10 @@ func TestRotateCAIsOneCommandThroughTheEntryPoint(t *testing.T) {
 		t.Errorf("progress line lacks the stage: %q", line)
 	}
 }
+
+func TestProgressLineOfAnOperationWithoutMachinesHasNoCounts(t *testing.T) {
+	line := progressLine(&pb.Operation{Ref: objectRef(testNamespace, "x"), Kind: pb.OperationKind_OPERATION_KIND_ICHOR, Phase: ichorv1alpha1.TalosOperationPhaseInProgress})
+	if line != "ichor x: phase InProgress" {
+		t.Errorf("progress line = %q", line)
+	}
+}

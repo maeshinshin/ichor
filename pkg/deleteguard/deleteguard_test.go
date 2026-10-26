@@ -229,14 +229,14 @@ func TestCheckControlPlaneApproval(t *testing.T) {
 
 func TestCheckLastWorker(t *testing.T) {
 	for _, tc := range []struct {
-		schedulable string
-		after       int
-		wantErr     bool
+		unschedulable bool
+		after         int
+		wantErr       bool
 	}{
-		{"false", 0, true}, {"false", 1, false}, {"true", 0, false},
+		{true, 0, true}, {true, 1, false}, {false, 0, false},
 	} {
-		if err := CheckLastWorker(tc.schedulable, tc.after); (err != nil) != tc.wantErr {
-			t.Errorf("CheckLastWorker(%q, %d) = %v, wantErr %v", tc.schedulable, tc.after, err, tc.wantErr)
+		if err := CheckLastWorker(tc.unschedulable, tc.after); (err != nil) != tc.wantErr {
+			t.Errorf("CheckLastWorker(%v, %d) = %v, wantErr %v", tc.unschedulable, tc.after, err, tc.wantErr)
 		}
 	}
 }

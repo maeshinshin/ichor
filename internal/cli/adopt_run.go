@@ -212,46 +212,52 @@ func reportPlans(w io.Writer, plans []*adoptPlan) []*adoptPlan {
 	return toCreate
 }
 
-// v14OnlyDocuments are the Talos v1.14 documents that replaced legacy Config fields. Ichor renders
-// their defaults, and no TalosConfigPatch kind (nor TalosCluster/TalosMachine field) can set them
-// yet (ADR 0075), so a node that differs in one cannot be adopted at the v1.14 contract.
-var v14OnlyDocuments = map[string]string{
-	"KubeNetworkConfig":       "pod and service subnets, DNS domain",
-	"UnattendedInstallConfig": "install disk and image",
-	"KubeFlannelCNIConfig":    "the flannel CNI (its absence means \"no flannel\")",
+// specFieldHints say which spec field carries a value adopt cannot put in a patch (ADR 0076).
+// The v1.14 documents and the legacy fields they replaced both map, because the same value
+// reaches Ichor through the same field whichever contract the node was generated for. First
+// match wins, so the specific prefixes come before the general ones.
+var specFieldHints = []struct{ prefix, hint string }{
+	{"KubeNetworkConfig.podSubnets", "set TalosCluster spec.network.podSubnets to the node's value (it cannot change once set)"},
+	{"cluster.network.podSubnets", "set TalosCluster spec.network.podSubnets to the node's value (it cannot change once set)"},
+	{"KubeNetworkConfig.serviceSubnets", "set TalosCluster spec.network.serviceSubnets to the node's value (it cannot change once set)"},
+	{"cluster.network.serviceSubnets", "set TalosCluster spec.network.serviceSubnets to the node's value (it cannot change once set)"},
+	{"KubeNetworkConfig", "the DNS domain has no spec field; Ichor keeps Talos's default"},
+	{"UnattendedInstallConfig", "set TalosMachine spec.install.disk (and .image) for this machine; wipe is always false"},
+	{"machine.install", "set TalosMachine spec.install.disk (and .image) for this machine; other install fields have no spec field"},
+	{"KubeFlannelCNIConfig", "Talos's flannel is rendered for spec.cni.preset flannel only; the preset cannot change after creation"},
+	{"cluster.network.cni", "Talos's flannel is rendered for spec.cni.preset flannel only; other presets render cni.name none"},
 }
 
-// explainUnrepresentable turns the paths adopt left alone into the lines a user can act on: which
-// v1.14 document each belongs to and why it cannot be captured, and, for what remains of the
-// legacy Config document, that a patch has to be written by hand.
+// explainUnrepresentable turns the paths adopt left alone into the lines a user can act on: the
+// spec field that carries each value Ichor models (ADR 0076), and, for what remains, that a patch
+// has to be written by hand.
 func explainUnrepresentable(paths []string) []string {
-	seen := map[string]bool{}
-	legacy := false
-
-	var lines []string
+	var (
+		lines  []string
+		manual bool
+	)
 
 	for _, p := range paths {
-		kind, _, _ := strings.Cut(p, ".")
+		hint := ""
 
-		what, ok := v14OnlyDocuments[kind]
-		if !ok {
-			legacy = true
+		for _, h := range specFieldHints {
+			if p == h.prefix || strings.HasPrefix(p, h.prefix+".") {
+				hint = h.hint
+
+				break
+			}
+		}
+
+		if hint == "" {
+			manual = true
 
 			continue
 		}
 
-		if seen[kind] {
-			continue
-		}
-
-		seen[kind] = true
-
-		lines = append(lines, fmt.Sprintf(
-			"%s (%s) is a Talos v1.14 document: there is no TalosConfigPatch kind for it, and the legacy Config fields "+
-				"it replaced are rejected next to it, so it cannot be adopted at versionContract v1.14 (ADR 0075)", kind, what))
+		lines = append(lines, fmt.Sprintf("%s: %s", p, hint))
 	}
 
-	if legacy {
+	if manual {
 		lines = append(lines, "write a TalosConfigPatch for the other fields by hand, then re-run adopt")
 	}
 

@@ -6,6 +6,7 @@ import { finishLogin, startLogin, storedToken, tokenUsable, type AuthConfig } fr
 import { Separator } from '@/components/ui/separator'
 import { ClusterDetail } from '@/pages/ClusterDetail'
 import { ClusterList } from '@/pages/ClusterList'
+import { GitOps } from '@/pages/GitOps'
 import { MachineList } from '@/pages/MachineList'
 import { NodeDetail } from '@/pages/NodeDetail'
 import { PatchDetail } from '@/pages/PatchDetail'
@@ -85,7 +86,7 @@ function renderRoute(path: string) {
   if (path === '/machines') return <MachineList />
   if (path === '/patches') return <PatchList />
   if (path === '/patches/new') return <PatchDetail />
-  if (path === '/gitops') return <Placeholder title="GitOps" />
+  if (path === '/gitops') return <GitOps />
 
   const cluster = matchRoute('/clusters/:namespace/:name', path)
   if (cluster) return <ClusterDetail namespace={cluster.namespace} name={cluster.name} />

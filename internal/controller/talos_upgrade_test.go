@@ -110,6 +110,36 @@ func (f *fakeStorageEvacuator) End(context.Context, *evacuationTarget, string) e
 }
 
 var _ = Describe("talosUpgradeAdvancer", func() {
+	It("finishes a control plane already on the target without a recorded hostname, using the name the node reports", func() {
+		secret := newTestSecret(newTestBundle("v1.14"))
+		cluster := newTestCluster(secret.Name, "v1.14")
+		cp := newTestControlPlane(cluster.Name, "nh1")
+		newTestNode("node-nh1", true)
+
+		fake := &fakeTalosClient{
+			version: cluster.Spec.TalosVersion, bootID: testBootIDBefore, nodeName: "node-nh1",
+			etcdMembers: []EtcdMember{{ID: 1, Hostname: "node-nh1"}},
+		}
+
+		done, err := newUpgradeAdvancer(fake, nil).Advance(ctx, cluster, fetchMachine(cp), nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(done).To(BeTrue())
+		Expect(fake.upgradeCalls).To(BeEmpty())
+	})
+
+	It("upgrades a node without a recorded hostname once it names its Kubernetes node", func() {
+		secret := newTestSecret(newTestBundle("v1.14"))
+		cluster := newTestCluster(secret.Name, "v1.14")
+		cp := newTestControlPlane(cluster.Name, "nh2")
+		newTestNode("node-nh2", true)
+
+		fake := &fakeTalosClient{version: testOldTalosVersion, bootID: testBootIDBefore, nodeName: "node-nh2"}
+
+		_, err := newUpgradeAdvancer(fake, nil).Advance(ctx, cluster, fetchMachine(cp), nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(fake.upgradeCalls).To(HaveLen(1))
+	})
+
 	It("gives the Upgrade RPC far more time than the 15s dial bound, since it blocks while the node pulls the installer", func() {
 		secret := newTestSecret(newTestBundle("v1.14"))
 		cluster := newTestCluster(secret.Name, "v1.14")

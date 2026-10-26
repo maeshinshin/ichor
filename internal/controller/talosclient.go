@@ -146,6 +146,11 @@ type TalosClient interface {
 	// itself renders them from the node's current machine configuration.
 	BootstrapManifests(ctx context.Context) ([]map[string]any, error)
 
+	// NodeName reports the Kubernetes node name this node registers under (its Nodename
+	// resource), which Talos derives from the hostname. It is how the executors find the Node
+	// and etcd member of a machine whose spec.hostname, an optional override, is unset.
+	NodeName(ctx context.Context) (string, error)
+
 	// MachineStage reads the node's MachineStatus stage ("running",
 	// "installing", "rebooting", ...), which followStage uses to follow a
 	// node Ichor provisioned until it is running.

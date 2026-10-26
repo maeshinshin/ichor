@@ -1510,16 +1510,18 @@ type KubernetesNodeSection struct {
 	Error            string                 `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
 	PermissionDenied bool                   `protobuf:"varint,2,opt,name=permission_denied,json=permissionDenied,proto3" json:"permission_denied,omitempty"`
 	// not_joined is true when no Node matches the machine.
-	NotJoined     bool                   `protobuf:"varint,3,opt,name=not_joined,json=notJoined,proto3" json:"not_joined,omitempty"`
-	NodeName      string                 `protobuf:"bytes,4,opt,name=node_name,json=nodeName,proto3" json:"node_name,omitempty"`
-	Conditions    []*KubernetesCondition `protobuf:"bytes,5,rep,name=conditions,proto3" json:"conditions,omitempty"`
-	Taints        []*KubernetesTaint     `protobuf:"bytes,6,rep,name=taints,proto3" json:"taints,omitempty"`
-	Resources     []*KubernetesResource  `protobuf:"bytes,7,rep,name=resources,proto3" json:"resources,omitempty"`
-	Pods          []*KubernetesPod       `protobuf:"bytes,8,rep,name=pods,proto3" json:"pods,omitempty"`
-	PodsTruncated bool                   `protobuf:"varint,9,opt,name=pods_truncated,json=podsTruncated,proto3" json:"pods_truncated,omitempty"`
-	PodsError     string                 `protobuf:"bytes,10,opt,name=pods_error,json=podsError,proto3" json:"pods_error,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	NotJoined      bool                   `protobuf:"varint,3,opt,name=not_joined,json=notJoined,proto3" json:"not_joined,omitempty"`
+	NodeName       string                 `protobuf:"bytes,4,opt,name=node_name,json=nodeName,proto3" json:"node_name,omitempty"`
+	Conditions     []*KubernetesCondition `protobuf:"bytes,5,rep,name=conditions,proto3" json:"conditions,omitempty"`
+	Taints         []*KubernetesTaint     `protobuf:"bytes,6,rep,name=taints,proto3" json:"taints,omitempty"`
+	Resources      []*KubernetesResource  `protobuf:"bytes,7,rep,name=resources,proto3" json:"resources,omitempty"`
+	Pods           []*KubernetesPod       `protobuf:"bytes,8,rep,name=pods,proto3" json:"pods,omitempty"`
+	PodsTruncated  bool                   `protobuf:"varint,9,opt,name=pods_truncated,json=podsTruncated,proto3" json:"pods_truncated,omitempty"`
+	PodsError      string                 `protobuf:"bytes,10,opt,name=pods_error,json=podsError,proto3" json:"pods_error,omitempty"`
+	KubeletVersion string                 `protobuf:"bytes,11,opt,name=kubelet_version,json=kubeletVersion,proto3" json:"kubelet_version,omitempty"`
+	Unschedulable  bool                   `protobuf:"varint,12,opt,name=unschedulable,proto3" json:"unschedulable,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *KubernetesNodeSection) Reset() {
@@ -1620,6 +1622,20 @@ func (x *KubernetesNodeSection) GetPodsError() string {
 		return x.PodsError
 	}
 	return ""
+}
+
+func (x *KubernetesNodeSection) GetKubeletVersion() string {
+	if x != nil {
+		return x.KubeletVersion
+	}
+	return ""
+}
+
+func (x *KubernetesNodeSection) GetUnschedulable() bool {
+	if x != nil {
+		return x.Unschedulable
+	}
+	return false
 }
 
 var File_ichor_v1alpha1_talosruntime_proto protoreflect.FileDescriptor
@@ -1760,7 +1776,7 @@ const file_ichor_v1alpha1_talosruntime_proto_rawDesc = "" +
 	"\x10total_containers\x18\x05 \x01(\x05R\x0ftotalContainers\x12\x1a\n" +
 	"\brestarts\x18\x06 \x01(\x05R\brestarts\x12\x1f\n" +
 	"\vage_seconds\x18\a \x01(\x03R\n" +
-	"ageSeconds\"\xcf\x03\n" +
+	"ageSeconds\"\x9e\x04\n" +
 	"\x15KubernetesNodeSection\x12\x14\n" +
 	"\x05error\x18\x01 \x01(\tR\x05error\x12+\n" +
 	"\x11permission_denied\x18\x02 \x01(\bR\x10permissionDenied\x12\x1d\n" +
@@ -1776,7 +1792,9 @@ const file_ichor_v1alpha1_talosruntime_proto_rawDesc = "" +
 	"\x0epods_truncated\x18\t \x01(\bR\rpodsTruncated\x12\x1d\n" +
 	"\n" +
 	"pods_error\x18\n" +
-	" \x01(\tR\tpodsErrorB\xc2\x01\n" +
+	" \x01(\tR\tpodsError\x12'\n" +
+	"\x0fkubelet_version\x18\v \x01(\tR\x0ekubeletVersion\x12$\n" +
+	"\runschedulable\x18\f \x01(\bR\runschedulableB\xc2\x01\n" +
 	"\x12com.ichor.v1alpha1B\x11TalosruntimeProtoP\x01Z@github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1;ichorv1alpha1\xa2\x02\x03IXX\xaa\x02\x0eIchor.V1alpha1\xca\x02\x0eIchor\\V1alpha1\xe2\x02\x1aIchor\\V1alpha1\\GPBMetadata\xea\x02\x0fIchor::V1alpha1b\x06proto3"
 
 var (

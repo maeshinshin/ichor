@@ -3,9 +3,10 @@ import type { ComponentChildren } from 'preact'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ErrorAlert } from '@/components/ErrorAlert'
+import { Field, Fields } from '@/components/PageHeader'
+import { Section } from '@/components/SectionNav'
 import type { GetNodeTalosRuntimeResponse } from '@/gen/ichor/v1alpha1/talosruntime_pb'
 import { nodeClient } from '@/lib/connect'
 import { describeError } from '@/lib/errors'
@@ -60,14 +61,14 @@ export function TalosRuntime({ namespace, name }: { namespace: string; name: str
   }, [namespace, name])
 
   if (error) return <ErrorAlert {...error} />
-  if (!data) return <p class="text-sm text-muted-foreground">{t('rt.loading')}</p>
+  if (!data) return <p class="text-muted-foreground">{t('rt.loading')}</p>
   const m = data.maintenanceMode
   return (
     <>
+      <KubernetesCard data={data} />
       <EtcdCard data={data} maintenance={m} />
       <ProcessesCard data={data} maintenance={m} />
       <ContainersCard data={data} maintenance={m} />
-      <KubernetesCard data={data} />
       <NetworkStateCard data={data} maintenance={m} />
       <KernelCard data={data} maintenance={m} />
     </>
@@ -89,45 +90,27 @@ function Panel({
 }) {
   const t = useT()
   return (
-    <div id={id} class="scroll-mt-24">
-      <Card>
-        <CardHeader>
-          <CardTitle>{title}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {error ? (
-            maintenance ? (
-              <p class="text-sm text-muted-foreground">{t('rt.unavailableMaintenance')}</p>
-            ) : (
-              <Alert variant="destructive">
-                <AlertDescription>
-                  {t('talos.sectionFailed')} <span class="break-words font-mono text-xs">{error}</span>
-                </AlertDescription>
-              </Alert>
-            )
-          ) : (
-            children
-          )}
-        </CardContent>
-      </Card>
-    </div>
+    <Section id={id} title={title}>
+      {error ? (
+        maintenance ? (
+          <p class="text-muted-foreground">{t('rt.unavailableMaintenance')}</p>
+        ) : (
+          <Alert variant="destructive">
+            <AlertDescription>
+              {t('talos.sectionFailed')} <span class="break-words font-mono text-xs">{error}</span>
+            </AlertDescription>
+          </Alert>
+        )
+      ) : (
+        children
+      )}
+    </Section>
   )
 }
-
-function Field({ label, value }: { label: string; value: ComponentChildren }) {
-  return (
-    <div class="min-w-0">
-      <dt class="text-xs text-muted-foreground">{label}</dt>
-      <dd class="break-words">{value || '-'}</dd>
-    </div>
-  )
-}
-
-const FIELDS = 'grid grid-cols-1 gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3'
 
 function Empty() {
   const t = useT()
-  return <p class="text-sm text-muted-foreground">{t('talos.none')}</p>
+  return <p class="text-muted-foreground">{t('talos.none')}</p>
 }
 
 function EtcdCard({ data, maintenance }: { data: GetNodeTalosRuntimeResponse; maintenance: boolean }) {
@@ -138,17 +121,19 @@ function EtcdCard({ data, maintenance }: { data: GetNodeTalosRuntimeResponse; ma
   return (
     <Panel id="etcd" title={t('rt.etcd')} error={e.error} maintenance={maintenance}>
       {e.notApplicable ? (
-        <p class="text-sm text-muted-foreground">{t('rt.etcdNotApplicable')}</p>
+        <p class="text-muted-foreground">{t('rt.etcdNotApplicable')}</p>
       ) : (
         <>
-          <dl class={FIELDS}>
-            <Field label={t('rt.etcdHealth')} value={<Badge variant={badgeVariant(etcdTone(e))}>{etcdTone(e) === 'ok' ? t('rt.healthy') : t('rt.attention')}</Badge>} />
-            <Field label={t('rt.etcdMember')} value={<span class="font-mono text-xs">{e.memberId}</span>} />
-            <Field label={t('rt.etcdLeader')} value={<span class="font-mono text-xs">{e.leaderId}</span>} />
+          <Fields>
+            <Field label={t('rt.etcdHealth')}>
+              <Badge variant={badgeVariant(etcdTone(e))}>{etcdTone(e) === 'ok' ? t('rt.healthy') : t('rt.attention')}</Badge>
+            </Field>
+            <Field label={t('rt.etcdMember')} value={e.memberId} />
+            <Field label={t('rt.etcdLeader')} value={e.leaderId} />
             <Field label={t('rt.etcdDb')} value={`${formatBytes(e.dbSizeBytes)}${pct >= 0 ? ` (${pct}% ${t('rt.inUse')})` : ''}`} />
             <Field label={t('rt.etcdRaft')} value={`${t('rt.term')} ${e.raftTerm}, ${t('rt.index')} ${e.raftIndex}, ${t('rt.applied')} ${e.raftAppliedIndex}`} />
             <Field label={t('rt.etcdVersion')} value={[e.protocolVersion, e.storageVersion].filter(Boolean).join(' / ')} />
-          </dl>
+          </Fields>
           {e.alarms.length > 0 && (
             <Alert variant="destructive">
               <AlertDescription>
@@ -290,15 +275,17 @@ function KubernetesCard({ data }: { data: GetNodeTalosRuntimeResponse }) {
   return (
     <Panel id="k8s-node" title={t('rt.k8s')} error={k.error} maintenance={false}>
       {k.permissionDenied ? (
-        <p class="text-sm text-muted-foreground">{t('rt.k8sDenied')}</p>
+        <p class="text-muted-foreground">{t('rt.k8sDenied')}</p>
       ) : k.notJoined ? (
-        <p class="text-sm text-muted-foreground">{t('rt.k8sNotJoined')}</p>
+        <p class="text-muted-foreground">{t('rt.k8sNotJoined')}</p>
       ) : (
         <>
-          <dl class={FIELDS}>
+          <Fields>
             <Field label={t('talos.k8sNodename')} value={k.nodeName} />
-            <Field label={t('rt.taints')} value={<span class="font-mono text-xs">{k.taints.map(formatTaint).join(', ')}</span>} />
-          </dl>
+            <Field label={t('node.k8sKubelet')} value={k.kubeletVersion} />
+            <Field label={t('node.k8sSchedulable')} value={k.unschedulable ? t('common.no') : t('common.yes')} />
+            <Field label={t('rt.taints')} value={k.taints.map(formatTaint).join(', ')} />
+          </Fields>
           <div class="flex flex-wrap gap-1">
             {k.conditions.map((c) => (
               <Badge key={c.type} variant={badgeVariant(conditionTone(c))} title={[c.reason, c.message].filter(Boolean).join(': ')}>
@@ -374,11 +361,13 @@ function NetworkStateCard({ data, maintenance }: { data: GetNodeTalosRuntimeResp
   if (!n) return null
   return (
     <Panel id="netstate" title={t('rt.netstate')} error={n.error} maintenance={maintenance}>
-      <dl class={FIELDS}>
-        <Field label={t('rt.timeStatus')} value={n.timeStatus && <Badge variant={n.timeSync ? 'secondary' : 'outline'}>{n.timeStatus}</Badge>} />
+      <Fields>
+        <Field label={t('rt.timeStatus')}>
+          {n.timeStatus ? <Badge variant={n.timeSync ? 'secondary' : 'outline'}>{n.timeStatus}</Badge> : '-'}
+        </Field>
         <Field label={t('rt.timeOffset')} value={n.timeStatus ? formatNanos(n.timeOffsetNanos) : ''} />
         <Field label={t('rt.timeMaxError')} value={n.timeStatus ? formatNanos(n.timeMaxErrorNanos) : ''} />
-      </dl>
+      </Fields>
       <p class="text-xs text-muted-foreground">{t('rt.routes')}</p>
       {n.routes.length === 0 ? (
         <Empty />

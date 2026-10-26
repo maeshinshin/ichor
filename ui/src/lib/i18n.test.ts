@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { timestampFromDate, type Timestamp } from '@bufbuild/protobuf/wkt'
 import { enumLabel } from './enum.ts'
-import { formatBytes, formatDate, formatTimestamp } from './format.ts'
+import { display, formatBytes, formatCores, formatDate, formatTimestamp, formatUsage } from './format.ts'
 import { en, enumName, t, type Key } from './i18n.ts'
 
 const keys = Object.keys(en) as Key[]
@@ -46,4 +46,21 @@ test('formatTimestamp is English and shows a dash for none', () => {
   assert.equal(formatTimestamp(undefined), '-')
   assert.equal(formatTimestamp(ts), new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'medium' }).format(d))
   assert.match(formatDate(d), /Oct/)
+})
+
+test('display shows missing values and firmware stand-ins as a dash', () => {
+  assert.equal(display(undefined), '-')
+  assert.equal(display(''), '-')
+  assert.equal(display('  '), '-')
+  assert.equal(display('None'), '-')
+  assert.equal(display('To Be Filled By O.E.M.'), '-')
+  assert.equal(display('QEMU'), 'QEMU')
+})
+
+test('usage shows used of total, and a dash when the total or the sample is unknown', () => {
+  assert.equal(formatUsage(1n << 30n, 4n << 30n), '1.0 GB / 4.0 GB (25%)')
+  assert.equal(formatUsage(0n, 0n), '-')
+  assert.equal(formatCores(1.234, true), '1.23')
+  assert.equal(formatCores(0, false), '-')
+  assert.equal(formatCores(-24.99, true), '-')
 })

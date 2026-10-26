@@ -136,7 +136,9 @@ func truncateText(s string, n int) string {
 // conditions, taints and capacity against allocatable. Pods are added by the
 // caller.
 func kubernetesNodeSection(node *corev1.Node) *pb.KubernetesNodeSection {
-	out := &pb.KubernetesNodeSection{NodeName: node.Name}
+	out := &pb.KubernetesNodeSection{
+		NodeName: node.Name, KubeletVersion: node.Status.NodeInfo.KubeletVersion, Unschedulable: node.Spec.Unschedulable,
+	}
 
 	for _, c := range node.Status.Conditions {
 		out.Conditions = append(out.Conditions, &pb.KubernetesCondition{

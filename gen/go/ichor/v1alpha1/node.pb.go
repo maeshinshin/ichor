@@ -581,8 +581,11 @@ type ResourceUsage struct {
 	MemoryTotalBytes     int64                  `protobuf:"varint,3,opt,name=memory_total_bytes,json=memoryTotalBytes,proto3" json:"memory_total_bytes,omitempty"`
 	FilesystemUsedBytes  int64                  `protobuf:"varint,4,opt,name=filesystem_used_bytes,json=filesystemUsedBytes,proto3" json:"filesystem_used_bytes,omitempty"`
 	FilesystemTotalBytes int64                  `protobuf:"varint,5,opt,name=filesystem_total_bytes,json=filesystemTotalBytes,proto3" json:"filesystem_total_bytes,omitempty"`
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	// cpu_sampled is false when the CPU counters did not move during the short
+	// sampling window, so cpu_cores_used is unknown, not zero.
+	CpuSampled    bool `protobuf:"varint,6,opt,name=cpu_sampled,json=cpuSampled,proto3" json:"cpu_sampled,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ResourceUsage) Reset() {
@@ -648,6 +651,13 @@ func (x *ResourceUsage) GetFilesystemTotalBytes() int64 {
 		return x.FilesystemTotalBytes
 	}
 	return 0
+}
+
+func (x *ResourceUsage) GetCpuSampled() bool {
+	if x != nil {
+		return x.CpuSampled
+	}
+	return false
 }
 
 type KubernetesNodeStatus struct {
@@ -1188,13 +1198,15 @@ const file_ichor_v1alpha1_node_proto_rawDesc = "" +
 	"\x05alias\x18\x02 \x01(\tR\x05alias\x12#\n" +
 	"\rpermanent_mac\x18\x03 \x01(\tR\fpermanentMac\x12\x0e\n" +
 	"\x02up\x18\x04 \x01(\bR\x02up\x12\x1c\n" +
-	"\taddresses\x18\x05 \x03(\tR\taddresses\"\xf9\x01\n" +
+	"\taddresses\x18\x05 \x03(\tR\taddresses\"\x9a\x02\n" +
 	"\rResourceUsage\x12$\n" +
 	"\x0ecpu_cores_used\x18\x01 \x01(\x01R\fcpuCoresUsed\x12*\n" +
 	"\x11memory_used_bytes\x18\x02 \x01(\x03R\x0fmemoryUsedBytes\x12,\n" +
 	"\x12memory_total_bytes\x18\x03 \x01(\x03R\x10memoryTotalBytes\x122\n" +
 	"\x15filesystem_used_bytes\x18\x04 \x01(\x03R\x13filesystemUsedBytes\x124\n" +
-	"\x16filesystem_total_bytes\x18\x05 \x01(\x03R\x14filesystemTotalBytes\"\x94\x01\n" +
+	"\x16filesystem_total_bytes\x18\x05 \x01(\x03R\x14filesystemTotalBytes\x12\x1f\n" +
+	"\vcpu_sampled\x18\x06 \x01(\bR\n" +
+	"cpuSampled\"\x94\x01\n" +
 	"\x14KubernetesNodeStatus\x12\x1b\n" +
 	"\tnode_name\x18\x01 \x01(\tR\bnodeName\x12\x14\n" +
 	"\x05ready\x18\x02 \x01(\bR\x05ready\x12'\n" +

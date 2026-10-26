@@ -96,6 +96,9 @@ message ResourceUsage {
   int64 memory_total_bytes = 3;
   int64 filesystem_used_bytes = 4;
   int64 filesystem_total_bytes = 5;
+  // cpu_sampled is false when the CPU counters did not move during the short
+  // sampling window, so cpu_cores_used is unknown, not zero.
+  bool cpu_sampled = 6;
 }
 
 message KubernetesNodeStatus {

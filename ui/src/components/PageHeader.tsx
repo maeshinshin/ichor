@@ -1,3 +1,4 @@
+import { display } from '@/lib/format'
 import type { ComponentChildren } from 'preact'
 
 // PageHeader is the top of every page: the resource name, its kind, the status
@@ -55,7 +56,7 @@ export function Field({ label, value, children }: { label: string; value?: strin
   return (
     <div class="min-w-0">
       <dt class="text-xs text-muted-foreground">{label}</dt>
-      <dd class="break-words">{children ?? (value || '-')}</dd>
+      <dd class="break-words">{children ?? display(value)}</dd>
     </div>
   )
 }

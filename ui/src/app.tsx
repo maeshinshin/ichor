@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'preact/hooks'
 import { AppShell } from '@/components/AppShell'
 import { ErrorAlert } from '@/components/ErrorAlert'
+import { Toaster } from '@/components/ui/sonner'
 import { finishLogin, startLogin, storedToken, tokenUsable, type AuthConfig } from '@/lib/oidc'
 import { useT } from '@/lib/useT'
 import { AddNode } from '@/pages/AddNode'
@@ -49,9 +50,12 @@ export function App() {
   if (login.state === 'error') return <ErrorAlert title={t('app.signInFailed')} detail={login.error} />
 
   return (
-    <AppShell path={path} signInNotConfigured={login.state === 'open'}>
-      {renderRoute(path, t('common.notFound'))}
-    </AppShell>
+    <>
+      <AppShell path={path} signInNotConfigured={login.state === 'open'}>
+        {renderRoute(path, t('common.notFound'))}
+      </AppShell>
+      <Toaster />
+    </>
   )
 }
 

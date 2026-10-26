@@ -250,7 +250,11 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) error {
 	}
 
 	// Step 5: create the CRs.
-	if err := createCRs(ctx, k8sClient, cluster, machine, candidates, deps.Stdout, deps.Output); err != nil {
+	create := func(ctx context.Context, obj client.Object) error {
+		return createWhenWebhooksUp(ctx, k8sClient, obj, deps.BootstrapWait, deps.BootstrapInterval, deps.Stderr)
+	}
+
+	if err := createCRs(ctx, create, cluster, machine, candidates, deps.Stdout, deps.Output); err != nil {
 		return err
 	}
 
@@ -268,20 +272,20 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) error {
 // candidate TalosConfigPatch, then prints what it created in the
 // requested output format (design: "-o yaml|json").
 func createCRs(
-	ctx context.Context, k8sClient client.Client,
+	ctx context.Context, create func(context.Context, client.Object) error,
 	cluster *ichorv1alpha1.TalosCluster, machine *ichorv1alpha1.TalosMachine, candidates []ichorv1alpha1.TalosConfigPatch,
 	stdout io.Writer, output string,
 ) error {
-	if err := k8sClient.Create(ctx, cluster); err != nil {
+	if err := create(ctx, cluster); err != nil {
 		return fmt.Errorf("init: creating TalosCluster: %w", err)
 	}
 
-	if err := k8sClient.Create(ctx, machine); err != nil {
+	if err := create(ctx, machine); err != nil {
 		return fmt.Errorf("init: creating TalosMachine: %w", err)
 	}
 
 	for _, p := range candidates {
-		if err := k8sClient.Create(ctx, &p); err != nil {
+		if err := create(ctx, &p); err != nil {
 			return fmt.Errorf("init: creating TalosConfigPatch %q: %w", p.Name, err)
 		}
 	}

@@ -76,7 +76,8 @@ func (v *TalosMachineCustomValidator) ValidateUpdate(ctx context.Context, oldObj
 
 	// An approved worker that stops being one (rejected, re-roled, moved to
 	// another cluster) leaves its old cluster just like a delete does.
-	if isApprovedRole(oldObj, roleWorker) && !(isApprovedRole(newObj, roleWorker) && sameCluster(oldObj, newObj)) {
+	stillWorker := isApprovedRole(newObj, roleWorker) && sameCluster(oldObj, newObj)
+	if isApprovedRole(oldObj, roleWorker) && !stillWorker {
 		return nil, v.checkWorkerLeaves(ctx, oldObj)
 	}
 
@@ -112,7 +113,7 @@ func (v *TalosMachineCustomValidator) getCluster(ctx context.Context, m *ichorv1
 }
 
 // checkApprovalCap enforces "no approving more control planes than
-// configured" (ADR 0053): only on the transition into an approved
+// configured" (ADR 0054): only on the transition into an approved
 // control plane of a cluster (oldObj nil on create).
 func (v *TalosMachineCustomValidator) checkApprovalCap(ctx context.Context, oldObj, newObj *ichorv1alpha1.TalosMachine) error {
 	if !isApprovedRole(newObj, roleControlPlane) {
@@ -142,7 +143,7 @@ func (v *TalosMachineCustomValidator) checkApprovalCap(ctx context.Context, oldO
 // includes it.
 func (v *TalosMachineCustomValidator) checkWorkerLeaves(ctx context.Context, m *ichorv1alpha1.TalosMachine) error {
 	cluster, err := v.getCluster(ctx, m)
-	if err != nil || cluster == nil || cluster.Spec.ControlPlane.Schedulable != "false" {
+	if err != nil || cluster == nil || !isUnschedulable(cluster) {
 		return err
 	}
 
@@ -151,7 +152,7 @@ func (v *TalosMachineCustomValidator) checkWorkerLeaves(ctx context.Context, m *
 		return err
 	}
 
-	return deleteguard.CheckLastWorker(cluster.Spec.ControlPlane.Schedulable, workers-1)
+	return deleteguard.CheckLastWorker(true, workers-1)
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type TalosMachine.

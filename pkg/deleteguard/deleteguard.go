@@ -158,24 +158,26 @@ func countApproved(ctx context.Context, reader client.Reader, namespace, cluster
 // (architecture.md "Nodes": 3->4->3, add before remove): desiredCount is odd
 // (1, 3 or 5), so desiredCount+1 is the one even, "transitioning" count the
 // design allows, and a second extra approval has no replacement to belong to.
-// ADR 0053 covers the race this admission-time check cannot close.
+// ADR 0054 covers the race this admission-time check cannot close.
 func CheckControlPlaneApproval(currentControlPlanes int, desiredCount int) error {
 	if currentControlPlanes > desiredCount {
 		return fmt.Errorf("approve refused: %d control planes are already approved against spec.controlPlane.count %d; "+
-			"one extra is allowed only while replacing a member, so remove one first or raise spec.controlPlane.count (to 1, 3 or 5)",
+			"one extra is allowed only while replacing a member, "+
+			"so remove one first or raise spec.controlPlane.count (to 1, 3 or 5)",
 			currentControlPlanes, desiredCount)
 	}
 	return nil
 }
 
 // CheckLastWorker refuses leaving a cluster whose control planes are
-// unschedulable (schedulable == "false") with no approved worker: nothing
-// could run workloads. workersAfter is the approved-worker count after the
-// operation. Used when schedulable turns false and when a worker leaves.
-func CheckLastWorker(schedulable string, workersAfter int) error {
-	if schedulable == "false" && workersAfter < 1 {
-		return errors.New("refused: spec.controlPlane.schedulable is \"false\" and the cluster would have no approved worker; " +
-			"approve a worker first, or set schedulable to \"true\"")
+// unschedulable (spec.controlPlane.schedulable is "false") with no approved
+// worker: nothing could run workloads. workersAfter is the approved-worker
+// count after the operation. Used when schedulable turns false and when a
+// worker leaves.
+func CheckLastWorker(unschedulable bool, workersAfter int) error {
+	if unschedulable && workersAfter < 1 {
+		return errors.New("refused: spec.controlPlane.schedulable is \"false\" " +
+			"and the cluster would have no approved worker; approve a worker first, or set schedulable to \"true\"")
 	}
 	return nil
 }

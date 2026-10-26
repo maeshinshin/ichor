@@ -380,7 +380,7 @@ func checkWebhookInvariants(t *testing.T, release string, docs []map[string]any)
 		for _, r := range rules {
 			rm, _ := r.(map[string]any)
 			ops, _ := rm["operations"].([]any)
-			// ADR 0053 widened these from DELETE-only: the approval cap
+			// ADR 0054 widened these from DELETE-only: the approval cap
 			// needs CREATE/UPDATE on TalosMachine, the schedulable check
 			// UPDATE on TalosCluster. Anything else would be a new decision.
 			want := map[string][]any{

@@ -52,6 +52,11 @@ type TalosClusterCustomValidator struct {
 	APIReader client.Reader
 }
 
+// isUnschedulable reports spec.controlPlane.schedulable == "false".
+func isUnschedulable(c *ichorv1alpha1.TalosCluster) bool {
+	return c.Spec.ControlPlane.Schedulable == "false"
+}
+
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type TalosCluster.
 func (v *TalosClusterCustomValidator) ValidateCreate(_ context.Context, obj *ichorv1alpha1.TalosCluster) (admission.Warnings, error) {
 	talosclusterlog.Info("Validation for TalosCluster upon creation", "name", obj.GetName())
@@ -66,13 +71,13 @@ func (v *TalosClusterCustomValidator) ValidateUpdate(ctx context.Context, oldObj
 	// Only the transition to "false" is checked: a cluster created
 	// unschedulable has no workers yet (they are discovered afterwards), and
 	// unrelated edits to one that lost its workers must not be blocked.
-	if oldObj.Spec.ControlPlane.Schedulable != "false" && newObj.Spec.ControlPlane.Schedulable == "false" {
+	if !isUnschedulable(oldObj) && isUnschedulable(newObj) {
 		workers, err := deleteguard.CountApprovedWorkers(ctx, v.APIReader, newObj.Namespace, newObj.Name)
 		if err != nil {
 			return nil, err
 		}
 
-		return nil, deleteguard.CheckLastWorker(newObj.Spec.ControlPlane.Schedulable, workers)
+		return nil, deleteguard.CheckLastWorker(true, workers)
 	}
 
 	return nil, nil

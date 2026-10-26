@@ -63,7 +63,8 @@ type RegistryAuth struct {
 // "wherever this TalosCluster happens to live" below cluster-wide, so every lookup here resolves
 // against one fixed namespace regardless of which namespace the TalosCluster itself is in.
 //
-// A registry entry with no AuthSecretRef is anonymous and is simply absent from the returned
+// A cluster with no registries returns a nil map without reading anything. A registry entry
+// with no AuthSecretRef is anonymous and is simply absent from the returned
 // map -- a public mirror needs no credentials, and that is not an error. A registry that does
 // name a Secret fails loudly, never silently, if that Secret is missing or carries none of the
 // three recognized keys: rendering it as an anonymous mirror instead would look like a working
@@ -78,6 +79,12 @@ type RegistryAuth struct {
 func ResolveRegistryAuth(
 	ctx context.Context, c client.Client, namespace string, cluster *ichorv1alpha1.TalosCluster,
 ) (map[string]RegistryAuth, error) {
+	// No registries: nothing to look up, so no Secret is read and no namespace is needed. Every
+	// caller passes its result straight to Render/BuildConfig, so this is the common path.
+	if len(cluster.Spec.Registries) == 0 {
+		return nil, nil
+	}
+
 	if namespace == "" {
 		return nil, fmt.Errorf("resolving registry auth: controller namespace is empty (is POD_NAMESPACE set?)")
 	}

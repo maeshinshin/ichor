@@ -44,7 +44,7 @@ func TestRunAdopt_ZeroDrift(t *testing.T) {
 	// What this node already has, from before Ichor ever knew about it.
 	fixture := sysctlPatch(cluster.Name, map[string]string{testSysctlKey: "1"})
 
-	currentCfg, _, err := render.Render(cluster, machine, bundle, []ichorv1alpha1.TalosConfigPatch{fixture})
+	currentCfg, _, err := render.Render(cluster, machine, bundle, []ichorv1alpha1.TalosConfigPatch{fixture}, nil)
 	if err != nil {
 		t.Fatalf("rendering current-config fixture: %v", err)
 	}
@@ -87,7 +87,7 @@ func TestRunAdopt_ZeroDrift(t *testing.T) {
 	}
 
 	// Zero drift, re-verified independently of buildAdoptPlan's own check.
-	rendered, _, err := render.Render(cluster, machine, bundle, []ichorv1alpha1.TalosConfigPatch{got})
+	rendered, _, err := render.Render(cluster, machine, bundle, []ichorv1alpha1.TalosConfigPatch{got}, nil)
 	if err != nil {
 		t.Fatalf("re-rendering with the created patch: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestRunAdopt_AlreadyInSync(t *testing.T) {
 	cluster := newTestCluster()
 	machine := newTestMachine(cluster.Name)
 
-	currentCfg, _, err := render.Render(cluster, machine, bundle, nil)
+	currentCfg, _, err := render.Render(cluster, machine, bundle, nil, nil)
 	if err != nil {
 		t.Fatalf("rendering current-config fixture: %v", err)
 	}
@@ -166,7 +166,7 @@ func TestRunAdopt_Confirmation(t *testing.T) {
 
 			fixture := sysctlPatch(cluster.Name, map[string]string{testSysctlKey: "1"})
 
-			currentCfg, _, err := render.Render(cluster, machine, bundle, []ichorv1alpha1.TalosConfigPatch{fixture})
+			currentCfg, _, err := render.Render(cluster, machine, bundle, []ichorv1alpha1.TalosConfigPatch{fixture}, nil)
 			if err != nil {
 				t.Fatalf("rendering current-config fixture: %v", err)
 			}
@@ -217,7 +217,7 @@ func TestRunAdopt_OutputFormats(t *testing.T) {
 
 			fixture := sysctlPatch(cluster.Name, map[string]string{testSysctlKey: "1"})
 
-			currentCfg, _, err := render.Render(cluster, machine, bundle, []ichorv1alpha1.TalosConfigPatch{fixture})
+			currentCfg, _, err := render.Render(cluster, machine, bundle, []ichorv1alpha1.TalosConfigPatch{fixture}, nil)
 			if err != nil {
 				t.Fatalf("rendering current-config fixture: %v", err)
 			}
@@ -260,12 +260,12 @@ func TestBuildAdoptPlan_LegacyDiffIsNeverAutoPatched(t *testing.T) {
 
 	fixture := legacyConfigPatch(cluster.Name)
 
-	currentCfg, _, err := render.Render(cluster, machine, bundle, []ichorv1alpha1.TalosConfigPatch{fixture})
+	currentCfg, _, err := render.Render(cluster, machine, bundle, []ichorv1alpha1.TalosConfigPatch{fixture}, nil)
 	if err != nil {
 		t.Fatalf("rendering current-config fixture: %v", err)
 	}
 
-	plan, err := buildAdoptPlan(cluster, machine, bundle, nil, currentCfg)
+	plan, err := buildAdoptPlan(cluster, machine, bundle, nil, currentCfg, nil)
 	if err != nil {
 		t.Fatalf("buildAdoptPlan: %v", err)
 	}

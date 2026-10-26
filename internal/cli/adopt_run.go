@@ -29,6 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/render"
 )
 
 // adoptDeps bundles adopt's side effects -- the Kubernetes API, each node's
@@ -59,6 +60,13 @@ func runAdopt(ctx context.Context, clusterName, namespace string, deps adoptDeps
 		return fmt.Errorf("adopt: getting TalosCluster %q: %w", clusterName, err)
 	}
 
+	// The controller's fixed namespace, not --namespace: that is where the controller reads
+	// authSecretRef Secrets from, so the CLI resolves the same ones.
+	auth, err := render.ResolveRegistryAuth(ctx, deps.K8s, ichorControllerNamespace, &cluster)
+	if err != nil {
+		return fmt.Errorf("adopt: %w", err)
+	}
+
 	var machineList ichorv1alpha1.TalosMachineList
 	if err := deps.K8s.List(ctx, &machineList, client.InNamespace(namespace)); err != nil {
 		return fmt.Errorf("adopt: listing TalosMachines: %w", err)
@@ -85,7 +93,7 @@ func runAdopt(ctx context.Context, clusterName, namespace string, deps adoptDeps
 			continue
 		}
 
-		plan, err := planMachine(ctx, &cluster, m, deps.Bundle, existing, deps.DialTalos)
+		plan, err := planMachine(ctx, &cluster, m, deps.Bundle, existing, auth, deps.DialTalos)
 		if err != nil {
 			return err
 		}
@@ -146,6 +154,7 @@ func planMachine(
 	m *ichorv1alpha1.TalosMachine,
 	bundle *secrets.Bundle,
 	existing []ichorv1alpha1.TalosConfigPatch,
+	auth map[string]render.RegistryAuth,
 	dial func(ctx context.Context, endpoint string) (talosConfigReader, error),
 ) (*adoptPlan, error) {
 	talos, err := dial(ctx, m.Spec.Endpoint)
@@ -158,7 +167,7 @@ func planMachine(
 		return nil, fmt.Errorf("adopt: reading machine %q's current configuration: %w", m.Name, err)
 	}
 
-	return buildAdoptPlan(cluster, m, bundle, existing, current)
+	return buildAdoptPlan(cluster, m, bundle, existing, current, auth)
 }
 
 // reportPlans writes a one-line-per-machine summary to w and returns the

@@ -25,8 +25,7 @@ limitations under the License.
 // client, the same role
 // internal/controller's loadBundle plays for the secrets bundle. It still
 // touches no Talos API and no node; what it returns is handed to
-// RenderWithRegistryAuth/BuildConfigWithRegistryAuth exactly the way an
-// already-loaded secrets.Bundle is handed to Render/BuildConfig.
+// Render/BuildConfig exactly the way an already-loaded secrets.Bundle is.
 package render
 
 import (
@@ -88,43 +87,22 @@ var layerOrder = map[string]int{
 // produced, and struct field order is fixed by the Go type -- so identical
 // inputs always encode to identical bytes, in this process or any other.
 //
-// Refuses, through BuildConfig, when cluster.Spec.Registries is non-empty -- this entry point never resolves or
-// injects registry auth,
-// so use RenderWithRegistryAuth instead.
+// auth is the resolved pull-credential map ResolveRegistryAuth returns for
+// cluster.Spec.Registries, keyed by TalosClusterRegistry.Host. It
+// is a required argument rather than a second entry point, so a caller cannot
+// forget to resolve it; nil is right for a cluster with no registries.
 func Render(
-	cluster *ichorv1alpha1.TalosCluster,
-	m *ichorv1alpha1.TalosMachine,
-	bundle *secrets.Bundle,
-	candidates []ichorv1alpha1.TalosConfigPatch,
-) ([]byte, string, error) {
-	return encodeAndHash(BuildConfig(cluster, m, bundle, candidates))
-}
-
-// RenderWithRegistryAuth is Render, extended with cluster.Spec.Registries'
-// resolved pull credentials merged in as the system layer: mirror
-// endpoints and auth land below every TalosConfigPatch layer, so a cluster,
-// role, selector or machine patch that also touches
-// machine.registries can still override it. auth is the resolved-credential
-// map ResolveRegistryAuth returns, keyed by TalosClusterRegistry.Host; a
-// host with no entry (or no credentials in its entry) renders as an
-// anonymous mirror. Render itself keeps working unchanged for every
-// existing caller that has no registries to inject; it now refuses outright
-// for one that does (BuildConfig's doc comment), which is this function's
-// reason to exist.
-func RenderWithRegistryAuth(
 	cluster *ichorv1alpha1.TalosCluster,
 	m *ichorv1alpha1.TalosMachine,
 	bundle *secrets.Bundle,
 	candidates []ichorv1alpha1.TalosConfigPatch,
 	auth map[string]RegistryAuth,
 ) ([]byte, string, error) {
-	return encodeAndHash(BuildConfigWithRegistryAuth(cluster, m, bundle, candidates, auth))
+	return encodeAndHash(BuildConfig(cluster, m, bundle, candidates, auth))
 }
 
-// encodeAndHash is Render's and RenderWithRegistryAuth's shared tail:
-// encode the validated Provider either of them produced and hash the
-// result. Pulled out so the two differ only in which BuildConfig* call
-// feeds it.
+// encodeAndHash encodes the validated Provider BuildConfig produced and
+// hashes the result.
 func encodeAndHash(cfg coreconfig.Provider, err error) ([]byte, string, error) {
 	if err != nil {
 		return nil, "", err
@@ -157,42 +135,12 @@ func Hash(data []byte) string {
 // base
 // config, patch selection and merge Render already does.
 //
-// It refuses outright when cluster.Spec.Registries is non-empty:
-// this entry point never resolves or injects registry auth, so rendering
-// anyway would silently produce a config whose mirrors carry no credentials
-// -- no error, no log, a cluster that simply cannot pull from its private
-// registry, with nothing pointing at why. A caller that has registries
-// declared must go through BuildConfigWithRegistryAuth/RenderWithRegistryAuth
-// instead, even if every one of them turns out to be anonymous.
+// cluster.Spec.Registries' mirror endpoints and the resolved credentials in
+// auth are merged in as the system layer: they land below every
+// TalosConfigPatch layer, so a cluster, role, selector or machine patch that
+// also touches machine.registries can still override them. A host with no
+// entry in auth renders as an anonymous mirror.
 func BuildConfig(
-	cluster *ichorv1alpha1.TalosCluster,
-	m *ichorv1alpha1.TalosMachine,
-	bundle *secrets.Bundle,
-	candidates []ichorv1alpha1.TalosConfigPatch,
-) (coreconfig.Provider, error) {
-	if len(cluster.Spec.Registries) > 0 {
-		return nil, fmt.Errorf(
-			"render: cluster.Spec.Registries is set; BuildConfig never resolves or injects registry auth -- " +
-				"use BuildConfigWithRegistryAuth (or Render's RenderWithRegistryAuth) instead")
-	}
-
-	return buildConfig(cluster, m, bundle, candidates, nil)
-}
-
-// BuildConfigWithRegistryAuth is BuildConfig, extended the same way
-// RenderWithRegistryAuth extends Render; see its doc comment for what auth
-// is and where the injection lands in the patch stack.
-func BuildConfigWithRegistryAuth(
-	cluster *ichorv1alpha1.TalosCluster,
-	m *ichorv1alpha1.TalosMachine,
-	bundle *secrets.Bundle,
-	candidates []ichorv1alpha1.TalosConfigPatch,
-	auth map[string]RegistryAuth,
-) (coreconfig.Provider, error) {
-	return buildConfig(cluster, m, bundle, candidates, auth)
-}
-
-func buildConfig(
 	cluster *ichorv1alpha1.TalosCluster,
 	m *ichorv1alpha1.TalosMachine,
 	bundle *secrets.Bundle,

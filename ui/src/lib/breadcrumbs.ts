@@ -5,14 +5,15 @@ import type { Key } from './i18n.ts'
 export type Crumb = { label?: Key; text?: string; to?: string }
 
 const sections: Record<string, { label: Key; to: string }> = {
-  clusters: { label: 'nav.clusters', to: '/' },
+  clusters: { label: 'nav.clusters', to: '/clusters' },
   nodes: { label: 'nav.machines', to: '/machines' },
   patches: { label: 'nav.patches', to: '/patches' },
   operations: { label: 'nav.operations', to: '/operations' },
 }
 
 const top: Record<string, Key> = {
-  '/': 'nav.clusters',
+  '/': 'nav.overview',
+  '/clusters': 'nav.clusters',
   '/machines': 'nav.machines',
   '/patches': 'nav.patches',
   '/operations': 'nav.operations',

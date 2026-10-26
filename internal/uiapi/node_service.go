@@ -59,7 +59,7 @@ func (s *Server) GetNode(
 		return nil, err
 	}
 
-	tc, closeFn, err := s.dialNode(ctx, cluster, m)
+	tc, closeFn, _, err := s.dialNode(ctx, cluster, m)
 	if err != nil {
 		return nil, err
 	}
@@ -215,7 +215,7 @@ func (s *Server) StreamNodeLogs(
 				return err
 			}
 
-			tc, closeFn, err := s.dialNode(gctx, cluster, m)
+			tc, closeFn, _, err := s.dialNode(gctx, cluster, m)
 			if err != nil {
 				return err
 			}
@@ -246,22 +246,60 @@ func (s *Server) StreamNodeLogs(
 // dialNode opens m's read-only Talos connection: maintenance mode
 // (unauthenticated) for a machine not yet approved, since no CA trust
 // exists for it yet, or the bundle's read-only identity otherwise
-// (architecture.md "Trust"). The returned close function is always safe to
-// call, whether or not the underlying client implements io.Closer.
+// (architecture.md "Trust"). An approved machine that has never converged
+// may still be in maintenance mode (approved without an install disk, or
+// waiting to be provisioned), where the bundle identity is not trusted: if
+// the authenticated probe read fails the connection falls back to the
+// maintenance API, the same rule the controller uses (ADR 0076). The bool
+// reports whether the connection is a maintenance one. The returned close
+// function is always safe to call, whether or not the underlying client
+// implements io.Closer.
 func (s *Server) dialNode(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
-) (NodeTalosClient, func(), error) {
+) (NodeTalosClient, func(), bool, error) {
 	var bundle *secrets.Bundle
 
 	if m.Spec.IsApproved() {
 		b, err := loadBundle(ctx, s.Client, s.ControllerNamespace, cluster)
 		if err != nil {
-			return nil, nil, connect.NewError(connect.CodeInternal, err)
+			return nil, nil, false, connect.NewError(connect.CodeInternal, err)
 		}
 
 		bundle = b
 	}
 
+	tc, closeFn, err := s.openNodeClient(ctx, cluster, m, bundle)
+	if err != nil {
+		return nil, nil, false, err
+	}
+
+	if bundle == nil {
+		return tc, closeFn, true, nil
+	}
+
+	// ponytail: a Hardware read doubles as the trust probe; a cheaper
+	// dedicated call would need a new NodeTalosClient method.
+	if m.Status.AppliedConfigHash != "" {
+		return tc, closeFn, false, nil
+	}
+
+	if _, probeErr := tc.Hardware(ctx); probeErr == nil {
+		return tc, closeFn, false, nil
+	}
+
+	closeFn()
+
+	tc, closeFn, err = s.openNodeClient(ctx, cluster, m, nil)
+	if err != nil {
+		return nil, nil, false, err
+	}
+
+	return tc, closeFn, true, nil
+}
+
+func (s *Server) openNodeClient(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, bundle *secrets.Bundle,
+) (NodeTalosClient, func(), error) {
 	tc, err := s.NodeTalosClient(ctx, cluster, m, bundle)
 	if err != nil {
 		return nil, nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("connecting to machine's Talos API: %w", err))

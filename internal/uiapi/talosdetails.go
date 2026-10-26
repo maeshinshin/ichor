@@ -51,16 +51,17 @@ func (s *Server) GetNodeTalosDetails(
 		return nil, err
 	}
 
-	tc, closeFn, err := s.dialNode(ctx, cluster, m)
+	tc, closeFn, maintenance, err := s.dialNode(ctx, cluster, m)
 	if err != nil {
 		return nil, err
 	}
 
 	defer closeFn()
 
-	// A machine that is not approved has no CA trust yet, so it is read over
-	// the insecure maintenance API, which allows fewer calls (dialNode).
-	resp := &pb.GetNodeTalosDetailsResponse{MaintenanceMode: !m.Spec.IsApproved()}
+	// A machine without CA trust (not approved, or approved but still in
+	// maintenance mode) is read over the insecure maintenance API, which
+	// allows fewer calls (dialNode).
+	resp := &pb.GetNodeTalosDetailsResponse{MaintenanceMode: maintenance}
 
 	var wg sync.WaitGroup
 

@@ -119,15 +119,24 @@ func (f *fakeNodeTalosClient) StreamLogs(ctx context.Context, service string, si
 }
 
 func newTestNodeServer(fake *fakeNodeTalosClient, draining <-chan struct{}) (ichorv1alpha1connect.NodeServiceClient, func()) {
+	return newTestNodeServerFn(func(*secrets.Bundle) (NodeTalosClient, error) {
+		if fake == nil {
+			return nil, errNoTalosClient
+		}
+
+		return fake, nil
+	}, draining)
+}
+
+// newTestNodeServerFn is newTestNodeServer with a factory that sees the
+// bundle, so a test can tell the authenticated dial (bundle set) from the
+// maintenance one (nil).
+func newTestNodeServerFn(dial func(*secrets.Bundle) (NodeTalosClient, error), draining <-chan struct{}) (ichorv1alpha1connect.NodeServiceClient, func()) {
 	s := &Server{
 		Client:              k8sClient,
 		ControllerNamespace: testNamespace,
-		NodeTalosClient: func(context.Context, *ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine, *secrets.Bundle) (NodeTalosClient, error) {
-			if fake == nil {
-				return nil, errNoTalosClient
-			}
-
-			return fake, nil
+		NodeTalosClient: func(_ context.Context, _ *ichorv1alpha1.TalosCluster, _ *ichorv1alpha1.TalosMachine, b *secrets.Bundle) (NodeTalosClient, error) {
+			return dial(b)
 		},
 		Draining: draining,
 	}

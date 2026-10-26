@@ -17,42 +17,140 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+// Condition type and reasons on TalosEtcdBackup.status.conditions.
+const (
+	// TalosEtcdBackupConditionReady is True while the newest snapshot is
+	// fresher than twice the schedule interval, False when the last attempt
+	// failed or the newest snapshot is stale.
+	TalosEtcdBackupConditionReady = "Ready"
 
-// TalosEtcdBackupSpec defines the desired state of TalosEtcdBackup
+	TalosEtcdBackupReasonSucceeded = "Succeeded"
+	TalosEtcdBackupReasonFailed    = "Failed"
+	TalosEtcdBackupReasonStale     = "Stale"
+	TalosEtcdBackupReasonSuspended = "Suspended"
+	TalosEtcdBackupReasonPending   = "Pending"
+)
+
+// TalosEtcdBackupSpec defines the desired state of TalosEtcdBackup: a
+// schedule, one S3-compatible destination and a retention count. Snapshots
+// are always encrypted; the key is derived from the cluster's secrets bundle
+// (ADR 0047), so there is nothing to configure and no key to hand over.
+// Holds references to Secrets only, never values, so it is safe in Git.
+// +kubebuilder:validation:XValidation:rule="self.clusterRef == oldSelf.clusterRef",message="clusterRef cannot change after creation"
 type TalosEtcdBackupSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-	// The following markers will use OpenAPI v3 schema to validate the value
-	// More info: https://book.kubebuilder.io/reference/markers/crd-validation.html
+	// clusterRef names the TalosCluster (same namespace) whose etcd is backed up.
+	// +kubebuilder:validation:XValidation:rule="self.name != ''",message="clusterRef.name is required"
+	// +required
+	ClusterRef corev1.LocalObjectReference `json:"clusterRef"`
 
-	// foo is an example field of TalosEtcdBackup. Edit talosetcdbackup_types.go to remove/update
+	// schedule is a standard five-field cron expression, evaluated in UTC.
+	// +kubebuilder:default="0 * * * *"
+	// +kubebuilder:validation:MinLength=1
 	// +optional
-	Foo *string `json:"foo,omitempty"`
+	Schedule string `json:"schedule,omitempty"`
+
+	// suspend stops new snapshots; existing ones are kept and not pruned.
+	// +optional
+	Suspend bool `json:"suspend,omitempty"`
+
+	// retention is how many snapshots to keep under the destination prefix.
+	// +kubebuilder:default={keepLast: 24}
+	// +optional
+	Retention TalosEtcdBackupRetention `json:"retention,omitzero"`
+
+	// destination is where snapshots are stored.
+	// +required
+	Destination TalosEtcdBackupDestination `json:"destination"`
+}
+
+// TalosEtcdBackupRetention bounds how many snapshots are kept.
+type TalosEtcdBackupRetention struct {
+	// keepLast keeps the newest N snapshots and deletes older ones after a
+	// successful upload.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:default=24
+	// +optional
+	KeepLast int32 `json:"keepLast,omitempty"`
+}
+
+// TalosEtcdBackupDestination selects the storage backend. S3 is the only one.
+type TalosEtcdBackupDestination struct {
+	// s3 is an S3-compatible bucket.
+	// +required
+	S3 TalosEtcdBackupS3 `json:"s3"`
+}
+
+// TalosEtcdBackupS3 addresses an S3-compatible bucket.
+type TalosEtcdBackupS3 struct {
+	// endpoint is the service URL, e.g. https://s3.eu-west-1.amazonaws.com or
+	// http://minio.minio.svc:9000. The scheme selects TLS.
+	// +kubebuilder:validation:Pattern=`^https?://[^/\s]+$`
+	// +required
+	Endpoint string `json:"endpoint"`
+
+	// region is the bucket's region; empty lets the client detect it.
+	// +optional
+	Region string `json:"region,omitempty"`
+
+	// bucket is the bucket name. It must already exist.
+	// +kubebuilder:validation:MinLength=3
+	// +required
+	Bucket string `json:"bucket"`
+
+	// prefix is the key prefix snapshots are written under, with no leading
+	// or trailing slash. Snapshots of different clusters need different prefixes.
+	// +kubebuilder:validation:Pattern=`^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$`
+	// +required
+	Prefix string `json:"prefix"`
+
+	// credentialsSecretRef names a Secret holding accessKeyID and
+	// secretAccessKey (and optionally sessionToken, and ca.crt, a PEM bundle
+	// that signs the endpoint). It is read from the controller's own
+	// namespace, not the namespace of this object (ADR 0011).
+	// +required
+	CredentialsSecretRef corev1.LocalObjectReference `json:"credentialsSecretRef"`
+}
+
+// TalosEtcdBackupSnapshot describes one stored snapshot. Nothing secret.
+type TalosEtcdBackupSnapshot struct {
+	// key is the object key within the bucket.
+	// +required
+	Key string `json:"key"`
+	// time is when the snapshot was taken.
+	// +required
+	Time metav1.Time `json:"time"`
+	// size is the stored (encrypted) size in bytes.
+	// +required
+	Size int64 `json:"size"`
+	// sourceMachine is the TalosMachine the snapshot was read from.
+	// +required
+	SourceMachine string `json:"sourceMachine"`
 }
 
 // TalosEtcdBackupStatus defines the observed state of TalosEtcdBackup.
 type TalosEtcdBackupStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// lastSnapshot is the newest snapshot this controller stored.
+	// +optional
+	LastSnapshot *TalosEtcdBackupSnapshot `json:"lastSnapshot,omitempty"`
 
-	// For Kubernetes API conventions, see:
-	// https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties
+	// lastAttemptTime is when the newest attempt started, successful or not.
+	// +optional
+	LastAttemptTime *metav1.Time `json:"lastAttemptTime,omitempty"`
 
-	// conditions represent the current state of the TalosEtcdBackup resource.
-	// Each condition has a unique type and reflects the status of a specific aspect of the resource.
-	//
-	// Standard condition types include:
-	// - "Available": the resource is fully functional
-	// - "Progressing": the resource is being created or updated
-	// - "Degraded": the resource failed to reach or maintain its desired state
-	//
-	// The status of each condition is one of True, False, or Unknown.
+	// lastSuccessTime is when the newest successful attempt finished.
+	// +optional
+	LastSuccessTime *metav1.Time `json:"lastSuccessTime,omitempty"`
+
+	// consecutiveFailures counts failed attempts since the last success.
+	// +optional
+	ConsecutiveFailures int32 `json:"consecutiveFailures,omitempty"`
+
+	// conditions: Ready.
 	// +listType=map
 	// +listMapKey=type
 	// +optional
@@ -61,6 +159,10 @@ type TalosEtcdBackupStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Cluster",type=string,JSONPath=".spec.clusterRef.name"
+// +kubebuilder:printcolumn:name="Schedule",type=string,JSONPath=".spec.schedule"
+// +kubebuilder:printcolumn:name="Last Success",type=date,JSONPath=".status.lastSuccessTime"
+// +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=".status.conditions[?(@.type=='Ready')].status"
 
 // TalosEtcdBackup is the Schema for the talosetcdbackups API
 type TalosEtcdBackup struct {

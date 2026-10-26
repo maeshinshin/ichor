@@ -70,6 +70,7 @@ type prChange struct {
 	target  prmode.Target
 	updates []prmode.FieldUpdate
 	newFile *prmode.NewFile
+	remove  bool // delete the CR's document (or its file)
 	title   string
 	impact  string
 }
@@ -245,9 +246,12 @@ func (s *Server) openPR(ctx context.Context, plan *prPlan, change prChange) (str
 		Host: hostOf(plan.repo.Host), APIBaseURL: strings.TrimSuffix(plan.repo.APIURL, "/"),
 		Owner: plan.repo.Owner, Repo: plan.repo.Repo, CloneURL: plan.repo.CloneURL, Token: token,
 		BaseBranch: plan.baseBranch,
-		HeadBranch: fmt.Sprintf("ichor/%s-%s-%d", change.verb, change.name, s.now().Unix()),
+		// Deterministic, so the same change asked twice finds the PR the first
+		// one opened instead of opening another (docs/adr/0056).
+		HeadBranch: fmt.Sprintf("ichor/%s-%s", change.verb, change.name),
 		SourcePath: plan.sourcePath, Target: change.target, Updates: change.updates, NewFile: change.newFile,
-		Title: change.title, Requester: s.actorName(), ImpactPreview: change.impact,
+		Delete: change.remove,
+		Title:  change.title, Requester: s.actorName(), ImpactPreview: change.impact,
 	}
 
 	res, err := prmode.SubmitPR(ctx, req)

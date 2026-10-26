@@ -83,6 +83,10 @@ message DeletePatchRequest {
 
 message DeletePatchResponse {
   AuditRecord audit = 1;
+  // pull_request_url is set when the patch is tracked by Argo CD and its
+  // removal was proposed as a pull request instead of being written; nothing
+  // was deleted from the cluster (docs/adr/0056).
+  string pull_request_url = 2;
 }
 
 message PreviewImpactRequest {

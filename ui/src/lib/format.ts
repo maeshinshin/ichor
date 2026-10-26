@@ -54,6 +54,32 @@ export function formatUsage(used: bigint | number, total: bigint | number): stri
   return `${formatBytes(used)} / ${formatBytes(total)} (${pct}%)`
 }
 
+const SUFFIX: Record<string, number> = {
+  Ki: 1024, Mi: 1024 ** 2, Gi: 1024 ** 3, Ti: 1024 ** 4,
+  k: 1e3, K: 1e3, M: 1e6, G: 1e9, T: 1e12, m: 1e-3, '': 1,
+}
+
+// A Kubernetes quantity ("3992140Ki", "1500m") as a number, or NaN.
+function parseQuantity(q: string): number {
+  const m = /^([0-9.]+)([A-Za-z]*)$/.exec(q.trim())
+  const mult = m ? SUFFIX[m[2]] : undefined
+  return m && mult !== undefined ? Number(m[1]) * mult : NaN
+}
+
+// A node resource for people: memory and storage as sizes, cpu as cores,
+// anything else (pods) as it came. An unreadable value is shown as it is.
+export function formatResource(name: string, quantity: string): string {
+  if (!quantity) return '-'
+  const n = parseQuantity(quantity)
+  if (Number.isNaN(n)) return quantity
+  if (name === 'cpu') {
+    const cores = Math.round(n * 100) / 100
+    return `${cores} ${cores === 1 ? 'core' : 'cores'}`
+  }
+  if (name === 'memory' || name.includes('storage') || name.startsWith('hugepages')) return formatBytes(n)
+  return quantity
+}
+
 // Cores in use, or a dash when the CPU counters were not sampled.
 export function formatCores(cores: number, sampled: boolean): string {
   return sampled && Number.isFinite(cores) && cores >= 0 ? cores.toFixed(2) : '-'

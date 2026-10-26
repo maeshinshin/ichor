@@ -97,6 +97,15 @@ func TestKubeProxyModeIsRenderedByIchor(t *testing.T) {
 		}
 	})
 
+	t.Run("spec enabled and never switched still honours a patch", func(t *testing.T) {
+		worker := testMachine("node-w", roleWorker, nil)
+
+		out := mustRender(t, clusterFor(cni.KubeProxyEnabled, ""), worker, bundle, patches)
+		if !strings.Contains(out, "disabled: true") {
+			t.Fatalf("an unswitched enabled cluster renders as before, got:\n%s", out)
+		}
+	})
+
 	t.Run("status wins over spec in both directions, and over a patch", func(t *testing.T) {
 		out := mustRender(t, clusterFor(cni.KubeProxyReplaced, cni.KubeProxyEnabled), m, bundle, patches)
 		if !strings.Contains(proxyDoc(out), proxyOn) {

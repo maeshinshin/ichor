@@ -60,7 +60,7 @@ func NewMachineryNodeTalosClient(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, bundle *secrets.Bundle,
 ) (NodeTalosClient, error) {
 	if bundle == nil {
-		c, err := client.New(ctx, client.WithMaintenanceMode(m.Spec.Endpoint, nil))
+		c, err := client.New(ctx, client.WithMaintenanceMode(m.DialEndpoint(), nil))
 		if err != nil {
 			return nil, fmt.Errorf("dialing maintenance Talos API: %w", err)
 		}
@@ -73,7 +73,7 @@ func NewMachineryNodeTalosClient(
 		return nil, fmt.Errorf("generating reader client certificate: %w", err)
 	}
 
-	cfg := clientconfig.NewConfig(cluster.Name, []string{m.Spec.Endpoint}, bundle.Certs.OS.Crt, cert)
+	cfg := clientconfig.NewConfig(cluster.Name, []string{m.DialEndpoint()}, bundle.Certs.OS.Crt, cert)
 
 	c, err := client.New(ctx, client.WithConfig(cfg))
 	if err != nil {

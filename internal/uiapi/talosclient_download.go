@@ -101,7 +101,7 @@ func NewMachineryDownloadTalosClient(
 		return nil, fmt.Errorf("generating client certificate: %w", err)
 	}
 
-	cfg := clientconfig.NewConfig(cluster.Name, []string{m.Spec.Endpoint}, bundle.Certs.OS.Crt, cert)
+	cfg := clientconfig.NewConfig(cluster.Name, []string{m.DialEndpoint()}, bundle.Certs.OS.Crt, cert)
 
 	c, err := client.New(ctx, client.WithConfig(cfg))
 	if err != nil {

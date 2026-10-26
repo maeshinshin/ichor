@@ -491,7 +491,7 @@ func (s *Server) blockedReason(
 		}
 
 		if by != "" {
-			what := "TalosCluster"
+			what := kindTalosCluster
 			if p.install != nil {
 				what = "IchorInstallation"
 			}

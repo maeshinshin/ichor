@@ -29,6 +29,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	machineapi "github.com/siderolabs/talos/pkg/machinery/api/machine"
@@ -110,100 +111,79 @@ func notUpYet(err error) bool {
 	return c == codes.Unavailable || c == codes.FailedPrecondition
 }
 
-// bootstrapWhenUp calls admin.Bootstrap, retrying while the node is not up yet for up to
-// wait. Any other error returns at once: only a node that is not there yet is worth waiting
-// for.
-func bootstrapWhenUp(ctx context.Context, admin bootstrapClient, wait, interval time.Duration, progress io.Writer) error {
-	if wait <= 0 {
-		wait = defaultBootstrapWait
+// pollWhile runs attempt every interval (first call at once) for up to timeout, retrying
+// while retryable(err) holds and printing "init: waiting for <what>: <err>" before each
+// retry. A nil or non-retryable error returns at once; when the wait runs out it returns the
+// last attempt's error rather than the poll's bare deadline error. Zero timeout or interval
+// take the defaults.
+func pollWhile(
+	ctx context.Context, timeout, interval time.Duration, progress io.Writer, what string,
+	attempt func(context.Context) error, retryable func(error) bool,
+) error {
+	if timeout <= 0 {
+		timeout = defaultBootstrapWait
 	}
 
 	if interval <= 0 {
 		interval = defaultBootstrapInterval
 	}
 
-	deadline := time.Now().Add(wait)
+	var last error
 
-	for {
-		err := admin.Bootstrap(ctx)
-		if err == nil || !notUpYet(err) || !time.Now().Add(interval).Before(deadline) {
-			return err
+	pollErr := wait.PollUntilContextTimeout(ctx, interval, timeout, true, func(ctx context.Context) (bool, error) {
+		last = attempt(ctx)
+		if last == nil || !retryable(last) {
+			return true, nil
 		}
 
-		_, _ = fmt.Fprintf(progress, "init: waiting for the node to come up on its new configuration: %v\n", err)
+		_, _ = fmt.Fprintf(progress, "init: waiting for %s: %v\n", what, last)
 
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(interval):
-		}
+		return false, nil
+	})
+	if pollErr != nil && ctx.Err() != nil {
+		return ctx.Err()
 	}
+
+	return last
+}
+
+// bootstrapWhenUp calls admin.Bootstrap, retrying while the node is not up yet for up to
+// timeout. Any other error returns at once: only a node that is not there yet is worth
+// waiting for.
+func bootstrapWhenUp(ctx context.Context, admin bootstrapClient, timeout, interval time.Duration, progress io.Writer) error {
+	return pollWhile(ctx, timeout, interval, progress, "the node to come up on its new configuration", admin.Bootstrap, notUpYet)
 }
 
 // waitForAPIServer polls until the new cluster's API server answers (any answer, even
-// NotFound, means it is up) for up to wait, so the first write is not the one that finds out.
-func waitForAPIServer(ctx context.Context, c ctrlclient.Client, wait, interval time.Duration, progress io.Writer) error {
-	if wait <= 0 {
-		wait = defaultBootstrapWait
-	}
-
-	if interval <= 0 {
-		interval = defaultBootstrapInterval
-	}
-
-	deadline := time.Now().Add(wait)
-
-	for {
+// NotFound, means it is up) for up to timeout, so the first write is not the one that finds
+// out.
+func waitForAPIServer(ctx context.Context, c ctrlclient.Client, timeout, interval time.Duration, progress io.Writer) error {
+	err := pollWhile(ctx, timeout, interval, progress, "the API server", func(ctx context.Context) error {
 		err := c.Get(ctx, types.NamespacedName{Name: metav1.NamespaceSystem}, &corev1.Namespace{})
-		if err == nil || apierrors.IsNotFound(err) {
+		if apierrors.IsNotFound(err) {
 			return nil
 		}
 
-		if !time.Now().Add(interval).Before(deadline) {
-			return fmt.Errorf("init: the new cluster's API server did not come up: %w", err)
-		}
-
-		_, _ = fmt.Fprintf(progress, "init: waiting for the API server: %v\n", err)
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(interval):
-		}
+		return err
+	}, func(error) bool { return true })
+	if err != nil && ctx.Err() == nil {
+		return fmt.Errorf("init: the new cluster's API server did not come up: %w", err)
 	}
+
+	return err
 }
 
 // createWhenWebhooksUp creates obj, retrying while the API server cannot reach Ichor's
 // admission webhooks (failurePolicy Fail; the controller serving them was started moments
-// ago by the manifest init applied) for up to wait.
+// ago by the manifest init applied) for up to timeout.
 func createWhenWebhooksUp(
-	ctx context.Context, c ctrlclient.Client, obj ctrlclient.Object, wait, interval time.Duration, progress io.Writer,
+	ctx context.Context, c ctrlclient.Client, obj ctrlclient.Object, timeout, interval time.Duration, progress io.Writer,
 ) error {
-	if wait <= 0 {
-		wait = defaultBootstrapWait
-	}
-
-	if interval <= 0 {
-		interval = defaultBootstrapInterval
-	}
-
-	deadline := time.Now().Add(wait)
-
-	for {
-		err := c.Create(ctx, obj)
-		if err == nil || !apierrors.IsInternalError(err) || !strings.Contains(err.Error(), "webhook") ||
-			!time.Now().Add(interval).Before(deadline) {
-			return err
-		}
-
-		_, _ = fmt.Fprintf(progress, "init: waiting for Ichor's webhooks: %v\n", err)
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(interval):
-		}
-	}
+	return pollWhile(ctx, timeout, interval, progress, "Ichor's webhooks", func(ctx context.Context) error {
+		return c.Create(ctx, obj)
+	}, func(err error) bool {
+		return apierrors.IsInternalError(err) && strings.Contains(err.Error(), "webhook")
+	})
 }
 
 // dialAdmin connects to endpoint using the bundle's admin identity, the

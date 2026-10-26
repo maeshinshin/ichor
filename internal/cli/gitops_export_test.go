@@ -72,8 +72,13 @@ func TestRunGitopsExport_WritesApprovedCRsOnly(t *testing.T) {
 		Spec: ichorv1alpha1.TalosStorageSpec{ClusterRef: corev1.LocalObjectReference{Name: exportTestCluster}},
 	}
 
+	backup := &ichorv1alpha1.TalosEtcdBackup{
+		Name: "my-backup", Namespace: testNamespace,
+		Spec: ichorv1alpha1.TalosEtcdBackupSpec{ClusterRef: corev1.LocalObjectReference{Name: exportTestCluster}},
+	}
+
 	k8sClient := fake.NewClientBuilder().WithScheme(newTestScheme(t)).
-		WithObjects(cluster, approved, unapproved, &patch, storage).Build()
+		WithObjects(cluster, approved, unapproved, &patch, storage, backup).Build()
 
 	dir := t.TempDir()
 
@@ -89,6 +94,7 @@ func TestRunGitopsExport_WritesApprovedCRsOnly(t *testing.T) {
 		"talos-machine-approved-machine.yaml",
 		"talos-config-patch-fixture-sysctl.yaml",
 		"talos-storage-my-storage.yaml",
+		"talos-etcd-backup-my-backup.yaml",
 	}
 
 	for _, name := range mustExist {

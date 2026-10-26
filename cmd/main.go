@@ -63,6 +63,10 @@ const (
 	// gated on --metrics-cert-path actually being set, unlike the webhook rotator above.
 	metricsSecretName  = "ichor-metrics-server-cert"
 	metricsServiceName = "ichor-controller-manager-metrics-service"
+
+	// backupSpoolDir is the emptyDir both manifests mount for TalosEtcdBackup's staged
+	// (encrypted) snapshots, since the root filesystem is read-only.
+	backupSpoolDir = "/var/spool/ichor"
 )
 
 var (
@@ -387,8 +391,10 @@ func main() {
 		os.Exit(1)
 	}
 	if err := (&controller.TalosEtcdBackupReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:              mgr.GetClient(),
+		ControllerNamespace: os.Getenv("POD_NAMESPACE"),
+		SnapshotClient:      controller.NewMachineryEtcdSnapshotClient,
+		SpoolDir:            backupSpoolDir,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "talosetcdbackup")
 		os.Exit(1)

@@ -150,7 +150,7 @@ type TalosClusterGitRepository struct {
 	// apiURL is the host's API root, e.g. https://api.github.com or https://gitlab.example.com. https
 	// only: the token is sent to it.
 	// +kubebuilder:validation:MaxLength=2048
-	// +kubebuilder:validation:XValidation:rule="isURL(self) && self.startsWith('https://')",message="apiURL must be an https URL"
+	// +kubebuilder:validation:XValidation:rule="isURL(self) && self.startsWith('https://') && !self.contains('@')",message="apiURL must be an https URL without credentials"
 	// +required
 	APIURL string `json:"apiURL"`
 
@@ -168,7 +168,7 @@ type TalosClusterGitRepository struct {
 
 	// cloneURL is what git clones and pushes to. https only: the token is sent to it.
 	// +kubebuilder:validation:MaxLength=2048
-	// +kubebuilder:validation:XValidation:rule="isURL(self) && self.startsWith('https://')",message="cloneURL must be an https URL"
+	// +kubebuilder:validation:XValidation:rule="isURL(self) && self.startsWith('https://') && !self.contains('@')",message="cloneURL must be an https URL without credentials"
 	// +required
 	CloneURL string `json:"cloneURL"`
 

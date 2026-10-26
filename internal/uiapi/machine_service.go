@@ -135,7 +135,8 @@ func (s *Server) ApproveMachine(
 		return nil, err
 	}
 
-	if err := s.requireUntracked(ctx, m); err != nil {
+	plan, err := s.planWrite(ctx, m, m.Spec.ClusterRef.Name, true)
+	if err != nil {
 		return nil, err
 	}
 
@@ -160,6 +161,7 @@ func (s *Server) ApproveMachine(
 	// (docs/adr/0018). The only state ApproveMachine refuses to touch is
 	// already-approved, checked above.
 	now := s.now()
+	stored := m.DeepCopy()
 
 	m.Spec.Role = machineRoleToSpec(role)
 	m.Spec.NodeLabels = req.Msg.GetNodeLabels()
@@ -167,6 +169,10 @@ func (s *Server) ApproveMachine(
 	m.Spec.ApprovalState = ichorv1alpha1.MachineApprovalStateApproved
 	m.Spec.ApprovalDecision = &ichorv1alpha1.TalosMachineApprovalDecision{
 		Actor: s.actorName(), Reason: req.Msg.GetReason(), At: metav1.NewTime(now),
+	}
+
+	if plan != nil {
+		return s.approveByPR(ctx, plan, m, stored, now, req.Msg.GetReason())
 	}
 
 	if err := s.Update(ctx, m, strictFieldValidation); err != nil {
@@ -202,7 +208,11 @@ func (s *Server) RejectMachine(
 		return nil, err
 	}
 
-	if err := s.requireUntracked(ctx, m); err != nil {
+	// A rejection is never a strict "add" (allowStrictAdd false): a pending
+	// machine nobody approved is a discovery record, not something that
+	// belongs in Git (docs/adr/0056).
+	plan, err := s.planWrite(ctx, m, m.Spec.ClusterRef.Name, false)
+	if err != nil {
 		return nil, err
 	}
 
@@ -212,10 +222,15 @@ func (s *Server) RejectMachine(
 	}
 
 	now := s.now()
+	stored := m.DeepCopy()
 
 	m.Spec.ApprovalState = ichorv1alpha1.MachineApprovalStateRejected
 	m.Spec.ApprovalDecision = &ichorv1alpha1.TalosMachineApprovalDecision{
 		Actor: s.actorName(), Reason: req.Msg.GetReason(), At: metav1.NewTime(now),
+	}
+
+	if plan != nil {
+		return s.rejectByPR(ctx, plan, m, stored, now, req.Msg.GetReason())
 	}
 
 	if err := s.Update(ctx, m, strictFieldValidation); err != nil {

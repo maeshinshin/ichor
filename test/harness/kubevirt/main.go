@@ -275,7 +275,7 @@ func bootToMaintenance() (string, error) {
 		if err != nil || len(objs) != 1 {
 			return "", false
 		}
-		return ip, talosctl.SpecField(objs[0], "stage") == "maintenance"
+		return ip, talosctl.SpecField(objs[0], "stage") == stageMaintenance
 	}); err != nil {
 		return "", err
 	}
@@ -352,7 +352,7 @@ func installAndBootstrap(ip string) ([]byte, error) {
 		if err != nil || len(objs) != 1 {
 			return "", false
 		}
-		return "", talosctl.SpecField(objs[0], "stage") == "running" && talosctl.MachineStatusReady(objs[0])
+		return "", talosctl.SpecField(objs[0], "stage") == stageRunning && talosctl.MachineStatusReady(objs[0])
 	}); err != nil {
 		return nil, fmt.Errorf("%w (last machinestatus: %s)", err, lastStatus)
 	}
@@ -447,15 +447,15 @@ func down() error {
 		killPortForward(strings.TrimSpace(string(pid)))
 		_ = os.Remove(portForwardPIDPath())
 	}
-	if _, err := utils.Run(kube.Command("-n", namespace, "delete", "pod", relayName,
+	if _, err := utils.Run(kube.Command("-n", namespace, verbDelete, "pod", relayName,
 		"--wait=false", "--ignore-not-found")); err != nil {
 		return fmt.Errorf("deleting the relay pod: %w", err)
 	}
-	if _, err := utils.Run(kube.Command("-n", namespace, "delete", "vm", vmName,
+	if _, err := utils.Run(kube.Command("-n", namespace, verbDelete, "vm", vmName,
 		"--wait=true", "--timeout=120s", "--ignore-not-found")); err != nil {
 		return fmt.Errorf("deleting the VM: %w", err)
 	}
-	if _, err := utils.Run(kube.Command("-n", namespace, "delete", "dv",
+	if _, err := utils.Run(kube.Command("-n", namespace, verbDelete, "dv",
 		vmName+"-iso", vmName+"-system", "--wait=true", "--timeout=120s", "--ignore-not-found")); err != nil {
 		return fmt.Errorf("deleting the DataVolumes: %w", err)
 	}

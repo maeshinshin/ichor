@@ -72,7 +72,9 @@ type generatedConfig struct {
 // once per node, not once per node's own config. The cluster endpoint pins to nodeIPs[0]
 // (this harness has no VIP/load balancer); WithEndpointList carries every node so Talos's
 // own endpoint controllers, and talosctl, know about all of them.
-func generateControlPlaneConfig(clusterName string, nodeIPs []string, extra ...generate.Option) (*generatedConfig, error) {
+func generateControlPlaneConfig(
+	clusterName string, nodeIPs []string, extra ...generate.Option,
+) (*generatedConfig, error) {
 	endpoint := fmt.Sprintf("https://%s:6443", nodeIPs[0])
 	installImage := fmt.Sprintf("factory.talos.dev/metal-installer/%s:%s", talosFactorySchematic, talosVersion)
 

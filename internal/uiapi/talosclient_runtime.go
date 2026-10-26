@@ -211,7 +211,7 @@ func (t *machineryNodeTalosClient) TalosNetworkState(ctx context.Context) (*pb.T
 }
 
 func (t *machineryNodeTalosClient) TalosKernelModules(ctx context.Context) (*pb.TalosKernelModulesSection, error) {
-	mods, err := safe.StateListAll[*runtime.LoadedKernelModule](ctx, t.c.COSI)
+	mods, err := safe.StateListAll[*runtime.KernelModuleStatus](ctx, t.c.COSI)
 	if err != nil {
 		return nil, fmt.Errorf("listing kernel modules: %w", err)
 	}
@@ -220,8 +220,12 @@ func (t *machineryNodeTalosClient) TalosKernelModules(ctx context.Context) (*pb.
 
 	for m := range mods.All() {
 		s := m.TypedSpec()
+		if s.Type == runtime.KernelModuleTypeBuiltin {
+			continue // built-in modules cannot be loaded or unloaded; only the dynamic ones are listed
+		}
+
 		out.Modules = append(out.Modules, &pb.TalosKernelModule{
-			Name: m.Metadata().ID(), SizeBytes: int64(s.Size), ReferenceCount: int32(s.ReferenceCount), State: s.State, //nolint:gosec // module sizes and counts are small
+			Name: m.Metadata().ID(), SizeBytes: int64(s.Size), ReferenceCount: int32(s.ReferenceCount), State: s.State.String(), //nolint:gosec // module sizes and counts are small
 		})
 	}
 

@@ -251,6 +251,30 @@ func TestStartCommandsAreMarkedAsWrites(t *testing.T) {
 	}
 }
 
+func TestPlanTextWarnsWhenTheKubernetesAPIGoesDown(t *testing.T) {
+	p := &pb.PlanOperationResponse{
+		Effect:                   pb.OperationEffect_OPERATION_EFFECT_REBOOT,
+		KubernetesApiUnavailable: true,
+		Machines:                 []*pb.PlannedMachine{{Name: opCP, Role: roleControlPlane, Step: 1}},
+	}
+
+	got := planText(pb.OperationKind_OPERATION_KIND_CONFIG, "c", p)
+	for _, want := range []string{"Ichor cordons and drains it first", "Kubernetes API is UNAVAILABLE"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("text lacks %q:\n%s", want, got)
+		}
+	}
+
+	if strings.Contains(got, "Talos cordons") {
+		t.Errorf("text still says Talos cordons and drains on a reboot:\n%s", got)
+	}
+
+	p.KubernetesApiUnavailable = false
+	if strings.Contains(planText(pb.OperationKind_OPERATION_KIND_CONFIG, "c", p), "UNAVAILABLE") {
+		t.Error("the warning appears without the flag")
+	}
+}
+
 func TestPlanTextMentionsHeldMachinesAndTheBlastRadius(t *testing.T) {
 	p := &pb.PlanOperationResponse{
 		Effect: pb.OperationEffect_OPERATION_EFFECT_RESTART_COMPONENTS, Current: "v1.36.0", Target: "v1.36.1", MaxUnavailable: 2,

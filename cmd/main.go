@@ -342,7 +342,7 @@ func main() {
 		}
 	}
 
-	// Only removal.go's drain step needs a raw Clientset (k8s.io/kubectl's
+	// Only the drains (drain.go: removal, and the config rollout before a reboot) need a raw Clientset (k8s.io/kubectl's
 	// drain helper takes kubernetes.Interface, not controller-runtime's
 	// cached client.Client); a failure here is fatal rather than leaving
 	// removal silently unable to drain.
@@ -415,7 +415,7 @@ func main() {
 
 	configRolloutAdvance := controller.NewConfigRolloutAdvancer(
 		mgr.GetClient(), os.Getenv("POD_NAMESPACE"), controller.NewMachineryTalosClient,
-		&controller.LonghornEvacuator{Client: mgr.GetClient()},
+		&controller.LonghornEvacuator{Client: mgr.GetClient()}, kubeClient,
 	)
 
 	ichorUpgradeAdvance := controller.NewIchorUpgradeAdvancer(mgr.GetClient(), os.Getenv("POD_NAMESPACE"))

@@ -55,8 +55,10 @@ type TalosClient interface {
 	// caller and never by Talos.
 	ApplyStaged(ctx context.Context, cfg []byte) error
 
-	// Reboot asks this node to reboot gracefully (not forced, so Talos cordons and drains it
-	// first, as for Shutdown). The RPC returns once the request is accepted.
+	// Reboot asks this node to reboot gracefully (not forced, so services stop in order). It does
+	// NOT cordon or drain: Talos 1.14.3's Sequencer.Reboot has no drain phase (unlike Upgrade and
+	// Shutdown with force=false), so the config rollout cordons and drains the node itself first
+	// (drain.go, ADR 0080). The RPC returns once the request is accepted.
 	Reboot(ctx context.Context) error
 
 	// EtcdMemberList lists etcd members as seen by the node this client is

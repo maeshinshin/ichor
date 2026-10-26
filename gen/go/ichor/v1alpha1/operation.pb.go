@@ -696,8 +696,12 @@ type PlanOperationResponse struct {
 	// cluster's secrets bundle, so the copy on the user's machine is stale and
 	// `ichor cluster bundle-export` is needed.
 	ReplacesSecretsBundle bool `protobuf:"varint,10,opt,name=replaces_secrets_bundle,json=replacesSecretsBundle,proto3" json:"replaces_secrets_bundle,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	// kubernetes_api_unavailable is true when a machine reboots while it is the
+	// cluster's only approved control plane, so the Kubernetes API is down for
+	// the length of the reboot.
+	KubernetesApiUnavailable bool `protobuf:"varint,11,opt,name=kubernetes_api_unavailable,json=kubernetesApiUnavailable,proto3" json:"kubernetes_api_unavailable,omitempty"`
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
 }
 
 func (x *PlanOperationResponse) Reset() {
@@ -796,6 +800,13 @@ func (x *PlanOperationResponse) GetStages() []string {
 func (x *PlanOperationResponse) GetReplacesSecretsBundle() bool {
 	if x != nil {
 		return x.ReplacesSecretsBundle
+	}
+	return false
+}
+
+func (x *PlanOperationResponse) GetKubernetesApiUnavailable() bool {
+	if x != nil {
+		return x.KubernetesApiUnavailable
 	}
 	return false
 }
@@ -1167,7 +1178,7 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x121\n" +
 	"\x04kind\x18\x02 \x01(\x0e2\x1d.ichor.v1alpha1.OperationKindR\x04kind\x12\x16\n" +
 	"\x06target\x18\x03 \x01(\tR\x06target\x12'\n" +
-	"\x0fmax_unavailable\x18\x04 \x01(\x05R\x0emaxUnavailable\"\x88\x03\n" +
+	"\x0fmax_unavailable\x18\x04 \x01(\x05R\x0emaxUnavailable\"\xc6\x03\n" +
 	"\x15PlanOperationResponse\x127\n" +
 	"\x06effect\x18\x01 \x01(\x0e2\x1f.ichor.v1alpha1.OperationEffectR\x06effect\x12:\n" +
 	"\bmachines\x18\x02 \x03(\v2\x1e.ichor.v1alpha1.PlannedMachineR\bmachines\x12\x12\n" +
@@ -1179,7 +1190,8 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\ablocked\x18\b \x01(\tR\ablocked\x12\x16\n" +
 	"\x06stages\x18\t \x03(\tR\x06stages\x126\n" +
 	"\x17replaces_secrets_bundle\x18\n" +
-	" \x01(\bR\x15replacesSecretsBundle\"\xc1\x01\n" +
+	" \x01(\bR\x15replacesSecretsBundle\x12<\n" +
+	"\x1akubernetes_api_unavailable\x18\v \x01(\bR\x18kubernetesApiUnavailable\"\xc1\x01\n" +
 	"\x16CreateOperationRequest\x123\n" +
 	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x121\n" +
 	"\x04kind\x18\x02 \x01(\x0e2\x1d.ichor.v1alpha1.OperationKindR\x04kind\x12\x16\n" +

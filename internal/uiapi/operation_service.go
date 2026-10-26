@@ -378,10 +378,16 @@ func (s *Server) planMachines(ctx context.Context, p *opPlan, cluster *ichorv1al
 
 	var cps, workers []*ichorv1alpha1.TalosMachine
 
+	approvedControlPlanes := 0
+
 	for i := range list.Items {
 		m := &list.Items[i]
 		if m.Spec.ClusterRef.Name != cluster.Name || !m.Spec.IsApproved() {
 			continue
+		}
+
+		if m.Spec.Role == opRoleControlPlane {
+			approvedControlPlanes++
 		}
 
 		// A config rollout visits only the machines with a pending change that needs a reboot
@@ -406,6 +412,11 @@ func (s *Server) planMachines(ctx context.Context, p *opPlan, cluster *ichorv1al
 	}
 
 	slices.Sort(p.resp.Held)
+
+	// With one approved control plane, rebooting it takes the Kubernetes API down for the length of
+	// the reboot (the cluster has no other API server to answer).
+	p.resp.KubernetesApiUnavailable = p.resp.Effect == pb.OperationEffect_OPERATION_EFFECT_REBOOT &&
+		approvedControlPlanes == 1 && len(cps) == 1
 
 	add := func(m *ichorv1alpha1.TalosMachine, step int32) {
 		pm := &pb.PlannedMachine{Name: m.Name, Role: m.Spec.Role, Step: step}

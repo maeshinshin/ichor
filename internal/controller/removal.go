@@ -48,7 +48,6 @@ import (
 	"time"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
-	"k8s.io/kubectl/pkg/drain"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -692,21 +691,8 @@ func (r *TalosMachineReconciler) drainNode(ctx context.Context, hostname string)
 		return err
 	}
 
-	helper := &drain.Helper{
-		Ctx: ctx, Client: r.KubeClient,
-		GracePeriodSeconds: -1, IgnoreAllDaemonSets: true, DeleteEmptyDirData: true,
-		Out: io.Discard, ErrOut: io.Discard,
-	}
-
-	if err := drain.RunCordonOrUncordon(helper, &node, true); err != nil {
-		return fmt.Errorf("cordoning node %q: %w", hostname, err)
-	}
-
-	if err := drain.RunNodeDrain(helper, hostname); err != nil {
-		return fmt.Errorf("draining node %q: %w", hostname, err)
-	}
-
-	return nil
+	// Unbounded, as before: removal is one blocking call under its own lock renewal (renewWhile).
+	return cordonAndDrain(newDrainHelper(ctx, r.KubeClient, 0), &node)
 }
 
 // renewWhile calls lock.Renew every interval until stop is called. A

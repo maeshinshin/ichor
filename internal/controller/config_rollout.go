@@ -22,9 +22,9 @@ limitations under the License.
 // label and one-control-plane-at-a-time all come from TalosOperationReconciler (ADR 0026).
 //
 // Per node: readiness and (control plane) etcd membership checks -> dry run -> storage-evacuation
-// hook -> staged apply (written to disk, nothing restarts) -> graceful Reboot (Talos cordons and
-// drains first) -> wait for the boot ID to change -> verify the node runs the rendered
-// configuration, is Ready and (control plane) is back in etcd.
+// hook -> cordon and drain (Ichor's own: Talos's Reboot does not) -> staged apply (written to disk,
+// nothing restarts) -> graceful Reboot -> wait for the boot ID to change -> verify the node runs the rendered
+// configuration, is Ready and (control plane) is back in etcd -> uncordon.
 package controller
 
 import (
@@ -36,6 +36,7 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
@@ -80,15 +81,22 @@ type configRolloutAdvancer struct {
 
 	// Evacuator is the storage hook, nil when no storage system is configured (as in talosUpgradeAdvancer).
 	Evacuator StorageEvacuator
+
+	// Kube cordons and drains the node before its reboot and uncordons it afterwards (drain.go),
+	// and reads its readiness live: Talos's Reboot does not drain (ADR 0080), and on a single
+	// control plane the cached Node would stay Ready while the API server is down. nil skips both.
+	Kube kubernetes.Interface
 }
 
 // NewConfigRolloutAdvancer returns the config-kind AdvanceMachineFunc.
 func NewConfigRolloutAdvancer(
 	c client.Client, controllerNamespace string,
 	talosClient func(context.Context, *ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine, *secrets.Bundle) (TalosClient, error),
-	evacuator StorageEvacuator,
+	evacuator StorageEvacuator, kube kubernetes.Interface,
 ) AdvanceMachineFunc {
-	a := &configRolloutAdvancer{Client: c, ControllerNamespace: controllerNamespace, TalosClient: talosClient, Evacuator: evacuator}
+	a := &configRolloutAdvancer{
+		Client: c, ControllerNamespace: controllerNamespace, TalosClient: talosClient, Evacuator: evacuator, Kube: kube,
+	}
 
 	return a.Advance
 }
@@ -174,6 +182,10 @@ func (a *configRolloutAdvancer) fail(
 ) error {
 	if endErr := a.endEvacuation(ctx, nil, cluster, m); endErr != nil {
 		return fmt.Errorf("%w (and re-enabling scheduling failed: %v)", err, endErr)
+	}
+
+	if uncErr := a.uncordon(ctx, nil, m); uncErr != nil {
+		err = fmt.Errorf("%w (and uncordoning failed: %v)", err, uncErr)
 	}
 
 	apimeta.SetStatusCondition(&m.Status.Conditions, metav1.Condition{
@@ -266,7 +278,29 @@ func (a *configRolloutAdvancer) begin(
 		return fmt.Errorf("evacuating %q timed out with storage replicas still remaining", node)
 	}
 
-	return a.stageAndReboot(ctx, dialCtx, talos, cluster, m, rendered)
+	if a.Kube != nil {
+		drained, err := drainForReboot(ctx, a.Kube, node)
+		if err != nil {
+			if uncErr := a.uncordon(ctx, talos, m); uncErr != nil {
+				err = fmt.Errorf("%w (and uncordoning failed: %v)", err, uncErr)
+			}
+
+			return err
+		}
+
+		if !drained {
+			return nil // evictions are still going (a PodDisruptionBudget holds some back): resume next reconcile
+		}
+	}
+
+	if err := a.stageAndReboot(ctx, dialCtx, talos, cluster, m, rendered); err != nil {
+		// Nothing was rebooted (a failed Reboot call already went through fail), so do not leave the node cordoned.
+		_ = a.uncordon(ctx, talos, m)
+
+		return err
+	}
+
+	return nil
 }
 
 // stageAndReboot writes the configuration to disk, records the pre-reboot boot ID on the marker
@@ -387,7 +421,8 @@ func (a *configRolloutAdvancer) finish(
 
 	ready, err := a.nodeReady(ctx, node)
 	if err != nil {
-		return false, fmt.Errorf("checking %q's node readiness: %w", m.Name, err)
+		// A single control plane has no API server while it reboots; that is waiting, not failing.
+		return false, a.stillWaiting(ctx, cluster, m, "checking the node's readiness: "+err.Error())
 	}
 
 	if !ready {
@@ -403,6 +438,10 @@ func (a *configRolloutAdvancer) finish(
 		if !etcdMemberPresent(members, node) {
 			return false, a.stillWaiting(ctx, cluster, m, "the node is not back in etcd")
 		}
+	}
+
+	if err := a.uncordon(ctx, talos, m); err != nil {
+		return false, a.stillWaiting(ctx, cluster, m, "uncordoning the node: "+err.Error())
 	}
 
 	if err := a.endEvacuation(ctx, talos, cluster, m); err != nil {
@@ -438,8 +477,31 @@ func (a *configRolloutAdvancer) endEvacuation(
 	return endMachineEvacuation(ctx, a.Client, a.Evacuator, cluster, m, node)
 }
 
+// uncordon lifts the cordon drainForReboot made, if any (a no-op without Kube).
+func (a *configRolloutAdvancer) uncordon(ctx context.Context, talos TalosClient, m *ichorv1alpha1.TalosMachine) error {
+	if a.Kube == nil {
+		return nil
+	}
+
+	node, err := resolveNodeName(ctx, a.Client, talos, m)
+	if err != nil {
+		return err
+	}
+
+	return uncordonAfterReboot(ctx, a.Kube, node)
+}
+
 // nodeReady reports whether hostname's Kubernetes Node is Ready.
 func (a *configRolloutAdvancer) nodeReady(ctx context.Context, hostname string) (bool, error) {
+	if a.Kube != nil {
+		n, err := a.Kube.CoreV1().Nodes().Get(ctx, hostname, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+
+		return nodeIsReady(n), nil
+	}
+
 	var node corev1.Node
 	if err := a.Get(ctx, types.NamespacedName{Name: hostname}, &node); err != nil {
 		return false, err

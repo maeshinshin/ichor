@@ -185,7 +185,7 @@ func bootHAToMaintenance() ([]string, error) {
 	for i := range haTotal() {
 		name := haVMName(i)
 		step := "waiting for " + name + "'s VMI to report a pod IP"
-		ip, err := pollFor(step, 3*time.Minute, func() (string, bool) {
+		ip, err := pollFor(step, 12*time.Minute, func() (string, bool) {
 			out, err := utils.Run(kube.Command("-n", namespace, "get", "vmi", name,
 				"-o", "jsonpath={.status.interfaces[0].ipAddress}"))
 			ip := strings.TrimSpace(out)

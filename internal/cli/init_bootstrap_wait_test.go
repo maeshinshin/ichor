@@ -46,7 +46,7 @@ func (*sequenceBootstrap) Kubeconfig(context.Context) ([]byte, error) { return n
 
 func TestBootstrapWhenUp_RetriesUnavailable(t *testing.T) {
 	unavailable := status.Error(codes.Unavailable, "handshake failed")
-	b := &sequenceBootstrap{errs: []error{unavailable, unavailable}}
+	b := &sequenceBootstrap{errs: []error{unavailable, status.Error(codes.FailedPrecondition, "bootstrap is not available yet")}}
 
 	if err := bootstrapWhenUp(context.Background(), b, time.Minute, time.Millisecond, io.Discard); err != nil {
 		t.Fatalf("bootstrapWhenUp: %v", err)

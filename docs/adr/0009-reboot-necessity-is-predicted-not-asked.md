@@ -102,3 +102,71 @@ controller blocks apid on a reachable control-plane endpoint for *worker*
 nodes only, so an isolated worker never starts apid at all. A control-plane
 config comes up normally. The details, and the four other harness
 requirements the same investigation turned up, are in ADR 0007.
+
+## Addendum: multi-document and registry paths
+
+The table originally knew only the legacy `Config` paths and two standalone
+kinds, so every other path fell to reboot-required. Ichor's own render hit
+that: adding `TalosCluster.spec.registries` was refused with `RebootRequired`
+(seen in ADR 0061's test). The v1.14.3 source was read to separate what Talos
+applies live from what it does not. A rule was added only where the consumer
+was found; the default is unchanged.
+
+Ichor's default render at the v1.14 contract (control plane and worker) is the
+legacy `Config` document (`machine.*`, `cluster.*`) plus the standalone kinds
+DiscoveryServiceConfig, DiscoveryIdentityConfig, ResolverConfig, VolumeConfig
+(EPHEMERAL), FilesystemTrimConfig, SecurityProfileConfig, HostnameConfig,
+KubeClusterConfig, KubeNodeConfig, KubeletConfig, KubeNetworkConfig,
+KubeAPIServerCAConfig, KubePrismConfig, and on control planes also
+KubeAggregatorCAConfig, KubeAdmissionControlConfig, KubeAuditPolicyConfig,
+KubeAuthenticationConfig, KubeAuthorizerConfig, KubeEtcdEncryptionConfig,
+KubeServiceAccountConfig, KubeAPIServerConfig, KubeControllerManagerConfig,
+KubeSchedulerConfig, KubeProxyConfig, KubeFlannelCNIConfig, KubeCoreDNSConfig.
+Patches add SysctlConfig, KernelModuleConfig, VolumeConfig, UserVolumeConfig,
+RawVolumeConfig and legacy `Config` fragments. Registries are injected into the
+legacy `machine.registries`, not into a `RegistryMirrorConfig` document, so the
+path that mattered was `machine.registries.mirrors.<host>.endpoints`.
+
+Mode handling, for reference: `ApplyConfiguration` in
+`internal/app/machined/internal/server/v1alpha1/v1alpha1_server.go` writes the
+config in `NO_REBOOT` and never inspects the diff; whether anything needs a
+reboot is decided by the controllers that consume the resource. Paths below are
+relative to the `siderolabs/talos` module at v1.14.3 (`pkg/machinery/...` is the
+machinery module).
+
+| Document and field | No reboot? | Where in the source |
+| --- | --- | --- |
+| `machine.registries.mirrors` | yes | `internal/app/machined/pkg/controllers/cri/registries_config.go` builds `RegistriesConfig` from the config on every change; `internal/app/machined/pkg/controllers/files/cri_config.go` renders it to containerd's `hosts` directory via `internal/pkg/containers/cri/containerd/hosts.go` (`GenerateHosts`), which containerd reads per pull |
+| `machine.registries.config.*.auth` | no (kept default) | `internal/pkg/containers/cri/containerd/containerd.go` `GenerateCRIConfig` puts auth in the CRI plugin's own config; `pkg/machinery/config/types/v1alpha1/v1alpha1_types.go` (`RegistryConfig.RegistryAuth`): "will not be picked up by the CRI containerd plugin without a reboot" |
+| `KubeNodeConfig.labels`, `.annotations`, `.taints`; `machine.nodeLabels`, `.nodeAnnotations`, `.nodeTaints` | yes | `controllers/k8s/node_label_spec.go`, `node_annotation_spec.go`, `node_taint_spec.go` write specs from `K8sNodeConfig()`; `node_apply.go` applies them to the Node and removes what it owned. `pkg/machinery/config/types/v1alpha1/v1alpha1_k8s_bridge.go` (`k8sNodeConfigShim`) maps the legacy fields onto the same interface |
+| `cluster.allowSchedulingOnControlPlanes`, `.allowSchedulingOnMasters` | yes | read only by the taint shim above (`v1alpha1_clusterconfig.go` `ScheduleOnControlPlanes`, used only in `v1alpha1_k8s_bridge.go`) |
+| `KubeAPIServerConfig`, `KubeControllerManagerConfig`, `KubeSchedulerConfig`, except `.image` | yes | `controllers/k8s/control_plane.go` reads `K8sAPIServerConfig()` etc. and regenerates the static pod; same consumer as the legacy `cluster.apiServer` rules |
+| the same three kinds, `.image` | no, on purpose | see below |
+| `KubeProxyConfig`, `KubeletConfig` (including `.image`) | unknown, kept default | see below |
+
+(`controllers/` is `internal/app/machined/pkg/controllers/`.)
+
+**The Kubernetes component images are deliberately not no-reboot.**
+`KubeAPIServerConfig.image`, `KubeControllerManagerConfig.image`,
+`KubeSchedulerConfig.image`, `KubeProxyConfig.image` and `KubeletConfig.image`
+would apply live in Talos, but a safe rule makes the machine controller apply
+all nodes the moment `spec.kubernetesVersion` changes, which breaks the
+one-node-at-a-time order ADR 0057's executor provides (it applies the image
+fields itself with an explicit no-reboot apply). The explicit `.image` entries
+in `pkg/fieldmeta` carve them out of their document's rule, and a test pins
+all five. The legacy `cluster.apiServer.image`, `cluster.controllerManager.image`
+and `cluster.scheduler.image` are still covered by the older `cluster.*` safe
+rules, so on a pre-1.14 contract the same hazard exists; it predates this
+addendum and is left for its own decision.
+
+**Read but not verified, so left at the default:** `KubeProxyConfig` (the open
+question about the kube-proxy DaemonSet stands), `KubeletConfig` fields other
+than the image and `machine.kubelet.*` (kubelet restart behaviour not traced),
+`KubeNodeConfig.nodeIP`, `ResolverConfig.hostDNS`, `HostnameConfig`,
+`DiscoveryServiceConfig`/`DiscoveryIdentityConfig`, `SecurityProfileConfig`,
+`KubeClusterConfig`, `KubeNetworkConfig`, the CA, admission, audit,
+authentication, authorizer, etcd-encryption, service-account, Prism, Flannel
+and CoreDNS kinds, `VolumeConfig`/`FilesystemTrimConfig` beyond
+`provisioning`, and registry TLS (the host sits inside the path, so a prefix
+rule cannot name it). Ichor's inputs never vary most of these after the first
+apply.

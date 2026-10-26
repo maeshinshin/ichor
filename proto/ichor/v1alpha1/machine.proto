@@ -48,8 +48,14 @@ message ApproveMachineRequest {
 }
 
 message ApproveMachineResponse {
+  // machine is the machine as stored. When pull_request_url is set nothing
+  // was written to the cluster and it is still pending until the pull
+  // request merges and syncs.
   Machine machine = 1;
   AuditRecord audit = 2;
+  // pull_request_url is set when the approval was proposed as a pull request
+  // (strict mode, or a machine Argo CD tracks) instead of being written.
+  string pull_request_url = 3;
 }
 
 message RejectMachineRequest {
@@ -59,6 +65,9 @@ message RejectMachineRequest {
 
 message RejectMachineResponse {
   AuditRecord audit = 1;
+  // pull_request_url is set when the machine is tracked by Argo CD and the
+  // rejection was proposed as a pull request instead of being written.
+  string pull_request_url = 2;
 }
 
 enum MachineRole {

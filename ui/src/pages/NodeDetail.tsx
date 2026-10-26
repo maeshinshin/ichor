@@ -1,9 +1,14 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { ConditionList, StatusBadge } from '@/components/ConditionList'
 import { ErrorAlert } from '@/components/ErrorAlert'
+import { Field, Fields, PageHeader } from '@/components/PageHeader'
+import { EmptyNote, PageSkeleton } from '@/components/PageStates'
+import { Section, SectionLayout, type SectionLink } from '@/components/SectionNav'
 import { TalosDetails } from '@/components/TalosDetails'
 import type { EffectiveConfigValue } from '@/gen/ichor/v1alpha1/node_pb'
 import { ConfigLayer, DiskRole, type NodeDetail as NodeDetailMessage, type StreamNodeLogsResponse } from '@/gen/ichor/v1alpha1/node_pb'
@@ -11,8 +16,9 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { type BreakGlassRun } from '@/components/BreakGlassDialog'
 import { PullRequestNotice } from '@/components/PullRequestNotice'
 import { SetInstallDialog } from '@/components/SetInstallDialog'
-import { MachineApprovalState, type Machine } from '@/gen/ichor/v1alpha1/machine_pb'
-import { machineClient, nodeClient } from '@/lib/connect'
+import type { Cluster } from '@/gen/ichor/v1alpha1/cluster_pb'
+import { MachineApprovalState, MachineRole, type Machine } from '@/gen/ichor/v1alpha1/machine_pb'
+import { clusterClient, machineClient, nodeClient } from '@/lib/connect'
 import { needsInstallDisk } from '@/lib/installDisk'
 import { enumLabel } from '@/lib/enum'
 import { describeError } from '@/lib/errors'
@@ -20,7 +26,7 @@ import { formatBytes, formatTimestamp } from '@/lib/format'
 import { streamWithResume } from '@/lib/resumableStream'
 import { useT } from '@/lib/useT'
 import type { Key } from '@/lib/i18n'
-import { Link } from '@/router'
+import { Link, objectRefPath } from '@/router'
 
 type ErrorShape = { title: string; detail: string }
 
@@ -33,6 +39,7 @@ export function NodeDetail({ namespace, name }: { namespace: string; name: strin
   const [error, setError] = useState<ErrorShape | null>(null)
   const [machine, setMachine] = useState<Machine | null>(null)
   const [pullRequest, setPullRequest] = useState<{ url: string; run?: BreakGlassRun } | null>(null)
+  const [cluster, setCluster] = useState<Cluster | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -51,24 +58,76 @@ export function NodeDetail({ namespace, name }: { namespace: string; name: strin
     }
   }, [namespace, name])
 
-  // The machine itself, only to know whether it is waiting for an install disk (ADR 0076). A
-  // failed read just hides the offer.
+  // The machine and its cluster are context around the node: the overview, and whether it is
+  // waiting for an install disk (ADR 0076). If either lookup fails the page still renders from
+  // the node detail alone. loadMachine also refreshes after the install disk is set.
   function loadMachine() {
-    machineClient.getMachine({ machine: { namespace, name } }).then(
-      (res) => setMachine(res.machine ?? null),
-      () => setMachine(null),
-    )
+    let cancelled = false
+    machineClient
+      .getMachine({ machine: { namespace, name } })
+      .then(async (res) => {
+        if (cancelled) return
+        setMachine(res.machine ?? null)
+        if (res.machine?.cluster) {
+          const c = await clusterClient.getCluster({ cluster: res.machine.cluster })
+          if (!cancelled) setCluster(c.cluster ?? null)
+        }
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
   }
-  useEffect(loadMachine, [namespace, name])
+  useEffect(() => {
+    setMachine(null)
+    setCluster(null)
+    return loadMachine()
+  }, [namespace, name])
 
   if (error) return <ErrorAlert {...error} />
-  if (!node) return <p class="mt-10 text-center text-sm text-muted-foreground">{t('node.loading')}</p>
+  if (!node) return <PageSkeleton label={t('node.loading')} />
+
+  const ready = machine?.conditions.find((c) => c.type === 'Ready')
+  const sections: SectionLink[] = [
+    { id: 'overview', label: t('page.overview') },
+    { id: 'conditions', label: t('cluster.conditions') },
+    { id: 'hardware', label: t('node.hardware') },
+    { id: 'disks', label: t('node.disks') },
+    { id: 'network', label: t('node.network') },
+    { id: 'usage', label: t('node.usage') },
+    { id: 'kubernetes', label: t('node.kubernetes') },
+    { id: 'talos', label: t('talos.title') },
+    { id: 'config', label: t('node.config') },
+    { id: 'logs', label: t('node.logs') },
+  ]
 
   return (
-    <div class="mt-6 space-y-4">
+    <>
+      <PageHeader
+        title={machine?.hostname || name}
+        kind={t('kind.machine')}
+        badges={
+          machine && (
+            <>
+              <Badge variant={machine.approvalState === MachineApprovalState.APPROVED ? 'secondary' : 'outline'}>
+                {enumLabel(MachineApprovalState, machine.approvalState)}
+              </Badge>
+              {ready && <StatusBadge type={ready.type} status={ready.status} />}
+              {machine.stage && <Badge variant="outline">{machine.stage}</Badge>}
+            </>
+          )
+        }
+        actions={
+          machine?.cluster && (
+            <Button asChild variant="outline" size="sm">
+              <Link to={objectRefPath('/clusters', machine.cluster)}>{t('node.openCluster')}</Link>
+            </Button>
+          )
+        }
+      />
       {pullRequest && <PullRequestNotice url={pullRequest.url} breakGlass={pullRequest.run} onBreakGlassDone={loadMachine} />}
       {machine && needsInstallDisk({ ...machine, approved: machine.approvalState === MachineApprovalState.APPROVED }) && (
-        <Alert>
+        <Alert className="mb-4">
           <AlertTitle>{t('installDisk.waitingTitle')}</AlertTitle>
           <AlertDescription>
             <p>{t('installDisk.waitingBody')}</p>
@@ -83,26 +142,46 @@ export function NodeDetail({ namespace, name }: { namespace: string; name: strin
           </AlertDescription>
         </Alert>
       )}
-      <Card>
-        <CardHeader>
-          <CardTitle>{name}</CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-          <Field label={t('node.manufacturer')} value={node.hardware?.manufacturer} />
-          <Field label={t('node.model')} value={node.hardware?.model} />
-          <Field label={t('node.serialNumber')} value={node.hardware?.serialNumber} />
-          <Field label={t('node.cpuCores')} value={node.hardware ? String(node.hardware.cpuCores) : undefined} />
-          <Field label={t('node.memory')} value={node.hardware ? formatBytes(node.hardware.memoryTotalBytes) : undefined} />
-        </CardContent>
-      </Card>
+      <SectionLayout sections={sections}>
+        <Section id="overview" title={t('page.overview')}>
+          <Fields>
+            <Field label={t('machines.colHostname')} value={machine?.hostname || name} />
+            <Field label={t('col.role')} value={machine ? enumLabel(MachineRole, machine.role) : undefined} />
+            <Field label={t('col.cluster')}>
+              {machine?.cluster ? (
+                <Link to={objectRefPath('/clusters', machine.cluster)} class="hover:underline">
+                  {machine.cluster.name}
+                </Link>
+              ) : (
+                '-'
+              )}
+            </Field>
+            <Field label={t('node.approval')} value={machine ? enumLabel(MachineApprovalState, machine.approvalState) : undefined} />
+            <Field label={t('col.ready')}>{ready ? <StatusBadge type={ready.type} status={ready.status} /> : '-'}</Field>
+            <Field label={t('node.stage')} value={machine?.stage} />
+            <Field label={t('col.endpoint')} value={machine?.endpoint} />
+            <Field label={t('cluster.talosVersion')} value={cluster?.talosVersion} />
+            <Field label={t('node.k8sKubelet')} value={node.kubernetes?.kubeletVersion} />
+          </Fields>
+        </Section>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('node.disks')}</CardTitle>
-        </CardHeader>
-        <CardContent>
+        <Section id="conditions" title={t('cluster.conditions')}>
+          <ConditionList conditions={machine?.conditions ?? []} />
+        </Section>
+
+        <Section id="hardware" title={t('node.hardware')}>
+          <Fields>
+            <Field label={t('node.manufacturer')} value={node.hardware?.manufacturer} />
+            <Field label={t('node.model')} value={node.hardware?.model} />
+            <Field label={t('node.serialNumber')} value={node.hardware?.serialNumber} />
+            <Field label={t('node.cpuCores')} value={node.hardware ? String(node.hardware.cpuCores) : undefined} />
+            <Field label={t('node.memory')} value={node.hardware ? formatBytes(node.hardware.memoryTotalBytes) : undefined} />
+          </Fields>
+        </Section>
+
+        <Section id="disks" title={t('node.disks')}>
           {node.disks.length === 0 ? (
-            <p class="text-sm text-muted-foreground">{t('node.noDisks')}</p>
+            <EmptyNote>{t('node.noDisks')}</EmptyNote>
           ) : (
             <Table>
               <TableHeader>
@@ -125,16 +204,11 @@ export function NodeDetail({ namespace, name }: { namespace: string; name: strin
               </TableBody>
             </Table>
           )}
-        </CardContent>
-      </Card>
+        </Section>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('node.network')}</CardTitle>
-        </CardHeader>
-        <CardContent>
+        <Section id="network" title={t('node.network')}>
           {node.networkInterfaces.length === 0 ? (
-            <p class="text-sm text-muted-foreground">{t('node.noNetwork')}</p>
+            <EmptyNote>{t('node.noNetwork')}</EmptyNote>
           ) : (
             <Table>
               <TableHeader>
@@ -159,16 +233,11 @@ export function NodeDetail({ namespace, name }: { namespace: string; name: strin
               </TableBody>
             </Table>
           )}
-        </CardContent>
-      </Card>
+        </Section>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('node.usage')}</CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+        <Section id="usage" title={t('node.usage')}>
           {node.resourceUsage ? (
-            <>
+            <Fields>
               <Field label={t('node.cpuUsed')} value={node.resourceUsage.cpuCoresUsed.toFixed(2)} />
               <Field
                 label={t('node.memory')}
@@ -178,37 +247,34 @@ export function NodeDetail({ namespace, name }: { namespace: string; name: strin
                 label={t('node.filesystem')}
                 value={`${formatBytes(node.resourceUsage.filesystemUsedBytes)} / ${formatBytes(node.resourceUsage.filesystemTotalBytes)}`}
               />
-            </>
+            </Fields>
           ) : (
-            <p class="text-sm text-muted-foreground">{t('node.noUsage')}</p>
+            <EmptyNote>{t('node.noUsage')}</EmptyNote>
           )}
-        </CardContent>
-      </Card>
+        </Section>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('node.kubernetes')}</CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+        <Section id="kubernetes" title={t('node.kubernetes')}>
           {node.kubernetes ? (
-            <>
+            <Fields>
               <Field label={t('node.k8sName')} value={node.kubernetes.nodeName} />
               <Field label={t('node.k8sReady')} value={node.kubernetes.ready ? t('common.yes') : t('common.no')} />
               <Field label={t('node.k8sKubelet')} value={node.kubernetes.kubeletVersion} />
               <Field label={t('node.k8sSchedulable')} value={node.kubernetes.schedulable ? t('common.yes') : t('common.no')} />
-            </>
+            </Fields>
           ) : node.kubernetesPermissionDenied ? (
-            <p class="text-sm text-muted-foreground">{t('common.noPermission')}</p>
+            <EmptyNote>{t('common.noPermission')}</EmptyNote>
           ) : (
-            <p class="text-sm text-muted-foreground">{t('node.notJoined')}</p>
+            <EmptyNote>{t('node.notJoined')}</EmptyNote>
           )}
-        </CardContent>
-      </Card>
+        </Section>
 
-      <TalosDetails namespace={namespace} name={name} />
-      <EffectiveConfigSection namespace={namespace} name={name} />
-      <LogsSection namespace={namespace} name={name} />
-    </div>
+        <div id="talos" class="scroll-mt-24">
+          <TalosDetails namespace={namespace} name={name} />
+        </div>
+        <EffectiveConfigSection namespace={namespace} name={name} />
+        <LogsSection namespace={namespace} name={name} />
+      </SectionLayout>
+    </>
   )
 }
 
@@ -248,11 +314,7 @@ function EffectiveConfigSection({ namespace, name }: { namespace: string; name: 
   const groups = groupByLayer(values ?? [])
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t('node.config')}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <Section id="config" title={t('node.config')}>
         <p class="text-sm text-muted-foreground">
           {t('node.configIntroBefore')}
           <Link to="/patches" class="underline">
@@ -261,8 +323,8 @@ function EffectiveConfigSection({ namespace, name }: { namespace: string; name: 
           {t('node.configIntroAfter')}
         </p>
         {error && <ErrorAlert {...error} />}
-        {!error && !values && <p class="text-sm text-muted-foreground">{t('common.loading')}</p>}
-        {values && values.length === 0 && <p class="text-sm text-muted-foreground">{t('node.configEmpty')}</p>}
+        {!error && !values && <Skeleton className="h-24 w-full" />}
+        {values && values.length === 0 && <EmptyNote>{t('node.configEmpty')}</EmptyNote>}
         {groups.map(([layer, group]) => (
           <div key={layer}>
             <h4 class="mb-1 text-sm font-medium">{enumLabel(ConfigLayer, layer)}</h4>
@@ -296,8 +358,7 @@ function EffectiveConfigSection({ namespace, name }: { namespace: string; name: 
             </Table>
           </div>
         ))}
-      </CardContent>
-    </Card>
+    </Section>
   )
 }
 
@@ -379,14 +440,16 @@ function LogsSection({ namespace, name }: { namespace: string; name: string }) {
   }, [lines.length])
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+    <Section
+      id="logs"
+      title={
+        <>
           {t('node.logs')}
           {reconnecting && <Badge variant="outline">{t('node.reconnecting')}</Badge>}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
+        </>
+      }
+    >
+      <div>
         <div class="mb-2 w-48">
           <Select value={source} onValueChange={setSource}>
             <SelectTrigger className="w-full">
@@ -411,16 +474,7 @@ function LogsSection({ namespace, name }: { namespace: string; name: string }) {
           ))}
           <div ref={bottomRef} />
         </div>
-      </CardContent>
-    </Card>
-  )
-}
-
-function Field({ label, value }: { label: string; value: string | undefined }) {
-  return (
-    <div>
-      <dt class="text-xs text-muted-foreground">{label}</dt>
-      <dd>{value || '-'}</dd>
-    </div>
+      </div>
+    </Section>
   )
 }

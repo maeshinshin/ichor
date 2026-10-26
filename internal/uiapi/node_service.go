@@ -29,6 +29,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -84,11 +85,13 @@ func (s *Server) GetNode(
 	}
 
 	node, err := s.findKubernetesNode(ctx, m)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
 
-	if node != nil {
+	switch {
+	case apierrors.IsForbidden(err):
+		detail.KubernetesPermissionDenied = true
+	case err != nil:
+		return nil, connect.NewError(connect.CodeInternal, err)
+	case node != nil:
 		detail.Kubernetes = kubernetesNodeStatus(node)
 	}
 
@@ -136,6 +139,17 @@ func (s *Server) GetEffectiveConfig(
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
+
+	// ResolveSystemInputs lists TalosStorage with the ServiceAccount; the
+	// presets end up in the (unmasked) rendering, so the caller's own list
+	// decides which of them they see (docs/adr/0062). Registry credentials
+	// stay on the ServiceAccount: they only leave as masked secrets.
+	var storages ichorv1alpha1.TalosStorageList
+	if err := s.List(ctx, &storages, client.InNamespace(cluster.Namespace)); err != nil {
+		return nil, mapListError("TalosStorage", err)
+	}
+
+	sys.Storage = storages.Items
 
 	values, err := effectiveConfigValues(cluster, m, bundle, patches.Items, sys)
 	if err != nil {
@@ -269,8 +283,12 @@ func (s *Server) dialNode(
 func (s *Server) findKubernetesNode(ctx context.Context, m *ichorv1alpha1.TalosMachine) (*corev1.Node, error) {
 	if m.Spec.Hostname != "" {
 		var node corev1.Node
-		if err := s.Client.Get(ctx, client.ObjectKey{Name: m.Spec.Hostname}, &node); err == nil {
+		// Read as the caller (docs/adr/0062): the Node's status is returned to them.
+		switch err := s.Get(ctx, client.ObjectKey{Name: m.Spec.Hostname}, &node); {
+		case err == nil:
 			return &node, nil
+		case apierrors.IsForbidden(err):
+			return nil, err
 		}
 	}
 
@@ -280,7 +298,7 @@ func (s *Server) findKubernetesNode(ctx context.Context, m *ichorv1alpha1.TalosM
 	}
 
 	var list corev1.NodeList
-	if err := s.Client.List(ctx, &list); err != nil {
+	if err := s.List(ctx, &list); err != nil {
 		return nil, err
 	}
 

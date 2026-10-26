@@ -147,11 +147,15 @@ func (s *Server) getMachineAndCluster(
 
 // mapGetError turns a client.Client Get error into the connect.Code a
 // browser-facing read should report: CodeNotFound for a missing object,
-// CodeInternal for everything else (a transient API server problem is not
+// CodePermissionDenied for a forbidden read, CodeInternal for everything else (a transient API server problem is not
 // the caller's fault to diagnose).
 func mapGetError(what string, err error) error {
 	if apierrors.IsNotFound(err) {
 		return connect.NewError(connect.CodeNotFound, fmt.Errorf("%s not found: %w", what, err))
+	}
+
+	if apierrors.IsForbidden(err) {
+		return connect.NewError(connect.CodePermissionDenied, fmt.Errorf("getting %s: %w", what, err))
 	}
 
 	return connect.NewError(connect.CodeInternal, fmt.Errorf("getting %s: %w", what, err))
@@ -161,3 +165,13 @@ func mapGetError(what string, err error) error {
 // Server.ArgoCDNamespace is empty (the same default `ichor init --argocd`
 // uses).
 const defaultArgoCDNamespace = "argocd"
+
+// mapListError is mapGetError for a List: forbidden is the caller's answer,
+// anything else is internal.
+func mapListError(what string, err error) error {
+	if apierrors.IsForbidden(err) {
+		return connect.NewError(connect.CodePermissionDenied, fmt.Errorf("listing %s: %w", what, err))
+	}
+
+	return connect.NewError(connect.CodeInternal, fmt.Errorf("listing %s: %w", what, err))
+}

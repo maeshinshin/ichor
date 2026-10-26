@@ -325,6 +325,23 @@ func TestRenderHashStable(t *testing.T) {
 
 // TestControlPlaneTaint checks that the control-plane taint is generated
 // only when controlPlane.schedulable is "false".
+// TestKubernetesVersionRendersValidImages guards against a doubled "v": spec.kubernetesVersion
+// carries the "v" (CRD pattern) and the generator adds its own to the component images.
+func TestKubernetesVersionRendersValidImages(t *testing.T) {
+	cluster := testCluster("false")
+	cluster.Spec.KubernetesVersion = "v1.36.1"
+
+	out := mustRender(t, cluster, testMachine("cp-a", roleControlPlane, nil), testBundle(t), nil)
+
+	if strings.Contains(out, ":vv") {
+		t.Fatalf("rendered a doubled v in an image tag:\n%s", out)
+	}
+
+	if !strings.Contains(out, "kube-apiserver:v1.36.1") {
+		t.Fatalf("expected kube-apiserver:v1.36.1 in:\n%s", out)
+	}
+}
+
 func TestControlPlaneTaint(t *testing.T) {
 	bundle := testBundle(t)
 	m := testMachine("cp-a", roleControlPlane, nil)

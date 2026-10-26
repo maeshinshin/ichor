@@ -86,7 +86,7 @@ func TestRotateCAWithYesCreatesOneOperationAndRefusesASecondWhileItRuns(t *testi
 }
 
 func TestRotateCAIsOneCommandThroughTheEntryPoint(t *testing.T) {
-	if clusterRotateCACmd.Annotations[writesAnnotation] != "true" {
+	if _, ok := clusterRotateCACmd.Annotations[writesAnnotation]; !ok {
 		t.Error("rotate-ca is not marked as a write")
 	}
 

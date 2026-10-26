@@ -127,11 +127,12 @@ func orderText(kind pb.OperationKind, p *pb.PlanOperationResponse) string {
 	total := len(p.GetMachines())
 	fmt.Fprintf(&b, "%d machine(s) (%d control plane, %d worker)", total, cps, total-cps)
 
-	if kind == pb.OperationKind_OPERATION_KIND_SHUTDOWN {
+	switch kind {
+	case pb.OperationKind_OPERATION_KIND_SHUTDOWN:
 		b.WriteString(": workers first, drained and stopped together, then the control planes at once:\n")
-	} else if kind == pb.OperationKind_OPERATION_KIND_CA_ROTATION {
+	case pb.OperationKind_OPERATION_KIND_CA_ROTATION:
 		b.WriteString(", one at a time, control planes first; every machine is visited in each pass:\n")
-	} else {
+	default:
 		fmt.Fprintf(&b, ": control planes one at a time, then workers (at most %d at once), in this order:\n", max(p.GetMaxUnavailable(), 1))
 	}
 

@@ -107,6 +107,26 @@ type TalosClient interface {
 	// false): Ichor does not re-implement that check, the same reasoning
 	// architecture.md already gives for not re-implementing cordon/drain.
 	Upgrade(ctx context.Context, image string) error
+
+	// PullImage pre-pulls image on this node, into the system containerd
+	// namespace when system is true (the kubelet's image) and the CRI
+	// namespace otherwise (the static pods' images), the same two
+	// namespaces talosctl upgrade-k8s pulls into
+	// (pkg/cluster/kubernetes/talos_managed.go's prePullImages, Talos
+	// 1.14.3). A node that does not implement the RPC is not an error.
+	PullImage(ctx context.Context, image string, system bool) error
+
+	// Kubeconfig returns an admin kubeconfig for the cluster, issued by the
+	// control-plane node this client is dialed to. It is how the Kubernetes
+	// upgrade writes the bootstrap manifests without giving the controller
+	// itself broad Kubernetes RBAC, exactly as talosctl upgrade-k8s does.
+	Kubeconfig(ctx context.Context) ([]byte, error)
+
+	// BootstrapManifests returns the objects of the node's bootstrap
+	// manifest set (the k8s.Manifest resources in the controlplane
+	// namespace: CoreDNS, kube-proxy, inlineManifests, ...), as Talos
+	// itself renders them from the node's current machine configuration.
+	BootstrapManifests(ctx context.Context) ([]map[string]any, error)
 }
 
 // EtcdMember is the one piece of each etcd member EtcdMemberList's callers

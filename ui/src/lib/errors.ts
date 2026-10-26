@@ -1,5 +1,5 @@
 import { Code, ConnectError } from '@connectrpc/connect'
-import { t } from './lang.ts'
+import { t } from './i18n.ts'
 
 // Turns a Connect error into something a person reads, instead of the raw
 // wire error (the task's own instruction for the approve/reject screen,

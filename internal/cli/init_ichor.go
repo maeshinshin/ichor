@@ -23,13 +23,18 @@ import (
 	"io"
 	"time"
 
+	"golang.org/x/mod/semver"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
+	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/installer"
 	"github.com/maeshinshin/ichor/internal/installmanifest"
+	"github.com/maeshinshin/ichor/internal/version"
 )
 
 // crdEstablishRetries and crdEstablishInterval bound how long
@@ -87,29 +92,7 @@ func applyIchorManifest(ctx context.Context, k8sClient client.Client, manifest [
 // unstructured objects it contains, skipping any empty document (a
 // trailing "---" produces one).
 func decodeManifest(data []byte) ([]*unstructured.Unstructured, error) {
-	dec := k8syaml.NewYAMLOrJSONDecoder(bytes.NewReader(data), 4096)
-
-	var objs []*unstructured.Unstructured
-
-	for {
-		var obj unstructured.Unstructured
-
-		if err := dec.Decode(&obj); err != nil {
-			if err == io.EOF { //nolint:errorlint // k8syaml.YAMLOrJSONDecoder.Decode returns io.EOF itself, not a wrapped one
-				break
-			}
-
-			return nil, err
-		}
-
-		if len(obj.Object) == 0 {
-			continue
-		}
-
-		objs = append(objs, &obj)
-	}
-
-	return objs, nil
+	return installer.Decode(data)
 }
 
 // createWithRetry creates obj, retrying briefly if the API server
@@ -138,4 +121,34 @@ func createWithRetry(ctx context.Context, k8sClient client.Client, obj *unstruct
 	}
 
 	return lastErr
+}
+
+// createIchorInstallation records the version `ichor init` just installed -- this binary's
+// own, since the manifest it applied is embedded in it -- as the IchorInstallation singleton, the CR a later
+// TalosOperation of kind ichor reads its target from. A "dev"
+// build has no semantic version to record (the CRD would refuse it), so it skips with a
+// notice instead of failing the init.
+func createIchorInstallation(ctx context.Context, k8sClient client.Client, warn io.Writer) error {
+	if !semver.IsValid(version.Version) {
+		_, _ = fmt.Fprintf(warn, "init: not creating IchorInstallation: this ichor binary is %q, not a released version\n", version.Version)
+
+		return nil
+	}
+
+	content, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&ichorv1alpha1.IchorInstallation{
+		TypeMeta:   metav1.TypeMeta{APIVersion: ichorv1alpha1.GroupVersion.String(), Kind: "IchorInstallation"},
+		ObjectMeta: metav1.ObjectMeta{Name: ichorv1alpha1.IchorInstallationName},
+		Spec: ichorv1alpha1.IchorInstallationSpec{
+			ManagementMode: ichorv1alpha1.IchorManagementModeIchor, Version: version.Version,
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	if err := createWithRetry(ctx, k8sClient, &unstructured.Unstructured{Object: content}); err != nil {
+		return fmt.Errorf("init: creating the IchorInstallation: %w", err)
+	}
+
+	return nil
 }

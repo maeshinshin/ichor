@@ -38,11 +38,14 @@ func init() {
 	addAPIFlags(machineCmd)
 }
 
+// roleControlPlane is the TalosMachine spec's spelling of the control plane role.
+const roleControlPlane = "controlplane"
+
 // parseRole maps the CLI's role spelling (the TalosMachine spec's own) to
 // the wire enum. Anything else is refused here, not guessed.
 func parseRole(s string) (pb.MachineRole, error) {
 	switch strings.ToLower(s) {
-	case "controlplane":
+	case roleControlPlane:
 		return pb.MachineRole_MACHINE_ROLE_CONTROL_PLANE, nil
 	case "worker":
 		return pb.MachineRole_MACHINE_ROLE_WORKER, nil

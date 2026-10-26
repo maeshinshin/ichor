@@ -449,10 +449,7 @@ func TestPlanSaysTheKubernetesAPIGoesDownWhenTheOnlyControlPlaneReboots(t *testi
 	}
 
 	workerOnly := []client.Object{
-		&ichorv1alpha1.TalosCluster{
-			Name: opCluster, Namespace: opNS,
-			Spec: ichorv1alpha1.TalosClusterSpec{TalosVersion: opOldTalos, KubernetesVersion: "v1.36.0"},
-		},
+		configObjects()[0],
 		rebootPending(opMachine("w2", "worker", nil, nil), "machine.network.interfaces"),
 		opMachine("cp1", "controlplane", nil, nil),
 	}

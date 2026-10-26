@@ -3928,6 +3928,20 @@ spec:
                 x-kubernetes-list-map-keys:
                 - name
                 x-kubernetes-list-type: map
+              cni:
+                description: cni is the observed CNI state that is not a spec ingredient.
+                properties:
+                  kubeProxy:
+                    description: |-
+                      kubeProxy is the mode the Talos side (cluster.proxy.disabled) is rendered for. Unset until
+                      a kube-proxy switch first runs, which means "render whatever the patches say"; once set,
+                      pkg/render appends it as the last patch, so it wins over any patch. Only the
+                      TalosOperation of kind cni writes it, and only after the new side is verified.
+                    enum:
+                    - enabled
+                    - replaced
+                    type: string
+                type: object
               conditions:
                 description: conditions represent the current state of the TalosCluster
                   resource, kstatus-compatible.

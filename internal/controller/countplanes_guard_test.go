@@ -43,44 +43,18 @@ import (
 var countplanesScanDirs = []string{".", "../webhook/v1alpha1"}
 
 // countplanesAllowedFuncs names every function, in either scanned
-// directory, allowed to declare a TalosMachineList for a purpose other
-// than deleteguard.CountApprovedControlPlanes's one canonical count.
-// candidateMachines (talosoperation_controller.go) lists machines to pick
-// which one to advance next, not to gate whether a disruptive action may
-// proceed at all -- see its own doc comment for why a cached read, and a
-// different listing site, are both fine there. Adding a name here must
-// come with the same kind of justification, in that function's own doc
-// comment, not just to silence this test.
+// directory, allowed to declare a TalosMachineList. Selecting the machines
+// of a cluster that count (approved, by role, not being deleted) is
+// deleteguard.ApprovedMachines's job and nothing else lists for it. The one
+// entry left does not select by that rule at all.
+// Adding a name here must come with the same kind of justification, in that
+// function's own doc comment, not just to silence this test.
 var countplanesAllowedFuncs = map[string]bool{
-	"candidateMachines": true,
-	// findEtcdSurvivor (removal.go) lists siblings to pick one to dial as
-	// the "a surviving node says remove this member" side of
-	// EtcdRemoveMemberByID -- it selects a peer, it does not decide
-	// whether a removal may proceed. It already reads through APIReader
-	// for the same staleness reason the canonical count does, and says so
-	// in its own doc comment.
-	"findEtcdSurvivor": true,
-	// snapshotCandidates (talosetcdbackup_controller.go) lists control planes
-	// to pick which one to read an etcd snapshot from; nothing is gated on how
-	// many there are. A stale cached list only means dialing a node that is
-	// gone, which fails and moves on to the next, so the cached client is fine.
-	"snapshotCandidates": true,
-	// machinesOfCluster (talosmachine_controller.go) maps a TalosStorage, TalosConfigPatch or TalosCluster event to the machines
-	// to re-reconcile, and readyCondition (talosstorage_controller.go) reports which machines
-	// have converged. Neither counts control planes or gates a disruptive action; both say so in
-	// their own doc comments, and a cached read is right for both (a late event is re-queued).
+	// machinesOfCluster (talosmachine_controller.go) maps a TalosStorage, TalosConfigPatch or
+	// TalosCluster event to every machine of the cluster to re-reconcile -- unapproved and
+	// deleting ones included, since both still need their reconcile (the removal finalizer runs
+	// on a deleting one). Counting nothing and gating nothing, it cannot use the approved filter.
 	"machinesOfCluster": true,
-	"readyCondition":    true,
-	// othersDone (cni_kubeproxy_switch.go) checks that every other machine of a kube-proxy switch has
-	// finished before the cluster-wide tail runs; it counts no quorum, and reads through the
-	// uncached Reader so a freshly approved machine is not missed (see its doc comment).
-	"othersDone": true,
-	// shutdownPlan and awaitPowerOn (shutdown.go) list the machines of a cluster to stop and to
-	// wait for. They count nothing against a quorum, and say so in their own doc comments; the
-	// shutdown deliberately ends quorum, and the lock that gates it still goes through
-	// acquireDisruptiveLock's canonical count. Both read through APIReader when it is set.
-	"shutdownPlan": true,
-	"awaitPowerOn": true,
 }
 
 // TestTalosMachineListCountingStaysCentralized parses every non-test
@@ -154,6 +128,6 @@ func TestTalosMachineListCountingStaysCentralized(t *testing.T) {
 
 	if found == 0 {
 		t.Fatalf("no TalosMachineList declaration found at all under %v; this guard has nothing to check -- "+
-			"did candidateMachines get renamed or removed?", countplanesScanDirs)
+			"did machinesOfCluster get renamed or removed?", countplanesScanDirs)
 	}
 }

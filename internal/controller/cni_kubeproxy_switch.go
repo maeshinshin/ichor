@@ -43,6 +43,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/cni"
+	"github.com/maeshinshin/ichor/pkg/deleteguard"
 	"github.com/maeshinshin/ichor/pkg/render"
 )
 
@@ -263,16 +264,16 @@ func (a *cniKubeProxyAdvancer) othersDone(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, self *ichorv1alpha1.TalosMachine,
 	op *ichorv1alpha1.TalosOperation, target cni.KubeProxyMode,
 ) (bool, error) {
-	var list ichorv1alpha1.TalosMachineList
-	if err := a.Reader.List(ctx, &list, client.InNamespace(cluster.Namespace)); err != nil {
+	list, err := deleteguard.ApprovedMachines(ctx, a.Reader, cluster.Namespace, cluster.Name, deleteguard.MachineFilter{})
+	if err != nil {
 		return false, err
 	}
 
 	done := true
 
-	for i := range list.Items {
-		o := &list.Items[i]
-		if o.Name == self.Name || o.Spec.ClusterRef.Name != cluster.Name || !o.Spec.IsApproved() {
+	for i := range list {
+		o := &list[i]
+		if o.Name == self.Name {
 			continue
 		}
 

@@ -105,7 +105,9 @@ func CheckControlPlaneCount(currentControlPlanes int, desiredCount int) error {
 // CountApprovedControlPlanes lists approved control-plane TalosMachines in
 // namespace belonging to the TalosCluster named clusterName, for
 // CheckControlPlaneQuorum/CheckControlPlaneCount's currentControlPlanes
-// argument.
+// argument. A control plane already being deleted is not counted (see
+// MachineFilter); the caller deciding that machine's own removal counts it back
+// in through ApprovedMachines' KeepDeleting.
 //
 // reader must be a direct, uncached read -- a manager's APIReader
 // (mgr.GetAPIReader()), never its cached Client (mgr.GetClient()). This
@@ -140,15 +142,36 @@ func CountApprovedWorkers(ctx context.Context, reader client.Reader, namespace, 
 }
 
 func countApproved(ctx context.Context, reader client.Reader, namespace, clusterName, role string) (int, error) {
-	machines, err := approvedMachines(ctx, reader, namespace, clusterName, role)
+	machines, err := ApprovedMachines(ctx, reader, namespace, clusterName, MachineFilter{Role: role})
 
 	return len(machines), err
 }
 
-// approvedMachines is the one TalosMachine listing behind every count here and
-// behind ControlPlaneOverCap: the approved machines of role in clusterName.
-func approvedMachines(
-	ctx context.Context, reader client.Reader, namespace, clusterName, role string,
+// MachineFilter narrows ApprovedMachines. The zero value is every approved,
+// not-being-deleted machine of the cluster.
+type MachineFilter struct {
+	// Role keeps only machines of this role; empty keeps every role.
+	Role string
+	// IncludeDeleting keeps machines that carry a DeletionTimestamp. A machine
+	// in that state is on its way out (its removal finalizer is still running),
+	// so by default it is not counted as staying: counting it would let a second
+	// removal drop the cluster below spec.controlPlane.count while the first is
+	// unfinished (ADR 0054 addendum).
+	IncludeDeleting bool
+	// KeepDeleting names one machine kept even though it is being deleted: the
+	// machine whose own removal is being decided, which is counted "including the
+	// one being removed" (CheckControlPlaneQuorum, CheckControlPlaneCount).
+	KeepDeleting string
+}
+
+// ApprovedMachines is the one place that lists TalosMachines and narrows them:
+// the approved machines of clusterName in namespace, by f. Every count here and
+// ControlPlaneOverCap go through it, and so should any caller that needs "the
+// machines of this cluster that count" (ADR 0054's addendum). reader must be a
+// direct read where the result gates a disruptive action; a cached client is
+// fine for picking a machine to act on.
+func ApprovedMachines(
+	ctx context.Context, reader client.Reader, namespace, clusterName string, f MachineFilter,
 ) ([]ichorv1alpha1.TalosMachine, error) {
 	var siblings ichorv1alpha1.TalosMachineList
 	if err := reader.List(ctx, &siblings, client.InNamespace(namespace)); err != nil {
@@ -158,9 +181,15 @@ func approvedMachines(
 	var out []ichorv1alpha1.TalosMachine
 
 	for _, m := range siblings.Items {
-		if m.Spec.Role == role && m.Spec.IsApproved() && m.Spec.ClusterRef.Name == clusterName {
-			out = append(out, m)
+		if m.Spec.ClusterRef.Name != clusterName || !m.Spec.IsApproved() || (f.Role != "" && m.Spec.Role != f.Role) {
+			continue
 		}
+
+		if !m.DeletionTimestamp.IsZero() && !f.IncludeDeleting && m.Name != f.KeepDeleting {
+			continue
+		}
+
+		out = append(out, m)
 	}
 
 	return out, nil
@@ -183,11 +212,11 @@ func approvedAt(m *ichorv1alpha1.TalosMachine) time.Time {
 // the webhook cannot). Approved control planes are ordered by approval time,
 // then by name for a tie; the first desiredCount+1 are kept and later ones
 // held. total is the approved control-plane count. It lists through the same
-// approvedMachines as CountApprovedControlPlanes, so it needs the same direct reader.
+// ApprovedMachines as CountApprovedControlPlanes, so it needs the same direct reader.
 func ControlPlaneOverCap(
 	ctx context.Context, reader client.Reader, namespace, clusterName, machineName string, desiredCount int,
 ) (held bool, total int, err error) {
-	cps, err := approvedMachines(ctx, reader, namespace, clusterName, "controlplane")
+	cps, err := ApprovedMachines(ctx, reader, namespace, clusterName, MachineFilter{Role: "controlplane"})
 	if err != nil {
 		return false, 0, err
 	}

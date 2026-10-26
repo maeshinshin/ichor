@@ -283,7 +283,8 @@ func (r *TalosOperationReconciler) setPhase(ctx context.Context, op *ichorv1alph
 	return r.Status().Update(ctx, op)
 }
 
-// candidateMachines lists every approved TalosMachine belonging to cluster,
+// candidateMachines lists every approved, not-being-deleted TalosMachine belonging to cluster
+// (deleteguard.ApprovedMachines),
 // excluding any carrying ichorv1alpha1.TalosMachineUpgradeHoldAnnotation
 // (the design's "per-machine hold annotation" -- held means permanently
 // excluded from this operation, not merely deferred), split by role and
@@ -310,16 +311,13 @@ func (r *TalosOperationReconciler) setPhase(ctx context.Context, op *ichorv1alph
 func (r *TalosOperationReconciler) candidateMachines(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster,
 ) (controlPlanes, workers []*ichorv1alpha1.TalosMachine, err error) {
-	var list ichorv1alpha1.TalosMachineList
-	if err := r.List(ctx, &list, client.InNamespace(cluster.Namespace)); err != nil {
+	list, err := deleteguard.ApprovedMachines(ctx, r.Client, cluster.Namespace, cluster.Name, deleteguard.MachineFilter{})
+	if err != nil {
 		return nil, nil, err
 	}
 
-	for i := range list.Items {
-		m := &list.Items[i]
-		if m.Spec.ClusterRef.Name != cluster.Name || !m.Spec.IsApproved() {
-			continue
-		}
+	for i := range list {
+		m := &list[i]
 		if m.Annotations[ichorv1alpha1.TalosMachineUpgradeHoldAnnotation] != "" {
 			continue
 		}

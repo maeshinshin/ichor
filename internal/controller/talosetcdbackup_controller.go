@@ -41,6 +41,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/etcdbackup"
+	"github.com/maeshinshin/ichor/pkg/deleteguard"
 )
 
 const (
@@ -335,14 +336,15 @@ func (r *TalosEtcdBackupReconciler) loadS3Config(
 // leader serves all writes, so reading a follower keeps load off it), healthy
 // leaders next. An unreachable or unhealthy member is skipped.
 //
-// It lists TalosMachines to choose a snapshot source, not to count control
-// planes, so it is on countplanesAllowedFuncs: nothing is gated on the number,
-// and a stale cached list only costs a failed dial before the next candidate.
+// It lists through deleteguard.ApprovedMachines, to choose a snapshot source,
+// not to count control planes: nothing is gated on the number, and a stale
+// cached list only costs a failed dial before the next candidate.
 func (r *TalosEtcdBackupReconciler) snapshotCandidates(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, bundle *secrets.Bundle,
 ) ([]*ichorv1alpha1.TalosMachine, error) {
-	var list ichorv1alpha1.TalosMachineList
-	if err := r.List(ctx, &list, client.InNamespace(cluster.Namespace)); err != nil {
+	list, err := deleteguard.ApprovedMachines(ctx, r.Client, cluster.Namespace, cluster.Name,
+		deleteguard.MachineFilter{Role: roleControlPlane})
+	if err != nil {
 		return nil, err
 	}
 
@@ -350,11 +352,8 @@ func (r *TalosEtcdBackupReconciler) snapshotCandidates(
 
 	var errs []error
 
-	for i := range list.Items {
-		m := &list.Items[i]
-		if m.Spec.ClusterRef.Name != cluster.Name || !m.Spec.IsApproved() || m.Spec.Role != roleControlPlane {
-			continue
-		}
+	for i := range list {
+		m := &list[i]
 
 		st, err := r.etcdStatus(ctx, cluster, m, bundle)
 		if err != nil {

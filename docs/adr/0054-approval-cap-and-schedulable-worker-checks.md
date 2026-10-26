@@ -102,3 +102,26 @@ lifts by itself once a sibling is deleted, un-approved, or `count` is raised.
 condition is derived from the very count being checked; the live count is the source.
 
 **A ValidatingAdmissionPolicy.** CEL cannot list sibling objects.
+
+## Addendum: one filter for "the machines that count"
+
+The control-plane count, the approval cap and several controllers each narrowed a `TalosMachineList` by hand
+(cluster, approval, role), and they disagreed about a machine that is being deleted: the count included it,
+`findEtcdSurvivor` skipped it. This is a policy matter, not an etcd one: members leave etcd one at a time, so a
+removal in progress cannot break quorum. What it broke was the declared count. With 4 control planes of which one
+is stuck mid-removal (finalizer still held), counting it let a second removal pass `4 -> 3` although only 3 were
+staying, so the effective count fell to 2 (test: "does not count another control plane that is already being
+deleted toward the declared count").
+
+`deleteguard.ApprovedMachines(ctx, reader, ns, cluster, MachineFilter{Role, IncludeDeleting, KeepDeleting})` is now
+the only function that lists TalosMachines and narrows them to approved ones of a cluster. By default a machine
+with a `DeletionTimestamp` is not counted. `KeepDeleting` names the machine whose own removal is being decided,
+which the quorum and count rules count "including the one being removed". `IncludeDeleting` is for a caller that
+must reach every node (the whole-cluster shutdown). `CountApprovedControlPlanes`, `CountApprovedWorkers`,
+`ControlPlaneOverCap`, `findEtcdSurvivor`, `snapshotCandidates`, `candidateMachines`, `othersDone`,
+`shutdownPlan` and the TalosStorage readiness check use it; `awaitPowerOn` reads each recorded machine by name.
+Only `machinesOfCluster` (it must enqueue unapproved and deleting machines too) still lists by hand, and is the one
+entry left in `countplanesAllowedFuncs` (ADR 0010's guard).
+
+Side effects of the default: a deleting machine is no longer picked as a snapshot source, a rolling-operation
+candidate, or waited for by the kube-proxy switch, and does not make a TalosStorage look unconverged.

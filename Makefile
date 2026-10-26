@@ -2,6 +2,11 @@
 IMG ?= controller:latest
 # Image URL for the ichor-ui image target (ADR 0020)
 IMG_UI ?= ichor-ui:latest
+# Image URL for the installer image target (ADR 0058)
+IMG_INSTALLER ?= ichor-installer:latest
+# VERSION is linked into every Ichor binary (internal/version); "dev" means unversioned.
+VERSION ?= dev
+LDFLAGS := -X github.com/maeshinshin/ichor/internal/version.Version=$(VERSION)
 # YEAR defines the year value used for substituting the YEAR placeholder in the boilerplate header.
 YEAR ?= $(shell date +%Y)
 
@@ -211,16 +216,16 @@ lint-config: golangci-lint ## Verify golangci-lint linter configuration
 
 .PHONY: build
 build: manifests generate fmt vet ## Build manager binary.
-	go build -o bin/manager cmd/main.go
+	go build -ldflags "$(LDFLAGS)" -o bin/manager cmd/main.go
 
 .PHONY: build-ichor
 build-ichor: fmt vet ## Build the ichor CLI binary (placeholder install manifest; see build-ichor-embed).
-	go build -o bin/ichor ./cmd/ichor
+	go build -ldflags "$(LDFLAGS)" -o bin/ichor ./cmd/ichor
 
 .PHONY: build-ichor-embed
 build-ichor-embed: build-installer ## Build the ichor CLI with Ichor's own install manifest embedded (what `ichor init` applies).
 	cp dist/install.yaml internal/installmanifest/install.yaml
-	go build -tags installembed -o bin/ichor ./cmd/ichor
+	go build -tags installembed -ldflags "$(LDFLAGS)" -o bin/ichor ./cmd/ichor
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
@@ -231,11 +236,16 @@ run: manifests generate fmt vet ## Run a controller from your host.
 # More info: https://docs.docker.com/develop/develop-images/build_enhancements/
 .PHONY: docker-build
 docker-build: ## Build docker image with the manager.
-	$(CONTAINER_TOOL) build -t ${IMG} .
+	$(CONTAINER_TOOL) build --build-arg VERSION=$(VERSION) -t ${IMG} .
 
 .PHONY: docker-push
 docker-push: ## Push docker image with the manager.
 	$(CONTAINER_TOOL) push ${IMG}
+
+.PHONY: docker-build-installer
+docker-build-installer: build-installer ## Build the installer image: the ichor binary with this tree's install manifest embedded (ADR 0058).
+	cp dist/install.yaml internal/installmanifest/install.yaml
+	$(CONTAINER_TOOL) build -f Dockerfile.installer --build-arg VERSION=$(VERSION) -t ${IMG_INSTALLER} .
 
 .PHONY: docker-build-ichor-ui
 docker-build-ichor-ui: ## Build docker image with ichor-ui, the real UI embedded (not the placeholder; ADR 0020).

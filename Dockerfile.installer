@@ -1,0 +1,27 @@
+# The installer Job's image (docs/adr/0058): the ichor binary with this version's install
+# manifest embedded (-tags installembed), run as `ichor installer run`. The manifest comes
+# from the build context -- `make docker-build-installer` writes it to
+# internal/installmanifest/install.yaml first -- so the image carries exactly the manifest
+# the same tree generated, and fetches nothing when it runs.
+FROM golang:1.26 AS builder
+ARG TARGETOS
+ARG TARGETARCH
+ARG VERSION=dev
+
+WORKDIR /workspace
+COPY go.mod go.mod
+COPY go.sum go.sum
+RUN go mod download
+
+COPY . .
+
+RUN test -f internal/installmanifest/install.yaml || { echo "run make docker-build-installer: install.yaml is not in the build context" >&2; exit 1; }
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -tags installembed -a \
+    -ldflags "-X github.com/maeshinshin/ichor/internal/version.Version=${VERSION}" -o ichor ./cmd/ichor
+
+FROM gcr.io/distroless/static:nonroot
+WORKDIR /
+COPY --from=builder /workspace/ichor .
+USER 65532:65532
+
+ENTRYPOINT ["/ichor"]

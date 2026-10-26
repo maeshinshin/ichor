@@ -166,6 +166,10 @@ docker-build-installer: build-installer ## Build the installer image: the ichor 
 	cp dist/install.yaml internal/installmanifest/install.yaml
 	$(CONTAINER_TOOL) build -f Dockerfile.installer --build-arg VERSION=$(VERSION) -t ${IMG_INSTALLER} .
 
+.PHONY: demo-images
+demo-images: manifests generate kustomize ui-build ## Build the three demo images with crane and push them to REGISTRY (VERSION=v0.0.8-abc1234 REGISTRY=localhost:5000); the tree stays unchanged.
+	VERSION="$(VERSION)" REGISTRY="$(REGISTRY)" KUSTOMIZE="$(KUSTOMIZE)" test/harness/ui-demo/images.sh
+
 .PHONY: docker-build-ichor-ui
 docker-build-ichor-ui: ## Build docker image with ichor-ui, the real UI embedded (not the placeholder).
 	$(CONTAINER_TOOL) build -f Dockerfile.ichor-ui -t ${IMG_UI} .

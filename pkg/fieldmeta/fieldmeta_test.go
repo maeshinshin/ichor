@@ -29,6 +29,8 @@ const (
 	pathMachineNetworkIfaces = "machine.network.interfaces" // uncovered on purpose: NIC changes stay reboot-required
 	pathMachineInstallDisk   = "machine.install.disk"
 	pathSysctlForward        = "SysctlConfig.params.net.ipv4.ip_forward"
+	pathKubeletMounts        = "machine.kubelet.extraMounts"
+	pathKubeProxyArgs        = "KubeProxyConfig.extraArgs"
 
 	pathVolumeConfigSelector = "VolumeConfig.provisioning.diskSelector.match"
 	// Uncovered on purpose: trim is read by its own scheduled controller,
@@ -226,18 +228,21 @@ func TestAssess_AggregatesAcrossMultiplePaths(t *testing.T) {
 // path applies without a reboot, and its uncovered sibling still needs one.
 func TestAssess_NoRebootRules(t *testing.T) {
 	cases := []struct{ name, safe, sibling string }{
-		{"registry mirrors", "machine.registries.mirrors.docker.io.endpoints", "machine.registries.config.docker.io.auth.password"},
+		{
+			"registry mirrors", "machine.registries.mirrors.docker.io.endpoints",
+			"machine.registries.config.docker.io.auth.password",
+		},
 		{"KubeNodeConfig labels", "KubeNodeConfig.labels.x", "KubeNodeConfig.nodeIP.validSubnets"},
 		{"KubeNodeConfig annotations", "KubeNodeConfig.annotations.x", "KubeNodeConfig.nodeIP.validSubnets"},
 		{"KubeNodeConfig taints", "KubeNodeConfig.taints.node-role.kubernetes.io/control-plane", "KubeNodeConfig.nodeIP"},
-		{"machine.nodeLabels", "machine.nodeLabels.x", "machine.kubelet.extraMounts"},
-		{"machine.nodeAnnotations", "machine.nodeAnnotations.x", "machine.kubelet.extraMounts"},
-		{"machine.nodeTaints", "machine.nodeTaints.x", "machine.kubelet.extraMounts"},
+		{"machine.nodeLabels", "machine.nodeLabels.x", pathKubeletMounts},
+		{"machine.nodeAnnotations", "machine.nodeAnnotations.x", pathKubeletMounts},
+		{"machine.nodeTaints", "machine.nodeTaints.x", pathKubeletMounts},
 		{"cluster.allowSchedulingOnControlPlanes", "cluster.allowSchedulingOnControlPlanes", pathClusterProxyDisabled},
 		{"cluster.allowSchedulingOnMasters", "cluster.allowSchedulingOnMasters", pathClusterProxyDisabled},
-		{"KubeAPIServerConfig args", "KubeAPIServerConfig.extraArgs.x", "KubeProxyConfig.extraArgs"},
-		{"KubeControllerManagerConfig args", "KubeControllerManagerConfig.extraArgs.x", "KubeProxyConfig.extraArgs"},
-		{"KubeSchedulerConfig args", "KubeSchedulerConfig.extraArgs.x", "KubeProxyConfig.extraArgs"},
+		{"KubeAPIServerConfig args", "KubeAPIServerConfig.extraArgs.x", pathKubeProxyArgs},
+		{"KubeControllerManagerConfig args", "KubeControllerManagerConfig.extraArgs.x", pathKubeProxyArgs},
+		{"KubeSchedulerConfig args", "KubeSchedulerConfig.extraArgs.x", pathKubeProxyArgs},
 	}
 
 	for _, tc := range cases {

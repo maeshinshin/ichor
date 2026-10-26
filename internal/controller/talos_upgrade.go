@@ -27,6 +27,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
@@ -75,6 +76,10 @@ const (
 	// an unchanged Version()).
 	conditionTalosUpgrade = "TalosUpgrade"
 )
+
+// upgradeCallTimeout bounds the Upgrade RPC itself, which blocks while the node pulls
+// and installs the installer image.
+const upgradeCallTimeout = 10 * time.Minute
 
 const (
 	reasonUpgradeRequested = "UpgradeRequested"
@@ -229,7 +234,13 @@ func (a *talosUpgradeAdvancer) beginUpgrade(
 		return false, fmt.Errorf("reading %q's boot ID before upgrading: %w", m.Name, err)
 	}
 
-	if err := talos.Upgrade(dialCtx, installerImage(cluster)); err != nil {
+	// The Upgrade RPC returns only after the node has pulled the installer image and
+	// written it, which takes minutes -- far past the 15s dial bound dialCtx carries
+	// (observed on a real node: DeadlineExceeded, operation paused, node untouched).
+	upgradeCtx, cancelUpgrade := context.WithTimeout(ctx, upgradeCallTimeout)
+	defer cancelUpgrade()
+
+	if err := talos.Upgrade(upgradeCtx, installerImage(cluster)); err != nil {
 		return false, fmt.Errorf("upgrade API call to %q failed: %w", m.Name, err)
 	}
 

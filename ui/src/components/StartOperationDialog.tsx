@@ -17,13 +17,13 @@ import { wireKindOf } from '@/components/opkind'
 import { OperationEffect, type PlanOperationResponse } from '@/gen/ichor/v1alpha1/operation_pb'
 import { operationClient } from '@/lib/connect'
 import { describeError } from '@/lib/errors'
-import { confirmMatches, planCounts, planSteps, targetError, type OpKind } from '@/lib/operations'
+import { confirmMatches, kindNeedsTarget, kindNeedsTypedName, planCounts, planSteps, targetError, type OpKind } from '@/lib/operations'
 import { useT } from '@/lib/useT'
 import { navigate, objectRefPath } from '@/router'
 
 type ErrorShape = { title: string; detail: string }
 
-const startedByDefault: Record<OpKind, boolean> = { talos: true, kubernetes: true, ichor: true, cni: true, shutdown: false }
+const startedByDefault: Record<OpKind, boolean> = { talos: true, kubernetes: true, ichor: true, cni: true, shutdown: false, 'ca-rotation': false }
 
 // StartOperationDialog is the only way the UI starts an upgrade or a shutdown.
 // It never writes on the first click: "Review" asks the server for the plan
@@ -46,10 +46,11 @@ export function StartOperationDialog({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<ErrorShape | null>(null)
 
-  const needsTarget = kind !== 'shutdown'
+  const needsTarget = kindNeedsTarget(kind)
+  const needsName = kindNeedsTypedName(kind)
   const targetProblem = needsTarget ? targetError(kind, target) : null
   const startable =
-    plan !== null && plan.blocked === '' && (kind !== 'shutdown' || confirmMatches(typed, cluster.name)) && !busy
+    plan !== null && plan.blocked === '' && (!needsName || confirmMatches(typed, cluster.name)) && !busy
 
   function reset(next: boolean) {
     setOpen(next)
@@ -131,9 +132,9 @@ export function StartOperationDialog({
           </div>
         )}
 
-        {plan && <PlanView kind={kind} plan={plan} />}
+        {plan && <PlanView kind={kind} plan={plan} clusterName={cluster.name} />}
 
-        {plan && kind === 'shutdown' && plan.blocked === '' && (
+        {plan && needsName && plan.blocked === '' && (
           <div class="space-y-2">
             <Label htmlFor="op-confirm-name">{t('ops.dialog.typeName', { name: cluster.name })}</Label>
             <Input id="op-confirm-name" value={typed} onInput={(e) => setTyped((e.currentTarget as HTMLInputElement).value)} />
@@ -163,7 +164,7 @@ export function StartOperationDialog({
 
 // PlanView says what the server's plan will do, in the words of the screen's
 // language. The server's own text (a blocking reason) is shown as received.
-function PlanView({ kind, plan }: { kind: OpKind; plan: PlanOperationResponse }) {
+function PlanView({ kind, plan, clusterName }: { kind: OpKind; plan: PlanOperationResponse; clusterName: string }) {
   const t = useT()
   const counts = planCounts(plan.machines)
   const steps = planSteps(plan.machines)
@@ -174,11 +175,16 @@ function PlanView({ kind, plan }: { kind: OpKind; plan: PlanOperationResponse })
       <p class="font-medium">{t(`ops.plan.${kind}`, { from: plan.current, to })}</p>
       {plan.specChanges && <p class="text-muted-foreground">{t('ops.plan.specChanges', { to })}</p>}
       <p>{effectText(t, plan.effect)}</p>
+      {plan.stages.length > 0 && <p>{t('ops.plan.stages', { stages: plan.stages.join(', ') })}</p>}
       {plan.machines.length > 0 ? (
         <div>
           <p>{t('ops.plan.counts', { total: plan.machines.length, ...counts })}</p>
           <p class="text-muted-foreground">
-            {kind === 'shutdown' ? t('ops.plan.orderShutdown') : t('ops.plan.orderRollout', { n: Math.max(plan.maxUnavailable, 1) })}
+            {kind === 'shutdown'
+              ? t('ops.plan.orderShutdown')
+              : kind === 'ca-rotation'
+                ? t('ops.plan.orderCARotation')
+                : t('ops.plan.orderRollout', { n: Math.max(plan.maxUnavailable, 1) })}
           </p>
           <ol class="mt-1 list-inside list-decimal">
             {steps.map((s, i) => (
@@ -190,6 +196,12 @@ function PlanView({ kind, plan }: { kind: OpKind; plan: PlanOperationResponse })
         </div>
       ) : (
         plan.effect !== OperationEffect.NONE && <p>{t('ops.plan.noMachines')}</p>
+      )}
+      {plan.replacesSecretsBundle && (
+        <Alert>
+          <AlertTitle>{t('ops.plan.bundleStaleTitle')}</AlertTitle>
+          <AlertDescription>{t('ops.plan.bundleStale', { name: clusterName })}</AlertDescription>
+        </Alert>
       )}
       {plan.held.length > 0 && <p>{t('ops.plan.held', { names: plan.held.join(', ') })}</p>}
       {kind !== 'shutdown' && <p class="text-muted-foreground">{t('ops.plan.pauseOnFailure')}</p>}
@@ -215,6 +227,8 @@ function effectText(t: ReturnType<typeof useT>, effect: number): string {
       return t('ops.plan.effectRestart')
     case OperationEffect.STOP:
       return t('ops.plan.effectStop')
+    case OperationEffect.CA_ROTATION:
+      return t('ops.plan.effectCARotation')
     default:
       return t('ops.plan.effectNone')
   }

@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
+  caStageProgress,
   confirmMatches,
+  kindNeedsTarget,
+  kindNeedsTypedName,
   operationState,
   pauseAction,
   planCounts,
@@ -80,4 +83,22 @@ test('the shutdown gate needs the exact cluster name', () => {
   assert.equal(confirmMatches(' prod ', 'prod'), true)
   assert.equal(confirmMatches('pro', 'prod'), false)
   assert.equal(confirmMatches('', ''), false)
+})
+
+test('a CA rotation takes no target and needs the cluster name typed, as a shutdown does', () => {
+  assert.equal(kindNeedsTarget('ca-rotation'), false)
+  assert.equal(kindNeedsTarget('shutdown'), false)
+  assert.equal(kindNeedsTarget('talos'), true)
+  assert.equal(targetError('ca-rotation', ''), null)
+  assert.equal(kindNeedsTypedName('ca-rotation'), true)
+  assert.equal(kindNeedsTypedName('shutdown'), true)
+  assert.equal(kindNeedsTypedName('talos'), false)
+})
+
+test('the CA rotation stage is a position in the stages; unknown or empty is not a position', () => {
+  assert.deepEqual(caStageProgress('Accepting'), { index: 1, total: 5 })
+  assert.deepEqual(caStageProgress('Dropping'), { index: 3, total: 5 })
+  assert.deepEqual(caStageProgress('Done'), { index: 5, total: 5 })
+  assert.equal(caStageProgress(''), null)
+  assert.equal(caStageProgress('Nonsense'), null)
 })

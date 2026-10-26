@@ -22,20 +22,12 @@ export class LogBuffer<T> {
   }
 
   push(batch: T[]): void {
-    // Only the newest `capacity` of a huge batch can survive; a new array
-    // each time so a state setter sees the change.
-    const kept = batch.length > this.capacity ? batch.slice(-this.capacity) : batch
-    this.nextId += batch.length - kept.length
-    const added = kept.map((item) => ({ id: this.nextId++, item }))
+    const added = batch.map((item) => ({ id: this.nextId++, item }))
     this.items = this.items.concat(added).slice(-this.capacity)
   }
 
   entries(): Entry<T>[] {
     return this.items
-  }
-
-  snapshot(): T[] {
-    return this.items.map((e) => e.item)
   }
 
   clear(): void {

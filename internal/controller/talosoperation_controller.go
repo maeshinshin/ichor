@@ -24,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -96,6 +97,15 @@ type TalosOperationReconciler struct {
 	// panicking, since each upgrade kind's own executor is later,
 	// separate work.
 	Advance AdvanceMachineFunc
+
+	// TalosClient, ControllerNamespace and NodeName serve the shutdown kind
+	// alone (shutdown.go). TalosClient opens the Talos API of one
+	// machine; ControllerNamespace is where the secrets bundle lives; NodeName
+	// is the Kubernetes node this controller runs on ("" when it runs outside
+	// the cluster it manages), so its own node can be stopped last.
+	TalosClient         func(ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, bundle *secrets.Bundle) (TalosClient, error)
+	ControllerNamespace string
+	NodeName            string
 }
 
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosoperations,verbs=get;list;watch;update;patch

@@ -86,13 +86,16 @@ spec:
                 description: |-
                   kind names which upgrade this is: talos (spec.talosVersion/schematic),
                   kubernetes (spec.kubernetesVersion), or ichor (the controller/CRDs/UI
-                  install), or cni (a spec.cni.kubeProxy switch). This CRD and its controller only store and report it --
-                  each kind's own execution is a separate unit's work.
+                  install), cni (a spec.cni.kubeProxy switch), or shutdown (a
+                  planned stop of the whole cluster). This CRD and its controller only
+                  store and report it -- each kind's own execution is a separate unit's work.
+                  shutdown is the exception: it runs its own state machine.
                 enum:
                 - talos
                 - kubernetes
                 - ichor
                 - cni
+                - shutdown
                 type: string
               maxUnavailable:
                 default: 1
@@ -200,6 +203,13 @@ spec:
                     TalosOperationMachineStatus is one machine's progress within a
                     TalosOperation.
                   properties:
+                    bootID:
+                      description: |-
+                        bootID is the machine's boot ID recorded just before it was asked to
+                        stop (shutdown kind only; empty for the other kinds, and for a machine
+                        that was already unreachable). A different boot ID later is how the
+                        operation knows the machine has been powered back on.
+                      type: string
                     name:
                       description: name is the TalosMachine's name.
                       type: string
@@ -234,6 +244,7 @@ spec:
                 - Pending
                 - InProgress
                 - Paused
+                - ShutDown
                 - Completed
                 type: string
             type: object

@@ -2,10 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { Code, ConnectError } from '@connectrpc/connect'
 import { describeError } from './errors.ts'
-import { setLang } from './lang.ts'
 
-// Node reports the machine's own locale as navigator.language.
-setLang('en')
 
 test('an apiserver validation message (InvalidArgument) is shown verbatim under a headline', () => {
   const msg = 'spec.target: exactly one of role, labelSelector, machineRef must be set'

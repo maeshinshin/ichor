@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { BreakGlassDialog, type BreakGlassRun } from '@/components/BreakGlassDialog'
+import { EmptyNote, PageSkeleton } from '@/components/PageStates'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { PullRequestNotice } from '@/components/PullRequestNotice'
 import { ConfigLayer } from '@/gen/ichor/v1alpha1/node_pb'
@@ -63,10 +64,10 @@ export function PatchList() {
   }, [])
 
   if (error) return <ErrorAlert {...error} />
-  if (!patches) return <p class="mt-10 text-center text-sm text-muted-foreground">{t('patches.loading')}</p>
+  if (!patches) return <PageSkeleton label={t('patches.loading')} />
 
   return (
-    <Card className="mt-6">
+    <Card>
       <CardHeader className="flex flex-wrap items-center justify-between gap-2">
         <CardTitle>{t('patches.title')}</CardTitle>
         <Button asChild size="sm">
@@ -76,7 +77,7 @@ export function PatchList() {
       <CardContent>
         <p class="mb-4 text-sm text-muted-foreground">{t('patches.intro')}</p>
         {patches.length === 0 ? (
-          <p class="text-sm text-muted-foreground">{t('patches.empty')}</p>
+          <EmptyNote>{t('patches.empty')}</EmptyNote>
         ) : (
           <Table>
             <TableHeader>

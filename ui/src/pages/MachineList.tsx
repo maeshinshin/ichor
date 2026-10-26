@@ -17,6 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { BreakGlassDialog, type BreakGlassRun } from '@/components/BreakGlassDialog'
 import { StatusBadge } from '@/components/ConditionList'
+import { EmptyNote, PageSkeleton } from '@/components/PageStates'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { PullRequestNotice } from '@/components/PullRequestNotice'
 import type { NodeDetail } from '@/gen/ichor/v1alpha1/node_pb'
@@ -73,7 +74,7 @@ export function MachineList() {
   }
 
   if (error) return <ErrorAlert {...error} />
-  if (!machines) return <p class="mt-10 text-center text-sm text-muted-foreground">{t('machines.loading')}</p>
+  if (!machines) return <PageSkeleton label={t('machines.loading')} />
 
   // approval_state is a tri-state (ADR 0018's amendment): a rejected
   // machine is its own bucket, not "pending" - that's the whole point of
@@ -84,7 +85,7 @@ export function MachineList() {
   const approved = machines.filter((m) => m.approvalState === MachineApprovalState.APPROVED)
 
   return (
-    <div class="mt-6 space-y-4">
+    <div class="space-y-6">
       {pullRequest && <PullRequestNotice url={pullRequest.url} breakGlass={pullRequest.run} onBreakGlassDone={reload} />}
       <Card>
         <CardHeader>
@@ -92,7 +93,7 @@ export function MachineList() {
         </CardHeader>
         <CardContent>
           {pending.length === 0 ? (
-            <p class="text-sm text-muted-foreground">{t('machines.pendingEmpty')}</p>
+            <EmptyNote>{t('machines.pendingEmpty')}</EmptyNote>
           ) : (
             <Table>
               <TableHeader>
@@ -129,7 +130,7 @@ export function MachineList() {
         </CardHeader>
         <CardContent>
           {rejected.length === 0 ? (
-            <p class="text-sm text-muted-foreground">{t('machines.rejectedEmpty')}</p>
+            <EmptyNote>{t('machines.rejectedEmpty')}</EmptyNote>
           ) : (
             <Table>
               <TableHeader>
@@ -174,7 +175,7 @@ export function MachineList() {
         </CardHeader>
         <CardContent>
           {approved.length === 0 ? (
-            <p class="text-sm text-muted-foreground">{t('machines.approvedEmpty')}</p>
+            <EmptyNote>{t('machines.approvedEmpty')}</EmptyNote>
           ) : (
             <Table>
               <TableHeader>

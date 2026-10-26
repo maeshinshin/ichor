@@ -1,7 +1,7 @@
 # 0054. Approving control planes is capped at count+1, and schedulable false needs a worker
 
 Status: Accepted · Date: 2026-10-26 · Design section: Validation, Nodes
-Decided: The TalosMachine webhook refuses an approval (update to `approved`, or create already `approved`) that would leave more than `spec.controlPlane.count`+1 approved control planes, counted by `deleteguard.CountApprovedControlPlanes`; the TalosCluster webhook refuses `schedulable` turning `"false"` with no approved worker, and the TalosMachine webhook refuses an approved worker leaving (delete, un-approve, re-role, move) when that would leave none; both webhooks now match CREATE/UPDATE as needed, not DELETE only; the race admission cannot close is left to a controller-side check, reported as a follow-up
+Decided: The TalosMachine webhook refuses an approval (update to `approved`, or create already `approved`) that would leave more than `spec.controlPlane.count`+1 approved control planes, counted by `deleteguard.CountApprovedControlPlanes`; the TalosCluster webhook refuses `schedulable` turning `"false"` with no approved worker, and the TalosMachine webhook refuses an approved worker leaving (delete, un-approve, re-role, move) when that would leave none; both webhooks now match CREATE/UPDATE as needed, not DELETE only; the race admission cannot close is closed by a controller-side hold of the newest surplus approvals (`ControlPlaneOverCap`)
 
 ## Context
 
@@ -53,12 +53,38 @@ is the same TOCTOU as ADR 0010's delete guard, and a lock does not close it for 
 have to span the apiserver commit. The webhook stays as the synchronous, early refusal that is right in the
 single-writer case (a person at a terminal, one UI click) and costs one List.
 
-The real fix is ordering at the actor that changes the world. For the cap that is the controller: before it renders
-or applies config for an approved control plane it should recount under the cluster lock and, if the approved total
-exceeds `count`+1, hold the surplus (deterministically, newest approval first) with a Ready=False reason instead of
-joining it to etcd. Not done here: it is a change to `internal/controller`, outside this unit's scope, and is
-reported as a follow-up. The worker rule needs no controller twin: a transient "no workers" is a scheduling
-problem that the next approval resolves, not a safety loss like etcd membership.
+The real fix is ordering at the actor that changes the world, which for the cap is the controller. It is built
+(see the next section); the worker rule needs no controller twin: a transient "no workers" is a scheduling problem
+that the next approval resolves, not a safety loss like etcd membership.
+
+## The controller-side hold
+
+`TalosMachineReconciler.Reconcile` recounts approved control planes before it loads the bundle, renders or applies
+anything. If the total exceeds `spec.controlPlane.count`+1, the machines beyond the first count+1 are held:
+`Ready=False`, reason `ControlPlaneOverCap`, nothing rendered, no dry run, no apply, and a 15 s requeue so the hold
+lifts by itself once a sibling is deleted, un-approved, or `count` is raised.
+
+- **Which is newer.** Approved control planes are sorted by `spec.approvalDecision.at`, ties broken by name
+  (ascending), and the tail past count+1 is held. A machine with no recorded decision time (a GitOps apply that
+  created it already approved) falls back to its `creationTimestamp`. The sort and the cut live in
+  `deleteguard.ControlPlaneOverCap`, which shares one listing (`approvedMachines`) with
+  `CountApprovedControlPlanes`; so the controller gained no `TalosMachineList` declaration, the guard allow-list is
+  unchanged, and the decision is made in the one package that already owns the count. Read through `APIReader`.
+- **Already an etcd member.** The hold only stops the controller from touching the node. It never removes the
+  member, resets the node, or changes `spec`: the controller does nothing destructive without a user action. A held
+  machine that had already joined stays a member, its config stays as last applied, and `Ready` says why. The
+  operator resolves it by deleting a surplus control plane (the ordinary guarded removal path, which the hold does
+  not block) or raising `count`. A held machine that is the only one the user wants removed can be removed the same
+  way; no special case.
+- **No lock.** The recount does not take the cluster lock. `acquireDisruptiveLock` refuses while the cluster is
+  `Transitioning`, and count+1 *is* the Transitioning state, so taking it here would block exactly the legitimate
+  replacement; and a hold is not a disruptive operation (it changes nothing on any node). The lock would also not
+  close the race: two approvals commit independently of any controller lock, and the recount sees both once they
+  are committed. Idempotence is what makes it safe: every reconcile recomputes the same ordered cut from live
+  state, so two controllers or two passes agree on the same held set.
+- **Residual window.** A node approved just before the surplus approval is visible can already have been
+  configured; that is the case above (it is older, so it is not the one held). The hold only prevents the newest
+  surplus from joining, which is the point.
 
 ## Consequences
 

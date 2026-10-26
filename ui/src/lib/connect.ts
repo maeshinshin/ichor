@@ -7,6 +7,7 @@ import { NodeService } from '@/gen/ichor/v1alpha1/node_pb'
 import { PatchService } from '@/gen/ichor/v1alpha1/patch_pb'
 import { GitOpsService } from '@/gen/ichor/v1alpha1/gitops_pb'
 import { OperationService } from '@/gen/ichor/v1alpha1/operation_pb'
+import { DiagnosticsService } from '@/gen/ichor/v1alpha1/diagnostics_pb'
 
 // "the browser talks only to the backend" (architecture.md, "CLI and UI"):
 // the transport's baseUrl is this page's own origin, never a third-party
@@ -38,3 +39,4 @@ export const nodeClient = createClient(NodeService, transport)
 export const patchClient = createClient(PatchService, transport)
 export const gitOpsClient = createClient(GitOpsService, transport)
 export const operationClient = createClient(OperationService, transport)
+export const diagnosticsClient = createClient(DiagnosticsService, transport)

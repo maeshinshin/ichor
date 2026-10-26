@@ -9,6 +9,7 @@ import { Field, Fields, PageHeader } from '@/components/PageHeader'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
 import { StatusText } from '@/components/Status'
 import { Section, SectionLayout, type SectionLink } from '@/components/SectionNav'
+import { NodeActions } from '@/components/NodeActions'
 import { NodeLogs } from '@/components/NodeLogs'
 import { TalosDetails } from '@/components/TalosDetails'
 import { TalosRuntime } from '@/components/TalosRuntime'
@@ -146,11 +147,14 @@ export function NodeDetail({ namespace, name }: { namespace: string; name: strin
           { label: t('node.k8sKubelet'), value: node.kubernetes?.kubeletVersion },
         ]}
         actions={
-          machine?.cluster && (
-            <Button asChild variant="outline" size="sm">
-              <Link to={objectRefPath('/clusters', machine.cluster)}>{t('node.openCluster')}</Link>
-            </Button>
-          )
+          <>
+            {machine?.cluster && (
+              <Button asChild variant="outline" size="sm">
+                <Link to={objectRefPath('/clusters', machine.cluster)}>{t('node.openCluster')}</Link>
+              </Button>
+            )}
+            {machine && <NodeActions machine={{ namespace, name }} controlPlane={machine.role === MachineRole.CONTROL_PLANE} />}
+          </>
         }
       />
       {pullRequest && <PullRequestNotice url={pullRequest.url} breakGlass={pullRequest.run} onBreakGlassDone={loadMachine} />}

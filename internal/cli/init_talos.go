@@ -24,6 +24,11 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	machineapi "github.com/siderolabs/talos/pkg/machinery/api/machine"
 	"github.com/siderolabs/talos/pkg/machinery/client"
@@ -95,9 +100,18 @@ const (
 	defaultBootstrapInterval = 5 * time.Second
 )
 
-// bootstrapWhenUp calls admin.Bootstrap, retrying while the node answers Unavailable (it has
-// not come back up on the new configuration yet) for up to wait. Any other error returns at
-// once: only a node that is not there yet is worth waiting for.
+// notUpYet reports the two answers of a node that is still coming up: Unavailable (it serves
+// its maintenance certificate, or nothing, until it has installed and rebooted) and
+// FailedPrecondition ("bootstrap is not available yet": etcd's service has not started).
+func notUpYet(err error) bool {
+	c := status.Code(err)
+
+	return c == codes.Unavailable || c == codes.FailedPrecondition
+}
+
+// bootstrapWhenUp calls admin.Bootstrap, retrying while the node is not up yet for up to
+// wait. Any other error returns at once: only a node that is not there yet is worth waiting
+// for.
 func bootstrapWhenUp(ctx context.Context, admin bootstrapClient, wait, interval time.Duration, progress io.Writer) error {
 	if wait <= 0 {
 		wait = defaultBootstrapWait
@@ -111,11 +125,44 @@ func bootstrapWhenUp(ctx context.Context, admin bootstrapClient, wait, interval 
 
 	for {
 		err := admin.Bootstrap(ctx)
-		if err == nil || status.Code(err) != codes.Unavailable || !time.Now().Add(interval).Before(deadline) {
+		if err == nil || !notUpYet(err) || !time.Now().Add(interval).Before(deadline) {
 			return err
 		}
 
 		_, _ = fmt.Fprintf(progress, "init: waiting for the node to come up on its new configuration: %v\n", err)
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(interval):
+		}
+	}
+}
+
+// waitForAPIServer polls until the new cluster's API server answers (any answer, even
+// NotFound, means it is up) for up to wait, so the first write is not the one that finds out.
+func waitForAPIServer(ctx context.Context, c ctrlclient.Client, wait, interval time.Duration, progress io.Writer) error {
+	if wait <= 0 {
+		wait = defaultBootstrapWait
+	}
+
+	if interval <= 0 {
+		interval = defaultBootstrapInterval
+	}
+
+	deadline := time.Now().Add(wait)
+
+	for {
+		err := c.Get(ctx, types.NamespacedName{Name: metav1.NamespaceSystem}, &corev1.Namespace{})
+		if err == nil || apierrors.IsNotFound(err) {
+			return nil
+		}
+
+		if !time.Now().Add(interval).Before(deadline) {
+			return fmt.Errorf("init: the new cluster's API server did not come up: %w", err)
+		}
+
+		_, _ = fmt.Fprintf(progress, "init: waiting for the API server: %v\n", err)
 
 		select {
 		case <-ctx.Done():

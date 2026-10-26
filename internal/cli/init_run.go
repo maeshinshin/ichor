@@ -228,15 +228,21 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) error {
 		return fmt.Errorf("init: preparing the secrets bundle Secret: %w", err)
 	}
 
-	if err := k8sClient.Create(ctx, bundleSecret); err != nil {
-		return fmt.Errorf("init: creating the secrets bundle Secret: %w", err)
+	// The API server comes up some time after etcd is bootstrapped.
+	if err := waitForAPIServer(ctx, k8sClient, deps.BootstrapWait, deps.BootstrapInterval, deps.Stderr); err != nil {
+		return err
 	}
 
 	// Ichor itself, applied through the API server now that kubeconfig is
 	// in hand -- not inlined into the node's boot config: its
-	// CRDs must exist before step 5 can create any of them.
+	// CRDs must exist before step 5 can create any of them, and its
+	// namespace before the bundle Secret can.
 	if err := applyIchorManifest(ctx, k8sClient, deps.IchorManifest, deps.Stderr); err != nil {
 		return err
+	}
+
+	if err := k8sClient.Create(ctx, bundleSecret); err != nil {
+		return fmt.Errorf("init: creating the secrets bundle Secret: %w", err)
 	}
 
 	if err := createIchorInstallation(ctx, k8sClient, deps.Stderr); err != nil {

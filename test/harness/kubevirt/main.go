@@ -270,11 +270,7 @@ func bootToMaintenance() (string, error) {
 		if err != nil {
 			return "", false
 		}
-		objs, err := talosctl.DecodeAll(out)
-		if err != nil || len(objs) != 1 {
-			return "", false
-		}
-		return ip, talosctl.SpecField(objs[0], "stage") == stageMaintenance
+		return ip, machineInMaintenance(out)
 	}); err != nil {
 		return "", err
 	}
@@ -347,11 +343,7 @@ func installAndBootstrap(ip string) ([]byte, error) {
 			return "", false
 		}
 		lastStatus = out
-		objs, err := talosctl.DecodeAll(out)
-		if err != nil || len(objs) != 1 {
-			return "", false
-		}
-		return "", talosctl.SpecField(objs[0], "stage") == stageRunning && talosctl.MachineStatusReady(objs[0])
+		return "", machineRunning(out, true)
 	}); err != nil {
 		return nil, fmt.Errorf("%w (last machinestatus: %s)", err, lastStatus)
 	}

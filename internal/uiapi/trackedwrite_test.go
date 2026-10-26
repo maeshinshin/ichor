@@ -45,6 +45,7 @@ const (
 	trackedArgoNS     = "argocd"
 	trackedEndpoint   = "10.0.0.10:50000"
 	argoTrackingAnnot = "argocd.argoproj.io/tracking-id"
+	argoTrackedBy     = "app:x"
 )
 
 func trackedScheme(t *testing.T) *runtime.Scheme {
@@ -114,7 +115,7 @@ func approveReq() *connect.Request[pb.ApproveMachineRequest] {
 
 func TestApproveRefusedWhenArgoCDTracks(t *testing.T) {
 	k8s := fake.NewClientBuilder().WithScheme(trackedScheme(t)).
-		WithObjects(trackedMachine(map[string]string{argoTrackingAnnot: "app:x"}), argoCM()).Build()
+		WithObjects(trackedMachine(map[string]string{argoTrackingAnnot: argoTrackedBy}), argoCM()).Build()
 
 	_, err := (&Server{Client: k8s}).ApproveMachine(context.Background(), approveReq())
 	wantRefused(t, err, "Argo CD")
@@ -131,7 +132,7 @@ func TestApproveRefusedWhenArgoCDTracks(t *testing.T) {
 
 func TestRejectRefusedWhenArgoCDTracks(t *testing.T) {
 	k8s := fake.NewClientBuilder().WithScheme(trackedScheme(t)).
-		WithObjects(trackedMachine(map[string]string{argoTrackingAnnot: "app:x"}), argoCM()).Build()
+		WithObjects(trackedMachine(map[string]string{argoTrackingAnnot: argoTrackedBy}), argoCM()).Build()
 
 	_, err := (&Server{Client: k8s}).RejectMachine(context.Background(),
 		connect.NewRequest(&pb.RejectMachineRequest{Machine: objectRef(trackedTestNS, "m1")}))

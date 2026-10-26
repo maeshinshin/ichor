@@ -86,12 +86,13 @@ spec:
                 description: |-
                   kind names which upgrade this is: talos (spec.talosVersion/schematic),
                   kubernetes (spec.kubernetesVersion), or ichor (the controller/CRDs/UI
-                  install). This CRD and its controller only store and report it --
+                  install), or cni (a spec.cni.kubeProxy switch). This CRD and its controller only store and report it --
                   each kind's own execution is a separate unit's work.
                 enum:
                 - talos
                 - kubernetes
                 - ichor
+                - cni
                 type: string
               maxUnavailable:
                 default: 1

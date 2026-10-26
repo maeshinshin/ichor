@@ -203,6 +203,12 @@ func (r *TalosMachineReconciler) acquireDisruptiveLock(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
 	identity string, completesTransition bool,
 ) (*clusterlock.Lock, error) {
+	// A cluster being shut down accepts no other disruptive work, not even the
+	// removal that would complete a replacement.
+	if err := shutdownBlocker(ctx, readerOrClient(r.APIReader, r.Client), cluster.Namespace, cluster.Name, nil); err != nil {
+		return nil, err
+	}
+
 	if !completesTransition {
 		controlPlanes, err := r.countApprovedControlPlanes(ctx, m)
 		if err != nil {
@@ -288,6 +294,10 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 	// it here would make that replacement impossible to ever finish.
 	lock, err := r.acquireDisruptiveLock(ctx, &cluster, m, controllerIdentity, true)
 	if err != nil {
+		if shuttingDown, ok := errors.AsType[*shuttingDownError](err); ok {
+			return r.removalCondition(ctx, m, metav1.ConditionFalse, reasonClusterShuttingDown,
+				shuttingDown.Error()+"; removal deferred")
+		}
 		if held, ok := errors.AsType[*clusterlock.HeldError](err); ok {
 			return r.removalCondition(ctx, m, metav1.ConditionFalse, reasonClusterLockHeld,
 				fmt.Sprintf("cluster lock held by %q; removal deferred", held.Holder))

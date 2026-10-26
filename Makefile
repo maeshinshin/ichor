@@ -386,7 +386,7 @@ ui-lint: ui-install ## Lint the UI (eslint).
 	cd ui && npm run lint
 
 .PHONY: ui-ci
-ui-ci: ui-typecheck ui-lint ui-build ## Install, type-check, lint and build the UI, in order.
+ui-ci: ui-typecheck ui-lint ui-test ui-build ## Install, type-check, lint, test and build the UI, in order.
 
 .PHONY: build-ichor-ui
 build-ichor-ui: ui-build ## Build the ichor-ui binary with the real UI embedded.

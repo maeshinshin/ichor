@@ -1144,3 +1144,65 @@ func specPropertyKeys(schema map[string]any) []string {
 	slices.Sort(keys)
 	return keys
 }
+
+// installerConfigRolePath is config/rbac/ichor-installer/role.yaml (hand-written, ADR 0058):
+// the installer Job's ClusterRole and namespaced Role, whose chart copy
+// templates/rbac/ichor-installer.yaml checkInstallerRBAC compares as rule sets.
+const installerConfigRolePath = "../../config/rbac/ichor-installer/role.yaml"
+
+const adr0058Doc = "docs/adr/0058-ichor-installation-and-self-upgrade.md"
+
+// TestInstallerRBAC pins the installer Job's identity (ADR 0058): absent unless
+// installer.enabled (a chart-installed Ichor is normally Argo CD's, and nothing should hold
+// the cluster-role escalation the installer needs), present and equal to config/rbac/ichor-
+// installer when enabled, and never able to touch a Secret.
+func TestInstallerRBAC(t *testing.T) {
+	t.Run("absent by default", func(t *testing.T) {
+		docs := renderChartWithValues(t, "ichor")
+		if find(docs, kindServiceAccount, "ichor-installer") != nil || find(docs, kindClusterRole, "ichor-installer-role") != nil {
+			t.Errorf("the installer's ServiceAccount/ClusterRole render by default; they must need installer.enabled=true; see %s", adr0058Doc)
+		}
+	})
+
+	t.Run("enabled matches config", func(t *testing.T) {
+		docs := renderChartWithValues(t, "ichor", "installer.enabled=true")
+		configDocs := loadYAMLDocs(t, installerConfigRolePath)
+
+		if find(docs, kindServiceAccount, "ichor-installer") == nil {
+			t.Fatalf("installer.enabled=true renders no ServiceAccount ichor-installer, the name the controller puts in the Job; see %s", adr0058Doc)
+		}
+
+		clusterRole := find(docs, kindClusterRole, "ichor-installer-role")
+		role := find(docs, kindRole, "ichor-installer-role")
+
+		// The chart scopes the namespaces rule to the release namespace; config says ichor-system.
+		for _, d := range []map[string]any{clusterRole, role} {
+			rules, _ := d["rules"].([]any)
+			for _, r := range rules {
+				rm, _ := r.(map[string]any)
+				if names, ok := rm["resourceNames"].([]any); ok && len(names) == 1 && names[0] == "default" {
+					rm["resourceNames"] = []any{"ichor-system"}
+				}
+			}
+		}
+
+		checkRBACRulesMatch(t, "ichor", "ClusterRole installer-role",
+			find(configDocs, kindClusterRole, "installer-role"), clusterRole,
+			installerConfigRolePath, "dist/chart/templates/rbac/ichor-installer.yaml")
+		checkRBACRulesMatch(t, "ichor", "Role installer-role",
+			find(configDocs, kindRole, "installer-role"), role,
+			installerConfigRolePath, "dist/chart/templates/rbac/ichor-installer.yaml")
+
+		for triple := range rbacTriples(append(allRules(clusterRole), allRules(role)...)) {
+			if triple.resource == "secrets" || triple.resource == "*" || triple.verb == "*" {
+				t.Errorf("the installer is granted %s; it must never read or write a Secret or hold a wildcard; see %s", triple, adr0058Doc)
+			}
+		}
+	})
+}
+
+func allRules(doc map[string]any) []any {
+	rules, _ := doc["rules"].([]any)
+
+	return rules
+}

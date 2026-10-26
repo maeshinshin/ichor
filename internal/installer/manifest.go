@@ -34,9 +34,9 @@ const (
 	kindCRD    = "CustomResourceDefinition"
 	kindSecret = "Secret"
 
-	// uiNamePrefix is how the UI's objects are told apart from the controller's: config/default
+	// uiNameMarker is how the UI objects are told apart from the controller objects: config/default
 	// prefixes every name with ichor-, and config/manager-ui names its objects ui*.
-	uiNamePrefix = "ichor-ui"
+	uiNameMarker = "ichor-ui"
 )
 
 // Decode splits a multi-document YAML stream into objects, skipping empty documents.
@@ -78,7 +78,7 @@ func classify(objs []*unstructured.Unstructured) plan {
 		case o.GetKind() == kindSecret:
 		case o.GetKind() == kindCRD:
 			p.crds = append(p.crds, o)
-		case strings.HasPrefix(o.GetName(), uiNamePrefix):
+		case strings.Contains(o.GetName(), uiNameMarker):
 			p.ui = append(p.ui, o)
 		default:
 			p.controller = append(p.controller, o)

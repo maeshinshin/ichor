@@ -1,0 +1,9 @@
+# The installer Job's own RBAC base (docs/adr/0058), wired into config/default as its own
+# resource entry, never merged with ../ (the controller never holds these permissions: it
+# only creates the Job, and the Job is the one process that rewrites Ichor's manifests).
+# Hand-written, not generated: the rules list exactly the kinds dist/install.yaml contains
+# (see role.yaml), and dist/chart/chart_test.go compares the chart's copy against role.yaml.
+resources:
+- service_account.yaml
+- role.yaml
+- role_binding.yaml

@@ -137,6 +137,14 @@ manager:
   #   labels: {}
   #   annotations: {}
 
+## The installer Job's identity (ADR 0058), used only when IchorInstallation.spec.managementMode
+## is "ichor". Off by default: a chart-installed Ichor is normally owned by Argo CD (mode
+## "external"), and then nothing should hold the cluster-role escalation this ServiceAccount
+## carries. See config/rbac/ichor-installer/role.yaml.
+##
+installer:
+  enabled: false
+
 ## Configure the ichor-ui deployment (ADR 0020). It holds a read-only Kubernetes
 ## identity, separate from the controller's own ServiceAccount (architecture.md "Trust"):
 ## see config/rbac/ichor-ui/ (ADR 0018) and templates/rbac/ichor-ui-*.yaml.

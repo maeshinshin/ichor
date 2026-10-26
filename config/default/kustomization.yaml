@@ -33,6 +33,8 @@ resources:
 # into ../rbac above, so ichor-ui's ServiceAccount/ClusterRole never share a kustomization
 # with the controller's -- they must stay separate identities (architecture.md "Trust").
 - ../rbac/ichor-ui
+# The installer Job's own RBAC (docs/adr/0058), separate for the same reason.
+- ../rbac/ichor-installer
 # Ichor does not ship a cluster-wide certificate-issuing dependency (ADR 0006): the
 # webhook serving certificate is generated at runtime by cert-controller, in-process
 # in the manager, so there is no certmanager/ directory here and no caBundle shipped

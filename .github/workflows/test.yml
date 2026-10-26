@@ -43,6 +43,9 @@ jobs:
       - name: Running Tests
         run: nix develop --command bash -c "go mod tidy && make test"
 
+      - name: Running UI CI (type-check, lint, unit tests, build)
+        run: nix develop --command make ui-ci
+
   # Catches drift between source (api/v1alpha1 types, +kubebuilder:rbac markers) and
   # what's generated from it (config/crd/bases, config/rbac/*, zz_generated.*.go): one
   # regenerate-and-diff covers every generated artifact at once, rather than a check per

@@ -108,4 +108,15 @@ message Cluster {
   // means discovery is off.
   repeated string discovery_addresses = 10;
   repeated string discovery_cidrs = 11;
+  // kube_proxy_mode is spec.cni.kubeProxy: "enabled" (the default) or "replaced".
+  string kube_proxy_mode = 12;
+  // certificates are status.certificates: when each CA expires.
+  repeated CertificateExpiry certificates = 13;
+}
+
+// CertificateExpiry is one CA of the cluster and its last instant of validity.
+message CertificateExpiry {
+  // name is talos, kubernetes, kubernetes-aggregator or etcd.
+  string name = 1;
+  google.protobuf.Timestamp not_after = 2;
 }

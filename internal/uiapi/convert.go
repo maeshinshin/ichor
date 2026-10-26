@@ -166,7 +166,7 @@ func configLayerFromPB(layer pb.ConfigLayer) string {
 	case pb.ConfigLayer_CONFIG_LAYER_CLUSTER:
 		return "cluster"
 	case pb.ConfigLayer_CONFIG_LAYER_ROLE:
-		return "role"
+		return fieldRole
 	case pb.ConfigLayer_CONFIG_LAYER_SELECTOR:
 		return "selector"
 	case pb.ConfigLayer_CONFIG_LAYER_MACHINE:

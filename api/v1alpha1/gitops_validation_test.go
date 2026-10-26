@@ -30,7 +30,7 @@ func gitRepo() *TalosClusterGitRepository {
 		Host: "github", APIURL: "https://api.github.com", Owner: "acme", Repo: "infra",
 		CloneURL: "https://github.com/acme/infra.git",
 		TokenSecretRef: corev1.SecretKeySelector{
-			LocalObjectReference: corev1.LocalObjectReference{Name: "git-token"}, Key: "token",
+			LocalObjectReference: corev1.LocalObjectReference{Name: "git-token"}, Key: "pat",
 		},
 	}
 }

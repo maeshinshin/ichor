@@ -81,10 +81,10 @@ func TestSubmitPR_NewFile(t *testing.T) {
 }
 
 func TestSubmitPR_NewFileRefusals(t *testing.T) {
-	bare := newBareRemote(t, "cluster.yaml")
+	bare := newBareRemote(t, "seed/cluster.yaml")
 
 	for name, path := range map[string]string{
-		"exists":    "cluster.yaml",
+		"exists":    "seed/cluster.yaml",
 		"dotdot":    "../escape.yaml",
 		"absolute":  "/tmp/escape.yaml",
 		"dot-git":   ".git/hooks/x",
@@ -114,7 +114,8 @@ func TestSubmitPR_NewFileRefusals(t *testing.T) {
 }
 
 func TestPatch_AddsAMissingLeafKey(t *testing.T) {
-	input := "apiVersion: ichor.maesh.dev/v1alpha1\nkind: TalosCluster\nmetadata:\n  name: prod\n  namespace: ichor-system\n" +
+	input := "apiVersion: ichor.maesh.dev/v1alpha1\nkind: TalosCluster\n" +
+		"metadata:\n  name: prod\n  namespace: ichor-system\n" +
 		"spec:\n  # keep me\n  talosVersion: v1.9.0\n"
 
 	got, err := Patch([]byte(input), patchTestTarget, []FieldUpdate{{Path: []string{specKey, "role"}, Value: "worker"}})

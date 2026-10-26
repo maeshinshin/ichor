@@ -40,6 +40,12 @@ import (
 
 // argoApplicationGVK is Argo CD's Application, read as unstructured because
 // Ichor takes no Go dependency on a CRD it does not own.
+// specKey and fieldRole are the CR keys PR mode edits.
+const (
+	specKey   = "spec"
+	fieldRole = "role"
+)
+
 var argoApplicationGVK = schema.GroupVersionKind{Group: "argoproj.io", Version: "v1alpha1", Kind: "Application"}
 
 // prPlan is the answer planWrite gives when a write must not touch the
@@ -183,7 +189,7 @@ func (s *Server) planEdit(
 
 	if !sameRepository(src.RepoURL, repo.CloneURL) {
 		return nil, connect.NewError(connect.CodeFailedPrecondition,
-			fmt.Errorf("Argo CD Application %q syncs %q from a repository other than the one this cluster's gitops.repository "+
+			fmt.Errorf("the Argo CD Application %q syncs %q from a repository other than the one this cluster's gitops.repository "+
 				"connects to, so no pull request is opened for it", appKey, src.RepoURL))
 	}
 
@@ -342,7 +348,7 @@ func machineManifest(m *ichorv1alpha1.TalosMachine) ([]byte, error) {
 		"apiVersion": ichorv1alpha1.GroupVersion.String(),
 		"kind":       "TalosMachine",
 		"metadata":   map[string]any{"name": m.Name, "namespace": m.Namespace},
-		"spec":       m.Spec,
+		specKey:      m.Spec,
 	})
 }
 
@@ -356,20 +362,20 @@ func machineSpecUpdates(m *ichorv1alpha1.TalosMachine) ([]prmode.FieldUpdate, er
 	}
 
 	updates := []prmode.FieldUpdate{
-		{Path: []string{"spec", "approvalState"}, Value: m.Spec.ApprovalState},
-		{Path: []string{"spec", "approvalDecision"}, Value: decision},
+		{Path: []string{specKey, "approvalState"}, Value: m.Spec.ApprovalState},
+		{Path: []string{specKey, "approvalDecision"}, Value: decision},
 	}
 
 	if m.Spec.Role != "" {
-		updates = append(updates, prmode.FieldUpdate{Path: []string{"spec", "role"}, Value: m.Spec.Role})
+		updates = append(updates, prmode.FieldUpdate{Path: []string{specKey, fieldRole}, Value: m.Spec.Role})
 	}
 
 	if m.Spec.Hostname != "" {
-		updates = append(updates, prmode.FieldUpdate{Path: []string{"spec", "hostname"}, Value: m.Spec.Hostname})
+		updates = append(updates, prmode.FieldUpdate{Path: []string{specKey, "hostname"}, Value: m.Spec.Hostname})
 	}
 
 	if len(m.Spec.NodeLabels) > 0 {
-		updates = append(updates, prmode.FieldUpdate{Path: []string{"spec", "nodeLabels"}, Value: m.Spec.NodeLabels})
+		updates = append(updates, prmode.FieldUpdate{Path: []string{specKey, "nodeLabels"}, Value: m.Spec.NodeLabels})
 	}
 
 	return updates, nil

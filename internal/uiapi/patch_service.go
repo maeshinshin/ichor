@@ -127,7 +127,7 @@ func (s *Server) CreatePatch(
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	audit := &pb.AuditRecord{Actor: actor, At: timestamppb.New(s.now()), Action: "create", Target: ref}
+	audit := &pb.AuditRecord{Actor: s.actorName(), At: timestamppb.New(s.now()), Action: "create", Target: ref}
 
 	return connect.NewResponse(&pb.CreatePatchResponse{Patch: out, Audit: audit}), nil
 }
@@ -159,7 +159,7 @@ func (s *Server) UpdatePatch(
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	audit := &pb.AuditRecord{Actor: actor, At: timestamppb.New(s.now()), Action: "update", Target: ref}
+	audit := &pb.AuditRecord{Actor: s.actorName(), At: timestamppb.New(s.now()), Action: "update", Target: ref}
 
 	return connect.NewResponse(&pb.UpdatePatchResponse{Patch: out, Audit: audit}), nil
 }
@@ -183,7 +183,7 @@ func (s *Server) DeletePatch(
 		return nil, mapWriteError("deleting", namespacedName(ref), err)
 	}
 
-	audit := &pb.AuditRecord{Actor: actor, At: timestamppb.New(s.now()), Action: "delete", Target: ref}
+	audit := &pb.AuditRecord{Actor: s.actorName(), At: timestamppb.New(s.now()), Action: "delete", Target: ref}
 
 	return connect.NewResponse(&pb.DeletePatchResponse{Audit: audit}), nil
 }

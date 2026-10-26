@@ -33,7 +33,10 @@ message Condition {
 message AuditRecord {
   string actor = 1;
   google.protobuf.Timestamp at = 2;
-  // action is "approve" or "reject".
+  // action is "approve" or "reject" (and "update" or "delete" for patches).
+  // When the change was proposed as a pull request instead of written, it
+  // carries a "-pr" suffix ("approve-pr"): the request is recorded, the
+  // change is not applied until the pull request merges.
   string action = 3;
   ObjectRef target = 4;
   // reason is optional free text, mainly used for rejections.

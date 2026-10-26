@@ -70,6 +70,9 @@ message Disk {
   string bus_path = 4;
   int64 size_bytes = 5;
   DiskRole role = 6;
+  // dev_path is the kernel device path (/dev/sda). Not stable across boots;
+  // the last resort when none of the identifiers above exist.
+  string dev_path = 7;
 }
 
 message NetworkInterface {

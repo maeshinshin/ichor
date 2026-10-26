@@ -20,10 +20,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"connectrpc.com/connect"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -154,6 +156,19 @@ func (s *Server) ApproveMachine(
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("role is required to approve a machine"))
 	}
 
+	// Checked here so the caller gets the reason, not a bare admission error (ADR 0076).
+	if h := req.Msg.GetHostname(); h != "" {
+		if errs := validation.IsDNS1123Subdomain(h); len(errs) > 0 {
+			return nil, connect.NewError(connect.CodeInvalidArgument,
+				fmt.Errorf("hostname %q is not a valid RFC 1123 name: %s", h, strings.Join(errs, "; ")))
+		}
+	}
+
+	install, err := installFromPB(req.Msg.GetInstall())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+
 	// A rejected machine can be approved: this is how a rejection is undone
 	// (docs/adr/0018). The only state ApproveMachine refuses to touch is
 	// already-approved, checked above.
@@ -163,6 +178,7 @@ func (s *Server) ApproveMachine(
 	m.Spec.Role = machineRoleToSpec(role)
 	m.Spec.NodeLabels = req.Msg.GetNodeLabels()
 	m.Spec.Hostname = req.Msg.GetHostname()
+	m.Spec.Install = install
 	m.Spec.ApprovalState = ichorv1alpha1.MachineApprovalStateApproved
 	m.Spec.ApprovalDecision = &ichorv1alpha1.TalosMachineApprovalDecision{
 		Actor: s.actorName(ctx), Reason: req.Msg.GetReason(), At: metav1.NewTime(now),
@@ -190,6 +206,48 @@ func (s *Server) ApproveMachine(
 	})
 
 	return connect.NewResponse(&pb.ApproveMachineResponse{Machine: machineToPB(m), Audit: audit, PullRequestUrl: url, Notice: notice}), nil
+}
+
+// installFromPB converts the wire install target to the spec field; nil means "none". Exactly
+// one disk identifier must be set, the same rule the CRD enforces, so the caller learns it here.
+func installFromPB(in *pb.MachineInstall) (*ichorv1alpha1.TalosMachineInstall, error) {
+	if in == nil {
+		return nil, nil
+	}
+
+	d := in.GetDisk()
+
+	set := 0
+
+	for _, v := range []string{d.GetWwid(), d.GetSerial(), d.GetByIdPath(), d.GetBusPath(), d.GetDevPath()} {
+		if v != "" {
+			set++
+		}
+	}
+
+	if set != 1 {
+		return nil, errors.New("install.disk needs exactly one of wwid, serial, by_id_path, bus_path or dev_path")
+	}
+
+	return &ichorv1alpha1.TalosMachineInstall{
+		Disk: ichorv1alpha1.TalosMachineDisk{
+			WWID: d.GetWwid(), Serial: d.GetSerial(), ByIDPath: d.GetByIdPath(), BusPath: d.GetBusPath(), DevPath: d.GetDevPath(),
+		},
+		Image: in.GetImage(),
+	}, nil
+}
+
+func installToPB(in *ichorv1alpha1.TalosMachineInstall) *pb.MachineInstall {
+	if in == nil {
+		return nil
+	}
+
+	return &pb.MachineInstall{
+		Disk: &pb.MachineDisk{
+			Wwid: in.Disk.WWID, Serial: in.Disk.Serial, ByIdPath: in.Disk.ByIDPath, BusPath: in.Disk.BusPath, DevPath: in.Disk.DevPath,
+		},
+		Image: in.Image,
+	}
 }
 
 // RejectMachine records that a pending machine was turned away by setting

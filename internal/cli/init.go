@@ -121,7 +121,7 @@ func init() {
 	flags.StringVar(&initOpts.TalosVersion, "talos-version", "", "Talos release this cluster renders configuration for (required, vX.Y.Z)")
 	flags.StringVar(&initOpts.KubernetesVersion, "kubernetes-version", "v"+constants.DefaultKubernetesVersion, "Kubernetes release this cluster runs")
 	flags.StringVar(&initOpts.VersionContract, "version-contract", "", "Talos version contract (required, vX.Y)")
-	flags.StringVar(&initOpts.InstallDisk, "install-disk", "", "the first node's install disk, e.g. /dev/sda (required)")
+	flags.StringVar(&initOpts.InstallDisk, "install-disk", "", "the first node's install disk: "+installDiskUsage+" (required)")
 	flags.StringVar(&initOpts.DiskRoles.EphemeralDiskSelector, "ephemeral-disk-selector", "",
 		"CEL disk selector (e.g. disk.wwid == \"...\") for a dedicated EPHEMERAL disk, separate from --install-disk")
 	flags.StringVar(&initOpts.DiskRoles.StorageDiskSelector, "storage-disk-selector", "",

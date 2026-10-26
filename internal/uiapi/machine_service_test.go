@@ -120,6 +120,37 @@ var _ = Describe("MachineService", func() {
 				"ListMachines must surface the decision record, not just ApproveMachine's own response")
 		})
 
+		It("records the install target and refuses a bad hostname or an ambiguous disk (ADR 0076)", func() {
+			cluster := newTestCluster("does-not-exist")
+			m := newTestMachine(cluster.Name, strongTestIdentity("uuid-install"), "", ichorv1alpha1.MachineApprovalStatePending)
+			s := &Server{Client: k8sClient}
+
+			for _, bad := range []*pb.ApproveMachineRequest{
+				{Hostname: "てすと"},
+				{Hostname: "Node_1"},
+				{Install: &pb.MachineInstall{}},
+				{Install: &pb.MachineInstall{Disk: &pb.MachineDisk{Wwid: "w", Serial: "s"}}},
+			} {
+				bad.Machine, bad.Role = objectRef(m.Namespace, m.Name), pb.MachineRole_MACHINE_ROLE_WORKER
+				_, err := s.ApproveMachine(ctx, connect.NewRequest(bad))
+				Expect(connect.CodeOf(err)).To(Equal(connect.CodeInvalidArgument), "%v", bad)
+			}
+
+			Expect(fetchTestMachine(m).Spec.IsApproved()).To(BeFalse())
+
+			resp, err := s.ApproveMachine(ctx, connect.NewRequest(&pb.ApproveMachineRequest{
+				Machine: objectRef(m.Namespace, m.Name), Role: pb.MachineRole_MACHINE_ROLE_WORKER,
+				Install: &pb.MachineInstall{Disk: &pb.MachineDisk{Wwid: "naa.1"}, Image: "factory.talos.dev/x:v1"},
+			}))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(resp.Msg.GetMachine().GetInstall().GetDisk().GetWwid()).To(Equal("naa.1"))
+
+			got := fetchTestMachine(m)
+			Expect(got.Spec.Install).NotTo(BeNil())
+			Expect(got.Spec.Install.Disk.WWID).To(Equal("naa.1"))
+			Expect(got.Spec.Install.Image).To(Equal("factory.talos.dev/x:v1"))
+		})
+
 		It("condition 1: refuses a weak identity", func() {
 			cluster := newTestCluster("does-not-exist")
 			weak := ichorv1alpha1.TalosMachineIdentity{UUID: "uuid-weak"} // no serial, no MAC

@@ -162,7 +162,7 @@ func (t *machineryNodeTalosClient) Disks(ctx context.Context) ([]*pb.Disk, error
 		}
 
 		out = append(out, &pb.Disk{
-			Wwid: spec.WWID, Serial: spec.Serial, ByIdPath: byIDPath, BusPath: spec.BusPath,
+			Wwid: spec.WWID, Serial: spec.Serial, ByIdPath: byIDPath, BusPath: spec.BusPath, DevPath: spec.DevPath,
 			SizeBytes: int64(spec.Size), //nolint:gosec // disk sizes fit in int64
 			// Role stays DISK_ROLE_UNSPECIFIED: disk role assignment does not
 			// exist on the CRD yet (NodeTalosClient's own doc comment).

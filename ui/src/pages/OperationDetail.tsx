@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'preact/hooks'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ErrorAlert } from '@/components/ErrorAlert'
+import { Field, Fields, PageHeader } from '@/components/PageHeader'
+import { EmptyNote, PageSkeleton } from '@/components/PageStates'
+import { Section } from '@/components/SectionNav'
 import { OperationControls } from '@/components/OperationControls'
 import { OperationKind, type Operation } from '@/gen/ichor/v1alpha1/operation_pb'
 import { operationClient } from '@/lib/connect'
@@ -11,7 +13,7 @@ import { enumLabel } from '@/lib/enum'
 import { describeError } from '@/lib/errors'
 import { caStageProgress, operationState, pollIntervalMs, progressCounts, stateBadge } from '@/lib/operations'
 import { useT } from '@/lib/useT'
-import { Link, navigate } from '@/router'
+import { navigate } from '@/router'
 
 type ErrorShape = { title: string; detail: string }
 
@@ -52,7 +54,7 @@ export function OperationDetail({ namespace, name }: { namespace: string; name: 
   }, [namespace, name])
 
   if (error && !op) return <ErrorAlert {...error} />
-  if (!op) return <p class="mt-10 text-center text-sm text-muted-foreground">{t('ops.loading')}</p>
+  if (!op) return <PageSkeleton label={t('ops.loading')} />
 
   const state = operationState(op.phase, op.failureReason)
   const { done, running } = progressCounts(op.machines)
@@ -60,32 +62,26 @@ export function OperationDetail({ namespace, name }: { namespace: string; name: 
   const stage = position ? { name: op.caRotationStage, ...position } : null
 
   return (
-    <div class="mt-6 space-y-4">
-      <Link to="/operations" class="text-sm text-muted-foreground hover:underline">
-        {t('ops.back')}
-      </Link>
-      <Card>
-        <CardHeader className="flex flex-wrap items-center justify-between gap-2">
-          <CardTitle>{op.ref?.name}</CardTitle>
-          <OperationControls op={op} onChanged={setOp} onDeleted={() => navigate('/operations')} />
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm">
-          <div class="flex flex-wrap items-center gap-2">
+    <>
+      <PageHeader
+        title={op.ref?.name ?? name}
+        kind={t('kind.operation')}
+        badges={
+          <>
             <Badge variant="outline">{enumLabel(OperationKind, op.kind)}</Badge>
             <Badge variant={stateBadge(state)}>{t(`ops.state.${state}`)}</Badge>
-            <span class="text-muted-foreground">{t('ops.progress', { done, running })}</span>
+            <span class="text-sm text-muted-foreground">{t('ops.progress', { done, running })}</span>
             {stage && <Badge variant="outline">{t('ops.caStage', { stage: stage.name, n: stage.index, total: stage.total })}</Badge>}
-          </div>
-          <dl class="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div>
-              <dt class="text-xs text-muted-foreground">{t('ops.cluster')}</dt>
-              <dd>{op.cluster?.name}</dd>
-            </div>
-            <div>
-              <dt class="text-xs text-muted-foreground">{t('ops.maxUnavailable')}</dt>
-              <dd>{op.maxUnavailable || 1}</dd>
-            </div>
-          </dl>
+          </>
+        }
+        actions={<OperationControls op={op} onChanged={setOp} onDeleted={() => navigate('/operations')} />}
+      />
+      <div class="space-y-6">
+        <Section id="overview" title={t('page.overview')}>
+          <Fields>
+            <Field label={t('ops.cluster')} value={op.cluster?.name} />
+            <Field label={t('ops.maxUnavailable')} value={String(op.maxUnavailable || 1)} />
+          </Fields>
           {op.kind === OperationKind.CA_ROTATION && state === 'done' && (
             <Alert>
               <AlertTitle>{t('ops.plan.bundleStaleTitle')}</AlertTitle>
@@ -103,16 +99,11 @@ export function OperationDetail({ namespace, name }: { namespace: string; name: 
             </Alert>
           )}
           {error && <ErrorAlert {...error} />}
-        </CardContent>
-      </Card>
+        </Section>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('ops.machines')}</CardTitle>
-        </CardHeader>
-        <CardContent>
+        <Section id="machines" title={t('ops.machines')}>
           {op.machines.length === 0 ? (
-            <p class="text-sm text-muted-foreground">{t('ops.noMachines')}</p>
+            <EmptyNote>{t('ops.noMachines')}</EmptyNote>
           ) : (
             <Table>
               <TableHeader>
@@ -134,8 +125,8 @@ export function OperationDetail({ namespace, name }: { namespace: string; name: 
               </TableBody>
             </Table>
           )}
-        </CardContent>
-      </Card>
-    </div>
+        </Section>
+      </div>
+    </>
   )
 }

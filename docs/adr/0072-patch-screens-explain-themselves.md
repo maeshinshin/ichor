@@ -13,7 +13,7 @@ The page from ADR 0039 was correct but bare: four fields, a JSON box per documen
 - **Documents stay JSON on the wire and in the editor**, as ADR 0039 decided (the server validates). The one exception is `SysctlConfig`, edited as key/value rows because it is the commonest and simplest document; the rows are kept in the component so a row with an empty key does not vanish before it is typed.
 - **Cards, not always-open editors.** A loaded document is collapsed to its kind and a summary (`summarizeDocument`); a new document opens in its editor. Documents get a client-side id so removing one does not shift another's open state.
 - **The preview is a nudge.** The page remembers the form state a preview was run for (`previewKey`). A missing or stale preview shows a line in the preview card and a reminder above Save. Save is never disabled by it: a preview is a round trip that can fail for reasons unrelated to the patch.
-- **List page machines.** The list calls `ListMachines` once and works out the machines in the cluster, of a role, or the one named (`targetedMachines`). For a label selector it says so instead of guessing, since the controller evaluates the selector.
+- **List page machines.** The "Applies to" column shows the patch's target as written, not computed machine names, so the UI never re-implements the controller's selection: every machine for a cluster-layer patch, `Role: <role>`, `Machine: <name>`, or "Machines matching the selector" for a label selector.
 
 ## Consequences
 

@@ -148,23 +148,3 @@ export function previewKey(f: {
 }): string {
   return JSON.stringify([f.cluster, f.layer, f.priority, f.target, f.documents.map((d) => [d.kind, d.document])])
 }
-
-export interface MachineLike {
-  name: string
-  cluster: string
-  role: string
-}
-
-// targetedMachines lists the machines a patch applies to, by name. It
-// returns null for a label selector: the selector is evaluated by the
-// controller, and guessing here could show the wrong machines.
-export function targetedMachines(
-  p: { cluster: string; clusterLayer: boolean; targetKind: string; role: string; machineRef: string },
-  machines: MachineLike[],
-): string[] | null {
-  const inCluster = machines.filter((m) => m.cluster === p.cluster)
-  if (p.clusterLayer) return inCluster.map((m) => m.name)
-  if (p.targetKind === 'role') return inCluster.filter((m) => m.role === p.role).map((m) => m.name)
-  if (p.targetKind === 'machineRef') return inCluster.filter((m) => m.name === p.machineRef).map((m) => m.name)
-  return null
-}

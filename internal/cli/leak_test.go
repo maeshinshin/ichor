@@ -151,7 +151,7 @@ func TestAdoptNeverLeaksSecrets(t *testing.T) {
 
 		fixture := sysctlPatch(cluster.Name, map[string]string{testSysctlKey: "1"})
 
-		currentCfg, _, err := render.Render(cluster, machine, bundle, []ichorv1alpha1.TalosConfigPatch{fixture})
+		currentCfg, _, err := render.Render(cluster, machine, bundle, []ichorv1alpha1.TalosConfigPatch{fixture}, nil)
 		if err != nil {
 			t.Fatalf("rendering current-config fixture: %v", err)
 		}
@@ -178,7 +178,7 @@ func TestAdoptNeverLeaksSecrets(t *testing.T) {
 
 		fixture := sysctlPatch(cluster.Name, map[string]string{testSysctlKey: "1"})
 
-		currentCfg, _, err := render.Render(cluster, machine, bundle, []ichorv1alpha1.TalosConfigPatch{fixture})
+		currentCfg, _, err := render.Render(cluster, machine, bundle, []ichorv1alpha1.TalosConfigPatch{fixture}, nil)
 		if err != nil {
 			t.Fatalf("rendering current-config fixture: %v", err)
 		}
@@ -205,7 +205,7 @@ func TestAdoptNeverLeaksSecrets(t *testing.T) {
 
 		fixture := legacyConfigPatch(cluster.Name)
 
-		currentCfg, _, err := render.Render(cluster, machine, bundle, []ichorv1alpha1.TalosConfigPatch{fixture})
+		currentCfg, _, err := render.Render(cluster, machine, bundle, []ichorv1alpha1.TalosConfigPatch{fixture}, nil)
 		if err != nil {
 			t.Fatalf("rendering current-config fixture: %v", err)
 		}
@@ -232,7 +232,7 @@ func TestAdoptNeverLeaksSecrets(t *testing.T) {
 
 		fixture := sysctlPatch(cluster.Name, map[string]string{testSysctlKey: "1"})
 
-		currentCfg, _, err := render.Render(cluster, machine, bundle, []ichorv1alpha1.TalosConfigPatch{fixture})
+		currentCfg, _, err := render.Render(cluster, machine, bundle, []ichorv1alpha1.TalosConfigPatch{fixture}, nil)
 		if err != nil {
 			t.Fatalf("rendering current-config fixture: %v", err)
 		}
@@ -259,7 +259,7 @@ func TestAdoptNeverLeaksSecrets(t *testing.T) {
 
 		fixture := sysctlPatch(cluster.Name, map[string]string{testSysctlKey: "1"})
 
-		currentCfg, _, err := render.Render(cluster, machine, bundle, []ichorv1alpha1.TalosConfigPatch{fixture})
+		currentCfg, _, err := render.Render(cluster, machine, bundle, []ichorv1alpha1.TalosConfigPatch{fixture}, nil)
 		if err != nil {
 			t.Fatalf("rendering current-config fixture: %v", err)
 		}

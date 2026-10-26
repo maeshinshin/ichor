@@ -75,8 +75,9 @@ func buildAdoptPlan(
 	bundle *secrets.Bundle,
 	existing []ichorv1alpha1.TalosConfigPatch,
 	currentCfg []byte,
+	auth map[string]render.RegistryAuth,
 ) (*adoptPlan, error) {
-	baseline, _, err := render.Render(cluster, m, bundle, existing)
+	baseline, _, err := render.Render(cluster, m, bundle, existing, auth)
 	if err != nil {
 		return nil, fmt.Errorf("adopt: rendering machine %q's baseline: %w", m.Name, err)
 	}
@@ -113,7 +114,7 @@ func buildAdoptPlan(
 
 	withCandidate := append(append([]ichorv1alpha1.TalosConfigPatch{}, existing...), candidate)
 
-	rendered, _, err := render.Render(cluster, m, bundle, withCandidate)
+	rendered, _, err := render.Render(cluster, m, bundle, withCandidate, auth)
 	if err != nil {
 		return nil, fmt.Errorf("adopt: verifying machine %q's zero-drift patch: %w", m.Name, err)
 	}

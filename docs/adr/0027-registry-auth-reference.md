@@ -1,8 +1,8 @@
 # 0027. Private registry auth through a Secret reference on `TalosCluster`
 
-Status: Accepted · Date: 2026-10-25 · Design section: "Typed configuration", "Monitoring and air gap"
+Status: Accepted, amended once · Date: 2026-10-25 · Design section: "Typed configuration", "Monitoring and air gap"
 
-Decided: Private registry auth through `TalosCluster.spec.registries[].authSecretRef`, resolved and injected as the system layer by `pkg/render`
+Decided: Private registry auth through `TalosCluster.spec.registries[].authSecretRef`, resolved and injected as the system layer by `pkg/render`; the auth-less `Render`/`BuildConfig` entry points were merged into one that always takes the resolved auth, after no production caller had ever been moved onto the auth-aware pair
 
 ## Context
 
@@ -119,7 +119,7 @@ for the secrets bundle.
   uniqueness at zero estimated CEL cost, confirmed by the same envtest apiserver accepting the
   CRD and rejecting a duplicate-host `Create` in `api/v1alpha1/validation_test.go`.
 - Resolved credentials are held only in a short-lived `map[string]RegistryAuth` in memory,
-  handed from `ResolveRegistryAuth` to `RenderWithRegistryAuth`/`BuildConfigWithRegistryAuth` and
+  handed from `ResolveRegistryAuth` to `Render`/`BuildConfig` and
   never written anywhere else -- not a CR's spec or status, not a log line, not an error string,
   not `ichor gitops export`'s output (which only ever marshals the `TalosCluster` object itself,
   and that object never carries a resolved value, only `authSecretRef`'s name). Covered by
@@ -139,16 +139,7 @@ for the secrets bundle.
   `machine.registries.config.<host>.auth.password` and never either password's value --
   confirming `TalosMachine.status` (which only ever carries `ChangedPaths`'s output, never the
   rendered config) cannot carry a registry credential either.
-- **Debt: `BuildConfig`/`Render` (no-auth) and `BuildConfigWithRegistryAuth`/`RenderWithRegistryAuth`
-  are two entry points for what should eventually be one call site.** They exist side by side only
-  because `internal/controller`'s reconcile loop could not be touched by this unit of work. Once
-  `TalosMachineReconciler` is wired to call `ResolveRegistryAuth` and the `*WithRegistryAuth`
-  entry points on every render, the no-auth `BuildConfig`/`Render` pair (and the refusal guard
-  they now carry) should be deleted and every remaining caller (`internal/cli`, `internal/uiapi`)
-  moved onto the auth-aware pair -- passing an empty map costs them nothing when a cluster has no
-  registries. Leaving both indefinitely keeps the refusal guard as a permanent patch over a
-  bifurcation that should not outlive the migration; this bullet is that migration's tracking
-  note, not a design this ADR intends to keep.
+- **Debt (closed, see the amendment below):** `BuildConfig`/`Render` and the `*WithRegistryAuth` pair were two entry points.
 - **Debt: this feature is built on a field machinery itself marks deprecated.**
   `injectRegistries` nests its output under the legacy
   `v1alpha1.Config.MachineConfig.MachineRegistries` (`//nolint:staticcheck` suppresses the
@@ -182,3 +173,38 @@ for no benefit this phase needs.
 
 **A CEL rule for `registries[].host` uniqueness.** Tried, measured, rejected -- see
 Consequences above.
+
+## Amendment (2026-10-26): one entry point; every production caller was still on the refusing one
+
+The Consequences bullet above tracked the `Render`/`*WithRegistryAuth` split as debt to be paid
+"once `TalosMachineReconciler` is wired". It never was: all five production call sites
+(`TalosMachineReconciler.Reconcile`, `internal/uiapi`'s effective-config view, `ichor init`, and
+`ichor adopt`'s two renders) still called the plain pair, and the refusal guard added so a
+forgotten call would be loud meant that **any `TalosCluster` with `spec.registries` set, even an
+anonymous mirror, could not be reconciled at all.** `ResolveRegistryAuth` and the `*WithRegistryAuth`
+functions had no non-test caller. A new envtest spec ("reconciles a TalosCluster that declares
+registries...") failed first with `RenderFailed` / `cluster.Spec.Registries is set; BuildConfig never
+resolves or injects registry auth`, then passed after the fix.
+
+The cause was having two entry points, so the fix removes one. `Render` and `BuildConfig` now take
+`auth map[string]RegistryAuth` as a required last argument; `RenderWithRegistryAuth`,
+`BuildConfigWithRegistryAuth` and the refusal guard are deleted. A caller that forgets to resolve
+auth is now a compile error rather than a runtime refusal. `ResolveRegistryAuth` returns a nil map
+without reading anything (and without requiring a namespace) when the cluster declares no
+registries, so the common path costs nothing and needs no extra RBAC.
+
+Each caller resolves the Secret in a fixed namespace, never `cluster.Namespace` (ADR 0011; the
+mistake this repository has made twice, see ADR 0018's amendment):
+
+- Controller: `r.ControllerNamespace`, the namespace `loadBundle` uses.
+- UI backend: `Server.ControllerNamespace`, the namespace its `loadBundle` uses.
+- `ichor adopt`: `ichorControllerNamespace` (`ichor-system`), where the install manifest puts the
+  controller and so where it reads `authSecretRef` Secrets, rather than adopt's `--namespace`
+  (which is where the TalosCluster lives).
+- `ichor init`: builds the TalosCluster itself, has no flag for `spec.registries`, and has no
+  management-cluster client yet. It passes nil and refuses (rather than rendering an
+  unauthenticated mirror) if the plan ever carries registries.
+
+RBAC needed no change: the controller's `Role` in `ichor-system` already has `get;list;watch` on
+Secrets and the UI backend's has `get` (both namespaced, the same grants `loadBundle` relies on);
+no cluster-wide Secret read was added.

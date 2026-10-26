@@ -33,6 +33,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/render"
 )
 
 // errNoTalosClient is returned when the backend was started with no
@@ -129,7 +130,14 @@ func (s *Server) GetEffectiveConfig(
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	values, err := effectiveConfigValues(cluster, m, bundle, patches.Items)
+	// Server.ControllerNamespace, not the TalosCluster's: same fixed namespace as loadBundle
+	// above and as the controller's own resolution (ADR 0018, ADR 0027).
+	auth, err := render.ResolveRegistryAuth(ctx, s.Client, s.ControllerNamespace, cluster)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	values, err := effectiveConfigValues(cluster, m, bundle, patches.Items, auth)
 	if err != nil {
 		// A machine with no role yet (unapproved) or any other input the
 		// renderer rejects is this machine's own state, not a server fault.

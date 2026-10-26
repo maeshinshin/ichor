@@ -39,7 +39,7 @@ same way it catches a stale chart.
 | 0024 | No CNI hand-over registry (one real member); removal happens at render time off a status condition; a separate controller | Accepted |
 | 0025 | Layer 4's storage-system side: `EvacuationHook` (write side) plus a preset-independent `EvacuationStatus` function (read side), both verified against longhorn-manager v1.9.1's own controller source | Accepted |
 | 0026 | `TalosOperation`: the backbone every upgrade kind shares (lock, status-held state machine, pause-on-failure, paused, maxUnavailable, hold annotation, ordering), with none of their execution | Accepted |
-| 0027 | Private registry auth through `TalosCluster.spec.registries[].authSecretRef`, resolved and injected as the system layer by `pkg/render` | Accepted |
+| 0027 | Private registry auth through `TalosCluster.spec.registries[].authSecretRef`, resolved and injected as the system layer by `pkg/render`; the auth-less `Render`/`BuildConfig` entry points were merged into one that always takes the resolved auth, after no production caller had ever been moved onto the auth-aware pair | Accepted, amended once |
 | 0028 | `ichor gitops export`'s allow-list of CR kinds, its Argo CD/Flux tracked-resource warning, and `ichor gitops handoff`'s one-field `TalosCluster` patch | Accepted |
 | 0029 | Generate `docs/adr/README.md`'s index table from a `Decided:`/`Status:` line in each ADR's own header (`internal/tools/adrindex`) instead of a shared, hand-edited table | Accepted |
 | 0030 | `ichor ui` discovers ichor-ui pods through the `ichor-ui-service` Service's own selector/port and reforwards to another ready pod (same local port) whenever the tunnel ends, instead of targeting one pod name | Accepted |

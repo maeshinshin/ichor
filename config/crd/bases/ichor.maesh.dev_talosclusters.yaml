@@ -3656,7 +3656,7 @@ spec:
                     -- carried on TalosCluster, a CR that lives in Git -- put a registry password in Git (design
                     principle 2, ADR 0003's secretFields follow-up). authSecretRef points at a Kubernetes Secret
                     instead; the render-time injection that resolves it never writes the resolved value back onto
-                    any CR (pkg/render.ResolveRegistryAuth, pkg/render.RenderWithRegistryAuth).
+                    any CR (pkg/render.ResolveRegistryAuth, pkg/render.Render).
                   properties:
                     authSecretRef:
                       description: |-

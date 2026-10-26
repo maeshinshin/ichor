@@ -26,6 +26,7 @@ import { enumLabel } from '@/lib/enum'
 import { offersBreakGlass } from '@/lib/breakGlass'
 import { describeError } from '@/lib/errors'
 import { canApprove, isStrongIdentity } from '@/lib/identity'
+import { diskKey, diskSelector, isValidHostname, type DiskSelector } from '@/lib/installDisk'
 import { formatBytes, formatTimestamp } from '@/lib/format'
 import { useT } from '@/lib/useT'
 import { objectRefPath, Link } from '@/router'
@@ -251,12 +252,29 @@ function ApproveDialog({
   const [nodeError, setNodeError] = useState<string | null>(null)
   const [role, setRole] = useState<MachineRole>(MachineRole.UNSPECIFIED)
   const [hostname, setHostname] = useState(machine.hostname)
+  // installKey is diskKey of the chosen disk, or '' for none; installDev is the typed device
+  // path used only while discovery reports no disks.
+  const [installKey, setInstallKey] = useState('')
+  const [installDev, setInstallDev] = useState('')
+  const [installImage, setInstallImage] = useState('')
   const [reason, setReason] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<ErrorShape | null>(null)
   const [refused, setRefused] = useState(false)
 
   const strong = isStrongIdentity(machine.identity)
+  const hostnameOk = isValidHostname(hostname)
+  const disks = (node?.disks ?? []).filter((d) => diskSelector(d))
+  // The list comes from the node itself; without it (the Talos API unreachable, or no disk
+  // reported) the person can still type a device path.
+  const typedDisk = disks.length === 0 && installDev.trim() !== ''
+  const install = typedDisk
+    ? { disk: { devPath: installDev.trim() }, image: installImage.trim() }
+    : installKey
+      ? { disk: JSON.parse(installKey) as DiskSelector, image: installImage.trim() }
+      : undefined
+  const installOk = !typedDisk || installDev.trim().startsWith('/dev/')
+  const canSubmit = canApprove(machine.identity, role !== MachineRole.UNSPECIFIED) && hostnameOk && installOk
 
   useEffect(() => {
     if (!open || !machine.ref) return
@@ -269,6 +287,9 @@ function ApproveDialog({
     // Reset the form each time the dialog is reopened.
     setRole(MachineRole.UNSPECIFIED)
     setHostname(machine.hostname)
+    setInstallKey('')
+    setInstallDev('')
+    setInstallImage('')
     setReason('')
     setSubmitError(null)
     setRefused(false)
@@ -280,6 +301,7 @@ function ApproveDialog({
       machine: machine.ref,
       role,
       hostname,
+      install,
       nodeLabels: {},
       reason,
       breakGlass: bg,
@@ -289,7 +311,7 @@ function ApproveDialog({
   }
 
   async function submit() {
-    if (!machine.ref || !canApprove(machine.identity, role !== MachineRole.UNSPECIFIED)) return
+    if (!machine.ref || !canSubmit) return
     setSubmitting(true)
     setSubmitError(null)
     try {
@@ -297,6 +319,7 @@ function ApproveDialog({
         machine: machine.ref,
         role,
         hostname,
+        install,
         nodeLabels: {},
         reason,
       })
@@ -382,7 +405,53 @@ function ApproveDialog({
               id="approve-hostname"
               value={hostname}
               onInput={(e) => setHostname((e.target as HTMLInputElement).value)}
+              aria-invalid={!hostnameOk}
             />
+            {!hostnameOk && <p class="text-destructive">{t('approve.hostnameInvalid')}</p>}
+          </section>
+
+          <section class="space-y-1">
+            <Label htmlFor="approve-install-disk">{t('approve.installDisk')}</Label>
+            {disks.length > 0 ? (
+              <Select value={installKey || 'none'} onValueChange={(v) => setInstallKey(v === 'none' ? '' : v)}>
+                <SelectTrigger id="approve-install-disk" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">{t('approve.installDiskNone')}</SelectItem>
+                  {disks.map((d) => (
+                    <SelectItem key={diskKey(d)} value={diskKey(d)}>
+                      {t('approve.installDiskOption', {
+                        id: Object.values(diskSelector(d) ?? {})[0] ?? '',
+                        size: formatBytes(d.sizeBytes),
+                        dev: d.devPath || '-',
+                      })}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <Input
+                id="approve-install-disk"
+                value={installDev}
+                placeholder="/dev/sda"
+                onInput={(e) => setInstallDev((e.target as HTMLInputElement).value)}
+                aria-invalid={!installOk}
+              />
+            )}
+            <p class="text-muted-foreground">
+              {disks.length > 0 ? t('approve.installDiskHelp') : t('approve.installDiskTyped')}
+            </p>
+            {install && (
+              <>
+                <Label htmlFor="approve-install-image">{t('approve.installImage')}</Label>
+                <Input
+                  id="approve-install-image"
+                  value={installImage}
+                  onInput={(e) => setInstallImage((e.target as HTMLInputElement).value)}
+                />
+              </>
+            )}
           </section>
 
           <section class="space-y-1">
@@ -406,7 +475,7 @@ function ApproveDialog({
           <Button variant="ghost" onClick={() => setOpen(false)}>
             {t('common.cancel')}
           </Button>
-          <Button disabled={!canApprove(machine.identity, role !== MachineRole.UNSPECIFIED) || submitting} onClick={submit}>
+          <Button disabled={!canSubmit || submitting} onClick={submit}>
             {submitting ? t('approve.submitting') : t('approve.button')}
           </Button>
         </DialogFooter>

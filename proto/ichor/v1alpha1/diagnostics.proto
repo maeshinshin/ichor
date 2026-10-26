@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+// DiagnosticsService serves three admin-only, read-only downloads from a node's
+// Talos API (docs/adr/0083): a support bundle, an etcd snapshot and a packet
+// capture. Each is a server stream of byte chunks the caller writes to a file;
+// nothing is stored in a custom resource or a Secret. Every file can hold
+// secrets, so each call is checked against a Kubernetes RBAC verb of the
+// caller's own and leaves an Event on the TalosMachine.
+package ichor.v1alpha1;
+
+import "ichor/v1alpha1/common.proto";
+
+service DiagnosticsService {
+  // GetDiagnosticsPermissions says which downloads the caller may start on a
+  // machine, so the UI can hide the others. The server checks again on each
+  // download.
+  rpc GetDiagnosticsPermissions(GetDiagnosticsPermissionsRequest) returns (GetDiagnosticsPermissionsResponse);
+  // DownloadSupportBundle streams a zip of one node's (or every node of a
+  // cluster's) logs, kernel log, processes, mounts and non-sensitive Talos
+  // resources.
+  rpc DownloadSupportBundle(DownloadSupportBundleRequest) returns (stream DownloadChunk);
+  // DownloadEtcdSnapshot streams an etcd snapshot taken from one control plane
+  // node. It contains every Kubernetes Secret.
+  rpc DownloadEtcdSnapshot(DownloadEtcdSnapshotRequest) returns (stream DownloadChunk);
+  // CapturePackets streams a pcap file captured on one node's interface, bounded
+  // by duration and size.
+  rpc CapturePackets(CapturePacketsRequest) returns (stream DownloadChunk);
+}
+
+message GetDiagnosticsPermissionsRequest {
+  ObjectRef machine = 1;
+}
+
+message GetDiagnosticsPermissionsResponse {
+  bool support_bundle = 1;
+  bool etcd_snapshot = 2;
+  bool packet_capture = 3;
+}
+
+message DownloadSupportBundleRequest {
+  // Exactly one of machine and cluster. A cluster means every approved machine in it.
+  oneof target {
+    ObjectRef machine = 1;
+    ObjectRef cluster = 2;
+  }
+}
+
+message DownloadEtcdSnapshotRequest {
+  // machine must be a control plane node.
+  ObjectRef machine = 1;
+}
+
+message CapturePacketsRequest {
+  ObjectRef machine = 1;
+  // interface is the node's link name, such as eth0.
+  string interface = 2;
+  // bpf_filter is optional, in `tcpdump -dd` format (one `{ code, jt, jf, k },`
+  // line per instruction), the form Talos itself takes. It is validated before
+  // the capture starts.
+  string bpf_filter = 3;
+  // duration_seconds defaults to 30 and may not exceed 300.
+  int32 duration_seconds = 4;
+  // max_bytes defaults to and may not exceed 100 MiB; the capture stops there.
+  int64 max_bytes = 5;
+}
+
+message DownloadChunk {
+  // filename and content_type are set on the first chunk only.
+  string filename = 1;
+  string content_type = 2;
+  bytes data = 3;
+}

@@ -177,6 +177,17 @@ ichorUI:
   ##
   argocdNamespace: argocd
 
+  ## Where the GitOps page links to (docs/adr/0061): the base URL of each tool's own UI, as a
+  ## browser reaches it. http or https only. A tool left empty gets no link. Argo CD links go
+  ## to the CR's Application; Grafana to the bundled dashboard (grafana.dashboards.enabled);
+  ## Hubble and Longhorn to their front page.
+  ##
+  links:
+    argocd: ""
+    grafana: ""
+    hubble: ""
+    longhorn: ""
+
   ## OIDC login with Kubernetes impersonation (docs/adr/0058). Off by default: ichor-ui then
   ## writes with its own ServiceAccount and anyone who can reach it can write, as before (it
   ## logs a warning and the UI shows a banner). On: every request needs an ID token from this

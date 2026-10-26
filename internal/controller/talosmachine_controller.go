@@ -525,7 +525,7 @@ func (r *TalosMachineReconciler) ready(
 // erasing it.
 //
 // warnings is free-form text from Talos (machined's ValidateAtRuntime),
-// never validated as safe to surface as-is -- redactBundleMaterial strips
+// never validated as safe to surface as-is -- the scrubber strips
 // anything matching bundle's own secret-shaped scalars before it reaches
 // this Condition, which internal/uiapi and anyone with talosmachines:get
 // can read, a far wider readership than Secret RBAC allows (ADR 0041).
@@ -535,7 +535,10 @@ func (r *TalosMachineReconciler) setWarnings(m *ichorv1alpha1.TalosMachine, bund
 
 	if len(warnings) > 0 {
 		status = metav1.ConditionTrue
-		message = redactBundleMaterial(strings.Join(warnings, "; "), bundle)
+		var scrub scrubber
+
+		scrub.add(bundleSecretMaterial(bundle)...)
+		message = scrub.clean(strings.Join(warnings, "; "))
 	}
 
 	apimeta.SetStatusCondition(&m.Status.Conditions, metav1.Condition{

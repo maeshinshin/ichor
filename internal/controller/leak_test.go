@@ -187,7 +187,7 @@ var _ = Describe("TalosMachineReconciler bundle leak", func() {
 	// about this code, so this does not rely on it: it feeds setWarnings
 	// the bundle's own secret material directly (standing in for whatever a
 	// future Talos version might start echoing) and asserts
-	// redactBundleMaterial still caught it.
+	// the scrubber still caught it.
 	It("dry run warnings echo bundle material", func() {
 		bundle := newTestBundle("v1.14")
 		secret := newTestSecret(bundle)

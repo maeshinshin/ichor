@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
@@ -66,7 +67,7 @@ func loadBundle(
 }
 
 // bundleSecretMaterial lists every sensitive scalar in bundle. The one
-// list leak_test.go's own assertions and redactBundleMaterial below both
+// list leak_test.go's own assertions and the scrubber both
 // use, so the two can never silently check (or redact) a different set
 // of fields than each other.
 func bundleSecretMaterial(bundle *secrets.Bundle) []string {
@@ -82,30 +83,33 @@ func bundleSecretMaterial(bundle *secrets.Bundle) []string {
 	}
 }
 
-// redactBundleMaterial replaces any of bundle's own secret-shaped scalars
-// found verbatim in message with a fixed placeholder.
-//
-// This exists for exactly one caller: setWarnings, which joins Talos's own
-// dry-run warning strings into a TalosMachine status Condition -- a field
-// read far more broadly than Secret RBAC allows. Verified against Talos
-// v1.14.3's actual source (pkg/machinery/config/container/validate.go's
-// validate/runtimeValidate, and every warning string machinery's own
-// v1alpha1 config validators generate) that no warning today ever echoes
-// a submitted value back, only field names, deprecation notices and
-// Talos's own constants (ADR 0041 records exactly what was read). That
-// finding is about today's warning text, not about this field: a future
-// Talos release could start echoing a value without this package's own
-// code changing at all, and a redaction step that only runs when today's
-// known-safe assumption breaks is a redaction step that was never
-// actually exercised. Unconditional, so it stays exercised.
-func redactBundleMaterial(message string, bundle *secrets.Bundle) string {
-	for _, material := range bundleSecretMaterial(bundle) {
-		if material == "" {
-			continue
-		}
+// redacted is what scrubber puts in place of a secret value.
+const redacted = "[redacted]"
 
-		message = strings.ReplaceAll(message, material, "[redacted]")
+// scrubber removes secret values from text that is about to be stored in
+// status or logged (ADR 0041, ADR 0047). Talos and S3 errors are not under
+// our control: a future version could echo a header, a key or a bundle
+// scalar, so scrubbing is unconditional and stays exercised. What counts as
+// secret for the bundle is bundleSecretMaterial.
+type scrubber struct{ secrets []string }
+
+func (s *scrubber) add(v ...string) {
+	for _, x := range v {
+		if x != "" {
+			s.secrets = append(s.secrets, x)
+		}
+	}
+}
+
+// clean replaces longest values first: were a secret a substring of another,
+// replacing the short one first would leave the rest of the long one behind.
+func (s *scrubber) clean(msg string) string {
+	ordered := slices.Clone(s.secrets)
+	slices.SortStableFunc(ordered, func(a, b string) int { return len(b) - len(a) })
+
+	for _, x := range ordered {
+		msg = strings.ReplaceAll(msg, x, redacted)
 	}
 
-	return message
+	return msg
 }

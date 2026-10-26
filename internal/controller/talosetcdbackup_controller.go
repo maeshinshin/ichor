@@ -23,7 +23,6 @@ import (
 	"io"
 	"os"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -57,8 +56,6 @@ const (
 	s3KeySecretAccessKey = "secretAccessKey"
 	s3KeySessionToken    = "sessionToken"
 	s3KeyCA              = "ca.crt"
-
-	redacted = "[redacted]"
 )
 
 // Prometheus series for "failures and staleness surface as metrics and
@@ -475,27 +472,6 @@ func (r *TalosEtcdBackupReconciler) setReady(
 	setReadyCondition(bk, status, reason, msg)
 
 	return r.Status().Update(ctx, bk)
-}
-
-// scrubber removes secret values from text that is about to be stored in
-// status or logged. S3 and Talos errors are not under our control: a future
-// version could echo a header or a key.
-type scrubber struct{ secrets []string }
-
-func (s *scrubber) add(v ...string) {
-	for _, x := range v {
-		if x != "" {
-			s.secrets = append(s.secrets, x)
-		}
-	}
-}
-
-func (s *scrubber) clean(msg string) string {
-	for _, x := range s.secrets {
-		msg = strings.ReplaceAll(msg, x, redacted)
-	}
-
-	return msg
 }
 
 // SetupWithManager sets up the controller with the Manager.

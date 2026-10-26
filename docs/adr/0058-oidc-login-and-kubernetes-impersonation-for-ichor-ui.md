@@ -19,9 +19,12 @@ credential. Everything below is what the design left open.
 **2. Impersonation.** `uiapi.Server` shadows `Get/List/Create/Update/Delete` so a call made under a context that
 carries an `Identity` goes through a client with `Impersonate-User` and one `Impersonate-Group` per group; no
 handler changed. Kubernetes then enforces RBAC, and the API server's own audit log names the user. Ichor writes
-no authorization logic. Reads that are the backend's own business (secrets bundle, `argocd-cm`, the Argo CD
-Application, the repository token, Nodes) stay on the ServiceAccount via `s.Client`: users are not meant to read
-the secrets bundle. The Talos read-only identity is unchanged; RPCs that reach a node first read the
+no authorization logic. Reads that are the backend's own business and whose result is not returned to the
+user (secrets bundle, `argocd-cm`, the repository token, the Application that `planWrite` inspects) stay on the
+ServiceAccount via `s.Client`: users are not meant to read the secrets bundle. A read whose result reaches the
+user (the tracking Application's status, the Kubernetes Node's status, `TalosStorage`) is made as the user;
+ADR 0062's amendment lists every `s.Client` read and which side it is on. Without an identity (point 4) the
+ServiceAccount is used for all of them. The Talos read-only identity is unchanged; RPCs that reach a node first read the
 `TalosMachine` as the user, so a user who cannot `get` it cannot reach its node data.
 
 **Scope of `impersonate`.** One rule: verb `impersonate` on `users` and `groups` in the core group, cluster

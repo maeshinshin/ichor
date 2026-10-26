@@ -33,6 +33,12 @@ spec:
           - --addr=:8080
         image: ichor-ui:latest
         name: ichor-ui
+        env:
+        # Where the secrets bundle lives (ADR 0011, ADR 0081).
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
         ports:
         - containerPort: 8080
           name: http

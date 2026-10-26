@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"time"
 
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
@@ -71,6 +72,11 @@ type initDeps struct {
 
 	AssumeYes bool
 	Output    string
+
+	// BootstrapWait and BootstrapInterval bound how long init waits for the node to come back on
+	// its new configuration before bootstrapping etcd; zero means the defaults.
+	BootstrapWait     time.Duration
+	BootstrapInterval time.Duration
 }
 
 // runInit implements `ichor init` steps 1-5 (docs/design/architecture.md,
@@ -196,7 +202,7 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) error {
 		return fmt.Errorf("init: %w", err)
 	}
 
-	if err := admin.Bootstrap(ctx); err != nil {
+	if err := bootstrapWhenUp(ctx, admin, deps.BootstrapWait, deps.BootstrapInterval, deps.Stderr); err != nil {
 		return fmt.Errorf("init: bootstrapping etcd: %w", err)
 	}
 

@@ -34,6 +34,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/gitopstracking"
 	"github.com/maeshinshin/ichor/pkg/prmode"
 )
@@ -60,6 +61,13 @@ type prPlan struct {
 	add        bool
 	sourcePath string
 	baseBranch string
+
+	// app and selfHeal name the tracking Application and say whether it
+	// self-heals (planEdit); bg is set when the caller was granted break-glass
+	// (docs/adr/0064): the CR is written directly and this PR follows.
+	app      string
+	selfHeal bool
+	bg       *breakGlass
 }
 
 // prChange is one proposed change: what to edit or add, and the words the PR
@@ -89,10 +97,17 @@ func (s *Server) argoNamespace() string {
 // it must not happen at all. A failed check refuses: "cannot tell" is never
 // "may write" (docs/adr/0044).
 //
+// bg asks for break-glass (docs/adr/0064): where the answer would be a pull
+// request, the returned plan has bg set and the caller writes the CR directly
+// and then opens that pull request. Where the write is direct anyway, bg is
+// ignored; where no pull request can be opened, it is refused.
+//
 // allowStrictAdd is true only for approving a machine: under spec.gitops.mode
 // strict, that is "a PR that adds the TalosMachine" even though nothing
 // tracks the pending CR yet.
-func (s *Server) planWrite(ctx context.Context, obj client.Object, clusterName string, allowStrictAdd bool) (*prPlan, error) {
+func (s *Server) planWrite(
+	ctx context.Context, obj client.Object, clusterName string, allowStrictAdd bool, bg *pb.BreakGlass,
+) (*prPlan, error) {
 	key := client.ObjectKeyFromObject(obj)
 
 	_, by, err := gitopstracking.IsTracked(ctx, s.Client, s.argoNamespace(), obj)
@@ -117,10 +132,21 @@ func (s *Server) planWrite(ctx context.Context, obj client.Object, clusterName s
 				fmt.Errorf("cluster %q is in strict GitOps mode but has no repository with machinesPath, so %q is not written", clusterName, key))
 		}
 
-		return &prPlan{repo: repo, add: true, baseBranch: orMain(repo.BaseBranch)}, nil
+		return s.withBreakGlass(ctx, obj, &prPlan{repo: repo, add: true, baseBranch: orMain(repo.BaseBranch)}, bg)
 	case prmode.ModeOpenPR:
-		return s.planEdit(ctx, obj, repo)
+		plan, err := s.planEdit(ctx, obj, repo)
+		if err != nil {
+			return nil, err
+		}
+
+		return s.withBreakGlass(ctx, obj, plan, bg)
 	default:
+		if bg != nil {
+			return nil, connect.NewError(connect.CodeFailedPrecondition,
+				fmt.Errorf("%q is tracked by %s and no pull request can be opened for it (that needs Argo CD and a gitops.repository "+
+					"on the cluster), so break-glass is refused: it would leave Git behind the cluster", key, by))
+		}
+
 		return nil, connect.NewError(connect.CodeFailedPrecondition,
 			fmt.Errorf("%q is tracked by %s, so it is read-only here: run `ichor gitops export` to put it in Git "+
 				"and change it with a pull request", key, by))
@@ -199,7 +225,9 @@ func (s *Server) planEdit(
 		base = orMain(repo.BaseBranch)
 	}
 
-	return &prPlan{repo: repo, sourcePath: src.Path, baseBranch: base}, nil
+	selfHeal, _, _ := unstructured.NestedBool(app.Object, "spec", "syncPolicy", "automated", "selfHeal")
+
+	return &prPlan{repo: repo, sourcePath: src.Path, baseBranch: base, app: appKey.Name, selfHeal: selfHeal}, nil
 }
 
 // orMain is the CRD's own default for baseBranch, for a CR read before the
@@ -252,6 +280,12 @@ func (s *Server) openPR(ctx context.Context, plan *prPlan, change prChange) (str
 		SourcePath: plan.sourcePath, Target: change.target, Updates: change.updates, NewFile: change.newFile,
 		Delete: change.remove,
 		Title:  change.title, Requester: s.actorName(ctx), ImpactPreview: change.impact,
+	}
+
+	if plan.bg != nil {
+		req.Title = "[break-glass] " + req.Title
+		req.ImpactPreview += fmt.Sprintf("\n- Break-glass: already written to the cluster by %s, so this pull request brings Git "+
+			"in line. Reason: %s\n", req.Requester, plan.bg.reason)
 	}
 
 	res, err := prmode.SubmitPR(ctx, req)

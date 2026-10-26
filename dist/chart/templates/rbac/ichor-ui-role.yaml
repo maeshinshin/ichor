@@ -68,4 +68,42 @@ rules:
   - kustomizations
   verbs:
   - list
+{{- if .Values.ichorUI.oidc.enabled }}
+# Only with OIDC login (docs/adr/0058): act as the signed-in user. Optionally narrowed to
+# named users/groups; never serviceaccounts or userextras.
+{{- with .Values.ichorUI.oidc.impersonate.users }}
+- apiGroups:
+  - ""
+  resourceNames:
+  {{- toYaml . | nindent 2 }}
+  resources:
+  - users
+  verbs:
+  - impersonate
+{{- else }}
+- apiGroups:
+  - ""
+  resources:
+  - users
+  verbs:
+  - impersonate
+{{- end }}
+{{- with .Values.ichorUI.oidc.impersonate.groups }}
+- apiGroups:
+  - ""
+  resourceNames:
+  {{- toYaml . | nindent 2 }}
+  resources:
+  - groups
+  verbs:
+  - impersonate
+{{- else }}
+- apiGroups:
+  - ""
+  resources:
+  - groups
+  verbs:
+  - impersonate
+{{- end }}
+{{- end }}
 {{- end }}

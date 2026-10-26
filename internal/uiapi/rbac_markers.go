@@ -77,3 +77,11 @@ package uiapi
 // configurable). The repository token Secret needs no new rule: it is read in
 // the backend's own namespace through the namespaced secrets rule at the top.
 // +kubebuilder:rbac:groups=argoproj.io,resources=applications,verbs=get
+
+// OIDC login (docs/adr/0058): the backend calls the Kubernetes API as the
+// signed-in user. impersonate on users/groups is the strongest verb in this
+// file, so the chart only renders it when ichorUI.oidc.enabled and can
+// narrow it with resourceNames (ichorUI.oidc.impersonate.users/groups); the
+// backend itself refuses to impersonate a system: user. Never on
+// serviceaccounts or userextras.
+// +kubebuilder:rbac:groups="",resources=users;groups,verbs=impersonate

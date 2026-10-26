@@ -38,6 +38,8 @@ import (
 // made as the user, so Kubernetes decides; Ichor has no list of who may.
 const BreakGlassVerb = "break-glass"
 
+const kindTalosMachine = "TalosMachine"
+
 // breakGlass is a granted break-glass request, carried on the prPlan that
 // planWrite returns: write the CR now, then open the plan's pull request.
 type breakGlass struct {
@@ -77,7 +79,7 @@ func (s *Server) withBreakGlass(ctx context.Context, obj client.Object, plan *pr
 // nobody to ask, and "cannot tell who" is a refusal.
 func (s *Server) authorizeBreakGlass(ctx context.Context, obj client.Object) error {
 	_, signedIn := IdentityFrom(ctx)
-	if !(signedIn && s.Impersonate != nil) && !s.CallerCredentials {
+	if (!signedIn || s.Impersonate == nil) && !s.CallerCredentials {
 		return connect.NewError(connect.CodePermissionDenied,
 			errors.New("break-glass is refused: it needs a signed-in user whose own Kubernetes RBAC grants the "+BreakGlassVerb+
 				" verb, and this backend has no user (enable OIDC with ichorUI.oidc, or use `ichor ... --break-glass` with your kubeconfig)"))
@@ -112,7 +114,7 @@ func kindOf(obj client.Object) (kind, resource string) {
 		return "TalosConfigPatch", "talosconfigpatches"
 	}
 
-	return "TalosMachine", "talosmachines"
+	return kindTalosMachine, "talosmachines"
 }
 
 // afterBreakGlass runs once the direct write has succeeded: it marks audit,
@@ -176,14 +178,16 @@ func (s *Server) afterBreakGlass(
 func (s *Server) emitBreakGlassEvent(ctx context.Context, obj client.Object, kind, message string) error {
 	now := metav1.NewTime(s.now())
 
-	return s.Client.Create(ctx, &corev1.Event{
-		ObjectMeta: metav1.ObjectMeta{GenerateName: obj.GetName() + ".", Namespace: obj.GetNamespace()},
+	ev := &corev1.Event{
 		InvolvedObject: corev1.ObjectReference{
 			APIVersion: ichorv1alpha1.GroupVersion.String(), Kind: kind,
 			Namespace: obj.GetNamespace(), Name: obj.GetName(), UID: obj.GetUID(),
 		},
 		Reason: "BreakGlass", Message: message, Type: corev1.EventTypeWarning,
-		Source:    corev1.EventSource{Component: "ichor-ui"},
+		Source:         corev1.EventSource{Component: "ichor-ui"},
 		FirstTimestamp: now, LastTimestamp: now, Count: 1,
-	})
+	}
+	ev.GenerateName, ev.Namespace = obj.GetName()+".", obj.GetNamespace()
+
+	return s.Client.Create(ctx, ev)
 }

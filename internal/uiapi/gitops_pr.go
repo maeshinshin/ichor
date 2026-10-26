@@ -369,7 +369,7 @@ func toGeneric(v any) (any, error) {
 
 func machineTarget(m *ichorv1alpha1.TalosMachine) prmode.Target {
 	return prmode.Target{
-		APIVersion: ichorv1alpha1.GroupVersion.String(), Kind: "TalosMachine", Namespace: m.Namespace, Name: m.Name,
+		APIVersion: ichorv1alpha1.GroupVersion.String(), Kind: kindTalosMachine, Namespace: m.Namespace, Name: m.Name,
 	}
 }
 

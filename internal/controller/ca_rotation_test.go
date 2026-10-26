@@ -221,7 +221,7 @@ func newCARotFixture() *caRotFixture {
 	f := &caRotFixture{recorder: record.NewFakeRecorder(100)}
 	f.old = newTestBundle("v1.14")
 	f.secret = newTestSecret(f.old)
-	f.cluster = newTestCluster(f.secret.Name, "v1.14")
+	f.cluster = newTestClusterWithCount(3, f.secret.Name)
 	f.world = &rotWorld{nodes: map[string]*rotNode{}, secretName: f.secret.Name, versionErr: map[string]error{}}
 
 	for _, n := range []string{"cp1", "cp2", "cp3"} {
@@ -383,7 +383,7 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 		Expect(rot.Kubernetes.Key).NotTo(BeEmpty())
 
 		// And it is still there, unchanged, when the first node is told to trust the new CA.
-		op, _ = f.runUntil(op, atStage(ichorv1alpha1.CARotationStageIssuing))
+		f.runUntil(op, atStage(ichorv1alpha1.CARotationStageIssuing))
 		Expect(f.world.rotationSavedAtFirstApply).NotTo(BeNil())
 		Expect(*f.world.rotationSavedAtFirstApply).To(BeTrue(), "the first node was told to trust a CA whose key was not yet saved")
 		Expect(f.storedRotation().Talos.Key).To(Equal(rot.Talos.Key))
@@ -544,7 +544,7 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 		delete(secret.Data, secretsbundle.RotationKey)
 		Expect(k8sClient.Update(ctx, &secret)).To(Succeed())
 
-		op, _ = f.runUntil(op, completed)
+		f.runUntil(op, completed)
 		Expect(f.storedBundle().Certs.OS.Crt).To(Equal(rot.Talos.Crt))
 	})
 
@@ -693,7 +693,7 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 		applied := len(f.world.applies)
 		_, err = reconcileMachine(mr, f.machines[0])
 		Expect(err).NotTo(HaveOccurred())
-		Expect(len(f.world.applies)).To(Equal(applied), "the machine controller applied something after the rotation")
+		Expect(f.world.applies).To(HaveLen(applied), "the machine controller applied something after the rotation")
 		Expect(readyCondition(fetchMachine(f.machines[0])).Status).To(Equal(metav1.ConditionTrue))
 	})
 
@@ -740,7 +740,7 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 		f.world.dialLeak = string(rot.Talos.Key)
 		f.world.nodes[f.machines[1].Name].down = true
 
-		var errs []error
+		errs := make([]error, 0, 6)
 
 		var snapshots []string
 

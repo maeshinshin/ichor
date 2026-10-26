@@ -1000,7 +1000,7 @@ type StreamNodeLogsRequest struct {
 	// merged multi-node viewer.
 	Machines []*ObjectRef `protobuf:"bytes,1,rep,name=machines,proto3" json:"machines,omitempty"`
 	// resume_token is opaque; omit it to start from the current tail (the
-	// last tail_lines lines, never the whole history; docs/adr/0078).
+	// last tail_lines lines, never the whole history; docs/adr/0079).
 	ResumeToken string `protobuf:"bytes,2,opt,name=resume_token,json=resumeToken,proto3" json:"resume_token,omitempty"`
 	// service selects which log: a Talos service name (e.g. "kubelet",
 	// "etcd", "trustd", "apid", "machined"), read through Talos's Logs API.
@@ -1010,7 +1010,7 @@ type StreamNodeLogsRequest struct {
 	Service string `protobuf:"bytes,3,opt,name=service,proto3" json:"service,omitempty"`
 	// tail_lines is how many of the most recent lines to start from. Zero
 	// means the server default (500); a negative value means the whole
-	// history; the server caps it at 10000 (docs/adr/0078).
+	// history; the server caps it at 10000 (docs/adr/0079).
 	TailLines int32 `protobuf:"varint,4,opt,name=tail_lines,json=tailLines,proto3" json:"tail_lines,omitempty"`
 	// follow keeps the stream open for new lines. Unset means true; false
 	// returns a snapshot of the tail and ends the stream.

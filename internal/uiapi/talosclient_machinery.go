@@ -290,7 +290,7 @@ func (t *machineryNodeTalosClient) StreamLogs(ctx context.Context, service strin
 	if service == "" {
 		// shortcut: Dmesg only has a boolean tail, no line count, so a
 		// snapshot reads the whole kernel ring and keeps the last TailLines
-		// lines here; a followed stream keeps the boolean tail (docs/adr/0078).
+		// lines here; a followed stream keeps the boolean tail (docs/adr/0079).
 		stream, err = t.c.Dmesg(ctx, opts.Follow, opts.Follow)
 		what = "kernel log"
 	} else {

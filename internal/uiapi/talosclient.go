@@ -88,7 +88,7 @@ type NodeTalosClient interface {
 	StreamLogs(ctx context.Context, service string, since time.Time, opts LogOptions, onLine func(LogLine) error) error
 }
 
-// Tail bounds for StreamNodeLogs (docs/adr/0078): a request that names no
+// Tail bounds for StreamNodeLogs (docs/adr/0079): a request that names no
 // tail_lines gets DefaultTailLines, and no request gets more than
 // MaxTailLines unless it asks for the whole history with a negative value.
 const (

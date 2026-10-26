@@ -154,7 +154,7 @@ message StreamNodeLogsRequest {
   // merged multi-node viewer.
   repeated ObjectRef machines = 1;
   // resume_token is opaque; omit it to start from the current tail (the
-  // last tail_lines lines, never the whole history; docs/adr/0078).
+  // last tail_lines lines, never the whole history; docs/adr/0079).
   string resume_token = 2;
   // service selects which log: a Talos service name (e.g. "kubelet",
   // "etcd", "trustd", "apid", "machined"), read through Talos's Logs API.
@@ -164,7 +164,7 @@ message StreamNodeLogsRequest {
   string service = 3;
   // tail_lines is how many of the most recent lines to start from. Zero
   // means the server default (500); a negative value means the whole
-  // history; the server caps it at 10000 (docs/adr/0078).
+  // history; the server caps it at 10000 (docs/adr/0079).
   int32 tail_lines = 4;
   // follow keeps the stream open for new lines. Unset means true; false
   // returns a snapshot of the tail and ends the stream.

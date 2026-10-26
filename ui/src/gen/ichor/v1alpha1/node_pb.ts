@@ -447,7 +447,7 @@ export type StreamNodeLogsRequest = Message<"ichor.v1alpha1.StreamNodeLogsReques
 
   /**
    * resume_token is opaque; omit it to start from the current tail (the
-   * last tail_lines lines, never the whole history; docs/adr/0078).
+   * last tail_lines lines, never the whole history; docs/adr/0079).
    *
    * @generated from field: string resume_token = 2;
    */
@@ -467,7 +467,7 @@ export type StreamNodeLogsRequest = Message<"ichor.v1alpha1.StreamNodeLogsReques
   /**
    * tail_lines is how many of the most recent lines to start from. Zero
    * means the server default (500); a negative value means the whole
-   * history; the server caps it at 10000 (docs/adr/0078).
+   * history; the server caps it at 10000 (docs/adr/0079).
    *
    * @generated from field: int32 tail_lines = 4;
    */

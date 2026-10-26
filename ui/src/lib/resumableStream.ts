@@ -12,25 +12,45 @@ import { Code, ConnectError } from '@connectrpc/connect'
 // from off each message. A clean stream end (the iterable finishes without
 // throwing) ends the generator; CodeUnavailable reconnects from the latest
 // token seen so far; any other error propagates to the caller.
+//
+// Reconnects back off (500 ms doubling to 10 s) and give up after
+// `maxAttempts` in a row with no message in between: an unreachable node
+// answers Unavailable every time, and an immediate retry loop would hammer
+// the backend and the page forever (ADR 0079). `signal` ends the loop.
+export interface ResumeOptions {
+  maxAttempts?: number
+  signal?: AbortSignal
+  sleep?: (ms: number) => Promise<void>
+}
+
 export async function* streamWithResume<T>(
   call: (resumeToken: string) => AsyncIterable<T>,
   getResumeToken: (message: T) => string,
   initialResumeToken = '',
+  { maxAttempts = 8, signal, sleep = defaultSleep }: ResumeOptions = {},
 ): AsyncGenerator<T, void, unknown> {
   let token = initialResumeToken
+  let attempts = 0
   for (;;) {
     try {
       for await (const message of call(token)) {
+        attempts = 0
         const next = getResumeToken(message)
         if (next) token = next
         yield message
       }
       return
     } catch (err) {
-      if (err instanceof ConnectError && err.code === Code.Unavailable) {
+      if (signal?.aborted) return
+      if (err instanceof ConnectError && err.code === Code.Unavailable && attempts < maxAttempts) {
+        await sleep(Math.min(500 * 2 ** attempts, 10_000))
+        attempts++
+        if (signal?.aborted) return
         continue
       }
       throw err
     }
   }
 }
+
+const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))

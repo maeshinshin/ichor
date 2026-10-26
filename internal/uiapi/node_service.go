@@ -248,7 +248,7 @@ func (s *Server) StreamNodeLogs(
 // logOptions resolves a request's tail_lines and follow into what the Talos
 // client gets: tail defaults to DefaultTailLines, is capped at MaxTailLines
 // (negative stays negative, meaning the whole history), and follow defaults
-// to true so existing callers keep streaming (docs/adr/0078).
+// to true so existing callers keep streaming (docs/adr/0079).
 func logOptions(req *pb.StreamNodeLogsRequest) LogOptions {
 	tail := req.GetTailLines()
 

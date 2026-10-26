@@ -33,6 +33,11 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
+const (
+	nameKubelet = "kubelet"
+	gatewayIP   = "10.0.0.1"
+)
+
 var _ = Describe("Talos runtime mapping", func() {
 	It("keeps the executable name only and never the command line", func() {
 		p := processFromInfo(&machineapi.ProcessInfo{
@@ -47,7 +52,7 @@ var _ = Describe("Talos runtime mapping", func() {
 	})
 
 	It("keeps the union of the heaviest processes by CPU and memory, bounded", func() {
-		var all []*machineapi.ProcessInfo
+		all := make([]*machineapi.ProcessInfo, 0, 100)
 		for i := range 100 {
 			all = append(all, &machineapi.ProcessInfo{
 				Pid: int32(i), Executable: "/bin/p", CpuTime: float64(i), ResidentMemory: uint64(100 - i), //nolint:gosec // test data
@@ -75,7 +80,7 @@ var _ = Describe("Talos runtime mapping", func() {
 
 	It("maps a pod without reading its spec beyond container counts", func() {
 		pod := &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "p", CreationTimestamp: metav1.NewTime(time.Unix(0, 0))},
+			Namespace: "ns", Name: "p", CreationTimestamp: metav1.NewTime(time.Unix(0, 0)),
 			Spec: corev1.PodSpec{Containers: []corev1.Container{
 				{Name: "a", Env: []corev1.EnvVar{{Name: "TOKEN", Value: fakeSecret}}}, {Name: "b"},
 			}},
@@ -108,8 +113,8 @@ var _ = Describe("NodeService.GetNodeTalosRuntime", func() {
 		Expect(k8sClient.Update(ctx, m)).To(Succeed())
 
 		node := &corev1.Node{
-			ObjectMeta: metav1.ObjectMeta{Name: m.Spec.Hostname},
-			Spec:       corev1.NodeSpec{Taints: []corev1.Taint{{Key: "dedicated", Value: "x", Effect: corev1.TaintEffectNoSchedule}}},
+			Name: m.Spec.Hostname,
+			Spec: corev1.NodeSpec{Taints: []corev1.Taint{{Key: "dedicated", Value: "x", Effect: corev1.TaintEffectNoSchedule}}},
 		}
 		Expect(k8sClient.Create(ctx, node)).To(Succeed())
 
@@ -121,7 +126,7 @@ var _ = Describe("NodeService.GetNodeTalosRuntime", func() {
 		Expect(k8sClient.Status().Update(ctx, node)).To(Succeed())
 
 		pod := &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{Name: "runtime-pod", Namespace: testNamespace},
+			Name: "runtime-pod", Namespace: testNamespace,
 			Spec: corev1.PodSpec{
 				NodeName:   node.Name,
 				Containers: []corev1.Container{{Name: "c", Image: "busybox", Env: []corev1.EnvVar{{Name: "TOKEN", Value: fakeSecret}}}},
@@ -135,9 +140,9 @@ var _ = Describe("NodeService.GetNodeTalosRuntime", func() {
 			},
 			runtimeProcesses: &pb.TalosProcessesSection{Total: 9, Processes: []*pb.TalosProcess{{Pid: 1, Name: "init"}}},
 			runtimeContainers: &pb.TalosContainersSection{Containers: []*pb.TalosContainer{
-				{Name: "kubelet", Image: "user:" + fakeSecret + "@reg.local/kubelet:1"},
+				{Name: nameKubelet, Image: "user:" + fakeSecret + "@reg.local/kubelet:1"},
 			}},
-			runtimeNetwork: &pb.TalosNetworkStateSection{Routes: []*pb.TalosRoute{{Destination: "0.0.0.0/0", Gateway: "10.0.0.1"}}},
+			runtimeNetwork: &pb.TalosNetworkStateSection{Routes: []*pb.TalosRoute{{Destination: "0.0.0.0/0", Gateway: gatewayIP}}},
 			runtimeModules: &pb.TalosKernelModulesSection{Modules: []*pb.TalosKernelModule{{Name: "nf_tables"}}},
 		}
 

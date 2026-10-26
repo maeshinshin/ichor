@@ -29,6 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/gitopstracking"
 )
 
 // exportTestCluster is the fixture cluster name shared by every test in
@@ -113,7 +114,7 @@ func TestRunGitopsExport_WritesApprovedCRsOnly(t *testing.T) {
 // TestRunGitopsExport_WarnsWhenUnapprovedMachineIsFluxTracked proves the
 // "warn, do not export" path for a TalosMachine that is unapproved but
 // already carries a managedFields entry for Flux's own field manager
-// (gitops_tracking.go's isTracked, the cheap single-object signal
+// (gitopstracking.IsTracked, the cheap single-object signal
 // architecture.md names for Flux, since Flux marks nothing else on the
 // object itself).
 func TestRunGitopsExport_WarnsWhenUnapprovedMachineIsFluxTracked(t *testing.T) {
@@ -124,7 +125,7 @@ func TestRunGitopsExport_WarnsWhenUnapprovedMachineIsFluxTracked(t *testing.T) {
 	machine.Name = "flux-owned-machine"
 	machine.Spec.ApprovalState = ichorv1alpha1.MachineApprovalStatePending
 	machine.ManagedFields = []metav1.ManagedFieldsEntry{{
-		Manager: fluxFieldManager, Operation: metav1.ManagedFieldsOperationApply,
+		Manager: gitopstracking.FluxKustomizeControllerFieldManager, Operation: metav1.ManagedFieldsOperationApply,
 		APIVersion: testAPIVersion, FieldsType: "FieldsV1",
 	}}
 

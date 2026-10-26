@@ -239,7 +239,7 @@ func TestDownloadCommandsKeepTheirOwnOutputFlag(t *testing.T) {
 	t.Parallel()
 
 	for _, name := range []string{"support-bundle", "pcap"} {
-		c, _, err := rootCmd.Find([]string{"node", name})
+		c, _, err := rootCmd.Find([]string{nodeCmd.Name(), name})
 		if err != nil {
 			t.Fatal(err)
 		}

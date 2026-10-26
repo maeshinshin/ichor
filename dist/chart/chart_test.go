@@ -1319,7 +1319,9 @@ func TestUIDiagnosticsDownloadVerb(t *testing.T) {
 	if role == nil || !grants(role) {
 		t.Fatalf("expected ClusterRole %q granting the download verb; got %v", roleName, role)
 	}
-	for _, sub := range []string{"talosmachines/support-bundle", "talosmachines/etcd-snapshot", "talosmachines/packet-capture"} {
+	for _, sub := range []string{
+		"talosmachines/support-bundle", "talosmachines/etcd-snapshot", "talosmachines/packet-capture",
+	} {
 		if !strings.Contains(fmt.Sprint(role["rules"]), sub) {
 			t.Errorf("ClusterRole %q lacks %s", roleName, sub)
 		}

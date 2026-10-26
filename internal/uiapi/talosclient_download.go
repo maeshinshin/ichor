@@ -24,7 +24,7 @@ import (
 	"fmt"
 	"io"
 	"path"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/cosi-project/runtime/pkg/resource"
@@ -139,8 +139,11 @@ const (
 // of everything Talos itself marks sensitive: the secrets namespace holds
 // certificates and keys, the config namespace holds the machine configuration,
 // and the kernel command line can carry talos.config=<url with a token>.
+// configNamespace is the COSI namespace of the machine configuration.
+const configNamespace = "config"
+
 var (
-	excludedNamespaces = map[resource.Namespace]bool{"secrets": true, "config": true}
+	excludedNamespaces = map[resource.Namespace]bool{"secrets": true, configNamespace: true}
 	excludedTypes      = map[resource.Type]bool{
 		"KernelCmdlines.runtime.talos.dev": true,
 		"MachineConfigs.config.talos.dev":  true,
@@ -164,7 +167,7 @@ func (t *machineryDownloadClient) CollectSupport(
 			names = append(names, n)
 		}
 
-		sort.Strings(names)
+		slices.Sort(names)
 
 		for _, n := range names {
 			if err := add(n, files[n]); err != nil {
@@ -395,7 +398,7 @@ func (t *machineryDownloadClient) containers(ctx context.Context) ([]byte, error
 	for _, src := range []struct {
 		ns     string
 		driver common.ContainerDriver
-	}{{"k8s.io", common.ContainerDriver_CRI}, {"system", common.ContainerDriver_CONTAINERD}} {
+	}{{"k8s.io", common.ContainerDriver_CRI}, {constants.SystemContainerdNamespace, common.ContainerDriver_CONTAINERD}} {
 		resp, err := t.c.Containers(ctx, src.ns, src.driver)
 		if err != nil {
 			errs = append(errs, err)
@@ -443,7 +446,7 @@ func collectResources(ctx context.Context, st state.State, problems *[]string) (
 
 		list, err := st.List(ctx, resource.NewMetadata(spec.DefaultNamespace, spec.Type, "", resource.VersionUndefined))
 		if err != nil {
-			*problems = append(*problems, "resource "+string(spec.Type)+": "+truncateText(err.Error(), 300))
+			*problems = append(*problems, "resource "+spec.Type+": "+truncateText(err.Error(), 300))
 
 			continue
 		}

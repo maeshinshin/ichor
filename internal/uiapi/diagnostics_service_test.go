@@ -25,6 +25,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -36,7 +37,6 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -50,6 +50,7 @@ const (
 	diagNobodyUser = "diag-nobody"
 	diagUserHeader = "X-Test-User"
 	diagSecret     = "TOP-SECRET-MARKER"
+	diagIface      = "eth0"
 )
 
 // fakeDownloadClient stands in for the Talos API: no call reaches a node.
@@ -240,11 +241,11 @@ var _ = Describe("DiagnosticsService", func() {
 		// The admin user may read and download; the nobody user may only read.
 		for user, rules := range map[string][]rbacv1.PolicyRule{diagAdminUser: {read, download}, diagNobodyUser: {read}} {
 			name := "diag-test-" + user
-			Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: name}, Rules: rules}))).To(Succeed())
+			Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, &rbacv1.ClusterRole{Name: name, Rules: rules}))).To(Succeed())
 			Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, &rbacv1.ClusterRoleBinding{
-				ObjectMeta: metav1.ObjectMeta{Name: name},
-				RoleRef:    rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: name},
-				Subjects:   []rbacv1.Subject{{APIGroup: rbacv1.GroupName, Kind: "User", Name: user}},
+				Name:     name,
+				RoleRef:  rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: reflect.TypeFor[rbacv1.ClusterRole]().Name(), Name: name},
+				Subjects: []rbacv1.Subject{{APIGroup: rbacv1.GroupName, Kind: rbacv1.UserKind, Name: user}},
 			}))).To(Succeed())
 		}
 
@@ -285,7 +286,7 @@ var _ = Describe("DiagnosticsService", func() {
 				},
 				"packet capture": func() error {
 					s, err := c.CapturePackets(ctx, asDiagUser(diagNobodyUser, &pb.CapturePacketsRequest{
-						Machine: objectRef(cp.Namespace, cp.Name), Interface: "eth0",
+						Machine: objectRef(cp.Namespace, cp.Name), Interface: diagIface,
 					}))
 					if err != nil {
 						return err
@@ -419,7 +420,7 @@ var _ = Describe("DiagnosticsService", func() {
 			_, s, closeFn := newDiagnosticsServer(&fakeDownloadClient{}, k8sClient, nil)
 			defer closeFn()
 
-			var releases []func()
+			releases := make([]func(), 0, maxConcurrentDownloads)
 
 			for range maxConcurrentDownloads {
 				r, err := s.acquireDownloadSlot()
@@ -458,12 +459,12 @@ var _ = Describe("DiagnosticsService", func() {
 			ref := objectRef(cp.Namespace, cp.Name)
 
 			for name, req := range map[string]*pb.CapturePacketsRequest{
-				"duration above the maximum": {Machine: ref, Interface: "eth0", DurationSeconds: 301},
-				"negative duration":          {Machine: ref, Interface: "eth0", DurationSeconds: -1},
-				"size above the maximum":     {Machine: ref, Interface: "eth0", MaxBytes: MaxCaptureBytes + 1},
+				"duration above the maximum": {Machine: ref, Interface: diagIface, DurationSeconds: 301},
+				"negative duration":          {Machine: ref, Interface: diagIface, DurationSeconds: -1},
+				"size above the maximum":     {Machine: ref, Interface: diagIface, MaxBytes: MaxCaptureBytes + 1},
 				"empty interface":            {Machine: ref},
 				"interface with a slash":     {Machine: ref, Interface: "../eth0"},
-				"garbage filter":             {Machine: ref, Interface: "eth0", BpfFilter: "tcp port 80"},
+				"garbage filter":             {Machine: ref, Interface: diagIface, BpfFilter: "tcp port 80"},
 			} {
 				_, _, err := capture(c, req)
 				Expect(connect.CodeOf(err)).To(Equal(connect.CodeInvalidArgument), name)
@@ -479,14 +480,14 @@ var _ = Describe("DiagnosticsService", func() {
 			defer closeFn()
 
 			name, data, err := capture(c, &pb.CapturePacketsRequest{
-				Machine: objectRef(cp.Namespace, cp.Name), Interface: "eth0", MaxBytes: 1234,
+				Machine: objectRef(cp.Namespace, cp.Name), Interface: diagIface, MaxBytes: 1234,
 				BpfFilter: "{ 0x6, 0, 0, 0x00040000 },",
 			})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(data).To(HaveLen(1234))
 			Expect(name).To(HavePrefix("capture-" + cp.Name + "-eth0-"))
 			Expect(name).To(HaveSuffix(".pcap"))
-			Expect(fake.gotIface).To(Equal("eth0"))
+			Expect(fake.gotIface).To(Equal(diagIface))
 			Expect(fake.gotFilter).To(HaveLen(1))
 
 			events := downloadEvents(cp)
@@ -500,7 +501,7 @@ var _ = Describe("DiagnosticsService", func() {
 			defer closeFn()
 
 			start := time.Now()
-			_, data, err := capture(c, &pb.CapturePacketsRequest{Machine: objectRef(cp.Namespace, cp.Name), Interface: "eth0", DurationSeconds: 1})
+			_, data, err := capture(c, &pb.CapturePacketsRequest{Machine: objectRef(cp.Namespace, cp.Name), Interface: diagIface, DurationSeconds: 1})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(string(data)).To(Equal("header"))
 			Expect(time.Since(start)).To(BeNumerically("<", 10*time.Second))

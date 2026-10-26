@@ -233,16 +233,15 @@ func targetPath(output, suggested string) (string, error) {
 		return "", errors.New("the server suggested no file name; pass -o FILE")
 	}
 
-	switch {
-	case output == "":
+	if output == "" {
 		return name, nil
-	default:
-		if st, err := os.Stat(output); err == nil && st.IsDir() {
-			return filepath.Join(output, name), nil
-		}
-
-		return output, nil
 	}
+
+	if st, err := os.Stat(output); err == nil && st.IsDir() {
+		return filepath.Join(output, name), nil
+	}
+
+	return output, nil
 }
 
 type downloadCall func(ctx context.Context, c ichorv1alpha1connect.DiagnosticsServiceClient) (chunkStream, error)

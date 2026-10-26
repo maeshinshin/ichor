@@ -105,7 +105,10 @@ export type AuditRecord = Message<"ichor.v1alpha1.AuditRecord"> & {
   at?: Timestamp | undefined;
 
   /**
-   * action is "approve" or "reject".
+   * action is "approve" or "reject" (and "update" or "delete" for patches).
+   * When the change was proposed as a pull request instead of written, it
+   * carries a "-pr" suffix ("approve-pr"): the request is recorded, the
+   * change is not applied until the pull request merges.
    *
    * @generated from field: string action = 3;
    */

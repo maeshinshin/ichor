@@ -396,11 +396,18 @@ func (x *ApproveMachineRequest) GetReason() string {
 }
 
 type ApproveMachineResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Machine       *Machine               `protobuf:"bytes,1,opt,name=machine,proto3" json:"machine,omitempty"`
-	Audit         *AuditRecord           `protobuf:"bytes,2,opt,name=audit,proto3" json:"audit,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// machine is the machine as stored. When pull_request_url is set nothing
+	// was written to the cluster and it is still pending until the pull
+	// request merges and syncs.
+	Machine *Machine     `protobuf:"bytes,1,opt,name=machine,proto3" json:"machine,omitempty"`
+	Audit   *AuditRecord `protobuf:"bytes,2,opt,name=audit,proto3" json:"audit,omitempty"`
+	// pull_request_url is set when the approval was proposed as a pull request
+	// (strict mode, or a machine Argo CD tracks) instead of being written
+	// (docs/adr/0056).
+	PullRequestUrl string `protobuf:"bytes,3,opt,name=pull_request_url,json=pullRequestUrl,proto3" json:"pull_request_url,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *ApproveMachineResponse) Reset() {
@@ -445,6 +452,13 @@ func (x *ApproveMachineResponse) GetAudit() *AuditRecord {
 		return x.Audit
 	}
 	return nil
+}
+
+func (x *ApproveMachineResponse) GetPullRequestUrl() string {
+	if x != nil {
+		return x.PullRequestUrl
+	}
+	return ""
 }
 
 type RejectMachineRequest struct {
@@ -500,10 +514,14 @@ func (x *RejectMachineRequest) GetReason() string {
 }
 
 type RejectMachineResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Audit         *AuditRecord           `protobuf:"bytes,1,opt,name=audit,proto3" json:"audit,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Audit *AuditRecord           `protobuf:"bytes,1,opt,name=audit,proto3" json:"audit,omitempty"`
+	// pull_request_url is set when the machine is tracked by Argo CD and the
+	// rejection was proposed as a pull request instead of being written
+	// (docs/adr/0056).
+	PullRequestUrl string `protobuf:"bytes,2,opt,name=pull_request_url,json=pullRequestUrl,proto3" json:"pull_request_url,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *RejectMachineResponse) Reset() {
@@ -541,6 +559,13 @@ func (x *RejectMachineResponse) GetAudit() *AuditRecord {
 		return x.Audit
 	}
 	return nil
+}
+
+func (x *RejectMachineResponse) GetPullRequestUrl() string {
+	if x != nil {
+		return x.PullRequestUrl
+	}
+	return ""
 }
 
 // MachineIdentity mirrors TalosMachine.spec.identity: the tuple Ichor keys a
@@ -826,15 +851,17 @@ const file_ichor_v1alpha1_machine_proto_rawDesc = "" +
 	"\x06reason\x18\x05 \x01(\tR\x06reason\x1a=\n" +
 	"\x0fNodeLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"~\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xa8\x01\n" +
 	"\x16ApproveMachineResponse\x121\n" +
 	"\amachine\x18\x01 \x01(\v2\x17.ichor.v1alpha1.MachineR\amachine\x121\n" +
-	"\x05audit\x18\x02 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\"c\n" +
+	"\x05audit\x18\x02 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\x12(\n" +
+	"\x10pull_request_url\x18\x03 \x01(\tR\x0epullRequestUrl\"c\n" +
 	"\x14RejectMachineRequest\x123\n" +
 	"\amachine\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\amachine\x12\x16\n" +
-	"\x06reason\x18\x02 \x01(\tR\x06reason\"J\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason\"t\n" +
 	"\x15RejectMachineResponse\x121\n" +
-	"\x05audit\x18\x01 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\"b\n" +
+	"\x05audit\x18\x01 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\x12(\n" +
+	"\x10pull_request_url\x18\x02 \x01(\tR\x0epullRequestUrl\"b\n" +
 	"\x0fMachineIdentity\x12\x12\n" +
 	"\x04uuid\x18\x01 \x01(\tR\x04uuid\x12\x16\n" +
 	"\x06serial\x18\x02 \x01(\tR\x06serial\x12#\n" +

@@ -168,7 +168,10 @@ type AuditRecord struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Actor string                 `protobuf:"bytes,1,opt,name=actor,proto3" json:"actor,omitempty"`
 	At    *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=at,proto3" json:"at,omitempty"`
-	// action is "approve" or "reject".
+	// action is "approve" or "reject" (and "update" or "delete" for patches).
+	// When the change was proposed as a pull request instead of written, it
+	// carries a "-pr" suffix ("approve-pr"): the request is recorded, the
+	// change is not applied until the pull request merges.
 	Action string     `protobuf:"bytes,3,opt,name=action,proto3" json:"action,omitempty"`
 	Target *ObjectRef `protobuf:"bytes,4,opt,name=target,proto3" json:"target,omitempty"`
 	// reason is optional free text, mainly used for rejections.

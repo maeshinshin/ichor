@@ -67,8 +67,14 @@ message UpdatePatchRequest {
 }
 
 message UpdatePatchResponse {
+  // patch is the patch as stored. When pull_request_url is set nothing was
+  // written to the cluster, and this is the unchanged stored patch.
   Patch patch = 1;
   AuditRecord audit = 2;
+  // pull_request_url is set when the patch is tracked by Argo CD and the
+  // change was proposed as a pull request instead of being written
+  // (docs/adr/0056).
+  string pull_request_url = 3;
 }
 
 message DeletePatchRequest {

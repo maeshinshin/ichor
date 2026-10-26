@@ -20,7 +20,7 @@ import type { Message, UnknownEnum } from "@bufbuild/protobuf";
  * Describes the file ichor/v1alpha1/machine.proto.
  */
 export const file_ichor_v1alpha1_machine: GenFile = /*@__PURE__*/
-  fileDesc("ChxpY2hvci92MWFscGhhMS9tYWNoaW5lLnByb3RvEg5pY2hvci52MWFscGhhMSJBChNMaXN0TWFjaGluZXNSZXF1ZXN0EioKB2NsdXN0ZXIYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYiQQoUTGlzdE1hY2hpbmVzUmVzcG9uc2USKQoIbWFjaGluZXMYASADKAsyFy5pY2hvci52MWFscGhhMS5NYWNoaW5lIj8KEUdldE1hY2hpbmVSZXF1ZXN0EioKB21hY2hpbmUYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYiPgoSR2V0TWFjaGluZVJlc3BvbnNlEigKB21hY2hpbmUYASABKAsyFy5pY2hvci52MWFscGhhMS5NYWNoaW5lIvECChVBcHByb3ZlTWFjaGluZVJlcXVlc3QSKgoHbWFjaGluZRgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhIpCgRyb2xlGAIgASgOMhsuaWNob3IudjFhbHBoYTEuTWFjaGluZVJvbGUSSgoLbm9kZV9sYWJlbHMYAyADKAsyNS5pY2hvci52MWFscGhhMS5BcHByb3ZlTWFjaGluZVJlcXVlc3QuTm9kZUxhYmVsc0VudHJ5EhAKCGhvc3RuYW1lGAQgASgJEg4KBnJlYXNvbhgFIAEoCRIvCgticmVha19nbGFzcxgGIAEoCzIaLmljaG9yLnYxYWxwaGExLkJyZWFrR2xhc3MSLwoHaW5zdGFsbBgHIAEoCzIeLmljaG9yLnYxYWxwaGExLk1hY2hpbmVJbnN0YWxsGjEKD05vZGVMYWJlbHNFbnRyeRILCgNrZXkYASABKAkSDQoFdmFsdWUYAiABKAk6AjgBImMKC01hY2hpbmVEaXNrEgwKBHd3aWQYASABKAkSDgoGc2VyaWFsGAIgASgJEhIKCmJ5X2lkX3BhdGgYAyABKAkSEAoIYnVzX3BhdGgYBCABKAkSEAoIZGV2X3BhdGgYBSABKAkiSgoOTWFjaGluZUluc3RhbGwSKQoEZGlzaxgBIAEoCzIbLmljaG9yLnYxYWxwaGExLk1hY2hpbmVEaXNrEg0KBWltYWdlGAIgASgJIpgBChZBcHByb3ZlTWFjaGluZVJlc3BvbnNlEigKB21hY2hpbmUYASABKAsyFy5pY2hvci52MWFscGhhMS5NYWNoaW5lEioKBWF1ZGl0GAIgASgLMhsuaWNob3IudjFhbHBoYTEuQXVkaXRSZWNvcmQSGAoQcHVsbF9yZXF1ZXN0X3VybBgDIAEoCRIOCgZub3RpY2UYBCABKAkigwEKFFJlamVjdE1hY2hpbmVSZXF1ZXN0EioKB21hY2hpbmUYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYSDgoGcmVhc29uGAIgASgJEi8KC2JyZWFrX2dsYXNzGAMgASgLMhouaWNob3IudjFhbHBoYTEuQnJlYWtHbGFzcyJtChVSZWplY3RNYWNoaW5lUmVzcG9uc2USKgoFYXVkaXQYASABKAsyGy5pY2hvci52MWFscGhhMS5BdWRpdFJlY29yZBIYChBwdWxsX3JlcXVlc3RfdXJsGAIgASgJEg4KBm5vdGljZRgDIAEoCSJGCg9NYWNoaW5lSWRlbnRpdHkSDAoEdXVpZBgBIAEoCRIOCgZzZXJpYWwYAiABKAkSFQoNbWFjX2FkZHJlc3NlcxgDIAMoCSJgChdNYWNoaW5lQXBwcm92YWxEZWNpc2lvbhINCgVhY3RvchgBIAEoCRIOCgZyZWFzb24YAiABKAkSJgoCYXQYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wItEECgdNYWNoaW5lEiYKA3JlZhgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhIqCgdjbHVzdGVyGAIgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmEjEKCGlkZW50aXR5GAMgASgLMh8uaWNob3IudjFhbHBoYTEuTWFjaGluZUlkZW50aXR5EhAKCGVuZHBvaW50GAQgASgJEikKBHJvbGUYBSABKA4yGy5pY2hvci52MWFscGhhMS5NYWNoaW5lUm9sZRI8Cgtub2RlX2xhYmVscxgGIAMoCzInLmljaG9yLnYxYWxwaGExLk1hY2hpbmUuTm9kZUxhYmVsc0VudHJ5EhAKCGhvc3RuYW1lGAcgASgJEi0KCmNvbmRpdGlvbnMYCSADKAsyGS5pY2hvci52MWFscGhhMS5Db25kaXRpb24SDQoFc3RhZ2UYCiABKAkSPAoOYXBwcm92YWxfc3RhdGUYCyABKA4yJC5pY2hvci52MWFscGhhMS5NYWNoaW5lQXBwcm92YWxTdGF0ZRJCChFhcHByb3ZhbF9kZWNpc2lvbhgMIAEoCzInLmljaG9yLnYxYWxwaGExLk1hY2hpbmVBcHByb3ZhbERlY2lzaW9uEi8KB2luc3RhbGwYDSABKAsyHi5pY2hvci52MWFscGhhMS5NYWNoaW5lSW5zdGFsbBoxCg9Ob2RlTGFiZWxzRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4AUoECAgQCVIIYXBwcm92ZWQqZAoLTWFjaGluZVJvbGUSHAoYTUFDSElORV9ST0xFX1VOU1BFQ0lGSUVEEAASHgoaTUFDSElORV9ST0xFX0NPTlRST0xfUExBTkUQARIXChNNQUNISU5FX1JPTEVfV09SS0VSEAIqrAEKFE1hY2hpbmVBcHByb3ZhbFN0YXRlEiYKIk1BQ0hJTkVfQVBQUk9WQUxfU1RBVEVfVU5TUEVDSUZJRUQQABIiCh5NQUNISU5FX0FQUFJPVkFMX1NUQVRFX1BFTkRJTkcQARIjCh9NQUNISU5FX0FQUFJPVkFMX1NUQVRFX0FQUFJPVkVEEAISIwofTUFDSElORV9BUFBST1ZBTF9TVEFURV9SRUpFQ1RFRBADMv8CCg5NYWNoaW5lU2VydmljZRJZCgxMaXN0TWFjaGluZXMSIy5pY2hvci52MWFscGhhMS5MaXN0TWFjaGluZXNSZXF1ZXN0GiQuaWNob3IudjFhbHBoYTEuTGlzdE1hY2hpbmVzUmVzcG9uc2USUwoKR2V0TWFjaGluZRIhLmljaG9yLnYxYWxwaGExLkdldE1hY2hpbmVSZXF1ZXN0GiIuaWNob3IudjFhbHBoYTEuR2V0TWFjaGluZVJlc3BvbnNlEl8KDkFwcHJvdmVNYWNoaW5lEiUuaWNob3IudjFhbHBoYTEuQXBwcm92ZU1hY2hpbmVSZXF1ZXN0GiYuaWNob3IudjFhbHBoYTEuQXBwcm92ZU1hY2hpbmVSZXNwb25zZRJcCg1SZWplY3RNYWNoaW5lEiQuaWNob3IudjFhbHBoYTEuUmVqZWN0TWFjaGluZVJlcXVlc3QaJS5pY2hvci52MWFscGhhMS5SZWplY3RNYWNoaW5lUmVzcG9uc2VCvQEKEmNvbS5pY2hvci52MWFscGhhMUIMTWFjaGluZVByb3RvUAFaQGdpdGh1Yi5jb20vbWFlc2hpbnNoaW4vaWNob3IvZ2VuL2dvL2ljaG9yL3YxYWxwaGExO2ljaG9ydjFhbHBoYTGiAgNJWFiqAg5JY2hvci5WMWFscGhhMcoCDkljaG9yXFYxYWxwaGEx4gIaSWNob3JcVjFhbHBoYTFcR1BCTWV0YWRhdGHqAg9JY2hvcjo6VjFhbHBoYTFiBnByb3RvMw", [file_google_protobuf_timestamp, file_ichor_v1alpha1_common]);
+  fileDesc("ChxpY2hvci92MWFscGhhMS9tYWNoaW5lLnByb3RvEg5pY2hvci52MWFscGhhMSJBChNMaXN0TWFjaGluZXNSZXF1ZXN0EioKB2NsdXN0ZXIYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYiQQoUTGlzdE1hY2hpbmVzUmVzcG9uc2USKQoIbWFjaGluZXMYASADKAsyFy5pY2hvci52MWFscGhhMS5NYWNoaW5lIj8KEUdldE1hY2hpbmVSZXF1ZXN0EioKB21hY2hpbmUYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYiPgoSR2V0TWFjaGluZVJlc3BvbnNlEigKB21hY2hpbmUYASABKAsyFy5pY2hvci52MWFscGhhMS5NYWNoaW5lIvECChVBcHByb3ZlTWFjaGluZVJlcXVlc3QSKgoHbWFjaGluZRgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhIpCgRyb2xlGAIgASgOMhsuaWNob3IudjFhbHBoYTEuTWFjaGluZVJvbGUSSgoLbm9kZV9sYWJlbHMYAyADKAsyNS5pY2hvci52MWFscGhhMS5BcHByb3ZlTWFjaGluZVJlcXVlc3QuTm9kZUxhYmVsc0VudHJ5EhAKCGhvc3RuYW1lGAQgASgJEg4KBnJlYXNvbhgFIAEoCRIvCgticmVha19nbGFzcxgGIAEoCzIaLmljaG9yLnYxYWxwaGExLkJyZWFrR2xhc3MSLwoHaW5zdGFsbBgHIAEoCzIeLmljaG9yLnYxYWxwaGExLk1hY2hpbmVJbnN0YWxsGjEKD05vZGVMYWJlbHNFbnRyeRILCgNrZXkYASABKAkSDQoFdmFsdWUYAiABKAk6AjgBImMKC01hY2hpbmVEaXNrEgwKBHd3aWQYASABKAkSDgoGc2VyaWFsGAIgASgJEhIKCmJ5X2lkX3BhdGgYAyABKAkSEAoIYnVzX3BhdGgYBCABKAkSEAoIZGV2X3BhdGgYBSABKAkiSgoOTWFjaGluZUluc3RhbGwSKQoEZGlzaxgBIAEoCzIbLmljaG9yLnYxYWxwaGExLk1hY2hpbmVEaXNrEg0KBWltYWdlGAIgASgJIpgBChZBcHByb3ZlTWFjaGluZVJlc3BvbnNlEigKB21hY2hpbmUYASABKAsyFy5pY2hvci52MWFscGhhMS5NYWNoaW5lEioKBWF1ZGl0GAIgASgLMhsuaWNob3IudjFhbHBoYTEuQXVkaXRSZWNvcmQSGAoQcHVsbF9yZXF1ZXN0X3VybBgDIAEoCRIOCgZub3RpY2UYBCABKAkigwEKFFJlamVjdE1hY2hpbmVSZXF1ZXN0EioKB21hY2hpbmUYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYSDgoGcmVhc29uGAIgASgJEi8KC2JyZWFrX2dsYXNzGAMgASgLMhouaWNob3IudjFhbHBoYTEuQnJlYWtHbGFzcyK4AQoYU2V0TWFjaGluZUluc3RhbGxSZXF1ZXN0EioKB21hY2hpbmUYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYSLwoHaW5zdGFsbBgCIAEoCzIeLmljaG9yLnYxYWxwaGExLk1hY2hpbmVJbnN0YWxsEg4KBnJlYXNvbhgDIAEoCRIvCgticmVha19nbGFzcxgEIAEoCzIaLmljaG9yLnYxYWxwaGExLkJyZWFrR2xhc3MimwEKGVNldE1hY2hpbmVJbnN0YWxsUmVzcG9uc2USKAoHbWFjaGluZRgBIAEoCzIXLmljaG9yLnYxYWxwaGExLk1hY2hpbmUSKgoFYXVkaXQYAiABKAsyGy5pY2hvci52MWFscGhhMS5BdWRpdFJlY29yZBIYChBwdWxsX3JlcXVlc3RfdXJsGAMgASgJEg4KBm5vdGljZRgEIAEoCSJtChVSZWplY3RNYWNoaW5lUmVzcG9uc2USKgoFYXVkaXQYASABKAsyGy5pY2hvci52MWFscGhhMS5BdWRpdFJlY29yZBIYChBwdWxsX3JlcXVlc3RfdXJsGAIgASgJEg4KBm5vdGljZRgDIAEoCSJGCg9NYWNoaW5lSWRlbnRpdHkSDAoEdXVpZBgBIAEoCRIOCgZzZXJpYWwYAiABKAkSFQoNbWFjX2FkZHJlc3NlcxgDIAMoCSJgChdNYWNoaW5lQXBwcm92YWxEZWNpc2lvbhINCgVhY3RvchgBIAEoCRIOCgZyZWFzb24YAiABKAkSJgoCYXQYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wItEECgdNYWNoaW5lEiYKA3JlZhgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhIqCgdjbHVzdGVyGAIgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmEjEKCGlkZW50aXR5GAMgASgLMh8uaWNob3IudjFhbHBoYTEuTWFjaGluZUlkZW50aXR5EhAKCGVuZHBvaW50GAQgASgJEikKBHJvbGUYBSABKA4yGy5pY2hvci52MWFscGhhMS5NYWNoaW5lUm9sZRI8Cgtub2RlX2xhYmVscxgGIAMoCzInLmljaG9yLnYxYWxwaGExLk1hY2hpbmUuTm9kZUxhYmVsc0VudHJ5EhAKCGhvc3RuYW1lGAcgASgJEi0KCmNvbmRpdGlvbnMYCSADKAsyGS5pY2hvci52MWFscGhhMS5Db25kaXRpb24SDQoFc3RhZ2UYCiABKAkSPAoOYXBwcm92YWxfc3RhdGUYCyABKA4yJC5pY2hvci52MWFscGhhMS5NYWNoaW5lQXBwcm92YWxTdGF0ZRJCChFhcHByb3ZhbF9kZWNpc2lvbhgMIAEoCzInLmljaG9yLnYxYWxwaGExLk1hY2hpbmVBcHByb3ZhbERlY2lzaW9uEi8KB2luc3RhbGwYDSABKAsyHi5pY2hvci52MWFscGhhMS5NYWNoaW5lSW5zdGFsbBoxCg9Ob2RlTGFiZWxzRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4AUoECAgQCVIIYXBwcm92ZWQqZAoLTWFjaGluZVJvbGUSHAoYTUFDSElORV9ST0xFX1VOU1BFQ0lGSUVEEAASHgoaTUFDSElORV9ST0xFX0NPTlRST0xfUExBTkUQARIXChNNQUNISU5FX1JPTEVfV09SS0VSEAIqrAEKFE1hY2hpbmVBcHByb3ZhbFN0YXRlEiYKIk1BQ0hJTkVfQVBQUk9WQUxfU1RBVEVfVU5TUEVDSUZJRUQQABIiCh5NQUNISU5FX0FQUFJPVkFMX1NUQVRFX1BFTkRJTkcQARIjCh9NQUNISU5FX0FQUFJPVkFMX1NUQVRFX0FQUFJPVkVEEAISIwofTUFDSElORV9BUFBST1ZBTF9TVEFURV9SRUpFQ1RFRBADMukDCg5NYWNoaW5lU2VydmljZRJZCgxMaXN0TWFjaGluZXMSIy5pY2hvci52MWFscGhhMS5MaXN0TWFjaGluZXNSZXF1ZXN0GiQuaWNob3IudjFhbHBoYTEuTGlzdE1hY2hpbmVzUmVzcG9uc2USUwoKR2V0TWFjaGluZRIhLmljaG9yLnYxYWxwaGExLkdldE1hY2hpbmVSZXF1ZXN0GiIuaWNob3IudjFhbHBoYTEuR2V0TWFjaGluZVJlc3BvbnNlEl8KDkFwcHJvdmVNYWNoaW5lEiUuaWNob3IudjFhbHBoYTEuQXBwcm92ZU1hY2hpbmVSZXF1ZXN0GiYuaWNob3IudjFhbHBoYTEuQXBwcm92ZU1hY2hpbmVSZXNwb25zZRJcCg1SZWplY3RNYWNoaW5lEiQuaWNob3IudjFhbHBoYTEuUmVqZWN0TWFjaGluZVJlcXVlc3QaJS5pY2hvci52MWFscGhhMS5SZWplY3RNYWNoaW5lUmVzcG9uc2USaAoRU2V0TWFjaGluZUluc3RhbGwSKC5pY2hvci52MWFscGhhMS5TZXRNYWNoaW5lSW5zdGFsbFJlcXVlc3QaKS5pY2hvci52MWFscGhhMS5TZXRNYWNoaW5lSW5zdGFsbFJlc3BvbnNlQr0BChJjb20uaWNob3IudjFhbHBoYTFCDE1hY2hpbmVQcm90b1ABWkBnaXRodWIuY29tL21hZXNoaW5zaGluL2ljaG9yL2dlbi9nby9pY2hvci92MWFscGhhMTtpY2hvcnYxYWxwaGExogIDSVhYqgIOSWNob3IuVjFhbHBoYTHKAg5JY2hvclxWMWFscGhhMeICGkljaG9yXFYxYWxwaGExXEdQQk1ldGFkYXRh6gIPSWNob3I6OlYxYWxwaGExYgZwcm90bzM", [file_google_protobuf_timestamp, file_ichor_v1alpha1_common]);
 
 /**
  * @generated from message ichor.v1alpha1.ListMachinesRequest
@@ -289,6 +289,79 @@ export const RejectMachineRequestSchema: GenMessage<RejectMachineRequest> = /*@_
   messageDesc(file_ichor_v1alpha1_machine, 8);
 
 /**
+ * @generated from message ichor.v1alpha1.SetMachineInstallRequest
+ */
+export type SetMachineInstallRequest = Message<"ichor.v1alpha1.SetMachineInstallRequest"> & {
+  /**
+   * @generated from field: ichor.v1alpha1.ObjectRef machine = 1;
+   */
+  machine?: ObjectRef | undefined;
+
+  /**
+   * install is required: the system disk and optionally the installer image.
+   *
+   * @generated from field: ichor.v1alpha1.MachineInstall install = 2;
+   */
+  install?: MachineInstall | undefined;
+
+  /**
+   * @generated from field: string reason = 3;
+   */
+  reason: string;
+
+  /**
+   * break_glass requests an emergency direct write.
+   *
+   * @generated from field: ichor.v1alpha1.BreakGlass break_glass = 4;
+   */
+  breakGlass?: BreakGlass | undefined;
+};
+
+/**
+ * Describes the message ichor.v1alpha1.SetMachineInstallRequest.
+ * Use `create(SetMachineInstallRequestSchema)` to create a new message.
+ */
+export const SetMachineInstallRequestSchema: GenMessage<SetMachineInstallRequest> = /*@__PURE__*/
+  messageDesc(file_ichor_v1alpha1_machine, 9);
+
+/**
+ * @generated from message ichor.v1alpha1.SetMachineInstallResponse
+ */
+export type SetMachineInstallResponse = Message<"ichor.v1alpha1.SetMachineInstallResponse"> & {
+  /**
+   * machine is the machine as stored (unchanged when a pull request was
+   * proposed instead).
+   *
+   * @generated from field: ichor.v1alpha1.Machine machine = 1;
+   */
+  machine?: Machine | undefined;
+
+  /**
+   * @generated from field: ichor.v1alpha1.AuditRecord audit = 2;
+   */
+  audit?: AuditRecord | undefined;
+
+  /**
+   * pull_request_url and notice: see ApproveMachineResponse.
+   *
+   * @generated from field: string pull_request_url = 3;
+   */
+  pullRequestUrl: string;
+
+  /**
+   * @generated from field: string notice = 4;
+   */
+  notice: string;
+};
+
+/**
+ * Describes the message ichor.v1alpha1.SetMachineInstallResponse.
+ * Use `create(SetMachineInstallResponseSchema)` to create a new message.
+ */
+export const SetMachineInstallResponseSchema: GenMessage<SetMachineInstallResponse> = /*@__PURE__*/
+  messageDesc(file_ichor_v1alpha1_machine, 10);
+
+/**
  * @generated from message ichor.v1alpha1.RejectMachineResponse
  */
 export type RejectMachineResponse = Message<"ichor.v1alpha1.RejectMachineResponse"> & {
@@ -318,7 +391,7 @@ export type RejectMachineResponse = Message<"ichor.v1alpha1.RejectMachineRespons
  * Use `create(RejectMachineResponseSchema)` to create a new message.
  */
 export const RejectMachineResponseSchema: GenMessage<RejectMachineResponse> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_machine, 9);
+  messageDesc(file_ichor_v1alpha1_machine, 11);
 
 /**
  * MachineIdentity mirrors TalosMachine.spec.identity: the tuple Ichor keys a
@@ -349,7 +422,7 @@ export type MachineIdentity = Message<"ichor.v1alpha1.MachineIdentity"> & {
  * Use `create(MachineIdentitySchema)` to create a new message.
  */
 export const MachineIdentitySchema: GenMessage<MachineIdentity> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_machine, 10);
+  messageDesc(file_ichor_v1alpha1_machine, 12);
 
 /**
  * MachineApprovalDecision records who decided approval_state, when, and
@@ -383,7 +456,7 @@ export type MachineApprovalDecision = Message<"ichor.v1alpha1.MachineApprovalDec
  * Use `create(MachineApprovalDecisionSchema)` to create a new message.
  */
 export const MachineApprovalDecisionSchema: GenMessage<MachineApprovalDecision> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_machine, 11);
+  messageDesc(file_ichor_v1alpha1_machine, 13);
 
 /**
  * @generated from message ichor.v1alpha1.Machine
@@ -469,7 +542,7 @@ export type Machine = Message<"ichor.v1alpha1.Machine"> & {
  * Use `create(MachineSchema)` to create a new message.
  */
 export const MachineSchema: GenMessage<Machine> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_machine, 12);
+  messageDesc(file_ichor_v1alpha1_machine, 14);
 
 /**
  * @generated from enum ichor.v1alpha1.MachineRole
@@ -591,6 +664,18 @@ export const MachineService: GenService<{
     methodKind: "unary";
     input: typeof RejectMachineRequestSchema;
     output: typeof RejectMachineResponseSchema;
+  },
+  /**
+   * SetMachineInstall writes only TalosMachine.spec.install of an approved
+   * machine that has not converged yet: how a machine approved
+   * without an install disk (Ready reason InstallDiskUnknown) gets one.
+   *
+   * @generated from rpc ichor.v1alpha1.MachineService.SetMachineInstall
+   */
+  setMachineInstall: {
+    methodKind: "unary";
+    input: typeof SetMachineInstallRequestSchema;
+    output: typeof SetMachineInstallResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_ichor_v1alpha1_machine, 0);

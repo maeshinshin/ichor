@@ -193,8 +193,21 @@ func TestRunInit_Flannel(t *testing.T) {
 		t.Fatalf("expected no inline manifests for flannel, got %+v", patches.Items[0].Spec.Documents[0].Config.ClusterConfig)
 	}
 
-	if got := patches.Items[0].Spec.Documents[0].Config.MachineConfig.MachineInstall.InstallDisk; got != opts.InstallDisk {
-		t.Fatalf("installDisk = %q, want %q", got, opts.InstallDisk)
+	// The install target is spec.install now; a machine.install in the patch would
+	// conflict with the UnattendedInstallConfig document at v1.14.
+	if patches.Items[0].Spec.Documents[0].Config.MachineConfig.MachineInstall != nil {
+		t.Fatalf("the bootstrap patch must not carry machine.install, got %+v",
+			patches.Items[0].Spec.Documents[0].Config.MachineConfig)
+	}
+
+	var machines ichorv1alpha1.TalosMachineList
+	if err := k8sClient.List(context.Background(), &machines); err != nil {
+		t.Fatalf("listing TalosMachines: %v", err)
+	}
+
+	if len(machines.Items) != 1 || machines.Items[0].Spec.Install == nil ||
+		machines.Items[0].Spec.Install.Disk.DevPath != opts.InstallDisk {
+		t.Fatalf("want spec.install.disk.devPath %q, got %+v", opts.InstallDisk, machines.Items)
 	}
 }
 

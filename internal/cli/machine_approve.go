@@ -34,13 +34,16 @@ type machineApproveOptions struct {
 	Labels   map[string]string
 	Hostname string
 	Reason   string
+	// InstallDisk is the system disk (see parseInstallDisk); InstallImage the installer image.
+	InstallDisk  string
+	InstallImage string
 }
 
 var machineApproveCmd = &cobra.Command{
 	Use:   "approve NAME --role controlplane|worker",
 	Short: "Approve a pending machine so the controller starts configuring it",
-	Long: `approve sets the role (and optionally node labels and a hostname) of a
-discovered machine and marks it approved; the controller then renders and
+	Long: `approve sets the role (and optionally node labels, a hostname and the
+install disk) of a discovered machine and marks it approved; the controller then renders and
 applies its configuration. It is refused for a machine whose identity is
 weak (missing UUID, serial number or permanent MAC) and for one already
 approved -- by ichor-ui, or, when ichor-ui is unreachable, by the same
@@ -59,6 +62,20 @@ func runMachineApprove(
 	role, err := parseRole(opts.Role)
 	if err != nil {
 		return err
+	}
+
+	var install *pb.MachineInstall
+
+	switch {
+	case opts.InstallDisk != "":
+		disk, err := parseInstallDisk(opts.InstallDisk)
+		if err != nil {
+			return err
+		}
+
+		install = installDiskToPB(disk, opts.InstallImage)
+	case opts.InstallImage != "":
+		return fmt.Errorf("--install-image needs --install-disk")
 	}
 
 	ref := objectRef(apiOpts.Namespace, name)
@@ -85,7 +102,7 @@ func runMachineApprove(
 
 	resp, err := c.Machine.ApproveMachine(ctx, connect.NewRequest(&pb.ApproveMachineRequest{
 		Machine: ref, Role: role, NodeLabels: opts.Labels, Hostname: opts.Hostname, Reason: opts.Reason,
-		BreakGlass: breakGlassOf(apiOpts),
+		BreakGlass: breakGlassOf(apiOpts), Install: install,
 	}))
 	if err != nil {
 		return err
@@ -102,5 +119,7 @@ func init() {
 	f.StringToStringVar(&machineApproveOpts.Labels, "label", nil, "node label KEY=VALUE (repeatable)")
 	f.StringVar(&machineApproveOpts.Hostname, "hostname", "", "hostname to set")
 	f.StringVar(&machineApproveOpts.Reason, "reason", "", "recorded with the approval")
+	f.StringVar(&machineApproveOpts.InstallDisk, "install-disk", "", "system disk Talos installs onto: "+installDiskUsage)
+	f.StringVar(&machineApproveOpts.InstallImage, "install-image", "", "installer image (default: the booted schematic's)")
 	_ = machineApproveCmd.MarkFlagRequired("role")
 }

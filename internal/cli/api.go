@@ -139,6 +139,11 @@ type apiClients struct {
 
 	// Close tears the tunnel down; never nil.
 	Close func()
+
+	// Reconnect, when set, opens a fresh tunnel after the old one died (the
+	// kube-apiserver the port-forward runs through restarted); nil for the
+	// in-process fallback, which has no tunnel.
+	Reconnect func(context.Context) (*apiClients, error)
 }
 
 // errBackendRequired is what a command that must go through ichor-ui
@@ -176,6 +181,20 @@ func connectAPI(ctx context.Context, opts apiOptions, deps apiDeps, requireBacke
 	if !opts.Local {
 		c, err := dialBackend(ctx, opts, deps)
 		if err == nil {
+			stop := c.Close
+			c.Close = func() { stop() }
+			c.Reconnect = func(ctx context.Context) (*apiClients, error) {
+				nc, err := dialBackend(ctx, opts, deps)
+				if err != nil {
+					return nil, err
+				}
+
+				stop()
+				stop = nc.Close
+
+				return nc, nil
+			}
+
 			return c, nil
 		}
 

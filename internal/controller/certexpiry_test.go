@@ -99,9 +99,10 @@ var _ = Describe("CertExpiryReconciler", func() {
 
 	It("retries a missing bundle without failing the reconcile", func() {
 		cluster := newTestCluster("no-such-secret", "v1.14")
+		key := types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}
 		r := &CertExpiryReconciler{Client: k8sClient, ControllerNamespace: tmNamespace}
 
-		res, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}})
+		res, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: key})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.RequeueAfter).To(Equal(certExpiryRetry))
 	})

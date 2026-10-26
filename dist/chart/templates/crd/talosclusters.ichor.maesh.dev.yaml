@@ -3901,6 +3901,33 @@ spec:
           status:
             description: status defines the observed state of TalosCluster
             properties:
+              certificates:
+                description: |-
+                  certificates lists when each cluster certificate authority in the secrets
+                  bundle expires, so an approaching expiry is visible before it locks anyone
+                  out. Read from the bundle, never from a node.
+                items:
+                  description: CertificateExpiry is one certificate authority's end
+                    of validity.
+                  properties:
+                    name:
+                      description: 'name is which authority: talos, kubernetes, kubernetes-aggregator
+                        or etcd.'
+                      maxLength: 63
+                      minLength: 1
+                      type: string
+                    notAfter:
+                      description: notAfter is the certificate's last instant of validity.
+                      format: date-time
+                      type: string
+                  required:
+                  - name
+                  - notAfter
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
               conditions:
                 description: conditions represent the current state of the TalosCluster
                   resource, kstatus-compatible.

@@ -199,10 +199,13 @@ type Options struct {
 // New builds an Application from opts, baking in the pitfalls the design
 // notes call out:
 //
-//   - a non-empty IgnoreDifferences always pairs with the
+//   - an IgnoreDifferences entry that names fields (jsonPointers,
+//     jqPathExpressions or managedFieldsManagers) always pairs with the
 //     RespectIgnoreDifferences=true sync option, because ignoreDifferences
 //     is otherwise only honoured when Argo CD computes the diff for display,
-//     not when it decides whether a sync is a no-op.
+//     not when it decides whether a sync is a no-op. An entry that names only
+//     a group and kind selects no field of any desired manifest, so there is
+//     nothing for the sync to respect and the option is not added.
 //   - ServerSideApply, when requested, becomes the ServerSideApply=true sync
 //     option.
 //   - SyncWave becomes the argocd.argoproj.io/sync-wave annotation.
@@ -257,7 +260,7 @@ func New(opts Options) (*Application, error) {
 		syncOptions = append(syncOptions, syncOptionServerSideApply)
 	}
 
-	if len(opts.IgnoreDifferences) > 0 {
+	if hasFieldLevelIgnore(opts.IgnoreDifferences) {
 		syncOptions = append(syncOptions, syncOptionRespectIgnoreDiffs)
 	}
 
@@ -286,6 +289,18 @@ func New(opts Options) (*Application, error) {
 		Annotations: annotations,
 		Spec:        spec,
 	}, nil
+}
+
+// hasFieldLevelIgnore reports whether any entry names fields of a manifest
+// Argo CD applies, which is the only case RespectIgnoreDifferences changes.
+func hasFieldLevelIgnore(entries []ResourceIgnoreDifference) bool {
+	for _, e := range entries {
+		if len(e.JSONPointers) > 0 || len(e.JQPathExpressions) > 0 || len(e.ManagedFieldsManagers) > 0 {
+			return true
+		}
+	}
+
+	return false
 }
 
 // checkSources rejects any source whose RepoURL carries embedded userinfo,

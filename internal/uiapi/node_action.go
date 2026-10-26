@@ -40,6 +40,8 @@ import (
 // nodeServices is the restart-service allowlist, the same as the controller's and the CRD's enum.
 var nodeServices = []string{"kubelet", "containerd", "cri"}
 
+const stepEvacuate = "Move storage replicas off the node, if a storage system is set up."
+
 func nodeActionToSpec(a pb.NodeAction) (string, error) {
 	switch a {
 	case pb.NodeAction_NODE_ACTION_REBOOT:
@@ -151,7 +153,7 @@ func (s *Server) planNode(ctx context.Context, req *pb.NodeActionRequest) (*opPl
 
 	describeNode(p.resp, m, action, np.spec, cps)
 
-	p.resp.Blocked, err = s.nodeBlocked(ctx, p, np, &cluster, cps)
+	p.resp.Blocked, err = s.nodeBlocked(ctx, np, &cluster, cps)
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +199,7 @@ func describeNode(resp *pb.PlanOperationResponse, m *ichorv1alpha1.TalosMachine,
 	case ichorv1alpha1.NodeActionReboot:
 		resp.Steps = []string{
 			check,
-			"Move storage replicas off the node, if a storage system is set up.",
+			stepEvacuate,
 			"Cordon the node and drain it, respecting PodDisruptionBudgets.",
 			"Restart the node gracefully.",
 			"Wait until it has booted again, is Ready" + map[bool]string{true: " and is back in etcd", false: ""}[isCP] + ".",
@@ -213,7 +215,7 @@ func describeNode(resp *pb.PlanOperationResponse, m *ichorv1alpha1.TalosMachine,
 	case ichorv1alpha1.NodeActionShutdown:
 		resp.Steps = []string{
 			"Check that stopping the node keeps etcd quorum.",
-			"Move storage replicas off the node, if a storage system is set up.",
+			stepEvacuate,
 			"Ask the node to drain and power off.",
 			"Wait until it stops answering.",
 			"The node stays off until you power it on; this operation then finishes.",
@@ -265,7 +267,7 @@ func describeNode(resp *pb.PlanOperationResponse, m *ichorv1alpha1.TalosMachine,
 }
 
 func removalSteps(isCP bool, wipe string) []string {
-	steps := []string{"Move storage replicas off the node, if a storage system is set up.", "Cordon the node and drain it."}
+	steps := []string{stepEvacuate, "Cordon the node and drain it."}
 	if isCP {
 		steps = append(steps, "Remove the node's etcd member.")
 	}
@@ -282,7 +284,7 @@ func removalSteps(isCP bool, wipe string) []string {
 // says what it can know from the API.
 //
 //nolint:gocyclo // one list of independent refusals
-func (s *Server) nodeBlocked(ctx context.Context, p *opPlan, np *nodePlan, cluster *ichorv1alpha1.TalosCluster, cps int) (string, error) {
+func (s *Server) nodeBlocked(ctx context.Context, np *nodePlan, cluster *ichorv1alpha1.TalosCluster, cps int) (string, error) {
 	m, action := np.machine, np.action
 	isCP := m.Spec.Role == opRoleControlPlane
 

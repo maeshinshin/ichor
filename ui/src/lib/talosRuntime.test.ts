@@ -61,6 +61,8 @@ test('pods with trouble sort first and restarts alone are not red', () => {
   assert.equal(podTone(pod('a', 'Succeeded', 0)), 'neutral')
   const sorted = sortPods([pod('c', 'Running', 2), pod('b', 'Running', 2, 4), pod('a', 'Running', 1)])
   assert.deepEqual(sorted.map((p) => p.name), ['a', 'b', 'c'])
+  const done = sortPods([pod('a', 'Succeeded', 0), pod('b', 'Running', 2)])
+  assert.deepEqual(done.map((p) => p.name), ['b', 'a'], 'finished pods come after running ones')
 })
 
 test('node conditions: Ready must be True, pressure must be False', () => {

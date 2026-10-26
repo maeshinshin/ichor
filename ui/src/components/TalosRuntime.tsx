@@ -10,7 +10,7 @@ import { Section } from '@/components/SectionNav'
 import type { GetNodeTalosRuntimeResponse } from '@/gen/ichor/v1alpha1/talosruntime_pb'
 import { nodeClient } from '@/lib/connect'
 import { describeError } from '@/lib/errors'
-import { formatBytes } from '@/lib/format'
+import { formatBytes, formatResource } from '@/lib/format'
 import type { Tone } from '@/lib/talosDetails'
 import {
   conditionTone,
@@ -305,8 +305,8 @@ function KubernetesCard({ data }: { data: GetNodeTalosRuntimeResponse }) {
               {k.resources.map((r) => (
                 <TableRow key={r.name}>
                   <TableCell>{r.name}</TableCell>
-                  <TableCell>{r.capacity}</TableCell>
-                  <TableCell>{r.allocatable}</TableCell>
+                  <TableCell>{formatResource(r.name, r.capacity)}</TableCell>
+                  <TableCell>{formatResource(r.name, r.allocatable)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

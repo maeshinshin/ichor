@@ -195,6 +195,11 @@ func (t *machineryTalosClient) Reset(ctx context.Context) error {
 	})
 }
 
+// Shutdown calls this node's Shutdown API. See TalosClient.Shutdown.
+func (t *machineryTalosClient) Shutdown(ctx context.Context, force bool) error {
+	return t.c.Shutdown(ctx, client.WithShutdownForce(force))
+}
+
 // Version reports this node's running Talos release tag.
 func (t *machineryTalosClient) Version(ctx context.Context) (string, error) {
 	resp, err := t.c.Version(ctx)

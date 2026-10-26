@@ -264,3 +264,4 @@ decide and build:
 - Talos control-plane metrics binding and ingress-firewall CIDR scoping
   remain unimplemented, left to the unit already working in `pkg/render`'s
   system layer (see above).
+- Update: the Talos control-plane metrics binding and the ingress-firewall CIDR restriction were built in ADR 0069 (`spec.controlPlaneMetrics`).

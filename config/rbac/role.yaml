@@ -71,6 +71,7 @@ rules:
   resources:
   - talosclusters
   - talosconfigpatches
+  - talosetcdbackups
   verbs:
   - get
   - list
@@ -89,7 +90,6 @@ rules:
 - apiGroups:
   - ichor.maesh.dev
   resources:
-  - talosetcdbackups
   - talosmachines
   verbs:
   - create
@@ -102,7 +102,6 @@ rules:
 - apiGroups:
   - ichor.maesh.dev
   resources:
-  - talosetcdbackups/finalizers
   - talosmachines/finalizers
   verbs:
   - update

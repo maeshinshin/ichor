@@ -53,6 +53,19 @@ const bootIDPath = "/proc/sys/kernel/random/boot_id"
 func NewMachineryTalosClient(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, bundle *secrets.Bundle,
 ) (TalosClient, error) {
+	c, err := dialAdmin(ctx, cluster, m, bundle)
+	if err != nil {
+		return nil, err
+	}
+
+	return &machineryTalosClient{c: c}, nil
+}
+
+// dialAdmin dials m's Talos API with the bundle's os:admin identity; shared
+// by every machinery-backed client in this package.
+func dialAdmin(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, bundle *secrets.Bundle,
+) (*client.Client, error) {
 	cert, err := bundle.GenerateTalosAPIClientCertificate(role.MakeSet(role.Admin))
 	if err != nil {
 		return nil, fmt.Errorf("generating admin client certificate: %w", err)
@@ -65,7 +78,7 @@ func NewMachineryTalosClient(
 		return nil, fmt.Errorf("dialing Talos API: %w", err)
 	}
 
-	return &machineryTalosClient{c: c}, nil
+	return c, nil
 }
 
 // machineryTalosClient adapts a real *client.Client to TalosClient.

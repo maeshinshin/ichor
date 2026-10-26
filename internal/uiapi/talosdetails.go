@@ -65,16 +65,12 @@ func (s *Server) GetNodeTalosDetails(
 	var wg sync.WaitGroup
 
 	run := func(read func(context.Context)) {
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			cctx, cancel := context.WithTimeout(ctx, talosDetailsTimeout)
 			defer cancel()
 
 			read(cctx)
-		}()
+		})
 	}
 
 	run(func(c context.Context) {

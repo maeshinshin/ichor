@@ -4,13 +4,14 @@
 
 // ClusterService backs the cluster list and cluster detail screens: status,
 // rollout progress and hand-over state (architecture.md, "CLI and UI").
-// Read-only: nothing here writes a TalosCluster.
+// The reads change nothing; AddDiscoveryAddress is the one write, and it
+// edits only spec.discovery.addresses.
 
 import type { GenEnum, GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
 import { enumDesc, fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
 import { file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
-import type { Condition, ObjectRef } from "./common_pb";
+import type { AuditRecord, BreakGlass, Condition, ObjectRef } from "./common_pb";
 import { file_ichor_v1alpha1_common } from "./common_pb";
 import type { Message, UnknownEnum } from "@bufbuild/protobuf";
 
@@ -18,7 +19,80 @@ import type { Message, UnknownEnum } from "@bufbuild/protobuf";
  * Describes the file ichor/v1alpha1/cluster.proto.
  */
 export const file_ichor_v1alpha1_cluster: GenFile = /*@__PURE__*/
-  fileDesc("ChxpY2hvci92MWFscGhhMS9jbHVzdGVyLnByb3RvEg5pY2hvci52MWFscGhhMSIVChNMaXN0Q2x1c3RlcnNSZXF1ZXN0IkEKFExpc3RDbHVzdGVyc1Jlc3BvbnNlEikKCGNsdXN0ZXJzGAEgAygLMhcuaWNob3IudjFhbHBoYTEuQ2x1c3RlciI/ChFHZXRDbHVzdGVyUmVxdWVzdBIqCgdjbHVzdGVyGAEgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmIj4KEkdldENsdXN0ZXJSZXNwb25zZRIoCgdjbHVzdGVyGAEgASgLMhcuaWNob3IudjFhbHBoYTEuQ2x1c3RlciKkAQoPUm9sbG91dFByb2dyZXNzEikKBGtpbmQYASABKA4yGy5pY2hvci52MWFscGhhMS5Sb2xsb3V0S2luZBIWCg50YXJnZXRfdmVyc2lvbhgCIAEoCRIOCgZwYXVzZWQYAyABKAgSEwoLbm9kZXNfdG90YWwYBCABKAUSEgoKbm9kZXNfZG9uZRgFIAEoBRIVCg1jdXJyZW50X3BoYXNlGAYgASgJIooBCg1IYW5kb3ZlclN0YXRlEhEKCWNvbXBvbmVudBgBIAEoCRIsCgVwaGFzZRgCIAEoDjIdLmljaG9yLnYxYWxwaGExLkhhbmRvdmVyUGhhc2USOAoUbGFzdF90cmFuc2l0aW9uX3RpbWUYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIskCCgdDbHVzdGVyEiYKA3JlZhgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhIVCg10YWxvc192ZXJzaW9uGAIgASgJEhoKEmt1YmVybmV0ZXNfdmVyc2lvbhgDIAEoCRIQCghlbmRwb2ludBgEIAEoCRIbChNjb250cm9sX3BsYW5lX2NvdW50GAUgASgFEiEKGWNvbnRyb2xfcGxhbmVfc2NoZWR1bGFibGUYBiABKAgSLQoKY29uZGl0aW9ucxgHIAMoCzIZLmljaG9yLnYxYWxwaGExLkNvbmRpdGlvbhIwCgdyb2xsb3V0GAggASgLMh8uaWNob3IudjFhbHBoYTEuUm9sbG91dFByb2dyZXNzEjAKCWhhbmRvdmVycxgJIAMoCzIdLmljaG9yLnYxYWxwaGExLkhhbmRvdmVyU3RhdGUqeAoLUm9sbG91dEtpbmQSHAoYUk9MTE9VVF9LSU5EX1VOU1BFQ0lGSUVEEAASFgoSUk9MTE9VVF9LSU5EX1RBTE9TEAESGwoXUk9MTE9VVF9LSU5EX0tVQkVSTkVURVMQAhIWChJST0xMT1VUX0tJTkRfSUNIT1IQAyqkAQoNSGFuZG92ZXJQaGFzZRIeChpIQU5ET1ZFUl9QSEFTRV9VTlNQRUNJRklFRBAAEhoKFkhBTkRPVkVSX1BIQVNFX1BFTkRJTkcQARIbChdIQU5ET1ZFUl9QSEFTRV9JTkpFQ1RFRBACEhoKFkhBTkRPVkVSX1BIQVNFX0FET1BURUQQAxIeChpIQU5ET1ZFUl9QSEFTRV9IQU5ERURfT1ZFUhAEMsABCg5DbHVzdGVyU2VydmljZRJZCgxMaXN0Q2x1c3RlcnMSIy5pY2hvci52MWFscGhhMS5MaXN0Q2x1c3RlcnNSZXF1ZXN0GiQuaWNob3IudjFhbHBoYTEuTGlzdENsdXN0ZXJzUmVzcG9uc2USUwoKR2V0Q2x1c3RlchIhLmljaG9yLnYxYWxwaGExLkdldENsdXN0ZXJSZXF1ZXN0GiIuaWNob3IudjFhbHBoYTEuR2V0Q2x1c3RlclJlc3BvbnNlQr0BChJjb20uaWNob3IudjFhbHBoYTFCDENsdXN0ZXJQcm90b1ABWkBnaXRodWIuY29tL21hZXNoaW5zaGluL2ljaG9yL2dlbi9nby9pY2hvci92MWFscGhhMTtpY2hvcnYxYWxwaGExogIDSVhYqgIOSWNob3IuVjFhbHBoYTHKAg5JY2hvclxWMWFscGhhMeICGkljaG9yXFYxYWxwaGExXEdQQk1ldGFkYXRh6gIPSWNob3I6OlYxYWxwaGExYgZwcm90bzM", [file_google_protobuf_timestamp, file_ichor_v1alpha1_common]);
+  fileDesc("ChxpY2hvci92MWFscGhhMS9jbHVzdGVyLnByb3RvEg5pY2hvci52MWFscGhhMSKaAQoaQWRkRGlzY292ZXJ5QWRkcmVzc1JlcXVlc3QSKgoHY2x1c3RlchgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhIPCgdhZGRyZXNzGAIgASgJEg4KBnJlYXNvbhgDIAEoCRIvCgticmVha19nbGFzcxgEIAEoCzIaLmljaG9yLnYxYWxwaGExLkJyZWFrR2xhc3MinQEKG0FkZERpc2NvdmVyeUFkZHJlc3NSZXNwb25zZRIoCgdjbHVzdGVyGAEgASgLMhcuaWNob3IudjFhbHBoYTEuQ2x1c3RlchIqCgVhdWRpdBgCIAEoCzIbLmljaG9yLnYxYWxwaGExLkF1ZGl0UmVjb3JkEhgKEHB1bGxfcmVxdWVzdF91cmwYAyABKAkSDgoGbm90aWNlGAQgASgJIhUKE0xpc3RDbHVzdGVyc1JlcXVlc3QiQQoUTGlzdENsdXN0ZXJzUmVzcG9uc2USKQoIY2x1c3RlcnMYASADKAsyFy5pY2hvci52MWFscGhhMS5DbHVzdGVyIj8KEUdldENsdXN0ZXJSZXF1ZXN0EioKB2NsdXN0ZXIYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYiPgoSR2V0Q2x1c3RlclJlc3BvbnNlEigKB2NsdXN0ZXIYASABKAsyFy5pY2hvci52MWFscGhhMS5DbHVzdGVyIqQBCg9Sb2xsb3V0UHJvZ3Jlc3MSKQoEa2luZBgBIAEoDjIbLmljaG9yLnYxYWxwaGExLlJvbGxvdXRLaW5kEhYKDnRhcmdldF92ZXJzaW9uGAIgASgJEg4KBnBhdXNlZBgDIAEoCBITCgtub2Rlc190b3RhbBgEIAEoBRISCgpub2Rlc19kb25lGAUgASgFEhUKDWN1cnJlbnRfcGhhc2UYBiABKAkiigEKDUhhbmRvdmVyU3RhdGUSEQoJY29tcG9uZW50GAEgASgJEiwKBXBoYXNlGAIgASgOMh0uaWNob3IudjFhbHBoYTEuSGFuZG92ZXJQaGFzZRI4ChRsYXN0X3RyYW5zaXRpb25fdGltZRgDIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAi/wIKB0NsdXN0ZXISJgoDcmVmGAEgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmEhUKDXRhbG9zX3ZlcnNpb24YAiABKAkSGgoSa3ViZXJuZXRlc192ZXJzaW9uGAMgASgJEhAKCGVuZHBvaW50GAQgASgJEhsKE2NvbnRyb2xfcGxhbmVfY291bnQYBSABKAUSIQoZY29udHJvbF9wbGFuZV9zY2hlZHVsYWJsZRgGIAEoCBItCgpjb25kaXRpb25zGAcgAygLMhkuaWNob3IudjFhbHBoYTEuQ29uZGl0aW9uEjAKB3JvbGxvdXQYCCABKAsyHy5pY2hvci52MWFscGhhMS5Sb2xsb3V0UHJvZ3Jlc3MSMAoJaGFuZG92ZXJzGAkgAygLMh0uaWNob3IudjFhbHBoYTEuSGFuZG92ZXJTdGF0ZRIbChNkaXNjb3ZlcnlfYWRkcmVzc2VzGAogAygJEhcKD2Rpc2NvdmVyeV9jaWRycxgLIAMoCSp4CgtSb2xsb3V0S2luZBIcChhST0xMT1VUX0tJTkRfVU5TUEVDSUZJRUQQABIWChJST0xMT1VUX0tJTkRfVEFMT1MQARIbChdST0xMT1VUX0tJTkRfS1VCRVJORVRFUxACEhYKElJPTExPVVRfS0lORF9JQ0hPUhADKqQBCg1IYW5kb3ZlclBoYXNlEh4KGkhBTkRPVkVSX1BIQVNFX1VOU1BFQ0lGSUVEEAASGgoWSEFORE9WRVJfUEhBU0VfUEVORElORxABEhsKF0hBTkRPVkVSX1BIQVNFX0lOSkVDVEVEEAISGgoWSEFORE9WRVJfUEhBU0VfQURPUFRFRBADEh4KGkhBTkRPVkVSX1BIQVNFX0hBTkRFRF9PVkVSEAQysAIKDkNsdXN0ZXJTZXJ2aWNlElkKDExpc3RDbHVzdGVycxIjLmljaG9yLnYxYWxwaGExLkxpc3RDbHVzdGVyc1JlcXVlc3QaJC5pY2hvci52MWFscGhhMS5MaXN0Q2x1c3RlcnNSZXNwb25zZRJTCgpHZXRDbHVzdGVyEiEuaWNob3IudjFhbHBoYTEuR2V0Q2x1c3RlclJlcXVlc3QaIi5pY2hvci52MWFscGhhMS5HZXRDbHVzdGVyUmVzcG9uc2USbgoTQWRkRGlzY292ZXJ5QWRkcmVzcxIqLmljaG9yLnYxYWxwaGExLkFkZERpc2NvdmVyeUFkZHJlc3NSZXF1ZXN0GisuaWNob3IudjFhbHBoYTEuQWRkRGlzY292ZXJ5QWRkcmVzc1Jlc3BvbnNlQr0BChJjb20uaWNob3IudjFhbHBoYTFCDENsdXN0ZXJQcm90b1ABWkBnaXRodWIuY29tL21hZXNoaW5zaGluL2ljaG9yL2dlbi9nby9pY2hvci92MWFscGhhMTtpY2hvcnYxYWxwaGExogIDSVhYqgIOSWNob3IuVjFhbHBoYTHKAg5JY2hvclxWMWFscGhhMeICGkljaG9yXFYxYWxwaGExXEdQQk1ldGFkYXRh6gIPSWNob3I6OlYxYWxwaGExYgZwcm90bzM", [file_google_protobuf_timestamp, file_ichor_v1alpha1_common]);
+
+/**
+ * @generated from message ichor.v1alpha1.AddDiscoveryAddressRequest
+ */
+export type AddDiscoveryAddressRequest = Message<"ichor.v1alpha1.AddDiscoveryAddressRequest"> & {
+  /**
+   * @generated from field: ichor.v1alpha1.ObjectRef cluster = 1;
+   */
+  cluster?: ObjectRef | undefined;
+
+  /**
+   * address is a single IPv4 address, e.g. "192.168.0.50".
+   *
+   * @generated from field: string address = 2;
+   */
+  address: string;
+
+  /**
+   * @generated from field: string reason = 3;
+   */
+  reason: string;
+
+  /**
+   * break_glass requests an emergency direct write.
+   *
+   * @generated from field: ichor.v1alpha1.BreakGlass break_glass = 4;
+   */
+  breakGlass?: BreakGlass | undefined;
+};
+
+/**
+ * Describes the message ichor.v1alpha1.AddDiscoveryAddressRequest.
+ * Use `create(AddDiscoveryAddressRequestSchema)` to create a new message.
+ */
+export const AddDiscoveryAddressRequestSchema: GenMessage<AddDiscoveryAddressRequest> = /*@__PURE__*/
+  messageDesc(file_ichor_v1alpha1_cluster, 0);
+
+/**
+ * @generated from message ichor.v1alpha1.AddDiscoveryAddressResponse
+ */
+export type AddDiscoveryAddressResponse = Message<"ichor.v1alpha1.AddDiscoveryAddressResponse"> & {
+  /**
+   * cluster is the cluster as stored (unchanged when a pull request was
+   * proposed instead).
+   *
+   * @generated from field: ichor.v1alpha1.Cluster cluster = 1;
+   */
+  cluster?: Cluster | undefined;
+
+  /**
+   * @generated from field: ichor.v1alpha1.AuditRecord audit = 2;
+   */
+  audit?: AuditRecord | undefined;
+
+  /**
+   * pull_request_url and notice: see ApproveMachineResponse.
+   *
+   * @generated from field: string pull_request_url = 3;
+   */
+  pullRequestUrl: string;
+
+  /**
+   * @generated from field: string notice = 4;
+   */
+  notice: string;
+};
+
+/**
+ * Describes the message ichor.v1alpha1.AddDiscoveryAddressResponse.
+ * Use `create(AddDiscoveryAddressResponseSchema)` to create a new message.
+ */
+export const AddDiscoveryAddressResponseSchema: GenMessage<AddDiscoveryAddressResponse> = /*@__PURE__*/
+  messageDesc(file_ichor_v1alpha1_cluster, 1);
 
 /**
  * @generated from message ichor.v1alpha1.ListClustersRequest
@@ -31,7 +105,7 @@ export type ListClustersRequest = Message<"ichor.v1alpha1.ListClustersRequest"> 
  * Use `create(ListClustersRequestSchema)` to create a new message.
  */
 export const ListClustersRequestSchema: GenMessage<ListClustersRequest> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_cluster, 0);
+  messageDesc(file_ichor_v1alpha1_cluster, 2);
 
 /**
  * @generated from message ichor.v1alpha1.ListClustersResponse
@@ -48,7 +122,7 @@ export type ListClustersResponse = Message<"ichor.v1alpha1.ListClustersResponse"
  * Use `create(ListClustersResponseSchema)` to create a new message.
  */
 export const ListClustersResponseSchema: GenMessage<ListClustersResponse> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_cluster, 1);
+  messageDesc(file_ichor_v1alpha1_cluster, 3);
 
 /**
  * @generated from message ichor.v1alpha1.GetClusterRequest
@@ -65,7 +139,7 @@ export type GetClusterRequest = Message<"ichor.v1alpha1.GetClusterRequest"> & {
  * Use `create(GetClusterRequestSchema)` to create a new message.
  */
 export const GetClusterRequestSchema: GenMessage<GetClusterRequest> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_cluster, 2);
+  messageDesc(file_ichor_v1alpha1_cluster, 4);
 
 /**
  * @generated from message ichor.v1alpha1.GetClusterResponse
@@ -82,7 +156,7 @@ export type GetClusterResponse = Message<"ichor.v1alpha1.GetClusterResponse"> & 
  * Use `create(GetClusterResponseSchema)` to create a new message.
  */
 export const GetClusterResponseSchema: GenMessage<GetClusterResponse> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_cluster, 3);
+  messageDesc(file_ichor_v1alpha1_cluster, 5);
 
 /**
  * RolloutProgress is present only while a rollout is in flight.
@@ -128,7 +202,7 @@ export type RolloutProgress = Message<"ichor.v1alpha1.RolloutProgress"> & {
  * Use `create(RolloutProgressSchema)` to create a new message.
  */
 export const RolloutProgressSchema: GenMessage<RolloutProgress> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_cluster, 4);
+  messageDesc(file_ichor_v1alpha1_cluster, 6);
 
 /**
  * @generated from message ichor.v1alpha1.HandoverState
@@ -157,7 +231,7 @@ export type HandoverState = Message<"ichor.v1alpha1.HandoverState"> & {
  * Use `create(HandoverStateSchema)` to create a new message.
  */
 export const HandoverStateSchema: GenMessage<HandoverState> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_cluster, 5);
+  messageDesc(file_ichor_v1alpha1_cluster, 7);
 
 /**
  * @generated from message ichor.v1alpha1.Cluster
@@ -209,6 +283,20 @@ export type Cluster = Message<"ichor.v1alpha1.Cluster"> & {
    * @generated from field: repeated ichor.v1alpha1.HandoverState handovers = 9;
    */
   handovers: HandoverState[];
+
+  /**
+   * discovery_addresses and discovery_cidrs are spec.discovery:
+   * where the controller looks for nodes in maintenance mode. Both empty
+   * means discovery is off.
+   *
+   * @generated from field: repeated string discovery_addresses = 10;
+   */
+  discoveryAddresses: string[];
+
+  /**
+   * @generated from field: repeated string discovery_cidrs = 11;
+   */
+  discoveryCidrs: string[];
 };
 
 /**
@@ -216,7 +304,7 @@ export type Cluster = Message<"ichor.v1alpha1.Cluster"> & {
  * Use `create(ClusterSchema)` to create a new message.
  */
 export const ClusterSchema: GenMessage<Cluster> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_cluster, 6);
+  messageDesc(file_ichor_v1alpha1_cluster, 8);
 
 /**
  * RolloutKind identifies which of the three upgrade kinds a RolloutProgress
@@ -330,6 +418,20 @@ export const ClusterService: GenService<{
     methodKind: "unary";
     input: typeof GetClusterRequestSchema;
     output: typeof GetClusterResponseSchema;
+  },
+  /**
+   * AddDiscoveryAddress appends one IPv4 address to
+   * TalosCluster.spec.discovery.addresses, so the controller
+   * probes it for a node in maintenance mode. It goes through the same write
+   * gate as the other writes: refused when Flux tracks the cluster, a pull
+   * request when Argo CD does, break-glass on request.
+   *
+   * @generated from rpc ichor.v1alpha1.ClusterService.AddDiscoveryAddress
+   */
+  addDiscoveryAddress: {
+    methodKind: "unary";
+    input: typeof AddDiscoveryAddressRequestSchema;
+    output: typeof AddDiscoveryAddressResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_ichor_v1alpha1_cluster, 0);

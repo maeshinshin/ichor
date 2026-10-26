@@ -4,7 +4,8 @@
 
 // ClusterService backs the cluster list and cluster detail screens: status,
 // rollout progress and hand-over state (architecture.md, "CLI and UI").
-// Read-only: nothing here writes a TalosCluster.
+// The reads change nothing; AddDiscoveryAddress is the one write, and it
+// edits only spec.discovery.addresses.
 package ichorv1alpha1connect
 
 import (
@@ -42,12 +43,21 @@ const (
 	// ClusterServiceGetClusterProcedure is the fully-qualified name of the ClusterService's GetCluster
 	// RPC.
 	ClusterServiceGetClusterProcedure = "/ichor.v1alpha1.ClusterService/GetCluster"
+	// ClusterServiceAddDiscoveryAddressProcedure is the fully-qualified name of the ClusterService's
+	// AddDiscoveryAddress RPC.
+	ClusterServiceAddDiscoveryAddressProcedure = "/ichor.v1alpha1.ClusterService/AddDiscoveryAddress"
 )
 
 // ClusterServiceClient is a client for the ichor.v1alpha1.ClusterService service.
 type ClusterServiceClient interface {
 	ListClusters(context.Context, *connect.Request[v1alpha1.ListClustersRequest]) (*connect.Response[v1alpha1.ListClustersResponse], error)
 	GetCluster(context.Context, *connect.Request[v1alpha1.GetClusterRequest]) (*connect.Response[v1alpha1.GetClusterResponse], error)
+	// AddDiscoveryAddress appends one IPv4 address to
+	// TalosCluster.spec.discovery.addresses, so the controller
+	// probes it for a node in maintenance mode. It goes through the same write
+	// gate as the other writes: refused when Flux tracks the cluster, a pull
+	// request when Argo CD does, break-glass on request.
+	AddDiscoveryAddress(context.Context, *connect.Request[v1alpha1.AddDiscoveryAddressRequest]) (*connect.Response[v1alpha1.AddDiscoveryAddressResponse], error)
 }
 
 // NewClusterServiceClient constructs a client for the ichor.v1alpha1.ClusterService service. By
@@ -73,13 +83,20 @@ func NewClusterServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(clusterServiceMethods.ByName("GetCluster")),
 			connect.WithClientOptions(opts...),
 		),
+		addDiscoveryAddress: connect.NewClient[v1alpha1.AddDiscoveryAddressRequest, v1alpha1.AddDiscoveryAddressResponse](
+			httpClient,
+			baseURL+ClusterServiceAddDiscoveryAddressProcedure,
+			connect.WithSchema(clusterServiceMethods.ByName("AddDiscoveryAddress")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // clusterServiceClient implements ClusterServiceClient.
 type clusterServiceClient struct {
-	listClusters *connect.Client[v1alpha1.ListClustersRequest, v1alpha1.ListClustersResponse]
-	getCluster   *connect.Client[v1alpha1.GetClusterRequest, v1alpha1.GetClusterResponse]
+	listClusters        *connect.Client[v1alpha1.ListClustersRequest, v1alpha1.ListClustersResponse]
+	getCluster          *connect.Client[v1alpha1.GetClusterRequest, v1alpha1.GetClusterResponse]
+	addDiscoveryAddress *connect.Client[v1alpha1.AddDiscoveryAddressRequest, v1alpha1.AddDiscoveryAddressResponse]
 }
 
 // ListClusters calls ichor.v1alpha1.ClusterService.ListClusters.
@@ -92,10 +109,21 @@ func (c *clusterServiceClient) GetCluster(ctx context.Context, req *connect.Requ
 	return c.getCluster.CallUnary(ctx, req)
 }
 
+// AddDiscoveryAddress calls ichor.v1alpha1.ClusterService.AddDiscoveryAddress.
+func (c *clusterServiceClient) AddDiscoveryAddress(ctx context.Context, req *connect.Request[v1alpha1.AddDiscoveryAddressRequest]) (*connect.Response[v1alpha1.AddDiscoveryAddressResponse], error) {
+	return c.addDiscoveryAddress.CallUnary(ctx, req)
+}
+
 // ClusterServiceHandler is an implementation of the ichor.v1alpha1.ClusterService service.
 type ClusterServiceHandler interface {
 	ListClusters(context.Context, *connect.Request[v1alpha1.ListClustersRequest]) (*connect.Response[v1alpha1.ListClustersResponse], error)
 	GetCluster(context.Context, *connect.Request[v1alpha1.GetClusterRequest]) (*connect.Response[v1alpha1.GetClusterResponse], error)
+	// AddDiscoveryAddress appends one IPv4 address to
+	// TalosCluster.spec.discovery.addresses, so the controller
+	// probes it for a node in maintenance mode. It goes through the same write
+	// gate as the other writes: refused when Flux tracks the cluster, a pull
+	// request when Argo CD does, break-glass on request.
+	AddDiscoveryAddress(context.Context, *connect.Request[v1alpha1.AddDiscoveryAddressRequest]) (*connect.Response[v1alpha1.AddDiscoveryAddressResponse], error)
 }
 
 // NewClusterServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -117,12 +145,20 @@ func NewClusterServiceHandler(svc ClusterServiceHandler, opts ...connect.Handler
 		connect.WithSchema(clusterServiceMethods.ByName("GetCluster")),
 		connect.WithHandlerOptions(opts...),
 	)
+	clusterServiceAddDiscoveryAddressHandler := connect.NewUnaryHandler(
+		ClusterServiceAddDiscoveryAddressProcedure,
+		svc.AddDiscoveryAddress,
+		connect.WithSchema(clusterServiceMethods.ByName("AddDiscoveryAddress")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/ichor.v1alpha1.ClusterService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case ClusterServiceListClustersProcedure:
 			clusterServiceListClustersHandler.ServeHTTP(w, r)
 		case ClusterServiceGetClusterProcedure:
 			clusterServiceGetClusterHandler.ServeHTTP(w, r)
+		case ClusterServiceAddDiscoveryAddressProcedure:
+			clusterServiceAddDiscoveryAddressHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -138,4 +174,8 @@ func (UnimplementedClusterServiceHandler) ListClusters(context.Context, *connect
 
 func (UnimplementedClusterServiceHandler) GetCluster(context.Context, *connect.Request[v1alpha1.GetClusterRequest]) (*connect.Response[v1alpha1.GetClusterResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.ClusterService.GetCluster is not implemented"))
+}
+
+func (UnimplementedClusterServiceHandler) AddDiscoveryAddress(context.Context, *connect.Request[v1alpha1.AddDiscoveryAddressRequest]) (*connect.Response[v1alpha1.AddDiscoveryAddressResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.ClusterService.AddDiscoveryAddress is not implemented"))
 }

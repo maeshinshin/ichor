@@ -114,6 +114,10 @@ func kindOf(obj client.Object) (kind, resource string) {
 		return "TalosConfigPatch", "talosconfigpatches"
 	}
 
+	if _, ok := obj.(*ichorv1alpha1.TalosCluster); ok {
+		return "TalosCluster", "talosclusters"
+	}
+
 	return kindTalosMachine, "talosmachines"
 }
 

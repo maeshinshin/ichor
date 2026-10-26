@@ -147,7 +147,7 @@ export function StartOperationDialog({
         </div>
       )}
 
-      {plan && plan.blocked === '' && (
+      {(!plan || plan.blocked === '') && (
         <Alert variant="destructive">
           <AlertTitle>{t('ops.warn.title')}</AlertTitle>
           <AlertDescription>{t(`ops.warn.${kind}`)}</AlertDescription>

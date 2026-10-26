@@ -80,7 +80,7 @@ export function Overview() {
   const opStates: OpState[] = (data.ops ?? []).map((o) => operationState(o.phase, o.failureReason))
   const mc = data.machines ? machineCounts(data.machines.map((m) => ({ approval: approval(m), ready: readyOf(m) }))) : null
   const oc = data.ops ? operationCounts(opStates) : null
-  const cr = data.clusters ? clusterReadiness(data.clusters.map((c) => c.conditions.find((x) => x.type === 'Ready')?.status ?? '')) : null
+  const cr = data.clusters ? clusterReadiness(data.clusters.map((c) => c.conditions)) : null
   const rolling =data.clusters?.filter((c) => c.rollout).length ?? 0
   const na = t('overview.noAccess')
 

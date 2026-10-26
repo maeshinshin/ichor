@@ -4,6 +4,8 @@
 //
 //   node hack/ui-shots.mjs <outDir> <baseURL> [path ...]
 //
+// CLICK="Button text" clicks that button first (to show a dialog); never use it on a button that writes.
+// SCROLLTO=id scrolls that element to the top first (use with FULL unset).
 // FULL=1 captures the whole page height (up to 4000px), not just the viewport.
 // Paths default to the list pages. Read-only: it only navigates (GET).
 import { spawn } from 'node:child_process'
@@ -67,7 +69,17 @@ try {
           source: `try{localStorage.setItem('ichor-ui-theme','${theme}')}catch(e){}`,
         })
         await s('Page.navigate', { url: new URL(p, base).href })
-        await sleep(3500) // data fetches and the skeleton settle
+        await sleep(Number(process.env.WAIT ?? 3500)) // data fetches and the skeleton settle (WAIT=ms for slow pages)
+        if (process.env.CLICK) {
+          // CLICK="Shut down cluster" opens a dialog before the shot; it clicks the first button with that exact text.
+          const expr = `(() => { const b = [...document.querySelectorAll('button')].find((x) => x.textContent.trim() === ${JSON.stringify(process.env.CLICK)}); if (b) b.click(); return !!b })()`
+          await s('Runtime.evaluate', { expression: expr })
+          await sleep(800)
+        }
+        if (process.env.SCROLLTO) {
+          await s('Runtime.evaluate', { expression: `document.getElementById(${JSON.stringify(process.env.SCROLLTO)})?.scrollIntoView()` })
+          await sleep(1500)
+        }
         const shot = { format: 'png' }
         if (process.env.FULL) {
           const { cssContentSize } = await s('Page.getLayoutMetrics')

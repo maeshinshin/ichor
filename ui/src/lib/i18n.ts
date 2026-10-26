@@ -569,6 +569,7 @@ export const en = {
     'This removes the record. A step already sent to a node is not stopped and nothing is rolled back.',
   'ops.machines': 'Nodes',
   'ops.noMachines': 'No node has been reached yet.',
+  'ops.ichorJob': 'This upgrade touches no node. A Job applies the new install manifest; the phase above is its progress.',
   'ops.failure': 'A node failed and the operation paused itself',
   'ops.failureHint':
     'It does not retry by itself and nothing was rolled back. Fix the cause, then delete this operation and start a new one.',

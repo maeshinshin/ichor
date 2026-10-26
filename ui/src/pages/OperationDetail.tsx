@@ -71,7 +71,7 @@ export function OperationDetail({ namespace, name }: { namespace: string; name: 
         badges={
           <>
             <StatusText tone={opStateTone(state)}>{t(`ops.state.${state}`)}</StatusText>
-            <span class="text-sm text-muted-foreground">{t('ops.progress', { done, running })}</span>
+            {op.machines.length > 0 && <span class="text-sm text-muted-foreground">{t('ops.progress', { done, running })}</span>}
             {stage && <Badge variant="outline">{t('ops.caStage', { stage: stage.name, n: stage.index, total: stage.total })}</Badge>}
           </>
         }
@@ -108,7 +108,7 @@ export function OperationDetail({ namespace, name }: { namespace: string; name: 
 
         <Section id="machines" title={t('ops.machines')}>
           {op.machines.length === 0 ? (
-            <EmptyNote>{t('ops.noMachines')}</EmptyNote>
+            <EmptyNote>{t(op.kind === OperationKind.ICHOR ? 'ops.ichorJob' : 'ops.noMachines')}</EmptyNote>
           ) : (
             <Table>
               <TableHeader>

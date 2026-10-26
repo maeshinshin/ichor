@@ -119,7 +119,7 @@ func (f *shutdownFixture) powerOn(ms ...*ichorv1alpha1.TalosMachine) {
 }
 
 func machineNames(ms []*ichorv1alpha1.TalosMachine) []string {
-	var out []string
+	out := make([]string, 0, len(ms))
 	for _, m := range ms {
 		out = append(out, m.Name)
 	}
@@ -221,7 +221,7 @@ var _ = Describe("TalosOperation shutdown", func() {
 		// The machine controller's own gate refuses too, including the removal path.
 		mr := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient}
 		for _, completesTransition := range []bool{false, true} {
-			_, err := mr.acquireDisruptiveLock(ctx, f.cluster, f.cps[0], controllerIdentity, completesTransition)
+			_, err := mr.acquireDisruptiveLock(ctx, f.cluster, f.cps[0], "shutdown-test", completesTransition)
 			var shuttingDown *shuttingDownError
 			Expect(errors.As(err, &shuttingDown)).To(BeTrue(), "completesTransition=%v", completesTransition)
 		}
@@ -244,9 +244,9 @@ var _ = Describe("TalosOperation shutdown", func() {
 		got = f.reconcile(op)
 		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseCompleted))
 
-		lock, err := mr.acquireDisruptiveLock(ctx, f.cluster, f.cps[0], controllerIdentity, false)
+		lock, err := mr.acquireDisruptiveLock(ctx, f.cluster, f.cps[0], "shutdown-test", false)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(lock.Release(ctx, controllerIdentity)).To(Succeed())
+		Expect(lock.Release(ctx, "shutdown-test")).To(Succeed())
 
 		got = f.reconcile(upgrade)
 		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseInProgress))

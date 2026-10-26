@@ -26,7 +26,8 @@ import { enumLabel } from '@/lib/enum'
 import { offersBreakGlass } from '@/lib/breakGlass'
 import { describeError } from '@/lib/errors'
 import { canApprove, isStrongIdentity } from '@/lib/identity'
-import { diskKey, diskSelector, isValidHostname, type DiskSelector } from '@/lib/installDisk'
+import { diskSelector, installChoice, isValidHostname } from '@/lib/installDisk'
+import { InstallDiskPicker } from '@/components/InstallDiskPicker'
 import { formatBytes, formatTimestamp } from '@/lib/format'
 import { useT } from '@/lib/useT'
 import { objectRefPath, Link } from '@/router'
@@ -267,13 +268,7 @@ function ApproveDialog({
   const disks = (node?.disks ?? []).filter((d) => diskSelector(d))
   // The list comes from the node itself; without it (the Talos API unreachable, or no disk
   // reported) the person can still type a device path.
-  const typedDisk = disks.length === 0 && installDev.trim() !== ''
-  const install = typedDisk
-    ? { disk: { devPath: installDev.trim() }, image: installImage.trim() }
-    : installKey
-      ? { disk: JSON.parse(installKey) as DiskSelector, image: installImage.trim() }
-      : undefined
-  const installOk = !typedDisk || installDev.trim().startsWith('/dev/')
+  const { install, ok: installOk } = installChoice({ disks, key: installKey, typed: installDev, image: installImage })
   const canSubmit = canApprove(machine.identity, role !== MachineRole.UNSPECIFIED) && hostnameOk && installOk
 
   useEffect(() => {
@@ -410,49 +405,18 @@ function ApproveDialog({
             {!hostnameOk && <p class="text-destructive">{t('approve.hostnameInvalid')}</p>}
           </section>
 
-          <section class="space-y-1">
-            <Label htmlFor="approve-install-disk">{t('approve.installDisk')}</Label>
-            {disks.length > 0 ? (
-              <Select value={installKey || 'none'} onValueChange={(v) => setInstallKey(v === 'none' ? '' : v)}>
-                <SelectTrigger id="approve-install-disk" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">{t('approve.installDiskNone')}</SelectItem>
-                  {disks.map((d) => (
-                    <SelectItem key={diskKey(d)} value={diskKey(d)}>
-                      {t('approve.installDiskOption', {
-                        id: Object.values(diskSelector(d) ?? {})[0] ?? '',
-                        size: formatBytes(d.sizeBytes),
-                        dev: d.devPath || '-',
-                      })}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <Input
-                id="approve-install-disk"
-                value={installDev}
-                placeholder="/dev/sda"
-                onInput={(e) => setInstallDev((e.target as HTMLInputElement).value)}
-                aria-invalid={!installOk}
-              />
-            )}
-            <p class="text-muted-foreground">
-              {disks.length > 0 ? t('approve.installDiskHelp') : t('approve.installDiskTyped')}
-            </p>
-            {install && (
-              <>
-                <Label htmlFor="approve-install-image">{t('approve.installImage')}</Label>
-                <Input
-                  id="approve-install-image"
-                  value={installImage}
-                  onInput={(e) => setInstallImage((e.target as HTMLInputElement).value)}
-                />
-              </>
-            )}
-          </section>
+          <InstallDiskPicker
+            idPrefix="approve"
+            disks={disks}
+            value={installKey}
+            typed={installDev}
+            image={installImage}
+            typedOk={installOk}
+            showImage={!!install}
+            onValue={setInstallKey}
+            onTyped={setInstallDev}
+            onImage={setInstallImage}
+          />
 
           <section class="space-y-1">
             <Label htmlFor="approve-reason">{t('approve.reason')}</Label>

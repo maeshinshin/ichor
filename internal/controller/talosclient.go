@@ -81,6 +81,34 @@ type TalosClient interface {
 	// fire-and-forget on Talos's side: this returns once the request is
 	// accepted, not once the wipe finishes.
 	Reset(ctx context.Context) error
+
+	// Version reports this node's current Talos release tag (e.g.
+	// "v1.14.3"), the "from" half of a Talos upgrade's pre-checks
+	// (pkg/upgrade.TalosPath) and the signal talos_upgrade.go polls to tell
+	// "upgrade not started yet" from "upgraded" from "rebooted but fell
+	// back to its previous A/B slot" (architecture.md, "Upgrades").
+	Version(ctx context.Context) (string, error)
+
+	// BootID reads this node's current boot ID
+	// (/proc/sys/kernel/random/boot_id), the same mechanism Talos's own
+	// talosctl uses to confirm a reboot actually happened
+	// (cmd/talosctl/pkg/talos/action/tracker.go's BootIDChangedPostCheckFn
+	// and getBootID, Talos 1.14.3) -- Version alone cannot tell "hasn't
+	// rebooted yet" apart from "rebooted and fell back", since both report
+	// the same, unchanged version.
+	BootID(ctx context.Context) (string, error)
+
+	// Upgrade calls this node's Upgrade API with image (an installer image
+	// reference), the default reboot mode, and preserve=false and
+	// stage=false -- UpgradeRequest.Preserve is deprecated and the
+	// installer ignores it on upgrade anyway (architecture.md's "Upgrades"
+	// section, confirmed against Talos 1.14.3's source), so there is
+	// nothing for a flag here to do. For a control-plane node this is also
+	// where Talos validates etcd health before proceeding (its own
+	// server-side ValidateForUpgrade, gated on force/preserve both being
+	// false): Ichor does not re-implement that check, the same reasoning
+	// architecture.md already gives for not re-implementing cordon/drain.
+	Upgrade(ctx context.Context, image string) error
 }
 
 // EtcdMember is the one piece of each etcd member EtcdMemberList's callers

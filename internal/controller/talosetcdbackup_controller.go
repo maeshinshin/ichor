@@ -337,6 +337,10 @@ func (r *TalosEtcdBackupReconciler) loadS3Config(
 // them: healthy non-leaders first (the design's "healthy non-leader" -- the
 // leader serves all writes, so reading a follower keeps load off it), healthy
 // leaders next. An unreachable or unhealthy member is skipped.
+//
+// It lists TalosMachines to choose a snapshot source, not to count control
+// planes, so it is on countplanesAllowedFuncs: nothing is gated on the number,
+// and a stale cached list only costs a failed dial before the next candidate.
 func (r *TalosEtcdBackupReconciler) snapshotCandidates(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, bundle *secrets.Bundle,
 ) ([]*ichorv1alpha1.TalosMachine, error) {

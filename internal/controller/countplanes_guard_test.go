@@ -60,6 +60,11 @@ var countplanesAllowedFuncs = map[string]bool{
 	// for the same staleness reason the canonical count does, and says so
 	// in its own doc comment.
 	"findEtcdSurvivor": true,
+	// snapshotCandidates (talosetcdbackup_controller.go) lists control planes
+	// to pick which one to read an etcd snapshot from; nothing is gated on how
+	// many there are. A stale cached list only means dialing a node that is
+	// gone, which fails and moves on to the next, so the cached client is fine.
+	"snapshotCandidates": true,
 }
 
 // TestTalosMachineListCountingStaysCentralized parses every non-test

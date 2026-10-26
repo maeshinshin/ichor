@@ -110,6 +110,27 @@ func TestNew_IgnoreDifferencesWithoutServerSideApply(t *testing.T) {
 	}
 }
 
+// TestNew_KindOnlyIgnoreDoesNotRespect checks that an ignoreDifferences entry
+// naming only group and kind (Cilium's CiliumIdentity, which the chart never
+// renders) does not add RespectIgnoreDifferences=true: ADR 0055.
+func TestNew_KindOnlyIgnoreDoesNotRespect(t *testing.T) {
+	opts := validOptions()
+	opts.IgnoreDifferences = []ResourceIgnoreDifference{{Group: "cilium.io", Kind: "CiliumIdentity"}}
+
+	app, err := New(opts)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	if app.Spec.SyncPolicy != nil && slices.Contains(app.Spec.SyncPolicy.SyncOptions, syncOptionRespectIgnoreDiffs) {
+		t.Errorf("syncOptions = %v, want no RespectIgnoreDifferences=true for a kind-only entry", app.Spec.SyncPolicy.SyncOptions)
+	}
+
+	if len(app.Spec.IgnoreDifferences) != 1 {
+		t.Errorf("ignoreDifferences = %+v, want the entry preserved", app.Spec.IgnoreDifferences)
+	}
+}
+
 // TestNew_SyncWaveAnnotation checks the third named pitfall: sync-wave
 // ordering is carried as the argocd.argoproj.io/sync-wave annotation.
 func TestNew_SyncWaveAnnotation(t *testing.T) {

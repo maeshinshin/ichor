@@ -122,8 +122,11 @@ func (Preset) ArgoCDApplication(kubeProxy cni.KubeProxyMode) (*gitops.Applicatio
 			TargetRevision: ChartVersion,
 			Helm:           &gitops.ApplicationSourceHelm{Values: string(valuesYAML)},
 		},
-		Destination:      gitops.ApplicationDestination{Server: argoCDDestinationServer, Namespace: namespace},
-		ServerSideApply:  true,
+		Destination:     gitops.ApplicationDestination{Server: argoCDDestinationServer, Namespace: namespace},
+		ServerSideApply: true,
+		IgnoreDifferences: []gitops.ResourceIgnoreDifference{
+			{Group: "cilium.io", Kind: "CiliumIdentity"},
+		},
 		ExtraSyncOptions: []string{"CreateNamespace=true"},
 		SyncWave:         gitops.SyncWaveCNI,
 	})

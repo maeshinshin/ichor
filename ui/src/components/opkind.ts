@@ -14,5 +14,7 @@ export function wireKindOf(k: OpKind): OperationKind {
       return OperationKindValues.CNI
     case 'shutdown':
       return OperationKindValues.SHUTDOWN
+    case 'ca-rotation':
+      return OperationKindValues.CA_ROTATION
   }
 }

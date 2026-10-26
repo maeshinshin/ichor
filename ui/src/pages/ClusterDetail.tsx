@@ -96,7 +96,7 @@ export function ClusterDetail({ namespace, name }: { namespace: string; name: st
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
           {cluster.ref &&
-            (['talos', 'kubernetes', 'ichor', 'cni', 'shutdown'] as const).map((kind) => (
+            (['talos', 'kubernetes', 'ichor', 'cni', 'ca-rotation', 'shutdown'] as const).map((kind) => (
               <StartOperationDialog key={kind} kind={kind} cluster={cluster.ref!} />
             ))}
         </CardContent>

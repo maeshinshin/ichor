@@ -9,7 +9,7 @@ import { OperationKind, type Operation } from '@/gen/ichor/v1alpha1/operation_pb
 import { operationClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
 import { describeError } from '@/lib/errors'
-import { operationState, pollIntervalMs, progressCounts, stateBadge } from '@/lib/operations'
+import { caStageProgress, operationState, pollIntervalMs, progressCounts, stateBadge } from '@/lib/operations'
 import { useT } from '@/lib/useT'
 import { Link, navigate } from '@/router'
 
@@ -56,6 +56,8 @@ export function OperationDetail({ namespace, name }: { namespace: string; name: 
 
   const state = operationState(op.phase, op.failureReason)
   const { done, running } = progressCounts(op.machines)
+  const position = op.caRotationStage === '' ? null : caStageProgress(op.caRotationStage)
+  const stage = position ? { name: op.caRotationStage, ...position } : null
 
   return (
     <div class="mt-6 space-y-4">
@@ -72,6 +74,7 @@ export function OperationDetail({ namespace, name }: { namespace: string; name: 
             <Badge variant="outline">{enumLabel(OperationKind, op.kind)}</Badge>
             <Badge variant={stateBadge(state)}>{t(`ops.state.${state}`)}</Badge>
             <span class="text-muted-foreground">{t('ops.progress', { done, running })}</span>
+            {stage && <Badge variant="outline">{t('ops.caStage', { stage: stage.name, n: stage.index, total: stage.total })}</Badge>}
           </div>
           <dl class="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div>
@@ -83,6 +86,12 @@ export function OperationDetail({ namespace, name }: { namespace: string; name: 
               <dd>{op.maxUnavailable || 1}</dd>
             </div>
           </dl>
+          {op.kind === OperationKind.CA_ROTATION && state === 'done' && (
+            <Alert>
+              <AlertTitle>{t('ops.plan.bundleStaleTitle')}</AlertTitle>
+              <AlertDescription>{t('ops.plan.bundleStale', { name: op.cluster?.name ?? '' })}</AlertDescription>
+            </Alert>
+          )}
           {state === 'failed' && (
             <Alert variant="destructive">
               <AlertTitle>{t('ops.failure')}</AlertTitle>

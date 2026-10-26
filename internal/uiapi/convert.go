@@ -378,7 +378,14 @@ func applyPatchSpec(spec *ichorv1alpha1.TalosConfigPatchSpec, p *pb.Patch) error
 func clusterToPB(c *ichorv1alpha1.TalosCluster) *pb.Cluster {
 	schedulable := c.Spec.ControlPlane.Schedulable == "true"
 
+	var addrs, cidrs []string
+	if d := c.Spec.Discovery; d != nil {
+		addrs, cidrs = d.Addresses, d.CIDRs
+	}
+
 	return &pb.Cluster{
+		DiscoveryAddresses:      addrs,
+		DiscoveryCidrs:          cidrs,
 		Ref:                     objectRef(c.Namespace, c.Name),
 		TalosVersion:            c.Spec.TalosVersion,
 		KubernetesVersion:       c.Spec.KubernetesVersion,

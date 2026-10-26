@@ -2,7 +2,8 @@ syntax = "proto3";
 
 // ClusterService backs the cluster list and cluster detail screens: status,
 // rollout progress and hand-over state (architecture.md, "CLI and UI").
-// Read-only: nothing here writes a TalosCluster.
+// The reads change nothing; AddDiscoveryAddress is the one write, and it
+// edits only spec.discovery.addresses.
 package ichor.v1alpha1;
 
 import "google/protobuf/timestamp.proto";
@@ -11,6 +12,31 @@ import "ichor/v1alpha1/common.proto";
 service ClusterService {
   rpc ListClusters(ListClustersRequest) returns (ListClustersResponse);
   rpc GetCluster(GetClusterRequest) returns (GetClusterResponse);
+  // AddDiscoveryAddress appends one IPv4 address to
+  // TalosCluster.spec.discovery.addresses (ADR 0011), so the controller
+  // probes it for a node in maintenance mode. It goes through the same write
+  // gate as the other writes: refused when Flux tracks the cluster, a pull
+  // request when Argo CD does, break-glass on request (ADR 0064).
+  rpc AddDiscoveryAddress(AddDiscoveryAddressRequest) returns (AddDiscoveryAddressResponse);
+}
+
+message AddDiscoveryAddressRequest {
+  ObjectRef cluster = 1;
+  // address is a single IPv4 address, e.g. "192.168.0.50".
+  string address = 2;
+  string reason = 3;
+  // break_glass requests an emergency direct write (docs/adr/0064).
+  BreakGlass break_glass = 4;
+}
+
+message AddDiscoveryAddressResponse {
+  // cluster is the cluster as stored (unchanged when a pull request was
+  // proposed instead).
+  Cluster cluster = 1;
+  AuditRecord audit = 2;
+  // pull_request_url and notice: see ApproveMachineResponse.
+  string pull_request_url = 3;
+  string notice = 4;
 }
 
 message ListClustersRequest {}
@@ -77,4 +103,9 @@ message Cluster {
   // rollout is unset when no rollout is in progress.
   RolloutProgress rollout = 8;
   repeated HandoverState handovers = 9;
+  // discovery_addresses and discovery_cidrs are spec.discovery (ADR 0011):
+  // where the controller looks for nodes in maintenance mode. Both empty
+  // means discovery is off.
+  repeated string discovery_addresses = 10;
+  repeated string discovery_cidrs = 11;
 }

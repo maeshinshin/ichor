@@ -373,6 +373,12 @@ func machineTarget(m *ichorv1alpha1.TalosMachine) prmode.Target {
 	}
 }
 
+func clusterTarget(c *ichorv1alpha1.TalosCluster) prmode.Target {
+	return prmode.Target{
+		APIVersion: ichorv1alpha1.GroupVersion.String(), Kind: "TalosCluster", Namespace: c.Namespace, Name: c.Name,
+	}
+}
+
 func patchTarget(p *ichorv1alpha1.TalosConfigPatch) prmode.Target {
 	return prmode.Target{
 		APIVersion: ichorv1alpha1.GroupVersion.String(), Kind: "TalosConfigPatch", Namespace: p.Namespace, Name: p.Name,

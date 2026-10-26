@@ -503,3 +503,7 @@ ui-test: ui-install ## Run the UI's own unit tests (node --test; no test framewo
 .PHONY: ui-proto-generate
 ui-proto-generate: ui-install ## Regenerate the TS Connect client into ui/src/gen (ADR 0021). Run before plain `buf generate`/`make proto-generate` if ui/node_modules is missing - buf.gen.yaml's TS plugin resolves to ui/node_modules/.bin/protoc-gen-es.
 	buf generate
+
+.PHONY: ui-shots
+ui-shots: ## Screenshot UI pages (desktop+phone, light+dark): make ui-shots OUT=.ui-shots/x URL=http://host/ [PATHS="/ /machines"].
+	node hack/ui-shots.mjs "$(OUT)" "$(URL)" $(PATHS)

@@ -32,6 +32,7 @@
               qemu
               cni-plugins
               nodejs
+              chromium # headless screenshots of the UI (hack/ui-shots.mjs, make ui-shots)
               gnumake
               git
             ];

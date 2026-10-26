@@ -79,6 +79,7 @@ rules:
   - ichor.maesh.dev
   resources:
   - talosclusters/status
+  - talosetcdbackups/status
   - talosmachines/status
   - talosoperations/status
   verbs:
@@ -88,6 +89,7 @@ rules:
 - apiGroups:
   - ichor.maesh.dev
   resources:
+  - talosetcdbackups
   - talosmachines
   verbs:
   - create
@@ -100,6 +102,7 @@ rules:
 - apiGroups:
   - ichor.maesh.dev
   resources:
+  - talosetcdbackups/finalizers
   - talosmachines/finalizers
   verbs:
   - update

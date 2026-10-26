@@ -120,7 +120,7 @@ func main() {
 		// Where argocd-cm lives (docs/adr/0051); empty means "argocd".
 		ArgoCDNamespace: os.Getenv("ICHOR_ARGOCD_NAMESPACE"),
 		NodeTalosClient: uiapi.NewMachineryNodeTalosClient,
-		// Support bundle, etcd snapshot and packet capture downloads (docs/adr/0083), each
+		// Support bundle, etcd snapshot and packet capture downloads (docs/adr/0084), each
 		// gated by a Kubernetes RBAC verb of the caller's own.
 		DownloadTalosClient: uiapi.NewMachineryDownloadTalosClient,
 		Draining:            draining,

@@ -38,7 +38,7 @@ import (
 )
 
 // The commands below download a support bundle, an etcd snapshot or a packet
-// capture (docs/adr/0083). All three files can hold secrets. They go through
+// capture (docs/adr/0084). All three files can hold secrets. They go through
 // ichor-ui when it can serve them, and otherwise through the same handlers in
 // this process on the caller's own kubeconfig, whose RBAC then decides.
 

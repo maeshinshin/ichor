@@ -1,4 +1,4 @@
-// The browser side of a download (docs/adr/0083): the bytes arrive as a Connect stream through the same
+// The browser side of a download (docs/adr/0084): the bytes arrive as a Connect stream through the same
 // authenticated transport as every other call (so the bearer token travels in a header, not a cookie, and
 // a cross-site request cannot start one), and are saved through a temporary object URL. Kept out of
 // diagnostics.ts because it needs the DOM.

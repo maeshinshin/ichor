@@ -40,7 +40,7 @@ import { useT } from '@/lib/useT'
 
 type Ref = { namespace: string; name: string }
 
-// The node page's Actions menu (docs/adr/0083): three downloads, each shown only when Kubernetes RBAC
+// The node page's Actions menu (docs/adr/0084): three downloads, each shown only when Kubernetes RBAC
 // lets this user start it, and each behind a warning that the file may contain secrets. It renders
 // nothing for a user who may do none of them, or when the permission check fails.
 export function NodeActions({ machine, controlPlane }: { machine: Ref; controlPlane: boolean }) {

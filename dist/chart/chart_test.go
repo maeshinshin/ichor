@@ -1289,7 +1289,7 @@ func allRules(doc map[string]any) []any {
 	return rules
 }
 
-// TestUIDiagnosticsDownloadVerb guards ADR 0083: the download verb on talosmachines'
+// TestUIDiagnosticsDownloadVerb guards ADR 0084: the download verb on talosmachines'
 // support-bundle, etcd-snapshot and packet-capture subresources is granted to nobody by
 // default, not to the ichor-ui ServiceAccount's own role, and only bound when the values say so.
 func TestUIDiagnosticsDownloadVerb(t *testing.T) {

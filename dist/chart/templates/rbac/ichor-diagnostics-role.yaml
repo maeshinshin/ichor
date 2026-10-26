@@ -1,6 +1,6 @@
 {{- if or .Values.rbac.helpers.enabled .Values.ichorUI.diagnostics.groups .Values.ichorUI.diagnostics.serviceAccount }}
 # Not bound to anyone unless ichorUI.diagnostics says so. The people who may download a support
-# bundle, an etcd snapshot or a packet capture from a node need this verb (ADR 0083). Ichor
+# bundle, an etcd snapshot or a packet capture from a node need this verb (ADR 0084). Ichor
 # checks it with a SelfSubjectAccessReview made as the user. The files can hold secrets; the
 # etcd snapshot holds every Kubernetes Secret.
 apiVersion: rbac.authorization.k8s.io/v1

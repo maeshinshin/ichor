@@ -1,5 +1,5 @@
 {{- if and .Values.ichorUI.enabled (or .Values.ichorUI.diagnostics.groups .Values.ichorUI.diagnostics.serviceAccount) }}
-# Opt-in grants of the diagnostics download verb (ADR 0083). With OIDC on, name the groups whose
+# Opt-in grants of the diagnostics download verb (ADR 0084). With OIDC on, name the groups whose
 # members may download (as the IdP names them plus ichorUI.oidc.groupsPrefix, for example
 # "oidc:platform-admins"). With OIDC off, ichor-ui acts as its own ServiceAccount, so only
 # ichorUI.diagnostics.serviceAccount=true lets anyone download, and then anyone who can reach

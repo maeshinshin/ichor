@@ -111,7 +111,11 @@ it.
 
 Only the controller holds an `os:admin`-equivalent Talos identity. The UI
 backend holds a read-only one. The browser holds nothing: no kube token, no
-Talos credentials. In the first release the UI is reached through
+Talos credentials. For three admin-gated downloads (support bundle, etcd snapshot,
+packet capture; ADR 0084) the UI backend also mints a certificate per call with
+the least Talos role that call needs (`os:reader`, `os:etcd:backup`,
+`os:operator`), only after Kubernetes RBAC has allowed the signed-in user; it has
+no method that changes a node. In the first release the UI is reached through
 `ichor ui` (a port-forward); OIDC login with Kubernetes impersonation comes
 later so that RBAC and audit apply per user.
 

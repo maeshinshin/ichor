@@ -1,4 +1,4 @@
-// Logic behind the node page's Actions menu (docs/adr/0083): which downloads to offer, the packet
+// Logic behind the node page's Actions menu (docs/adr/0084): which downloads to offer, the packet
 // capture form, and reading a download stream into memory with a bound. Pure: no DOM, no preact, so
 // it runs under `node --test`. The click that saves the file is in download.ts.
 import type { TalosLink } from '@/gen/ichor/v1alpha1/talosdetails_pb'

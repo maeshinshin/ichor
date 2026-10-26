@@ -121,7 +121,7 @@ var _ = Describe("ichor-ui generated RBAC", func() {
 		Expect(resp.Msg.GetKubernetes().GetNodeName()).To(Equal(node.Name))
 	})
 
-	// ADR 0083: the three downloads are never granted to the ServiceAccount by the generated role, so with
+	// ADR 0084: the three downloads are never granted to the ServiceAccount by the generated role, so with
 	// OIDC off a default install refuses them; the Event that audits an allowed one can still be created.
 	It("refuses every diagnostics download to the ServiceAccount, and still records their Events", func() {
 		cluster := newTestClusterWithBundle()

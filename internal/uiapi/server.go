@@ -91,7 +91,7 @@ type Server struct {
 	Links Links
 
 	// DownloadTalosClient opens the connection for the support bundle, etcd
-	// snapshot and packet capture downloads (docs/adr/0083), each with the
+	// snapshot and packet capture downloads (docs/adr/0084), each with the
 	// least Talos role its call needs. NewMachineryDownloadTalosClient is the
 	// real one; nil answers Unavailable.
 	DownloadTalosClient DownloadTalosClientFactory

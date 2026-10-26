@@ -3,7 +3,7 @@
 // Source: ichor/v1alpha1/diagnostics.proto
 
 // DiagnosticsService serves three admin-only, read-only downloads from a node's
-// Talos API (docs/adr/0083): a support bundle, an etcd snapshot and a packet
+// Talos API (docs/adr/0084): a support bundle, an etcd snapshot and a packet
 // capture. Each is a server stream of byte chunks the caller writes to a file;
 // nothing is stored in a custom resource or a Secret. Every file can hold
 // secrets, so each call is checked against a Kubernetes RBAC verb of the

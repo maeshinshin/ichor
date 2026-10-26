@@ -134,7 +134,7 @@ type apiClients struct {
 	Patch     ichorv1alpha1connect.PatchServiceClient
 	Operation ichorv1alpha1connect.OperationServiceClient
 
-	// Diagnostics serves the three downloads (docs/adr/0083).
+	// Diagnostics serves the three downloads (docs/adr/0084).
 	Diagnostics ichorv1alpha1connect.DiagnosticsServiceClient
 
 	// Local is true when the clients are the in-process fallback.

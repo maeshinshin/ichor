@@ -44,7 +44,7 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
-// DownloadScope names one of the three downloads (docs/adr/0083). The string is
+// DownloadScope names one of the three downloads (docs/adr/0084). The string is
 // also the RBAC subresource on talosmachines the caller needs the "download"
 // verb on, so the three can be granted separately.
 type DownloadScope string

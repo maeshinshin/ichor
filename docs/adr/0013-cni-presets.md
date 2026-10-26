@@ -230,3 +230,5 @@ statement that switching is safe to automate yet.
   `kubeProxy` switch: it only clears admission. Nothing executes the
   design's required new-side-up/verify/old-side-down sequence yet, so a
   switch today is a manual operation even once the annotation is set.
+
+- Superseded in part by ADR 0066: the new-side-up, verify, old-side-down sequence is now executed by a `TalosOperation` of kind `cni`.

@@ -209,7 +209,9 @@ func BuildConfig(
 	}
 
 	// The Talos side of the kube-proxy split is Ichor's, not a patch's.
-	ordered = dropProxyDisabled(ordered)
+	if kubeProxyOwned(cluster) {
+		ordered = dropProxyDisabled(ordered)
+	}
 
 	cfg, err = applyPatches(cfg, ordered)
 	if err != nil {

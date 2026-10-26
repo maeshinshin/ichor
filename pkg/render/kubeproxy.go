@@ -43,6 +43,15 @@ func KubeProxyMode(cluster *ichorv1alpha1.TalosCluster) (mode cni.KubeProxyMode,
 	return cni.KubeProxyMode(cluster.Spec.CNI.KubeProxy), false
 }
 
+// kubeProxyOwned reports whether Ichor, not the patches, decides cluster.proxy.disabled: from the
+// moment the cluster replaces kube-proxy or a switch has set the status. A cluster that is enabled
+// and never switched renders exactly as before, whatever its patches say.
+func kubeProxyOwned(cluster *ichorv1alpha1.TalosCluster) bool {
+	mode, fromStatus := KubeProxyMode(cluster)
+
+	return fromStatus || mode == cni.KubeProxyReplaced
+}
+
 // dropProxyDisabled returns ordered with cluster.proxy.disabled cleared from every Config
 // document, deep-copying only the patches that set it (same discipline as
 // dropHandedOverInlineManifest). The legacy block cannot coexist with the KubeProxyConfig

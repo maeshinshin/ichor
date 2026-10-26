@@ -39,7 +39,6 @@ const (
 	proxyOnInConfig  = "enabled: true"
 	modeReplaced     = "replaced"
 	modeEnabled      = "enabled"
-	ciliumKPRKey     = "kube-proxy-replacement"
 )
 
 // fakeKubeProxyAdmin records the removal and, like the real one, deletes the DaemonSet. It also

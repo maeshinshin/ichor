@@ -11,7 +11,7 @@ import { StatusText } from '@/components/Status'
 import { Section, SectionLayout, type SectionLink } from '@/components/SectionNav'
 import { NodeActions } from '@/components/NodeActions'
 import { NodeLogs } from '@/components/NodeLogs'
-import { NodeActionsMenu, NodeActionStartedNotice, type NodeActionStarted } from '@/components/NodeActionsMenu'
+import { NodeActionsMenu } from '@/components/NodeActionsMenu'
 import { TalosDetails } from '@/components/TalosDetails'
 import { TalosRuntime } from '@/components/TalosRuntime'
 import type { EffectiveConfigValue } from '@/gen/ichor/v1alpha1/node_pb'
@@ -43,7 +43,6 @@ export function NodeDetail({ namespace, name }: { namespace: string; name: strin
   const [machine, setMachine] = useState<Machine | null>(null)
   const [pullRequest, setPullRequest] = useState<{ url: string; run?: BreakGlassRun } | null>(null)
   const [cluster, setCluster] = useState<Cluster | null>(null)
-  const [started, setStarted] = useState<NodeActionStarted | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -165,16 +164,12 @@ export function NodeDetail({ namespace, name }: { namespace: string; name: strin
                   deleting: machine.deleting,
                   role: machine.role === MachineRole.CONTROL_PLANE ? 'controlplane' : 'worker',
                 }}
-                onStarted={(s) => {
-                  setStarted(s)
-                  loadMachine()
-                }}
+                onStarted={loadMachine}
               />
             )}
           </>
         }
       />
-      {started && <NodeActionStartedNotice started={started} onDismiss={() => setStarted(null)} />}
       {pullRequest && <PullRequestNotice url={pullRequest.url} breakGlass={pullRequest.run} onBreakGlassDone={loadMachine} />}
       {machine && needsInstallDisk({ ...machine, approved: machine.approvalState === MachineApprovalState.APPROVED }) && (
         <Alert className="mb-4">

@@ -247,12 +247,10 @@ func (a *talosUpgradeAdvancer) beginUpgrade(
 		return false, fmt.Errorf("upgrade API call to %q failed: %w", m.Name, err)
 	}
 
-	apimeta.SetStatusCondition(&m.Status.Conditions, metav1.Condition{
+	if err := setMachineCondition(ctx, a.Client, a.Client, m, metav1.Condition{
 		Type: conditionTalosUpgrade, Status: metav1.ConditionTrue, Reason: reasonUpgradeRequested,
 		Message: bootID,
-	})
-
-	if err := a.Status().Update(ctx, m); err != nil {
+	}); err != nil {
 		return false, fmt.Errorf("recording the upgrade request for %q: %w", m.Name, err)
 	}
 
@@ -335,12 +333,10 @@ func (a *talosUpgradeAdvancer) finish(
 	}
 
 	if apimeta.IsStatusConditionTrue(m.Status.Conditions, conditionTalosUpgrade) {
-		apimeta.SetStatusCondition(&m.Status.Conditions, metav1.Condition{
+		if err := setMachineCondition(ctx, a.Client, a.Client, m, metav1.Condition{
 			Type: conditionTalosUpgrade, Status: metav1.ConditionFalse, Reason: reasonUpgradeConverged,
 			Message: fmt.Sprintf("running %s", cluster.Spec.TalosVersion),
-		})
-
-		if err := a.Status().Update(ctx, m); err != nil {
+		}); err != nil {
 			return false, err
 		}
 	}

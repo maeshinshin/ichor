@@ -311,12 +311,10 @@ func (a *kubernetesUpgradeAdvancer) begin(
 		return fmt.Errorf("applying the rendered configuration to %q: %w", m.Name, err)
 	}
 
-	apimeta.SetStatusCondition(&m.Status.Conditions, metav1.Condition{
+	if err := setMachineCondition(ctx, a.Reader, a.Client, m, metav1.Condition{
 		Type: conditionKubernetesUpgrade, Status: metav1.ConditionTrue, Reason: reasonKubernetesApplied,
 		Message: "applied the configuration for Kubernetes " + target,
-	})
-
-	if err := a.Status().Update(ctx, m); err != nil {
+	}); err != nil {
 		return fmt.Errorf("recording the applied configuration for %q: %w", m.Name, err)
 	}
 
@@ -456,12 +454,10 @@ func (a *kubernetesUpgradeAdvancer) verify(
 	}
 
 	if cond := apimeta.FindStatusCondition(m.Status.Conditions, conditionKubernetesUpgrade); cond != nil && cond.Status == metav1.ConditionTrue {
-		apimeta.SetStatusCondition(&m.Status.Conditions, metav1.Condition{
+		if err := setMachineCondition(ctx, a.Reader, a.Client, m, metav1.Condition{
 			Type: conditionKubernetesUpgrade, Status: metav1.ConditionFalse, Reason: reasonKubernetesConverged,
 			Message: "running Kubernetes " + target,
-		})
-
-		if err := a.Status().Update(ctx, m); err != nil {
+		}); err != nil {
 			return false, err
 		}
 	}
@@ -590,11 +586,9 @@ func (a *kubernetesUpgradeAdvancer) waiting(
 ) error {
 	cond := apimeta.FindStatusCondition(m.Status.Conditions, conditionKubernetesUpgrade)
 	if cond == nil || cond.Status != metav1.ConditionTrue {
-		apimeta.SetStatusCondition(&m.Status.Conditions, metav1.Condition{
+		return setMachineCondition(ctx, a.Reader, a.Client, m, metav1.Condition{
 			Type: conditionKubernetesUpgrade, Status: metav1.ConditionTrue, Reason: reasonKubernetesApplied, Message: reason,
 		})
-
-		return a.Status().Update(ctx, m)
 	}
 
 	if time.Since(cond.LastTransitionTime.Time) > kubernetesVerifyTimeout {

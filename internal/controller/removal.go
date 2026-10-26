@@ -704,10 +704,9 @@ func closeTalosClient(talos TalosClient) {
 func (r *TalosMachineReconciler) removalCondition(
 	ctx context.Context, m *ichorv1alpha1.TalosMachine, status metav1.ConditionStatus, reason, message string,
 ) error {
-	apimeta.SetStatusCondition(&m.Status.Conditions, metav1.Condition{
+	return setMachineCondition(ctx, readerOrClient(r.APIReader, r.Client), r.Client, m, metav1.Condition{
 		Type: conditionRemoval, Status: status, Reason: reason, Message: message,
 	})
-	return r.Status().Update(ctx, m)
 }
 
 // checkControlPlaneRemoval runs every refusal docs/design/architecture.md's

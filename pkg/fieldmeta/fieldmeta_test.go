@@ -108,6 +108,10 @@ func TestAssess_Rules(t *testing.T) {
 			nonMatch: "machine.installer.anything", wantInstallSet: true,
 		},
 		{
+			name: "UnattendedInstallConfig is install-time-only, not reboot", match: "UnattendedInstallConfig.provisioning.diskSelector.match",
+			nonMatch: "KubeFlannelCNIConfig.backendType", wantInstallSet: true,
+		},
+		{
 			name: "VolumeConfig.provisioning is install-time-only, not reboot", match: pathVolumeConfigSelector,
 			nonMatch: pathVolumeConfigTrim, wantInstallSet: true,
 		},

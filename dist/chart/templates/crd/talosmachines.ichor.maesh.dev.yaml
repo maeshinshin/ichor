@@ -161,7 +161,9 @@ spec:
                   an installed disk alone but gives a maintenance-mode machine nothing to install onto.
                 properties:
                   disk:
-                    description: disk selects the system disk by a stable identifier.
+                    description: |-
+                      disk selects the system disk by a stable identifier. Required: the v1.14 install document
+                      has no meaning without a disk to install onto.
                     properties:
                       busPath:
                         description: busPath is the disk's bus path, e.g. /pci0000:00/0000:00:17.0/ata1/host0/target0:0:0/0:0:0:0.
@@ -203,6 +205,8 @@ spec:
                       schematic it booted from, which only works when it booted an Image Factory asset.
                     maxLength: 512
                     type: string
+                required:
+                - disk
                 type: object
               nodeLabels:
                 additionalProperties:

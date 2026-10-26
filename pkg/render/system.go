@@ -47,6 +47,10 @@ type SystemInputs struct {
 	// Storage is every TalosStorage in the cluster's namespace (any cluster; storage.Select
 	// filters). Order does not matter.
 	Storage []ichorv1alpha1.TalosStorage
+
+	// CARotation is a CA rotation's current stage and new CAs (ADR 0063). Only the rotation
+	// executor sets it; nil is the normal case.
+	CARotation *CARotation
 }
 
 // ResolveSystemInputs reads what Render's system layer needs: registry credentials from

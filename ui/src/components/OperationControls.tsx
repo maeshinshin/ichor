@@ -17,10 +17,13 @@ export function OperationControls({
   op,
   onChanged,
   onDeleted,
+  showDelete = true,
 }: {
   op: Operation
   onChanged: (next: Operation) => void
   onDeleted: () => void
+  // showDelete is false where only pause and resume belong (the cluster page).
+  showDelete?: boolean
 }) {
   const t = useT()
   const [busy, setBusy] = useState(false)
@@ -67,6 +70,7 @@ export function OperationControls({
             {busy ? t('ops.pausing') : t(action === 'pause' ? 'ops.pause' : 'ops.resume')}
           </Button>
         )}
+        {showDelete && (
         <ConfirmDialog
           open={open}
           onOpenChange={setOpen}
@@ -81,6 +85,7 @@ export function OperationControls({
         >
           {error && <ErrorAlert {...error} />}
         </ConfirmDialog>
+        )}
       </div>
       {error && !open && <ErrorAlert {...error} />}
     </div>

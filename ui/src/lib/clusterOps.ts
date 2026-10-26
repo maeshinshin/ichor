@@ -73,9 +73,10 @@ export function versionProblem(current: string, target: string): 'required' | 'i
   return d === 0 ? 'same' : d < 0 ? 'older' : null
 }
 
-// rebootPendingCount is how many nodes wait for a reboot to take a config change.
-export function rebootPendingCount(machines: readonly { rebootPaths: readonly string[] }[]): number {
-  return machines.filter((m) => m.rebootPaths.length > 0).length
+// rebootPendingCount is how many nodes wait for a reboot to take a config change:
+// status.rebootPaths is set, or Ready says RebootRequired (an older backend sends only that).
+export function rebootPendingCount(machines: readonly { rebootPaths: readonly string[]; readyReason: string }[]): number {
+  return machines.filter((m) => m.rebootPaths.length > 0 || m.readyReason === 'RebootRequired').length
 }
 
 const day = 86400

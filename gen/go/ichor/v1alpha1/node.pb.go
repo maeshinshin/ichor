@@ -1158,7 +1158,7 @@ var File_ichor_v1alpha1_node_proto protoreflect.FileDescriptor
 
 const file_ichor_v1alpha1_node_proto_rawDesc = "" +
 	"\n" +
-	"\x19ichor/v1alpha1/node.proto\x12\x0eichor.v1alpha1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1bichor/v1alpha1/common.proto\x1a!ichor/v1alpha1/talosdetails.proto\"E\n" +
+	"\x19ichor/v1alpha1/node.proto\x12\x0eichor.v1alpha1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1bichor/v1alpha1/common.proto\x1a!ichor/v1alpha1/talosdetails.proto\x1a!ichor/v1alpha1/talosruntime.proto\"E\n" +
 	"\x0eGetNodeRequest\x123\n" +
 	"\amachine\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\amachine\"A\n" +
 	"\x0fGetNodeResponse\x12.\n" +
@@ -1248,11 +1248,12 @@ const file_ichor_v1alpha1_node_proto_rawDesc = "" +
 	"\x14CONFIG_LAYER_CLUSTER\x10\x02\x12\x15\n" +
 	"\x11CONFIG_LAYER_ROLE\x10\x03\x12\x19\n" +
 	"\x15CONFIG_LAYER_SELECTOR\x10\x04\x12\x18\n" +
-	"\x14CONFIG_LAYER_MACHINE\x10\x052\x99\x03\n" +
+	"\x14CONFIG_LAYER_MACHINE\x10\x052\x89\x04\n" +
 	"\vNodeService\x12J\n" +
 	"\aGetNode\x12\x1e.ichor.v1alpha1.GetNodeRequest\x1a\x1f.ichor.v1alpha1.GetNodeResponse\x12k\n" +
 	"\x12GetEffectiveConfig\x12).ichor.v1alpha1.GetEffectiveConfigRequest\x1a*.ichor.v1alpha1.GetEffectiveConfigResponse\x12n\n" +
-	"\x13GetNodeTalosDetails\x12*.ichor.v1alpha1.GetNodeTalosDetailsRequest\x1a+.ichor.v1alpha1.GetNodeTalosDetailsResponse\x12a\n" +
+	"\x13GetNodeTalosDetails\x12*.ichor.v1alpha1.GetNodeTalosDetailsRequest\x1a+.ichor.v1alpha1.GetNodeTalosDetailsResponse\x12n\n" +
+	"\x13GetNodeTalosRuntime\x12*.ichor.v1alpha1.GetNodeTalosRuntimeRequest\x1a+.ichor.v1alpha1.GetNodeTalosRuntimeResponse\x12a\n" +
 	"\x0eStreamNodeLogs\x12%.ichor.v1alpha1.StreamNodeLogsRequest\x1a&.ichor.v1alpha1.StreamNodeLogsResponse0\x01B\xba\x01\n" +
 	"\x12com.ichor.v1alpha1B\tNodeProtoP\x01Z@github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1;ichorv1alpha1\xa2\x02\x03IXX\xaa\x02\x0eIchor.V1alpha1\xca\x02\x0eIchor\\V1alpha1\xe2\x02\x1aIchor\\V1alpha1\\GPBMetadata\xea\x02\x0fIchor::V1alpha1b\x06proto3"
 
@@ -1291,7 +1292,9 @@ var file_ichor_v1alpha1_node_proto_goTypes = []any{
 	(*ObjectRef)(nil),                   // 17: ichor.v1alpha1.ObjectRef
 	(*timestamppb.Timestamp)(nil),       // 18: google.protobuf.Timestamp
 	(*GetNodeTalosDetailsRequest)(nil),  // 19: ichor.v1alpha1.GetNodeTalosDetailsRequest
-	(*GetNodeTalosDetailsResponse)(nil), // 20: ichor.v1alpha1.GetNodeTalosDetailsResponse
+	(*GetNodeTalosRuntimeRequest)(nil),  // 20: ichor.v1alpha1.GetNodeTalosRuntimeRequest
+	(*GetNodeTalosDetailsResponse)(nil), // 21: ichor.v1alpha1.GetNodeTalosDetailsResponse
+	(*GetNodeTalosRuntimeResponse)(nil), // 22: ichor.v1alpha1.GetNodeTalosRuntimeResponse
 }
 var file_ichor_v1alpha1_node_proto_depIdxs = []int32{
 	17, // 0: ichor.v1alpha1.GetNodeRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
@@ -1315,13 +1318,15 @@ var file_ichor_v1alpha1_node_proto_depIdxs = []int32{
 	2,  // 18: ichor.v1alpha1.NodeService.GetNode:input_type -> ichor.v1alpha1.GetNodeRequest
 	4,  // 19: ichor.v1alpha1.NodeService.GetEffectiveConfig:input_type -> ichor.v1alpha1.GetEffectiveConfigRequest
 	19, // 20: ichor.v1alpha1.NodeService.GetNodeTalosDetails:input_type -> ichor.v1alpha1.GetNodeTalosDetailsRequest
-	15, // 21: ichor.v1alpha1.NodeService.StreamNodeLogs:input_type -> ichor.v1alpha1.StreamNodeLogsRequest
-	3,  // 22: ichor.v1alpha1.NodeService.GetNode:output_type -> ichor.v1alpha1.GetNodeResponse
-	5,  // 23: ichor.v1alpha1.NodeService.GetEffectiveConfig:output_type -> ichor.v1alpha1.GetEffectiveConfigResponse
-	20, // 24: ichor.v1alpha1.NodeService.GetNodeTalosDetails:output_type -> ichor.v1alpha1.GetNodeTalosDetailsResponse
-	16, // 25: ichor.v1alpha1.NodeService.StreamNodeLogs:output_type -> ichor.v1alpha1.StreamNodeLogsResponse
-	22, // [22:26] is the sub-list for method output_type
-	18, // [18:22] is the sub-list for method input_type
+	20, // 21: ichor.v1alpha1.NodeService.GetNodeTalosRuntime:input_type -> ichor.v1alpha1.GetNodeTalosRuntimeRequest
+	15, // 22: ichor.v1alpha1.NodeService.StreamNodeLogs:input_type -> ichor.v1alpha1.StreamNodeLogsRequest
+	3,  // 23: ichor.v1alpha1.NodeService.GetNode:output_type -> ichor.v1alpha1.GetNodeResponse
+	5,  // 24: ichor.v1alpha1.NodeService.GetEffectiveConfig:output_type -> ichor.v1alpha1.GetEffectiveConfigResponse
+	21, // 25: ichor.v1alpha1.NodeService.GetNodeTalosDetails:output_type -> ichor.v1alpha1.GetNodeTalosDetailsResponse
+	22, // 26: ichor.v1alpha1.NodeService.GetNodeTalosRuntime:output_type -> ichor.v1alpha1.GetNodeTalosRuntimeResponse
+	16, // 27: ichor.v1alpha1.NodeService.StreamNodeLogs:output_type -> ichor.v1alpha1.StreamNodeLogsResponse
+	23, // [23:28] is the sub-list for method output_type
+	18, // [18:23] is the sub-list for method input_type
 	18, // [18:18] is the sub-list for extension type_name
 	18, // [18:18] is the sub-list for extension extendee
 	0,  // [0:18] is the sub-list for field type_name
@@ -1334,6 +1339,7 @@ func file_ichor_v1alpha1_node_proto_init() {
 	}
 	file_ichor_v1alpha1_common_proto_init()
 	file_ichor_v1alpha1_talosdetails_proto_init()
+	file_ichor_v1alpha1_talosruntime_proto_init()
 	file_ichor_v1alpha1_node_proto_msgTypes[13].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

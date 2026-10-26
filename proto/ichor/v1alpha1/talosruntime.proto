@@ -1,0 +1,201 @@
+syntax = "proto3";
+
+// Messages for NodeService.GetNodeTalosRuntime, the read-only "live state" view
+// of one machine (docs/adr/0082): etcd, top processes, containers, network
+// state, kernel modules and the Kubernetes view of the node. Like
+// talosdetails.proto, every field is picked explicitly. Process command lines,
+// container environments and arguments, WireGuard keys and machine
+// configuration are never carried.
+package ichor.v1alpha1;
+
+import "ichor/v1alpha1/common.proto";
+
+message GetNodeTalosRuntimeRequest {
+  ObjectRef machine = 1;
+}
+
+message GetNodeTalosRuntimeResponse {
+  // maintenance_mode is true for a machine read over the insecure maintenance
+  // API, which allows far fewer calls; sections it refuses carry an error.
+  bool maintenance_mode = 1;
+  // Each section loads independently and carries its own error.
+  TalosEtcdSection etcd = 2;
+  TalosProcessesSection processes = 3;
+  TalosContainersSection containers = 4;
+  TalosNetworkStateSection network_state = 5;
+  TalosKernelModulesSection kernel_modules = 6;
+  KubernetesNodeSection kubernetes = 7;
+}
+
+message TalosEtcdMember {
+  // id is the member ID as 16 hex digits, the form etcdctl and talosctl print.
+  string id = 1;
+  string hostname = 2;
+  repeated string peer_urls = 3;
+  repeated string client_urls = 4;
+  bool learner = 5;
+  bool leader = 6;
+}
+
+message TalosEtcdSection {
+  string error = 1;
+  // not_applicable is true for a machine that is not a control plane node.
+  bool not_applicable = 2;
+  repeated TalosEtcdMember members = 3;
+  // The queried node's own member status.
+  string member_id = 4;
+  string leader_id = 5;
+  int64 db_size_bytes = 6;
+  int64 db_size_in_use_bytes = 7;
+  uint64 raft_index = 8;
+  uint64 raft_term = 9;
+  uint64 raft_applied_index = 10;
+  string protocol_version = 11;
+  string storage_version = 12;
+  repeated string status_errors = 13;
+  // alarms are "<member id>: <alarm type>", for example "00ab...: NOSPACE".
+  repeated string alarms = 14;
+}
+
+message TalosProcess {
+  int32 pid = 1;
+  int32 ppid = 2;
+  string state = 3;
+  int32 threads = 4;
+  // cpu_seconds is the cumulative CPU time, not a percentage.
+  double cpu_seconds = 5;
+  uint64 resident_bytes = 6;
+  uint64 virtual_bytes = 7;
+  // name is the executable's base name. The command line is never carried: it
+  // can hold tokens and passwords.
+  string name = 8;
+}
+
+message TalosProcessesSection {
+  string error = 1;
+  int32 total = 2;
+  // processes is the union of the heaviest by CPU time and by resident memory,
+  // bounded; the UI sorts it.
+  repeated TalosProcess processes = 3;
+}
+
+message TalosContainer {
+  // runtime_namespace is "k8s.io" for Kubernetes containers (CRI) or "system"
+  // for Talos's own services (containerd).
+  string runtime_namespace = 1;
+  string id = 2;
+  string pod = 3;
+  string name = 4;
+  // image has any credentials in the reference removed.
+  string image = 5;
+  string status = 6;
+  uint32 pid = 7;
+}
+
+message TalosContainersSection {
+  string error = 1;
+  repeated TalosContainer containers = 2;
+  bool truncated = 3;
+}
+
+message TalosRoute {
+  string family = 1;
+  string destination = 2;
+  string gateway = 3;
+  string source = 4;
+  string link = 5;
+  string table = 6;
+  string protocol = 7;
+  string scope = 8;
+  string type = 9;
+  uint32 priority = 10;
+}
+
+message TalosDiscoveryMember {
+  string hostname = 1;
+  repeated string addresses = 2;
+  string machine_type = 3;
+  string operating_system = 4;
+}
+
+message TalosKubeSpanPeer {
+  string label = 1;
+  string endpoint = 2;
+  string state = 3;
+  int64 receive_bytes = 4;
+  int64 transmit_bytes = 5;
+  // last_handshake_unix is 0 when there has been none.
+  int64 last_handshake_unix = 6;
+}
+
+message TalosNetworkStateSection {
+  string error = 1;
+  repeated TalosRoute routes = 2;
+  bool routes_truncated = 3;
+  repeated TalosDiscoveryMember members = 4;
+  repeated TalosKubeSpanPeer kubespan_peers = 5;
+  // Time synchronisation detail from Talos's adjtime status.
+  string time_status = 6;
+  int64 time_offset_nanos = 7;
+  int64 time_max_error_nanos = 8;
+  bool time_sync = 9;
+}
+
+message TalosKernelModule {
+  string name = 1;
+  int64 size_bytes = 2;
+  int32 reference_count = 3;
+  string state = 4;
+}
+
+message TalosKernelModulesSection {
+  string error = 1;
+  repeated TalosKernelModule modules = 2;
+}
+
+message KubernetesCondition {
+  string type = 1;
+  string status = 2;
+  string reason = 3;
+  string message = 4;
+}
+
+message KubernetesTaint {
+  string key = 1;
+  string value = 2;
+  string effect = 3;
+}
+
+message KubernetesResource {
+  string name = 1;
+  string capacity = 2;
+  string allocatable = 3;
+}
+
+message KubernetesPod {
+  string namespace = 1;
+  string name = 2;
+  string phase = 3;
+  int32 ready_containers = 4;
+  int32 total_containers = 5;
+  int32 restarts = 6;
+  // age_seconds is the time since the pod was created.
+  int64 age_seconds = 7;
+}
+
+// KubernetesNodeSection is the Kubernetes API's view of the node behind the
+// machine. It is read as the caller, so a caller who may not read Nodes or
+// Pods gets permission_denied instead of data.
+message KubernetesNodeSection {
+  string error = 1;
+  bool permission_denied = 2;
+  // not_joined is true when no Node matches the machine.
+  bool not_joined = 3;
+  string node_name = 4;
+  repeated KubernetesCondition conditions = 5;
+  repeated KubernetesTaint taints = 6;
+  repeated KubernetesResource resources = 7;
+  repeated KubernetesPod pods = 8;
+  bool pods_truncated = 9;
+  string pods_error = 10;
+}

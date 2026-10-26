@@ -68,6 +68,15 @@ type NodeTalosClient interface {
 	TalosServices(ctx context.Context) (*pb.TalosServicesSection, error)
 	TalosExtensions(ctx context.Context) (*pb.TalosExtensionsSection, error)
 
+	// TalosEtcd, TalosProcesses, TalosContainers, TalosNetworkState and
+	// TalosKernelModules back GetNodeTalosRuntime (docs/adr/0082), on the
+	// same terms as the methods above.
+	TalosEtcd(ctx context.Context) (*pb.TalosEtcdSection, error)
+	TalosProcesses(ctx context.Context) (*pb.TalosProcessesSection, error)
+	TalosContainers(ctx context.Context) (*pb.TalosContainersSection, error)
+	TalosNetworkState(ctx context.Context) (*pb.TalosNetworkStateSection, error)
+	TalosKernelModules(ctx context.Context) (*pb.TalosKernelModulesSection, error)
+
 	// StreamLogs tails one log and calls onLine for every line after since
 	// (the mechanism StreamNodeLogs's resume token relies on) until ctx is
 	// done or the underlying stream ends. service selects which log:

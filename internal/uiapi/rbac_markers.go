@@ -68,6 +68,12 @@ package uiapi
 // TalosMachine's hostname or endpoint address.
 // +kubebuilder:rbac:groups="",resources=nodes,verbs=get;list
 
+// GetNodeTalosRuntime lists the pods bound to one node (ADR 0082): one List per call, filtered
+// by spec.nodeName, read as the caller when OIDC is on. A Pod is namespaced, but the pods of a
+// node live in every namespace, so the grant is cluster-wide get;list (no watch, no
+// pods/log, pods/exec or secrets). It is the only widening of this role in that ADR.
+// +kubebuilder:rbac:groups="",resources=pods,verbs=get;list
+
 // The two reads behind the "is this CR tracked by Argo CD or Flux" gate on
 // every write (docs/adr/0051). Both stay in this ClusterRole: Argo CD's
 // namespace is configurable (Server.ArgoCDNamespace), and a Role/RoleBinding

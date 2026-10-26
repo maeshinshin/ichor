@@ -17,13 +17,17 @@ limitations under the License.
 package uiapi
 
 import (
+	"context"
 	"os"
 	"strings"
 
 	"connectrpc.com/connect"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
+	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -92,5 +96,29 @@ var _ = Describe("ichor-ui generated RBAC", func() {
 			Machine: objectRef(m.Namespace, m.Name),
 		}))
 		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("lets GetNodeTalosRuntime read the Node and the pods bound to it", func() {
+		cluster := newTestClusterWithBundle()
+		m := newTestMachine(cluster.Name, strongTestIdentity("uuid-rbac-rt"), roleWorker, ichorv1alpha1.MachineApprovalStateApproved)
+		m.Spec.Hostname = "node-rbac-rt"
+		Expect(k8sClient.Update(ctx, m)).To(Succeed())
+
+		node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: m.Spec.Hostname}}
+		Expect(k8sClient.Create(ctx, node)).To(Succeed())
+
+		s := &Server{
+			Client: saClient, ControllerNamespace: testNamespace,
+			NodeTalosClient: func(context.Context, *ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine, *secrets.Bundle) (NodeTalosClient, error) {
+				return &fakeNodeTalosClient{}, nil
+			},
+		}
+
+		resp, err := s.GetNodeTalosRuntime(ctx, connect.NewRequest(&pb.GetNodeTalosRuntimeRequest{Machine: objectRef(m.Namespace, m.Name)}))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(resp.Msg.GetKubernetes().GetPermissionDenied()).To(BeFalse())
+		Expect(resp.Msg.GetKubernetes().GetError()).To(BeEmpty())
+		Expect(resp.Msg.GetKubernetes().GetPodsError()).To(BeEmpty(), "the ServiceAccount must be allowed to list pods")
+		Expect(resp.Msg.GetKubernetes().GetNodeName()).To(Equal(node.Name))
 	})
 })

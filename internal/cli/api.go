@@ -258,6 +258,12 @@ func (localNode) GetNodeTalosDetails(
 	return nil, connect.NewError(connect.CodeUnavailable, errBackendRequired)
 }
 
+func (localNode) GetNodeTalosRuntime(
+	context.Context, *connect.Request[pb.GetNodeTalosRuntimeRequest],
+) (*connect.Response[pb.GetNodeTalosRuntimeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnavailable, errBackendRequired)
+}
+
 func (localNode) StreamNodeLogs(
 	context.Context, *connect.Request[pb.StreamNodeLogsRequest],
 ) (*connect.ServerStreamForClient[pb.StreamNodeLogsResponse], error) {

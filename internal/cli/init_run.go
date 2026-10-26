@@ -225,6 +225,10 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) error {
 		return err
 	}
 
+	if err := createIchorInstallation(ctx, k8sClient, deps.Stderr); err != nil {
+		return err
+	}
+
 	// Step 5: create the CRs.
 	if err := createCRs(ctx, k8sClient, cluster, machine, candidates, deps.Stdout, deps.Output); err != nil {
 		return err

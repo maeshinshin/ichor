@@ -214,7 +214,13 @@ func watchOperation(ctx context.Context, c *apiClients, ref *pb.ObjectRef, out, 
 	var last string
 
 	for {
-		resp, err := c.Operation.GetOperation(ctx, connect.NewRequest(&pb.GetOperationRequest{Operation: ref}))
+		var resp *connect.Response[pb.GetOperationResponse]
+
+		err := retryTransient(ctx, c, errw, func() (err error) {
+			resp, err = c.Operation.GetOperation(ctx, connect.NewRequest(&pb.GetOperationRequest{Operation: ref}))
+
+			return err
+		})
 		if err != nil {
 			return err
 		}

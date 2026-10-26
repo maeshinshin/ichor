@@ -1,8 +1,8 @@
 # 0055. Cilium stays Synced under Argo CD with ignoreDifferences on CiliumIdentity and ServerSideApply
 
-Status: Accepted · Date: 2026-10-26 · Design section: CNI, GitOps and Argo CD
+Status: Accepted (amended 2026-10-26) · Date: 2026-10-26 · Design section: CNI, GitOps and Argo CD
 
-Decided: The generated Cilium Application carries `ignoreDifferences: [{group: cilium.io, kind: CiliumIdentity}]` and `ServerSideApply=true`, without `RespectIgnoreDifferences=true`; Hubble certificates stay on `hubble.tls.auto.method=cronJob`; Kokumi cannot carry either setting today, so that case is an open question
+Decided: The generated Cilium Application carries `ignoreDifferences: [{group: cilium.io, kind: CiliumIdentity}]` and `ServerSideApply=true`, without `RespectIgnoreDifferences=true`; Hubble certificates stay on `hubble.tls.auto.method=cronJob`; Kokumi cannot carry either setting today, so that case is an open question; the generated Cilium and root Applications use automated sync with prune and selfHeal (addendum 2026-10-26)
 
 ## Context
 
@@ -167,3 +167,43 @@ Things the run turned up:
   `tunnelProtocol: geneve` fixed it at once. Cause on the outer network not
   investigated. Any Cilium e2e on this harness needs it.
 - Chart 1.18.0 ran on Kubernetes v1.37.1 here without trouble in this short run.
+
+## Addendum (2026-10-26): generated Applications sync automatically
+
+Decided by the user: with Argo CD in use, automated sync is fine; without Argo
+CD this does not apply. The e2e run above showed that an Application without
+`syncPolicy.automated` stays OutOfSync until someone syncs it, so the CNI
+hand-over (ADR 0024) never completes.
+
+**Distinction.** "Ichor never touches an Application's sync policy" means Ichor
+never changes the sync policy of an Application that already exists. An
+Application Ichor generates (only on the Argo CD / hand-over path) chooses its
+sync policy once, at creation, in `pkg/gitops.New` (ADR 0015).
+
+**Every generated Application** (there are no others; `gitops export` reuses
+these two builders, flannel's `ArgoCDApplication` returns nil):
+
+| Application | Built by | Policy |
+|---|---|---|
+| `cilium` (CNI) | `pkg/cni/cilium` | `automated {prune: true, selfHeal: true}`, `ServerSideApply=true`, `CreateNamespace=true`, `PruneLast=true` |
+| `root` (app of apps) | `internal/cli.buildRootApplication` | `automated {prune: true, selfHeal: true}` (already so; unchanged) |
+
+**Prune, per Application** (Argo CD v3.5 docs, sync-options and auto_sync):
+
+- CNI: `prune: true`. Prune removes only resources Argo CD tracks that the
+  pinned chart no longer renders, i.e. after a deliberate chart or value change.
+  `prune: false` would not stop that change; it would leave the app OutOfSync
+  ("the app will be out of sync if Argo CD expects a resource to be pruned"),
+  which blocks the Synced + Healthy signal the hand-over waits for. The risk
+  that a dropped resource takes the network down is reduced by `PruneLast=true`
+  (pruning runs as a last implicit wave, after the new resources are healthy).
+  A user can protect any single resource with the
+  `argocd.argoproj.io/sync-options: Prune=false` annotation, which overrides
+  the policy.
+- root: `prune: true`. It deletes a child Application only when its manifest is
+  removed from Git, which is the intent. Ichor sets no
+  `resources-finalizer` on children, so deleting a child Application does not
+  cascade-delete the workloads it deployed.
+
+Without `--argocd` (or with `handover: disabled`) no Application is generated and
+nothing changes; `TestBuildCNIBootstrap_Cilium` and `_Flannel` check it.

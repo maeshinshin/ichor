@@ -127,7 +127,13 @@ func (Preset) ArgoCDApplication(kubeProxy cni.KubeProxyMode) (*gitops.Applicatio
 		IgnoreDifferences: []gitops.ResourceIgnoreDifference{
 			{Group: "cilium.io", Kind: "CiliumIdentity"},
 		},
-		ExtraSyncOptions: []string{"CreateNamespace=true"},
+		// Automated sync, or Argo CD never syncs this Application and the
+		// hand-over never completes. PruneLast deletes
+		// anything the chart dropped only after the rest is healthy.
+		Automated:        true,
+		Prune:            true,
+		SelfHeal:         true,
+		ExtraSyncOptions: []string{"CreateNamespace=true", "PruneLast=true"},
 		SyncWave:         gitops.SyncWaveCNI,
 	})
 	if err != nil {

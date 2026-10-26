@@ -147,3 +147,5 @@ with a failing test first.
 - The same-identity lock hazard exists in other machine-reconciler paths (`removal.go` takes the lock as
   `ichor-controller` too); only `refuseReboot` was changed here.
 - A per-machine apply (one named machine) is not offered; hold the others with `upgrade-hold`.
+
+- Addendum: the config rollout, Talos upgrade, evacuation and removal paths write machine conditions on a fresh copy with retry on conflict, as the Kubernetes upgrade does (ADR 0057).

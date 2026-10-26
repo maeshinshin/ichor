@@ -24,7 +24,6 @@ import (
 
 	"connectrpc.com/connect"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -42,6 +41,8 @@ import (
 
 const (
 	trackedTestNS     = "default"
+	trackedArgoNS     = "argocd"
+	trackedEndpoint   = "10.0.0.10:50000"
 	argoTrackingAnnot = "argocd.argoproj.io/tracking-id"
 )
 
@@ -62,22 +63,22 @@ func trackedScheme(t *testing.T) *runtime.Scheme {
 
 func trackedMachine(annotations map[string]string) *ichorv1alpha1.TalosMachine {
 	return &ichorv1alpha1.TalosMachine{
-		ObjectMeta: metav1.ObjectMeta{Name: "m1", Namespace: trackedTestNS, Annotations: annotations},
+		Name: "m1", Namespace: trackedTestNS, Annotations: annotations,
 		Spec: ichorv1alpha1.TalosMachineSpec{
 			ClusterRef:    corev1.LocalObjectReference{Name: "c"},
 			Identity:      ichorv1alpha1.TalosMachineIdentity{UUID: "u", Serial: "s", MACAddresses: []string{"aa:bb:cc:dd:ee:ff"}},
-			Endpoint:      "10.0.0.10:50000",
+			Endpoint:      trackedEndpoint,
 			ApprovalState: ichorv1alpha1.MachineApprovalStatePending,
 		},
 	}
 }
 
 func trackedPatch() *ichorv1alpha1.TalosConfigPatch {
-	return &ichorv1alpha1.TalosConfigPatch{ObjectMeta: metav1.ObjectMeta{Name: "p1", Namespace: trackedTestNS}}
+	return &ichorv1alpha1.TalosConfigPatch{Name: "p1", Namespace: trackedTestNS}
 }
 
 func argoCM() *corev1.ConfigMap {
-	return &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "argocd-cm", Namespace: "argocd"}}
+	return &corev1.ConfigMap{Name: "argocd-cm", Namespace: trackedArgoNS}
 }
 
 func fluxInventory(id string) *unstructured.Unstructured {

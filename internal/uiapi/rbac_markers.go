@@ -58,3 +58,12 @@ package uiapi
 // call, never an informer) backs that lookup of the Node matching a
 // TalosMachine's hostname or endpoint address.
 // +kubebuilder:rbac:groups="",resources=nodes,verbs=get;list
+
+// The two reads behind the "is this CR tracked by Argo CD or Flux" gate on
+// every write. Both stay in this ClusterRole: Argo CD's
+// namespace is configurable (Server.ArgoCDNamespace), and a Role/RoleBinding
+// into a namespace that may not exist would fail the chart install. Narrowed instead
+// by resourceNames, so this is get on ConfigMaps named argocd-cm and nothing
+// else -- no cluster-wide ConfigMap or Secret read.
+// +kubebuilder:rbac:groups="",resources=configmaps,resourceNames=argocd-cm,verbs=get
+// +kubebuilder:rbac:groups=kustomize.toolkit.fluxcd.io,resources=kustomizations,verbs=list

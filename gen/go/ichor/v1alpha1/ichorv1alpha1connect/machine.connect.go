@@ -50,6 +50,9 @@ const (
 	// MachineServiceRejectMachineProcedure is the fully-qualified name of the MachineService's
 	// RejectMachine RPC.
 	MachineServiceRejectMachineProcedure = "/ichor.v1alpha1.MachineService/RejectMachine"
+	// MachineServiceSetMachineInstallProcedure is the fully-qualified name of the MachineService's
+	// SetMachineInstall RPC.
+	MachineServiceSetMachineInstallProcedure = "/ichor.v1alpha1.MachineService/SetMachineInstall"
 )
 
 // MachineServiceClient is a client for the ichor.v1alpha1.MachineService service.
@@ -58,6 +61,10 @@ type MachineServiceClient interface {
 	GetMachine(context.Context, *connect.Request[v1alpha1.GetMachineRequest]) (*connect.Response[v1alpha1.GetMachineResponse], error)
 	ApproveMachine(context.Context, *connect.Request[v1alpha1.ApproveMachineRequest]) (*connect.Response[v1alpha1.ApproveMachineResponse], error)
 	RejectMachine(context.Context, *connect.Request[v1alpha1.RejectMachineRequest]) (*connect.Response[v1alpha1.RejectMachineResponse], error)
+	// SetMachineInstall writes only TalosMachine.spec.install of an approved
+	// machine that has not converged yet (ADR 0076): how a machine approved
+	// without an install disk (Ready reason InstallDiskUnknown) gets one.
+	SetMachineInstall(context.Context, *connect.Request[v1alpha1.SetMachineInstallRequest]) (*connect.Response[v1alpha1.SetMachineInstallResponse], error)
 }
 
 // NewMachineServiceClient constructs a client for the ichor.v1alpha1.MachineService service. By
@@ -95,15 +102,22 @@ func NewMachineServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(machineServiceMethods.ByName("RejectMachine")),
 			connect.WithClientOptions(opts...),
 		),
+		setMachineInstall: connect.NewClient[v1alpha1.SetMachineInstallRequest, v1alpha1.SetMachineInstallResponse](
+			httpClient,
+			baseURL+MachineServiceSetMachineInstallProcedure,
+			connect.WithSchema(machineServiceMethods.ByName("SetMachineInstall")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // machineServiceClient implements MachineServiceClient.
 type machineServiceClient struct {
-	listMachines   *connect.Client[v1alpha1.ListMachinesRequest, v1alpha1.ListMachinesResponse]
-	getMachine     *connect.Client[v1alpha1.GetMachineRequest, v1alpha1.GetMachineResponse]
-	approveMachine *connect.Client[v1alpha1.ApproveMachineRequest, v1alpha1.ApproveMachineResponse]
-	rejectMachine  *connect.Client[v1alpha1.RejectMachineRequest, v1alpha1.RejectMachineResponse]
+	listMachines      *connect.Client[v1alpha1.ListMachinesRequest, v1alpha1.ListMachinesResponse]
+	getMachine        *connect.Client[v1alpha1.GetMachineRequest, v1alpha1.GetMachineResponse]
+	approveMachine    *connect.Client[v1alpha1.ApproveMachineRequest, v1alpha1.ApproveMachineResponse]
+	rejectMachine     *connect.Client[v1alpha1.RejectMachineRequest, v1alpha1.RejectMachineResponse]
+	setMachineInstall *connect.Client[v1alpha1.SetMachineInstallRequest, v1alpha1.SetMachineInstallResponse]
 }
 
 // ListMachines calls ichor.v1alpha1.MachineService.ListMachines.
@@ -126,12 +140,21 @@ func (c *machineServiceClient) RejectMachine(ctx context.Context, req *connect.R
 	return c.rejectMachine.CallUnary(ctx, req)
 }
 
+// SetMachineInstall calls ichor.v1alpha1.MachineService.SetMachineInstall.
+func (c *machineServiceClient) SetMachineInstall(ctx context.Context, req *connect.Request[v1alpha1.SetMachineInstallRequest]) (*connect.Response[v1alpha1.SetMachineInstallResponse], error) {
+	return c.setMachineInstall.CallUnary(ctx, req)
+}
+
 // MachineServiceHandler is an implementation of the ichor.v1alpha1.MachineService service.
 type MachineServiceHandler interface {
 	ListMachines(context.Context, *connect.Request[v1alpha1.ListMachinesRequest]) (*connect.Response[v1alpha1.ListMachinesResponse], error)
 	GetMachine(context.Context, *connect.Request[v1alpha1.GetMachineRequest]) (*connect.Response[v1alpha1.GetMachineResponse], error)
 	ApproveMachine(context.Context, *connect.Request[v1alpha1.ApproveMachineRequest]) (*connect.Response[v1alpha1.ApproveMachineResponse], error)
 	RejectMachine(context.Context, *connect.Request[v1alpha1.RejectMachineRequest]) (*connect.Response[v1alpha1.RejectMachineResponse], error)
+	// SetMachineInstall writes only TalosMachine.spec.install of an approved
+	// machine that has not converged yet (ADR 0076): how a machine approved
+	// without an install disk (Ready reason InstallDiskUnknown) gets one.
+	SetMachineInstall(context.Context, *connect.Request[v1alpha1.SetMachineInstallRequest]) (*connect.Response[v1alpha1.SetMachineInstallResponse], error)
 }
 
 // NewMachineServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -165,6 +188,12 @@ func NewMachineServiceHandler(svc MachineServiceHandler, opts ...connect.Handler
 		connect.WithSchema(machineServiceMethods.ByName("RejectMachine")),
 		connect.WithHandlerOptions(opts...),
 	)
+	machineServiceSetMachineInstallHandler := connect.NewUnaryHandler(
+		MachineServiceSetMachineInstallProcedure,
+		svc.SetMachineInstall,
+		connect.WithSchema(machineServiceMethods.ByName("SetMachineInstall")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/ichor.v1alpha1.MachineService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case MachineServiceListMachinesProcedure:
@@ -175,6 +204,8 @@ func NewMachineServiceHandler(svc MachineServiceHandler, opts ...connect.Handler
 			machineServiceApproveMachineHandler.ServeHTTP(w, r)
 		case MachineServiceRejectMachineProcedure:
 			machineServiceRejectMachineHandler.ServeHTTP(w, r)
+		case MachineServiceSetMachineInstallProcedure:
+			machineServiceSetMachineInstallHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -198,4 +229,8 @@ func (UnimplementedMachineServiceHandler) ApproveMachine(context.Context, *conne
 
 func (UnimplementedMachineServiceHandler) RejectMachine(context.Context, *connect.Request[v1alpha1.RejectMachineRequest]) (*connect.Response[v1alpha1.RejectMachineResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.MachineService.RejectMachine is not implemented"))
+}
+
+func (UnimplementedMachineServiceHandler) SetMachineInstall(context.Context, *connect.Request[v1alpha1.SetMachineInstallRequest]) (*connect.Response[v1alpha1.SetMachineInstallResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.MachineService.SetMachineInstall is not implemented"))
 }

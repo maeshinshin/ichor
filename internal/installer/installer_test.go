@@ -1,0 +1,383 @@
+/*
+Copyright 2026 maeshinshin.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package installer
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"strings"
+	"testing"
+
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/envtest"
+)
+
+// These run against a real kube-apiserver (envtest): server-side apply, the CRD schema
+// handling and the restore-by-update are the behaviour under test, which a fake client
+// would only pretend to have.
+
+var (
+	testEnv   *envtest.Environment
+	k8sClient client.Client
+)
+
+func TestMain(m *testing.M) {
+	testEnv = &envtest.Environment{}
+
+	cfg, err := testEnv.Start()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "starting envtest:", err)
+		os.Exit(1)
+	}
+
+	scheme := runtime.NewScheme()
+	if err := clientgoscheme.AddToScheme(scheme); err != nil {
+		fmt.Fprintln(os.Stderr, "building scheme:", err)
+		os.Exit(1)
+	}
+
+	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme})
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "building client:", err)
+		os.Exit(1)
+	}
+
+	code := m.Run()
+
+	if err := testEnv.Stop(); err != nil {
+		fmt.Fprintln(os.Stderr, "stopping envtest:", err)
+	}
+
+	os.Exit(code)
+}
+
+// fixture is what one test installs. Every name is unique to the test (CRDs are
+// cluster-scoped and the API server is shared), so tests do not clean up after each other.
+type fixture struct {
+	ns, plural, group, run string
+}
+
+func newFixture(t *testing.T) fixture {
+	t.Helper()
+
+	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{GenerateName: "installer-test-"}}
+	if err := k8sClient.Create(context.Background(), ns); err != nil {
+		t.Fatalf("creating namespace: %v", err)
+	}
+
+	id := strings.TrimPrefix(ns.Name, "installer-test-")
+
+	return fixture{ns: ns.Name, plural: "widgets", group: id + ".installer.test", run: "run-" + id}
+}
+
+// manifest renders the fixture's install manifest: a CRD (with extraField when non-empty),
+// a controller Deployment and a UI Deployment, in the order kustomize emits them. A Secret
+// rides along to prove it is never touched.
+func (f fixture) manifest(image, extraField string) []byte {
+	extra := ""
+	if extraField != "" {
+		extra = "\n              " + extraField + ":\n                type: string"
+	}
+
+	dep := func(name string) string {
+		return fmt.Sprintf(`---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: %s
+  namespace: %s
+spec:
+  selector:
+    matchLabels: {app: %s}
+  template:
+    metadata:
+      labels: {app: %s}
+    spec:
+      containers:
+      - name: m
+        image: %s
+`, name, f.ns, name, name, image)
+	}
+
+	return []byte(fmt.Sprintf(`apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: %s.%s
+spec:
+  group: %s
+  names: {kind: Widget, listKind: WidgetList, plural: %s, singular: widget}
+  scope: Namespaced
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              size:
+                type: string%s
+%s%s---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: cert
+  namespace: %s
+stringData: {k: from-manifest}
+`, f.plural, f.group, f.group, f.plural, extra, dep("ichor-controller-manager"), dep("ichor-ui"), f.ns))
+}
+
+func (f fixture) image(t *testing.T, name string) string {
+	t.Helper()
+
+	var d unstructured.Unstructured
+	d.SetAPIVersion("apps/v1")
+	d.SetKind("Deployment")
+
+	if err := k8sClient.Get(context.Background(), types.NamespacedName{Namespace: f.ns, Name: name}, &d); err != nil {
+		if apierrors.IsNotFound(err) {
+			return ""
+		}
+
+		t.Fatalf("getting %s: %v", name, err)
+	}
+
+	containers, _, _ := unstructured.NestedSlice(d.Object, "spec", "template", "spec", "containers")
+
+	return containers[0].(map[string]any)["image"].(string)
+}
+
+func (f fixture) crdHasField(t *testing.T, field string) bool {
+	t.Helper()
+
+	var crd unstructured.Unstructured
+	crd.SetAPIVersion("apiextensions.k8s.io/v1")
+	crd.SetKind(kindCRD)
+
+	if err := k8sClient.Get(context.Background(), types.NamespacedName{Name: f.plural + "." + f.group}, &crd); err != nil {
+		if apierrors.IsNotFound(err) {
+			return false
+		}
+
+		t.Fatalf("getting the CRD: %v", err)
+	}
+
+	versions, _, _ := unstructured.NestedSlice(crd.Object, "spec", "versions")
+	_, found, _ := unstructured.NestedMap(versions[0].(map[string]any), "schema", "openAPIV3Schema", "properties", "spec", "properties", field)
+
+	return found
+}
+
+// noWait skips the post-check (envtest has no Deployment controller), recording the order.
+func noWait(order *[]string) ReadyFunc {
+	return func(_ context.Context, _ client.Client, obj *unstructured.Unstructured) error {
+		*order = append(*order, obj.GetKind()+"/"+obj.GetName())
+
+		return nil
+	}
+}
+
+func TestRunAppliesCRDsThenControllerThenUI(t *testing.T) {
+	f := newFixture(t)
+
+	var order []string
+
+	err := Run(context.Background(), k8sClient, Options{
+		Namespace: f.ns, RunID: f.run, Manifest: f.manifest("ctrl:v2", "color"), Ready: noWait(&order),
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	want := []string{"CustomResourceDefinition/" + f.plural + "." + f.group, "Deployment/ichor-controller-manager", "Deployment/ichor-ui"}
+	if strings.Join(order, ",") != strings.Join(want, ",") {
+		t.Errorf("post-check order = %v, want %v", order, want)
+	}
+
+	if got := f.image(t, "ichor-controller-manager"); got != "ctrl:v2" {
+		t.Errorf("controller image = %q, want ctrl:v2", got)
+	}
+
+	if err := k8sClient.Get(context.Background(), types.NamespacedName{Namespace: f.ns, Name: "cert"}, &corev1.Secret{}); !apierrors.IsNotFound(err) {
+		t.Errorf("the Secret in the manifest must not be applied, Get error = %v", err)
+	}
+}
+
+func TestRunRefusesACRDThatWouldDropAField(t *testing.T) {
+	f := newFixture(t)
+
+	var order []string
+
+	// The cluster already runs the newer CRD (with "color")...
+	if err := Run(context.Background(), k8sClient, Options{
+		Namespace: f.ns, RunID: f.run + "-new", Manifest: f.manifest("ctrl:v2", "color"), Ready: noWait(&order),
+	}); err != nil {
+		t.Fatalf("installing the newer manifest: %v", err)
+	}
+
+	// ...and an installer carrying the older manifest (no "color") must be refused before any write.
+	err := Run(context.Background(), k8sClient, Options{
+		Namespace: f.ns, RunID: f.run + "-old", Manifest: f.manifest("ctrl:v1", ""), Ready: noWait(&order),
+	})
+	if err == nil || !strings.Contains(err.Error(), "color would be removed") {
+		t.Fatalf("Run error = %v, want a refusal naming the dropped field", err)
+	}
+
+	if !f.crdHasField(t, "color") {
+		t.Error("the live CRD lost its field")
+	}
+
+	if got := f.image(t, "ichor-controller-manager"); got != "ctrl:v2" {
+		t.Errorf("controller image = %q: a refused upgrade must not write", got)
+	}
+
+	if l, _ := loadSnapshot(context.Background(), k8sClient, f.ns, f.run+"-old"); l != nil {
+		t.Error("a refused upgrade must not leave a snapshot")
+	}
+}
+
+func TestRunRollsBackWhenAPostCheckFails(t *testing.T) {
+	f := newFixture(t)
+
+	var order []string
+
+	// Version 1 is installed.
+	if err := Run(context.Background(), k8sClient, Options{
+		Namespace: f.ns, RunID: f.run + "-v1", Manifest: f.manifest("ctrl:v1", ""), Ready: noWait(&order),
+	}); err != nil {
+		t.Fatalf("installing v1: %v", err)
+	}
+
+	// Remove the UI so the failed upgrade has something it created to delete again.
+	ui := &unstructured.Unstructured{}
+	ui.SetAPIVersion("apps/v1")
+	ui.SetKind("Deployment")
+	ui.SetNamespace(f.ns)
+	ui.SetName("ichor-ui")
+
+	if err := k8sClient.Delete(context.Background(), ui); err != nil {
+		t.Fatalf("deleting the UI: %v", err)
+	}
+
+	failUI := func(_ context.Context, _ client.Client, obj *unstructured.Unstructured) error {
+		if obj.GetName() == "ichor-ui" {
+			return errors.New("UI never became ready")
+		}
+
+		return nil
+	}
+
+	err := Run(context.Background(), k8sClient, Options{
+		Namespace: f.ns, RunID: f.run + "-v2", Manifest: f.manifest("ctrl:v2", "color"), Ready: failUI,
+	})
+	if err == nil || !strings.Contains(err.Error(), "rolled back") || !strings.Contains(err.Error(), "UI never became ready") {
+		t.Fatalf("Run error = %v, want the cause and a rollback", err)
+	}
+
+	if got := f.image(t, "ichor-controller-manager"); got != "ctrl:v1" {
+		t.Errorf("controller image = %q, want it restored to ctrl:v1", got)
+	}
+
+	if got := f.image(t, "ichor-ui"); got != "" {
+		t.Errorf("the UI the upgrade created must be deleted again, found image %q", got)
+	}
+
+	// The CRD is kept: deleting a CRD deletes its custom resources, and the added field is harmless.
+	if !f.crdHasField(t, "size") {
+		t.Error("the CRD must survive a rollback")
+	}
+
+	if l, err := loadSnapshot(context.Background(), k8sClient, f.ns, f.run+"-v2"); err != nil || l == nil {
+		t.Errorf("the snapshot must stay as evidence, got %v, %v", l, err)
+	}
+}
+
+func TestSnapshotIsKeptWhenARunIsRepeated(t *testing.T) {
+	f := newFixture(t)
+
+	var order []string
+
+	// A first run that fails after the snapshot leaves the original in place...
+	failCtrl := func(_ context.Context, _ client.Client, obj *unstructured.Unstructured) error {
+		if obj.GetName() == "ichor-controller-manager" {
+			return errors.New("boom")
+		}
+
+		return nil
+	}
+
+	_ = Run(context.Background(), k8sClient, Options{Namespace: f.ns, RunID: f.run, Manifest: f.manifest("ctrl:v2", ""), Ready: failCtrl})
+
+	first, err := loadSnapshot(context.Background(), k8sClient, f.ns, f.run)
+	if err != nil || len(first) == 0 {
+		t.Fatalf("snapshot after the first run: %v, %v", first, err)
+	}
+
+	// ...and a second run with the same id reuses it rather than snapshotting the mid-upgrade state.
+	if err := Run(context.Background(), k8sClient, Options{
+		Namespace: f.ns, RunID: f.run, Manifest: f.manifest("ctrl:v2", ""), Ready: noWait(&order),
+	}); err != nil {
+		t.Fatalf("second run: %v", err)
+	}
+
+	second, _ := loadSnapshot(context.Background(), k8sClient, f.ns, f.run)
+	if len(second) != len(first) {
+		t.Errorf("snapshot changed between runs: %d entries, then %d", len(first), len(second))
+	}
+
+	for i, e := range second {
+		if (e.Object == nil) != (first[i].Object == nil) {
+			t.Errorf("entry %s %s changed from absent/present between runs", e.Kind, e.Name)
+		}
+	}
+}
+
+func TestRolloutDone(t *testing.T) {
+	d := func(gen, observed, replicas, updated, total, available int64) *unstructured.Unstructured {
+		u := &unstructured.Unstructured{Object: map[string]any{
+			"spec":   map[string]any{"replicas": replicas},
+			"status": map[string]any{"observedGeneration": observed, "updatedReplicas": updated, "replicas": total, "availableReplicas": available},
+		}}
+		u.SetGeneration(gen)
+
+		return u
+	}
+
+	if !rolledOut(d(2, 2, 1, 1, 1, 1)) {
+		t.Error("a finished rollout was reported as unfinished")
+	}
+
+	if rolledOut(d(3, 2, 1, 1, 1, 1)) {
+		t.Error("a Deployment whose spec the controller has not seen was reported as rolled out")
+	}
+
+	if rolledOut(d(2, 2, 1, 1, 2, 1)) {
+		t.Error("a rollout with an old replica still around was reported as finished")
+	}
+}

@@ -62,7 +62,7 @@ func patchFileCmd(use, short string, run func(ctx context.Context, c *apiClients
 }
 
 var patchListCmd = &cobra.Command{
-	Use: "list", Short: "List patches", Args: cobra.NoArgs,
+	Use: useList, Short: "List patches", Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
 			return runPatchList(ctx, c, cmd.OutOrStdout(), patchListCluster)
@@ -71,7 +71,7 @@ var patchListCmd = &cobra.Command{
 }
 
 var patchGetCmd = &cobra.Command{
-	Use: "get NAME", Short: "Show one patch", Args: cobra.ExactArgs(1),
+	Use: useGetName, Short: "Show one patch", Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
 			return runPatchGet(ctx, c, cmd.OutOrStdout(), args[0])

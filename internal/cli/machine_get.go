@@ -27,7 +27,7 @@ import (
 )
 
 var machineGetCmd = &cobra.Command{
-	Use:   "get NAME",
+	Use:   useGetName,
 	Short: "Show one machine",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {

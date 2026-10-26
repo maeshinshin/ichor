@@ -64,6 +64,8 @@ message UpdatePatchRequest {
   // other field on patch replaces that object's spec wholesale, the same
   // "no partial-field merge" simplicity CreatePatch has.
   Patch patch = 1;
+  // break_glass requests an emergency direct write.
+  BreakGlass break_glass = 2;
 }
 
 message UpdatePatchResponse {
@@ -74,10 +76,14 @@ message UpdatePatchResponse {
   // pull_request_url is set when the patch is tracked by Argo CD and the
   // change was proposed as a pull request instead of being written.
   string pull_request_url = 3;
+  // notice: see ApproveMachineResponse.notice.
+  string notice = 4;
 }
 
 message DeletePatchRequest {
   ObjectRef patch = 1;
+  // break_glass requests an emergency direct write.
+  BreakGlass break_glass = 2;
 }
 
 message DeletePatchResponse {
@@ -86,6 +92,8 @@ message DeletePatchResponse {
   // removal was proposed as a pull request instead of being written; nothing
   // was deleted from the cluster.
   string pull_request_url = 2;
+  // notice: see ApproveMachineResponse.notice.
+  string notice = 3;
 }
 
 message PreviewImpactRequest {

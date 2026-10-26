@@ -310,7 +310,9 @@ type UpdatePatchRequest struct {
 	// Full replace: patch.ref identifies which TalosConfigPatch, and every
 	// other field on patch replaces that object's spec wholesale, the same
 	// "no partial-field merge" simplicity CreatePatch has.
-	Patch         *Patch `protobuf:"bytes,1,opt,name=patch,proto3" json:"patch,omitempty"`
+	Patch *Patch `protobuf:"bytes,1,opt,name=patch,proto3" json:"patch,omitempty"`
+	// break_glass requests an emergency direct write.
+	BreakGlass    *BreakGlass `protobuf:"bytes,2,opt,name=break_glass,json=breakGlass,proto3" json:"break_glass,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -352,6 +354,13 @@ func (x *UpdatePatchRequest) GetPatch() *Patch {
 	return nil
 }
 
+func (x *UpdatePatchRequest) GetBreakGlass() *BreakGlass {
+	if x != nil {
+		return x.BreakGlass
+	}
+	return nil
+}
+
 type UpdatePatchResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// patch is the patch as stored. When pull_request_url is set nothing was
@@ -361,8 +370,10 @@ type UpdatePatchResponse struct {
 	// pull_request_url is set when the patch is tracked by Argo CD and the
 	// change was proposed as a pull request instead of being written.
 	PullRequestUrl string `protobuf:"bytes,3,opt,name=pull_request_url,json=pullRequestUrl,proto3" json:"pull_request_url,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// notice: see ApproveMachineResponse.notice.
+	Notice        string `protobuf:"bytes,4,opt,name=notice,proto3" json:"notice,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *UpdatePatchResponse) Reset() {
@@ -416,9 +427,18 @@ func (x *UpdatePatchResponse) GetPullRequestUrl() string {
 	return ""
 }
 
+func (x *UpdatePatchResponse) GetNotice() string {
+	if x != nil {
+		return x.Notice
+	}
+	return ""
+}
+
 type DeletePatchRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Patch         *ObjectRef             `protobuf:"bytes,1,opt,name=patch,proto3" json:"patch,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Patch *ObjectRef             `protobuf:"bytes,1,opt,name=patch,proto3" json:"patch,omitempty"`
+	// break_glass requests an emergency direct write.
+	BreakGlass    *BreakGlass `protobuf:"bytes,2,opt,name=break_glass,json=breakGlass,proto3" json:"break_glass,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -460,6 +480,13 @@ func (x *DeletePatchRequest) GetPatch() *ObjectRef {
 	return nil
 }
 
+func (x *DeletePatchRequest) GetBreakGlass() *BreakGlass {
+	if x != nil {
+		return x.BreakGlass
+	}
+	return nil
+}
+
 type DeletePatchResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Audit *AuditRecord           `protobuf:"bytes,1,opt,name=audit,proto3" json:"audit,omitempty"`
@@ -467,8 +494,10 @@ type DeletePatchResponse struct {
 	// removal was proposed as a pull request instead of being written; nothing
 	// was deleted from the cluster.
 	PullRequestUrl string `protobuf:"bytes,2,opt,name=pull_request_url,json=pullRequestUrl,proto3" json:"pull_request_url,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// notice: see ApproveMachineResponse.notice.
+	Notice        string `protobuf:"bytes,3,opt,name=notice,proto3" json:"notice,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *DeletePatchResponse) Reset() {
@@ -511,6 +540,13 @@ func (x *DeletePatchResponse) GetAudit() *AuditRecord {
 func (x *DeletePatchResponse) GetPullRequestUrl() string {
 	if x != nil {
 		return x.PullRequestUrl
+	}
+	return ""
+}
+
+func (x *DeletePatchResponse) GetNotice() string {
+	if x != nil {
+		return x.Notice
 	}
 	return ""
 }
@@ -987,18 +1023,24 @@ const file_ichor_v1alpha1_patch_proto_rawDesc = "" +
 	"\x05patch\x18\x01 \x01(\v2\x15.ichor.v1alpha1.PatchR\x05patch\"u\n" +
 	"\x13CreatePatchResponse\x12+\n" +
 	"\x05patch\x18\x01 \x01(\v2\x15.ichor.v1alpha1.PatchR\x05patch\x121\n" +
-	"\x05audit\x18\x02 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\"A\n" +
+	"\x05audit\x18\x02 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\"~\n" +
 	"\x12UpdatePatchRequest\x12+\n" +
-	"\x05patch\x18\x01 \x01(\v2\x15.ichor.v1alpha1.PatchR\x05patch\"\x9f\x01\n" +
+	"\x05patch\x18\x01 \x01(\v2\x15.ichor.v1alpha1.PatchR\x05patch\x12;\n" +
+	"\vbreak_glass\x18\x02 \x01(\v2\x1a.ichor.v1alpha1.BreakGlassR\n" +
+	"breakGlass\"\xb7\x01\n" +
 	"\x13UpdatePatchResponse\x12+\n" +
 	"\x05patch\x18\x01 \x01(\v2\x15.ichor.v1alpha1.PatchR\x05patch\x121\n" +
 	"\x05audit\x18\x02 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\x12(\n" +
-	"\x10pull_request_url\x18\x03 \x01(\tR\x0epullRequestUrl\"E\n" +
+	"\x10pull_request_url\x18\x03 \x01(\tR\x0epullRequestUrl\x12\x16\n" +
+	"\x06notice\x18\x04 \x01(\tR\x06notice\"\x82\x01\n" +
 	"\x12DeletePatchRequest\x12/\n" +
-	"\x05patch\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\x05patch\"r\n" +
+	"\x05patch\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\x05patch\x12;\n" +
+	"\vbreak_glass\x18\x02 \x01(\v2\x1a.ichor.v1alpha1.BreakGlassR\n" +
+	"breakGlass\"\x8a\x01\n" +
 	"\x13DeletePatchResponse\x121\n" +
 	"\x05audit\x18\x01 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\x12(\n" +
-	"\x10pull_request_url\x18\x02 \x01(\tR\x0epullRequestUrl\"C\n" +
+	"\x10pull_request_url\x18\x02 \x01(\tR\x0epullRequestUrl\x12\x16\n" +
+	"\x06notice\x18\x03 \x01(\tR\x06notice\"C\n" +
 	"\x14PreviewImpactRequest\x12+\n" +
 	"\x05patch\x18\x01 \x01(\v2\x15.ichor.v1alpha1.PatchR\x05patch\"\x8e\x01\n" +
 	"\x15PreviewImpactResponse\x12'\n" +
@@ -1074,7 +1116,8 @@ var file_ichor_v1alpha1_patch_proto_goTypes = []any{
 	nil,                              // 17: ichor.v1alpha1.LabelSelector.MatchLabelsEntry
 	(*ObjectRef)(nil),                // 18: ichor.v1alpha1.ObjectRef
 	(*AuditRecord)(nil),              // 19: ichor.v1alpha1.AuditRecord
-	(ConfigLayer)(0),                 // 20: ichor.v1alpha1.ConfigLayer
+	(*BreakGlass)(nil),               // 20: ichor.v1alpha1.BreakGlass
+	(ConfigLayer)(0),                 // 21: ichor.v1alpha1.ConfigLayer
 }
 var file_ichor_v1alpha1_patch_proto_depIdxs = []int32{
 	18, // 0: ichor.v1alpha1.ListPatchesRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
@@ -1085,36 +1128,38 @@ var file_ichor_v1alpha1_patch_proto_depIdxs = []int32{
 	16, // 5: ichor.v1alpha1.CreatePatchResponse.patch:type_name -> ichor.v1alpha1.Patch
 	19, // 6: ichor.v1alpha1.CreatePatchResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
 	16, // 7: ichor.v1alpha1.UpdatePatchRequest.patch:type_name -> ichor.v1alpha1.Patch
-	16, // 8: ichor.v1alpha1.UpdatePatchResponse.patch:type_name -> ichor.v1alpha1.Patch
-	19, // 9: ichor.v1alpha1.UpdatePatchResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
-	18, // 10: ichor.v1alpha1.DeletePatchRequest.patch:type_name -> ichor.v1alpha1.ObjectRef
-	19, // 11: ichor.v1alpha1.DeletePatchResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
-	16, // 12: ichor.v1alpha1.PreviewImpactRequest.patch:type_name -> ichor.v1alpha1.Patch
-	17, // 13: ichor.v1alpha1.LabelSelector.match_labels:type_name -> ichor.v1alpha1.LabelSelector.MatchLabelsEntry
-	12, // 14: ichor.v1alpha1.LabelSelector.match_expressions:type_name -> ichor.v1alpha1.LabelSelectorRequirement
-	13, // 15: ichor.v1alpha1.PatchTarget.label_selector:type_name -> ichor.v1alpha1.LabelSelector
-	18, // 16: ichor.v1alpha1.Patch.ref:type_name -> ichor.v1alpha1.ObjectRef
-	18, // 17: ichor.v1alpha1.Patch.cluster:type_name -> ichor.v1alpha1.ObjectRef
-	20, // 18: ichor.v1alpha1.Patch.layer:type_name -> ichor.v1alpha1.ConfigLayer
-	14, // 19: ichor.v1alpha1.Patch.target:type_name -> ichor.v1alpha1.PatchTarget
-	15, // 20: ichor.v1alpha1.Patch.documents:type_name -> ichor.v1alpha1.PatchDocument
-	0,  // 21: ichor.v1alpha1.PatchService.ListPatches:input_type -> ichor.v1alpha1.ListPatchesRequest
-	2,  // 22: ichor.v1alpha1.PatchService.GetPatch:input_type -> ichor.v1alpha1.GetPatchRequest
-	4,  // 23: ichor.v1alpha1.PatchService.CreatePatch:input_type -> ichor.v1alpha1.CreatePatchRequest
-	6,  // 24: ichor.v1alpha1.PatchService.UpdatePatch:input_type -> ichor.v1alpha1.UpdatePatchRequest
-	8,  // 25: ichor.v1alpha1.PatchService.DeletePatch:input_type -> ichor.v1alpha1.DeletePatchRequest
-	10, // 26: ichor.v1alpha1.PatchService.PreviewImpact:input_type -> ichor.v1alpha1.PreviewImpactRequest
-	1,  // 27: ichor.v1alpha1.PatchService.ListPatches:output_type -> ichor.v1alpha1.ListPatchesResponse
-	3,  // 28: ichor.v1alpha1.PatchService.GetPatch:output_type -> ichor.v1alpha1.GetPatchResponse
-	5,  // 29: ichor.v1alpha1.PatchService.CreatePatch:output_type -> ichor.v1alpha1.CreatePatchResponse
-	7,  // 30: ichor.v1alpha1.PatchService.UpdatePatch:output_type -> ichor.v1alpha1.UpdatePatchResponse
-	9,  // 31: ichor.v1alpha1.PatchService.DeletePatch:output_type -> ichor.v1alpha1.DeletePatchResponse
-	11, // 32: ichor.v1alpha1.PatchService.PreviewImpact:output_type -> ichor.v1alpha1.PreviewImpactResponse
-	27, // [27:33] is the sub-list for method output_type
-	21, // [21:27] is the sub-list for method input_type
-	21, // [21:21] is the sub-list for extension type_name
-	21, // [21:21] is the sub-list for extension extendee
-	0,  // [0:21] is the sub-list for field type_name
+	20, // 8: ichor.v1alpha1.UpdatePatchRequest.break_glass:type_name -> ichor.v1alpha1.BreakGlass
+	16, // 9: ichor.v1alpha1.UpdatePatchResponse.patch:type_name -> ichor.v1alpha1.Patch
+	19, // 10: ichor.v1alpha1.UpdatePatchResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
+	18, // 11: ichor.v1alpha1.DeletePatchRequest.patch:type_name -> ichor.v1alpha1.ObjectRef
+	20, // 12: ichor.v1alpha1.DeletePatchRequest.break_glass:type_name -> ichor.v1alpha1.BreakGlass
+	19, // 13: ichor.v1alpha1.DeletePatchResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
+	16, // 14: ichor.v1alpha1.PreviewImpactRequest.patch:type_name -> ichor.v1alpha1.Patch
+	17, // 15: ichor.v1alpha1.LabelSelector.match_labels:type_name -> ichor.v1alpha1.LabelSelector.MatchLabelsEntry
+	12, // 16: ichor.v1alpha1.LabelSelector.match_expressions:type_name -> ichor.v1alpha1.LabelSelectorRequirement
+	13, // 17: ichor.v1alpha1.PatchTarget.label_selector:type_name -> ichor.v1alpha1.LabelSelector
+	18, // 18: ichor.v1alpha1.Patch.ref:type_name -> ichor.v1alpha1.ObjectRef
+	18, // 19: ichor.v1alpha1.Patch.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	21, // 20: ichor.v1alpha1.Patch.layer:type_name -> ichor.v1alpha1.ConfigLayer
+	14, // 21: ichor.v1alpha1.Patch.target:type_name -> ichor.v1alpha1.PatchTarget
+	15, // 22: ichor.v1alpha1.Patch.documents:type_name -> ichor.v1alpha1.PatchDocument
+	0,  // 23: ichor.v1alpha1.PatchService.ListPatches:input_type -> ichor.v1alpha1.ListPatchesRequest
+	2,  // 24: ichor.v1alpha1.PatchService.GetPatch:input_type -> ichor.v1alpha1.GetPatchRequest
+	4,  // 25: ichor.v1alpha1.PatchService.CreatePatch:input_type -> ichor.v1alpha1.CreatePatchRequest
+	6,  // 26: ichor.v1alpha1.PatchService.UpdatePatch:input_type -> ichor.v1alpha1.UpdatePatchRequest
+	8,  // 27: ichor.v1alpha1.PatchService.DeletePatch:input_type -> ichor.v1alpha1.DeletePatchRequest
+	10, // 28: ichor.v1alpha1.PatchService.PreviewImpact:input_type -> ichor.v1alpha1.PreviewImpactRequest
+	1,  // 29: ichor.v1alpha1.PatchService.ListPatches:output_type -> ichor.v1alpha1.ListPatchesResponse
+	3,  // 30: ichor.v1alpha1.PatchService.GetPatch:output_type -> ichor.v1alpha1.GetPatchResponse
+	5,  // 31: ichor.v1alpha1.PatchService.CreatePatch:output_type -> ichor.v1alpha1.CreatePatchResponse
+	7,  // 32: ichor.v1alpha1.PatchService.UpdatePatch:output_type -> ichor.v1alpha1.UpdatePatchResponse
+	9,  // 33: ichor.v1alpha1.PatchService.DeletePatch:output_type -> ichor.v1alpha1.DeletePatchResponse
+	11, // 34: ichor.v1alpha1.PatchService.PreviewImpact:output_type -> ichor.v1alpha1.PreviewImpactResponse
+	29, // [29:35] is the sub-list for method output_type
+	23, // [23:29] is the sub-list for method input_type
+	23, // [23:23] is the sub-list for extension type_name
+	23, // [23:23] is the sub-list for extension extendee
+	0,  // [0:23] is the sub-list for field type_name
 }
 
 func init() { file_ichor_v1alpha1_patch_proto_init() }

@@ -160,6 +160,57 @@ func (x *Condition) GetLastTransitionTime() *timestamppb.Timestamp {
 	return nil
 }
 
+// BreakGlass asks for an emergency direct write. Setting it
+// on a request means "if this change would be a pull request or is refused
+// because Argo CD tracks the resource, write it now and open the matching pull
+// request". The backend allows it only to a signed-in user whose Kubernetes RBAC
+// grants the break-glass verb on the resource, and refuses it otherwise.
+type BreakGlass struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// reason is required: it is recorded in the audit record, the Kubernetes
+	// Event and the pull request description.
+	Reason        string `protobuf:"bytes,1,opt,name=reason,proto3" json:"reason,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BreakGlass) Reset() {
+	*x = BreakGlass{}
+	mi := &file_ichor_v1alpha1_common_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BreakGlass) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BreakGlass) ProtoMessage() {}
+
+func (x *BreakGlass) ProtoReflect() protoreflect.Message {
+	mi := &file_ichor_v1alpha1_common_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BreakGlass.ProtoReflect.Descriptor instead.
+func (*BreakGlass) Descriptor() ([]byte, []int) {
+	return file_ichor_v1alpha1_common_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *BreakGlass) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
 // AuditRecord is returned by ApproveMachine and RejectMachine so the caller
 // can confirm what was recorded: who did it, when, against what, and why.
 // "actor" comes from the caller's authenticated identity, not from the
@@ -182,7 +233,7 @@ type AuditRecord struct {
 
 func (x *AuditRecord) Reset() {
 	*x = AuditRecord{}
-	mi := &file_ichor_v1alpha1_common_proto_msgTypes[2]
+	mi := &file_ichor_v1alpha1_common_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -194,7 +245,7 @@ func (x *AuditRecord) String() string {
 func (*AuditRecord) ProtoMessage() {}
 
 func (x *AuditRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_common_proto_msgTypes[2]
+	mi := &file_ichor_v1alpha1_common_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -207,7 +258,7 @@ func (x *AuditRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuditRecord.ProtoReflect.Descriptor instead.
 func (*AuditRecord) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_common_proto_rawDescGZIP(), []int{2}
+	return file_ichor_v1alpha1_common_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *AuditRecord) GetActor() string {
@@ -258,7 +309,10 @@ const file_ichor_v1alpha1_common_proto_rawDesc = "" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12\x16\n" +
 	"\x06reason\x18\x03 \x01(\tR\x06reason\x12\x18\n" +
 	"\amessage\x18\x04 \x01(\tR\amessage\x12L\n" +
-	"\x14last_transition_time\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x12lastTransitionTime\"\xb2\x01\n" +
+	"\x14last_transition_time\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x12lastTransitionTime\"$\n" +
+	"\n" +
+	"BreakGlass\x12\x16\n" +
+	"\x06reason\x18\x01 \x01(\tR\x06reason\"\xb2\x01\n" +
 	"\vAuditRecord\x12\x14\n" +
 	"\x05actor\x18\x01 \x01(\tR\x05actor\x12*\n" +
 	"\x02at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x02at\x12\x16\n" +
@@ -279,16 +333,17 @@ func file_ichor_v1alpha1_common_proto_rawDescGZIP() []byte {
 	return file_ichor_v1alpha1_common_proto_rawDescData
 }
 
-var file_ichor_v1alpha1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_ichor_v1alpha1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_ichor_v1alpha1_common_proto_goTypes = []any{
 	(*ObjectRef)(nil),             // 0: ichor.v1alpha1.ObjectRef
 	(*Condition)(nil),             // 1: ichor.v1alpha1.Condition
-	(*AuditRecord)(nil),           // 2: ichor.v1alpha1.AuditRecord
-	(*timestamppb.Timestamp)(nil), // 3: google.protobuf.Timestamp
+	(*BreakGlass)(nil),            // 2: ichor.v1alpha1.BreakGlass
+	(*AuditRecord)(nil),           // 3: ichor.v1alpha1.AuditRecord
+	(*timestamppb.Timestamp)(nil), // 4: google.protobuf.Timestamp
 }
 var file_ichor_v1alpha1_common_proto_depIdxs = []int32{
-	3, // 0: ichor.v1alpha1.Condition.last_transition_time:type_name -> google.protobuf.Timestamp
-	3, // 1: ichor.v1alpha1.AuditRecord.at:type_name -> google.protobuf.Timestamp
+	4, // 0: ichor.v1alpha1.Condition.last_transition_time:type_name -> google.protobuf.Timestamp
+	4, // 1: ichor.v1alpha1.AuditRecord.at:type_name -> google.protobuf.Timestamp
 	0, // 2: ichor.v1alpha1.AuditRecord.target:type_name -> ichor.v1alpha1.ObjectRef
 	3, // [3:3] is the sub-list for method output_type
 	3, // [3:3] is the sub-list for method input_type
@@ -308,7 +363,7 @@ func file_ichor_v1alpha1_common_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_ichor_v1alpha1_common_proto_rawDesc), len(file_ichor_v1alpha1_common_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

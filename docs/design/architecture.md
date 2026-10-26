@@ -770,7 +770,9 @@ Application until the Talos side is ready.
    A dry run first is still worth it: it is side-effect free and returns
    validation warnings worth surfacing. Reboot-requiring changes take the cluster lock and go one
    node at a time through the operation hook and drain, control planes with
-   etcd checks in between.
+   etcd checks in between. They never start by themselves: the machine reports
+   `RebootRequired` with the fields, and a `config` operation, started from
+   `ichor config apply` or the cluster page after a plan, rolls them out.
 5. Watch COSI for state and drift. Drift handling is per cluster: warn only
    (default), or auto-correct non-reboot differences.
 

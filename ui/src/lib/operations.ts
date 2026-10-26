@@ -4,7 +4,7 @@
 export type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline'
 
 // The kinds an operation can have, as the screens name them.
-export type OpKind = 'talos' | 'kubernetes' | 'ichor' | 'cni' | 'shutdown' | 'ca-rotation'
+export type OpKind = 'talos' | 'kubernetes' | 'ichor' | 'cni' | 'shutdown' | 'ca-rotation' | 'config'
 
 export type OpState = 'pending' | 'running' | 'paused' | 'failed' | 'shutdown' | 'done'
 
@@ -103,6 +103,7 @@ export function targetError(kind: OpKind, input: string): 'required' | 'invalid'
   switch (kind) {
     case 'shutdown':
     case 'ca-rotation':
+    case 'config':
       return null
     case 'cni':
       return v === '' ? 'required' : v === 'enabled' || v === 'replaced' ? null : 'invalid'
@@ -119,13 +120,13 @@ export function confirmMatches(typed: string, name: string): boolean {
 
 // kindNeedsTarget is false for the kinds that start without a version or mode.
 export function kindNeedsTarget(kind: OpKind): boolean {
-  return kind !== 'shutdown' && kind !== 'ca-rotation'
+  return kind !== 'shutdown' && kind !== 'ca-rotation' && kind !== 'config'
 }
 
 // kindNeedsTypedName: the kinds that take every machine through a disruptive
 // change ask for the cluster's name to be typed.
 export function kindNeedsTypedName(kind: OpKind): boolean {
-  return kind === 'shutdown' || kind === 'ca-rotation'
+  return kind === 'shutdown' || kind === 'ca-rotation' || kind === 'config'
 }
 
 // The stages status.caRotation.stage goes through, in order.

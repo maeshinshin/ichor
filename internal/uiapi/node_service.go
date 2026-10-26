@@ -186,6 +186,8 @@ func (s *Server) StreamNodeLogs(
 
 	service := req.Msg.GetService()
 
+	opts := logOptions(req.Msg)
+
 	tok := decodeResumeToken(req.Msg.GetResumeToken())
 
 	var mu sync.Mutex
@@ -226,7 +228,7 @@ func (s *Server) StreamNodeLogs(
 			since := tok[namespacedName(ref).String()].Time
 			mu.Unlock()
 
-			return tc.StreamLogs(gctx, service, since, func(line LogLine) error { return send(ref, line) })
+			return tc.StreamLogs(gctx, service, since, opts, func(line LogLine) error { return send(ref, line) })
 		})
 	}
 
@@ -241,6 +243,23 @@ func (s *Server) StreamNodeLogs(
 		return connect.NewError(connect.CodeUnavailable,
 			errors.New("ichor-ui is shutting down; reconnect with the latest resume_token to continue"))
 	}
+}
+
+// logOptions resolves a request's tail_lines and follow into what the Talos
+// client gets: tail defaults to DefaultTailLines, is capped at MaxTailLines
+// (negative stays negative, meaning the whole history), and follow defaults
+// to true so existing callers keep streaming.
+func logOptions(req *pb.StreamNodeLogsRequest) LogOptions {
+	tail := req.GetTailLines()
+
+	switch {
+	case tail == 0:
+		tail = DefaultTailLines
+	case tail > MaxTailLines:
+		tail = MaxTailLines
+	}
+
+	return LogOptions{Follow: req.Follow == nil || req.GetFollow(), TailLines: tail}
 }
 
 // dialNode opens m's read-only Talos connection: maintenance mode

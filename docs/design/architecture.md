@@ -823,11 +823,16 @@ A/B slot counts as a failure. The version contract is never bumped
 automatically.
 
 Kubernetes: change `spec.kubernetesVersion`, one minor at a time within the
-skew policy. Warn about removed APIs in use, pre-pull images, switch the
-control-plane components node by node through machine config, update
-kube-proxy (skipped when replaced), roll the kubelets, sync the bootstrap
-manifests. Reusing talosctl's `upgrade-k8s` logic is the first thing to
-evaluate.
+skew policy. Warn about removed APIs in use, pre-pull images, then in three
+stages, each finished on every machine before the next (no kubelet is ever
+newer than an API server): switch the control-plane components node by node
+through machine config; update kube-proxy and sync the bootstrap manifests
+(the rollout check is skipped when kube-proxy is replaced); roll the
+kubelets, control planes first. The intermediate configurations are renders
+with the kubelet and kube-proxy pinned to the version the node runs, never
+a write to `spec`. A minor upgrade of several control planes behind an
+endpoint of type `node` warns that the endpoint is one apiserver. This is
+`upgrade-k8s`'s order, run on Ichor's own machinery (ADR 0057, ADR 0087).
 
 Ichor: in `ichor` mode, the controller only launches the installer Job for the
 target version and never upgrades itself. The installer snapshots the current

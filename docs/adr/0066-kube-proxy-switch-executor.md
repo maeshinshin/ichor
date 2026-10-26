@@ -93,3 +93,29 @@ which Talos has no shell for. `kube-proxy --cleanup` would need a privileged per
   (as ADR 0057 does for images); not yet exercised against a real node.
 - The operation is created by hand (or by the UI/CLI); the admission guard (ADR 0013) still needs the
   annotation on the spec change.
+
+## E2E observation (2026-10-26, through `ichor cni kube-proxy replaced`)
+
+Same cluster as ADR 0057's observation (Cilium 1.18.0 with kube-proxy, `handover: disabled`, legacy
+`cluster.proxy` form because the contract was v1.13, so the v1.14 `KubeProxyConfig` document path was not run).
+
+- Confirmation text: "Switch kube-proxy on cluster ... from enabled to replaced. Configuration is applied without a
+  reboot; the kubelet and control plane components restart on each machine. 4 machine(s) ...". The annotation was
+  not left on the TalosCluster afterwards.
+- The operation sat in `AwaitingCNIChange` ("live kube-proxy-replacement is false ... set kubeProxyReplacement: true,
+  with k8sServiceHost: localhost and the KubePrism port ...") and touched no node until Cilium was changed. I applied
+  the chart's `kubeProxyReplacement: true` values by server-side apply (the stand-in for editing the inline entry,
+  as there was none here). Within about 15 s the operation reported "the Cilium agents are rolling out" and then
+  started on the first control plane.
+- A cluster with a control plane still on the old Kubernetes version failed the step with "unrelated pending
+  configuration change at cluster.apiServer.image ... converge it first", as designed (my cluster was half
+  upgraded; see ADR 0057).
+- After converging: all four machines switched (Talos `cluster.proxy.disabled: true` on every node, 4 s for the
+  three control planes already applied), `cilium-config` `kube-proxy-replacement: true`.
+- **Bug: the operation ends `Paused` on the worker**, the last machine, with `removing kube-proxy: fetching an admin
+  kubeconfig from the Talos API: rpc error: code = Unimplemented desc = kubeconfig is only available on control
+  plane nodes`. The post-switch deletion of the DaemonSet and its objects is run through whichever machine finishes
+  last; a cluster with workers always ends on a worker. It needs to use a control plane for the admin kubeconfig.
+  I removed the DaemonSet and ServiceAccount by hand and then checked: from a pod, the cluster DNS ClusterIP
+  (`10.249.0.10`) answered and a TCP/TLS connection to the `kubernetes` Service ClusterIP was established.
+- Not observed: `replaced` to `enabled`; the "values in Git" wait after a hand-over.

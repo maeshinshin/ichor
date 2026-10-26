@@ -23,6 +23,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
+	"time"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -137,19 +140,72 @@ func CountApprovedWorkers(ctx context.Context, reader client.Reader, namespace, 
 }
 
 func countApproved(ctx context.Context, reader client.Reader, namespace, clusterName, role string) (int, error) {
+	machines, err := approvedMachines(ctx, reader, namespace, clusterName, role)
+
+	return len(machines), err
+}
+
+// approvedMachines is the one TalosMachine listing behind every count here and
+// behind ControlPlaneOverCap: the approved machines of role in clusterName.
+func approvedMachines(
+	ctx context.Context, reader client.Reader, namespace, clusterName, role string,
+) ([]ichorv1alpha1.TalosMachine, error) {
 	var siblings ichorv1alpha1.TalosMachineList
 	if err := reader.List(ctx, &siblings, client.InNamespace(namespace)); err != nil {
-		return 0, err
+		return nil, err
 	}
 
-	count := 0
+	var out []ichorv1alpha1.TalosMachine
+
 	for _, m := range siblings.Items {
 		if m.Spec.Role == role && m.Spec.IsApproved() && m.Spec.ClusterRef.Name == clusterName {
-			count++
+			out = append(out, m)
 		}
 	}
 
-	return count, nil
+	return out, nil
+}
+
+// approvedAt is when m was approved: the recorded decision time, or, for a
+// machine approved by a writer that recorded none (a GitOps apply), the time
+// the object was created.
+func approvedAt(m *ichorv1alpha1.TalosMachine) time.Time {
+	if d := m.Spec.ApprovalDecision; d != nil && !d.At.IsZero() {
+		return d.At.Time
+	}
+
+	return m.CreationTimestamp.Time
+}
+
+// ControlPlaneOverCap reports whether the control plane named machineName is
+// held because more than desiredCount+1 control planes are approved (closing the race
+// the webhook cannot). Approved control planes are ordered by approval time,
+// then by name for a tie; the first desiredCount+1 are kept and later ones
+// held. total is the approved control-plane count. It lists through the same
+// approvedMachines as CountApprovedControlPlanes, so it needs the same direct reader.
+func ControlPlaneOverCap(
+	ctx context.Context, reader client.Reader, namespace, clusterName, machineName string, desiredCount int,
+) (held bool, total int, err error) {
+	cps, err := approvedMachines(ctx, reader, namespace, clusterName, "controlplane")
+	if err != nil {
+		return false, 0, err
+	}
+
+	slices.SortFunc(cps, func(a, b ichorv1alpha1.TalosMachine) int {
+		if c := approvedAt(&a).Compare(approvedAt(&b)); c != 0 {
+			return c
+		}
+
+		return strings.Compare(a.Name, b.Name)
+	})
+
+	for i := desiredCount + 1; i < len(cps); i++ {
+		if cps[i].Name == machineName {
+			return true, len(cps), nil
+		}
+	}
+
+	return false, len(cps), nil
 }
 
 // CheckControlPlaneApproval refuses approving one more control plane when

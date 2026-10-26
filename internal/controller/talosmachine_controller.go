@@ -53,6 +53,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
@@ -71,6 +72,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/clusterlock"
+	"github.com/maeshinshin/ichor/pkg/deleteguard"
 	"github.com/maeshinshin/ichor/pkg/fieldmeta"
 	"github.com/maeshinshin/ichor/pkg/render"
 )
@@ -122,12 +124,55 @@ const (
 	reasonNodeDrifted              = "NodeDrifted"
 	reasonDriftCorrected           = "DriftCorrected"
 	reasonClusterTransitioning     = "ClusterTransitioning"
+	reasonControlPlaneOverCap      = "ControlPlaneOverCap"
 )
 
 // driftPolicyAutoCorrect is the one TalosCluster.spec.driftPolicy value that
 // allows the reconciler to re-apply on drift. Anything else -- including the
 // zero value, for a cluster the CRD default hasn't reached yet -- is
 // treated as warnOnly, the safe side (design 5.6 step 5).
+// ensureRemovalFinalizer gives an approved control plane machineRemovalFinalizer and reports true
+// when it wrote one, so the caller returns and the update's event re-enters Reconcile.
+func (r *TalosMachineReconciler) ensureRemovalFinalizer(ctx context.Context, m *ichorv1alpha1.TalosMachine) (bool, error) {
+	if m.Spec.Role != roleControlPlane || controllerutil.ContainsFinalizer(m, machineRemovalFinalizer) {
+		return false, nil
+	}
+
+	controllerutil.AddFinalizer(m, machineRemovalFinalizer)
+
+	return true, r.Update(ctx, m)
+}
+
+// holdIfOverCap sets Ready=False/ControlPlaneOverCap on m and reports stop=true when m is a control plane
+// beyond spec.controlPlane.count+1 (deleteguard.ControlPlaneOverCap); the caller then stops before
+// render and apply. Nothing on the node is touched, even if m is already an etcd member.
+func (r *TalosMachineReconciler) holdIfOverCap(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
+) (bool, error) {
+	if m.Spec.Role != roleControlPlane {
+		return false, nil
+	}
+
+	held, total, err := deleteguard.ControlPlaneOverCap(
+		ctx, r.APIReader, m.Namespace, m.Spec.ClusterRef.Name, m.Name, int(cluster.Spec.ControlPlane.Count))
+	if err != nil {
+		return true, err
+	}
+
+	if !held {
+		return false, nil
+	}
+
+	// ponytail: poll (overCapRecheck), not watch -- a sibling leaving does not enqueue this machine.
+	return true, r.ready(ctx, m, metav1.ConditionFalse, reasonControlPlaneOverCap,
+		fmt.Sprintf("%d control planes are approved against spec.controlPlane.count %d (at most count+1 is allowed); "+
+			"this is among the newest approvals, so no configuration is applied until another control plane "+
+			"is removed or the count is raised", total, cluster.Spec.ControlPlane.Count))
+}
+
+// overCapRecheck is how often a machine held for ControlPlaneOverCap looks again.
+const overCapRecheck = 15 * time.Second
+
 const driftPolicyAutoCorrect = "autoCorrect"
 
 // TalosMachineReconciler reconciles a TalosMachine object.
@@ -224,9 +269,8 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	// Only an approved control plane needs removal.go's ordered removal
 	// operation; a worker or an unapproved machine gets no
 	// finalizer and deletes exactly as before.
-	if m.Spec.Role == roleControlPlane && !controllerutil.ContainsFinalizer(&m, machineRemovalFinalizer) {
-		controllerutil.AddFinalizer(&m, machineRemovalFinalizer)
-		return ctrl.Result{}, r.Update(ctx, &m)
+	if added, err := r.ensureRemovalFinalizer(ctx, &m); added {
+		return ctrl.Result{}, err
 	}
 
 	var cluster ichorv1alpha1.TalosCluster
@@ -247,6 +291,12 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	// removal happens to run.
 	if err := r.refreshTransitioning(ctx, &cluster, &m); err != nil {
 		return ctrl.Result{}, err
+	}
+
+	// The webhook's cap can be raced past, so recount here and hold the
+	// newest approvals beyond count+1 before anything is rendered or applied.
+	if stop, err := r.holdIfOverCap(ctx, &cluster, &m); stop {
+		return ctrl.Result{RequeueAfter: overCapRecheck}, err
 	}
 
 	// Step 1: load the bundle and gather this cluster's patches, then

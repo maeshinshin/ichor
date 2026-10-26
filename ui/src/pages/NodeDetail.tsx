@@ -7,7 +7,13 @@ import { ErrorAlert } from '@/components/ErrorAlert'
 import { TalosDetails } from '@/components/TalosDetails'
 import type { EffectiveConfigValue } from '@/gen/ichor/v1alpha1/node_pb'
 import { ConfigLayer, DiskRole, type NodeDetail as NodeDetailMessage, type StreamNodeLogsResponse } from '@/gen/ichor/v1alpha1/node_pb'
-import { nodeClient } from '@/lib/connect'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { type BreakGlassRun } from '@/components/BreakGlassDialog'
+import { PullRequestNotice } from '@/components/PullRequestNotice'
+import { SetInstallDialog } from '@/components/SetInstallDialog'
+import { MachineApprovalState, type Machine } from '@/gen/ichor/v1alpha1/machine_pb'
+import { machineClient, nodeClient } from '@/lib/connect'
+import { needsInstallDisk } from '@/lib/installDisk'
 import { enumLabel } from '@/lib/enum'
 import { describeError } from '@/lib/errors'
 import { formatBytes, formatTimestamp } from '@/lib/format'
@@ -25,6 +31,8 @@ export function NodeDetail({ namespace, name }: { namespace: string; name: strin
   const t = useT()
   const [node, setNode] = useState<NodeDetailMessage | null>(null)
   const [error, setError] = useState<ErrorShape | null>(null)
+  const [machine, setMachine] = useState<Machine | null>(null)
+  const [pullRequest, setPullRequest] = useState<{ url: string; run?: BreakGlassRun } | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -43,11 +51,38 @@ export function NodeDetail({ namespace, name }: { namespace: string; name: strin
     }
   }, [namespace, name])
 
+  // The machine itself, only to know whether it is waiting for an install disk. A
+  // failed read just hides the offer.
+  function loadMachine() {
+    machineClient.getMachine({ machine: { namespace, name } }).then(
+      (res) => setMachine(res.machine ?? null),
+      () => setMachine(null),
+    )
+  }
+  useEffect(loadMachine, [namespace, name])
+
   if (error) return <ErrorAlert {...error} />
   if (!node) return <p class="mt-10 text-center text-sm text-muted-foreground">{t('node.loading')}</p>
 
   return (
     <div class="mt-6 space-y-4">
+      {pullRequest && <PullRequestNotice url={pullRequest.url} breakGlass={pullRequest.run} onBreakGlassDone={loadMachine} />}
+      {machine && needsInstallDisk({ ...machine, approved: machine.approvalState === MachineApprovalState.APPROVED }) && (
+        <Alert>
+          <AlertTitle>{t('installDisk.waitingTitle')}</AlertTitle>
+          <AlertDescription>
+            <p>{t('installDisk.waitingBody')}</p>
+            <div class="mt-2">
+              <SetInstallDialog
+                machine={machine}
+                disks={node.disks}
+                onDone={loadMachine}
+                onPullRequest={(url, run) => setPullRequest({ url, run })}
+              />
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
       <Card>
         <CardHeader>
           <CardTitle>{name}</CardTitle>

@@ -158,6 +158,14 @@ export const en = {
   'approve.reasonPlaceholder': "Why, if it isn't obvious from the above",
   'approve.submitting': 'Approving…',
 
+  'installDisk.button': 'Set install disk',
+  'installDisk.title': 'Set the install disk of {name}',
+  'installDisk.description':
+    'This machine was approved without an install disk, so the controller is waiting for one before it installs Talos. Only the install target is changed.',
+  'installDisk.submitting': 'Saving…',
+  'installDisk.waitingTitle': 'Waiting for an install disk',
+  'installDisk.waitingBody': 'The controller will install Talos as soon as a disk is chosen.',
+
   'reject.button': 'Reject',
   'reject.title': 'Reject {name}?',
   'reject.description':

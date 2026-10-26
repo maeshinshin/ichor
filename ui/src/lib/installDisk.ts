@@ -26,3 +26,33 @@ export function diskSelector(d: Disk): DiskSelector | undefined {
 export function diskKey(d: Disk): string {
   return JSON.stringify(diskSelector(d) ?? {})
 }
+
+export type InstallChoice = { disk: DiskSelector; image: string }
+
+// installChoice turns the picker's state into the install target to send. A disk chosen from the
+// node's own list wins; the typed device path is only used while the node reports no disks. ok is
+// false for a typed path that is not a device path.
+export function installChoice(s: { disks: Disk[]; key: string; typed: string; image: string }): {
+  install: InstallChoice | undefined
+  typedDisk: boolean
+  ok: boolean
+} {
+  const typedDisk = s.disks.length === 0 && s.typed.trim() !== ''
+  const image = s.image.trim()
+  const install = typedDisk
+    ? { disk: { devPath: s.typed.trim() }, image }
+    : s.key
+      ? { disk: JSON.parse(s.key) as DiskSelector, image }
+      : undefined
+  return { install, typedDisk, ok: !typedDisk || s.typed.trim().startsWith('/dev/') }
+}
+
+// needsInstallDisk: an approved machine with no install target whose Ready reason says the
+// controller is waiting for one, so the machine page offers to set it.
+export function needsInstallDisk(m: {
+  approved: boolean
+  install?: unknown
+  conditions: { type: string; reason: string }[]
+}): boolean {
+  return m.approved && !m.install && m.conditions.some((c) => c.type === 'Ready' && c.reason === 'InstallDiskUnknown')
+}

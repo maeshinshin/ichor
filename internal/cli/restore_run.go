@@ -1,0 +1,313 @@
+/*
+Copyright 2026 maeshinshin.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package cli
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"path/filepath"
+	"strings"
+	"time"
+
+	machineapi "github.com/siderolabs/talos/pkg/machinery/api/machine"
+	"github.com/siderolabs/talos/pkg/machinery/client"
+	clientconfig "github.com/siderolabs/talos/pkg/machinery/client/config"
+	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
+	"github.com/siderolabs/talos/pkg/machinery/role"
+
+	"github.com/maeshinshin/ichor/internal/etcdbackup"
+)
+
+type restoreOptions struct {
+	RecoverCluster bool
+	Cluster        string
+	SecretsBundle  string
+	NodeEndpoint   string
+	Snapshot       string
+	S3             etcdbackup.S3Config // Endpoint, Bucket, Region only; credentials come from the environment
+	S3Prefix       string
+	S3CAFile       string
+}
+
+// recoverClient is the two Talos calls full-loss recovery makes, in this
+// order, on one node (ADR 0053): upload the snapshot, then bootstrap etcd
+// from it.
+type recoverClient interface {
+	EtcdRecover(ctx context.Context, snapshot io.Reader) error
+	BootstrapRecover(ctx context.Context) error
+}
+
+type restoreDeps struct {
+	NewStore func(etcdbackup.S3Config) (etcdbackup.Store, error)
+	Dial     func(ctx context.Context, cluster, endpoint string, bundle *secrets.Bundle) (recoverClient, error)
+	Getenv   func(string) string
+	ReadFile func(string) ([]byte, error)
+
+	Stdout, Stderr io.Writer
+	Stdin          io.Reader
+
+	AssumeYes bool
+}
+
+// runRecoverCluster is `ichor restore --recover-cluster` (ADR 0053). Every
+// step that can fail without touching the node (bundle, listing, download,
+// decrypt, integrity check) runs before the confirmation, so the operator
+// confirms a snapshot already known good, and nothing is sent otherwise.
+func runRecoverCluster(ctx context.Context, opts restoreOptions, deps restoreDeps) error {
+	for _, req := range []struct{ flag, value string }{
+		{"--cluster", opts.Cluster}, {"--node-endpoint", opts.NodeEndpoint}, {"--s3-endpoint", opts.S3.Endpoint},
+		{"--s3-bucket", opts.S3.Bucket}, {"--s3-prefix", opts.S3Prefix},
+	} {
+		if req.value == "" {
+			return fmt.Errorf("restore: %s is required", req.flag)
+		}
+	}
+
+	bundlePath := opts.SecretsBundle
+	if bundlePath == "" {
+		dir, err := bundleDir(opts.Cluster)
+		if err != nil {
+			return fmt.Errorf("restore: %w", err)
+		}
+
+		bundlePath = filepath.Join(dir, bundleSecretKey)
+	}
+
+	bundle, err := loadBundleFile(bundlePath)
+	if err != nil {
+		return fmt.Errorf("restore: %w", err)
+	}
+
+	passphrase, err := etcdbackup.Passphrase(bundle)
+	if err != nil {
+		return fmt.Errorf("restore: %w", err)
+	}
+
+	s3 := opts.S3
+	s3.AccessKeyID = firstEnv(deps.Getenv, "ICHOR_S3_ACCESS_KEY_ID", "AWS_ACCESS_KEY_ID")
+	s3.SecretAccessKey = firstEnv(deps.Getenv, "ICHOR_S3_SECRET_ACCESS_KEY", "AWS_SECRET_ACCESS_KEY")
+	s3.SessionToken = firstEnv(deps.Getenv, "ICHOR_S3_SESSION_TOKEN", "AWS_SESSION_TOKEN")
+
+	if s3.AccessKeyID == "" || s3.SecretAccessKey == "" {
+		return errors.New("restore: set ICHOR_S3_ACCESS_KEY_ID and ICHOR_S3_SECRET_ACCESS_KEY (they are not accepted as flags)")
+	}
+
+	if opts.S3CAFile != "" {
+		if s3.CAPEM, err = deps.ReadFile(opts.S3CAFile); err != nil {
+			return fmt.Errorf("restore: reading --s3-ca-file: %w", err)
+		}
+	}
+
+	// Errors whose text comes from S3, TLS or gRPC are scrubbed of every secret held here.
+	scrub := newScrubber(passphrase, s3.AccessKeyID, s3.SecretAccessKey, s3.SessionToken)
+
+	store, err := deps.NewStore(s3)
+	if err != nil {
+		return fmt.Errorf("restore: %w", scrub(err))
+	}
+
+	snap, err := pickSnapshot(ctx, store, opts, passphrase, deps.Stderr, scrub)
+	if err != nil {
+		return err
+	}
+
+	if !deps.AssumeYes {
+		ok, err := confirm(deps.Stdin, deps.Stderr, fmt.Sprintf(
+			"Recover etcd on %s from snapshot %s (%s, %d bytes, verified)?\n"+
+				"The cluster's state reverts to that time. The node's etcd data directory must be empty. "+
+				"This cannot be undone. [y/N]: ",
+			opts.NodeEndpoint, snap.name, snap.time.Format("2006-01-02 15:04:05 UTC"), snap.data.Len()))
+		if err != nil {
+			return fmt.Errorf("restore: reading confirmation: %w", err)
+		}
+
+		if !ok {
+			return errors.New("restore: aborted before contacting the node; nothing was changed")
+		}
+	}
+
+	c, err := deps.Dial(ctx, opts.Cluster, opts.NodeEndpoint, bundle)
+	if err != nil {
+		return fmt.Errorf("restore: %w", scrub(err))
+	}
+
+	if closer, ok := c.(io.Closer); ok {
+		defer func() { _ = closer.Close() }()
+	}
+
+	if err := c.EtcdRecover(ctx, bytes.NewReader(snap.data.Bytes())); err != nil {
+		return fmt.Errorf("restore: uploading the snapshot to %q: %w", opts.NodeEndpoint, scrub(err))
+	}
+
+	if err := c.BootstrapRecover(ctx); err != nil {
+		return fmt.Errorf("restore: bootstrapping etcd from the snapshot on %q: %w", opts.NodeEndpoint, scrub(err))
+	}
+
+	_, _ = fmt.Fprintf(deps.Stdout, "etcd on %s is recovering from %s.\n"+
+		"Next: once the Kubernetes API is back, the restored Ichor controller re-reconciles the cluster; "+
+		"check each machine before approving anything.\n", opts.NodeEndpoint, snap.name)
+
+	return nil
+}
+
+type verifiedSnapshot struct {
+	name string
+	time time.Time
+	data *bytes.Buffer // decrypted and integrity-checked: exactly what EtcdSnapshot streamed
+}
+
+// pickSnapshot downloads, decrypts and verifies snapshots newest first and
+// returns the first good one. A named snapshot is the only candidate; a
+// broken one is an error, never replaced by another.
+func pickSnapshot(ctx context.Context, store etcdbackup.Store, opts restoreOptions, passphrase string, stderr io.Writer, scrub func(error) error) (*verifiedSnapshot, error) {
+	objs, err := store.List(ctx, opts.S3Prefix)
+	if err != nil {
+		return nil, fmt.Errorf("restore: listing snapshots under %q: %w", opts.S3Prefix, scrub(err))
+	}
+
+	if opts.Snapshot != "" {
+		var named []etcdbackup.Object
+
+		for _, o := range objs {
+			if o.Name == opts.Snapshot {
+				named = append(named, o)
+			}
+		}
+
+		objs = named
+	}
+
+	if len(objs) == 0 {
+		return nil, fmt.Errorf("restore: no matching snapshot under prefix %q in the bucket", opts.S3Prefix)
+	}
+
+	var problems []string
+
+	for _, o := range objs {
+		buf, err := fetchVerified(ctx, store, o.Key, passphrase)
+		if err != nil {
+			err = scrub(err)
+			problems = append(problems, fmt.Sprintf("  %s: %v", o.Name, err))
+			_, _ = fmt.Fprintf(stderr, "skipping %s: %v\n", o.Name, err)
+
+			continue
+		}
+
+		return &verifiedSnapshot{name: o.Name, time: o.Time, data: buf}, nil
+	}
+
+	return nil, fmt.Errorf("restore: no usable snapshot (nothing was sent to any node):\n%s", strings.Join(problems, "\n"))
+}
+
+// fetchVerified is the restore recipe of ADR 0047: Get, Decrypt, check the
+// etcd checksum trailer. The plaintext is held in memory rather than on disk,
+// since it contains every Secret in the cluster.
+func fetchVerified(ctx context.Context, store etcdbackup.Store, key, passphrase string) (*bytes.Buffer, error) {
+	rc, err := store.Get(ctx, key)
+	if err != nil {
+		return nil, fmt.Errorf("downloading: %w", err)
+	}
+
+	defer func() { _ = rc.Close() }()
+
+	plain, err := etcdbackup.Decrypt(rc, passphrase)
+	if err != nil {
+		return nil, fmt.Errorf("decrypting (is this the cluster's own secrets bundle?): %w", err)
+	}
+
+	var (
+		buf bytes.Buffer
+		v   = etcdbackup.NewVerifier()
+	)
+
+	if _, err := io.Copy(io.MultiWriter(&buf, v), plain); err != nil {
+		return nil, fmt.Errorf("decrypting: %w", err)
+	}
+
+	if err := v.Verify(); err != nil {
+		return nil, err
+	}
+
+	return &buf, nil
+}
+
+func firstEnv(getenv func(string) string, names ...string) string {
+	for _, n := range names {
+		if v := getenv(n); v != "" {
+			return v
+		}
+	}
+
+	return ""
+}
+
+// newScrubber returns a function that rewrites an error with every non-empty
+// secret replaced.
+func newScrubber(secretValues ...string) func(error) error {
+	var pairs []string
+
+	for _, s := range secretValues {
+		if s != "" {
+			pairs = append(pairs, s, "[redacted]")
+		}
+	}
+
+	r := strings.NewReplacer(pairs...)
+
+	return func(err error) error {
+		if err == nil || len(pairs) == 0 {
+			return err
+		}
+
+		return errors.New(r.Replace(err.Error()))
+	}
+}
+
+// dialRecover connects to one control plane as the bundle's admin identity,
+// the recipe dialAdmin uses for init.
+func dialRecover(ctx context.Context, cluster, endpoint string, bundle *secrets.Bundle) (recoverClient, error) {
+	cert, err := bundle.GenerateTalosAPIClientCertificate(role.MakeSet(role.Admin))
+	if err != nil {
+		return nil, fmt.Errorf("generating admin client certificate: %w", err)
+	}
+
+	cfg := clientconfig.NewConfig(cluster, []string{endpoint}, bundle.Certs.OS.Crt, cert)
+
+	c, err := client.New(ctx, client.WithConfig(cfg))
+	if err != nil {
+		return nil, fmt.Errorf("dialing Talos API at %q: %w", endpoint, err)
+	}
+
+	return &recoverTalos{c: c}, nil
+}
+
+type recoverTalos struct{ c *client.Client }
+
+func (r *recoverTalos) Close() error { return r.c.Close() }
+
+func (r *recoverTalos) EtcdRecover(ctx context.Context, snapshot io.Reader) error {
+	_, err := r.c.EtcdRecover(ctx, snapshot)
+
+	return err
+}
+
+func (r *recoverTalos) BootstrapRecover(ctx context.Context) error {
+	return r.c.Bootstrap(ctx, &machineapi.BootstrapRequest{RecoverEtcd: true})
+}

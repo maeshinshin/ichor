@@ -6,6 +6,7 @@ import { ErrorAlert } from '@/components/ErrorAlert'
 import { Field, Fields, PageHeader } from '@/components/PageHeader'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
 import { Section, SectionLayout, type SectionLink } from '@/components/SectionNav'
+import { StatusText } from '@/components/Status'
 import { StartOperationDialog } from '@/components/StartOperationDialog'
 import { HandoverPhase, RolloutKind, type Cluster } from '@/gen/ichor/v1alpha1/cluster_pb'
 import { clusterClient } from '@/lib/connect'
@@ -41,7 +42,6 @@ export function ClusterDetail({ namespace, name }: { namespace: string; name: st
 
   const ready = cluster.conditions.find((c) => c.type === 'Ready')
   const sections: SectionLink[] = [
-    { id: 'overview', label: t('page.overview') },
     { id: 'conditions', label: t('cluster.conditions') },
     { id: 'rollout', label: t('cluster.rollout') },
     { id: 'operations', label: t('cluster.operations') },
@@ -56,22 +56,25 @@ export function ClusterDetail({ namespace, name }: { namespace: string; name: st
         badges={
           <>
             {ready && <StatusBadge type={ready.type} status={ready.status} />}
-            {cluster.rollout && <Badge variant="outline">{enumLabel(RolloutKind, cluster.rollout.kind)}</Badge>}
+            {cluster.rollout && (
+              <StatusText tone="progress">
+                {enumLabel(RolloutKind, cluster.rollout.kind)} {cluster.rollout.nodesDone}/{cluster.rollout.nodesTotal}
+              </StatusText>
+            )}
           </>
         }
+        meta={[
+          { label: t('cluster.talosVersion'), value: cluster.talosVersion },
+          { label: t('cluster.kubernetesVersion'), value: cluster.kubernetesVersion },
+          { label: t('cluster.endpoint'), value: cluster.endpoint },
+          {
+            label: t('cluster.cpCount'),
+            value: `${cluster.controlPlaneCount}${cluster.controlPlaneSchedulable ? ` ${t('clusters.schedulable')}` : ''}`,
+          },
+          { label: t('cluster.namespace'), value: cluster.ref?.namespace },
+        ]}
       />
       <SectionLayout sections={sections}>
-        <Section id="overview" title={t('page.overview')}>
-          <Fields>
-            <Field label={t('cluster.namespace')} value={cluster.ref?.namespace} />
-            <Field label={t('cluster.talosVersion')} value={cluster.talosVersion} />
-            <Field label={t('cluster.kubernetesVersion')} value={cluster.kubernetesVersion} />
-            <Field label={t('cluster.endpoint')} value={cluster.endpoint} />
-            <Field label={t('cluster.cpCount')} value={String(cluster.controlPlaneCount)} />
-            <Field label={t('cluster.cpSchedulable')} value={cluster.controlPlaneSchedulable ? t('common.yes') : t('common.no')} />
-          </Fields>
-        </Section>
-
         <Section id="conditions" title={t('cluster.conditions')}>
           <ConditionList conditions={cluster.conditions} />
         </Section>

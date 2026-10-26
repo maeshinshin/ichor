@@ -3,17 +3,19 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ErrorAlert } from '@/components/ErrorAlert'
-import { Field, Fields, PageHeader } from '@/components/PageHeader'
+import { PageHeader } from '@/components/PageHeader'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
 import { Section } from '@/components/SectionNav'
+import { StatusText } from '@/components/Status'
 import { OperationControls } from '@/components/OperationControls'
 import { OperationKind, type Operation } from '@/gen/ichor/v1alpha1/operation_pb'
 import { operationClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
 import { describeError } from '@/lib/errors'
-import { caStageProgress, operationState, pollIntervalMs, progressCounts, stateBadge } from '@/lib/operations'
+import { caStageProgress, operationState, pollIntervalMs, progressCounts } from '@/lib/operations'
+import { opStateTone } from '@/lib/status'
 import { useT } from '@/lib/useT'
-import { navigate } from '@/router'
+import { Link, navigate, objectRefPath } from '@/router'
 
 type ErrorShape = { title: string; detail: string }
 
@@ -68,20 +70,23 @@ export function OperationDetail({ namespace, name }: { namespace: string; name: 
         kind={t('kind.operation')}
         badges={
           <>
-            <Badge variant="outline">{enumLabel(OperationKind, op.kind)}</Badge>
-            <Badge variant={stateBadge(state)}>{t(`ops.state.${state}`)}</Badge>
+            <StatusText tone={opStateTone(state)}>{t(`ops.state.${state}`)}</StatusText>
             <span class="text-sm text-muted-foreground">{t('ops.progress', { done, running })}</span>
             {stage && <Badge variant="outline">{t('ops.caStage', { stage: stage.name, n: stage.index, total: stage.total })}</Badge>}
           </>
         }
+        meta={[
+          { label: t('ops.colKind'), value: enumLabel(OperationKind, op.kind) },
+          {
+            label: t('ops.cluster'),
+            value: op.cluster ? <Link to={objectRefPath('/clusters', op.cluster)} class="hover:underline">{op.cluster.name}</Link> : undefined,
+          },
+          { label: t('ops.maxUnavailable'), value: String(op.maxUnavailable || 1) },
+        ]}
         actions={<OperationControls op={op} onChanged={setOp} onDeleted={() => navigate('/operations')} />}
       />
-      <div class="space-y-6">
-        <Section id="overview" title={t('page.overview')}>
-          <Fields>
-            <Field label={t('ops.cluster')} value={op.cluster?.name} />
-            <Field label={t('ops.maxUnavailable')} value={String(op.maxUnavailable || 1)} />
-          </Fields>
+      <div class="space-y-8">
+        <div class="space-y-4 empty:hidden">
           {op.kind === OperationKind.CA_ROTATION && state === 'done' && (
             <Alert>
               <AlertTitle>{t('ops.plan.bundleStaleTitle')}</AlertTitle>
@@ -99,7 +104,7 @@ export function OperationDetail({ namespace, name }: { namespace: string; name: 
             </Alert>
           )}
           {error && <ErrorAlert {...error} />}
-        </Section>
+        </div>
 
         <Section id="machines" title={t('ops.machines')}>
           {op.machines.length === 0 ? (
@@ -118,7 +123,7 @@ export function OperationDetail({ namespace, name }: { namespace: string; name: 
                     <TableCell>{m.name}</TableCell>
                     <TableCell>
                       {/* The controller's own word (InProgress, Completed), as received. */}
-                      <Badge variant={m.phase === 'Completed' ? 'secondary' : 'outline'}>{m.phase}</Badge>
+                      <StatusText tone={m.phase === 'Completed' ? 'good' : m.phase === 'InProgress' ? 'progress' : 'neutral'}>{m.phase}</StatusText>
                     </TableCell>
                   </TableRow>
                 ))}

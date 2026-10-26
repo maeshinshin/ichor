@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'preact/hooks'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Dialog,
   DialogContent,
@@ -16,8 +15,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 import { BreakGlassDialog, type BreakGlassRun } from '@/components/BreakGlassDialog'
-import { StatusBadge } from '@/components/ConditionList'
+import { DataTable, LinkRow, ListToolbar } from '@/components/ListToolbar'
+import { PageHeader } from '@/components/PageHeader'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
+import { StatusText } from '@/components/Status'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { PullRequestNotice } from '@/components/PullRequestNotice'
 import type { NodeDetail } from '@/gen/ichor/v1alpha1/node_pb'
@@ -26,6 +27,8 @@ import { clusterClient, machineClient, nodeClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
 import { offersBreakGlass } from '@/lib/breakGlass'
 import { describeError } from '@/lib/errors'
+import { matchesQuery } from '@/lib/filter'
+import { conditionStatusTone } from '@/lib/status'
 import { canApprove, isStrongIdentity } from '@/lib/identity'
 import { diskSelector, installChoice, isValidHostname } from '@/lib/installDisk'
 import { InstallDiskPicker } from '@/components/InstallDiskPicker'
@@ -42,6 +45,7 @@ export function MachineList() {
   const t = useT()
   const [machines, setMachines] = useState<Machine[] | null>(null)
   const [error, setError] = useState<ErrorShape | null>(null)
+  const [query, setQuery] = useState('')
   const [clusterNames, setClusterNames] = useState<Record<string, string>>({})
   const [pullRequest, setPullRequest] = useState<{ url: string; run?: BreakGlassRun } | null>(null)
 
@@ -80,22 +84,25 @@ export function MachineList() {
   // machine is its own bucket, not "pending" - that's the whole point of
   // the state existing, so it stops reappearing as a fresh approval
   // request every time this list loads.
-  const pending = machines.filter((m) => m.approvalState !== MachineApprovalState.APPROVED && m.approvalState !== MachineApprovalState.REJECTED)
-  const rejected = machines.filter((m) => m.approvalState === MachineApprovalState.REJECTED)
-  const approved = machines.filter((m) => m.approvalState === MachineApprovalState.APPROVED)
+  const match = (m: Machine) =>
+    matchesQuery(query, m.hostname, m.ref?.name, m.identity?.uuid, m.endpoint, m.cluster?.name, enumLabel(MachineRole, m.role))
+  const shown = machines.filter(match)
+  const pending = shown.filter((m) => m.approvalState !== MachineApprovalState.APPROVED && m.approvalState !== MachineApprovalState.REJECTED)
+  const rejected = shown.filter((m) => m.approvalState === MachineApprovalState.REJECTED)
+  const approved = shown.filter((m) => m.approvalState === MachineApprovalState.APPROVED)
 
   return (
     <div class="space-y-6">
+      <PageHeader title={t('nav.machines')} />
+      <ListToolbar query={query} onQuery={setQuery} shown={shown.length} total={machines.length} onRefresh={reload} />
       {pullRequest && <PullRequestNotice url={pullRequest.url} breakGlass={pullRequest.run} onBreakGlassDone={reload} />}
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('machines.pending', { n: pending.length })}</CardTitle>
-        </CardHeader>
-        <CardContent>
+      {pending.length > 0 && (
+<section>
+<h2 class="mb-2 text-sm font-medium">{t('machines.pending', { n: pending.length })}</h2>
           {pending.length === 0 ? (
             <EmptyNote>{t('machines.pendingEmpty')}</EmptyNote>
           ) : (
-            <Table>
+            <DataTable><Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>{t('col.identity')}</TableHead>
@@ -119,20 +126,18 @@ export function MachineList() {
                   </TableRow>
                 ))}
               </TableBody>
-            </Table>
+            </Table></DataTable>
           )}
-        </CardContent>
-      </Card>
+        </section>
+)}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('machines.rejected', { n: rejected.length })}</CardTitle>
-        </CardHeader>
-        <CardContent>
+      {rejected.length > 0 && (
+<section>
+<h2 class="mb-2 text-sm font-medium">{t('machines.rejected', { n: rejected.length })}</h2>
           {rejected.length === 0 ? (
             <EmptyNote>{t('machines.rejectedEmpty')}</EmptyNote>
           ) : (
-            <Table>
+            <DataTable><Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>{t('col.identity')}</TableHead>
@@ -164,20 +169,17 @@ export function MachineList() {
                   </TableRow>
                 ))}
               </TableBody>
-            </Table>
+            </Table></DataTable>
           )}
-        </CardContent>
-      </Card>
+        </section>
+)}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('machines.approved', { n: approved.length })}</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <section>
+<h2 class="mb-2 text-sm font-medium">{t('machines.approved', { n: approved.length })}</h2>
           {approved.length === 0 ? (
             <EmptyNote>{t('machines.approvedEmpty')}</EmptyNote>
           ) : (
-            <Table>
+            <DataTable><Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>{t('machines.colHostname')}</TableHead>
@@ -188,7 +190,7 @@ export function MachineList() {
               </TableHeader>
               <TableBody>
                 {approved.map((m) => (
-                  <TableRow key={refKey(m)}>
+                  <LinkRow key={refKey(m)} to={m.ref ? objectRefPath('/nodes', m.ref) : '/machines'}>
                     <TableCell>
                       {m.ref ? (
                         <Link to={objectRefPath('/nodes', m.ref)} class="font-medium hover:underline">
@@ -203,13 +205,12 @@ export function MachineList() {
                     <TableCell>
                       <ReadyCell machine={m} />
                     </TableCell>
-                  </TableRow>
+                  </LinkRow>
                 ))}
               </TableBody>
-            </Table>
+            </Table></DataTable>
           )}
-        </CardContent>
-      </Card>
+        </section>
     </div>
   )
 }
@@ -221,8 +222,7 @@ function ReadyCell({ machine }: { machine: Machine }) {
   if (!ready) return <>-</>
   return (
     <span class="inline-flex items-center gap-2">
-      <StatusBadge type={ready.type} status={ready.status} />
-      {ready.reason && <span class="text-xs text-muted-foreground">{ready.reason}</span>}
+      <StatusText tone={conditionStatusTone(ready.type, ready.status)}>{ready.reason || ready.status}</StatusText>
     </span>
   )
 }

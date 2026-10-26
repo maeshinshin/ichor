@@ -1,15 +1,18 @@
 import { useEffect, useState } from 'preact/hooks'
-import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { DataTable, LinkRow, ListToolbar } from '@/components/ListToolbar'
+import { PageHeader } from '@/components/PageHeader'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
+import { StatusText } from '@/components/Status'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { OperationControls } from '@/components/OperationControls'
 import { OperationKind, type Operation } from '@/gen/ichor/v1alpha1/operation_pb'
 import { operationClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
 import { describeError } from '@/lib/errors'
-import { operationState, progressCounts, stateBadge } from '@/lib/operations'
+import { matchesQuery } from '@/lib/filter'
+import { operationState, progressCounts } from '@/lib/operations'
+import { opStateTone } from '@/lib/status'
 import { useT } from '@/lib/useT'
 import { Link, objectRefPath } from '@/router'
 
@@ -23,6 +26,7 @@ export function OperationList() {
   const t = useT()
   const [ops, setOps] = useState<Operation[] | null>(null)
   const [error, setError] = useState<ErrorShape | null>(null)
+  const [query, setQuery] = useState('')
 
   async function reload() {
     try {
@@ -43,15 +47,20 @@ export function OperationList() {
   if (error) return <ErrorAlert {...error} />
   if (!ops) return <PageSkeleton label={t('ops.loading')} />
 
+  const rows = ops.filter((o) =>
+    matchesQuery(query, o.ref?.name, o.cluster?.name, enumLabel(OperationKind, o.kind), t(`ops.state.${operationState(o.phase, o.failureReason)}`)),
+  )
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t('ops.title')}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {ops.length === 0 ? (
-          <EmptyNote>{t('ops.empty')}</EmptyNote>
-        ) : (
+    <div>
+      <PageHeader title={t('ops.title')} />
+      <ListToolbar query={query} onQuery={setQuery} shown={rows.length} total={ops.length} onRefresh={reload} />
+      {ops.length === 0 ? (
+        <EmptyNote>{t('ops.empty')}</EmptyNote>
+      ) : rows.length === 0 ? (
+        <EmptyNote>{t('list.noMatch')}</EmptyNote>
+      ) : (
+        <DataTable>
           <Table>
             <TableHeader>
               <TableRow>
@@ -64,14 +73,14 @@ export function OperationList() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {ops.map((op) => (
+              {rows.map((op) => (
                 <OperationRow key={`${op.ref?.namespace}/${op.ref?.name}`} op={op} onChanged={reload} />
               ))}
             </TableBody>
           </Table>
-        )}
-      </CardContent>
-    </Card>
+        </DataTable>
+      )}
+    </div>
   )
 }
 
@@ -81,7 +90,7 @@ function OperationRow({ op, onChanged }: { op: Operation; onChanged: () => void 
   const { done, running } = progressCounts(op.machines)
 
   return (
-    <TableRow>
+    <LinkRow to={op.ref ? objectRefPath('/operations', op.ref) : '/operations'}>
       <TableCell>
         {op.ref && (
           <Link to={objectRefPath('/operations', op.ref)} class="font-medium hover:underline">
@@ -92,12 +101,12 @@ function OperationRow({ op, onChanged }: { op: Operation; onChanged: () => void 
       <TableCell>{enumLabel(OperationKind, op.kind)}</TableCell>
       <TableCell>{op.cluster?.name}</TableCell>
       <TableCell>
-        <Badge variant={stateBadge(state)}>{t(`ops.state.${state}`)}</Badge>
+        <StatusText tone={opStateTone(state)}>{t(`ops.state.${state}`)}</StatusText>
       </TableCell>
       <TableCell>{t('ops.progress', { done, running })}</TableCell>
       <TableCell>
         <OperationControls op={op} onChanged={onChanged} onDeleted={onChanged} />
       </TableCell>
-    </TableRow>
+    </LinkRow>
   )
 }

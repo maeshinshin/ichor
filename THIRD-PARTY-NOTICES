@@ -421,6 +421,14 @@ Exhibit B - "Incompatible With Secondary Licenses" Notice
 2. Upstream NOTICE texts
 ================================================================================
 
+github.com/coreos/go-oidc/v3@v3.21.0: NOTICE
+
+CoreOS Project
+Copyright 2014 CoreOS, Inc
+
+This product includes software developed at CoreOS, Inc.
+(http://www.coreos.com/).
+
 github.com/go-openapi/jsonpointer@v1.0.1: NOTICE
 
 Copyright 2015-2025 go-swagger maintainers
@@ -921,6 +929,8 @@ Components:
     Copyright 2021-2025 The Connect Authors
 - github.com/containerd/go-cni@v1.1.13
 - github.com/containernetworking/cni@v1.3.0
+- github.com/coreos/go-oidc/v3@v3.21.0
+- github.com/go-jose/go-jose/v4@v4.1.4
 - github.com/go-logr/logr@v1.4.4
 - github.com/go-logr/stdr@v1.2.2
 - github.com/go-logr/zapr@v1.3.0

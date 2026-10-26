@@ -25,6 +25,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"io/fs"
@@ -89,9 +90,17 @@ func spaHandler(files fs.FS) http.Handler {
 
 func main() {
 	addr := flag.String("addr", ":8080", "address ichor-ui listens on")
+	oidcIssuer := flag.String("oidc-issuer", os.Getenv("ICHOR_OIDC_ISSUER"), "OIDC issuer URL; empty disables login")
+	oidcClientID := flag.String("oidc-client-id", os.Getenv("ICHOR_OIDC_CLIENT_ID"), "OIDC client ID (public client, PKCE); also the expected token audience")
+	oidcUserClaim := flag.String("oidc-username-claim", os.Getenv("ICHOR_OIDC_USERNAME_CLAIM"), "claim used as the Kubernetes user name (default email)")
+	oidcGroupsClaim := flag.String("oidc-groups-claim", os.Getenv("ICHOR_OIDC_GROUPS_CLAIM"), "claim used for Kubernetes groups (default groups)")
+	oidcUserPrefix := flag.String("oidc-username-prefix", os.Getenv("ICHOR_OIDC_USERNAME_PREFIX"), "prefix added to the user name")
+	oidcGroupsPrefix := flag.String("oidc-groups-prefix", os.Getenv("ICHOR_OIDC_GROUPS_PREFIX"), "prefix added to each group")
 	flag.Parse()
 
-	c, err := client.New(ctrl.GetConfigOrDie(), client.Options{Scheme: scheme})
+	restCfg := ctrl.GetConfigOrDie()
+
+	c, err := client.New(restCfg, client.Options{Scheme: scheme})
 	if err != nil {
 		log.Fatalf("ichor-ui: building Kubernetes client: %v", err)
 	}
@@ -114,7 +123,42 @@ func main() {
 		Draining:        draining,
 	}
 
+	// OIDC. Off: writes use this pod's ServiceAccount, so anyone who
+	// can reach ichor-ui can write; that is said here and by /auth/config (the UI
+	// shows a banner). On: every RPC needs a verified ID token and the Kubernetes
+	// API is called as that user. Discovery failing is fatal -- never fall back
+	// to open.
+	var authn *uiapi.Authenticator
+
+	if *oidcIssuer != "" {
+		dctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		authn, err = uiapi.NewAuthenticator(dctx, uiapi.OIDCConfig{
+			Issuer: *oidcIssuer, ClientID: *oidcClientID,
+			UsernameClaim: *oidcUserClaim, GroupsClaim: *oidcGroupsClaim,
+			UsernamePrefix: *oidcUserPrefix, GroupsPrefix: *oidcGroupsPrefix,
+		})
+
+		cancel()
+
+		if err != nil {
+			log.Fatalf("ichor-ui: %v", err)
+		}
+
+		server.Impersonate = uiapi.NewImpersonator(restCfg, client.Options{Scheme: scheme, Mapper: c.RESTMapper()})
+
+		log.Printf("ichor-ui: OIDC login enabled (issuer %s); Kubernetes calls are made as the signed-in user", *oidcIssuer)
+	} else {
+		log.Print("ichor-ui: WARNING: OIDC is not configured; every client that can reach ichor-ui " +
+			"writes with this pod's ServiceAccount permissions and is audited as \"ichor-ui\"")
+	}
+
 	mux := http.NewServeMux()
+	mux.HandleFunc("/auth/config", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"enabled": authn != nil, "issuer": *oidcIssuer, "clientId": *oidcClientID,
+		})
+	})
 	mux.Handle("/", spaHandler(webFS))
 
 	// /metrics, on the same mux and port as every Connect handler below: ichor-ui is
@@ -125,7 +169,7 @@ func main() {
 	// the exported RPC-latency series comes from.
 	mux.Handle("/metrics", promhttp.Handler())
 
-	rpcInterceptor := connect.WithInterceptors(uiapi.MetricsInterceptor())
+	rpcInterceptor := connect.WithInterceptors(uiapi.MetricsInterceptor(), uiapi.AuthInterceptor(authn))
 	mux.Handle(ichorv1alpha1connect.NewClusterServiceHandler(server, rpcInterceptor))
 	mux.Handle(ichorv1alpha1connect.NewMachineServiceHandler(server, rpcInterceptor))
 	mux.Handle(ichorv1alpha1connect.NewNodeServiceHandler(server, rpcInterceptor))

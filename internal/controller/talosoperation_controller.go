@@ -60,7 +60,8 @@ const (
 // consumer; each upgrade kind's own implementation -- calling Talos's
 // Upgrade API, driving a Kubernetes upgrade, launching Ichor's installer
 // Job -- is separate, later work, wired in by setting
-// TalosOperationReconciler.Advance. The state machine here never branches
+// TalosOperationReconciler.Advance (the machine is nil for kind ichor,
+// which has none). The state machine here never branches
 // on spec.kind itself.
 type AdvanceMachineFunc func(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, op *ichorv1alpha1.TalosOperation,
@@ -194,6 +195,12 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	if r.Advance == nil {
 		return ctrl.Result{}, r.setPhase(ctx, &op, ichorv1alpha1.TalosOperationPhasePaused,
 			reasonOperationNoExecutor, "no machine executor is wired up for this controller")
+	}
+
+	// An Ichor self-upgrade touches no machine: its executor watches one installer Job, so the
+	// operation carries no machine list.
+	if op.Spec.Kind == ichorv1alpha1.TalosOperationKindIchor {
+		return r.advanceIchor(ctx, &op, &cluster, lock)
 	}
 
 	controlPlanes, workers, err := r.candidateMachines(ctx, &cluster)

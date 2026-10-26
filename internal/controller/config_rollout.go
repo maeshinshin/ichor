@@ -188,11 +188,9 @@ func (a *configRolloutAdvancer) fail(
 		err = fmt.Errorf("%w (and uncordoning failed: %v)", err, uncErr)
 	}
 
-	apimeta.SetStatusCondition(&m.Status.Conditions, metav1.Condition{
+	if updErr := setMachineCondition(ctx, a.Client, a.Client, m, metav1.Condition{
 		Type: conditionConfigRollout, Status: metav1.ConditionFalse, Reason: reasonRolloutFailed, Message: err.Error(),
-	})
-
-	if updErr := a.Status().Update(ctx, m); updErr != nil {
+	}); updErr != nil {
 		return fmt.Errorf("%w (and recording it failed: %v)", err, updErr)
 	}
 
@@ -324,11 +322,9 @@ func (a *configRolloutAdvancer) stageAndReboot(
 		return fmt.Errorf("staging the rendered configuration on %q: %w", m.Name, err)
 	}
 
-	apimeta.SetStatusCondition(&m.Status.Conditions, metav1.Condition{
+	if err := setMachineCondition(ctx, a.Client, a.Client, m, metav1.Condition{
 		Type: conditionConfigRollout, Status: metav1.ConditionTrue, Reason: reasonRolloutRebooting, Message: bootID,
-	})
-
-	if err := a.Status().Update(ctx, m); err != nil {
+	}); err != nil {
 		return fmt.Errorf("recording the reboot of %q: %w", m.Name, err)
 	}
 
@@ -458,12 +454,10 @@ func (a *configRolloutAdvancer) finish(
 		return false, err
 	}
 
-	apimeta.SetStatusCondition(&m.Status.Conditions, metav1.Condition{
+	if err := setMachineCondition(ctx, a.Client, a.Client, m, metav1.Condition{
 		Type: conditionConfigRollout, Status: metav1.ConditionFalse, Reason: reasonRolloutConverged,
 		Message: "running the rendered configuration",
-	})
-
-	if err := a.Status().Update(ctx, m); err != nil {
+	}); err != nil {
 		return false, err
 	}
 

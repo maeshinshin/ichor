@@ -64,6 +64,8 @@ func kindToSpec(k pb.OperationKind) (string, error) {
 		return ichorv1alpha1.TalosOperationKindCNI, nil
 	case pb.OperationKind_OPERATION_KIND_SHUTDOWN:
 		return ichorv1alpha1.TalosOperationKindShutdown, nil
+	case pb.OperationKind_OPERATION_KIND_CA_ROTATION:
+		return ichorv1alpha1.TalosOperationKindCARotation, nil
 	case pb.OperationKind_OPERATION_KIND_UNSPECIFIED:
 	}
 
@@ -82,6 +84,8 @@ func kindToPB(k string) pb.OperationKind {
 		return pb.OperationKind_OPERATION_KIND_CNI
 	case ichorv1alpha1.TalosOperationKindShutdown:
 		return pb.OperationKind_OPERATION_KIND_SHUTDOWN
+	case ichorv1alpha1.TalosOperationKindCARotation:
+		return pb.OperationKind_OPERATION_KIND_CA_ROTATION
 	}
 
 	return pb.OperationKind_OPERATION_KIND_UNSPECIFIED
@@ -98,6 +102,10 @@ func operationToPB(op *ichorv1alpha1.TalosOperation) *pb.Operation {
 		FailureReason:  op.Status.FailureReason,
 		Conditions:     conditions(op.Status.Conditions),
 		CreatedAt:      timestamppb.New(op.CreationTimestamp.Time),
+	}
+
+	if op.Status.CARotation != nil {
+		out.CaRotationStage = op.Status.CARotation.Stage
 	}
 
 	for _, m := range op.Status.Machines {
@@ -234,9 +242,9 @@ type opPlan struct {
 // normalizeTarget validates target for kind and returns it in the form the spec stores.
 func normalizeTarget(kind, target string) (string, error) {
 	switch kind {
-	case ichorv1alpha1.TalosOperationKindShutdown:
+	case ichorv1alpha1.TalosOperationKindShutdown, ichorv1alpha1.TalosOperationKindCARotation:
 		if target != "" {
-			return "", connect.NewError(connect.CodeInvalidArgument, errors.New("a shutdown has no target"))
+			return "", connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("a %s has no target", kind))
 		}
 	case ichorv1alpha1.TalosOperationKindCNI:
 		if target != "" && target != kubeProxyEnabled && target != kubeProxyReplaced {
@@ -274,7 +282,7 @@ func (s *Server) trackedBy(ctx context.Context, obj client.Object) (string, erro
 	return by, nil
 }
 
-//nolint:gocyclo // one switch over the five kinds, each a few lines
+//nolint:gocyclo // one switch over the six kinds, each a few lines
 func (s *Server) planOperation(
 	ctx context.Context, clusterRef *pb.ObjectRef, pbKind pb.OperationKind, rawTarget string, maxUnavailable int32,
 ) (*opPlan, error) {
@@ -292,7 +300,8 @@ func (s *Server) planOperation(
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("max_unavailable cannot be negative"))
 	}
 
-	if maxUnavailable == 0 {
+	// A CA rotation visits the machines one at a time, control planes first.
+	if maxUnavailable == 0 || kind == ichorv1alpha1.TalosOperationKindCARotation {
 		maxUnavailable = 1
 	}
 
@@ -319,6 +328,12 @@ func (s *Server) planOperation(
 		}
 	case ichorv1alpha1.TalosOperationKindShutdown:
 		p.resp.Effect = pb.OperationEffect_OPERATION_EFFECT_STOP
+	case ichorv1alpha1.TalosOperationKindCARotation:
+		p.resp.Effect = pb.OperationEffect_OPERATION_EFFECT_CA_ROTATION
+		p.resp.Stages = []string{
+			ichorv1alpha1.CARotationStageAccepting, ichorv1alpha1.CARotationStageIssuing, ichorv1alpha1.CARotationStageDropping,
+		}
+		p.resp.ReplacesSecretsBundle = true
 	case ichorv1alpha1.TalosOperationKindIchor:
 		p.resp.Effect = pb.OperationEffect_OPERATION_EFFECT_NONE
 		p.install = &ichorv1alpha1.IchorInstallation{}
@@ -363,8 +378,9 @@ func (s *Server) planMachines(ctx context.Context, p *opPlan, cluster *ichorv1al
 			continue
 		}
 
-		// A hold excludes a machine from a rollout, not from stopping the cluster.
-		if p.kind != ichorv1alpha1.TalosOperationKindShutdown && m.Annotations[ichorv1alpha1.TalosMachineUpgradeHoldAnnotation] != "" {
+		// A hold excludes a machine from a rollout, not from stopping the cluster and not from
+		// a CA rotation, which would lock a machine left out when the old CA is dropped.
+		if p.kind != ichorv1alpha1.TalosOperationKindShutdown && p.kind != ichorv1alpha1.TalosOperationKindCARotation && m.Annotations[ichorv1alpha1.TalosMachineUpgradeHoldAnnotation] != "" {
 			p.resp.Held = append(p.resp.Held, m.Name)
 
 			continue

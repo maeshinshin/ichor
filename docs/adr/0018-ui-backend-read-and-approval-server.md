@@ -693,3 +693,15 @@ three metrics-cert verbs); after it the suite passes, and removing
 `applications:watch` made it fail with `ClusterRole manager-role is missing
 argoproj.io/applications:watch (present in ../../config/rbac/role.yaml); add
 it to dist/chart/templates/rbac/manager-role.yaml`.
+
+## Amendment: RBAC proven by an enforcing test
+
+`GetEffectiveConfig` failed live with `cannot list resource "talosstorages"`: `render.ResolveSystemInputs`
+lists `TalosStorage` as the ServiceAccount (ADR 0050) and `rbac_markers.go` had no rule for it. Added
+`talosstorages` `list` (no `get`, no `watch`: one non-cached List per call). An audit of every `Get`/`List` in
+`internal/uiapi` and the render inputs it calls (`ResolveSystemInputs`, `ResolveRegistryAuth`, `secretsbundle.Load`)
+found no other gap: Secrets are `get` in the controller namespace, `argocd-cm` and Applications are already granted.
+`internal/uiapi/rbac_enforced_test.go` now loads `config/rbac/ichor-ui/role.yaml` into envtest (whose apiserver
+enforces RBAC) and runs `GetEffectiveConfig` as a client impersonating `system:serviceaccount:ichor-system:ichor-ui`,
+so a read the generated role does not grant fails the suite with Forbidden. A new render input needs a marker, and
+a handler added to that spec is covered.

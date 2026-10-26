@@ -85,3 +85,8 @@ setting name.
 - Kernel modules and sysctls: `longhorn-v1` emits none today (ADR 0023 verified none); a preset that
   needs them returns them from `TalosPatches` and they arrive the same way.
 - Patches do not trigger machine reconciles (only `TalosStorage` does); unchanged here.
+
+## Amendment: the UI backend reads TalosStorage
+
+The UI's effective-config view renders layer 1, so the `ichor-ui` ClusterRole needs `list` on `talosstorages`
+(missed at first, found live; see the amendment in ADR 0018, which also adds the test that enforces it).

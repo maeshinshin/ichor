@@ -48,6 +48,9 @@ package uiapi
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=ichorinstallations,verbs=get;update
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosconfigpatches,verbs=get;list;create;update;delete
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosmachines,verbs=get;list;update
+// GetEffectiveConfig renders through render.ResolveSystemInputs, which lists TalosStorages with
+// the ServiceAccount; the caller's own list follows. List only, no informer.
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosstorages,verbs=list
 // +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,verbs=get
 
 // corev1.Node is itself a cluster-scoped Kubernetes type, unlike the secrets

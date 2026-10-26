@@ -198,6 +198,9 @@ message Machine {
   MachineInstall install = 13;
   // deleting is true while the machine is being removed (its deletion timestamp is set).
   bool deleting = 14;
+  // reboot_paths are the configuration fields whose pending change needs a
+  // reboot to take effect (TalosMachine.status.rebootPaths, ADR 0080).
+  repeated string reboot_paths = 15;
 }
 
 message RemoveMachineRequest {

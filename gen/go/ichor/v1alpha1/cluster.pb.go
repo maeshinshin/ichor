@@ -613,8 +613,12 @@ type Cluster struct {
 	// means discovery is off.
 	DiscoveryAddresses []string `protobuf:"bytes,10,rep,name=discovery_addresses,json=discoveryAddresses,proto3" json:"discovery_addresses,omitempty"`
 	DiscoveryCidrs     []string `protobuf:"bytes,11,rep,name=discovery_cidrs,json=discoveryCidrs,proto3" json:"discovery_cidrs,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// kube_proxy_mode is spec.cni.kubeProxy: "enabled" (the default) or "replaced".
+	KubeProxyMode string `protobuf:"bytes,12,opt,name=kube_proxy_mode,json=kubeProxyMode,proto3" json:"kube_proxy_mode,omitempty"`
+	// certificates are status.certificates: when each CA expires (ADR 0063).
+	Certificates  []*CertificateExpiry `protobuf:"bytes,13,rep,name=certificates,proto3" json:"certificates,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Cluster) Reset() {
@@ -724,6 +728,74 @@ func (x *Cluster) GetDiscoveryCidrs() []string {
 	return nil
 }
 
+func (x *Cluster) GetKubeProxyMode() string {
+	if x != nil {
+		return x.KubeProxyMode
+	}
+	return ""
+}
+
+func (x *Cluster) GetCertificates() []*CertificateExpiry {
+	if x != nil {
+		return x.Certificates
+	}
+	return nil
+}
+
+// CertificateExpiry is one CA of the cluster and its last instant of validity.
+type CertificateExpiry struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// name is talos, kubernetes, kubernetes-aggregator or etcd.
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	NotAfter      *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=not_after,json=notAfter,proto3" json:"not_after,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CertificateExpiry) Reset() {
+	*x = CertificateExpiry{}
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CertificateExpiry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CertificateExpiry) ProtoMessage() {}
+
+func (x *CertificateExpiry) ProtoReflect() protoreflect.Message {
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CertificateExpiry.ProtoReflect.Descriptor instead.
+func (*CertificateExpiry) Descriptor() ([]byte, []int) {
+	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *CertificateExpiry) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *CertificateExpiry) GetNotAfter() *timestamppb.Timestamp {
+	if x != nil {
+		return x.NotAfter
+	}
+	return nil
+}
+
 var File_ichor_v1alpha1_cluster_proto protoreflect.FileDescriptor
 
 const file_ichor_v1alpha1_cluster_proto_rawDesc = "" +
@@ -759,7 +831,7 @@ const file_ichor_v1alpha1_cluster_proto_rawDesc = "" +
 	"\rHandoverState\x12\x1c\n" +
 	"\tcomponent\x18\x01 \x01(\tR\tcomponent\x123\n" +
 	"\x05phase\x18\x02 \x01(\x0e2\x1d.ichor.v1alpha1.HandoverPhaseR\x05phase\x12L\n" +
-	"\x14last_transition_time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x12lastTransitionTime\"\x9f\x04\n" +
+	"\x14last_transition_time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x12lastTransitionTime\"\x8e\x05\n" +
 	"\aCluster\x12+\n" +
 	"\x03ref\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\x03ref\x12#\n" +
 	"\rtalos_version\x18\x02 \x01(\tR\ftalosVersion\x12-\n" +
@@ -774,7 +846,12 @@ const file_ichor_v1alpha1_cluster_proto_rawDesc = "" +
 	"\thandovers\x18\t \x03(\v2\x1d.ichor.v1alpha1.HandoverStateR\thandovers\x12/\n" +
 	"\x13discovery_addresses\x18\n" +
 	" \x03(\tR\x12discoveryAddresses\x12'\n" +
-	"\x0fdiscovery_cidrs\x18\v \x03(\tR\x0ediscoveryCidrs*x\n" +
+	"\x0fdiscovery_cidrs\x18\v \x03(\tR\x0ediscoveryCidrs\x12&\n" +
+	"\x0fkube_proxy_mode\x18\f \x01(\tR\rkubeProxyMode\x12E\n" +
+	"\fcertificates\x18\r \x03(\v2!.ichor.v1alpha1.CertificateExpiryR\fcertificates\"`\n" +
+	"\x11CertificateExpiry\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x127\n" +
+	"\tnot_after\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\bnotAfter*x\n" +
 	"\vRolloutKind\x12\x1c\n" +
 	"\x18ROLLOUT_KIND_UNSPECIFIED\x10\x00\x12\x16\n" +
 	"\x12ROLLOUT_KIND_TALOS\x10\x01\x12\x1b\n" +
@@ -806,7 +883,7 @@ func file_ichor_v1alpha1_cluster_proto_rawDescGZIP() []byte {
 }
 
 var file_ichor_v1alpha1_cluster_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_ichor_v1alpha1_cluster_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_ichor_v1alpha1_cluster_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_ichor_v1alpha1_cluster_proto_goTypes = []any{
 	(RolloutKind)(0),                    // 0: ichor.v1alpha1.RolloutKind
 	(HandoverPhase)(0),                  // 1: ichor.v1alpha1.HandoverPhase
@@ -819,38 +896,41 @@ var file_ichor_v1alpha1_cluster_proto_goTypes = []any{
 	(*RolloutProgress)(nil),             // 8: ichor.v1alpha1.RolloutProgress
 	(*HandoverState)(nil),               // 9: ichor.v1alpha1.HandoverState
 	(*Cluster)(nil),                     // 10: ichor.v1alpha1.Cluster
-	(*ObjectRef)(nil),                   // 11: ichor.v1alpha1.ObjectRef
-	(*BreakGlass)(nil),                  // 12: ichor.v1alpha1.BreakGlass
-	(*AuditRecord)(nil),                 // 13: ichor.v1alpha1.AuditRecord
-	(*timestamppb.Timestamp)(nil),       // 14: google.protobuf.Timestamp
-	(*Condition)(nil),                   // 15: ichor.v1alpha1.Condition
+	(*CertificateExpiry)(nil),           // 11: ichor.v1alpha1.CertificateExpiry
+	(*ObjectRef)(nil),                   // 12: ichor.v1alpha1.ObjectRef
+	(*BreakGlass)(nil),                  // 13: ichor.v1alpha1.BreakGlass
+	(*AuditRecord)(nil),                 // 14: ichor.v1alpha1.AuditRecord
+	(*timestamppb.Timestamp)(nil),       // 15: google.protobuf.Timestamp
+	(*Condition)(nil),                   // 16: ichor.v1alpha1.Condition
 }
 var file_ichor_v1alpha1_cluster_proto_depIdxs = []int32{
-	11, // 0: ichor.v1alpha1.AddDiscoveryAddressRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
-	12, // 1: ichor.v1alpha1.AddDiscoveryAddressRequest.break_glass:type_name -> ichor.v1alpha1.BreakGlass
+	12, // 0: ichor.v1alpha1.AddDiscoveryAddressRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	13, // 1: ichor.v1alpha1.AddDiscoveryAddressRequest.break_glass:type_name -> ichor.v1alpha1.BreakGlass
 	10, // 2: ichor.v1alpha1.AddDiscoveryAddressResponse.cluster:type_name -> ichor.v1alpha1.Cluster
-	13, // 3: ichor.v1alpha1.AddDiscoveryAddressResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
+	14, // 3: ichor.v1alpha1.AddDiscoveryAddressResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
 	10, // 4: ichor.v1alpha1.ListClustersResponse.clusters:type_name -> ichor.v1alpha1.Cluster
-	11, // 5: ichor.v1alpha1.GetClusterRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	12, // 5: ichor.v1alpha1.GetClusterRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
 	10, // 6: ichor.v1alpha1.GetClusterResponse.cluster:type_name -> ichor.v1alpha1.Cluster
 	0,  // 7: ichor.v1alpha1.RolloutProgress.kind:type_name -> ichor.v1alpha1.RolloutKind
 	1,  // 8: ichor.v1alpha1.HandoverState.phase:type_name -> ichor.v1alpha1.HandoverPhase
-	14, // 9: ichor.v1alpha1.HandoverState.last_transition_time:type_name -> google.protobuf.Timestamp
-	11, // 10: ichor.v1alpha1.Cluster.ref:type_name -> ichor.v1alpha1.ObjectRef
-	15, // 11: ichor.v1alpha1.Cluster.conditions:type_name -> ichor.v1alpha1.Condition
+	15, // 9: ichor.v1alpha1.HandoverState.last_transition_time:type_name -> google.protobuf.Timestamp
+	12, // 10: ichor.v1alpha1.Cluster.ref:type_name -> ichor.v1alpha1.ObjectRef
+	16, // 11: ichor.v1alpha1.Cluster.conditions:type_name -> ichor.v1alpha1.Condition
 	8,  // 12: ichor.v1alpha1.Cluster.rollout:type_name -> ichor.v1alpha1.RolloutProgress
 	9,  // 13: ichor.v1alpha1.Cluster.handovers:type_name -> ichor.v1alpha1.HandoverState
-	4,  // 14: ichor.v1alpha1.ClusterService.ListClusters:input_type -> ichor.v1alpha1.ListClustersRequest
-	6,  // 15: ichor.v1alpha1.ClusterService.GetCluster:input_type -> ichor.v1alpha1.GetClusterRequest
-	2,  // 16: ichor.v1alpha1.ClusterService.AddDiscoveryAddress:input_type -> ichor.v1alpha1.AddDiscoveryAddressRequest
-	5,  // 17: ichor.v1alpha1.ClusterService.ListClusters:output_type -> ichor.v1alpha1.ListClustersResponse
-	7,  // 18: ichor.v1alpha1.ClusterService.GetCluster:output_type -> ichor.v1alpha1.GetClusterResponse
-	3,  // 19: ichor.v1alpha1.ClusterService.AddDiscoveryAddress:output_type -> ichor.v1alpha1.AddDiscoveryAddressResponse
-	17, // [17:20] is the sub-list for method output_type
-	14, // [14:17] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	11, // 14: ichor.v1alpha1.Cluster.certificates:type_name -> ichor.v1alpha1.CertificateExpiry
+	15, // 15: ichor.v1alpha1.CertificateExpiry.not_after:type_name -> google.protobuf.Timestamp
+	4,  // 16: ichor.v1alpha1.ClusterService.ListClusters:input_type -> ichor.v1alpha1.ListClustersRequest
+	6,  // 17: ichor.v1alpha1.ClusterService.GetCluster:input_type -> ichor.v1alpha1.GetClusterRequest
+	2,  // 18: ichor.v1alpha1.ClusterService.AddDiscoveryAddress:input_type -> ichor.v1alpha1.AddDiscoveryAddressRequest
+	5,  // 19: ichor.v1alpha1.ClusterService.ListClusters:output_type -> ichor.v1alpha1.ListClustersResponse
+	7,  // 20: ichor.v1alpha1.ClusterService.GetCluster:output_type -> ichor.v1alpha1.GetClusterResponse
+	3,  // 21: ichor.v1alpha1.ClusterService.AddDiscoveryAddress:output_type -> ichor.v1alpha1.AddDiscoveryAddressResponse
+	19, // [19:22] is the sub-list for method output_type
+	16, // [16:19] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_ichor_v1alpha1_cluster_proto_init() }
@@ -865,7 +945,7 @@ func file_ichor_v1alpha1_cluster_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_ichor_v1alpha1_cluster_proto_rawDesc), len(file_ichor_v1alpha1_cluster_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   9,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

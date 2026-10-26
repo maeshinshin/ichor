@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import type { MessageInitShape } from '@bufbuild/protobuf'
+import { BreakGlassDialog, type BreakGlassRun } from '@/components/BreakGlassDialog'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { PullRequestNotice } from '@/components/PullRequestNotice'
 import type { Cluster } from '@/gen/ichor/v1alpha1/cluster_pb'
@@ -23,6 +24,7 @@ import { ConfigLayer } from '@/gen/ichor/v1alpha1/node_pb'
 import { PatchSchema } from '@/gen/ichor/v1alpha1/patch_pb'
 import { clusterClient, patchClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
+import { offersBreakGlass } from '@/lib/breakGlass'
 import { describeError } from '@/lib/errors'
 import { useT } from '@/lib/useT'
 import { buildPatchTarget, canSavePatch, stringifyLabelSelector, targetKindOf, type TargetKind } from '@/lib/patchTarget'
@@ -70,6 +72,7 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
   const [saveError, setSaveError] = useState<ErrorShape | string | null>(null)
   const [saving, setSaving] = useState(false)
   const [pullRequestUrl, setPullRequestUrl] = useState<string | null>(null)
+  const [saveRefused, setSaveRefused] = useState(false)
 
   const [preview, setPreview] = useState<{ rebootRequired: boolean; installTimeOnly: string[]; unsupported: string[] } | null>(null)
   const [previewError, setPreviewError] = useState<ErrorShape | string | null>(null)
@@ -150,9 +153,18 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
     }
   }
 
+  // The same update again with break_glass set.
+  const saveBreakGlass: BreakGlassRun = async (bg) => {
+    const wire = buildWire(setSaveError)
+    if (!wire) throw new Error(t('patch.chooseCluster'))
+    const res = await patchClient.updatePatch({ patch: wire, breakGlass: bg })
+    return { pullRequestUrl: res.pullRequestUrl, notice: res.notice }
+  }
+
   async function save() {
     const wire = buildWire(setSaveError)
     if (!wire) return
+    setSaveRefused(false)
     setSaving(true)
     try {
       if (isNew) {
@@ -167,6 +179,7 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
       navigate('/patches')
     } catch (err) {
       setSaveError(describeError(err))
+      setSaveRefused(!isNew && offersBreakGlass({ error: err }))
     } finally {
       setSaving(false)
     }
@@ -424,8 +437,9 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
         </CardContent>
       </Card>
 
-      {pullRequestUrl && <PullRequestNotice url={pullRequestUrl} />}
+      {pullRequestUrl && <PullRequestNotice url={pullRequestUrl} breakGlass={saveBreakGlass} onBreakGlassDone={() => navigate('/patches')} />}
       {saveError && (typeof saveError === 'string' ? <ErrorAlert title={t('error.invalidTarget')} detail={saveError} /> : <ErrorAlert {...saveError} />)}
+      {saveRefused && <BreakGlassDialog run={saveBreakGlass} onDone={() => navigate('/patches')} />}
 
       <div class="flex items-center justify-between">
         <div class="flex gap-2">
@@ -448,6 +462,14 @@ function DeleteButton({ namespace, name }: { namespace: string; name: string }) 
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<ErrorShape | null>(null)
   const [pullRequestUrl, setPullRequestUrl] = useState<string | null>(null)
+  const [refused, setRefused] = useState(false)
+
+  // The same deletion again with break_glass set.
+  const breakGlass: BreakGlassRun = async (bg) => {
+    const res = await patchClient.deletePatch({ patch: { namespace, name }, breakGlass: bg })
+    return { pullRequestUrl: res.pullRequestUrl, notice: res.notice }
+  }
+  const done = () => navigate('/patches')
 
   async function submit() {
     setSubmitting(true)
@@ -462,6 +484,7 @@ function DeleteButton({ namespace, name }: { namespace: string; name: string }) 
       navigate('/patches')
     } catch (err) {
       setError(describeError(err))
+      setRefused(offersBreakGlass({ error: err }))
     } finally {
       setSubmitting(false)
     }
@@ -475,7 +498,7 @@ function DeleteButton({ namespace, name }: { namespace: string; name: string }) 
       <DialogContent>
         {pullRequestUrl ? (
           <>
-            <PullRequestNotice url={pullRequestUrl} />
+            <PullRequestNotice url={pullRequestUrl} breakGlass={breakGlass} onBreakGlassDone={done} />
             <DialogFooter>
               <Button variant="ghost" onClick={() => setOpen(false)}>
                 {t('common.close')}
@@ -489,6 +512,7 @@ function DeleteButton({ namespace, name }: { namespace: string; name: string }) 
           <DialogDescription>{t('patch.deleteDescription')}</DialogDescription>
         </DialogHeader>
         {error && <ErrorAlert {...error} />}
+        {refused && <BreakGlassDialog run={breakGlass} onDone={done} />}
         <DialogFooter>
           <Button variant="ghost" onClick={() => setOpen(false)}>
             {t('common.cancel')}

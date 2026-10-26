@@ -13,6 +13,7 @@ export function describeError(err: unknown): { title: string; detail: string } {
   if (err instanceof ConnectError) {
     switch (err.code) {
       case Code.FailedPrecondition:
+      case Code.PermissionDenied:
         return { title: t('error.notAllowed'), detail: err.rawMessage }
       case Code.InvalidArgument:
         return { title: t('error.invalidInput'), detail: err.rawMessage }

@@ -12,12 +12,14 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { BreakGlassDialog, type BreakGlassRun } from '@/components/BreakGlassDialog'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { PullRequestNotice } from '@/components/PullRequestNotice'
 import { ConfigLayer } from '@/gen/ichor/v1alpha1/node_pb'
 import type { Patch } from '@/gen/ichor/v1alpha1/patch_pb'
 import { clusterClient, patchClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
+import { offersBreakGlass } from '@/lib/breakGlass'
 import { describeError } from '@/lib/errors'
 import { targetKindOf } from '@/lib/patchTarget'
 import { useT } from '@/lib/useT'
@@ -146,6 +148,17 @@ function DeleteDialog({ patch, onDeleted }: { patch: Patch; onDeleted: () => voi
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<ErrorShape | null>(null)
   const [pullRequestUrl, setPullRequestUrl] = useState<string | null>(null)
+  const [refused, setRefused] = useState(false)
+
+  // The same deletion again with break_glass set.
+  const breakGlass: BreakGlassRun = async (bg) => {
+    const res = await patchClient.deletePatch({ patch: patch.ref, breakGlass: bg })
+    return { pullRequestUrl: res.pullRequestUrl, notice: res.notice }
+  }
+  const done = () => {
+    setOpen(false)
+    onDeleted()
+  }
 
   async function submit() {
     if (!patch.ref) return
@@ -162,6 +175,7 @@ function DeleteDialog({ patch, onDeleted }: { patch: Patch; onDeleted: () => voi
       onDeleted()
     } catch (err) {
       setError(describeError(err))
+      setRefused(offersBreakGlass({ error: err }))
     } finally {
       setSubmitting(false)
     }
@@ -177,7 +191,7 @@ function DeleteDialog({ patch, onDeleted }: { patch: Patch; onDeleted: () => voi
       <DialogContent>
         {pullRequestUrl ? (
           <>
-            <PullRequestNotice url={pullRequestUrl} />
+            <PullRequestNotice url={pullRequestUrl} breakGlass={breakGlass} onBreakGlassDone={done} />
             <DialogFooter>
               <Button variant="ghost" onClick={() => setOpen(false)}>
                 {t('common.close')}
@@ -191,6 +205,7 @@ function DeleteDialog({ patch, onDeleted }: { patch: Patch; onDeleted: () => voi
           <DialogDescription>{t('patches.deleteDescription')}</DialogDescription>
         </DialogHeader>
         {error && <ErrorAlert {...error} />}
+        {refused && <BreakGlassDialog run={breakGlass} onDone={done} />}
         <DialogFooter>
           <Button variant="ghost" onClick={() => setOpen(false)}>
             {t('common.cancel')}

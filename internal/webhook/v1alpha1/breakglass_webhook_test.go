@@ -67,7 +67,7 @@ func grant(user string, glass bool) {
 	role := &rbacv1.ClusterRole{
 		Name: "bg-test-" + user,
 		Rules: []rbacv1.PolicyRule{{
-			APIGroups: []string{"ichor.maesh.dev"},
+			APIGroups: []string{ichorGroup},
 			Resources: []string{"talosmachines", "talosconfigpatches"},
 			Verbs:     verbs,
 		}},

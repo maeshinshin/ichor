@@ -56,6 +56,6 @@ export function needsAttention(item: { error: string; syncStatus: string; health
 }
 
 // trackingLabel is what the "Managed by" column says.
-export function trackingLabel(trackedBy: string): string {
-  return trackedBy === '' ? 'Not in Git' : trackedBy
+export function trackingLabel(trackedBy: string, notInGit: string): string {
+  return trackedBy === '' ? notInGit : trackedBy
 }

@@ -56,6 +56,6 @@ test('attention covers errors, drift and a bad health', () => {
 })
 
 test('an untracked CR says it is not in Git', () => {
-  assert.equal(trackingLabel(''), 'Not in Git')
-  assert.equal(trackingLabel('Argo CD'), 'Argo CD')
+  assert.equal(trackingLabel('', 'Not in Git'), 'Not in Git')
+  assert.equal(trackingLabel('Argo CD', 'Not in Git'), 'Argo CD')
 })

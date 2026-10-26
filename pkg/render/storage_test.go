@@ -131,7 +131,7 @@ func TestRenderStorage(t *testing.T) {
 	// documents carry no kubelet mount field, so the mount is absent by design.
 	t.Run("pre-1.14 contract renders the legacy kubelet mount", func(t *testing.T) {
 		legacy := testCluster("true")
-		legacy.Spec.VersionContract = "v1.12"
+		legacy.Spec.VersionContract = contractV112
 
 		out, _, err := Render(legacy, selected, bundle, nil, sys)
 		if err != nil {

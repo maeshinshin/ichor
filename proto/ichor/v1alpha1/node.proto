@@ -80,16 +80,6 @@ message Disk {
   string dev_path = 7;
 }
 
-message NetworkInterface {
-  // name is the current kernel interface name, which can change across
-  // boots; alias is the stable LinkAliasConfig name when one is assigned.
-  string name = 1;
-  string alias = 2;
-  string permanent_mac = 3;
-  bool up = 4;
-  repeated string addresses = 5;
-}
-
 message ResourceUsage {
   double cpu_cores_used = 1;
   int64 memory_used_bytes = 2;
@@ -112,7 +102,10 @@ message NodeDetail {
   ObjectRef machine = 1;
   Hardware hardware = 2;
   repeated Disk disks = 3;
-  repeated NetworkInterface network_interfaces = 4;
+  // Field 4 was network_interfaces; network data now comes from the Talos
+  // details and runtime RPCs (docs/adr/0082).
+  reserved 4;
+  reserved "network_interfaces";
   ResourceUsage resource_usage = 5;
   KubernetesNodeStatus kubernetes = 6;
   // kubernetes_permission_denied is true when the caller may not read the

@@ -63,10 +63,11 @@ export function App() {
   if (login.state === 'error') return <ErrorAlert title={t('app.signInFailed')} detail={login.error} />
 
   return (
-    <div class="mx-auto min-h-screen max-w-5xl px-4">
-      <header class="flex items-center gap-2 py-4">
+    <div class="mx-auto min-h-screen min-w-0 max-w-5xl px-4">
+      <header class="flex flex-wrap items-center gap-x-2 gap-y-1 py-3 sm:py-4">
         <span class="text-base font-semibold">Ichor</span>
-        <nav class="ml-6 flex gap-1">
+        {/* On a phone the nav drops to its own row and scrolls inside itself, so it never widens the page. */}
+        <nav class="order-last -mx-1 flex w-full gap-1 overflow-x-auto px-1 pb-1 sm:order-none sm:mx-0 sm:ml-6 sm:w-auto sm:overflow-visible sm:p-0">
           {navRoutes.map((r) => (
             <Button key={r.path} asChild variant={path === r.path ? 'secondary' : 'ghost'} size="sm">
               <Link to={r.path}>{t(r.label)}</Link>

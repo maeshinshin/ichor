@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"connectrpc.com/connect"
+	"golang.org/x/mod/semver"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
@@ -492,6 +493,10 @@ func (s *Server) blockedReason(
 		return blocked, err
 	}
 
+	if isDowngrade(p) {
+		return fmt.Sprintf("cannot downgrade %s from %s to %s: the executor refuses it, and the spec is not written", p.kind, p.resp.Current, p.resp.Target), nil
+	}
+
 	if p.kind == ichorv1alpha1.TalosOperationKindConfig && len(p.resp.Machines) == 0 {
 		return "no approved machine has a pending configuration change that needs a reboot (nothing is waiting in Ready=RebootRequired)", nil
 	}
@@ -659,4 +664,19 @@ func (s *Server) writeTarget(ctx context.Context, p *opPlan) error {
 	}
 
 	return nil
+}
+
+// isDowngrade reports a version target older than the current one for the
+// kinds that carry a version (talos, kubernetes, ichor). The executors refuse
+// it too, but only after the CLI has written the lower version into the spec.
+func isDowngrade(p *opPlan) bool {
+	switch p.kind {
+	case ichorv1alpha1.TalosOperationKindTalos, ichorv1alpha1.TalosOperationKindKubernetes, ichorv1alpha1.TalosOperationKindIchor:
+	default:
+		return false
+	}
+
+	t, c := p.resp.GetTarget(), p.resp.GetCurrent()
+
+	return t != "" && semver.IsValid(t) && semver.IsValid(c) && semver.Compare(t, c) < 0
 }

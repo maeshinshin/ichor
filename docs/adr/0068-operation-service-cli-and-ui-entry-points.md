@@ -155,3 +155,4 @@ delete` and `operation resume` also ran. See ADRs 0057, 0066 and 0067 for what e
 - The UI screens and `operation list` / `get --watch` were not exercised.
 
 - `--follow` / `--watch` (one shared helper, `retryTransient`) retry transient API errors (connection refused/reset, Unavailable, EOF, timeouts) with backoff for up to 10 minutes, printing `API unreachable, retrying`, and re-open a dead ichor-ui tunnel. NotFound, PermissionDenied and the like still end the command.
+- `PlanOperation` blocks a version target older than the current one (Talos, Kubernetes, Ichor), so `CreateOperation` never writes a downgrade into the spec before the executor refuses it.

@@ -28,6 +28,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"connectrpc.com/connect"
 	corev1 "k8s.io/api/core/v1"
@@ -83,7 +84,10 @@ type prHost struct {
 	srv  *httptest.Server
 	body map[string]string // the last PR request body
 	auth string
-	hits int
+	hits int // POSTs: pull requests opened
+	gets int // lookups of an existing pull request
+
+	open map[string]string // head branch -> html_url, for the pull requests this host opened
 }
 
 // newPRHost serves "open a PR" as Gitea does. status != 201 makes it fail
@@ -91,8 +95,24 @@ type prHost struct {
 func newPRHost(t *testing.T, status int) *prHost {
 	t.Helper()
 
-	h := &prHost{}
+	h := &prHost{open: map[string]string{}}
 	h.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			// Gitea "get a pull request by base and head": 404 when there is none.
+			h.gets++
+
+			head := strings.TrimPrefix(r.URL.Path, "/api/v1/repos/acme/infra/pulls/main/")
+			if u, ok := h.open[head]; ok {
+				_ = json.NewEncoder(w).Encode(map[string]string{"html_url": u, "state": "open"})
+
+				return
+			}
+
+			http.NotFound(w, r)
+
+			return
+		}
+
 		h.hits++
 		h.auth = r.Header.Get("Authorization")
 		raw, _ := io.ReadAll(r.Body)
@@ -103,6 +123,8 @@ func newPRHost(t *testing.T, status int) *prHost {
 
 			return
 		}
+
+		h.open[h.body["head"]] = prPRURL
 
 		w.WriteHeader(status)
 		_ = json.NewEncoder(w).Encode(map[string]string{"html_url": prPRURL})
@@ -511,4 +533,37 @@ func TestTokenNeverLeaks(t *testing.T) {
 			t.Fatal("expected a redaction marker")
 		}
 	})
+}
+
+// TestSecondApprovalReturnsTheOpenPullRequest: approving again while the
+// first strict-approval PR is open must not open another one, even when the
+// clock has moved on (duplicates).
+func TestSecondApprovalReturnsTheOpenPullRequest(t *testing.T) {
+	e := newPREnv(t, prOpts{strict: true})
+
+	tick := int64(1_700_000_000)
+	e.srv.Now = func() time.Time { tick += 60; return time.Unix(tick, 0) }
+
+	first, err := e.srv.ApproveMachine(context.Background(), approveReq())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	second, err := e.srv.ApproveMachine(context.Background(), approveReq())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if e.host.hits != 1 {
+		t.Fatalf("pull requests opened = %d, want 1", e.host.hits)
+	}
+
+	if second.Msg.GetPullRequestUrl() != first.Msg.GetPullRequestUrl() {
+		t.Fatalf("second url %q != first %q", second.Msg.GetPullRequestUrl(), first.Msg.GetPullRequestUrl())
+	}
+
+	out, _ := exec.Command("git", "-C", e.bare, "for-each-ref", "--format=%(refname:short)", "refs/heads/ichor/").Output()
+	if n := len(strings.Fields(string(out))); n != 1 {
+		t.Fatalf("branches pushed = %d, want 1: %s", n, out)
+	}
 }

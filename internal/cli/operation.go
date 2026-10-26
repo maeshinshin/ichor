@@ -1,0 +1,337 @@
+/*
+Copyright 2026 maeshinshin.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package cli
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"strings"
+	"time"
+
+	"connectrpc.com/connect"
+	"github.com/spf13/cobra"
+
+	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
+)
+
+// opWatchInterval is how often --watch/--follow polls an operation. A var so
+// tests can shrink it. The API has no stream for operations: the status is a
+// handful of fields and a poll costs one Get.
+var opWatchInterval = 2 * time.Second
+
+var operationOpts struct {
+	Watch bool
+}
+
+var operationCmd = &cobra.Command{
+	Use:     "operation",
+	Aliases: []string{"op"},
+	Short:   "List, follow, pause, resume or delete the operations (upgrades, shutdowns) of a cluster",
+	Long: `An operation is the record of one machine-by-machine action: a Talos,
+Kubernetes or Ichor upgrade, a kube-proxy switch, or a cluster shutdown. These
+commands read and change the records; ` + "`ichor upgrade`, `ichor cni` and `ichor cluster shutdown`" + ` start them.`,
+}
+
+var operationListCmd = &cobra.Command{
+	Use:   useList,
+	Short: "List operations",
+	Args:  cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
+			resp, err := c.Operation.ListOperations(ctx, connect.NewRequest(&pb.ListOperationsRequest{
+				Cluster: clusterFilter(apiOpts.Namespace, operationClusterFlag),
+			}))
+			if err != nil {
+				return err
+			}
+
+			return writeMessage(cmd.OutOrStdout(), outputFormat, resp.Msg)
+		})
+	},
+}
+
+var operationClusterFlag string
+
+var operationGetCmd = &cobra.Command{
+	Use:   useGetName,
+	Short: "Show one operation: phase, failure reason and the state of each machine",
+	Long: `get prints the operation's status as the controller wrote it. With --watch it
+keeps polling, prints a progress line to stderr whenever the status changes, and
+exits when the operation completes (or pauses itself because a machine failed,
+which is an error exit).`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
+			ref := objectRef(apiOpts.Namespace, args[0])
+			if operationOpts.Watch {
+				return watchOperation(ctx, c, ref, cmd.OutOrStdout(), cmd.ErrOrStderr())
+			}
+
+			resp, err := c.Operation.GetOperation(ctx, connect.NewRequest(&pb.GetOperationRequest{Operation: ref}))
+			if err != nil {
+				return err
+			}
+
+			return writeMessage(cmd.OutOrStdout(), outputFormat, resp.Msg)
+		})
+	},
+}
+
+func newPauseCmd(use, short string, paused bool) *cobra.Command {
+	return &cobra.Command{
+		Use:   use + " NAME",
+		Short: short,
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
+				resp, err := c.Operation.SetOperationPaused(ctx, connect.NewRequest(&pb.SetOperationPausedRequest{
+					Operation: objectRef(apiOpts.Namespace, args[0]), Paused: paused,
+				}))
+				if err != nil {
+					return err
+				}
+
+				return writeMessage(cmd.OutOrStdout(), outputFormat, resp.Msg)
+			})
+		},
+	}
+}
+
+var operationPauseCmd = newPauseCmd("pause", "Stop the operation from advancing any further machine (the cluster lock stays held, nothing is undone)", true)
+var operationResumeCmd = newPauseCmd("resume", "Let a paused operation continue", false)
+
+var operationDeleteCmd = &cobra.Command{
+	Use:   "delete NAME",
+	Short: "Delete an operation record",
+	Long: `delete removes the record and, when it has not finished, lets the controller release
+the cluster lock. It does not stop a step already sent to a machine and it does not
+roll anything back. It asks for confirmation unless --yes.`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
+			return runOperationDelete(ctx, c, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), args[0])
+		})
+	},
+}
+
+func runOperationDelete(ctx context.Context, c *apiClients, in io.Reader, out, errw io.Writer, name string) error {
+	ref := objectRef(apiOpts.Namespace, name)
+
+	if !assumeYes {
+		got, err := c.Operation.GetOperation(ctx, connect.NewRequest(&pb.GetOperationRequest{Operation: ref}))
+		if err != nil {
+			return err
+		}
+
+		op := got.Msg.GetOperation()
+
+		ok, err := confirm(in, errw, fmt.Sprintf(
+			"Delete operation %s/%s (%s on cluster %s, phase %q)? Steps already sent to machines are not undone. [y/N] ",
+			ref.GetNamespace(), name, kindName(op.GetKind()), op.GetCluster().GetName(), op.GetPhase()))
+		if err != nil {
+			return fmt.Errorf("operation delete: reading confirmation: %w", err)
+		}
+
+		if !ok {
+			return errors.New("operation delete: aborted")
+		}
+	}
+
+	resp, err := c.Operation.DeleteOperation(ctx, connect.NewRequest(&pb.DeleteOperationRequest{Operation: ref}))
+	if err != nil {
+		return err
+	}
+
+	return writeMessage(out, outputFormat, resp.Msg)
+}
+
+func kindName(k pb.OperationKind) string {
+	return strings.ToLower(strings.TrimPrefix(k.String(), "OPERATION_KIND_"))
+}
+
+// progressLine is one line of --watch output.
+func progressLine(op *pb.Operation) string {
+	var done, running int
+
+	parts := make([]string, 0, len(op.GetMachines()))
+
+	for _, m := range op.GetMachines() {
+		switch m.GetPhase() {
+		case "Completed":
+			done++
+		case "InProgress":
+			running++
+		}
+
+		parts = append(parts, m.GetName()+"="+m.GetPhase())
+	}
+
+	line := fmt.Sprintf("%s %s: phase %s, %d done, %d in progress", kindName(op.GetKind()), op.GetRef().GetName(), orDash(op.GetPhase()), done, running)
+	if len(parts) > 0 {
+		line += " [" + strings.Join(parts, " ") + "]"
+	}
+
+	if op.GetFailureReason() != "" {
+		line += ": " + op.GetFailureReason()
+	}
+
+	return line
+}
+
+func orDash(s string) string {
+	if s == "" {
+		return "-"
+	}
+
+	return s
+}
+
+// watchOperation polls the operation, prints a progress line whenever it
+// changes, and ends with the operation's final message on out. A pause caused
+// by a failed machine is an error exit (the controller never retries it); a
+// pause by the operator is waited out.
+func watchOperation(ctx context.Context, c *apiClients, ref *pb.ObjectRef, out, errw io.Writer) error {
+	var last string
+
+	for {
+		resp, err := c.Operation.GetOperation(ctx, connect.NewRequest(&pb.GetOperationRequest{Operation: ref}))
+		if err != nil {
+			return err
+		}
+
+		op := resp.Msg.GetOperation()
+
+		if line := progressLine(op); line != last {
+			_, _ = fmt.Fprintln(errw, line)
+			last = line
+		}
+
+		failed := op.GetPhase() == "Paused" && op.GetFailureReason() != ""
+		if op.GetPhase() == "Completed" || op.GetPhase() == "ShutDown" || failed {
+			if err := writeMessage(out, outputFormat, resp.Msg); err != nil {
+				return err
+			}
+
+			if failed {
+				return fmt.Errorf("operation %s paused after a failure: %s", ref.GetName(), op.GetFailureReason())
+			}
+
+			return nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(opWatchInterval):
+		}
+	}
+}
+
+// startSpec is what an upgrade, kube-proxy or shutdown command asks for.
+type startSpec struct {
+	Kind           pb.OperationKind
+	Cluster        string // name; empty means the only cluster in the namespace
+	Target         string
+	MaxUnavailable int32
+	Follow         bool
+}
+
+// resolveCluster returns the cluster the command acts on: --cluster, or the
+// only cluster in the namespace.
+func resolveCluster(ctx context.Context, c *apiClients, name string) (*pb.ObjectRef, error) {
+	if name != "" {
+		return objectRef(apiOpts.Namespace, name), nil
+	}
+
+	resp, err := c.Cluster.ListClusters(ctx, connect.NewRequest(&pb.ListClustersRequest{}))
+	if err != nil {
+		return nil, err
+	}
+
+	var names []string
+
+	for _, cl := range resp.Msg.GetClusters() {
+		if cl.GetRef().GetNamespace() == apiOpts.Namespace {
+			names = append(names, cl.GetRef().GetName())
+		}
+	}
+
+	if len(names) != 1 {
+		return nil, fmt.Errorf("name the cluster with --cluster (namespace %q has %d: %s)", apiOpts.Namespace, len(names), strings.Join(names, ", "))
+	}
+
+	return objectRef(apiOpts.Namespace, names[0]), nil
+}
+
+// runStartOperation is the shared body of `upgrade`, `cni kube-proxy` and
+// `cluster shutdown`: ask the server for the plan, show it, confirm, create.
+// The server changes the spec first and creates the operation second, and
+// refuses everything it can before the first write.
+func runStartOperation(ctx context.Context, c *apiClients, in io.Reader, out, errw io.Writer, s startSpec) error {
+	cluster, err := resolveCluster(ctx, c, s.Cluster)
+	if err != nil {
+		return err
+	}
+
+	if !assumeYes {
+		plan, err := c.Operation.PlanOperation(ctx, connect.NewRequest(&pb.PlanOperationRequest{
+			Cluster: cluster, Kind: s.Kind, Target: s.Target, MaxUnavailable: s.MaxUnavailable,
+		}))
+		if err != nil {
+			return err
+		}
+
+		if b := plan.Msg.GetBlocked(); b != "" {
+			return fmt.Errorf("%s: %s", kindName(s.Kind), b)
+		}
+
+		ok, err := confirm(in, errw, planText(s.Kind, cluster.GetName(), plan.Msg)+"Proceed? [y/N] ")
+		if err != nil {
+			return fmt.Errorf("%s: reading confirmation: %w", kindName(s.Kind), err)
+		}
+
+		if !ok {
+			return fmt.Errorf("%s: aborted", kindName(s.Kind))
+		}
+	}
+
+	resp, err := c.Operation.CreateOperation(ctx, connect.NewRequest(&pb.CreateOperationRequest{
+		Cluster: cluster, Kind: s.Kind, Target: s.Target, MaxUnavailable: s.MaxUnavailable,
+	}))
+	if err != nil {
+		return err
+	}
+
+	if !s.Follow {
+		return writeMessage(out, outputFormat, resp.Msg)
+	}
+
+	_, _ = fmt.Fprintf(errw, "created operation %s\n", resp.Msg.GetOperation().GetRef().GetName())
+
+	return watchOperation(ctx, c, resp.Msg.GetOperation().GetRef(), out, errw)
+}
+
+func init() {
+	rootCmd.AddCommand(operationCmd)
+	addAPIFlags(operationCmd)
+	operationCmd.AddCommand(operationListCmd, operationGetCmd, operationPauseCmd, operationResumeCmd, operationDeleteCmd)
+	operationListCmd.Flags().StringVar(&operationClusterFlag, "cluster", "", "only the operations of this cluster")
+	operationGetCmd.Flags().BoolVarP(&operationOpts.Watch, "watch", "w", false, "keep polling and print progress until the operation finishes")
+	markWrites(operationPauseCmd, operationResumeCmd, operationDeleteCmd)
+}

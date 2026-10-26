@@ -1,7 +1,7 @@
-# 0063. CA expiry is read from the secrets bundle and published; CA rotation is decided here and not yet built
+# 0063. CA expiry is read from the secrets bundle and published; CA rotation is decided here and built as the `ca-rotation` operation
 
 Status: Accepted · Date: 2026-10-26 · Design section: Backup, recovery, certificates
-Decided: `CertExpiryReconciler` reads the CAs in the secrets bundle (talos, kubernetes, kubernetes-aggregator, etcd) and publishes each `notAfter` in `TalosCluster.status.certificates` and as `ichor_certificate_expiry_timestamp_seconds`; `talosctl rotate-ca` is not reused whole; rotating the CAs does not change the etcd backup key; the `TalosOperation` kind `CARotation` is decided below but is deliberately not implemented in this change
+Decided: `CertExpiryReconciler` reads the CAs in the secrets bundle (talos, kubernetes, kubernetes-aggregator, etcd) and publishes each `notAfter` in `TalosCluster.status.certificates` and as `ichor_certificate_expiry_timestamp_seconds`; `talosctl rotate-ca` is not reused whole; rotating the CAs does not change the etcd backup key; the `TalosOperation` kind `CARotation` is decided below but is deliberately not implemented in this change; the `ca-rotation` TalosOperation kind is built as its own state machine on the ADR 0026 backbone: three verified passes, the new CAs saved to the Secret's `rotation.yaml` before any node is told, `secrets.yaml` replaced last, `BundleBackupStale` until `ichor cluster bundle-export` (see "Implementation")
 
 ## Context
 
@@ -111,3 +111,113 @@ holding the lock through `acquireDisruptiveLock`.
   tests use needs.
 - Until `CARotation` exists, rotation is `talosctl rotate-ca` by hand, after which the Secret must be replaced by the user
   or the controller can no longer authenticate.
+
+## Implementation (the `ca-rotation` kind)
+
+Decisions 2 to 5 stand. Decision 5 said what the executor needed; this is how each part was built, and where the build
+differs from what was sketched.
+
+**Entry.** `TalosOperation.spec.kind: ca-rotation`, started by `ichor cluster rotate-ca NAME` (confirmation, then it writes the
+operation through the kubeconfig, as `ichor init` writes its CRs). The operation entry points of ADR 0068 (`PlanOperation`,
+`CreateOperation`) do not carry the kind: that needs a new `OperationKind` in `proto/`, regenerated into `gen/go` and `ui/src/gen`,
+and `ui/` belongs to another unit. Until then the UI and `ichor operation list` show the kind as unspecified; everything else about
+the operation (phase, pause, conditions, status) is shown as for any operation.
+
+**State machine (`internal/controller/ca_rotation.go`).** Like shutdown, the backbone takes the cluster lock through
+`acquireDisruptiveLock` (the only `Acquire`) and then dispatches to `advanceCARotation`. Everything is in
+`status.caRotation`: `stage` (`Accepting`, `Issuing`, `Dropping`, `Finalizing`, `Done`; empty before the new CAs are saved) and, per
+rotated CA (`talos`, `kubernetes`), `previous`, `next`, `issuing` and `accepted` as SHA-256 fingerprints of the certificates. The
+stage names what every node is being given, so which CA is accepted and which issues is always readable from status. Which
+machines a stage still has to visit is not stored: it is re-derived from the node (its current configuration hash against the
+configuration rendered for the stage), so a controller killed at any point resumes from status, and a pass that was half done
+repeats no apply. `status.machines` shows the stage under way and is emptied when the stage changes. Both CAs are rotated in the same
+passes (one apply per machine per stage), where `talosctl rotate-ca` runs the Talos pass set and then the Kubernetes one.
+
+1. *Preflight* (stage empty). Every approved machine must answer Ichor, must already run exactly the configuration Ichor renders for
+   it (so no unrelated pending change is swept into the rotation), and every Kubernetes Node must be Ready. Otherwise the
+   operation pauses and nothing is written, not even a CA. A machine that is down when the old CA is dropped could never be
+   reached again, which is why the check is at the start and again at every stage.
+2. *Save the new CAs.* `rotation.yaml` (certificate and key for both) is written into the bundle Secret with an `Update` that
+   fails if it already exists, and only then is `stage: Accepting` written. A start that died between the two is resumed by
+   adopting that `rotation.yaml`; no node has been told anything at that point. A test asserts that the Secret holds
+   `rotation.yaml` when the first node is told anything, which is the failure this ADR names as the worst one.
+3. *Accepting, Issuing, Dropping.* Each stage renders the machines (below), applies to each that differs (dry run, then
+   `ApplyNoReboot`, control planes first), and in a later reconcile verifies before the stage advances: Ichor can dial every
+   machine with the stage's credentials (`Version`), and every Kubernetes Node is Ready (read through the admin kubeconfig a Talos
+   node issues, `NodesReady`). The verification is a separate reconcile from the applying one, so the kubelet restart a CA change
+   causes has begun before readiness is read (`ponytail:` that does not observe the restart itself, as `talosctl`'s helper does
+   through the kubelet service resource).
+4. *Finalizing.* One Secret update puts the new CAs into `secrets.yaml` and removes `rotation.yaml`, and fails if the Secret changed in
+   between. Then `BundleBackupStale` is raised, and every machine is checked against the replaced bundle: Ichor dials it with the
+   plain bundle (as every other controller will) and its configuration equals what the replaced bundle renders. Only then `Done`,
+   the lock is released and the phase is `Completed`. A restart after the Secret was replaced but before status learned of it
+   recognises the new CAs by fingerprint and carries on (tested).
+
+**A step that cannot be verified never advances.** Ichor not reaching a machine, a Node not Ready, a refused dry run or apply, a
+render failure: the operation is `Paused` with a `CARotation` condition (`False`, reason `Blocked`, a message naming the cause) and is
+tried again every `operationRequeueInterval`, so it continues by itself when the cause is gone. This is not the failure pause of the
+other kinds (`failureReason`, which is never retried): a rotation stopped for good halfway is the state this ADR refuses to create,
+and a retry is always safe because each step is idempotent.
+
+**How Ichor stays connected.** Ichor builds its Talos client certificate from the bundle on every dial. During a rotation the dial
+uses a derived bundle: the signing CA and key are the one the stage's nodes accept, and the trusted server CA list holds both CAs
+(`dialBundle`; `GenerateTalosAPIClientCertificate` signs with the first certificate and key, and the trust list is a PEM bundle).
+Accepting is applied with the old client certificate, which every node still accepts; every later stage with the new one, which the
+Accepting verification proved the nodes accept. The tests' fake node serves a certificate from the CA in its applied configuration
+and accepts a client only if its certificate chains to one of that configuration's accepted CAs, so a wrong signer or a missing
+trust fails exactly as it would on a node.
+
+**Render input (`pkg/render/carotation.go`).** `SystemInputs.CARotation{Stage, New}`, set by the executor only (never by
+`ResolveSystemInputs`). The bundle passed to `Render` stays the old one. Accepting renders from it and adds the new CAs to
+`machine.acceptedCAs` and the Kubernetes accepted list; Issuing renders from a copy of the bundle with the new CAs and adds the old
+ones as accepted; Dropping and Finalizing render from that copy with nothing extra. The Kubernetes accepted list is written through
+machinery's own `rotatepatcher`, so the single- or multi-document form follows the version contract. A test pins that the Dropping
+configuration is byte for byte what a bundle already holding the new CAs renders, for both roles, which is what leaves the machine
+controller no drift when the rotation ends.
+
+**The machine controller does not fight the stages.** While a `ca-rotation` operation is under way (a stage is set and the
+operation is not `Completed`), the machine controller sets `Ready=Unknown/CARotationInProgress` and does nothing else: it neither
+renders, dials nor applies, so it cannot revert a stage, and its dial (made with the bundle, which names the old CAs) cannot fail
+against nodes that already serve the new ones. The check reads uncached. The disruptive-work gates (`shutdownBlocker`, used by
+`acquireDisruptiveLock` of both controllers and by machine removal) refuse other operations and removals for the same reason, with the
+reason `ClusterCARotating`. The `TalosOperation` carries a finalizer, removed when the rotation is `Done`, because the stage is the only
+record of which CA the nodes accept: deleting the operation midway would lose it. If a rotation must be abandoned by hand, remove the
+finalizer knowing that the nodes are then in the stage status last showed and `rotation.yaml` is still in the Secret.
+
+**Secret write and RBAC.** `update` on Secrets in the controller namespace was added to the manager's namespaced Role (config and
+chart). It is broader than Decision 4 intended: `resourceNames` cannot name the bundle Secret, whose name is `spec.secretsRef.name`,
+chosen by the user. Reads of the bundle, `rotation.yaml` and the machine gate go through the API reader. `talosoperations/finalizers`
+was added too.
+
+**`BundleBackupStale`.** Raised on the `TalosCluster` (condition, `reason: CARotated`) and as a Warning Event by the executor at
+Finalizing. The message names the command and carries no secret. `ichor cluster bundle-export NAME` reads the live bundle from the
+Secret (refusing while `rotation.yaml` exists), saves it to `~/.ichor/clusters/<name>/secrets.yaml`, reads the file back, and only if
+it holds the live bundle sets the annotation `ichor.maesh.dev/bundle-exported` on the cluster to the bundle's fingerprint (a hash of
+the two CA fingerprints). `CertExpiryReconciler` lowers the condition when the annotation equals the live bundle's fingerprint; an
+export of the pre-rotation bundle does not. The CLI writes metadata, not `spec`, and the controller still owns every status.
+
+**Backups.** Not touched: `etcdbackup.Passphrase` derives from `Cluster.Secret` and `Cluster.ID`, which `Rotation.Apply` leaves as they
+are; `TestPassphraseSurvivesCARotation` still passes, and the controller test asserts both fields and the etcd CA are unchanged in the
+replaced bundle.
+
+**Tests.** envtest with a fake node per machine (above), and a new reconciler for every step, so nothing can live in memory: the
+stage sequence and the issuing and accepted fingerprints at each stage; nodes' CAs after each stage; each of Accepting, Issuing and
+Dropping killed after two applies and resumed with no apply repeated; the Secret replaced but status not told; an adopted
+`rotation.yaml`; a machine that stops answering Ichor, and a Node not Ready, hold the stage and resume by themselves; a machine down
+or not converged blocks the start and writes nothing; the machine controller and another operation stand aside; deletion held by
+the finalizer; `BundleBackupStale` kept by a stale export and cleared by the live one; and a leak test in the style of
+`leak_test.go` that makes dial errors echo the new CA key and the old CA key and checks every status snapshot, Event, cluster object
+and returned error for any bundle or CA material (and that the redaction happened). The scrubber is applied to every message
+`caRun.status` writes; removing it makes that test fail.
+
+**Not built, and the limits.**
+
+- The UI and the Connect operation entry points (the proto enum, above).
+- Between Issuing and Finalizing the bundle in the Secret names the old CAs while nodes serve the new ones, so the other controllers
+  that dial with it (etcd backup, discovery, the UI backend's read-only client) fail to connect and retry until Finalizing. Only the
+  machine controller is quiesced explicitly. A backup that falls in that window fails and is taken by the next schedule.
+- `status.certificates` follows the replaced bundle at the next hourly read of the cert-expiry reconciler, not at once.
+- Held machines (`upgrade-hold`) are not skipped: a machine left out would be locked out when the old CA is dropped.
+- The etcd and aggregator CAs and the service-account key are not rotated (Decision 3).
+- Nothing here was run against real machines or a real kubelet restart; the sequence follows `talosctl rotate-ca`'s as read from
+  Talos v1.14.3 (`pkg/rotate/pki`), and the first real run should be on a disposable cluster.

@@ -331,6 +331,22 @@ spec:
                   failureReason explains why phase is Paused when the cause is a
                   machine's own failed step, as opposed to spec.paused.
                 type: string
+              kubernetes:
+                description: |-
+                  kubernetes is the kubernetes kind's state machine: which of the three stages the machines
+                  are being taken through.
+                properties:
+                  stage:
+                    description: |-
+                      stage is ControlPlanes (apiserver, controller-manager and scheduler on every control plane,
+                      the kubelets and kube-proxy still on the old version), KubeProxy (kube-proxy and the
+                      bootstrap manifests) or Kubelets (every kubelet, control planes first, then workers).
+                    enum:
+                    - ControlPlanes
+                    - KubeProxy
+                    - Kubelets
+                    type: string
+                type: object
               machines:
                 description: |-
                   machines records every machine this operation has ever selected, and

@@ -70,12 +70,6 @@ const (
 	provisionRecheck        = 15 * time.Second
 )
 
-// MachineStager is implemented by a TalosClient that can report the node's MachineStatus stage.
-// It is an optional capability, like io.Closer, so the TalosClient interface does not grow.
-type MachineStager interface {
-	MachineStage(ctx context.Context) (string, error)
-}
-
 // provision handles an approved machine that has never converged and that the authenticated
 // client could not read. It decides "in maintenance" by asking the insecure API for the node's
 // identity: only a node actually in maintenance mode answers that, so no error text is parsed.
@@ -213,13 +207,8 @@ func (r *TalosMachineReconciler) following(
 func (r *TalosMachineReconciler) followStage(
 	ctx context.Context, talos TalosClient, m *ichorv1alpha1.TalosMachine,
 ) (res ctrl.Result, stop bool, err error) {
-	stager, ok := talos.(MachineStager)
-	if !ok {
-		return ctrl.Result{}, false, nil
-	}
-
 	stageCtx, cancel := context.WithTimeout(ctx, talosCallTimeout)
-	stage, serr := stager.MachineStage(stageCtx)
+	stage, serr := talos.MachineStage(stageCtx)
 
 	cancel()
 

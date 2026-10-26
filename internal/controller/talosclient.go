@@ -135,6 +135,11 @@ type TalosClient interface {
 	// namespace: CoreDNS, kube-proxy, inlineManifests, ...), as Talos
 	// itself renders them from the node's current machine configuration.
 	BootstrapManifests(ctx context.Context) ([]map[string]any, error)
+
+	// MachineStage reads the node's MachineStatus stage ("running",
+	// "installing", "rebooting", ...), which followStage uses to follow a
+	// node Ichor provisioned until it is running.
+	MachineStage(ctx context.Context) (string, error)
 }
 
 // EtcdMember is the one piece of each etcd member EtcdMemberList's callers

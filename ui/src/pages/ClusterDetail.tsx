@@ -2,6 +2,7 @@ import { useEffect, useState } from 'preact/hooks'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
+import { ConditionList } from '@/components/ConditionList'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { StartOperationDialog } from '@/components/StartOperationDialog'
 import { HandoverPhase, RolloutKind, type Cluster } from '@/gen/ichor/v1alpha1/cluster_pb'
@@ -57,14 +58,7 @@ export function ClusterDetail({ namespace, name }: { namespace: string; name: st
           <CardTitle>{t('cluster.conditions')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
-          {cluster.conditions.length === 0 && <p class="text-muted-foreground">{t('cluster.noConditions')}</p>}
-          {cluster.conditions.map((c) => (
-            <div key={c.type} class="flex flex-wrap items-center gap-2">
-              <Badge variant={c.status === 'True' ? 'secondary' : 'outline'}>{c.type}</Badge>
-              <span class="text-muted-foreground">{c.status}</span>
-              {c.message && <span>- {c.message}</span>}
-            </div>
-          ))}
+          <ConditionList conditions={cluster.conditions} />
         </CardContent>
       </Card>
 

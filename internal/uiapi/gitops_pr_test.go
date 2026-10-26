@@ -87,6 +87,8 @@ type prHost struct {
 	hits int // POSTs: pull requests opened
 	gets int // lookups of an existing pull request
 
+	getStatus int // when set, lookups fail with it and echo the Authorization header
+
 	open map[string]string // head branch -> html_url, for the pull requests this host opened
 }
 
@@ -100,6 +102,12 @@ func newPRHost(t *testing.T, status int) *prHost {
 		if r.Method == http.MethodGet {
 			// Gitea "get a pull request by base and head": 404 when there is none.
 			h.gets++
+
+			if h.getStatus != 0 {
+				http.Error(w, "denied for "+r.Header.Get("Authorization"), h.getStatus)
+
+				return
+			}
 
 			head := strings.TrimPrefix(r.URL.Path, "/api/v1/repos/acme/infra/pulls/main/")
 			if u, ok := h.open[head]; ok {
@@ -420,8 +428,95 @@ func TestTrackedWithoutConnectionIsStillRefused(t *testing.T) {
 	}
 }
 
-func TestTrackedPatchDeleteIsRefusedEvenWithAConnection(t *testing.T) {
+// A second approval with a different role while the first PR is open gets
+// the first PR back: the open PR wins, nothing is amended.
+func TestSecondApprovalWithAnotherRoleReturnsTheOpenPullRequest(t *testing.T) {
+	e := newPREnv(t, prOpts{strict: true})
+
+	first, err := e.srv.ApproveMachine(context.Background(), approveReq())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	other := approveReq()
+	other.Msg.Role = pb.MachineRole_MACHINE_ROLE_CONTROL_PLANE
+
+	second, err := e.srv.ApproveMachine(context.Background(), other)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if second.Msg.GetPullRequestUrl() != first.Msg.GetPullRequestUrl() || e.host.hits != 1 {
+		t.Fatalf("url=%q posts=%d", second.Msg.GetPullRequestUrl(), e.host.hits)
+	}
+
+	if got := fileOnBranch(t, e.bare, prAppPath+"/machines/m1.yaml"); !strings.Contains(got, "role: worker") {
+		t.Fatalf("the open PR's branch must be unchanged:\n%s", got)
+	}
+}
+
+// A failed lookup is an error, not "no PR" (that would open a duplicate),
+// and it does not leak the token even when the host echoes the header.
+func TestFailedLookupRefusesAndDoesNotLeak(t *testing.T) {
+	e := newPREnv(t, prOpts{strict: true})
+	e.host.getStatus = http.StatusUnauthorized
+
+	_, err := e.srv.ApproveMachine(context.Background(), approveReq())
+	if err == nil {
+		t.Fatal("want an error")
+	}
+
+	if strings.Contains(err.Error(), "tok-SECRET") {
+		t.Fatalf("error leaked the token: %v", err)
+	}
+
+	if e.host.hits != 0 {
+		t.Fatal("no PR may be opened when the lookup failed")
+	}
+}
+
+func TestTrackedPatchDeleteOpensAPRThatRemovesItsDocument(t *testing.T) {
 	e := newPREnv(t, prOpts{tracked: true})
+	delReq := func() *connect.Request[pb.DeletePatchRequest] {
+		return connect.NewRequest(&pb.DeletePatchRequest{Patch: objectRef(trackedTestNS, "p1")})
+	}
+
+	res, err := e.srv.DeletePatch(context.Background(), delReq())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if res.Msg.GetPullRequestUrl() != prPRURL || res.Msg.GetAudit().GetAction() != "delete-pr" {
+		t.Fatalf("url=%q action=%q", res.Msg.GetPullRequestUrl(), res.Msg.GetAudit().GetAction())
+	}
+
+	var p ichorv1alpha1.TalosConfigPatch
+	if err := e.k8s.Get(context.Background(), types.NamespacedName{Namespace: trackedTestNS, Name: "p1"}, &p); err != nil {
+		t.Fatalf("the patch must stay in the cluster until the PR merges: %v", err)
+	}
+
+	// The seed file holds a machine and the patch: only the patch goes, the
+	// machine's bytes (comment included) stay as they were.
+	got := fileOnBranch(t, e.bare, prAppPath+"/nodes.yaml")
+	want := prSeedFile[:strings.Index(prSeedFile, "---\n")]
+
+	if got != want {
+		t.Fatalf("file on branch:\n%q\nwant\n%q", got, want)
+	}
+
+	if e.host.body["head"] != "ichor/delete-p1" {
+		t.Fatalf("head = %q", e.host.body["head"])
+	}
+
+	// Again: the same PR, not a second.
+	again, err := e.srv.DeletePatch(context.Background(), delReq())
+	if err != nil || again.Msg.GetPullRequestUrl() != prPRURL || e.host.hits != 1 {
+		t.Fatalf("err=%v url=%q posts=%d", err, again.Msg.GetPullRequestUrl(), e.host.hits)
+	}
+}
+
+func TestTrackedPatchDeleteWithoutConnectionIsRefused(t *testing.T) {
+	e := newPREnv(t, prOpts{tracked: true, noRepo: true})
 
 	_, err := e.srv.DeletePatch(context.Background(), connect.NewRequest(&pb.DeletePatchRequest{Patch: objectRef(trackedTestNS, "p1")}))
 	if connect.CodeOf(err) != connect.CodeFailedPrecondition {
@@ -429,7 +524,7 @@ func TestTrackedPatchDeleteIsRefusedEvenWithAConnection(t *testing.T) {
 	}
 
 	if e.host.hits != 0 {
-		t.Fatal("no PR for a delete")
+		t.Fatal("no PR without a connection")
 	}
 }
 

@@ -138,6 +138,27 @@ func (s *Server) updatePatchByPR(
 	return connect.NewResponse(&pb.UpdatePatchResponse{Patch: out, Audit: audit, PullRequestUrl: url}), nil
 }
 
+// deletePatchByPR is DeletePatch's pull request branch: the PR removes the
+// patch's document from its file (the whole file when it is the only one).
+// Whether Argo CD then prunes the live object is the Application's setting.
+func (s *Server) deletePatchByPR(
+	ctx context.Context, plan *prPlan, p *ichorv1alpha1.TalosConfigPatch, ref *pb.ObjectRef,
+) (*connect.Response[pb.DeletePatchResponse], error) {
+	url, err := s.openPR(ctx, plan, prChange{
+		verb: "delete", name: p.Name, target: patchTarget(p), remove: true,
+		title: "Delete patch " + p.Name,
+		impact: fmt.Sprintf("- Layer: %s\n- Removes the patch from Git; the machine configuration it contributed to "+
+			"changes for the affected nodes once it is synced and pruned.\n", p.Spec.Layer),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	audit := &pb.AuditRecord{Actor: s.actorName(), At: timestamppb.New(s.now()), Action: "delete-pr", Target: ref}
+
+	return connect.NewResponse(&pb.DeletePatchResponse{Audit: audit, PullRequestUrl: url}), nil
+}
+
 // patchImpactText is PreviewImpact's answer for p, as the PR description
 // carries it ("affected nodes, reboot required or not"). cluster may be nil
 // (not found): the layer and target are still said, the field impact is

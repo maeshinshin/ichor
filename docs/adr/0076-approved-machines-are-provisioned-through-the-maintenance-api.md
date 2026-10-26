@@ -32,8 +32,7 @@ os:admin identity, which a node in maintenance mode does not trust, so an approv
 - **Follow.** The RPC returning means "stored". `status.configStoredAt` records it and is what stops any further
   insecure apply. After that each reconcile requeues every 15 s: if the node answers insecurely it is still in
   maintenance (`AwaitingInstall`); if neither API answers it is `NodeRebooting`; once the authenticated client reads
-  it, the stage comes from MachineStatus (optional `MachineStager` capability of the Talos client, so the interface
-  does not grow): `NodeInstalling`, `NodeRebooting`, `NodeStarting`, and on `running` the `Provisioned` condition goes
+  it, the stage comes from MachineStatus (`TalosClient.MachineStage`): `NodeInstalling`, `NodeRebooting`, `NodeStarting`, and on `running` the `Provisioned` condition goes
   True (`NodeJoined`) and the ordinary configuration reconcile takes over. `status.stage` holds the last stage;
   `installing` right after the store and `rebooting` while unreachable are inferred, `running` is observed.
 - **Conditions.** `Ready` carries the same reason as `Provisioned` while following. Reasons: `ConfigStored`,

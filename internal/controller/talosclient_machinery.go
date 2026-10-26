@@ -24,12 +24,17 @@ import (
 
 	"github.com/cosi-project/runtime/pkg/resource"
 	"github.com/cosi-project/runtime/pkg/safe"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
+	"github.com/siderolabs/talos/pkg/machinery/api/common"
 	machineapi "github.com/siderolabs/talos/pkg/machinery/api/machine"
 	"github.com/siderolabs/talos/pkg/machinery/client"
 	clientconfig "github.com/siderolabs/talos/pkg/machinery/client/config"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	"github.com/siderolabs/talos/pkg/machinery/constants"
 	configres "github.com/siderolabs/talos/pkg/machinery/resources/config"
+	k8sres "github.com/siderolabs/talos/pkg/machinery/resources/k8s"
 	"github.com/siderolabs/talos/pkg/machinery/role"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -242,4 +247,47 @@ func (t *machineryTalosClient) Upgrade(ctx context.Context, image string) error 
 	_, err := t.c.Upgrade(ctx, image, false, false)
 
 	return err
+}
+
+// PullImage pre-pulls image through the legacy ImagePull RPC, the one
+// talosctl upgrade-k8s itself still uses; Unimplemented is not an error.
+//
+//nolint:staticcheck // Client.ImagePull is deprecated in favor of ImageServiceClient, which talosctl upgrade-k8s has not moved off either.
+func (t *machineryTalosClient) PullImage(ctx context.Context, image string, system bool) error {
+	namespace := common.ContainerdNamespace_NS_CRI
+	if system {
+		namespace = common.ContainerdNamespace_NS_SYSTEM
+	}
+
+	err := t.c.ImagePull(ctx, namespace, image)
+	if status.Code(err) == codes.Unimplemented {
+		return nil
+	}
+
+	return err
+}
+
+// Kubeconfig asks the dialed control plane for an admin kubeconfig.
+func (t *machineryTalosClient) Kubeconfig(ctx context.Context) ([]byte, error) {
+	return t.c.Kubeconfig(ctx)
+}
+
+// BootstrapManifests lists the k8s.Manifest resources of the control-plane
+// namespace and flattens their items, the same read
+// go-kubernetes' manifests.GetBootstrapManifests does for talosctl.
+func (t *machineryTalosClient) BootstrapManifests(ctx context.Context) ([]map[string]any, error) {
+	list, err := safe.StateListAll[*k8sres.Manifest](ctx, t.c.COSI)
+	if err != nil {
+		return nil, fmt.Errorf("listing bootstrap manifests: %w", err)
+	}
+
+	var objects []map[string]any
+
+	for manifest := range list.All() {
+		for _, item := range manifest.TypedSpec().Items {
+			objects = append(objects, item.Object)
+		}
+	}
+
+	return objects, nil
 }

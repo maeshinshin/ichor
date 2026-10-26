@@ -42,6 +42,10 @@ const (
 	testK8sTooFar = "v1.37.0"
 
 	testKubeSystem = "kube-system"
+
+	testK8sContract      = "v1.14"
+	testCilium           = "cilium"
+	testHandoverDisabled = "disabled"
 )
 
 // fakeKubernetesAdmin is the KubernetesAdmin test double: it records calls and returns
@@ -106,11 +110,12 @@ func newStaticPod(component, node, version string, ready bool) {
 	p := &corev1.Pod{}
 	p.Namespace = testKubeSystem
 	p.Name = component + "-" + node
-	p.Labels = map[string]string{"k8s-app": component}
+	p.Labels = map[string]string{labelK8sApp: component}
 	p.Spec.NodeName = node
 	p.Spec.Containers = []corev1.Container{{Name: component, Image: "registry.k8s.io/" + component + ":" + version}}
 	Expect(k8sClient.Create(ctx, p)).To(Succeed())
-	DeferCleanup(func() { _ = k8sClient.Delete(ctx, p) })
+	// Grace period 0: there is no kubelet in envtest to confirm a graceful delete.
+	DeferCleanup(func() { _ = k8sClient.Delete(ctx, p, client.GracePeriodSeconds(0)) })
 
 	status := corev1.ConditionFalse
 	if ready {
@@ -132,12 +137,14 @@ func setStaticPodsFor(node, version string) {
 func newKubeProxyDaemonSet(version string, desired, ready int32) {
 	ds := &appsv1.DaemonSet{}
 	ds.Namespace = testKubeSystem
-	ds.Name = "kube-proxy"
-	ds.Spec.Selector = &metav1.LabelSelector{MatchLabels: map[string]string{"k8s-app": "kube-proxy"}}
-	ds.Spec.Template.Labels = map[string]string{"k8s-app": "kube-proxy"}
-	ds.Spec.Template.Spec.Containers = []corev1.Container{{Name: "kube-proxy", Image: "registry.k8s.io/kube-proxy:" + version}}
+	ds.Name = kubeProxyName
+	ds.Spec.Selector = &metav1.LabelSelector{MatchLabels: map[string]string{labelK8sApp: kubeProxyName}}
+	ds.Spec.Template.Labels = map[string]string{labelK8sApp: kubeProxyName}
+	ds.Spec.Template.Spec.Containers = []corev1.Container{{Name: kubeProxyName, Image: "registry.k8s.io/kube-proxy:" + version}}
 	Expect(k8sClient.Create(ctx, ds)).To(Succeed())
-	DeferCleanup(func() { _ = k8sClient.Delete(ctx, ds) })
+	DeferCleanup(func() {
+		_ = k8sClient.Delete(ctx, ds, client.GracePeriodSeconds(0), client.PropagationPolicy(metav1.DeletePropagationBackground))
+	})
 
 	ds.Status.DesiredNumberScheduled = desired
 	ds.Status.UpdatedNumberScheduled = ready
@@ -153,11 +160,25 @@ func newKubernetesAdvancer(fake *fakeTalosClient, admin KubernetesAdmin) *kubern
 }
 
 // k8sCluster creates a cluster whose spec.kubernetesVersion is target.
-func k8sCluster(target string) *ichorv1alpha1.TalosCluster {
-	secret := newTestSecret(newTestBundle("v1.14"))
-	cluster := newTestCluster(secret.Name, "v1.14")
-	cluster.Spec.KubernetesVersion = target
-	Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
+func k8sCluster(target string, cniSpec ...ichorv1alpha1.TalosClusterCNI) *ichorv1alpha1.TalosCluster {
+	secret := newTestSecret(newTestBundle(testK8sContract))
+
+	cluster := &ichorv1alpha1.TalosCluster{
+		GenerateName: testClusterGenerate, Namespace: tmNamespace,
+		Spec: ichorv1alpha1.TalosClusterSpec{
+			Endpoint:          ichorv1alpha1.TalosClusterEndpoint{Type: testEndpointType, Address: testClusterAddress},
+			TalosVersion:      testTalosVersion,
+			KubernetesVersion: target,
+			VersionContract:   testK8sContract,
+			SecretsRef:        corev1.LocalObjectReference{Name: secret.Name},
+			ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: 1, Schedulable: testSchedulable},
+		},
+	}
+	if len(cniSpec) > 0 {
+		cluster.Spec.CNI = cniSpec[0]
+	}
+
+	Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
 
 	return cluster
 }
@@ -224,10 +245,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 	})
 
 	It("blocks while the CNI hand-over is unfinished, and proceeds once it is complete", func() {
-		cluster := k8sCluster(testK8sTarget)
-		cluster.Spec.CNI.Preset = "cilium"
-		cluster.Spec.CNI.Handover = "automatic"
-		Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
+		cluster := k8sCluster(testK8sTarget, ichorv1alpha1.TalosClusterCNI{Preset: testCilium, KubeProxy: "enabled", Handover: "automatic"})
 
 		apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
 			Type: render.ConditionCNIHandover, Status: metav1.ConditionFalse,
@@ -262,13 +280,10 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 	})
 
 	It("lets a cluster whose hand-over is disabled through: re-applying its inline manifest is the intended state", func() {
-		cluster := k8sCluster(testK8sTarget)
-		cluster.Spec.CNI.Preset = "cilium"
-		cluster.Spec.CNI.Handover = "disabled"
-		Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
+		cluster := k8sCluster(testK8sTarget, ichorv1alpha1.TalosClusterCNI{Preset: testCilium, KubeProxy: "enabled", Handover: testHandoverDisabled})
 
 		apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-			Type: render.ConditionCNIHandover, Status: metav1.ConditionFalse, Reason: reasonHandoverDisabled, Message: "disabled",
+			Type: render.ConditionCNIHandover, Status: metav1.ConditionFalse, Reason: reasonHandoverDisabled, Message: testHandoverDisabled,
 		})
 		Expect(k8sClient.Status().Update(ctx, cluster)).To(Succeed())
 
@@ -428,8 +443,8 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		for _, c := range []string{"kube-apiserver", "kube-controller-manager", "kube-scheduler"} {
 			var p corev1.Pod
 			Expect(k8sClient.Get(ctx, client.ObjectKey{Namespace: testKubeSystem, Name: c + "-" + cp1.Spec.Hostname}, &p)).To(Succeed())
-			Expect(k8sClient.Delete(ctx, &p)).To(Succeed())
-			newStaticPod(c, cp1.Spec.Hostname, testK8sTarget, true)
+			p.Spec.Containers[0].Image = "registry.k8s.io/" + c + ":" + testK8sTarget
+			Expect(k8sClient.Update(ctx, &p)).To(Succeed())
 		}
 
 		done, err = adv.Advance(ctx, cluster, fetchMachine(cp1), nil)
@@ -440,7 +455,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 
 	It("syncs the bootstrap manifests and waits for kube-proxy once the last control plane is done", func() {
 		cluster := k8sCluster(testK8sTarget)
-		cp := newK8sControlPlane(cluster.Name, "cpL")
+		cp := newK8sControlPlane(cluster.Name, "cpl")
 		newK8sNode(cp.Spec.Hostname, testK8sTarget, true)
 		setStaticPodsFor(cp.Spec.Hostname, testK8sTarget)
 		newKubeProxyDaemonSet(testK8sTarget, 3, 1)
@@ -456,7 +471,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		Expect(fake.applyCalls).To(BeEmpty(), "nothing to apply: the node already has the rendered config")
 
 		var ds appsv1.DaemonSet
-		Expect(k8sClient.Get(ctx, client.ObjectKey{Namespace: testKubeSystem, Name: "kube-proxy"}, &ds)).To(Succeed())
+		Expect(k8sClient.Get(ctx, client.ObjectKey{Namespace: testKubeSystem, Name: kubeProxyName}, &ds)).To(Succeed())
 		ds.Status.NumberReady = 3
 		ds.Status.UpdatedNumberScheduled = 3
 		Expect(k8sClient.Status().Update(ctx, &ds)).To(Succeed())
@@ -467,13 +482,9 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 	})
 
 	It("skips kube-proxy entirely when the CNI replaces it", func() {
-		cluster := k8sCluster(testK8sTarget)
-		cluster.Spec.CNI.Preset = "cilium"
-		cluster.Spec.CNI.KubeProxy = "replaced"
-		cluster.Spec.CNI.Handover = "disabled"
-		Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
+		cluster := k8sCluster(testK8sTarget, ichorv1alpha1.TalosClusterCNI{Preset: testCilium, KubeProxy: "replaced", Handover: testHandoverDisabled})
 
-		cp := newK8sControlPlane(cluster.Name, "cpR")
+		cp := newK8sControlPlane(cluster.Name, "cpr")
 		newK8sNode(cp.Spec.Hostname, testK8sTarget, true)
 		setStaticPodsFor(cp.Spec.Hostname, testK8sTarget)
 
@@ -511,9 +522,14 @@ var _ = Describe("kind: kubernetes through TalosOperationReconciler", func() {
 			TalosClient: perMachineClientFactory(byName), Admin: &fakeKubernetesAdmin{},
 		}
 
-		op := newOpTestOperation(cluster.Name)
-		op.Spec.Kind = ichorv1alpha1.TalosOperationKindKubernetes
-		Expect(k8sClient.Update(ctx, op)).To(Succeed())
+		op := &ichorv1alpha1.TalosOperation{
+			GenerateName: "op-", Namespace: tmNamespace,
+			Spec: ichorv1alpha1.TalosOperationSpec{
+				ClusterRef: corev1.LocalObjectReference{Name: cluster.Name},
+				Kind:       ichorv1alpha1.TalosOperationKindKubernetes,
+			},
+		}
+		Expect(k8sClient.Create(ctx, op)).To(Succeed())
 
 		r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: adv.Advance}
 

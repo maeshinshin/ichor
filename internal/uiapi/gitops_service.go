@@ -236,7 +236,7 @@ func (s *Server) FindPullRequests(
 		return connect.NewResponse(&pb.FindPullRequestsResponse{Note: "Ichor opens no pull requests for this kind"}), nil
 	}
 
-	plan, err := s.planWrite(ctx, obj, cluster, req.Msg.GetKind() == pb.GitOpsKind_GIT_OPS_KIND_MACHINE)
+	plan, err := s.planWrite(ctx, obj, cluster, req.Msg.GetKind() == pb.GitOpsKind_GIT_OPS_KIND_MACHINE, nil)
 	if err != nil {
 		// A refusal (read-only because of Flux, say) is the answer, not a failure.
 		return connect.NewResponse(&pb.FindPullRequestsResponse{Note: "no pull request applies: " + err.Error()}), nil

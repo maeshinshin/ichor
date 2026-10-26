@@ -82,7 +82,7 @@ export function ClusterDetail({ namespace, name }: { namespace: string; name: st
       </Card>
 
       <Card>
-        <CardHeader className="flex items-center justify-between">
+        <CardHeader className="flex flex-wrap items-center justify-between gap-2">
           <CardTitle>{t('cluster.operations')}</CardTitle>
           <Link to="/operations" class="text-sm text-muted-foreground hover:underline">
             {t('ops.title')}

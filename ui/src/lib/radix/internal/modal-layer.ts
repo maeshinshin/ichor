@@ -41,12 +41,11 @@ export function hideOthers(attribute: "inert" | "aria-hidden", ...keep: Array<El
 // shortcut: only `overflow: hidden` on body, no wheel/touch interception; add it if the page still scrolls behind a modal on iOS
 function lockScroll() {
   if (scrollLocks++ === 0) {
-    const { body, documentElement } = document
-    const { overflow, paddingRight } = body.style
-    const scrollbarWidth = window.innerWidth - documentElement.clientWidth
+    const { body } = document
+    const { overflow } = body.style
+    // No padding compensation: `html { scrollbar-gutter: stable }` (index.css) keeps the gutter, so nothing shifts when body locks.
     body.style.overflow = "hidden"
-    if (scrollbarWidth > 0) body.style.paddingRight = `${(parseFloat(getComputedStyle(body).paddingRight) || 0) + scrollbarWidth}px`
-    restoreScroll = () => Object.assign(body.style, { overflow, paddingRight })
+    restoreScroll = () => Object.assign(body.style, { overflow })
   }
   return () => {
     if (--scrollLocks === 0) restoreScroll()

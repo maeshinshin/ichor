@@ -38,7 +38,10 @@ import (
 // made as the user, so Kubernetes decides; Ichor has no list of who may.
 const BreakGlassVerb = "break-glass"
 
-const kindTalosMachine = "TalosMachine"
+const (
+	kindTalosMachine = "TalosMachine"
+	kindTalosCluster = "TalosCluster"
+)
 
 // breakGlass is a granted break-glass request, carried on the prPlan that
 // planWrite returns: write the CR now, then open the plan's pull request.
@@ -115,7 +118,7 @@ func kindOf(obj client.Object) (kind, resource string) {
 	}
 
 	if _, ok := obj.(*ichorv1alpha1.TalosCluster); ok {
-		return "TalosCluster", "talosclusters"
+		return kindTalosCluster, "talosclusters"
 	}
 
 	return kindTalosMachine, "talosmachines"

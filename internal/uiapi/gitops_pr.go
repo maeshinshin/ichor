@@ -375,7 +375,7 @@ func machineTarget(m *ichorv1alpha1.TalosMachine) prmode.Target {
 
 func clusterTarget(c *ichorv1alpha1.TalosCluster) prmode.Target {
 	return prmode.Target{
-		APIVersion: ichorv1alpha1.GroupVersion.String(), Kind: "TalosCluster", Namespace: c.Namespace, Name: c.Name,
+		APIVersion: ichorv1alpha1.GroupVersion.String(), Kind: kindTalosCluster, Namespace: c.Namespace, Name: c.Name,
 	}
 }
 

@@ -201,9 +201,7 @@ func (s *Server) DeletePatch(
 	}
 
 	if plan != nil {
-		return nil, connect.NewError(connect.CodeFailedPrecondition,
-			fmt.Errorf("%q is tracked by Argo CD: deleting it through a pull request is not supported; "+
-				"remove its file in Git", namespacedName(ref)))
+		return s.deletePatchByPR(ctx, plan, p, ref)
 	}
 
 	if err := s.Delete(ctx, p); err != nil {

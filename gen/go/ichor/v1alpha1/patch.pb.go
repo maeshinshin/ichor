@@ -461,10 +461,14 @@ func (x *DeletePatchRequest) GetPatch() *ObjectRef {
 }
 
 type DeletePatchResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Audit         *AuditRecord           `protobuf:"bytes,1,opt,name=audit,proto3" json:"audit,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Audit *AuditRecord           `protobuf:"bytes,1,opt,name=audit,proto3" json:"audit,omitempty"`
+	// pull_request_url is set when the patch is tracked by Argo CD and its
+	// removal was proposed as a pull request instead of being written; nothing
+	// was deleted from the cluster.
+	PullRequestUrl string `protobuf:"bytes,2,opt,name=pull_request_url,json=pullRequestUrl,proto3" json:"pull_request_url,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *DeletePatchResponse) Reset() {
@@ -502,6 +506,13 @@ func (x *DeletePatchResponse) GetAudit() *AuditRecord {
 		return x.Audit
 	}
 	return nil
+}
+
+func (x *DeletePatchResponse) GetPullRequestUrl() string {
+	if x != nil {
+		return x.PullRequestUrl
+	}
+	return ""
 }
 
 type PreviewImpactRequest struct {
@@ -984,9 +995,10 @@ const file_ichor_v1alpha1_patch_proto_rawDesc = "" +
 	"\x05audit\x18\x02 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\x12(\n" +
 	"\x10pull_request_url\x18\x03 \x01(\tR\x0epullRequestUrl\"E\n" +
 	"\x12DeletePatchRequest\x12/\n" +
-	"\x05patch\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\x05patch\"H\n" +
+	"\x05patch\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\x05patch\"r\n" +
 	"\x13DeletePatchResponse\x121\n" +
-	"\x05audit\x18\x01 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\"C\n" +
+	"\x05audit\x18\x01 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\x12(\n" +
+	"\x10pull_request_url\x18\x02 \x01(\tR\x0epullRequestUrl\"C\n" +
 	"\x14PreviewImpactRequest\x12+\n" +
 	"\x05patch\x18\x01 \x01(\v2\x15.ichor.v1alpha1.PatchR\x05patch\"\x8e\x01\n" +
 	"\x15PreviewImpactResponse\x12'\n" +

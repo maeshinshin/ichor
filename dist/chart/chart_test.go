@@ -1143,8 +1143,10 @@ const installerConfigRolePath = "../../config/rbac/ichor-installer/role.yaml"
 func TestInstallerRBAC(t *testing.T) {
 	t.Run("absent by default", func(t *testing.T) {
 		docs := renderChartWithValues(t, "ichor")
-		if find(docs, kindServiceAccount, "ichor-installer") != nil || find(docs, kindClusterRole, "ichor-installer-role") != nil {
-			t.Errorf("the installer's ServiceAccount/ClusterRole render by default; they must need installer.enabled=true")
+		if find(docs, kindServiceAccount, "ichor-installer") != nil ||
+			find(docs, kindClusterRole, "ichor-installer-role") != nil {
+			t.Errorf("the installer's ServiceAccount/ClusterRole render by default; " +
+				"they must need installer.enabled=true")
 		}
 	})
 
@@ -1153,7 +1155,8 @@ func TestInstallerRBAC(t *testing.T) {
 		configDocs := loadYAMLDocs(t, installerConfigRolePath)
 
 		if find(docs, kindServiceAccount, "ichor-installer") == nil {
-			t.Fatalf("installer.enabled=true renders no ServiceAccount ichor-installer, the name the controller puts in the Job")
+			t.Fatalf("installer.enabled=true renders no ServiceAccount ichor-installer, " +
+				"the name the controller puts in the Job")
 		}
 
 		clusterRole := find(docs, kindClusterRole, "ichor-installer-role")
@@ -1179,7 +1182,8 @@ func TestInstallerRBAC(t *testing.T) {
 
 		for triple := range rbacTriples(append(allRules(clusterRole), allRules(role)...)) {
 			if triple.resource == "secrets" || triple.resource == "*" || triple.verb == "*" {
-				t.Errorf("the installer is granted %s; it must never read or write a Secret or hold a wildcard", triple)
+				t.Errorf("the installer is granted %s; it must never read or write a Secret "+
+					"or hold a wildcard", triple)
 			}
 		}
 	})

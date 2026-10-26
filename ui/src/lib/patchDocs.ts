@@ -74,6 +74,14 @@ export const DOCUMENT_KINDS: DocumentKind[] = [
   },
 ]
 
+// defaultDocument is the starting text for a newly chosen kind: the shape the
+// kind's required field wants, so the editor never opens on a wrong skeleton.
+export function defaultDocument(kind: string): string {
+  if (kind === 'SysctlConfig') return '{"params":{}}'
+  if (kind === 'Config') return '{}'
+  return '{"name":""}'
+}
+
 export function kindInfo(kind: string): DocumentKind | undefined {
   return DOCUMENT_KINDS.find((k) => k.kind === kind)
 }

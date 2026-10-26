@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
   buildSysctlDocument,
+  defaultDocument,
   DOCUMENT_KINDS,
   parseSysctlParams,
   previewKey,
@@ -48,6 +49,12 @@ test('previewKey changes with anything the preview depends on, and with nothing 
   assert.equal(previewKey(base), previewKey({ ...base }))
   assert.notEqual(previewKey(base), previewKey({ ...base, priority: 1 }))
   assert.notEqual(previewKey(base), previewKey({ ...base, documents: [{ kind: 'SysctlConfig', document: '{"params":{}}' }] }))
+})
+
+test('defaultDocument starts each kind on the right skeleton', () => {
+  assert.equal(defaultDocument('SysctlConfig'), '{"params":{}}')
+  assert.equal(defaultDocument('UserVolumeConfig'), '{"name":""}')
+  assert.equal(defaultDocument('Config'), '{}')
 })
 
 test('targetedMachines picks the machines a patch applies to, or null when it cannot tell', () => {

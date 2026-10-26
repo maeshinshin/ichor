@@ -58,8 +58,39 @@ func runConfigEffective(ctx context.Context, c *apiClients, out io.Writer, machi
 	return writeMessage(out, outputFormat, resp.Msg)
 }
 
+var configApplyFlags startFlags
+
+var configApplyCmd = &cobra.Command{
+	Use:   "apply",
+	Short: "Apply the pending configuration changes that need a reboot (each machine reboots)",
+	Long: `Ichor never reboots a node for a configuration change on its own: a machine whose
+rendered configuration differs from the node's in a way that needs a reboot waits with
+Ready=False, reason RebootRequired, and the message names the fields. apply starts the
+config operation that rolls those changes out, one machine at a time: control planes
+first, one at a time with an etcd membership check before each, then workers (at most
+--max-unavailable at once), and the machine this controller runs on last. Per machine:
+storage evacuation hook, the configuration is staged, the node reboots (Talos cordons and
+drains it first), and the step finishes when the node runs the configuration, is Ready and
+(control planes) is back in etcd. A machine that fails pauses the operation; nothing is
+rolled back. Machines held with upgrade-hold are skipped.
+
+It shows which machines reboot, which fields need it and in which order, and asks for
+confirmation unless --yes.`,
+	Args: cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
+			return runStartOperation(ctx, c, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), startSpec{
+				Kind: pb.OperationKind_OPERATION_KIND_CONFIG, Cluster: configApplyFlags.Cluster,
+				MaxUnavailable: configApplyFlags.MaxUnavailable, Follow: configApplyFlags.Follow,
+			})
+		})
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(configCmd)
 	addAPIFlags(configCmd)
-	configCmd.AddCommand(configEffectiveCmd)
+	configCmd.AddCommand(configEffectiveCmd, configApplyCmd)
+	addStartFlags(configApplyCmd, &configApplyFlags)
+	markWrites(configApplyCmd)
 }

@@ -23,7 +23,7 @@ import { navigate, objectRefPath } from '@/router'
 
 type ErrorShape = { title: string; detail: string }
 
-const startedByDefault: Record<OpKind, boolean> = { talos: true, kubernetes: true, ichor: true, cni: true, shutdown: false, 'ca-rotation': false }
+const startedByDefault: Record<OpKind, boolean> = { talos: true, kubernetes: true, ichor: true, cni: true, shutdown: false, 'ca-rotation': false, config: false }
 
 // StartOperationDialog is the only way the UI starts an upgrade or a shutdown.
 // It never writes on the first click: "Review" asks the server for the plan
@@ -174,7 +174,7 @@ function PlanView({ kind, plan, clusterName }: { kind: OpKind; plan: PlanOperati
     <div class="space-y-3 text-sm">
       <p class="font-medium">{t(`ops.plan.${kind}`, { from: plan.current, to })}</p>
       {plan.specChanges && <p class="text-muted-foreground">{t('ops.plan.specChanges', { to })}</p>}
-      <p>{effectText(t, plan.effect)}</p>
+      <p>{effectText(t, plan.effect, kind)}</p>
       {plan.stages.length > 0 && <p>{t('ops.plan.stages', { stages: plan.stages.join(', ') })}</p>}
       {plan.machines.length > 0 ? (
         <div>
@@ -193,6 +193,14 @@ function PlanView({ kind, plan, clusterName }: { kind: OpKind; plan: PlanOperati
               </li>
             ))}
           </ol>
+          {kind === 'config' && (
+            <ul class="mt-2 space-y-1">
+              {plan.machines.map((m) => (
+                <li key={m.name}>{t('ops.plan.rebootFields', { name: m.name, fields: m.rebootFields.join(', ') })}</li>
+              ))}
+            </ul>
+          )}
+          {kind === 'config' && <p class="mt-2 text-muted-foreground">{t('ops.plan.ownNodeLast')}</p>}
         </div>
       ) : (
         plan.effect !== OperationEffect.NONE && <p>{t('ops.plan.noMachines')}</p>
@@ -219,10 +227,10 @@ function roleText(t: ReturnType<typeof useT>, role: string): string {
   return role === 'controlplane' ? t('ops.plan.role.controlplane') : t('ops.plan.role.worker')
 }
 
-function effectText(t: ReturnType<typeof useT>, effect: number): string {
+function effectText(t: ReturnType<typeof useT>, effect: number, kind: OpKind): string {
   switch (effect) {
     case OperationEffect.REBOOT:
-      return t('ops.plan.effectReboot')
+      return t(kind === 'config' ? 'ops.plan.effectConfigReboot' : 'ops.plan.effectReboot')
     case OperationEffect.RESTART_COMPONENTS:
       return t('ops.plan.effectRestart')
     case OperationEffect.STOP:

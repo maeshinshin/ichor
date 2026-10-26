@@ -376,6 +376,93 @@ func TestPlanSaysWhyCreateWouldBeRefused(t *testing.T) {
 	}
 }
 
+func rebootPending(m *ichorv1alpha1.TalosMachine, paths ...string) *ichorv1alpha1.TalosMachine {
+	m.Status.RebootPaths = paths
+
+	return m
+}
+
+func configObjects() []client.Object {
+	return []client.Object{
+		&ichorv1alpha1.TalosCluster{
+			Name: opCluster, Namespace: opNS,
+			Spec: ichorv1alpha1.TalosClusterSpec{TalosVersion: opOldTalos, KubernetesVersion: "v1.36.0"},
+		},
+		rebootPending(opMachine("w2", "worker", nil, nil), "machine.network.interfaces"),
+		rebootPending(opMachine("cp1", "controlplane", nil, nil), "cluster.proxy.disabled", "machine.network.interfaces"),
+		opMachine("converged", "worker", nil, nil),
+		rebootPending(opMachine("held", "worker", nil, map[string]string{ichorv1alpha1.TalosMachineUpgradeHoldAnnotation: "x"}), "cluster.proxy.disabled"),
+	}
+}
+
+func TestPlanConfigListsOnlyMachinesWithAPendingRebootAndTheirFields(t *testing.T) {
+	srv, _ := opServer(t, configObjects()...)
+
+	res, err := srv.PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{
+		Cluster: objectRef(opNS, opCluster), Kind: pb.OperationKind_OPERATION_KIND_CONFIG,
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var names []string
+
+	for _, m := range res.Msg.GetMachines() {
+		names = append(names, m.GetName())
+	}
+
+	if got := strings.Join(names, ","); got != "cp1,w2" {
+		t.Fatalf("machines = %s, want the control plane then the worker, not the converged or held ones", got)
+	}
+
+	if f := res.Msg.GetMachines()[0].GetRebootFields(); strings.Join(f, ",") != "cluster.proxy.disabled,machine.network.interfaces" {
+		t.Fatalf("cp1 reboot fields = %v", f)
+	}
+
+	if res.Msg.GetEffect() != pb.OperationEffect_OPERATION_EFFECT_REBOOT || res.Msg.GetSpecChanges() || res.Msg.GetBlocked() != "" ||
+		strings.Join(res.Msg.GetHeld(), ",") != "held" {
+		t.Fatalf("plan = %v", res.Msg)
+	}
+}
+
+func TestPlanConfigIsBlockedWhenNothingNeedsAReboot(t *testing.T) {
+	srv, _ := opServer(t, opObjects()...)
+
+	res, err := srv.PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{
+		Cluster: objectRef(opNS, opCluster), Kind: pb.OperationKind_OPERATION_KIND_CONFIG,
+	}))
+	if err != nil || !strings.Contains(res.Msg.GetBlocked(), "needs a reboot") {
+		t.Fatalf("err=%v plan=%v", err, res.Msg)
+	}
+
+	_, err = srv.CreateOperation(context.Background(), opCreate(pb.OperationKind_OPERATION_KIND_CONFIG, ""))
+	if connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Fatalf("create err = %v, want FailedPrecondition", err)
+	}
+}
+
+func TestCreateConfigCreatesAnOperationWithoutTouchingTheSpecAndTakesNoTarget(t *testing.T) {
+	srv, k8s := opServer(t, configObjects()...)
+
+	before := getCluster(t, k8s).ResourceVersion
+
+	res, err := srv.CreateOperation(context.Background(), opCreate(pb.OperationKind_OPERATION_KIND_CONFIG, ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ops := listOps(t, k8s)
+	if len(ops) != 1 || ops[0].Spec.Kind != ichorv1alpha1.TalosOperationKindConfig || res.Msg.GetSpecChanged() ||
+		getCluster(t, k8s).ResourceVersion != before {
+		t.Fatalf("ops=%+v spec changed=%v", ops, res.Msg.GetSpecChanged())
+	}
+
+	_, err = srv.CreateOperation(context.Background(), opCreate(pb.OperationKind_OPERATION_KIND_CONFIG, "v1.2.3"))
+	if connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Fatalf("a target err = %v, want InvalidArgument", err)
+	}
+}
+
 func TestPauseResumeAndDeleteAreMadeAsTheCaller(t *testing.T) {
 	op := &ichorv1alpha1.TalosOperation{
 		Name: "x", Namespace: opNS,

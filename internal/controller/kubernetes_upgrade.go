@@ -153,10 +153,6 @@ func NewKubernetesUpgradeAdvancer(
 func (a *kubernetesUpgradeAdvancer) Advance(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, op *ichorv1alpha1.TalosOperation,
 ) (bool, error) {
-	if m.Spec.Hostname == "" {
-		return false, fmt.Errorf("machine %q has no hostname recorded; cannot find its Kubernetes node", m.Name)
-	}
-
 	bundle, err := loadBundle(ctx, a.Client, a.ControllerNamespace, cluster)
 	if err != nil {
 		return false, fmt.Errorf("loading secrets bundle to upgrade %q: %w", m.Name, err)
@@ -214,8 +210,13 @@ func (a *kubernetesUpgradeAdvancer) begin(
 ) error {
 	target := cluster.Spec.KubernetesVersion
 
+	nodeName, err := resolveNodeName(ctx, a.Reader, talos, m)
+	if err != nil {
+		return err
+	}
+
 	var node corev1.Node
-	if err := a.Reader.Get(ctx, types.NamespacedName{Name: m.Spec.Hostname}, &node); err != nil {
+	if err := a.Reader.Get(ctx, types.NamespacedName{Name: nodeName}, &node); err != nil {
 		return fmt.Errorf("reading %q's Kubernetes node: %w", m.Name, err)
 	}
 
@@ -420,7 +421,12 @@ func (a *kubernetesUpgradeAdvancer) verify(
 ) (bool, error) {
 	target := cluster.Spec.KubernetesVersion
 
-	if reason := a.nodeNotConverged(ctx, m, target); reason != "" {
+	nodeName, err := resolveNodeName(ctx, a.Reader, talos, m)
+	if err != nil {
+		return false, a.waiting(ctx, m, cluster, err.Error())
+	}
+
+	if reason := a.nodeNotConverged(ctx, m, nodeName, target); reason != "" {
 		return false, a.waiting(ctx, m, cluster, reason)
 	}
 
@@ -463,10 +469,12 @@ func (a *kubernetesUpgradeAdvancer) verify(
 }
 
 // nodeNotConverged returns why m's node is not on target yet, or "".
-func (a *kubernetesUpgradeAdvancer) nodeNotConverged(ctx context.Context, m *ichorv1alpha1.TalosMachine, target string) string {
+func (a *kubernetesUpgradeAdvancer) nodeNotConverged(
+	ctx context.Context, m *ichorv1alpha1.TalosMachine, nodeName, target string,
+) string {
 	var node corev1.Node
-	if err := a.Reader.Get(ctx, types.NamespacedName{Name: m.Spec.Hostname}, &node); err != nil {
-		return fmt.Sprintf("reading node %q: %v", m.Spec.Hostname, err) // API server restarting
+	if err := a.Reader.Get(ctx, types.NamespacedName{Name: nodeName}, &node); err != nil {
+		return fmt.Sprintf("reading node %q: %v", nodeName, err) // API server restarting
 	}
 
 	if v := node.Status.NodeInfo.KubeletVersion; v != target {
@@ -482,13 +490,13 @@ func (a *kubernetesUpgradeAdvancer) nodeNotConverged(ctx context.Context, m *ich
 	}
 
 	for _, component := range staticPodComponents {
-		pod, err := a.staticPod(ctx, component, m.Spec.Hostname)
+		pod, err := a.staticPod(ctx, component, nodeName)
 		if err != nil {
 			return err.Error()
 		}
 
 		if !podIsReady(pod) || imageTag(pod) != target {
-			return fmt.Sprintf("%s on %q is not Ready on %s yet", component, m.Spec.Hostname, target)
+			return fmt.Sprintf("%s on %q is not Ready on %s yet", component, nodeName, target)
 		}
 	}
 

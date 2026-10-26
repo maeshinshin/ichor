@@ -999,14 +999,22 @@ type StreamNodeLogsRequest struct {
 	// machines is one entry for a single node's log tail, several for the
 	// merged multi-node viewer.
 	Machines []*ObjectRef `protobuf:"bytes,1,rep,name=machines,proto3" json:"machines,omitempty"`
-	// resume_token is opaque; omit it to start from the current tail.
+	// resume_token is opaque; omit it to start from the current tail (the
+	// last tail_lines lines, never the whole history; docs/adr/0078).
 	ResumeToken string `protobuf:"bytes,2,opt,name=resume_token,json=resumeToken,proto3" json:"resume_token,omitempty"`
 	// service selects which log: a Talos service name (e.g. "kubelet",
 	// "etcd", "trustd", "apid", "machined"), read through Talos's Logs API.
 	// Empty selects the machine's kernel log (Talos's Dmesg API) -- the
 	// whole-machine log this field's absence used to mean before it existed
 	// (docs/adr/0018).
-	Service       string `protobuf:"bytes,3,opt,name=service,proto3" json:"service,omitempty"`
+	Service string `protobuf:"bytes,3,opt,name=service,proto3" json:"service,omitempty"`
+	// tail_lines is how many of the most recent lines to start from. Zero
+	// means the server default (500); a negative value means the whole
+	// history; the server caps it at 10000 (docs/adr/0078).
+	TailLines int32 `protobuf:"varint,4,opt,name=tail_lines,json=tailLines,proto3" json:"tail_lines,omitempty"`
+	// follow keeps the stream open for new lines. Unset means true; false
+	// returns a snapshot of the tail and ends the stream.
+	Follow        *bool `protobuf:"varint,5,opt,name=follow,proto3,oneof" json:"follow,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1060,6 +1068,20 @@ func (x *StreamNodeLogsRequest) GetService() string {
 		return x.Service
 	}
 	return ""
+}
+
+func (x *StreamNodeLogsRequest) GetTailLines() int32 {
+	if x != nil {
+		return x.TailLines
+	}
+	return 0
+}
+
+func (x *StreamNodeLogsRequest) GetFollow() bool {
+	if x != nil && x.Follow != nil {
+		return *x.Follow
+	}
+	return false
 }
 
 type StreamNodeLogsResponse struct {
@@ -1199,11 +1221,15 @@ const file_ichor_v1alpha1_node_proto_rawDesc = "" +
 	"\x06origin\x18\x04 \x01(\v2\x1c.ichor.v1alpha1.ConfigOriginR\x06origin\"\x84\x01\n" +
 	"\x0fEffectiveConfig\x123\n" +
 	"\amachine\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\amachine\x12<\n" +
-	"\x06values\x18\x02 \x03(\v2$.ichor.v1alpha1.EffectiveConfigValueR\x06values\"\x8b\x01\n" +
+	"\x06values\x18\x02 \x03(\v2$.ichor.v1alpha1.EffectiveConfigValueR\x06values\"\xd2\x01\n" +
 	"\x15StreamNodeLogsRequest\x125\n" +
 	"\bmachines\x18\x01 \x03(\v2\x19.ichor.v1alpha1.ObjectRefR\bmachines\x12!\n" +
 	"\fresume_token\x18\x02 \x01(\tR\vresumeToken\x12\x18\n" +
-	"\aservice\x18\x03 \x01(\tR\aservice\"\xba\x01\n" +
+	"\aservice\x18\x03 \x01(\tR\aservice\x12\x1d\n" +
+	"\n" +
+	"tail_lines\x18\x04 \x01(\x05R\ttailLines\x12\x1b\n" +
+	"\x06follow\x18\x05 \x01(\bH\x00R\x06follow\x88\x01\x01B\t\n" +
+	"\a_follow\"\xba\x01\n" +
 	"\x16StreamNodeLogsResponse\x123\n" +
 	"\amachine\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\amachine\x12.\n" +
 	"\x04time\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x04time\x12\x18\n" +
@@ -1308,6 +1334,7 @@ func file_ichor_v1alpha1_node_proto_init() {
 	}
 	file_ichor_v1alpha1_common_proto_init()
 	file_ichor_v1alpha1_talosdetails_proto_init()
+	file_ichor_v1alpha1_node_proto_msgTypes[13].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

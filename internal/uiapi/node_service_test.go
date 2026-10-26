@@ -27,6 +27,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
+	"google.golang.org/protobuf/proto"
 	corev1 "k8s.io/api/core/v1"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -62,6 +63,8 @@ type fakeNodeTalosClient struct {
 	// test can assert the request's service field reached NodeTalosClient
 	// unchanged.
 	gotService string
+	// gotOpts records the tail/follow options the last StreamLogs got.
+	gotOpts LogOptions
 
 	closed bool
 }
@@ -96,8 +99,9 @@ func (f *fakeNodeTalosClient) TalosExtensions(context.Context) (*pb.TalosExtensi
 	return f.talosExtensions, f.talosErr["extensions"]
 }
 
-func (f *fakeNodeTalosClient) StreamLogs(ctx context.Context, service string, since time.Time, onLine func(LogLine) error) error {
+func (f *fakeNodeTalosClient) StreamLogs(ctx context.Context, service string, since time.Time, opts LogOptions, onLine func(LogLine) error) error {
 	f.gotService = service
+	f.gotOpts = opts
 
 	for _, l := range f.lines {
 		if !l.Time.After(since) {
@@ -247,6 +251,46 @@ var _ = Describe("NodeService", func() {
 		}
 		Expect(resumed.Err()).NotTo(HaveOccurred())
 		Expect(replayed).To(BeEmpty(), "resuming from the latest token must not replay already-seen lines")
+	})
+
+	It("starts from the tail and follows by default, and honours tail_lines and follow=false", func() {
+		cluster := newTestClusterWithBundle()
+		m := newTestMachine(cluster.Name, strongTestIdentity("uuid-logtail"), roleWorker, ichorv1alpha1.MachineApprovalStateApproved)
+
+		fake := &fakeNodeTalosClient{}
+		client, closeFn := newTestNodeServer(fake, nil)
+		defer closeFn()
+
+		drain := func(req *pb.StreamNodeLogsRequest) {
+			req.Machines = []*pb.ObjectRef{objectRef(m.Namespace, m.Name)}
+			stream, err := client.StreamNodeLogs(ctx, connect.NewRequest(req))
+			Expect(err).NotTo(HaveOccurred())
+
+			for stream.Receive() { //nolint:revive // drain to the end
+			}
+			Expect(stream.Err()).NotTo(HaveOccurred())
+		}
+
+		drain(&pb.StreamNodeLogsRequest{})
+		Expect(fake.gotOpts).To(Equal(LogOptions{Follow: true, TailLines: DefaultTailLines}))
+
+		drain(&pb.StreamNodeLogsRequest{TailLines: 20, Follow: proto.Bool(false)})
+		Expect(fake.gotOpts).To(Equal(LogOptions{Follow: false, TailLines: 20}))
+
+		drain(&pb.StreamNodeLogsRequest{TailLines: 1_000_000})
+		Expect(fake.gotOpts.TailLines).To(Equal(int32(MaxTailLines)))
+
+		drain(&pb.StreamNodeLogsRequest{TailLines: -1})
+		Expect(fake.gotOpts.TailLines).To(Equal(int32(-1)))
+	})
+
+	It("sendLast delivers only the last n lines", func() {
+		lines := []LogLine{{Message: "a"}, {Message: "b"}, {Message: "c"}}
+
+		var got []string
+
+		Expect(sendLast(lines, 2, func(l LogLine) error { got = append(got, l.Message); return nil })).To(Succeed())
+		Expect(got).To(Equal([]string{"b", "c"}))
 	})
 
 	It("passes the requested service through to NodeTalosClient, empty meaning the kernel log", func() {

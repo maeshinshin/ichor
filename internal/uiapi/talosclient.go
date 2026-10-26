@@ -85,7 +85,23 @@ type NodeTalosClient interface {
 	// Talos regardless is surfaced as connect.CodePermissionDenied, not
 	// swallowed, so a future Talos version narrowing that table fails
 	// loudly instead of silently returning nothing.
-	StreamLogs(ctx context.Context, service string, since time.Time, onLine func(LogLine) error) error
+	StreamLogs(ctx context.Context, service string, since time.Time, opts LogOptions, onLine func(LogLine) error) error
+}
+
+// Tail bounds for StreamNodeLogs (docs/adr/0078): a request that names no
+// tail_lines gets DefaultTailLines, and no request gets more than
+// MaxTailLines unless it asks for the whole history with a negative value.
+const (
+	DefaultTailLines = 500
+	MaxTailLines     = 10000
+)
+
+// LogOptions says where StreamLogs starts and whether it keeps going.
+// TailLines is the number of most recent lines to start from; negative
+// means the whole history. Follow keeps the stream open for new lines.
+type LogOptions struct {
+	Follow    bool
+	TailLines int32
 }
 
 // LogLine is one line NodeTalosClient.StreamLogs delivers. Time is when the

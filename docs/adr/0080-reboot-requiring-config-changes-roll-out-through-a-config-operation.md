@@ -43,10 +43,9 @@ paths that are neither safe nor install-time-only), set with `Ready=RebootRequir
 Ready message names the first five ("fields: a, b, and 3 more") and says to run `ichor config apply` or use the
 cluster page. The plan reads `rebootPaths`; only machines that have it are listed.
 
-`refuseReboot` still takes the cluster lock so that "cluster shutting down", "control-plane count is even" and "lock
-held" are shown as the reason, but under its own identity (`ichor-controller/machine`). It used `ichor-controller`,
-the identity every `TalosOperation` holds the lock as, and `Release` for the same identity would have freed a
-running operation's lock from under it.
+`refuseReboot` takes no cluster lock: it only records `rebootPaths` and sets RebootRequired. Its earlier probe (under
+`ichor-controller/machine`, which replaced an `ichor-controller` probe that could free a running operation's lock) only
+changed which refusal reason was shown, and protected nothing, since the `config` operation takes the lock when it works.
 
 ## Decision 3: what the executor does to one machine
 

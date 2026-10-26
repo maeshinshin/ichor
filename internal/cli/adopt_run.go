@@ -214,7 +214,7 @@ func reportPlans(w io.Writer, plans []*adoptPlan) []*adoptPlan {
 
 // v14OnlyDocuments are the Talos v1.14 documents that replaced legacy Config fields. Ichor renders
 // their defaults, and no TalosConfigPatch kind (nor TalosCluster/TalosMachine field) can set them
-// yet (ADR 0073), so a node that differs in one cannot be adopted at the v1.14 contract.
+// yet (ADR 0075), so a node that differs in one cannot be adopted at the v1.14 contract.
 var v14OnlyDocuments = map[string]string{
 	"KubeNetworkConfig":       "pod and service subnets, DNS domain",
 	"UnattendedInstallConfig": "install disk and image",
@@ -248,7 +248,7 @@ func explainUnrepresentable(paths []string) []string {
 
 		lines = append(lines, fmt.Sprintf(
 			"%s (%s) is a Talos v1.14 document: there is no TalosConfigPatch kind for it, and the legacy Config fields "+
-				"it replaced are rejected next to it, so it cannot be adopted at versionContract v1.14 (ADR 0073)", kind, what))
+				"it replaced are rejected next to it, so it cannot be adopted at versionContract v1.14 (ADR 0075)", kind, what))
 	}
 
 	if legacy {

@@ -1,0 +1,32 @@
+// Pure helpers for the Talos details card; no DOM, no preact,
+// so they run under `node --test`.
+
+export type Tone = 'ok' | 'bad' | 'neutral'
+
+type ServiceLike = { state: string; healthUnknown: boolean; healthy: boolean }
+
+export function formatSpeed(mbit: number): string {
+  if (!Number.isFinite(mbit) || mbit <= 0) return '-'
+  if (mbit < 1000) return `${mbit} Mbit/s`
+  return `${mbit / 1000} Gbit/s`
+}
+
+// A service Talos reports as failed, or running but unhealthy, is bad; one
+// running and healthy is ok; anything else (finished, unknown health) is shown
+// without colour.
+export function serviceTone(s: ServiceLike): Tone {
+  if (s.state === 'Failed') return 'bad'
+  if (s.state !== 'Running') return 'neutral'
+  if (s.healthUnknown) return 'neutral'
+  return s.healthy ? 'ok' : 'bad'
+}
+
+export function sortServices<T extends ServiceLike & { id: string }>(services: readonly T[]): T[] {
+  const rank = (s: T) => (serviceTone(s) === 'bad' ? 0 : 1)
+  return [...services].sort((a, b) => rank(a) - rank(b) || a.id.localeCompare(b.id))
+}
+
+export function timeSyncLabel(synced: boolean, disabled: boolean): 'synced' | 'not synced' | 'sync disabled' {
+  if (disabled) return 'sync disabled'
+  return synced ? 'synced' : 'not synced'
+}

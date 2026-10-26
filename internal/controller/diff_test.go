@@ -164,3 +164,44 @@ func TestChangedPaths_MalformedYAML(t *testing.T) {
 		t.Fatal("ChangedPaths(malformed YAML) = nil error, want one")
 	}
 }
+
+const kernelModuleDoc = "apiVersion: v1alpha1\nkind: KernelModuleConfig\nname: br_netfilter\n"
+
+func TestCollapseDocumentPaths_AddedDocumentIsReportedAsTheDocument(t *testing.T) {
+	current := []byte("version: v1alpha1\nmachine:\n  type: worker\n")
+	rendered := []byte("version: v1alpha1\nmachine:\n  type: worker\n---\n" + kernelModuleDoc)
+
+	paths, err := ChangedPaths(current, rendered)
+	if err != nil {
+		t.Fatalf("ChangedPaths: %v", err)
+	}
+
+	got, err := collapseDocumentPaths(current, rendered, paths)
+	if err != nil {
+		t.Fatalf("collapseDocumentPaths: %v", err)
+	}
+
+	if want := []string{"KernelModuleConfig br_netfilter (added)"}; !slices.Equal(got, want) {
+		t.Fatalf("collapseDocumentPaths = %v, want %v (raw paths %v)", got, want, paths)
+	}
+}
+
+func TestCollapseDocumentPaths_RemovedDocumentAndUntouchedFields(t *testing.T) {
+	current := []byte("version: v1alpha1\nmachine:\n  type: worker\n---\n" + kernelModuleDoc)
+	rendered := []byte("version: v1alpha1\nmachine:\n  type: controlplane\n")
+
+	paths, err := ChangedPaths(current, rendered)
+	if err != nil {
+		t.Fatalf("ChangedPaths: %v", err)
+	}
+
+	got, err := collapseDocumentPaths(current, rendered, paths)
+	if err != nil {
+		t.Fatalf("collapseDocumentPaths: %v", err)
+	}
+
+	want := []string{"KernelModuleConfig br_netfilter (removed)", "machine.type"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("collapseDocumentPaths = %v, want %v", got, want)
+	}
+}

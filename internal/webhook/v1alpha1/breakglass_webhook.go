@@ -32,6 +32,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/gitopstracking"
 )
 
@@ -48,6 +49,7 @@ const (
 var breakglasslog = logf.Log.WithName("breakglass-webhook")
 
 // +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-breakglass,mutating=false,failurePolicy=fail,sideEffects=None,groups=ichor.maesh.dev,resources=talosmachines;talosconfigpatches,verbs=update;delete,versions=v1alpha1,name=vbreakglass-v1alpha1.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-breakglass,mutating=false,failurePolicy=fail,sideEffects=None,groups=ichor.maesh.dev,resources=talosoperations,verbs=create,versions=v1alpha1,name=vbreakglassop-v1alpha1.kb.io,admissionReviewVersions=v1
 // +kubebuilder:rbac:groups=authorization.k8s.io,resources=subjectaccessreviews,verbs=create
 
 // BreakGlassOptions configures the break-glass admission check.
@@ -107,6 +109,10 @@ func SetupBreakGlassWebhookWithManager(mgr ctrl.Manager, opts BreakGlassOptions)
 
 // Handle implements admission.Handler.
 func (h *BreakGlassHandler) Handle(ctx context.Context, req admission.Request) admission.Response {
+	if req.Resource.Resource == "talosoperations" {
+		return h.handleOperation(ctx, req)
+	}
+
 	if req.Operation != "UPDATE" && req.Operation != "DELETE" {
 		return admission.Allowed("")
 	}
@@ -133,7 +139,7 @@ func (h *BreakGlassHandler) Handle(ctx context.Context, req admission.Request) a
 
 	// Ask the user's right first: holders skip the tracking lookup, so a
 	// break-glass write still works while Argo CD or Flux is unreadable.
-	allowed, err := h.mayBreakGlass(ctx, req)
+	allowed, err := h.mayBreakGlass(ctx, req.UserInfo, req.Resource.Resource, req.Name, req.Namespace)
 	if err != nil {
 		return admission.Errored(http.StatusServiceUnavailable, fmt.Errorf("cannot check the %s right: %w", BreakGlassVerb, err))
 	}
@@ -165,6 +171,41 @@ func (h *BreakGlassHandler) Handle(ctx context.Context, req admission.Request) a
 	return admission.Allowed("")
 }
 
+// handleOperation guards the one dangerous node action, reset, wherever the
+// TalosOperation comes from: the CLI and UI check break-glass too, but a user
+// with `create` on talosoperations can write the CR by hand. The
+// typed-name confirmation is a CRD rule (confirm == machineRef.name), so it
+// needs no copy here.
+func (h *BreakGlassHandler) handleOperation(ctx context.Context, req admission.Request) admission.Response {
+	if req.Operation != "CREATE" || slices.Contains(h.ExemptUsers, req.UserInfo.Username) {
+		return admission.Allowed("")
+	}
+
+	var op ichorv1alpha1.TalosOperation
+	if err := json.Unmarshal(req.Object.Raw, &op); err != nil {
+		return admission.Errored(http.StatusBadRequest, fmt.Errorf("decoding the operation: %w", err))
+	}
+
+	if op.Spec.Kind != ichorv1alpha1.TalosOperationKindNode || op.Spec.Node == nil || op.Spec.Node.Action != ichorv1alpha1.NodeActionReset {
+		return admission.Allowed("")
+	}
+
+	machine := op.Spec.Node.MachineRef.Name
+
+	allowed, err := h.mayBreakGlass(ctx, req.UserInfo, "talosmachines", machine, req.Namespace)
+	if err != nil {
+		return admission.Errored(http.StatusServiceUnavailable, fmt.Errorf("cannot check the %s right: %w", BreakGlassVerb, err))
+	}
+
+	if !allowed {
+		return admission.Denied(fmt.Sprintf("a reset wipes the node: it needs the %q verb on talosmachines/%s", BreakGlassVerb, machine))
+	}
+
+	breakglasslog.Info("reset admitted under break-glass", "user", req.UserInfo.Username, "machine", machine)
+
+	return admission.Allowed("")
+}
+
 // removesIchorFinalizer reports whether updated drops an ichor.maesh.dev/*
 // finalizer that old (already deleting) carries.
 func removesIchorFinalizer(old, updated *unstructured.Unstructured) bool {
@@ -183,19 +224,19 @@ func removesIchorFinalizer(old, updated *unstructured.Unstructured) bool {
 
 // mayBreakGlass asks Kubernetes whether the requesting user holds the verb on
 // the object, as the user: the webhook never impersonates.
-func (h *BreakGlassHandler) mayBreakGlass(ctx context.Context, req admission.Request) (bool, error) {
+func (h *BreakGlassHandler) mayBreakGlass(ctx context.Context, user authnv1.UserInfo, resource, name, namespace string) (bool, error) {
 	sar := &authzv1.SubjectAccessReview{
 		Spec: authzv1.SubjectAccessReviewSpec{
-			User:   req.UserInfo.Username,
-			UID:    req.UserInfo.UID,
-			Groups: req.UserInfo.Groups,
-			Extra:  extraOf(req.UserInfo.Extra),
+			User:   user.Username,
+			UID:    user.UID,
+			Groups: user.Groups,
+			Extra:  extraOf(user.Extra),
 			ResourceAttributes: &authzv1.ResourceAttributes{
 				Group:     ichorGroup,
-				Resource:  req.Resource.Resource,
+				Resource:  resource,
 				Verb:      BreakGlassVerb,
-				Name:      req.Name,
-				Namespace: req.Namespace,
+				Name:      name,
+				Namespace: namespace,
 			},
 		},
 	}

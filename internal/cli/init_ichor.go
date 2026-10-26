@@ -125,7 +125,7 @@ func createWithRetry(ctx context.Context, k8sClient client.Client, obj *unstruct
 
 // createIchorInstallation records the version `ichor init` just installed -- this binary's
 // own, since the manifest it applied is embedded in it -- as the IchorInstallation singleton
-// (ADR 0058), the CR a later TalosOperation of kind ichor reads its target from. A "dev"
+// (ADR 0059), the CR a later TalosOperation of kind ichor reads its target from. A "dev"
 // build has no semantic version to record (the CRD would refuse it), so it skips with a
 // notice instead of failing the init.
 func createIchorInstallation(ctx context.Context, k8sClient client.Client, warn io.Writer) error {

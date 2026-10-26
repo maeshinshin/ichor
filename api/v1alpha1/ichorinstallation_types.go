@@ -23,7 +23,7 @@ import (
 
 // Values for IchorInstallationSpec.ManagementMode.
 const (
-	// IchorManagementModeIchor means upgrades run through the installer Job (ADR 0058).
+	// IchorManagementModeIchor means upgrades run through the installer Job (ADR 0059).
 	IchorManagementModeIchor = "ichor"
 
 	// IchorManagementModeExternal means Argo CD owns Ichor's manifests: no installer Job
@@ -36,7 +36,7 @@ const IchorInstallationName = "ichor"
 
 // IchorInstallationSpec defines the desired state of IchorInstallation: which version of
 // Ichor should be installed, and who is allowed to change it. It holds the target; the
-// TalosOperation of kind ichor holds the execution (ADR 0058), so the target version is
+// TalosOperation of kind ichor holds the execution (ADR 0059), so the target version is
 // written in exactly one place.
 type IchorInstallationSpec struct {
 	// managementMode says who owns Ichor's own manifests. ichor: upgrades run through the
@@ -66,7 +66,7 @@ type IchorInstallationSpec struct {
 type IchorInstallationStatus struct {
 	// installedVersion is the version of the running controller, reported by the controller
 	// itself: the single source of "what is installed", which is also what the CLI compares
-	// itself against (ADR 0058).
+	// itself against (ADR 0059).
 	// +optional
 	InstalledVersion string `json:"installedVersion,omitempty"`
 

@@ -55,3 +55,5 @@ Three field-level decisions that the design leaves open:
   acceptance criteria for each phase can actually check the shape.
 - The cost is that `kubectl get crd` won't show the full catalogue until phase
   7. The API table in the design doc remains the place to see where it's going.
+
+- Update: `IchorInstallation` was created in phase 6 with ADR 0059.

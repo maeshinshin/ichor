@@ -63,7 +63,7 @@ func ichorInstallerJobName(op *ichorv1alpha1.TalosOperation) string {
 
 // +kubebuilder:rbac:groups=batch,namespace=ichor-system,resources=jobs,verbs=get;create
 
-// NewIchorUpgradeAdvancer builds the executor for TalosOperation kind: ichor (ADR 0058). It
+// NewIchorUpgradeAdvancer builds the executor for TalosOperation kind: ichor (ADR 0059). It
 // launches the installer Job for IchorInstallation.spec.version and reports on it; the
 // controller never replaces itself -- the Job, a separate process running the target
 // version's image, does (design, "Upgrades").

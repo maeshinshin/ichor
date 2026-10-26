@@ -46,7 +46,7 @@ const (
 // IchorInstallationReconciler reports on Ichor's own installation: the running version, and
 // whether the controller finds itself under GitOps. It never changes spec and never launches
 // the installer -- that is the kind: ichor executor's job, started by a TalosOperation
-// (ADR 0058) -- and, per the design, the controller never upgrades itself.
+// (ADR 0059) -- and, per the design, the controller never upgrades itself.
 type IchorInstallationReconciler struct {
 	client.Client
 

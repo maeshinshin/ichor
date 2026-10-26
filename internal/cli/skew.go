@@ -29,7 +29,7 @@ import (
 )
 
 // writesAnnotation marks a command that changes the world. Only these are refused when the
-// CLI and the server are more than one minor apart (design, "Upgrades"; ADR 0058): a read
+// CLI and the server are more than one minor apart (design, "Upgrades"; ADR 0059): a read
 // of a newer or older server is at worst incomplete, a write can be wrong.
 const writesAnnotation = "ichor.maesh.dev/writes"
 

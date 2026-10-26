@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package installer is the process the installer Job runs (ADR 0058): it snapshots the live
+// Package installer is the process the installer Job runs (ADR 0059): it snapshots the live
 // manifests, applies the manifest embedded in this binary -- the target version's own, so
 // nothing is fetched -- in the order CRDs, controller, UI, checks each step, and rolls back
 // from the snapshot when one fails.

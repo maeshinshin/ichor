@@ -148,7 +148,7 @@ spec:
                 description: |-
                   installedVersion is the version of the running controller, reported by the controller
                   itself: the single source of "what is installed", which is also what the CLI compares
-                  itself against (ADR 0058).
+                  itself against (ADR 0059).
                 type: string
             type: object
         required:

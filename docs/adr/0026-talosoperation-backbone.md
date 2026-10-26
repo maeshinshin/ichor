@@ -174,3 +174,5 @@ the doc comment does.
   API, Kubernetes upgrade execution, Ichor's self-upgrade, the UI's progress
   view, and the `ichor` CLI's own upgrade commands. `AdvanceMachineFunc`'s
   only implementation in this unit is test fakes.
+
+- `IchorInstallation` and the `kind: ichor` executor landed in ADR 0059; the installer Job is a separate process, so the backbone is unchanged (the executor is idempotent per operation).

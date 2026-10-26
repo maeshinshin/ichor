@@ -23,7 +23,7 @@ import (
 	"github.com/maeshinshin/ichor/internal/installmanifest"
 )
 
-// installerCmd groups what only the installer Job runs (ADR 0058). Hidden: a person upgrades
+// installerCmd groups what only the installer Job runs (ADR 0059). Hidden: a person upgrades
 // Ichor by creating a TalosOperation of kind ichor, never by running this.
 var installerCmd = &cobra.Command{
 	Use:    "installer",

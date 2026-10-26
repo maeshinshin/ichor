@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// This file implements the TalosOperationKindConfig AdvanceMachineFunc (ADR 0078): the per-node
+// This file implements the TalosOperationKindConfig AdvanceMachineFunc (ADR 0080): the per-node
 // step of docs/design/architecture.md's "Configuration reconcile" step 4 for a change whose field
 // paths pkg/fieldmeta says need a reboot. TalosMachineReconciler only reports such a change
 // (refuseReboot); this applies it, and only when someone started the operation. The lock, the

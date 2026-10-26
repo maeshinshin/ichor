@@ -600,7 +600,7 @@ func desiredInputsHash(
 
 // refuseReboot is the reboot-needed branch of design step 5. This reconciler never reboots a node:
 // the hook, the drain and the etcd checks that must precede a reboot belong to a config-rollout
-// TalosOperation (ADR 0078), which someone has to start. Here it only reports, naming the fields
+// TalosOperation (ADR 0080), which someone has to start. Here it only reports, naming the fields
 // that need the reboot (also kept in status.rebootPaths for the rollout's plan), after the lock
 // refusals that say why the cluster could not take one right now.
 //

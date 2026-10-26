@@ -46,7 +46,7 @@ const (
 
 	// TalosOperationKindConfig applies the pending reboot-requiring configuration changes of the
 	// approved machines, one machine at a time through the node-operation hook, a staged apply and
-	// a reboot (ADR 0078). Nothing reboots a node for a configuration change without one.
+	// a reboot (ADR 0080). Nothing reboots a node for a configuration change without one.
 	TalosOperationKindConfig = "config"
 )
 
@@ -147,7 +147,7 @@ type TalosOperationSpec struct {
 	// store and report it -- each kind's own execution is a separate unit's work.
 	// shutdown and ca-rotation are the exceptions: each runs its own state machine.
 	// config applies the pending reboot-requiring configuration changes, one machine at a time
-	// with a reboot each (ADR 0078).
+	// with a reboot each (ADR 0080).
 	// +kubebuilder:validation:Enum=talos;kubernetes;ichor;cni;shutdown;ca-rotation;config
 	// +required
 	Kind string `json:"kind"`

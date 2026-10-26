@@ -33,6 +33,9 @@ enum OperationKind {
   OPERATION_KIND_SHUTDOWN = 5;
   // CA_ROTATION replaces the Talos API and Kubernetes API CAs (ADR 0063).
   OPERATION_KIND_CA_ROTATION = 6;
+  // CONFIG applies the pending reboot-requiring configuration changes, one
+  // machine at a time with a reboot each (ADR 0080).
+  OPERATION_KIND_CONFIG = 7;
 }
 
 // OperationMachine is TalosOperation.status.machines[] as it is: a machine
@@ -103,13 +106,17 @@ message PlannedMachine {
   string role = 2; // controlplane or worker
   // step is 1-based; machines with the same step may be handled together.
   int32 step = 3;
+  // reboot_fields are the configuration field paths whose pending change needs
+  // the reboot (config kind only; TalosMachine.status.rebootPaths).
+  repeated string reboot_fields = 4;
 }
 
 message PlanOperationRequest {
   ObjectRef cluster = 1;
   OperationKind kind = 2;
   // target is the version to move to (talos, kubernetes, ichor), the kube-proxy
-  // mode "enabled" or "replaced" (cni), and must be empty for shutdown. For
+  // mode "enabled" or "replaced" (cni), and must be empty for shutdown,
+  // ca-rotation and config. For
   // the kinds with a version or mode, empty means "the cluster's spec already
   // says it": the operation is created without changing the spec.
   string target = 3;

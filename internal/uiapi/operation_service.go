@@ -66,6 +66,8 @@ func kindToSpec(k pb.OperationKind) (string, error) {
 		return ichorv1alpha1.TalosOperationKindShutdown, nil
 	case pb.OperationKind_OPERATION_KIND_CA_ROTATION:
 		return ichorv1alpha1.TalosOperationKindCARotation, nil
+	case pb.OperationKind_OPERATION_KIND_CONFIG:
+		return ichorv1alpha1.TalosOperationKindConfig, nil
 	case pb.OperationKind_OPERATION_KIND_UNSPECIFIED:
 	}
 
@@ -86,6 +88,8 @@ func kindToPB(k string) pb.OperationKind {
 		return pb.OperationKind_OPERATION_KIND_SHUTDOWN
 	case ichorv1alpha1.TalosOperationKindCARotation:
 		return pb.OperationKind_OPERATION_KIND_CA_ROTATION
+	case ichorv1alpha1.TalosOperationKindConfig:
+		return pb.OperationKind_OPERATION_KIND_CONFIG
 	}
 
 	return pb.OperationKind_OPERATION_KIND_UNSPECIFIED
@@ -242,7 +246,7 @@ type opPlan struct {
 // normalizeTarget validates target for kind and returns it in the form the spec stores.
 func normalizeTarget(kind, target string) (string, error) {
 	switch kind {
-	case ichorv1alpha1.TalosOperationKindShutdown, ichorv1alpha1.TalosOperationKindCARotation:
+	case ichorv1alpha1.TalosOperationKindShutdown, ichorv1alpha1.TalosOperationKindCARotation, ichorv1alpha1.TalosOperationKindConfig:
 		if target != "" {
 			return "", connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("a %s has no target", kind))
 		}
@@ -282,7 +286,7 @@ func (s *Server) trackedBy(ctx context.Context, obj client.Object) (string, erro
 	return by, nil
 }
 
-//nolint:gocyclo // one switch over the six kinds, each a few lines
+//nolint:gocyclo // one switch over the seven kinds, each a few lines
 func (s *Server) planOperation(
 	ctx context.Context, clusterRef *pb.ObjectRef, pbKind pb.OperationKind, rawTarget string, maxUnavailable int32,
 ) (*opPlan, error) {
@@ -328,6 +332,8 @@ func (s *Server) planOperation(
 		}
 	case ichorv1alpha1.TalosOperationKindShutdown:
 		p.resp.Effect = pb.OperationEffect_OPERATION_EFFECT_STOP
+	case ichorv1alpha1.TalosOperationKindConfig:
+		p.resp.Effect = pb.OperationEffect_OPERATION_EFFECT_REBOOT
 	case ichorv1alpha1.TalosOperationKindCARotation:
 		p.resp.Effect = pb.OperationEffect_OPERATION_EFFECT_CA_ROTATION
 		p.resp.Stages = []string{
@@ -378,6 +384,12 @@ func (s *Server) planMachines(ctx context.Context, p *opPlan, cluster *ichorv1al
 			continue
 		}
 
+		// A config rollout visits only the machines with a pending change that needs a reboot
+		// (TalosMachine.status.rebootPaths, ADR 0080).
+		if p.kind == ichorv1alpha1.TalosOperationKindConfig && len(m.Status.RebootPaths) == 0 {
+			continue
+		}
+
 		// A hold excludes a machine from a rollout, not from stopping the cluster (ADR 0067) and not from
 		// a CA rotation, which would lock a machine left out when the old CA is dropped (ADR 0063).
 		if p.kind != ichorv1alpha1.TalosOperationKindShutdown && p.kind != ichorv1alpha1.TalosOperationKindCARotation && m.Annotations[ichorv1alpha1.TalosMachineUpgradeHoldAnnotation] != "" {
@@ -396,7 +408,12 @@ func (s *Server) planMachines(ctx context.Context, p *opPlan, cluster *ichorv1al
 	slices.Sort(p.resp.Held)
 
 	add := func(m *ichorv1alpha1.TalosMachine, step int32) {
-		p.resp.Machines = append(p.resp.Machines, &pb.PlannedMachine{Name: m.Name, Role: m.Spec.Role, Step: step})
+		pm := &pb.PlannedMachine{Name: m.Name, Role: m.Spec.Role, Step: step}
+		if p.kind == ichorv1alpha1.TalosOperationKindConfig {
+			pm.RebootFields = slices.Clone(m.Status.RebootPaths)
+		}
+
+		p.resp.Machines = append(p.resp.Machines, pm)
 	}
 
 	if p.kind == ichorv1alpha1.TalosOperationKindShutdown {
@@ -450,6 +467,10 @@ func (s *Server) blockedReason(
 			return fmt.Sprintf("operation %q (%s) on this cluster is not finished (phase %q); wait for it, or delete it if it is stuck",
 				o.Name, o.Spec.Kind, o.Status.Phase), nil
 		}
+	}
+
+	if p.kind == ichorv1alpha1.TalosOperationKindConfig && len(p.resp.Machines) == 0 {
+		return "no approved machine has a pending configuration change that needs a reboot (nothing is waiting in Ready=RebootRequired)", nil
 	}
 
 	if p.resp.SpecChanges {

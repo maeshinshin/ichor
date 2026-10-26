@@ -105,7 +105,7 @@ type fakeTalosClient struct {
 	// upgradeBudget is the time left on the Upgrade call's context when it arrived.
 	upgradeBudget time.Duration
 
-	// config-rollout fields: config_rollout_test.go's fixtures (ADR 0078).
+	// config-rollout fields: config_rollout_test.go's fixtures (ADR 0080).
 	stagedErr    error
 	stagedCalls  [][]byte
 	rebootErr    error

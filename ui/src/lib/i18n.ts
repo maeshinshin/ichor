@@ -443,6 +443,7 @@ export const en = {
   'ops.start.cni': 'Switch kube-proxy',
   'ops.start.shutdown': 'Shut down cluster',
   'ops.start.ca-rotation': 'Rotate CAs',
+  'ops.start.config': 'Apply config (reboots)',
 
   'ops.dialog.title': '{action}: {cluster}',
   'ops.dialog.targetVersion': 'Target version (for example v1.2.3)',
@@ -464,6 +465,11 @@ export const en = {
   'ops.plan.cni': 'Switch kube-proxy from {from} to {to}.',
   'ops.plan.shutdown': 'Shut down the whole cluster.',
   'ops.plan.ca-rotation': 'Replace the Talos API and Kubernetes API certificate authorities.',
+  'ops.plan.config': 'Apply the pending configuration changes that need a reboot.',
+  'ops.plan.effectConfigReboot':
+    'Each machine below gets its rendered configuration staged and reboots; Talos cordons and drains it first.',
+  'ops.plan.rebootFields': '{name} needs the reboot for: {fields}',
+  'ops.plan.ownNodeLast': 'The machine the controller runs on goes last.',
   'ops.plan.effectReboot': 'Each machine is upgraded and reboots.',
   'ops.plan.effectRestart':
     'Configuration is applied without a reboot; the kubelet and control plane components restart on each machine.',

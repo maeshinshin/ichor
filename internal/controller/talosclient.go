@@ -51,7 +51,7 @@ type TalosClient interface {
 
 	// ApplyStaged applies cfg with ApplyConfigurationRequest_STAGED: it is written to disk and
 	// takes effect on the next boot, nothing restarts. Only the config-rollout executor calls
-	// it, and only just before Reboot (ADR 0078); ADR 0009 is why the mode is chosen by the
+	// it, and only just before Reboot (ADR 0080); ADR 0009 is why the mode is chosen by the
 	// caller and never by Talos.
 	ApplyStaged(ctx context.Context, cfg []byte) error
 

@@ -204,7 +204,7 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	// A config rollout reboots nodes, so the machine this controller runs on goes last: its reboot
-	// stops the controller, which resumes from the status and has nothing left to wait for (ADR 0078).
+	// stops the controller, which resumes from the status and has nothing left to wait for (ADR 0080).
 	var own []*ichorv1alpha1.TalosMachine
 	if op.Spec.Kind == ichorv1alpha1.TalosOperationKindConfig {
 		controlPlanes, workers, own = holdOwnNodeLast(controlPlanes, workers, r.NodeName)

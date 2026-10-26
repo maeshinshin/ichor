@@ -35,7 +35,11 @@ func planText(kind pb.OperationKind, cluster string, p *pb.PlanOperationResponse
 
 	switch p.GetEffect() {
 	case pb.OperationEffect_OPERATION_EFFECT_REBOOT:
-		b.WriteString("Each machine is upgraded and REBOOTS.\n")
+		if kind == pb.OperationKind_OPERATION_KIND_CONFIG {
+			b.WriteString("Each machine below gets its rendered configuration staged and REBOOTS (Talos cordons and drains it first).\n")
+		} else {
+			b.WriteString("Each machine is upgraded and REBOOTS.\n")
+		}
 	case pb.OperationEffect_OPERATION_EFFECT_RESTART_COMPONENTS:
 		b.WriteString("Configuration is applied without a reboot; the kubelet and control plane components restart on each machine.\n")
 	case pb.OperationEffect_OPERATION_EFFECT_STOP:
@@ -87,6 +91,8 @@ func headline(kind pb.OperationKind, cluster string, p *pb.PlanOperationResponse
 		return fmt.Sprintf("Switch kube-proxy on cluster %q from %s to %s.", cluster, p.GetCurrent(), to)
 	case pb.OperationKind_OPERATION_KIND_CA_ROTATION:
 		return fmt.Sprintf("Rotate the Talos API and Kubernetes API certificate authorities (ca-rotation) of cluster %q.", cluster)
+	case pb.OperationKind_OPERATION_KIND_CONFIG:
+		return fmt.Sprintf("Apply the pending reboot-requiring configuration changes (config) of cluster %q.", cluster)
 	case pb.OperationKind_OPERATION_KIND_SHUTDOWN:
 		return fmt.Sprintf("SHUT DOWN cluster %q.", cluster)
 	case pb.OperationKind_OPERATION_KIND_UNSPECIFIED:
@@ -138,6 +144,16 @@ func orderText(kind pb.OperationKind, p *pb.PlanOperationResponse) string {
 
 	b.WriteString(strings.Join(steps, "\n"))
 	b.WriteString("\n")
+
+	for _, m := range p.GetMachines() {
+		if f := m.GetRebootFields(); len(f) > 0 {
+			fmt.Fprintf(&b, "  %s needs the reboot for: %s\n", m.GetName(), strings.Join(f, ", "))
+		}
+	}
+
+	if kind == pb.OperationKind_OPERATION_KIND_CONFIG {
+		b.WriteString("The machine the controller runs on goes last.\n")
+	}
 
 	return b.String()
 }

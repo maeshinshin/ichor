@@ -259,7 +259,7 @@ type TalosMachineStatus struct {
 
 	// rebootPaths lists the configuration field paths whose pending change needs a reboot, while
 	// Ready is False with reason RebootRequired; empty otherwise. A config-rollout
-	// TalosOperation (ADR 0078) applies them; the plan shown before starting one reads this.
+	// TalosOperation (ADR 0080) applies them; the plan shown before starting one reads this.
 	// +listType=atomic
 	// +optional
 	RebootPaths []string `json:"rebootPaths,omitempty"`

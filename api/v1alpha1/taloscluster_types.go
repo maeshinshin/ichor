@@ -391,6 +391,29 @@ type TalosClusterStatus struct {
 	// observedGeneration is the most recent generation the controller has reconciled.
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
+	// certificates lists when each cluster certificate authority in the secrets
+	// bundle expires, so an approaching expiry is visible before it locks anyone
+	// out. Read from the bundle, never from a node.
+	// +patchMergeKey=name
+	// +patchStrategy=merge
+	// +listType=map
+	// +listMapKey=name
+	// +optional
+	Certificates []CertificateExpiry `json:"certificates,omitempty" patchStrategy:"merge" patchMergeKey:"name"`
+}
+
+// CertificateExpiry is one certificate authority's end of validity.
+type CertificateExpiry struct {
+	// name is which authority: talos, kubernetes, kubernetes-aggregator or etcd.
+	// +required
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=63
+	Name string `json:"name"`
+
+	// notAfter is the certificate's last instant of validity.
+	// +required
+	NotAfter metav1.Time `json:"notAfter"`
 }
 
 // TalosClusterConfirmKubeProxySwitchAnnotation, when present on a TalosCluster, allows

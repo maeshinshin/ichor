@@ -19,6 +19,11 @@ package cli
 import (
 	"context"
 	"fmt"
+	"io"
+	"time"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	machineapi "github.com/siderolabs/talos/pkg/machinery/api/machine"
 	"github.com/siderolabs/talos/pkg/machinery/client"
@@ -80,6 +85,44 @@ func (m *maintenanceClient) ApplyInsecure(ctx context.Context, cfg []byte) error
 type bootstrapClient interface {
 	Bootstrap(ctx context.Context) error
 	Kubeconfig(ctx context.Context) ([]byte, error)
+}
+
+// Defaults for bootstrapWhenUp: a node that has just taken its configuration keeps serving
+// its maintenance certificate (so the admin handshake fails with Unavailable) until it has
+// installed and rebooted, which takes minutes on a slow disk.
+const (
+	defaultBootstrapWait     = 15 * time.Minute
+	defaultBootstrapInterval = 5 * time.Second
+)
+
+// bootstrapWhenUp calls admin.Bootstrap, retrying while the node answers Unavailable (it has
+// not come back up on the new configuration yet) for up to wait. Any other error returns at
+// once: only a node that is not there yet is worth waiting for.
+func bootstrapWhenUp(ctx context.Context, admin bootstrapClient, wait, interval time.Duration, progress io.Writer) error {
+	if wait <= 0 {
+		wait = defaultBootstrapWait
+	}
+
+	if interval <= 0 {
+		interval = defaultBootstrapInterval
+	}
+
+	deadline := time.Now().Add(wait)
+
+	for {
+		err := admin.Bootstrap(ctx)
+		if err == nil || status.Code(err) != codes.Unavailable || !time.Now().Add(interval).Before(deadline) {
+			return err
+		}
+
+		_, _ = fmt.Fprintf(progress, "init: waiting for the node to come up on its new configuration: %v\n", err)
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(interval):
+		}
+	}
 }
 
 // dialAdmin connects to endpoint using the bundle's admin identity, the

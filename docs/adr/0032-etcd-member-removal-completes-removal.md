@@ -303,3 +303,6 @@ rejoined cleanly either, consistent with a stale etcd peer URL baked into
 its own persisted config -- the inner cluster did not recover, and nothing
 tried to force it to): `kubectl get vm,vmi,pod,dv,pvc,secret -n ichor-e2e`
 shows "No resources found."
+
+Update: removal now evacuates storage before the drain (shared with the Talos
+upgrade, see ADR 0043), so the order is evacuation, drain, etcd member, reset.

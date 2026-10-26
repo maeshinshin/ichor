@@ -27,7 +27,6 @@ package controller
 import (
 	"context"
 	"fmt"
-	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
@@ -76,18 +75,11 @@ const (
 	// from "rebooted and fell back to the same old version" (both report
 	// an unchanged Version()).
 	conditionTalosUpgrade = "TalosUpgrade"
-
-	// conditionStorageEvacuation is True from BeginEvacuation's write until
-	// EvacuationStatus reports done or paused and EndEvacuation is written.
-	// LastTransitionTime is evacuate's own "elapsed" clock start.
-	conditionStorageEvacuation = "StorageEvacuation"
 )
 
 const (
-	reasonUpgradeRequested  = "UpgradeRequested"
-	reasonUpgradeConverged  = "Converged"
-	reasonEvacuating        = "Evacuating"
-	reasonEvacuationStopped = "EvacuationStopped"
+	reasonUpgradeRequested = "UpgradeRequested"
+	reasonUpgradeConverged = "Converged"
 )
 
 // talosUpgradeAdvancer is the Talos-kind AdvanceMachineFunc. cmd/main.go
@@ -351,105 +343,25 @@ func (a *talosUpgradeAdvancer) nodeReady(ctx context.Context, hostname string) (
 	return false, nil
 }
 
-// evacuate drives one storage.EvacuationStatus step for m's node: Begin on
-// the first call (returning EvacuationWaiting so the caller keeps
-// reconciling), then ReplicasRemaining against the elapsed time since
-// conditionStorageEvacuation's own LastTransitionTime on every call after.
-// On EvacuationPaused it also calls End (architecture.md: a paused
-// evacuation gives up and re-enables scheduling, since this operation is
-// not going to drain the node after all). On EvacuationDone it
-// deliberately does NOT call End yet: the node is unschedulable until the
-// upgrade's drain-and-reboot is actually confirmed to have worked, by
-// finish's own call to endEvacuation, never before (architecture.md,
-// "Storage": "...then drain; afterwards, re-enable scheduling").
+// evacuate drives one storage.EvacuationStatus step for m's node through
+// the shared evacuateMachine (evacuation.go), which removal.go calls too.
+// On EvacuationDone it deliberately does NOT call End yet: the node is
+// unschedulable until the upgrade's drain-and-reboot is actually confirmed
+// to have worked, by finish's own call to endEvacuation, never before
+// (architecture.md, "Storage": "...then drain; afterwards, re-enable
+// scheduling").
 func (a *talosUpgradeAdvancer) evacuate(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
 ) (storage.EvacuationProgress, error) {
-	if a.Evacuator == nil {
-		return storage.EvacuationDone, nil
-	}
-
-	target, err := a.Evacuator.Resolve(ctx, cluster, m.Spec.Hostname)
-	if err != nil {
-		return 0, err
-	}
-
-	if target == nil {
-		return storage.EvacuationDone, nil
-	}
-
-	cond := apimeta.FindStatusCondition(m.Status.Conditions, conditionStorageEvacuation)
-	if cond == nil || cond.Status != metav1.ConditionTrue {
-		if err := a.Evacuator.Begin(ctx, target, m.Spec.Hostname); err != nil {
-			return 0, err
-		}
-
-		if err := a.setEvacuationCondition(ctx, m, metav1.ConditionTrue, reasonEvacuating,
-			fmt.Sprintf("evacuating node %q before upgrading", m.Spec.Hostname)); err != nil {
-			return 0, err
-		}
-
-		return storage.EvacuationWaiting, nil
-	}
-
-	elapsed := time.Since(cond.LastTransitionTime.Time)
-
-	remaining, err := a.Evacuator.ReplicasRemaining(ctx, target, m.Spec.Hostname)
-	if err != nil {
-		return 0, err
-	}
-
-	progress := storage.EvacuationStatus(remaining, elapsed, target.timeout)
-	if progress == storage.EvacuationWaiting {
-		return progress, nil
-	}
-
-	if progress == storage.EvacuationPaused {
-		if err := a.endEvacuation(ctx, cluster, m); err != nil {
-			return 0, err
-		}
-	}
-
-	return progress, nil
+	return evacuateMachine(ctx, a.Client, a.Evacuator, cluster, m, "upgrading")
 }
 
-// endEvacuation undoes a pending evacuation (re-enables scheduling), a
-// no-op if conditionStorageEvacuation is not currently True -- covering
-// both "evacuation was never needed for this node" and "it was already
-// ended".
+// endEvacuation undoes a pending evacuation (re-enables scheduling); see
+// endMachineEvacuation.
 func (a *talosUpgradeAdvancer) endEvacuation(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
 ) error {
-	if a.Evacuator == nil || !apimeta.IsStatusConditionTrue(m.Status.Conditions, conditionStorageEvacuation) {
-		return nil
-	}
-
-	target, err := a.Evacuator.Resolve(ctx, cluster, m.Spec.Hostname)
-	if err != nil {
-		return err
-	}
-
-	if target == nil {
-		return nil
-	}
-
-	if err := a.Evacuator.End(ctx, target, m.Spec.Hostname); err != nil {
-		return err
-	}
-
-	return a.setEvacuationCondition(ctx, m, metav1.ConditionFalse, reasonEvacuationStopped,
-		fmt.Sprintf("scheduling re-enabled on node %q", m.Spec.Hostname))
-}
-
-// setEvacuationCondition writes conditionStorageEvacuation and persists m's status.
-func (a *talosUpgradeAdvancer) setEvacuationCondition(
-	ctx context.Context, m *ichorv1alpha1.TalosMachine, status metav1.ConditionStatus, reason, message string,
-) error {
-	apimeta.SetStatusCondition(&m.Status.Conditions, metav1.Condition{
-		Type: conditionStorageEvacuation, Status: status, Reason: reason, Message: message,
-	})
-
-	return a.Status().Update(ctx, m)
+	return endMachineEvacuation(ctx, a.Client, a.Evacuator, cluster, m)
 }
 
 // installerImage builds cluster's target installer image reference:

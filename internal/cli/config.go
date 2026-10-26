@@ -13,39 +13,53 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
 package cli
 
 import (
-	"fmt"
+	"context"
+	"io"
 
+	"connectrpc.com/connect"
 	"github.com/spf13/cobra"
+
+	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
-// configCmd represents the config command
+// configCmd groups the machine-configuration read subcommands.
 var configCmd = &cobra.Command{
 	Use:   "config",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
+	Short: "Inspect machine configuration",
+}
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("config called")
+var configEffectiveCmd = &cobra.Command{
+	Use:   "effective MACHINE",
+	Short: "Show a machine's rendered configuration, each value tagged with the layer that set it",
+	Long: `effective renders the machine's complete configuration the way the
+controller does and prints every value with its origin layer. Secrets are
+masked ("***") by the same code ichor-ui uses -- this works without ichor-ui,
+reading the CRs and the secrets bundle with your own Kubernetes access.`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
+			return runConfigEffective(ctx, c, cmd.OutOrStdout(), args[0])
+		})
 	},
+}
+
+func runConfigEffective(ctx context.Context, c *apiClients, out io.Writer, machine string) error {
+	resp, err := c.Node.GetEffectiveConfig(ctx, connect.NewRequest(&pb.GetEffectiveConfigRequest{
+		Machine: objectRef(apiOpts.Namespace, machine),
+	}))
+	if err != nil {
+		return err
+	}
+
+	return writeMessage(out, outputFormat, resp.Msg)
 }
 
 func init() {
 	rootCmd.AddCommand(configCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// configCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// configCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	addAPIFlags(configCmd)
+	configCmd.AddCommand(configEffectiveCmd)
 }

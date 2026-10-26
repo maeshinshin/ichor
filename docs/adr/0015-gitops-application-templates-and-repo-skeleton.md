@@ -85,6 +85,7 @@ correctly-shaped-but-broken Application by omission:
   field manager owns the field (the example from the design notes —
   `widget-operator` owning a CRD's `spec.versions` — is exactly
   `ResourceIgnoreDifference{..., ManagedFieldsManagers: []string{"widget-operator"}}`).
+  (ADR 0055 narrows this: the pairing applies to entries that name fields, not kind-only ones.)
   `New` *always* pairs this with `RespectIgnoreDifferences=true` in
   `syncOptions`, because `ignoreDifferences` alone only suppresses the
   field from the *displayed* diff — without the sync option, Argo CD still

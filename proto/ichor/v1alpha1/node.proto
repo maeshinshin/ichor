@@ -9,10 +9,15 @@ package ichor.v1alpha1;
 
 import "google/protobuf/timestamp.proto";
 import "ichor/v1alpha1/common.proto";
+import "ichor/v1alpha1/talosdetails.proto";
 
 service NodeService {
   rpc GetNode(GetNodeRequest) returns (GetNodeResponse);
   rpc GetEffectiveConfig(GetEffectiveConfigRequest) returns (GetEffectiveConfigResponse);
+  // GetNodeTalosDetails reads a machine's Talos-side facts (version, stage,
+  // network, disks, services, extensions) read-only, one independently
+  // failing section at a time.
+  rpc GetNodeTalosDetails(GetNodeTalosDetailsRequest) returns (GetNodeTalosDetailsResponse);
   // StreamNodeLogs streams one machine's log (the node page) or several
   // (the merged viewer) from the same call. It resumes from a token carrying
   // the last log timestamp seen per machine (architecture.md: "streams that

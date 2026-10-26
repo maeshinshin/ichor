@@ -57,3 +57,31 @@ func TestApproveFallbackRefusesArgoCDTrackedMachine(t *testing.T) {
 		t.Fatal("the fallback wrote a tracked machine")
 	}
 }
+
+// --argocd-namespace must reach the fallback's Server: with Argo CD in a
+// namespace other than the default, the tracked machine is still refused.
+func TestApproveFallbackHonoursArgoCDNamespaceFlag(t *testing.T) {
+	setAPITestFlags(t, true)
+
+	const argoNS = "gitops-argo"
+	apiOpts.ArgoCDNamespace = argoNS
+
+	m := strongMachine("tracked")
+	m.Annotations = map[string]string{"argocd.argoproj.io/tracking-id": "app:ns/x"}
+	argoCM := &corev1.ConfigMap{Name: "argocd-cm", Namespace: argoNS}
+	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(m, argoCM).Build()
+
+	c, err := connectAPI(context.Background(), apiOpts, apiDeps{K8s: k8s, Stderr: &bytes.Buffer{}}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = runMachineApprove(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{}, "tracked", approveWorker)
+	if connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Fatalf("want FailedPrecondition with --argocd-namespace=%s, got %v", argoNS, err)
+	}
+
+	if getMachine(t, k8s, "tracked").Spec.IsApproved() {
+		t.Fatal("the fallback wrote a tracked machine although --argocd-namespace named Argo CD's namespace")
+	}
+}

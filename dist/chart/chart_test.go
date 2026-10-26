@@ -108,6 +108,8 @@ const (
 // backend must keep separate Kubernetes identities (architecture.md "Trust").
 const adr0020Doc = "docs/adr/0020-ichor-ui-shipping-path.md"
 
+const adr0051Doc = "docs/adr/0051-ui-and-cli-writes-refuse-gitops-tracked-crs.md"
+
 // TestChartInvariants renders the committed chart under both the
 // conventional release name (Makefile's HELM_RELEASE) and a non-default one,
 // and checks every invariant the hand-edits in templates/ exist to hold.
@@ -494,6 +496,60 @@ func checkUIBackendRBACIsSeparate(t *testing.T, release string, docs []map[strin
 			release, kindClusterRoleBinding, ichorUIRoleName, ichorUIServiceAccountName, adr0020Doc,
 		)
 	}
+}
+
+// TestUIArgoCDNamespaceEnv pins ichorUI.argocdNamespace to ichor-ui's ICHOR_ARGOCD_NAMESPACE
+// (docs/adr/0051): without it the UI backend reads argocd-cm in "argocd" whatever Argo CD's
+// real namespace is, and a CR Argo CD tracks there gets written directly.
+func TestUIArgoCDNamespaceEnv(t *testing.T) {
+	const envName = "ICHOR_ARGOCD_NAMESPACE"
+
+	for _, tc := range []struct {
+		name string
+		sets []string
+		want string
+	}{
+		{name: "default", want: "argocd"},
+		{name: "override", sets: []string{"ichorUI.argocdNamespace=gitops-argo"}, want: "gitops-argo"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			docs := renderChartWithValues(t, "ichor", tc.sets...)
+
+			deployment := find(docs, kindDeployment, ichorUIDeploymentName)
+			if deployment == nil {
+				t.Fatalf("helm template . %v: no %s %q", tc.sets, kindDeployment, ichorUIDeploymentName)
+			}
+			got, found := containerEnvValue(deployment, "ichor-ui", envName)
+			if !found || got != tc.want {
+				t.Errorf("helm template . %v: %s = %q (found=%v), want %q; see %s",
+					tc.sets, envName, got, found, tc.want, adr0051Doc)
+			}
+		})
+	}
+}
+
+// containerEnvValue returns the value of env var name on the named container of a decoded
+// Deployment, and whether it is set.
+func containerEnvValue(deployment map[string]any, container, name string) (string, bool) {
+	spec, _ := deployment["spec"].(map[string]any)
+	template, _ := spec["template"].(map[string]any)
+	podSpec, _ := template["spec"].(map[string]any)
+	containers, _ := podSpec["containers"].([]any)
+	for _, c := range containers {
+		cm, _ := c.(map[string]any)
+		if cm["name"] != container {
+			continue
+		}
+		envs, _ := cm["env"].([]any)
+		for _, e := range envs {
+			em, _ := e.(map[string]any)
+			if em["name"] == name {
+				v, _ := em["value"].(string)
+				return v, true
+			}
+		}
+	}
+	return "", false
 }
 
 // deploymentServiceAccountName reads spec.template.spec.serviceAccountName from a decoded

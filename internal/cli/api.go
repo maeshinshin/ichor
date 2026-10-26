@@ -66,6 +66,9 @@ type apiOptions struct {
 	// IchorNamespace is where Ichor is installed: ichor-ui's Service and
 	// the secrets bundle Secret (uiapi.Server.ControllerNamespace).
 	IchorNamespace string
+	// ArgoCDNamespace is where Argo CD runs; the fallback reads its argocd-cm
+	// to refuse writes to CRs Argo CD tracks (docs/adr/0051).
+	ArgoCDNamespace string
 	// Local skips ichor-ui and computes from the Kubernetes API.
 	Local bool
 }
@@ -76,6 +79,8 @@ func addAPIFlags(cmd *cobra.Command) {
 	f.StringVarP(&apiOpts.Namespace, "namespace", "n", ichorControllerNamespace, "namespace of the Ichor resources the command names")
 	f.StringVar(&apiOpts.IchorNamespace, "ichor-namespace", ichorControllerNamespace,
 		"namespace Ichor is installed in (where ichor-ui runs and the secrets bundle lives)")
+	f.StringVar(&apiOpts.ArgoCDNamespace, "argocd-namespace", "argocd",
+		"namespace Argo CD runs in, used by the --local fallback to read argocd-cm when checking whether a resource is tracked")
 	f.BoolVar(&apiOpts.Local, "local", false, "do not use ichor-ui; compute from the Kubernetes API directly")
 }
 
@@ -150,7 +155,9 @@ func connectAPI(ctx context.Context, opts apiOptions, deps apiDeps, requireBacke
 // rules, strict field validation on every write, the secret masking in
 // GetEffectiveConfig -- is the same code, not a copy of it.
 func localClients(opts apiOptions, deps apiDeps) *apiClients {
-	s := &uiapi.Server{Client: deps.K8s, ControllerNamespace: opts.IchorNamespace, Actor: actorCLI}
+	s := &uiapi.Server{
+		Client: deps.K8s, ControllerNamespace: opts.IchorNamespace, ArgoCDNamespace: opts.ArgoCDNamespace, Actor: actorCLI,
+	}
 
 	return &apiClients{
 		Cluster: s, Machine: s, Patch: s, Node: localNode{s}, Local: true, Close: func() {},

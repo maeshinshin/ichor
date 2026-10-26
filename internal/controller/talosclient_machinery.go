@@ -114,6 +114,17 @@ func (t *machineryTalosClient) CurrentConfig(ctx context.Context) ([]byte, error
 	return res.Provider().Bytes()
 }
 
+// NodeName reads the Nodename resource (k8s namespace, ID "nodename"): the name Talos registers
+// this node under in Kubernetes, which is also what its etcd member is called.
+func (t *machineryTalosClient) NodeName(ctx context.Context) (string, error) {
+	res, err := safe.StateGetByID[*k8sres.Nodename](ctx, t.c.COSI, k8sres.NodenameID)
+	if err != nil {
+		return "", fmt.Errorf("reading the Kubernetes node name: %w", err)
+	}
+
+	return res.TypedSpec().Nodename, nil
+}
+
 // MachineStage reads the MachineStatus resource's stage ("running", "installing",
 // "rebooting", ...).
 func (t *machineryTalosClient) MachineStage(ctx context.Context) (string, error) {

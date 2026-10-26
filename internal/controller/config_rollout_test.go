@@ -86,6 +86,39 @@ func (f *rolloutFixture) after(m *ichorv1alpha1.TalosMachine) []byte {
 }
 
 var _ = Describe("configRolloutAdvancer", func() {
+	It("is done for a machine that needs nothing even when no hostname is recorded", func() {
+		f := newRolloutFixture()
+		m := newTestMachine(f.cluster.Name, true)
+		Expect(m.Spec.Hostname).To(BeEmpty())
+
+		fake := &fakeTalosClient{current: f.after(m), bootID: testBootIDBefore}
+
+		done, err := newRolloutAdvancer(fake).Advance(ctx, f.cluster, fetchMachine(m), nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(done).To(BeTrue())
+		Expect(fake.rebootCalls).To(BeZero())
+	})
+
+	It("rolls out to a machine without a recorded hostname using the Kubernetes node name the node reports", func() {
+		f := newRolloutFixture()
+		m := newTestMachine(f.cluster.Name, true)
+		newTestNode("node-cr-reported", true)
+
+		fake := &fakeTalosClient{current: f.before(m), bootID: testBootIDBefore, nodeName: "node-cr-reported"}
+		adv := newRolloutAdvancer(fake)
+
+		done, err := adv.Advance(ctx, f.cluster, fetchMachine(m), nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(done).To(BeFalse())
+		Expect(fake.rebootCalls).To(Equal(1))
+
+		fake.bootID, fake.current = testBootIDAfter, f.after(m)
+
+		done, err = adv.Advance(ctx, f.cluster, fetchMachine(m), nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(done).To(BeTrue())
+	})
+
 	It("does nothing to a machine that already runs the rendered configuration", func() {
 		f := newRolloutFixture()
 		m := newTestMachine(f.cluster.Name, true)

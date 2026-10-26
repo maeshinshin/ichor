@@ -257,13 +257,13 @@ const (
 // all mean there is nothing to evacuate: EvacuationDone, not an error.
 func evacuateMachine(
 	ctx context.Context, c client.Client, ev StorageEvacuator,
-	cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, purpose string,
+	cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, node, purpose string,
 ) (storage.EvacuationProgress, error) {
 	if ev == nil {
 		return storage.EvacuationDone, nil
 	}
 
-	target, err := ev.Resolve(ctx, cluster, m.Spec.Hostname)
+	target, err := ev.Resolve(ctx, cluster, node)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return storage.EvacuationDone, nil // no Node object: no replicas to move off it
@@ -278,12 +278,12 @@ func evacuateMachine(
 
 	cond := apimeta.FindStatusCondition(m.Status.Conditions, conditionStorageEvacuation)
 	if cond == nil || cond.Status != metav1.ConditionTrue {
-		if err := ev.Begin(ctx, target, m.Spec.Hostname); err != nil {
+		if err := ev.Begin(ctx, target, node); err != nil {
 			return 0, err
 		}
 
 		if err := setEvacuationCondition(ctx, c, m, metav1.ConditionTrue, reasonEvacuating,
-			fmt.Sprintf("evacuating node %q before %s", m.Spec.Hostname, purpose)); err != nil {
+			fmt.Sprintf("evacuating node %q before %s", node, purpose)); err != nil {
 			return 0, err
 		}
 
@@ -292,14 +292,14 @@ func evacuateMachine(
 
 	elapsed := time.Since(cond.LastTransitionTime.Time)
 
-	remaining, err := ev.ReplicasRemaining(ctx, target, m.Spec.Hostname)
+	remaining, err := ev.ReplicasRemaining(ctx, target, node)
 	if err != nil {
 		return 0, err
 	}
 
 	progress := storage.EvacuationStatus(remaining, elapsed, target.timeout)
 	if progress == storage.EvacuationPaused {
-		if err := endMachineEvacuation(ctx, c, ev, cluster, m); err != nil {
+		if err := endMachineEvacuation(ctx, c, ev, cluster, m, node); err != nil {
 			return 0, err
 		}
 	}
@@ -313,13 +313,13 @@ func evacuateMachine(
 // ended".
 func endMachineEvacuation(
 	ctx context.Context, c client.Client, ev StorageEvacuator,
-	cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
+	cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, node string,
 ) error {
 	if ev == nil || !apimeta.IsStatusConditionTrue(m.Status.Conditions, conditionStorageEvacuation) {
 		return nil
 	}
 
-	target, err := ev.Resolve(ctx, cluster, m.Spec.Hostname)
+	target, err := ev.Resolve(ctx, cluster, node)
 	if err != nil {
 		return err
 	}
@@ -328,12 +328,12 @@ func endMachineEvacuation(
 		return nil
 	}
 
-	if err := ev.End(ctx, target, m.Spec.Hostname); err != nil {
+	if err := ev.End(ctx, target, node); err != nil {
 		return err
 	}
 
 	return setEvacuationCondition(ctx, c, m, metav1.ConditionFalse, reasonEvacuationStopped,
-		fmt.Sprintf("scheduling re-enabled on node %q", m.Spec.Hostname))
+		fmt.Sprintf("scheduling re-enabled on node %q", node))
 }
 
 // setEvacuationCondition writes conditionStorageEvacuation and persists m's status.

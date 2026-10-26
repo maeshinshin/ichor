@@ -99,10 +99,6 @@ func NewConfigRolloutAdvancer(
 func (a *configRolloutAdvancer) Advance(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, _ *ichorv1alpha1.TalosOperation,
 ) (bool, error) {
-	if m.Spec.Hostname == "" {
-		return false, fmt.Errorf("machine %q has no hostname recorded; cannot verify its Kubernetes node or etcd membership", m.Name)
-	}
-
 	bundle, err := loadBundle(ctx, a.Client, a.ControllerNamespace, cluster)
 	if err != nil {
 		return false, fmt.Errorf("loading secrets bundle to roll out %q: %w", m.Name, err)
@@ -176,7 +172,7 @@ func (a *configRolloutAdvancer) stillWaiting(
 func (a *configRolloutAdvancer) fail(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, err error,
 ) error {
-	if endErr := endMachineEvacuation(ctx, a.Client, a.Evacuator, cluster, m); endErr != nil {
+	if endErr := a.endEvacuation(ctx, nil, cluster, m); endErr != nil {
 		return fmt.Errorf("%w (and re-enabling scheduling failed: %v)", err, endErr)
 	}
 
@@ -238,13 +234,18 @@ func (a *configRolloutAdvancer) begin(
 		return nil
 	}
 
-	ready, err := a.nodeReady(ctx, m.Spec.Hostname)
+	node, err := resolveNodeName(ctx, a.Client, talos, m)
+	if err != nil {
+		return err
+	}
+
+	ready, err := a.nodeReady(ctx, node)
 	if err != nil {
 		return fmt.Errorf("checking %q's node readiness: %w", m.Name, err)
 	}
 
 	if !ready {
-		return fmt.Errorf("node %q is not Ready; refusing to reboot it", m.Spec.Hostname)
+		return fmt.Errorf("node %q is not Ready; refusing to reboot it", node)
 	}
 
 	if m.Spec.Role == roleControlPlane {
@@ -253,7 +254,7 @@ func (a *configRolloutAdvancer) begin(
 		}
 	}
 
-	progress, err := evacuateMachine(ctx, a.Client, a.Evacuator, cluster, m, "rebooting")
+	progress, err := evacuateMachine(ctx, a.Client, a.Evacuator, cluster, m, node, "rebooting")
 	if err != nil {
 		return err
 	}
@@ -262,7 +263,7 @@ func (a *configRolloutAdvancer) begin(
 	case storage.EvacuationWaiting:
 		return nil
 	case storage.EvacuationPaused:
-		return fmt.Errorf("evacuating %q timed out with storage replicas still remaining", m.Spec.Hostname)
+		return fmt.Errorf("evacuating %q timed out with storage replicas still remaining", node)
 	}
 
 	return a.stageAndReboot(ctx, dialCtx, talos, cluster, m, rendered)
@@ -324,15 +325,26 @@ func (a *configRolloutAdvancer) checkEtcd(
 		return err
 	}
 
+	planeCount := 0
+
 	for i := range planes {
 		cp := &planes[i]
-		if cp.Spec.Role != roleControlPlane || cp.Spec.Hostname == "" {
+		if cp.Spec.Role != roleControlPlane {
 			continue
 		}
 
-		if !etcdMemberPresent(members, cp.Spec.Hostname) {
+		planeCount++
+
+		// A control plane without spec.hostname is counted below instead: its name is only known
+		// to its own node, and dialing every sibling here would make a reboot depend on all of them.
+		if cp.Spec.Hostname != "" && !etcdMemberPresent(members, cp.Spec.Hostname) {
 			return fmt.Errorf("etcd member %q is missing; rebooting %q could lose quorum", cp.Spec.Hostname, m.Name)
 		}
+	}
+
+	if len(members) < planeCount {
+		return fmt.Errorf("etcd lists %d members for %d approved control planes; rebooting %q could lose quorum",
+			len(members), planeCount, m.Name)
 	}
 
 	return nil
@@ -368,7 +380,12 @@ func (a *configRolloutAdvancer) afterReboot(
 func (a *configRolloutAdvancer) finish(
 	ctx, dialCtx context.Context, talos TalosClient, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
 ) (bool, error) {
-	ready, err := a.nodeReady(ctx, m.Spec.Hostname)
+	node, err := resolveNodeName(ctx, a.Client, talos, m)
+	if err != nil {
+		return false, a.stillWaiting(ctx, cluster, m, err.Error())
+	}
+
+	ready, err := a.nodeReady(ctx, node)
 	if err != nil {
 		return false, fmt.Errorf("checking %q's node readiness: %w", m.Name, err)
 	}
@@ -383,12 +400,12 @@ func (a *configRolloutAdvancer) finish(
 			return false, a.stillWaiting(ctx, cluster, m, "listing etcd members: "+err.Error())
 		}
 
-		if !etcdMemberPresent(members, m.Spec.Hostname) {
+		if !etcdMemberPresent(members, node) {
 			return false, a.stillWaiting(ctx, cluster, m, "the node is not back in etcd")
 		}
 	}
 
-	if err := endMachineEvacuation(ctx, a.Client, a.Evacuator, cluster, m); err != nil {
+	if err := a.endEvacuation(ctx, talos, cluster, m); err != nil {
 		return false, err
 	}
 
@@ -402,6 +419,23 @@ func (a *configRolloutAdvancer) finish(
 	}
 
 	return true, nil
+}
+
+// endEvacuation re-enables scheduling after an evacuation, resolving the node's name like the
+// rest of the rollout (talos may be nil when the node cannot be dialed).
+func (a *configRolloutAdvancer) endEvacuation(
+	ctx context.Context, talos TalosClient, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
+) error {
+	if a.Evacuator == nil || !apimeta.IsStatusConditionTrue(m.Status.Conditions, conditionStorageEvacuation) {
+		return nil
+	}
+
+	node, err := resolveNodeName(ctx, a.Client, talos, m)
+	if err != nil {
+		return err
+	}
+
+	return endMachineEvacuation(ctx, a.Client, a.Evacuator, cluster, m, node)
 }
 
 // nodeReady reports whether hostname's Kubernetes Node is Ready.

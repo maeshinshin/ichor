@@ -136,10 +136,6 @@ func NewTalosUpgradeAdvancer(
 func (a *talosUpgradeAdvancer) Advance(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, _ *ichorv1alpha1.TalosOperation,
 ) (bool, error) {
-	if m.Spec.Hostname == "" {
-		return false, fmt.Errorf("machine %q has no hostname recorded; cannot verify its Kubernetes node or etcd membership", m.Name)
-	}
-
 	target := cluster.Spec.TalosVersion
 
 	bundle, err := loadBundle(ctx, a.Client, a.ControllerNamespace, cluster)
@@ -210,16 +206,21 @@ func (a *talosUpgradeAdvancer) beginUpgrade(
 		return false, fmt.Errorf("kubernetes %s is not supported with talos %s: %w", cluster.Spec.KubernetesVersion, target, err)
 	}
 
-	ready, err := a.nodeReady(ctx, m.Spec.Hostname)
+	node, err := resolveNodeName(ctx, a.Client, talos, m)
+	if err != nil {
+		return false, err
+	}
+
+	ready, err := a.nodeReady(ctx, node)
 	if err != nil {
 		return false, fmt.Errorf("checking %q's node readiness: %w", m.Name, err)
 	}
 
 	if !ready {
-		return false, fmt.Errorf("node %q is not Ready; refusing to start an upgrade", m.Spec.Hostname)
+		return false, fmt.Errorf("node %q is not Ready; refusing to start an upgrade", node)
 	}
 
-	progress, err := a.evacuate(ctx, cluster, m)
+	progress, err := a.evacuate(ctx, cluster, m, node)
 	if err != nil {
 		return false, err
 	}
@@ -228,7 +229,7 @@ func (a *talosUpgradeAdvancer) beginUpgrade(
 	case storage.EvacuationWaiting:
 		return false, nil
 	case storage.EvacuationPaused:
-		return false, fmt.Errorf("evacuating %q timed out with storage replicas still remaining", m.Spec.Hostname)
+		return false, fmt.Errorf("evacuating %q timed out with storage replicas still remaining", node)
 	}
 
 	bootID, err := talos.BootID(dialCtx)
@@ -281,7 +282,7 @@ func (a *talosUpgradeAdvancer) afterReboot(
 	}
 
 	if currentVersion != target {
-		if endErr := a.endEvacuation(ctx, cluster, m); endErr != nil {
+		if endErr := a.endEvacuation(ctx, talos, cluster, m); endErr != nil {
 			return false, endErr
 		}
 
@@ -300,7 +301,16 @@ func (a *talosUpgradeAdvancer) afterReboot(
 func (a *talosUpgradeAdvancer) finish(
 	ctx, dialCtx context.Context, talos TalosClient, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
 ) (bool, error) {
-	ready, err := a.nodeReady(ctx, m.Spec.Hostname)
+	node, err := resolveNodeName(ctx, a.Client, talos, m)
+	if err != nil {
+		if apimeta.IsStatusConditionTrue(m.Status.Conditions, conditionTalosUpgrade) {
+			return false, nil // right after the reboot the node may not report its name yet
+		}
+
+		return false, err
+	}
+
+	ready, err := a.nodeReady(ctx, node)
 	if err != nil {
 		return false, fmt.Errorf("checking %q's node readiness: %w", m.Name, err)
 	}
@@ -315,12 +325,12 @@ func (a *talosUpgradeAdvancer) finish(
 			return false, fmt.Errorf("listing %q's etcd members: %w", m.Name, err)
 		}
 
-		if !etcdMemberPresent(members, m.Spec.Hostname) {
+		if !etcdMemberPresent(members, node) {
 			return false, nil
 		}
 	}
 
-	if err := a.endEvacuation(ctx, cluster, m); err != nil {
+	if err := a.endEvacuation(ctx, talos, cluster, m); err != nil {
 		return false, err
 	}
 
@@ -362,17 +372,26 @@ func (a *talosUpgradeAdvancer) nodeReady(ctx context.Context, hostname string) (
 // (architecture.md, "Storage": "...then drain; afterwards, re-enable
 // scheduling").
 func (a *talosUpgradeAdvancer) evacuate(
-	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, node string,
 ) (storage.EvacuationProgress, error) {
-	return evacuateMachine(ctx, a.Client, a.Evacuator, cluster, m, "upgrading")
+	return evacuateMachine(ctx, a.Client, a.Evacuator, cluster, m, node, "upgrading")
 }
 
 // endEvacuation undoes a pending evacuation (re-enables scheduling); see
 // endMachineEvacuation.
 func (a *talosUpgradeAdvancer) endEvacuation(
-	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
+	ctx context.Context, talos TalosClient, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
 ) error {
-	return endMachineEvacuation(ctx, a.Client, a.Evacuator, cluster, m)
+	if a.Evacuator == nil || !apimeta.IsStatusConditionTrue(m.Status.Conditions, conditionStorageEvacuation) {
+		return nil
+	}
+
+	node, err := resolveNodeName(ctx, a.Client, talos, m)
+	if err != nil {
+		return err
+	}
+
+	return endMachineEvacuation(ctx, a.Client, a.Evacuator, cluster, m, node)
 }
 
 // installerImage builds cluster's target installer image reference:

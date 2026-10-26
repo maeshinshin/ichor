@@ -333,7 +333,7 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 	// same evacuateMachine the Talos upgrade uses. Its progress lives in
 	// the StorageEvacuation condition, so a restarted controller resumes
 	// from status; a timeout stops the removal here and never advances it.
-	progress, err := evacuateMachine(ctx, r.Client, r.Evacuator, &cluster, m, "removal")
+	progress, err := evacuateMachine(ctx, r.Client, r.Evacuator, &cluster, m, m.Spec.Hostname, "removal")
 	if err != nil {
 		return r.removalCondition(ctx, m, metav1.ConditionFalse, reasonEvacuationFailed, err.Error())
 	}

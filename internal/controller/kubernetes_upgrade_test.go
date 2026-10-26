@@ -366,6 +366,24 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		Expect(cond.Message).To(ContainSubstring("flowschemas"))
 	})
 
+	It("finds the Kubernetes node from what the node reports when spec.hostname is unset", func() {
+		cluster := k8sCluster(testK8sTarget)
+		w := newK8sWorker(cluster.Name, "w-nohost")
+		name := w.Spec.Hostname
+		newK8sNode(name, testK8sOld, true)
+
+		w.Spec.Hostname = ""
+		Expect(k8sClient.Update(ctx, w)).To(Succeed())
+
+		fake := &fakeTalosClient{version: testTalosVersion, current: renderAt(cluster, w, testK8sOld), nodeName: name}
+		adv := newKubernetesAdvancer(fake, &fakeKubernetesAdmin{})
+
+		done, err := adv.Advance(ctx, cluster, fetchMachine(w), nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(done).To(BeFalse())
+		Expect(fake.applyCalls).To(HaveLen(1), "the node was found by the name it reports, and the step ran")
+	})
+
 	It("applies a worker's kubelet image once, pre-pulls it, and finishes when the node runs the target", func() {
 		cluster := k8sCluster(testK8sTarget)
 		w := newK8sWorker(cluster.Name, "w1")

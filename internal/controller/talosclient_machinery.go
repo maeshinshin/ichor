@@ -156,6 +156,20 @@ func (t *machineryTalosClient) ApplyNoReboot(ctx context.Context, cfg []byte) er
 	return err
 }
 
+// ApplyStaged applies cfg with ApplyConfigurationRequest_STAGED. See TalosClient.ApplyStaged.
+func (t *machineryTalosClient) ApplyStaged(ctx context.Context, cfg []byte) error {
+	_, err := t.c.ApplyConfiguration(ctx, &machineapi.ApplyConfigurationRequest{
+		Data: cfg, Mode: machineapi.ApplyConfigurationRequest_STAGED,
+	})
+
+	return err
+}
+
+// Reboot calls this node's Reboot API with the default (graceful) mode.
+func (t *machineryTalosClient) Reboot(ctx context.Context) error {
+	return t.c.Reboot(ctx)
+}
+
 // EtcdMemberList lists etcd members as this node's own machined sees them
 // (etcd's membership is raft-replicated, so any member -- not only a
 // control plane the request happens to be "about" -- reports the same

@@ -105,6 +105,14 @@ type fakeTalosClient struct {
 	// upgradeBudget is the time left on the Upgrade call's context when it arrived.
 	upgradeBudget time.Duration
 
+	// config-rollout fields: config_rollout_test.go's fixtures (ADR 0078).
+	stagedErr    error
+	stagedCalls  [][]byte
+	rebootErr    error
+	rebootCalls  int
+	stagedBudget time.Duration
+	rebootBudget time.Duration
+
 	// shutdown-related fields: shutdown_test.go's fixtures (ADR 0067).
 	shutdownErr   error
 	shutdownCalls []bool // the force argument of each call, in order
@@ -140,6 +148,24 @@ func (f *fakeTalosClient) ApplyNoReboot(ctx context.Context, cfg []byte) error {
 	f.applyCalls = append(f.applyCalls, cfg)
 
 	return f.applyErr
+}
+
+func (f *fakeTalosClient) ApplyStaged(ctx context.Context, cfg []byte) error {
+	if dl, ok := ctx.Deadline(); ok {
+		f.stagedBudget = time.Until(dl)
+	}
+	f.stagedCalls = append(f.stagedCalls, cfg)
+
+	return f.stagedErr
+}
+
+func (f *fakeTalosClient) Reboot(ctx context.Context) error {
+	if dl, ok := ctx.Deadline(); ok {
+		f.rebootBudget = time.Until(dl)
+	}
+	f.rebootCalls++
+
+	return f.rebootErr
 }
 
 func (f *fakeTalosClient) EtcdMemberList(context.Context) ([]EtcdMember, error) {
@@ -575,6 +601,8 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(fake.applyCalls).To(BeEmpty())
+		Expect(fake.stagedCalls).To(BeEmpty(), "no operation, so nothing is staged")
+		Expect(fake.rebootCalls).To(BeZero(), "no operation, so nothing reboots")
 
 		got := fetchMachine(m)
 		Expect(got.Status.AppliedConfigHash).To(BeEmpty())
@@ -583,11 +611,44 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(cond).NotTo(BeNil())
 		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
 		Expect(cond.Reason).To(Equal(reasonRebootRequired))
+		Expect(cond.Message).To(ContainSubstring("cluster.proxy.disabled"), "the message names the field that needs the reboot")
+		Expect(cond.Message).To(ContainSubstring("ichor config apply"), "and says how to apply it")
+		Expect(got.Status.RebootPaths).To(ContainElement("cluster.proxy.disabled"))
 
 		lock := clusterlock.New(k8sClient, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0)
 		_, held, err := lock.Holder(ctx)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(held).To(BeFalse(), "cluster lock should have been released")
+	})
+
+	It("does not release a lock a running operation holds as the controller", func() {
+		bundle := newTestBundle("v1.14")
+		secret := newTestSecret(bundle)
+		cluster := newTestCluster(secret.Name, "v1.14")
+		m := newTestMachine(cluster.Name, true)
+
+		current := renderWithConfig(cluster, m, bundle, layerCluster, nil, minimalConfigSkeleton())
+
+		disabled := true
+		desired := minimalConfigSkeleton()
+		desired.ClusterConfig.ProxyConfig = &typedconfig.ProxyConfig{Disabled: &disabled}
+		newTestPatch(cluster.Name, layerCluster, nil, desired)
+
+		lock := clusterlock.New(k8sClient, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0)
+		Expect(lock.Acquire(ctx, controllerIdentity)).To(Succeed())
+
+		fake := &fakeTalosClient{current: current}
+		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
+
+		_, err := reconcileMachine(r, m)
+		Expect(err).NotTo(HaveOccurred())
+
+		holder, held, err := lock.Holder(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(held).To(BeTrue())
+		Expect(holder).To(Equal(controllerIdentity))
+		Expect(fake.stagedCalls).To(BeEmpty())
+		Expect(fake.rebootCalls).To(BeZero(), "the machine reconciler never reboots a node")
 	})
 
 	It("reports the lock's holder and leaves it alone when another identity already holds it", func() {

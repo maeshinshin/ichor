@@ -86,6 +86,11 @@ import (
 // webhook cert rotator's FieldOwner).
 const controllerIdentity = "ichor-controller"
 
+// machineLockIdentity is the identity under which the machine reconciler probes the cluster lock
+// for a reboot-requiring change it only reports (refuseReboot); distinct from controllerIdentity
+// so it can never release a lock a TalosOperation holds.
+const machineLockIdentity = "ichor-controller/machine"
+
 // roleControlPlane is TalosMachineSpec.Role's control-plane value, shared
 // across this package's own uses of it (talosoperation_controller.go and
 // removal.go) rather than each repeating the literal.
@@ -389,6 +394,7 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	if hashConfig(current) == hash {
 		m.Status.AppliedConfigHash = hash
 		m.Status.ObservedInputsHash = inputsHash
+		m.Status.RebootPaths = nil
 
 		return ctrl.Result{}, r.ready(ctx, &m, metav1.ConditionTrue, reasonConverged,
 			"node configuration matches the rendered configuration")
@@ -447,6 +453,8 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		driftNote = "node configuration has drifted from the rendered configuration; "
 	}
 
+	m.Status.RebootPaths = nil
+
 	switch {
 	case len(impact.Unsupported) > 0:
 		return ctrl.Result{}, r.ready(ctx, &m, metav1.ConditionFalse, reasonUnsupportedTalosVersion,
@@ -459,7 +467,7 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 				driftNote, strings.Join(impact.InstallTimeOnly, ", ")))
 
 	case impact.RebootRequired:
-		return r.refuseReboot(ctx, &m, &cluster, driftNote)
+		return r.refuseReboot(ctx, &m, &cluster, driftNote, impact.RebootPaths)
 
 	case drifted && cluster.Spec.DriftPolicy != driftPolicyAutoCorrect:
 		return ctrl.Result{}, r.ready(ctx, &m, metav1.ConditionFalse, reasonNodeDrifted,
@@ -590,32 +598,51 @@ func desiredInputsHash(
 	return render.Hash([]byte(strings.Join(parts, ";"))), nil
 }
 
-// refuseReboot implements the reboot-needed branch of design step 5: take
-// the cluster lock, then stop. Draining, the node-operation hook and the
-// etcd checks that must precede a real reboot are phase 3 and 7 work (unit
-// rule 4); applying or rebooting without them would take workloads down, so
-// the only correct move here is a visible, lock-protected refusal.
+// refuseReboot is the reboot-needed branch of design step 5. This reconciler never reboots a node:
+// the hook, the drain and the etcd checks that must precede a reboot belong to a config-rollout
+// TalosOperation (ADR 0078), which someone has to start. Here it only reports, naming the fields
+// that need the reboot (also kept in status.rebootPaths for the rollout's plan), after the lock
+// refusals that say why the cluster could not take one right now.
+//
+// The lock is taken under machineLockIdentity, not controllerIdentity: a running rollout holds
+// the lock as controllerIdentity, and Release for the same identity would free it from under the
+// rollout. Under its own identity this probe is refused ("held") while a rollout runs, and
+// only ever releases what it took itself.
 func (r *TalosMachineReconciler) refuseReboot(
-	ctx context.Context, m *ichorv1alpha1.TalosMachine, cluster *ichorv1alpha1.TalosCluster, driftNote string,
+	ctx context.Context, m *ichorv1alpha1.TalosMachine, cluster *ichorv1alpha1.TalosCluster, driftNote string, paths []string,
 ) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
+	m.Status.RebootPaths = paths
+
 	// A reboot-causing apply never itself completes a control-plane
 	// transition, so completesTransition is always false here.
-	lock, err := r.acquireDisruptiveLock(ctx, cluster, m, controllerIdentity, false)
+	lock, err := r.acquireDisruptiveLock(ctx, cluster, m, machineLockIdentity, false)
 	if err != nil {
 		return r.lockRefusal(ctx, m, err, driftNote, "reboot-requiring change deferred")
 	}
 
 	defer func() {
-		if err := lock.Release(ctx, controllerIdentity); err != nil {
+		if err := lock.Release(ctx, machineLockIdentity); err != nil {
 			log.Error(err, "releasing cluster lock")
 		}
 	}()
 
 	return ctrl.Result{}, r.ready(ctx, m, metav1.ConditionFalse, reasonRebootRequired,
-		driftNote+"configuration change needs a reboot; this phase does not reboot nodes -- "+
-			"draining, the node-operation hook and etcd checks that must precede a reboot are later work")
+		driftNote+"configuration change needs a reboot (fields: "+summarizePaths(paths, rebootPathsInMessage)+
+			"); nothing reboots a node on its own -- start a config rollout (ichor config apply, or the cluster page) to apply it")
+}
+
+// rebootPathsInMessage caps how many field paths a Ready message lists; status.rebootPaths has all.
+const rebootPathsInMessage = 5
+
+// summarizePaths joins up to limit paths and counts the rest.
+func summarizePaths(paths []string, limit int) string {
+	if len(paths) <= limit {
+		return strings.Join(paths, ", ")
+	}
+
+	return fmt.Sprintf("%s, and %d more", strings.Join(paths[:limit], ", "), len(paths)-limit)
 }
 
 // lockRefusal turns an acquireDisruptiveLock error into a visible, retried refusal; deferred

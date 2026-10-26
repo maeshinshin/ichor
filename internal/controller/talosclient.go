@@ -49,6 +49,16 @@ type TalosClient interface {
 	// change needs neither a reboot nor a reinstall.
 	ApplyNoReboot(ctx context.Context, cfg []byte) error
 
+	// ApplyStaged applies cfg with ApplyConfigurationRequest_STAGED: it is written to disk and
+	// takes effect on the next boot, nothing restarts. Only the config-rollout executor calls
+	// it, and only just before Reboot (ADR 0078); ADR 0009 is why the mode is chosen by the
+	// caller and never by Talos.
+	ApplyStaged(ctx context.Context, cfg []byte) error
+
+	// Reboot asks this node to reboot gracefully (not forced, so Talos cordons and drains it
+	// first, as for Shutdown). The RPC returns once the request is accepted.
+	Reboot(ctx context.Context) error
+
 	// EtcdMemberList lists etcd members as seen by the node this client is
 	// dialed to (removal.go: queried on the departing machine's own client
 	// first, and on a surviving sibling's client as a fallback, to decide

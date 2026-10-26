@@ -36,6 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/test/internal/kube"
 	"github.com/maeshinshin/ichor/test/internal/talosctl"
 	"github.com/maeshinshin/ichor/test/utils"
 )
@@ -185,7 +186,7 @@ var _ = Describe("short", Label("short"), Ordered, func() {
 			"talosmachines.ichor.maesh.dev",
 			"talosconfigpatches.ichor.maesh.dev",
 		} {
-			_, err := utils.Run(exec.Command("kubectl", "wait", "crd/"+crd,
+			_, err := utils.Run(kube.InnerCommand(innerKubeconfig, "wait", "crd/"+crd,
 				"--for=condition=Established", "--timeout=60s"))
 			Expect(err).NotTo(HaveOccurred(), "CRD %s did not reach Established", crd)
 		}

@@ -51,6 +51,11 @@ type SystemInputs struct {
 	// CARotation is a CA rotation's current stage and new CAs (ADR 0063). Only the rotation
 	// executor sets it; nil is the normal case.
 	CARotation *CARotation
+
+	// Staged pins the kubelet and kube-proxy below spec.kubernetesVersion while a Kubernetes
+	// upgrade moves the control planes first (ADR 0087). Only the upgrade executor sets it; nil is
+	// the normal case.
+	Staged *StagedKubernetes
 }
 
 // ResolveSystemInputs reads what Render's system layer needs: registry credentials from

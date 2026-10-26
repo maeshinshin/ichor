@@ -229,6 +229,12 @@ func BuildConfig(
 		return nil, err
 	}
 
+	// A staged Kubernetes upgrade pins the kubelet and kube-proxy below the spec (ADR 0087).
+	cfg, err = injectStagedVersions(cfg, contract, sys.staged())
+	if err != nil {
+		return nil, err
+	}
+
 	ordered, err := SelectPatches(cluster, m, candidates)
 	if err != nil {
 		return nil, err

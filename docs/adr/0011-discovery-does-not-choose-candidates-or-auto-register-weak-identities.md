@@ -345,3 +345,5 @@ given `TalosCluster` -- on a timer, on a watch event, from a CLI command --
 is a separate question this phase still does not answer, for the same
 reason the original endpoint question was deferred: it is its own design
 decision, not implied by anything settled here.
+
+- Addendum (ADR 0086): the same identity answering in maintenance mode at a new address is recorded in `status.observedEndpoint`, never in `spec.endpoint`.

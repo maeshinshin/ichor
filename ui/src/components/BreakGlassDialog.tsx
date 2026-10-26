@@ -1,20 +1,13 @@
 import { useState } from 'preact/hooks'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { PullRequestNotice } from '@/components/PullRequestNotice'
 import { breakGlassRequest, reasonIsValid } from '@/lib/breakGlass'
+import { notifyDone } from '@/lib/notify'
 import { describeError } from '@/lib/errors'
 import { useT } from '@/lib/useT'
 
@@ -41,7 +34,9 @@ export function BreakGlassDialog({ run, onDone }: { run: BreakGlassRun; onDone?:
     setSubmitting(true)
     setError(null)
     try {
-      setOutcome(await run(breakGlassRequest(reason)))
+      const out = await run(breakGlassRequest(reason))
+      setOutcome(out)
+      notifyDone(out.pullRequestUrl ? t('toast.breakGlassPr') : t('toast.breakGlass'))
     } catch (err) {
       setError(describeError(err))
     } finally {
@@ -55,60 +50,49 @@ export function BreakGlassDialog({ run, onDone }: { run: BreakGlassRun; onDone?:
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger asChild>
+    <ConfirmDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      trigger={
         <Button size="sm" variant="destructive">
           {t('breakGlass.button')}
         </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-lg">
-        {outcome ? (
-          <>
-            <DialogHeader>
-              <DialogTitle>{t('breakGlass.done')}</DialogTitle>
-            </DialogHeader>
-            {outcome.notice && (
-              <Alert variant="destructive">
-                <AlertTitle>{t('breakGlass.noticeTitle')}</AlertTitle>
-                <AlertDescription>{outcome.notice}</AlertDescription>
-              </Alert>
-            )}
-            {outcome.pullRequestUrl && <PullRequestNotice url={outcome.pullRequestUrl} direct />}
-            <DialogFooter>
-              <Button variant="ghost" onClick={() => onOpenChange(false)}>
-                {t('common.close')}
-              </Button>
-            </DialogFooter>
-          </>
-        ) : (
-          <>
-            <DialogHeader>
-              <DialogTitle>{t('breakGlass.title')}</DialogTitle>
-              <DialogDescription>{t('breakGlass.description')}</DialogDescription>
-            </DialogHeader>
-            <p class="text-sm text-muted-foreground">{t('breakGlass.selfHeal')}</p>
-            <div class="space-y-1">
-              <Label htmlFor="break-glass-reason">{t('breakGlass.reason')}</Label>
-              <Textarea
-                id="break-glass-reason"
-                value={reason}
-                required
-                onInput={(e) => setReason((e.target as HTMLTextAreaElement).value)}
-                placeholder={t('breakGlass.reasonPlaceholder')}
-              />
-            </div>
-            {error && <ErrorAlert {...error} />}
-            <DialogFooter>
-              <Button variant="ghost" onClick={() => setOpen(false)}>
-                {t('common.cancel')}
-              </Button>
-              <Button variant="destructive" disabled={submitting || !reasonIsValid(reason)} onClick={submit}>
-                {submitting ? t('breakGlass.submitting') : t('breakGlass.submit')}
-              </Button>
-            </DialogFooter>
-          </>
-        )}
-      </DialogContent>
-    </Dialog>
+      }
+      title={outcome ? t('breakGlass.done') : t('breakGlass.title')}
+      description={outcome ? undefined : t('breakGlass.description')}
+      closeLabel={outcome ? t('common.close') : undefined}
+      confirm={
+        outcome
+          ? undefined
+          : { label: submitting ? t('breakGlass.submitting') : t('breakGlass.submit'), disabled: submitting || !reasonIsValid(reason), onClick: submit }
+      }
+    >
+      {outcome ? (
+        <>
+          {outcome.notice && (
+            <Alert variant="destructive">
+              <AlertTitle>{t('breakGlass.noticeTitle')}</AlertTitle>
+              <AlertDescription>{outcome.notice}</AlertDescription>
+            </Alert>
+          )}
+          {outcome.pullRequestUrl && <PullRequestNotice url={outcome.pullRequestUrl} direct />}
+        </>
+      ) : (
+        <>
+          <p class="text-sm text-muted-foreground">{t('breakGlass.selfHeal')}</p>
+          <div class="space-y-1">
+            <Label htmlFor="break-glass-reason">{t('breakGlass.reason')}</Label>
+            <Textarea
+              id="break-glass-reason"
+              value={reason}
+              required
+              onInput={(e) => setReason((e.target as HTMLTextAreaElement).value)}
+              placeholder={t('breakGlass.reasonPlaceholder')}
+            />
+          </div>
+          {error && <ErrorAlert {...error} />}
+        </>
+      )}
+    </ConfirmDialog>
   )
 }

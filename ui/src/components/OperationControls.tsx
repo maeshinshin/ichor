@@ -1,17 +1,10 @@
 import { useState } from 'preact/hooks'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import type { Operation } from '@/gen/ichor/v1alpha1/operation_pb'
 import { operationClient } from '@/lib/connect'
+import { notifyDone } from '@/lib/notify'
 import { describeError } from '@/lib/errors'
 import { operationState, pauseAction } from '@/lib/operations'
 import { useT } from '@/lib/useT'
@@ -42,6 +35,7 @@ export function OperationControls({
     try {
       const res = await operationClient.setOperationPaused({ operation: op.ref, paused })
       if (res.operation) onChanged(res.operation)
+      notifyDone(t(paused ? 'toast.opPaused' : 'toast.opResumed'))
     } catch (err) {
       setError(describeError(err))
     } finally {
@@ -56,6 +50,7 @@ export function OperationControls({
     try {
       await operationClient.deleteOperation({ operation: op.ref })
       setOpen(false)
+      notifyDone(t('toast.opDeleted'))
       onDeleted()
     } catch (err) {
       setError(describeError(err))
@@ -72,28 +67,20 @@ export function OperationControls({
             {busy ? t('ops.pausing') : t(action === 'pause' ? 'ops.pause' : 'ops.resume')}
           </Button>
         )}
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
+        <ConfirmDialog
+          open={open}
+          onOpenChange={setOpen}
+          trigger={
             <Button size="sm" variant="destructive">
               {t('ops.delete')}
             </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{t('ops.deleteTitle', { name: op.ref?.name ?? '' })}</DialogTitle>
-              <DialogDescription>{t('ops.deleteDescription')}</DialogDescription>
-            </DialogHeader>
-            {error && <ErrorAlert {...error} />}
-            <DialogFooter>
-              <Button variant="ghost" onClick={() => setOpen(false)}>
-                {t('common.cancel')}
-              </Button>
-              <Button variant="destructive" disabled={busy} onClick={remove}>
-                {busy ? t('ops.deleting') : t('ops.delete')}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+          }
+          title={t('ops.deleteTitle', { name: op.ref?.name ?? '' })}
+          description={t('ops.deleteDescription')}
+          confirm={{ label: busy ? t('ops.deleting') : t('ops.delete'), disabled: busy, onClick: remove }}
+        >
+          {error && <ErrorAlert {...error} />}
+        </ConfirmDialog>
       </div>
       {error && !open && <ErrorAlert {...error} />}
     </div>

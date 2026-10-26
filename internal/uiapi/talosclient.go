@@ -56,6 +56,18 @@ type NodeTalosClient interface {
 	// ResourceUsage reads a live CPU/memory/filesystem snapshot.
 	ResourceUsage(ctx context.Context) (*pb.ResourceUsage, error)
 
+	// TalosSystem, TalosNetwork, TalosStorage, TalosServices and
+	// TalosExtensions back GetNodeTalosDetails (docs/adr/0071). Each reads
+	// one independent slice of the node, picking fields explicitly; none
+	// returns a configuration document, certificate, key or token. The
+	// section's Error field is left empty here: the caller fills it from the
+	// returned error.
+	TalosSystem(ctx context.Context) (*pb.TalosSystemSection, error)
+	TalosNetwork(ctx context.Context) (*pb.TalosNetworkSection, error)
+	TalosStorage(ctx context.Context) (*pb.TalosStorageSection, error)
+	TalosServices(ctx context.Context) (*pb.TalosServicesSection, error)
+	TalosExtensions(ctx context.Context) (*pb.TalosExtensionsSection, error)
+
 	// StreamLogs tails one log and calls onLine for every line after since
 	// (the mechanism StreamNodeLogs's resume token relies on) until ctx is
 	// done or the underlying stream ends. service selects which log:

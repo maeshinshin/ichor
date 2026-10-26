@@ -128,6 +128,7 @@ rules:
   - ichor.maesh.dev
   resources:
   - talosmachines/finalizers
+  - talosoperations/finalizers
   verbs:
   - update
 - apiGroups:

@@ -423,6 +423,10 @@ func main() {
 		TalosClient:         controller.NewMachineryTalosClient,
 		ControllerNamespace: os.Getenv("POD_NAMESPACE"),
 		NodeName:            os.Getenv("NODE_NAME"),
+		// The ca-rotation kind is, like shutdown, dispatched by the backbone to its own
+		// state machine: it needs the Kubernetes Node readiness check and an Event recorder.
+		NodesReady: controller.NewNodesReady(),
+		Recorder:   mgr.GetEventRecorderFor("ichor-controller"), //nolint:staticcheck // typed against record.EventRecorder, as above
 		Advance: func(
 			ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, op *ichorv1alpha1.TalosOperation,
 		) (bool, error) {

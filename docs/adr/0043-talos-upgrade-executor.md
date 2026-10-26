@@ -46,3 +46,37 @@ the same evacuation before its drain: the decision lives once in
 upgrade and removal call, with the same `StorageEvacuation` condition as the
 resume marker and timeout clock. A removal-side timeout stops the removal
 (scheduling re-enabled, Warning Event) and retries evacuation; it never drains.
+
+## E2E observation (2026-10-26)
+
+Run on the 3-control-plane KubeVirt cluster (Talos v1.14.3, Cilium, no storage),
+`TalosCluster.spec.talosVersion` set to v1.14.4 (factory schematic
+`376567988a...`, the harness's), then a `TalosOperation` `kind: talos`. The
+controller ran in a pod on the outer cluster with webhooks off. The
+`pkg/render` `vv` image bug (7dcc455) was not hit: the harness builds the node
+config with the machinery generator directly, and the controller only
+dry-ran it (`RebootRequired`, not applied).
+
+- **First attempt failed, a real bug**: `Upgrade` ran under the 15 s
+  `etcdDialTimeout` context. The RPC blocks while the node pulls and installs
+  the installer image, so it returned `DeadlineExceeded`, the operation went
+  Paused, and the node was untouched (still v1.14.3). Fixed with a separate
+  10-minute bound for that call (`upgradeCallTimeout`).
+- **Second attempt (created 14:02:53 JST, finished 14:12:13):**
+  the operation went Paused at once with no machines (a cluster lock still held
+  from the deleted first operation), then started at about 14:05. Order:
+  ha-0 `TalosUpgrade=True/UpgradeRequested`, then Converged (about 14:06:35);
+  ha-1 NotReady,SchedulingDisabled during the reboot, Converged (about
+  14:09:54); ha-2, Converged; operation `Completed` at 14:12:13. Never two
+  nodes at once.
+- Afterwards `talosctl version` on all three: v1.14.4; `etcd members`: three
+  voters, none learner; `get machinestatus`: running, ready; Kubernetes nodes
+  Ready. No A/B fallback occurred.
+- Rough edges seen: while a control plane rebooted the operation briefly went
+  Paused (`clusterlock: held by "ichor-controller"` and API connection errors in
+  the controller log, because the test controller's kubeconfig names one node's
+  apiserver) and resumed on its own; the status showed `Paused` with
+  `ha-1 InProgress` for about a minute. The evacuation hook was not exercised
+  (no TalosStorage), only the pass-through path.
+- Drain/cordon is Talos's own; the node showed SchedulingDisabled during
+  its turn.

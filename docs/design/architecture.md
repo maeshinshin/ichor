@@ -683,12 +683,13 @@ operator-created resources.
 Cilium stays Synced with `ignoreDifferences` on `cilium.io/CiliumIdentity` plus
 the `ServerSideApply=true` sync option. `RespectIgnoreDifferences` is not set:
 it only matters for fields of a manifest Argo CD applies, and the chart never
-renders `CiliumIdentity` (the operator creates them). The basis is an
-observation of an Argo CD-managed Cilium 1.20.0 that is Synced with exactly
-that, in the author's own homelab. It is not a cluster Ichor handed over, and
-Ichor pins chart 1.18.0; Ichor's own confirmation is the end-to-end run. The
-Calico values will be decided when Calico is built, by the same method:
-observing a working Argo CD-managed Calico (ADR 0055).
+renders `CiliumIdentity` (the operator creates them). Observed on a cluster
+Ichor's own Application was applied to (Talos on KubeVirt, Cilium chart 1.18.0,
+Argo CD v3.5.6, 2026-10-26): Synced and stable for the full run, and still
+Synced with the `ignoreDifferences` entry removed, so on that cluster the
+entry did not change the outcome (ADR 0055). It is kept because the homelab
+reference carries it. The Calico values will be decided when Calico is built,
+by observing a working Argo CD-managed Calico.
 
 With Kokumi (below) Ichor does not write the Application, and as of Kokumi's
 source at 2026-10-21 the Application has `ServerSideApply=true` but no field to
@@ -949,9 +950,9 @@ resumption works. A short set runs per PR, the full set nightly.
   reference exists yet; decide when Calico is built, by observing a working
   Argo CD-managed Calico.
 - Cilium with Kokumi: Kokumi's Application cannot carry `ignoreDifferences`.
-  Does a `resource.customizations.ignoreDifferences.cilium.io_CiliumIdentity`
-  key in `argocd-cm` (which takes field selectors, not a bare kind) keep the
-  Application Synced, and does Kokumi want such a field added upstream?
+  The e2e run found Cilium Synced without it (ADR 0055), so this probably does
+  not matter; whether it stays true over a Cilium upgrade or with Gateway API
+  and L2 announcements enabled is not observed.
 
 ## Alternatives considered
 

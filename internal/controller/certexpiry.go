@@ -28,12 +28,14 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	talosx509 "github.com/siderolabs/crypto/x509"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/secretsbundle"
 )
 
 const (
@@ -99,6 +101,10 @@ func (r *CertExpiryReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{RequeueAfter: certExpiryRetry}, nil
 	}
 
+	if err := r.clearBundleBackupStale(ctx, &cluster, bundle); err != nil {
+		return ctrl.Result{}, err
+	}
+
 	expiries, err := certificateExpiries(bundle)
 	if err != nil {
 		ctrl.LoggerFrom(ctx).Info("Cannot read a certificate in the secrets bundle", "reason", err.Error())
@@ -122,6 +128,35 @@ func (r *CertExpiryReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 
 	return ctrl.Result{RequeueAfter: certExpiryRecheck}, nil
+}
+
+// clearBundleBackupStale lowers BundleBackupStale once the user has exported the live bundle: the
+// annotation ichor sets after saving the file holds the fingerprint of what it saved, and only a
+// match with the bundle in the cluster counts. An export of an older bundle, or none,
+// leaves the condition up.
+func (r *CertExpiryReconciler) clearBundleBackupStale(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, bundle *secrets.Bundle,
+) error {
+	if !apimeta.IsStatusConditionTrue(cluster.Status.Conditions, ichorv1alpha1.ConditionBundleBackupStale) {
+		return nil
+	}
+
+	want, err := secretsbundle.BundleFingerprint(bundle)
+	if err != nil || cluster.Annotations[ichorv1alpha1.BundleExportedAnnotation] != want {
+		return nil //nolint:nilerr // an unreadable bundle keeps the condition up; the expiry path reports it
+	}
+
+	base := cluster.DeepCopy()
+	apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+		Type: ichorv1alpha1.ConditionBundleBackupStale, Status: metav1.ConditionFalse, Reason: "Exported",
+		Message: "the current secrets bundle has been exported", ObservedGeneration: cluster.Generation,
+	})
+
+	if err := r.Status().Patch(ctx, cluster, client.MergeFrom(base)); err != nil {
+		return fmt.Errorf("clearing BundleBackupStale: %w", err)
+	}
+
+	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

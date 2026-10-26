@@ -19,6 +19,7 @@ package cli
 import (
 	"fmt"
 	"io"
+	"net/netip"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -123,6 +124,47 @@ type initPlanInput struct {
 	// the other three roles; see buildInitPlan's doc comment). Required:
 	// without it the node cannot install itself non-interactively.
 	InstallDisk string
+
+	// PodSubnets and ServiceSubnets set TalosCluster.spec.network; empty keeps
+	// Talos's defaults.
+	PodSubnets     []string
+	ServiceSubnets []string
+
+	// RegistryMirrors are "HOST=URL" pairs for spec.registries: anonymous mirrors only, since
+	// a new cluster has no Secret to read credentials from yet.
+	RegistryMirrors []string
+}
+
+// maxSubnetsPerRange is the CRD's limit: one CIDR per IP family.
+const maxSubnetsPerRange = 2
+
+func validateCIDRs(flag string, cidrs []string) error {
+	if len(cidrs) > maxSubnetsPerRange {
+		return fmt.Errorf("init: %s takes at most %d CIDRs (one per IP family)", flag, maxSubnetsPerRange)
+	}
+
+	for _, c := range cidrs {
+		if _, err := netip.ParsePrefix(c); err != nil {
+			return fmt.Errorf("init: %s %q is not a CIDR: %w", flag, c, err)
+		}
+	}
+
+	return nil
+}
+
+func parseRegistryMirrors(specs []string) ([]ichorv1alpha1.TalosClusterRegistry, error) {
+	var out []ichorv1alpha1.TalosClusterRegistry
+
+	for _, s := range specs {
+		host, endpoint, ok := strings.Cut(s, "=")
+		if !ok || host == "" || endpoint == "" {
+			return nil, fmt.Errorf("init: --registry-mirror %q must be HOST=URL", s)
+		}
+
+		out = append(out, ichorv1alpha1.TalosClusterRegistry{Host: host, Endpoints: []string{endpoint}})
+	}
+
+	return out, nil
 }
 
 // secretsRefName is the Secret name buildInitPlan assigns to
@@ -219,9 +261,29 @@ func buildInitPlan(in initPlanInput, warn io.Writer) (*ichorv1alpha1.TalosCluste
 		return nil, fmt.Errorf("init: --install-disk is required")
 	}
 
+	if err := validateCIDRs("--pod-subnets", in.PodSubnets); err != nil {
+		return nil, err
+	}
+
+	if err := validateCIDRs("--service-subnets", in.ServiceSubnets); err != nil {
+		return nil, err
+	}
+
+	registries, err := parseRegistryMirrors(in.RegistryMirrors)
+	if err != nil {
+		return nil, err
+	}
+
+	var network *ichorv1alpha1.TalosClusterNetwork
+	if len(in.PodSubnets) > 0 || len(in.ServiceSubnets) > 0 {
+		network = &ichorv1alpha1.TalosClusterNetwork{PodSubnets: in.PodSubnets, ServiceSubnets: in.ServiceSubnets}
+	}
+
 	return &ichorv1alpha1.TalosCluster{
 		Name: in.Cluster, Namespace: in.Namespace,
 		Spec: ichorv1alpha1.TalosClusterSpec{
+			Network:           network,
+			Registries:        registries,
 			Endpoint:          ichorv1alpha1.TalosClusterEndpoint{Type: in.EndpointType, Address: in.EndpointAddress},
 			TalosVersion:      in.TalosVersion,
 			KubernetesVersion: in.KubernetesVersion,

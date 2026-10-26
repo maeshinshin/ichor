@@ -81,6 +81,14 @@ var _ = Describe("TalosConfigPatch", func() {
 		Entry("target set but none of its fields chosen", "role", &TalosConfigPatchTarget{}),
 		Entry("layer cluster with a target", literalCluster, &TalosConfigPatchTarget{Role: literalControlPlane}),
 		Entry("layer machine without a target", "machine", nil),
+		Entry("layer role with a machineRef target", "role",
+			&TalosConfigPatchTarget{MachineRef: &corev1.LocalObjectReference{Name: "m"}}),
+		Entry("layer role with a labelSelector target", "role",
+			&TalosConfigPatchTarget{LabelSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"k": "v"}}}),
+		Entry("layer selector with a role target", "selector", &TalosConfigPatchTarget{Role: "worker"}),
+		Entry("layer machine with a role target", "machine", &TalosConfigPatchTarget{Role: "worker"}),
+		Entry("layer machine with a labelSelector target", "machine",
+			&TalosConfigPatchTarget{LabelSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"k": "v"}}}),
 	)
 
 	DescribeTable("accepted target/layer combinations",

@@ -716,8 +716,12 @@ type NodeDetail struct {
 	NetworkInterfaces []*NetworkInterface    `protobuf:"bytes,4,rep,name=network_interfaces,json=networkInterfaces,proto3" json:"network_interfaces,omitempty"`
 	ResourceUsage     *ResourceUsage         `protobuf:"bytes,5,opt,name=resource_usage,json=resourceUsage,proto3" json:"resource_usage,omitempty"`
 	Kubernetes        *KubernetesNodeStatus  `protobuf:"bytes,6,opt,name=kubernetes,proto3" json:"kubernetes,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// kubernetes_permission_denied is true when the caller may not read the
+	// Kubernetes Node behind this machine; kubernetes is then
+	// unset, which does not mean the machine has not joined.
+	KubernetesPermissionDenied bool `protobuf:"varint,7,opt,name=kubernetes_permission_denied,json=kubernetesPermissionDenied,proto3" json:"kubernetes_permission_denied,omitempty"`
+	unknownFields              protoimpl.UnknownFields
+	sizeCache                  protoimpl.SizeCache
 }
 
 func (x *NodeDetail) Reset() {
@@ -790,6 +794,13 @@ func (x *NodeDetail) GetKubernetes() *KubernetesNodeStatus {
 		return x.Kubernetes
 	}
 	return nil
+}
+
+func (x *NodeDetail) GetKubernetesPermissionDenied() bool {
+	if x != nil {
+		return x.KubernetesPermissionDenied
+	}
+	return false
 }
 
 type ConfigOrigin struct {
@@ -1154,7 +1165,7 @@ const file_ichor_v1alpha1_node_proto_rawDesc = "" +
 	"\tnode_name\x18\x01 \x01(\tR\bnodeName\x12\x14\n" +
 	"\x05ready\x18\x02 \x01(\bR\x05ready\x12'\n" +
 	"\x0fkubelet_version\x18\x03 \x01(\tR\x0ekubeletVersion\x12 \n" +
-	"\vschedulable\x18\x04 \x01(\bR\vschedulable\"\x80\x03\n" +
+	"\vschedulable\x18\x04 \x01(\bR\vschedulable\"\xc2\x03\n" +
 	"\n" +
 	"NodeDetail\x123\n" +
 	"\amachine\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\amachine\x124\n" +
@@ -1164,7 +1175,8 @@ const file_ichor_v1alpha1_node_proto_rawDesc = "" +
 	"\x0eresource_usage\x18\x05 \x01(\v2\x1d.ichor.v1alpha1.ResourceUsageR\rresourceUsage\x12D\n" +
 	"\n" +
 	"kubernetes\x18\x06 \x01(\v2$.ichor.v1alpha1.KubernetesNodeStatusR\n" +
-	"kubernetes\"Y\n" +
+	"kubernetes\x12@\n" +
+	"\x1ckubernetes_permission_denied\x18\a \x01(\bR\x1akubernetesPermissionDenied\"Y\n" +
 	"\fConfigOrigin\x121\n" +
 	"\x05layer\x18\x01 \x01(\x0e2\x1b.ichor.v1alpha1.ConfigLayerR\x05layer\x12\x16\n" +
 	"\x06source\x18\x02 \x01(\tR\x06source\"\x8e\x01\n" +

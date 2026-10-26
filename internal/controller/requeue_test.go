@@ -62,7 +62,7 @@ var _ = Describe("TalosMachineReconciler requeue after a failure", func() {
 
 		res, err := reconcileMachine(r, m)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.RequeueAfter).To(BeNumerically(">", 0))
+		Expect(res.RequeueAfter).To(Equal(transientRecheck))
 		Expect(readyCondition(fetchMachine(m)).Reason).To(Equal(reasonTalosConnectFailed))
 
 		reachable = true
@@ -82,7 +82,7 @@ var _ = Describe("TalosMachineReconciler requeue after a failure", func() {
 
 		res, err := reconcileMachine(r, m)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.RequeueAfter).To(BeNumerically(">", 0))
+		Expect(res.RequeueAfter).To(Equal(transientRecheck))
 		Expect(readyCondition(fetchMachine(m)).Reason).To(Equal(reasonCurrentConfigUnavailable))
 	})
 
@@ -93,7 +93,7 @@ var _ = Describe("TalosMachineReconciler requeue after a failure", func() {
 
 		res, err := reconcileMachine(r, m)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.RequeueAfter).To(BeNumerically(">", 0))
+		Expect(res.RequeueAfter).To(Equal(transientRecheck))
 		Expect(readyCondition(fetchMachine(m)).Reason).To(Equal(reasonSecretsBundleUnavailable))
 	})
 
@@ -107,7 +107,7 @@ var _ = Describe("TalosMachineReconciler requeue after a failure", func() {
 
 		res, err := reconcileMachine(r, m)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.RequeueAfter).To(BeNumerically(">", 0))
+		Expect(res.RequeueAfter).To(Equal(transientRecheck))
 		Expect(readyCondition(fetchMachine(m)).Reason).To(Equal(reasonApplyFailed))
 
 		fake.applyErr = nil

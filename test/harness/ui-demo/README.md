@@ -36,7 +36,10 @@ kubectl --context admin@talos-cluster01 apply -f test/harness/ui-demo/tools-pod.
 # and bin/ui-demo.{kubeconfig,talosconfig} / ui-demo-secrets.yaml to :/work/{kubeconfig,talosconfig,secrets.yaml}
 # Inner kubectl: kubectl exec ichor-ui-demo-tools -- env KUBECONFIG=/work/kubeconfig /srv/kubectl ...
 # inner: apply config/crd/bases/*.yaml (--server-side), inner.yaml (TOOLS_IP -> the tools pod IP),
-#        config/rbac/ichor-ui/*.yaml (namespace system -> ichor-system), the secrets Secret
+#        config/rbac/ichor-ui/*.yaml (namespace system -> ichor-system; apply with
+#        `-n ichor-system`: the RoleBinding ichor-ui-secrets-rolebinding has no namespace
+#        in the source, so without it it lands in `default` and ichor-ui cannot read the
+#        bundle Secret; or use kustomize with the namespace set), the secrets Secret
 #        ichor-ui-demo-secrets (key secrets.yaml), ichor-crs.yaml (placeholders filled in)
 # ichor adopt --cluster ichor-ui-demo -n ichor-system ...  (with discovery temporarily off:
 #        adopt dials every machine, and a maintenance-mode worker has no credentials)

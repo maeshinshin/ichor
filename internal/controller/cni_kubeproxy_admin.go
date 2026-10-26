@@ -86,7 +86,7 @@ func removeKubeProxyObjects(ctx context.Context, c client.Client) error {
 			continue
 		}
 
-		if err := c.Delete(ctx, &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: kubeSystemNamespace, Name: name}}); err != nil &&
+		if err := c.Delete(ctx, &corev1.ConfigMap{Namespace: kubeSystemNamespace, Name: name}); err != nil &&
 			!apierrors.IsNotFound(err) {
 			return fmt.Errorf("deleting ConfigMap %q: %w", name, err)
 		}

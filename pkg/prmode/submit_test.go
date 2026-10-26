@@ -56,11 +56,11 @@ func TestSubmitPR_EndToEnd(t *testing.T) {
 		Host: HostGitea, APIBaseURL: srv.URL,
 		Owner: testOwner, Repo: testRepo, CloneURL: bare, Token: fakeToken,
 		BaseBranch: testBaseBranch, HeadBranch: testHeadBranch,
-		SourcePath: "clusters/prod",
+		SourcePath: testClustersProdPath,
 		Target:     patchTestTarget,
 		Updates:    bumpTalosVersion,
 		Title:      "Bump Talos to v1.10.0",
-		Requester:  "ichor-ui",
+		Requester:  testRequester,
 	}
 
 	result, err := SubmitPR(context.Background(), req)

@@ -63,7 +63,7 @@ func TestSubmitPR_NewFile(t *testing.T) {
 		BaseBranch: testBaseBranch, HeadBranch: testHeadBranch,
 		NewFile:   &NewFile{Path: "clusters/prod/machines/node-a.yaml", Content: []byte("kind: TalosMachine\n")},
 		Title:     "Approve node-a",
-		Requester: "ichor-ui",
+		Requester: testRequester,
 	}
 
 	res, err := SubmitPR(context.Background(), req)

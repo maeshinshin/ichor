@@ -32,6 +32,8 @@ import (
 // instead of opening another, and a tracked CR can be removed by PR.
 
 // lookup records the one GET a FindOpenPullRequest makes.
+const testRequester = "ichor-ui"
+
 type lookup struct {
 	method, path, rawQuery, auth string
 }
@@ -40,7 +42,8 @@ func lookupServer(t *testing.T, got *lookup, status int, body any) *httptest.Ser
 	t.Helper()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		*got = lookup{r.Method, r.URL.Path, r.URL.Query().Encode(), r.Header.Get("Authorization") + r.Header.Get("PRIVATE-TOKEN")}
+		auth := r.Header.Get("Authorization") + r.Header.Get("PRIVATE-TOKEN")
+		*got = lookup{r.Method, r.URL.Path, r.URL.Query().Encode(), auth}
 
 		w.WriteHeader(status)
 		_ = json.NewEncoder(w).Encode(body)
@@ -54,7 +57,7 @@ func TestFindOpenPullRequest_GitHub(t *testing.T) {
 	var got lookup
 
 	srv := lookupServer(t, &got, http.StatusOK, []map[string]string{
-		{htmlURLKey: "https://github.invalid/acme/r/pull/4", "state": "open"},
+		{htmlURLKey: "https://github.invalid/acme/r/pull/4", stateKey: stateOpen},
 	})
 
 	req := testPRRequest
@@ -122,7 +125,8 @@ func TestFindOpenPullRequest_GitLab(t *testing.T) {
 func TestFindOpenPullRequest_Gitea(t *testing.T) {
 	var got lookup
 
-	srv := lookupServer(t, &got, http.StatusOK, map[string]string{htmlURLKey: "https://gitea.invalid/acme/r/pulls/5", "state": "open"})
+	srv := lookupServer(t, &got, http.StatusOK,
+		map[string]string{htmlURLKey: "https://gitea.invalid/acme/r/pulls/5", stateKey: stateOpen})
 
 	req := testPRRequest
 	req.APIBaseURL = srv.URL
@@ -147,7 +151,7 @@ func TestFindOpenPullRequest_GiteaNotOpenOrMissing(t *testing.T) {
 		body   any
 	}{
 		"404":    {http.StatusNotFound, map[string]string{}},
-		"closed": {http.StatusOK, map[string]string{htmlURLKey: "https://gitea.invalid/p/1", "state": "closed"}},
+		"closed": {http.StatusOK, map[string]string{htmlURLKey: "https://gitea.invalid/p/1", stateKey: "closed"}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			var got lookup
@@ -193,13 +197,14 @@ func TestSubmitPR_ReturnsTheOpenPullRequest(t *testing.T) {
 			posted = true
 		}
 
-		_ = json.NewEncoder(w).Encode(map[string]string{htmlURLKey: "https://gitea.invalid/acme/r/pulls/8", "state": "open"})
+		pr := map[string]string{htmlURLKey: "https://gitea.invalid/acme/r/pulls/8", stateKey: stateOpen}
+		_ = json.NewEncoder(w).Encode(pr)
 	}))
 	defer srv.Close()
 
 	res, err := SubmitPR(context.Background(), SubmitPRRequest{
 		Host: HostGitea, APIBaseURL: srv.URL, Owner: testOwner, Repo: testRepo, CloneURL: bare, Token: fakeToken,
-		BaseBranch: testBaseBranch, HeadBranch: testHeadBranch, SourcePath: "clusters/prod",
+		BaseBranch: testBaseBranch, HeadBranch: testHeadBranch, SourcePath: testClustersProdPath,
 		Target: patchTestTarget, Updates: bumpTalosVersion,
 	})
 	if err != nil || res.URL != "https://gitea.invalid/acme/r/pulls/8" {
@@ -225,7 +230,7 @@ func TestSubmitPR_ReusesABranchLeftByAClosedPR(t *testing.T) {
 	srv := giteaServer(t, &gotBody)
 	req := SubmitPRRequest{
 		Host: HostGitea, APIBaseURL: srv.URL, Owner: testOwner, Repo: testRepo, CloneURL: bare, Token: fakeToken,
-		BaseBranch: testBaseBranch, HeadBranch: testHeadBranch, SourcePath: "clusters/prod",
+		BaseBranch: testBaseBranch, HeadBranch: testHeadBranch, SourcePath: testClustersProdPath,
 		Target: patchTestTarget, Updates: bumpTalosVersion,
 	}
 
@@ -262,6 +267,9 @@ data:
     odd:   "spacing"
 `
 
+const prodDoc = "apiVersion: ichor.maesh.dev/v1alpha1\nkind: TalosCluster\n" +
+	"metadata:\n  name: prod\n  namespace: ichor-system\n"
+
 func TestRemoveDocument(t *testing.T) {
 	target := patchTestTarget
 
@@ -276,12 +284,12 @@ func TestRemoveDocument(t *testing.T) {
 			remaining: true,
 		},
 		"first": {
-			in:        "apiVersion: ichor.maesh.dev/v1alpha1\nkind: TalosCluster\nmetadata:\n  name: prod\n  namespace: ichor-system\n---\nkind: ConfigMap\n  # odd\n",
+			in:        prodDoc + "---\nkind: ConfigMap\n  # odd\n",
 			want:      "kind: ConfigMap\n  # odd\n",
 			remaining: true,
 		},
 		"last": {
-			in:        "kind: ConfigMap\n---\napiVersion: ichor.maesh.dev/v1alpha1\nkind: TalosCluster\nmetadata:\n  name: prod\n  namespace: ichor-system\n",
+			in:        "kind: ConfigMap\n---\n" + prodDoc,
 			want:      "kind: ConfigMap\n",
 			remaining: true,
 		},
@@ -322,8 +330,8 @@ func pushFile(t *testing.T, bare, path, content string) {
 func deleteRequest(srvURL, bare string) SubmitPRRequest {
 	return SubmitPRRequest{
 		Host: HostGitea, APIBaseURL: srvURL, Owner: testOwner, Repo: testRepo, CloneURL: bare, Token: fakeToken,
-		BaseBranch: testBaseBranch, HeadBranch: "ichor/delete-prod", SourcePath: "clusters/prod",
-		Target: patchTestTarget, Delete: true, Title: "Delete prod", Requester: "ichor-ui",
+		BaseBranch: testBaseBranch, HeadBranch: "ichor/delete-prod", SourcePath: testClustersProdPath,
+		Target: patchTestTarget, Delete: true, Title: "Delete prod", Requester: testRequester,
 	}
 }
 

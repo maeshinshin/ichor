@@ -32,6 +32,15 @@ import (
 // same way.
 const titleKey = "title"
 
+// Spellings repeated across the host calls.
+const (
+	authorizationHeader = "Authorization"
+	baseKey             = "base"
+	headKey             = "head"
+	stateKey            = "state"
+	stateOpen           = "open"
+)
+
 // defaultGitHubAPI is GitHub's own public API root, used when
 // req.APIBaseURL is empty (GitHub Enterprise Server deployments set
 // their own).
@@ -137,11 +146,11 @@ func findGitHubPR(ctx context.Context, req PRRequest) (PRResult, bool, error) {
 		base = defaultGitHubAPI
 	}
 
-	q := url.Values{"state": {"open"}, "head": {req.Owner + ":" + req.HeadBranch}, "base": {req.BaseBranch}}
+	q := url.Values{stateKey: {stateOpen}, headKey: {req.Owner + ":" + req.HeadBranch}, baseKey: {req.BaseBranch}}
 	urlStr := base + "/repos/" + url.PathEscape(req.Owner) + "/" + url.PathEscape(req.Repo) + "/pulls?" + q.Encode()
 
 	headers := map[string]string{
-		"Authorization":        "Bearer " + req.Token,
+		authorizationHeader:    "Bearer " + req.Token,
 		"Accept":               "application/vnd.github+json",
 		"X-GitHub-Api-Version": "2022-11-28",
 	}
@@ -156,7 +165,7 @@ func findGitHubPR(ctx context.Context, req PRRequest) (PRResult, bool, error) {
 	}
 
 	for _, pr := range list {
-		if pr.State == "open" && pr.HTMLURL != "" {
+		if pr.State == stateOpen && pr.HTMLURL != "" {
 			return PRResult{URL: pr.HTMLURL}, true, nil
 		}
 	}
@@ -174,7 +183,8 @@ func findGitLabPR(ctx context.Context, req PRRequest) (PRResult, bool, error) {
 	}
 
 	q := url.Values{"state": {"opened"}, "source_branch": {req.HeadBranch}, "target_branch": {req.BaseBranch}}
-	urlStr := req.APIBaseURL + "/api/v4/projects/" + url.PathEscape(req.Owner+"/"+req.Repo) + "/merge_requests?" + q.Encode()
+	project := url.PathEscape(req.Owner + "/" + req.Repo)
+	urlStr := req.APIBaseURL + "/api/v4/projects/" + project + "/merge_requests?" + q.Encode()
 
 	var list []struct {
 		WebURL string `json:"web_url"`
@@ -213,7 +223,7 @@ func findGiteaPR(ctx context.Context, req PRRequest) (PRResult, bool, error) {
 		State   string `json:"state"`
 	}
 
-	err := getJSON(ctx, urlStr, map[string]string{"Authorization": "token " + req.Token}, &pr)
+	err := getJSON(ctx, urlStr, map[string]string{authorizationHeader: "token " + req.Token}, &pr)
 	if errors.Is(err, errNotFound) {
 		return PRResult{}, false, nil
 	}
@@ -222,7 +232,7 @@ func findGiteaPR(ctx context.Context, req PRRequest) (PRResult, bool, error) {
 		return PRResult{}, false, err
 	}
 
-	if pr.State != "open" || pr.HTMLURL == "" {
+	if pr.State != stateOpen || pr.HTMLURL == "" {
 		return PRResult{}, false, nil
 	}
 
@@ -253,13 +263,13 @@ func openGitHubPR(ctx context.Context, req PRRequest) (PRResult, error) {
 	urlStr := base + "/repos/" + url.PathEscape(req.Owner) + "/" + url.PathEscape(req.Repo) + "/pulls"
 
 	headers := map[string]string{
-		"Authorization":        "Bearer " + req.Token,
+		authorizationHeader:    "Bearer " + req.Token,
 		"Accept":               "application/vnd.github+json",
 		"X-GitHub-Api-Version": "2022-11-28",
 	}
 
 	body := map[string]string{
-		titleKey: req.Title, "head": req.HeadBranch, "base": req.BaseBranch, "body": req.Body,
+		titleKey: req.Title, headKey: req.HeadBranch, baseKey: req.BaseBranch, "body": req.Body,
 	}
 
 	var result struct {
@@ -314,10 +324,10 @@ func openGiteaPR(ctx context.Context, req PRRequest) (PRResult, error) {
 
 	urlStr := req.APIBaseURL + "/api/v1/repos/" + url.PathEscape(req.Owner) + "/" + url.PathEscape(req.Repo) + "/pulls"
 
-	headers := map[string]string{"Authorization": "token " + req.Token}
+	headers := map[string]string{authorizationHeader: "token " + req.Token}
 
 	body := map[string]string{
-		"head": req.HeadBranch, "base": req.BaseBranch, titleKey: req.Title, "body": req.Body,
+		headKey: req.HeadBranch, baseKey: req.BaseBranch, titleKey: req.Title, "body": req.Body,
 	}
 
 	var result struct {

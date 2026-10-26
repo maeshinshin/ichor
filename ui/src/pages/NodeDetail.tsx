@@ -13,7 +13,7 @@ import { NodeLogs } from '@/components/NodeLogs'
 import { TalosDetails } from '@/components/TalosDetails'
 import { TalosRuntime } from '@/components/TalosRuntime'
 import type { EffectiveConfigValue } from '@/gen/ichor/v1alpha1/node_pb'
-import { ConfigLayer, DiskRole, type NodeDetail as NodeDetailMessage } from '@/gen/ichor/v1alpha1/node_pb'
+import { ConfigLayer, type NodeDetail as NodeDetailMessage } from '@/gen/ichor/v1alpha1/node_pb'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { type BreakGlassRun } from '@/components/BreakGlassDialog'
 import { PullRequestNotice } from '@/components/PullRequestNotice'
@@ -24,7 +24,8 @@ import { clusterClient, machineClient, nodeClient } from '@/lib/connect'
 import { needsInstallDisk } from '@/lib/installDisk'
 import { enumLabel } from '@/lib/enum'
 import { describeError } from '@/lib/errors'
-import { formatBytes } from '@/lib/format'
+import { formatBytes, formatCores, formatUsage } from '@/lib/format'
+import { setPageTitle, titleKey } from '@/lib/pageTitle'
 import { useT } from '@/lib/useT'
 import { Link, objectRefPath } from '@/router'
 
@@ -84,6 +85,13 @@ export function NodeDetail({ namespace, name }: { namespace: string; name: strin
     return loadMachine()
   }, [namespace, name])
 
+  // The breadcrumb shows the hostname instead of the UUID the URL carries.
+  useEffect(() => {
+    const key = titleKey('nodes', namespace, name)
+    setPageTitle(key, machine?.hostname)
+    return () => setPageTitle(key, undefined)
+  }, [namespace, name, machine?.hostname])
+
   if (error) return <ErrorAlert {...error} />
   if (!node) return <PageSkeleton label={t('node.loading')} />
 
@@ -91,15 +99,16 @@ export function NodeDetail({ namespace, name }: { namespace: string; name: strin
   const sections: SectionLink[] = [
     { id: 'conditions', label: t('cluster.conditions') },
     { id: 'hardware', label: t('node.hardware') },
-    { id: 'disks', label: t('node.disks') },
-    { id: 'network', label: t('node.network') },
     { id: 'usage', label: t('node.usage') },
-    { id: 'kubernetes', label: t('node.kubernetes') },
-    { id: 'talos', label: t('talos.title') },
+    { id: 'talos', label: t('talos.system') },
+    { id: 'storage', label: t('node.disks') },
+    { id: 'network', label: t('node.network') },
+    { id: 'services', label: t('talos.services') },
+    { id: 'extensions', label: t('talos.extensions') },
+    { id: 'k8s-node', label: t('rt.k8s') },
     { id: 'etcd', label: t('rt.etcd') },
     { id: 'processes', label: t('rt.processes') },
     { id: 'containers', label: t('rt.containers') },
-    { id: 'k8s-node', label: t('rt.k8s') },
     { id: 'netstate', label: t('rt.netstate') },
     { id: 'kernel', label: t('rt.kernel') },
     { id: 'config', label: t('node.config') },
@@ -176,73 +185,17 @@ export function NodeDetail({ namespace, name }: { namespace: string; name: strin
           </Fields>
         </Section>
 
-        <Section id="disks" title={t('node.disks')}>
-          {node.disks.length === 0 ? (
-            <EmptyNote>{t('node.noDisks')}</EmptyNote>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t('node.colIdentification')}</TableHead>
-                  <TableHead>{t('node.colSize')}</TableHead>
-                  <TableHead>{t('col.role')}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {node.disks.map((d, i) => (
-                  <TableRow key={i}>
-                    <TableCell>{diskIdentification(d, t('node.noStableDiskId'))}</TableCell>
-                    <TableCell>{formatBytes(d.sizeBytes)}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{enumLabel(DiskRole, d.role)}</Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </Section>
-
-        <Section id="network" title={t('node.network')}>
-          {node.networkInterfaces.length === 0 ? (
-            <EmptyNote>{t('node.noNetwork')}</EmptyNote>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t('node.colInterface')}</TableHead>
-                  <TableHead>{t('node.colMac')}</TableHead>
-                  <TableHead>{t('node.colUp')}</TableHead>
-                  <TableHead>{t('node.colAddresses')}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {node.networkInterfaces.map((n) => (
-                  <TableRow key={n.name}>
-                    <TableCell>{n.alias || n.name}</TableCell>
-                    <TableCell>{n.permanentMac || '-'}</TableCell>
-                    <TableCell>
-                      <Badge variant={n.up ? 'secondary' : 'outline'}>{n.up ? t('node.up') : t('node.down')}</Badge>
-                    </TableCell>
-                    <TableCell>{n.addresses.length ? n.addresses.join(', ') : '-'}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </Section>
-
         <Section id="usage" title={t('node.usage')}>
           {node.resourceUsage ? (
             <Fields>
-              <Field label={t('node.cpuUsed')} value={node.resourceUsage.cpuCoresUsed.toFixed(2)} />
+              <Field label={t('node.cpuUsed')} value={formatCores(node.resourceUsage.cpuCoresUsed, node.resourceUsage.cpuSampled)} />
               <Field
                 label={t('node.memory')}
-                value={`${formatBytes(node.resourceUsage.memoryUsedBytes)} / ${formatBytes(node.resourceUsage.memoryTotalBytes)}`}
+                value={formatUsage(node.resourceUsage.memoryUsedBytes, node.resourceUsage.memoryTotalBytes)}
               />
               <Field
                 label={t('node.filesystem')}
-                value={`${formatBytes(node.resourceUsage.filesystemUsedBytes)} / ${formatBytes(node.resourceUsage.filesystemTotalBytes)}`}
+                value={formatUsage(node.resourceUsage.filesystemUsedBytes, node.resourceUsage.filesystemTotalBytes)}
               />
             </Fields>
           ) : (
@@ -250,24 +203,7 @@ export function NodeDetail({ namespace, name }: { namespace: string; name: strin
           )}
         </Section>
 
-        <Section id="kubernetes" title={t('node.kubernetes')}>
-          {node.kubernetes ? (
-            <Fields>
-              <Field label={t('node.k8sName')} value={node.kubernetes.nodeName} />
-              <Field label={t('node.k8sReady')} value={node.kubernetes.ready ? t('common.yes') : t('common.no')} />
-              <Field label={t('node.k8sKubelet')} value={node.kubernetes.kubeletVersion} />
-              <Field label={t('node.k8sSchedulable')} value={node.kubernetes.schedulable ? t('common.yes') : t('common.no')} />
-            </Fields>
-          ) : node.kubernetesPermissionDenied ? (
-            <EmptyNote>{t('common.noPermission')}</EmptyNote>
-          ) : (
-            <EmptyNote>{t('node.notJoined')}</EmptyNote>
-          )}
-        </Section>
-
-        <div id="talos" class="scroll-mt-24">
-          <TalosDetails namespace={namespace} name={name} />
-        </div>
+        <TalosDetails namespace={namespace} name={name} />
         <TalosRuntime namespace={namespace} name={name} />
         <EffectiveConfigSection namespace={namespace} name={name} />
         <div id="logs" class="scroll-mt-24">
@@ -276,12 +212,6 @@ export function NodeDetail({ namespace, name }: { namespace: string; name: strin
       </SectionLayout>
     </>
   )
-}
-
-function diskIdentification(d: { wwid: string; serial: string; byIdPath: string; busPath: string }, none: string): string {
-  // architecture.md's own fallback chain: WWID, then serial, then by-id
-  // path; any of the first three may be empty (node.proto's own comment).
-  return d.wwid || d.serial || d.byIdPath || d.busPath || none
 }
 
 function EffectiveConfigSection({ namespace, name }: { namespace: string; name: string }) {

@@ -214,17 +214,10 @@ func (t *machineryNodeTalosClient) NetworkInterfaces(ctx context.Context) ([]*pb
 	return out, nil
 }
 
-// ResourceUsage reads perf.Memory directly (already a point-in-time
-// snapshot) and derives CPU utilization from perf.CPU's cumulative-total
-// fields.
-//
-// shortcut: perf.CPUSpec's fields are not documented as a percentage or a
-// cumulative jiffy counter anywhere in the vendored machinery module (no
-// controller source ships with it, only the resource shape), so this
-// treats CPUTotal as already being the latest sample window's percentages
-// -- cpu_cores_used = (100-idle)/100 * cores -- which has not been checked
-// against a real Talos node's live values. Upgrade by sampling perf.CPU
-// twice and computing a rate once this is checked against a real cluster.
+// ResourceUsage reads perf.Memory (kibibytes, as /proc/meminfo reports them),
+// derives CPU use from two samples of perf.CPU (cumulative seconds per
+// state, so a single sample says nothing about the present) and reads the
+// data filesystem from the Mounts API.
 func (t *machineryNodeTalosClient) ResourceUsage(ctx context.Context) (*pb.ResourceUsage, error) {
 	usage := &pb.ResourceUsage{}
 
@@ -237,22 +230,77 @@ func (t *machineryNodeTalosClient) ResourceUsage(ctx context.Context) (*pb.Resou
 
 	if err == nil {
 		spec := mem.TypedSpec()
-		usage.MemoryTotalBytes, usage.MemoryUsedBytes = int64(spec.MemTotal), int64(spec.MemUsed) //nolint:gosec
+		usage.MemoryTotalBytes, usage.MemoryUsedBytes = kibToBytes(spec.MemTotal), kibToBytes(spec.MemUsed)
 	}
 
-	cpu, err := safe.StateGet[*perf.CPU](ctx, t.c.COSI, resource.NewMetadata(
-		perf.NamespaceName, perf.CPUType, perf.CPUID, resource.VersionUndefined,
-	))
-	if err != nil && !state.IsNotFoundError(err) {
-		return nil, fmt.Errorf("reading cpu stats: %w", err)
+	if err := t.sampleCPU(ctx, usage); err != nil {
+		return nil, err
 	}
 
-	if err == nil {
-		idle := cpu.TypedSpec().CPUTotal.Idle
-		usage.CpuCoresUsed = (100 - idle) / 100 * float64(len(cpu.TypedSpec().CPU))
+	// A refused or empty Mounts call leaves the filesystem fields at zero; the
+	// UI shows that as unknown.
+	if mounts, err := t.c.Mounts(ctx); err == nil {
+		for _, m := range mounts.GetMessages() {
+			usage.FilesystemUsedBytes, usage.FilesystemTotalBytes = dataFilesystem(m.GetStats())
+		}
 	}
 
 	return usage, nil
+}
+
+const (
+	cpuSampleGap     = 500 * time.Millisecond
+	cpuSampleTimeout = 3 * time.Second
+)
+
+// sampleCPU reads perf.CPU, then again until the cumulative counters have
+// moved (Talos refreshes them on its own interval) or cpuSampleTimeout has
+// passed, and sets the cores in use from the difference.
+func (t *machineryNodeTalosClient) sampleCPU(ctx context.Context, usage *pb.ResourceUsage) error {
+	read := func() (*perf.CPUSpec, error) {
+		cpu, err := safe.StateGet[*perf.CPU](ctx, t.c.COSI, resource.NewMetadata(
+			perf.NamespaceName, perf.CPUType, perf.CPUID, resource.VersionUndefined,
+		))
+		if err != nil {
+			if state.IsNotFoundError(err) {
+				return nil, nil //nolint:nilnil // no stats on this node
+			}
+
+			return nil, fmt.Errorf("reading cpu stats: %w", err)
+		}
+
+		spec := cpu.TypedSpec()
+
+		return spec, nil
+	}
+
+	first, err := read()
+	if err != nil || first == nil {
+		return err
+	}
+
+	deadline := time.Now().Add(cpuSampleTimeout)
+
+	for time.Now().Before(deadline) {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(cpuSampleGap):
+		}
+
+		next, err := read()
+		if err != nil || next == nil {
+			return err
+		}
+
+		if cores, ok := cpuCoresUsed(first.CPUTotal, next.CPUTotal, len(next.CPU)); ok {
+			usage.CpuCoresUsed, usage.CpuSampled = cores, true
+
+			return nil
+		}
+	}
+
+	return nil
 }
 
 // dataStream is the common shape of Dmesg's and Logs' response streams

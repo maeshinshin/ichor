@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { formatSpeed, serviceTone, sortServices, timeSyncLabel } from './talosDetails.ts'
+import { formatSpeed, serviceTone, sortServices, timeSyncLabel, visibleVolumes } from './talosDetails.ts'
 
 test('link speed is shown in Mbit/s or Gbit/s, and unknown speed as a dash', () => {
   assert.equal(formatSpeed(0), '-')
@@ -31,4 +31,10 @@ test('time sync label', () => {
   assert.equal(timeSyncLabel(true, false), 'synced')
   assert.equal(timeSyncLabel(false, false), 'not synced')
   assert.equal(timeSyncLabel(false, true), 'sync disabled')
+})
+
+test('volumes: only disk-backed ones by default, all on request', () => {
+  const vols = [{ type: 'partition' }, { type: 'directory' }, { type: 'overlay' }, { type: 'symlink' }, { type: 'disk' }]
+  assert.deepEqual(visibleVolumes(vols, false).map((v) => v.type), ['partition', 'disk'])
+  assert.equal(visibleVolumes(vols, true).length, 5)
 })

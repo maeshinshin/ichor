@@ -20,3 +20,9 @@ test('a new patch and an unknown path', () => {
   assert.deepEqual(breadcrumbsFor('/patches/new'), [{ label: 'nav.patches', to: '/patches' }, { label: 'patch.newTitle' }])
   assert.deepEqual(breadcrumbsFor('/nope/x'), [{ label: 'common.notFound' }])
 })
+
+test('a published title replaces the name in the last crumb', () => {
+  const titles = { 'nodes/ns/9f95-uuid': 'cp-1' }
+  assert.deepEqual(breadcrumbsFor('/nodes/ns/9f95-uuid', titles), [{ label: 'nav.machines', to: '/machines' }, { text: 'cp-1' }])
+  assert.deepEqual(breadcrumbsFor('/nodes/ns/other', titles), [{ label: 'nav.machines', to: '/machines' }, { text: 'other' }])
+})

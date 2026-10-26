@@ -332,6 +332,8 @@ export const en = {
   'talos.colVersion': 'Version',
   'talos.colAuthor': 'Author',
   'talos.none': 'Nothing reported.',
+  'talos.volumesShowAll': 'Show all volumes ({n})',
+  'talos.volumesDiskOnly': 'Show disk volumes only',
   'rt.loading': "Loading live state…",
   'rt.unavailableMaintenance': "Not available over the maintenance API. It appears once the machine is approved.",
   'rt.etcd': "etcd",

@@ -31,6 +31,7 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { breadcrumbsFor } from '@/lib/breadcrumbs'
 import type { Key } from '@/lib/i18n'
+import { usePageTitles } from '@/lib/usePageTitles'
 import { useT } from '@/lib/useT'
 import { Link } from '@/router'
 
@@ -73,7 +74,8 @@ function NavItems({ path }: { path: string }) {
 
 function Crumbs({ path }: { path: string }) {
   const t = useT()
-  const crumbs = breadcrumbsFor(path)
+  const titles = usePageTitles()
+  const crumbs = breadcrumbsFor(path, titles)
   return (
     <Breadcrumb aria-label={t('nav.breadcrumb')} className="min-w-0">
       <BreadcrumbList className="flex-nowrap">

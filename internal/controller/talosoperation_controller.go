@@ -201,6 +201,13 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, err
 	}
 
+	// A config rollout reboots nodes, so the machine this controller runs on goes last: its reboot
+	// stops the controller, which resumes from the status and has nothing left to wait for.
+	var own []*ichorv1alpha1.TalosMachine
+	if op.Spec.Kind == ichorv1alpha1.TalosOperationKindConfig {
+		controlPlanes, workers, own = holdOwnNodeLast(controlPlanes, workers, r.NodeName)
+	}
+
 	// Control planes go one at a time, and only once every one of them is
 	// done do workers start -- never interleaved with workers.
 	toAdvance := pendingMachines(controlPlanes, op.Status.Machines)
@@ -208,7 +215,23 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		toAdvance = toAdvance[:1]
 	} else {
 		pendingWorkers := pendingMachines(workers, op.Status.Machines)
-		if len(pendingWorkers) == 0 {
+		pendingOwn := pendingMachines(own, op.Status.Machines)
+
+		switch {
+		case len(pendingWorkers) > 0:
+			maxUnavailable := op.Spec.MaxUnavailable
+			if maxUnavailable <= 0 {
+				maxUnavailable = 1
+			}
+
+			if int32(len(pendingWorkers)) > maxUnavailable {
+				pendingWorkers = pendingWorkers[:maxUnavailable]
+			}
+
+			toAdvance = pendingWorkers
+		case len(pendingOwn) > 0:
+			toAdvance = pendingOwn[:1]
+		default:
 			if err := lock.Release(ctx, controllerIdentity); err != nil {
 				return ctrl.Result{}, err
 			}
@@ -216,17 +239,6 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			return ctrl.Result{}, r.setPhase(ctx, &op, ichorv1alpha1.TalosOperationPhaseCompleted,
 				reasonOperationComplete, "every eligible machine finished")
 		}
-
-		maxUnavailable := op.Spec.MaxUnavailable
-		if maxUnavailable <= 0 {
-			maxUnavailable = 1
-		}
-
-		if int32(len(pendingWorkers)) > maxUnavailable {
-			pendingWorkers = pendingWorkers[:maxUnavailable]
-		}
-
-		toAdvance = pendingWorkers
 	}
 
 	// The long-operation half of "the lock": renewed once per batch, the
@@ -346,6 +358,36 @@ func (r *TalosOperationReconciler) candidateMachines(
 	upgrade.SortByOrder(workers)
 
 	return controlPlanes, workers, nil
+}
+
+// holdOwnNodeLast takes the machine whose Kubernetes node is nodeName (the one this controller
+// runs on) out of controlPlanes and workers; it is advanced after both. Empty nodeName (the
+// controller runs outside the cluster) changes nothing.
+func holdOwnNodeLast(
+	controlPlanes, workers []*ichorv1alpha1.TalosMachine, nodeName string,
+) (cps, ws, own []*ichorv1alpha1.TalosMachine) {
+	if nodeName == "" {
+		return controlPlanes, workers, nil
+	}
+
+	split := func(in []*ichorv1alpha1.TalosMachine) (rest []*ichorv1alpha1.TalosMachine) {
+		for _, m := range in {
+			if m.Spec.Hostname == nodeName {
+				own = append(own, m)
+
+				continue
+			}
+
+			rest = append(rest, m)
+		}
+
+		return rest
+	}
+
+	cps = split(controlPlanes)
+	ws = split(workers)
+
+	return cps, ws, own
 }
 
 // pendingMachines returns every machine in candidates that has not reached

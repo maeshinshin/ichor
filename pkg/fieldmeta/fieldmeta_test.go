@@ -43,6 +43,15 @@ const (
 	pathRawVolumeConfigSelector  = "RawVolumeConfig.provisioning.diskSelector.match"
 )
 
+func TestAssess_RebootPathsNameTheFieldsThatNeedTheReboot(t *testing.T) {
+	impact := Assess([]string{pathClusterProxyDisabled, pathMachineInstallDisk, pathMachineNetworkIfaces}, nil)
+
+	want := []string{pathClusterProxyDisabled, pathMachineNetworkIfaces}
+	if !reflect.DeepEqual(impact.RebootPaths, want) {
+		t.Fatalf("RebootPaths = %v, want %v (the install-time-only path is not one)", impact.RebootPaths, want)
+	}
+}
+
 func TestAssess_UnknownPathIsRebootRequired(t *testing.T) {
 	impact := Assess([]string{pathClusterProxyDisabled}, nil)
 

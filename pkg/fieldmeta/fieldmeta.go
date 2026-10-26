@@ -241,6 +241,9 @@ type Impact struct {
 	// effect.
 	RebootRequired bool
 
+	// RebootPaths lists the paths that need the reboot, in the order given.
+	RebootPaths []string
+
 	// InstallTimeOnly lists the paths that need a reset and reinstall
 	// rather than any kind of apply.
 	InstallTimeOnly []string
@@ -265,6 +268,7 @@ func Assess(paths []string, pinned *machineryconfig.VersionContract) Impact {
 			impact.InstallTimeOnly = append(impact.InstallTimeOnly, p)
 		case !r.safe:
 			impact.RebootRequired = true
+			impact.RebootPaths = append(impact.RebootPaths, p)
 		}
 
 		if r.introducedAfter != nil && !pinned.Greater(r.introducedAfter) {

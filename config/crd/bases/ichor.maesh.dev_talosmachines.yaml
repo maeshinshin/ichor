@@ -316,6 +316,15 @@ spec:
                   did, so the node must have). A hash only, never the generations or config themselves
                   (principle 3).
                 type: string
+              rebootPaths:
+                description: |-
+                  rebootPaths lists the configuration field paths whose pending change needs a reboot, while
+                  Ready is False with reason RebootRequired; empty otherwise. A config-rollout
+                  TalosOperation applies them; the plan shown before starting one reads this.
+                items:
+                  type: string
+                type: array
+                x-kubernetes-list-type: atomic
               stage:
                 description: |-
                   stage is the last stage the node was seen in on its way from maintenance mode to

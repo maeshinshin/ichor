@@ -43,6 +43,11 @@ const (
 	// passes (accept the new CA, make it the issuer, drop the old one). Like shutdown it
 	// runs its own state machine, held in status.caRotation, instead of the per-machine rollout.
 	TalosOperationKindCARotation = "ca-rotation"
+
+	// TalosOperationKindConfig applies the pending reboot-requiring configuration changes of the
+	// approved machines, one machine at a time through the node-operation hook, a staged apply and
+	// a reboot. Nothing reboots a node for a configuration change without one.
+	TalosOperationKindConfig = "config"
 )
 
 // Values for TalosOperationCARotationStatus.Stage, in the order they run. The stage names which CA
@@ -141,7 +146,9 @@ type TalosOperationSpec struct {
 	// Kubernetes API CAs). This CRD and its controller only
 	// store and report it -- each kind's own execution is a separate unit's work.
 	// shutdown and ca-rotation are the exceptions: each runs its own state machine.
-	// +kubebuilder:validation:Enum=talos;kubernetes;ichor;cni;shutdown;ca-rotation
+	// config applies the pending reboot-requiring configuration changes, one machine at a time
+	// with a reboot each.
+	// +kubebuilder:validation:Enum=talos;kubernetes;ichor;cni;shutdown;ca-rotation;config
 	// +required
 	Kind string `json:"kind"`
 

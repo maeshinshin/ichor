@@ -1,0 +1,132 @@
+# The installer Job's permissions: exactly the kinds dist/install.yaml
+# contains, and nothing the installer does not do (it never deletes a CRD, never reads or
+# writes a Secret, never touches a TalosCluster or any other custom resource).
+#
+# Not narrowable further: the clusterroles and clusterrolebindings
+# rules, with escalate and bind. Applying a ClusterRole that grants more than the applier
+# holds is refused unless the applier has escalate, and a new version names new roles, so
+# resourceNames cannot list them in advance. These two are the part of this file that is as
+# strong as cluster-admin, which is why the ServiceAccount exists only for the Job, the chart
+# creates it only when installer.enabled, and the controller can create the Job but not hold
+# these permissions.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: installer-role
+rules:
+- apiGroups:
+  - apiextensions.k8s.io
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - create
+  - get
+- apiGroups:
+  - apiextensions.k8s.io
+  resourceNames:
+  - ichorinstallations.ichor.maesh.dev
+  - talosclusters.ichor.maesh.dev
+  - talosconfigpatches.ichor.maesh.dev
+  - talosetcdbackups.ichor.maesh.dev
+  - talosmachines.ichor.maesh.dev
+  - talosoperations.ichor.maesh.dev
+  - talosstorages.ichor.maesh.dev
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - patch
+  - update
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - clusterrolebindings
+  - clusterroles
+  verbs:
+  - create
+  - delete
+  - get
+  - patch
+  - update
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - clusterroles
+  verbs:
+  - bind
+  - escalate
+- apiGroups:
+  - admissionregistration.k8s.io
+  resources:
+  - validatingadmissionpolicies
+  - validatingadmissionpolicybindings
+  - validatingwebhookconfigurations
+  verbs:
+  - create
+  - delete
+  - get
+  - patch
+  - update
+- apiGroups:
+  - ""
+  resourceNames:
+  - ichor-system
+  resources:
+  - namespaces
+  verbs:
+  - get
+  - patch
+  - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: installer-role
+  namespace: system
+rules:
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - create
+  - delete
+  - get
+  - patch
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - serviceaccounts
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - patch
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - create
+  - get
+  - list
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - rolebindings
+  - roles
+  verbs:
+  - create
+  - delete
+  - get
+  - patch
+  - update
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - roles
+  verbs:
+  - bind
+  - escalate

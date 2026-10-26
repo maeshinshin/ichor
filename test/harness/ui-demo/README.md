@@ -65,11 +65,14 @@ sed s/__PREFIX__/$P/ test/harness/ui-demo/outer-service.yaml | kubectl --context
 
 ```sh
 kubectl --context $C -n ichor-e2e port-forward svc/$P-registry 5000:5000 &   # only ever this service
+PF=$!   # the port-forward's PID, to stop it below
 make demo-images VERSION=v0.0.8-$(git rev-parse --short HEAD) REGISTRY=localhost:5000
-bin/ichor upgrade ichor v0.0.8-<the same short sha> --cluster $P -n ichor-system --kubeconfig bin/ui-demo.kubeconfig --yes --follow
+kill $PF   # stop the port-forward once the images are pushed
+bin/img/ichor/ichor upgrade ichor v0.0.8-<the same short sha> --cluster $P -n ichor-system --kubeconfig bin/ui-demo.kubeconfig --yes --follow
 ```
 
-`demo-images` leaves the git tree unchanged and fails if a binary is not freshly built with that `VERSION`.
+`demo-images` leaves the git tree unchanged and fails if a binary is not freshly built with that `VERSION`;
+`bin/img/ichor/ichor` is the CLI it built, so upgrade with that one (there is no `bin/ichor`).
 
 Gotchas: the endpoint is the VM's pod IP and changes if the VM restarts (re-run init);
 `ichor init` cannot be re-run against a node that already took its config, so after a failed

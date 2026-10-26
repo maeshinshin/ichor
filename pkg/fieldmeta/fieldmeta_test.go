@@ -84,6 +84,20 @@ func TestAssess_UserAndRawVolumeConfigStayRebootRequired(t *testing.T) {
 	}
 }
 
+// TestAssess_HostnameStaysRebootRequired pins spec.hostname's two rendered forms (HostnameConfig
+// from the v1.14 contract, machine.network.hostname before it). Talos's HostnameConfigController
+// would apply a new name live, but the kubelet registers the Kubernetes node under the name it
+// started with, so a rename is only settled by a reboot; no rule is added on purpose.
+func TestAssess_HostnameStaysRebootRequired(t *testing.T) {
+	for _, path := range []string{"HostnameConfig.hostname", "HostnameConfig.auto", "machine.network.hostname"} {
+		impact := Assess([]string{path}, nil)
+
+		if !impact.RebootRequired || len(impact.InstallTimeOnly) != 0 {
+			t.Errorf("Assess(%q) = %+v, want reboot-required", path, impact)
+		}
+	}
+}
+
 // TestAssess_Rules covers every rule in the table: one path that matches it
 // and a sibling path that does not (and so stays reboot-required).
 func TestAssess_Rules(t *testing.T) {

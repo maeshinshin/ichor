@@ -17,7 +17,9 @@ import { ErrorAlert } from '@/components/ErrorAlert'
 import { PullRequestNotice } from '@/components/PullRequestNotice'
 import { ConfigLayer } from '@/gen/ichor/v1alpha1/node_pb'
 import type { Patch } from '@/gen/ichor/v1alpha1/patch_pb'
-import { clusterClient, patchClient } from '@/lib/connect'
+import { MachineRole } from '@/gen/ichor/v1alpha1/machine_pb'
+import { clusterClient, machineClient, patchClient } from '@/lib/connect'
+import { targetedMachines, type MachineLike } from '@/lib/patchDocs'
 import { enumLabel } from '@/lib/enum'
 import { offersBreakGlass } from '@/lib/breakGlass'
 import { describeError } from '@/lib/errors'
@@ -37,6 +39,7 @@ export function PatchList() {
   const [patches, setPatches] = useState<Patch[] | null>(null)
   const [error, setError] = useState<ErrorShape | null>(null)
   const [clusterNames, setClusterNames] = useState<Record<string, string>>({})
+  const [machines, setMachines] = useState<MachineLike[]>([])
 
   async function reload() {
     try {
@@ -44,6 +47,18 @@ export function PatchList() {
         patchClient.listPatches({}),
         clusterClient.listClusters({}),
       ])
+      // The machines column is a convenience: if the list fails, it shows "-".
+      machineClient.listMachines({}).then(
+        (res) =>
+          setMachines(
+            res.machines.map((m) => ({
+              name: m.ref?.name ?? '',
+              cluster: m.cluster ? `${m.cluster.namespace}/${m.cluster.name}` : '',
+              role: m.role === MachineRole.CONTROL_PLANE ? 'controlplane' : m.role === MachineRole.WORKER ? 'worker' : '',
+            })),
+          ),
+        () => setMachines([]),
+      )
       setPatches(patchesRes.patches)
       setClusterNames(
         Object.fromEntries(
@@ -74,6 +89,7 @@ export function PatchList() {
         </Button>
       </CardHeader>
       <CardContent>
+        <p class="mb-4 text-sm text-muted-foreground">{t('patches.intro')}</p>
         {patches.length === 0 ? (
           <p class="text-sm text-muted-foreground">{t('patches.empty')}</p>
         ) : (
@@ -85,6 +101,7 @@ export function PatchList() {
                 <TableHead>{t('patches.colLayer')}</TableHead>
                 <TableHead>{t('patches.colPriority')}</TableHead>
                 <TableHead>{t('patches.colTarget')}</TableHead>
+                <TableHead>{t('patches.colMachines')}</TableHead>
                 <TableHead>{t('patches.colDocuments')}</TableHead>
                 <TableHead>{t('col.actions')}</TableHead>
               </TableRow>
@@ -109,7 +126,17 @@ export function PatchList() {
                   </TableCell>
                   <TableCell>{p.priority}</TableCell>
                   <TableCell>{targetSummary(p, t)}</TableCell>
-                  <TableCell>{p.documents.length === 0 ? '-' : p.documents.map((d) => d.kind).join(', ')}</TableCell>
+                  <TableCell>{machinesSummary(p, machines, t)}</TableCell>
+                  <TableCell>
+                    {p.documents.length === 0 ? (
+                      '-'
+                    ) : (
+                      <>
+                        <div>{t('patches.docCount', { count: p.documents.length })}</div>
+                        <div class="text-xs text-muted-foreground">{p.documents.map((d) => d.kind).join(', ')}</div>
+                      </>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <div class="flex gap-2">
                       <Button asChild size="sm" variant="outline">
@@ -126,6 +153,24 @@ export function PatchList() {
       </CardContent>
     </Card>
   )
+}
+
+function machinesSummary(p: Patch, machines: MachineLike[], t: ReturnType<typeof useT>): string {
+  const kind = targetKindOf(p.target)
+  const names = targetedMachines(
+    {
+      cluster: p.cluster ? `${p.cluster.namespace}/${p.cluster.name}` : '',
+      clusterLayer: p.layer === ConfigLayer.CLUSTER,
+      targetKind: kind,
+      role: p.target?.role ?? '',
+      machineRef: p.target?.machineRef ?? '',
+    },
+    machines,
+  )
+  if (names === null) return kind === 'labelSelector' ? t('patches.machinesSelector') : '-'
+  if (names.length === 0) return t('patches.machinesNone')
+  if (p.layer === ConfigLayer.CLUSTER) return t('patches.machinesAll', { count: names.length })
+  return t('patches.machinesSome', { names: names.join(', ') })
 }
 
 function targetSummary(p: Patch, t: ReturnType<typeof useT>): string {

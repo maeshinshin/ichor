@@ -33,7 +33,7 @@ func installReq(in *pb.MachineInstall) *connect.Request[pb.SetMachineInstallRequ
 }
 
 func TestSetMachineInstallRefusedWhenArgoCDTracks(t *testing.T) {
-	m := trackedMachine(map[string]string{argoTrackingAnnot: "app:x"})
+	m := trackedMachine(map[string]string{argoTrackingAnnot: argoTrackedBy})
 	m.Spec.ApprovalState = ichorv1alpha1.MachineApprovalStateApproved
 	k8s := fake.NewClientBuilder().WithScheme(trackedScheme(t)).WithObjects(m, argoCM()).Build()
 
@@ -44,7 +44,7 @@ func TestSetMachineInstallRefusedWhenArgoCDTracks(t *testing.T) {
 func TestSetMachineInstallWritesOnlyInstall(t *testing.T) {
 	m := trackedMachine(nil)
 	m.Spec.ApprovalState = ichorv1alpha1.MachineApprovalStateApproved
-	m.Spec.Role = "worker"
+	m.Spec.Role = roleWorker
 	k8s := fake.NewClientBuilder().WithScheme(trackedScheme(t)).WithObjects(m, argoCM()).WithStatusSubresource(m).Build()
 	s := &Server{Client: k8s}
 	key := types.NamespacedName{Namespace: trackedTestNS, Name: "m1"}
@@ -71,7 +71,7 @@ func TestSetMachineInstallWritesOnlyInstall(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got.Spec.Install == nil || got.Spec.Install.Disk.WWID != "w" || got.Spec.Role != "worker" || got.Spec.ApprovalDecision != nil {
+	if got.Spec.Install == nil || got.Spec.Install.Disk.WWID != "w" || got.Spec.Role != roleWorker || got.Spec.ApprovalDecision != nil {
 		t.Fatalf("want only spec.install changed, got %+v", got.Spec)
 	}
 

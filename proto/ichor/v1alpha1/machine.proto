@@ -15,6 +15,10 @@ service MachineService {
   rpc GetMachine(GetMachineRequest) returns (GetMachineResponse);
   rpc ApproveMachine(ApproveMachineRequest) returns (ApproveMachineResponse);
   rpc RejectMachine(RejectMachineRequest) returns (RejectMachineResponse);
+  // RemoveMachine deletes an approved machine through the removal flow: drain, etcd
+  // member removal for a control plane, then the TalosMachine goes. The
+  // node is not wiped; reset is a node action.
+  rpc RemoveMachine(RemoveMachineRequest) returns (RemoveMachineResponse);
   // SetMachineInstall writes only TalosMachine.spec.install of an approved
   // machine that has not converged yet: how a machine approved
   // without an install disk (Ready reason InstallDiskUnknown) gets one.
@@ -189,4 +193,14 @@ message Machine {
   MachineApprovalDecision approval_decision = 12;
   // install is unset until an install target is declared.
   MachineInstall install = 13;
+}
+
+message RemoveMachineRequest {
+  ObjectRef machine = 1;
+  // confirm must equal the machine's name.
+  string confirm = 2;
+}
+
+message RemoveMachineResponse {
+  AuditRecord audit = 1;
 }

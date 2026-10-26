@@ -68,6 +68,8 @@ func kindToSpec(k pb.OperationKind) (string, error) {
 		return ichorv1alpha1.TalosOperationKindCARotation, nil
 	case pb.OperationKind_OPERATION_KIND_CONFIG:
 		return ichorv1alpha1.TalosOperationKindConfig, nil
+	case pb.OperationKind_OPERATION_KIND_NODE:
+		return ichorv1alpha1.TalosOperationKindNode, nil
 	case pb.OperationKind_OPERATION_KIND_UNSPECIFIED:
 	}
 
@@ -90,6 +92,8 @@ func kindToPB(k string) pb.OperationKind {
 		return pb.OperationKind_OPERATION_KIND_CA_ROTATION
 	case ichorv1alpha1.TalosOperationKindConfig:
 		return pb.OperationKind_OPERATION_KIND_CONFIG
+	case ichorv1alpha1.TalosOperationKindNode:
+		return pb.OperationKind_OPERATION_KIND_NODE
 	}
 
 	return pb.OperationKind_OPERATION_KIND_UNSPECIFIED
@@ -110,6 +114,15 @@ func operationToPB(op *ichorv1alpha1.TalosOperation) *pb.Operation {
 
 	if op.Status.CARotation != nil {
 		out.CaRotationStage = op.Status.CARotation.Stage
+	}
+
+	if n := op.Spec.Node; n != nil {
+		out.NodeAction = nodeActionToPB(n.Action)
+		out.NodeMachine = objectRef(op.Namespace, n.MachineRef.Name)
+
+		if op.Status.Node != nil {
+			out.NodeMessage = op.Status.Node.Message
+		}
 	}
 
 	for _, m := range op.Status.Machines {
@@ -241,12 +254,15 @@ type opPlan struct {
 	cluster *ichorv1alpha1.TalosCluster
 	// install is set for the ichor kind.
 	install *ichorv1alpha1.IchorInstallation
+	// node is set for the node kind.
+	node *nodePlan
 }
 
 // normalizeTarget validates target for kind and returns it in the form the spec stores.
 func normalizeTarget(kind, target string) (string, error) {
 	switch kind {
-	case ichorv1alpha1.TalosOperationKindShutdown, ichorv1alpha1.TalosOperationKindCARotation, ichorv1alpha1.TalosOperationKindConfig:
+	case ichorv1alpha1.TalosOperationKindShutdown, ichorv1alpha1.TalosOperationKindCARotation, ichorv1alpha1.TalosOperationKindConfig,
+		ichorv1alpha1.TalosOperationKindNode:
 		if target != "" {
 			return "", connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("a %s has no target", kind))
 		}
@@ -289,10 +305,15 @@ func (s *Server) trackedBy(ctx context.Context, obj client.Object) (string, erro
 //nolint:gocyclo // one switch over the seven kinds, each a few lines
 func (s *Server) planOperation(
 	ctx context.Context, clusterRef *pb.ObjectRef, pbKind pb.OperationKind, rawTarget string, maxUnavailable int32,
+	node *pb.NodeActionRequest,
 ) (*opPlan, error) {
 	kind, err := kindToSpec(pbKind)
 	if err != nil {
 		return nil, err
+	}
+
+	if kind == ichorv1alpha1.TalosOperationKindNode {
+		return s.planNode(ctx, node)
 	}
 
 	target, err := normalizeTarget(kind, rawTarget)
@@ -467,17 +488,8 @@ func (s *Server) planMachines(ctx context.Context, p *opPlan, cluster *ichorv1al
 func (s *Server) blockedReason(
 	ctx context.Context, p *opPlan, cluster *ichorv1alpha1.TalosCluster, tracked client.Object,
 ) (string, error) {
-	var ops ichorv1alpha1.TalosOperationList
-	if err := s.List(ctx, &ops, client.InNamespace(cluster.Namespace)); err != nil {
-		return "", mapListError("operations", err)
-	}
-
-	for i := range ops.Items {
-		o := &ops.Items[i]
-		if o.Spec.ClusterRef.Name == cluster.Name && o.Status.Phase != ichorv1alpha1.TalosOperationPhaseCompleted {
-			return fmt.Sprintf("operation %q (%s) on this cluster is not finished (phase %q); wait for it, or delete it if it is stuck",
-				o.Name, o.Spec.Kind, o.Status.Phase), nil
-		}
+	if blocked, err := s.unfinishedOperation(ctx, cluster); err != nil || blocked != "" {
+		return blocked, err
 	}
 
 	if p.kind == ichorv1alpha1.TalosOperationKindConfig && len(p.resp.Machines) == 0 {
@@ -504,11 +516,36 @@ func (s *Server) blockedReason(
 	return "", nil
 }
 
+// unfinishedOperation names the operation of the cluster that still runs, which blocks a new one.
+// A node shutdown that is resting in ShutDown holds nothing: the node stays off by design.
+func (s *Server) unfinishedOperation(ctx context.Context, cluster *ichorv1alpha1.TalosCluster) (string, error) {
+	var ops ichorv1alpha1.TalosOperationList
+	if err := s.List(ctx, &ops, client.InNamespace(cluster.Namespace)); err != nil {
+		return "", mapListError("operations", err)
+	}
+
+	for i := range ops.Items {
+		o := &ops.Items[i]
+		if o.Spec.ClusterRef.Name != cluster.Name || o.Status.Phase == ichorv1alpha1.TalosOperationPhaseCompleted {
+			continue
+		}
+
+		if o.Spec.Kind == ichorv1alpha1.TalosOperationKindNode && o.Status.Phase == ichorv1alpha1.TalosOperationPhaseShutDown {
+			continue
+		}
+
+		return fmt.Sprintf("operation %q (%s) on this cluster is not finished (phase %q); wait for it, or delete it if it is stuck",
+			o.Name, o.Spec.Kind, o.Status.Phase), nil
+	}
+
+	return "", nil
+}
+
 // PlanOperation reports what CreateOperation would do, without writing.
 func (s *Server) PlanOperation(
 	ctx context.Context, req *connect.Request[pb.PlanOperationRequest],
 ) (*connect.Response[pb.PlanOperationResponse], error) {
-	p, err := s.planOperation(ctx, req.Msg.GetCluster(), req.Msg.GetKind(), req.Msg.GetTarget(), req.Msg.GetMaxUnavailable())
+	p, err := s.planOperation(ctx, req.Msg.GetCluster(), req.Msg.GetKind(), req.Msg.GetTarget(), req.Msg.GetMaxUnavailable(), req.Msg.GetNode())
 	if err != nil {
 		return nil, err
 	}
@@ -529,13 +566,22 @@ func (s *Server) CreateOperation(
 ) (*connect.Response[pb.CreateOperationResponse], error) {
 	m := req.Msg
 
-	p, err := s.planOperation(ctx, m.GetCluster(), m.GetKind(), m.GetTarget(), m.GetMaxUnavailable())
+	p, err := s.planOperation(ctx, m.GetCluster(), m.GetKind(), m.GetTarget(), m.GetMaxUnavailable(), m.GetNode())
 	if err != nil {
 		return nil, err
 	}
 
 	if p.resp.GetBlocked() != "" {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New(p.resp.GetBlocked()))
+	}
+
+	if p.node != nil {
+		resp, err := s.createNodeOperation(ctx, p)
+		if err != nil {
+			return nil, err
+		}
+
+		return connect.NewResponse(resp), nil
 	}
 
 	cluster := p.cluster

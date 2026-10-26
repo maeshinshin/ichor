@@ -39,7 +39,8 @@ default `argocd`.
 
 ## Consequences
 
-- Deferred: the chart does not set `ICHOR_ARGOCD_NAMESPACE` on the `ichor-ui` Deployment, and the CLI fallback
-  always uses `argocd`. A non-default Argo CD namespace is therefore not honoured yet by either; that needs a
-  chart value and a CLI flag.
+- The namespace is configurable end to end: the chart sets `ichorUI.argocdNamespace` (default `argocd`) as
+  `ICHOR_ARGOCD_NAMESPACE` on the `ichor-ui` Deployment, and the CLI's `--argocd-namespace` (default `argocd`,
+  the same flag `ichor gitops export` has) sets the namespace the `--local` fallback reads. Before this, a
+  non-default Argo CD namespace silently let a tracked CR be written directly.
 - Flux has no PR path (ADR 0037), so a Flux-tracked CR stays read-only even once a repository connection exists.

@@ -78,6 +78,9 @@ spec:
         {{- with .Values.ichorUI.image.pullPolicy }}
         imagePullPolicy: {{ . }}
         {{- end }}
+        env:
+        - name: ICHOR_ARGOCD_NAMESPACE
+          value: {{ .Values.ichorUI.argocdNamespace | quote }}
         # No HTTP health endpoint exists yet; a TCP check against the listening
         # port is the only thing that's actually true about this server today.
         livenessProbe:

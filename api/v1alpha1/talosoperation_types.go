@@ -74,6 +74,19 @@ const (
 	NodeStepRemoving = "Removing"
 )
 
+// Values for TalosOperationKubernetesStatus.Stage, in the order they run.
+const (
+	// KubernetesStageControlPlanes: every control plane's apiserver, controller-manager and
+	// scheduler move to the target, one control plane at a time; kubelets and kube-proxy stay.
+	KubernetesStageControlPlanes = "ControlPlanes"
+
+	// KubernetesStageKubeProxy: kube-proxy moves to the target and the bootstrap manifests are synced.
+	KubernetesStageKubeProxy = "KubeProxy"
+
+	// KubernetesStageKubelets: every kubelet moves to the target, control planes first.
+	KubernetesStageKubelets = "Kubelets"
+)
+
 // Values for TalosOperationCARotationStatus.Stage, in the order they run. The stage names which CA
 // every node is being given: it is the whole answer to "which CA is accepted and which issues".
 const (
@@ -305,6 +318,11 @@ type TalosOperationStatus struct {
 	// +optional
 	Node *TalosOperationNodeStatus `json:"node,omitempty"`
 
+	// kubernetes is the kubernetes kind's state machine: which of the three stages the machines
+	// are being taken through.
+	// +optional
+	Kubernetes *TalosOperationKubernetesStatus `json:"kubernetes,omitempty"`
+
 	// caRotation is the ca-rotation kind's state machine: which stage every node is being taken
 	// to, and which CA is accepted and which issues in it. Public fingerprints only.
 	// +optional
@@ -315,6 +333,17 @@ type TalosOperationStatus struct {
 	// +listMapKey=type
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
+}
+
+// TalosOperationKubernetesStatus is the stage a Kubernetes upgrade is in. status.machines
+// holds the progress of that stage only; it is cleared when the stage changes.
+type TalosOperationKubernetesStatus struct {
+	// stage is ControlPlanes (apiserver, controller-manager and scheduler on every control plane,
+	// the kubelets and kube-proxy still on the old version), KubeProxy (kube-proxy and the
+	// bootstrap manifests) or Kubelets (every kubelet, control planes first, then workers).
+	// +kubebuilder:validation:Enum=ControlPlanes;KubeProxy;Kubelets
+	// +optional
+	Stage string `json:"stage,omitempty"`
 }
 
 // TalosOperationCARotationStatus is the whole state of a CA rotation. Nothing else holds it: a

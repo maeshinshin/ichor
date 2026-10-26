@@ -232,7 +232,13 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	// Control planes go one at a time, and only once every one of them is
 	// done do workers start -- never interleaved with workers.
-	toAdvance := nextBatch(controlPlanes, workers, own, op.Status.Machines, op.Spec.MaxUnavailable)
+	var toAdvance []*ichorv1alpha1.TalosMachine
+	if op.Spec.Kind == ichorv1alpha1.TalosOperationKindKubernetes {
+		toAdvance = kubernetesBatch(&op, controlPlanes, workers)
+	} else {
+		toAdvance = nextBatch(controlPlanes, workers, own, op.Status.Machines, op.Spec.MaxUnavailable)
+	}
+
 	if len(toAdvance) == 0 {
 		if err := lock.Release(ctx, controllerIdentity); err != nil {
 			return ctrl.Result{}, err
@@ -279,7 +285,15 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	return result, r.setPhase(ctx, &op, ichorv1alpha1.TalosOperationPhaseInProgress,
-		reasonOperationAdvancing, fmt.Sprintf("%d machine(s) advancing", len(toAdvance)))
+		reasonOperationAdvancing, advancingMessage(&op, len(toAdvance)))
+}
+
+func advancingMessage(op *ichorv1alpha1.TalosOperation, n int) string {
+	if op.Status.Kubernetes != nil && op.Status.Kubernetes.Stage != "" {
+		return fmt.Sprintf("stage %s: %d machine(s) advancing", op.Status.Kubernetes.Stage, n)
+	}
+
+	return fmt.Sprintf("%d machine(s) advancing", n)
 }
 
 // restingPhase handles the phases that hold no cluster lock. A shutdown that has asked every machine
@@ -423,6 +437,50 @@ func nextBatch(
 	}
 
 	return nil
+}
+
+// kubernetesBatch is nextBatch for a Kubernetes upgrade, which visits the machines three times: the control planes
+// for their components, the control planes again for kube-proxy
+// and the bootstrap manifests, then the kubelets (control planes first, then workers within
+// maxUnavailable). It records the stage in op.status.kubernetes and, when a stage has no pending
+// machine left, moves to the next and clears status.machines (the progress of that stage), so
+// the stage and the cleared list reach the API in the one status write that follows. Empty when
+// the last stage is done.
+func kubernetesBatch(op *ichorv1alpha1.TalosOperation, controlPlanes, workers []*ichorv1alpha1.TalosMachine) []*ichorv1alpha1.TalosMachine {
+	if op.Status.Kubernetes == nil {
+		// An operation that started before stages existed has only ever applied the whole
+		// configuration to a machine: it is already in the last stage.
+		stage := ichorv1alpha1.KubernetesStageControlPlanes
+		if len(op.Status.Machines) > 0 {
+			stage = ichorv1alpha1.KubernetesStageKubelets
+		}
+
+		op.Status.Kubernetes = &ichorv1alpha1.TalosOperationKubernetesStatus{Stage: stage}
+	}
+
+	next := map[string]string{
+		ichorv1alpha1.KubernetesStageControlPlanes: ichorv1alpha1.KubernetesStageKubeProxy,
+		ichorv1alpha1.KubernetesStageKubeProxy:     ichorv1alpha1.KubernetesStageKubelets,
+	}
+
+	for {
+		ws := workers
+		if op.Status.Kubernetes.Stage != ichorv1alpha1.KubernetesStageKubelets {
+			ws = nil
+		}
+
+		if batch := nextBatch(controlPlanes, ws, nil, op.Status.Machines, op.Spec.MaxUnavailable); len(batch) > 0 {
+			return batch
+		}
+
+		stage, ok := next[op.Status.Kubernetes.Stage]
+		if !ok {
+			return nil
+		}
+
+		op.Status.Kubernetes.Stage = stage
+		op.Status.Machines = nil
+	}
 }
 
 // holdOwnNodeLast takes the machine whose Kubernetes node is nodeName (the one this controller

@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -196,6 +197,54 @@ func renderAt(cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine
 	Expect(err).NotTo(HaveOccurred())
 
 	return rendered
+}
+
+// setStaticPodImages moves node's three static pods to version, as the kubelet does once Talos
+// has rewritten their manifests.
+func setStaticPodImages(node, version string) {
+	for _, c := range staticPodComponents {
+		var p corev1.Pod
+		Expect(k8sClient.Get(ctx, client.ObjectKey{Namespace: testKubeSystem, Name: c + "-" + node}, &p)).To(Succeed())
+		p.Spec.Containers[0].Image = "registry.k8s.io/" + c + ":" + version
+		Expect(k8sClient.Update(ctx, &p)).To(Succeed())
+	}
+}
+
+// renderStaged renders m as the executor renders it in a stage that pins the kubelet and kube-proxy.
+func renderStaged(cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, staged *render.StagedKubernetes) []byte {
+	bundle, err := loadBundle(ctx, k8sClient, tmNamespace, cluster)
+	Expect(err).NotTo(HaveOccurred())
+
+	sys, err := render.ResolveSystemInputs(ctx, k8sClient, tmNamespace, cluster)
+	Expect(err).NotTo(HaveOccurred())
+
+	sys.Staged = staged
+
+	rendered, _, err := render.Render(cluster, m, bundle, nil, sys)
+	Expect(err).NotTo(HaveOccurred())
+
+	return rendered
+}
+
+// opAtStage is an operation whose recorded stage is stage.
+func opAtStage(stage string) *ichorv1alpha1.TalosOperation {
+	op := &ichorv1alpha1.TalosOperation{}
+	op.Status.Kubernetes = &ichorv1alpha1.TalosOperationKubernetesStatus{Stage: stage}
+
+	return op
+}
+
+var componentImage = regexp.MustCompile(`image:\s*\S*/(kube-apiserver|kube-controller-manager|kube-scheduler|kubelet|kube-proxy):(v[0-9.]+)`)
+
+// imageTags maps each Kubernetes component in a rendered configuration to its image tag.
+func imageTags(cfg []byte) map[string]string {
+	tags := map[string]string{}
+
+	for _, m := range componentImage.FindAllStringSubmatch(string(cfg), -1) {
+		tags[m[1]] = m[2]
+	}
+
+	return tags
 }
 
 func newK8sWorker(clusterName, suffix string) *ichorv1alpha1.TalosMachine {
@@ -468,21 +517,19 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		Expect(done).To(BeFalse())
 	})
 
-	It("verifies a control plane's static pods, then syncs bootstrap manifests only once every control plane is done", func() {
+	It("in the last stage applies a control plane's whole configuration and does not sync the bootstrap manifests", func() {
 		cluster := k8sCluster(testK8sTarget)
 		cp1 := newK8sControlPlane(cluster.Name, "cp1")
-		cp2 := newK8sControlPlane(cluster.Name, "cp2")
 		newK8sNode(cp1.Spec.Hostname, testK8sOld, true)
-		newK8sNode(cp2.Spec.Hostname, testK8sOld, true)
 		setStaticPodsFor(cp1.Spec.Hostname, testK8sOld)
-		setStaticPodsFor(cp2.Spec.Hostname, testK8sOld)
 		newKubeProxyDaemonSet(testK8sOld, 2, 2)
 
 		fake1 := &fakeTalosClient{version: testTalosVersion, current: renderAt(cluster, cp1, testK8sOld)}
 		admin := &fakeKubernetesAdmin{}
 		adv := newKubernetesAdvancer(fake1, admin)
+		op := opAtStage(ichorv1alpha1.KubernetesStageKubelets)
 
-		done, err := adv.Advance(ctx, cluster, cp1, nil)
+		done, err := adv.Advance(ctx, cluster, cp1, op)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(done).To(BeFalse())
 		Expect(fake1.applyCalls).To(HaveLen(1))
@@ -493,39 +540,86 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		// The node's kubelet is on the target, but its static pods have not been replaced yet.
 		setK8sNode(cp1.Spec.Hostname, testK8sTarget, true)
 
-		done, err = adv.Advance(ctx, cluster, fetchMachine(cp1), nil)
+		done, err = adv.Advance(ctx, cluster, fetchMachine(cp1), op)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(done).To(BeFalse(), "the static pods still run the old version")
 
-		for _, c := range []string{"kube-apiserver", "kube-controller-manager", "kube-scheduler"} {
-			var p corev1.Pod
-			Expect(k8sClient.Get(ctx, client.ObjectKey{Namespace: testKubeSystem, Name: c + "-" + cp1.Spec.Hostname}, &p)).To(Succeed())
-			p.Spec.Containers[0].Image = "registry.k8s.io/" + c + ":" + testK8sTarget
-			Expect(k8sClient.Update(ctx, &p)).To(Succeed())
-		}
+		setStaticPodImages(cp1.Spec.Hostname, testK8sTarget)
 
-		done, err = adv.Advance(ctx, cluster, fetchMachine(cp1), nil)
+		done, err = adv.Advance(ctx, cluster, fetchMachine(cp1), op)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(done).To(BeTrue())
-		Expect(admin.syncCalls).To(BeZero(), "cp2 still runs the old apiserver: the manifest sync must wait for it")
+		Expect(admin.syncCalls).To(BeZero(), "the manifests are synced in the KubeProxy stage")
 	})
 
-	It("syncs the bootstrap manifests and waits for kube-proxy once the last control plane is done", func() {
+	It("stage ControlPlanes moves the control-plane components and leaves the kubelet and kube-proxy on the old version", func() {
 		cluster := k8sCluster(testK8sTarget)
-		cp := newK8sControlPlane(cluster.Name, "cpl")
-		newK8sNode(cp.Spec.Hostname, testK8sTarget, true)
+		cp := newK8sControlPlane(cluster.Name, "st1")
+		newK8sNode(cp.Spec.Hostname, testK8sOld, true)
+		setStaticPodsFor(cp.Spec.Hostname, testK8sOld)
+
+		fake := &fakeTalosClient{version: testTalosVersion, current: renderAt(cluster, cp, testK8sOld)}
+		admin := &fakeKubernetesAdmin{}
+		op := opAtStage(ichorv1alpha1.KubernetesStageControlPlanes)
+
+		done, err := newKubernetesAdvancer(fake, admin).Advance(ctx, cluster, cp, op)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(done).To(BeFalse())
+		Expect(fake.applyCalls).To(HaveLen(1))
+		Expect(imageTags(fake.applyCalls[0])).To(Equal(map[string]string{
+			"kube-apiserver": testK8sTarget, "kube-controller-manager": testK8sTarget, "kube-scheduler": testK8sTarget,
+			"kubelet": testK8sOld, "kube-proxy": testK8sOld,
+		}))
+		Expect(fake.pulled).To(HaveLen(3), "the kubelet image is not pulled yet")
+
+		// A restarted controller (a new advancer) finds the configuration applied and only verifies.
+		fake.current = fake.applyCalls[0]
+
+		done, err = newKubernetesAdvancer(fake, admin).Advance(ctx, cluster, fetchMachine(cp), op)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(done).To(BeFalse(), "the static pods still run the old version")
+		Expect(fake.applyCalls).To(HaveLen(1))
+
+		setStaticPodImages(cp.Spec.Hostname, testK8sTarget)
+
+		done, err = newKubernetesAdvancer(fake, admin).Advance(ctx, cluster, fetchMachine(cp), op)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(done).To(BeTrue(), "the kubelet is still old and that is what this stage wants")
+		Expect(fake.applyCalls).To(HaveLen(1))
+		Expect(admin.syncCalls).To(BeZero())
+	})
+
+	It("stage KubeProxy moves kube-proxy only, then syncs the manifests and waits for the rollout", func() {
+		cluster := k8sCluster(testK8sTarget)
+		cp := newK8sControlPlane(cluster.Name, "st2")
+		newK8sNode(cp.Spec.Hostname, testK8sOld, true)
 		setStaticPodsFor(cp.Spec.Hostname, testK8sTarget)
 		newKubeProxyDaemonSet(testK8sTarget, 3, 1)
 
-		fake := &fakeTalosClient{version: testTalosVersion, current: renderAt(cluster, cp, testK8sTarget)}
+		fake := &fakeTalosClient{
+			version: testTalosVersion,
+			current: renderStaged(cluster, cp, &render.StagedKubernetes{KubeletVersion: testK8sOld, KubeProxyVersion: testK8sOld}),
+		}
 		admin := &fakeKubernetesAdmin{}
-		adv := newKubernetesAdvancer(fake, admin)
+		op := opAtStage(ichorv1alpha1.KubernetesStageKubeProxy)
 
-		done, err := adv.Advance(ctx, cluster, cp, nil)
+		done, err := newKubernetesAdvancer(fake, admin).Advance(ctx, cluster, cp, op)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(done).To(BeFalse())
+		Expect(fake.applyCalls).To(HaveLen(1))
+		Expect(imageTags(fake.applyCalls[0])).To(HaveKeyWithValue("kube-proxy", testK8sTarget))
+		Expect(imageTags(fake.applyCalls[0])).To(HaveKeyWithValue("kubelet", testK8sOld))
+		Expect(imageTags(fake.applyCalls[0])).To(HaveKeyWithValue("kube-apiserver", testK8sTarget))
+		Expect(fake.pulled).To(BeEmpty(), "kube-proxy is a DaemonSet the sync rolls out, and nothing else changed")
+		Expect(admin.syncCalls).To(BeZero())
+
+		fake.current = fake.applyCalls[0]
+
+		done, err = newKubernetesAdvancer(fake, admin).Advance(ctx, cluster, fetchMachine(cp), op)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(done).To(BeFalse(), "kube-proxy has not finished rolling out")
 		Expect(admin.syncCalls).To(Equal(1))
-		Expect(fake.applyCalls).To(BeEmpty(), "nothing to apply: the node already has the rendered config")
+		Expect(fake.applyCalls).To(HaveLen(1))
 
 		var ds appsv1.DaemonSet
 		Expect(k8sClient.Get(ctx, client.ObjectKey{Namespace: testKubeSystem, Name: kubeProxyName}, &ds)).To(Succeed())
@@ -533,27 +627,313 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		ds.Status.UpdatedNumberScheduled = 3
 		Expect(k8sClient.Status().Update(ctx, &ds)).To(Succeed())
 
-		done, err = adv.Advance(ctx, cluster, fetchMachine(cp), nil)
+		done, err = newKubernetesAdvancer(fake, admin).Advance(ctx, cluster, fetchMachine(cp), op)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(done).To(BeTrue())
 	})
 
-	It("skips kube-proxy entirely when the CNI replaces it", func() {
+	It("stage KubeProxy syncs the manifests but waits for no kube-proxy when the CNI replaces it", func() {
 		cluster := k8sCluster(testK8sTarget, ichorv1alpha1.TalosClusterCNI{Preset: testCilium, KubeProxy: "replaced", Handover: testHandoverDisabled})
 
-		cp := newK8sControlPlane(cluster.Name, "cpr")
-		newK8sNode(cp.Spec.Hostname, testK8sTarget, true)
+		cp := newK8sControlPlane(cluster.Name, "st2r")
+		newK8sNode(cp.Spec.Hostname, testK8sOld, true)
 		setStaticPodsFor(cp.Spec.Hostname, testK8sTarget)
 
 		// No kube-proxy DaemonSet exists at all.
-		fake := &fakeTalosClient{version: testTalosVersion, current: renderAt(cluster, cp, testK8sTarget)}
+		fake := &fakeTalosClient{
+			version: testTalosVersion,
+			current: renderStaged(cluster, cp, &render.StagedKubernetes{KubeletVersion: testK8sOld}),
+		}
 		admin := &fakeKubernetesAdmin{}
-		adv := newKubernetesAdvancer(fake, admin)
 
-		done, err := adv.Advance(ctx, cluster, cp, nil)
+		done, err := newKubernetesAdvancer(fake, admin).Advance(ctx, cluster, cp, opAtStage(ichorv1alpha1.KubernetesStageKubeProxy))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(done).To(BeTrue())
 		Expect(admin.syncCalls).To(Equal(1))
+	})
+
+	It("stage Kubelets moves the kubelet only, and the node ends on the cluster's desired configuration", func() {
+		cluster := k8sCluster(testK8sTarget)
+		cp := newK8sControlPlane(cluster.Name, "st3")
+		newK8sNode(cp.Spec.Hostname, testK8sOld, true)
+		setStaticPodsFor(cp.Spec.Hostname, testK8sTarget)
+
+		fake := &fakeTalosClient{
+			version: testTalosVersion,
+			current: renderStaged(cluster, cp, &render.StagedKubernetes{KubeletVersion: testK8sOld}),
+		}
+		admin := &fakeKubernetesAdmin{}
+		op := opAtStage(ichorv1alpha1.KubernetesStageKubelets)
+
+		done, err := newKubernetesAdvancer(fake, admin).Advance(ctx, cluster, cp, op)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(done).To(BeFalse())
+		Expect(fake.applyCalls).To(HaveLen(1))
+		Expect(fake.applyCalls[0]).To(Equal(renderAt(cluster, cp, testK8sTarget)))
+		Expect(fake.pulled).To(ConsistOf(ContainSubstring("kubelet:" + testK8sTarget)))
+
+		fake.current = fake.applyCalls[0]
+
+		done, err = newKubernetesAdvancer(fake, admin).Advance(ctx, cluster, fetchMachine(cp), op)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(done).To(BeFalse(), "the kubelet has not restarted yet")
+		Expect(fake.applyCalls).To(HaveLen(1))
+
+		setK8sNode(cp.Spec.Hostname, testK8sTarget, true)
+
+		done, err = newKubernetesAdvancer(fake, admin).Advance(ctx, cluster, fetchMachine(cp), op)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(done).To(BeTrue())
+		Expect(fake.applyCalls).To(HaveLen(1))
+	})
+
+	for i, stage := range []string{
+		ichorv1alpha1.KubernetesStageControlPlanes, ichorv1alpha1.KubernetesStageKubeProxy, ichorv1alpha1.KubernetesStageKubelets,
+	} {
+		It("stage "+stage+": a failed apply is an error, so the operation pauses, and nothing is marked applied", func() {
+			cluster := k8sCluster(testK8sTarget)
+			cp := newK8sControlPlane(cluster.Name, fmt.Sprintf("fail%d", i))
+			newK8sNode(cp.Spec.Hostname, testK8sOld, true)
+			setStaticPodsFor(cp.Spec.Hostname, testK8sOld)
+
+			current := map[string][]byte{
+				ichorv1alpha1.KubernetesStageControlPlanes: renderAt(cluster, cp, testK8sOld),
+				ichorv1alpha1.KubernetesStageKubeProxy: renderStaged(cluster, cp,
+					&render.StagedKubernetes{KubeletVersion: testK8sOld, KubeProxyVersion: testK8sOld}),
+				ichorv1alpha1.KubernetesStageKubelets: renderStaged(cluster, cp, &render.StagedKubernetes{KubeletVersion: testK8sOld}),
+			}[stage]
+
+			fake := &fakeTalosClient{version: testTalosVersion, current: current, applyErr: fmt.Errorf("boom")}
+
+			done, err := newKubernetesAdvancer(fake, &fakeKubernetesAdmin{}).Advance(ctx, cluster, cp, opAtStage(stage))
+			Expect(err).To(MatchError(ContainSubstring("boom")))
+			Expect(done).To(BeFalse())
+			Expect(apimeta.IsStatusConditionTrue(fetchMachine(cp).Status.Conditions, conditionKubernetesUpgrade)).To(BeFalse())
+		})
+	}
+})
+
+// kubernetesFleet is a small fake cluster for the staged upgrade: machines with a fake Talos
+// client each, whose Node and static pods follow whatever configuration is applied to them.
+type kubernetesFleet struct {
+	cluster  *ichorv1alpha1.TalosCluster
+	machines []*ichorv1alpha1.TalosMachine
+	byName   map[string]*fakeTalosClient
+	admin    *fakeKubernetesAdmin
+	op       *ichorv1alpha1.TalosOperation
+	seen     map[string]int
+}
+
+func newKubernetesFleet(suffix string, controlPlanes, workers int) *kubernetesFleet {
+	f := &kubernetesFleet{
+		cluster: k8sCluster(testK8sTarget), byName: map[string]*fakeTalosClient{}, admin: &fakeKubernetesAdmin{},
+		seen: map[string]int{},
+	}
+
+	for i := range controlPlanes {
+		cp := newK8sControlPlane(f.cluster.Name, fmt.Sprintf("%s-cp%d", suffix, i+1))
+		setUpgradeOrder(cp, fmt.Sprint(i+1))
+		newK8sNode(cp.Spec.Hostname, testK8sOld, true)
+		setStaticPodsFor(cp.Spec.Hostname, testK8sOld)
+		f.machines = append(f.machines, fetchMachine(cp))
+	}
+
+	for i := range workers {
+		w := newK8sWorker(f.cluster.Name, fmt.Sprintf("%s-w%d", suffix, i+1))
+		newK8sNode(w.Spec.Hostname, testK8sOld, true)
+		f.machines = append(f.machines, w)
+	}
+
+	for _, m := range f.machines {
+		f.byName[m.Name] = &fakeTalosClient{version: testTalosVersion, current: renderAt(f.cluster, m, testK8sOld)}
+	}
+
+	// kube-proxy's DaemonSet is rolled by the manifest sync, which is faked: it is simply ready.
+	newKubeProxyDaemonSet(testK8sTarget, 3, 3)
+
+	f.op = newOpTestOperationOfKind(f.cluster.Name, ichorv1alpha1.TalosOperationKindKubernetes)
+
+	return f
+}
+
+// reconcile runs one pass with a brand new reconciler and advancer, as a restarted controller
+// would, then lets every node take over the configuration applied to it during the pass. It
+// returns the (machine, stage) of each apply in the pass.
+func (f *kubernetesFleet) reconcile() (applied [][2]string) {
+	adv := &kubernetesUpgradeAdvancer{
+		Client: k8sClient, Reader: k8sClient, ControllerNamespace: tmNamespace,
+		TalosClient: perMachineClientFactory(f.byName), Admin: f.admin,
+	}
+	r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: adv.Advance}
+
+	_, err := reconcileOperation(r, f.op)
+	Expect(err).NotTo(HaveOccurred())
+
+	stage := ""
+	if st := fetchOperation(f.op).Status.Kubernetes; st != nil {
+		stage = st.Stage
+	}
+
+	for _, m := range f.machines {
+		fake := f.byName[m.Name]
+		if len(fake.applyCalls) == f.seen[m.Name] {
+			continue
+		}
+
+		f.seen[m.Name] = len(fake.applyCalls)
+		cfg := fake.applyCalls[len(fake.applyCalls)-1]
+		fake.current = cfg
+		tags := imageTags(cfg)
+
+		setK8sNode(m.Spec.Hostname, tags["kubelet"], true)
+
+		if m.Spec.Role == roleControlPlane {
+			setStaticPodImages(m.Spec.Hostname, tags["kube-apiserver"])
+		}
+
+		applied = append(applied, [2]string{m.Name, stage})
+
+		f.expectNoKubeletNewerThanAnAPIServer()
+	}
+
+	return applied
+}
+
+// expectNoKubeletNewerThanAnAPIServer is Kubernetes' version-skew policy, checked on the live
+// objects after every single apply.
+func (f *kubernetesFleet) expectNoKubeletNewerThanAnAPIServer() {
+	GinkgoHelper()
+
+	for _, m := range f.machines {
+		var node corev1.Node
+		Expect(k8sClient.Get(ctx, client.ObjectKey{Name: m.Spec.Hostname}, &node)).To(Succeed())
+
+		for _, cp := range f.machines {
+			if cp.Spec.Role != roleControlPlane {
+				continue
+			}
+
+			var pod corev1.Pod
+			Expect(k8sClient.Get(ctx, client.ObjectKey{Namespace: testKubeSystem, Name: "kube-apiserver-" + cp.Spec.Hostname}, &pod)).To(Succeed())
+			Expect(semverLess(imageTag(&pod), node.Status.NodeInfo.KubeletVersion)).To(BeFalse(),
+				"the kubelet of %s (%s) is newer than the apiserver of %s (%s)",
+				m.Name, node.Status.NodeInfo.KubeletVersion, cp.Name, imageTag(&pod))
+		}
+	}
+}
+
+func semverLess(a, b string) bool {
+	parse := func(v string) (out [3]int) {
+		_, _ = fmt.Sscanf(v, "v%d.%d.%d", &out[0], &out[1], &out[2])
+
+		return out
+	}
+
+	x, y := parse(a), parse(b)
+
+	for i := range x {
+		if x[i] != y[i] {
+			return x[i] < y[i]
+		}
+	}
+
+	return false
+}
+
+var _ = Describe("a staged Kubernetes upgrade through TalosOperationReconciler", func() {
+	It("moves every control plane's components, then kube-proxy, then the kubelets; a restarted controller resumes in each phase", func() {
+		f := newKubernetesFleet("seq", 3, 1)
+		cp1, cp2, cp3, w := f.machines[0], f.machines[1], f.machines[2], f.machines[3]
+
+		var (
+			applied        [][2]string
+			syncsAtKubelet = -1
+		)
+
+		for range 60 {
+			for _, a := range f.reconcile() {
+				if a[1] == ichorv1alpha1.KubernetesStageKubelets && syncsAtKubelet < 0 {
+					syncsAtKubelet = f.admin.syncCalls
+				}
+
+				applied = append(applied, a)
+			}
+
+			if fetchOperation(f.op).Status.Phase == ichorv1alpha1.TalosOperationPhaseCompleted {
+				break
+			}
+		}
+
+		Expect(fetchOperation(f.op).Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseCompleted))
+		Expect(applied).To(Equal([][2]string{
+			{cp1.Name, ichorv1alpha1.KubernetesStageControlPlanes}, {cp2.Name, ichorv1alpha1.KubernetesStageControlPlanes},
+			{cp3.Name, ichorv1alpha1.KubernetesStageControlPlanes},
+			{cp1.Name, ichorv1alpha1.KubernetesStageKubeProxy}, {cp2.Name, ichorv1alpha1.KubernetesStageKubeProxy},
+			{cp3.Name, ichorv1alpha1.KubernetesStageKubeProxy},
+			{cp1.Name, ichorv1alpha1.KubernetesStageKubelets}, {cp2.Name, ichorv1alpha1.KubernetesStageKubelets},
+			{cp3.Name, ichorv1alpha1.KubernetesStageKubelets},
+			{w.Name, ichorv1alpha1.KubernetesStageKubelets},
+		}))
+		Expect(syncsAtKubelet).To(BeNumerically(">=", 1), "the bootstrap manifests are synced before the first kubelet moves")
+
+		for _, m := range f.machines {
+			Expect(f.byName[m.Name].current).To(Equal(renderAt(f.cluster, m, testK8sTarget)),
+				"%s ends on the cluster's desired configuration", m.Name)
+		}
+	})
+
+	It("pauses in the ControlPlanes stage when a control plane's apply fails, and touches no kubelet", func() {
+		f := newKubernetesFleet("pause", 3, 1)
+		cp1, cp2 := f.machines[0], f.machines[1]
+
+		Expect(f.reconcile()).To(Equal([][2]string{{cp1.Name, ichorv1alpha1.KubernetesStageControlPlanes}}))
+
+		f.byName[cp2.Name].applyErr = fmt.Errorf("boom")
+
+		for range 6 {
+			f.reconcile()
+		}
+
+		got := fetchOperation(f.op)
+		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+		Expect(got.Status.FailureReason).To(ContainSubstring("boom"))
+		Expect(got.Status.Kubernetes.Stage).To(Equal(ichorv1alpha1.KubernetesStageControlPlanes))
+
+		for _, m := range f.machines {
+			Expect(imageTags(f.byName[m.Name].current)["kubelet"]).To(Equal(testK8sOld), "%s", m.Name)
+		}
+	})
+
+	It("a single control plane is staged too: its apiserver moves before its own kubelet", func() {
+		f := newKubernetesFleet("single", 1, 0)
+		cp := f.machines[0]
+
+		var applied [][2]string
+
+		for range 20 {
+			applied = append(applied, f.reconcile()...)
+
+			if fetchOperation(f.op).Status.Phase == ichorv1alpha1.TalosOperationPhaseCompleted {
+				break
+			}
+		}
+
+		Expect(applied).To(Equal([][2]string{
+			{cp.Name, ichorv1alpha1.KubernetesStageControlPlanes},
+			{cp.Name, ichorv1alpha1.KubernetesStageKubeProxy},
+			{cp.Name, ichorv1alpha1.KubernetesStageKubelets},
+		}))
+	})
+
+	It("takes an operation that started before stages existed as already in the last stage", func() {
+		f := newKubernetesFleet("legacy", 1, 0)
+		cp := f.machines[0]
+
+		f.op.Status.Machines = []ichorv1alpha1.TalosOperationMachineStatus{{Name: "someone-else", Phase: ichorv1alpha1.TalosOperationMachinePhaseCompleted}}
+		f.op.Status.Phase = ichorv1alpha1.TalosOperationPhaseInProgress
+		Expect(k8sClient.Status().Update(ctx, f.op)).To(Succeed())
+
+		Expect(f.reconcile()).To(Equal([][2]string{{cp.Name, ichorv1alpha1.KubernetesStageKubelets}}))
 	})
 })
 

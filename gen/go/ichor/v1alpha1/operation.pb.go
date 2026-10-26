@@ -39,6 +39,8 @@ const (
 	OperationKind_OPERATION_KIND_ICHOR       OperationKind = 3
 	OperationKind_OPERATION_KIND_CNI         OperationKind = 4
 	OperationKind_OPERATION_KIND_SHUTDOWN    OperationKind = 5
+	// CA_ROTATION replaces the Talos API and Kubernetes API CAs.
+	OperationKind_OPERATION_KIND_CA_ROTATION OperationKind = 6
 )
 
 // Enum value maps for OperationKind.
@@ -50,6 +52,7 @@ var (
 		3: "OPERATION_KIND_ICHOR",
 		4: "OPERATION_KIND_CNI",
 		5: "OPERATION_KIND_SHUTDOWN",
+		6: "OPERATION_KIND_CA_ROTATION",
 	}
 	OperationKind_value = map[string]int32{
 		"OPERATION_KIND_UNSPECIFIED": 0,
@@ -58,6 +61,7 @@ var (
 		"OPERATION_KIND_ICHOR":       3,
 		"OPERATION_KIND_CNI":         4,
 		"OPERATION_KIND_SHUTDOWN":    5,
+		"OPERATION_KIND_CA_ROTATION": 6,
 	}
 )
 
@@ -102,6 +106,9 @@ const (
 	OperationEffect_OPERATION_EFFECT_STOP OperationEffect = 3
 	// NONE: no machine is touched (an Ichor self-upgrade runs as a Job).
 	OperationEffect_OPERATION_EFFECT_NONE OperationEffect = 4
+	// CA_ROTATION: every machine is reconfigured once per stage (no reboot); the
+	// kubelet restarts on each machine in the stages that change the Kubernetes CA.
+	OperationEffect_OPERATION_EFFECT_CA_ROTATION OperationEffect = 5
 )
 
 // Enum value maps for OperationEffect.
@@ -112,6 +119,7 @@ var (
 		2: "OPERATION_EFFECT_RESTART_COMPONENTS",
 		3: "OPERATION_EFFECT_STOP",
 		4: "OPERATION_EFFECT_NONE",
+		5: "OPERATION_EFFECT_CA_ROTATION",
 	}
 	OperationEffect_value = map[string]int32{
 		"OPERATION_EFFECT_UNSPECIFIED":        0,
@@ -119,6 +127,7 @@ var (
 		"OPERATION_EFFECT_RESTART_COMPONENTS": 2,
 		"OPERATION_EFFECT_STOP":               3,
 		"OPERATION_EFFECT_NONE":               4,
+		"OPERATION_EFFECT_CA_ROTATION":        5,
 	}
 )
 
@@ -220,8 +229,12 @@ type Operation struct {
 	Machines      []*OperationMachine    `protobuf:"bytes,8,rep,name=machines,proto3" json:"machines,omitempty"`
 	Conditions    []*Condition           `protobuf:"bytes,9,rep,name=conditions,proto3" json:"conditions,omitempty"`
 	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// ca_rotation_stage is status.caRotation.stage of a ca-rotation operation
+	// (Accepting, Issuing, Dropping, Finalizing, Done); empty before the new CAs
+	// are saved, and for every other kind.
+	CaRotationStage string `protobuf:"bytes,11,opt,name=ca_rotation_stage,json=caRotationStage,proto3" json:"ca_rotation_stage,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *Operation) Reset() {
@@ -322,6 +335,13 @@ func (x *Operation) GetCreatedAt() *timestamppb.Timestamp {
 		return x.CreatedAt
 	}
 	return nil
+}
+
+func (x *Operation) GetCaRotationStage() string {
+	if x != nil {
+		return x.CaRotationStage
+	}
+	return ""
 }
 
 type ListOperationsRequest struct {
@@ -652,9 +672,16 @@ type PlanOperationResponse struct {
 	// spec_changes is true when CreateOperation would change a spec first.
 	SpecChanges bool `protobuf:"varint,7,opt,name=spec_changes,json=specChanges,proto3" json:"spec_changes,omitempty"`
 	// blocked is non-empty when CreateOperation would be refused, and says why.
-	Blocked       string `protobuf:"bytes,8,opt,name=blocked,proto3" json:"blocked,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Blocked string `protobuf:"bytes,8,opt,name=blocked,proto3" json:"blocked,omitempty"`
+	// stages are the passes a ca-rotation makes over every machine, in order;
+	// empty for the other kinds.
+	Stages []string `protobuf:"bytes,9,rep,name=stages,proto3" json:"stages,omitempty"`
+	// replaces_secrets_bundle is true when the operation ends by replacing the
+	// cluster's secrets bundle, so the copy on the user's machine is stale and
+	// `ichor cluster bundle-export` is needed.
+	ReplacesSecretsBundle bool `protobuf:"varint,10,opt,name=replaces_secrets_bundle,json=replacesSecretsBundle,proto3" json:"replaces_secrets_bundle,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *PlanOperationResponse) Reset() {
@@ -741,6 +768,20 @@ func (x *PlanOperationResponse) GetBlocked() string {
 		return x.Blocked
 	}
 	return ""
+}
+
+func (x *PlanOperationResponse) GetStages() []string {
+	if x != nil {
+		return x.Stages
+	}
+	return nil
+}
+
+func (x *PlanOperationResponse) GetReplacesSecretsBundle() bool {
+	if x != nil {
+		return x.ReplacesSecretsBundle
+	}
+	return false
 }
 
 type CreateOperationRequest struct {
@@ -1074,7 +1115,7 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\x1eichor/v1alpha1/operation.proto\x12\x0eichor.v1alpha1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1bichor/v1alpha1/common.proto\"<\n" +
 	"\x10OperationMachine\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
-	"\x05phase\x18\x02 \x01(\tR\x05phase\"\xd2\x03\n" +
+	"\x05phase\x18\x02 \x01(\tR\x05phase\"\xfe\x03\n" +
 	"\tOperation\x12+\n" +
 	"\x03ref\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\x03ref\x123\n" +
 	"\acluster\x18\x02 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x121\n" +
@@ -1089,7 +1130,8 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"conditions\x129\n" +
 	"\n" +
 	"created_at\x18\n" +
-	" \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"L\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12*\n" +
+	"\x11ca_rotation_stage\x18\v \x01(\tR\x0fcaRotationStage\"L\n" +
 	"\x15ListOperationsRequest\x123\n" +
 	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\"S\n" +
 	"\x16ListOperationsResponse\x129\n" +
@@ -1108,7 +1150,7 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x121\n" +
 	"\x04kind\x18\x02 \x01(\x0e2\x1d.ichor.v1alpha1.OperationKindR\x04kind\x12\x16\n" +
 	"\x06target\x18\x03 \x01(\tR\x06target\x12'\n" +
-	"\x0fmax_unavailable\x18\x04 \x01(\x05R\x0emaxUnavailable\"\xb8\x02\n" +
+	"\x0fmax_unavailable\x18\x04 \x01(\x05R\x0emaxUnavailable\"\x88\x03\n" +
 	"\x15PlanOperationResponse\x127\n" +
 	"\x06effect\x18\x01 \x01(\x0e2\x1f.ichor.v1alpha1.OperationEffectR\x06effect\x12:\n" +
 	"\bmachines\x18\x02 \x03(\v2\x1e.ichor.v1alpha1.PlannedMachineR\bmachines\x12\x12\n" +
@@ -1117,7 +1159,10 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\acurrent\x18\x05 \x01(\tR\acurrent\x12\x16\n" +
 	"\x06target\x18\x06 \x01(\tR\x06target\x12!\n" +
 	"\fspec_changes\x18\a \x01(\bR\vspecChanges\x12\x18\n" +
-	"\ablocked\x18\b \x01(\tR\ablocked\"\xc1\x01\n" +
+	"\ablocked\x18\b \x01(\tR\ablocked\x12\x16\n" +
+	"\x06stages\x18\t \x03(\tR\x06stages\x126\n" +
+	"\x17replaces_secrets_bundle\x18\n" +
+	" \x01(\bR\x15replacesSecretsBundle\"\xc1\x01\n" +
 	"\x16CreateOperationRequest\x123\n" +
 	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x121\n" +
 	"\x04kind\x18\x02 \x01(\x0e2\x1d.ichor.v1alpha1.OperationKindR\x04kind\x12\x16\n" +
@@ -1136,20 +1181,22 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\x16DeleteOperationRequest\x127\n" +
 	"\toperation\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\toperation\"L\n" +
 	"\x17DeleteOperationResponse\x121\n" +
-	"\x05audit\x18\x01 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit*\xb7\x01\n" +
+	"\x05audit\x18\x01 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit*\xd7\x01\n" +
 	"\rOperationKind\x12\x1e\n" +
 	"\x1aOPERATION_KIND_UNSPECIFIED\x10\x00\x12\x18\n" +
 	"\x14OPERATION_KIND_TALOS\x10\x01\x12\x1d\n" +
 	"\x19OPERATION_KIND_KUBERNETES\x10\x02\x12\x18\n" +
 	"\x14OPERATION_KIND_ICHOR\x10\x03\x12\x16\n" +
 	"\x12OPERATION_KIND_CNI\x10\x04\x12\x1b\n" +
-	"\x17OPERATION_KIND_SHUTDOWN\x10\x05*\xaf\x01\n" +
+	"\x17OPERATION_KIND_SHUTDOWN\x10\x05\x12\x1e\n" +
+	"\x1aOPERATION_KIND_CA_ROTATION\x10\x06*\xd1\x01\n" +
 	"\x0fOperationEffect\x12 \n" +
 	"\x1cOPERATION_EFFECT_UNSPECIFIED\x10\x00\x12\x1b\n" +
 	"\x17OPERATION_EFFECT_REBOOT\x10\x01\x12'\n" +
 	"#OPERATION_EFFECT_RESTART_COMPONENTS\x10\x02\x12\x19\n" +
 	"\x15OPERATION_EFFECT_STOP\x10\x03\x12\x19\n" +
-	"\x15OPERATION_EFFECT_NONE\x10\x042\xe1\x04\n" +
+	"\x15OPERATION_EFFECT_NONE\x10\x04\x12 \n" +
+	"\x1cOPERATION_EFFECT_CA_ROTATION\x10\x052\xe1\x04\n" +
 	"\x10OperationService\x12_\n" +
 	"\x0eListOperations\x12%.ichor.v1alpha1.ListOperationsRequest\x1a&.ichor.v1alpha1.ListOperationsResponse\x12Y\n" +
 	"\fGetOperation\x12#.ichor.v1alpha1.GetOperationRequest\x1a$.ichor.v1alpha1.GetOperationResponse\x12\\\n" +

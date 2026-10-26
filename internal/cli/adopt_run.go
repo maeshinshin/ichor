@@ -93,6 +93,20 @@ func runAdopt(ctx context.Context, clusterName, namespace string, deps adoptDeps
 			continue
 		}
 
+		// A pending or rejected machine has no credentials in the cluster's bundle yet (it is in
+		// maintenance mode, where the Talos API accepts no client certificate), so dialing it
+		// can only fail with a TLS error. Say so instead.
+		if m.Spec.ApprovalState != ichorv1alpha1.MachineApprovalStateApproved {
+			state := m.Spec.ApprovalState
+			if state == "" {
+				state = ichorv1alpha1.MachineApprovalStatePending
+			}
+
+			plans = append(plans, &adoptPlan{Machine: m.Name, Skipped: "approval state is " + state})
+
+			continue
+		}
+
 		plan, err := planMachine(ctx, &cluster, m, deps.Bundle, existing, sys, deps.DialTalos)
 		if err != nil {
 			return err
@@ -177,6 +191,9 @@ func reportPlans(w io.Writer, plans []*adoptPlan) []*adoptPlan {
 
 	for _, p := range plans {
 		switch {
+		case p.Skipped != "":
+			_, _ = fmt.Fprintf(w, "adopt: machine %q: skipped, %s (only approved machines are read; approve it and re-run adopt to include it)\n",
+				p.Machine, p.Skipped)
 		case p.Patch != nil:
 			_, _ = fmt.Fprintf(w, "adopt: machine %q: drift found, patch ready (zero drift verified)\n", p.Machine)
 
@@ -184,13 +201,61 @@ func reportPlans(w io.Writer, plans []*adoptPlan) []*adoptPlan {
 		case len(p.UnrepresentablePaths) > 0:
 			_, _ = fmt.Fprintf(w, "adopt: machine %q: drift found in %d field(s) that adopt cannot patch automatically: %s\n",
 				p.Machine, len(p.UnrepresentablePaths), strings.Join(p.UnrepresentablePaths, ", "))
-			_, _ = fmt.Fprintf(w, "adopt: machine %q: write a TalosConfigPatch for these fields by hand, then re-run adopt\n", p.Machine)
+			for _, line := range explainUnrepresentable(p.UnrepresentablePaths) {
+				_, _ = fmt.Fprintf(w, "adopt: machine %q: %s\n", p.Machine, line)
+			}
 		default:
 			_, _ = fmt.Fprintf(w, "adopt: machine %q: already matches a fresh render, nothing to do\n", p.Machine)
 		}
 	}
 
 	return toCreate
+}
+
+// v14OnlyDocuments are the Talos v1.14 documents that replaced legacy Config fields. Ichor renders
+// their defaults, and no TalosConfigPatch kind (nor TalosCluster/TalosMachine field) can set them
+// yet, so a node that differs in one cannot be adopted at the v1.14 contract.
+var v14OnlyDocuments = map[string]string{
+	"KubeNetworkConfig":       "pod and service subnets, DNS domain",
+	"UnattendedInstallConfig": "install disk and image",
+	"KubeFlannelCNIConfig":    "the flannel CNI (its absence means \"no flannel\")",
+}
+
+// explainUnrepresentable turns the paths adopt left alone into the lines a user can act on: which
+// v1.14 document each belongs to and why it cannot be captured, and, for what remains of the
+// legacy Config document, that a patch has to be written by hand.
+func explainUnrepresentable(paths []string) []string {
+	seen := map[string]bool{}
+	legacy := false
+
+	var lines []string
+
+	for _, p := range paths {
+		kind, _, _ := strings.Cut(p, ".")
+
+		what, ok := v14OnlyDocuments[kind]
+		if !ok {
+			legacy = true
+
+			continue
+		}
+
+		if seen[kind] {
+			continue
+		}
+
+		seen[kind] = true
+
+		lines = append(lines, fmt.Sprintf(
+			"%s (%s) is a Talos v1.14 document: there is no TalosConfigPatch kind for it, and the legacy Config fields "+
+				"it replaced are rejected next to it, so it cannot be adopted at versionContract v1.14", kind, what))
+	}
+
+	if legacy {
+		lines = append(lines, "write a TalosConfigPatch for the other fields by hand, then re-run adopt")
+	}
+
+	return lines
 }
 
 // confirm reads a yes/no answer from r, defaulting to no on anything but a

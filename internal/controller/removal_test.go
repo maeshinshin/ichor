@@ -89,7 +89,9 @@ func newTestClusterWithCount(count int32, secretName string) *ichorv1alpha1.Talo
 // the real secrets bundle Secret's name its caller's TalosCluster needs to
 // reference for loadBundle to succeed.
 func removalReadyReconciler() (*TalosMachineReconciler, string) {
-	fake := &fakeTalosClient{}
+	// nodeName: machines here have no spec.hostname, and a control plane whose name cannot be
+	// resolved is refused.
+	fake := &fakeTalosClient{nodeName: "removal-ready-node"}
 	bundle := newTestBundle("v1.14")
 	secret := newTestSecret(bundle)
 

@@ -98,6 +98,7 @@ const (
 	reasonEtcdMemberRemoveFail = "EtcdMemberRemovalFailed"
 	reasonResetRequested       = "ResetRequested"
 	reasonResetFailed          = "ResetFailed"
+	reasonNodeNameUnresolved   = "NodeNameUnresolved"
 )
 
 // resetOnDeleteAnnotation opts a TalosMachine's removal into also
@@ -137,6 +138,10 @@ const reasonNodeStillHasClusterCredentials = "NodeStillHasClusterCredentials"
 // either.
 const nodeStillHasClusterCredentialsMessage = "control plane %q was removed from etcd, but its physical node was never reset " +
 	"and still holds this cluster's PKI; it cannot rejoin etcd, but do not repurpose or discard the hardware until it is reset"
+
+// workerStillHasClusterCredentialsMessage is the worker form: it was never an etcd member.
+const workerStillHasClusterCredentialsMessage = "worker %q was removed, but its physical node was never reset " +
+	"and still holds this cluster's PKI; do not repurpose or discard the hardware until it is reset"
 
 // conditionTransitioning and its two reasons implement
 // docs/design/architecture.md's "Nodes" section: "Even counts are allowed
@@ -333,19 +338,34 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 		}
 	}
 
+	// The drain, the evacuation and the etcd-member check all act on the Kubernetes node / etcd
+	// member name, which spec.hostname only overrides (resolveNodeName, as everywhere else). A
+	// control plane whose name cannot be told is refused: skipping its etcd member would delete
+	// the machine and leave a dead member in the quorum.
+	nodeName, err := r.removalNodeName(ctx, &cluster, m)
+	if err != nil && isControlPlane {
+		msg := fmt.Sprintf("cannot tell which Kubernetes node and etcd member control plane %q is, "+
+			"so it is not removed (set spec.hostname or bring the node back): %v", m.Name, err)
+		if cerr := r.removalCondition(ctx, m, metav1.ConditionFalse, reasonNodeNameUnresolved, msg); cerr != nil {
+			return cerr
+		}
+
+		return errors.New(msg) // an error, so Reconcile requeues: the node may only be rebooting
+	}
+
 	// Storage evacuation comes before the drain (architecture.md, "Nodes":
 	// evacuation hook, drain, etcd member, reset, Node delete), through the
 	// same evacuateMachine the Talos upgrade uses. Its progress lives in
 	// the StorageEvacuation condition, so a restarted controller resumes
 	// from status; a timeout stops the removal here and never advances it.
-	progress, err := evacuateMachine(ctx, r.Client, r.Evacuator, &cluster, m, m.Spec.Hostname, "removal")
+	progress, err := evacuateMachine(ctx, r.Client, r.Evacuator, &cluster, m, nodeName, "removal")
 	if err != nil {
 		return r.removalCondition(ctx, m, metav1.ConditionFalse, reasonEvacuationFailed, err.Error())
 	}
 
 	switch progress {
 	case storage.EvacuationWaiting:
-		msg := fmt.Sprintf("waiting for storage replicas to move off node %q before draining it", m.Spec.Hostname)
+		msg := fmt.Sprintf("waiting for storage replicas to move off node %q before draining it", nodeName)
 		if err := r.removalCondition(ctx, m, metav1.ConditionFalse, reasonEvacuationPending, msg); err != nil {
 			return err
 		}
@@ -354,7 +374,7 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 		return errors.New(msg)
 	case storage.EvacuationPaused:
 		msg := fmt.Sprintf("evacuating node %q timed out with storage replicas still on it; "+
-			"removal is stopped and scheduling was re-enabled (retrying evacuation)", m.Spec.Hostname)
+			"removal is stopped and scheduling was re-enabled (retrying evacuation)", nodeName)
 		if err := r.removalCondition(ctx, m, metav1.ConditionFalse, reasonEvacuationFailed, msg); err != nil {
 			return err
 		}
@@ -365,7 +385,7 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 	}
 
 	stop := renewWhile(ctx, lock, controllerIdentity, removalRenewInterval)
-	drainErr := r.drainNode(ctx, m.Spec.Hostname)
+	drainErr := r.drainNode(ctx, nodeName)
 	stop()
 
 	if drainErr != nil {
@@ -373,7 +393,7 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 	}
 
 	if isControlPlane {
-		if err := r.removeEtcdMember(ctx, &cluster, m); err != nil {
+		if err := r.removeEtcdMember(ctx, &cluster, m, nodeName); err != nil {
 			log.Error(err, "removing etcd member")
 
 			return r.removalCondition(ctx, m, metav1.ConditionFalse, reasonEtcdMemberRemoveFail, err.Error())
@@ -392,6 +412,36 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 	return r.completeRemoval(ctx, m, reset)
 }
 
+// removalNodeName is resolveNodeName for the departing machine: spec.hostname when set,
+// otherwise its own report (dialed here, bounded by etcdDialTimeout) or the Kubernetes Node at
+// its endpoint. The error is only fatal for a control plane (the caller decides).
+func (r *TalosMachineReconciler) removalNodeName(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
+) (string, error) {
+	if m.Spec.Hostname != "" {
+		return m.Spec.Hostname, nil
+	}
+
+	var talos TalosClient
+
+	if r.TalosClient != nil {
+		if bundle, err := loadBundle(ctx, r.Client, r.ControllerNamespace, cluster); err == nil {
+			dialCtx, cancel := context.WithTimeout(ctx, etcdDialTimeout)
+			defer cancel()
+
+			if c, err := r.TalosClient(dialCtx, cluster, m, bundle); err == nil {
+				defer closeTalosClient(c)
+
+				talos = c
+			}
+
+			return resolveNodeName(dialCtx, r.Client, talos, m)
+		}
+	}
+
+	return resolveNodeName(ctx, r.Client, talos, m)
+}
+
 // completeRemoval records the Removal condition's terminal success message,
 // then clears machineRemovalFinalizer -- in that order, so a crash between
 // the two leaves the finalizer still held (removeEtcdMember's own
@@ -406,8 +456,12 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 // no longer true: Reset wiped the STATE partition those credentials lived
 // on. The event fires exactly when it did before ADR 0042 existed.
 func (r *TalosMachineReconciler) completeRemoval(ctx context.Context, m *ichorv1alpha1.TalosMachine, reset bool) error {
-	message := "removal passed the quorum, last-control-plane and declared-count checks, the node was " +
-		"drained, and its etcd member was removed"
+	message := "the node was drained and removed"
+	if m.Spec.Role == roleControlPlane {
+		message = "removal passed the quorum, last-control-plane and declared-count checks, the node was " +
+			"drained, and its etcd member was removed"
+	}
+
 	if reset {
 		message += "; the node was reset and is rebooting back to maintenance mode"
 	}
@@ -417,8 +471,13 @@ func (r *TalosMachineReconciler) completeRemoval(ctx context.Context, m *ichorv1
 	}
 
 	if !reset && r.Recorder != nil {
-		r.Recorder.Eventf(m, corev1.EventTypeWarning, reasonNodeStillHasClusterCredentials,
-			nodeStillHasClusterCredentialsMessage, m.Name)
+		msg := nodeStillHasClusterCredentialsMessage
+		if m.Spec.Role != roleControlPlane {
+			// A worker was never an etcd member: do not claim it was removed from etcd.
+			msg = workerStillHasClusterCredentialsMessage
+		}
+
+		r.Recorder.Eventf(m, corev1.EventTypeWarning, reasonNodeStillHasClusterCredentials, msg, m.Name)
 	}
 
 	controllerutil.RemoveFinalizer(m, machineRemovalFinalizer)
@@ -486,7 +545,7 @@ func (r *TalosMachineReconciler) resetNode(
 // next reconcile re-lists rather than trusting any local memory of what it
 // already did.
 func (r *TalosMachineReconciler) removeEtcdMember(
-	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, nodeName string,
 ) error {
 	if r.TalosClient == nil {
 		return fmt.Errorf("no Talos API connectivity is configured for this controller")
@@ -497,11 +556,11 @@ func (r *TalosMachineReconciler) removeEtcdMember(
 		return fmt.Errorf("loading secrets bundle for etcd member removal: %w", err)
 	}
 
-	if r.trySelfLeave(ctx, cluster, m, bundle) {
+	if r.trySelfLeave(ctx, cluster, m, nodeName, bundle) {
 		return nil
 	}
 
-	return r.removeEtcdMemberFromSurvivor(ctx, cluster, m, bundle)
+	return r.removeEtcdMemberFromSurvivor(ctx, cluster, m, nodeName, bundle)
 }
 
 // trySelfLeave attempts removeEtcdMember's first-choice path (self-dial, list, leave) and
@@ -516,7 +575,7 @@ func (r *TalosMachineReconciler) removeEtcdMember(
 // long Reconcile's own ctx happens to live, wedging this package's one worker on every
 // other TalosMachine behind it.
 func (r *TalosMachineReconciler) trySelfLeave(
-	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, bundle *secrets.Bundle,
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, nodeName string, bundle *secrets.Bundle,
 ) bool {
 	selfCtx, cancel := context.WithTimeout(ctx, etcdDialTimeout)
 	defer cancel()
@@ -532,7 +591,7 @@ func (r *TalosMachineReconciler) trySelfLeave(
 		return false
 	}
 
-	if !etcdMemberPresent(members, m.Spec.Hostname) {
+	if !etcdMemberPresent(members, nodeName) {
 		return true // already gone: the resumption case above
 	}
 
@@ -546,7 +605,7 @@ func (r *TalosMachineReconciler) trySelfLeave(
 // finalizer and retries later rather than treating that as "already
 // removed".
 func (r *TalosMachineReconciler) removeEtcdMemberFromSurvivor(
-	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, bundle *secrets.Bundle,
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, nodeName string, bundle *secrets.Bundle,
 ) error {
 	survivor, err := r.findEtcdSurvivor(ctx, m)
 	if err != nil {
@@ -567,7 +626,7 @@ func (r *TalosMachineReconciler) removeEtcdMemberFromSurvivor(
 		return fmt.Errorf("listing etcd members from a surviving control plane: %w", err)
 	}
 
-	id, found := etcdMemberID(members, m.Spec.Hostname)
+	id, found := etcdMemberID(members, nodeName)
 	if !found {
 		return nil // already gone
 	}

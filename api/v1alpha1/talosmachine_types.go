@@ -134,9 +134,10 @@ type TalosMachineSpec struct {
 // TalosMachineInstall is the install target of one machine, rendered by pkg/render as the
 // UnattendedInstallConfig document from the v1.14 contract and as machine.install before.
 type TalosMachineInstall struct {
-	// disk selects the system disk by a stable identifier.
-	// +optional
-	Disk *TalosMachineDisk `json:"disk,omitempty"`
+	// disk selects the system disk by a stable identifier. Required: the v1.14 install document
+	// has no meaning without a disk to install onto.
+	// +required
+	Disk TalosMachineDisk `json:"disk"`
 
 	// image is the installer image reference. Unset lets Talos use the installer of the
 	// schematic it booted from, which only works when it booted an Image Factory asset.

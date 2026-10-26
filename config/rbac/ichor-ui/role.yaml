@@ -15,6 +15,13 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - groups
+  - users
+  verbs:
+  - impersonate
+- apiGroups:
+  - ""
+  resources:
   - nodes
   verbs:
   - get

@@ -169,6 +169,31 @@ ichorUI:
   ##
   argocdNamespace: argocd
 
+  ## OIDC login with Kubernetes impersonation. Off by default: ichor-ui then
+  ## writes with its own ServiceAccount and anyone who can reach it can write, as before (it
+  ## logs a warning and the UI shows a banner). On: every request needs an ID token from this
+  ## issuer, and ichor-ui calls the Kubernetes API as that user, so RBAC and audit apply per
+  ## user. The client is public (authorization code + PKCE in the browser); register the UI's
+  ## origin as a redirect URI. There is no client secret.
+  ##
+  oidc:
+    enabled: false
+    issuer: ""
+    clientId: ""
+    ## Claim used as the user name ("email" additionally requires email_verified).
+    usernameClaim: email
+    groupsClaim: groups
+    ## Prepended to names so an IdP value can never collide with a built-in such as
+    ## system:masters. Bind your RBAC to e.g. "oidc:alice@example.com" / "oidc:platform".
+    usernamePrefix: "oidc:"
+    groupsPrefix: "oidc:"
+    ## The ServiceAccount is granted `impersonate` on users and groups. Empty lists allow any
+    ## name (the backend still refuses system: users); list names to narrow it. A user outside
+    ## the lists, or in a group outside them, gets a 403 from the API server.
+    impersonate:
+      users: []
+      groups: []
+
   ## Pod-level security settings
   ##
   podSecurityContext:

@@ -4,14 +4,17 @@ go 1.27.3
 
 require (
 	connectrpc.com/connect v1.21.0
+	filippo.io/age v1.3.2
 	github.com/cosi-project/runtime v1.16.3
 	github.com/go-logr/logr v1.4.4
+	github.com/minio/minio-go/v7 v7.4.1
 	github.com/onsi/ginkgo/v2 v2.28.1
 	github.com/onsi/gomega v1.39.1
 	github.com/open-policy-agent/cert-controller v0.16.0
 	github.com/opencontainers/runtime-spec v1.3.0
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
 	github.com/prometheus/client_golang v1.23.2
+	github.com/robfig/cron/v3 v3.0.1
 	github.com/siderolabs/crypto v0.6.5
 	github.com/siderolabs/talos/pkg/machinery v1.14.3
 	github.com/spf13/cobra v1.10.2
@@ -34,7 +37,6 @@ require (
 
 require (
 	cel.dev/expr v0.25.2 // indirect
-	filippo.io/age v1.3.2 // indirect
 	filippo.io/hpke v0.4.0 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20230124172434-306776ec8161 // indirect
 	github.com/MakeNowJust/heredoc v1.0.0 // indirect
@@ -105,7 +107,6 @@ require (
 	github.com/mdlayher/socket v0.6.1 // indirect
 	github.com/minio/crc64nvme v1.1.1 // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
-	github.com/minio/minio-go/v7 v7.4.1 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/moby/spdystream v0.5.1 // indirect
 	github.com/moby/term v0.5.0 // indirect
@@ -123,7 +124,6 @@ require (
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.67.5 // indirect
 	github.com/prometheus/procfs v0.19.2 // indirect
-	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/rs/xid v1.6.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/ryanuber/go-glob v1.0.0 // indirect

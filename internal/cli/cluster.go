@@ -33,7 +33,7 @@ var clusterCmd = &cobra.Command{
 }
 
 var clusterListCmd = &cobra.Command{
-	Use:   "list",
+	Use:   useList,
 	Short: "List clusters",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
@@ -44,7 +44,7 @@ var clusterListCmd = &cobra.Command{
 }
 
 var clusterGetCmd = &cobra.Command{
-	Use:   "get NAME",
+	Use:   useGetName,
 	Short: "Show one cluster: versions, conditions, rollout and hand-over state",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {

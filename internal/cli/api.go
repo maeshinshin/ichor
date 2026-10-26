@@ -42,6 +42,12 @@ import (
 	"github.com/maeshinshin/ichor/internal/uiapi"
 )
 
+// Command Use strings several subcommand groups share.
+const (
+	useList    = "list"
+	useGetName = "get NAME"
+)
+
 // actorCLI is the audit actor the in-process fallback records, so an
 // AuditRecord says which path wrote the CR (docs/adr/0047).
 const actorCLI = "ichor-cli"
@@ -181,7 +187,7 @@ func dialBackend(ctx context.Context, opts apiOptions, deps apiDeps) (*apiClient
 	}
 
 	if len(svc.Spec.Ports) == 0 || len(svc.Spec.Selector) == 0 {
-		return nil, fmt.Errorf("Service %s/%s has no port or selector", opts.IchorNamespace, uiServiceName)
+		return nil, fmt.Errorf("service %s/%s has no port or selector", opts.IchorNamespace, uiServiceName)
 	}
 
 	dctx, cancel := context.WithTimeout(ctx, apiConnectTimeout)

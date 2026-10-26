@@ -55,7 +55,7 @@ var nodeCmd = &cobra.Command{
 }
 
 var nodeGetCmd = &cobra.Command{
-	Use:   "get NAME",
+	Use:   useGetName,
 	Short: "Show a node's hardware, disks, network interfaces, usage and Kubernetes status",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {

@@ -29,7 +29,7 @@ import (
 var machineListCluster string
 
 var machineListCmd = &cobra.Command{
-	Use:   "list",
+	Use:   useList,
 	Short: "List machines, pending ones included",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {

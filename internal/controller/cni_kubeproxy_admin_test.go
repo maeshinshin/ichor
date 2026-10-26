@@ -23,7 +23,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -31,21 +30,21 @@ var _ = Describe("removeKubeProxyObjects", func() {
 	It("deletes the DaemonSet, ServiceAccount, ClusterRoleBinding and every kube-proxy ConfigMap, and nothing else", func() {
 		newKubeProxyDaemonSet(testK8sOld, 2, 2)
 
-		sa := &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Namespace: testKubeSystem, Name: kubeProxyName}}
+		sa := &corev1.ServiceAccount{Namespace: testKubeSystem, Name: kubeProxyName}
 		Expect(k8sClient.Create(ctx, sa)).To(Succeed())
 
 		crb := &rbacv1.ClusterRoleBinding{
-			ObjectMeta: metav1.ObjectMeta{Name: kubeProxyName},
-			RoleRef:    rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: "system:node-proxier"},
-			Subjects:   []rbacv1.Subject{{Kind: "ServiceAccount", Name: kubeProxyName, Namespace: testKubeSystem}},
+			Name:     kubeProxyName,
+			RoleRef:  rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: "system:node-proxier"},
+			Subjects: []rbacv1.Subject{{Kind: "ServiceAccount", Name: kubeProxyName, Namespace: testKubeSystem}},
 		}
 		Expect(k8sClient.Create(ctx, crb)).To(Succeed())
 
 		// Talos names the ConfigMap kube-proxy-<checksum>; nothing guarantees it carries labels.
-		cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: testKubeSystem, Name: kubeProxyName + "-5d7f9c"}}
+		cm := &corev1.ConfigMap{Namespace: testKubeSystem, Name: kubeProxyName + "-5d7f9c"}
 		Expect(k8sClient.Create(ctx, cm)).To(Succeed())
 
-		other := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: testKubeSystem, Name: "coredns-kp-test"}}
+		other := &corev1.ConfigMap{Namespace: testKubeSystem, Name: "coredns-kp-test"}
 		Expect(k8sClient.Create(ctx, other)).To(Succeed())
 		DeferCleanup(func() { _ = k8sClient.Delete(ctx, other) })
 

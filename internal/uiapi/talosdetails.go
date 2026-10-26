@@ -76,7 +76,6 @@ func (s *Server) GetNodeTalosDetails(
 	run(func(c context.Context) {
 		resp.System = section(c, tc.TalosSystem, func(e string) *pb.TalosSystemSection { return &pb.TalosSystemSection{Error: e} })
 		resp.System.KernelArgs = redactKernelArgs(resp.System.KernelArgs)
-
 	})
 	run(func(c context.Context) {
 		resp.Network = section(c, tc.TalosNetwork, func(e string) *pb.TalosNetworkSection { return &pb.TalosNetworkSection{Error: e} })

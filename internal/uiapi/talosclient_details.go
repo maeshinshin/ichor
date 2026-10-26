@@ -103,9 +103,9 @@ func (t *machineryNodeTalosClient) TalosSystem(ctx context.Context) (*pb.TalosSy
 	}
 
 	if cmd != nil {
-		// Redacted again by the handler; doing it here too keeps this client
-		// safe to reuse.
-		out.KernelArgs = redactKernelArgs(strings.Fields(cmd.TypedSpec().Cmdline))
+		// Unredacted here: GetNodeTalosDetails masks credential-shaped
+		// arguments for every NodeTalosClient.
+		out.KernelArgs = strings.Fields(cmd.TypedSpec().Cmdline)
 	}
 
 	return out, nil

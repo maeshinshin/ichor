@@ -408,6 +408,11 @@ func main() {
 		controller.NewKubernetesAdmin(),
 	)
 
+	configRolloutAdvance := controller.NewConfigRolloutAdvancer(
+		mgr.GetClient(), os.Getenv("POD_NAMESPACE"), controller.NewMachineryTalosClient,
+		&controller.LonghornEvacuator{Client: mgr.GetClient()},
+	)
+
 	ichorUpgradeAdvance := controller.NewIchorUpgradeAdvancer(mgr.GetClient(), os.Getenv("POD_NAMESPACE"))
 	cniKubeProxyAdvance := controller.NewCNIKubeProxyAdvancer(
 		mgr.GetClient(), mgr.GetAPIReader(), os.Getenv("POD_NAMESPACE"), controller.NewMachineryTalosClient,
@@ -436,6 +441,8 @@ func main() {
 				return talosUpgradeAdvance(ctx, cluster, m, op)
 			case ichorv1alpha1.TalosOperationKindKubernetes:
 				return kubernetesUpgradeAdvance(ctx, cluster, m, op)
+			case ichorv1alpha1.TalosOperationKindConfig:
+				return configRolloutAdvance(ctx, cluster, m, op)
 			case ichorv1alpha1.TalosOperationKindIchor:
 				return ichorUpgradeAdvance(ctx, cluster, m, op)
 			case ichorv1alpha1.TalosOperationKindCNI:

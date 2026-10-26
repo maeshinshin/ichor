@@ -94,6 +94,8 @@ spec:
                   Kubernetes API CAs). This CRD and its controller only
                   store and report it -- each kind's own execution is a separate unit's work.
                   shutdown and ca-rotation are the exceptions: each runs its own state machine.
+                  config applies the pending reboot-requiring configuration changes, one machine at a time
+                  with a reboot each.
                 enum:
                 - talos
                 - kubernetes
@@ -101,6 +103,7 @@ spec:
                 - cni
                 - shutdown
                 - ca-rotation
+                - config
                 type: string
               maxUnavailable:
                 default: 1

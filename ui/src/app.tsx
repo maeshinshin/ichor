@@ -1,10 +1,8 @@
 import { useEffect, useState } from 'preact/hooks'
+import { AppShell } from '@/components/AppShell'
 import { ErrorAlert } from '@/components/ErrorAlert'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Button } from '@/components/ui/button'
 import { finishLogin, startLogin, storedToken, tokenUsable, type AuthConfig } from '@/lib/oidc'
 import { useT } from '@/lib/useT'
-import { Separator } from '@/components/ui/separator'
 import { ClusterDetail } from '@/pages/ClusterDetail'
 import { ClusterList } from '@/pages/ClusterList'
 import { GitOps } from '@/pages/GitOps'
@@ -15,22 +13,8 @@ import { OperationList } from '@/pages/OperationList'
 import { PatchDetail } from '@/pages/PatchDetail'
 import { PatchList } from '@/pages/PatchList'
 import { Placeholder } from '@/pages/Placeholder'
-import { ThemeSwitch } from '@/components/ThemeSwitch'
-import { Link, matchRoute, usePath } from '@/router'
-import type { Key } from '@/lib/i18n'
+import { matchRoute, usePath } from '@/router'
 import { t as translateNow } from '@/lib/i18n'
-
-// Top-level nav. Cluster detail (/clusters/:namespace/:name), node detail
-// (/nodes/:namespace/:name) and patch edit (/patches/:namespace/:name) are
-// reached from a list row, not from here, same as there's no nav entry for
-// an individual GitHub PR page.
-const navRoutes: { path: string; label: Key }[] = [
-  { path: '/', label: 'nav.clusters' },
-  { path: '/machines', label: 'nav.machines' },
-  { path: '/patches', label: 'nav.patches' },
-  { path: '/operations', label: 'nav.operations' },
-  { path: '/gitops', label: 'nav.gitops' },
-]
 
 // useLogin gates the app on OIDC (docs/adr/0058). 'open' means ichor-ui has no
 // login configured and writes with its own ServiceAccount, which the banner says.
@@ -63,30 +47,9 @@ export function App() {
   if (login.state === 'error') return <ErrorAlert title={t('app.signInFailed')} detail={login.error} />
 
   return (
-    <div class="mx-auto min-h-screen min-w-0 max-w-5xl px-4">
-      <header class="flex flex-wrap items-center gap-x-2 gap-y-1 py-3 sm:py-4">
-        <span class="text-base font-semibold">Ichor</span>
-        {/* On a phone the nav drops to its own row and scrolls inside itself, so it never widens the page. */}
-        <nav class="order-last -mx-1 flex w-full gap-1 overflow-x-auto px-1 pb-1 sm:order-none sm:mx-0 sm:ml-6 sm:w-auto sm:overflow-visible sm:p-0">
-          {navRoutes.map((r) => (
-            <Button key={r.path} asChild variant={path === r.path ? 'secondary' : 'ghost'} size="sm">
-              <Link to={r.path}>{t(r.label)}</Link>
-            </Button>
-          ))}
-        </nav>
-        <div class="ml-auto">
-          <ThemeSwitch />
-        </div>
-      </header>
-      <Separator />
-      {login.state === 'open' && (
-        <Alert className="mt-4">
-          <AlertTitle>{t('app.noLoginTitle')}</AlertTitle>
-          <AlertDescription>{t('app.noLoginBody')}</AlertDescription>
-        </Alert>
-      )}
-      <main>{renderRoute(path, t('common.notFound'))}</main>
-    </div>
+    <AppShell path={path} signInNotConfigured={login.state === 'open'}>
+      {renderRoute(path, t('common.notFound'))}
+    </AppShell>
   )
 }
 

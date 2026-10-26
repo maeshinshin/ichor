@@ -121,6 +121,8 @@ not to add.
 
 ## Decision: Hubble's certificates
 
+> Update (ADR 0055): re-checked against the Cilium v1.20.0 chart; `cronJob` kept, and the Application also ignores `CiliumIdentity`.
+
 Cilium's Helm chart defaults `hubble.tls.auto.method` to `helm`, which
 regenerates the mTLS certificate as a Helm hook on every install/upgrade --
 and so on every Argo CD sync, which runs `helm template`/`helm upgrade`

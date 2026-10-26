@@ -35,6 +35,8 @@ import (
 // Node actions over a fake client: what the plan says, what is refused before
 // anything is written, and what the TalosOperation looks like.
 
+const nodeTestCP = "cp1"
+
 func nodePlanReq(machine string, action pb.NodeAction) *connect.Request[pb.PlanOperationRequest] {
 	return connect.NewRequest(&pb.PlanOperationRequest{
 		Kind: pb.OperationKind_OPERATION_KIND_NODE,
@@ -70,7 +72,7 @@ func TestNodePlanSaysWhatHappensInPlainEnglish(t *testing.T) {
 	}
 
 	// The only control plane: its reboot takes the API away, and the plan says so.
-	cp := planNodeOK(t, s, nodePlanReq("cp1", pb.NodeAction_NODE_ACTION_REBOOT))
+	cp := planNodeOK(t, s, nodePlanReq(nodeTestCP, pb.NodeAction_NODE_ACTION_REBOOT))
 	if !cp.GetKubernetesApiUnavailable() || !strings.Contains(cp.GetWarning(), "only control plane") {
 		t.Fatalf("sole control plane reboot must warn about the API: %+v", cp)
 	}
@@ -103,8 +105,8 @@ func TestNodePlanRefusals(t *testing.T) {
 		"service outside the allowlist":      {"w1", &pb.NodeActionRequest{Action: pb.NodeAction_NODE_ACTION_RESTART_SERVICE, Service: "etcd"}, "cannot be restarted"},
 		"no service":                         {"w1", &pb.NodeActionRequest{Action: pb.NodeAction_NODE_ACTION_RESTART_SERVICE}, "choose the service"},
 		"etcd action on a worker":            {"w1", &pb.NodeActionRequest{Action: pb.NodeAction_NODE_ACTION_ETCD_DEFRAG}, "only control planes"},
-		"stopping one of two control planes": {"cp1", &pb.NodeActionRequest{Action: pb.NodeAction_NODE_ACTION_SHUTDOWN}, "two control planes"},
-		"removing one of two control planes": {"cp1", &pb.NodeActionRequest{Action: pb.NodeAction_NODE_ACTION_REMOVE}, "quorum"},
+		"stopping one of two control planes": {nodeTestCP, &pb.NodeActionRequest{Action: pb.NodeAction_NODE_ACTION_SHUTDOWN}, "two control planes"},
+		"removing one of two control planes": {nodeTestCP, &pb.NodeActionRequest{Action: pb.NodeAction_NODE_ACTION_REMOVE}, "quorum"},
 	} {
 		tc.req.Machine = objectRef(opNS, tc.machine)
 
@@ -119,7 +121,7 @@ func TestNodePlanRefusals(t *testing.T) {
 	}
 
 	if _, err := s.PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{
-		Kind: pb.OperationKind_OPERATION_KIND_NODE, Node: &pb.NodeActionRequest{Machine: objectRef(opNS, "w1"), Service: "kubelet", Action: pb.NodeAction_NODE_ACTION_REBOOT},
+		Kind: pb.OperationKind_OPERATION_KIND_NODE, Node: &pb.NodeActionRequest{Machine: objectRef(opNS, "w1"), Service: nameKubelet, Action: pb.NodeAction_NODE_ACTION_REBOOT},
 	})); connect.CodeOf(err) != connect.CodeInvalidArgument {
 		t.Fatalf("a service with reboot: %v", err)
 	}
@@ -129,7 +131,7 @@ func TestNodeCreateWritesOneNodeOperation(t *testing.T) {
 	s, k8s := opServer(t, opObjects()...)
 
 	res, err := s.CreateOperation(context.Background(), nodeCreateReq(&pb.NodeActionRequest{
-		Machine: objectRef(opNS, "w1"), Action: pb.NodeAction_NODE_ACTION_RESTART_SERVICE, Service: "kubelet",
+		Machine: objectRef(opNS, "w1"), Action: pb.NodeAction_NODE_ACTION_RESTART_SERVICE, Service: nameKubelet,
 	}))
 	if err != nil {
 		t.Fatalf("create: %v", err)
@@ -141,7 +143,7 @@ func TestNodeCreateWritesOneNodeOperation(t *testing.T) {
 	}
 
 	n := ops[0].Spec.Node
-	if n == nil || n.MachineRef.Name != "w1" || n.Action != ichorv1alpha1.NodeActionRestartService || n.Service != "kubelet" {
+	if n == nil || n.MachineRef.Name != "w1" || n.Action != ichorv1alpha1.NodeActionRestartService || n.Service != nameKubelet {
 		t.Fatalf("spec.node = %+v", n)
 	}
 
@@ -289,7 +291,7 @@ func TestRemoveMachineDeletesAfterTheTypedName(t *testing.T) {
 func TestRemoveMachineRefusesTheLastControlPlane(t *testing.T) {
 	s, _ := opServer(t, opObjects()...)
 
-	_, err := s.RemoveMachine(context.Background(), connect.NewRequest(&pb.RemoveMachineRequest{Machine: objectRef(opNS, "cp1"), Confirm: "cp1"}))
+	_, err := s.RemoveMachine(context.Background(), connect.NewRequest(&pb.RemoveMachineRequest{Machine: objectRef(opNS, nodeTestCP), Confirm: nodeTestCP}))
 	if connect.CodeOf(err) != connect.CodeFailedPrecondition {
 		t.Fatalf("last control plane: %v", err)
 	}

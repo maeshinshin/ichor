@@ -151,6 +151,7 @@ func machineToPB(m *ichorv1alpha1.TalosMachine) *pb.Machine {
 		ApprovalDecision: approvalDecisionToPB(m.Spec.ApprovalDecision),
 		Conditions:       conditions(m.Status.Conditions),
 		Deleting:         !m.DeletionTimestamp.IsZero(),
+		RebootPaths:      m.Status.RebootPaths,
 		Stage:            "", // Talos's own MachineStatus stage: not read by this phase (GetNode's job)
 	}
 }
@@ -394,8 +395,19 @@ func clusterToPB(c *ichorv1alpha1.TalosCluster) *pb.Cluster {
 		ControlPlaneCount:       c.Spec.ControlPlane.Count,
 		ControlPlaneSchedulable: schedulable,
 		Conditions:              conditions(c.Status.Conditions),
+		KubeProxyMode:           c.Spec.CNI.KubeProxy,
+		Certificates:            certificatesToPB(c.Status.Certificates),
 		// Rollout and Handovers stay unset: TalosClusterStatus carries
 		// neither a rollout nor a hand-over state yet (roadmap phases 6 and
 		// 4/8's controller-side work).
 	}
+}
+
+func certificatesToPB(in []ichorv1alpha1.CertificateExpiry) []*pb.CertificateExpiry {
+	out := make([]*pb.CertificateExpiry, len(in))
+	for i, c := range in {
+		out[i] = &pb.CertificateExpiry{Name: c.Name, NotAfter: timestamppb.New(c.NotAfter.Time)}
+	}
+
+	return out
 }

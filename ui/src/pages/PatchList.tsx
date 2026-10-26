@@ -20,6 +20,7 @@ import { clusterClient, patchClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
 import { describeError } from '@/lib/errors'
 import { targetKindOf } from '@/lib/patchTarget'
+import { useT } from '@/lib/useT'
 import { Link, objectRefPath } from '@/router'
 
 type ErrorShape = { title: string; detail: string }
@@ -30,6 +31,7 @@ type ErrorShape = { title: string; detail: string }
 // machines). Create/edit/delete all live here and on PatchDetail
 // (architecture.md, "CLI and UI": "config editing by layer").
 export function PatchList() {
+  const t = useT()
   const [patches, setPatches] = useState<Patch[] | null>(null)
   const [error, setError] = useState<ErrorShape | null>(null)
   const [clusterNames, setClusterNames] = useState<Record<string, string>>({})
@@ -59,30 +61,30 @@ export function PatchList() {
   }, [])
 
   if (error) return <ErrorAlert {...error} />
-  if (!patches) return <p class="mt-10 text-center text-sm text-muted-foreground">Loading patches…</p>
+  if (!patches) return <p class="mt-10 text-center text-sm text-muted-foreground">{t('patches.loading')}</p>
 
   return (
     <Card className="mt-6">
       <CardHeader className="flex items-center justify-between">
-        <CardTitle>Config patches</CardTitle>
+        <CardTitle>{t('patches.title')}</CardTitle>
         <Button asChild size="sm">
-          <Link to="/patches/new">New patch</Link>
+          <Link to="/patches/new">{t('patches.new')}</Link>
         </Button>
       </CardHeader>
       <CardContent>
         {patches.length === 0 ? (
-          <p class="text-sm text-muted-foreground">No patches yet.</p>
+          <p class="text-sm text-muted-foreground">{t('patches.empty')}</p>
         ) : (
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Cluster</TableHead>
-                <TableHead>Layer</TableHead>
-                <TableHead>Priority</TableHead>
-                <TableHead>Target</TableHead>
-                <TableHead>Documents</TableHead>
-                <TableHead>Actions</TableHead>
+                <TableHead>{t('col.name')}</TableHead>
+                <TableHead>{t('col.cluster')}</TableHead>
+                <TableHead>{t('patches.colLayer')}</TableHead>
+                <TableHead>{t('patches.colPriority')}</TableHead>
+                <TableHead>{t('patches.colTarget')}</TableHead>
+                <TableHead>{t('patches.colDocuments')}</TableHead>
+                <TableHead>{t('col.actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -104,12 +106,12 @@ export function PatchList() {
                     <Badge variant="outline">{enumLabel(ConfigLayer, p.layer)}</Badge>
                   </TableCell>
                   <TableCell>{p.priority}</TableCell>
-                  <TableCell>{targetSummary(p)}</TableCell>
+                  <TableCell>{targetSummary(p, t)}</TableCell>
                   <TableCell>{p.documents.length === 0 ? '-' : p.documents.map((d) => d.kind).join(', ')}</TableCell>
                   <TableCell>
                     <div class="flex gap-2">
                       <Button asChild size="sm" variant="outline">
-                        <Link to={objectRefPath('/patches', p.ref ?? { namespace: '', name: '' })}>Edit</Link>
+                        <Link to={objectRefPath('/patches', p.ref ?? { namespace: '', name: '' })}>{t('patches.edit')}</Link>
                       </Button>
                       <DeleteDialog patch={p} onDeleted={reload} />
                     </div>
@@ -124,21 +126,22 @@ export function PatchList() {
   )
 }
 
-function targetSummary(p: Patch): string {
+function targetSummary(p: Patch, t: ReturnType<typeof useT>): string {
   if (p.layer === ConfigLayer.CLUSTER) return '-'
   switch (targetKindOf(p.target)) {
     case 'role':
-      return `Role: ${p.target!.role}`
+      return t('patches.targetRole', { role: p.target!.role })
     case 'labelSelector':
-      return 'Label selector'
+      return t('patches.targetSelector')
     case 'machineRef':
-      return `Machine: ${p.target!.machineRef}`
+      return t('patches.targetMachine', { name: p.target!.machineRef })
     default:
       return '-'
   }
 }
 
 function DeleteDialog({ patch, onDeleted }: { patch: Patch; onDeleted: () => void }) {
+  const t = useT()
   const [open, setOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<ErrorShape | null>(null)
@@ -168,7 +171,7 @@ function DeleteDialog({ patch, onDeleted }: { patch: Patch; onDeleted: () => voi
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button size="sm" variant="destructive">
-          Delete
+          {t('patches.delete')}
         </Button>
       </DialogTrigger>
       <DialogContent>
@@ -177,27 +180,23 @@ function DeleteDialog({ patch, onDeleted }: { patch: Patch; onDeleted: () => voi
             <PullRequestNotice url={pullRequestUrl} />
             <DialogFooter>
               <Button variant="ghost" onClick={() => setOpen(false)}>
-                Close
+                {t('common.close')}
               </Button>
             </DialogFooter>
           </>
         ) : (
           <>
         <DialogHeader>
-          <DialogTitle>Delete {patch.ref?.name}?</DialogTitle>
-          <DialogDescription>
-            This removes the TalosConfigPatch outright, unlike rejecting a machine - there is no durable record
-            left behind and nothing will recreate it. Nodes it targets stop receiving its values the next time
-            the controller renders their configuration.
-          </DialogDescription>
+          <DialogTitle>{t('patches.deleteTitle', { name: patch.ref?.name ?? '' })}</DialogTitle>
+          <DialogDescription>{t('patches.deleteDescription')}</DialogDescription>
         </DialogHeader>
         {error && <ErrorAlert {...error} />}
         <DialogFooter>
           <Button variant="ghost" onClick={() => setOpen(false)}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button variant="destructive" disabled={submitting} onClick={submit}>
-            {submitting ? 'Deleting…' : 'Delete'}
+            {submitting ? t('patches.deleting') : t('patches.delete')}
           </Button>
         </DialogFooter>
           </>

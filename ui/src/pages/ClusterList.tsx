@@ -7,11 +7,13 @@ import { HandoverPhase, RolloutKind, type Cluster } from '@/gen/ichor/v1alpha1/c
 import { clusterClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
 import { describeError } from '@/lib/errors'
+import { useT } from '@/lib/useT'
 import { Link, objectRefPath } from '@/router'
 
 // Cluster list: status, rollout progress and hand-over state
 // (architecture.md, "CLI and UI").
 export function ClusterList() {
+  const t = useT()
   const [clusters, setClusters] = useState<Cluster[] | null>(null)
   const [error, setError] = useState<{ title: string; detail: string } | null>(null)
 
@@ -31,26 +33,26 @@ export function ClusterList() {
   }, [])
 
   if (error) return <ErrorAlert {...error} />
-  if (!clusters) return <p class="mt-10 text-center text-sm text-muted-foreground">Loading clusters…</p>
+  if (!clusters) return <p class="mt-10 text-center text-sm text-muted-foreground">{t('clusters.loading')}</p>
 
   return (
     <Card className="mt-6">
       <CardHeader>
-        <CardTitle>Clusters</CardTitle>
+        <CardTitle>{t('clusters.title')}</CardTitle>
       </CardHeader>
       <CardContent>
         {clusters.length === 0 ? (
-          <p class="text-sm text-muted-foreground">No clusters yet.</p>
+          <p class="text-sm text-muted-foreground">{t('clusters.empty')}</p>
         ) : (
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Cluster</TableHead>
-                <TableHead>Talos</TableHead>
-                <TableHead>Kubernetes</TableHead>
-                <TableHead>Control plane</TableHead>
-                <TableHead>Rollout</TableHead>
-                <TableHead>Hand-over</TableHead>
+                <TableHead>{t('col.cluster')}</TableHead>
+                <TableHead>{t('clusters.colTalos')}</TableHead>
+                <TableHead>{t('clusters.colKubernetes')}</TableHead>
+                <TableHead>{t('clusters.colControlPlane')}</TableHead>
+                <TableHead>{t('clusters.colRollout')}</TableHead>
+                <TableHead>{t('clusters.colHandover')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -69,16 +71,16 @@ export function ClusterList() {
                   <TableCell>{c.kubernetesVersion || '-'}</TableCell>
                   <TableCell>
                     {c.controlPlaneCount}
-                    {c.controlPlaneSchedulable ? ' (schedulable)' : ''}
+                    {c.controlPlaneSchedulable ? ` ${t('clusters.schedulable')}` : ''}
                   </TableCell>
                   <TableCell>
                     {c.rollout ? (
                       <Badge variant="secondary">
-                        {enumLabel(RolloutKind, c.rollout.kind)}: {c.rollout.currentPhase || 'in progress'} (
+                        {enumLabel(RolloutKind, c.rollout.kind)}: {c.rollout.currentPhase || t('clusters.inProgress')} (
                         {c.rollout.nodesDone}/{c.rollout.nodesTotal})
                       </Badge>
                     ) : (
-                      <span class="text-muted-foreground">none</span>
+                      <span class="text-muted-foreground">{t('common.none')}</span>
                     )}
                   </TableCell>
                   <TableCell>

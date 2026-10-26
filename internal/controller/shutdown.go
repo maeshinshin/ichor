@@ -53,6 +53,7 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/clusterlock"
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
+	"github.com/maeshinshin/ichor/pkg/upgrade"
 )
 
 const (
@@ -168,8 +169,8 @@ func (r *TalosOperationReconciler) shutdownPlan(
 		}
 	}
 
-	sortByUpgradeOrder(workers)
-	sortByUpgradeOrder(last)
+	upgrade.SortByOrder(workers)
+	upgrade.SortByOrder(last)
 
 	return workers, append(last, own...), nil
 }

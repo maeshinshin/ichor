@@ -20,8 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"slices"
-	"strings"
 	"time"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
@@ -32,6 +30,7 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/clusterlock"
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
+	"github.com/maeshinshin/ichor/pkg/upgrade"
 )
 
 // operationRequeueInterval is how often TalosOperationReconciler re-checks
@@ -330,32 +329,10 @@ func (r *TalosOperationReconciler) candidateMachines(
 		}
 	}
 
-	sortByUpgradeOrder(controlPlanes)
-	sortByUpgradeOrder(workers)
+	upgrade.SortByOrder(controlPlanes)
+	upgrade.SortByOrder(workers)
 
 	return controlPlanes, workers, nil
-}
-
-// sortByUpgradeOrder sorts machines in place by
-// ichorv1alpha1.TalosMachineUpgradeOrderLabel's value, machines without the
-// label last, breaking ties by name for a deterministic order every
-// reconcile agrees on.
-func sortByUpgradeOrder(machines []*ichorv1alpha1.TalosMachine) {
-	slices.SortFunc(machines, func(a, b *ichorv1alpha1.TalosMachine) int {
-		av, aok := a.Labels[ichorv1alpha1.TalosMachineUpgradeOrderLabel]
-		bv, bok := b.Labels[ichorv1alpha1.TalosMachineUpgradeOrderLabel]
-
-		switch {
-		case aok && !bok:
-			return -1
-		case !aok && bok:
-			return 1
-		case av != bv:
-			return strings.Compare(av, bv)
-		default:
-			return strings.Compare(a.Name, b.Name)
-		}
-	})
 }
 
 // pendingMachines returns every machine in candidates that has not reached

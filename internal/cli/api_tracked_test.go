@@ -85,3 +85,44 @@ func TestApproveFallbackHonoursArgoCDNamespaceFlag(t *testing.T) {
 		t.Fatal("the fallback wrote a tracked machine although --argocd-namespace named Argo CD's namespace")
 	}
 }
+
+// --break-glass never goes through the backend (its ServiceAccount must not
+// decide who may break glass) and reaches the Server as a break-glass
+// request: with no repository to open the pull request in, a tracked
+// resource is still refused, and the refusal says why (docs/adr/0064).
+const (
+	trackingID  = "app:ns/x"
+	trackingKey = "argocd.argoproj.io/tracking-id"
+	argoCMName  = "argocd-cm"
+)
+
+func TestBreakGlassFlagUsesTheCallersCredentialsAndIsRefusedWithoutARepository(t *testing.T) {
+	setAPITestFlags(t, true)
+
+	apiOpts.BreakGlass = "node-2 is down"
+
+	t.Cleanup(func() { apiOpts.BreakGlass = "" })
+
+	m := strongMachine("tracked")
+	m.Annotations = map[string]string{trackingKey: trackingID}
+	argoCM := &corev1.ConfigMap{Name: argoCMName, Namespace: trackedArgoNS}
+	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(m, argoCM).Build()
+
+	c, err := connectAPI(context.Background(), apiOpts, apiDeps{K8s: k8s, Stderr: &bytes.Buffer{}}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !c.Local {
+		t.Fatal("--break-glass must use the in-process server on the caller's credentials")
+	}
+
+	err = runMachineApprove(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{}, "tracked", approveWorker)
+	if connect.CodeOf(err) != connect.CodeFailedPrecondition || !strings.Contains(err.Error(), "break-glass") {
+		t.Fatalf("want a break-glass refusal, got %v", err)
+	}
+
+	if getMachine(t, k8s, "tracked").Spec.IsApproved() {
+		t.Fatal("nothing may be written")
+	}
+}

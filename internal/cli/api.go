@@ -71,6 +71,19 @@ type apiOptions struct {
 	ArgoCDNamespace string
 	// Local skips ichor-ui and computes from the Kubernetes API.
 	Local bool
+	// BreakGlass is the reason of an emergency direct write (docs/adr/0064);
+	// empty means off. Setting it implies Local: break-glass is decided by the
+	// caller's own RBAC, never by the backend's ServiceAccount.
+	BreakGlass string
+}
+
+// breakGlassOf is the request field the --break-glass flag fills; nil when off.
+func breakGlassOf(opts apiOptions) *pb.BreakGlass {
+	if opts.BreakGlass == "" {
+		return nil
+	}
+
+	return &pb.BreakGlass{Reason: opts.BreakGlass}
 }
 
 // addAPIFlags registers the shared flags on a command group.
@@ -82,6 +95,9 @@ func addAPIFlags(cmd *cobra.Command) {
 	f.StringVar(&apiOpts.ArgoCDNamespace, "argocd-namespace", "argocd",
 		"namespace Argo CD runs in, used by the --local fallback to read argocd-cm when checking whether a resource is tracked")
 	f.BoolVar(&apiOpts.Local, "local", false, "do not use ichor-ui; compute from the Kubernetes API directly")
+	f.StringVar(&apiOpts.BreakGlass, "break-glass", "",
+		"incident only: write a GitOps-tracked resource now and open the matching pull request; the value is the reason, "+
+			"recorded in the audit record, an Event and the pull request. Needs the break-glass RBAC verb on the resource; implies --local")
 }
 
 // apiDeps is connectAPI's dependencies. Forward and FreePort are the seams
@@ -131,6 +147,14 @@ var errBackendRequired = errors.New("this command needs ichor-ui, because only t
 // requireBackend turns the fallback into errBackendRequired, for the
 // commands that need the backend's Talos identity.
 func connectAPI(ctx context.Context, opts apiOptions, deps apiDeps, requireBackend bool) (*apiClients, error) {
+	if opts.BreakGlass != "" {
+		if requireBackend {
+			return nil, fmt.Errorf("--break-glass applies to writes, which never need the backend: %w", errBackendRequired)
+		}
+
+		opts.Local = true
+	}
+
 	if !opts.Local {
 		c, err := dialBackend(ctx, opts, deps)
 		if err == nil {
@@ -157,6 +181,7 @@ func connectAPI(ctx context.Context, opts apiOptions, deps apiDeps, requireBacke
 func localClients(opts apiOptions, deps apiDeps) *apiClients {
 	s := &uiapi.Server{
 		Client: deps.K8s, ControllerNamespace: opts.IchorNamespace, ArgoCDNamespace: opts.ArgoCDNamespace, Actor: actorCLI,
+		CallerCredentials: true,
 	}
 
 	return &apiClients{

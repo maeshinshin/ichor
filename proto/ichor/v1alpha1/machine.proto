@@ -47,6 +47,27 @@ message ApproveMachineRequest {
   string reason = 5;
   // break_glass requests an emergency direct write.
   BreakGlass break_glass = 6;
+  // install is the system disk (TalosMachine.spec.install). Unset
+  // approves without an install target.
+  MachineInstall install = 7;
+}
+
+// MachineDisk selects a disk by exactly one stable identifier
+// (TalosMachine.spec.install.disk): the fallback chain WWID, serial, by-id
+// path, bus path, then the unstable dev_path.
+message MachineDisk {
+  string wwid = 1;
+  string serial = 2;
+  string by_id_path = 3;
+  string bus_path = 4;
+  string dev_path = 5;
+}
+
+// MachineInstall mirrors TalosMachine.spec.install.
+message MachineInstall {
+  MachineDisk disk = 1;
+  // image is the installer image; empty uses the booted schematic's.
+  string image = 2;
 }
 
 message ApproveMachineResponse {
@@ -143,4 +164,6 @@ message Machine {
   MachineApprovalState approval_state = 11;
   // approval_decision is unset until the first approve/reject decision.
   MachineApprovalDecision approval_decision = 12;
+  // install is unset until an install target is declared.
+  MachineInstall install = 13;
 }

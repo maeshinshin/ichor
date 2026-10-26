@@ -403,13 +403,16 @@ func (x *Hardware) GetMemoryTotalBytes() int64 {
 // empty, so the screen has to be able to show "nothing stable to key on"
 // rather than treat it as missing data.
 type Disk struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Wwid          string                 `protobuf:"bytes,1,opt,name=wwid,proto3" json:"wwid,omitempty"`
-	Serial        string                 `protobuf:"bytes,2,opt,name=serial,proto3" json:"serial,omitempty"`
-	ByIdPath      string                 `protobuf:"bytes,3,opt,name=by_id_path,json=byIdPath,proto3" json:"by_id_path,omitempty"`
-	BusPath       string                 `protobuf:"bytes,4,opt,name=bus_path,json=busPath,proto3" json:"bus_path,omitempty"`
-	SizeBytes     int64                  `protobuf:"varint,5,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
-	Role          DiskRole               `protobuf:"varint,6,opt,name=role,proto3,enum=ichor.v1alpha1.DiskRole" json:"role,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Wwid      string                 `protobuf:"bytes,1,opt,name=wwid,proto3" json:"wwid,omitempty"`
+	Serial    string                 `protobuf:"bytes,2,opt,name=serial,proto3" json:"serial,omitempty"`
+	ByIdPath  string                 `protobuf:"bytes,3,opt,name=by_id_path,json=byIdPath,proto3" json:"by_id_path,omitempty"`
+	BusPath   string                 `protobuf:"bytes,4,opt,name=bus_path,json=busPath,proto3" json:"bus_path,omitempty"`
+	SizeBytes int64                  `protobuf:"varint,5,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
+	Role      DiskRole               `protobuf:"varint,6,opt,name=role,proto3,enum=ichor.v1alpha1.DiskRole" json:"role,omitempty"`
+	// dev_path is the kernel device path (/dev/sda). Not stable across boots;
+	// the last resort when none of the identifiers above exist.
+	DevPath       string `protobuf:"bytes,7,opt,name=dev_path,json=devPath,proto3" json:"dev_path,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -484,6 +487,13 @@ func (x *Disk) GetRole() DiskRole {
 		return x.Role
 	}
 	return DiskRole_DISK_ROLE_UNSPECIFIED
+}
+
+func (x *Disk) GetDevPath() string {
+	if x != nil {
+		return x.DevPath
+	}
+	return ""
 }
 
 type NetworkInterface struct {
@@ -1139,7 +1149,7 @@ const file_ichor_v1alpha1_node_proto_rawDesc = "" +
 	"\x05model\x18\x02 \x01(\tR\x05model\x12#\n" +
 	"\rserial_number\x18\x03 \x01(\tR\fserialNumber\x12\x1b\n" +
 	"\tcpu_cores\x18\x04 \x01(\x05R\bcpuCores\x12,\n" +
-	"\x12memory_total_bytes\x18\x05 \x01(\x03R\x10memoryTotalBytes\"\xb8\x01\n" +
+	"\x12memory_total_bytes\x18\x05 \x01(\x03R\x10memoryTotalBytes\"\xd3\x01\n" +
 	"\x04Disk\x12\x12\n" +
 	"\x04wwid\x18\x01 \x01(\tR\x04wwid\x12\x16\n" +
 	"\x06serial\x18\x02 \x01(\tR\x06serial\x12\x1c\n" +
@@ -1148,7 +1158,8 @@ const file_ichor_v1alpha1_node_proto_rawDesc = "" +
 	"\bbus_path\x18\x04 \x01(\tR\abusPath\x12\x1d\n" +
 	"\n" +
 	"size_bytes\x18\x05 \x01(\x03R\tsizeBytes\x12,\n" +
-	"\x04role\x18\x06 \x01(\x0e2\x18.ichor.v1alpha1.DiskRoleR\x04role\"\x8f\x01\n" +
+	"\x04role\x18\x06 \x01(\x0e2\x18.ichor.v1alpha1.DiskRoleR\x04role\x12\x19\n" +
+	"\bdev_path\x18\a \x01(\tR\adevPath\"\x8f\x01\n" +
 	"\x10NetworkInterface\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05alias\x18\x02 \x01(\tR\x05alias\x12#\n" +

@@ -78,7 +78,8 @@ type rule struct {
 }
 
 // rules holds only exceptions; everything else defaults to reboot-required.
-// Longest matching prefix wins, though none of the entries below overlap.
+// Longest matching prefix wins; the Kube*Config ".image" entries rely on it
+// to carve the image out of their document's safe rule.
 var rules = []rule{
 	// SysctlConfig and KernelModuleConfig only exist as their own documents
 	// from Talos >1.13 (machinery config.VersionContract's
@@ -152,6 +153,50 @@ var rules = []rule{
 	// reboot-required default -- not installTimeOnly, not safe -- is each
 	// kind's correct classification already, with no rule needed.
 	{prefix: "VolumeConfig.provisioning", installTimeOnly: true},
+
+	// The rules below were verified against the Talos v1.14.3 source (ADR 0009,
+	// "Multi-document and registry paths"); the table there lists the files.
+	// Paths a rule does not name stay reboot-required.
+
+	// Registry mirrors (and TLS) are rendered into containerd's hosts.toml
+	// files, which Talos rewrites on every config change and containerd reads
+	// per pull. Registry AUTH is deliberately absent: it goes into the CRI
+	// plugin's own config, and machinery's docs say it needs a reboot.
+	{prefix: "machine.registries.mirrors", safe: true},
+
+	// Node labels, annotations and taints are reconciled onto the Kubernetes
+	// Node object by NodeLabelSpec/NodeAnnotationSpec/NodeTaintSpec and
+	// NodeApplyController, which also removes what it no longer owns. The
+	// legacy fields and the standalone KubeNodeConfig document feed the same
+	// controllers; cluster.allowScheduling* is read only to derive the
+	// control-plane taint. KubeNodeConfig.nodeIP is deliberately absent.
+	{prefix: "KubeNodeConfig.labels", safe: true},
+	{prefix: "KubeNodeConfig.annotations", safe: true},
+	{prefix: "KubeNodeConfig.taints", safe: true},
+	{prefix: "machine.nodeLabels", safe: true},
+	{prefix: "machine.nodeAnnotations", safe: true},
+	{prefix: "machine.nodeTaints", safe: true},
+	{prefix: "cluster.allowSchedulingOnControlPlanes", safe: true},
+	{prefix: "cluster.allowSchedulingOnMasters", safe: true},
+
+	// The standalone static-pod kinds are the multi-document form of
+	// cluster.apiServer / controllerManager / scheduler above: the same
+	// controller (controllers/k8s/control_plane.go) reads both.
+	//
+	// The .image entries are NOT safe on purpose; they are not an oversight,
+	// do not "complete" them. Talos would apply an image change without a
+	// reboot, but a safe rule would make the machine controller apply every
+	// node the moment spec.kubernetesVersion changes, destroying the
+	// one-node-at-a-time order of the Kubernetes upgrade executor (ADR 0057),
+	// which applies the image fields itself with an explicit no-reboot apply.
+	// The same goes for KubeProxyConfig.image and KubeletConfig.image, which
+	// have no rule at all (so their whole documents stay reboot-required).
+	{prefix: "KubeAPIServerConfig", safe: true},
+	{prefix: "KubeAPIServerConfig.image"},
+	{prefix: "KubeControllerManagerConfig", safe: true},
+	{prefix: "KubeControllerManagerConfig.image"},
+	{prefix: "KubeSchedulerConfig", safe: true},
+	{prefix: "KubeSchedulerConfig.image"},
 }
 
 func matchesPrefix(path, prefix string) bool {

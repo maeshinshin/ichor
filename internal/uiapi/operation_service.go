@@ -27,7 +27,6 @@ import (
 	"connectrpc.com/connect"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -511,7 +510,7 @@ func (s *Server) CreateOperation(
 
 	cluster := p.cluster
 	op := &ichorv1alpha1.TalosOperation{
-		ObjectMeta: metav1.ObjectMeta{GenerateName: p.kind + "-", Namespace: cluster.Namespace},
+		GenerateName: p.kind + "-", Namespace: cluster.Namespace,
 		Spec: ichorv1alpha1.TalosOperationSpec{
 			ClusterRef: corev1.LocalObjectReference{Name: cluster.Name}, Kind: p.kind, MaxUnavailable: m.GetMaxUnavailable(),
 		},

@@ -114,7 +114,7 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) error {
 				UUID: identity.UUID, Serial: identity.Serial, MACAddresses: identity.MACAddresses,
 			},
 			Endpoint: opts.NodeEndpoint,
-			Role:     "controlplane",
+			Role:     roleControlPlane,
 			// init is the special case of approving the first control
 			// plane (architecture.md's "Bootstrap": "Adding later nodes
 			// goes through the normal approval flow").

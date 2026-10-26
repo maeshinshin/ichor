@@ -81,7 +81,7 @@ func TestRunInit_Success(t *testing.T) {
 		t.Fatalf("getting created TalosMachine: %v", err)
 	}
 
-	if machine.Spec.Role != "controlplane" || !machine.Spec.IsApproved() {
+	if machine.Spec.Role != roleControlPlane || !machine.Spec.IsApproved() {
 		t.Fatalf("machine spec = %+v, want role controlplane and approved", machine.Spec)
 	}
 

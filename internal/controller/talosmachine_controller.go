@@ -64,10 +64,12 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -639,33 +641,49 @@ func hashConfig(cfg []byte) string {
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *TalosMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	// TalosStorage, TalosConfigPatch and TalosCluster are render inputs: creating,
+	// editing or deleting one re-reconciles the machines of its cluster, which is how a change
+	// reaches an already converged node. Only a spec change (generation) counts for
+	// an update, so the status writes these controllers make do not wake every machine.
+	// Secrets are not watched.
+	renderInput := builder.WithPredicates(predicate.GenerationChangedPredicate{})
+	enqueue := handler.EnqueueRequestsFromMapFunc(r.machinesOfCluster)
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&ichorv1alpha1.TalosMachine{}).
-		// A TalosStorage is a render input: creating or editing one re-reconciles
-		// the machines of its cluster, which is how layer 1 reaches already-converged nodes.
-		Watches(&ichorv1alpha1.TalosStorage{}, handler.EnqueueRequestsFromMapFunc(r.machinesForStorage)).
+		Watches(&ichorv1alpha1.TalosStorage{}, enqueue, renderInput).
+		Watches(&ichorv1alpha1.TalosConfigPatch{}, enqueue, renderInput).
+		Watches(&ichorv1alpha1.TalosCluster{}, enqueue, renderInput).
 		Named("talosmachine").
 		Complete(r)
 }
 
-// machinesForStorage maps a TalosStorage to every TalosMachine of its cluster, to re-reconcile
-// them. It selects machines to enqueue; it does not count control planes or gate anything, so a
-// cached read is fine (countplanes_guard_test.go).
-func (r *TalosMachineReconciler) machinesForStorage(ctx context.Context, obj client.Object) []reconcile.Request {
-	ts, ok := obj.(*ichorv1alpha1.TalosStorage)
-	if !ok {
+// machinesOfCluster maps a render input (TalosStorage, TalosConfigPatch or TalosCluster) to every
+// TalosMachine of its cluster, to re-reconcile them. It selects machines to enqueue; it does not
+// count control planes or gate anything, so a cached read is fine (countplanes_guard_test.go).
+func (r *TalosMachineReconciler) machinesOfCluster(ctx context.Context, obj client.Object) []reconcile.Request {
+	var clusterName string
+
+	switch o := obj.(type) {
+	case *ichorv1alpha1.TalosCluster:
+		clusterName = o.Name
+	case *ichorv1alpha1.TalosConfigPatch:
+		clusterName = o.Spec.ClusterRef.Name
+	case *ichorv1alpha1.TalosStorage:
+		clusterName = o.Spec.ClusterRef.Name
+	default:
 		return nil
 	}
 
 	var list ichorv1alpha1.TalosMachineList
-	if err := r.List(ctx, &list, client.InNamespace(ts.Namespace)); err != nil {
+	if err := r.List(ctx, &list, client.InNamespace(obj.GetNamespace())); err != nil {
 		return nil
 	}
 
 	var reqs []reconcile.Request
 
 	for i := range list.Items {
-		if list.Items[i].Spec.ClusterRef.Name == ts.Spec.ClusterRef.Name {
+		if list.Items[i].Spec.ClusterRef.Name == clusterName {
 			reqs = append(reqs, reconcile.Request{NamespacedName: client.ObjectKeyFromObject(&list.Items[i])})
 		}
 	}

@@ -233,11 +233,11 @@ func newTestMachine(clusterName string, approved bool) *ichorv1alpha1.TalosMachi
 	}
 
 	m := &ichorv1alpha1.TalosMachine{
-		GenerateName: "machine-", Namespace: tmNamespace,
+		GenerateName: machinePrefix, Namespace: tmNamespace,
 		Spec: ichorv1alpha1.TalosMachineSpec{
 			ClusterRef:    corev1.LocalObjectReference{Name: clusterName},
 			Identity:      ichorv1alpha1.TalosMachineIdentity{UUID: "uuid-" + clusterName},
-			Endpoint:      "10.0.0.10:50000",
+			Endpoint:      storageTestEndpoint,
 			Role:          roleWorker,
 			ApprovalState: state,
 		},
@@ -251,7 +251,7 @@ func newTestMachine(clusterName string, approved bool) *ichorv1alpha1.TalosMachi
 // TalosConfigPatch carrying a single typed Config document.
 func newTestPatch(clusterName, layer string, target *ichorv1alpha1.TalosConfigPatchTarget, cfg *typedconfig.Config) *ichorv1alpha1.TalosConfigPatch {
 	p := &ichorv1alpha1.TalosConfigPatch{
-		GenerateName: "patch-", Namespace: tmNamespace,
+		GenerateName: patchPrefix, Namespace: tmNamespace,
 		Spec: ichorv1alpha1.TalosConfigPatchSpec{
 			ClusterRef: corev1.LocalObjectReference{Name: clusterName},
 			Layer:      layer,
@@ -266,12 +266,12 @@ func newTestPatch(clusterName, layer string, target *ichorv1alpha1.TalosConfigPa
 
 func newTestSysctlPatch(clusterName string, params map[string]string) *ichorv1alpha1.TalosConfigPatch {
 	p := &ichorv1alpha1.TalosConfigPatch{
-		GenerateName: "patch-", Namespace: tmNamespace,
+		GenerateName: patchPrefix, Namespace: tmNamespace,
 		Spec: ichorv1alpha1.TalosConfigPatchSpec{
 			ClusterRef: corev1.LocalObjectReference{Name: clusterName},
 			Layer:      layerCluster,
 			Documents: []ichorv1alpha1.TalosConfigPatchDocument{{
-				Kind:         "SysctlConfig",
+				Kind:         kindSysctl,
 				SysctlConfig: &typedconfig.SysctlConfigV1Alpha1{Params: params},
 			}},
 		},

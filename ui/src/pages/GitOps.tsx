@@ -170,10 +170,18 @@ function GitOpsRow(props: {
         )}
         {item.error && <p class="text-xs text-destructive">{item.error}</p>}
       </TableCell>
-      <TableCell>{item.syncStatus ? <Badge variant={syncBadge(item.syncStatus)}>{item.syncStatus}</Badge> : '-'}</TableCell>
-      <TableCell>
-        {item.healthStatus ? <Badge variant={healthBadge(item.healthStatus)}>{item.healthStatus}</Badge> : '-'}
-      </TableCell>
+      {item.permissionDenied ? (
+        <TableCell colSpan={2} class="text-muted-foreground">
+          {t('common.noPermission')}
+        </TableCell>
+      ) : (
+        <>
+          <TableCell>{item.syncStatus ? <Badge variant={syncBadge(item.syncStatus)}>{item.syncStatus}</Badge> : '-'}</TableCell>
+          <TableCell>
+            {item.healthStatus ? <Badge variant={healthBadge(item.healthStatus)}>{item.healthStatus}</Badge> : '-'}
+          </TableCell>
+        </>
+      )}
       <TableCell>
         {canHavePr && pr === undefined && (
           <Button variant="outline" size="sm" onClick={props.onCheck}>

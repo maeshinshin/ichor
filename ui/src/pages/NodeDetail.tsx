@@ -161,6 +161,8 @@ export function NodeDetail({ namespace, name }: { namespace: string; name: strin
               <Field label={t('node.k8sKubelet')} value={node.kubernetes.kubeletVersion} />
               <Field label={t('node.k8sSchedulable')} value={node.kubernetes.schedulable ? t('common.yes') : t('common.no')} />
             </>
+          ) : node.kubernetesPermissionDenied ? (
+            <p class="text-sm text-muted-foreground">{t('common.noPermission')}</p>
           ) : (
             <p class="text-sm text-muted-foreground">{t('node.notJoined')}</p>
           )}

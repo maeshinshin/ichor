@@ -579,7 +579,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(warn.Status).To(Equal(metav1.ConditionFalse))
 	})
 
-	It("takes the cluster lock, applies nothing, and releases it for a reboot-causing change", func() {
+	It("applies nothing and never takes the cluster lock for a reboot-causing change", func() {
 		bundle := newTestBundle("v1.14")
 		secret := newTestSecret(bundle)
 		cluster := newTestCluster(secret.Name, "v1.14")
@@ -618,10 +618,10 @@ var _ = Describe("TalosMachineReconciler", func() {
 		lock := clusterlock.New(k8sClient, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0)
 		_, held, err := lock.Holder(ctx)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(held).To(BeFalse(), "cluster lock should have been released")
+		Expect(held).To(BeFalse(), "refuseReboot never takes the cluster lock")
 	})
 
-	It("does not release a lock a running operation holds as the controller", func() {
+	It("never touches a cluster lock a running operation holds as the controller", func() {
 		bundle := newTestBundle("v1.14")
 		secret := newTestSecret(bundle)
 		cluster := newTestCluster(secret.Name, "v1.14")
@@ -651,7 +651,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(fake.rebootCalls).To(BeZero(), "the machine reconciler never reboots a node")
 	})
 
-	It("reports the lock's holder and leaves it alone when another identity already holds it", func() {
+	It("reports RebootRequired and leaves another identity's cluster lock alone", func() {
 		bundle := newTestBundle("v1.14")
 		secret := newTestSecret(bundle)
 		cluster := newTestCluster(secret.Name, "v1.14")
@@ -678,8 +678,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		cond := readyCondition(fetchMachine(m))
 		Expect(cond).NotTo(BeNil())
 		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(cond.Reason).To(Equal(reasonClusterLockHeld))
-		Expect(cond.Message).To(ContainSubstring("someone-else"))
+		Expect(cond.Reason).To(Equal(reasonRebootRequired))
 
 		holder, held, err := lock.Holder(ctx)
 		Expect(err).NotTo(HaveOccurred())

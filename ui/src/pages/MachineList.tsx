@@ -21,7 +21,7 @@ import { MachineApprovalState, MachineRole, type Machine } from '@/gen/ichor/v1a
 import { clusterClient, machineClient, nodeClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
 import { describeError } from '@/lib/errors'
-import { isStrongIdentity } from '@/lib/identity'
+import { canApprove, isStrongIdentity } from '@/lib/identity'
 import { formatBytes, formatTimestamp } from '@/lib/format'
 import { objectRefPath, Link } from '@/router'
 
@@ -243,7 +243,7 @@ function ApproveDialog({ machine, onApproved }: { machine: Machine; onApproved: 
   }, [open])
 
   async function submit() {
-    if (!machine.ref || !strong || role === MachineRole.UNSPECIFIED) return
+    if (!machine.ref || !canApprove(machine.identity, role !== MachineRole.UNSPECIFIED)) return
     setSubmitting(true)
     setSubmitError(null)
     try {
@@ -359,7 +359,7 @@ function ApproveDialog({ machine, onApproved }: { machine: Machine; onApproved: 
           <Button variant="ghost" onClick={() => setOpen(false)}>
             Cancel
           </Button>
-          <Button disabled={!strong || role === MachineRole.UNSPECIFIED || submitting} onClick={submit}>
+          <Button disabled={!canApprove(machine.identity, role !== MachineRole.UNSPECIFIED) || submitting} onClick={submit}>
             {submitting ? 'Approving…' : 'Approve'}
           </Button>
         </DialogFooter>

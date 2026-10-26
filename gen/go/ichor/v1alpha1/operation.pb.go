@@ -570,9 +570,12 @@ type PlanOperationRequest struct {
 	// mode "enabled" or "replaced" (cni), and must be empty for shutdown. For
 	// the kinds with a version or mode, empty means "the cluster's spec already
 	// says it": the operation is created without changing the spec.
-	Target        string `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Target string `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	// max_unavailable is how many workers would be handled at once; 0 is the
+	// CRD default (1).
+	MaxUnavailable int32 `protobuf:"varint,4,opt,name=max_unavailable,json=maxUnavailable,proto3" json:"max_unavailable,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *PlanOperationRequest) Reset() {
@@ -624,6 +627,13 @@ func (x *PlanOperationRequest) GetTarget() string {
 		return x.Target
 	}
 	return ""
+}
+
+func (x *PlanOperationRequest) GetMaxUnavailable() int32 {
+	if x != nil {
+		return x.MaxUnavailable
+	}
+	return 0
 }
 
 type PlanOperationResponse struct {
@@ -1093,11 +1103,12 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\x0ePlannedMachine\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04role\x18\x02 \x01(\tR\x04role\x12\x12\n" +
-	"\x04step\x18\x03 \x01(\x05R\x04step\"\x96\x01\n" +
+	"\x04step\x18\x03 \x01(\x05R\x04step\"\xbf\x01\n" +
 	"\x14PlanOperationRequest\x123\n" +
 	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x121\n" +
 	"\x04kind\x18\x02 \x01(\x0e2\x1d.ichor.v1alpha1.OperationKindR\x04kind\x12\x16\n" +
-	"\x06target\x18\x03 \x01(\tR\x06target\"\xb8\x02\n" +
+	"\x06target\x18\x03 \x01(\tR\x06target\x12'\n" +
+	"\x0fmax_unavailable\x18\x04 \x01(\x05R\x0emaxUnavailable\"\xb8\x02\n" +
 	"\x15PlanOperationResponse\x127\n" +
 	"\x06effect\x18\x01 \x01(\x0e2\x1f.ichor.v1alpha1.OperationEffectR\x06effect\x12:\n" +
 	"\bmachines\x18\x02 \x03(\v2\x1e.ichor.v1alpha1.PlannedMachineR\bmachines\x12\x12\n" +

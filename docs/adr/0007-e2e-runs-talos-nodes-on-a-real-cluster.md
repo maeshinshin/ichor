@@ -591,3 +591,26 @@ checked again afterward and was still the same healthy 3-member cluster
 (`ichor-e2e-ha-0/1/2`, no learners) it had been before the kill. The interrupted deletion
 did not touch, let alone break, the real etcd cluster underneath it -- confirmed, not
 inferred from the code's own doc comment alone.
+
+## Pinning the target cluster (follow-up)
+
+The KUBECONFIG-only check above was not enough: with KUBECONFIG set to a
+multi-context file, `kubectl` without `--context` still used its
+`current-context`. Every outer-cluster `kubectl` call in the harness now goes
+through `test/internal/kube.Command`, which always adds
+`--context $ICHOR_E2E_KUBE_CONTEXT` and builds a command that fails to start
+when the variable is unset. Deletes are additionally refused unless they carry
+`-n ichor-e2e` and name their objects (no `-A`, `--all`, `-l`, `-f`). Inner
+cluster calls use `kube.InnerCommand(<kubeconfig>, ...)` and never delete.
+`talosctl` runs only in pods; `test/internal/talosctl` refuses a call with no
+explicit `--nodes` or with 192.168.0.201-203 anywhere in its arguments.
+
+Environment variables an e2e run needs:
+
+| Variable | Meaning |
+| --- | --- |
+| `KUBECONFIG` | kubeconfig file containing the outer cluster |
+| `ICHOR_E2E_KUBE_CONTEXT` | context in it to target; required, no default |
+
+`make test-e2e-prereqs` and the harness binary both refuse to run when
+`ICHOR_E2E_KUBE_CONTEXT` is unset or is not a context in the kubeconfig.

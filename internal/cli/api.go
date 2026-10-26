@@ -118,10 +118,11 @@ type apiDeps struct {
 // it is backed by ichor-ui over the tunnel or by a uiapi.Server running in
 // this process on the user's own Kubernetes credentials.
 type apiClients struct {
-	Cluster ichorv1alpha1connect.ClusterServiceClient
-	Machine ichorv1alpha1connect.MachineServiceClient
-	Node    ichorv1alpha1connect.NodeServiceClient
-	Patch   ichorv1alpha1connect.PatchServiceClient
+	Cluster   ichorv1alpha1connect.ClusterServiceClient
+	Machine   ichorv1alpha1connect.MachineServiceClient
+	Node      ichorv1alpha1connect.NodeServiceClient
+	Patch     ichorv1alpha1connect.PatchServiceClient
+	Operation ichorv1alpha1connect.OperationServiceClient
 
 	// Local is true when the clients are the in-process fallback.
 	Local bool
@@ -185,7 +186,7 @@ func localClients(opts apiOptions, deps apiDeps) *apiClients {
 	}
 
 	return &apiClients{
-		Cluster: s, Machine: s, Patch: s, Node: localNode{s}, Local: true, Close: func() {},
+		Cluster: s, Machine: s, Patch: s, Operation: s, Node: localNode{s}, Local: true, Close: func() {},
 	}
 }
 
@@ -264,11 +265,12 @@ func dialBackend(ctx context.Context, opts apiOptions, deps apiDeps) (*apiClient
 	h := http.DefaultClient
 
 	return &apiClients{
-		Cluster: ichorv1alpha1connect.NewClusterServiceClient(h, base),
-		Machine: ichorv1alpha1connect.NewMachineServiceClient(h, base),
-		Node:    ichorv1alpha1connect.NewNodeServiceClient(h, base),
-		Patch:   ichorv1alpha1connect.NewPatchServiceClient(h, base),
-		Close:   stop,
+		Cluster:   ichorv1alpha1connect.NewClusterServiceClient(h, base),
+		Machine:   ichorv1alpha1connect.NewMachineServiceClient(h, base),
+		Node:      ichorv1alpha1connect.NewNodeServiceClient(h, base),
+		Patch:     ichorv1alpha1connect.NewPatchServiceClient(h, base),
+		Operation: ichorv1alpha1connect.NewOperationServiceClient(h, base),
+		Close:     stop,
 	}, nil
 }
 

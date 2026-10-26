@@ -87,6 +87,10 @@ const (
 	// the nodes accept and which issues. It is removed when the rotation is Done.
 	caRotationFinalizer = "ichor.maesh.dev/ca-rotation"
 
+	// caRotationNextStage is how soon the next stage is looked at: stages are separated by a status
+	// write, not by waiting.
+	caRotationNextStage = time.Second
+
 	talosCAName       = "talos"
 	kubernetesCAName  = "kubernetes"
 	bundleStaleReason = "CARotated"
@@ -336,7 +340,7 @@ func (c *caRun) nodesReady(ctx context.Context, first *ichorv1alpha1.TalosMachin
 		}
 
 		if len(notReady) > 0 {
-			return fmt.Errorf("Kubernetes Nodes not Ready: %v", notReady)
+			return fmt.Errorf("kubernetes Nodes not Ready: %v", notReady)
 		}
 
 		return nil
@@ -423,7 +427,7 @@ func (c *caRun) preflight(ctx context.Context) (ctrl.Result, error) {
 	}
 	setStageCertificates(c.op.Status.CARotation)
 
-	return ctrl.Result{Requeue: true}, c.status(ctx, ichorv1alpha1.TalosOperationPhaseInProgress, metav1.ConditionTrue,
+	return ctrl.Result{RequeueAfter: caRotationNextStage}, c.status(ctx, ichorv1alpha1.TalosOperationPhaseInProgress, metav1.ConditionTrue,
 		reasonCARotationSaved, "the new CAs are saved; adding them to every machine's accepted CAs")
 }
 
@@ -591,7 +595,7 @@ func (c *caRun) pass(ctx context.Context, stage string) (ctrl.Result, error) {
 	for _, m := range machines {
 		err := c.withNode(ctx, m, verifyBundle, func(ctx context.Context, talos TalosClient) error {
 			if _, err := talos.Version(ctx); err != nil {
-				return fmt.Errorf("Ichor cannot reach %q with the %s credentials: %w", m.Name, stage, err)
+				return fmt.Errorf("ichor cannot reach %q with the %s credentials: %w", m.Name, stage, err)
 			}
 
 			return nil
@@ -610,7 +614,7 @@ func (c *caRun) pass(ctx context.Context, stage string) (ctrl.Result, error) {
 	c.op.Status.CARotation.Stage = nextStage(stage)
 	setStageCertificates(c.op.Status.CARotation)
 
-	return ctrl.Result{Requeue: true}, c.status(ctx, ichorv1alpha1.TalosOperationPhaseInProgress, metav1.ConditionTrue,
+	return ctrl.Result{RequeueAfter: caRotationNextStage}, c.status(ctx, ichorv1alpha1.TalosOperationPhaseInProgress, metav1.ConditionTrue,
 		reasonCARotationVerifying, fmt.Sprintf("stage %s verified on %d machine(s)", stage, len(machines)))
 }
 
@@ -653,7 +657,7 @@ func (c *caRun) finalize(ctx context.Context) (ctrl.Result, error) {
 		err = c.withNode(ctx, m, bundle, func(ctx context.Context, talos TalosClient) error {
 			current, err := talos.CurrentConfig(ctx)
 			if err != nil {
-				return fmt.Errorf("Ichor cannot reach %q with the replaced bundle: %w", m.Name, err)
+				return fmt.Errorf("ichor cannot reach %q with the replaced bundle: %w", m.Name, err)
 			}
 
 			if hashConfig(current) != hash {
@@ -676,7 +680,7 @@ func (c *caRun) finalize(ctx context.Context) (ctrl.Result, error) {
 	c.op.Status.CARotation.Stage = ichorv1alpha1.CARotationStageDone
 	setStageCertificates(c.op.Status.CARotation)
 
-	return ctrl.Result{Requeue: true}, c.status(ctx, ichorv1alpha1.TalosOperationPhaseInProgress, metav1.ConditionTrue,
+	return ctrl.Result{RequeueAfter: caRotationNextStage}, c.status(ctx, ichorv1alpha1.TalosOperationPhaseInProgress, metav1.ConditionTrue,
 		reasonCARotationVerifying, "the replaced bundle is verified against every machine")
 }
 

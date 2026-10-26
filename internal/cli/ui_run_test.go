@@ -58,7 +58,7 @@ func uiTestPod(name string) *corev1.Pod {
 
 func uiTestService() *corev1.Service {
 	return &corev1.Service{
-		Name: "ichor-ichor-ui-service", Namespace: uiTestNamespace, Labels: map[string]string{uiComponentLabel: uiComponentValue},
+		Name: testUIServiceName, Namespace: uiTestNamespace, Labels: map[string]string{uiComponentLabel: uiComponentValue},
 		Spec: corev1.ServiceSpec{
 			Ports:    []corev1.ServicePort{{Port: 8080}},
 			Selector: uiTestSelector,

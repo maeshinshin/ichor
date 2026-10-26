@@ -104,3 +104,9 @@ package uiapi
 // SelfSubjectAccessReview made as the user (every authenticated user may ask
 // that), so the ServiceAccount gains nothing for it.
 // +kubebuilder:rbac:groups="",resources=events,verbs=create
+
+// Diagnostic downloads add nothing to this role on purpose. The download verb on
+// talosmachines/support-bundle, talosmachines/etcd-snapshot and talosmachines/packet-capture is checked
+// with a SelfSubjectAccessReview as the caller, and is granted to nobody here: the chart grants it to
+// groups (or, only if the operator says so, to this ServiceAccount) from its values. The Event that
+// audits each download needs the events create rule above.

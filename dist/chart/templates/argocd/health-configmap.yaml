@@ -1,0 +1,20 @@
+{{- if .Values.argocdHealth.enabled }}
+# Not argocd-cm: Ichor never writes Argo CD's configuration. Each data key below is the exact
+# argocd-cm key (resource.customizations.health.<group>_<kind>); merge them into your own
+# argocd-cm. Source of truth: files/argocd-health/*.lua.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/name: {{ include "ichor.name" . }}
+    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  name: ichor-argocd-health
+  namespace: {{ .Release.Namespace }}
+data:
+  resource.customizations.health.ichor.maesh.dev_TalosCluster: |
+{{ .Files.Get "files/argocd-health/TalosCluster.lua" | indent 4 }}
+  resource.customizations.health.ichor.maesh.dev_TalosMachine: |
+{{ .Files.Get "files/argocd-health/TalosMachine.lua" | indent 4 }}
+{{- end }}

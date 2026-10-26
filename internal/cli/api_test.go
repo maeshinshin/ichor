@@ -281,6 +281,29 @@ func TestCommandsThatNeedTheBackendRefuseToFallBack(t *testing.T) {
 	}
 }
 
+// TestPatchCreatePrintsItsImpact: the help promises create shows the impact,
+// even when nothing needs confirming.
+func TestPatchCreatePrintsItsImpact(t *testing.T) {
+	setAPITestFlags(t, true)
+
+	cluster := newTestCluster()
+	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(cluster).Build()
+	c := localClients(apiOpts, apiDeps{K8s: k8s})
+
+	p := sysctlPatch(cluster.Name, map[string]string{testSysctlKey: "1"})
+	p.Name = testPatchName
+	p.Spec.Layer = "cluster"
+
+	var out, errw bytes.Buffer
+	if err := runPatchWrite(context.Background(), c, strings.NewReader(""), &out, &errw, &p, false); err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(errw.String(), "Impact of patch "+testNamespace+"/"+testPatchName+":") {
+		t.Fatalf("no impact summary on stderr: %q", errw.String())
+	}
+}
+
 func TestPatchWriteAndPreviewLocally(t *testing.T) {
 	setAPITestFlags(t, true)
 

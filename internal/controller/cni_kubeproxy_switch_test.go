@@ -266,6 +266,20 @@ var _ = Describe("cniKubeProxyAdvancer", func() {
 		Expect(err.Error()).To(ContainSubstring("timed out"))
 	})
 
+	It("replaced: gives the apply its own long deadline, not what is left of the 15s dial bound", func() {
+		newCilium("true", true)
+
+		cluster := cniSwitchCluster(modeReplaced)
+		cp := newK8sControlPlane(cluster.Name, "kp-budget")
+		fake := &fakeTalosClient{current: nodeConfig(cluster, cp, modeEnabled)}
+		adv := newKubeProxyAdvancer(map[string]*fakeTalosClient{cp.Name: fake}, &fakeKubeProxyAdmin{})
+
+		_, err := adv.Advance(ctx, cluster, cp, &ichorv1alpha1.TalosOperation{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(fake.applyCalls).To(HaveLen(1))
+		Expect(fake.applyBudget).To(BeNumerically(">", 4*etcdDialTimeout))
+	})
+
 	It("replaced: switches every control plane, then removes kube-proxy once, last", func() {
 		newCilium("true", true)
 		newKubeProxyDaemonSet(testK8sOld, 2, 2)

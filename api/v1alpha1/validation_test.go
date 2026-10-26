@@ -649,7 +649,7 @@ var _ = Describe("TalosCluster.spec.cni", func() {
 	})
 })
 
-// ADR 0076: spec.network, immutable once set; spec.hostname and spec.install on TalosMachine.
+// ADR 0077: spec.network, immutable once set; spec.hostname and spec.install on TalosMachine.
 var _ = Describe("TalosCluster.spec.network", func() {
 	newNet := func(pods, svcs []string) *TalosCluster {
 		c := newCluster(corev1.LocalObjectReference{Name: literalSecrets}, 3, "true")

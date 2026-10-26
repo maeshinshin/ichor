@@ -3789,7 +3789,7 @@ spec:
                 type: string
               network:
                 description: |-
-                  network sets the pod and service subnets (ADR 0076). Unset keeps Talos's defaults. It
+                  network sets the pod and service subnets (ADR 0077). Unset keeps Talos's defaults. It
                   cannot change once set.
                 properties:
                   podSubnets:

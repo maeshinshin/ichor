@@ -120,7 +120,7 @@ var _ = Describe("MachineService", func() {
 				"ListMachines must surface the decision record, not just ApproveMachine's own response")
 		})
 
-		It("records the install target and refuses a bad hostname or an ambiguous disk (ADR 0076)", func() {
+		It("records the install target and refuses a bad hostname or an ambiguous disk (ADR 0077)", func() {
 			cluster := newTestCluster("does-not-exist")
 			m := newTestMachine(cluster.Name, strongTestIdentity("uuid-install"), "", ichorv1alpha1.MachineApprovalStatePending)
 			s := &Server{Client: k8sClient}

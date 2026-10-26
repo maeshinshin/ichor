@@ -50,6 +50,8 @@ Done here:
 
 ## Open: how a v1.14 cluster gets these values
 
+Decided by ADR 0077 (option C, with the per-node half as a spec field).
+
 Not decided here, because the design document does not settle it and each option reaches beyond `pkg/render`.
 
 A. Extend the patch allow-list (design: "Kinds outside the allow-list are listed, and the user chooses between

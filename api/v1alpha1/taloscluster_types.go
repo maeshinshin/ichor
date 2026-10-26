@@ -318,7 +318,7 @@ type TalosClusterControlPlaneMetrics struct {
 	AllowedCIDRs []string `json:"allowedCIDRs,omitempty"`
 }
 
-// TalosClusterNetwork is the cluster's pod and service address ranges (ADR 0076). Both lists
+// TalosClusterNetwork is the cluster's pod and service address ranges (ADR 0077). Both lists
 // are optional; an empty list keeps Talos's default for that range (10.244.0.0/16 for pods,
 // 10.96.0.0/12 for services). The ranges are fixed when the cluster is created: Kubernetes
 // cannot renumber a live cluster, so the whole field is immutable once set (a cluster that
@@ -398,7 +398,7 @@ type TalosClusterSpec struct {
 	// +optional
 	CNI TalosClusterCNI `json:"cni,omitempty"`
 
-	// network sets the pod and service subnets (ADR 0076). Unset keeps Talos's defaults. It
+	// network sets the pod and service subnets (ADR 0077). Unset keeps Talos's defaults. It
 	// cannot change once set.
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="network cannot change after it is set; Kubernetes cannot renumber a live cluster"
 	// +optional

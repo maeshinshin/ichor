@@ -47,7 +47,7 @@ message ApproveMachineRequest {
   string reason = 5;
   // break_glass requests an emergency direct write (docs/adr/0064).
   BreakGlass break_glass = 6;
-  // install is the system disk (TalosMachine.spec.install, ADR 0076). Unset
+  // install is the system disk (TalosMachine.spec.install, ADR 0077). Unset
   // approves without an install target.
   MachineInstall install = 7;
 }

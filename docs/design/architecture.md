@@ -533,7 +533,11 @@ disk), `storage` (prepared for a storage system via a preset), `userVolume`, or
 `VolumeConfig`/`UserVolumeConfig`/`RawVolumeConfig` document for the rest,
 each selecting its disk with a CEL expression over the disk's reported fields.
 All three documents are on the mirror allow-list, so a role is expressible
-today; what is still missing is the controller that sets one.
+today; what is still missing is the controller that sets one. The `system`
+disk is the exception to "a document per role": it is
+`TalosMachine.spec.install.disk` (WWID, serial, by-id path, bus path, or
+device path as a last resort), rendered as `UnattendedInstallConfig` from the
+v1.14 contract and as `machine.install` before it (ADR 0077).
 
 Two things about editing a disk role after the fact, both verified against
 Talos's volume manager. **A changed selector on a volume that already exists
@@ -649,7 +653,10 @@ the workloads that signal a successful hand-over. New CNIs are new
 implementations of that interface and nothing else.
 
 The preset cannot be changed after the cluster exists; swapping a CNI takes
-the network down and is out of scope.
+the network down and is out of scope. For every preset but `flannel` the
+system layer removes Talos's own CNI (the `KubeFlannelCNIConfig` document, or
+`cni.name: none` before v1.14). Pod and service subnets are
+`spec.network.{podSubnets,serviceSubnets}`, fixed once set (ADR 0077).
 
 `spec.cni.kubeProxy` is `enabled` or `replaced`. Replacing kube-proxy splits
 the setting across two owners — Talos (`cluster.proxy.disabled`, Ichor) and

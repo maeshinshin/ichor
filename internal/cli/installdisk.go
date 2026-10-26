@@ -26,7 +26,7 @@ import (
 
 const installDiskUsage = `"wwid:ID", "serial:SERIAL", a /dev/disk/by-id/ path, a bus path such as /pci0000:00/..., or a device path such as /dev/sda`
 
-// parseInstallDisk reads the --install-disk value (ADR 0076). The stable identifiers come first
+// parseInstallDisk reads the --install-disk value (ADR 0077). The stable identifiers come first
 // in the design's fallback chain; a bare /dev/sdX path works but the kernel can renumber it.
 func parseInstallDisk(v string) (*ichorv1alpha1.TalosMachineDisk, error) {
 	switch {

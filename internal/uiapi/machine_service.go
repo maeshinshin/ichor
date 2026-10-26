@@ -156,7 +156,7 @@ func (s *Server) ApproveMachine(
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("role is required to approve a machine"))
 	}
 
-	// Checked here so the caller gets the reason, not a bare admission error (ADR 0076).
+	// Checked here so the caller gets the reason, not a bare admission error (ADR 0077).
 	if h := req.Msg.GetHostname(); h != "" {
 		if errs := validation.IsDNS1123Subdomain(h); len(errs) > 0 {
 			return nil, connect.NewError(connect.CodeInvalidArgument,

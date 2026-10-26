@@ -135,7 +135,7 @@ export type ApproveMachineRequest = Message<"ichor.v1alpha1.ApproveMachineReques
   breakGlass?: BreakGlass | undefined;
 
   /**
-   * install is the system disk (TalosMachine.spec.install, ADR 0076). Unset
+   * install is the system disk (TalosMachine.spec.install, ADR 0077). Unset
    * approves without an install target.
    *
    * @generated from field: ichor.v1alpha1.MachineInstall install = 7;

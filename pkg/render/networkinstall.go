@@ -33,7 +33,7 @@ import (
 )
 
 // cniPresetFlannel is the one preset whose CNI Talos itself runs. Every other preset brings its
-// own CNI, so the Talos-side flannel must not exist (ADR 0076).
+// own CNI, so the Talos-side flannel must not exist (ADR 0077).
 const cniPresetFlannel = "flannel"
 
 // talosRunsFlannel reports whether the cluster's CNI is Talos's own flannel. An unset preset is
@@ -44,7 +44,7 @@ func talosRunsFlannel(cluster *ichorv1alpha1.TalosCluster) bool {
 	return p == "" || p == cniPresetFlannel
 }
 
-// injectCNI is the CNI half of the system layer (ADR 0076). For a preset other than flannel it
+// injectCNI is the CNI half of the system layer (ADR 0077). For a preset other than flannel it
 // removes Talos's own CNI: the KubeFlannelCNIConfig document the generator adds from the v1.14
 // contract, and cluster.network.cni.name: none before it. A custom preset's own documents are
 // patches and still win over this.
@@ -81,7 +81,7 @@ func injectCNI(
 	}, "cni")
 }
 
-// injectInstall renders spec.install (ADR 0076): the UnattendedInstallConfig document from the
+// injectInstall renders spec.install (ADR 0077): the UnattendedInstallConfig document from the
 // v1.14 contract, machine.install before it. The two cannot coexist, so exactly one is produced.
 func injectInstall(
 	cfg coreconfig.Provider, contract *coreconfig.VersionContract, m *ichorv1alpha1.TalosMachine,

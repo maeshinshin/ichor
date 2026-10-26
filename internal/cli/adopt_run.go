@@ -212,7 +212,7 @@ func reportPlans(w io.Writer, plans []*adoptPlan) []*adoptPlan {
 	return toCreate
 }
 
-// specFieldHints say which spec field carries a value adopt cannot put in a patch (ADR 0076).
+// specFieldHints say which spec field carries a value adopt cannot put in a patch (ADR 0077).
 // The v1.14 documents and the legacy fields they replaced both map, because the same value
 // reaches Ichor through the same field whichever contract the node was generated for. First
 // match wins, so the specific prefixes come before the general ones.
@@ -229,7 +229,7 @@ var specFieldHints = []struct{ prefix, hint string }{
 }
 
 // explainUnrepresentable turns the paths adopt left alone into the lines a user can act on: the
-// spec field that carries each value Ichor models (ADR 0076), and, for what remains, that a patch
+// spec field that carries each value Ichor models (ADR 0077), and, for what remains, that a patch
 // has to be written by hand.
 func explainUnrepresentable(paths []string) []string {
 	var (

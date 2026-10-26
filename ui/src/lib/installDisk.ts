@@ -1,6 +1,6 @@
 import type { Disk } from '@/gen/ichor/v1alpha1/node_pb'
 
-// The RFC 1123 subdomain TalosMachine.spec.hostname is validated against (ADR 0076); the same
+// The RFC 1123 subdomain TalosMachine.spec.hostname is validated against (ADR 0077); the same
 // rule runs in the CRD and in ApproveMachine, repeated here so the form says so before submit.
 const hostnameRe = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$/
 

@@ -105,7 +105,7 @@ type TalosMachineSpec struct {
 	Hostname string `json:"hostname,omitempty"`
 
 	// install is where Talos installs itself on this machine (the design's `system` disk role,
-	// ADR 0076). Unset renders no install configuration, which leaves a machine that boots from
+	// ADR 0077). Unset renders no install configuration, which leaves a machine that boots from
 	// an installed disk alone but gives a maintenance-mode machine nothing to install onto.
 	// +optional
 	Install *TalosMachineInstall `json:"install,omitempty"`

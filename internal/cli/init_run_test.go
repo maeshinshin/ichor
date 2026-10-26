@@ -193,7 +193,7 @@ func TestRunInit_Flannel(t *testing.T) {
 		t.Fatalf("expected no inline manifests for flannel, got %+v", patches.Items[0].Spec.Documents[0].Config.ClusterConfig)
 	}
 
-	// The install target is spec.install now (ADR 0076); a machine.install in the patch would
+	// The install target is spec.install now (ADR 0077); a machine.install in the patch would
 	// conflict with the UnattendedInstallConfig document at v1.14.
 	if patches.Items[0].Spec.Documents[0].Config.MachineConfig.MachineInstall != nil {
 		t.Fatalf("the bootstrap patch must not carry machine.install, got %+v",

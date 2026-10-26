@@ -328,7 +328,7 @@ type ApproveMachineRequest struct {
 	Reason string `protobuf:"bytes,5,opt,name=reason,proto3" json:"reason,omitempty"`
 	// break_glass requests an emergency direct write (docs/adr/0064).
 	BreakGlass *BreakGlass `protobuf:"bytes,6,opt,name=break_glass,json=breakGlass,proto3" json:"break_glass,omitempty"`
-	// install is the system disk (TalosMachine.spec.install, ADR 0076). Unset
+	// install is the system disk (TalosMachine.spec.install, ADR 0077). Unset
 	// approves without an install target.
 	Install       *MachineInstall `protobuf:"bytes,7,opt,name=install,proto3" json:"install,omitempty"`
 	unknownFields protoimpl.UnknownFields

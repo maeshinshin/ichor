@@ -198,7 +198,7 @@ func BuildConfig(
 		return nil, err
 	}
 
-	// The CNI Talos runs and the install target (ADR 0076) are system layer too.
+	// The CNI Talos runs and the install target (ADR 0077) are system layer too.
 	cfg, err = injectCNI(cfg, contract, cluster)
 	if err != nil {
 		return nil, err
@@ -302,7 +302,7 @@ func baseConfig(
 		return nil, fmt.Errorf("render: preparing generator input: %w", err)
 	}
 
-	// spec.network (ADR 0076): the generator renders these as the KubeNetworkConfig document from
+	// spec.network (ADR 0077): the generator renders these as the KubeNetworkConfig document from
 	// the v1.14 contract and as cluster.network before it, so it, not Ichor, picks the form.
 	if n := cluster.Spec.Network; n != nil {
 		if len(n.PodSubnets) > 0 {

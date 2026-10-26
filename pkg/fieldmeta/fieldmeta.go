@@ -95,7 +95,7 @@ var rules = []rule{
 	// reset-and-reinstall operation").
 	{prefix: "machine.install", installTimeOnly: true},
 
-	// UnattendedInstallConfig is the v1.14 form of machine.install (ADR 0076) and is read at the
+	// UnattendedInstallConfig is the v1.14 form of machine.install (ADR 0077) and is read at the
 	// same moment. KubeNetworkConfig and KubeFlannelCNIConfig deliberately have no rule: the
 	// subnets are fixed at creation and removing the flannel document is not verified to be
 	// reboot-free, so both keep the reboot-required default.

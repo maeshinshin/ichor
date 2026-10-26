@@ -74,7 +74,9 @@ type fakeTalosClient struct {
 	applyErr error
 
 	dryRunCalls int
-	applyCalls  [][]byte
+	// dryRunBudget and applyBudget are the time left on each call's context when it arrived.
+	dryRunBudget, applyBudget time.Duration
+	applyCalls                [][]byte
 
 	// etcd-related fields: removal_test.go's fixtures for removeEtcdMember.
 	etcdMembers    []EtcdMember
@@ -117,13 +119,19 @@ func (f *fakeTalosClient) CurrentConfig(context.Context) ([]byte, error) {
 	return f.current, f.currentErr
 }
 
-func (f *fakeTalosClient) DryRunApply(_ context.Context, _ []byte) ([]string, error) {
+func (f *fakeTalosClient) DryRunApply(ctx context.Context, _ []byte) ([]string, error) {
 	f.dryRunCalls++
+	if dl, ok := ctx.Deadline(); ok {
+		f.dryRunBudget = time.Until(dl)
+	}
 
 	return f.warnings, f.dryRunErr
 }
 
-func (f *fakeTalosClient) ApplyNoReboot(_ context.Context, cfg []byte) error {
+func (f *fakeTalosClient) ApplyNoReboot(ctx context.Context, cfg []byte) error {
+	if dl, ok := ctx.Deadline(); ok {
+		f.applyBudget = time.Until(dl)
+	}
 	f.applyCalls = append(f.applyCalls, cfg)
 
 	return f.applyErr

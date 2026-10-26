@@ -180,7 +180,7 @@ func (a *cniKubeProxyAdvancer) Advance(
 	}
 
 	if hashConfig(current) != hash {
-		return false, a.apply(dialCtx, talos, m, current, rendered)
+		return false, a.apply(ctx, talos, m, current, rendered)
 	}
 
 	others, err := a.othersDone(ctx, cluster, m, op, target)
@@ -229,7 +229,7 @@ func (a *cniKubeProxyAdvancer) setTalosSide(
 // apply sends the rendered configuration without a reboot, after checking that the only thing it
 // changes is kube-proxy's mode: a pending unrelated change is never swept into a switch.
 func (a *cniKubeProxyAdvancer) apply(
-	dialCtx context.Context, talos TalosClient, m *ichorv1alpha1.TalosMachine, current, rendered []byte,
+	ctx context.Context, talos TalosClient, m *ichorv1alpha1.TalosMachine, current, rendered []byte,
 ) error {
 	paths, err := ChangedPaths(current, rendered)
 	if err != nil {
@@ -243,11 +243,20 @@ func (a *cniKubeProxyAdvancer) apply(
 		}
 	}
 
-	if _, err := talos.DryRunApply(dialCtx, rendered); err != nil {
+	// Each call has its own deadline: sharing the 15s dial bound would starve the apply.
+	dryRunCtx, cancelDryRun := context.WithTimeout(ctx, etcdDialTimeout)
+	_, err = talos.DryRunApply(dryRunCtx, rendered)
+
+	cancelDryRun()
+
+	if err != nil {
 		return fmt.Errorf("dry-run apply to %q failed: %w", m.Name, err)
 	}
 
-	if err := talos.ApplyNoReboot(dialCtx, rendered); err != nil {
+	applyCtx, cancelApply := context.WithTimeout(ctx, upgradeCallTimeout)
+	defer cancelApply()
+
+	if err := talos.ApplyNoReboot(applyCtx, rendered); err != nil {
 		return fmt.Errorf("applying the kube-proxy mode to %q: %w", m.Name, err)
 	}
 

@@ -17,6 +17,7 @@ limitations under the License.
 package cli
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"io"
@@ -211,8 +212,13 @@ func runPatchWrite(
 		return err
 	}
 
-	if warn := impactWarning(impact.Msg); warn != "" && !assumeYes {
-		ok, err := confirm(in, errw, fmt.Sprintf("Patch %s/%s: %s Continue? [y/N] ", p.Namespace, p.Name, warn))
+	warn := impactWarning(impact.Msg)
+
+	// stderr, so -o yaml|json on stdout stays the written object alone.
+	_, _ = fmt.Fprintf(errw, "Impact of patch %s/%s: %s\n", p.Namespace, p.Name, cmp.Or(warn, "no reboot needed; nothing install-time-only or too new for the cluster's Talos."))
+
+	if warn != "" && !assumeYes {
+		ok, err := confirm(in, errw, "Continue? [y/N] ")
 		if err != nil {
 			return fmt.Errorf("patch: reading confirmation: %w", err)
 		}

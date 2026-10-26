@@ -87,3 +87,5 @@ change and is left for whoever owns it.
 ## Amendment: Service discovery by label
 
 The CLI finds the ichor-ui Service by `app.kubernetes.io/component=ui` in the Ichor namespace, not by name. Kustomize `namePrefix` makes the init-installed Service `ichor-ichor-ui-service`, the chart names it `ichor-ui-service`, and both now set the label. Names are left as they are because `internal/installer` classifies UI objects by the `ichor-ichor-ui` prefix.
+
+- `patch create|update` always print the impact (reboot, install-time-only, unsupported, or "no reboot needed") on stderr before writing, as the help says; the written object stays alone on stdout.

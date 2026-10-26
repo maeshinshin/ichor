@@ -25,6 +25,7 @@ import (
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -93,10 +94,11 @@ func SanitizeLink(raw string) string {
 	return u.String()
 }
 
-// ListGitOps reads each CR's tracking Application. The CR lists use the
-// caller's identity, so the page shows only CRs the caller may list. The
-// Application is read with the ServiceAccount (its get) and only its
-// two status words leave this function: sync and health.
+// ListGitOps reads each CR's tracking Application. The CR lists and the
+// Application get both use the caller's identity: a caller who
+// may not read the Application gets a permission_denied row, not its sync and
+// health. Which tracker owns a CR is decided with the ServiceAccount, but that
+// answer is about the CR the caller already listed.
 func (s *Server) ListGitOps(
 	ctx context.Context, _ *connect.Request[pb.ListGitOpsRequest],
 ) (*connect.Response[pb.ListGitOpsResponse], error) {
@@ -162,7 +164,7 @@ func (s *Server) gitOpsItem(
 	item.Application = objectRef(appKey.Namespace, appKey.Name)
 
 	if seen, ok := apps[appKey.String()]; ok {
-		item.SyncStatus, item.HealthStatus, item.Error = seen.SyncStatus, seen.HealthStatus, seen.Error
+		item.SyncStatus, item.HealthStatus, item.Error, item.PermissionDenied = seen.SyncStatus, seen.HealthStatus, seen.Error, seen.PermissionDenied
 
 		return item
 	}
@@ -171,9 +173,14 @@ func (s *Server) gitOpsItem(
 
 	app.SetGroupVersionKind(argoApplicationGVK)
 
-	if err := s.Client.Get(ctx, appKey, &app); err != nil {
+	// Read as the caller: the status words go back to them.
+	// Without OIDC there is no identity and s.Get is the ServiceAccount.
+	switch err := s.Get(ctx, appKey, &app); {
+	case apierrors.IsForbidden(err):
+		item.PermissionDenied = true
+	case err != nil:
 		item.Error = fmt.Sprintf("Application %s cannot be read: %v", appKey, err)
-	} else {
+	default:
 		item.SyncStatus, _, _ = unstructured.NestedString(app.Object, "status", "sync", "status")
 		item.HealthStatus, _, _ = unstructured.NestedString(app.Object, "status", "health", "status")
 	}

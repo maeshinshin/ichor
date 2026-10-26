@@ -19,6 +19,7 @@ package uiapi
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -37,6 +38,7 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/resources/hardware"
 	"github.com/siderolabs/talos/pkg/machinery/resources/perf"
 	"github.com/siderolabs/talos/pkg/machinery/role"
+	"google.golang.org/protobuf/types/known/emptypb"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
@@ -205,56 +207,67 @@ func (t *machineryNodeTalosClient) ResourceUsage(ctx context.Context) (*pb.Resou
 	return usage, nil
 }
 
-const (
-	cpuSampleGap     = 500 * time.Millisecond
-	cpuSampleTimeout = 3 * time.Second
-)
+// cpuSampleGap separates the two live reads of /proc/stat.
+const cpuSampleGap = time.Second
 
-// sampleCPU reads perf.CPU, then again until the cumulative counters have
-// moved (Talos refreshes them on its own interval) or cpuSampleTimeout has
-// passed, and sets the cores in use from the difference.
+// cpuReading is one cumulative CPU sample: the all-CPU total and the core count.
+type cpuReading struct {
+	Total perf.CPUStat
+	Cores int
+}
+
+// readSystemStat reads /proc/stat live through MachineService.SystemStat. The perf.CPU resource
+// is not used: Talos's perf controller rewrites it only every 30 seconds
+// (internal/app/machined/pkg/controllers/perf: updateInterval), so two reads a few seconds
+// apart return the same snapshot.
+func (t *machineryNodeTalosClient) readSystemStat(ctx context.Context) (cpuReading, error) {
+	resp, err := t.c.MachineClient.SystemStat(ctx, &emptypb.Empty{})
+	if err != nil {
+		return cpuReading{}, fmt.Errorf("reading cpu stats: %w", err)
+	}
+
+	msgs := resp.GetMessages()
+	if len(msgs) == 0 || msgs[0].GetCpuTotal() == nil {
+		return cpuReading{}, errors.New("reading cpu stats: empty SystemStat reply")
+	}
+
+	c := msgs[0].GetCpuTotal()
+
+	return cpuReading{
+		Total: perf.CPUStat{
+			User: c.GetUser(), Nice: c.GetNice(), System: c.GetSystem(), Idle: c.GetIdle(),
+			Iowait: c.GetIowait(), Irq: c.GetIrq(), SoftIrq: c.GetSoftIrq(), Steal: c.GetSteal(),
+		},
+		Cores: len(msgs[0].GetCpu()),
+	}, nil
+}
+
 func (t *machineryNodeTalosClient) sampleCPU(ctx context.Context, usage *pb.ResourceUsage) error {
-	read := func() (*perf.CPUSpec, error) {
-		cpu, err := safe.StateGet[*perf.CPU](ctx, t.c.COSI, resource.NewMetadata(
-			perf.NamespaceName, perf.CPUType, perf.CPUID, resource.VersionUndefined,
-		))
-		if err != nil {
-			if state.IsNotFoundError(err) {
-				return nil, nil //nolint:nilnil // no stats on this node
-			}
+	return sampleCPUUsage(ctx, t.readSystemStat, cpuSampleGap, usage)
+}
 
-			return nil, fmt.Errorf("reading cpu stats: %w", err)
-		}
-
-		spec := cpu.TypedSpec()
-
-		return spec, nil
+// sampleCPUUsage reads the counters twice, gap apart, and sets the cores in use from the
+// difference. A failed read leaves the usage unsampled (shown as unknown) rather than failing the
+// whole page.
+func sampleCPUUsage(ctx context.Context, read func(context.Context) (cpuReading, error), gap time.Duration, usage *pb.ResourceUsage) error {
+	first, err := read(ctx)
+	if err != nil {
+		return nil //nolint:nilerr // CPU is optional on the page
 	}
 
-	first, err := read()
-	if err != nil || first == nil {
-		return err
+	select {
+	case <-ctx.Done():
+		return nil
+	case <-time.After(gap):
 	}
 
-	deadline := time.Now().Add(cpuSampleTimeout)
+	next, err := read(ctx)
+	if err != nil {
+		return nil //nolint:nilerr // CPU is optional on the page
+	}
 
-	for time.Now().Before(deadline) {
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-time.After(cpuSampleGap):
-		}
-
-		next, err := read()
-		if err != nil || next == nil {
-			return err
-		}
-
-		if cores, ok := cpuCoresUsed(first.CPUTotal, next.CPUTotal, len(next.CPU)); ok {
-			usage.CpuCoresUsed, usage.CpuSampled = cores, true
-
-			return nil
-		}
+	if cores, ok := cpuCoresUsed(first.Total, next.Total, next.Cores); ok {
+		usage.CpuCoresUsed, usage.CpuSampled = cores, true
 	}
 
 	return nil

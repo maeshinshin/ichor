@@ -31,10 +31,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os/exec"
 	"strings"
 	"time"
 
+	"github.com/maeshinshin/ichor/test/internal/kube"
 	"github.com/maeshinshin/ichor/test/utils"
 )
 
@@ -163,6 +163,10 @@ func MetadataID(obj map[string]any) any {
 // waits up to timeout for the pod to reach a terminal phase, and returns its combined
 // stdout/stderr. The Pod and any Secret are deleted before returning.
 func run(namespace string, args []string, secretData map[string]string, timeout time.Duration) (string, error) {
+	if err := checkTargets(args); err != nil {
+		return "", err
+	}
+
 	id := fmt.Sprintf("talosctl-%d", time.Now().UnixNano())
 
 	var secretName string
@@ -174,17 +178,17 @@ func run(namespace string, args []string, secretData map[string]string, timeout 
 		defer deleteSecret(namespace, secretName)
 	}
 
-	cmd := exec.Command("kubectl", "apply", "-f", "-")
+	cmd := kube.Command("apply", "-f", "-")
 	cmd.Stdin = strings.NewReader(podManifest(id, namespace, args, secretName))
 	if _, err := utils.Run(cmd); err != nil {
 		return "", err
 	}
 	defer func() {
-		_, _ = utils.Run(exec.Command("kubectl", "-n", namespace, "delete", "pod", id, "--wait=false", "--ignore-not-found"))
+		_, _ = utils.Run(kube.Command("-n", namespace, "delete", "pod", id, "--wait=false", "--ignore-not-found"))
 	}()
 
 	phase, waitErr := waitTerminal(namespace, id, timeout)
-	logs, logErr := utils.Run(exec.Command("kubectl", "-n", namespace, "logs", id))
+	logs, logErr := utils.Run(kube.Command("-n", namespace, "logs", id))
 	if waitErr != nil {
 		return logs, waitErr
 	}
@@ -197,11 +201,36 @@ func run(namespace string, args []string, secretData map[string]string, timeout 
 	return logs, nil
 }
 
+// protectedNodes are the production home-lab control planes; no e2e path may address them.
+var protectedNodes = map[string]bool{"192.168.0.201": true, "192.168.0.202": true, "192.168.0.203": true}
+
+// checkTargets requires an explicit, non-protected --nodes on every call (so talosctl never
+// falls back to a talosconfig's default nodes) and refuses protected addresses anywhere in
+// args. Every call here runs in a pod with only the talosconfig this package mounts, but
+// the node list is the thing that decides what gets touched, so it is checked on its own.
+func checkTargets(args []string) error {
+	hasNodes := false
+	for i, a := range args {
+		for f := range strings.SplitSeq(a, ",") {
+			if protectedNodes[strings.TrimSpace(f)] {
+				return fmt.Errorf("refusing talosctl %v: %s is a protected production node", args, f)
+			}
+		}
+		if a == nodesFlag && i+1 < len(args) && strings.TrimSpace(args[i+1]) != "" {
+			hasNodes = true
+		}
+	}
+	if !hasNodes {
+		return fmt.Errorf("refusing talosctl %v: no explicit %s", args, nodesFlag)
+	}
+	return nil
+}
+
 // waitTerminal polls the pod's phase until it reaches Succeeded or Failed, or times out.
 func waitTerminal(namespace, podName string, timeout time.Duration) (string, error) {
 	deadline := time.Now().Add(timeout)
 	for {
-		phase, _ := utils.Run(exec.Command("kubectl", "-n", namespace, "get", "pod", podName,
+		phase, _ := utils.Run(kube.Command("-n", namespace, "get", "pod", podName,
 			"-o", "jsonpath={.status.phase}"))
 		phase = strings.TrimSpace(phase)
 		if phase == "Succeeded" || phase == "Failed" {
@@ -247,12 +276,12 @@ func applySecret(namespace, name string, data map[string]string) error {
 	for k, v := range data {
 		fmt.Fprintf(&b, "  %s: %s\n", k, base64.StdEncoding.EncodeToString([]byte(v)))
 	}
-	cmd := exec.Command("kubectl", "apply", "-f", "-")
+	cmd := kube.Command("apply", "-f", "-")
 	cmd.Stdin = strings.NewReader(b.String())
 	_, err := utils.Run(cmd)
 	return err
 }
 
 func deleteSecret(namespace, name string) {
-	_, _ = utils.Run(exec.Command("kubectl", "-n", namespace, "delete", "secret", name, "--wait=false", "--ignore-not-found"))
+	_, _ = utils.Run(kube.Command("-n", namespace, "delete", "secret", name, "--wait=false", "--ignore-not-found"))
 }

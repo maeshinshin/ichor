@@ -26,13 +26,13 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/maeshinshin/ichor/test/internal/kube"
 	"github.com/maeshinshin/ichor/test/internal/talosctl"
 	"github.com/maeshinshin/ichor/test/utils"
 )
@@ -179,12 +179,13 @@ func main() {
 	}
 	mode := os.Args[1]
 
-	// Every kubectl call below (every mode) carries no --context: it targets whatever
-	// KUBECONFIG resolves to. Falling back to kubectl's ambient current-context on an
-	// unset KUBECONFIG means "down" can delete a VM on a cluster this run never created
-	// one on - refuse rather than guess (observed for real: a dangling kind-kind context).
-	if os.Getenv("KUBECONFIG") == "" {
-		fmt.Fprintln(os.Stderr, "kubevirt harness: KUBECONFIG is not set; refusing to guess which cluster to target")
+	// Every outer-cluster kubectl call goes through test/internal/kube, which pins it to
+	// --context $ICHOR_E2E_KUBE_CONTEXT and confines deletes to ichor-e2e. Refuse up front
+	// (before any "up" creates something) rather than fall back to kubectl's ambient
+	// current-context, on which "down" could delete from a cluster this run never touched
+	// (observed for real: a dangling kind-kind context).
+	if err := kube.VerifyContextExists(); err != nil {
+		fmt.Fprintln(os.Stderr, "kubevirt harness:", err)
 		os.Exit(1)
 	}
 
@@ -253,7 +254,7 @@ func bootToMaintenance() (string, error) {
 	}
 
 	ip, err := pollFor("waiting for the VMI to report a pod IP", 3*time.Minute, func() (string, bool) {
-		out, err := utils.Run(exec.Command("kubectl", "-n", namespace, "get", "vmi", vmName,
+		out, err := utils.Run(kube.Command("-n", namespace, "get", "vmi", vmName,
 			"-o", "jsonpath={.status.interfaces[0].ipAddress}"))
 		ip := strings.TrimSpace(out)
 		return ip, err == nil && ip != ""
@@ -395,13 +396,13 @@ func publish(ip string, talosconfigYAML []byte) error {
 	}
 
 	if _, err := pollFor("waiting for one Ready node through the tunnel", 3*time.Minute, func() (string, bool) {
-		out, err := utils.Run(exec.Command("kubectl", "--kubeconfig", innerKubeconfigPath, "get", "nodes",
+		out, err := utils.Run(kube.InnerCommand(innerKubeconfigPath, "get", "nodes",
 			"-o", "jsonpath={.items[*].status.conditions[?(@.type==\"Ready\")].status}"))
 		return out, err == nil && strings.TrimSpace(out) == "True"
 	}); err != nil {
 		return err
 	}
-	nodesOut, err := utils.Run(exec.Command("kubectl", "--kubeconfig", innerKubeconfigPath, "get", "nodes"))
+	nodesOut, err := utils.Run(kube.InnerCommand(innerKubeconfigPath, "get", "nodes"))
 	if err != nil {
 		return err
 	}
@@ -443,15 +444,15 @@ func down() error {
 		killPortForward(strings.TrimSpace(string(pid)))
 		_ = os.Remove(portForwardPIDPath())
 	}
-	if _, err := utils.Run(exec.Command("kubectl", "-n", namespace, "delete", "pod", relayName,
+	if _, err := utils.Run(kube.Command("-n", namespace, "delete", "pod", relayName,
 		"--wait=false", "--ignore-not-found")); err != nil {
 		return fmt.Errorf("deleting the relay pod: %w", err)
 	}
-	if _, err := utils.Run(exec.Command("kubectl", "-n", namespace, "delete", "vm", vmName,
+	if _, err := utils.Run(kube.Command("-n", namespace, "delete", "vm", vmName,
 		"--wait=true", "--timeout=120s", "--ignore-not-found")); err != nil {
 		return fmt.Errorf("deleting the VM: %w", err)
 	}
-	if _, err := utils.Run(exec.Command("kubectl", "-n", namespace, "delete", "dv",
+	if _, err := utils.Run(kube.Command("-n", namespace, "delete", "dv",
 		vmName+"-iso", vmName+"-system", "--wait=true", "--timeout=120s", "--ignore-not-found")); err != nil {
 		return fmt.Errorf("deleting the DataVolumes: %w", err)
 	}
@@ -466,7 +467,7 @@ func startRelay(nodeIP string) error {
 	if err := applyManifest(manifest); err != nil {
 		return fmt.Errorf("creating the relay pod: %w", err)
 	}
-	if _, err := utils.Run(exec.Command("kubectl", "-n", namespace, "wait", "pod/"+relayName,
+	if _, err := utils.Run(kube.Command("-n", namespace, "wait", "pod/"+relayName,
 		"--for=condition=Ready", "--timeout=60s")); err != nil {
 		return fmt.Errorf("waiting for the relay pod: %w", err)
 	}
@@ -475,7 +476,7 @@ func startRelay(nodeIP string) error {
 	if err != nil {
 		return err
 	}
-	pf := exec.Command("kubectl", "-n", namespace, "port-forward", "pod/"+relayName,
+	pf := kube.Command("-n", namespace, "port-forward", "pod/"+relayName,
 		relayLocalPort+":6443", "--address=127.0.0.1")
 	pf.Dir = dir
 	logFile, err := os.Create(filepath.Join(dir, "bin", "test-e2e-kubevirt.portforward.log"))

@@ -35,6 +35,7 @@ import (
 	"time"
 
 	"github.com/maeshinshin/ichor/test/harness/webhookcert"
+	"github.com/maeshinshin/ichor/test/internal/kube"
 	"github.com/maeshinshin/ichor/test/utils"
 )
 
@@ -178,7 +179,7 @@ func downController() error {
 	if _, err := deleteWebhook.CombinedOutput(); err != nil {
 		fmt.Fprintln(os.Stderr, "kubevirt harness: deleting the inner ValidatingWebhookConfiguration:", err)
 	}
-	if _, err := utils.Run(exec.Command("kubectl", "-n", namespace, "delete", "pod", controllerPodName,
+	if _, err := utils.Run(kube.Command("-n", namespace, "delete", "pod", controllerPodName,
 		"--wait=true", "--timeout=60s", "--ignore-not-found")); err != nil {
 		return fmt.Errorf("deleting the controller pod: %w", err)
 	}
@@ -193,7 +194,7 @@ func createControllerPod(binaryPath, kubeconfigPath, kubectlPath string) (string
 		return "", fmt.Errorf("creating the controller pod: %w", err)
 	}
 	if _, err := pollFor("waiting for the controller pod to be running", 2*time.Minute, func() (string, bool) {
-		out, err := utils.Run(exec.Command("kubectl", "-n", namespace, "get", "pod", controllerPodName,
+		out, err := utils.Run(kube.Command("-n", namespace, "get", "pod", controllerPodName,
 			"-o", "jsonpath={.status.phase}"))
 		return "", err == nil && strings.TrimSpace(out) == "Running"
 	}); err != nil {
@@ -201,7 +202,7 @@ func createControllerPod(binaryPath, kubeconfigPath, kubectlPath string) (string
 	}
 
 	podIP, err := pollFor("waiting for the controller pod's IP", 30*time.Second, func() (string, bool) {
-		out, err := utils.Run(exec.Command("kubectl", "-n", namespace, "get", "pod", controllerPodName,
+		out, err := utils.Run(kube.Command("-n", namespace, "get", "pod", controllerPodName,
 			"-o", "jsonpath={.status.podIP}"))
 		ip := strings.TrimSpace(out)
 		return ip, err == nil && ip != ""
@@ -216,7 +217,7 @@ func createControllerPod(binaryPath, kubeconfigPath, kubectlPath string) (string
 		{kubectlPath, controllerPodName + ":/usr/local/bin/kubectl"},
 	}
 	for _, c := range copies {
-		if _, err := utils.Run(exec.Command("kubectl", "-n", namespace, "cp", c[0], c[1])); err != nil {
+		if _, err := utils.Run(kube.Command("-n", namespace, "cp", c[0], c[1])); err != nil {
 			return "", fmt.Errorf("copying %s into the pod: %w", c[0], err)
 		}
 	}
@@ -343,7 +344,7 @@ func mintAndInstallLeafCert(bin, podIP, caBundleB64 string) error {
 		{certPath, controllerPodName + ":/tmp/k8s-webhook-server/serving-certs/tls.crt"},
 		{keyPath, controllerPodName + ":/tmp/k8s-webhook-server/serving-certs/tls.key"},
 	} {
-		if _, err := utils.Run(exec.Command("kubectl", "-n", namespace, "cp", c[0], c[1])); err != nil {
+		if _, err := utils.Run(kube.Command("-n", namespace, "cp", c[0], c[1])); err != nil {
 			return fmt.Errorf("copying the minted cert into the pod: %w", err)
 		}
 	}
@@ -367,7 +368,7 @@ func applyInnerManifest(manifest string) error {
 // piped via cmd.Stdin (e.g. applyInnerManifest's "kubectl apply -f -") reaches the remote
 // side as an already-closed, empty stdin.
 func podExec(args ...string) *exec.Cmd {
-	return exec.Command("kubectl", append([]string{"-n", namespace, "exec", "-i", controllerPodName, "--"}, args...)...)
+	return kube.Command(append([]string{"-n", namespace, "exec", "-i", controllerPodName, "--"}, args...)...)
 }
 
 // podExecWithKubeconfig runs /manager inside the controller pod with the inner cluster's

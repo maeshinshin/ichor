@@ -25,7 +25,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -33,6 +32,7 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	yaml "go.yaml.in/yaml/v4"
 
+	"github.com/maeshinshin/ichor/test/internal/kube"
 	"github.com/maeshinshin/ichor/test/internal/talosctl"
 	"github.com/maeshinshin/ichor/test/utils"
 )
@@ -156,7 +156,7 @@ func bootHAToMaintenance() ([]string, error) {
 		name := haVMName(i)
 		step := "waiting for " + name + "'s VMI to report a pod IP"
 		ip, err := pollFor(step, 3*time.Minute, func() (string, bool) {
-			out, err := utils.Run(exec.Command("kubectl", "-n", namespace, "get", "vmi", name,
+			out, err := utils.Run(kube.Command("-n", namespace, "get", "vmi", name,
 				"-o", "jsonpath={.status.interfaces[0].ipAddress}"))
 			ip := strings.TrimSpace(out)
 			return ip, err == nil && ip != ""
@@ -322,13 +322,13 @@ func downHA() error {
 
 	args := append([]string{"-n", namespace, "delete", "vm"}, names...)
 	args = append(args, "--wait=true", "--timeout=120s", "--ignore-not-found")
-	if _, err := utils.Run(exec.Command("kubectl", args...)); err != nil {
+	if _, err := utils.Run(kube.Command(args...)); err != nil {
 		return fmt.Errorf("deleting the VMs: %w", err)
 	}
 
 	args = append([]string{"-n", namespace, "delete", "dv"}, dvs...)
 	args = append(args, "--wait=true", "--timeout=120s", "--ignore-not-found")
-	if _, err := utils.Run(exec.Command("kubectl", args...)); err != nil {
+	if _, err := utils.Run(kube.Command(args...)); err != nil {
 		return fmt.Errorf("deleting the DataVolumes: %w", err)
 	}
 	return nil
@@ -337,7 +337,7 @@ func downHA() error {
 // applyManifest runs `kubectl apply -f -` with manifest on stdin; the small piece bootToMaintenance/
 // startRelay each already inline, pulled out once it had a third caller.
 func applyManifest(manifest string) error {
-	cmd := exec.Command("kubectl", "apply", "-f", "-")
+	cmd := kube.Command("apply", "-f", "-")
 	cmd.Stdin = strings.NewReader(manifest)
 	_, err := utils.Run(cmd)
 	return err

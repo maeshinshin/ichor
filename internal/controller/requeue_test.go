@@ -68,11 +68,58 @@ var _ = Describe("TalosMachineReconciler requeue after a failure", func() {
 		reachable = true
 		res, err = reconcileMachine(r, m)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.RequeueAfter).To(BeZero())
+		Expect(res.RequeueAfter).To(Equal(reachabilityRecheck), "a converged machine is re-probed, so a lost node shows in Ready")
 
 		got := fetchMachine(m)
 		Expect(readyCondition(got).Reason).To(Equal(reasonConverged))
 		Expect(got.Status.AppliedConfigHash).To(Equal(hash))
+	})
+
+	It("follows a node whose address changed: records the Kubernetes Node's address in status, never in spec", func() {
+		_, m, _ := setup()
+		setHostname(m, "node-moved-1")
+
+		m = fetchMachine(m)
+		m.Status.AppliedConfigHash = "sha256:previous"
+		Expect(k8sClient.Status().Update(ctx, m)).To(Succeed())
+
+		node := &corev1.Node{}
+		node.Name = "node-moved-1"
+		Expect(k8sClient.Create(ctx, node)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, node) })
+
+		node.Status.Addresses = []corev1.NodeAddress{
+			{Type: corev1.NodeHostName, Address: "node-moved-1"}, {Type: corev1.NodeInternalIP, Address: "10.9.9.9"},
+		}
+		Expect(k8sClient.Status().Update(ctx, node)).To(Succeed())
+
+		var dialed []string
+		r := &TalosMachineReconciler{
+			Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace,
+			TalosClient: func(_ context.Context, _ *ichorv1alpha1.TalosCluster, mm *ichorv1alpha1.TalosMachine, _ *secrets.Bundle) (TalosClient, error) {
+				dialed = append(dialed, mm.DialEndpoint())
+
+				return &fakeTalosClient{currentErr: errors.New("i/o timeout")}, nil
+			},
+		}
+
+		res, err := reconcileMachine(r, m)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.RequeueAfter).NotTo(BeZero())
+
+		got := fetchMachine(m)
+		Expect(got.Spec.Endpoint).To(Equal(storageTestEndpoint), "the controller never mutates spec")
+		Expect(got.Status.ObservedEndpoint).To(Equal("10.9.9.9:50000"))
+
+		_, err = reconcileMachine(r, m)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(dialed).To(Equal([]string{storageTestEndpoint, "10.9.9.9:50000"}), "the next round dials the observed address")
+
+		// An operator editing spec.endpoint overrides what was observed.
+		got = fetchMachine(m)
+		got.Spec.Endpoint = "10.0.0.77:50000"
+		Expect(k8sClient.Update(ctx, got)).To(Succeed())
+		Expect(got.DialEndpoint()).To(Equal("10.0.0.77:50000"))
 	})
 
 	It("asks to be looked at again when the node's current configuration cannot be read", func() {
@@ -113,7 +160,7 @@ var _ = Describe("TalosMachineReconciler requeue after a failure", func() {
 		fake.applyErr = nil
 		res, err = reconcileMachine(r, m)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.RequeueAfter).To(BeZero())
+		Expect(res.RequeueAfter).To(Equal(reachabilityRecheck))
 		Expect(readyCondition(fetchMachine(m)).Reason).To(Equal(reasonApplied))
 	})
 

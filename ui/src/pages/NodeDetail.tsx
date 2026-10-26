@@ -7,6 +7,7 @@ import { ConditionList, StatusBadge } from '@/components/ConditionList'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { Field, Fields, PageHeader } from '@/components/PageHeader'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
+import { StatusText } from '@/components/Status'
 import { Section, SectionLayout, type SectionLink } from '@/components/SectionNav'
 import { NodeLogs } from '@/components/NodeLogs'
 import { TalosDetails } from '@/components/TalosDetails'
@@ -87,7 +88,6 @@ export function NodeDetail({ namespace, name }: { namespace: string; name: strin
 
   const ready = machine?.conditions.find((c) => c.type === 'Ready')
   const sections: SectionLink[] = [
-    { id: 'overview', label: t('page.overview') },
     { id: 'conditions', label: t('cluster.conditions') },
     { id: 'hardware', label: t('node.hardware') },
     { id: 'disks', label: t('node.disks') },
@@ -107,14 +107,28 @@ export function NodeDetail({ namespace, name }: { namespace: string; name: strin
         badges={
           machine && (
             <>
-              <Badge variant={machine.approvalState === MachineApprovalState.APPROVED ? 'secondary' : 'outline'}>
+              <StatusText tone={machine.approvalState === MachineApprovalState.APPROVED ? 'good' : 'warn'}>
                 {enumLabel(MachineApprovalState, machine.approvalState)}
-              </Badge>
+              </StatusText>
               {ready && <StatusBadge type={ready.type} status={ready.status} />}
-              {machine.stage && <Badge variant="outline">{machine.stage}</Badge>}
+              {machine.stage && <span class="text-sm text-muted-foreground">{machine.stage}</span>}
             </>
           )
         }
+        meta={[
+          { label: t('col.role'), value: machine ? enumLabel(MachineRole, machine.role) : undefined },
+          {
+            label: t('col.cluster'),
+            value: machine?.cluster ? (
+              <Link to={objectRefPath('/clusters', machine.cluster)} class="hover:underline">
+                {machine.cluster.name}
+              </Link>
+            ) : undefined,
+          },
+          { label: t('col.endpoint'), value: machine?.endpoint },
+          { label: t('cluster.talosVersion'), value: cluster?.talosVersion },
+          { label: t('node.k8sKubelet'), value: node.kubernetes?.kubeletVersion },
+        ]}
         actions={
           machine?.cluster && (
             <Button asChild variant="outline" size="sm">
@@ -141,28 +155,6 @@ export function NodeDetail({ namespace, name }: { namespace: string; name: strin
         </Alert>
       )}
       <SectionLayout sections={sections}>
-        <Section id="overview" title={t('page.overview')}>
-          <Fields>
-            <Field label={t('machines.colHostname')} value={machine?.hostname || name} />
-            <Field label={t('col.role')} value={machine ? enumLabel(MachineRole, machine.role) : undefined} />
-            <Field label={t('col.cluster')}>
-              {machine?.cluster ? (
-                <Link to={objectRefPath('/clusters', machine.cluster)} class="hover:underline">
-                  {machine.cluster.name}
-                </Link>
-              ) : (
-                '-'
-              )}
-            </Field>
-            <Field label={t('node.approval')} value={machine ? enumLabel(MachineApprovalState, machine.approvalState) : undefined} />
-            <Field label={t('col.ready')}>{ready ? <StatusBadge type={ready.type} status={ready.status} /> : '-'}</Field>
-            <Field label={t('node.stage')} value={machine?.stage} />
-            <Field label={t('col.endpoint')} value={machine?.endpoint} />
-            <Field label={t('cluster.talosVersion')} value={cluster?.talosVersion} />
-            <Field label={t('node.k8sKubelet')} value={node.kubernetes?.kubeletVersion} />
-          </Fields>
-        </Section>
-
         <Section id="conditions" title={t('cluster.conditions')}>
           <ConditionList conditions={machine?.conditions ?? []} />
         </Section>

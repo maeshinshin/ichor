@@ -7,6 +7,7 @@ import { ClusterDetail } from '@/pages/ClusterDetail'
 import { ClusterList } from '@/pages/ClusterList'
 import { GitOps } from '@/pages/GitOps'
 import { MachineList } from '@/pages/MachineList'
+import { Overview } from '@/pages/Overview'
 import { NodeDetail } from '@/pages/NodeDetail'
 import { OperationDetail } from '@/pages/OperationDetail'
 import { OperationList } from '@/pages/OperationList'
@@ -54,7 +55,8 @@ export function App() {
 }
 
 function renderRoute(path: string, notFound: string) {
-  if (path === '/') return <ClusterList />
+  if (path === '/') return <Overview />
+  if (path === '/clusters') return <ClusterList />
   if (path === '/machines') return <MachineList />
   if (path === '/patches') return <PatchList />
   if (path === '/patches/new') return <PatchDetail />

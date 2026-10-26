@@ -1,6 +1,6 @@
 import type { ComponentChildren } from 'preact'
 import { Fragment } from 'preact'
-import { BoxesIcon, GitBranchIcon, LayersIcon, ListChecksIcon, ServerIcon, TriangleAlertIcon } from 'lucide-preact'
+import { BoxesIcon, GitBranchIcon, LayoutDashboardIcon, LayersIcon, ListChecksIcon, ServerIcon, TriangleAlertIcon } from 'lucide-preact'
 import { ThemeSwitch } from '@/components/ThemeSwitch'
 import {
   Breadcrumb,
@@ -39,7 +39,8 @@ import { Link } from '@/router'
 // reached from a list row, not from here, same as there's no nav entry for
 // an individual GitHub PR page.
 const navRoutes = [
-  { path: '/', label: 'nav.clusters', Icon: BoxesIcon, section: '/clusters/' },
+  { path: '/', label: 'nav.overview', Icon: LayoutDashboardIcon, section: '' },
+  { path: '/clusters', label: 'nav.clusters', Icon: BoxesIcon, section: '/clusters/' },
   { path: '/machines', label: 'nav.machines', Icon: ServerIcon, section: '/nodes/' },
   { path: '/patches', label: 'nav.patches', Icon: LayersIcon, section: '/patches/' },
   { path: '/operations', label: 'nav.operations', Icon: ListChecksIcon, section: '/operations/' },
@@ -48,7 +49,7 @@ const navRoutes = [
 
 // The nav entry is current on its list page and on the detail pages under it.
 function isCurrent(r: { path: string; section: string }, path: string): boolean {
-  return path === r.path || path.startsWith(r.section)
+  return path === r.path || (r.section !== '' && path.startsWith(r.section))
 }
 
 function NavItems({ path }: { path: string }) {

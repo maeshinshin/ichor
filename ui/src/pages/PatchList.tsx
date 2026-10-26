@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'preact/hooks'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Dialog,
   DialogContent,
@@ -13,6 +12,8 @@ import {
 } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { BreakGlassDialog, type BreakGlassRun } from '@/components/BreakGlassDialog'
+import { DataTable, LinkRow, ListToolbar } from '@/components/ListToolbar'
+import { PageHeader } from '@/components/PageHeader'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { PullRequestNotice } from '@/components/PullRequestNotice'
@@ -22,6 +23,7 @@ import { clusterClient, patchClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
 import { offersBreakGlass } from '@/lib/breakGlass'
 import { describeError } from '@/lib/errors'
+import { matchesQuery } from '@/lib/filter'
 import { targetKindOf } from '@/lib/patchTarget'
 import { useT } from '@/lib/useT'
 import { Link, objectRefPath } from '@/router'
@@ -38,6 +40,7 @@ export function PatchList() {
   const [patches, setPatches] = useState<Patch[] | null>(null)
   const [error, setError] = useState<ErrorShape | null>(null)
   const [clusterNames, setClusterNames] = useState<Record<string, string>>({})
+  const [query, setQuery] = useState('')
 
   async function reload() {
     try {
@@ -66,19 +69,26 @@ export function PatchList() {
   if (error) return <ErrorAlert {...error} />
   if (!patches) return <PageSkeleton label={t('patches.loading')} />
 
+  const clusterOf = (p: Patch) => (p.cluster ? clusterNames[`${p.cluster.namespace}/${p.cluster.name}`] ?? p.cluster.name : '')
+  const rows = patches.filter((p) =>
+    matchesQuery(query, p.ref?.name, clusterOf(p), enumLabel(ConfigLayer, p.layer), p.documents.map((d) => d.kind).join(' ')),
+  )
+
   return (
-    <Card>
-      <CardHeader className="flex flex-wrap items-center justify-between gap-2">
-        <CardTitle>{t('patches.title')}</CardTitle>
+    <div>
+      <PageHeader title={t('patches.title')} />
+      <p class="mb-4 max-w-3xl text-sm text-muted-foreground">{t('patches.intro')}</p>
+      <ListToolbar query={query} onQuery={setQuery} shown={rows.length} total={patches.length} onRefresh={reload}>
         <Button asChild size="sm">
           <Link to="/patches/new">{t('patches.new')}</Link>
         </Button>
-      </CardHeader>
-      <CardContent>
-        <p class="mb-4 text-sm text-muted-foreground">{t('patches.intro')}</p>
-        {patches.length === 0 ? (
-          <EmptyNote>{t('patches.empty')}</EmptyNote>
-        ) : (
+      </ListToolbar>
+      {patches.length === 0 ? (
+        <EmptyNote>{t('patches.empty')}</EmptyNote>
+      ) : rows.length === 0 ? (
+        <EmptyNote>{t('list.noMatch')}</EmptyNote>
+      ) : (
+        <DataTable>
           <Table>
             <TableHeader>
               <TableRow>
@@ -93,8 +103,8 @@ export function PatchList() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {patches.map((p) => (
-                <TableRow key={`${p.ref?.namespace}/${p.ref?.name}`}>
+              {rows.map((p) => (
+                <LinkRow key={`${p.ref?.namespace}/${p.ref?.name}`} to={objectRefPath('/patches', p.ref ?? { namespace: '', name: '' })}>
                   <TableCell>
                     {p.ref ? (
                       <Link to={objectRefPath('/patches', p.ref)} class="font-medium hover:underline">
@@ -131,13 +141,13 @@ export function PatchList() {
                       <DeleteDialog patch={p} onDeleted={reload} />
                     </div>
                   </TableCell>
-                </TableRow>
+                </LinkRow>
               ))}
             </TableBody>
           </Table>
-        )}
-      </CardContent>
-    </Card>
+        </DataTable>
+      )}
+    </div>
   )
 }
 

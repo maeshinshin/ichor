@@ -250,7 +250,10 @@ func baseConfig(
 
 	endpoint := fmt.Sprintf("https://%s:%d", cluster.Spec.Endpoint.Address, constants.DefaultControlPlanePort)
 
-	input, err := generate.NewInput(cluster.Name, endpoint, cluster.Spec.KubernetesVersion,
+	// spec.kubernetesVersion is "vX.Y.Z" (the CRD pattern), but machinery's generator takes it
+	// without the "v" and adds one itself when it builds the component images; passed through
+	// as-is it renders "kube-apiserver:vv1.36.0", an image that does not exist.
+	input, err := generate.NewInput(cluster.Name, endpoint, strings.TrimPrefix(cluster.Spec.KubernetesVersion, "v"),
 		generate.WithVersionContract(contract),
 		generate.WithSecretsBundle(bundle),
 		generate.WithAllowSchedulingOnControlPlanes(allowScheduling),

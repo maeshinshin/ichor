@@ -1,21 +1,15 @@
 import { useState } from 'preact/hooks'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { AlertDialogCancel, AlertDialogFooter } from '@/components/ui/alert-dialog'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { wireKindOf } from '@/components/opkind'
 import { OperationEffect, type PlanOperationResponse } from '@/gen/ichor/v1alpha1/operation_pb'
 import { operationClient } from '@/lib/connect'
+import { notifyDone } from '@/lib/notify'
 import { describeError } from '@/lib/errors'
 import { confirmMatches, kindNeedsTarget, kindNeedsTypedName, planCounts, planSteps, targetError, type OpKind } from '@/lib/operations'
 import { useT } from '@/lib/useT'
@@ -83,6 +77,7 @@ export function StartOperationDialog({
         target: needsTarget ? target.trim() : '',
       })
       reset(false)
+      notifyDone(t('toast.opStarted', { action: t(`ops.start.${kind}`) }))
       if (res.operation?.ref) navigate(objectRefPath('/operations', res.operation.ref))
     } catch (err) {
       setError(describeError(err))
@@ -92,61 +87,25 @@ export function StartOperationDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={reset}>
-      <DialogTrigger asChild>
+    <ConfirmDialog
+      open={open}
+      onOpenChange={reset}
+      trigger={
         <Button size="sm" variant={kind === 'shutdown' ? 'destructive' : 'outline'}>
           {t(`ops.start.${kind}`)}
         </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{t('ops.dialog.title', { action: t(`ops.start.${kind}`), cluster: cluster.name })}</DialogTitle>
-          <DialogDescription>{plan ? '' : t('cluster.operationsHint')}</DialogDescription>
-        </DialogHeader>
-
-        {!plan && needsTarget && (
-          <div class="space-y-2">
-            <Label htmlFor={`op-target-${kind}`}>{t(kind === 'cni' ? 'ops.dialog.targetMode' : 'ops.dialog.targetVersion')}</Label>
-            {kind === 'cni' ? (
-              <select
-                id={`op-target-${kind}`}
-                class="h-9 w-full rounded-md border bg-background px-2 text-sm"
-                value={target}
-                onChange={(e) => setTarget((e.currentTarget as HTMLSelectElement).value)}
-              >
-                <option value="replaced">{t('ops.dialog.modeReplaced')}</option>
-                <option value="enabled">{t('ops.dialog.modeEnabled')}</option>
-              </select>
-            ) : (
-              <Input
-                id={`op-target-${kind}`}
-                value={target}
-                onInput={(e) => setTarget((e.currentTarget as HTMLInputElement).value)}
-              />
-            )}
-            {target !== '' && targetProblem && (
-              <p class="text-xs text-destructive">
-                {t(targetProblem === 'required' ? 'ops.dialog.errRequired' : 'ops.dialog.errInvalid')}
-              </p>
-            )}
-          </div>
-        )}
-
-        {plan && <PlanView kind={kind} plan={plan} clusterName={cluster.name} />}
-
-        {plan && needsName && plan.blocked === '' && (
-          <div class="space-y-2">
-            <Label htmlFor="op-confirm-name">{t('ops.dialog.typeName', { name: cluster.name })}</Label>
-            <Input id="op-confirm-name" value={typed} onInput={(e) => setTyped((e.currentTarget as HTMLInputElement).value)} />
-          </div>
-        )}
-
-        {error && <ErrorAlert {...error} />}
-
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => (plan ? setPlan(null) : reset(false))}>
-            {plan ? t('ops.dialog.back') : t('common.cancel')}
-          </Button>
+      }
+      title={t('ops.dialog.title', { action: t(`ops.start.${kind}`), cluster: cluster.name })}
+      description={plan ? undefined : t('cluster.operationsHint')}
+      footer={
+        <AlertDialogFooter>
+          {plan ? (
+            <Button variant="ghost" onClick={() => setPlan(null)}>
+              {t('ops.dialog.back')}
+            </Button>
+          ) : (
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+          )}
           {plan ? (
             <Button variant={startedByDefault[kind] ? 'default' : 'destructive'} disabled={!startable} onClick={start}>
               {busy ? t('ops.dialog.starting') : t('ops.dialog.start')}
@@ -156,9 +115,57 @@ export function StartOperationDialog({
               {busy ? t('ops.dialog.reviewing') : t('ops.dialog.review')}
             </Button>
           )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </AlertDialogFooter>
+      }
+    >
+
+      {!plan && needsTarget && (
+        <div class="space-y-2">
+          <Label htmlFor={`op-target-${kind}`}>{t(kind === 'cni' ? 'ops.dialog.targetMode' : 'ops.dialog.targetVersion')}</Label>
+        {kind === 'cni' ? (
+            <select
+              id={`op-target-${kind}`}
+              class="h-9 w-full rounded-md border bg-background px-2 text-sm"
+              value={target}
+              onChange={(e) => setTarget((e.currentTarget as HTMLSelectElement).value)}
+            >
+              <option value="replaced">{t('ops.dialog.modeReplaced')}</option>
+              <option value="enabled">{t('ops.dialog.modeEnabled')}</option>
+            </select>
+          ) : (
+            <Input
+              id={`op-target-${kind}`}
+              value={target}
+              onInput={(e) => setTarget((e.currentTarget as HTMLInputElement).value)}
+            />
+          )}
+          {target !== '' && targetProblem && (
+            <p class="text-xs text-destructive">
+              {t(targetProblem === 'required' ? 'ops.dialog.errRequired' : 'ops.dialog.errInvalid')}
+            </p>
+          )}
+        </div>
+      )}
+
+      {plan && plan.blocked === '' && (
+        <Alert variant="destructive">
+          <AlertTitle>{t('ops.warn.title')}</AlertTitle>
+          <AlertDescription>{t(`ops.warn.${kind}`)}</AlertDescription>
+        </Alert>
+      )}
+
+      {plan && <PlanView kind={kind} plan={plan} clusterName={cluster.name} />}
+
+      {plan && needsName && plan.blocked === '' && (
+        <div class="space-y-2">
+          <Label htmlFor="op-confirm-name">{t('ops.dialog.typeName', { name: cluster.name })}</Label>
+          <Input id="op-confirm-name" value={typed} onInput={(e) => setTyped((e.currentTarget as HTMLInputElement).value)} />
+        </div>
+      )}
+
+      {error && <ErrorAlert {...error} />}
+
+    </ConfirmDialog>
   )
 }
 

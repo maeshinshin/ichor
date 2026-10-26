@@ -16,6 +16,7 @@ import type { Machine } from '@/gen/ichor/v1alpha1/machine_pb'
 import type { Disk } from '@/gen/ichor/v1alpha1/node_pb'
 import { offersBreakGlass } from '@/lib/breakGlass'
 import { machineClient } from '@/lib/connect'
+import { notifyWrite } from '@/lib/notify'
 import { describeError } from '@/lib/errors'
 import { diskSelector, installChoice } from '@/lib/installDisk'
 import { useT } from '@/lib/useT'
@@ -60,6 +61,7 @@ export function SetInstallDialog({
     try {
       const res = await machineClient.setMachineInstall({ machine: machine.ref, install })
       if (res.pullRequestUrl) onPullRequest(res.pullRequestUrl, breakGlassSet)
+      notifyWrite(res, 'toast.installSet')
       setOpen(false)
       onDone()
     } catch (err) {

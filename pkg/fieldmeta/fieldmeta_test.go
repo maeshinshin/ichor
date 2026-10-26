@@ -220,3 +220,50 @@ func TestAssess_AggregatesAcrossMultiplePaths(t *testing.T) {
 		t.Fatalf("Assess(mixed paths).InstallTimeOnly = %v, want [%s]", impact.InstallTimeOnly, pathMachineInstallDisk)
 	}
 }
+
+// TestAssess_NoRebootRules covers the rules ADR 0009's "multi-document and
+// registry paths" addendum verified against the Talos v1.14.3 source: each
+// path applies without a reboot, and its uncovered sibling still needs one.
+func TestAssess_NoRebootRules(t *testing.T) {
+	cases := []struct{ name, safe, sibling string }{
+		{"registry mirrors", "machine.registries.mirrors.docker.io.endpoints", "machine.registries.config.docker.io.auth.password"},
+		{"KubeNodeConfig labels", "KubeNodeConfig.labels.x", "KubeNodeConfig.nodeIP.validSubnets"},
+		{"KubeNodeConfig annotations", "KubeNodeConfig.annotations.x", "KubeNodeConfig.nodeIP.validSubnets"},
+		{"KubeNodeConfig taints", "KubeNodeConfig.taints.node-role.kubernetes.io/control-plane", "KubeNodeConfig.nodeIP"},
+		{"machine.nodeLabels", "machine.nodeLabels.x", "machine.kubelet.extraMounts"},
+		{"machine.nodeAnnotations", "machine.nodeAnnotations.x", "machine.kubelet.extraMounts"},
+		{"machine.nodeTaints", "machine.nodeTaints.x", "machine.kubelet.extraMounts"},
+		{"cluster.allowSchedulingOnControlPlanes", "cluster.allowSchedulingOnControlPlanes", pathClusterProxyDisabled},
+		{"cluster.allowSchedulingOnMasters", "cluster.allowSchedulingOnMasters", pathClusterProxyDisabled},
+		{"KubeAPIServerConfig args", "KubeAPIServerConfig.extraArgs.x", "KubeProxyConfig.extraArgs"},
+		{"KubeControllerManagerConfig args", "KubeControllerManagerConfig.extraArgs.x", "KubeProxyConfig.extraArgs"},
+		{"KubeSchedulerConfig args", "KubeSchedulerConfig.extraArgs.x", "KubeProxyConfig.extraArgs"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := Assess([]string{tc.safe}, nil); got.RebootRequired {
+				t.Errorf("Assess(%q).RebootRequired = true, want false", tc.safe)
+			}
+
+			if got := Assess([]string{tc.sibling}, nil); !got.RebootRequired {
+				t.Errorf("Assess(%q) (sibling) = %+v, want RebootRequired true", tc.sibling, got)
+			}
+		})
+	}
+}
+
+// TestAssess_KubernetesImagesStayRebootRequired pins a deliberate omission
+// (ADR 0057, fieldmeta.go): a component image path must never be no-reboot,
+// or a spec.kubernetesVersion bump would be applied to every node at once by
+// the machine controller instead of one at a time by the upgrade executor.
+func TestAssess_KubernetesImagesStayRebootRequired(t *testing.T) {
+	for _, path := range []string{
+		"KubeAPIServerConfig.image", "KubeControllerManagerConfig.image", "KubeSchedulerConfig.image",
+		"KubeProxyConfig.image", "KubeletConfig.image",
+	} {
+		if got := Assess([]string{path}, nil); !got.RebootRequired {
+			t.Errorf("Assess(%q).RebootRequired = false, want true", path)
+		}
+	}
+}

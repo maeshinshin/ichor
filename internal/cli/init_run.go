@@ -160,10 +160,8 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) error {
 	// --registry-mirror only builds anonymous mirrors, and the new cluster has no management
 	// API to read an authSecretRef from yet; refuse rather than render a mirror with no
 	// credentials if a mirror ever carries one.
-	for _, r := range cluster.Spec.Registries {
-		if r.AuthSecretRef != nil {
-			return fmt.Errorf("init: registry %q has an authSecretRef; credentials are not supported at bootstrap, add them after init", r.Host)
-		}
+	if err := rejectRegistryCredentials(cluster); err != nil {
+		return err
 	}
 
 	rendered, _, err := render.Render(cluster, machine, bundle, candidates, nil)
@@ -261,6 +259,16 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) error {
 	if opts.ArgoCD {
 		if err := initArgoCD(ctx, opts, cluster, machine, candidates, cniBoot.ArgoCDApplication, k8sClient, deps.Stderr); err != nil {
 			return err
+		}
+	}
+
+	return nil
+}
+
+func rejectRegistryCredentials(cluster *ichorv1alpha1.TalosCluster) error {
+	for _, r := range cluster.Spec.Registries {
+		if r.AuthSecretRef != nil {
+			return fmt.Errorf("init: registry %q has an authSecretRef; credentials are not supported at bootstrap, add them after init", r.Host)
 		}
 	}
 

@@ -279,7 +279,7 @@ type dataStream interface {
 // observed it, not a time parsed from the line itself -- see LogLine's own
 // doc comment on why that is still a valid resume key. Logs' lines (a
 // container's stdout/stderr, framed by containerd) are not either.
-func (t *machineryNodeTalosClient) StreamLogs(ctx context.Context, service string, since time.Time, onLine func(LogLine) error) error {
+func (t *machineryNodeTalosClient) StreamLogs(ctx context.Context, service string, since time.Time, opts LogOptions, onLine func(LogLine) error) error {
 	var (
 		stream dataStream
 		err    error
@@ -287,10 +287,13 @@ func (t *machineryNodeTalosClient) StreamLogs(ctx context.Context, service strin
 	)
 
 	if service == "" {
-		stream, err = t.c.Dmesg(ctx, true, true)
+		// shortcut: Dmesg only has a boolean tail, no line count, so a
+		// snapshot reads the whole kernel ring and keeps the last TailLines
+		// lines here; a followed stream keeps the boolean tail.
+		stream, err = t.c.Dmesg(ctx, opts.Follow, opts.Follow)
 		what = "kernel log"
 	} else {
-		stream, err = t.c.Logs(ctx, constants.SystemContainerdNamespace, common.ContainerDriver_CONTAINERD, service, true, -1)
+		stream, err = t.c.Logs(ctx, constants.SystemContainerdNamespace, common.ContainerDriver_CONTAINERD, service, opts.Follow, opts.TailLines)
 		what = "service " + strconv.Quote(service) + "'s log"
 	}
 
@@ -300,10 +303,20 @@ func (t *machineryNodeTalosClient) StreamLogs(ctx context.Context, service strin
 
 	var pending bytes.Buffer
 
+	// A kernel-log snapshot is trimmed to its last TailLines lines once the
+	// ring has been read to the end.
+	trim := service == "" && !opts.Follow && opts.TailLines > 0
+
+	var ring []LogLine
+
 	for {
 		resp, err := stream.Recv()
 		if err != nil {
 			if err == io.EOF || ctx.Err() != nil { //nolint:errorlint // grpc stream EOF is a sentinel, not a wrapped error
+				if trim && ctx.Err() == nil {
+					return sendLast(ring, int(opts.TailLines), onLine)
+				}
+
 				return nil
 			}
 
@@ -332,9 +345,30 @@ func (t *machineryNodeTalosClient) StreamLogs(ctx context.Context, service strin
 				continue
 			}
 
+			if trim {
+				ring = append(ring, LogLine{Time: now, Message: line})
+
+				continue
+			}
+
 			if err := onLine(LogLine{Time: now, Message: line}); err != nil {
 				return err
 			}
 		}
 	}
+}
+
+// sendLast delivers the last n of lines to onLine.
+func sendLast(lines []LogLine, n int, onLine func(LogLine) error) error {
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+
+	for _, l := range lines {
+		if err := onLine(l); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

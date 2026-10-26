@@ -29,8 +29,7 @@ export const en = {
   'kind.machine': 'Machine',
   'kind.patch': 'Patch',
   'kind.operation': 'Operation',
-  'theme.toDark': 'Dark mode',
-  'theme.toLight': 'Light mode',
+  'theme.toggle': 'Toggle dark mode',
 
   'app.signingIn': 'Signing in...',
   'app.signInFailed': 'Sign-in failed',

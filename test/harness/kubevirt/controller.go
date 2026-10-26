@@ -174,12 +174,12 @@ func upController() error {
 }
 
 func downController() error {
-	deleteWebhook := innerKubectl("delete", "validatingwebhookconfiguration",
+	deleteWebhook := innerKubectl(verbDelete, "validatingwebhookconfiguration",
 		controllerValidatingWebhookConfig, "--ignore-not-found")
 	if _, err := deleteWebhook.CombinedOutput(); err != nil {
 		fmt.Fprintln(os.Stderr, "kubevirt harness: deleting the inner ValidatingWebhookConfiguration:", err)
 	}
-	if _, err := utils.Run(kube.Command("-n", namespace, "delete", "pod", controllerPodName,
+	if _, err := utils.Run(kube.Command("-n", namespace, verbDelete, "pod", controllerPodName,
 		"--wait=true", "--timeout=60s", "--ignore-not-found")); err != nil {
 		return fmt.Errorf("deleting the controller pod: %w", err)
 	}

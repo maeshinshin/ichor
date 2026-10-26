@@ -79,7 +79,7 @@ func upDemo() error {
 				return "", false
 			}
 			objs, err := talosctl.DecodeAll(out)
-			return "", err == nil && len(objs) == 1 && talosctl.SpecField(objs[0], "stage") == "maintenance"
+			return "", err == nil && len(objs) == 1 && talosctl.SpecField(objs[0], "stage") == stageMaintenance
 		}); err != nil {
 			return err
 		}
@@ -115,7 +115,7 @@ func upDemo() error {
 			return "", false
 		}
 		objs, err := talosctl.DecodeAll(out)
-		return "", err == nil && len(objs) == 1 && talosctl.SpecField(objs[0], "stage") == "running" && talosctl.MachineStatusReady(objs[0])
+		return "", err == nil && len(objs) == 1 && talosctl.SpecField(objs[0], "stage") == stageRunning && talosctl.MachineStatusReady(objs[0])
 	}); err != nil {
 		return err
 	}
@@ -147,11 +147,11 @@ func upDemo() error {
 }
 
 func downDemo() error {
-	if _, err := utils.Run(kube.Command("-n", namespace, "delete", "vm", demoCP, demoWorker,
+	if _, err := utils.Run(kube.Command("-n", namespace, verbDelete, "vm", demoCP, demoWorker,
 		"--wait=true", "--timeout=120s", "--ignore-not-found")); err != nil {
 		return fmt.Errorf("deleting the VMs: %w", err)
 	}
-	args := []string{"-n", namespace, "delete", "dv",
+	args := []string{"-n", namespace, verbDelete, "dv",
 		demoCP + "-iso", demoCP + "-system", demoWorker + "-iso", demoWorker + "-system",
 		"--wait=true", "--timeout=120s", "--ignore-not-found"}
 	if _, err := utils.Run(kube.Command(args...)); err != nil {

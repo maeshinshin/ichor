@@ -42,6 +42,13 @@ import (
 // something.
 const haCount = 3
 
+// Shared string values the harness compares or passes more than once.
+const (
+	stageMaintenance = "maintenance"
+	stageRunning     = "running"
+	verbDelete       = "delete"
+)
+
 // haCluster names every object this scenario creates; haVMName derives each VM's own name
 // from it, fixed like vmName (see its own comment) for the same cross-invocation reason.
 const haCluster = "ichor-e2e-ha"
@@ -178,7 +185,7 @@ func bootHAToMaintenance() ([]string, error) {
 			if err != nil || len(objs) != 1 {
 				return "", false
 			}
-			return "", talosctl.SpecField(objs[0], "stage") == "maintenance"
+			return "", talosctl.SpecField(objs[0], "stage") == stageMaintenance
 		}); err != nil {
 			return nil, err
 		}
@@ -249,7 +256,7 @@ func configureAndBootstrapHA(ips []string) ([]byte, *secrets.Bundle, error) {
 			}
 			// With no CNI the node cannot report ready (its Kubernetes node stays NotReady), so only
 			// the stage is awaited; the test installs the CNI afterwards.
-			running := talosctl.SpecField(objs[0], "stage") == "running"
+			running := talosctl.SpecField(objs[0], "stage") == stageRunning
 			return "", running && (os.Getenv(cniEnv) == cniNone || talosctl.MachineStatusReady(objs[0]))
 		}); err != nil {
 			return nil, nil, err
@@ -325,13 +332,13 @@ func downHA() error {
 		dvs = append(dvs, haVMName(i)+"-iso", haVMName(i)+"-system")
 	}
 
-	args := append([]string{"-n", namespace, "delete", "vm"}, names...)
+	args := append([]string{"-n", namespace, verbDelete, "vm"}, names...)
 	args = append(args, "--wait=true", "--timeout=120s", "--ignore-not-found")
 	if _, err := utils.Run(kube.Command(args...)); err != nil {
 		return fmt.Errorf("deleting the VMs: %w", err)
 	}
 
-	args = append([]string{"-n", namespace, "delete", "dv"}, dvs...)
+	args = append([]string{"-n", namespace, verbDelete, "dv"}, dvs...)
 	args = append(args, "--wait=true", "--timeout=120s", "--ignore-not-found")
 	if _, err := utils.Run(kube.Command(args...)); err != nil {
 		return fmt.Errorf("deleting the DataVolumes: %w", err)

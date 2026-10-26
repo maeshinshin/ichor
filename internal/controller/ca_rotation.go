@@ -551,8 +551,8 @@ func (c *caRun) pass(ctx context.Context, stage string) (ctrl.Result, error) {
 
 		didApply := false
 
-		err = c.withNode(ctx, m, applyBundle, func(ctx context.Context, talos TalosClient) error {
-			current, err := talos.CurrentConfig(ctx)
+		err = c.withNode(ctx, m, applyBundle, func(dialCtx context.Context, talos TalosClient) error {
+			current, err := talos.CurrentConfig(dialCtx)
 			if err != nil {
 				return fmt.Errorf("reading %q's configuration: %w", m.Name, err)
 			}
@@ -561,11 +561,16 @@ func (c *caRun) pass(ctx context.Context, stage string) (ctrl.Result, error) {
 				return nil
 			}
 
-			if _, err := talos.DryRunApply(ctx, rendered); err != nil {
+			if _, err := talos.DryRunApply(dialCtx, rendered); err != nil {
 				return fmt.Errorf("dry-run apply to %q failed: %w", m.Name, err)
 			}
 
-			if err := talos.ApplyNoReboot(ctx, rendered); err != nil {
+			// The apply gets its own deadline: the 15s dial bound would cut it off while Talos
+			// restarts services (the Kubernetes upgrade hit exactly that).
+			applyCtx, cancelApply := context.WithTimeout(ctx, upgradeCallTimeout)
+			defer cancelApply()
+
+			if err := talos.ApplyNoReboot(applyCtx, rendered); err != nil {
 				return fmt.Errorf("applying the %s configuration to %q failed: %w", stage, m.Name, err)
 			}
 

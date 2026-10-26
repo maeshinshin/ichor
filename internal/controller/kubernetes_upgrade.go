@@ -196,7 +196,7 @@ func (a *kubernetesUpgradeAdvancer) Advance(
 	}
 
 	if hashConfig(current) != hash {
-		return false, a.begin(ctx, dialCtx, talos, cluster, m, op, current, rendered)
+		return false, a.begin(ctx, talos, cluster, m, op, current, rendered)
 	}
 
 	return a.verify(ctx, talos, cluster, m)
@@ -204,8 +204,12 @@ func (a *kubernetesUpgradeAdvancer) Advance(
 
 // begin runs the pre-checks for one node, pre-pulls the new images, and applies the rendered
 // configuration without a reboot. It reports done=false on success: verification follows.
+//
+// Every Talos call gets its own deadline derived from ctx: a context shared with the dial would
+// leave the apply whatever is left of etcdDialTimeout (15s) and fail it with DeadlineExceeded while
+// Talos is still restarting the static pods.
 func (a *kubernetesUpgradeAdvancer) begin(
-	ctx, dialCtx context.Context, talos TalosClient, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
+	ctx context.Context, talos TalosClient, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
 	op *ichorv1alpha1.TalosOperation, current, rendered []byte,
 ) error {
 	target := cluster.Spec.KubernetesVersion
@@ -227,7 +231,11 @@ func (a *kubernetesUpgradeAdvancer) begin(
 		return fmt.Errorf("kubernetes %s -> %s on node %q is not allowed: %w", from, target, node.Name, err)
 	}
 
-	talosVersion, err := talos.Version(dialCtx)
+	versionCtx, cancelVersion := context.WithTimeout(ctx, etcdDialTimeout)
+	talosVersion, err := talos.Version(versionCtx)
+
+	cancelVersion()
+
 	if err != nil {
 		return fmt.Errorf("reading %q's Talos version: %w", m.Name, err)
 	}
@@ -246,7 +254,9 @@ func (a *kubernetesUpgradeAdvancer) begin(
 			"disabled on a cluster without Argo CD) and create the operation again", msg)
 	}
 
-	a.warnRemovedAPIs(dialCtx, talos, op, target)
+	scrapeCtx, cancelScrape := context.WithTimeout(ctx, etcdDialTimeout)
+	a.warnRemovedAPIs(scrapeCtx, talos, op, target)
+	cancelScrape()
 
 	paths, err := ChangedPaths(current, rendered)
 	if err != nil {
@@ -279,7 +289,12 @@ func (a *kubernetesUpgradeAdvancer) begin(
 		}
 	}
 
-	if _, err := talos.DryRunApply(dialCtx, rendered); err != nil {
+	dryRunCtx, cancelDryRun := context.WithTimeout(ctx, etcdDialTimeout)
+	_, err = talos.DryRunApply(dryRunCtx, rendered)
+
+	cancelDryRun()
+
+	if err != nil {
 		return fmt.Errorf("dry-run apply to %q failed: %w", m.Name, err)
 	}
 
@@ -287,7 +302,10 @@ func (a *kubernetesUpgradeAdvancer) begin(
 		return fmt.Errorf("pre-pulling images on %q: %w", m.Name, err)
 	}
 
-	if err := talos.ApplyNoReboot(dialCtx, rendered); err != nil {
+	applyCtx, cancelApply := context.WithTimeout(ctx, upgradeCallTimeout)
+	defer cancelApply()
+
+	if err := talos.ApplyNoReboot(applyCtx, rendered); err != nil {
 		return fmt.Errorf("applying the rendered configuration to %q: %w", m.Name, err)
 	}
 

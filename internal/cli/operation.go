@@ -162,7 +162,7 @@ func runOperationDelete(ctx context.Context, c *apiClients, in io.Reader, out, e
 }
 
 func kindName(k pb.OperationKind) string {
-	return strings.ToLower(strings.TrimPrefix(k.String(), "OPERATION_KIND_"))
+	return strings.ReplaceAll(strings.ToLower(strings.TrimPrefix(k.String(), "OPERATION_KIND_")), "_", "-")
 }
 
 // progressLine is one line of --watch output.
@@ -183,6 +183,10 @@ func progressLine(op *pb.Operation) string {
 	}
 
 	line := fmt.Sprintf("%s %s: phase %s, %d done, %d in progress", kindName(op.GetKind()), op.GetRef().GetName(), orDash(op.GetPhase()), done, running)
+	if st := op.GetCaRotationStage(); st != "" {
+		line += ", stage " + st
+	}
+
 	if len(parts) > 0 {
 		line += " [" + strings.Join(parts, " ") + "]"
 	}
@@ -316,6 +320,11 @@ func runStartOperation(ctx context.Context, c *apiClients, in io.Reader, out, er
 	}))
 	if err != nil {
 		return err
+	}
+
+	if s.Kind == pb.OperationKind_OPERATION_KIND_CA_ROTATION {
+		_, _ = fmt.Fprintf(errw, "When it completes, the secrets bundle on your machine is stale: run 'ichor cluster bundle-export %s'.\n",
+			cluster.GetName())
 	}
 
 	if !s.Follow {

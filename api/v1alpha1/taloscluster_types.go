@@ -297,6 +297,27 @@ type TalosClusterDiscovery struct {
 	CIDRs []string `json:"cidrs,omitempty"`
 }
 
+// TalosClusterControlPlaneMetrics exposes the control-plane metrics Talos binds to localhost by
+// default (kube-controller-manager, kube-scheduler, etcd) and restricts who can scrape them with
+// Talos's ingress firewall (ADR 0069). Unset, or enabled false (the default), changes nothing.
+// +kubebuilder:validation:XValidation:rule="!self.enabled || (has(self.allowedCIDRs) && self.allowedCIDRs.size() > 0)",message="allowedCIDRs needs at least one CIDR when enabled: the metrics are never exposed without a source restriction"
+type TalosClusterControlPlaneMetrics struct {
+	// enabled binds the metrics endpoints on all addresses and adds ingress firewall rules that
+	// drop connections to those ports from any source outside allowedCIDRs.
+	// +kubebuilder:default=false
+	// +optional
+	Enabled bool `json:"enabled,omitempty"`
+
+	// allowedCIDRs are the only sources that may reach the metrics ports (TCP 10257, 10259 and
+	// 2381) on control-plane nodes. Every other port keeps Talos's default firewall action
+	// (accept). A prefix length of 0 is rejected: that would be no restriction at all.
+	// +kubebuilder:validation:MaxItems=8
+	// +kubebuilder:validation:items:MaxLength=43
+	// +kubebuilder:validation:XValidation:rule="self.all(c, isCIDR(c) && cidr(c).prefixLength() > 0)",message="allowedCIDRs must be valid CIDRs with a prefix length above 0"
+	// +optional
+	AllowedCIDRs []string `json:"allowedCIDRs,omitempty"`
+}
+
 // TalosClusterSpec defines the desired state of TalosCluster.
 type TalosClusterSpec struct {
 	// endpoint is the cluster's control-plane endpoint.
@@ -357,6 +378,11 @@ type TalosClusterSpec struct {
 	// default) disables discovery: the controller opens no connection at all (ADR 0011).
 	// +optional
 	Discovery *TalosClusterDiscovery `json:"discovery,omitempty"`
+
+	// controlPlaneMetrics exposes the control-plane metrics Talos binds locally and restricts
+	// scraping to a CIDR (ADR 0069). Unset (the default) leaves the Talos defaults alone.
+	// +optional
+	ControlPlaneMetrics *TalosClusterControlPlaneMetrics `json:"controlPlaneMetrics,omitempty"`
 
 	// registries declares this cluster's private registry mirrors and where their pull
 	// credentials live, pushed to every node through the system layer (ADR 0027,

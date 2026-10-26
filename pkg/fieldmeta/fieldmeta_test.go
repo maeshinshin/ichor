@@ -243,6 +243,8 @@ func TestAssess_NoRebootRules(t *testing.T) {
 		{"KubeAPIServerConfig args", "KubeAPIServerConfig.extraArgs.x", pathKubeProxyArgs},
 		{"KubeControllerManagerConfig args", "KubeControllerManagerConfig.extraArgs.x", pathKubeProxyArgs},
 		{"KubeSchedulerConfig args", "KubeSchedulerConfig.extraArgs.x", pathKubeProxyArgs},
+		{"NetworkRuleConfig", "NetworkRuleConfig.ingress", "cluster.etcd.extraArgs.listen-metrics-urls"},
+		{"NetworkDefaultActionConfig", "NetworkDefaultActionConfig.ingress", "cluster.etcd.extraArgs.listen-metrics-urls"},
 	}
 
 	for _, tc := range cases {

@@ -46,11 +46,12 @@ const (
 	kindKernelModuleConfig = "KernelModuleConfig"
 	kindConfig             = "Config"
 
-	cniPresetFlannel  = "flannel"
-	cniPresetCilium   = "cilium"
-	kubeProxyEnabled  = "enabled"
-	kubeProxyReplaced = "replaced"
-	testCIDR          = "192.0.2.0/24"
+	cniPresetFlannel   = "flannel"
+	cniPresetCilium    = "cilium"
+	kubeProxyEnabled   = "enabled"
+	kubeProxyReplaced  = "replaced"
+	testCIDR           = "192.0.2.0/24"
+	metricsAllowedCIDR = "10.20.0.0/16"
 
 	testRegistryHost   = "registry.example.com"
 	testMirrorEndpoint = "https://mirror.example.com"
@@ -442,6 +443,43 @@ var _ = Describe("TalosCluster", func() {
 		Entry("an IPv6 CIDR is rejected", []string{"::1/128"}, false),
 		Entry("a 5th CIDR is rejected (MaxItems=4)",
 			[]string{testCIDR, "192.0.3.0/24", "192.0.4.0/24", "192.0.5.0/24", "192.0.6.0/24"}, false),
+	)
+
+	// ADR 0069: spec.controlPlaneMetrics is off by default and never exposes without a source CIDR.
+	It("accepts a TalosCluster with no controlPlaneMetrics declared at all (the default)", func() {
+		c := newCluster(corev1.LocalObjectReference{Name: literalSecrets}, 3, "true")
+		Expect(k8sClient.Create(context.Background(), c)).To(Succeed())
+		Expect(c.Spec.ControlPlaneMetrics).To(BeNil())
+	})
+
+	DescribeTable("controlPlaneMetrics",
+		func(enabled bool, cidrs []string, accepted bool) {
+			c := newCluster(corev1.LocalObjectReference{Name: literalSecrets}, 3, "true")
+			c.Spec.ControlPlaneMetrics = &TalosClusterControlPlaneMetrics{Enabled: enabled, AllowedCIDRs: cidrs}
+
+			err := k8sClient.Create(context.Background(), c)
+			if accepted {
+				Expect(err).NotTo(HaveOccurred())
+			} else {
+				Expect(err).To(HaveOccurred())
+			}
+		},
+		Entry("enabled with an IPv4 CIDR is accepted", true, []string{metricsAllowedCIDR}, true),
+		Entry("enabled with an IPv6 CIDR is accepted", true, []string{"2001:db8::/32"}, true),
+		Entry("a single host /32 is accepted", true, []string{"10.20.0.7/32"}, true),
+		Entry("disabled with no CIDR is accepted", false, nil, true),
+		Entry("disabled with a CIDR is accepted (kept for later)", false, []string{metricsAllowedCIDR}, true),
+		Entry("enabled with no CIDR is rejected", true, nil, false),
+		Entry("enabled with an empty list is rejected", true, []string{}, false),
+		Entry("0.0.0.0/0 is rejected (no restriction)", true, []string{"0.0.0.0/0"}, false),
+		Entry("::/0 is rejected", true, []string{"::/0"}, false),
+		Entry("a bare address is rejected", true, []string{"10.20.0.1"}, false),
+		Entry("garbage is rejected", true, []string{"not-a-cidr"}, false),
+		Entry("a bad entry beside a good one is rejected", true, []string{metricsAllowedCIDR, "nope"}, false),
+		Entry("a 9th CIDR is rejected (MaxItems=8)", true, []string{
+			"10.0.0.0/24", "10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24", "10.0.4.0/24",
+			"10.0.5.0/24", "10.0.6.0/24", "10.0.7.0/24", "10.0.8.0/24",
+		}, false),
 	)
 
 	// ADR 0027: spec.registries is the reference form for a private registry's mirror and pull

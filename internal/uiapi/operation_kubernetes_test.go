@@ -34,7 +34,7 @@ func planKubernetes(t *testing.T, endpointType string, controlPlanes int, target
 	t.Helper()
 
 	objs := opObjects()
-	objs[0].(*ichorv1alpha1.TalosCluster).Spec.Endpoint = ichorv1alpha1.TalosClusterEndpoint{Type: endpointType, Address: "10.0.0.1"}
+	objs[0].(*ichorv1alpha1.TalosCluster).Spec.Endpoint = ichorv1alpha1.TalosClusterEndpoint{Type: endpointType, Address: gatewayIP}
 
 	for i := 2; i <= controlPlanes; i++ {
 		objs = append(objs, opMachine("cp"+string(rune('0'+i)), "controlplane", nil, nil))

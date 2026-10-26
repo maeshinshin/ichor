@@ -99,6 +99,12 @@ type fakeTalosClient struct {
 	bootIDErr    error
 	upgradeErr   error
 	upgradeCalls []string
+
+	// kubernetes-upgrade fields: kubernetes_upgrade_test.go's fixtures.
+	pulled     []string
+	pullErr    error
+	kubeconfig []byte
+	manifests  []map[string]any
 }
 
 func (f *fakeTalosClient) CurrentConfig(context.Context) ([]byte, error) {
@@ -151,6 +157,20 @@ func (f *fakeTalosClient) Upgrade(_ context.Context, image string) error {
 	f.upgradeCalls = append(f.upgradeCalls, image)
 
 	return f.upgradeErr
+}
+
+func (f *fakeTalosClient) PullImage(_ context.Context, image string, _ bool) error {
+	f.pulled = append(f.pulled, image)
+
+	return f.pullErr
+}
+
+func (f *fakeTalosClient) Kubeconfig(context.Context) ([]byte, error) {
+	return f.kubeconfig, nil
+}
+
+func (f *fakeTalosClient) BootstrapManifests(context.Context) ([]map[string]any, error) {
+	return f.manifests, nil
 }
 
 func clientFactory(fake *fakeTalosClient) func(

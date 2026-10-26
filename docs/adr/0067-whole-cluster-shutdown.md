@@ -136,3 +136,11 @@ cluster is off; the next successful snapshot after power-on clears it, so it was
   more than 20 minutes after the start, and I had no console to see why. "The operation becomes `Completed` by
   itself" was therefore **not observed**. A test needs node addresses that survive a stop and start (a secondary
   interface with static addresses, which the outer cluster does not have, or a single-node cluster).
+
+## Amendment (drain assumption re-checked, Talos v1.14.3)
+
+`Shutdown(force=false)` draining is confirmed in the source: `Sequencer.Shutdown`
+(`internal/app/machined/pkg/runtime/v1alpha1/v1alpha1_sequencer.go:363-381`) appends `CordonAndDrainNode` when the
+request is not forced and node registration is not skipped, and the shutting-down stage cordons the node
+(`controllers/k8s/node_cordoned_spec.go:73-76`). Nothing was changed here. The assumption that `Reboot` drains the same
+way, which ADR 0080 had also made, was wrong and is fixed there: Ichor drains before its own reboots.

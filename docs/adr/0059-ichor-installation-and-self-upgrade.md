@@ -124,3 +124,12 @@ operation is written by hand like any TalosOperation; `ichor self-upgrade --loca
 controller; snapshot garbage collection; `ttlSecondsAfterFinished` on the Job (a finished Job and its snapshot
 stay until deleted). Not verified: a real upgrade between two released versions, because there is no second
 released version yet and no cluster to run it on.
+
+## Amendment (real hardware)
+
+The executor never created the installer Job: it reads Jobs through the manager's cached client, whose cluster-wide
+informer needs `list`/`watch` on `jobs.batch` at cluster scope, while the Role grants `jobs` in `ichor-system` only
+(`jobs.batch is forbidden ... at the cluster scope`). The Job cache is now confined to the controller's namespace like
+the Secret cache, and the Role grants `get;list;watch;create` on `jobs`. A new envtest spec (ADR 0081, item 6) builds
+the manager's cache as the controller's identity bound to the generated RBAC and requires an informer to sync for every
+kind read through the cached client, so this class of mismatch fails in CI.

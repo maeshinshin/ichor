@@ -67,8 +67,8 @@ the existing `StorageEvacuation` one), so a restarted controller resumes:
    boot ID be recorded in the marker before the reboot is asked for, so a controller killed between the two resumes
    into "wait for the boot ID to change" instead of rebooting the node a second time. Each RPC has its own
    two-minute deadline, not what is left of the 15 s dial (the bug ADR 0043 and 0057 each fixed once).
-5. The reboot is the graceful one, not forced, so Talos cordons and drains the node before it stops services, as for
-   `Shutdown` and upgrade; Ichor does no cordon or drain of its own (design, Upgrades).
+5. **Ichor cordons and drains the node itself, then reboots** (amended after real hardware, see "Observed on
+   hardware"). The reboot is the graceful one, not forced, but Talos 1.14.3's `Reboot` does not drain.
 6. After the reboot: dial or read failures mean "still rebooting" until 20 minutes after the marker was set, then the
    step fails. A boot ID that changed with a node not running the rendered configuration fails. Otherwise wait for
    `Ready` and, for a control plane, the node's return to etcd, then end evacuation and clear the marker. Any failure
@@ -88,17 +88,51 @@ verify step) and every other member has to be there before the next one goes.
 - The rollout applies the machine's whole rendered configuration, not only the reboot paths: any other pending
   safe change lands in the same staged apply. The plan lists the reboot fields because those are what need
   consent.
-- A single-control-plane cluster can be rolled; the API server is down while it reboots. The plan does not special-case
-  it beyond the typed cluster name in the UI.
+- A single-control-plane cluster can be rolled; the API server is down while it reboots. The plan says so (below), and
+  the step reads the Node live and treats an unreachable API server after the reboot as "still waiting".
 - Drift on a node that Ichor did not change (`driftPolicy`) is also a reboot-requiring diff when it touches those
   fields, and also waits for the operation: drift is never auto-rebooted.
+
+## Observed on hardware, and what changed
+
+A one-control-plane, one-worker Talos v1.14.3 cluster installed by `ichor init` showed four faults. Each was fixed
+with a failing test first.
+
+- **A missing hostname paused a rollout that had nothing to do.** The executor required `spec.hostname` before the
+  "already runs the rendered configuration" step, and `ichor init` leaves it empty on the first control plane. The
+  convergence check now comes first, and `spec.hostname` is an optional override: the Kubernetes node name and etcd
+  member name come from the node's own `Nodename` resource (`TalosClient.NodeName`), or, when the node cannot be asked
+  (mid-reboot), from the Kubernetes Node whose address is the machine's Talos endpoint (`resolveNodeName`). The same
+  applies to the Talos (ADR 0043) and Kubernetes (ADR 0057) upgrade executors. A control plane's etcd check names
+  siblings that have a `spec.hostname` and counts members against approved control planes for the rest.
+- **Nothing drained.** The worker's Node never showed `SchedulingDisabled` and no pod was evicted. Reading Talos 1.14.3:
+  `Sequencer.Reboot` (`internal/app/machined/pkg/runtime/v1alpha1/v1alpha1_sequencer.go:257-271`) has only
+  `StopAllPods` and the service stops, no drain phase, while `Shutdown` (`:363-381`, drain when not forced) and
+  `Upgrade` (`:440-455`, drain unless node registration is skipped) have one; the controller that cordons reacts only
+  to the shutting-down, upgrading and resetting stages (`controllers/k8s/node_cordoned_spec.go:73-76`), not to
+  rebooting. `talosctl reboot` drains client-side behind `--drain` (`cmd/talosctl/cmd/talos/reboot.go`). This ADR's
+  earlier assumption was wrong. The executor now cordons and drains before staging (`drain.go`, the kubectl drain
+  helper `removal.go` already used, now shared): evictions through the Eviction API so PodDisruptionBudgets hold,
+  DaemonSet and mirror pods left alone, pods owned by no controller refused rather than lost. Each reconcile drains for
+  at most 90 s (the cluster lock is renewed once per reconcile and lasts five minutes) and resumes on the next; after
+  10 minutes in total the step fails, the node is uncordoned and nothing is rebooted. Two Node annotations carry the
+  state, `ichor.maesh.dev/drain-started-at` and `ichor.maesh.dev/cordoned-by-ichor`, so a restarted controller
+  resumes and a node an administrator had cordoned is not uncordoned. The node is uncordoned once it runs the
+  configuration, is Ready and (control plane) is back in etcd, and on any failure. Readiness is read live from the API
+  server, not from the cache, and an unreachable API server after the reboot is "still waiting": on one control plane
+  it is down for the length of the reboot, which the plan now says (`PlanOperationResponse.kubernetes_api_unavailable`,
+  shown by the CLI and the dialog). `Upgrade` and `Shutdown` need nothing from Ichor (ADR 0043, 0067).
+- **Reboot fields listed `KernelModuleConfig.apiVersion`.** A document that is added or removed whole is reported as the
+  document, `KernelModuleConfig br_netfilter (added)`, in `status.rebootPaths` and the `RebootRequired` message
+  (`collapseDocumentPaths`); classification still runs on the field paths.
 
 ## Not verified
 
 - Against a real node. The controller tests run the executor over a fake Talos client (the calls, their order,
   the deadlines, the resume points); no node was staged or rebooted.
-- That Talos 1.14.3's `Reboot` sequence drains the node the way its `Shutdown` and `Upgrade` sequences are read to
-  (`drain` phase unless forced). The executor relies on it and does not drain by itself.
+- The new cordon and drain against a real node: it runs over a fake clientset whose eviction deletes the pod and whose
+  PodDisruptionBudget answer is scripted (429). The fake ignores field selectors, so only the real API server's
+  `spec.nodeName` filter confirms that other nodes' pods are untouched.
 - That a staged configuration is activated on the next boot for every field in `pkg/fieldmeta`'s reboot default. The
   step fails (rather than succeeding) when the node comes back not running the rendered configuration.
 - Rolling the node the controller runs on, last: that the resumed controller finishes the step was reasoned from the

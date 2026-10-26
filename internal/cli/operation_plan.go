@@ -71,7 +71,7 @@ func planText(kind pb.OperationKind, cluster string, p *pb.PlanOperationResponse
 			"run 'ichor cluster bundle-export %s' and keep the file safe.\n", cluster)
 	}
 
-	if kind != pb.OperationKind_OPERATION_KIND_SHUTDOWN {
+	if kind != pb.OperationKind_OPERATION_KIND_SHUTDOWN && p.GetEffect() != pb.OperationEffect_OPERATION_EFFECT_NONE {
 		b.WriteString("A machine that fails pauses the operation; nothing is rolled back.\n")
 	}
 

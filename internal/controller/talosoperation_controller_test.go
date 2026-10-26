@@ -69,11 +69,15 @@ func setUpgradeOrder(m *ichorv1alpha1.TalosMachine, value string) {
 }
 
 func newOpTestOperation(clusterName string) *ichorv1alpha1.TalosOperation {
+	return newOpTestOperationOfKind(clusterName, ichorv1alpha1.TalosOperationKindTalos)
+}
+
+func newOpTestOperationOfKind(clusterName, kind string) *ichorv1alpha1.TalosOperation {
 	op := &ichorv1alpha1.TalosOperation{
 		GenerateName: "op-", Namespace: tmNamespace,
 		Spec: ichorv1alpha1.TalosOperationSpec{
 			ClusterRef: corev1.LocalObjectReference{Name: clusterName},
-			Kind:       ichorv1alpha1.TalosOperationKindTalos,
+			Kind:       kind,
 		},
 	}
 	Expect(k8sClient.Create(ctx, op)).To(Succeed())

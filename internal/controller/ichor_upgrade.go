@@ -29,10 +29,12 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/version"
+	"github.com/maeshinshin/ichor/pkg/clusterlock"
 )
 
 // Names the installer Job and its RBAC share (config/rbac/ichor-installer, the chart's
@@ -67,12 +69,9 @@ func ichorInstallerJobName(op *ichorv1alpha1.TalosOperation) string {
 // controller never replaces itself -- the Job, a separate process running the target
 // version's image, does (design, "Upgrades").
 //
-// The backbone calls an AdvanceMachineFunc per machine, and an Ichor upgrade has no
-// machines. Rather than rebuild the backbone (ADR 0026), the executor is idempotent per
-// operation: the Job is named by the operation, so every call, whichever machine it is for,
-// looks at the same Job. The first call creates it; later calls report its progress. The
-// machines then complete one at a time as soon as the Job has, which is the backbone's
-// serial control-plane order with nothing slow left to do per machine.
+// An Ichor upgrade has no machines, so the backbone calls the executor once per reconcile
+// with a nil machine (advanceIchor). The Job is named by the operation, so every call looks
+// at the same Job: the first creates it, later calls report its progress.
 //
 // Everything is re-derived per call (the ADR 0043 discipline): nothing is remembered in
 // the process, so a restart of the controller -- which the Job itself causes -- resumes
@@ -105,6 +104,33 @@ func NewIchorUpgradeAdvancer(c client.Client, controllerNamespace string) Advanc
 
 		return advanceInstallerJob(ctx, c, controllerNamespace, op, &inst)
 	}
+}
+
+// advanceIchor steps an ichor operation: no machine is selected or recorded, the operation's
+// progress is the installer Job's.
+func (r *TalosOperationReconciler) advanceIchor(
+	ctx context.Context, op *ichorv1alpha1.TalosOperation, cluster *ichorv1alpha1.TalosCluster, lock *clusterlock.Lock,
+) (ctrl.Result, error) {
+	if err := lock.Renew(ctx, controllerIdentity); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	done, err := r.Advance(ctx, cluster, nil, op)
+	if err != nil {
+		return ctrl.Result{}, r.setPhase(ctx, op, ichorv1alpha1.TalosOperationPhasePaused, reasonOperationStepFailed, err.Error())
+	}
+
+	if done {
+		if err := lock.Release(ctx, controllerIdentity); err != nil {
+			return ctrl.Result{}, err
+		}
+
+		return ctrl.Result{}, r.setPhase(ctx, op, ichorv1alpha1.TalosOperationPhaseCompleted,
+			reasonOperationComplete, "the installer Job completed")
+	}
+
+	return ctrl.Result{RequeueAfter: operationRequeueInterval}, r.setPhase(ctx, op, ichorv1alpha1.TalosOperationPhaseInProgress,
+		reasonOperationAdvancing, "the installer Job is running")
 }
 
 func advanceInstallerJob(

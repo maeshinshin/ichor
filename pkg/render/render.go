@@ -208,9 +208,17 @@ func BuildConfig(
 		ordered = dropHandedOverInlineManifest(ordered)
 	}
 
+	// The Talos side of the kube-proxy split is Ichor's, not a patch's.
+	ordered = dropProxyDisabled(ordered)
+
 	cfg, err = applyPatches(cfg, ordered)
 	if err != nil {
 		return nil, fmt.Errorf("render: applying patches: %w", err)
+	}
+
+	cfg, err = injectKubeProxy(cfg, contract, cluster)
+	if err != nil {
+		return nil, err
 	}
 
 	if _, err := cfg.ValidateAsClient(clientRuntimeMode{}); err != nil {

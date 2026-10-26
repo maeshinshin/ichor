@@ -161,6 +161,7 @@ var (
 		"up":            up,
 		"up-ha":         upHA,
 		"up-controller": upController,
+		"up-demo":       upDemo,
 	}
 	downFns = map[string]func() error{
 		"up":              down,
@@ -169,12 +170,14 @@ var (
 		"down-ha":         downHA,
 		"up-controller":   downController,
 		"down-controller": downController,
+		"up-demo":         downDemo,
+		"down-demo":       downDemo,
 	}
 )
 
 func main() {
 	if len(os.Args) != 2 || downFns[os.Args[1]] == nil {
-		fmt.Fprintln(os.Stderr, "usage: kubevirt up|down|up-ha|down-ha|up-controller|down-controller")
+		fmt.Fprintln(os.Stderr, "usage: kubevirt up|down|up-ha|down-ha|up-controller|down-controller|up-demo|down-demo")
 		os.Exit(2)
 	}
 	mode := os.Args[1]

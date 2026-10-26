@@ -318,7 +318,6 @@ export const en = {
   'patch.noPatch': 'No patch was returned.',
   'patch.chooseCluster': 'Choose a cluster first.',
   'patch.newTitle': 'New patch',
-  'patch.editTitle': 'Edit {name}',
   'patch.selectCluster': 'Select a cluster',
   'patch.intro':
     'A patch sets Talos machine config. It holds typed Talos config documents, and the controller applies them to the machines it selects: all machines of a cluster, or narrower by role, label selector or single machine. When several patches set the same value, the higher layer wins, then the higher priority. Preview the impact before you save.',
@@ -406,7 +405,6 @@ export const en = {
   'ops.title': 'Operations',
   'ops.loading': 'Loading operations…',
   'ops.empty': 'No operations.',
-  'ops.back': 'All operations',
   'ops.colKind': 'Kind',
   'ops.colState': 'State',
   'ops.colProgress': 'Progress',

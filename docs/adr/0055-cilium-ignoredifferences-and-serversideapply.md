@@ -120,3 +120,50 @@ built, the same way: observe a working Argo CD-managed Calico.
   entries (ADR 0015 amended).
 - The design's Open questions shrinks to Calico and the Kokumi case.
 - Chart 1.18.0 versus the 1.20.0 observation is an explicit gap for e2e.
+
+## E2E observation (2026-10-26)
+
+Run on a throwaway 3-control-plane Talos v1.14.3 cluster (`ichor-e2e`
+harness, `ICHOR_E2E_CNI=none`), Kubernetes v1.37.1. Cilium chart 1.18.0 was
+installed from `helm template` with the values `pkg/cni/cilium` produces,
+applied with server-side apply (the stand-in for the inline manifest: today
+`BootstrapManifest` returns only the values document, see ADR 0013). Argo CD
+v3.5.6 `core-install.yaml` was installed on the inner cluster only. The
+Application is the one `ArgoCDApplication` returns, with one added value
+(`tunnelProtocol: geneve`, below) in both the install and the Application.
+
+- **Before the first sync: OutOfSync, 25 resources, and the only difference in
+  every one is the `argocd.argoproj.io/tracking-id` annotation** (from
+  `argocd app diff --core`; no other line differed). That includes the Hubble
+  `cronJob` resources, so the chosen method produces no render difference. The
+  hand-over is "no diff" in content, but not Synced until Argo CD writes its
+  tracking annotation, which needs one sync.
+- **The Ichor Application has no `syncPolicy.automated`.** Argo CD never syncs
+  it by itself. One manual sync (13:23 JST) succeeded and the Application was
+  Synced/Healthy; the DaemonSet did not change generation and no Cilium pod
+  restarted. It stayed Synced for the 15 minutes watched (13:23 to 13:38; the
+  last reconcile was 13:38:12) with no further operation.
+- **With `automated: {prune: true, selfHeal: true}`** (as in the homelab) added
+  to the same Application: Synced/Healthy for another 10 minutes (13:40 to
+  13:50), no new sync operation, no restarts.
+- **Isolation: with `ignoreDifferences` removed** (checked: `spec.ignoreDifferences`
+  empty), with selfHeal on: still Synced/Healthy for 5 minutes (13:46 to 13:50)
+  with 9 `CiliumIdentity` objects present. So on this cluster the kind-only entry
+  was not needed, and nothing was shown about what it does. Consistent with the
+  Context above: the chart renders no `CiliumIdentity`, and they are
+  cluster-scoped objects Argo CD does not track. The entry is kept (homelab
+  reference). Not tested: a Cilium upgrade, or features that create more
+  operator-owned objects.
+- Not exercised: the `CNIHandover` controller (cluster set to
+  `handover: disabled`) and a Talos-inlined bootstrap manifest.
+
+Things the run turned up:
+
+- Argo CD `core-install.yaml` has no `default` AppProject; the Application
+  reported `InvalidSpecError` until one was created.
+- VXLAN (UDP 8472) between the nodes is dropped on `talos-cluster01`:
+  Cilium's default tunnel gave `1/3 reachable`, pod to service and pod DNS
+  timed out, and Argo CD's repo-server could not resolve anything. Switching to
+  `tunnelProtocol: geneve` fixed it at once. Cause on the outer network not
+  investigated. Any Cilium e2e on this harness needs it.
+- Chart 1.18.0 ran on Kubernetes v1.37.1 here without trouble in this short run.

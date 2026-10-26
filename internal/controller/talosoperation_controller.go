@@ -155,22 +155,9 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, err
 	}
 
-	// A shutdown that has asked every machine to stop only waits for the
-	// operator to power them on; it holds no lock (shutdown.go, ADR 0067).
-	// Same for a node shutdown (ADR 0083). A reset waits for the removal flow, which takes the
-	// cluster lock itself, so it does not hold it either.
-	if op.Spec.Kind == ichorv1alpha1.TalosOperationKindShutdown && op.Status.Phase == ichorv1alpha1.TalosOperationPhaseShutDown {
-		return r.awaitPowerOn(ctx, &op, &cluster)
-	}
-
-	if op.Spec.Kind == ichorv1alpha1.TalosOperationKindNode {
-		if op.Status.Phase == ichorv1alpha1.TalosOperationPhaseShutDown {
-			return r.awaitPowerOn(ctx, &op, &cluster)
-		}
-
-		if st := op.Status.Node; st != nil && st.Step == ichorv1alpha1.NodeStepRemoving && op.Status.FailureReason == "" {
-			return r.awaitRemoval(ctx, &op)
-		}
+	// Phases that hold no cluster lock are handled before it is taken.
+	if res, handled, err := r.restingPhase(ctx, &op, &cluster); handled {
+		return res, err
 	}
 
 	lock, err := r.acquireDisruptiveLock(ctx, &cluster, &op)
@@ -290,6 +277,36 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	return result, r.setPhase(ctx, &op, ichorv1alpha1.TalosOperationPhaseInProgress,
 		reasonOperationAdvancing, fmt.Sprintf("%d machine(s) advancing", len(toAdvance)))
+}
+
+// restingPhase handles the phases that hold no cluster lock. A shutdown that has asked every machine
+// to stop only waits for the operator to power them on (shutdown.go, ADR 0067); so does a node
+// shutdown, and a node reset waits for the removal flow, which takes the cluster lock itself (ADR 0083).
+func (r *TalosOperationReconciler) restingPhase(
+	ctx context.Context, op *ichorv1alpha1.TalosOperation, cluster *ichorv1alpha1.TalosCluster,
+) (res ctrl.Result, handled bool, err error) {
+	switch op.Spec.Kind {
+	case ichorv1alpha1.TalosOperationKindShutdown:
+		if op.Status.Phase == ichorv1alpha1.TalosOperationPhaseShutDown {
+			res, err = r.awaitPowerOn(ctx, op, cluster)
+
+			return res, true, err
+		}
+	case ichorv1alpha1.TalosOperationKindNode:
+		if op.Status.Phase == ichorv1alpha1.TalosOperationPhaseShutDown {
+			res, err = r.awaitPowerOn(ctx, op, cluster)
+
+			return res, true, err
+		}
+
+		if st := op.Status.Node; st != nil && st.Step == ichorv1alpha1.NodeStepRemoving && op.Status.FailureReason == "" {
+			res, err = r.awaitRemoval(ctx, op)
+
+			return res, true, err
+		}
+	}
+
+	return ctrl.Result{}, false, nil
 }
 
 // setMachineStatus records name's phase in op.status.machines, replacing

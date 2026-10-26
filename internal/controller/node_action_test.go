@@ -85,7 +85,7 @@ func (f *nodeFixture) reconciler() *TalosOperationReconciler {
 
 // members makes every machine's etcd list the control planes among hosts.
 func (f *nodeFixture) members(hosts ...string) {
-	var list []EtcdMember
+	list := make([]EtcdMember, 0, len(hosts))
 	for i, h := range hosts {
 		list = append(list, EtcdMember{ID: uint64(i + 1), Hostname: h})
 	}
@@ -99,7 +99,7 @@ func (f *nodeFixture) newOp(host string, spec ichorv1alpha1.TalosOperationNodeSp
 	spec.MachineRef.Name = f.machines[host].Name
 
 	op := &ichorv1alpha1.TalosOperation{}
-	op.GenerateName, op.Namespace = "node-op-", tmNamespace
+	op.GenerateName, op.Namespace = nodeOpPrefix, tmNamespace
 	op.Spec.ClusterRef.Name, op.Spec.Kind, op.Spec.Node = f.cluster.Name, ichorv1alpha1.TalosOperationKindNode, &spec
 	Expect(k8sClient.Create(ctx, op)).To(Succeed())
 
@@ -120,6 +120,8 @@ func (f *nodeFixture) unschedulable(host string) bool { return f.kube.node(host)
 func nodeSpec(action string) ichorv1alpha1.TalosOperationNodeSpec {
 	return ichorv1alpha1.TalosOperationNodeSpec{Action: action}
 }
+
+const nodeOpPrefix = "node-op-"
 
 const (
 	hostW1  = "w1"
@@ -306,7 +308,7 @@ var _ = Describe("TalosOperation node actions", func() {
 
 			for _, svc := range []string{"etcd", "apid", "trustd", "machined"} {
 				bad := &ichorv1alpha1.TalosOperation{}
-				bad.GenerateName, bad.Namespace = "node-op-", tmNamespace
+				bad.GenerateName, bad.Namespace = nodeOpPrefix, tmNamespace
 				bad.Spec.ClusterRef.Name, bad.Spec.Kind = f.cluster.Name, ichorv1alpha1.TalosOperationKindNode
 				bad.Spec.Node = &ichorv1alpha1.TalosOperationNodeSpec{
 					MachineRef: corev1.LocalObjectReference{Name: f.machines[hostW1].Name},
@@ -436,7 +438,7 @@ var _ = Describe("TalosOperation node actions", func() {
 			spec.Confirm = "something-else"
 
 			op := &ichorv1alpha1.TalosOperation{}
-			op.GenerateName, op.Namespace = "node-op-", tmNamespace
+			op.GenerateName, op.Namespace = nodeOpPrefix, tmNamespace
 			op.Spec.ClusterRef.Name, op.Spec.Kind, op.Spec.Node = f.cluster.Name, ichorv1alpha1.TalosOperationKindNode, &spec
 			Expect(k8sClient.Create(ctx, op)).NotTo(Succeed())
 		})

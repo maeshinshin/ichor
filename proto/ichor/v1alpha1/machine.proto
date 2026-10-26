@@ -45,6 +45,8 @@ message ApproveMachineRequest {
   // for rejections," not exclusive to them, so a caller that does have a
   // reason to approve (e.g. "replacing node-3, same role") can record it.
   string reason = 5;
+  // break_glass requests an emergency direct write (docs/adr/0064).
+  BreakGlass break_glass = 6;
 }
 
 message ApproveMachineResponse {
@@ -57,11 +59,17 @@ message ApproveMachineResponse {
   // (strict mode, or a machine Argo CD tracks) instead of being written
   // (docs/adr/0056).
   string pull_request_url = 3;
+  // notice is a warning for the caller, set after a break-glass write
+  // (docs/adr/0064): the Argo CD selfHeal caveat, or that the pull request
+  // could not be opened.
+  string notice = 4;
 }
 
 message RejectMachineRequest {
   ObjectRef machine = 1;
   string reason = 2;
+  // break_glass requests an emergency direct write (docs/adr/0064).
+  BreakGlass break_glass = 3;
 }
 
 message RejectMachineResponse {
@@ -70,6 +78,8 @@ message RejectMachineResponse {
   // rejection was proposed as a pull request instead of being written
   // (docs/adr/0056).
   string pull_request_url = 2;
+  // notice: see ApproveMachineResponse.notice.
+  string notice = 3;
 }
 
 enum MachineRole {

@@ -325,7 +325,9 @@ type ApproveMachineRequest struct {
 	// below -- AuditRecord.reason already documents itself as "mainly used
 	// for rejections," not exclusive to them, so a caller that does have a
 	// reason to approve (e.g. "replacing node-3, same role") can record it.
-	Reason        string `protobuf:"bytes,5,opt,name=reason,proto3" json:"reason,omitempty"`
+	Reason string `protobuf:"bytes,5,opt,name=reason,proto3" json:"reason,omitempty"`
+	// break_glass requests an emergency direct write (docs/adr/0064).
+	BreakGlass    *BreakGlass `protobuf:"bytes,6,opt,name=break_glass,json=breakGlass,proto3" json:"break_glass,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -395,6 +397,13 @@ func (x *ApproveMachineRequest) GetReason() string {
 	return ""
 }
 
+func (x *ApproveMachineRequest) GetBreakGlass() *BreakGlass {
+	if x != nil {
+		return x.BreakGlass
+	}
+	return nil
+}
+
 type ApproveMachineResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// machine is the machine as stored. When pull_request_url is set nothing
@@ -406,8 +415,12 @@ type ApproveMachineResponse struct {
 	// (strict mode, or a machine Argo CD tracks) instead of being written
 	// (docs/adr/0056).
 	PullRequestUrl string `protobuf:"bytes,3,opt,name=pull_request_url,json=pullRequestUrl,proto3" json:"pull_request_url,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// notice is a warning for the caller, set after a break-glass write
+	// (docs/adr/0064): the Argo CD selfHeal caveat, or that the pull request
+	// could not be opened.
+	Notice        string `protobuf:"bytes,4,opt,name=notice,proto3" json:"notice,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ApproveMachineResponse) Reset() {
@@ -461,10 +474,19 @@ func (x *ApproveMachineResponse) GetPullRequestUrl() string {
 	return ""
 }
 
+func (x *ApproveMachineResponse) GetNotice() string {
+	if x != nil {
+		return x.Notice
+	}
+	return ""
+}
+
 type RejectMachineRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Machine       *ObjectRef             `protobuf:"bytes,1,opt,name=machine,proto3" json:"machine,omitempty"`
-	Reason        string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Machine *ObjectRef             `protobuf:"bytes,1,opt,name=machine,proto3" json:"machine,omitempty"`
+	Reason  string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
+	// break_glass requests an emergency direct write (docs/adr/0064).
+	BreakGlass    *BreakGlass `protobuf:"bytes,3,opt,name=break_glass,json=breakGlass,proto3" json:"break_glass,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -513,6 +535,13 @@ func (x *RejectMachineRequest) GetReason() string {
 	return ""
 }
 
+func (x *RejectMachineRequest) GetBreakGlass() *BreakGlass {
+	if x != nil {
+		return x.BreakGlass
+	}
+	return nil
+}
+
 type RejectMachineResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Audit *AuditRecord           `protobuf:"bytes,1,opt,name=audit,proto3" json:"audit,omitempty"`
@@ -520,8 +549,10 @@ type RejectMachineResponse struct {
 	// rejection was proposed as a pull request instead of being written
 	// (docs/adr/0056).
 	PullRequestUrl string `protobuf:"bytes,2,opt,name=pull_request_url,json=pullRequestUrl,proto3" json:"pull_request_url,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// notice: see ApproveMachineResponse.notice.
+	Notice        string `protobuf:"bytes,3,opt,name=notice,proto3" json:"notice,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *RejectMachineResponse) Reset() {
@@ -564,6 +595,13 @@ func (x *RejectMachineResponse) GetAudit() *AuditRecord {
 func (x *RejectMachineResponse) GetPullRequestUrl() string {
 	if x != nil {
 		return x.PullRequestUrl
+	}
+	return ""
+}
+
+func (x *RejectMachineResponse) GetNotice() string {
+	if x != nil {
+		return x.Notice
 	}
 	return ""
 }
@@ -841,27 +879,33 @@ const file_ichor_v1alpha1_machine_proto_rawDesc = "" +
 	"\x11GetMachineRequest\x123\n" +
 	"\amachine\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\amachine\"G\n" +
 	"\x12GetMachineResponse\x121\n" +
-	"\amachine\x18\x01 \x01(\v2\x17.ichor.v1alpha1.MachineR\amachine\"\xc8\x02\n" +
+	"\amachine\x18\x01 \x01(\v2\x17.ichor.v1alpha1.MachineR\amachine\"\x85\x03\n" +
 	"\x15ApproveMachineRequest\x123\n" +
 	"\amachine\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\amachine\x12/\n" +
 	"\x04role\x18\x02 \x01(\x0e2\x1b.ichor.v1alpha1.MachineRoleR\x04role\x12V\n" +
 	"\vnode_labels\x18\x03 \x03(\v25.ichor.v1alpha1.ApproveMachineRequest.NodeLabelsEntryR\n" +
 	"nodeLabels\x12\x1a\n" +
 	"\bhostname\x18\x04 \x01(\tR\bhostname\x12\x16\n" +
-	"\x06reason\x18\x05 \x01(\tR\x06reason\x1a=\n" +
+	"\x06reason\x18\x05 \x01(\tR\x06reason\x12;\n" +
+	"\vbreak_glass\x18\x06 \x01(\v2\x1a.ichor.v1alpha1.BreakGlassR\n" +
+	"breakGlass\x1a=\n" +
 	"\x0fNodeLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xa8\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xc0\x01\n" +
 	"\x16ApproveMachineResponse\x121\n" +
 	"\amachine\x18\x01 \x01(\v2\x17.ichor.v1alpha1.MachineR\amachine\x121\n" +
 	"\x05audit\x18\x02 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\x12(\n" +
-	"\x10pull_request_url\x18\x03 \x01(\tR\x0epullRequestUrl\"c\n" +
+	"\x10pull_request_url\x18\x03 \x01(\tR\x0epullRequestUrl\x12\x16\n" +
+	"\x06notice\x18\x04 \x01(\tR\x06notice\"\xa0\x01\n" +
 	"\x14RejectMachineRequest\x123\n" +
 	"\amachine\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\amachine\x12\x16\n" +
-	"\x06reason\x18\x02 \x01(\tR\x06reason\"t\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason\x12;\n" +
+	"\vbreak_glass\x18\x03 \x01(\v2\x1a.ichor.v1alpha1.BreakGlassR\n" +
+	"breakGlass\"\x8c\x01\n" +
 	"\x15RejectMachineResponse\x121\n" +
 	"\x05audit\x18\x01 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\x12(\n" +
-	"\x10pull_request_url\x18\x02 \x01(\tR\x0epullRequestUrl\"b\n" +
+	"\x10pull_request_url\x18\x02 \x01(\tR\x0epullRequestUrl\x12\x16\n" +
+	"\x06notice\x18\x03 \x01(\tR\x06notice\"b\n" +
 	"\x0fMachineIdentity\x12\x12\n" +
 	"\x04uuid\x18\x01 \x01(\tR\x04uuid\x12\x16\n" +
 	"\x06serial\x18\x02 \x01(\tR\x06serial\x12#\n" +
@@ -937,9 +981,10 @@ var file_ichor_v1alpha1_machine_proto_goTypes = []any{
 	nil,                             // 13: ichor.v1alpha1.ApproveMachineRequest.NodeLabelsEntry
 	nil,                             // 14: ichor.v1alpha1.Machine.NodeLabelsEntry
 	(*ObjectRef)(nil),               // 15: ichor.v1alpha1.ObjectRef
-	(*AuditRecord)(nil),             // 16: ichor.v1alpha1.AuditRecord
-	(*timestamppb.Timestamp)(nil),   // 17: google.protobuf.Timestamp
-	(*Condition)(nil),               // 18: ichor.v1alpha1.Condition
+	(*BreakGlass)(nil),              // 16: ichor.v1alpha1.BreakGlass
+	(*AuditRecord)(nil),             // 17: ichor.v1alpha1.AuditRecord
+	(*timestamppb.Timestamp)(nil),   // 18: google.protobuf.Timestamp
+	(*Condition)(nil),               // 19: ichor.v1alpha1.Condition
 }
 var file_ichor_v1alpha1_machine_proto_depIdxs = []int32{
 	15, // 0: ichor.v1alpha1.ListMachinesRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
@@ -949,32 +994,34 @@ var file_ichor_v1alpha1_machine_proto_depIdxs = []int32{
 	15, // 4: ichor.v1alpha1.ApproveMachineRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
 	0,  // 5: ichor.v1alpha1.ApproveMachineRequest.role:type_name -> ichor.v1alpha1.MachineRole
 	13, // 6: ichor.v1alpha1.ApproveMachineRequest.node_labels:type_name -> ichor.v1alpha1.ApproveMachineRequest.NodeLabelsEntry
-	12, // 7: ichor.v1alpha1.ApproveMachineResponse.machine:type_name -> ichor.v1alpha1.Machine
-	16, // 8: ichor.v1alpha1.ApproveMachineResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
-	15, // 9: ichor.v1alpha1.RejectMachineRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
-	16, // 10: ichor.v1alpha1.RejectMachineResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
-	17, // 11: ichor.v1alpha1.MachineApprovalDecision.at:type_name -> google.protobuf.Timestamp
-	15, // 12: ichor.v1alpha1.Machine.ref:type_name -> ichor.v1alpha1.ObjectRef
-	15, // 13: ichor.v1alpha1.Machine.cluster:type_name -> ichor.v1alpha1.ObjectRef
-	10, // 14: ichor.v1alpha1.Machine.identity:type_name -> ichor.v1alpha1.MachineIdentity
-	0,  // 15: ichor.v1alpha1.Machine.role:type_name -> ichor.v1alpha1.MachineRole
-	14, // 16: ichor.v1alpha1.Machine.node_labels:type_name -> ichor.v1alpha1.Machine.NodeLabelsEntry
-	18, // 17: ichor.v1alpha1.Machine.conditions:type_name -> ichor.v1alpha1.Condition
-	1,  // 18: ichor.v1alpha1.Machine.approval_state:type_name -> ichor.v1alpha1.MachineApprovalState
-	11, // 19: ichor.v1alpha1.Machine.approval_decision:type_name -> ichor.v1alpha1.MachineApprovalDecision
-	2,  // 20: ichor.v1alpha1.MachineService.ListMachines:input_type -> ichor.v1alpha1.ListMachinesRequest
-	4,  // 21: ichor.v1alpha1.MachineService.GetMachine:input_type -> ichor.v1alpha1.GetMachineRequest
-	6,  // 22: ichor.v1alpha1.MachineService.ApproveMachine:input_type -> ichor.v1alpha1.ApproveMachineRequest
-	8,  // 23: ichor.v1alpha1.MachineService.RejectMachine:input_type -> ichor.v1alpha1.RejectMachineRequest
-	3,  // 24: ichor.v1alpha1.MachineService.ListMachines:output_type -> ichor.v1alpha1.ListMachinesResponse
-	5,  // 25: ichor.v1alpha1.MachineService.GetMachine:output_type -> ichor.v1alpha1.GetMachineResponse
-	7,  // 26: ichor.v1alpha1.MachineService.ApproveMachine:output_type -> ichor.v1alpha1.ApproveMachineResponse
-	9,  // 27: ichor.v1alpha1.MachineService.RejectMachine:output_type -> ichor.v1alpha1.RejectMachineResponse
-	24, // [24:28] is the sub-list for method output_type
-	20, // [20:24] is the sub-list for method input_type
-	20, // [20:20] is the sub-list for extension type_name
-	20, // [20:20] is the sub-list for extension extendee
-	0,  // [0:20] is the sub-list for field type_name
+	16, // 7: ichor.v1alpha1.ApproveMachineRequest.break_glass:type_name -> ichor.v1alpha1.BreakGlass
+	12, // 8: ichor.v1alpha1.ApproveMachineResponse.machine:type_name -> ichor.v1alpha1.Machine
+	17, // 9: ichor.v1alpha1.ApproveMachineResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
+	15, // 10: ichor.v1alpha1.RejectMachineRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
+	16, // 11: ichor.v1alpha1.RejectMachineRequest.break_glass:type_name -> ichor.v1alpha1.BreakGlass
+	17, // 12: ichor.v1alpha1.RejectMachineResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
+	18, // 13: ichor.v1alpha1.MachineApprovalDecision.at:type_name -> google.protobuf.Timestamp
+	15, // 14: ichor.v1alpha1.Machine.ref:type_name -> ichor.v1alpha1.ObjectRef
+	15, // 15: ichor.v1alpha1.Machine.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	10, // 16: ichor.v1alpha1.Machine.identity:type_name -> ichor.v1alpha1.MachineIdentity
+	0,  // 17: ichor.v1alpha1.Machine.role:type_name -> ichor.v1alpha1.MachineRole
+	14, // 18: ichor.v1alpha1.Machine.node_labels:type_name -> ichor.v1alpha1.Machine.NodeLabelsEntry
+	19, // 19: ichor.v1alpha1.Machine.conditions:type_name -> ichor.v1alpha1.Condition
+	1,  // 20: ichor.v1alpha1.Machine.approval_state:type_name -> ichor.v1alpha1.MachineApprovalState
+	11, // 21: ichor.v1alpha1.Machine.approval_decision:type_name -> ichor.v1alpha1.MachineApprovalDecision
+	2,  // 22: ichor.v1alpha1.MachineService.ListMachines:input_type -> ichor.v1alpha1.ListMachinesRequest
+	4,  // 23: ichor.v1alpha1.MachineService.GetMachine:input_type -> ichor.v1alpha1.GetMachineRequest
+	6,  // 24: ichor.v1alpha1.MachineService.ApproveMachine:input_type -> ichor.v1alpha1.ApproveMachineRequest
+	8,  // 25: ichor.v1alpha1.MachineService.RejectMachine:input_type -> ichor.v1alpha1.RejectMachineRequest
+	3,  // 26: ichor.v1alpha1.MachineService.ListMachines:output_type -> ichor.v1alpha1.ListMachinesResponse
+	5,  // 27: ichor.v1alpha1.MachineService.GetMachine:output_type -> ichor.v1alpha1.GetMachineResponse
+	7,  // 28: ichor.v1alpha1.MachineService.ApproveMachine:output_type -> ichor.v1alpha1.ApproveMachineResponse
+	9,  // 29: ichor.v1alpha1.MachineService.RejectMachine:output_type -> ichor.v1alpha1.RejectMachineResponse
+	26, // [26:30] is the sub-list for method output_type
+	22, // [22:26] is the sub-list for method input_type
+	22, // [22:22] is the sub-list for extension type_name
+	22, // [22:22] is the sub-list for extension extendee
+	0,  // [0:22] is the sub-list for field type_name
 }
 
 func init() { file_ichor_v1alpha1_machine_proto_init() }

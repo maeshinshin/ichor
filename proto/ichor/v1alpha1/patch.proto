@@ -64,6 +64,8 @@ message UpdatePatchRequest {
   // other field on patch replaces that object's spec wholesale, the same
   // "no partial-field merge" simplicity CreatePatch has.
   Patch patch = 1;
+  // break_glass requests an emergency direct write (docs/adr/0064).
+  BreakGlass break_glass = 2;
 }
 
 message UpdatePatchResponse {
@@ -75,10 +77,14 @@ message UpdatePatchResponse {
   // change was proposed as a pull request instead of being written
   // (docs/adr/0056).
   string pull_request_url = 3;
+  // notice: see ApproveMachineResponse.notice.
+  string notice = 4;
 }
 
 message DeletePatchRequest {
   ObjectRef patch = 1;
+  // break_glass requests an emergency direct write (docs/adr/0064).
+  BreakGlass break_glass = 2;
 }
 
 message DeletePatchResponse {
@@ -87,6 +93,8 @@ message DeletePatchResponse {
   // removal was proposed as a pull request instead of being written; nothing
   // was deleted from the cluster (docs/adr/0056).
   string pull_request_url = 2;
+  // notice: see ApproveMachineResponse.notice.
+  string notice = 3;
 }
 
 message PreviewImpactRequest {

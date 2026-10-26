@@ -83,3 +83,11 @@ Kubernetes' audit log; `prmode.SubmitPRRequest.Requester` receives the same valu
 
 **8. Secrets.** The ID token and (nonexistent) client secret are never logged, put in errors or written to
 audit; tests assert the verifier's errors do not echo the token. Nothing logs a request header.
+
+## Amendment: what an impersonated user needs for the effective config
+
+`GetEffectiveConfig` lists `TalosConfigPatch` and `TalosStorage` as the user (ADR 0062), so a user needs `get`/`list`
+on `talosclusters`, `talosmachines`, `talosconfigpatches` and `talosstorages` in the cluster's namespace; the
+chart's per-CRD `*-viewer-role` ClusterRoles grant exactly that. Without `talosstorages` list the view fails with
+Forbidden for that user. The ServiceAccount's own `list` on `talosstorages` (ADR 0018 amendment) is separate: it
+serves `ResolveSystemInputs` and the OIDC-off case.

@@ -66,6 +66,12 @@ rules:
   - list
   - update
 - apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosstorages
+  verbs:
+  - list
+- apiGroups:
   - kustomize.toolkit.fluxcd.io
   resources:
   - kustomizations

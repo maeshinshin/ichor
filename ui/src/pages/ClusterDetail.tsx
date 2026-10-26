@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'preact/hooks'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Separator } from '@/components/ui/separator'
-import { ConditionList } from '@/components/ConditionList'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { ConditionList, StatusBadge } from '@/components/ConditionList'
 import { ErrorAlert } from '@/components/ErrorAlert'
+import { Field, Fields, PageHeader } from '@/components/PageHeader'
+import { EmptyNote, PageSkeleton } from '@/components/PageStates'
+import { Section, SectionLayout, type SectionLink } from '@/components/SectionNav'
 import { StartOperationDialog } from '@/components/StartOperationDialog'
 import { HandoverPhase, RolloutKind, type Cluster } from '@/gen/ichor/v1alpha1/cluster_pb'
 import { clusterClient } from '@/lib/connect'
@@ -35,93 +37,101 @@ export function ClusterDetail({ namespace, name }: { namespace: string; name: st
   }, [namespace, name])
 
   if (error) return <ErrorAlert {...error} />
-  if (!cluster) return <p class="mt-10 text-center text-sm text-muted-foreground">{t('cluster.loading')}</p>
+  if (!cluster) return <PageSkeleton label={t('cluster.loading')} />
+
+  const ready = cluster.conditions.find((c) => c.type === 'Ready')
+  const sections: SectionLink[] = [
+    { id: 'overview', label: t('page.overview') },
+    { id: 'conditions', label: t('cluster.conditions') },
+    { id: 'rollout', label: t('cluster.rollout') },
+    { id: 'operations', label: t('cluster.operations') },
+    { id: 'handover', label: t('cluster.handover') },
+  ]
 
   return (
-    <div class="mt-6 space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle>{cluster.ref?.name}</CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-          <Field label={t('cluster.namespace')} value={cluster.ref?.namespace} />
-          <Field label={t('cluster.talosVersion')} value={cluster.talosVersion} />
-          <Field label={t('cluster.kubernetesVersion')} value={cluster.kubernetesVersion} />
-          <Field label={t('cluster.endpoint')} value={cluster.endpoint} />
-          <Field label={t('cluster.cpCount')} value={String(cluster.controlPlaneCount)} />
-          <Field label={t('cluster.cpSchedulable')} value={cluster.controlPlaneSchedulable ? t('common.yes') : t('common.no')} />
-        </CardContent>
-      </Card>
+    <>
+      <PageHeader
+        title={cluster.ref?.name ?? name}
+        kind={t('kind.cluster')}
+        badges={
+          <>
+            {ready && <StatusBadge type={ready.type} status={ready.status} />}
+            {cluster.rollout && <Badge variant="outline">{enumLabel(RolloutKind, cluster.rollout.kind)}</Badge>}
+          </>
+        }
+      />
+      <SectionLayout sections={sections}>
+        <Section id="overview" title={t('page.overview')}>
+          <Fields>
+            <Field label={t('cluster.namespace')} value={cluster.ref?.namespace} />
+            <Field label={t('cluster.talosVersion')} value={cluster.talosVersion} />
+            <Field label={t('cluster.kubernetesVersion')} value={cluster.kubernetesVersion} />
+            <Field label={t('cluster.endpoint')} value={cluster.endpoint} />
+            <Field label={t('cluster.cpCount')} value={String(cluster.controlPlaneCount)} />
+            <Field label={t('cluster.cpSchedulable')} value={cluster.controlPlaneSchedulable ? t('common.yes') : t('common.no')} />
+          </Fields>
+        </Section>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('cluster.conditions')}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm">
+        <Section id="conditions" title={t('cluster.conditions')}>
           <ConditionList conditions={cluster.conditions} />
-        </CardContent>
-      </Card>
+        </Section>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('cluster.rollout')}</CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm">
+        <Section id="rollout" title={t('cluster.rollout')}>
           {cluster.rollout ? (
-            <dl class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Fields>
               <Field label={t('cluster.rolloutKind')} value={enumLabel(RolloutKind, cluster.rollout.kind)} />
               <Field label={t('cluster.rolloutTarget')} value={cluster.rollout.targetVersion} />
               <Field label={t('cluster.rolloutPaused')} value={cluster.rollout.paused ? t('common.yes') : t('common.no')} />
               <Field label={t('cluster.rolloutProgress')} value={`${cluster.rollout.nodesDone}/${cluster.rollout.nodesTotal}`} />
               <Field label={t('cluster.rolloutPhase')} value={cluster.rollout.currentPhase} />
-            </dl>
+            </Fields>
           ) : (
-            <p class="text-muted-foreground">{t('cluster.noRollout')}</p>
+            <EmptyNote>{t('cluster.noRollout')}</EmptyNote>
           )}
-        </CardContent>
-      </Card>
+        </Section>
 
-      <Card>
-        <CardHeader className="flex flex-wrap items-center justify-between gap-2">
-          <CardTitle>{t('cluster.operations')}</CardTitle>
-          <Link to="/operations" class="text-sm text-muted-foreground hover:underline">
-            {t('ops.title')}
-          </Link>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-2">
-          {cluster.ref &&
-            (['talos', 'kubernetes', 'ichor', 'cni', 'ca-rotation', 'shutdown'] as const).map((kind) => (
-              <StartOperationDialog key={kind} kind={kind} cluster={cluster.ref!} />
-            ))}
-        </CardContent>
-      </Card>
+        <Section
+          id="operations"
+          title={t('cluster.operations')}
+          actions={
+            <Link to="/operations" class="text-sm text-muted-foreground hover:underline">
+              {t('ops.title')}
+            </Link>
+          }
+        >
+          <div class="flex flex-wrap gap-2">
+            {cluster.ref &&
+              (['talos', 'kubernetes', 'ichor', 'cni', 'ca-rotation', 'shutdown'] as const).map((kind) => (
+                <StartOperationDialog key={kind} kind={kind} cluster={cluster.ref!} />
+              ))}
+          </div>
+        </Section>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('cluster.handover')}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm">
-          {cluster.handovers.length === 0 && <p class="text-muted-foreground">{t('cluster.noHandover')}</p>}
-          {cluster.handovers.map((h, i) => (
-            <div key={h.component}>
-              {i > 0 && <Separator className="my-2" />}
-              <div class="flex items-center gap-2">
-                <span class="font-medium">{h.component}</span>
-                <Badge variant="outline">{enumLabel(HandoverPhase, h.phase)}</Badge>
-              </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
-
-function Field({ label, value }: { label: string; value: string | undefined }) {
-  return (
-    <div>
-      <dt class="text-xs text-muted-foreground">{label}</dt>
-      <dd>{value || '-'}</dd>
-    </div>
+        <Section id="handover" title={t('cluster.handover')}>
+          {cluster.handovers.length === 0 ? (
+            <EmptyNote>{t('cluster.noHandover')}</EmptyNote>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t('cluster.colComponent')}</TableHead>
+                  <TableHead>{t('cluster.colPhase')}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {cluster.handovers.map((h) => (
+                  <TableRow key={h.component}>
+                    <TableCell className="font-medium">{h.component}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{enumLabel(HandoverPhase, h.phase)}</Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </Section>
+      </SectionLayout>
+    </>
   )
 }

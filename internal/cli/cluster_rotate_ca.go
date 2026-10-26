@@ -18,94 +18,47 @@ package cli
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"io"
 
 	"github.com/spf13/cobra"
-	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
-// clusterRotateCACmd implements `ichor cluster rotate-ca`: it writes a ca-rotation TalosOperation
-// (ADR 0063). It changes nothing else; the controller runs the rotation. It writes the custom
-// resource directly through the kubeconfig, as `ichor init` does, rather than through ichor-ui:
-// a rotation is started rarely, and the operation entry points of ADR 0068 do not carry the kind.
+var clusterRotateCAFollow bool
+
+// clusterRotateCACmd implements `ichor cluster rotate-ca`: it starts a ca-rotation TalosOperation
+// (ADR 0063) through OperationService like every other start (ADR 0068), so the plan, the
+// refusals and the permission check are the ones the UI has. The controller runs the rotation.
 var clusterRotateCACmd = &cobra.Command{
 	Use:   "rotate-ca NAME",
 	Short: "Replace the cluster's Talos API and Kubernetes API certificate authorities",
 	Long: `rotate-ca starts a CA rotation operation: the Talos API CA and the Kubernetes API CA are
 replaced in three passes over every machine (accept the new CA, make it the issuer, drop the old
-one), each verified before the next. The etcd and aggregator CAs and the service-account key are not
-rotated.
+one), each verified before the next. The kubelet restarts on each machine in the passes that change
+the Kubernetes CA. The etcd and aggregator CAs and the service-account key are not rotated.
 
 Before it starts, every machine must answer, run the configuration Ichor renders for it, and every
 Kubernetes Node must be Ready; otherwise the operation pauses without changing anything. While it
 runs, the machine controller does not reconcile the cluster's machines and other disruptive
 operations are refused. It resumes by itself after the controller restarts, and does not advance past
-a step it could not verify.
+a step it could not verify. Machines held with upgrade-hold are not skipped.
 
 When it completes, the secrets bundle in the cluster has been replaced, and the copy saved on your
-machine is stale: run 'ichor cluster bundle-export NAME' and keep the file safe.`,
+machine is stale: run 'ichor cluster bundle-export NAME' and keep the file safe.
+
+It shows which machines are reconfigured and in which order, and asks for confirmation unless --yes.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		k8s, err := newKubeClient(kubeconfigPath)
-		if err != nil {
-			return err
-		}
-
-		return runRotateCA(cmd.Context(), k8s, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), apiOpts.Namespace, args[0])
+		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
+			return runStartOperation(ctx, c, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(),
+				startSpec{Kind: pb.OperationKind_OPERATION_KIND_CA_ROTATION, Cluster: args[0], Follow: clusterRotateCAFollow})
+		})
 	},
-}
-
-func runRotateCA(ctx context.Context, k8s client.Client, in io.Reader, out, errw io.Writer, namespace, name string) error {
-	var cluster ichorv1alpha1.TalosCluster
-	if err := k8s.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, &cluster); err != nil {
-		return fmt.Errorf("getting TalosCluster %s/%s: %w", namespace, name, err)
-	}
-
-	var ops ichorv1alpha1.TalosOperationList
-	if err := k8s.List(ctx, &ops, client.InNamespace(namespace)); err != nil {
-		return err
-	}
-
-	for i := range ops.Items {
-		o := &ops.Items[i]
-		if o.Spec.ClusterRef.Name == name && o.Spec.Kind == ichorv1alpha1.TalosOperationKindCARotation &&
-			o.Status.Phase != ichorv1alpha1.TalosOperationPhaseCompleted {
-			return fmt.Errorf("TalosOperation %s is already rotating this cluster's CAs", o.Name)
-		}
-	}
-
-	if !assumeYes {
-		ok, err := confirm(in, errw, fmt.Sprintf("Rotate the Talos API and Kubernetes API CAs of cluster %s/%s? "+
-			"Every machine is reconfigured three times; the secrets bundle is replaced at the end. [y/N] ", namespace, name))
-		if err != nil {
-			return err
-		}
-
-		if !ok {
-			return errors.New("aborted")
-		}
-	}
-
-	op := &ichorv1alpha1.TalosOperation{}
-	op.GenerateName, op.Namespace = name+"-ca-rotation-", namespace
-	op.Spec.ClusterRef.Name, op.Spec.Kind = name, ichorv1alpha1.TalosOperationKindCARotation
-
-	if err := k8s.Create(ctx, op); err != nil {
-		return fmt.Errorf("creating the CA rotation: %w", err)
-	}
-
-	_, err := fmt.Fprintf(out, "Started TalosOperation %s. Follow it with 'ichor operation get %s'; when it completes, "+
-		"run 'ichor cluster bundle-export %s'.\n", op.Name, op.Name, name)
-
-	return err
 }
 
 func init() {
 	clusterCmd.AddCommand(clusterRotateCACmd)
+	clusterRotateCACmd.Flags().BoolVar(&clusterRotateCAFollow, "follow", false,
+		"after creating the operation, follow its progress until it completes or a machine fails")
 	markWrites(clusterRotateCACmd)
 }

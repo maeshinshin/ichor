@@ -42,6 +42,9 @@ func planText(kind pb.OperationKind, cluster string, p *pb.PlanOperationResponse
 		b.WriteString("Every machine is POWERED OFF and stays off until you start it again. The Kubernetes API goes down.\n")
 	case pb.OperationEffect_OPERATION_EFFECT_NONE:
 		b.WriteString("No machine is touched; a Job applies the new install manifest.\n")
+	case pb.OperationEffect_OPERATION_EFFECT_CA_ROTATION:
+		fmt.Fprintf(&b, "Every machine is reconfigured once per pass (%s), without a reboot. "+
+			"The kubelet RESTARTS on each machine in the passes that change the Kubernetes CA.\n", strings.Join(p.GetStages(), ", "))
 	case pb.OperationEffect_OPERATION_EFFECT_UNSPECIFIED:
 	}
 
@@ -53,6 +56,11 @@ func planText(kind pb.OperationKind, cluster string, p *pb.PlanOperationResponse
 
 	if h := p.GetHeld(); len(h) > 0 {
 		fmt.Fprintf(&b, "Held (skipped, upgrade-hold annotation): %s\n", strings.Join(h, ", "))
+	}
+
+	if p.GetReplacesSecretsBundle() {
+		fmt.Fprintf(&b, "When it completes, the secrets bundle in the cluster is replaced and the copy on your machine is stale: "+
+			"run 'ichor cluster bundle-export %s' and keep the file safe.\n", cluster)
 	}
 
 	if kind != pb.OperationKind_OPERATION_KIND_SHUTDOWN {
@@ -77,6 +85,8 @@ func headline(kind pb.OperationKind, cluster string, p *pb.PlanOperationResponse
 		return fmt.Sprintf("Upgrade Ichor itself from %s to %s.", p.GetCurrent(), to)
 	case pb.OperationKind_OPERATION_KIND_CNI:
 		return fmt.Sprintf("Switch kube-proxy on cluster %q from %s to %s.", cluster, p.GetCurrent(), to)
+	case pb.OperationKind_OPERATION_KIND_CA_ROTATION:
+		return fmt.Sprintf("Rotate the Talos API and Kubernetes API certificate authorities (ca-rotation) of cluster %q.", cluster)
 	case pb.OperationKind_OPERATION_KIND_SHUTDOWN:
 		return fmt.Sprintf("SHUT DOWN cluster %q.", cluster)
 	case pb.OperationKind_OPERATION_KIND_UNSPECIFIED:
@@ -119,6 +129,8 @@ func orderText(kind pb.OperationKind, p *pb.PlanOperationResponse) string {
 
 	if kind == pb.OperationKind_OPERATION_KIND_SHUTDOWN {
 		b.WriteString(": workers first, drained and stopped together, then the control planes at once:\n")
+	} else if kind == pb.OperationKind_OPERATION_KIND_CA_ROTATION {
+		b.WriteString(", one at a time, control planes first; every machine is visited in each pass:\n")
 	} else {
 		fmt.Fprintf(&b, ": control planes one at a time, then workers (at most %d at once), in this order:\n", max(p.GetMaxUnavailable(), 1))
 	}

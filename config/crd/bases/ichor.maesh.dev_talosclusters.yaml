@@ -2728,6 +2728,40 @@ spec:
                   runs.
                 pattern: ^v\d+\.\d+\.\d+$
                 type: string
+              network:
+                description: |-
+                  network sets the pod and service subnets. Unset keeps Talos's defaults. It
+                  cannot change once set.
+                properties:
+                  podSubnets:
+                    description: podSubnets are the pod CIDRs, at most one per IP
+                      family.
+                    items:
+                      maxLength: 43
+                      type: string
+                    maxItems: 2
+                    type: array
+                    x-kubernetes-list-type: atomic
+                    x-kubernetes-validations:
+                    - message: podSubnets must be valid CIDRs
+                      rule: self.all(c, isCIDR(c))
+                  serviceSubnets:
+                    description: serviceSubnets are the service CIDRs, at most one
+                      per IP family.
+                    items:
+                      maxLength: 43
+                      type: string
+                    maxItems: 2
+                    type: array
+                    x-kubernetes-list-type: atomic
+                    x-kubernetes-validations:
+                    - message: serviceSubnets must be valid CIDRs
+                      rule: self.all(c, isCIDR(c))
+                type: object
+                x-kubernetes-validations:
+                - message: network cannot change after it is set; Kubernetes cannot
+                    renumber a live cluster
+                  rule: self == oldSelf
               registries:
                 description: |-
                   registries declares this cluster's private registry mirrors and where their pull

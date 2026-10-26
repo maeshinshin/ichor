@@ -648,3 +648,106 @@ var _ = Describe("TalosCluster.spec.cni", func() {
 		Expect(k8sClient.Update(context.Background(), created)).To(Succeed())
 	})
 })
+
+// Spec.network, immutable once set; spec.hostname and spec.install on TalosMachine.
+var _ = Describe("TalosCluster.spec.network", func() {
+	newNet := func(pods, svcs []string) *TalosCluster {
+		c := newCluster(corev1.LocalObjectReference{Name: literalSecrets}, 3, "true")
+		c.Spec.Network = &TalosClusterNetwork{PodSubnets: pods, ServiceSubnets: svcs}
+
+		return c
+	}
+
+	DescribeTable("subnet lists at creation",
+		func(pods, svcs []string, accepted bool) {
+			err := k8sClient.Create(context.Background(), newNet(pods, svcs))
+			if accepted {
+				Expect(err).NotTo(HaveOccurred())
+			} else {
+				Expect(err).To(HaveOccurred())
+			}
+		},
+		Entry("both ranges", []string{"10.200.0.0/16"}, []string{"10.201.0.0/16"}, true),
+		Entry("only pods", []string{"10.200.0.0/16"}, nil, true),
+		Entry("dual stack", []string{"10.200.0.0/16", "fd00:10::/48"}, nil, true),
+		Entry("a bare address is rejected", []string{"10.200.0.1"}, nil, false),
+		Entry("garbage is rejected", nil, []string{"nope"}, false),
+		Entry("a third range is rejected", []string{"10.1.0.0/16", "10.2.0.0/16", "10.3.0.0/16"}, nil, false),
+	)
+
+	It("rejects changing the subnets after creation", func() {
+		c := newNet([]string{"10.200.0.0/16"}, nil)
+		Expect(k8sClient.Create(context.Background(), c)).To(Succeed())
+
+		c.Spec.Network.PodSubnets = []string{"10.210.0.0/16"}
+		Expect(k8sClient.Update(context.Background(), c)).NotTo(Succeed())
+	})
+
+	It("accepts an update that leaves the subnets unchanged", func() {
+		c := newNet([]string{"10.200.0.0/16"}, nil)
+		Expect(k8sClient.Create(context.Background(), c)).To(Succeed())
+
+		c.Labels = map[string]string{"touched": "true"}
+		Expect(k8sClient.Update(context.Background(), c)).To(Succeed())
+	})
+})
+
+func newMachine() *TalosMachine {
+	return &TalosMachine{
+		GenerateName: "machine-",
+		Namespace:    testNamespace,
+		Spec: TalosMachineSpec{
+			ClusterRef: corev1.LocalObjectReference{Name: literalCluster},
+			Identity:   TalosMachineIdentity{UUID: "u"},
+			Endpoint:   literalNodeIP,
+		},
+	}
+}
+
+var _ = Describe("TalosMachine", func() {
+	DescribeTable("hostname is an RFC 1123 name",
+		func(hostname string, accepted bool) {
+			m := newMachine()
+			m.Spec.Hostname = hostname
+
+			err := k8sClient.Create(context.Background(), m)
+			if accepted {
+				Expect(err).NotTo(HaveOccurred())
+			} else {
+				Expect(err).To(HaveOccurred())
+			}
+		},
+		Entry("a label", "node-1", true),
+		Entry("a subdomain", "node-1.lab.example.com", true),
+		Entry("unset", "", true),
+		Entry("Japanese text", "てすと", false),
+		Entry("upper case", "Node1", false),
+		Entry("an underscore", "node_1", false),
+		Entry("a leading hyphen", "-node", false),
+		Entry("a trailing dot", "node.", false),
+		Entry("a space", "node 1", false),
+	)
+
+	DescribeTable("install.disk",
+		func(disk *TalosMachineDisk, accepted bool) {
+			m := newMachine()
+			m.Spec.Install = &TalosMachineInstall{Disk: disk}
+
+			err := k8sClient.Create(context.Background(), m)
+			if accepted {
+				Expect(err).NotTo(HaveOccurred())
+			} else {
+				Expect(err).To(HaveOccurred())
+			}
+		},
+		Entry("by WWID", &TalosMachineDisk{WWID: "naa.5000c500a1b2c3d4"}, true),
+		Entry("by serial", &TalosMachineDisk{Serial: "S3Z9NX0M"}, true),
+		Entry("by by-id path", &TalosMachineDisk{ByIDPath: "/dev/disk/by-id/nvme-Samsung_SSD_980_S64DNX0"}, true),
+		Entry("by bus path", &TalosMachineDisk{BusPath: "/pci0000:00/0000:00:17.0/ata1/host0/target0:0:0/0:0:0:0"}, true),
+		Entry("by device path", &TalosMachineDisk{DevPath: "/dev/vda"}, true),
+		Entry("no selector", &TalosMachineDisk{}, false),
+		Entry("two selectors", &TalosMachineDisk{WWID: "w", Serial: "s"}, false),
+		Entry("a by-id path outside /dev/disk/by-id", &TalosMachineDisk{ByIDPath: "/tmp/x"}, false),
+		Entry("a device path with a quote", &TalosMachineDisk{DevPath: "/dev/sd\"a"}, false),
+	)
+})

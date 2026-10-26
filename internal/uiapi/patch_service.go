@@ -146,6 +146,10 @@ func (s *Server) UpdatePatch(
 		return nil, err
 	}
 
+	if err := s.requireUntracked(ctx, p); err != nil {
+		return nil, err
+	}
+
 	if err := applyPatchSpec(&p.Spec, wire); err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
@@ -176,6 +180,10 @@ func (s *Server) DeletePatch(
 
 	p, err := s.getPatch(ctx, ref)
 	if err != nil {
+		return nil, err
+	}
+
+	if err := s.requireUntracked(ctx, p); err != nil {
 		return nil, err
 	}
 

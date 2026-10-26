@@ -29,6 +29,8 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/gitopstracking"
+	"github.com/maeshinshin/ichor/pkg/prmode"
 )
 
 // Server implements ClusterServiceHandler, MachineServiceHandler and
@@ -70,6 +72,10 @@ type Server struct {
 	// (internal/cli) sets "ichor-cli" so the audit trail says which path
 	// wrote the CR.
 	Actor string
+
+	// ArgoCDNamespace is where argocd-cm is read to tell whether Argo CD
+	// tracks a CR. Empty means "argocd".
+	ArgoCDNamespace string
 
 	// Draining is closed when the process is shutting down, so a
 	// StreamNodeLogs call in flight stops and tells its client to
@@ -131,4 +137,39 @@ func mapGetError(what string, err error) error {
 	}
 
 	return connect.NewError(connect.CodeInternal, fmt.Errorf("getting %s: %w", what, err))
+}
+
+// defaultArgoCDNamespace is where Argo CD's argocd-cm is read when
+// Server.ArgoCDNamespace is empty (the same default `ichor init --argocd`
+// uses).
+const defaultArgoCDNamespace = "argocd"
+
+// requireUntracked is the one place every write to an existing CR passes
+// through: it asks pkg/gitopstracking whether Argo CD or Flux
+// owns obj and puts the answer through pkg/prmode.Decide. No repository
+// connection is configurable yet, so hasRepoConnection is false and anything
+// tracked is read-only; opening a PR for ModeOpenPR is a later unit.
+//
+// A failed tracking check refuses the write: "cannot tell" must never turn
+// into "may write".
+func (s *Server) requireUntracked(ctx context.Context, obj client.Object) error {
+	ns := s.ArgoCDNamespace
+	if ns == "" {
+		ns = defaultArgoCDNamespace
+	}
+
+	_, by, err := gitopstracking.IsTracked(ctx, s.Client, ns, obj)
+	if err != nil {
+		return connect.NewError(connect.CodeUnavailable,
+			fmt.Errorf("cannot tell whether Argo CD or Flux tracks %q, so it is not written: %w",
+				client.ObjectKeyFromObject(obj), err))
+	}
+
+	if prmode.Decide(by, false) == prmode.ModeDirectWrite {
+		return nil
+	}
+
+	return connect.NewError(connect.CodeFailedPrecondition,
+		fmt.Errorf("%q is tracked by %s, so it is read-only here: run `ichor gitops export` to put it in Git "+
+			"and change it with a pull request", client.ObjectKeyFromObject(obj), by))
 }

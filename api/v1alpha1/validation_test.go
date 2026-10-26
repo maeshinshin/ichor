@@ -51,6 +51,8 @@ const (
 	kubeProxyEnabled   = "enabled"
 	kubeProxyReplaced  = "replaced"
 	testCIDR           = "192.0.2.0/24"
+	testTrue           = "true"
+	testPodCIDR        = "10.200.0.0/16"
 	metricsAllowedCIDR = "10.20.0.0/16"
 
 	testRegistryHost   = "registry.example.com"
@@ -624,7 +626,7 @@ var _ = Describe("TalosCluster.spec.cni", func() {
 		created := newClusterWithCNI(TalosClusterCNI{Preset: cniPresetCilium, KubeProxy: kubeProxyEnabled})
 		Expect(k8sClient.Create(context.Background(), created)).To(Succeed())
 
-		created.Labels = map[string]string{"touched": "true"}
+		created.Labels = map[string]string{"touched": testTrue}
 		Expect(k8sClient.Update(context.Background(), created)).To(Succeed())
 	})
 
@@ -667,16 +669,16 @@ var _ = Describe("TalosCluster.spec.network", func() {
 				Expect(err).To(HaveOccurred())
 			}
 		},
-		Entry("both ranges", []string{"10.200.0.0/16"}, []string{"10.201.0.0/16"}, true),
-		Entry("only pods", []string{"10.200.0.0/16"}, nil, true),
-		Entry("dual stack", []string{"10.200.0.0/16", "fd00:10::/48"}, nil, true),
+		Entry("both ranges", []string{testPodCIDR}, []string{"10.201.0.0/16"}, true),
+		Entry("only pods", []string{testPodCIDR}, nil, true),
+		Entry("dual stack", []string{testPodCIDR, "fd00:10::/48"}, nil, true),
 		Entry("a bare address is rejected", []string{"10.200.0.1"}, nil, false),
 		Entry("garbage is rejected", nil, []string{"nope"}, false),
 		Entry("a third range is rejected", []string{"10.1.0.0/16", "10.2.0.0/16", "10.3.0.0/16"}, nil, false),
 	)
 
 	It("rejects changing the subnets after creation", func() {
-		c := newNet([]string{"10.200.0.0/16"}, nil)
+		c := newNet([]string{testPodCIDR}, nil)
 		Expect(k8sClient.Create(context.Background(), c)).To(Succeed())
 
 		c.Spec.Network.PodSubnets = []string{"10.210.0.0/16"}
@@ -684,10 +686,10 @@ var _ = Describe("TalosCluster.spec.network", func() {
 	})
 
 	It("accepts an update that leaves the subnets unchanged", func() {
-		c := newNet([]string{"10.200.0.0/16"}, nil)
+		c := newNet([]string{testPodCIDR}, nil)
 		Expect(k8sClient.Create(context.Background(), c)).To(Succeed())
 
-		c.Labels = map[string]string{"touched": "true"}
+		c.Labels = map[string]string{"touched": testTrue}
 		Expect(k8sClient.Update(context.Background(), c)).To(Succeed())
 	})
 })

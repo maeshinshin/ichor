@@ -148,14 +148,12 @@ type apiClients struct {
 var errBackendRequired = errors.New("this command needs ichor-ui, because only the backend holds the read-only " +
 	"Talos identity (the CLI never talks to a node directly); run it without --local while ichor-ui is reachable")
 
-// errOIDCBackend is what a backend-only command returns while ichor-ui
-// requires OIDC: the CLI does not forward its kubeconfig credentials and has no
-// ID token to send (docs/adr/0058, point 5).
+// errOIDCBackend is returned by dialBackend when /auth/config says OIDC is
+// enabled, and is what a backend-only command returns to the user while
+// ichor-ui requires OIDC: the CLI does not forward its kubeconfig credentials
+// and has no ID token to send (docs/adr/0058, point 5).
 var errOIDCBackend = errors.New("ichor-ui requires OIDC login and the CLI cannot present an OIDC token yet " +
 	"(it never forwards kubeconfig credentials), so this command, which only the backend can serve, is unavailable")
-
-// errBackendOIDC is dialBackend's signal that /auth/config said enabled.
-var errBackendOIDC = errors.New("ichor-ui has OIDC enabled")
 
 // connectAPI returns clients for one command invocation. It tries ichor-ui
 // first; only when ichor-ui cannot be reached at all (no Service, no ready
@@ -183,9 +181,9 @@ func connectAPI(ctx context.Context, opts apiOptions, deps apiDeps, requireBacke
 		}
 
 		switch {
-		case errors.Is(err, errBackendOIDC) && requireBackend:
-			return nil, errOIDCBackend
-		case errors.Is(err, errBackendOIDC):
+		case errors.Is(err, errOIDCBackend) && requireBackend:
+			return nil, err
+		case errors.Is(err, errOIDCBackend):
 			_, _ = fmt.Fprintln(deps.Stderr, "ichor: ichor-ui requires OIDC; using your own kubeconfig and RBAC in this process instead")
 		case requireBackend:
 			return nil, fmt.Errorf("%w (ichor-ui: %v)", errBackendRequired, err)
@@ -298,7 +296,7 @@ func dialBackend(ctx context.Context, opts apiOptions, deps apiDeps) (*apiClient
 	if oidcEnabled(dctx, base) {
 		stop()
 
-		return nil, errBackendOIDC
+		return nil, errOIDCBackend
 	}
 
 	h := http.DefaultClient

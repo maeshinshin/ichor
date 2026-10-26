@@ -13,7 +13,7 @@ import { clusterClient, machineClient, operationClient, patchClient } from '@/li
 import { enumLabel } from '@/lib/enum'
 import { describeError } from '@/lib/errors'
 import { operationState, type OpState } from '@/lib/operations'
-import { machineCounts, operationCounts, type MachineLite } from '@/lib/overview'
+import { clusterReadiness, machineCounts, operationCounts, operationsLine, type MachineLite } from '@/lib/overview'
 import { opStateTone } from '@/lib/status'
 import { useT } from '@/lib/useT'
 import { Link, objectRefPath } from '@/router'
@@ -80,7 +80,8 @@ export function Overview() {
   const opStates: OpState[] = (data.ops ?? []).map((o) => operationState(o.phase, o.failureReason))
   const mc = data.machines ? machineCounts(data.machines.map((m) => ({ approval: approval(m), ready: readyOf(m) }))) : null
   const oc = data.ops ? operationCounts(opStates) : null
-  const rolling = data.clusters?.filter((c) => c.rollout).length ?? 0
+  const cr = data.clusters ? clusterReadiness(data.clusters.map((c) => c.conditions.find((x) => x.type === 'Ready')?.status ?? '')) : null
+  const rolling =data.clusters?.filter((c) => c.rollout).length ?? 0
   const na = t('overview.noAccess')
 
   return (
@@ -88,11 +89,12 @@ export function Overview() {
       <PageHeader title={t('overview.title')} />
       <div class="mb-6 grid grid-cols-2 divide-x divide-y rounded-md border bg-card lg:grid-cols-4 lg:divide-y-0">
         <Tile to="/clusters" label={t('overview.clusters')} value={data.clusters?.length}>
-          {data.clusters && (
-            <StatusText tone={rolling > 0 ? 'progress' : 'neutral'}>
-              {rolling > 0 ? t('overview.clustersRollout', { n: rolling }) : t('overview.clustersSteady')}
+          {cr && cr.total > 0 && (
+            <StatusText tone={cr.ready === cr.total ? 'good' : 'warn'}>
+              {cr.ready === cr.total ? t('overview.clustersReady', { n: cr.ready }) : t('overview.clustersSomeReady', { n: cr.ready, total: cr.total })}
             </StatusText>
           )}
+          {rolling > 0 && <StatusText tone="progress">{t('overview.clustersRollout', { n: rolling })}</StatusText>}
         </Tile>
         <Tile to="/machines" label={t('overview.machines')} value={mc?.total}>
           {mc && (
@@ -107,12 +109,19 @@ export function Overview() {
         <Tile to="/operations" label={t('overview.operations')} value={oc?.total}>
           {oc && (
             <>
-              {oc.running === 0 && oc.failed === 0 && oc.paused === 0 && (
-                <StatusText tone="neutral">{t('overview.opsAllClear')}</StatusText>
+              {operationsLine(oc).map((line) =>
+                line === 'none' ? (
+                  <StatusText key={line} tone="neutral">{t('overview.opsNone')}</StatusText>
+                ) : line === 'allCompleted' ? (
+                  <StatusText key={line} tone="good">{t('overview.opsAllCompleted')}</StatusText>
+                ) : line === 'running' ? (
+                  <StatusText key={line} tone="progress">{t('overview.opsRunning', { n: oc.running })}</StatusText>
+                ) : line === 'failed' ? (
+                  <StatusText key={line} tone="bad">{t('overview.opsFailed', { n: oc.failed })}</StatusText>
+                ) : (
+                  <StatusText key={line} tone="warn">{t('overview.opsPaused', { n: oc.paused })}</StatusText>
+                ),
               )}
-              {oc.running > 0 && <StatusText tone="progress">{t('overview.opsRunning', { n: oc.running })}</StatusText>}
-              {oc.failed > 0 && <StatusText tone="bad">{t('overview.opsFailed', { n: oc.failed })}</StatusText>}
-              {oc.paused > 0 && <StatusText tone="warn">{t('overview.opsPaused', { n: oc.paused })}</StatusText>}
             </>
           )}
         </Tile>

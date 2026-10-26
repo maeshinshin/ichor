@@ -293,6 +293,27 @@ func resolveCluster(ctx context.Context, c *apiClients, name string) (*pb.Object
 	return objectRef(apiOpts.Namespace, names[0]), nil
 }
 
+// confirmPlan shows the plan on errw and asks to proceed. --yes skips only the question; the plan
+// is always shown. what prefixes the errors.
+func confirmPlan(in io.Reader, errw io.Writer, what, text string) error {
+	if assumeYes {
+		_, _ = fmt.Fprint(errw, text)
+
+		return nil
+	}
+
+	ok, err := confirm(in, errw, text+"Proceed? [y/N] ")
+	if err != nil {
+		return fmt.Errorf("%s: reading confirmation: %w", what, err)
+	}
+
+	if !ok {
+		return fmt.Errorf("%s: aborted", what)
+	}
+
+	return nil
+}
+
 // runStartOperation is the shared body of `upgrade`, `cni kube-proxy` and
 // `cluster shutdown`: ask the server for the plan, show it, confirm (unless --yes), create.
 // The server changes the spec first and creates the operation second, and
@@ -314,19 +335,8 @@ func runStartOperation(ctx context.Context, c *apiClients, in io.Reader, out, er
 		return fmt.Errorf("%s: %s", kindName(s.Kind), b)
 	}
 
-	// --yes skips only the question; the plan is always shown.
-	text := planText(s.Kind, cluster.GetName(), plan.Msg)
-	if assumeYes {
-		_, _ = fmt.Fprint(errw, text)
-	} else {
-		ok, err := confirm(in, errw, text+"Proceed? [y/N] ")
-		if err != nil {
-			return fmt.Errorf("%s: reading confirmation: %w", kindName(s.Kind), err)
-		}
-
-		if !ok {
-			return fmt.Errorf("%s: aborted", kindName(s.Kind))
-		}
+	if err := confirmPlan(in, errw, kindName(s.Kind), planText(s.Kind, cluster.GetName(), plan.Msg)); err != nil {
+		return err
 	}
 
 	resp, err := c.Operation.CreateOperation(ctx, connect.NewRequest(&pb.CreateOperationRequest{

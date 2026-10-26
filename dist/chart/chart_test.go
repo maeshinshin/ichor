@@ -58,6 +58,12 @@ const crdSourceDir = "../../config/crd/bases"
 // checkUIBackendRBACMatchesConfig compares the two as rule sets instead.
 const ichorUIConfigRolePath = "../../config/rbac/ichor-ui/role.yaml"
 
+// controllerConfigRolePath is config/rbac/role.yaml, controller-gen's output from the
+// controller's +kubebuilder:rbac markers: a ClusterRole and a namespaced Role, both named
+// manager-role. Like ichorUIConfigRolePath it can't be copied into dist/chart, so
+// checkControllerRBACMatchesConfig compares rule sets.
+const controllerConfigRolePath = "../../config/rbac/role.yaml"
+
 const (
 	kindService                        = "Service"
 	kindSecret                         = "Secret"
@@ -119,6 +125,7 @@ func TestChartInvariants(t *testing.T) {
 			checkKubeProxySwitchPolicy(t, release, docs)
 			checkUIBackendRBACIsSeparate(t, release, docs)
 			checkUIBackendRBACMatchesConfig(t, release, docs)
+			checkControllerRBACMatchesConfig(t, release, docs)
 			checkMonitoringOptionsOffByDefault(t, release, docs)
 		})
 	}
@@ -541,6 +548,42 @@ func checkUIBackendRBACMatchesConfig(t *testing.T, release string, docs []map[st
 		ichorUIConfigRolePath, "dist/chart/templates/rbac/ichor-ui-secrets-role.yaml")
 }
 
+// checkControllerRBACMatchesConfig is checkUIBackendRBACMatchesConfig for the controller:
+// config/rbac/role.yaml's ClusterRole manager-role must equal the chart's manager-role
+// template, and its namespaced Role manager-role (the secrets rules) must equal the chart's
+// separate manager-secrets-role. The chart names are release-templated, hence the
+// "-manager-role" / "-manager-secrets-role" suffix match.
+//
+// Deliberately not compared: leader-election-role (kubebuilder's static scaffold, not
+// generated from markers), metrics-auth-role and metrics-reader (static scaffold), and the
+// per-CRD admin/editor/viewer roles (generated per kind for end users, not the controller's
+// own identity).
+func checkControllerRBACMatchesConfig(t *testing.T, release string, docs []map[string]any) {
+	t.Helper()
+
+	configDocs := loadYAMLDocs(t, controllerConfigRolePath)
+
+	checkRBACRulesMatch(t, release, "ClusterRole manager-role",
+		find(configDocs, kindClusterRole, "manager-role"),
+		findNameSuffix(docs, kindClusterRole, "-manager-role"),
+		controllerConfigRolePath, "dist/chart/templates/rbac/manager-role.yaml")
+
+	checkRBACRulesMatch(t, release, "Role manager-role (secrets)",
+		find(configDocs, kindRole, "manager-role"),
+		findNameSuffix(docs, kindRole, "-manager-secrets-role"),
+		controllerConfigRolePath, "dist/chart/templates/rbac/manager-secrets-role.yaml")
+}
+
+// findNameSuffix is find for release-templated names.
+func findNameSuffix(docs []map[string]any, kind, suffix string) map[string]any {
+	for _, d := range findAll(docs, kind) {
+		if strings.HasSuffix(nameOf(d), suffix) {
+			return d
+		}
+	}
+	return nil
+}
+
 // checkRBACRulesMatch compares want and got's rules as a set of (apiGroup, resource, verb)
 // triples, reporting any rule present in one but not the other with the exact file paths to
 // fix. Grouping (which resources/verbs share one apiGroups entry) and ordering never matter.
@@ -578,14 +621,21 @@ func checkRBACRulesMatch(t *testing.T, release, label string, want, got map[stri
 // rbacTriple is one (apiGroup, resource, verb) grant, the unit checkRBACRulesMatch compares
 // rule sets by -- independent of how a role's author chose to group resources or verbs into
 // apiGroups entries.
-type rbacTriple struct{ group, resource, verb string }
+//
+// names is the rule's resourceNames, comma-joined ("" = every name), so a name-scoped
+// grant never hides a missing grant for another name.
+type rbacTriple struct{ group, resource, verb, names string }
 
 func (r rbacTriple) String() string {
 	group := r.group
 	if group == "" {
 		group = "core"
 	}
-	return group + "/" + r.resource + ":" + r.verb
+	s := group + "/" + r.resource + ":" + r.verb
+	if r.names != "" {
+		s += " [resourceNames " + r.names + "]"
+	}
+	return s
 }
 
 // rbacTriples expands a decoded ClusterRole/Role's rules into the full set of
@@ -594,10 +644,11 @@ func rbacTriples(rules []any) map[rbacTriple]bool {
 	set := make(map[rbacTriple]bool)
 	for _, r := range rules {
 		rm, _ := r.(map[string]any)
+		names := strings.Join(stringsOf(rm["resourceNames"]), ",")
 		for _, g := range stringsOf(rm["apiGroups"]) {
 			for _, res := range stringsOf(rm["resources"]) {
 				for _, v := range stringsOf(rm["verbs"]) {
-					set[rbacTriple{g, res, v}] = true
+					set[rbacTriple{g, res, v, names}] = true
 				}
 			}
 		}

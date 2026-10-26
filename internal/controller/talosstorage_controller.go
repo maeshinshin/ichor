@@ -36,6 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/deleteguard"
 	"github.com/maeshinshin/ichor/pkg/render"
 	"github.com/maeshinshin/ichor/pkg/storage"
 )
@@ -149,23 +150,24 @@ func (r *TalosStorageReconciler) readyCondition(
 
 	var (
 		storages ichorv1alpha1.TalosStorageList
-		machines ichorv1alpha1.TalosMachineList
 		patches  ichorv1alpha1.TalosConfigPatchList
 	)
 
-	for _, l := range []client.ObjectList{&storages, &machines, &patches} {
+	for _, l := range []client.ObjectList{&storages, &patches} {
 		if err := r.List(ctx, l, client.InNamespace(ts.Namespace)); err != nil {
 			return cond, err
 		}
 	}
 
+	machines, err := deleteguard.ApprovedMachines(ctx, r.Client, ts.Namespace, cluster.Name, deleteguard.MachineFilter{})
+	if err != nil {
+		return cond, err
+	}
+
 	var governed, pending []string
 
-	for i := range machines.Items {
-		m := &machines.Items[i]
-		if m.Spec.ClusterRef.Name != cluster.Name || !m.Spec.IsApproved() {
-			continue
-		}
+	for i := range machines {
+		m := &machines[i]
 
 		chosen, err := render.StorageFor(&cluster, m, storages.Items)
 		if err != nil {

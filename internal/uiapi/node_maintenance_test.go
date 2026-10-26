@@ -49,7 +49,7 @@ var _ = Describe("NodeService reads of an approved machine still in maintenance 
 		insecure     int
 	)
 
-	dial := func(b *secrets.Bundle) (NodeTalosClient, error) {
+	dial := func(b *secrets.Bundle) (NodeTalosClient, error) { //nolint:unparam // matches the factory signature
 		if b != nil {
 			secureDialed++
 

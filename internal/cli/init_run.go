@@ -351,7 +351,10 @@ func buildInlineManifestsPatch(
 		Name: cluster.Name + "-bootstrap-manifests", Namespace: cluster.Namespace,
 		Spec: ichorv1alpha1.TalosConfigPatchSpec{
 			ClusterRef: corev1.LocalObjectReference{Name: cluster.Name},
-			Layer:      cniPatchLayer,
+			// machine.type is the first node's role, so the patch must not reach machines of
+			// another role: at the cluster layer a worker approved later rendered as a control plane.
+			Layer:  "role",
+			Target: &ichorv1alpha1.TalosConfigPatchTarget{Role: machine.Spec.Role},
 			Documents: []ichorv1alpha1.TalosConfigPatchDocument{{
 				Kind: "Config",
 				Config: &typedconfig.Config{

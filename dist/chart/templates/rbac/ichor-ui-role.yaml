@@ -32,6 +32,12 @@ rules:
   - get
   - list
 - apiGroups:
+  - argoproj.io
+  resources:
+  - applications
+  verbs:
+  - get
+- apiGroups:
   - ichor.maesh.dev
   resources:
   - talosclusters

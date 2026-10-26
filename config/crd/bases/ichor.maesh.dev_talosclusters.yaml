@@ -3659,8 +3659,8 @@ spec:
                         maxLength: 2048
                         type: string
                         x-kubernetes-validations:
-                        - message: apiURL must be an https URL
-                          rule: isURL(self) && self.startsWith('https://')
+                        - message: apiURL must be an https URL without credentials
+                          rule: isURL(self) && self.startsWith('https://') && !self.contains('@')
                       baseBranch:
                         default: main
                         description: |-
@@ -3675,8 +3675,8 @@ spec:
                         maxLength: 2048
                         type: string
                         x-kubernetes-validations:
-                        - message: cloneURL must be an https URL
-                          rule: isURL(self) && self.startsWith('https://')
+                        - message: cloneURL must be an https URL without credentials
+                          rule: isURL(self) && self.startsWith('https://') && !self.contains('@')
                       host:
                         description: host is the Git hosting API pull requests are
                           opened through.

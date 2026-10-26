@@ -30,6 +30,9 @@ bootstrap. Doing that on a workstation with no container runtime and no registry
    `init` waits for the API server before the first write. It applies Ichor's manifest before the bundle Secret, because the Secret lives
    in the namespace the manifest creates (it failed with "namespace not found"). The CRs are created with a retry while the API server
    cannot call Ichor's `failurePolicy: Fail` webhooks, whose controller `init` has only just started.
+   The bootstrap `TalosConfigPatch` (it carries `machine.type` and `certSANs`) moves from the `cluster` layer to the `role` layer
+   targeting the first node's role: at the cluster layer it forced every later machine, a worker included, to render as a control plane.
+   An existing cluster made by an older `init` keeps the cluster-layer patch; recreate it with `layer: role` and `target.role: controlplane`.
 6. **Controller RBAC and cache.** The shipped Role grants Secret `list`/`watch` in `ichor-system` only and the webhook configuration
    only by `resourceNames`, but the manager's cache listed Secrets cluster-wide and cert-controller's informer lists every
    `ValidatingWebhookConfiguration`; both were forbidden, the cert rotator's cache never synced and the pod crash-looped (the old demo hid this

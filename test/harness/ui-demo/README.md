@@ -56,12 +56,17 @@ kubectl --context $C -n ichor-e2e exec $P-tools -- env HOME=/tmp/home /tmp/ichor
 # init waits for the node, the API server and the webhooks; allow 10-15 minutes. The secrets bundle and
 # kubeconfig are under /tmp/home/.ichor/clusters/$P/ in the pod: copy them to bin/ (gitignored) at once.
 
-# 5. the worker: a TalosCluster needs spec.discovery.addresses=[$WORKER_IP] to list it, then
-ichor machine approve <name> --role worker --install-disk /dev/vda   # (--local with the kubeconfig)
+# 5. the worker: init sets no spec.discovery, so write it, wait for the pending TalosMachine, approve it.
+#    (inside the pod, KUBECONFIG=/tmp/kc, with a static kubectl copied in)
+kubectl -n ichor-system patch taloscluster $P --type merge -p '{"spec":{"discovery":{"addresses":["'$WORKER_IP'"]}}}'
+KUBECONFIG=/tmp/kc ichor machine approve <pending machine name> --role worker --install-disk /dev/vda --hostname $P-w --yes
+# both TalosMachines go Ready=True and `get nodes` shows two Ready nodes after a few minutes
 
-# 6. expose it: point Service ichor-ui-demo at the new VM (selector vm.kubevirt.io/name: $P-cp), add
-#    an inner NodePort Service for ichor-ui on 30080, then
-#    kubectl --kubeconfig bin/ui-demo.kubeconfig get nodes   # server https://192.168.0.69:6443, tls-server-name = the CP IP
+# 6. expose it: inner NodePort for ichor-ui, then repoint the outer Service
+kubectl -n ichor-system apply -f test/harness/ui-demo/inner-nodeport.yaml          # inner cluster
+sed s/__PREFIX__/$P/ test/harness/ui-demo/outer-service.yaml | kubectl --context $C -n ichor-e2e apply -f -
+# kubeconfig: init's, with server https://192.168.0.69:6443 and tls-server-name: $CP_IP (a certSAN)
+# written to bin/ui-demo.kubeconfig; `kubectl --kubeconfig bin/ui-demo.kubeconfig get nodes`
 ```
 
 Gotchas: the endpoint is the VM's pod IP and changes if the VM restarts (re-run init);

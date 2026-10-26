@@ -20,6 +20,12 @@ export const en = {
   'nav.machines': 'Machines',
   'nav.patches': 'Patches',
   'nav.gitops': 'GitOps',
+  'nav.menu': 'Navigation',
+  'nav.breadcrumb': 'Breadcrumb',
+  'nav.onThisPage': 'On this page',
+  'nav.jumpTo': 'Jump to a section',
+  'theme.toDark': 'Dark mode',
+  'theme.toLight': 'Light mode',
 
   'app.signingIn': 'Signing in...',
   'app.signInFailed': 'Sign-in failed',

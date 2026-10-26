@@ -1,15 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { ChevronDown } from 'lucide-preact'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import {
@@ -22,10 +12,12 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { NodeAction, OperationKind, type PlanOperationResponse } from '@/gen/ichor/v1alpha1/operation_pb'
 import { operationClient, machineClient } from '@/lib/connect'
 import { describeError } from '@/lib/errors'
+import { notifyDone } from '@/lib/notify'
 import {
   availableActions,
   canStart,
@@ -34,7 +26,6 @@ import {
   type NodeActionId,
 } from '@/lib/nodeActions'
 import { useT } from '@/lib/useT'
-import { Link, objectRefPath } from '@/router'
 
 type ErrorShape = { title: string; detail: string }
 
@@ -48,9 +39,6 @@ const wireAction: Record<NodeActionId, NodeAction> = {
   remove: NodeAction.REMOVE,
 }
 
-// What the page shows after an action started, until it is dismissed.
-export type NodeActionStarted = { message: string; operation?: { namespace: string; name: string } }
-
 // NodeActionsMenu is the node page's one actions menu: every node action, each opening an alert
 // dialog with the server's plan. Choosing an item writes nothing; only the dialog's
 // own button does, after the plan was shown. The UI only writes custom resources (an operation,
@@ -62,7 +50,7 @@ export function NodeActionsMenu({
   extra,
 }: {
   machine: { namespace: string; name: string; approved: boolean; deleting: boolean; role: string }
-  onStarted: (s: NodeActionStarted) => void
+  onStarted: () => void
   extra?: preact.ComponentChildren
 }) {
   const t = useT()
@@ -104,9 +92,9 @@ export function NodeActionsMenu({
           def={active}
           machine={machine}
           onClose={() => setActive(null)}
-          onStarted={(s) => {
+          onStarted={() => {
             setActive(null)
-            onStarted(s)
+            onStarted()
           }}
         />
       )}
@@ -123,7 +111,7 @@ function NodeActionDialog({
   def: NodeActionDef
   machine: { namespace: string; name: string }
   onClose: () => void
-  onStarted: (s: NodeActionStarted) => void
+  onStarted: () => void
 }) {
   const t = useT()
   const [service, setService] = useState(def.id === 'restart-service' ? restartableServices[0] : '')
@@ -180,14 +168,13 @@ function NodeActionDialog({
       const label = t(`node.action.go.${def.id}`)
       if (def.id === 'remove') {
         await machineClient.removeMachine({ machine: { namespace: machine.namespace, name: machine.name }, confirm: typed.trim() })
-        onStarted({ message: t('node.action.removed', { node: machine.name }) })
+        notifyDone(t('node.action.removed', { node: machine.name }))
+        onStarted()
         return
       }
-      const res = await operationClient.createOperation({ kind: OperationKind.NODE, node: request(typed.trim()) })
-      onStarted({
-        message: t('node.action.started', { action: label, node: machine.name }),
-        operation: res.operation?.ref ? { namespace: res.operation.ref.namespace, name: res.operation.ref.name } : undefined,
-      })
+      await operationClient.createOperation({ kind: OperationKind.NODE, node: request(typed.trim()) })
+      notifyDone(t('node.action.started', { action: label, node: machine.name }))
+      onStarted()
     } catch (err) {
       setError(describeError(err))
       setBusy(false)
@@ -195,12 +182,18 @@ function NodeActionDialog({
   }
 
   return (
-    <AlertDialog open onOpenChange={(open) => !open && !busy && onClose()}>
-      <AlertDialogContent className="max-h-[90vh] overflow-y-auto data-[size=default]:max-w-lg data-[size=default]:sm:max-w-lg">
-        <AlertDialogHeader>
-          <AlertDialogTitle>{t('node.action.title', { action: t(`node.action.${def.id}`).replace('…', ''), node: machine.name })}</AlertDialogTitle>
-          <AlertDialogDescription>{plan === null && !error ? t('node.action.checking') : ''}</AlertDialogDescription>
-        </AlertDialogHeader>
+    <ConfirmDialog
+      open
+      onOpenChange={(open) => !open && !busy && onClose()}
+      title={t('node.action.title', { action: t(`node.action.${def.id}`).replace('…', ''), node: machine.name })}
+      description={plan === null && !error ? t('node.action.checking') : undefined}
+      confirm={{
+        label: busy ? t('node.action.starting') : t(`node.action.go.${def.id}`),
+        onClick: () => void start(),
+        disabled: !startable,
+        destructive: def.destructive,
+      }}
+    >
 
         {def.id === 'restart-service' && (
           <div class="space-y-2">
@@ -283,43 +276,7 @@ function NodeActionDialog({
 
         {error && <ErrorAlert {...error} />}
 
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={busy}>{t('common.cancel')}</AlertDialogCancel>
-          <AlertDialogAction
-            variant={def.destructive ? 'destructive' : 'default'}
-            disabled={!startable}
-            onClick={(e: Event) => {
-              // The dialog stays open while the request runs, and on an error.
-              e.preventDefault()
-              void start()
-            }}
-          >
-            {busy ? t('node.action.starting') : t(`node.action.go.${def.id}`)}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    </ConfirmDialog>
   )
 }
 
-// NodeActionStartedNotice is the confirmation shown on the page after an action started.
-export function NodeActionStartedNotice({ started, onDismiss }: { started: NodeActionStarted; onDismiss: () => void }) {
-  const t = useT()
-  return (
-    <Alert className="mb-4" role="status">
-      <AlertTitle>{started.message}</AlertTitle>
-      <AlertDescription>
-        <div class="flex flex-wrap items-center gap-3">
-          {started.operation && (
-            <Link to={objectRefPath('/operations', started.operation)} class="underline">
-              {t('node.action.viewOperation')}
-            </Link>
-          )}
-          <Button size="sm" variant="ghost" onClick={onDismiss}>
-            {t('node.action.dismiss')}
-          </Button>
-        </div>
-      </AlertDescription>
-    </Alert>
-  )
-}

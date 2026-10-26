@@ -67,3 +67,5 @@ os:admin identity, which a node in maintenance mode does not trust, so an approv
 - A spec that records a UUID but whose node reports none (a weak hardware identity) is refused as a mismatch.
 - MachineStatus readability over the insecure API was not verified, so maintenance is inferred from the identity read
   succeeding rather than read as a stage.
+
+- Addendum: `spec.hostname` is rendered at the machine layer, over the patches: the `HostnameConfig` document with `auto: off` from the v1.14 contract, `machine.network.hostname` before it; changing it stays reboot-required in `pkg/fieldmeta`. Dials use `DialEndpoint()` (ADR 0086).

@@ -32,14 +32,12 @@ import (
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -90,19 +88,6 @@ var (
 // name (ADR 0081); get, update and patch can.
 // +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,verbs=list;watch
 // +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,resourceNames=ichor-validating-webhook-configuration,verbs=get;update;patch
-
-// cacheOptions confines the cached Secret informer to the controller's own namespace: the
-// controller's RBAC grants Secret list and watch only there (above), so an unrestricted
-// informer is forbidden and its cache never syncs (ADR 0081).
-func cacheOptions(namespace string) cache.Options {
-	if namespace == "" {
-		return cache.Options{}
-	}
-
-	return cache.Options{ByObject: map[client.Object]cache.ByObject{
-		&corev1.Secret{}: {Namespaces: map[string]cache.Config{namespace: {}}},
-	}}
-}
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
@@ -238,7 +223,7 @@ func main() {
 		Scheme:                 scheme,
 		Metrics:                metricsServerOptions,
 		WebhookServer:          webhookServer,
-		Cache:                  cacheOptions(os.Getenv("POD_NAMESPACE")),
+		Cache:                  controller.CacheOptions(os.Getenv("POD_NAMESPACE")),
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "61779df1.maesh.dev",

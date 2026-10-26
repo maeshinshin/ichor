@@ -60,7 +60,7 @@ func ichorInstallerJobName(op *ichorv1alpha1.TalosOperation) string {
 	return ichorInstallerJobPrefix + hex.EncodeToString(sum[:])[:10]
 }
 
-// +kubebuilder:rbac:groups=batch,namespace=ichor-system,resources=jobs,verbs=get;create
+// +kubebuilder:rbac:groups=batch,namespace=ichor-system,resources=jobs,verbs=get;list;watch;create
 
 // NewIchorUpgradeAdvancer builds the executor for TalosOperation kind: ichor (ADR 0059). It
 // launches the installer Job for IchorInstallation.spec.version and reports on it; the

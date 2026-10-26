@@ -39,6 +39,12 @@ bootstrap. Doing that on a workstation with no container runtime and no registry
    behind `cluster-admin` and `ENABLE_WEBHOOKS=false`). The Secret informer is now confined to `POD_NAMESPACE`, and `list`/`watch` on
    `validatingwebhookconfigurations` are granted without `resourceNames` (an informer cannot name its object); `get`/`update`/`patch` stay
    restricted to Ichor's one configuration. This widens the controller's read access to webhook configurations cluster-wide, read-only.
+   The same bug hit real hardware for `Job`: the self-upgrade executor reads installer Jobs through the cached client, whose cluster-wide
+   informer was forbidden (`jobs.batch is forbidden ... at the cluster scope`), so the installer Job was never created. `controller.CacheOptions`
+   (moved out of `cmd/main.go`) now scopes `Job` as well as `Secret` to `POD_NAMESPACE`, the Role grants `jobs` `list`/`watch`, and
+   `cache_rbac_test.go` builds the manager's cache as the controller's identity bound to the generated `role.yaml` under envtest and
+   requires an informer to sync for every kind read through the cached client. Pods, DaemonSets, ConfigMaps and Deployments are read through
+   the uncached `APIReader` or the direct client and need only `get`.
 7. **ichor-ui needs `POD_NAMESPACE`.** `cmd/ichor-ui` resolves the secrets bundle in `POD_NAMESPACE`, but neither the chart nor
    `config/manager-ui` set it (the old hand-built demo did, hiding it), so every machine page failed with "controller namespace is empty".
    Both now set it from the downward API, and `TestPodNamespaceFromDownwardAPI` pins it on the manager and ichor-ui containers.

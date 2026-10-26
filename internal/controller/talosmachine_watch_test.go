@@ -150,6 +150,8 @@ var _ = Describe("TalosMachine re-reconcile on render inputs", func() {
 	})
 
 	It("re-renders a TalosCluster spec change that is a render input", func() {
+		before := appliedHash()
+
 		var latest ichorv1alpha1.TalosCluster
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: clus.Name}, &latest)).To(Succeed())
 
@@ -158,11 +160,10 @@ var _ = Describe("TalosMachine re-reconcile on render inputs", func() {
 		}}
 		Expect(k8sClient.Update(ctx, &latest)).To(Succeed())
 
-		// A registry mirror needs a reboot on a Talos node, so what proves the machine was
-		// re-reconciled is its Ready reason leaving Converged for RebootRequired.
-		Eventually(func() string {
-			return readyCondition(fetchMachineIn(ns, m.Name)).Reason
-		}, settle, pollGap).Should(Equal(reasonRebootRequired))
+		// A registry mirror is read live by Talos, so the re-render is applied
+		// rather than refused with RebootRequired.
+		Eventually(appliedHash, settle, pollGap).ShouldNot(Equal(before))
+		Expect(readyCondition(fetchMachineIn(ns, m.Name)).Reason).NotTo(Equal(reasonRebootRequired))
 	})
 })
 

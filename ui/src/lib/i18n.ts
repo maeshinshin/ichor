@@ -24,6 +24,11 @@ export const en = {
   'nav.breadcrumb': 'Breadcrumb',
   'nav.onThisPage': 'On this page',
   'nav.jumpTo': 'Jump to a section',
+  'page.overview': 'Overview',
+  'kind.cluster': 'Cluster',
+  'kind.machine': 'Machine',
+  'kind.patch': 'Patch',
+  'kind.operation': 'Operation',
   'theme.toDark': 'Dark mode',
   'theme.toLight': 'Light mode',
 
@@ -99,6 +104,8 @@ export const en = {
   'cluster.rolloutPhase': 'Current phase',
   'cluster.noRollout': 'No rollout in progress.',
   'cluster.handover': 'Hand-over',
+  'cluster.colComponent': 'Component',
+  'cluster.colPhase': 'Phase',
   'cluster.noHandover': 'No hand-over components tracked.',
 
   'gitops.loading': 'Loading GitOps state…',

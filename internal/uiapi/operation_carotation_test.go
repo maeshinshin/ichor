@@ -35,6 +35,8 @@ import (
 
 // The ca-rotation kind through OperationService.
 
+const caOpsResource = "talosoperations"
+
 func caOp(phase string) *ichorv1alpha1.TalosOperation {
 	return &ichorv1alpha1.TalosOperation{
 		Name: "x", Namespace: opNS,
@@ -111,7 +113,7 @@ func TestCreateCARotationRefusedWhenTheCallerMayNotCreateOperations(t *testing.T
 	base := fake.NewClientBuilder().WithScheme(trackedScheme(t)).WithObjects(opObjects()...).Build()
 	user := interceptor.NewClient(base, interceptor.Funcs{
 		Create: func(_ context.Context, _ client.WithWatch, obj client.Object, _ ...client.CreateOption) error {
-			return apierrors.NewForbidden(schema.GroupResource{Group: ichorv1alpha1.SchemeGroupVersion.Group, Resource: "talosoperations"}, obj.GetName(), nil)
+			return apierrors.NewForbidden(schema.GroupResource{Group: ichorv1alpha1.SchemeGroupVersion.Group, Resource: caOpsResource}, obj.GetName(), nil)
 		},
 	})
 	srv := &Server{Client: base, Impersonate: func(Identity) (client.Client, error) { return user, nil }}

@@ -341,11 +341,8 @@ var _ = Describe("cniKubeProxyAdvancer", func() {
 		op := &ichorv1alpha1.TalosOperation{}
 		markCompleted(op, cp)
 
-		_, err := adv.Advance(ctx, cluster, w, op)
-		Expect(err).NotTo(HaveOccurred())
-		fw.current = fw.applyCalls[0]
-
-		done, err := adv.Advance(ctx, fetchCluster(cluster), w, op)
+		// A v1.14 worker renders no KubeProxyConfig, so there is nothing to apply to it.
+		done, err := adv.Advance(ctx, cluster, w, op)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(done).To(BeTrue())
 		Expect(admin.calls).To(Equal(1))

@@ -1,7 +1,7 @@
 # 0065. Break-glass: a direct write that also opens the matching PR
 
-Status: Accepted · Date: 2026-10-26 · Design section: GitOps and Argo CD; Validation
-Decided: break-glass is a request flag (`BreakGlass{reason}` on approve, reject, update-patch and delete-patch) that, only where the answer would otherwise be a pull request or a refusal because Argo CD tracks the resource, writes the CR directly and then opens the same pull request ADR 0056 would have opened; it is allowed only when Kubernetes RBAC says so, asked with a `SelfSubjectAccessReview` made as the user (verb `break-glass`, group `ichor.maesh.dev`, resource `talosmachines` or `talosconfigpatches`, the object's name and namespace), so Ichor keeps no list of who may; with OIDC off (the backend on its own ServiceAccount) it is refused, and the CLI's `--break-glass <reason>` always runs in-process on the caller's kubeconfig; a reason is required and goes to `AuditRecord` (action `<verb>-break-glass`), a Warning Event `BreakGlass` on the resource, and the PR title and description; Ichor never touches an Application's sync policy, so the response carries a `notice` that says the write will be reverted if the Application has `selfHeal` on, and to pause it in Argo CD until the PR merges; refusing finalizer removal except through break-glass is a webhook check of the same verb, left to the webhook owner
+Status: Accepted (UI and webhook added 2026-10-26) · Date: 2026-10-26 · Design section: GitOps and Argo CD; Validation
+Decided: break-glass is a request flag (`BreakGlass{reason}` on approve, reject, update-patch and delete-patch) that, only where the answer would otherwise be a pull request or a refusal because Argo CD tracks the resource, writes the CR directly and then opens the same pull request ADR 0056 would have opened; it is allowed only when Kubernetes RBAC says so, asked with a `SelfSubjectAccessReview` made as the user (verb `break-glass`, group `ichor.maesh.dev`, resource `talosmachines` or `talosconfigpatches`, the object's name and namespace), so Ichor keeps no list of who may; with OIDC off (the backend on its own ServiceAccount) it is refused, and the CLI's `--break-glass <reason>` always runs in-process on the caller's kubeconfig; a reason is required and goes to `AuditRecord` (action `<verb>-break-glass`), a Warning Event `BreakGlass` on the resource, and the PR title and description; Ichor never touches an Application's sync policy, so the response carries a `notice` that says the write will be reverted if the Application has `selfHeal` on, and to pause it in Argo CD until the PR merges; a validating webhook (`/validate-ichor-maesh-dev-v1alpha1-breakglass`, UPDATE and DELETE of `talosmachines` and `talosconfigpatches`, fail-closed) refuses, unless the requesting user holds the same verb (a `SubjectAccessReview` on the admission request's `userInfo`), a direct update or delete of a CR that `gitopstracking.IsTracked` reports as tracked, and the removal of an `ichor.maesh.dev/*` finalizer from an object that is being deleted; Ichor's own controller, Argo CD's application controller, Flux's kustomize and helm controllers and the two kube-system controllers that cascade deletions are exempt by exact username; when tracking cannot be determined the write is refused; the UI offers the path after a pull request or a refusal, asks for a required reason and shows the response `notice`
 
 ## Context
 
@@ -71,26 +71,74 @@ Event cannot be created the write already happened: the `notice` says so. (c) Th
 There is no `AuditRecord` custom resource; the response, the Event and the PR are the durable trail, with the API
 server's own audit log as the authoritative one. The reason is required (`InvalidArgument` when empty or blank).
 
-**6. Finalizer removal.** The only operation in this design that is safe only through break-glass is removing a
-finalizer from a resource the controller is still working on (a mid-sequence `TalosMachine`, or
-`TalosCluster`/`TalosMachine` deletion guards): it orphans a cordoned node or an etcd voter. Neither the UI nor the
-CLI removes finalizers, so there is nothing to gate in `internal/uiapi`. The rule belongs to the admission
-webhook (`internal/controller` / `internal/webhook`, another owner): reject an update that removes
-`ichor.maesh.dev/*` finalizers from an object whose `deletionTimestamp` is set, unless the requesting user holds
-the same `break-glass` verb on that resource (a `SubjectAccessReview` on `request.userInfo`). The same check is
-how the webhook's "direct writes to GitOps-managed CRs are rejected except through break-glass" can recognise a
-break-glass write, since the write reaches the API server as the user. Not done here; the verb and role are
-ready for it.
+**6. Finalizer removal and tracked writes: the webhook.** The only operation in this design that is safe only through
+break-glass is removing a finalizer from a resource the controller is still working on (a mid-sequence
+`TalosMachine`, or the deletion guards): it orphans a cordoned node or an etcd voter. Neither the UI nor the CLI
+removes finalizers, so the rule lives in the admission webhook (`internal/webhook/v1alpha1/breakglass_webhook.go`),
+which also enforces the design's "direct writes to GitOps-managed CRs are rejected except through break-glass"
+for anyone who bypasses the UI and CLI (`kubectl edit`). It is a separate webhook entry from the existing
+validators (path `/validate-ichor-maesh-dev-v1alpha1-breakglass`, `failurePolicy: Fail`, UPDATE and DELETE,
+`talosmachines` and `talosconfigpatches`), so the one rule covers both kinds and the per-kind validators stay as
+they are. In order, for each request:
 
-**7. UI.** Nothing in `ui/` changes in this PR (another change is working there). The responses already carry
-`pull_request_url`, so the existing notice shows the PR; a follow-up should send `break_glass` from a confirm
-dialog that asks for the reason and show `notice` (selfHeal warning) next to the PR link. Until then break-glass
-is CLI-only, which is also the safer default.
+1. Not UPDATE or DELETE: allowed. CREATE is not checked: a new object is not yet "a GitOps-managed CR", and a
+   check there would also stop Helm or a user creating an object that merely carries `app.kubernetes.io/instance`.
+2. The username is exempt (decision 8): allowed.
+3. A `SubjectAccessReview` is created for `userInfo` (username, UID, groups, extra), verb `break-glass`, the
+   resource and the object's name and namespace. Allowed means the request is allowed and nothing else is read.
+   Holders therefore still work when Argo CD or Flux cannot be read, which is when an incident is likely. The webhook
+   server never impersonates anyone and gains only `subjectaccessreviews` `create` (cluster scoped; `create` cannot be
+   narrowed by `resourceNames`).
+4. UPDATE that removes an `ichor.maesh.dev/*` finalizer the stored object has, while the stored object has a
+   `deletionTimestamp`: denied, tracked or not.
+5. Otherwise `gitopstracking.IsTracked` on the stored object (not the new one, so an update cannot strip the marker
+   to get past it): tracked is denied, with the message naming the manager and the verb to hold.
+
+*Cost.* An ordinary user's write to an untracked CR now costs one `SubjectAccessReview` and the reads `IsTracked`
+makes (`argocd-cm` by name, one list of Flux `Kustomization`s). All of it is uncached (`client.New`, no informer, so no
+list or watch grant on ConfigMaps) and uses RBAC the controller already has for the same check (`configmaps/argocd-cm`
+`get`, `kustomizations` `list`, ADR 0044); nothing else is added to the controller's role.
+
+**7. UI.** The dialog is offered in two situations only: after the write came back as a pull request (the PR is
+already open; the direct write then reuses it through ADR 0056's dedup) and after a refusal (`FailedPrecondition`:
+tracked and no PR possible; `PermissionDenied`). It is not asked beforehand whether the user may (no new RPC): the
+button is always offered there, and Kubernetes' refusal, whose message states the missing verb, is shown inside the
+dialog. The dialog (`BreakGlassDialog`) says what the call does (writes now, also opens the pull request) and that
+Argo CD may revert it while selfHeal is on, requires a non-blank reason (the submit button stays disabled, and
+the server refuses it as well), repeats the same call with `break_glass{reason}`, and on success shows the response
+`notice` (the selfHeal warning, or a failed PR) and the pull request link with wording that says the cluster already
+changed. It is wired into approve, reject, patch update and patch delete. The helper logic is in
+`ui/src/lib/breakGlass.ts` (reason check, request shape, when to offer).
+
+**8. Who is exempt, and how.** Exact usernames, never groups or namespaces: `system:serviceaccount:<ns>:<name>` for
+(a) Ichor's own controller (`POD_NAMESPACE` and `POD_SERVICE_ACCOUNT`, the latter from the downward API field
+`spec.serviceAccountName`, so a renamed ServiceAccount stays right), (b) Argo CD's `argocd-application-controller`
+in the Argo CD namespace (`ICHOR_ARGOCD_NAMESPACE`, default `argocd`), the identity that applies a sync, (c) Flux's
+`kustomize-controller` and `helm-controller` in `flux-system`, and (d) kube-system's `namespace-controller` and
+`generic-garbage-collector`, because a namespace or owner deletion cascades into tracked CRs and would be refused and hang. `ICHOR_BREAK_GLASS_EXEMPT_USERS` (comma separated) adds exact names for an Argo CD or Flux
+that lives elsewhere or syncs through an impersonated account. Why not a group such as `system:serviceaccounts:argocd`:
+it would also exempt `argocd-server`, which writes on behalf of people clicking in its UI, and so turn the exemption
+into a way round the rule. Why exemption at all: a refused sync breaks GitOps for everything, and Ichor's controller
+removes its own finalizers and must never wait on a human. The cost of exact names is that an Argo CD that is
+configured to impersonate per-Application accounts needs those names added; the symptom is a sync that fails with
+the webhook's message, which names the verb and the object. The controller's own writes arrive as that identity
+only when it has one: `make run` against a kubeconfig user is not exempt, but a cluster admin
+(`system:masters`) always holds every verb.
+
+**9. When tracking cannot be decided.** `IsTracked` can fail (the API is unavailable, `argocd-cm` is forbidden, the
+Flux list fails; a missing `argocd-cm` or a missing Flux CRD is "not tracked", not a failure). Then the write is
+refused with 503 and the cause in the message (ADR 0044: when it cannot be decided, do not write). That is safe
+because the usual victims are exempt before any lookup: Argo CD's sync and Ichor's controller never reach
+`IsTracked`, so an outage there cannot block GitOps or the controller, and holders of the verb skip it too. A person
+without the verb who edits while Argo CD is unreadable is refused until it is back, or until a holder writes. A
+failing `SubjectAccessReview` is refused the same way. The webhook server being down refuses all writes to these
+kinds (ADR 0006's fail-closed), unchanged, but a lookup that hangs now also holds each non-exempt admission
+request until the API server's webhook timeout (10 s default).
 
 ## Consequences
 
-- Break-glass in the UI needs the follow-up above and OIDC. Without OIDC only the CLI can use it.
-- A break-glass write is a normal write to the API server as the user, so any admission webhook sees that user.
+- Break-glass in the UI needs OIDC. Without OIDC only the CLI can use it.
+- A break-glass write is a normal write to the API server as the user, so the webhook (decision 6) sees that user and recognises the verb.
 - Two requests for the same change return the same PR (ADR 0056) but the second one still writes directly.
 - Shortcut (`ponytail:`): no break-glass for `TalosCluster` (the UI/CLI write none) and for creating a patch
   (`CreatePatch` writes a new object, which is not tracked yet).

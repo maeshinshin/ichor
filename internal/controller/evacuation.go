@@ -105,6 +105,14 @@ var (
 	longhornReplicaListGVK = schema.GroupVersionKind{Group: "longhorn.io", Version: "v1beta2", Kind: "ReplicaList"}
 )
 
+// Longhorn's own objects, read and written in whichever namespace it is installed in. The
+// verbs are the ones Begin/End/ReplicasRemaining use and no more; talosstorages is read by
+// Resolve.
+//
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosstorages,verbs=get;list;watch
+// +kubebuilder:rbac:groups=longhorn.io,resources=nodes,verbs=get;update
+// +kubebuilder:rbac:groups=longhorn.io,resources=replicas,verbs=list
+
 // Resolve implements StorageEvacuator. It only reads TalosStorage and the
 // Kubernetes Node, neither Longhorn-specific, so (unlike Begin/
 // ReplicasRemaining/End) it needs no real Longhorn CRDs to exercise in a

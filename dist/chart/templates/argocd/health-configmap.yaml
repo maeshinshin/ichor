@@ -17,4 +17,6 @@ data:
 {{ .Files.Get "files/argocd-health/TalosCluster.lua" | indent 4 }}
   resource.customizations.health.ichor.maesh.dev_TalosMachine: |
 {{ .Files.Get "files/argocd-health/TalosMachine.lua" | indent 4 }}
+  resource.customizations.health.ichor.maesh.dev_TalosStorage: |
+{{ .Files.Get "files/argocd-health/TalosStorage.lua" | indent 4 }}
 {{- end }}

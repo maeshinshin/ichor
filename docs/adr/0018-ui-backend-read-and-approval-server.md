@@ -1,8 +1,8 @@
 # 0018. UI backend: the read and approval server implementation
 
-Status: Accepted, amended four times · Date: 2026-10-25 · Design section: CLI and UI, roadmap item 5
+Status: Accepted, amended five times · Date: 2026-10-25 · Design section: CLI and UI, roadmap item 5
 
-Decided: One `Server` type implements all three handler interfaces over a single uncached client; settled the four approval refusals; fixed `loadBundle` resolving the TalosCluster's own namespace instead of the backend's, the same bug ADR 0011 had already fixed on the controller side; granted the `nodes` get/list `findKubernetesNode` had always read without it; added a chart-vs-`config/` RBAC drift test after the chart's own copy of this `ClusterRole` was found silently narrower than `config/rbac/ichor-ui/role.yaml`
+Decided: One `Server` type implements all three handler interfaces over a single uncached client; settled the four approval refusals; fixed `loadBundle` resolving the TalosCluster's own namespace instead of the backend's, the same bug ADR 0011 had already fixed on the controller side; granted the `nodes` get/list `findKubernetesNode` had always read without it; added a chart-vs-`config/` RBAC drift test after the chart's own copy of this `ClusterRole` was found silently narrower than `config/rbac/ichor-ui/role.yaml`; extended that drift test to the controller's `manager-role` and `manager-secrets-role`, which found and fixed missing `talosoperations`, Argo CD `applications` and metrics-cert Secret grants
 
 ## Context
 
@@ -662,3 +662,34 @@ for both the `ichor` and `something-else` release-name subtests, naming the
 exact missing grant and which file to fix. Restoring the verb made the
 suite pass again. `checkNoClusterWideSecretsRead` and
 `checkUIBackendRBACIsSeparate` both still pass unchanged.
+
+**The same check, extended to the controller's `manager-role`.** The drift
+check had only looked at `ichor-ui-role`, so the same drift in the
+controller's own RBAC went unseen: `config/rbac/role.yaml` (controller-gen
+output) carried `talosoperations`, `talosoperations/status` and the Argo CD
+`applications` rules, and the chart's `manager-role.yaml` had none of them
+(since `a328ca6`, which added `TalosOperation`). A Helm install would have
+been Forbidden on `TalosOperation` (no upgrade could run) and unable to read
+`Application` state (the CNI handover could never finish).
+
+`checkControllerRBACMatchesConfig` reuses `checkRBACRulesMatch` unchanged and
+compares `config/rbac/role.yaml`'s `ClusterRole manager-role` with the
+chart's `manager-role`, and its namespaced `Role manager-role` with the
+chart's `manager-secrets-role` (the chart splits secrets out; chart names are
+release-templated, so they are matched by suffix). Not compared, on purpose:
+`leader-election-role`, `metrics-auth-role` and `metrics-reader` (static
+kubebuilder scaffolds, not generated from markers) and the per-CRD
+admin/editor/viewer roles (end-user roles, not the controller's identity).
+
+The shared triple now also carries `resourceNames`; without it a name-scoped
+grant for one Secret hid a missing one for another. That immediately found a
+fourth gap: `manager-secrets-role` lacked `get/patch/update` on
+`ichor-metrics-server-cert`, which `cmd/main.go`'s cert rotator needs. Fixed
+in the chart with the other three.
+
+Proven both ways: before the chart fix the check failed naming every missing
+`talosoperations`, `talosoperations/status` and `applications` verb (and the
+three metrics-cert verbs); after it the suite passes, and removing
+`applications:watch` made it fail with `ClusterRole manager-role is missing
+argoproj.io/applications:watch (present in ../../config/rbac/role.yaml); add
+it to dist/chart/templates/rbac/manager-role.yaml`.

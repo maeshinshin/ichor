@@ -71,10 +71,27 @@ const (
 // shuttingDownError is the refusal of every disruptive operation while a
 // shutdown of the cluster has not completed. Distinguished from
 // clusterlock.HeldError and transitioningError so each gets its own reason.
-type shuttingDownError struct{ operation string }
+type shuttingDownError struct {
+	operation string
+	// rotation marks the refusal made for a CA rotation in progress (ca_rotation.go), which
+	// refuses the same work for the same reason: the nodes are not in one settled state.
+	rotation bool
+}
 
 func (e *shuttingDownError) Error() string {
+	if e.rotation {
+		return fmt.Sprintf("cluster CA rotation is in progress (TalosOperation %q); disruptive work is refused until it completes", e.operation)
+	}
+
 	return fmt.Sprintf("cluster is shutting down (TalosOperation %q); disruptive work is refused until it completes", e.operation)
+}
+
+func (e *shuttingDownError) reason() string {
+	if e.rotation {
+		return reasonOperationCARotating
+	}
+
+	return reasonOperationShuttingDown
 }
 
 // shutdownBlocker returns a *shuttingDownError when a shutdown of the cluster
@@ -96,6 +113,10 @@ func shutdownBlocker(ctx context.Context, reader client.Reader, namespace, clust
 
 	for i := range ops.Items {
 		other := &ops.Items[i]
+		if other.Spec.ClusterRef.Name == cluster && caRotationUnderway(other) && (self == nil || self.Name != other.Name) {
+			return &shuttingDownError{operation: other.Name, rotation: true}
+		}
+
 		if other.Spec.ClusterRef.Name != cluster || other.Spec.Kind != ichorv1alpha1.TalosOperationKindShutdown ||
 			other.Status.Phase == ichorv1alpha1.TalosOperationPhaseCompleted || !other.DeletionTimestamp.IsZero() {
 			continue

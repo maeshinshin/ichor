@@ -127,6 +127,7 @@ const (
 	reasonDriftCorrected           = "DriftCorrected"
 	reasonClusterTransitioning     = "ClusterTransitioning"
 	reasonClusterShuttingDown      = reasonOperationShuttingDown
+	reasonCARotationInProgress     = "CARotationInProgress"
 	reasonControlPlaneOverCap      = "ControlPlaneOverCap"
 )
 
@@ -307,6 +308,24 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	// newest approvals beyond count+1 before anything is rendered or applied.
 	if stop, err := r.holdIfOverCap(ctx, &cluster, &m); stop {
 		return ctrl.Result{RequeueAfter: overCapRecheck}, err
+	}
+
+	// A CA rotation moves every node through stages the secrets bundle does not describe: the
+	// bundle names the old CAs while the nodes already trust the new ones. Rendering from it,
+	// dialing with it or applying it would fight the rotation (and could undo a stage), so the
+	// machine is left alone until the rotation is done. Read uncached: it gates an apply.
+	rotation, err := activeCARotation(ctx, readerOrClient(r.APIReader, r.Client), m.Namespace, cluster.Name)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if rotation != "" {
+		if err := r.ready(ctx, &m, metav1.ConditionUnknown, reasonCARotationInProgress,
+			fmt.Sprintf("TalosOperation %q is rotating the cluster's CAs; this machine is not reconciled until it completes", rotation)); err != nil {
+			return ctrl.Result{}, err
+		}
+
+		return ctrl.Result{RequeueAfter: transientRecheck}, nil
 	}
 
 	// Step 1: load the bundle and gather this cluster's patches, then
@@ -538,7 +557,7 @@ func (r *TalosMachineReconciler) refuseReboot(
 	if err != nil {
 		// The transition ending or the lock being released enqueues nothing, so both poll.
 		if shuttingDown, ok := errors.AsType[*shuttingDownError](err); ok {
-			return r.retryLater(ctx, m, reasonClusterShuttingDown,
+			return r.retryLater(ctx, m, shuttingDown.reason(),
 				fmt.Sprintf("%s%s; reboot-requiring change deferred", driftNote, shuttingDown.Error()))
 		}
 		if transitioning, ok := errors.AsType[*transitioningError](err); ok {

@@ -24,6 +24,7 @@ import (
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -107,6 +108,12 @@ type TalosOperationReconciler struct {
 	TalosClient         func(ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, bundle *secrets.Bundle) (TalosClient, error)
 	ControllerNamespace string
 	NodeName            string
+
+	// NodesReady and Recorder serve the ca-rotation kind alone (ca_rotation.go, ADR 0063).
+	// NodesReady reads which Kubernetes Nodes are not Ready; Recorder raises the BundleBackupStale
+	// Event (nil skips the Event, not the condition).
+	NodesReady NodesReadyFunc
+	Recorder   record.EventRecorder
 }
 
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosoperations,verbs=get;list;watch;update;patch
@@ -125,6 +132,10 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	var op ichorv1alpha1.TalosOperation
 	if err := r.Get(ctx, req.NamespacedName, &op); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	if handled, err := r.caRotationFinalizerStep(ctx, &op); handled || err != nil {
+		return ctrl.Result{}, err
 	}
 
 	if op.Status.Phase == ichorv1alpha1.TalosOperationPhaseCompleted {
@@ -146,7 +157,7 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	if err != nil {
 		if shuttingDown, ok := errors.AsType[*shuttingDownError](err); ok {
 			return ctrl.Result{RequeueAfter: operationRequeueInterval},
-				r.setPhase(ctx, &op, ichorv1alpha1.TalosOperationPhasePaused, reasonOperationShuttingDown, shuttingDown.Error())
+				r.setPhase(ctx, &op, ichorv1alpha1.TalosOperationPhasePaused, shuttingDown.reason(), shuttingDown.Error())
 		}
 
 		if transitioning, ok := errors.AsType[*transitioningError](err); ok {
@@ -176,6 +187,10 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	if op.Spec.Kind == ichorv1alpha1.TalosOperationKindShutdown {
 		return r.advanceShutdown(ctx, &op, &cluster, lock)
+	}
+
+	if op.Spec.Kind == ichorv1alpha1.TalosOperationKindCARotation {
+		return r.advanceCARotation(ctx, &op, &cluster, lock)
 	}
 
 	if r.Advance == nil {

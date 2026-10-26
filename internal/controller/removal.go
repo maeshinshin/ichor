@@ -295,7 +295,7 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 	lock, err := r.acquireDisruptiveLock(ctx, &cluster, m, controllerIdentity, true)
 	if err != nil {
 		if shuttingDown, ok := errors.AsType[*shuttingDownError](err); ok {
-			return r.removalCondition(ctx, m, metav1.ConditionFalse, reasonClusterShuttingDown,
+			return r.removalCondition(ctx, m, metav1.ConditionFalse, shuttingDown.reason(),
 				shuttingDown.Error()+"; removal deferred")
 		}
 		if held, ok := errors.AsType[*clusterlock.HeldError](err); ok {

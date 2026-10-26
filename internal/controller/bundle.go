@@ -57,7 +57,7 @@ const bundleSecretKey = secretsbundle.SecretKey
 // namespace is never treated as "all namespaces" here -- that would turn a
 // missing POD_NAMESPACE into a silent, far broader read than intended.
 func loadBundle(
-	ctx context.Context, c client.Client, namespace string, cluster *ichorv1alpha1.TalosCluster,
+	ctx context.Context, c client.Reader, namespace string, cluster *ichorv1alpha1.TalosCluster,
 ) (*secrets.Bundle, error) {
 	if namespace == "" {
 		return nil, fmt.Errorf("loading secrets bundle: controller namespace is empty (is POD_NAMESPACE set?)")

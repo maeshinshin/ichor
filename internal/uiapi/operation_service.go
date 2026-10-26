@@ -117,6 +117,10 @@ func operationToPB(op *ichorv1alpha1.TalosOperation) *pb.Operation {
 		out.CaRotationStage = op.Status.CARotation.Stage
 	}
 
+	if op.Status.Kubernetes != nil {
+		out.KubernetesStage = op.Status.Kubernetes.Stage
+	}
+
 	if n := op.Spec.Node; n != nil {
 		out.NodeAction = nodeActionToPB(n.Action)
 		out.NodeMachine = objectRef(op.Namespace, n.MachineRef.Name)

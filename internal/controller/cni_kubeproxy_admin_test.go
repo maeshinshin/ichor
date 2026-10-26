@@ -35,7 +35,7 @@ var _ = Describe("removeKubeProxyObjects", func() {
 
 		crb := &rbacv1.ClusterRoleBinding{
 			Name:     kubeProxyName,
-			RoleRef:  rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: "system:node-proxier"},
+			RoleRef:  rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: clusterRoleKind, Name: "system:node-proxier"},
 			Subjects: []rbacv1.Subject{{Kind: "ServiceAccount", Name: kubeProxyName, Namespace: testKubeSystem}},
 		}
 		Expect(k8sClient.Create(ctx, crb)).To(Succeed())

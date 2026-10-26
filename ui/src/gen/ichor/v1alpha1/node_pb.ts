@@ -24,7 +24,7 @@ import type { Message, UnknownEnum } from "@bufbuild/protobuf";
  * Describes the file ichor/v1alpha1/node.proto.
  */
 export const file_ichor_v1alpha1_node: GenFile = /*@__PURE__*/
-  fileDesc("ChlpY2hvci92MWFscGhhMS9ub2RlLnByb3RvEg5pY2hvci52MWFscGhhMSI8Cg5HZXROb2RlUmVxdWVzdBIqCgdtYWNoaW5lGAEgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmIjsKD0dldE5vZGVSZXNwb25zZRIoCgRub2RlGAEgASgLMhouaWNob3IudjFhbHBoYTEuTm9kZURldGFpbCJHChlHZXRFZmZlY3RpdmVDb25maWdSZXF1ZXN0EioKB21hY2hpbmUYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYiTQoaR2V0RWZmZWN0aXZlQ29uZmlnUmVzcG9uc2USLwoGY29uZmlnGAEgASgLMh8uaWNob3IudjFhbHBoYTEuRWZmZWN0aXZlQ29uZmlnInUKCEhhcmR3YXJlEhQKDG1hbnVmYWN0dXJlchgBIAEoCRINCgVtb2RlbBgCIAEoCRIVCg1zZXJpYWxfbnVtYmVyGAMgASgJEhEKCWNwdV9jb3JlcxgEIAEoBRIaChJtZW1vcnlfdG90YWxfYnl0ZXMYBSABKAMimAEKBERpc2sSDAoEd3dpZBgBIAEoCRIOCgZzZXJpYWwYAiABKAkSEgoKYnlfaWRfcGF0aBgDIAEoCRIQCghidXNfcGF0aBgEIAEoCRISCgpzaXplX2J5dGVzGAUgASgDEiYKBHJvbGUYBiABKA4yGC5pY2hvci52MWFscGhhMS5EaXNrUm9sZRIQCghkZXZfcGF0aBgHIAEoCSJlChBOZXR3b3JrSW50ZXJmYWNlEgwKBG5hbWUYASABKAkSDQoFYWxpYXMYAiABKAkSFQoNcGVybWFuZW50X21hYxgDIAEoCRIKCgJ1cBgEIAEoCBIRCglhZGRyZXNzZXMYBSADKAkisgEKDVJlc291cmNlVXNhZ2USFgoOY3B1X2NvcmVzX3VzZWQYASABKAESGQoRbWVtb3J5X3VzZWRfYnl0ZXMYAiABKAMSGgoSbWVtb3J5X3RvdGFsX2J5dGVzGAMgASgDEh0KFWZpbGVzeXN0ZW1fdXNlZF9ieXRlcxgEIAEoAxIeChZmaWxlc3lzdGVtX3RvdGFsX2J5dGVzGAUgASgDEhMKC2NwdV9zYW1wbGVkGAYgASgIImYKFEt1YmVybmV0ZXNOb2RlU3RhdHVzEhEKCW5vZGVfbmFtZRgBIAEoCRINCgVyZWFkeRgCIAEoCBIXCg9rdWJlbGV0X3ZlcnNpb24YAyABKAkSEwoLc2NoZWR1bGFibGUYBCABKAgi3gIKCk5vZGVEZXRhaWwSKgoHbWFjaGluZRgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhIqCghoYXJkd2FyZRgCIAEoCzIYLmljaG9yLnYxYWxwaGExLkhhcmR3YXJlEiMKBWRpc2tzGAMgAygLMhQuaWNob3IudjFhbHBoYTEuRGlzaxI8ChJuZXR3b3JrX2ludGVyZmFjZXMYBCADKAsyIC5pY2hvci52MWFscGhhMS5OZXR3b3JrSW50ZXJmYWNlEjUKDnJlc291cmNlX3VzYWdlGAUgASgLMh0uaWNob3IudjFhbHBoYTEuUmVzb3VyY2VVc2FnZRI4CgprdWJlcm5ldGVzGAYgASgLMiQuaWNob3IudjFhbHBoYTEuS3ViZXJuZXRlc05vZGVTdGF0dXMSJAoca3ViZXJuZXRlc19wZXJtaXNzaW9uX2RlbmllZBgHIAEoCCJKCgxDb25maWdPcmlnaW4SKgoFbGF5ZXIYASABKA4yGy5pY2hvci52MWFscGhhMS5Db25maWdMYXllchIOCgZzb3VyY2UYAiABKAkicQoURWZmZWN0aXZlQ29uZmlnVmFsdWUSDAoEcGF0aBgBIAEoCRINCgV2YWx1ZRgCIAEoCRIOCgZzZWNyZXQYAyABKAgSLAoGb3JpZ2luGAQgASgLMhwuaWNob3IudjFhbHBoYTEuQ29uZmlnT3JpZ2luInMKD0VmZmVjdGl2ZUNvbmZpZxIqCgdtYWNoaW5lGAEgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmEjQKBnZhbHVlcxgCIAMoCzIkLmljaG9yLnYxYWxwaGExLkVmZmVjdGl2ZUNvbmZpZ1ZhbHVlIp8BChVTdHJlYW1Ob2RlTG9nc1JlcXVlc3QSKwoIbWFjaGluZXMYASADKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYSFAoMcmVzdW1lX3Rva2VuGAIgASgJEg8KB3NlcnZpY2UYAyABKAkSEgoKdGFpbF9saW5lcxgEIAEoBRITCgZmb2xsb3cYBSABKAhIAIgBAUIJCgdfZm9sbG93IpUBChZTdHJlYW1Ob2RlTG9nc1Jlc3BvbnNlEioKB21hY2hpbmUYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYSKAoEdGltZRgCIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASDwoHbWVzc2FnZRgDIAEoCRIUCgxyZXN1bWVfdG9rZW4YBCABKAkqnAEKCERpc2tSb2xlEhkKFURJU0tfUk9MRV9VTlNQRUNJRklFRBAAEhQKEERJU0tfUk9MRV9TWVNURU0QARIXChNESVNLX1JPTEVfRVBIRU1FUkFMEAISFQoRRElTS19ST0xFX1NUT1JBR0UQAxIZChVESVNLX1JPTEVfVVNFUl9WT0xVTUUQBBIUChBESVNLX1JPTEVfVU5VU0VEEAUqqgEKC0NvbmZpZ0xheWVyEhwKGENPTkZJR19MQVlFUl9VTlNQRUNJRklFRBAAEhcKE0NPTkZJR19MQVlFUl9TWVNURU0QARIYChRDT05GSUdfTEFZRVJfQ0xVU1RFUhACEhUKEUNPTkZJR19MQVlFUl9ST0xFEAMSGQoVQ09ORklHX0xBWUVSX1NFTEVDVE9SEAQSGAoUQ09ORklHX0xBWUVSX01BQ0hJTkUQBTKJBAoLTm9kZVNlcnZpY2USSgoHR2V0Tm9kZRIeLmljaG9yLnYxYWxwaGExLkdldE5vZGVSZXF1ZXN0Gh8uaWNob3IudjFhbHBoYTEuR2V0Tm9kZVJlc3BvbnNlEmsKEkdldEVmZmVjdGl2ZUNvbmZpZxIpLmljaG9yLnYxYWxwaGExLkdldEVmZmVjdGl2ZUNvbmZpZ1JlcXVlc3QaKi5pY2hvci52MWFscGhhMS5HZXRFZmZlY3RpdmVDb25maWdSZXNwb25zZRJuChNHZXROb2RlVGFsb3NEZXRhaWxzEiouaWNob3IudjFhbHBoYTEuR2V0Tm9kZVRhbG9zRGV0YWlsc1JlcXVlc3QaKy5pY2hvci52MWFscGhhMS5HZXROb2RlVGFsb3NEZXRhaWxzUmVzcG9uc2USbgoTR2V0Tm9kZVRhbG9zUnVudGltZRIqLmljaG9yLnYxYWxwaGExLkdldE5vZGVUYWxvc1J1bnRpbWVSZXF1ZXN0GisuaWNob3IudjFhbHBoYTEuR2V0Tm9kZVRhbG9zUnVudGltZVJlc3BvbnNlEmEKDlN0cmVhbU5vZGVMb2dzEiUuaWNob3IudjFhbHBoYTEuU3RyZWFtTm9kZUxvZ3NSZXF1ZXN0GiYuaWNob3IudjFhbHBoYTEuU3RyZWFtTm9kZUxvZ3NSZXNwb25zZTABQroBChJjb20uaWNob3IudjFhbHBoYTFCCU5vZGVQcm90b1ABWkBnaXRodWIuY29tL21hZXNoaW5zaGluL2ljaG9yL2dlbi9nby9pY2hvci92MWFscGhhMTtpY2hvcnYxYWxwaGExogIDSVhYqgIOSWNob3IuVjFhbHBoYTHKAg5JY2hvclxWMWFscGhhMeICGkljaG9yXFYxYWxwaGExXEdQQk1ldGFkYXRh6gIPSWNob3I6OlYxYWxwaGExYgZwcm90bzM", [file_google_protobuf_timestamp, file_ichor_v1alpha1_common, file_ichor_v1alpha1_talosdetails, file_ichor_v1alpha1_talosruntime]);
+  fileDesc("ChlpY2hvci92MWFscGhhMS9ub2RlLnByb3RvEg5pY2hvci52MWFscGhhMSI8Cg5HZXROb2RlUmVxdWVzdBIqCgdtYWNoaW5lGAEgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmIjsKD0dldE5vZGVSZXNwb25zZRIoCgRub2RlGAEgASgLMhouaWNob3IudjFhbHBoYTEuTm9kZURldGFpbCJHChlHZXRFZmZlY3RpdmVDb25maWdSZXF1ZXN0EioKB21hY2hpbmUYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYiTQoaR2V0RWZmZWN0aXZlQ29uZmlnUmVzcG9uc2USLwoGY29uZmlnGAEgASgLMh8uaWNob3IudjFhbHBoYTEuRWZmZWN0aXZlQ29uZmlnInUKCEhhcmR3YXJlEhQKDG1hbnVmYWN0dXJlchgBIAEoCRINCgVtb2RlbBgCIAEoCRIVCg1zZXJpYWxfbnVtYmVyGAMgASgJEhEKCWNwdV9jb3JlcxgEIAEoBRIaChJtZW1vcnlfdG90YWxfYnl0ZXMYBSABKAMimAEKBERpc2sSDAoEd3dpZBgBIAEoCRIOCgZzZXJpYWwYAiABKAkSEgoKYnlfaWRfcGF0aBgDIAEoCRIQCghidXNfcGF0aBgEIAEoCRISCgpzaXplX2J5dGVzGAUgASgDEiYKBHJvbGUYBiABKA4yGC5pY2hvci52MWFscGhhMS5EaXNrUm9sZRIQCghkZXZfcGF0aBgHIAEoCSKyAQoNUmVzb3VyY2VVc2FnZRIWCg5jcHVfY29yZXNfdXNlZBgBIAEoARIZChFtZW1vcnlfdXNlZF9ieXRlcxgCIAEoAxIaChJtZW1vcnlfdG90YWxfYnl0ZXMYAyABKAMSHQoVZmlsZXN5c3RlbV91c2VkX2J5dGVzGAQgASgDEh4KFmZpbGVzeXN0ZW1fdG90YWxfYnl0ZXMYBSABKAMSEwoLY3B1X3NhbXBsZWQYBiABKAgiZgoUS3ViZXJuZXRlc05vZGVTdGF0dXMSEQoJbm9kZV9uYW1lGAEgASgJEg0KBXJlYWR5GAIgASgIEhcKD2t1YmVsZXRfdmVyc2lvbhgDIAEoCRITCgtzY2hlZHVsYWJsZRgEIAEoCCK6AgoKTm9kZURldGFpbBIqCgdtYWNoaW5lGAEgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmEioKCGhhcmR3YXJlGAIgASgLMhguaWNob3IudjFhbHBoYTEuSGFyZHdhcmUSIwoFZGlza3MYAyADKAsyFC5pY2hvci52MWFscGhhMS5EaXNrEjUKDnJlc291cmNlX3VzYWdlGAUgASgLMh0uaWNob3IudjFhbHBoYTEuUmVzb3VyY2VVc2FnZRI4CgprdWJlcm5ldGVzGAYgASgLMiQuaWNob3IudjFhbHBoYTEuS3ViZXJuZXRlc05vZGVTdGF0dXMSJAoca3ViZXJuZXRlc19wZXJtaXNzaW9uX2RlbmllZBgHIAEoCEoECAQQBVISbmV0d29ya19pbnRlcmZhY2VzIkoKDENvbmZpZ09yaWdpbhIqCgVsYXllchgBIAEoDjIbLmljaG9yLnYxYWxwaGExLkNvbmZpZ0xheWVyEg4KBnNvdXJjZRgCIAEoCSJxChRFZmZlY3RpdmVDb25maWdWYWx1ZRIMCgRwYXRoGAEgASgJEg0KBXZhbHVlGAIgASgJEg4KBnNlY3JldBgDIAEoCBIsCgZvcmlnaW4YBCABKAsyHC5pY2hvci52MWFscGhhMS5Db25maWdPcmlnaW4icwoPRWZmZWN0aXZlQ29uZmlnEioKB21hY2hpbmUYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYSNAoGdmFsdWVzGAIgAygLMiQuaWNob3IudjFhbHBoYTEuRWZmZWN0aXZlQ29uZmlnVmFsdWUinwEKFVN0cmVhbU5vZGVMb2dzUmVxdWVzdBIrCghtYWNoaW5lcxgBIAMoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhIUCgxyZXN1bWVfdG9rZW4YAiABKAkSDwoHc2VydmljZRgDIAEoCRISCgp0YWlsX2xpbmVzGAQgASgFEhMKBmZvbGxvdxgFIAEoCEgAiAEBQgkKB19mb2xsb3cilQEKFlN0cmVhbU5vZGVMb2dzUmVzcG9uc2USKgoHbWFjaGluZRgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhIoCgR0aW1lGAIgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIPCgdtZXNzYWdlGAMgASgJEhQKDHJlc3VtZV90b2tlbhgEIAEoCSqcAQoIRGlza1JvbGUSGQoVRElTS19ST0xFX1VOU1BFQ0lGSUVEEAASFAoQRElTS19ST0xFX1NZU1RFTRABEhcKE0RJU0tfUk9MRV9FUEhFTUVSQUwQAhIVChFESVNLX1JPTEVfU1RPUkFHRRADEhkKFURJU0tfUk9MRV9VU0VSX1ZPTFVNRRAEEhQKEERJU0tfUk9MRV9VTlVTRUQQBSqqAQoLQ29uZmlnTGF5ZXISHAoYQ09ORklHX0xBWUVSX1VOU1BFQ0lGSUVEEAASFwoTQ09ORklHX0xBWUVSX1NZU1RFTRABEhgKFENPTkZJR19MQVlFUl9DTFVTVEVSEAISFQoRQ09ORklHX0xBWUVSX1JPTEUQAxIZChVDT05GSUdfTEFZRVJfU0VMRUNUT1IQBBIYChRDT05GSUdfTEFZRVJfTUFDSElORRAFMokECgtOb2RlU2VydmljZRJKCgdHZXROb2RlEh4uaWNob3IudjFhbHBoYTEuR2V0Tm9kZVJlcXVlc3QaHy5pY2hvci52MWFscGhhMS5HZXROb2RlUmVzcG9uc2USawoSR2V0RWZmZWN0aXZlQ29uZmlnEikuaWNob3IudjFhbHBoYTEuR2V0RWZmZWN0aXZlQ29uZmlnUmVxdWVzdBoqLmljaG9yLnYxYWxwaGExLkdldEVmZmVjdGl2ZUNvbmZpZ1Jlc3BvbnNlEm4KE0dldE5vZGVUYWxvc0RldGFpbHMSKi5pY2hvci52MWFscGhhMS5HZXROb2RlVGFsb3NEZXRhaWxzUmVxdWVzdBorLmljaG9yLnYxYWxwaGExLkdldE5vZGVUYWxvc0RldGFpbHNSZXNwb25zZRJuChNHZXROb2RlVGFsb3NSdW50aW1lEiouaWNob3IudjFhbHBoYTEuR2V0Tm9kZVRhbG9zUnVudGltZVJlcXVlc3QaKy5pY2hvci52MWFscGhhMS5HZXROb2RlVGFsb3NSdW50aW1lUmVzcG9uc2USYQoOU3RyZWFtTm9kZUxvZ3MSJS5pY2hvci52MWFscGhhMS5TdHJlYW1Ob2RlTG9nc1JlcXVlc3QaJi5pY2hvci52MWFscGhhMS5TdHJlYW1Ob2RlTG9nc1Jlc3BvbnNlMAFCugEKEmNvbS5pY2hvci52MWFscGhhMUIJTm9kZVByb3RvUAFaQGdpdGh1Yi5jb20vbWFlc2hpbnNoaW4vaWNob3IvZ2VuL2dvL2ljaG9yL3YxYWxwaGExO2ljaG9ydjFhbHBoYTGiAgNJWFiqAg5JY2hvci5WMWFscGhhMcoCDkljaG9yXFYxYWxwaGEx4gIaSWNob3JcVjFhbHBoYTFcR1BCTWV0YWRhdGHqAg9JY2hvcjo6VjFhbHBoYTFiBnByb3RvMw", [file_google_protobuf_timestamp, file_ichor_v1alpha1_common, file_ichor_v1alpha1_talosdetails, file_ichor_v1alpha1_talosruntime]);
 
 /**
  * @generated from message ichor.v1alpha1.GetNodeRequest
@@ -187,46 +187,6 @@ export const DiskSchema: GenMessage<Disk> = /*@__PURE__*/
   messageDesc(file_ichor_v1alpha1_node, 5);
 
 /**
- * @generated from message ichor.v1alpha1.NetworkInterface
- */
-export type NetworkInterface = Message<"ichor.v1alpha1.NetworkInterface"> & {
-  /**
-   * name is the current kernel interface name, which can change across
-   * boots; alias is the stable LinkAliasConfig name when one is assigned.
-   *
-   * @generated from field: string name = 1;
-   */
-  name: string;
-
-  /**
-   * @generated from field: string alias = 2;
-   */
-  alias: string;
-
-  /**
-   * @generated from field: string permanent_mac = 3;
-   */
-  permanentMac: string;
-
-  /**
-   * @generated from field: bool up = 4;
-   */
-  up: boolean;
-
-  /**
-   * @generated from field: repeated string addresses = 5;
-   */
-  addresses: string[];
-};
-
-/**
- * Describes the message ichor.v1alpha1.NetworkInterface.
- * Use `create(NetworkInterfaceSchema)` to create a new message.
- */
-export const NetworkInterfaceSchema: GenMessage<NetworkInterface> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_node, 6);
-
-/**
  * @generated from message ichor.v1alpha1.ResourceUsage
  */
 export type ResourceUsage = Message<"ichor.v1alpha1.ResourceUsage"> & {
@@ -269,7 +229,7 @@ export type ResourceUsage = Message<"ichor.v1alpha1.ResourceUsage"> & {
  * Use `create(ResourceUsageSchema)` to create a new message.
  */
 export const ResourceUsageSchema: GenMessage<ResourceUsage> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_node, 7);
+  messageDesc(file_ichor_v1alpha1_node, 6);
 
 /**
  * @generated from message ichor.v1alpha1.KubernetesNodeStatus
@@ -301,7 +261,7 @@ export type KubernetesNodeStatus = Message<"ichor.v1alpha1.KubernetesNodeStatus"
  * Use `create(KubernetesNodeStatusSchema)` to create a new message.
  */
 export const KubernetesNodeStatusSchema: GenMessage<KubernetesNodeStatus> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_node, 8);
+  messageDesc(file_ichor_v1alpha1_node, 7);
 
 /**
  * @generated from message ichor.v1alpha1.NodeDetail
@@ -321,11 +281,6 @@ export type NodeDetail = Message<"ichor.v1alpha1.NodeDetail"> & {
    * @generated from field: repeated ichor.v1alpha1.Disk disks = 3;
    */
   disks: Disk[];
-
-  /**
-   * @generated from field: repeated ichor.v1alpha1.NetworkInterface network_interfaces = 4;
-   */
-  networkInterfaces: NetworkInterface[];
 
   /**
    * @generated from field: ichor.v1alpha1.ResourceUsage resource_usage = 5;
@@ -352,7 +307,7 @@ export type NodeDetail = Message<"ichor.v1alpha1.NodeDetail"> & {
  * Use `create(NodeDetailSchema)` to create a new message.
  */
 export const NodeDetailSchema: GenMessage<NodeDetail> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_node, 9);
+  messageDesc(file_ichor_v1alpha1_node, 8);
 
 /**
  * @generated from message ichor.v1alpha1.ConfigOrigin
@@ -377,7 +332,7 @@ export type ConfigOrigin = Message<"ichor.v1alpha1.ConfigOrigin"> & {
  * Use `create(ConfigOriginSchema)` to create a new message.
  */
 export const ConfigOriginSchema: GenMessage<ConfigOrigin> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_node, 10);
+  messageDesc(file_ichor_v1alpha1_node, 9);
 
 /**
  * EffectiveConfigValue is one field of the effective-config view. Masking is
@@ -419,7 +374,7 @@ export type EffectiveConfigValue = Message<"ichor.v1alpha1.EffectiveConfigValue"
  * Use `create(EffectiveConfigValueSchema)` to create a new message.
  */
 export const EffectiveConfigValueSchema: GenMessage<EffectiveConfigValue> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_node, 11);
+  messageDesc(file_ichor_v1alpha1_node, 10);
 
 /**
  * @generated from message ichor.v1alpha1.EffectiveConfig
@@ -441,7 +396,7 @@ export type EffectiveConfig = Message<"ichor.v1alpha1.EffectiveConfig"> & {
  * Use `create(EffectiveConfigSchema)` to create a new message.
  */
 export const EffectiveConfigSchema: GenMessage<EffectiveConfig> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_node, 12);
+  messageDesc(file_ichor_v1alpha1_node, 11);
 
 /**
  * @generated from message ichor.v1alpha1.StreamNodeLogsRequest
@@ -496,7 +451,7 @@ export type StreamNodeLogsRequest = Message<"ichor.v1alpha1.StreamNodeLogsReques
  * Use `create(StreamNodeLogsRequestSchema)` to create a new message.
  */
 export const StreamNodeLogsRequestSchema: GenMessage<StreamNodeLogsRequest> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_node, 13);
+  messageDesc(file_ichor_v1alpha1_node, 12);
 
 /**
  * @generated from message ichor.v1alpha1.StreamNodeLogsResponse
@@ -531,7 +486,7 @@ export type StreamNodeLogsResponse = Message<"ichor.v1alpha1.StreamNodeLogsRespo
  * Use `create(StreamNodeLogsResponseSchema)` to create a new message.
  */
 export const StreamNodeLogsResponseSchema: GenMessage<StreamNodeLogsResponse> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_node, 14);
+  messageDesc(file_ichor_v1alpha1_node, 13);
 
 /**
  * DiskRole mirrors the role a disk is assigned (architecture.md, "Nodes").

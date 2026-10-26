@@ -35,7 +35,6 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/constants"
 	"github.com/siderolabs/talos/pkg/machinery/resources/block"
 	"github.com/siderolabs/talos/pkg/machinery/resources/hardware"
-	"github.com/siderolabs/talos/pkg/machinery/resources/network"
 	"github.com/siderolabs/talos/pkg/machinery/resources/perf"
 	"github.com/siderolabs/talos/pkg/machinery/role"
 
@@ -167,48 +166,6 @@ func (t *machineryNodeTalosClient) Disks(ctx context.Context) ([]*pb.Disk, error
 			// Role stays DISK_ROLE_UNSPECIFIED: disk role assignment does not
 			// exist on the CRD yet (NodeTalosClient's own doc comment).
 		})
-	}
-
-	return out, nil
-}
-
-// NetworkInterfaces lists network.LinkStatus for physical links only
-// (Physical() excludes virtual/loopback links, the same filter
-// internal/controller.machineryMaintenanceClient.Identity applies), joined
-// with network.AddressStatus for each link's addresses.
-func (t *machineryNodeTalosClient) NetworkInterfaces(ctx context.Context) ([]*pb.NetworkInterface, error) {
-	links, err := safe.StateListAll[*network.LinkStatus](ctx, t.c.COSI)
-	if err != nil {
-		return nil, fmt.Errorf("listing link status: %w", err)
-	}
-
-	addrs, err := safe.StateListAll[*network.AddressStatus](ctx, t.c.COSI)
-	if err != nil {
-		return nil, fmt.Errorf("listing address status: %w", err)
-	}
-
-	out := make([]*pb.NetworkInterface, 0, links.Len())
-
-	for i := range links.Len() {
-		link := links.Get(i)
-		spec := link.TypedSpec()
-
-		if !spec.Physical() {
-			continue
-		}
-
-		iface := &pb.NetworkInterface{
-			Name: link.Metadata().ID(), Alias: spec.Alias,
-			PermanentMac: spec.PermanentAddr.String(), Up: spec.LinkState,
-		}
-
-		for j := range addrs.Len() {
-			if addrs.Get(j).TypedSpec().LinkName == iface.Name {
-				iface.Addresses = append(iface.Addresses, addrs.Get(j).TypedSpec().Address.String())
-			}
-		}
-
-		out = append(out, iface)
 	}
 
 	return out, nil

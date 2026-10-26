@@ -122,6 +122,12 @@ func init() {
 	flags.StringVar(&initOpts.KubernetesVersion, "kubernetes-version", "v"+constants.DefaultKubernetesVersion, "Kubernetes release this cluster runs")
 	flags.StringVar(&initOpts.VersionContract, "version-contract", "", "Talos version contract (required, vX.Y)")
 	flags.StringVar(&initOpts.InstallDisk, "install-disk", "", "the first node's install disk: "+installDiskUsage+" (required)")
+	flags.StringSliceVar(&initOpts.PodSubnets, "pod-subnets", nil,
+		"pod CIDRs (spec.network.podSubnets; at most one per IP family); unset keeps Talos's default 10.244.0.0/16. Fixed once the cluster exists")
+	flags.StringSliceVar(&initOpts.ServiceSubnets, "service-subnets", nil,
+		"service CIDRs (spec.network.serviceSubnets); unset keeps Talos's default 10.96.0.0/12. Fixed once the cluster exists")
+	flags.StringArrayVar(&initOpts.RegistryMirrors, "registry-mirror", nil,
+		"anonymous registry mirror as HOST=URL (spec.registries), e.g. ghcr.io=http://10.0.0.5:5000; repeatable")
 	flags.StringVar(&initOpts.DiskRoles.EphemeralDiskSelector, "ephemeral-disk-selector", "",
 		"CEL disk selector (e.g. disk.wwid == \"...\") for a dedicated EPHEMERAL disk, separate from --install-disk")
 	flags.StringVar(&initOpts.DiskRoles.StorageDiskSelector, "storage-disk-selector", "",

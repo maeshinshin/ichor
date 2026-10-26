@@ -151,11 +151,13 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) error {
 	// Step 3: render the first control plane's configuration.
 	candidates := candidatePatches(cluster, machine, cniBoot, opts.NodeEndpoint, opts.DiskRoles)
 
-	// init builds the TalosCluster itself and has no flag for spec.registries, and the new
-	// cluster has no management API to read an authSecretRef from yet, so there is nothing to
-	// resolve; refuse rather than render a mirror with no credentials if that ever changes.
-	if len(cluster.Spec.Registries) > 0 {
-		return fmt.Errorf("init: spec.registries is not supported at bootstrap; add it after init")
+	// --registry-mirror only builds anonymous mirrors, and the new cluster has no management
+	// API to read an authSecretRef from yet; refuse rather than render a mirror with no
+	// credentials if a mirror ever carries one.
+	for _, r := range cluster.Spec.Registries {
+		if r.AuthSecretRef != nil {
+			return fmt.Errorf("init: registry %q has an authSecretRef; credentials are not supported at bootstrap, add them after init", r.Host)
+		}
 	}
 
 	rendered, _, err := render.Render(cluster, machine, bundle, candidates, nil)

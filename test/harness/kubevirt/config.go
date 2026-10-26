@@ -137,7 +137,8 @@ func generateControlPlaneConfig(
 	}
 
 	return &generatedConfig{
-		machineConfig: machineConfig, workerConfig: workerConfig, talosconfig: talosCfg, secretsBundle: input.Options.SecretsBundle,
+		machineConfig: machineConfig, workerConfig: workerConfig,
+		talosconfig: talosCfg, secretsBundle: input.Options.SecretsBundle,
 	}, nil
 }
 

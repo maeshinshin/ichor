@@ -106,6 +106,11 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) error {
 			opts.NodeEndpoint)
 	}
 
+	installDisk, err := parseInstallDisk(opts.InstallDisk)
+	if err != nil {
+		return fmt.Errorf("init: %w", err)
+	}
+
 	machine := &ichorv1alpha1.TalosMachine{
 		Name: identity.UUID, Namespace: cluster.Namespace,
 		Spec: ichorv1alpha1.TalosMachineSpec{
@@ -115,6 +120,7 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) error {
 			},
 			Endpoint: opts.NodeEndpoint,
 			Role:     roleControlPlane,
+			Install:  &ichorv1alpha1.TalosMachineInstall{Disk: *installDisk},
 			// init is the special case of approving the first control
 			// plane (architecture.md's "Bootstrap": "Adding later nodes
 			// goes through the normal approval flow").
@@ -143,7 +149,7 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) error {
 	nagBackup(deps.Stderr, bundlePath)
 
 	// Step 3: render the first control plane's configuration.
-	candidates := candidatePatches(cluster, machine, cniBoot, opts.NodeEndpoint, opts.InstallDisk, opts.DiskRoles)
+	candidates := candidatePatches(cluster, machine, cniBoot, opts.NodeEndpoint, opts.DiskRoles)
 
 	// init builds the TalosCluster itself and has no flag for spec.registries, and the new
 	// cluster has no management API to read an authSecretRef from yet, so there is nothing to
@@ -279,7 +285,7 @@ func createCRs(
 // and the inline-manifests patch carrying the CNI's bootstrap manifest
 // (if the preset has one).
 func candidatePatches(
-	cluster *ichorv1alpha1.TalosCluster, machine *ichorv1alpha1.TalosMachine, cniBoot *cniBootstrap, nodeEndpoint, installDisk string,
+	cluster *ichorv1alpha1.TalosCluster, machine *ichorv1alpha1.TalosMachine, cniBoot *cniBootstrap, nodeEndpoint string,
 	diskRoles diskRoleOptions,
 ) []ichorv1alpha1.TalosConfigPatch {
 	var out []ichorv1alpha1.TalosConfigPatch
@@ -294,8 +300,8 @@ func candidatePatches(
 	}
 
 	// Always built, even for flannel (no inline manifest) or a CNI with
-	// no TalosPatches: the install disk is required on every node.
-	bootstrap := buildInlineManifestsPatch(cluster, machine, nodeEndpoint, installDisk, manifests)
+	// no TalosPatches: its machine.type and machine.certSANs are required by the patch CRD.
+	bootstrap := buildInlineManifestsPatch(cluster, machine, nodeEndpoint, manifests)
 	bootstrap.Spec.Documents = append(bootstrap.Spec.Documents, buildDiskRoleDocuments(diskRoles)...)
 	out = append(out, bootstrap)
 
@@ -315,7 +321,7 @@ func candidatePatches(
 // machine.required) get real, correct values -- the node's own role and
 // address -- never placeholders.
 func buildInlineManifestsPatch(
-	cluster *ichorv1alpha1.TalosCluster, machine *ichorv1alpha1.TalosMachine, nodeEndpoint, installDisk string,
+	cluster *ichorv1alpha1.TalosCluster, machine *ichorv1alpha1.TalosMachine, nodeEndpoint string,
 	manifests []*typedconfig.ClusterInlineManifest,
 ) ichorv1alpha1.TalosConfigPatch {
 	host := nodeEndpoint
@@ -335,7 +341,6 @@ func buildInlineManifestsPatch(
 					MachineConfig: &typedconfig.MachineConfig{
 						MachineType:     machine.Spec.Role,
 						MachineCertSANs: []string{host},
-						MachineInstall:  &typedconfig.InstallConfig{InstallDisk: installDisk},
 					},
 					ClusterConfig: &typedconfig.ClusterConfig{ClusterInlineManifests: manifests},
 				},

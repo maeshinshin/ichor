@@ -61,3 +61,34 @@ export function parseLabelSelector(text: string): LabelSelectorLike {
     matchExpressions: (obj.matchExpressions ?? []) as LabelSelectorLike['matchExpressions'],
   }
 }
+
+// buildPatchTarget turns the form's target fields into the wire target.
+// requiresTarget is false for the cluster layer (no target). Throws
+// parseLabelSelector's error on malformed JSON, so the caller can refuse to
+// send anything: the one client-side check that stops a bad request.
+export function buildPatchTarget(
+  requiresTarget: boolean,
+  kind: TargetKind,
+  role: string,
+  labelSelectorText: string,
+  machineRef: string,
+): TargetLike | undefined {
+  if (!requiresTarget) return undefined
+  if (kind === 'role') return { role, labelSelector: undefined, machineRef: '' }
+  if (kind === 'machineRef') return { role: '', labelSelector: undefined, machineRef }
+  if (kind === 'labelSelector') return { role: '', labelSelector: parseLabelSelector(labelSelectorText), machineRef: '' }
+  return undefined
+}
+
+// canSavePatch gates the Save button: layerSet and clusterLayer are the
+// caller's reading of the ConfigLayer enum (kept out of here so this file
+// stays free of ui/src/gen imports).
+export function canSavePatch(f: {
+  name: string
+  hasCluster: boolean
+  layerSet: boolean
+  clusterLayer: boolean
+  targetKind: TargetKind
+}): boolean {
+  return f.name !== '' && f.hasCluster && f.layerSet && (f.clusterLayer || f.targetKind !== 'none')
+}

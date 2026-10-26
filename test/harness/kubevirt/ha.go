@@ -247,7 +247,9 @@ func configureAndBootstrapHA(ips []string) ([]byte, *secrets.Bundle, error) {
 			if err != nil || len(objs) != 1 {
 				return "", false
 			}
-			return "", talosctl.SpecField(objs[0], "stage") == "running" && talosctl.MachineStatusReady(objs[0])
+			// With no CNI the node cannot report ready (its Kubernetes node stays NotReady), so only
+			// the stage is awaited; the test installs the CNI afterwards.
+			return "", talosctl.SpecField(objs[0], "stage") == "running" && (os.Getenv(cniEnv) == cniNone || talosctl.MachineStatusReady(objs[0]))
 		}); err != nil {
 			return nil, nil, err
 		}
@@ -258,11 +260,15 @@ func configureAndBootstrapHA(ips []string) ([]byte, *secrets.Bundle, error) {
 // publishHA prints the cluster-health evidence (talosctl health, etcd members) and writes
 // the talosconfig/kubeconfig files the removal-ordering verification reads afterwards.
 func publishHA(ips []string, talosconfigYAML []byte, bundle *secrets.Bundle) error {
-	healthOut, err := talosctl.Health(namespace, ips, talosconfigYAML)
-	fmt.Println("--- talosctl health ---")
-	fmt.Println(healthOut)
-	if err != nil {
-		return fmt.Errorf("cluster health check: %w", err)
+	// With no CNI the nodes cannot be Ready yet, so `talosctl health` would fail on
+	// "all k8s nodes to report ready"; the test installs the CNI itself afterwards.
+	if os.Getenv(cniEnv) != cniNone {
+		healthOut, err := talosctl.Health(namespace, ips, talosconfigYAML)
+		fmt.Println("--- talosctl health ---")
+		fmt.Println(healthOut)
+		if err != nil {
+			return fmt.Errorf("cluster health check: %w", err)
+		}
 	}
 
 	membersOut, err := talosctl.EtcdMembers(namespace, ips[0], talosconfigYAML)

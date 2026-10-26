@@ -5,6 +5,7 @@ import { ClusterService } from '@/gen/ichor/v1alpha1/cluster_pb'
 import { MachineService } from '@/gen/ichor/v1alpha1/machine_pb'
 import { NodeService } from '@/gen/ichor/v1alpha1/node_pb'
 import { PatchService } from '@/gen/ichor/v1alpha1/patch_pb'
+import { GitOpsService } from '@/gen/ichor/v1alpha1/gitops_pb'
 
 // "the browser talks only to the backend" (architecture.md, "CLI and UI"):
 // the transport's baseUrl is this page's own origin, never a third-party
@@ -34,3 +35,4 @@ export const clusterClient = createClient(ClusterService, transport)
 export const machineClient = createClient(MachineService, transport)
 export const nodeClient = createClient(NodeService, transport)
 export const patchClient = createClient(PatchService, transport)
+export const gitOpsClient = createClient(GitOpsService, transport)

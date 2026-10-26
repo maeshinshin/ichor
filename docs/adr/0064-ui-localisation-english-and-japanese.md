@@ -1,6 +1,6 @@
 # 0064. The UI is localised in English and Japanese with a typed dictionary and no library
 
-Status: Accepted · Date: 2026-10-26 · Design section: UI, Roadmap phase 10
+Status: Superseded by 0070 · Date: 2026-10-26 · Design section: UI, Roadmap phase 10
 Decided: The UI's fixed wording lives in two typed objects, `en` and `ja`, in `ui/src/lib/i18n.ts`, read through one `t()` function, with no i18n dependency; the language is the saved choice, else `navigator.languages`, else English, switched on screen and kept in `localStorage` with nothing on the server; names, field names, state words from Argo CD or the cluster, log lines and the body of apiserver or Talos errors are shown as received; dates and sizes go through `Intl` for the chosen language
 
 ## Context

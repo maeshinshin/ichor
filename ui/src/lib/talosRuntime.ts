@@ -76,9 +76,10 @@ export function podTone(p: PodLike): Tone {
   return 'neutral'
 }
 
-// Pods with trouble first, then by namespace and name.
+// Pods with trouble first, then running ones, then the rest (finished pods
+// last), each by namespace and name.
 export function sortPods<T extends PodLike & { namespace: string; name: string }>(pods: readonly T[]): T[] {
-  const rank = (p: T) => (podTone(p) === 'bad' ? 0 : p.restarts > 0 ? 1 : 2)
+  const rank = (p: T) => (podTone(p) === 'bad' ? 0 : p.restarts > 0 ? 1 : p.phase === 'Running' ? 2 : 3)
   return [...pods].sort((a, b) => rank(a) - rank(b) || a.namespace.localeCompare(b.namespace) || a.name.localeCompare(b.name))
 }
 

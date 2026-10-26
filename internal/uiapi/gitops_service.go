@@ -75,7 +75,7 @@ func (c *prCache) put(key string, l prLookup) {
 	c.m[key] = l
 }
 
-// Links are the external tool base URLs from the chart's values (ADR 0061).
+// Links are the external tool base URLs from the chart's values (ADR 0062).
 type Links struct {
 	ArgoCD, Grafana, Hubble, Longhorn string
 }

@@ -1,0 +1,202 @@
+import { useEffect, useState } from 'preact/hooks'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { ErrorAlert } from '@/components/ErrorAlert'
+import { GitOpsKind, type FindPullRequestsResponse, type GetLinksResponse, type GitOpsItem } from '@/gen/ichor/v1alpha1/gitops_pb'
+import { gitOpsClient } from '@/lib/connect'
+import { describeError } from '@/lib/errors'
+import {
+  argoApplicationUrl,
+  externalBase,
+  grafanaDashboardUrl,
+  healthBadge,
+  needsAttention,
+  syncBadge,
+  trackingLabel,
+} from '@/lib/gitops'
+import { pullRequestHref } from '@/lib/pullRequest'
+
+type ErrorShape = { title: string; detail: string }
+
+const kindLabel: Record<number, string> = {
+  [GitOpsKind.CLUSTER]: 'Cluster',
+  [GitOpsKind.MACHINE]: 'Machine',
+  [GitOpsKind.PATCH]: 'Patch',
+}
+
+const rowKey = (i: GitOpsItem) => `${i.kind}/${i.ref?.namespace}/${i.ref?.name}`
+
+function ExternalLink({ href, children }: { href: string | null; children: string }) {
+  if (href === null) return null
+  return (
+    <a class="underline" href={href} target="_blank" rel="noreferrer">
+      {children}
+    </a>
+  )
+}
+
+// GitOps: each CR's Argo CD Application with its sync and health state, the
+// pull requests still open for it, and links into the tools that are registered
+// (docs/adr/0061). Opening the page reads only the cluster; the Git host is
+// asked only when a row's "Pull requests" button is pressed.
+export function GitOps() {
+  const [items, setItems] = useState<GitOpsItem[] | null>(null)
+  const [links, setLinks] = useState<GetLinksResponse | null>(null)
+  const [error, setError] = useState<ErrorShape | null>(null)
+  const [prs, setPrs] = useState<Record<string, FindPullRequestsResponse | ErrorShape | 'loading'>>({})
+
+  useEffect(() => {
+    let cancelled = false
+    gitOpsClient.listGitOps({}).then(
+      (res) => !cancelled && setItems(res.items),
+      (err) => !cancelled && setError(describeError(err)),
+    )
+    // Links are a convenience: failing to read them must not hide the table.
+    gitOpsClient.getLinks({}).then(
+      (res) => !cancelled && setLinks(res),
+      () => undefined,
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  async function checkPullRequests(item: GitOpsItem) {
+    const key = rowKey(item)
+    setPrs((p) => ({ ...p, [key]: 'loading' }))
+    try {
+      const res = await gitOpsClient.findPullRequests({ kind: item.kind, ref: item.ref })
+      setPrs((p) => ({ ...p, [key]: res }))
+    } catch (err) {
+      setPrs((p) => ({ ...p, [key]: describeError(err) }))
+    }
+  }
+
+  if (error) return <ErrorAlert {...error} />
+  if (!items) return <p class="mt-10 text-center text-sm text-muted-foreground">Loading GitOps state…</p>
+
+  const sorted = [...items].sort((a, b) => Number(needsAttention(b)) - Number(needsAttention(a)))
+
+  const toolLinks = links
+    ? [
+        { label: 'Grafana dashboard', href: grafanaDashboardUrl(links.grafana) },
+        { label: 'Hubble', href: externalBase(links.hubble) },
+        { label: 'Longhorn', href: externalBase(links.longhorn) },
+        { label: 'Argo CD', href: externalBase(links.argocd) },
+      ].filter((l) => l.href !== null)
+    : []
+
+  return (
+    <Card className="mt-6">
+      <CardHeader>
+        <CardTitle>GitOps</CardTitle>
+        {toolLinks.length > 0 && (
+          <p class="flex flex-wrap gap-4 text-sm">
+            {toolLinks.map((l) => (
+              <ExternalLink key={l.label} href={l.href}>
+                {l.label}
+              </ExternalLink>
+            ))}
+          </p>
+        )}
+      </CardHeader>
+      <CardContent>
+        {sorted.length === 0 ? (
+          <p class="text-sm text-muted-foreground">Nothing to show yet.</p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Resource</TableHead>
+                <TableHead>Cluster</TableHead>
+                <TableHead>Managed by</TableHead>
+                <TableHead>Application</TableHead>
+                <TableHead>Sync</TableHead>
+                <TableHead>Health</TableHead>
+                <TableHead>Pull requests</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {sorted.map((item) => (
+                <GitOpsRow
+                  key={rowKey(item)}
+                  item={item}
+                  argocd={links?.argocd ?? ''}
+                  pr={prs[rowKey(item)]}
+                  onCheck={() => checkPullRequests(item)}
+                />
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function GitOpsRow(props: {
+  item: GitOpsItem
+  argocd: string
+  pr: FindPullRequestsResponse | ErrorShape | 'loading' | undefined
+  onCheck: () => void
+}) {
+  const { item, pr } = props
+  const appHref = item.application ? argoApplicationUrl(props.argocd, item.application) : null
+  const canHavePr = item.kind === GitOpsKind.MACHINE || item.kind === GitOpsKind.PATCH
+
+  return (
+    <TableRow>
+      <TableCell>
+        <span class="text-muted-foreground">{kindLabel[item.kind] ?? '-'} </span>
+        <span class="font-medium">{item.ref?.name}</span>
+      </TableCell>
+      <TableCell>{item.cluster || '-'}</TableCell>
+      <TableCell>{trackingLabel(item.trackedBy)}</TableCell>
+      <TableCell>
+        {item.application ? (
+          appHref ? (
+            <ExternalLink href={appHref}>{item.application.name}</ExternalLink>
+          ) : (
+            item.application.name
+          )
+        ) : (
+          '-'
+        )}
+        {item.error && <p class="text-xs text-destructive">{item.error}</p>}
+      </TableCell>
+      <TableCell>{item.syncStatus ? <Badge variant={syncBadge(item.syncStatus)}>{item.syncStatus}</Badge> : '-'}</TableCell>
+      <TableCell>
+        {item.healthStatus ? <Badge variant={healthBadge(item.healthStatus)}>{item.healthStatus}</Badge> : '-'}
+      </TableCell>
+      <TableCell>
+        {canHavePr && pr === undefined && (
+          <Button variant="outline" size="sm" onClick={props.onCheck}>
+            Check
+          </Button>
+        )}
+        {pr === 'loading' && <span class="text-muted-foreground">Checking…</span>}
+        {pr && pr !== 'loading' && 'title' in pr && <span class="text-xs text-destructive">{pr.title}: {pr.detail}</span>}
+        {pr && pr !== 'loading' && !('title' in pr) && <PullRequestList res={pr} />}
+      </TableCell>
+    </TableRow>
+  )
+}
+
+function PullRequestList({ res }: { res: FindPullRequestsResponse }) {
+  if (res.note) return <span class="text-xs text-muted-foreground">{res.note}</span>
+  if (res.pullRequests.length === 0) return <span class="text-muted-foreground">none open</span>
+  return (
+    <ul class="text-sm">
+      {res.pullRequests.map((p) => {
+        const href = pullRequestHref(p.url)
+        return (
+          <li key={p.url}>
+            {p.action}: {href ? <ExternalLink href={href}>{p.url}</ExternalLink> : p.url}
+          </li>
+        )
+      })}
+    </ul>
+  )
+}

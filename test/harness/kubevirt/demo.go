@@ -78,8 +78,7 @@ func upDemo() error {
 			if err != nil {
 				return "", false
 			}
-			objs, err := talosctl.DecodeAll(out)
-			return "", err == nil && len(objs) == 1 && talosctl.SpecField(objs[0], "stage") == stageMaintenance
+			return "", machineInMaintenance(out)
 		}); err != nil {
 			return err
 		}
@@ -114,9 +113,7 @@ func upDemo() error {
 		if err != nil {
 			return "", false
 		}
-		objs, err := talosctl.DecodeAll(out)
-		ready := err == nil && len(objs) == 1 && talosctl.SpecField(objs[0], "stage") == stageRunning
-		return "", ready && talosctl.MachineStatusReady(objs[0])
+		return "", machineRunning(out, true)
 	}); err != nil {
 		return err
 	}

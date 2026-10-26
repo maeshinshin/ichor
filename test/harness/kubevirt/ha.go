@@ -42,12 +42,24 @@ import (
 // something (docs/adr/0010).
 const haCount = 3
 
-// Shared string values the harness compares or passes more than once.
-const (
-	stageMaintenance = "maintenance"
-	stageRunning     = "running"
-	verbDelete       = "delete"
-)
+const verbDelete = "delete"
+
+// machineInMaintenance reports whether a `get machinestatus` output (one document) is at the
+// maintenance stage.
+func machineInMaintenance(out string) bool {
+	objs, err := talosctl.DecodeAll(out)
+	return err == nil && len(objs) == 1 && talosctl.SpecField(objs[0], "stage") == "maintenance"
+}
+
+// machineRunning reports whether a `get machinestatus` output is at the running stage and,
+// when needReady, the node also reports ready.
+func machineRunning(out string, needReady bool) bool {
+	objs, err := talosctl.DecodeAll(out)
+	if err != nil || len(objs) != 1 || talosctl.SpecField(objs[0], "stage") != "running" {
+		return false
+	}
+	return !needReady || talosctl.MachineStatusReady(objs[0])
+}
 
 // haCluster names every object this scenario creates; haVMName derives each VM's own name
 // from it, fixed like vmName (see its own comment) for the same cross-invocation reason.
@@ -181,11 +193,7 @@ func bootHAToMaintenance() ([]string, error) {
 			if err != nil {
 				return "", false
 			}
-			objs, err := talosctl.DecodeAll(out)
-			if err != nil || len(objs) != 1 {
-				return "", false
-			}
-			return "", talosctl.SpecField(objs[0], "stage") == stageMaintenance
+			return "", machineInMaintenance(out)
 		}); err != nil {
 			return nil, err
 		}
@@ -250,14 +258,9 @@ func configureAndBootstrapHA(ips []string) ([]byte, *secrets.Bundle, error) {
 			if err != nil {
 				return "", false
 			}
-			objs, err := talosctl.DecodeAll(out)
-			if err != nil || len(objs) != 1 {
-				return "", false
-			}
 			// With no CNI the node cannot report ready (its Kubernetes node stays NotReady), so only
 			// the stage is awaited; the test installs the CNI afterwards.
-			running := talosctl.SpecField(objs[0], "stage") == stageRunning
-			return "", running && (os.Getenv(cniEnv) == cniNone || talosctl.MachineStatusReady(objs[0]))
+			return "", machineRunning(out, os.Getenv(cniEnv) != cniNone)
 		}); err != nil {
 			return nil, nil, err
 		}

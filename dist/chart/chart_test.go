@@ -26,6 +26,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -112,7 +113,7 @@ func TestChartInvariants(t *testing.T) {
 			checkCRDsMatchConfig(t, release, docs)
 			checkKubeProxySwitchPolicy(t, release, docs)
 			checkUIBackendRBACIsSeparate(t, release, docs)
-			checkUIBackendRBACMatchesConfig(t, release, docs)
+			checkUIBackendRBACMatchesConfig(t, release, docs, false)
 			checkControllerRBACMatchesConfig(t, release, docs)
 			checkMonitoringOptionsOffByDefault(t, release, docs)
 		})
@@ -521,6 +522,31 @@ func TestUIArgoCDNamespaceEnv(t *testing.T) {
 	}
 }
 
+// TestUIOIDC pins: OIDC is off by default (no env, no impersonate grant), and when on the
+// env reaches the container, the role equals the generated one including impersonate, and a
+// narrowed impersonate list becomes resourceNames.
+func TestUIOIDC(t *testing.T) {
+	off := renderChartWithValues(t, "ichor")
+	if _, found := containerEnvValue(find(off, kindDeployment, ichorUIDeploymentName), "ichor-ui", "ICHOR_OIDC_ISSUER"); found {
+		t.Error("OIDC env present by default; it must be off")
+	}
+
+	on := renderChartWithValues(t, "ichor", "ichorUI.oidc.enabled=true",
+		"ichorUI.oidc.issuer=https://idp.example", "ichorUI.oidc.clientId=ichor")
+	if got, _ := containerEnvValue(find(on, kindDeployment, ichorUIDeploymentName), "ichor-ui", "ICHOR_OIDC_ISSUER"); got != "https://idp.example" {
+		t.Errorf("ICHOR_OIDC_ISSUER = %q", got)
+	}
+	checkUIBackendRBACMatchesConfig(t, "ichor", on, true)
+
+	narrow := renderChartWithValues(t, "ichor", "ichorUI.oidc.enabled=true",
+		"ichorUI.oidc.issuer=https://idp.example", "ichorUI.oidc.clientId=ichor",
+		"ichorUI.oidc.impersonate.groups={oidc:platform}")
+	role := find(narrow, kindClusterRole, ichorUIRoleName)
+	if !strings.Contains(fmt.Sprint(role["rules"]), "oidc:platform") {
+		t.Errorf("impersonate.groups did not become resourceNames: %v", role["rules"])
+	}
+}
+
 // containerEnvValue returns the value of env var name on the named container of a decoded
 // Deployment, and whether it is set.
 func containerEnvValue(deployment map[string]any, container, name string) (string, bool) {
@@ -578,14 +604,30 @@ func clusterRoleBindingRefs(binding map[string]any) (roleRef, subject string) {
 // YAML text or document order, so grouping resources/verbs into one apiGroups entry versus
 // several is not a difference. Also checks the namespaced secrets Role the same way; see
 // ichorUISecretsRoleName for why it can't be matched by name.
-func checkUIBackendRBACMatchesConfig(t *testing.T, release string, docs []map[string]any) {
+func checkUIBackendRBACMatchesConfig(t *testing.T, release string, docs []map[string]any, oidc bool) {
 	t.Helper()
 
 	configDocs := loadYAMLDocs(t, ichorUIConfigRolePath)
+	configRole := find(configDocs, kindClusterRole, ichorUIRoleName)
+
+	// The impersonate rule is in the generated role but the chart renders it only
+	// with ichorUI.oidc.enabled, so the default render is compared without it and the OIDC render
+	// (TestUIOIDC) with it.
+	if !oidc && configRole != nil {
+		var kept []any
+		rules, _ := configRole["rules"].([]any)
+		for _, r := range rules {
+			rm, _ := r.(map[string]any)
+			if !slices.Contains(stringsOf(rm["verbs"]), "impersonate") {
+				kept = append(kept, r)
+			}
+		}
+		configRole = map[string]any{"rules": kept}
+	}
 
 	checkRBACRulesMatch(t, release,
 		"ClusterRole "+ichorUIRoleName,
-		find(configDocs, kindClusterRole, ichorUIRoleName), find(docs, kindClusterRole, ichorUIRoleName),
+		configRole, find(docs, kindClusterRole, ichorUIRoleName),
 		ichorUIConfigRolePath, "dist/chart/templates/rbac/ichor-ui-role.yaml")
 
 	// The namespaced Role carrying the secrets rule: same name as the ClusterRole in

@@ -304,6 +304,18 @@ spec:
                   follows the node to running. Empty for a node that has not been provisioned by Ichor.
                 format: date-time
                 type: string
+              observedEndpoint:
+                description: |-
+                  observedEndpoint is the node's Talos API address when it moved away from spec.endpoint (a
+                  new DHCP lease, a recreated pod). The controller never changes spec, so it records the
+                  address here, found by discovery matching the node's identity or from the node's
+                  Kubernetes Node address, and dials it in preference to spec.endpoint.
+                type: string
+              observedEndpointFor:
+                description: |-
+                  observedEndpointFor is the spec.endpoint that observedEndpoint was recorded against. When an
+                  operator edits spec.endpoint, the two differ and observedEndpoint is ignored.
+                type: string
               observedGeneration:
                 description: observedGeneration is the most recent generation the
                   controller has reconciled.

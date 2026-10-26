@@ -213,6 +213,16 @@ func (s TalosMachineSpec) IsApproved() bool {
 	return s.ApprovalState == MachineApprovalStateApproved
 }
 
+// DialEndpoint is the address to dial the machine's Talos API at: the address the controller
+// last observed for it while that still supersedes spec.endpoint, else spec.endpoint itself.
+func (m *TalosMachine) DialEndpoint() string {
+	if m.Status.ObservedEndpoint != "" && m.Status.ObservedEndpointFor == m.Spec.Endpoint {
+		return m.Status.ObservedEndpoint
+	}
+
+	return m.Spec.Endpoint
+}
+
 // TalosMachineStatus defines the observed state of TalosMachine.
 type TalosMachineStatus struct {
 	// conditions represent the current state of the TalosMachine resource, kstatus-compatible.
@@ -255,6 +265,18 @@ type TalosMachineStatus struct {
 	// follows the node to running. Empty for a node that has not been provisioned by Ichor.
 	// +optional
 	ConfigStoredAt *metav1.Time `json:"configStoredAt,omitempty"`
+
+	// observedEndpoint is the node's Talos API address when it moved away from spec.endpoint (a
+	// new DHCP lease, a recreated pod). The controller never changes spec, so it records the
+	// address here, found by discovery matching the node's identity or from the node's
+	// Kubernetes Node address, and dials it in preference to spec.endpoint.
+	// +optional
+	ObservedEndpoint string `json:"observedEndpoint,omitempty"`
+
+	// observedEndpointFor is the spec.endpoint that observedEndpoint was recorded against. When an
+	// operator edits spec.endpoint, the two differ and observedEndpoint is ignored.
+	// +optional
+	ObservedEndpointFor string `json:"observedEndpointFor,omitempty"`
 
 	// rebootPaths lists the configuration field paths whose pending change needs a reboot, while
 	// Ready is False with reason RebootRequired; empty otherwise. A config-rollout

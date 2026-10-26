@@ -243,6 +243,10 @@ func (s *Server) FindPullRequests(
 		return connect.NewResponse(&pb.FindPullRequestsResponse{Note: "Ichor opens no pull requests for this kind"}), nil
 	}
 
+	if err := s.requireApplicationRead(ctx, obj); err != nil {
+		return nil, err
+	}
+
 	plan, err := s.planWrite(ctx, obj, cluster, req.Msg.GetKind() == pb.GitOpsKind_GIT_OPS_KIND_MACHINE, nil)
 	if err != nil {
 		// A refusal (read-only because of Flux, say) is the answer, not a failure.
@@ -256,6 +260,39 @@ func (s *Server) FindPullRequests(
 	}
 
 	return s.findPRs(ctx, plan, req.Msg.GetKind(), obj.GetName())
+}
+
+// requireApplicationRead refuses a caller who may not read the Argo CD
+// Application tracking obj. The pull requests are looked up
+// with the repository token, which is the ServiceAccount's side; asking them
+// of a caller who may not see the Application would show GitOps state they
+// were refused on the page. An untracked or Flux-tracked CR has no
+// Application, so there is nothing to check.
+func (s *Server) requireApplicationRead(ctx context.Context, obj client.Object) error {
+	_, by, err := gitopstracking.IsTracked(ctx, s.Client, s.argoNamespace(), obj)
+	if err != nil {
+		return connect.NewError(connect.CodeUnavailable, err)
+	}
+
+	if by != gitopstracking.TrackedByArgoCD {
+		return nil
+	}
+
+	appKey, err := gitopstracking.ArgoApplicationOf(ctx, s.Client, s.argoNamespace(), obj)
+	if err != nil {
+		return nil //nolint:nilerr // planWrite refuses with the reason
+	}
+
+	var app unstructured.Unstructured
+
+	app.SetGroupVersionKind(argoApplicationGVK)
+
+	if err := s.Get(ctx, appKey, &app); apierrors.IsForbidden(err) {
+		return connect.NewError(connect.CodePermissionDenied,
+			fmt.Errorf("you may not read the Argo CD Application %s that tracks this resource", appKey))
+	}
+
+	return nil
 }
 
 func (s *Server) findPRs(

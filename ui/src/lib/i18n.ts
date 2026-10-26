@@ -11,6 +11,7 @@
 // only `ja` has) does not compile. "{name}" marks a value filled in by t().
 
 export const en = {
+  'common.noPermission': 'No permission',
   'common.yes': 'yes',
   'common.no': 'no',
   'common.none': 'none',
@@ -274,6 +275,7 @@ export type Key = keyof typeof en
 type Dict = Record<Key, string>
 
 export const ja: Dict = {
+  'common.noPermission': '権限がありません',
   'common.yes': 'はい',
   'common.no': 'いいえ',
   'common.none': 'なし',

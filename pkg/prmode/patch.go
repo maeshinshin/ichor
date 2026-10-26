@@ -144,7 +144,7 @@ func RemoveDocument(data []byte, target Target) (out []byte, remaining bool, err
 
 		// The first document went, so the next one becomes the first and
 		// loses the separator that introduced it.
-		if !(idx == 0 && j == 1) {
+		if idx != 0 || j != 1 {
 			buf.Write(s.sep)
 		}
 

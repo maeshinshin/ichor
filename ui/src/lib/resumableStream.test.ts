@@ -61,3 +61,63 @@ test('ends cleanly without reconnecting when the stream finishes normally', asyn
   assert.deepEqual(seen, ['only'])
   assert.equal(calls, 1)
 })
+
+test('backs off between reconnects and gives up after repeated failures with no message', async () => {
+  let calls = 0
+  const delays: number[] = []
+  function alwaysUnavailable(): AsyncIterable<FakeLine> {
+    calls++
+    return {
+      [Symbol.asyncIterator]() {
+        return { next: () => Promise.reject(new ConnectError('node unreachable', Code.Unavailable)) }
+      },
+    }
+  }
+
+  const iterator = streamWithResume(alwaysUnavailable, (l) => l.resumeToken, '', {
+    maxAttempts: 3,
+    sleep: async (ms) => {
+      delays.push(ms)
+    },
+  })
+  await assert.rejects(() => iterator.next(), /node unreachable/)
+  assert.equal(calls, 4, 'first call plus three reconnects')
+  assert.equal(delays.length, 3)
+  assert.ok(delays[1] > delays[0] && delays[2] > delays[1], 'delays grow')
+})
+
+test('a received message resets the reconnect budget', async () => {
+  let calls = 0
+  async function* flaky(): AsyncIterable<FakeLine> {
+    calls++
+    if (calls < 6) {
+      yield { message: String(calls), resumeToken: `t${calls}` }
+      throw new ConnectError('draining', Code.Unavailable)
+    }
+  }
+  const seen: string[] = []
+  for await (const l of streamWithResume(flaky, (x) => x.resumeToken, '', { maxAttempts: 2, sleep: async () => {} })) {
+    seen.push(l.message)
+  }
+  assert.deepEqual(seen, ['1', '2', '3', '4', '5'])
+})
+
+test('stops without reconnecting once aborted', async () => {
+  const controller = new AbortController()
+  let calls = 0
+  function unavailable(): AsyncIterable<FakeLine> {
+    calls++
+    return {
+      [Symbol.asyncIterator]() {
+        return { next: () => Promise.reject(new ConnectError('draining', Code.Unavailable)) }
+      },
+    }
+  }
+  const iterator = streamWithResume(unavailable, (l) => l.resumeToken, '', {
+    signal: controller.signal,
+    sleep: async () => controller.abort(),
+  })
+  const result = await iterator.next()
+  assert.equal(result.done, true)
+  assert.equal(calls, 1)
+})

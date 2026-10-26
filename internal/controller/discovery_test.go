@@ -92,6 +92,7 @@ const (
 	uuidApproval  = "50505050-5050-5050-5050-505050505050"
 	uuidMixed     = "60606060-6060-6060-6060-606060606060"
 	uuidRejected  = "70707070-7070-7070-7070-707070707070"
+	uuidMoved     = "90909090-9090-9090-9090-909090909090"
 
 	// testMAC is the permanent MAC address every test below that doesn't
 	// care about its specific value reuses.
@@ -181,6 +182,32 @@ var _ = Describe("DiscoveryReconciler.Discover", func() {
 
 		Expect(second.Name).To(Equal(first.Name))
 		Expect(second.ResourceVersion).To(Equal(first.ResourceVersion))
+	})
+
+	It("records the new address in status, never in spec, when the same machine answers somewhere else", func() {
+		cluster := newTestCluster("does-not-exist", "v1.14")
+		fake := &fakeMaintenanceClient{identity: HardwareIdentity{
+			UUID: uuidMoved, Serial: "S9", MACAddresses: []string{"11:22:33:44:55:99"},
+		}}
+
+		r := &DiscoveryReconciler{Client: k8sClient, MaintenanceClient: maintenanceFactory(fake)}
+
+		_, err := r.Discover(ctx, cluster, "10.0.0.30:50000")
+		Expect(err).NotTo(HaveOccurred())
+
+		moved, err := r.Discover(ctx, cluster, "10.0.0.31:50000")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(moved).NotTo(BeNil())
+
+		got := getMachine(cluster.Namespace, uuidMoved)
+		Expect(got.Spec.Endpoint).To(Equal("10.0.0.30:50000"), "the controller never mutates spec")
+		Expect(got.Status.ObservedEndpoint).To(Equal("10.0.0.31:50000"))
+		Expect(got.DialEndpoint()).To(Equal("10.0.0.31:50000"))
+
+		// Seen again at the same place: nothing to write.
+		again, err := r.Discover(ctx, cluster, "10.0.0.31:50000")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(again.ResourceVersion).To(Equal(got.ResourceVersion))
 	})
 
 	It("does not auto-register a colliding UUID and leaves the existing TalosMachine untouched", func() {

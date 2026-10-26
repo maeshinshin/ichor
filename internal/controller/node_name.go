@@ -43,7 +43,7 @@ func resolveNodeName(ctx context.Context, c client.Reader, talos TalosClient, m 
 		}
 	}
 
-	host := m.Spec.Endpoint
+	host := m.DialEndpoint()
 	if h, _, err := net.SplitHostPort(host); err == nil {
 		host = h
 	}

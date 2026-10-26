@@ -181,6 +181,11 @@ const overCapRecheck = 15 * time.Second
 // unreachable, Secret not yet created, lock held ...) looks again. docs/adr/0059.
 const transientRecheck = 30 * time.Second
 
+// reachabilityRecheck is how often a converged machine is probed again. Nothing else would notice
+// a node that went away or moved: no event reaches a controller that is not watching the node, so
+// without it Ready stays True for a machine nobody can reach.
+const reachabilityRecheck = 2 * time.Minute
+
 const driftPolicyAutoCorrect = "autoCorrect"
 
 // TalosMachineReconciler reconciles a TalosMachine object.
@@ -391,7 +396,7 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		m.Status.ObservedInputsHash = inputsHash
 		m.Status.RebootPaths = nil
 
-		return ctrl.Result{}, r.ready(ctx, &m, metav1.ConditionTrue, reasonConverged,
+		return ctrl.Result{RequeueAfter: reachabilityRecheck}, r.ready(ctx, &m, metav1.ConditionTrue, reasonConverged,
 			"node configuration matches the rendered configuration")
 	}
 
@@ -487,7 +492,7 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 				"and every changed path is reboot-free"
 		}
 
-		return ctrl.Result{}, r.ready(ctx, &m, metav1.ConditionTrue, reason, message)
+		return ctrl.Result{RequeueAfter: reachabilityRecheck}, r.ready(ctx, &m, metav1.ConditionTrue, reason, message)
 	}
 }
 
@@ -504,6 +509,14 @@ func (r *TalosMachineReconciler) readNode(
 	cancelRead()
 
 	if err != nil {
+		// A joined node that moved (a new lease, a recreated pod) is followed to where the
+		// Kubernetes Node says it is (ADR 0086); the next round dials the new address.
+		if moved, ferr := r.followNodeAddress(ctx, m); ferr != nil {
+			logf.FromContext(ctx).V(1).Info("following the node's address failed", "error", ferr.Error())
+		} else if moved {
+			return nil, ctrl.Result{RequeueAfter: time.Second}, true, nil
+		}
+
 		// A machine that has never converged and cannot be read with the bundle's identity may
 		// still be in maintenance mode: provision finds out by asking the insecure API, not by
 		// interpreting this error.

@@ -160,6 +160,15 @@ func (r *DiscoveryReconciler) Discover(
 		return nil, fmt.Errorf("looking up existing TalosMachine %q: %w", key.Name, err)
 
 	case sameIdentity(existing.Spec.Identity, hw):
+		// The same machine, possibly somewhere new (a fresh DHCP lease or pod IP). spec.endpoint
+		// is the operator's and never edited here; the address it answers at is recorded in
+		// status and dialed first (ADR 0086).
+		if existing.DialEndpoint() != endpoint {
+			if err := recordObservedEndpoint(ctx, r.Client, r.Client, &existing, endpoint); err != nil {
+				return nil, fmt.Errorf("recording %q's new address: %w", existing.Name, err)
+			}
+		}
+
 		return &existing, nil
 
 	default:

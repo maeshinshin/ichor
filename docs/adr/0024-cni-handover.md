@@ -1,8 +1,8 @@
 # 0024. CNI hand-over: no registry, render-time removal, a separate controller
 
-Status: Accepted · Date: 2026-10-25 · Design section: GitOps and Argo CD
+Status: Accepted (amended 2026-10-26) · Date: 2026-10-25 · Design section: GitOps and Argo CD
 
-Decided: No CNI hand-over registry (one real member); removal happens at render time off a status condition; a separate controller
+Decided: No CNI hand-over registry (one real member); removal happens at render time off a status condition; a separate controller; the generated Application syncs automatically (prune, selfHeal), amended 2026-10-26
 
 ## Context
 
@@ -132,3 +132,5 @@ in a tight loop) without guessing that the operator meant `disabled`.
   0013) for the same reason: a controller cannot import the CLI package.
 - Not built here: the `ichor gitops handoff cni` CLI command; any change to
   `internal/cli`, `internal/uiapi`, `pkg/upgrade`, or the e2e suite.
+
+> Update (ADR 0055 addendum, 2026-10-26): the generated Cilium Application now carries `syncPolicy.automated {prune: true, selfHeal: true}` and `PruneLast=true`. Without it Argo CD never synced the Application, so it never became Synced + Healthy and the hand-over never completed (found on real hardware). Ichor still never changes the sync policy of an existing Application; it only chooses one when it creates its own.

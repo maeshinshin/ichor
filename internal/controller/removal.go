@@ -313,17 +313,23 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 	// same point, so whichever of two concurrent removals gets here second
 	// sees the first's finalizer (or its completed deletion) already
 	// reflected -- the race the webhook's admission-time count cannot see.
-	siblings, err := r.countApprovedControlPlanes(ctx, m)
-	if err != nil {
-		return err
-	}
+	// A worker only reaches here when a reset gave it the finalizer; it was never an
+	// etcd member and is not counted toward quorum, so only the drain and the reset apply to it.
+	isControlPlane := m.Spec.Role == roleControlPlane
 
-	if err := r.updateTransitioning(ctx, &cluster, siblings); err != nil {
-		return err
-	}
+	if isControlPlane {
+		siblings, err := r.countApprovedControlPlanes(ctx, m)
+		if err != nil {
+			return err
+		}
 
-	if err := checkControlPlaneRemoval(siblings, int(cluster.Spec.ControlPlane.Count)); err != nil {
-		return r.removalCondition(ctx, m, metav1.ConditionFalse, reasonRemovalRefused, err.Error())
+		if err := r.updateTransitioning(ctx, &cluster, siblings); err != nil {
+			return err
+		}
+
+		if err := checkControlPlaneRemoval(siblings, int(cluster.Spec.ControlPlane.Count)); err != nil {
+			return r.removalCondition(ctx, m, metav1.ConditionFalse, reasonRemovalRefused, err.Error())
+		}
 	}
 
 	// Storage evacuation comes before the drain (architecture.md, "Nodes":
@@ -365,10 +371,12 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 		return r.removalCondition(ctx, m, metav1.ConditionFalse, reasonDrainFailed, drainErr.Error())
 	}
 
-	if err := r.removeEtcdMember(ctx, &cluster, m); err != nil {
-		log.Error(err, "removing etcd member")
+	if isControlPlane {
+		if err := r.removeEtcdMember(ctx, &cluster, m); err != nil {
+			log.Error(err, "removing etcd member")
 
-		return r.removalCondition(ctx, m, metav1.ConditionFalse, reasonEtcdMemberRemoveFail, err.Error())
+			return r.removalCondition(ctx, m, metav1.ConditionFalse, reasonEtcdMemberRemoveFail, err.Error())
+		}
 	}
 
 	reset := resetRequested(m)

@@ -24,6 +24,7 @@ import (
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -113,6 +114,12 @@ type TalosOperationReconciler struct {
 	// Event (nil skips the Event, not the condition).
 	NodesReady NodesReadyFunc
 	Recorder   record.EventRecorder
+
+	// KubeClient, Evacuator serve the node kind alone (node_action.go): KubeClient
+	// cordons, drains and reads Node readiness live (nil skips the drain and reads the cache),
+	// Evacuator is the storage hook run before a node is taken away (nil skips it).
+	KubeClient kubernetes.Interface
+	Evacuator  StorageEvacuator
 }
 
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosoperations,verbs=get;list;watch;update;patch
@@ -148,8 +155,20 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	// A shutdown that has asked every machine to stop only waits for the
 	// operator to power them on; it holds no lock (shutdown.go).
+	// Same for a node shutdown. A reset waits for the removal flow, which takes the
+	// cluster lock itself, so it does not hold it either.
 	if op.Spec.Kind == ichorv1alpha1.TalosOperationKindShutdown && op.Status.Phase == ichorv1alpha1.TalosOperationPhaseShutDown {
 		return r.awaitPowerOn(ctx, &op, &cluster)
+	}
+
+	if op.Spec.Kind == ichorv1alpha1.TalosOperationKindNode {
+		if op.Status.Phase == ichorv1alpha1.TalosOperationPhaseShutDown {
+			return r.awaitPowerOn(ctx, &op, &cluster)
+		}
+
+		if st := op.Status.Node; st != nil && st.Step == ichorv1alpha1.NodeStepRemoving && op.Status.FailureReason == "" {
+			return r.awaitRemoval(ctx, &op)
+		}
 	}
 
 	lock, err := r.acquireDisruptiveLock(ctx, &cluster, &op)
@@ -186,6 +205,10 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	if op.Spec.Kind == ichorv1alpha1.TalosOperationKindShutdown {
 		return r.advanceShutdown(ctx, &op, &cluster, lock)
+	}
+
+	if op.Spec.Kind == ichorv1alpha1.TalosOperationKindNode {
+		return r.advanceNode(ctx, &op, &cluster, lock)
 	}
 
 	if op.Spec.Kind == ichorv1alpha1.TalosOperationKindCARotation {

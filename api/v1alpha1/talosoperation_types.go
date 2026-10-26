@@ -48,6 +48,30 @@ const (
 	// approved machines, one machine at a time through the node-operation hook, a staged apply and
 	// a reboot. Nothing reboots a node for a configuration change without one.
 	TalosOperationKindConfig = "config"
+
+	// TalosOperationKindNode runs one action on exactly one machine (spec.node): a
+	// reboot, a shutdown, a service restart, an etcd defragmentation or leadership handover, or a
+	// reset. Like shutdown it runs its own state machine, held in status.node.
+	TalosOperationKindNode = "node"
+)
+
+// Values for TalosOperationNodeSpec.Action.
+const (
+	NodeActionReboot                = "reboot"
+	NodeActionShutdown              = "shutdown"
+	NodeActionRestartService        = "restart-service"
+	NodeActionEtcdDefrag            = "etcd-defrag"
+	NodeActionEtcdForfeitLeadership = "etcd-forfeit-leadership"
+	NodeActionReset                 = "reset"
+)
+
+// Values for TalosOperationNodeStatus.Step.
+const (
+	// NodeStepRequested: the action was sent to the node; the operation waits for its effect.
+	NodeStepRequested = "Requested"
+
+	// NodeStepRemoving: a reset handed the machine to the removal flow and waits for it to go.
+	NodeStepRemoving = "Removing"
 )
 
 // Values for TalosOperationCARotationStatus.Stage, in the order they run. The stage names which CA
@@ -133,6 +157,8 @@ const TalosMachineUpgradeOrderLabel = "ichor.maesh.dev/upgrade-order"
 // controls -- never that kind's own execution details.
 // +kubebuilder:validation:XValidation:rule="self.clusterRef == oldSelf.clusterRef",message="clusterRef cannot change after creation"
 // +kubebuilder:validation:XValidation:rule="self.kind == oldSelf.kind",message="kind cannot change after creation"
+// +kubebuilder:validation:XValidation:rule="(self.kind == 'node') == has(self.node)",message="spec.node is required for the node kind and only allowed there"
+// +kubebuilder:validation:XValidation:rule="has(self.node) == has(oldSelf.node) && (!has(self.node) || self.node == oldSelf.node)",message="node cannot change after creation"
 type TalosOperationSpec struct {
 	// clusterRef names the TalosCluster this operation acts on.
 	// +kubebuilder:validation:XValidation:rule="self.name != ''",message="clusterRef.name is required"
@@ -148,9 +174,13 @@ type TalosOperationSpec struct {
 	// shutdown and ca-rotation are the exceptions: each runs its own state machine.
 	// config applies the pending reboot-requiring configuration changes, one machine at a time
 	// with a reboot each.
-	// +kubebuilder:validation:Enum=talos;kubernetes;ichor;cni;shutdown;ca-rotation;config
+	// +kubebuilder:validation:Enum=talos;kubernetes;ichor;cni;shutdown;ca-rotation;config;node
 	// +required
 	Kind string `json:"kind"`
+
+	// node is the action of a node-kind operation: which machine and what to do to it.
+	// +optional
+	Node *TalosOperationNodeSpec `json:"node,omitempty"`
 
 	// paused stops the operation from advancing any further machine. It
 	// does not undo a machine already advanced, and it does not release
@@ -167,6 +197,58 @@ type TalosOperationSpec struct {
 	// +kubebuilder:default=1
 	// +optional
 	MaxUnavailable int32 `json:"maxUnavailable,omitempty"`
+}
+
+// TalosOperationNodeSpec is one action on one machine. One action per operation.
+// +kubebuilder:validation:XValidation:rule="self.action == 'restart-service' ? has(self.service) : !has(self.service)",message="service is required for restart-service and only allowed there"
+// +kubebuilder:validation:XValidation:rule="self.action != 'reset' || (has(self.confirm) && self.confirm == self.machineRef.name)",message="reset needs confirm equal to the machine name"
+// +kubebuilder:validation:XValidation:rule="!self.allowLeader || self.action == 'etcd-defrag'",message="allowLeader only applies to etcd-defrag"
+type TalosOperationNodeSpec struct {
+	// machineRef names the TalosMachine the action runs on.
+	// +kubebuilder:validation:XValidation:rule="self.name != ''",message="machineRef.name is required"
+	// +required
+	MachineRef corev1.LocalObjectReference `json:"machineRef"`
+
+	// action is what to do: reboot, shutdown, restart-service, etcd-defrag (control planes),
+	// etcd-forfeit-leadership (the control plane that leads etcd), or reset (the removal flow with
+	// the node wiped). etcd member removal is not an action: it is part of removal.
+	// +kubebuilder:validation:Enum=reboot;shutdown;restart-service;etcd-defrag;etcd-forfeit-leadership;reset
+	// +required
+	Action string `json:"action"`
+
+	// service is the Talos service restart-service restarts. Only kubelet, containerd and cri
+	// are allowed; etcd, apid, trustd and machined never are.
+	// +kubebuilder:validation:Enum=kubelet;containerd;cri
+	// +optional
+	Service string `json:"service,omitempty"`
+
+	// allowLeader lets etcd-defrag run on the member that currently leads a multi-member etcd.
+	// By default it is refused there.
+	// +kubebuilder:default=false
+	// +optional
+	AllowLeader bool `json:"allowLeader,omitempty"`
+
+	// confirm must equal the machine's name for reset, the typed confirmation of an irreversible action.
+	// +optional
+	Confirm string `json:"confirm,omitempty"`
+}
+
+// TalosOperationNodeStatus is the state of a node-kind operation. The machine's own entry in
+// status.machines holds the boot ID read just before the action was sent.
+type TalosOperationNodeStatus struct {
+	// step is empty until the action was sent, then Requested (waiting for its effect) or
+	// Removing (a reset waiting for the removal flow).
+	// +kubebuilder:validation:Enum=Requested;Removing
+	// +optional
+	Step string `json:"step,omitempty"`
+
+	// requestedAt is when the action was sent; the wait for its effect is bounded from it.
+	// +optional
+	RequestedAt *metav1.Time `json:"requestedAt,omitempty"`
+
+	// message is a plain-English line about what the operation is doing or waiting for.
+	// +optional
+	Message string `json:"message,omitempty"`
 }
 
 // TalosOperationMachineStatus is one machine's progress within a
@@ -218,6 +300,10 @@ type TalosOperationStatus struct {
 	// machine's own failed step, as opposed to spec.paused.
 	// +optional
 	FailureReason string `json:"failureReason,omitempty"`
+
+	// node is the node kind's state machine.
+	// +optional
+	Node *TalosOperationNodeStatus `json:"node,omitempty"`
 
 	// caRotation is the ca-rotation kind's state machine: which stage every node is being taken
 	// to, and which CA is accepted and which issues in it. Public fingerprints only.

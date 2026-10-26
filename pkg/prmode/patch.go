@@ -170,6 +170,15 @@ func setNode(doc *yaml.Node, path []string, newValue any) error {
 		}
 
 		child := findMappingValue(node, key)
+		if child == nil && i == len(path)-1 {
+			// Only the leaf may be absent: a field the CR never set (a
+			// strict approval adds role, hostname ...). A missing parent is
+			// still an error, so a typo cannot invent structure.
+			node.Content = append(node.Content,
+				&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: key}, &yaml.Node{Kind: yaml.ScalarNode})
+			child = node.Content[len(node.Content)-1]
+		}
+
 		if child == nil {
 			return fmt.Errorf("key %q not found at %s", key, strings.Join(path[:i], "."))
 		}

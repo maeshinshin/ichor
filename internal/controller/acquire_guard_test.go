@@ -25,8 +25,8 @@ import (
 )
 
 // acquireLockFuncName is the one function allowed to call
-// clusterlock.Lock.Acquire. Every disruptive operation (refuseReboot
-// today; a future upgrade or CA rotation) must go through it, so the
+// clusterlock.Lock.Acquire. Every disruptive operation (removal today,
+// the TalosOperation backbone; a future upgrade or CA rotation) must go through it, so the
 // control-plane-transitioning refusal (ADR 0010's appendix) lives in one
 // place rather than being a safety net each new call site has to
 // remember to add -- the same way the secrets RBAC marker regressed once

@@ -436,7 +436,7 @@ var _ = Describe("TalosCluster transitioning status", func() {
 		Expect(cond.Message).To(ContainSubstring("4"))
 	})
 
-	It("refuses a reboot-requiring change on any machine while the cluster is transitioning", func() {
+	It("reports a reboot-requiring change while the cluster is transitioning, without taking the lock", func() {
 		bundle := newTestBundle("v1.14")
 		secret := newTestSecret(bundle)
 		cluster := newTestCluster(secret.Name, "v1.14")
@@ -470,11 +470,11 @@ var _ = Describe("TalosCluster transitioning status", func() {
 		cond := readyCondition(fetchMachine(worker))
 		Expect(cond).NotTo(BeNil())
 		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(cond.Reason).To(Equal(reasonClusterTransitioning))
+		Expect(cond.Reason).To(Equal(reasonRebootRequired))
 
 		lock := clusterlock.New(k8sClient, clusterKeyOf2(cluster), 0)
 		_, held, err := lock.Holder(ctx)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(held).To(BeFalse(), "refuseReboot's transitioning check returns before ever taking the lock")
+		Expect(held).To(BeFalse(), "refuseReboot never takes the cluster lock")
 	})
 })

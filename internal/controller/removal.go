@@ -182,7 +182,7 @@ func (e *transitioningError) Error() string {
 // acquireDisruptiveLock is the only place in this package that calls
 // clusterlock.Lock.Acquire -- enforced by TestAcquireDisruptiveLockIsTheOnlyAcquireCallSite,
 // a go/parser check in the same spirit as TestFixtureUUIDsAreUnique. Every
-// disruptive operation (refuseReboot today; a future upgrade or CA
+// disruptive operation (removal and the TalosOperation backbone today; a future upgrade or CA
 // rotation) goes through it, so the control-plane-transitioning refusal
 // lives in exactly one place instead of being a safety net each new call
 // site has to remember to add -- the same way the secrets RBAC marker

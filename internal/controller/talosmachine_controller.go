@@ -86,11 +86,6 @@ import (
 // webhook cert rotator's FieldOwner).
 const controllerIdentity = "ichor-controller"
 
-// machineLockIdentity is the identity under which the machine reconciler probes the cluster lock
-// for a reboot-requiring change it only reports (refuseReboot); distinct from controllerIdentity
-// so it can never release a lock a TalosOperation holds.
-const machineLockIdentity = "ichor-controller/machine"
-
 // roleControlPlane is TalosMachineSpec.Role's control-plane value, shared
 // across this package's own uses of it (talosoperation_controller.go and
 // removal.go) rather than each repeating the literal.
@@ -467,7 +462,7 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 				driftNote, strings.Join(impact.InstallTimeOnly, ", ")))
 
 	case impact.RebootRequired:
-		return r.refuseReboot(ctx, &m, &cluster, driftNote, impact.RebootPaths)
+		return r.refuseReboot(ctx, &m, driftNote, impact.RebootPaths)
 
 	case drifted && cluster.Spec.DriftPolicy != driftPolicyAutoCorrect:
 		return ctrl.Result{}, r.ready(ctx, &m, metav1.ConditionFalse, reasonNodeDrifted,
@@ -598,35 +593,15 @@ func desiredInputsHash(
 	return render.Hash([]byte(strings.Join(parts, ";"))), nil
 }
 
-// refuseReboot is the reboot-needed branch of design step 5. This reconciler never reboots a node:
-// the hook, the drain and the etcd checks that must precede a reboot belong to a config-rollout
-// TalosOperation (ADR 0080), which someone has to start. Here it only reports, naming the fields
-// that need the reboot (also kept in status.rebootPaths for the rollout's plan), after the lock
-// refusals that say why the cluster could not take one right now.
-//
-// The lock is taken under machineLockIdentity, not controllerIdentity: a running rollout holds
-// the lock as controllerIdentity, and Release for the same identity would free it from under the
-// rollout. Under its own identity this probe is refused ("held") while a rollout runs, and
-// only ever releases what it took itself.
+// refuseReboot is the reboot-needed branch of design step 5. This reconciler never reboots a node
+// and never takes the cluster lock here: the hook, the drain and the etcd checks that must precede
+// a reboot belong to a config-rollout TalosOperation (ADR 0080), which someone has to start and
+// which takes the lock itself when it does the work. Here it only records status.rebootPaths
+// (the rollout's plan reads them) and reports Ready=False/RebootRequired, naming the fields.
 func (r *TalosMachineReconciler) refuseReboot(
-	ctx context.Context, m *ichorv1alpha1.TalosMachine, cluster *ichorv1alpha1.TalosCluster, driftNote string, paths []string,
+	ctx context.Context, m *ichorv1alpha1.TalosMachine, driftNote string, paths []string,
 ) (ctrl.Result, error) {
-	log := logf.FromContext(ctx)
-
 	m.Status.RebootPaths = paths
-
-	// A reboot-causing apply never itself completes a control-plane
-	// transition, so completesTransition is always false here.
-	lock, err := r.acquireDisruptiveLock(ctx, cluster, m, machineLockIdentity, false)
-	if err != nil {
-		return r.lockRefusal(ctx, m, err, driftNote, "reboot-requiring change deferred")
-	}
-
-	defer func() {
-		if err := lock.Release(ctx, machineLockIdentity); err != nil {
-			log.Error(err, "releasing cluster lock")
-		}
-	}()
 
 	return ctrl.Result{}, r.ready(ctx, m, metav1.ConditionFalse, reasonRebootRequired,
 		driftNote+"configuration change needs a reboot (fields: "+summarizePaths(paths, rebootPathsInMessage)+

@@ -144,6 +144,16 @@ export const en = {
   'approve.role': 'Role',
   'approve.selectRole': 'Select a role',
   'approve.hostname': 'Hostname',
+  'approve.hostnameInvalid':
+    'Use lower-case letters, digits and "-", with "." between labels (RFC 1123); it cannot start or end with "-".',
+  'approve.installDisk': 'Install disk (system)',
+  'approve.installDiskNone': 'None - set it later',
+  'approve.installDiskOption': '{id} - {size} ({dev})',
+  'approve.installDiskHelp':
+    'Talos installs onto this disk. It is picked by its most stable identifier (WWID, serial, by-id path, bus path), not by its device name.',
+  'approve.installDiskTyped':
+    'No disks were reported by the machine, so type a device path. It can change between boots; a stable identifier is better.',
+  'approve.installImage': 'Installer image (optional)',
   'approve.reason': 'Reason (optional)',
   'approve.reasonPlaceholder': "Why, if it isn't obvious from the above",
   'approve.submitting': 'Approving…',

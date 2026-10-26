@@ -193,3 +193,56 @@ func IsTracked(
 
 	return false, "", nil
 }
+
+// ArgoApplicationOf names the Application that tracks obj, so PR mode can
+// read its source. The annotation value is
+// "<app>:<group>/<kind>:<namespace>/<name>", with "<appNamespace>_<app>" for
+// an Application outside argoCDNamespace; the label value is the bare app
+// name. Honoring the method argocd-cm declares is the same rule IsTracked
+// uses, so a CR IsTracked reported is found here too. An error means "cannot
+// say which Application", and the caller must not write.
+func ArgoApplicationOf(
+	ctx context.Context, k8sClient client.Client, argoCDNamespace string, obj client.Object,
+) (types.NamespacedName, error) {
+	var cm corev1.ConfigMap
+
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: argoCDNamespace, Name: ArgoConfigMapName}, &cm); err != nil {
+		return types.NamespacedName{}, fmt.Errorf("reading %s/%s: %w", argoCDNamespace, ArgoConfigMapName, err)
+	}
+
+	method := cm.Data[ResourceTrackingMethodKey]
+
+	if method == "" || method == "annotation" || method == "annotation+label" {
+		if v, ok := obj.GetAnnotations()[ArgoTrackingAnnotation]; ok {
+			app, _, _ := strings.Cut(v, ":")
+
+			return qualifiedApp(argoCDNamespace, app)
+		}
+	}
+
+	if method == "" || method == "label" || method == "annotation+label" {
+		labelKey := cm.Data[ApplicationInstanceLabelKey]
+		if labelKey == "" {
+			labelKey = ArgoDefaultInstanceLabelKey
+		}
+
+		if v, ok := obj.GetLabels()[labelKey]; ok {
+			return qualifiedApp(argoCDNamespace, v)
+		}
+	}
+
+	return types.NamespacedName{}, fmt.Errorf("%s carries no Argo CD tracking marker", client.ObjectKeyFromObject(obj))
+}
+
+func qualifiedApp(argoCDNamespace, app string) (types.NamespacedName, error) {
+	ns, name := argoCDNamespace, app
+	if before, after, ok := strings.Cut(app, "_"); ok {
+		ns, name = before, after
+	}
+
+	if ns == "" || name == "" {
+		return types.NamespacedName{}, fmt.Errorf("the Argo CD tracking marker names no Application (%q)", app)
+	}
+
+	return types.NamespacedName{Namespace: ns, Name: name}, nil
+}

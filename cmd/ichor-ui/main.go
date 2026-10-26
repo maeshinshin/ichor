@@ -121,6 +121,11 @@ func main() {
 		ArgoCDNamespace: os.Getenv("ICHOR_ARGOCD_NAMESPACE"),
 		NodeTalosClient: uiapi.NewMachineryNodeTalosClient,
 		Draining:        draining,
+		// External tool links registered in the chart; empty means not registered.
+		Links: uiapi.Links{
+			ArgoCD: os.Getenv("ICHOR_LINK_ARGOCD"), Grafana: os.Getenv("ICHOR_LINK_GRAFANA"),
+			Hubble: os.Getenv("ICHOR_LINK_HUBBLE"), Longhorn: os.Getenv("ICHOR_LINK_LONGHORN"),
+		},
 	}
 
 	// OIDC. Off: writes use this pod's ServiceAccount, so anyone who
@@ -174,6 +179,7 @@ func main() {
 	mux.Handle(ichorv1alpha1connect.NewMachineServiceHandler(server, rpcInterceptor))
 	mux.Handle(ichorv1alpha1connect.NewNodeServiceHandler(server, rpcInterceptor))
 	mux.Handle(ichorv1alpha1connect.NewPatchServiceHandler(server, rpcInterceptor))
+	mux.Handle(ichorv1alpha1connect.NewGitOpsServiceHandler(server, rpcInterceptor))
 
 	srv := &http.Server{
 		Addr:              *addr,

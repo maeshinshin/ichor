@@ -45,13 +45,15 @@ const (
 // records how many nodes had been switched when the removal happened.
 type fakeKubeProxyAdmin struct {
 	calls     int
+	got       TalosClient // the client of the latest call
 	appliedAt int
 	applied   func() int
 	err       error
 }
 
-func (f *fakeKubeProxyAdmin) RemoveKubeProxy(ctx context.Context, _ TalosClient) error {
+func (f *fakeKubeProxyAdmin) RemoveKubeProxy(ctx context.Context, talos TalosClient) error {
 	f.calls++
+	f.got = talos
 	if f.applied != nil {
 		f.appliedAt = f.applied()
 	}
@@ -323,6 +325,31 @@ var _ = Describe("cniKubeProxyAdvancer", func() {
 		Expect(admin.calls).To(Equal(1))
 		Expect(admin.appliedAt).To(Equal(2), "removed only after both control planes were switched")
 		Expect(kubeProxyExists()).To(BeFalse())
+	})
+
+	It("replaced: when a worker finishes last, kube-proxy is removed through a control plane's client", func() {
+		newCilium("true", true)
+		newKubeProxyDaemonSet(testK8sOld, 2, 2)
+
+		cluster := cniSwitchCluster(modeReplaced)
+		cp := newK8sControlPlane(cluster.Name, "kp-wcp")
+		w := newK8sWorker(cluster.Name, "kp-wrk")
+		fcp := &fakeTalosClient{current: nodeConfig(cluster, cp, modeEnabled)}
+		fw := &fakeTalosClient{current: nodeConfig(cluster, w, modeEnabled)}
+		admin := &fakeKubeProxyAdmin{}
+		adv := newKubeProxyAdvancer(map[string]*fakeTalosClient{cp.Name: fcp, w.Name: fw}, admin)
+		op := &ichorv1alpha1.TalosOperation{}
+		markCompleted(op, cp)
+
+		_, err := adv.Advance(ctx, cluster, w, op)
+		Expect(err).NotTo(HaveOccurred())
+		fw.current = fw.applyCalls[0]
+
+		done, err := adv.Advance(ctx, fetchCluster(cluster), w, op)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(done).To(BeTrue())
+		Expect(admin.calls).To(Equal(1))
+		Expect(admin.got).To(BeIdenticalTo(fcp), "a worker's Talos API has no kubeconfig to give")
 	})
 
 	It("replaced: refuses to remove kube-proxy while a held control plane still renders it", func() {

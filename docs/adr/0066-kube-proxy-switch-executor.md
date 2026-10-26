@@ -50,7 +50,7 @@ Replacing (`enabled` to `replaced`):
    touched and no status changes.
 2. `status.cni.kubeProxy` is set to replaced; each machine is switched (`enabled: false`), control planes first.
 3. After every machine of the operation is done: delete the DaemonSet, ServiceAccount, ClusterRoleBinding and
-   the labelled ConfigMaps (through the admin kubeconfig, like ADR 0057), then confirm the DaemonSet is gone.
+   the `kube-proxy`-named ConfigMaps (through the admin kubeconfig, like ADR 0057), then confirm the DaemonSet is gone.
    A control plane excluded by the hold annotation fails the step instead (it would re-apply what is deleted).
 
 Enabling (`replaced` to `enabled`):
@@ -119,3 +119,4 @@ Same cluster as ADR 0057's observation (Cilium 1.18.0 with kube-proxy, `handover
   I removed the DaemonSet and ServiceAccount by hand and then checked: from a pod, the cluster DNS ClusterIP
   (`10.249.0.10`) answered and a TCP/TLS connection to the `kubernetes` Service ClusterIP was established.
 - Not observed: `replaced` to `enabled`; the "values in Git" wait after a hand-over.
+- Fixed: the removal goes through a control plane's Talos client when the last machine is a worker, and deletes the DaemonSet, ServiceAccount, ClusterRoleBinding and every `kube-proxy` or `kube-proxy-<checksum>` ConfigMap by name.

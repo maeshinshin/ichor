@@ -27,6 +27,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -193,7 +194,7 @@ func (a *cniKubeProxyAdvancer) Advance(
 	}
 
 	if target == cni.KubeProxyReplaced {
-		return a.removeKubeProxy(ctx, talos)
+		return a.removeKubeProxy(ctx, cluster, m, bundle, talos)
 	}
 
 	return a.enableTail(ctx, preset, cluster, op)
@@ -316,7 +317,35 @@ func machineCompleted(op *ichorv1alpha1.TalosOperation, name string) bool {
 
 // removeKubeProxy is the replacing tail: Talos stopped managing the objects but does not delete
 // them (ADR 0066), so Ichor does, and reports done once the DaemonSet is gone.
-func (a *cniKubeProxyAdvancer) removeKubeProxy(ctx context.Context, talos TalosClient) (bool, error) {
+//
+// Only a control plane's Talos API issues an admin kubeconfig, and a cluster with workers can finish
+// on one, so the removal goes through a control plane's client when m is not one.
+func (a *cniKubeProxyAdvancer) removeKubeProxy(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, bundle *secrets.Bundle, talos TalosClient,
+) (bool, error) {
+	if m.Spec.Role != roleControlPlane {
+		cps, err := deleteguard.ApprovedMachines(ctx, a.Reader, cluster.Namespace, cluster.Name,
+			deleteguard.MachineFilter{Role: roleControlPlane})
+		if err != nil {
+			return false, err
+		}
+
+		if len(cps) == 0 {
+			return false, errors.New("no approved control plane to fetch an admin kubeconfig from")
+		}
+
+		dialCtx, cancel := context.WithTimeout(ctx, etcdDialTimeout)
+		defer cancel()
+
+		cp, err := a.TalosClient(dialCtx, cluster, &cps[0], bundle)
+		if err != nil {
+			return false, fmt.Errorf("dialing control plane %q to remove kube-proxy: %w", cps[0].Name, err)
+		}
+		defer closeTalosClient(cp)
+
+		talos = cp
+	}
+
 	if err := a.Admin.RemoveKubeProxy(ctx, talos); err != nil {
 		return false, fmt.Errorf("removing kube-proxy: %w", err)
 	}

@@ -135,3 +135,4 @@ or "no flannel" (those are separate documents, rejected when combined with the l
   the cluster was finished with `talosctl upgrade-k8s`, which is outside the product.
 - Not observed: the bootstrap-manifest sync and the worker step (the operation never got past the second control
   plane).
+- Fixed: each Talos call in `begin` (and the kube-proxy switch and CA rotation applies) now has its own deadline, the apply bounded by `upgradeCallTimeout`.

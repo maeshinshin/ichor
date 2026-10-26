@@ -1,68 +1,85 @@
 # ichor-ui demo cluster (KubeVirt)
 
-A long-lived throwaway Talos cluster for looking at ichor-ui in a browser. Everything
-lives in the outer `ichor-e2e` namespace and is named `ichor-ui-demo-*`.
+A long-lived throwaway Talos cluster for looking at ichor-ui in a browser, built by the
+product's own bootstrap: `ichor init` creates the control plane, a second VM is approved
+with `ichor machine approve --install-disk`. Everything lives in the outer `ichor-e2e`
+namespace and is named `<prefix>-*` (prefix `ichor-ui-demo`, or `ichor-ui-demo2` for the
+second build; see ADR 0081 for the decisions behind this).
 
 ichor-ui runs with **OIDC off**: anyone who can reach the LoadBalancer address can read
 and write every Ichor CR (ADR 0058). Tear it down when you are done.
 
 ## What it is
 
-- `ichor-ui-demo-cp`: one schedulable control plane, installed and bootstrapped by
-  `kubevirt-harness up-demo`, adopted and approved through the `ichor` CLI.
-- `ichor-ui-demo-w`: a worker left in maintenance mode; `spec.discovery` finds it and it
-  shows as a pending machine.
-- Inside the cluster (`ichor-system`): the controller (`ENABLE_WEBHOOKS=false`), ichor-ui,
-  a NodePort Service on 30080, a TalosCluster, the control plane's TalosMachine and one
-  TalosConfigPatch (`demo-sysctl`).
-- Outside: Service `ichor-ui-demo` (type LoadBalancer) selecting the control plane's
-  virt-launcher pod. Cilium's pool assigns a 192.168.0.64/26 address.
-- `ichor-ui-demo-tools`: a busybox pod serving the controller/ichor-ui/ichor/kubectl
-  binaries on :8000 for the inner pods' init containers (no registry, no docker). Keep it
-  running: a restarted inner pod fetches its binary from it again.
+- `<prefix>-cp`: one schedulable control plane (preset `single`, flannel), created by `ichor init`.
+- `<prefix>-w`: a worker found in maintenance mode by `spec.discovery` and approved by hand.
+- Inside the cluster: Ichor (controller + ichor-ui) from `init`'s embedded manifest, pod/service
+  subnets 10.248.0.0/16 and 10.249.0.0/16 (the outer cluster owns 10.244.0.0/16).
+- Outside: `<prefix>-registry` (a `registry:2` Deployment + Service, emptyDir), `<prefix>-tools`
+  (a busybox pod `ichor init` runs in, because the workstation cannot reach pod IPs) and the
+  LoadBalancer Service `ichor-ui-demo` (`outer-service.yaml`): port 80 -> ichor-ui, 6443 -> the
+  inner kube-apiserver.
 
-## Steps (as run)
+## Steps
+
+`P=ichor-ui-demo2`, `C=admin@talos-cluster01`; run inside `nix develop`. Replace `__PREFIX__` with `$P`.
 
 ```sh
-export ICHOR_E2E_KUBE_CONTEXT=admin@talos-cluster01
+export ICHOR_E2E_KUBE_CONTEXT=$C ICHOR_UI_DEMO_PREFIX=$P
 go build -o bin/kubevirt-harness ./test/harness/kubevirt
-./bin/kubevirt-harness up-demo        # VMs, Talos install, bootstrap; writes bin/ui-demo.*
-make build-ichor-ui                   # then CGO_ENABLED=0 go build -tags uiembed -o bin/ichor-ui ./cmd/ichor-ui
-CGO_ENABLED=0 go build -o bin/manager-static cmd/main.go
-CGO_ENABLED=0 go build -o bin/ichor ./cmd/ichor
 
-kubectl --context admin@talos-cluster01 apply -f test/harness/ui-demo/tools-pod.yaml
-# kubectl cp bin/{ichor-ui,manager-static->manager,ichor} and kubectl to ichor-ui-demo-tools:/srv/,
-# and bin/ui-demo.{kubeconfig,talosconfig} / ui-demo-secrets.yaml to :/work/{kubeconfig,talosconfig,secrets.yaml}
-# Inner kubectl: kubectl exec ichor-ui-demo-tools -- env KUBECONFIG=/work/kubeconfig /srv/kubectl ...
-# inner: apply config/crd/bases/*.yaml (--server-side), inner.yaml (TOOLS_IP -> the tools pod IP),
-#        config/rbac/ichor-ui/*.yaml (namespace system -> ichor-system; apply with
-#        `-n ichor-system`: the RoleBinding ichor-ui-secrets-rolebinding has no namespace
-#        in the source, so without it it lands in `default` and ichor-ui cannot read the
-#        bundle Secret; or use kustomize with the namespace set), the secrets Secret
-#        ichor-ui-demo-secrets (key secrets.yaml), ichor-crs.yaml (placeholders filled in)
-# ichor adopt --cluster ichor-ui-demo -n ichor-system ...  (with discovery temporarily off:
-#        adopt dials every machine, and a maintenance-mode worker has no credentials)
-# ichor machine approve ichor-ui-demo-cp --role controlplane --local ...
-# inner: apply ichor-patch.yaml, then put spec.discovery back
-kubectl --context admin@talos-cluster01 apply -f test/harness/ui-demo/outer-service.yaml
-kubectl --context admin@talos-cluster01 -n ichor-e2e get svc ichor-ui-demo   # EXTERNAL-IP
+# 1. registry + images (no container runtime: crane appends the binaries to a distroless base)
+sed s/__PREFIX__/$P/ test/harness/ui-demo/registry.yaml | kubectl --context $C -n ichor-e2e apply -f -
+REG=$(kubectl --context $C -n ichor-e2e get svc $P-registry -o jsonpath={.spec.clusterIP})
+make build-ichor-ui
+CGO_ENABLED=0 go build -tags uiembed -o bin/img/ichor-ui/ichor-ui ./cmd/ichor-ui
+CGO_ENABLED=0 go build -ldflags "-X github.com/maeshinshin/ichor/internal/version.Version=v0.0.0-demo" -o bin/img/manager/manager cmd/main.go
+# tar each binary (named manager / ichor-ui, mode 755) and `crane append --insecure -b gcr.io/distroless/static:nonroot
+# -f X.tar -t localhost:PORT/maeshinshin/ichor-controller:demo` (and ichor-ui) through
+# `kubectl port-forward svc/$P-registry PORT:5000`
+
+# 2. ichor with the install manifest pointing at those names; undo the kustomization edits afterwards
+make build-ichor-embed VERSION=v0.0.0-demo IMG=ghcr.io/maeshinshin/ichor-controller:demo IMG_UI=ghcr.io/maeshinshin/ichor-ui:demo
+git checkout config/manager/kustomization.yaml config/manager-ui/kustomization.yaml
+CGO_ENABLED=0 go build -tags installembed -ldflags "-X github.com/maeshinshin/ichor/internal/version.Version=v0.0.0-demo" -o bin/ichor-static ./cmd/ichor
+
+# 3. VMs in maintenance mode (prints CP_IP and WORKER_IP)
+./bin/kubevirt-harness up-demo
+
+# 4. tools pod; copy ichor-static and a static kubectl in; init from inside it
+kubectl --context $C -n ichor-e2e run $P-tools --image=busybox:1.37 --restart=Never -- sleep 86400
+kubectl --context $C -n ichor-e2e cp bin/ichor-static $P-tools:/tmp/ichor
+kubectl --context $C -n ichor-e2e exec $P-tools -- env HOME=/tmp/home /tmp/ichor init --yes \
+  --cluster $P --preset single --cni flannel --endpoint-type node --endpoint-address $CP_IP \
+  --node-endpoint $CP_IP:50000 --talos-version v1.14.3 --version-contract v1.14 --install-disk /dev/vda \
+  --pod-subnets 10.248.0.0/16 --service-subnets 10.249.0.0/16 --registry-mirror ghcr.io=http://$REG:5000
+# init waits for the node, the API server and the webhooks; allow 10-15 minutes. The secrets bundle and
+# kubeconfig are under /tmp/home/.ichor/clusters/$P/ in the pod: copy them to bin/ (gitignored) at once.
+
+# 5. the worker: a TalosCluster needs spec.discovery.addresses=[$WORKER_IP] to list it, then
+ichor machine approve <name> --role worker --install-disk /dev/vda   # (--local with the kubeconfig)
+
+# 6. expose it: point Service ichor-ui-demo at the new VM (selector vm.kubevirt.io/name: $P-cp), add
+#    an inner NodePort Service for ichor-ui on 30080, then
+#    kubectl --kubeconfig bin/ui-demo.kubeconfig get nodes   # server https://192.168.0.69:6443, tls-server-name = the CP IP
 ```
 
-`ichor adopt` reports drift it cannot patch (install-time and pod/service subnet fields)
-because the harness generates the node's config with the Talos library, not Ichor's render.
-So the control plane's Ready condition is False/RebootRequired: Ichor refuses to apply.
+Gotchas: the endpoint is the VM's pod IP and changes if the VM restarts (re-run init);
+`ichor init` cannot be re-run against a node that already took its config, so after a failed
+init delete and recreate the VMs (`down-demo`, `up-demo`).
 
 ## Teardown
 
 Every command names its target; nothing uses `-l` or `--all`.
 
 ```sh
-C=admin@talos-cluster01
-kubectl --context $C -n ichor-e2e delete service ichor-ui-demo
-kubectl --context $C -n ichor-e2e delete pod ichor-ui-demo-tools
-ICHOR_E2E_KUBE_CONTEXT=$C ./bin/kubevirt-harness down-demo   # VMs ichor-ui-demo-cp/-w and their 4 DataVolumes
-rm -f bin/ui-demo.kubeconfig bin/ui-demo.talosconfig bin/ui-demo-secrets.yaml
+C=admin@talos-cluster01; P=ichor-ui-demo2
+kubectl --context $C -n ichor-e2e delete pod $P-tools
+kubectl --context $C -n ichor-e2e delete deployment $P-registry
+kubectl --context $C -n ichor-e2e delete service $P-registry
+ICHOR_UI_DEMO_PREFIX=$P ICHOR_E2E_KUBE_CONTEXT=$C ./bin/kubevirt-harness down-demo   # VMs $P-cp/-w and their 4 DataVolumes
+rm -f bin/ui-demo.kubeconfig   # only if it is for this cluster
+# the shared Service ichor-ui-demo: delete it only when no demo is left
 ```
 
 Deleting the VMs removes the inner cluster and everything in it.

@@ -87,13 +87,13 @@ var (
 // +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,verbs=list;watch;create
 // cert-controller reads the webhook configuration through an informer, which lists and watches
 // the whole kind (no object name in the request), so list and watch cannot be scoped to one
-// name (ADR 0078); get, update and patch can.
+// name (ADR 0081); get, update and patch can.
 // +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,verbs=list;watch
 // +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,resourceNames=ichor-validating-webhook-configuration,verbs=get;update;patch
 
 // cacheOptions confines the cached Secret informer to the controller's own namespace: the
 // controller's RBAC grants Secret list and watch only there (above), so an unrestricted
-// informer is forbidden and its cache never syncs (ADR 0078).
+// informer is forbidden and its cache never syncs (ADR 0081).
 func cacheOptions(namespace string) cache.Options {
 	if namespace == "" {
 		return cache.Options{}

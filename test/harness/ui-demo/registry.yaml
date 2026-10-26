@@ -1,0 +1,47 @@
+# Applied to the OUTER cluster, namespace ichor-e2e only. A throwaway, anonymous, plain-HTTP
+# registry the demo cluster's Talos nodes pull Ichor's images from (ADR 0081). Storage is an
+# emptyDir: re-push the images after a restart. Replace __PREFIX__ with the demo prefix
+# (`sed s/__PREFIX__/ichor-ui-demo2/ registry.yaml | kubectl ... apply -f -`).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: __PREFIX__-registry
+  namespace: ichor-e2e
+  labels:
+    ichor.maesh.dev/e2e-harness: kubevirt-ui-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: __PREFIX__-registry
+  template:
+    metadata:
+      labels:
+        app: __PREFIX__-registry
+        ichor.maesh.dev/e2e-harness: kubevirt-ui-demo
+    spec:
+      containers:
+        - name: registry
+          image: registry:2
+          ports:
+            - containerPort: 5000
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/registry
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: __PREFIX__-registry
+  namespace: ichor-e2e
+  labels:
+    ichor.maesh.dev/e2e-harness: kubevirt-ui-demo
+spec:
+  selector:
+    app: __PREFIX__-registry
+  ports:
+    - port: 5000
+      targetPort: 5000

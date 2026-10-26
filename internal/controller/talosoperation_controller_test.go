@@ -24,6 +24,8 @@ import (
 	. "github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 
@@ -123,6 +125,19 @@ func (f *fakeAdvancer) Advance(
 	return true, nil
 }
 
+// expectPausedBecause asserts a paused operation says why: a Paused condition carrying the reason
+// and a message. failureReason stays empty for these, because it also means "a step failed, hold"
+// to the controller, the CLI and the UI.
+func expectPausedBecause(op *ichorv1alpha1.TalosOperation, reason string) {
+	GinkgoHelper()
+
+	cond := apimeta.FindStatusCondition(op.Status.Conditions, conditionOperationPaused)
+	Expect(cond).NotTo(BeNil(), "a paused operation must carry a reason")
+	Expect(cond.Status).To(Equal(metav1.ConditionTrue))
+	Expect(cond.Reason).To(Equal(reason))
+	Expect(cond.Message).NotTo(BeEmpty())
+}
+
 var _ = Describe("TalosOperationReconciler", func() {
 	It("ignores a TalosOperation that no longer exists", func() {
 		r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient}
@@ -143,7 +158,7 @@ var _ = Describe("TalosOperationReconciler", func() {
 
 		got := fetchOperation(op)
 		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
-		Expect(got.Status.Conditions).To(BeEmpty()) // this phase sets no Conditions, only Phase/FailureReason
+		expectPausedBecause(got, reasonOperationNoExecutor)
 	})
 
 	It("pauses with ClusterTransitioning and never calls Advance while the live control-plane count is even", func() {
@@ -161,6 +176,7 @@ var _ = Describe("TalosOperationReconciler", func() {
 
 		got := fetchOperation(op)
 		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+		expectPausedBecause(got, reasonOperationTransitioning)
 	})
 
 	It("pauses with ClusterLockHeld and never calls Advance when another identity holds the cluster lock", func() {
@@ -180,6 +196,7 @@ var _ = Describe("TalosOperationReconciler", func() {
 
 		got := fetchOperation(op)
 		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+		expectPausedBecause(got, reasonOperationLockHeld)
 	})
 
 	It("pauses with OperatorPaused and never calls Advance when spec.paused is true, but keeps the lock", func() {
@@ -198,6 +215,7 @@ var _ = Describe("TalosOperationReconciler", func() {
 
 		got := fetchOperation(op)
 		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+		expectPausedBecause(got, reasonOperationPaused)
 
 		lock := clusterlock.New(k8sClient, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0)
 		_, held, err := lock.Holder(ctx)

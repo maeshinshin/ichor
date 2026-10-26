@@ -19,6 +19,8 @@ package controller
 import (
 	"context"
 	"fmt"
+	"io"
+	"strings"
 
 	"github.com/cosi-project/runtime/pkg/resource"
 	"github.com/cosi-project/runtime/pkg/safe"
@@ -32,6 +34,11 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
+
+// bootIDPath is Linux's own per-boot random ID, re-generated on every boot
+// -- the file Talos's own talosctl reads to confirm a reboot happened
+// (cmd/talosctl/pkg/talos/action/tracker.go's getBootID, Talos 1.14.3).
+const bootIDPath = "/proc/sys/kernel/random/boot_id"
 
 // NewMachineryTalosClient dials m's Talos API using the bundle's os:admin
 // identity and adapts the connection to TalosClient. It is what cmd/main.go
@@ -168,4 +175,58 @@ func (t *machineryTalosClient) Reset(ctx context.Context) error {
 			{Label: constants.EphemeralPartitionLabel, Wipe: true},
 		},
 	})
+}
+
+// Version reports this node's running Talos release tag.
+func (t *machineryTalosClient) Version(ctx context.Context) (string, error) {
+	resp, err := t.c.Version(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	for _, msg := range resp.GetMessages() {
+		if tag := msg.GetVersion().GetTag(); tag != "" {
+			return tag, nil
+		}
+	}
+
+	return "", fmt.Errorf("talos: version response carried no version tag")
+}
+
+// BootID reads bootIDPath over Talos's file-read API.
+func (t *machineryTalosClient) BootID(ctx context.Context) (string, error) {
+	reader, err := t.c.Read(ctx, bootIDPath)
+	if err != nil {
+		return "", err
+	}
+	defer reader.Close() //nolint:errcheck
+
+	body, err := io.ReadAll(reader)
+	if err != nil {
+		return "", err
+	}
+
+	return strings.TrimSpace(string(body)), nil
+}
+
+// Upgrade calls this node's Upgrade API. stage and force both stay false:
+// stage is for upgrading before the next reboot rather than this call's own
+// (not needed, since architecture.md's "Upgrades" always upgrades in
+// place), and force would skip the server's own etcd-health validation for
+// a control plane (v1alpha1_server.go's Server.Upgrade, Talos 1.14.3) --
+// exactly the check this interface's own doc comment says Ichor relies on
+// instead of re-implementing.
+//
+// streaming replacement needs multiplex/streaming infrastructure this
+// package doesn't otherwise have, and plain Upgrade still works across the
+// whole supported upgrade-from range (talosctl's own LifecycleService
+// support starts at >1.13.0-alpha.2, but pkg/machinery/compatibility's
+// MinimumHostUpgradeVersion for 1.14 is 1.12.0 -- a host that old has no
+// LifecycleService to call).
+//
+//nolint:staticcheck // legacy MachineService.Upgrade: LifecycleService's
+func (t *machineryTalosClient) Upgrade(ctx context.Context, image string) error {
+	_, err := t.c.Upgrade(ctx, image, false, false)
+
+	return err
 }

@@ -87,6 +87,18 @@ type fakeTalosClient struct {
 	// reset-related fields: etcd_removal_test.go's fixtures for resetNode.
 	resetErr   error
 	resetCalls int
+
+	// upgrade-related fields: talos_upgrade_test.go's fixtures for
+	// talosUpgradeAdvancer. version and bootID are mutated
+	// directly between Advance calls within one test to simulate a reboot
+	// (and, for the A/B-fallback case, a reboot that lands back on the old
+	// version) -- there is no auto-incrementing behavior here to fake.
+	version      string
+	versionErr   error
+	bootID       string
+	bootIDErr    error
+	upgradeErr   error
+	upgradeCalls []string
 }
 
 func (f *fakeTalosClient) CurrentConfig(context.Context) ([]byte, error) {
@@ -125,6 +137,20 @@ func (f *fakeTalosClient) Reset(context.Context) error {
 	f.resetCalls++
 
 	return f.resetErr
+}
+
+func (f *fakeTalosClient) Version(context.Context) (string, error) {
+	return f.version, f.versionErr
+}
+
+func (f *fakeTalosClient) BootID(context.Context) (string, error) {
+	return f.bootID, f.bootIDErr
+}
+
+func (f *fakeTalosClient) Upgrade(_ context.Context, image string) error {
+	f.upgradeCalls = append(f.upgradeCalls, image)
+
+	return f.upgradeErr
 }
 
 func clientFactory(fake *fakeTalosClient) func(

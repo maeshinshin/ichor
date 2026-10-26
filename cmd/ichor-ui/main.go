@@ -124,23 +124,10 @@ func main() {
 	mux.Handle("/metrics", promhttp.Handler())
 
 	rpcInterceptor := connect.WithInterceptors(uiapi.MetricsInterceptor())
-	for _, register := range []func() (string, http.Handler){
-		func() (string, http.Handler) {
-			return ichorv1alpha1connect.NewClusterServiceHandler(server, rpcInterceptor)
-		},
-		func() (string, http.Handler) {
-			return ichorv1alpha1connect.NewMachineServiceHandler(server, rpcInterceptor)
-		},
-		func() (string, http.Handler) {
-			return ichorv1alpha1connect.NewNodeServiceHandler(server, rpcInterceptor)
-		},
-		func() (string, http.Handler) {
-			return ichorv1alpha1connect.NewPatchServiceHandler(server, rpcInterceptor)
-		},
-	} {
-		path, handler := register()
-		mux.Handle(path, handler)
-	}
+	mux.Handle(ichorv1alpha1connect.NewClusterServiceHandler(server, rpcInterceptor))
+	mux.Handle(ichorv1alpha1connect.NewMachineServiceHandler(server, rpcInterceptor))
+	mux.Handle(ichorv1alpha1connect.NewNodeServiceHandler(server, rpcInterceptor))
+	mux.Handle(ichorv1alpha1connect.NewPatchServiceHandler(server, rpcInterceptor))
 
 	srv := &http.Server{
 		Addr:              *addr,

@@ -29,11 +29,6 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
-const (
-	roleControlPlane = "controlplane"
-	roleWorker       = "worker"
-)
-
 // topologyCluster creates a TalosCluster with the given control-plane count
 // and schedulable value, returning its generated name.
 func topologyCluster(count int32, schedulable string) string {

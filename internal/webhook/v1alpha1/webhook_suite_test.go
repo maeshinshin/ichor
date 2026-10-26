@@ -115,6 +115,12 @@ var _ = BeforeSuite(func() {
 	err = SetupTalosMachineWebhookWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred())
 
+	err = SetupBreakGlassWebhookWithManager(mgr, BreakGlassOptions{
+		ArgoCDNamespace: testArgoNamespace,
+		ExemptUsers:     []string{testControllerUser, testArgoUser},
+	})
+	Expect(err).NotTo(HaveOccurred())
+
 	// +kubebuilder:scaffold:webhook
 
 	go func() {

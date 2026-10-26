@@ -100,6 +100,21 @@ func TestNodeRebootYesCreatesOneNodeOperation(t *testing.T) {
 	}
 }
 
+func TestNodeActionYesStillPrintsThePlan(t *testing.T) {
+	c, _ := nodeActionClients(t, true)
+
+	var errw bytes.Buffer
+
+	if err := runNodeAction(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &errw,
+		nodeActionSpec{Machine: testMachineName, Action: pb.NodeAction_NODE_ACTION_REBOOT}); err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(errw.String(), "Reboot node") || strings.Contains(errw.String(), "Proceed?") {
+		t.Fatalf("--yes must print the plan and skip only the question:\n%s", errw.String())
+	}
+}
+
 func TestNodeRestartServiceAndEtcdRefusalsAreStatedBeforeAnyPrompt(t *testing.T) {
 	c, k8s := nodeActionClients(t, true)
 

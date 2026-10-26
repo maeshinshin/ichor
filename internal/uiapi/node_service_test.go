@@ -41,7 +41,6 @@ import (
 type fakeNodeTalosClient struct {
 	hardware *pb.Hardware
 	disks    []*pb.Disk
-	ifaces   []*pb.NetworkInterface
 	usage    *pb.ResourceUsage
 
 	// Talos details sections; talosErr fails one section by name.
@@ -78,9 +77,6 @@ type fakeNodeTalosClient struct {
 
 func (f *fakeNodeTalosClient) Hardware(context.Context) (*pb.Hardware, error) { return f.hardware, nil }
 func (f *fakeNodeTalosClient) Disks(context.Context) ([]*pb.Disk, error)      { return f.disks, nil }
-func (f *fakeNodeTalosClient) NetworkInterfaces(context.Context) ([]*pb.NetworkInterface, error) {
-	return f.ifaces, nil
-}
 func (f *fakeNodeTalosClient) ResourceUsage(context.Context) (*pb.ResourceUsage, error) {
 	return f.usage, nil
 }
@@ -183,7 +179,7 @@ func newTestNodeServerFn(dial func(*secrets.Bundle) (NodeTalosClient, error), dr
 }
 
 var _ = Describe("NodeService", func() {
-	It("returns hardware, disks, network interfaces, usage and Kubernetes status", func() {
+	It("returns hardware, disks, usage and Kubernetes status", func() {
 		cluster := newTestClusterWithBundle()
 		m := newTestMachine(cluster.Name, strongTestIdentity("uuid-getnode"), roleWorker, ichorv1alpha1.MachineApprovalStateApproved)
 		m.Spec.Hostname = "node-getnode"
@@ -201,7 +197,6 @@ var _ = Describe("NodeService", func() {
 		fake := &fakeNodeTalosClient{
 			hardware: &pb.Hardware{Manufacturer: "QEMU", CpuCores: 4},
 			disks:    []*pb.Disk{{Wwid: "wwid-1", SizeBytes: 1024}},
-			ifaces:   []*pb.NetworkInterface{{Name: "eth0", Up: true}},
 			usage:    &pb.ResourceUsage{MemoryTotalBytes: 2048},
 		}
 
@@ -214,7 +209,6 @@ var _ = Describe("NodeService", func() {
 		got := resp.Msg.GetNode()
 		Expect(got.GetHardware().GetManufacturer()).To(Equal("QEMU"))
 		Expect(got.GetDisks()).To(HaveLen(1))
-		Expect(got.GetNetworkInterfaces()).To(HaveLen(1))
 		Expect(got.GetResourceUsage().GetMemoryTotalBytes()).To(Equal(int64(2048)))
 		Expect(got.GetKubernetes().GetReady()).To(BeTrue())
 		Expect(got.GetKubernetes().GetKubeletVersion()).To(Equal("v1.31.0"))

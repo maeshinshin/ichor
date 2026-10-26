@@ -43,8 +43,8 @@ import (
 // hits (server.go's own doc comment on the field).
 var errNoTalosClient = errors.New("no Talos API connectivity is configured for this backend")
 
-// GetNode returns one machine's hardware, disks, network interfaces,
-// live resource usage and Kubernetes node status.
+// GetNode returns one machine's hardware, disks, live resource usage and
+// Kubernetes node status.
 func (s *Server) GetNode(
 	ctx context.Context, req *connect.Request[pb.GetNodeRequest],
 ) (*connect.Response[pb.GetNodeResponse], error) {
@@ -74,10 +74,6 @@ func (s *Server) GetNode(
 
 	if detail.Disks, err = tc.Disks(ctx); err != nil {
 		return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("reading disks: %w", err))
-	}
-
-	if detail.NetworkInterfaces, err = tc.NetworkInterfaces(ctx); err != nil {
-		return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("reading network interfaces: %w", err))
 	}
 
 	if detail.ResourceUsage, err = tc.ResourceUsage(ctx); err != nil {

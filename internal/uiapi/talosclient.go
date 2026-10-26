@@ -47,11 +47,6 @@ type NodeTalosClient interface {
 	// source of truth to fill it from.
 	Disks(ctx context.Context) ([]*pb.Disk, error)
 
-	// NetworkInterfaces lists the machine's physical links and their
-	// addresses. Alias comes back empty until LinkAliasConfig assignment
-	// exists (same gap as Disks' Role).
-	NetworkInterfaces(ctx context.Context) ([]*pb.NetworkInterface, error)
-
 	// ResourceUsage reads a live CPU/memory/filesystem snapshot.
 	ResourceUsage(ctx context.Context) (*pb.ResourceUsage, error)
 

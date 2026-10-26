@@ -496,84 +496,6 @@ func (x *Disk) GetDevPath() string {
 	return ""
 }
 
-type NetworkInterface struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// name is the current kernel interface name, which can change across
-	// boots; alias is the stable LinkAliasConfig name when one is assigned.
-	Name          string   `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Alias         string   `protobuf:"bytes,2,opt,name=alias,proto3" json:"alias,omitempty"`
-	PermanentMac  string   `protobuf:"bytes,3,opt,name=permanent_mac,json=permanentMac,proto3" json:"permanent_mac,omitempty"`
-	Up            bool     `protobuf:"varint,4,opt,name=up,proto3" json:"up,omitempty"`
-	Addresses     []string `protobuf:"bytes,5,rep,name=addresses,proto3" json:"addresses,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *NetworkInterface) Reset() {
-	*x = NetworkInterface{}
-	mi := &file_ichor_v1alpha1_node_proto_msgTypes[6]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *NetworkInterface) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*NetworkInterface) ProtoMessage() {}
-
-func (x *NetworkInterface) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_node_proto_msgTypes[6]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use NetworkInterface.ProtoReflect.Descriptor instead.
-func (*NetworkInterface) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_node_proto_rawDescGZIP(), []int{6}
-}
-
-func (x *NetworkInterface) GetName() string {
-	if x != nil {
-		return x.Name
-	}
-	return ""
-}
-
-func (x *NetworkInterface) GetAlias() string {
-	if x != nil {
-		return x.Alias
-	}
-	return ""
-}
-
-func (x *NetworkInterface) GetPermanentMac() string {
-	if x != nil {
-		return x.PermanentMac
-	}
-	return ""
-}
-
-func (x *NetworkInterface) GetUp() bool {
-	if x != nil {
-		return x.Up
-	}
-	return false
-}
-
-func (x *NetworkInterface) GetAddresses() []string {
-	if x != nil {
-		return x.Addresses
-	}
-	return nil
-}
-
 type ResourceUsage struct {
 	state                protoimpl.MessageState `protogen:"open.v1"`
 	CpuCoresUsed         float64                `protobuf:"fixed64,1,opt,name=cpu_cores_used,json=cpuCoresUsed,proto3" json:"cpu_cores_used,omitempty"`
@@ -590,7 +512,7 @@ type ResourceUsage struct {
 
 func (x *ResourceUsage) Reset() {
 	*x = ResourceUsage{}
-	mi := &file_ichor_v1alpha1_node_proto_msgTypes[7]
+	mi := &file_ichor_v1alpha1_node_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -602,7 +524,7 @@ func (x *ResourceUsage) String() string {
 func (*ResourceUsage) ProtoMessage() {}
 
 func (x *ResourceUsage) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_node_proto_msgTypes[7]
+	mi := &file_ichor_v1alpha1_node_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -615,7 +537,7 @@ func (x *ResourceUsage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResourceUsage.ProtoReflect.Descriptor instead.
 func (*ResourceUsage) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_node_proto_rawDescGZIP(), []int{7}
+	return file_ichor_v1alpha1_node_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ResourceUsage) GetCpuCoresUsed() float64 {
@@ -672,7 +594,7 @@ type KubernetesNodeStatus struct {
 
 func (x *KubernetesNodeStatus) Reset() {
 	*x = KubernetesNodeStatus{}
-	mi := &file_ichor_v1alpha1_node_proto_msgTypes[8]
+	mi := &file_ichor_v1alpha1_node_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -684,7 +606,7 @@ func (x *KubernetesNodeStatus) String() string {
 func (*KubernetesNodeStatus) ProtoMessage() {}
 
 func (x *KubernetesNodeStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_node_proto_msgTypes[8]
+	mi := &file_ichor_v1alpha1_node_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -697,7 +619,7 @@ func (x *KubernetesNodeStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KubernetesNodeStatus.ProtoReflect.Descriptor instead.
 func (*KubernetesNodeStatus) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_node_proto_rawDescGZIP(), []int{8}
+	return file_ichor_v1alpha1_node_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *KubernetesNodeStatus) GetNodeName() string {
@@ -729,13 +651,12 @@ func (x *KubernetesNodeStatus) GetSchedulable() bool {
 }
 
 type NodeDetail struct {
-	state             protoimpl.MessageState `protogen:"open.v1"`
-	Machine           *ObjectRef             `protobuf:"bytes,1,opt,name=machine,proto3" json:"machine,omitempty"`
-	Hardware          *Hardware              `protobuf:"bytes,2,opt,name=hardware,proto3" json:"hardware,omitempty"`
-	Disks             []*Disk                `protobuf:"bytes,3,rep,name=disks,proto3" json:"disks,omitempty"`
-	NetworkInterfaces []*NetworkInterface    `protobuf:"bytes,4,rep,name=network_interfaces,json=networkInterfaces,proto3" json:"network_interfaces,omitempty"`
-	ResourceUsage     *ResourceUsage         `protobuf:"bytes,5,opt,name=resource_usage,json=resourceUsage,proto3" json:"resource_usage,omitempty"`
-	Kubernetes        *KubernetesNodeStatus  `protobuf:"bytes,6,opt,name=kubernetes,proto3" json:"kubernetes,omitempty"`
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Machine       *ObjectRef             `protobuf:"bytes,1,opt,name=machine,proto3" json:"machine,omitempty"`
+	Hardware      *Hardware              `protobuf:"bytes,2,opt,name=hardware,proto3" json:"hardware,omitempty"`
+	Disks         []*Disk                `protobuf:"bytes,3,rep,name=disks,proto3" json:"disks,omitempty"`
+	ResourceUsage *ResourceUsage         `protobuf:"bytes,5,opt,name=resource_usage,json=resourceUsage,proto3" json:"resource_usage,omitempty"`
+	Kubernetes    *KubernetesNodeStatus  `protobuf:"bytes,6,opt,name=kubernetes,proto3" json:"kubernetes,omitempty"`
 	// kubernetes_permission_denied is true when the caller may not read the
 	// Kubernetes Node behind this machine; kubernetes is then
 	// unset, which does not mean the machine has not joined.
@@ -746,7 +667,7 @@ type NodeDetail struct {
 
 func (x *NodeDetail) Reset() {
 	*x = NodeDetail{}
-	mi := &file_ichor_v1alpha1_node_proto_msgTypes[9]
+	mi := &file_ichor_v1alpha1_node_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -758,7 +679,7 @@ func (x *NodeDetail) String() string {
 func (*NodeDetail) ProtoMessage() {}
 
 func (x *NodeDetail) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_node_proto_msgTypes[9]
+	mi := &file_ichor_v1alpha1_node_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -771,7 +692,7 @@ func (x *NodeDetail) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NodeDetail.ProtoReflect.Descriptor instead.
 func (*NodeDetail) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_node_proto_rawDescGZIP(), []int{9}
+	return file_ichor_v1alpha1_node_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *NodeDetail) GetMachine() *ObjectRef {
@@ -791,13 +712,6 @@ func (x *NodeDetail) GetHardware() *Hardware {
 func (x *NodeDetail) GetDisks() []*Disk {
 	if x != nil {
 		return x.Disks
-	}
-	return nil
-}
-
-func (x *NodeDetail) GetNetworkInterfaces() []*NetworkInterface {
-	if x != nil {
-		return x.NetworkInterfaces
 	}
 	return nil
 }
@@ -835,7 +749,7 @@ type ConfigOrigin struct {
 
 func (x *ConfigOrigin) Reset() {
 	*x = ConfigOrigin{}
-	mi := &file_ichor_v1alpha1_node_proto_msgTypes[10]
+	mi := &file_ichor_v1alpha1_node_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -847,7 +761,7 @@ func (x *ConfigOrigin) String() string {
 func (*ConfigOrigin) ProtoMessage() {}
 
 func (x *ConfigOrigin) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_node_proto_msgTypes[10]
+	mi := &file_ichor_v1alpha1_node_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -860,7 +774,7 @@ func (x *ConfigOrigin) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfigOrigin.ProtoReflect.Descriptor instead.
 func (*ConfigOrigin) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_node_proto_rawDescGZIP(), []int{10}
+	return file_ichor_v1alpha1_node_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ConfigOrigin) GetLayer() ConfigLayer {
@@ -896,7 +810,7 @@ type EffectiveConfigValue struct {
 
 func (x *EffectiveConfigValue) Reset() {
 	*x = EffectiveConfigValue{}
-	mi := &file_ichor_v1alpha1_node_proto_msgTypes[11]
+	mi := &file_ichor_v1alpha1_node_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -908,7 +822,7 @@ func (x *EffectiveConfigValue) String() string {
 func (*EffectiveConfigValue) ProtoMessage() {}
 
 func (x *EffectiveConfigValue) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_node_proto_msgTypes[11]
+	mi := &file_ichor_v1alpha1_node_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -921,7 +835,7 @@ func (x *EffectiveConfigValue) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EffectiveConfigValue.ProtoReflect.Descriptor instead.
 func (*EffectiveConfigValue) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_node_proto_rawDescGZIP(), []int{11}
+	return file_ichor_v1alpha1_node_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *EffectiveConfigValue) GetPath() string {
@@ -962,7 +876,7 @@ type EffectiveConfig struct {
 
 func (x *EffectiveConfig) Reset() {
 	*x = EffectiveConfig{}
-	mi := &file_ichor_v1alpha1_node_proto_msgTypes[12]
+	mi := &file_ichor_v1alpha1_node_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -974,7 +888,7 @@ func (x *EffectiveConfig) String() string {
 func (*EffectiveConfig) ProtoMessage() {}
 
 func (x *EffectiveConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_node_proto_msgTypes[12]
+	mi := &file_ichor_v1alpha1_node_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -987,7 +901,7 @@ func (x *EffectiveConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EffectiveConfig.ProtoReflect.Descriptor instead.
 func (*EffectiveConfig) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_node_proto_rawDescGZIP(), []int{12}
+	return file_ichor_v1alpha1_node_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *EffectiveConfig) GetMachine() *ObjectRef {
@@ -1030,7 +944,7 @@ type StreamNodeLogsRequest struct {
 
 func (x *StreamNodeLogsRequest) Reset() {
 	*x = StreamNodeLogsRequest{}
-	mi := &file_ichor_v1alpha1_node_proto_msgTypes[13]
+	mi := &file_ichor_v1alpha1_node_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1042,7 +956,7 @@ func (x *StreamNodeLogsRequest) String() string {
 func (*StreamNodeLogsRequest) ProtoMessage() {}
 
 func (x *StreamNodeLogsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_node_proto_msgTypes[13]
+	mi := &file_ichor_v1alpha1_node_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1055,7 +969,7 @@ func (x *StreamNodeLogsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamNodeLogsRequest.ProtoReflect.Descriptor instead.
 func (*StreamNodeLogsRequest) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_node_proto_rawDescGZIP(), []int{13}
+	return file_ichor_v1alpha1_node_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *StreamNodeLogsRequest) GetMachines() []*ObjectRef {
@@ -1107,7 +1021,7 @@ type StreamNodeLogsResponse struct {
 
 func (x *StreamNodeLogsResponse) Reset() {
 	*x = StreamNodeLogsResponse{}
-	mi := &file_ichor_v1alpha1_node_proto_msgTypes[14]
+	mi := &file_ichor_v1alpha1_node_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1119,7 +1033,7 @@ func (x *StreamNodeLogsResponse) String() string {
 func (*StreamNodeLogsResponse) ProtoMessage() {}
 
 func (x *StreamNodeLogsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_node_proto_msgTypes[14]
+	mi := &file_ichor_v1alpha1_node_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1132,7 +1046,7 @@ func (x *StreamNodeLogsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamNodeLogsResponse.ProtoReflect.Descriptor instead.
 func (*StreamNodeLogsResponse) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_node_proto_rawDescGZIP(), []int{14}
+	return file_ichor_v1alpha1_node_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *StreamNodeLogsResponse) GetMachine() *ObjectRef {
@@ -1191,13 +1105,7 @@ const file_ichor_v1alpha1_node_proto_rawDesc = "" +
 	"\n" +
 	"size_bytes\x18\x05 \x01(\x03R\tsizeBytes\x12,\n" +
 	"\x04role\x18\x06 \x01(\x0e2\x18.ichor.v1alpha1.DiskRoleR\x04role\x12\x19\n" +
-	"\bdev_path\x18\a \x01(\tR\adevPath\"\x8f\x01\n" +
-	"\x10NetworkInterface\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
-	"\x05alias\x18\x02 \x01(\tR\x05alias\x12#\n" +
-	"\rpermanent_mac\x18\x03 \x01(\tR\fpermanentMac\x12\x0e\n" +
-	"\x02up\x18\x04 \x01(\bR\x02up\x12\x1c\n" +
-	"\taddresses\x18\x05 \x03(\tR\taddresses\"\x9a\x02\n" +
+	"\bdev_path\x18\a \x01(\tR\adevPath\"\x9a\x02\n" +
 	"\rResourceUsage\x12$\n" +
 	"\x0ecpu_cores_used\x18\x01 \x01(\x01R\fcpuCoresUsed\x12*\n" +
 	"\x11memory_used_bytes\x18\x02 \x01(\x03R\x0fmemoryUsedBytes\x12,\n" +
@@ -1210,18 +1118,17 @@ const file_ichor_v1alpha1_node_proto_rawDesc = "" +
 	"\tnode_name\x18\x01 \x01(\tR\bnodeName\x12\x14\n" +
 	"\x05ready\x18\x02 \x01(\bR\x05ready\x12'\n" +
 	"\x0fkubelet_version\x18\x03 \x01(\tR\x0ekubeletVersion\x12 \n" +
-	"\vschedulable\x18\x04 \x01(\bR\vschedulable\"\xc2\x03\n" +
+	"\vschedulable\x18\x04 \x01(\bR\vschedulable\"\x8b\x03\n" +
 	"\n" +
 	"NodeDetail\x123\n" +
 	"\amachine\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\amachine\x124\n" +
 	"\bhardware\x18\x02 \x01(\v2\x18.ichor.v1alpha1.HardwareR\bhardware\x12*\n" +
-	"\x05disks\x18\x03 \x03(\v2\x14.ichor.v1alpha1.DiskR\x05disks\x12O\n" +
-	"\x12network_interfaces\x18\x04 \x03(\v2 .ichor.v1alpha1.NetworkInterfaceR\x11networkInterfaces\x12D\n" +
+	"\x05disks\x18\x03 \x03(\v2\x14.ichor.v1alpha1.DiskR\x05disks\x12D\n" +
 	"\x0eresource_usage\x18\x05 \x01(\v2\x1d.ichor.v1alpha1.ResourceUsageR\rresourceUsage\x12D\n" +
 	"\n" +
 	"kubernetes\x18\x06 \x01(\v2$.ichor.v1alpha1.KubernetesNodeStatusR\n" +
 	"kubernetes\x12@\n" +
-	"\x1ckubernetes_permission_denied\x18\a \x01(\bR\x1akubernetesPermissionDenied\"Y\n" +
+	"\x1ckubernetes_permission_denied\x18\a \x01(\bR\x1akubernetesPermissionDeniedJ\x04\b\x04\x10\x05R\x12network_interfaces\"Y\n" +
 	"\fConfigOrigin\x121\n" +
 	"\x05layer\x18\x01 \x01(\x0e2\x1b.ichor.v1alpha1.ConfigLayerR\x05layer\x12\x16\n" +
 	"\x06source\x18\x02 \x01(\tR\x06source\"\x8e\x01\n" +
@@ -1281,7 +1188,7 @@ func file_ichor_v1alpha1_node_proto_rawDescGZIP() []byte {
 }
 
 var file_ichor_v1alpha1_node_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_ichor_v1alpha1_node_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_ichor_v1alpha1_node_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_ichor_v1alpha1_node_proto_goTypes = []any{
 	(DiskRole)(0),                       // 0: ichor.v1alpha1.DiskRole
 	(ConfigLayer)(0),                    // 1: ichor.v1alpha1.ConfigLayer
@@ -1291,56 +1198,54 @@ var file_ichor_v1alpha1_node_proto_goTypes = []any{
 	(*GetEffectiveConfigResponse)(nil),  // 5: ichor.v1alpha1.GetEffectiveConfigResponse
 	(*Hardware)(nil),                    // 6: ichor.v1alpha1.Hardware
 	(*Disk)(nil),                        // 7: ichor.v1alpha1.Disk
-	(*NetworkInterface)(nil),            // 8: ichor.v1alpha1.NetworkInterface
-	(*ResourceUsage)(nil),               // 9: ichor.v1alpha1.ResourceUsage
-	(*KubernetesNodeStatus)(nil),        // 10: ichor.v1alpha1.KubernetesNodeStatus
-	(*NodeDetail)(nil),                  // 11: ichor.v1alpha1.NodeDetail
-	(*ConfigOrigin)(nil),                // 12: ichor.v1alpha1.ConfigOrigin
-	(*EffectiveConfigValue)(nil),        // 13: ichor.v1alpha1.EffectiveConfigValue
-	(*EffectiveConfig)(nil),             // 14: ichor.v1alpha1.EffectiveConfig
-	(*StreamNodeLogsRequest)(nil),       // 15: ichor.v1alpha1.StreamNodeLogsRequest
-	(*StreamNodeLogsResponse)(nil),      // 16: ichor.v1alpha1.StreamNodeLogsResponse
-	(*ObjectRef)(nil),                   // 17: ichor.v1alpha1.ObjectRef
-	(*timestamppb.Timestamp)(nil),       // 18: google.protobuf.Timestamp
-	(*GetNodeTalosDetailsRequest)(nil),  // 19: ichor.v1alpha1.GetNodeTalosDetailsRequest
-	(*GetNodeTalosRuntimeRequest)(nil),  // 20: ichor.v1alpha1.GetNodeTalosRuntimeRequest
-	(*GetNodeTalosDetailsResponse)(nil), // 21: ichor.v1alpha1.GetNodeTalosDetailsResponse
-	(*GetNodeTalosRuntimeResponse)(nil), // 22: ichor.v1alpha1.GetNodeTalosRuntimeResponse
+	(*ResourceUsage)(nil),               // 8: ichor.v1alpha1.ResourceUsage
+	(*KubernetesNodeStatus)(nil),        // 9: ichor.v1alpha1.KubernetesNodeStatus
+	(*NodeDetail)(nil),                  // 10: ichor.v1alpha1.NodeDetail
+	(*ConfigOrigin)(nil),                // 11: ichor.v1alpha1.ConfigOrigin
+	(*EffectiveConfigValue)(nil),        // 12: ichor.v1alpha1.EffectiveConfigValue
+	(*EffectiveConfig)(nil),             // 13: ichor.v1alpha1.EffectiveConfig
+	(*StreamNodeLogsRequest)(nil),       // 14: ichor.v1alpha1.StreamNodeLogsRequest
+	(*StreamNodeLogsResponse)(nil),      // 15: ichor.v1alpha1.StreamNodeLogsResponse
+	(*ObjectRef)(nil),                   // 16: ichor.v1alpha1.ObjectRef
+	(*timestamppb.Timestamp)(nil),       // 17: google.protobuf.Timestamp
+	(*GetNodeTalosDetailsRequest)(nil),  // 18: ichor.v1alpha1.GetNodeTalosDetailsRequest
+	(*GetNodeTalosRuntimeRequest)(nil),  // 19: ichor.v1alpha1.GetNodeTalosRuntimeRequest
+	(*GetNodeTalosDetailsResponse)(nil), // 20: ichor.v1alpha1.GetNodeTalosDetailsResponse
+	(*GetNodeTalosRuntimeResponse)(nil), // 21: ichor.v1alpha1.GetNodeTalosRuntimeResponse
 }
 var file_ichor_v1alpha1_node_proto_depIdxs = []int32{
-	17, // 0: ichor.v1alpha1.GetNodeRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
-	11, // 1: ichor.v1alpha1.GetNodeResponse.node:type_name -> ichor.v1alpha1.NodeDetail
-	17, // 2: ichor.v1alpha1.GetEffectiveConfigRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
-	14, // 3: ichor.v1alpha1.GetEffectiveConfigResponse.config:type_name -> ichor.v1alpha1.EffectiveConfig
+	16, // 0: ichor.v1alpha1.GetNodeRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
+	10, // 1: ichor.v1alpha1.GetNodeResponse.node:type_name -> ichor.v1alpha1.NodeDetail
+	16, // 2: ichor.v1alpha1.GetEffectiveConfigRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
+	13, // 3: ichor.v1alpha1.GetEffectiveConfigResponse.config:type_name -> ichor.v1alpha1.EffectiveConfig
 	0,  // 4: ichor.v1alpha1.Disk.role:type_name -> ichor.v1alpha1.DiskRole
-	17, // 5: ichor.v1alpha1.NodeDetail.machine:type_name -> ichor.v1alpha1.ObjectRef
+	16, // 5: ichor.v1alpha1.NodeDetail.machine:type_name -> ichor.v1alpha1.ObjectRef
 	6,  // 6: ichor.v1alpha1.NodeDetail.hardware:type_name -> ichor.v1alpha1.Hardware
 	7,  // 7: ichor.v1alpha1.NodeDetail.disks:type_name -> ichor.v1alpha1.Disk
-	8,  // 8: ichor.v1alpha1.NodeDetail.network_interfaces:type_name -> ichor.v1alpha1.NetworkInterface
-	9,  // 9: ichor.v1alpha1.NodeDetail.resource_usage:type_name -> ichor.v1alpha1.ResourceUsage
-	10, // 10: ichor.v1alpha1.NodeDetail.kubernetes:type_name -> ichor.v1alpha1.KubernetesNodeStatus
-	1,  // 11: ichor.v1alpha1.ConfigOrigin.layer:type_name -> ichor.v1alpha1.ConfigLayer
-	12, // 12: ichor.v1alpha1.EffectiveConfigValue.origin:type_name -> ichor.v1alpha1.ConfigOrigin
-	17, // 13: ichor.v1alpha1.EffectiveConfig.machine:type_name -> ichor.v1alpha1.ObjectRef
-	13, // 14: ichor.v1alpha1.EffectiveConfig.values:type_name -> ichor.v1alpha1.EffectiveConfigValue
-	17, // 15: ichor.v1alpha1.StreamNodeLogsRequest.machines:type_name -> ichor.v1alpha1.ObjectRef
-	17, // 16: ichor.v1alpha1.StreamNodeLogsResponse.machine:type_name -> ichor.v1alpha1.ObjectRef
-	18, // 17: ichor.v1alpha1.StreamNodeLogsResponse.time:type_name -> google.protobuf.Timestamp
-	2,  // 18: ichor.v1alpha1.NodeService.GetNode:input_type -> ichor.v1alpha1.GetNodeRequest
-	4,  // 19: ichor.v1alpha1.NodeService.GetEffectiveConfig:input_type -> ichor.v1alpha1.GetEffectiveConfigRequest
-	19, // 20: ichor.v1alpha1.NodeService.GetNodeTalosDetails:input_type -> ichor.v1alpha1.GetNodeTalosDetailsRequest
-	20, // 21: ichor.v1alpha1.NodeService.GetNodeTalosRuntime:input_type -> ichor.v1alpha1.GetNodeTalosRuntimeRequest
-	15, // 22: ichor.v1alpha1.NodeService.StreamNodeLogs:input_type -> ichor.v1alpha1.StreamNodeLogsRequest
-	3,  // 23: ichor.v1alpha1.NodeService.GetNode:output_type -> ichor.v1alpha1.GetNodeResponse
-	5,  // 24: ichor.v1alpha1.NodeService.GetEffectiveConfig:output_type -> ichor.v1alpha1.GetEffectiveConfigResponse
-	21, // 25: ichor.v1alpha1.NodeService.GetNodeTalosDetails:output_type -> ichor.v1alpha1.GetNodeTalosDetailsResponse
-	22, // 26: ichor.v1alpha1.NodeService.GetNodeTalosRuntime:output_type -> ichor.v1alpha1.GetNodeTalosRuntimeResponse
-	16, // 27: ichor.v1alpha1.NodeService.StreamNodeLogs:output_type -> ichor.v1alpha1.StreamNodeLogsResponse
-	23, // [23:28] is the sub-list for method output_type
-	18, // [18:23] is the sub-list for method input_type
-	18, // [18:18] is the sub-list for extension type_name
-	18, // [18:18] is the sub-list for extension extendee
-	0,  // [0:18] is the sub-list for field type_name
+	8,  // 8: ichor.v1alpha1.NodeDetail.resource_usage:type_name -> ichor.v1alpha1.ResourceUsage
+	9,  // 9: ichor.v1alpha1.NodeDetail.kubernetes:type_name -> ichor.v1alpha1.KubernetesNodeStatus
+	1,  // 10: ichor.v1alpha1.ConfigOrigin.layer:type_name -> ichor.v1alpha1.ConfigLayer
+	11, // 11: ichor.v1alpha1.EffectiveConfigValue.origin:type_name -> ichor.v1alpha1.ConfigOrigin
+	16, // 12: ichor.v1alpha1.EffectiveConfig.machine:type_name -> ichor.v1alpha1.ObjectRef
+	12, // 13: ichor.v1alpha1.EffectiveConfig.values:type_name -> ichor.v1alpha1.EffectiveConfigValue
+	16, // 14: ichor.v1alpha1.StreamNodeLogsRequest.machines:type_name -> ichor.v1alpha1.ObjectRef
+	16, // 15: ichor.v1alpha1.StreamNodeLogsResponse.machine:type_name -> ichor.v1alpha1.ObjectRef
+	17, // 16: ichor.v1alpha1.StreamNodeLogsResponse.time:type_name -> google.protobuf.Timestamp
+	2,  // 17: ichor.v1alpha1.NodeService.GetNode:input_type -> ichor.v1alpha1.GetNodeRequest
+	4,  // 18: ichor.v1alpha1.NodeService.GetEffectiveConfig:input_type -> ichor.v1alpha1.GetEffectiveConfigRequest
+	18, // 19: ichor.v1alpha1.NodeService.GetNodeTalosDetails:input_type -> ichor.v1alpha1.GetNodeTalosDetailsRequest
+	19, // 20: ichor.v1alpha1.NodeService.GetNodeTalosRuntime:input_type -> ichor.v1alpha1.GetNodeTalosRuntimeRequest
+	14, // 21: ichor.v1alpha1.NodeService.StreamNodeLogs:input_type -> ichor.v1alpha1.StreamNodeLogsRequest
+	3,  // 22: ichor.v1alpha1.NodeService.GetNode:output_type -> ichor.v1alpha1.GetNodeResponse
+	5,  // 23: ichor.v1alpha1.NodeService.GetEffectiveConfig:output_type -> ichor.v1alpha1.GetEffectiveConfigResponse
+	20, // 24: ichor.v1alpha1.NodeService.GetNodeTalosDetails:output_type -> ichor.v1alpha1.GetNodeTalosDetailsResponse
+	21, // 25: ichor.v1alpha1.NodeService.GetNodeTalosRuntime:output_type -> ichor.v1alpha1.GetNodeTalosRuntimeResponse
+	15, // 26: ichor.v1alpha1.NodeService.StreamNodeLogs:output_type -> ichor.v1alpha1.StreamNodeLogsResponse
+	22, // [22:27] is the sub-list for method output_type
+	17, // [17:22] is the sub-list for method input_type
+	17, // [17:17] is the sub-list for extension type_name
+	17, // [17:17] is the sub-list for extension extendee
+	0,  // [0:17] is the sub-list for field type_name
 }
 
 func init() { file_ichor_v1alpha1_node_proto_init() }
@@ -1351,14 +1256,14 @@ func file_ichor_v1alpha1_node_proto_init() {
 	file_ichor_v1alpha1_common_proto_init()
 	file_ichor_v1alpha1_talosdetails_proto_init()
 	file_ichor_v1alpha1_talosruntime_proto_init()
-	file_ichor_v1alpha1_node_proto_msgTypes[13].OneofWrappers = []any{}
+	file_ichor_v1alpha1_node_proto_msgTypes[12].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_ichor_v1alpha1_node_proto_rawDesc), len(file_ichor_v1alpha1_node_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   15,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

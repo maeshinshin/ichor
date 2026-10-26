@@ -66,6 +66,55 @@ func TestBuildInitPlan_RejectsBadSubnets(t *testing.T) {
 	}
 }
 
+func TestBuildInitPlan_Discovery(t *testing.T) {
+	in := validInitPlanInput()
+	in.DiscoverAddresses = []string{"192.168.1.20", "192.168.1.21"}
+	in.DiscoverCIDRs = []string{"192.168.2.0/24"}
+
+	cluster, err := buildInitPlan(in, io.Discard)
+	if err != nil {
+		t.Fatalf("buildInitPlan: %v", err)
+	}
+
+	d := cluster.Spec.Discovery
+	if d == nil || len(d.Addresses) != 2 || d.Addresses[1] != "192.168.1.21" || len(d.CIDRs) != 1 || d.CIDRs[0] != "192.168.2.0/24" {
+		t.Fatalf("spec.discovery = %+v, want both addresses and the CIDR", d)
+	}
+}
+
+func TestBuildInitPlan_NoDiscoveryLeavesItUnset(t *testing.T) {
+	cluster, err := buildInitPlan(validInitPlanInput(), io.Discard)
+	if err != nil {
+		t.Fatalf("buildInitPlan: %v", err)
+	}
+
+	if cluster.Spec.Discovery != nil {
+		t.Fatalf("spec.discovery = %+v, want nil so discovery stays off", cluster.Spec.Discovery)
+	}
+}
+
+func TestBuildInitPlan_RejectsBadDiscovery(t *testing.T) {
+	for name, mutate := range map[string]func(*initPlanInput){
+		"not an address": func(in *initPlanInput) { in.DiscoverAddresses = []string{"nope"} },
+		"ipv6 address":   func(in *initPlanInput) { in.DiscoverAddresses = []string{"fd00::1"} },
+		"not a CIDR":     func(in *initPlanInput) { in.DiscoverCIDRs = []string{"192.168.2.0"} },
+		"ipv6 CIDR":      func(in *initPlanInput) { in.DiscoverCIDRs = []string{"fd00::/120"} },
+		"wider than /24": func(in *initPlanInput) { in.DiscoverCIDRs = []string{"10.0.0.0/16"} },
+		"too many CIDRs": func(in *initPlanInput) {
+			in.DiscoverCIDRs = []string{"10.0.0.0/24", "10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24", "10.0.4.0/24"}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			in := validInitPlanInput()
+			mutate(&in)
+
+			if _, err := buildInitPlan(in, io.Discard); err == nil {
+				t.Fatal("expected an error")
+			}
+		})
+	}
+}
+
 func TestBuildInitPlan_RegistryMirrors(t *testing.T) {
 	in := validInitPlanInput()
 	in.RegistryMirrors = []string{"ghcr.io=http://10.0.0.5:5000"}

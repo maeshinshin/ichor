@@ -23,6 +23,9 @@ resources:
 # default, aiding admins in cluster management. Those roles are
 # not used by the ichor itself. You can comment the following lines
 # if you do not want those helpers be installed with your Project.
+- ichorinstallation_admin_role.yaml
+- ichorinstallation_editor_role.yaml
+- ichorinstallation_viewer_role.yaml
 - talosetcdbackup_admin_role.yaml
 - talosetcdbackup_editor_role.yaml
 - talosetcdbackup_viewer_role.yaml

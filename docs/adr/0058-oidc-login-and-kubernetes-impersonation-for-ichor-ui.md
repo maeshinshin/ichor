@@ -59,6 +59,17 @@ backend, so its calls through the port-forward get `Unauthenticated` instead of 
 works, and commands that need the backend (`node`) will need an ID token flag later. A follow-up should make the
 CLI read `/auth/config`, fall back automatically, and take its actor name from a `SelfSubjectReview`.
 
+**5a. Amendment: the CLI detects OIDC (point 5's follow-up, done).** Right after the port-forward is up and
+the probe answers, the CLI reads `GET /auth/config`. `enabled:true` makes it drop the tunnel and use the
+in-process `uiapi.Server` on the user's own kubeconfig and RBAC, printing one line to stderr saying so. Any other
+answer (non-200, unparseable body, an older backend) counts as not enabled, so the call goes to the backend, which
+rejects it itself if it does require a token: detection never opens anything up. `node get` / `node logs` need the
+backend's read-only Talos identity, so with OIDC on they fail with a reason (the backend requires OIDC, the CLI
+cannot present a token and never forwards kubeconfig credentials) instead of `Unauthenticated`; the flag that
+would carry an ID token is still later. The in-process actor (`AuditRecord.actor`, `Requested by:`, the approval
+decision) is the username from a `SelfSubjectReview` made with the user's kubeconfig; if that call fails the
+actor stays `ichor-cli`. Only the username is read; no credential is logged or stored.
+
 **6. Login in the UI.** Authorization code + PKCE (S256), state and nonce, in the browser, as a public client:
 there is no client secret to store, mount or leak, and the backend stays stateless (no sessions or cookies; it
 verifies the bearer ID token on each call). The ID token lives in `sessionStorage` and is sent as

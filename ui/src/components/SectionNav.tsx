@@ -1,6 +1,5 @@
 import type { ComponentChildren } from 'preact'
 import { useEffect, useState } from 'preact/hooks'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { activeSection } from '@/lib/sectionNav'
 import { cn } from '@/lib/utils'
 import { useT } from '@/lib/useT'
@@ -77,7 +76,7 @@ export function SectionLayout({ sections, children }: { sections: SectionLink[];
           </a>
         ))}
       </nav>
-      <div class="min-w-0 space-y-6">{children}</div>
+      <div class="min-w-0 space-y-8">{children}</div>
       <nav aria-label={t('nav.onThisPage')} class="hidden xl:block">
         <div class="sticky top-20">
           <p class="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('nav.onThisPage')}</p>
@@ -120,12 +119,12 @@ export function Section({
   children: ComponentChildren
 }) {
   return (
-    <Card id={id} className="scroll-mt-24">
-      <CardHeader className="flex flex-wrap items-center justify-between gap-2">
-        <CardTitle className="flex items-center gap-2">{title}</CardTitle>
+    <section id={id} class="scroll-mt-24">
+      <div class="mb-3 flex flex-wrap items-center justify-between gap-2 border-b pb-2">
+        <h2 class="flex items-center gap-2 text-base font-semibold">{title}</h2>
         {actions}
-      </CardHeader>
-      <CardContent className="space-y-4 text-sm">{children}</CardContent>
-    </Card>
+      </div>
+      <div class="space-y-4 text-sm [&_[data-slot=table-container]]:rounded-md [&_[data-slot=table-container]]:border [&_td]:px-3 [&_td]:py-2 [&_th]:h-9 [&_th]:bg-muted/40 [&_th]:px-3 [&_th]:text-xs [&_th]:text-muted-foreground [&_tr:last-child]:border-b-0">{children}</div>
+    </section>
   )
 }

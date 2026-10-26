@@ -19,12 +19,9 @@ backend that reads as the signed-in user when OIDC is on (ADR 0058).
   names with `get`. It never lists Applications, so ADR 0056's `get` rule is enough and no RBAC is added. One
   Application is read once per call however many CRs it tracks. Flux-tracked and untracked CRs are listed with
   who manages them and no state.
-- *Whose permission reads the Application.* The ServiceAccount's, and only the two status words and the
-  Application's name leave the backend (not its source, repository or conditions). Reading it as the user would
-  make the page empty for everyone not also granted `get` on Applications in Argo CD's namespace, which is a
-  different grant from "may see this CR"; the CR itself is already gated by the caller's RBAC, and its
-  Application's name is in the CR's own tracking annotation. If an Application cannot be read, that row carries
-  the error and the rest of the page still renders.
+- *Whose permission reads the Application.* The caller's (strict, decided 2026-10-26: "permissions are managed
+  strictly"; see Amendment below). The first draft read it with the ServiceAccount; that showed a user the sync and
+  health of an Application they may not read.
 - *Open pull requests.* Not on page load. Every open pull request lookup is a call to an external host
   (rate-limited, token-bearing), and a page open would make two per machine or patch. The row's "Check" button
   calls `FindPullRequests`, which reads the CR as the caller first, gets the plan from `planWrite` (the same
@@ -64,7 +61,48 @@ rule) again. Links open with `rel="noreferrer"`. Nothing credential-bearing is i
 ## Consequences
 
 - The page costs a handful of API-server reads per load and no host calls.
-- Argo CD's Application list is readable through this page by anyone who may list the CR; that is the intended
-  scope.
+- A user sees an Application's sync and health only if their own RBAC allows `get` on it (see Amendment).
 - A Git host failure shows in the row that asked, as "Backend unavailable" (the status code OpenPR failures
   already use), and other rows are unaffected.
+
+## Amendment (2026-10-26): reads are the caller's unless the result stays inside the backend
+
+The rule: **a read whose result, or anything derived from it, is returned to a user is made as that user.** The
+ServiceAccount (`s.Client`) is used only for a read that drives an internal decision, or whose content leaves only
+masked or as a property of an object the caller already reads. With OIDC off there is no identity, `s.Get` falls
+back to the ServiceAccount, and "anyone who reaches the UI may do anything" already holds (ADR 0058, point 4); that
+stays, so nobody is locked out on upgrade.
+
+A caller who may not `get` the tracking Application gets a `permission_denied` row (`GitOpsItem.permission_denied`):
+no sync, no health, no error, and the UI shows "No permission" / "権限がありません" (`common.noPermission`). The other
+rows render. `tracked_by` and the Application's name stay: both are read off the CR the caller already listed (its
+tracking annotation or label); the ServiceAccount's `argocd-cm` and Flux inventory reads only decide how to read
+those markers, and a Flux/Argo answer is the same gate that makes a write read-only, which the caller must be told.
+Users need `get` on `applications.argoproj.io` in Argo CD's namespace through their own RBAC; the chart grants
+nothing new, because the grant is the site's decision.
+
+`FindPullRequests` already read the CR as the caller. The Git host is asked with the repository token, which is
+the ServiceAccount's side and cannot be impersonated; the result is PR URLs of branches `ichor/<verb>-<name>` of a
+CR the caller can read, in a repository that is the cluster's own. That alone is looser than the page: a caller
+refused the Application's status would still see what is pending against it. So it also requires `get` on the
+tracking Application as the caller (`requireApplicationRead`) and answers PermissionDenied otherwise, before any
+host call. Untracked and Flux-tracked CRs have no Application and are unchanged.
+
+### Audit of every `s.Client` read in `internal/uiapi`
+
+| Read | Call site | Returned to the user? | Reader |
+| --- | --- | --- | --- |
+| Tracking Application `get` | `ListGitOps` | sync, health | **caller** (changed) |
+| Tracking Application `get` | `FindPullRequests`, new `requireApplicationRead` | only allow or refuse | **caller** (new) |
+| Kubernetes Node `get`/`list` | `findKubernetesNode`, `GetNode` | ready, kubelet version, schedulable | **caller** (changed); forbidden gives `kubernetes_permission_denied`, not "not joined" |
+| `TalosStorage` list | `GetEffectiveConfig` (`ResolveSystemInputs` listed it as the ServiceAccount) | presets appear unmasked in the rendering | **caller** (changed); the ServiceAccount list inside `ResolveSystemInputs` is overwritten |
+| Application `get` | `planEdit` (in `planWrite`) | no: decides whether a PR can be opened | ServiceAccount |
+| `argocd-cm`, Flux inventory (`IsTracked`, `ArgoApplicationOf`) | `planWrite`, `ListGitOps`, `FindPullRequests` | `ListGitOps` returns only the tracker's name for a CR the caller listed | ServiceAccount |
+| Secrets bundle (`loadBundle`) | `GetEffectiveConfig`, `NodeTalosClient` dialing | only as masked values (`RedactSecrets`); the client certificate never leaves | ServiceAccount |
+| Registry credentials (`ResolveRegistryAuth`) | `GetEffectiveConfig` | only masked | ServiceAccount |
+| Git token Secret | `gitToken` | no: used for the host call | ServiceAccount |
+
+Also changed: `mapGetError` now maps a forbidden read to PermissionDenied instead of Internal, and a forbidden
+`TalosStorage` list does the same. Not changed and noted: the Flux inventory scan inside `IsTracked` can tell a
+caller "Flux" for a CR they list without their own right to read Flux inventories; it is the same fact the write
+gate acts on (ADR 0044), so it is kept on the ServiceAccount.

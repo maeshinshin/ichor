@@ -17,6 +17,7 @@ limitations under the License.
 package cli
 
 import (
+	authv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -47,6 +48,12 @@ func cliScheme() (*runtime.Scheme, error) {
 	scheme := runtime.NewScheme()
 
 	if err := corev1.AddToScheme(scheme); err != nil {
+		return nil, err
+	}
+
+	// authorization/v1: local mode runs the uiapi server in-process, and its
+	// break-glass and diagnostics checks create SelfSubjectAccessReviews.
+	if err := authv1.AddToScheme(scheme); err != nil {
 		return nil, err
 	}
 

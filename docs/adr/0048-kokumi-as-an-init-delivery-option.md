@@ -45,6 +45,10 @@ surface that has to be re-verified.
 
 ## Unknowns (what to check before building)
 
+- (Partly answered, ADR 0055: in Kokumi's source at commit 4126144 the
+  Application is hard-coded with prune, selfHeal and `ServerSideApply=true`,
+  has no `ignoreDifferences`, and edits to it are reverted. No sync-wave or
+  other options are passed. Still to confirm on a test cluster.)
 - Whether Kokumi's Application can be given a `ref`/path or only a bare
   artifact, and whether its Applications can carry Ichor's sync-wave and
   sync options. Check: Kokumi's Serving CRD reference and a generated

@@ -117,6 +117,8 @@ stop this polling; left at the `automatic` default it polls forever and says
 so plainly, which satisfies "does not break" (nothing blocks, nothing retries
 in a tight loop) without guessing that the operator meant `disabled`.
 
+> Update (ADR 0055): the handed-over Application now also carries `ignoreDifferences` on `CiliumIdentity`; release name, namespace and values are unchanged and a test compares them with the bootstrap values.
+
 ## Consequences
 
 - `pkg/cni.InlineManifestName` is a new exported constant duplicating

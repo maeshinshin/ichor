@@ -132,30 +132,23 @@ func runNodeAction(ctx context.Context, c *apiClients, in io.Reader, out, errw i
 		return errors.New("node reset: it needs --break-glass <reason> (and the break-glass RBAC verb on the machine); the reason goes into the audit record")
 	}
 
-	if !assumeYes {
-		if needsTypedName(s.Action) && s.Confirm == "" {
-			_, _ = fmt.Fprint(errw, nodePlanText(s, plan.Msg))
+	text := nodePlanText(s, plan.Msg)
 
-			typed, err := readLine(in, errw, fmt.Sprintf("Type the node name %q to confirm: ", s.Machine))
-			if err != nil {
-				return fmt.Errorf("node %s: reading confirmation: %w", name, err)
-			}
+	if !assumeYes && needsTypedName(s.Action) && s.Confirm == "" {
+		_, _ = fmt.Fprint(errw, text)
 
-			if typed != s.Machine {
-				return fmt.Errorf("node %s: aborted (the name did not match)", name)
-			}
-
-			s.Confirm = typed
-		} else {
-			ok, err := confirm(in, errw, nodePlanText(s, plan.Msg)+"Proceed? [y/N] ")
-			if err != nil {
-				return fmt.Errorf("node %s: reading confirmation: %w", name, err)
-			}
-
-			if !ok {
-				return fmt.Errorf("node %s: aborted", name)
-			}
+		typed, err := readLine(in, errw, fmt.Sprintf("Type the node name %q to confirm: ", s.Machine))
+		if err != nil {
+			return fmt.Errorf("node %s: reading confirmation: %w", name, err)
 		}
+
+		if typed != s.Machine {
+			return fmt.Errorf("node %s: aborted (the name did not match)", name)
+		}
+
+		s.Confirm = typed
+	} else if err := confirmPlan(in, errw, "node "+name, text); err != nil {
+		return err
 	}
 
 	if needsTypedName(s.Action) && s.Confirm != s.Machine {

@@ -2,20 +2,12 @@ import { useEffect, useState } from 'preact/hooks'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import type { MessageInitShape } from '@bufbuild/protobuf'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { BreakGlassDialog, type BreakGlassRun } from '@/components/BreakGlassDialog'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { PageHeader } from '@/components/PageHeader'
@@ -28,6 +20,7 @@ import { PatchSchema } from '@/gen/ichor/v1alpha1/patch_pb'
 import { clusterClient, machineClient, patchClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
 import { offersBreakGlass } from '@/lib/breakGlass'
+import { notifyDone, notifyWrite } from '@/lib/notify'
 import { describeError } from '@/lib/errors'
 import { useT } from '@/lib/useT'
 import type { Key } from '@/lib/i18n'
@@ -220,8 +213,10 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
     try {
       if (isNew) {
         await patchClient.createPatch({ patch: wire })
+        notifyDone(t('toast.patchCreated', { name: wire.ref?.name ?? '' }))
       } else {
         const res = await patchClient.updatePatch({ patch: wire })
+        notifyWrite(res, 'toast.patchSaved', { name: wire.ref?.name ?? '' })
         if (res.pullRequestUrl) {
           setPullRequestUrl(res.pullRequestUrl)
           return
@@ -563,8 +558,10 @@ function DeleteButton({ namespace, name }: { namespace: string; name: string }) 
       if (res.pullRequestUrl) {
         // Tracked by Argo CD: the removal is a pull request, nothing was deleted.
         setPullRequestUrl(res.pullRequestUrl)
+        notifyWrite(res, 'toast.patchDeleted', { name })
         return
       }
+      notifyDone(t('toast.patchDeleted', { name }))
       navigate('/patches')
     } catch (err) {
       setError(describeError(err))
@@ -575,39 +572,23 @@ function DeleteButton({ namespace, name }: { namespace: string; name: string }) 
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="destructive">{t('patches.delete')}</Button>
-      </DialogTrigger>
-      <DialogContent>
-        {pullRequestUrl ? (
-          <>
-            <PullRequestNotice url={pullRequestUrl} breakGlass={breakGlass} onBreakGlassDone={done} />
-            <DialogFooter>
-              <Button variant="ghost" onClick={() => setOpen(false)}>
-                {t('common.close')}
-              </Button>
-            </DialogFooter>
-          </>
-        ) : (
-          <>
-        <DialogHeader>
-          <DialogTitle>{t('patches.deleteTitle', { name })}</DialogTitle>
-          <DialogDescription>{t('patch.deleteDescription')}</DialogDescription>
-        </DialogHeader>
-        {error && <ErrorAlert {...error} />}
-        {refused && <BreakGlassDialog run={breakGlass} onDone={done} />}
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => setOpen(false)}>
-            {t('common.cancel')}
-          </Button>
-          <Button variant="destructive" disabled={submitting} onClick={submit}>
-            {submitting ? t('patches.deleting') : t('patches.delete')}
-          </Button>
-        </DialogFooter>
-          </>
-        )}
-      </DialogContent>
-    </Dialog>
+    <ConfirmDialog
+      open={open}
+      onOpenChange={setOpen}
+      trigger={<Button variant="destructive">{t('patches.delete')}</Button>}
+      title={pullRequestUrl ? t('pr.title') : t('patches.deleteTitle', { name })}
+      description={pullRequestUrl ? undefined : t('patch.deleteDescription')}
+      closeLabel={pullRequestUrl ? t('common.close') : undefined}
+      confirm={pullRequestUrl ? undefined : { label: submitting ? t('patches.deleting') : t('patches.delete'), disabled: submitting, onClick: submit }}
+    >
+      {pullRequestUrl ? (
+        <PullRequestNotice url={pullRequestUrl} breakGlass={breakGlass} onBreakGlassDone={done} />
+      ) : (
+        <>
+          {error && <ErrorAlert {...error} />}
+          {refused && <BreakGlassDialog run={breakGlass} onDone={done} />}
+        </>
+      )}
+    </ConfirmDialog>
   )
 }

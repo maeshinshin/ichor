@@ -1,16 +1,8 @@
 import { useEffect, useState } from 'preact/hooks'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { BreakGlassDialog, type BreakGlassRun } from '@/components/BreakGlassDialog'
 import { DataTable, LinkRow, ListToolbar } from '@/components/ListToolbar'
 import { PageHeader } from '@/components/PageHeader'
@@ -22,6 +14,7 @@ import type { Patch } from '@/gen/ichor/v1alpha1/patch_pb'
 import { clusterClient, patchClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
 import { offersBreakGlass } from '@/lib/breakGlass'
+import { notifyDone, notifyWrite } from '@/lib/notify'
 import { describeError } from '@/lib/errors'
 import { matchesQuery } from '@/lib/filter'
 import { targetKindOf } from '@/lib/patchTarget'
@@ -200,9 +193,11 @@ function DeleteDialog({ patch, onDeleted }: { patch: Patch; onDeleted: () => voi
       if (res.pullRequestUrl) {
         // Tracked by Argo CD: the removal is a pull request, nothing was deleted.
         setPullRequestUrl(res.pullRequestUrl)
+        notifyWrite(res, 'toast.patchDeleted', { name: patch.ref.name })
         return
       }
       setOpen(false)
+      notifyDone(t('toast.patchDeleted', { name: patch.ref.name }))
       onDeleted()
     } catch (err) {
       setError(describeError(err))
@@ -213,41 +208,27 @@ function DeleteDialog({ patch, onDeleted }: { patch: Patch; onDeleted: () => voi
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
+    <ConfirmDialog
+      open={open}
+      onOpenChange={setOpen}
+      trigger={
         <Button size="sm" variant="destructive">
           {t('patches.delete')}
         </Button>
-      </DialogTrigger>
-      <DialogContent>
-        {pullRequestUrl ? (
-          <>
-            <PullRequestNotice url={pullRequestUrl} breakGlass={breakGlass} onBreakGlassDone={done} />
-            <DialogFooter>
-              <Button variant="ghost" onClick={() => setOpen(false)}>
-                {t('common.close')}
-              </Button>
-            </DialogFooter>
-          </>
-        ) : (
-          <>
-        <DialogHeader>
-          <DialogTitle>{t('patches.deleteTitle', { name: patch.ref?.name ?? '' })}</DialogTitle>
-          <DialogDescription>{t('patches.deleteDescription')}</DialogDescription>
-        </DialogHeader>
-        {error && <ErrorAlert {...error} />}
-        {refused && <BreakGlassDialog run={breakGlass} onDone={done} />}
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => setOpen(false)}>
-            {t('common.cancel')}
-          </Button>
-          <Button variant="destructive" disabled={submitting} onClick={submit}>
-            {submitting ? t('patches.deleting') : t('patches.delete')}
-          </Button>
-        </DialogFooter>
-          </>
-        )}
-      </DialogContent>
-    </Dialog>
+      }
+      title={pullRequestUrl ? t('pr.title') : t('patches.deleteTitle', { name: patch.ref?.name ?? '' })}
+      description={pullRequestUrl ? undefined : t('patches.deleteDescription')}
+      closeLabel={pullRequestUrl ? t('common.close') : undefined}
+      confirm={pullRequestUrl ? undefined : { label: submitting ? t('patches.deleting') : t('patches.delete'), disabled: submitting, onClick: submit }}
+    >
+      {pullRequestUrl ? (
+        <PullRequestNotice url={pullRequestUrl} breakGlass={breakGlass} onBreakGlassDone={done} />
+      ) : (
+        <>
+          {error && <ErrorAlert {...error} />}
+          {refused && <BreakGlassDialog run={breakGlass} onDone={done} />}
+        </>
+      )}
+    </ConfirmDialog>
   )
 }

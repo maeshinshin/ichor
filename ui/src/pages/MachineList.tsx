@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { BreakGlassDialog, type BreakGlassRun } from '@/components/BreakGlassDialog'
 import { DataTable, LinkRow, ListToolbar } from '@/components/ListToolbar'
 import { PageHeader } from '@/components/PageHeader'
@@ -26,6 +27,7 @@ import { MachineApprovalState, MachineRole, type Machine } from '@/gen/ichor/v1a
 import { clusterClient, machineClient, nodeClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
 import { offersBreakGlass } from '@/lib/breakGlass'
+import { notifyWrite } from '@/lib/notify'
 import { describeError } from '@/lib/errors'
 import { matchesQuery } from '@/lib/filter'
 import { conditionStatusTone } from '@/lib/status'
@@ -321,6 +323,7 @@ function ApproveDialog({
       })
       if (res.pullRequestUrl) onPullRequest(res.pullRequestUrl, breakGlassApprove)
       else if (res.machine) onApproved(res.machine)
+      notifyWrite(res, 'toast.approved', { name: hostname || machine.ref.name })
       setOpen(false)
     } catch (err) {
       setSubmitError(describeError(err))
@@ -478,6 +481,7 @@ function RejectDialog({
     try {
       const res = await machineClient.rejectMachine({ machine: machine.ref, reason })
       if (res.pullRequestUrl) onPullRequest(res.pullRequestUrl, breakGlassReject)
+      notifyWrite(res, 'toast.rejected', { name: machine.ref.name })
       setOpen(false)
       onRejected()
     } catch (err) {
@@ -489,40 +493,30 @@ function RejectDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
+    <ConfirmDialog
+      open={open}
+      onOpenChange={setOpen}
+      trigger={
         <Button size="sm" variant="outline">
           {t('reject.button')}
         </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{t('reject.title', { name: machine.ref?.name ?? '' })}</DialogTitle>
-          <DialogDescription>{t('reject.description')}</DialogDescription>
-        </DialogHeader>
+      }
+      title={t('reject.title', { name: machine.ref?.name ?? '' })}
+      description={t('reject.description')}
+      confirm={{ label: submitting ? t('reject.submitting') : t('reject.button'), disabled: submitting, onClick: submit }}
+    >
+      <div class="space-y-1">
+        <Label htmlFor="reject-reason">{t('reject.reason')}</Label>
+        <Textarea
+          id="reject-reason"
+          value={reason}
+          onInput={(e) => setReason((e.target as HTMLTextAreaElement).value)}
+          placeholder={t('reject.reasonPlaceholder')}
+        />
+      </div>
 
-        <div class="space-y-1">
-          <Label htmlFor="reject-reason">{t('reject.reason')}</Label>
-          <Textarea
-            id="reject-reason"
-            value={reason}
-            onInput={(e) => setReason((e.target as HTMLTextAreaElement).value)}
-            placeholder={t('reject.reasonPlaceholder')}
-          />
-        </div>
-
-        {submitError && <ErrorAlert {...submitError} />}
-        {refused && <BreakGlassDialog run={breakGlassReject} onDone={() => { setOpen(false); onRejected() }} />}
-
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => setOpen(false)}>
-            {t('common.cancel')}
-          </Button>
-          <Button variant="destructive" disabled={submitting} onClick={submit}>
-            {submitting ? t('reject.submitting') : t('reject.button')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      {submitError && <ErrorAlert {...submitError} />}
+      {refused && <BreakGlassDialog run={breakGlassReject} onDone={() => { setOpen(false); onRejected() }} />}
+    </ConfirmDialog>
   )
 }

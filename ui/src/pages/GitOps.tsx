@@ -3,6 +3,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { EmptyNote, PageSkeleton } from '@/components/PageStates'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { GitOpsKind, type FindPullRequestsResponse, type GetLinksResponse, type GitOpsItem } from '@/gen/ichor/v1alpha1/gitops_pb'
 import { gitOpsClient } from '@/lib/connect'
@@ -77,7 +78,7 @@ export function GitOps() {
   }
 
   if (error) return <ErrorAlert {...error} />
-  if (!items) return <p class="mt-10 text-center text-sm text-muted-foreground">{t('gitops.loading')}</p>
+  if (!items) return <PageSkeleton label={t('gitops.loading')} />
 
   const sorted = [...items].sort((a, b) => Number(needsAttention(b)) - Number(needsAttention(a)))
 
@@ -91,7 +92,7 @@ export function GitOps() {
     : []
 
   return (
-    <Card className="mt-6">
+    <Card>
       <CardHeader>
         <CardTitle>{t('gitops.title')}</CardTitle>
         {toolLinks.length > 0 && (
@@ -106,7 +107,7 @@ export function GitOps() {
       </CardHeader>
       <CardContent>
         {sorted.length === 0 ? (
-          <p class="text-sm text-muted-foreground">{t('gitops.empty')}</p>
+          <EmptyNote>{t('gitops.empty')}</EmptyNote>
         ) : (
           <Table>
             <TableHeader>

@@ -33,5 +33,14 @@ export function breadcrumbsFor(path: string, titles: Readonly<Record<string, str
     const title = titles[`${parts[0]}/${decodeURIComponent(parts[1])}/${name}`]
     return [{ label: section.label, to: section.to }, { text: title || name }]
   }
+  if (parts[0] === 'clusters' && parts.length === 4 && parts[3] === 'add-node') {
+    const name = decodeURIComponent(parts[2])
+    const title = titles[`clusters/${decodeURIComponent(parts[1])}/${name}`]
+    return [
+      { label: 'nav.clusters', to: '/clusters' },
+      { text: title || name, to: `/clusters/${parts[1]}/${parts[2]}` },
+      { label: 'cluster.addNode' },
+    ]
+  }
   return [{ label: 'common.notFound' }]
 }

@@ -16,6 +16,15 @@ test('a detail route links its section and names the object', () => {
   assert.deepEqual(breadcrumbsFor('/patches/ns/p%201'), [{ label: 'nav.patches', to: '/patches' }, { text: 'p 1' }])
 })
 
+test('the add-node page sits under its cluster', () => {
+  assert.deepEqual(breadcrumbsFor('/clusters/ns/demo/add-node'), [
+    { label: 'nav.clusters', to: '/clusters' },
+    { text: 'demo', to: '/clusters/ns/demo' },
+    { label: 'cluster.addNode' },
+  ])
+  assert.deepEqual(breadcrumbsFor('/clusters/ns/demo/other'), [{ label: 'common.notFound' }])
+})
+
 test('a new patch and an unknown path', () => {
   assert.deepEqual(breadcrumbsFor('/patches/new'), [{ label: 'nav.patches', to: '/patches' }, { label: 'patch.newTitle' }])
   assert.deepEqual(breadcrumbsFor('/nope/x'), [{ label: 'common.notFound' }])

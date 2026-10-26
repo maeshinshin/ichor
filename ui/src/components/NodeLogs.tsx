@@ -1,7 +1,17 @@
 import { Component, type ComponentChildren } from 'preact'
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { WrapTextIcon } from 'lucide-preact'
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  CodeBlock,
+  CodeBlockActions,
+  CodeBlockContent,
+  CodeBlockCopyButton,
+  CodeBlockHeader,
+  CodeBlockLine,
+  CodeBlockTitle,
+} from '@/components/ui/code-block'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ErrorAlert } from '@/components/ErrorAlert'
@@ -70,7 +80,14 @@ function LogsSection({ namespace, name }: { namespace: string; name: string }) {
   const pausedRef = useRef(false)
   const atBottom = useRef(true)
   const listRef = useRef<HTMLDivElement>(null)
+  const [wrap, setWrap] = useState(true)
   const service = LOG_SOURCES.find((s) => s.value === source)?.wire ?? ''
+  const sourceLabel = (() => {
+    const label = LOG_SOURCES.find((s) => s.value === source)?.label ?? source
+    return label.startsWith('node.') ? t(label as Key) : label
+  })()
+  // One string for the copy button, built only when the lines change.
+  const copyText = useMemo(() => entries.map((e) => formatTimestamp(e.item.time) + ' ' + e.item.message).join('\n'), [entries])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -123,12 +140,17 @@ function LogsSection({ namespace, name }: { namespace: string; name: string }) {
 
   // Follow the tail only while the person is at the bottom.
   useEffect(() => {
-    const el = listRef.current
+    const el = scroller()
     if (el && atBottom.current) el.scrollTop = el.scrollHeight
   }, [entries])
 
+  // The code block's <pre> is the element that scrolls.
+  function scroller(): HTMLElement | null {
+    return listRef.current?.querySelector<HTMLElement>('[data-slot=code-block-content]') ?? null
+  }
+
   function onScroll() {
-    const el = listRef.current
+    const el = scroller()
     if (el) atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24
   }
 
@@ -177,30 +199,46 @@ function LogsSection({ namespace, name }: { namespace: string; name: string }) {
           </Button>
         </div>
         {error && <ErrorAlert {...error} />}
-        <div
-          ref={listRef}
-          onScroll={onScroll}
-          class="max-h-96 overflow-y-auto rounded-md bg-muted/40 p-2 font-mono text-xs"
-        >
-          {entries.length === 0 && !error && <p class="text-muted-foreground">{t('node.logWaiting')}</p>}
-          {entries.map((e) => {
-            const open = expanded.has(e.id)
-            const { text, truncated } = open ? { text: e.item.message, truncated: false } : truncateMessage(e.item.message, MAX_CHARS)
-            const canCollapse = open && e.item.message.length > MAX_CHARS
-            return (
-              <div key={e.id} class="break-words whitespace-pre-wrap">
-                <span class="text-muted-foreground">{formatTimestamp(e.item.time)}</span> {text}
-                {(truncated || canCollapse) && (
-                  <>
-                    {truncated && '… '}
-                    <button type="button" class="text-primary underline" onClick={() => toggleExpanded(e.id)}>
-                      {truncated ? t('node.logExpand') : t('node.logCollapse')}
-                    </button>
-                  </>
-                )}
-              </div>
-            )
-          })}
+        <div ref={listRef}>
+          <CodeBlock size="sm">
+            <CodeBlockHeader>
+              <CodeBlockTitle>{sourceLabel}</CodeBlockTitle>
+              <CodeBlockActions>
+                <Button
+                  variant={wrap ? 'secondary' : 'ghost'}
+                  size="icon-xs"
+                  aria-label={t('node.logWrap')}
+                  aria-pressed={wrap}
+                  title={t('node.logWrap')}
+                  onClick={() => setWrap(!wrap)}
+                >
+                  <WrapTextIcon />
+                </Button>
+                <CodeBlockCopyButton value={copyText} aria-label={t('node.logCopy')} title={t('node.logCopy')} />
+              </CodeBlockActions>
+            </CodeBlockHeader>
+            <CodeBlockContent wrap={wrap} onScroll={onScroll} className="max-h-96">
+              {entries.length === 0 && !error && <CodeBlockLine className="text-muted-foreground">{t('node.logWaiting')}</CodeBlockLine>}
+              {entries.map((e) => {
+                const open = expanded.has(e.id)
+                const { text, truncated } = open ? { text: e.item.message, truncated: false } : truncateMessage(e.item.message, MAX_CHARS)
+                const canCollapse = open && e.item.message.length > MAX_CHARS
+                return (
+                  <CodeBlockLine key={e.id}>
+                    <span class="text-muted-foreground">{formatTimestamp(e.item.time)}</span> {text}
+                    {(truncated || canCollapse) && (
+                      <>
+                        {truncated && '… '}
+                        <button type="button" class="font-sans text-primary underline" onClick={() => toggleExpanded(e.id)}>
+                          {truncated ? t('node.logExpand') : t('node.logCollapse')}
+                        </button>
+                      </>
+                    )}
+                  </CodeBlockLine>
+                )
+              })}
+            </CodeBlockContent>
+          </CodeBlock>
         </div>
       </CardContent>
     </Card>

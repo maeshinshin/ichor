@@ -3,6 +3,7 @@ import { AppShell } from '@/components/AppShell'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { finishLogin, startLogin, storedToken, tokenUsable, type AuthConfig } from '@/lib/oidc'
 import { useT } from '@/lib/useT'
+import { AddNode } from '@/pages/AddNode'
 import { ClusterDetail } from '@/pages/ClusterDetail'
 import { ClusterList } from '@/pages/ClusterList'
 import { GitOps } from '@/pages/GitOps'
@@ -62,6 +63,9 @@ function renderRoute(path: string, notFound: string) {
   if (path === '/patches/new') return <PatchDetail />
   if (path === '/gitops') return <GitOps />
   if (path === '/operations') return <OperationList />
+
+  const addNode = matchRoute('/clusters/:namespace/:name/add-node', path)
+  if (addNode) return <AddNode namespace={addNode.namespace} name={addNode.name} />
 
   const cluster = matchRoute('/clusters/:namespace/:name', path)
   if (cluster) return <ClusterDetail namespace={cluster.namespace} name={cluster.name} />

@@ -83,3 +83,7 @@ change and is left for whoever owns it.
 - Table output; everything is structured `-o yaml|json`.
 - Per-user identity: both paths act as the backend/caller until OIDC and
   impersonation (roadmap phase 9).
+
+## Amendment: Service discovery by label
+
+The CLI finds the ichor-ui Service by `app.kubernetes.io/component=ui` in the Ichor namespace, not by name. Kustomize `namePrefix` makes the init-installed Service `ichor-ichor-ui-service`, the chart names it `ichor-ui-service`, and both now set the label. Names are left as they are because `internal/installer` classifies UI objects by the `ichor-ichor-ui` prefix.

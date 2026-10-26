@@ -84,7 +84,7 @@ func uiBackendObjects() []client.Object {
 
 	return []client.Object{
 		&corev1.Service{
-			Name: uiServiceName, Namespace: ichorControllerNamespace,
+			Name: "ichor-ichor-ui-service", Namespace: ichorControllerNamespace, Labels: map[string]string{uiComponentLabel: uiComponentValue},
 			Spec: corev1.ServiceSpec{Selector: sel, Ports: []corev1.ServicePort{{Port: 8080}}},
 		},
 		&corev1.Pod{

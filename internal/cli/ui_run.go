@@ -25,7 +25,6 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -150,17 +149,17 @@ func waitForReadyPod(
 // real browser. It never returns an error for a clean Ctrl-C: ctx being
 // cancelled is the expected way this loop ends.
 func runUI(ctx context.Context, opts uiOptions, deps uiDeps) error {
-	var svc corev1.Service
-	if err := deps.K8s.Get(ctx, types.NamespacedName{Namespace: opts.Namespace, Name: uiServiceName}, &svc); err != nil {
-		return fmt.Errorf("ui: fetching Service %s/%s: %w", opts.Namespace, uiServiceName, err)
+	svc, err := findUIService(ctx, deps.K8s, opts.Namespace)
+	if err != nil {
+		return fmt.Errorf("ui: %w", err)
 	}
 
 	if len(svc.Spec.Ports) == 0 {
-		return fmt.Errorf("ui: Service %s/%s has no ports", opts.Namespace, uiServiceName)
+		return fmt.Errorf("ui: Service %s/%s has no ports", svc.Namespace, svc.Name)
 	}
 
 	if len(svc.Spec.Selector) == 0 {
-		return fmt.Errorf("ui: Service %s/%s has no selector", opts.Namespace, uiServiceName)
+		return fmt.Errorf("ui: Service %s/%s has no selector", svc.Namespace, svc.Name)
 	}
 
 	remotePort := svc.Spec.Ports[0].Port

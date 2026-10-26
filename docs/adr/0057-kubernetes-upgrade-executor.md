@@ -136,3 +136,5 @@ or "no flannel" (those are separate documents, rejected when combined with the l
 - Not observed: the bootstrap-manifest sync and the worker step (the operation never got past the second control
   plane).
 - Fixed: each Talos call in `begin` (and the kube-proxy switch and CA rotation applies) now has its own deadline, the apply bounded by `upgradeCallTimeout`.
+
+- Addendum: the executors write the machine condition through a re-read with retry on conflict (`setMachineCondition`), so the machine reconciler writing the same status during the long calls no longer pauses the first machine. Finding, not fixed: this executor applies the control-plane images and the kubelet of one node together, where `upgrade-k8s` upgrades every control plane first and the kubelets afterwards, so on a minor upgrade the first node's kubelet is newer than the apiservers it reaches through the endpoint (see the report on endpoint type `node`).

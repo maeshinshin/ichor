@@ -288,3 +288,5 @@ future pass; the machinery-client call itself is the same verified
 
 Update: removal now evacuates storage before the drain (shared with the Talos
 upgrade, see ADR 0043), so the order is evacuation, drain, etcd member, reset.
+
+- Addendum: removal resolves the node name with `resolveNodeName` (an empty `spec.hostname` no longer skips the drain, the evacuation or the etcd member); a control plane whose name cannot be resolved is refused with `NodeNameUnresolved` and retried, and the credentials event says "removed from etcd" only for a control plane.

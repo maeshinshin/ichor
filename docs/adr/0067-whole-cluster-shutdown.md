@@ -144,3 +144,5 @@ cluster is off; the next successful snapshot after power-on clears it, so it was
 request is not forced and node registration is not skipped, and the shutting-down stage cordons the node
 (`controllers/k8s/node_cordoned_spec.go:73-76`). Nothing was changed here. The assumption that `Reboot` drains the same
 way, which ADR 0080 had also made, was wrong and is fixed there: Ichor drains before its own reboots.
+
+- Addendum (ADR 0086): the wait for a machine to return dials `DialEndpoint()`, so a node that came back at a new address is seen once the address is recorded in status.

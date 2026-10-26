@@ -347,6 +347,12 @@ func (s *Server) planOperation(
 		p.resp.Effect, p.resp.Current = pb.OperationEffect_OPERATION_EFFECT_REBOOT, cluster.Spec.TalosVersion
 	case ichorv1alpha1.TalosOperationKindKubernetes:
 		p.resp.Effect, p.resp.Current = pb.OperationEffect_OPERATION_EFFECT_RESTART_COMPONENTS, cluster.Spec.KubernetesVersion
+		// The executor's three stages: no kubelet is newer than any API server at any step.
+		p.resp.Stages = []string{
+			"control plane components (apiserver, controller-manager, scheduler)",
+			"kube-proxy and the bootstrap manifests",
+			"kubelets",
+		}
 	case ichorv1alpha1.TalosOperationKindCNI:
 		p.resp.Effect, p.resp.Current = pb.OperationEffect_OPERATION_EFFECT_RESTART_COMPONENTS, cluster.Spec.CNI.KubeProxy
 		if p.resp.Current == "" {
@@ -439,6 +445,15 @@ func (s *Server) planMachines(ctx context.Context, p *opPlan, cluster *ichorv1al
 	// the reboot (the cluster has no other API server to answer).
 	p.resp.KubernetesApiUnavailable = p.resp.Effect == pb.OperationEffect_OPERATION_EFFECT_REBOOT &&
 		approvedControlPlanes == 1 && len(cps) == 1
+
+	// Through a single node's address, every kubelet and controller talks to one API server; while
+	// that node's API server restarts the whole cluster has none.
+	if p.kind == ichorv1alpha1.TalosOperationKindKubernetes && approvedControlPlanes > 1 &&
+		cluster.Spec.Endpoint.Type == "node" && !samePatchLine(p.resp.GetCurrent(), p.resp.GetTarget()) {
+		p.resp.Warning = "The cluster endpoint is the address of a single control plane (type node), so while that node's " +
+			"API server is replaced the Kubernetes API is unreachable for every client, although the other control planes " +
+			"are up. Use a virtual IP or a load balancer as the endpoint first."
+	}
 
 	add := func(m *ichorv1alpha1.TalosMachine, step int32) {
 		pm := &pb.PlannedMachine{Name: m.Name, Role: m.Spec.Role, Step: step}
@@ -669,6 +684,12 @@ func (s *Server) writeTarget(ctx context.Context, p *opPlan) error {
 // isDowngrade reports a version target older than the current one for the
 // kinds that carry a version (talos, kubernetes, ichor). The executors refuse
 // it too, but only after the CLI has written the lower version into the spec.
+// samePatchLine reports that moving from current to target stays within one minor version. An
+// empty or unparsable target (the spec already says it) is not known to, so it is not "same".
+func samePatchLine(current, target string) bool {
+	return semver.IsValid(current) && semver.IsValid(target) && semver.MajorMinor(current) == semver.MajorMinor(target)
+}
+
 func isDowngrade(p *opPlan) bool {
 	switch p.kind {
 	case ichorv1alpha1.TalosOperationKindTalos, ichorv1alpha1.TalosOperationKindKubernetes, ichorv1alpha1.TalosOperationKindIchor:

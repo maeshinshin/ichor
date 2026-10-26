@@ -2,6 +2,7 @@ import { useEffect, useState } from 'preact/hooks'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { EmptyNote, PageSkeleton } from '@/components/PageStates'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { HandoverPhase, RolloutKind, type Cluster } from '@/gen/ichor/v1alpha1/cluster_pb'
 import { clusterClient } from '@/lib/connect'
@@ -33,16 +34,16 @@ export function ClusterList() {
   }, [])
 
   if (error) return <ErrorAlert {...error} />
-  if (!clusters) return <p class="mt-10 text-center text-sm text-muted-foreground">{t('clusters.loading')}</p>
+  if (!clusters) return <PageSkeleton label={t('clusters.loading')} />
 
   return (
-    <Card className="mt-6">
+    <Card>
       <CardHeader>
         <CardTitle>{t('clusters.title')}</CardTitle>
       </CardHeader>
       <CardContent>
         {clusters.length === 0 ? (
-          <p class="text-sm text-muted-foreground">{t('clusters.empty')}</p>
+          <EmptyNote>{t('clusters.empty')}</EmptyNote>
         ) : (
           <Table>
             <TableHeader>

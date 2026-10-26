@@ -14,7 +14,7 @@ import type { GenEnum, GenFile, GenMessage, GenService } from "@bufbuild/protobu
 import { enumDesc, fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
 import { file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
-import type { AuditRecord, Condition, ObjectRef } from "./common_pb";
+import type { AuditRecord, BreakGlass, Condition, ObjectRef } from "./common_pb";
 import { file_ichor_v1alpha1_common } from "./common_pb";
 import type { Message, UnknownEnum } from "@bufbuild/protobuf";
 
@@ -22,7 +22,60 @@ import type { Message, UnknownEnum } from "@bufbuild/protobuf";
  * Describes the file ichor/v1alpha1/operation.proto.
  */
 export const file_ichor_v1alpha1_operation: GenFile = /*@__PURE__*/
-  fileDesc("Ch5pY2hvci92MWFscGhhMS9vcGVyYXRpb24ucHJvdG8SDmljaG9yLnYxYWxwaGExIi8KEE9wZXJhdGlvbk1hY2hpbmUSDAoEbmFtZRgBIAEoCRINCgVwaGFzZRgCIAEoCSKKAwoJT3BlcmF0aW9uEiYKA3JlZhgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhIqCgdjbHVzdGVyGAIgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmEisKBGtpbmQYAyABKA4yHS5pY2hvci52MWFscGhhMS5PcGVyYXRpb25LaW5kEg4KBnBhdXNlZBgEIAEoCBIXCg9tYXhfdW5hdmFpbGFibGUYBSABKAUSDQoFcGhhc2UYBiABKAkSFgoOZmFpbHVyZV9yZWFzb24YByABKAkSMgoIbWFjaGluZXMYCCADKAsyIC5pY2hvci52MWFscGhhMS5PcGVyYXRpb25NYWNoaW5lEi0KCmNvbmRpdGlvbnMYCSADKAsyGS5pY2hvci52MWFscGhhMS5Db25kaXRpb24SLgoKY3JlYXRlZF9hdBgKIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASGQoRY2Ffcm90YXRpb25fc3RhZ2UYCyABKAkiQwoVTGlzdE9wZXJhdGlvbnNSZXF1ZXN0EioKB2NsdXN0ZXIYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYiRwoWTGlzdE9wZXJhdGlvbnNSZXNwb25zZRItCgpvcGVyYXRpb25zGAEgAygLMhkuaWNob3IudjFhbHBoYTEuT3BlcmF0aW9uIkMKE0dldE9wZXJhdGlvblJlcXVlc3QSLAoJb3BlcmF0aW9uGAEgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmIkQKFEdldE9wZXJhdGlvblJlc3BvbnNlEiwKCW9wZXJhdGlvbhgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9wZXJhdGlvbiJRCg5QbGFubmVkTWFjaGluZRIMCgRuYW1lGAEgASgJEgwKBHJvbGUYAiABKAkSDAoEc3RlcBgDIAEoBRIVCg1yZWJvb3RfZmllbGRzGAQgAygJIpgBChRQbGFuT3BlcmF0aW9uUmVxdWVzdBIqCgdjbHVzdGVyGAEgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmEisKBGtpbmQYAiABKA4yHS5pY2hvci52MWFscGhhMS5PcGVyYXRpb25LaW5kEg4KBnRhcmdldBgDIAEoCRIXCg9tYXhfdW5hdmFpbGFibGUYBCABKAUivgIKFVBsYW5PcGVyYXRpb25SZXNwb25zZRIvCgZlZmZlY3QYASABKA4yHy5pY2hvci52MWFscGhhMS5PcGVyYXRpb25FZmZlY3QSMAoIbWFjaGluZXMYAiADKAsyHi5pY2hvci52MWFscGhhMS5QbGFubmVkTWFjaGluZRIMCgRoZWxkGAMgAygJEhcKD21heF91bmF2YWlsYWJsZRgEIAEoBRIPCgdjdXJyZW50GAUgASgJEg4KBnRhcmdldBgGIAEoCRIUCgxzcGVjX2NoYW5nZXMYByABKAgSDwoHYmxvY2tlZBgIIAEoCRIOCgZzdGFnZXMYCSADKAkSHwoXcmVwbGFjZXNfc2VjcmV0c19idW5kbGUYCiABKAgSIgoaa3ViZXJuZXRlc19hcGlfdW5hdmFpbGFibGUYCyABKAgimgEKFkNyZWF0ZU9wZXJhdGlvblJlcXVlc3QSKgoHY2x1c3RlchgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhIrCgRraW5kGAIgASgOMh0uaWNob3IudjFhbHBoYTEuT3BlcmF0aW9uS2luZBIOCgZ0YXJnZXQYAyABKAkSFwoPbWF4X3VuYXZhaWxhYmxlGAQgASgFIokBChdDcmVhdGVPcGVyYXRpb25SZXNwb25zZRIsCglvcGVyYXRpb24YASABKAsyGS5pY2hvci52MWFscGhhMS5PcGVyYXRpb24SKgoFYXVkaXQYAiABKAsyGy5pY2hvci52MWFscGhhMS5BdWRpdFJlY29yZBIUCgxzcGVjX2NoYW5nZWQYAyABKAgiWQoZU2V0T3BlcmF0aW9uUGF1c2VkUmVxdWVzdBIsCglvcGVyYXRpb24YASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYSDgoGcGF1c2VkGAIgASgIInYKGlNldE9wZXJhdGlvblBhdXNlZFJlc3BvbnNlEiwKCW9wZXJhdGlvbhgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9wZXJhdGlvbhIqCgVhdWRpdBgCIAEoCzIbLmljaG9yLnYxYWxwaGExLkF1ZGl0UmVjb3JkIkYKFkRlbGV0ZU9wZXJhdGlvblJlcXVlc3QSLAoJb3BlcmF0aW9uGAEgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmIkUKF0RlbGV0ZU9wZXJhdGlvblJlc3BvbnNlEioKBWF1ZGl0GAEgASgLMhsuaWNob3IudjFhbHBoYTEuQXVkaXRSZWNvcmQq8gEKDU9wZXJhdGlvbktpbmQSHgoaT1BFUkFUSU9OX0tJTkRfVU5TUEVDSUZJRUQQABIYChRPUEVSQVRJT05fS0lORF9UQUxPUxABEh0KGU9QRVJBVElPTl9LSU5EX0tVQkVSTkVURVMQAhIYChRPUEVSQVRJT05fS0lORF9JQ0hPUhADEhYKEk9QRVJBVElPTl9LSU5EX0NOSRAEEhsKF09QRVJBVElPTl9LSU5EX1NIVVRET1dOEAUSHgoaT1BFUkFUSU9OX0tJTkRfQ0FfUk9UQVRJT04QBhIZChVPUEVSQVRJT05fS0lORF9DT05GSUcQByrRAQoPT3BlcmF0aW9uRWZmZWN0EiAKHE9QRVJBVElPTl9FRkZFQ1RfVU5TUEVDSUZJRUQQABIbChdPUEVSQVRJT05fRUZGRUNUX1JFQk9PVBABEicKI09QRVJBVElPTl9FRkZFQ1RfUkVTVEFSVF9DT01QT05FTlRTEAISGQoVT1BFUkFUSU9OX0VGRkVDVF9TVE9QEAMSGQoVT1BFUkFUSU9OX0VGRkVDVF9OT05FEAQSIAocT1BFUkFUSU9OX0VGRkVDVF9DQV9ST1RBVElPThAFMuEEChBPcGVyYXRpb25TZXJ2aWNlEl8KDkxpc3RPcGVyYXRpb25zEiUuaWNob3IudjFhbHBoYTEuTGlzdE9wZXJhdGlvbnNSZXF1ZXN0GiYuaWNob3IudjFhbHBoYTEuTGlzdE9wZXJhdGlvbnNSZXNwb25zZRJZCgxHZXRPcGVyYXRpb24SIy5pY2hvci52MWFscGhhMS5HZXRPcGVyYXRpb25SZXF1ZXN0GiQuaWNob3IudjFhbHBoYTEuR2V0T3BlcmF0aW9uUmVzcG9uc2USXAoNUGxhbk9wZXJhdGlvbhIkLmljaG9yLnYxYWxwaGExLlBsYW5PcGVyYXRpb25SZXF1ZXN0GiUuaWNob3IudjFhbHBoYTEuUGxhbk9wZXJhdGlvblJlc3BvbnNlEmIKD0NyZWF0ZU9wZXJhdGlvbhImLmljaG9yLnYxYWxwaGExLkNyZWF0ZU9wZXJhdGlvblJlcXVlc3QaJy5pY2hvci52MWFscGhhMS5DcmVhdGVPcGVyYXRpb25SZXNwb25zZRJrChJTZXRPcGVyYXRpb25QYXVzZWQSKS5pY2hvci52MWFscGhhMS5TZXRPcGVyYXRpb25QYXVzZWRSZXF1ZXN0GiouaWNob3IudjFhbHBoYTEuU2V0T3BlcmF0aW9uUGF1c2VkUmVzcG9uc2USYgoPRGVsZXRlT3BlcmF0aW9uEiYuaWNob3IudjFhbHBoYTEuRGVsZXRlT3BlcmF0aW9uUmVxdWVzdBonLmljaG9yLnYxYWxwaGExLkRlbGV0ZU9wZXJhdGlvblJlc3BvbnNlQr8BChJjb20uaWNob3IudjFhbHBoYTFCDk9wZXJhdGlvblByb3RvUAFaQGdpdGh1Yi5jb20vbWFlc2hpbnNoaW4vaWNob3IvZ2VuL2dvL2ljaG9yL3YxYWxwaGExO2ljaG9ydjFhbHBoYTGiAgNJWFiqAg5JY2hvci5WMWFscGhhMcoCDkljaG9yXFYxYWxwaGEx4gIaSWNob3JcVjFhbHBoYTFcR1BCTWV0YWRhdGHqAg9JY2hvcjo6VjFhbHBoYTFiBnByb3RvMw", [file_google_protobuf_timestamp, file_ichor_v1alpha1_common]);
+  fileDesc("Ch5pY2hvci92MWFscGhhMS9vcGVyYXRpb24ucHJvdG8SDmljaG9yLnYxYWxwaGExItQBChFOb2RlQWN0aW9uUmVxdWVzdBIqCgdtYWNoaW5lGAEgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmEioKBmFjdGlvbhgCIAEoDjIaLmljaG9yLnYxYWxwaGExLk5vZGVBY3Rpb24SDwoHc2VydmljZRgDIAEoCRIUCgxhbGxvd19sZWFkZXIYBCABKAgSDwoHY29uZmlybRgFIAEoCRIvCgticmVha19nbGFzcxgGIAEoCzIaLmljaG9yLnYxYWxwaGExLkJyZWFrR2xhc3MiLwoQT3BlcmF0aW9uTWFjaGluZRIMCgRuYW1lGAEgASgJEg0KBXBoYXNlGAIgASgJIoIECglPcGVyYXRpb24SJgoDcmVmGAEgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmEioKB2NsdXN0ZXIYAiABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYSKwoEa2luZBgDIAEoDjIdLmljaG9yLnYxYWxwaGExLk9wZXJhdGlvbktpbmQSDgoGcGF1c2VkGAQgASgIEhcKD21heF91bmF2YWlsYWJsZRgFIAEoBRINCgVwaGFzZRgGIAEoCRIWCg5mYWlsdXJlX3JlYXNvbhgHIAEoCRIyCghtYWNoaW5lcxgIIAMoCzIgLmljaG9yLnYxYWxwaGExLk9wZXJhdGlvbk1hY2hpbmUSLQoKY29uZGl0aW9ucxgJIAMoCzIZLmljaG9yLnYxYWxwaGExLkNvbmRpdGlvbhIuCgpjcmVhdGVkX2F0GAogASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIZChFjYV9yb3RhdGlvbl9zdGFnZRgLIAEoCRIvCgtub2RlX2FjdGlvbhgMIAEoDjIaLmljaG9yLnYxYWxwaGExLk5vZGVBY3Rpb24SLwoMbm9kZV9tYWNoaW5lGA0gASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmEhQKDG5vZGVfbWVzc2FnZRgOIAEoCSJDChVMaXN0T3BlcmF0aW9uc1JlcXVlc3QSKgoHY2x1c3RlchgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZiJHChZMaXN0T3BlcmF0aW9uc1Jlc3BvbnNlEi0KCm9wZXJhdGlvbnMYASADKAsyGS5pY2hvci52MWFscGhhMS5PcGVyYXRpb24iQwoTR2V0T3BlcmF0aW9uUmVxdWVzdBIsCglvcGVyYXRpb24YASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYiRAoUR2V0T3BlcmF0aW9uUmVzcG9uc2USLAoJb3BlcmF0aW9uGAEgASgLMhkuaWNob3IudjFhbHBoYTEuT3BlcmF0aW9uIlEKDlBsYW5uZWRNYWNoaW5lEgwKBG5hbWUYASABKAkSDAoEcm9sZRgCIAEoCRIMCgRzdGVwGAMgASgFEhUKDXJlYm9vdF9maWVsZHMYBCADKAkiyQEKFFBsYW5PcGVyYXRpb25SZXF1ZXN0EioKB2NsdXN0ZXIYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYSKwoEa2luZBgCIAEoDjIdLmljaG9yLnYxYWxwaGExLk9wZXJhdGlvbktpbmQSDgoGdGFyZ2V0GAMgASgJEhcKD21heF91bmF2YWlsYWJsZRgEIAEoBRIvCgRub2RlGAUgASgLMiEuaWNob3IudjFhbHBoYTEuTm9kZUFjdGlvblJlcXVlc3QikgMKFVBsYW5PcGVyYXRpb25SZXNwb25zZRIvCgZlZmZlY3QYASABKA4yHy5pY2hvci52MWFscGhhMS5PcGVyYXRpb25FZmZlY3QSMAoIbWFjaGluZXMYAiADKAsyHi5pY2hvci52MWFscGhhMS5QbGFubmVkTWFjaGluZRIMCgRoZWxkGAMgAygJEhcKD21heF91bmF2YWlsYWJsZRgEIAEoBRIPCgdjdXJyZW50GAUgASgJEg4KBnRhcmdldBgGIAEoCRIUCgxzcGVjX2NoYW5nZXMYByABKAgSDwoHYmxvY2tlZBgIIAEoCRIOCgZzdGFnZXMYCSADKAkSHwoXcmVwbGFjZXNfc2VjcmV0c19idW5kbGUYCiABKAgSIgoaa3ViZXJuZXRlc19hcGlfdW5hdmFpbGFibGUYCyABKAgSDQoFc3RlcHMYDCADKAkSDwoHd2FybmluZxgNIAEoCRIUCgxjb25maXJtX25hbWUYDiABKAkSHAoUYnJlYWtfZ2xhc3NfcmVxdWlyZWQYDyABKAgiywEKFkNyZWF0ZU9wZXJhdGlvblJlcXVlc3QSKgoHY2x1c3RlchgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhIrCgRraW5kGAIgASgOMh0uaWNob3IudjFhbHBoYTEuT3BlcmF0aW9uS2luZBIOCgZ0YXJnZXQYAyABKAkSFwoPbWF4X3VuYXZhaWxhYmxlGAQgASgFEi8KBG5vZGUYBSABKAsyIS5pY2hvci52MWFscGhhMS5Ob2RlQWN0aW9uUmVxdWVzdCKJAQoXQ3JlYXRlT3BlcmF0aW9uUmVzcG9uc2USLAoJb3BlcmF0aW9uGAEgASgLMhkuaWNob3IudjFhbHBoYTEuT3BlcmF0aW9uEioKBWF1ZGl0GAIgASgLMhsuaWNob3IudjFhbHBoYTEuQXVkaXRSZWNvcmQSFAoMc3BlY19jaGFuZ2VkGAMgASgIIlkKGVNldE9wZXJhdGlvblBhdXNlZFJlcXVlc3QSLAoJb3BlcmF0aW9uGAEgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmEg4KBnBhdXNlZBgCIAEoCCJ2ChpTZXRPcGVyYXRpb25QYXVzZWRSZXNwb25zZRIsCglvcGVyYXRpb24YASABKAsyGS5pY2hvci52MWFscGhhMS5PcGVyYXRpb24SKgoFYXVkaXQYAiABKAsyGy5pY2hvci52MWFscGhhMS5BdWRpdFJlY29yZCJGChZEZWxldGVPcGVyYXRpb25SZXF1ZXN0EiwKCW9wZXJhdGlvbhgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZiJFChdEZWxldGVPcGVyYXRpb25SZXNwb25zZRIqCgVhdWRpdBgBIAEoCzIbLmljaG9yLnYxYWxwaGExLkF1ZGl0UmVjb3JkKosCCg1PcGVyYXRpb25LaW5kEh4KGk9QRVJBVElPTl9LSU5EX1VOU1BFQ0lGSUVEEAASGAoUT1BFUkFUSU9OX0tJTkRfVEFMT1MQARIdChlPUEVSQVRJT05fS0lORF9LVUJFUk5FVEVTEAISGAoUT1BFUkFUSU9OX0tJTkRfSUNIT1IQAxIWChJPUEVSQVRJT05fS0lORF9DTkkQBBIbChdPUEVSQVRJT05fS0lORF9TSFVURE9XThAFEh4KGk9QRVJBVElPTl9LSU5EX0NBX1JPVEFUSU9OEAYSGQoVT1BFUkFUSU9OX0tJTkRfQ09ORklHEAcSFwoTT1BFUkFUSU9OX0tJTkRfTk9ERRAIKvEBCgpOb2RlQWN0aW9uEhsKF05PREVfQUNUSU9OX1VOU1BFQ0lGSUVEEAASFgoSTk9ERV9BQ1RJT05fUkVCT09UEAESGAoUTk9ERV9BQ1RJT05fU0hVVERPV04QAhIfChtOT0RFX0FDVElPTl9SRVNUQVJUX1NFUlZJQ0UQAxIbChdOT0RFX0FDVElPTl9FVENEX0RFRlJBRxAEEicKI05PREVfQUNUSU9OX0VUQ0RfRk9SRkVJVF9MRUFERVJTSElQEAUSFQoRTk9ERV9BQ1RJT05fUkVTRVQQBhIWChJOT0RFX0FDVElPTl9SRU1PVkUQByrRAQoPT3BlcmF0aW9uRWZmZWN0EiAKHE9QRVJBVElPTl9FRkZFQ1RfVU5TUEVDSUZJRUQQABIbChdPUEVSQVRJT05fRUZGRUNUX1JFQk9PVBABEicKI09QRVJBVElPTl9FRkZFQ1RfUkVTVEFSVF9DT01QT05FTlRTEAISGQoVT1BFUkFUSU9OX0VGRkVDVF9TVE9QEAMSGQoVT1BFUkFUSU9OX0VGRkVDVF9OT05FEAQSIAocT1BFUkFUSU9OX0VGRkVDVF9DQV9ST1RBVElPThAFMuEEChBPcGVyYXRpb25TZXJ2aWNlEl8KDkxpc3RPcGVyYXRpb25zEiUuaWNob3IudjFhbHBoYTEuTGlzdE9wZXJhdGlvbnNSZXF1ZXN0GiYuaWNob3IudjFhbHBoYTEuTGlzdE9wZXJhdGlvbnNSZXNwb25zZRJZCgxHZXRPcGVyYXRpb24SIy5pY2hvci52MWFscGhhMS5HZXRPcGVyYXRpb25SZXF1ZXN0GiQuaWNob3IudjFhbHBoYTEuR2V0T3BlcmF0aW9uUmVzcG9uc2USXAoNUGxhbk9wZXJhdGlvbhIkLmljaG9yLnYxYWxwaGExLlBsYW5PcGVyYXRpb25SZXF1ZXN0GiUuaWNob3IudjFhbHBoYTEuUGxhbk9wZXJhdGlvblJlc3BvbnNlEmIKD0NyZWF0ZU9wZXJhdGlvbhImLmljaG9yLnYxYWxwaGExLkNyZWF0ZU9wZXJhdGlvblJlcXVlc3QaJy5pY2hvci52MWFscGhhMS5DcmVhdGVPcGVyYXRpb25SZXNwb25zZRJrChJTZXRPcGVyYXRpb25QYXVzZWQSKS5pY2hvci52MWFscGhhMS5TZXRPcGVyYXRpb25QYXVzZWRSZXF1ZXN0GiouaWNob3IudjFhbHBoYTEuU2V0T3BlcmF0aW9uUGF1c2VkUmVzcG9uc2USYgoPRGVsZXRlT3BlcmF0aW9uEiYuaWNob3IudjFhbHBoYTEuRGVsZXRlT3BlcmF0aW9uUmVxdWVzdBonLmljaG9yLnYxYWxwaGExLkRlbGV0ZU9wZXJhdGlvblJlc3BvbnNlQr8BChJjb20uaWNob3IudjFhbHBoYTFCDk9wZXJhdGlvblByb3RvUAFaQGdpdGh1Yi5jb20vbWFlc2hpbnNoaW4vaWNob3IvZ2VuL2dvL2ljaG9yL3YxYWxwaGExO2ljaG9ydjFhbHBoYTGiAgNJWFiqAg5JY2hvci5WMWFscGhhMcoCDkljaG9yXFYxYWxwaGEx4gIaSWNob3JcVjFhbHBoYTFcR1BCTWV0YWRhdGHqAg9JY2hvcjo6VjFhbHBoYTFiBnByb3RvMw", [file_google_protobuf_timestamp, file_ichor_v1alpha1_common]);
+
+/**
+ * NodeActionRequest names the machine and the action of a node-kind plan or create.
+ *
+ * @generated from message ichor.v1alpha1.NodeActionRequest
+ */
+export type NodeActionRequest = Message<"ichor.v1alpha1.NodeActionRequest"> & {
+  /**
+   * @generated from field: ichor.v1alpha1.ObjectRef machine = 1;
+   */
+  machine?: ObjectRef | undefined;
+
+  /**
+   * @generated from field: ichor.v1alpha1.NodeAction action = 2;
+   */
+  action: NodeAction;
+
+  /**
+   * service is the Talos service to restart: kubelet, containerd or cri.
+   *
+   * @generated from field: string service = 3;
+   */
+  service: string;
+
+  /**
+   * allow_leader lets etcd-defrag run on the leader of a multi-member etcd.
+   *
+   * @generated from field: bool allow_leader = 4;
+   */
+  allowLeader: boolean;
+
+  /**
+   * confirm is the machine's name, typed, for reset (and remove).
+   *
+   * @generated from field: string confirm = 5;
+   */
+  confirm: string;
+
+  /**
+   * break_glass is required for reset: the reason, checked against the break-glass
+   * verb on the machine (ADR 0065).
+   *
+   * @generated from field: ichor.v1alpha1.BreakGlass break_glass = 6;
+   */
+  breakGlass?: BreakGlass | undefined;
+};
+
+/**
+ * Describes the message ichor.v1alpha1.NodeActionRequest.
+ * Use `create(NodeActionRequestSchema)` to create a new message.
+ */
+export const NodeActionRequestSchema: GenMessage<NodeActionRequest> = /*@__PURE__*/
+  messageDesc(file_ichor_v1alpha1_operation, 0);
 
 /**
  * OperationMachine is TalosOperation.status.machines[] as it is: a machine
@@ -49,7 +102,7 @@ export type OperationMachine = Message<"ichor.v1alpha1.OperationMachine"> & {
  * Use `create(OperationMachineSchema)` to create a new message.
  */
 export const OperationMachineSchema: GenMessage<OperationMachine> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_operation, 0);
+  messageDesc(file_ichor_v1alpha1_operation, 1);
 
 /**
  * @generated from message ichor.v1alpha1.Operation
@@ -119,6 +172,24 @@ export type Operation = Message<"ichor.v1alpha1.Operation"> & {
    * @generated from field: string ca_rotation_stage = 11;
    */
   caRotationStage: string;
+
+  /**
+   * node_action, node_machine and node_message describe a node-kind operation: what it
+   * does, to which machine, and what it is doing or waiting for now.
+   *
+   * @generated from field: ichor.v1alpha1.NodeAction node_action = 12;
+   */
+  nodeAction: NodeAction;
+
+  /**
+   * @generated from field: ichor.v1alpha1.ObjectRef node_machine = 13;
+   */
+  nodeMachine?: ObjectRef | undefined;
+
+  /**
+   * @generated from field: string node_message = 14;
+   */
+  nodeMessage: string;
 };
 
 /**
@@ -126,7 +197,7 @@ export type Operation = Message<"ichor.v1alpha1.Operation"> & {
  * Use `create(OperationSchema)` to create a new message.
  */
 export const OperationSchema: GenMessage<Operation> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_operation, 1);
+  messageDesc(file_ichor_v1alpha1_operation, 2);
 
 /**
  * @generated from message ichor.v1alpha1.ListOperationsRequest
@@ -145,7 +216,7 @@ export type ListOperationsRequest = Message<"ichor.v1alpha1.ListOperationsReques
  * Use `create(ListOperationsRequestSchema)` to create a new message.
  */
 export const ListOperationsRequestSchema: GenMessage<ListOperationsRequest> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_operation, 2);
+  messageDesc(file_ichor_v1alpha1_operation, 3);
 
 /**
  * @generated from message ichor.v1alpha1.ListOperationsResponse
@@ -162,7 +233,7 @@ export type ListOperationsResponse = Message<"ichor.v1alpha1.ListOperationsRespo
  * Use `create(ListOperationsResponseSchema)` to create a new message.
  */
 export const ListOperationsResponseSchema: GenMessage<ListOperationsResponse> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_operation, 3);
+  messageDesc(file_ichor_v1alpha1_operation, 4);
 
 /**
  * @generated from message ichor.v1alpha1.GetOperationRequest
@@ -179,7 +250,7 @@ export type GetOperationRequest = Message<"ichor.v1alpha1.GetOperationRequest"> 
  * Use `create(GetOperationRequestSchema)` to create a new message.
  */
 export const GetOperationRequestSchema: GenMessage<GetOperationRequest> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_operation, 4);
+  messageDesc(file_ichor_v1alpha1_operation, 5);
 
 /**
  * @generated from message ichor.v1alpha1.GetOperationResponse
@@ -196,7 +267,7 @@ export type GetOperationResponse = Message<"ichor.v1alpha1.GetOperationResponse"
  * Use `create(GetOperationResponseSchema)` to create a new message.
  */
 export const GetOperationResponseSchema: GenMessage<GetOperationResponse> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_operation, 5);
+  messageDesc(file_ichor_v1alpha1_operation, 6);
 
 /**
  * @generated from message ichor.v1alpha1.PlannedMachine
@@ -235,7 +306,7 @@ export type PlannedMachine = Message<"ichor.v1alpha1.PlannedMachine"> & {
  * Use `create(PlannedMachineSchema)` to create a new message.
  */
 export const PlannedMachineSchema: GenMessage<PlannedMachine> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_operation, 6);
+  messageDesc(file_ichor_v1alpha1_operation, 7);
 
 /**
  * @generated from message ichor.v1alpha1.PlanOperationRequest
@@ -269,6 +340,13 @@ export type PlanOperationRequest = Message<"ichor.v1alpha1.PlanOperationRequest"
    * @generated from field: int32 max_unavailable = 4;
    */
   maxUnavailable: number;
+
+  /**
+   * node is required for kind NODE (cluster may then be left unset: it is the machine's).
+   *
+   * @generated from field: ichor.v1alpha1.NodeActionRequest node = 5;
+   */
+  node?: NodeActionRequest | undefined;
 };
 
 /**
@@ -276,7 +354,7 @@ export type PlanOperationRequest = Message<"ichor.v1alpha1.PlanOperationRequest"
  * Use `create(PlanOperationRequestSchema)` to create a new message.
  */
 export const PlanOperationRequestSchema: GenMessage<PlanOperationRequest> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_operation, 7);
+  messageDesc(file_ichor_v1alpha1_operation, 8);
 
 /**
  * @generated from message ichor.v1alpha1.PlanOperationResponse
@@ -360,6 +438,30 @@ export type PlanOperationResponse = Message<"ichor.v1alpha1.PlanOperationRespons
    * @generated from field: bool kubernetes_api_unavailable = 11;
    */
   kubernetesApiUnavailable: boolean;
+
+  /**
+   * steps, warning, confirm_name and break_glass_required describe a node action in plain
+   * English: what happens in order, what the user should know first, the name they must type
+   * (empty when no typing is needed), and whether a break-glass reason is needed.
+   *
+   * @generated from field: repeated string steps = 12;
+   */
+  steps: string[];
+
+  /**
+   * @generated from field: string warning = 13;
+   */
+  warning: string;
+
+  /**
+   * @generated from field: string confirm_name = 14;
+   */
+  confirmName: string;
+
+  /**
+   * @generated from field: bool break_glass_required = 15;
+   */
+  breakGlassRequired: boolean;
 };
 
 /**
@@ -367,7 +469,7 @@ export type PlanOperationResponse = Message<"ichor.v1alpha1.PlanOperationRespons
  * Use `create(PlanOperationResponseSchema)` to create a new message.
  */
 export const PlanOperationResponseSchema: GenMessage<PlanOperationResponse> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_operation, 8);
+  messageDesc(file_ichor_v1alpha1_operation, 9);
 
 /**
  * @generated from message ichor.v1alpha1.CreateOperationRequest
@@ -396,6 +498,11 @@ export type CreateOperationRequest = Message<"ichor.v1alpha1.CreateOperationRequ
    * @generated from field: int32 max_unavailable = 4;
    */
   maxUnavailable: number;
+
+  /**
+   * @generated from field: ichor.v1alpha1.NodeActionRequest node = 5;
+   */
+  node?: NodeActionRequest | undefined;
 };
 
 /**
@@ -403,7 +510,7 @@ export type CreateOperationRequest = Message<"ichor.v1alpha1.CreateOperationRequ
  * Use `create(CreateOperationRequestSchema)` to create a new message.
  */
 export const CreateOperationRequestSchema: GenMessage<CreateOperationRequest> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_operation, 9);
+  messageDesc(file_ichor_v1alpha1_operation, 10);
 
 /**
  * @generated from message ichor.v1alpha1.CreateOperationResponse
@@ -433,7 +540,7 @@ export type CreateOperationResponse = Message<"ichor.v1alpha1.CreateOperationRes
  * Use `create(CreateOperationResponseSchema)` to create a new message.
  */
 export const CreateOperationResponseSchema: GenMessage<CreateOperationResponse> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_operation, 10);
+  messageDesc(file_ichor_v1alpha1_operation, 11);
 
 /**
  * @generated from message ichor.v1alpha1.SetOperationPausedRequest
@@ -455,7 +562,7 @@ export type SetOperationPausedRequest = Message<"ichor.v1alpha1.SetOperationPaus
  * Use `create(SetOperationPausedRequestSchema)` to create a new message.
  */
 export const SetOperationPausedRequestSchema: GenMessage<SetOperationPausedRequest> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_operation, 11);
+  messageDesc(file_ichor_v1alpha1_operation, 12);
 
 /**
  * @generated from message ichor.v1alpha1.SetOperationPausedResponse
@@ -477,7 +584,7 @@ export type SetOperationPausedResponse = Message<"ichor.v1alpha1.SetOperationPau
  * Use `create(SetOperationPausedResponseSchema)` to create a new message.
  */
 export const SetOperationPausedResponseSchema: GenMessage<SetOperationPausedResponse> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_operation, 12);
+  messageDesc(file_ichor_v1alpha1_operation, 13);
 
 /**
  * @generated from message ichor.v1alpha1.DeleteOperationRequest
@@ -494,7 +601,7 @@ export type DeleteOperationRequest = Message<"ichor.v1alpha1.DeleteOperationRequ
  * Use `create(DeleteOperationRequestSchema)` to create a new message.
  */
 export const DeleteOperationRequestSchema: GenMessage<DeleteOperationRequest> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_operation, 13);
+  messageDesc(file_ichor_v1alpha1_operation, 14);
 
 /**
  * @generated from message ichor.v1alpha1.DeleteOperationResponse
@@ -511,7 +618,7 @@ export type DeleteOperationResponse = Message<"ichor.v1alpha1.DeleteOperationRes
  * Use `create(DeleteOperationResponseSchema)` to create a new message.
  */
 export const DeleteOperationResponseSchema: GenMessage<DeleteOperationResponse> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_operation, 14);
+  messageDesc(file_ichor_v1alpha1_operation, 15);
 
 /**
  * @generated from enum ichor.v1alpha1.OperationKind
@@ -561,6 +668,13 @@ export const OperationKind = {
    * @generated from enum value: OPERATION_KIND_CONFIG = 7;
    */
   CONFIG: 7,
+
+  /**
+   * NODE runs one NodeAction on one machine (ADR 0083).
+   *
+   * @generated from enum value: OPERATION_KIND_NODE = 8;
+   */
+  NODE: 8,
 } as const;
 
 /**
@@ -573,6 +687,71 @@ export type OperationKind = (typeof OperationKind)[keyof typeof OperationKind] |
  */
 export const OperationKindSchema: GenEnum<OperationKind> = /*@__PURE__*/
   enumDesc(file_ichor_v1alpha1_operation, 0);
+
+/**
+ * NodeAction is what a node-kind operation does to its one machine (ADR 0083).
+ *
+ * @generated from enum ichor.v1alpha1.NodeAction
+ */
+export const NodeAction = {
+  /**
+   * @generated from enum value: NODE_ACTION_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED: 0,
+
+  /**
+   * @generated from enum value: NODE_ACTION_REBOOT = 1;
+   */
+  REBOOT: 1,
+
+  /**
+   * @generated from enum value: NODE_ACTION_SHUTDOWN = 2;
+   */
+  SHUTDOWN: 2,
+
+  /**
+   * @generated from enum value: NODE_ACTION_RESTART_SERVICE = 3;
+   */
+  RESTART_SERVICE: 3,
+
+  /**
+   * @generated from enum value: NODE_ACTION_ETCD_DEFRAG = 4;
+   */
+  ETCD_DEFRAG: 4,
+
+  /**
+   * @generated from enum value: NODE_ACTION_ETCD_FORFEIT_LEADERSHIP = 5;
+   */
+  ETCD_FORFEIT_LEADERSHIP: 5,
+
+  /**
+   * RESET removes the machine through the removal flow and wipes the node (ADR 0042).
+   *
+   * @generated from enum value: NODE_ACTION_RESET = 6;
+   */
+  RESET: 6,
+
+  /**
+   * REMOVE is only planned here: CreateOperation refuses it, MachineService.RemoveMachine
+   * does it (a delete of the TalosMachine, which removes its etcd member, ADR 0032).
+   *
+   * @generated from enum value: NODE_ACTION_REMOVE = 7;
+   */
+  REMOVE: 7,
+} as const;
+
+/**
+ * NodeAction is what a node-kind operation does to its one machine (ADR 0083).
+ *
+ * @generated from enum ichor.v1alpha1.NodeAction
+ */
+export type NodeAction = (typeof NodeAction)[keyof typeof NodeAction] | UnknownEnum;
+
+/**
+ * Describes the enum ichor.v1alpha1.NodeAction.
+ */
+export const NodeActionSchema: GenEnum<NodeAction> = /*@__PURE__*/
+  enumDesc(file_ichor_v1alpha1_operation, 1);
 
 /**
  * OperationEffect is what the operation does to each machine it reaches.
@@ -634,7 +813,7 @@ export type OperationEffect = (typeof OperationEffect)[keyof typeof OperationEff
  * Describes the enum ichor.v1alpha1.OperationEffect.
  */
 export const OperationEffectSchema: GenEnum<OperationEffect> = /*@__PURE__*/
-  enumDesc(file_ichor_v1alpha1_operation, 1);
+  enumDesc(file_ichor_v1alpha1_operation, 2);
 
 /**
  * @generated from service ichor.v1alpha1.OperationService

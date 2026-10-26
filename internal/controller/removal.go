@@ -69,7 +69,7 @@ import (
 // machine was never an etcd member (ADR 0010), so there is nothing here to
 // protect, and giving every TalosMachine a finalizer that always just
 // removes itself again would be ceremony with no safety behind it.
-const machineRemovalFinalizer = "ichor.maesh.dev/machine-removal"
+const machineRemovalFinalizer = ichorv1alpha1.TalosMachineRemovalFinalizer
 
 // removalRenewInterval is how often reconcileRemoval renews the cluster
 // lock while draining. One minute is comfortably inside

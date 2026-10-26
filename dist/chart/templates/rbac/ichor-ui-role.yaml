@@ -55,8 +55,16 @@ rules:
   - ichor.maesh.dev
   resources:
   - talosclusters
+  verbs:
+  - get
+  - list
+  - update
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
   - talosmachines
   verbs:
+  - delete
   - get
   - list
   - update

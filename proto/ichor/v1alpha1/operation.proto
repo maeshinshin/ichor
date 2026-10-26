@@ -36,6 +36,38 @@ enum OperationKind {
   // CONFIG applies the pending reboot-requiring configuration changes, one
   // machine at a time with a reboot each (ADR 0080).
   OPERATION_KIND_CONFIG = 7;
+  // NODE runs one NodeAction on one machine (ADR 0083).
+  OPERATION_KIND_NODE = 8;
+}
+
+// NodeAction is what a node-kind operation does to its one machine (ADR 0083).
+enum NodeAction {
+  NODE_ACTION_UNSPECIFIED = 0;
+  NODE_ACTION_REBOOT = 1;
+  NODE_ACTION_SHUTDOWN = 2;
+  NODE_ACTION_RESTART_SERVICE = 3;
+  NODE_ACTION_ETCD_DEFRAG = 4;
+  NODE_ACTION_ETCD_FORFEIT_LEADERSHIP = 5;
+  // RESET removes the machine through the removal flow and wipes the node (ADR 0042).
+  NODE_ACTION_RESET = 6;
+  // REMOVE is only planned here: CreateOperation refuses it, MachineService.RemoveMachine
+  // does it (a delete of the TalosMachine, which removes its etcd member, ADR 0032).
+  NODE_ACTION_REMOVE = 7;
+}
+
+// NodeActionRequest names the machine and the action of a node-kind plan or create.
+message NodeActionRequest {
+  ObjectRef machine = 1;
+  NodeAction action = 2;
+  // service is the Talos service to restart: kubelet, containerd or cri.
+  string service = 3;
+  // allow_leader lets etcd-defrag run on the leader of a multi-member etcd.
+  bool allow_leader = 4;
+  // confirm is the machine's name, typed, for reset (and remove).
+  string confirm = 5;
+  // break_glass is required for reset: the reason, checked against the break-glass
+  // verb on the machine (ADR 0065).
+  BreakGlass break_glass = 6;
 }
 
 // OperationMachine is TalosOperation.status.machines[] as it is: a machine
@@ -65,6 +97,11 @@ message Operation {
   // (Accepting, Issuing, Dropping, Finalizing, Done); empty before the new CAs
   // are saved, and for every other kind.
   string ca_rotation_stage = 11;
+  // node_action, node_machine and node_message describe a node-kind operation: what it
+  // does, to which machine, and what it is doing or waiting for now.
+  NodeAction node_action = 12;
+  ObjectRef node_machine = 13;
+  string node_message = 14;
 }
 
 message ListOperationsRequest {
@@ -123,6 +160,8 @@ message PlanOperationRequest {
   // max_unavailable is how many workers would be handled at once; 0 is the
   // CRD default (1).
   int32 max_unavailable = 4;
+  // node is required for kind NODE (cluster may then be left unset: it is the machine's).
+  NodeActionRequest node = 5;
 }
 
 message PlanOperationResponse {
@@ -152,6 +191,13 @@ message PlanOperationResponse {
   // cluster's only approved control plane, so the Kubernetes API is down for
   // the length of the reboot.
   bool kubernetes_api_unavailable = 11;
+  // steps, warning, confirm_name and break_glass_required describe a node action in plain
+  // English: what happens in order, what the user should know first, the name they must type
+  // (empty when no typing is needed), and whether a break-glass reason is needed.
+  repeated string steps = 12;
+  string warning = 13;
+  string confirm_name = 14;
+  bool break_glass_required = 15;
 }
 
 message CreateOperationRequest {
@@ -161,6 +207,7 @@ message CreateOperationRequest {
   string target = 3;
   // max_unavailable caps parallel workers; 0 keeps the CRD default.
   int32 max_unavailable = 4;
+  NodeActionRequest node = 5;
 }
 
 message CreateOperationResponse {

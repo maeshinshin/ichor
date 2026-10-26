@@ -50,6 +50,9 @@ const (
 	// MachineServiceRejectMachineProcedure is the fully-qualified name of the MachineService's
 	// RejectMachine RPC.
 	MachineServiceRejectMachineProcedure = "/ichor.v1alpha1.MachineService/RejectMachine"
+	// MachineServiceRemoveMachineProcedure is the fully-qualified name of the MachineService's
+	// RemoveMachine RPC.
+	MachineServiceRemoveMachineProcedure = "/ichor.v1alpha1.MachineService/RemoveMachine"
 	// MachineServiceSetMachineInstallProcedure is the fully-qualified name of the MachineService's
 	// SetMachineInstall RPC.
 	MachineServiceSetMachineInstallProcedure = "/ichor.v1alpha1.MachineService/SetMachineInstall"
@@ -61,6 +64,10 @@ type MachineServiceClient interface {
 	GetMachine(context.Context, *connect.Request[v1alpha1.GetMachineRequest]) (*connect.Response[v1alpha1.GetMachineResponse], error)
 	ApproveMachine(context.Context, *connect.Request[v1alpha1.ApproveMachineRequest]) (*connect.Response[v1alpha1.ApproveMachineResponse], error)
 	RejectMachine(context.Context, *connect.Request[v1alpha1.RejectMachineRequest]) (*connect.Response[v1alpha1.RejectMachineResponse], error)
+	// RemoveMachine deletes an approved machine through the removal flow: drain, etcd
+	// member removal for a control plane, then the TalosMachine goes (ADR 0032, 0083). The
+	// node is not wiped; reset is a node action.
+	RemoveMachine(context.Context, *connect.Request[v1alpha1.RemoveMachineRequest]) (*connect.Response[v1alpha1.RemoveMachineResponse], error)
 	// SetMachineInstall writes only TalosMachine.spec.install of an approved
 	// machine that has not converged yet (ADR 0076): how a machine approved
 	// without an install disk (Ready reason InstallDiskUnknown) gets one.
@@ -102,6 +109,12 @@ func NewMachineServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(machineServiceMethods.ByName("RejectMachine")),
 			connect.WithClientOptions(opts...),
 		),
+		removeMachine: connect.NewClient[v1alpha1.RemoveMachineRequest, v1alpha1.RemoveMachineResponse](
+			httpClient,
+			baseURL+MachineServiceRemoveMachineProcedure,
+			connect.WithSchema(machineServiceMethods.ByName("RemoveMachine")),
+			connect.WithClientOptions(opts...),
+		),
 		setMachineInstall: connect.NewClient[v1alpha1.SetMachineInstallRequest, v1alpha1.SetMachineInstallResponse](
 			httpClient,
 			baseURL+MachineServiceSetMachineInstallProcedure,
@@ -117,6 +130,7 @@ type machineServiceClient struct {
 	getMachine        *connect.Client[v1alpha1.GetMachineRequest, v1alpha1.GetMachineResponse]
 	approveMachine    *connect.Client[v1alpha1.ApproveMachineRequest, v1alpha1.ApproveMachineResponse]
 	rejectMachine     *connect.Client[v1alpha1.RejectMachineRequest, v1alpha1.RejectMachineResponse]
+	removeMachine     *connect.Client[v1alpha1.RemoveMachineRequest, v1alpha1.RemoveMachineResponse]
 	setMachineInstall *connect.Client[v1alpha1.SetMachineInstallRequest, v1alpha1.SetMachineInstallResponse]
 }
 
@@ -140,6 +154,11 @@ func (c *machineServiceClient) RejectMachine(ctx context.Context, req *connect.R
 	return c.rejectMachine.CallUnary(ctx, req)
 }
 
+// RemoveMachine calls ichor.v1alpha1.MachineService.RemoveMachine.
+func (c *machineServiceClient) RemoveMachine(ctx context.Context, req *connect.Request[v1alpha1.RemoveMachineRequest]) (*connect.Response[v1alpha1.RemoveMachineResponse], error) {
+	return c.removeMachine.CallUnary(ctx, req)
+}
+
 // SetMachineInstall calls ichor.v1alpha1.MachineService.SetMachineInstall.
 func (c *machineServiceClient) SetMachineInstall(ctx context.Context, req *connect.Request[v1alpha1.SetMachineInstallRequest]) (*connect.Response[v1alpha1.SetMachineInstallResponse], error) {
 	return c.setMachineInstall.CallUnary(ctx, req)
@@ -151,6 +170,10 @@ type MachineServiceHandler interface {
 	GetMachine(context.Context, *connect.Request[v1alpha1.GetMachineRequest]) (*connect.Response[v1alpha1.GetMachineResponse], error)
 	ApproveMachine(context.Context, *connect.Request[v1alpha1.ApproveMachineRequest]) (*connect.Response[v1alpha1.ApproveMachineResponse], error)
 	RejectMachine(context.Context, *connect.Request[v1alpha1.RejectMachineRequest]) (*connect.Response[v1alpha1.RejectMachineResponse], error)
+	// RemoveMachine deletes an approved machine through the removal flow: drain, etcd
+	// member removal for a control plane, then the TalosMachine goes (ADR 0032, 0083). The
+	// node is not wiped; reset is a node action.
+	RemoveMachine(context.Context, *connect.Request[v1alpha1.RemoveMachineRequest]) (*connect.Response[v1alpha1.RemoveMachineResponse], error)
 	// SetMachineInstall writes only TalosMachine.spec.install of an approved
 	// machine that has not converged yet (ADR 0076): how a machine approved
 	// without an install disk (Ready reason InstallDiskUnknown) gets one.
@@ -188,6 +211,12 @@ func NewMachineServiceHandler(svc MachineServiceHandler, opts ...connect.Handler
 		connect.WithSchema(machineServiceMethods.ByName("RejectMachine")),
 		connect.WithHandlerOptions(opts...),
 	)
+	machineServiceRemoveMachineHandler := connect.NewUnaryHandler(
+		MachineServiceRemoveMachineProcedure,
+		svc.RemoveMachine,
+		connect.WithSchema(machineServiceMethods.ByName("RemoveMachine")),
+		connect.WithHandlerOptions(opts...),
+	)
 	machineServiceSetMachineInstallHandler := connect.NewUnaryHandler(
 		MachineServiceSetMachineInstallProcedure,
 		svc.SetMachineInstall,
@@ -204,6 +233,8 @@ func NewMachineServiceHandler(svc MachineServiceHandler, opts ...connect.Handler
 			machineServiceApproveMachineHandler.ServeHTTP(w, r)
 		case MachineServiceRejectMachineProcedure:
 			machineServiceRejectMachineHandler.ServeHTTP(w, r)
+		case MachineServiceRemoveMachineProcedure:
+			machineServiceRemoveMachineHandler.ServeHTTP(w, r)
 		case MachineServiceSetMachineInstallProcedure:
 			machineServiceSetMachineInstallHandler.ServeHTTP(w, r)
 		default:
@@ -229,6 +260,10 @@ func (UnimplementedMachineServiceHandler) ApproveMachine(context.Context, *conne
 
 func (UnimplementedMachineServiceHandler) RejectMachine(context.Context, *connect.Request[v1alpha1.RejectMachineRequest]) (*connect.Response[v1alpha1.RejectMachineResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.MachineService.RejectMachine is not implemented"))
+}
+
+func (UnimplementedMachineServiceHandler) RemoveMachine(context.Context, *connect.Request[v1alpha1.RemoveMachineRequest]) (*connect.Response[v1alpha1.RemoveMachineResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.MachineService.RemoveMachine is not implemented"))
 }
 
 func (UnimplementedMachineServiceHandler) SetMachineInstall(context.Context, *connect.Request[v1alpha1.SetMachineInstallRequest]) (*connect.Response[v1alpha1.SetMachineInstallResponse], error) {

@@ -44,6 +44,8 @@ const (
 	// CONFIG applies the pending reboot-requiring configuration changes, one
 	// machine at a time with a reboot each (ADR 0080).
 	OperationKind_OPERATION_KIND_CONFIG OperationKind = 7
+	// NODE runs one NodeAction on one machine (ADR 0083).
+	OperationKind_OPERATION_KIND_NODE OperationKind = 8
 )
 
 // Enum value maps for OperationKind.
@@ -57,6 +59,7 @@ var (
 		5: "OPERATION_KIND_SHUTDOWN",
 		6: "OPERATION_KIND_CA_ROTATION",
 		7: "OPERATION_KIND_CONFIG",
+		8: "OPERATION_KIND_NODE",
 	}
 	OperationKind_value = map[string]int32{
 		"OPERATION_KIND_UNSPECIFIED": 0,
@@ -67,6 +70,7 @@ var (
 		"OPERATION_KIND_SHUTDOWN":    5,
 		"OPERATION_KIND_CA_ROTATION": 6,
 		"OPERATION_KIND_CONFIG":      7,
+		"OPERATION_KIND_NODE":        8,
 	}
 )
 
@@ -95,6 +99,74 @@ func (x OperationKind) Number() protoreflect.EnumNumber {
 // Deprecated: Use OperationKind.Descriptor instead.
 func (OperationKind) EnumDescriptor() ([]byte, []int) {
 	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{0}
+}
+
+// NodeAction is what a node-kind operation does to its one machine (ADR 0083).
+type NodeAction int32
+
+const (
+	NodeAction_NODE_ACTION_UNSPECIFIED             NodeAction = 0
+	NodeAction_NODE_ACTION_REBOOT                  NodeAction = 1
+	NodeAction_NODE_ACTION_SHUTDOWN                NodeAction = 2
+	NodeAction_NODE_ACTION_RESTART_SERVICE         NodeAction = 3
+	NodeAction_NODE_ACTION_ETCD_DEFRAG             NodeAction = 4
+	NodeAction_NODE_ACTION_ETCD_FORFEIT_LEADERSHIP NodeAction = 5
+	// RESET removes the machine through the removal flow and wipes the node (ADR 0042).
+	NodeAction_NODE_ACTION_RESET NodeAction = 6
+	// REMOVE is only planned here: CreateOperation refuses it, MachineService.RemoveMachine
+	// does it (a delete of the TalosMachine, which removes its etcd member, ADR 0032).
+	NodeAction_NODE_ACTION_REMOVE NodeAction = 7
+)
+
+// Enum value maps for NodeAction.
+var (
+	NodeAction_name = map[int32]string{
+		0: "NODE_ACTION_UNSPECIFIED",
+		1: "NODE_ACTION_REBOOT",
+		2: "NODE_ACTION_SHUTDOWN",
+		3: "NODE_ACTION_RESTART_SERVICE",
+		4: "NODE_ACTION_ETCD_DEFRAG",
+		5: "NODE_ACTION_ETCD_FORFEIT_LEADERSHIP",
+		6: "NODE_ACTION_RESET",
+		7: "NODE_ACTION_REMOVE",
+	}
+	NodeAction_value = map[string]int32{
+		"NODE_ACTION_UNSPECIFIED":             0,
+		"NODE_ACTION_REBOOT":                  1,
+		"NODE_ACTION_SHUTDOWN":                2,
+		"NODE_ACTION_RESTART_SERVICE":         3,
+		"NODE_ACTION_ETCD_DEFRAG":             4,
+		"NODE_ACTION_ETCD_FORFEIT_LEADERSHIP": 5,
+		"NODE_ACTION_RESET":                   6,
+		"NODE_ACTION_REMOVE":                  7,
+	}
+)
+
+func (x NodeAction) Enum() *NodeAction {
+	p := new(NodeAction)
+	*p = x
+	return p
+}
+
+func (x NodeAction) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (NodeAction) Descriptor() protoreflect.EnumDescriptor {
+	return file_ichor_v1alpha1_operation_proto_enumTypes[1].Descriptor()
+}
+
+func (NodeAction) Type() protoreflect.EnumType {
+	return &file_ichor_v1alpha1_operation_proto_enumTypes[1]
+}
+
+func (x NodeAction) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use NodeAction.Descriptor instead.
+func (NodeAction) EnumDescriptor() ([]byte, []int) {
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{1}
 }
 
 // OperationEffect is what the operation does to each machine it reaches.
@@ -147,11 +219,11 @@ func (x OperationEffect) String() string {
 }
 
 func (OperationEffect) Descriptor() protoreflect.EnumDescriptor {
-	return file_ichor_v1alpha1_operation_proto_enumTypes[1].Descriptor()
+	return file_ichor_v1alpha1_operation_proto_enumTypes[2].Descriptor()
 }
 
 func (OperationEffect) Type() protoreflect.EnumType {
-	return &file_ichor_v1alpha1_operation_proto_enumTypes[1]
+	return &file_ichor_v1alpha1_operation_proto_enumTypes[2]
 }
 
 func (x OperationEffect) Number() protoreflect.EnumNumber {
@@ -160,7 +232,97 @@ func (x OperationEffect) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use OperationEffect.Descriptor instead.
 func (OperationEffect) EnumDescriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{1}
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{2}
+}
+
+// NodeActionRequest names the machine and the action of a node-kind plan or create.
+type NodeActionRequest struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Machine *ObjectRef             `protobuf:"bytes,1,opt,name=machine,proto3" json:"machine,omitempty"`
+	Action  NodeAction             `protobuf:"varint,2,opt,name=action,proto3,enum=ichor.v1alpha1.NodeAction" json:"action,omitempty"`
+	// service is the Talos service to restart: kubelet, containerd or cri.
+	Service string `protobuf:"bytes,3,opt,name=service,proto3" json:"service,omitempty"`
+	// allow_leader lets etcd-defrag run on the leader of a multi-member etcd.
+	AllowLeader bool `protobuf:"varint,4,opt,name=allow_leader,json=allowLeader,proto3" json:"allow_leader,omitempty"`
+	// confirm is the machine's name, typed, for reset (and remove).
+	Confirm string `protobuf:"bytes,5,opt,name=confirm,proto3" json:"confirm,omitempty"`
+	// break_glass is required for reset: the reason, checked against the break-glass
+	// verb on the machine (ADR 0065).
+	BreakGlass    *BreakGlass `protobuf:"bytes,6,opt,name=break_glass,json=breakGlass,proto3" json:"break_glass,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *NodeActionRequest) Reset() {
+	*x = NodeActionRequest{}
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NodeActionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NodeActionRequest) ProtoMessage() {}
+
+func (x *NodeActionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NodeActionRequest.ProtoReflect.Descriptor instead.
+func (*NodeActionRequest) Descriptor() ([]byte, []int) {
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *NodeActionRequest) GetMachine() *ObjectRef {
+	if x != nil {
+		return x.Machine
+	}
+	return nil
+}
+
+func (x *NodeActionRequest) GetAction() NodeAction {
+	if x != nil {
+		return x.Action
+	}
+	return NodeAction_NODE_ACTION_UNSPECIFIED
+}
+
+func (x *NodeActionRequest) GetService() string {
+	if x != nil {
+		return x.Service
+	}
+	return ""
+}
+
+func (x *NodeActionRequest) GetAllowLeader() bool {
+	if x != nil {
+		return x.AllowLeader
+	}
+	return false
+}
+
+func (x *NodeActionRequest) GetConfirm() string {
+	if x != nil {
+		return x.Confirm
+	}
+	return ""
+}
+
+func (x *NodeActionRequest) GetBreakGlass() *BreakGlass {
+	if x != nil {
+		return x.BreakGlass
+	}
+	return nil
 }
 
 // OperationMachine is TalosOperation.status.machines[] as it is: a machine
@@ -176,7 +338,7 @@ type OperationMachine struct {
 
 func (x *OperationMachine) Reset() {
 	*x = OperationMachine{}
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[0]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -188,7 +350,7 @@ func (x *OperationMachine) String() string {
 func (*OperationMachine) ProtoMessage() {}
 
 func (x *OperationMachine) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[0]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -201,7 +363,7 @@ func (x *OperationMachine) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OperationMachine.ProtoReflect.Descriptor instead.
 func (*OperationMachine) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{0}
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *OperationMachine) GetName() string {
@@ -238,13 +400,18 @@ type Operation struct {
 	// (Accepting, Issuing, Dropping, Finalizing, Done); empty before the new CAs
 	// are saved, and for every other kind.
 	CaRotationStage string `protobuf:"bytes,11,opt,name=ca_rotation_stage,json=caRotationStage,proto3" json:"ca_rotation_stage,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// node_action, node_machine and node_message describe a node-kind operation: what it
+	// does, to which machine, and what it is doing or waiting for now.
+	NodeAction    NodeAction `protobuf:"varint,12,opt,name=node_action,json=nodeAction,proto3,enum=ichor.v1alpha1.NodeAction" json:"node_action,omitempty"`
+	NodeMachine   *ObjectRef `protobuf:"bytes,13,opt,name=node_machine,json=nodeMachine,proto3" json:"node_machine,omitempty"`
+	NodeMessage   string     `protobuf:"bytes,14,opt,name=node_message,json=nodeMessage,proto3" json:"node_message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Operation) Reset() {
 	*x = Operation{}
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[1]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -256,7 +423,7 @@ func (x *Operation) String() string {
 func (*Operation) ProtoMessage() {}
 
 func (x *Operation) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[1]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -269,7 +436,7 @@ func (x *Operation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Operation.ProtoReflect.Descriptor instead.
 func (*Operation) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{1}
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *Operation) GetRef() *ObjectRef {
@@ -349,6 +516,27 @@ func (x *Operation) GetCaRotationStage() string {
 	return ""
 }
 
+func (x *Operation) GetNodeAction() NodeAction {
+	if x != nil {
+		return x.NodeAction
+	}
+	return NodeAction_NODE_ACTION_UNSPECIFIED
+}
+
+func (x *Operation) GetNodeMachine() *ObjectRef {
+	if x != nil {
+		return x.NodeMachine
+	}
+	return nil
+}
+
+func (x *Operation) GetNodeMessage() string {
+	if x != nil {
+		return x.NodeMessage
+	}
+	return ""
+}
+
 type ListOperationsRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// cluster narrows the list; unset lists every operation the caller may list.
@@ -359,7 +547,7 @@ type ListOperationsRequest struct {
 
 func (x *ListOperationsRequest) Reset() {
 	*x = ListOperationsRequest{}
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[2]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -371,7 +559,7 @@ func (x *ListOperationsRequest) String() string {
 func (*ListOperationsRequest) ProtoMessage() {}
 
 func (x *ListOperationsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[2]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -384,7 +572,7 @@ func (x *ListOperationsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListOperationsRequest.ProtoReflect.Descriptor instead.
 func (*ListOperationsRequest) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{2}
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *ListOperationsRequest) GetCluster() *ObjectRef {
@@ -403,7 +591,7 @@ type ListOperationsResponse struct {
 
 func (x *ListOperationsResponse) Reset() {
 	*x = ListOperationsResponse{}
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[3]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -415,7 +603,7 @@ func (x *ListOperationsResponse) String() string {
 func (*ListOperationsResponse) ProtoMessage() {}
 
 func (x *ListOperationsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[3]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -428,7 +616,7 @@ func (x *ListOperationsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListOperationsResponse.ProtoReflect.Descriptor instead.
 func (*ListOperationsResponse) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{3}
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *ListOperationsResponse) GetOperations() []*Operation {
@@ -447,7 +635,7 @@ type GetOperationRequest struct {
 
 func (x *GetOperationRequest) Reset() {
 	*x = GetOperationRequest{}
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[4]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -459,7 +647,7 @@ func (x *GetOperationRequest) String() string {
 func (*GetOperationRequest) ProtoMessage() {}
 
 func (x *GetOperationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[4]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -472,7 +660,7 @@ func (x *GetOperationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetOperationRequest.ProtoReflect.Descriptor instead.
 func (*GetOperationRequest) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{4}
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *GetOperationRequest) GetOperation() *ObjectRef {
@@ -491,7 +679,7 @@ type GetOperationResponse struct {
 
 func (x *GetOperationResponse) Reset() {
 	*x = GetOperationResponse{}
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[5]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -503,7 +691,7 @@ func (x *GetOperationResponse) String() string {
 func (*GetOperationResponse) ProtoMessage() {}
 
 func (x *GetOperationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[5]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -516,7 +704,7 @@ func (x *GetOperationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetOperationResponse.ProtoReflect.Descriptor instead.
 func (*GetOperationResponse) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{5}
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *GetOperationResponse) GetOperation() *Operation {
@@ -541,7 +729,7 @@ type PlannedMachine struct {
 
 func (x *PlannedMachine) Reset() {
 	*x = PlannedMachine{}
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[6]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -553,7 +741,7 @@ func (x *PlannedMachine) String() string {
 func (*PlannedMachine) ProtoMessage() {}
 
 func (x *PlannedMachine) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[6]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -566,7 +754,7 @@ func (x *PlannedMachine) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlannedMachine.ProtoReflect.Descriptor instead.
 func (*PlannedMachine) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{6}
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *PlannedMachine) GetName() string {
@@ -610,13 +798,15 @@ type PlanOperationRequest struct {
 	// max_unavailable is how many workers would be handled at once; 0 is the
 	// CRD default (1).
 	MaxUnavailable int32 `protobuf:"varint,4,opt,name=max_unavailable,json=maxUnavailable,proto3" json:"max_unavailable,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// node is required for kind NODE (cluster may then be left unset: it is the machine's).
+	Node          *NodeActionRequest `protobuf:"bytes,5,opt,name=node,proto3" json:"node,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *PlanOperationRequest) Reset() {
 	*x = PlanOperationRequest{}
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[7]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -628,7 +818,7 @@ func (x *PlanOperationRequest) String() string {
 func (*PlanOperationRequest) ProtoMessage() {}
 
 func (x *PlanOperationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[7]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -641,7 +831,7 @@ func (x *PlanOperationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlanOperationRequest.ProtoReflect.Descriptor instead.
 func (*PlanOperationRequest) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{7}
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *PlanOperationRequest) GetCluster() *ObjectRef {
@@ -672,6 +862,13 @@ func (x *PlanOperationRequest) GetMaxUnavailable() int32 {
 	return 0
 }
 
+func (x *PlanOperationRequest) GetNode() *NodeActionRequest {
+	if x != nil {
+		return x.Node
+	}
+	return nil
+}
+
 type PlanOperationResponse struct {
 	state  protoimpl.MessageState `protogen:"open.v1"`
 	Effect OperationEffect        `protobuf:"varint,1,opt,name=effect,proto3,enum=ichor.v1alpha1.OperationEffect" json:"effect,omitempty"`
@@ -700,13 +897,20 @@ type PlanOperationResponse struct {
 	// cluster's only approved control plane, so the Kubernetes API is down for
 	// the length of the reboot.
 	KubernetesApiUnavailable bool `protobuf:"varint,11,opt,name=kubernetes_api_unavailable,json=kubernetesApiUnavailable,proto3" json:"kubernetes_api_unavailable,omitempty"`
-	unknownFields            protoimpl.UnknownFields
-	sizeCache                protoimpl.SizeCache
+	// steps, warning, confirm_name and break_glass_required describe a node action in plain
+	// English: what happens in order, what the user should know first, the name they must type
+	// (empty when no typing is needed), and whether a break-glass reason is needed.
+	Steps              []string `protobuf:"bytes,12,rep,name=steps,proto3" json:"steps,omitempty"`
+	Warning            string   `protobuf:"bytes,13,opt,name=warning,proto3" json:"warning,omitempty"`
+	ConfirmName        string   `protobuf:"bytes,14,opt,name=confirm_name,json=confirmName,proto3" json:"confirm_name,omitempty"`
+	BreakGlassRequired bool     `protobuf:"varint,15,opt,name=break_glass_required,json=breakGlassRequired,proto3" json:"break_glass_required,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *PlanOperationResponse) Reset() {
 	*x = PlanOperationResponse{}
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[8]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -718,7 +922,7 @@ func (x *PlanOperationResponse) String() string {
 func (*PlanOperationResponse) ProtoMessage() {}
 
 func (x *PlanOperationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[8]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -731,7 +935,7 @@ func (x *PlanOperationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlanOperationResponse.ProtoReflect.Descriptor instead.
 func (*PlanOperationResponse) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{8}
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *PlanOperationResponse) GetEffect() OperationEffect {
@@ -811,6 +1015,34 @@ func (x *PlanOperationResponse) GetKubernetesApiUnavailable() bool {
 	return false
 }
 
+func (x *PlanOperationResponse) GetSteps() []string {
+	if x != nil {
+		return x.Steps
+	}
+	return nil
+}
+
+func (x *PlanOperationResponse) GetWarning() string {
+	if x != nil {
+		return x.Warning
+	}
+	return ""
+}
+
+func (x *PlanOperationResponse) GetConfirmName() string {
+	if x != nil {
+		return x.ConfirmName
+	}
+	return ""
+}
+
+func (x *PlanOperationResponse) GetBreakGlassRequired() bool {
+	if x != nil {
+		return x.BreakGlassRequired
+	}
+	return false
+}
+
 type CreateOperationRequest struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Cluster *ObjectRef             `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
@@ -818,14 +1050,15 @@ type CreateOperationRequest struct {
 	// target: see PlanOperationRequest.
 	Target string `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
 	// max_unavailable caps parallel workers; 0 keeps the CRD default.
-	MaxUnavailable int32 `protobuf:"varint,4,opt,name=max_unavailable,json=maxUnavailable,proto3" json:"max_unavailable,omitempty"`
+	MaxUnavailable int32              `protobuf:"varint,4,opt,name=max_unavailable,json=maxUnavailable,proto3" json:"max_unavailable,omitempty"`
+	Node           *NodeActionRequest `protobuf:"bytes,5,opt,name=node,proto3" json:"node,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
 
 func (x *CreateOperationRequest) Reset() {
 	*x = CreateOperationRequest{}
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[9]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -837,7 +1070,7 @@ func (x *CreateOperationRequest) String() string {
 func (*CreateOperationRequest) ProtoMessage() {}
 
 func (x *CreateOperationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[9]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -850,7 +1083,7 @@ func (x *CreateOperationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateOperationRequest.ProtoReflect.Descriptor instead.
 func (*CreateOperationRequest) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{9}
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *CreateOperationRequest) GetCluster() *ObjectRef {
@@ -881,6 +1114,13 @@ func (x *CreateOperationRequest) GetMaxUnavailable() int32 {
 	return 0
 }
 
+func (x *CreateOperationRequest) GetNode() *NodeActionRequest {
+	if x != nil {
+		return x.Node
+	}
+	return nil
+}
+
 type CreateOperationResponse struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	Operation *Operation             `protobuf:"bytes,1,opt,name=operation,proto3" json:"operation,omitempty"`
@@ -894,7 +1134,7 @@ type CreateOperationResponse struct {
 
 func (x *CreateOperationResponse) Reset() {
 	*x = CreateOperationResponse{}
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[10]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -906,7 +1146,7 @@ func (x *CreateOperationResponse) String() string {
 func (*CreateOperationResponse) ProtoMessage() {}
 
 func (x *CreateOperationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[10]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -919,7 +1159,7 @@ func (x *CreateOperationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateOperationResponse.ProtoReflect.Descriptor instead.
 func (*CreateOperationResponse) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{10}
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *CreateOperationResponse) GetOperation() *Operation {
@@ -953,7 +1193,7 @@ type SetOperationPausedRequest struct {
 
 func (x *SetOperationPausedRequest) Reset() {
 	*x = SetOperationPausedRequest{}
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[11]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -965,7 +1205,7 @@ func (x *SetOperationPausedRequest) String() string {
 func (*SetOperationPausedRequest) ProtoMessage() {}
 
 func (x *SetOperationPausedRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[11]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -978,7 +1218,7 @@ func (x *SetOperationPausedRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetOperationPausedRequest.ProtoReflect.Descriptor instead.
 func (*SetOperationPausedRequest) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{11}
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *SetOperationPausedRequest) GetOperation() *ObjectRef {
@@ -1005,7 +1245,7 @@ type SetOperationPausedResponse struct {
 
 func (x *SetOperationPausedResponse) Reset() {
 	*x = SetOperationPausedResponse{}
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[12]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1017,7 +1257,7 @@ func (x *SetOperationPausedResponse) String() string {
 func (*SetOperationPausedResponse) ProtoMessage() {}
 
 func (x *SetOperationPausedResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[12]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1030,7 +1270,7 @@ func (x *SetOperationPausedResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetOperationPausedResponse.ProtoReflect.Descriptor instead.
 func (*SetOperationPausedResponse) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{12}
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *SetOperationPausedResponse) GetOperation() *Operation {
@@ -1056,7 +1296,7 @@ type DeleteOperationRequest struct {
 
 func (x *DeleteOperationRequest) Reset() {
 	*x = DeleteOperationRequest{}
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[13]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1068,7 +1308,7 @@ func (x *DeleteOperationRequest) String() string {
 func (*DeleteOperationRequest) ProtoMessage() {}
 
 func (x *DeleteOperationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[13]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1081,7 +1321,7 @@ func (x *DeleteOperationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteOperationRequest.ProtoReflect.Descriptor instead.
 func (*DeleteOperationRequest) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{13}
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *DeleteOperationRequest) GetOperation() *ObjectRef {
@@ -1100,7 +1340,7 @@ type DeleteOperationResponse struct {
 
 func (x *DeleteOperationResponse) Reset() {
 	*x = DeleteOperationResponse{}
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[14]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1112,7 +1352,7 @@ func (x *DeleteOperationResponse) String() string {
 func (*DeleteOperationResponse) ProtoMessage() {}
 
 func (x *DeleteOperationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[14]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1125,7 +1365,7 @@ func (x *DeleteOperationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteOperationResponse.ProtoReflect.Descriptor instead.
 func (*DeleteOperationResponse) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{14}
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *DeleteOperationResponse) GetAudit() *AuditRecord {
@@ -1139,10 +1379,18 @@ var File_ichor_v1alpha1_operation_proto protoreflect.FileDescriptor
 
 const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\n" +
-	"\x1eichor/v1alpha1/operation.proto\x12\x0eichor.v1alpha1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1bichor/v1alpha1/common.proto\"<\n" +
+	"\x1eichor/v1alpha1/operation.proto\x12\x0eichor.v1alpha1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1bichor/v1alpha1/common.proto\"\x90\x02\n" +
+	"\x11NodeActionRequest\x123\n" +
+	"\amachine\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\amachine\x122\n" +
+	"\x06action\x18\x02 \x01(\x0e2\x1a.ichor.v1alpha1.NodeActionR\x06action\x12\x18\n" +
+	"\aservice\x18\x03 \x01(\tR\aservice\x12!\n" +
+	"\fallow_leader\x18\x04 \x01(\bR\vallowLeader\x12\x18\n" +
+	"\aconfirm\x18\x05 \x01(\tR\aconfirm\x12;\n" +
+	"\vbreak_glass\x18\x06 \x01(\v2\x1a.ichor.v1alpha1.BreakGlassR\n" +
+	"breakGlass\"<\n" +
 	"\x10OperationMachine\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
-	"\x05phase\x18\x02 \x01(\tR\x05phase\"\xfe\x03\n" +
+	"\x05phase\x18\x02 \x01(\tR\x05phase\"\x9c\x05\n" +
 	"\tOperation\x12+\n" +
 	"\x03ref\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\x03ref\x123\n" +
 	"\acluster\x18\x02 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x121\n" +
@@ -1158,7 +1406,11 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\n" +
 	" \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12*\n" +
-	"\x11ca_rotation_stage\x18\v \x01(\tR\x0fcaRotationStage\"L\n" +
+	"\x11ca_rotation_stage\x18\v \x01(\tR\x0fcaRotationStage\x12;\n" +
+	"\vnode_action\x18\f \x01(\x0e2\x1a.ichor.v1alpha1.NodeActionR\n" +
+	"nodeAction\x12<\n" +
+	"\fnode_machine\x18\r \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\vnodeMachine\x12!\n" +
+	"\fnode_message\x18\x0e \x01(\tR\vnodeMessage\"L\n" +
 	"\x15ListOperationsRequest\x123\n" +
 	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\"S\n" +
 	"\x16ListOperationsResponse\x129\n" +
@@ -1173,12 +1425,13 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04role\x18\x02 \x01(\tR\x04role\x12\x12\n" +
 	"\x04step\x18\x03 \x01(\x05R\x04step\x12#\n" +
-	"\rreboot_fields\x18\x04 \x03(\tR\frebootFields\"\xbf\x01\n" +
+	"\rreboot_fields\x18\x04 \x03(\tR\frebootFields\"\xf6\x01\n" +
 	"\x14PlanOperationRequest\x123\n" +
 	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x121\n" +
 	"\x04kind\x18\x02 \x01(\x0e2\x1d.ichor.v1alpha1.OperationKindR\x04kind\x12\x16\n" +
 	"\x06target\x18\x03 \x01(\tR\x06target\x12'\n" +
-	"\x0fmax_unavailable\x18\x04 \x01(\x05R\x0emaxUnavailable\"\xc6\x03\n" +
+	"\x0fmax_unavailable\x18\x04 \x01(\x05R\x0emaxUnavailable\x125\n" +
+	"\x04node\x18\x05 \x01(\v2!.ichor.v1alpha1.NodeActionRequestR\x04node\"\xcb\x04\n" +
 	"\x15PlanOperationResponse\x127\n" +
 	"\x06effect\x18\x01 \x01(\x0e2\x1f.ichor.v1alpha1.OperationEffectR\x06effect\x12:\n" +
 	"\bmachines\x18\x02 \x03(\v2\x1e.ichor.v1alpha1.PlannedMachineR\bmachines\x12\x12\n" +
@@ -1191,12 +1444,17 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\x06stages\x18\t \x03(\tR\x06stages\x126\n" +
 	"\x17replaces_secrets_bundle\x18\n" +
 	" \x01(\bR\x15replacesSecretsBundle\x12<\n" +
-	"\x1akubernetes_api_unavailable\x18\v \x01(\bR\x18kubernetesApiUnavailable\"\xc1\x01\n" +
+	"\x1akubernetes_api_unavailable\x18\v \x01(\bR\x18kubernetesApiUnavailable\x12\x14\n" +
+	"\x05steps\x18\f \x03(\tR\x05steps\x12\x18\n" +
+	"\awarning\x18\r \x01(\tR\awarning\x12!\n" +
+	"\fconfirm_name\x18\x0e \x01(\tR\vconfirmName\x120\n" +
+	"\x14break_glass_required\x18\x0f \x01(\bR\x12breakGlassRequired\"\xf8\x01\n" +
 	"\x16CreateOperationRequest\x123\n" +
 	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x121\n" +
 	"\x04kind\x18\x02 \x01(\x0e2\x1d.ichor.v1alpha1.OperationKindR\x04kind\x12\x16\n" +
 	"\x06target\x18\x03 \x01(\tR\x06target\x12'\n" +
-	"\x0fmax_unavailable\x18\x04 \x01(\x05R\x0emaxUnavailable\"\xa8\x01\n" +
+	"\x0fmax_unavailable\x18\x04 \x01(\x05R\x0emaxUnavailable\x125\n" +
+	"\x04node\x18\x05 \x01(\v2!.ichor.v1alpha1.NodeActionRequestR\x04node\"\xa8\x01\n" +
 	"\x17CreateOperationResponse\x127\n" +
 	"\toperation\x18\x01 \x01(\v2\x19.ichor.v1alpha1.OperationR\toperation\x121\n" +
 	"\x05audit\x18\x02 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\x12!\n" +
@@ -1210,7 +1468,7 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\x16DeleteOperationRequest\x127\n" +
 	"\toperation\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\toperation\"L\n" +
 	"\x17DeleteOperationResponse\x121\n" +
-	"\x05audit\x18\x01 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit*\xf2\x01\n" +
+	"\x05audit\x18\x01 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit*\x8b\x02\n" +
 	"\rOperationKind\x12\x1e\n" +
 	"\x1aOPERATION_KIND_UNSPECIFIED\x10\x00\x12\x18\n" +
 	"\x14OPERATION_KIND_TALOS\x10\x01\x12\x1d\n" +
@@ -1219,7 +1477,18 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\x12OPERATION_KIND_CNI\x10\x04\x12\x1b\n" +
 	"\x17OPERATION_KIND_SHUTDOWN\x10\x05\x12\x1e\n" +
 	"\x1aOPERATION_KIND_CA_ROTATION\x10\x06\x12\x19\n" +
-	"\x15OPERATION_KIND_CONFIG\x10\a*\xd1\x01\n" +
+	"\x15OPERATION_KIND_CONFIG\x10\a\x12\x17\n" +
+	"\x13OPERATION_KIND_NODE\x10\b*\xf1\x01\n" +
+	"\n" +
+	"NodeAction\x12\x1b\n" +
+	"\x17NODE_ACTION_UNSPECIFIED\x10\x00\x12\x16\n" +
+	"\x12NODE_ACTION_REBOOT\x10\x01\x12\x18\n" +
+	"\x14NODE_ACTION_SHUTDOWN\x10\x02\x12\x1f\n" +
+	"\x1bNODE_ACTION_RESTART_SERVICE\x10\x03\x12\x1b\n" +
+	"\x17NODE_ACTION_ETCD_DEFRAG\x10\x04\x12'\n" +
+	"#NODE_ACTION_ETCD_FORFEIT_LEADERSHIP\x10\x05\x12\x15\n" +
+	"\x11NODE_ACTION_RESET\x10\x06\x12\x16\n" +
+	"\x12NODE_ACTION_REMOVE\x10\a*\xd1\x01\n" +
 	"\x0fOperationEffect\x12 \n" +
 	"\x1cOPERATION_EFFECT_UNSPECIFIED\x10\x00\x12\x1b\n" +
 	"\x17OPERATION_EFFECT_REBOOT\x10\x01\x12'\n" +
@@ -1248,72 +1517,82 @@ func file_ichor_v1alpha1_operation_proto_rawDescGZIP() []byte {
 	return file_ichor_v1alpha1_operation_proto_rawDescData
 }
 
-var file_ichor_v1alpha1_operation_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_ichor_v1alpha1_operation_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_ichor_v1alpha1_operation_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
+var file_ichor_v1alpha1_operation_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_ichor_v1alpha1_operation_proto_goTypes = []any{
 	(OperationKind)(0),                 // 0: ichor.v1alpha1.OperationKind
-	(OperationEffect)(0),               // 1: ichor.v1alpha1.OperationEffect
-	(*OperationMachine)(nil),           // 2: ichor.v1alpha1.OperationMachine
-	(*Operation)(nil),                  // 3: ichor.v1alpha1.Operation
-	(*ListOperationsRequest)(nil),      // 4: ichor.v1alpha1.ListOperationsRequest
-	(*ListOperationsResponse)(nil),     // 5: ichor.v1alpha1.ListOperationsResponse
-	(*GetOperationRequest)(nil),        // 6: ichor.v1alpha1.GetOperationRequest
-	(*GetOperationResponse)(nil),       // 7: ichor.v1alpha1.GetOperationResponse
-	(*PlannedMachine)(nil),             // 8: ichor.v1alpha1.PlannedMachine
-	(*PlanOperationRequest)(nil),       // 9: ichor.v1alpha1.PlanOperationRequest
-	(*PlanOperationResponse)(nil),      // 10: ichor.v1alpha1.PlanOperationResponse
-	(*CreateOperationRequest)(nil),     // 11: ichor.v1alpha1.CreateOperationRequest
-	(*CreateOperationResponse)(nil),    // 12: ichor.v1alpha1.CreateOperationResponse
-	(*SetOperationPausedRequest)(nil),  // 13: ichor.v1alpha1.SetOperationPausedRequest
-	(*SetOperationPausedResponse)(nil), // 14: ichor.v1alpha1.SetOperationPausedResponse
-	(*DeleteOperationRequest)(nil),     // 15: ichor.v1alpha1.DeleteOperationRequest
-	(*DeleteOperationResponse)(nil),    // 16: ichor.v1alpha1.DeleteOperationResponse
-	(*ObjectRef)(nil),                  // 17: ichor.v1alpha1.ObjectRef
-	(*Condition)(nil),                  // 18: ichor.v1alpha1.Condition
-	(*timestamppb.Timestamp)(nil),      // 19: google.protobuf.Timestamp
-	(*AuditRecord)(nil),                // 20: ichor.v1alpha1.AuditRecord
+	(NodeAction)(0),                    // 1: ichor.v1alpha1.NodeAction
+	(OperationEffect)(0),               // 2: ichor.v1alpha1.OperationEffect
+	(*NodeActionRequest)(nil),          // 3: ichor.v1alpha1.NodeActionRequest
+	(*OperationMachine)(nil),           // 4: ichor.v1alpha1.OperationMachine
+	(*Operation)(nil),                  // 5: ichor.v1alpha1.Operation
+	(*ListOperationsRequest)(nil),      // 6: ichor.v1alpha1.ListOperationsRequest
+	(*ListOperationsResponse)(nil),     // 7: ichor.v1alpha1.ListOperationsResponse
+	(*GetOperationRequest)(nil),        // 8: ichor.v1alpha1.GetOperationRequest
+	(*GetOperationResponse)(nil),       // 9: ichor.v1alpha1.GetOperationResponse
+	(*PlannedMachine)(nil),             // 10: ichor.v1alpha1.PlannedMachine
+	(*PlanOperationRequest)(nil),       // 11: ichor.v1alpha1.PlanOperationRequest
+	(*PlanOperationResponse)(nil),      // 12: ichor.v1alpha1.PlanOperationResponse
+	(*CreateOperationRequest)(nil),     // 13: ichor.v1alpha1.CreateOperationRequest
+	(*CreateOperationResponse)(nil),    // 14: ichor.v1alpha1.CreateOperationResponse
+	(*SetOperationPausedRequest)(nil),  // 15: ichor.v1alpha1.SetOperationPausedRequest
+	(*SetOperationPausedResponse)(nil), // 16: ichor.v1alpha1.SetOperationPausedResponse
+	(*DeleteOperationRequest)(nil),     // 17: ichor.v1alpha1.DeleteOperationRequest
+	(*DeleteOperationResponse)(nil),    // 18: ichor.v1alpha1.DeleteOperationResponse
+	(*ObjectRef)(nil),                  // 19: ichor.v1alpha1.ObjectRef
+	(*BreakGlass)(nil),                 // 20: ichor.v1alpha1.BreakGlass
+	(*Condition)(nil),                  // 21: ichor.v1alpha1.Condition
+	(*timestamppb.Timestamp)(nil),      // 22: google.protobuf.Timestamp
+	(*AuditRecord)(nil),                // 23: ichor.v1alpha1.AuditRecord
 }
 var file_ichor_v1alpha1_operation_proto_depIdxs = []int32{
-	17, // 0: ichor.v1alpha1.Operation.ref:type_name -> ichor.v1alpha1.ObjectRef
-	17, // 1: ichor.v1alpha1.Operation.cluster:type_name -> ichor.v1alpha1.ObjectRef
-	0,  // 2: ichor.v1alpha1.Operation.kind:type_name -> ichor.v1alpha1.OperationKind
-	2,  // 3: ichor.v1alpha1.Operation.machines:type_name -> ichor.v1alpha1.OperationMachine
-	18, // 4: ichor.v1alpha1.Operation.conditions:type_name -> ichor.v1alpha1.Condition
-	19, // 5: ichor.v1alpha1.Operation.created_at:type_name -> google.protobuf.Timestamp
-	17, // 6: ichor.v1alpha1.ListOperationsRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
-	3,  // 7: ichor.v1alpha1.ListOperationsResponse.operations:type_name -> ichor.v1alpha1.Operation
-	17, // 8: ichor.v1alpha1.GetOperationRequest.operation:type_name -> ichor.v1alpha1.ObjectRef
-	3,  // 9: ichor.v1alpha1.GetOperationResponse.operation:type_name -> ichor.v1alpha1.Operation
-	17, // 10: ichor.v1alpha1.PlanOperationRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
-	0,  // 11: ichor.v1alpha1.PlanOperationRequest.kind:type_name -> ichor.v1alpha1.OperationKind
-	1,  // 12: ichor.v1alpha1.PlanOperationResponse.effect:type_name -> ichor.v1alpha1.OperationEffect
-	8,  // 13: ichor.v1alpha1.PlanOperationResponse.machines:type_name -> ichor.v1alpha1.PlannedMachine
-	17, // 14: ichor.v1alpha1.CreateOperationRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
-	0,  // 15: ichor.v1alpha1.CreateOperationRequest.kind:type_name -> ichor.v1alpha1.OperationKind
-	3,  // 16: ichor.v1alpha1.CreateOperationResponse.operation:type_name -> ichor.v1alpha1.Operation
-	20, // 17: ichor.v1alpha1.CreateOperationResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
-	17, // 18: ichor.v1alpha1.SetOperationPausedRequest.operation:type_name -> ichor.v1alpha1.ObjectRef
-	3,  // 19: ichor.v1alpha1.SetOperationPausedResponse.operation:type_name -> ichor.v1alpha1.Operation
-	20, // 20: ichor.v1alpha1.SetOperationPausedResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
-	17, // 21: ichor.v1alpha1.DeleteOperationRequest.operation:type_name -> ichor.v1alpha1.ObjectRef
-	20, // 22: ichor.v1alpha1.DeleteOperationResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
-	4,  // 23: ichor.v1alpha1.OperationService.ListOperations:input_type -> ichor.v1alpha1.ListOperationsRequest
-	6,  // 24: ichor.v1alpha1.OperationService.GetOperation:input_type -> ichor.v1alpha1.GetOperationRequest
-	9,  // 25: ichor.v1alpha1.OperationService.PlanOperation:input_type -> ichor.v1alpha1.PlanOperationRequest
-	11, // 26: ichor.v1alpha1.OperationService.CreateOperation:input_type -> ichor.v1alpha1.CreateOperationRequest
-	13, // 27: ichor.v1alpha1.OperationService.SetOperationPaused:input_type -> ichor.v1alpha1.SetOperationPausedRequest
-	15, // 28: ichor.v1alpha1.OperationService.DeleteOperation:input_type -> ichor.v1alpha1.DeleteOperationRequest
-	5,  // 29: ichor.v1alpha1.OperationService.ListOperations:output_type -> ichor.v1alpha1.ListOperationsResponse
-	7,  // 30: ichor.v1alpha1.OperationService.GetOperation:output_type -> ichor.v1alpha1.GetOperationResponse
-	10, // 31: ichor.v1alpha1.OperationService.PlanOperation:output_type -> ichor.v1alpha1.PlanOperationResponse
-	12, // 32: ichor.v1alpha1.OperationService.CreateOperation:output_type -> ichor.v1alpha1.CreateOperationResponse
-	14, // 33: ichor.v1alpha1.OperationService.SetOperationPaused:output_type -> ichor.v1alpha1.SetOperationPausedResponse
-	16, // 34: ichor.v1alpha1.OperationService.DeleteOperation:output_type -> ichor.v1alpha1.DeleteOperationResponse
-	29, // [29:35] is the sub-list for method output_type
-	23, // [23:29] is the sub-list for method input_type
-	23, // [23:23] is the sub-list for extension type_name
-	23, // [23:23] is the sub-list for extension extendee
-	0,  // [0:23] is the sub-list for field type_name
+	19, // 0: ichor.v1alpha1.NodeActionRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
+	1,  // 1: ichor.v1alpha1.NodeActionRequest.action:type_name -> ichor.v1alpha1.NodeAction
+	20, // 2: ichor.v1alpha1.NodeActionRequest.break_glass:type_name -> ichor.v1alpha1.BreakGlass
+	19, // 3: ichor.v1alpha1.Operation.ref:type_name -> ichor.v1alpha1.ObjectRef
+	19, // 4: ichor.v1alpha1.Operation.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	0,  // 5: ichor.v1alpha1.Operation.kind:type_name -> ichor.v1alpha1.OperationKind
+	4,  // 6: ichor.v1alpha1.Operation.machines:type_name -> ichor.v1alpha1.OperationMachine
+	21, // 7: ichor.v1alpha1.Operation.conditions:type_name -> ichor.v1alpha1.Condition
+	22, // 8: ichor.v1alpha1.Operation.created_at:type_name -> google.protobuf.Timestamp
+	1,  // 9: ichor.v1alpha1.Operation.node_action:type_name -> ichor.v1alpha1.NodeAction
+	19, // 10: ichor.v1alpha1.Operation.node_machine:type_name -> ichor.v1alpha1.ObjectRef
+	19, // 11: ichor.v1alpha1.ListOperationsRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	5,  // 12: ichor.v1alpha1.ListOperationsResponse.operations:type_name -> ichor.v1alpha1.Operation
+	19, // 13: ichor.v1alpha1.GetOperationRequest.operation:type_name -> ichor.v1alpha1.ObjectRef
+	5,  // 14: ichor.v1alpha1.GetOperationResponse.operation:type_name -> ichor.v1alpha1.Operation
+	19, // 15: ichor.v1alpha1.PlanOperationRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	0,  // 16: ichor.v1alpha1.PlanOperationRequest.kind:type_name -> ichor.v1alpha1.OperationKind
+	3,  // 17: ichor.v1alpha1.PlanOperationRequest.node:type_name -> ichor.v1alpha1.NodeActionRequest
+	2,  // 18: ichor.v1alpha1.PlanOperationResponse.effect:type_name -> ichor.v1alpha1.OperationEffect
+	10, // 19: ichor.v1alpha1.PlanOperationResponse.machines:type_name -> ichor.v1alpha1.PlannedMachine
+	19, // 20: ichor.v1alpha1.CreateOperationRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	0,  // 21: ichor.v1alpha1.CreateOperationRequest.kind:type_name -> ichor.v1alpha1.OperationKind
+	3,  // 22: ichor.v1alpha1.CreateOperationRequest.node:type_name -> ichor.v1alpha1.NodeActionRequest
+	5,  // 23: ichor.v1alpha1.CreateOperationResponse.operation:type_name -> ichor.v1alpha1.Operation
+	23, // 24: ichor.v1alpha1.CreateOperationResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
+	19, // 25: ichor.v1alpha1.SetOperationPausedRequest.operation:type_name -> ichor.v1alpha1.ObjectRef
+	5,  // 26: ichor.v1alpha1.SetOperationPausedResponse.operation:type_name -> ichor.v1alpha1.Operation
+	23, // 27: ichor.v1alpha1.SetOperationPausedResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
+	19, // 28: ichor.v1alpha1.DeleteOperationRequest.operation:type_name -> ichor.v1alpha1.ObjectRef
+	23, // 29: ichor.v1alpha1.DeleteOperationResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
+	6,  // 30: ichor.v1alpha1.OperationService.ListOperations:input_type -> ichor.v1alpha1.ListOperationsRequest
+	8,  // 31: ichor.v1alpha1.OperationService.GetOperation:input_type -> ichor.v1alpha1.GetOperationRequest
+	11, // 32: ichor.v1alpha1.OperationService.PlanOperation:input_type -> ichor.v1alpha1.PlanOperationRequest
+	13, // 33: ichor.v1alpha1.OperationService.CreateOperation:input_type -> ichor.v1alpha1.CreateOperationRequest
+	15, // 34: ichor.v1alpha1.OperationService.SetOperationPaused:input_type -> ichor.v1alpha1.SetOperationPausedRequest
+	17, // 35: ichor.v1alpha1.OperationService.DeleteOperation:input_type -> ichor.v1alpha1.DeleteOperationRequest
+	7,  // 36: ichor.v1alpha1.OperationService.ListOperations:output_type -> ichor.v1alpha1.ListOperationsResponse
+	9,  // 37: ichor.v1alpha1.OperationService.GetOperation:output_type -> ichor.v1alpha1.GetOperationResponse
+	12, // 38: ichor.v1alpha1.OperationService.PlanOperation:output_type -> ichor.v1alpha1.PlanOperationResponse
+	14, // 39: ichor.v1alpha1.OperationService.CreateOperation:output_type -> ichor.v1alpha1.CreateOperationResponse
+	16, // 40: ichor.v1alpha1.OperationService.SetOperationPaused:output_type -> ichor.v1alpha1.SetOperationPausedResponse
+	18, // 41: ichor.v1alpha1.OperationService.DeleteOperation:output_type -> ichor.v1alpha1.DeleteOperationResponse
+	36, // [36:42] is the sub-list for method output_type
+	30, // [30:36] is the sub-list for method input_type
+	30, // [30:30] is the sub-list for extension type_name
+	30, // [30:30] is the sub-list for extension extendee
+	0,  // [0:30] is the sub-list for field type_name
 }
 
 func init() { file_ichor_v1alpha1_operation_proto_init() }
@@ -1327,8 +1606,8 @@ func file_ichor_v1alpha1_operation_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_ichor_v1alpha1_operation_proto_rawDesc), len(file_ichor_v1alpha1_operation_proto_rawDesc)),
-			NumEnums:      2,
-			NumMessages:   15,
+			NumEnums:      3,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

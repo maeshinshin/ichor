@@ -1,0 +1,296 @@
+/*
+Copyright 2026 maeshinshin.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package uiapi
+
+import (
+	"context"
+	"strings"
+	"testing"
+
+	"connectrpc.com/connect"
+	authv1 "k8s.io/api/authorization/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/deleteguard"
+)
+
+// Node actions over a fake client (docs/adr/0083): what the plan says, what is refused before
+// anything is written, and what the TalosOperation looks like.
+
+func nodePlanReq(machine string, action pb.NodeAction) *connect.Request[pb.PlanOperationRequest] {
+	return connect.NewRequest(&pb.PlanOperationRequest{
+		Kind: pb.OperationKind_OPERATION_KIND_NODE,
+		Node: &pb.NodeActionRequest{Machine: objectRef(opNS, machine), Action: action},
+	})
+}
+
+func nodeCreateReq(n *pb.NodeActionRequest) *connect.Request[pb.CreateOperationRequest] {
+	return connect.NewRequest(&pb.CreateOperationRequest{Kind: pb.OperationKind_OPERATION_KIND_NODE, Node: n})
+}
+
+func planNodeOK(t *testing.T, s *Server, req *connect.Request[pb.PlanOperationRequest]) *pb.PlanOperationResponse {
+	t.Helper()
+
+	res, err := s.PlanOperation(context.Background(), req)
+	if err != nil {
+		t.Fatalf("plan: %v", err)
+	}
+
+	return res.Msg
+}
+
+func TestNodePlanSaysWhatHappensInPlainEnglish(t *testing.T) {
+	s, _ := opServer(t, opObjects()...)
+
+	p := planNodeOK(t, s, nodePlanReq("w1", pb.NodeAction_NODE_ACTION_REBOOT))
+	if p.GetBlocked() != "" || len(p.GetSteps()) < 4 || p.GetWarning() == "" || p.GetConfirmName() != "" {
+		t.Fatalf("reboot plan = %+v", p)
+	}
+
+	if len(p.GetMachines()) != 1 || p.GetMachines()[0].GetName() != "w1" {
+		t.Fatalf("a node plan lists exactly its machine: %+v", p.GetMachines())
+	}
+
+	// The only control plane: its reboot takes the API away, and the plan says so.
+	cp := planNodeOK(t, s, nodePlanReq("cp1", pb.NodeAction_NODE_ACTION_REBOOT))
+	if !cp.GetKubernetesApiUnavailable() || !strings.Contains(cp.GetWarning(), "only control plane") {
+		t.Fatalf("sole control plane reboot must warn about the API: %+v", cp)
+	}
+
+	sd := planNodeOK(t, s, nodePlanReq("w1", pb.NodeAction_NODE_ACTION_SHUTDOWN))
+	if sd.GetConfirmName() != "w1" || !strings.Contains(sd.GetWarning(), "stays off") {
+		t.Fatalf("shutdown plan = %+v", sd)
+	}
+
+	reset := planNodeOK(t, s, nodePlanReq("w1", pb.NodeAction_NODE_ACTION_RESET))
+	if reset.GetConfirmName() != "w1" || !reset.GetBreakGlassRequired() || !strings.Contains(reset.GetWarning(), "cannot be undone") {
+		t.Fatalf("reset plan = %+v", reset)
+	}
+
+	rm := planNodeOK(t, s, nodePlanReq("w1", pb.NodeAction_NODE_ACTION_REMOVE))
+	if rm.GetConfirmName() != "w1" || rm.GetBreakGlassRequired() || rm.GetBlocked() != "" {
+		t.Fatalf("remove plan = %+v", rm)
+	}
+}
+
+func TestNodePlanRefusals(t *testing.T) {
+	objs := append(opObjects(), opMachine("cp2", "controlplane", nil, nil))
+	s, _ := opServer(t, objs...)
+
+	for name, tc := range map[string]struct {
+		machine string
+		req     *pb.NodeActionRequest
+		want    string
+	}{
+		"service outside the allowlist":      {"w1", &pb.NodeActionRequest{Action: pb.NodeAction_NODE_ACTION_RESTART_SERVICE, Service: "etcd"}, "cannot be restarted"},
+		"no service":                         {"w1", &pb.NodeActionRequest{Action: pb.NodeAction_NODE_ACTION_RESTART_SERVICE}, "choose the service"},
+		"etcd action on a worker":            {"w1", &pb.NodeActionRequest{Action: pb.NodeAction_NODE_ACTION_ETCD_DEFRAG}, "only control planes"},
+		"stopping one of two control planes": {"cp1", &pb.NodeActionRequest{Action: pb.NodeAction_NODE_ACTION_SHUTDOWN}, "two control planes"},
+		"removing one of two control planes": {"cp1", &pb.NodeActionRequest{Action: pb.NodeAction_NODE_ACTION_REMOVE}, "quorum"},
+	} {
+		tc.req.Machine = objectRef(opNS, tc.machine)
+
+		p, err := s.PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{Kind: pb.OperationKind_OPERATION_KIND_NODE, Node: tc.req}))
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+
+		if !strings.Contains(p.Msg.GetBlocked(), tc.want) {
+			t.Errorf("%s: blocked = %q, want it to contain %q", name, p.Msg.GetBlocked(), tc.want)
+		}
+	}
+
+	if _, err := s.PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{
+		Kind: pb.OperationKind_OPERATION_KIND_NODE, Node: &pb.NodeActionRequest{Machine: objectRef(opNS, "w1"), Service: "kubelet", Action: pb.NodeAction_NODE_ACTION_REBOOT},
+	})); connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Fatalf("a service with reboot: %v", err)
+	}
+}
+
+func TestNodeCreateWritesOneNodeOperation(t *testing.T) {
+	s, k8s := opServer(t, opObjects()...)
+
+	res, err := s.CreateOperation(context.Background(), nodeCreateReq(&pb.NodeActionRequest{
+		Machine: objectRef(opNS, "w1"), Action: pb.NodeAction_NODE_ACTION_RESTART_SERVICE, Service: "kubelet",
+	}))
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	ops := listOps(t, k8s)
+	if len(ops) != 1 || ops[0].Spec.Kind != ichorv1alpha1.TalosOperationKindNode || ops[0].Spec.ClusterRef.Name != opCluster {
+		t.Fatalf("operations = %+v", ops)
+	}
+
+	n := ops[0].Spec.Node
+	if n == nil || n.MachineRef.Name != "w1" || n.Action != ichorv1alpha1.NodeActionRestartService || n.Service != "kubelet" {
+		t.Fatalf("spec.node = %+v", n)
+	}
+
+	got := res.Msg.GetOperation()
+	if got.GetNodeAction() != pb.NodeAction_NODE_ACTION_RESTART_SERVICE || got.GetNodeMachine().GetName() != "w1" || res.Msg.GetAudit().GetAction() != "create" {
+		t.Fatalf("response = %+v", res.Msg)
+	}
+
+	// A second one is refused while the first has not finished.
+	_, err = s.CreateOperation(context.Background(), nodeCreateReq(&pb.NodeActionRequest{
+		Machine: objectRef(opNS, "w2"), Action: pb.NodeAction_NODE_ACTION_REBOOT,
+	}))
+	if connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Fatalf("second operation: %v", err)
+	}
+}
+
+func TestNodeCreateIsRefusedWhenBlockedAndWritesNothing(t *testing.T) {
+	s, k8s := opServer(t, opObjects()...)
+
+	_, err := s.CreateOperation(context.Background(), nodeCreateReq(&pb.NodeActionRequest{
+		Machine: objectRef(opNS, "w1"), Action: pb.NodeAction_NODE_ACTION_RESTART_SERVICE, Service: "machined",
+	}))
+	if connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Fatalf("service outside the allowlist: %v", err)
+	}
+
+	_, err = s.CreateOperation(context.Background(), nodeCreateReq(&pb.NodeActionRequest{
+		Machine: objectRef(opNS, "w1"), Action: pb.NodeAction_NODE_ACTION_REMOVE,
+	}))
+	if connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Fatalf("remove is not an operation: %v", err)
+	}
+
+	if ops := listOps(t, k8s); len(ops) != 0 {
+		t.Fatalf("nothing may be written: %+v", ops)
+	}
+}
+
+func TestNodeShutdownRestingInShutDownDoesNotBlockTheNextOperation(t *testing.T) {
+	objs := append(opObjects(), &ichorv1alpha1.TalosOperation{
+		Name: "node-1", Namespace: opNS,
+		Spec: ichorv1alpha1.TalosOperationSpec{
+			ClusterRef: corev1.LocalObjectReference{Name: opCluster}, Kind: ichorv1alpha1.TalosOperationKindNode,
+		},
+		Status: ichorv1alpha1.TalosOperationStatus{Phase: ichorv1alpha1.TalosOperationPhaseShutDown},
+	})
+	s, _ := opServer(t, objs...)
+
+	if p := planNodeOK(t, s, nodePlanReq("w2", pb.NodeAction_NODE_ACTION_REBOOT)); p.GetBlocked() != "" {
+		t.Fatalf("a node that is off holds nothing: %q", p.GetBlocked())
+	}
+}
+
+func resetReq(confirm, reason string) *connect.Request[pb.CreateOperationRequest] {
+	n := &pb.NodeActionRequest{Machine: objectRef(opNS, "w1"), Action: pb.NodeAction_NODE_ACTION_RESET, Confirm: confirm}
+	if reason != "" {
+		n.BreakGlass = &pb.BreakGlass{Reason: reason}
+	}
+
+	return nodeCreateReq(n)
+}
+
+func TestNodeResetNeedsTheNameAndBreakGlass(t *testing.T) {
+	s, k8s := opServer(t, opObjects()...)
+	bg := context.Background()
+
+	if _, err := s.CreateOperation(bg, resetReq("not-the-name", bgReason)); connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Fatalf("wrong name: %v", err)
+	}
+
+	if _, err := s.CreateOperation(bg, resetReq("w1", "")); connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Fatalf("no reason: %v", err)
+	}
+
+	// With no signed-in user nobody can be asked whether they may break glass.
+	if _, err := s.CreateOperation(bg, resetReq("w1", bgReason)); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("no user: %v", err)
+	}
+
+	var asked []authv1.ResourceAttributes
+
+	s.Impersonate = func(Identity) (client.Client, error) { return reviewing(k8s, false, &asked), nil }
+	user := context.WithValue(bg, identityKey{}, Identity{User: bgUser})
+
+	if _, err := s.CreateOperation(user, resetReq("w1", bgReason)); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("RBAC says no: %v", err)
+	}
+
+	if len(asked) == 0 || asked[0].Verb != "break-glass" || asked[0].Resource != "talosmachines" || asked[0].Name != "w1" {
+		t.Fatalf("access review = %+v", asked)
+	}
+
+	if ops := listOps(t, k8s); len(ops) != 0 {
+		t.Fatalf("nothing may be written: %+v", ops)
+	}
+
+	s.Impersonate = func(Identity) (client.Client, error) { return reviewing(k8s, true, &asked), nil }
+
+	res, err := s.CreateOperation(user, resetReq("w1", bgReason))
+	if err != nil {
+		t.Fatalf("allowed: %v", err)
+	}
+
+	if a := res.Msg.GetAudit(); a.GetAction() != "create-break-glass" || a.GetReason() != bgReason {
+		t.Fatalf("audit = %+v", a)
+	}
+
+	ops := listOps(t, k8s)
+	if len(ops) != 1 || ops[0].Spec.Node.Action != ichorv1alpha1.NodeActionReset || ops[0].Spec.Node.Confirm != "w1" {
+		t.Fatalf("operations = %+v", ops)
+	}
+}
+
+func TestRemoveMachineDeletesAfterTheTypedName(t *testing.T) {
+	s, k8s := opServer(t, opObjects()...)
+	ctx := context.Background()
+
+	if _, err := s.RemoveMachine(ctx, connect.NewRequest(&pb.RemoveMachineRequest{Machine: objectRef(opNS, "w1"), Confirm: "nope"})); connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Fatalf("wrong name: %v", err)
+	}
+
+	var m ichorv1alpha1.TalosMachine
+	if err := k8s.Get(ctx, types.NamespacedName{Namespace: opNS, Name: "w1"}, &m); err != nil {
+		t.Fatalf("a refused removal leaves the machine: %v", err)
+	}
+
+	res, err := s.RemoveMachine(ctx, connect.NewRequest(&pb.RemoveMachineRequest{Machine: objectRef(opNS, "w1"), Confirm: "w1"}))
+	if err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+
+	if res.Msg.GetAudit().GetAction() != "remove" {
+		t.Fatalf("audit = %+v", res.Msg.GetAudit())
+	}
+
+	err = k8s.Get(ctx, types.NamespacedName{Namespace: opNS, Name: "w1"}, &m)
+	// The fake client deletes at once, or, with the finalizer the removal sets, marks it deleted.
+	if err == nil && (m.DeletionTimestamp.IsZero() ||
+		m.Annotations[deleteguard.AllowDeleteAnnotation] != deleteguard.AllowDeleteValue) {
+		t.Fatalf("machine = %+v", m)
+	}
+}
+
+func TestRemoveMachineRefusesTheLastControlPlane(t *testing.T) {
+	s, _ := opServer(t, opObjects()...)
+
+	_, err := s.RemoveMachine(context.Background(), connect.NewRequest(&pb.RemoveMachineRequest{Machine: objectRef(opNS, "cp1"), Confirm: "cp1"}))
+	if connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Fatalf("last control plane: %v", err)
+	}
+}

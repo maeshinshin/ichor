@@ -306,3 +306,8 @@ func init() {
 		return nil
 	})
 }
+
+// TalosMachineRemovalFinalizer holds a TalosMachine's deletion until the controller has drained its
+// node and, for a control plane, removed its etcd member (ADR 0032). The controller adds it to every
+// approved control plane; a worker gets it when a removal or reset is requested for it (ADR 0083).
+const TalosMachineRemovalFinalizer = "ichor.maesh.dev/machine-removal"

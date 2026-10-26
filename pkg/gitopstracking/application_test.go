@@ -25,6 +25,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
+const testApp = "prod-root"
+
 func TestArgoApplicationOf(t *testing.T) {
 	cases := []struct {
 		name        string
@@ -36,19 +38,19 @@ func TestArgoApplicationOf(t *testing.T) {
 	}{
 		{
 			name:        "annotation in the Argo CD namespace",
-			annotations: map[string]string{ArgoTrackingAnnotation: "prod-root:ichor.maesh.dev/TalosMachine:default/m1"},
-			want:        types.NamespacedName{Namespace: "argocd", Name: "prod-root"},
+			annotations: map[string]string{ArgoTrackingAnnotation: testApp + ":ichor.maesh.dev/TalosMachine:default/m1"},
+			want:        types.NamespacedName{Namespace: trackingTestArgoCDNamespace, Name: testApp},
 		},
 		{
 			name:        "annotation naming an Application in another namespace",
 			annotations: map[string]string{ArgoTrackingAnnotation: "team-a_prod-root:ichor.maesh.dev/TalosMachine:default/m1"},
-			want:        types.NamespacedName{Namespace: "team-a", Name: "prod-root"},
+			want:        types.NamespacedName{Namespace: "team-a", Name: testApp},
 		},
 		{
 			name:   "default instance label when the method is label",
-			labels: map[string]string{ArgoDefaultInstanceLabelKey: "prod-root"},
+			labels: map[string]string{ArgoDefaultInstanceLabelKey: testApp},
 			cmData: map[string]string{ResourceTrackingMethodKey: "label"},
-			want:   types.NamespacedName{Namespace: "argocd", Name: "prod-root"},
+			want:   types.NamespacedName{Namespace: trackingTestArgoCDNamespace, Name: testApp},
 		},
 		{name: "not tracked by Argo CD", wantErr: true},
 	}
@@ -58,10 +60,10 @@ func TestArgoApplicationOf(t *testing.T) {
 			obj := trackingTestObject()
 			obj.Annotations, obj.Labels = tc.annotations, tc.labels
 
-			cm := &corev1.ConfigMap{Name: ArgoConfigMapName, Namespace: "argocd", Data: tc.cmData}
+			cm := &corev1.ConfigMap{Name: ArgoConfigMapName, Namespace: trackingTestArgoCDNamespace, Data: tc.cmData}
 			k8sClient := fake.NewClientBuilder().WithScheme(trackingTestScheme(t)).WithObjects(cm).Build()
 
-			got, err := ArgoApplicationOf(context.Background(), k8sClient, "argocd", obj)
+			got, err := ArgoApplicationOf(context.Background(), k8sClient, trackingTestArgoCDNamespace, obj)
 			if (err != nil) != tc.wantErr || got != tc.want {
 				t.Fatalf("got %v, %v; want %v (err %v)", got, err, tc.want, tc.wantErr)
 			}

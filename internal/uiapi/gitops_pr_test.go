@@ -249,7 +249,7 @@ func newPREnv(t *testing.T, o prOpts) *prEnv {
 	}
 
 	app := &unstructured.Unstructured{}
-	app.SetGroupVersionKind(schema.GroupVersionKind{Group: "argoproj.io", Version: "v1alpha1", Kind: "Application"})
+	app.SetGroupVersionKind(schema.GroupVersionKind{Group: "argoproj.io", Version: ichorv1alpha1.GroupVersion.Version, Kind: "Application"})
 	app.SetName("prod-root")
 	app.SetNamespace(trackedArgoNS)
 	_ = unstructured.SetNestedField(app.Object, o.appRepoURL, "spec", "source", "repoURL")

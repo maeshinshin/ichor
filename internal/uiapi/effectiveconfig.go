@@ -269,7 +269,7 @@ func configLayerToPB(layer string) pb.ConfigLayer {
 	switch layer {
 	case "cluster":
 		return pb.ConfigLayer_CONFIG_LAYER_CLUSTER
-	case "role":
+	case fieldRole:
 		return pb.ConfigLayer_CONFIG_LAYER_ROLE
 	case "selector":
 		return pb.ConfigLayer_CONFIG_LAYER_SELECTOR

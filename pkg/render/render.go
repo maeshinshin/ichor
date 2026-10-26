@@ -248,6 +248,11 @@ func BuildConfig(
 		return nil, fmt.Errorf("render: applying patches: %w", err)
 	}
 
+	cfg, err = injectHostname(cfg, contract, m)
+	if err != nil {
+		return nil, err
+	}
+
 	cfg, err = injectKubeProxy(cfg, contract, cluster)
 	if err != nil {
 		return nil, err

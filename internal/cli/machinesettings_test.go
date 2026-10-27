@@ -1,0 +1,126 @@
+/*
+Copyright 2026 maeshinshin.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package cli
+
+import (
+	"bytes"
+	"context"
+	"strings"
+	"testing"
+
+	"connectrpc.com/connect"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+)
+
+const testNIC = "aa:bb:cc:dd:ee:ff"
+
+func TestNetworkFromFlags(t *testing.T) {
+	good := machineApproveOptions{
+		NIC: testNIC, Addresses: []string{"10.0.0.2/24"}, Gateway: "10.0.0.1", DNS: []string{"1.1.1.1"}, VLAN: 20,
+	}
+
+	got, err := networkFromFlags(good)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got.GetAddressing() != "static" || got.GetMac() != testNIC || got.GetVlanId() != 20 || got.GetGateway() != "10.0.0.1" {
+		t.Fatalf("static flags: %+v", got)
+	}
+
+	got, err = networkFromFlags(machineApproveOptions{NIC: testNIC})
+	if err != nil || got.GetAddressing() != "dhcp" {
+		t.Fatalf("--nic alone is DHCP, got %+v, %v", got, err)
+	}
+
+	if got, err = networkFromFlags(machineApproveOptions{}); got != nil || err != nil {
+		t.Fatalf("no flags: want nil, got %+v, %v", got, err)
+	}
+
+	for _, bad := range []machineApproveOptions{
+		{Addresses: []string{"10.0.0.2/24"}},
+		{Gateway: "10.0.0.1"},
+		{DNS: []string{"1.1.1.1"}},
+		{VLAN: 5},
+		{NIC: testNIC, Gateway: "10.0.0.1"},
+	} {
+		if _, err := networkFromFlags(bad); err == nil || !strings.Contains(err.Error(), "--nic") && !strings.Contains(err.Error(), "--address") {
+			t.Errorf("networkFromFlags(%+v) must name the missing flag, got %v", bad, err)
+		}
+	}
+}
+
+func TestDisksFromFlags(t *testing.T) {
+	got, err := disksFromFlags(machineApproveOptions{
+		EphemeralDisk: "serial:E1",
+		UserVolumes:   []string{"data=wwid:naa.1,size=200GiB", "scratch=/dev/disk/by-id/x"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(got) != 3 || got[0].GetRole() != "ephemeral" || got[0].GetDisk().GetSerial() != "E1" ||
+		got[1].GetName() != "data" || got[1].GetMaxSize() != "200GiB" || got[1].GetDisk().GetWwid() != "naa.1" ||
+		got[2].GetName() != "scratch" || got[2].GetMaxSize() != "" || got[2].GetDisk().GetByIdPath() != "/dev/disk/by-id/x" {
+		t.Fatalf("disks: %+v", got)
+	}
+
+	for _, bad := range []machineApproveOptions{
+		{EphemeralDisk: "sda"},
+		{UserVolumes: []string{"nodisk"}},
+		{UserVolumes: []string{"=serial:x"}},
+		{UserVolumes: []string{"a=sda"}},
+	} {
+		if _, err := disksFromFlags(bad); err == nil {
+			t.Errorf("disksFromFlags(%+v) must fail", bad)
+		}
+	}
+}
+
+func TestApproveWritesNetworkAndDisks(t *testing.T) {
+	setAPITestFlags(t, true)
+
+	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(strongMachine("strong")).Build()
+	c := localClients(apiOpts, apiDeps{K8s: k8s})
+	run := func(o machineApproveOptions) error {
+		o.Role = testRoleWorker
+
+		return runMachineApprove(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{}, "strong", o)
+	}
+
+	// A NIC the machine was not discovered with reaches the caller as InvalidArgument.
+	if err := run(machineApproveOptions{NIC: "00:11:22:33:44:55"}); connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Fatalf("unknown NIC: want InvalidArgument, got %v", err)
+	}
+
+	err := run(machineApproveOptions{
+		NIC: testNIC, Addresses: []string{"10.0.0.2/24"}, Gateway: "10.0.0.1", DNS: []string{"9.9.9.9"},
+		EphemeralDisk: "serial:E1", UserVolumes: []string{"data=wwid:naa.1"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got := getMachine(t, k8s, "strong").Spec
+	if got.Network == nil || got.Network.Addressing != "static" || got.Network.MAC != testNIC || got.Network.Gateway != "10.0.0.1" {
+		t.Fatalf("spec.network: %+v", got.Network)
+	}
+
+	if len(got.Disks) != 2 || got.Disks[0].Role != "ephemeral" || got.Disks[1].Name != "data" {
+		t.Fatalf("spec.disks: %+v", got.Disks)
+	}
+}

@@ -45,6 +45,20 @@ func TestRegistryAuthSecretNames(t *testing.T) {
 	}
 }
 
+func TestBundleSecretNames(t *testing.T) {
+	cluster := &ichorv1alpha1.TalosCluster{Spec: ichorv1alpha1.TalosClusterSpec{
+		SecretsRef: corev1.LocalObjectReference{Name: "bundle-secret"},
+	}}
+
+	if got := bundleSecretNames(cluster); len(got) != 1 || got[0] != "bundle-secret" {
+		t.Fatalf("bundleSecretNames = %v, want [bundle-secret]", got)
+	}
+
+	if bundleSecretNames(&corev1.Secret{}) != nil {
+		t.Fatal("a non-TalosCluster object must index to nothing")
+	}
+}
+
 func TestRegistryAuthFingerprint(t *testing.T) {
 	if got := registryAuthFingerprint(nil); got != "" {
 		t.Fatalf("no auth must fingerprint to empty (so existing hashes do not move), got %q", got)

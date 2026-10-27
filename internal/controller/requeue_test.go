@@ -133,14 +133,14 @@ var _ = Describe("TalosMachineReconciler requeue after a failure", func() {
 		Expect(readyCondition(fetchMachine(m)).Reason).To(Equal(reasonCurrentConfigUnavailable))
 	})
 
-	It("asks to be looked at again when the secrets bundle is missing", func() {
+	It("waits for the Secret watch, without polling, when the secrets bundle is missing", func() {
 		cluster := newTestCluster("no-such-secret", "v1.14")
 		m := newTestMachine(cluster.Name, true)
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace}
 
 		res, err := reconcileMachine(r, m)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.RequeueAfter).To(Equal(transientRecheck))
+		Expect(res.RequeueAfter).To(BeZero())
 		Expect(readyCondition(fetchMachine(m)).Reason).To(Equal(reasonSecretsBundleUnavailable))
 	})
 

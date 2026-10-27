@@ -13,7 +13,7 @@ import { clusterClient, machineClient, operationClient, patchClient } from '@/li
 import { enumLabel } from '@/lib/enum'
 import { describeError } from '@/lib/errors'
 import { operationState, type OpState } from '@/lib/operations'
-import { clusterReadiness, machineCounts, operationCounts, operationsLine, type MachineLite } from '@/lib/overview'
+import { clusterReadiness, expiringCertificatesMessage, machineCounts, operationCounts, operationsLine, type MachineLite } from '@/lib/overview'
 import { opStateTone } from '@/lib/status'
 import { useT } from '@/lib/useT'
 import { Link, objectRefPath } from '@/router'
@@ -214,6 +214,11 @@ function Attention({ data, states, na }: { data: Data; states: OpState[]; na: st
   })
   for (const c of data.clusters ?? []) {
     if (c.rollout && c.ref) items.push({ key: `c-${c.ref.name}`, to: objectRefPath('/clusters', c.ref), name: c.ref.name, tone: 'progress', text: t('overview.attentionRollout') })
+  }
+  for (const c of data.clusters ?? []) {
+    if (c.ref && expiringCertificatesMessage(c.conditions) !== null) {
+      items.push({ key: `x-${c.ref.name}`, to: objectRefPath('/clusters', c.ref), name: c.ref.name, tone: 'warn', text: t('overview.attentionCerts') })
+    }
   }
   if (data.machines === null && data.ops === null) return <p class="text-sm text-muted-foreground">{na}</p>
   return (

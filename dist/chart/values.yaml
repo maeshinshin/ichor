@@ -429,6 +429,11 @@ prometheus:
   rules:
     enabled: false
 
+    ## How many days before a cluster CA expires IchorCertificateExpiring fires. Keep it equal
+    ## to the controller's --certificate-expiry-warning-days (default 90; set it in
+    ## manager.args), which sets the CertificatesExpiring condition the UI shows.
+    certificateExpiryDays: 90
+
 ## A ConfigMap carrying one Grafana dashboard for the metrics above, labeled
 ## "grafana_dashboard: \"1\"" -- the sidecar-discovery convention both
 ## kube-prometheus-stack's and Bitnami's Grafana charts support out of the box. Ichor

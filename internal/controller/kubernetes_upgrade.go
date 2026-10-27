@@ -145,10 +145,9 @@ type kubernetesUpgradeAdvancer struct {
 	Evacuator StorageEvacuator
 	Kube      kubernetes.Interface
 
-	// NodeName is the Kubernetes node this controller runs on ("" outside the cluster). Its
-	// kubelet is rolled without a drain: evicting the controller from its own step would
-	// restart it mid-roll. ponytail: ordering the own node last in the Kubelets stage needs
-	// kubernetesBatch to hold it back (as holdOwnNodeLast does for config rollouts).
+	// NodeName is the Kubernetes node this controller runs on ("" outside the cluster). It is
+	// drained like any other, last (kubernetesBatch); the eviction restarts the controller, and
+	// the step resumes from the node's state.
 	NodeName string
 }
 
@@ -285,14 +284,10 @@ func (a *kubernetesUpgradeAdvancer) Advance(
 // drainFirst is the Kubelets stage's leave-the-node step: the storage evacuation hook, then
 // cordon and drain, both resumable from what the node and the machine's StorageEvacuation
 // condition say. It reports whether the kubelet may be rolled now; false with no error means
-// "still evacuating or draining, call again". The controller's own node is not drained.
+// "still evacuating or draining, call again".
 func (a *kubernetesUpgradeAdvancer) drainFirst(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, node string,
 ) (bool, error) {
-	if node == a.NodeName {
-		return true, nil
-	}
-
 	progress, err := evacuateMachine(ctx, a.Client, a.Evacuator, cluster, m, node, "rolling its kubelet")
 	if err != nil {
 		return false, err

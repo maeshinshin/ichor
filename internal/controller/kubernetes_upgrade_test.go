@@ -868,6 +868,11 @@ type kubernetesFleet struct {
 	admin    *fakeKubernetesAdmin
 	op       *ichorv1alpha1.TalosOperation
 	seen     map[string]int
+
+	// ownNode and kube, when set, make every pass's advancer the controller of that node, draining
+	// through kube.
+	ownNode string
+	kube    *drainFake
 }
 
 func newKubernetesFleet(suffix string, controlPlanes, workers int) *kubernetesFleet {
@@ -908,9 +913,12 @@ func newKubernetesFleet(suffix string, controlPlanes, workers int) *kubernetesFl
 func (f *kubernetesFleet) reconcile() (applied [][2]string) {
 	adv := &kubernetesUpgradeAdvancer{
 		Client: k8sClient, Reader: k8sClient, ControllerNamespace: tmNamespace,
-		TalosClient: perMachineClientFactory(f.byName), Admin: f.admin,
+		TalosClient: perMachineClientFactory(f.byName), Admin: f.admin, NodeName: f.ownNode,
 	}
-	r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: adv.Advance}
+	if f.kube != nil { // a nil *drainFake in the interface would not be nil
+		adv.Kube = f.kube
+	}
+	r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: adv.Advance, NodeName: f.ownNode}
 
 	_, err := reconcileOperation(r, f.op)
 	Expect(err).NotTo(HaveOccurred())
@@ -1058,6 +1066,41 @@ var _ = Describe("a staged Kubernetes upgrade through TalosOperationReconciler",
 			Expect(f.byName[m.Name].current).To(Equal(renderAt(f.cluster, m, testK8sTarget)),
 				"%s ends on the cluster's desired configuration", m.Name)
 		}
+	})
+
+	It("rolls the controller's own node's kubelet last, drained, and a restarted controller resumes it", func() {
+		f := newKubernetesFleet("own", 3, 1)
+		cp1, cp2, cp3, w := f.machines[0], f.machines[1], f.machines[2], f.machines[3]
+		f.ownNode = cp1.Spec.Hostname
+		f.kube = newDrainFake(func() int { return 0 }, bareNode(cp1.Spec.Hostname), bareNode(cp2.Spec.Hostname), bareNode(cp3.Spec.Hostname), bareNode(w.Spec.Hostname))
+		kube := f.kube
+
+		var kubelets []string
+
+		cordonedAtOwnRoll := false
+
+		for range 60 {
+			for _, a := range f.reconcile() { // every pass is a fresh controller
+				if a[1] != ichorv1alpha1.KubernetesStageKubelets {
+					continue
+				}
+
+				kubelets = append(kubelets, a[0])
+
+				if a[0] == cp1.Name {
+					cordonedAtOwnRoll = kube.node(cp1.Spec.Hostname).Spec.Unschedulable
+				}
+			}
+
+			if fetchOperation(f.op).Status.Phase == ichorv1alpha1.TalosOperationPhaseCompleted {
+				break
+			}
+		}
+
+		Expect(fetchOperation(f.op).Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseCompleted))
+		Expect(kubelets).To(Equal([]string{cp2.Name, cp3.Name, w.Name, cp1.Name}), "the controller's own node goes last")
+		Expect(cordonedAtOwnRoll).To(BeTrue(), "the own node was drained before its kubelet rolled")
+		Expect(kube.node(cp1.Spec.Hostname).Spec.Unschedulable).To(BeFalse(), "and released afterwards")
 	})
 
 	It("pauses in the APIServers stage when a control plane's apply fails, and touches no kubelet", func() {

@@ -129,7 +129,7 @@ func decode(encoded string) (p Params, salt, key []byte, err error) {
 	}
 	var m, t uint64
 	var th uint64
-	for _, kv := range strings.Split(parts[3], ",") {
+	for kv := range strings.SplitSeq(parts[3], ",") {
 		k, v, ok := strings.Cut(kv, "=")
 		if !ok {
 			return p, nil, nil, ErrInvalidHash
@@ -159,7 +159,9 @@ func decode(encoded string) (p Params, salt, key []byte, err error) {
 	if key, err = enc.DecodeString(parts[5]); err != nil || len(key) == 0 || len(key) > maxDecodeKeyLen {
 		return p, nil, nil, ErrInvalidHash
 	}
-	p = Params{Time: uint32(t), Memory: uint32(m), Threads: uint8(th), KeyLen: uint32(len(key)), SaltLen: uint32(len(salt))}
+	p = Params{
+		Time: uint32(t), Memory: uint32(m), Threads: uint8(th), KeyLen: uint32(len(key)), SaltLen: uint32(len(salt)),
+	}
 	return p, salt, key, nil
 }
 

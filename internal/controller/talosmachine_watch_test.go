@@ -167,6 +167,92 @@ var _ = Describe("TalosMachine re-reconcile on render inputs", func() {
 	})
 })
 
+var _ = Describe("TalosMachine re-reconcile on a registry auth Secret", func() {
+	It("re-renders when the password in the referenced Secret changes", func() {
+		const (
+			settle  = 15 * time.Second
+			pollGap = 100 * time.Millisecond
+		)
+
+		nsObj := &corev1.Namespace{GenerateName: "watch-auth-"}
+		Expect(k8sClient.Create(ctx, nsObj)).To(Succeed())
+
+		ns := nsObj.Name
+
+		bundle := newTestBundle("v1.14")
+		raw, err := yaml.Marshal(bundle)
+		Expect(err).NotTo(HaveOccurred())
+
+		secret := &corev1.Secret{GenerateName: "bundle-", Namespace: ns, Data: map[string][]byte{bundleSecretKey: raw}}
+		Expect(k8sClient.Create(ctx, secret)).To(Succeed())
+
+		auth := &corev1.Secret{
+			GenerateName: "regauth-", Namespace: ns, Data: map[string][]byte{"password": []byte("first")},
+		}
+		Expect(k8sClient.Create(ctx, auth)).To(Succeed())
+
+		spec := newClusterSpec(secret.Name, "v1.14")
+		spec.Registries = []ichorv1alpha1.TalosClusterRegistry{{
+			Host: "registry.example.com", Endpoints: []string{"https://private.example.com"}, Username: "deploy",
+			AuthSecretRef: &corev1.LocalObjectReference{Name: auth.Name},
+		}}
+		clus := &ichorv1alpha1.TalosCluster{GenerateName: testClusterGenerate, Namespace: ns, Spec: spec}
+		Expect(k8sClient.Create(ctx, clus)).To(Succeed())
+
+		m := &ichorv1alpha1.TalosMachine{
+			GenerateName: machinePrefix, Namespace: ns,
+			Spec: ichorv1alpha1.TalosMachineSpec{
+				ClusterRef:    corev1.LocalObjectReference{Name: clus.Name},
+				Identity:      ichorv1alpha1.TalosMachineIdentity{UUID: "uuid-" + clus.Name},
+				Endpoint:      storageTestEndpoint,
+				Role:          roleWorker,
+				ApprovalState: ichorv1alpha1.MachineApprovalStateApproved,
+			},
+		}
+		Expect(k8sClient.Create(ctx, m)).To(Succeed())
+
+		resolved, err := render.ResolveRegistryAuth(ctx, k8sClient, ns, clus)
+		Expect(err).NotTo(HaveOccurred())
+
+		current, _, err := render.Render(clus, m, bundle, nil, &render.SystemInputs{RegistryAuth: resolved})
+		Expect(err).NotTo(HaveOccurred())
+
+		mgr, err := ctrl.NewManager(cfg, ctrl.Options{
+			Scheme:     scheme.Scheme,
+			Metrics:    metricsserver.Options{BindAddress: "0"},
+			Cache:      cache.Options{DefaultNamespaces: map[string]cache.Config{ns: {}}},
+			Controller: config.Controller{SkipNameValidation: ptr.To(true)},
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect((&TalosMachineReconciler{
+			Client: mgr.GetClient(), APIReader: mgr.GetAPIReader(),
+			ControllerNamespace: ns, TalosClient: clientFactory(&fakeTalosClient{current: current}),
+		}).SetupWithManager(mgr)).To(Succeed())
+
+		mctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+
+		go func() {
+			defer GinkgoRecover()
+			Expect(mgr.Start(mctx)).To(Succeed())
+		}()
+
+		applied := func() string { return fetchMachineIn(ns, m.Name).Status.AppliedConfigHash }
+		Eventually(applied, settle, pollGap).ShouldNot(BeEmpty())
+
+		before := applied()
+
+		var latest corev1.Secret
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: auth.Name}, &latest)).To(Succeed())
+
+		latest.Data["password"] = []byte("second")
+		Expect(k8sClient.Update(ctx, &latest)).To(Succeed())
+
+		Eventually(applied, settle, pollGap).ShouldNot(Equal(before))
+	})
+})
+
 // newClusterSpec is newTestCluster's spec without creating anything, so a fixture can place
 // the cluster in a namespace of its own.
 func newClusterSpec(secretName, versionContract string) ichorv1alpha1.TalosClusterSpec {

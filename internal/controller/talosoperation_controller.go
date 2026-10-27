@@ -235,6 +235,10 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, err
 	}
 
+	// A config rollout visits only machines with a pending change (the same selection the plan uses), plus
+	// any it already started: a machine whose change was applied no longer lists paths but is still ours.
+	controlPlanes, workers = configSelection(&op, controlPlanes, workers)
+
 	// A config rollout reboots nodes, so the machine this controller runs on goes last: its reboot
 	// stops the controller, which resumes from the status and has nothing left to wait for.
 	// A Kubernetes upgrade does the same in its Kubelets stage, where the node is drained first.
@@ -658,4 +662,22 @@ func (r *TalosOperationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&ichorv1alpha1.TalosOperation{}).
 		Named("talosoperation").
 		Complete(r)
+}
+
+// configSelection narrows a config operation's candidates to the machines with a pending change (the
+// plan's selection) and those it already started; other kinds pass through.
+func configSelection(
+	op *ichorv1alpha1.TalosOperation, controlPlanes, workers []*ichorv1alpha1.TalosMachine,
+) (cps, ws []*ichorv1alpha1.TalosMachine) {
+	if op.Spec.Kind != ichorv1alpha1.TalosOperationKindConfig {
+		return controlPlanes, workers
+	}
+
+	drop := func(m *ichorv1alpha1.TalosMachine) bool {
+		_, started := recorded(op, m.Name)
+
+		return !started && !upgrade.ConfigPending(m)
+	}
+
+	return slices.DeleteFunc(controlPlanes, drop), slices.DeleteFunc(workers, drop)
 }

@@ -622,7 +622,7 @@ func (c *caRun) pass(ctx context.Context, stage string) (ctrl.Result, error) {
 		if didApply {
 			applied++
 
-			setMachineStatus(c.op, m.Name, ichorv1alpha1.TalosOperationMachinePhaseInProgress)
+			c.r.markMachine(c.op, m.Name, ichorv1alpha1.TalosOperationMachinePhaseInProgress)
 		}
 	}
 

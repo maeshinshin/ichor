@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -59,6 +60,9 @@ const (
 	reasonOperationStepFailed    = "StepFailed"
 	reasonOperationAdvancing     = "Advancing"
 	reasonOperationComplete      = "Complete"
+	reasonMachineStarted         = "MachineStarted"
+	reasonMachineFinished        = "MachineFinished"
+	reasonOperationResumed       = "OperationResumed"
 )
 
 // AdvanceMachineFunc performs one disruptive step for a single machine
@@ -281,7 +285,7 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			// Pause on failure, without undoing anything already
 			// Completed in op.Status.Machines above -- there is no
 			// automatic cluster-wide rollback.
-			setMachineStatus(&op, m.Name, ichorv1alpha1.TalosOperationMachinePhaseInProgress)
+			r.markMachine(&op, m.Name, ichorv1alpha1.TalosOperationMachinePhaseInProgress)
 
 			return ctrl.Result{}, r.setPhase(ctx, &op, ichorv1alpha1.TalosOperationPhasePaused,
 				reasonOperationStepFailed, fmt.Sprintf("machine %q: %v", m.Name, err))
@@ -294,7 +298,7 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			requeue = true
 		}
 
-		setMachineStatus(&op, m.Name, phase)
+		r.markMachine(&op, m.Name, phase)
 	}
 
 	result := ctrl.Result{}
@@ -408,21 +412,77 @@ func (r *TalosOperationReconciler) restingPhase(
 }
 
 // setMachineStatus records name's phase in op.status.machines, replacing
-// any existing entry for the same name rather than appending a duplicate.
-func setMachineStatus(op *ichorv1alpha1.TalosOperation, name, phase string) {
+// any existing entry for the same name rather than appending a duplicate. It stamps startedAt
+// when the machine first appears and finishedAt when it reaches Completed, and reports whether
+// the entry is new or its phase changed.
+func setMachineStatus(op *ichorv1alpha1.TalosOperation, name, phase string) bool {
+	now := metav1.Now()
+
 	for i := range op.Status.Machines {
-		if op.Status.Machines[i].Name == name {
-			op.Status.Machines[i].Phase = phase
-			return
+		m := &op.Status.Machines[i]
+		if m.Name != name {
+			continue
 		}
+
+		if m.Phase == phase {
+			return false
+		}
+
+		m.Phase = phase
+		if phase == ichorv1alpha1.TalosOperationMachinePhaseCompleted {
+			m.FinishedAt = &now
+		}
+
+		return true
 	}
 
-	op.Status.Machines = append(op.Status.Machines, ichorv1alpha1.TalosOperationMachineStatus{Name: name, Phase: phase})
+	entry := ichorv1alpha1.TalosOperationMachineStatus{Name: name, Phase: phase, StartedAt: &now}
+	if phase == ichorv1alpha1.TalosOperationMachinePhaseCompleted {
+		entry.FinishedAt = &now
+	}
+
+	op.Status.Machines = append(op.Status.Machines, entry)
+
+	return true
+}
+
+// markMachine is setMachineStatus plus an Event on the operation when the machine starts or
+// finishes its step, so the operation's activity log shows it.
+func (r *TalosOperationReconciler) markMachine(op *ichorv1alpha1.TalosOperation, name, phase string) {
+	if !setMachineStatus(op, name, phase) {
+		return
+	}
+
+	if phase == ichorv1alpha1.TalosOperationMachinePhaseCompleted {
+		r.operationEvent(op, corev1.EventTypeNormal, reasonMachineFinished, "machine "+name+" finished")
+	} else {
+		r.operationEvent(op, corev1.EventTypeNormal, reasonMachineStarted, "machine "+name+" started")
+	}
+}
+
+// operationEvent records an Event on op when a Recorder is wired. Messages carry names and
+// reasons only, never secret material.
+func (r *TalosOperationReconciler) operationEvent(op *ichorv1alpha1.TalosOperation, eventType, reason, message string) {
+	if r.Recorder != nil {
+		r.Recorder.Event(op, eventType, reason, message)
+	}
 }
 
 // setPhase persists op's phase, reason and message, then writes status.
 func (r *TalosOperationReconciler) setPhase(ctx context.Context, op *ichorv1alpha1.TalosOperation, phase, reason, message string) error {
+	previous := op.Status.Phase
+	previousPauseReason := ""
+
+	if c := apimeta.FindStatusCondition(op.Status.Conditions, conditionOperationPaused); c != nil {
+		previousPauseReason = c.Reason
+	}
+
 	op.Status.Phase = phase
+
+	if phase == ichorv1alpha1.TalosOperationPhaseCompleted && op.Status.FinishedAt == nil {
+		now := metav1.Now()
+		op.Status.FinishedAt = &now
+	}
 
 	if reason == reasonOperationStepFailed {
 		op.Status.FailureReason = message
@@ -441,7 +501,31 @@ func (r *TalosOperationReconciler) setPhase(ctx context.Context, op *ichorv1alph
 		apimeta.RemoveStatusCondition(&op.Status.Conditions, conditionOperationPaused)
 	}
 
-	return r.Status().Update(ctx, op)
+	if err := r.Status().Update(ctx, op); err != nil {
+		return err
+	}
+
+	r.phaseEvent(op, previous, previousPauseReason, phase, reason, message)
+
+	return nil
+}
+
+// phaseEvent records the Event for a phase transition: a pause (once per reason), a resume out of a
+// pause, and completion. The steady InProgress/Advancing reconcile records nothing.
+func (r *TalosOperationReconciler) phaseEvent(op *ichorv1alpha1.TalosOperation, previous, previousPauseReason, phase, reason, message string) {
+	switch {
+	case phase == ichorv1alpha1.TalosOperationPhasePaused && (previous != phase || previousPauseReason != reason):
+		eventType := corev1.EventTypeNormal
+		if reason == reasonOperationStepFailed {
+			eventType = corev1.EventTypeWarning
+		}
+
+		r.operationEvent(op, eventType, reason, "paused: "+message)
+	case phase == ichorv1alpha1.TalosOperationPhaseInProgress && previous == ichorv1alpha1.TalosOperationPhasePaused:
+		r.operationEvent(op, corev1.EventTypeNormal, reasonOperationResumed, "resumed")
+	case phase == ichorv1alpha1.TalosOperationPhaseCompleted && previous != phase:
+		r.operationEvent(op, corev1.EventTypeNormal, reason, message)
+	}
 }
 
 // candidateMachines lists every approved, not-being-deleted TalosMachine belonging to cluster

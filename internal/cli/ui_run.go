@@ -195,23 +195,39 @@ func runUI(ctx context.Context, opts uiOptions, deps uiDeps) error {
 
 		go func() { done <- deps.Forward(ctx, pod, localPort, remotePort, ready) }()
 
+		isReady := false
+		finished := false
+
 		select {
 		case <-ready:
-			if !opened {
-				_, _ = fmt.Fprintf(deps.Stderr, "ichor ui: open http://localhost:%d/ in your browser\n", localPort)
+			isReady = true
+		case err = <-done:
+			finished = true
+			// Forward closes ready before it returns, but when both are
+			// pending select picks at random: look at ready explicitly so a
+			// tunnel that ends right after becoming ready still counts as
+			// ready and the browser still opens.
+			select {
+			case <-ready:
+				isReady = true
+			default:
+			}
+		}
 
-				if opts.OpenBrowser {
-					if err := deps.OpenBrowser(fmt.Sprintf("http://localhost:%d/", localPort)); err != nil {
-						_, _ = fmt.Fprintf(deps.Stderr, "ichor ui: could not open a browser automatically: %v\n", err)
-					}
+		if isReady && !opened {
+			_, _ = fmt.Fprintf(deps.Stderr, "ichor ui: open http://localhost:%d/ in your browser\n", localPort)
+
+			if opts.OpenBrowser {
+				if err := deps.OpenBrowser(fmt.Sprintf("http://localhost:%d/", localPort)); err != nil {
+					_, _ = fmt.Fprintf(deps.Stderr, "ichor ui: could not open a browser automatically: %v\n", err)
 				}
-
-				opened = true
 			}
 
+			opened = true
+		}
+
+		if !finished {
 			err = <-done
-		case err = <-done:
-			// Forward ended before ever becoming ready.
 		}
 
 		if ctx.Err() != nil {

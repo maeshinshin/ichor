@@ -346,6 +346,45 @@ func TestChangeOwnPassword(t *testing.T) {
 	}
 }
 
+func TestChangeOwnPasswordBacksOffAfterRepeatedFailures(t *testing.T) {
+	s := userServer(t, false, newUser(userAlice, false, "viewer"))
+	if err := s.setCredential(context.Background(), userAlice, strongPass, false); err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	s.Now = func() time.Time { return now }
+
+	t.Cleanup(func() { changePasswordFailures.reset(userAlice) })
+	changePasswordFailures.reset(userAlice)
+
+	change := func(old string) error {
+		_, err := s.ChangeOwnPassword(ichorCtx(userAlice), connect.NewRequest(&pb.ChangeOwnPasswordRequest{OldPassword: old, NewPassword: strongPass2}))
+
+		return err
+	}
+
+	for range freeFailures {
+		if err := change("wrong password!!"); connect.CodeOf(err) != connect.CodePermissionDenied {
+			t.Fatalf("wrong old password: %v", err)
+		}
+	}
+
+	// Even the right password waits while the back-off runs.
+	if err := change(strongPass); connect.CodeOf(err) != connect.CodeResourceExhausted {
+		t.Fatalf("during back-off: %v", err)
+	}
+
+	now = now.Add(2 * time.Second)
+	if err := change(strongPass); err != nil {
+		t.Fatalf("after back-off: %v", err)
+	}
+
+	if changePasswordFailures.wait(userAlice, now) != 0 {
+		t.Error("a success did not reset the back-off")
+	}
+}
+
 func TestRevokeSessionsMovesNotBefore(t *testing.T) {
 	s := userServer(t, true, newUser(userAlice, false, "viewer"))
 	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)

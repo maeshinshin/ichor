@@ -25,6 +25,13 @@ import (
 
 // pullRequestText is what `ichor upgrade ichor` says when the installation is managed in Git: the
 // upgrade became a pull request and no operation exists yet (ADR 0059).
+// credentialsStopWorking is what a CA rotation does to the operator's credentials, in the words the
+// plan and rotate-ca's help share (the UI's copy says the same in its own strings). The nodes start
+// serving certificates from the new CA at Issuing, the second pass, so a kubeconfig or talosconfig
+// that trusts only the old CA fails from there on.
+const credentialsStopWorking = "kubeconfig and talosconfig STOP WORKING from the second pass (Issuing) on: " +
+	"the nodes start serving certificates from the new CA, and a file that trusts only the old CA can no longer verify them."
+
 func pullRequestText(url string) string {
 	return "Opened a pull request that changes Ichor's target version in Git: " + url + "\n" +
 		"Nothing was written to the cluster and no operation was created. Merge it and let Argo CD sync, " +
@@ -70,8 +77,7 @@ func planText(kind pb.OperationKind, cluster string, p *pb.PlanOperationResponse
 	case pb.OperationEffect_OPERATION_EFFECT_CA_ROTATION:
 		fmt.Fprintf(&b, "Every machine is reconfigured once per pass (%s), without a reboot. "+
 			"The kubelet RESTARTS on each machine in the passes that change the Kubernetes CA.\n", strings.Join(p.GetStages(), ", "))
-		b.WriteString("YOUR kubeconfig and talosconfig STOP WORKING during it: the Kubernetes API serves the new CA from the second pass on, " +
-			"and the Talos API refuses the old CA after the third.\n" +
+		b.WriteString("YOUR " + credentialsStopWorking + "\n" +
 			"So after every machine accepts the new CAs the operation WAITS, changing nothing, until you have new credentials. " +
 			"'ichor cluster rotate-ca' writes them (a kubeconfig and a talosconfig trusting the old and the new CAs, next to your current ones, " +
 			"mode 0600, never printed) while your current ones still work, checks them, and only then lets the operation go on. " +

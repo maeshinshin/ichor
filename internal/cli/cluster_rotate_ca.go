@@ -48,8 +48,7 @@ replaced in passes over every machine (accept the new CA, make it the issuer, dr
 each verified before the next. The kubelet restarts on each machine in the passes that change the
 Kubernetes CA. The etcd and aggregator CAs and the service-account key are not rotated.
 
-Your kubeconfig and talosconfig stop working during the rotation: the Kubernetes API serves the new
-CA from the second pass on, and the Talos API refuses the old CA after the third. So after every
+Your ` + credentialsStopWorking + ` So after every
 machine accepts the new CAs, the operation WAITS, changing nothing, until you have new credentials.
 This command waits for that point while your current credentials still work, then writes
 

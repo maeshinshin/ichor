@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
@@ -232,7 +233,7 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	// stops the controller, which resumes from the status and has nothing left to wait for.
 	var own []*ichorv1alpha1.TalosMachine
 	if op.Spec.Kind == ichorv1alpha1.TalosOperationKindConfig {
-		controlPlanes, workers, own = holdOwnNodeLast(controlPlanes, workers, r.NodeName)
+		controlPlanes, workers, own = r.holdOwnNodeLast(ctx, &cluster, controlPlanes, workers)
 	}
 
 	// Control planes go one at a time, and only once every one of them is
@@ -527,16 +528,20 @@ func kubernetesBatch(op *ichorv1alpha1.TalosOperation, controlPlanes, workers []
 // holdOwnNodeLast takes the machine whose Kubernetes node is nodeName (the one this controller
 // runs on) out of controlPlanes and workers; it is advanced after both. Empty nodeName (the
 // controller runs outside the cluster) changes nothing.
-func holdOwnNodeLast(
-	controlPlanes, workers []*ichorv1alpha1.TalosMachine, nodeName string,
+// The node names are resolved as everywhere else (spec.hostname is empty on the first control plane).
+func (r *TalosOperationReconciler) holdOwnNodeLast(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, controlPlanes, workers []*ichorv1alpha1.TalosMachine,
 ) (cps, ws, own []*ichorv1alpha1.TalosMachine) {
+	nodeName := r.NodeName
 	if nodeName == "" {
 		return controlPlanes, workers, nil
 	}
 
+	names, _ := r.nodeNames(ctx, cluster, nil, slices.Concat(controlPlanes, workers)) // an unnamed machine is not the controller's
+
 	split := func(in []*ichorv1alpha1.TalosMachine) (rest []*ichorv1alpha1.TalosMachine) {
 		for _, m := range in {
-			if m.Spec.Hostname == nodeName {
+			if names[m.Name] == nodeName {
 				own = append(own, m)
 
 				continue

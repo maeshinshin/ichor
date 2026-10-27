@@ -40,20 +40,23 @@ func TestPlanRestoreNodes(t *testing.T) {
 		name       string
 		cps        []*ichorv1alpha1.TalosMachine
 		node       string
+		names      map[string]string // resolved node names by machine name, when spec.hostname is empty
 		wantOrder  []string
 		wantTarget string
 		wantOwn    string
 		solo       bool
 	}{
-		{"controller elsewhere", []*ichorv1alpha1.TalosMachine{mk("b", "hb"), mk("a", "ha"), mk("c", "hc")}, "w1", []string{"a", "b", "c"}, "a", "", false},
-		{"controller outside the cluster", []*ichorv1alpha1.TalosMachine{mk("b", "hb"), mk("a", "ha")}, "", []string{"a", "b"}, "a", "", false},
-		{"controller on a control plane", []*ichorv1alpha1.TalosMachine{mk("b", "hb"), mk("a", "ha"), mk("c", "hc")}, "ha", []string{"b", "c"}, "b", "a", false},
-		{"controller on the only control plane", []*ichorv1alpha1.TalosMachine{mk("a", "ha")}, "ha", []string{"a"}, "a", "", true},
+		{"controller elsewhere", []*ichorv1alpha1.TalosMachine{mk("b", "hb"), mk("a", "ha"), mk("c", "hc")}, "w1", nil, []string{"a", "b", "c"}, "a", "", false},
+		{"controller outside the cluster", []*ichorv1alpha1.TalosMachine{mk("b", "hb"), mk("a", "ha")}, "", nil, []string{"a", "b"}, "a", "", false},
+		{"controller on a control plane", []*ichorv1alpha1.TalosMachine{mk("b", "hb"), mk("a", "ha"), mk("c", "hc")}, "ha", nil, []string{"b", "c"}, "b", "a", false},
+		{"controller on the only control plane", []*ichorv1alpha1.TalosMachine{mk("a", "ha")}, "ha", nil, []string{"a"}, "a", "", true},
+		{"controller on a control plane with no spec.hostname", []*ichorv1alpha1.TalosMachine{mk("b", ""), mk("a", ""), mk("c", "")}, "nodeA",
+			map[string]string{"a": "nodeA", "b": "nodeB", "c": "nodeC"}, []string{"b", "c"}, "b", "a", false},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			p := planRestoreNodes(tc.cps, tc.node)
+			p := planRestoreNodes(tc.cps, tc.node, tc.names)
 
 			var order []string
 			for _, m := range p.order {

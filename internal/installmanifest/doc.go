@@ -38,8 +38,8 @@ limitations under the License.
 // come out of the same `go build` invocation, the controller version
 // `ichor init` installs is always the version of Ichor this CLI itself
 // is -- there is no separate fetch step where the two could drift, and
-// no version flag for a caller to get wrong. This same property is what
-// air-gap support (phase 10) needs: the binary already carries
+// no version flag for a caller to get wrong. This same property keeps the
+// install self-contained: the binary already carries
 // everything it installs.
 package installmanifest
 

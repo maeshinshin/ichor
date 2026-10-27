@@ -26,7 +26,7 @@ import (
 )
 
 // rpcDuration is the one metric the UI backend adds (docs/design/architecture.md,
-// "Monitoring and air gap": "the controller and UI backend export Prometheus
+// "Monitoring and registry mirrors": "the controller and UI backend export Prometheus
 // metrics"; docs/adr/0040-ui-backend-and-controller-metrics-options.md): latency and
 // outcome for every Connect RPC it serves, by procedure and status code. It is
 // observed from one place -- MetricsInterceptor below -- rather than timing code

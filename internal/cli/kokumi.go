@@ -25,7 +25,7 @@ import (
 // kokumiVersion is the Kokumi release this build knows (ADR 0048): the
 // install.yaml asset of github.com/kokumi-dev/kokumi release 0.17.0
 // (2026-10-11, sha256 345223726800ca3f08f633c76c91a38265bc0c131551b24dc49c69ee0cd7b840).
-// Ichor never installs it; the version only keys the image list.
+// Ichor never installs it; the version only names it in the disclaimer.
 const kokumiVersion = "0.17.0"
 
 const (
@@ -37,16 +37,6 @@ const (
 	kokumiForceHTTP   = "true"
 	kokumiRegistryURL = "oci://kokumi-registry.kokumi.svc.cluster.local:5000"
 )
-
-// kokumiImages are the images Kokumi's 0.17.0 install.yaml runs: the operator
-// (one image serves both the controller and the server Deployments) and the
-// bundled registry.
-func kokumiImages() []string {
-	return []string{
-		"ghcr.io/kokumi-dev/kokumi:" + kokumiVersion,
-		"docker.io/library/registry:3.1.2@sha256:ddf754342cfc8acc51a56d5d0ab6af06826461864460636d8bd5c546dab2a7b8",
-	}
-}
 
 // buildKokumiRepoCredsSecret is the Argo CD repo-creds Secret that lets Argo CD
 // pull Kokumi's OCI artifacts (ADR 0048). It holds no credential; it is still

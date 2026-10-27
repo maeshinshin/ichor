@@ -1,25 +1,39 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { clusterIsReady, clusterReadiness, expiringCertificatesMessage, machineCounts, operationCounts, operationsLine } from './overview.ts'
+import { attentionItems, clusterIsReady, clusterStatus, expiringCertificatesMessage, machineCounts } from './overview.ts'
 
-test('clusterReadiness uses Ready when there is one, else steady and not unhealthy', () => {
-  const ready = (status: string) => [{ type: 'Ready', status }]
-  assert.deepEqual(clusterReadiness([ready('True'), ready('True')]), { total: 2, ready: 2 })
-  assert.deepEqual(clusterReadiness([ready('True'), ready('False'), ready('Unknown')]), { total: 3, ready: 1 })
-  assert.deepEqual(clusterReadiness([]), { total: 0, ready: 0 })
-  // No Ready condition: a steady cluster counts, a transitioning or unhealthy one does not.
+test('clusterIsReady uses Ready when there is one, else steady and not unhealthy', () => {
+  assert.equal(clusterIsReady([{ type: 'Ready', status: 'True' }]), true)
+  assert.equal(clusterIsReady([{ type: 'Ready', status: 'Unknown' }]), false)
   assert.equal(clusterIsReady([{ type: 'Transitioning', status: 'False' }]), true)
   assert.equal(clusterIsReady([]), true)
   assert.equal(clusterIsReady([{ type: 'Transitioning', status: 'True' }]), false)
   assert.equal(clusterIsReady([{ type: 'Available', status: 'False' }]), false)
 })
 
-test('operationsLine says what a person wants to know first', () => {
-  const c = (o: Partial<ReturnType<typeof operationCounts>>) => ({ total: 4, running: 0, failed: 0, paused: 0, done: 4, ...o })
-  assert.deepEqual(operationsLine(c({})), ['allCompleted'])
-  assert.deepEqual(operationsLine(c({ total: 0, done: 0 })), ['none'])
-  assert.deepEqual(operationsLine(c({ running: 2 })), ['running'])
-  assert.deepEqual(operationsLine(c({ running: 1, failed: 1, paused: 1 })), ['running', 'failed', 'paused'])
+test('clusterStatus: upgrading beats ready and degraded', () => {
+  const ready = [{ type: 'Ready', status: 'True' }]
+  const down = [{ type: 'Ready', status: 'False' }]
+  assert.equal(clusterStatus(ready, false, false), 'ready')
+  assert.equal(clusterStatus(down, false, false), 'degraded')
+  assert.equal(clusterStatus(down, true, false), 'upgrading')
+  assert.equal(clusterStatus(ready, false, true), 'upgrading')
+})
+
+test('attentionItems lists only what applies', () => {
+  assert.deepEqual(attentionItems({ conditions: [], pending: 0, configWaiting: 0, opState: 'running' }), [])
+  const conds = [
+    { type: 'CertificatesExpiring', status: 'True', message: 'etcd CA expires' },
+    { type: 'BundleBackupStale', status: 'True', message: 'bundle is old' },
+  ]
+  assert.deepEqual(attentionItems({ conditions: conds, pending: 2, configWaiting: 1, opState: 'failed' }), [
+    { kind: 'opFailed' },
+    { kind: 'certs', message: 'etcd CA expires' },
+    { kind: 'backupStale', message: 'bundle is old' },
+    { kind: 'pending', count: 2 },
+    { kind: 'config', count: 1 },
+  ])
+  assert.deepEqual(attentionItems({ conditions: [{ type: 'BundleBackupStale', status: 'False' }], pending: 0, configWaiting: 0, opState: 'paused' }), [{ kind: 'opPaused' }])
 })
 
 test('machineCounts splits by approval and readiness', () => {
@@ -31,11 +45,6 @@ test('machineCounts splits by approval and readiness', () => {
     { approval: 'rejected', ready: '' },
   ])
   assert.deepEqual(c, { total: 5, ready: 1, notReady: 1, unknown: 1, pending: 1, rejected: 1 })
-})
-
-test('operationCounts counts running, paused, failed and done', () => {
-  const c = operationCounts(['running', 'running', 'failed', 'done', 'paused', 'pending'])
-  assert.deepEqual(c, { total: 6, running: 2, failed: 1, paused: 1, done: 1 })
 })
 
 test('expiringCertificatesMessage returns the message only while CertificatesExpiring is True', () => {

@@ -150,6 +150,7 @@ Each is one PR, with the listed tests, and scaffolded with the tools named in CL
 
 - Unit 2: the `audience` parameter (only `ichor-kube` or `ichor-ui`; `ichor-ui` client only `ichor-ui`) is accepted on the authorize request and on the refresh request. It is carried in the code and in the refresh token, so a refresh without the parameter keeps the audience chosen at login; absent everywhere, `ichor-ui` client gets `ichor-ui` and `ichor-cli` gets `ichor-kube`. A refresh grant returns no new refresh token (not rotated).
 - Unit 2: the kube-apiserver authenticator uses go-oidc v2.5.0, not v3 as the ADR cites for rotation: it refetches the JWKS on an unknown `kid` only after the cache expiry given by the response headers. Discovery and JWKS are therefore served with `Cache-Control: no-cache` (no positive max-age), which makes rotation pickup immediate; a test pins it.
+- Unit 2/3 integration: the issuer reads the controller's `keys.json` (`{"v":1,"keys":[...]}`, `internal/oidctrust`) through the shared `oidctrust.ParseKeys`, `Signing` and `Published`; it has no format of its own. Keys are PKCS#8 only. The retire boundary is the controller's: a key is dropped at `retireAfter` exactly, not after it. A test feeds the issuer a document made by the controller's own rotation code.
 
 ## Amendment: Hardware results
 

@@ -7,6 +7,9 @@
 // CLICK="Button text" clicks that button first (to show a dialog); never use it on a button that writes.
 // SCROLLTO=id scrolls that element to the top first (use with FULL unset).
 // FULL=1 captures the whole page height (up to 4000px), not just the viewport.
+// WAIT=ms is a cap (default 20000), not a fixed delay: after each navigate, CLICK and SCROLLTO the
+// script polls until the page is loaded and shows no "Loading" text, skeleton or aria-busy element,
+// then waits 300 ms for paint. If the cap is hit it says so on stderr and shoots anyway.
 // Paths default to the list pages. Read-only: it only navigates (GET).
 import { spawn } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
@@ -24,6 +27,9 @@ const sizes = [
   ['phone', 390, 844, true],
 ]
 const themes = ['light', 'dark']
+const cap = Number(process.env.WAIT ?? 20000)
+// True while the page is still loading: document not complete, "Loading…" text (common.loading and the per-page keys), a skeleton or an aria-busy element.
+const LOADING = `document.readyState !== 'complete' || document.body.innerText.includes('Loading') || document.querySelector('[data-slot="skeleton"], [aria-busy="true"]') !== null`
 const port = 9300 + Math.floor(Math.random() * 500)
 mkdirSync(outDir, { recursive: true })
 
@@ -59,6 +65,18 @@ try {
   const { sessionId } = await send('Target.attachToTarget', { targetId, flatten: true })
   const s = (m, p) => send(m, p, sessionId)
   await s('Page.enable')
+  // settle polls until nothing is loading (LOADING), capped at WAIT ms, then waits for paint.
+  const settle = async (label) => {
+    const deadline = Date.now() + cap
+    while ((await s('Runtime.evaluate', { expression: LOADING, returnByValue: true })).result?.value) {
+      if (Date.now() >= deadline) {
+        console.error(`ui-shots: ${label} still loading after ${cap} ms (WAIT cap); shooting anyway`)
+        break
+      }
+      await sleep(200)
+    }
+    await sleep(300)
+  }
 
   for (const p of paths) {
     for (const [sizeName, width, height, mobile] of sizes) {
@@ -69,16 +87,16 @@ try {
           source: `try{localStorage.setItem('ichor-ui-theme','${theme}')}catch(e){}`,
         })
         await s('Page.navigate', { url: new URL(p, base).href })
-        await sleep(Number(process.env.WAIT ?? 3500)) // data fetches and the skeleton settle (WAIT=ms for slow pages)
+        await settle(`${p} ${sizeName} ${theme}`)
         if (process.env.CLICK) {
           // CLICK="Shut down cluster" opens a dialog before the shot; it clicks the first button with that exact text.
           const expr = `(() => { const b = [...document.querySelectorAll('button')].find((x) => x.textContent.trim() === ${JSON.stringify(process.env.CLICK)}); if (b) b.click(); return !!b })()`
           await s('Runtime.evaluate', { expression: expr })
-          await sleep(800)
+          await settle(`${p} ${sizeName} ${theme} after CLICK`)
         }
         if (process.env.SCROLLTO) {
           await s('Runtime.evaluate', { expression: `document.getElementById(${JSON.stringify(process.env.SCROLLTO)})?.scrollIntoView()` })
-          await sleep(1500)
+          await settle(`${p} ${sizeName} ${theme} after SCROLLTO`)
         }
         const shot = { format: 'png' }
         if (process.env.FULL) {

@@ -186,7 +186,9 @@ func TestMonitoringOptionsEnabled(t *testing.T) {
 		t.Fatalf("helm template ichor . --set prometheus.rules.enabled=true: expected a "+
 			"PrometheusRule named %q; see docs/adr/0040", ruleName)
 	}
-	wantAlerts := map[string]bool{"IchorControllerDown": false, "IchorReconcileErrorsPersisting": false, "IchorCertificateExpiring": false}
+	wantAlerts := map[string]bool{
+		"IchorControllerDown": false, "IchorReconcileErrorsPersisting": false, "IchorCertificateExpiring": false,
+	}
 	spec, _ := rule["spec"].(map[string]any)
 	groups, _ := spec["groups"].([]any)
 	for _, g := range groups {

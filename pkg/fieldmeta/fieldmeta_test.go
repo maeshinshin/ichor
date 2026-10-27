@@ -128,6 +128,10 @@ func TestAssess_Rules(t *testing.T) {
 			nonMatch: pathClusterProxyDisabled,
 		},
 		{name: "cluster.scheduler is safe", match: "cluster.scheduler.extraArgs", nonMatch: pathClusterProxyDisabled},
+		{
+			name: "KubeAuthenticationConfig is safe", match: "KubeAuthenticationConfig.configuration.jwt",
+			nonMatch: "KubeletConfig.image",
+		},
 		{name: "LinkConfig is safe", match: "LinkConfig.addresses", nonMatch: pathLinkAliasSelector},
 		{name: "VLANConfig is safe", match: "VLANConfig.vlanID", nonMatch: pathLinkAliasSelector},
 		{name: "DHCPv4Config is safe", match: "DHCPv4Config.routeMetric", nonMatch: pathLinkAliasSelector},

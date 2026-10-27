@@ -139,11 +139,16 @@ const reasonNodeStillHasClusterCredentials = "NodeStillHasClusterCredentials"
 // as a trusted etcd member, but it is not safe to repurpose or discard
 // either.
 const nodeStillHasClusterCredentialsMessage = "control plane %q was removed from etcd, but its physical node was never reset " +
-	"and still holds this cluster's PKI; it cannot rejoin etcd, but do not repurpose or discard the hardware until it is reset"
+	"and still holds this cluster's PKI; it cannot rejoin etcd, but do not repurpose or discard the hardware until it is reset. " +
+	nodeObjectStaysNote
 
 // workerStillHasClusterCredentialsMessage is the worker form: it was never an etcd member.
 const workerStillHasClusterCredentialsMessage = "worker %q was removed, but its physical node was never reset " +
-	"and still holds this cluster's PKI; do not repurpose or discard the hardware until it is reset"
+	"and still holds this cluster's PKI; do not repurpose or discard the hardware until it is reset. " +
+	nodeObjectStaysNote
+
+// nodeObjectStaysNote: the Kubernetes Node is not deleted, because the running kubelet would register it again.
+const nodeObjectStaysNote = "The Kubernetes Node stays while the machine runs; power it off or reset it, then delete the Node with kubectl delete node %[1]s"
 
 // conditionTransitioning and its two reasons implement
 // docs/design/architecture.md's "Nodes" section: "Even counts are allowed

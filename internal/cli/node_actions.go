@@ -163,7 +163,14 @@ func runNodeAction(ctx context.Context, c *apiClients, in io.Reader, out, errw i
 			return err
 		}
 
-		return writeMessage(out, outputFormat, resp.Msg)
+		if err := writeMessage(out, outputFormat, resp.Msg); err != nil {
+			return err
+		}
+
+		_, _ = fmt.Fprintf(errw, "Next: the Kubernetes Node stays while the machine runs (its kubelet keeps the cluster's credentials).\n"+
+			"Power it off or reset it (`ichor node reset`, break-glass), then delete the Node: `kubectl delete node %s`.\n", s.Machine)
+
+		return nil
 	}
 
 	resp, err := c.Operation.CreateOperation(ctx, connect.NewRequest(&pb.CreateOperationRequest{

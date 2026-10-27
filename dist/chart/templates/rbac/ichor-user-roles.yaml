@@ -201,6 +201,8 @@ rules:
   resources:
   - ichorusers/password
   - talosclusters/authentication
+  - talosclusters/secret-references
+  - talosetcdbackups/secret-references
   verbs:
   - update
 - apiGroups:

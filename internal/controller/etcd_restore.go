@@ -39,7 +39,6 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
@@ -80,29 +79,6 @@ const (
 	// reset of a node with stale etcd data was last sent.
 	staleWipeConditionPrefix = "StaleWipeSent-"
 )
-
-// rateGate lets a key through at most once per interval. The zero value is ready to use.
-type rateGate struct {
-	mu sync.Mutex
-	at map[string]time.Time
-}
-
-func (g *rateGate) allow(key string, every time.Duration) bool {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-
-	if g.at == nil {
-		g.at = map[string]time.Time{}
-	}
-
-	if last, ok := g.at[key]; ok && time.Since(last) < every {
-		return false
-	}
-
-	g.at[key] = time.Now()
-
-	return true
-}
 
 // etcdRestoreStepRank orders the steps; a marker and a status are compared by it.
 func etcdRestoreStepRank(step string) int {
@@ -870,11 +846,6 @@ func (run *restoreRun) wipeIfStale(ctx context.Context, cp *ichorv1alpha1.TalosM
 
 	present, err := c.EtcdDataPresent(dialCtx)
 	if err != nil || !present {
-		return
-	}
-
-	key := run.op.Namespace + "/" + run.op.Name + "/" + cp.Name
-	if !r.staleWipes.allow(key, etcdRestoreResendAfter) {
 		return
 	}
 

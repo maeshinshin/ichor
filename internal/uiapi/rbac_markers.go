@@ -116,3 +116,11 @@ package uiapi
 // with a SelfSubjectAccessReview as the caller, and is granted to nobody here: the chart grants it to
 // groups (or, only if the operator says so, to this ServiceAccount) from its values. The Event that
 // audits each download needs the events create rule above.
+
+// Ichor users, in ichor-system only. The per-RPC re-read of the signed-in IchorUser
+// is a get with the ServiceAccount. The password hashes live in one Secret that the backend patches
+// after a SelfSubjectAccessReview as the caller: get, update, patch on that name and no other, never
+// create (the chart makes the Secret) and never list. The user CRs themselves are written as the
+// caller, so the ServiceAccount needs nothing more on ichorusers.
+// +kubebuilder:rbac:groups=ichor.maesh.dev,namespace=ichor-system,resources=ichorusers,verbs=get
+// +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,resourceNames=ichor-user-credentials,verbs=get;update;patch

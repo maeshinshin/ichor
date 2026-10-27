@@ -122,6 +122,12 @@ type TalosOperationReconciler struct {
 	// Event (nil skips the Event, not the condition).
 	NodesReady NodesReadyFunc
 	Recorder   record.EventRecorder
+	// RootCAPublished and ClientSettleDelay keep the Dropping stage from starting while in-cluster
+	// clients still hold the old CA (ca_rotation.go): the first reads which namespaces' kube-root-ca.crt
+	// lacks the new Kubernetes CA (nil skips the check), the second is how long pods then get to
+	// pick up the projected file (0 means caClientSettleDelay).
+	RootCAPublished   RootCAPublishedFunc
+	ClientSettleDelay time.Duration
 
 	// KubeClient, Evacuator serve the node kind alone (node_action.go): KubeClient
 	// cordons, drains and reads Node readiness live (nil skips the drain and reads the cache),

@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -219,10 +220,15 @@ type caRotFixture struct {
 	// holdHandoff keeps step from acknowledging the credential hand-off, as an operator who has not
 	// run the CLI yet.
 	holdHandoff bool
+	// rootCAStale is what the fake kube-root-ca.crt check reports; rootCAChecks the fingerprints
+	// it was asked about; settleDelay the reconciler's ClientSettleDelay (0 is the real default).
+	rootCAStale  []string
+	rootCAChecks []string
+	settleDelay  time.Duration
 }
 
 func newCARotFixture() *caRotFixture {
-	f := &caRotFixture{recorder: record.NewFakeRecorder(100)}
+	f := &caRotFixture{recorder: record.NewFakeRecorder(100), settleDelay: time.Nanosecond}
 	f.old = newTestBundle("v1.14")
 	f.secret = newTestSecret(f.old)
 	f.cluster = newTestClusterWithCount(3, f.secret.Name)
@@ -256,6 +262,12 @@ func (f *caRotFixture) newReconciler() *TalosOperationReconciler {
 			return f.world.notReady, nil
 		},
 		Recorder: f.recorder,
+		RootCAPublished: func(_ context.Context, _ TalosClient, fp string) ([]string, error) {
+			f.rootCAChecks = append(f.rootCAChecks, fp)
+
+			return f.rootCAStale, nil
+		},
+		ClientSettleDelay: f.settleDelay,
 	}
 }
 
@@ -678,6 +690,32 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 		// It resumes by itself once the machine answers again.
 		delete(f.world.versionErr, victim)
 		f.runUntil(op, completed)
+	})
+
+	It("does not drop the old CAs until kube-root-ca.crt carries the new Kubernetes CA, then lets pods settle", func() {
+		f := newCARotFixture()
+		f.rootCAStale = []string{"argocd", "kube-system"}
+		op := f.newOp()
+
+		op, _ = f.runUntil(op, atStage(ichorv1alpha1.CARotationStageIssuing))
+		for range 8 {
+			op = f.step(op)
+		}
+
+		Expect(stageOf(op)).To(Equal(ichorv1alpha1.CARotationStageIssuing), "Dropping started while pods lack the new CA")
+		cond := apimeta.FindStatusCondition(op.Status.Conditions, conditionCARotation)
+		Expect(cond.Message).To(ContainSubstring("kube-root-ca.crt"))
+		Expect(cond.Message).To(ContainSubstring("argocd"))
+		Expect(f.rootCAChecks).NotTo(BeEmpty())
+		Expect(f.rootCAChecks[0]).To(Equal(op.Status.CARotation.Certificates[1].Next), "asked about the new Kubernetes CA")
+
+		f.rootCAStale = nil
+		op = f.step(op)
+		Expect(stageOf(op)).To(Equal(ichorv1alpha1.CARotationStageIssuing), "the settle time must pass before Dropping")
+		Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionCARotation).Reason).To(Equal(reasonCARotationSettling))
+
+		op, _ = f.runUntil(op, completed)
+		Expect(stageOf(op)).To(Equal(ichorv1alpha1.CARotationStageDone))
 	})
 
 	It("does not advance while a Kubernetes Node is not Ready", func() {

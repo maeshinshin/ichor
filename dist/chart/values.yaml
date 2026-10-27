@@ -223,6 +223,17 @@ ichorUI:
       users: []
       groups: []
 
+  ## Ichor's own users. Off by default. This unit ships only the built-in roles:
+  ## ClusterRoles ichor-viewer, ichor-operator and ichor-admin bound to the groups ichor:viewer,
+  ## ichor:operator and ichor:admin, plus a Role in the release namespace for `ichor ui`.
+  ##
+  users:
+    enabled: false
+    ## Built-in role names (viewer, operator, admin) whose group is also bound to cluster-admin.
+    ## Empty by default. Doing so lets those users read the secrets bundle, which holds the Talos
+    ## credentials.
+    clusterAdminRoles: []
+
   ## Who may download a support bundle, an etcd snapshot or a packet capture from a node. Each file can hold secrets: the etcd snapshot holds every Kubernetes
   ## Secret. Nobody may by default, including ichor-ui's own ServiceAccount, so with OIDC off
   ## the downloads are refused. Ichor checks the "download" verb on talosmachines/support-bundle,

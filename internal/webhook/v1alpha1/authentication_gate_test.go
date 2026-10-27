@@ -28,6 +28,12 @@ import (
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
 )
 
+const (
+	kindClusterRole = "ClusterRole"
+	kindUser        = "User"
+	verbGet         = "get"
+)
+
 // bindRole binds a ClusterRole with rules to the user (the webhook asks real RBAC, as in
 // grantOperationRights).
 func bindRole(name, user string, rules ...rbacv1.PolicyRule) {
@@ -35,8 +41,8 @@ func bindRole(name, user string, rules ...rbacv1.PolicyRule) {
 	Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, role))).To(Succeed())
 	Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, &rbacv1.ClusterRoleBinding{
 		Name:     name,
-		RoleRef:  rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: name},
-		Subjects: []rbacv1.Subject{{APIGroup: rbacv1.GroupName, Kind: "User", Name: user}},
+		RoleRef:  rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: kindClusterRole, Name: name},
+		Subjects: []rbacv1.Subject{{APIGroup: rbacv1.GroupName, Kind: kindUser, Name: user}},
 	}))).To(Succeed())
 }
 
@@ -59,7 +65,7 @@ var _ = Describe("Authentication gate on TalosCluster", func() {
 
 	BeforeEach(func() {
 		clusters := []string{"talosclusters"}
-		get := rbacv1.PolicyRule{APIGroups: []string{ichorGroup}, Resources: clusters, Verbs: []string{"get", "update", "patch"}}
+		get := rbacv1.PolicyRule{APIGroups: []string{ichorGroup}, Resources: clusters, Verbs: []string{verbGet, "update", "patch"}}
 		bindRole("auth-gate-editor", editor, get)
 		bindRole("auth-gate-admin", authAdmin, get, rbacv1.PolicyRule{
 			APIGroups: []string{ichorGroup}, Resources: []string{"talosclusters/authentication"}, Verbs: []string{AuthenticationVerb},
@@ -166,7 +172,7 @@ var _ = Describe("Start gate on TalosOperation", func() {
 		return &ichorv1alpha1.TalosOperation{GenerateName: "start-", Namespace: testNamespace, Spec: spec}
 	}
 
-	create := rbacv1.PolicyRule{APIGroups: []string{ichorGroup}, Resources: []string{"talosoperations"}, Verbs: []string{"create", "get"}}
+	create := rbacv1.PolicyRule{APIGroups: []string{ichorGroup}, Resources: []string{"talosoperations"}, Verbs: []string{"create", verbGet}}
 
 	BeforeEach(func() {
 		bindRole("start-gate-creator", creator, create)

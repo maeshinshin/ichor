@@ -42,6 +42,7 @@ import (
 )
 
 const (
+	opCreate = "CREATE"
 	opUpdate = "UPDATE"
 	opDelete = "DELETE"
 )
@@ -403,7 +404,7 @@ func checkWebhookInvariants(t *testing.T, release string, docs []map[string]any)
 				// ADR 0085: and the creation of a node reset by hand.
 				"vbreakglassop-v1alpha1.kb.io": {"CREATE"},
 				// ADR 0094: a change to spec.authentication, on create and update.
-				"vauthentication-v1alpha1.kb.io": {"CREATE", opUpdate},
+				"vauthentication-v1alpha1.kb.io": {opCreate, opUpdate},
 			}[name]
 			if !reflect.DeepEqual(ops, want) {
 				t.Errorf("webhook %q: expected operations %v; see %s; got %v",

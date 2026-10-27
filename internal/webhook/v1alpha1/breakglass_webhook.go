@@ -42,6 +42,8 @@ import (
 // directly, or remove an Ichor finalizer from a deleting one (ADR 0065).
 const BreakGlassVerb = "break-glass"
 
+const opUpdate = "UPDATE"
+
 const (
 	breakGlassWebhookPath = "/validate-ichor-maesh-dev-v1alpha1-breakglass"
 	ichorFinalizerPrefix  = "ichor.maesh.dev/"
@@ -119,7 +121,7 @@ func (h *BreakGlassHandler) Handle(ctx context.Context, req admission.Request) a
 		return h.handleCluster(ctx, req)
 	}
 
-	if req.Operation != "UPDATE" && req.Operation != "DELETE" {
+	if req.Operation != opUpdate && req.Operation != "DELETE" {
 		return admission.Allowed("")
 	}
 
@@ -134,7 +136,7 @@ func (h *BreakGlassHandler) Handle(ctx context.Context, req admission.Request) a
 
 	removing := false
 
-	if req.Operation == "UPDATE" {
+	if req.Operation == opUpdate {
 		var updated unstructured.Unstructured
 		if err := json.Unmarshal(req.Object.Raw, &updated); err != nil {
 			return admission.Errored(http.StatusBadRequest, fmt.Errorf("decoding the new object: %w", err))
@@ -307,7 +309,7 @@ const (
 // the apiserver's own validation. A write that leaves spec.authentication as it was is not checked,
 // and the controller and GitOps engines (ExemptUsers) are never stopped.
 func (h *BreakGlassHandler) handleCluster(ctx context.Context, req admission.Request) admission.Response {
-	if (req.Operation != "CREATE" && req.Operation != "UPDATE") || slices.Contains(h.ExemptUsers, req.UserInfo.Username) {
+	if (req.Operation != "CREATE" && req.Operation != opUpdate) || slices.Contains(h.ExemptUsers, req.UserInfo.Username) {
 		return admission.Allowed("")
 	}
 
@@ -318,7 +320,7 @@ func (h *BreakGlassHandler) handleCluster(ctx context.Context, req admission.Req
 
 	var before *ichorv1alpha1.TalosClusterAuthentication
 
-	if req.Operation == "UPDATE" {
+	if req.Operation == opUpdate {
 		var old ichorv1alpha1.TalosCluster
 		if err := json.Unmarshal(req.OldObject.Raw, &old); err != nil {
 			return admission.Errored(http.StatusBadRequest, fmt.Errorf("decoding the stored cluster: %w", err))

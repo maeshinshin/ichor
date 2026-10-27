@@ -133,7 +133,7 @@ func pemBundleHolds(bundle []byte, fingerprint string) bool {
 		}
 
 		sum := sha256.Sum256(block.Bytes)
-		if block.Type == "CERTIFICATE" && hex.EncodeToString(sum[:]) == fingerprint {
+		if block.Type == pemTypeCertificate && hex.EncodeToString(sum[:]) == fingerprint {
 			return true
 		}
 	}

@@ -128,7 +128,7 @@ func newCA(now time.Time) (keyPair, error) {
 		return keyPair{}, err
 	}
 
-	return keyPair{pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), keyPEM}, nil
+	return keyPair{pem.EncodeToMemory(&pem.Block{Type: pemTypeCertificate, Bytes: der}), keyPEM}, nil
 }
 
 // caUsable reports whether the stored CA parses and has more than issuerCARenewBefore left.
@@ -221,7 +221,7 @@ func newLeaf(ca *x509.Certificate, caKey *rsa.PrivateKey, spec leafSpec, now tim
 		return keyPair{}, err
 	}
 
-	return keyPair{pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), keyPEM}, nil
+	return keyPair{pem.EncodeToMemory(&pem.Block{Type: pemTypeCertificate, Bytes: der}), keyPEM}, nil
 }
 
 // newSigningKey makes one RS256 key with an id derived from its public half.
@@ -353,3 +353,6 @@ func nextKeyEvent(ks oidctrust.Keys, now time.Time, plan rotationPlan) time.Time
 
 	return next
 }
+
+// pemTypeCertificate is the PEM block type of an X.509 certificate.
+const pemTypeCertificate = "CERTIFICATE"

@@ -269,7 +269,7 @@ function PlanView({ kind, plan, clusterName }: { kind: OpKind; plan: PlanOperati
           </ol>
           {kind === 'config' && (
             <ul class="mt-2 space-y-1">
-              {plan.machines.map((m) => (
+              {plan.machines.filter((m) => m.rebootFields.length > 0).map((m) => (
                 <li key={m.name}>{t('ops.plan.rebootFields', { name: m.name, fields: m.rebootFields.join(', ') })}</li>
               ))}
             </ul>
@@ -337,7 +337,7 @@ function effectText(t: ReturnType<typeof useT>, effect: number, kind: OpKind): s
     case OperationEffect.REBOOT:
       return t(kind === 'config' ? 'ops.plan.effectConfigReboot' : 'ops.plan.effectReboot')
     case OperationEffect.RESTART_COMPONENTS:
-      return t('ops.plan.effectRestart')
+      return t(kind === 'config' ? 'ops.plan.effectConfigRestart' : 'ops.plan.effectRestart')
     case OperationEffect.STOP:
       return t('ops.plan.effectStop')
     case OperationEffect.CA_ROTATION:

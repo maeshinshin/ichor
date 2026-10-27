@@ -33,6 +33,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/render"
+	"github.com/maeshinshin/ichor/pkg/storage"
 )
 
 const (
@@ -93,6 +94,14 @@ func newK8sNode(name string, ready bool) {
 	n.Status.NodeInfo.KubeletVersion = testK8sOld
 	n.Status.Conditions = []corev1.NodeCondition{{Type: corev1.NodeReady, Status: status}}
 	Expect(k8sClient.Status().Update(ctx, n)).To(Succeed())
+}
+
+// bareNode is a Node object for a fake clientset.
+func bareNode(name string) *corev1.Node {
+	n := &corev1.Node{}
+	n.Name = name
+
+	return n
 }
 
 // setK8sNode makes name's kubelet report kubeletVersion, Ready.
@@ -489,6 +498,75 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		Expect(fake.applyCalls).To(HaveLen(1))
 		Expect(admin.syncCalls).To(BeZero(), "bootstrap manifests are synced when the control planes finish, not per worker")
 		Expect(apimeta.IsStatusConditionTrue(fetchMachine(w).Status.Conditions, conditionKubernetesUpgrade)).To(BeFalse())
+	})
+
+	It("evacuates and drains a worker before rolling its kubelet, then uncordons and ends the evacuation", func() {
+		cluster := k8sCluster(testK8sTarget)
+		w := newK8sWorker(cluster.Name, "wdrain")
+		name := w.Spec.Hostname
+		newK8sNode(name, true)
+
+		hook, err := storage.NewEvacuationHook(storage.LonghornV1)
+		Expect(err).NotTo(HaveOccurred())
+
+		evacuator := &fakeStorageEvacuator{target: &evacuationTarget{hook: hook, timeout: time.Minute, namespace: defaultLonghornNamespace}}
+		kube := newDrainFake(func() int { return 0 }, bareNode(name))
+
+		fake := &fakeTalosClient{version: testTalosVersion, current: renderAt(cluster, w, testK8sOld)}
+		adv := newKubernetesAdvancer(fake, &fakeKubernetesAdmin{})
+		adv.Evacuator, adv.Kube = evacuator, kube
+		op := opAtStage(ichorv1alpha1.KubernetesStageKubelets)
+
+		done, err := adv.Advance(ctx, cluster, w, op)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(done).To(BeFalse())
+		Expect(evacuator.beginCalls).To(Equal(1))
+		Expect(fake.applyCalls).To(BeEmpty(), "the kubelet is not rolled before the evacuation finished")
+
+		done, err = adv.Advance(ctx, cluster, fetchMachine(w), op)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(done).To(BeFalse())
+		Expect(fake.applyCalls).To(HaveLen(1))
+		Expect(kube.node(name).Spec.Unschedulable).To(BeTrue(), "the node was cordoned before the roll")
+
+		fake.current = fake.applyCalls[0]
+		setK8sNode(name, testK8sTarget)
+
+		done, err = adv.Advance(ctx, cluster, fetchMachine(w), op)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(done).To(BeTrue())
+		Expect(kube.node(name).Spec.Unschedulable).To(BeFalse())
+		Expect(evacuator.endCalls).To(Equal(1))
+	})
+
+	It("does not roll a kubelet whose evacuation timed out, and leaves the node schedulable", func() {
+		cluster := k8sCluster(testK8sTarget)
+		w := newK8sWorker(cluster.Name, "wevac")
+		name := w.Spec.Hostname
+		newK8sNode(name, true)
+
+		hook, err := storage.NewEvacuationHook(storage.LonghornV1)
+		Expect(err).NotTo(HaveOccurred())
+
+		evacuator := &fakeStorageEvacuator{
+			target: &evacuationTarget{hook: hook, timeout: time.Nanosecond, namespace: defaultLonghornNamespace}, remaining: 2,
+		}
+		kube := newDrainFake(func() int { return 0 }, bareNode(name))
+
+		fake := &fakeTalosClient{version: testTalosVersion, current: renderAt(cluster, w, testK8sOld)}
+		adv := newKubernetesAdvancer(fake, &fakeKubernetesAdmin{})
+		adv.Evacuator, adv.Kube = evacuator, kube
+		op := opAtStage(ichorv1alpha1.KubernetesStageKubelets)
+
+		_, err = adv.Advance(ctx, cluster, w, op)
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = adv.Advance(ctx, cluster, fetchMachine(w), op)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("timed out"))
+		Expect(fake.applyCalls).To(BeEmpty())
+		Expect(evacuator.endCalls).To(Equal(1))
+		Expect(kube.node(name).Spec.Unschedulable).To(BeFalse())
 	})
 
 	It("records the applied marker even when something else wrote the machine's status during the long calls", func() {

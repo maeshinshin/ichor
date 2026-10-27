@@ -284,7 +284,7 @@ func (r *TalosOperationReconciler) requestStop(
 
 		changed = true
 
-		setMachineStatus(op, m.Name, ichorv1alpha1.TalosOperationMachinePhaseInProgress)
+		r.markMachine(op, m.Name, ichorv1alpha1.TalosOperationMachinePhaseInProgress)
 
 		talos, id, err := r.probe(ctx, cluster, m, bundle)
 		if err != nil {

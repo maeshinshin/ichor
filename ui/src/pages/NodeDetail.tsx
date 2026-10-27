@@ -31,7 +31,7 @@ import { nodeTabs, nodeTabSearch, parseNodeTab, type NodeTab } from '@/lib/nodeT
 import { setPageTitle, titleKey } from '@/lib/pageTitle'
 import { useCluster } from '@/lib/useCluster'
 import { useT } from '@/lib/useT'
-import { Link, objectRefPath } from '@/router'
+import { Link } from '@/router'
 
 type ErrorShape = { title: string; detail: string }
 
@@ -117,10 +117,10 @@ function NodePage({ namespace, name }: { namespace: string; name: string }) {
 
   // The breadcrumb shows the hostname instead of the UUID the URL carries.
   useEffect(() => {
-    const key = titleKey('nodes', namespace, name)
+    const key = titleKey('nodes', name)
     setPageTitle(key, machine?.hostname)
     return () => setPageTitle(key, undefined)
-  }, [namespace, name, machine?.hostname])
+  }, [name, machine?.hostname])
 
   if (error) return <ErrorAlert {...error} />
   if (!node) return <PageSkeleton label={t('node.loading')} />
@@ -156,7 +156,7 @@ function NodePage({ namespace, name }: { namespace: string; name: string }) {
           {
             label: t('col.cluster'),
             value: machine?.cluster ? (
-              <Link to={objectRefPath('/clusters', machine.cluster)} class="hover:underline">
+              <Link to={'/'} class="hover:underline">
                 {machine.cluster.name}
               </Link>
             ) : undefined,
@@ -169,7 +169,7 @@ function NodePage({ namespace, name }: { namespace: string; name: string }) {
           <>
             {machine?.cluster && (
               <Button asChild variant="outline" size="sm">
-                <Link to={objectRefPath('/clusters', machine.cluster)}>{t('node.openCluster')}</Link>
+                <Link to={'/'}>{t('node.openCluster')}</Link>
               </Button>
             )}
             {machine && (
@@ -297,7 +297,7 @@ function EffectiveConfigSection({ namespace, name }: { namespace: string; name: 
     <Section id="config" title={t('node.config')}>
         <p class="text-sm text-muted-foreground">
           {t('node.configIntroBefore')}
-          <Link to="/patches" class="underline">
+          <Link to="/config" class="underline">
             {t('node.configIntroLink')}
           </Link>
           {t('node.configIntroAfter')}

@@ -14,7 +14,7 @@ import { canRestore, canReview, snapshotChoices, type SnapshotChoice } from '@/l
 import { formatBytes, formatDate } from '@/lib/format'
 import { notifyDone } from '@/lib/notify'
 import { useT } from '@/lib/useT'
-import { navigate, objectRefPath } from '@/router'
+import { navigate } from '@/router'
 
 type ErrorShape = { title: string; detail: string }
 
@@ -99,7 +99,7 @@ export function RestoreDialog({ cluster, disabled = false }: { cluster: { namesp
       const res = await operationClient.createOperation(request(typed.trim()))
       reset(false)
       notifyDone(t('restore.started', { cluster: cluster.name }))
-      if (res.operation?.ref) navigate(objectRefPath('/operations', res.operation.ref))
+      if (res.operation?.ref) navigate(`/operations/${encodeURIComponent(res.operation.ref.name)}`)
     } catch (err) {
       setError(describeError(err))
     } finally {

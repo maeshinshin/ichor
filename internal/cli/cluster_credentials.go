@@ -97,6 +97,8 @@ it. 'ichor cluster rotate-ca' does all of this itself.`,
 			}
 		}
 
+		stale := false
+
 		if o.Bundle != "" {
 			// Best effort: without a cluster to compare with, the bundle is taken as it is.
 			var cluster ctrlclient.Client
@@ -104,7 +106,9 @@ it. 'ichor cluster rotate-ca' does all of this itself.`,
 				cluster = kc
 			}
 
-			if err := checkBundleCurrent(cmd.Context(), cluster, cmd.ErrOrStderr(), o.Bundle, req, o.Force); err != nil {
+			var err error
+
+			if stale, err = checkBundleCurrent(cmd.Context(), cluster, cmd.ErrOrStderr(), o.Bundle, req, o.Force); err != nil {
 				return err
 			}
 		}
@@ -113,6 +117,8 @@ it. 'ichor cluster rotate-ca' does all of this itself.`,
 		if err != nil {
 			return err
 		}
+
+		files.ForcedStaleBundle = stale
 
 		reportCredentials(cmd.ErrOrStderr(), files)
 
@@ -144,14 +150,14 @@ func defaultHandoffChecks() handoffChecks {
 // refuses to write credentials from it unless force is set. It needs the cluster to compare with:
 // with k8s nil, or when the cluster cannot be read, there is nothing to compare and it passes.
 func checkBundleCurrent(ctx context.Context, k8s ctrlclient.Client, errw io.Writer, bundleFile string,
-	req credentialRequest, force bool) error {
+	req credentialRequest, force bool) (stale bool, err error) {
 	if k8s == nil {
-		return nil
+		return false, nil
 	}
 
 	bundle, err := loadBundleFile(bundleFile)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	dctx, cancel := context.WithTimeout(ctx, apiConnectTimeout)
@@ -159,16 +165,16 @@ func checkBundleCurrent(ctx context.Context, k8s ctrlclient.Client, errw io.Writ
 
 	current, known := bundleMatchesCluster(dctx, k8s, req, bundle)
 	if !known || current {
-		return nil
+		return false, nil
 	}
 
 	_, _ = fmt.Fprintln(errw, "warning: "+staleBundleWarning)
 
 	if force {
-		return nil
+		return true, nil
 	}
 
-	return errors.New("refusing to write credentials from " + bundleFile + ": its CAs differ from the stored secrets bundle; " +
+	return false, errors.New("refusing to write credentials from " + bundleFile + ": its CAs differ from the stored secrets bundle; " +
 		"pass --force if the file is the current bundle (for example after a restore)")
 }
 
@@ -280,6 +286,10 @@ func acknowledgeWithChecks(
 // reportCredentials says where the files are and what to do with them. It never prints their content.
 func reportCredentials(w io.Writer, files *credentialFiles) {
 	trusts := "the cluster's CA"
+	if files.ForcedStaleBundle {
+		trusts = "the bundle's CAs, which differ from the stored ones"
+	}
+
 	if files.Dual {
 		trusts = "the old and the new CAs"
 	}

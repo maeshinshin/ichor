@@ -75,6 +75,8 @@ type credentialFiles struct {
 	Talosconfig string
 	// Dual is true when the files trust the old and the new CAs, which is the case during a rotation.
 	Dual bool
+	// ForcedStaleBundle is true when the CAs came from a bundle file found stale and used with --force.
+	ForcedStaleBundle bool
 }
 
 // writeCredentials writes the kubeconfig and talosconfig. With a cluster client (k8s) it reads the

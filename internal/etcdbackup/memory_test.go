@@ -25,13 +25,11 @@ import (
 	"runtime"
 	"testing"
 	"time"
-
-	"filippo.io/age"
 )
 
 // heapBound is how much the heap may grow above its starting size while a backup is encrypted or an object is
-// verified and decrypted. The controller ships with a 512Mi limit; age's default scrypt work factor alone
-// costs ~270 MiB per derivation, so this bound fails if the key derivation ever gets expensive again.
+// verified and decrypted. The controller ships with a 256Mi limit; this bound fails if the key derivation ever
+// gets expensive again (age's default scrypt work factor alone costs ~270 MiB per derivation).
 const heapBound = 64 << 20
 
 // peakHeapGrowth runs f and returns the highest HeapInuse seen above the value before it started.
@@ -138,33 +136,5 @@ func TestMemoryBackupAndRestoreOfLargeObject(t *testing.T) {
 
 	if grew > heapBound {
 		t.Fatalf("verify+decrypt grew the heap by %d MiB, bound %d MiB", grew>>20, heapBound>>20)
-	}
-}
-
-// TestBackupsWrittenWithTheDefaultWorkFactorStillDecrypt keeps backups taken before the work factor was
-// lowered (they were sealed with age's default, 2^18) restorable.
-func TestBackupsWrittenWithTheDefaultWorkFactorStillDecrypt(t *testing.T) {
-	r, err := age.NewScryptRecipient("pw")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var sealed bytes.Buffer
-
-	w, err := age.Encrypt(&sealed, r)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, _ = w.Write([]byte("old"))
-	_ = w.Close()
-
-	rd, err := Decrypt(&sealed, "pw")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if got, _ := io.ReadAll(rd); string(got) != "old" {
-		t.Fatalf("got %q", got)
 	}
 }

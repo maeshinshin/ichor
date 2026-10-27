@@ -402,8 +402,9 @@ func checkWebhookInvariants(t *testing.T, release string, docs []map[string]any)
 				"vbreakglass-v1alpha1.kb.io": {opUpdate, opDelete},
 				// And the creation of a node reset by hand.
 				"vbreakglassop-v1alpha1.kb.io": {"CREATE"},
-				// A change to spec.authentication, on create and update.
-				"vauthentication-v1alpha1.kb.io": {opCreate, opUpdate},
+				// A change to spec.authentication, on create and update: and the
+				// delete of a tracked cluster.
+				"vauthentication-v1alpha1.kb.io": {opCreate, opUpdate, opDelete},
 				"vsecretrefs-v1alpha1.kb.io":     {opCreate, opUpdate},
 			}[name]
 			if !reflect.DeepEqual(ops, want) {

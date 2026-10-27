@@ -181,9 +181,12 @@ Three things went wrong; each is now handled and tested.
    machines to reconcile, it now also deletes the kube-proxy pods of every node that is not a control plane
    (control planes are wiped and reboot, so their pods start fresh): found through the `kube-proxy` DaemonSet's own
    selector, in `kube-system` only, and deleted one by one by name. Best effort and logged. A cluster without
-   the DaemonSet (kube-proxy replaced by the CNI) is left alone. The CNI's pods are deliberately not restarted:
-   nothing was seen failing, and restarting an agent such as Cilium's drops datapath state on every node; if a CNI is
-   seen to keep stale state after a restore, add its DaemonSet next to kube-proxy.
+   the DaemonSet (kube-proxy replaced by the CNI) is left alone. Amended: the CNI's pods (the `cilium` or
+   `kube-flannel` DaemonSet, found by name as the kube-proxy switch finds Cilium) are now replaced the same way. Ichor
+   still does not install or operate the CNI; a one-time pod restart after a restore, so that its agent drops state
+   cached from the old cluster, is in scope, at the cost of a brief datapath reset on those nodes. The wipe rate limit
+   (above) is also kept in the operation's status (a `StaleWipeSent-<machine>` condition), so a restarted controller
+   does not repeat a reset that is underway.
    *The controller's own caches.* The rollback is preceded by the loss of the API, which stops the manager (leader
    election) and the process; the replacement process starts with empty informers against the returned API, so no
    cache outlives the rewind in the designed path. A manager that somehow stays up across the rewind relies on

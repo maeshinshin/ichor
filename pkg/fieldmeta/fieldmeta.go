@@ -132,9 +132,19 @@ var rules = []rule{
 	// certSANs, admissionControl, auditPolicy, env, resources, extraVolumes, image) ends up in the
 	// kube-apiserver pod spec, its secrets or its config files, and a change recreates that pod. It is
 	// therefore an apiServerRestart, not safe (audit below, next to KubeAuthenticationConfig).
+	//
+	// These are the only spelling a pre-1.14 contract has (the Kube*Config documents are the 1.14
+	// form of the same settings; control_plane.go reads both through one config provider), so the
+	// class applies to them whatever the pinned contract is. Their .image fields carry the same
+	// carve-out as the documents' below: the Kubernetes upgrade executor owns the image,
+	// so cluster.apiServer.image stays reboot-required instead of being applied by the machine
+	// controller or the config operation when spec.kubernetesVersion changes.
 	{prefix: "cluster.apiServer", apiServerRestart: true},
+	{prefix: "cluster.apiServer.image"},
 	{prefix: "cluster.controllerManager", safe: true},
+	{prefix: "cluster.controllerManager.image"},
 	{prefix: "cluster.scheduler", safe: true},
+	{prefix: "cluster.scheduler.image"},
 
 	// VolumeConfig.provisioning (which disk a system volume -- STATE or
 	// EPHEMERAL -- lives on, and its min/max size) is install-time-only,
@@ -188,6 +198,12 @@ var rules = []rule{
 	// RegistryConfig.RegistryAuth is stale.'s addendum has the file:line
 	// references. The legacy path is keyed by a host that contains dots, so the rule
 	// is the whole machine.registries.config subtree.
+	// Re-verified in the same source: files/cri_config.go renders auth into the CRIConfig
+	// EtcFileSpec (containerd.GenerateCRIConfig) and TLS into hosts.toml
+	// (containerd.GenerateHosts: ca, skip_verify, client identity); files/etcfile.go copies the
+	// spec version into the EtcFileStatus, and cri/service.go reconcile stops and starts the CRI
+	// service when that version changes. That restart is Talos 1.14.3 behaviour; no older source
+	// is vendored to compare against.
 	{prefix: "machine.registries.mirrors", safe: true},
 	{prefix: "machine.registries.config", safe: true},
 	{prefix: "RegistryMirrorConfig", safe: true},

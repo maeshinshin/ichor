@@ -109,6 +109,7 @@ rules:
   - ichor.maesh.dev
   resources:
   - ichorinstallations
+  - ichorusers
   - talosclusters
   - talosconfigpatches
   - talosetcdbackups
@@ -140,6 +141,7 @@ rules:
   - ichor.maesh.dev
   resources:
   - ichorinstallations/status
+  - ichorusers/status
   - talosclusters/status
   - talosetcdbackups/status
   - talosmachines/status

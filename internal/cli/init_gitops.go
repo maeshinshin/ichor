@@ -179,6 +179,21 @@ func initArgoCD(
 		}
 	}
 
+	if opts.Kokumi {
+		// The Secret holds no credential; the skeleton is unchanged
+		// (nothing Ichor writes moves to Kokumi, and the Cilium Application stays
+		// a plain Argo CD Application so it keeps ignoreDifferences).
+		if err := k8sClient.Create(ctx, buildKokumiRepoCredsSecret(opts.ArgoCDNamespace)); err != nil {
+			_, _ = fmt.Fprintf(warn,
+				"init: warning: could not create the Kokumi repo-creds Secret in namespace %q: %v\n", opts.ArgoCDNamespace, err)
+		}
+
+		_, _ = fmt.Fprintf(warn,
+			"init: --kokumi prepared the Argo CD repo-creds Secret for Kokumi's registry, but did NOT install Kokumi "+
+				"(release %s; apply its install.yaml yourself after Argo CD). Ichor's own Applications, "+
+				"including Cilium, are still delivered from the repository by the root Application.\n", kokumiVersion)
+	}
+
 	if opts.GitOpsDir == "" {
 		return nil
 	}

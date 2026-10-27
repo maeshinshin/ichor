@@ -1,8 +1,8 @@
 # 0048. Kokumi is an option of `ichor init`'s Argo CD hand-off, designed now and built later
 
-Status: Proposed · Date: 2026-10-26 · Design section: GitOps and Argo CD
+Status: Accepted (implemented 2026-10-27) · Date: 2026-10-26 · Design section: GitOps and Argo CD
 
-Decided: Kokumi is selectable in `ichor init`'s Argo CD setup (prepares the OCI repo-creds Secret, installs neither Kokumi nor Argo CD); recorded as design only, implementation deferred
+Decided: `ichor init --argocd --kokumi` prepares the OCI repo-creds Secret, installs neither Kokumi nor Argo CD, and leaves the repository skeleton (including the Cilium Application) unchanged; `ichor images list --kokumi` names Kokumi 0.17.0's images
 
 ## Context
 
@@ -36,7 +36,7 @@ Argo CD"):
   unchanged.
 - Flag name (`--delivery kokumi` is a placeholder) is left to implementation.
 
-## Why implementation is deferred
+## Why the first cut left implementation out
 
 Reconciling the design against the code turned up gaps that matter more than
 a new option, and they should be filled first so Kokumi is not built on top
@@ -66,6 +66,52 @@ surface that has to be re-verified.
 
 ## Consequences
 
-- No code changes now; `init --argocd` behaves as ADR 0019 describes.
-- When built, `ichor images list` needs a Kokumi section only if Kokumi's
+- Without `--kokumi`, `init --argocd` behaves as ADR 0019 describes.
+- `ichor images list --kokumi` prints Kokumi's images (see Implementation); it needed a section only if Kokumi's
   images are shown to be mirrorable through the existing path.
+
+## Implementation (2026-10-27)
+
+Accepted and built, in the narrow form the Decision above describes.
+
+- Source confirmed: github.com/kokumi-dev/kokumi, release 0.17.0 (2026-10-11,
+  latest at the time), one asset `install.yaml` (sha256
+  `345223726800ca3f08f633c76c91a38265bc0c131551b24dc49c69ee0cd7b840`). Its CRDs
+  are in `delivery.kokumi.dev` (Approval, Kitchen, Menu, Order, Pantry,
+  Preparation, Recipe, Serving); everything runs in namespace `kokumi`. The
+  pinned version lives in `internal/cli/kokumi.go` (`kokumiVersion`).
+- Flag: `ichor init --argocd --kokumi` (`--kokumi` without `--argocd` is
+  refused before anything happens). The old `--delivery kokumi` placeholder was
+  not used: this is a boolean refinement of `--argocd`, not a choice among
+  delivery kinds.
+- What it does: creates the Secret `kokumi-registry-repo-creds` in
+  `--argocd-namespace` (`argocd.argoproj.io/secret-type: repo-creds`, `type:
+  oci`, `url: oci://kokumi-registry.kokumi.svc.cluster.local:5000`,
+  `insecureOCIForceHttp: "true"`; the service name and port 5000 were checked
+  in 0.17.0's install.yaml). Soft-fail like the repository Secret. It prints
+  that Kokumi was not installed.
+- What it does not do: the repository skeleton is byte-identical with and
+  without `--kokumi` (tested). Ichor writes no Kokumi CRs (Kitchen, Menu, Order,
+  Serving...) and moves none of its own CRs behind Kokumi. This is the
+  conservative answer to the root-Application coexistence unknown: the root
+  Application keeps delivering everything Ichor generates.
+- Cilium: the Cilium Application stays a plain Argo CD Application in the
+  repository (`apps/cni/application.yaml`, delivered by the root Application),
+  so it keeps `ignoreDifferences` and `ServerSideApply=true` (ADR 0055). Kokumi
+  never delivers Cilium, which removes the open question rather than answering
+  the `argocd-cm` route. A user who delivers other things through Kokumi is
+  unaffected.
+- Air gap: Kokumi 0.17.0's install.yaml runs two images, listed by `ichor images
+  list --kokumi` under `kokumiImages` with their upstream registries (not
+  rewritten by `--image-registry`): `ghcr.io/kokumi-dev/kokumi:0.17.0` (operator
+  and server) and `docker.io/library/registry:3.1.2@sha256:ddf75434...`. Images
+  referenced in Orders/Recipes at runtime are the user's and not listed.
+- `gitops export` and `gitops handoff` are unchanged: Kokumi-created
+  Applications are ordinary Argo CD Applications and tracking detection is
+  untouched.
+
+Deferred: delivering any Ichor CR through Kokumi; the Argo CD >= 3.3 check and
+Kubernetes >= 1.26 check; testing against a real cluster (not done, no cluster
+was touched); a TLS or authenticated Kokumi registry (the Secret assumes the
+bundled plain-HTTP one); tracking Kokumi upgrades past 0.17.0 (v1alpha1,
+experimental).

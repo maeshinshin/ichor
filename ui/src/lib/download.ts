@@ -2,7 +2,8 @@
 // authenticated transport as every other call (so the bearer token travels in a header, not a cookie, and
 // a cross-site request cannot start one), and are saved through a temporary object URL. Kept out of
 // diagnostics.ts because it needs the DOM.
-import { diagnosticsClient, operationClient } from '@/lib/connect'
+import { diagnosticsClient, operationClient, userClient } from '@/lib/connect'
+import { downloadName } from '@/lib/users'
 import { collect, fileNameOf, type Chunk } from '@/lib/diagnostics'
 import type { CapturePacketsRequest } from '@/gen/ichor/v1alpha1/diagnostics_pb'
 
@@ -39,6 +40,21 @@ export async function download(req: DownloadRequest, signal: AbortSignal): Promi
   const got = await collect(chunksOf(open(req, signal)))
   const name = fileNameOf(got, req.kind)
   const url = URL.createObjectURL(new Blob(got.parts, { type: got.contentType }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = name
+  document.body.append(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  return name
+}
+
+// The caller's own kubeconfig: public data only, saved as a text file.
+export async function downloadKubeconfig(): Promise<string> {
+  const res = await userClient.getMyKubeconfig({})
+  const name = downloadName(res.filename, 'kubeconfig.yaml')
+  const url = URL.createObjectURL(new Blob([res.kubeconfig], { type: 'application/yaml' }))
   const a = document.createElement('a')
   a.href = url
   a.download = name

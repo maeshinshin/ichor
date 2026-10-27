@@ -18,6 +18,7 @@ const top: Record<string, Key> = {
   '/patches': 'nav.patches',
   '/operations': 'nav.operations',
   '/gitops': 'nav.gitops',
+  '/users': 'nav.users',
 }
 
 // breadcrumbsFor maps a route path to the trail shown in the top bar. Pure so

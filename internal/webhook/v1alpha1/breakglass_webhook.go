@@ -171,8 +171,8 @@ func (h *BreakGlassHandler) Handle(ctx context.Context, req admission.Request) a
 	return admission.Allowed("")
 }
 
-// handleOperation guards the one dangerous node action, reset, wherever the
-// TalosOperation comes from: the CLI and UI check break-glass too, but a user
+// handleOperation guards the dangerous operations, an etcd restore and the node action reset, wherever
+// the TalosOperation comes from: the CLI and UI check break-glass too, but a user
 // with `create` on talosoperations can write the CR by hand. The
 // typed-name confirmation is a CRD rule (confirm == machineRef.name), so it
 // needs no copy here.
@@ -184,6 +184,24 @@ func (h *BreakGlassHandler) handleOperation(ctx context.Context, req admission.R
 	var op ichorv1alpha1.TalosOperation
 	if err := json.Unmarshal(req.Object.Raw, &op); err != nil {
 		return admission.Errored(http.StatusBadRequest, fmt.Errorf("decoding the operation: %w", err))
+	}
+
+	// An etcd restore rewinds the whole cluster to a snapshot: it needs the verb on the cluster.
+	if op.Spec.Kind == ichorv1alpha1.TalosOperationKindEtcdRestore {
+		cluster := op.Spec.ClusterRef.Name
+
+		allowed, err := h.mayBreakGlass(ctx, req.UserInfo, "talosclusters", cluster, req.Namespace)
+		if err != nil {
+			return admission.Errored(http.StatusServiceUnavailable, fmt.Errorf("cannot check the %s right: %w", BreakGlassVerb, err))
+		}
+
+		if !allowed {
+			return admission.Denied(fmt.Sprintf("an etcd restore rewinds the whole cluster: it needs the %q verb on talosclusters/%s", BreakGlassVerb, cluster))
+		}
+
+		breakglasslog.Info("etcd restore admitted under break-glass", "user", req.UserInfo.Username, "cluster", cluster)
+
+		return admission.Allowed("")
 	}
 
 	if op.Spec.Kind != ichorv1alpha1.TalosOperationKindNode || op.Spec.Node == nil || op.Spec.Node.Action != ichorv1alpha1.NodeActionReset {

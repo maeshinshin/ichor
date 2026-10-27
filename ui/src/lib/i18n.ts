@@ -1106,6 +1106,13 @@ export const en = {
   'backups.snapNone': 'No snapshot has been stored yet.',
   'backups.restore': 'Restore',
   'backups.restoreHint': 'Rewind the whole cluster to a stored snapshot. Everything written since is lost.',
+  // list pages
+  'nodes.title': 'Nodes',
+  'nodes.add': 'Add node',
+  'addNode.pageTitle': 'Add a node',
+  'addNode.backToNodes': 'Back to nodes',
+  'config.title': 'Configuration',
+  'list.noCluster': 'No cluster exists yet.',
 } as const
 
 export type Key = keyof typeof en

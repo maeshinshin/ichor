@@ -14,7 +14,7 @@ import { matchesQuery } from '@/lib/filter'
 import { operationState, progressCounts } from '@/lib/operations'
 import { opStateTone } from '@/lib/status'
 import { useT } from '@/lib/useT'
-import { Link, objectRefPath } from '@/router'
+import { Link } from '@/router'
 
 type ErrorShape = { title: string; detail: string }
 
@@ -48,7 +48,7 @@ export function OperationList() {
   if (!ops) return <PageSkeleton label={t('ops.loading')} />
 
   const rows = ops.filter((o) =>
-    matchesQuery(query, o.ref?.name, o.cluster?.name, enumLabel(OperationKind, o.kind), t(`ops.state.${operationState(o.phase, o.failureReason)}`)),
+    matchesQuery(query, o.ref?.name, enumLabel(OperationKind, o.kind), t(`ops.state.${operationState(o.phase, o.failureReason)}`)),
   )
 
   return (
@@ -66,7 +66,6 @@ export function OperationList() {
               <TableRow>
                 <TableHead>{t('col.name')}</TableHead>
                 <TableHead>{t('ops.colKind')}</TableHead>
-                <TableHead>{t('col.cluster')}</TableHead>
                 <TableHead>{t('ops.colState')}</TableHead>
                 <TableHead>{t('ops.colProgress')}</TableHead>
                 <TableHead>{t('col.actions')}</TableHead>
@@ -90,16 +89,15 @@ function OperationRow({ op, onChanged }: { op: Operation; onChanged: () => void 
   const { done, running } = progressCounts(op.machines)
 
   return (
-    <LinkRow to={op.ref ? objectRefPath('/operations', op.ref) : '/operations'}>
+    <LinkRow to={op.ref ? `/operations/${op.ref.name}` : '/operations'}>
       <TableCell>
         {op.ref && (
-          <Link to={objectRefPath('/operations', op.ref)} class="font-medium hover:underline">
+          <Link to={`/operations/${op.ref.name}`} class="font-medium hover:underline">
             {op.ref.name}
           </Link>
         )}
       </TableCell>
       <TableCell>{enumLabel(OperationKind, op.kind)}</TableCell>
-      <TableCell>{op.cluster?.name}</TableCell>
       <TableCell>
         <StatusText tone={opStateTone(state)}>{t(`ops.state.${state}`)}</StatusText>
       </TableCell>

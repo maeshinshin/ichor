@@ -311,30 +311,30 @@ type restoreTails struct {
 
 var defaultRestoreTails = &restoreTails{running: map[types.NamespacedName]bool{}, inflight: map[types.NamespacedName]types.NamespacedName{}}
 
-// start runs job in a goroutine unless one runs for the operation already. The goroutine is not tied
+// start runs run in a goroutine unless one runs for the operation already. The goroutine is not tied
 // to any reconcile or manager context.
-func (t *restoreTails) start(job *restoreJob) {
+func (t *restoreTails) start(key, backup types.NamespacedName, run func()) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	t.inflight[job.key] = job.backup
+	t.inflight[key] = backup
 
-	if t.running[job.key] {
+	if t.running[key] {
 		return
 	}
 
-	t.running[job.key] = true
+	t.running[key] = true
 	t.wg.Add(1)
 
 	go func() {
 		defer t.wg.Done()
 		defer func() {
 			t.mu.Lock()
-			delete(t.running, job.key)
+			delete(t.running, key)
 			t.mu.Unlock()
 		}()
 
-		job.run(context.WithoutCancel(context.Background()))
+		run()
 	}()
 }
 

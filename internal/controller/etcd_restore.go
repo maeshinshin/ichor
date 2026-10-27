@@ -494,7 +494,7 @@ func (run *restoreRun) launch(m *etcdbackup.RestoreMarker, nodes restoreNodes) {
 		return
 	}
 
-	defaultRestoreTails.start(job)
+	defaultRestoreTails.start(job.key, job.backup, func() { job.run(context.WithoutCancel(context.Background())) })
 }
 
 // ensureTail starts the job again after a restart of this process, from the marker. It does nothing

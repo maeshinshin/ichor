@@ -90,3 +90,21 @@ setting name.
 
 The UI's effective-config view renders layer 1, so the `ichor-ui` ClusterRole needs `list` on `talosstorages`
 (missed at first, found live; see the amendment in ADR 0018, which also adds the test that enforces it).
+
+## Amendment: the extension check is wired (ExtensionsPresent)
+
+Found on real hardware: a `longhorn-v1` TalosStorage was Ready on nodes whose schematic lacked
+`iscsi-tools` and `util-linux-tools`, and longhorn-manager crash-looped. The "Not done" note above is
+superseded. `TalosStorageReconciler` now sets `ExtensionsPresent` (informational, never gates
+`Ready`, never blocks the rest of the reconcile): for each governed machine it finds the Kubernetes
+Node (`spec.hostname`, else the Node whose address is the machine endpoint) and reads its
+`extensions.talos.dev/<name>` labels, mapping each to `siderolabs/<name>` for `Preset.CheckExtensions`.
+`False/MissingExtensions` names each node and its missing extensions and says to add them to
+`spec.schematic` and run `ichor upgrade talos`; `Unknown/NodesNotObserved` when no governed machine has
+a Node yet; `True/AllPresent` otherwise.
+
+Why the Node labels and not the Talos API: Talos itself publishes them from the booted image, the
+controller already reads Nodes (no new credentials, no Talos client or per-node dial in a status
+controller), and it reflects what is running, not what a schematic ID claims. The cost is that a node
+not yet joined has no labels, hence Unknown rather than False. The UI shows the condition in the
+generic condition list, and `ExtensionsPresent=False` renders as a failure.

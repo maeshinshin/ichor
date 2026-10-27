@@ -222,6 +222,59 @@ var _ = Describe("TalosStorage layer 1 and status", func() {
 			Expect(ready.Reason).To(Equal(reasonStoragePrepared))
 		})
 
+		It("reports governed nodes whose Node lacks the preset's extension labels, without gating Ready", func() {
+			secret := newTestSecret(bundleRaw)
+			cluster := newTestCluster(secret.Name, "v1.14")
+			labels := map[string]string{storageNodeKey: storageNodeValue}
+			bare := newStorageTestMachine(cluster.Name, labels)
+			full := newStorageTestMachine(cluster.Name, labels)
+			s := newRealStorage(cluster.Name)
+			r := newReconciler("")
+
+			// No Node exists yet: nothing is known, which is not a failure.
+			ext := cond(reconcileStorage(r, s), conditionStorageExtensions)
+			Expect(ext.Status).To(Equal(metav1.ConditionUnknown))
+			Expect(ext.Reason).To(Equal(reasonStorageExtensionsUnknown))
+
+			mkNode := func(m *ichorv1alpha1.TalosMachine, nodeLabels map[string]string) string {
+				m.Spec.Hostname = "node-" + m.Name
+				Expect(k8sClient.Update(ctx, m)).To(Succeed())
+
+				n := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: m.Spec.Hostname, Labels: nodeLabels}}
+				Expect(k8sClient.Create(ctx, n)).To(Succeed())
+				DeferCleanup(func() { _ = k8sClient.Delete(ctx, n) })
+
+				return n.Name
+			}
+
+			bareNode := mkNode(bare, map[string]string{talosExtensionLabelPrefix + "iscsi-tools": "v0.2.0"})
+			fullNode := mkNode(full, map[string]string{
+				talosExtensionLabelPrefix + "iscsi-tools":      "v0.2.0",
+				talosExtensionLabelPrefix + "util-linux-tools": "2.41",
+			})
+
+			got := reconcileStorage(r, s)
+			ext = cond(got, conditionStorageExtensions)
+			Expect(ext.Status).To(Equal(metav1.ConditionFalse))
+			Expect(ext.Reason).To(Equal(reasonStorageMissingExtensions))
+			Expect(ext.Message).To(ContainSubstring(bareNode + " lacks siderolabs/util-linux-tools"))
+			Expect(ext.Message).NotTo(ContainSubstring(fullNode))
+			Expect(ext.Message).To(ContainSubstring("spec.schematic"))
+			Expect(ext.Message).To(ContainSubstring("ichor upgrade talos"))
+			Expect(cond(got, conditionStorageReady)).NotTo(BeNil(), "the rest of the reconcile still ran")
+			Expect(cond(got, conditionStorageSystem)).NotTo(BeNil())
+
+			// After upgrading the schematic the labels appear and the condition clears.
+			var n corev1.Node
+			Expect(k8sClient.Get(ctx, client.ObjectKey{Name: bareNode}, &n)).To(Succeed())
+			n.Labels[talosExtensionLabelPrefix+"util-linux-tools"] = "2.41"
+			Expect(k8sClient.Update(ctx, &n)).To(Succeed())
+
+			ext = cond(reconcileStorage(r, s), conditionStorageExtensions)
+			Expect(ext.Status).To(Equal(metav1.ConditionTrue), "message: %s", ext.Message)
+			Expect(ext.Reason).To(Equal(reasonStorageExtensionsPresent))
+		})
+
 		It("reports ClusterNotFound", func() {
 			s := newRealStorage("no-such-cluster")
 

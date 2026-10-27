@@ -1228,8 +1228,11 @@ type Machine struct {
 	// reboot to take effect (TalosMachine.status.rebootPaths, ADR 0080).
 	RebootPaths []string `protobuf:"bytes,15,rep,name=reboot_paths,json=rebootPaths,proto3" json:"reboot_paths,omitempty"`
 	// network and disks mirror spec.network and spec.disks (ADR 0092).
-	Network       *MachineNetwork    `protobuf:"bytes,16,opt,name=network,proto3" json:"network,omitempty"`
-	Disks         []*MachineDiskRole `protobuf:"bytes,17,rep,name=disks,proto3" json:"disks,omitempty"`
+	Network *MachineNetwork    `protobuf:"bytes,16,opt,name=network,proto3" json:"network,omitempty"`
+	Disks   []*MachineDiskRole `protobuf:"bytes,17,rep,name=disks,proto3" json:"disks,omitempty"`
+	// node_name is the Kubernetes node name the node reports (TalosMachine.status.nodeName);
+	// empty until the controller has read the node. Views name a machine hostname, else node_name.
+	NodeName      string `protobuf:"bytes,18,opt,name=node_name,json=nodeName,proto3" json:"node_name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1374,6 +1377,13 @@ func (x *Machine) GetDisks() []*MachineDiskRole {
 		return x.Disks
 	}
 	return nil
+}
+
+func (x *Machine) GetNodeName() string {
+	if x != nil {
+		return x.NodeName
+	}
+	return ""
 }
 
 type RemoveMachineRequest struct {
@@ -1558,7 +1568,7 @@ const file_ichor_v1alpha1_machine_proto_rawDesc = "" +
 	"\x17MachineApprovalDecision\x12\x14\n" +
 	"\x05actor\x18\x01 \x01(\tR\x05actor\x12\x16\n" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\x12*\n" +
-	"\x02at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x02at\"\x88\a\n" +
+	"\x02at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x02at\"\xa5\a\n" +
 	"\aMachine\x12+\n" +
 	"\x03ref\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\x03ref\x123\n" +
 	"\acluster\x18\x02 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x12;\n" +
@@ -1579,7 +1589,8 @@ const file_ichor_v1alpha1_machine_proto_rawDesc = "" +
 	"\bdeleting\x18\x0e \x01(\bR\bdeleting\x12!\n" +
 	"\freboot_paths\x18\x0f \x03(\tR\vrebootPaths\x128\n" +
 	"\anetwork\x18\x10 \x01(\v2\x1e.ichor.v1alpha1.MachineNetworkR\anetwork\x125\n" +
-	"\x05disks\x18\x11 \x03(\v2\x1f.ichor.v1alpha1.MachineDiskRoleR\x05disks\x1a=\n" +
+	"\x05disks\x18\x11 \x03(\v2\x1f.ichor.v1alpha1.MachineDiskRoleR\x05disks\x12\x1b\n" +
+	"\tnode_name\x18\x12 \x01(\tR\bnodeName\x1a=\n" +
 	"\x0fNodeLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\b\x10\tR\bapproved\"e\n" +

@@ -550,6 +550,16 @@ func (r *TalosMachineReconciler) readNode(
 
 	cancelSchem()
 
+	// Recorded once: a node does not rename itself, and asking again would be a call per reconcile.
+	if m.Status.NodeName == "" {
+		nameCtx, cancelName := context.WithTimeout(ctx, talosCallTimeout)
+		if name, nerr := talos.NodeName(nameCtx); nerr == nil {
+			m.Status.NodeName = name
+		}
+
+		cancelName()
+	}
+
 	res, stop, err = r.followStage(ctx, talos, m)
 
 	return current, res, stop, err

@@ -26,6 +26,9 @@ spec:
     - jsonPath: .spec.approvalState
       name: Approval
       type: string
+    - jsonPath: .status.nodeName
+      name: Node
+      type: string
     - jsonPath: .spec.endpoint
       name: Endpoint
       type: string
@@ -462,6 +465,12 @@ spec:
                   maintenance API. Once set, Ichor never applies to this node insecurely again; it only
                   follows the node to running. Empty for a node that has not been provisioned by Ichor.
                 format: date-time
+                type: string
+              nodeName:
+                description: |-
+                  nodeName is the Kubernetes node name the node reports (its Nodename resource), recorded
+                  once it is read so that views can name a machine that has no spec.hostname. Empty until
+                  the node has been read.
                 type: string
               observedEndpoint:
                 description: |-

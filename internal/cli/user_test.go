@@ -48,6 +48,8 @@ const (
 	testUserPassword = "correct horse battery staple"
 	testGenerated    = "Gen3ratedPassw0rdValue24"
 	testToken        = "tok-secret-ichor-ui-id-token"
+	testUserAlice    = "alice"
+	testAdminName    = "root"
 )
 
 // fakeUserService records what the CLI sends and answers like ichor-ui would.
@@ -149,13 +151,13 @@ func TestUserCreateReadsPasswordFromStdinAndSendsBearer(t *testing.T) {
 	f := &fakeUserService{}
 	u := newUserClient(t, f)
 	cmd, out, errw := newUserCmd(testUserPassword + "\n")
-	userOpts.passwordStdin, userOpts.roles = true, []string{"viewer"}
+	userOpts.passwordStdin, userOpts.roles = true, []string{ichorauth.RoleViewer}
 
-	if err := runUserCreate(context.Background(), u, cmd, "alice"); err != nil {
+	if err := runUserCreate(context.Background(), u, cmd, testUserAlice); err != nil {
 		t.Fatal(err)
 	}
 
-	if f.created.GetName() != "alice" || f.created.GetRoles()[0] != "viewer" {
+	if f.created.GetName() != testUserAlice || f.created.GetRoles()[0] != ichorauth.RoleViewer {
 		t.Errorf("create request = %v", f.created)
 	}
 
@@ -233,14 +235,14 @@ func TestResolvePassword(t *testing.T) {
 func TestUserUpdateChangesOnlyPassedFlags(t *testing.T) {
 	resetUserOpts(t)
 
-	f := &fakeUserService{existing: &pb.User{Name: "alice", DisplayName: "Alice", Email: "a@example.com", Roles: []string{"viewer"}}}
+	f := &fakeUserService{existing: &pb.User{Name: testUserAlice, DisplayName: "Alice", Email: "a@example.com", Roles: []string{ichorauth.RoleViewer}}}
 	cmd, _, _ := newUserCmd("")
 	cmd.Flags().BoolVar(&userOpts.disabled, "disabled", false, "")
 	cmd.Flags().StringSliceVar(&userOpts.roles, "role", nil, "")
 	cmd.Flags().StringVar(&userOpts.email, "email", "", "")
 	cmd.Flags().StringVar(&userOpts.displayName, "display-name", "", "")
 
-	if err := runUserUpdate(context.Background(), newUserClient(t, f), cmd, "alice"); err == nil {
+	if err := runUserUpdate(context.Background(), newUserClient(t, f), cmd, testUserAlice); err == nil {
 		t.Fatal("no flag passed should be an error")
 	}
 
@@ -248,7 +250,7 @@ func TestUserUpdateChangesOnlyPassedFlags(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := runUserUpdate(context.Background(), newUserClient(t, f), cmd, "alice"); err != nil {
+	if err := runUserUpdate(context.Background(), newUserClient(t, f), cmd, testUserAlice); err != nil {
 		t.Fatal(err)
 	}
 
@@ -260,7 +262,7 @@ func TestUserUpdateChangesOnlyPassedFlags(t *testing.T) {
 
 func TestAuthStatusPrintsNoToken(t *testing.T) {
 	f := &fakeUserService{}
-	sess := &uiSession{Users: newUserClient(t, f), Issuer: "https://ichor.example.com",
+	sess := &uiSession{Users: newUserClient(t, f), Issuer: testUIURL,
 		Entry: &authCacheEntry{IDToken: testToken, RefreshToken: "refresh-secret", Expiry: time.Now().Add(time.Minute)}}
 
 	t.Setenv("HOME", t.TempDir())
@@ -285,7 +287,7 @@ func TestAuthStatusPrintsNoToken(t *testing.T) {
 
 func TestAuthKubeconfigWrites0600AndPassesCAFile(t *testing.T) {
 	f := &fakeUserService{}
-	sess := &uiSession{Users: newUserClient(t, f), Issuer: "https://ichor.example.com", Entry: &authCacheEntry{}}
+	sess := &uiSession{Users: newUserClient(t, f), Issuer: testUIURL, Entry: &authCacheEntry{}}
 	dir := t.TempDir()
 	out := filepath.Join(dir, "kc.yaml")
 
@@ -357,7 +359,7 @@ func TestAuthHTTPClientTrustsOnlyTheGivenCA(t *testing.T) {
 
 func TestSecureIssuerRefusesPlainHTTP(t *testing.T) {
 	for raw, ok := range map[string]bool{
-		"https://ichor.example.com": true, "http://127.0.0.1:8080": true, "http://localhost:9": true,
+		testUIURL: true, "http://127.0.0.1:8080": true, "http://localhost:9": true,
 		"http://ichor.example.com": false, "ichor.example.com": false,
 	} {
 		if err := secureIssuer(raw); (err == nil) != ok {
@@ -380,14 +382,14 @@ func userKubeClient(t *testing.T, withSecret bool) client.Client {
 func TestBootstrapUserWritesCRAndHash(t *testing.T) {
 	k := userKubeClient(t, true)
 	now := time.Date(2026, 10, 27, 12, 0, 0, 0, time.UTC)
-	spec := userSpec{Name: "root", Roles: []string{"admin"}}
+	spec := userSpec{Name: testAdminName, Roles: []string{ichorauth.RoleAdmin}}
 
-	if err := createUserWithPassword(context.Background(), k, ichorControllerNamespace, spec, testUserPassword, now); err != nil {
+	if err := createUserWithPassword(context.Background(), k, spec, testUserPassword, now); err != nil {
 		t.Fatal(err)
 	}
 
 	var u ichorv1alpha1.IchorUser
-	if err := k.Get(context.Background(), types.NamespacedName{Namespace: ichorControllerNamespace, Name: "root"}, &u); err != nil || u.Spec.Roles[0] != "admin" {
+	if err := k.Get(context.Background(), types.NamespacedName{Namespace: ichorControllerNamespace, Name: testAdminName}, &u); err != nil || u.Spec.Roles[0] != ichorauth.RoleAdmin {
 		t.Fatalf("user CR: %v %+v", err, u)
 	}
 
@@ -396,7 +398,7 @@ func TestBootstrapUserWritesCRAndHash(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cred, err := ichorauth.ParseCredential(sec.Data["root"])
+	cred, err := ichorauth.ParseCredential(sec.Data[testAdminName])
 	if err != nil || !cred.MustChange || !cred.NotBefore.Equal(now) {
 		t.Fatalf("credential: %v %+v", err, cred)
 	}
@@ -405,28 +407,28 @@ func TestBootstrapUserWritesCRAndHash(t *testing.T) {
 		t.Error("the stored hash does not verify the password")
 	}
 
-	if bytes.Contains(sec.Data["root"], []byte(testUserPassword)) {
+	if bytes.Contains(sec.Data[testAdminName], []byte(testUserPassword)) {
 		t.Error("the Secret holds the plain password")
 	}
 }
 
 func TestBootstrapUserRefusals(t *testing.T) {
 	ctx := context.Background()
-	spec := userSpec{Name: "root", Roles: []string{"admin"}}
+	spec := userSpec{Name: testAdminName, Roles: []string{ichorauth.RoleAdmin}}
 
 	// An existing user: never reset its password.
 	k := userKubeClient(t, true)
-	if err := createUserWithPassword(ctx, k, ichorControllerNamespace, spec, testUserPassword, time.Now()); err != nil {
+	if err := createUserWithPassword(ctx, k, spec, testUserPassword, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 
-	err := createUserWithPassword(ctx, k, ichorControllerNamespace, spec, "another password entirely", time.Now())
+	err := createUserWithPassword(ctx, k, spec, "another password entirely", time.Now())
 	if err == nil || !strings.Contains(err.Error(), "already exists") {
 		t.Errorf("existing user: %v", err)
 	}
 
 	// Users not turned on: no credentials Secret.
-	err = createUserWithPassword(ctx, userKubeClient(t, false), ichorControllerNamespace, spec, testUserPassword, time.Now())
+	err = createUserWithPassword(ctx, userKubeClient(t, false), spec, testUserPassword, time.Now())
 	if err == nil || !strings.Contains(err.Error(), "not turned on") {
 		t.Errorf("no Secret: %v", err)
 	}
@@ -434,12 +436,12 @@ func TestBootstrapUserRefusals(t *testing.T) {
 	// Policy and name checks leave nothing behind.
 	k = userKubeClient(t, true)
 	for _, bad := range []userSpec{{Name: "Root"}, {Name: "ok", Roles: []string{"Bad Role"}}} {
-		if err := createUserWithPassword(ctx, k, ichorControllerNamespace, bad, testUserPassword, time.Now()); err == nil {
+		if err := createUserWithPassword(ctx, k, bad, testUserPassword, time.Now()); err == nil {
 			t.Errorf("%+v should be refused", bad)
 		}
 	}
 
-	if err := createUserWithPassword(ctx, k, ichorControllerNamespace, userSpec{Name: "ok"}, "short", time.Now()); err == nil {
+	if err := createUserWithPassword(ctx, k, userSpec{Name: "ok"}, "short", time.Now()); err == nil {
 		t.Errorf("short password: %v", err)
 	}
 

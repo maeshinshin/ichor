@@ -90,11 +90,8 @@ type initDeps struct {
 // component Synced and Healthy, remove it from inlineManifests"), not
 // something a one-shot CLI command does.
 func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
-	if opts.UIURL != "" && opts.AdminUser == "" {
-		opts.AdminUser = defaultAdminUser
-	}
-
-	if err := validateInitUsers(opts); err != nil {
+	opts, err = prepareInitUsers(opts)
+	if err != nil {
 		return err
 	}
 
@@ -102,11 +99,7 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 	// the user exists and nothing else could show it.
 	var adminPassword string
 
-	defer func() {
-		if opts.UIURL != "" {
-			initUsersEpilogue(deps.Stderr, opts, adminPassword)
-		}
-	}()
+	defer func() { initUsersEpilogue(deps.Stderr, opts, adminPassword) }()
 
 	// Step 2: settle the cluster's shape.
 	cluster, err := buildInitPlan(opts.initPlanInput, deps.Stderr)
@@ -271,10 +264,8 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 	}
 
 	// The first admin exists before the switch that makes every request need a token.
-	if opts.UIURL != "" {
-		if adminPassword, err = initUsers(ctx, opts, k8sClient, deps.Stderr); err != nil {
-			return err
-		}
+	if adminPassword, err = initUsers(ctx, opts, k8sClient, deps.Stderr); err != nil {
+		return err
 	}
 
 	// Step 5: create the CRs.
@@ -286,10 +277,8 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 		return err
 	}
 
-	if opts.UIURL != "" {
-		if err := setClusterAuthentication(ctx, k8sClient, cluster, opts.UIURL); err != nil {
-			return err
-		}
+	if err := setClusterAuthentication(ctx, k8sClient, cluster, opts.UIURL); err != nil {
+		return err
 	}
 
 	if opts.ArgoCD {

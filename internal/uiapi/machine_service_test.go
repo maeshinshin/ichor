@@ -151,7 +151,7 @@ var _ = Describe("MachineService", func() {
 			Expect(got.Spec.Install.Image).To(Equal("factory.talos.dev/x:v1"))
 		})
 
-		It("records the network and disk roles and refuses a MAC the machine does not have (ADR 0091)", func() {
+		It("records the network and disk roles and refuses a MAC the machine does not have (ADR 0092)", func() {
 			cluster := newTestCluster("does-not-exist")
 			m := newTestMachine(cluster.Name, strongTestIdentity("uuid-net"), "", ichorv1alpha1.MachineApprovalStatePending)
 			s := &Server{Client: k8sClient}

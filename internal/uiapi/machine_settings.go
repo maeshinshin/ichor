@@ -33,7 +33,7 @@ var (
 	maxSizeRe    = regexp.MustCompile(`^[1-9][0-9]*(MiB|GiB|TiB)$`)
 )
 
-// networkFromPB converts the wire network settings to spec.network (ADR 0091) and checks them
+// networkFromPB converts the wire network settings to spec.network (ADR 0092) and checks them
 // the way the CRD does, so the caller learns the reason instead of an admission error. The MAC
 // must be one the machine was discovered with: that is what "permanent MAC discovered earlier"
 // means, and it stops a typo from selecting a link that does not exist. nil means "none".
@@ -123,7 +123,7 @@ func networkToPB(in *ichorv1alpha1.TalosMachineNetwork) *pb.MachineNetwork {
 	}
 }
 
-// disksFromPB converts the wire disk roles to spec.disks (ADR 0091), with the CRD's rules: one
+// disksFromPB converts the wire disk roles to spec.disks (ADR 0092), with the CRD's rules: one
 // selector per disk, at most one ephemeral disk, a unique name per user volume.
 func disksFromPB(in []*pb.MachineDiskRole) ([]ichorv1alpha1.TalosMachineDiskRole, error) {
 	var (

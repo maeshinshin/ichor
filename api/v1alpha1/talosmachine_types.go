@@ -110,13 +110,13 @@ type TalosMachineSpec struct {
 	// +optional
 	Install *TalosMachineInstall `json:"install,omitempty"`
 
-	// network is the machine's primary network link and how it is addressed (ADR 0091). Unset
+	// network is the machine's primary network link and how it is addressed (ADR 0092). Unset
 	// leaves networking to Talos's default (DHCP on every physical link).
 	// +optional
 	Network *TalosMachineNetwork `json:"network,omitempty"`
 
 	// disks assign roles to disks other than the system disk (spec.install): ephemeral puts
-	// EPHEMERAL on its own disk, userVolume provisions a named user volume (ADR 0091).
+	// EPHEMERAL on its own disk, userVolume provisions a named user volume (ADR 0092).
 	// +kubebuilder:validation:MaxItems=8
 	// +kubebuilder:validation:XValidation:rule="self.filter(d, d.role == 'ephemeral').size() <= 1",message="at most one disk can have the ephemeral role"
 	// +kubebuilder:validation:XValidation:rule="self.all(a, !(a.role == 'userVolume' && has(a.name)) || self.filter(b, b.role == 'userVolume' && has(b.name) && b.name == a.name).size() == 1)",message="userVolume names must be unique"
@@ -248,7 +248,7 @@ type TalosMachineNetwork struct {
 	VLANID int32 `json:"vlanID,omitempty"`
 }
 
-// TalosMachineDiskRole gives one non-system disk a role (ADR 0091). The disk is identified the
+// TalosMachineDiskRole gives one non-system disk a role (ADR 0092). The disk is identified the
 // same way as spec.install.disk.
 // +kubebuilder:validation:XValidation:rule="self.role == 'userVolume' ? has(self.name) : (!has(self.name) && !has(self.maxSize))",message="name is required for userVolume and not allowed for ephemeral, and so is maxSize"
 type TalosMachineDiskRole struct {

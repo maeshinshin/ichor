@@ -39,7 +39,7 @@ const primaryLinkAlias = "net0"
 // ephemeralVolume is the name of the EPHEMERAL system volume.
 const ephemeralVolume = "EPHEMERAL"
 
-// injectNetwork renders spec.network (ADR 0091). From the multi-document contract it is a
+// injectNetwork renders spec.network (ADR 0092). From the multi-document contract it is a
 // LinkAliasConfig whose CEL selector matches the permanent MAC, plus a DHCPv4Config or a
 // LinkConfig (or, with a VLAN, a VLANConfig on the alias) for the addressing and a
 // ResolverConfig for the DNS servers. Before it, one machine.network.interfaces entry selected by
@@ -211,7 +211,7 @@ func injectLegacyNetwork(cfg coreconfig.Provider, n *ichorv1alpha1.TalosMachineN
 	}, "network")
 }
 
-// injectDisks renders spec.disks (ADR 0091): a VolumeConfig for EPHEMERAL and a UserVolumeConfig
+// injectDisks renders spec.disks (ADR 0092): a VolumeConfig for EPHEMERAL and a UserVolumeConfig
 // per user volume, each selecting its disk with the CEL expression diskExpression builds.
 func injectDisks(cfg coreconfig.Provider, m *ichorv1alpha1.TalosMachine) (coreconfig.Provider, error) {
 	for _, d := range m.Spec.Disks {

@@ -25,7 +25,7 @@ import (
 )
 
 // networkFromFlags turns --nic/--address/--gateway/--dns/--vlan into the approval's network
-// settings (ADR 0091). --nic alone is DHCP, any --address makes it static. The backend checks
+// settings (ADR 0092). --nic alone is DHCP, any --address makes it static. The backend checks
 // the values themselves (the MAC against the machine's discovered ones, the address syntax); this
 // only refuses flags that cannot mean anything without --nic.
 func networkFromFlags(o machineApproveOptions) (*pb.MachineNetwork, error) {

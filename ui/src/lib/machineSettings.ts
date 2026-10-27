@@ -2,7 +2,7 @@ import type { TalosLink } from '@/gen/ichor/v1alpha1/talosdetails_pb'
 import type { Key } from './i18n.ts'
 import type { DiskSelector } from './installDisk.ts'
 
-// The checks below repeat the CRD's rules (TalosMachine.spec.network and spec.disks, ADR 0091) and
+// The checks below repeat the CRD's rules (TalosMachine.spec.network and spec.disks, ADR 0092) and
 // the backend's, so a form says what is wrong before it is sent.
 
 const macRe = /^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$/

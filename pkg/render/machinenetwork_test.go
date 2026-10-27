@@ -67,7 +67,7 @@ func wantNone(t *testing.T, out string, absent ...string) {
 }
 
 // TestRenderNetwork: spec.network picks the primary link by permanent MAC through a
-// LinkAliasConfig and refers to the alias from the addressing documents (ADR 0091). v1.13 and
+// LinkAliasConfig and refers to the alias from the addressing documents (ADR 0092). v1.13 and
 // v1.14 both use documents; v1.11 is the legacy machine.network.interfaces form.
 func TestRenderNetwork(t *testing.T) {
 	dhcp := func(m *ichorv1alpha1.TalosMachine) {
@@ -149,7 +149,7 @@ func TestRenderNetwork(t *testing.T) {
 }
 
 // TestRenderDisks: spec.disks becomes a VolumeConfig for EPHEMERAL and a UserVolumeConfig per
-// user volume, each with a CEL disk selector (ADR 0091).
+// user volume, each with a CEL disk selector (ADR 0092).
 func TestRenderDisks(t *testing.T) {
 	disks := func(m *ichorv1alpha1.TalosMachine) {
 		m.Spec.Disks = []ichorv1alpha1.TalosMachineDiskRole{

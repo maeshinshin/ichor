@@ -144,7 +144,7 @@ export type ApproveMachineRequest = Message<"ichor.v1alpha1.ApproveMachineReques
 
   /**
    * network is the primary link and its addressing (TalosMachine.spec.network,
-   * ADR 0091). Unset leaves networking to Talos's default.
+   * ADR 0092). Unset leaves networking to Talos's default.
    *
    * @generated from field: ichor.v1alpha1.MachineNetwork network = 8;
    */
@@ -662,7 +662,7 @@ export type Machine = Message<"ichor.v1alpha1.Machine"> & {
   rebootPaths: string[];
 
   /**
-   * network and disks mirror spec.network and spec.disks (ADR 0091).
+   * network and disks mirror spec.network and spec.disks (ADR 0092).
    *
    * @generated from field: ichor.v1alpha1.MachineNetwork network = 16;
    */

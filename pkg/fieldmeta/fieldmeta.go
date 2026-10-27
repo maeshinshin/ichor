@@ -226,7 +226,7 @@ var rules = []rule{
 	{prefix: "NetworkRuleConfig", safe: true},
 	{prefix: "NetworkDefaultActionConfig", safe: true},
 
-	// Link addressing (ADR 0091), verified against Talos v1.14.3
+	// Link addressing (ADR 0092), verified against Talos v1.14.3
 	// internal/app/machined/pkg/controllers/network: link_config.go (LinkConfig, VLANConfig ->
 	// LinkSpec), address_config.go and operator_config.go (static addresses and routes ->
 	// AddressSpec/RouteSpec, DHCPv4Config -> OperatorSpec) and resolver_config.go (nameservers)

@@ -209,7 +209,7 @@ func BuildConfig(
 		return nil, err
 	}
 
-	// Approval-time network and disk roles (ADR 0091).
+	// Approval-time network and disk roles (ADR 0092).
 	cfg, err = injectNetwork(cfg, contract, m)
 	if err != nil {
 		return nil, err

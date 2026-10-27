@@ -762,7 +762,7 @@ var _ = Describe("TalosMachine", func() {
 		Entry("a device path with a quote", &TalosMachineDisk{DevPath: "/dev/sd\"a"}, false),
 	)
 
-	// ADR 0091: spec.network.
+	// ADR 0092: spec.network.
 	const nicMAC = "aa:bb:cc:dd:ee:01"
 
 	DescribeTable("network",
@@ -804,7 +804,7 @@ var _ = Describe("TalosMachine", func() {
 		Entry("an unknown addressing", &TalosMachineNetwork{MAC: nicMAC, Addressing: "slaac"}, false),
 	)
 
-	// ADR 0091: spec.disks.
+	// ADR 0092: spec.disks.
 	DescribeTable("disks",
 		func(disks []TalosMachineDiskRole, accepted bool) {
 			m := newMachine()

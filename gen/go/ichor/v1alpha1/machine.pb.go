@@ -332,7 +332,7 @@ type ApproveMachineRequest struct {
 	// approves without an install target.
 	Install *MachineInstall `protobuf:"bytes,7,opt,name=install,proto3" json:"install,omitempty"`
 	// network is the primary link and its addressing (TalosMachine.spec.network,
-	// ADR 0091). Unset leaves networking to Talos's default.
+	// ADR 0092). Unset leaves networking to Talos's default.
 	Network *MachineNetwork `protobuf:"bytes,8,opt,name=network,proto3" json:"network,omitempty"`
 	// disks are the roles of the non-system disks (TalosMachine.spec.disks).
 	Disks         []*MachineDiskRole `protobuf:"bytes,9,rep,name=disks,proto3" json:"disks,omitempty"`
@@ -1227,7 +1227,7 @@ type Machine struct {
 	// reboot_paths are the configuration fields whose pending change needs a
 	// reboot to take effect (TalosMachine.status.rebootPaths, ADR 0080).
 	RebootPaths []string `protobuf:"bytes,15,rep,name=reboot_paths,json=rebootPaths,proto3" json:"reboot_paths,omitempty"`
-	// network and disks mirror spec.network and spec.disks (ADR 0091).
+	// network and disks mirror spec.network and spec.disks (ADR 0092).
 	Network       *MachineNetwork    `protobuf:"bytes,16,opt,name=network,proto3" json:"network,omitempty"`
 	Disks         []*MachineDiskRole `protobuf:"bytes,17,rep,name=disks,proto3" json:"disks,omitempty"`
 	unknownFields protoimpl.UnknownFields

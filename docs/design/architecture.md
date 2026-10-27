@@ -539,7 +539,9 @@ disk), `storage` (prepared for a storage system via a preset), `userVolume`, or
 `VolumeConfig`/`UserVolumeConfig`/`RawVolumeConfig` document for the rest,
 each selecting its disk with a CEL expression over the disk's reported fields.
 All three documents are on the mirror allow-list, so a role is expressible
-today; what is still missing is the controller that sets one. The `system`
+today; `TalosMachine.spec.disks` sets `ephemeral` and `userVolume` at approval
+and `spec.network` the primary NIC, DHCP or static, and a VLAN (ADR 0092);
+`storage`, `unused` and bonds are not done. The `system`
 disk is the exception to "a document per role": it is
 `TalosMachine.spec.install.disk` (WWID, serial, by-id path, bus path, or
 device path as a last resort), rendered as `UnattendedInstallConfig` from the
@@ -882,7 +884,7 @@ automatically; an expired one would lock Ichor out with no way back. CA
 rotation (Talos and Kubernetes) follows the documented Talos procedure and
 runs through the same machinery as upgrades, except that it waits, after every
 node accepts the new CAs, until the operator has credentials that work with
-both CAs (ADR 0091); otherwise the first stage that changes what the API
+both CAs (ADR 0092); otherwise the first stage that changes what the API
 servers present would lock the operator out. Expiry dates are visible in
 status, the UI and metrics.
 

@@ -124,10 +124,10 @@ spec:
               disks:
                 description: |-
                   disks assign roles to disks other than the system disk (spec.install): ephemeral puts
-                  EPHEMERAL on its own disk, userVolume provisions a named user volume (ADR 0091).
+                  EPHEMERAL on its own disk, userVolume provisions a named user volume (ADR 0092).
                 items:
                   description: |-
-                    TalosMachineDiskRole gives one non-system disk a role (ADR 0091). The disk is identified the
+                    TalosMachineDiskRole gives one non-system disk a role (ADR 0092). The disk is identified the
                     same way as spec.install.disk.
                   properties:
                     disk:
@@ -293,7 +293,7 @@ spec:
                 type: object
               network:
                 description: |-
-                  network is the machine's primary network link and how it is addressed (ADR 0091). Unset
+                  network is the machine's primary network link and how it is addressed (ADR 0092). Unset
                   leaves networking to Talos's default (DHCP on every physical link).
                 properties:
                   addresses:

@@ -110,6 +110,14 @@ func (s *Server) argoNamespace() string {
 func (s *Server) planWrite(
 	ctx context.Context, obj client.Object, clusterName string, allowStrictAdd bool, bg *pb.BreakGlass,
 ) (*prPlan, error) {
+	return s.planWriteIn(ctx, obj, obj.GetNamespace(), clusterName, allowStrictAdd, bg)
+}
+
+// planWriteIn is planWrite for an object whose cluster lives in clusterNamespace, which is not
+// the object's own namespace when the object is cluster-scoped (IchorInstallation).
+func (s *Server) planWriteIn(
+	ctx context.Context, obj client.Object, clusterNamespace, clusterName string, allowStrictAdd bool, bg *pb.BreakGlass,
+) (*prPlan, error) {
 	key := client.ObjectKeyFromObject(obj)
 
 	_, by, err := gitopstracking.IsTracked(ctx, s.Client, s.argoNamespace(), obj)
@@ -118,7 +126,7 @@ func (s *Server) planWrite(
 			fmt.Errorf("cannot tell whether Argo CD or Flux tracks %q, so it is not written: %w", key, err))
 	}
 
-	repo, strict, err := s.gitOpsOf(ctx, obj.GetNamespace(), clusterName)
+	repo, strict, err := s.gitOpsOf(ctx, clusterNamespace, clusterName)
 	if err != nil {
 		return nil, err
 	}

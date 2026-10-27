@@ -61,6 +61,9 @@ const (
 	// OperationServiceListEtcdBackupsProcedure is the fully-qualified name of the OperationService's
 	// ListEtcdBackups RPC.
 	OperationServiceListEtcdBackupsProcedure = "/ichor.v1alpha1.OperationService/ListEtcdBackups"
+	// OperationServiceGetIchorInstallationProcedure is the fully-qualified name of the
+	// OperationService's GetIchorInstallation RPC.
+	OperationServiceGetIchorInstallationProcedure = "/ichor.v1alpha1.OperationService/GetIchorInstallation"
 )
 
 // OperationServiceClient is a client for the ichor.v1alpha1.OperationService service.
@@ -78,6 +81,11 @@ type OperationServiceClient interface {
 	// first: what a restore can choose from (ADR 0089). It reads the backups' status; it does not
 	// touch the storage.
 	ListEtcdBackups(context.Context, *connect.Request[v1alpha1.ListEtcdBackupsRequest]) (*connect.Response[v1alpha1.ListEtcdBackupsResponse], error)
+	// GetIchorInstallation reports which Ichor version is installed and whether the cluster
+	// already knows a newer one (ADR 0059); it is what the app shell's version label shows.
+	// It answers with an empty installed_version, not an error, when there is no
+	// IchorInstallation, so the UI can simply show nothing.
+	GetIchorInstallation(context.Context, *connect.Request[v1alpha1.GetIchorInstallationRequest]) (*connect.Response[v1alpha1.GetIchorInstallationResponse], error)
 }
 
 // NewOperationServiceClient constructs a client for the ichor.v1alpha1.OperationService service. By
@@ -133,18 +141,25 @@ func NewOperationServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(operationServiceMethods.ByName("ListEtcdBackups")),
 			connect.WithClientOptions(opts...),
 		),
+		getIchorInstallation: connect.NewClient[v1alpha1.GetIchorInstallationRequest, v1alpha1.GetIchorInstallationResponse](
+			httpClient,
+			baseURL+OperationServiceGetIchorInstallationProcedure,
+			connect.WithSchema(operationServiceMethods.ByName("GetIchorInstallation")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // operationServiceClient implements OperationServiceClient.
 type operationServiceClient struct {
-	listOperations     *connect.Client[v1alpha1.ListOperationsRequest, v1alpha1.ListOperationsResponse]
-	getOperation       *connect.Client[v1alpha1.GetOperationRequest, v1alpha1.GetOperationResponse]
-	planOperation      *connect.Client[v1alpha1.PlanOperationRequest, v1alpha1.PlanOperationResponse]
-	createOperation    *connect.Client[v1alpha1.CreateOperationRequest, v1alpha1.CreateOperationResponse]
-	setOperationPaused *connect.Client[v1alpha1.SetOperationPausedRequest, v1alpha1.SetOperationPausedResponse]
-	deleteOperation    *connect.Client[v1alpha1.DeleteOperationRequest, v1alpha1.DeleteOperationResponse]
-	listEtcdBackups    *connect.Client[v1alpha1.ListEtcdBackupsRequest, v1alpha1.ListEtcdBackupsResponse]
+	listOperations       *connect.Client[v1alpha1.ListOperationsRequest, v1alpha1.ListOperationsResponse]
+	getOperation         *connect.Client[v1alpha1.GetOperationRequest, v1alpha1.GetOperationResponse]
+	planOperation        *connect.Client[v1alpha1.PlanOperationRequest, v1alpha1.PlanOperationResponse]
+	createOperation      *connect.Client[v1alpha1.CreateOperationRequest, v1alpha1.CreateOperationResponse]
+	setOperationPaused   *connect.Client[v1alpha1.SetOperationPausedRequest, v1alpha1.SetOperationPausedResponse]
+	deleteOperation      *connect.Client[v1alpha1.DeleteOperationRequest, v1alpha1.DeleteOperationResponse]
+	listEtcdBackups      *connect.Client[v1alpha1.ListEtcdBackupsRequest, v1alpha1.ListEtcdBackupsResponse]
+	getIchorInstallation *connect.Client[v1alpha1.GetIchorInstallationRequest, v1alpha1.GetIchorInstallationResponse]
 }
 
 // ListOperations calls ichor.v1alpha1.OperationService.ListOperations.
@@ -182,6 +197,11 @@ func (c *operationServiceClient) ListEtcdBackups(ctx context.Context, req *conne
 	return c.listEtcdBackups.CallUnary(ctx, req)
 }
 
+// GetIchorInstallation calls ichor.v1alpha1.OperationService.GetIchorInstallation.
+func (c *operationServiceClient) GetIchorInstallation(ctx context.Context, req *connect.Request[v1alpha1.GetIchorInstallationRequest]) (*connect.Response[v1alpha1.GetIchorInstallationResponse], error) {
+	return c.getIchorInstallation.CallUnary(ctx, req)
+}
+
 // OperationServiceHandler is an implementation of the ichor.v1alpha1.OperationService service.
 type OperationServiceHandler interface {
 	ListOperations(context.Context, *connect.Request[v1alpha1.ListOperationsRequest]) (*connect.Response[v1alpha1.ListOperationsResponse], error)
@@ -197,6 +217,11 @@ type OperationServiceHandler interface {
 	// first: what a restore can choose from (ADR 0089). It reads the backups' status; it does not
 	// touch the storage.
 	ListEtcdBackups(context.Context, *connect.Request[v1alpha1.ListEtcdBackupsRequest]) (*connect.Response[v1alpha1.ListEtcdBackupsResponse], error)
+	// GetIchorInstallation reports which Ichor version is installed and whether the cluster
+	// already knows a newer one (ADR 0059); it is what the app shell's version label shows.
+	// It answers with an empty installed_version, not an error, when there is no
+	// IchorInstallation, so the UI can simply show nothing.
+	GetIchorInstallation(context.Context, *connect.Request[v1alpha1.GetIchorInstallationRequest]) (*connect.Response[v1alpha1.GetIchorInstallationResponse], error)
 }
 
 // NewOperationServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -248,6 +273,12 @@ func NewOperationServiceHandler(svc OperationServiceHandler, opts ...connect.Han
 		connect.WithSchema(operationServiceMethods.ByName("ListEtcdBackups")),
 		connect.WithHandlerOptions(opts...),
 	)
+	operationServiceGetIchorInstallationHandler := connect.NewUnaryHandler(
+		OperationServiceGetIchorInstallationProcedure,
+		svc.GetIchorInstallation,
+		connect.WithSchema(operationServiceMethods.ByName("GetIchorInstallation")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/ichor.v1alpha1.OperationService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case OperationServiceListOperationsProcedure:
@@ -264,6 +295,8 @@ func NewOperationServiceHandler(svc OperationServiceHandler, opts ...connect.Han
 			operationServiceDeleteOperationHandler.ServeHTTP(w, r)
 		case OperationServiceListEtcdBackupsProcedure:
 			operationServiceListEtcdBackupsHandler.ServeHTTP(w, r)
+		case OperationServiceGetIchorInstallationProcedure:
+			operationServiceGetIchorInstallationHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -299,4 +332,8 @@ func (UnimplementedOperationServiceHandler) DeleteOperation(context.Context, *co
 
 func (UnimplementedOperationServiceHandler) ListEtcdBackups(context.Context, *connect.Request[v1alpha1.ListEtcdBackupsRequest]) (*connect.Response[v1alpha1.ListEtcdBackupsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.OperationService.ListEtcdBackups is not implemented"))
+}
+
+func (UnimplementedOperationServiceHandler) GetIchorInstallation(context.Context, *connect.Request[v1alpha1.GetIchorInstallationRequest]) (*connect.Response[v1alpha1.GetIchorInstallationResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.OperationService.GetIchorInstallation is not implemented"))
 }

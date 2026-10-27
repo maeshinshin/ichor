@@ -35,8 +35,8 @@ func TestGoOIDCVerifiesIDToken(t *testing.T) {
 		t.Fatalf("endpoints %+v", prov.Endpoint())
 	}
 
-	tr := e.tokens("ichor-ui", uiRedirect, "")
-	idt, err := prov.Verifier(&oidc.Config{ClientID: "ichor-ui"}).Verify(ctx, tr.IDToken)
+	tr := e.tokens(clientUI, uiRedirect, "")
+	idt, err := prov.Verifier(&oidc.Config{ClientID: clientUI}).Verify(ctx, tr.IDToken)
 	if err != nil {
 		t.Fatalf("Verify: %v", err)
 	}
@@ -47,7 +47,7 @@ func TestGoOIDCVerifiesIDToken(t *testing.T) {
 	if err := idt.Claims(&c); err != nil {
 		t.Fatal(err)
 	}
-	if idt.Subject != "alice" || idt.Issuer != srv.URL || c.Nonce != "n1" || !slices.Equal(c.Groups, []string{"admin"}) {
+	if idt.Subject != userAlice || idt.Issuer != srv.URL || c.Nonce != "n1" || !slices.Equal(c.Groups, []string{roleAdmin}) {
 		t.Fatalf("claims: sub=%q iss=%q %+v", idt.Subject, idt.Issuer, c)
 	}
 	if got := idt.Expiry.Sub(idt.IssuedAt); got != 5*time.Minute {
@@ -57,11 +57,11 @@ func TestGoOIDCVerifiesIDToken(t *testing.T) {
 		t.Fatalf("response %+v", tr)
 	}
 	// The browser token is not a Kubernetes credential: wrong audience fails.
-	if _, err := prov.Verifier(&oidc.Config{ClientID: "ichor-kube"}).Verify(ctx, tr.IDToken); err == nil {
+	if _, err := prov.Verifier(&oidc.Config{ClientID: audKube}).Verify(ctx, tr.IDToken); err == nil {
 		t.Fatal("ichor-ui token verified for audience ichor-kube")
 	}
 	// Internal tokens are no ID tokens.
-	if _, err := prov.Verifier(&oidc.Config{ClientID: "ichor-ui"}).Verify(ctx, tr.RefreshToken); err == nil {
+	if _, err := prov.Verifier(&oidc.Config{ClientID: clientUI}).Verify(ctx, tr.RefreshToken); err == nil {
 		t.Fatal("refresh token verified as ID token")
 	}
 }
@@ -84,7 +84,7 @@ func apiserverAuthenticator(t *testing.T, srvCert *x509.Certificate, discovery s
 	a, err := k8soidc.New(ctx, k8soidc.Options{
 		JWTAuthenticator: apiserver.JWTAuthenticator{
 			Issuer: apiserver.Issuer{
-				URL: externalURL, DiscoveryURL: discovery, Audiences: []string{"ichor-kube"},
+				URL: externalURL, DiscoveryURL: discovery, Audiences: []string{audKube},
 			},
 			ClaimMappings: apiserver.ClaimMappings{
 				Username: apiserver.PrefixedClaimOrExpression{Claim: "sub", Prefix: ptr.To("ichor:")},
@@ -131,20 +131,20 @@ func TestAPIServerAuthenticator(t *testing.T) {
 	serve(e.iss.InternalHandler())
 	a := apiserverAuthenticator(t, srv.Certificate(), srv.URL+"/.well-known/openid-configuration")
 
-	good := e.tokens("ichor-cli", cliRedirect, "ichor-kube")
+	good := e.tokens(clientCLI, cliRedirect, audKube)
 	resp := authOK(t, a, good.IDToken)
 	if resp.User.GetName() != "ichor:alice" || !slices.Contains(resp.User.GetGroups(), "ichor:admin") {
 		t.Fatalf("user = %q groups = %v", resp.User.GetName(), resp.User.GetGroups())
 	}
 	// The CLI default audience is the Kubernetes one.
-	if _, tr := e.token(refreshForm("ichor-cli", good.RefreshToken, "")); authOK(t, a, tr.IDToken).User.GetName() != "ichor:alice" {
+	if _, tr := e.token(refreshForm(clientCLI, good.RefreshToken, "")); authOK(t, a, tr.IDToken).User.GetName() != "ichor:alice" {
 		t.Fatal("refreshed token rejected")
 	}
 
 	t.Run("browser audience", func(t *testing.T) {
-		ui := e.tokens("ichor-ui", uiRedirect, "")
+		ui := e.tokens(clientUI, uiRedirect, "")
 		authRejected(t, a, "ichor-ui id token", ui.IDToken)
-		_, viaRefresh := e.token(refreshForm("ichor-cli", good.RefreshToken, "ichor-ui"))
+		_, viaRefresh := e.token(refreshForm(clientCLI, good.RefreshToken, clientUI))
 		authRejected(t, a, "cli token with ichor-ui audience", viaRefresh.IDToken)
 	})
 	t.Run("internal tokens", func(t *testing.T) {
@@ -162,7 +162,7 @@ func TestAPIServerAuthenticator(t *testing.T) {
 	})
 	t.Run("expired", func(t *testing.T) {
 		e.clk.shift(-time.Hour)
-		old := e.tokens("ichor-cli", cliRedirect, "ichor-kube")
+		old := e.tokens(clientCLI, cliRedirect, audKube)
 		e.clk.shift(time.Hour)
 		authRejected(t, a, "expired", old.IDToken)
 	})
@@ -172,7 +172,7 @@ func TestAPIServerAuthenticator(t *testing.T) {
 		if err := e.keys.Update(keysJSON(t, e.recs[0], k2)); err != nil {
 			t.Fatal(err)
 		}
-		rot := e.tokens("ichor-cli", cliRedirect, "ichor-kube")
+		rot := e.tokens(clientCLI, cliRedirect, audKube)
 		if claimsKID(t, rot.IDToken) != "k2" || before == "k2" {
 			t.Fatalf("kid before %q after %q", before, claimsKID(t, rot.IDToken))
 		}

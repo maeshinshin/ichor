@@ -118,7 +118,7 @@ func (s *KeyStore) Signing() (jose.JSONWebKey, error) {
 	if best == nil {
 		return jose.JSONWebKey{}, errors.New("oidcissuer: no active signing key")
 	}
-	return jose.JSONWebKey{Key: best.priv, KeyID: best.rec.KID, Algorithm: string(jose.RS256), Use: "sig"}, nil
+	return jose.JSONWebKey{Key: best.priv, KeyID: best.rec.KID, Algorithm: string(jose.RS256), Use: jwkUseSig}, nil
 }
 
 func (s *KeyStore) Public() []jose.JSONWebKey {
@@ -132,7 +132,7 @@ func (s *KeyStore) Public() []jose.JSONWebKey {
 		if retired(k.rec, now) {
 			continue
 		}
-		out = append(out, jose.JSONWebKey{Key: &k.priv.PublicKey, KeyID: k.rec.KID, Algorithm: string(jose.RS256), Use: "sig"})
+		out = append(out, jose.JSONWebKey{Key: &k.priv.PublicKey, KeyID: k.rec.KID, Algorithm: string(jose.RS256), Use: jwkUseSig})
 	}
 	return out
 }

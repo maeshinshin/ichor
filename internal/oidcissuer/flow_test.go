@@ -17,27 +17,27 @@ func TestRedirectRules(t *testing.T) {
 		client, uri string
 		ok          bool
 	}{
-		{"ichor-ui", uiRedirect, true},
-		{"ichor-ui", uiRedirect + "/", false},
-		{"ichor-ui", "https://evil.example/auth/callback", false},
-		{"ichor-ui", cliRedirect, false},
-		{"ichor-cli", "http://127.0.0.1:8123/callback", true},
-		{"ichor-cli", "http://127.0.0.1:1/callback", true},
-		{"ichor-cli", "http://127.0.0.1:65535/callback", true},
-		{"ichor-cli", "http://localhost:8123/callback", false},
-		{"ichor-cli", "https://127.0.0.1:8123/callback", false},
-		{"ichor-cli", "http://127.0.0.1/callback", false},
-		{"ichor-cli", "http://127.0.0.1:8123/other", false},
-		{"ichor-cli", "http://127.0.0.1:8123/callback?x=1", false},
-		{"ichor-cli", "http://127.0.0.1:8123/callback#f", false},
-		{"ichor-cli", "http://[::1]:8123/callback", false},
-		{"ichor-cli", "http://127.0.0.1:0/callback", false},
-		{"ichor-cli", "http://127.0.0.1:99999/callback", false},
-		{"ichor-cli", "http://127.0.0.1:08123/callback", false},
-		{"ichor-cli", "http://127.0.0.2:8123/callback", false},
-		{"ichor-cli", "http://127.0.0.1:8123@evil.example/callback", false},
-		{"ichor-cli", "http://u:p@127.0.0.1:8123/callback", false},
-		{"ichor-cli", uiRedirect, false},
+		{clientUI, uiRedirect, true},
+		{clientUI, uiRedirect + "/", false},
+		{clientUI, "https://evil.example/auth/callback", false},
+		{clientUI, cliRedirect, false},
+		{clientCLI, "http://127.0.0.1:8123/callback", true},
+		{clientCLI, "http://127.0.0.1:1/callback", true},
+		{clientCLI, "http://127.0.0.1:65535/callback", true},
+		{clientCLI, "http://localhost:8123/callback", false},
+		{clientCLI, "https://127.0.0.1:8123/callback", false},
+		{clientCLI, "http://127.0.0.1/callback", false},
+		{clientCLI, "http://127.0.0.1:8123/other", false},
+		{clientCLI, "http://127.0.0.1:8123/callback?x=1", false},
+		{clientCLI, "http://127.0.0.1:8123/callback#f", false},
+		{clientCLI, "http://[::1]:8123/callback", false},
+		{clientCLI, "http://127.0.0.1:0/callback", false},
+		{clientCLI, "http://127.0.0.1:99999/callback", false},
+		{clientCLI, "http://127.0.0.1:08123/callback", false},
+		{clientCLI, "http://127.0.0.2:8123/callback", false},
+		{clientCLI, "http://127.0.0.1:8123@evil.example/callback", false},
+		{clientCLI, "http://u:p@127.0.0.1:8123/callback", false},
+		{clientCLI, uiRedirect, false},
 		{"other", cliRedirect, false},
 	}
 	for _, c := range cases {
@@ -59,9 +59,9 @@ func TestAuthorizeRejectsBadRequests(t *testing.T) {
 	e := newEnv(t, externalURL, "")
 	p := newPKCE()
 	base := url.Values{
-		"response_type": {"code"}, "client_id": {"ichor-cli"}, "redirect_uri": {cliRedirect},
-		"scope": {"openid"}, "state": {"s"}, "nonce": {"n"},
-		"code_challenge": {p.challenge}, "code_challenge_method": {"S256"},
+		"response_type": {pCode}, pClientID: {clientCLI}, "redirect_uri": {cliRedirect},
+		pScope: {"openid"}, "state": {"s"}, pNonce: {"n"},
+		pChallenge: {p.challenge}, "code_challenge_method": {pS256},
 	}
 	mut := func(f func(url.Values)) url.Values {
 		v := url.Values{}
@@ -73,18 +73,18 @@ func TestAuthorizeRejectsBadRequests(t *testing.T) {
 	}
 	cases := map[string]url.Values{
 		"plain pkce":      mut(func(v url.Values) { v.Set("code_challenge_method", "plain") }),
-		"no pkce":         mut(func(v url.Values) { v.Del("code_challenge") }),
-		"short challenge": mut(func(v url.Values) { v.Set("code_challenge", "abc") }),
+		"no pkce":         mut(func(v url.Values) { v.Del(pChallenge) }),
+		"short challenge": mut(func(v url.Values) { v.Set(pChallenge, "abc") }),
 		"implicit":        mut(func(v url.Values) { v.Set("response_type", "token") }),
 		"hybrid":          mut(func(v url.Values) { v.Set("response_type", "code id_token") }),
-		"no openid":       mut(func(v url.Values) { v.Set("scope", "profile") }),
+		"no openid":       mut(func(v url.Values) { v.Set(pScope, "profile") }),
 		"no state":        mut(func(v url.Values) { v.Del("state") }),
-		"no nonce":        mut(func(v url.Values) { v.Del("nonce") }),
+		"no nonce":        mut(func(v url.Values) { v.Del(pNonce) }),
 		"bad audience":    mut(func(v url.Values) { v.Set("audience", "somebody-else") }),
 		"ui asks kube": mut(func(v url.Values) {
-			v.Set("client_id", "ichor-ui")
+			v.Set(pClientID, clientUI)
 			v.Set("redirect_uri", uiRedirect)
-			v.Set("audience", "ichor-kube")
+			v.Set("audience", audKube)
 		}),
 	}
 	for name, q := range cases {
@@ -108,78 +108,78 @@ func TestCodeGrantNegatives(t *testing.T) {
 	p := newPKCE()
 
 	t.Run("replay", func(t *testing.T) {
-		code := e.code("ichor-cli", cliRedirect, "", p)
-		if s, _ := e.token(codeForm("ichor-cli", cliRedirect, code, p)); s != http.StatusOK {
+		code := e.code(clientCLI, cliRedirect, "", p)
+		if s, _ := e.token(codeForm(clientCLI, cliRedirect, code, p)); s != http.StatusOK {
 			t.Fatalf("first use: %d", s)
 		}
-		if s, tr := e.token(codeForm("ichor-cli", cliRedirect, code, p)); s != http.StatusBadRequest || tr.Error != "invalid_grant" {
+		if s, tr := e.token(codeForm(clientCLI, cliRedirect, code, p)); s != http.StatusBadRequest || tr.Error != "invalid_grant" {
 			t.Fatalf("replay: %d %q", s, tr.Error)
 		}
 	})
 	t.Run("wrong verifier", func(t *testing.T) {
-		code := e.code("ichor-cli", cliRedirect, "", p)
-		if s, tr := e.token(codeForm("ichor-cli", cliRedirect, code, newPKCE())); s != http.StatusBadRequest || tr.Error != "invalid_grant" {
+		code := e.code(clientCLI, cliRedirect, "", p)
+		if s, tr := e.token(codeForm(clientCLI, cliRedirect, code, newPKCE())); s != http.StatusBadRequest || tr.Error != "invalid_grant" {
 			t.Fatalf("%d %q", s, tr.Error)
 		}
 		// the attempt burned the code
-		if s, _ := e.token(codeForm("ichor-cli", cliRedirect, code, p)); s == http.StatusOK {
+		if s, _ := e.token(codeForm(clientCLI, cliRedirect, code, p)); s == http.StatusOK {
 			t.Fatal("code survived a failed PKCE check")
 		}
 	})
 	t.Run("short verifier", func(t *testing.T) {
-		code := e.code("ichor-cli", cliRedirect, "", p)
-		f := codeForm("ichor-cli", cliRedirect, code, p)
+		code := e.code(clientCLI, cliRedirect, "", p)
+		f := codeForm(clientCLI, cliRedirect, code, p)
 		f.Set("code_verifier", "x")
 		if s, _ := e.token(f); s != http.StatusBadRequest {
 			t.Fatal(s)
 		}
 	})
 	t.Run("redirect mismatch", func(t *testing.T) {
-		code := e.code("ichor-cli", cliRedirect, "", p)
-		if s, _ := e.token(codeForm("ichor-cli", "http://127.0.0.1:9999/callback", code, p)); s != http.StatusBadRequest {
+		code := e.code(clientCLI, cliRedirect, "", p)
+		if s, _ := e.token(codeForm(clientCLI, "http://127.0.0.1:9999/callback", code, p)); s != http.StatusBadRequest {
 			t.Fatal(s)
 		}
 	})
 	t.Run("other client", func(t *testing.T) {
-		code := e.code("ichor-cli", cliRedirect, "", p)
-		if s, _ := e.token(codeForm("ichor-ui", uiRedirect, code, p)); s != http.StatusBadRequest {
+		code := e.code(clientCLI, cliRedirect, "", p)
+		if s, _ := e.token(codeForm(clientUI, uiRedirect, code, p)); s != http.StatusBadRequest {
 			t.Fatal(s)
 		}
 	})
 	t.Run("expired", func(t *testing.T) {
-		code := e.code("ichor-cli", cliRedirect, "", p)
+		code := e.code(clientCLI, cliRedirect, "", p)
 		e.clk.shift(oidcissuer.CodeTTL + time.Second)
 		defer e.clk.shift(-oidcissuer.CodeTTL - time.Second)
-		if s, _ := e.token(codeForm("ichor-cli", cliRedirect, code, p)); s != http.StatusBadRequest {
+		if s, _ := e.token(codeForm(clientCLI, cliRedirect, code, p)); s != http.StatusBadRequest {
 			t.Fatal(s)
 		}
 	})
 	t.Run("wrong token kinds", func(t *testing.T) {
-		tr := e.tokens("ichor-cli", cliRedirect, "")
+		tr := e.tokens(clientCLI, cliRedirect, "")
 		// refresh token and ID token are no codes
 		for _, bad := range []string{tr.RefreshToken, tr.IDToken, "garbage", ""} {
-			if s, _ := e.token(codeForm("ichor-cli", cliRedirect, bad, p)); s != http.StatusBadRequest {
+			if s, _ := e.token(codeForm(clientCLI, cliRedirect, bad, p)); s != http.StatusBadRequest {
 				t.Fatalf("%.10q accepted as code: %d", bad, s)
 			}
 		}
 		// a ticket is no code
-		ticket := e.ticket(e.authorize("ichor-cli", cliRedirect, "", p))
-		if s, _ := e.token(codeForm("ichor-cli", cliRedirect, ticket, p)); s != http.StatusBadRequest {
+		ticket := e.ticket(e.authorize(clientCLI, cliRedirect, "", p))
+		if s, _ := e.token(codeForm(clientCLI, cliRedirect, ticket, p)); s != http.StatusBadRequest {
 			t.Fatal("ticket accepted as code")
 		}
 		// a code and an ID token are no refresh tokens
-		code := e.code("ichor-cli", cliRedirect, "", p)
+		code := e.code(clientCLI, cliRedirect, "", p)
 		for _, bad := range []string{code, tr.IDToken, ticket} {
-			if s, _ := e.token(refreshForm("ichor-cli", bad, "")); s != http.StatusBadRequest {
+			if s, _ := e.token(refreshForm(clientCLI, bad, "")); s != http.StatusBadRequest {
 				t.Fatalf("%.10q accepted as refresh token: %d", bad, s)
 			}
 		}
 	})
 	t.Run("grants and clients", func(t *testing.T) {
-		if s, _ := e.token(url.Values{"grant_type": {"password"}, "client_id": {"ichor-cli"}, "username": {"alice"}, "password": {"correct horse"}}); s != http.StatusBadRequest {
+		if s, _ := e.token(url.Values{pGrant: {pPassword}, pClientID: {clientCLI}, "username": {userAlice}, pPassword: {"correct horse"}}); s != http.StatusBadRequest {
 			t.Fatalf("password grant: %d", s)
 		}
-		if s, _ := e.token(url.Values{"grant_type": {"client_credentials"}, "client_id": {"ichor-cli"}}); s != http.StatusBadRequest {
+		if s, _ := e.token(url.Values{pGrant: {"client_credentials"}, pClientID: {clientCLI}}); s != http.StatusBadRequest {
 			t.Fatalf("client_credentials: %d", s)
 		}
 		if s, _ := e.token(refreshForm("nobody", "x", "")); s != http.StatusUnauthorized {
@@ -190,8 +190,8 @@ func TestCodeGrantNegatives(t *testing.T) {
 		}
 	})
 	t.Run("token response headers", func(t *testing.T) {
-		code := e.code("ichor-cli", cliRedirect, "", p)
-		rec := e.do(e.h, http.MethodPost, "/oidc/token", "application/x-www-form-urlencoded", codeForm("ichor-cli", cliRedirect, code, p).Encode())
+		code := e.code(clientCLI, cliRedirect, "", p)
+		rec := e.do(e.h, http.MethodPost, "/oidc/token", "application/x-www-form-urlencoded", codeForm(clientCLI, cliRedirect, code, p).Encode())
 		if rec.Header().Get("Cache-Control") != "no-store" || rec.Header().Get("Pragma") != "no-cache" {
 			t.Fatalf("headers %v", rec.Header())
 		}
@@ -201,17 +201,17 @@ func TestCodeGrantNegatives(t *testing.T) {
 func TestLoginNegatives(t *testing.T) {
 	e := newEnv(t, externalURL, "")
 	p := newPKCE()
-	ticket := e.ticket(e.authorize("ichor-cli", cliRedirect, "", p))
+	ticket := e.ticket(e.authorize(clientCLI, cliRedirect, "", p))
 
-	if rec := e.login("garbage", "alice", "correct horse"); rec.Code != http.StatusBadRequest {
+	if rec := e.login("garbage", userAlice, "correct horse"); rec.Code != http.StatusBadRequest {
 		t.Errorf("garbage ticket: %d", rec.Code)
 	}
 	parts := strings.Split(ticket, ".")
 	parts[1] = parts[1][:len(parts[1])-2] + "AA"
-	if rec := e.login(strings.Join(parts, "."), "alice", "correct horse"); rec.Code != http.StatusBadRequest {
+	if rec := e.login(strings.Join(parts, "."), userAlice, "correct horse"); rec.Code != http.StatusBadRequest {
 		t.Errorf("tampered ticket: %d", rec.Code)
 	}
-	if rec := e.login(ticket, "alice", "wrong"); rec.Code != http.StatusUnauthorized {
+	if rec := e.login(ticket, userAlice, "wrong"); rec.Code != http.StatusUnauthorized {
 		t.Errorf("wrong password: %d", rec.Code)
 	}
 	if rec := e.login(ticket, "nobody", "x"); rec.Code != http.StatusUnauthorized || strings.Contains(rec.Body.String(), "nobody") {
@@ -231,114 +231,130 @@ func TestLoginNegatives(t *testing.T) {
 		t.Error("disabled state leaked")
 	}
 	e.clk.shift(oidcissuer.TicketTTL + time.Second)
-	if rec := e.login(ticket, "alice", "correct horse"); rec.Code != http.StatusBadRequest {
+	if rec := e.login(ticket, userAlice, "correct horse"); rec.Code != http.StatusBadRequest {
 		t.Errorf("expired ticket: %d", rec.Code)
 	}
 }
 
 func TestLoginBackoff(t *testing.T) {
 	e := newEnv(t, externalURL, "")
-	ticket := e.ticket(e.authorize("ichor-cli", cliRedirect, "", newPKCE()))
+	ticket := e.ticket(e.authorize(clientCLI, cliRedirect, "", newPKCE()))
 	for i := range 5 {
-		if rec := e.login(ticket, "alice", "wrong"); rec.Code != http.StatusUnauthorized {
+		if rec := e.login(ticket, userAlice, "wrong"); rec.Code != http.StatusUnauthorized {
 			t.Fatalf("failure %d: %d", i, rec.Code)
 		}
 	}
-	rec := e.login(ticket, "alice", "correct horse")
+	rec := e.login(ticket, userAlice, "correct horse")
 	if rec.Code != http.StatusTooManyRequests || rec.Header().Get("Retry-After") == "" {
 		t.Fatalf("after five failures: %d", rec.Code)
 	}
 	e.clk.shift(2 * time.Second)
-	if rec := e.login(ticket, "alice", "correct horse"); rec.Code != http.StatusOK {
+	if rec := e.login(ticket, userAlice, "correct horse"); rec.Code != http.StatusOK {
 		t.Fatalf("after waiting: %d", rec.Code)
 	}
 }
 
 func TestRefreshGrant(t *testing.T) {
 	e := newEnv(t, externalURL, "")
-	tr := e.tokens("ichor-cli", cliRedirect, "")
+	tr := e.tokens(clientCLI, cliRedirect, "")
 	if tr.RefreshToken == "" {
 		t.Fatal("no refresh token despite offline_access")
 	}
 	aud := func(tok string) any { return claimsOf(t, tok)["aud"] }
 
-	if aud(tr.IDToken) != "ichor-kube" {
+	if aud(tr.IDToken) != audKube {
 		t.Fatalf("cli default audience %v", aud(tr.IDToken))
 	}
-	s, r1 := e.token(refreshForm("ichor-cli", tr.RefreshToken, ""))
-	if s != http.StatusOK || aud(r1.IDToken) != "ichor-kube" || r1.RefreshToken != "" {
+	s, r1 := e.token(refreshForm(clientCLI, tr.RefreshToken, ""))
+	if s != http.StatusOK || aud(r1.IDToken) != audKube || r1.RefreshToken != "" {
 		t.Fatalf("refresh: %d aud %v refresh %q", s, aud(r1.IDToken), r1.RefreshToken)
 	}
-	if _, r2 := e.token(refreshForm("ichor-cli", tr.RefreshToken, "ichor-ui")); aud(r2.IDToken) != "ichor-ui" {
+	if _, r2 := e.token(refreshForm(clientCLI, tr.RefreshToken, clientUI)); aud(r2.IDToken) != clientUI {
 		t.Fatalf("audience parameter ignored: %v", aud(r2.IDToken))
 	}
-	if s, _ := e.token(refreshForm("ichor-cli", tr.RefreshToken, "other")); s != http.StatusBadRequest {
+	if s, _ := e.token(refreshForm(clientCLI, tr.RefreshToken, "other")); s != http.StatusBadRequest {
 		t.Fatalf("foreign audience: %d", s)
 	}
-	if s, _ := e.token(refreshForm("ichor-ui", tr.RefreshToken, "")); s != http.StatusBadRequest {
+	if s, _ := e.token(refreshForm(clientUI, tr.RefreshToken, "")); s != http.StatusBadRequest {
 		t.Fatalf("refresh token used by another client: %d", s)
 	}
-	ui := e.tokens("ichor-ui", uiRedirect, "")
-	if s, _ := e.token(refreshForm("ichor-ui", ui.RefreshToken, "ichor-kube")); s != http.StatusBadRequest {
+	ui := e.tokens(clientUI, uiRedirect, "")
+	if s, _ := e.token(refreshForm(clientUI, ui.RefreshToken, audKube)); s != http.StatusBadRequest {
 		t.Fatalf("ui client got the kube audience: %d", s)
 	}
 
 	t.Run("role change shows at refresh", func(t *testing.T) {
-		e.dir.set(oidcissuer.User{Name: "alice", Roles: []string{"viewer", "ops"}}, "correct horse")
-		_, r := e.token(refreshForm("ichor-cli", tr.RefreshToken, ""))
+		e.dir.set(oidcissuer.User{Name: userAlice, Roles: []string{"viewer", "ops"}}, "correct horse")
+		_, r := e.token(refreshForm(clientCLI, tr.RefreshToken, ""))
 		g, _ := claimsOf(t, r.IDToken)["groups"].([]any)
 		if len(g) != 2 || g[0] != "viewer" {
 			t.Fatalf("groups %v", g)
 		}
 	})
 	t.Run("not before", func(t *testing.T) {
-		e.dir.set(oidcissuer.User{Name: "alice", NotBefore: e.clk.now().Add(-time.Hour)}, "correct horse")
-		if s, _ := e.token(refreshForm("ichor-cli", tr.RefreshToken, "")); s != http.StatusOK {
+		e.dir.set(oidcissuer.User{Name: userAlice, NotBefore: e.clk.now().Add(-time.Hour)}, "correct horse")
+		if s, _ := e.token(refreshForm(clientCLI, tr.RefreshToken, "")); s != http.StatusOK {
 			t.Fatalf("older notBefore: %d", s)
 		}
-		e.dir.set(oidcissuer.User{Name: "alice", NotBefore: e.clk.now().Add(2 * time.Second)}, "correct horse")
-		if s, _ := e.token(refreshForm("ichor-cli", tr.RefreshToken, "")); s != http.StatusBadRequest {
+		e.dir.set(oidcissuer.User{Name: userAlice, NotBefore: e.clk.now().Add(2 * time.Second)}, "correct horse")
+		if s, _ := e.token(refreshForm(clientCLI, tr.RefreshToken, "")); s != http.StatusBadRequest {
 			t.Fatalf("iat < notBefore: %d", s)
 		}
 	})
 	t.Run("disabled and deleted", func(t *testing.T) {
-		e.dir.set(oidcissuer.User{Name: "alice", Disabled: true}, "correct horse")
-		if s, _ := e.token(refreshForm("ichor-cli", tr.RefreshToken, "")); s != http.StatusBadRequest {
+		e.dir.set(oidcissuer.User{Name: userAlice, Disabled: true}, "correct horse")
+		if s, _ := e.token(refreshForm(clientCLI, tr.RefreshToken, "")); s != http.StatusBadRequest {
 			t.Fatalf("disabled: %d", s)
 		}
 		e.dir.mu.Lock()
-		delete(e.dir.users, "alice")
+		delete(e.dir.users, userAlice)
 		e.dir.mu.Unlock()
-		if s, _ := e.token(refreshForm("ichor-cli", tr.RefreshToken, "")); s != http.StatusBadRequest {
+		if s, _ := e.token(refreshForm(clientCLI, tr.RefreshToken, "")); s != http.StatusBadRequest {
 			t.Fatalf("deleted: %d", s)
 		}
 	})
 	t.Run("absolute lifetime", func(t *testing.T) {
-		e.dir.set(oidcissuer.User{Name: "alice", Roles: []string{"admin"}}, "correct horse")
+		e.dir.set(oidcissuer.User{Name: userAlice, Roles: []string{roleAdmin}}, "correct horse")
 		e.clk.shift(11 * time.Hour)
 		if s, _ := e.token(refreshForm("ui-or-cli", tr.RefreshToken, "")); s == http.StatusOK {
 			t.Fatal("bad client accepted")
 		}
-		if s, _ := e.token(refreshForm("ichor-cli", tr.RefreshToken, "")); s != http.StatusOK {
+		if s, _ := e.token(refreshForm(clientCLI, tr.RefreshToken, "")); s != http.StatusOK {
 			t.Fatalf("within lifetime: %d", s)
 		}
 		e.clk.shift(2 * time.Hour)
-		if s, _ := e.token(refreshForm("ichor-cli", tr.RefreshToken, "")); s != http.StatusBadRequest {
+		if s, _ := e.token(refreshForm(clientCLI, tr.RefreshToken, "")); s != http.StatusBadRequest {
 			t.Fatalf("past 12h: %d", s)
 		}
 	})
+}
+
+func TestAudienceSurvivesRefresh(t *testing.T) {
+	e := newEnv(t, externalURL, "")
+	tr := e.tokens(clientCLI, cliRedirect, clientUI)
+	if claimsOf(t, tr.IDToken)["aud"] != clientUI {
+		t.Fatal("login audience ignored")
+	}
+	_, r := e.token(refreshForm(clientCLI, tr.RefreshToken, ""))
+	if claimsOf(t, r.IDToken)["aud"] != clientUI {
+		t.Fatalf("refresh lost the chosen audience: %v", claimsOf(t, r.IDToken)["aud"])
+	}
+	_, r = e.token(refreshForm(clientCLI, tr.RefreshToken, audKube))
+	if claimsOf(t, r.IDToken)["aud"] != audKube {
+		t.Fatal("explicit audience on refresh ignored")
+	}
 }
 
 func TestNoOfflineAccessNoRefreshToken(t *testing.T) {
 	e := newEnv(t, externalURL, "")
 	p := newPKCE()
 	q := url.Values{
-		"response_type": {"code"}, "client_id": {"ichor-cli"}, "redirect_uri": {cliRedirect},
-		"scope": {"openid"}, "state": {"st1"}, "nonce": {"n1"},
-		"code_challenge": {p.challenge}, "code_challenge_method": {"S256"},
+		"response_type": {pCode}, pClientID: {clientCLI}, "redirect_uri": {cliRedirect},
+		pScope: {"openid"}, "state": {stateVal}, pNonce: {"n1"},
+		pChallenge: {p.challenge}, "code_challenge_method": {pS256},
 	}
 	ticket := e.ticket(e.do(e.h, http.MethodGet, "/oidc/authorize?"+q.Encode(), "", ""))
-	rec := e.login(ticket, "alice", "correct horse")
+	rec := e.login(ticket, userAlice, "correct horse")
 	if rec.Code != http.StatusOK {
 		t.Fatal(rec.Code)
 	}
@@ -349,7 +365,7 @@ func TestNoOfflineAccessNoRefreshToken(t *testing.T) {
 		t.Fatal(err)
 	}
 	u, _ := url.Parse(out.RedirectURI)
-	s, tr := e.token(codeForm("ichor-cli", cliRedirect, u.Query().Get("code"), p))
+	s, tr := e.token(codeForm(clientCLI, cliRedirect, u.Query().Get("code"), p))
 	if s != http.StatusOK || tr.RefreshToken != "" {
 		t.Fatalf("%d refresh=%q", s, tr.RefreshToken)
 	}
@@ -369,7 +385,7 @@ func TestDiscoveryVariants(t *testing.T) {
 	if de["jwks_uri"] != externalURL+"/oidc/jwks" || di["jwks_uri"] != "https://10.96.0.7:8444/oidc/jwks" {
 		t.Fatalf("jwks_uri %v / %v", de["jwks_uri"], di["jwks_uri"])
 	}
-	if m, _ := de["code_challenge_methods_supported"].([]any); len(m) != 1 || m[0] != "S256" {
+	if m, _ := de["code_challenge_methods_supported"].([]any); len(m) != 1 || m[0] != pS256 {
 		t.Fatalf("pkce methods %v", m)
 	}
 	for _, p := range []string{"/oidc/token", "/oidc/authorize", "/oidc/login"} {
@@ -411,7 +427,7 @@ func TestKeyStoreTimeline(t *testing.T) {
 		t.Fatal(err)
 	}
 	kids := func() []string {
-		var out []string
+		out := make([]string, 0, 3)
 		for _, k := range ks.Public() {
 			out = append(out, k.KeyID)
 		}

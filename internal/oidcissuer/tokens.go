@@ -34,8 +34,9 @@ type authRequest struct {
 }
 
 type refreshClaims struct {
-	ClientID string `json:"client_id"`
-	Scope    string `json:"scope"`
+	ClientID      string `json:"client_id"`
+	Scope         string `json:"scope"`
+	TokenAudience string `json:"token_aud"`
 }
 
 type idClaims struct {

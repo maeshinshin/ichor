@@ -19,6 +19,8 @@ package uiapi
 import (
 	"context"
 	"errors"
+	"log/slog"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -38,6 +40,9 @@ type IssuerBackend struct {
 	Reader    client.Reader
 	Namespace string
 	Settings  *UserSettings
+	// Writer, when set, upgrades a hash made with weaker parameters after a
+	// successful login. nil leaves old hashes as they are.
+	Writer client.Writer
 }
 
 func (b *IssuerBackend) credentials(ctx context.Context) (*corev1.Secret, error) {
@@ -103,13 +108,53 @@ func (b *IssuerBackend) VerifyPassword(ctx context.Context, name, password strin
 		return false, nil
 	}
 
-	// ponytail: a hash made with weaker parameters is not upgraded on login (needsRehash is ignored).
-	match, _, verr := cred.Verify(password)
+	match, needsRehash, verr := cred.Verify(password)
 	if verr != nil {
 		ichorauth.VerifyDummy(password)
 
 		return false, nil
 	}
 
+	if match && needsRehash {
+		b.rehash(ctx, sec, name, cred, password)
+	}
+
 	return match, nil
+}
+
+// rehash stores a fresh hash of a password that just verified against a
+// weaker one, keeping notBefore and mustChange. It patches only this user's
+// key and fails on a changed Secret, so a concurrent password change is never
+// overwritten. A failure is logged (never the hash or password) and does not
+// block the login.
+func (b *IssuerBackend) rehash(ctx context.Context, sec *corev1.Secret, name string, cred ichorauth.Credential, password string) {
+	if b.Writer == nil {
+		return
+	}
+
+	fail := func(err error) { slog.Warn("upgrading a password hash failed", "user", name, "error", err.Error()) }
+
+	var err error
+	if cred.Hash, err = ichorauth.Hash(password); err != nil {
+		fail(err)
+
+		return
+	}
+
+	raw, err := cred.Marshal()
+	if err != nil {
+		fail(err)
+
+		return
+	}
+
+	updated := sec.DeepCopy()
+	updated.Data[name] = raw
+
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+
+	if err := b.Writer.Patch(ctx, updated, client.MergeFromWithOptions(sec, client.MergeFromWithOptimisticLock{})); err != nil {
+		fail(err)
+	}
 }

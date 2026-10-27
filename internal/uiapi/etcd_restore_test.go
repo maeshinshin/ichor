@@ -36,9 +36,10 @@ import (
 // anything is written, and what the TalosOperation looks like.
 
 const (
-	restoreBackup = "nightly"
-	restoreSnap   = "etcd-20261001T020000Z.snapshot.age"
-	restoreOlder  = "etcd-20260930T020000Z.snapshot.age"
+	restoreBackup  = "nightly"
+	restoreSnap    = "etcd-20261001T020000Z.snapshot.age"
+	restoreOlder   = "etcd-20260930T020000Z.snapshot.age"
+	restoreCP2Node = "node-cp2"
 )
 
 var restoreSnapTime = time.Date(2026, 10, 1, 2, 0, 0, 0, time.UTC)
@@ -118,6 +119,39 @@ func TestEtcdRestorePlanSaysWhatIsLost(t *testing.T) {
 
 	if len(p.GetMachines()) != 3 {
 		t.Fatalf("machines = %+v", p.GetMachines())
+	}
+}
+
+// The controller pod is found by its control-plane label alone: the chart's app.kubernetes.io/name
+// follows nameOverride, so a pod named for anything else still says where the controller runs.
+func TestEtcdRestorePlanNamesTheControllersNodeWhateverTheAppNameIs(t *testing.T) {
+	for _, appName := range []string{"ichor", "renamed-by-name-override", ""} {
+		cp2 := opMachine("cp2", "controlplane", nil, nil)
+		cp2.Spec.Hostname = restoreCP2Node
+
+		labels := map[string]string{"control-plane": "controller-manager"}
+		if appName != "" {
+			labels["app.kubernetes.io/name"] = appName
+		}
+
+		pod := &corev1.Pod{
+			Name: "ichor-controller", Namespace: opNS, Labels: labels,
+			Spec: corev1.PodSpec{NodeName: restoreCP2Node},
+		}
+		node := &corev1.Node{Name: restoreCP2Node}
+
+		objs := append(opObjects(), restoreBackupObject(), cp2, opMachine("cp3", "controlplane", nil, nil), node, pod)
+		s, _ := opServer(t, objs...)
+		s.ControllerNamespace = opNS
+
+		res, err := s.PlanOperation(context.Background(), restorePlanReq(restoreReq(restoreSnap, "", "")))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if got := res.Msg.GetSteps()[2]; !strings.Contains(got, "then cp2 (where this controller runs)") {
+			t.Fatalf("app name %q: wipe step = %q", appName, got)
+		}
 	}
 }
 

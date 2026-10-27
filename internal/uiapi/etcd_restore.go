@@ -168,7 +168,7 @@ func (s *Server) controllerControlPlane(ctx context.Context, machines []ichorv1a
 
 	var pods corev1.PodList
 	if err := s.List(ctx, &pods, client.InNamespace(s.ControllerNamespace),
-		client.MatchingLabels{"control-plane": "controller-manager", "app.kubernetes.io/name": "ichor"}); err != nil {
+		client.MatchingLabels{"control-plane": "controller-manager"}); err != nil {
 		return ""
 	}
 

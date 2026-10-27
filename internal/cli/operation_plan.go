@@ -23,6 +23,14 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
+// pullRequestText is what `ichor upgrade ichor` says when the installation is managed in Git: the
+// upgrade became a pull request and no operation exists yet.
+func pullRequestText(url string) string {
+	return "Opened a pull request that changes Ichor's target version in Git: " + url + "\n" +
+		"Nothing was written to the cluster and no operation was created. Merge it and let Argo CD sync, " +
+		"then run 'ichor upgrade ichor' again without a version.\n"
+}
+
 // planText is the confirmation a destructive operation asks: what changes,
 // how many machines, in which order, and what happens to each one. It is a
 // pure function of the server's plan (OperationService.PlanOperation), so the
@@ -53,7 +61,12 @@ func planText(kind pb.OperationKind, cluster string, p *pb.PlanOperationResponse
 	case pb.OperationEffect_OPERATION_EFFECT_STOP:
 		b.WriteString("Every machine is POWERED OFF and stays off until you start it again. The Kubernetes API goes down.\n")
 	case pb.OperationEffect_OPERATION_EFFECT_NONE:
-		b.WriteString("No machine is touched; a Job applies the new install manifest.\n")
+		if p.GetOpensPullRequest() {
+			b.WriteString("Ichor's installation is managed in Git: this opens a pull request that changes its target version. " +
+				"Nothing is written to the cluster and no operation is created until you merge it and run this again.\n")
+		} else {
+			b.WriteString("No machine is touched; a Job applies the new install manifest.\n")
+		}
 	case pb.OperationEffect_OPERATION_EFFECT_CA_ROTATION:
 		fmt.Fprintf(&b, "Every machine is reconfigured once per pass (%s), without a reboot. "+
 			"The kubelet RESTARTS on each machine in the passes that change the Kubernetes CA.\n", strings.Join(p.GetStages(), ", "))

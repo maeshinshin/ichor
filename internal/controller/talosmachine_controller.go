@@ -77,6 +77,7 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/clusterlock"
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
+	"github.com/maeshinshin/ichor/pkg/fieldmeta"
 	"github.com/maeshinshin/ichor/pkg/render"
 )
 
@@ -465,13 +466,8 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			fmt.Sprintf("%sneeds a reset and reinstall, not an apply (install-time-only fields changed: %s)",
 				driftNote, strings.Join(impact.InstallTimeOnly, ", ")))
 
-	case impact.RebootRequired:
-		m.Status.APIServerRestartPaths = reportablePaths(current, rendered, impact.APIServerRestartPaths)
-
-		return r.refuseReboot(ctx, &m, driftNote, reportablePaths(current, rendered, impact.RebootPaths))
-
-	case len(impact.APIServerRestartPaths) > 0 && m.Spec.Role == roleControlPlane:
-		return r.refuseAPIServerRestart(ctx, &m, driftNote, reportablePaths(current, rendered, impact.APIServerRestartPaths))
+	case needsOperation(&m, impact):
+		return r.refuseForOperation(ctx, &m, driftNote, current, rendered, impact)
 
 	case drifted && cluster.Spec.DriftPolicy != driftPolicyAutoCorrect:
 		return ctrl.Result{}, r.ready(ctx, &m, metav1.ConditionFalse, reasonNodeDrifted,
@@ -669,6 +665,28 @@ func (r *TalosMachineReconciler) refuseReboot(
 	return ctrl.Result{}, r.ready(ctx, m, metav1.ConditionFalse, reasonRebootRequired,
 		driftNote+"configuration change needs a reboot (fields: "+summarizePaths(paths, rebootPathsInMessage)+
 			")"+renameNote(paths)+"; nothing reboots a node on its own -- start a config rollout (ichor config apply, or the cluster page) to apply it")
+}
+
+// needsOperation reports whether the change is left to a config operation: it needs a reboot, or
+// it restarts the API server of a control plane (a worker has none and is applied like a safe change).
+func needsOperation(m *ichorv1alpha1.TalosMachine, impact fieldmeta.Impact) bool {
+	return impact.RebootRequired || (len(impact.APIServerRestartPaths) > 0 && m.Spec.Role == roleControlPlane)
+}
+
+// refuseForOperation reports a change needsOperation holds back: the reboot form when a reboot is
+// needed (the API server restart fields ride along in status), the restart form otherwise.
+func (r *TalosMachineReconciler) refuseForOperation(
+	ctx context.Context, m *ichorv1alpha1.TalosMachine, driftNote string, current, rendered []byte, impact fieldmeta.Impact,
+) (ctrl.Result, error) {
+	restart := reportablePaths(current, rendered, impact.APIServerRestartPaths)
+
+	if impact.RebootRequired {
+		m.Status.APIServerRestartPaths = restart
+
+		return r.refuseReboot(ctx, m, driftNote, reportablePaths(current, rendered, impact.RebootPaths))
+	}
+
+	return r.refuseAPIServerRestart(ctx, m, driftNote, restart)
 }
 
 // refuseAPIServerRestart is the same for a change that needs no reboot but restarts this node's

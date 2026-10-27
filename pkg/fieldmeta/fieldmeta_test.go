@@ -31,6 +31,7 @@ const (
 	pathSysctlForward        = "SysctlConfig.params.net.ipv4.ip_forward"
 	pathKubeletMounts        = "machine.kubelet.extraMounts"
 	pathKubeProxyArgs        = "KubeProxyConfig.extraArgs"
+	pathKubeAuthJWT          = "KubeAuthenticationConfig.configuration.jwt"
 	pathUnattendedSelector   = "UnattendedInstallConfig.provisioning.diskSelector.match"
 
 	pathVolumeConfigSelector = "VolumeConfig.provisioning.diskSelector.match"
@@ -129,7 +130,7 @@ func TestAssess_Rules(t *testing.T) {
 		},
 		{name: "cluster.scheduler is safe", match: "cluster.scheduler.extraArgs", nonMatch: pathClusterProxyDisabled},
 		{
-			name: "KubeAuthenticationConfig is safe", match: "KubeAuthenticationConfig.configuration.jwt",
+			name: "KubeAuthenticationConfig is safe", match: pathKubeAuthJWT,
 			nonMatch: "KubeletConfig.image",
 		},
 		{name: "LinkConfig is safe", match: "LinkConfig.addresses", nonMatch: pathLinkAliasSelector},
@@ -312,7 +313,7 @@ func TestAssess_NoRebootRules(t *testing.T) {
 // documents stay plainly safe.
 func TestAssess_APIServerRestartClass(t *testing.T) {
 	for _, path := range []string{
-		"KubeAuthenticationConfig.configuration.jwt", "KubeAPIServerConfig.extraArgs.x",
+		pathKubeAuthJWT, "KubeAPIServerConfig.extraArgs.x",
 		"KubeAdmissionControlConfig.plugins", "KubeAuditPolicyConfig.policy", "KubeAuthorizerConfig.authorizers",
 		"cluster.apiServer.extraArgs", "cluster.apiServer.certSANs", "cluster.apiServer.admissionControl",
 		"cluster.apiServer.auditPolicy",
@@ -323,19 +324,21 @@ func TestAssess_APIServerRestartClass(t *testing.T) {
 		}
 	}
 
-	for _, path := range []string{"cluster.controllerManager.extraArgs", "KubeSchedulerConfig.extraArgs.x", pathSysctlForward} {
+	plain := []string{"cluster.controllerManager.extraArgs", "KubeSchedulerConfig.extraArgs.x", pathSysctlForward}
+	for _, path := range plain {
 		if got := Assess([]string{path}, nil); got.RebootRequired || len(got.APIServerRestartPaths) != 0 {
 			t.Errorf("Assess(%q) = %+v, want plainly safe", path, got)
 		}
 	}
 
 	// The image stays reboot-required (the Kubernetes upgrade executor owns it).
-	if got := Assess([]string{"KubeAPIServerConfig.image"}, nil); !got.RebootRequired || len(got.APIServerRestartPaths) != 0 {
+	got := Assess([]string{"KubeAPIServerConfig.image"}, nil)
+	if !got.RebootRequired || len(got.APIServerRestartPaths) != 0 {
 		t.Errorf("KubeAPIServerConfig.image = %+v, want reboot-required only", got)
 	}
 
 	// A mixed set reports each class on its own list.
-	mixed := Assess([]string{"KubeAuthenticationConfig.configuration.jwt", pathClusterProxyDisabled}, nil)
+	mixed := Assess([]string{pathKubeAuthJWT, pathClusterProxyDisabled}, nil)
 	if !mixed.RebootRequired || len(mixed.APIServerRestartPaths) != 1 || len(mixed.RebootPaths) != 1 {
 		t.Errorf("mixed = %+v", mixed)
 	}

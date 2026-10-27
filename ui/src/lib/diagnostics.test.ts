@@ -95,5 +95,6 @@ test('collect surfaces a stream error instead of returning half a file', async (
 test('a file name falls back to a sensible one', () => {
   const c = { filename: '', contentType: '', parts: [], size: 0 }
   assert.equal(fileNameOf(c, 'packet-capture'), 'capture.pcap')
+  assert.equal(fileNameOf(c, 'ca-credentials'), 'credentials.zip')
   assert.equal(fileNameOf({ ...c, filename: 'mine.zip' }, 'support-bundle'), 'mine.zip')
 })

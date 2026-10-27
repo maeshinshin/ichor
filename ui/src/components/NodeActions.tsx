@@ -53,7 +53,7 @@ import {
   type DownloadKind,
   type Permissions,
 } from '@/lib/diagnostics'
-import { download, type DownloadRequest } from '@/lib/download'
+import { download, type DiagnosticsDownloadRequest } from '@/lib/download'
 import { describeError } from '@/lib/errors'
 import { useT } from '@/lib/useT'
 
@@ -93,7 +93,7 @@ export function NodeActions({
   const t = useT()
   const [perms, setPerms] = useState<Permissions | undefined>()
   // The download waiting for the user's confirmation, with its request when it has parameters.
-  const [pending, setPending] = useState<DownloadRequest | null>(null)
+  const [pending, setPending] = useState<DiagnosticsDownloadRequest | null>(null)
   const [captureOpen, setCaptureOpen] = useState(false)
   const abort = useRef<AbortController | null>(null)
 
@@ -119,7 +119,7 @@ export function NodeActions({
   const dangerDefs = nodeDefs.filter((d) => d.destructive)
   if (actions.length === 0 && nodeDefs.length === 0) return null
 
-  async function run(req: DownloadRequest) {
+  async function run(req: DiagnosticsDownloadRequest) {
     setPending(null)
     const controller = new AbortController()
     abort.current = controller

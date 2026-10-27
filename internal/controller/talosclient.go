@@ -210,6 +210,13 @@ type TalosClient interface {
 	// "installing", "rebooting", ...), which followStage uses to follow a
 	// node Ichor provisioned until it is running.
 	MachineStage(ctx context.Context) (string, error)
+
+	// Schematic reports the Image Factory schematic ID this node's running system was built from
+	// (the ImageFactorySchematic resource, which Talos fills from the "schematic" extension that
+	// Image Factory bakes into every asset and installer image). Empty with a nil error when the
+	// node did not boot an Image Factory asset.: it is how a schematic-only
+	// change is told apart from "already up to date".
+	Schematic(ctx context.Context) (string, error)
 }
 
 // EtcdMember is the one piece of each etcd member EtcdMemberList's callers

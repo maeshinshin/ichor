@@ -51,3 +51,4 @@ resources:
 - ichor_admin_role.yaml
 - ichor_user_access_role.yaml
 - ichor_roles_binding.yaml
+- credentials_role.yaml

@@ -96,6 +96,11 @@ type Server struct {
 	// real one; nil answers Unavailable.
 	DownloadTalosClient DownloadTalosClientFactory
 
+	// VerifyKubeconfig checks that a kubeconfig authenticates to its cluster before a CA rotation's
+	// credentials hand-off is acknowledged. nil means credentials.VerifyKubeconfig;
+	// tests supply a fake, since no API server accepts a freshly minted CA.
+	VerifyKubeconfig func(ctx context.Context, kubeconfig []byte) error
+
 	prs prCache
 
 	diag     diagnostics

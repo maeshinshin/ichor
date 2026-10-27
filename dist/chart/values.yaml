@@ -247,6 +247,18 @@ ichorUI:
     ## OIDC off, and it lets anyone who can reach ichor-ui download secrets. Leave false.
     serviceAccount: false
 
+  ## Who may download the new kubeconfig and talosconfig of a CA rotation from the UI. They hold cluster-admin private keys. Nobody may by default, including
+  ## ichor-ui's own ServiceAccount. Ichor checks the "download" verb on talosclusters/credentials
+  ## as the signed-in user. Continuing a rotation does not need it (only patching the operation).
+  ##
+  credentials:
+    ## Groups to grant the verb to, with ichorUI.oidc.groupsPrefix applied. Only meaningful with
+    ## ichorUI.oidc.enabled.
+    groups: []
+    ## Grant the verb to ichor-ui's own ServiceAccount. This is the only way to download with
+    ## OIDC off, and then anyone who can reach ichor-ui gets cluster-admin credentials. Leave false.
+    serviceAccount: false
+
   ## Pod-level security settings
   ##
   podSecurityContext:

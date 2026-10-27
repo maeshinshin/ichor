@@ -368,6 +368,28 @@ func (t *machineryTalosClient) ServiceRestart(ctx context.Context, id string) er
 	return err
 }
 
+// ServiceState reads the service from the Talos ServiceList API.
+func (t *machineryTalosClient) ServiceState(ctx context.Context, id string) (string, bool, bool, error) {
+	resp, err := t.c.ServiceList(ctx)
+	if err != nil {
+		return "", false, false, err
+	}
+
+	for _, msg := range resp.GetMessages() {
+		for _, svc := range msg.GetServices() {
+			if svc.GetId() != id {
+				continue
+			}
+
+			h := svc.GetHealth()
+
+			return svc.GetState(), h != nil && !h.GetUnknown(), h.GetHealthy(), nil
+		}
+	}
+
+	return "", false, false, fmt.Errorf("service %q is not reported by the node", id)
+}
+
 // EtcdStatus reads this node's own etcd member status.
 func (t *machineryTalosClient) EtcdStatus(ctx context.Context) (EtcdStatus, error) {
 	resp, err := t.c.EtcdStatus(ctx)

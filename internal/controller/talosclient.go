@@ -173,6 +173,10 @@ type TalosClient interface {
 	// nodeActionServices (ADR 0085); the interface does not enforce the allowlist.
 	ServiceRestart(ctx context.Context, id string) error
 
+	// ServiceState returns one Talos service's state ("Running", ...) and, when the service has a
+	// health check, whether it is healthy; hasHealth is false when it has none.
+	ServiceState(ctx context.Context, id string) (state string, hasHealth, healthy bool, err error)
+
 	// EtcdStatus reports this node's own etcd member: its ID and the ID of the member it
 	// believes leads, so the caller can tell whether it is the leader.
 	EtcdStatus(ctx context.Context) (EtcdStatus, error)

@@ -81,17 +81,6 @@ func newNodeFixture(hosts map[string]string) *nodeFixture {
 
 const nodeSpareWorker = "spare-worker"
 
-// serviceFake adds a scripted ServiceState to a fake Talos client.
-type serviceFake struct {
-	*fakeTalosClient
-	state   string
-	healthy bool
-}
-
-func (s *serviceFake) ServiceState(context.Context, string) (string, bool, bool, error) {
-	return s.state, true, s.healthy, nil
-}
-
 func (f *nodeFixture) reconciler() *TalosOperationReconciler {
 	return &TalosOperationReconciler{
 		Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, KubeClient: f.kube,
@@ -356,10 +345,8 @@ var _ = Describe("TalosOperation node actions", func() {
 
 		It("is not complete until the restarted service is Running and healthy", func() {
 			f := newNodeFixture(map[string]string{hostW1: roleWorker})
-			svc := &serviceFake{fakeTalosClient: f.fake(hostW1), state: "Starting"}
-			f.r.TalosClient = func(context.Context, *ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine, *secrets.Bundle) (TalosClient, error) {
-				return svc, nil
-			}
+			svc := f.fake(hostW1)
+			svc.serviceState, svc.serviceUnhealthy = "Starting", true
 
 			spec := nodeSpec(ichorv1alpha1.NodeActionRestartService)
 			spec.Service = serviceKubelet
@@ -371,12 +358,12 @@ var _ = Describe("TalosOperation node actions", func() {
 			Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseInProgress), "Node Ready is not enough")
 			Expect(got.Status.Node.Message).To(ContainSubstring("not Running"))
 
-			svc.state = "Running"
+			svc.serviceState = "Running"
 			got = f.reconcile(op)
 			Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseInProgress))
 			Expect(got.Status.Node.Message).To(ContainSubstring("not healthy"))
 
-			svc.healthy = true
+			svc.serviceUnhealthy = false
 			Expect(f.reconcile(op).Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseCompleted))
 		})
 

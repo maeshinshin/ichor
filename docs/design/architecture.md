@@ -534,7 +534,9 @@ disk), `storage` (prepared for a storage system via a preset), `userVolume`, or
 `VolumeConfig`/`UserVolumeConfig`/`RawVolumeConfig` document for the rest,
 each selecting its disk with a CEL expression over the disk's reported fields.
 All three documents are on the mirror allow-list, so a role is expressible
-today; what is still missing is the controller that sets one. The `system`
+today; `TalosMachine.spec.disks` sets `ephemeral` and `userVolume` at approval
+and `spec.network` the primary NIC, DHCP or static, and a VLAN;
+`storage`, `unused` and bonds are not done. The `system`
 disk is the exception to "a document per role": it is
 `TalosMachine.spec.install.disk` (WWID, serial, by-id path, bus path, or
 device path as a last resort), rendered as `UnattendedInstallConfig` from the

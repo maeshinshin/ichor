@@ -1,6 +1,6 @@
 # 0059. IchorInstallation holds the target version; a TalosOperation of kind ichor runs an installer Job that carries its own manifests, snapshots, and rolls back
 
-Status: Accepted · Date: 2026-10-26 · Design section: Upgrades (Ichor), API
+Status: Accepted; superseded in part by ADR 0090 (no air-gap requirement) · Date: 2026-10-26 · Design section: Upgrades (Ichor), API
 Decided: Add the cluster-scoped singleton `IchorInstallation` (managementMode, target version, installer repository; installed version reported by the controller), execute `kind: ichor` by creating a one-shot installer Job that runs the target version's own image and embedded manifest (snapshot in ConfigMaps, additive-only CRD check, CRDs then controller then UI with post-checks, rollback from the snapshot), refuse CLI writes more than one minor from the server, and never launch the Job in `external` mode
 
 ## Context
@@ -17,7 +17,7 @@ backend sends its version in a header. ADR 0004 deferred `IchorInstallation` to 
 
 **1. Shape, and who owns what.** `IchorInstallation` (cluster-scoped, must be named `ichor`, enforced by CEL):
 `spec.managementMode` (`ichor` default, `external`), `spec.version` (semver with a leading `v`, required),
-`spec.installerRepository` (default `ghcr.io/maeshinshin/ichor-installer`; point it at a mirror when air-gapped).
+`spec.installerRepository` (default `ghcr.io/maeshinshin/ichor-installer`; point it at a mirror if needed).
 `status.installedVersion` is written by the controller from its own build version (`internal/version`, linked
 with `-ldflags`) and nothing else writes it; conditions `UpToDate` and `ExternalSuggested` (the latter when
 the mode is `ichor` but `pkg/gitopstracking.IsTracked` finds the controller's own Deployment tracked).
@@ -40,10 +40,10 @@ run, which is the point.
 **2. Where the target's manifest comes from.** From the target version's own installer image. `ichor installer
 run` (a hidden subcommand) applies `installmanifest.Manifest`, the same embedded bytes `ichor init` applies
 (ADR 0019), so the image is built with `-tags installembed` (`Dockerfile.installer`, `make
-docker-build-installer`) and **fetches nothing at run time**, which is what an air-gapped cluster needs. The
+docker-build-installer`) and **fetches nothing at run time**. The
 Job runs `<installerRepository>:<version>`. The controller never reads the new manifest; it cannot even tell
 what it contains. The cost: one more image per release, and the manifest's own image references (controller,
-UI) must be mirrored along with it (`ichor images list`, phase 10).
+UI) are pulled as usual.
 
 **3. Snapshot and rollback.** Before any write, the installer saves the live state of every object the
 manifest names (and a marker for those that do not exist yet) as gzipped JSON, split into 512 KiB parts, in

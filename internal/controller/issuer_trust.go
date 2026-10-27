@@ -66,10 +66,6 @@ const (
 	// separate calls, in either order.
 	issuerOrphanGrace = 2 * time.Minute
 
-	// ConditionIssuerCertificatesExpiring is True on a TalosCluster while the issuer's CA or leaf
-	// is within the warning window of its end.
-	ConditionIssuerCertificatesExpiring = "IssuerCertificatesExpiring"
-
 	managedByLabel   = "app.kubernetes.io/managed-by"
 	managedByValue   = "ichor-controller"
 	credentialsShape = "$argon2id$"
@@ -109,10 +105,6 @@ type IssuerTrustReconciler struct {
 	// retirement. Zero means DefaultRefreshLifetime.
 	RefreshLifetime time.Duration
 
-	// ExpiryWarning is the window for ConditionIssuerCertificatesExpiring. Zero means
-	// DefaultCertificateExpiryWarning.
-	ExpiryWarning time.Duration
-
 	// Now is the clock; nil means time.Now.
 	Now func() time.Time
 
@@ -124,7 +116,6 @@ type IssuerTrustReconciler struct {
 
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=ichorusers,verbs=get;list;watch
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=ichorusers/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",namespace=ichor-system,resources=configmaps,verbs=get;list;watch;create;update;patch
 // +kubebuilder:rbac:groups="",namespace=ichor-system,resources=services,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,resourceNames=ichor-user-credentials,verbs=get;update;patch
@@ -312,10 +303,6 @@ func (r *IssuerTrustReconciler) reconcileTLS(ctx context.Context, now time.Time)
 	issuerCertExpiry.WithLabelValues("ca").Set(float64(caX509.NotAfter.Unix()))
 	issuerCertExpiry.WithLabelValues("tls").Set(float64(leafEnd.Unix()))
 
-	if err := r.setExpiring(ctx, now, caX509.NotAfter, leafEnd); err != nil {
-		return time.Time{}, err
-	}
-
 	// Wake for the leaf's renewal point.
 	return leafRenewAt(leaf), nil
 }
@@ -441,59 +428,6 @@ func (r *IssuerTrustReconciler) ensureTrustMap(ctx context.Context, ip net.IP, c
 
 	if err := r.Update(ctx, &cm); err != nil {
 		return fmt.Errorf("updating ConfigMap %s: %w", oidctrust.TrustConfigMap, err)
-	}
-
-	return nil
-}
-
-// setExpiring sets ConditionIssuerCertificatesExpiring on every TalosCluster in the namespace.
-func (r *IssuerTrustReconciler) setExpiring(ctx context.Context, now, caEnd, leafEnd time.Time) error {
-	window := r.ExpiryWarning
-	if window <= 0 {
-		window = DefaultCertificateExpiryWarning
-	}
-
-	var soon []string
-
-	for _, c := range []struct {
-		name string
-		end  time.Time
-	}{{"CA", caEnd}, {"serving certificate", leafEnd}} {
-		if c.end.Before(now.Add(window)) {
-			soon = append(soon, fmt.Sprintf("the issuer %s expires on %s", c.name, c.end.UTC().Format(time.DateOnly)))
-		}
-	}
-
-	want := metav1.Condition{
-		Type: ConditionIssuerCertificatesExpiring, Status: metav1.ConditionFalse, Reason: "NoneExpiring",
-		Message: fmt.Sprintf("neither issuer certificate expires within %d days", int(window.Hours()/24)),
-	}
-
-	if len(soon) > 0 {
-		want.Status, want.Reason = metav1.ConditionTrue, "ExpiringSoon"
-		want.Message = strings.Join(soon, "; ") + ". The controller renews them on its own; this stays True only if it cannot."
-	}
-
-	var clusters ichorv1alpha1.TalosClusterList
-	if err := r.List(ctx, &clusters, client.InNamespace(r.Namespace)); err != nil {
-		return fmt.Errorf("listing TalosClusters: %w", err)
-	}
-
-	for i := range clusters.Items {
-		c := &clusters.Items[i]
-
-		before := apimeta.FindStatusCondition(c.Status.Conditions, want.Type)
-		if before != nil && before.Status == want.Status && before.Reason == want.Reason && before.Message == want.Message {
-			continue
-		}
-
-		base := c.DeepCopy()
-		want.ObservedGeneration = c.Generation
-		apimeta.SetStatusCondition(&c.Status.Conditions, want)
-
-		if err := r.Status().Patch(ctx, c, client.MergeFrom(base)); client.IgnoreNotFound(err) != nil {
-			return fmt.Errorf("setting %s on %s: %w", want.Type, c.Name, err)
-		}
 	}
 
 	return nil

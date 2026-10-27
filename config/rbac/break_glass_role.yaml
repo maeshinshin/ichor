@@ -1,5 +1,5 @@
 # Not bound to anyone. Bind it to the people who may write GitOps-tracked Ichor
-# resources directly in an incident (docs/adr/0064). Ichor checks this verb with a
+# resources directly in an incident (docs/adr/0065). Ichor checks this verb with a
 # SelfSubjectAccessReview made as the user; the user also needs ordinary update (or
 # delete) rights on the resource, since the write is made as them.
 # Roles with verbs '*' on these resources (the *_admin_role.yaml helpers) include it.

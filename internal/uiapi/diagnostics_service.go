@@ -43,7 +43,7 @@ import (
 // DownloadVerb is the Kubernetes RBAC verb that lets a user start one of the
 // three diagnostic downloads (docs/adr/0084), on the subresource named by the
 // DownloadScope of talosmachines. It follows the break-glass verb's pattern
-// (docs/adr/0064): checked with a SelfSubjectAccessReview as the caller, so
+// (docs/adr/0065): checked with a SelfSubjectAccessReview as the caller, so
 // Kubernetes decides and Ichor keeps no list of who may.
 const DownloadVerb = "download"
 

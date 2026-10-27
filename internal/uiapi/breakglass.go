@@ -34,7 +34,7 @@ import (
 
 // BreakGlassVerb is the Kubernetes RBAC verb that lets a user write a
 // GitOps-managed (or strict-mode) resource directly in an incident
-// (docs/adr/0064). It is checked per resource with a SelfSubjectAccessReview
+// (docs/adr/0065). It is checked per resource with a SelfSubjectAccessReview
 // made as the user, so Kubernetes decides; Ichor has no list of who may.
 const BreakGlassVerb = "break-glass"
 

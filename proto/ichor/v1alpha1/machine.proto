@@ -53,7 +53,7 @@ message ApproveMachineRequest {
   // for rejections," not exclusive to them, so a caller that does have a
   // reason to approve (e.g. "replacing node-3, same role") can record it.
   string reason = 5;
-  // break_glass requests an emergency direct write (docs/adr/0064).
+  // break_glass requests an emergency direct write (docs/adr/0065).
   BreakGlass break_glass = 6;
   // install is the system disk (TalosMachine.spec.install, ADR 0077). Unset
   // approves without an install target.
@@ -119,7 +119,7 @@ message ApproveMachineResponse {
   // (docs/adr/0056).
   string pull_request_url = 3;
   // notice is a warning for the caller, set after a break-glass write
-  // (docs/adr/0064): the Argo CD selfHeal caveat, or that the pull request
+  // (docs/adr/0065): the Argo CD selfHeal caveat, or that the pull request
   // could not be opened.
   string notice = 4;
 }
@@ -127,7 +127,7 @@ message ApproveMachineResponse {
 message RejectMachineRequest {
   ObjectRef machine = 1;
   string reason = 2;
-  // break_glass requests an emergency direct write (docs/adr/0064).
+  // break_glass requests an emergency direct write (docs/adr/0065).
   BreakGlass break_glass = 3;
 }
 
@@ -136,7 +136,7 @@ message SetMachineInstallRequest {
   // install is required: the system disk and optionally the installer image.
   MachineInstall install = 2;
   string reason = 3;
-  // break_glass requests an emergency direct write (docs/adr/0064).
+  // break_glass requests an emergency direct write (docs/adr/0065).
   BreakGlass break_glass = 4;
 }
 

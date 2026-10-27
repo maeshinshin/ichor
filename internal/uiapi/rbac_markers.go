@@ -102,7 +102,7 @@ package uiapi
 // serviceaccounts or userextras.
 // +kubebuilder:rbac:groups="",resources=users;groups,verbs=impersonate
 
-// Break-glass (docs/adr/0064) records a Warning Event on the resource it
+// Break-glass (docs/adr/0065) records a Warning Event on the resource it
 // wrote. create only, on Events: no get/list/update/delete. The break-glass
 // permission itself is not here: it is the user's, checked with a
 // SelfSubjectAccessReview made as the user (every authenticated user may ask

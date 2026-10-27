@@ -86,7 +86,7 @@ export const ConditionSchema: GenMessage<Condition> = /*@__PURE__*/
   messageDesc(file_ichor_v1alpha1_common, 1);
 
 /**
- * BreakGlass asks for an emergency direct write (docs/adr/0064). Setting it
+ * BreakGlass asks for an emergency direct write (docs/adr/0065). Setting it
  * on a request means "if this change would be a pull request or is refused
  * because Argo CD tracks the resource, write it now and open the matching pull
  * request". The backend allows it only to a signed-in user whose Kubernetes RBAC

@@ -128,7 +128,7 @@ export type ApproveMachineRequest = Message<"ichor.v1alpha1.ApproveMachineReques
   reason: string;
 
   /**
-   * break_glass requests an emergency direct write (docs/adr/0064).
+   * break_glass requests an emergency direct write (docs/adr/0065).
    *
    * @generated from field: ichor.v1alpha1.BreakGlass break_glass = 6;
    */
@@ -353,7 +353,7 @@ export type ApproveMachineResponse = Message<"ichor.v1alpha1.ApproveMachineRespo
 
   /**
    * notice is a warning for the caller, set after a break-glass write
-   * (docs/adr/0064): the Argo CD selfHeal caveat, or that the pull request
+   * (docs/adr/0065): the Argo CD selfHeal caveat, or that the pull request
    * could not be opened.
    *
    * @generated from field: string notice = 4;
@@ -383,7 +383,7 @@ export type RejectMachineRequest = Message<"ichor.v1alpha1.RejectMachineRequest"
   reason: string;
 
   /**
-   * break_glass requests an emergency direct write (docs/adr/0064).
+   * break_glass requests an emergency direct write (docs/adr/0065).
    *
    * @generated from field: ichor.v1alpha1.BreakGlass break_glass = 3;
    */
@@ -419,7 +419,7 @@ export type SetMachineInstallRequest = Message<"ichor.v1alpha1.SetMachineInstall
   reason: string;
 
   /**
-   * break_glass requests an emergency direct write (docs/adr/0064).
+   * break_glass requests an emergency direct write (docs/adr/0065).
    *
    * @generated from field: ichor.v1alpha1.BreakGlass break_glass = 4;
    */

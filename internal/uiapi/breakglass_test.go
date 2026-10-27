@@ -34,7 +34,7 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
-// Break-glass tests (docs/adr/0064): the Kubernetes API is a fake whose
+// Break-glass tests (docs/adr/0065): the Kubernetes API is a fake whose
 // SelfSubjectAccessReview answer the test chooses, standing in for RBAC.
 
 const (

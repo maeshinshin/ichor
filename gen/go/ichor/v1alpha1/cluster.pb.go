@@ -146,7 +146,7 @@ type AddDiscoveryAddressRequest struct {
 	// address is a single IPv4 address, e.g. "192.168.0.50".
 	Address string `protobuf:"bytes,2,opt,name=address,proto3" json:"address,omitempty"`
 	Reason  string `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
-	// break_glass requests an emergency direct write (docs/adr/0064).
+	// break_glass requests an emergency direct write (docs/adr/0065).
 	BreakGlass    *BreakGlass `protobuf:"bytes,4,opt,name=break_glass,json=breakGlass,proto3" json:"break_glass,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

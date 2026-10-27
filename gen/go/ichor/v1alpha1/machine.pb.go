@@ -326,7 +326,7 @@ type ApproveMachineRequest struct {
 	// for rejections," not exclusive to them, so a caller that does have a
 	// reason to approve (e.g. "replacing node-3, same role") can record it.
 	Reason string `protobuf:"bytes,5,opt,name=reason,proto3" json:"reason,omitempty"`
-	// break_glass requests an emergency direct write (docs/adr/0064).
+	// break_glass requests an emergency direct write (docs/adr/0065).
 	BreakGlass *BreakGlass `protobuf:"bytes,6,opt,name=break_glass,json=breakGlass,proto3" json:"break_glass,omitempty"`
 	// install is the system disk (TalosMachine.spec.install, ADR 0077). Unset
 	// approves without an install target.
@@ -739,7 +739,7 @@ type ApproveMachineResponse struct {
 	// (docs/adr/0056).
 	PullRequestUrl string `protobuf:"bytes,3,opt,name=pull_request_url,json=pullRequestUrl,proto3" json:"pull_request_url,omitempty"`
 	// notice is a warning for the caller, set after a break-glass write
-	// (docs/adr/0064): the Argo CD selfHeal caveat, or that the pull request
+	// (docs/adr/0065): the Argo CD selfHeal caveat, or that the pull request
 	// could not be opened.
 	Notice        string `protobuf:"bytes,4,opt,name=notice,proto3" json:"notice,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -808,7 +808,7 @@ type RejectMachineRequest struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Machine *ObjectRef             `protobuf:"bytes,1,opt,name=machine,proto3" json:"machine,omitempty"`
 	Reason  string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
-	// break_glass requests an emergency direct write (docs/adr/0064).
+	// break_glass requests an emergency direct write (docs/adr/0065).
 	BreakGlass    *BreakGlass `protobuf:"bytes,3,opt,name=break_glass,json=breakGlass,proto3" json:"break_glass,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -871,7 +871,7 @@ type SetMachineInstallRequest struct {
 	// install is required: the system disk and optionally the installer image.
 	Install *MachineInstall `protobuf:"bytes,2,opt,name=install,proto3" json:"install,omitempty"`
 	Reason  string          `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
-	// break_glass requests an emergency direct write (docs/adr/0064).
+	// break_glass requests an emergency direct write (docs/adr/0065).
 	BreakGlass    *BreakGlass `protobuf:"bytes,4,opt,name=break_glass,json=breakGlass,proto3" json:"break_glass,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

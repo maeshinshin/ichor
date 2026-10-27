@@ -75,7 +75,7 @@ type apiOptions struct {
 	ArgoCDNamespace string
 	// Local skips ichor-ui and computes from the Kubernetes API.
 	Local bool
-	// BreakGlass is the reason of an emergency direct write (docs/adr/0064);
+	// BreakGlass is the reason of an emergency direct write (docs/adr/0065);
 	// empty means off. Setting it implies Local: break-glass is decided by the
 	// caller's own RBAC, never by the backend's ServiceAccount.
 	BreakGlass string

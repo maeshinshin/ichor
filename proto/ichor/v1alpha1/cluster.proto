@@ -16,7 +16,7 @@ service ClusterService {
   // TalosCluster.spec.discovery.addresses (ADR 0011), so the controller
   // probes it for a node in maintenance mode. It goes through the same write
   // gate as the other writes: refused when Flux tracks the cluster, a pull
-  // request when Argo CD does, break-glass on request (ADR 0064).
+  // request when Argo CD does, break-glass on request (ADR 0065).
   rpc AddDiscoveryAddress(AddDiscoveryAddressRequest) returns (AddDiscoveryAddressResponse);
 }
 
@@ -25,7 +25,7 @@ message AddDiscoveryAddressRequest {
   // address is a single IPv4 address, e.g. "192.168.0.50".
   string address = 2;
   string reason = 3;
-  // break_glass requests an emergency direct write (docs/adr/0064).
+  // break_glass requests an emergency direct write (docs/adr/0065).
   BreakGlass break_glass = 4;
 }
 

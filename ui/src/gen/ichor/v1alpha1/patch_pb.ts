@@ -151,7 +151,7 @@ export type UpdatePatchRequest = Message<"ichor.v1alpha1.UpdatePatchRequest"> & 
   patch?: Patch | undefined;
 
   /**
-   * break_glass requests an emergency direct write (docs/adr/0064).
+   * break_glass requests an emergency direct write (docs/adr/0065).
    *
    * @generated from field: ichor.v1alpha1.BreakGlass break_glass = 2;
    */
@@ -216,7 +216,7 @@ export type DeletePatchRequest = Message<"ichor.v1alpha1.DeletePatchRequest"> & 
   patch?: ObjectRef | undefined;
 
   /**
-   * break_glass requests an emergency direct write (docs/adr/0064).
+   * break_glass requests an emergency direct write (docs/adr/0065).
    *
    * @generated from field: ichor.v1alpha1.BreakGlass break_glass = 2;
    */

@@ -89,7 +89,7 @@ func TestApproveFallbackHonoursArgoCDNamespaceFlag(t *testing.T) {
 // --break-glass never goes through the backend (its ServiceAccount must not
 // decide who may break glass) and reaches the Server as a break-glass
 // request: with no repository to open the pull request in, a tracked
-// resource is still refused, and the refusal says why (docs/adr/0064).
+// resource is still refused, and the refusal says why (docs/adr/0065).
 const (
 	trackingID  = "app:ns/x"
 	trackingKey = "argocd.argoproj.io/tracking-id"

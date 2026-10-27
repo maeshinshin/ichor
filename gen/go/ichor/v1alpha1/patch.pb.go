@@ -311,7 +311,7 @@ type UpdatePatchRequest struct {
 	// other field on patch replaces that object's spec wholesale, the same
 	// "no partial-field merge" simplicity CreatePatch has.
 	Patch *Patch `protobuf:"bytes,1,opt,name=patch,proto3" json:"patch,omitempty"`
-	// break_glass requests an emergency direct write (docs/adr/0064).
+	// break_glass requests an emergency direct write (docs/adr/0065).
 	BreakGlass    *BreakGlass `protobuf:"bytes,2,opt,name=break_glass,json=breakGlass,proto3" json:"break_glass,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -438,7 +438,7 @@ func (x *UpdatePatchResponse) GetNotice() string {
 type DeletePatchRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Patch *ObjectRef             `protobuf:"bytes,1,opt,name=patch,proto3" json:"patch,omitempty"`
-	// break_glass requests an emergency direct write (docs/adr/0064).
+	// break_glass requests an emergency direct write (docs/adr/0065).
 	BreakGlass    *BreakGlass `protobuf:"bytes,2,opt,name=break_glass,json=breakGlass,proto3" json:"break_glass,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

@@ -64,7 +64,7 @@ message UpdatePatchRequest {
   // other field on patch replaces that object's spec wholesale, the same
   // "no partial-field merge" simplicity CreatePatch has.
   Patch patch = 1;
-  // break_glass requests an emergency direct write (docs/adr/0064).
+  // break_glass requests an emergency direct write (docs/adr/0065).
   BreakGlass break_glass = 2;
 }
 
@@ -83,7 +83,7 @@ message UpdatePatchResponse {
 
 message DeletePatchRequest {
   ObjectRef patch = 1;
-  // break_glass requests an emergency direct write (docs/adr/0064).
+  // break_glass requests an emergency direct write (docs/adr/0065).
   BreakGlass break_glass = 2;
 }
 

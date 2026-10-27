@@ -36,7 +36,7 @@ import (
 // AddDiscoveryAddress appends one IPv4 address to spec.discovery.addresses and writes nothing else
 // (ADR 0011: Ichor only dials what the cluster declares). It passes the same gate as every other
 // write to an existing CR (planWrite): refused when the cluster is tracked and no pull request can
-// be opened, a pull request when Argo CD tracks it, break-glass on request (ADR 0064).
+// be opened, a pull request when Argo CD tracks it, break-glass on request (ADR 0065).
 func (s *Server) AddDiscoveryAddress(
 	ctx context.Context, req *connect.Request[pb.AddDiscoveryAddressRequest],
 ) (*connect.Response[pb.AddDiscoveryAddressResponse], error) {

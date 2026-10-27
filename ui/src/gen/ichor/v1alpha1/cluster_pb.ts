@@ -43,7 +43,7 @@ export type AddDiscoveryAddressRequest = Message<"ichor.v1alpha1.AddDiscoveryAdd
   reason: string;
 
   /**
-   * break_glass requests an emergency direct write (docs/adr/0064).
+   * break_glass requests an emergency direct write (docs/adr/0065).
    *
    * @generated from field: ichor.v1alpha1.BreakGlass break_glass = 4;
    */
@@ -464,7 +464,7 @@ export const ClusterService: GenService<{
    * TalosCluster.spec.discovery.addresses (ADR 0011), so the controller
    * probes it for a node in maintenance mode. It goes through the same write
    * gate as the other writes: refused when Flux tracks the cluster, a pull
-   * request when Argo CD does, break-glass on request (ADR 0064).
+   * request when Argo CD does, break-glass on request (ADR 0065).
    *
    * @generated from rpc ichor.v1alpha1.ClusterService.AddDiscoveryAddress
    */

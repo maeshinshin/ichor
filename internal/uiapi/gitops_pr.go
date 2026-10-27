@@ -66,7 +66,7 @@ type prPlan struct {
 
 	// app and selfHeal name the tracking Application and say whether it
 	// self-heals (planEdit); bg is set when the caller was granted break-glass
-	// (docs/adr/0064): the CR is written directly and this PR follows.
+	// (docs/adr/0065): the CR is written directly and this PR follows.
 	app      string
 	selfHeal bool
 	bg       *breakGlass
@@ -99,7 +99,7 @@ func (s *Server) argoNamespace() string {
 // it must not happen at all. A failed check refuses: "cannot tell" is never
 // "may write" (docs/adr/0044).
 //
-// bg asks for break-glass (docs/adr/0064): where the answer would be a pull
+// bg asks for break-glass (docs/adr/0065): where the answer would be a pull
 // request, the returned plan has bg set and the caller writes the CR directly
 // and then opens that pull request. Where the write is direct anyway, bg is
 // ignored; where no pull request can be opened, it is refused.

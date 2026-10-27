@@ -95,6 +95,8 @@ func (s *Server) planEtcdRestore(ctx context.Context, clusterRef *pb.ObjectRef, 
 
 	slices.Sort(cps)
 
+	own := s.controllerControlPlane(ctx, machines.Items, cluster.Name)
+
 	var taken time.Time
 
 	for _, snap := range bk.Status.Snapshots {
@@ -110,7 +112,7 @@ func (s *Server) planEtcdRestore(ctx context.Context, clusterRef *pb.ObjectRef, 
 	p.resp.Steps = []string{
 		"Check the snapshot: it is decrypted and its checksum verified, and a copy is kept in the backup storage so that retention cannot remove it.",
 		"Take the cluster lock and write a marker next to the backups. It is how the restore carries on after the Kubernetes API is gone.",
-		fmt.Sprintf("Wipe etcd data on every control plane (%s): their EPHEMERAL partitions are reset and the nodes reboot. STATE stays, so each keeps its configuration.", strings.Join(cps, ", ")),
+		wipeStep(cps, own),
 		"Upload the snapshot to one control plane and start etcd from it.",
 		"The other control planes rejoin etcd by themselves. Wait until all are members and the Kubernetes API answers.",
 		"Restart kube-proxy on the nodes that were not wiped, ask every machine to reconcile again and wait until each is Ready.",
@@ -135,6 +137,60 @@ func (s *Server) planEtcdRestore(ctx context.Context, clusterRef *pb.ObjectRef, 
 	}
 
 	return p, nil
+}
+
+// wipeStep is the plan's wipe step. The control plane the controller runs on is wiped last, once etcd is
+// back and the others have rejoined, by the controller itself, which stops with it.
+func wipeStep(cps []string, own string) string {
+	const tail = " Their EPHEMERAL partitions are reset and the nodes reboot. STATE stays, so each keeps its configuration."
+
+	if own == "" || len(cps) < 2 {
+		return fmt.Sprintf("Wipe etcd data on every control plane (%s).", strings.Join(cps, ", ")) + tail
+	}
+
+	rest := make([]string, 0, len(cps))
+
+	for _, c := range cps {
+		if c != own {
+			rest = append(rest, c)
+		}
+	}
+
+	return fmt.Sprintf("Wipe etcd data on %s, then %s (where this controller runs) once the others have rejoined.", strings.Join(rest, ", "), own) + tail
+}
+
+// controllerControlPlane is the control plane machine the Ichor controller pod runs on, "" when it cannot
+// be told (a worker, outside the cluster, or the pod or Node cannot be read): the plan then names nobody.
+func (s *Server) controllerControlPlane(ctx context.Context, machines []ichorv1alpha1.TalosMachine, cluster string) string {
+	if s.ControllerNamespace == "" {
+		return ""
+	}
+
+	var pods corev1.PodList
+	if err := s.List(ctx, &pods, client.InNamespace(s.ControllerNamespace),
+		client.MatchingLabels{"control-plane": "controller-manager", "app.kubernetes.io/name": "ichor"}); err != nil {
+		return ""
+	}
+
+	for i := range pods.Items {
+		node := pods.Items[i].Spec.NodeName
+		if node == "" {
+			continue
+		}
+
+		for j := range machines {
+			m := &machines[j]
+			if m.Spec.ClusterRef.Name != cluster || m.Spec.Role != opRoleControlPlane || !m.Spec.IsApproved() {
+				continue
+			}
+
+			if n, err := s.findKubernetesNode(ctx, m); err == nil && n != nil && n.Name == node {
+				return m.Name
+			}
+		}
+	}
+
+	return ""
 }
 
 func whenText(t time.Time) string {

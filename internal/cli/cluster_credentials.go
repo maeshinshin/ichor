@@ -21,16 +21,17 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"time"
 
 	"github.com/siderolabs/talos/pkg/machinery/client"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/kubernetes"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/credentials"
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
 )
 
@@ -219,19 +220,12 @@ func bundleMatchesCluster(ctx context.Context, k8s ctrlclient.Client, req creden
 
 // verifyKubeconfig asks the API server who the kubeconfig's credentials are.
 func verifyKubeconfig(ctx context.Context, path string) error {
-	cfg, err := loadKubeconfig(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
 
-	cs, err := kubernetes.NewForConfig(cfg)
-	if err != nil {
-		return err
-	}
-
-	_, err = selfSubjectName(ctx, cs.AuthenticationV1().SelfSubjectReviews())
-
-	return err
+	return credentials.VerifyKubeconfig(ctx, data)
 }
 
 // verifyTalosconfig calls Version on the first endpoint with the new talosconfig.

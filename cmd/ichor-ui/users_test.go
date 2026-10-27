@@ -35,19 +35,24 @@ func TestAuthConfigProviders(t *testing.T) {
 		users     usersFlags
 		enabled   bool
 		providers []string
-		issuer    string
 	}{
-		{"neither", "", usersFlags{}, false, nil, ""},
-		{"external only keeps the old keys", testIDP, usersFlags{}, true, []string{"oidc"}, testIDP},
-		{"ichor only", "", on, true, []string{"ichor"}, testIssuer},
-		{"both", testIDP, on, true, []string{"oidc", "ichor"}, testIDP},
+		{"neither", "", usersFlags{}, false, nil},
+		{"external only", testIDP, usersFlags{}, true, []string{"oidc"}},
+		{"ichor only", "", on, true, []string{"ichor"}},
+		{"both", testIDP, on, true, []string{"oidc", "ichor"}},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			got := authConfig(tc.oidc, "client", tc.users)
-			if got["enabled"] != tc.enabled || got["issuer"] != tc.issuer {
-				t.Fatalf("enabled=%v issuer=%v", got["enabled"], got["issuer"])
+			if _, ok := got["issuer"]; ok {
+				t.Fatalf("top-level issuer still sent: %v", got["issuer"])
+			}
+			if _, ok := got["clientId"]; ok {
+				t.Fatalf("top-level clientId still sent: %v", got["clientId"])
+			}
+			if got["enabled"] != tc.enabled {
+				t.Fatalf("enabled=%v", got["enabled"])
 			}
 
 			ps := got["providers"].([]authProvider)

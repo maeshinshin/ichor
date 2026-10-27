@@ -8,14 +8,7 @@
 // A sign-in choice from /auth/config (docs/adr/0094): 'oidc' is the external IdP of ADR 0058,
 // 'ichor' is ichor-ui's own issuer.
 export type AuthProvider = { id: string; issuer: string; clientId: string }
-export type AuthConfig = { enabled: boolean; issuer: string; clientId: string; providers?: AuthProvider[] }
-
-// providersOf lists the sign-in choices. An older ichor-ui sends no providers[], only the
-// enabled/issuer/clientId of the external IdP.
-export function providersOf(cfg: AuthConfig): AuthProvider[] {
-  if (cfg.providers && cfg.providers.length > 0) return cfg.providers
-  return cfg.enabled ? [{ id: 'oidc', issuer: cfg.issuer, clientId: cfg.clientId }] : []
-}
+export type AuthConfig = { enabled: boolean; providers: AuthProvider[] }
 
 // The redirect URI each provider has registered: the issuer's UI client takes /auth/callback, the
 // external IdP keeps the page root (ADR 0058).

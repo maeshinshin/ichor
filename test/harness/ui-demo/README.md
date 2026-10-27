@@ -66,9 +66,10 @@ sed s/__PREFIX__/$P/ test/harness/ui-demo/outer-service.yaml | kubectl --context
 ```sh
 kubectl --context $C -n ichor-e2e port-forward svc/$P-registry 5000:5000 &   # only ever this service
 PF=$!   # the port-forward's PID, to stop it below
-make demo-images VERSION=v0.0.8-$(git rev-parse --short HEAD) REGISTRY=localhost:5000
+V=v0.0.$(date +%s)-$(git rev-parse --short HEAD)   # always newer than the installed one
+make demo-images VERSION=$V REGISTRY=localhost:5000
 kill $PF   # stop the port-forward once the images are pushed
-bin/img/ichor/ichor upgrade ichor v0.0.8-<the same short sha> --cluster $P -n ichor-system --kubeconfig bin/ui-demo.kubeconfig --yes --follow
+bin/img/ichor/ichor upgrade ichor $V --cluster $P -n ichor-system --kubeconfig bin/ui-demo.kubeconfig --yes --follow
 ```
 
 `demo-images` leaves the git tree unchanged and fails if a binary is not freshly built with that `VERSION`;

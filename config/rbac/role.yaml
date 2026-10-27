@@ -282,13 +282,7 @@ rules:
   - deployments
   verbs:
   - get
-- apiGroups:
-  - apps
-  resourceNames:
-  - ichor-ui
-  resources:
-  - deployments
-  verbs:
+  - list
   - patch
 - apiGroups:
   - batch

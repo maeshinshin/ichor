@@ -27,6 +27,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/maeshinshin/ichor/internal/oidctrust"
 )
 
 // uiComponentLabel/Value select the ichor-ui Service on every install path:
@@ -34,8 +36,8 @@ import (
 // ichor-ichor-ui-service) and dist/chart/templates/ui/ui-service.yaml both set
 // it, so the CLI never depends on a name.
 const (
-	uiComponentLabel = "app.kubernetes.io/component"
-	uiComponentValue = "ui"
+	uiComponentLabel = oidctrust.UIComponentLabel
+	uiComponentValue = oidctrust.UIComponentValue
 )
 
 // findUIService returns the ichor-ui Service in ns, found by label.

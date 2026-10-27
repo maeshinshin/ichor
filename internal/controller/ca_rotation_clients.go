@@ -28,6 +28,8 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+
+	"github.com/maeshinshin/ichor/internal/oidctrust"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -41,7 +43,8 @@ import (
 
 // +kubebuilder:rbac:groups=apps,resources=daemonsets,resourceNames=kube-proxy;cilium;kube-flannel,verbs=get;patch
 // +kubebuilder:rbac:groups=apps,resources=deployments,resourceNames=coredns,verbs=get;patch
-// +kubebuilder:rbac:groups=apps,namespace=ichor-system,resources=deployments,resourceNames=ichor-ui,verbs=patch
+// ichor-ui is found by label (kustomize prefixes its name), which needs list; patch then cannot be pinned to a name.
+// +kubebuilder:rbac:groups=apps,namespace=ichor-system,resources=deployments,verbs=get;list;patch
 
 const (
 	reasonCARotationRestarting = "RestartingClients"
@@ -54,9 +57,8 @@ const (
 
 	caClientPoll = 10 * time.Second
 
-	kindDeployment   = "Deployment"
-	uiDeploymentName = "ichor-ui"
-	corednsName      = "coredns"
+	kindDeployment = "Deployment"
+	corednsName    = "coredns"
 )
 
 // caClientRestartTimeout is how long the restarted workloads get to become available again.
@@ -70,13 +72,24 @@ type caClient struct {
 
 func (a caClient) String() string { return a.kind + " " + a.namespace + "/" + a.name }
 
-func (c *caRun) restartTargets() []caClient {
+func (c *caRun) restartTargets(ctx context.Context) ([]caClient, error) {
 	targets := []caClient{{kindDeployment, kubeSystemNamespace, corednsName}}
 	for _, n := range restoreAgentNames {
 		targets = append(targets, caClient{"DaemonSet", kubeSystemNamespace, n})
 	}
 
-	return append(targets, caClient{kindDeployment, c.r.ControllerNamespace, uiDeploymentName})
+	// ichor-ui, found by the label every install path sets; none installed is fine.
+	list, err := c.r.KubeClient.AppsV1().Deployments(c.r.ControllerNamespace).List(ctx,
+		metav1.ListOptions{LabelSelector: oidctrust.UIComponentLabel + "=" + oidctrust.UIComponentValue})
+	if err != nil {
+		return nil, fmt.Errorf("finding the ichor-ui Deployment: %w", err)
+	}
+
+	for _, d := range list.Items {
+		targets = append(targets, caClient{kindDeployment, c.r.ControllerNamespace, d.Name})
+	}
+
+	return targets, nil
 }
 
 // restartClients restarts, once, the in-cluster clients known to keep the old CA, and waits (bounded)
@@ -91,7 +104,12 @@ func (c *caRun) restartClients(ctx context.Context) (res ctrl.Result, note strin
 	token := string(c.op.UID)
 	var pending []string
 
-	for _, t := range c.restartTargets() {
+	targets, err := c.restartTargets(ctx)
+	if err != nil {
+		return ctrl.Result{RequeueAfter: caClientPoll}, "", false, err
+	}
+
+	for _, t := range targets {
 		ready, gone, rerr := c.restartOne(ctx, t, token)
 		if rerr != nil {
 			pending = append(pending, fmt.Sprintf("%s (%v)", t, rerr))

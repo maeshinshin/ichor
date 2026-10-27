@@ -31,6 +31,9 @@ export const en = {
   'kind.patch': 'Patch',
   'kind.operation': 'Operation',
   'theme.toggle': 'Toggle dark mode',
+  'version.installed': 'Installed Ichor version {version}',
+  'version.updateAvailable': 'Update available',
+  'version.updateHint': 'This cluster is set to run Ichor {version}. Start "Upgrade Ichor" on a cluster page to move to it.',
 
   'app.signingIn': 'Signing in...',
   'app.signInFailed': 'Sign-in failed',
@@ -725,6 +728,8 @@ export const en = {
   'ops.plan.held': 'Skipped (upgrade-hold): {names}',
   'ops.plan.noMachines': 'No approved node is selected, so nothing would be changed.',
   'ops.plan.pauseOnFailure': 'A node that fails pauses the operation; nothing is rolled back.',
+  'ops.plan.opensPullRequest':
+    'Ichor is managed in Git. Starting opens a pull request that changes its target version to {to}. Nothing is written to the cluster and no operation is created until the pull request is merged and you start the upgrade again.',
   'ops.plan.specChanges': 'The spec is changed to {to} first; the operation is created after that.',
   'ops.plan.blocked': 'Cannot start',
 

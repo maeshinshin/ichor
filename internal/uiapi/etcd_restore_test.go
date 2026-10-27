@@ -220,8 +220,6 @@ func TestEtcdRestorePlanRefusals(t *testing.T) {
 	})
 }
 
-var _, clusterResource = kindOf(&ichorv1alpha1.TalosCluster{})
-
 func TestEtcdRestoreNeedsTheClusterNameAndBreakGlass(t *testing.T) {
 	s, k8s := opServer(t, restoreObjects()...)
 	bg := context.Background()

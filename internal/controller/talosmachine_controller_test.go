@@ -249,7 +249,11 @@ func (f *fakeTalosClient) Version(context.Context) (string, error) {
 	return f.version, f.versionErr
 }
 
-func (f *fakeTalosClient) BootID(context.Context) (string, error) {
+func (f *fakeTalosClient) BootID(ctx context.Context) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err // like gRPC: a call on an expired context never reaches the node
+	}
+
 	return f.bootID, f.bootIDErr
 }
 

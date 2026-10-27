@@ -37,13 +37,24 @@ type machineApproveOptions struct {
 	// InstallDisk is the system disk (see parseInstallDisk); InstallImage the installer image.
 	InstallDisk  string
 	InstallImage string
+
+	// NIC is the primary link's permanent MAC; Addresses (CIDR), Gateway, DNS and VLAN describe how
+	// it is addressed (see networkFromFlags). EphemeralDisk and UserVolumes are disk roles (see
+	// disksFromFlags).
+	NIC           string
+	Addresses     []string
+	Gateway       string
+	DNS           []string
+	VLAN          int32
+	EphemeralDisk string
+	UserVolumes   []string
 }
 
 var machineApproveCmd = &cobra.Command{
 	Use:   "approve NAME --role controlplane|worker",
 	Short: "Approve a pending machine so the controller starts configuring it",
 	Long: `approve sets the role (and optionally node labels, a hostname and the
-install disk) of a discovered machine and marks it approved; the controller then renders and
+install disk, network link and disk roles) of a discovered machine and marks it approved; the controller then renders and
 applies its configuration. It is refused for a machine whose identity is
 weak (missing UUID, serial number or permanent MAC) and for one already
 approved -- by ichor-ui, or, when ichor-ui is unreachable, by the same
@@ -78,6 +89,16 @@ func runMachineApprove(
 		return fmt.Errorf("--install-image needs --install-disk")
 	}
 
+	network, err := networkFromFlags(opts)
+	if err != nil {
+		return err
+	}
+
+	disks, err := disksFromFlags(opts)
+	if err != nil {
+		return err
+	}
+
 	ref := objectRef(apiOpts.Namespace, name)
 
 	if !assumeYes {
@@ -102,7 +123,7 @@ func runMachineApprove(
 
 	resp, err := c.Machine.ApproveMachine(ctx, connect.NewRequest(&pb.ApproveMachineRequest{
 		Machine: ref, Role: role, NodeLabels: opts.Labels, Hostname: opts.Hostname, Reason: opts.Reason,
-		BreakGlass: breakGlassOf(apiOpts), Install: install,
+		BreakGlass: breakGlassOf(apiOpts), Install: install, Network: network, Disks: disks,
 	}))
 	if err != nil {
 		return err
@@ -121,5 +142,12 @@ func init() {
 	f.StringVar(&machineApproveOpts.Reason, "reason", "", "recorded with the approval")
 	f.StringVar(&machineApproveOpts.InstallDisk, "install-disk", "", "system disk Talos installs onto: "+installDiskUsage)
 	f.StringVar(&machineApproveOpts.InstallImage, "install-image", "", "installer image (default: the booted schematic's)")
+	f.StringVar(&machineApproveOpts.NIC, "nic", "", "primary network link, by its permanent MAC (aa:bb:cc:dd:ee:ff); alone it means DHCP")
+	f.StringSliceVar(&machineApproveOpts.Addresses, "address", nil, "static address with prefix length, 192.168.1.10/24 (repeatable; needs --nic)")
+	f.StringVar(&machineApproveOpts.Gateway, "gateway", "", "default gateway for the static address")
+	f.StringSliceVar(&machineApproveOpts.DNS, "dns", nil, "DNS server address (repeatable; needs --nic)")
+	f.Int32Var(&machineApproveOpts.VLAN, "vlan", 0, "VLAN ID (1-4094) to put the addressing on (needs --nic)")
+	f.StringVar(&machineApproveOpts.EphemeralDisk, "ephemeral-disk", "", "put EPHEMERAL on its own disk: "+installDiskUsage)
+	f.StringArrayVar(&machineApproveOpts.UserVolumes, "user-volume", nil, "NAME=DISK[,size=200GiB] user volume on a disk (repeatable)")
 	_ = machineApproveCmd.MarkFlagRequired("role")
 }

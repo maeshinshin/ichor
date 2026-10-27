@@ -209,6 +209,17 @@ func BuildConfig(
 		return nil, err
 	}
 
+	// Approval-time network and disk roles.
+	cfg, err = injectNetwork(cfg, contract, m)
+	if err != nil {
+		return nil, err
+	}
+
+	cfg, err = injectDisks(cfg, m)
+	if err != nil {
+		return nil, err
+	}
+
 	// Storage preparation (layer 1) is system layer too, above the registries and
 	// below every patch.
 	cfg, err = injectStorage(cfg, contract, cluster, m, sys)

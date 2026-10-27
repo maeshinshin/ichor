@@ -312,6 +312,7 @@ spec:
                       Empty until the new CAs have been generated and saved.
                     enum:
                     - Accepting
+                    - AwaitingCredentials
                     - Issuing
                     - Dropping
                     - Finalizing

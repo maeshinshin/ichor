@@ -37,6 +37,11 @@ import (
 // controllers, so a rollout is "finished" exactly when its status says so.
 const flannelNodes = 5
 
+const (
+	corednsPatchKey = "deployments/coredns"
+	uiPatchKey      = "deployments/ichor-ichor-ui"
+)
+
 // restartFixture is a CA rotation whose in-cluster clients are a fake clientset: CoreDNS and ichor-ui
 // (available) and, when flannelAvailable >= 0, a kube-flannel DaemonSet (no kube-proxy, no Cilium).
 func restartFixture(flannelAvailable int32) (*caRotFixture, *fake.Clientset) {
@@ -107,7 +112,7 @@ var _ = Describe("TalosOperation ca-rotation client restarts", func() {
 
 		op, _ = f.runUntil(op, completed)
 		Expect(patchCount(kc)).To(Equal(map[string]int{
-			"deployments/coredns": 1, "daemonsets/kube-flannel": 1, "deployments/ichor-ichor-ui": 1,
+			corednsPatchKey: 1, "daemonsets/kube-flannel": 1, uiPatchKey: 1,
 		}))
 
 		d, err := kc.AppsV1().Deployments(kubeSystemNamespace).Get(ctx, corednsName, metav1.GetOptions{})
@@ -122,7 +127,7 @@ var _ = Describe("TalosOperation ca-rotation client restarts", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(done).To(BeTrue())
 		Expect(note).To(BeEmpty())
-		Expect(patchCount(kc)["deployments/coredns"]).To(Equal(1))
+		Expect(patchCount(kc)[corednsPatchKey]).To(Equal(1))
 	})
 
 	It("waits in Finalizing while a restarted workload is not available, then completes", func() {
@@ -137,6 +142,7 @@ var _ = Describe("TalosOperation ca-rotation client restarts", func() {
 		Expect(stageOf(op)).To(Equal(ichorv1alpha1.CARotationStageFinalizing))
 		Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionCARotation).Message).To(ContainSubstring("kube-flannel"))
 		Expect(patchCount(kc)["daemonsets/kube-flannel"]).To(Equal(1), "waiting must not restart again")
+		Expect(patchCount(kc)).NotTo(HaveKey(uiPatchKey), "ichor-ui waits for the CNI to be available")
 
 		ds, err := kc.AppsV1().DaemonSets(kubeSystemNamespace).Get(ctx, "kube-flannel", metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
@@ -148,6 +154,33 @@ var _ = Describe("TalosOperation ca-rotation client restarts", func() {
 		op, _ = f.runUntil(op, completed)
 		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseCompleted))
 		Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionCARotation).Message).NotTo(ContainSubstring("not back"))
+	})
+
+	It("restarts nothing while a Node is not Ready, and rolls out CoreDNS before the CNI before ichor-ui", func() {
+		f, kc := restartFixture(flannelNodes)
+		op := f.newOp()
+
+		op, _ = f.runUntil(op, atStage(ichorv1alpha1.CARotationStageFinalizing))
+		f.world.notReady = []string{"cp-restart-test"}
+
+		for range 3 {
+			op = f.step(op)
+		}
+
+		Expect(patchCount(kc)).To(BeEmpty(), "no restart before the replaced bundle is verified and the Nodes are Ready")
+
+		f.world.notReady = nil
+		_, _ = f.runUntil(op, completed)
+
+		var order []string
+
+		for _, a := range kc.Actions() {
+			if _, ok := a.(clienttesting.PatchAction); ok {
+				order = append(order, a.GetResource().Resource+"/"+a.(clienttesting.PatchAction).GetName())
+			}
+		}
+
+		Expect(order).To(Equal([]string{corednsPatchKey, "daemonsets/kube-flannel", uiPatchKey}))
 	})
 
 	It("finishes the rotation, naming what is not back, once the wait is over", func() {
@@ -167,6 +200,6 @@ var _ = Describe("TalosOperation ca-rotation client restarts", func() {
 
 		op, _ = f.runUntil(op, completed)
 		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseCompleted))
-		Expect(patchCount(kc)).To(Equal(map[string]int{"deployments/coredns": 1, "deployments/ichor-ichor-ui": 1}))
+		Expect(patchCount(kc)).To(Equal(map[string]int{corednsPatchKey: 1, uiPatchKey: 1}))
 	})
 })

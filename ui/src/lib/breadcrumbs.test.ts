@@ -4,35 +4,32 @@ import { breadcrumbsFor } from './breadcrumbs.ts'
 
 test('a top-level route is a single current crumb', () => {
   assert.deepEqual(breadcrumbsFor('/'), [{ label: 'nav.overview' }])
-  assert.deepEqual(breadcrumbsFor('/clusters'), [{ label: 'nav.clusters' }])
-  assert.deepEqual(breadcrumbsFor('/machines'), [{ label: 'nav.machines' }])
+  assert.deepEqual(breadcrumbsFor('/nodes'), [{ label: 'nav.machines' }])
+  assert.deepEqual(breadcrumbsFor('/config'), [{ label: 'nav.config' }])
+  assert.deepEqual(breadcrumbsFor('/backups'), [{ label: 'nav.backups' }])
   assert.deepEqual(breadcrumbsFor('/gitops'), [{ label: 'nav.gitops' }])
   assert.deepEqual(breadcrumbsFor('/users'), [{ label: 'nav.users' }])
 })
 
 test('a detail route links its section and names the object', () => {
-  assert.deepEqual(breadcrumbsFor('/clusters/ns/demo'), [{ label: 'nav.clusters', to: '/clusters' }, { text: 'demo' }])
-  assert.deepEqual(breadcrumbsFor('/nodes/ns/node-1'), [{ label: 'nav.machines', to: '/machines' }, { text: 'node-1' }])
-  assert.deepEqual(breadcrumbsFor('/operations/ns/op-1'), [{ label: 'nav.operations', to: '/operations' }, { text: 'op-1' }])
-  assert.deepEqual(breadcrumbsFor('/patches/ns/p%201'), [{ label: 'nav.patches', to: '/patches' }, { text: 'p 1' }])
+  assert.deepEqual(breadcrumbsFor('/nodes/node-1'), [{ label: 'nav.machines', to: '/nodes' }, { text: 'node-1' }])
+  assert.deepEqual(breadcrumbsFor('/operations/op-1'), [{ label: 'nav.operations', to: '/operations' }, { text: 'op-1' }])
+  assert.deepEqual(breadcrumbsFor('/config/p%201'), [{ label: 'nav.config', to: '/config' }, { text: 'p 1' }])
 })
 
-test('the add-node page sits under its cluster', () => {
-  assert.deepEqual(breadcrumbsFor('/clusters/ns/demo/add-node'), [
-    { label: 'nav.clusters', to: '/clusters' },
-    { text: 'demo', to: '/clusters/ns/demo' },
-    { label: 'cluster.addNode' },
-  ])
-  assert.deepEqual(breadcrumbsFor('/clusters/ns/demo/other'), [{ label: 'common.notFound' }])
+test('add node and new config sit under their lists', () => {
+  assert.deepEqual(breadcrumbsFor('/nodes/add'), [{ label: 'nav.machines', to: '/nodes' }, { label: 'cluster.addNode' }])
+  assert.deepEqual(breadcrumbsFor('/config/new'), [{ label: 'nav.config', to: '/config' }, { label: 'patch.newTitle' }])
 })
 
-test('a new patch and an unknown path', () => {
-  assert.deepEqual(breadcrumbsFor('/patches/new'), [{ label: 'nav.patches', to: '/patches' }, { label: 'patch.newTitle' }])
+test('old and unknown paths are not found', () => {
+  assert.deepEqual(breadcrumbsFor('/clusters'), [{ label: 'common.notFound' }])
+  assert.deepEqual(breadcrumbsFor('/nodes/ns/x'), [{ label: 'common.notFound' }])
   assert.deepEqual(breadcrumbsFor('/nope/x'), [{ label: 'common.notFound' }])
 })
 
 test('a published title replaces the name in the last crumb', () => {
   const titles = { 'nodes/ns/9f95-uuid': 'cp-1' }
-  assert.deepEqual(breadcrumbsFor('/nodes/ns/9f95-uuid', titles), [{ label: 'nav.machines', to: '/machines' }, { text: 'cp-1' }])
-  assert.deepEqual(breadcrumbsFor('/nodes/ns/other', titles), [{ label: 'nav.machines', to: '/machines' }, { text: 'other' }])
+  assert.deepEqual(breadcrumbsFor('/nodes/9f95-uuid', titles, 'ns'), [{ label: 'nav.machines', to: '/nodes' }, { text: 'cp-1' }])
+  assert.deepEqual(breadcrumbsFor('/nodes/other', titles, 'ns'), [{ label: 'nav.machines', to: '/nodes' }, { text: 'other' }])
 })

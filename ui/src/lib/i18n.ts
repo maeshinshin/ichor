@@ -1036,6 +1036,19 @@ export const en = {
   'enum.STORAGE': 'Storage',
   'enum.USER_VOLUME': 'User Volume',
   'enum.UNUSED': 'Unused',
+
+  // single-cluster shell
+  'nav.config': 'Configuration',
+  'nav.backups': 'Backups',
+  'shell.noCluster': 'No cluster yet. Run `ichor init`.',
+  'shell.manyClusters': 'Ichor manages one cluster; showing {name}',
+  'shell.loadingCluster': 'Loading the cluster…',
+  'shell.talos': 'Talos {version}',
+  'shell.kubernetes': 'Kubernetes {version}',
+  'shell.ichor': 'Ichor {version}',
+  'health.ready': 'Ready',
+  'health.degraded': 'Degraded',
+  'health.upgrading': 'Upgrading',
 } as const
 
 export type Key = keyof typeof en

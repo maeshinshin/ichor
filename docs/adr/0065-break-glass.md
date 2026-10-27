@@ -140,5 +140,4 @@ request until the API server's webhook timeout (10 s default).
 - Break-glass in the UI needs OIDC. Without OIDC only the CLI can use it.
 - A break-glass write is a normal write to the API server as the user, so the webhook (decision 6) sees that user and recognises the verb.
 - Two requests for the same change return the same PR (ADR 0056) but the second one still writes directly.
-- Shortcut (`ponytail:`): no break-glass for `TalosCluster` (the UI/CLI write none) and for creating a patch
-  (`CreatePatch` writes a new object, which is not tracked yet).
+- Amended: the webhook now also refuses a direct UPDATE of a GitOps-tracked `TalosCluster` unless the user holds `break-glass` on `talosclusters` (same exempt users, same 503 when tracking cannot be decided; DELETE of a cluster is still not matched by the webhook rules). The `break-glass` RBAC rules still list only machines and patches, so a role must add `talosclusters` to grant it. `CreatePatch` stays ungated on purpose (ADR 0051, decision 1 above: a new object is not yet GitOps-managed), so it has no `break_glass` field.

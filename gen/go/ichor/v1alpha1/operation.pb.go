@@ -405,8 +405,8 @@ type Operation struct {
 	NodeAction  NodeAction `protobuf:"varint,12,opt,name=node_action,json=nodeAction,proto3,enum=ichor.v1alpha1.NodeAction" json:"node_action,omitempty"`
 	NodeMachine *ObjectRef `protobuf:"bytes,13,opt,name=node_machine,json=nodeMachine,proto3" json:"node_machine,omitempty"`
 	NodeMessage string     `protobuf:"bytes,14,opt,name=node_message,json=nodeMessage,proto3" json:"node_message,omitempty"`
-	// kubernetes_stage is status.kubernetes.stage of a kubernetes operation (ControlPlanes,
-	// KubeProxy, Kubelets); empty before the first stage is recorded, and for every other kind.
+	// kubernetes_stage is status.kubernetes.stage of a kubernetes operation (APIServers,
+	// ControlPlaneComponents, KubeProxy, Kubelets; ControlPlanes on operations started before the split); empty before the first stage is recorded, and for every other kind.
 	KubernetesStage string `protobuf:"bytes,15,opt,name=kubernetes_stage,json=kubernetesStage,proto3" json:"kubernetes_stage,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache

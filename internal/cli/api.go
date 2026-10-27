@@ -20,12 +20,15 @@ import (
 	"bytes"
 	"cmp"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"time"
 
 	"connectrpc.com/connect"
@@ -79,6 +82,12 @@ type apiOptions struct {
 	// empty means off. Setting it implies Local: break-glass is decided by the
 	// caller's own RBAC, never by the backend's ServiceAccount.
 	BreakGlass string
+	// CAFile is a PEM bundle trusted, besides the system roots, when ichor-ui
+	// serves TLS on its main port (chart ichorUI.tls.secretName).
+	CAFile string
+	// TLSServerName is the name on ichor-ui's certificate the tunnel verifies
+	// it against; empty means the Service's DNS name.
+	TLSServerName string
 }
 
 // breakGlassOf is the request field the --break-glass flag fills; nil when off.
@@ -99,6 +108,10 @@ func addAPIFlags(cmd *cobra.Command) {
 	f.StringVar(&apiOpts.ArgoCDNamespace, "argocd-namespace", "argocd",
 		"namespace Argo CD runs in, used by the --local fallback to read argocd-cm when checking whether a resource is tracked")
 	f.BoolVar(&apiOpts.Local, "local", false, "do not use ichor-ui; compute from the Kubernetes API directly")
+	f.StringVar(&apiOpts.CAFile, "ca-file", os.Getenv(caFileEnv),
+		"PEM file of the CA that signed ichor-ui's serving certificate, when ichor-ui serves TLS (env "+caFileEnv+")")
+	f.StringVar(&apiOpts.TLSServerName, "tls-server-name", "",
+		"name on ichor-ui's serving certificate, when it is not the Service's DNS name (<service>.<namespace>.svc)")
 	f.StringVar(&apiOpts.BreakGlass, "break-glass", "",
 		"incident only: write a GitOps-tracked resource now and open the matching pull request; the value is the reason, "+
 			"recorded in the audit record, an Event and the pull request. Needs the break-glass RBAC verb on the resource; implies --local")
@@ -345,21 +358,18 @@ func dialBackend(ctx context.Context, opts apiOptions, deps apiDeps) (*apiClient
 		return nil, fmt.Errorf("port-forward to pod/%s: %w", pod.Name, dctx.Err())
 	}
 
-	base := fmt.Sprintf("http://localhost:%d", port)
-
-	if err := probe(dctx, base); err != nil {
+	h, base, err := tunnelClient(dctx, port, opts.CAFile, cmp.Or(opts.TLSServerName, svc.Name+"."+svc.Namespace+".svc"))
+	if err != nil {
 		stop()
 
-		return nil, fmt.Errorf("probing ichor-ui through the tunnel: %w", err)
+		return nil, err
 	}
 
-	if oidcEnabled(dctx, base) {
+	if oidcEnabled(dctx, h, base) {
 		stop()
 
 		return nil, errOIDCBackend
 	}
-
-	h := http.DefaultClient
 
 	return &apiClients{
 		Cluster:     ichorv1alpha1connect.NewClusterServiceClient(h, base),
@@ -372,14 +382,67 @@ func dialBackend(ctx context.Context, opts apiOptions, deps apiDeps) (*apiClient
 	}, nil
 }
 
-// probe succeeds on any HTTP response: ichor-ui serves its SPA at "/".
-func probe(ctx context.Context, base string) error {
+// tunnelClient finds out whether ichor-ui speaks TLS on the forwarded port and
+// returns the HTTP client and base URL to use. TLS is tried first, trusting the
+// system roots plus caFile; a server that answers plain HTTP is used as such.
+// A certificate that cannot be verified is an error naming the way out: the
+// CLI never skips verification.
+// ponytail: reading the CA from the TLS Secret ichor-ui mounts is deferred; --ca-file covers it.
+func tunnelClient(ctx context.Context, port int32, caFile, serverName string) (*http.Client, string, error) {
+	hc, err := authHTTPClient(caFile)
+	if err != nil {
+		return nil, "", err
+	}
+
+	if hc == nil {
+		hc = &http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone()} //nolint:errcheck,forcetypeassert // the default transport is an *http.Transport
+	}
+
+	if serverName != "" {
+		tr := hc.Transport.(*http.Transport) //nolint:errcheck,forcetypeassert // built above or by authHTTPClient
+		if tr.TLSClientConfig == nil {
+			tr.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS12}
+		}
+
+		tr.TLSClientConfig.ServerName = serverName
+	}
+
+	tlsBase := fmt.Sprintf("https://localhost:%d", port)
+
+	err = probe(ctx, hc, tlsBase)
+	if err == nil {
+		return hc, tlsBase, nil
+	}
+
+	var (
+		unknown x509.UnknownAuthorityError
+		invalid x509.CertificateInvalidError
+		host    x509.HostnameError
+	)
+
+	if errors.As(err, &unknown) || errors.As(err, &invalid) || errors.As(err, &host) {
+		return nil, "", fmt.Errorf("ichor-ui serves TLS but its certificate cannot be verified (%w); "+
+			"pass the CA that signed it with --ca-file (env %s), the certificate's name with --tls-server-name, or skip ichor-ui with --local", err, caFileEnv)
+	}
+
+	plainBase := fmt.Sprintf("http://localhost:%d", port)
+
+	if perr := probe(ctx, http.DefaultClient, plainBase); perr != nil {
+		return nil, "", fmt.Errorf("probing ichor-ui through the tunnel: %w", perr)
+	}
+
+	return http.DefaultClient, plainBase, nil
+}
+
+// probe succeeds on any HTTP response: ichor-ui serves its SPA at "/". A plain
+// HTTP server answering a TLS client is an error, which tunnelClient falls back on.
+func probe(ctx context.Context, hc *http.Client, base string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/", nil)
 	if err != nil {
 		return err
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := hc.Do(req)
 	if err != nil {
 		return err
 	}
@@ -390,13 +453,13 @@ func probe(ctx context.Context, base string) error {
 // oidcEnabled reads ichor-ui's GET /auth/config (docs/adr/0058). Anything but a
 // 200 JSON answer with enabled:true -- an older backend, an unparseable body --
 // counts as off: the backend then rejects an unauthenticated call itself.
-func oidcEnabled(ctx context.Context, base string) bool {
+func oidcEnabled(ctx context.Context, hc *http.Client, base string) bool {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/auth/config", nil)
 	if err != nil {
 		return false
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := hc.Do(req)
 	if err != nil {
 		return false
 	}

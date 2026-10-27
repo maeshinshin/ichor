@@ -15,7 +15,7 @@ import { describeError } from '@/lib/errors'
 import { versionProblem } from '@/lib/clusterOps'
 import { confirmMatches, kindNeedsTarget, kindNeedsTypedName, kubernetesStages, planCounts, planSteps, targetError, type OpKind } from '@/lib/operations'
 import { useT } from '@/lib/useT'
-import { navigate, objectRefPath } from '@/router'
+import { navigate } from '@/router'
 
 type ErrorShape = { title: string; detail: string }
 
@@ -97,7 +97,7 @@ export function StartOperationDialog({
         return
       }
       notifyDone(t('toast.opStarted', { action: t(`ops.start.${kind}`) }))
-      if (res.operation?.ref) navigate(objectRefPath('/operations', res.operation.ref))
+      if (res.operation?.ref) navigate(`/operations/${encodeURIComponent(res.operation.ref.name)}`)
     } catch (err) {
       setError(describeError(err))
     } finally {

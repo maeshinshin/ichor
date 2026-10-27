@@ -48,10 +48,6 @@ export function matchRoute(pattern: string, path: string): Record<string, string
   return params
 }
 
-export function objectRefPath(base: string, ref: { namespace: string; name: string }): string {
-  return `${base}/${encodeURIComponent(ref.namespace)}/${encodeURIComponent(ref.name)}`
-}
-
 type LinkProps = Omit<JSX.HTMLAttributes<HTMLAnchorElement>, 'href'> & {
   to: string
 }

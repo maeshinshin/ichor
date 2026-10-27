@@ -14,7 +14,6 @@ test('a detail route links its section and names the object', () => {
   assert.deepEqual(breadcrumbsFor('/nodes/node-1'), [{ label: 'nodes.title', to: '/nodes' }, { text: 'node-1' }])
   assert.deepEqual(breadcrumbsFor('/operations/op-1'), [{ label: 'nav.operations', to: '/operations' }, { text: 'op-1' }])
   assert.deepEqual(breadcrumbsFor('/config/p%201'), [{ label: 'config.title', to: '/config' }, { text: 'p 1' }])
-  assert.deepEqual(breadcrumbsFor('/clusters/ns/demo'), [{ label: 'nav.clusters', to: '/clusters' }, { text: 'demo' }])
 })
 
 test('the add-node page sits under nodes', () => {

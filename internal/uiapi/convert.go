@@ -146,6 +146,7 @@ func machineToPB(m *ichorv1alpha1.TalosMachine) *pb.Machine {
 		Role:             specRoleToMachineRole(m.Spec.Role),
 		NodeLabels:       m.Spec.NodeLabels,
 		Hostname:         m.Spec.Hostname,
+		NodeName:         m.Status.NodeName,
 		Install:          installToPB(m.Spec.Install),
 		Network:          networkToPB(m.Spec.Network),
 		Disks:            disksToPB(m.Spec.Disks),

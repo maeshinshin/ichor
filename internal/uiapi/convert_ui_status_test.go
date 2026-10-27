@@ -45,6 +45,15 @@ func TestClusterToPBCarriesKubeProxyModeAndCertificateExpiry(t *testing.T) {
 	}
 }
 
+func TestMachineToPBCarriesNodeName(t *testing.T) {
+	m := &ichorv1alpha1.TalosMachine{}
+	m.Status.NodeName = "ichor-cp-1"
+
+	if got := machineToPB(m).GetNodeName(); got != "ichor-cp-1" {
+		t.Fatalf("node name = %q", got)
+	}
+}
+
 func TestMachineToPBCarriesRebootPaths(t *testing.T) {
 	m := &ichorv1alpha1.TalosMachine{}
 	m.Status.RebootPaths = []string{"machine.install"}

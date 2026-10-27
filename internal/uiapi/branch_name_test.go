@@ -36,11 +36,11 @@ func TestPRBranchNameIsAValidBoundedRef(t *testing.T) {
 	valid := regexp.MustCompile(`^ichor/[a-z0-9]([a-z0-9-]*[a-z0-9])?$`)
 
 	cases := [][3]string{
-		{"update", "ns", "x.lock"},
-		{"update", "ns", "a..b"},
-		{"update", "ns", "trailing."},
-		{"update", "ns", strings.Repeat("a", 253)},
-		{"update", strings.Repeat("n", 63), strings.Repeat("a", 253)},
+		{verbUpdate, "ns", "x.lock"},
+		{verbUpdate, "ns", "a..b"},
+		{verbUpdate, "ns", "trailing."},
+		{verbUpdate, "ns", strings.Repeat("a", 253)},
+		{verbUpdate, strings.Repeat("n", 63), strings.Repeat("a", 253)},
 	}
 
 	seen := map[string]bool{}
@@ -60,12 +60,13 @@ func TestPRBranchNameIsAValidBoundedRef(t *testing.T) {
 
 	// Two long names that agree up to the cut still differ.
 	long := strings.Repeat("a", 200)
-	if prBranchName("update", "ns", long+"1") == prBranchName("update", "ns", long+"2") {
+	if prBranchName(verbUpdate, "ns", long+"1") == prBranchName(verbUpdate, "ns", long+"2") {
 		t.Fatal("long names that differ only past the cut must not collide")
 	}
 
 	// Deterministic.
-	if prBranchName("update", "ns", long) != prBranchName("update", "ns", long) {
+	first := prBranchName(verbUpdate, "ns", long)
+	if again := prBranchName(verbUpdate, "ns", long); first != again {
 		t.Fatal("not deterministic")
 	}
 }

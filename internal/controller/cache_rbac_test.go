@@ -109,8 +109,8 @@ var _ = Describe("manager cache against the generated RBAC", func() {
 		go func() { _ = ca.Start(cacheCtx) }()
 	})
 
-	// Every kind the reconcilers and executors read through mgr.GetClient(). Pods, DaemonSets,
-	// ConfigMaps and Deployments are deliberately absent: they are read through the uncached
+	// Every kind the reconcilers and executors read through mgr.GetClient(). Pods, DaemonSets
+	// and Deployments are deliberately absent: they are read through the uncached
 	// APIReader or a direct client, which only needs get.
 	DescribeTable("syncs an informer for",
 		func(obj client.Object) {
@@ -122,6 +122,9 @@ var _ = Describe("manager cache against the generated RBAC", func() {
 		},
 		Entry("Job (installer, namespaced-only grant)", &batchv1.Job{}),
 		Entry("Secret (namespaced-only grant)", &corev1.Secret{}),
+		Entry("ConfigMap (namespaced-only grant)", &corev1.ConfigMap{}),
+		Entry("Service (namespaced-only grant)", &corev1.Service{}),
+		Entry("IchorUser", &ichorv1alpha1.IchorUser{}),
 		Entry("Node", &corev1.Node{}),
 		Entry("Lease", &coordinationv1.Lease{}),
 		Entry("TalosCluster", &ichorv1alpha1.TalosCluster{}),

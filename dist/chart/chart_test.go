@@ -643,7 +643,10 @@ func TestUIUsers(t *testing.T) {
 		"ichorUI.users.kubeAPIServerURL=https://k8s.example.com:443", "ichorUI.users.kubeAPITLSServerName=kubernetes")
 	apiDep := fmt.Sprint(find(withAPI, kindDeployment, ichorUIDeploymentName)["spec"])
 
-	for _, want := range []string{"--kube-api-server-url=https://k8s.example.com:443", "--kube-api-tls-server-name=kubernetes"} {
+	for _, want := range []string{
+		"--kube-api-server-url=https://k8s.example.com:443",
+		"--kube-api-tls-server-name=kubernetes",
+	} {
 		if !strings.Contains(apiDep, want) {
 			t.Errorf("Deployment lacks %q: %s", want, apiDep)
 		}

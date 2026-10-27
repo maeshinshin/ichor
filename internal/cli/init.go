@@ -142,6 +142,8 @@ func init() {
 
 	flags.BoolVar(&initOpts.ArgoCD, "argocd", false, "bootstrap Argo CD's repository credentials and GitOps CRs for this cluster")
 	flags.StringVar(&initOpts.ArgoCDNamespace, "argocd-namespace", "argocd", "namespace Argo CD runs in (for the repository credentials Secret)")
+	flags.BoolVar(&initOpts.Kokumi, "kokumi", false,
+		"with --argocd: also prepare the Argo CD repo-creds Secret for Kokumi's OCI registry (installs neither Argo CD nor Kokumi)")
 	flags.StringVar(&initOpts.RepoURL, "repo", "", "Git repository URL for GitOps (required with --argocd)")
 	flags.StringVar(&initOpts.RepoPath, "path", "", "path within --repo for this cluster's CRs (defaults to clusters/<cluster>)")
 	flags.StringVar(&initOpts.RepoUsername, "repo-username", "", "username for --repo, if it is private")

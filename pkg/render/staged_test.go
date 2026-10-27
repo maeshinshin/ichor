@@ -82,6 +82,18 @@ func TestStagedKubernetesPinsKubeletAndProxyBelowTheSpec(t *testing.T) {
 		}
 	})
 
+	t.Run("controller-manager and scheduler can be pinned below the apiserver", func(t *testing.T) {
+		got := render(t, cp, &StagedKubernetes{ControllerManagerVersion: old, SchedulerVersion: old})
+
+		for _, want := range []string{
+			"kube-apiserver:" + target, "kube-controller-manager:" + old, "kube-scheduler:" + old, "kubelet:" + target,
+		} {
+			if !strings.Contains(got, want) {
+				t.Errorf("want %q in the staged render", want)
+			}
+		}
+	})
+
 	t.Run("a worker pins its kubelet and gets no kube-proxy document", func(t *testing.T) {
 		got := render(t, worker, &StagedKubernetes{KubeletVersion: old, KubeProxyVersion: old})
 		if !strings.Contains(got, "kubelet:"+old) || strings.Contains(got, "kube-proxy") {

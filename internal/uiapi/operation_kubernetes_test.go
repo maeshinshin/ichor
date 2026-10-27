@@ -52,11 +52,11 @@ func planKubernetes(t *testing.T, endpointType string, controlPlanes int, target
 	return res.Msg
 }
 
-func TestPlanKubernetesNamesTheThreeStages(t *testing.T) {
+func TestPlanKubernetesNamesTheFourStages(t *testing.T) {
 	p := planKubernetes(t, "vip", 1, "v1.37.0")
 
-	if got := strings.Join(p.GetStages(), "|"); !strings.Contains(got, "control plane") || !strings.Contains(got, "kube-proxy") ||
-		!strings.Contains(got, "kubelet") || len(p.GetStages()) != 3 {
+	if got := strings.Join(p.GetStages(), "|"); !strings.Contains(got, "kube-apiserver") || !strings.Contains(got, "kube-controller-manager") ||
+		!strings.Contains(got, "kube-proxy") || !strings.Contains(got, "kubelet") || len(p.GetStages()) != 4 {
 		t.Fatalf("stages = %q", got)
 	}
 }

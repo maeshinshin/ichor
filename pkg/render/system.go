@@ -52,9 +52,9 @@ type SystemInputs struct {
 	// executor sets it; nil is the normal case.
 	CARotation *CARotation
 
-	// Staged pins the kubelet and kube-proxy below spec.kubernetesVersion while a Kubernetes
-	// upgrade moves the control planes first (ADR 0087). Only the upgrade executor sets it; nil is
-	// the normal case.
+	// Staged pins the controller-manager, scheduler, kubelet and kube-proxy below
+	// spec.kubernetesVersion while a Kubernetes upgrade moves the control planes first
+	// (ADR 0087). Only the upgrade executor sets it; nil is the normal case.
 	Staged *StagedKubernetes
 }
 

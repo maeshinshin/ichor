@@ -192,8 +192,8 @@ export type Operation = Message<"ichor.v1alpha1.Operation"> & {
   nodeMessage: string;
 
   /**
-   * kubernetes_stage is status.kubernetes.stage of a kubernetes operation (ControlPlanes,
-   * KubeProxy, Kubelets); empty before the first stage is recorded, and for every other kind.
+   * kubernetes_stage is status.kubernetes.stage of a kubernetes operation (APIServers,
+   * ControlPlaneComponents, KubeProxy, Kubelets; ControlPlanes on operations started before the split); empty before the first stage is recorded, and for every other kind.
    *
    * @generated from field: string kubernetes_stage = 15;
    */

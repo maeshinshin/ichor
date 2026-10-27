@@ -43,7 +43,8 @@ func planText(kind pb.OperationKind, cluster string, p *pb.PlanOperationResponse
 	case pb.OperationEffect_OPERATION_EFFECT_RESTART_COMPONENTS:
 		b.WriteString("Configuration is applied without a reboot; the kubelet and control plane components restart on each machine.\n")
 		if kind == pb.OperationKind_OPERATION_KIND_KUBERNETES && len(p.GetStages()) > 0 {
-			b.WriteString("It runs in three stages, each finished on every machine before the next starts, so no kubelet is ever newer than an API server:\n")
+			fmt.Fprintf(&b, "It runs in %d stages, each finished on every machine before the next starts, "+
+				"so nothing is ever newer than an API server:\n", len(p.GetStages()))
 
 			for i, s := range p.GetStages() {
 				fmt.Fprintf(&b, "  %d. %s\n", i+1, s)
@@ -154,7 +155,7 @@ func orderText(kind pb.OperationKind, p *pb.PlanOperationResponse) string {
 	case pb.OperationKind_OPERATION_KIND_CA_ROTATION:
 		b.WriteString(", one at a time, control planes first; every machine is visited in each pass:\n")
 	case pb.OperationKind_OPERATION_KIND_KUBERNETES:
-		fmt.Fprintf(&b, ": the control planes one at a time in each of the first two stages; in the kubelet stage the control planes "+
+		fmt.Fprintf(&b, ": the control planes one at a time in each of the first three stages; in the kubelet stage the control planes "+
 			"one at a time, then workers (at most %d at once), in this order:\n", max(p.GetMaxUnavailable(), 1))
 	default:
 		fmt.Fprintf(&b, ": control planes one at a time, then workers (at most %d at once), in this order:\n", max(p.GetMaxUnavailable(), 1))

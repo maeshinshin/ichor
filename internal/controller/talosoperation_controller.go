@@ -441,10 +441,10 @@ func nextBatch(
 	return nil
 }
 
-// kubernetesBatch is nextBatch for a Kubernetes upgrade, which visits the machines three times
-// (ADR 0087): the control planes for their components, the control planes again for kube-proxy
-// and the bootstrap manifests, then the kubelets (control planes first, then workers within
-// maxUnavailable). It records the stage in op.status.kubernetes and, when a stage has no pending
+// kubernetesBatch is nextBatch for a Kubernetes upgrade, which visits the machines four times
+// (ADR 0087): the control planes for their apiservers, again for controller-manager and
+// scheduler, again for kube-proxy and the bootstrap manifests, then the kubelets (control planes
+// first, then workers within maxUnavailable). It records the stage in op.status.kubernetes and, when a stage has no pending
 // machine left, moves to the next and clears status.machines (the progress of that stage), so
 // the stage and the cleared list reach the API in the one status write that follows. Empty when
 // the last stage is done.
@@ -452,7 +452,7 @@ func kubernetesBatch(op *ichorv1alpha1.TalosOperation, controlPlanes, workers []
 	if op.Status.Kubernetes == nil {
 		// An operation that started before stages existed has only ever applied the whole
 		// configuration to a machine: it is already in the last stage.
-		stage := ichorv1alpha1.KubernetesStageControlPlanes
+		stage := ichorv1alpha1.KubernetesStageAPIServers
 		if len(op.Status.Machines) > 0 {
 			stage = ichorv1alpha1.KubernetesStageKubelets
 		}
@@ -460,9 +460,17 @@ func kubernetesBatch(op *ichorv1alpha1.TalosOperation, controlPlanes, workers []
 		op.Status.Kubernetes = &ichorv1alpha1.TalosOperationKubernetesStatus{Stage: stage}
 	}
 
+	// An operation recorded in the old combined first stage continues in its first half, keeping
+	// the machines it has already finished: they have all three components on the target, which
+	// the next stage finds and only verifies.
+	if op.Status.Kubernetes.Stage == ichorv1alpha1.KubernetesStageControlPlanes {
+		op.Status.Kubernetes.Stage = ichorv1alpha1.KubernetesStageAPIServers
+	}
+
 	next := map[string]string{
-		ichorv1alpha1.KubernetesStageControlPlanes: ichorv1alpha1.KubernetesStageKubeProxy,
-		ichorv1alpha1.KubernetesStageKubeProxy:     ichorv1alpha1.KubernetesStageKubelets,
+		ichorv1alpha1.KubernetesStageAPIServers:             ichorv1alpha1.KubernetesStageControlPlaneComponents,
+		ichorv1alpha1.KubernetesStageControlPlaneComponents: ichorv1alpha1.KubernetesStageKubeProxy,
+		ichorv1alpha1.KubernetesStageKubeProxy:              ichorv1alpha1.KubernetesStageKubelets,
 	}
 
 	for {

@@ -351,9 +351,10 @@ func (s *Server) planOperation(
 		p.resp.Effect, p.resp.Current = pb.OperationEffect_OPERATION_EFFECT_REBOOT, cluster.Spec.TalosVersion
 	case ichorv1alpha1.TalosOperationKindKubernetes:
 		p.resp.Effect, p.resp.Current = pb.OperationEffect_OPERATION_EFFECT_RESTART_COMPONENTS, cluster.Spec.KubernetesVersion
-		// The executor's three stages (ADR 0087): no kubelet is newer than any API server at any step.
+		// The executor's four stages (ADR 0087): nothing is newer than any API server at any step.
 		p.resp.Stages = []string{
-			"control plane components (apiserver, controller-manager, scheduler)",
+			"kube-apiserver on every control plane",
+			"kube-controller-manager and kube-scheduler on every control plane",
 			"kube-proxy and the bootstrap manifests",
 			"kubelets",
 		}

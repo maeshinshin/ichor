@@ -21,9 +21,9 @@ limitations under the License.
 // machine's configuration from spec.kubernetesVersion, so a node's step is
 // "apply the freshly rendered configuration, whose only differences are the
 // component images", then watch the node converge. The operation visits each
-// machine in up to three stages (ADR 0087), and the configuration rendered
-// for a stage pins the kubelet and kube-proxy to the node's current version
-// until their stage. TalosOperationReconciler supplies everything else
+// machine in up to four stages (ADR 0087), and the configuration rendered
+// for a stage pins everything after that stage's component (controller-manager and scheduler,
+// kubelet, kube-proxy) to the node's current version until its stage. TalosOperationReconciler supplies everything else
 // (ADR 0026).
 package controller
 
@@ -102,7 +102,8 @@ var kubernetesImagePaths = map[string]struct{}{
 	"machine.kubelet.image":             {},
 }
 
-// staticPodComponents are the control-plane components Talos runs as static pods.
+// staticPodComponents are the control-plane components Talos runs as static pods, kube-apiserver
+// first (the APIServers stage verifies only that one).
 var staticPodComponents = []string{"kube-apiserver", "kube-controller-manager", "kube-scheduler"}
 
 // KubernetesAdmin is the two cluster-wide actions a Kubernetes upgrade needs that go through an
@@ -157,19 +158,29 @@ func kubernetesStageOf(op *ichorv1alpha1.TalosOperation) string {
 		return ichorv1alpha1.KubernetesStageKubelets
 	}
 
+	// The combined first stage of operations that started before the split is its first half.
+	if op.Status.Kubernetes.Stage == ichorv1alpha1.KubernetesStageControlPlanes {
+		return ichorv1alpha1.KubernetesStageAPIServers
+	}
+
 	return op.Status.Kubernetes.Stage
 }
 
-// stagedFor is what the render pins for m in stage. The control-plane components always follow
-// the spec; until the Kubelets stage the kubelet stays on the version its node runs (it is never
-// newer than any API server), and kube-proxy stays on it until the KubeProxy stage. Neither
-// version is stored: until the Kubelets stage the node's kubelet has not been touched, so it is
-// the same on every call.
+// stagedFor is what the render pins for m in stage. The apiserver always follows the spec. Until
+// the ControlPlaneComponents stage the controller-manager and scheduler stay on the version the
+// node runs (they reach the apiservers through an endpoint that balances across all of them, and
+// a new scheduler needs APIs only a new apiserver serves), until the Kubelets stage so does the
+// kubelet (never newer than any API server), and kube-proxy stays on it until the KubeProxy
+// stage. None of these versions is stored: until the Kubelets stage the node's kubelet has not
+// been touched, so it is the same on every call, and a node's controller-manager and scheduler
+// run its kubelet's version.
 func stagedFor(stage string, node *corev1.Node) *render.StagedKubernetes {
 	v := node.Status.NodeInfo.KubeletVersion
 
 	switch stage {
-	case ichorv1alpha1.KubernetesStageControlPlanes:
+	case ichorv1alpha1.KubernetesStageAPIServers:
+		return &render.StagedKubernetes{ControllerManagerVersion: v, SchedulerVersion: v, KubeletVersion: v, KubeProxyVersion: v}
+	case ichorv1alpha1.KubernetesStageControlPlaneComponents:
 		return &render.StagedKubernetes{KubeletVersion: v, KubeProxyVersion: v}
 	case ichorv1alpha1.KubernetesStageKubeProxy:
 		return &render.StagedKubernetes{KubeletVersion: v}
@@ -525,7 +536,13 @@ func (a *kubernetesUpgradeAdvancer) nodeNotConverged(
 		return ""
 	}
 
-	for _, component := range staticPodComponents {
+	components := staticPodComponents
+	if stage == ichorv1alpha1.KubernetesStageAPIServers {
+		// Controller-manager and scheduler are deliberately left where they are.
+		components = staticPodComponents[:1]
+	}
+
+	for _, component := range components {
 		pod, err := a.staticPod(ctx, component, nodeName)
 		if err != nil {
 			return err.Error()

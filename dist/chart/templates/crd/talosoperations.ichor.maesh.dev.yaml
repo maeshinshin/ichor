@@ -338,11 +338,15 @@ spec:
                 properties:
                   stage:
                     description: |-
-                      stage is ControlPlanes (apiserver, controller-manager and scheduler on every control plane,
-                      the kubelets and kube-proxy still on the old version), KubeProxy (kube-proxy and the
-                      bootstrap manifests) or Kubelets (every kubelet, control planes first, then workers).
+                      stage is APIServers (kube-apiserver on every control plane), ControlPlaneComponents
+                      (controller-manager and scheduler on every control plane; the kubelets and kube-proxy still on
+                      the old version), KubeProxy (kube-proxy and the bootstrap manifests) or Kubelets (every
+                      kubelet, control planes first, then workers). ControlPlanes is the legacy combined first
+                      stage of operations started before the split; it is read as APIServers.
                     enum:
                     - ControlPlanes
+                    - APIServers
+                    - ControlPlaneComponents
                     - KubeProxy
                     - Kubelets
                     type: string

@@ -8,7 +8,8 @@ import { ErrorAlert } from '@/components/ErrorAlert'
 import { Field, Fields, PageHeader } from '@/components/PageHeader'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
 import { StatusText } from '@/components/Status'
-import { Section, SectionLayout, type SectionLink } from '@/components/SectionNav'
+import { Section } from '@/components/SectionNav'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { NodeActions } from '@/components/NodeActions'
 import { NodeLogs } from '@/components/NodeLogs'
 import { TalosDetails } from '@/components/TalosDetails'
@@ -26,7 +27,9 @@ import { needsInstallDisk } from '@/lib/installDisk'
 import { enumLabel } from '@/lib/enum'
 import { describeError } from '@/lib/errors'
 import { formatBytes, formatCores, formatUsage } from '@/lib/format'
+import { nodeTabs, nodeTabSearch, parseNodeTab, type NodeTab } from '@/lib/nodeTabs'
 import { setPageTitle, titleKey } from '@/lib/pageTitle'
+import { useCluster } from '@/lib/useCluster'
 import { useT } from '@/lib/useT'
 import { Link, objectRefPath } from '@/router'
 
@@ -35,8 +38,34 @@ type ErrorShape = { title: string; detail: string }
 // Node detail: hardware, disks, network, live resource usage, Kubernetes
 // state, effective config (origin-annotated, secrets masked) and logs
 // (architecture.md, "CLI and UI").
-export function NodeDetail({ namespace, name }: { namespace: string; name: string }) {
+export function NodeDetail({ name }: { name: string }) {
   const t = useT()
+  const { cluster: ichorCluster } = useCluster()
+  const namespace = ichorCluster?.ref?.namespace
+  if (!namespace) return <PageSkeleton label={t('node.loading')} />
+  return <NodePage namespace={namespace} name={name} />
+}
+
+// useNodeTab keeps the active tab in ?tab= so it is linkable and survives a reload.
+function useNodeTab(): [NodeTab, (tab: NodeTab) => void] {
+  const [tab, setTab] = useState(() => parseNodeTab(window.location.search))
+  useEffect(() => {
+    const onPop = () => setTab(parseNodeTab(window.location.search))
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
+  return [
+    tab,
+    (next) => {
+      window.history.replaceState({}, '', window.location.pathname + nodeTabSearch(window.location.search, next))
+      setTab(next)
+    },
+  ]
+}
+
+function NodePage({ namespace, name }: { namespace: string; name: string }) {
+  const t = useT()
+  const [tab, setTab] = useNodeTab()
   const [node, setNode] = useState<NodeDetailMessage | null>(null)
   const [error, setError] = useState<ErrorShape | null>(null)
   const [machine, setMachine] = useState<Machine | null>(null)
@@ -97,24 +126,14 @@ export function NodeDetail({ namespace, name }: { namespace: string; name: strin
   if (!node) return <PageSkeleton label={t('node.loading')} />
 
   const ready = machine?.conditions.find((c) => c.type === 'Ready')
-  const sections: SectionLink[] = [
-    { id: 'conditions', label: t('cluster.conditions') },
-    { id: 'hardware', label: t('node.hardware') },
-    { id: 'usage', label: t('node.usage') },
-    { id: 'talos', label: t('talos.system') },
-    { id: 'storage', label: t('node.disks') },
-    { id: 'network', label: t('node.network') },
-    { id: 'services', label: t('talos.services') },
-    { id: 'extensions', label: t('talos.extensions') },
-    { id: 'k8s-node', label: t('rt.k8s') },
-    { id: 'etcd', label: t('rt.etcd') },
-    { id: 'processes', label: t('rt.processes') },
-    { id: 'containers', label: t('rt.containers') },
-    { id: 'netstate', label: t('rt.netstate') },
-    { id: 'kernel', label: t('rt.kernel') },
-    { id: 'config', label: t('node.config') },
-    { id: 'logs', label: t('node.logs') },
-  ]
+  const tabLabels: Record<NodeTab, string> = {
+    summary: t('node.tab.summary'),
+    storage: t('node.tab.storage'),
+    talos: t('node.tab.talos'),
+    kubernetes: t('node.tab.kubernetes'),
+    config: t('node.tab.config'),
+    logs: t('node.tab.logs'),
+  }
 
   return (
     <>
@@ -182,7 +201,16 @@ export function NodeDetail({ namespace, name }: { namespace: string; name: strin
           </AlertDescription>
         </Alert>
       )}
-      <SectionLayout sections={sections}>
+      <Tabs value={tab} onValueChange={(v) => setTab(parseNodeTab(`?tab=${v}`))}>
+        <TabsList variant="line" aria-label={t('node.tabs')} className="h-auto w-full justify-start overflow-x-auto">
+          {nodeTabs.map((id) => (
+            <TabsTrigger key={id} value={id} className="flex-none px-3 py-1.5">
+              {tabLabels[id]}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        {/* Radix mounts only the active panel, so a tab's data loads when it is first opened. */}
+        <TabsContent value="summary" className="space-y-8">
         <Section id="conditions" title={t('cluster.conditions')}>
           <ConditionList conditions={machine?.conditions ?? []} />
         </Section>
@@ -214,14 +242,24 @@ export function NodeDetail({ namespace, name }: { namespace: string; name: strin
             <EmptyNote>{t('node.noUsage')}</EmptyNote>
           )}
         </Section>
-
-        <TalosDetails namespace={namespace} name={name} />
-        <TalosRuntime namespace={namespace} name={name} />
-        <EffectiveConfigSection namespace={namespace} name={name} />
-        <div id="logs" class="scroll-mt-section">
+        </TabsContent>
+        <TabsContent value="storage" className="space-y-8">
+          <TalosDetails namespace={namespace} name={name} part="storage" />
+        </TabsContent>
+        <TabsContent value="talos" className="space-y-8">
+          <TalosDetails namespace={namespace} name={name} part="talos" />
+          <TalosRuntime namespace={namespace} name={name} part="talos" />
+        </TabsContent>
+        <TabsContent value="kubernetes" className="space-y-8">
+          <TalosRuntime namespace={namespace} name={name} part="kubernetes" />
+        </TabsContent>
+        <TabsContent value="config" className="space-y-8">
+          <EffectiveConfigSection namespace={namespace} name={name} />
+        </TabsContent>
+        <TabsContent value="logs" className="space-y-8">
           <NodeLogs namespace={namespace} name={name} />
-        </div>
-      </SectionLayout>
+        </TabsContent>
+      </Tabs>
     </>
   )
 }

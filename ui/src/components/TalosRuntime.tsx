@@ -38,7 +38,9 @@ function badgeVariant(tone: Tone) {
   return tone === 'bad' ? 'destructive' : tone === 'ok' ? 'secondary' : 'outline'
 }
 
-export function TalosRuntime({ namespace, name }: { namespace: string; name: string }) {
+// part="talos" renders processes, containers and kernel (the Talos tab);
+// part="kubernetes" renders the k8s node, etcd and network state.
+export function TalosRuntime({ namespace, name, part }: { namespace: string; name: string; part: 'talos' | 'kubernetes' }) {
   const t = useT()
   const [data, setData] = useState<GetNodeTalosRuntimeResponse | null>(null)
   const [error, setError] = useState<{ title: string; detail: string } | null>(null)
@@ -63,13 +65,19 @@ export function TalosRuntime({ namespace, name }: { namespace: string; name: str
   if (error) return <ErrorAlert {...error} />
   if (!data) return <p class="text-muted-foreground">{t('rt.loading')}</p>
   const m = data.maintenanceMode
+  if (part === 'kubernetes') {
+    return (
+      <>
+        <KubernetesCard data={data} />
+        <EtcdCard data={data} maintenance={m} />
+        <NetworkStateCard data={data} maintenance={m} />
+      </>
+    )
+  }
   return (
     <>
-      <KubernetesCard data={data} />
-      <EtcdCard data={data} maintenance={m} />
       <ProcessesCard data={data} maintenance={m} />
       <ContainersCard data={data} maintenance={m} />
-      <NetworkStateCard data={data} maintenance={m} />
       <KernelCard data={data} maintenance={m} />
     </>
   )

@@ -1074,6 +1074,14 @@ export const en = {
   'home.details': 'Details',
   'home.detailsHint': 'Conditions, rollout and hand-over.',
   'home.endpoint': 'Endpoint',
+  // node tabs
+  'node.tabs': 'Node sections',
+  'node.tab.summary': 'Summary',
+  'node.tab.storage': 'Storage & network',
+  'node.tab.talos': 'Talos',
+  'node.tab.kubernetes': 'Kubernetes & etcd',
+  'node.tab.config': 'Configuration',
+  'node.tab.logs': 'Logs',
 } as const
 
 export type Key = keyof typeof en

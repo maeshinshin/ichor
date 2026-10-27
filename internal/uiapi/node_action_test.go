@@ -91,6 +91,10 @@ func TestNodePlanSaysWhatHappensInPlainEnglish(t *testing.T) {
 	if rm.GetConfirmName() != "w1" || rm.GetBreakGlassRequired() || rm.GetBlocked() != "" {
 		t.Fatalf("remove plan = %+v", rm)
 	}
+
+	if last := rm.GetSteps()[len(rm.GetSteps())-1]; !strings.Contains(last, "kubectl delete node") || !strings.Contains(last, "Node stays") {
+		t.Fatalf("the remove plan must say the Kubernetes Node stays: %q", last)
+	}
 }
 
 func TestNodePlanRefusals(t *testing.T) {

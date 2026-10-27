@@ -34,6 +34,10 @@ service OperationService {
   // first: what a restore can choose from (ADR 0089). It reads the backups' status; it does not
   // touch the storage.
   rpc ListEtcdBackups(ListEtcdBackupsRequest) returns (ListEtcdBackupsResponse);
+  // RequestEtcdBackup asks for one snapshot outside the schedule. It only sets the backup-now
+  // annotation on the TalosEtcdBackup as the caller (ADR 0047); the controller takes the snapshot.
+  // It is refused for a suspended backup.
+  rpc RequestEtcdBackup(RequestEtcdBackupRequest) returns (RequestEtcdBackupResponse);
   // GetIchorInstallation reports which Ichor version is installed and whether the cluster
   // already knows a newer one (ADR 0059); it is what the app shell's version label shows.
   // It answers with an empty installed_version, not an error, when there is no
@@ -77,6 +81,37 @@ message EtcdBackup {
   repeated EtcdSnapshot snapshots = 3;
   // ready is false while the last attempt failed or the newest snapshot is stale.
   bool ready = 4;
+  // destination is where snapshots go. Never the credentials.
+  EtcdBackupDestination destination = 5;
+  // keep_last is how many snapshots are kept.
+  int32 keep_last = 6;
+  // last_success_time is when the newest successful attempt finished; unset before the first.
+  google.protobuf.Timestamp last_success_time = 7;
+  // last_error is the Ready condition's message while the last attempt failed; empty otherwise.
+  string last_error = 8;
+  // suspended is spec.suspend: no snapshot is taken, on demand included.
+  bool suspended = 9;
+  // last_manual_backup is the time of the newest on-demand request the controller acted on.
+  google.protobuf.Timestamp last_manual_backup = 10;
+  // manual_backup_pending is true while an on-demand request has not been acted on yet.
+  bool manual_backup_pending = 11;
+}
+
+// EtcdBackupDestination is the S3 location of a backup, without the credentials Secret's content.
+message EtcdBackupDestination {
+  string endpoint = 1;
+  string region = 2;
+  string bucket = 3;
+  string prefix = 4;
+}
+
+message RequestEtcdBackupRequest {
+  ObjectRef backup = 1;
+}
+
+message RequestEtcdBackupResponse {
+  EtcdBackup backup = 1;
+  AuditRecord audit = 2;
 }
 
 message ListEtcdBackupsResponse {

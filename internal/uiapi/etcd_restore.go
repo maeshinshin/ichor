@@ -27,6 +27,7 @@ import (
 	"connectrpc.com/connect"
 	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -334,14 +335,7 @@ func (s *Server) ListEtcdBackups(
 			continue
 		}
 
-		eb := &pb.EtcdBackup{
-			Ref: objectRef(bk.Namespace, bk.Name), Schedule: bk.Spec.Schedule,
-			Ready: apimeta.IsStatusConditionTrue(bk.Status.Conditions, ichorv1alpha1.TalosEtcdBackupConditionReady),
-		}
-
-		for _, snap := range bk.Status.Snapshots {
-			eb.Snapshots = append(eb.Snapshots, &pb.EtcdSnapshot{Name: snap.Name, Time: timestamppb.New(snap.Time.Time), Size: snap.Size})
-		}
+		eb := etcdBackupToPB(bk)
 
 		out.Backups = append(out.Backups, eb)
 	}
@@ -349,6 +343,85 @@ func (s *Server) ListEtcdBackups(
 	slices.SortFunc(out.Backups, func(a, b *pb.EtcdBackup) int { return strings.Compare(a.GetRef().GetName(), b.GetRef().GetName()) })
 
 	return connect.NewResponse(out), nil
+}
+
+// etcdBackupToPB is the page's view of a backup: its destination without the credentials, retention,
+// and what the controller last recorded.
+func etcdBackupToPB(bk *ichorv1alpha1.TalosEtcdBackup) *pb.EtcdBackup {
+	s3 := bk.Spec.Destination.S3
+	ready := apimeta.FindStatusCondition(bk.Status.Conditions, ichorv1alpha1.TalosEtcdBackupConditionReady)
+	eb := &pb.EtcdBackup{
+		Ref: objectRef(bk.Namespace, bk.Name), Schedule: bk.Spec.Schedule,
+		Ready:       ready != nil && ready.Status == metav1.ConditionTrue,
+		Destination: &pb.EtcdBackupDestination{Endpoint: s3.Endpoint, Region: s3.Region, Bucket: s3.Bucket, Prefix: s3.Prefix},
+		KeepLast:    bk.Spec.Retention.KeepLast, Suspended: bk.Spec.Suspend,
+	}
+
+	if ready != nil && ready.Status == metav1.ConditionFalse && ready.Reason == ichorv1alpha1.TalosEtcdBackupReasonFailed {
+		eb.LastError = ready.Message
+	}
+
+	if t := bk.Status.LastSuccessTime; t != nil {
+		eb.LastSuccessTime = timestamppb.New(t.Time)
+	}
+
+	if t := bk.Status.LastManualBackup; t != nil {
+		eb.LastManualBackup = timestamppb.New(t.Time)
+	}
+
+	if at, err := time.Parse(time.RFC3339, bk.Annotations[ichorv1alpha1.BackupNowAnnotation]); err == nil {
+		last := bk.Status.LastManualBackup
+		eb.ManualBackupPending = last == nil || at.After(last.Time)
+	}
+
+	for _, snap := range bk.Status.Snapshots {
+		eb.Snapshots = append(eb.Snapshots, &pb.EtcdSnapshot{Name: snap.Name, Time: timestamppb.New(snap.Time.Time), Size: snap.Size})
+	}
+
+	return eb
+}
+
+// RequestEtcdBackup sets the backup-now annotation as the caller; the controller takes the snapshot
+// (ADR 0047). The time is never earlier than status.lastManualBackup plus a second, so a second
+// request is newer than the one the controller already acted on, and a request that is still waiting
+// is refused instead of stacked.
+func (s *Server) RequestEtcdBackup(
+	ctx context.Context, req *connect.Request[pb.RequestEtcdBackupRequest],
+) (*connect.Response[pb.RequestEtcdBackupResponse], error) {
+	ref := req.Msg.GetBackup()
+	if ref.GetName() == "" {
+		return nil, invalid("the backup is required")
+	}
+
+	var bk ichorv1alpha1.TalosEtcdBackup
+	if err := s.Get(ctx, namespacedName(ref), &bk); err != nil {
+		return nil, mapOperationWriteError("getting etcd backup", namespacedName(ref), err)
+	}
+
+	if bk.Spec.Suspend {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("the backup is suspended (spec.suspend): no snapshot is taken until it is resumed"))
+	}
+
+	if etcdBackupToPB(&bk).GetManualBackupPending() {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("an on-demand backup was already requested and has not started yet"))
+	}
+
+	at := s.now().UTC().Truncate(time.Second)
+	if last := bk.Status.LastManualBackup; last != nil && !at.After(last.Time) {
+		at = last.Add(time.Second)
+	}
+
+	if bk.Annotations == nil {
+		bk.Annotations = map[string]string{}
+	}
+
+	bk.Annotations[ichorv1alpha1.BackupNowAnnotation] = at.Format(time.RFC3339)
+
+	if err := s.Update(ctx, &bk, strictFieldValidation); err != nil {
+		return nil, mapOperationWriteError("updating etcd backup", namespacedName(ref), err)
+	}
+
+	return connect.NewResponse(&pb.RequestEtcdBackupResponse{Backup: etcdBackupToPB(&bk), Audit: s.opAudit(ctx, "backup-now", ref)}), nil
 }
 
 // etcdRestoreToPB fills the restore fields of an Operation.

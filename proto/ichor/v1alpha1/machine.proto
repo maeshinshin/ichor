@@ -58,6 +58,36 @@ message ApproveMachineRequest {
   // install is the system disk (TalosMachine.spec.install, ADR 0077). Unset
   // approves without an install target.
   MachineInstall install = 7;
+  // network is the primary link and its addressing (TalosMachine.spec.network,
+  // ADR 0091). Unset leaves networking to Talos's default.
+  MachineNetwork network = 8;
+  // disks are the roles of the non-system disks (TalosMachine.spec.disks).
+  repeated MachineDiskRole disks = 9;
+}
+
+// MachineNetwork mirrors TalosMachine.spec.network.
+message MachineNetwork {
+  // mac is the link's permanent MAC address.
+  string mac = 1;
+  // addressing is "dhcp" or "static"; empty means dhcp.
+  string addressing = 2;
+  // addresses are static addresses with a prefix length (192.168.1.10/24).
+  repeated string addresses = 3;
+  string gateway = 4;
+  repeated string dns_servers = 5;
+  // vlan_id is 0 for no VLAN, otherwise 1..4094.
+  int32 vlan_id = 6;
+}
+
+// MachineDiskRole mirrors one TalosMachine.spec.disks entry.
+message MachineDiskRole {
+  // role is "ephemeral" or "userVolume".
+  string role = 1;
+  MachineDisk disk = 2;
+  // name is the user volume's name; empty for ephemeral.
+  string name = 3;
+  // max_size caps a user volume, like "200GiB"; empty means the whole disk.
+  string max_size = 4;
 }
 
 // MachineDisk selects a disk by exactly one stable identifier
@@ -201,6 +231,9 @@ message Machine {
   // reboot_paths are the configuration fields whose pending change needs a
   // reboot to take effect (TalosMachine.status.rebootPaths, ADR 0080).
   repeated string reboot_paths = 15;
+  // network and disks mirror spec.network and spec.disks (ADR 0091).
+  MachineNetwork network = 16;
+  repeated MachineDiskRole disks = 17;
 }
 
 message RemoveMachineRequest {

@@ -63,6 +63,9 @@ message TalosLink {
   // bond, vlan, ...).
   string kind = 7;
   string driver = 8;
+  // permanent_mac is the hardware address burned into the NIC, the one
+  // TalosMachine.spec.network.mac matches; empty when the link reports none.
+  string permanent_mac = 9;
 }
 
 message TalosNetworkSection {

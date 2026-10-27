@@ -169,6 +169,16 @@ func (s *Server) ApproveMachine(
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 
+	network, err := networkFromPB(req.Msg.GetNetwork(), m.Spec.Identity)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+
+	disks, err := disksFromPB(req.Msg.GetDisks())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+
 	// A rejected machine can be approved: this is how a rejection is undone
 	// (docs/adr/0018). The only state ApproveMachine refuses to touch is
 	// already-approved, checked above.
@@ -179,6 +189,8 @@ func (s *Server) ApproveMachine(
 	m.Spec.NodeLabels = req.Msg.GetNodeLabels()
 	m.Spec.Hostname = req.Msg.GetHostname()
 	m.Spec.Install = install
+	m.Spec.Network = network
+	m.Spec.Disks = disks
 	m.Spec.ApprovalState = ichorv1alpha1.MachineApprovalStateApproved
 	m.Spec.ApprovalDecision = &ichorv1alpha1.TalosMachineApprovalDecision{
 		Actor: s.actorName(ctx), Reason: req.Msg.GetReason(), At: metav1.NewTime(now),

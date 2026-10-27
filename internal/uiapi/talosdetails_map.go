@@ -74,10 +74,21 @@ func redactKernelArgs(args []string) []string {
 	return out
 }
 
+// permanentMAC is the burned-in address of a physical link, the one spec.network.mac matches; it
+// is empty for a virtual link, which has none.
+func permanentMAC(spec *network.LinkStatusSpec) string {
+	if len(spec.PermanentAddr) == 0 {
+		return ""
+	}
+
+	return spec.PermanentAddr.String()
+}
+
 func linkFromSpec(name string, spec *network.LinkStatusSpec) *pb.TalosLink {
 	return &pb.TalosLink{
 		Name:             name,
 		Mac:              spec.HardwareAddr.String(),
+		PermanentMac:     permanentMAC(spec),
 		OperationalState: spec.OperationalState.String(),
 		LinkUp:           spec.LinkState,
 		Mtu:              spec.MTU,

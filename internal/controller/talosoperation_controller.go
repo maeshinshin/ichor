@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -32,6 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/etcdbackup"
 	"github.com/maeshinshin/ichor/pkg/clusterlock"
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
 	"github.com/maeshinshin/ichor/pkg/upgrade"
@@ -125,9 +127,20 @@ type TalosOperationReconciler struct {
 	// Evacuator is the storage hook run before a node is taken away (nil skips it).
 	KubeClient kubernetes.Interface
 	Evacuator  StorageEvacuator
+
+	// NewStore builds the object store an etcd restore reads its snapshot from (etcd_restore.go); nil means
+	// etcdbackup.NewS3Store.
+	NewStore func(etcdbackup.S3Config) (etcdbackup.Store, error)
+
+	// launchTail replaces the goroutine that runs the destructive part of an etcd restore; tests set it.
+	launchTail func(*restoreJob)
+	// staleWipes rate limits the reset of a control plane that holds stale etcd data.
+	staleWipes rateGate
 }
 
-// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosoperations,verbs=get;list;watch;update;patch
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosoperations,verbs=get;list;watch;create;update;patch
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosmachines,verbs=patch
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosetcdbackups,verbs=get;list;watch
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosoperations/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters,verbs=get;list;watch
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosmachines,verbs=get;list;watch
@@ -142,10 +155,19 @@ type TalosOperationReconciler struct {
 func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	var op ichorv1alpha1.TalosOperation
 	if err := r.Get(ctx, req.NamespacedName, &op); err != nil {
+		if apierrors.IsNotFound(err) {
+			// An etcd restore this process started has rolled the API back past its own operation.
+			r.resumeRolledBack(ctx, req.NamespacedName)
+		}
+
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
 	if handled, err := r.caRotationFinalizerStep(ctx, &op); handled || err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if handled, err := r.etcdRestoreFinalizerStep(ctx, &op); handled || err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -163,24 +185,15 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return res, err
 	}
 
+	// An etcd restore that has started is mostly driven without the cluster lock: the lock is a
+	// Kubernetes object, and the restore takes the Kubernetes API away and rolls it back.
+	if etcdRestoreStarted(&op) {
+		return r.advanceEtcdRestore(ctx, &op, &cluster)
+	}
+
 	lock, err := r.acquireDisruptiveLock(ctx, &cluster, &op)
 	if err != nil {
-		if shuttingDown, ok := errors.AsType[*shuttingDownError](err); ok {
-			return ctrl.Result{RequeueAfter: operationRequeueInterval},
-				r.setPhase(ctx, &op, ichorv1alpha1.TalosOperationPhasePaused, shuttingDown.reason(), shuttingDown.Error())
-		}
-
-		if transitioning, ok := errors.AsType[*transitioningError](err); ok {
-			return ctrl.Result{RequeueAfter: operationRequeueInterval},
-				r.setPhase(ctx, &op, ichorv1alpha1.TalosOperationPhasePaused, reasonOperationTransitioning, transitioning.Error())
-		}
-
-		if held, ok := errors.AsType[*clusterlock.HeldError](err); ok {
-			return ctrl.Result{RequeueAfter: operationRequeueInterval}, r.setPhase(ctx, &op, ichorv1alpha1.TalosOperationPhasePaused,
-				reasonOperationLockHeld, fmt.Sprintf("cluster lock held by %q", held.Holder))
-		}
-
-		return ctrl.Result{}, err
+		return r.lockUnavailable(ctx, &op, err)
 	}
 
 	if op.Spec.Paused {
@@ -201,6 +214,10 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	if op.Spec.Kind == ichorv1alpha1.TalosOperationKindNode {
 		return r.advanceNode(ctx, &op, &cluster, lock)
+	}
+
+	if op.Spec.Kind == ichorv1alpha1.TalosOperationKindEtcdRestore {
+		return r.beginEtcdRestore(ctx, &op, &cluster, lock)
 	}
 
 	if op.Spec.Kind == ichorv1alpha1.TalosOperationKindCARotation {
@@ -286,6 +303,27 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	return result, r.setPhase(ctx, &op, ichorv1alpha1.TalosOperationPhaseInProgress,
 		reasonOperationAdvancing, advancingMessage(&op, len(toAdvance)))
+}
+
+// lockUnavailable turns a refusal of acquireDisruptiveLock into the pause that explains it; the
+// pause lifts itself when the cause does. Any other error is returned for a retry.
+func (r *TalosOperationReconciler) lockUnavailable(ctx context.Context, op *ichorv1alpha1.TalosOperation, err error) (ctrl.Result, error) {
+	if shuttingDown, ok := errors.AsType[*shuttingDownError](err); ok {
+		return ctrl.Result{RequeueAfter: operationRequeueInterval},
+			r.setPhase(ctx, op, ichorv1alpha1.TalosOperationPhasePaused, shuttingDown.reason(), shuttingDown.Error())
+	}
+
+	if transitioning, ok := errors.AsType[*transitioningError](err); ok {
+		return ctrl.Result{RequeueAfter: operationRequeueInterval},
+			r.setPhase(ctx, op, ichorv1alpha1.TalosOperationPhasePaused, reasonOperationTransitioning, transitioning.Error())
+	}
+
+	if held, ok := errors.AsType[*clusterlock.HeldError](err); ok {
+		return ctrl.Result{RequeueAfter: operationRequeueInterval}, r.setPhase(ctx, op, ichorv1alpha1.TalosOperationPhasePaused,
+			reasonOperationLockHeld, fmt.Sprintf("cluster lock held by %q", held.Holder))
+	}
+
+	return ctrl.Result{}, err
 }
 
 func advancingMessage(op *ichorv1alpha1.TalosOperation, n int) string {

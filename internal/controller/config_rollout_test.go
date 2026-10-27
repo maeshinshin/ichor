@@ -354,6 +354,61 @@ var _ = Describe("a config operation on the backbone", func() {
 		return op
 	}
 
+	pend := func(ms ...*ichorv1alpha1.TalosMachine) {
+		for _, m := range ms {
+			m.Status.RebootPaths = []string{"machine.network"}
+			Expect(k8sClient.Status().Update(ctx, m)).To(Succeed())
+		}
+	}
+
+	It("lists only the machines with a pending change", func() {
+		cluster := newOpTestCluster()
+		cp1 := newOpTestMachine(cluster.Name, "controlplane", "cfgp-cp1")
+		cp2 := newOpTestMachine(cluster.Name, "controlplane", "cfgp-cp2")
+		cp3 := newOpTestMachine(cluster.Name, "controlplane", "cfgp-cp3")
+		setUpgradeOrder(cp1, "1")
+		setUpgradeOrder(cp2, "2")
+		setUpgradeOrder(cp3, "3")
+		cp2.Status.APIServerRestartPaths = []string{"cluster.apiServer"}
+		Expect(k8sClient.Status().Update(ctx, cp2)).To(Succeed())
+
+		op := newConfigOp(cluster.Name)
+		fake := &fakeAdvancer{outcomes: map[string]advanceOutcome{}}
+		r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: fake.Advance}
+
+		for range 4 {
+			_, err := reconcileOperation(r, op)
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		got := fetchOperation(op)
+		Expect(got.Status.Machines).To(HaveLen(1))
+		Expect(got.Status.Machines[0].Name).To(Equal(cp2.Name))
+		Expect(fake.calls).To(Equal([]string{cp2.Name}))
+		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseCompleted))
+	})
+
+	It("completes with no machines when none has a pending change", func() {
+		cluster := newOpTestCluster()
+		newOpTestMachine(cluster.Name, "controlplane", "cfgn-cp1")
+		newOpTestMachine(cluster.Name, "controlplane", "cfgn-cp2")
+		newOpTestMachine(cluster.Name, "controlplane", "cfgn-cp3")
+
+		op := newConfigOp(cluster.Name)
+		fake := &fakeAdvancer{outcomes: map[string]advanceOutcome{}}
+		r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: fake.Advance}
+
+		for range 3 {
+			_, err := reconcileOperation(r, op)
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		got := fetchOperation(op)
+		Expect(got.Status.Machines).To(BeEmpty())
+		Expect(fake.calls).To(BeEmpty())
+		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseCompleted))
+	})
+
 	It("takes the controller's own node last, after the control planes and the workers, and skips a held machine", func() {
 		cluster := newOpTestCluster()
 		cp1 := newOpTestMachine(cluster.Name, "controlplane", "cfg-cp1")
@@ -367,6 +422,7 @@ var _ = Describe("a config operation on the backbone", func() {
 		setUpgradeOrder(cp2, "2")
 		setUpgradeOrder(cp3, "3")
 		setHostname(cp1, "node-cfg-self")
+		pend(cp1, cp2, cp3, w1)
 
 		held.Annotations = map[string]string{ichorv1alpha1.TalosMachineUpgradeHoldAnnotation: "true"}
 		Expect(k8sClient.Update(ctx, held)).To(Succeed())
@@ -392,6 +448,7 @@ var _ = Describe("a config operation on the backbone", func() {
 		newOpTestMachine(cluster.Name, "controlplane", "cfgf-cp3")
 		setUpgradeOrder(cp1, "1")
 		setUpgradeOrder(cp2, "2")
+		pend(cp1, cp2)
 
 		op := newConfigOp(cluster.Name)
 		fake := &fakeAdvancer{outcomes: map[string]advanceOutcome{cp1.Name: {err: errors.New("etcd member missing")}}}

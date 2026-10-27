@@ -420,6 +420,58 @@ func TestPruneNeverDeletesTheCurrentSnapshot(t *testing.T) {
 
 // Kustomize prefixes every name with ichor-, so the UI objects are ichor-ichor-ui-*; the
 // installer's own objects must land with the controller, not the UI.
+// TestRunAppliesItsOwnRBACFirst pins: the installer's roles and bindings
+// are applied (and snapshotted) before the CRDs, so an upgrade started by an older release
+// grants itself the rights the new manifest needs.
+func TestRunAppliesItsOwnRBACFirst(t *testing.T) {
+	f := newFixture(t)
+
+	rbac := fmt.Sprintf(`---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: {name: ichor-installer-role, namespace: %[1]s}
+rules:
+- apiGroups: [""]
+  resources: [configmaps]
+  verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: {name: ichor-installer-rolebinding, namespace: %[1]s}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: ichor-installer-role}
+subjects: [{kind: ServiceAccount, name: ichor-installer, namespace: %[1]s}]
+`, f.ns)
+
+	// Appended last in the manifest, as kustomize may emit it anywhere.
+	manifest := append(f.manifest("ctrl:v2", ""), []byte(rbac)...)
+
+	var order []string
+
+	err := Run(context.Background(), k8sClient, Options{
+		Namespace: f.ns, RunID: f.run, Manifest: manifest, Ready: noWait(&order),
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	want := []string{
+		"Role/ichor-installer-role", "RoleBinding/ichor-installer-rolebinding",
+		"CustomResourceDefinition/" + f.plural + "." + f.group, "Deployment/ichor-controller-manager", "Deployment/ichor-ui",
+	}
+	if strings.Join(order, ",") != strings.Join(want, ",") {
+		t.Errorf("post-check order = %v, want %v", order, want)
+	}
+
+	snap, err := loadSnapshot(context.Background(), k8sClient, f.ns, f.run)
+	if err != nil {
+		t.Fatalf("loadSnapshot: %v", err)
+	}
+
+	if len(snap) == 0 || snap[0].Kind != "Role" {
+		t.Errorf("the snapshot must start with the installer RBAC so a rollback restores it last, got %+v", snap)
+	}
+}
+
 func TestClassifySplitsByKindThenUIName(t *testing.T) {
 	mk := func(kind, name string) *unstructured.Unstructured {
 		u := &unstructured.Unstructured{}
@@ -438,10 +490,15 @@ func TestClassifySplitsByKindThenUIName(t *testing.T) {
 		mk("ServiceAccount", "ichor-installer"),
 		mk(kindSecret, "ichor-webhook-server-cert"),
 		mk("Deployment", "ichor-controller-manager"),
+		mk("ClusterRole", "ichor-installer-role"),
+		mk("ClusterRoleBinding", "ichor-installer-rolebinding"),
+		mk("Role", "ichor-installer-role"),
+		mk("RoleBinding", "ichor-installer-rolebinding"),
 	})
 
-	if len(p.crds) != 1 || len(p.ui) != 3 || len(p.controller) != 3 {
-		t.Errorf("crds/ui/controller = %d/%d/%d, want 1/3/3 (the Secret is in none)", len(p.crds), len(p.ui), len(p.controller))
+	if len(p.rbac) != 4 || len(p.crds) != 1 || len(p.ui) != 3 || len(p.controller) != 3 {
+		t.Errorf("rbac/crds/ui/controller = %d/%d/%d/%d, want 4/1/3/3 (the Secret is in none)",
+			len(p.rbac), len(p.crds), len(p.ui), len(p.controller))
 	}
 }
 

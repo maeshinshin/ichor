@@ -889,7 +889,11 @@ func (x *RevokeSessionsResponse) GetNotBefore() *timestamppb.Timestamp {
 }
 
 type GetMyKubeconfigRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// ca_file, when set, is added to the exec block as `--ca-file <path>` so the
+	// plugin trusts a private CA for the issuer (a path on the user's machine,
+	// not a secret). Empty adds nothing.
+	CaFile        string `protobuf:"bytes,1,opt,name=ca_file,json=caFile,proto3" json:"ca_file,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -922,6 +926,13 @@ func (x *GetMyKubeconfigRequest) ProtoReflect() protoreflect.Message {
 // Deprecated: Use GetMyKubeconfigRequest.ProtoReflect.Descriptor instead.
 func (*GetMyKubeconfigRequest) Descriptor() ([]byte, []int) {
 	return file_ichor_v1alpha1_user_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *GetMyKubeconfigRequest) GetCaFile() string {
+	if x != nil {
+		return x.CaFile
+	}
+	return ""
 }
 
 type GetMyKubeconfigResponse struct {
@@ -1148,8 +1159,9 @@ const file_ichor_v1alpha1_user_proto_rawDesc = "" +
 	"\x04name\x18\x01 \x01(\tR\x04name\"S\n" +
 	"\x16RevokeSessionsResponse\x129\n" +
 	"\n" +
-	"not_before\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\tnotBefore\"\x18\n" +
-	"\x16GetMyKubeconfigRequest\"U\n" +
+	"not_before\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\tnotBefore\"1\n" +
+	"\x16GetMyKubeconfigRequest\x12\x17\n" +
+	"\aca_file\x18\x01 \x01(\tR\x06caFile\"U\n" +
 	"\x17GetMyKubeconfigResponse\x12\x1e\n" +
 	"\n" +
 	"kubeconfig\x18\x01 \x01(\tR\n" +

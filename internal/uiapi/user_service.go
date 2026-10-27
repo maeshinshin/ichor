@@ -25,6 +25,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -55,6 +56,7 @@ const (
 	passwordSubres    = "password"
 	condPasswordSet   = "PasswordSet"
 	kubeconfigFileFmt = "ichor-%s.kubeconfig"
+	maxCAFileLen      = 4096
 )
 
 var (
@@ -404,10 +406,14 @@ func (s *Server) WhoAmI(ctx context.Context, _ *connect.Request[pb.WhoAmIRequest
 
 // GetMyKubeconfig returns public data only: the API server URL, the cluster CA
 // certificate and an exec block that runs `ichor auth token`.
-func (s *Server) GetMyKubeconfig(ctx context.Context, _ *connect.Request[pb.GetMyKubeconfigRequest]) (*connect.Response[pb.GetMyKubeconfigResponse], error) {
+func (s *Server) GetMyKubeconfig(ctx context.Context, req *connect.Request[pb.GetMyKubeconfigRequest]) (*connect.Response[pb.GetMyKubeconfigResponse], error) {
 	id, err := s.requireUsers(ctx)
 	if err != nil {
 		return nil, err
+	}
+
+	if f := req.Msg.GetCaFile(); len(f) > maxCAFileLen || strings.ContainsFunc(f, unicode.IsControl) {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("ca_file is not a usable path"))
 	}
 
 	name, ok := strings.CutPrefix(id.User, IchorUserPrefix)
@@ -433,7 +439,7 @@ func (s *Server) GetMyKubeconfig(ctx context.Context, _ *connect.Request[pb.GetM
 	}
 
 	raw, err := buildKubeconfig(cluster.Name, "https://"+net.JoinHostPort(cluster.Spec.Endpoint.Address, kubeAPIPort),
-		bundle.Certs.K8s.Crt, name, s.Users.IssuerURL)
+		bundle.Certs.K8s.Crt, name, s.Users.IssuerURL, req.Msg.GetCaFile())
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, errors.New("building the kubeconfig failed"))
 	}
@@ -469,13 +475,18 @@ func credentialWriteError(err error) error {
 
 // buildKubeconfig writes the kubeconfig GetMyKubeconfig returns. Its only
 // credential is an exec block that runs `ichor auth token`; the CA is public.
-func buildKubeconfig(cluster, server string, ca []byte, user, issuer string) ([]byte, error) {
+func buildKubeconfig(cluster, server string, ca []byte, user, issuer, caFile string) ([]byte, error) {
+	args := []string{"auth", "token", "--issuer", issuer, "--client-id", cliClientID, "--audience", kubeAudience}
+	if caFile != "" {
+		args = append(args, "--ca-file", caFile)
+	}
+
 	cfg := clientcmdapi.NewConfig()
 	cfg.Clusters[cluster] = &clientcmdapi.Cluster{Server: server, CertificateAuthorityData: ca}
 	cfg.AuthInfos[user] = &clientcmdapi.AuthInfo{Exec: &clientcmdapi.ExecConfig{
 		APIVersion:         "client.authentication.k8s.io/v1",
 		Command:            "ichor",
-		Args:               []string{"auth", "token", "--issuer", issuer, "--client-id", cliClientID, "--audience", kubeAudience},
+		Args:               args,
 		InteractiveMode:    clientcmdapi.IfAvailableExecInteractiveMode,
 		ProvideClusterInfo: false,
 	}}

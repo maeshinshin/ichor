@@ -6,7 +6,7 @@ RUN cd ui && npm ci && npm run build
 
 # Build the ichor-ui binary with the real UI embedded, not the placeholder
 # (-tags uiembed)
-FROM golang:1.26 AS builder
+FROM golang:1.27.3 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 

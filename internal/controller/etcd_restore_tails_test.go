@@ -17,6 +17,8 @@ limitations under the License.
 package controller
 
 import (
+	"net"
+	"net/http"
 	"slices"
 	"sync/atomic"
 	"testing"
@@ -133,5 +135,47 @@ func TestRestoreTailsRunsOnceAndIsWaitedFor(t *testing.T) {
 
 	if _, ok := tails.backupOf(key); ok {
 		t.Fatal("forgotten operation still known")
+	}
+}
+
+// TestProbesAreServedWhileARestoreRunsWithoutTheManager: the liveness probe would get the process that
+// is finishing a restore killed, so the probe address answers after the manager is gone.
+func TestProbesAreServedWhileARestoreRunsWithoutTheManager(t *testing.T) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	addr := l.Addr().String()
+	_ = l.Close()
+
+	stop := serveProbes(addr)
+	defer stop()
+
+	var status int
+
+	for range 50 {
+		resp, err := http.Get("http://" + addr + "/healthz") //nolint:noctx // a test against a local port
+		if err == nil {
+			status = resp.StatusCode
+			_ = resp.Body.Close()
+
+			break
+		}
+
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	if status != http.StatusOK {
+		t.Fatalf("healthz = %d", status)
+	}
+}
+
+func TestWaitForRestoreTailsReturnsAtOnceWithNothingRunning(t *testing.T) {
+	start := time.Now()
+	WaitForRestoreTails(time.Hour, "127.0.0.1:1")
+
+	if time.Since(start) > 5*time.Second {
+		t.Fatal("waited with no job running")
 	}
 }

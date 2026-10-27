@@ -529,7 +529,7 @@ func main() {
 	// An etcd restore (ADR 0089) takes the Kubernetes API away, which costs the manager its leader
 	// lease and stops it. The restore is then mid-way (etcd wiped, snapshot not yet recovered) and
 	// only this process can finish it, so it is waited for before the process exits.
-	controller.WaitForRestoreTails(restoreTailGrace)
+	controller.WaitForRestoreTails(restoreTailGrace, probeAddr)
 
 	if err != nil {
 		setupLog.Error(err, "Failed to run manager")

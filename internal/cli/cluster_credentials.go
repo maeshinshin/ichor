@@ -294,6 +294,9 @@ type handoffDeps struct {
 	K8s    ctrlclient.Client
 	Checks handoffChecks
 	Poll   time.Duration
+
+	// Progress, when set, is shared with the --follow that comes after, so no stage line prints twice.
+	Progress *stageProgress
 }
 
 func init() {

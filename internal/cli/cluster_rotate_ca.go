@@ -102,9 +102,11 @@ func afterRotateCACreate(ctx context.Context, cmd *cobra.Command, cluster string
 		KubeconfigIn: kubeconfigPath, TalosconfigIn: talosconfigPath,
 	}
 
+	progress := &stageProgress{w: errw}
+
 	_, _ = fmt.Fprintf(errw, "created operation %s\n", ref.GetName())
 
-	files, err := runRotateCAHandoff(ctx, handoffDeps{K8s: k8s, Checks: defaultHandoffChecks(), Poll: opWatchInterval}, req, ref.GetName(), errw)
+	files, err := runRotateCAHandoff(ctx, handoffDeps{K8s: k8s, Checks: defaultHandoffChecks(), Poll: opWatchInterval, Progress: progress}, req, ref.GetName(), errw)
 	if err != nil {
 		return fmt.Errorf("%w\nThe operation %s keeps waiting; nothing was changed on your credentials. Rerun the hand-off with "+
 			"'ichor cluster credentials %s --acknowledge'", err, ref.GetName(), cluster)
@@ -134,7 +136,7 @@ func afterRotateCACreate(ctx context.Context, cmd *cobra.Command, cluster string
 		return err
 	}
 
-	if err := watchCARotation(ctx, newClient, ref.GetNamespace(), ref.GetName(), errw); err != nil {
+	if err := watchCARotation(ctx, newClient, ref.GetNamespace(), ref.GetName(), errw, progress); err != nil {
 		return err
 	}
 
@@ -175,7 +177,10 @@ func runRotateCAHandoff(ctx context.Context, d handoffDeps, req credentialReques
 
 // waitForCredentialsStage polls the operation until it is in AwaitingCredentials.
 func waitForCredentialsStage(ctx context.Context, d handoffDeps, namespace, name string, errw io.Writer) error {
-	progress := stageProgress{w: errw}
+	progress := d.Progress
+	if progress == nil {
+		progress = &stageProgress{w: errw}
+	}
 
 	for {
 		var op ichorv1alpha1.TalosOperation
@@ -237,8 +242,10 @@ func caProgressAt(op *ichorv1alpha1.TalosOperation, stage string) string {
 
 // watchCARotation follows the rotation through the Kubernetes API until it completes. Transient
 // errors (the API server restarting for the new CA) are retried; a failed step is an error exit.
-func watchCARotation(ctx context.Context, k8s ctrlclient.Client, namespace, name string, errw io.Writer) error {
-	progress := stageProgress{w: errw}
+func watchCARotation(ctx context.Context, k8s ctrlclient.Client, namespace, name string, errw io.Writer, progress *stageProgress) error {
+	if progress == nil {
+		progress = &stageProgress{w: errw}
+	}
 
 	for {
 		var op ichorv1alpha1.TalosOperation

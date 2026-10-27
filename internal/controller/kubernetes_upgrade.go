@@ -38,6 +38,7 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
@@ -46,6 +47,7 @@ import (
 	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/fieldmeta"
 	"github.com/maeshinshin/ichor/pkg/render"
+	"github.com/maeshinshin/ichor/pkg/storage"
 	"github.com/maeshinshin/ichor/pkg/upgrade"
 
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
@@ -136,16 +138,29 @@ type kubernetesUpgradeAdvancer struct {
 	) (TalosClient, error)
 
 	Admin KubernetesAdmin
+
+	// Evacuator and Kube make a kubelet roll leave its node first (ADR 0057): the storage hook,
+	// then cordon and drain, then the roll; afterwards uncordon and end the evacuation. nil
+	// skips the respective step.
+	Evacuator StorageEvacuator
+	Kube      kubernetes.Interface
+
+	// NodeName is the Kubernetes node this controller runs on ("" outside the cluster). Its
+	// kubelet is rolled without a drain: evicting the controller from its own step would
+	// restart it mid-roll. ponytail: ordering the own node last in the Kubelets stage needs
+	// kubernetesBatch to hold it back (as holdOwnNodeLast does for config rollouts).
+	NodeName string
 }
 
 // NewKubernetesUpgradeAdvancer returns the Kubernetes-kind AdvanceMachineFunc.
 func NewKubernetesUpgradeAdvancer(
 	c client.Client, reader client.Reader, controllerNamespace string,
 	talosClient func(context.Context, *ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine, *secrets.Bundle) (TalosClient, error),
-	admin KubernetesAdmin,
+	admin KubernetesAdmin, evacuator StorageEvacuator, kube kubernetes.Interface, nodeName string,
 ) AdvanceMachineFunc {
 	a := &kubernetesUpgradeAdvancer{
 		Client: c, Reader: reader, ControllerNamespace: controllerNamespace, TalosClient: talosClient, Admin: admin,
+		Evacuator: evacuator, Kube: kube, NodeName: nodeName,
 	}
 
 	return a.Advance
@@ -258,10 +273,73 @@ func (a *kubernetesUpgradeAdvancer) Advance(
 	}
 
 	if hashConfig(current) != hash {
-		return false, a.begin(ctx, talos, cluster, m, op, &node, stage, current, rendered)
+		return false, a.releaseOnError(ctx, cluster, m, nodeName, stage,
+			a.begin(ctx, talos, cluster, m, op, &node, stage, current, rendered))
 	}
 
-	return a.verify(ctx, talos, cluster, m, nodeName, stage)
+	done, err := a.verify(ctx, talos, cluster, m, nodeName, stage)
+
+	return done, a.releaseOnError(ctx, cluster, m, nodeName, stage, err)
+}
+
+// drainFirst is the Kubelets stage's leave-the-node step: the storage evacuation hook, then
+// cordon and drain, both resumable from what the node and the machine's StorageEvacuation
+// condition say. It reports whether the kubelet may be rolled now; false with no error means
+// "still evacuating or draining, call again". The controller's own node is not drained.
+func (a *kubernetesUpgradeAdvancer) drainFirst(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, node string,
+) (bool, error) {
+	if node == a.NodeName {
+		return true, nil
+	}
+
+	progress, err := evacuateMachine(ctx, a.Client, a.Evacuator, cluster, m, node, "rolling its kubelet")
+	if err != nil {
+		return false, err
+	}
+
+	switch progress {
+	case storage.EvacuationWaiting:
+		return false, nil
+	case storage.EvacuationPaused:
+		return false, fmt.Errorf("evacuating %q timed out with storage replicas still remaining", node)
+	}
+
+	if a.Kube == nil {
+		return true, nil
+	}
+
+	return drainForReboot(ctx, a.Kube, node)
+}
+
+// release undoes drainFirst: uncordon, then end the evacuation. Both are no-ops for a node that
+// was never drained or evacuated.
+func (a *kubernetesUpgradeAdvancer) release(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, node string,
+) error {
+	if a.Kube != nil {
+		if err := uncordonAfterReboot(ctx, a.Kube, node); err != nil {
+			return err
+		}
+	}
+
+	return endMachineEvacuation(ctx, a.Client, a.Evacuator, cluster, m, node)
+}
+
+// releaseOnError returns err unchanged, after giving the node back when a Kubelets-stage step
+// failed: the operation pauses, and a paused operation must not leave its node unschedulable.
+func (a *kubernetesUpgradeAdvancer) releaseOnError(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, node, stage string, err error,
+) error {
+	if err == nil || stage != ichorv1alpha1.KubernetesStageKubelets {
+		return err
+	}
+
+	if relErr := a.release(ctx, cluster, m, node); relErr != nil {
+		return fmt.Errorf("%w (and re-enabling scheduling failed: %v)", err, relErr)
+	}
+
+	return err
 }
 
 // begin runs the pre-checks for one node, pre-pulls the new images, and applies the rendered
@@ -357,6 +435,13 @@ func (a *kubernetesUpgradeAdvancer) begin(
 
 	if err := a.prePull(ctx, talos, rendered, images); err != nil {
 		return fmt.Errorf("pre-pulling images on %q: %w", m.Name, err)
+	}
+
+	// A kubelet roll takes the node's pods down with it: move storage and workloads off first.
+	if stage == ichorv1alpha1.KubernetesStageKubelets {
+		if ready, err := a.drainFirst(ctx, cluster, m, node.Name); err != nil || !ready {
+			return err
+		}
 	}
 
 	applyCtx, cancelApply := context.WithTimeout(ctx, upgradeCallTimeout)
@@ -478,6 +563,13 @@ func (a *kubernetesUpgradeAdvancer) verify(
 
 	if reason := a.nodeNotConverged(ctx, m, nodeName, target, stage); reason != "" {
 		return false, a.waiting(ctx, m, cluster, reason)
+	}
+
+	// The kubelet is back on the target and Ready: give the node back.
+	if stage == ichorv1alpha1.KubernetesStageKubelets {
+		if err := a.release(ctx, cluster, m, nodeName); err != nil {
+			return false, a.waiting(ctx, m, cluster, "re-enabling scheduling: "+err.Error())
+		}
 	}
 
 	if m.Spec.Role == roleControlPlane && stage == ichorv1alpha1.KubernetesStageKubeProxy {

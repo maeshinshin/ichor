@@ -441,6 +441,7 @@ func main() {
 	kubernetesUpgradeAdvance := controller.NewKubernetesUpgradeAdvancer(
 		mgr.GetClient(), mgr.GetAPIReader(), os.Getenv("POD_NAMESPACE"), controller.NewMachineryTalosClient,
 		controller.NewKubernetesAdmin(),
+		&controller.LonghornEvacuator{Client: mgr.GetClient()}, kubeClient, os.Getenv("NODE_NAME"),
 	)
 
 	configRolloutAdvance := controller.NewConfigRolloutAdvancer(

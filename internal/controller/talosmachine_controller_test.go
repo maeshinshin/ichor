@@ -876,6 +876,60 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(cond.Message).To(ContainSubstring("warnOnly"))
 	})
 
+	It("applies a render change from an Ichor upgrade under warnOnly instead of calling it drift, and a restart re-applies nothing", func() {
+		bundle := newTestBundle("v1.14")
+		secret := newTestSecret(bundle)
+		cluster := newTestCluster(secret.Name, "v1.14")
+		m := newTestMachine(cluster.Name, true)
+
+		patch := newTestPatch(cluster.Name, layerCluster, nil, extraArgsConfig())
+		wantRendered, wantHash, err := render.Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{*patch}, nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		fake := &fakeTalosClient{current: wantRendered}
+		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
+
+		_, err = reconcileMachine(r, m)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(fetchMachine(m).Status.AppliedConfigHash).To(Equal(wantHash))
+
+		// A restart on the same Ichor changes nothing: a fresh reconciler, same version, no apply.
+		_, err = reconcileMachine(&TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}, m)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(fake.applyCalls).To(BeEmpty())
+
+		// The node holds what the previous Ichor rendered, which differs from what this one does,
+		// while no CR generation moved.
+		old := extraArgsConfig()
+		old.ClusterConfig.APIServerConfig.ExtraArgsConfig["foo"] = []string{"c"}
+		fake.current = renderWithConfig(cluster, m, bundle, layerCluster, nil, old)
+
+		prev := renderVersion
+		renderVersion = prev + 1
+
+		DeferCleanup(func() { renderVersion = prev })
+
+		_, err = reconcileMachine(r, m)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(fake.applyCalls).To(HaveLen(1))
+		Expect(fake.applyCalls[0]).To(Equal(wantRendered))
+
+		cond := readyCondition(fetchMachine(m))
+		Expect(cond).NotTo(BeNil())
+		Expect(cond.Status).To(Equal(metav1.ConditionTrue))
+		Expect(cond.Reason).To(Equal(reasonApplied))
+
+		// Converged at the new version, the same difference is drift again.
+		fake.current = renderWithConfig(cluster, m, bundle, layerCluster, nil, old)
+		fake.applyCalls = nil
+
+		_, err = reconcileMachine(r, m)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(fake.applyCalls).To(BeEmpty())
+		Expect(readyCondition(fetchMachine(m)).Reason).To(Equal(reasonNodeDrifted))
+	})
+
 	It("corrects drift when driftPolicy is autoCorrect and every changed path is reboot-free", func() {
 		bundle := newTestBundle("v1.14")
 		secret := newTestSecret(bundle)

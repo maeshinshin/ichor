@@ -133,3 +133,5 @@ informer needs `list`/`watch` on `jobs.batch` at cluster scope, while the Role g
 the Secret cache, and the Role grants `get;list;watch;create` on `jobs`. A new envtest spec (ADR 0081, item 6) builds
 the manager's cache as the controller's identity bound to the generated RBAC and requires an informer to sync for every
 kind read through the cached client, so this class of mismatch fails in CI.
+
+Addendum (ADR 0088): an Ichor upgrade whose renderer emits different output is applied to nodes like any desired-state change (render.Version is part of the input hash); reboot-requiring changes wait for a config rollout.

@@ -568,6 +568,9 @@ func (r *TalosMachineReconciler) holdUntilEligible(
 		fmt.Sprintf("TalosOperation %q is rotating the cluster's CAs; this machine is not reconciled until it completes", rotation))
 }
 
+// renderVersion is render.Version; a variable only so tests can simulate an Ichor upgrade.
+var renderVersion = render.Version
+
 // desiredInputsHash fingerprints the generation of every object that fed
 // this reconcile's render: cluster, m, and whichever of candidates
 // render.SelectPatches decides apply to m -- the same question Render
@@ -585,7 +588,8 @@ func desiredInputsHash(
 	}
 
 	parts := make([]string, 0, len(applicable)+2)
-	parts = append(parts, fmt.Sprintf("cluster=%d", cluster.Generation), fmt.Sprintf("machine=%d", m.Generation))
+	parts = append(parts, fmt.Sprintf("render=%d", renderVersion),
+		fmt.Sprintf("cluster=%d", cluster.Generation), fmt.Sprintf("machine=%d", m.Generation))
 
 	for _, p := range applicable {
 		parts = append(parts, fmt.Sprintf("patch:%s=%d", p.Name, p.Generation))

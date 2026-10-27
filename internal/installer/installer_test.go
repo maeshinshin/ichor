@@ -357,6 +357,67 @@ func TestSnapshotIsKeptWhenARunIsRepeated(t *testing.T) {
 	}
 }
 
+func snapshotRuns(t *testing.T, ns string) map[string]int {
+	t.Helper()
+
+	var l corev1.ConfigMapList
+	if err := k8sClient.List(context.Background(), &l, client.InNamespace(ns), client.HasLabels{SnapshotLabel}); err != nil {
+		t.Fatalf("listing snapshots: %v", err)
+	}
+
+	out := map[string]int{}
+	for _, cm := range l.Items {
+		out[cm.Labels[SnapshotLabel]]++
+	}
+
+	return out
+}
+
+func TestRunKeepsOnlyTheNewestSnapshots(t *testing.T) {
+	f := newFixture(t)
+
+	var order []string
+
+	for i := range SnapshotsKept + 2 {
+		if err := Run(context.Background(), k8sClient, Options{
+			Namespace: f.ns, RunID: fmt.Sprintf("%s-%d", f.run, i), Manifest: f.manifest("ctrl:v2", ""), Ready: noWait(&order),
+		}); err != nil {
+			t.Fatalf("run %d: %v", i, err)
+		}
+	}
+
+	got := snapshotRuns(t, f.ns)
+	if len(got) != SnapshotsKept {
+		t.Fatalf("snapshots after %d runs = %v, want the newest %d", SnapshotsKept+2, got, SnapshotsKept)
+	}
+
+	for i := 2; i < SnapshotsKept+2; i++ {
+		if got[fmt.Sprintf("%s-%d", f.run, i)] == 0 {
+			t.Errorf("run %d's snapshot was deleted: %v", i, got)
+		}
+	}
+}
+
+func TestPruneNeverDeletesTheCurrentSnapshot(t *testing.T) {
+	f := newFixture(t)
+
+	for _, id := range []string{"b", "a", "c"} {
+		if _, err := takeSnapshot(context.Background(), k8sClient, f.ns, f.run+id, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// keep 1 would keep only "c" (newest); "b" is current and the oldest, so it stays too.
+	if err := pruneSnapshots(context.Background(), k8sClient, f.ns, f.run+"b", 1); err != nil {
+		t.Fatal(err)
+	}
+
+	got := snapshotRuns(t, f.ns)
+	if len(got) != 2 || got[f.run+"b"] == 0 || got[f.run+"c"] == 0 {
+		t.Errorf("snapshots = %v, want b (current) and c (newest)", got)
+	}
+}
+
 // Kustomize prefixes every name with ichor-, so the UI objects are ichor-ichor-ui-*; the
 // installer's own objects must land with the controller, not the UI.
 func TestClassifySplitsByKindThenUIName(t *testing.T) {

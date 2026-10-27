@@ -166,6 +166,9 @@ var _ = Describe("IchorInstallation", func() {
 			job := jobs()[0]
 			Expect(job.Spec.Template.Spec.Containers[0].Image).To(Equal("registry.example/ichor-installer:v0.2.0"))
 			Expect(job.Spec.Template.Spec.ServiceAccountName).To(Equal(IchorInstallerServiceAccount))
+			// A finished Job is removed after a day: long enough to read its log, and the
+			// operation never needs it afterwards (the next test).
+			Expect(job.Spec.TTLSecondsAfterFinished).To(HaveValue(Equal(int32(24 * 60 * 60))))
 
 			// Called again (the next machine, the next reconcile): same Job, still running.
 			done, err = advance(ctx, nil, nil, o)
@@ -213,7 +216,7 @@ var _ = Describe("IchorInstallation", func() {
 			Expect(jobs()).To(BeEmpty())
 		})
 
-		It("is done, with no Job, once the running version is the target", func() {
+		It("is done, with no Job, once the running version is the target (the Job may be long gone)", func() {
 			withVersion("v0.2.0")
 			createInstallation(ichorv1alpha1.IchorManagementModeIchor, "v0.2.0")
 

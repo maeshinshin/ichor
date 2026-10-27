@@ -48,8 +48,10 @@ import (
 )
 
 const (
-	// DefaultUIServiceName is the ClusterIP Service in front of ichor-ui (dist/chart/templates/ui).
-	DefaultUIServiceName = "ichor-ui-service"
+	// uiComponentLabel/Value select the ichor-ui Service on every install path (kustomize prefixes
+	// its name, the chart does not), so the controller never depends on a name.
+	uiComponentLabel = "app.kubernetes.io/component"
+	uiComponentValue = "ui"
 
 	issuerRotateEvery     = 30 * 24 * time.Hour
 	issuerActivationDelay = 10 * time.Minute
@@ -99,6 +101,7 @@ type IssuerTrustReconciler struct {
 	Namespace string
 
 	// UIServiceName is the Service whose ClusterIP the serving certificate and discoveryURL name.
+	// Empty (the default) finds it by the app.kubernetes.io/component=ui label.
 	UIServiceName string
 
 	// RefreshLifetime is the longest-lived token ichor-ui signs; a key is kept that long past its
@@ -142,10 +145,35 @@ func (r *IssuerTrustReconciler) plan() rotationPlan {
 
 func (r *IssuerTrustReconciler) serviceName() string {
 	if r.UIServiceName == "" {
-		return DefaultUIServiceName
+		return uiComponentLabel + "=" + uiComponentValue
 	}
 
 	return r.UIServiceName
+}
+
+// uiService returns the ichor-ui Service: by name when UIServiceName is set, otherwise the first
+// Service in the namespace carrying the component label. NotFound when there is none.
+func (r *IssuerTrustReconciler) uiService(ctx context.Context) (*corev1.Service, error) {
+	var svc corev1.Service
+
+	if r.UIServiceName != "" {
+		if err := r.Get(ctx, r.key(r.UIServiceName), &svc); err != nil {
+			return nil, err
+		}
+
+		return &svc, nil
+	}
+
+	var list corev1.ServiceList
+	if err := r.List(ctx, &list, client.InNamespace(r.Namespace), client.MatchingLabels{uiComponentLabel: uiComponentValue}); err != nil {
+		return nil, err
+	}
+
+	if len(list.Items) == 0 {
+		return nil, apierrors.NewNotFound(corev1.Resource("services"), r.serviceName())
+	}
+
+	return &list.Items[0], nil
 }
 
 // Reconcile converges every object. The request key is ignored: all events map to one pass.
@@ -265,9 +293,8 @@ func (r *IssuerTrustReconciler) apply(
 // reconcileTLS keeps the CA, the serving certificate and the trust ConfigMap. Without a ClusterIP
 // (the Service is missing or headless) it issues nothing and retries shortly.
 func (r *IssuerTrustReconciler) reconcileTLS(ctx context.Context, now time.Time) (time.Time, error) {
-	var svc corev1.Service
-
-	if err := r.Get(ctx, r.key(r.serviceName()), &svc); err != nil {
+	svc, err := r.uiService(ctx)
+	if err != nil {
 		if apierrors.IsNotFound(err) {
 			ctrl.LoggerFrom(ctx).Info("ichor-ui Service not found; internal TLS waits", "service", r.serviceName())
 
@@ -284,7 +311,7 @@ func (r *IssuerTrustReconciler) reconcileTLS(ctx context.Context, now time.Time)
 		return now.Add(30 * time.Second), nil
 	}
 
-	spec := leafSpec{ip: ip, dns: []string{fmt.Sprintf("%s.%s.svc", r.serviceName(), r.Namespace)}}
+	spec := leafSpec{ip: ip, dns: []string{fmt.Sprintf("%s.%s.svc", svc.Name, r.Namespace)}}
 
 	ca, caX509, caKey, err := r.ensureCA(ctx, now)
 	if err != nil {
@@ -619,6 +646,10 @@ func (r *IssuerTrustReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	named := predicate.NewPredicateFuncs(func(o client.Object) bool {
 		if o.GetNamespace() != r.Namespace {
 			return false
+		}
+
+		if _, isSvc := o.(*corev1.Service); isSvc && r.UIServiceName == "" {
+			return o.GetLabels()[uiComponentLabel] == uiComponentValue
 		}
 
 		return slices.Contains([]string{

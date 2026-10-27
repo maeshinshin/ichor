@@ -7,9 +7,10 @@ metadata:
     app.kubernetes.io/name: {{ include "ichor.name" . }}
     helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
     app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: ui
     control-plane: ui-backend
     {{- with .Values.ichorUI.labels }}
-    {{- with omit . "app.kubernetes.io/managed-by" "app.kubernetes.io/name" "helm.sh/chart" "app.kubernetes.io/instance" "control-plane" }}
+    {{- with omit . "app.kubernetes.io/managed-by" "app.kubernetes.io/name" "helm.sh/chart" "app.kubernetes.io/instance" "control-plane" "app.kubernetes.io/component" }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
     {{- end }}

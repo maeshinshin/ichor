@@ -18,6 +18,8 @@ package uiapi
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -34,6 +36,29 @@ import (
 type Identity struct {
 	User   string
 	Groups []string
+	// Source is SourceIchor or SourceOIDC; DisplayName is set
+	// for an Ichor user only.
+	Source, DisplayName string
+}
+
+// The two places an identity can come from.
+const (
+	SourceIchor = "ichor"
+	SourceOIDC  = "oidc"
+)
+
+// Prefixes for Ichor users and their roles. The external IdP is mapped with
+// its own prefix (default "oidc:"), and the process refuses one that could
+// collide with these.
+const (
+	IchorUserPrefix  = "ichor:"
+	IchorGroupPrefix = "ichor:"
+)
+
+// LocalVerifier verifies an ID token minted by Ichor's own issuer, in process,
+// against its own keys: signature, issuer, audience "ichor-ui" and expiry.
+type LocalVerifier interface {
+	Verify(ctx context.Context, raw string) (subject string, err error)
 }
 
 type identityKey struct{}
@@ -55,10 +80,18 @@ type OIDCConfig struct {
 	UsernameClaim, GroupsClaim, UsernamePrefix, GroupsPrefix string
 }
 
-// Authenticator verifies ID tokens against one issuer.
+// Authenticator verifies ID tokens from up to two sources:
+// an external IdP (go-oidc) and Ichor's own issuer (verified in
+// process). It routes by the token's unverified "iss" claim, and each path
+// then verifies the token in full, so a token never gets a looser check by
+// naming the other issuer.
 type Authenticator struct {
 	cfg      OIDCConfig
 	verifier *oidc.IDTokenVerifier
+
+	local       LocalVerifier
+	localIssuer string
+	users       *UserCache
 }
 
 // NewAuthenticator runs OIDC discovery against cfg.Issuer. The verifier
@@ -85,6 +118,41 @@ func NewAuthenticator(ctx context.Context, cfg OIDCConfig) (*Authenticator, erro
 	return &Authenticator{cfg: cfg, verifier: p.Verifier(&oidc.Config{ClientID: cfg.ClientID})}, nil
 }
 
+// WithLocal returns a that also accepts tokens from Ichor's own issuer
+// (iss == issuer). a may be nil (Ichor users only).
+func (a *Authenticator) WithLocal(issuer string, v LocalVerifier, users *UserCache) *Authenticator {
+	out := &Authenticator{}
+	if a != nil {
+		*out = *a
+	}
+
+	out.local, out.localIssuer, out.users = v, issuer, users
+
+	return out
+}
+
+// unverifiedIssuer reads "iss" from a JWT's payload without checking anything;
+// it only chooses which verifier then checks the whole token.
+func unverifiedIssuer(raw string) string {
+	parts := strings.Split(raw, ".")
+	if len(parts) != 3 {
+		return ""
+	}
+
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return ""
+	}
+
+	var c struct {
+		Iss string `json:"iss"`
+	}
+
+	_ = json.Unmarshal(payload, &c)
+
+	return c.Iss
+}
+
 // Authenticate turns an "Authorization: Bearer <id token>" header into an
 // Identity. Errors never include the token or the verifier's detail beyond a
 // fixed phrase, so nothing sensitive can reach a log or a response.
@@ -94,6 +162,41 @@ func (a *Authenticator) Authenticate(ctx context.Context, header string) (Identi
 		return Identity{}, errors.New("missing bearer token")
 	}
 
+	if a.local != nil && unverifiedIssuer(raw) == a.localIssuer {
+		return a.authenticateLocal(ctx, raw)
+	}
+
+	if a.verifier == nil {
+		return Identity{}, errors.New("invalid ID token")
+	}
+
+	return a.authenticateExternal(ctx, raw)
+}
+
+// authenticateLocal verifies a token of Ichor's own issuer, then re-reads the
+// IchorUser (a cache of at most 10 s): a disabled or deleted user is refused,
+// and the roles come from the CR, not from the token, so a role change or a
+// disable takes effect here within seconds.
+func (a *Authenticator) authenticateLocal(ctx context.Context, raw string) (Identity, error) {
+	sub, err := a.local.Verify(ctx, raw)
+	if err != nil || sub == "" || a.users == nil {
+		return Identity{}, errors.New("invalid ID token")
+	}
+
+	u, err := a.users.Get(ctx, sub)
+	if err != nil || u.Spec.Disabled {
+		return Identity{}, errors.New("invalid ID token")
+	}
+
+	id := Identity{User: IchorUserPrefix + u.Name, Source: SourceIchor, DisplayName: u.Spec.DisplayName}
+	for _, r := range u.Spec.Roles {
+		id.Groups = append(id.Groups, IchorGroupPrefix+r)
+	}
+
+	return id, nil
+}
+
+func (a *Authenticator) authenticateExternal(ctx context.Context, raw string) (Identity, error) {
 	tok, err := a.verifier.Verify(ctx, raw)
 	if err != nil {
 		return Identity{}, errors.New("invalid ID token")
@@ -115,15 +218,16 @@ func (a *Authenticator) Authenticate(ctx context.Context, header string) (Identi
 		}
 	}
 
-	id := Identity{User: a.cfg.UsernamePrefix + name}
+	id := Identity{User: a.cfg.UsernamePrefix + name, Source: SourceOIDC}
 	// Never let a token name a Kubernetes built-in identity.
-	if strings.HasPrefix(id.User, "system:") {
-		return Identity{}, errors.New("ID token names a reserved system: user")
+	if strings.HasPrefix(id.User, "system:") || strings.HasPrefix(id.User, IchorUserPrefix) {
+		return Identity{}, errors.New("ID token names a reserved user")
 	}
 
 	if gs, ok := claims[a.cfg.GroupsClaim].([]any); ok {
 		for _, g := range gs {
-			if s, ok := g.(string); ok && s != "" && !strings.HasPrefix(a.cfg.GroupsPrefix+s, "system:") {
+			if s, ok := g.(string); ok && s != "" && !strings.HasPrefix(a.cfg.GroupsPrefix+s, "system:") &&
+				!strings.HasPrefix(a.cfg.GroupsPrefix+s, IchorGroupPrefix) {
 				id.Groups = append(id.Groups, a.cfg.GroupsPrefix+s)
 			}
 		}

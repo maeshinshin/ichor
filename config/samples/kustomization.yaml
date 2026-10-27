@@ -7,4 +7,5 @@ resources:
 - ichor_v1alpha1_talosoperation.yaml
 - ichor_v1alpha1_talosetcdbackup.yaml
 - ichor_v1alpha1_ichorinstallation.yaml
+- ichor_v1alpha1_ichoruser.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

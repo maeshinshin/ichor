@@ -28,7 +28,9 @@ ADR 0082 listed what the Talos client enables and ranked it, and implemented non
 
 ## Not decided here
 
-Support bundle, etcd snapshot and packet capture (ADR 0082 items 3, 5, 9) are not implemented. A reboot or shutdown does not yet refuse the last schedulable worker. `restart-service` has no verification beyond the Node being Ready.
+Support bundle, etcd snapshot and packet capture (ADR 0082 items 3, 5, 9) are not implemented. Break-glass for the last-worker refusal: a node operation carries no break-glass field and the webhook checks it for `reset` only, so the refusal has no override yet.
+
+Amended: a `reboot` or `shutdown` of a worker is refused (the operation pauses with the reason) when no other schedulable, Ready, non-control-plane Node exists. `restart-service` also requires the Talos service to report `Running` (and healthy, when it has a health check) through the Talos ServiceList API, in addition to the Node being Ready; a client that cannot read service state gets the Node check alone.
 
 ## Consequences
 

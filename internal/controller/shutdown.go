@@ -41,8 +41,12 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
+	"sync"
+	"time"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
+	policyv1 "k8s.io/api/policy/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -67,6 +71,23 @@ const (
 	reasonShutdownWaiting   = "WaitingForPowerOn"
 	reasonShutdownReturned  = "AllMachinesBack"
 )
+
+// shutdownUnreachableWindow is how long a worker that was asked to stop must stay unreachable before
+// it counts as stopped: a node that only lost its network for a moment answers again within it. A
+// variable so tests can change it.
+var shutdownUnreachableWindow = 90 * time.Second
+
+// shutdownDrainStall is how long stage 1 may wait for the workers before the operation pauses and
+// names the PodDisruptionBudgets that may be holding the drain back.
+var shutdownDrainStall = 15 * time.Minute
+
+// shutdownNow is the clock of the window; a variable for tests.
+var shutdownNow = time.Now
+
+// shutdownUnreachableSince holds, per operation UID and machine, when the machine was first seen
+// unreachable. ponytail: in memory only; a restarted controller starts the window again, which can
+// only make a stop count later, never earlier.
+var shutdownUnreachableSince sync.Map
 
 // shuttingDownError is the refusal of every disruptive operation while a
 // shutdown of the cluster has not completed. Distinguished from
@@ -198,7 +219,7 @@ func (r *TalosOperationReconciler) shutdownPlan(
 			own = append(own, m)
 		case m.Spec.Role == roleControlPlane:
 			last = append(last, m)
-		case m.Spec.Role == "worker":
+		case m.Spec.Role == workerRole:
 			workers = append(workers, m)
 		}
 	}
@@ -331,13 +352,58 @@ func (r *TalosOperationReconciler) stopped(
 		return false
 	}
 
+	key := string(op.UID) + "/" + m.Name
+
 	talos, id, err := r.probe(ctx, cluster, m, bundle)
 	if err != nil {
-		return true
+		// Never asked to stop (no boot ID): it was down already.
+		if rec.BootID == "" {
+			return true
+		}
+
+		since, _ := shutdownUnreachableSince.LoadOrStore(key, shutdownNow())
+
+		return shutdownNow().Sub(since.(time.Time)) >= shutdownUnreachableWindow
 	}
 	defer closeTalosClient(talos)
 
+	shutdownUnreachableSince.Delete(key)
+
 	return rec.BootID == "" || id != rec.BootID
+}
+
+// stalledPDBs names the PodDisruptionBudgets that currently allow no disruption, which is what
+// holds a node's drain back. ponytail: cluster-wide, not narrowed to the pods of the waiting nodes.
+func (r *TalosOperationReconciler) stalledPDBs(ctx context.Context) []string {
+	var pdbs []policyv1.PodDisruptionBudget
+
+	if r.KubeClient != nil {
+		list, err := r.KubeClient.PolicyV1().PodDisruptionBudgets(metav1.NamespaceAll).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return nil
+		}
+
+		pdbs = list.Items
+	} else {
+		var list policyv1.PodDisruptionBudgetList
+		if err := readerOrClient(r.APIReader, r.Client).List(ctx, &list); err != nil {
+			return nil
+		}
+
+		pdbs = list.Items
+	}
+
+	var names []string
+
+	for _, p := range pdbs {
+		if p.Status.DisruptionsAllowed == 0 && p.Status.ExpectedPods > 0 {
+			names = append(names, p.Namespace+"/"+p.Name)
+		}
+	}
+
+	slices.Sort(names)
+
+	return names
 }
 
 // advanceShutdown runs stages 1 and 2. The caller holds the cluster lock.
@@ -377,6 +443,19 @@ func (r *TalosOperationReconciler) advanceShutdown(
 	}
 
 	if waiting > 0 {
+		if c := apimeta.FindStatusCondition(op.Status.Conditions, conditionShutdown); c != nil &&
+			c.Reason == reasonShutdownStopping && shutdownNow().Sub(c.LastTransitionTime.Time) > shutdownDrainStall {
+			why := fmt.Sprintf("%d of %d worker(s) have not stopped after %s", waiting, len(workers), shutdownDrainStall)
+			if names := r.stalledPDBs(ctx); len(names) > 0 {
+				why += "; PodDisruptionBudget(s) allowing no disruption may be holding the drain back: " + strings.Join(names, ", ")
+			}
+
+			// Dropping the progress condition restarts the stall clock when the operation is resumed.
+			apimeta.RemoveStatusCondition(&op.Status.Conditions, conditionShutdown)
+
+			return ctrl.Result{}, r.setPhase(ctx, op, ichorv1alpha1.TalosOperationPhasePaused, reasonOperationStepFailed, why)
+		}
+
 		return ctrl.Result{RequeueAfter: operationRequeueInterval}, r.shutdownStatus(ctx, op,
 			ichorv1alpha1.TalosOperationPhaseInProgress, reasonShutdownStopping,
 			fmt.Sprintf("waiting for %d of %d worker(s) to stop", waiting, len(workers)))

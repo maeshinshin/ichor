@@ -149,3 +149,5 @@ request is not forced and node registration is not skipped, and the shutting-dow
 way, which ADR 0080 had also made, was wrong and is fixed there: Ichor drains before its own reboots.
 
 - Addendum (ADR 0086): the wait for a machine to return dials `DialEndpoint()`, so a node that came back at a new address is seen once the address is recorded in status.
+
+- Amendment: a worker counts as stopped only after it stayed unreachable for 90 seconds (a brief network loss does not count; the clock is in memory, so a restarted controller starts it again), and when stage 1 has waited 15 minutes the operation pauses with a reason that names the PodDisruptionBudgets allowing no disruption (cluster-wide, not narrowed to the waiting nodes).

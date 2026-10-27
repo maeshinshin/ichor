@@ -132,8 +132,18 @@ type RestoreMarker struct {
 	Failure string `json:"failure,omitempty"`
 	// LastNote is the job's last transient problem ("dialing cp-a: ..."), kept so that a process that
 	// died leaves a trace; it is not final.
-	LastNote  string    `json:"lastNote,omitempty"`
-	StartedAt time.Time `json:"startedAt"`
+	LastNote string `json:"lastNote,omitempty"`
+	// Nodes maps each control plane's TalosMachine name to its Kubernetes node name, read before
+	// anything was wiped (a node cannot be asked afterwards). Own is the machine the controller runs on,
+	// which is wiped last; empty when the controller runs elsewhere.
+	Nodes map[string]string `json:"nodes,omitempty"`
+	Own   string            `json:"own,omitempty"`
+	// AgentsSince is when the kubelets of the nodes that were not wiped were restarted (the node-side
+	// agents refresh); zero before. It bounds the wait for them and makes the restart once.
+	AgentsSince time.Time `json:"agentsSince,omitzero"`
+	// AgentWarning is what had not converged on those nodes when the wait for them ran out.
+	AgentWarning string    `json:"agentWarning,omitempty"`
+	StartedAt    time.Time `json:"startedAt"`
 }
 
 // MarkerKey and PinnedKey are the object keys under a backup's prefix.

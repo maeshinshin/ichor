@@ -103,22 +103,45 @@ var _ = Describe("TalosOperation etcd-restore after a restart of the controller"
 		Expect(f.marker()).NotTo(BeNil(), "the marker stays for the next start")
 	})
 
-	It("restarts kube-proxy on the nodes that were not wiped, by pod name, and nothing else", func() {
-		f := newRestoreFixture("")
+	// restoreWithWorker runs the restore up to the point where the API is back and the control planes
+	// are members again, with one worker that was not wiped.
+	restoreWithWorker := func(kc *kubefake.Clientset) (f *restoreFixture, op *ichorv1alpha1.TalosOperation, r *TalosOperationReconciler, worker *fakeTalosClient) {
+		f = newRestoreFixture("")
 		f.wipeHooks()
 
-		cp := func(name string) *corev1.Node {
-			return &corev1.Node{Name: name, Labels: map[string]string{controlPlaneLabel: ""}}
-		}
-		pod := func(ns, name, node string, labels map[string]string) *corev1.Pod {
-			return &corev1.Pod{
-				Namespace: ns, Name: name, Labels: labels,
-				Spec: corev1.PodSpec{NodeName: node},
-			}
-		}
+		w := newOpTestMachine(f.backup.cluster.Name, roleWorker, "rs-w1")
+		setHostname(w, "wk-1")
+
+		worker = &fakeTalosClient{}
+		f.fakes[w.Name] = worker
+
+		op = f.newOp(nil)
+		f.reconcile(op)
+		_, err := f.run(f.lastJob(), 5)
+		Expect(err).NotTo(HaveOccurred())
+		dropOperation(op)
+
+		r = f.reconciler("")
+		r.KubeClient = kc
+		Expect(r.ResumeEtcdRestores(ctx)).To(Succeed())
+		f.members(f.hosts()...)
+
+		return f, op, r, worker
+	}
+
+	kubeProxyCluster := func() *kubefake.Clientset {
 		kp := map[string]string{labelK8sApp: kubeProxyName}
-		kc := kubefake.NewClientset(
-			cp(restoreHostA), cp(restoreHostB), cp(restoreHostC), &corev1.Node{Name: "wk-1"},
+		pod := func(ns, name, node string, labels map[string]string) *corev1.Pod {
+			return &corev1.Pod{Namespace: ns, Name: name, Labels: labels, Spec: corev1.PodSpec{NodeName: node}}
+		}
+
+		// The node reports Ready with a heartbeat after the kubelet restart.
+		node := &corev1.Node{Name: "wk-1", Status: corev1.NodeStatus{Conditions: []corev1.NodeCondition{{
+			Type: corev1.NodeReady, Status: corev1.ConditionTrue, LastHeartbeatTime: metav1.NewTime(time.Now().Add(time.Hour)),
+		}}}}
+
+		return kubefake.NewClientset(
+			node,
 			&appsv1.DaemonSet{
 				Namespace: kubeSystemNamespace, Name: kubeProxyName,
 				Spec: appsv1.DaemonSetSpec{Selector: &metav1.LabelSelector{MatchLabels: kp}},
@@ -128,34 +151,85 @@ var _ = Describe("TalosOperation etcd-restore after a restart of the controller"
 			pod("other", "kube-proxy-other", "wk-1", kp),
 			pod("kube-system", "coredns-w", "wk-1", map[string]string{"k8s-app": "kube-dns"}),
 		)
+	}
+
+	podNames := func(kc *kubefake.Clientset, ns string) []string {
+		l, err := kc.CoreV1().Pods(ns).List(ctx, metav1.ListOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		names := make([]string, 0, len(l.Items))
+		for _, p := range l.Items {
+			names = append(names, p.Name)
+		}
+
+		return names
+	}
+
+	It("restarts the kubelet of a node that was not wiped, then its kube-proxy pod, and moves on only when the new pod is Ready", func() {
+		kc := kubeProxyCluster()
+		f, op, r, worker := restoreWithWorker(kc)
+
+		got := f.reconcileWith(r, op)
+		Expect(worker.serviceRestarts).To(Equal([]string{"kubelet"}), "the kubelet is restarted through Talos first")
+		Expect(podNames(kc, "kube-system")).To(ContainElement("kube-proxy-w"), "the pod is not deleted before the kubelet is back")
+		Expect(got.Status.EtcdRestore.Step).To(Equal(ichorv1alpha1.EtcdRestoreStepRejoining))
+
+		got = f.reconcileWith(r, op)
+		Expect(worker.serviceRestarts).To(HaveLen(1), "the kubelet is restarted once")
+		Expect(podNames(kc, "kube-system")).To(ConsistOf("kube-proxy-a", "coredns-w"), "only the worker's kube-proxy pod went")
+		Expect(podNames(kc, "other")).To(ConsistOf("kube-proxy-other"))
+		Expect(got.Status.EtcdRestore.Step).To(Equal(ichorv1alpha1.EtcdRestoreStepRejoining), "no replacement yet: the step is not done")
+
+		_, err := kc.CoreV1().Pods("kube-system").Create(ctx, &corev1.Pod{
+			Namespace: "kube-system", Name: "kube-proxy-w2", Labels: map[string]string{labelK8sApp: kubeProxyName},
+			CreationTimestamp: metav1.NewTime(time.Now().Add(time.Hour)),
+			Spec:              corev1.PodSpec{NodeName: "wk-1"},
+			Status:            corev1.PodStatus{Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}},
+		}, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		got = f.reconcileWith(r, op)
+		Expect(got.Status.EtcdRestore.Step).To(Equal(ichorv1alpha1.EtcdRestoreStepReconciling))
+	})
+
+	It("says so, rather than claiming success, when the node does not converge", func() {
+		old := agentsBound
+		agentsBound = time.Millisecond
+
+		DeferCleanup(func() { agentsBound = old })
+
+		kc := kubeProxyCluster()
+		f, op, r, _ := restoreWithWorker(kc)
+
+		f.reconcileWith(r, op)
+		time.Sleep(5 * time.Millisecond)
+
+		got := f.reconcileWith(r, op)
+		Expect(got.Status.EtcdRestore.Step).To(Equal(ichorv1alpha1.EtcdRestoreStepReconciling))
+		Expect(got.Status.EtcdRestore.Message).To(ContainSubstring("wk-1"))
+		Expect(got.Status.EtcdRestore.Message).To(ContainSubstring("kube-proxy"))
+	})
+
+	It("recognises the controller's own control plane when its spec.hostname is empty, and wipes it last", func() {
+		f := newRestoreFixture(restoreHostA)
+		own := f.cps[restoreHostA]
+		setHostname(own, "")
+		f.fake(restoreHostA).nodeName = restoreHostA
 
 		op := f.newOp(nil)
-		f.reconcile(op)
-		_, err := f.run(f.lastJob(), 5)
-		Expect(err).NotTo(HaveOccurred())
-		dropOperation(op)
+		got := f.reconcile(op)
 
-		restarted := f.reconciler("")
-		restarted.KubeClient = kc
-		Expect(restarted.ResumeEtcdRestores(ctx)).To(Succeed())
-		f.members(f.hosts()...)
-
-		got := f.reconcileWith(restarted, op)
-		Expect(got.Status.EtcdRestore.Step).To(Equal(ichorv1alpha1.EtcdRestoreStepReconciling))
-
-		left := func(ns string) []string {
-			l, err := kc.CoreV1().Pods(ns).List(ctx, metav1.ListOptions{})
-			Expect(err).NotTo(HaveOccurred())
-
-			names := make([]string, 0, len(l.Items))
-			for _, p := range l.Items {
-				names = append(names, p.Name)
-			}
-
-			return names
+		var order []string
+		for _, n := range f.lastJob().order {
+			order = append(order, n.name)
 		}
-		Expect(left("kube-system")).To(ConsistOf("kube-proxy-a", "coredns-w"), "only the worker's kube-proxy pod went")
-		Expect(left("other")).To(ConsistOf("kube-proxy-other"))
+
+		Expect(order).NotTo(ContainElement(own.Name), "the controller's node is not wiped in the first pass")
+		Expect(order).To(HaveLen(2))
+		Expect(f.marker().Own).To(Equal(own.Name))
+		Expect(f.marker().Nodes).To(HaveKeyWithValue(own.Name, restoreHostA))
+		Expect(got.Status.EtcdRestore.Message).To(ContainSubstring("where this controller runs"))
+		Expect(got.Status.EtcdRestore.Message).To(ContainSubstring(restoreHostA))
 	})
 })
 

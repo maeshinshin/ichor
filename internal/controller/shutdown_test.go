@@ -191,6 +191,16 @@ var _ = Describe("TalosOperation shutdown", func() {
 		Expect(f.fakes[f.workers[0].Name].shutdownCalls).To(Equal([]bool{true}))
 	})
 
+	It("finds the controller's own node through what Talos reports when spec.hostname is empty", func() {
+		f := newShutdownFixture()
+		f.fakes[f.workers[0].Name].nodeName = "ctrl-node"
+		f.r.NodeName = "ctrl-node"
+
+		op := f.newOp(ichorv1alpha1.TalosOperationKindShutdown)
+		f.reconcile(op)
+		Expect(f.log).To(Equal([]string{f.workers[1].Name}), "the node running this controller is not drained first")
+	})
+
 	It("does not record a machine whose Shutdown request failed, so the next reconcile retries it", func() {
 		f := newShutdownFixture()
 		f.fakes[f.workers[0].Name].shutdownErr = errors.New("rpc failed")

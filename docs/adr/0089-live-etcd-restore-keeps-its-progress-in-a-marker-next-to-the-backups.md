@@ -216,6 +216,45 @@ completion message) instead of claiming success. (3) `ichor restore --live --fol
 after the API returned and before the operation was recreated; the follow now treats NotFound of the restore operation
 as expected for up to 15 minutes and prints "waiting for the restore to resume".
 
+### Changes after the third run
+
+The third run (3 control planes, 1 worker) recovered etcd and rejoined the two other control planes within six minutes, then
+stuck at `Rejoining` for 17 minutes. The controller ran on its own, not yet wiped, control plane: that node's etcd held
+the pre-rewind data and was not a member of the recovered cluster, and its kube-proxy was stale, so from there the Service IP
+was unreachable. The pod crash-looped on "Failed to start manager ... connection refused", and only the controller could wipe
+its own node: a deadlock, broken by deleting that node's kube-proxy pod through another control plane. Separately,
+`ichor restore --live --follow` retried the kubeconfig's one server, the controller's own control plane, for ten minutes and
+exited.
+
+1. **The controller's own node is wiped by the restore job, not by the reconcile.** The job (Talos only, outliving the
+   manager) no longer ends at `Rejoining` when the marker names an `own` node. It goes on: (a) wait until the target's etcd
+   member list, read through the Talos API, names every other control plane (their node names are in the marker); (b) if
+   the own node is already a member, or has no etcd data, set `ownDone` in the marker and stop; (c) otherwise write
+   `ownWipeAt` to the marker, **then** send the reset (non-graceful, EPHEMERAL, as for the others). The controller dies with
+   that node's reboot, is rescheduled or restarts on the node once it is back, with fresh networking, and the resume path
+   (`ResumeEtcdRestores`) recreates the operation from the marker and goes on at `Reconciling`. The reconcile no longer wipes
+   the own node (`waitForMembers` skips `marker.own`), so there is one actor and no Kubernetes API call on that path.
+   Idempotence: the intent is stored before the reset, so a process that died in between finds `ownWipeAt` and a node that
+   still has data, trusts the request for ten minutes (the node may be going down), then asks again; an unreachable own node
+   is waited for (it is rebooting); a node without data or in the member list is done. `ensureTail` starts the job again at
+   `Rejoining` while `own` is set and `ownDone` is not, and takes the own node from the marker, not from where the new
+   process runs. The same 150-minute limit bounds it. With the controller on a worker or outside the cluster there is no
+   `own`, and nothing changes.
+2. **`--follow` fails over to the other control planes.** With `--follow`, `restore --live` reads the cluster's control
+   plane machines up front (while all answer) and builds a ring of apiserver URLs: the kubeconfig's server first, then each
+   other control plane's host from its Talos endpoint, with the kubeconfig's port (6443 when it names none). While a call is
+   transiently failing, each retry moves the in-process clients to the next entry, prints `trying API server <url>`, and
+   prints `API server <url> answered` when one does. The certificate is verified against the original server's name
+   (`tls-server-name` of the copied config, unless the kubeconfig set one), so the node IPs must be in the apiserver
+   certificate's SANs, which Talos does by default for its nodes. It applies to the in-process clients (`--break-glass`
+   implies them, and a live restore requires it); the ichor-ui tunnel keeps its own reconnect. The hook is a field of the
+   shared clients and `retryTransient` uses it when set, so other follows could opt in; none does.
+3. **The plan names the node.** The wipe step now reads "Wipe etcd data on cp-a, cp-c, then cp-b (where this controller
+   runs) once the others have rejoined", found by matching the controller pod's node to the control planes' Nodes (best
+   effort: without a match the plan names nobody).
+
+Not observed on hardware: the own-node wipe by the job, and the failover against a real apiserver.
+
 ## Not decided here
 
 - Restoring from an uploaded snapshot file, and from storage other than S3.

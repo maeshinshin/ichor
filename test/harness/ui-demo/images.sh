@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 # Build the three demo images from this tree with crane (no container runtime) and push them to
-# $REGISTRY. Run through `make demo-images`, which provides KUSTOMIZE and builds the UI first.
-# The git tree is left unchanged: the install manifest is built from a temp copy of config/.
+# $REGISTRY. Run through `make demo-images`, which builds the UI and dist/install.yaml first.
+# The git tree is left unchanged: build-installer works on a temp copy of config/.
 set -euo pipefail
 
 : "${VERSION:?set VERSION, e.g. v0.0.8-\$(git rev-parse --short HEAD)}"
 : "${REGISTRY:?set REGISTRY, e.g. localhost:5000 (a kubectl port-forward to svc/<prefix>-registry)}"
-: "${KUSTOMIZE:?run through make demo-images}"
 [ "$VERSION" != dev ] || { echo "demo-images: VERSION must not be 'dev'" >&2; exit 1; }
 
 BASE=gcr.io/distroless/static:nonroot
@@ -18,12 +17,7 @@ work=$(mktemp -d)
 trap 'rc=$?; [ $rc -eq 0 ] || cat "$work/crane.log" >&2; rm -rf "$work"' EXIT
 : > "$work/crane.log"
 
-# Install manifest from a temp copy of config/, so no kustomization.yaml in the tree is edited.
-cp -r config "$work/config"
-(cd "$work/config/manager" && "$KUSTOMIZE" edit set image "controller=$LIVE/ichor-controller:$VERSION")
-(cd "$work/config/manager-ui" && "$KUSTOMIZE" edit set image "ichor-ui=$LIVE/ichor-ui:$VERSION")
-mkdir -p dist
-"$KUSTOMIZE" build "$work/config/default" > dist/install.yaml
+# dist/install.yaml was built by `make build-installer` (from a temp copy of config/) with the LIVE names.
 grep -q "$LIVE/ichor-controller:$VERSION" dist/install.yaml || { echo "demo-images: install manifest lacks the controller image" >&2; exit 1; }
 grep -q "$LIVE/ichor-ui:$VERSION" dist/install.yaml || { echo "demo-images: install manifest lacks the UI image" >&2; exit 1; }
 cp dist/install.yaml internal/installmanifest/install.yaml

@@ -284,27 +284,32 @@ build-installer: manifests generate kustomize ## Generate a consolidated YAML wi
 
 ##@ Deployment
 
+# KUBE_CONTEXT is optional: when set, every kubectl call in install, uninstall, deploy and
+# undeploy is pinned to that kubeconfig context; when empty, kubectl uses the current-context.
+KUBE_CONTEXT ?=
+KUBE_CONTEXT_FLAG = $(if $(KUBE_CONTEXT),--context $(KUBE_CONTEXT))
+
 ifndef ignore-not-found
   ignore-not-found = false
 endif
 
 .PHONY: install
-install: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
+install: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config. Set KUBE_CONTEXT to pick a context other than the current one.
 	@crds="$$( "$(KUSTOMIZE)" build config/crd 2>/dev/null || true )"; \
-	if [ -n "$$crds" ]; then echo "$$crds" | "$(KUBECTL)" apply -f -; else echo "No CRDs to install; skipping."; fi
+	if [ -n "$$crds" ]; then echo "$$crds" | "$(KUBECTL)" $(KUBE_CONTEXT_FLAG) apply -f -; else echo "No CRDs to install; skipping."; fi
 
 .PHONY: uninstall
-uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
+uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified in ~/.kube/config. Set KUBE_CONTEXT to pick a context other than the current one. Call with ignore-not-found=true to ignore resource not found errors during deletion.
 	@crds="$$( "$(KUSTOMIZE)" build config/crd 2>/dev/null || true )"; \
-	if [ -n "$$crds" ]; then echo "$$crds" | "$(KUBECTL)" delete --ignore-not-found=$(ignore-not-found) -f -; else echo "No CRDs to delete; skipping."; fi
+	if [ -n "$$crds" ]; then echo "$$crds" | "$(KUBECTL)" $(KUBE_CONTEXT_FLAG) delete --ignore-not-found=$(ignore-not-found) -f -; else echo "No CRDs to delete; skipping."; fi
 
 .PHONY: deploy
-deploy: build-installer ## Deploy controller to the K8s cluster specified in ~/.kube/config.
-	"$(KUBECTL)" apply -f dist/install.yaml
+deploy: build-installer ## Deploy controller to the K8s cluster specified in ~/.kube/config. Set KUBE_CONTEXT to pick a context other than the current one.
+	"$(KUBECTL)" $(KUBE_CONTEXT_FLAG) apply -f dist/install.yaml
 
 .PHONY: undeploy
-undeploy: kustomize ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
-	"$(KUSTOMIZE)" build config/default | "$(KUBECTL)" delete --ignore-not-found=$(ignore-not-found) -f -
+undeploy: kustomize ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Set KUBE_CONTEXT to pick a context other than the current one. Call with ignore-not-found=true to ignore resource not found errors during deletion.
+	"$(KUSTOMIZE)" build config/default | "$(KUBECTL)" $(KUBE_CONTEXT_FLAG) delete --ignore-not-found=$(ignore-not-found) -f -
 
 ##@ Dependencies
 

@@ -827,12 +827,11 @@ func checkControllerRBACMatchesConfig(t *testing.T, release string, docs []map[s
 		controllerConfigRolePath, "dist/chart/templates/rbac/manager-secrets-role.yaml")
 }
 
-// findNameSuffix is find for release-templated names.
+const managerContainerName = "manager"
+
 // TestManagerStartupProbe pins the startupProbe that covers the controller's start-up wait
 // for the API server (cmd/waitapi.go, up to 5 minutes): without it the liveness probe kills
 // the pod during a CA rotation.
-const managerContainerName = "manager"
-
 func TestManagerStartupProbe(t *testing.T) {
 	docs := renderChart(t, "ichor")
 	spec, _ := findNameSuffix(docs, kindDeployment, "controller-manager")["spec"].(map[string]any)
@@ -855,6 +854,7 @@ func TestManagerStartupProbe(t *testing.T) {
 	t.Fatal("no manager container in the controller-manager Deployment")
 }
 
+// findNameSuffix is find for release-templated names.
 func findNameSuffix(docs []map[string]any, kind, suffix string) map[string]any {
 	for _, d := range findAll(docs, kind) {
 		if strings.HasSuffix(nameOf(d), suffix) {

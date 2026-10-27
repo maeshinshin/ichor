@@ -343,7 +343,7 @@ func (x *CapturePacketsRequest) GetMaxBytes() int64 {
 	return 0
 }
 
-type DownloadChunk struct {
+type DownloadSupportBundleResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// filename and content_type are set on the first chunk only.
 	Filename      string `protobuf:"bytes,1,opt,name=filename,proto3" json:"filename,omitempty"`
@@ -353,20 +353,20 @@ type DownloadChunk struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *DownloadChunk) Reset() {
-	*x = DownloadChunk{}
+func (x *DownloadSupportBundleResponse) Reset() {
+	*x = DownloadSupportBundleResponse{}
 	mi := &file_ichor_v1alpha1_diagnostics_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *DownloadChunk) String() string {
+func (x *DownloadSupportBundleResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*DownloadChunk) ProtoMessage() {}
+func (*DownloadSupportBundleResponse) ProtoMessage() {}
 
-func (x *DownloadChunk) ProtoReflect() protoreflect.Message {
+func (x *DownloadSupportBundleResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_ichor_v1alpha1_diagnostics_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -378,26 +378,148 @@ func (x *DownloadChunk) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use DownloadChunk.ProtoReflect.Descriptor instead.
-func (*DownloadChunk) Descriptor() ([]byte, []int) {
+// Deprecated: Use DownloadSupportBundleResponse.ProtoReflect.Descriptor instead.
+func (*DownloadSupportBundleResponse) Descriptor() ([]byte, []int) {
 	return file_ichor_v1alpha1_diagnostics_proto_rawDescGZIP(), []int{5}
 }
 
-func (x *DownloadChunk) GetFilename() string {
+func (x *DownloadSupportBundleResponse) GetFilename() string {
 	if x != nil {
 		return x.Filename
 	}
 	return ""
 }
 
-func (x *DownloadChunk) GetContentType() string {
+func (x *DownloadSupportBundleResponse) GetContentType() string {
 	if x != nil {
 		return x.ContentType
 	}
 	return ""
 }
 
-func (x *DownloadChunk) GetData() []byte {
+func (x *DownloadSupportBundleResponse) GetData() []byte {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
+type DownloadEtcdSnapshotResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// filename and content_type are set on the first chunk only.
+	Filename      string `protobuf:"bytes,1,opt,name=filename,proto3" json:"filename,omitempty"`
+	ContentType   string `protobuf:"bytes,2,opt,name=content_type,json=contentType,proto3" json:"content_type,omitempty"`
+	Data          []byte `protobuf:"bytes,3,opt,name=data,proto3" json:"data,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DownloadEtcdSnapshotResponse) Reset() {
+	*x = DownloadEtcdSnapshotResponse{}
+	mi := &file_ichor_v1alpha1_diagnostics_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DownloadEtcdSnapshotResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DownloadEtcdSnapshotResponse) ProtoMessage() {}
+
+func (x *DownloadEtcdSnapshotResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_ichor_v1alpha1_diagnostics_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DownloadEtcdSnapshotResponse.ProtoReflect.Descriptor instead.
+func (*DownloadEtcdSnapshotResponse) Descriptor() ([]byte, []int) {
+	return file_ichor_v1alpha1_diagnostics_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *DownloadEtcdSnapshotResponse) GetFilename() string {
+	if x != nil {
+		return x.Filename
+	}
+	return ""
+}
+
+func (x *DownloadEtcdSnapshotResponse) GetContentType() string {
+	if x != nil {
+		return x.ContentType
+	}
+	return ""
+}
+
+func (x *DownloadEtcdSnapshotResponse) GetData() []byte {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
+type CapturePacketsResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// filename and content_type are set on the first chunk only.
+	Filename      string `protobuf:"bytes,1,opt,name=filename,proto3" json:"filename,omitempty"`
+	ContentType   string `protobuf:"bytes,2,opt,name=content_type,json=contentType,proto3" json:"content_type,omitempty"`
+	Data          []byte `protobuf:"bytes,3,opt,name=data,proto3" json:"data,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CapturePacketsResponse) Reset() {
+	*x = CapturePacketsResponse{}
+	mi := &file_ichor_v1alpha1_diagnostics_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CapturePacketsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CapturePacketsResponse) ProtoMessage() {}
+
+func (x *CapturePacketsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_ichor_v1alpha1_diagnostics_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CapturePacketsResponse.ProtoReflect.Descriptor instead.
+func (*CapturePacketsResponse) Descriptor() ([]byte, []int) {
+	return file_ichor_v1alpha1_diagnostics_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *CapturePacketsResponse) GetFilename() string {
+	if x != nil {
+		return x.Filename
+	}
+	return ""
+}
+
+func (x *CapturePacketsResponse) GetContentType() string {
+	if x != nil {
+		return x.ContentType
+	}
+	return ""
+}
+
+func (x *CapturePacketsResponse) GetData() []byte {
 	if x != nil {
 		return x.Data
 	}
@@ -427,16 +549,24 @@ const file_ichor_v1alpha1_diagnostics_proto_rawDesc = "" +
 	"\n" +
 	"bpf_filter\x18\x03 \x01(\tR\tbpfFilter\x12)\n" +
 	"\x10duration_seconds\x18\x04 \x01(\x05R\x0fdurationSeconds\x12\x1b\n" +
-	"\tmax_bytes\x18\x05 \x01(\x03R\bmaxBytes\"b\n" +
-	"\rDownloadChunk\x12\x1a\n" +
+	"\tmax_bytes\x18\x05 \x01(\x03R\bmaxBytes\"r\n" +
+	"\x1dDownloadSupportBundleResponse\x12\x1a\n" +
 	"\bfilename\x18\x01 \x01(\tR\bfilename\x12!\n" +
 	"\fcontent_type\x18\x02 \x01(\tR\vcontentType\x12\x12\n" +
-	"\x04data\x18\x03 \x01(\fR\x04data2\xbf\x03\n" +
+	"\x04data\x18\x03 \x01(\fR\x04data\"q\n" +
+	"\x1cDownloadEtcdSnapshotResponse\x12\x1a\n" +
+	"\bfilename\x18\x01 \x01(\tR\bfilename\x12!\n" +
+	"\fcontent_type\x18\x02 \x01(\tR\vcontentType\x12\x12\n" +
+	"\x04data\x18\x03 \x01(\fR\x04data\"k\n" +
+	"\x16CapturePacketsResponse\x12\x1a\n" +
+	"\bfilename\x18\x01 \x01(\tR\bfilename\x12!\n" +
+	"\fcontent_type\x18\x02 \x01(\tR\vcontentType\x12\x12\n" +
+	"\x04data\x18\x03 \x01(\fR\x04data2\xe7\x03\n" +
 	"\x12DiagnosticsService\x12\x80\x01\n" +
-	"\x19GetDiagnosticsPermissions\x120.ichor.v1alpha1.GetDiagnosticsPermissionsRequest\x1a1.ichor.v1alpha1.GetDiagnosticsPermissionsResponse\x12f\n" +
-	"\x15DownloadSupportBundle\x12,.ichor.v1alpha1.DownloadSupportBundleRequest\x1a\x1d.ichor.v1alpha1.DownloadChunk0\x01\x12d\n" +
-	"\x14DownloadEtcdSnapshot\x12+.ichor.v1alpha1.DownloadEtcdSnapshotRequest\x1a\x1d.ichor.v1alpha1.DownloadChunk0\x01\x12X\n" +
-	"\x0eCapturePackets\x12%.ichor.v1alpha1.CapturePacketsRequest\x1a\x1d.ichor.v1alpha1.DownloadChunk0\x01B\xc1\x01\n" +
+	"\x19GetDiagnosticsPermissions\x120.ichor.v1alpha1.GetDiagnosticsPermissionsRequest\x1a1.ichor.v1alpha1.GetDiagnosticsPermissionsResponse\x12v\n" +
+	"\x15DownloadSupportBundle\x12,.ichor.v1alpha1.DownloadSupportBundleRequest\x1a-.ichor.v1alpha1.DownloadSupportBundleResponse0\x01\x12s\n" +
+	"\x14DownloadEtcdSnapshot\x12+.ichor.v1alpha1.DownloadEtcdSnapshotRequest\x1a,.ichor.v1alpha1.DownloadEtcdSnapshotResponse0\x01\x12a\n" +
+	"\x0eCapturePackets\x12%.ichor.v1alpha1.CapturePacketsRequest\x1a&.ichor.v1alpha1.CapturePacketsResponse0\x01B\xc1\x01\n" +
 	"\x12com.ichor.v1alpha1B\x10DiagnosticsProtoP\x01Z@github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1;ichorv1alpha1\xa2\x02\x03IXX\xaa\x02\x0eIchor.V1alpha1\xca\x02\x0eIchor\\V1alpha1\xe2\x02\x1aIchor\\V1alpha1\\GPBMetadata\xea\x02\x0fIchor::V1alpha1b\x06proto3"
 
 var (
@@ -451,30 +581,32 @@ func file_ichor_v1alpha1_diagnostics_proto_rawDescGZIP() []byte {
 	return file_ichor_v1alpha1_diagnostics_proto_rawDescData
 }
 
-var file_ichor_v1alpha1_diagnostics_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_ichor_v1alpha1_diagnostics_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_ichor_v1alpha1_diagnostics_proto_goTypes = []any{
 	(*GetDiagnosticsPermissionsRequest)(nil),  // 0: ichor.v1alpha1.GetDiagnosticsPermissionsRequest
 	(*GetDiagnosticsPermissionsResponse)(nil), // 1: ichor.v1alpha1.GetDiagnosticsPermissionsResponse
 	(*DownloadSupportBundleRequest)(nil),      // 2: ichor.v1alpha1.DownloadSupportBundleRequest
 	(*DownloadEtcdSnapshotRequest)(nil),       // 3: ichor.v1alpha1.DownloadEtcdSnapshotRequest
 	(*CapturePacketsRequest)(nil),             // 4: ichor.v1alpha1.CapturePacketsRequest
-	(*DownloadChunk)(nil),                     // 5: ichor.v1alpha1.DownloadChunk
-	(*ObjectRef)(nil),                         // 6: ichor.v1alpha1.ObjectRef
+	(*DownloadSupportBundleResponse)(nil),     // 5: ichor.v1alpha1.DownloadSupportBundleResponse
+	(*DownloadEtcdSnapshotResponse)(nil),      // 6: ichor.v1alpha1.DownloadEtcdSnapshotResponse
+	(*CapturePacketsResponse)(nil),            // 7: ichor.v1alpha1.CapturePacketsResponse
+	(*ObjectRef)(nil),                         // 8: ichor.v1alpha1.ObjectRef
 }
 var file_ichor_v1alpha1_diagnostics_proto_depIdxs = []int32{
-	6, // 0: ichor.v1alpha1.GetDiagnosticsPermissionsRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
-	6, // 1: ichor.v1alpha1.DownloadSupportBundleRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
-	6, // 2: ichor.v1alpha1.DownloadSupportBundleRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
-	6, // 3: ichor.v1alpha1.DownloadEtcdSnapshotRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
-	6, // 4: ichor.v1alpha1.CapturePacketsRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
+	8, // 0: ichor.v1alpha1.GetDiagnosticsPermissionsRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
+	8, // 1: ichor.v1alpha1.DownloadSupportBundleRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
+	8, // 2: ichor.v1alpha1.DownloadSupportBundleRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	8, // 3: ichor.v1alpha1.DownloadEtcdSnapshotRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
+	8, // 4: ichor.v1alpha1.CapturePacketsRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
 	0, // 5: ichor.v1alpha1.DiagnosticsService.GetDiagnosticsPermissions:input_type -> ichor.v1alpha1.GetDiagnosticsPermissionsRequest
 	2, // 6: ichor.v1alpha1.DiagnosticsService.DownloadSupportBundle:input_type -> ichor.v1alpha1.DownloadSupportBundleRequest
 	3, // 7: ichor.v1alpha1.DiagnosticsService.DownloadEtcdSnapshot:input_type -> ichor.v1alpha1.DownloadEtcdSnapshotRequest
 	4, // 8: ichor.v1alpha1.DiagnosticsService.CapturePackets:input_type -> ichor.v1alpha1.CapturePacketsRequest
 	1, // 9: ichor.v1alpha1.DiagnosticsService.GetDiagnosticsPermissions:output_type -> ichor.v1alpha1.GetDiagnosticsPermissionsResponse
-	5, // 10: ichor.v1alpha1.DiagnosticsService.DownloadSupportBundle:output_type -> ichor.v1alpha1.DownloadChunk
-	5, // 11: ichor.v1alpha1.DiagnosticsService.DownloadEtcdSnapshot:output_type -> ichor.v1alpha1.DownloadChunk
-	5, // 12: ichor.v1alpha1.DiagnosticsService.CapturePackets:output_type -> ichor.v1alpha1.DownloadChunk
+	5, // 10: ichor.v1alpha1.DiagnosticsService.DownloadSupportBundle:output_type -> ichor.v1alpha1.DownloadSupportBundleResponse
+	6, // 11: ichor.v1alpha1.DiagnosticsService.DownloadEtcdSnapshot:output_type -> ichor.v1alpha1.DownloadEtcdSnapshotResponse
+	7, // 12: ichor.v1alpha1.DiagnosticsService.CapturePackets:output_type -> ichor.v1alpha1.CapturePacketsResponse
 	9, // [9:13] is the sub-list for method output_type
 	5, // [5:9] is the sub-list for method input_type
 	5, // [5:5] is the sub-list for extension type_name
@@ -498,7 +630,7 @@ func file_ichor_v1alpha1_diagnostics_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_ichor_v1alpha1_diagnostics_proto_rawDesc), len(file_ichor_v1alpha1_diagnostics_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   6,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

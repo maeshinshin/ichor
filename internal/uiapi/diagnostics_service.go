@@ -245,10 +245,11 @@ func (s *Server) withDrain(ctx context.Context) (context.Context, context.Cancel
 
 var errSizeCap = errors.New("size cap reached")
 
-// chunkWriter sends what is written as DownloadChunk messages, the first one
-// carrying the file name, and stops with errSizeCap past max bytes.
+// chunkWriter sends what is written as chunks, the first one carrying the file
+// name, and stops with errSizeCap past max bytes. send wraps the RPC's own
+// response message type (each streaming RPC has one).
 type chunkWriter struct {
-	stream      *connect.ServerStream[pb.DownloadChunk]
+	send        func(filename, contentType string, data []byte) error
 	filename    string
 	contentType string
 	max, n      int64
@@ -271,12 +272,12 @@ func (w *chunkWriter) Write(p []byte) (int, error) {
 			}
 		}
 
-		msg := &pb.DownloadChunk{Data: part}
+		var filename, contentType string
 		if !w.started {
-			msg.Filename, msg.ContentType, w.started = w.filename, w.contentType, true
+			filename, contentType, w.started = w.filename, w.contentType, true
 		}
 
-		if err := w.stream.Send(msg); err != nil {
+		if err := w.send(filename, contentType, part); err != nil {
 			return written, err
 		}
 
@@ -300,14 +301,14 @@ func (w *chunkWriter) finish() error {
 
 	w.started = true
 
-	return w.stream.Send(&pb.DownloadChunk{Filename: w.filename, ContentType: w.contentType})
+	return w.send(w.filename, w.contentType, nil)
 }
 
 func stamp(t time.Time) string { return t.UTC().Format("20060102T150405Z") }
 
 // DownloadEtcdSnapshot streams an etcd snapshot from one control plane node.
 func (s *Server) DownloadEtcdSnapshot(
-	ctx context.Context, req *connect.Request[pb.DownloadEtcdSnapshotRequest], stream *connect.ServerStream[pb.DownloadChunk],
+	ctx context.Context, req *connect.Request[pb.DownloadEtcdSnapshotRequest], stream *connect.ServerStream[pb.DownloadEtcdSnapshotResponse],
 ) error {
 	m, cluster, err := s.getMachineAndCluster(ctx, req.Msg.GetMachine())
 	if err != nil {
@@ -347,7 +348,10 @@ func (s *Server) DownloadEtcdSnapshot(
 	defer func() { _ = rc.Close() }()
 
 	w := &chunkWriter{
-		stream: stream, max: etcdSnapshotCap, contentType: "application/octet-stream",
+		send: func(f, c string, d []byte) error {
+			return stream.Send(&pb.DownloadEtcdSnapshotResponse{Filename: f, ContentType: c, Data: d})
+		},
+		max: etcdSnapshotCap, contentType: "application/octet-stream",
 		filename: fmt.Sprintf("etcd-%s-%s.snapshot.db", m.Name, stamp(s.now())),
 	}
 
@@ -360,7 +364,7 @@ func (s *Server) DownloadEtcdSnapshot(
 
 // CapturePackets streams a bounded pcap from one node's interface.
 func (s *Server) CapturePackets(
-	ctx context.Context, req *connect.Request[pb.CapturePacketsRequest], stream *connect.ServerStream[pb.DownloadChunk],
+	ctx context.Context, req *connect.Request[pb.CapturePacketsRequest], stream *connect.ServerStream[pb.CapturePacketsResponse],
 ) error {
 	m, cluster, err := s.getMachineAndCluster(ctx, req.Msg.GetMachine())
 	if err != nil {
@@ -427,7 +431,10 @@ func (s *Server) CapturePackets(
 	defer func() { _ = rc.Close() }()
 
 	w := &chunkWriter{
-		stream: stream, max: maxBytes, contentType: pcapContentType,
+		send: func(f, c string, d []byte) error {
+			return stream.Send(&pb.CapturePacketsResponse{Filename: f, ContentType: c, Data: d})
+		},
+		max: maxBytes, contentType: pcapContentType,
 		filename: fmt.Sprintf("capture-%s-%s-%s.pcap", m.Name, r.GetInterface(), stamp(s.now())),
 	}
 
@@ -448,7 +455,7 @@ func (s *Server) CapturePackets(
 // DownloadSupportBundle streams a zip of one node's, or every approved node of a
 // cluster's, diagnostics.
 func (s *Server) DownloadSupportBundle(
-	ctx context.Context, req *connect.Request[pb.DownloadSupportBundleRequest], stream *connect.ServerStream[pb.DownloadChunk],
+	ctx context.Context, req *connect.Request[pb.DownloadSupportBundleRequest], stream *connect.ServerStream[pb.DownloadSupportBundleResponse],
 ) error {
 	var (
 		machines []*ichorv1alpha1.TalosMachine
@@ -543,7 +550,10 @@ func (s *Server) DownloadSupportBundle(
 	}
 
 	w := &chunkWriter{
-		stream: stream, max: supportBundleCap, contentType: "application/zip",
+		send: func(f, c string, d []byte) error {
+			return stream.Send(&pb.DownloadSupportBundleResponse{Filename: f, ContentType: c, Data: d})
+		},
+		max: supportBundleCap, contentType: "application/zip",
 		filename: fmt.Sprintf("support-%s-%s.zip", name, stamp(s.now())),
 	}
 	zw := zip.NewWriter(w)

@@ -186,18 +186,24 @@ func asDiagUser[T any](user string, msg *T) *connect.Request[T] {
 }
 
 // collect drains a download stream into its file name and bytes.
-func collect(stream *connect.ServerStreamForClient[pb.DownloadChunk]) (string, []byte, error) {
+// Each streaming RPC has its own response type, so this takes any of them.
+func collect[T any, P interface {
+	*T
+	GetFilename() string
+	GetData() []byte
+}](stream *connect.ServerStreamForClient[T]) (string, []byte, error) {
 	var (
 		name string
 		buf  bytes.Buffer
 	)
 
 	for stream.Receive() {
-		if f := stream.Msg().GetFilename(); f != "" {
+		msg := P(stream.Msg())
+		if f := msg.GetFilename(); f != "" {
 			name = f
 		}
 
-		buf.Write(stream.Msg().GetData())
+		buf.Write(msg.GetData())
 	}
 
 	return name, buf.Bytes(), stream.Err()

@@ -18,13 +18,13 @@ service DiagnosticsService {
   // DownloadSupportBundle streams a zip of one node's (or every node of a
   // cluster's) logs, kernel log, processes, mounts and non-sensitive Talos
   // resources.
-  rpc DownloadSupportBundle(DownloadSupportBundleRequest) returns (stream DownloadChunk);
+  rpc DownloadSupportBundle(DownloadSupportBundleRequest) returns (stream DownloadSupportBundleResponse);
   // DownloadEtcdSnapshot streams an etcd snapshot taken from one control plane
   // node. It contains every Kubernetes Secret.
-  rpc DownloadEtcdSnapshot(DownloadEtcdSnapshotRequest) returns (stream DownloadChunk);
+  rpc DownloadEtcdSnapshot(DownloadEtcdSnapshotRequest) returns (stream DownloadEtcdSnapshotResponse);
   // CapturePackets streams a pcap file captured on one node's interface, bounded
   // by duration and size.
-  rpc CapturePackets(CapturePacketsRequest) returns (stream DownloadChunk);
+  rpc CapturePackets(CapturePacketsRequest) returns (stream CapturePacketsResponse);
 }
 
 message GetDiagnosticsPermissionsRequest {
@@ -64,7 +64,24 @@ message CapturePacketsRequest {
   int64 max_bytes = 5;
 }
 
-message DownloadChunk {
+// Each streaming RPC has its own response message (buf STANDARD requires a
+// unique response type per RPC). They carry the same fields.
+
+message DownloadSupportBundleResponse {
+  // filename and content_type are set on the first chunk only.
+  string filename = 1;
+  string content_type = 2;
+  bytes data = 3;
+}
+
+message DownloadEtcdSnapshotResponse {
+  // filename and content_type are set on the first chunk only.
+  string filename = 1;
+  string content_type = 2;
+  bytes data = 3;
+}
+
+message CapturePacketsResponse {
   // filename and content_type are set on the first chunk only.
   string filename = 1;
   string content_type = 2;

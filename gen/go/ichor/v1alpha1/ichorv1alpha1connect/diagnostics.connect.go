@@ -62,13 +62,13 @@ type DiagnosticsServiceClient interface {
 	// DownloadSupportBundle streams a zip of one node's (or every node of a
 	// cluster's) logs, kernel log, processes, mounts and non-sensitive Talos
 	// resources.
-	DownloadSupportBundle(context.Context, *connect.Request[v1alpha1.DownloadSupportBundleRequest]) (*connect.ServerStreamForClient[v1alpha1.DownloadChunk], error)
+	DownloadSupportBundle(context.Context, *connect.Request[v1alpha1.DownloadSupportBundleRequest]) (*connect.ServerStreamForClient[v1alpha1.DownloadSupportBundleResponse], error)
 	// DownloadEtcdSnapshot streams an etcd snapshot taken from one control plane
 	// node. It contains every Kubernetes Secret.
-	DownloadEtcdSnapshot(context.Context, *connect.Request[v1alpha1.DownloadEtcdSnapshotRequest]) (*connect.ServerStreamForClient[v1alpha1.DownloadChunk], error)
+	DownloadEtcdSnapshot(context.Context, *connect.Request[v1alpha1.DownloadEtcdSnapshotRequest]) (*connect.ServerStreamForClient[v1alpha1.DownloadEtcdSnapshotResponse], error)
 	// CapturePackets streams a pcap file captured on one node's interface, bounded
 	// by duration and size.
-	CapturePackets(context.Context, *connect.Request[v1alpha1.CapturePacketsRequest]) (*connect.ServerStreamForClient[v1alpha1.DownloadChunk], error)
+	CapturePackets(context.Context, *connect.Request[v1alpha1.CapturePacketsRequest]) (*connect.ServerStreamForClient[v1alpha1.CapturePacketsResponse], error)
 }
 
 // NewDiagnosticsServiceClient constructs a client for the ichor.v1alpha1.DiagnosticsService
@@ -88,19 +88,19 @@ func NewDiagnosticsServiceClient(httpClient connect.HTTPClient, baseURL string, 
 			connect.WithSchema(diagnosticsServiceMethods.ByName("GetDiagnosticsPermissions")),
 			connect.WithClientOptions(opts...),
 		),
-		downloadSupportBundle: connect.NewClient[v1alpha1.DownloadSupportBundleRequest, v1alpha1.DownloadChunk](
+		downloadSupportBundle: connect.NewClient[v1alpha1.DownloadSupportBundleRequest, v1alpha1.DownloadSupportBundleResponse](
 			httpClient,
 			baseURL+DiagnosticsServiceDownloadSupportBundleProcedure,
 			connect.WithSchema(diagnosticsServiceMethods.ByName("DownloadSupportBundle")),
 			connect.WithClientOptions(opts...),
 		),
-		downloadEtcdSnapshot: connect.NewClient[v1alpha1.DownloadEtcdSnapshotRequest, v1alpha1.DownloadChunk](
+		downloadEtcdSnapshot: connect.NewClient[v1alpha1.DownloadEtcdSnapshotRequest, v1alpha1.DownloadEtcdSnapshotResponse](
 			httpClient,
 			baseURL+DiagnosticsServiceDownloadEtcdSnapshotProcedure,
 			connect.WithSchema(diagnosticsServiceMethods.ByName("DownloadEtcdSnapshot")),
 			connect.WithClientOptions(opts...),
 		),
-		capturePackets: connect.NewClient[v1alpha1.CapturePacketsRequest, v1alpha1.DownloadChunk](
+		capturePackets: connect.NewClient[v1alpha1.CapturePacketsRequest, v1alpha1.CapturePacketsResponse](
 			httpClient,
 			baseURL+DiagnosticsServiceCapturePacketsProcedure,
 			connect.WithSchema(diagnosticsServiceMethods.ByName("CapturePackets")),
@@ -112,9 +112,9 @@ func NewDiagnosticsServiceClient(httpClient connect.HTTPClient, baseURL string, 
 // diagnosticsServiceClient implements DiagnosticsServiceClient.
 type diagnosticsServiceClient struct {
 	getDiagnosticsPermissions *connect.Client[v1alpha1.GetDiagnosticsPermissionsRequest, v1alpha1.GetDiagnosticsPermissionsResponse]
-	downloadSupportBundle     *connect.Client[v1alpha1.DownloadSupportBundleRequest, v1alpha1.DownloadChunk]
-	downloadEtcdSnapshot      *connect.Client[v1alpha1.DownloadEtcdSnapshotRequest, v1alpha1.DownloadChunk]
-	capturePackets            *connect.Client[v1alpha1.CapturePacketsRequest, v1alpha1.DownloadChunk]
+	downloadSupportBundle     *connect.Client[v1alpha1.DownloadSupportBundleRequest, v1alpha1.DownloadSupportBundleResponse]
+	downloadEtcdSnapshot      *connect.Client[v1alpha1.DownloadEtcdSnapshotRequest, v1alpha1.DownloadEtcdSnapshotResponse]
+	capturePackets            *connect.Client[v1alpha1.CapturePacketsRequest, v1alpha1.CapturePacketsResponse]
 }
 
 // GetDiagnosticsPermissions calls ichor.v1alpha1.DiagnosticsService.GetDiagnosticsPermissions.
@@ -123,17 +123,17 @@ func (c *diagnosticsServiceClient) GetDiagnosticsPermissions(ctx context.Context
 }
 
 // DownloadSupportBundle calls ichor.v1alpha1.DiagnosticsService.DownloadSupportBundle.
-func (c *diagnosticsServiceClient) DownloadSupportBundle(ctx context.Context, req *connect.Request[v1alpha1.DownloadSupportBundleRequest]) (*connect.ServerStreamForClient[v1alpha1.DownloadChunk], error) {
+func (c *diagnosticsServiceClient) DownloadSupportBundle(ctx context.Context, req *connect.Request[v1alpha1.DownloadSupportBundleRequest]) (*connect.ServerStreamForClient[v1alpha1.DownloadSupportBundleResponse], error) {
 	return c.downloadSupportBundle.CallServerStream(ctx, req)
 }
 
 // DownloadEtcdSnapshot calls ichor.v1alpha1.DiagnosticsService.DownloadEtcdSnapshot.
-func (c *diagnosticsServiceClient) DownloadEtcdSnapshot(ctx context.Context, req *connect.Request[v1alpha1.DownloadEtcdSnapshotRequest]) (*connect.ServerStreamForClient[v1alpha1.DownloadChunk], error) {
+func (c *diagnosticsServiceClient) DownloadEtcdSnapshot(ctx context.Context, req *connect.Request[v1alpha1.DownloadEtcdSnapshotRequest]) (*connect.ServerStreamForClient[v1alpha1.DownloadEtcdSnapshotResponse], error) {
 	return c.downloadEtcdSnapshot.CallServerStream(ctx, req)
 }
 
 // CapturePackets calls ichor.v1alpha1.DiagnosticsService.CapturePackets.
-func (c *diagnosticsServiceClient) CapturePackets(ctx context.Context, req *connect.Request[v1alpha1.CapturePacketsRequest]) (*connect.ServerStreamForClient[v1alpha1.DownloadChunk], error) {
+func (c *diagnosticsServiceClient) CapturePackets(ctx context.Context, req *connect.Request[v1alpha1.CapturePacketsRequest]) (*connect.ServerStreamForClient[v1alpha1.CapturePacketsResponse], error) {
 	return c.capturePackets.CallServerStream(ctx, req)
 }
 
@@ -146,13 +146,13 @@ type DiagnosticsServiceHandler interface {
 	// DownloadSupportBundle streams a zip of one node's (or every node of a
 	// cluster's) logs, kernel log, processes, mounts and non-sensitive Talos
 	// resources.
-	DownloadSupportBundle(context.Context, *connect.Request[v1alpha1.DownloadSupportBundleRequest], *connect.ServerStream[v1alpha1.DownloadChunk]) error
+	DownloadSupportBundle(context.Context, *connect.Request[v1alpha1.DownloadSupportBundleRequest], *connect.ServerStream[v1alpha1.DownloadSupportBundleResponse]) error
 	// DownloadEtcdSnapshot streams an etcd snapshot taken from one control plane
 	// node. It contains every Kubernetes Secret.
-	DownloadEtcdSnapshot(context.Context, *connect.Request[v1alpha1.DownloadEtcdSnapshotRequest], *connect.ServerStream[v1alpha1.DownloadChunk]) error
+	DownloadEtcdSnapshot(context.Context, *connect.Request[v1alpha1.DownloadEtcdSnapshotRequest], *connect.ServerStream[v1alpha1.DownloadEtcdSnapshotResponse]) error
 	// CapturePackets streams a pcap file captured on one node's interface, bounded
 	// by duration and size.
-	CapturePackets(context.Context, *connect.Request[v1alpha1.CapturePacketsRequest], *connect.ServerStream[v1alpha1.DownloadChunk]) error
+	CapturePackets(context.Context, *connect.Request[v1alpha1.CapturePacketsRequest], *connect.ServerStream[v1alpha1.CapturePacketsResponse]) error
 }
 
 // NewDiagnosticsServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -209,14 +209,14 @@ func (UnimplementedDiagnosticsServiceHandler) GetDiagnosticsPermissions(context.
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.DiagnosticsService.GetDiagnosticsPermissions is not implemented"))
 }
 
-func (UnimplementedDiagnosticsServiceHandler) DownloadSupportBundle(context.Context, *connect.Request[v1alpha1.DownloadSupportBundleRequest], *connect.ServerStream[v1alpha1.DownloadChunk]) error {
+func (UnimplementedDiagnosticsServiceHandler) DownloadSupportBundle(context.Context, *connect.Request[v1alpha1.DownloadSupportBundleRequest], *connect.ServerStream[v1alpha1.DownloadSupportBundleResponse]) error {
 	return connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.DiagnosticsService.DownloadSupportBundle is not implemented"))
 }
 
-func (UnimplementedDiagnosticsServiceHandler) DownloadEtcdSnapshot(context.Context, *connect.Request[v1alpha1.DownloadEtcdSnapshotRequest], *connect.ServerStream[v1alpha1.DownloadChunk]) error {
+func (UnimplementedDiagnosticsServiceHandler) DownloadEtcdSnapshot(context.Context, *connect.Request[v1alpha1.DownloadEtcdSnapshotRequest], *connect.ServerStream[v1alpha1.DownloadEtcdSnapshotResponse]) error {
 	return connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.DiagnosticsService.DownloadEtcdSnapshot is not implemented"))
 }
 
-func (UnimplementedDiagnosticsServiceHandler) CapturePackets(context.Context, *connect.Request[v1alpha1.CapturePacketsRequest], *connect.ServerStream[v1alpha1.DownloadChunk]) error {
+func (UnimplementedDiagnosticsServiceHandler) CapturePackets(context.Context, *connect.Request[v1alpha1.CapturePacketsRequest], *connect.ServerStream[v1alpha1.CapturePacketsResponse]) error {
 	return connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.DiagnosticsService.CapturePackets is not implemented"))
 }

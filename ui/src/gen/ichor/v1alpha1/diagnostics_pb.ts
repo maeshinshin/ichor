@@ -19,7 +19,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file ichor/v1alpha1/diagnostics.proto.
  */
 export const file_ichor_v1alpha1_diagnostics: GenFile = /*@__PURE__*/
-  fileDesc("CiBpY2hvci92MWFscGhhMS9kaWFnbm9zdGljcy5wcm90bxIOaWNob3IudjFhbHBoYTEiTgogR2V0RGlhZ25vc3RpY3NQZXJtaXNzaW9uc1JlcXVlc3QSKgoHbWFjaGluZRgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZiJqCiFHZXREaWFnbm9zdGljc1Blcm1pc3Npb25zUmVzcG9uc2USFgoOc3VwcG9ydF9idW5kbGUYASABKAgSFQoNZXRjZF9zbmFwc2hvdBgCIAEoCBIWCg5wYWNrZXRfY2FwdHVyZRgDIAEoCCKEAQocRG93bmxvYWRTdXBwb3J0QnVuZGxlUmVxdWVzdBIsCgdtYWNoaW5lGAEgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmSAASLAoHY2x1c3RlchgCIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZkgAQggKBnRhcmdldCJJChtEb3dubG9hZEV0Y2RTbmFwc2hvdFJlcXVlc3QSKgoHbWFjaGluZRgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZiKXAQoVQ2FwdHVyZVBhY2tldHNSZXF1ZXN0EioKB21hY2hpbmUYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYSEQoJaW50ZXJmYWNlGAIgASgJEhIKCmJwZl9maWx0ZXIYAyABKAkSGAoQZHVyYXRpb25fc2Vjb25kcxgEIAEoBRIRCgltYXhfYnl0ZXMYBSABKAMiRQoNRG93bmxvYWRDaHVuaxIQCghmaWxlbmFtZRgBIAEoCRIUCgxjb250ZW50X3R5cGUYAiABKAkSDAoEZGF0YRgDIAEoDDK/AwoSRGlhZ25vc3RpY3NTZXJ2aWNlEoABChlHZXREaWFnbm9zdGljc1Blcm1pc3Npb25zEjAuaWNob3IudjFhbHBoYTEuR2V0RGlhZ25vc3RpY3NQZXJtaXNzaW9uc1JlcXVlc3QaMS5pY2hvci52MWFscGhhMS5HZXREaWFnbm9zdGljc1Blcm1pc3Npb25zUmVzcG9uc2USZgoVRG93bmxvYWRTdXBwb3J0QnVuZGxlEiwuaWNob3IudjFhbHBoYTEuRG93bmxvYWRTdXBwb3J0QnVuZGxlUmVxdWVzdBodLmljaG9yLnYxYWxwaGExLkRvd25sb2FkQ2h1bmswARJkChREb3dubG9hZEV0Y2RTbmFwc2hvdBIrLmljaG9yLnYxYWxwaGExLkRvd25sb2FkRXRjZFNuYXBzaG90UmVxdWVzdBodLmljaG9yLnYxYWxwaGExLkRvd25sb2FkQ2h1bmswARJYCg5DYXB0dXJlUGFja2V0cxIlLmljaG9yLnYxYWxwaGExLkNhcHR1cmVQYWNrZXRzUmVxdWVzdBodLmljaG9yLnYxYWxwaGExLkRvd25sb2FkQ2h1bmswAULBAQoSY29tLmljaG9yLnYxYWxwaGExQhBEaWFnbm9zdGljc1Byb3RvUAFaQGdpdGh1Yi5jb20vbWFlc2hpbnNoaW4vaWNob3IvZ2VuL2dvL2ljaG9yL3YxYWxwaGExO2ljaG9ydjFhbHBoYTGiAgNJWFiqAg5JY2hvci5WMWFscGhhMcoCDkljaG9yXFYxYWxwaGEx4gIaSWNob3JcVjFhbHBoYTFcR1BCTWV0YWRhdGHqAg9JY2hvcjo6VjFhbHBoYTFiBnByb3RvMw", [file_ichor_v1alpha1_common]);
+  fileDesc("CiBpY2hvci92MWFscGhhMS9kaWFnbm9zdGljcy5wcm90bxIOaWNob3IudjFhbHBoYTEiTgogR2V0RGlhZ25vc3RpY3NQZXJtaXNzaW9uc1JlcXVlc3QSKgoHbWFjaGluZRgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZiJqCiFHZXREaWFnbm9zdGljc1Blcm1pc3Npb25zUmVzcG9uc2USFgoOc3VwcG9ydF9idW5kbGUYASABKAgSFQoNZXRjZF9zbmFwc2hvdBgCIAEoCBIWCg5wYWNrZXRfY2FwdHVyZRgDIAEoCCKEAQocRG93bmxvYWRTdXBwb3J0QnVuZGxlUmVxdWVzdBIsCgdtYWNoaW5lGAEgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmSAASLAoHY2x1c3RlchgCIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZkgAQggKBnRhcmdldCJJChtEb3dubG9hZEV0Y2RTbmFwc2hvdFJlcXVlc3QSKgoHbWFjaGluZRgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZiKXAQoVQ2FwdHVyZVBhY2tldHNSZXF1ZXN0EioKB21hY2hpbmUYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYSEQoJaW50ZXJmYWNlGAIgASgJEhIKCmJwZl9maWx0ZXIYAyABKAkSGAoQZHVyYXRpb25fc2Vjb25kcxgEIAEoBRIRCgltYXhfYnl0ZXMYBSABKAMiVQodRG93bmxvYWRTdXBwb3J0QnVuZGxlUmVzcG9uc2USEAoIZmlsZW5hbWUYASABKAkSFAoMY29udGVudF90eXBlGAIgASgJEgwKBGRhdGEYAyABKAwiVAocRG93bmxvYWRFdGNkU25hcHNob3RSZXNwb25zZRIQCghmaWxlbmFtZRgBIAEoCRIUCgxjb250ZW50X3R5cGUYAiABKAkSDAoEZGF0YRgDIAEoDCJOChZDYXB0dXJlUGFja2V0c1Jlc3BvbnNlEhAKCGZpbGVuYW1lGAEgASgJEhQKDGNvbnRlbnRfdHlwZRgCIAEoCRIMCgRkYXRhGAMgASgMMucDChJEaWFnbm9zdGljc1NlcnZpY2USgAEKGUdldERpYWdub3N0aWNzUGVybWlzc2lvbnMSMC5pY2hvci52MWFscGhhMS5HZXREaWFnbm9zdGljc1Blcm1pc3Npb25zUmVxdWVzdBoxLmljaG9yLnYxYWxwaGExLkdldERpYWdub3N0aWNzUGVybWlzc2lvbnNSZXNwb25zZRJ2ChVEb3dubG9hZFN1cHBvcnRCdW5kbGUSLC5pY2hvci52MWFscGhhMS5Eb3dubG9hZFN1cHBvcnRCdW5kbGVSZXF1ZXN0Gi0uaWNob3IudjFhbHBoYTEuRG93bmxvYWRTdXBwb3J0QnVuZGxlUmVzcG9uc2UwARJzChREb3dubG9hZEV0Y2RTbmFwc2hvdBIrLmljaG9yLnYxYWxwaGExLkRvd25sb2FkRXRjZFNuYXBzaG90UmVxdWVzdBosLmljaG9yLnYxYWxwaGExLkRvd25sb2FkRXRjZFNuYXBzaG90UmVzcG9uc2UwARJhCg5DYXB0dXJlUGFja2V0cxIlLmljaG9yLnYxYWxwaGExLkNhcHR1cmVQYWNrZXRzUmVxdWVzdBomLmljaG9yLnYxYWxwaGExLkNhcHR1cmVQYWNrZXRzUmVzcG9uc2UwAULBAQoSY29tLmljaG9yLnYxYWxwaGExQhBEaWFnbm9zdGljc1Byb3RvUAFaQGdpdGh1Yi5jb20vbWFlc2hpbnNoaW4vaWNob3IvZ2VuL2dvL2ljaG9yL3YxYWxwaGExO2ljaG9ydjFhbHBoYTGiAgNJWFiqAg5JY2hvci5WMWFscGhhMcoCDkljaG9yXFYxYWxwaGEx4gIaSWNob3JcVjFhbHBoYTFcR1BCTWV0YWRhdGHqAg9JY2hvcjo6VjFhbHBoYTFiBnByb3RvMw", [file_ichor_v1alpha1_common]);
 
 /**
  * @generated from message ichor.v1alpha1.GetDiagnosticsPermissionsRequest
@@ -163,9 +163,9 @@ export const CapturePacketsRequestSchema: GenMessage<CapturePacketsRequest> = /*
   messageDesc(file_ichor_v1alpha1_diagnostics, 4);
 
 /**
- * @generated from message ichor.v1alpha1.DownloadChunk
+ * @generated from message ichor.v1alpha1.DownloadSupportBundleResponse
  */
-export type DownloadChunk = Message<"ichor.v1alpha1.DownloadChunk"> & {
+export type DownloadSupportBundleResponse = Message<"ichor.v1alpha1.DownloadSupportBundleResponse"> & {
   /**
    * filename and content_type are set on the first chunk only.
    *
@@ -185,11 +185,69 @@ export type DownloadChunk = Message<"ichor.v1alpha1.DownloadChunk"> & {
 };
 
 /**
- * Describes the message ichor.v1alpha1.DownloadChunk.
- * Use `create(DownloadChunkSchema)` to create a new message.
+ * Describes the message ichor.v1alpha1.DownloadSupportBundleResponse.
+ * Use `create(DownloadSupportBundleResponseSchema)` to create a new message.
  */
-export const DownloadChunkSchema: GenMessage<DownloadChunk> = /*@__PURE__*/
+export const DownloadSupportBundleResponseSchema: GenMessage<DownloadSupportBundleResponse> = /*@__PURE__*/
   messageDesc(file_ichor_v1alpha1_diagnostics, 5);
+
+/**
+ * @generated from message ichor.v1alpha1.DownloadEtcdSnapshotResponse
+ */
+export type DownloadEtcdSnapshotResponse = Message<"ichor.v1alpha1.DownloadEtcdSnapshotResponse"> & {
+  /**
+   * filename and content_type are set on the first chunk only.
+   *
+   * @generated from field: string filename = 1;
+   */
+  filename: string;
+
+  /**
+   * @generated from field: string content_type = 2;
+   */
+  contentType: string;
+
+  /**
+   * @generated from field: bytes data = 3;
+   */
+  data: Uint8Array;
+};
+
+/**
+ * Describes the message ichor.v1alpha1.DownloadEtcdSnapshotResponse.
+ * Use `create(DownloadEtcdSnapshotResponseSchema)` to create a new message.
+ */
+export const DownloadEtcdSnapshotResponseSchema: GenMessage<DownloadEtcdSnapshotResponse> = /*@__PURE__*/
+  messageDesc(file_ichor_v1alpha1_diagnostics, 6);
+
+/**
+ * @generated from message ichor.v1alpha1.CapturePacketsResponse
+ */
+export type CapturePacketsResponse = Message<"ichor.v1alpha1.CapturePacketsResponse"> & {
+  /**
+   * filename and content_type are set on the first chunk only.
+   *
+   * @generated from field: string filename = 1;
+   */
+  filename: string;
+
+  /**
+   * @generated from field: string content_type = 2;
+   */
+  contentType: string;
+
+  /**
+   * @generated from field: bytes data = 3;
+   */
+  data: Uint8Array;
+};
+
+/**
+ * Describes the message ichor.v1alpha1.CapturePacketsResponse.
+ * Use `create(CapturePacketsResponseSchema)` to create a new message.
+ */
+export const CapturePacketsResponseSchema: GenMessage<CapturePacketsResponse> = /*@__PURE__*/
+  messageDesc(file_ichor_v1alpha1_diagnostics, 7);
 
 /**
  * @generated from service ichor.v1alpha1.DiagnosticsService
@@ -217,7 +275,7 @@ export const DiagnosticsService: GenService<{
   downloadSupportBundle: {
     methodKind: "server_streaming";
     input: typeof DownloadSupportBundleRequestSchema;
-    output: typeof DownloadChunkSchema;
+    output: typeof DownloadSupportBundleResponseSchema;
   },
   /**
    * DownloadEtcdSnapshot streams an etcd snapshot taken from one control plane
@@ -228,7 +286,7 @@ export const DiagnosticsService: GenService<{
   downloadEtcdSnapshot: {
     methodKind: "server_streaming";
     input: typeof DownloadEtcdSnapshotRequestSchema;
-    output: typeof DownloadChunkSchema;
+    output: typeof DownloadEtcdSnapshotResponseSchema;
   },
   /**
    * CapturePackets streams a pcap file captured on one node's interface, bounded
@@ -239,7 +297,7 @@ export const DiagnosticsService: GenService<{
   capturePackets: {
     methodKind: "server_streaming";
     input: typeof CapturePacketsRequestSchema;
-    output: typeof DownloadChunkSchema;
+    output: typeof CapturePacketsResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_ichor_v1alpha1_diagnostics, 0);

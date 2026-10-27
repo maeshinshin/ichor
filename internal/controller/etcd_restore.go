@@ -47,6 +47,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -131,6 +132,7 @@ type restoreRun struct {
 	passphrase string
 	scrub      scrubber
 	backup     *ichorv1alpha1.TalosEtcdBackup
+	warn       string // what did not converge on the nodes that were not wiped
 }
 
 // newRestoreRun reads the backup, the bundle and the S3 credentials of op. It reads through the
@@ -207,22 +209,33 @@ type restoreNodes struct {
 	// controllerOnTarget: the controller runs on the target, the only control plane. The wipe stops
 	// the controller, so the restore cannot finish by itself.
 	controllerOnTarget bool
+	// names are the control planes' Kubernetes node names by machine name (see nodeNameFor).
+	names map[string]string
+}
+
+// nodeNameFor is m's Kubernetes node name: the resolved one (names, by machine name), else spec.hostname.
+func nodeNameFor(names map[string]string, m *ichorv1alpha1.TalosMachine) string {
+	if n := names[m.Name]; n != "" {
+		return n
+	}
+
+	return m.Spec.Hostname
 }
 
 // planRestoreNodes decides who is wiped and who recovers. The node the controller runs on is wiped
 // last, after the snapshot is recovered elsewhere, so that the controller lives through the recovery
 // (its stopping at the very end costs nothing: the next controller continues from the marker). With a
 // single control plane there is no elsewhere.
-func planRestoreNodes(cps []*ichorv1alpha1.TalosMachine, nodeName string) restoreNodes {
+func planRestoreNodes(cps []*ichorv1alpha1.TalosMachine, nodeName string, names map[string]string) restoreNodes {
 	all := slices.Clone(cps)
 	slices.SortFunc(all, func(a, b *ichorv1alpha1.TalosMachine) int { return strings.Compare(a.Name, b.Name) })
 
-	p := restoreNodes{all: all}
+	p := restoreNodes{all: all, names: names}
 
 	var own *ichorv1alpha1.TalosMachine
 
 	for _, m := range all {
-		if nodeName != "" && m.Spec.Hostname == nodeName {
+		if nodeName != "" && nodeNameFor(names, m) == nodeName {
 			own = m
 		}
 	}
@@ -357,15 +370,26 @@ func (r *TalosOperationReconciler) beginEtcdRestore(
 		return r.restoreRefused(ctx, op, run, errors.New("the cluster has no approved control plane"))
 	}
 
-	nodes := planRestoreNodes(cps, r.NodeName)
-
 	// Every control plane must answer now: etcd is wiped on each, and a node that is away would come
 	// back later with old data.
-	for _, m := range nodes.all {
+	for _, m := range cps {
 		if err := r.restoreReachable(ctx, cluster, m, run.bundle); err != nil {
 			return r.restoreRefused(ctx, op, run, err)
 		}
 	}
+
+	// Which control plane is the controller's is read now, before anything is wiped (a wiped node can no
+	// longer be asked), and kept in the marker. spec.hostname is empty on the first control plane.
+	var names map[string]string
+
+	if r.NodeName != "" {
+		var err error
+		if names, err = r.nodeNames(ctx, cluster, run.bundle, cps); err != nil {
+			return r.restoreRefused(ctx, op, run, fmt.Errorf("cannot tell which control plane runs this controller (node %q): %w", r.NodeName, err))
+		}
+	}
+
+	nodes := planRestoreNodes(cps, r.NodeName, names)
 
 	if _, err := etcdbackup.VerifyObject(ctx, run.store, snap.Key, run.passphrase); err != nil {
 		return r.restoreRefused(ctx, op, run, fmt.Errorf("snapshot %q does not pass its check: %w", snap.Name, err))
@@ -383,7 +407,11 @@ func (r *TalosOperationReconciler) beginEtcdRestore(
 	next := etcdbackup.RestoreMarker{
 		Namespace: op.Namespace, Operation: op.Name, Cluster: cluster.Name, Backup: spec.BackupRef.Name,
 		Snapshot: snap.Name, SnapshotTime: snap.Time, Reason: spec.Reason, Target: nodes.target.Name,
-		Step: etcdbackup.MarkerWiping, StartedAt: now,
+		Step: etcdbackup.MarkerWiping, StartedAt: now, Nodes: names,
+	}
+
+	if nodes.own != nil {
+		next.Own = nodes.own.Name
 	}
 
 	// The marker is what makes the destructive part resumable. Nothing is wiped before it is stored.
@@ -422,7 +450,7 @@ func wipingMessage(n restoreNodes) string {
 
 	switch {
 	case n.own != nil:
-		msg += fmt.Sprintf(" %s, where this controller runs, is wiped last, when etcd is back.", n.own.Name)
+		msg += fmt.Sprintf(" %s (node %s), where this controller runs, is wiped last, when etcd is back.", n.own.Name, nodeNameFor(n.names, n.own))
 	case n.controllerOnTarget:
 		msg += " This controller runs on the only control plane and stops when it is wiped: finish with `ichor restore --recover-cluster`."
 	}
@@ -509,7 +537,7 @@ func (run *restoreRun) ensureTail(ctx context.Context, m *etcdbackup.RestoreMark
 		return err
 	}
 
-	nodes := planRestoreNodes(cps, run.r.NodeName)
+	nodes := planRestoreNodes(cps, run.r.NodeName, m.Nodes)
 
 	idx := slices.IndexFunc(nodes.order, func(c *ichorv1alpha1.TalosMachine) bool { return c.Name == m.Target })
 	if idx < 0 {
@@ -699,10 +727,21 @@ func (run *restoreRun) rejoin(ctx context.Context, m *etcdbackup.RestoreMarker) 
 			return r.restoreWait(ctx, op, "waiting for the Kubernetes API: "+err.Error()), nil
 		}
 
-		if err := run.requestReconcile(ctx); err != nil {
+		why, err := run.refreshAgents(ctx, m)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+
+		if why != "" {
+			return r.restoreWait(ctx, op, why), nil
+		}
+
+		if err := run.requestReconcile(ctx, m.AgentWarning); err != nil {
 			return ctrl.Result{}, err
 		}
 	}
+
+	run.warn = m.AgentWarning
 
 	why, err := run.reconciled(ctx)
 	if err != nil {
@@ -710,7 +749,7 @@ func (run *restoreRun) rejoin(ctx context.Context, m *etcdbackup.RestoreMarker) 
 	}
 
 	if why != "" {
-		return r.restoreWait(ctx, op, why), nil
+		return r.restoreWait(ctx, op, strings.TrimSpace(why+" "+run.warn)), nil
 	}
 
 	return run.finish(ctx, lock)
@@ -754,8 +793,8 @@ func (run *restoreRun) waitForMembers(ctx context.Context, m *etcdbackup.Restore
 	var missing []string
 
 	for _, cp := range cps {
-		if cp.Spec.Hostname != "" && !etcdMemberPresent(members, cp.Spec.Hostname) {
-			missing = append(missing, cp.Spec.Hostname)
+		if name := nodeNameFor(m.Nodes, cp); name != "" && !etcdMemberPresent(members, name) {
+			missing = append(missing, name)
 		}
 	}
 
@@ -819,7 +858,7 @@ func (run *restoreRun) apiReady(ctx context.Context) error {
 
 // requestReconcile asks every approved machine to reconcile again, with a token the machine controller
 // echoes in its status once it has.
-func (run *restoreRun) requestReconcile(ctx context.Context) error {
+func (run *restoreRun) requestReconcile(ctx context.Context, warning string) error {
 	r, op := run.r, run.op
 	token := string(op.UID)
 
@@ -848,11 +887,9 @@ func (run *restoreRun) requestReconcile(ctx context.Context) error {
 		}
 	}
 
-	run.restartNetworkAgents(ctx)
-
 	st := op.Status.EtcdRestore
 	st.Step, st.ReconcileRequest = ichorv1alpha1.EtcdRestoreStepReconciling, token
-	st.Message = "the cluster is back; waiting for every machine to reconcile against the restored state."
+	st.Message = strings.TrimSpace("the cluster is back; waiting for every machine to reconcile against the restored state. " + warning)
 
 	return r.Status().Update(ctx, op)
 }
@@ -913,10 +950,14 @@ func (run *restoreRun) finish(ctx context.Context, lock *clusterlock.Lock) (ctrl
 	key := types.NamespacedName{Namespace: run.op.Namespace, Name: run.op.Name}
 	defaultRestoreTails.forget(key)
 
-	run.op.Status.EtcdRestore.Message = "etcd is restored and every machine reconciled."
+	run.op.Status.EtcdRestore.Message = strings.TrimSpace("etcd is restored and every machine reconciled. " + run.warn)
 
-	return ctrl.Result{}, run.r.setPhase(ctx, run.op, ichorv1alpha1.TalosOperationPhaseCompleted, reasonEtcdRestoreDone,
-		"etcd is restored from the snapshot and every machine is Ready")
+	msg := "etcd is restored from the snapshot and every machine is Ready"
+	if run.warn != "" {
+		msg += "; warning: " + run.warn
+	}
+
+	return ctrl.Result{}, run.r.setPhase(ctx, run.op, ichorv1alpha1.TalosOperationPhaseCompleted, reasonEtcdRestoreDone, msg)
 }
 
 // cleanup removes the pinned snapshot copy and the marker.
@@ -1175,72 +1216,237 @@ func (r *TalosOperationReconciler) clusterOf(ctx context.Context, op *ichorv1alp
 	return &c
 }
 
-const (
-	controlPlaneLabel = "node-role.kubernetes.io/control-plane"
-)
+// agentsBound bounds the wait, after the kubelets of the nodes that were not wiped were restarted, for
+// those nodes to be Ready again and for their kube-proxy pods to be recreated and Ready. Past it the
+// restore carries on and says what did not converge. A variable so tests can shorten it.
+var agentsBound = 10 * time.Minute
 
-// restartNetworkAgents deletes the kube-proxy pods of every node that was not wiped (ADR 0089). The
-// restore wipes etcd, not the nodes: a worker keeps running through the rollback with the Service rules
-// kube-proxy programmed from the cluster's state before it, and after the rewind its watches can sit
-// on the old state (on hardware the Service IP refused connections on a worker although the
-// apiservers and Endpoints were healthy, until its kube-proxy pod was deleted). The control planes
-// reboot with the wipe, and their pods start fresh. The pods are found through the DaemonSet's own
-// selector in its namespace and deleted one by one, by name. Best effort: a failure is logged, not fatal,
-// because the machines still reconcile and the operator can delete the pods by hand.
+// unwipedNode is a node the restore did not wipe: a worker. It keeps running through the rollback.
+type unwipedNode struct {
+	machine *ichorv1alpha1.TalosMachine
+	node    string
+}
+
+// unwipedNodes lists the approved workers with their Kubernetes node names.
+func (run *restoreRun) unwipedNodes(ctx context.Context) ([]unwipedNode, error) {
+	machines, err := deleteguard.ApprovedMachines(ctx, readerOrClient(run.r.APIReader, run.r.Client), run.cluster.Namespace, run.cluster.Name,
+		deleteguard.MachineFilter{})
+	if err != nil {
+		return nil, err
+	}
+
+	var workers []*ichorv1alpha1.TalosMachine
+
+	for i := range machines {
+		if machines[i].Spec.Role != roleControlPlane {
+			workers = append(workers, &machines[i])
+		}
+	}
+
+	names, _ := run.r.nodeNames(ctx, run.cluster, run.bundle, workers) // an unnamed one is reported below
+
+	out := make([]unwipedNode, len(workers))
+	for i, w := range workers {
+		out[i] = unwipedNode{machine: w, node: names[w.Name]}
+	}
+
+	return out, nil
+}
+
+// refreshAgents makes the nodes that were not wiped follow the rewound API (ADR 0089). They keep running
+// through the rollback with what they cached from the cluster before it: on hardware the kubelet of such
+// a worker kept failing "Error updating node status", and its kube-proxy pod stayed Terminating, so
+// deleting the pod alone changed nothing. The order is therefore: restart the kubelet through Talos (the
+// controller is the only writer to a node), wait until the node is Ready again with a heartbeat from after
+// the restart, delete the kube-proxy pod that predates it, and wait until the replacement is Ready. It
+// returns why it is not done, or "" when it is. After agentsBound it returns "" anyway and keeps what did
+// not converge in the marker (AgentWarning) rather than claiming success.
 //
 // ponytail: only kube-proxy. The CNI's pods (flannel, cilium) are not restarted: they were not seen
 // failing, and restarting a Cilium agent drops its datapath state on every node; revisit if a CNI is
 // seen to keep stale state after a restore.
-func (run *restoreRun) restartNetworkAgents(ctx context.Context) {
-	kc := run.r.KubeClient
-	if kc == nil {
-		return
+func (run *restoreRun) refreshAgents(ctx context.Context, m *etcdbackup.RestoreMarker) (string, error) {
+	if run.r.KubeClient == nil || m.AgentWarning != "" {
+		return "", nil
+	}
+
+	workers, err := run.unwipedNodes(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	if len(workers) == 0 {
+		return "", nil
 	}
 
 	log := logf.FromContext(ctx)
 
-	ds, err := kc.AppsV1().DaemonSets(kubeSystemNamespace).Get(ctx, kubeProxyName, metav1.GetOptions{})
-	if err != nil {
-		if !apierrors.IsNotFound(err) { // not found: kube-proxy is replaced by the CNI
-			log.Info("not restarting kube-proxy: reading its DaemonSet failed", "error", err.Error())
+	if m.AgentsSince.IsZero() {
+		// Recorded before the restart, so that a restart of this process does not restart the kubelets again.
+		m.AgentsSince = time.Now().UTC()
+		if err := etcdbackup.PutMarker(ctx, run.store, run.prefix, m); err != nil {
+			m.AgentsSince = time.Time{}
+
+			return "waiting for the backup storage: " + run.clean(err), nil
 		}
 
-		return
+		for _, w := range workers {
+			if err := run.restartKubelet(ctx, w.machine); err != nil {
+				log.Info("restarting a kubelet failed", "machine", w.machine.Name, "error", run.clean(err))
+			}
+		}
+
+		return "restarted the kubelet of the nodes that were not wiped; waiting for them to be Ready again.", nil
 	}
 
-	selector, err := metav1.LabelSelectorAsSelector(ds.Spec.Selector)
-	if err != nil || selector.Empty() {
-		return
+	waiting := run.agentsWaiting(ctx, m.AgentsSince, workers)
+	if len(waiting) == 0 {
+		return "", nil
 	}
 
-	wiped := map[string]bool{}
+	slices.Sort(waiting)
 
-	nodes, err := kc.CoreV1().Nodes().List(ctx, metav1.ListOptions{LabelSelector: controlPlaneLabel})
+	why := strings.Join(waiting[:min(len(waiting), 3)], "; ")
+
+	if time.Since(m.AgentsSince) > agentsBound {
+		m.AgentWarning = fmt.Sprintf("after %s these nodes had not converged on the restored cluster: %s; check their kubelet and delete their kube-proxy pod by hand",
+			agentsBound, strings.Join(waiting, "; "))
+
+		if err := etcdbackup.PutMarker(ctx, run.store, run.prefix, m); err != nil {
+			m.AgentWarning = ""
+
+			return "waiting for the backup storage: " + run.clean(err), nil
+		}
+
+		return "", nil
+	}
+
+	return "waiting for the nodes that were not wiped to follow the restored cluster: " + why, nil
+}
+
+// restartKubelet asks the node of w to restart its kubelet.
+func (run *restoreRun) restartKubelet(ctx context.Context, w *ichorv1alpha1.TalosMachine) error {
+	dialCtx, cancel := context.WithTimeout(ctx, etcdDialTimeout)
+	defer cancel()
+
+	c, err := run.r.TalosClient(dialCtx, run.cluster, w, run.bundle)
 	if err != nil {
-		log.Info("not restarting kube-proxy: listing the control plane nodes failed", "error", err.Error())
-
-		return
+		return err
 	}
 
-	for i := range nodes.Items {
-		wiped[nodes.Items[i].Name] = true
+	defer closeTalosClient(c)
+
+	return c.ServiceRestart(dialCtx, "kubelet")
+}
+
+// agentsWaiting is what is still short on the nodes since the kubelets were restarted: each entry names
+// a node. A stale kube-proxy pod (one created before the restart) is deleted on the way.
+func (run *restoreRun) agentsWaiting(ctx context.Context, since time.Time, workers []unwipedNode) []string {
+	kc := run.r.KubeClient
+	log := logf.FromContext(ctx)
+
+	var selector labels.Selector
+
+	ds, err := kc.AppsV1().DaemonSets(kubeSystemNamespace).Get(ctx, kubeProxyName, metav1.GetOptions{})
+
+	switch {
+	case err == nil && ds.Spec.Selector != nil:
+		if s, serr := metav1.LabelSelectorAsSelector(ds.Spec.Selector); serr == nil && !s.Empty() {
+			selector = s
+		}
+	case err != nil && !apierrors.IsNotFound(err): // not found: kube-proxy is replaced by the CNI
+		return []string{fmt.Sprintf("the kube-proxy DaemonSet cannot be read (%v)", err)}
 	}
 
-	pods, err := kc.CoreV1().Pods(kubeSystemNamespace).List(ctx, metav1.ListOptions{LabelSelector: selector.String()})
-	if err != nil {
-		log.Info("not restarting kube-proxy: listing its pods failed", "error", err.Error())
+	var waiting []string
 
-		return
-	}
+	for _, w := range workers {
+		if w.node == "" {
+			waiting = append(waiting, w.machine.Name+" (its Kubernetes node name is unknown)")
 
-	for i := range pods.Items {
-		p := &pods.Items[i]
-		if wiped[p.Spec.NodeName] || !metav1.IsControlledBy(p, ds) && len(p.OwnerReferences) > 0 {
 			continue
 		}
 
-		if err := kc.CoreV1().Pods(kubeSystemNamespace).Delete(ctx, p.Name, metav1.DeleteOptions{}); client.IgnoreNotFound(err) != nil {
-			log.Info("deleting a kube-proxy pod failed", "pod", p.Name, "node", p.Spec.NodeName, "error", err.Error())
+		if !run.nodeRefreshed(ctx, w.node, since) {
+			waiting = append(waiting, w.node+" (not Ready since its kubelet was restarted)")
+
+			continue
+		}
+
+		if selector == nil {
+			continue
+		}
+
+		pods, err := kc.CoreV1().Pods(kubeSystemNamespace).List(ctx, metav1.ListOptions{LabelSelector: selector.String()})
+		if err != nil {
+			waiting = append(waiting, fmt.Sprintf("%s (listing its kube-proxy pod failed: %v)", w.node, err))
+
+			continue
+		}
+
+		fresh := false
+
+		for i := range pods.Items {
+			p := &pods.Items[i]
+			if p.Spec.NodeName != w.node || !metav1.IsControlledBy(p, ds) && len(p.OwnerReferences) > 0 {
+				continue
+			}
+
+			switch {
+			case p.DeletionTimestamp != nil:
+			case p.CreationTimestamp.Time.Before(since):
+				if err := kc.CoreV1().Pods(kubeSystemNamespace).Delete(ctx, p.Name, metav1.DeleteOptions{}); client.IgnoreNotFound(err) != nil {
+					log.Info("deleting a kube-proxy pod failed", "pod", p.Name, "node", w.node, "error", err.Error())
+				}
+			case podReady(p):
+				fresh = true
+			}
+		}
+
+		if !fresh {
+			waiting = append(waiting, w.node+" (no Ready kube-proxy pod yet)")
 		}
 	}
+
+	return waiting
+}
+
+// nodeRefreshed reports whether the Node is Ready with a heartbeat from after since: its Ready condition
+// in the rewound API can be the stale one from the snapshot.
+func (run *restoreRun) nodeRefreshed(ctx context.Context, name string, since time.Time) bool {
+	kc := run.r.KubeClient
+
+	node, err := kc.CoreV1().Nodes().Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return false
+	}
+
+	for _, c := range node.Status.Conditions {
+		if c.Type != corev1.NodeReady {
+			continue
+		}
+
+		if c.Status != corev1.ConditionTrue {
+			return false
+		}
+
+		if c.LastHeartbeatTime.After(since) {
+			return true
+		}
+	}
+
+	// Ready, but with a heartbeat that may predate the restart: the node lease is renewed more often.
+	lease, err := kc.CoordinationV1().Leases(corev1.NamespaceNodeLease).Get(ctx, name, metav1.GetOptions{})
+
+	return err == nil && lease.Spec.RenewTime != nil && lease.Spec.RenewTime.After(since)
+}
+
+func podReady(p *corev1.Pod) bool {
+	for _, c := range p.Status.Conditions {
+		if c.Type == corev1.PodReady {
+			return c.Status == corev1.ConditionTrue
+		}
+	}
+
+	return false
 }

@@ -198,6 +198,24 @@ Three things went wrong; each is now handled and tested.
    and the bucket (the plan already says the same for a controller on a single control plane). The memory use of the
    snapshot handling itself is `internal/etcdbackup`'s concern and is fixed separately.
 
+### Changes after the second run on hardware
+
+The second run (3 control planes, 1 worker) found three more faults. (1) The controller's own node was not recognised:
+the first control plane that `ichor init` creates has an empty `spec.hostname`, so matching `NODE_NAME` against it failed
+and all three were wiped at once. Every "is this the controller's node" question (the restore plan, the shutdown order,
+the config rollout's own-node-last) now resolves each machine's node name like the rest of the controller does
+(`resolveNodeName`: `spec.hostname`, else what Talos reports, else the Node by address), and the restore reads it before
+anything destructive and keeps it in the marker (`nodes`, `own`), so the plan survives the wipe; the plan text names the
+controller's node and says it is wiped last. (2) Deleting the kube-proxy pod of a worker that was not wiped did nothing:
+its kubelet is as stale against the rewound API as the pod, and the pod stayed Terminating. The controller now restarts
+that kubelet through Talos first (`ServiceRestart kubelet`, recorded in the marker as `agentsSince` so it happens once),
+waits until the node is Ready with a heartbeat from after the restart, deletes the kube-proxy pod that predates it, and
+waits for the replacement to be Ready; only then does the restore move on. If that has not converged after ten
+minutes it moves on anyway and states what did not converge (marker `agentWarning`, shown in the status and in the
+completion message) instead of claiming success. (3) `ichor restore --live --follow` ended with `not_found` in the window
+after the API returned and before the operation was recreated; the follow now treats NotFound of the restore operation
+as expected for up to 15 minutes and prints "waiting for the restore to resume".
+
 ## Not decided here
 
 - Restoring from an uploaded snapshot file, and from storage other than S3.

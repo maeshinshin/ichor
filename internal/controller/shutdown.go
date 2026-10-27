@@ -177,11 +177,24 @@ func (r *TalosOperationReconciler) shutdownPlan(
 
 	var own []*ichorv1alpha1.TalosMachine
 
+	// Which machine is the controller's is asked of the node names, not of spec.hostname, which is
+	// empty on the first control plane.
+	var names map[string]string
+
+	if r.NodeName != "" {
+		ptrs := make([]*ichorv1alpha1.TalosMachine, len(list))
+		for i := range list {
+			ptrs[i] = &list[i]
+		}
+
+		names, _ = r.nodeNames(ctx, cluster, nil, ptrs) // a machine whose name cannot be told is simply not the controller's
+	}
+
 	for i := range list {
 		m := &list[i]
 
 		switch {
-		case r.NodeName != "" && m.Spec.Hostname == r.NodeName:
+		case r.NodeName != "" && names[m.Name] == r.NodeName:
 			own = append(own, m)
 		case m.Spec.Role == roleControlPlane:
 			last = append(last, m)

@@ -211,30 +211,9 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 
 	// Step 4: bootstrap etcd, fetch the kubeconfig, store the bundle as a
 	// Secret.
-	admin, err := deps.DialAdmin(ctx, cluster, opts.NodeEndpoint, bundle)
+	k8sClient, err := initBootstrapAccess(ctx, opts, deps, cluster, bundle)
 	if err != nil {
-		return fmt.Errorf("init: %w", err)
-	}
-
-	if err := bootstrapWhenUp(ctx, admin, deps.BootstrapWait, deps.BootstrapInterval, deps.Stderr); err != nil {
-		return fmt.Errorf("init: bootstrapping etcd: %w", err)
-	}
-
-	kubeconfig, err := admin.Kubeconfig(ctx)
-	if err != nil {
-		return fmt.Errorf("init: fetching the kubeconfig: %w", err)
-	}
-
-	kubeconfigPath, err := saveKubeconfigFile(cluster.Name, kubeconfig)
-	if err != nil {
-		return fmt.Errorf("init: saving the kubeconfig: %w", err)
-	}
-
-	_, _ = fmt.Fprintf(deps.Stderr, "init: kubeconfig written to %s\n", kubeconfigPath)
-
-	k8sClient, err := deps.NewK8sClient(kubeconfig)
-	if err != nil {
-		return fmt.Errorf("init: connecting to the new cluster: %w", err)
+		return err
 	}
 
 	bundleSecret, err := buildBundleSecret(cluster, bundle)
@@ -288,6 +267,39 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 	}
 
 	return nil
+}
+
+// initBootstrapAccess is step 4's first half: bootstrap etcd, fetch and save the kubeconfig, and connect.
+func initBootstrapAccess(
+	ctx context.Context, opts initOptions, deps initDeps, cluster *ichorv1alpha1.TalosCluster, bundle *secrets.Bundle,
+) (client.Client, error) {
+	admin, err := deps.DialAdmin(ctx, cluster, opts.NodeEndpoint, bundle)
+	if err != nil {
+		return nil, fmt.Errorf("init: %w", err)
+	}
+
+	if err := bootstrapWhenUp(ctx, admin, deps.BootstrapWait, deps.BootstrapInterval, deps.Stderr); err != nil {
+		return nil, fmt.Errorf("init: bootstrapping etcd: %w", err)
+	}
+
+	kubeconfig, err := admin.Kubeconfig(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("init: fetching the kubeconfig: %w", err)
+	}
+
+	kubeconfigPath, err := saveKubeconfigFile(cluster.Name, kubeconfig)
+	if err != nil {
+		return nil, fmt.Errorf("init: saving the kubeconfig: %w", err)
+	}
+
+	_, _ = fmt.Fprintf(deps.Stderr, "init: kubeconfig written to %s\n", kubeconfigPath)
+
+	k8sClient, err := deps.NewK8sClient(kubeconfig)
+	if err != nil {
+		return nil, fmt.Errorf("init: connecting to the new cluster: %w", err)
+	}
+
+	return k8sClient, nil
 }
 
 func rejectRegistryCredentials(cluster *ichorv1alpha1.TalosCluster) error {

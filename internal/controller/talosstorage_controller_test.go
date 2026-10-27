@@ -50,7 +50,7 @@ type fakeSettingReader struct{ value string }
 
 func (f fakeSettingReader) Get(_ context.Context, key client.ObjectKey, obj client.Object, _ ...client.GetOption) error {
 	if f.value == "" {
-		return apierrors.NewNotFound(schema.GroupResource{Group: "longhorn.io", Resource: "settings"}, key.Name)
+		return apierrors.NewNotFound(schema.GroupResource{Group: longhornGroup, Resource: "settings"}, key.Name)
 	}
 
 	u, ok := obj.(*unstructured.Unstructured)

@@ -107,9 +107,11 @@ type LonghornEvacuator struct {
 	noted sync.Map
 }
 
+const longhornGroup = "longhorn.io"
+
 var (
-	longhornNodeGVK        = schema.GroupVersionKind{Group: "longhorn.io", Version: "v1beta2", Kind: "Node"}
-	longhornReplicaListGVK = schema.GroupVersionKind{Group: "longhorn.io", Version: "v1beta2", Kind: "ReplicaList"}
+	longhornNodeGVK        = schema.GroupVersionKind{Group: longhornGroup, Version: "v1beta2", Kind: "Node"}
+	longhornReplicaListGVK = schema.GroupVersionKind{Group: longhornGroup, Version: "v1beta2", Kind: "ReplicaList"}
 )
 
 // Longhorn's own objects, read and written in whichever namespace it is installed in. The
@@ -166,7 +168,7 @@ func (e *LonghornEvacuator) Begin(ctx context.Context, target *evacuationTarget,
 	allowScheduling, evictionRequested := target.hook.BeginEvacuation()
 
 	return e.writeNodeEvacuation(ctx, target, node, [2]nodeField{
-		{"allowScheduling", allowScheduling}, {"evictionRequested", evictionRequested},
+		{fieldAllowScheduling, allowScheduling}, {fieldEvictionRequested, evictionRequested},
 	})
 }
 
@@ -178,9 +180,15 @@ func (e *LonghornEvacuator) End(ctx context.Context, target *evacuationTarget, n
 	allowScheduling, evictionRequested := target.hook.EndEvacuation()
 
 	return e.writeNodeEvacuation(ctx, target, node, [2]nodeField{
-		{"evictionRequested", evictionRequested}, {"allowScheduling", allowScheduling},
+		{fieldEvictionRequested, evictionRequested}, {fieldAllowScheduling, allowScheduling},
 	})
 }
+
+// The two Longhorn Node spec fields the evacuation toggles.
+const (
+	fieldAllowScheduling   = "allowScheduling"
+	fieldEvictionRequested = "evictionRequested"
+)
 
 // nodeField is one boolean of a Longhorn Node's spec.
 type nodeField struct {

@@ -45,24 +45,24 @@ const (
 // allowScheduling and evictionRequested may not both be true. updates records every accepted write.
 func longhornNodeFake(allowScheduling, evictionRequested bool, updates *[]map[string]any) client.Client {
 	obj := &unstructured.Unstructured{Object: map[string]any{
-		"spec": map[string]any{"allowScheduling": allowScheduling, "evictionRequested": evictionRequested},
+		"spec": map[string]any{fieldAllowScheduling: allowScheduling, fieldEvictionRequested: evictionRequested},
 	}}
 	obj.SetGroupVersionKind(longhornNodeGVK)
 	obj.SetNamespace(defaultLonghornNamespace)
 	obj.SetName(longhornTestNode)
 
 	return interceptor.NewClient(
-		fake.NewClientBuilder().WithScheme(runtime.NewScheme()).WithObjects(obj).Build().(client.WithWatch),
+		fake.NewClientBuilder().WithScheme(runtime.NewScheme()).WithObjects(obj).Build(),
 		interceptor.Funcs{Update: func(ctx context.Context, c client.WithWatch, o client.Object, opts ...client.UpdateOption) error {
 			u := o.(*unstructured.Unstructured)
-			allow, _, _ := unstructured.NestedBool(u.Object, "spec", "allowScheduling")
-			evict, _, _ := unstructured.NestedBool(u.Object, "spec", "evictionRequested")
+			allow, _, _ := unstructured.NestedBool(u.Object, "spec", fieldAllowScheduling)
+			evict, _, _ := unstructured.NestedBool(u.Object, "spec", fieldEvictionRequested)
 
 			if allow && evict {
 				return apierrors.NewBadRequest("admission webhook \"validator.longhorn.io\" denied the request: " + longhornDenied)
 			}
 
-			*updates = append(*updates, map[string]any{"allowScheduling": allow, "evictionRequested": evict})
+			*updates = append(*updates, map[string]any{fieldAllowScheduling: allow, fieldEvictionRequested: evict})
 
 			return c.Update(ctx, o, opts...)
 		}},
@@ -83,8 +83,8 @@ var _ = Describe("LonghornEvacuator Begin and End", func() {
 		e := &LonghornEvacuator{Client: longhornNodeFake(true, false, &updates)}
 		Expect(e.Begin(ctx, longhornTestTarget(), longhornTestNode)).To(Succeed())
 		Expect(updates).To(Equal([]map[string]any{
-			{"allowScheduling": false, "evictionRequested": false},
-			{"allowScheduling": false, "evictionRequested": true},
+			{fieldAllowScheduling: false, fieldEvictionRequested: false},
+			{fieldAllowScheduling: false, fieldEvictionRequested: true},
 		}))
 	})
 
@@ -94,8 +94,8 @@ var _ = Describe("LonghornEvacuator Begin and End", func() {
 		e := &LonghornEvacuator{Client: longhornNodeFake(false, true, &updates)}
 		Expect(e.End(ctx, longhornTestTarget(), longhornTestNode)).To(Succeed())
 		Expect(updates).To(Equal([]map[string]any{
-			{"allowScheduling": false, "evictionRequested": false},
-			{"allowScheduling": true, "evictionRequested": false},
+			{fieldAllowScheduling: false, fieldEvictionRequested: false},
+			{fieldAllowScheduling: true, fieldEvictionRequested: false},
 		}))
 	})
 
@@ -109,12 +109,12 @@ var _ = Describe("LonghornEvacuator Begin and End", func() {
 	})
 
 	It("treats an uninstalled Longhorn CRD as nothing to evacuate, and no replicas remaining", func() {
-		noMatch := interceptor.NewClient(fake.NewClientBuilder().Build().(client.WithWatch), interceptor.Funcs{
+		noMatch := interceptor.NewClient(fake.NewClientBuilder().Build(), interceptor.Funcs{
 			Get: func(context.Context, client.WithWatch, client.ObjectKey, client.Object, ...client.GetOption) error {
-				return &apimeta.NoKindMatchError{GroupKind: schema.GroupKind{Group: "longhorn.io", Kind: "Node"}}
+				return &apimeta.NoKindMatchError{GroupKind: schema.GroupKind{Group: longhornGroup, Kind: "Node"}}
 			},
 			List: func(context.Context, client.WithWatch, client.ObjectList, ...client.ListOption) error {
-				return &apimeta.NoKindMatchError{GroupKind: schema.GroupKind{Group: "longhorn.io", Kind: "Replica"}}
+				return &apimeta.NoKindMatchError{GroupKind: schema.GroupKind{Group: longhornGroup, Kind: "Replica"}}
 			},
 		})
 
@@ -129,7 +129,7 @@ var _ = Describe("LonghornEvacuator Begin and End", func() {
 
 	It("still fails on any other read error", func() {
 		boom := errors.New("boom")
-		failing := interceptor.NewClient(fake.NewClientBuilder().Build().(client.WithWatch), interceptor.Funcs{
+		failing := interceptor.NewClient(fake.NewClientBuilder().Build(), interceptor.Funcs{
 			Get: func(context.Context, client.WithWatch, client.ObjectKey, client.Object, ...client.GetOption) error {
 				return boom
 			},

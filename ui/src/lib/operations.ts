@@ -115,7 +115,7 @@ export function kindNeedsTypedName(kind: OpKind): boolean {
 }
 
 // The stages status.caRotation.stage goes through, in order.
-const caStages = ['Accepting', 'Issuing', 'Dropping', 'Finalizing', 'Done'] as const
+const caStages = ['Accepting', 'AwaitingCredentials', 'Issuing', 'Dropping', 'Finalizing', 'Done'] as const
 
 // caStageProgress is where a rotation is, as a 1-based position; null before
 // the new CAs are saved (empty stage) or for a stage this UI does not know.

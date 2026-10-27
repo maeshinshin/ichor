@@ -121,6 +121,12 @@ export function OperationDetail({ namespace, name }: { namespace: string; name: 
       />
       <div class="space-y-8">
         <div class="space-y-4 empty:hidden">
+          {op.kind === OperationKind.CA_ROTATION && op.caRotationStage === 'AwaitingCredentials' && state !== 'done' && (
+            <Alert variant="destructive">
+              <AlertTitle>{t('ops.awaitingCredentialsTitle')}</AlertTitle>
+              <AlertDescription>{t('ops.awaitingCredentials', { name: op.cluster?.name ?? '' })}</AlertDescription>
+            </Alert>
+          )}
           {op.kind === OperationKind.CA_ROTATION && state === 'done' && (
             <Alert>
               <AlertTitle>{t('ops.plan.bundleStaleTitle')}</AlertTitle>

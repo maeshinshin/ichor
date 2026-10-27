@@ -281,6 +281,12 @@ function PlanView({ kind, plan, clusterName }: { kind: OpKind; plan: PlanOperati
           <AlertDescription>{t('ops.plan.apiDown')}</AlertDescription>
         </Alert>
       )}
+      {kind === 'ca-rotation' && (
+        <Alert variant="destructive">
+          <AlertTitle>{t('ops.plan.credentialsTitle')}</AlertTitle>
+          <AlertDescription>{t('ops.plan.credentials', { name: clusterName })}</AlertDescription>
+        </Alert>
+      )}
       {plan.replacesSecretsBundle && (
         <Alert>
           <AlertTitle>{t('ops.plan.bundleStaleTitle')}</AlertTitle>

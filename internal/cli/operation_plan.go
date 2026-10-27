@@ -70,6 +70,12 @@ func planText(kind pb.OperationKind, cluster string, p *pb.PlanOperationResponse
 	case pb.OperationEffect_OPERATION_EFFECT_CA_ROTATION:
 		fmt.Fprintf(&b, "Every machine is reconfigured once per pass (%s), without a reboot. "+
 			"The kubelet RESTARTS on each machine in the passes that change the Kubernetes CA.\n", strings.Join(p.GetStages(), ", "))
+		b.WriteString("YOUR kubeconfig and talosconfig STOP WORKING during it: the Kubernetes API serves the new CA from the second pass on, " +
+			"and the Talos API refuses the old CA after the third.\n" +
+			"So after every machine accepts the new CAs the operation WAITS, changing nothing, until you have new credentials. " +
+			"'ichor cluster rotate-ca' writes them (a kubeconfig and a talosconfig trusting the old and the new CAs, next to your current ones, " +
+			"mode 0600, never printed) while your current ones still work, checks them, and only then lets the operation go on. " +
+			"The UI cannot hand them over: run 'ichor cluster credentials NAME --acknowledge' with your current kubeconfig to continue.\n")
 	case pb.OperationEffect_OPERATION_EFFECT_UNSPECIFIED:
 	}
 

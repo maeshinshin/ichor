@@ -23,3 +23,7 @@ ADR 0026 pauses an operation when a step fails and never retries it by itself, a
 ## Consequences
 
 One new status field (`lastRetry`) and one annotation; the CRD is regenerated. A retry cannot be undone, the same as the step it repeats. Deleting and recreating still works but is no longer the advice.
+
+## Amendment: one command
+
+`ichor operation retry`, the `RetryOperation` RPC and the UI Retry button are gone: two commands for one intent. `resume` (`SetOperationPaused` with `paused=false`) on an operation that is Paused with a `failureReason` also writes the retry annotation, with a time later than `status.lastRetry`, in the same update; on any other operation it only lifts `spec.paused`. The CLI prints "re-running the step that failed: REASON". The UI shows Resume for a failed operation, a failed etcd restore included, behind a confirmation that says it re-runs the failed step. The controller side (annotation and `lastRetry`) is unchanged. Resuming is no longer refused for an etcd restore that has started (only pausing is), so a failed one can be resumed.

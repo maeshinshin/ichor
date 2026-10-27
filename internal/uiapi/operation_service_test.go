@@ -686,7 +686,7 @@ func TestListAndGetReturnStatusMachinesAsTheyAre(t *testing.T) {
 	}
 }
 
-func TestRetryOperationAnnotatesOnlyAFailedOperation(t *testing.T) {
+func TestResumeAnnotatesOnlyAFailedOperation(t *testing.T) {
 	newOp := func(name, phase, reason string, last *metav1.Time) *ichorv1alpha1.TalosOperation {
 		return &ichorv1alpha1.TalosOperation{
 			Name: name, Namespace: opNS,
@@ -704,7 +704,13 @@ func TestRetryOperationAnnotatesOnlyAFailedOperation(t *testing.T) {
 	)...)
 	ctx := context.Background()
 
-	if _, err := srv.RetryOperation(ctx, connect.NewRequest(&pb.RetryOperationRequest{Operation: objectRef(opNS, "failed")})); err != nil {
+	resume := func(name string) error {
+		_, err := srv.SetOperationPaused(ctx, connect.NewRequest(&pb.SetOperationPausedRequest{Operation: objectRef(opNS, name)}))
+
+		return err
+	}
+
+	if err := resume("failed"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -723,14 +729,13 @@ func TestRetryOperationAnnotatesOnlyAFailedOperation(t *testing.T) {
 	}
 
 	for _, name := range []string{"operator-paused", "in-progress"} {
-		_, err := srv.RetryOperation(ctx, connect.NewRequest(&pb.RetryOperationRequest{Operation: objectRef(opNS, name)}))
-		if connect.CodeOf(err) != connect.CodeFailedPrecondition || annotation(name) != "" {
-			t.Errorf("%s: err = %v, annotation %q; want FailedPrecondition and none", name, err, annotation(name))
+		if err := resume(name); err != nil || annotation(name) != "" {
+			t.Errorf("%s: err = %v, annotation %q; want a plain resume and no annotation", name, err, annotation(name))
 		}
 	}
 
 	// A request is always newer than the one the controller already acted on.
-	if _, err := srv.RetryOperation(ctx, connect.NewRequest(&pb.RetryOperationRequest{Operation: objectRef(opNS, "retried")})); err != nil {
+	if err := resume("retried"); err != nil {
 		t.Fatal(err)
 	}
 

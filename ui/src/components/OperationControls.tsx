@@ -6,12 +6,12 @@ import { OperationKind, type Operation } from '@/gen/ichor/v1alpha1/operation_pb
 import { operationClient } from '@/lib/connect'
 import { notifyDone } from '@/lib/notify'
 import { describeError } from '@/lib/errors'
-import { operationState, pauseAction, retryAvailable } from '@/lib/operations'
+import { operationState, pauseAction } from '@/lib/operations'
 import { useT } from '@/lib/useT'
 
 type ErrorShape = { title: string; detail: string }
 
-// OperationControls: pause or resume (retry after a failed step), and delete. Deleting asks first; pausing
+// OperationControls: pause or resume (resuming a failed operation runs the failed step again), and delete. Deleting asks first; pausing
 // changes nothing already done and can be undone, so it does not.
 export function OperationControls({
   op,
@@ -29,9 +29,10 @@ export function OperationControls({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<ErrorShape | null>(null)
   const [open, setOpen] = useState(false)
-  // A restore that has started is half done; the server refuses to pause it, so the button is not offered.
-  const canRetry = retryAvailable(operationState(op.phase, op.failureReason))
-  const action = op.kind === OperationKind.ETCD_RESTORE ? null : pauseAction(op.paused, operationState(op.phase, op.failureReason))
+  const [resumeOpen, setResumeOpen] = useState(false)
+  const state = operationState(op.phase, op.failureReason)
+  // A restore that has started is half done; the server refuses to pause it, so only a failed one gets a button (Resume).
+  const action = op.kind === OperationKind.ETCD_RESTORE && state !== 'failed' ? null : pauseAction(op.paused, state)
 
   async function setPaused(paused: boolean) {
     if (!op.ref) return
@@ -40,22 +41,8 @@ export function OperationControls({
     try {
       const res = await operationClient.setOperationPaused({ operation: op.ref, paused })
       if (res.operation) onChanged(res.operation)
+      setResumeOpen(false)
       notifyDone(t(paused ? 'toast.opPaused' : 'toast.opResumed'))
-    } catch (err) {
-      setError(describeError(err))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function retry() {
-    if (!op.ref) return
-    setBusy(true)
-    setError(null)
-    try {
-      const res = await operationClient.retryOperation({ operation: op.ref })
-      if (res.operation) onChanged(res.operation)
-      notifyDone(t('toast.opRetried'))
     } catch (err) {
       setError(describeError(err))
     } finally {
@@ -82,14 +69,25 @@ export function OperationControls({
   return (
     <div class="flex flex-col gap-2">
       <div class="flex gap-2">
-        {action && (
+        {action && state === 'failed' && (
+          <ConfirmDialog
+            open={resumeOpen}
+            onOpenChange={setResumeOpen}
+            trigger={
+              <Button size="sm" variant="outline" disabled={busy}>
+                {t('ops.resume')}
+              </Button>
+            }
+            title={t('ops.resumeTitle', { name: op.ref?.name ?? '' })}
+            description={t('ops.resumeFailedDescription')}
+            confirm={{ label: busy ? t('ops.pausing') : t('ops.resume'), disabled: busy, onClick: () => setPaused(false), destructive: false }}
+          >
+            {error && <ErrorAlert {...error} />}
+          </ConfirmDialog>
+        )}
+        {action && state !== 'failed' && (
           <Button size="sm" variant="outline" disabled={busy} onClick={() => setPaused(action === 'pause')}>
             {busy ? t('ops.pausing') : t(action === 'pause' ? 'ops.pause' : 'ops.resume')}
-          </Button>
-        )}
-        {canRetry && (
-          <Button size="sm" variant="outline" disabled={busy} title={t('ops.retryHint')} onClick={retry}>
-            {busy ? t('ops.pausing') : t('ops.retry')}
           </Button>
         )}
         {showDelete && (

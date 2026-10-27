@@ -455,6 +455,24 @@ func (s *Server) planOperation(
 	return p, nil
 }
 
+// configEffect is REBOOT when any selected machine needs a reboot and RESTART_COMPONENTS (the API
+// server restart, no reboot) when none does (ADR 0080 amendment).
+func configEffect(machines []*ichorv1alpha1.TalosMachine) pb.OperationEffect {
+	for _, m := range machines {
+		if len(m.Status.RebootPaths) > 0 {
+			return pb.OperationEffect_OPERATION_EFFECT_REBOOT
+		}
+	}
+
+	return pb.OperationEffect_OPERATION_EFFECT_RESTART_COMPONENTS
+}
+
+// apiGoesDown reports whether the plan's own step takes a lone control plane's API server away:
+// a reboot, or a config change (which reboots or restarts it).
+func apiGoesDown(p *opPlan) bool {
+	return p.resp.Effect == pb.OperationEffect_OPERATION_EFFECT_REBOOT || p.kind == ichorv1alpha1.TalosOperationKindConfig
+}
+
 func (s *Server) planMachines(ctx context.Context, p *opPlan, cluster *ichorv1alpha1.TalosCluster, maxUnavailable int32) error {
 	if p.kind == ichorv1alpha1.TalosOperationKindIchor {
 		return nil
@@ -517,23 +535,13 @@ func (s *Server) planMachines(ctx context.Context, p *opPlan, cluster *ichorv1al
 	// A config rollout whose machines all need only the API server restart (no reboot) says so
 	// instead of "reboot": restarts the API server on each control plane, one at a time.
 	if p.kind == ichorv1alpha1.TalosOperationKindConfig {
-		p.resp.Effect = pb.OperationEffect_OPERATION_EFFECT_RESTART_COMPONENTS
-
-		for _, m := range slices.Concat(cps, workers) {
-			if len(m.Status.RebootPaths) > 0 {
-				p.resp.Effect = pb.OperationEffect_OPERATION_EFFECT_REBOOT
-
-				break
-			}
-		}
+		p.resp.Effect = configEffect(slices.Concat(cps, workers))
 	}
 
 	// With one approved control plane, rebooting it (or, for a config change, restarting its API
 	// server) takes the Kubernetes API down for the length of it (the cluster has no other API
 	// server to answer).
-	p.resp.KubernetesApiUnavailable = (p.resp.Effect == pb.OperationEffect_OPERATION_EFFECT_REBOOT ||
-		p.kind == ichorv1alpha1.TalosOperationKindConfig) &&
-		approvedControlPlanes == 1 && len(cps) == 1
+	p.resp.KubernetesApiUnavailable = apiGoesDown(p) && approvedControlPlanes == 1 && len(cps) == 1
 
 	// Through a single node's address, every kubelet and controller talks to one API server; while
 	// that node's API server restarts the whole cluster has none (ADR 0087).

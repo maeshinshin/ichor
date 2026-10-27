@@ -62,8 +62,8 @@ func demoNames() (cp, worker string, err error) {
 func demoVMManifest(name string) string {
 	m := fmt.Sprintf(haVMManifestTmpl, name, talosFactorySchematic, talosVersion)
 	m = strings.ReplaceAll(m, "kubevirt-ha", "kubevirt-ui-demo")
-	// The control plane also runs ichor and ichor-ui, so it gets more memory than a bare node.
-	return strings.ReplaceAll(m, "guest: 2560Mi", "guest: 4Gi")
+
+	return m
 }
 
 func upDemo() error {

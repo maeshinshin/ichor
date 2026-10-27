@@ -218,7 +218,7 @@ export function NodeDetail({ namespace, name }: { namespace: string; name: strin
         <TalosDetails namespace={namespace} name={name} />
         <TalosRuntime namespace={namespace} name={name} />
         <EffectiveConfigSection namespace={namespace} name={name} />
-        <div id="logs" class="scroll-mt-24">
+        <div id="logs" class="scroll-mt-section">
           <NodeLogs namespace={namespace} name={name} />
         </div>
       </SectionLayout>

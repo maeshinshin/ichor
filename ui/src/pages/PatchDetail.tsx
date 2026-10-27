@@ -299,7 +299,7 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
           { id: 'impact', label: t('patch.impact') },
         ]}
       >
-      <Card id="basics" className="scroll-mt-24">
+      <Card id="basics" className="scroll-mt-section">
         <CardHeader>
           <CardTitle>{t('patch.basics')}</CardTitle>
         </CardHeader>
@@ -434,7 +434,7 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
         </CardContent>
       </Card>
 
-      <Card id="documents" className="scroll-mt-24">
+      <Card id="documents" className="scroll-mt-section">
         <CardHeader className="flex items-center justify-between">
           <div class="space-y-1">
             <CardTitle>{t('patch.documents')}</CardTitle>
@@ -458,7 +458,7 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
         </CardContent>
       </Card>
 
-      <Card id="impact" className="scroll-mt-24">
+      <Card id="impact" className="scroll-mt-section">
         <CardHeader className="flex items-center justify-between">
           <CardTitle>{t('patch.impact')}</CardTitle>
           <Button size="sm" variant="outline" disabled={previewing} onClick={runPreview}>

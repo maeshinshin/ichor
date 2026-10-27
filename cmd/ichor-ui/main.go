@@ -104,6 +104,7 @@ func main() {
 	flag.StringVar(&users.externalURL, "external-url", os.Getenv("ICHOR_USERS_EXTERNAL_URL"), "https URL of ichor-ui as browsers and the CLI reach it; the issuer of Ichor's tokens")
 	flag.StringVar(&users.internalAddr, "internal-addr", ":8444", "HTTPS address of the listener the kube-apiserver reads discovery and JWKS from")
 	flag.StringVar(&users.internalTLSDir, "internal-tls-dir", "/etc/ichor/oidc-tls", "directory with tls.crt and tls.key of the internal listener")
+	flag.StringVar(&users.internalJWKSURI, "internal-jwks-uri", os.Getenv("ICHOR_USERS_INTERNAL_JWKS_URI"), "jwks_uri of the internal discovery document (default: the Service ClusterIP from the environment)")
 	flag.StringVar(&users.signingKeysDir, "signing-keys-dir", "/etc/ichor/oidc-signing", "directory with keys.json, the signing keys the controller keeps")
 	flag.DurationVar(&users.tokenTTL, "token-ttl", 5*time.Minute, "lifetime of an ID token (1m to 15m)")
 	flag.DurationVar(&users.refreshTTL, "refresh-lifetime", 12*time.Hour, "absolute lifetime of a refresh token (1h to 30d)")
@@ -180,14 +181,19 @@ func main() {
 	)
 
 	if users.enabled {
-		issuer, err = newIssuer(users)
+		cache := &uiapi.UserCache{Reader: c, Namespace: server.ControllerNamespace}
+		server.Users = uiapi.NewUserSettings(cache, users.externalURL)
+
+		var verifier localVerifier
+
+		issuer, verifier, err = newIssuer(context.Background(), users, &uiapi.IssuerBackend{
+			Users: cache, Reader: c, Namespace: server.ControllerNamespace, Settings: server.Users,
+		})
 		if err != nil {
 			log.Fatalf("ichor-ui: %v", err)
 		}
 
-		cache := &uiapi.UserCache{Reader: c, Namespace: server.ControllerNamespace}
-		authn = authn.WithLocal(users.externalURL, localVerifier{issuer}, cache)
-		server.Users = uiapi.NewUserSettings(cache, users.externalURL)
+		authn = authn.WithLocal(users.externalURL, verifier, cache)
 		internalSrv = internalServer(users, issuer)
 
 		log.Printf("ichor-ui: Ichor users enabled (issuer %s)", users.externalURL)

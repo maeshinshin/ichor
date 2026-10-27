@@ -19,7 +19,6 @@ package uiapi
 import (
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"slices"
 	"strings"
@@ -258,8 +257,8 @@ func readStored(t *testing.T, s *Server) (ichorauth.Credential, string) {
 		t.Fatal(err)
 	}
 
-	var c ichorauth.Credential
-	if err := json.Unmarshal(sec.Data[userAlice], &c); err != nil {
+	c, err := ichorauth.ParseCredential(sec.Data[userAlice])
+	if err != nil {
 		t.Fatal(err)
 	}
 
@@ -298,7 +297,7 @@ func TestSetPasswordNeedsTheVerbAndNeverStoresCleartext(t *testing.T) {
 	}
 
 	cred, raw = readStored(t, s)
-	if strings.Contains(raw, gen.Msg.GetGeneratedPassword()) || !ichorauth.VerifyPassword(gen.Msg.GetGeneratedPassword(), cred.Hash) {
+	if strings.Contains(raw, gen.Msg.GetGeneratedPassword()) || !pwMatches(gen.Msg.GetGeneratedPassword(), cred.Hash) {
 		t.Error("generated password not stored as a matching hash")
 	}
 
@@ -332,7 +331,7 @@ func TestChangeOwnPassword(t *testing.T) {
 	}
 
 	cred, _ := readStored(t, s)
-	if cred.MustChange || !ichorauth.VerifyPassword(strongPass2, cred.Hash) {
+	if cred.MustChange || !pwMatches(strongPass2, cred.Hash) {
 		t.Error("password not changed or still must-change")
 	}
 
@@ -367,7 +366,7 @@ func TestRevokeSessionsMovesNotBefore(t *testing.T) {
 	}
 
 	cred, _ := readStored(t, s)
-	if !cred.NotBefore.Equal(t0.Add(time.Hour)) || !ichorauth.VerifyPassword(strongPass, cred.Hash) {
+	if !cred.NotBefore.Equal(t0.Add(time.Hour)) || !pwMatches(strongPass, cred.Hash) {
 		t.Errorf("notBefore = %v, or the hash changed", cred.NotBefore)
 	}
 }
@@ -403,4 +402,10 @@ func TestWhoAmIReportsMustChange(t *testing.T) {
 	if err != nil || !resp.Msg.GetMustChangePassword() || resp.Msg.GetUsername() != "ichor:alice" {
 		t.Fatalf("whoami: %v %v", resp, err)
 	}
+}
+
+func pwMatches(password, hash string) bool {
+	ok, _, err := ichorauth.Verify(password, hash)
+
+	return err == nil && ok
 }

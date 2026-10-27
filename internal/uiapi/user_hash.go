@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"connectrpc.com/connect"
 	corev1 "k8s.io/api/core/v1"
@@ -63,16 +62,8 @@ func (u *UserSettings) acquire(ctx context.Context) (release func(), err error) 
 	}
 }
 
-func (s *Server) hashPassword(ctx context.Context, password string) (string, error) {
-	release, err := s.Users.acquire(ctx)
-	if err != nil {
-		return "", err
-	}
-	defer release()
-
-	return ichorauth.HashPassword(password)
-}
-
+// verifyPassword checks password against an entry's hash. A missing or
+// malformed hash burns the same work against a dummy and answers false.
 func (s *Server) verifyPassword(ctx context.Context, password, hash string) (bool, error) {
 	release, err := s.Users.acquire(ctx)
 	if err != nil {
@@ -80,7 +71,16 @@ func (s *Server) verifyPassword(ctx context.Context, password, hash string) (boo
 	}
 	defer release()
 
-	return ichorauth.VerifyPassword(password, hash), nil
+	if hash == "" {
+		return ichorauth.VerifyDummy(password), nil
+	}
+
+	match, _, err := ichorauth.Verify(password, hash)
+	if err != nil {
+		return ichorauth.VerifyDummy(password), nil
+	}
+
+	return match, nil
 }
 
 // readCredential returns the stored entry of user name; found is false when
@@ -102,7 +102,7 @@ func (s *Server) readCredential(ctx context.Context, name string) (cred ichoraut
 		return cred, false, nil
 	}
 
-	if err := json.Unmarshal(raw, &cred); err != nil {
+	if cred, err = ichorauth.ParseCredential(raw); err != nil {
 		return cred, false, fmt.Errorf("credentials entry for %q is unreadable", name)
 	}
 
@@ -113,9 +113,7 @@ func (s *Server) readCredential(ctx context.Context, name string) (cred ichoraut
 // replicas never overwrite each other's users. The Secret must exist (the
 // chart creates it; the ServiceAccount cannot).
 func (s *Server) writeCredential(ctx context.Context, name string, cred ichorauth.Credential) error {
-	cred.V = 1
-
-	raw, err := json.Marshal(cred)
+	raw, err := cred.Marshal()
 	if err != nil {
 		return err
 	}
@@ -134,12 +132,18 @@ func (s *Server) writeCredential(ctx context.Context, name string, cred ichoraut
 // setCredential hashes password and stores it for name with the given
 // mustChange. notBefore is now: every refresh token issued before this is dead.
 func (s *Server) setCredential(ctx context.Context, name, password string, mustChange bool) error {
-	hash, err := s.hashPassword(ctx, password)
+	release, err := s.Users.acquire(ctx)
+	if err != nil {
+		return err
+	}
+	defer release()
+
+	cred, err := ichorauth.NewCredential(password, mustChange, s.now())
 	if err != nil {
 		return err
 	}
 
-	return s.writeCredential(ctx, name, ichorauth.Credential{Hash: hash, NotBefore: s.now().UTC().Truncate(time.Second), MustChange: mustChange})
+	return s.writeCredential(ctx, name, cred)
 }
 
 func generatePassword() (string, error) { return ichorauth.GeneratePassword() }

@@ -84,6 +84,12 @@ spec:
         - --metrics-bind-address=0
         {{- end }}
         - --health-probe-bind-address=:8081
+        {{- if and .Values.ichorUI.enabled .Values.ichorUI.users.enabled }}
+        # Keeps the signing keys, the internal TLS and the trust ConfigMap of ichor-ui's own issuer
+        # (docs/adr/0094).
+        - --user-issuer
+        - --oidc-refresh-lifetime={{ .Values.ichorUI.users.refreshLifetime }}
+        {{- end }}
         {{- range .Values.manager.args }}
         - {{ . }}
         {{- end }}

@@ -43,6 +43,7 @@ import (
 	"time"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
@@ -74,6 +75,10 @@ const (
 	etcdRestoreWaitInterval = 15 * time.Second
 
 	reasonEtcdRestoreDone = "EtcdRestored"
+
+	// staleWipeConditionPrefix names the status condition (one per control plane) that holds when the
+	// reset of a node with stale etcd data was last sent.
+	staleWipeConditionPrefix = "StaleWipeSent-"
 )
 
 // rateGate lets a key through at most once per interval. The zero value is ready to use.
@@ -873,8 +878,26 @@ func (run *restoreRun) wipeIfStale(ctx context.Context, cp *ichorv1alpha1.TalosM
 		return
 	}
 
-	// ponytail: the wipe is rate limited in memory, so a restarted controller may ask a node that is
-	// already wiping once more; a second reset of the same data is harmless.
+	// The time of the last reset is kept in the operation's status (a condition per machine), so that a
+	// restarted controller does not ask a node that is already wiping once more.
+	condType := staleWipeConditionPrefix + cp.Name
+	if c := apimeta.FindStatusCondition(run.op.Status.Conditions, condType); c != nil && time.Since(c.LastTransitionTime.Time) < etcdRestoreResendAfter {
+		return
+	}
+
+	apimeta.RemoveStatusCondition(&run.op.Status.Conditions, condType)
+	apimeta.SetStatusCondition(&run.op.Status.Conditions, metav1.Condition{
+		Type: condType, Status: metav1.ConditionTrue, Reason: "StaleEtcdDataWiped",
+		Message: "etcd data that is not a member of the restored cluster was reset", ObservedGeneration: run.op.Generation,
+	})
+
+	// Recorded before the reset is sent; when it cannot be recorded, nothing is sent this time.
+	if err := r.Status().Update(ctx, run.op); err != nil {
+		logf.FromContext(ctx).Info("recording the wipe of a control plane failed", "machine", cp.Name, "error", err.Error())
+
+		return
+	}
+
 	if err := c.ResetEtcdData(dialCtx); err != nil {
 		logf.FromContext(ctx).Info("wiping a control plane that holds stale etcd data failed", "machine", cp.Name, "error", run.clean(err))
 	}
@@ -1297,9 +1320,9 @@ func (run *restoreRun) unwipedNodes(ctx context.Context) ([]unwipedNode, error) 
 // returns why it is not done, or "" when it is. After agentsBound it returns "" anyway and keeps what did
 // not converge in the marker (AgentWarning) rather than claiming success.
 //
-// ponytail: only kube-proxy. The CNI's pods (flannel, cilium) are not restarted: they were not seen
-// failing, and restarting a Cilium agent drops its datapath state on every node; revisit if a CNI is
-// seen to keep stale state after a restore.
+// The CNI's pods (Cilium, flannel) are replaced the same way as kube-proxy's: Ichor does not operate
+// the CNI, but a one-time pod restart after a restore, so that it drops what it cached from the old
+// cluster, is in scope (ADR 0089). It briefly drops that node's datapath state.
 func (run *restoreRun) refreshAgents(ctx context.Context, m *etcdbackup.RestoreMarker) (string, error) {
 	if run.r.KubeClient == nil || m.AgentWarning != "" {
 		return "", nil
@@ -1378,19 +1401,22 @@ func (run *restoreRun) restartKubelet(ctx context.Context, w *ichorv1alpha1.Talo
 // a node. A stale kube-proxy pod (one created before the restart) is deleted on the way.
 func (run *restoreRun) agentsWaiting(ctx context.Context, since time.Time, workers []unwipedNode) []string {
 	kc := run.r.KubeClient
-	log := logf.FromContext(ctx)
 
-	var selector labels.Selector
+	// kube-proxy and the CNI (found the way the kube-proxy switch finds Cilium: by its DaemonSet name).
+	// A DaemonSet that is not there is skipped: kube-proxy is replaced by the CNI, or another CNI runs.
+	var agents []restoreAgent
 
-	ds, err := kc.AppsV1().DaemonSets(kubeSystemNamespace).Get(ctx, kubeProxyName, metav1.GetOptions{})
+	for _, name := range restoreAgentNames {
+		ds, err := kc.AppsV1().DaemonSets(kubeSystemNamespace).Get(ctx, name, metav1.GetOptions{})
 
-	switch {
-	case err == nil && ds.Spec.Selector != nil:
-		if s, serr := metav1.LabelSelectorAsSelector(ds.Spec.Selector); serr == nil && !s.Empty() {
-			selector = s
+		switch {
+		case err == nil && ds.Spec.Selector != nil:
+			if s, serr := metav1.LabelSelectorAsSelector(ds.Spec.Selector); serr == nil && !s.Empty() {
+				agents = append(agents, restoreAgent{name: name, ds: ds, selector: s})
+			}
+		case err != nil && !apierrors.IsNotFound(err):
+			return []string{fmt.Sprintf("the %s DaemonSet cannot be read (%v)", name, err)}
 		}
-	case err != nil && !apierrors.IsNotFound(err): // not found: kube-proxy is replaced by the CNI
-		return []string{fmt.Sprintf("the kube-proxy DaemonSet cannot be read (%v)", err)}
 	}
 
 	var waiting []string
@@ -1408,42 +1434,59 @@ func (run *restoreRun) agentsWaiting(ctx context.Context, since time.Time, worke
 			continue
 		}
 
-		if selector == nil {
-			continue
-		}
-
-		pods, err := kc.CoreV1().Pods(kubeSystemNamespace).List(ctx, metav1.ListOptions{LabelSelector: selector.String()})
-		if err != nil {
-			waiting = append(waiting, fmt.Sprintf("%s (listing its kube-proxy pod failed: %v)", w.node, err))
-
-			continue
-		}
-
-		fresh := false
-
-		for i := range pods.Items {
-			p := &pods.Items[i]
-			if p.Spec.NodeName != w.node || !metav1.IsControlledBy(p, ds) && len(p.OwnerReferences) > 0 {
-				continue
-			}
-
-			switch {
-			case p.DeletionTimestamp != nil:
-			case p.CreationTimestamp.Time.Before(since):
-				if err := kc.CoreV1().Pods(kubeSystemNamespace).Delete(ctx, p.Name, metav1.DeleteOptions{}); client.IgnoreNotFound(err) != nil {
-					log.Info("deleting a kube-proxy pod failed", "pod", p.Name, "node", w.node, "error", err.Error())
-				}
-			case podReady(p):
-				fresh = true
-			}
-		}
-
-		if !fresh {
-			waiting = append(waiting, w.node+" (no Ready kube-proxy pod yet)")
+		for _, a := range agents {
+			waiting = append(waiting, run.agentPodWaiting(ctx, a, w.node, since)...)
 		}
 	}
 
 	return waiting
+}
+
+// restoreAgentNames are the DaemonSets, in kube-system, whose pods on a node that was not wiped are
+// replaced after a restore: kube-proxy and the CNI (Cilium, or Talos's default flannel).
+var restoreAgentNames = []string{kubeProxyName, ciliumName, "kube-flannel"}
+
+// restoreAgent is one such DaemonSet with the selector of its pods.
+type restoreAgent struct {
+	name     string
+	ds       *appsv1.DaemonSet
+	selector labels.Selector
+}
+
+// agentPodWaiting deletes the pod of a on node when it predates since, and says (as a one-entry list)
+// when no Ready pod of it exists there yet.
+func (run *restoreRun) agentPodWaiting(ctx context.Context, a restoreAgent, node string, since time.Time) []string {
+	kc := run.r.KubeClient
+
+	pods, err := kc.CoreV1().Pods(kubeSystemNamespace).List(ctx, metav1.ListOptions{LabelSelector: a.selector.String()})
+	if err != nil {
+		return []string{fmt.Sprintf("%s (listing its %s pod failed: %v)", node, a.name, err)}
+	}
+
+	fresh := false
+
+	for i := range pods.Items {
+		p := &pods.Items[i]
+		if p.Spec.NodeName != node || !metav1.IsControlledBy(p, a.ds) && len(p.OwnerReferences) > 0 {
+			continue
+		}
+
+		switch {
+		case p.DeletionTimestamp != nil:
+		case p.CreationTimestamp.Time.Before(since):
+			if err := kc.CoreV1().Pods(kubeSystemNamespace).Delete(ctx, p.Name, metav1.DeleteOptions{}); client.IgnoreNotFound(err) != nil {
+				logf.FromContext(ctx).Info("deleting a pod failed", "agent", a.name, "pod", p.Name, "node", node, "error", err.Error())
+			}
+		case podReady(p):
+			fresh = true
+		}
+	}
+
+	if !fresh {
+		return []string{fmt.Sprintf("%s (no Ready %s pod yet)", node, a.name)}
+	}
+
+	return nil
 }
 
 // nodeRefreshed reports whether the Node is Ready with a heartbeat from after since: its Ready condition

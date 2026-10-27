@@ -18,25 +18,19 @@ package cli
 
 import (
 	"context"
-	stdx509 "crypto/x509"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
-	"time"
 
-	"github.com/siderolabs/crypto/x509"
 	clientconfig "github.com/siderolabs/talos/pkg/machinery/client/config"
-	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
-	"github.com/siderolabs/talos/pkg/machinery/role"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
-	"github.com/maeshinshin/ichor/internal/secretsbundle"
+	"github.com/maeshinshin/ichor/internal/credentials"
 )
 
 // Credentials for the operator (ADR 0091). A CA rotation replaces the CAs the operator's kubeconfig
@@ -51,140 +45,7 @@ const (
 	// credentialsSuffix is appended to the current kubeconfig's and talosconfig's path to name the
 	// files written next to them: the current ones are never overwritten.
 	credentialsSuffix = ".ichor-new"
-
-	// kubeAdminOrganization is the group that makes a Kubernetes client certificate cluster-admin;
-	// kubeAdminCommonName is the name Talos gives its own admin kubeconfig.
-	kubeAdminOrganization = "system:masters"
-	kubeAdminCommonName   = "admin"
-
-	// credentialLifetime is how long the client certificates are valid; the CAs outlive them.
-	credentialLifetime = 365 * 24 * time.Hour
-
-	// credentialSkew backdates the certificates' start, like the ones Talos issues.
-	credentialSkew = 10 * time.Second
 )
-
-// credentialSources is what the credentials are made from: for each API the CAs to trust (all of
-// them) and the one CA key that signs the client certificate.
-type credentialSources struct {
-	// Dual is true when a rotation is in progress, so the trust lists hold the old and the new CA.
-	Dual bool
-
-	KubernetesTrust  []byte
-	KubernetesSigner *x509.PEMEncodedCertificateAndKey
-
-	TalosTrust  []byte
-	TalosSigner *x509.PEMEncodedCertificateAndKey
-
-	// bundle is the secrets bundle the Talos client certificate is generated from (its OS CA is the
-	// signer).
-	bundle *secrets.Bundle
-}
-
-// newCredentialSources takes the CAs from bundle and, when a rotation is under way, from rot as well:
-// the new CAs sign, the old and the new are trusted. rot is nil outside a rotation.
-func newCredentialSources(bundle *secrets.Bundle, rot *secretsbundle.Rotation) (*credentialSources, error) {
-	if bundle == nil || bundle.Certs == nil || bundle.Certs.K8s == nil || bundle.Certs.OS == nil {
-		return nil, errors.New("the secrets bundle has no Talos or Kubernetes CA")
-	}
-
-	s := &credentialSources{
-		KubernetesSigner: bundle.Certs.K8s, KubernetesTrust: pemWithNewline(bundle.Certs.K8s.Crt),
-		TalosSigner: bundle.Certs.OS, TalosTrust: pemWithNewline(bundle.Certs.OS.Crt),
-	}
-
-	if rot != nil {
-		if err := rot.Validate(); err != nil {
-			return nil, err
-		}
-
-		s.Dual = true
-		s.KubernetesSigner = rot.Kubernetes
-		s.KubernetesTrust = slices.Concat(pemWithNewline(rot.Kubernetes.Crt), pemWithNewline(bundle.Certs.K8s.Crt))
-		s.TalosSigner = rot.Talos
-		s.TalosTrust = slices.Concat(pemWithNewline(rot.Talos.Crt), pemWithNewline(bundle.Certs.OS.Crt))
-	}
-
-	derived := *bundle
-	certs := *bundle.Certs
-	certs.OS = s.TalosSigner
-	derived.Certs = &certs
-	s.bundle = &derived
-
-	return s, nil
-}
-
-func pemWithNewline(b []byte) []byte {
-	if len(b) > 0 && b[len(b)-1] != '\n' {
-		return append(slices.Clone(b), '\n')
-	}
-
-	return b
-}
-
-// kubeconfig is current with its cluster's CA data replaced by the trust list and its user replaced by
-// a client certificate signed by the signer. The server, names and namespace stay as they were; only
-// the current context is kept.
-func (s *credentialSources) kubeconfig(current clientcmdapi.Config) ([]byte, error) {
-	ctxName := current.CurrentContext
-
-	kctx := current.Contexts[ctxName]
-	if kctx == nil {
-		return nil, errors.New("the current kubeconfig has no current context to copy the server from")
-	}
-
-	cluster := current.Clusters[kctx.Cluster]
-	if cluster == nil || cluster.Server == "" {
-		return nil, fmt.Errorf("the current kubeconfig's context %q names no cluster with a server", ctxName)
-	}
-
-	ca, err := x509.NewCertificateAuthorityFromCertificateAndKey(s.KubernetesSigner)
-	if err != nil {
-		return nil, fmt.Errorf("reading the Kubernetes CA: %w", err)
-	}
-
-	pair, err := x509.NewKeyPair(ca,
-		x509.CommonName(kubeAdminCommonName), x509.Organization(kubeAdminOrganization),
-		x509.NotBefore(time.Now().Add(-credentialSkew)), x509.NotAfter(time.Now().Add(credentialLifetime)),
-		x509.KeyUsage(stdx509.KeyUsageDigitalSignature|stdx509.KeyUsageKeyEncipherment),
-		x509.ExtKeyUsage([]stdx509.ExtKeyUsage{stdx509.ExtKeyUsageClientAuth}),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("generating a Kubernetes client certificate: %w", err)
-	}
-
-	cert := x509.NewCertificateAndKeyFromKeyPair(pair)
-
-	userName := kctx.AuthInfo
-	if userName == "" {
-		userName = kubeAdminCommonName
-	}
-
-	out := clientcmdapi.Config{
-		APIVersion: "v1", Kind: "Config", CurrentContext: ctxName,
-		Clusters: map[string]*clientcmdapi.Cluster{kctx.Cluster: {
-			Server: cluster.Server, TLSServerName: cluster.TLSServerName, ProxyURL: cluster.ProxyURL,
-			CertificateAuthorityData: s.KubernetesTrust,
-		}},
-		AuthInfos: map[string]*clientcmdapi.AuthInfo{userName: {ClientCertificateData: cert.Crt, ClientKeyData: cert.Key}},
-		Contexts: map[string]*clientcmdapi.Context{ctxName: {
-			Cluster: kctx.Cluster, AuthInfo: userName, Namespace: kctx.Namespace,
-		}},
-	}
-
-	return clientcmd.Write(out)
-}
-
-// talosconfig is a one-context talosconfig named name that trusts the Talos API CAs and presents an
-// os:admin client certificate signed by the signer.
-func (s *credentialSources) talosconfig(name string, endpoints []string) ([]byte, error) {
-	cert, err := s.bundle.GenerateTalosAPIClientCertificate(role.MakeSet(role.Admin))
-	if err != nil {
-		return nil, fmt.Errorf("generating a Talos client certificate: %w", err)
-	}
-
-	return clientconfig.NewConfig(name, endpoints, s.TalosTrust, cert).Bytes()
-}
 
 // credentialRequest is one run of writeCredentials.
 type credentialRequest struct {
@@ -252,12 +113,12 @@ func writeCredentials(ctx context.Context, k8s client.Client, req credentialRequ
 		return nil, errors.New("refusing to overwrite the current kubeconfig or talosconfig; choose another output path")
 	}
 
-	kube, err := src.kubeconfig(*current)
+	kube, err := src.Kubeconfig(*current)
 	if err != nil {
 		return nil, err
 	}
 
-	talos, err := src.talosconfig(req.Cluster, endpoints)
+	talos, err := src.Talosconfig(req.Cluster, endpoints)
 	if err != nil {
 		return nil, err
 	}
@@ -276,14 +137,14 @@ func writeCredentials(ctx context.Context, k8s client.Client, req credentialRequ
 }
 
 // loadCredentialSources returns the CAs and, from the cluster, the control planes' Talos endpoints.
-func loadCredentialSources(ctx context.Context, k8s client.Client, req credentialRequest) (*credentialSources, []string, error) {
+func loadCredentialSources(ctx context.Context, k8s client.Client, req credentialRequest) (*credentials.Sources, []string, error) {
 	if req.BundleFile != "" {
 		bundle, err := loadBundleFile(req.BundleFile)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		src, err := newCredentialSources(bundle, nil)
+		src, err := credentials.NewSources(bundle, nil)
 
 		return src, nil, err
 	}
@@ -297,38 +158,7 @@ func loadCredentialSources(ctx context.Context, k8s client.Client, req credentia
 		return nil, nil, fmt.Errorf("getting TalosCluster %s/%s: %w", req.Namespace, req.Cluster, err)
 	}
 
-	bundle, err := secretsbundle.Load(ctx, k8s, req.IchorNamespace, cluster.Spec.SecretsRef.Name)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	rot, err := secretsbundle.LoadRotation(ctx, k8s, req.IchorNamespace, cluster.Spec.SecretsRef.Name)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	src, err := newCredentialSources(bundle, rot)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	var machines ichorv1alpha1.TalosMachineList
-	if err := k8s.List(ctx, &machines, client.InNamespace(req.Namespace)); err != nil {
-		return nil, nil, fmt.Errorf("listing the cluster's machines: %w", err)
-	}
-
-	var endpoints []string
-
-	for i := range machines.Items {
-		m := &machines.Items[i]
-		if m.Spec.ClusterRef.Name == req.Cluster && m.Spec.Role == roleControlPlane && m.DeletionTimestamp.IsZero() && m.DialEndpoint() != "" {
-			endpoints = append(endpoints, m.DialEndpoint())
-		}
-	}
-
-	slices.Sort(endpoints)
-
-	return src, endpoints, nil
+	return credentials.Load(ctx, k8s, req.IchorNamespace, &cluster)
 }
 
 func firstNonEmpty(a, b string) string {

@@ -57,6 +57,15 @@ func Passphrase(bundle *secrets.Bundle) (string, error) {
 	return hex.EncodeToString(key), nil
 }
 
+// Work factors (log2 of scrypt's N, r=8). The passphrase is a 256-bit HKDF output, not something a person
+// chose, so scrypt's job of slowing down guessing is moot; age's default (18) costs ~270 MiB of heap per
+// derivation, which OOM-killed the controller. New backups use encryptWorkFactor (1 MiB). Decrypt still
+// accepts what older backups were written with, up to maxWorkFactor: those cost the 270 MiB once per decrypt.
+const (
+	encryptWorkFactor = 10
+	maxWorkFactor     = 18
+)
+
 // Encrypt returns a writer that age-encrypts (scrypt recipient) into dst. The
 // caller must Close it to flush the final chunk.
 func Encrypt(dst io.Writer, passphrase string) (io.WriteCloser, error) {
@@ -64,6 +73,8 @@ func Encrypt(dst io.Writer, passphrase string) (io.WriteCloser, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	r.SetWorkFactor(encryptWorkFactor)
 
 	return age.Encrypt(dst, r)
 }
@@ -75,6 +86,8 @@ func Decrypt(src io.Reader, passphrase string) (io.Reader, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	i.SetMaxWorkFactor(maxWorkFactor)
 
 	return age.Decrypt(src, i)
 }

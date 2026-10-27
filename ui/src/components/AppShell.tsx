@@ -1,7 +1,7 @@
 import { AppToaster } from '@/components/AppToaster'
 import type { ComponentChildren } from 'preact'
 import { Fragment } from 'preact'
-import { BoxesIcon, GitBranchIcon, LayoutDashboardIcon, LayersIcon, ListChecksIcon, ServerIcon, TriangleAlertIcon, UsersIcon } from 'lucide-preact'
+import { ArchiveIcon, BoxesIcon, GitBranchIcon, LayoutDashboardIcon, LayersIcon, ListChecksIcon, ServerIcon, TriangleAlertIcon, UsersIcon } from 'lucide-preact'
 import { AccountMenu } from '@/components/AccountMenu'
 import type { WhoAmIResponse } from '@/gen/ichor/v1alpha1/user_pb'
 import { IchorVersion } from '@/components/IchorVersion'
@@ -37,18 +37,37 @@ import { breadcrumbsFor } from '@/lib/breadcrumbs'
 import type { Key } from '@/lib/i18n'
 import { usePageTitles } from '@/lib/usePageTitles'
 import { useT } from '@/lib/useT'
+import { clusterHealth, type Health } from '@/lib/clusterHealth'
+import { useCluster } from '@/lib/useCluster'
+import { Badge } from '@/components/ui/badge'
 import { Link } from '@/router'
 
-// Top-level nav. Cluster detail (/clusters/:namespace/:name), node detail
-// (/nodes/:namespace/:name) and patch edit (/patches/:namespace/:name) are
-// reached from a list row, not from here, same as there's no nav entry for
-// an individual GitHub PR page.
+const healthVariant: Record<Health, 'default' | 'destructive' | 'secondary'> = { ready: 'default', degraded: 'destructive', upgrading: 'secondary' }
+
+// The cluster this Ichor manages: name, Talos and Kubernetes versions, health.
+function ClusterBar() {
+  const t = useT()
+  const { cluster } = useCluster()
+  if (!cluster) return null
+  const health = clusterHealth(cluster)
+  return (
+    <div class="flex items-center gap-2 text-sm">
+      <span class="font-medium">{cluster.ref?.name}</span>
+      {cluster.talosVersion && <span class="hidden text-muted-foreground lg:inline">{t('shell.talos', { version: cluster.talosVersion })}</span>}
+      {cluster.kubernetesVersion && <span class="hidden text-muted-foreground lg:inline">{t('shell.kubernetes', { version: cluster.kubernetesVersion })}</span>}
+      <Badge variant={healthVariant[health]}>{t(`health.${health}`)}</Badge>
+    </div>
+  )
+}
+
+// Top-level nav. Node, operation and config detail pages are reached from a list row, not from
+// here. There is no Clusters entry: the Overview is the cluster.
 const navRoutes = [
   { path: '/', label: 'nav.overview', Icon: LayoutDashboardIcon, section: '' },
-  { path: '/clusters', label: 'nav.clusters', Icon: BoxesIcon, section: '/clusters/' },
-  { path: '/machines', label: 'nav.machines', Icon: ServerIcon, section: '/nodes/' },
-  { path: '/patches', label: 'nav.patches', Icon: LayersIcon, section: '/patches/' },
+  { path: '/nodes', label: 'nav.machines', Icon: ServerIcon, section: '/nodes/' },
   { path: '/operations', label: 'nav.operations', Icon: ListChecksIcon, section: '/operations/' },
+  { path: '/backups', label: 'nav.backups', Icon: ArchiveIcon, section: '' },
+  { path: '/config', label: 'nav.config', Icon: LayersIcon, section: '/config/' },
   { path: '/gitops', label: 'nav.gitops', Icon: GitBranchIcon, section: '/gitops/' },
 ] satisfies { path: string; label: Key; Icon: typeof BoxesIcon; section: string }[]
 
@@ -82,7 +101,8 @@ function NavItems({ path, usersEnabled }: { path: string; usersEnabled: boolean 
 function Crumbs({ path }: { path: string }) {
   const t = useT()
   const titles = usePageTitles()
-  const crumbs = breadcrumbsFor(path, titles)
+  const { cluster } = useCluster()
+  const crumbs = breadcrumbsFor(path, titles, cluster?.ref?.namespace ?? '')
   return (
     <Breadcrumb aria-label={t('nav.breadcrumb')} className="min-w-0">
       <BreadcrumbList className="flex-nowrap">
@@ -180,6 +200,7 @@ export function AppShell({
             <Separator orientation="vertical" className="mr-1 h-4" />
             <Crumbs path={path} />
             <div className="ml-auto flex shrink-0 items-center gap-2">
+              <ClusterBar />
               <IchorVersion />
               <ThemeSwitch />
               {me && <AccountMenu me={me} />}

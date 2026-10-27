@@ -96,6 +96,11 @@ func Run(ctx context.Context, c client.Client, opts Options) error {
 
 	logf(opts.Log, "snapshot %s saved: %d objects", opts.RunID, len(snap))
 
+	// Old snapshots are evidence, not state: failing to remove one must not fail an upgrade.
+	if err := pruneSnapshots(ctx, c, opts.Namespace, opts.RunID, SnapshotsKept); err != nil {
+		logf(opts.Log, "could not remove old snapshots: %v", err)
+	}
+
 	steps := []struct {
 		name string
 		objs []*unstructured.Unstructured

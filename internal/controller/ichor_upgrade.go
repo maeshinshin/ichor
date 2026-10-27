@@ -52,6 +52,14 @@ const (
 	// ichorInstallerOperationLabel carries a hash of the operation's namespace/name; labels
 	// cannot hold both, and the Job lives in the controller's namespace, not the operation's.
 	ichorInstallerOperationLabel = "ichor.maesh.dev/installer-operation"
+
+	// ichorInstallerJobTTL is how long a finished Job (and its pod log) stays: a day is long
+	// enough to read why an upgrade failed, short enough that Jobs do not pile up. The
+	// operation does not need the Job afterwards: once the upgrade succeeded the new
+	// controller's version equals spec.version, which the executor checks before it looks
+	// for a Job. (If an expired failed Job is resumed, the executor starts a fresh attempt;
+	// the installer reuses the run's snapshot, so that is a retry, not a second snapshot.)
+	ichorInstallerJobTTL = 24 * 60 * 60
 )
 
 // ichorInstallerJobName derives the Job's name from the operation, so the same operation
@@ -184,7 +192,8 @@ func newInstallerJob(ns, name string, op *ichorv1alpha1.TalosOperation, inst *ic
 		Spec: batchv1.JobSpec{
 			// One attempt: a retry after a rollback would redo a failed upgrade without anyone
 			// having looked at why. The operation pauses instead.
-			BackoffLimit: ptr.To[int32](0),
+			BackoffLimit:            ptr.To[int32](0),
+			TTLSecondsAfterFinished: ptr.To[int32](ichorInstallerJobTTL),
 			Template: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
 					RestartPolicy:      corev1.RestartPolicyNever,

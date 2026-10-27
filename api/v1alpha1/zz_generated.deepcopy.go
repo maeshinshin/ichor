@@ -1062,6 +1062,10 @@ func (in *TalosEtcdBackupStatus) DeepCopyInto(out *TalosEtcdBackupStatus) {
 		in, out := &in.LastSuccessTime, &out.LastSuccessTime
 		*out = (*in).DeepCopy()
 	}
+	if in.LastManualBackup != nil {
+		in, out := &in.LastManualBackup, &out.LastManualBackup
+		*out = (*in).DeepCopy()
+	}
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
 		*out = make([]v1.Condition, len(*in))

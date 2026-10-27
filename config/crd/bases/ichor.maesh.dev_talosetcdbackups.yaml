@@ -228,6 +228,12 @@ spec:
                   or not.
                 format: date-time
                 type: string
+              lastManualBackup:
+                description: |-
+                  lastManualBackup is the time of the newest backup-now request (BackupNowAnnotation) the
+                  controller acted on; a request is acted on once, whether the snapshot succeeded or not.
+                format: date-time
+                type: string
               lastSnapshot:
                 description: lastSnapshot is the newest snapshot this controller stored.
                 properties:

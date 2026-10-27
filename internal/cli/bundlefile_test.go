@@ -23,6 +23,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/siderolabs/talos/pkg/machinery/role"
 )
 
 // osWindows names the one platform these permission-bit assertions don't
@@ -222,6 +224,26 @@ func TestFsyncDir_ErrorsOnMissingDir(t *testing.T) {
 	err := fsyncDir(filepath.Join(t.TempDir(), "does-not-exist"))
 	if err == nil {
 		t.Fatal("expected an error for a missing directory, got nil")
+	}
+}
+
+// TestLoadBundleFileFillsClock: a bundle read from a file must be able to mint a client certificate, which
+// `ichor restore --recover-cluster` does to dial the node. Without a Clock it panicked in dialRecover.
+func TestLoadBundleFileFillsClock(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	path, err := saveBundleFile("my-cluster", newTestBundle(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := loadBundleFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := got.GenerateTalosAPIClientCertificate(role.MakeSet(role.Admin)); err != nil {
+		t.Fatalf("GenerateTalosAPIClientCertificate: %v", err)
 	}
 }
 

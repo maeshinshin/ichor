@@ -74,9 +74,20 @@ func Load(ctx context.Context, c client.Reader, namespace, name string) (*secret
 		return nil, fmt.Errorf("secrets bundle Secret %q has no %q key", key, SecretKey)
 	}
 
+	bundle, err := Decode(raw)
+	if err != nil {
+		return nil, fmt.Errorf("decoding secrets bundle from Secret %q: %w", key, err)
+	}
+
+	return bundle, nil
+}
+
+// Decode parses a secrets bundle in the "secrets.yaml" encoding and fills in what the encoding cannot carry.
+// Every loader (the Secret, a local file) goes through it so none can forget the Clock.
+func Decode(raw []byte) (*secrets.Bundle, error) {
 	var bundle secrets.Bundle
 	if err := yaml.Unmarshal(raw, &bundle); err != nil {
-		return nil, fmt.Errorf("decoding secrets bundle from Secret %q: %w", key, err)
+		return nil, err
 	}
 
 	// Bundle.Clock carries "yaml:\"-\"" (it is behavior, not data) and the machinery

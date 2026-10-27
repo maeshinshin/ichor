@@ -65,3 +65,5 @@ does have a cluster, must take the lock.
 - A restore round trip against a real Talos (e2e) is the design's regular proof and is not part of this unit.
 - Tests use an in-memory `etcdbackup.Store` plus a fake Talos client; the real S3 client is covered by
   `internal/etcdbackup`'s TLS fake S3, which lives in a `_test.go` file and is not importable.
+
+- Amendment 2026-10-27: `loadBundleFile` now decodes through `secretsbundle.Decode`, which fills `Bundle.Clock`; before, `--recover-cluster` panicked in `dialRecover` on a nil Clock.

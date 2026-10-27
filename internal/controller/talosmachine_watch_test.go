@@ -249,17 +249,11 @@ var _ = Describe("TalosMachine re-reconcile on a registry auth Secret", func() {
 		latest.Data["password"] = []byte("second")
 		Expect(k8sClient.Update(ctx, &latest)).To(Succeed())
 
-		// Registry auth goes into the CRI config and is not reboot-free (fieldmeta), so the
-		// re-render is reported as a reboot-requiring change and not applied. That the machine
-		// reaches that state at all, with nothing else touched, is the watch's doing.
-		Eventually(func() string {
-			if c := readyCondition(fetchMachineIn(ns, m.Name)); c != nil {
-				return c.Reason
-			}
-
-			return ""
-		}, settle, pollGap).Should(Equal(reasonRebootRequired))
-		Expect(applied()).To(Equal(before))
+		// Registry auth is picked up live too (Talos restarts the CRI service itself), so
+		// the re-render is applied. That it is applied at all, with nothing else touched, is the
+		// watch's doing.
+		Eventually(applied, settle, pollGap).ShouldNot(Equal(before))
+		Expect(readyCondition(fetchMachineIn(ns, m.Name)).Reason).NotTo(Equal(reasonRebootRequired))
 	})
 })
 

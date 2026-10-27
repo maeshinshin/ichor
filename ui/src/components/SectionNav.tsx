@@ -1,20 +1,37 @@
 import type { ComponentChildren } from 'preact'
 import { useEffect, useState } from 'preact/hooks'
-import { activeSection } from '@/lib/sectionNav'
+import { pickActive } from '@/lib/sectionNav'
 import { cn } from '@/lib/utils'
 import { useT } from '@/lib/useT'
 
 export type SectionLink = { id: string; label: string }
 
-// The sticky top bar is h-14; sections stop a little below it.
-const SCROLL_OFFSET = 88
+// A clicked id is held as active until its smooth scroll ends.
+let held: string | null = null
+let release = 0
+const listeners = new Set<() => void>()
+
+function releaseHold() {
+  held = null
+  window.removeEventListener('scrollend', releaseHold)
+  clearTimeout(release)
+  listeners.forEach((f) => f())
+}
 
 function jump(id: string) {
-  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  const el = document.getElementById(id)
+  if (!el) return
+  held = id
+  listeners.forEach((f) => f())
+  window.addEventListener('scrollend', releaseHold) // same fn: added once
+  clearTimeout(release)
+  release = window.setTimeout(releaseHold, 1200) // browsers without scrollend
+  el.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
 // useActiveSection follows the scroll position. It recomputes on scroll and
-// resize, once per frame, from the sections' measured tops.
+// resize, once per frame, from the sections' measured tops. The threshold is
+// the sections' own scroll-margin-top, the same value jump() stops at.
 function useActiveSection(ids: string[]): string {
   const [active, setActive] = useState(ids[0] ?? '')
   const key = ids.join('|')
@@ -22,21 +39,24 @@ function useActiveSection(ids: string[]): string {
     let frame = 0
     const update = () => {
       frame = 0
-      const tops = ids.flatMap((id) => {
+      const els = ids.flatMap((id) => {
         const el = document.getElementById(id)
-        return el ? [{ id, top: el.getBoundingClientRect().top }] : []
+        return el ? [{ id, el }] : []
       })
-      // At the very bottom the last section may never reach the offset.
+      const tops = els.map(({ id, el }) => ({ id, top: el.getBoundingClientRect().top }))
+      const offset = els.length > 0 ? parseFloat(getComputedStyle(els[0].el).scrollMarginTop) || 0 : 0
       const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2
-      setActive(atBottom && tops.length > 0 ? tops[tops.length - 1].id : activeSection(tops, SCROLL_OFFSET))
+      setActive(pickActive(tops, offset, atBottom, held))
     }
     const schedule = () => {
       if (!frame) frame = requestAnimationFrame(update)
     }
     update()
+    listeners.add(update)
     window.addEventListener('scroll', schedule, { passive: true })
     window.addEventListener('resize', schedule)
     return () => {
+      listeners.delete(update)
       window.removeEventListener('scroll', schedule)
       window.removeEventListener('resize', schedule)
       if (frame) cancelAnimationFrame(frame)
@@ -119,7 +139,7 @@ export function Section({
   children: ComponentChildren
 }) {
   return (
-    <section id={id} class="scroll-mt-24">
+    <section id={id} class="scroll-mt-section">
       <div class="mb-3 flex flex-wrap items-center justify-between gap-2 border-b pb-2">
         <h2 class="flex items-center gap-2 text-base font-semibold">{title}</h2>
         {actions}

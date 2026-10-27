@@ -109,7 +109,9 @@ package uiapi
 // permission itself is not here: it is the user's, checked with a
 // SelfSubjectAccessReview made as the user (every authenticated user may ask
 // that), so the ServiceAccount gains nothing for it.
-// +kubebuilder:rbac:groups="",resources=events,verbs=create
+// The operation page lists the Events about an operation; with OIDC on that list is made as the
+// signed-in user, so this rule only serves the no-OIDC mode.
+// +kubebuilder:rbac:groups="",resources=events,verbs=create;list
 
 // Diagnostic downloads add nothing to this role on purpose. The download verb on
 // talosmachines/support-bundle, talosmachines/etcd-snapshot and talosmachines/packet-capture is checked

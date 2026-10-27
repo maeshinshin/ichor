@@ -73,6 +73,9 @@ const (
 	// OperationServiceGetIchorInstallationProcedure is the fully-qualified name of the
 	// OperationService's GetIchorInstallation RPC.
 	OperationServiceGetIchorInstallationProcedure = "/ichor.v1alpha1.OperationService/GetIchorInstallation"
+	// OperationServiceListOperationEventsProcedure is the fully-qualified name of the
+	// OperationService's ListOperationEvents RPC.
+	OperationServiceListOperationEventsProcedure = "/ichor.v1alpha1.OperationService/ListOperationEvents"
 )
 
 // OperationServiceClient is a client for the ichor.v1alpha1.OperationService service.
@@ -107,6 +110,10 @@ type OperationServiceClient interface {
 	// It answers with an empty installed_version, not an error, when there is no
 	// IchorInstallation, so the UI can simply show nothing.
 	GetIchorInstallation(context.Context, *connect.Request[v1alpha1.GetIchorInstallationRequest]) (*connect.Response[v1alpha1.GetIchorInstallationResponse], error)
+	// --- operation detail page ---
+	// ListOperationEvents returns the Kubernetes Events about an operation or one of its machines,
+	// within the operation's lifetime, oldest first: the activity log on the operation's page.
+	ListOperationEvents(context.Context, *connect.Request[v1alpha1.ListOperationEventsRequest]) (*connect.Response[v1alpha1.ListOperationEventsResponse], error)
 }
 
 // NewOperationServiceClient constructs a client for the ichor.v1alpha1.OperationService service. By
@@ -186,6 +193,12 @@ func NewOperationServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(operationServiceMethods.ByName("GetIchorInstallation")),
 			connect.WithClientOptions(opts...),
 		),
+		listOperationEvents: connect.NewClient[v1alpha1.ListOperationEventsRequest, v1alpha1.ListOperationEventsResponse](
+			httpClient,
+			baseURL+OperationServiceListOperationEventsProcedure,
+			connect.WithSchema(operationServiceMethods.ByName("ListOperationEvents")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -202,6 +215,7 @@ type operationServiceClient struct {
 	listEtcdBackups                  *connect.Client[v1alpha1.ListEtcdBackupsRequest, v1alpha1.ListEtcdBackupsResponse]
 	requestEtcdBackup                *connect.Client[v1alpha1.RequestEtcdBackupRequest, v1alpha1.RequestEtcdBackupResponse]
 	getIchorInstallation             *connect.Client[v1alpha1.GetIchorInstallationRequest, v1alpha1.GetIchorInstallationResponse]
+	listOperationEvents              *connect.Client[v1alpha1.ListOperationEventsRequest, v1alpha1.ListOperationEventsResponse]
 }
 
 // ListOperations calls ichor.v1alpha1.OperationService.ListOperations.
@@ -261,6 +275,11 @@ func (c *operationServiceClient) GetIchorInstallation(ctx context.Context, req *
 	return c.getIchorInstallation.CallUnary(ctx, req)
 }
 
+// ListOperationEvents calls ichor.v1alpha1.OperationService.ListOperationEvents.
+func (c *operationServiceClient) ListOperationEvents(ctx context.Context, req *connect.Request[v1alpha1.ListOperationEventsRequest]) (*connect.Response[v1alpha1.ListOperationEventsResponse], error) {
+	return c.listOperationEvents.CallUnary(ctx, req)
+}
+
 // OperationServiceHandler is an implementation of the ichor.v1alpha1.OperationService service.
 type OperationServiceHandler interface {
 	ListOperations(context.Context, *connect.Request[v1alpha1.ListOperationsRequest]) (*connect.Response[v1alpha1.ListOperationsResponse], error)
@@ -293,6 +312,10 @@ type OperationServiceHandler interface {
 	// It answers with an empty installed_version, not an error, when there is no
 	// IchorInstallation, so the UI can simply show nothing.
 	GetIchorInstallation(context.Context, *connect.Request[v1alpha1.GetIchorInstallationRequest]) (*connect.Response[v1alpha1.GetIchorInstallationResponse], error)
+	// --- operation detail page ---
+	// ListOperationEvents returns the Kubernetes Events about an operation or one of its machines,
+	// within the operation's lifetime, oldest first: the activity log on the operation's page.
+	ListOperationEvents(context.Context, *connect.Request[v1alpha1.ListOperationEventsRequest]) (*connect.Response[v1alpha1.ListOperationEventsResponse], error)
 }
 
 // NewOperationServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -368,6 +391,12 @@ func NewOperationServiceHandler(svc OperationServiceHandler, opts ...connect.Han
 		connect.WithSchema(operationServiceMethods.ByName("GetIchorInstallation")),
 		connect.WithHandlerOptions(opts...),
 	)
+	operationServiceListOperationEventsHandler := connect.NewUnaryHandler(
+		OperationServiceListOperationEventsProcedure,
+		svc.ListOperationEvents,
+		connect.WithSchema(operationServiceMethods.ByName("ListOperationEvents")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/ichor.v1alpha1.OperationService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case OperationServiceListOperationsProcedure:
@@ -392,6 +421,8 @@ func NewOperationServiceHandler(svc OperationServiceHandler, opts ...connect.Han
 			operationServiceRequestEtcdBackupHandler.ServeHTTP(w, r)
 		case OperationServiceGetIchorInstallationProcedure:
 			operationServiceGetIchorInstallationHandler.ServeHTTP(w, r)
+		case OperationServiceListOperationEventsProcedure:
+			operationServiceListOperationEventsHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -443,4 +474,8 @@ func (UnimplementedOperationServiceHandler) RequestEtcdBackup(context.Context, *
 
 func (UnimplementedOperationServiceHandler) GetIchorInstallation(context.Context, *connect.Request[v1alpha1.GetIchorInstallationRequest]) (*connect.Response[v1alpha1.GetIchorInstallationResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.OperationService.GetIchorInstallation is not implemented"))
+}
+
+func (UnimplementedOperationServiceHandler) ListOperationEvents(context.Context, *connect.Request[v1alpha1.ListOperationEventsRequest]) (*connect.Response[v1alpha1.ListOperationEventsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.OperationService.ListOperationEvents is not implemented"))
 }

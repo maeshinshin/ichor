@@ -286,7 +286,8 @@ func (s *Server) ListOperationEvents(
 		e := &list.Items[i]
 		inv := e.InvolvedObject
 
-		if !((inv.Kind == "TalosOperation" && inv.Name == op.Name) || (inv.Kind == "TalosMachine" && machines[inv.Name])) {
+		ours := (inv.Kind == "TalosOperation" && inv.Name == op.Name) || (inv.Kind == "TalosMachine" && machines[inv.Name])
+		if !ours {
 			continue
 		}
 

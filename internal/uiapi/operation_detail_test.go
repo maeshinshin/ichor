@@ -51,7 +51,7 @@ func TestOperationSummaryPerKind(t *testing.T) {
 	}{
 		{"talos", ichorv1alpha1.TalosOperationSpec{Kind: ichorv1alpha1.TalosOperationKindTalos}, ichorv1alpha1.TalosOperationStatus{},
 			"Upgrade Talos to v1.14.4 (schematic abcdef012345…)"},
-		{"kubernetes", ichorv1alpha1.TalosOperationSpec{Kind: ichorv1alpha1.TalosOperationKindKubernetes}, ichorv1alpha1.TalosOperationStatus{},
+		{"k8s", ichorv1alpha1.TalosOperationSpec{Kind: ichorv1alpha1.TalosOperationKindKubernetes}, ichorv1alpha1.TalosOperationStatus{},
 			"Upgrade Kubernetes to v1.37.1"},
 		{"ichor", ichorv1alpha1.TalosOperationSpec{Kind: ichorv1alpha1.TalosOperationKindIchor}, ichorv1alpha1.TalosOperationStatus{},
 			"Upgrade Ichor v0.2.0 → v0.3.0"},
@@ -74,9 +74,7 @@ func TestOperationSummaryPerKind(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			op := &ichorv1alpha1.TalosOperation{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "op", Namespace: opNS, Annotations: map[string]string{ichorv1alpha1.OperationStartedByAnnotation: "alice"},
-				},
+				Name: "op", Namespace: opNS, Annotations: map[string]string{ichorv1alpha1.OperationStartedByAnnotation: "alice"},
 				Spec: tc.spec, Status: tc.st,
 			}
 			out := &pb.Operation{}
@@ -110,8 +108,8 @@ func TestListOperationEventsFiltersByObjectAndTime(t *testing.T) {
 	created := time.Date(2026, 5, 1, 10, 0, 0, 0, time.UTC)
 	finished := created.Add(10 * time.Minute)
 	op := &ichorv1alpha1.TalosOperation{
-		ObjectMeta: metav1.ObjectMeta{Name: "talos-x", Namespace: opNS, CreationTimestamp: metav1.NewTime(created)},
-		Spec:       ichorv1alpha1.TalosOperationSpec{ClusterRef: corev1.LocalObjectReference{Name: opCluster}, Kind: ichorv1alpha1.TalosOperationKindTalos},
+		Name: "talos-x", Namespace: opNS, CreationTimestamp: metav1.NewTime(created),
+		Spec: ichorv1alpha1.TalosOperationSpec{ClusterRef: corev1.LocalObjectReference{Name: opCluster}, Kind: ichorv1alpha1.TalosOperationKindTalos},
 		Status: ichorv1alpha1.TalosOperationStatus{
 			FinishedAt: &metav1.Time{Time: finished},
 			Machines:   []ichorv1alpha1.TalosOperationMachineStatus{{Name: "w1", Phase: "Completed"}},
@@ -120,7 +118,7 @@ func TestListOperationEventsFiltersByObjectAndTime(t *testing.T) {
 
 	event := func(name, kind, obj, reason string, at time.Time, typ string) *corev1.Event {
 		return &corev1.Event{
-			ObjectMeta:     metav1.ObjectMeta{Name: name, Namespace: opNS},
+			Name: name, Namespace: opNS,
 			InvolvedObject: corev1.ObjectReference{Kind: kind, Name: obj, Namespace: opNS},
 			Reason:         reason, Message: reason + " message", Type: typ, LastTimestamp: metav1.NewTime(at),
 		}
@@ -141,7 +139,7 @@ func TestListOperationEventsFiltersByObjectAndTime(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var got []string
+	got := make([]string, 0, len(resp.Msg.GetEvents()))
 	for _, e := range resp.Msg.GetEvents() {
 		got = append(got, e.GetReason())
 	}

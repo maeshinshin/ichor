@@ -373,7 +373,7 @@ func userKubeClient(t *testing.T, withSecret bool) client.Client {
 
 	b := fake.NewClientBuilder().WithScheme(newTestScheme(t))
 	if withSecret {
-		b = b.WithObjects(&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: ichorControllerNamespace, Name: ichorauth.CredentialsSecretName}})
+		b = b.WithObjects(&corev1.Secret{Namespace: ichorControllerNamespace, Name: ichorauth.CredentialsSecretName})
 	}
 
 	return b.Build()

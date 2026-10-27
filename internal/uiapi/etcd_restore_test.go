@@ -129,13 +129,13 @@ func TestEtcdRestorePlanNamesTheControllersNodeWhateverTheAppNameIs(t *testing.T
 		cp2 := opMachine("cp2", "controlplane", nil, nil)
 		cp2.Spec.Hostname = restoreCP2Node
 
-		labels := map[string]string{"control-plane": "controller-manager"}
+		labels := map[string]string{testControllerLabelKey: testControllerLabelVal}
 		if appName != "" {
 			labels["app.kubernetes.io/name"] = appName
 		}
 
 		pod := &corev1.Pod{
-			Name: "ichor-controller", Namespace: opNS, Labels: labels,
+			Name: testControllerPodName, Namespace: opNS, Labels: labels,
 			Spec: corev1.PodSpec{NodeName: restoreCP2Node},
 		}
 		node := &corev1.Node{Name: restoreCP2Node}
@@ -370,7 +370,7 @@ func TestEtcdRestorePlanFindsTheControllerWithoutItsNamespaceOrAMatchingSpecEndp
 	cp2.Status.ObservedEndpoint, cp2.Status.ObservedEndpointFor = "10.0.0.22:50000", cp2.Spec.Endpoint
 
 	pod := &corev1.Pod{
-		Name: "ichor-controller", Namespace: opNS, Labels: map[string]string{"control-plane": "controller-manager"},
+		Name: testControllerPodName, Namespace: opNS, Labels: map[string]string{testControllerLabelKey: testControllerLabelVal},
 		Spec: corev1.PodSpec{NodeName: "some-node"},
 	}
 	node := &corev1.Node{Name: "some-node", Status: corev1.NodeStatus{Addresses: []corev1.NodeAddress{{Type: corev1.NodeInternalIP, Address: "10.0.0.22"}}}}

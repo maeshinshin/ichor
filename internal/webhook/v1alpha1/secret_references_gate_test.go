@@ -28,6 +28,13 @@ import (
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
 )
 
+const (
+	resClusters  = "talosclusters"
+	verbCreate   = "create"
+	verbPatch    = "patch"
+	secrefNewK8s = "v1.36.1"
+)
+
 // Setting or changing a field that names a Secret the controller reads with its own
 // privileges needs update on <resource>/secret-references.
 var _ = Describe("Secret-references gate", func() {
@@ -38,8 +45,8 @@ var _ = Describe("Secret-references gate", func() {
 
 	BeforeEach(func() {
 		edit := rbacv1.PolicyRule{
-			APIGroups: []string{ichorGroup}, Resources: []string{"talosclusters", "talosetcdbackups"},
-			Verbs: []string{verbGet, "create", "update", "patch"},
+			APIGroups: []string{ichorGroup}, Resources: []string{resClusters, "talosetcdbackups"},
+			Verbs: []string{verbGet, verbCreate, SecretReferencesVerb, verbPatch},
 		}
 		bindRole("secref-operator", operator, edit)
 		bindRole("secref-admin", admin, edit, rbacv1.PolicyRule{
@@ -109,7 +116,7 @@ var _ = Describe("Secret-references gate", func() {
 		}
 
 		It("admits an operator who leaves every reference as it was", func() {
-			Expect(change(operator, func(c *ichorv1alpha1.TalosCluster) { c.Spec.KubernetesVersion = "v1.36.1" })).To(Succeed())
+			Expect(change(operator, func(c *ichorv1alpha1.TalosCluster) { c.Spec.KubernetesVersion = secrefNewK8s })).To(Succeed())
 		})
 
 		It("admits an operator who removes a registry's authSecretRef", func() {

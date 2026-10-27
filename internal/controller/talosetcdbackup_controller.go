@@ -148,7 +148,9 @@ func (r *TalosEtcdBackupReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	now := r.now()
 
-	if wait := r.untilDue(&bk, sched, now); wait > 0 {
+	manual := consumeBackupNow(&bk)
+
+	if wait := r.untilDue(&bk, sched, now); wait > 0 && !manual {
 		r.refreshStaleness(&bk, sched, now)
 
 		return ctrl.Result{RequeueAfter: wait}, r.Status().Update(ctx, &bk)
@@ -188,6 +190,25 @@ func (r *TalosEtcdBackupReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	setReadyCondition(&bk, metav1.ConditionTrue, ichorv1alpha1.TalosEtcdBackupReasonSucceeded, msg)
 
 	return ctrl.Result{RequeueAfter: max(sched.Next(start).Sub(r.now()), time.Second)}, r.Status().Update(ctx, &bk)
+}
+
+// consumeBackupNow reports whether a backup-now request (BackupNowAnnotation) newer than
+// status.lastManualBackup is waiting, and records it as acted on. A missing, unparsable or not-newer
+// annotation is ignored. The caller writes status in the same reconcile.
+func consumeBackupNow(bk *ichorv1alpha1.TalosEtcdBackup) bool {
+	at, err := time.Parse(time.RFC3339, bk.Annotations[ichorv1alpha1.BackupNowAnnotation])
+	if err != nil {
+		return false
+	}
+
+	if last := bk.Status.LastManualBackup; last != nil && !at.After(last.Time) {
+		return false
+	}
+
+	t := metav1.NewTime(at)
+	bk.Status.LastManualBackup = &t
+
+	return true
 }
 
 // untilDue returns 0 when a snapshot is due now.
@@ -502,7 +523,8 @@ func (r *TalosEtcdBackupReconciler) setReady(
 // SetupWithManager sets up the controller with the Manager.
 func (r *TalosEtcdBackupReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&ichorv1alpha1.TalosEtcdBackup{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		For(&ichorv1alpha1.TalosEtcdBackup{}, builder.WithPredicates(
+			predicate.Or(predicate.GenerationChangedPredicate{}, predicate.AnnotationChangedPredicate{}))).
 		Named("talosetcdbackup").
 		Complete(r)
 }

@@ -51,7 +51,7 @@ func oidcBackend(t *testing.T, enabled bool) (apiDeps, *atomic.Int32, *bytes.Buf
 			w.Header().Set("Content-Type", "application/json")
 
 			if enabled {
-				_, _ = w.Write([]byte(`{"enabled":true,"issuer":"https://idp","clientId":"x"}`))
+				_, _ = w.Write([]byte(`{"enabled":true,"providers":[{"id":"ichor","issuer":"https://idp"}]}`))
 			} else {
 				_, _ = w.Write([]byte(`{"enabled":false}`))
 			}

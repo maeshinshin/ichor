@@ -66,7 +66,7 @@ func NewMachineryTalosClient(
 		return nil, err
 	}
 
-	return &machineryTalosClient{c: c}, nil
+	return &machineryTalosClient{c: c, endpoint: m.DialEndpoint(), kubernetesCA: bundle.Certs.K8s.Crt}, nil
 }
 
 // dialAdmin dials m's Talos API with the bundle's os:admin identity; shared
@@ -91,6 +91,10 @@ func dialAdmin(
 
 // machineryTalosClient adapts a real *client.Client to TalosClient.
 type machineryTalosClient struct {
+	// endpoint and kubernetesCA let APIServerReady probe the node's kube-apiserver.
+	endpoint     string
+	kubernetesCA []byte
+
 	c *client.Client
 }
 

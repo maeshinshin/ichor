@@ -217,6 +217,17 @@ type TalosClient interface {
 	// node did not boot an Image Factory asset.: it is how a schematic-only
 	// change is told apart from "already up to date".
 	Schematic(ctx context.Context) (string, error)
+
+	// APIServerInstance identifies this control plane's running kube-apiserver container (the
+	// container ID in the kube-apiserver static pod's status, from Talos's StaticPodStatus
+	// resource). It changes when the pod is recreated, which is how the config rollout tells "the
+	// restart has not started yet" from "restarted". Empty with a nil error when
+	// the pod reports no container.
+	APIServerInstance(ctx context.Context) (string, error)
+
+	// APIServerReady asks this control plane's own kube-apiserver for /readyz, through the node's
+	// own address (the one the Talos API is dialed on), and returns nil only for HTTP 200.
+	APIServerReady(ctx context.Context) error
 }
 
 // EtcdMember is the one piece of each etcd member EtcdMemberList's callers

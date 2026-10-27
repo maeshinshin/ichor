@@ -5,7 +5,23 @@
 // checks below only make the page behave sensibly. The token is for Ichor,
 // never a Kubernetes or Talos credential.
 
-export type AuthConfig = { enabled: boolean; issuer: string; clientId: string }
+// A sign-in choice from /auth/config: 'oidc' is the external IdP,
+// 'ichor' is ichor-ui's own issuer.
+export type AuthProvider = { id: string; issuer: string; clientId: string }
+export type AuthConfig = { enabled: boolean; issuer: string; clientId: string; providers?: AuthProvider[] }
+
+// providersOf lists the sign-in choices. An older ichor-ui sends no providers[], only the
+// enabled/issuer/clientId of the external IdP.
+export function providersOf(cfg: AuthConfig): AuthProvider[] {
+  if (cfg.providers && cfg.providers.length > 0) return cfg.providers
+  return cfg.enabled ? [{ id: 'oidc', issuer: cfg.issuer, clientId: cfg.clientId }] : []
+}
+
+// The redirect URI each provider has registered: the issuer's UI client takes /auth/callback, the
+// external IdP keeps the page root.
+export function redirectUriFor(providerId: string, origin: string): string {
+  return origin + (providerId === 'ichor' ? '/auth/callback' : '/')
+}
 
 export function base64url(bytes: Uint8Array): string {
   let s = ''
@@ -84,16 +100,16 @@ async function discover(issuer: string): Promise<Discovery> {
   return res.json()
 }
 
-export async function startLogin(cfg: AuthConfig): Promise<never> {
+export async function startLogin(cfg: AuthProvider): Promise<never> {
   const d = await discover(cfg.issuer)
   const verifier = randomString()
   const state = randomString()
   const nonce = randomString()
-  sessionStorage.setItem(PENDING, JSON.stringify({ verifier, state, nonce }))
+  sessionStorage.setItem(PENDING, JSON.stringify({ verifier, state, nonce, provider: cfg.id }))
   window.location.assign(
     buildAuthUrl(d.authorization_endpoint, {
       clientId: cfg.clientId,
-      redirectUri: window.location.origin + '/',
+      redirectUri: redirectUriFor(cfg.id, window.location.origin),
       state,
       nonce,
       challenge: await pkceChallenge(verifier),
@@ -104,7 +120,7 @@ export async function startLogin(cfg: AuthConfig): Promise<never> {
 
 // finishLogin completes the redirect back from the IdP, if this page load is
 // one. It returns true when it stored a token.
-export async function finishLogin(cfg: AuthConfig): Promise<boolean> {
+export async function finishLogin(providers: AuthProvider[]): Promise<boolean> {
   const q = new URLSearchParams(window.location.search)
   const code = q.get('code')
   if (!code) return false
@@ -113,8 +129,10 @@ export async function finishLogin(cfg: AuthConfig): Promise<boolean> {
   sessionStorage.removeItem(PENDING)
   window.history.replaceState({}, '', '/')
   if (!raw) throw new Error('Unexpected login response')
-  const pending = JSON.parse(raw) as { verifier: string; state: string; nonce: string }
+  const pending = JSON.parse(raw) as { verifier: string; state: string; nonce: string; provider?: string }
   if (q.get('state') !== pending.state) throw new Error('Login response did not match this session')
+  const cfg = providers.find((p) => p.id === (pending.provider ?? 'oidc'))
+  if (!cfg) throw new Error('Unexpected login response')
 
   const d = await discover(cfg.issuer)
   const res = await fetch(d.token_endpoint, {
@@ -123,7 +141,7 @@ export async function finishLogin(cfg: AuthConfig): Promise<boolean> {
     body: new URLSearchParams({
       grant_type: 'authorization_code',
       code,
-      redirect_uri: window.location.origin + '/',
+      redirect_uri: redirectUriFor(cfg.id, window.location.origin),
       client_id: cfg.clientId,
       code_verifier: pending.verifier,
     }),
@@ -133,4 +151,11 @@ export async function finishLogin(cfg: AuthConfig): Promise<boolean> {
   if (!idToken || idTokenClaims(idToken)?.nonce !== pending.nonce) throw new Error('Login response did not match this session')
   sessionStorage.setItem(KEY, idToken)
   return true
+}
+
+// signOut drops the ID token and reloads, which shows the sign-in screen. The issuer keeps no
+// browser session of its own, so there is nothing to call.
+export function signOut() {
+  clearToken()
+  window.location.assign('/')
 }

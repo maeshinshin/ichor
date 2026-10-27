@@ -1893,6 +1893,295 @@ func (x *DeleteOperationResponse) GetAudit() *AuditRecord {
 	return nil
 }
 
+type GetCARotationCredentialsPermissionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Operation     *ObjectRef             `protobuf:"bytes,1,opt,name=operation,proto3" json:"operation,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetCARotationCredentialsPermissionRequest) Reset() {
+	*x = GetCARotationCredentialsPermissionRequest{}
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetCARotationCredentialsPermissionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetCARotationCredentialsPermissionRequest) ProtoMessage() {}
+
+func (x *GetCARotationCredentialsPermissionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetCARotationCredentialsPermissionRequest.ProtoReflect.Descriptor instead.
+func (*GetCARotationCredentialsPermissionRequest) Descriptor() ([]byte, []int) {
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *GetCARotationCredentialsPermissionRequest) GetOperation() *ObjectRef {
+	if x != nil {
+		return x.Operation
+	}
+	return nil
+}
+
+type GetCARotationCredentialsPermissionResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Download      bool                   `protobuf:"varint,1,opt,name=download,proto3" json:"download,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetCARotationCredentialsPermissionResponse) Reset() {
+	*x = GetCARotationCredentialsPermissionResponse{}
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetCARotationCredentialsPermissionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetCARotationCredentialsPermissionResponse) ProtoMessage() {}
+
+func (x *GetCARotationCredentialsPermissionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetCARotationCredentialsPermissionResponse.ProtoReflect.Descriptor instead.
+func (*GetCARotationCredentialsPermissionResponse) Descriptor() ([]byte, []int) {
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *GetCARotationCredentialsPermissionResponse) GetDownload() bool {
+	if x != nil {
+		return x.Download
+	}
+	return false
+}
+
+type DownloadCARotationCredentialsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Operation     *ObjectRef             `protobuf:"bytes,1,opt,name=operation,proto3" json:"operation,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DownloadCARotationCredentialsRequest) Reset() {
+	*x = DownloadCARotationCredentialsRequest{}
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DownloadCARotationCredentialsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DownloadCARotationCredentialsRequest) ProtoMessage() {}
+
+func (x *DownloadCARotationCredentialsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DownloadCARotationCredentialsRequest.ProtoReflect.Descriptor instead.
+func (*DownloadCARotationCredentialsRequest) Descriptor() ([]byte, []int) {
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *DownloadCARotationCredentialsRequest) GetOperation() *ObjectRef {
+	if x != nil {
+		return x.Operation
+	}
+	return nil
+}
+
+type DownloadCARotationCredentialsResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// filename and content_type are set on the first chunk only.
+	Filename      string `protobuf:"bytes,1,opt,name=filename,proto3" json:"filename,omitempty"`
+	ContentType   string `protobuf:"bytes,2,opt,name=content_type,json=contentType,proto3" json:"content_type,omitempty"`
+	Data          []byte `protobuf:"bytes,3,opt,name=data,proto3" json:"data,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DownloadCARotationCredentialsResponse) Reset() {
+	*x = DownloadCARotationCredentialsResponse{}
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DownloadCARotationCredentialsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DownloadCARotationCredentialsResponse) ProtoMessage() {}
+
+func (x *DownloadCARotationCredentialsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DownloadCARotationCredentialsResponse.ProtoReflect.Descriptor instead.
+func (*DownloadCARotationCredentialsResponse) Descriptor() ([]byte, []int) {
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *DownloadCARotationCredentialsResponse) GetFilename() string {
+	if x != nil {
+		return x.Filename
+	}
+	return ""
+}
+
+func (x *DownloadCARotationCredentialsResponse) GetContentType() string {
+	if x != nil {
+		return x.ContentType
+	}
+	return ""
+}
+
+func (x *DownloadCARotationCredentialsResponse) GetData() []byte {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
+type AcknowledgeCARotationCredentialsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Operation     *ObjectRef             `protobuf:"bytes,1,opt,name=operation,proto3" json:"operation,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AcknowledgeCARotationCredentialsRequest) Reset() {
+	*x = AcknowledgeCARotationCredentialsRequest{}
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AcknowledgeCARotationCredentialsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AcknowledgeCARotationCredentialsRequest) ProtoMessage() {}
+
+func (x *AcknowledgeCARotationCredentialsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AcknowledgeCARotationCredentialsRequest.ProtoReflect.Descriptor instead.
+func (*AcknowledgeCARotationCredentialsRequest) Descriptor() ([]byte, []int) {
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *AcknowledgeCARotationCredentialsRequest) GetOperation() *ObjectRef {
+	if x != nil {
+		return x.Operation
+	}
+	return nil
+}
+
+type AcknowledgeCARotationCredentialsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Operation     *Operation             `protobuf:"bytes,1,opt,name=operation,proto3" json:"operation,omitempty"`
+	Audit         *AuditRecord           `protobuf:"bytes,2,opt,name=audit,proto3" json:"audit,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AcknowledgeCARotationCredentialsResponse) Reset() {
+	*x = AcknowledgeCARotationCredentialsResponse{}
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AcknowledgeCARotationCredentialsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AcknowledgeCARotationCredentialsResponse) ProtoMessage() {}
+
+func (x *AcknowledgeCARotationCredentialsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AcknowledgeCARotationCredentialsResponse.ProtoReflect.Descriptor instead.
+func (*AcknowledgeCARotationCredentialsResponse) Descriptor() ([]byte, []int) {
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *AcknowledgeCARotationCredentialsResponse) GetOperation() *Operation {
+	if x != nil {
+		return x.Operation
+	}
+	return nil
+}
+
+func (x *AcknowledgeCARotationCredentialsResponse) GetAudit() *AuditRecord {
+	if x != nil {
+		return x.Audit
+	}
+	return nil
+}
+
 var File_ichor_v1alpha1_operation_proto protoreflect.FileDescriptor
 
 const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
@@ -2024,7 +2313,22 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\x16DeleteOperationRequest\x127\n" +
 	"\toperation\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\toperation\"L\n" +
 	"\x17DeleteOperationResponse\x121\n" +
-	"\x05audit\x18\x01 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit*\xac\x02\n" +
+	"\x05audit\x18\x01 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\"d\n" +
+	")GetCARotationCredentialsPermissionRequest\x127\n" +
+	"\toperation\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\toperation\"H\n" +
+	"*GetCARotationCredentialsPermissionResponse\x12\x1a\n" +
+	"\bdownload\x18\x01 \x01(\bR\bdownload\"_\n" +
+	"$DownloadCARotationCredentialsRequest\x127\n" +
+	"\toperation\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\toperation\"z\n" +
+	"%DownloadCARotationCredentialsResponse\x12\x1a\n" +
+	"\bfilename\x18\x01 \x01(\tR\bfilename\x12!\n" +
+	"\fcontent_type\x18\x02 \x01(\tR\vcontentType\x12\x12\n" +
+	"\x04data\x18\x03 \x01(\fR\x04data\"b\n" +
+	"'AcknowledgeCARotationCredentialsRequest\x127\n" +
+	"\toperation\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\toperation\"\x96\x01\n" +
+	"(AcknowledgeCARotationCredentialsResponse\x127\n" +
+	"\toperation\x18\x01 \x01(\v2\x19.ichor.v1alpha1.OperationR\toperation\x121\n" +
+	"\x05audit\x18\x02 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit*\xac\x02\n" +
 	"\rOperationKind\x12\x1e\n" +
 	"\x1aOPERATION_KIND_UNSPECIFIED\x10\x00\x12\x18\n" +
 	"\x14OPERATION_KIND_TALOS\x10\x01\x12\x1d\n" +
@@ -2052,14 +2356,17 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"#OPERATION_EFFECT_RESTART_COMPONENTS\x10\x02\x12\x19\n" +
 	"\x15OPERATION_EFFECT_STOP\x10\x03\x12\x19\n" +
 	"\x15OPERATION_EFFECT_NONE\x10\x04\x12 \n" +
-	"\x1cOPERATION_EFFECT_CA_ROTATION\x10\x052\xb8\x06\n" +
+	"\x1cOPERATION_EFFECT_CA_ROTATION\x10\x052\xff\t\n" +
 	"\x10OperationService\x12_\n" +
 	"\x0eListOperations\x12%.ichor.v1alpha1.ListOperationsRequest\x1a&.ichor.v1alpha1.ListOperationsResponse\x12Y\n" +
 	"\fGetOperation\x12#.ichor.v1alpha1.GetOperationRequest\x1a$.ichor.v1alpha1.GetOperationResponse\x12\\\n" +
 	"\rPlanOperation\x12$.ichor.v1alpha1.PlanOperationRequest\x1a%.ichor.v1alpha1.PlanOperationResponse\x12b\n" +
 	"\x0fCreateOperation\x12&.ichor.v1alpha1.CreateOperationRequest\x1a'.ichor.v1alpha1.CreateOperationResponse\x12k\n" +
 	"\x12SetOperationPaused\x12).ichor.v1alpha1.SetOperationPausedRequest\x1a*.ichor.v1alpha1.SetOperationPausedResponse\x12b\n" +
-	"\x0fDeleteOperation\x12&.ichor.v1alpha1.DeleteOperationRequest\x1a'.ichor.v1alpha1.DeleteOperationResponse\x12b\n" +
+	"\x0fDeleteOperation\x12&.ichor.v1alpha1.DeleteOperationRequest\x1a'.ichor.v1alpha1.DeleteOperationResponse\x12\x9b\x01\n" +
+	"\"GetCARotationCredentialsPermission\x129.ichor.v1alpha1.GetCARotationCredentialsPermissionRequest\x1a:.ichor.v1alpha1.GetCARotationCredentialsPermissionResponse\x12\x8e\x01\n" +
+	"\x1dDownloadCARotationCredentials\x124.ichor.v1alpha1.DownloadCARotationCredentialsRequest\x1a5.ichor.v1alpha1.DownloadCARotationCredentialsResponse0\x01\x12\x95\x01\n" +
+	" AcknowledgeCARotationCredentials\x127.ichor.v1alpha1.AcknowledgeCARotationCredentialsRequest\x1a8.ichor.v1alpha1.AcknowledgeCARotationCredentialsResponse\x12b\n" +
 	"\x0fListEtcdBackups\x12&.ichor.v1alpha1.ListEtcdBackupsRequest\x1a'.ichor.v1alpha1.ListEtcdBackupsResponse\x12q\n" +
 	"\x14GetIchorInstallation\x12+.ichor.v1alpha1.GetIchorInstallationRequest\x1a,.ichor.v1alpha1.GetIchorInstallationResponseB\xbf\x01\n" +
 	"\x12com.ichor.v1alpha1B\x0eOperationProtoP\x01Z@github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1;ichorv1alpha1\xa2\x02\x03IXX\xaa\x02\x0eIchor.V1alpha1\xca\x02\x0eIchor\\V1alpha1\xe2\x02\x1aIchor\\V1alpha1\\GPBMetadata\xea\x02\x0fIchor::V1alpha1b\x06proto3"
@@ -2077,104 +2384,121 @@ func file_ichor_v1alpha1_operation_proto_rawDescGZIP() []byte {
 }
 
 var file_ichor_v1alpha1_operation_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_ichor_v1alpha1_operation_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
+var file_ichor_v1alpha1_operation_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
 var file_ichor_v1alpha1_operation_proto_goTypes = []any{
-	(OperationKind)(0),                   // 0: ichor.v1alpha1.OperationKind
-	(NodeAction)(0),                      // 1: ichor.v1alpha1.NodeAction
-	(OperationEffect)(0),                 // 2: ichor.v1alpha1.OperationEffect
-	(*GetIchorInstallationRequest)(nil),  // 3: ichor.v1alpha1.GetIchorInstallationRequest
-	(*GetIchorInstallationResponse)(nil), // 4: ichor.v1alpha1.GetIchorInstallationResponse
-	(*ListEtcdBackupsRequest)(nil),       // 5: ichor.v1alpha1.ListEtcdBackupsRequest
-	(*EtcdSnapshot)(nil),                 // 6: ichor.v1alpha1.EtcdSnapshot
-	(*EtcdBackup)(nil),                   // 7: ichor.v1alpha1.EtcdBackup
-	(*ListEtcdBackupsResponse)(nil),      // 8: ichor.v1alpha1.ListEtcdBackupsResponse
-	(*EtcdRestoreRequest)(nil),           // 9: ichor.v1alpha1.EtcdRestoreRequest
-	(*NodeActionRequest)(nil),            // 10: ichor.v1alpha1.NodeActionRequest
-	(*OperationMachine)(nil),             // 11: ichor.v1alpha1.OperationMachine
-	(*Operation)(nil),                    // 12: ichor.v1alpha1.Operation
-	(*ListOperationsRequest)(nil),        // 13: ichor.v1alpha1.ListOperationsRequest
-	(*ListOperationsResponse)(nil),       // 14: ichor.v1alpha1.ListOperationsResponse
-	(*GetOperationRequest)(nil),          // 15: ichor.v1alpha1.GetOperationRequest
-	(*GetOperationResponse)(nil),         // 16: ichor.v1alpha1.GetOperationResponse
-	(*PlannedMachine)(nil),               // 17: ichor.v1alpha1.PlannedMachine
-	(*PlanOperationRequest)(nil),         // 18: ichor.v1alpha1.PlanOperationRequest
-	(*PlanOperationResponse)(nil),        // 19: ichor.v1alpha1.PlanOperationResponse
-	(*CreateOperationRequest)(nil),       // 20: ichor.v1alpha1.CreateOperationRequest
-	(*CreateOperationResponse)(nil),      // 21: ichor.v1alpha1.CreateOperationResponse
-	(*SetOperationPausedRequest)(nil),    // 22: ichor.v1alpha1.SetOperationPausedRequest
-	(*SetOperationPausedResponse)(nil),   // 23: ichor.v1alpha1.SetOperationPausedResponse
-	(*DeleteOperationRequest)(nil),       // 24: ichor.v1alpha1.DeleteOperationRequest
-	(*DeleteOperationResponse)(nil),      // 25: ichor.v1alpha1.DeleteOperationResponse
-	(*ObjectRef)(nil),                    // 26: ichor.v1alpha1.ObjectRef
-	(*timestamppb.Timestamp)(nil),        // 27: google.protobuf.Timestamp
-	(*BreakGlass)(nil),                   // 28: ichor.v1alpha1.BreakGlass
-	(*Condition)(nil),                    // 29: ichor.v1alpha1.Condition
-	(*AuditRecord)(nil),                  // 30: ichor.v1alpha1.AuditRecord
+	(OperationKind)(0),                                 // 0: ichor.v1alpha1.OperationKind
+	(NodeAction)(0),                                    // 1: ichor.v1alpha1.NodeAction
+	(OperationEffect)(0),                               // 2: ichor.v1alpha1.OperationEffect
+	(*GetIchorInstallationRequest)(nil),                // 3: ichor.v1alpha1.GetIchorInstallationRequest
+	(*GetIchorInstallationResponse)(nil),               // 4: ichor.v1alpha1.GetIchorInstallationResponse
+	(*ListEtcdBackupsRequest)(nil),                     // 5: ichor.v1alpha1.ListEtcdBackupsRequest
+	(*EtcdSnapshot)(nil),                               // 6: ichor.v1alpha1.EtcdSnapshot
+	(*EtcdBackup)(nil),                                 // 7: ichor.v1alpha1.EtcdBackup
+	(*ListEtcdBackupsResponse)(nil),                    // 8: ichor.v1alpha1.ListEtcdBackupsResponse
+	(*EtcdRestoreRequest)(nil),                         // 9: ichor.v1alpha1.EtcdRestoreRequest
+	(*NodeActionRequest)(nil),                          // 10: ichor.v1alpha1.NodeActionRequest
+	(*OperationMachine)(nil),                           // 11: ichor.v1alpha1.OperationMachine
+	(*Operation)(nil),                                  // 12: ichor.v1alpha1.Operation
+	(*ListOperationsRequest)(nil),                      // 13: ichor.v1alpha1.ListOperationsRequest
+	(*ListOperationsResponse)(nil),                     // 14: ichor.v1alpha1.ListOperationsResponse
+	(*GetOperationRequest)(nil),                        // 15: ichor.v1alpha1.GetOperationRequest
+	(*GetOperationResponse)(nil),                       // 16: ichor.v1alpha1.GetOperationResponse
+	(*PlannedMachine)(nil),                             // 17: ichor.v1alpha1.PlannedMachine
+	(*PlanOperationRequest)(nil),                       // 18: ichor.v1alpha1.PlanOperationRequest
+	(*PlanOperationResponse)(nil),                      // 19: ichor.v1alpha1.PlanOperationResponse
+	(*CreateOperationRequest)(nil),                     // 20: ichor.v1alpha1.CreateOperationRequest
+	(*CreateOperationResponse)(nil),                    // 21: ichor.v1alpha1.CreateOperationResponse
+	(*SetOperationPausedRequest)(nil),                  // 22: ichor.v1alpha1.SetOperationPausedRequest
+	(*SetOperationPausedResponse)(nil),                 // 23: ichor.v1alpha1.SetOperationPausedResponse
+	(*DeleteOperationRequest)(nil),                     // 24: ichor.v1alpha1.DeleteOperationRequest
+	(*DeleteOperationResponse)(nil),                    // 25: ichor.v1alpha1.DeleteOperationResponse
+	(*GetCARotationCredentialsPermissionRequest)(nil),  // 26: ichor.v1alpha1.GetCARotationCredentialsPermissionRequest
+	(*GetCARotationCredentialsPermissionResponse)(nil), // 27: ichor.v1alpha1.GetCARotationCredentialsPermissionResponse
+	(*DownloadCARotationCredentialsRequest)(nil),       // 28: ichor.v1alpha1.DownloadCARotationCredentialsRequest
+	(*DownloadCARotationCredentialsResponse)(nil),      // 29: ichor.v1alpha1.DownloadCARotationCredentialsResponse
+	(*AcknowledgeCARotationCredentialsRequest)(nil),    // 30: ichor.v1alpha1.AcknowledgeCARotationCredentialsRequest
+	(*AcknowledgeCARotationCredentialsResponse)(nil),   // 31: ichor.v1alpha1.AcknowledgeCARotationCredentialsResponse
+	(*ObjectRef)(nil),                                  // 32: ichor.v1alpha1.ObjectRef
+	(*timestamppb.Timestamp)(nil),                      // 33: google.protobuf.Timestamp
+	(*BreakGlass)(nil),                                 // 34: ichor.v1alpha1.BreakGlass
+	(*Condition)(nil),                                  // 35: ichor.v1alpha1.Condition
+	(*AuditRecord)(nil),                                // 36: ichor.v1alpha1.AuditRecord
 }
 var file_ichor_v1alpha1_operation_proto_depIdxs = []int32{
-	26, // 0: ichor.v1alpha1.ListEtcdBackupsRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
-	27, // 1: ichor.v1alpha1.EtcdSnapshot.time:type_name -> google.protobuf.Timestamp
-	26, // 2: ichor.v1alpha1.EtcdBackup.ref:type_name -> ichor.v1alpha1.ObjectRef
+	32, // 0: ichor.v1alpha1.ListEtcdBackupsRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	33, // 1: ichor.v1alpha1.EtcdSnapshot.time:type_name -> google.protobuf.Timestamp
+	32, // 2: ichor.v1alpha1.EtcdBackup.ref:type_name -> ichor.v1alpha1.ObjectRef
 	6,  // 3: ichor.v1alpha1.EtcdBackup.snapshots:type_name -> ichor.v1alpha1.EtcdSnapshot
 	7,  // 4: ichor.v1alpha1.ListEtcdBackupsResponse.backups:type_name -> ichor.v1alpha1.EtcdBackup
-	26, // 5: ichor.v1alpha1.EtcdRestoreRequest.backup:type_name -> ichor.v1alpha1.ObjectRef
-	28, // 6: ichor.v1alpha1.EtcdRestoreRequest.break_glass:type_name -> ichor.v1alpha1.BreakGlass
-	26, // 7: ichor.v1alpha1.NodeActionRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
+	32, // 5: ichor.v1alpha1.EtcdRestoreRequest.backup:type_name -> ichor.v1alpha1.ObjectRef
+	34, // 6: ichor.v1alpha1.EtcdRestoreRequest.break_glass:type_name -> ichor.v1alpha1.BreakGlass
+	32, // 7: ichor.v1alpha1.NodeActionRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
 	1,  // 8: ichor.v1alpha1.NodeActionRequest.action:type_name -> ichor.v1alpha1.NodeAction
-	28, // 9: ichor.v1alpha1.NodeActionRequest.break_glass:type_name -> ichor.v1alpha1.BreakGlass
-	26, // 10: ichor.v1alpha1.Operation.ref:type_name -> ichor.v1alpha1.ObjectRef
-	26, // 11: ichor.v1alpha1.Operation.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	34, // 9: ichor.v1alpha1.NodeActionRequest.break_glass:type_name -> ichor.v1alpha1.BreakGlass
+	32, // 10: ichor.v1alpha1.Operation.ref:type_name -> ichor.v1alpha1.ObjectRef
+	32, // 11: ichor.v1alpha1.Operation.cluster:type_name -> ichor.v1alpha1.ObjectRef
 	0,  // 12: ichor.v1alpha1.Operation.kind:type_name -> ichor.v1alpha1.OperationKind
 	11, // 13: ichor.v1alpha1.Operation.machines:type_name -> ichor.v1alpha1.OperationMachine
-	29, // 14: ichor.v1alpha1.Operation.conditions:type_name -> ichor.v1alpha1.Condition
-	27, // 15: ichor.v1alpha1.Operation.created_at:type_name -> google.protobuf.Timestamp
+	35, // 14: ichor.v1alpha1.Operation.conditions:type_name -> ichor.v1alpha1.Condition
+	33, // 15: ichor.v1alpha1.Operation.created_at:type_name -> google.protobuf.Timestamp
 	1,  // 16: ichor.v1alpha1.Operation.node_action:type_name -> ichor.v1alpha1.NodeAction
-	26, // 17: ichor.v1alpha1.Operation.node_machine:type_name -> ichor.v1alpha1.ObjectRef
-	26, // 18: ichor.v1alpha1.Operation.etcd_restore_backup:type_name -> ichor.v1alpha1.ObjectRef
-	27, // 19: ichor.v1alpha1.Operation.etcd_restore_snapshot_time:type_name -> google.protobuf.Timestamp
-	26, // 20: ichor.v1alpha1.ListOperationsRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	32, // 17: ichor.v1alpha1.Operation.node_machine:type_name -> ichor.v1alpha1.ObjectRef
+	32, // 18: ichor.v1alpha1.Operation.etcd_restore_backup:type_name -> ichor.v1alpha1.ObjectRef
+	33, // 19: ichor.v1alpha1.Operation.etcd_restore_snapshot_time:type_name -> google.protobuf.Timestamp
+	32, // 20: ichor.v1alpha1.ListOperationsRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
 	12, // 21: ichor.v1alpha1.ListOperationsResponse.operations:type_name -> ichor.v1alpha1.Operation
-	26, // 22: ichor.v1alpha1.GetOperationRequest.operation:type_name -> ichor.v1alpha1.ObjectRef
+	32, // 22: ichor.v1alpha1.GetOperationRequest.operation:type_name -> ichor.v1alpha1.ObjectRef
 	12, // 23: ichor.v1alpha1.GetOperationResponse.operation:type_name -> ichor.v1alpha1.Operation
-	26, // 24: ichor.v1alpha1.PlanOperationRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	32, // 24: ichor.v1alpha1.PlanOperationRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
 	0,  // 25: ichor.v1alpha1.PlanOperationRequest.kind:type_name -> ichor.v1alpha1.OperationKind
 	10, // 26: ichor.v1alpha1.PlanOperationRequest.node:type_name -> ichor.v1alpha1.NodeActionRequest
 	9,  // 27: ichor.v1alpha1.PlanOperationRequest.etcd_restore:type_name -> ichor.v1alpha1.EtcdRestoreRequest
 	2,  // 28: ichor.v1alpha1.PlanOperationResponse.effect:type_name -> ichor.v1alpha1.OperationEffect
 	17, // 29: ichor.v1alpha1.PlanOperationResponse.machines:type_name -> ichor.v1alpha1.PlannedMachine
-	27, // 30: ichor.v1alpha1.PlanOperationResponse.snapshot_time:type_name -> google.protobuf.Timestamp
-	26, // 31: ichor.v1alpha1.CreateOperationRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	33, // 30: ichor.v1alpha1.PlanOperationResponse.snapshot_time:type_name -> google.protobuf.Timestamp
+	32, // 31: ichor.v1alpha1.CreateOperationRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
 	0,  // 32: ichor.v1alpha1.CreateOperationRequest.kind:type_name -> ichor.v1alpha1.OperationKind
 	10, // 33: ichor.v1alpha1.CreateOperationRequest.node:type_name -> ichor.v1alpha1.NodeActionRequest
 	9,  // 34: ichor.v1alpha1.CreateOperationRequest.etcd_restore:type_name -> ichor.v1alpha1.EtcdRestoreRequest
 	12, // 35: ichor.v1alpha1.CreateOperationResponse.operation:type_name -> ichor.v1alpha1.Operation
-	30, // 36: ichor.v1alpha1.CreateOperationResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
-	26, // 37: ichor.v1alpha1.SetOperationPausedRequest.operation:type_name -> ichor.v1alpha1.ObjectRef
+	36, // 36: ichor.v1alpha1.CreateOperationResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
+	32, // 37: ichor.v1alpha1.SetOperationPausedRequest.operation:type_name -> ichor.v1alpha1.ObjectRef
 	12, // 38: ichor.v1alpha1.SetOperationPausedResponse.operation:type_name -> ichor.v1alpha1.Operation
-	30, // 39: ichor.v1alpha1.SetOperationPausedResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
-	26, // 40: ichor.v1alpha1.DeleteOperationRequest.operation:type_name -> ichor.v1alpha1.ObjectRef
-	30, // 41: ichor.v1alpha1.DeleteOperationResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
-	13, // 42: ichor.v1alpha1.OperationService.ListOperations:input_type -> ichor.v1alpha1.ListOperationsRequest
-	15, // 43: ichor.v1alpha1.OperationService.GetOperation:input_type -> ichor.v1alpha1.GetOperationRequest
-	18, // 44: ichor.v1alpha1.OperationService.PlanOperation:input_type -> ichor.v1alpha1.PlanOperationRequest
-	20, // 45: ichor.v1alpha1.OperationService.CreateOperation:input_type -> ichor.v1alpha1.CreateOperationRequest
-	22, // 46: ichor.v1alpha1.OperationService.SetOperationPaused:input_type -> ichor.v1alpha1.SetOperationPausedRequest
-	24, // 47: ichor.v1alpha1.OperationService.DeleteOperation:input_type -> ichor.v1alpha1.DeleteOperationRequest
-	5,  // 48: ichor.v1alpha1.OperationService.ListEtcdBackups:input_type -> ichor.v1alpha1.ListEtcdBackupsRequest
-	3,  // 49: ichor.v1alpha1.OperationService.GetIchorInstallation:input_type -> ichor.v1alpha1.GetIchorInstallationRequest
-	14, // 50: ichor.v1alpha1.OperationService.ListOperations:output_type -> ichor.v1alpha1.ListOperationsResponse
-	16, // 51: ichor.v1alpha1.OperationService.GetOperation:output_type -> ichor.v1alpha1.GetOperationResponse
-	19, // 52: ichor.v1alpha1.OperationService.PlanOperation:output_type -> ichor.v1alpha1.PlanOperationResponse
-	21, // 53: ichor.v1alpha1.OperationService.CreateOperation:output_type -> ichor.v1alpha1.CreateOperationResponse
-	23, // 54: ichor.v1alpha1.OperationService.SetOperationPaused:output_type -> ichor.v1alpha1.SetOperationPausedResponse
-	25, // 55: ichor.v1alpha1.OperationService.DeleteOperation:output_type -> ichor.v1alpha1.DeleteOperationResponse
-	8,  // 56: ichor.v1alpha1.OperationService.ListEtcdBackups:output_type -> ichor.v1alpha1.ListEtcdBackupsResponse
-	4,  // 57: ichor.v1alpha1.OperationService.GetIchorInstallation:output_type -> ichor.v1alpha1.GetIchorInstallationResponse
-	50, // [50:58] is the sub-list for method output_type
-	42, // [42:50] is the sub-list for method input_type
-	42, // [42:42] is the sub-list for extension type_name
-	42, // [42:42] is the sub-list for extension extendee
-	0,  // [0:42] is the sub-list for field type_name
+	36, // 39: ichor.v1alpha1.SetOperationPausedResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
+	32, // 40: ichor.v1alpha1.DeleteOperationRequest.operation:type_name -> ichor.v1alpha1.ObjectRef
+	36, // 41: ichor.v1alpha1.DeleteOperationResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
+	32, // 42: ichor.v1alpha1.GetCARotationCredentialsPermissionRequest.operation:type_name -> ichor.v1alpha1.ObjectRef
+	32, // 43: ichor.v1alpha1.DownloadCARotationCredentialsRequest.operation:type_name -> ichor.v1alpha1.ObjectRef
+	32, // 44: ichor.v1alpha1.AcknowledgeCARotationCredentialsRequest.operation:type_name -> ichor.v1alpha1.ObjectRef
+	12, // 45: ichor.v1alpha1.AcknowledgeCARotationCredentialsResponse.operation:type_name -> ichor.v1alpha1.Operation
+	36, // 46: ichor.v1alpha1.AcknowledgeCARotationCredentialsResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
+	13, // 47: ichor.v1alpha1.OperationService.ListOperations:input_type -> ichor.v1alpha1.ListOperationsRequest
+	15, // 48: ichor.v1alpha1.OperationService.GetOperation:input_type -> ichor.v1alpha1.GetOperationRequest
+	18, // 49: ichor.v1alpha1.OperationService.PlanOperation:input_type -> ichor.v1alpha1.PlanOperationRequest
+	20, // 50: ichor.v1alpha1.OperationService.CreateOperation:input_type -> ichor.v1alpha1.CreateOperationRequest
+	22, // 51: ichor.v1alpha1.OperationService.SetOperationPaused:input_type -> ichor.v1alpha1.SetOperationPausedRequest
+	24, // 52: ichor.v1alpha1.OperationService.DeleteOperation:input_type -> ichor.v1alpha1.DeleteOperationRequest
+	26, // 53: ichor.v1alpha1.OperationService.GetCARotationCredentialsPermission:input_type -> ichor.v1alpha1.GetCARotationCredentialsPermissionRequest
+	28, // 54: ichor.v1alpha1.OperationService.DownloadCARotationCredentials:input_type -> ichor.v1alpha1.DownloadCARotationCredentialsRequest
+	30, // 55: ichor.v1alpha1.OperationService.AcknowledgeCARotationCredentials:input_type -> ichor.v1alpha1.AcknowledgeCARotationCredentialsRequest
+	5,  // 56: ichor.v1alpha1.OperationService.ListEtcdBackups:input_type -> ichor.v1alpha1.ListEtcdBackupsRequest
+	3,  // 57: ichor.v1alpha1.OperationService.GetIchorInstallation:input_type -> ichor.v1alpha1.GetIchorInstallationRequest
+	14, // 58: ichor.v1alpha1.OperationService.ListOperations:output_type -> ichor.v1alpha1.ListOperationsResponse
+	16, // 59: ichor.v1alpha1.OperationService.GetOperation:output_type -> ichor.v1alpha1.GetOperationResponse
+	19, // 60: ichor.v1alpha1.OperationService.PlanOperation:output_type -> ichor.v1alpha1.PlanOperationResponse
+	21, // 61: ichor.v1alpha1.OperationService.CreateOperation:output_type -> ichor.v1alpha1.CreateOperationResponse
+	23, // 62: ichor.v1alpha1.OperationService.SetOperationPaused:output_type -> ichor.v1alpha1.SetOperationPausedResponse
+	25, // 63: ichor.v1alpha1.OperationService.DeleteOperation:output_type -> ichor.v1alpha1.DeleteOperationResponse
+	27, // 64: ichor.v1alpha1.OperationService.GetCARotationCredentialsPermission:output_type -> ichor.v1alpha1.GetCARotationCredentialsPermissionResponse
+	29, // 65: ichor.v1alpha1.OperationService.DownloadCARotationCredentials:output_type -> ichor.v1alpha1.DownloadCARotationCredentialsResponse
+	31, // 66: ichor.v1alpha1.OperationService.AcknowledgeCARotationCredentials:output_type -> ichor.v1alpha1.AcknowledgeCARotationCredentialsResponse
+	8,  // 67: ichor.v1alpha1.OperationService.ListEtcdBackups:output_type -> ichor.v1alpha1.ListEtcdBackupsResponse
+	4,  // 68: ichor.v1alpha1.OperationService.GetIchorInstallation:output_type -> ichor.v1alpha1.GetIchorInstallationResponse
+	58, // [58:69] is the sub-list for method output_type
+	47, // [47:58] is the sub-list for method input_type
+	47, // [47:47] is the sub-list for extension type_name
+	47, // [47:47] is the sub-list for extension extendee
+	0,  // [0:47] is the sub-list for field type_name
 }
 
 func init() { file_ichor_v1alpha1_operation_proto_init() }
@@ -2189,7 +2513,7 @@ func file_ichor_v1alpha1_operation_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_ichor_v1alpha1_operation_proto_rawDesc), len(file_ichor_v1alpha1_operation_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   23,
+			NumMessages:   29,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

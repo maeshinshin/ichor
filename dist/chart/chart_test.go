@@ -1297,6 +1297,55 @@ func allRules(doc map[string]any) []any {
 	return rules
 }
 
+// TestUICredentialsDownloadVerb guards ADR 0093: the download verb on talosclusters/credentials is
+// granted to nobody by default, not to ichor-ui-role, and only bound when the values say so.
+func TestUICredentialsDownloadVerb(t *testing.T) {
+	const roleName = "ichor-credentials-role"
+
+	bindingsTo := func(docs []map[string]any) []map[string]any {
+		var out []map[string]any
+		for _, b := range findAll(docs, kindClusterRoleBinding) {
+			if ref, _ := clusterRoleBindingRefs(b); ref == roleName {
+				out = append(out, b)
+			}
+		}
+		return out
+	}
+
+	off := renderChartWithValues(t, "ichor")
+	if find(off, kindClusterRole, roleName) != nil {
+		t.Errorf("ClusterRole %q rendered by default; it is a helper role (rbac.helpers.enabled)", roleName)
+	}
+	if ui := find(off, kindClusterRole, ichorUIRoleName); ui == nil || strings.Contains(fmt.Sprint(ui["rules"]), "talosclusters/credentials") {
+		t.Errorf("ichor-ui-role must not hold the credentials download verb")
+	}
+
+	helpers := renderChartWithValues(t, "ichor", "rbac.helpers.enabled=true")
+	role := find(helpers, kindClusterRole, roleName)
+	if role == nil || !strings.Contains(fmt.Sprint(role["rules"]), "talosclusters/credentials") || !strings.Contains(fmt.Sprint(role["rules"]), "download") {
+		t.Fatalf("expected ClusterRole %q granting download on talosclusters/credentials; got %v", roleName, role)
+	}
+	if b := bindingsTo(helpers); len(b) != 0 {
+		t.Errorf("the credentials verb is bound by default: %v", b)
+	}
+
+	groups := renderChartWithValues(t, "ichor", "ichorUI.credentials.groups={oidc:platform-admins}")
+	bs := bindingsTo(groups)
+	if len(bs) != 1 || !strings.Contains(fmt.Sprint(bs[0]["subjects"]), "oidc:platform-admins") ||
+		strings.Contains(fmt.Sprint(bs[0]["subjects"]), "ServiceAccount") {
+		t.Errorf("ichorUI.credentials.groups must bind only those groups, got %v", bs)
+	}
+	if find(groups, kindClusterRole, roleName) == nil {
+		t.Errorf("a bound credentials role must render without the helper roles")
+	}
+
+	sa := renderChartWithValues(t, "ichor", "ichorUI.credentials.serviceAccount=true")
+	bs = bindingsTo(sa)
+	if len(bs) != 1 || !strings.Contains(fmt.Sprint(bs[0]["subjects"]), ichorUIServiceAccountName) {
+		t.Errorf("ichorUI.credentials.serviceAccount must bind the ichor-ui ServiceAccount, got %v", bs)
+	}
+}
+
 // TestUIDiagnosticsDownloadVerb guards ADR 0084: the download verb on talosmachines'
 // support-bundle, etcd-snapshot and packet-capture subresources is granted to nobody by
 // default, not to the ichor-ui ServiceAccount's own role, and only bound when the values say so.

@@ -58,6 +58,15 @@ const (
 	// OperationServiceDeleteOperationProcedure is the fully-qualified name of the OperationService's
 	// DeleteOperation RPC.
 	OperationServiceDeleteOperationProcedure = "/ichor.v1alpha1.OperationService/DeleteOperation"
+	// OperationServiceGetCARotationCredentialsPermissionProcedure is the fully-qualified name of the
+	// OperationService's GetCARotationCredentialsPermission RPC.
+	OperationServiceGetCARotationCredentialsPermissionProcedure = "/ichor.v1alpha1.OperationService/GetCARotationCredentialsPermission"
+	// OperationServiceDownloadCARotationCredentialsProcedure is the fully-qualified name of the
+	// OperationService's DownloadCARotationCredentials RPC.
+	OperationServiceDownloadCARotationCredentialsProcedure = "/ichor.v1alpha1.OperationService/DownloadCARotationCredentials"
+	// OperationServiceAcknowledgeCARotationCredentialsProcedure is the fully-qualified name of the
+	// OperationService's AcknowledgeCARotationCredentials RPC.
+	OperationServiceAcknowledgeCARotationCredentialsProcedure = "/ichor.v1alpha1.OperationService/AcknowledgeCARotationCredentials"
 	// OperationServiceListEtcdBackupsProcedure is the fully-qualified name of the OperationService's
 	// ListEtcdBackups RPC.
 	OperationServiceListEtcdBackupsProcedure = "/ichor.v1alpha1.OperationService/ListEtcdBackups"
@@ -77,6 +86,18 @@ type OperationServiceClient interface {
 	CreateOperation(context.Context, *connect.Request[v1alpha1.CreateOperationRequest]) (*connect.Response[v1alpha1.CreateOperationResponse], error)
 	SetOperationPaused(context.Context, *connect.Request[v1alpha1.SetOperationPausedRequest]) (*connect.Response[v1alpha1.SetOperationPausedResponse], error)
 	DeleteOperation(context.Context, *connect.Request[v1alpha1.DeleteOperationRequest]) (*connect.Response[v1alpha1.DeleteOperationResponse], error)
+	// GetCARotationCredentialsPermission says whether the caller may download a ca-rotation's new
+	// credentials (the RBAC verb "download" on talosclusters/credentials, ADR 0093), so the UI shows
+	// the button only to those who may. DownloadCARotationCredentials asks again.
+	GetCARotationCredentialsPermission(context.Context, *connect.Request[v1alpha1.GetCARotationCredentialsPermissionRequest]) (*connect.Response[v1alpha1.GetCARotationCredentialsPermissionResponse], error)
+	// DownloadCARotationCredentials streams one zip holding a kubeconfig and a talosconfig that trust
+	// the old and the new CAs and are signed by the new ones (ADR 0093). They are cluster-admin
+	// private keys: the call is admin-gated and leaves a Warning Event on the TalosCluster.
+	DownloadCARotationCredentials(context.Context, *connect.Request[v1alpha1.DownloadCARotationCredentialsRequest]) (*connect.ServerStreamForClient[v1alpha1.DownloadCARotationCredentialsResponse], error)
+	// AcknowledgeCARotationCredentials tells a ca-rotation waiting in AwaitingCredentials that the
+	// operator has credentials that work, after checking that a kubeconfig made the same way
+	// authenticates to the cluster (ADR 0093). It sets the hand-off annotation, nothing else.
+	AcknowledgeCARotationCredentials(context.Context, *connect.Request[v1alpha1.AcknowledgeCARotationCredentialsRequest]) (*connect.Response[v1alpha1.AcknowledgeCARotationCredentialsResponse], error)
 	// ListEtcdBackups lists the TalosEtcdBackups of a cluster with the snapshots each holds, newest
 	// first: what a restore can choose from (ADR 0089). It reads the backups' status; it does not
 	// touch the storage.
@@ -135,6 +156,24 @@ func NewOperationServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(operationServiceMethods.ByName("DeleteOperation")),
 			connect.WithClientOptions(opts...),
 		),
+		getCARotationCredentialsPermission: connect.NewClient[v1alpha1.GetCARotationCredentialsPermissionRequest, v1alpha1.GetCARotationCredentialsPermissionResponse](
+			httpClient,
+			baseURL+OperationServiceGetCARotationCredentialsPermissionProcedure,
+			connect.WithSchema(operationServiceMethods.ByName("GetCARotationCredentialsPermission")),
+			connect.WithClientOptions(opts...),
+		),
+		downloadCARotationCredentials: connect.NewClient[v1alpha1.DownloadCARotationCredentialsRequest, v1alpha1.DownloadCARotationCredentialsResponse](
+			httpClient,
+			baseURL+OperationServiceDownloadCARotationCredentialsProcedure,
+			connect.WithSchema(operationServiceMethods.ByName("DownloadCARotationCredentials")),
+			connect.WithClientOptions(opts...),
+		),
+		acknowledgeCARotationCredentials: connect.NewClient[v1alpha1.AcknowledgeCARotationCredentialsRequest, v1alpha1.AcknowledgeCARotationCredentialsResponse](
+			httpClient,
+			baseURL+OperationServiceAcknowledgeCARotationCredentialsProcedure,
+			connect.WithSchema(operationServiceMethods.ByName("AcknowledgeCARotationCredentials")),
+			connect.WithClientOptions(opts...),
+		),
 		listEtcdBackups: connect.NewClient[v1alpha1.ListEtcdBackupsRequest, v1alpha1.ListEtcdBackupsResponse](
 			httpClient,
 			baseURL+OperationServiceListEtcdBackupsProcedure,
@@ -152,14 +191,17 @@ func NewOperationServiceClient(httpClient connect.HTTPClient, baseURL string, op
 
 // operationServiceClient implements OperationServiceClient.
 type operationServiceClient struct {
-	listOperations       *connect.Client[v1alpha1.ListOperationsRequest, v1alpha1.ListOperationsResponse]
-	getOperation         *connect.Client[v1alpha1.GetOperationRequest, v1alpha1.GetOperationResponse]
-	planOperation        *connect.Client[v1alpha1.PlanOperationRequest, v1alpha1.PlanOperationResponse]
-	createOperation      *connect.Client[v1alpha1.CreateOperationRequest, v1alpha1.CreateOperationResponse]
-	setOperationPaused   *connect.Client[v1alpha1.SetOperationPausedRequest, v1alpha1.SetOperationPausedResponse]
-	deleteOperation      *connect.Client[v1alpha1.DeleteOperationRequest, v1alpha1.DeleteOperationResponse]
-	listEtcdBackups      *connect.Client[v1alpha1.ListEtcdBackupsRequest, v1alpha1.ListEtcdBackupsResponse]
-	getIchorInstallation *connect.Client[v1alpha1.GetIchorInstallationRequest, v1alpha1.GetIchorInstallationResponse]
+	listOperations                     *connect.Client[v1alpha1.ListOperationsRequest, v1alpha1.ListOperationsResponse]
+	getOperation                       *connect.Client[v1alpha1.GetOperationRequest, v1alpha1.GetOperationResponse]
+	planOperation                      *connect.Client[v1alpha1.PlanOperationRequest, v1alpha1.PlanOperationResponse]
+	createOperation                    *connect.Client[v1alpha1.CreateOperationRequest, v1alpha1.CreateOperationResponse]
+	setOperationPaused                 *connect.Client[v1alpha1.SetOperationPausedRequest, v1alpha1.SetOperationPausedResponse]
+	deleteOperation                    *connect.Client[v1alpha1.DeleteOperationRequest, v1alpha1.DeleteOperationResponse]
+	getCARotationCredentialsPermission *connect.Client[v1alpha1.GetCARotationCredentialsPermissionRequest, v1alpha1.GetCARotationCredentialsPermissionResponse]
+	downloadCARotationCredentials      *connect.Client[v1alpha1.DownloadCARotationCredentialsRequest, v1alpha1.DownloadCARotationCredentialsResponse]
+	acknowledgeCARotationCredentials   *connect.Client[v1alpha1.AcknowledgeCARotationCredentialsRequest, v1alpha1.AcknowledgeCARotationCredentialsResponse]
+	listEtcdBackups                    *connect.Client[v1alpha1.ListEtcdBackupsRequest, v1alpha1.ListEtcdBackupsResponse]
+	getIchorInstallation               *connect.Client[v1alpha1.GetIchorInstallationRequest, v1alpha1.GetIchorInstallationResponse]
 }
 
 // ListOperations calls ichor.v1alpha1.OperationService.ListOperations.
@@ -192,6 +234,24 @@ func (c *operationServiceClient) DeleteOperation(ctx context.Context, req *conne
 	return c.deleteOperation.CallUnary(ctx, req)
 }
 
+// GetCARotationCredentialsPermission calls
+// ichor.v1alpha1.OperationService.GetCARotationCredentialsPermission.
+func (c *operationServiceClient) GetCARotationCredentialsPermission(ctx context.Context, req *connect.Request[v1alpha1.GetCARotationCredentialsPermissionRequest]) (*connect.Response[v1alpha1.GetCARotationCredentialsPermissionResponse], error) {
+	return c.getCARotationCredentialsPermission.CallUnary(ctx, req)
+}
+
+// DownloadCARotationCredentials calls
+// ichor.v1alpha1.OperationService.DownloadCARotationCredentials.
+func (c *operationServiceClient) DownloadCARotationCredentials(ctx context.Context, req *connect.Request[v1alpha1.DownloadCARotationCredentialsRequest]) (*connect.ServerStreamForClient[v1alpha1.DownloadCARotationCredentialsResponse], error) {
+	return c.downloadCARotationCredentials.CallServerStream(ctx, req)
+}
+
+// AcknowledgeCARotationCredentials calls
+// ichor.v1alpha1.OperationService.AcknowledgeCARotationCredentials.
+func (c *operationServiceClient) AcknowledgeCARotationCredentials(ctx context.Context, req *connect.Request[v1alpha1.AcknowledgeCARotationCredentialsRequest]) (*connect.Response[v1alpha1.AcknowledgeCARotationCredentialsResponse], error) {
+	return c.acknowledgeCARotationCredentials.CallUnary(ctx, req)
+}
+
 // ListEtcdBackups calls ichor.v1alpha1.OperationService.ListEtcdBackups.
 func (c *operationServiceClient) ListEtcdBackups(ctx context.Context, req *connect.Request[v1alpha1.ListEtcdBackupsRequest]) (*connect.Response[v1alpha1.ListEtcdBackupsResponse], error) {
 	return c.listEtcdBackups.CallUnary(ctx, req)
@@ -213,6 +273,18 @@ type OperationServiceHandler interface {
 	CreateOperation(context.Context, *connect.Request[v1alpha1.CreateOperationRequest]) (*connect.Response[v1alpha1.CreateOperationResponse], error)
 	SetOperationPaused(context.Context, *connect.Request[v1alpha1.SetOperationPausedRequest]) (*connect.Response[v1alpha1.SetOperationPausedResponse], error)
 	DeleteOperation(context.Context, *connect.Request[v1alpha1.DeleteOperationRequest]) (*connect.Response[v1alpha1.DeleteOperationResponse], error)
+	// GetCARotationCredentialsPermission says whether the caller may download a ca-rotation's new
+	// credentials (the RBAC verb "download" on talosclusters/credentials, ADR 0093), so the UI shows
+	// the button only to those who may. DownloadCARotationCredentials asks again.
+	GetCARotationCredentialsPermission(context.Context, *connect.Request[v1alpha1.GetCARotationCredentialsPermissionRequest]) (*connect.Response[v1alpha1.GetCARotationCredentialsPermissionResponse], error)
+	// DownloadCARotationCredentials streams one zip holding a kubeconfig and a talosconfig that trust
+	// the old and the new CAs and are signed by the new ones (ADR 0093). They are cluster-admin
+	// private keys: the call is admin-gated and leaves a Warning Event on the TalosCluster.
+	DownloadCARotationCredentials(context.Context, *connect.Request[v1alpha1.DownloadCARotationCredentialsRequest], *connect.ServerStream[v1alpha1.DownloadCARotationCredentialsResponse]) error
+	// AcknowledgeCARotationCredentials tells a ca-rotation waiting in AwaitingCredentials that the
+	// operator has credentials that work, after checking that a kubeconfig made the same way
+	// authenticates to the cluster (ADR 0093). It sets the hand-off annotation, nothing else.
+	AcknowledgeCARotationCredentials(context.Context, *connect.Request[v1alpha1.AcknowledgeCARotationCredentialsRequest]) (*connect.Response[v1alpha1.AcknowledgeCARotationCredentialsResponse], error)
 	// ListEtcdBackups lists the TalosEtcdBackups of a cluster with the snapshots each holds, newest
 	// first: what a restore can choose from (ADR 0089). It reads the backups' status; it does not
 	// touch the storage.
@@ -267,6 +339,24 @@ func NewOperationServiceHandler(svc OperationServiceHandler, opts ...connect.Han
 		connect.WithSchema(operationServiceMethods.ByName("DeleteOperation")),
 		connect.WithHandlerOptions(opts...),
 	)
+	operationServiceGetCARotationCredentialsPermissionHandler := connect.NewUnaryHandler(
+		OperationServiceGetCARotationCredentialsPermissionProcedure,
+		svc.GetCARotationCredentialsPermission,
+		connect.WithSchema(operationServiceMethods.ByName("GetCARotationCredentialsPermission")),
+		connect.WithHandlerOptions(opts...),
+	)
+	operationServiceDownloadCARotationCredentialsHandler := connect.NewServerStreamHandler(
+		OperationServiceDownloadCARotationCredentialsProcedure,
+		svc.DownloadCARotationCredentials,
+		connect.WithSchema(operationServiceMethods.ByName("DownloadCARotationCredentials")),
+		connect.WithHandlerOptions(opts...),
+	)
+	operationServiceAcknowledgeCARotationCredentialsHandler := connect.NewUnaryHandler(
+		OperationServiceAcknowledgeCARotationCredentialsProcedure,
+		svc.AcknowledgeCARotationCredentials,
+		connect.WithSchema(operationServiceMethods.ByName("AcknowledgeCARotationCredentials")),
+		connect.WithHandlerOptions(opts...),
+	)
 	operationServiceListEtcdBackupsHandler := connect.NewUnaryHandler(
 		OperationServiceListEtcdBackupsProcedure,
 		svc.ListEtcdBackups,
@@ -293,6 +383,12 @@ func NewOperationServiceHandler(svc OperationServiceHandler, opts ...connect.Han
 			operationServiceSetOperationPausedHandler.ServeHTTP(w, r)
 		case OperationServiceDeleteOperationProcedure:
 			operationServiceDeleteOperationHandler.ServeHTTP(w, r)
+		case OperationServiceGetCARotationCredentialsPermissionProcedure:
+			operationServiceGetCARotationCredentialsPermissionHandler.ServeHTTP(w, r)
+		case OperationServiceDownloadCARotationCredentialsProcedure:
+			operationServiceDownloadCARotationCredentialsHandler.ServeHTTP(w, r)
+		case OperationServiceAcknowledgeCARotationCredentialsProcedure:
+			operationServiceAcknowledgeCARotationCredentialsHandler.ServeHTTP(w, r)
 		case OperationServiceListEtcdBackupsProcedure:
 			operationServiceListEtcdBackupsHandler.ServeHTTP(w, r)
 		case OperationServiceGetIchorInstallationProcedure:
@@ -328,6 +424,18 @@ func (UnimplementedOperationServiceHandler) SetOperationPaused(context.Context, 
 
 func (UnimplementedOperationServiceHandler) DeleteOperation(context.Context, *connect.Request[v1alpha1.DeleteOperationRequest]) (*connect.Response[v1alpha1.DeleteOperationResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.OperationService.DeleteOperation is not implemented"))
+}
+
+func (UnimplementedOperationServiceHandler) GetCARotationCredentialsPermission(context.Context, *connect.Request[v1alpha1.GetCARotationCredentialsPermissionRequest]) (*connect.Response[v1alpha1.GetCARotationCredentialsPermissionResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.OperationService.GetCARotationCredentialsPermission is not implemented"))
+}
+
+func (UnimplementedOperationServiceHandler) DownloadCARotationCredentials(context.Context, *connect.Request[v1alpha1.DownloadCARotationCredentialsRequest], *connect.ServerStream[v1alpha1.DownloadCARotationCredentialsResponse]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.OperationService.DownloadCARotationCredentials is not implemented"))
+}
+
+func (UnimplementedOperationServiceHandler) AcknowledgeCARotationCredentials(context.Context, *connect.Request[v1alpha1.AcknowledgeCARotationCredentialsRequest]) (*connect.Response[v1alpha1.AcknowledgeCARotationCredentialsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.OperationService.AcknowledgeCARotationCredentials is not implemented"))
 }
 
 func (UnimplementedOperationServiceHandler) ListEtcdBackups(context.Context, *connect.Request[v1alpha1.ListEtcdBackupsRequest]) (*connect.Response[v1alpha1.ListEtcdBackupsResponse], error) {

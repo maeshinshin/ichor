@@ -20,10 +20,12 @@ import (
 	"context"
 	"os"
 	"strings"
+	"time"
 
 	"connectrpc.com/connect"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -34,6 +36,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/secretsbundle"
 )
 
 // envtest's kube-apiserver enforces RBAC, so these specs run handlers as the real ichor-ui
@@ -139,5 +142,53 @@ var _ = Describe("ichor-ui generated RBAC", func() {
 		Expect(resp.Msg.GetSupportBundle() || resp.Msg.GetEtcdSnapshot() || resp.Msg.GetPacketCapture()).To(BeFalse())
 
 		Expect(s.emitDownloadEvent(ctx, m, ScopeEtcdSnapshot, "")).To(Succeed())
+	})
+
+	// ADR 0093: the ServiceAccount's generated role reads the rotation keys, lists machines, creates the
+	// Event and updates the operation (so the acknowledgement works), but is not granted the download verb.
+	It("builds and acknowledges CA rotation credentials as the ServiceAccount, and refuses their download", func() {
+		contract, err := coreconfig.ParseContractFromVersion(testVersionContract)
+		Expect(err).NotTo(HaveOccurred())
+
+		rot, err := secretsbundle.NewRotation(time.Now(), contract)
+		Expect(err).NotTo(HaveOccurred())
+
+		raw, err := rot.Marshal()
+		Expect(err).NotTo(HaveOccurred())
+
+		secret := newTestSecret(newTestBundle())
+		secret.Data[secretsbundle.RotationKey] = raw
+		Expect(k8sClient.Update(ctx, secret)).To(Succeed())
+
+		cluster := newTestCluster(secret.Name)
+		_ = newTestMachine(cluster.Name, strongTestIdentity("uuid-rbac-cred"), roleControlPlane, ichorv1alpha1.MachineApprovalStateApproved)
+
+		op := &ichorv1alpha1.TalosOperation{
+			GenerateName: "ca-", Namespace: testNamespace,
+			Spec: ichorv1alpha1.TalosOperationSpec{
+				ClusterRef: corev1.LocalObjectReference{Name: cluster.Name}, Kind: ichorv1alpha1.TalosOperationKindCARotation,
+			},
+		}
+		Expect(k8sClient.Create(ctx, op)).To(Succeed())
+
+		op.Status.CARotation = &ichorv1alpha1.TalosOperationCARotationStatus{
+			Stage:        ichorv1alpha1.CARotationStageAwaitingCredentials,
+			Certificates: []ichorv1alpha1.CARotationCertificate{{Name: "talos", Previous: "a", Next: "b"}},
+		}
+		Expect(k8sClient.Status().Update(ctx, op)).To(Succeed())
+
+		s := &Server{
+			Client: saClient, ControllerNamespace: testNamespace,
+			VerifyKubeconfig: func(context.Context, []byte) error { return nil },
+		}
+
+		allowed, err := s.mayDownloadCredentials(ctx, op)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(allowed).To(BeFalse())
+
+		Expect(s.emitCredentialsEvent(ctx, cluster, op.Name)).To(Succeed())
+
+		_, err = s.AcknowledgeCARotationCredentials(ctx, connect.NewRequest(&pb.AcknowledgeCARotationCredentialsRequest{Operation: objectRef(op.Namespace, op.Name)}))
+		Expect(err).NotTo(HaveOccurred())
 	})
 })

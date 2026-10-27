@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -30,11 +29,11 @@ import (
 // The manager's Role has update on every Secret in its namespace (ADR 0063), so the executor itself must
 // only ever write the Secret the TalosCluster's secretsRef names, in the controller namespace.
 func TestCARotationWritesOnlyTheReferencedBundleSecret(t *testing.T) {
-	cluster := &ichorv1alpha1.TalosCluster{ObjectMeta: metav1.ObjectMeta{Name: "c"}}
+	cluster := &ichorv1alpha1.TalosCluster{Name: "c"}
 	cluster.Spec.SecretsRef.Name = "bundle"
 
 	secret := func(ns, name string) *corev1.Secret {
-		return &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: name}}
+		return &corev1.Secret{Namespace: ns, Name: name}
 	}
 
 	cl := fake.NewClientBuilder().WithObjects(secret("ichor-system", "bundle"), secret("ichor-system", "other"),

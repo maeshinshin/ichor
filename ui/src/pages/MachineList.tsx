@@ -15,6 +15,7 @@ import { PullRequestNotice } from '@/components/PullRequestNotice'
 import { MachineApprovalState, MachineRole, type Machine } from '@/gen/ichor/v1alpha1/machine_pb'
 import { machineClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
+import { machineDisplayName } from '@/lib/machineName'
 import { offersBreakGlass } from '@/lib/breakGlass'
 import { notifyWrite } from '@/lib/notify'
 import { describeError } from '@/lib/errors'
@@ -60,7 +61,7 @@ export function MachineList() {
   // the state existing, so it stops reappearing as a fresh approval
   // request every time this list loads.
   const match = (m: Machine) =>
-    matchesQuery(query, m.hostname, m.ref?.name, m.identity?.uuid, m.endpoint, enumLabel(MachineRole, m.role))
+    matchesQuery(query, m.hostname, m.nodeName, m.ref?.name, m.identity?.uuid, m.endpoint, enumLabel(MachineRole, m.role))
   const shown = machines.filter(match)
   const pending = shown.filter((m) => m.approvalState !== MachineApprovalState.APPROVED && m.approvalState !== MachineApprovalState.REJECTED)
   const rejected = shown.filter((m) => m.approvalState === MachineApprovalState.REJECTED)
@@ -171,7 +172,7 @@ export function MachineList() {
                     <TableCell>
                       {m.ref ? (
                         <Link to={`/nodes/${m.ref.name}`} class="font-medium hover:underline">
-                          {m.hostname || m.ref.name}
+                          {machineDisplayName(m)}
                         </Link>
                       ) : (
                         m.hostname || '-'

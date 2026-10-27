@@ -1,0 +1,180 @@
+/*
+Copyright 2026 maeshinshin.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package render
+
+import (
+	"strings"
+	"testing"
+
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+)
+
+const testNICMAC = "AA:BB:CC:DD:EE:01"
+
+// renderWith renders a worker at the given contract ("" is the cluster default, v1.14) after
+// mutating the machine.
+func renderWith(t *testing.T, contract string, mutate func(m *ichorv1alpha1.TalosMachine)) string {
+	t.Helper()
+
+	cluster := testCluster("true")
+	if contract != "" {
+		cluster.Spec.VersionContract = contract
+	}
+
+	m := testMachine("node-a", roleWorker, nil)
+	mutate(m)
+
+	out, _, err := Render(cluster, m, testBundle(t), nil, nil)
+	if err != nil {
+		t.Fatalf("Render at %q: %v", contract, err)
+	}
+
+	return string(out)
+}
+
+func wantAll(t *testing.T, out string, want ...string) {
+	t.Helper()
+
+	for _, w := range want {
+		if !strings.Contains(out, w) {
+			t.Errorf("rendered config lacks %q:\n%s", w, out)
+		}
+	}
+}
+
+func wantNone(t *testing.T, out string, absent ...string) {
+	t.Helper()
+
+	for _, w := range absent {
+		if strings.Contains(out, w) {
+			t.Errorf("rendered config has %q but must not:\n%s", w, out)
+		}
+	}
+}
+
+// TestRenderNetwork: spec.network picks the primary link by permanent MAC through a
+// LinkAliasConfig and refers to the alias from the addressing documents (ADR 0091). v1.13 and
+// v1.14 both use documents; v1.11 is the legacy machine.network.interfaces form.
+func TestRenderNetwork(t *testing.T) {
+	dhcp := func(m *ichorv1alpha1.TalosMachine) {
+		m.Spec.Network = &ichorv1alpha1.TalosMachineNetwork{MAC: testNICMAC, Addressing: "dhcp"}
+	}
+	static := func(m *ichorv1alpha1.TalosMachine) {
+		m.Spec.Network = &ichorv1alpha1.TalosMachineNetwork{
+			MAC: testNICMAC, Addressing: "static", Addresses: []string{"192.168.1.10/24"},
+			Gateway: "192.168.1.1", DNSServers: []string{"1.1.1.1", "9.9.9.9"},
+		}
+	}
+	vlan := func(m *ichorv1alpha1.TalosMachine) {
+		static(m)
+		m.Spec.Network.VLANID = 100
+	}
+
+	for _, contract := range []string{"", "v1.13"} {
+		name := contract
+		if name == "" {
+			name = "v1.14"
+		}
+
+		alias := []string{"kind: LinkAliasConfig", "name: net0", `mac(link.permanent_addr) == "aa:bb:cc:dd:ee:01"`}
+
+		t.Run(name+"/dhcp", func(t *testing.T) {
+			out := renderWith(t, contract, dhcp)
+			wantAll(t, out, append(alias, "kind: DHCPv4Config")...)
+			wantNone(t, out, "kind: LinkConfig", "kind: VLANConfig", "192.168.1.10")
+		})
+
+		t.Run(name+"/static", func(t *testing.T) {
+			out := renderWith(t, contract, static)
+			wantAll(t, out, append(alias, "kind: LinkConfig", "address: 192.168.1.10/24", "gateway: 192.168.1.1",
+				"kind: ResolverConfig", "address: 1.1.1.1", "address: 9.9.9.9")...)
+			wantNone(t, out, "kind: DHCPv4Config", "kind: VLANConfig")
+		})
+
+		t.Run(name+"/static on a vlan", func(t *testing.T) {
+			out := renderWith(t, contract, vlan)
+			wantAll(t, out, append(alias, "kind: VLANConfig", "name: net0.100", "vlanID: 100", "parent: net0",
+				"address: 192.168.1.10/24")...)
+			wantNone(t, out, "kind: DHCPv4Config")
+		})
+
+		t.Run(name+"/dhcp on a vlan", func(t *testing.T) {
+			out := renderWith(t, contract, func(m *ichorv1alpha1.TalosMachine) {
+				dhcp(m)
+				m.Spec.Network.VLANID = 7
+			})
+			wantAll(t, out, "kind: VLANConfig", "name: net0.7", "kind: DHCPv4Config")
+		})
+
+		t.Run(name+"/unset renders nothing", func(t *testing.T) {
+			wantNone(t, renderWith(t, contract, func(*ichorv1alpha1.TalosMachine) {}), "LinkAliasConfig", "net0")
+		})
+	}
+
+	t.Run("v1.11 legacy", func(t *testing.T) {
+		out := renderWith(t, "v1.11", static)
+		wantAll(t, out, "interfaces:", "permanentAddr: aa:bb:cc:dd:ee:01", "192.168.1.10/24", "gateway: 192.168.1.1",
+			"network: 0.0.0.0/0", "nameservers:", "1.1.1.1")
+		wantNone(t, out, "LinkAliasConfig")
+
+		out = renderWith(t, "v1.11", vlan)
+		wantAll(t, out, "vlans:", "vlanId: 100", "192.168.1.10/24")
+
+		out = renderWith(t, "v1.11", dhcp)
+		wantAll(t, out, "permanentAddr: aa:bb:cc:dd:ee:01", "dhcp: true")
+	})
+
+	t.Run("an IPv6 gateway routes ::/0 in the legacy form", func(t *testing.T) {
+		out := renderWith(t, "v1.11", func(m *ichorv1alpha1.TalosMachine) {
+			m.Spec.Network = &ichorv1alpha1.TalosMachineNetwork{
+				MAC: testNICMAC, Addressing: "static", Addresses: []string{"fd00::10/64"}, Gateway: "fd00::1",
+			}
+		})
+		wantAll(t, out, "network: ::/0", "gateway: fd00::1")
+	})
+}
+
+// TestRenderDisks: spec.disks becomes a VolumeConfig for EPHEMERAL and a UserVolumeConfig per
+// user volume, each with a CEL disk selector (ADR 0091).
+func TestRenderDisks(t *testing.T) {
+	disks := func(m *ichorv1alpha1.TalosMachine) {
+		m.Spec.Disks = []ichorv1alpha1.TalosMachineDiskRole{
+			{Role: "ephemeral", Disk: ichorv1alpha1.TalosMachineDisk{Serial: "EPH1"}},
+			{Role: "userVolume", Name: "data", MaxSize: "200GiB", Disk: ichorv1alpha1.TalosMachineDisk{WWID: "naa.1"}},
+			{Role: "userVolume", Name: "scratch", Disk: ichorv1alpha1.TalosMachineDisk{ByIDPath: "/dev/disk/by-id/x"}},
+		}
+	}
+
+	for _, contract := range []string{"", "v1.13"} {
+		name := contract
+		if name == "" {
+			name = "v1.14"
+		}
+
+		t.Run(name, func(t *testing.T) {
+			out := renderWith(t, contract, disks)
+			wantAll(t, out,
+				"kind: VolumeConfig", "name: EPHEMERAL", `disk.serial == "EPH1"`,
+				"kind: UserVolumeConfig", "name: data", `disk.wwid == "naa.1"`, "maxSize: 200GiB",
+				"name: scratch", `"/dev/disk/by-id/x" in disk.symlinks`, "minSize: 1GiB", "grow: true")
+		})
+	}
+
+	t.Run("unset renders no volume documents", func(t *testing.T) {
+		wantNone(t, renderWith(t, "", func(*ichorv1alpha1.TalosMachine) {}), "kind: UserVolumeConfig", "diskSelector")
+	})
+}

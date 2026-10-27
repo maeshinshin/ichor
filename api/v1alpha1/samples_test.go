@@ -48,6 +48,7 @@ var sampleFiles = []string{
 	"ichor_v1alpha1_talosconfigpatch.yaml",
 	"ichor_v1alpha1_talosstorage.yaml",
 	"ichor_v1alpha1_talosoperation.yaml",
+	"ichor_v1alpha1_ichoruser.yaml",
 }
 
 var _ = Describe("config/samples", func() {

@@ -248,7 +248,8 @@ func TestStartCommandsAreMarkedAsWrites(t *testing.T) {
 		"talos": upgradeTalosCmd.Annotations[writesAnnotation], "kubernetes": upgradeKubernetesCmd.Annotations[writesAnnotation],
 		"ichor": upgradeIchorCmd.Annotations[writesAnnotation], "kube-proxy": cniKubeProxyCmd.Annotations[writesAnnotation],
 		"shutdown": clusterShutdownCmd.Annotations[writesAnnotation], "pause": operationPauseCmd.Annotations[writesAnnotation],
-		"resume": operationResumeCmd.Annotations[writesAnnotation], "delete": operationDeleteCmd.Annotations[writesAnnotation],
+		"resume": operationResumeCmd.Annotations[writesAnnotation], "retry": operationRetryCmd.Annotations[writesAnnotation],
+		"delete": operationDeleteCmd.Annotations[writesAnnotation],
 	} {
 		if ann != "true" {
 			t.Errorf("%s is not marked as a write", name)
@@ -373,7 +374,4 @@ func TestOperationRetryAnnotatesTheFailedOperation(t *testing.T) {
 		t.Fatal("the retry annotation was not set")
 	}
 
-	if operationRetryCmd.Annotations[writesAnnotation] != "true" {
-		t.Error("retry is not marked as a write")
-	}
 }

@@ -55,7 +55,7 @@ spec:
                 default: ghcr.io/maeshinshin/ichor-installer
                 description: |-
                   installerRepository is the image repository of the installer image; the Job runs
-                  <installerRepository>:<version>. Point it at a mirror in an air-gapped cluster.
+                  <installerRepository>:<version>. Point it at a mirror or private registry if you need to.
                 minLength: 1
                 type: string
               managementMode:

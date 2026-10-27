@@ -55,7 +55,7 @@ type IchorInstallationSpec struct {
 	Version string `json:"version"`
 
 	// installerRepository is the image repository of the installer image; the Job runs
-	// <installerRepository>:<version>. Point it at a mirror in an air-gapped cluster.
+	// <installerRepository>:<version>. Point it at a mirror or private registry if you need to.
 	// +kubebuilder:default="ghcr.io/maeshinshin/ichor-installer"
 	// +kubebuilder:validation:MinLength=1
 	// +optional

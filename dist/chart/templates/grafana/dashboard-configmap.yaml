@@ -3,8 +3,8 @@
 # weighs more against a JSON blob that rots the moment a panel's metric name changes,
 # not for maximizing panel count. Discovered by Grafana's sidecar-ConfigMap convention
 # (grafana_dashboard: "1"), which both kube-prometheus-stack's and Bitnami's Grafana
-# charts support -- Ichor ships no Grafana itself (architecture.md "Monitoring and air
-# gap"), so this ConfigMap is inert unless the cluster's own Grafana runs that sidecar.
+# charts support -- Ichor ships no Grafana itself (architecture.md "Monitoring and registry
+# mirrors"), so this ConfigMap is inert unless the cluster's own Grafana runs that sidecar.
 apiVersion: v1
 kind: ConfigMap
 metadata:

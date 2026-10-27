@@ -415,7 +415,7 @@ admission:
 ## Prometheus ServiceMonitors for scraping the controller manager's and (when
 ## ichorUI.enabled) ichor-ui's /metrics endpoints. Requires prometheus-operator's
 ## ServiceMonitor CRD to be installed in the cluster. Ichor ships no Prometheus itself
-## (docs/design/architecture.md, "Monitoring and air gap").
+## (docs/design/architecture.md, "Monitoring and registry mirrors").
 ##
 prometheus:
   enabled: false
@@ -432,7 +432,7 @@ prometheus:
 ## A ConfigMap carrying one Grafana dashboard for the metrics above, labeled
 ## "grafana_dashboard: \"1\"" -- the sidecar-discovery convention both
 ## kube-prometheus-stack's and Bitnami's Grafana charts support out of the box. Ichor
-## ships no Grafana (docs/design/architecture.md, "Monitoring and air gap"): this
+## ships no Grafana (docs/design/architecture.md, "Monitoring and registry mirrors"): this
 ## ConfigMap does nothing unless the cluster's own Grafana deployment already runs
 ## that sidecar.
 ##

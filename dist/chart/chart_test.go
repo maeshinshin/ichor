@@ -265,7 +265,9 @@ func renderChartWithValues(t *testing.T, release string, sets ...string) []map[s
 // renderChartWithValuesErr runs "helm template" with --set overrides and returns its error
 // instead of failing, for values the chart must refuse.
 func renderChartWithValuesErr(release string, sets ...string) ([]byte, error) {
-	args := []string{"template", release, "."}
+	args := make([]string, 0, 3+2*len(sets))
+	args = append(args, "template", release, ".")
+
 	for _, s := range sets {
 		args = append(args, "--set", s)
 	}
@@ -625,16 +627,22 @@ func TestUIUsers(t *testing.T) {
 		t.Error("the credentials Secret renders by default")
 	}
 
-	if args := fmt.Sprint(find(off, kindDeployment, ichorUIDeploymentName)["spec"]); strings.Contains(args, "users-enabled") ||
-		strings.Contains(args, "oidc-signing") {
+	offDep := fmt.Sprint(find(off, kindDeployment, ichorUIDeploymentName)["spec"])
+	if strings.Contains(offDep, "users-enabled") || strings.Contains(offDep, "oidc-signing") {
 		t.Error("users flags or volumes render by default")
 	}
 
-	on := renderChartWithValues(t, "ichor", "ichorUI.users.enabled=true", "ichorUI.users.externalURL=https://ichor.example.com")
+	const url = "https://ichor.example.com"
+
+	on := renderChartWithValues(t, "ichor", "ichorUI.users.enabled=true", "ichorUI.users.externalURL="+url)
 	dep := fmt.Sprint(find(on, kindDeployment, ichorUIDeploymentName)["spec"])
 
-	for _, want := range []string{"--users-enabled=true", "--external-url=https://ichor.example.com", "--internal-addr=:8444",
-		"--token-ttl=5m", "--refresh-lifetime=12h", "ichor-oidc-signing", "ichor-oidc-tls", "containerPort:8444"} {
+	wants := []string{
+		"--users-enabled=true", "--external-url=" + url, "--internal-addr=:8444", "--token-ttl=5m",
+		"--refresh-lifetime=12h", "ichor-oidc-signing", "ichor-oidc-tls", "containerPort:8444",
+	}
+
+	for _, want := range wants {
 		if !strings.Contains(dep, want) {
 			t.Errorf("Deployment lacks %q: %s", want, dep)
 		}

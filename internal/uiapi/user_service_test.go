@@ -29,7 +29,6 @@ import (
 	"connectrpc.com/connect"
 	authv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -42,9 +41,12 @@ import (
 )
 
 const (
-	usersNS     = "ichor-system"
-	strongPass  = "correct horse battery"
-	strongPass2 = "another long password"
+	usersNS         = "ichor-system"
+	userAlice       = "alice"
+	userRoot        = "root"
+	ichorAdminGroup = "ichor:admin"
+	strongPass      = "correct horse battery"
+	strongPass2     = "another long password"
 )
 
 func b64(s string) string { return base64.RawURLEncoding.EncodeToString([]byte(s)) }
@@ -61,8 +63,8 @@ func (f fakeLocal) Verify(_ context.Context, raw string) (string, error) {
 
 func newUser(name string, disabled bool, roles ...string) *ichorv1alpha1.IchorUser {
 	return &ichorv1alpha1.IchorUser{
-		ObjectMeta: metav1.ObjectMeta{Namespace: usersNS, Name: name},
-		Spec:       ichorv1alpha1.IchorUserSpec{DisplayName: "D " + name, Roles: roles, Disabled: disabled},
+		Namespace: usersNS, Name: name,
+		Spec: ichorv1alpha1.IchorUserSpec{DisplayName: "D " + name, Roles: roles, Disabled: disabled},
 	}
 }
 
@@ -80,7 +82,7 @@ func userServer(t *testing.T, allow bool, objs ...client.Object) *Server {
 		t.Fatal(err)
 	}
 
-	store := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: usersNS, Name: ichorauth.CredentialsSecretName}}
+	store := &corev1.Secret{Namespace: usersNS, Name: ichorauth.CredentialsSecretName}
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(append(objs, store)...).
 		WithInterceptorFuncs(interceptor.Funcs{Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
 			if r, ok := obj.(*authv1.SelfSubjectAccessReview); ok {
@@ -103,8 +105,8 @@ func ichorCtx(name string) context.Context {
 }
 
 func TestAuthenticateLocalTokenReadsRolesFromTheCRAndRefusesDisabled(t *testing.T) {
-	s := userServer(t, true, newUser("alice", false, "admin", "ops"), newUser("bob", true, "viewer"))
-	a := (*Authenticator)(nil).WithLocal("https://ichor.example.com", fakeLocal{"ta": "alice", "tb": "bob", "tg": "ghost"}, s.Users.Cache)
+	s := userServer(t, true, newUser(userAlice, false, adminRole, "ops"), newUser("bob", true, "viewer"))
+	a := (*Authenticator)(nil).WithLocal("https://ichor.example.com", fakeLocal{"ta": userAlice, "tb": "bob", "tg": "ghost"}, s.Users.Cache)
 
 	mk := func(tok string) string { // a JWT-shaped token whose unverified iss is the local issuer
 		payload := `{"iss":"https://ichor.example.com"}`
@@ -116,7 +118,7 @@ func TestAuthenticateLocalTokenReadsRolesFromTheCRAndRefusesDisabled(t *testing.
 		t.Fatal(err)
 	}
 
-	if id.User != "ichor:alice" || !slices.Equal(id.Groups, []string{"ichor:admin", "ichor:ops"}) || id.Source != SourceIchor {
+	if id.User != "ichor:alice" || !slices.Equal(id.Groups, []string{ichorAdminGroup, "ichor:ops"}) || id.Source != SourceIchor {
 		t.Errorf("identity = %+v", id)
 	}
 
@@ -132,18 +134,18 @@ func TestAuthenticateLocalTokenReadsRolesFromTheCRAndRefusesDisabled(t *testing.
 }
 
 func TestAuthenticateLocalSeesADisableWithinTheCacheWindow(t *testing.T) {
-	s := userServer(t, true, newUser("alice", false, "admin"))
+	s := userServer(t, true, newUser(userAlice, false, adminRole))
 	now := time.Now()
 	s.Users.Cache.Now = func() time.Time { return now }
 
-	a := (*Authenticator)(nil).WithLocal("https://i", fakeLocal{"t": "alice"}, s.Users.Cache)
+	a := (*Authenticator)(nil).WithLocal("https://i", fakeLocal{"t": userAlice}, s.Users.Cache)
 	tok := "Bearer e30." + b64(`{"iss":"https://i"}`) + ".t"
 
 	if _, err := a.Authenticate(context.Background(), tok); err != nil {
 		t.Fatal(err)
 	}
 
-	u := newUser("alice", true, "admin")
+	u := newUser(userAlice, true, adminRole)
 	cur := &ichorv1alpha1.IchorUser{}
 
 	if err := s.Client.Get(context.Background(), client.ObjectKeyFromObject(u), cur); err != nil {
@@ -174,15 +176,15 @@ func TestExternalTokenCannotNameAnIchorIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tok := p.mint(t, p.key, func(c map[string]any) { c["email"] = "ichor:admin" })
+	tok := p.mint(t, p.key, func(c map[string]any) { c["email"] = ichorAdminGroup })
 	if _, err := a.Authenticate(context.Background(), "Bearer "+tok); err == nil {
 		t.Fatal("an external token named ichor:admin")
 	}
 
-	tok = p.mint(t, p.key, func(c map[string]any) { c["groups"] = []string{"ichor:admin"} })
+	tok = p.mint(t, p.key, func(c map[string]any) { c["groups"] = []string{ichorAdminGroup} })
 
 	id, err := a.Authenticate(context.Background(), "Bearer "+tok)
-	if err != nil || slices.Contains(id.Groups, "ichor:admin") {
+	if err != nil || slices.Contains(id.Groups, ichorAdminGroup) {
 		t.Fatalf("an external token got the group ichor:admin: %v %v", id.Groups, err)
 	}
 }
@@ -206,39 +208,39 @@ func TestUserServiceNeedsUsersOnAndAnIdentity(t *testing.T) {
 
 func TestCreateUpdateDisableAndTheLastAdminGuard(t *testing.T) {
 	s := userServer(t, true)
-	ctx := ichorCtx("root")
+	ctx := ichorCtx(userRoot)
 
 	if _, err := s.CreateUser(ctx, connect.NewRequest(&pb.CreateUserRequest{Name: "Bad_Name"})); connect.CodeOf(err) != connect.CodeInvalidArgument {
 		t.Errorf("bad name: %v", err)
 	}
 
-	if _, err := s.CreateUser(ctx, connect.NewRequest(&pb.CreateUserRequest{Name: "root", Roles: []string{"admin"}})); err != nil {
+	if _, err := s.CreateUser(ctx, connect.NewRequest(&pb.CreateUserRequest{Name: userRoot, Roles: []string{adminRole}})); err != nil {
 		t.Fatal(err)
 	}
 
-	if _, err := s.CreateUser(ctx, connect.NewRequest(&pb.CreateUserRequest{Name: "root"})); connect.CodeOf(err) != connect.CodeAlreadyExists {
+	if _, err := s.CreateUser(ctx, connect.NewRequest(&pb.CreateUserRequest{Name: userRoot})); connect.CodeOf(err) != connect.CodeAlreadyExists {
 		t.Errorf("duplicate: %v", err)
 	}
 
 	for name, req := range map[string]*pb.UpdateUserRequest{
-		"disable": {Name: "root", Roles: []string{"admin"}, Disabled: true},
-		"demote":  {Name: "root", Roles: []string{"viewer"}},
+		"disable": {Name: userRoot, Roles: []string{adminRole}, Disabled: true},
+		"demote":  {Name: userRoot, Roles: []string{"viewer"}},
 	} {
 		if _, err := s.UpdateUser(ctx, connect.NewRequest(req)); connect.CodeOf(err) != connect.CodeFailedPrecondition {
 			t.Errorf("%s the last admin: %v", name, err)
 		}
 	}
 
-	if _, err := s.DeleteUser(ctx, connect.NewRequest(&pb.DeleteUserRequest{Name: "root"})); connect.CodeOf(err) != connect.CodeFailedPrecondition {
+	if _, err := s.DeleteUser(ctx, connect.NewRequest(&pb.DeleteUserRequest{Name: userRoot})); connect.CodeOf(err) != connect.CodeFailedPrecondition {
 		t.Errorf("delete the last admin: %v", err)
 	}
 
 	// With a second admin, the first can go.
-	if _, err := s.CreateUser(ctx, connect.NewRequest(&pb.CreateUserRequest{Name: "second", Roles: []string{"admin"}})); err != nil {
+	if _, err := s.CreateUser(ctx, connect.NewRequest(&pb.CreateUserRequest{Name: "second", Roles: []string{adminRole}})); err != nil {
 		t.Fatal(err)
 	}
 
-	if _, err := s.UpdateUser(ctx, connect.NewRequest(&pb.UpdateUserRequest{Name: "root", Roles: []string{"admin"}, Disabled: true})); err != nil {
+	if _, err := s.UpdateUser(ctx, connect.NewRequest(&pb.UpdateUserRequest{Name: userRoot, Roles: []string{adminRole}, Disabled: true})); err != nil {
 		t.Errorf("disable with a second admin: %v", err)
 	}
 
@@ -248,7 +250,7 @@ func TestCreateUpdateDisableAndTheLastAdminGuard(t *testing.T) {
 	}
 }
 
-func readStored(t *testing.T, s *Server, name string) (ichorauth.Credential, string) {
+func readStored(t *testing.T, s *Server) (ichorauth.Credential, string) {
 	t.Helper()
 
 	var sec corev1.Secret
@@ -257,45 +259,45 @@ func readStored(t *testing.T, s *Server, name string) (ichorauth.Credential, str
 	}
 
 	var c ichorauth.Credential
-	if err := json.Unmarshal(sec.Data[name], &c); err != nil {
+	if err := json.Unmarshal(sec.Data[userAlice], &c); err != nil {
 		t.Fatal(err)
 	}
 
-	return c, string(sec.Data[name])
+	return c, string(sec.Data[userAlice])
 }
 
 func TestSetPasswordNeedsTheVerbAndNeverStoresCleartext(t *testing.T) {
-	denied := userServer(t, false, newUser("alice", false, "viewer"))
-	if _, err := denied.SetPassword(ichorCtx("x"), connect.NewRequest(&pb.SetPasswordRequest{Name: "alice", Password: strongPass})); connect.CodeOf(err) != connect.CodePermissionDenied {
+	denied := userServer(t, false, newUser(userAlice, false, "viewer"))
+	if _, err := denied.SetPassword(ichorCtx("x"), connect.NewRequest(&pb.SetPasswordRequest{Name: userAlice, Password: strongPass})); connect.CodeOf(err) != connect.CodePermissionDenied {
 		t.Fatalf("without the verb: %v", err)
 	}
 
-	if _, found, _ := denied.readCredential(context.Background(), "alice"); found {
+	if _, found, _ := denied.readCredential(context.Background(), userAlice); found {
 		t.Fatal("a refused SetPassword wrote an entry")
 	}
 
-	s := userServer(t, true, newUser("alice", false, "viewer"))
+	s := userServer(t, true, newUser(userAlice, false, "viewer"))
 
-	resp, err := s.SetPassword(ichorCtx("x"), connect.NewRequest(&pb.SetPasswordRequest{Name: "alice", Password: strongPass}))
+	resp, err := s.SetPassword(ichorCtx("x"), connect.NewRequest(&pb.SetPasswordRequest{Name: userAlice, Password: strongPass}))
 	if err != nil || resp.Msg.GetGeneratedPassword() != "" {
 		t.Fatalf("explicit password: %v %q", err, resp.Msg.GetGeneratedPassword())
 	}
 
-	cred, raw := readStored(t, s, "alice")
+	cred, raw := readStored(t, s)
 	if !cred.MustChange || !strings.HasPrefix(cred.Hash, "$argon2id$") || strings.Contains(raw, strongPass) {
 		t.Errorf("stored entry wrong: mustChange=%v", cred.MustChange)
 	}
 
-	if _, err := s.SetPassword(ichorCtx("x"), connect.NewRequest(&pb.SetPasswordRequest{Name: "alice", Password: "short"})); connect.CodeOf(err) != connect.CodeInvalidArgument {
+	if _, err := s.SetPassword(ichorCtx("x"), connect.NewRequest(&pb.SetPasswordRequest{Name: userAlice, Password: "short"})); connect.CodeOf(err) != connect.CodeInvalidArgument {
 		t.Errorf("short password: %v", err)
 	}
 
-	gen, err := s.SetPassword(ichorCtx("x"), connect.NewRequest(&pb.SetPasswordRequest{Name: "alice"}))
+	gen, err := s.SetPassword(ichorCtx("x"), connect.NewRequest(&pb.SetPasswordRequest{Name: userAlice}))
 	if err != nil || len(gen.Msg.GetGeneratedPassword()) != 24 {
 		t.Fatalf("generated: %v", err)
 	}
 
-	cred, raw = readStored(t, s, "alice")
+	cred, raw = readStored(t, s)
 	if strings.Contains(raw, gen.Msg.GetGeneratedPassword()) || !ichorauth.VerifyPassword(gen.Msg.GetGeneratedPassword(), cred.Hash) {
 		t.Error("generated password not stored as a matching hash")
 	}
@@ -306,13 +308,13 @@ func TestSetPasswordNeedsTheVerbAndNeverStoresCleartext(t *testing.T) {
 }
 
 func TestChangeOwnPassword(t *testing.T) {
-	s := userServer(t, false, newUser("alice", false, "viewer"))
-	if err := s.setCredential(context.Background(), "alice", strongPass, true); err != nil {
+	s := userServer(t, false, newUser(userAlice, false, "viewer"))
+	if err := s.setCredential(context.Background(), userAlice, strongPass, true); err != nil {
 		t.Fatal(err)
 	}
 
 	change := func(old, nu string) error {
-		_, err := s.ChangeOwnPassword(ichorCtx("alice"), connect.NewRequest(&pb.ChangeOwnPasswordRequest{OldPassword: old, NewPassword: nu}))
+		_, err := s.ChangeOwnPassword(ichorCtx(userAlice), connect.NewRequest(&pb.ChangeOwnPasswordRequest{OldPassword: old, NewPassword: nu}))
 		return err
 	}
 
@@ -329,7 +331,7 @@ func TestChangeOwnPassword(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cred, _ := readStored(t, s, "alice")
+	cred, _ := readStored(t, s)
 	if cred.MustChange || !ichorauth.VerifyPassword(strongPass2, cred.Hash) {
 		t.Error("password not changed or still must-change")
 	}
@@ -346,32 +348,32 @@ func TestChangeOwnPassword(t *testing.T) {
 }
 
 func TestRevokeSessionsMovesNotBefore(t *testing.T) {
-	s := userServer(t, true, newUser("alice", false, "viewer"))
+	s := userServer(t, true, newUser(userAlice, false, "viewer"))
 	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	s.Now = func() time.Time { return t0 }
 
-	if _, err := s.RevokeSessions(ichorCtx("x"), connect.NewRequest(&pb.RevokeSessionsRequest{Name: "alice"})); connect.CodeOf(err) != connect.CodeFailedPrecondition {
+	if _, err := s.RevokeSessions(ichorCtx("x"), connect.NewRequest(&pb.RevokeSessionsRequest{Name: userAlice})); connect.CodeOf(err) != connect.CodeFailedPrecondition {
 		t.Fatalf("no password yet: %v", err)
 	}
 
-	if err := s.setCredential(context.Background(), "alice", strongPass, false); err != nil {
+	if err := s.setCredential(context.Background(), userAlice, strongPass, false); err != nil {
 		t.Fatal(err)
 	}
 
 	s.Now = func() time.Time { return t0.Add(time.Hour) }
 
-	if _, err := s.RevokeSessions(ichorCtx("x"), connect.NewRequest(&pb.RevokeSessionsRequest{Name: "alice"})); err != nil {
+	if _, err := s.RevokeSessions(ichorCtx("x"), connect.NewRequest(&pb.RevokeSessionsRequest{Name: userAlice})); err != nil {
 		t.Fatal(err)
 	}
 
-	cred, _ := readStored(t, s, "alice")
+	cred, _ := readStored(t, s)
 	if !cred.NotBefore.Equal(t0.Add(time.Hour)) || !ichorauth.VerifyPassword(strongPass, cred.Hash) {
 		t.Errorf("notBefore = %v, or the hash changed", cred.NotBefore)
 	}
 }
 
 func TestKubeconfigHoldsPublicDataOnly(t *testing.T) {
-	raw, err := buildKubeconfig("c1", "https://10.0.0.5:6443", []byte("CA-PEM"), "alice", "https://ichor.example.com")
+	raw, err := buildKubeconfig("c1", "https://10.0.0.5:6443", []byte("CA-PEM"), userAlice, "https://ichor.example.com")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -392,12 +394,12 @@ func TestKubeconfigHoldsPublicDataOnly(t *testing.T) {
 }
 
 func TestWhoAmIReportsMustChange(t *testing.T) {
-	s := userServer(t, false, newUser("alice", false, "viewer"))
-	if err := s.setCredential(context.Background(), "alice", strongPass, true); err != nil {
+	s := userServer(t, false, newUser(userAlice, false, "viewer"))
+	if err := s.setCredential(context.Background(), userAlice, strongPass, true); err != nil {
 		t.Fatal(err)
 	}
 
-	resp, err := s.WhoAmI(ichorCtx("alice"), connect.NewRequest(&pb.WhoAmIRequest{}))
+	resp, err := s.WhoAmI(ichorCtx(userAlice), connect.NewRequest(&pb.WhoAmIRequest{}))
 	if err != nil || !resp.Msg.GetMustChangePassword() || resp.Msg.GetUsername() != "ichor:alice" {
 		t.Fatalf("whoami: %v %v", resp, err)
 	}

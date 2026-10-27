@@ -31,7 +31,6 @@ import (
 	authv1 "k8s.io/api/authorization/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
@@ -67,7 +66,7 @@ var (
 // and the call must carry an identity (turning users on turns on login).
 func (s *Server) requireUsers(ctx context.Context) (Identity, error) {
 	if s.Users == nil {
-		return Identity{}, connect.NewError(connect.CodeFailedPrecondition, errors.New("Ichor users are not enabled"))
+		return Identity{}, connect.NewError(connect.CodeFailedPrecondition, errors.New("ichor users are not enabled"))
 	}
 
 	id, ok := IdentityFrom(ctx)
@@ -87,7 +86,7 @@ func (s *Server) mayUpdatePasswords(ctx context.Context) error {
 	}
 
 	review := &authv1.SelfSubjectAccessReview{Spec: authv1.SelfSubjectAccessReviewSpec{ResourceAttributes: &authv1.ResourceAttributes{
-		Namespace: s.ControllerNamespace, Verb: "update", Group: ichorv1alpha1.GroupVersion.Group,
+		Namespace: s.ControllerNamespace, Verb: verbUpdate, Group: ichorv1alpha1.GroupVersion.Group,
 		Resource: "ichorusers", Subresource: passwordSubres,
 	}}}
 
@@ -97,7 +96,7 @@ func (s *Server) mayUpdatePasswords(ctx context.Context) error {
 
 	if !review.Status.Allowed {
 		return connect.NewError(connect.CodePermissionDenied,
-			errors.New("Kubernetes RBAC does not grant you the update verb on ichorusers/password"))
+			errors.New("kubernetes RBAC does not grant you the update verb on ichorusers/password"))
 	}
 
 	return nil
@@ -220,8 +219,8 @@ func (s *Server) CreateUser(ctx context.Context, req *connect.Request[pb.CreateU
 	}
 
 	u := &ichorv1alpha1.IchorUser{
-		ObjectMeta: metav1.ObjectMeta{Namespace: s.ControllerNamespace, Name: m.GetName()},
-		Spec:       ichorv1alpha1.IchorUserSpec{DisplayName: m.GetDisplayName(), Email: m.GetEmail(), Roles: m.GetRoles()},
+		Namespace: s.ControllerNamespace, Name: m.GetName(),
+		Spec: ichorv1alpha1.IchorUserSpec{DisplayName: m.GetDisplayName(), Email: m.GetEmail(), Roles: m.GetRoles()},
 	}
 
 	if err := s.Create(ctx, u); err != nil {

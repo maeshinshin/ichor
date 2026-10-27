@@ -21,8 +21,13 @@ import (
 	"time"
 )
 
+const (
+	testIssuer = "https://ichor.example.com"
+	testIDP    = "https://idp"
+)
+
 func TestAuthConfigProviders(t *testing.T) {
-	on := usersFlags{enabled: true, externalURL: "https://ichor.example.com"}
+	on := usersFlags{enabled: true, externalURL: testIssuer}
 
 	cases := []struct {
 		name      string
@@ -33,9 +38,9 @@ func TestAuthConfigProviders(t *testing.T) {
 		issuer    string
 	}{
 		{"neither", "", usersFlags{}, false, nil, ""},
-		{"external only keeps the old keys", "https://idp", usersFlags{}, true, []string{"oidc"}, "https://idp"},
-		{"ichor only", "", on, true, []string{"ichor"}, "https://ichor.example.com"},
-		{"both", "https://idp", on, true, []string{"oidc", "ichor"}, "https://idp"},
+		{"external only keeps the old keys", testIDP, usersFlags{}, true, []string{"oidc"}, testIDP},
+		{"ichor only", "", on, true, []string{"ichor"}, testIssuer},
+		{"both", testIDP, on, true, []string{"oidc", "ichor"}, testIDP},
 	}
 
 	for _, tc := range cases {
@@ -60,7 +65,7 @@ func TestAuthConfigProviders(t *testing.T) {
 }
 
 func TestUsersFlagsValidate(t *testing.T) {
-	ok := usersFlags{enabled: true, externalURL: "https://ichor.example.com", tokenTTL: 5 * time.Minute, refreshTTL: 12 * time.Hour}
+	ok := usersFlags{enabled: true, externalURL: testIssuer, tokenTTL: 5 * time.Minute, refreshTTL: 12 * time.Hour}
 	if err := ok.validate(); err != nil {
 		t.Fatal(err)
 	}

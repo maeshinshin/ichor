@@ -416,8 +416,8 @@ type TalosClusterSpec struct {
 
 	// registries declares this cluster's private registry mirrors and where their pull
 	// credentials live, pushed to every node through the system layer (ADR 0027,
-	// docs/design/architecture.md "Monitoring and air gap"). Empty (the default) configures no
-	// mirrors at all -- air-gap support stays entirely optional. listType=map on host (rather
+	// docs/design/architecture.md "Monitoring and registry mirrors"). Empty (the default) configures no
+	// mirrors at all -- mirrors stay entirely optional. listType=map on host (rather
 	// than a CEL uniqueness rule, same as status.conditions below) is what the structural schema
 	// itself rejects a duplicate host under -- a CEL self.exists_one rule over this list was
 	// tried first and rejected by envtest's apiserver: with MaxItems=32 its estimated cost

@@ -51,6 +51,9 @@ inventing a new control plane.
   state belong to Longhorn (or whatever you run).
 - Multi-cluster management. The design keeps a hub mode possible, but it is
   not a first-release feature.
+- Air-gapped environments (ADR 0090). Nothing is built or tested for an
+  installation with no route to public registries; registry mirrors exist for
+  pull-through caches and private registries.
 - IPv6, PXE provisioning, Flux PR mode. Later, maybe.
 
 ## Overview
@@ -474,11 +477,6 @@ What choosing it changes, as far as Kokumi's published docs say:
   creates are ordinary Argo CD Applications, so `argocd-cm` is still what
   Ichor reads.
 
-Air gap: Kokumi's artifacts are OCI and its docs say its dependencies can be
-mirrored to a private registry, so they plausibly ride the same mirror path
-as `ichor images list`; `ichor images list --kokumi` prints the two images
-Kokumi 0.17.0 runs (ADR 0048).
-
 ### Nodes
 
 Discovery starts from a node in maintenance mode: either registered by IP or
@@ -885,7 +883,7 @@ rotation (Talos and Kubernetes) follows the documented Talos procedure and
 runs through the same machinery as upgrades. Expiry dates are visible in
 status, the UI and metrics.
 
-### Monitoring and air gap
+### Monitoring and registry mirrors
 
 Ichor does not install a monitoring stack. It can expose the control-plane
 metrics that Talos binds locally by default (controller-manager, scheduler,
@@ -895,28 +893,11 @@ alert rules and Grafana dashboards ship with the chart as an option. The
 monitoring stack itself is an optional component in the Git skeleton, a
 documented set of Helm values, or nothing — the user's choice.
 
-Air-gap support is entirely optional and off by default: registry mirrors
-pushed to every node through the system layer, an override for the installer
-image source, a self-hosted Image Factory URL, and `ichor images list` to
-print everything that needs mirroring for a given version set. The pre-checks
-can verify mirror reachability before an upgrade.
-
-What `ichor images list` has to print for a self-hosted Image Factory is
-settled, from the Factory's own `docs/sources.md` and `docs/air-gapped.md`.
-It pulls from `ghcr.io` unless given `-image-registry`, and needs
-`siderolabs/imager`, `siderolabs/installer-base` (`siderolabs/installer`
-below Talos 1.10.0), `siderolabs/extensions`, `siderolabs/overlays` and
-`siderolabs/talosctl-all` (Talos 1.11.0 and up). Mirroring is
-`hack/copy-artifacts.sh`, which copies signatures as well as images, and the
-Factory is pointed at the result with `artifacts.core.registry` plus an
-optional `artifacts.core.namespace` for registries that prefix paths.
-
-The part that is easy to get wrong, and so the part `ichor images list` exists
-for: `extensions` and `overlays` are *catalogs*. Mirroring them does not
-mirror what they name — every extension and overlay image they reference has
-to be mirrored too, and the `namespace` prefix applies to those as well. A
-mirror that holds the five images above and nothing else looks complete and
-fails at the first schematic that asks for an extension.
+Registry mirrors are optional and off by default: they are pushed to every
+node through the system layer, alongside an override for the installer image
+source and a self-hosted Image Factory URL. They serve pull-through caches and
+private registries, not air-gapped installs. The pre-checks can verify mirror
+reachability before an upgrade.
 
 ## CLI and UI
 
@@ -984,8 +965,8 @@ resumption works. A short set runs per PR, the full set nightly.
 7. Storage integration (longhorn-v1, operation hooks), CA rotation.
 8. PR mode, strict mode, break-glass, Argo CD health checks, GitOps page.
 9. Monitoring settings, metrics and dashboards, optional components, external
-   links, OIDC and impersonation, `ichor images list`.
-10. Air-gap verification, UI localisation.
+   links, OIDC and impersonation.
+10. UI localisation.
 11. Later: calico, more storage presets, Flux PR mode, IPv6, hub mode, replica-
     based scaling.
 

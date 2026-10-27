@@ -1,12 +1,12 @@
 # 0036. `ichor images list` cannot resolve catalogs or schematics, and says so
 
-Status: Accepted · Date: 2026-10-26 · Design section: Monitoring and air gap
+Status: Superseded by ADR 0090 (the command was removed) · Date: 2026-10-26 · Design section: Monitoring and registry mirrors
 
 Decided: `ichor images list` prints the five fixed Image Factory images (version-gated) plus an unconditional warning naming the two catalogs, instead of trying to resolve a schematic's extensions/overlays into images
 
 ## Context
 
-architecture.md's "Monitoring and air gap" section names what `ichor images
+architecture.md's "Monitoring and registry mirrors" section names what `ichor images
 list` has to print -- `siderolabs/imager`, `siderolabs/installer-base`
 (`siderolabs/installer` below Talos 1.10.0), `siderolabs/extensions`,
 `siderolabs/overlays`, `siderolabs/talosctl-all` (1.11.0 and up) -- and

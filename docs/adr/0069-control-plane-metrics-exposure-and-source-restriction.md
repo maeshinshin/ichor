@@ -1,11 +1,11 @@
 # 0069. Control-plane metrics are exposed by `spec.controlPlaneMetrics` and fenced by one source-restricting firewall rule
 
-Status: Accepted · Date: 2026-10-26 · Design section: Monitoring and air gap
+Status: Accepted · Date: 2026-10-26 · Design section: Monitoring and registry mirrors
 Decided: `TalosCluster.spec.controlPlaneMetrics {enabled, allowedCIDRs}` (off by default; enabled needs at least one CIDR, `/0` rejected) renders, on control-plane nodes only and in the system layer, `bind-address: 0.0.0.0` for kube-controller-manager and kube-scheduler, `listen-metrics-urls: http://0.0.0.0:2381` for etcd, and one `NetworkRuleConfig` for TCP 2381, 10257 and 10259 that drops every source outside `allowedCIDRs`, with Talos's default firewall action left at accept; the firewall kinds are no-reboot in `pkg/fieldmeta`, the etcd argument stays reboot-required; the chart gets no new monitoring resource.
 
 ## Context
 
-architecture.md ("Monitoring and air gap") says Ichor can expose the control-plane metrics Talos
+architecture.md ("Monitoring and registry mirrors") says Ichor can expose the control-plane metrics Talos
 binds locally and restrict scraping to a CIDR with Talos's ingress firewall. ADR 0040 left it as a
 `pkg/render` system-layer unit and listed what it needs. Everything below was read from the Talos
 v1.14.3 source (`siderolabs/talos@v1.14.3` and `pkg/machinery@v1.14.3`), not recalled.

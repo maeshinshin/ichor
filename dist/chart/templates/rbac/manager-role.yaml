@@ -80,6 +80,26 @@ rules:
   verbs:
   - get
 - apiGroups:
+  - apps
+  resourceNames:
+  - cilium
+  - kube-flannel
+  - kube-proxy
+  resources:
+  - daemonsets
+  verbs:
+  - get
+  - patch
+- apiGroups:
+  - apps
+  resourceNames:
+  - coredns
+  resources:
+  - deployments
+  verbs:
+  - get
+  - patch
+- apiGroups:
   - argoproj.io
   resources:
   - applications

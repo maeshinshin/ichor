@@ -36,7 +36,8 @@ limitations under the License.
 //	Issuing ... new CA issues, old is accepted                                 -> Dropping
 //	Dropping .. old CA removed from the accepted CAs                           -> Finalizing
 //	Finalizing  Secret replaced, BundleBackupStale raised, Ichor's dial and the machines'
-//	            configuration checked against the replaced bundle              -> Done
+//	            configuration checked against the replaced bundle, CoreDNS, kube-proxy, the
+//	            CNI and ichor-ui restarted once to load the new CA             -> Done
 //
 // A step that cannot be verified (a machine does not answer Ichor, a Node is not Ready, an apply
 // is refused) never advances the stage: the operation is Paused with the reason and tried again
@@ -183,6 +184,8 @@ type caRun struct {
 	bundle  *secrets.Bundle
 	rot     *secretsbundle.Rotation
 	scrub   scrubber
+	// restartNote names what did not come back after the clients' restart; it ends the completion message.
+	restartNote string
 }
 
 // advanceCARotation runs one step of the rotation. The caller holds the cluster lock.
@@ -815,6 +818,13 @@ func (c *caRun) finalize(ctx context.Context) (ctrl.Result, error) {
 		}
 	}
 
+	res, note, done, err := c.restartClients(ctx)
+	if !done {
+		return res, err
+	}
+
+	c.restartNote = note
+
 	// Done is the last thing this reconcile verified, so the operation completes now: a requeue here
 	// would leave it InProgress at Done for as long as the requeue takes to come back.
 	c.op.Status.CARotation.Stage = ichorv1alpha1.CARotationStageDone
@@ -905,5 +915,5 @@ func (c *caRun) complete(ctx context.Context) (ctrl.Result, error) {
 	}
 
 	return ctrl.Result{}, c.status(ctx, ichorv1alpha1.TalosOperationPhaseCompleted, metav1.ConditionFalse,
-		reasonCARotationComplete, "the Talos API and Kubernetes API CAs are replaced; export the new secrets bundle")
+		reasonCARotationComplete, "the Talos API and Kubernetes API CAs are replaced; export the new secrets bundle"+c.restartNote)
 }

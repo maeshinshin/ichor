@@ -93,6 +93,15 @@ func (s *Server) enrichOperation(ctx context.Context, out *pb.Operation, op *ich
 	describeOperation(out, op, &cluster, install)
 }
 
+// fromTo is " from → to" when the starting version was recorded, else " to target".
+func fromTo(from, target string) string {
+	if from != "" && from != target {
+		return " " + from + " → " + target
+	}
+
+	return " to " + target
+}
+
 func shortID(id string) string {
 	if len(id) > 12 {
 		return id[:12] + "…"
@@ -103,8 +112,6 @@ func shortID(id string) string {
 
 // describeOperation fills summary, details, started_by and finished_at. cluster and install are
 // optional: without them the summary leaves the versions out rather than guessing.
-// ponytail: the version an upgrade moves from is not on the CR (the target lives on the cluster
-// spec), so Talos and Kubernetes summaries only say "to".
 //
 //nolint:gocyclo // one switch over the kinds, each a few lines
 func describeOperation(out *pb.Operation, op *ichorv1alpha1.TalosOperation, cluster *ichorv1alpha1.TalosCluster, install *ichorv1alpha1.IchorInstallation) {
@@ -129,7 +136,7 @@ func describeOperation(out *pb.Operation, op *ichorv1alpha1.TalosOperation, clus
 		out.Summary = "Upgrade Talos"
 
 		if cluster != nil {
-			out.Summary += " to " + cluster.Spec.TalosVersion
+			out.Summary += fromTo(op.Status.FromVersion, cluster.Spec.TalosVersion)
 
 			add("Target Talos version", cluster.Spec.TalosVersion)
 
@@ -143,7 +150,7 @@ func describeOperation(out *pb.Operation, op *ichorv1alpha1.TalosOperation, clus
 		out.Summary = "Upgrade Kubernetes"
 
 		if cluster != nil {
-			out.Summary += " to " + cluster.Spec.KubernetesVersion
+			out.Summary += fromTo(op.Status.FromVersion, cluster.Spec.KubernetesVersion)
 
 			add("Target Kubernetes version", cluster.Spec.KubernetesVersion)
 		}

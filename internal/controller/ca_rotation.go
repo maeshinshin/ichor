@@ -654,7 +654,7 @@ func (c *caRun) awaitCredentials(ctx context.Context) (ctrl.Result, error) {
 		metav1.ConditionFalse, reasonCARotationAwaitingCredentials, fmt.Sprintf(
 			"every machine accepts the new CAs and the old ones still work. Nothing else happens until you have credentials that "+
 				"work after the next stage: run `ichor cluster credentials %s --acknowledge` "+
-				"with your current kubeconfig", c.cluster.Name))
+				"with your current kubeconfig, or download them and continue on the operation page of the UI", c.cluster.Name))
 }
 
 // finalize replaces secrets.yaml with the new CAs and removes rotation.yaml in one Secret update,

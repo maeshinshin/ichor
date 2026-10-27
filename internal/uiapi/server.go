@@ -101,6 +101,10 @@ type Server struct {
 	// tests supply a fake, since no API server accepts a freshly minted CA.
 	VerifyKubeconfig func(ctx context.Context, kubeconfig []byte) error
 
+	// Users is non-nil when Ichor's own users are on (docs/adr/0094); UserService
+	// answers FailedPrecondition otherwise.
+	Users *UserSettings
+
 	prs prCache
 
 	diag     diagnostics

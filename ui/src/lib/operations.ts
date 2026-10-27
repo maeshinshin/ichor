@@ -125,12 +125,13 @@ export function caStageProgress(stage: string): { index: number; total: number }
 }
 
 // The stages status.kubernetes.stage goes through, in order.
-export const kubernetesStages = ['ControlPlanes', 'KubeProxy', 'Kubelets'] as const
+export const kubernetesStages = ['APIServers', 'ControlPlaneComponents', 'KubeProxy', 'Kubelets'] as const
 export type KubernetesStage = (typeof kubernetesStages)[number]
 
 // kubernetesStageProgress is where a Kubernetes upgrade is: its stage's name and a
-// 1-based position among the three stages. Null before the first stage is recorded or for an unknown one.
+// 1-based position among the four stages. Null before the first stage is recorded or for an unknown one.
+// 'ControlPlanes' is the combined first stage of operations started before the split; it counts as the first.
 export function kubernetesStageProgress(stage: string): { name: KubernetesStage; index: number; total: number } | null {
-  const i = (kubernetesStages as readonly string[]).indexOf(stage)
+  const i = (kubernetesStages as readonly string[]).indexOf(stage === 'ControlPlanes' ? 'APIServers' : stage)
   return i < 0 ? null : { name: kubernetesStages[i], index: i + 1, total: kubernetesStages.length }
 }

@@ -2,7 +2,7 @@
 
 Status: Accepted · Date: 2026-10-26 · Design section: Backup, recovery, certificates
 
-Decided: `ichor restore --recover-cluster` runs standalone (no Kubernetes, no Ichor): it reads the local secrets bundle, takes S3 credentials from environment variables, picks the newest snapshot that decrypts and passes the etcd checksum (or the one named by `--snapshot`, which is refused if broken), asks for confirmation, then uploads it with `EtcdRecover` to one freshly installed control plane and calls `Bootstrap{RecoverEtcd: true}`; restoring into a live cluster is not started
+Decided: `ichor restore --recover-cluster` runs standalone (no Kubernetes, no Ichor): it reads the local secrets bundle, takes S3 credentials from environment variables, picks the newest snapshot that decrypts and passes the etcd checksum (or the one named by `--snapshot`, which is refused if broken), asks for confirmation, then uploads it with `EtcdRecover` to one freshly installed control plane and calls `Bootstrap{RecoverEtcd: true}`; restoring into a live cluster is a separate controller-run operation (ADR 0089)
 
 ## Context
 
@@ -57,9 +57,11 @@ does have a cluster, must take the lock.
 
 ## Not done
 
-- **Restore into a live cluster (UI and CLI)** is not started. `ichor restore` without `--recover-cluster` says
-  so. It needs: the lock, stopping etcd on every control plane, `EtcdRecover` plus `Bootstrap{RecoverEtcd}` on
-  one and the others re-joining (or a reset of the others), and a UI RPC; it should reuse `fetchVerified`.
+- ~~Restore into a live cluster (UI and CLI)~~ is built, in ADR 0089: `ichor restore --live` and the UI create an
+  `etcd-restore` operation; the controller takes the lock, wipes etcd on every control plane, recovers the snapshot
+  on one with the calls above, lets the others rejoin and reconciles every machine again; it reuses `fetchVerified`
+  (now `etcdbackup.FetchVerified`). `--recover-cluster` is still the way back when that operation cannot finish,
+  for example when the controller ran on the only control plane that was wiped.
 - A restore round trip against a real Talos (e2e) is the design's regular proof and is not part of this unit.
 - Tests use an in-memory `etcdbackup.Store` plus a fake Talos client; the real S3 client is covered by
   `internal/etcdbackup`'s TLS fake S3, which lives in a `_test.go` file and is not importable.

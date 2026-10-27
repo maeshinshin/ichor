@@ -354,12 +354,6 @@ func (a *kubernetesUpgradeAdvancer) begin(
 		return fmt.Errorf("node %q has not reported a kubelet version", node.Name)
 	}
 
-	// The first node an upgrade begins on still runs the cluster's current version (apiservers go
-	// first, and no kubelet moves before them). Recorded once; the caller's status write saves it.
-	if op != nil && op.Status.FromVersion == "" {
-		op.Status.FromVersion = from
-	}
-
 	// One minor at a time, judged against what this node actually runs, so a spec edited past the
 	// next minor (or a node left behind by an earlier, partial upgrade) is refused before
 	// anything is changed.

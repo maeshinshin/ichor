@@ -773,6 +773,11 @@ func (s *Server) CreateOperation(
 	}
 	clusterKey := client.ObjectKeyFromObject(cluster)
 
+	if p.resp.GetSpecChanges() && p.resp.GetCurrent() != "" &&
+		(p.kind == ichorv1alpha1.TalosOperationKindTalos || p.kind == ichorv1alpha1.TalosOperationKindKubernetes) {
+		op.Annotations[ichorv1alpha1.OperationFromVersionAnnotation] = p.resp.GetCurrent()
+	}
+
 	if err := s.authorizeStart(ctx, &op.Spec, cluster.Namespace); err != nil {
 		return nil, err
 	}

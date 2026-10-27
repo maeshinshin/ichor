@@ -136,7 +136,7 @@ func describeOperation(out *pb.Operation, op *ichorv1alpha1.TalosOperation, clus
 		out.Summary = "Upgrade Talos"
 
 		if cluster != nil {
-			out.Summary += fromTo(op.Status.FromVersion, cluster.Spec.TalosVersion)
+			out.Summary += fromTo(op.Annotations[ichorv1alpha1.OperationFromVersionAnnotation], cluster.Spec.TalosVersion)
 
 			add("Target Talos version", cluster.Spec.TalosVersion)
 
@@ -150,7 +150,7 @@ func describeOperation(out *pb.Operation, op *ichorv1alpha1.TalosOperation, clus
 		out.Summary = "Upgrade Kubernetes"
 
 		if cluster != nil {
-			out.Summary += fromTo(op.Status.FromVersion, cluster.Spec.KubernetesVersion)
+			out.Summary += fromTo(op.Annotations[ichorv1alpha1.OperationFromVersionAnnotation], cluster.Spec.KubernetesVersion)
 
 			add("Target Kubernetes version", cluster.Spec.KubernetesVersion)
 		}

@@ -46,6 +46,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/credentials"
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
 )
 
@@ -278,7 +279,7 @@ func TestCredentialsDuringRotationTrustBothCAsAndAreSignedByTheNewOne(t *testing
 	block, _ := pem.Decode(crt)
 	cert, _ := stdx509.ParseCertificate(block.Bytes)
 
-	if !slices.Equal(cert.Subject.Organization, []string{kubeAdminOrganization}) {
+	if !slices.Equal(cert.Subject.Organization, []string{credentials.KubeAdminOrganization}) {
 		t.Fatalf("client certificate organization %v", cert.Subject.Organization)
 	}
 

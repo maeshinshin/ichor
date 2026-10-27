@@ -114,6 +114,9 @@ mid-run, which the rollback uses the old snapshot to undo.
 
 ## Built, and not
 
+(The `external` pull request, the version label, snapshot garbage collection and the Job TTL listed as not built
+below were built later; see "Amendment (the remaining items, built)".)
+
 1. `IchorInstallation` CRD and reconciler: built. 2. `kind: ichor` executor and the Job: built. 3. The
 installer (snapshot, additive check, ordered apply, post-checks, rollback), its image and RBAC: built, tested
 against a real API server. 4. CLI skew refusal: built; UI header: **not started** (above). 5. `external`: no Job
@@ -124,6 +127,44 @@ operation is written by hand like any TalosOperation; `ichor self-upgrade --loca
 controller; snapshot garbage collection; `ttlSecondsAfterFinished` on the Job (a finished Job and its snapshot
 stay until deleted). Not verified: a real upgrade between two released versions, because there is no second
 released version yet and no cluster to run it on.
+
+## Amendment (the remaining items, built)
+
+1. **Installer Job cleanup.** The Job carries `ttlSecondsAfterFinished: 86400` (one day: long enough to read the
+   pod log of a failed upgrade, short enough that Jobs do not pile up). The operation does not need the Job once
+   it has finished: after a successful upgrade the new controller's version equals `spec.version`, which the
+   executor checks before it looks for a Job (decision 1, "Done must be decided before the mode"). An expired
+   *failed* Job that is resumed after more than a day starts a fresh attempt under the same run id, which reuses
+   the run's snapshot (decision 3), so it is a retry and never a second snapshot of a half-upgraded cluster.
+2. **Snapshot garbage collection.** Each snapshot ConfigMap carries a `...-taken` annotation (RFC 3339, nanoseconds;
+   `creationTimestamp` has one-second resolution and runs can share a second). After the installer has saved
+   (or reused) its snapshot, and before it writes anything, it deletes every snapshot except the newest
+   `SnapshotsKept` (3, the current one included) and never the current run's. Failing to delete is logged and does
+   not fail the upgrade. The installer's Role gains `delete` on ConfigMaps (still namespace-scoped; the chart copy
+   is compared by `dist/chart/chart_test.go`). The decision above that snapshots are kept after success or
+   failure still holds, now for the last three.
+3. **Version in the UI.** `OperationService.GetIchorInstallation` returns the installed version
+   (`status.installedVersion`), `spec.version`, the mode, whether an `ichor` operation is unfinished, and
+   `update_available`: `spec.version` is semver-newer than the installed version and no Ichor upgrade is running. A
+   cluster without an `IchorInstallation` answers with empty fields, not an error. The app shell shows the
+   installed version as a badge in the top bar, plus an "Update available" badge only when the server says so; a
+   failed read shows nothing. The `X-Ichor-Version` response header (decision 7, a reload prompt when the bundle
+   and backend differ) is still not built; this label is separate from it.
+4. **`external` mode and Git: a pull request.** What the PR changes is the one thing prmode can edit safely:
+   the `IchorInstallation` document in the file the tracking Argo CD Application's plain path source holds,
+   field `spec.version` (target `IchorInstallation/ichor`, branch `ichor/upgrade-ichor-<version>`, so asking
+   twice finds the first PR). It goes through the same gate as every other write (`planWriteIn`: Argo CD tracks
+   it, the cluster's `gitops.repository` is the Application's repository, the source is a plain path). When the
+   `CreateOperation`/`PlanOperation` target would change a tracked `IchorInstallation` and a plan exists, the
+   backend opens the PR and returns `pull_request_url` with **no operation** (`opens_pull_request` in the plan, so
+   the CLI and UI say so before they act); nothing is written to the cluster. When no PR can be opened the old
+   refusal stands. In `ichor` mode the next step after merging is to start the upgrade again without a target (the
+   installer Job runs). In `external` mode no Job ever runs, so the PR records the target only: the chart or
+   manifests Argo CD applies for Ichor (a Helm source, which prmode cannot edit) must be bumped by hand, and the PR
+   description says so. That is the conservative reading of "bump the chart version in Git"; editing a Helm
+   `targetRevision` or values file is not attempted. An `external` installation that Argo CD does not track is
+   refused by the plan (it can neither be written nor proposed). The executor in `external` mode still
+   launches no Job and pauses, unchanged.
 
 ## Amendment (real hardware)
 

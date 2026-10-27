@@ -123,14 +123,14 @@ func takeSnapshot(ctx context.Context, c client.Client, ns, runID string, objs [
 		chunk := data[i*snapshotChunkBytes : min((i+1)*snapshotChunkBytes, len(data))]
 
 		cm := &corev1.ConfigMap{
-			Namespace:   ns,
-			Name:        snapshotName(runID, i),
-			Labels:      map[string]string{SnapshotLabel: runID},
+			Namespace: ns,
+			Name:      snapshotName(runID, i),
+			Labels:    map[string]string{SnapshotLabel: runID},
 			Annotations: map[string]string{
 				SnapshotLabel + "-parts": strconv.Itoa(parts),
 				snapshotTakenAnnotation:  taken,
 			},
-			BinaryData:  map[string][]byte{snapshotKey: chunk},
+			BinaryData: map[string][]byte{snapshotKey: chunk},
 		}
 		if err := c.Create(ctx, cm); err != nil {
 			return nil, fmt.Errorf("saving snapshot part %d of %d: %w", i+1, parts, err)

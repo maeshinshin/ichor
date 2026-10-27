@@ -333,6 +333,12 @@ spec:
                   did, so the node must have). A hash only, never the generations or config themselves
                   (principle 3).
                 type: string
+              observedReconcileRequest:
+                description: |-
+                  observedReconcileRequest is the value of the ichor.maesh.dev/reconcile-requested annotation
+                  at the last reconcile. An etcd restore (ADR 0089) writes a fresh token there and waits for
+                  it to appear here, which proves the machine was looked at again after the rollback.
+                type: string
               rebootPaths:
                 description: |-
                   rebootPaths lists the configuration field paths whose pending change needs a reboot, while

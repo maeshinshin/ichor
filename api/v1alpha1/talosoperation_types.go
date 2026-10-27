@@ -53,7 +53,37 @@ const (
 	// reboot, a shutdown, a service restart, an etcd defragmentation or leadership handover, or a
 	// reset. Like shutdown it runs its own state machine, held in status.node.
 	TalosOperationKindNode = "node"
+
+	// TalosOperationKindEtcdRestore rewinds the whole cluster to a stored etcd snapshot (spec.etcdRestore,
+	// ADR 0089): etcd is wiped on every control plane and recovered on one from the snapshot. Like
+	// shutdown it runs its own state machine, held in status.etcdRestore and, while the Kubernetes API
+	// is away, in a marker next to the backups.
+	TalosOperationKindEtcdRestore = "etcd-restore"
 )
+
+// Values for TalosOperationEtcdRestoreStatus.Step, in the order they run.
+const (
+	// EtcdRestoreStepWiping: the snapshot is verified and pinned, the marker is written, and etcd data is
+	// being wiped on every control plane (their EPHEMERAL partitions are reset and the nodes reboot).
+	EtcdRestoreStepWiping = "Wiping"
+
+	// EtcdRestoreStepRecovering: every control plane is wiped; the snapshot is uploaded to the target and
+	// its etcd is bootstrapped from it.
+	EtcdRestoreStepRecovering = "Recovering"
+
+	// EtcdRestoreStepRejoining: etcd on the target was recovered; the other control planes rejoin it and
+	// the Kubernetes API comes back. From here the cluster state is the snapshot's.
+	EtcdRestoreStepRejoining = "Rejoining"
+
+	// EtcdRestoreStepReconciling: etcd has every member and the Kubernetes API answers; every TalosMachine
+	// was asked to reconcile again and the operation waits until each is Ready.
+	EtcdRestoreStepReconciling = "Reconciling"
+)
+
+// EtcdRestoreReconcileAnnotation, set by an etcd-restore operation on every TalosMachine, holds a token
+// the machine controller copies to status.observedReconcileRequest once it has reconciled the machine
+// after the request. It is how the restore knows each machine looked at the restored state.
+const EtcdRestoreReconcileAnnotation = "ichor.maesh.dev/reconcile-requested"
 
 // Values for TalosOperationNodeSpec.Action.
 const (
@@ -178,6 +208,9 @@ const TalosMachineUpgradeOrderLabel = "ichor.maesh.dev/upgrade-order"
 // +kubebuilder:validation:XValidation:rule="self.clusterRef == oldSelf.clusterRef",message="clusterRef cannot change after creation"
 // +kubebuilder:validation:XValidation:rule="self.kind == oldSelf.kind",message="kind cannot change after creation"
 // +kubebuilder:validation:XValidation:rule="(self.kind == 'node') == has(self.node)",message="spec.node is required for the node kind and only allowed there"
+// +kubebuilder:validation:XValidation:rule="(self.kind == 'etcd-restore') == has(self.etcdRestore)",message="spec.etcdRestore is required for the etcd-restore kind and only allowed there"
+// +kubebuilder:validation:XValidation:rule="!has(self.etcdRestore) || self.etcdRestore.confirm == self.clusterRef.name",message="an etcd restore needs spec.etcdRestore.confirm equal to the cluster name"
+// +kubebuilder:validation:XValidation:rule="has(self.etcdRestore) == has(oldSelf.etcdRestore) && (!has(self.etcdRestore) || self.etcdRestore == oldSelf.etcdRestore)",message="etcdRestore cannot change after creation"
 // +kubebuilder:validation:XValidation:rule="has(self.node) == has(oldSelf.node) && (!has(self.node) || self.node == oldSelf.node)",message="node cannot change after creation"
 type TalosOperationSpec struct {
 	// clusterRef names the TalosCluster this operation acts on.
@@ -194,9 +227,14 @@ type TalosOperationSpec struct {
 	// shutdown and ca-rotation are the exceptions: each runs its own state machine.
 	// config applies the pending reboot-requiring configuration changes, one machine at a time
 	// with a reboot each (ADR 0080).
-	// +kubebuilder:validation:Enum=talos;kubernetes;ichor;cni;shutdown;ca-rotation;config;node
+	// etcd-restore rewinds the cluster to a stored etcd snapshot (ADR 0089).
+	// +kubebuilder:validation:Enum=talos;kubernetes;ichor;cni;shutdown;ca-rotation;config;node;etcd-restore
 	// +required
 	Kind string `json:"kind"`
+
+	// etcdRestore is the snapshot of an etcd-restore-kind operation.
+	// +optional
+	EtcdRestore *TalosOperationEtcdRestoreSpec `json:"etcdRestore,omitempty"`
 
 	// node is the action of a node-kind operation: which machine and what to do to it.
 	// +optional
@@ -217,6 +255,32 @@ type TalosOperationSpec struct {
 	// +kubebuilder:default=1
 	// +optional
 	MaxUnavailable int32 `json:"maxUnavailable,omitempty"`
+}
+
+// TalosOperationEtcdRestoreSpec names the snapshot an etcd-restore operation puts back (ADR 0089).
+type TalosOperationEtcdRestoreSpec struct {
+	// backupRef names the TalosEtcdBackup (same namespace) whose storage holds the snapshot. Its
+	// credentials, prefix and the cluster's secrets bundle (the decryption key) are what the
+	// controller reads the snapshot with.
+	// +kubebuilder:validation:XValidation:rule="self.name != ''",message="backupRef.name is required"
+	// +required
+	BackupRef corev1.LocalObjectReference `json:"backupRef"`
+
+	// snapshot is the object name of the snapshot under the backup's prefix, as listed in the
+	// backup's status.snapshots.
+	// +kubebuilder:validation:Pattern=`^etcd-[0-9]{8}T[0-9]{6}Z\.snapshot\.age$`
+	// +required
+	Snapshot string `json:"snapshot"`
+
+	// confirm must equal the cluster's name: the restore rewinds the whole cluster, so the name is typed.
+	// +required
+	Confirm string `json:"confirm"`
+
+	// reason is the break-glass reason the restore was started under. It is part of the record that
+	// survives the rollback.
+	// +kubebuilder:validation:MinLength=1
+	// +required
+	Reason string `json:"reason"`
 }
 
 // TalosOperationNodeSpec is one action on one machine (ADR 0085). One action per operation.
@@ -265,6 +329,37 @@ type TalosOperationNodeStatus struct {
 	// requestedAt is when the action was sent; the wait for its effect is bounded from it.
 	// +optional
 	RequestedAt *metav1.Time `json:"requestedAt,omitempty"`
+
+	// message is a plain-English line about what the operation is doing or waiting for.
+	// +optional
+	Message string `json:"message,omitempty"`
+}
+
+// TalosOperationEtcdRestoreStatus is the visible state of an etcd restore. The state that survives the
+// rollback of the Kubernetes API is the marker object next to the backups (ADR 0089); this mirrors it
+// whenever the API can be written, and the operation is recreated from the marker after the rollback.
+type TalosOperationEtcdRestoreStatus struct {
+	// step is Wiping, Recovering, Rejoining or Reconciling; empty until the snapshot was verified and
+	// the marker written.
+	// +kubebuilder:validation:Enum=Wiping;Recovering;Rejoining;Reconciling
+	// +optional
+	Step string `json:"step,omitempty"`
+
+	// target is the control plane the snapshot is recovered on.
+	// +optional
+	Target string `json:"target,omitempty"`
+
+	// snapshotTime is when the snapshot being restored was taken.
+	// +optional
+	SnapshotTime *metav1.Time `json:"snapshotTime,omitempty"`
+
+	// requestedAt is when the destructive part started; waits are bounded from it.
+	// +optional
+	RequestedAt *metav1.Time `json:"requestedAt,omitempty"`
+
+	// reconcileRequest is the token every TalosMachine was asked to acknowledge in the last step.
+	// +optional
+	ReconcileRequest string `json:"reconcileRequest,omitempty"`
 
 	// message is a plain-English line about what the operation is doing or waiting for.
 	// +optional
@@ -324,6 +419,10 @@ type TalosOperationStatus struct {
 	// node is the node kind's state machine.
 	// +optional
 	Node *TalosOperationNodeStatus `json:"node,omitempty"`
+
+	// etcdRestore is the etcd-restore kind's state machine.
+	// +optional
+	EtcdRestore *TalosOperationEtcdRestoreStatus `json:"etcdRestore,omitempty"`
 
 	// kubernetes is the kubernetes kind's state machine: which of the three stages the machines
 	// are being taken through.

@@ -132,8 +132,28 @@ type TalosEtcdBackupSnapshot struct {
 	SourceMachine string `json:"sourceMachine"`
 }
 
+// TalosEtcdBackupStored is one snapshot kept in the destination, as the last listing saw it.
+type TalosEtcdBackupStored struct {
+	// name is the object name under the prefix: what an etcd-restore operation's spec.etcdRestore.snapshot says.
+	// +required
+	Name string `json:"name"`
+	// time is when the snapshot was taken (encoded in its name).
+	// +required
+	Time metav1.Time `json:"time"`
+	// size is the stored (encrypted) size in bytes.
+	// +required
+	Size int64 `json:"size"`
+}
+
 // TalosEtcdBackupStatus defines the observed state of TalosEtcdBackup.
 type TalosEtcdBackupStatus struct {
+	// snapshots lists the snapshots kept in the destination after the last backup and prune,
+	// newest first, so the UI and CLI can offer them for a restore without reading the bucket.
+	// +kubebuilder:validation:MaxItems=500
+	// +listType=atomic
+	// +optional
+	Snapshots []TalosEtcdBackupStored `json:"snapshots,omitempty"`
+
 	// lastSnapshot is the newest snapshot this controller stored.
 	// +optional
 	LastSnapshot *TalosEtcdBackupSnapshot `json:"lastSnapshot,omitempty"`

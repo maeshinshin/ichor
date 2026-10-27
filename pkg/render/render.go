@@ -234,6 +234,12 @@ func BuildConfig(
 		return nil, err
 	}
 
+	// Who the kube-apiserver trusts to sign users in (ADR 0094): the typed KubeAuthenticationConfig.
+	cfg, err = injectAuthentication(cfg, contract, cluster, machineType, sys)
+	if err != nil {
+		return nil, err
+	}
+
 	// spec.nodeLabels is the machine's own intent, applied over the storage preset's labels.
 	cfg, err = injectNodeLabels(cfg, contract, m)
 	if err != nil {

@@ -56,6 +56,11 @@ type SystemInputs struct {
 	// spec.kubernetesVersion while a Kubernetes upgrade moves the control planes first
 	// (ADR 0087). Only the upgrade executor sets it; nil is the normal case.
 	Staged *StagedKubernetes
+
+	// OIDCTrust is the public trust material of Ichor's own issuer, read from the ConfigMap
+	// ichor-oidc-trust when spec.authentication.ichor is enabled (ADR 0094). Nil when it is not
+	// enabled, or when the ConfigMap does not exist yet (the render then says so).
+	OIDCTrust *OIDCTrust
 }
 
 // ResolveSystemInputs reads what Render's system layer needs: registry credentials from
@@ -73,7 +78,12 @@ func ResolveSystemInputs(
 		return nil, fmt.Errorf("listing TalosStorages: %w", err)
 	}
 
-	return &SystemInputs{RegistryAuth: auth, Storage: storages.Items}, nil
+	trust, err := resolveOIDCTrust(ctx, c, secretNamespace, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	return &SystemInputs{RegistryAuth: auth, Storage: storages.Items, OIDCTrust: trust}, nil
 }
 
 func (s *SystemInputs) registryAuth() map[string]RegistryAuth {

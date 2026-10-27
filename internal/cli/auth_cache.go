@@ -25,6 +25,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -113,6 +114,63 @@ func deleteAuthCache(dir, key string) error {
 	}
 
 	return nil
+}
+
+// sameIssuer compares issuer URLs ignoring a trailing slash.
+func sameIssuer(a, b string) bool { return strings.TrimRight(a, "/") == strings.TrimRight(b, "/") }
+
+// listAuthCache returns every readable entry in dir by key; an unreadable or
+// foreign file is skipped. A missing directory is an empty cache.
+func listAuthCache(dir string) (map[string]*authCacheEntry, error) {
+	files, err := os.ReadDir(dir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("reading the login cache: %w", err)
+	}
+
+	out := map[string]*authCacheEntry{}
+
+	for _, f := range files {
+		key, ok := strings.CutSuffix(f.Name(), ".json")
+		if !ok {
+			continue
+		}
+
+		if e, err := loadAuthCache(dir, key); err == nil && e != nil {
+			out[key] = e
+		}
+	}
+
+	return out, nil
+}
+
+// deleteAuthCacheIssuer removes every cached login for issuer, of every client
+// and audience, or only those of audience when it is not empty. It returns how
+// many it removed.
+func deleteAuthCacheIssuer(dir, issuer, audience string) (int, error) {
+	entries, err := listAuthCache(dir)
+	if err != nil {
+		return 0, err
+	}
+
+	n := 0
+
+	for key, e := range entries {
+		if !sameIssuer(e.Issuer, issuer) || (audience != "" && e.Audience != audience) {
+			continue
+		}
+
+		if err := deleteAuthCache(dir, key); err != nil {
+			return n, err
+		}
+
+		n++
+	}
+
+	return n, nil
 }
 
 // lockAuthCache takes an exclusive flock on <key>.lock so concurrent kubectl

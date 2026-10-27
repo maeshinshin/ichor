@@ -194,7 +194,7 @@ func (i *Issuer) jwks(w http.ResponseWriter, _ *http.Request) {
 		if !pub.Valid() {
 			continue
 		}
-		pub.Use, pub.Algorithm = "sig", string(jose.RS256)
+		pub.Use, pub.Algorithm = jwkUseSig, string(jose.RS256)
 		set.Keys = append(set.Keys, pub)
 	}
 	w.Header().Set("Cache-Control", noCache)
@@ -205,4 +205,6 @@ func (i *Issuer) jwks(w http.ResponseWriter, _ *http.Request) {
 // go-oidc (v2.5.0) keeps fetched keys until the response's own cache expiry
 // and refetches on an unknown kid only after that, so any positive max-age
 // would delay a rotation by that long. Without one it refetches immediately.
+const jwkUseSig = "sig"
+
 const noCache = "no-cache"

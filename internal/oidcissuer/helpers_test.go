@@ -125,7 +125,7 @@ func newEnv(t *testing.T, issuer, internalJWKS string) *env {
 		t.Fatal(err)
 	}
 	d := newDir()
-	d.set(oidcissuer.User{Name: "alice", Roles: []string{"admin"}}, "correct horse")
+	d.set(oidcissuer.User{Name: userAlice, Roles: []string{roleAdmin}}, "correct horse")
 	iss, err := oidcissuer.New(oidcissuer.Config{
 		Issuer: issuer, InternalJWKSURI: internalJWKS, UIRedirectURI: uiRedirect,
 		Keys: keys, Users: d, Passwords: d, Now: clk.now,
@@ -170,9 +170,9 @@ func (e *env) do(h http.Handler, method, path, ctype, body string) *httptest.Res
 
 func (e *env) authorize(client, redirect, aud string, p pkce) *httptest.ResponseRecorder {
 	q := url.Values{
-		"response_type": {"code"}, "client_id": {client}, "redirect_uri": {redirect},
-		"scope": {"openid offline_access"}, "state": {"st1"}, "nonce": {"n1"},
-		"code_challenge": {p.challenge}, "code_challenge_method": {"S256"},
+		"response_type": {pCode}, pClientID: {client}, "redirect_uri": {redirect},
+		pScope: {"openid offline_access"}, "state": {stateVal}, pNonce: {"n1"},
+		pChallenge: {p.challenge}, "code_challenge_method": {pS256},
 	}
 	if aud != "" {
 		q.Set("audience", aud)
@@ -193,14 +193,14 @@ func (e *env) ticket(rec *httptest.ResponseRecorder) string {
 }
 
 func (e *env) login(ticket, user, password string) *httptest.ResponseRecorder {
-	b, _ := json.Marshal(map[string]string{"ticket": ticket, "username": user, "password": password})
+	b, _ := json.Marshal(map[string]string{"ticket": ticket, "username": user, pPassword: password})
 	return e.do(e.h, http.MethodPost, "/oidc/login", "application/json", string(b))
 }
 
 // code runs authorize and login as alice and returns the authorization code.
 func (e *env) code(client, redirect, aud string, p pkce) string {
 	e.t.Helper()
-	rec := e.login(e.ticket(e.authorize(client, redirect, aud, p)), "alice", "correct horse")
+	rec := e.login(e.ticket(e.authorize(client, redirect, aud, p)), userAlice, "correct horse")
 	if rec.Code != http.StatusOK {
 		e.t.Fatalf("login: status %d body %q", rec.Code, rec.Body.String())
 	}
@@ -214,7 +214,7 @@ func (e *env) code(client, redirect, aud string, p pkce) string {
 	if err != nil {
 		e.t.Fatal(err)
 	}
-	if got := u.Query().Get("state"); got != "st1" {
+	if got := u.Query().Get("state"); got != stateVal {
 		e.t.Fatalf("state = %q", got)
 	}
 	if got := u.Query().Get("iss"); got == "" {
@@ -241,13 +241,13 @@ func (e *env) token(form url.Values) (int, tokenResp) {
 
 func codeForm(client, redirect, code string, p pkce) url.Values {
 	return url.Values{
-		"grant_type": {"authorization_code"}, "client_id": {client}, "redirect_uri": {redirect},
+		pGrant: {"authorization_code"}, pClientID: {client}, "redirect_uri": {redirect},
 		"code": {code}, "code_verifier": {p.verifier},
 	}
 }
 
 func refreshForm(client, refresh, aud string) url.Values {
-	f := url.Values{"grant_type": {"refresh_token"}, "client_id": {client}, "refresh_token": {refresh}}
+	f := url.Values{pGrant: {"refresh_token"}, pClientID: {client}, "refresh_token": {refresh}}
 	if aud != "" {
 		f.Set("audience", aud)
 	}
@@ -283,3 +283,21 @@ func claimsOf(t *testing.T, jws string) map[string]any {
 }
 
 func jsonUnmarshal(b []byte, v any) error { return json.Unmarshal(b, v) }
+
+const (
+	clientUI  = "ichor-ui"
+	clientCLI = "ichor-cli"
+	audKube   = "ichor-kube"
+	userAlice = "alice"
+	roleAdmin = "admin"
+	stateVal  = "st1"
+	pClientID = "client_id"
+	pNonce    = "nonce"
+	pS256     = "S256"
+	pPassword = "password"
+	pGrant    = "grant_type"
+
+	pCode      = "code"
+	pScope     = "scope"
+	pChallenge = "code_challenge"
+)

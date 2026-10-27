@@ -144,3 +144,8 @@ Each is one PR, with the listed tests, and scaffolded with the tools named in CL
 - The controller gains Secret writes in `ichor-system` for four named objects and a reconciler; the Talos config for control planes gains one more rendered document, and every change to it is a control-plane rollout.
 - The `ichor-operator` role can start the routine kinds of `TalosOperation` (upgrades, config, CNI, reboot, service restart) but not shutdown, CA rotation, restore, reset: those are separate, named, auditable grants.
 - Kubeconfigs downloaded before a Kubernetes CA rotation must be fetched again.
+
+## Amendments
+
+- Unit 2: the `audience` parameter (only `ichor-kube` or `ichor-ui`; `ichor-ui` client only `ichor-ui`) is accepted on the authorize request and on the refresh request. It is carried in the code and in the refresh token, so a refresh without the parameter keeps the audience chosen at login; absent everywhere, `ichor-ui` client gets `ichor-ui` and `ichor-cli` gets `ichor-kube`. A refresh grant returns no new refresh token (not rotated).
+- Unit 2: the kube-apiserver authenticator uses go-oidc v2.5.0, not v3 as the ADR cites for rotation: it refetches the JWKS on an unknown `kid` only after the cache expiry given by the response headers. Discovery and JWKS are therefore served with `Cache-Control: no-cache` (no positive max-age), which makes rotation pickup immediate; a test pins it.

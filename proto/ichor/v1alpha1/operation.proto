@@ -43,6 +43,11 @@ service OperationService {
   // It answers with an empty installed_version, not an error, when there is no
   // IchorInstallation, so the UI can simply show nothing.
   rpc GetIchorInstallation(GetIchorInstallationRequest) returns (GetIchorInstallationResponse);
+
+  // --- operation detail page ---
+  // ListOperationEvents returns the Kubernetes Events about an operation or one of its machines,
+  // within the operation's lifetime, oldest first: the activity log on the operation's page.
+  rpc ListOperationEvents(ListOperationEventsRequest) returns (ListOperationEventsResponse);
 }
 
 message GetIchorInstallationRequest {}
@@ -186,6 +191,13 @@ message OperationMachine {
   string name = 1;
   // phase is InProgress or Completed.
   string phase = 2;
+  // --- operation detail page ---
+  // message is why the machine's step failed, when it did; step is the operation's stage while
+  // the machine is InProgress (Kubernetes and CA-rotation stages), empty otherwise.
+  string step = 10;
+  string message = 11;
+  google.protobuf.Timestamp started_at = 12;
+  google.protobuf.Timestamp finished_at = 13;
 }
 
 message Operation {
@@ -223,6 +235,38 @@ message Operation {
   string etcd_restore_snapshot = 18;
   google.protobuf.Timestamp etcd_restore_snapshot_time = 19;
   string etcd_restore_message = 20;
+
+  // --- operation detail page ---
+  // summary is one human sentence built from the kind and the spec ("Reboot node talos-02").
+  string summary = 40;
+  // details are the spec's facts as key/value pairs, in display order.
+  repeated OperationDetail details = 41;
+  // started_by is who created the operation, when Ichor recorded it; empty otherwise.
+  string started_by = 42;
+  google.protobuf.Timestamp finished_at = 43;
+}
+
+message OperationDetail {
+  string key = 1;
+  string value = 2;
+}
+
+message ListOperationEventsRequest {
+  ObjectRef operation = 1;
+}
+
+message OperationEvent {
+  google.protobuf.Timestamp time = 1;
+  // type is Normal or Warning.
+  string type = 2;
+  string reason = 3;
+  string message = 4;
+  string object_kind = 5;
+  string object_name = 6;
+}
+
+message ListOperationEventsResponse {
+  repeated OperationEvent events = 1;
 }
 
 message ListOperationsRequest {

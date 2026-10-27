@@ -92,6 +92,11 @@ const EtcdRestoreReconcileAnnotation = "ichor.maesh.dev/reconcile-requested"
 // annotation; it acts once the time is newer than status.lastRetry (ADR 0095).
 const OperationRetryAnnotation = "ichor.maesh.dev/retry"
 
+// OperationStartedByAnnotation records who created the operation through the UI backend (the signed-in
+// user, or the backend's own name). Informational only: the audit trail is the Events and the Kubernetes
+// audit log.
+const OperationStartedByAnnotation = "ichor.maesh.dev/started-by"
+
 // Values for TalosOperationNodeSpec.Action.
 const (
 	NodeActionReboot                = "reboot"

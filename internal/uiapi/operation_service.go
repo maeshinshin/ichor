@@ -455,6 +455,23 @@ func (s *Server) planOperation(
 	return p, nil
 }
 
+// splitOwnMachine takes the machine named name (the one the controller runs on) out of both lists.
+func splitOwnMachine(
+	cps, workers []*ichorv1alpha1.TalosMachine, name string,
+) (outCPs, outWorkers []*ichorv1alpha1.TalosMachine, own *ichorv1alpha1.TalosMachine) {
+	isOwn := func(m *ichorv1alpha1.TalosMachine) bool {
+		if m.Name != name {
+			return false
+		}
+
+		own = m
+
+		return true
+	}
+
+	return slices.DeleteFunc(cps, isOwn), slices.DeleteFunc(workers, isOwn), own
+}
+
 // configEffect is REBOOT when any selected machine needs a reboot and RESTART_COMPONENTS (the API
 // server restart, no reboot) when none does.
 func configEffect(machines []*ichorv1alpha1.TalosMachine) pb.OperationEffect {
@@ -585,19 +602,7 @@ func (s *Server) planMachines(ctx context.Context, p *opPlan, cluster *ichorv1al
 	var own *ichorv1alpha1.TalosMachine
 
 	if p.kind == ichorv1alpha1.TalosOperationKindConfig {
-		name := s.controllerMachine(ctx, list.Items, cluster.Name, "")
-		isOwn := func(m *ichorv1alpha1.TalosMachine) bool {
-			if m.Name != name {
-				return false
-			}
-
-			own = m
-
-			return true
-		}
-
-		cps = slices.DeleteFunc(cps, isOwn)
-		workers = slices.DeleteFunc(workers, isOwn)
+		cps, workers, own = splitOwnMachine(cps, workers, s.controllerMachine(ctx, list.Items, cluster.Name, ""))
 	}
 
 	step := int32(0)

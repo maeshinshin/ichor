@@ -115,7 +115,9 @@ Talos credentials. For three admin-gated downloads (support bundle, etcd snapsho
 packet capture) the UI backend also mints a certificate per call with
 the least Talos role that call needs (`os:reader`, `os:etcd:backup`,
 `os:operator`), only after Kubernetes RBAC has allowed the signed-in user; it has
-no method that changes a node. In the first release the UI is reached through
+no method that changes a node. The restore of an etcd snapshot into a live
+cluster is the controller's, not the UI's: the UI backend only lists the
+snapshots a `TalosEtcdBackup` reports and writes the operation. In the first release the UI is reached through
 `ichor ui` (a port-forward); OIDC login with Kubernetes impersonation comes
 later so that RBAC and audit apply per user.
 
@@ -144,7 +146,9 @@ first.
    it.
 6. Disruptive operations (upgrades, reboots, CA rotation, topology changes)
    take a per-cluster Lease. One at a time.
-7. Progress lives in status and resumes idempotently.
+7. Progress lives in status and resumes idempotently. (A live etcd restore
+   cannot keep a status, since it rolls the API back; its marker in the backup
+   storage is the exception)
 8. CLI and UI are equivalent. The only CLI-only operations are the ones that
    happen before a cluster exists.
 9. There is always a recovery path that needs neither Argo CD nor a working
@@ -854,7 +858,11 @@ stores them in S3-compatible storage with retention. Failures and staleness
 surface as metrics and alerts.
 
 Two recovery paths. Restoring into a live cluster stops etcd on all control
-planes and restores the snapshot; the UI and CLI both offer it. Full-loss
+planes and restores the snapshot; the UI and CLI both offer it, as a
+`TalosOperation` that needs the break-glass right on the cluster and the
+cluster's name typed. Because the restore rolls the Kubernetes API back past the
+operation itself, its progress is kept in a marker next to the backups, not in
+status, and the operation is recreated from the marker. Full-loss
 recovery is CLI-only: `ichor restore --recover-cluster` rebuilds control
 planes from the local bundle and the snapshot, after which the controller
 re-reconciles every node the way `adopt` does and waits for confirmation

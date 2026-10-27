@@ -147,10 +147,25 @@ func (t *machineryNodeTalosClient) Disks(ctx context.Context) ([]*pb.Disk, error
 		return nil, fmt.Errorf("listing disks: %w", err)
 	}
 
-	out := make([]*pb.Disk, 0, disks.Len())
-
+	specs := make([]*block.DiskSpec, 0, disks.Len())
 	for i := range disks.Len() {
-		spec := disks.Get(i).TypedSpec()
+		specs = append(specs, disks.Get(i).TypedSpec())
+	}
+
+	return installableDisks(specs), nil
+}
+
+// installableDisks maps disk specs to pb.Disk, leaving out CD-ROM drives and
+// read-only disks: neither can take an install or data role, so the approval
+// pickers must not offer them. The hardware display (Talos details) lists
+// block.Disk itself and still shows everything.
+func installableDisks(specs []*block.DiskSpec) []*pb.Disk {
+	out := make([]*pb.Disk, 0, len(specs))
+
+	for _, spec := range specs {
+		if spec.CDROM || spec.Readonly {
+			continue
+		}
 
 		var byIDPath string
 
@@ -170,7 +185,7 @@ func (t *machineryNodeTalosClient) Disks(ctx context.Context) ([]*pb.Disk, error
 		})
 	}
 
-	return out, nil
+	return out
 }
 
 // ResourceUsage reads perf.Memory (kibibytes, as /proc/meminfo reports them),

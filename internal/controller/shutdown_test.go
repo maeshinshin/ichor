@@ -31,6 +31,7 @@ import (
 
 const (
 	shutdownBootBefore = "boot-before"
+	shutdownOwnNode    = "ctrl-node"
 	shutdownBootAfter  = "boot-after"
 )
 
@@ -175,9 +176,9 @@ var _ = Describe("TalosOperation shutdown", func() {
 
 	It("keeps the controller's own node for the last burst, and asks it last", func() {
 		f := newShutdownFixture()
-		f.workers[0].Spec.Hostname = "ctrl-node"
+		f.workers[0].Spec.Hostname = shutdownOwnNode
 		Expect(k8sClient.Update(ctx, f.workers[0])).To(Succeed())
-		f.r.NodeName = "ctrl-node"
+		f.r.NodeName = shutdownOwnNode
 
 		op := f.newOp(ichorv1alpha1.TalosOperationKindShutdown)
 		f.reconcile(op)
@@ -193,8 +194,8 @@ var _ = Describe("TalosOperation shutdown", func() {
 
 	It("finds the controller's own node through what Talos reports when spec.hostname is empty", func() {
 		f := newShutdownFixture()
-		f.fakes[f.workers[0].Name].nodeName = "ctrl-node"
-		f.r.NodeName = "ctrl-node"
+		f.fakes[f.workers[0].Name].nodeName = shutdownOwnNode
+		f.r.NodeName = shutdownOwnNode
 
 		op := f.newOp(ichorv1alpha1.TalosOperationKindShutdown)
 		f.reconcile(op)

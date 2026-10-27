@@ -1,0 +1,198 @@
+/*
+Copyright 2026 maeshinshin.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package controller
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"strings"
+	"time"
+
+	appsv1 "k8s.io/api/apps/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	ctrl "sigs.k8s.io/controller-runtime"
+
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+)
+
+// After the old CAs are dropped, CoreDNS, flannel and kube-proxy keep verifying the API server against
+// the CA they loaded at start (measured on hardware: they never recovered by themselves), and ichor-ui
+// re-reads it slowly. A rotation therefore restarts them once (ADR 0063, amendment). It is a write to
+// those workloads, in scope the way the restore's one-time pod restart is: Ichor does not operate the
+// CNI, it recovers from its own action.
+
+// +kubebuilder:rbac:groups=apps,resources=daemonsets,resourceNames=kube-proxy;cilium;kube-flannel,verbs=get;patch
+// +kubebuilder:rbac:groups=apps,resources=deployments,resourceNames=coredns,verbs=get;patch
+// +kubebuilder:rbac:groups=apps,namespace=ichor-system,resources=deployments,resourceNames=ichor-ui,verbs=patch
+
+const (
+	reasonCARotationRestarting = "RestartingClients"
+
+	// caRestartMarker is set on a restarted workload's pod template to the operation that restarted it:
+	// a controller that dies after the patch finds it and does not restart the workload twice.
+	caRestartMarker = "ichor.maesh.dev/ca-rotation"
+
+	restartedAtAnnotation = "kubectl.kubernetes.io/restartedAt"
+
+	caClientPoll = 10 * time.Second
+
+	kindDeployment   = "Deployment"
+	uiDeploymentName = "ichor-ui"
+	corednsName      = "coredns"
+)
+
+// caClientRestartTimeout is how long the restarted workloads get to become available again.
+// A variable so tests need not wait.
+var caClientRestartTimeout = 5 * time.Minute
+
+// caClient is one workload that is restarted.
+type caClient struct {
+	kind, namespace, name string
+}
+
+func (a caClient) String() string { return a.kind + " " + a.namespace + "/" + a.name }
+
+func (c *caRun) restartTargets() []caClient {
+	targets := []caClient{{kindDeployment, kubeSystemNamespace, corednsName}}
+	for _, n := range restoreAgentNames {
+		targets = append(targets, caClient{"DaemonSet", kubeSystemNamespace, n})
+	}
+
+	return append(targets, caClient{kindDeployment, c.r.ControllerNamespace, uiDeploymentName})
+}
+
+// restartClients restarts, once, the in-cluster clients known to keep the old CA, and waits (bounded)
+// for them. done is false while the rotation must wait; a workload that is not back after the timeout
+// is named in the returned note and does not hold the rotation.
+func (c *caRun) restartClients(ctx context.Context) (res ctrl.Result, note string, done bool, err error) {
+	kc := c.r.KubeClient
+	if kc == nil {
+		return ctrl.Result{}, "", true, nil
+	}
+
+	token := string(c.op.UID)
+	var pending []string
+
+	for _, t := range c.restartTargets() {
+		ready, gone, rerr := c.restartOne(ctx, t, token)
+		if rerr != nil {
+			pending = append(pending, fmt.Sprintf("%s (%v)", t, rerr))
+		} else if !gone && !ready {
+			pending = append(pending, t.String())
+		}
+	}
+
+	if len(pending) == 0 {
+		return ctrl.Result{}, "", true, nil
+	}
+
+	cond := apimeta.FindStatusCondition(c.op.Status.Conditions, conditionCARotation)
+	if cond == nil || cond.Reason != reasonCARotationRestarting || cond.Status != metav1.ConditionTrue {
+		// Start the clock: a removed condition gets a fresh transition time.
+		apimeta.RemoveStatusCondition(&c.op.Status.Conditions, conditionCARotation)
+	} else if time.Since(cond.LastTransitionTime.Time) > caClientRestartTimeout {
+		return ctrl.Result{}, "; not back after the restart: " + strings.Join(pending, ", "), true, nil
+	}
+
+	err = c.status(ctx, ichorv1alpha1.TalosOperationPhaseInProgress, metav1.ConditionTrue, reasonCARotationRestarting,
+		"the old CAs are dropped; waiting for the clients restarted to load the new one: "+strings.Join(pending, ", "))
+
+	return ctrl.Result{RequeueAfter: caClientPoll}, "", false, err
+}
+
+// restartOne patches t's pod template unless it already carries token, and reports whether the rollout
+// is available. gone is true when t does not exist.
+func (c *caRun) restartOne(ctx context.Context, t caClient, token string) (ready, gone bool, err error) {
+	kc := c.r.KubeClient
+
+	var template *metav1.ObjectMeta
+
+	var status func() bool
+
+	var patch func([]byte) error
+
+	switch t.kind {
+	case kindDeployment:
+		d, gerr := kc.AppsV1().Deployments(t.namespace).Get(ctx, t.name, metav1.GetOptions{})
+		if gerr != nil {
+			return false, apierrors.IsNotFound(gerr), skipNotFound(gerr)
+		}
+
+		template, status = &d.Spec.Template.ObjectMeta, func() bool { return deploymentAvailable(d) }
+		patch = func(b []byte) error {
+			_, perr := kc.AppsV1().Deployments(t.namespace).Patch(ctx, t.name, types.StrategicMergePatchType, b, metav1.PatchOptions{})
+
+			return perr
+		}
+	default:
+		d, gerr := kc.AppsV1().DaemonSets(t.namespace).Get(ctx, t.name, metav1.GetOptions{})
+		if gerr != nil {
+			return false, apierrors.IsNotFound(gerr), skipNotFound(gerr)
+		}
+
+		template, status = &d.Spec.Template.ObjectMeta, func() bool { return daemonSetAvailable(d) }
+		patch = func(b []byte) error {
+			_, perr := kc.AppsV1().DaemonSets(t.namespace).Patch(ctx, t.name, types.StrategicMergePatchType, b, metav1.PatchOptions{})
+
+			return perr
+		}
+	}
+
+	if template.Annotations[caRestartMarker] == token {
+		return status(), false, nil
+	}
+
+	body, _ := json.Marshal(map[string]any{"spec": map[string]any{"template": map[string]any{"metadata": map[string]any{
+		"annotations": map[string]string{
+			restartedAtAnnotation: time.Now().UTC().Format(time.RFC3339),
+			caRestartMarker:       token,
+		},
+	}}}})
+
+	// The patch just made the rollout; whatever status was read describes the previous one.
+	return false, false, patch(body)
+}
+
+func skipNotFound(err error) error {
+	if apierrors.IsNotFound(err) {
+		return nil
+	}
+
+	return err
+}
+
+func deploymentAvailable(d *appsv1.Deployment) bool {
+	want := int32(1)
+	if d.Spec.Replicas != nil {
+		want = *d.Spec.Replicas
+	}
+
+	s := d.Status
+
+	return s.ObservedGeneration >= d.Generation && s.UpdatedReplicas == want && s.Replicas == want && s.AvailableReplicas == want
+}
+
+func daemonSetAvailable(d *appsv1.DaemonSet) bool {
+	s := d.Status
+
+	return s.ObservedGeneration >= d.Generation && s.UpdatedNumberScheduled == s.DesiredNumberScheduled &&
+		s.NumberAvailable == s.DesiredNumberScheduled
+}

@@ -12,7 +12,7 @@ import { NodeAction, OperationKind, type Operation } from '@/gen/ichor/v1alpha1/
 import { operationClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
 import { describeError } from '@/lib/errors'
-import { caStageProgress, operationState, pollIntervalMs, progressCounts } from '@/lib/operations'
+import { caStageProgress, kubernetesStageProgress, operationState, pollIntervalMs, progressCounts } from '@/lib/operations'
 import { opStateTone } from '@/lib/status'
 import { useT } from '@/lib/useT'
 import { Link, navigate, objectRefPath } from '@/router'
@@ -62,6 +62,7 @@ export function OperationDetail({ namespace, name }: { namespace: string; name: 
   const { done, running } = progressCounts(op.machines)
   const position = op.caRotationStage === '' ? null : caStageProgress(op.caRotationStage)
   const stage = position ? { name: op.caRotationStage, ...position } : null
+  const kubeStage = kubernetesStageProgress(op.kubernetesStage)
 
   return (
     <>
@@ -73,6 +74,11 @@ export function OperationDetail({ namespace, name }: { namespace: string; name: 
             <StatusText tone={opStateTone(state)}>{t(`ops.state.${state}`)}</StatusText>
             {op.machines.length > 0 && <span class="text-sm text-muted-foreground">{t('ops.progress', { done, running })}</span>}
             {stage && <Badge variant="outline">{t('ops.caStage', { stage: stage.name, n: stage.index, total: stage.total })}</Badge>}
+            {kubeStage && (
+              <Badge variant="outline">
+                {t('ops.kubeStage', { stage: t(`ops.kubeStageName.${kubeStage.name}`), n: kubeStage.index, total: kubeStage.total })}
+              </Badge>
+            )}
           </>
         }
         meta={[

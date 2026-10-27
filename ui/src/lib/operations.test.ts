@@ -3,6 +3,7 @@ import { test } from 'node:test'
 import {
   caStageProgress,
   confirmMatches,
+  kubernetesStageProgress,
   kindNeedsTarget,
   kindNeedsTypedName,
   operationState,
@@ -105,4 +106,12 @@ test('the CA rotation stage is a position in the stages; unknown or empty is not
   assert.deepEqual(caStageProgress('Done'), { index: 5, total: 5 })
   assert.equal(caStageProgress(''), null)
   assert.equal(caStageProgress('Nonsense'), null)
+})
+
+test('the Kubernetes upgrade stage is a position in the three stages; unknown or empty is not a position', () => {
+  assert.deepEqual(kubernetesStageProgress('ControlPlanes'), { name: 'ControlPlanes', index: 1, total: 3 })
+  assert.deepEqual(kubernetesStageProgress('KubeProxy'), { name: 'KubeProxy', index: 2, total: 3 })
+  assert.deepEqual(kubernetesStageProgress('Kubelets'), { name: 'Kubelets', index: 3, total: 3 })
+  assert.equal(kubernetesStageProgress(''), null)
+  assert.equal(kubernetesStageProgress('Accepting'), null)
 })

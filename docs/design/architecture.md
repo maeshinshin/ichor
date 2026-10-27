@@ -143,7 +143,10 @@ Roles are plain Kubernetes RBAC. Three built-in ClusterRoles, `ichor-viewer`,
 `ichor:operator` and `ichor:admin`. None of them gets `secrets`,
 `impersonate` or `cluster-admin`. The destructive operation starts (shutdown,
 CA rotation, etcd restore, node reset and shutdown) need their own verb, held
-by `ichor-admin` only.
+by `ichor-admin` only. So does setting or changing a field that names a Secret
+(`update` on `talosclusters/secret-references` and the like): the
+controller reads those Secrets with its own privileges, so an operator who may
+edit a cluster must not be able to repoint one.
 
 A user's kubeconfig holds no secret. It runs `ichor auth token` as a client-go
 exec plugin. That command logs in through the browser and keeps a 5 minute ID
@@ -183,9 +186,11 @@ be reachable from the control planes. Ichor installs no ingress. Expose
 ichor-ui with an Ingress, a Gateway or a LoadBalancer, or terminate TLS in
 ichor-ui with `ichorUI.tls.secretName`.
 
-Not verified yet: that a host-network kube-apiserver reaches a
-Service ClusterIP; whether Talos applies the issuer document without a reboot;
-and whether the apiserver reloads it or restarts.
+Verified on hardware: a host-network kube-apiserver reaches a
+Service ClusterIP; Talos applies the issuer document without a reboot but the
+kube-apiserver restarts (15 to 45 s without `/readyz` per node), which is why
+the rollout is one control plane at a time. Talos does not validate
+the document, so Ichor validates it before rendering.
 
 ## Principles
 
@@ -632,7 +637,10 @@ configured) → cordon and drain with a timeout → remove the etcd member if it
 a control plane (refused if quorum would break, if the count would drop below
 `spec.controlPlane.count`, or if it's the last one) → graceful Talos reset →
 delete the Node, in that order. The machine reappears as pending and can be
-reused. `forceRemove` skips drain and reset for dead hardware. Control planes
+reused. A `node remove` action is different: it deletes the
+TalosMachine but not the Kubernetes Node, because the machine is not wiped and
+its kubelet would register the Node again; the plan ends with "power it off or
+reset it, then delete the Node", and the controller does not do that last step. `forceRemove` skips drain and reset for dead hardware. Control planes
 are replaced add-then-remove, never the other way round — a 3-node cluster
 replacing a member goes 3→4→3, never 3→2, because four members tolerate one
 failure while two tolerate none.
@@ -773,9 +781,11 @@ own configuration lives in Argo CD's values. Presets start with `longhorn-v1`
 (verify the `iscsi-tools` and `util-linux-tools` extensions are in the node's
 installer image, create the `UserVolumeConfig` Longhorn expects), followed by
 `longhorn-v2`, `raw` (for Rook/Ceph-style consumers) and `filesystem`.
-Missing extensions block the preset with a clear message, since adding one is
-an installer-image change and goes through the same rolling procedure as a
-Talos upgrade.
+Missing extensions are reported by the informational `ExtensionsPresent`
+condition on `TalosStorage`, read from the Nodes' `extensions.talos.dev/*`
+labels; it never gates `Ready`. Adding one is an installer-image
+change: a new schematic, which the Talos upgrade treats as an upgrade even when
+the version does not move.
 
 Disks are registered with the storage system through its own node label and
 annotation mechanism, not by writing its CRs. A consistency check confirms the
@@ -832,6 +842,11 @@ Application until the Talos side is ready.
    etcd checks in between. They never start by themselves: the machine reports
    `RebootRequired` with the fields, and a `config` operation, started from
    `ichor config apply` or the cluster page after a plan, rolls them out.
+   A third class, `APIServerRestart` (for example `spec.authentication`), needs
+   no reboot but restarts the kube-apiserver; the machine controller never
+   applies it to a control plane, and the same `config` operation does, one
+   control plane at a time with no drain, waiting for that node's `/readyz`
+   before the next.
    Talos's `Reboot` does not cordon or drain (unlike its `Upgrade` and `Shutdown`),
    so the rollout does both itself before the reboot and uncordons afterwards.
 5. Watch COSI for state and drift. Drift handling is per cluster: warn only
@@ -841,6 +856,10 @@ Application until the Talos side is ready.
    reboot-requiring changes wait for a config rollout.
 
 ### Upgrades
+
+A step that fails pauses its operation with a `failureReason` and is never
+retried by itself; `ichor operation resume` (or Resume in the UI) on such an
+operation re-runs the failed step through an annotation, not through `spec`.
 
 All three upgrade kinds share the lock, the status-held state machine, pause-
 on-failure (no automatic cluster-wide rollback), `paused`, `maxUnavailable`
@@ -885,7 +904,9 @@ endpoint of type `node` warns that the endpoint is one apiserver. This is
 `upgrade-k8s`'s order, run on Ichor's own machinery.
 
 Ichor: in `ichor` mode, the controller only launches the installer Job for the
-target version and never upgrades itself. The installer snapshots the current
+target version and never upgrades itself. The Job runs with the RBAC of the
+release being replaced, so the installer applies its own RBAC first.
+It then snapshots the current
 manifests, updates CRDs (additive, never downgraded), the controller, then the
 UI, runs post-checks, and rolls back from the snapshot on failure. In
 `external` mode it's a PR. The CLI refuses writes when more than one minor
@@ -928,7 +949,11 @@ rotation (Talos and Kubernetes) follows the documented Talos procedure and
 runs through the same machinery as upgrades, except that it waits, after every
 node accepts the new CAs, until the operator has credentials that work with
 both CAs; otherwise the first stage that changes what the API
-servers present would lock the operator out. Expiry dates are visible in
+servers present would lock the operator out. The new credentials are written by
+the CLI or downloaded by an administrator in the UI. In-cluster
+clients cannot hold both Kubernetes CAs (`kube-root-ca.crt` switches at
+Issuing), so before dropping the old CA the controller waits for the new one in
+every namespace and then a settle delay. Expiry dates are visible in
 status, the UI and metrics.
 
 ### Monitoring and registry mirrors

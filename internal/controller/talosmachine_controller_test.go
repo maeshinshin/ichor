@@ -116,6 +116,13 @@ type fakeTalosClient struct {
 	stagedBudget time.Duration
 	rebootBudget time.Duration
 
+	// kube-apiserver fields: the config rollout's API server restart wait (ADR 0080 amendment).
+	apiInstance    string
+	apiInstanceErr error
+	apiReadyErr    error
+	apiReadyCalls  int
+	apiReadyHook   func()
+
 	// shutdown-related fields: shutdown_test.go's fixtures (ADR 0067).
 	shutdownErr   error
 	shutdownCalls []bool // the force argument of each call, in order
@@ -239,6 +246,21 @@ func (f *fakeTalosClient) Shutdown(_ context.Context, force bool) error {
 
 func (f *fakeTalosClient) MachineStage(context.Context) (string, error) {
 	return f.stage, f.stageErr
+}
+
+// kube-apiserver fields (config_rollout_apiserver_test.go, ADR 0080 amendment).
+func (f *fakeTalosClient) APIServerInstance(context.Context) (string, error) {
+	return f.apiInstance, f.apiInstanceErr
+}
+
+func (f *fakeTalosClient) APIServerReady(context.Context) error {
+	f.apiReadyCalls++
+
+	if f.apiReadyHook != nil {
+		f.apiReadyHook()
+	}
+
+	return f.apiReadyErr
 }
 
 func (f *fakeTalosClient) Schematic(context.Context) (string, error) {

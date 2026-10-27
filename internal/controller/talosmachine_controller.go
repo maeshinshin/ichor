@@ -122,6 +122,7 @@ const (
 	reasonUnsupportedTalosVersion  = "UnsupportedTalosVersion"
 	reasonInstallTimeOnlyChange    = "InstallTimeOnlyChange"
 	reasonRebootRequired           = "RebootRequired"
+	reasonAPIServerRestartRequired = "APIServerRestartRequired"
 	reasonClusterLockHeld          = "ClusterLockHeld"
 	reasonDryRunWarnings           = "DryRunWarnings"
 	reasonNodeDrifted              = "NodeDrifted"
@@ -396,7 +397,7 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	if hashConfig(current) == hash {
 		m.Status.AppliedConfigHash = hash
 		m.Status.ObservedInputsHash = inputsHash
-		m.Status.RebootPaths = nil
+		m.Status.RebootPaths, m.Status.APIServerRestartPaths = nil, nil
 
 		return ctrl.Result{RequeueAfter: reachabilityRecheck}, r.ready(ctx, &m, metav1.ConditionTrue, reasonConverged,
 			"node configuration matches the rendered configuration")
@@ -455,7 +456,7 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		driftNote = "node configuration has drifted from the rendered configuration; "
 	}
 
-	m.Status.RebootPaths = nil
+	m.Status.RebootPaths, m.Status.APIServerRestartPaths = nil, nil
 
 	switch {
 	case len(impact.Unsupported) > 0:
@@ -469,7 +470,12 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 				driftNote, strings.Join(impact.InstallTimeOnly, ", ")))
 
 	case impact.RebootRequired:
+		m.Status.APIServerRestartPaths = reportablePaths(current, rendered, impact.APIServerRestartPaths)
+
 		return r.refuseReboot(ctx, &m, driftNote, reportablePaths(current, rendered, impact.RebootPaths))
+
+	case len(impact.APIServerRestartPaths) > 0 && m.Spec.Role == roleControlPlane:
+		return r.refuseAPIServerRestart(ctx, &m, driftNote, reportablePaths(current, rendered, impact.APIServerRestartPaths))
 
 	case drifted && cluster.Spec.DriftPolicy != driftPolicyAutoCorrect:
 		return ctrl.Result{}, r.ready(ctx, &m, metav1.ConditionFalse, reasonNodeDrifted,
@@ -667,6 +673,22 @@ func (r *TalosMachineReconciler) refuseReboot(
 	return ctrl.Result{}, r.ready(ctx, m, metav1.ConditionFalse, reasonRebootRequired,
 		driftNote+"configuration change needs a reboot (fields: "+summarizePaths(paths, rebootPathsInMessage)+
 			")"+renameNote(paths)+"; nothing reboots a node on its own -- start a config rollout (ichor config apply, or the cluster page) to apply it")
+}
+
+// refuseAPIServerRestart is the same for a change that needs no reboot but restarts this node's
+// kube-apiserver (fieldmeta's APIServerRestart class). Applying it from here would restart every
+// control plane's API server at about the same time, a full API outage on an HA cluster, so it is
+// left to a config-rollout TalosOperation (ADR 0080 amendment), which does it one control plane at
+// a time and waits for /readyz between them.
+func (r *TalosMachineReconciler) refuseAPIServerRestart(
+	ctx context.Context, m *ichorv1alpha1.TalosMachine, driftNote string, paths []string,
+) (ctrl.Result, error) {
+	m.Status.APIServerRestartPaths = paths
+
+	return ctrl.Result{}, r.ready(ctx, m, metav1.ConditionFalse, reasonAPIServerRestartRequired,
+		driftNote+"configuration change restarts the Kubernetes API server (fields: "+summarizePaths(paths, rebootPathsInMessage)+
+			"); no reboot, but it is not applied on its own, so every control plane does not lose its API server at once -- "+
+			"start a config rollout (ichor config apply, or the cluster page) to apply it one control plane at a time")
 }
 
 // rebootPathsInMessage caps how many field paths a Ready message lists; status.rebootPaths has all.

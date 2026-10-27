@@ -190,7 +190,7 @@ func (f *authFlow) ensure(ctx context.Context, interactive bool) (*authCacheEntr
 	}
 
 	if !interactive {
-		return nil, fmt.Errorf("no valid login for %s: run `ichor auth login --issuer %s --client-id %s`", f.Issuer, f.Issuer, f.ClientID)
+		return nil, fmt.Errorf("no valid login for %s: run `ichor auth login --issuer %s --client-id %s --audience %s` once, or use kubectl from a terminal", f.Issuer, f.Issuer, f.ClientID, f.Audience)
 	}
 
 	n, err := f.login(ctx)

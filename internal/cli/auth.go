@@ -59,7 +59,7 @@ holds no secret.`,
 
 var authLoginCmd = &cobra.Command{
 	Use:   "login",
-	Short: "Log in through the browser (authorization code + PKCE, loopback redirect)",
+	Short: "Log in through the browser (authorization code + PKCE, loopback redirect); the default audience ichor-kube is the login kubectl needs when it has no terminal",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		f, err := newAuthFlow(cmd, !authOpts.noBrowser)
@@ -119,7 +119,7 @@ func init() {
 	pf := authCmd.PersistentFlags()
 	pf.StringVar(&authOpts.issuer, "issuer", os.Getenv("ICHOR_ISSUER"), "Ichor OIDC issuer URL, the external https URL of ichor-ui (required; env ICHOR_ISSUER)")
 	pf.StringVar(&authOpts.clientID, "client-id", defaultAuthClient, "OIDC client id")
-	pf.StringVar(&authOpts.audience, "audience", defaultAuthAudience, "token audience: ichor-kube (the kube-apiserver) or ichor-ui (ichor-ui itself)")
+	pf.StringVar(&authOpts.audience, "audience", defaultAuthAudience, "token audience: ichor-kube (the kube-apiserver, default; `ichor auth login` once lets kubectl run without a terminal) or ichor-ui (ichor-ui itself)")
 	addCAFileFlag(pf)
 	authLoginCmd.Flags().BoolVar(&authOpts.noBrowser, "no-browser", false, "print the login URL instead of opening a browser")
 

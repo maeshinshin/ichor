@@ -1,0 +1,27 @@
+# The namespaced part of the built-in Ichor user roles: what a signed-in user
+# needs in ichor-system for `ichor ui` (port-forward to ichor-ui). Bound to all three groups by
+# ichor_roles_binding.yaml.
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    app.kubernetes.io/name: ichor
+    app.kubernetes.io/managed-by: kustomize
+  name: user-access
+  namespace: system
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  - services
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - ""
+  resources:
+  - pods/portforward
+  verbs:
+  - create

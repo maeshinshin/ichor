@@ -103,7 +103,7 @@ func (f *restoreFixture) putSnapshot(t time.Time, body string) (name string, pla
 func (f *restoreFixture) reconciler(nodeName string) *TalosOperationReconciler {
 	return &TalosOperationReconciler{
 		Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, NodeName: nodeName,
-		NewStore:   func(etcdbackup.S3Config) (etcdbackup.Store, error) { return f.backup.store, nil },
+		NewStore:    func(etcdbackup.S3Config) (etcdbackup.Store, error) { return f.backup.store, nil },
 		TalosClient: perMachineClientFactory(f.fakes),
 		launchTail:  func(j *restoreJob) { f.jobs = append(f.jobs, j) },
 	}
@@ -160,7 +160,7 @@ func (f *restoreFixture) targetFake() *fakeTalosClient { return f.fake(f.target(
 
 // hosts is every control plane's host, which is what a healthy etcd lists as members.
 func (f *restoreFixture) hosts() []string {
-	var out []string
+	out := make([]string, 0, len(f.cps))
 	for h := range f.cps {
 		out = append(out, h)
 	}
@@ -191,7 +191,6 @@ func (f *restoreFixture) lastJob() *restoreJob {
 // wipeHooks makes a reset empty the node's etcd data, and a bootstrap fill the target's again.
 func (f *restoreFixture) wipeHooks() {
 	for _, fk := range f.fakes {
-		fk := fk
 		fk.resetEtcdHook = func() { fk.etcdData = false }
 		fk.bootstrapRecoverHook = func() { fk.etcdData = true }
 	}

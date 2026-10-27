@@ -82,7 +82,7 @@ func liveClients(t *testing.T, yes, allowed bool, extra ...client.Object) (*apiC
 func liveSpec() liveRestoreSpec { return liveRestoreSpec{Cluster: opTestCluster} }
 
 func TestRestoreLiveIsRegisteredBesideRecoverCluster(t *testing.T) {
-	for _, name := range []string{"live", "backup", "confirm", "follow", "snapshot", "cluster", "recover-cluster"} {
+	for _, name := range []string{"live", "backup", "confirm", "follow", flagSnapshot, flagCluster, "recover-cluster"} {
 		if restoreCmd.Flags().Lookup(name) == nil {
 			t.Errorf("ichor restore has no --%s", name)
 		}
@@ -94,8 +94,10 @@ func TestRestoreLiveIsRegisteredBesideRecoverCluster(t *testing.T) {
 }
 
 func TestChooseSnapshot(t *testing.T) {
-	one := &pb.EtcdBackup{Ref: objectRef("ns", "a"), Snapshots: []*pb.EtcdSnapshot{{Name: "new"}, {Name: "old"}}}
-	two := &pb.EtcdBackup{Ref: objectRef("ns", "b"), Snapshots: []*pb.EtcdSnapshot{{Name: "other"}}}
+	const snapOlder = "snap-older"
+
+	one := &pb.EtcdBackup{Ref: objectRef("ns", "a"), Snapshots: []*pb.EtcdSnapshot{{Name: "snap-new"}, {Name: snapOlder}}}
+	two := &pb.EtcdBackup{Ref: objectRef("ns", "b"), Snapshots: []*pb.EtcdSnapshot{{Name: "snap-b"}}}
 	empty := &pb.EtcdBackup{Ref: objectRef("ns", "c")}
 
 	cases := []struct {
@@ -105,11 +107,11 @@ func TestChooseSnapshot(t *testing.T) {
 		want    string
 		wantErr string
 	}{
-		{"the only backup, newest snapshot", []*pb.EtcdBackup{one}, liveRestoreSpec{}, "new", ""},
-		{"a named snapshot", []*pb.EtcdBackup{one}, liveRestoreSpec{Snapshot: "old"}, "old", ""},
+		{"the only backup, newest snapshot", []*pb.EtcdBackup{one}, liveRestoreSpec{}, "snap-new", ""},
+		{"a named snapshot", []*pb.EtcdBackup{one}, liveRestoreSpec{Snapshot: snapOlder}, snapOlder, ""},
 		{"a snapshot the backup does not list", []*pb.EtcdBackup{one}, liveRestoreSpec{Snapshot: "gone"}, "", "does not list snapshot \"gone\""},
 		{"several backups need a choice", []*pb.EtcdBackup{one, two}, liveRestoreSpec{}, "", "choose one with --backup"},
-		{"the named one of several", []*pb.EtcdBackup{one, two}, liveRestoreSpec{Backup: "b"}, "other", ""},
+		{"the named one of several", []*pb.EtcdBackup{one, two}, liveRestoreSpec{Backup: "b"}, "snap-b", ""},
 		{"a backup that does not exist", []*pb.EtcdBackup{one}, liveRestoreSpec{Backup: "zzz"}, "", "no TalosEtcdBackup named"},
 		{"no backup at all", nil, liveRestoreSpec{}, "", "nothing to restore from"},
 		{"a backup with no snapshot yet", []*pb.EtcdBackup{empty}, liveRestoreSpec{}, "", "lists no snapshot"},
@@ -282,7 +284,7 @@ func TestRestoreRequiresAMode(t *testing.T) {
 
 func TestProgressLineShowsTheRestoreStep(t *testing.T) {
 	op := &pb.Operation{
-		Ref: objectRef("ns", "etcd-restore-x"), Kind: pb.OperationKind_OPERATION_KIND_ETCD_RESTORE, Phase: "InProgress",
+		Ref: objectRef("ns", "etcd-restore-x"), Kind: pb.OperationKind_OPERATION_KIND_ETCD_RESTORE, Phase: ichorv1alpha1.TalosOperationPhaseInProgress,
 		EtcdRestoreStep: ichorv1alpha1.EtcdRestoreStepRecovering,
 	}
 

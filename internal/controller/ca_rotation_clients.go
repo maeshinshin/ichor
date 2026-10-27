@@ -92,8 +92,9 @@ func (c *caRun) restartTargets(ctx context.Context) ([]caClient, error) {
 	return targets, nil
 }
 
-// restartClients restarts, once, the in-cluster clients known to keep the old CA, and waits (bounded)
-// for them. done is false while the rotation must wait; a workload that is not back after the timeout
+// restartClients restarts, once and one at a time (CoreDNS, kube-proxy, the CNI, ichor-ui), the in-cluster
+// clients known to keep the old CA, and waits (bounded) for each before the next. The caller runs it only
+// after the replaced bundle is verified and every Node is Ready. done is false while the rotation must wait; a workload that is not back after the timeout
 // is named in the returned note and does not hold the rotation.
 func (c *caRun) restartClients(ctx context.Context) (res ctrl.Result, note string, done bool, err error) {
 	kc := c.r.KubeClient
@@ -109,13 +110,25 @@ func (c *caRun) restartClients(ctx context.Context) (res ctrl.Result, note strin
 		return ctrl.Result{RequeueAfter: caClientPoll}, "", false, err
 	}
 
-	for _, t := range targets {
+	// One at a time, in order: a workload is restarted only once the one before it is available again,
+	// so DNS and the proxy are never down together. On a wait, the later ones are not touched.
+	for i, t := range targets {
 		ready, gone, rerr := c.restartOne(ctx, t, token)
+		if gone || (rerr == nil && ready) {
+			continue
+		}
+
 		if rerr != nil {
 			pending = append(pending, fmt.Sprintf("%s (%v)", t, rerr))
-		} else if !gone && !ready {
+		} else {
 			pending = append(pending, t.String())
 		}
+
+		for _, later := range targets[i+1:] {
+			pending = append(pending, later.String()+" (not restarted yet)")
+		}
+
+		break
 	}
 
 	if len(pending) == 0 {

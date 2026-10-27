@@ -187,7 +187,7 @@ func main() {
 		var verifier localVerifier
 
 		issuer, verifier, err = newIssuer(context.Background(), users, &uiapi.IssuerBackend{
-			Users: cache, Reader: c, Namespace: server.ControllerNamespace, Settings: server.Users,
+			Users: cache, Reader: c, Writer: c, Namespace: server.ControllerNamespace, Settings: server.Users,
 		})
 		if err != nil {
 			log.Fatalf("ichor-ui: %v", err)

@@ -107,6 +107,48 @@ func TestWatchGivesUpAfterTheRetryWindow(t *testing.T) {
 	}
 }
 
+func TestWatchRestoreWaitsOutNotFound(t *testing.T) {
+	shrinkFollowTimers(t)
+	setAPITestFlags(t, true)
+
+	ops := &flakyOps{errs: []error{
+		connect.NewError(connect.CodeNotFound, errors.New("operation x not found")),
+		connect.NewError(connect.CodeNotFound, errors.New("operation x not found")),
+	}}
+	c := &apiClients{Operation: ops, Close: func() {}}
+
+	var errw bytes.Buffer
+
+	if err := watchRestoreOperation(context.Background(), c, objectRef(testNamespace, "x"), &bytes.Buffer{}, &errw); err != nil {
+		t.Fatalf("want success once the operation is back, got %v", err)
+	}
+
+	if ops.calls != 3 || strings.Count(errw.String(), "waiting for the restore to resume") != 1 {
+		t.Fatalf("calls=%d stderr=%q", ops.calls, errw.String())
+	}
+}
+
+func TestWatchRestoreGivesUpOnNotFoundAfterTheWindow(t *testing.T) {
+	shrinkFollowTimers(t)
+
+	old := restoreResumeWindow
+	restoreResumeWindow = 30 * time.Millisecond
+
+	t.Cleanup(func() { restoreResumeWindow = old })
+
+	ops := &flakyOps{errs: make([]error, 100000)}
+	for i := range ops.errs {
+		ops.errs[i] = connect.NewError(connect.CodeNotFound, errors.New("gone"))
+	}
+
+	c := &apiClients{Operation: ops, Close: func() {}}
+
+	err := watchRestoreOperation(context.Background(), c, objectRef(testNamespace, "x"), &bytes.Buffer{}, &bytes.Buffer{})
+	if connect.CodeOf(err) != connect.CodeNotFound {
+		t.Fatalf("want the NotFound once the window is spent, got %v", err)
+	}
+}
+
 func TestWatchRedialsADeadTunnel(t *testing.T) {
 	shrinkFollowTimers(t)
 

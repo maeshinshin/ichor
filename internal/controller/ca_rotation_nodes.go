@@ -18,6 +18,9 @@ package controller
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/pem"
 	"errors"
 	"fmt"
 
@@ -68,5 +71,70 @@ func NewNodesReady() NodesReadyFunc {
 		}
 
 		return notReady, nil
+	}
+}
+
+// rootCAConfigMap is the ConfigMap kube-controller-manager's root-ca-cert-publisher keeps in
+// every namespace; every pod's projected ca.crt is made from it.
+const rootCAConfigMap = "kube-root-ca.crt"
+
+// RootCAPublishedFunc reports the namespaces whose kube-root-ca.crt does not yet carry the CA with
+// the given fingerprint: pods there would not trust a serving certificate signed by it. A seam so
+// tests never reach a cluster; cmd/main.go wires NewRootCAPublished.
+type RootCAPublishedFunc func(ctx context.Context, talos TalosClient, fingerprint string) (stale []string, err error)
+
+// NewRootCAPublished returns the RootCAPublishedFunc cmd/main.go wires in. It reads the ConfigMaps
+// through the admin kubeconfig the Talos API issues, like NewNodesReady, so the controller's own
+// ServiceAccount needs no cluster-wide right on ConfigMaps.
+func NewRootCAPublished() RootCAPublishedFunc {
+	return func(ctx context.Context, talos TalosClient, fingerprint string) ([]string, error) {
+		cfg, err := restConfig(ctx, talos)
+		if err != nil {
+			return nil, err
+		}
+
+		cs, err := kubernetes.NewForConfig(cfg)
+		if err != nil {
+			return nil, fmt.Errorf("building a clientset from the admin kubeconfig: %w", err)
+		}
+
+		maps, err := cs.CoreV1().ConfigMaps(metav1.NamespaceAll).List(ctx, metav1.ListOptions{
+			FieldSelector: "metadata.name=" + rootCAConfigMap,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("listing %s ConfigMaps: %w", rootCAConfigMap, err)
+		}
+
+		if len(maps.Items) == 0 {
+			return nil, fmt.Errorf("the Kubernetes API lists no %s ConfigMap", rootCAConfigMap)
+		}
+
+		var stale []string
+
+		for i := range maps.Items {
+			if !pemBundleHolds([]byte(maps.Items[i].Data["ca.crt"]), fingerprint) {
+				stale = append(stale, maps.Items[i].Namespace)
+			}
+		}
+
+		return stale, nil
+	}
+}
+
+// pemBundleHolds reports whether a PEM bundle carries the certificate with the given fingerprint
+// (the sha256 of its DER encoding, as secretsbundle.Fingerprint computes it).
+func pemBundleHolds(bundle []byte, fingerprint string) bool {
+	for {
+		var block *pem.Block
+
+		block, bundle = pem.Decode(bundle)
+		if block == nil {
+			return false
+		}
+
+		sum := sha256.Sum256(block.Bytes)
+		if block.Type == "CERTIFICATE" && hex.EncodeToString(sum[:]) == fingerprint {
+			return true
+		}
 	}
 }

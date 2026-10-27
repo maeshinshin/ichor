@@ -48,11 +48,16 @@ func TestRotateCAPromptSaysKubeletRestartsAndTheBundleGoesStaleAndDeclineWritesN
 	for _, want := range []string{
 		"ca-rotation", "2 machine(s)", "1. " + opCP + " (controlplane)", "2. " + testMachineName + " (worker)",
 		"Accepting, Issuing, Dropping", "kubelet", "ichor cluster bundle-export " + opTestCluster,
-		"STOP WORKING", "WAITS", "ichor cluster credentials NAME --acknowledge",
+		"STOP WORKING from the second pass (Issuing)", "WAITS", "ichor cluster credentials NAME --acknowledge",
 	} {
 		if !strings.Contains(prompt.String(), want) && !strings.Contains(strings.ToLower(prompt.String()), strings.ToLower(want)) {
 			t.Errorf("prompt lacks %q:\n%s", want, prompt.String())
 		}
+	}
+
+	// The Talos API serves the new CA from Issuing too, so the old talosconfig fails there, not at Dropping.
+	if strings.Contains(prompt.String(), "third") {
+		t.Errorf("prompt still says the Talos API refuses the old CA after the third pass:\n%s", prompt.String())
 	}
 
 	if len(opTestOps(t, k8s)) != 0 {

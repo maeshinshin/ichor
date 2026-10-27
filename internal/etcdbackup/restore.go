@@ -138,6 +138,12 @@ type RestoreMarker struct {
 	// which is wiped last; empty when the controller runs elsewhere.
 	Nodes map[string]string `json:"nodes,omitempty"`
 	Own   string            `json:"own,omitempty"`
+	// OwnWipeAt is when the job recorded that it was about to wipe the controller's own node (Own), before
+	// it sent the wipe; OwnDone is set once that node is known to be wiped or a member. The wipe is done by
+	// the job through the Talos API alone, because the node's etcd is stale and the Kubernetes API is not
+	// reachable from it.
+	OwnWipeAt time.Time `json:"ownWipeAt,omitzero"`
+	OwnDone   bool      `json:"ownDone,omitempty"`
 	// AgentsSince is when the kubelets of the nodes that were not wiped were restarted (the node-side
 	// agents refresh); zero before. It bounds the wait for them and makes the restart once.
 	AgentsSince time.Time `json:"agentsSince,omitzero"`

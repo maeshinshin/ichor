@@ -417,11 +417,22 @@ func (s *Server) planOperation(
 			return nil, mapGetError("IchorInstallation \""+ichorv1alpha1.IchorInstallationName+"\"", err)
 		}
 
-		p.resp.Current, tracked = p.install.Spec.Version, p.install
+		// Current is what runs, not what was asked for: after a rolled-back upgrade spec.version
+		// is the failed target while the controller still reports the old version.
+		p.resp.Current, tracked = p.install.Status.InstalledVersion, p.install
+		if p.resp.Current == "" {
+			p.resp.Current = p.install.Spec.Version
+		}
+
+	}
+
+	specVersion := p.resp.Current
+	if p.install != nil {
+		specVersion = p.install.Spec.Version
 	}
 
 	p.resp.Target = target
-	p.resp.SpecChanges = target != "" && target != p.resp.Current
+	p.resp.SpecChanges = target != "" && target != specVersion
 
 	if err := s.planMachines(ctx, p, &cluster, maxUnavailable); err != nil {
 		return nil, err

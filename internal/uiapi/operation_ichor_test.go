@@ -212,3 +212,23 @@ func TestGetIchorInstallation(t *testing.T) {
 		})
 	}
 }
+
+// A rolled-back upgrade leaves spec.version at the failed target while the controller still
+// reports the version that runs: the plan's current version is the one that runs.
+func TestIchorPlanAfterARolledBackUpgradeReportsTheRunningVersion(t *testing.T) {
+	e := newPREnv(t, prOpts{})
+	if err := e.k8s.Create(context.Background(), ichorInstallation("ichor", ichorNew, ichorOld, false)); err != nil {
+		t.Fatal(err)
+	}
+
+	plan, err := e.srv.PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{
+		Cluster: objectRef(trackedTestNS, "c"), Kind: pb.OperationKind_OPERATION_KIND_ICHOR,
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := plan.Msg.GetCurrent(); got != ichorOld {
+		t.Fatalf("current = %q, want the running %q, not the failed target", got, ichorOld)
+	}
+}

@@ -27,7 +27,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -163,7 +162,7 @@ func patchCredential(ctx context.Context, k client.Client, ns, name string, cred
 		return err
 	}
 
-	sec := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: ichorauth.CredentialsSecretName}}
+	sec := &corev1.Secret{Namespace: ns, Name: ichorauth.CredentialsSecretName}
 
 	// The error of a failed patch can quote the request, which holds a hash.
 	if err := k.Patch(ctx, sec, client.RawPatch(types.MergePatchType, patch)); err != nil {

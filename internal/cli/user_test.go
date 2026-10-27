@@ -96,7 +96,7 @@ func (f *fakeUserService) GetMyKubeconfig(_ context.Context, r *connect.Request[
 }
 
 func (f *fakeUserService) WhoAmI(context.Context, *connect.Request[pb.WhoAmIRequest]) (*connect.Response[pb.WhoAmIResponse], error) {
-	return connect.NewResponse(&pb.WhoAmIResponse{Username: "ichor:alice", Groups: []string{"ichor:admin"}, Source: "ichor", MustChangePassword: true}), nil
+	return connect.NewResponse(&pb.WhoAmIResponse{Username: "ichor:alice", Groups: []string{"ichor:admin"}, Source: appNameIchor, MustChangePassword: true}), nil
 }
 
 func newUserClient(t *testing.T, f *fakeUserService) ichorv1alpha1connect.UserServiceClient {

@@ -15,10 +15,11 @@ import { formatSpeed, serviceTone, sortServices, visibleVolumes } from '@/lib/ta
 import { useT } from '@/lib/useT'
 
 // Read-only Talos details of one machine (docs/adr/0073, 0083): one call, five
-// independently failing parts, rendered as flat page sections (ids: talos,
-// storage, network, services, extensions). A part that failed shows its error
+// independently failing parts. The node page's "Storage & network" tab renders
+// part="storage" (disks, network), its "Talos" tab part="talos" (system,
+// services, extensions); each tab makes its own call. A part that failed shows its error
 // inline and the rest still render. Tables scroll inside their own container.
-export function TalosDetails({ namespace, name }: { namespace: string; name: string }) {
+export function TalosDetails({ namespace, name, part }: { namespace: string; name: string; part: 'storage' | 'talos' }) {
   const t = useT()
   const [data, setData] = useState<GetNodeTalosDetailsResponse | null>(null)
   const [error, setError] = useState<{ title: string; detail: string } | null>(null)
@@ -40,25 +41,19 @@ export function TalosDetails({ namespace, name }: { namespace: string; name: str
     }
   }, [namespace, name])
 
-  if (error) {
+  if (error) return <ErrorAlert {...error} />
+  if (!data) return <p class="text-muted-foreground">{t('common.loading')}</p>
+  if (part === 'storage') {
     return (
-      <Section id="talos" title={t('talos.system')}>
-        <ErrorAlert {...error} />
-      </Section>
-    )
-  }
-  if (!data) {
-    return (
-      <Section id="talos" title={t('talos.system')}>
-        <p class="text-muted-foreground">{t('common.loading')}</p>
-      </Section>
+      <>
+        <StorageSection data={data} />
+        <NetworkSection data={data} />
+      </>
     )
   }
   return (
     <>
       <SystemSection data={data} />
-      <StorageSection data={data} />
-      <NetworkSection data={data} />
       <ServicesSection data={data} />
       <ExtensionsSection data={data} />
     </>

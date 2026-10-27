@@ -101,9 +101,10 @@ test('a config rollout takes no target and needs the cluster name typed, because
 })
 
 test('the CA rotation stage is a position in the stages; unknown or empty is not a position', () => {
-  assert.deepEqual(caStageProgress('Accepting'), { index: 1, total: 5 })
-  assert.deepEqual(caStageProgress('Dropping'), { index: 3, total: 5 })
-  assert.deepEqual(caStageProgress('Done'), { index: 5, total: 5 })
+  assert.deepEqual(caStageProgress('Accepting'), { index: 1, total: 6 })
+  assert.deepEqual(caStageProgress('AwaitingCredentials'), { index: 2, total: 6 })
+  assert.deepEqual(caStageProgress('Dropping'), { index: 4, total: 6 })
+  assert.deepEqual(caStageProgress('Done'), { index: 6, total: 6 })
   assert.equal(caStageProgress(''), null)
   assert.equal(caStageProgress('Nonsense'), null)
 })

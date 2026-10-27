@@ -871,7 +871,10 @@ regularly.
 Ichor's own Talos client certificates are short-lived and renewed
 automatically; an expired one would lock Ichor out with no way back. CA
 rotation (Talos and Kubernetes) follows the documented Talos procedure and
-runs through the same machinery as upgrades. Expiry dates are visible in
+runs through the same machinery as upgrades, except that it waits, after every
+node accepts the new CAs, until the operator has credentials that work with
+both CAs; otherwise the first stage that changes what the API
+servers present would lock the operator out. Expiry dates are visible in
 status, the UI and metrics.
 
 ### Monitoring and registry mirrors

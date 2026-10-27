@@ -100,6 +100,8 @@ lock, though the target is `IchorInstallation.spec.version`.
 
 ## Decision 7: the `ca-rotation` kind (ADR 0063)
 
+*Amended by ADR 0091: the stages gain `AwaitingCredentials`, `rotate-ca` performs the credential hand-off after the start, and the plan says the operator's credentials stop working.*
+
 `OperationKind` gains `OPERATION_KIND_CA_ROTATION`, `OperationEffect` gains `OPERATION_EFFECT_CA_ROTATION`, `Operation` carries
 `ca_rotation_stage` (`status.caRotation.stage`, empty before the new CAs are saved), and `PlanOperationResponse` carries `stages`
 (`Accepting`, `Issuing`, `Dropping`) and `replaces_secrets_bundle`. The rest is the discipline of the other kinds: `CreateOperation`

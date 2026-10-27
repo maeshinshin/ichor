@@ -172,7 +172,8 @@ Three things went wrong; each is now handled and tested.
    `ResumeEtcdRestoresUntilDone` as a runnable that needs leader election, so it starts after the webhook server
    and the caches; one pass (`ResumeEtcdRestores`) now returns the errors it met, and the runner repeats it with a
    pause from 1s doubling to 30s until a pass has nothing left to do (no marker, or the operation is back) or the
-   manager stops. Creating the operation and writing its status is also repeatable: if the status write failed
+   manager stops (a backup whose storage settings cannot be loaded is logged and skipped, since a retry would not
+   change that). Creating the operation and writing its status is also repeatable: if the status write failed
    after the create, the next pass finds the operation without `status.etcdRestore` and writes it.
 2. **A node that was not wiped kept stale kube-proxy state.** After the rewind, on the worker the Service IP
    refused connections although the apiservers and Endpoints were healthy; deleting the worker's kube-proxy pod

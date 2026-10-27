@@ -1006,13 +1006,24 @@ func (r *TalosOperationReconciler) ResumeEtcdRestores(ctx context.Context) error
 
 	for i := range backups.Items {
 		key := client.ObjectKeyFromObject(&backups.Items[i])
-		if err := r.resumeBackup(ctx, key); err != nil {
+		err := r.resumeBackup(ctx, key)
+
+		switch {
+		case err == nil:
+		case errors.Is(err, errBackupUnusable):
+			// Not something a retry fixes (a backup whose storage settings cannot be read): it must not
+			// keep the others, or the manager's runner, waiting.
+			logf.FromContext(ctx).Info("cannot look for an etcd restore marker", "backup", key.String(), "error", err.Error())
+		default:
 			errs = append(errs, fmt.Errorf("looking for an unfinished etcd restore of backup %s: %w", key.String(), err))
 		}
 	}
 
 	return errors.Join(errs...)
 }
+
+// errBackupUnusable marks a backup whose destination settings cannot be loaded.
+var errBackupUnusable = errors.New("the backup's storage settings cannot be loaded")
 
 // resumeBackoffStart and resumeBackoffMax bound the pause between two passes of
 // ResumeEtcdRestoresUntilDone. Variables so tests can shorten them.
@@ -1062,7 +1073,7 @@ func (r *TalosOperationReconciler) resumeBackup(ctx context.Context, backup type
 
 	s3cfg, err := loadS3ConfigFrom(ctx, r.Client, r.ControllerNamespace, bk.Spec.Destination.S3, &scrub)
 	if err != nil {
-		return errors.New(scrub.clean(err.Error()))
+		return fmt.Errorf("%w: %s", errBackupUnusable, scrub.clean(err.Error()))
 	}
 
 	newStore := r.NewStore

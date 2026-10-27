@@ -243,6 +243,12 @@ ichorUI:
     tokenTTL: 5m
     ## Absolute lifetime of a refresh token (1h to 30d).
     refreshLifetime: 12h
+    ## The Kubernetes API URL users put in their kubeconfig (GetMyKubeconfig), e.g. a load
+    ## balancer in front of the control planes. Empty uses the cluster's spec.endpoint.
+    kubeAPIServerURL: ""
+    ## Sent as the kubeconfig's tls-server-name when kubeAPIServerURL's host is not in the
+    ## apiserver certificate's SANs (use a name that is). Empty sets none.
+    kubeAPITLSServerName: ""
     ## Built-in role names (viewer, operator, admin) whose group is also bound to cluster-admin.
     ## Empty by default. Doing so lets those users read the secrets bundle, which holds the Talos
     ## credentials.

@@ -85,6 +85,12 @@ spec:
         - --signing-keys-dir=/etc/ichor/oidc-signing
         - --token-ttl={{ .Values.ichorUI.users.tokenTTL }}
         - --refresh-lifetime={{ .Values.ichorUI.users.refreshLifetime }}
+        {{- with .Values.ichorUI.users.kubeAPIServerURL }}
+        - --kube-api-server-url={{ . }}
+        {{- end }}
+        {{- with .Values.ichorUI.users.kubeAPITLSServerName }}
+        - --kube-api-tls-server-name={{ . }}
+        {{- end }}
         {{- end }}
         command:
         - /ichor-ui

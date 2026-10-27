@@ -649,6 +649,20 @@ func TestUIUsers(t *testing.T) {
 		}
 	}
 
+	if strings.Contains(dep, "kube-api-server-url") || strings.Contains(dep, "kube-api-tls-server-name") {
+		t.Errorf("kube API flags render by default: %s", dep)
+	}
+
+	withAPI := renderChartWithValues(t, "ichor", "ichorUI.users.enabled=true", "ichorUI.users.externalURL="+url,
+		"ichorUI.users.kubeAPIServerURL=https://k8s.example.com:443", "ichorUI.users.kubeAPITLSServerName=kubernetes")
+	apiDep := fmt.Sprint(find(withAPI, kindDeployment, ichorUIDeploymentName)["spec"])
+
+	for _, want := range []string{"--kube-api-server-url=https://k8s.example.com:443", "--kube-api-tls-server-name=kubernetes"} {
+		if !strings.Contains(apiDep, want) {
+			t.Errorf("Deployment lacks %q: %s", want, apiDep)
+		}
+	}
+
 	mgr := fmt.Sprint(findNameSuffix(on, kindDeployment, "controller-manager")["spec"])
 	if !strings.Contains(mgr, "--user-issuer") || !strings.Contains(mgr, "--oidc-refresh-lifetime=12h") {
 		t.Errorf("the manager does not get --user-issuer: %s", mgr)

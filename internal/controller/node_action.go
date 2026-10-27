@@ -381,6 +381,10 @@ func (n *nodeRun) beginReboot(ctx context.Context) (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
+	if err := n.lastWorkerGuard(ctx, node, "reboot"); err != nil {
+		return ctrl.Result{}, err
+	}
+
 	if done, err := n.evacuate(ctx, node, "rebooting"); err != nil || !done {
 		if err != nil {
 			return ctrl.Result{}, err
@@ -483,6 +487,10 @@ func (n *nodeRun) beginShutdown(ctx context.Context) (ctrl.Result, error) {
 			return ctrl.Result{}, err
 		}
 
+		if err := n.lastWorkerGuard(ctx, node, "shut down"); err != nil {
+			return ctrl.Result{}, err
+		}
+
 		if done, err := n.evacuate(ctx, node, "shutting down"); err != nil || !done {
 			if err != nil {
 				return ctrl.Result{}, err
@@ -575,7 +583,11 @@ func (n *nodeRun) awaitRestartService(ctx context.Context) (ctrl.Result, error) 
 		return n.wait(ctx, "the node is not Ready yet")
 	}
 
-	return n.complete(ctx, fmt.Sprintf("%s was restarted and the node is Ready", n.spec.Service))
+	if ok, why := n.serviceVerified(); !ok {
+		return n.wait(ctx, why)
+	}
+
+	return n.complete(ctx, fmt.Sprintf("%s was restarted, is Running and the node is Ready", n.spec.Service))
 }
 
 // ---- etcd ----

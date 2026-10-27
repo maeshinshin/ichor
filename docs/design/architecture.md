@@ -857,7 +857,8 @@ for workers, a per-machine hold annotation, label-based ordering, and a
 progress view. Outstanding hand-overs are flagged before a Kubernetes upgrade
 because of the bootstrap-manifest re-apply.
 
-Talos: change `spec.talosVersion` or the schematic. Pre-checks cover etcd
+Talos: change `spec.talosVersion` or the schematic (a machine is upgraded when its running version or
+running schematic, read from its `ImageFactorySchematic` resource, differs from the target; ADR 0023). Pre-checks cover etcd
 health, node readiness, the supported upgrade path and the Kubernetes pairing.
 Control planes go first, one at a time; workers follow within
 `maxUnavailable`. Per node: hook → Upgrade API → reboot → verify version,

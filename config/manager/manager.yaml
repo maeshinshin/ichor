@@ -88,6 +88,14 @@ spec:
           capabilities:
             drop:
             - "ALL"
+        # Covers the start-up wait for the API server (up to 5m, cmd/waitapi.go); the liveness
+        # probe only starts once this succeeds.
+        startupProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          periodSeconds: 10
+          failureThreshold: 36
         livenessProbe:
           httpGet:
             path: /healthz

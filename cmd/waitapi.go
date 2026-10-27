@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"net"
+	"net/http"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -31,6 +33,8 @@ func waitForAPIServer(
 	timeout, initial, maxGap time.Duration,
 ) (*rest.Config, error) {
 	log := logr.FromContextOrDiscard(ctx)
+	start := time.Now()
+	parent := ctx
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	gap := initial
@@ -48,6 +52,10 @@ func waitForAPIServer(
 		log.Info("Waiting for the API server", "reason", err.Error(), "retryIn", gap.String())
 		select {
 		case <-ctx.Done():
+			if parent.Err() != nil {
+				return nil, fmt.Errorf("stopped while waiting for the API server (%s): %w",
+					time.Since(start).Round(time.Second), err)
+			}
 			return nil, fmt.Errorf("API server not reachable within %s: %w", timeout, err)
 		case <-time.After(gap):
 		}
@@ -55,11 +63,50 @@ func waitForAPIServer(
 	}
 }
 
+// serveWaitHealth answers /healthz (200) and /readyz (503) on addr until the returned stop is
+// called, which also frees the port. The manager's own probe server binds the same address
+// later, and without this the startup/liveness probes would kill the pod during the wait.
+func serveWaitHealth(addr string) (func(), error) {
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("ok"))
+	})
+	mux.HandleFunc("/readyz", func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "waiting for the API server", http.StatusServiceUnavailable)
+	})
+	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}
+	go func() { _ = srv.Serve(ln) }()
+	return func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(ctx)
+	}, nil
+}
+
+// waitWithHealth runs wait while serving the temporary health endpoint on probeAddr, and
+// closes it before returning. A bind failure is logged, not fatal: the wait still runs.
+func waitWithHealth(
+	ctx context.Context, probeAddr string, wait func(context.Context) (*rest.Config, error),
+) (*rest.Config, error) {
+	if stop, err := serveWaitHealth(probeAddr); err != nil {
+		logr.FromContextOrDiscard(ctx).Error(err, "Temporary health endpoint not started")
+	} else {
+		defer stop()
+	}
+	return wait(ctx)
+}
+
 // waitForAPIServerDefault probes the in-cluster/kubeconfig API server with the production bounds.
-func waitForAPIServerDefault(ctx context.Context) (*rest.Config, error) {
-	return waitForAPIServer(ctx, ctrl.GetConfig,
-		func(c *rest.Config) (discovery.ServerGroupsInterface, error) {
-			return discovery.NewDiscoveryClientForConfig(c)
-		},
-		apiWaitTimeout, apiWaitInitialGap, apiWaitMaxGap)
+func waitForAPIServerDefault(ctx context.Context, probeAddr string) (*rest.Config, error) {
+	return waitWithHealth(ctx, probeAddr, func(ctx context.Context) (*rest.Config, error) {
+		return waitForAPIServer(ctx, ctrl.GetConfig,
+			func(c *rest.Config) (discovery.ServerGroupsInterface, error) {
+				return discovery.NewDiscoveryClientForConfig(c)
+			},
+			apiWaitTimeout, apiWaitInitialGap, apiWaitMaxGap)
+	})
 }

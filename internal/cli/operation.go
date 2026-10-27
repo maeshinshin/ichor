@@ -44,7 +44,7 @@ var operationOpts struct {
 var operationCmd = &cobra.Command{
 	Use:     "operation",
 	Aliases: []string{"op"},
-	Short:   "List, follow, pause, resume or delete the operations (upgrades, shutdowns) of a cluster",
+	Short:   "List, follow, pause, resume, retry or delete the operations (upgrades, shutdowns) of a cluster",
 	Long: `An operation is the record of one machine-by-machine action: a Talos,
 Kubernetes or Ichor upgrade, a kube-proxy switch, or a cluster shutdown. These
 commands read and change the records; ` + "`ichor upgrade`, `ichor cni` and `ichor cluster shutdown`" + ` start them.`,
@@ -102,21 +102,52 @@ func newPauseCmd(use, short string, paused bool) *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
-				resp, err := c.Operation.SetOperationPaused(ctx, connect.NewRequest(&pb.SetOperationPausedRequest{
-					Operation: objectRef(apiOpts.Namespace, args[0]), Paused: paused,
-				}))
-				if err != nil {
-					return err
-				}
-
-				return writeMessage(cmd.OutOrStdout(), outputFormat, resp.Msg)
+				return runSetPaused(ctx, c, cmd.OutOrStdout(), cmd.ErrOrStderr(), args[0], paused)
 			})
 		},
 	}
 }
 
+func runSetPaused(ctx context.Context, c *apiClients, out, errw io.Writer, name string, paused bool) error {
+	resp, err := c.Operation.SetOperationPaused(ctx, connect.NewRequest(&pb.SetOperationPausedRequest{
+		Operation: objectRef(apiOpts.Namespace, name), Paused: paused,
+	}))
+	if err != nil {
+		return err
+	}
+
+	// Resuming lifts spec.paused only; a step that failed stays failed.
+	if op := resp.Msg.GetOperation(); !paused && op.GetPhase() == "Paused" && op.GetFailureReason() != "" {
+		_, _ = fmt.Fprintf(errw, "ichor: the step failed: %s; run `ichor operation retry %s` after fixing the cause\n", op.GetFailureReason(), name)
+	}
+
+	return writeMessage(out, outputFormat, resp.Msg)
+}
+
+var operationRetryCmd = &cobra.Command{
+	Use:   "retry NAME",
+	Short: "Run the failed step of a paused operation again, after fixing what made it fail",
+	Long: `retry is for an operation that paused itself because a step failed (a drain blocked by a pod,
+a refused webhook, a timeout). Fix the cause first, then retry: the controller clears the failure and runs
+the failed machine's step again. Machines that already finished are not touched. ` + "`resume`" + ` does not
+do this: it only lifts a pause an operator asked for.`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
+			resp, err := c.Operation.RetryOperation(ctx, connect.NewRequest(&pb.RetryOperationRequest{
+				Operation: objectRef(apiOpts.Namespace, args[0]),
+			}))
+			if err != nil {
+				return err
+			}
+
+			return writeMessage(cmd.OutOrStdout(), outputFormat, resp.Msg)
+		})
+	},
+}
+
 var operationPauseCmd = newPauseCmd("pause", "Stop the operation from advancing any further machine (the cluster lock stays held, nothing is undone)", true)
-var operationResumeCmd = newPauseCmd("resume", "Let a paused operation continue", false)
+var operationResumeCmd = newPauseCmd("resume", "Let an operation paused by an operator continue (a failed step needs `retry`)", false)
 
 var operationDeleteCmd = &cobra.Command{
 	Use:   "delete NAME",
@@ -338,7 +369,7 @@ func watchOperationUntil(ctx context.Context, c *apiClients, ref *pb.ObjectRef, 
 			}
 
 			if failed {
-				return fmt.Errorf("operation %s paused after a failure: %s", ref.GetName(), op.GetFailureReason())
+				return fmt.Errorf("operation %s paused after a failure: %s (fix the cause, then `ichor operation retry %[1]s`)", ref.GetName(), op.GetFailureReason())
 			}
 
 			return nil
@@ -468,8 +499,8 @@ func runStartOperation(ctx context.Context, c *apiClients, in io.Reader, out, er
 func init() {
 	rootCmd.AddCommand(operationCmd)
 	addAPIFlags(operationCmd)
-	operationCmd.AddCommand(operationListCmd, operationGetCmd, operationPauseCmd, operationResumeCmd, operationDeleteCmd)
+	operationCmd.AddCommand(operationListCmd, operationGetCmd, operationPauseCmd, operationResumeCmd, operationRetryCmd, operationDeleteCmd)
 	operationListCmd.Flags().StringVar(&operationClusterFlag, "cluster", "", "only the operations of this cluster")
 	operationGetCmd.Flags().BoolVarP(&operationOpts.Watch, "watch", "w", false, "keep polling and print progress until the operation finishes")
-	markWrites(operationPauseCmd, operationResumeCmd, operationDeleteCmd)
+	markWrites(operationPauseCmd, operationResumeCmd, operationRetryCmd, operationDeleteCmd)
 }

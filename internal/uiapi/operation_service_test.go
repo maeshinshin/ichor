@@ -21,10 +21,12 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"connectrpc.com/connect"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -640,5 +642,89 @@ func TestListAndGetReturnStatusMachinesAsTheyAre(t *testing.T) {
 	o := g.Msg.GetOperation()
 	if o.GetFailureReason() != "boom" || len(o.GetMachines()) != 2 || o.GetMachines()[1].GetPhase() != "InProgress" || o.GetPhase() != "Paused" {
 		t.Fatalf("operation = %v", o)
+	}
+}
+
+func TestRetryOperationAnnotatesOnlyAFailedOperation(t *testing.T) {
+	newOp := func(name, phase, reason string, last *metav1.Time) *ichorv1alpha1.TalosOperation {
+		return &ichorv1alpha1.TalosOperation{
+			Name: name, Namespace: opNS,
+			Spec:       ichorv1alpha1.TalosOperationSpec{ClusterRef: corev1.LocalObjectReference{Name: opCluster}, Kind: ichorv1alpha1.TalosOperationKindTalos},
+			Status:     ichorv1alpha1.TalosOperationStatus{Phase: phase, FailureReason: reason, LastRetry: last},
+		}
+	}
+
+	future := metav1.NewTime(time.Now().Add(time.Hour))
+	srv, k8s := opServer(t, append(opObjects(),
+		newOp("failed", ichorv1alpha1.TalosOperationPhasePaused, "boom", nil),
+		newOp("operator-paused", ichorv1alpha1.TalosOperationPhasePaused, "", nil),
+		newOp("running", ichorv1alpha1.TalosOperationPhaseInProgress, "", nil),
+		newOp("retried", ichorv1alpha1.TalosOperationPhasePaused, "boom again", &future),
+	)...)
+	ctx := context.Background()
+
+	if _, err := srv.RetryOperation(ctx, connect.NewRequest(&pb.RetryOperationRequest{Operation: objectRef(opNS, "failed")})); err != nil {
+		t.Fatal(err)
+	}
+
+	annotation := func(name string) string {
+		for _, o := range listOps(t, k8s) {
+			if o.Name == name {
+				return o.Annotations[ichorv1alpha1.OperationRetryAnnotation]
+			}
+		}
+
+		return ""
+	}
+
+	if annotation("failed") == "" {
+		t.Fatal("a failed operation was not annotated")
+	}
+
+	for _, name := range []string{"operator-paused", "running"} {
+		_, err := srv.RetryOperation(ctx, connect.NewRequest(&pb.RetryOperationRequest{Operation: objectRef(opNS, name)}))
+		if connect.CodeOf(err) != connect.CodeFailedPrecondition || annotation(name) != "" {
+			t.Errorf("%s: err = %v, annotation %q; want FailedPrecondition and none", name, err, annotation(name))
+		}
+	}
+
+	// A request is always newer than the one the controller already acted on.
+	if _, err := srv.RetryOperation(ctx, connect.NewRequest(&pb.RetryOperationRequest{Operation: objectRef(opNS, "retried")})); err != nil {
+		t.Fatal(err)
+	}
+
+	at, err := time.Parse(time.RFC3339, annotation("retried"))
+	if err != nil || !at.After(future.Time) {
+		t.Fatalf("annotation %q (%v) is not after lastRetry %v", annotation("retried"), err, future.Time)
+	}
+}
+
+func TestMachineActionsAcceptAHostnameAndRefuseAnAmbiguousOne(t *testing.T) {
+	mk := func(name, host string) *ichorv1alpha1.TalosMachine {
+		m := opMachine(name, "worker", nil, nil)
+		m.Spec.Hostname = host
+
+		return m
+	}
+
+	srv, _ := opServer(t, append(opObjects(), mk("11111111-aaaa", "w-1"), mk("22222222-bbbb", "dup"), mk("33333333-cccc", "dup"))...)
+	ctx := context.Background()
+
+	m, err := srv.resolveMachine(ctx, objectRef(opNS, "w-1"))
+	if err != nil || m.Name != "11111111-aaaa" {
+		t.Fatalf("hostname: %v, %v", m, err)
+	}
+
+	if m, err = srv.resolveMachine(ctx, objectRef(opNS, "11111111-aaaa")); err != nil || m.Name != "11111111-aaaa" {
+		t.Fatalf("own name: %v, %v", m, err)
+	}
+
+	if _, err = srv.resolveMachine(ctx, objectRef(opNS, "dup")); connect.CodeOf(err) != connect.CodeInvalidArgument ||
+		!strings.Contains(err.Error(), "22222222-bbbb") {
+		t.Fatalf("ambiguous: %v", err)
+	}
+
+	if _, err = srv.resolveMachine(ctx, objectRef(opNS, "nobody")); connect.CodeOf(err) != connect.CodeNotFound {
+		t.Fatalf("unknown: %v", err)
 	}
 }

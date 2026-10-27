@@ -265,6 +265,7 @@ var _ = Describe("the API server restart class", func() {
 		setUpgradeOrder(cp1, "1")
 		setUpgradeOrder(cp2, "2")
 		setUpgradeOrder(cp3, "3")
+		markAPIServerRestartPending(cp1, cp2) // what the machine controller reports; cp3 is converged
 
 		fake1 := &fakeTalosClient{current: f.before(cp1), apiInstance: apiInstanceOld}
 		fake2 := &fakeTalosClient{current: f.before(cp2), apiInstance: apiInstanceOld}
@@ -316,6 +317,7 @@ var _ = Describe("the API server restart class", func() {
 		setUpgradeOrder(cp1, "1")
 		setUpgradeOrder(cp2, "2")
 		setUpgradeOrder(cp3, "3")
+		markAPIServerRestartPending(cp1, cp2) // what the machine controller reports; cp3 is converged
 
 		fake1 := &fakeTalosClient{current: f.before(cp1), apiInstance: apiInstanceOld, apiReadyErr: errors.New("connection refused")}
 		fake2 := &fakeTalosClient{current: f.before(cp2), apiInstance: apiInstanceOld}
@@ -346,6 +348,15 @@ var _ = Describe("the API server restart class", func() {
 		Expect(fake2.applyCalls).To(BeEmpty())
 	})
 })
+
+// markAPIServerRestartPending sets what the machine controller reports for a control plane whose
+// pending change restarts kube-apiserver; a config operation selects machines by it.
+func markAPIServerRestartPending(ms ...*ichorv1alpha1.TalosMachine) {
+	for _, m := range ms {
+		m.Status.APIServerRestartPaths = []string{"KubeAuthenticationConfig.configuration"}
+		Expect(k8sClient.Status().Update(ctx, m)).To(Succeed())
+	}
+}
 
 func newConfigOpFor(clusterName string) *ichorv1alpha1.TalosOperation {
 	op := &ichorv1alpha1.TalosOperation{

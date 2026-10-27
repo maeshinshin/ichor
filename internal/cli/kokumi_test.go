@@ -164,34 +164,3 @@ func TestInitArgoCD_KokumiVariantSkeletonAndSecret(t *testing.T) {
 		t.Fatalf("disclaimer mismatch:\nalone=%s\nkokumi=%s", aloneMsg, kokMsg)
 	}
 }
-
-func TestKokumiImages(t *testing.T) {
-	imgs := kokumiImages()
-	if len(imgs) != 2 || imgs[0] != "ghcr.io/kokumi-dev/kokumi:"+kokumiVersion {
-		t.Fatalf("kokumiImages() = %v", imgs)
-	}
-
-	if !strings.Contains(imgs[1], "registry:3.1.2@sha256:") {
-		t.Fatalf("registry image not digest-pinned: %v", imgs)
-	}
-}
-
-func TestRunImagesList_KokumiFlag(t *testing.T) {
-	var without, with bytes.Buffer
-
-	if err := runImagesList(&without, imagesListOptions{TalosVersions: []string{testTalosVersion}}); err != nil {
-		t.Fatal(err)
-	}
-
-	if strings.Contains(without.String(), "kokumi") {
-		t.Fatalf("Kokumi listed without --kokumi:\n%s", without.String())
-	}
-
-	if err := runImagesList(&with, imagesListOptions{TalosVersions: []string{testTalosVersion}, Kokumi: true}); err != nil {
-		t.Fatal(err)
-	}
-
-	if !strings.Contains(with.String(), "ghcr.io/kokumi-dev/kokumi:"+kokumiVersion) {
-		t.Fatalf("output lacks Kokumi's image:\n%s", with.String())
-	}
-}

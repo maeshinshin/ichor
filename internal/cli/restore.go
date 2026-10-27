@@ -17,6 +17,7 @@ limitations under the License.
 package cli
 
 import (
+	"context"
 	"errors"
 	"os"
 
@@ -27,13 +28,23 @@ import (
 
 var restoreOpts restoreOptions
 
-// restoreCmd implements `ichor restore`. Only --recover-cluster (full-loss
-// recovery, ADR 0053) exists so far; it is one of the CLI operations that
-// predate the cluster and so never go through the Connect API.
+// restoreCmd implements `ichor restore`: --recover-cluster (full-loss
+// recovery, ADR 0053), one of the CLI operations that predate the cluster and
+// so never go through the Connect API, and --live (ADR 0089), which asks the
+// controller of a running cluster to put a stored snapshot back.
 var restoreCmd = &cobra.Command{
-	Use:   "restore --recover-cluster",
-	Short: "Recover a lost cluster's etcd from a backup snapshot and the local secrets bundle",
-	Long: `restore --recover-cluster recovers a cluster whose control planes and
+	Use:   "restore (--live | --recover-cluster)",
+	Short: "Restore etcd from a backup snapshot: into the running cluster (--live) or after losing it (--recover-cluster)",
+	Long: `restore --live rewinds a RUNNING cluster to a stored snapshot (disaster recovery after
+data corruption or a bad change). It creates an etcd-restore operation; the controller wipes
+etcd on every control plane, recovers the snapshot on one, lets the others rejoin and reconciles
+every machine again. The Kubernetes API is unavailable meanwhile and EVERYTHING WRITTEN SINCE THE
+SNAPSHOT IS LOST. It needs --break-glass <reason> (and the break-glass verb on the TalosCluster) and
+the cluster's name typed (or --confirm NAME); --yes does not replace the name. Without --snapshot
+the newest snapshot of the cluster's backup is used; --backup picks the backup when there are
+several. Follow it with --follow.
+
+restore --recover-cluster recovers a cluster whose control planes and
 etcd data are gone, using only what survives outside it: the secrets bundle
 (~/.ichor/clusters/<cluster>/secrets.yaml, or --secrets-bundle) and the S3
 bucket the TalosEtcdBackup wrote to. It does not need Ichor, Kubernetes or
@@ -55,10 +66,32 @@ Without --snapshot the newest usable snapshot is used; one that fails to
 decrypt or whose checksum does not match is skipped and reported. With
 --snapshot, that snapshot or nothing.
 
-Restoring into a LIVE cluster is not implemented yet.`,
+With --live the snapshot is read and decrypted by the controller; no secrets bundle or S3
+credentials are needed here.`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
+		if restoreLiveOpts.Live {
+			if restoreOpts.RecoverCluster {
+				return errors.New("restore: choose --live or --recover-cluster, not both")
+			}
+
+			// Only --live changes a cluster through Ichor, so only it is refused across a version skew;
+			// --recover-cluster must not wait on a cluster that is gone.
+			markWrites(cmd)
+
+			if err := skewPreRun(cmd, nil); err != nil {
+				return err
+			}
+
+			return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
+				return runLiveRestore(ctx, c, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), liveRestoreSpec{
+					Cluster: restoreOpts.Cluster, Backup: restoreLiveOpts.Backup, Snapshot: restoreOpts.Snapshot,
+					Confirm: restoreLiveOpts.Confirm, Follow: restoreLiveOpts.Follow,
+				})
+			})
+		}
+
 		if !restoreOpts.RecoverCluster {
-			return errors.New("restore: only --recover-cluster is implemented; restoring into a live cluster is not yet available (ADR 0053)")
+			return errors.New("restore: choose --live (into the running cluster) or --recover-cluster (after losing it)")
 		}
 
 		deps := restoreDeps{
@@ -79,12 +112,18 @@ Restoring into a LIVE cluster is not implemented yet.`,
 func init() {
 	rootCmd.AddCommand(restoreCmd)
 
+	addAPIFlags(restoreCmd)
+
 	f := restoreCmd.Flags()
+	f.BoolVar(&restoreLiveOpts.Live, "live", false, "restore into the running cluster: the controller wipes etcd on every control plane and recovers a stored snapshot (ADR 0089)")
+	f.StringVar(&restoreLiveOpts.Backup, "backup", "", "with --live: the TalosEtcdBackup to restore from (default the cluster's only one)")
+	f.StringVar(&restoreLiveOpts.Confirm, "confirm", "", "with --live: the cluster's name, to go on without being asked to type it")
+	f.BoolVar(&restoreLiveOpts.Follow, "follow", false, "with --live: follow the operation until it finishes")
 	f.BoolVar(&restoreOpts.RecoverCluster, "recover-cluster", false, "full-loss recovery: bootstrap one new control plane from a snapshot")
-	f.StringVar(&restoreOpts.Cluster, flagCluster, "", "name of the cluster (locates ~/.ichor/clusters/<name>/secrets.yaml) (required)")
+	f.StringVar(&restoreOpts.Cluster, flagCluster, "", "name of the cluster (--recover-cluster: locates ~/.ichor/clusters/<name>/secrets.yaml, required; --live: default the only one)")
 	f.StringVar(&restoreOpts.SecretsBundle, "secrets-bundle", "", "path to the secrets bundle; default ~/.ichor/clusters/<cluster>/secrets.yaml")
 	f.StringVar(&restoreOpts.NodeEndpoint, "node-endpoint", "", "Talos API address (host:port) of the new control plane to recover onto (required)")
-	f.StringVar(&restoreOpts.Snapshot, "snapshot", "", "object name to restore (etcd-<time>.snapshot.age); default the newest usable one")
+	f.StringVar(&restoreOpts.Snapshot, "snapshot", "", "object name to restore (etcd-<time>.snapshot.age); default the newest one")
 	f.StringVar(&restoreOpts.S3.Endpoint, "s3-endpoint", "", "S3 endpoint URL, https://host[:port] (required)")
 	f.StringVar(&restoreOpts.S3.Bucket, "s3-bucket", "", "S3 bucket (required)")
 	f.StringVar(&restoreOpts.S3.Region, "s3-region", "", "S3 region, if the service needs one")

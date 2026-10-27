@@ -191,6 +191,10 @@ func progressLine(op *pb.Operation) string {
 		line += ", stage " + st
 	}
 
+	if st := op.GetEtcdRestoreStep(); st != "" {
+		line += ", step " + st
+	}
+
 	if len(parts) > 0 {
 		line += " [" + strings.Join(parts, " ") + "]"
 	}

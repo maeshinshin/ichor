@@ -57,6 +57,112 @@ spec:
           spec:
             description: spec defines the desired state of TalosCluster
             properties:
+              authentication:
+                description: |-
+                  authentication declares who the kube-apiserver trusts to sign users in with a JWT: Ichor's
+                  own issuer and up to three external OIDC providers (ADR 0094). It is rendered into Talos's
+                  KubeAuthenticationConfig document, so it needs versionContract v1.14 or later, and changing
+                  it needs the update verb on talosclusters/authentication. Unset (the default) renders the
+                  Talos default: no JWT authenticator, anonymous access to the health endpoints only.
+                properties:
+                  external:
+                    description: |-
+                      external lists the external OIDC providers the kube-apiserver also trusts. Keep it equal
+                      to ichorUI.oidc.* (ADR 0058): that is what the UI signs in against, this is what the
+                      kube-apiserver accepts.
+                    items:
+                      description: TalosClusterExternalIssuer is one external OIDC
+                        provider (ADR 0058's, as the kube-apiserver sees it).
+                      properties:
+                        audiences:
+                          description: audiences are the accepted aud values (the
+                            OIDC client IDs).
+                          items:
+                            maxLength: 253
+                            minLength: 1
+                            type: string
+                          maxItems: 8
+                          minItems: 1
+                          type: array
+                        certificateAuthority:
+                          description: |-
+                            certificateAuthority is a PEM bundle (public certificates only) that verifies the provider's
+                            TLS certificate. Empty uses the control plane's system roots.
+                          maxLength: 65536
+                          type: string
+                        groupsClaim:
+                          default: groups
+                          description: groupsClaim is the token claim that lists the
+                            user's groups.
+                          maxLength: 63
+                          minLength: 1
+                          type: string
+                        groupsPrefix:
+                          default: 'oidc:'
+                          description: groupsPrefix is put in front of every group,
+                            with the same restrictions as usernamePrefix.
+                          maxLength: 63
+                          minLength: 1
+                          type: string
+                          x-kubernetes-validations:
+                          - message: 'the prefix ichor: is reserved for Ichor''s own
+                              groups'
+                            rule: '!self.startsWith(''ichor:'')'
+                        issuerURL:
+                          description: issuerURL is the provider's issuer, an https
+                            URL without query or fragment.
+                          maxLength: 253
+                          pattern: ^https://[^\s/?#@]+(/[^\s?#]*)?$
+                          type: string
+                        usernameClaim:
+                          default: email
+                          description: usernameClaim is the token claim that names
+                            the user.
+                          maxLength: 63
+                          minLength: 1
+                          type: string
+                        usernamePrefix:
+                          default: 'oidc:'
+                          description: |-
+                            usernamePrefix is put in front of every username. It cannot be empty or start with
+                            "ichor:", so an external user can never be mistaken for an Ichor user.
+                          maxLength: 63
+                          minLength: 1
+                          type: string
+                          x-kubernetes-validations:
+                          - message: 'the prefix ichor: is reserved for Ichor''s own
+                              users'
+                            rule: '!self.startsWith(''ichor:'')'
+                      required:
+                      - audiences
+                      - issuerURL
+                      type: object
+                    maxItems: 3
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - issuerURL
+                    x-kubernetes-list-type: map
+                  ichor:
+                    description: |-
+                      ichor turns on Ichor's own OIDC issuer (ichor-ui) as a kube-apiserver authenticator.
+                      Users appear as ichor:<name>, groups as ichor:<role>.
+                    properties:
+                      enabled:
+                        default: false
+                        description: |-
+                          enabled renders Ichor's issuer into the kube-apiserver. It needs the trust ConfigMap
+                          ichor-oidc-trust (the controller publishes it); without it the render fails and says so.
+                        type: boolean
+                      url:
+                        description: url is the external https URL of ichor-ui. It
+                          is the issuer (the iss claim of every token).
+                        maxLength: 253
+                        pattern: ^https://[^\s/?#@]+(/[^\s?#]*)?$
+                        type: string
+                    required:
+                    - url
+                    type: object
+                type: object
               cni:
                 description: |-
                   cni configures which CNI preset this cluster bootstraps and how kube-proxy is split

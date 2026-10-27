@@ -433,6 +433,102 @@ type TalosClusterSpec struct {
 	// are opened against (docs/adr/0056). Unset behaves as mode relaxed with no repository.
 	// +optional
 	GitOps *TalosClusterGitOps `json:"gitops,omitempty"`
+
+	// authentication declares who the kube-apiserver trusts to sign users in with a JWT: Ichor's
+	// own issuer and up to three external OIDC providers (ADR 0094). It is rendered into Talos's
+	// KubeAuthenticationConfig document, so it needs versionContract v1.14 or later, and changing
+	// it needs the update verb on talosclusters/authentication. Unset (the default) renders the
+	// Talos default: no JWT authenticator, anonymous access to the health endpoints only.
+	// +optional
+	Authentication *TalosClusterAuthentication `json:"authentication,omitempty"`
+}
+
+// TalosClusterAuthentication is spec.authentication (ADR 0094, Decision 3). Each enabled entry
+// becomes one jwt[] element of the kube-apiserver's AuthenticationConfiguration; issuer URLs
+// must be unique across Ichor's and the external ones.
+type TalosClusterAuthentication struct {
+	// ichor turns on Ichor's own OIDC issuer (ichor-ui) as a kube-apiserver authenticator.
+	// Users appear as ichor:<name>, groups as ichor:<role>.
+	// +optional
+	Ichor *TalosClusterIchorIssuer `json:"ichor,omitempty"`
+
+	// external lists the external OIDC providers the kube-apiserver also trusts. Keep it equal
+	// to ichorUI.oidc.* (ADR 0058): that is what the UI signs in against, this is what the
+	// kube-apiserver accepts.
+	// +kubebuilder:validation:MaxItems=3
+	// +listType=map
+	// +listMapKey=issuerURL
+	// +optional
+	External []TalosClusterExternalIssuer `json:"external,omitempty"`
+}
+
+// TalosClusterIchorIssuer enables Ichor's issuer.
+type TalosClusterIchorIssuer struct {
+	// enabled renders Ichor's issuer into the kube-apiserver. It needs the trust ConfigMap
+	// ichor-oidc-trust (the controller publishes it); without it the render fails and says so.
+	// +kubebuilder:default=false
+	// +optional
+	Enabled bool `json:"enabled,omitempty"`
+
+	// url is the external https URL of ichor-ui. It is the issuer (the iss claim of every token).
+	// +kubebuilder:validation:MaxLength=253
+	// +kubebuilder:validation:Pattern=`^https://[^\s/?#@]+(/[^\s?#]*)?$`
+	// +required
+	URL string `json:"url"`
+}
+
+// TalosClusterExternalIssuer is one external OIDC provider (ADR 0058's, as the kube-apiserver sees it).
+type TalosClusterExternalIssuer struct {
+	// issuerURL is the provider's issuer, an https URL without query or fragment.
+	// +kubebuilder:validation:MaxLength=253
+	// +kubebuilder:validation:Pattern=`^https://[^\s/?#@]+(/[^\s?#]*)?$`
+	// +required
+	IssuerURL string `json:"issuerURL"`
+
+	// audiences are the accepted aud values (the OIDC client IDs).
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=8
+	// +kubebuilder:validation:items:MinLength=1
+	// +kubebuilder:validation:items:MaxLength=253
+	// +required
+	Audiences []string `json:"audiences"`
+
+	// usernameClaim is the token claim that names the user.
+	// +kubebuilder:default=email
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=63
+	// +optional
+	UsernameClaim string `json:"usernameClaim,omitempty"`
+
+	// groupsClaim is the token claim that lists the user's groups.
+	// +kubebuilder:default=groups
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=63
+	// +optional
+	GroupsClaim string `json:"groupsClaim,omitempty"`
+
+	// usernamePrefix is put in front of every username. It cannot be empty or start with
+	// "ichor:", so an external user can never be mistaken for an Ichor user.
+	// +kubebuilder:default="oidc:"
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=63
+	// +kubebuilder:validation:XValidation:rule="!self.startsWith('ichor:')",message="the prefix ichor: is reserved for Ichor's own users"
+	// +optional
+	UsernamePrefix string `json:"usernamePrefix,omitempty"`
+
+	// groupsPrefix is put in front of every group, with the same restrictions as usernamePrefix.
+	// +kubebuilder:default="oidc:"
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=63
+	// +kubebuilder:validation:XValidation:rule="!self.startsWith('ichor:')",message="the prefix ichor: is reserved for Ichor's own groups"
+	// +optional
+	GroupsPrefix string `json:"groupsPrefix,omitempty"`
+
+	// certificateAuthority is a PEM bundle (public certificates only) that verifies the provider's
+	// TLS certificate. Empty uses the control plane's system roots.
+	// +kubebuilder:validation:MaxLength=65536
+	// +optional
+	CertificateAuthority string `json:"certificateAuthority,omitempty"`
 }
 
 // TalosClusterStatus defines the observed state of TalosCluster.

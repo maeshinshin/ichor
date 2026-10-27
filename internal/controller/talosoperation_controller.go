@@ -270,6 +270,8 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			reasonOperationComplete, "every eligible machine finished")
 	}
 
+	r.recordTalosFromVersion(ctx, &op, &cluster, append(slices.Clone(heldCPs), heldWorkers...))
+
 	// The long-operation half of "the lock": renewed once per batch, the
 	// same way removal.go's renewWhile already renews repeatedly for a
 	// drain, well inside clusterlock.DefaultDuration's five minutes.
@@ -308,6 +310,55 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	return result, r.setPhase(ctx, &op, ichorv1alpha1.TalosOperationPhaseInProgress,
 		reasonOperationAdvancing, advancingMessage(&op, len(toAdvance)))
+}
+
+// recordTalosFromVersion sets status.fromVersion once, before the first machine of a Talos upgrade
+// starts: the version most of the selected machines run (ties go to the earlier machine's). It is
+// best effort and only for display: a machine that does not answer is left out, and with no
+// answers the field stays empty and the next reconcile tries again. It is persisted by the
+// caller's next status write.
+func (r *TalosOperationReconciler) recordTalosFromVersion(
+	ctx context.Context, op *ichorv1alpha1.TalosOperation, cluster *ichorv1alpha1.TalosCluster, machines []*ichorv1alpha1.TalosMachine,
+) {
+	if op.Spec.Kind != ichorv1alpha1.TalosOperationKindTalos || op.Status.FromVersion != "" ||
+		len(op.Status.Machines) > 0 || r.TalosClient == nil {
+		return
+	}
+
+	bundle, err := loadBundle(ctx, r.Client, r.ControllerNamespace, cluster)
+	if err != nil {
+		return
+	}
+
+	counts := map[string]int{}
+	best := ""
+
+	for _, m := range machines {
+		dialCtx, cancel := context.WithTimeout(ctx, etcdDialTimeout)
+
+		talos, err := r.TalosClient(dialCtx, cluster, m, bundle)
+		if err != nil {
+			cancel()
+
+			continue
+		}
+
+		v, err := talos.Version(dialCtx)
+
+		closeTalosClient(talos)
+		cancel()
+
+		if err != nil || v == "" {
+			continue
+		}
+
+		counts[v]++
+		if best == "" || counts[v] > counts[best] {
+			best = v
+		}
+	}
+
+	op.Status.FromVersion = best
 }
 
 // consumeRetry acts on a retry request (OperationRetryAnnotation) newer than status.lastRetry for a

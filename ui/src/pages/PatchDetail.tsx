@@ -14,14 +14,14 @@ import { PageHeader } from '@/components/PageHeader'
 import { PageSkeleton } from '@/components/PageStates'
 import { SectionLayout } from '@/components/SectionNav'
 import { PullRequestNotice } from '@/components/PullRequestNotice'
-import type { Cluster } from '@/gen/ichor/v1alpha1/cluster_pb'
 import { ConfigLayer } from '@/gen/ichor/v1alpha1/node_pb'
 import { PatchSchema } from '@/gen/ichor/v1alpha1/patch_pb'
-import { clusterClient, machineClient, patchClient } from '@/lib/connect'
+import { machineClient, patchClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
 import { offersBreakGlass } from '@/lib/breakGlass'
 import { notifyDone, notifyWrite } from '@/lib/notify'
 import { describeError } from '@/lib/errors'
+import { useCluster } from '@/lib/useCluster'
 import { useT } from '@/lib/useT'
 import type { Key } from '@/lib/i18n'
 import { PatchDocumentCard, type DocItem } from '@/components/PatchDocumentCard'
@@ -68,21 +68,22 @@ function layerKeyOf(layer: ConfigLayer): LayerKey {
 
 let nextDocId = 1
 
-// PatchDetail is both the create form (/patches/new, namespace and name
-// undefined) and the edit form (/patches/:namespace/:name) for a
+// PatchDetail is both the create form (/config/new, name
+// undefined) and the edit form (/config/:name) for a
 // TalosConfigPatch, matching PatchService's own "full replace, no
 // partial-field merge" shape (not
 // through a generic schema-driven renderer - see).
-export function PatchDetail({ namespace, name }: { namespace?: string; name?: string }) {
+export function PatchDetail({ name }: { name?: string }) {
   const t = useT()
-  const isNew = namespace === undefined || name === undefined
+  const { cluster: current, error: clusterError } = useCluster()
+  const namespace = current?.ref?.namespace
+  const cluster = current?.ref ? { namespace: current.ref.namespace, name: current.ref.name } : undefined
+  const isNew = name === undefined
 
   const [loaded, setLoaded] = useState(isNew)
   const [loadError, setLoadError] = useState<ErrorShape | null>(null)
 
-  const [clusters, setClusters] = useState<Cluster[]>([])
   const [patchName, setPatchName] = useState(name ?? '')
-  const [cluster, setCluster] = useState<{ namespace: string; name: string } | undefined>(undefined)
   const [layer, setLayer] = useState<ConfigLayer>(ConfigLayer.UNSPECIFIED)
   const [priority, setPriority] = useState(0)
   const [machines, setMachines] = useState<Machine[]>([])
@@ -102,15 +103,6 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
   const [previewError, setPreviewError] = useState<ErrorShape | string | null>(null)
   const [previewing, setPreviewing] = useState(false)
 
-  useEffect(() => {
-    clusterClient.listClusters({}).then(
-      (res) => setClusters(res.clusters),
-      () => {
-        /* The cluster picker degrades to "no options"; listPatches/getPatch below report the real error. */
-      },
-    )
-  }, [])
-
   // The machine picker lists the chosen cluster's machines.
   useEffect(() => {
     if (!cluster) {
@@ -128,7 +120,7 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
   }, [cluster?.namespace, cluster?.name])
 
   useEffect(() => {
-    if (isNew) return
+    if (isNew || !namespace) return
     let cancelled = false
     patchClient.getPatch({ patch: { namespace, name } }).then(
       (res) => {
@@ -139,7 +131,6 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
           return
         }
         setPatchName(p.ref?.name ?? name)
-        setCluster(p.cluster ? { namespace: p.cluster.namespace, name: p.cluster.name } : undefined)
         setLayer(p.layer)
         setPriority(p.priority)
         applyTargetFields(targetFieldsFor(layerKeyOf(p.layer), p.target))
@@ -186,7 +177,7 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
     }
     setErr(null)
     return {
-      ref: { namespace: namespace ?? cluster.namespace, name: patchName },
+      ref: { namespace: cluster.namespace, name: patchName },
       cluster,
       layer,
       priority,
@@ -220,7 +211,7 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
           return
         }
       }
-      navigate('/patches')
+      navigate('/config')
     } catch (err) {
       setSaveError(describeError(err))
       setSaveRefused(!isNew && offersBreakGlass({ error: err }))
@@ -267,6 +258,7 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
   })
   const previewFresh = previewedKey === currentKey
 
+  if (clusterError) return <ErrorAlert {...clusterError} />
   if (loadError) return <ErrorAlert {...loadError} />
   if (!loaded) return <PageSkeleton label={t('patch.loading')} />
 
@@ -287,7 +279,6 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
           !isNew && (
             <>
               <Badge variant="outline">{enumLabel(ConfigLayer, layer)}</Badge>
-              <Badge variant="secondary">{cluster?.name}</Badge>
             </>
           )
         }
@@ -315,31 +306,6 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
                 onInput={(e) => setPatchName((e.target as HTMLInputElement).value)}
               />
               <p class="text-xs text-muted-foreground">{t('patch.nameHelp')}</p>
-            </div>
-            <div class="space-y-1">
-              <Label htmlFor="patch-cluster">{t('col.cluster')}</Label>
-              <Select
-                value={cluster ? `${cluster.namespace}/${cluster.name}` : ''}
-                onValueChange={(v) => {
-                  const [ns, n] = v.split('/')
-                  setCluster({ namespace: ns, name: n })
-                  setMachineRef('')
-                }}
-              >
-                <SelectTrigger id="patch-cluster" className="w-full">
-                  <SelectValue placeholder={t('patch.selectCluster')} />
-                </SelectTrigger>
-                <SelectContent>
-                  {clusters
-                    .filter((c) => c.ref)
-                    .map((c) => (
-                      <SelectItem key={`${c.ref!.namespace}/${c.ref!.name}`} value={`${c.ref!.namespace}/${c.ref!.name}`}>
-                        {c.ref!.name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-              <p class="text-xs text-muted-foreground">{t('patch.clusterHelp')}</p>
             </div>
             <div class="space-y-1">
               <Label htmlFor="patch-layer">{t('patch.layer')}</Label>
@@ -511,9 +477,9 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
         </CardContent>
       </Card>
 
-      {pullRequestUrl && <PullRequestNotice url={pullRequestUrl} breakGlass={saveBreakGlass} onBreakGlassDone={() => navigate('/patches')} />}
+      {pullRequestUrl && <PullRequestNotice url={pullRequestUrl} breakGlass={saveBreakGlass} onBreakGlassDone={() => navigate('/config')} />}
       {saveError && (typeof saveError === 'string' ? <ErrorAlert title={t('error.invalidTarget')} detail={saveError} /> : <ErrorAlert {...saveError} />)}
-      {saveRefused && <BreakGlassDialog run={saveBreakGlass} onDone={() => navigate('/patches')} />}
+      {saveRefused && <BreakGlassDialog run={saveBreakGlass} onDone={() => navigate('/config')} />}
 
       {!previewFresh && !previewing && <p class="text-sm text-muted-foreground">{t('patch.saveReminder')}</p>}
 
@@ -522,7 +488,7 @@ export function PatchDetail({ namespace, name }: { namespace?: string; name?: st
           <Button disabled={!canSave || saving} onClick={save}>
             {saving ? t('patch.saving') : isNew ? t('patch.create') : t('patch.save')}
           </Button>
-          <Button variant="ghost" onClick={() => navigate('/patches')}>
+          <Button variant="ghost" onClick={() => navigate('/config')}>
             {t('common.cancel')}
           </Button>
         </div>
@@ -546,7 +512,7 @@ function DeleteButton({ namespace, name }: { namespace: string; name: string }) 
     const res = await patchClient.deletePatch({ patch: { namespace, name }, breakGlass: bg })
     return { pullRequestUrl: res.pullRequestUrl, notice: res.notice }
   }
-  const done = () => navigate('/patches')
+  const done = () => navigate('/config')
 
   async function submit() {
     setSubmitting(true)
@@ -560,7 +526,7 @@ function DeleteButton({ namespace, name }: { namespace: string; name: string }) 
         return
       }
       notifyDone(t('toast.patchDeleted', { name }))
-      navigate('/patches')
+      navigate('/config')
     } catch (err) {
       setError(describeError(err))
       setRefused(offersBreakGlass({ error: err }))

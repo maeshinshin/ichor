@@ -116,3 +116,19 @@ rules:
   - secrets
   verbs:
   - get
+- apiGroups:
+  - ""
+  resourceNames:
+  - ichor-user-credentials
+  resources:
+  - secrets
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - ichorusers
+  verbs:
+  - get

@@ -211,6 +211,13 @@ var rules = []rule{
 	// have no rule at all (so their whole documents stay reboot-required).
 	{prefix: "KubeAPIServerConfig", safe: true},
 	{prefix: "KubeAPIServerConfig.image"},
+	// KubeAuthenticationConfig is read from the machine config by
+	// ControlPlaneAuthenticationController (controllers/k8s/control_plane.go in Talos 1.14.3), which
+	// publishes it as the k8s.AuthenticationConfig resource; the static pod renderer writes it to
+	// authentication-config.yaml, and the kube-apiserver static pod carries the config-file version
+	// as an annotation (k8stemplates/apiserver.go, AnnotationStaticPodConfigFileVersion), so a
+	// change recreates that pod. No node reboot: the same path as KubeAPIServerConfig above.
+	{prefix: "KubeAuthenticationConfig", safe: true, introducedAfter: machineryconfig.TalosVersion1_13},
 	{prefix: "KubeControllerManagerConfig", safe: true},
 	{prefix: "KubeControllerManagerConfig.image"},
 	{prefix: "KubeSchedulerConfig", safe: true},

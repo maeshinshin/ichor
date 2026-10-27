@@ -28,27 +28,30 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type GetDiagnosticsPermissionsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Machine       *ObjectRef             `protobuf:"bytes,1,opt,name=machine,proto3" json:"machine,omitempty"`
+type GetMyPermissionsRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// machine is optional; without it the three machine flags are false.
+	Machine *ObjectRef `protobuf:"bytes,1,opt,name=machine,proto3" json:"machine,omitempty"`
+	// cluster is optional; without it cluster_credentials is false.
+	Cluster       *ObjectRef `protobuf:"bytes,2,opt,name=cluster,proto3" json:"cluster,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *GetDiagnosticsPermissionsRequest) Reset() {
-	*x = GetDiagnosticsPermissionsRequest{}
+func (x *GetMyPermissionsRequest) Reset() {
+	*x = GetMyPermissionsRequest{}
 	mi := &file_ichor_v1alpha1_diagnostics_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GetDiagnosticsPermissionsRequest) String() string {
+func (x *GetMyPermissionsRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GetDiagnosticsPermissionsRequest) ProtoMessage() {}
+func (*GetMyPermissionsRequest) ProtoMessage() {}
 
-func (x *GetDiagnosticsPermissionsRequest) ProtoReflect() protoreflect.Message {
+func (x *GetMyPermissionsRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_ichor_v1alpha1_diagnostics_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -60,41 +63,50 @@ func (x *GetDiagnosticsPermissionsRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GetDiagnosticsPermissionsRequest.ProtoReflect.Descriptor instead.
-func (*GetDiagnosticsPermissionsRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use GetMyPermissionsRequest.ProtoReflect.Descriptor instead.
+func (*GetMyPermissionsRequest) Descriptor() ([]byte, []int) {
 	return file_ichor_v1alpha1_diagnostics_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *GetDiagnosticsPermissionsRequest) GetMachine() *ObjectRef {
+func (x *GetMyPermissionsRequest) GetMachine() *ObjectRef {
 	if x != nil {
 		return x.Machine
 	}
 	return nil
 }
 
-type GetDiagnosticsPermissionsResponse struct {
+func (x *GetMyPermissionsRequest) GetCluster() *ObjectRef {
+	if x != nil {
+		return x.Cluster
+	}
+	return nil
+}
+
+type GetMyPermissionsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	SupportBundle bool                   `protobuf:"varint,1,opt,name=support_bundle,json=supportBundle,proto3" json:"support_bundle,omitempty"`
 	EtcdSnapshot  bool                   `protobuf:"varint,2,opt,name=etcd_snapshot,json=etcdSnapshot,proto3" json:"etcd_snapshot,omitempty"`
 	PacketCapture bool                   `protobuf:"varint,3,opt,name=packet_capture,json=packetCapture,proto3" json:"packet_capture,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// cluster_credentials is the "download" verb on talosclusters/credentials.
+	ClusterCredentials bool `protobuf:"varint,4,opt,name=cluster_credentials,json=clusterCredentials,proto3" json:"cluster_credentials,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
-func (x *GetDiagnosticsPermissionsResponse) Reset() {
-	*x = GetDiagnosticsPermissionsResponse{}
+func (x *GetMyPermissionsResponse) Reset() {
+	*x = GetMyPermissionsResponse{}
 	mi := &file_ichor_v1alpha1_diagnostics_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GetDiagnosticsPermissionsResponse) String() string {
+func (x *GetMyPermissionsResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GetDiagnosticsPermissionsResponse) ProtoMessage() {}
+func (*GetMyPermissionsResponse) ProtoMessage() {}
 
-func (x *GetDiagnosticsPermissionsResponse) ProtoReflect() protoreflect.Message {
+func (x *GetMyPermissionsResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_ichor_v1alpha1_diagnostics_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -106,28 +118,35 @@ func (x *GetDiagnosticsPermissionsResponse) ProtoReflect() protoreflect.Message 
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GetDiagnosticsPermissionsResponse.ProtoReflect.Descriptor instead.
-func (*GetDiagnosticsPermissionsResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use GetMyPermissionsResponse.ProtoReflect.Descriptor instead.
+func (*GetMyPermissionsResponse) Descriptor() ([]byte, []int) {
 	return file_ichor_v1alpha1_diagnostics_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *GetDiagnosticsPermissionsResponse) GetSupportBundle() bool {
+func (x *GetMyPermissionsResponse) GetSupportBundle() bool {
 	if x != nil {
 		return x.SupportBundle
 	}
 	return false
 }
 
-func (x *GetDiagnosticsPermissionsResponse) GetEtcdSnapshot() bool {
+func (x *GetMyPermissionsResponse) GetEtcdSnapshot() bool {
 	if x != nil {
 		return x.EtcdSnapshot
 	}
 	return false
 }
 
-func (x *GetDiagnosticsPermissionsResponse) GetPacketCapture() bool {
+func (x *GetMyPermissionsResponse) GetPacketCapture() bool {
 	if x != nil {
 		return x.PacketCapture
+	}
+	return false
+}
+
+func (x *GetMyPermissionsResponse) GetClusterCredentials() bool {
+	if x != nil {
+		return x.ClusterCredentials
 	}
 	return false
 }
@@ -530,13 +549,15 @@ var File_ichor_v1alpha1_diagnostics_proto protoreflect.FileDescriptor
 
 const file_ichor_v1alpha1_diagnostics_proto_rawDesc = "" +
 	"\n" +
-	" ichor/v1alpha1/diagnostics.proto\x12\x0eichor.v1alpha1\x1a\x1bichor/v1alpha1/common.proto\"W\n" +
-	" GetDiagnosticsPermissionsRequest\x123\n" +
-	"\amachine\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\amachine\"\x96\x01\n" +
-	"!GetDiagnosticsPermissionsResponse\x12%\n" +
+	" ichor/v1alpha1/diagnostics.proto\x12\x0eichor.v1alpha1\x1a\x1bichor/v1alpha1/common.proto\"\x83\x01\n" +
+	"\x17GetMyPermissionsRequest\x123\n" +
+	"\amachine\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\amachine\x123\n" +
+	"\acluster\x18\x02 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\"\xbe\x01\n" +
+	"\x18GetMyPermissionsResponse\x12%\n" +
 	"\x0esupport_bundle\x18\x01 \x01(\bR\rsupportBundle\x12#\n" +
 	"\retcd_snapshot\x18\x02 \x01(\bR\fetcdSnapshot\x12%\n" +
-	"\x0epacket_capture\x18\x03 \x01(\bR\rpacketCapture\"\x96\x01\n" +
+	"\x0epacket_capture\x18\x03 \x01(\bR\rpacketCapture\x12/\n" +
+	"\x13cluster_credentials\x18\x04 \x01(\bR\x12clusterCredentials\"\x96\x01\n" +
 	"\x1cDownloadSupportBundleRequest\x125\n" +
 	"\amachine\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefH\x00R\amachine\x125\n" +
 	"\acluster\x18\x02 \x01(\v2\x19.ichor.v1alpha1.ObjectRefH\x00R\aclusterB\b\n" +
@@ -561,9 +582,9 @@ const file_ichor_v1alpha1_diagnostics_proto_rawDesc = "" +
 	"\x16CapturePacketsResponse\x12\x1a\n" +
 	"\bfilename\x18\x01 \x01(\tR\bfilename\x12!\n" +
 	"\fcontent_type\x18\x02 \x01(\tR\vcontentType\x12\x12\n" +
-	"\x04data\x18\x03 \x01(\fR\x04data2\xe7\x03\n" +
-	"\x12DiagnosticsService\x12\x80\x01\n" +
-	"\x19GetDiagnosticsPermissions\x120.ichor.v1alpha1.GetDiagnosticsPermissionsRequest\x1a1.ichor.v1alpha1.GetDiagnosticsPermissionsResponse\x12v\n" +
+	"\x04data\x18\x03 \x01(\fR\x04data2\xcb\x03\n" +
+	"\x12DiagnosticsService\x12e\n" +
+	"\x10GetMyPermissions\x12'.ichor.v1alpha1.GetMyPermissionsRequest\x1a(.ichor.v1alpha1.GetMyPermissionsResponse\x12v\n" +
 	"\x15DownloadSupportBundle\x12,.ichor.v1alpha1.DownloadSupportBundleRequest\x1a-.ichor.v1alpha1.DownloadSupportBundleResponse0\x01\x12s\n" +
 	"\x14DownloadEtcdSnapshot\x12+.ichor.v1alpha1.DownloadEtcdSnapshotRequest\x1a,.ichor.v1alpha1.DownloadEtcdSnapshotResponse0\x01\x12a\n" +
 	"\x0eCapturePackets\x12%.ichor.v1alpha1.CapturePacketsRequest\x1a&.ichor.v1alpha1.CapturePacketsResponse0\x01B\xc1\x01\n" +
@@ -583,35 +604,36 @@ func file_ichor_v1alpha1_diagnostics_proto_rawDescGZIP() []byte {
 
 var file_ichor_v1alpha1_diagnostics_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_ichor_v1alpha1_diagnostics_proto_goTypes = []any{
-	(*GetDiagnosticsPermissionsRequest)(nil),  // 0: ichor.v1alpha1.GetDiagnosticsPermissionsRequest
-	(*GetDiagnosticsPermissionsResponse)(nil), // 1: ichor.v1alpha1.GetDiagnosticsPermissionsResponse
-	(*DownloadSupportBundleRequest)(nil),      // 2: ichor.v1alpha1.DownloadSupportBundleRequest
-	(*DownloadEtcdSnapshotRequest)(nil),       // 3: ichor.v1alpha1.DownloadEtcdSnapshotRequest
-	(*CapturePacketsRequest)(nil),             // 4: ichor.v1alpha1.CapturePacketsRequest
-	(*DownloadSupportBundleResponse)(nil),     // 5: ichor.v1alpha1.DownloadSupportBundleResponse
-	(*DownloadEtcdSnapshotResponse)(nil),      // 6: ichor.v1alpha1.DownloadEtcdSnapshotResponse
-	(*CapturePacketsResponse)(nil),            // 7: ichor.v1alpha1.CapturePacketsResponse
-	(*ObjectRef)(nil),                         // 8: ichor.v1alpha1.ObjectRef
+	(*GetMyPermissionsRequest)(nil),       // 0: ichor.v1alpha1.GetMyPermissionsRequest
+	(*GetMyPermissionsResponse)(nil),      // 1: ichor.v1alpha1.GetMyPermissionsResponse
+	(*DownloadSupportBundleRequest)(nil),  // 2: ichor.v1alpha1.DownloadSupportBundleRequest
+	(*DownloadEtcdSnapshotRequest)(nil),   // 3: ichor.v1alpha1.DownloadEtcdSnapshotRequest
+	(*CapturePacketsRequest)(nil),         // 4: ichor.v1alpha1.CapturePacketsRequest
+	(*DownloadSupportBundleResponse)(nil), // 5: ichor.v1alpha1.DownloadSupportBundleResponse
+	(*DownloadEtcdSnapshotResponse)(nil),  // 6: ichor.v1alpha1.DownloadEtcdSnapshotResponse
+	(*CapturePacketsResponse)(nil),        // 7: ichor.v1alpha1.CapturePacketsResponse
+	(*ObjectRef)(nil),                     // 8: ichor.v1alpha1.ObjectRef
 }
 var file_ichor_v1alpha1_diagnostics_proto_depIdxs = []int32{
-	8, // 0: ichor.v1alpha1.GetDiagnosticsPermissionsRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
-	8, // 1: ichor.v1alpha1.DownloadSupportBundleRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
-	8, // 2: ichor.v1alpha1.DownloadSupportBundleRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
-	8, // 3: ichor.v1alpha1.DownloadEtcdSnapshotRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
-	8, // 4: ichor.v1alpha1.CapturePacketsRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
-	0, // 5: ichor.v1alpha1.DiagnosticsService.GetDiagnosticsPermissions:input_type -> ichor.v1alpha1.GetDiagnosticsPermissionsRequest
-	2, // 6: ichor.v1alpha1.DiagnosticsService.DownloadSupportBundle:input_type -> ichor.v1alpha1.DownloadSupportBundleRequest
-	3, // 7: ichor.v1alpha1.DiagnosticsService.DownloadEtcdSnapshot:input_type -> ichor.v1alpha1.DownloadEtcdSnapshotRequest
-	4, // 8: ichor.v1alpha1.DiagnosticsService.CapturePackets:input_type -> ichor.v1alpha1.CapturePacketsRequest
-	1, // 9: ichor.v1alpha1.DiagnosticsService.GetDiagnosticsPermissions:output_type -> ichor.v1alpha1.GetDiagnosticsPermissionsResponse
-	5, // 10: ichor.v1alpha1.DiagnosticsService.DownloadSupportBundle:output_type -> ichor.v1alpha1.DownloadSupportBundleResponse
-	6, // 11: ichor.v1alpha1.DiagnosticsService.DownloadEtcdSnapshot:output_type -> ichor.v1alpha1.DownloadEtcdSnapshotResponse
-	7, // 12: ichor.v1alpha1.DiagnosticsService.CapturePackets:output_type -> ichor.v1alpha1.CapturePacketsResponse
-	9, // [9:13] is the sub-list for method output_type
-	5, // [5:9] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	8,  // 0: ichor.v1alpha1.GetMyPermissionsRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
+	8,  // 1: ichor.v1alpha1.GetMyPermissionsRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	8,  // 2: ichor.v1alpha1.DownloadSupportBundleRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
+	8,  // 3: ichor.v1alpha1.DownloadSupportBundleRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	8,  // 4: ichor.v1alpha1.DownloadEtcdSnapshotRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
+	8,  // 5: ichor.v1alpha1.CapturePacketsRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
+	0,  // 6: ichor.v1alpha1.DiagnosticsService.GetMyPermissions:input_type -> ichor.v1alpha1.GetMyPermissionsRequest
+	2,  // 7: ichor.v1alpha1.DiagnosticsService.DownloadSupportBundle:input_type -> ichor.v1alpha1.DownloadSupportBundleRequest
+	3,  // 8: ichor.v1alpha1.DiagnosticsService.DownloadEtcdSnapshot:input_type -> ichor.v1alpha1.DownloadEtcdSnapshotRequest
+	4,  // 9: ichor.v1alpha1.DiagnosticsService.CapturePackets:input_type -> ichor.v1alpha1.CapturePacketsRequest
+	1,  // 10: ichor.v1alpha1.DiagnosticsService.GetMyPermissions:output_type -> ichor.v1alpha1.GetMyPermissionsResponse
+	5,  // 11: ichor.v1alpha1.DiagnosticsService.DownloadSupportBundle:output_type -> ichor.v1alpha1.DownloadSupportBundleResponse
+	6,  // 12: ichor.v1alpha1.DiagnosticsService.DownloadEtcdSnapshot:output_type -> ichor.v1alpha1.DownloadEtcdSnapshotResponse
+	7,  // 13: ichor.v1alpha1.DiagnosticsService.CapturePackets:output_type -> ichor.v1alpha1.CapturePacketsResponse
+	10, // [10:14] is the sub-list for method output_type
+	6,  // [6:10] is the sub-list for method input_type
+	6,  // [6:6] is the sub-list for extension type_name
+	6,  // [6:6] is the sub-list for extension extendee
+	0,  // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_ichor_v1alpha1_diagnostics_proto_init() }

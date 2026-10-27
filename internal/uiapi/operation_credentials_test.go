@@ -51,8 +51,7 @@ const (
 	credEditorUser = "cred-editor"
 	credReaderUser = "cred-reader"
 
-	certTalos             = "talos"
-	resourceTalosMachines = "talosmachines"
+	certTalos = "talos"
 )
 
 func newOperationClientFor(s *Server) (ichorv1alpha1connect.OperationServiceClient, func()) {
@@ -174,14 +173,14 @@ var _ = Describe("CA rotation credentials", func() {
 		return got.Annotations[ichorv1alpha1.CredentialsHandoffAnnotation]
 	}
 
-	It("reports the download permission per caller", func() {
-		c, closeFn := server(k8sClient, nil)
+	It("reports the credentials download permission per caller", func() {
+		d, _, closeFn := newDiagnosticsServer(&fakeDownloadClient{}, k8sClient, nil)
 		defer closeFn()
 
 		for user, want := range map[string]bool{credAdminUser: true, credEditorUser: false, credReaderUser: false} {
-			resp, err := c.GetCARotationCredentialsPermission(ctx, asDiagUser(user, &pb.GetCARotationCredentialsPermissionRequest{Operation: objectRef(op.Namespace, op.Name)}))
+			resp, err := d.GetMyPermissions(ctx, asDiagUser(user, &pb.GetMyPermissionsRequest{Cluster: objectRef(cluster.Namespace, cluster.Name)}))
 			Expect(err).NotTo(HaveOccurred())
-			Expect(resp.Msg.GetDownload()).To(Equal(want), user)
+			Expect(resp.Msg.GetClusterCredentials()).To(Equal(want), user)
 		}
 	})
 

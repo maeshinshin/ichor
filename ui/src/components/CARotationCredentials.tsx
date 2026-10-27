@@ -19,15 +19,17 @@ type ErrorShape = { title: string; detail: string }
 export function CARotationCredentials({
   op,
   panel,
+  permitted,
   onChanged,
 }: {
   op: Operation
   panel: Exclude<CredentialsPanel, 'none'>
+  // Whether the caller holds the download verb, fetched once by the page; undefined offers nothing.
+  permitted: boolean | undefined
   onChanged: (next: Operation) => void
 }) {
   const t = useT()
   const ref = op.ref
-  const [permitted, setPermitted] = useState<boolean | undefined>(undefined)
   const [confirmDownload, setConfirmDownload] = useState(false)
   const [confirmContinue, setConfirmContinue] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -35,22 +37,7 @@ export function CARotationCredentials({
   const [error, setError] = useState<ErrorShape | null>(null)
   const abort = useRef<AbortController | null>(null)
 
-  useEffect(() => {
-    let cancelled = false
-    setPermitted(undefined)
-    if (ref) {
-      operationClient.getCARotationCredentialsPermission({ operation: ref }).then(
-        (res) => {
-          if (!cancelled) setPermitted(res.download)
-        },
-        () => {},
-      )
-    }
-    return () => {
-      cancelled = true
-      abort.current?.abort()
-    }
-  }, [ref?.namespace, ref?.name])
+  useEffect(() => () => abort.current?.abort(), [])
 
   async function runDownload() {
     if (!ref) return

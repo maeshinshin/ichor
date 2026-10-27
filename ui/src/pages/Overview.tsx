@@ -18,7 +18,6 @@ import { OperationKind, type Operation } from '@/gen/ichor/v1alpha1/operation_pb
 import { blockingOperation, currentOperation, recentOperations, rebootPendingCount, type OpRow } from '@/lib/clusterOps'
 import { machineClient, operationClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
-import { describeError } from '@/lib/errors'
 import { formatTimestamp } from '@/lib/format'
 import { kubernetesStageProgress, operationState, progressCounts } from '@/lib/operations'
 import { clusterHealth, type Health } from '@/lib/clusterHealth'
@@ -50,31 +49,32 @@ const readyReason = (m: Machine) => m.conditions.find((c) => c.type === 'Ready')
 // change goes through the dialogs, which ask the server for a plan first.
 export function Overview() {
   const t = useT()
-  const { cluster, opRunning, loading, error, reload } = useCluster()
+  const { cluster, operations, opRunning, opsError, loading, error, reload } = useCluster()
   if (error) return <ErrorAlert {...error} />
   if (loading) return <PageSkeleton label={t('cluster.loading')} />
   if (!cluster?.ref) return <EmptyNote>{t('home.noCluster')}</EmptyNote>
-  return <Home cluster={cluster} opRunning={opRunning} reloadCluster={reload} />
+  return <Home cluster={cluster} operations={operations} opRunning={opRunning} opsError={opsError} reloadCluster={reload} />
 }
 
-function Home({ cluster, opRunning, reloadCluster }: { cluster: Cluster; opRunning: boolean; reloadCluster: () => void }) {
+function Home({
+  cluster,
+  operations,
+  opRunning,
+  opsError,
+  reloadCluster,
+}: {
+  cluster: Cluster
+  operations: Operation[]
+  opRunning: boolean
+  opsError: ErrorShape | null
+  reloadCluster: () => void
+}) {
   const t = useT()
   const ref = cluster.ref!
-  const [ops, setOps] = useState<Row[] | null>(null)
+  const ops = operations.map(toRow)
   const [machines, setMachines] = useState<Machine[] | null>(null)
-  const [error, setError] = useState<ErrorShape | null>(null)
   const [ichorVersion, setIchorVersion] = useState<string | null>(null)
   const wasBusy = useRef(false)
-
-  async function reloadOps() {
-    try {
-      const res = await operationClient.listOperations({ cluster: ref })
-      setOps(res.operations.map(toRow))
-      setError(null)
-    } catch (err) {
-      setError(describeError(err))
-    }
-  }
 
   async function reloadMachines() {
     try {
@@ -92,27 +92,26 @@ function Home({ cluster, opRunning, reloadCluster }: { cluster: Cluster; opRunni
     }
   }
 
+  // The operations come from the shared cluster poll; a visit refreshes them at once.
   useEffect(() => {
-    reloadOps()
+    reloadCluster()
     reloadMachines()
     loadIchor()
-    const id = setInterval(reloadOps, 5000)
-    return () => clearInterval(id)
   }, [ref.namespace, ref.name])
 
-  const current = ops ? currentOperation(ops) : null
-  const busy = ops ? blockingOperation(ops) : null
+  const current = currentOperation(ops)
+  const busy = blockingOperation(ops)
   // When an operation of this cluster finishes, read the versions and nodes again.
   useEffect(() => {
     if (busy) {
       wasBusy.current = true
-    } else if (wasBusy.current && ops) {
+    } else if (wasBusy.current) {
       wasBusy.current = false
       reloadCluster()
       reloadMachines()
       loadIchor()
     }
-  }, [busy !== null, ops !== null])
+  }, [busy !== null])
 
   const approved = (machines ?? []).filter((m) => m.approvalState === MachineApprovalState.APPROVED)
   const pending = (machines ?? []).filter((m) => m.approvalState !== MachineApprovalState.APPROVED && m.approvalState !== MachineApprovalState.REJECTED)
@@ -123,7 +122,7 @@ function Home({ cluster, opRunning, reloadCluster }: { cluster: Cluster; opRunni
   const busyReason = busy ? t('ops.disabledBusy') : undefined
   const kubeProxy = cluster.kubeProxyMode || 'enabled'
   const items = attentionItems({ conditions: cluster.conditions, pending: pending.length, configWaiting: waiting.length, opState: currentState })
-  const recent = ops ? recentOperations(ops, 5) : null
+  const recent = recentOperations(ops, 5)
 
   return (
     <>
@@ -139,7 +138,7 @@ function Home({ cluster, opRunning, reloadCluster }: { cluster: Cluster; opRunni
           },
         ]}
       />
-      {error && <ErrorAlert {...error} />}
+      {opsError && <ErrorAlert {...opsError} />}
       <div class="space-y-6">
         <div class="grid gap-4 md:grid-cols-3">
           <Card>
@@ -225,7 +224,7 @@ function Home({ cluster, opRunning, reloadCluster }: { cluster: Cluster; opRunni
                               {t('home.open')}
                             </Link>
                           )}
-                          <OperationControls op={current.op} onChanged={reloadOps} onDeleted={reloadOps} showDelete={false} />
+                          <OperationControls op={current.op} onChanged={reloadCluster} onDeleted={reloadCluster} showDelete={false} />
                         </div>
                       </>
                     )}
@@ -292,7 +291,7 @@ function Home({ cluster, opRunning, reloadCluster }: { cluster: Cluster; opRunni
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {recent === null ? null : recent.length === 0 ? (
+            {recent.length === 0 ? (
               <p class="text-muted-foreground">{t('ops.recentNone')}</p>
             ) : (
               <ul class="divide-y rounded-md border">

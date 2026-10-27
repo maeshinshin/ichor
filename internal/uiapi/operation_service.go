@@ -518,6 +518,26 @@ func (s *Server) planMachines(ctx context.Context, p *opPlan, cluster *ichorv1al
 	upgrade.SortByOrder(cps)
 	upgrade.SortByOrder(workers)
 
+	// A config rollout reboots the machine the controller runs on last (ADR 0080): the controller applies
+	// the same order, so the plan must list it.
+	var own *ichorv1alpha1.TalosMachine
+
+	if p.kind == ichorv1alpha1.TalosOperationKindConfig {
+		name := s.controllerMachine(ctx, list.Items, cluster.Name, "")
+		isOwn := func(m *ichorv1alpha1.TalosMachine) bool {
+			if m.Name != name {
+				return false
+			}
+
+			own = m
+
+			return true
+		}
+
+		cps = slices.DeleteFunc(cps, isOwn)
+		workers = slices.DeleteFunc(workers, isOwn)
+	}
+
 	step := int32(0)
 
 	for _, m := range cps {
@@ -531,6 +551,10 @@ func (s *Server) planMachines(ctx context.Context, p *opPlan, cluster *ichorv1al
 		}
 
 		add(m, step)
+	}
+
+	if own != nil {
+		add(own, step+1) // alone in its step, after everything else
 	}
 
 	return nil

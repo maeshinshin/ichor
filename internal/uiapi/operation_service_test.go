@@ -18,6 +18,7 @@ package uiapi
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -464,6 +465,40 @@ func TestPlanConfigListsOnlyMachinesWithAPendingRebootAndTheirFields(t *testing.
 	if res.Msg.GetEffect() != pb.OperationEffect_OPERATION_EFFECT_REBOOT || res.Msg.GetSpecChanges() || res.Msg.GetBlocked() != "" ||
 		strings.Join(res.Msg.GetHeld(), ",") != "held" {
 		t.Fatalf("plan = %v", res.Msg)
+	}
+}
+
+// ADR 0080: the controller reboots the machine it runs on last, so the plan lists that machine last
+// even when it is a control plane.
+func TestPlanConfigListsTheControllersOwnMachineLast(t *testing.T) {
+	objs := configObjects()
+	cp1 := objs[2].(*ichorv1alpha1.TalosMachine)
+	cp1.Spec.Endpoint = "10.9.9.9:50000"
+	cp1.Status.ObservedEndpoint, cp1.Status.ObservedEndpointFor = "10.0.0.22:50000", cp1.Spec.Endpoint
+
+	pod := &corev1.Pod{
+		Name: "ichor-controller", Namespace: opNS, Labels: map[string]string{"control-plane": "controller-manager"},
+		Spec: corev1.PodSpec{NodeName: "some-node"},
+	}
+	node := &corev1.Node{Name: "some-node", Status: corev1.NodeStatus{Addresses: []corev1.NodeAddress{{Type: corev1.NodeInternalIP, Address: "10.0.0.22"}}}}
+
+	srv, _ := opServer(t, append(objs, node, pod)...)
+
+	res, err := srv.PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{
+		Cluster: objectRef(opNS, opCluster), Kind: pb.OperationKind_OPERATION_KIND_CONFIG,
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var got []string
+
+	for _, m := range res.Msg.GetMachines() {
+		got = append(got, fmt.Sprintf("%s@%d", m.GetName(), m.GetStep()))
+	}
+
+	if strings.Join(got, ",") != "w2@1,cp1@2" {
+		t.Fatalf("machines = %v, want the worker, then the controller's own control plane last", got)
 	}
 }
 

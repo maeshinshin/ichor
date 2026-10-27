@@ -1,245 +1,467 @@
 import type { ComponentChildren } from 'preact'
-import { useEffect, useState } from 'preact/hooks'
-import { PageHeader } from '@/components/PageHeader'
-import { PageSkeleton } from '@/components/PageStates'
-import { StatusText } from '@/components/Status'
-import { DataTable, LinkRow } from '@/components/ListToolbar'
-import { ErrorAlert } from '@/components/ErrorAlert'
+import { useEffect, useRef, useState } from 'preact/hooks'
+import { InfoIcon, PlusIcon } from 'lucide-preact'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import type { Cluster } from '@/gen/ichor/v1alpha1/cluster_pb'
+import { ConditionList } from '@/components/ConditionList'
+import { ErrorAlert } from '@/components/ErrorAlert'
+import { OperationControls } from '@/components/OperationControls'
+import { Field, Fields, PageHeader } from '@/components/PageHeader'
+import { EmptyNote, PageSkeleton } from '@/components/PageStates'
+import { StartOperationDialog } from '@/components/StartOperationDialog'
+import { StatusText } from '@/components/Status'
+import { HandoverPhase, RolloutKind, type Cluster } from '@/gen/ichor/v1alpha1/cluster_pb'
 import { MachineApprovalState, type Machine } from '@/gen/ichor/v1alpha1/machine_pb'
 import { OperationKind, type Operation } from '@/gen/ichor/v1alpha1/operation_pb'
-import { clusterClient, machineClient, operationClient, patchClient } from '@/lib/connect'
+import { blockingOperation, currentOperation, recentOperations, rebootPendingCount, type OpRow } from '@/lib/clusterOps'
+import { machineClient, operationClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
 import { describeError } from '@/lib/errors'
-import { operationState, type OpState } from '@/lib/operations'
-import { clusterReadiness, expiringCertificatesMessage, machineCounts, operationCounts, operationsLine, type MachineLite } from '@/lib/overview'
-import { opStateTone } from '@/lib/status'
+import { formatTimestamp } from '@/lib/format'
+import { kubernetesStageProgress, operationState, progressCounts } from '@/lib/operations'
+import { attentionItems, clusterStatus, machineCounts, type ClusterStatus } from '@/lib/overview'
+import { opStateTone, type Tone } from '@/lib/status'
+import { useCluster } from '@/lib/useCluster'
 import { useT } from '@/lib/useT'
-import { Link, objectRefPath } from '@/router'
+import { Link } from '@/router'
 
-type Data = {
-  clusters: Cluster[] | null
-  machines: Machine[] | null
-  ops: Operation[] | null
-  patches: number | null
-}
+type Row = OpRow & { op: Operation }
+type ErrorShape = { title: string; detail: string }
 
-function approval(m: Machine): MachineLite['approval'] {
-  if (m.approvalState === MachineApprovalState.APPROVED) return 'approved'
-  if (m.approvalState === MachineApprovalState.REJECTED) return 'rejected'
-  return 'pending'
-}
+const toRow = (op: Operation): Row => ({
+  op,
+  name: op.ref?.name ?? '',
+  phase: op.phase,
+  failureReason: op.failureReason,
+  isNode: op.kind === OperationKind.NODE,
+  created: Number(op.createdAt?.seconds ?? 0n),
+})
 
-function readyOf(m: Machine): string {
-  return m.conditions.find((c) => c.type === 'Ready')?.status ?? ''
-}
+const statusTone: Record<ClusterStatus, Tone> = { ready: 'good', degraded: 'bad', upgrading: 'progress' }
 
-function opSeconds(o: Operation): number {
-  return Number(o.createdAt?.seconds ?? 0n)
-}
+const readyReason = (m: Machine) => m.conditions.find((c) => c.type === 'Ready')?.reason ?? ''
 
-// Overview is the landing page: how many of each thing there is and whether it
-// is healthy, what needs a person, and the latest operations. Every figure
-// links to the list it summarises. A list the user may not read shows "not
-// available" instead of failing the page.
+// Overview is the home of the one cluster Ichor manages: where it stands, what
+// needs a person, the versions with their upgrades, quick actions, the latest
+// operations, the details, and the dangerous actions last. It only reads; every
+// change goes through the dialogs, which ask the server for a plan first.
 export function Overview() {
   const t = useT()
-  const [data, setData] = useState<Data | null>(null)
-  const [error, setError] = useState<{ title: string; detail: string } | null>(null)
+  const { cluster, loading, error, reload } = useCluster()
+  if (error) return <ErrorAlert {...error} />
+  if (loading) return <PageSkeleton label={t('cluster.loading')} />
+  if (!cluster?.ref) return <EmptyNote>{t('home.noCluster')}</EmptyNote>
+  return <Home cluster={cluster} reloadCluster={reload} />
+}
 
-  async function reload() {
-    const [c, m, o, p] = await Promise.allSettled([
-      clusterClient.listClusters({}),
-      machineClient.listMachines({}),
-      operationClient.listOperations({}),
-      patchClient.listPatches({}),
-    ])
-    if (c.status === 'rejected' && m.status === 'rejected' && o.status === 'rejected') {
-      setError(describeError(c.reason))
-      return
+function Home({ cluster, reloadCluster }: { cluster: Cluster; reloadCluster: () => void }) {
+  const t = useT()
+  const ref = cluster.ref!
+  const [ops, setOps] = useState<Row[] | null>(null)
+  const [machines, setMachines] = useState<Machine[] | null>(null)
+  const [error, setError] = useState<ErrorShape | null>(null)
+  const [ichorVersion, setIchorVersion] = useState<string | null>(null)
+  const wasBusy = useRef(false)
+
+  async function reloadOps() {
+    try {
+      const res = await operationClient.listOperations({ cluster: ref })
+      setOps(res.operations.map(toRow))
+      setError(null)
+    } catch (err) {
+      setError(describeError(err))
     }
-    setError(null)
-    setData({
-      clusters: c.status === 'fulfilled' ? c.value.clusters : null,
-      machines: m.status === 'fulfilled' ? m.value.machines : null,
-      ops: o.status === 'fulfilled' ? o.value.operations.slice().sort((a, b) => opSeconds(b) - opSeconds(a)) : null,
-      patches: p.status === 'fulfilled' ? p.value.patches.length : null,
-    })
+  }
+
+  async function reloadMachines() {
+    try {
+      setMachines((await machineClient.listMachines({ cluster: ref })).machines)
+    } catch {
+      setMachines([])
+    }
+  }
+
+  async function loadIchor() {
+    try {
+      setIchorVersion((await operationClient.planOperation({ cluster: ref, kind: OperationKind.ICHOR, target: '' })).current)
+    } catch {
+      setIchorVersion(null)
+    }
   }
 
   useEffect(() => {
-    reload()
-    const id = setInterval(reload, 10000)
+    reloadOps()
+    reloadMachines()
+    loadIchor()
+    const id = setInterval(reloadOps, 5000)
     return () => clearInterval(id)
-  }, [])
+  }, [ref.namespace, ref.name])
 
-  if (error) return <ErrorAlert {...error} />
-  if (!data) return <PageSkeleton label={t('overview.loading')} />
+  const current = ops ? currentOperation(ops) : null
+  const busy = ops ? blockingOperation(ops) : null
+  // When an operation of this cluster finishes, read the versions and nodes again.
+  useEffect(() => {
+    if (busy) {
+      wasBusy.current = true
+    } else if (wasBusy.current && ops) {
+      wasBusy.current = false
+      reloadCluster()
+      reloadMachines()
+      loadIchor()
+    }
+  }, [busy !== null, ops !== null])
 
-  const opStates: OpState[] = (data.ops ?? []).map((o) => operationState(o.phase, o.failureReason))
-  const mc = data.machines ? machineCounts(data.machines.map((m) => ({ approval: approval(m), ready: readyOf(m) }))) : null
-  const oc = data.ops ? operationCounts(opStates) : null
-  const cr = data.clusters ? clusterReadiness(data.clusters.map((c) => c.conditions)) : null
-  const rolling =data.clusters?.filter((c) => c.rollout).length ?? 0
-  const na = t('overview.noAccess')
+  const approved = (machines ?? []).filter((m) => m.approvalState === MachineApprovalState.APPROVED)
+  const pending = (machines ?? []).filter((m) => m.approvalState !== MachineApprovalState.APPROVED && m.approvalState !== MachineApprovalState.REJECTED)
+  const counts = machineCounts(approved.map((m) => ({ approval: 'approved' as const, ready: m.conditions.find((c) => c.type === 'Ready')?.status ?? '' })))
+  const waiting = approved.filter((m) => rebootPendingCount([{ rebootPaths: m.rebootPaths, readyReason: readyReason(m) }]) > 0)
+  const currentState = current ? operationState(current.op.phase, current.op.failureReason) : null
+  const status = clusterStatus(cluster.conditions, !!cluster.rollout, currentState === 'running')
+  const busyReason = busy ? t('ops.disabledBusy') : undefined
+  const kubeProxy = cluster.kubeProxyMode || 'enabled'
+  const items = attentionItems({ conditions: cluster.conditions, pending: pending.length, configWaiting: waiting.length, opState: currentState })
+  const recent = ops ? recentOperations(ops, 5) : null
 
   return (
-    <div>
-      <PageHeader title={t('overview.title')} />
-      <div class="mb-6 grid grid-cols-2 divide-x divide-y rounded-md border bg-card lg:grid-cols-4 lg:divide-y-0">
-        <Tile to="/clusters" label={t('overview.clusters')} value={data.clusters?.length}>
-          {cr && cr.total > 0 && (
-            <StatusText tone={cr.ready === cr.total ? 'good' : 'warn'}>
-              {cr.ready === cr.total ? t('overview.clustersReady', { n: cr.ready }) : t('overview.clustersSomeReady', { n: cr.ready, total: cr.total })}
-            </StatusText>
-          )}
-          {rolling > 0 && <StatusText tone="progress">{t('overview.clustersRollout', { n: rolling })}</StatusText>}
-        </Tile>
-        <Tile to="/machines" label={t('overview.machines')} value={mc?.total}>
-          {mc && (
-            <>
-              <StatusText tone="good">{t('overview.machinesReady', { n: mc.ready })}</StatusText>
-              {mc.notReady > 0 && <StatusText tone="bad">{t('overview.machinesNotReady', { n: mc.notReady })}</StatusText>}
-              {mc.pending > 0 && <StatusText tone="warn">{t('overview.machinesPending', { n: mc.pending })}</StatusText>}
-              {mc.unknown > 0 && <StatusText tone="neutral">{t('overview.machinesUnknown', { n: mc.unknown })}</StatusText>}
-            </>
-          )}
-        </Tile>
-        <Tile to="/operations" label={t('overview.operations')} value={oc?.total}>
-          {oc && (
-            <>
-              {operationsLine(oc).map((line) =>
-                line === 'none' ? (
-                  <StatusText key={line} tone="neutral">{t('overview.opsNone')}</StatusText>
-                ) : line === 'allCompleted' ? (
-                  <StatusText key={line} tone="good">{t('overview.opsAllCompleted')}</StatusText>
-                ) : line === 'running' ? (
-                  <StatusText key={line} tone="progress">{t('overview.opsRunning', { n: oc.running })}</StatusText>
-                ) : line === 'failed' ? (
-                  <StatusText key={line} tone="bad">{t('overview.opsFailed', { n: oc.failed })}</StatusText>
+    <>
+      <PageHeader
+        title={ref.name}
+        kind={t('kind.cluster')}
+        badges={<StatusText tone={statusTone[status]}>{t(`home.status.${status}`)}</StatusText>}
+        meta={[
+          { label: t('home.endpoint'), value: cluster.endpoint },
+          {
+            label: t('cluster.cpCount'),
+            value: `${cluster.controlPlaneCount}${cluster.controlPlaneSchedulable ? ` ${t('clusters.schedulable')}` : ''}`,
+          },
+        ]}
+      />
+      {error && <ErrorAlert {...error} />}
+      <div class="space-y-6">
+        <div class="grid gap-4 md:grid-cols-3">
+          <Card>
+            <CardHeader>
+              <CardDescription>{t('home.statusCard')}</CardDescription>
+              <CardTitle>
+                <StatusText tone={statusTone[status]}>{t(`home.status.${status}`)}</StatusText>
+                {cluster.rollout && (
+                  <p class="text-sm font-normal text-muted-foreground">
+                    {enumLabel(RolloutKind, cluster.rollout.kind)} {cluster.rollout.nodesDone}/{cluster.rollout.nodesTotal}
+                  </p>
+                )}
+              </CardTitle>
+            </CardHeader>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardDescription>{t('home.nodesCard')}</CardDescription>
+              <CardTitle>
+                <Link to="/nodes" class="hover:underline">
+                  {machines ? t('home.nodesReady', { ready: counts.ready, total: approved.length }) : '-'}
+                </Link>
+              </CardTitle>
+            </CardHeader>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardDescription>{t('home.activeCard')}</CardDescription>
+              <CardTitle>
+                {current ? (
+                  <ActiveOperation row={current} total={approved.length} />
                 ) : (
-                  <StatusText key={line} tone="warn">{t('overview.opsPaused', { n: oc.paused })}</StatusText>
-                ),
-              )}
-            </>
-          )}
-        </Tile>
-        <Tile to="/patches" label={t('overview.patches')} value={data.patches ?? undefined} />
-      </div>
+                  <span class="text-base font-normal text-muted-foreground">{t('home.noActive')}</span>
+                )}
+              </CardTitle>
+            </CardHeader>
+          </Card>
+        </div>
 
-      <div class="grid gap-6 lg:grid-cols-2">
-        <section>
-          <h2 class="mb-2 text-sm font-medium">{t('overview.attention')}</h2>
-          <Attention data={data} states={opStates} na={na} />
-        </section>
-        <section>
-          <div class="mb-2 flex items-baseline justify-between">
-            <h2 class="text-sm font-medium">{t('overview.recentOps')}</h2>
-            <Link to="/operations" class="text-xs text-muted-foreground hover:underline">
-              {t('overview.viewAll')}
-            </Link>
-          </div>
-          <DataTable>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t('col.name')}</TableHead>
-                  <TableHead>{t('ops.colKind')}</TableHead>
-                  <TableHead>{t('ops.colState')}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {(data.ops ?? []).slice(0, 5).map((op) => {
-                  const s = operationState(op.phase, op.failureReason)
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('overview.attention')}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {items.length === 0 ? (
+              <p class="text-muted-foreground">{t('overview.attentionEmpty')}</p>
+            ) : (
+              <ul class="divide-y">
+                {items.map((a) => (
+                  <li key={a.kind} class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2 first:pt-0 last:pb-0">
+                    {a.kind === 'certs' && (
+                      <>
+                        <StatusText tone="warn">{t('cluster.certsExpiringTitle')}</StatusText>
+                        <span class="min-w-0 break-words text-muted-foreground">{a.message}</span>
+                      </>
+                    )}
+                    {a.kind === 'backupStale' && (
+                      <>
+                        <StatusText tone="warn">{t('home.attnBackupStale')}</StatusText>
+                        <span class="min-w-0 break-words text-muted-foreground">{a.message}</span>
+                      </>
+                    )}
+                    {a.kind === 'pending' && (
+                      <>
+                        <StatusText tone="warn">{t('home.attnPending', { n: a.count })}</StatusText>
+                        <Link to="/nodes" class="font-medium hover:underline">
+                          {t('home.review')}
+                        </Link>
+                      </>
+                    )}
+                    {a.kind === 'config' && (
+                      <>
+                        <StatusText tone="warn">{t('home.attnConfig', { n: a.count })}</StatusText>
+                        <StartOperationDialog kind="config" cluster={ref} label={t('ops.action.apply')} disabled={!!busy} />
+                      </>
+                    )}
+                    {(a.kind === 'opFailed' || a.kind === 'opPaused') && current && (
+                      <>
+                        <StatusText tone={a.kind === 'opFailed' ? 'bad' : 'warn'}>{t(a.kind === 'opFailed' ? 'home.attnOpFailed' : 'home.attnOpPaused')}</StatusText>
+                        <div class="flex flex-wrap items-center gap-3">
+                          {current.op.ref && (
+                            <Link to={`/operations/${current.op.ref.name}`} class="font-medium hover:underline">
+                              {t('home.open')}
+                            </Link>
+                          )}
+                          <OperationControls op={current.op} onChanged={reloadOps} onDeleted={reloadOps} showDelete={false} />
+                        </div>
+                      </>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('home.versions')}</CardTitle>
+            <CardDescription>{t('home.versionsHint')}</CardDescription>
+          </CardHeader>
+          <CardContent className="divide-y px-0 [&>*]:px-(--card-spacing)">
+            <Action title={t('ops.row.talos')} detail={t('ops.installed', { version: cluster.talosVersion })} reason={busyReason}>
+              <StartOperationDialog kind="talos" cluster={ref} current={cluster.talosVersion} label={t('ops.action.upgrade')} disabled={!!busy} />
+            </Action>
+            <Action title={t('ops.row.kubernetes')} detail={t('ops.installed', { version: cluster.kubernetesVersion })} reason={busyReason}>
+              <StartOperationDialog kind="kubernetes" cluster={ref} current={cluster.kubernetesVersion} label={t('ops.action.upgrade')} disabled={!!busy} />
+            </Action>
+            <Action
+              title={t('ops.row.ichor')}
+              detail={ichorVersion ? t('ops.installed', { version: ichorVersion }) : t('ops.installedUnknown')}
+              reason={busyReason}
+            >
+              <StartOperationDialog kind="ichor" cluster={ref} current={ichorVersion ?? ''} label={t('ops.action.upgrade')} disabled={!!busy} />
+            </Action>
+            <Action title={t('ops.row.cni')} detail={t(kubeProxy === 'replaced' ? 'ops.modeReplaced' : 'ops.modeEnabled')} reason={busyReason}>
+              <StartOperationDialog kind="cni" cluster={ref} current={kubeProxy} label={t('ops.action.switch')} disabled={!!busy} />
+            </Action>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('home.quickActions')}</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-center gap-2">
+            <Button asChild size="sm">
+              <Link to="/nodes/add">
+                <PlusIcon />
+                {t('cluster.addNode')}
+              </Link>
+            </Button>
+            <StartOperationDialog
+              kind="config"
+              cluster={ref}
+              label={t('home.applyConfig')}
+              disabled={!!busy || machines === null || waiting.length === 0}
+            />
+            {machines !== null && waiting.length === 0 && <span class="text-muted-foreground">{t('ops.disabledNothing')}</span>}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('home.recent')}</CardTitle>
+            <CardDescription>
+              <Link to="/operations" class="hover:underline">
+                {t('overview.viewAll')}
+              </Link>
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {recent === null ? null : recent.length === 0 ? (
+              <p class="text-muted-foreground">{t('ops.recentNone')}</p>
+            ) : (
+              <ul class="divide-y rounded-md border">
+                {recent.map(({ op }) => {
+                  const state = operationState(op.phase, op.failureReason)
                   return (
-                    <LinkRow key={`${op.ref?.namespace}/${op.ref?.name}`} to={op.ref ? objectRefPath('/operations', op.ref) : '/operations'}>
-                      <TableCell className="font-medium">{op.ref?.name}</TableCell>
-                      <TableCell>{enumLabel(OperationKind, op.kind)}</TableCell>
-                      <TableCell>
-                        <StatusText tone={opStateTone(s)}>{t(`ops.state.${s}`)}</StatusText>
-                      </TableCell>
-                    </LinkRow>
+                    <li key={op.ref?.name} class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-3 py-2">
+                      <div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                        <StatusText tone={opStateTone(state)}>{t(`ops.state.${state}`)}</StatusText>
+                        {op.ref ? (
+                          <Link to={`/operations/${op.ref.name}`} class="font-medium hover:underline">
+                            {enumLabel(OperationKind, op.kind)}
+                          </Link>
+                        ) : (
+                          enumLabel(OperationKind, op.kind)
+                        )}
+                      </div>
+                      <span class="text-muted-foreground">{formatTimestamp(op.createdAt)}</span>
+                    </li>
                   )
                 })}
-                {(data.ops ?? []).length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={3} className="text-muted-foreground">
-                      {t('ops.empty')}
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </DataTable>
-        </section>
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent>
+            <details>
+              <summary class="cursor-pointer font-medium">
+                {t('home.details')} <span class="font-normal text-muted-foreground">{t('home.detailsHint')}</span>
+              </summary>
+              <div class="mt-4 space-y-6">
+                <section class="space-y-2">
+                  <h3 class="font-medium">{t('cluster.conditions')}</h3>
+                  <ConditionList conditions={cluster.conditions} />
+                </section>
+                <section class="space-y-2">
+                  <h3 class="font-medium">{t('cluster.rollout')}</h3>
+                  {cluster.rollout ? (
+                    <Fields>
+                      <Field label={t('cluster.rolloutKind')} value={enumLabel(RolloutKind, cluster.rollout.kind)} />
+                      <Field label={t('cluster.rolloutTarget')} value={cluster.rollout.targetVersion} />
+                      <Field label={t('cluster.rolloutPaused')} value={cluster.rollout.paused ? t('common.yes') : t('common.no')} />
+                      <Field label={t('cluster.rolloutProgress')} value={`${cluster.rollout.nodesDone}/${cluster.rollout.nodesTotal}`} />
+                      <Field label={t('cluster.rolloutPhase')} value={cluster.rollout.currentPhase} />
+                    </Fields>
+                  ) : (
+                    <EmptyNote>{t('cluster.noRollout')}</EmptyNote>
+                  )}
+                </section>
+                <section class="space-y-2">
+                  <h3 class="font-medium">{t('cluster.handover')}</h3>
+                  {cluster.handovers.length === 0 ? (
+                    <EmptyNote>{t('cluster.noHandover')}</EmptyNote>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>{t('cluster.colComponent')}</TableHead>
+                          <TableHead>{t('cluster.colPhase')}</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {cluster.handovers.map((h) => (
+                          <TableRow key={h.component}>
+                            <TableCell className="font-medium">{h.component}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline">{enumLabel(HandoverPhase, h.phase)}</Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </section>
+              </div>
+            </details>
+          </CardContent>
+        </Card>
+
+        <Card className="ring-destructive/40">
+          <CardHeader>
+            <CardTitle className="text-destructive">{t('ops.group.danger')}</CardTitle>
+            <CardDescription>{t('ops.group.dangerHint')}</CardDescription>
+          </CardHeader>
+          <CardContent className="divide-y px-0 [&>*]:px-(--card-spacing)">
+            <Action title={t('ops.row.caRotation')} hint={t('ops.row.caRotationHint')} detail={<CertificateLines cluster={cluster} />} reason={busyReason}>
+              <StartOperationDialog kind="ca-rotation" cluster={ref} label={t('ops.action.rotate')} disabled={!!busy} />
+            </Action>
+            <Action title={t('ops.row.shutdown')} hint={t('ops.row.shutdownHint')} reason={busyReason}>
+              <StartOperationDialog kind="shutdown" cluster={ref} label={t('ops.action.shutdown')} disabled={!!busy} />
+            </Action>
+          </CardContent>
+        </Card>
       </div>
+    </>
+  )
+}
+
+// ActiveOperation is the running operation's kind, its progress and a link to it.
+function ActiveOperation({ row, total }: { row: Row; total: number }) {
+  const t = useT()
+  const op = row.op
+  const { done } = progressCounts(op.machines)
+  const kubeStage = kubernetesStageProgress(op.kubernetesStage)
+  const tracksNodes =
+    op.kind !== OperationKind.ICHOR && op.kind !== OperationKind.CONFIG && op.kind !== OperationKind.NODE && op.kind !== OperationKind.ETCD_RESTORE && total > 0
+  const label = enumLabel(OperationKind, op.kind)
+  return (
+    <div class="space-y-1 text-base">
+      {op.ref ? (
+        <Link to={`/operations/${op.ref.name}`} class="font-medium hover:underline">
+          {label}
+        </Link>
+      ) : (
+        label
+      )}
+      <p class="text-sm font-normal text-muted-foreground">
+        {tracksNodes ? t('ops.currentNodes', { done, total }) : t(`ops.state.${operationState(op.phase, op.failureReason)}`)}
+        {kubeStage && ` · ${t('ops.kubeStage', { stage: t(`ops.kubeStageName.${kubeStage.name}`), n: kubeStage.index, total: kubeStage.total })}`}
+      </p>
     </div>
   )
 }
 
-function Tile({ to, label, value, children }: { to: string; label: string; value?: number; children?: ComponentChildren }) {
+// Action is one row: what it is, what it is like now, and its button. When the
+// button is off, the reason is written under it, not left to a server refusal.
+function Action({
+  title,
+  hint,
+  detail,
+  reason,
+  children,
+}: {
+  title: string
+  hint?: string
+  detail?: ComponentChildren
+  reason?: string
+  children: ComponentChildren
+}) {
   return (
-    <Link to={to} class="block min-w-0 space-y-2 p-4 transition-colors hover:bg-accent/50">
-      <div class="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div class="text-3xl font-semibold tabular-nums">{value ?? '-'}</div>
-      <div class="flex flex-col items-start gap-1">{children}</div>
-    </Link>
+    <div class="flex flex-col gap-3 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+      <div class="min-w-0 space-y-1">
+        <p class="font-medium">{title}</p>
+        {hint && <p class="text-muted-foreground">{hint}</p>}
+        {detail && <div class="text-foreground">{detail}</div>}
+        {reason && (
+          <p class="flex items-center gap-1.5 text-muted-foreground">
+            <InfoIcon class="size-4 shrink-0" aria-hidden="true" />
+            {reason}
+          </p>
+        )}
+      </div>
+      <div class="shrink-0">{children}</div>
+    </div>
   )
 }
 
-type Item = { key: string; to: string; name: string; tone: 'warn' | 'bad' | 'progress'; text: string }
-
-function Attention({ data, states, na }: { data: Data; states: OpState[]; na: string }) {
+// CertificateLines lists each CA with its expiry date.
+function CertificateLines({ cluster }: { cluster: Cluster }) {
   const t = useT()
-  const items: Item[] = []
-  for (const m of data.machines ?? []) {
-    const name = m.hostname || m.ref?.name || ''
-    const to = m.ref ? objectRefPath('/nodes', m.ref) : '/machines'
-    const a = approval(m)
-    if (a === 'pending') items.push({ key: `m-${m.ref?.name}`, to: '/machines', name: m.identity?.uuid || name, tone: 'warn', text: t('overview.attentionPending') })
-    else if (a === 'approved' && readyOf(m) === 'False') items.push({ key: `m-${m.ref?.name}`, to, name, tone: 'bad', text: t('overview.attentionNotReady') })
-  }
-  ;(data.ops ?? []).forEach((o, i) => {
-    const s = states[i]
-    if (s === 'failed' || s === 'paused' || s === 'running') {
-      items.push({
-        key: `o-${o.ref?.name}`,
-        to: o.ref ? objectRefPath('/operations', o.ref) : '/operations',
-        name: o.ref?.name ?? '',
-        tone: s === 'failed' ? 'bad' : s === 'paused' ? 'warn' : 'progress',
-        text: t('overview.attentionOp', { state: t(`ops.state.${s}`).toLowerCase() }),
-      })
-    }
-  })
-  for (const c of data.clusters ?? []) {
-    if (c.rollout && c.ref) items.push({ key: `c-${c.ref.name}`, to: objectRefPath('/clusters', c.ref), name: c.ref.name, tone: 'progress', text: t('overview.attentionRollout') })
-  }
-  for (const c of data.clusters ?? []) {
-    if (c.ref && expiringCertificatesMessage(c.conditions) !== null) {
-      items.push({ key: `x-${c.ref.name}`, to: objectRefPath('/clusters', c.ref), name: c.ref.name, tone: 'warn', text: t('overview.attentionCerts') })
-    }
-  }
-  if (data.machines === null && data.ops === null) return <p class="text-sm text-muted-foreground">{na}</p>
+  if (cluster.certificates.length === 0) return <span class="text-muted-foreground">{t('ops.caNone')}</span>
   return (
-    <DataTable>
-      <Table>
-        <TableBody>
-          {items.length === 0 && (
-            <TableRow>
-              <TableCell className="text-muted-foreground">{t('overview.attentionEmpty')}</TableCell>
-            </TableRow>
-          )}
-          {items.map((i) => (
-            <LinkRow key={i.key} to={i.to}>
-              <TableCell className="font-medium">{i.name}</TableCell>
-              <TableCell>
-                <StatusText tone={i.tone}>{i.text}</StatusText>
-              </TableCell>
-            </LinkRow>
-          ))}
-        </TableBody>
-      </Table>
-    </DataTable>
+    <ul class="space-y-0.5">
+      {cluster.certificates.map((c) => {
+        const at = Number(c.notAfter?.seconds ?? 0n)
+        const date = new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(new Date(at * 1000))
+        return <li key={c.name}>{t('ops.caLine', { name: c.name, date })}</li>
+      })}
+    </ul>
   )
 }

@@ -170,20 +170,33 @@ func (h *BreakGlassHandler) Handle(ctx context.Context, req admission.Request) a
 			"(the controller is still working on it: this orphans a node or an etcd member)", ichorFinalizerPrefix, req.Resource.Resource, BreakGlassVerb))
 	}
 
-	tracked, by, err := gitopstracking.IsTracked(ctx, h.Client, h.ArgoCDNamespace, &old)
-	if err != nil {
-		// Cannot tell: ADR 0044, do not write. Argo CD and Flux are exempt
-		// above, so refusing here never blocks a sync.
-		return admission.Errored(http.StatusServiceUnavailable,
-			fmt.Errorf("cannot tell whether %s is managed by GitOps, so the direct write is refused: %w", req.Name, err))
-	}
-
-	if tracked {
-		return admission.Denied(fmt.Sprintf("%s %q is managed by %s: change it in Git, or hold the %q verb to write it directly in an incident",
-			req.Resource.Resource, req.Name, by, BreakGlassVerb))
+	if resp := h.refuseIfTracked(ctx, req, &old); resp != nil {
+		return *resp
 	}
 
 	return admission.Allowed("")
+}
+
+// refuseIfTracked returns a denial when obj (the stored object) is tracked by Argo CD or Flux, and
+// a 503 when that cannot be told: ADR 0044, do not write. Argo CD and Flux are exempt before this
+// is reached, so refusing here never blocks a sync. nil means "not tracked, carry on".
+func (h *BreakGlassHandler) refuseIfTracked(ctx context.Context, req admission.Request, obj client.Object) *admission.Response {
+	tracked, by, err := gitopstracking.IsTracked(ctx, h.Client, h.ArgoCDNamespace, obj)
+	if err != nil {
+		r := admission.Errored(http.StatusServiceUnavailable,
+			fmt.Errorf("cannot tell whether %s is managed by GitOps, so the direct write is refused: %w", req.Name, err))
+
+		return &r
+	}
+
+	if tracked {
+		r := admission.Denied(fmt.Sprintf("%s %q is managed by %s: change it in Git, or hold the %q verb to write it directly in an incident",
+			req.Resource.Resource, req.Name, by, BreakGlassVerb))
+
+		return &r
+	}
+
+	return nil
 }
 
 // handleOperation guards the dangerous operations, an etcd restore and the node action reset, wherever
@@ -330,6 +343,21 @@ func (h *BreakGlassHandler) handleCluster(ctx context.Context, req admission.Req
 	if req.Operation == opUpdate {
 		if err := json.Unmarshal(req.OldObject.Raw, &old); err != nil {
 			return admission.Errored(http.StatusBadRequest, fmt.Errorf("decoding the stored cluster: %w", err))
+		}
+	}
+
+	// A direct update of a GitOps-tracked cluster needs the break-glass verb like a machine or a patch
+	// (ADR 0065). Holders skip the tracking lookup; the gates below still apply to them.
+	if req.Operation == opUpdate {
+		allowed, err := h.mayBreakGlass(ctx, req.UserInfo, "talosclusters", req.Name, req.Namespace)
+		if err != nil {
+			return admission.Errored(http.StatusServiceUnavailable, fmt.Errorf("cannot check the %s right: %w", BreakGlassVerb, err))
+		}
+
+		if !allowed {
+			if resp := h.refuseIfTracked(ctx, req, &old); resp != nil {
+				return *resp
+			}
 		}
 	}
 

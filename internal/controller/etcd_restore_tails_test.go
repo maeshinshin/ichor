@@ -24,7 +24,6 @@ import (
 	"testing"
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -34,7 +33,7 @@ import (
 // back (wiping it stops the controller), unless it is the only one.
 func TestPlanRestoreNodes(t *testing.T) {
 	mk := func(name, host string) *ichorv1alpha1.TalosMachine {
-		return &ichorv1alpha1.TalosMachine{ObjectMeta: metav1.ObjectMeta{Name: name}, Spec: ichorv1alpha1.TalosMachineSpec{Hostname: host}}
+		return &ichorv1alpha1.TalosMachine{Name: name, Spec: ichorv1alpha1.TalosMachineSpec{Hostname: host}}
 	}
 
 	cases := []struct {

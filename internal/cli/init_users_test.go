@@ -44,14 +44,14 @@ const testUIURL = "https://ichor.example.com"
 func uiObjects() []client.Object {
 	return []client.Object{
 		&appsv1.Deployment{
-			ObjectMeta: metav1.ObjectMeta{Namespace: ichorControllerNamespace, Name: uiDeploymentName},
+			Namespace: ichorControllerNamespace, Name: uiDeploymentName,
 			Spec: appsv1.DeploymentSpec{Template: corev1.PodTemplateSpec{Spec: corev1.PodSpec{
 				Containers: []corev1.Container{{Name: uiDeploymentName, Args: []string{"--addr=:8080"}}},
 			}}},
 		},
 		&corev1.Service{
-			ObjectMeta: metav1.ObjectMeta{Namespace: ichorControllerNamespace, Name: uiServiceName},
-			Spec:       corev1.ServiceSpec{Ports: []corev1.ServicePort{{Name: "http", Port: 8080}}},
+			Namespace: ichorControllerNamespace, Name: uiServiceName,
+			Spec: corev1.ServiceSpec{Ports: []corev1.ServicePort{{Name: "http", Port: 8080}}},
 		},
 	}
 }

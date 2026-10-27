@@ -29,6 +29,9 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -37,6 +40,7 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
+	"github.com/maeshinshin/ichor/pkg/ichorauth"
 )
 
 // envtest's kube-apiserver enforces RBAC, so these specs run handlers as the real ichor-ui
@@ -190,5 +194,30 @@ var _ = Describe("ichor-ui generated RBAC", func() {
 
 		_, err = s.AcknowledgeCARotationCredentials(ctx, connect.NewRequest(&pb.AcknowledgeCARotationCredentialsRequest{Operation: objectRef(op.Namespace, op.Name)}))
 		Expect(err).NotTo(HaveOccurred())
+	})
+
+	// ADR 0094: the backend re-reads an IchorUser (get, no list) and patches one named Secret,
+	// the credentials store, and nothing else.
+	It("lets the backend read an IchorUser and patch only the credentials Secret", func() {
+		u := &ichorv1alpha1.IchorUser{ObjectMeta: metav1.ObjectMeta{Name: "rbac-user", Namespace: testNamespace}}
+		Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, u))).To(Succeed())
+
+		Expect(saClient.Get(ctx, client.ObjectKeyFromObject(u), &ichorv1alpha1.IchorUser{})).To(Succeed())
+		Expect(apierrors.IsForbidden(saClient.List(ctx, &ichorv1alpha1.IchorUserList{}, client.InNamespace(testNamespace)))).To(BeTrue())
+
+		store := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: ichorauth.CredentialsSecretName, Namespace: testNamespace}}
+		Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, store))).To(Succeed())
+
+		s := &Server{Client: saClient, ControllerNamespace: testNamespace}
+		Expect(s.writeCredential(ctx, "rbac-user", ichorauth.Credential{Hash: "h"})).To(Succeed())
+
+		_, found, err := s.readCredential(ctx, "rbac-user")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(found).To(BeTrue())
+
+		other := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "something-else", Namespace: testNamespace}}
+		Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, other))).To(Succeed())
+		Expect(apierrors.IsForbidden(saClient.Patch(ctx, other, client.RawPatch(types.MergePatchType, []byte(`{"data":{"a":"Yg=="}}`))))).To(BeTrue())
+		Expect(apierrors.IsForbidden(saClient.Create(ctx, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "new-one", Namespace: testNamespace}}))).To(BeTrue())
 	})
 })

@@ -47,6 +47,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1/ichorv1alpha1connect"
+	"github.com/maeshinshin/ichor/internal/oidcissuer"
 	"github.com/maeshinshin/ichor/internal/uiapi"
 )
 
@@ -96,7 +97,25 @@ func main() {
 	oidcGroupsClaim := flag.String("oidc-groups-claim", os.Getenv("ICHOR_OIDC_GROUPS_CLAIM"), "claim used for Kubernetes groups (default groups)")
 	oidcUserPrefix := flag.String("oidc-username-prefix", os.Getenv("ICHOR_OIDC_USERNAME_PREFIX"), "prefix added to the user name")
 	oidcGroupsPrefix := flag.String("oidc-groups-prefix", os.Getenv("ICHOR_OIDC_GROUPS_PREFIX"), "prefix added to each group")
+	// Ichor's own users and issuer (docs/adr/0094); off by default.
+	var users usersFlags
+
+	flag.BoolVar(&users.enabled, "users-enabled", os.Getenv("ICHOR_USERS_ENABLED") == "true", "serve Ichor's own OIDC issuer and accept its users (docs/adr/0094)")
+	flag.StringVar(&users.externalURL, "external-url", os.Getenv("ICHOR_USERS_EXTERNAL_URL"), "https URL of ichor-ui as browsers and the CLI reach it; the issuer of Ichor's tokens")
+	flag.StringVar(&users.internalAddr, "internal-addr", ":8444", "HTTPS address of the listener the kube-apiserver reads discovery and JWKS from")
+	flag.StringVar(&users.internalTLSDir, "internal-tls-dir", "/etc/ichor/oidc-tls", "directory with tls.crt and tls.key of the internal listener")
+	flag.StringVar(&users.signingKeysDir, "signing-keys-dir", "/etc/ichor/oidc-signing", "directory with keys.json, the signing keys the controller keeps")
+	flag.DurationVar(&users.tokenTTL, "token-ttl", 5*time.Minute, "lifetime of an ID token (1m to 15m)")
+	flag.DurationVar(&users.refreshTTL, "refresh-lifetime", 12*time.Hour, "absolute lifetime of a refresh token (1h to 30d)")
+
+	tlsCert := flag.String("tls-cert-file", "", "serve the main listener over TLS with this certificate (with --tls-key-file)")
+	tlsKey := flag.String("tls-key-file", "", "private key for --tls-cert-file")
+
 	flag.Parse()
+
+	if err := users.validate(); err != nil {
+		log.Fatalf("ichor-ui: %v", err)
+	}
 
 	restCfg := ctrl.GetConfigOrDie()
 
@@ -152,9 +171,30 @@ func main() {
 			log.Fatalf("ichor-ui: %v", err)
 		}
 
-		server.Impersonate = uiapi.NewImpersonator(restCfg, client.Options{Scheme: scheme, Mapper: c.RESTMapper()})
-
 		log.Printf("ichor-ui: OIDC login enabled (issuer %s); Kubernetes calls are made as the signed-in user", *oidcIssuer)
+	}
+
+	var (
+		issuer      *oidcissuer.Issuer
+		internalSrv *http.Server
+	)
+
+	if users.enabled {
+		issuer, err = newIssuer(users)
+		if err != nil {
+			log.Fatalf("ichor-ui: %v", err)
+		}
+
+		cache := &uiapi.UserCache{Reader: c, Namespace: server.ControllerNamespace}
+		authn = authn.WithLocal(users.externalURL, localVerifier{issuer}, cache)
+		server.Users = uiapi.NewUserSettings(cache, users.externalURL)
+		internalSrv = internalServer(users, issuer)
+
+		log.Printf("ichor-ui: Ichor users enabled (issuer %s)", users.externalURL)
+	}
+
+	if authn != nil {
+		server.Impersonate = uiapi.NewImpersonator(restCfg, client.Options{Scheme: scheme, Mapper: c.RESTMapper()})
 	} else {
 		log.Print("ichor-ui: WARNING: OIDC is not configured; every client that can reach ichor-ui " +
 			"writes with this pod's ServiceAccount permissions and is audited as \"ichor-ui\"")
@@ -163,10 +203,12 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/auth/config", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"enabled": authn != nil, "issuer": *oidcIssuer, "clientId": *oidcClientID,
-		})
+		_ = json.NewEncoder(w).Encode(authConfig(*oidcIssuer, *oidcClientID, users))
 	})
+
+	if issuer != nil {
+		mountIssuer(mux, issuer)
+	}
 	mux.Handle("/", spaHandler(webFS))
 
 	// /metrics, on the same mux and port as every Connect handler below: ichor-ui is
@@ -185,6 +227,7 @@ func main() {
 	mux.Handle(ichorv1alpha1connect.NewGitOpsServiceHandler(server, rpcInterceptor))
 	mux.Handle(ichorv1alpha1connect.NewOperationServiceHandler(server, rpcInterceptor))
 	mux.Handle(ichorv1alpha1connect.NewDiagnosticsServiceHandler(server, rpcInterceptor))
+	mux.Handle(ichorv1alpha1connect.NewUserServiceHandler(server, rpcInterceptor))
 
 	srv := &http.Server{
 		Addr:              *addr,
@@ -197,10 +240,28 @@ func main() {
 
 	go func() {
 		log.Printf("ichor-ui: listening on %s", *addr)
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+
+		var err error
+		if *tlsCert != "" {
+			err = srv.ListenAndServeTLS(*tlsCert, *tlsKey)
+		} else {
+			err = srv.ListenAndServe()
+		}
+
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("ichor-ui: %v", err)
 		}
 	}()
+
+	if internalSrv != nil {
+		go func() {
+			log.Printf("ichor-ui: internal HTTPS listener on %s", users.internalAddr)
+			// The certificate comes from TLSConfig.GetCertificate, so the file arguments stay empty.
+			if err := internalSrv.ListenAndServeTLS("", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				log.Fatalf("ichor-ui: %v", err)
+			}
+		}()
+	}
 
 	<-ctx.Done()
 	close(draining)
@@ -213,5 +274,9 @@ func main() {
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Printf("ichor-ui: graceful shutdown failed: %v", err)
+	}
+
+	if internalSrv != nil {
+		_ = internalSrv.Shutdown(shutdownCtx)
 	}
 }

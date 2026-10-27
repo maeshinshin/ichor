@@ -2,7 +2,7 @@ import { useState } from 'preact/hooks'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { ErrorAlert } from '@/components/ErrorAlert'
-import type { Operation } from '@/gen/ichor/v1alpha1/operation_pb'
+import { OperationKind, type Operation } from '@/gen/ichor/v1alpha1/operation_pb'
 import { operationClient } from '@/lib/connect'
 import { notifyDone } from '@/lib/notify'
 import { describeError } from '@/lib/errors'
@@ -29,7 +29,8 @@ export function OperationControls({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<ErrorShape | null>(null)
   const [open, setOpen] = useState(false)
-  const action = pauseAction(op.paused, operationState(op.phase, op.failureReason))
+  // A restore that has started is half done; the server refuses to pause it, so the button is not offered.
+  const action = op.kind === OperationKind.ETCD_RESTORE ? null : pauseAction(op.paused, operationState(op.phase, op.failureReason))
 
   async function setPaused(paused: boolean) {
     if (!op.ref) return

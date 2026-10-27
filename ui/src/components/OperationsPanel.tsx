@@ -4,6 +4,7 @@ import { InfoIcon } from 'lucide-preact'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { OperationControls } from '@/components/OperationControls'
+import { RestoreDialog } from '@/components/RestoreDialog'
 import { StartOperationDialog } from '@/components/StartOperationDialog'
 import { StatusText } from '@/components/Status'
 import type { Cluster } from '@/gen/ichor/v1alpha1/cluster_pb'
@@ -12,6 +13,7 @@ import { OperationKind, type Operation } from '@/gen/ichor/v1alpha1/operation_pb
 import { blockingOperation, caExpiry, currentOperation, recentOperations, rebootPendingCount, type OpRow } from '@/lib/clusterOps'
 import { operationClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
+import { restoreStepProgress } from '@/lib/etcdRestore'
 import { describeError } from '@/lib/errors'
 import { formatTimestamp } from '@/lib/format'
 import { kubernetesStageProgress, operationState, progressCounts } from '@/lib/operations'
@@ -165,6 +167,9 @@ export function OperationsPanel({
         <Action title={t('ops.row.shutdown')} hint={t('ops.row.shutdownHint')} reason={busyReason}>
           <StartOperationDialog kind="shutdown" cluster={ref} label={t('ops.action.shutdown')} disabled={!!busy} />
         </Action>
+        <Action title={t('ops.row.restore')} hint={t('ops.row.restoreHint')} reason={busyReason}>
+          <RestoreDialog cluster={ref} disabled={!!busy} />
+        </Action>
       </Group>
 
       <Recent ops={ops} />
@@ -253,7 +258,9 @@ function CurrentOperation({ row, total, onChanged }: { row: Row; total: number; 
   const now = op.machines.find((m) => m.phase === 'InProgress')?.name
   const kind = enumLabel(OperationKind, op.kind)
   const kubeStage = kubernetesStageProgress(op.kubernetesStage)
-  const tracksNodes = op.kind !== OperationKind.ICHOR && op.kind !== OperationKind.CONFIG && op.kind !== OperationKind.NODE && total > 0
+  const tracksNodes =
+    op.kind !== OperationKind.ICHOR && op.kind !== OperationKind.CONFIG && op.kind !== OperationKind.NODE && op.kind !== OperationKind.ETCD_RESTORE && total > 0
+  const restoreStep = restoreStepProgress(op.etcdRestoreStep)
 
   return (
     <Card className="ring-sky-500/40">
@@ -278,6 +285,10 @@ function CurrentOperation({ row, total, onChanged }: { row: Row; total: number; 
           )}
           {now && <p>{t('ops.currentNode', { name: now })}</p>}
           {op.nodeMessage && <p>{op.nodeMessage}</p>}
+          {restoreStep && (
+            <p>{t('restore.stepName', { n: restoreStep.index, total: restoreStep.total, name: t(`restore.stepName.${restoreStep.name}`) })}</p>
+          )}
+          {op.etcdRestoreMessage && <p>{op.etcdRestoreMessage}</p>}
           {op.failureReason && <p class="break-words text-destructive">{op.failureReason}</p>}
         </div>
         <div class="flex flex-wrap items-center gap-3">

@@ -12,6 +12,8 @@ import { NodeAction, OperationKind, type Operation } from '@/gen/ichor/v1alpha1/
 import { operationClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
 import { describeError } from '@/lib/errors'
+import { restoreStepProgress } from '@/lib/etcdRestore'
+import { formatTimestamp } from '@/lib/format'
 import { caStageProgress, kubernetesStageProgress, operationState, pollIntervalMs, progressCounts } from '@/lib/operations'
 import { opStateTone } from '@/lib/status'
 import { useT } from '@/lib/useT'
@@ -63,6 +65,7 @@ export function OperationDetail({ namespace, name }: { namespace: string; name: 
   const position = op.caRotationStage === '' ? null : caStageProgress(op.caRotationStage)
   const stage = position ? { name: op.caRotationStage, ...position } : null
   const kubeStage = kubernetesStageProgress(op.kubernetesStage)
+  const restoreStep = restoreStepProgress(op.etcdRestoreStep)
 
   return (
     <>
@@ -74,6 +77,11 @@ export function OperationDetail({ namespace, name }: { namespace: string; name: 
             <StatusText tone={opStateTone(state)}>{t(`ops.state.${state}`)}</StatusText>
             {op.machines.length > 0 && <span class="text-sm text-muted-foreground">{t('ops.progress', { done, running })}</span>}
             {stage && <Badge variant="outline">{t('ops.caStage', { stage: stage.name, n: stage.index, total: stage.total })}</Badge>}
+            {restoreStep && (
+              <Badge variant="outline">
+                {t('restore.stepName', { n: restoreStep.index, total: restoreStep.total, name: t(`restore.stepName.${restoreStep.name}`) })}
+              </Badge>
+            )}
             {kubeStage && (
               <Badge variant="outline">
                 {t('ops.kubeStage', { stage: t(`ops.kubeStageName.${kubeStage.name}`), n: kubeStage.index, total: kubeStage.total })}
@@ -100,7 +108,14 @@ export function OperationDetail({ namespace, name }: { namespace: string; name: 
                 },
                 { label: t('node.action.progress'), value: op.nodeMessage },
               ]
-            : [{ label: t('ops.maxUnavailable'), value: String(op.maxUnavailable || 1) }]),
+            : op.kind === OperationKind.ETCD_RESTORE
+              ? [
+                  { label: t('restore.snapshotLabel'), value: op.etcdRestoreSnapshot },
+                  { label: t('restore.snapshotTaken'), value: formatTimestamp(op.etcdRestoreSnapshotTime) },
+                  { label: t('restore.backupLabel'), value: op.etcdRestoreBackup?.name },
+                  { label: t('restore.progress'), value: op.etcdRestoreMessage },
+                ]
+              : [{ label: t('ops.maxUnavailable'), value: String(op.maxUnavailable || 1) }]),
         ]}
         actions={<OperationControls op={op} onChanged={setOp} onDeleted={() => navigate('/operations')} />}
       />

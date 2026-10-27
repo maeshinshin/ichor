@@ -85,6 +85,9 @@ Left alone. kube-proxy's rules (nftables by default) remain until the node reboo
 (ephemeral); Cilium's documented manual cleanup is `iptables-save | grep -v KUBE | iptables-restore` on each node,
 which Talos has no shell for. `kube-proxy --cleanup` would need a privileged per-node Job. Deferred
 (`ponytail:` in `RemoveKubeProxy`): the stale rules are bypassed by Cilium's socket load balancing.
+Amended: after the removal the executor connects to the `kubernetes` Service's cluster IP from the controller
+(`KUBERNETES_SERVICE_HOST`) and reports done only once that answers; until then it waits under the verification clock
+(`VerifyingNewSide`, 30 minutes) with a message that says the old rules stay on each node until it reboots.
 
 ## Consequences
 

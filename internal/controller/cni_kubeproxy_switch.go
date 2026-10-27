@@ -29,6 +29,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"os"
 	"strings"
 	"time"
 
@@ -66,6 +68,9 @@ const (
 	// cniChangeTimeout bounds the wait for the CNI's owner: a pull request may sit in review.
 	cniChangeTimeout = 24 * time.Hour
 
+	// kubeProxyProbeTimeout bounds one connection to the kubernetes Service after kube-proxy's removal.
+	kubeProxyProbeTimeout = 5 * time.Second
+
 	ciliumConfigName = "cilium-config"
 	ciliumName       = "cilium"
 
@@ -101,6 +106,10 @@ type cniKubeProxyAdvancer struct {
 	) (TalosClient, error)
 
 	Admin KubeProxyAdmin
+
+	// ServiceProbe checks, after kube-proxy was removed, that the kubernetes Service still answers;
+	// nil means probeKubernetesService.
+	ServiceProbe func(ctx context.Context) error
 }
 
 // NewCNIKubeProxyAdvancer returns the cni-kind AdvanceMachineFunc.
@@ -194,7 +203,7 @@ func (a *cniKubeProxyAdvancer) Advance(
 	}
 
 	if target == cni.KubeProxyReplaced {
-		return a.removeKubeProxy(ctx, cluster, m, bundle, talos)
+		return a.removeKubeProxy(ctx, cluster, m, op, bundle, talos)
 	}
 
 	return a.enableTail(ctx, preset, cluster, op)
@@ -321,7 +330,8 @@ func machineCompleted(op *ichorv1alpha1.TalosOperation, name string) bool {
 // Only a control plane's Talos API issues an admin kubeconfig, and a cluster with workers can finish
 // on one, so the removal goes through a control plane's client when m is not one.
 func (a *cniKubeProxyAdvancer) removeKubeProxy(
-	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, bundle *secrets.Bundle, talos TalosClient,
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, op *ichorv1alpha1.TalosOperation,
+	bundle *secrets.Bundle, talos TalosClient,
 ) (bool, error) {
 	if m.Spec.Role != roleControlPlane {
 		cps, err := deleteguard.ApprovedMachines(ctx, a.Reader, cluster.Namespace, cluster.Name,
@@ -353,11 +363,49 @@ func (a *cniKubeProxyAdvancer) removeKubeProxy(
 	var ds appsv1.DaemonSet
 
 	err := a.Reader.Get(ctx, types.NamespacedName{Namespace: kubeSystemNamespace, Name: kubeProxyName}, &ds)
-	if apierrors.IsNotFound(err) {
+	if err != nil && !apierrors.IsNotFound(err) {
+		return false, err
+	}
+
+	if err != nil {
+		// The DaemonSet is gone; the CNI must now serve the kubernetes Service without kube-proxy. The
+		// rules kube-proxy programmed stay on the nodes until they reboot.
+		probe := a.ServiceProbe
+		if probe == nil {
+			probe = probeKubernetesService
+		}
+
+		if perr := probe(ctx); perr != nil {
+			return false, waitOn(op, conditionVerifyingNewSide, reasonNewSideNotReady,
+				fmt.Sprintf("kube-proxy is removed but the kubernetes Service does not answer from the controller (%v); "+
+					"its old iptables/nftables rules stay on each node until it reboots", perr), kubeProxyVerifyTimeout)
+		}
+
+		clearWait(op, conditionVerifyingNewSide)
+
 		return true, nil
 	}
 
-	return false, err
+	return false, nil
+}
+
+// probeKubernetesService opens a TCP connection to the kubernetes Service's cluster IP, the address the
+// controller's own environment names. Outside a cluster (no such variables) there is nothing to probe.
+func probeKubernetesService(ctx context.Context) error {
+	host, port := os.Getenv("KUBERNETES_SERVICE_HOST"), os.Getenv("KUBERNETES_SERVICE_PORT")
+	if host == "" || port == "" {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, kubeProxyProbeTimeout)
+	defer cancel()
+
+	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", net.JoinHostPort(host, port))
+	if err != nil {
+		return err
+	}
+
+	return conn.Close()
 }
 
 // enableTail is the enabling tail: kube-proxy runs on every node first (it is the new side), and

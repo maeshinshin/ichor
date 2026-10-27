@@ -495,6 +495,10 @@ func TestRotateCAHandoffWritesTheFilesChecksThemAndAcknowledges(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if !strings.Contains(errw.String(), "checked: the new kubeconfig") {
+		t.Fatalf("no line saying the kubeconfig was verified: %s", errw.String())
+	}
+
 	if checked != files.Kubeconfig {
 		t.Fatalf("the new kubeconfig was not checked before the acknowledgement: %q", checked)
 	}

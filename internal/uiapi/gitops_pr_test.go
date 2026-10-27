@@ -80,6 +80,16 @@ spec:
   documents: []
 `
 
+// prIchorFile is a second file in the seed: the IchorInstallation Argo CD syncs.
+const prIchorFile = `apiVersion: ichor.maesh.dev/v1alpha1
+kind: IchorInstallation
+metadata:
+  name: ichor
+spec:
+  managementMode: ichor
+  version: v0.1.0
+`
+
 type prHost struct {
 	srv  *httptest.Server
 	body map[string]string // the last PR request body
@@ -175,6 +185,10 @@ func newBare(t *testing.T) string {
 	}
 
 	if err := os.WriteFile(filepath.Join(work, prAppPath, "nodes.yaml"), []byte(prSeedFile), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(filepath.Join(work, prAppPath, "ichor.yaml"), []byte(prIchorFile), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

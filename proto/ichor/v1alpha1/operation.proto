@@ -26,6 +26,27 @@ service OperationService {
   // first: what a restore can choose from. It reads the backups' status; it does not
   // touch the storage.
   rpc ListEtcdBackups(ListEtcdBackupsRequest) returns (ListEtcdBackupsResponse);
+  // GetIchorInstallation reports which Ichor version is installed and whether the cluster
+  // already knows a newer one; it is what the app shell's version label shows.
+  // It answers with an empty installed_version, not an error, when there is no
+  // IchorInstallation, so the UI can simply show nothing.
+  rpc GetIchorInstallation(GetIchorInstallationRequest) returns (GetIchorInstallationResponse);
+}
+
+message GetIchorInstallationRequest {}
+
+message GetIchorInstallationResponse {
+  // installed_version is IchorInstallation.status.installedVersion: the version the controller runs.
+  string installed_version = 1;
+  // target_version is IchorInstallation.spec.version.
+  string target_version = 2;
+  // management_mode is "ichor" or "external".
+  string management_mode = 3;
+  // upgrading is true while an ichor operation has not finished.
+  bool upgrading = 4;
+  // update_available is true when target_version is newer than installed_version and no upgrade
+  // is running: the cluster knows a newer version and has not moved to it yet.
+  bool update_available = 5;
 }
 
 message ListEtcdBackupsRequest {
@@ -258,6 +279,9 @@ message PlanOperationResponse {
   bool break_glass_required = 15;
   // snapshot_time is when the snapshot an etcd restore would put back was taken; everything after it is lost.
   google.protobuf.Timestamp snapshot_time = 16;
+  // opens_pull_request is true when CreateOperation would open a pull request that changes the
+  // spec in Git (an Ichor upgrade whose IchorInstallation Argo CD tracks) and create no operation.
+  bool opens_pull_request = 17;
 }
 
 message CreateOperationRequest {
@@ -277,6 +301,10 @@ message CreateOperationResponse {
   // spec_changed is true when the cluster's (or the installation's) spec was
   // changed to the target before the operation was created.
   bool spec_changed = 3;
+  // pull_request_url is set instead of an operation when the IchorInstallation is managed in
+  // Git: a pull request that changes its spec.version was opened and nothing was written to
+  // the cluster. operation is then empty.
+  string pull_request_url = 4;
 }
 
 message SetOperationPausedRequest {

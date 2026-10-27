@@ -52,11 +52,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"time"
 
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -353,7 +355,7 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	// whatever was recorded the last time the node was confirmed to match
 	// what was rendered; empty on a machine's first reconcile, since there
 	// is no previous convergence yet.
-	inputsHash, err := desiredInputsHash(&cluster, &m, patches.Items, sys.Storage)
+	inputsHash, err := desiredInputsHash(&cluster, &m, patches.Items, sys.Storage, registryAuthFingerprint(sys.RegistryAuth))
 	if err != nil {
 		log.Error(err, "hashing render inputs")
 
@@ -580,7 +582,7 @@ var renderVersion = render.Version
 // them is unnecessary detail no caller needs to parse back out.
 func desiredInputsHash(
 	cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, candidates []ichorv1alpha1.TalosConfigPatch,
-	storages []ichorv1alpha1.TalosStorage,
+	storages []ichorv1alpha1.TalosStorage, registryAuth string,
 ) (string, error) {
 	applicable, err := render.SelectPatches(cluster, m, candidates)
 	if err != nil {
@@ -606,7 +608,42 @@ func desiredInputsHash(
 		parts = append(parts, fmt.Sprintf("storage:%s=%d", chosen.Name, chosen.Generation))
 	}
 
+	// The registry credentials feed the render too (ADR 0061): a changed password reads as a
+	// desired-state change. registryAuth is registryAuthFingerprint's hash, never the data; empty
+	// when no registry names a Secret, which leaves the hash as it was.
+	if registryAuth != "" {
+		parts = append(parts, "registryauth="+registryAuth)
+	}
+
 	return render.Hash([]byte(strings.Join(parts, ";"))), nil
+}
+
+// registryAuthFingerprint hashes the resolved registry credentials (principle 3: the result is a
+// hash, never the data) so that desiredInputsHash moves when a referenced Secret's password,
+// auth or identityToken changes. It hashes the three values the render uses rather than the
+// Secret's resourceVersion, so a label or annotation edit on the Secret does not read as a
+// desired-state change. Empty for no credentials.
+func registryAuthFingerprint(auth map[string]render.RegistryAuth) string {
+	if len(auth) == 0 {
+		return ""
+	}
+
+	hosts := make([]string, 0, len(auth))
+	for h := range auth {
+		hosts = append(hosts, h)
+	}
+
+	slices.Sort(hosts)
+
+	var b strings.Builder
+
+	for _, h := range hosts {
+		a := auth[h]
+		// %q quotes each field, so a value cannot run into its neighbour.
+		fmt.Fprintf(&b, "%q:%q,%q,%q;", h, a.Password, a.Auth, a.IdentityToken)
+	}
+
+	return render.Hash([]byte(b.String()))
 }
 
 // refuseReboot is the reboot-needed branch of design step 5. This reconciler never reboots a node
@@ -748,12 +785,19 @@ func (r *TalosMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// editing or deleting one re-reconciles the machines of its cluster, which is how a change
 	// reaches an already converged node (ADR 0061). Only a spec change (generation) counts for
 	// an update, so the status writes these controllers make do not wake every machine.
-	// Secrets are not watched (ADR 0061).
+	// A Secret that a TalosCluster names in registries[].authSecretRef is one too, in the
+	// controller's namespace only (ADR 0061).
 	renderInput := builder.WithPredicates(predicate.GenerationChangedPredicate{})
 	enqueue := handler.EnqueueRequestsFromMapFunc(r.machinesOfCluster)
 
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &ichorv1alpha1.TalosCluster{},
+		registryAuthSecretIndex, registryAuthSecretNames); err != nil {
+		return err
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&ichorv1alpha1.TalosMachine{}).
+		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(r.machinesOfAuthSecret)).
 		Watches(&ichorv1alpha1.TalosStorage{}, enqueue, renderInput).
 		Watches(&ichorv1alpha1.TalosConfigPatch{}, enqueue, renderInput).
 		Watches(&ichorv1alpha1.TalosCluster{}, enqueue, renderInput).
@@ -789,6 +833,50 @@ func (r *TalosMachineReconciler) machinesOfCluster(ctx context.Context, obj clie
 		if list.Items[i].Spec.ClusterRef.Name == clusterName {
 			reqs = append(reqs, reconcile.Request{NamespacedName: client.ObjectKeyFromObject(&list.Items[i])})
 		}
+	}
+
+	return reqs
+}
+
+// registryAuthSecretIndex indexes a TalosCluster by the names of the Secrets its registries
+// reference, so a Secret event finds the clusters that use it without scanning them.
+const registryAuthSecretIndex = "spec.registries.authSecretRef.name"
+
+// registryAuthSecretNames is the index function behind registryAuthSecretIndex.
+func registryAuthSecretNames(o client.Object) []string {
+	cluster, ok := o.(*ichorv1alpha1.TalosCluster)
+	if !ok {
+		return nil
+	}
+
+	var names []string
+
+	for _, reg := range cluster.Spec.Registries {
+		if reg.AuthSecretRef != nil {
+			names = append(names, reg.AuthSecretRef.Name)
+		}
+	}
+
+	return names
+}
+
+// machinesOfAuthSecret maps a Secret to the machines of every TalosCluster whose registries
+// reference it. Only Secrets in the controller's own namespace count: that is the one place
+// ResolveRegistryAuth reads, and the cache holds no other (cache.go).
+func (r *TalosMachineReconciler) machinesOfAuthSecret(ctx context.Context, obj client.Object) []reconcile.Request {
+	if r.ControllerNamespace == "" || obj.GetNamespace() != r.ControllerNamespace {
+		return nil
+	}
+
+	var clusters ichorv1alpha1.TalosClusterList
+	if err := r.List(ctx, &clusters, client.MatchingFields{registryAuthSecretIndex: obj.GetName()}); err != nil {
+		return nil
+	}
+
+	var reqs []reconcile.Request
+
+	for i := range clusters.Items {
+		reqs = append(reqs, r.machinesOfCluster(ctx, &clusters.Items[i])...)
 	}
 
 	return reqs

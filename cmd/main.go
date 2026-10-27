@@ -402,6 +402,7 @@ func main() {
 	}
 	if err := (&controller.TalosStorageReconciler{
 		Client: mgr.GetClient(), APIReader: mgr.GetAPIReader(),
+		ControllerNamespace: os.Getenv("POD_NAMESPACE"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "talosstorage")
 		os.Exit(1)

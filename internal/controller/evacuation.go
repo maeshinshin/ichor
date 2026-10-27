@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -29,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/storage"
@@ -98,6 +100,9 @@ type StorageEvacuator interface {
 // dependency here ... was considered and rejected").
 type LonghornEvacuator struct {
 	client.Client
+
+	// noted remembers which nodes already had their "nothing to evacuate" info line logged.
+	noted sync.Map
 }
 
 var (
@@ -153,49 +158,82 @@ func (e *LonghornEvacuator) Resolve(
 	return &evacuationTarget{hook: hook, timeout: timeout, namespace: defaultLonghornNamespace}, nil
 }
 
-// Begin implements StorageEvacuator.
+// Begin implements StorageEvacuator. Scheduling is disabled first, then the eviction requested:
+// Longhorn's webhook rejects a write that leaves both true.
 func (e *LonghornEvacuator) Begin(ctx context.Context, target *evacuationTarget, node string) error {
 	allowScheduling, evictionRequested := target.hook.BeginEvacuation()
 
-	return e.writeNodeEvacuation(ctx, target, node, allowScheduling, evictionRequested)
+	return e.writeNodeEvacuation(ctx, target, node, [2]nodeField{
+		{"allowScheduling", allowScheduling}, {"evictionRequested", evictionRequested},
+	})
 }
 
-// End implements StorageEvacuator.
+// End implements StorageEvacuator. The eviction is cancelled first, then scheduling enabled: the
+// webhook ("need to disable scheduling on node X for node eviction, or cancel eviction to enable
+// scheduling on this node") refuses allowScheduling=true while evictionRequested is still true.
 func (e *LonghornEvacuator) End(ctx context.Context, target *evacuationTarget, node string) error {
 	allowScheduling, evictionRequested := target.hook.EndEvacuation()
 
-	return e.writeNodeEvacuation(ctx, target, node, allowScheduling, evictionRequested)
+	return e.writeNodeEvacuation(ctx, target, node, [2]nodeField{
+		{"evictionRequested", evictionRequested}, {"allowScheduling", allowScheduling},
+	})
 }
 
-// writeNodeEvacuation writes allowScheduling then evictionRequested to
-// node's nodes.longhorn.io object, as two separate updates in that order --
-// Longhorn's own admission webhook rejects a write that leaves
-// evictionRequested true while allowScheduling is also true (verified against longhorn-manager v1.9.1's
-// webhook/resources/node/validator.go).
+// nodeField is one boolean of a Longhorn Node's spec.
+type nodeField struct {
+	name  string
+	value bool
+}
+
+// absent reports whether err means Longhorn itself is not there to evacuate: its CRD is not
+// installed, or it has no Node object for this machine (e.g. longhorn-manager is crash-looping
+// because the schematic still lacks iscsi-tools). A TalosStorage legitimately exists before
+// Longhorn does (the disk comes first), so this is "nothing to evacuate", not a failure. The
+// first sighting per node is logged at info level.
+func (e *LonghornEvacuator) absent(ctx context.Context, node string, err error) bool {
+	if !apimeta.IsNoMatchError(err) && !apierrors.IsNotFound(err) {
+		return false
+	}
+
+	if _, seen := e.noted.LoadOrStore(node, struct{}{}); !seen {
+		logf.FromContext(ctx).Info("Longhorn has no Node object for this node (CRD or object absent); nothing to evacuate",
+			"node", node, "reason", err.Error())
+	}
+
+	return true
+}
+
+// writeNodeEvacuation writes the two fields to node's nodes.longhorn.io object as two separate
+// updates, in the order given (a field already holding its value is not rewritten). Longhorn's
+// admission webhook rejects a write that leaves evictionRequested true while allowScheduling is
+// also true, so the order differs for Begin and End. A missing CRD
+// or Node object is nothing to evacuate and returns nil.
 func (e *LonghornEvacuator) writeNodeEvacuation(
-	ctx context.Context, target *evacuationTarget, node string, allowScheduling, evictionRequested bool,
+	ctx context.Context, target *evacuationTarget, node string, fields [2]nodeField,
 ) error {
 	var obj unstructured.Unstructured
 	obj.SetGroupVersionKind(longhornNodeGVK)
 
 	if err := e.Get(ctx, types.NamespacedName{Namespace: target.namespace, Name: node}, &obj); err != nil {
+		if e.absent(ctx, node, err) {
+			return nil
+		}
+
 		return fmt.Errorf("reading Longhorn node %q: %w", node, err)
 	}
 
-	if err := unstructured.SetNestedField(obj.Object, allowScheduling, "spec", "allowScheduling"); err != nil {
-		return err
-	}
+	for _, f := range fields {
+		if cur, found, _ := unstructured.NestedBool(obj.Object, "spec", f.name); found && cur == f.value {
+			continue
+		}
 
-	if err := e.Update(ctx, &obj); err != nil {
-		return fmt.Errorf("writing Longhorn node %q's allowScheduling: %w", node, err)
-	}
+		if err := unstructured.SetNestedField(obj.Object, f.value, "spec", f.name); err != nil {
+			return err
+		}
 
-	if err := unstructured.SetNestedField(obj.Object, evictionRequested, "spec", "evictionRequested"); err != nil {
-		return err
-	}
-
-	if err := e.Update(ctx, &obj); err != nil {
-		return fmt.Errorf("writing Longhorn node %q's evictionRequested: %w", node, err)
+		if err := e.Update(ctx, &obj); err != nil {
+			return fmt.Errorf("writing Longhorn node %q's %s: %w", node, f.name, err)
+		}
 	}
 
 	return nil
@@ -213,6 +251,10 @@ func (e *LonghornEvacuator) ReplicasRemaining(ctx context.Context, target *evacu
 	list.SetGroupVersionKind(longhornReplicaListGVK)
 
 	if err := e.List(ctx, &list, client.InNamespace(target.namespace)); err != nil {
+		if e.absent(ctx, node, err) {
+			return 0, nil
+		}
+
 		return 0, fmt.Errorf("listing Longhorn replicas: %w", err)
 	}
 

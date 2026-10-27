@@ -94,3 +94,15 @@ rm -f bin/ui-demo.kubeconfig   # only if it is for this cluster
 ```
 
 Deleting the VMs removes the inner cluster and everything in it.
+
+## Caveats
+
+- The demo VMs use the KubeVirt pod network. Stopping or restarting a VM gives it a new IP.
+  The Talos cluster (etcd, endpoints) cannot come back after that. Rebuild the demo with the
+  teardown and up steps above instead.
+- `ichor node remove` leaves the Kubernetes Node in place until the VM is deleted. Then run
+  `kubectl delete node <name>`.
+- VM sizing: the control plane needs 2560Mi. That is enough; measured use is about 1.6Gi with
+  ichor and ichor-ui. Workers use 1536Mi.
+- Run `make demo-images` from a separate worktree for each agent or user. Two builds in one
+  checkout overwrite each other's `dist/install.yaml` and `bin/img`.

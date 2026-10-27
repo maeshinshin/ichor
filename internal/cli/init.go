@@ -159,6 +159,14 @@ func init() {
 	flags.StringVar(&initOpts.AdminUser, "admin-user", "",
 		"with --ui-url: name of the first admin (default "+defaultAdminUser+"); its generated password is printed once to stderr "+
 			"and must be changed at the first sign-in")
+	flags.StringVar(&initOpts.UITLSSecret, "ui-tls-secret", "",
+		"with --ui-url: serve ichor-ui over TLS with this existing kubernetes.io/tls Secret in "+ichorControllerNamespace+" (chart: ichorUI.tls.secretName)")
+	flags.StringVar(&initOpts.UITLSCert, "ui-tls-cert", "", "with --ui-url: PEM certificate file for ichor-ui's TLS; init stores it with --ui-tls-key as a Secret")
+	flags.StringVar(&initOpts.UITLSKey, "ui-tls-key", "", "with --ui-tls-cert: PEM private key file (never printed)")
+	flags.StringVar(&initOpts.KubeAPIServerURL, "kube-api-server-url", "",
+		"with --ui-url: https URL of the Kubernetes API put in users' kubeconfigs (chart: ichorUI.users.kubeAPIServerURL)")
+	flags.StringVar(&initOpts.KubeAPITLSServerName, "kube-api-tls-server-name", "",
+		"with --ui-url: tls-server-name in users' kubeconfigs (chart: ichorUI.users.kubeAPITLSServerName)")
 	flags.StringVar(&initOpts.GitOpsDir, "gitops-dir", "", "write the GitOps repository skeleton to this local directory")
 
 	for _, name := range []string{flagCluster, cniKey, "endpoint-address", "node-endpoint", "talos-version", "version-contract", "install-disk"} {

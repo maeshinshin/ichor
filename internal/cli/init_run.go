@@ -54,6 +54,11 @@ type initOptions struct {
 	// UIURL turns Ichor's own users on (ADR 0094); AdminUser names the first admin.
 	UIURL     string
 	AdminUser string
+
+	// With UIURL: TLS inside ichor-ui (an existing Secret, or a cert/key init stores) and the
+	// kubeconfig's server, passed to ichor-ui.
+	UITLSSecret, UITLSCert, UITLSKey       string
+	KubeAPIServerURL, KubeAPITLSServerName string
 }
 
 // initDeps bundles init's side effects -- hardware identity, the Talos

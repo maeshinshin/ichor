@@ -78,6 +78,10 @@ func prepareInitUsers(opts initOptions) (initOptions, error) {
 }
 
 func validateInitUsers(opts initOptions) error {
+	if err := validateInitUIExtras(opts); err != nil {
+		return err
+	}
+
 	if opts.UIURL == "" {
 		if opts.AdminUser != "" {
 			return errors.New("init: --admin-user needs --ui-url (without it init turns users off and creates none)")
@@ -288,6 +292,18 @@ func initUsers(ctx context.Context, opts initOptions, k client.Client, errw io.W
 	// Everything that can fail on the cluster's shape is checked before the first write.
 	targets, err := prepareUITargets(ctx, k, ichorControllerNamespace, opts.UIURL)
 	if err != nil {
+		return "", err
+	}
+
+	if err := checkUITLSSecret(ctx, k, ichorControllerNamespace, opts); err != nil {
+		return "", err
+	}
+
+	if err := uiExtrasOnDeployment(targets.ui, opts); err != nil {
+		return "", err
+	}
+
+	if err := storeUITLSSecret(ctx, k, ichorControllerNamespace, opts); err != nil {
 		return "", err
 	}
 

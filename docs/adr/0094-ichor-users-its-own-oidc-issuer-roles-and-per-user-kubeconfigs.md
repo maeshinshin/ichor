@@ -179,3 +179,5 @@ Amendment (names): object names differ by install path (kustomize `namePrefix: i
 ## Amendment: accepted after the hardware run
 
 Amendment (2026-10-28): verified end to end on hardware; `ichor init --ui-url` works as shipped, and must-change, roles, disable, issuer-down and the one-at-a-time apiserver rollout were each checked, so Status is Accepted.
+
+Amendment (CLI bearer): when ichor-ui's `/auth/config` says auth is required, the CLI sends `Authorization: Bearer <ID token>` on its Connect calls through the port-forward, using the cached `ichor-ui`-audience login for one of the advertised issuers (refreshed with the cached refresh token when near expiry, never printed); with none cached it keeps the in-process fallback and prints `ichor auth login --issuer <url> --audience ichor-ui`. A TLS verification failure now says so in the fallback line. `ichor auth logout` removes every cached audience for the issuer unless `--audience` is given.

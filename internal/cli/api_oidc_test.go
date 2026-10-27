@@ -39,6 +39,8 @@ const testWho = "alice@example.com"
 func oidcBackend(t *testing.T, enabled bool) (apiDeps, *atomic.Int32, *bytes.Buffer) {
 	t.Helper()
 
+	t.Setenv("HOME", t.TempDir()) // the login cache is under HOME
+
 	k8s := ctrlfake.NewClientBuilder().WithScheme(newTestScheme(t)).
 		WithObjects(append(uiBackendObjects(), strongMachine("strong"))...).Build()
 

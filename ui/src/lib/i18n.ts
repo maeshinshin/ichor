@@ -110,6 +110,8 @@ export const en = {
   'overview.attentionNotReady': 'Not ready',
   'overview.attentionOp': 'Operation {state}',
   'overview.attentionRollout': 'Rollout in progress',
+  'overview.attentionCerts': 'CA expiring soon',
+  'cluster.certsExpiringTitle': 'A cluster CA is expiring',
   'overview.recentOps': 'Recent operations',
   'overview.viewAll': 'View all',
   'overview.clusterMachines': 'Nodes',

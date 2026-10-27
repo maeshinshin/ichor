@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -45,6 +46,10 @@ const (
 
 	// certExpiryRetry is how soon an unreadable bundle is tried again.
 	certExpiryRetry = 5 * time.Minute
+
+	// DefaultCertificateExpiryWarning is how far ahead CertificatesExpiring turns True when the
+	// controller is not given --certificate-expiry-warning-days.
+	DefaultCertificateExpiryWarning = 90 * 24 * time.Hour
 )
 
 // Metric label names, shared so the series and its deletion cannot drift.
@@ -75,6 +80,10 @@ type CertExpiryReconciler struct {
 
 	// ControllerNamespace is where the bundle is read.
 	ControllerNamespace string
+
+	// ExpiryWarning is how long before a CA expires CertificatesExpiring turns True.
+	// Zero means DefaultCertificateExpiryWarning.
+	ExpiryWarning time.Duration
 }
 
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters,verbs=get;list;watch
@@ -116,18 +125,86 @@ func (r *CertExpiryReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		certExpiry.WithLabelValues(cluster.Namespace, cluster.Name, e.Name).Set(float64(e.NotAfter.Unix()))
 	}
 
+	base := cluster.DeepCopy()
+	changed := false
+
 	if !slices.EqualFunc(cluster.Status.Certificates, expiries, func(a, b ichorv1alpha1.CertificateExpiry) bool {
 		return a.Name == b.Name && a.NotAfter.Equal(&b.NotAfter)
 	}) {
-		base := cluster.DeepCopy()
 		cluster.Status.Certificates = expiries
+		changed = true
+	}
 
+	if setCertificatesExpiring(&cluster, expiries, time.Now(), r.warningWindow()) {
+		changed = true
+	}
+
+	if changed {
 		if err := r.Status().Patch(ctx, &cluster, client.MergeFrom(base)); err != nil {
 			return ctrl.Result{}, fmt.Errorf("publishing certificate expiry: %w", err)
 		}
 	}
 
 	return ctrl.Result{RequeueAfter: certExpiryRecheck}, nil
+}
+
+// warningWindow is how long before a CA expires CertificatesExpiring turns True.
+func (r *CertExpiryReconciler) warningWindow() time.Duration {
+	if r.ExpiryWarning <= 0 {
+		return DefaultCertificateExpiryWarning
+	}
+
+	return r.ExpiryWarning
+}
+
+// setCertificatesExpiring sets the CertificatesExpiring condition from expiries and reports whether
+// the condition changed. The message names each CA and its date, not the days left, so it does not
+// change (and cause a write) every hour; the dates are in UTC for the same reason.
+func setCertificatesExpiring(
+	cluster *ichorv1alpha1.TalosCluster, expiries []ichorv1alpha1.CertificateExpiry, now time.Time, window time.Duration,
+) bool {
+	var soon []string
+
+	expired := false
+
+	for _, e := range expiries {
+		if !e.NotAfter.Time.Before(now.Add(window)) {
+			continue
+		}
+
+		verb := "expires"
+		if e.NotAfter.Time.Before(now) {
+			verb, expired = "expired", true
+		}
+
+		soon = append(soon, fmt.Sprintf("the %s CA %s on %s", e.Name, verb, e.NotAfter.UTC().Format(time.DateOnly)))
+	}
+
+	cond := metav1.Condition{
+		Type: ichorv1alpha1.ConditionCertificatesExpiring, Status: metav1.ConditionFalse, Reason: "NoneExpiring",
+		Message:            fmt.Sprintf("no CA expires within %d days", int(window.Hours()/24)),
+		ObservedGeneration: cluster.Generation,
+	}
+
+	if len(soon) > 0 {
+		cond.Status, cond.Reason = metav1.ConditionTrue, "ExpiringSoon"
+		if expired {
+			cond.Reason = "Expired"
+		}
+
+		cond.Message = strings.Join(soon, "; ") + ". Rotate the CAs (ichor cluster rotate-ca) before they expire; " +
+			"the etcd and aggregator CAs are not covered by that command."
+	}
+
+	before := apimeta.FindStatusCondition(cluster.Status.Conditions, cond.Type)
+	if before != nil && before.Status == cond.Status && before.Reason == cond.Reason &&
+		before.Message == cond.Message && before.ObservedGeneration == cond.ObservedGeneration {
+		return false
+	}
+
+	apimeta.SetStatusCondition(&cluster.Status.Conditions, cond)
+
+	return true
 }
 
 // clearBundleBackupStale lowers BundleBackupStale once the user has exported the live bundle: the

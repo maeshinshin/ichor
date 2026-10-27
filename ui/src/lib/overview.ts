@@ -55,3 +55,10 @@ export function operationCounts(states: readonly OpState[]) {
   }
   return c
 }
+
+// expiringCertificatesMessage is the message of the CertificatesExpiring condition while it is True
+// (a CA is inside the controller's warning window or expired), else null.
+export function expiringCertificatesMessage(conds: readonly { type: string; status: string; message?: string }[]): string | null {
+  const c = conds.find((x) => x.type === 'CertificatesExpiring' && x.status === 'True')
+  return c ? c.message || '' : null
+}

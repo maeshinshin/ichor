@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks'
 import { PlusIcon } from 'lucide-preact'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -16,7 +17,7 @@ import { MachineApprovalState, MachineRole, type Machine } from '@/gen/ichor/v1a
 import { clusterClient, machineClient, nodeClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
 import { describeError } from '@/lib/errors'
-import { machineCounts } from '@/lib/overview'
+import { expiringCertificatesMessage, machineCounts } from '@/lib/overview'
 import { useT } from '@/lib/useT'
 import { Link, objectRefPath } from '@/router'
 
@@ -90,6 +91,7 @@ export function ClusterDetail({ namespace, name }: { namespace: string; name: st
   if (!cluster) return <PageSkeleton label={t('cluster.loading')} />
 
   const ready = cluster.conditions.find((c) => c.type === 'Ready')
+  const certsExpiring = expiringCertificatesMessage(cluster.conditions)
   const approved = (machines ?? []).filter((m) => m.approvalState === MachineApprovalState.APPROVED)
   const pending = (machines ?? []).filter(
     (m) => m.approvalState !== MachineApprovalState.APPROVED && m.approvalState !== MachineApprovalState.REJECTED,
@@ -150,6 +152,12 @@ export function ClusterDetail({ namespace, name }: { namespace: string; name: st
           { label: t('cluster.namespace'), value: cluster.ref?.namespace },
         ]}
       />
+      {certsExpiring !== null && (
+        <Alert className="mb-4">
+          <AlertTitle>{t('cluster.certsExpiringTitle')}</AlertTitle>
+          <AlertDescription>{certsExpiring}</AlertDescription>
+        </Alert>
+      )}
       <SectionLayout sections={sections}>
         <Section
           id="nodes"

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { clusterIsReady, clusterReadiness, machineCounts, operationCounts, operationsLine } from './overview.ts'
+import { clusterIsReady, clusterReadiness, expiringCertificatesMessage, machineCounts, operationCounts, operationsLine } from './overview.ts'
 
 test('clusterReadiness uses Ready when there is one, else steady and not unhealthy', () => {
   const ready = (status: string) => [{ type: 'Ready', status }]
@@ -36,4 +36,11 @@ test('machineCounts splits by approval and readiness', () => {
 test('operationCounts counts running, paused, failed and done', () => {
   const c = operationCounts(['running', 'running', 'failed', 'done', 'paused', 'pending'])
   assert.deepEqual(c, { total: 6, running: 2, failed: 1, paused: 1, done: 1 })
+})
+
+test('expiringCertificatesMessage returns the message only while CertificatesExpiring is True', () => {
+  const on = [{ type: 'Ready', status: 'True' }, { type: 'CertificatesExpiring', status: 'True', message: 'the etcd CA expires on 2026-12-11.' }]
+  assert.equal(expiringCertificatesMessage(on), 'the etcd CA expires on 2026-12-11.')
+  assert.equal(expiringCertificatesMessage([{ type: 'CertificatesExpiring', status: 'False', message: 'none' }]), null)
+  assert.equal(expiringCertificatesMessage([]), null)
 })

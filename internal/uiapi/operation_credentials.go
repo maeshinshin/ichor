@@ -29,7 +29,6 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/siderolabs/talos/pkg/machinery/constants"
-	authv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -90,44 +89,6 @@ func (s *Server) caRotationOperation(ctx context.Context, ref *pb.ObjectRef, sta
 
 	return nil, connect.NewError(connect.CodeFailedPrecondition,
 		fmt.Errorf("operation %q is at stage %q; this is only possible at %v", op.Name, stage, stages))
-}
-
-// mayDownloadCredentials asks Kubernetes whether the caller holds the download verb on
-// talosclusters/credentials for the cluster, the same way mayDownload does for machines.
-func (s *Server) mayDownloadCredentials(ctx context.Context, op *ichorv1alpha1.TalosOperation) (bool, error) {
-	c, err := s.cl(ctx)
-	if err != nil {
-		return false, connect.NewError(connect.CodeUnavailable, fmt.Errorf("acting as the user: %w", err))
-	}
-
-	review := &authv1.SelfSubjectAccessReview{Spec: authv1.SelfSubjectAccessReviewSpec{ResourceAttributes: &authv1.ResourceAttributes{
-		Namespace: op.Namespace, Verb: DownloadVerb, Group: ichorv1alpha1.GroupVersion.Group,
-		Resource: resourceTalosClusters, Subresource: CredentialsScope, Name: op.Spec.ClusterRef.Name,
-	}}}
-
-	if err := c.Create(ctx, review); err != nil {
-		return false, connect.NewError(connect.CodeUnavailable, fmt.Errorf("asking Kubernetes whether you may: %w", err))
-	}
-
-	return review.Status.Allowed, nil
-}
-
-// GetCARotationCredentialsPermission reports whether the caller may download the credentials. It only
-// decides what the UI shows.
-func (s *Server) GetCARotationCredentialsPermission(
-	ctx context.Context, req *connect.Request[pb.GetCARotationCredentialsPermissionRequest],
-) (*connect.Response[pb.GetCARotationCredentialsPermissionResponse], error) {
-	op, err := s.getOperation(ctx, req.Msg.GetOperation())
-	if err != nil {
-		return nil, err
-	}
-
-	allowed, err := s.mayDownloadCredentials(ctx, op)
-	if err != nil {
-		return nil, err
-	}
-
-	return connect.NewResponse(&pb.GetCARotationCredentialsPermissionResponse{Download: allowed}), nil
 }
 
 // emitCredentialsEvent records who started the download. It carries no content, and is created with
@@ -192,7 +153,7 @@ func (s *Server) DownloadCARotationCredentials(
 		return err
 	}
 
-	allowed, err := s.mayDownloadCredentials(ctx, op)
+	allowed, err := s.mayDownload(ctx, op.Namespace, resourceTalosClusters, CredentialsScope, op.Spec.ClusterRef.Name)
 	if err != nil {
 		return err
 	}

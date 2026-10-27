@@ -11,10 +11,10 @@ package ichor.v1alpha1;
 import "ichor/v1alpha1/common.proto";
 
 service DiagnosticsService {
-  // GetDiagnosticsPermissions says which downloads the caller may start on a
-  // machine, so the UI can hide the others. The server checks again on each
-  // download.
-  rpc GetDiagnosticsPermissions(GetDiagnosticsPermissionsRequest) returns (GetDiagnosticsPermissionsResponse);
+  // GetMyPermissions says which downloads the caller may start (the machine's
+  // three, the cluster's CA rotation credentials, docs/adr/0093), so the UI can
+  // hide the others. The server checks again on each download.
+  rpc GetMyPermissions(GetMyPermissionsRequest) returns (GetMyPermissionsResponse);
   // DownloadSupportBundle streams a zip of one node's (or every node of a
   // cluster's) logs, kernel log, processes, mounts and non-sensitive Talos
   // resources.
@@ -27,14 +27,19 @@ service DiagnosticsService {
   rpc CapturePackets(CapturePacketsRequest) returns (stream CapturePacketsResponse);
 }
 
-message GetDiagnosticsPermissionsRequest {
+message GetMyPermissionsRequest {
+  // machine is optional; without it the three machine flags are false.
   ObjectRef machine = 1;
+  // cluster is optional; without it cluster_credentials is false.
+  ObjectRef cluster = 2;
 }
 
-message GetDiagnosticsPermissionsResponse {
+message GetMyPermissionsResponse {
   bool support_bundle = 1;
   bool etcd_snapshot = 2;
   bool packet_capture = 3;
+  // cluster_credentials is the "download" verb on talosclusters/credentials.
+  bool cluster_credentials = 4;
 }
 
 message DownloadSupportBundleRequest {

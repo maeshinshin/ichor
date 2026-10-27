@@ -316,17 +316,25 @@ var _ = Describe("DiagnosticsService", func() {
 			c, _, closeFn := newDiagnosticsServer(&fakeDownloadClient{}, k8sClient, nil)
 			defer closeFn()
 
-			resp, err := c.GetDiagnosticsPermissions(ctx, asDiagUser(diagAdminUser, &pb.GetDiagnosticsPermissionsRequest{Machine: objectRef(cp.Namespace, cp.Name)}))
+			req := &pb.GetMyPermissionsRequest{Machine: objectRef(cp.Namespace, cp.Name), Cluster: objectRef(cp.Namespace, "any-cluster")}
+
+			resp, err := c.GetMyPermissions(ctx, asDiagUser(diagAdminUser, req))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(resp.Msg.GetSupportBundle()).To(BeTrue())
 			Expect(resp.Msg.GetEtcdSnapshot()).To(BeTrue())
 			Expect(resp.Msg.GetPacketCapture()).To(BeTrue())
 
-			resp, err = c.GetDiagnosticsPermissions(ctx, asDiagUser(diagNobodyUser, &pb.GetDiagnosticsPermissionsRequest{Machine: objectRef(cp.Namespace, cp.Name)}))
+			resp, err = c.GetMyPermissions(ctx, asDiagUser(diagNobodyUser, req))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(resp.Msg.GetSupportBundle()).To(BeFalse())
 			Expect(resp.Msg.GetEtcdSnapshot()).To(BeFalse())
 			Expect(resp.Msg.GetPacketCapture()).To(BeFalse())
+			Expect(resp.Msg.GetClusterCredentials()).To(BeFalse())
+
+			// Without a machine or a cluster there is nothing to ask about.
+			resp, err = c.GetMyPermissions(ctx, asDiagUser(diagAdminUser, &pb.GetMyPermissionsRequest{}))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(resp.Msg.GetSupportBundle() || resp.Msg.GetClusterCredentials()).To(BeFalse())
 		})
 	})
 

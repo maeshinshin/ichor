@@ -30,6 +30,7 @@ import { formatBytes, formatCores, formatUsage } from '@/lib/format'
 import { nodeTabs, nodeTabSearch, parseNodeTab, type NodeTab } from '@/lib/nodeTabs'
 import { setPageTitle, titleKey } from '@/lib/pageTitle'
 import { useCluster } from '@/lib/useCluster'
+import { useMyPermissions } from '@/lib/useMyPermissions'
 import { useT } from '@/lib/useT'
 import { Link } from '@/router'
 
@@ -71,6 +72,7 @@ function NodePage({ namespace, name }: { namespace: string; name: string }) {
   const [machine, setMachine] = useState<Machine | null>(null)
   const [pullRequest, setPullRequest] = useState<{ url: string; run?: BreakGlassRun } | null>(null)
   const [cluster, setCluster] = useState<Cluster | null>(null)
+  const perms = useMyPermissions({ namespace, name })
 
   useEffect(() => {
     let cancelled = false
@@ -175,6 +177,7 @@ function NodePage({ namespace, name }: { namespace: string; name: string }) {
             {machine && (
               <NodeActions
                 machine={{ namespace, name }}
+                perms={perms}
                 controlPlane={machine.role === MachineRole.CONTROL_PLANE}
                 approved={machine.approvalState === MachineApprovalState.APPROVED}
                 deleting={machine.deleting}

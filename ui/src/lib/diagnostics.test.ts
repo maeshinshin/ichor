@@ -9,14 +9,15 @@ import {
   fileNameOf,
   filterProblem,
   parseDuration,
+  toPermissions,
   type Chunk,
 } from './diagnostics.ts'
 
-const all = { supportBundle: true, etcdSnapshot: true, packetCapture: true }
+const all = { supportBundle: true, etcdSnapshot: true, packetCapture: true, clusterCredentials: true }
 
 test('a user with no permissions, or unknown ones, is offered nothing', () => {
   assert.deepEqual(availableActions(undefined, true), [])
-  assert.deepEqual(availableActions({ supportBundle: false, etcdSnapshot: false, packetCapture: false }, true), [])
+  assert.deepEqual(availableActions({ supportBundle: false, etcdSnapshot: false, packetCapture: false, clusterCredentials: false }, true), [])
 })
 
 test('the etcd snapshot is offered on a control plane node only', () => {
@@ -97,4 +98,10 @@ test('a file name falls back to a sensible one', () => {
   assert.equal(fileNameOf(c, 'packet-capture'), 'capture.pcap')
   assert.equal(fileNameOf(c, 'ca-credentials'), 'credentials.zip')
   assert.equal(fileNameOf({ ...c, filename: 'mine.zip' }, 'support-bundle'), 'mine.zip')
+})
+
+test('toPermissions keeps unknown unknown and copies the four flags', () => {
+  assert.equal(toPermissions(undefined), undefined)
+  const all = { supportBundle: true, etcdSnapshot: false, packetCapture: true, clusterCredentials: true }
+  assert.deepEqual(toPermissions({ ...all }), all)
 })

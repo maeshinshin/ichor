@@ -36,7 +36,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { NodeAction, OperationKind, type PlanOperationResponse } from '@/gen/ichor/v1alpha1/operation_pb'
-import { diagnosticsClient, machineClient, nodeClient, operationClient } from '@/lib/connect'
+import { machineClient, nodeClient, operationClient } from '@/lib/connect'
 import { notifyDone } from '@/lib/notify'
 import {
   availableActions as availableNodeActions,
@@ -79,38 +79,27 @@ const wireAction: Record<NodeActionId, NodeAction> = {
 // Actions that cannot apply to the node are not offered, and the whole menu is absent when none is.
 export function NodeActions({
   machine,
+  perms,
   controlPlane,
   approved,
   deleting,
   onStarted,
 }: {
   machine: Ref
+  // What the caller may download, fetched once by the page; undefined offers no download.
+  perms: Permissions | undefined
   controlPlane: boolean
   approved: boolean
   deleting: boolean
   onStarted: () => void
 }) {
   const t = useT()
-  const [perms, setPerms] = useState<Permissions | undefined>()
   // The download waiting for the user's confirmation, with its request when it has parameters.
   const [pending, setPending] = useState<DiagnosticsDownloadRequest | null>(null)
   const [captureOpen, setCaptureOpen] = useState(false)
   const abort = useRef<AbortController | null>(null)
 
-  useEffect(() => {
-    let cancelled = false
-    setPerms(undefined)
-    diagnosticsClient.getDiagnosticsPermissions({ machine }).then(
-      (res) => {
-        if (!cancelled) setPerms({ supportBundle: res.supportBundle, etcdSnapshot: res.etcdSnapshot, packetCapture: res.packetCapture })
-      },
-      () => {},
-    )
-    return () => {
-      cancelled = true
-      abort.current?.abort()
-    }
-  }, [machine.namespace, machine.name])
+  useEffect(() => () => abort.current?.abort(), [])
 
   const [active, setActive] = useState<NodeActionDef | null>(null)
   const actions = availableActions(perms, controlPlane)

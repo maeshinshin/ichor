@@ -19,29 +19,38 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file ichor/v1alpha1/diagnostics.proto.
  */
 export const file_ichor_v1alpha1_diagnostics: GenFile = /*@__PURE__*/
-  fileDesc("CiBpY2hvci92MWFscGhhMS9kaWFnbm9zdGljcy5wcm90bxIOaWNob3IudjFhbHBoYTEiTgogR2V0RGlhZ25vc3RpY3NQZXJtaXNzaW9uc1JlcXVlc3QSKgoHbWFjaGluZRgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZiJqCiFHZXREaWFnbm9zdGljc1Blcm1pc3Npb25zUmVzcG9uc2USFgoOc3VwcG9ydF9idW5kbGUYASABKAgSFQoNZXRjZF9zbmFwc2hvdBgCIAEoCBIWCg5wYWNrZXRfY2FwdHVyZRgDIAEoCCKEAQocRG93bmxvYWRTdXBwb3J0QnVuZGxlUmVxdWVzdBIsCgdtYWNoaW5lGAEgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmSAASLAoHY2x1c3RlchgCIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZkgAQggKBnRhcmdldCJJChtEb3dubG9hZEV0Y2RTbmFwc2hvdFJlcXVlc3QSKgoHbWFjaGluZRgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZiKXAQoVQ2FwdHVyZVBhY2tldHNSZXF1ZXN0EioKB21hY2hpbmUYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYSEQoJaW50ZXJmYWNlGAIgASgJEhIKCmJwZl9maWx0ZXIYAyABKAkSGAoQZHVyYXRpb25fc2Vjb25kcxgEIAEoBRIRCgltYXhfYnl0ZXMYBSABKAMiVQodRG93bmxvYWRTdXBwb3J0QnVuZGxlUmVzcG9uc2USEAoIZmlsZW5hbWUYASABKAkSFAoMY29udGVudF90eXBlGAIgASgJEgwKBGRhdGEYAyABKAwiVAocRG93bmxvYWRFdGNkU25hcHNob3RSZXNwb25zZRIQCghmaWxlbmFtZRgBIAEoCRIUCgxjb250ZW50X3R5cGUYAiABKAkSDAoEZGF0YRgDIAEoDCJOChZDYXB0dXJlUGFja2V0c1Jlc3BvbnNlEhAKCGZpbGVuYW1lGAEgASgJEhQKDGNvbnRlbnRfdHlwZRgCIAEoCRIMCgRkYXRhGAMgASgMMucDChJEaWFnbm9zdGljc1NlcnZpY2USgAEKGUdldERpYWdub3N0aWNzUGVybWlzc2lvbnMSMC5pY2hvci52MWFscGhhMS5HZXREaWFnbm9zdGljc1Blcm1pc3Npb25zUmVxdWVzdBoxLmljaG9yLnYxYWxwaGExLkdldERpYWdub3N0aWNzUGVybWlzc2lvbnNSZXNwb25zZRJ2ChVEb3dubG9hZFN1cHBvcnRCdW5kbGUSLC5pY2hvci52MWFscGhhMS5Eb3dubG9hZFN1cHBvcnRCdW5kbGVSZXF1ZXN0Gi0uaWNob3IudjFhbHBoYTEuRG93bmxvYWRTdXBwb3J0QnVuZGxlUmVzcG9uc2UwARJzChREb3dubG9hZEV0Y2RTbmFwc2hvdBIrLmljaG9yLnYxYWxwaGExLkRvd25sb2FkRXRjZFNuYXBzaG90UmVxdWVzdBosLmljaG9yLnYxYWxwaGExLkRvd25sb2FkRXRjZFNuYXBzaG90UmVzcG9uc2UwARJhCg5DYXB0dXJlUGFja2V0cxIlLmljaG9yLnYxYWxwaGExLkNhcHR1cmVQYWNrZXRzUmVxdWVzdBomLmljaG9yLnYxYWxwaGExLkNhcHR1cmVQYWNrZXRzUmVzcG9uc2UwAULBAQoSY29tLmljaG9yLnYxYWxwaGExQhBEaWFnbm9zdGljc1Byb3RvUAFaQGdpdGh1Yi5jb20vbWFlc2hpbnNoaW4vaWNob3IvZ2VuL2dvL2ljaG9yL3YxYWxwaGExO2ljaG9ydjFhbHBoYTGiAgNJWFiqAg5JY2hvci5WMWFscGhhMcoCDkljaG9yXFYxYWxwaGEx4gIaSWNob3JcVjFhbHBoYTFcR1BCTWV0YWRhdGHqAg9JY2hvcjo6VjFhbHBoYTFiBnByb3RvMw", [file_ichor_v1alpha1_common]);
+  fileDesc("CiBpY2hvci92MWFscGhhMS9kaWFnbm9zdGljcy5wcm90bxIOaWNob3IudjFhbHBoYTEicQoXR2V0TXlQZXJtaXNzaW9uc1JlcXVlc3QSKgoHbWFjaGluZRgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhIqCgdjbHVzdGVyGAIgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmIn4KGEdldE15UGVybWlzc2lvbnNSZXNwb25zZRIWCg5zdXBwb3J0X2J1bmRsZRgBIAEoCBIVCg1ldGNkX3NuYXBzaG90GAIgASgIEhYKDnBhY2tldF9jYXB0dXJlGAMgASgIEhsKE2NsdXN0ZXJfY3JlZGVudGlhbHMYBCABKAgihAEKHERvd25sb2FkU3VwcG9ydEJ1bmRsZVJlcXVlc3QSLAoHbWFjaGluZRgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZkgAEiwKB2NsdXN0ZXIYAiABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWZIAEIICgZ0YXJnZXQiSQobRG93bmxvYWRFdGNkU25hcHNob3RSZXF1ZXN0EioKB21hY2hpbmUYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYilwEKFUNhcHR1cmVQYWNrZXRzUmVxdWVzdBIqCgdtYWNoaW5lGAEgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmEhEKCWludGVyZmFjZRgCIAEoCRISCgpicGZfZmlsdGVyGAMgASgJEhgKEGR1cmF0aW9uX3NlY29uZHMYBCABKAUSEQoJbWF4X2J5dGVzGAUgASgDIlUKHURvd25sb2FkU3VwcG9ydEJ1bmRsZVJlc3BvbnNlEhAKCGZpbGVuYW1lGAEgASgJEhQKDGNvbnRlbnRfdHlwZRgCIAEoCRIMCgRkYXRhGAMgASgMIlQKHERvd25sb2FkRXRjZFNuYXBzaG90UmVzcG9uc2USEAoIZmlsZW5hbWUYASABKAkSFAoMY29udGVudF90eXBlGAIgASgJEgwKBGRhdGEYAyABKAwiTgoWQ2FwdHVyZVBhY2tldHNSZXNwb25zZRIQCghmaWxlbmFtZRgBIAEoCRIUCgxjb250ZW50X3R5cGUYAiABKAkSDAoEZGF0YRgDIAEoDDLLAwoSRGlhZ25vc3RpY3NTZXJ2aWNlEmUKEEdldE15UGVybWlzc2lvbnMSJy5pY2hvci52MWFscGhhMS5HZXRNeVBlcm1pc3Npb25zUmVxdWVzdBooLmljaG9yLnYxYWxwaGExLkdldE15UGVybWlzc2lvbnNSZXNwb25zZRJ2ChVEb3dubG9hZFN1cHBvcnRCdW5kbGUSLC5pY2hvci52MWFscGhhMS5Eb3dubG9hZFN1cHBvcnRCdW5kbGVSZXF1ZXN0Gi0uaWNob3IudjFhbHBoYTEuRG93bmxvYWRTdXBwb3J0QnVuZGxlUmVzcG9uc2UwARJzChREb3dubG9hZEV0Y2RTbmFwc2hvdBIrLmljaG9yLnYxYWxwaGExLkRvd25sb2FkRXRjZFNuYXBzaG90UmVxdWVzdBosLmljaG9yLnYxYWxwaGExLkRvd25sb2FkRXRjZFNuYXBzaG90UmVzcG9uc2UwARJhCg5DYXB0dXJlUGFja2V0cxIlLmljaG9yLnYxYWxwaGExLkNhcHR1cmVQYWNrZXRzUmVxdWVzdBomLmljaG9yLnYxYWxwaGExLkNhcHR1cmVQYWNrZXRzUmVzcG9uc2UwAULBAQoSY29tLmljaG9yLnYxYWxwaGExQhBEaWFnbm9zdGljc1Byb3RvUAFaQGdpdGh1Yi5jb20vbWFlc2hpbnNoaW4vaWNob3IvZ2VuL2dvL2ljaG9yL3YxYWxwaGExO2ljaG9ydjFhbHBoYTGiAgNJWFiqAg5JY2hvci5WMWFscGhhMcoCDkljaG9yXFYxYWxwaGEx4gIaSWNob3JcVjFhbHBoYTFcR1BCTWV0YWRhdGHqAg9JY2hvcjo6VjFhbHBoYTFiBnByb3RvMw", [file_ichor_v1alpha1_common]);
 
 /**
- * @generated from message ichor.v1alpha1.GetDiagnosticsPermissionsRequest
+ * @generated from message ichor.v1alpha1.GetMyPermissionsRequest
  */
-export type GetDiagnosticsPermissionsRequest = Message<"ichor.v1alpha1.GetDiagnosticsPermissionsRequest"> & {
+export type GetMyPermissionsRequest = Message<"ichor.v1alpha1.GetMyPermissionsRequest"> & {
   /**
+   * machine is optional; without it the three machine flags are false.
+   *
    * @generated from field: ichor.v1alpha1.ObjectRef machine = 1;
    */
   machine?: ObjectRef | undefined;
+
+  /**
+   * cluster is optional; without it cluster_credentials is false.
+   *
+   * @generated from field: ichor.v1alpha1.ObjectRef cluster = 2;
+   */
+  cluster?: ObjectRef | undefined;
 };
 
 /**
- * Describes the message ichor.v1alpha1.GetDiagnosticsPermissionsRequest.
- * Use `create(GetDiagnosticsPermissionsRequestSchema)` to create a new message.
+ * Describes the message ichor.v1alpha1.GetMyPermissionsRequest.
+ * Use `create(GetMyPermissionsRequestSchema)` to create a new message.
  */
-export const GetDiagnosticsPermissionsRequestSchema: GenMessage<GetDiagnosticsPermissionsRequest> = /*@__PURE__*/
+export const GetMyPermissionsRequestSchema: GenMessage<GetMyPermissionsRequest> = /*@__PURE__*/
   messageDesc(file_ichor_v1alpha1_diagnostics, 0);
 
 /**
- * @generated from message ichor.v1alpha1.GetDiagnosticsPermissionsResponse
+ * @generated from message ichor.v1alpha1.GetMyPermissionsResponse
  */
-export type GetDiagnosticsPermissionsResponse = Message<"ichor.v1alpha1.GetDiagnosticsPermissionsResponse"> & {
+export type GetMyPermissionsResponse = Message<"ichor.v1alpha1.GetMyPermissionsResponse"> & {
   /**
    * @generated from field: bool support_bundle = 1;
    */
@@ -56,13 +65,20 @@ export type GetDiagnosticsPermissionsResponse = Message<"ichor.v1alpha1.GetDiagn
    * @generated from field: bool packet_capture = 3;
    */
   packetCapture: boolean;
+
+  /**
+   * cluster_credentials is the "download" verb on talosclusters/credentials.
+   *
+   * @generated from field: bool cluster_credentials = 4;
+   */
+  clusterCredentials: boolean;
 };
 
 /**
- * Describes the message ichor.v1alpha1.GetDiagnosticsPermissionsResponse.
- * Use `create(GetDiagnosticsPermissionsResponseSchema)` to create a new message.
+ * Describes the message ichor.v1alpha1.GetMyPermissionsResponse.
+ * Use `create(GetMyPermissionsResponseSchema)` to create a new message.
  */
-export const GetDiagnosticsPermissionsResponseSchema: GenMessage<GetDiagnosticsPermissionsResponse> = /*@__PURE__*/
+export const GetMyPermissionsResponseSchema: GenMessage<GetMyPermissionsResponse> = /*@__PURE__*/
   messageDesc(file_ichor_v1alpha1_diagnostics, 1);
 
 /**
@@ -254,16 +270,16 @@ export const CapturePacketsResponseSchema: GenMessage<CapturePacketsResponse> = 
  */
 export const DiagnosticsService: GenService<{
   /**
-   * GetDiagnosticsPermissions says which downloads the caller may start on a
-   * machine, so the UI can hide the others. The server checks again on each
-   * download.
+   * GetMyPermissions says which downloads the caller may start (the machine's
+   * three, the cluster's CA rotation credentials, docs/adr/0093), so the UI can
+   * hide the others. The server checks again on each download.
    *
-   * @generated from rpc ichor.v1alpha1.DiagnosticsService.GetDiagnosticsPermissions
+   * @generated from rpc ichor.v1alpha1.DiagnosticsService.GetMyPermissions
    */
-  getDiagnosticsPermissions: {
+  getMyPermissions: {
     methodKind: "unary";
-    input: typeof GetDiagnosticsPermissionsRequestSchema;
-    output: typeof GetDiagnosticsPermissionsResponseSchema;
+    input: typeof GetMyPermissionsRequestSchema;
+    output: typeof GetMyPermissionsResponseSchema;
   },
   /**
    * DownloadSupportBundle streams a zip of one node's (or every node of a

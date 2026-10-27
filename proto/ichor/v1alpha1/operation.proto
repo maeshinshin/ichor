@@ -22,10 +22,6 @@ service OperationService {
   rpc CreateOperation(CreateOperationRequest) returns (CreateOperationResponse);
   rpc SetOperationPaused(SetOperationPausedRequest) returns (SetOperationPausedResponse);
   rpc DeleteOperation(DeleteOperationRequest) returns (DeleteOperationResponse);
-  // GetCARotationCredentialsPermission says whether the caller may download a ca-rotation's new
-  // credentials (the RBAC verb "download" on talosclusters/credentials, ADR 0093), so the UI shows
-  // the button only to those who may. DownloadCARotationCredentials asks again.
-  rpc GetCARotationCredentialsPermission(GetCARotationCredentialsPermissionRequest) returns (GetCARotationCredentialsPermissionResponse);
   // DownloadCARotationCredentials streams one zip holding a kubeconfig and a talosconfig that trust
   // the old and the new CAs and are signed by the new ones (ADR 0093). They are cluster-admin
   // private keys: the call is admin-gated and leaves a Warning Event on the TalosCluster.
@@ -342,14 +338,6 @@ message DeleteOperationRequest {
 
 message DeleteOperationResponse {
   AuditRecord audit = 1;
-}
-
-message GetCARotationCredentialsPermissionRequest {
-  ObjectRef operation = 1;
-}
-
-message GetCARotationCredentialsPermissionResponse {
-  bool download = 1;
 }
 
 message DownloadCARotationCredentialsRequest {

@@ -140,9 +140,9 @@ var _ = Describe("ichor-ui generated RBAC", func() {
 			Expect(connect.CodeOf(err)).To(Equal(connect.CodePermissionDenied), string(scope))
 		}
 
-		resp, err := s.GetDiagnosticsPermissions(ctx, connect.NewRequest(&pb.GetDiagnosticsPermissionsRequest{Machine: objectRef(m.Namespace, m.Name)}))
+		resp, err := s.GetMyPermissions(ctx, connect.NewRequest(&pb.GetMyPermissionsRequest{Machine: objectRef(m.Namespace, m.Name), Cluster: objectRef(m.Namespace, cluster.Name)}))
 		Expect(err).NotTo(HaveOccurred())
-		Expect(resp.Msg.GetSupportBundle() || resp.Msg.GetEtcdSnapshot() || resp.Msg.GetPacketCapture()).To(BeFalse())
+		Expect(resp.Msg.GetSupportBundle() || resp.Msg.GetEtcdSnapshot() || resp.Msg.GetPacketCapture() || resp.Msg.GetClusterCredentials()).To(BeFalse())
 
 		Expect(s.emitDownloadEvent(ctx, m, ScopeEtcdSnapshot, "")).To(Succeed())
 	})
@@ -185,7 +185,7 @@ var _ = Describe("ichor-ui generated RBAC", func() {
 			VerifyKubeconfig: func(context.Context, []byte) error { return nil },
 		}
 
-		allowed, err := s.mayDownloadCredentials(ctx, op)
+		allowed, err := s.mayDownload(ctx, op.Namespace, resourceTalosClusters, CredentialsScope, op.Spec.ClusterRef.Name)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(allowed).To(BeFalse())
 

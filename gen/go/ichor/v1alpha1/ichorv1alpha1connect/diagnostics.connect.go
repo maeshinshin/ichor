@@ -39,9 +39,9 @@ const (
 // reflection-formatted method names, remove the leading slash and convert the remaining slash to a
 // period.
 const (
-	// DiagnosticsServiceGetDiagnosticsPermissionsProcedure is the fully-qualified name of the
-	// DiagnosticsService's GetDiagnosticsPermissions RPC.
-	DiagnosticsServiceGetDiagnosticsPermissionsProcedure = "/ichor.v1alpha1.DiagnosticsService/GetDiagnosticsPermissions"
+	// DiagnosticsServiceGetMyPermissionsProcedure is the fully-qualified name of the
+	// DiagnosticsService's GetMyPermissions RPC.
+	DiagnosticsServiceGetMyPermissionsProcedure = "/ichor.v1alpha1.DiagnosticsService/GetMyPermissions"
 	// DiagnosticsServiceDownloadSupportBundleProcedure is the fully-qualified name of the
 	// DiagnosticsService's DownloadSupportBundle RPC.
 	DiagnosticsServiceDownloadSupportBundleProcedure = "/ichor.v1alpha1.DiagnosticsService/DownloadSupportBundle"
@@ -55,10 +55,10 @@ const (
 
 // DiagnosticsServiceClient is a client for the ichor.v1alpha1.DiagnosticsService service.
 type DiagnosticsServiceClient interface {
-	// GetDiagnosticsPermissions says which downloads the caller may start on a
-	// machine, so the UI can hide the others. The server checks again on each
-	// download.
-	GetDiagnosticsPermissions(context.Context, *connect.Request[v1alpha1.GetDiagnosticsPermissionsRequest]) (*connect.Response[v1alpha1.GetDiagnosticsPermissionsResponse], error)
+	// GetMyPermissions says which downloads the caller may start (the machine's
+	// three, the cluster's CA rotation credentials, docs/adr/0093), so the UI can
+	// hide the others. The server checks again on each download.
+	GetMyPermissions(context.Context, *connect.Request[v1alpha1.GetMyPermissionsRequest]) (*connect.Response[v1alpha1.GetMyPermissionsResponse], error)
 	// DownloadSupportBundle streams a zip of one node's (or every node of a
 	// cluster's) logs, kernel log, processes, mounts and non-sensitive Talos
 	// resources.
@@ -82,10 +82,10 @@ func NewDiagnosticsServiceClient(httpClient connect.HTTPClient, baseURL string, 
 	baseURL = strings.TrimRight(baseURL, "/")
 	diagnosticsServiceMethods := v1alpha1.File_ichor_v1alpha1_diagnostics_proto.Services().ByName("DiagnosticsService").Methods()
 	return &diagnosticsServiceClient{
-		getDiagnosticsPermissions: connect.NewClient[v1alpha1.GetDiagnosticsPermissionsRequest, v1alpha1.GetDiagnosticsPermissionsResponse](
+		getMyPermissions: connect.NewClient[v1alpha1.GetMyPermissionsRequest, v1alpha1.GetMyPermissionsResponse](
 			httpClient,
-			baseURL+DiagnosticsServiceGetDiagnosticsPermissionsProcedure,
-			connect.WithSchema(diagnosticsServiceMethods.ByName("GetDiagnosticsPermissions")),
+			baseURL+DiagnosticsServiceGetMyPermissionsProcedure,
+			connect.WithSchema(diagnosticsServiceMethods.ByName("GetMyPermissions")),
 			connect.WithClientOptions(opts...),
 		),
 		downloadSupportBundle: connect.NewClient[v1alpha1.DownloadSupportBundleRequest, v1alpha1.DownloadSupportBundleResponse](
@@ -111,15 +111,15 @@ func NewDiagnosticsServiceClient(httpClient connect.HTTPClient, baseURL string, 
 
 // diagnosticsServiceClient implements DiagnosticsServiceClient.
 type diagnosticsServiceClient struct {
-	getDiagnosticsPermissions *connect.Client[v1alpha1.GetDiagnosticsPermissionsRequest, v1alpha1.GetDiagnosticsPermissionsResponse]
-	downloadSupportBundle     *connect.Client[v1alpha1.DownloadSupportBundleRequest, v1alpha1.DownloadSupportBundleResponse]
-	downloadEtcdSnapshot      *connect.Client[v1alpha1.DownloadEtcdSnapshotRequest, v1alpha1.DownloadEtcdSnapshotResponse]
-	capturePackets            *connect.Client[v1alpha1.CapturePacketsRequest, v1alpha1.CapturePacketsResponse]
+	getMyPermissions      *connect.Client[v1alpha1.GetMyPermissionsRequest, v1alpha1.GetMyPermissionsResponse]
+	downloadSupportBundle *connect.Client[v1alpha1.DownloadSupportBundleRequest, v1alpha1.DownloadSupportBundleResponse]
+	downloadEtcdSnapshot  *connect.Client[v1alpha1.DownloadEtcdSnapshotRequest, v1alpha1.DownloadEtcdSnapshotResponse]
+	capturePackets        *connect.Client[v1alpha1.CapturePacketsRequest, v1alpha1.CapturePacketsResponse]
 }
 
-// GetDiagnosticsPermissions calls ichor.v1alpha1.DiagnosticsService.GetDiagnosticsPermissions.
-func (c *diagnosticsServiceClient) GetDiagnosticsPermissions(ctx context.Context, req *connect.Request[v1alpha1.GetDiagnosticsPermissionsRequest]) (*connect.Response[v1alpha1.GetDiagnosticsPermissionsResponse], error) {
-	return c.getDiagnosticsPermissions.CallUnary(ctx, req)
+// GetMyPermissions calls ichor.v1alpha1.DiagnosticsService.GetMyPermissions.
+func (c *diagnosticsServiceClient) GetMyPermissions(ctx context.Context, req *connect.Request[v1alpha1.GetMyPermissionsRequest]) (*connect.Response[v1alpha1.GetMyPermissionsResponse], error) {
+	return c.getMyPermissions.CallUnary(ctx, req)
 }
 
 // DownloadSupportBundle calls ichor.v1alpha1.DiagnosticsService.DownloadSupportBundle.
@@ -139,10 +139,10 @@ func (c *diagnosticsServiceClient) CapturePackets(ctx context.Context, req *conn
 
 // DiagnosticsServiceHandler is an implementation of the ichor.v1alpha1.DiagnosticsService service.
 type DiagnosticsServiceHandler interface {
-	// GetDiagnosticsPermissions says which downloads the caller may start on a
-	// machine, so the UI can hide the others. The server checks again on each
-	// download.
-	GetDiagnosticsPermissions(context.Context, *connect.Request[v1alpha1.GetDiagnosticsPermissionsRequest]) (*connect.Response[v1alpha1.GetDiagnosticsPermissionsResponse], error)
+	// GetMyPermissions says which downloads the caller may start (the machine's
+	// three, the cluster's CA rotation credentials, docs/adr/0093), so the UI can
+	// hide the others. The server checks again on each download.
+	GetMyPermissions(context.Context, *connect.Request[v1alpha1.GetMyPermissionsRequest]) (*connect.Response[v1alpha1.GetMyPermissionsResponse], error)
 	// DownloadSupportBundle streams a zip of one node's (or every node of a
 	// cluster's) logs, kernel log, processes, mounts and non-sensitive Talos
 	// resources.
@@ -162,10 +162,10 @@ type DiagnosticsServiceHandler interface {
 // and JSON codecs. They also support gzip compression.
 func NewDiagnosticsServiceHandler(svc DiagnosticsServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
 	diagnosticsServiceMethods := v1alpha1.File_ichor_v1alpha1_diagnostics_proto.Services().ByName("DiagnosticsService").Methods()
-	diagnosticsServiceGetDiagnosticsPermissionsHandler := connect.NewUnaryHandler(
-		DiagnosticsServiceGetDiagnosticsPermissionsProcedure,
-		svc.GetDiagnosticsPermissions,
-		connect.WithSchema(diagnosticsServiceMethods.ByName("GetDiagnosticsPermissions")),
+	diagnosticsServiceGetMyPermissionsHandler := connect.NewUnaryHandler(
+		DiagnosticsServiceGetMyPermissionsProcedure,
+		svc.GetMyPermissions,
+		connect.WithSchema(diagnosticsServiceMethods.ByName("GetMyPermissions")),
 		connect.WithHandlerOptions(opts...),
 	)
 	diagnosticsServiceDownloadSupportBundleHandler := connect.NewServerStreamHandler(
@@ -188,8 +188,8 @@ func NewDiagnosticsServiceHandler(svc DiagnosticsServiceHandler, opts ...connect
 	)
 	return "/ichor.v1alpha1.DiagnosticsService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case DiagnosticsServiceGetDiagnosticsPermissionsProcedure:
-			diagnosticsServiceGetDiagnosticsPermissionsHandler.ServeHTTP(w, r)
+		case DiagnosticsServiceGetMyPermissionsProcedure:
+			diagnosticsServiceGetMyPermissionsHandler.ServeHTTP(w, r)
 		case DiagnosticsServiceDownloadSupportBundleProcedure:
 			diagnosticsServiceDownloadSupportBundleHandler.ServeHTTP(w, r)
 		case DiagnosticsServiceDownloadEtcdSnapshotProcedure:
@@ -205,8 +205,8 @@ func NewDiagnosticsServiceHandler(svc DiagnosticsServiceHandler, opts ...connect
 // UnimplementedDiagnosticsServiceHandler returns CodeUnimplemented from all methods.
 type UnimplementedDiagnosticsServiceHandler struct{}
 
-func (UnimplementedDiagnosticsServiceHandler) GetDiagnosticsPermissions(context.Context, *connect.Request[v1alpha1.GetDiagnosticsPermissionsRequest]) (*connect.Response[v1alpha1.GetDiagnosticsPermissionsResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.DiagnosticsService.GetDiagnosticsPermissions is not implemented"))
+func (UnimplementedDiagnosticsServiceHandler) GetMyPermissions(context.Context, *connect.Request[v1alpha1.GetMyPermissionsRequest]) (*connect.Response[v1alpha1.GetMyPermissionsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.DiagnosticsService.GetMyPermissions is not implemented"))
 }
 
 func (UnimplementedDiagnosticsServiceHandler) DownloadSupportBundle(context.Context, *connect.Request[v1alpha1.DownloadSupportBundleRequest], *connect.ServerStream[v1alpha1.DownloadSupportBundleResponse]) error {

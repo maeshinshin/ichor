@@ -31,6 +31,7 @@ import (
 	machineapi "github.com/siderolabs/talos/pkg/machinery/api/machine"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	"golang.org/x/net/bpf"
+	"golang.org/x/sync/errgroup"
 	authv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -46,6 +47,8 @@ import (
 // (docs/adr/0065): checked with a SelfSubjectAccessReview as the caller, so
 // Kubernetes decides and Ichor keeps no list of who may.
 const DownloadVerb = "download"
+
+const resourceTalosMachines = "talosmachines"
 
 // Caps, enforced here whatever the caller asks for.
 const (
@@ -93,46 +96,68 @@ func (s *Server) acquireDownloadSlot() (func(), error) {
 	}
 }
 
-// GetDiagnosticsPermissions reports which downloads the caller may start on a
-// machine. The answer only decides what the UI shows; each download asks again.
-func (s *Server) GetDiagnosticsPermissions(
-	ctx context.Context, req *connect.Request[pb.GetDiagnosticsPermissionsRequest],
-) (*connect.Response[pb.GetDiagnosticsPermissionsResponse], error) {
-	m, _, err := s.getMachineAndCluster(ctx, req.Msg.GetMachine())
-	if err != nil {
-		return nil, err
-	}
+// GetMyPermissions answers every download flag the UI needs in one call, each a
+// SelfSubjectAccessReview as the caller (run concurrently): the three machine
+// downloads when a machine is given, the cluster credentials download when a
+// cluster is given. The answer only decides what the UI shows; each download
+// asks again.
+func (s *Server) GetMyPermissions(
+	ctx context.Context, req *connect.Request[pb.GetMyPermissionsRequest],
+) (*connect.Response[pb.GetMyPermissionsResponse], error) {
+	var (
+		out pb.GetMyPermissionsResponse
+		g   errgroup.Group
+	)
 
-	var out pb.GetDiagnosticsPermissionsResponse
-
-	for scope, dst := range map[DownloadScope]*bool{
-		ScopeSupportBundle: &out.SupportBundle, ScopeEtcdSnapshot: &out.EtcdSnapshot, ScopePacketCapture: &out.PacketCapture,
-	} {
-		allowed, err := s.mayDownload(ctx, m, scope)
-		if err != nil {
-			return nil, err
+	if m := req.Msg.GetMachine(); m != nil {
+		if m.GetNamespace() == "" || m.GetName() == "" {
+			return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("machine needs a namespace and a name"))
 		}
 
-		*dst = allowed
+		for scope, dst := range map[DownloadScope]*bool{
+			ScopeSupportBundle: &out.SupportBundle, ScopeEtcdSnapshot: &out.EtcdSnapshot, ScopePacketCapture: &out.PacketCapture,
+		} {
+			g.Go(func() (err error) {
+				*dst, err = s.mayDownload(ctx, m.GetNamespace(), resourceTalosMachines, string(scope), m.GetName())
+
+				return err
+			})
+		}
+	}
+
+	if c := req.Msg.GetCluster(); c != nil {
+		if c.GetNamespace() == "" || c.GetName() == "" {
+			return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("cluster needs a namespace and a name"))
+		}
+
+		g.Go(func() (err error) {
+			out.ClusterCredentials, err = s.mayDownload(ctx, c.GetNamespace(), resourceTalosClusters, CredentialsScope, c.GetName())
+
+			return err
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		return nil, err
 	}
 
 	return connect.NewResponse(&out), nil
 }
 
 // mayDownload asks Kubernetes whether the caller holds the download verb on
-// scope for m. The caller is the OIDC user the backend impersonates; with OIDC
-// off it is the backend's own ServiceAccount (or, in the CLI's in-process
-// fallback, whoever the kubeconfig is), so a default install, whose ServiceAccount
-// has no such grant, refuses every download.
-func (s *Server) mayDownload(ctx context.Context, m *ichorv1alpha1.TalosMachine, scope DownloadScope) (bool, error) {
+// resource/subresource of the named object. The caller is the OIDC user the
+// backend impersonates; with OIDC off it is the backend's own ServiceAccount (or,
+// in the CLI's in-process fallback, whoever the kubeconfig is), so a default
+// install, whose ServiceAccount has no such grant, refuses every download.
+func (s *Server) mayDownload(ctx context.Context, namespace, resource, subresource, name string) (bool, error) {
 	c, err := s.cl(ctx)
 	if err != nil {
 		return false, connect.NewError(connect.CodeUnavailable, fmt.Errorf("acting as the user: %w", err))
 	}
 
 	review := &authv1.SelfSubjectAccessReview{Spec: authv1.SelfSubjectAccessReviewSpec{ResourceAttributes: &authv1.ResourceAttributes{
-		Namespace: m.Namespace, Verb: DownloadVerb, Group: ichorv1alpha1.GroupVersion.Group,
-		Resource: "talosmachines", Subresource: string(scope), Name: m.Name,
+		Namespace: namespace, Verb: DownloadVerb, Group: ichorv1alpha1.GroupVersion.Group,
+		Resource: resource, Subresource: subresource, Name: name,
 	}}}
 
 	if err := c.Create(ctx, review); err != nil {
@@ -143,7 +168,7 @@ func (s *Server) mayDownload(ctx context.Context, m *ichorv1alpha1.TalosMachine,
 }
 
 func (s *Server) authorizeDownload(ctx context.Context, m *ichorv1alpha1.TalosMachine, scope DownloadScope) error {
-	allowed, err := s.mayDownload(ctx, m, scope)
+	allowed, err := s.mayDownload(ctx, m.Namespace, resourceTalosMachines, string(scope), m.Name)
 	if err != nil {
 		return err
 	}

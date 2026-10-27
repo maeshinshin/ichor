@@ -1389,6 +1389,12 @@ type PlanOperationResponse struct {
 	// opens_pull_request is true when CreateOperation would open a pull request that changes the
 	// spec in Git (an Ichor upgrade whose IchorInstallation Argo CD tracks) and create no operation.
 	OpensPullRequest bool `protobuf:"varint,17,opt,name=opens_pull_request,json=opensPullRequest,proto3" json:"opens_pull_request,omitempty"`
+	// current_schematic and target_schematic are set for a Talos upgrade whose Image Factory schematic
+	// differs between at least one approved machine's running system and spec.schematic. current_schematic is the first
+	// differing running schematic; target_schematic is
+	// spec.schematic.id (the Talos default schematic when unset). Both are empty otherwise.
+	CurrentSchematic string `protobuf:"bytes,18,opt,name=current_schematic,json=currentSchematic,proto3" json:"current_schematic,omitempty"`
+	TargetSchematic  string `protobuf:"bytes,19,opt,name=target_schematic,json=targetSchematic,proto3" json:"target_schematic,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -1540,6 +1546,20 @@ func (x *PlanOperationResponse) GetOpensPullRequest() bool {
 		return x.OpensPullRequest
 	}
 	return false
+}
+
+func (x *PlanOperationResponse) GetCurrentSchematic() string {
+	if x != nil {
+		return x.CurrentSchematic
+	}
+	return ""
+}
+
+func (x *PlanOperationResponse) GetTargetSchematic() string {
+	if x != nil {
+		return x.TargetSchematic
+	}
+	return ""
 }
 
 type CreateOperationRequest struct {
@@ -2272,7 +2292,7 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\x06target\x18\x03 \x01(\tR\x06target\x12'\n" +
 	"\x0fmax_unavailable\x18\x04 \x01(\x05R\x0emaxUnavailable\x125\n" +
 	"\x04node\x18\x05 \x01(\v2!.ichor.v1alpha1.NodeActionRequestR\x04node\x12E\n" +
-	"\fetcd_restore\x18\x06 \x01(\v2\".ichor.v1alpha1.EtcdRestoreRequestR\vetcdRestore\"\xba\x05\n" +
+	"\fetcd_restore\x18\x06 \x01(\v2\".ichor.v1alpha1.EtcdRestoreRequestR\vetcdRestore\"\x92\x06\n" +
 	"\x15PlanOperationResponse\x127\n" +
 	"\x06effect\x18\x01 \x01(\x0e2\x1f.ichor.v1alpha1.OperationEffectR\x06effect\x12:\n" +
 	"\bmachines\x18\x02 \x03(\v2\x1e.ichor.v1alpha1.PlannedMachineR\bmachines\x12\x12\n" +
@@ -2291,7 +2311,9 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\fconfirm_name\x18\x0e \x01(\tR\vconfirmName\x120\n" +
 	"\x14break_glass_required\x18\x0f \x01(\bR\x12breakGlassRequired\x12?\n" +
 	"\rsnapshot_time\x18\x10 \x01(\v2\x1a.google.protobuf.TimestampR\fsnapshotTime\x12,\n" +
-	"\x12opens_pull_request\x18\x11 \x01(\bR\x10opensPullRequest\"\xbf\x02\n" +
+	"\x12opens_pull_request\x18\x11 \x01(\bR\x10opensPullRequest\x12+\n" +
+	"\x11current_schematic\x18\x12 \x01(\tR\x10currentSchematic\x12)\n" +
+	"\x10target_schematic\x18\x13 \x01(\tR\x0ftargetSchematic\"\xbf\x02\n" +
 	"\x16CreateOperationRequest\x123\n" +
 	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x121\n" +
 	"\x04kind\x18\x02 \x01(\x0e2\x1d.ichor.v1alpha1.OperationKindR\x04kind\x12\x16\n" +

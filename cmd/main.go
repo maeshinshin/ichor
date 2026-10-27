@@ -473,7 +473,7 @@ func main() {
 	// An etcd restore rolls the Kubernetes API back past its own operation. When the
 	// controller starts again, with the API up, the operation is recreated from the marker kept
 	// next to the backups.
-	if err := mgr.Add(manager.RunnableFunc(opReconciler.ResumeEtcdRestores)); err != nil {
+	if err := mgr.Add(manager.RunnableFunc(opReconciler.ResumeEtcdRestoresUntilDone)); err != nil {
 		setupLog.Error(err, "Failed to add the etcd restore resumer")
 		os.Exit(1)
 	}

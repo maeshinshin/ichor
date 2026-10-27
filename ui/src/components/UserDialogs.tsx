@@ -1,0 +1,404 @@
+import { useState } from 'preact/hooks'
+import { CheckIcon, CopyIcon } from 'lucide-preact'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { ErrorAlert } from '@/components/ErrorAlert'
+import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import type { User } from '@/gen/ichor/v1alpha1/user_pb'
+import { userClient } from '@/lib/connect'
+import { notifyDone } from '@/lib/notify'
+import { minPasswordLength, passwordOk, roleNames, toggleRole, userError, userNameOk } from '@/lib/users'
+import { useT } from '@/lib/useT'
+
+type ErrorShape = { title: string; detail: string }
+
+function RolePicker({ id, roles, onChange }: { id: string; roles: string[]; onChange: (roles: string[]) => void }) {
+  const t = useT()
+  return (
+    <fieldset class="space-y-2">
+      <legend class="text-sm font-medium">{t('users.roles')}</legend>
+      <div class="flex flex-wrap gap-x-5 gap-y-2">
+        {roleNames.map((r) => (
+          <div key={r} class="flex items-center gap-2">
+            <Checkbox id={`${id}-${r}`} checked={roles.includes(r)} onCheckedChange={(on: boolean | 'indeterminate') => onChange(toggleRole(roles, r, on === true))} />
+            <Label htmlFor={`${id}-${r}`}>{t(`users.role.${r}`)}</Label>
+          </div>
+        ))}
+      </div>
+      {roles.length === 0 && <p class="text-xs text-muted-foreground">{t('users.rolesNone')}</p>}
+    </fieldset>
+  )
+}
+
+// GeneratedPassword shows a password the server made, once, with a copy button.
+function GeneratedPassword({ password }: { password: string }) {
+  const t = useT()
+  const [copied, setCopied] = useState(false)
+  return (
+    <div class="space-y-2">
+      <p class="text-sm">{t('users.generatedOnce')}</p>
+      <div class="flex items-center gap-2">
+        <Input readOnly value={password} class="font-mono" aria-label={t('users.passwordGenerated')} onFocus={(e) => (e.target as HTMLInputElement).select()} />
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => {
+            navigator.clipboard?.writeText(password).then(() => setCopied(true), () => {})
+          }}
+        >
+          {copied ? <CheckIcon /> : <CopyIcon />}
+          {copied ? t('users.copied') : t('users.copy')}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+// Create user: CreateUser, then SetPassword (typed, or empty so the server generates one and
+// returns it once). SetPassword always marks the password must-change, so the dialog says so
+// instead of offering a switch that would do nothing.
+export function CreateUserDialog({ onDone }: { onDone: () => void }) {
+  const t = useT()
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState('')
+  const [displayName, setDisplayName] = useState('')
+  const [email, setEmail] = useState('')
+  const [roles, setRoles] = useState<string[]>(['viewer'])
+  const [typePassword, setTypePassword] = useState(false)
+  const [password, setPassword] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<ErrorShape | null>(null)
+  const [generated, setGenerated] = useState<{ name: string; password: string } | null>(null)
+
+  const nameBad = name !== '' && !userNameOk(name)
+  const ready = userNameOk(name) && (!typePassword || passwordOk(password))
+
+  function reset() {
+    setName('')
+    setDisplayName('')
+    setEmail('')
+    setRoles(['viewer'])
+    setTypePassword(false)
+    setPassword('')
+    setError(null)
+    setGenerated(null)
+  }
+
+  function change(next: boolean) {
+    setOpen(next)
+    if (!next) reset()
+  }
+
+  async function submit() {
+    setBusy(true)
+    setError(null)
+    let created = false
+    try {
+      await userClient.createUser({ name, displayName, email, roles })
+      created = true
+      const res = await userClient.setPassword({ name, password: typePassword ? password : '' })
+      onDone()
+      if (res.generatedPassword) return setGenerated({ name, password: res.generatedPassword })
+      notifyDone(t('users.created', { name }))
+      change(false)
+    } catch (err) {
+      const e = userError(err)
+      if (created) {
+        onDone()
+        setError({ title: e.title, detail: `${t('users.createdNoPassword', { name })} ${e.detail}` })
+      } else {
+        setError(e)
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <>
+      <Button size="sm" onClick={() => setOpen(true)}>
+        {t('users.create')}
+      </Button>
+      <Dialog open={open} onOpenChange={change}>
+        <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-lg overflow-y-auto">
+          {generated ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>{t('users.created', { name: generated.name })}</DialogTitle>
+                <DialogDescription>{t('users.mustChange')}</DialogDescription>
+              </DialogHeader>
+              <GeneratedPassword password={generated.password} />
+              <DialogFooter>
+                <Button onClick={() => change(false)}>{t('common.close')}</Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle>{t('users.createTitle')}</DialogTitle>
+                <DialogDescription>{t('users.createDescription')}</DialogDescription>
+              </DialogHeader>
+              <div class="space-y-4 text-sm">
+                <div class="space-y-1">
+                  <Label htmlFor="user-name">{t('users.name')}</Label>
+                  <Input id="user-name" autoCapitalize="none" spellcheck={false} aria-invalid={nameBad} value={name} onInput={(e) => setName((e.target as HTMLInputElement).value)} />
+                  <p class={`text-xs ${nameBad ? 'text-destructive' : 'text-muted-foreground'}`}>{nameBad ? t('users.nameInvalid') : t('users.nameHint')}</p>
+                </div>
+                <div class="space-y-1">
+                  <Label htmlFor="user-display">{t('users.displayName')}</Label>
+                  <Input id="user-display" value={displayName} onInput={(e) => setDisplayName((e.target as HTMLInputElement).value)} />
+                </div>
+                <div class="space-y-1">
+                  <Label htmlFor="user-email">{t('users.email')}</Label>
+                  <Input id="user-email" type="email" value={email} onInput={(e) => setEmail((e.target as HTMLInputElement).value)} />
+                </div>
+                <RolePicker id="create-role" roles={roles} onChange={setRoles} />
+                <div class="space-y-2">
+                  <p class="font-medium">{t('users.passwordMode')}</p>
+                  <div class="flex items-center gap-2">
+                    <Checkbox id="user-typed" checked={typePassword} onCheckedChange={(on: boolean | 'indeterminate') => setTypePassword(on === true)} />
+                    <Label htmlFor="user-typed">{t('users.passwordType')}</Label>
+                  </div>
+                  {typePassword ? (
+                    <div class="space-y-1">
+                      <Input type="password" autoComplete="new-password" aria-label={t('users.passwordType')} value={password} onInput={(e) => setPassword((e.target as HTMLInputElement).value)} />
+                      <p class="text-xs text-muted-foreground">{t('account.passwordHint', { n: minPasswordLength })}</p>
+                    </div>
+                  ) : (
+                    <p class="text-xs text-muted-foreground">{t('users.passwordGenerate')}</p>
+                  )}
+                  <p class="text-xs text-muted-foreground">{t('users.mustChange')}</p>
+                </div>
+                {error && <ErrorAlert {...error} />}
+              </div>
+              <DialogFooter>
+                <Button variant="ghost" onClick={() => change(false)}>
+                  {t('common.cancel')}
+                </Button>
+                <Button disabled={!ready || busy} onClick={submit}>
+                  {busy ? t('users.creating') : t('users.create')}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
+
+export function EditUserDialog({ user, open, onOpenChange, onDone }: { user: User; open: boolean; onOpenChange: (o: boolean) => void; onDone: () => void }) {
+  const t = useT()
+  const [displayName, setDisplayName] = useState(user.displayName)
+  const [email, setEmail] = useState(user.email)
+  const [roles, setRoles] = useState<string[]>(user.roles)
+  const [disabled, setDisabled] = useState(user.disabled)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<ErrorShape | null>(null)
+
+  async function submit() {
+    setBusy(true)
+    setError(null)
+    try {
+      await userClient.updateUser({ name: user.name, displayName, email, roles, disabled })
+      notifyDone(t('users.updated', { name: user.name }))
+      onOpenChange(false)
+      onDone()
+    } catch (err) {
+      setError(userError(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-lg overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{t('users.editTitle', { name: user.name })}</DialogTitle>
+        </DialogHeader>
+        <div class="space-y-4 text-sm">
+          <div class="space-y-1">
+            <Label htmlFor="edit-display">{t('users.displayName')}</Label>
+            <Input id="edit-display" value={displayName} onInput={(e) => setDisplayName((e.target as HTMLInputElement).value)} />
+          </div>
+          <div class="space-y-1">
+            <Label htmlFor="edit-email">{t('users.email')}</Label>
+            <Input id="edit-email" type="email" value={email} onInput={(e) => setEmail((e.target as HTMLInputElement).value)} />
+          </div>
+          <RolePicker id="edit-role" roles={roles} onChange={setRoles} />
+          <div class="space-y-1">
+            <div class="flex items-center gap-2">
+              <Checkbox id="edit-disabled" checked={disabled} onCheckedChange={(on: boolean | 'indeterminate') => setDisabled(on === true)} />
+              <Label htmlFor="edit-disabled">{t('users.disabled')}</Label>
+            </div>
+            <p class="text-xs text-muted-foreground">{t('users.disabledHint')}</p>
+          </div>
+          {error && <ErrorAlert {...error} />}
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            {t('common.cancel')}
+          </Button>
+          <Button disabled={busy} onClick={submit}>
+            {busy ? t('users.saving') : t('users.save')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+export function SetPasswordDialog({ user, open, onOpenChange }: { user: User; open: boolean; onOpenChange: (o: boolean) => void }) {
+  const t = useT()
+  const [password, setPassword] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<ErrorShape | null>(null)
+  const [generated, setGenerated] = useState('')
+
+  function change(next: boolean) {
+    onOpenChange(next)
+    if (!next) {
+      setPassword('')
+      setGenerated('')
+      setError(null)
+    }
+  }
+
+  async function submit() {
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await userClient.setPassword({ name: user.name, password })
+      if (res.generatedPassword) return setGenerated(res.generatedPassword)
+      notifyDone(t('users.passwordSet', { name: user.name }))
+      change(false)
+    } catch (err) {
+      setError(userError(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={change}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{t('users.setPasswordTitle', { name: user.name })}</DialogTitle>
+          <DialogDescription>{t('users.setPasswordDescription')}</DialogDescription>
+        </DialogHeader>
+        {generated ? (
+          <GeneratedPassword password={generated} />
+        ) : (
+          <div class="space-y-1 text-sm">
+            <Label htmlFor="set-password">{t('users.newPasswordOptional')}</Label>
+            <Input id="set-password" type="password" autoComplete="new-password" value={password} onInput={(e) => setPassword((e.target as HTMLInputElement).value)} />
+            <p class="text-xs text-muted-foreground">{t('account.passwordHint', { n: minPasswordLength })}</p>
+          </div>
+        )}
+        {error && <ErrorAlert {...error} />}
+        <DialogFooter>
+          {generated ? (
+            <Button onClick={() => change(false)}>{t('common.close')}</Button>
+          ) : (
+            <>
+              <Button variant="ghost" onClick={() => change(false)}>
+                {t('common.cancel')}
+              </Button>
+              <Button disabled={busy || (password !== '' && !passwordOk(password))} onClick={submit}>
+                {t('users.setPassword')}
+              </Button>
+            </>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// Revoke sessions and delete go through the alert dialog; the server's refusal (the last enabled
+// admin, a missing permission) is shown inside it.
+export function RevokeUserDialog({ user, open, onOpenChange }: { user: User; open: boolean; onOpenChange: (o: boolean) => void }) {
+  const t = useT()
+  return (
+    <UserConfirm
+      open={open}
+      onOpenChange={onOpenChange}
+      title={t('users.revokeTitle', { name: user.name })}
+      description={t('users.revokeDescription')}
+      label={t('users.revoke')}
+      run={async () => {
+        await userClient.revokeSessions({ name: user.name })
+        notifyDone(t('users.revoked', { name: user.name }))
+      }}
+    />
+  )
+}
+
+export function DeleteUserDialog({ user, open, onOpenChange, onDone }: { user: User; open: boolean; onOpenChange: (o: boolean) => void; onDone: () => void }) {
+  const t = useT()
+  return (
+    <UserConfirm
+      open={open}
+      onOpenChange={onOpenChange}
+      title={t('users.deleteTitle', { name: user.name })}
+      description={t('users.deleteDescription')}
+      label={t('users.delete')}
+      run={async () => {
+        await userClient.deleteUser({ name: user.name })
+        notifyDone(t('users.deleted', { name: user.name }))
+        onDone()
+      }}
+    />
+  )
+}
+
+function UserConfirm({
+  open,
+  onOpenChange,
+  title,
+  description,
+  label,
+  run,
+}: {
+  open: boolean
+  onOpenChange: (o: boolean) => void
+  title: string
+  description: string
+  label: string
+  run: () => Promise<void>
+}) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<ErrorShape | null>(null)
+
+  async function go() {
+    setBusy(true)
+    setError(null)
+    try {
+      await run()
+      onOpenChange(false)
+    } catch (err) {
+      setError(userError(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <ConfirmDialog
+      open={open}
+      onOpenChange={(o) => {
+        onOpenChange(o)
+        if (!o) setError(null)
+      }}
+      title={title}
+      description={description}
+      confirm={{ label, disabled: busy, onClick: go }}
+    >
+      {error && <ErrorAlert {...error} />}
+    </ConfirmDialog>
+  )
+}

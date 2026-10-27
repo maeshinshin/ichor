@@ -32,6 +32,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/clusterlock"
+	"github.com/maeshinshin/ichor/pkg/storage"
 )
 
 // nodeFixture is a cluster whose machines each have a faked Talos API and a Kubernetes Node in a
@@ -217,6 +218,26 @@ var _ = Describe("TalosOperation node actions", func() {
 
 			f.reconcile(op)
 			Expect(f.fake(hostW1).rebootCalls).To(Equal(1))
+		})
+
+		It("ends the storage evacuation when the operation pauses on a failed Reboot call", func() {
+			f := newNodeFixture(map[string]string{hostW1: roleWorker})
+			hook, err := storage.NewEvacuationHook(storage.LonghornV1)
+			Expect(err).NotTo(HaveOccurred())
+
+			evacuator := &fakeStorageEvacuator{target: &evacuationTarget{hook: hook, timeout: time.Minute, namespace: defaultLonghornNamespace}}
+			f.r.Evacuator = evacuator
+			f.fake(hostW1).rebootErr = errors.New("boom")
+			op := f.newOp(hostW1, nodeSpec(ichorv1alpha1.NodeActionReboot))
+
+			got := f.reconcile(op) // begins the evacuation
+			Expect(evacuator.beginCalls).To(Equal(1))
+			Expect(evacuator.endCalls).To(BeZero())
+			Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseInProgress))
+
+			got = f.reconcile(op) // replicas are gone, the reboot call fails
+			Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+			Expect(evacuator.endCalls).To(Equal(1), "a paused operation must not leave the Longhorn node unschedulable")
 		})
 
 		It("is refused while another operation holds the cluster lock", func() {

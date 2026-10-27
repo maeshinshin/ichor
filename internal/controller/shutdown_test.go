@@ -20,11 +20,15 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
+	policyv1 "k8s.io/api/policy/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -63,6 +67,9 @@ type shutdownFixture struct {
 
 func newShutdownFixture() *shutdownFixture {
 	f := &shutdownFixture{fakes: map[string]*fakeTalosClient{}}
+
+	// The unreachable window is tested on its own; elsewhere an unreachable worker counts at once.
+	shutdownUnreachableWindow, shutdownNow = 0, time.Now
 	secret := newTestSecret(newTestBundle("v1.14"))
 	f.cluster = newTestCluster(secret.Name, "v1.14")
 
@@ -162,6 +169,61 @@ var _ = Describe("TalosOperation shutdown", func() {
 		// Nothing is sent twice.
 		f.reconcile(op)
 		Expect(f.log).To(HaveLen(len(f.workers) + len(f.cps)))
+	})
+
+	It("counts a worker as stopped only after it stayed unreachable for the window", func() {
+		f := newShutdownFixture()
+		now := time.Now()
+		shutdownUnreachableWindow, shutdownNow = time.Minute, func() time.Time { return now }
+
+		DeferCleanup(func() { shutdownUnreachableWindow, shutdownNow = 0, time.Now })
+
+		op := f.newOp(ichorv1alpha1.TalosOperationKindShutdown)
+		f.reconcile(op)
+
+		f.halt(f.workers...)
+		Expect(f.reconcile(op).Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseInProgress))
+
+		// A blip: w1 answers again on its old boot, so its clock starts over.
+		now = now.Add(45 * time.Second)
+		f.fakes[f.workers[0].Name].bootIDErr = nil
+		f.reconcile(op)
+		f.halt(f.workers[0])
+
+		now = now.Add(45 * time.Second)
+		got := f.reconcile(op)
+		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseInProgress), "w1 has been away for less than the window")
+		Expect(f.log).To(HaveLen(len(f.workers)), "no control plane is touched yet")
+
+		now = now.Add(2 * time.Minute)
+		Expect(f.reconcile(op).Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseShutDown))
+	})
+
+	It("pauses naming the PodDisruptionBudget when the workers' drain stalls", func() {
+		f := newShutdownFixture()
+		now := time.Now()
+		shutdownNow = func() time.Time { return now }
+
+		DeferCleanup(func() { shutdownNow = time.Now })
+
+		pdb := &policyv1.PodDisruptionBudget{}
+		pdb.Name, pdb.Namespace = "sd-stuck-pdb", testIchorNamespace
+		pdb.Spec.MinAvailable = &intstr.IntOrString{IntVal: 1}
+		pdb.Spec.Selector = &metav1.LabelSelector{MatchLabels: map[string]string{"app": "sd"}}
+		Expect(k8sClient.Create(ctx, pdb)).To(Succeed())
+		DeferCleanup(func() { Expect(k8sClient.Delete(ctx, pdb)).To(Succeed()) })
+
+		pdb.Status.ExpectedPods, pdb.Status.CurrentHealthy, pdb.Status.DesiredHealthy = 1, 1, 1
+		Expect(k8sClient.Status().Update(ctx, pdb)).To(Succeed())
+
+		op := f.newOp(ichorv1alpha1.TalosOperationKindShutdown)
+		Expect(f.reconcile(op).Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseInProgress))
+
+		now = now.Add(shutdownDrainStall + time.Minute)
+		got := f.reconcile(op)
+		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+		Expect(got.Status.FailureReason).To(ContainSubstring(testIchorNamespace + "/sd-stuck-pdb"))
+		Expect(f.log).To(HaveLen(len(f.workers)), "no control plane is touched")
 	})
 
 	It("does not stop a machine that is already unreachable", func() {

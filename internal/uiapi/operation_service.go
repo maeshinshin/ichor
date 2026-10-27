@@ -455,6 +455,23 @@ func (s *Server) planOperation(
 	return p, nil
 }
 
+// configPending reports whether m waits for a config operation: a reboot or an API server restart.
+func configPending(m *ichorv1alpha1.TalosMachine) bool {
+	return len(m.Status.RebootPaths) > 0 || len(m.Status.APIServerRestartPaths) > 0
+}
+
+// notePendingSchematic records the first schematic change a Talos upgrade would make.
+func notePendingSchematic(p *opPlan, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine) {
+	running := m.Status.Schematic
+	if running == "" {
+		running = upgrade.DefaultSchematic // a node that booted no Image Factory asset runs the stock one
+	}
+
+	if want := targetSchematic(cluster); running != want && p.resp.CurrentSchematic == "" {
+		p.resp.CurrentSchematic, p.resp.TargetSchematic = running, want
+	}
+}
+
 // splitOwnMachine takes the machine named name (the one the controller runs on) out of both lists.
 func splitOwnMachine(
 	cps, workers []*ichorv1alpha1.TalosMachine, name string,
@@ -517,7 +534,7 @@ func (s *Server) planMachines(ctx context.Context, p *opPlan, cluster *ichorv1al
 		// A config rollout visits only the machines with a pending change that needs a reboot
 		// (TalosMachine.status.rebootPaths, ADR 0080) or an API server restart
 		// (status.apiServerRestartPaths, ADR 0080 amendment).
-		if p.kind == ichorv1alpha1.TalosOperationKindConfig && len(m.Status.RebootPaths) == 0 && len(m.Status.APIServerRestartPaths) == 0 {
+		if p.kind == ichorv1alpha1.TalosOperationKindConfig && !configPending(m) {
 			continue
 		}
 
@@ -530,14 +547,7 @@ func (s *Server) planMachines(ctx context.Context, p *opPlan, cluster *ichorv1al
 		}
 
 		if p.kind == ichorv1alpha1.TalosOperationKindTalos {
-			running := m.Status.Schematic
-			if running == "" {
-				running = upgrade.DefaultSchematic // a node that booted no Image Factory asset runs the stock one
-			}
-
-			if want := targetSchematic(cluster); running != want && p.resp.CurrentSchematic == "" {
-				p.resp.CurrentSchematic, p.resp.TargetSchematic = running, want
-			}
+			notePendingSchematic(p, cluster, m)
 		}
 
 		if m.Spec.Role == opRoleControlPlane {

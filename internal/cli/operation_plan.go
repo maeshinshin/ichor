@@ -83,6 +83,10 @@ func planText(kind pb.OperationKind, cluster string, p *pb.PlanOperationResponse
 			"mode 0600, never printed) while your current ones still work, checks them, and only then lets the operation go on. " +
 			"To continue, run 'ichor cluster credentials NAME --acknowledge' with your current kubeconfig, or, if you may " +
 			"(the 'download' verb on talosclusters/credentials), use the operation page of the UI: it downloads the same files and continues the rotation.\n")
+		b.WriteString("Pods change from the old CA to the new one at the second pass (Issuing): the API server's certificate changes at once, " +
+			"but a pod's copy of the CA (kube-root-ca.crt) is refreshed by the kubelet within about a minute, so for that time in-cluster clients " +
+			"cannot verify the API server. Ichor waits until every namespace has the new CA and then two minutes before the old CAs are dropped, " +
+			"but in-cluster clients that load the CA once may restart.\n")
 	case pb.OperationEffect_OPERATION_EFFECT_UNSPECIFIED:
 	}
 

@@ -4,7 +4,7 @@ import { ErrorAlert } from '@/components/ErrorAlert'
 import { MustChangePassword } from '@/components/ChangePassword'
 import type { WhoAmIResponse } from '@/gen/ichor/v1alpha1/user_pb'
 import { userClient } from '@/lib/connect'
-import { finishLogin, providersOf, startLogin, storedToken, tokenUsable, type AuthConfig, type AuthProvider } from '@/lib/oidc'
+import { finishLogin, startLogin, storedToken, tokenUsable, type AuthConfig, type AuthProvider } from '@/lib/oidc'
 import { useT } from '@/lib/useT'
 import { AddNode } from '@/pages/AddNode'
 import { ClusterDetail } from '@/pages/ClusterDetail'
@@ -37,7 +37,7 @@ function useLogin(): { state: LoginState; error: string; providers: AuthProvider
   useEffect(() => {
     ;(async () => {
       const cfg = (await (await fetch('/auth/config')).json()) as AuthConfig
-      const list = providersOf(cfg)
+      const list = cfg.providers ?? []
       setProviders(list)
       if (list.length === 0) return setState('open')
       if (await finishLogin(list)) return setState('ready')

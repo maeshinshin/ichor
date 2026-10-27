@@ -15,6 +15,12 @@ export function usePath(): string {
   return path
 }
 
+// replace swaps the current history entry (a redirect from an old URL), so Back does not loop.
+export function replace(to: string) {
+  window.history.replaceState({}, '', to)
+  window.dispatchEvent(new PopStateEvent('popstate'))
+}
+
 export function navigate(to: string) {
   if (to !== window.location.pathname) {
     window.history.pushState({}, '', to)

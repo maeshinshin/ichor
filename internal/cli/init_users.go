@@ -22,8 +22,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -51,12 +53,18 @@ const (
 	// initUsersMinContract is the first Talos contract with KubeAuthenticationConfig.
 	initUsersMinContract = "v1.14"
 	defaultAdminUser     = "admin"
-	uiDeploymentName     = "ichor-ui"
-	uiServiceName        = "ichor-ui-service"
-	uiInternalPort       = 8444
-	uiInternalPortName   = "internal"
-	schemeHTTPS          = "https"
-	appNameIchor         = "ichor"
+	// Container names are the same on every install path; object names are not (kustomize
+	// prefixes them), so objects are found by label.
+	uiContainer          = "ichor-ui"
+	controllerContainer  = "manager"
+	controllerLabel      = "control-plane"
+	controllerLabelValue = "controller-manager"
+	// defaultRefreshLifetime is the chart's ichorUI.users.refreshLifetime default.
+	defaultRefreshLifetime = "12h"
+	uiInternalPort         = 8444
+	uiInternalPortName     = "internal"
+	schemeHTTPS            = "https"
+	appNameIchor           = "ichor"
 )
 
 // validateInitUsers runs before anything irreversible, so a bad URL or an old
@@ -108,25 +116,59 @@ func ensureCredentialsSecret(ctx context.Context, k client.Client, ns string) er
 	return nil
 }
 
-// enableUIUsers is the in-place equivalent of the chart's ichorUI.users.enabled
-// for the ichor-ui Deployment and Service.
-func enableUIUsers(ctx context.Context, k client.Client, ns, externalURL string) error {
-	var dep appsv1.Deployment
-	if err := k.Get(ctx, types.NamespacedName{Namespace: ns, Name: uiDeploymentName}, &dep); err != nil {
-		return fmt.Errorf("init: reading the ichor-ui Deployment: %w", err)
+// uiTargets are the three objects turning users on edits, already modified in
+// memory. They are found by label and built before anything is written, so a
+// missing or odd object fails init before the admin user exists.
+type uiTargets struct {
+	ui, controller *appsv1.Deployment
+	svc            *corev1.Service
+}
+
+// findDeploymentByLabel returns the first Deployment in ns with label key=value.
+func findDeploymentByLabel(ctx context.Context, k client.Client, ns, key, value string) (*appsv1.Deployment, error) {
+	var list appsv1.DeploymentList
+	if err := k.List(ctx, &list, client.InNamespace(ns), client.MatchingLabels{key: value}); err != nil {
+		return nil, fmt.Errorf("init: listing Deployments labelled %s=%s in %s: %w", key, value, ns, err)
 	}
 
-	if err := usersOnDeployment(&dep, externalURL); err != nil {
-		return err
+	if len(list.Items) == 0 {
+		return nil, fmt.Errorf("init: no Deployment labelled %s=%s in namespace %s", key, value, ns)
 	}
 
-	if err := k.Update(ctx, &dep); err != nil {
-		return fmt.Errorf("init: updating the ichor-ui Deployment: %w", err)
+	return &list.Items[0], nil
+}
+
+// prepareUITargets finds and edits (in memory) the ichor-ui Deployment and
+// Service and the controller Deployment: the in-place equivalent of the
+// chart's ichorUI.users.enabled.
+func prepareUITargets(ctx context.Context, k client.Client, ns, externalURL string) (*uiTargets, error) {
+	ui, err := findDeploymentByLabel(ctx, k, ns, uiComponentLabel, uiComponentValue)
+	if err != nil {
+		return nil, err
 	}
 
-	var svc corev1.Service
-	if err := k.Get(ctx, types.NamespacedName{Namespace: ns, Name: uiServiceName}, &svc); err != nil {
-		return fmt.Errorf("init: reading the ichor-ui Service: %w", err)
+	mgr, err := findDeploymentByLabel(ctx, k, ns, controllerLabel, controllerLabelValue)
+	if err != nil {
+		return nil, err
+	}
+
+	svc, err := findUIService(ctx, k, ns)
+	if err != nil {
+		return nil, fmt.Errorf("init: %w", err)
+	}
+
+	// ichor-ui cannot list Services, and the kubelet's *_SERVICE_HOST variable carries the
+	// (prefixed) Service name, so init hands it the ClusterIP; a ClusterIP never changes.
+	if net.ParseIP(svc.Spec.ClusterIP) == nil {
+		return nil, fmt.Errorf("init: the ichor-ui Service %s has no ClusterIP", svc.Name)
+	}
+
+	if err := usersOnDeployment(ui, externalURL, svc.Spec.ClusterIP); err != nil {
+		return nil, err
+	}
+
+	if err := issuerOnController(mgr); err != nil {
+		return nil, err
 	}
 
 	if !slices.ContainsFunc(svc.Spec.Ports, func(p corev1.ServicePort) bool { return p.Name == uiInternalPortName }) {
@@ -135,26 +177,53 @@ func enableUIUsers(ctx context.Context, k client.Client, ns, externalURL string)
 		})
 	}
 
-	if err := k.Update(ctx, &svc); err != nil {
-		return fmt.Errorf("init: updating the ichor-ui Service: %w", err)
+	return &uiTargets{ui: ui, controller: mgr, svc: svc}, nil
+}
+
+// issuerOnController adds the flags that make the controller keep the signing
+// keys, internal TLS and trust ConfigMap (the chart renders the same two).
+func issuerOnController(dep *appsv1.Deployment) error {
+	i := slices.IndexFunc(dep.Spec.Template.Spec.Containers, func(c corev1.Container) bool { return c.Name == controllerContainer })
+	if i < 0 {
+		return fmt.Errorf("init: the controller Deployment %s has no container %q", dep.Name, controllerContainer)
+	}
+
+	c := &dep.Spec.Template.Spec.Containers[i]
+	c.Args = slices.DeleteFunc(c.Args, func(a string) bool {
+		return a == "--user-issuer" || a == "--user-issuer=true" || strings.HasPrefix(a, "--oidc-refresh-lifetime=")
+	})
+	c.Args = append(c.Args, "--user-issuer", "--oidc-refresh-lifetime="+defaultRefreshLifetime)
+
+	return nil
+}
+
+func (t *uiTargets) apply(ctx context.Context, k client.Client) error {
+	for _, o := range []struct {
+		what string
+		obj  client.Object
+	}{{"ichor-ui Deployment", t.ui}, {"ichor-ui Service", t.svc}, {"controller Deployment", t.controller}} {
+		if err := k.Update(ctx, o.obj); err != nil {
+			return fmt.Errorf("init: updating the %s: %w", o.what, err)
+		}
 	}
 
 	return nil
 }
 
-func usersOnDeployment(dep *appsv1.Deployment, externalURL string) error {
-	i := slices.IndexFunc(dep.Spec.Template.Spec.Containers, func(c corev1.Container) bool { return c.Name == uiDeploymentName })
+func usersOnDeployment(dep *appsv1.Deployment, externalURL, clusterIP string) error {
+	i := slices.IndexFunc(dep.Spec.Template.Spec.Containers, func(c corev1.Container) bool { return c.Name == uiContainer })
 	if i < 0 {
-		return fmt.Errorf("init: the ichor-ui Deployment has no container %q", uiDeploymentName)
+		return fmt.Errorf("init: the ichor-ui Deployment %s has no container %q", dep.Name, uiContainer)
 	}
 
 	c := &dep.Spec.Template.Spec.Containers[i]
 
 	// Drop any earlier setting of the same flags so a re-run replaces the URL.
 	c.Args = slices.DeleteFunc(c.Args, func(a string) bool {
-		return a == "--users-enabled=true" || strings.HasPrefix(a, "--external-url=")
+		return a == "--users-enabled=true" || strings.HasPrefix(a, "--external-url=") || strings.HasPrefix(a, "--internal-jwks-uri=")
 	})
-	c.Args = append(c.Args, "--users-enabled=true", "--external-url="+externalURL)
+	c.Args = append(c.Args, "--users-enabled=true", "--external-url="+externalURL,
+		"--internal-jwks-uri=https://"+net.JoinHostPort(clusterIP, strconv.Itoa(uiInternalPort))+"/oidc/jwks")
 
 	if !slices.ContainsFunc(c.Ports, func(p corev1.ContainerPort) bool { return p.Name == uiInternalPortName }) {
 		c.Ports = append(c.Ports, corev1.ContainerPort{Name: uiInternalPortName, ContainerPort: uiInternalPort, Protocol: corev1.ProtocolTCP})
@@ -216,6 +285,12 @@ func initUsers(ctx context.Context, opts initOptions, k client.Client, errw io.W
 		return "", nil
 	}
 
+	// Everything that can fail on the cluster's shape is checked before the first write.
+	targets, err := prepareUITargets(ctx, k, ichorControllerNamespace, opts.UIURL)
+	if err != nil {
+		return "", err
+	}
+
 	if err := ensureCredentialsSecret(ctx, k, ichorControllerNamespace); err != nil {
 		return "", err
 	}
@@ -230,7 +305,7 @@ func initUsers(ctx context.Context, opts initOptions, k client.Client, errw io.W
 		return "", fmt.Errorf("init: creating the first admin: %w", err)
 	}
 
-	if err := enableUIUsers(ctx, k, ichorControllerNamespace, opts.UIURL); err != nil {
+	if err := targets.apply(ctx, k); err != nil {
 		return password, err
 	}
 
@@ -248,7 +323,7 @@ func initUsersEpilogue(errw io.Writer, opts initOptions, password string) {
 
 	_, _ = fmt.Fprintf(errw, "init: Helm/GitOps equivalent: ichorUI.users.enabled=true, ichorUI.users.externalURL=%s\n", opts.UIURL)
 	_, _ = fmt.Fprintf(errw, "init: make ichor-ui reachable at %s over https (an Ingress, Gateway or LoadBalancer in front of "+
-		"service %s, or ichorUI.tls.secretName); Ichor installs none\n", opts.UIURL, uiServiceName)
+		"the ichor-ui Service (label %s=%s), or ichorUI.tls.secretName); Ichor installs none\n", opts.UIURL, uiComponentLabel, uiComponentValue)
 	_, _ = fmt.Fprintln(errw, "init: spec.authentication.ichor is set; the controller renders the kube-apiserver authentication "+
 		"config next, which restarts kube-apiserver on each control plane. If a change waits for a reboot, run `ichor config apply`")
 

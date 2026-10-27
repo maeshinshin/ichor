@@ -40,17 +40,34 @@ import (
 
 const testUIURL = "https://ichor.example.com"
 
+const (
+	testPrefixedUIDeployment = "ichor-ichor-ui"
+	testControllerDeployment = "ichor-controller-manager"
+	testUIClusterIP          = "10.96.0.42"
+)
+
+// uiObjects is what the embedded kustomize manifest installs: every name carries
+// the namePrefix, so only the labels identify the objects.
 func uiObjects() []client.Object {
 	return []client.Object{
 		&appsv1.Deployment{
-			Namespace: ichorControllerNamespace, Name: uiDeploymentName,
+			Namespace: ichorControllerNamespace, Name: testPrefixedUIDeployment,
+			Labels: map[string]string{uiComponentLabel: uiComponentValue},
 			Spec: appsv1.DeploymentSpec{Template: corev1.PodTemplateSpec{Spec: corev1.PodSpec{
-				Containers: []corev1.Container{{Name: uiDeploymentName, Args: []string{"--addr=:8080"}}},
+				Containers: []corev1.Container{{Name: uiContainer, Args: []string{"--addr=:8080"}}},
+			}}},
+		},
+		&appsv1.Deployment{
+			Namespace: ichorControllerNamespace, Name: testControllerDeployment,
+			Labels: map[string]string{controllerLabel: controllerLabelValue},
+			Spec: appsv1.DeploymentSpec{Template: corev1.PodTemplateSpec{Spec: corev1.PodSpec{
+				Containers: []corev1.Container{{Name: controllerContainer, Args: []string{"--leader-elect"}}},
 			}}},
 		},
 		&corev1.Service{
-			Namespace: ichorControllerNamespace, Name: uiServiceName,
-			Spec: corev1.ServiceSpec{Ports: []corev1.ServicePort{{Name: "http", Port: 8080}}},
+			Namespace: ichorControllerNamespace, Name: testUIServiceName,
+			Labels: map[string]string{uiComponentLabel: uiComponentValue},
+			Spec:   corev1.ServiceSpec{ClusterIP: testUIClusterIP, Ports: []corev1.ServicePort{{Name: "http", Port: 8080}}},
 		},
 	}
 }
@@ -128,7 +145,7 @@ func TestRunInit_UIURLTurnsUsersOnAndCreatesTheFirstAdmin(t *testing.T) {
 	}
 
 	var dep appsv1.Deployment
-	if err := k.Get(ctx, types.NamespacedName{Namespace: ichorControllerNamespace, Name: uiDeploymentName}, &dep); err != nil {
+	if err := k.Get(ctx, types.NamespacedName{Namespace: ichorControllerNamespace, Name: testPrefixedUIDeployment}, &dep); err != nil {
 		t.Fatal(err)
 	}
 
@@ -137,12 +154,14 @@ func TestRunInit_UIURLTurnsUsersOnAndCreatesTheFirstAdmin(t *testing.T) {
 		t.Errorf("ichor-ui args = %v", args)
 	}
 
+	assertControllerIssuerFlags(t, k, args)
+
 	if len(dep.Spec.Template.Spec.Volumes) != 2 || len(dep.Spec.Template.Spec.Containers[0].VolumeMounts) != 2 {
 		t.Errorf("signing and tls volumes missing: %+v", dep.Spec.Template.Spec)
 	}
 
 	var svc corev1.Service
-	if err := k.Get(ctx, types.NamespacedName{Namespace: ichorControllerNamespace, Name: uiServiceName}, &svc); err != nil || len(svc.Spec.Ports) != 2 {
+	if err := k.Get(ctx, types.NamespacedName{Namespace: ichorControllerNamespace, Name: testUIServiceName}, &svc); err != nil || len(svc.Spec.Ports) != 2 {
 		t.Errorf("service: %v %+v", err, svc.Spec.Ports)
 	}
 
@@ -203,32 +222,84 @@ func TestRunInit_UsersFlagsAreCheckedBeforeAnythingHappens(t *testing.T) {
 	}
 }
 
-func TestRunInit_PasswordIsStillPrintedWhenALaterStepFails(t *testing.T) {
-	withTempHome(t)
+// TestRunInit_MissingUIObjectsLeaveNothingHalfDone: whichever object init needs is
+// absent (or unlabelled), it fails before creating the Secret or the admin user.
+func TestRunInit_MissingUIObjectsLeaveNothingHalfDone(t *testing.T) {
+	for name, drop := range map[string]func(client.Object) bool{
+		"no ichor-ui Deployment": func(o client.Object) bool { return o.GetName() == testPrefixedUIDeployment },
+		"no controller":          func(o client.Object) bool { return o.GetName() == testControllerDeployment },
+		"no ichor-ui Service":    func(o client.Object) bool { return o.GetName() == testUIServiceName },
+	} {
+		t.Run(name, func(t *testing.T) {
+			withTempHome(t)
 
-	// No ichor-ui Deployment in the fixture: enabling users fails after the admin exists.
-	k := fake.NewClientBuilder().WithScheme(newTestScheme(t)).Build()
-	deps, _, _ := newFakeInitDeps(t, k)
+			var objs []client.Object
 
-	var stdout, stderr bytes.Buffer
+			for _, o := range uiObjects() {
+				if !drop(o) {
+					objs = append(objs, o)
+				}
+			}
 
-	deps.Stdout, deps.Stderr = &stdout, &stderr
+			k := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(objs...).Build()
+			deps, _, _ := newFakeInitDeps(t, k)
 
-	opts := validInitOptions()
-	opts.UIURL = testUIURL
+			var stdout, stderr bytes.Buffer
 
-	err := runInit(context.Background(), opts, deps)
-	if err == nil {
-		t.Fatal("expected the missing Deployment to fail")
+			deps.Stdout, deps.Stderr = &stdout, &stderr
+
+			opts := validInitOptions()
+			opts.UIURL = testUIURL
+
+			if err := runInit(context.Background(), opts, deps); err == nil {
+				t.Fatal("expected an error")
+			}
+
+			ctx := context.Background()
+
+			var users ichorv1alpha1.IchorUserList
+			if err := k.List(ctx, &users); err != nil || len(users.Items) != 0 {
+				t.Errorf("an admin user was created: %v %v", err, users.Items)
+			}
+
+			var sec corev1.Secret
+			if err := k.Get(ctx, types.NamespacedName{Namespace: ichorControllerNamespace, Name: ichorauth.CredentialsSecretName}, &sec); !apierrors.IsNotFound(err) {
+				t.Errorf("the credentials Secret was created: %v", err)
+			}
+
+			if strings.Contains(stderr.String(), "must change it at the first sign-in") {
+				t.Error("a password was printed although nothing was created")
+			}
+		})
+	}
+}
+
+func TestPrepareUITargets_FindsByLabelNotName(t *testing.T) {
+	k := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(uiObjects()...).Build()
+
+	tg, err := prepareUITargets(context.Background(), k, ichorControllerNamespace, testUIURL)
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	pw := generatedAdminPassword(t, stderr.String())
-	if strings.Contains(err.Error(), pw) || strings.Contains(stdout.String(), pw) {
-		t.Error("the password leaked into the error or stdout")
+	if tg.ui.Name != testPrefixedUIDeployment || tg.controller.Name != testControllerDeployment || tg.svc.Name != testUIServiceName {
+		t.Errorf("found %s, %s, %s", tg.ui.Name, tg.controller.Name, tg.svc.Name)
+	}
+}
+
+func assertControllerIssuerFlags(t *testing.T, k client.Client, uiArgs []string) {
+	t.Helper()
+
+	if !slices.Contains(uiArgs, "--internal-jwks-uri=https://"+testUIClusterIP+":8444/oidc/jwks") {
+		t.Errorf("ichor-ui args lack the internal jwks uri: %v", uiArgs)
 	}
 
-	var u ichorv1alpha1.IchorUser
-	if gerr := k.Get(context.Background(), types.NamespacedName{Namespace: ichorControllerNamespace, Name: defaultAdminUser}, &u); apierrors.IsNotFound(gerr) {
-		t.Error("the default admin user name should be admin")
+	var mgr appsv1.Deployment
+	if err := k.Get(context.Background(), types.NamespacedName{Namespace: ichorControllerNamespace, Name: testControllerDeployment}, &mgr); err != nil {
+		t.Fatal(err)
+	}
+
+	if margs := mgr.Spec.Template.Spec.Containers[0].Args; !slices.Contains(margs, "--user-issuer") || !slices.Contains(margs, "--oidc-refresh-lifetime=12h") || !slices.Contains(margs, "--leader-elect") {
+		t.Errorf("controller args = %v", margs)
 	}
 }

@@ -102,8 +102,8 @@ message Operation {
   NodeAction node_action = 12;
   ObjectRef node_machine = 13;
   string node_message = 14;
-  // kubernetes_stage is status.kubernetes.stage of a kubernetes operation (ControlPlanes,
-  // KubeProxy, Kubelets); empty before the first stage is recorded, and for every other kind.
+  // kubernetes_stage is status.kubernetes.stage of a kubernetes operation (APIServers,
+  // ControlPlaneComponents, KubeProxy, Kubelets; ControlPlanes on operations started before the split); empty before the first stage is recorded, and for every other kind.
   string kubernetes_stage = 15;
 }
 

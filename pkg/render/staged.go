@@ -28,13 +28,16 @@ import (
 )
 
 // StagedKubernetes is the system-layer input of a Kubernetes upgrade in progress. The
-// control-plane components always follow spec.kubernetesVersion; this pins the kubelet and
-// kube-proxy below it, to the version a node still runs, while the control planes are being
-// upgraded first (Kubernetes' version-skew policy: a kubelet may not be newer than the API
-// server). An empty field follows the spec. Only the Kubernetes upgrade executor sets it.
+// apiserver always follows spec.kubernetesVersion; this pins the controller-manager, scheduler,
+// kubelet and kube-proxy below it, to the version a node still runs, while the apiservers and then
+// the other control-plane components are upgraded first (Kubernetes' version-skew policy: nothing
+// may be newer than the API server). An empty field follows the spec. Only the Kubernetes upgrade
+// executor sets it.
 type StagedKubernetes struct {
-	KubeletVersion   string
-	KubeProxyVersion string
+	ControllerManagerVersion string
+	SchedulerVersion         string
+	KubeletVersion           string
+	KubeProxyVersion         string
 }
 
 func (s *SystemInputs) staged() *StagedKubernetes {
@@ -45,8 +48,9 @@ func (s *SystemInputs) staged() *StagedKubernetes {
 	return s.Staged
 }
 
-// injectStagedVersions pins the kubelet and kube-proxy images. It runs below the patch layers, so
-// a patch that sets an image explicitly still wins. kube-proxy has no document on a worker.
+// injectStagedVersions pins the controller-manager, scheduler, kubelet and kube-proxy images. It
+// runs below the patch layers, so a patch that sets an image explicitly still wins. The three
+// control-plane components have no document on a worker.
 func injectStagedVersions(
 	cfg coreconfig.Provider, contract *coreconfig.VersionContract, staged *StagedKubernetes,
 ) (coreconfig.Provider, error) {
@@ -69,6 +73,19 @@ func injectStagedVersions(
 		patches = append(patches, p)
 
 		return nil
+	}
+
+	if v := staged.ControllerManagerVersion; v != "" && cfg.Machine().Type() != machine.TypeWorker {
+		img := image(constants.KubernetesControllerManagerImage, v)
+		if err := add(stdpatches.WithKubeControllerManagerImage(contract, img)); err != nil {
+			return nil, fmt.Errorf("render: pinning the controller-manager image: %w", err)
+		}
+	}
+
+	if v := staged.SchedulerVersion; v != "" && cfg.Machine().Type() != machine.TypeWorker {
+		if err := add(stdpatches.WithKubeSchedulerImage(contract, image(constants.KubernetesSchedulerImage, v))); err != nil {
+			return nil, fmt.Errorf("render: pinning the scheduler image: %w", err)
+		}
 	}
 
 	if v := staged.KubeletVersion; v != "" {

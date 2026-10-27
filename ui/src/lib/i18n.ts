@@ -767,10 +767,30 @@ export const en = {
     'When the rotation completes, the secrets bundle in the cluster is replaced and the copy on your machine is out of date. Run "ichor cluster bundle-export {name}" and keep the file safe. Nodes held with upgrade-hold are not skipped.',
   'ops.plan.credentialsTitle': 'Your credentials stop working during the rotation',
   'ops.plan.credentials':
-    'Your kubeconfig and talosconfig stop working from the second pass (Issuing) on: the nodes start serving certificates from the new CA, and a file that trusts only the old CA can no longer verify them. After every node accepts the new CAs, the operation waits, changing nothing, until you have new credentials. Credentials are not offered for download here, because they would carry the cluster-admin private key through the browser; use the CLI with your current kubeconfig: "ichor cluster credentials {name} --acknowledge" writes a kubeconfig and a talosconfig that work with both CAs, checks them, and lets the operation go on. "ichor cluster rotate-ca {name}" does this itself when you start the rotation from the terminal.',
+    'Your kubeconfig and talosconfig stop working from the second pass (Issuing) on: the nodes start serving certificates from the new CA, and a file that trusts only the old CA can no longer verify them. After every node accepts the new CAs, the operation waits, changing nothing, until you have new credentials. There are two ways to get them. In this page, an administrator who is allowed to ("download" on talosclusters/credentials) downloads a zip with a new kubeconfig and talosconfig that work with both CAs, saves it, and then chooses "Continue rotation" after the page has checked that the new kubeconfig works. Or in a terminal, with your current kubeconfig: "ichor cluster credentials {name} --acknowledge" writes the same two files, checks them, and lets the operation go on; "ichor cluster rotate-ca {name}" does all of this itself when you start the rotation from the terminal.',
   'ops.awaitingCredentialsTitle': 'Waiting for your credentials',
   'ops.awaitingCredentials':
-    'Every node accepts the new CAs and the old ones still work. Nothing else happens until you run "ichor cluster credentials {name} --acknowledge" with your current kubeconfig.',
+    'Every node accepts the new CAs and the old ones still work. Nothing else happens until you continue. Download the new credentials here (if you are allowed to) and save them, then choose "Continue rotation"; or run "ichor cluster credentials {name} --acknowledge" with your current kubeconfig. The downloaded files work with both CAs. Your current kubeconfig and talosconfig stop working once the rotation continues.',
+  'creds.download': 'Download new credentials',
+  'creds.downloadTitle': 'Download the new credentials?',
+  'creds.downloadDescription':
+    'The zip holds a kubeconfig and a talosconfig with cluster-admin private keys. Store it like a password. The download is recorded as a Warning Event on the cluster, with your name.',
+  'creds.downloadConfirm': 'Download',
+  'creds.downloaded': 'Saved {file}',
+  'creds.downloadFailed': 'The credentials download failed',
+  'creds.continue': 'Continue rotation',
+  'creds.continueTitle': 'Continue the rotation?',
+  'creds.continueDescription':
+    'Ichor checks that a new kubeconfig authenticates to the cluster, then lets the rotation go on. From the next pass (Issuing) your current kubeconfig and talosconfig stop working. The downloaded files work with both CAs and keep working after the old CA is dropped.',
+  'creds.continueNoDownload':
+    'If you have not downloaded the new credentials, you can still download them while the rotation runs, but only if you are allowed to. Otherwise run "ichor cluster credentials" with a kubeconfig that still works.',
+  'creds.continueConfirm': 'Continue rotation',
+  'creds.continuing': 'Checking and continuing…',
+  'creds.continued': 'The rotation is going on',
+  'creds.acknowledged': 'Acknowledged. The rotation goes on in the next pass of the controller.',
+  'creds.issuedTitle': 'New credentials',
+  'creds.issued':
+    'The rotation is under way. Your old kubeconfig and talosconfig stop working once the nodes issue from the new CA. The new credentials work with both CAs and after the old one is dropped.',
   'ops.plan.counts': '{total} node(s): {controlPlanes} control plane, {workers} worker.',
   'ops.plan.orderRollout': 'Control planes one at a time, then workers (at most {n} at once):',
   'ops.plan.orderShutdown': 'Workers first, stopped together; then the control planes at once:',

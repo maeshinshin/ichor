@@ -8,9 +8,11 @@ import { EmptyNote, PageSkeleton } from '@/components/PageStates'
 import { Section } from '@/components/SectionNav'
 import { StatusText } from '@/components/Status'
 import { OperationControls } from '@/components/OperationControls'
+import { CARotationCredentials } from '@/components/CARotationCredentials'
 import { NodeAction, OperationKind, type Operation } from '@/gen/ichor/v1alpha1/operation_pb'
 import { operationClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
+import { credentialsPanel } from '@/lib/credentials'
 import { describeError } from '@/lib/errors'
 import { restoreStepProgress } from '@/lib/etcdRestore'
 import { formatTimestamp } from '@/lib/format'
@@ -66,6 +68,7 @@ export function OperationDetail({ namespace, name }: { namespace: string; name: 
   const stage = position ? { name: op.caRotationStage, ...position } : null
   const kubeStage = kubernetesStageProgress(op.kubernetesStage)
   const restoreStep = restoreStepProgress(op.etcdRestoreStep)
+  const panel = credentialsPanel(op.kind === OperationKind.CA_ROTATION, op.caRotationStage, state === 'done')
 
   return (
     <>
@@ -121,10 +124,22 @@ export function OperationDetail({ namespace, name }: { namespace: string; name: 
       />
       <div class="space-y-8">
         <div class="space-y-4 empty:hidden">
-          {op.kind === OperationKind.CA_ROTATION && op.caRotationStage === 'AwaitingCredentials' && state !== 'done' && (
+          {panel === 'gate' && (
             <Alert variant="destructive">
               <AlertTitle>{t('ops.awaitingCredentialsTitle')}</AlertTitle>
-              <AlertDescription>{t('ops.awaitingCredentials', { name: op.cluster?.name ?? '' })}</AlertDescription>
+              <AlertDescription>
+                {t('ops.awaitingCredentials', { name: op.cluster?.name ?? '' })}
+                <CARotationCredentials op={op} panel={panel} onChanged={setOp} />
+              </AlertDescription>
+            </Alert>
+          )}
+          {panel === 'issued' && (
+            <Alert>
+              <AlertTitle>{t('creds.issuedTitle')}</AlertTitle>
+              <AlertDescription>
+                {t('creds.issued')}
+                <CARotationCredentials op={op} panel={panel} onChanged={setOp} />
+              </AlertDescription>
             </Alert>
           )}
           {op.kind === OperationKind.CA_ROTATION && state === 'done' && (

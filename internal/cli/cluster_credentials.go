@@ -266,6 +266,8 @@ func acknowledgeWithChecks(
 			"waiting and your current credentials keep working", files.Kubeconfig, err)
 	}
 
+	_, _ = fmt.Fprintf(errw, "checked: the new kubeconfig %s authenticates to the cluster\n", files.Kubeconfig)
+
 	if checks.Talos != nil {
 		if err := checks.Talos(ctx, files.Talosconfig); err != nil {
 			_, _ = fmt.Fprintf(errw, "ichor: warning: could not check the new talosconfig %s against a node from this machine (%v); "+

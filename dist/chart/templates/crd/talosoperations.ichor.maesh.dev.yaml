@@ -424,6 +424,10 @@ spec:
                   failureReason explains why phase is Paused when the cause is a
                   machine's own failed step, as opposed to spec.paused.
                 type: string
+              finishedAt:
+                description: finishedAt is when the operation reached Completed.
+                format: date-time
+                type: string
               kubernetes:
                 description: |-
                   kubernetes is the kubernetes kind's state machine: which of the three stages the machines
@@ -466,6 +470,11 @@ spec:
                         that was already unreachable). A different boot ID later is how the
                         operation knows the machine has been powered back on.
                       type: string
+                    finishedAt:
+                      description: finishedAt is when this machine's step was reported
+                        done.
+                      format: date-time
+                      type: string
                     name:
                       description: name is the TalosMachine's name.
                       type: string
@@ -479,6 +488,11 @@ spec:
                       enum:
                       - InProgress
                       - Completed
+                      type: string
+                    startedAt:
+                      description: startedAt is when the operation first selected
+                        this machine.
+                      format: date-time
                       type: string
                   required:
                   - name

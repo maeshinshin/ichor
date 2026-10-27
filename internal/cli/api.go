@@ -183,8 +183,11 @@ var errBackendRequired = errors.New("this command needs ichor-ui, because only t
 // enabled, and is what a backend-only command returns to the user while
 // ichor-ui requires OIDC: the CLI does not forward its kubeconfig credentials
 // and has no ID token to send (point 5).
-var errOIDCBackend = errors.New("ichor-ui requires OIDC login and the CLI cannot present an OIDC token yet " +
+var errOIDCBackend = errors.New("ichor-ui requires OIDC login and the CLI has no cached OIDC token for it " +
 	"(it never forwards kubeconfig credentials), so this command, which only the backend can serve, is unavailable")
+
+// errTLSVerify marks a tunnelClient failure to verify ichor-ui's certificate.
+var errTLSVerify = errors.New("ichor-ui's TLS certificate cannot be verified")
 
 // connectAPI returns clients for one command invocation. It tries ichor-ui
 // first; only when ichor-ui cannot be reached at all (no Service, no ready
@@ -229,7 +232,10 @@ func connectAPI(ctx context.Context, opts apiOptions, deps apiDeps, requireBacke
 		case errors.Is(err, errOIDCBackend) && requireBackend:
 			return nil, err
 		case errors.Is(err, errOIDCBackend):
-			_, _ = fmt.Fprintln(deps.Stderr, "ichor: ichor-ui requires OIDC; using your own kubeconfig and RBAC in this process instead")
+			_, _ = fmt.Fprintf(deps.Stderr, "ichor: ichor-ui requires OIDC and there is no usable ichor-ui login; "+
+				"using your own kubeconfig and RBAC in this process instead (%s)\n", loginHint(err))
+		case errors.Is(err, errTLSVerify):
+			_, _ = fmt.Fprintf(deps.Stderr, "ichor: not using ichor-ui: %v; computing from the Kubernetes API directly\n", err)
 		case requireBackend:
 			return nil, fmt.Errorf("%w (ichor-ui: %v)", errBackendRequired, err)
 		default:
@@ -365,10 +371,15 @@ func dialBackend(ctx context.Context, opts apiOptions, deps apiDeps) (*apiClient
 		return nil, err
 	}
 
-	if oidcEnabled(dctx, h, base) {
-		stop()
+	if cfg := fetchAuthConfig(dctx, h, base); cfg.Enabled {
+		token, err := uiBearerToken(dctx, cfg, opts.CAFile, deps.Stderr)
+		if err != nil {
+			stop()
 
-		return nil, errOIDCBackend
+			return nil, err
+		}
+
+		h = withBearer(h, token)
 	}
 
 	return &apiClients{
@@ -421,8 +432,8 @@ func tunnelClient(ctx context.Context, port int32, caFile, serverName string) (*
 	)
 
 	if errors.As(err, &unknown) || errors.As(err, &invalid) || errors.As(err, &host) {
-		return nil, "", fmt.Errorf("ichor-ui serves TLS but its certificate cannot be verified (%w); "+
-			"pass the CA that signed it with --ca-file (env %s), the certificate's name with --tls-server-name, or skip ichor-ui with --local", err, caFileEnv)
+		return nil, "", fmt.Errorf("%w (%w); "+
+			"pass the CA that signed it with --ca-file (env %s), the certificate's name with --tls-server-name, or skip ichor-ui with --local", errTLSVerify, err, caFileEnv)
 	}
 
 	plainBase := fmt.Sprintf("http://localhost:%d", port)
@@ -448,33 +459,6 @@ func probe(ctx context.Context, hc *http.Client, base string) error {
 	}
 
 	return resp.Body.Close()
-}
-
-// oidcEnabled reads ichor-ui's GET /auth/config. Anything but a
-// 200 JSON answer with enabled:true -- an older backend, an unparseable body --
-// counts as off: the backend then rejects an unauthenticated call itself.
-func oidcEnabled(ctx context.Context, hc *http.Client, base string) bool {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/auth/config", nil)
-	if err != nil {
-		return false
-	}
-
-	resp, err := hc.Do(req)
-	if err != nil {
-		return false
-	}
-
-	defer func() { _ = resp.Body.Close() }()
-
-	var cfg struct {
-		Enabled bool `json:"enabled"`
-	}
-
-	if resp.StatusCode != http.StatusOK || json.NewDecoder(io.LimitReader(resp.Body, 1<<16)).Decode(&cfg) != nil {
-		return false
-	}
-
-	return cfg.Enabled
 }
 
 // selfSubjectName asks the API server who the kubeconfig's credentials are.

@@ -76,6 +76,7 @@ func (b *IssuerBackend) LookupUser(ctx context.Context, name string) (oidcissuer
 
 	if cred, perr := ichorauth.ParseCredential(sec.Data[name]); perr == nil {
 		out.NotBefore = cred.NotBefore
+		out.MustChange = cred.MustChange
 	}
 
 	return out, nil

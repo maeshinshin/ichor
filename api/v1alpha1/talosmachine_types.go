@@ -363,6 +363,12 @@ type TalosMachineStatus struct {
 	// +optional
 	Schematic string `json:"schematic,omitempty"`
 
+	// nodeName is the Kubernetes node name the node reports (its Nodename resource), recorded
+	// once it is read so that views can name a machine that has no spec.hostname. Empty until
+	// the node has been read.
+	// +optional
+	NodeName string `json:"nodeName,omitempty"`
+
 	// configStoredAt is when the node accepted its initial configuration over the insecure
 	// maintenance API. Once set, Ichor never applies to this node insecurely again; it only
 	// follows the node to running. Empty for a node that has not been provisioned by Ichor.
@@ -403,6 +409,7 @@ type TalosMachineStatus struct {
 // +kubebuilder:resource:shortName=tm
 // +kubebuilder:printcolumn:name="Role",type=string,JSONPath=".spec.role"
 // +kubebuilder:printcolumn:name="Approval",type=string,JSONPath=".spec.approvalState"
+// +kubebuilder:printcolumn:name="Node",type=string,JSONPath=".status.nodeName"
 // +kubebuilder:printcolumn:name="Endpoint",type=string,JSONPath=".spec.endpoint"
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=".metadata.creationTimestamp"

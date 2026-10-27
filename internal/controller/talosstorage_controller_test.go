@@ -240,7 +240,8 @@ var _ = Describe("TalosStorage layer 1 and status", func() {
 				m.Spec.Hostname = "node-" + m.Name
 				Expect(k8sClient.Update(ctx, m)).To(Succeed())
 
-				n := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: m.Spec.Hostname, Labels: nodeLabels}}
+				n := &corev1.Node{}
+				n.Name, n.Labels = m.Spec.Hostname, nodeLabels
 				Expect(k8sClient.Create(ctx, n)).To(Succeed())
 				DeferCleanup(func() { _ = k8sClient.Delete(ctx, n) })
 

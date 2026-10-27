@@ -52,9 +52,14 @@ export function progressCounts(machines: readonly { phase: string }[]): { done: 
   return { done, running }
 }
 
+// retryAvailable is true for an operation that paused itself after a failed step: it is
+// fixed, then retried. Resuming it would not run the step again.
+export function retryAvailable(state: OpState): boolean {
+  return state === 'failed'
+}
+
 // pauseAction is the button an operation row shows: nothing once it is over or
-// failed (a failed operation is fixed, then deleted or replaced; resuming it
-// would not retry the machine), "resume" while paused by a person.
+// failed (a failed operation gets the retry button instead), "resume" while paused by a person.
 export function pauseAction(paused: boolean, state: OpState): 'pause' | 'resume' | null {
   if (state === 'done' || state === 'failed' || state === 'shutdown') return null
   return paused ? 'resume' : 'pause'

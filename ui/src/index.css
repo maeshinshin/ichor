@@ -38,6 +38,10 @@
 }
 
 :root {
+  /* Where a jumped-to section stops: the sticky top bar (3.5rem), plus the
+     sticky jump-link row below xl. SectionNav reads the same value back as
+     the scroll-spy threshold, so the two cannot drift. */
+  --section-offset: 7rem;
   --radius: 0.625rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -108,4 +112,14 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+@media (min-width: 80rem) {
+  :root {
+    --section-offset: 6rem;
+  }
+}
+
+@utility scroll-mt-section {
+  scroll-margin-top: var(--section-offset);
 }

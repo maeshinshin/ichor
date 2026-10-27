@@ -144,7 +144,7 @@ func (a *configRolloutAdvancer) Advance(
 	case hashConfig(current) == hash:
 		return true, nil // nothing pending on this node: no reboot, no hook
 	default:
-		return false, a.begin(ctx, dialCtx, talos, cluster, m, current, rendered)
+		return false, a.begin(ctx, talos, cluster, m, current, rendered)
 	}
 }
 
@@ -196,10 +196,16 @@ func (a *configRolloutAdvancer) fail(
 	return err
 }
 
+// dialBound is a fresh context for one short Talos call, created at the point of use: a context
+// made before a long evacuation or drain would already have expired (ADR 0043).
+func dialBound(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(ctx, etcdDialTimeout)
+}
+
 // begin runs the pre-checks for one node and, when a reboot really is needed, stages the rendered
 // configuration and reboots. A pending change that needs no reboot is applied without one.
 func (a *configRolloutAdvancer) begin(
-	ctx, dialCtx context.Context, talos TalosClient, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
+	ctx context.Context, talos TalosClient, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
 	current, rendered []byte,
 ) error {
 	paths, err := ChangedPaths(current, rendered)
@@ -258,7 +264,7 @@ func (a *configRolloutAdvancer) begin(
 	}
 
 	if m.Spec.Role == roleControlPlane {
-		if err := a.checkEtcd(ctx, dialCtx, talos, cluster, m); err != nil {
+		if err := a.checkEtcd(ctx, talos, cluster, m); err != nil {
 			return err
 		}
 	}
@@ -290,7 +296,7 @@ func (a *configRolloutAdvancer) begin(
 		}
 	}
 
-	if err := a.stageAndReboot(ctx, dialCtx, talos, cluster, m, rendered); err != nil {
+	if err := a.stageAndReboot(ctx, talos, cluster, m, rendered); err != nil {
 		// Nothing was rebooted (a failed Reboot call already went through fail), so do not leave the node cordoned.
 		_ = a.uncordon(ctx, talos, m)
 
@@ -304,10 +310,15 @@ func (a *configRolloutAdvancer) begin(
 // and only then asks for the reboot, so a controller killed in between resumes into "waiting for
 // the boot ID to change" instead of rebooting the node a second time.
 func (a *configRolloutAdvancer) stageAndReboot(
-	ctx, dialCtx context.Context, talos TalosClient, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
+	ctx context.Context, talos TalosClient, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
 	rendered []byte,
 ) error {
-	bootID, err := talos.BootID(dialCtx)
+	// A fresh bound: begin may have spent minutes evacuating and draining since Advance dialed.
+	bootCtx, cancelBoot := dialBound(ctx)
+	bootID, err := talos.BootID(bootCtx)
+
+	cancelBoot()
+
 	if err != nil {
 		return fmt.Errorf("reading %q's boot ID before rebooting: %w", m.Name, err)
 	}
@@ -342,19 +353,23 @@ func (a *configRolloutAdvancer) stageAndReboot(
 // missing a three-member cluster would lose quorum. Talos is not asked to do this for Reboot as
 // it is for Upgrade (ADR 0043), so the check is Ichor's.
 func (a *configRolloutAdvancer) checkEtcd(
-	ctx, dialCtx context.Context, talos TalosClient, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
+	ctx context.Context, talos TalosClient, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
 ) error {
-	return etcdAllMembersPresent(ctx, dialCtx, a.Client, talos, cluster, m, "rebooting")
+	return etcdAllMembersPresent(ctx, a.Client, talos, cluster, m, "rebooting")
 }
 
 // etcdAllMembersPresent is the quorum guard of every action that takes a control plane's etcd
 // member away for a while (ADR 0010, 0080, 0085): talos's etcd must list every approved control
 // plane. doing completes the refusal ("rebooting", "stopping").
 func etcdAllMembersPresent(
-	ctx, dialCtx context.Context, reader client.Reader, talos TalosClient, cluster *ichorv1alpha1.TalosCluster,
+	ctx context.Context, reader client.Reader, talos TalosClient, cluster *ichorv1alpha1.TalosCluster,
 	m *ichorv1alpha1.TalosMachine, doing string,
 ) error {
-	members, err := talos.EtcdMemberList(dialCtx)
+	listCtx, cancelList := dialBound(ctx)
+	members, err := talos.EtcdMemberList(listCtx)
+
+	cancelList()
+
 	if err != nil {
 		return fmt.Errorf("listing %q's etcd members: %w", m.Name, err)
 	}

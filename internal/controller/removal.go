@@ -86,7 +86,9 @@ const removalRenewInterval = time.Minute
 // sub-second) while still bounding a dead one's hang to something a human waits out
 // rather than a human who gives up and kills the process not knowing it would have
 // recovered on its own eventually.
-const etcdDialTimeout = 15 * time.Second
+//
+// A var so tests can shrink it; nothing else assigns it.
+var etcdDialTimeout = 15 * time.Second
 
 const (
 	conditionRemoval           = "Removal"

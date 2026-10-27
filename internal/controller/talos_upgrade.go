@@ -195,7 +195,7 @@ func (a *talosUpgradeAdvancer) Advance(
 	case rebooting:
 		return a.afterReboot(ctx, dialCtx, talos, cluster, m, upToDate, currentVersion, target)
 	case !upToDate:
-		return a.beginUpgrade(ctx, dialCtx, talos, cluster, m, currentVersion, target)
+		return a.beginUpgrade(ctx, talos, cluster, m, currentVersion, target)
 	default:
 		return a.finish(ctx, dialCtx, talos, cluster, m)
 	}
@@ -214,7 +214,7 @@ func (a *talosUpgradeAdvancer) Advance(
 // re-implementing cordon/drain applies here: Ichor would only duplicate a
 // check Talos already makes more precisely.
 func (a *talosUpgradeAdvancer) beginUpgrade(
-	ctx, dialCtx context.Context, talos TalosClient, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
+	ctx context.Context, talos TalosClient, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
 	currentVersion, target string,
 ) (bool, error) {
 	if err := upgrade.TalosPath(currentVersion, target); err != nil {
@@ -251,7 +251,12 @@ func (a *talosUpgradeAdvancer) beginUpgrade(
 		return false, fmt.Errorf("evacuating %q timed out with storage replicas still remaining", node)
 	}
 
-	bootID, err := talos.BootID(dialCtx)
+	// Fresh bound: evacuation may have taken longer than dialCtx lives.
+	bootCtx, cancelBoot := dialBound(ctx)
+	bootID, err := talos.BootID(bootCtx)
+
+	cancelBoot()
+
 	if err != nil {
 		return false, fmt.Errorf("reading %q's boot ID before upgrading: %w", m.Name, err)
 	}

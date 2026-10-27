@@ -194,6 +194,25 @@ var _ = Describe("configRolloutAdvancer", func() {
 		Expect(fake.rebootCalls).To(BeZero())
 	})
 
+	It("reads the boot ID on a fresh deadline after a step that outlasts the dial bound (a slow drain)", func() {
+		DeferCleanup(func(old time.Duration) { etcdDialTimeout = old }, etcdDialTimeout)
+
+		etcdDialTimeout = 200 * time.Millisecond
+
+		f := newRolloutFixture()
+		m := newTestMachine(f.cluster.Name, true)
+		setHostname(m, "node-cr-slowdrain")
+		newTestNode("node-cr-slowdrain", true)
+
+		fake := &fakeTalosClient{current: f.before(m), bootID: testBootIDBefore}
+		fake.dryRunHook = func() { time.Sleep(2 * etcdDialTimeout) } // stands in for the evacuation and drain
+
+		done, err := newRolloutAdvancer(fake).Advance(ctx, f.cluster, fetchMachine(m), nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(done).To(BeFalse())
+		Expect(fake.rebootCalls).To(Equal(1))
+	})
+
 	It("refuses to reboot a node that is not Ready", func() {
 		f := newRolloutFixture()
 		m := newTestMachine(f.cluster.Name, true)

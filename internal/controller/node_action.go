@@ -222,7 +222,11 @@ func (n *nodeRun) cleanup(ctx context.Context) {
 // time, so a controller killed between the record and the call resumes into "waiting" and a
 // call is never repeated.
 func (n *nodeRun) recordRequest(ctx context.Context, message string) error {
-	bootID, err := n.talos.BootID(n.dial)
+	bootCtx, cancelBoot := dialBound(ctx)
+	bootID, err := n.talos.BootID(bootCtx)
+
+	cancelBoot()
+
 	if err != nil {
 		return fmt.Errorf("reading %q's boot ID before the action: %w", n.m.Name, err)
 	}
@@ -322,7 +326,7 @@ func (n *nodeRun) controlPlaneGuard(ctx context.Context, doing string) (only boo
 		return false, fmt.Errorf("cluster %q has two control planes: stopping %q would leave one member, below etcd quorum of two", n.cluster.Name, n.m.Name)
 	}
 
-	return false, etcdAllMembersPresent(ctx, n.dial, readerOrClient(n.r.APIReader, n.r.Client), n.talos, n.cluster, n.m, doing)
+	return false, etcdAllMembersPresent(ctx, readerOrClient(n.r.APIReader, n.r.Client), n.talos, n.cluster, n.m, doing)
 }
 
 // evacuate runs the storage hook before a node is taken away. done is false while replicas still
@@ -434,7 +438,11 @@ func (n *nodeRun) awaitReboot(ctx context.Context) (ctrl.Result, error) {
 	}
 
 	if n.m.Spec.Role == roleControlPlane {
-		members, err := n.talos.EtcdMemberList(n.dial)
+		listCtx, cancelList := dialBound(ctx)
+		members, err := n.talos.EtcdMemberList(listCtx)
+
+		cancelList()
+
 		if err != nil {
 			return n.wait(ctx, "listing etcd members: "+err.Error())
 		}
@@ -603,7 +611,7 @@ func (n *nodeRun) beginDefrag(ctx context.Context) (ctrl.Result, error) {
 	}
 
 	if members > 1 {
-		if err := etcdAllMembersPresent(ctx, n.dial, readerOrClient(n.r.APIReader, n.r.Client), n.talos, n.cluster, n.m, "defragmenting"); err != nil {
+		if err := etcdAllMembersPresent(ctx, readerOrClient(n.r.APIReader, n.r.Client), n.talos, n.cluster, n.m, "defragmenting"); err != nil {
 			return ctrl.Result{}, err
 		}
 	}
@@ -648,7 +656,7 @@ func (n *nodeRun) beginForfeit(ctx context.Context) (ctrl.Result, error) {
 		return ctrl.Result{}, fmt.Errorf("%q does not lead etcd (member %x does): nothing to hand over", n.m.Name, st.LeaderID)
 	}
 
-	if err := etcdAllMembersPresent(ctx, n.dial, readerOrClient(n.r.APIReader, n.r.Client), n.talos, n.cluster, n.m, "handing over leadership of"); err != nil {
+	if err := etcdAllMembersPresent(ctx, readerOrClient(n.r.APIReader, n.r.Client), n.talos, n.cluster, n.m, "handing over leadership of"); err != nil {
 		return ctrl.Result{}, err
 	}
 

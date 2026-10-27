@@ -79,6 +79,8 @@ func newUpgradeAdvancer(fake *fakeTalosClient, evacuator StorageEvacuator) *talo
 // Begin/End/ReplicasRemaining record how many times each was called.
 type fakeStorageEvacuator struct {
 	target *evacuationTarget
+	// resolveDelay makes Resolve slow, standing in for a long evacuation.
+	resolveDelay time.Duration
 
 	remaining    int
 	remainingErr error
@@ -90,6 +92,8 @@ type fakeStorageEvacuator struct {
 }
 
 func (f *fakeStorageEvacuator) Resolve(context.Context, *ichorv1alpha1.TalosCluster, string) (*evacuationTarget, error) {
+	time.Sleep(f.resolveDelay)
+
 	return f.target, nil
 }
 
@@ -244,6 +248,25 @@ var _ = Describe("talosUpgradeAdvancer", func() {
 		Expect(fake.upgradeCalls).To(HaveLen(1))
 		Expect(fake.upgradeBudget).To(BeNumerically(">", 4*etcdDialTimeout),
 			"the Upgrade RPC's context must not inherit the %s dial bound", etcdDialTimeout)
+	})
+
+	It("reads the boot ID on a fresh deadline after an evacuation that outlasts the dial bound", func() {
+		DeferCleanup(func(old time.Duration) { etcdDialTimeout = old }, etcdDialTimeout)
+
+		etcdDialTimeout = 200 * time.Millisecond
+
+		secret := newTestSecret(newTestBundle("v1.14"))
+		cluster := newTestCluster(secret.Name, "v1.14")
+		cp := newTestControlPlane(cluster.Name, "slow1")
+		setHostname(cp, "node-slow1")
+		newTestNode("node-slow1", true)
+
+		fake := &fakeTalosClient{version: testOldTalosVersion, bootID: testBootIDBefore}
+		adv := newUpgradeAdvancer(fake, &fakeStorageEvacuator{resolveDelay: 2 * etcdDialTimeout})
+
+		_, err := adv.Advance(ctx, cluster, fetchMachine(cp), nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(fake.upgradeCalls).To(HaveLen(1))
 	})
 
 	It("fails (never succeeds) when the node reboots but is still running its previous version -- an A/B slot rollback", func() {

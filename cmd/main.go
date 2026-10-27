@@ -237,7 +237,14 @@ func main() {
 		metricsServerOptions.KeyName = metricsCertKey
 	}
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	sigCtx := ctrl.SetupSignalHandler()
+	restConfig, err := waitForAPIServerDefault(logr.NewContext(sigCtx, setupLog))
+	if err != nil {
+		setupLog.Error(err, "API server unavailable")
+		os.Exit(1)
+	}
+
+	mgr, err := ctrl.NewManager(restConfig, ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsServerOptions,
 		WebhookServer:          webhookServer,
@@ -550,7 +557,7 @@ func main() {
 	}
 
 	setupLog.Info("Starting manager")
-	err = mgr.Start(ctrl.SetupSignalHandler())
+	err = mgr.Start(sigCtx)
 
 	// An etcd restore (ADR 0089) takes the Kubernetes API away, which costs the manager its leader
 	// lease and stops it. The restore is then mid-way (etcd wiped, snapshot not yet recovered) and

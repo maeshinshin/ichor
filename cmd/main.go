@@ -156,8 +156,8 @@ func main() {
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
 	flag.BoolVar(&userIssuer, "user-issuer", false,
 		"Keep the signing keys, internal TLS and trust ConfigMap for ichor-ui's own OIDC issuer.")
-	flag.StringVar(&uiServiceName, "ui-service-name", controller.DefaultUIServiceName,
-		"The ClusterIP Service in front of ichor-ui, named by the issuer's internal certificate.")
+	flag.StringVar(&uiServiceName, "ui-service-name", "",
+		"Override: the name of the ClusterIP Service in front of ichor-ui. Empty finds it by the app.kubernetes.io/component=ui label.")
 	flag.DurationVar(&refreshLifetime, "oidc-refresh-lifetime", controller.DefaultRefreshLifetime,
 		"The longest-lived token ichor-ui signs; a rotated-out signing key is kept this long.")
 	flag.IntVar(&certExpiryWarningDays, "certificate-expiry-warning-days", 90,

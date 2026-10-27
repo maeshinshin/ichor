@@ -289,7 +289,7 @@ function KubernetesStages({ names }: { names: string[] }) {
   const t = useT()
   return (
     <div>
-      <p>{t('ops.plan.kubeStages')}</p>
+      <p>{t('ops.plan.kubeStages', { n: names.length })}</p>
       <ol class="mt-1 list-inside list-decimal">
         {names.map((name, i) => (
           <li key={name}>

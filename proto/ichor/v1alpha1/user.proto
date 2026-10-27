@@ -136,7 +136,12 @@ message RevokeSessionsResponse {
   google.protobuf.Timestamp not_before = 1;
 }
 
-message GetMyKubeconfigRequest {}
+message GetMyKubeconfigRequest {
+  // ca_file, when set, is added to the exec block as `--ca-file <path>` so the
+  // plugin trusts a private CA for the issuer (a path on the user's machine,
+  // not a secret). Empty adds nothing.
+  string ca_file = 1;
+}
 
 message GetMyKubeconfigResponse {
   // kubeconfig is the YAML file. It contains no secret.

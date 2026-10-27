@@ -34,6 +34,7 @@ import (
 
 const (
 	opPhaseDone = "Completed"
+	cp1URL      = "https://10.0.0.1:6443"
 	cp2URL      = "https://10.0.0.2:6443"
 	cp3URL      = "https://10.0.0.3:6443"
 )
@@ -195,7 +196,7 @@ func TestWatchFailsOverToAnotherControlPlane(t *testing.T) {
 
 	var tried []string
 
-	c := &apiClients{Operation: &serverOps{dead: true}, Close: func() {}, Server: "https://10.0.0.1:6443", Local: true}
+	c := &apiClients{Operation: &serverOps{dead: true}, Close: func() {}, Server: cp1URL, Local: true}
 	c.Dial = func(_ context.Context, server string) (*apiClients, error) {
 		tried = append(tried, server)
 
@@ -240,7 +241,7 @@ func TestControlPlaneServersKeepTheKubeconfigsPortAndSkipTheCurrentHost(t *testi
 		{Endpoint: "10.0.0.4", Role: pb.MachineRole_MACHINE_ROLE_CONTROL_PLANE, Deleting: true},
 	}
 
-	got := controlPlaneServers(machines, "https://10.0.0.1:6443")
+	got := controlPlaneServers(machines, cp1URL)
 	if want := []string{cp2URL, cp3URL}; !slices.Equal(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}

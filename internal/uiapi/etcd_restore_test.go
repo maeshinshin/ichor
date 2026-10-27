@@ -361,3 +361,30 @@ func TestAnEtcdRestoreThatStartedCannotBePaused(t *testing.T) {
 		t.Fatalf("operation = %+v", op)
 	}
 }
+
+// A controller that does not run in ControllerNamespace (the in-process server of a CLI has no
+// POD_NAMESPACE) is found in the cluster's namespace, and a node that moved is matched by its observed address.
+func TestEtcdRestorePlanFindsTheControllerWithoutItsNamespaceOrAMatchingSpecEndpoint(t *testing.T) {
+	cp2 := opMachine("cp2", "controlplane", nil, nil)
+	cp2.Spec.Endpoint = "10.9.9.9:50000"
+	cp2.Status.ObservedEndpoint, cp2.Status.ObservedEndpointFor = "10.0.0.22:50000", cp2.Spec.Endpoint
+
+	pod := &corev1.Pod{
+		Name: "ichor-controller", Namespace: opNS, Labels: map[string]string{"control-plane": "controller-manager"},
+		Spec: corev1.PodSpec{NodeName: "some-node"},
+	}
+	node := &corev1.Node{Name: "some-node", Status: corev1.NodeStatus{Addresses: []corev1.NodeAddress{{Type: corev1.NodeInternalIP, Address: "10.0.0.22"}}}}
+
+	objs := append(opObjects(), restoreBackupObject(), cp2, opMachine("cp3", "controlplane", nil, nil), node, pod)
+	s, _ := opServer(t, objs...)
+	s.ControllerNamespace = ""
+
+	res, err := s.PlanOperation(context.Background(), restorePlanReq(restoreReq(restoreSnap, "", "")))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := res.Msg.GetSteps()[2]; !strings.Contains(got, "then cp2 (where this controller runs)") {
+		t.Fatalf("wipe step = %q", got)
+	}
+}

@@ -292,3 +292,94 @@ func TestProgressLineShowsTheRestoreStep(t *testing.T) {
 		t.Fatalf("line = %q", line)
 	}
 }
+
+// The in-process server (what --break-glass forces) names the controller's control plane in the plan, as
+// ichor-ui does: it looks the pod up in --ichor-namespace.
+func TestRestoreLivePlanNamesTheControllersNodeInLocalMode(t *testing.T) {
+	const ownNode = "node-cp2"
+
+	cp2 := newTestMachine(opTestCluster)
+	cp2.Name, cp2.Spec.Role, cp2.Spec.Hostname = "cp2", roleControlPlane, ownNode
+
+	pod := &corev1.Pod{
+		Name: "ichor-controller", Namespace: ichorControllerNamespace,
+		Labels: map[string]string{"control-plane": "controller-manager"},
+		Spec:   corev1.PodSpec{NodeName: ownNode},
+	}
+
+	c, _ := liveClients(t, false, true, cp2, &corev1.Node{Name: ownNode}, pod)
+
+	var prompt bytes.Buffer
+
+	_ = runLiveRestore(context.Background(), c, strings.NewReader("wrong\n"), &bytes.Buffer{}, &prompt, liveSpec())
+
+	if !strings.Contains(prompt.String(), "then cp2 (where this controller runs)") {
+		t.Fatalf("plan does not name the controller's node:\n%s", prompt.String())
+	}
+}
+
+// A kubeconfig that names one control plane gets the others as failover servers from the machines, with
+// the real ListMachines of the in-process server.
+func TestEnableFailoverFromTheLocalMachines(t *testing.T) {
+	setAPITestFlags(t, false)
+
+	mk := func(name, ep string) *ichorv1alpha1.TalosMachine {
+		m := newTestMachine(opTestCluster)
+		m.Name, m.Spec.Role, m.Spec.Endpoint = name, roleControlPlane, ep
+
+		return m
+	}
+
+	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).
+		WithObjects(newTestCluster(), mk("cp1", "10.0.0.1:50000"), mk("cp2", "10.0.0.2:50000"), mk("cp3", "10.0.0.3")).Build()
+	c := localClients(apiOpts, apiDeps{K8s: k8s})
+	c.Server = cp1URL
+	c.Dial = func(_ context.Context, server string) (*apiClients, error) {
+		return &apiClients{Server: server, Close: func() {}}, nil
+	}
+
+	enableFailover(context.Background(), c, &bytes.Buffer{}, objectRef(testNamespace, opTestCluster))
+
+	if c.Failover == nil {
+		t.Fatal("no failover armed")
+	}
+
+	name, _, err := c.Failover(context.Background())
+	if err != nil || name != cp2URL {
+		t.Fatalf("first failover = %q, %v", name, err)
+	}
+}
+
+// enableFailover's ring, driven through the real retry: the first server refuses, the next answers.
+func TestEnableFailoverThenWatchMovesToTheNextServer(t *testing.T) {
+	shrinkFollowTimers(t)
+	setAPITestFlags(t, false)
+
+	mk := func(name, ep string) *ichorv1alpha1.TalosMachine {
+		m := newTestMachine(opTestCluster)
+		m.Name, m.Spec.Role, m.Spec.Endpoint = name, roleControlPlane, ep
+
+		return m
+	}
+
+	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).
+		WithObjects(newTestCluster(), mk("cp1", "10.0.0.1:50000"), mk("cp2", "10.0.0.2:50000")).Build()
+	c := localClients(apiOpts, apiDeps{K8s: k8s})
+	c.Operation = &serverOps{dead: true}
+	c.Server = cp1URL
+	c.Dial = func(_ context.Context, server string) (*apiClients, error) {
+		return &apiClients{Operation: &serverOps{dead: server == cp1URL}, Server: server, Close: func() {}}, nil
+	}
+
+	var errw bytes.Buffer
+
+	enableFailover(context.Background(), c, &errw, objectRef(testNamespace, opTestCluster))
+
+	if err := watchOperation(context.Background(), c, objectRef(testNamespace, "x"), &bytes.Buffer{}, &errw); err != nil {
+		t.Fatalf("%v\n%s", err, errw.String())
+	}
+
+	if !strings.Contains(errw.String(), "trying API server "+cp2URL) || c.Server != cp2URL {
+		t.Fatalf("server %s, stderr %q", c.Server, errw.String())
+	}
+}

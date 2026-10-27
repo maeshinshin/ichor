@@ -162,35 +162,60 @@ func wipeStep(cps []string, own string) string {
 // controllerControlPlane is the control plane machine the Ichor controller pod runs on, "" when it cannot
 // be told (a worker, outside the cluster, or the pod or Node cannot be read): the plan then names nobody.
 func (s *Server) controllerControlPlane(ctx context.Context, machines []ichorv1alpha1.TalosMachine, cluster string) string {
-	if s.ControllerNamespace == "" {
-		return ""
-	}
-
-	var pods corev1.PodList
-	if err := s.List(ctx, &pods, client.InNamespace(s.ControllerNamespace),
-		client.MatchingLabels{"control-plane": "controller-manager"}); err != nil {
-		return ""
-	}
-
-	for i := range pods.Items {
-		node := pods.Items[i].Spec.NodeName
-		if node == "" {
+	// The namespace Ichor runs in, then the cluster's own, then (the in-process server runs on the caller's
+	// credentials and a CLI process has no POD_NAMESPACE) every namespace: the first that has the pod wins.
+	for _, ns := range s.controllerNamespaces(machines) {
+		var pods corev1.PodList
+		if err := s.List(ctx, &pods, client.InNamespace(ns), client.MatchingLabels{"control-plane": "controller-manager"}); err != nil {
 			continue
 		}
 
-		for j := range machines {
-			m := &machines[j]
-			if m.Spec.ClusterRef.Name != cluster || m.Spec.Role != opRoleControlPlane || !m.Spec.IsApproved() {
+		for i := range pods.Items {
+			node := pods.Items[i].Spec.NodeName
+			if node == "" {
 				continue
 			}
 
-			if n, err := s.findKubernetesNode(ctx, m); err == nil && n != nil && n.Name == node {
-				return m.Name
+			for j := range machines {
+				m := &machines[j]
+				if m.Spec.ClusterRef.Name != cluster || m.Spec.Role != opRoleControlPlane || !m.Spec.IsApproved() {
+					continue
+				}
+
+				if n, err := s.findKubernetesNode(ctx, m); err == nil && n != nil && n.Name == node {
+					return m.Name
+				}
 			}
 		}
 	}
 
 	return ""
+}
+
+// controllerNamespaces are the namespaces controllerControlPlane looks for the controller pod in, in order;
+// corev1.NamespaceAll (every namespace) comes last, and only for the in-process server.
+func (s *Server) controllerNamespaces(machines []ichorv1alpha1.TalosMachine) []string {
+	var out []string
+
+	for _, ns := range []string{s.ControllerNamespace, machinesNamespace(machines)} {
+		if ns != "" && !slices.Contains(out, ns) {
+			out = append(out, ns)
+		}
+	}
+
+	if s.CallerCredentials {
+		out = append(out, corev1.NamespaceAll)
+	}
+
+	return out
+}
+
+func machinesNamespace(machines []ichorv1alpha1.TalosMachine) string {
+	if len(machines) == 0 {
+		return ""
+	}
+
+	return machines[0].Namespace
 }
 
 func whenText(t time.Time) string {

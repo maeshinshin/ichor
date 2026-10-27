@@ -19,6 +19,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"net/url"
 	"slices"
@@ -114,20 +115,26 @@ func hostOf(server string) string {
 
 // enableFailover arms c to move to another control plane's apiserver while its own is unreachable. It
 // does nothing for clients that cannot dial another server (the ichor-ui tunnel has its own reconnect).
-func enableFailover(ctx context.Context, c *apiClients, cluster *pb.ObjectRef) {
+func enableFailover(ctx context.Context, c *apiClients, errw io.Writer, cluster *pb.ObjectRef) {
 	if c.Dial == nil || c.Server == "" {
 		return
 	}
 
 	resp, err := c.Machine.ListMachines(ctx, connect.NewRequest(&pb.ListMachinesRequest{Cluster: cluster}))
 	if err != nil {
+		_, _ = fmt.Fprintf(errw, "ichor: no failover to other API servers (reading the machines: %v); --follow will retry %s\n", err, c.Server)
+
 		return // best effort: the follow still retries the one server
 	}
 
 	ring := append([]string{c.Server}, controlPlaneServers(resp.Msg.GetMachines(), c.Server)...)
 	if len(ring) < 2 {
+		_, _ = fmt.Fprintf(errw, "ichor: no failover to other API servers (no other control plane with an endpoint is known); --follow will retry %s\n", c.Server)
+
 		return
 	}
+
+	_, _ = fmt.Fprintf(errw, "ichor: API servers for --follow, in order of failover: %s\n", strings.Join(ring, ", "))
 
 	at := 0
 

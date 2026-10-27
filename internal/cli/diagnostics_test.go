@@ -38,7 +38,8 @@ import (
 type fakeDiagnostics struct {
 	ichorv1alpha1connect.UnimplementedDiagnosticsServiceHandler
 
-	chunks []*pb.DownloadChunk
+	// chunks are what the etcd snapshot download streams (the tests use only that one).
+	chunks []*pb.DownloadEtcdSnapshotResponse
 	// failAfter, when set, ends the stream with this error after the chunks.
 	failAfter error
 	// deny refuses the call.
@@ -47,13 +48,21 @@ type fakeDiagnostics struct {
 	gotPcap *pb.CapturePacketsRequest
 }
 
-func (f *fakeDiagnostics) send(stream *connect.ServerStream[pb.DownloadChunk]) error {
+func (f *fakeDiagnostics) refusal() error {
 	if f.deny {
 		return connect.NewError(connect.CodePermissionDenied, errors.New("no"))
 	}
 
+	return nil
+}
+
+func (f *fakeDiagnostics) DownloadEtcdSnapshot(_ context.Context, _ *connect.Request[pb.DownloadEtcdSnapshotRequest], s *connect.ServerStream[pb.DownloadEtcdSnapshotResponse]) error {
+	if err := f.refusal(); err != nil {
+		return err
+	}
+
 	for _, c := range f.chunks {
-		if err := stream.Send(c); err != nil {
+		if err := s.Send(c); err != nil {
 			return err
 		}
 	}
@@ -61,18 +70,14 @@ func (f *fakeDiagnostics) send(stream *connect.ServerStream[pb.DownloadChunk]) e
 	return f.failAfter
 }
 
-func (f *fakeDiagnostics) DownloadEtcdSnapshot(_ context.Context, _ *connect.Request[pb.DownloadEtcdSnapshotRequest], s *connect.ServerStream[pb.DownloadChunk]) error {
-	return f.send(s)
+func (f *fakeDiagnostics) DownloadSupportBundle(_ context.Context, _ *connect.Request[pb.DownloadSupportBundleRequest], _ *connect.ServerStream[pb.DownloadSupportBundleResponse]) error {
+	return f.refusal()
 }
 
-func (f *fakeDiagnostics) DownloadSupportBundle(_ context.Context, _ *connect.Request[pb.DownloadSupportBundleRequest], s *connect.ServerStream[pb.DownloadChunk]) error {
-	return f.send(s)
-}
-
-func (f *fakeDiagnostics) CapturePackets(_ context.Context, r *connect.Request[pb.CapturePacketsRequest], s *connect.ServerStream[pb.DownloadChunk]) error {
+func (f *fakeDiagnostics) CapturePackets(_ context.Context, r *connect.Request[pb.CapturePacketsRequest], _ *connect.ServerStream[pb.CapturePacketsResponse]) error {
 	f.gotPcap = r.Msg
 
-	return f.send(s)
+	return f.refusal()
 }
 
 func diagClients(t *testing.T, f *fakeDiagnostics, local bool) *apiClients {
@@ -87,14 +92,14 @@ func diagClients(t *testing.T, f *fakeDiagnostics, local bool) *apiClients {
 	return &apiClients{Diagnostics: ichorv1alpha1connect.NewDiagnosticsServiceClient(http.DefaultClient, srv.URL), Local: local, Close: func() {}}
 }
 
-func call(ctx context.Context, c ichorv1alpha1connect.DiagnosticsServiceClient) (chunkStream, error) {
+func call(ctx context.Context, c ichorv1alpha1connect.DiagnosticsServiceClient) (chunkStream[*pb.DownloadEtcdSnapshotResponse], error) {
 	return c.DownloadEtcdSnapshot(ctx, connect.NewRequest(&pb.DownloadEtcdSnapshotRequest{}))
 }
 
 func TestRunDownloadWritesAPrivateFile(t *testing.T) {
 	t.Parallel()
 
-	f := &fakeDiagnostics{chunks: []*pb.DownloadChunk{{Filename: "etcd.snapshot.db", Data: []byte("abc")}, {Data: []byte("def")}}}
+	f := &fakeDiagnostics{chunks: []*pb.DownloadEtcdSnapshotResponse{{Filename: "etcd.snapshot.db", Data: []byte("abc")}, {Data: []byte("def")}}}
 	c := diagClients(t, f, false)
 	out := filepath.Join(t.TempDir(), "snap.db")
 
@@ -120,7 +125,7 @@ func TestRunDownloadWritesAPrivateFile(t *testing.T) {
 func TestRunDownloadUsesTheServersNameInADirectory(t *testing.T) {
 	t.Parallel()
 
-	f := &fakeDiagnostics{chunks: []*pb.DownloadChunk{{Filename: "../../evil/support-x.zip", Data: []byte("z")}}}
+	f := &fakeDiagnostics{chunks: []*pb.DownloadEtcdSnapshotResponse{{Filename: "../../evil/support-x.zip", Data: []byte("z")}}}
 	dir := t.TempDir()
 
 	if err := runDownload(context.Background(), diagClients(t, f, false), dir, nil, &bytes.Buffer{}, call); err != nil {
@@ -136,7 +141,7 @@ func TestRunDownloadLeavesNoFileWhenTheStreamBreaks(t *testing.T) {
 	t.Parallel()
 
 	f := &fakeDiagnostics{
-		chunks:    []*pb.DownloadChunk{{Filename: "x.db", Data: []byte("partial")}},
+		chunks:    []*pb.DownloadEtcdSnapshotResponse{{Filename: "x.db", Data: []byte("partial")}},
 		failAfter: connect.NewError(connect.CodeResourceExhausted, errors.New("size cap")),
 	}
 	dir := t.TempDir()
@@ -156,7 +161,7 @@ func TestRunDownloadLeavesNoFileWhenTheStreamBreaks(t *testing.T) {
 func TestRunDownloadToStdout(t *testing.T) {
 	t.Parallel()
 
-	f := &fakeDiagnostics{chunks: []*pb.DownloadChunk{{Filename: "x", Data: []byte("hello")}}}
+	f := &fakeDiagnostics{chunks: []*pb.DownloadEtcdSnapshotResponse{{Filename: "x", Data: []byte("hello")}}}
 
 	var out, errw bytes.Buffer
 	if err := runDownload(context.Background(), diagClients(t, f, false), "-", &out, &errw, call); err != nil {

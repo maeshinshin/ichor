@@ -98,7 +98,7 @@ func (l *localDiagnostics) GetDiagnosticsPermissions(
 
 func (l *localDiagnostics) DownloadSupportBundle(
 	ctx context.Context, req *connect.Request[pb.DownloadSupportBundleRequest],
-) (*connect.ServerStreamForClient[pb.DownloadChunk], error) {
+) (*connect.ServerStreamForClient[pb.DownloadSupportBundleResponse], error) {
 	c, err := l.client()
 	if err != nil {
 		return nil, err
@@ -109,7 +109,7 @@ func (l *localDiagnostics) DownloadSupportBundle(
 
 func (l *localDiagnostics) DownloadEtcdSnapshot(
 	ctx context.Context, req *connect.Request[pb.DownloadEtcdSnapshotRequest],
-) (*connect.ServerStreamForClient[pb.DownloadChunk], error) {
+) (*connect.ServerStreamForClient[pb.DownloadEtcdSnapshotResponse], error) {
 	c, err := l.client()
 	if err != nil {
 		return nil, err
@@ -120,7 +120,7 @@ func (l *localDiagnostics) DownloadEtcdSnapshot(
 
 func (l *localDiagnostics) CapturePackets(
 	ctx context.Context, req *connect.Request[pb.CapturePacketsRequest],
-) (*connect.ServerStreamForClient[pb.DownloadChunk], error) {
+) (*connect.ServerStreamForClient[pb.CapturePacketsResponse], error) {
 	c, err := l.client()
 	if err != nil {
 		return nil, err
@@ -129,10 +129,18 @@ func (l *localDiagnostics) CapturePackets(
 	return c.CapturePackets(ctx, req)
 }
 
-// chunkStream is what *connect.ServerStreamForClient[pb.DownloadChunk] offers.
-type chunkStream interface {
+// chunk is one of the three streaming responses (each RPC has its own message
+// type); they all carry the same fields.
+type chunk interface {
+	*pb.DownloadSupportBundleResponse | *pb.DownloadEtcdSnapshotResponse | *pb.CapturePacketsResponse
+	GetFilename() string
+	GetData() []byte
+}
+
+// chunkStream is what *connect.ServerStreamForClient[M] offers.
+type chunkStream[M chunk] interface {
 	Receive() bool
-	Msg() *pb.DownloadChunk
+	Msg() M
 	Err() error
 	Close() error
 }
@@ -142,7 +150,7 @@ type chunkStream interface {
 // directory; a directory gets that name inside it; "-" is standard output. The
 // file is created with mode 0600 under a temporary name and renamed once the
 // stream ended cleanly, so a cut-off download never looks like a complete one.
-func saveDownload(stream chunkStream, output string, stdout io.Writer) (string, int64, error) {
+func saveDownload[M chunk](stream chunkStream[M], output string, stdout io.Writer) (string, int64, error) {
 	if output == "-" {
 		var n int64
 
@@ -244,10 +252,10 @@ func targetPath(output, suggested string) (string, error) {
 	return output, nil
 }
 
-type downloadCall func(ctx context.Context, c ichorv1alpha1connect.DiagnosticsServiceClient) (chunkStream, error)
+type downloadCall[M chunk] func(ctx context.Context, c ichorv1alpha1connect.DiagnosticsServiceClient) (chunkStream[M], error)
 
 // download connects and runs one streaming call.
-func download(cmd *cobra.Command, call downloadCall) error {
+func download[M chunk](cmd *cobra.Command, call downloadCall[M]) error {
 	return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
 		return runDownload(ctx, c, downloadOpts.Output, cmd.OutOrStdout(), cmd.ErrOrStderr(), call)
 	})
@@ -255,7 +263,7 @@ func download(cmd *cobra.Command, call downloadCall) error {
 
 // runDownload runs call and saves the stream. A refusal from ichor-ui says how
 // to use the caller's own credentials instead.
-func runDownload(ctx context.Context, c *apiClients, output string, stdout, stderr io.Writer, call downloadCall) error {
+func runDownload[M chunk](ctx context.Context, c *apiClients, output string, stdout, stderr io.Writer, call downloadCall[M]) error {
 	stream, err := call(ctx, c.Diagnostics)
 	if err != nil {
 		return explainDownloadError(err, c.Local)
@@ -337,7 +345,7 @@ talosmachines/support-bundle. The file is written with mode 0600; -o - writes to
 			return err
 		}
 
-		return download(cmd, func(ctx context.Context, c ichorv1alpha1connect.DiagnosticsServiceClient) (chunkStream, error) {
+		return download(cmd, func(ctx context.Context, c ichorv1alpha1connect.DiagnosticsServiceClient) (chunkStream[*pb.DownloadSupportBundleResponse], error) {
 			return c.DownloadSupportBundle(ctx, connect.NewRequest(req))
 		})
 	},
@@ -362,7 +370,7 @@ Needs the "download" verb on talosmachines/packet-capture. The file is written w
 			return err
 		}
 
-		return download(cmd, func(ctx context.Context, c ichorv1alpha1connect.DiagnosticsServiceClient) (chunkStream, error) {
+		return download(cmd, func(ctx context.Context, c ichorv1alpha1connect.DiagnosticsServiceClient) (chunkStream[*pb.CapturePacketsResponse], error) {
 			return c.CapturePackets(ctx, connect.NewRequest(req))
 		})
 	},
@@ -389,7 +397,7 @@ talosmachines/etcd-snapshot. The file is written with mode 0600; -o - writes to 
 
 		req := &pb.DownloadEtcdSnapshotRequest{Machine: objectRef(apiOpts.Namespace, downloadOpts.Node)}
 
-		return download(cmd, func(ctx context.Context, c ichorv1alpha1connect.DiagnosticsServiceClient) (chunkStream, error) {
+		return download(cmd, func(ctx context.Context, c ichorv1alpha1connect.DiagnosticsServiceClient) (chunkStream[*pb.DownloadEtcdSnapshotResponse], error) {
 			return c.DownloadEtcdSnapshot(ctx, connect.NewRequest(req))
 		})
 	},

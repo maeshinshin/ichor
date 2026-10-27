@@ -27,6 +27,7 @@ import (
 
 	authnv1 "k8s.io/api/authentication/v1"
 	authzv1 "k8s.io/api/authorization/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -55,6 +56,7 @@ var breakglasslog = logf.Log.WithName("breakglass-webhook")
 // +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-breakglass,mutating=false,failurePolicy=fail,sideEffects=None,groups=ichor.maesh.dev,resources=talosmachines;talosconfigpatches,verbs=update;delete,versions=v1alpha1,name=vbreakglass-v1alpha1.kb.io,admissionReviewVersions=v1
 // +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-breakglass,mutating=false,failurePolicy=fail,sideEffects=None,groups=ichor.maesh.dev,resources=talosoperations,verbs=create,versions=v1alpha1,name=vbreakglassop-v1alpha1.kb.io,admissionReviewVersions=v1
 // +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-breakglass,mutating=false,failurePolicy=fail,sideEffects=None,groups=ichor.maesh.dev,resources=talosclusters,verbs=create;update,versions=v1alpha1,name=vauthentication-v1alpha1.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-breakglass,mutating=false,failurePolicy=fail,sideEffects=None,groups=ichor.maesh.dev,resources=talosetcdbackups,verbs=create;update,versions=v1alpha1,name=vsecretrefs-v1alpha1.kb.io,admissionReviewVersions=v1
 // +kubebuilder:rbac:groups=authorization.k8s.io,resources=subjectaccessreviews,verbs=create
 
 // BreakGlassOptions configures the break-glass admission check.
@@ -119,6 +121,8 @@ func (h *BreakGlassHandler) Handle(ctx context.Context, req admission.Request) a
 		return h.handleOperation(ctx, req)
 	case "talosclusters":
 		return h.handleCluster(ctx, req)
+	case "talosetcdbackups":
+		return h.handleEtcdBackup(ctx, req)
 	}
 
 	if req.Operation != opUpdate && req.Operation != "DELETE" {
@@ -318,18 +322,19 @@ func (h *BreakGlassHandler) handleCluster(ctx context.Context, req admission.Req
 		return admission.Errored(http.StatusBadRequest, fmt.Errorf("decoding the cluster: %w", err))
 	}
 
-	var before *ichorv1alpha1.TalosClusterAuthentication
+	var old ichorv1alpha1.TalosCluster
 
 	if req.Operation == opUpdate {
-		var old ichorv1alpha1.TalosCluster
 		if err := json.Unmarshal(req.OldObject.Raw, &old); err != nil {
 			return admission.Errored(http.StatusBadRequest, fmt.Errorf("decoding the stored cluster: %w", err))
 		}
-
-		before = old.Spec.Authentication
 	}
 
-	if reflect.DeepEqual(before, updated.Spec.Authentication) {
+	if resp := h.gateSecretReferences(ctx, req, "talosclusters", clusterSecretRefChanges(&old, &updated)); resp != nil {
+		return *resp
+	}
+
+	if reflect.DeepEqual(old.Spec.Authentication, updated.Spec.Authentication) {
 		return admission.Allowed("")
 	}
 
@@ -350,6 +355,111 @@ func (h *BreakGlassHandler) handleCluster(ctx context.Context, req admission.Req
 	breakglasslog.Info("spec.authentication changed", "user", req.UserInfo.Username, "cluster", req.Name)
 
 	return admission.Allowed("")
+}
+
+// SecretReferencesVerb and SecretReferencesSubresource are the RBAC right that gates setting or
+// changing a field naming a Secret the controller (or the UI backend) reads with its own, broader
+// privileges (ADR 0096): verb update on <resource>/secret-references.
+const (
+	SecretReferencesVerb        = "update"
+	SecretReferencesSubresource = "secret-references"
+)
+
+// clusterSecretRefChanges lists the Secret references updated sets or changes relative to old
+// (the zero value on create). A reference that is removed, or kept as it was, is not listed.
+func clusterSecretRefChanges(old, updated *ichorv1alpha1.TalosCluster) []string {
+	var changed []string
+
+	if updated.Spec.SecretsRef != old.Spec.SecretsRef {
+		changed = append(changed, "spec.secretsRef")
+	}
+
+	var before, after *corev1.SecretKeySelector
+	if r := old.Spec.GitOps; r != nil && r.Repository != nil {
+		before = &r.Repository.TokenSecretRef
+	}
+
+	if r := updated.Spec.GitOps; r != nil && r.Repository != nil {
+		after = &r.Repository.TokenSecretRef
+	}
+
+	if after != nil && (before == nil || !reflect.DeepEqual(*before, *after)) {
+		changed = append(changed, "spec.gitops.repository.tokenSecretRef")
+	}
+
+	had := map[string]bool{}
+
+	for _, r := range old.Spec.Registries {
+		if r.AuthSecretRef != nil {
+			had[r.Host+"\x00"+r.AuthSecretRef.Name] = true
+		}
+	}
+
+	for _, r := range updated.Spec.Registries {
+		if r.AuthSecretRef != nil && !had[r.Host+"\x00"+r.AuthSecretRef.Name] {
+			changed = append(changed, "spec.registries[].authSecretRef")
+
+			break
+		}
+	}
+
+	return changed
+}
+
+// handleEtcdBackup gates spec.destination.s3.credentialsSecretRef the same way.
+func (h *BreakGlassHandler) handleEtcdBackup(ctx context.Context, req admission.Request) admission.Response {
+	if (req.Operation != "CREATE" && req.Operation != opUpdate) || slices.Contains(h.ExemptUsers, req.UserInfo.Username) {
+		return admission.Allowed("")
+	}
+
+	var updated, old ichorv1alpha1.TalosEtcdBackup
+	if err := json.Unmarshal(req.Object.Raw, &updated); err != nil {
+		return admission.Errored(http.StatusBadRequest, fmt.Errorf("decoding the backup: %w", err))
+	}
+
+	if req.Operation == opUpdate {
+		if err := json.Unmarshal(req.OldObject.Raw, &old); err != nil {
+			return admission.Errored(http.StatusBadRequest, fmt.Errorf("decoding the stored backup: %w", err))
+		}
+	}
+
+	var changed []string
+
+	if updated.Spec.Destination.S3.CredentialsSecretRef != old.Spec.Destination.S3.CredentialsSecretRef {
+		changed = append(changed, "spec.destination.s3.credentialsSecretRef")
+	}
+
+	if resp := h.gateSecretReferences(ctx, req, "talosetcdbackups", changed); resp != nil {
+		return *resp
+	}
+
+	return admission.Allowed("")
+}
+
+// gateSecretReferences returns a denial (or an error) unless changed is empty or the requesting
+// user holds update on <resource>/secret-references. nil means "carry on".
+func (h *BreakGlassHandler) gateSecretReferences(ctx context.Context, req admission.Request, resource string, changed []string) *admission.Response {
+	if len(changed) == 0 {
+		return nil
+	}
+
+	allowed, err := h.mayDo(ctx, req.UserInfo, SecretReferencesVerb, resource, SecretReferencesSubresource, req.Name, req.Namespace)
+	if err != nil {
+		r := admission.Errored(http.StatusServiceUnavailable, fmt.Errorf("cannot check the %s right: %w", SecretReferencesVerb, err))
+
+		return &r
+	}
+
+	if !allowed {
+		r := admission.Denied(fmt.Sprintf("setting or changing %s needs the %q verb on %s/%s: "+
+			"the Secret it names is read with Ichor's own privileges", strings.Join(changed, ", "), SecretReferencesVerb, resource, SecretReferencesSubresource))
+
+		return &r
+	}
+
+	breakglasslog.Info("secret reference changed", "user", req.UserInfo.Username, "resource", resource, "name", req.Name, "fields", changed)
+
+	return nil
 }
 
 func extraOf(in map[string]authnv1.ExtraValue) map[string]authzv1.ExtraValue {

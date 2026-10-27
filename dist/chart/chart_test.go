@@ -418,6 +418,7 @@ func checkWebhookInvariants(t *testing.T, release string, docs []map[string]any)
 				"vbreakglassop-v1alpha1.kb.io": {"CREATE"},
 				// ADR 0094: a change to spec.authentication, on create and update.
 				"vauthentication-v1alpha1.kb.io": {opCreate, opUpdate},
+				"vsecretrefs-v1alpha1.kb.io":     {opCreate, opUpdate},
 			}[name]
 			if !reflect.DeepEqual(ops, want) {
 				t.Errorf("webhook %q: expected operations %v; see %s; got %v",

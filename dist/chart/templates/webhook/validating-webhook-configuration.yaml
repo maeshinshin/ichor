@@ -56,6 +56,26 @@ webhooks:
       namespace: {{ .Release.Namespace }}
       path: /validate-ichor-maesh-dev-v1alpha1-breakglass
   failurePolicy: Fail
+  name: vsecretrefs-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - ichor.maesh.dev
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - talosetcdbackups
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: ichor-webhook-service
+      namespace: {{ .Release.Namespace }}
+      path: /validate-ichor-maesh-dev-v1alpha1-breakglass
+  failurePolicy: Fail
   name: vauthentication-v1alpha1.kb.io
   rules:
   - apiGroups:

@@ -14,7 +14,7 @@ import { operationClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
 import { describeError } from '@/lib/errors'
 import { formatTimestamp } from '@/lib/format'
-import { operationState, progressCounts } from '@/lib/operations'
+import { kubernetesStageProgress, operationState, progressCounts } from '@/lib/operations'
 import { opStateTone } from '@/lib/status'
 import { useT } from '@/lib/useT'
 import { Link, objectRefPath } from '@/router'
@@ -253,6 +253,7 @@ function CurrentOperation({ row, total, onChanged }: { row: Row; total: number; 
   const { done, running } = progressCounts(op.machines)
   const now = op.machines.find((m) => m.phase === 'InProgress')?.name
   const kind = enumLabel(OperationKind, op.kind)
+  const kubeStage = kubernetesStageProgress(op.kubernetesStage)
   const tracksNodes = op.kind !== OperationKind.ICHOR && op.kind !== OperationKind.CONFIG && op.kind !== OperationKind.NODE && total > 0
 
   return (
@@ -266,6 +267,11 @@ function CurrentOperation({ row, total, onChanged }: { row: Row; total: number; 
           <span class="font-medium">{kind}</span>
           <StatusText tone={opStateTone(state)}>{t(`ops.state.${state}`)}</StatusText>
           {op.caRotationStage && <span class="text-muted-foreground">{op.caRotationStage}</span>}
+          {kubeStage && (
+            <span class="text-muted-foreground">
+              {t('ops.kubeStage', { stage: t(`ops.kubeStageName.${kubeStage.name}`), n: kubeStage.index, total: kubeStage.total })}
+            </span>
+          )}
         </div>
         <div class="space-y-1 text-muted-foreground">
           {op.machines.length > 0 && (

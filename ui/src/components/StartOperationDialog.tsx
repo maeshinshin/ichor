@@ -12,7 +12,7 @@ import { operationClient } from '@/lib/connect'
 import { notifyDone } from '@/lib/notify'
 import { describeError } from '@/lib/errors'
 import { versionProblem } from '@/lib/clusterOps'
-import { confirmMatches, kindNeedsTarget, kindNeedsTypedName, planCounts, planSteps, targetError, type OpKind } from '@/lib/operations'
+import { confirmMatches, kindNeedsTarget, kindNeedsTypedName, kubernetesStages, planCounts, planSteps, targetError, type OpKind } from '@/lib/operations'
 import { useT } from '@/lib/useT'
 import { navigate, objectRefPath } from '@/router'
 
@@ -171,6 +171,13 @@ export function StartOperationDialog({
 
       {plan && <PlanView kind={kind} plan={plan} clusterName={cluster.name} />}
 
+      {plan && plan.warning !== '' && (
+        <Alert>
+          <AlertTitle>{t('ops.plan.warningTitle')}</AlertTitle>
+          <AlertDescription>{plan.warning}</AlertDescription>
+        </Alert>
+      )}
+
       {plan && needsName && plan.blocked === '' && (
         <div class="space-y-2">
           <Label htmlFor="op-confirm-name">{t('ops.dialog.typeName', { name: cluster.name })}</Label>
@@ -221,7 +228,8 @@ function PlanView({ kind, plan, clusterName }: { kind: OpKind; plan: PlanOperati
       <p class="font-medium">{t(`ops.plan.${kind}`, { from: plan.current, to })}</p>
       {plan.specChanges && <p class="text-muted-foreground">{t('ops.plan.specChanges', { to })}</p>}
       <p>{effectText(t, plan.effect, kind)}</p>
-      {plan.stages.length > 0 && <p>{t('ops.plan.stages', { stages: plan.stages.join(', ') })}</p>}
+      {kind === 'kubernetes' && plan.stages.length > 0 && <KubernetesStages names={plan.stages} />}
+      {kind === 'ca-rotation' && plan.stages.length > 0 && <p>{t('ops.plan.stages', { stages: plan.stages.join(', ') })}</p>}
       {plan.machines.length > 0 ? (
         <div>
           <p>{t('ops.plan.counts', { total: plan.machines.length, ...counts })}</p>
@@ -271,6 +279,25 @@ function PlanView({ kind, plan, clusterName }: { kind: OpKind; plan: PlanOperati
           <AlertDescription>{plan.blocked}</AlertDescription>
         </Alert>
       )}
+    </div>
+  )
+}
+
+// KubernetesStages lists the plan's stages in order, each with what it does. The
+// explanation is looked up by the stage's position: the plan names them in the order of kubernetesStages.
+function KubernetesStages({ names }: { names: string[] }) {
+  const t = useT()
+  return (
+    <div>
+      <p>{t('ops.plan.kubeStages')}</p>
+      <ol class="mt-1 list-inside list-decimal">
+        {names.map((name, i) => (
+          <li key={name}>
+            <span class="font-medium">{name}</span>
+            {kubernetesStages[i] !== undefined && <>: {t(`ops.plan.kubeStageHint.${kubernetesStages[i]}`)}</>}
+          </li>
+        ))}
+      </ol>
     </div>
   )
 }

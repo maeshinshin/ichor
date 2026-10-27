@@ -773,8 +773,9 @@ func (s *Server) CreateOperation(
 	}
 	clusterKey := client.ObjectKeyFromObject(cluster)
 
-	if p.resp.GetSpecChanges() && p.resp.GetCurrent() != "" &&
-		(p.kind == ichorv1alpha1.TalosOperationKindTalos || p.kind == ichorv1alpha1.TalosOperationKindKubernetes) {
+	if p.resp.GetSpecChanges() && p.resp.GetCurrent() != "" && slices.Contains([]string{
+		ichorv1alpha1.TalosOperationKindTalos, ichorv1alpha1.TalosOperationKindKubernetes, ichorv1alpha1.TalosOperationKindIchor,
+	}, p.kind) {
 		op.Annotations[ichorv1alpha1.OperationFromVersionAnnotation] = p.resp.GetCurrent()
 	}
 

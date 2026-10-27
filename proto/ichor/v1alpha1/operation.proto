@@ -197,6 +197,9 @@ message OperationMachine {
   string message = 11;
   google.protobuf.Timestamp started_at = 12;
   google.protobuf.Timestamp finished_at = 13;
+  // display_name is the machine's hostname, else its node name, else empty (callers show name).
+  // Filled by GetOperation only.
+  string display_name = 14;
 }
 
 message Operation {

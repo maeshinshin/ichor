@@ -15,8 +15,9 @@ export function formatDuration(ms: number | undefined): string {
 }
 
 // spanMs is the time from start to end, or to now while there is no end yet. No start is no span.
-export function spanMs(start: Date | undefined, end: Date | undefined, now: Date): number | undefined {
-  if (!start) return undefined
+// A finished item with no recorded end (created before finishedAt existed) has no known span.
+export function spanMs(start: Date | undefined, end: Date | undefined, now: Date, finished = false): number | undefined {
+  if (!start || (finished && !end)) return undefined
   return (end ?? now).getTime() - start.getTime()
 }
 

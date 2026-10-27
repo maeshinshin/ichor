@@ -50,7 +50,7 @@ type authFlow struct {
 	Dir      string
 
 	Now          func() time.Time
-	HTTP         *http.Client      // nil: http.DefaultClient
+	HTTP         *http.Client       // nil: http.DefaultClient
 	OpenBrowser  func(string) error // nil: only print the URL
 	Stderr       io.Writer
 	LoginTimeout time.Duration
@@ -68,7 +68,7 @@ func (f *authFlow) key() string { return authCacheKey(f.Issuer, f.ClientID, f.Au
 
 func (f *authFlow) logf(format string, args ...any) {
 	if f.Stderr != nil {
-		fmt.Fprintf(f.Stderr, format+"\n", args...)
+		_, _ = fmt.Fprintf(f.Stderr, format+"\n", args...)
 	}
 }
 
@@ -202,21 +202,21 @@ func (f *authFlow) ensure(ctx context.Context, interactive bool) (*authCacheEntr
 }
 
 // loginAndSave is `ichor auth login`: always a fresh interactive login.
-func (f *authFlow) loginAndSave(ctx context.Context) (*authCacheEntry, error) {
+func (f *authFlow) loginAndSave(ctx context.Context) error {
 	ctx = f.withClient(ctx)
 
 	unlock, err := lockAuthCache(f.Dir, f.key())
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer unlock()
 
 	n, err := f.login(ctx)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return n, saveAuthCache(f.Dir, f.key(), n)
+	return saveAuthCache(f.Dir, f.key(), n)
 }
 
 func randomURLString() (string, error) {
@@ -234,7 +234,7 @@ func (f *authFlow) login(ctx context.Context) (*authCacheEntry, error) {
 	if err != nil {
 		return nil, fmt.Errorf("listening for the login redirect: %w", err)
 	}
-	defer lis.Close()
+	defer func() { _ = lis.Close() }()
 
 	redirect := fmt.Sprintf("http://%s%s", lis.Addr().String(), authCallbackPath)
 
@@ -349,11 +349,11 @@ func authCallbackHandler(state string, ch chan<- authCallback) http.Handler {
 
 		if res.err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprintln(w, "Login failed; see the terminal.")
+			_, _ = fmt.Fprintln(w, "Login failed; see the terminal.")
 
 			return
 		}
 
-		fmt.Fprintln(w, "Logged in. You can close this tab and return to the terminal.")
+		_, _ = fmt.Fprintln(w, "Logged in. You can close this tab and return to the terminal.")
 	})
 }

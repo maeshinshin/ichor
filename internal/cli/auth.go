@@ -25,8 +25,8 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	clientauthv1 "k8s.io/client-go/pkg/apis/clientauthentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	clientauthv1 "k8s.io/client-go/pkg/apis/clientauthentication/v1"
 )
 
 const (
@@ -61,11 +61,11 @@ var authLoginCmd = &cobra.Command{
 			return err
 		}
 
-		if _, err := f.loginAndSave(cmd.Context()); err != nil {
+		if err := f.loginAndSave(cmd.Context()); err != nil {
 			return err
 		}
 
-		fmt.Fprintf(cmd.ErrOrStderr(), "Logged in to %s as client %s.\n", f.Issuer, f.ClientID)
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Logged in to %s as client %s.\n", f.Issuer, f.ClientID)
 
 		return nil
 	},
@@ -103,7 +103,7 @@ var authLogoutCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Fprintf(cmd.ErrOrStderr(), "Logged out of %s.\n", f.Issuer)
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Logged out of %s.\n", f.Issuer)
 
 		return nil
 	},
@@ -175,8 +175,10 @@ func runAuthToken(ctx context.Context, f *authFlow, execInfo string, out io.Writ
 
 	exp := metav1.NewTime(e.Expiry)
 
-	return json.NewEncoder(out).Encode(clientauthv1.ExecCredential{
-		TypeMeta: metav1.TypeMeta{APIVersion: execCredentialAPI, Kind: "ExecCredential"},
-		Status:   &clientauthv1.ExecCredentialStatus{Token: e.IDToken, ExpirationTimestamp: &exp},
-	})
+	cred := clientauthv1.ExecCredential{
+		Status: &clientauthv1.ExecCredentialStatus{Token: e.IDToken, ExpirationTimestamp: &exp},
+	}
+	cred.APIVersion, cred.Kind = execCredentialAPI, "ExecCredential"
+
+	return json.NewEncoder(out).Encode(cred)
 }

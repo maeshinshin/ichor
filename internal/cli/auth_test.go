@@ -184,7 +184,7 @@ func (f *fakeIssuer) token(w http.ResponseWriter, r *http.Request) {
 
 		nonce := c.nonce
 		if f.wrongNonce {
-			nonce = "other"
+			nonce = "wrong-nonce"
 		}
 
 		resp["id_token"] = f.idToken(aud, nonce)
@@ -256,7 +256,7 @@ func TestAuthLoginLoopbackPKCE(t *testing.T) {
 
 	f, stderr := newTestFlow(t, iss, &opened)
 
-	if _, err := f.loginAndSave(context.Background()); err != nil {
+	if err := f.loginAndSave(context.Background()); err != nil {
 		t.Fatal(err) // the fake rejects a wrong verifier, redirect or missing PKCE
 	}
 
@@ -303,7 +303,7 @@ func TestAuthLoginRejectsWrongNonce(t *testing.T) {
 
 	f, _ := newTestFlow(t, iss, &opened)
 
-	if _, err := f.loginAndSave(context.Background()); err == nil || !strings.Contains(err.Error(), "nonce") {
+	if err := f.loginAndSave(context.Background()); err == nil || !strings.Contains(err.Error(), "nonce") {
 		t.Fatalf("err = %v, want a nonce error", err)
 	}
 
@@ -436,7 +436,7 @@ func TestAuthTokenRefreshesExpiredIDToken(t *testing.T) {
 
 	f, _ := newTestFlow(t, iss, &opened)
 
-	if _, err := f.loginAndSave(context.Background()); err != nil {
+	if err := f.loginAndSave(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -478,7 +478,7 @@ func TestAuthTokenFailedRefresh(t *testing.T) {
 
 	f, stderr := newTestFlow(t, iss, &opened)
 
-	if _, err := f.loginAndSave(context.Background()); err != nil {
+	if err := f.loginAndSave(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -511,7 +511,7 @@ func TestAuthAudienceIsRequestedAndChecked(t *testing.T) {
 	f, _ := newTestFlow(t, iss, &opened)
 	f.Audience = "ichor-kube"
 
-	if _, err := f.loginAndSave(context.Background()); err != nil {
+	if err := f.loginAndSave(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -523,7 +523,7 @@ func TestAuthAudienceIsRequestedAndChecked(t *testing.T) {
 	iss.ignoreAud = true
 	f.Audience = "ichor-ui"
 
-	if _, err := f.loginAndSave(context.Background()); err == nil || !strings.Contains(err.Error(), "audience") {
+	if err := f.loginAndSave(context.Background()); err == nil || !strings.Contains(err.Error(), "audience") {
 		t.Errorf("err = %v, want an audience error", err)
 	}
 }

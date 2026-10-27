@@ -309,6 +309,11 @@ type startSpec struct {
 	Target         string
 	MaxUnavailable int32
 	Follow         bool
+
+	// AfterCreate, when set, takes over once the operation exists: it gets the operation's ref and
+	// the create response and does the output and any follow itself (ca-rotation's credential
+	// hand-off, which cannot wait behind a tunnel the rotation breaks).
+	AfterCreate func(ctx context.Context, ref *pb.ObjectRef, created *pb.CreateOperationResponse) error
 }
 
 // resolveCluster returns the cluster the command acts on: --cluster, or the
@@ -397,9 +402,8 @@ func runStartOperation(ctx context.Context, c *apiClients, in io.Reader, out, er
 		return writeMessage(out, outputFormat, resp.Msg)
 	}
 
-	if s.Kind == pb.OperationKind_OPERATION_KIND_CA_ROTATION {
-		_, _ = fmt.Fprintf(errw, "When it completes, the secrets bundle on your machine is stale: run 'ichor cluster bundle-export %s'.\n",
-			cluster.GetName())
+	if s.AfterCreate != nil {
+		return s.AfterCreate(ctx, resp.Msg.GetOperation().GetRef(), resp.Msg)
 	}
 
 	if !s.Follow {

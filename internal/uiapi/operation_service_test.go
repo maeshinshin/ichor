@@ -649,8 +649,8 @@ func TestRetryOperationAnnotatesOnlyAFailedOperation(t *testing.T) {
 	newOp := func(name, phase, reason string, last *metav1.Time) *ichorv1alpha1.TalosOperation {
 		return &ichorv1alpha1.TalosOperation{
 			Name: name, Namespace: opNS,
-			Spec:       ichorv1alpha1.TalosOperationSpec{ClusterRef: corev1.LocalObjectReference{Name: opCluster}, Kind: ichorv1alpha1.TalosOperationKindTalos},
-			Status:     ichorv1alpha1.TalosOperationStatus{Phase: phase, FailureReason: reason, LastRetry: last},
+			Spec:   ichorv1alpha1.TalosOperationSpec{ClusterRef: corev1.LocalObjectReference{Name: opCluster}, Kind: ichorv1alpha1.TalosOperationKindTalos},
+			Status: ichorv1alpha1.TalosOperationStatus{Phase: phase, FailureReason: reason, LastRetry: last},
 		}
 	}
 
@@ -658,7 +658,7 @@ func TestRetryOperationAnnotatesOnlyAFailedOperation(t *testing.T) {
 	srv, k8s := opServer(t, append(opObjects(),
 		newOp("failed", ichorv1alpha1.TalosOperationPhasePaused, "boom", nil),
 		newOp("operator-paused", ichorv1alpha1.TalosOperationPhasePaused, "", nil),
-		newOp("running", ichorv1alpha1.TalosOperationPhaseInProgress, "", nil),
+		newOp("in-progress", ichorv1alpha1.TalosOperationPhaseInProgress, "", nil),
 		newOp("retried", ichorv1alpha1.TalosOperationPhasePaused, "boom again", &future),
 	)...)
 	ctx := context.Background()
@@ -681,7 +681,7 @@ func TestRetryOperationAnnotatesOnlyAFailedOperation(t *testing.T) {
 		t.Fatal("a failed operation was not annotated")
 	}
 
-	for _, name := range []string{"operator-paused", "running"} {
+	for _, name := range []string{"operator-paused", "in-progress"} {
 		_, err := srv.RetryOperation(ctx, connect.NewRequest(&pb.RetryOperationRequest{Operation: objectRef(opNS, name)}))
 		if connect.CodeOf(err) != connect.CodeFailedPrecondition || annotation(name) != "" {
 			t.Errorf("%s: err = %v, annotation %q; want FailedPrecondition and none", name, err, annotation(name))

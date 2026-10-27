@@ -1491,6 +1491,10 @@ func (in *TalosOperationStatus) DeepCopyInto(out *TalosOperationStatus) {
 		*out = make([]TalosOperationMachineStatus, len(*in))
 		copy(*out, *in)
 	}
+	if in.LastRetry != nil {
+		in, out := &in.LastRetry, &out.LastRetry
+		*out = (*in).DeepCopy()
+	}
 	if in.Node != nil {
 		in, out := &in.Node, &out.Node
 		*out = new(TalosOperationNodeStatus)

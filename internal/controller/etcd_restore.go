@@ -579,7 +579,10 @@ func (r *TalosOperationReconciler) advanceEtcdRestore(
 	ctx context.Context, op *ichorv1alpha1.TalosOperation, cluster *ichorv1alpha1.TalosCluster,
 ) (ctrl.Result, error) {
 	if op.Status.Phase == ichorv1alpha1.TalosOperationPhasePaused && op.Status.FailureReason != "" {
-		return ctrl.Result{}, nil // a failed step is never retried by itself
+		// a failed step is never retried by itself, only by an explicit request
+		if retried, err := r.consumeRetry(ctx, op); err != nil || !retried {
+			return ctrl.Result{}, err
+		}
 	}
 
 	if r.TalosClient == nil {

@@ -34,6 +34,11 @@ var builtinUserRoles = []string{"viewer", "operator", "admin"}
 // TestBuiltinUserRoles guards ADR 0094 Decision 4: the three built-in ClusterRoles render only
 // with ichorUI.users.enabled, never hold secrets, impersonate or '*', each includes the one below,
 // are bound only to the groups ichor:viewer|operator|admin, and match config/rbac.
+const (
+	usersOn  = "ichorUI.users.enabled=true"
+	usersURL = "ichorUI.users.externalURL=https://ichor.example.com"
+)
+
 func TestBuiltinUserRoles(t *testing.T) {
 	off := renderChartWithValues(t, "ichor")
 	for _, n := range builtinUserRoles {
@@ -42,7 +47,7 @@ func TestBuiltinUserRoles(t *testing.T) {
 		}
 	}
 
-	docs := renderChartWithValues(t, "ichor", "ichorUI.users.enabled=true", "ichorUI.users.externalURL=https://ichor.example.com")
+	docs := renderChartWithValues(t, "ichor", usersOn, usersURL)
 	configDocs := loadYAMLDocs(t, "../../config/rbac/ichor_roles_binding.yaml")
 
 	var prev map[rbacTriple]bool
@@ -124,7 +129,7 @@ func TestBuiltinUserRoles(t *testing.T) {
 			t.Errorf("cluster-admin bound by default: %v", d)
 		}
 	}
-	ca := renderChartWithValues(t, "ichor", "ichorUI.users.enabled=true", "ichorUI.users.externalURL=https://ichor.example.com", "ichorUI.users.clusterAdminRoles={admin}")
+	ca := renderChartWithValues(t, "ichor", usersOn, usersURL, "ichorUI.users.clusterAdminRoles={admin}")
 	if b := find(ca, kindClusterRoleBinding, "ichor-admin-cluster-admin"); b == nil ||
 		!strings.Contains(fmt.Sprint(b["subjects"]), "ichor:admin") {
 		t.Errorf("clusterAdminRoles={admin} must bind cluster-admin to ichor:admin, got %v", b)

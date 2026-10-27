@@ -91,7 +91,7 @@ type localVerifier struct {
 }
 
 func (v localVerifier) Verify(ctx context.Context, raw string) (string, error) {
-	var pub []crypto.PublicKey
+	pub := make([]crypto.PublicKey, 0, len(v.keys.Public()))
 
 	for _, k := range v.keys.Public() {
 		pub = append(pub, k.Public().Key)

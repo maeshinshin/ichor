@@ -259,8 +259,13 @@ func TestAssess_NoRebootRules(t *testing.T) {
 	cases := []struct{ name, safe, sibling string }{
 		{
 			"registry mirrors", "machine.registries.mirrors.docker.io.endpoints",
-			"machine.registries.config.docker.io.auth.password",
+			pathKubeletMounts,
 		},
+		{"registry auth", "machine.registries.config.docker.io.auth.password", pathKubeletMounts},
+		{"registry tls", "machine.registries.config.registry.local:5000.tls.ca", pathKubeletMounts},
+		{"RegistryAuthConfig", "RegistryAuthConfig.password", pathKubeletMounts},
+		{"RegistryTLSConfig", "RegistryTLSConfig.ca", pathKubeletMounts},
+		{"RegistryMirrorConfig", "RegistryMirrorConfig.endpoints", pathKubeletMounts},
 		{"KubeNodeConfig labels", "KubeNodeConfig.labels.x", "KubeNodeConfig.nodeIP.validSubnets"},
 		{"KubeNodeConfig annotations", "KubeNodeConfig.annotations.x", "KubeNodeConfig.nodeIP.validSubnets"},
 		{"KubeNodeConfig taints", "KubeNodeConfig.taints.node-role.kubernetes.io/control-plane", "KubeNodeConfig.nodeIP"},

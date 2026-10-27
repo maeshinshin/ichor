@@ -529,8 +529,11 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 		}))
 
 		rot := f.storedRotation()
-		op, _ = f.runUntil(op, completed)
+
+		// The reconcile that reaches Done completes the operation too: nothing waits for a later one.
+		op = f.step(op)
 		Expect(stageOf(op)).To(Equal(ichorv1alpha1.CARotationStageDone))
+		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseCompleted))
 
 		// The Secret now holds the new CAs and nothing else of the rotation.
 		Expect(f.secretData()).NotTo(HaveKey(secretsbundle.RotationKey))

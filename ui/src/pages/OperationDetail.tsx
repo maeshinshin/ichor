@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'preact/hooks'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { PageHeader } from '@/components/PageHeader'
@@ -9,13 +12,15 @@ import { Section } from '@/components/SectionNav'
 import { StatusText } from '@/components/Status'
 import { OperationControls } from '@/components/OperationControls'
 import { CARotationCredentials } from '@/components/CARotationCredentials'
-import { NodeAction, OperationKind, type Operation } from '@/gen/ichor/v1alpha1/operation_pb'
+import { timestampDate, type Timestamp } from '@bufbuild/protobuf/wkt'
+import { NodeAction, OperationKind, type Operation, type OperationEvent } from '@/gen/ichor/v1alpha1/operation_pb'
 import { operationClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
 import { credentialsPanel } from '@/lib/credentials'
 import { describeError } from '@/lib/errors'
 import { restoreStepProgress } from '@/lib/etcdRestore'
 import { formatTimestamp } from '@/lib/format'
+import { formatDuration, nodePath, spanMs, summaryFallback, visibleEvents } from '@/lib/operationDetail'
 import { caStageProgress, kubernetesStageProgress, operationState, pollIntervalMs, progressCounts } from '@/lib/operations'
 import { opStateTone } from '@/lib/status'
 import { useCluster } from '@/lib/useCluster'
@@ -23,7 +28,9 @@ import { useMyPermissions } from '@/lib/useMyPermissions'
 import { useT } from '@/lib/useT'
 import { Link, navigate } from '@/router'
 
-type ErrorShape = { title: string; detail: string }
+const toDate = (ts: Timestamp | undefined): Date | undefined => (ts ? timestampDate(ts) : undefined)
+
+type ErrorShape ={ title: string; detail: string }
 
 // Progress view of one operation (architecture.md, "Upgrades": the three
 // upgrade kinds share a progress view): the phase and each machine's state
@@ -35,6 +42,10 @@ export function OperationDetail({ name }: { name: string }) {
   const namespace = cluster?.ref?.namespace
   const [op, setOp] = useState<Operation | null>(null)
   const [error, setError] = useState<ErrorShape | null>(null)
+  const [events, setEvents] = useState<OperationEvent[] | null>(null)
+  const [eventsError, setEventsError] = useState<ErrorShape | null>(null)
+  const [warningsOnly, setWarningsOnly] = useState(false)
+  const [now, setNow] = useState(() => new Date())
   const perms = useMyPermissions(undefined, op?.kind === OperationKind.CA_ROTATION ? op.cluster : undefined)
 
   useEffect(() => {
@@ -65,11 +76,43 @@ export function OperationDetail({ name }: { name: string }) {
     }
   }, [namespace, name])
 
+  // The activity log refreshes every 5 s while the operation can still change, and once more when it stops.
+  const active = op !== null && pollIntervalMs(operationState(op.phase, op.failureReason)) !== null
+  const loaded = op !== null
+  useEffect(() => {
+    if (!namespace || !loaded) return
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+
+    async function load() {
+      try {
+        const res = await operationClient.listOperationEvents({ operation: { namespace, name } })
+        if (cancelled) return
+        setEvents(res.events)
+        setEventsError(null)
+      } catch (err) {
+        if (cancelled) return
+        setEventsError(describeError(err))
+      }
+      if (cancelled) return
+      setNow(new Date())
+      if (active) timer = setTimeout(load, 5_000)
+    }
+
+    load()
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [namespace, name, loaded, active])
+
   if (clusterError) return <ErrorAlert {...clusterError} />
   if (error && !op) return <ErrorAlert {...error} />
   if (!op) return <PageSkeleton label={t('ops.loading')} />
 
   const state = operationState(op.phase, op.failureReason)
+  const shownEvents = visibleEvents(events ?? [], warningsOnly)
+  const title = op.summary || summaryFallback(op.ref?.name ?? name, enumLabel(OperationKind, op.kind), op.nodeMachine?.name)
   const { done, running } = progressCounts(op.machines)
   const position = op.caRotationStage === '' ? null : caStageProgress(op.caRotationStage)
   const stage = position ? { name: op.caRotationStage, ...position } : null
@@ -80,8 +123,8 @@ export function OperationDetail({ name }: { name: string }) {
   return (
     <>
       <PageHeader
-        title={op.ref?.name ?? name}
-        kind={t('kind.operation')}
+        title={title}
+        kind={`${t('kind.operation')} ${op.ref?.name ?? name}`}
         badges={
           <>
             <StatusText tone={opStateTone(state)}>{t(`ops.state.${state}`)}</StatusText>
@@ -101,6 +144,10 @@ export function OperationDetail({ name }: { name: string }) {
         }
         meta={[
           { label: t('ops.colKind'), value: enumLabel(OperationKind, op.kind) },
+          { label: t('ops.startedBy'), value: op.startedBy || '-' },
+          { label: t('ops.startedAt'), value: formatTimestamp(op.createdAt) },
+          { label: t('ops.finishedAt'), value: formatTimestamp(op.finishedAt) },
+          { label: t('ops.duration'), value: formatDuration(spanMs(toDate(op.createdAt), toDate(op.finishedAt), now)) },
           ...(op.kind === OperationKind.NODE
             ? [
                 { label: t('node.action.actionLabel'), value: enumLabel(NodeAction, op.nodeAction) },
@@ -164,6 +211,24 @@ export function OperationDetail({ name }: { name: string }) {
           {error && <ErrorAlert {...error} />}
         </div>
 
+        <Section id="what" title={t('ops.whatItDoes')}>
+          <Card>
+            <CardHeader>
+              <CardTitle>{title}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <dl class="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-1 text-sm">
+                {op.details.map((d) => (
+                  <div key={d.key} class="contents">
+                    <dt class="text-muted-foreground">{d.key}</dt>
+                    <dd class="min-w-0 break-words font-mono text-xs leading-5">{d.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </CardContent>
+          </Card>
+        </Section>
+
         <Section id="machines" title={t('ops.machines')}>
           {op.machines.length === 0 ? (
             <EmptyNote>{t(op.kind === OperationKind.ICHOR ? 'ops.ichorJob' : 'ops.noMachines')}</EmptyNote>
@@ -173,21 +238,70 @@ export function OperationDetail({ name }: { name: string }) {
                 <TableRow>
                   <TableHead>{t('col.name')}</TableHead>
                   <TableHead>{t('ops.colState')}</TableHead>
+                  <TableHead>{t('ops.colStep')}</TableHead>
+                  <TableHead>{t('ops.startedAt')}</TableHead>
+                  <TableHead>{t('ops.finishedAt')}</TableHead>
+                  <TableHead>{t('ops.duration')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {op.machines.map((m) => (
                   <TableRow key={m.name}>
-                    <TableCell>{m.name}</TableCell>
+                    <TableCell>
+                      <Link to={nodePath(m.name)} class="hover:underline">
+                        {m.name}
+                      </Link>
+                    </TableCell>
                     <TableCell>
                       {/* The controller's own word (InProgress, Completed), as received. */}
                       <StatusText tone={m.phase === 'Completed' ? 'good' : m.phase === 'InProgress' ? 'progress' : 'neutral'}>{m.phase}</StatusText>
                     </TableCell>
+                    <TableCell class="max-w-[28rem] whitespace-normal break-words font-mono text-xs">{[m.step, m.message].filter(Boolean).join(': ') || '-'}</TableCell>
+                    <TableCell>{formatTimestamp(m.startedAt)}</TableCell>
+                    <TableCell>{formatTimestamp(m.finishedAt)}</TableCell>
+                    <TableCell>{formatDuration(spanMs(toDate(m.startedAt), toDate(m.finishedAt), now))}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
           )}
+        </Section>
+
+        <Section id="activity" title={t('ops.activity')}>
+          <div class="mb-3 flex items-center gap-2">
+            <Checkbox id="op-warnings-only" checked={warningsOnly} onCheckedChange={(on: boolean | 'indeterminate') => setWarningsOnly(on === true)} />
+            <Label htmlFor="op-warnings-only">{t('ops.warningsOnly')}</Label>
+          </div>
+          {eventsError && <ErrorAlert {...eventsError} />}
+          {events !== null &&
+            (shownEvents.length === 0 ? (
+              <EmptyNote>{t('ops.noEvents')}</EmptyNote>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t('ops.eventTime')}</TableHead>
+                    <TableHead>{t('ops.eventType')}</TableHead>
+                    <TableHead>{t('ops.eventObject')}</TableHead>
+                    <TableHead>{t('ops.eventReason')}</TableHead>
+                    <TableHead>{t('ops.eventMessage')}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {shownEvents.map((e, i) => (
+                    <TableRow key={i}>
+                      <TableCell class="whitespace-nowrap">{formatTimestamp(e.time)}</TableCell>
+                      <TableCell>
+                        <Badge variant={e.type === 'Warning' ? 'destructive' : 'outline'}>{e.type}</Badge>
+                      </TableCell>
+                      <TableCell class="whitespace-nowrap">{`${e.objectKind}/${e.objectName}`}</TableCell>
+                      <TableCell>{e.reason}</TableCell>
+                      <TableCell class="whitespace-normal break-words font-mono text-xs">{e.message}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ))}
         </Section>
       </div>
     </>

@@ -586,7 +586,7 @@ func (r *TalosOperationReconciler) advanceEtcdRestore(
 			return r.restoreWait(ctx, op, err.Error()), nil
 		}
 
-		run.mirror(ctx, marker, "")
+		run.mirror(ctx, marker, marker.LastNote)
 
 		return ctrl.Result{RequeueAfter: etcdRestoreWaitInterval}, nil
 	}
@@ -630,10 +630,19 @@ func (run *restoreRun) mirror(ctx context.Context, m *etcdbackup.RestoreMarker, 
 	}
 }
 
+// etcdRestoreFallback is what the operator is told when the restore stops: the offline recovery needs
+// only the secrets bundle and the bucket, no Kubernetes and no controller.
+const etcdRestoreFallback = "To finish by hand, without Kubernetes or this controller: `ichor restore --recover-cluster` " +
+	"(it needs the cluster's secrets bundle and the backup bucket)."
+
 // failed pauses the operation with the reason, in the status and (when there is a marker) in the marker
 // so that a recreated operation shows it too. It is final: a failed restore step is not retried.
 func (run *restoreRun) failed(ctx context.Context, m *etcdbackup.RestoreMarker, cause error) (ctrl.Result, error) {
 	msg := run.clean(cause)
+
+	if m != nil && run.ours(m) && !strings.Contains(msg, etcdRestoreFallback) {
+		msg += " " + etcdRestoreFallback
+	}
 
 	if m != nil && m.Failure == "" {
 		next := *m
@@ -839,6 +848,8 @@ func (run *restoreRun) requestReconcile(ctx context.Context) error {
 		}
 	}
 
+	run.restartNetworkAgents(ctx)
+
 	st := op.Status.EtcdRestore
 	st.Step, st.ReconcileRequest = ichorv1alpha1.EtcdRestoreStepReconciling, token
 	st.Message = "the cluster is back; waiting for every machine to reconcile against the restored state."
@@ -940,7 +951,18 @@ func (r *TalosOperationReconciler) recreateRestoreOperation(ctx context.Context,
 	}
 
 	if err := r.Create(ctx, op); err != nil {
-		return client.IgnoreAlreadyExists(err)
+		if !apierrors.IsAlreadyExists(err) {
+			return err
+		}
+
+		// A first try created it and failed to write the status: finish that.
+		if err := readerOrClient(r.APIReader, r.Client).Get(ctx, client.ObjectKeyFromObject(op), op); err != nil {
+			return err
+		}
+
+		if op.Status.EtcdRestore != nil {
+			return nil
+		}
 	}
 
 	snap, started := metav1.NewTime(m.SnapshotTime), metav1.NewTime(m.StartedAt)
@@ -970,25 +992,61 @@ func (r *TalosOperationReconciler) resumeRolledBack(ctx context.Context, key typ
 	}
 }
 
-// ResumeEtcdRestores is run once when the controller starts, with the API up. A restore whose operation
-// is gone (the rollback deleted it) is recreated from its marker. It reads one small object per
-// TalosEtcdBackup.
+// ResumeEtcdRestores is one pass over the markers, with the API up. A restore whose operation is gone
+// (the rollback deleted it) is recreated from its marker. It reads one small object per
+// TalosEtcdBackup. The error lists what could not be done this time; ResumeEtcdRestoresUntilDone
+// repeats the pass.
 func (r *TalosOperationReconciler) ResumeEtcdRestores(ctx context.Context) error {
 	var backups ichorv1alpha1.TalosEtcdBackupList
 	if err := readerOrClient(r.APIReader, r.Client).List(ctx, &backups); err != nil {
 		return err
 	}
 
-	log := logf.FromContext(ctx)
+	var errs []error
 
 	for i := range backups.Items {
-		bk := &backups.Items[i]
-		if err := r.resumeBackup(ctx, client.ObjectKeyFromObject(bk)); err != nil {
-			log.Error(err, "looking for an unfinished etcd restore", "backup", client.ObjectKeyFromObject(bk).String())
+		key := client.ObjectKeyFromObject(&backups.Items[i])
+		if err := r.resumeBackup(ctx, key); err != nil {
+			errs = append(errs, fmt.Errorf("looking for an unfinished etcd restore of backup %s: %w", key.String(), err))
 		}
 	}
 
-	return nil
+	return errors.Join(errs...)
+}
+
+// resumeBackoffStart and resumeBackoffMax bound the pause between two passes of
+// ResumeEtcdRestoresUntilDone. Variables so tests can shorten them.
+var (
+	resumeBackoffStart = time.Second
+	resumeBackoffMax   = 30 * time.Second
+)
+
+// ResumeEtcdRestoresUntilDone repeats ResumeEtcdRestores, with a growing pause, until a pass has
+// nothing left to do or ctx ends. It is what the manager runs. Creating the operation goes through the
+// break-glass admission webhook (fail-closed), which this same process serves and which is not in the
+// Service until the Pod is Ready: the first passes after a start are expected to be refused, so a
+// failure is retried, never given up on (the marker stays until the operation is back). It returns nil
+// when ctx ends, so that it never takes the manager down.
+func (r *TalosOperationReconciler) ResumeEtcdRestoresUntilDone(ctx context.Context) error {
+	log := logf.FromContext(ctx)
+	wait := resumeBackoffStart
+
+	for {
+		err := r.ResumeEtcdRestores(ctx)
+		if err == nil {
+			return nil
+		}
+
+		log.Info("an etcd restore is not resumed yet; trying again", "error", err.Error(), "in", wait.String())
+
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(wait):
+		}
+
+		wait = min(wait*2, resumeBackoffMax)
+	}
 }
 
 // resumeBackup recreates the operation of backup's marker if the API no longer has it.
@@ -1104,4 +1162,74 @@ func (r *TalosOperationReconciler) clusterOf(ctx context.Context, op *ichorv1alp
 	}
 
 	return &c
+}
+
+const (
+	controlPlaneLabel = "node-role.kubernetes.io/control-plane"
+)
+
+// restartNetworkAgents deletes the kube-proxy pods of every node that was not wiped. The
+// restore wipes etcd, not the nodes: a worker keeps running through the rollback with the Service rules
+// kube-proxy programmed from the cluster's state before it, and after the rewind its watches can sit
+// on the old state (on hardware the Service IP refused connections on a worker although the
+// apiservers and Endpoints were healthy, until its kube-proxy pod was deleted). The control planes
+// reboot with the wipe, and their pods start fresh. The pods are found through the DaemonSet's own
+// selector in its namespace and deleted one by one, by name. Best effort: a failure is logged, not fatal,
+// because the machines still reconcile and the operator can delete the pods by hand.
+//
+// ponytail: only kube-proxy. The CNI's pods (flannel, cilium) are not restarted: they were not seen
+// failing, and restarting a Cilium agent drops its datapath state on every node; revisit if a CNI is
+// seen to keep stale state after a restore.
+func (run *restoreRun) restartNetworkAgents(ctx context.Context) {
+	kc := run.r.KubeClient
+	if kc == nil {
+		return
+	}
+
+	log := logf.FromContext(ctx)
+
+	ds, err := kc.AppsV1().DaemonSets(kubeSystemNamespace).Get(ctx, kubeProxyName, metav1.GetOptions{})
+	if err != nil {
+		if !apierrors.IsNotFound(err) { // not found: kube-proxy is replaced by the CNI
+			log.Info("not restarting kube-proxy: reading its DaemonSet failed", "error", err.Error())
+		}
+
+		return
+	}
+
+	selector, err := metav1.LabelSelectorAsSelector(ds.Spec.Selector)
+	if err != nil || selector.Empty() {
+		return
+	}
+
+	wiped := map[string]bool{}
+
+	nodes, err := kc.CoreV1().Nodes().List(ctx, metav1.ListOptions{LabelSelector: controlPlaneLabel})
+	if err != nil {
+		log.Info("not restarting kube-proxy: listing the control plane nodes failed", "error", err.Error())
+
+		return
+	}
+
+	for i := range nodes.Items {
+		wiped[nodes.Items[i].Name] = true
+	}
+
+	pods, err := kc.CoreV1().Pods(kubeSystemNamespace).List(ctx, metav1.ListOptions{LabelSelector: selector.String()})
+	if err != nil {
+		log.Info("not restarting kube-proxy: listing its pods failed", "error", err.Error())
+
+		return
+	}
+
+	for i := range pods.Items {
+		p := &pods.Items[i]
+		if wiped[p.Spec.NodeName] || !metav1.IsControlledBy(p, ds) && len(p.OwnerReferences) > 0 {
+			continue
+		}
+
+		if err := kc.CoreV1().Pods(kubeSystemNamespace).Delete(ctx, p.Name, metav1.DeleteOptions{}); client.IgnoreNotFound(err) != nil {
+			log.Info("deleting a kube-proxy pod failed", "pod", p.Name, "node", p.Spec.NodeName, "error", err.Error())
+		}
+	}
 }

@@ -113,14 +113,15 @@ func (s *Server) planEtcdRestore(ctx context.Context, clusterRef *pb.ObjectRef, 
 		fmt.Sprintf("Wipe etcd data on every control plane (%s): their EPHEMERAL partitions are reset and the nodes reboot. STATE stays, so each keeps its configuration.", strings.Join(cps, ", ")),
 		"Upload the snapshot to one control plane and start etcd from it.",
 		"The other control planes rejoin etcd by themselves. Wait until all are members and the Kubernetes API answers.",
-		"Ask every machine to reconcile again and wait until each is Ready.",
+		"Restart kube-proxy on the nodes that were not wiped, ask every machine to reconcile again and wait until each is Ready.",
 	}
 	p.resp.Warning = fmt.Sprintf("This rewinds the whole cluster to the state of %s. Everything written since is lost: "+
 		"every Kubernetes object, including Ichor's own resources and Secrets, and every change to machines or this cluster. "+
 		"The Kubernetes API is unavailable from the first wipe until etcd is back, which takes several minutes; "+
 		"running pods keep running but nothing can be changed. Afterwards every machine reconciles against the restored "+
 		"state, which may differ from what the nodes run, so check each machine. If Ichor's controller runs on the only "+
-		"control plane it stops with it and `ichor restore --recover-cluster` finishes the restore.", whenText(taken))
+		"control plane it stops with it and `ichor restore --recover-cluster` finishes the restore. That command is also the way out "+
+		"if the restore stops with an error.", whenText(taken))
 
 	p.resp.Blocked, _ = s.etcdRestoreBlocked(ctx, p, &cluster, &bk, taken, len(cps))
 

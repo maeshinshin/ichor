@@ -157,6 +157,46 @@ cluster name; `--yes` skips the y/N question but not the name, and without `--br
 review step that shows the plan, the typed cluster name and the reason; the operation page shows the step,
 the snapshot and its time.
 
+## Changes after the first run on hardware (3 control planes, 1 worker, Talos v1.14.3)
+
+Three things went wrong; each is now handled and tested.
+
+1. **The operation was never recreated after a restart.** `ResumeEtcdRestores` ran once, as soon as the manager
+   started, and creating the `TalosOperation` goes through the fail-closed break-glass webhook
+   (`vbreakglassop-v1alpha1.kb.io`), which this same process serves and which is not behind the Service until the
+   Pod is Ready: `connect: connection refused`, one log line, marker left, nothing ever retried (seen twice). The
+   controller's own identity is exempt in that webhook (`DefaultExemptUsers`, from `POD_NAMESPACE` and
+   `POD_SERVICE_ACCOUNT`, set in `config/manager` and the chart; tested by "admits Ichor's own controller, which
+   recreates the operation"), but an exempt user is still sent to the webhook: exemption is decided inside it. So
+   the call cannot avoid the webhook, and the fix is to wait for it. The manager now runs
+   `ResumeEtcdRestoresUntilDone` as a runnable that needs leader election, so it starts after the webhook server
+   and the caches; one pass (`ResumeEtcdRestores`) now returns the errors it met, and the runner repeats it with a
+   pause from 1s doubling to 30s until a pass has nothing left to do (no marker, or the operation is back) or the
+   manager stops. Creating the operation and writing its status is also repeatable: if the status write failed
+   after the create, the next pass finds the operation without `status.etcdRestore` and writes it.
+2. **A node that was not wiped kept stale kube-proxy state.** After the rewind, on the worker the Service IP
+   refused connections although the apiservers and Endpoints were healthy; deleting the worker's kube-proxy pod
+   fixed it, and the controller (running there) had been crash-looping on it. When the `Rejoining` step asks the
+   machines to reconcile, it now also deletes the kube-proxy pods of every node that is not a control plane
+   (control planes are wiped and reboot, so their pods start fresh): found through the `kube-proxy` DaemonSet's own
+   selector, in `kube-system` only, and deleted one by one by name. Best effort and logged. A cluster without
+   the DaemonSet (kube-proxy replaced by the CNI) is left alone. The CNI's pods are deliberately not restarted:
+   nothing was seen failing, and restarting an agent such as Cilium's drops datapath state on every node; if a CNI is
+   seen to keep stale state after a restore, add its DaemonSet next to kube-proxy.
+   *The controller's own caches.* The rollback is preceded by the loss of the API, which stops the manager (leader
+   election) and the process; the replacement process starts with empty informers against the returned API, so no
+   cache outlives the rewind in the designed path. A manager that somehow stays up across the rewind relies on
+   client-go's reflectors relisting on "resource version too large"; that is not relied on here, and
+   the simplest safe answer, a restart, is what happens.
+3. **The job must not die silently.** The marker (the only thing that survives) now records `lastNote`, the job's
+   last transient problem, whenever it changes, and `failure` for a final error. A panic in the job is turned into
+   a final error instead of a crash. A kill or an out-of-memory death cannot write anything, but the last note
+   is already there for the next start; the reconcile shows `lastNote` as the status message while the job runs,
+   and a failure becomes the operation's `failureReason` (`ichor operation get`). Every failure after the marker
+   was written now ends with the way out: `ichor restore --recover-cluster`, which needs only the secrets bundle
+   and the bucket (the plan already says the same for a controller on a single control plane). The memory use of the
+   snapshot handling itself is `internal/etcdbackup`'s concern and is fixed separately.
+
 ## Not decided here
 
 - Restoring from an uploaded snapshot file, and from storage other than S3.

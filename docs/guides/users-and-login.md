@@ -45,6 +45,20 @@ failed, and is stored nowhere; the first login forces a change. Save it when it
 is printed. The controller renders the kube-apiserver login settings next; that
 restarts the kube-apiserver on each control plane (see the end of this guide).
 
+`ichor init` takes four more flags, all of which need `--ui-url`. They are
+checked before anything is written, and each has a chart value:
+
+| `ichor init` flag | Chart value | Effect on ichor-ui |
+|---|---|---|
+| `--ui-tls-secret NAME` | `ichorUI.tls.secretName` | Mounts the existing `kubernetes.io/tls` Secret `NAME` (in `ichor-system`), sets `--tls-cert-file` and `--tls-key-file`, and probes over HTTPS. |
+| `--ui-tls-cert FILE` with `--ui-tls-key FILE` | `ichorUI.tls.secretName` | Alternative to `--ui-tls-secret`: init stores the PEM pair as the Secret `ichor-ui-tls` and uses it the same way. The key is never printed. |
+| `--kube-api-server-url URL` | `ichorUI.users.kubeAPIServerURL` | `--kube-api-server-url`: the https URL put in users' kubeconfigs (default: the cluster's `spec.endpoint`). |
+| `--kube-api-tls-server-name NAME` | `ichorUI.users.kubeAPITLSServerName` | `--kube-api-tls-server-name`: the `tls-server-name` in users' kubeconfigs, for a URL host outside the kube-apiserver certificate. |
+
+Without the TLS flags ichor-ui serves plain HTTP. Making it reachable at the
+`--ui-url` (a LoadBalancer, an Ingress or a Gateway) is your job: init
+installs none of them, with or without `--ui-tls-secret`.
+
 On an existing install, set `ichorUI.users.enabled` to `true` and
 `ichorUI.users.externalURL` to the https URL in the chart values, and create
 the first admin before every request starts to need a login:

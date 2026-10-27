@@ -145,6 +145,8 @@ func (r *TalosOperationReconciler) advanceNode(
 	if waiting {
 		res, err := n.await(ctx)
 		if err != nil {
+			n.cleanup(ctx)
+
 			return r.nodeFailed(ctx, op, err)
 		}
 
@@ -241,6 +243,8 @@ func (n *nodeRun) recordRequest(ctx context.Context, message string) error {
 func (n *nodeRun) wait(ctx context.Context, why string) (ctrl.Result, error) {
 	st := n.op.Status.Node
 	if st != nil && st.RequestedAt != nil && time.Since(st.RequestedAt.Time) > nodeActionTimeout {
+		n.cleanup(ctx) // the operation pauses: the node must not stay cordoned and unschedulable
+
 		return n.r.nodeFailed(ctx, n.op, fmt.Errorf("%q did not finish within %s: %s", n.m.Name, nodeActionTimeout, why))
 	}
 

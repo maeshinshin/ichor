@@ -167,8 +167,9 @@ docker-build-installer: build-installer ## Build the installer image: the ichor 
 	$(CONTAINER_TOOL) build -f Dockerfile.installer --build-arg VERSION=$(VERSION) -t ${IMG_INSTALLER} .
 
 .PHONY: demo-images
-demo-images: manifests generate kustomize ui-build ## Build the three demo images with crane and push them to REGISTRY (VERSION=v0.0.8-abc1234 REGISTRY=localhost:5000); the tree stays unchanged.
-	VERSION="$(VERSION)" REGISTRY="$(REGISTRY)" KUSTOMIZE="$(KUSTOMIZE)" test/harness/ui-demo/images.sh
+demo-images: ui-build ## Build the three demo images with crane and push them to REGISTRY (VERSION=v0.0.8-abc1234 REGISTRY=localhost:5000); the tree stays unchanged.
+	$(MAKE) build-installer IMG=ghcr.io/maeshinshin/ichor-controller:$(VERSION) IMG_UI=ghcr.io/maeshinshin/ichor-ui:$(VERSION)
+	VERSION="$(VERSION)" REGISTRY="$(REGISTRY)" test/harness/ui-demo/images.sh
 
 .PHONY: docker-build-ichor-ui
 docker-build-ichor-ui: ## Build docker image with ichor-ui, the real UI embedded (not the placeholder).
@@ -193,10 +194,12 @@ docker-buildx: ## Build and push docker image for the manager for cross-platform
 
 .PHONY: build-installer
 build-installer: manifests generate kustomize ## Generate a consolidated YAML with CRDs and deployment.
+	@# Built from a temp copy of config/, so the tracked kustomization.yaml files are never edited.
 	mkdir -p dist
-	cd config/manager && "$(KUSTOMIZE)" edit set image controller=${IMG}
-	cd config/manager-ui && "$(KUSTOMIZE)" edit set image ichor-ui=${IMG_UI}
-	"$(KUSTOMIZE)" build config/default > dist/install.yaml
+	@work=$$(mktemp -d) && trap 'rm -rf "$$work"' EXIT && cp -r config "$$work/config" && \
+	(cd "$$work/config/manager" && "$(KUSTOMIZE)" edit set image controller=${IMG}) && \
+	(cd "$$work/config/manager-ui" && "$(KUSTOMIZE)" edit set image ichor-ui=${IMG_UI}) && \
+	"$(KUSTOMIZE)" build "$$work/config/default" > dist/install.yaml
 
 ##@ Deployment
 
@@ -215,10 +218,8 @@ uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified 
 	if [ -n "$$crds" ]; then echo "$$crds" | "$(KUBECTL)" delete --ignore-not-found=$(ignore-not-found) -f -; else echo "No CRDs to delete; skipping."; fi
 
 .PHONY: deploy
-deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
-	cd config/manager && "$(KUSTOMIZE)" edit set image controller=${IMG}
-	cd config/manager-ui && "$(KUSTOMIZE)" edit set image ichor-ui=${IMG_UI}
-	"$(KUSTOMIZE)" build config/default | "$(KUBECTL)" apply -f -
+deploy: build-installer ## Deploy controller to the K8s cluster specified in ~/.kube/config.
+	"$(KUBECTL)" apply -f dist/install.yaml
 
 .PHONY: undeploy
 undeploy: kustomize ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.

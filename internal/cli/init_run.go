@@ -50,6 +50,10 @@ type initOptions struct {
 	RepoPassword    string
 
 	GitOpsDir string
+
+	// UIURL turns Ichor's own users on (ADR 0094); AdminUser names the first admin.
+	UIURL     string
+	AdminUser string
 }
 
 // initDeps bundles init's side effects -- hardware identity, the Talos
@@ -85,7 +89,25 @@ type initDeps struct {
 // continuous reconciliation ("once Argo CD reports each bootstrapped
 // component Synced and Healthy, remove it from inlineManifests"), not
 // something a one-shot CLI command does.
-func runInit(ctx context.Context, opts initOptions, deps initDeps) error {
+func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
+	if opts.UIURL != "" && opts.AdminUser == "" {
+		opts.AdminUser = defaultAdminUser
+	}
+
+	if err := validateInitUsers(opts); err != nil {
+		return err
+	}
+
+	// The generated admin password is printed once, at the very end, also when a later step fails: by then
+	// the user exists and nothing else could show it.
+	var adminPassword string
+
+	defer func() {
+		if opts.UIURL != "" {
+			initUsersEpilogue(deps.Stderr, opts, adminPassword)
+		}
+	}()
+
 	// Step 2: settle the cluster's shape.
 	cluster, err := buildInitPlan(opts.initPlanInput, deps.Stderr)
 	if err != nil {
@@ -248,6 +270,13 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) error {
 		return err
 	}
 
+	// ADR 0094 unit 9: the first admin exists before the switch that makes every request need a token.
+	if opts.UIURL != "" {
+		if adminPassword, err = initUsers(ctx, opts, k8sClient, deps.Stderr); err != nil {
+			return err
+		}
+	}
+
 	// Step 5: create the CRs.
 	create := func(ctx context.Context, obj client.Object) error {
 		return createWhenWebhooksUp(ctx, k8sClient, obj, deps.BootstrapWait, deps.BootstrapInterval, deps.Stderr)
@@ -255,6 +284,12 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) error {
 
 	if err := createCRs(ctx, create, cluster, machine, candidates, deps.Stdout, deps.Output); err != nil {
 		return err
+	}
+
+	if opts.UIURL != "" {
+		if err := setClusterAuthentication(ctx, k8sClient, cluster, opts.UIURL); err != nil {
+			return err
+		}
 	}
 
 	if opts.ArgoCD {

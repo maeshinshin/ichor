@@ -27,6 +27,7 @@ import (
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	"github.com/siderolabs/talos/pkg/machinery/constants"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -216,6 +217,10 @@ func newTestScheme(t *testing.T) *runtime.Scheme {
 	s := runtime.NewScheme()
 	if err := corev1.AddToScheme(s); err != nil {
 		t.Fatalf("adding corev1 to scheme: %v", err)
+	}
+
+	if err := appsv1.AddToScheme(s); err != nil {
+		t.Fatalf("adding appsv1 to scheme: %v", err)
 	}
 
 	if err := ichorv1alpha1.AddToScheme(s); err != nil {

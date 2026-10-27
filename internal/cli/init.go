@@ -153,6 +153,12 @@ func init() {
 	flags.StringVar(&initOpts.RepoUsername, "repo-username", "", "username for --repo, if it is private")
 	flags.StringVar(&initOpts.RepoPassword, "repo-password", "", "password or token for --repo, if it is private")
 
+	flags.StringVar(&initOpts.UIURL, "ui-url", "",
+		"turn Ichor's own users on (ADR 0094): the https URL at which browsers and the CLI reach ichor-ui, the issuer of every token; "+
+			"needs --version-contract v1.14 or later")
+	flags.StringVar(&initOpts.AdminUser, "admin-user", "",
+		"with --ui-url: name of the first admin (default "+defaultAdminUser+"); its generated password is printed once to stderr "+
+			"and must be changed at the first sign-in")
 	flags.StringVar(&initOpts.GitOpsDir, "gitops-dir", "", "write the GitOps repository skeleton to this local directory")
 
 	for _, name := range []string{flagCluster, cniKey, "endpoint-address", "node-endpoint", "talos-version", "version-contract", "install-disk"} {

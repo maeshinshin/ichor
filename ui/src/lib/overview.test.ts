@@ -35,3 +35,36 @@ test('expiringCertificatesMessage returns the message only while CertificatesExp
   assert.equal(expiringCertificatesMessage([{ type: 'CertificatesExpiring', status: 'False', message: 'none' }]), null)
   assert.equal(expiringCertificatesMessage([]), null)
 })
+
+import { backupsValue, newestSnapshotSeconds, nodesValue, tileTargets, timeAgo, versionsValue } from './overview.ts'
+
+test('timeAgo picks the coarsest unit', () => {
+  const now = 1_000_000_000
+  assert.equal(timeAgo(now, now - 5_000), 'just now')
+  assert.equal(timeAgo(now, now + 5_000), 'just now')
+  assert.equal(timeAgo(now, now - 5 * 60_000), '5 min ago')
+  assert.equal(timeAgo(now, now - 3 * 3600_000 - 59_000), '3 h ago')
+  assert.equal(timeAgo(now, now - 49 * 3600_000), '2 d ago')
+})
+
+test('backupsValue: not loaded, not configured, no snapshot, newest age', () => {
+  const now = 100_000_000
+  const snap = (s: number) => ({ time: { seconds: BigInt(s) } })
+  assert.equal(backupsValue(null, now), '-')
+  assert.equal(backupsValue([], now), 'Not configured')
+  assert.equal(backupsValue([{ snapshots: [] }], now), 'No snapshot yet')
+  const backups = [{ snapshots: [snap(now / 1000 - 7200), snap(now / 1000 - 3600)] }, { snapshots: [snap(now / 1000 - 90000)] }]
+  assert.equal(newestSnapshotSeconds(backups), now / 1000 - 3600)
+  assert.equal(backupsValue(backups, now), '1 h ago')
+})
+
+test('tile values and targets', () => {
+  assert.equal(nodesValue(3, 4), '3 / 4 ready')
+  assert.equal(versionsValue('v1.14.3', '1.37.1'), 'Talos v1.14.3 · K8s v1.37.1')
+  assert.equal(versionsValue('', 'v1.37.1'), 'Talos - · K8s v1.37.1')
+  assert.deepEqual(tileTargets(null).operation, { kind: 'route', to: '/operations' })
+  assert.deepEqual(tileTargets('upgrade-1').operation, { kind: 'route', to: '/operations/upgrade-1' })
+  assert.deepEqual(tileTargets(null).nodes, { kind: 'route', to: '/nodes' })
+  assert.deepEqual(tileTargets(null).backups, { kind: 'route', to: '/backups' })
+  assert.deepEqual(tileTargets(null).versions, { kind: 'anchor', id: 'versions' })
+})

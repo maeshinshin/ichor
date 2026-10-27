@@ -143,21 +143,19 @@ func (s *Server) now() time.Time {
 func (s *Server) getMachineAndCluster(
 	ctx context.Context, ref *pb.ObjectRef,
 ) (*ichorv1alpha1.TalosMachine, *ichorv1alpha1.TalosCluster, error) {
-	var m ichorv1alpha1.TalosMachine
-
-	key := types.NamespacedName{Namespace: ref.GetNamespace(), Name: ref.GetName()}
-	if err := s.Get(ctx, key, &m); err != nil {
-		return nil, nil, mapGetError(fmt.Sprintf("machine %q", key), err)
+	m, err := s.resolveMachine(ctx, ref)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	var c ichorv1alpha1.TalosCluster
 
 	ckey := types.NamespacedName{Namespace: m.Namespace, Name: m.Spec.ClusterRef.Name}
 	if err := s.Get(ctx, ckey, &c); err != nil {
-		return nil, nil, mapGetError(fmt.Sprintf("cluster %q for machine %q", ckey, key), err)
+		return nil, nil, mapGetError(fmt.Sprintf("cluster %q for machine %q", ckey, m.Name), err)
 	}
 
-	return &m, &c, nil
+	return m, &c, nil
 }
 
 // mapGetError turns a client.Client Get error into the connect.Code a

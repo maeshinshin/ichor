@@ -33,6 +33,11 @@ const (
 	execInfoEnv       = "KUBERNETES_EXEC_INFO"
 	execCredentialAPI = "client.authentication.k8s.io/v1"
 	defaultAuthClient = "ichor-cli"
+
+	// defaultAuthAudience is what a kubeconfig token is for; user and status
+	// commands ask for ichor-ui themselves.
+	defaultAuthAudience = "ichor-kube"
+	uiAudience          = "ichor-ui"
 )
 
 var authOpts struct {
@@ -40,6 +45,7 @@ var authOpts struct {
 	clientID  string
 	audience  string
 	noBrowser bool
+	caFile    string
 }
 
 var authCmd = &cobra.Command{
@@ -111,16 +117,23 @@ var authLogoutCmd = &cobra.Command{
 
 func init() {
 	pf := authCmd.PersistentFlags()
-	pf.StringVar(&authOpts.issuer, "issuer", "", "Ichor OIDC issuer URL (required)")
+	pf.StringVar(&authOpts.issuer, "issuer", os.Getenv("ICHOR_ISSUER"), "Ichor OIDC issuer URL, the external https URL of ichor-ui (required; env ICHOR_ISSUER)")
 	pf.StringVar(&authOpts.clientID, "client-id", defaultAuthClient, "OIDC client id")
-	pf.StringVar(&authOpts.audience, "audience", "", "token audience (for example ichor-kube or ichor-ui); default: the client id")
+	pf.StringVar(&authOpts.audience, "audience", defaultAuthAudience, "token audience: ichor-kube (the kube-apiserver) or ichor-ui (ichor-ui itself)")
+	addCAFileFlag(pf)
 	authLoginCmd.Flags().BoolVar(&authOpts.noBrowser, "no-browser", false, "print the login URL instead of opening a browser")
 
-	authCmd.AddCommand(authLoginCmd, authTokenCmd, authLogoutCmd)
+	authCmd.AddCommand(authLoginCmd, authTokenCmd, authLogoutCmd, authStatusCmd, authKubeconfigCmd)
 	rootCmd.AddCommand(authCmd)
 }
 
 func newAuthFlow(cmd *cobra.Command, openBrowserToo bool) (*authFlow, error) {
+	return newAuthFlowFor(cmd, authOpts.audience, openBrowserToo)
+}
+
+// newAuthFlowFor is newAuthFlow for a token of another audience (the user and
+// status commands present ichor-ui's, not the kube-apiserver's).
+func newAuthFlowFor(cmd *cobra.Command, audience string, openBrowserToo bool) (*authFlow, error) {
 	if authOpts.issuer == "" {
 		return nil, errors.New("--issuer is required")
 	}
@@ -130,9 +143,14 @@ func newAuthFlow(cmd *cobra.Command, openBrowserToo bool) (*authFlow, error) {
 		return nil, err
 	}
 
+	hc, err := authHTTPClient(authOpts.caFile)
+	if err != nil {
+		return nil, err
+	}
+
 	f := &authFlow{
-		Issuer: authOpts.issuer, ClientID: authOpts.clientID, Audience: authOpts.audience,
-		Dir: dir, Stderr: cmd.ErrOrStderr(),
+		Issuer: authOpts.issuer, ClientID: authOpts.clientID, Audience: audience,
+		Dir: dir, Stderr: cmd.ErrOrStderr(), HTTP: hc,
 	}
 	if openBrowserToo {
 		f.OpenBrowser = openBrowser

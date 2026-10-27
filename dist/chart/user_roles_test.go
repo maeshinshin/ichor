@@ -25,9 +25,10 @@ import (
 // builtinUserRoles are the three built-in roles, lowest first. The chart names them
 // ichor-<name>; config/rbac names them <name> and kustomize's namePrefix adds "ichor-".
 const (
-	ichorGroup = "ichor.maesh.dev"
-	verbStart  = "start"
-	verbUpdate = "update"
+	ichorGroup      = "ichor.maesh.dev"
+	verbStart       = "start"
+	verbUpdate      = "update"
+	verbImpersonate = "impersonate"
 )
 
 var builtinUserRoles = []string{"viewer", "operator", "admin"}
@@ -60,7 +61,7 @@ func TestBuiltinUserRoles(t *testing.T) {
 		got := rbacTriples(allRules(role))
 		for tr := range got {
 			if tr.verb == "*" || tr.resource == "*" || tr.group == "*" ||
-				tr.verb == "impersonate" || strings.Contains(tr.resource, "secrets") {
+				tr.verb == verbImpersonate || strings.Contains(tr.resource, "secrets") {
 				t.Errorf("ClusterRole ichor-%s grants %s", n, tr)
 			}
 		}
@@ -137,6 +138,39 @@ func TestBuiltinUserRoles(t *testing.T) {
 		!strings.Contains(fmt.Sprint(b["subjects"]), "ichor:admin") {
 		t.Errorf("clusterAdminRoles={admin} must bind cluster-admin to ichor:admin, got %v", b)
 	}
+}
+
+// TestUserAccessRoleEvents guards: the namespaced ichor-user-access
+// Role lets viewers and operators read Events (the operation page's activity log), read-only, and
+// the chart and config/rbac copies agree.
+func TestUserAccessRoleEvents(t *testing.T) {
+	docs := renderChartWithValues(t, "ichor", usersOn, usersURL)
+	role := find(docs, "Role", "ichor-user-access")
+	if role == nil {
+		t.Fatal("expected Role ichor-user-access with ichorUI.users.enabled=true")
+	}
+
+	got := rbacTriples(allRules(role))
+	for _, g := range []string{"", "events.k8s.io"} {
+		for _, v := range []string{"get", "list", "watch"} {
+			if !got[rbacTriple{g, "events", v, ""}] {
+				t.Errorf("Role ichor-user-access lacks %s events %s", g, v)
+			}
+		}
+	}
+
+	for tr := range got {
+		if tr.resource == "events" && tr.verb != "get" && tr.verb != "list" && tr.verb != "watch" {
+			t.Errorf("Role ichor-user-access grants %s", tr)
+		}
+		if tr.verb == "*" || tr.verb == verbImpersonate || strings.Contains(tr.resource, "secrets") {
+			t.Errorf("Role ichor-user-access grants %s", tr)
+		}
+	}
+
+	cfg := loadYAMLDocs(t, "../../config/rbac/ichor_user_access_role.yaml")
+	checkRBACRulesMatch(t, "ichor", "Role ichor-user-access", find(cfg, "Role", "user-access"), role,
+		"config/rbac/ichor_user_access_role.yaml", "dist/chart/templates/rbac/ichor-user-roles.yaml")
 }
 
 // TestBreakGlassRole guards: the break-glass verb is grantable on clusters, machines and

@@ -173,7 +173,7 @@ var _ = Describe("ichor-ui generated RBAC", func() {
 
 		op.Status.CARotation = &ichorv1alpha1.TalosOperationCARotationStatus{
 			Stage:        ichorv1alpha1.CARotationStageAwaitingCredentials,
-			Certificates: []ichorv1alpha1.CARotationCertificate{{Name: "talos", Previous: "a", Next: "b"}},
+			Certificates: []ichorv1alpha1.CARotationCertificate{{Name: certTalos, Previous: "a", Next: "b"}},
 		}
 		Expect(k8sClient.Status().Update(ctx, op)).To(Succeed())
 

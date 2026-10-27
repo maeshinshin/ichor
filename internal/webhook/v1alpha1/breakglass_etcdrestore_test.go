@@ -21,8 +21,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -36,22 +34,12 @@ var _ = Describe("Break-glass webhook on an etcd restore", func() {
 	)
 
 	grant := func(user string, glassOnCluster bool) {
-		rules := []rbacv1.PolicyRule{{
-			APIGroups: []string{ichorGroup}, Resources: []string{"talosoperations"}, Verbs: []string{"create", "get"},
-		}}
+		glass := ""
 		if glassOnCluster {
-			rules = append(rules, rbacv1.PolicyRule{
-				APIGroups: []string{ichorGroup}, Resources: []string{"talosclusters"}, Verbs: []string{"break-glass"},
-			})
+			glass = "talosclusters"
 		}
 
-		role := &rbacv1.ClusterRole{Name: "bg-restore-" + user, Rules: rules}
-		Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, role))).To(Succeed())
-		Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, &rbacv1.ClusterRoleBinding{
-			Name:     role.Name,
-			RoleRef:  rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: role.Name},
-			Subjects: []rbacv1.Subject{{APIGroup: rbacv1.GroupName, Kind: "User", Name: user}},
-		}))).To(Succeed())
+		grantOperationRights(user, glass)
 	}
 
 	restoreOp := func() *ichorv1alpha1.TalosOperation {

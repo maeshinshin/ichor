@@ -186,6 +186,8 @@ func TestEtcdRestorePlanRefusals(t *testing.T) {
 	})
 }
 
+var _, clusterResource = kindOf(&ichorv1alpha1.TalosCluster{})
+
 func TestEtcdRestoreNeedsTheClusterNameAndBreakGlass(t *testing.T) {
 	s, k8s := opServer(t, restoreObjects()...)
 	bg := context.Background()
@@ -212,7 +214,7 @@ func TestEtcdRestoreNeedsTheClusterNameAndBreakGlass(t *testing.T) {
 		t.Fatalf("RBAC says no: %v", err)
 	}
 
-	if len(asked) == 0 || asked[0].Verb != "break-glass" || asked[0].Resource != "talosclusters" || asked[0].Name != opCluster {
+	if len(asked) == 0 || asked[0].Verb != BreakGlassVerb || asked[0].Resource != clusterResource || asked[0].Name != opCluster {
 		t.Fatalf("the verb is asked on the cluster: %+v", asked)
 	}
 

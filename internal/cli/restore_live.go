@@ -100,7 +100,7 @@ func chooseSnapshot(backups []*pb.EtcdBackup, s liveRestoreSpec) (*pb.EtcdBackup
 }
 
 func snapshotNames(b *pb.EtcdBackup) string {
-	var names []string
+	names := make([]string, 0, len(b.GetSnapshots()))
 
 	for _, snap := range b.GetSnapshots() {
 		names = append(names, snap.GetName())

@@ -38,22 +38,12 @@ var _ = Describe("Break-glass webhook on a node reset", func() {
 	)
 
 	grantOps := func(user string, glassOnMachine bool) {
-		rules := []rbacv1.PolicyRule{{
-			APIGroups: []string{ichorGroup}, Resources: []string{"talosoperations"}, Verbs: []string{"create", "get"},
-		}}
+		glass := ""
 		if glassOnMachine {
-			rules = append(rules, rbacv1.PolicyRule{
-				APIGroups: []string{ichorGroup}, Resources: []string{"talosmachines"}, Verbs: []string{"break-glass"},
-			})
+			glass = "talosmachines"
 		}
 
-		role := &rbacv1.ClusterRole{Name: "bg-ops-" + user, Rules: rules}
-		Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, role))).To(Succeed())
-		Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, &rbacv1.ClusterRoleBinding{
-			Name:     role.Name,
-			RoleRef:  rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: role.Name},
-			Subjects: []rbacv1.Subject{{APIGroup: rbacv1.GroupName, Kind: "User", Name: user}},
-		}))).To(Succeed())
+		grantOperationRights(user, glass)
 	}
 
 	nodeOp := func(action string) *ichorv1alpha1.TalosOperation {
@@ -102,6 +92,27 @@ var _ = Describe("Break-glass webhook on a node reset", func() {
 		Expect(asUser(opUser).Create(ctx, op)).To(Succeed())
 	})
 })
+
+// grantOperationRights lets user create and get TalosOperations, and, when glassOn names a resource,
+// hold the break-glass verb on it. The webhook asks Kubernetes about the verb, so a real role is bound.
+func grantOperationRights(user, glassOn string) {
+	rules := []rbacv1.PolicyRule{{
+		APIGroups: []string{ichorGroup}, Resources: []string{"talosoperations"}, Verbs: []string{"create", "get"},
+	}}
+	if glassOn != "" {
+		rules = append(rules, rbacv1.PolicyRule{
+			APIGroups: []string{ichorGroup}, Resources: []string{glassOn}, Verbs: []string{BreakGlassVerb},
+		})
+	}
+
+	role := &rbacv1.ClusterRole{Name: "bg-ops-" + user + "-" + glassOn, Rules: rules}
+	Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, role))).To(Succeed())
+	Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, &rbacv1.ClusterRoleBinding{
+		Name:     role.Name,
+		RoleRef:  rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: role.Name},
+		Subjects: []rbacv1.Subject{{APIGroup: rbacv1.GroupName, Kind: "User", Name: user}},
+	}))).To(Succeed())
+}
 
 // confirmFor is the typed confirmation the CRD demands of a reset (the
 // machine's name) and nothing for the other actions.

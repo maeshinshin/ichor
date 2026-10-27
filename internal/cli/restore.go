@@ -28,6 +28,9 @@ import (
 
 var restoreOpts restoreOptions
 
+// flagSnapshot names the flag that picks the snapshot, for both restore modes.
+const flagSnapshot = "snapshot"
+
 // restoreCmd implements `ichor restore`: --recover-cluster (full-loss
 // recovery, ADR 0053), one of the CLI operations that predate the cluster and
 // so never go through the Connect API, and --live (ADR 0089), which asks the
@@ -123,7 +126,7 @@ func init() {
 	f.StringVar(&restoreOpts.Cluster, flagCluster, "", "name of the cluster (--recover-cluster: locates ~/.ichor/clusters/<name>/secrets.yaml, required; --live: default the only one)")
 	f.StringVar(&restoreOpts.SecretsBundle, "secrets-bundle", "", "path to the secrets bundle; default ~/.ichor/clusters/<cluster>/secrets.yaml")
 	f.StringVar(&restoreOpts.NodeEndpoint, "node-endpoint", "", "Talos API address (host:port) of the new control plane to recover onto (required)")
-	f.StringVar(&restoreOpts.Snapshot, "snapshot", "", "object name to restore (etcd-<time>.snapshot.age); default the newest one")
+	f.StringVar(&restoreOpts.Snapshot, flagSnapshot, "", "object name to restore (etcd-<time>.snapshot.age); default the newest one")
 	f.StringVar(&restoreOpts.S3.Endpoint, "s3-endpoint", "", "S3 endpoint URL, https://host[:port] (required)")
 	f.StringVar(&restoreOpts.S3.Bucket, "s3-bucket", "", "S3 bucket (required)")
 	f.StringVar(&restoreOpts.S3.Region, "s3-region", "", "S3 region, if the service needs one")

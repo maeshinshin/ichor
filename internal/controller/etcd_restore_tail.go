@@ -112,9 +112,8 @@ func (j *restoreJob) step(ctx context.Context) (done bool, err error) {
 	}
 
 	if j.marker.Step == etcdbackup.MarkerWiping {
-		wiped, err := j.wipe(ctx)
-		if err != nil || !wiped {
-			return false, err
+		if !j.wipe(ctx) {
+			return false, nil
 		}
 
 		if err := j.setStep(ctx, etcdbackup.MarkerRecovering); err != nil {
@@ -131,7 +130,7 @@ func (j *restoreJob) step(ctx context.Context) (done bool, err error) {
 // returns true when none has any. They must go together: a node wiped while the others still run
 // would rejoin the old etcd by itself and have data again. A node that cannot be reached counts as
 // not wiped yet: it is rebooting, or it is a problem the deadline reports.
-func (j *restoreJob) wipe(ctx context.Context) (bool, error) {
+func (j *restoreJob) wipe(ctx context.Context) bool {
 	var notes []string
 
 	for _, n := range j.order {
@@ -181,7 +180,7 @@ func (j *restoreJob) wipe(ctx context.Context) (bool, error) {
 
 	j.note = strings.Join(notes, "; ")
 
-	return len(notes) == 0, nil
+	return len(notes) == 0
 }
 
 // recoverTarget uploads the pinned snapshot to the target and bootstraps etcd from it, then waits for
@@ -327,10 +326,8 @@ func (t *restoreTails) start(key, backup types.NamespacedName, run func()) {
 	}
 
 	t.running[key] = true
-	t.wg.Add(1)
 
-	go func() {
-		defer t.wg.Done()
+	t.wg.Go(func() {
 		defer func() {
 			t.mu.Lock()
 			delete(t.running, key)
@@ -338,7 +335,7 @@ func (t *restoreTails) start(key, backup types.NamespacedName, run func()) {
 		}()
 
 		run()
-	}()
+	})
 }
 
 func (t *restoreTails) isRunning(key types.NamespacedName) bool {

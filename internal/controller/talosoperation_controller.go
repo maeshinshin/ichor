@@ -210,20 +210,8 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, nil
 	}
 
-	if op.Spec.Kind == ichorv1alpha1.TalosOperationKindShutdown {
-		return r.advanceShutdown(ctx, &op, &cluster, lock)
-	}
-
-	if op.Spec.Kind == ichorv1alpha1.TalosOperationKindNode {
-		return r.advanceNode(ctx, &op, &cluster, lock)
-	}
-
-	if op.Spec.Kind == ichorv1alpha1.TalosOperationKindEtcdRestore {
-		return r.beginEtcdRestore(ctx, &op, &cluster, lock)
-	}
-
-	if op.Spec.Kind == ichorv1alpha1.TalosOperationKindCARotation {
-		return r.advanceCARotation(ctx, &op, &cluster, lock)
+	if res, handled, err := r.advanceOwnStateMachine(ctx, &op, &cluster, lock); handled {
+		return res, err
 	}
 
 	if r.Advance == nil {
@@ -326,6 +314,27 @@ func (r *TalosOperationReconciler) lockUnavailable(ctx context.Context, op *icho
 	}
 
 	return ctrl.Result{}, err
+}
+
+// advanceOwnStateMachine runs the kinds that are not a rollout over the machines but a state machine of
+// their own: shutdown, node, etcd-restore and ca-rotation. handled is false for every other kind.
+func (r *TalosOperationReconciler) advanceOwnStateMachine(
+	ctx context.Context, op *ichorv1alpha1.TalosOperation, cluster *ichorv1alpha1.TalosCluster, lock *clusterlock.Lock,
+) (res ctrl.Result, handled bool, err error) {
+	switch op.Spec.Kind {
+	case ichorv1alpha1.TalosOperationKindShutdown:
+		res, err = r.advanceShutdown(ctx, op, cluster, lock)
+	case ichorv1alpha1.TalosOperationKindNode:
+		res, err = r.advanceNode(ctx, op, cluster, lock)
+	case ichorv1alpha1.TalosOperationKindEtcdRestore:
+		res, err = r.beginEtcdRestore(ctx, op, cluster, lock)
+	case ichorv1alpha1.TalosOperationKindCARotation:
+		res, err = r.advanceCARotation(ctx, op, cluster, lock)
+	default:
+		return ctrl.Result{}, false, nil
+	}
+
+	return res, true, err
 }
 
 func advancingMessage(op *ichorv1alpha1.TalosOperation, n int) string {

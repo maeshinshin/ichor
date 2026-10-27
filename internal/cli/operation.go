@@ -219,7 +219,26 @@ func orDash(s string) string {
 // by a failed machine is an error exit (the controller never retries it); a
 // pause by the operator is waited out.
 func watchOperation(ctx context.Context, c *apiClients, ref *pb.ObjectRef, out, errw io.Writer) error {
-	var last string
+	return watchOperationUntil(ctx, c, ref, out, errw, 0)
+}
+
+// restoreResumeWindow bounds how long a live restore's --follow waits for the operation to come back:
+// the restore rolls the API back to a snapshot taken before the operation existed, so right after the
+// API answers again the operation is NotFound until the controller recreates it from the marker.
+var restoreResumeWindow = 15 * time.Minute
+
+// watchRestoreOperation is watchOperation for a live etcd restore: the operation being NotFound is
+// expected for a while, and is waited out (ADR 0089).
+func watchRestoreOperation(ctx context.Context, c *apiClients, ref *pb.ObjectRef, out, errw io.Writer) error {
+	return watchOperationUntil(ctx, c, ref, out, errw, restoreResumeWindow)
+}
+
+// watchOperationUntil is the watch; goneWindow > 0 treats NotFound as transient for that long.
+func watchOperationUntil(ctx context.Context, c *apiClients, ref *pb.ObjectRef, out, errw io.Writer, goneWindow time.Duration) error {
+	var (
+		last      string
+		goneSince time.Time
+	)
 
 	for {
 		var resp *connect.Response[pb.GetOperationResponse]
@@ -229,9 +248,31 @@ func watchOperation(ctx context.Context, c *apiClients, ref *pb.ObjectRef, out, 
 
 			return err
 		})
+		if goneWindow > 0 && connect.CodeOf(err) == connect.CodeNotFound {
+			if goneSince.IsZero() {
+				goneSince = time.Now()
+
+				_, _ = fmt.Fprintln(errw, "ichor: the operation is gone from the API (the cluster was rolled back to the snapshot); waiting for the restore to resume…")
+			}
+
+			if time.Since(goneSince) > goneWindow {
+				return err
+			}
+
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(opWatchInterval):
+			}
+
+			continue
+		}
+
 		if err != nil {
 			return err
 		}
+
+		goneSince = time.Time{}
 
 		op := resp.Msg.GetOperation()
 

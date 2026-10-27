@@ -109,8 +109,11 @@ as `...:vv1.36.0`. The `v` is now trimmed before the call, with a regression tes
 - `pkg/fieldmeta` still lacks reboot rules for the multi-document Kubernetes component kinds. Any machine whose
   rendered config changes one of those kinds outside an operation is reported `RebootRequired`; left as is on
   purpose (above).
-- Deferred: kubelet-only rolls on a worker do not drain or evacuate (a kubelet restart does not evict pods); the
-  `Ichor` kind is still unwired.
+- Amended: every kubelet roll (the Kubelets stage, ADR 0087) now begins storage evacuation, cordons and drains the
+  node with the config rollout's helpers, rolls the kubelet, waits for Ready, uncordons and ends the evacuation; a
+  failure pauses and ends the evacuation too. The controller's own node is rolled without a drain until the
+  operation orders it last (as `holdOwnNodeLast` does for config rollouts).
+- Deferred: the `Ichor` kind is still unwired.
 
 ## E2E observation (2026-10-26, through `ichor upgrade kubernetes`)
 

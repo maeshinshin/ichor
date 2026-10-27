@@ -422,7 +422,8 @@ func TestKeyStoreTimeline(t *testing.T) {
 	old := keyRecord(t, "old", now.Add(-48*time.Hour))
 	cur := keyRecord(t, "cur", now.Add(-24*time.Hour))
 	next := keyRecord(t, "next", now.Add(10*time.Minute))
-	old.RetireAfter = now.Add(time.Hour)
+	ra := now.Add(time.Hour)
+	old.RetireAfter = &ra
 	if err := ks.Update(keysJSON(t, old, cur, next)); err != nil {
 		t.Fatal(err)
 	}

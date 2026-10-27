@@ -66,8 +66,20 @@ try {
   const s = (m, p) => send(m, p, sessionId)
   await s('Page.enable')
   // settle polls until nothing is loading (LOADING), capped at WAIT ms, then waits for paint.
-  const settle = async (label) => {
+  // With url, it first waits for the app to have mounted (#app has content and a <main> exists);
+  // an idle blank page would otherwise look "not loading".
+  const settle = async (label, url) => {
     const deadline = Date.now() + cap
+    if (url) {
+      const rendered = `!!document.querySelector('#app > *') && !!document.querySelector('main')`
+      while (!(await s('Runtime.evaluate', { expression: rendered, returnByValue: true })).result?.value) {
+        if (Date.now() >= deadline) {
+          console.error(`ui-shots: ${label} app did not render within ${cap} ms (WAIT cap); shooting anyway`)
+          break
+        }
+        await sleep(200)
+      }
+    }
     while ((await s('Runtime.evaluate', { expression: LOADING, returnByValue: true })).result?.value) {
       if (Date.now() >= deadline) {
         console.error(`ui-shots: ${label} still loading after ${cap} ms (WAIT cap); shooting anyway`)
@@ -86,12 +98,19 @@ try {
         const { identifier } = await s('Page.addScriptToEvaluateOnNewDocument', {
           source: `try{localStorage.setItem('ichor-ui-theme','${theme}')}catch(e){}`,
         })
-        await s('Page.navigate', { url: new URL(p, base).href })
-        await settle(`${p} ${sizeName} ${theme}`)
+        const url = new URL(p, base).href
+        await s('Page.navigate', { url })
+        await settle(`${p} ${sizeName} ${theme}`, url)
         if (process.env.CLICK) {
           // CLICK="Shut down cluster" opens a dialog before the shot; it clicks the first button with that exact text.
           const expr = `(() => { const b = [...document.querySelectorAll('button')].find((x) => x.textContent.trim() === ${JSON.stringify(process.env.CLICK)}); if (b) b.click(); return !!b })()`
-          await s('Runtime.evaluate', { expression: expr })
+          // The button may render after the data does: poll for it within the cap.
+          const deadline = Date.now() + cap
+          let clicked = false
+          while (!(clicked = (await s('Runtime.evaluate', { expression: expr, returnByValue: true })).result?.value) && Date.now() < deadline) {
+            await sleep(200)
+          }
+          if (!clicked) console.error(`ui-shots: ${p} ${sizeName} ${theme}: button "${process.env.CLICK}" never appeared within ${cap} ms (WAIT cap)`)
           await settle(`${p} ${sizeName} ${theme} after CLICK`)
         }
         if (process.env.SCROLLTO) {

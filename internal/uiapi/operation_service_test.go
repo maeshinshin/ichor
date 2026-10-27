@@ -66,7 +66,7 @@ func opObjects() []client.Object {
 	return []client.Object{
 		&ichorv1alpha1.TalosCluster{
 			Name: opCluster, Namespace: opNS,
-			Spec: ichorv1alpha1.TalosClusterSpec{TalosVersion: opOldTalos, KubernetesVersion: "v1.36.0"},
+			Spec: ichorv1alpha1.TalosClusterSpec{TalosVersion: opOldTalos, KubernetesVersion: opOldK8s},
 		},
 		opMachine("w2", "worker", nil, nil),
 		opMachine("w1", "worker", map[string]string{ichorv1alpha1.TalosMachineUpgradeOrderLabel: "1"}, nil),
@@ -425,6 +425,8 @@ func TestPlanSaysWhyCreateWouldBeRefused(t *testing.T) {
 	}
 }
 
+const opOldK8s = "v1.36.0"
+
 func rebootPending(m *ichorv1alpha1.TalosMachine, paths ...string) *ichorv1alpha1.TalosMachine {
 	m.Status.RebootPaths = paths
 
@@ -435,7 +437,7 @@ func configObjects() []client.Object {
 	return []client.Object{
 		&ichorv1alpha1.TalosCluster{
 			Name: opCluster, Namespace: opNS,
-			Spec: ichorv1alpha1.TalosClusterSpec{TalosVersion: opOldTalos, KubernetesVersion: "v1.36.0"},
+			Spec: ichorv1alpha1.TalosClusterSpec{TalosVersion: opOldTalos, KubernetesVersion: opOldK8s},
 		},
 		rebootPending(opMachine("w2", "worker", nil, nil), "machine.network.interfaces"),
 		rebootPending(opMachine("cp1", "controlplane", nil, nil), "cluster.proxy.disabled", "machine.network.interfaces"),
@@ -484,7 +486,7 @@ func TestPlanConfigSelectsAPIServerRestartMachinesAndSaysNoReboot(t *testing.T) 
 	}
 	cluster := &ichorv1alpha1.TalosCluster{
 		Name: opCluster, Namespace: opNS,
-		Spec: ichorv1alpha1.TalosClusterSpec{TalosVersion: opOldTalos, KubernetesVersion: "v1.36.0"},
+		Spec: ichorv1alpha1.TalosClusterSpec{TalosVersion: opOldTalos, KubernetesVersion: opOldK8s},
 	}
 	plan := func(objs ...client.Object) *pb.PlanOperationResponse {
 		srv, _ := opServer(t, objs...)
@@ -499,14 +501,14 @@ func TestPlanConfigSelectsAPIServerRestartMachinesAndSaysNoReboot(t *testing.T) 
 		return res.Msg
 	}
 
-	got := plan(cluster, restartOnly(opMachine("cp1", "controlplane", nil, nil)), opMachine("converged", "worker", nil, nil))
-	if len(got.GetMachines()) != 1 || got.GetMachines()[0].GetName() != "cp1" || len(got.GetMachines()[0].GetRebootFields()) != 0 ||
+	got := plan(cluster, restartOnly(opMachine(nodeTestCP, "controlplane", nil, nil)), opMachine("converged", "worker", nil, nil))
+	if len(got.GetMachines()) != 1 || got.GetMachines()[0].GetName() != nodeTestCP || len(got.GetMachines()[0].GetRebootFields()) != 0 ||
 		got.GetEffect() != pb.OperationEffect_OPERATION_EFFECT_RESTART_COMPONENTS || got.GetBlocked() != "" ||
 		!got.GetKubernetesApiUnavailable() {
 		t.Fatalf("restart-only plan = %v", got)
 	}
 
-	mixed := plan(cluster, restartOnly(opMachine("cp1", "controlplane", nil, nil)),
+	mixed := plan(cluster, restartOnly(opMachine(nodeTestCP, "controlplane", nil, nil)),
 		rebootPending(opMachine("w1", "worker", nil, nil), "machine.network.interfaces"))
 	if len(mixed.GetMachines()) != 2 || mixed.GetEffect() != pb.OperationEffect_OPERATION_EFFECT_REBOOT {
 		t.Fatalf("mixed plan = %v", mixed)

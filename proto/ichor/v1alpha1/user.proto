@@ -1,0 +1,159 @@
+syntax = "proto3";
+
+// UserService manages Ichor's own users: the IchorUser CRs and
+// their password hashes. The CR is written as the caller (Kubernetes RBAC
+// decides); the hash is written by ichor-ui's ServiceAccount after a
+// SelfSubjectAccessReview as the caller. No message here ever carries a
+// stored hash, a token or a signing key; a password appears only in the
+// request that sets it and, for a generated one, once in the response.
+package ichor.v1alpha1;
+
+import "google/protobuf/timestamp.proto";
+import "ichor/v1alpha1/common.proto";
+
+service UserService {
+  // ListUsers returns every IchorUser the caller can list.
+  rpc ListUsers(ListUsersRequest) returns (ListUsersResponse);
+
+  // GetUser returns one IchorUser.
+  rpc GetUser(GetUserRequest) returns (GetUserResponse);
+
+  // CreateUser creates the IchorUser CR. It sets no password; the user cannot
+  // sign in until SetPassword.
+  rpc CreateUser(CreateUserRequest) returns (CreateUserResponse);
+
+  // UpdateUser changes display name, e-mail, roles and disabled. Disabling or
+  // demoting the last enabled admin is refused.
+  rpc UpdateUser(UpdateUserRequest) returns (UpdateUserResponse);
+
+  // DeleteUser deletes the CR (the controller removes the credentials entry).
+  // Deleting the last enabled admin is refused.
+  rpc DeleteUser(DeleteUserRequest) returns (DeleteUserResponse);
+
+  // SetPassword sets a user's password as an administrator and marks it
+  // must-change. Needs verb update on ichorusers/password.
+  rpc SetPassword(SetPasswordRequest) returns (SetPasswordResponse);
+
+  // ChangeOwnPassword changes the caller's own password after checking the old
+  // one. It needs no RBAC: it is the user's own account.
+  rpc ChangeOwnPassword(ChangeOwnPasswordRequest) returns (ChangeOwnPasswordResponse);
+
+  // RevokeSessions invalidates every refresh token issued so far to one user.
+  // Needs verb update on ichorusers/password.
+  rpc RevokeSessions(RevokeSessionsRequest) returns (RevokeSessionsResponse);
+
+  // GetMyKubeconfig returns a kubeconfig for the caller. It holds public data
+  // only: the API server URL, the cluster CA certificate and an exec block
+  // that runs `ichor auth token`.
+  rpc GetMyKubeconfig(GetMyKubeconfigRequest) returns (GetMyKubeconfigResponse);
+
+  // WhoAmI returns the caller's identity as the backend sees it.
+  rpc WhoAmI(WhoAmIRequest) returns (WhoAmIResponse);
+}
+
+// User is the public view of one IchorUser.
+message User {
+  // name is the identity: it becomes sub and the Kubernetes user ichor:<name>.
+  string name = 1;
+  string display_name = 2;
+  string email = 3;
+  repeated string roles = 4;
+  bool disabled = 5;
+  // password_set mirrors the PasswordSet condition.
+  bool password_set = 6;
+  repeated Condition conditions = 7;
+  google.protobuf.Timestamp created_at = 8;
+}
+
+message ListUsersRequest {}
+
+message ListUsersResponse {
+  repeated User users = 1;
+}
+
+message GetUserRequest {
+  string name = 1;
+}
+
+message GetUserResponse {
+  User user = 1;
+}
+
+message CreateUserRequest {
+  string name = 1;
+  string display_name = 2;
+  string email = 3;
+  repeated string roles = 4;
+}
+
+message CreateUserResponse {
+  User user = 1;
+}
+
+message UpdateUserRequest {
+  string name = 1;
+  string display_name = 2;
+  string email = 3;
+  repeated string roles = 4;
+  bool disabled = 5;
+}
+
+message UpdateUserResponse {
+  User user = 1;
+}
+
+message DeleteUserRequest {
+  string name = 1;
+}
+
+message DeleteUserResponse {}
+
+message SetPasswordRequest {
+  string name = 1;
+  // password is optional. Empty means "generate one" (24 characters) and
+  // return it once in generated_password.
+  string password = 2;
+}
+
+message SetPasswordResponse {
+  // generated_password is set only when the request carried no password. It
+  // is shown once and stored nowhere.
+  string generated_password = 1;
+}
+
+message ChangeOwnPasswordRequest {
+  string old_password = 1;
+  string new_password = 2;
+}
+
+message ChangeOwnPasswordResponse {}
+
+message RevokeSessionsRequest {
+  string name = 1;
+}
+
+message RevokeSessionsResponse {
+  google.protobuf.Timestamp not_before = 1;
+}
+
+message GetMyKubeconfigRequest {}
+
+message GetMyKubeconfigResponse {
+  // kubeconfig is the YAML file. It contains no secret.
+  string kubeconfig = 1;
+  string filename = 2;
+}
+
+message WhoAmIRequest {}
+
+message WhoAmIResponse {
+  // username is the Kubernetes user name, with its prefix (ichor:alice).
+  string username = 1;
+  repeated string groups = 2;
+  // source is "ichor" or "oidc".
+  string source = 3;
+  string display_name = 4;
+  // must_change_password is true when the user has to change the password
+  // before doing anything else.
+  bool must_change_password = 5;
+}

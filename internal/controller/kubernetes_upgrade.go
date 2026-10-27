@@ -151,14 +151,9 @@ func NewKubernetesUpgradeAdvancer(
 }
 
 // kubernetesStageOf is the stage of a Kubernetes upgrade the executor acts in. An
-// operation with no recorded stage is unstaged: the final one, the whole rendered configuration.
+// operation with no recorded stage starts at the first one.
 func kubernetesStageOf(op *ichorv1alpha1.TalosOperation) string {
 	if op == nil || op.Status.Kubernetes == nil || op.Status.Kubernetes.Stage == "" {
-		return ichorv1alpha1.KubernetesStageKubelets
-	}
-
-	// The combined first stage of operations that started before the split is its first half.
-	if op.Status.Kubernetes.Stage == ichorv1alpha1.KubernetesStageControlPlanes {
 		return ichorv1alpha1.KubernetesStageAPIServers
 	}
 

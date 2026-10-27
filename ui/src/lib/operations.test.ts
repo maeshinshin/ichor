@@ -113,7 +113,6 @@ test('the Kubernetes upgrade stage is a position in the four stages; unknown or 
   assert.deepEqual(kubernetesStageProgress('ControlPlaneComponents'), { name: 'ControlPlaneComponents', index: 2, total: 4 })
   assert.deepEqual(kubernetesStageProgress('KubeProxy'), { name: 'KubeProxy', index: 3, total: 4 })
   assert.deepEqual(kubernetesStageProgress('Kubelets'), { name: 'Kubelets', index: 4, total: 4 })
-  assert.deepEqual(kubernetesStageProgress('ControlPlanes'), { name: 'APIServers', index: 1, total: 4 })
   assert.equal(kubernetesStageProgress(''), null)
   assert.equal(kubernetesStageProgress('Accepting'), null)
 })

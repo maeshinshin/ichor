@@ -212,7 +212,9 @@ func NewCredential(password string, mustChange bool, now time.Time) (Credential,
 	if err != nil {
 		return Credential{}, err
 	}
-	return Credential{Version: CredentialVersion, Hash: h, NotBefore: now.UTC().Truncate(time.Second), MustChange: mustChange}, nil
+	return Credential{
+		Version: CredentialVersion, Hash: h, NotBefore: now.UTC().Truncate(time.Second), MustChange: mustChange,
+	}, nil
 }
 
 // Marshal is the Secret value.

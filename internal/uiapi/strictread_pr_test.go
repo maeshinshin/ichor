@@ -27,7 +27,7 @@ import (
 
 func TestFindPullRequestsRefusesACallerWhoCannotReadTheApplication(t *testing.T) {
 	e := newPREnv(t, prOpts{tracked: true})
-	e.host.open["ichor/approve-m1"] = prPRURL
+	e.host.open[prBranchName("approve", trackedTestNS, "m1")] = prPRURL
 	e.impersonateWith(denyApplications(e.k8s))
 
 	_, err := e.srv.FindPullRequests(asUser(context.Background()), findPRsReq(pb.GitOpsKind_GIT_OPS_KIND_MACHINE, "m1"))

@@ -388,6 +388,8 @@ func checkWebhookInvariants(t *testing.T, release string, docs []map[string]any)
 				"vbreakglass-v1alpha1.kb.io": {opUpdate, opDelete},
 				// And the creation of a node reset by hand.
 				"vbreakglassop-v1alpha1.kb.io": {"CREATE"},
+				// A change to spec.authentication, on create and update.
+				"vauthentication-v1alpha1.kb.io": {"CREATE", opUpdate},
 			}[name]
 			if !reflect.DeepEqual(ops, want) {
 				t.Errorf("webhook %q: expected operations %v; got %v",

@@ -172,3 +172,31 @@ func TestAuthenticationRender(t *testing.T) {
 		}
 	})
 }
+
+// TestAuthenticationMultipleAudiences covers the hardware spike's crash loop:
+// Talos accepts any document, and kube-apiserver then refuses two audiences without
+// audienceMatchPolicy. The render sets MatchAny, and the apiserver's own validation, which is
+// mandatory before rendering, rejects the file when it is missing.
+func TestAuthenticationMultipleAudiences(t *testing.T) {
+	e := externalIssuer()
+	e.Audiences = []string{"ichor", "ichor-second"}
+
+	cfg, err := AuthenticationConfiguration(&ichorv1alpha1.TalosClusterAuthentication{
+		External: []ichorv1alpha1.TalosClusterExternalIssuer{e},
+	}, nil)
+	if err != nil {
+		t.Fatalf("AuthenticationConfiguration: %v", err)
+	}
+
+	if got := cfg.JWT[0].Issuer.AudienceMatchPolicy; got != "MatchAny" {
+		t.Fatalf("audienceMatchPolicy = %q, want MatchAny", got)
+	}
+
+	// The same file without the policy is exactly what crash-looped the apiserver.
+	cfg.JWT[0].Issuer.AudienceMatchPolicy = ""
+
+	err = validateAuthenticationConfiguration(cfg)
+	if err == nil || !strings.Contains(err.Error(), "audienceMatchPolicy must be MatchAny for multiple audiences") {
+		t.Fatalf("validation error = %v, want the audienceMatchPolicy error", err)
+	}
+}

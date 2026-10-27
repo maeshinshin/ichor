@@ -23,6 +23,7 @@ import { SetInstallDialog } from '@/components/SetInstallDialog'
 import type { Cluster } from '@/gen/ichor/v1alpha1/cluster_pb'
 import { MachineApprovalState, MachineRole, type Machine } from '@/gen/ichor/v1alpha1/machine_pb'
 import { clusterClient, machineClient, nodeClient } from '@/lib/connect'
+import { machineDisplayName } from '@/lib/machineName'
 import { needsInstallDisk } from '@/lib/installDisk'
 import { enumLabel } from '@/lib/enum'
 import { describeError } from '@/lib/errors'
@@ -117,12 +118,12 @@ function NodePage({ namespace, name }: { namespace: string; name: string }) {
     return loadMachine()
   }, [namespace, name])
 
-  // The breadcrumb shows the hostname instead of the UUID the URL carries.
+  // The breadcrumb shows the display name instead of the UUID the URL carries.
   useEffect(() => {
     const key = titleKey('nodes', name)
-    setPageTitle(key, machine?.hostname)
+    setPageTitle(key, machine ? machineDisplayName(machine) : undefined)
     return () => setPageTitle(key, undefined)
-  }, [name, machine?.hostname])
+  }, [name, machine?.hostname, machine?.nodeName])
 
   if (error) return <ErrorAlert {...error} />
   if (!node) return <PageSkeleton label={t('node.loading')} />
@@ -140,7 +141,7 @@ function NodePage({ namespace, name }: { namespace: string; name: string }) {
   return (
     <>
       <PageHeader
-        title={machine?.hostname || name}
+        title={machine ? machineDisplayName(machine) : name}
         kind={t('kind.machine')}
         badges={
           machine && (

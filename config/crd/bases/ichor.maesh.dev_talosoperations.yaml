@@ -82,6 +82,51 @@ spec:
                 x-kubernetes-validations:
                 - message: clusterRef.name is required
                   rule: self.name != ''
+              etcdRestore:
+                description: etcdRestore is the snapshot of an etcd-restore-kind operation.
+                properties:
+                  backupRef:
+                    description: |-
+                      backupRef names the TalosEtcdBackup (same namespace) whose storage holds the snapshot. Its
+                      credentials, prefix and the cluster's secrets bundle (the decryption key) are what the
+                      controller reads the snapshot with.
+                    properties:
+                      name:
+                        default: ""
+                        description: |-
+                          Name of the referent.
+                          This field is effectively required, but due to backwards compatibility is
+                          allowed to be empty. Instances of this type with an empty value here are
+                          almost certainly wrong.
+                          More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                        type: string
+                    type: object
+                    x-kubernetes-map-type: atomic
+                    x-kubernetes-validations:
+                    - message: backupRef.name is required
+                      rule: self.name != ''
+                  confirm:
+                    description: 'confirm must equal the cluster''s name: the restore
+                      rewinds the whole cluster, so the name is typed.'
+                    type: string
+                  reason:
+                    description: |-
+                      reason is the break-glass reason the restore was started under. It is part of the record that
+                      survives the rollback.
+                    minLength: 1
+                    type: string
+                  snapshot:
+                    description: |-
+                      snapshot is the object name of the snapshot under the backup's prefix, as listed in the
+                      backup's status.snapshots.
+                    pattern: ^etcd-[0-9]{8}T[0-9]{6}Z\.snapshot\.age$
+                    type: string
+                required:
+                - backupRef
+                - confirm
+                - reason
+                - snapshot
+                type: object
               kind:
                 description: |-
                   kind names which upgrade this is: talos (spec.talosVersion/schematic),
@@ -93,6 +138,7 @@ spec:
                   shutdown and ca-rotation are the exceptions: each runs its own state machine.
                   config applies the pending reboot-requiring configuration changes, one machine at a time
                   with a reboot each.
+                  etcd-restore rewinds the cluster to a stored etcd snapshot.
                 enum:
                 - talos
                 - kubernetes
@@ -102,6 +148,7 @@ spec:
                 - ca-rotation
                 - config
                 - node
+                - etcd-restore
                 type: string
               maxUnavailable:
                 default: 1
@@ -199,6 +246,15 @@ spec:
               rule: self.kind == oldSelf.kind
             - message: spec.node is required for the node kind and only allowed there
               rule: (self.kind == 'node') == has(self.node)
+            - message: spec.etcdRestore is required for the etcd-restore kind and
+                only allowed there
+              rule: (self.kind == 'etcd-restore') == has(self.etcdRestore)
+            - message: an etcd restore needs spec.etcdRestore.confirm equal to the
+                cluster name
+              rule: '!has(self.etcdRestore) || self.etcdRestore.confirm == self.clusterRef.name'
+            - message: etcdRestore cannot change after creation
+              rule: has(self.etcdRestore) == has(oldSelf.etcdRestore) && (!has(self.etcdRestore)
+                || self.etcdRestore == oldSelf.etcdRestore)
             - message: node cannot change after creation
               rule: has(self.node) == has(oldSelf.node) && (!has(self.node) || self.node
                 == oldSelf.node)
@@ -323,6 +379,42 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              etcdRestore:
+                description: etcdRestore is the etcd-restore kind's state machine.
+                properties:
+                  message:
+                    description: message is a plain-English line about what the operation
+                      is doing or waiting for.
+                    type: string
+                  reconcileRequest:
+                    description: reconcileRequest is the token every TalosMachine
+                      was asked to acknowledge in the last step.
+                    type: string
+                  requestedAt:
+                    description: requestedAt is when the destructive part started;
+                      waits are bounded from it.
+                    format: date-time
+                    type: string
+                  snapshotTime:
+                    description: snapshotTime is when the snapshot being restored
+                      was taken.
+                    format: date-time
+                    type: string
+                  step:
+                    description: |-
+                      step is Wiping, Recovering, Rejoining or Reconciling; empty until the snapshot was verified and
+                      the marker written.
+                    enum:
+                    - Wiping
+                    - Recovering
+                    - Rejoining
+                    - Reconciling
+                    type: string
+                  target:
+                    description: target is the control plane the snapshot is recovered
+                      on.
+                    type: string
+                type: object
               failureReason:
                 description: |-
                   failureReason explains why phase is Paused when the cause is a

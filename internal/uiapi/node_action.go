@@ -94,6 +94,8 @@ type nodePlan struct {
 	action  string
 	machine *ichorv1alpha1.TalosMachine
 	bg      *pb.BreakGlass
+	// asked is the name the caller used for the machine: its own, its hostname or its Node name.
+	asked string
 }
 
 func invalid(format string, args ...any) error {
@@ -111,7 +113,7 @@ func (s *Server) planNode(ctx context.Context, req *pb.NodeActionRequest) (*opPl
 		return nil, err
 	}
 
-	m, err := s.getMachine(ctx, req.GetMachine())
+	m, err := s.resolveMachine(ctx, req.GetMachine())
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +134,7 @@ func (s *Server) planNode(ctx context.Context, req *pb.NodeActionRequest) (*opPl
 	}
 
 	np := &nodePlan{
-		action: action, machine: m, bg: req.GetBreakGlass(),
+		action: action, machine: m, bg: req.GetBreakGlass(), asked: req.GetMachine().GetName(),
 		spec: ichorv1alpha1.TalosOperationNodeSpec{
 			MachineRef: corev1.LocalObjectReference{Name: m.Name}, Action: action,
 			Service: req.GetService(), AllowLeader: req.GetAllowLeader(), Confirm: req.GetConfirm(),
@@ -336,7 +338,7 @@ func (s *Server) createNodeOperation(ctx context.Context, p *opPlan) (*pb.Create
 	var reason string
 
 	if np.action == ichorv1alpha1.NodeActionReset {
-		if np.spec.Confirm != np.machine.Name {
+		if np.spec.Confirm != np.machine.Name && np.spec.Confirm != np.asked {
 			return nil, invalid("type the machine name %q to confirm the reset", np.machine.Name)
 		}
 
@@ -400,7 +402,7 @@ func (s *Server) RemoveMachine(
 	}
 
 	m := p.node.machine
-	if req.Msg.GetConfirm() != m.Name {
+	if c := req.Msg.GetConfirm(); c != m.Name && c != p.node.asked {
 		return nil, invalid("type the machine name %q to confirm the removal", m.Name)
 	}
 

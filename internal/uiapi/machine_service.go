@@ -96,6 +96,53 @@ func (s *Server) getMachine(ctx context.Context, ref *pb.ObjectRef) (*ichorv1alp
 	return &m, nil
 }
 
+// resolveMachine is getMachine that also takes the machine's hostname or its Kubernetes Node name,
+// for a caller who knows the node by that name and not by the TalosMachine's UUID. The exact name
+// wins; only a name no machine has is looked up as a hostname or Node name, and more than one match
+// is an error rather than a guess.
+func (s *Server) resolveMachine(ctx context.Context, ref *pb.ObjectRef) (*ichorv1alpha1.TalosMachine, error) {
+	m, err := s.getMachine(ctx, ref)
+	if connect.CodeOf(err) != connect.CodeNotFound {
+		return m, err
+	}
+
+	var list ichorv1alpha1.TalosMachineList
+	if lerr := s.List(ctx, &list, client.InNamespace(ref.GetNamespace())); lerr != nil {
+		return nil, err // the not found is the better answer
+	}
+
+	var found []*ichorv1alpha1.TalosMachine
+
+	for i := range list.Items {
+		if list.Items[i].Spec.Hostname == ref.GetName() {
+			found = append(found, &list.Items[i])
+		}
+	}
+
+	if len(found) == 0 {
+		for i := range list.Items {
+			if node, nerr := s.findKubernetesNode(ctx, &list.Items[i]); nerr == nil && node != nil && node.Name == ref.GetName() {
+				found = append(found, &list.Items[i])
+			}
+		}
+	}
+
+	switch len(found) {
+	case 0:
+		return nil, err
+	case 1:
+		return found[0], nil
+	}
+
+	names := make([]string, len(found))
+	for i, f := range found {
+		names[i] = f.Name
+	}
+
+	return nil, connect.NewError(connect.CodeInvalidArgument,
+		fmt.Errorf("%q matches more than one machine (%s): use the machine's own name", ref.GetName(), strings.Join(names, ", ")))
+}
+
 // ApproveMachine is how a person decides a discovered machine joins the
 // cluster (architecture.md "Nodes"): once it returns, the controller starts
 // rendering and applying configuration to the node. Four things this

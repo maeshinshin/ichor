@@ -139,9 +139,13 @@ hands.
 
 ## Tests
 
-- `make test` runs unit tests and envtest.
-- End-to-end tests create throwaway clusters with `talosctl cluster create`
-  (QEMU). The short set runs on every PR; the full set runs nightly.
+- `make test` runs unit tests and envtest; `make ui-ci` runs the UI's typecheck,
+  lint, node tests and build.
+- End-to-end tests run Talos nodes as KubeVirt VMs on a host cluster
+  ([ADR 0007](docs/adr/0007-e2e-runs-talos-nodes-as-kubevirt-vms.md)); a full
+  cluster built by `ichor init` is described in `test/harness/ui-demo/README.md`.
+- `make ui-shots` takes desktop and phone screenshots of the UI in light and dark;
+  look at them before calling a UI change done.
 
 ## Licensing
 

@@ -26,6 +26,8 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
+
+	"github.com/maeshinshin/ichor/internal/oidctrust"
 	clienttesting "k8s.io/client-go/testing"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -49,7 +51,13 @@ func restartFixture(flannelAvailable int32) (*caRotFixture, *fake.Clientset) {
 		}
 	}
 
-	kc := fake.NewClientset(dep(kubeSystemNamespace, corednsName), dep(tmNamespace, uiDeploymentName))
+	uiDep := func(d *appsv1.Deployment) *appsv1.Deployment {
+		d.Labels = map[string]string{oidctrust.UIComponentLabel: oidctrust.UIComponentValue}
+
+		return d
+	}
+
+	kc := fake.NewClientset(dep(kubeSystemNamespace, corednsName), uiDep(dep(tmNamespace, "ichor-ichor-ui")))
 	if flannelAvailable >= 0 {
 		_, err := kc.AppsV1().DaemonSets(kubeSystemNamespace).Create(ctx, &appsv1.DaemonSet{
 			Namespace: kubeSystemNamespace, Name: "kube-flannel", Generation: 1,
@@ -99,7 +107,7 @@ var _ = Describe("TalosOperation ca-rotation client restarts", func() {
 
 		op, _ = f.runUntil(op, completed)
 		Expect(patchCount(kc)).To(Equal(map[string]int{
-			"deployments/coredns": 1, "daemonsets/kube-flannel": 1, "deployments/ichor-ui": 1,
+			"deployments/coredns": 1, "daemonsets/kube-flannel": 1, "deployments/ichor-ichor-ui": 1,
 		}))
 
 		d, err := kc.AppsV1().Deployments(kubeSystemNamespace).Get(ctx, corednsName, metav1.GetOptions{})
@@ -159,6 +167,6 @@ var _ = Describe("TalosOperation ca-rotation client restarts", func() {
 
 		op, _ = f.runUntil(op, completed)
 		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseCompleted))
-		Expect(patchCount(kc)).To(Equal(map[string]int{"deployments/coredns": 1, "deployments/ichor-ui": 1}))
+		Expect(patchCount(kc)).To(Equal(map[string]int{"deployments/coredns": 1, "deployments/ichor-ichor-ui": 1}))
 	})
 })

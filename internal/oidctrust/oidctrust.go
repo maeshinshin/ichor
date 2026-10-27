@@ -54,6 +54,13 @@ const (
 	DiscoveryURLKey = "discoveryURL"
 )
 
+// The label every install path (kustomize, chart) puts on the ichor-ui Deployment and Service, so
+// nothing finds them by name: kustomize prefixes names.
+const (
+	UIComponentLabel = "app.kubernetes.io/component"
+	UIComponentValue = "ui"
+)
+
 // InternalPort is the port of ichor-ui's HTTPS listener that serves discovery and the JWKS.
 const InternalPort = 8444
 

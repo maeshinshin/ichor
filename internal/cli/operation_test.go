@@ -281,6 +281,22 @@ func TestPlanTextWarnsWhenTheKubernetesAPIGoesDown(t *testing.T) {
 	}
 }
 
+func TestPlanTextForAConfigRestartSaysNoReboot(t *testing.T) {
+	p := &pb.PlanOperationResponse{
+		Effect: pb.OperationEffect_OPERATION_EFFECT_RESTART_COMPONENTS, MaxUnavailable: 1,
+		Machines: []*pb.PlannedMachine{{Name: opCP, Role: roleControlPlane, Step: 1}},
+	}
+
+	got := planText(pb.OperationKind_OPERATION_KIND_CONFIG, "c", p)
+	if !strings.Contains(got, "Restarts the Kubernetes API server on each control plane, one at a time; no reboot.") {
+		t.Errorf("text lacks the restart sentence:\n%s", got)
+	}
+
+	if strings.Contains(got, "REBOOTS") {
+		t.Errorf("text says the machines reboot:\n%s", got)
+	}
+}
+
 func TestPlanTextForTalosNamesASchematicOnlyChange(t *testing.T) {
 	p := &pb.PlanOperationResponse{
 		Effect: pb.OperationEffect_OPERATION_EFFECT_REBOOT, Current: "v1.14.3", MaxUnavailable: 1,

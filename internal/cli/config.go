@@ -62,7 +62,7 @@ var configApplyFlags startFlags
 
 var configApplyCmd = &cobra.Command{
 	Use:   "apply",
-	Short: "Apply the pending configuration changes that need a reboot (each machine reboots)",
+	Short: "Apply the pending configuration changes that need a reboot or an API server restart",
 	Long: `Ichor never reboots a node for a configuration change on its own: a machine whose
 rendered configuration differs from the node's in a way that needs a reboot waits with
 Ready=False, reason RebootRequired, and the message names the fields. apply starts the
@@ -73,7 +73,10 @@ storage evacuation hook, the node is cordoned and drained (evictions respect
 PodDisruptionBudgets; DaemonSet and mirror pods stay), the configuration is staged, the node
 reboots, and the step finishes when the node runs the configuration, is Ready, is
 uncordoned and (control planes) is back in etcd. On a cluster with one control plane the
-Kubernetes API is unavailable while it reboots. A machine that fails pauses the operation; nothing is
+Kubernetes API is unavailable while it reboots. A change that needs no reboot but restarts the
+Kubernetes API server (authentication, API server arguments, admission, audit, authorizers: Ready=False,
+reason APIServerRestartRequired) is applied the same way, one control plane at a time with no drain
+and no reboot, waiting for that node's API server to answer /readyz before the next. A machine that fails pauses the operation; nothing is
 rolled back. Machines held with upgrade-hold are skipped.
 
 It shows which machines reboot, which fields need it and in which order, and asks for

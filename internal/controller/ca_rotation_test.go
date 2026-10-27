@@ -586,7 +586,7 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 		var cluster ichorv1alpha1.TalosCluster
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: tmNamespace, Name: f.cluster.Name}, &cluster)).To(Succeed())
 		Expect(apimeta.IsStatusConditionTrue(cluster.Status.Conditions, ichorv1alpha1.ConditionBundleBackupStale)).To(BeTrue())
-		Expect(f.recorder.Events).To(Receive(ContainSubstring(ichorv1alpha1.ConditionBundleBackupStale)))
+		Expect(strings.Join(drainEvents(f.recorder), "\n")).To(ContainSubstring(ichorv1alpha1.ConditionBundleBackupStale))
 
 		// The finalizer goes once the rotation is done.
 		op = f.step(op)

@@ -161,9 +161,9 @@ var _ = Describe("TalosOperation shutdown", func() {
 
 		for _, cp := range f.cps {
 			Expect(f.fakes[cp.Name].shutdownCalls).To(Equal([]bool{true}), "control planes are forced: the API is about to go")
-			Expect(got.Status.Machines).To(ContainElement(ichorv1alpha1.TalosOperationMachineStatus{
-				Name: cp.Name, Phase: ichorv1alpha1.TalosOperationMachinePhaseInProgress, BootID: shutdownBootBefore,
-			}))
+			Expect(got.Status.Machines).To(ContainElement(And(
+				HaveField("Name", cp.Name), HaveField("Phase", ichorv1alpha1.TalosOperationMachinePhaseInProgress), HaveField("BootID", shutdownBootBefore),
+			)))
 		}
 
 		// Nothing is sent twice.

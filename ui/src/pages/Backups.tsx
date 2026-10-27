@@ -5,8 +5,9 @@ import { EmptyNote, PageSkeleton } from '@/components/PageStates'
 import { StatusText } from '@/components/Status'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { RestoreDialog } from '@/components/RestoreDialog'
+import { BackupNow } from '@/components/BackupNow'
 import type { EtcdBackup } from '@/gen/ichor/v1alpha1/operation_pb'
-import { exampleBackupYaml, newestSnapshot, totalBytes } from '@/lib/backups'
+import { destinationLabel, exampleBackupYaml, newestSnapshot, totalBytes } from '@/lib/backups'
 import { operationClient } from '@/lib/connect'
 import { describeError } from '@/lib/errors'
 import { formatBytes, formatTimestamp } from '@/lib/format'
@@ -18,7 +19,8 @@ type ErrorShape = { title: string; detail: string }
 const adrUrl = 'https://github.com/maeshinshin/ichor/blob/main/docs/adr/0047-etcd-backup-format-and-controller.md'
 
 // Backups: the cluster's TalosEtcdBackups, the snapshots they hold, and restore (docs/adr/0047, 0089).
-// The UI reads only; a backup is created by applying a TalosEtcdBackup, and the controller takes the snapshots.
+// A backup is created by applying a TalosEtcdBackup, and the controller takes the snapshots; Back up now only
+// sets a request on it (docs/adr/0047).
 export function Backups() {
   const t = useT()
   const { cluster, loading, error: clusterError } = useCluster()
@@ -78,10 +80,13 @@ export function Backups() {
                 <TableRow>
                   <TableHead>{t('backups.colName')}</TableHead>
                   <TableHead>{t('backups.colSchedule')}</TableHead>
+                  <TableHead>{t('backups.colDestination')}</TableHead>
+                  <TableHead>{t('backups.colRetention')}</TableHead>
                   <TableHead>{t('backups.colLast')}</TableHead>
                   <TableHead>{t('backups.colSnapshots')}</TableHead>
                   <TableHead>{t('backups.colSize')}</TableHead>
                   <TableHead>{t('backups.colStatus')}</TableHead>
+                  <TableHead />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -91,17 +96,45 @@ export function Backups() {
                     <TableRow key={b.ref?.name}>
                       <TableCell class="font-medium">{b.ref?.name}</TableCell>
                       <TableCell class="font-mono text-xs">{b.schedule}</TableCell>
-                      <TableCell>{last ? formatTimestamp(last.time) : t('backups.never')}</TableCell>
+                      <TableCell class="font-mono text-xs">{destinationLabel(b.destination)}</TableCell>
+                      <TableCell>{t('backups.keepLast', { count: b.keepLast })}</TableCell>
+                      <TableCell>{b.lastSuccessTime ? formatTimestamp(b.lastSuccessTime) : last ? formatTimestamp(last.time) : t('backups.never')}</TableCell>
                       <TableCell>{b.snapshots.length}</TableCell>
                       <TableCell>{formatBytes(totalBytes(b.snapshots))}</TableCell>
                       <TableCell>
-                        <StatusText tone={b.ready ? 'good' : 'warn'}>{b.ready ? t('backups.ok') : t('backups.stale')}</StatusText>
+                        {b.suspended ? (
+                          <StatusText tone="neutral">{t('backups.suspended')}</StatusText>
+                        ) : (
+                          <StatusText tone={b.ready ? 'good' : 'warn'}>{b.ready ? t('backups.ok') : t('backups.stale')}</StatusText>
+                        )}
+                      </TableCell>
+                      <TableCell class="text-right">
+                        <BackupNow backup={b} onChanged={(next) => setBackups(backups.map((x) => (x.ref?.name === next.ref?.name ? next : x)))} />
                       </TableCell>
                     </TableRow>
                   )
                 })}
               </TableBody>
             </Table>
+            <dl class="space-y-1 text-sm">
+              {backups.map((b) => (
+                <div key={b.ref?.name} class="flex flex-wrap gap-x-2">
+                  <dt class="font-medium">{b.ref?.name}</dt>
+                  <dd class="text-muted-foreground">
+                    {b.manualBackupPending
+                      ? t('backups.manualPending')
+                      : b.lastManualBackup
+                        ? t('backups.manualDone', { time: formatTimestamp(b.lastManualBackup) })
+                        : t('backups.manualNone')}
+                  </dd>
+                  {b.lastError && (
+                    <dd class="w-full break-words text-amber-600 dark:text-amber-400">
+                      {t('backups.lastError')}: {b.lastError}
+                    </dd>
+                  )}
+                </div>
+              ))}
+            </dl>
             <p class="text-sm text-muted-foreground">{t('backups.hint')}</p>
           </section>
           <section class="space-y-3">

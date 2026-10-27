@@ -2,7 +2,6 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
   blockingOperation,
-  caExpiry,
   currentOperation,
   recentOperations,
   rebootPendingCount,
@@ -73,12 +72,3 @@ test('nodes that wait for a reboot are counted', () => {
   assert.equal(rebootPendingCount([]), 0)
 })
 
-test('CA expiry says days left and warns inside 30 days', () => {
-  const day = 86400
-  const now = 1_000_000
-  assert.deepEqual(caExpiry(now + 400 * day, now), { days: 400, level: 'ok' })
-  assert.deepEqual(caExpiry(now + 29 * day, now), { days: 29, level: 'soon' })
-  assert.deepEqual(caExpiry(now + 30 * day, now), { days: 30, level: 'ok' })
-  assert.deepEqual(caExpiry(now - 3 * day, now), { days: -3, level: 'expired' })
-  assert.deepEqual(caExpiry(now + 3600, now), { days: 0, level: 'soon' })
-})

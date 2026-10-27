@@ -78,13 +78,3 @@ export function versionProblem(current: string, target: string): 'required' | 'i
 export function rebootPendingCount(machines: readonly { rebootPaths: readonly string[]; readyReason: string }[]): number {
   return machines.filter((m) => m.rebootPaths.length > 0 || m.readyReason === 'RebootRequired').length
 }
-
-const day = 86400
-
-// caExpiry: whole days left (negative once expired) and a level. 30 days is the
-// same warning window the certificate alert uses (ADR 0063).
-export function caExpiry(notAfterSeconds: number, nowSeconds: number): { days: number; level: 'ok' | 'soon' | 'expired' } {
-  const left = notAfterSeconds - nowSeconds
-  const days = Math.floor(left / day)
-  return { days, level: left < 0 ? 'expired' : days < 30 ? 'soon' : 'ok' }
-}

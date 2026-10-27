@@ -2,6 +2,7 @@ import { AppToaster } from '@/components/AppToaster'
 import type { ComponentChildren } from 'preact'
 import { Fragment } from 'preact'
 import { BoxesIcon, GitBranchIcon, LayoutDashboardIcon, LayersIcon, ListChecksIcon, ServerIcon, TriangleAlertIcon } from 'lucide-preact'
+import { IchorVersion } from '@/components/IchorVersion'
 import { ThemeSwitch } from '@/components/ThemeSwitch'
 import {
   Breadcrumb,
@@ -169,7 +170,8 @@ export function AppShell({
             <SidebarTrigger className="-ml-1" />
             <Separator orientation="vertical" className="mr-1 h-4" />
             <Crumbs path={path} />
-            <div className="ml-auto shrink-0">
+            <div className="ml-auto flex shrink-0 items-center gap-2">
+              <IchorVersion />
               <ThemeSwitch />
             </div>
           </header>

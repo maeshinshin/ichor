@@ -391,6 +391,12 @@ func runStartOperation(ctx context.Context, c *apiClients, in io.Reader, out, er
 		return err
 	}
 
+	if url := resp.Msg.GetPullRequestUrl(); url != "" {
+		_, _ = fmt.Fprint(errw, pullRequestText(url))
+
+		return writeMessage(out, outputFormat, resp.Msg)
+	}
+
 	if s.Kind == pb.OperationKind_OPERATION_KIND_CA_ROTATION {
 		_, _ = fmt.Fprintf(errw, "When it completes, the secrets bundle on your machine is stale: run 'ichor cluster bundle-export %s'.\n",
 			cluster.GetName())

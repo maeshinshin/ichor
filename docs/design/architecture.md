@@ -113,16 +113,49 @@ becomes the source of truth from then on. CRs reference it; they never contain
 it.
 
 Only the controller holds an `os:admin`-equivalent Talos identity. The UI
-backend holds a read-only one. The browser holds nothing: no kube token, no
-Talos credentials. For three admin-gated downloads (support bundle, etcd snapshot,
+backend holds a read-only one. The browser holds no Talos credentials. For three admin-gated downloads (support bundle, etcd snapshot,
 packet capture) the UI backend also mints a certificate per call with
 the least Talos role that call needs (`os:reader`, `os:etcd:backup`,
 `os:operator`), only after Kubernetes RBAC has allowed the signed-in user; it has
 no method that changes a node. The restore of an etcd snapshot into a live
 cluster is the controller's, not the UI's: the UI backend only lists the
 snapshots a `TalosEtcdBackup` reports and writes the operation. In the first release the UI is reached through
-`ichor ui` (a port-forward); OIDC login with Kubernetes impersonation comes
-later so that RBAC and audit apply per user.
+`ichor ui` (a port-forward), which needs no https URL.
+
+Users sign in to ichor-ui in one of two ways, and the kube-apiserver accepts
+both, so RBAC and audit apply per user.
+
+- An external OIDC provider, configured with `ichorUI.oidc.*`. Its
+  users are named `oidc:<name>` in Kubernetes.
+- Ichor's own users, off until `ichorUI.users.enabled` is set. A
+  user is an `IchorUser` CR with a display name, an e-mail, roles and a
+  disabled flag. It has no password field. Password hashes (argon2id) live in
+  one Secret, `ichor-user-credentials`. ichor-ui is a small stateless OIDC
+  issuer for these users, and the controller renders it into the
+  kube-apiserver's configuration beside the external provider. Its users are
+  named `ichor:<name>`.
+
+Roles are plain Kubernetes RBAC. Three built-in ClusterRoles, `ichor-viewer`,
+`ichor-operator` and `ichor-admin`, are bound to the groups `ichor:viewer`,
+`ichor:operator` and `ichor:admin`. None of them gets `secrets`,
+`impersonate` or `cluster-admin`. The destructive operation starts (shutdown,
+CA rotation, etcd restore, node reset and shutdown) need their own verb, held
+by `ichor-admin` only.
+
+A user's kubeconfig holds no secret. It runs `ichor auth token` as a client-go
+exec plugin. That command logs in through the browser and keeps a 5 minute ID
+token and a 12 hour refresh token on the user's machine. The browser never
+holds a Kubernetes credential; its token is for ichor-ui only.
+
+Users never get a talosconfig, because no per-user Talos identity exists. Two
+paths can hand Talos credentials to a person, and both stay admin-only: the
+CLI hand-off and the UI download.
+
+Break-glass: the secrets bundle keeps the `admin` client certificate
+(`system:masters`) and the Talos `os:admin` identity in
+`~/.ichor/clusters/<name>/`. Neither depends on any login. A broken issuer, a
+stopped ichor-ui or a deleted user cannot lock the operator out. Keep this
+bundle offline once users exist. The guide is `../guides/users-and-login.md`.
 
 Approval uses Talos's insecure apply, which does not authenticate the node.
 A separate provisioning network is assumed; the docs say so.
@@ -135,6 +168,21 @@ except on clusters with a single schedulable node, where the installer drops to
 one replica and no PDB (otherwise a drain never finishes). A hub mode, where
 Ichor manages clusters from outside, is left open by the API but not built
 first.
+
+Ichor's own users and login are off by default. Turning them on
+needs three things a default install lacks: an https URL that browsers and the
+CLI can reach (`ichorUI.users.externalURL`, set by `ichor init --ui-url`), a
+Talos v1.14 contract or later (earlier contracts can carry only one issuer),
+and an `ichor config apply` rollout of the control planes. ichor-ui is the
+issuer. The kube-apiserver reads discovery and keys from a ClusterIP listener
+on port 8444, signed by an Ichor-made CA, so the external URL does not have to
+be reachable from the control planes. Ichor installs no ingress. Expose
+ichor-ui with an Ingress, a Gateway or a LoadBalancer, or terminate TLS in
+ichor-ui with `ichorUI.tls.secretName`.
+
+Not verified yet: that a host-network kube-apiserver reaches a
+Service ClusterIP; whether Talos applies the issuer document without a reboot;
+and whether the apiserver reloads it or restarts.
 
 ## Principles
 
@@ -961,7 +1009,7 @@ resumption works. A short set runs per PR, the full set nightly.
 7. Storage integration (longhorn-v1, operation hooks), CA rotation.
 8. PR mode, strict mode, break-glass, Argo CD health checks, GitOps page.
 9. Monitoring settings, metrics and dashboards, optional components, external
-   links, OIDC and impersonation.
+   links, OIDC and impersonation, Ichor's own users and issuer.
 10. UI localisation.
 11. Later: calico, more storage presets, Flux PR mode, IPv6, hub mode, replica-
     based scaling.

@@ -216,37 +216,8 @@ func pickSnapshot(ctx context.Context, store etcdbackup.Store, opts restoreOptio
 	return nil, fmt.Errorf("restore: no usable snapshot (nothing was sent to any node):\n%s", strings.Join(problems, "\n"))
 }
 
-// fetchVerified is the restore recipe of ADR 0047: Get, Decrypt, check the
-// etcd checksum trailer. The plaintext is held in memory rather than on disk,
-// since it contains every Secret in the cluster.
-func fetchVerified(ctx context.Context, store etcdbackup.Store, key, passphrase string) (*bytes.Buffer, error) {
-	rc, err := store.Get(ctx, key)
-	if err != nil {
-		return nil, fmt.Errorf("downloading: %w", err)
-	}
-
-	defer func() { _ = rc.Close() }()
-
-	plain, err := etcdbackup.Decrypt(rc, passphrase)
-	if err != nil {
-		return nil, fmt.Errorf("decrypting (is this the cluster's own secrets bundle?): %w", err)
-	}
-
-	var (
-		buf bytes.Buffer
-		v   = etcdbackup.NewVerifier()
-	)
-
-	if _, err := io.Copy(io.MultiWriter(&buf, v), plain); err != nil {
-		return nil, fmt.Errorf("decrypting: %w", err)
-	}
-
-	if err := v.Verify(); err != nil {
-		return nil, err
-	}
-
-	return &buf, nil
-}
+// fetchVerified is the restore recipe of ADR 0047, shared with the controller's live restore (ADR 0089).
+var fetchVerified = etcdbackup.FetchVerified
 
 func firstEnv(getenv func(string) string, names ...string) string {
 	for _, n := range names {

@@ -21,6 +21,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"errors"
+	"fmt"
 	"io"
 	"slices"
 	"strings"
@@ -176,7 +177,12 @@ func (s *memStore) Put(_ context.Context, key string, r io.Reader, size int64) e
 }
 
 func (s *memStore) Get(_ context.Context, key string) (io.ReadCloser, error) {
-	return io.NopCloser(bytes.NewReader(s.objects[key])), nil
+	b, ok := s.objects[key]
+	if !ok {
+		return nil, fmt.Errorf("%w: %s", etcdbackup.ErrNotFound, key)
+	}
+
+	return io.NopCloser(bytes.NewReader(b)), nil
 }
 
 func (s *memStore) Delete(_ context.Context, key string) error {

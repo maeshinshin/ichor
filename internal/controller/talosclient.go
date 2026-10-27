@@ -16,7 +16,21 @@ limitations under the License.
 
 package controller
 
-import "context"
+import (
+	"context"
+	"errors"
+	"io"
+)
+
+// Errors of the etcd recovery calls that a retry or a different decision follows from (ADR 0089).
+var (
+	// ErrRecoveryNotReady: the node is up but not ready to take the snapshot or the bootstrap yet (the
+	// etcd service is not waiting for one, time is not in sync, cri is not healthy). Try again.
+	ErrRecoveryNotReady = errors.New("node is not ready for etcd recovery yet")
+
+	// ErrEtcdDataExists: the node's etcd data directory is not empty, so it cannot be bootstrapped.
+	ErrEtcdDataExists = errors.New("etcd data directory is not empty")
+)
 
 // TalosClient is the Talos API surface the reconciler needs for one
 // machine (architecture.md's "Configuration reconcile" steps 2 and 4). It
@@ -173,6 +187,26 @@ type TalosClient interface {
 	// EtcdForfeitLeadership asks this node's etcd member, if it leads, to hand leadership to
 	// another member.
 	EtcdForfeitLeadership(ctx context.Context) error
+
+	// EtcdDataPresent reports whether this node has an etcd data directory (/var/lib/etcd/member).
+	// It is how an etcd restore (ADR 0089) tells a control plane that is wiped from one that is not,
+	// and a recovered one from both, without any state of its own.
+	EtcdDataPresent(ctx context.Context) (bool, error)
+
+	// ResetEtcdData wipes this node's etcd data the way Talos's disaster-recovery procedure does: a
+	// non-graceful reset with reboot of the EPHEMERAL partition and of every dedicated-partition system
+	// volume (never STATE: the machine configuration and identity stay). Fire-and-forget on Talos's
+	// side. The node does not leave etcd first and does not drain.
+	ResetEtcdData(ctx context.Context) error
+
+	// EtcdRecover uploads an etcd snapshot to this node (for the next bootstrap with recovery). A
+	// node that is not yet ready for it returns an error wrapping ErrRecoveryNotReady.
+	EtcdRecover(ctx context.Context, snapshot io.Reader) error
+
+	// BootstrapRecover bootstraps etcd on this node from the uploaded snapshot (Bootstrap with
+	// RecoverEtcd). It wraps ErrRecoveryNotReady when the node is not ready yet and ErrEtcdDataExists
+	// when its data directory is not empty.
+	BootstrapRecover(ctx context.Context) error
 
 	// MachineStage reads the node's MachineStatus stage ("running",
 	// "installing", "rebooting", ...), which followStage uses to follow a

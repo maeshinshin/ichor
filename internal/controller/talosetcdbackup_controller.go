@@ -160,7 +160,7 @@ func (r *TalosEtcdBackupReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	var scrub scrubber
 
-	snap, pruneErr, err := r.runBackup(ctx, &bk, start, &scrub)
+	snap, stored, pruneErr, err := r.runBackup(ctx, &bk, start, &scrub)
 
 	bk.Status.LastAttemptTime = &metav1.Time{Time: start}
 
@@ -177,6 +177,7 @@ func (r *TalosEtcdBackupReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	done := metav1.NewTime(r.now())
 	bk.Status.LastSuccessTime = &done
 	bk.Status.LastSnapshot = snap
+	bk.Status.Snapshots = stored
 	bk.Status.ConsecutiveFailures = 0
 	backupLastSuccess.WithLabelValues(bk.Namespace, bk.Name).Set(float64(done.Unix()))
 
@@ -228,32 +229,32 @@ func (r *TalosEtcdBackupReconciler) refreshStaleness(bk *ichorv1alpha1.TalosEtcd
 // secret as it is loaded.
 func (r *TalosEtcdBackupReconciler) runBackup(
 	ctx context.Context, bk *ichorv1alpha1.TalosEtcdBackup, start time.Time, scrub *scrubber,
-) (snap *ichorv1alpha1.TalosEtcdBackupSnapshot, pruneErr, err error) {
+) (snap *ichorv1alpha1.TalosEtcdBackupSnapshot, stored []ichorv1alpha1.TalosEtcdBackupStored, pruneErr, err error) {
 	ctx, cancel := context.WithTimeout(ctx, backupTimeout)
 	defer cancel()
 
 	var cluster ichorv1alpha1.TalosCluster
 	if err := r.Get(ctx, types.NamespacedName{Namespace: bk.Namespace, Name: bk.Spec.ClusterRef.Name}, &cluster); err != nil {
-		return nil, nil, fmt.Errorf("getting TalosCluster %q: %w", bk.Spec.ClusterRef.Name, err)
+		return nil, nil, nil, fmt.Errorf("getting TalosCluster %q: %w", bk.Spec.ClusterRef.Name, err)
 	}
 
 	bundle, err := loadBundle(ctx, r.Client, r.ControllerNamespace, &cluster)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	scrub.add(bundleSecretMaterial(bundle)...)
 
 	passphrase, err := etcdbackup.Passphrase(bundle)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	scrub.add(passphrase)
 
 	s3cfg, err := r.loadS3Config(ctx, bk, scrub)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	newStore := r.NewStore
@@ -263,12 +264,12 @@ func (r *TalosEtcdBackupReconciler) runBackup(
 
 	store, err := newStore(s3cfg)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	candidates, err := r.snapshotCandidates(ctx, &cluster, bundle)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	prefix := bk.Spec.Destination.S3.Prefix
@@ -289,10 +290,30 @@ func (r *TalosEtcdBackupReconciler) runBackup(
 
 		return &ichorv1alpha1.TalosEtcdBackupSnapshot{
 			Key: key, Time: metav1.NewTime(start), Size: size, SourceMachine: m.Name,
-		}, pruneErr, nil
+		}, storedSnapshots(ctx, store, prefix), pruneErr, nil
 	}
 
-	return nil, nil, errors.Join(errs...)
+	return nil, nil, nil, errors.Join(errs...)
+}
+
+// maxStoredSnapshots is the CRD's cap on status.snapshots.
+const maxStoredSnapshots = 500
+
+// storedSnapshots lists what the destination holds after a backup and its prune, newest first. A
+// failed listing yields nil: the list is for choosing a restore, and the next backup rebuilds it.
+func storedSnapshots(ctx context.Context, store etcdbackup.Store, prefix string) []ichorv1alpha1.TalosEtcdBackupStored {
+	objs, err := store.List(ctx, prefix)
+	if err != nil {
+		return nil
+	}
+
+	out := make([]ichorv1alpha1.TalosEtcdBackupStored, 0, min(len(objs), maxStoredSnapshots))
+
+	for _, o := range objs[:min(len(objs), maxStoredSnapshots)] {
+		out = append(out, ichorv1alpha1.TalosEtcdBackupStored{Name: o.Name, Time: metav1.NewTime(o.Time), Size: o.Size})
+	}
+
+	return out
 }
 
 // loadS3Config reads the credentials Secret from the controller's namespace
@@ -301,14 +322,20 @@ func (r *TalosEtcdBackupReconciler) runBackup(
 func (r *TalosEtcdBackupReconciler) loadS3Config(
 	ctx context.Context, bk *ichorv1alpha1.TalosEtcdBackup, scrub *scrubber,
 ) (etcdbackup.S3Config, error) {
-	if r.ControllerNamespace == "" {
+	return loadS3ConfigFrom(ctx, r.Client, r.ControllerNamespace, bk.Spec.Destination.S3, scrub)
+}
+
+// loadS3ConfigFrom is loadS3Config for any reader: the etcd restore (ADR 0089) reads the same
+// credentials the backup wrote with.
+func loadS3ConfigFrom(
+	ctx context.Context, c client.Reader, controllerNamespace string, dst ichorv1alpha1.TalosEtcdBackupS3, scrub *scrubber,
+) (etcdbackup.S3Config, error) {
+	if controllerNamespace == "" {
 		return etcdbackup.S3Config{}, errors.New("loading S3 credentials: controller namespace is empty (is POD_NAMESPACE set?)")
 	}
 
-	dst := bk.Spec.Destination.S3
-
 	var sec corev1.Secret
-	if err := r.Get(ctx, types.NamespacedName{Namespace: r.ControllerNamespace, Name: dst.CredentialsSecretRef.Name}, &sec); err != nil {
+	if err := c.Get(ctx, types.NamespacedName{Namespace: controllerNamespace, Name: dst.CredentialsSecretRef.Name}, &sec); err != nil {
 		return etcdbackup.S3Config{}, fmt.Errorf("getting S3 credentials Secret %q: %w", dst.CredentialsSecretRef.Name, err)
 	}
 

@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"io"
 	"reflect"
 	"sync"
 	"time"
@@ -138,6 +139,18 @@ type fakeTalosClient struct {
 	forfeitCalls      int
 	forfeitErr        error
 	forfeitHook       func()
+
+	// etcd-restore fields (ADR 0089): etcdData is the answer of EtcdDataPresent.
+	etcdData              bool
+	etcdDataErr           error
+	resetEtcdCalls        int
+	resetEtcdErr          error
+	resetEtcdHook         func()
+	recovered             [][]byte
+	recoverErr            error
+	bootstrapRecoverCalls int
+	bootstrapRecoverErr   error
+	bootstrapRecoverHook  func()
 
 	// nodeName and nodeNameErr serve NodeName: the Kubernetes node name the node reports.
 	nodeName    string
@@ -1088,4 +1101,38 @@ func (f *fakeTalosClient) EtcdForfeitLeadership(context.Context) error {
 	}
 
 	return f.forfeitErr
+}
+
+// etcd-restore fields (etcd_restore_test.go, ADR 0089).
+func (f *fakeTalosClient) EtcdDataPresent(context.Context) (bool, error) {
+	return f.etcdData, f.etcdDataErr
+}
+
+func (f *fakeTalosClient) ResetEtcdData(context.Context) error {
+	f.resetEtcdCalls++
+	if f.resetEtcdHook != nil {
+		f.resetEtcdHook()
+	}
+
+	return f.resetEtcdErr
+}
+
+func (f *fakeTalosClient) EtcdRecover(_ context.Context, snapshot io.Reader) error {
+	b, err := io.ReadAll(snapshot)
+	if err != nil {
+		return err
+	}
+
+	f.recovered = append(f.recovered, b)
+
+	return f.recoverErr
+}
+
+func (f *fakeTalosClient) BootstrapRecover(context.Context) error {
+	f.bootstrapRecoverCalls++
+	if f.bootstrapRecoverHook != nil {
+		f.bootstrapRecoverHook()
+	}
+
+	return f.bootstrapRecoverErr
 }

@@ -684,6 +684,7 @@ func (r *TalosMachineReconciler) ready(
 		Type: conditionReady, Status: status, Reason: reason, Message: message,
 	})
 	m.Status.ObservedGeneration = m.Generation
+	m.Status.ObservedReconcileRequest = m.Annotations[ichorv1alpha1.EtcdRestoreReconcileAnnotation]
 
 	return r.Status().Update(ctx, m)
 }

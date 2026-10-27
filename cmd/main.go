@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/open-policy-agent/cert-controller/pkg/rotator"
@@ -41,6 +42,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -69,6 +71,10 @@ const (
 	// backupSpoolDir is the emptyDir both manifests mount for TalosEtcdBackup's staged
 	// (encrypted) snapshots, since the root filesystem is read-only (ADR 0047).
 	backupSpoolDir = "/var/spool/ichor"
+
+	// restoreTailGrace is how long the process outlives its manager while an etcd restore is mid-way
+	// (ADR 0089): the restore's own bound for the wipe and the recovery, plus a margin.
+	restoreTailGrace = 70 * time.Minute
 )
 
 var (
@@ -428,7 +434,7 @@ func main() {
 	// dispatches it to its own state machine, which needs a Talos dialer, the bundle's
 	// namespace, and the node this pod runs on (NODE_NAME, from the downward API) so that
 	// node can be stopped last.
-	if err := (&controller.TalosOperationReconciler{
+	opReconciler := &controller.TalosOperationReconciler{
 		Client:              mgr.GetClient(),
 		APIReader:           mgr.GetAPIReader(),
 		TalosClient:         controller.NewMachineryTalosClient,
@@ -460,8 +466,16 @@ func main() {
 				return false, fmt.Errorf("no executor wired up for operation kind %q yet", op.Spec.Kind)
 			}
 		},
-	}).SetupWithManager(mgr); err != nil {
+	}
+	if err := opReconciler.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "talosoperation")
+		os.Exit(1)
+	}
+	// An etcd restore (ADR 0089) rolls the Kubernetes API back past its own operation. When the
+	// controller starts again, with the API up, the operation is recreated from the marker kept
+	// next to the backups.
+	if err := mgr.Add(manager.RunnableFunc(opReconciler.ResumeEtcdRestores)); err != nil {
+		setupLog.Error(err, "Failed to add the etcd restore resumer")
 		os.Exit(1)
 	}
 	if err := (&controller.TalosEtcdBackupReconciler{
@@ -510,7 +524,14 @@ func main() {
 	}
 
 	setupLog.Info("Starting manager")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+	err = mgr.Start(ctrl.SetupSignalHandler())
+
+	// An etcd restore (ADR 0089) takes the Kubernetes API away, which costs the manager its leader
+	// lease and stops it. The restore is then mid-way (etcd wiped, snapshot not yet recovered) and
+	// only this process can finish it, so it is waited for before the process exits.
+	controller.WaitForRestoreTails(restoreTailGrace)
+
+	if err != nil {
 		setupLog.Error(err, "Failed to run manager")
 		os.Exit(1)
 	}

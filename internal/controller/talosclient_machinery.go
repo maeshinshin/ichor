@@ -18,8 +18,10 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
 	"strings"
 
 	"github.com/cosi-project/runtime/pkg/resource"
@@ -31,8 +33,10 @@ import (
 	machineapi "github.com/siderolabs/talos/pkg/machinery/api/machine"
 	"github.com/siderolabs/talos/pkg/machinery/client"
 	clientconfig "github.com/siderolabs/talos/pkg/machinery/client/config"
+	talosconfig "github.com/siderolabs/talos/pkg/machinery/config/config"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	"github.com/siderolabs/talos/pkg/machinery/constants"
+	blockres "github.com/siderolabs/talos/pkg/machinery/resources/block"
 	configres "github.com/siderolabs/talos/pkg/machinery/resources/config"
 	k8sres "github.com/siderolabs/talos/pkg/machinery/resources/k8s"
 	runtimeres "github.com/siderolabs/talos/pkg/machinery/resources/runtime"
@@ -386,6 +390,73 @@ func (t *machineryTalosClient) EtcdDefragment(ctx context.Context) error {
 // EtcdForfeitLeadership asks this node's member to hand leadership over.
 func (t *machineryTalosClient) EtcdForfeitLeadership(ctx context.Context) error {
 	_, err := t.c.EtcdForfeitLeadership(ctx, &machineapi.EtcdForfeitLeadershipRequest{})
+
+	return err
+}
+
+// EtcdDataPresent lists /var/lib/etcd/member, as Talos's own recovery test does to prove a wipe: a
+// missing directory is the answer "no", whatever else fails is an error.
+func (t *machineryTalosClient) EtcdDataPresent(ctx context.Context) (bool, error) {
+	stream, err := t.c.MachineClient.List(ctx, &machineapi.ListRequest{Root: filepath.Join(constants.EtcdDataPath, "member")})
+	if err != nil {
+		return false, err
+	}
+
+	_, err = stream.Recv()
+
+	switch {
+	case err == nil, errors.Is(err, io.EOF):
+		return true, nil
+	case strings.Contains(client.Status(err).Message(), "no such file or directory"):
+		return false, nil
+	}
+
+	return false, err
+}
+
+// ResetEtcdData is the wipe of Talos's disaster-recovery procedure (its integration test
+// EtcdRecoverSuite): a non-graceful reset with reboot of EPHEMERAL plus every promotable system volume
+// that is a dedicated partition (ETCD, CRI, KUBELET, LOG), because wiping EPHEMERAL only clears those
+// that live as directories under it. STATE stays, so the node keeps its configuration and identity.
+func (t *machineryTalosClient) ResetEtcdData(ctx context.Context) error {
+	wipe := []*machineapi.ResetPartitionSpec{{Label: constants.EphemeralPartitionLabel, Wipe: true}}
+
+	for _, id := range talosconfig.PromotableSystemVolumeNames {
+		vs, err := safe.StateGetByID[*blockres.VolumeStatus](ctx, t.c.COSI, id)
+		if err != nil || vs.TypedSpec().Type != blockres.VolumeTypePartition {
+			continue // a directory under EPHEMERAL, or unknown: the EPHEMERAL wipe covers it
+		}
+
+		wipe = append(wipe, &machineapi.ResetPartitionSpec{Label: id, Wipe: true})
+	}
+
+	return t.c.ResetGeneric(ctx, &machineapi.ResetRequest{Graceful: false, Reboot: true, SystemPartitionsToWipe: wipe})
+}
+
+// EtcdRecover uploads the snapshot. See TalosClient.EtcdRecover.
+func (t *machineryTalosClient) EtcdRecover(ctx context.Context, snapshot io.Reader) error {
+	_, err := t.c.EtcdRecover(ctx, snapshot)
+
+	return recoveryError(err)
+}
+
+// BootstrapRecover is `talosctl bootstrap --recover-from` after the upload.
+func (t *machineryTalosClient) BootstrapRecover(ctx context.Context) error {
+	return recoveryError(t.c.Bootstrap(ctx, &machineapi.BootstrapRequest{RecoverEtcd: true}))
+}
+
+// recoveryError maps the answers Talos's recovery calls give to the sentinels callers decide on:
+// FailedPrecondition and DeadlineExceeded (not ready, time not in sync) mean wait, AlreadyExists means
+// the etcd data directory is not empty.
+func recoveryError(err error) error {
+	switch client.StatusCode(err) {
+	case codes.OK:
+		return err
+	case codes.FailedPrecondition, codes.DeadlineExceeded:
+		return fmt.Errorf("%w: %w", ErrRecoveryNotReady, err)
+	case codes.AlreadyExists:
+		return fmt.Errorf("%w: %w", ErrEtcdDataExists, err)
+	}
 
 	return err
 }

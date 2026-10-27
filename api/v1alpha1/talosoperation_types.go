@@ -135,7 +135,7 @@ const (
 
 	// CARotationStageAwaitingCredentials: Accepting is verified on every node (both CAs accepted, the
 	// old ones still issue) and the operation waits, changing nothing, until the operator has new
-	// credentials: the CLI writes them and sets CredentialsHandoffAnnotation (ADR 0090). Nothing the
+	// credentials: the CLI writes them and sets CredentialsHandoffAnnotation (ADR 0091). Nothing the
 	// operator holds stops working before this stage ends.
 	CARotationStageAwaitingCredentials = "AwaitingCredentials"
 
@@ -161,7 +161,7 @@ const ConditionBundleBackupStale = "BundleBackupStale"
 // CredentialsHandoffAnnotation, set on a ca-rotation TalosOperation by `ichor cluster rotate-ca` (or
 // `ichor cluster credentials --acknowledge`) after it has written the operator a kubeconfig and a
 // talosconfig that work with both the old and the new CAs, holds CARotationHandoffToken of the
-// operation's status. The controller leaves the AwaitingCredentials stage only when it matches (ADR 0090).
+// operation's status. The controller leaves the AwaitingCredentials stage only when it matches (ADR 0091).
 const CredentialsHandoffAnnotation = "ichor.maesh.dev/credentials-handoff"
 
 // CARotationHandoffToken is what CredentialsHandoffAnnotation must hold: the fingerprints of the new

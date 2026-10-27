@@ -719,6 +719,12 @@ export const en = {
   'ops.plan.bundleStaleTitle': 'Your secrets bundle becomes stale',
   'ops.plan.bundleStale':
     'When the rotation completes, the secrets bundle in the cluster is replaced and the copy on your machine is out of date. Run "ichor cluster bundle-export {name}" and keep the file safe. Nodes held with upgrade-hold are not skipped.',
+  'ops.plan.credentialsTitle': 'Your credentials stop working during the rotation',
+  'ops.plan.credentials':
+    'Your kubeconfig and talosconfig stop working: the Kubernetes API serves the new CA from the second pass on, and the Talos API refuses the old CA after the third. After every node accepts the new CAs, the operation waits, changing nothing, until you have new credentials. Credentials are not offered for download here, because they would carry the cluster-admin private key through the browser; use the CLI with your current kubeconfig: "ichor cluster credentials {name} --acknowledge" writes a kubeconfig and a talosconfig that work with both CAs, checks them, and lets the operation go on. "ichor cluster rotate-ca {name}" does this itself when you start the rotation from the terminal.',
+  'ops.awaitingCredentialsTitle': 'Waiting for your credentials',
+  'ops.awaitingCredentials':
+    'Every node accepts the new CAs and the old ones still work. Nothing else happens until you run "ichor cluster credentials {name} --acknowledge" with your current kubeconfig.',
   'ops.plan.counts': '{total} node(s): {controlPlanes} control plane, {workers} worker.',
   'ops.plan.orderRollout': 'Control planes one at a time, then workers (at most {n} at once):',
   'ops.plan.orderShutdown': 'Workers first, stopped together; then the control planes at once:',

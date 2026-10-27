@@ -38,7 +38,7 @@ var clusterRotateCAFollow bool
 // refusals and the permission check are the ones the UI has. The controller runs the rotation.
 //
 // Unlike the other kinds the command does not return when the operation exists: the rotation waits,
-// after the nodes accept the new CAs, for the operator's credentials (ADR 0090), and this command
+// after the nodes accept the new CAs, for the operator's credentials (ADR 0091), and this command
 // writes them while the old ones still work and tells the controller to go on.
 var clusterRotateCACmd = &cobra.Command{
 	Use:   "rotate-ca NAME",

@@ -161,7 +161,7 @@ message Operation {
   repeated Condition conditions = 9;
   google.protobuf.Timestamp created_at = 10;
   // ca_rotation_stage is status.caRotation.stage of a ca-rotation operation
-  // (Accepting, Issuing, Dropping, Finalizing, Done); empty before the new CAs
+  // (Accepting, AwaitingCredentials, Issuing, Dropping, Finalizing, Done); empty before the new CAs
   // are saved, and for every other kind.
   string ca_rotation_stage = 11;
   // node_action, node_machine and node_message describe a node-kind operation: what it

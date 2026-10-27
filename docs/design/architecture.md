@@ -51,7 +51,7 @@ inventing a new control plane.
   state belong to Longhorn (or whatever you run).
 - Multi-cluster management. The design keeps a hub mode possible, but it is
   not a first-release feature.
-- Air-gapped environments (ADR 0090). Nothing is built or tested for an
+- Air-gapped environments (ADR 0091). Nothing is built or tested for an
   installation with no route to public registries; registry mirrors exist for
   pull-through caches and private registries.
 - IPv6, PXE provisioning, Flux PR mode. Later, maybe.
@@ -880,7 +880,10 @@ regularly.
 Ichor's own Talos client certificates are short-lived and renewed
 automatically; an expired one would lock Ichor out with no way back. CA
 rotation (Talos and Kubernetes) follows the documented Talos procedure and
-runs through the same machinery as upgrades. Expiry dates are visible in
+runs through the same machinery as upgrades, except that it waits, after every
+node accepts the new CAs, until the operator has credentials that work with
+both CAs (ADR 0091); otherwise the first stage that changes what the API
+servers present would lock the operator out. Expiry dates are visible in
 status, the UI and metrics.
 
 ### Monitoring and registry mirrors

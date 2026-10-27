@@ -37,7 +37,7 @@ var clusterCredentialsOpts struct {
 	Acknowledge    bool
 }
 
-// clusterCredentialsCmd implements `ichor cluster credentials` (ADR 0090): write a kubeconfig and a
+// clusterCredentialsCmd implements `ichor cluster credentials` (ADR 0091): write a kubeconfig and a
 // talosconfig for the operator, from the cluster's secrets bundle or, offline, from a bundle file.
 var clusterCredentialsCmd = &cobra.Command{
 	Use:   "credentials NAME",

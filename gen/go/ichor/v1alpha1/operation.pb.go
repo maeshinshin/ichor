@@ -815,7 +815,7 @@ type Operation struct {
 	Conditions    []*Condition           `protobuf:"bytes,9,rep,name=conditions,proto3" json:"conditions,omitempty"`
 	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	// ca_rotation_stage is status.caRotation.stage of a ca-rotation operation
-	// (Accepting, Issuing, Dropping, Finalizing, Done); empty before the new CAs
+	// (Accepting, AwaitingCredentials, Issuing, Dropping, Finalizing, Done); empty before the new CAs
 	// are saved, and for every other kind.
 	CaRotationStage string `protobuf:"bytes,11,opt,name=ca_rotation_stage,json=caRotationStage,proto3" json:"ca_rotation_stage,omitempty"`
 	// node_action, node_machine and node_message describe a node-kind operation: what it

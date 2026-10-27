@@ -374,7 +374,7 @@ export type Operation = Message<"ichor.v1alpha1.Operation"> & {
 
   /**
    * ca_rotation_stage is status.caRotation.stage of a ca-rotation operation
-   * (Accepting, Issuing, Dropping, Finalizing, Done); empty before the new CAs
+   * (Accepting, AwaitingCredentials, Issuing, Dropping, Finalizing, Done); empty before the new CAs
    * are saved, and for every other kind.
    *
    * @generated from field: string ca_rotation_stage = 11;

@@ -39,7 +39,7 @@ import (
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
 )
 
-// Credentials for the operator (ADR 0090). A CA rotation replaces the CAs the operator's kubeconfig
+// Credentials for the operator (ADR 0091). A CA rotation replaces the CAs the operator's kubeconfig
 // and talosconfig trust and sign with. `talosctl rotate-ca` hands the operator a new talosconfig as a
 // side effect; Ichor's rotation is run by the controller, so this file is where the operator gets
 // theirs: a kubeconfig and a talosconfig that trust the old and the new CAs and carry a client

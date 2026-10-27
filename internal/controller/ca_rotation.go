@@ -635,7 +635,7 @@ func (c *caRun) pass(ctx context.Context, stage string) (ctrl.Result, error) {
 }
 
 // awaitCredentials holds the rotation, changing nothing, until the operator has acknowledged the
-// credential hand-off (ADR 0090): from the next stage on the Kubernetes API serves the new CA and,
+// credential hand-off (ADR 0091): from the next stage on the Kubernetes API serves the new CA and,
 // two stages later, the Talos API stops accepting the old one, so a kubeconfig or talosconfig that
 // trusts only the old CAs would be locked out. The annotation is set by the CLI after it has written
 // credentials valid under both CAs; the controller only reads it, and only when it names this

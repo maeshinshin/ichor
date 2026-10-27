@@ -26,6 +26,7 @@ import (
 	authv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -385,5 +386,68 @@ func TestEtcdRestorePlanFindsTheControllerWithoutItsNamespaceOrAMatchingSpecEndp
 
 	if got := res.Msg.GetSteps()[2]; !strings.Contains(got, "then cp2 (where this controller runs)") {
 		t.Fatalf("wipe step = %q", got)
+	}
+}
+
+func TestRequestEtcdBackupSetsTheAnnotationAndRefusesWhatCannotRun(t *testing.T) {
+	get := func(k8s client.Client) *ichorv1alpha1.TalosEtcdBackup {
+		var bk ichorv1alpha1.TalosEtcdBackup
+		if err := k8s.Get(context.Background(), types.NamespacedName{Namespace: opNS, Name: restoreBackup}, &bk); err != nil {
+			t.Fatal(err)
+		}
+
+		return &bk
+	}
+	call := func(s *Server) (*connect.Response[pb.RequestEtcdBackupResponse], error) {
+		return s.RequestEtcdBackup(context.Background(), connect.NewRequest(&pb.RequestEtcdBackupRequest{Backup: objectRef(opNS, restoreBackup)}))
+	}
+
+	s, k8s := opServer(t, restoreBackupObject())
+
+	res, err := call(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	at, err := time.Parse(time.RFC3339, get(k8s).Annotations[ichorv1alpha1.BackupNowAnnotation])
+	if err != nil || time.Since(at) > time.Minute {
+		t.Fatalf("annotation = %v, %v", at, err)
+	}
+
+	if !res.Msg.GetBackup().GetManualBackupPending() || res.Msg.GetAudit().GetAction() != "backup-now" {
+		t.Fatalf("response = %+v", res.Msg)
+	}
+
+	if _, err := call(s); connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Fatalf("a request still waiting: %v", err)
+	}
+
+	// Once the controller acted on it, the next request is newer than lastManualBackup.
+	bk := get(k8s)
+	last := metav1.NewTime(at.Add(time.Hour))
+	bk.Status.LastManualBackup = &last
+
+	if err := k8s.Update(context.Background(), bk); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := call(s); err != nil {
+		t.Fatal(err)
+	}
+
+	if next, _ := time.Parse(time.RFC3339, get(k8s).Annotations[ichorv1alpha1.BackupNowAnnotation]); !next.After(last.Time) {
+		t.Fatalf("next = %v, not after %v", next, last)
+	}
+
+	susp := restoreBackupObject()
+	susp.Spec.Suspend = true
+
+	s, _ = opServer(t, susp)
+	if _, err := call(s); connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Fatalf("suspended: %v", err)
+	}
+
+	if _, err := s.RequestEtcdBackup(context.Background(), connect.NewRequest(&pb.RequestEtcdBackupRequest{})); connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Fatalf("no backup: %v", err)
 	}
 }

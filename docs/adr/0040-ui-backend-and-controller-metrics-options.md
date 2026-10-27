@@ -1,12 +1,12 @@
 # 0040. The UI backend gets one metric, the controller gets zero, and monitoring stays optional in the chart
 
-Status: Accepted · Date: 2026-10-26 · Design section: Monitoring and air gap
+Status: Accepted · Date: 2026-10-26 · Design section: Monitoring and registry mirrors
 
 Decided: added exactly one custom metric (`ichor_uiapi_rpc_duration_seconds`, via a single `connectrpc.com/connect` interceptor) because the UI backend exports nothing on its own; added zero custom metrics to the controller because `controller-runtime` already exports reconcile/workqueue health and `kube-state-metrics` already covers cluster-level state (pending approvals, the cluster lock, `TalosOperation` progress) from fields already in CR spec/status; shipped a `ServiceMonitor` for ichor-ui, one `PrometheusRule` with two alerts, and one Grafana dashboard, all as chart options defaulting off, the same opt-in shape `metricsCert.enabled` already established (ADR 0031).
 
 ## Context
 
-architecture.md's "Monitoring and air gap" section requires: "The controller
+architecture.md's "Monitoring and registry mirrors" section requires: "The controller
 and UI backend export Prometheus metrics, and ServiceMonitors, alert rules
 and Grafana dashboards ship with the chart as an option." It also requires
 Ichor to "expose the control-plane metrics that Talos binds locally by

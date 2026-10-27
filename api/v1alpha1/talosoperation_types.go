@@ -423,6 +423,14 @@ type TalosOperationMachineStatus struct {
 	// operation knows the machine has been powered back on.
 	// +optional
 	BootID string `json:"bootID,omitempty"`
+
+	// startedAt is when the operation first selected this machine.
+	// +optional
+	StartedAt *metav1.Time `json:"startedAt,omitempty"`
+
+	// finishedAt is when this machine's step was reported done.
+	// +optional
+	FinishedAt *metav1.Time `json:"finishedAt,omitempty"`
 }
 
 // TalosOperationStatus defines the observed state of TalosOperation.
@@ -450,6 +458,10 @@ type TalosOperationStatus struct {
 	// machine's own failed step, as opposed to spec.paused.
 	// +optional
 	FailureReason string `json:"failureReason,omitempty"`
+
+	// finishedAt is when the operation reached Completed.
+	// +optional
+	FinishedAt *metav1.Time `json:"finishedAt,omitempty"`
 
 	// lastRetry is the time of the retry request (the ichor.maesh.dev/retry annotation) the
 	// controller last acted on: it cleared failureReason and ran the failed step again.

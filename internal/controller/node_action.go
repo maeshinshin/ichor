@@ -251,7 +251,7 @@ func (n *nodeRun) recordRequest(ctx context.Context, message string) error {
 		return fmt.Errorf("reading %q's boot ID before the action: %w", n.m.Name, err)
 	}
 
-	setMachineStatus(n.op, n.m.Name, ichorv1alpha1.TalosOperationMachinePhaseInProgress)
+	n.r.markMachine(n.op, n.m.Name, ichorv1alpha1.TalosOperationMachinePhaseInProgress)
 	setMachineBootID(n.op, n.m.Name, bootID)
 
 	now := metav1.Now()
@@ -283,7 +283,7 @@ func (n *nodeRun) wait(ctx context.Context, why string) (ctrl.Result, error) {
 
 // complete ends the operation: the machine is Completed, the lock is released.
 func (n *nodeRun) complete(ctx context.Context, message string) (ctrl.Result, error) {
-	setMachineStatus(n.op, n.m.Name, ichorv1alpha1.TalosOperationMachinePhaseCompleted)
+	n.r.markMachine(n.op, n.m.Name, ichorv1alpha1.TalosOperationMachinePhaseCompleted)
 
 	if n.op.Status.Node == nil {
 		n.op.Status.Node = &ichorv1alpha1.TalosOperationNodeStatus{}
@@ -751,7 +751,7 @@ func (n *nodeRun) beginReset(ctx context.Context) (ctrl.Result, error) {
 		return ctrl.Result{}, fmt.Errorf("marking %q for removal with a reset: %w", n.m.Name, err)
 	}
 
-	setMachineStatus(n.op, n.m.Name, ichorv1alpha1.TalosOperationMachinePhaseInProgress)
+	n.r.markMachine(n.op, n.m.Name, ichorv1alpha1.TalosOperationMachinePhaseInProgress)
 	n.op.Status.Phase = ichorv1alpha1.TalosOperationPhaseInProgress
 	n.op.Status.Node = &ichorv1alpha1.TalosOperationNodeStatus{
 		Step: ichorv1alpha1.NodeStepRemoving, Message: "the machine was handed to the removal flow with a reset",
@@ -775,7 +775,7 @@ func (r *TalosOperationReconciler) awaitRemoval(ctx context.Context, op *ichorv1
 
 	err := readerOrClient(r.APIReader, r.Client).Get(ctx, types.NamespacedName{Namespace: op.Namespace, Name: op.Spec.Node.MachineRef.Name}, m)
 	if apierrors.IsNotFound(err) {
-		setMachineStatus(op, op.Spec.Node.MachineRef.Name, ichorv1alpha1.TalosOperationMachinePhaseCompleted)
+		r.markMachine(op, op.Spec.Node.MachineRef.Name, ichorv1alpha1.TalosOperationMachinePhaseCompleted)
 		op.Status.Node.Message = "the machine was removed and its node reset"
 
 		return ctrl.Result{}, r.setPhase(ctx, op, ichorv1alpha1.TalosOperationPhaseCompleted, reasonNodeActionDone, op.Status.Node.Message)

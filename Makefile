@@ -201,7 +201,7 @@ cleanup-test-e2e: ## Tear down the cluster setup-test-e2e provisioned; a no-op i
 	@KUBECONFIG=$(TEST_E2E_KUBECONFIG) talosctl cluster destroy --name ichor-test-e2e 2>/dev/null || true
 
 .PHONY: lint
-lint: golangci-lint ## Run golangci-lint linter
+lint: golangci-lint proto-lint ## Run golangci-lint and buf lint (proto-lint is a prerequisite so CI catches proto drift; ADR 0016)
 	"$(GOLANGCI_LINT)" run
 
 .PHONY: lint-fix

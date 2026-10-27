@@ -1,0 +1,127 @@
+/*
+Copyright 2026 maeshinshin.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package chart
+
+import (
+	"fmt"
+	"strings"
+	"testing"
+)
+
+// builtinUserRoles are ADR 0094's three built-in roles, lowest first. The chart names them
+// ichor-<name>; config/rbac names them <name> and kustomize's namePrefix adds "ichor-".
+var builtinUserRoles = []string{"viewer", "operator", "admin"}
+
+// TestBuiltinUserRoles guards ADR 0094 Decision 4: the three built-in ClusterRoles render only
+// with ichorUI.users.enabled, never hold secrets, impersonate or '*', each includes the one below,
+// are bound only to the groups ichor:viewer|operator|admin, and match config/rbac.
+func TestBuiltinUserRoles(t *testing.T) {
+	off := renderChartWithValues(t, "ichor")
+	for _, n := range builtinUserRoles {
+		if find(off, kindClusterRole, "ichor-"+n) != nil {
+			t.Errorf("ClusterRole ichor-%s rendered with ichorUI.users.enabled=false", n)
+		}
+	}
+
+	docs := renderChartWithValues(t, "ichor", "ichorUI.users.enabled=true")
+	configDocs := loadYAMLDocs(t, "../../config/rbac/ichor_roles_binding.yaml")
+
+	var prev map[rbacTriple]bool
+	for _, n := range builtinUserRoles {
+		role := find(docs, kindClusterRole, "ichor-"+n)
+		if role == nil {
+			t.Fatalf("expected ClusterRole ichor-%s with ichorUI.users.enabled=true", n)
+		}
+		got := rbacTriples(allRules(role))
+		for tr := range got {
+			if tr.verb == "*" || tr.resource == "*" || tr.group == "*" ||
+				tr.verb == "impersonate" || strings.Contains(tr.resource, "secrets") {
+				t.Errorf("ClusterRole ichor-%s grants %s", n, tr)
+			}
+		}
+		for tr := range prev {
+			if !got[tr] {
+				t.Errorf("ClusterRole ichor-%s lacks %s, which the role below it grants", n, tr)
+			}
+		}
+		if prev != nil && len(got) <= len(prev) {
+			t.Errorf("ClusterRole ichor-%s adds nothing to the role below it", n)
+		}
+		prev = got
+
+		cfg := loadYAMLDocs(t, "../../config/rbac/ichor_"+n+"_role.yaml")
+		checkRBACRulesMatch(t, "ichor", "ClusterRole ichor-"+n, find(cfg, kindClusterRole, n), role,
+			"config/rbac/ichor_"+n+"_role.yaml", "dist/chart/templates/rbac/ichor-user-roles.yaml")
+
+		// Subjects: exactly the one group, in both the chart and the kustomize binding.
+		want := fmt.Sprint([]any{map[string]any{
+			"apiGroup": "rbac.authorization.k8s.io", "kind": "Group", "name": "ichor:" + n,
+		}})
+		for label, set := range map[string][]map[string]any{"chart": docs, "kustomize": configDocs} {
+			bname := "ichor-" + n + "-rolebinding"
+			if label == "kustomize" {
+				bname = n + "-rolebinding"
+			}
+			b := find(set, kindClusterRoleBinding, bname)
+			if b == nil {
+				t.Errorf("%s: no ClusterRoleBinding %s", label, bname)
+				continue
+			}
+			if fmt.Sprint(b["subjects"]) != want {
+				t.Errorf("%s: %s subjects = %v, want only Group ichor:%s", label, bname, b["subjects"], n)
+			}
+		}
+	}
+
+	// The explicit verbs live in ichor-admin and nowhere below it.
+	adminOnly := []rbacTriple{
+		{"ichor.maesh.dev", "talosoperations/shutdown", "start", ""},
+		{"ichor.maesh.dev", "talosoperations/ca-rotation", "start", ""},
+		{"ichor.maesh.dev", "talosoperations/etcd-restore", "start", ""},
+		{"ichor.maesh.dev", "talosoperations/node-reset", "start", ""},
+		{"ichor.maesh.dev", "talosoperations/node-shutdown", "start", ""},
+		{"ichor.maesh.dev", "talosclusters/authentication", "update", ""},
+		{"ichor.maesh.dev", "ichorusers/password", "update", ""},
+		{"ichor.maesh.dev", "talosclusters", "break-glass", ""},
+		{"ichor.maesh.dev", "talosclusters/credentials", "download", ""},
+		{"ichor.maesh.dev", "talosmachines/support-bundle", "download", ""},
+		{"ichor.maesh.dev", "ichorusers", "create", ""},
+	}
+	admin := rbacTriples(allRules(find(docs, kindClusterRole, "ichor-admin")))
+	for _, tr := range adminOnly {
+		if !admin[tr] {
+			t.Errorf("ichor-admin lacks %s", tr)
+		}
+		for _, n := range []string{"viewer", "operator"} {
+			if rbacTriples(allRules(find(docs, kindClusterRole, "ichor-"+n)))[tr] {
+				t.Errorf("ichor-%s grants %s", n, tr)
+			}
+		}
+	}
+
+	// cluster-admin is opt-in.
+	for _, d := range findAll(docs, kindClusterRoleBinding) {
+		if ref, _ := clusterRoleBindingRefs(d); ref == "cluster-admin" {
+			t.Errorf("cluster-admin bound by default: %v", d)
+		}
+	}
+	ca := renderChartWithValues(t, "ichor", "ichorUI.users.enabled=true", "ichorUI.users.clusterAdminRoles={admin}")
+	if b := find(ca, kindClusterRoleBinding, "ichor-admin-cluster-admin"); b == nil ||
+		!strings.Contains(fmt.Sprint(b["subjects"]), "ichor:admin") {
+		t.Errorf("clusterAdminRoles={admin} must bind cluster-admin to ichor:admin, got %v", b)
+	}
+}

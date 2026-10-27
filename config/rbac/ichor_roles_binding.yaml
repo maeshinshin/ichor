@@ -1,0 +1,73 @@
+# Binds the built-in Ichor roles to the groups the Ichor OIDC issuer emits (docs/adr/0094):
+# ichor:viewer, ichor:operator, ichor:admin. Nobody is in those groups until a user is created.
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/name: ichor
+    app.kubernetes.io/managed-by: kustomize
+  name: viewer-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: viewer
+subjects:
+- apiGroup: rbac.authorization.k8s.io
+  kind: Group
+  name: ichor:viewer
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/name: ichor
+    app.kubernetes.io/managed-by: kustomize
+  name: operator-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: operator
+subjects:
+- apiGroup: rbac.authorization.k8s.io
+  kind: Group
+  name: ichor:operator
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/name: ichor
+    app.kubernetes.io/managed-by: kustomize
+  name: admin-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: admin
+subjects:
+- apiGroup: rbac.authorization.k8s.io
+  kind: Group
+  name: ichor:admin
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/name: ichor
+    app.kubernetes.io/managed-by: kustomize
+  name: user-access-rolebinding
+  namespace: system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: user-access
+subjects:
+- apiGroup: rbac.authorization.k8s.io
+  kind: Group
+  name: ichor:viewer
+- apiGroup: rbac.authorization.k8s.io
+  kind: Group
+  name: ichor:operator
+- apiGroup: rbac.authorization.k8s.io
+  kind: Group
+  name: ichor:admin

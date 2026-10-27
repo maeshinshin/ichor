@@ -1,0 +1,33 @@
+# Built-in role for the Ichor users group ichor:viewer (docs/adr/0094). Read-only on the Ichor
+# resources. No secrets, no events, no ichorusers. Bound by ichor_roles_binding.yaml.
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: ichor
+    app.kubernetes.io/managed-by: kustomize
+  name: viewer
+rules:
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - ichorinstallations
+  - talosclusters
+  - talosconfigpatches
+  - talosetcdbackups
+  - talosmachines
+  - talosoperations
+  - talosstorages
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  - pods
+  verbs:
+  - get
+  - list

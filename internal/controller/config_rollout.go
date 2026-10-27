@@ -59,6 +59,16 @@ const (
 	reasonRolloutConverged = "Converged"
 	reasonRolloutFailed    = "Failed"
 
+	// reasonRolloutRestarting marks (Status True) a control plane whose kube-apiserver the applied
+	// configuration is restarting; reasonRolloutAPINotReady (False) that it did not come back in time.
+	reasonRolloutRestarting  = "APIServerRestarting"
+	reasonRolloutAPINotReady = "APIServerNotReady"
+
+	// apiServerReadyTimeout bounds the wait for a restarted kube-apiserver to answer /readyz (15-45 s
+	// on Talos 1.14.3); apiServerRestartGrace is how long a pod that never changed is waited for.
+	apiServerReadyTimeout = 3 * time.Minute
+	apiServerRestartGrace = time.Minute
+
 	// configRolloutVerifyTimeout bounds the wait for a node to come back on the new configuration,
 	// Ready and in etcd. Past it the step fails and the operation pauses.
 	configRolloutVerifyTimeout = 20 * time.Minute
@@ -106,42 +116,66 @@ func NewConfigRolloutAdvancer(
 func (a *configRolloutAdvancer) Advance(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, _ *ichorv1alpha1.TalosOperation,
 ) (bool, error) {
+	restarting := false
+	if c := apimeta.FindStatusCondition(m.Status.Conditions, conditionConfigRollout); c != nil {
+		restarting = c.Status == metav1.ConditionTrue && c.Reason == reasonRolloutRestarting
+	}
+
+	rebooting := apimeta.IsStatusConditionTrue(m.Status.Conditions, conditionConfigRollout) && !restarting
+
+	// While this control plane's own API server restarts, the controller may be talking to it: any
+	// failure to read or write the cluster is waiting (bounded), not a reason to pause the operation.
+	early := func(err error) (bool, error) {
+		if restarting {
+			return a.restartWaiting(ctx, cluster, m, err.Error())
+		}
+
+		return false, err
+	}
+
 	bundle, err := loadBundle(ctx, a.Client, a.ControllerNamespace, cluster)
 	if err != nil {
-		return false, fmt.Errorf("loading secrets bundle to roll out %q: %w", m.Name, err)
+		return early(fmt.Errorf("loading secrets bundle to roll out %q: %w", m.Name, err))
 	}
 
 	var patches ichorv1alpha1.TalosConfigPatchList
 	if err := a.List(ctx, &patches, client.InNamespace(m.Namespace)); err != nil {
-		return false, err
+		return early(err)
 	}
 
 	rendered, hash, _, err := (&TalosMachineReconciler{Client: a.Client, ControllerNamespace: a.ControllerNamespace}).
 		renderMachine(ctx, cluster, m, bundle, patches.Items)
 	if err != nil {
-		return false, fmt.Errorf("rendering %q's configuration: %w", m.Name, err)
+		return early(fmt.Errorf("rendering %q's configuration: %w", m.Name, err))
 	}
-
-	rebooting := apimeta.IsStatusConditionTrue(m.Status.Conditions, conditionConfigRollout)
 
 	dialCtx, cancel := context.WithTimeout(ctx, etcdDialTimeout)
 	defer cancel()
 
 	talos, err := a.TalosClient(dialCtx, cluster, m, bundle)
 	if err != nil {
-		return a.unreachable(ctx, cluster, m, rebooting, fmt.Errorf("dialing %q: %w", m.Name, err))
+		return a.unreachable(ctx, cluster, m, rebooting, restarting, fmt.Errorf("dialing %q: %w", m.Name, err))
 	}
 	defer closeTalosClient(talos)
 
 	current, err := talos.CurrentConfig(dialCtx)
 	if err != nil {
-		return a.unreachable(ctx, cluster, m, rebooting, fmt.Errorf("reading %q's configuration: %w", m.Name, err))
+		return a.unreachable(ctx, cluster, m, rebooting, restarting, fmt.Errorf("reading %q's configuration: %w", m.Name, err))
 	}
 
 	switch {
+	case restarting:
+		return a.afterRestart(ctx, dialCtx, talos, cluster, m, current, rendered, hash)
 	case rebooting:
 		return a.afterReboot(ctx, dialCtx, talos, cluster, m, current, hash)
 	case hashConfig(current) == hash:
+		// A retried wait: the configuration is on the node but its API server did not
+		// answer in time last time; wait again with a fresh clock instead of calling it done.
+		if c := apimeta.FindStatusCondition(m.Status.Conditions, conditionConfigRollout); c != nil &&
+			c.Status == metav1.ConditionFalse && c.Reason == reasonRolloutAPINotReady {
+			return false, a.markRestarting(ctx, m, "")
+		}
+
 		return true, nil // nothing pending on this node: no reboot, no hook
 	default:
 		return false, a.begin(ctx, talos, cluster, m, current, rendered)
@@ -151,13 +185,126 @@ func (a *configRolloutAdvancer) Advance(
 // unreachable decides what a failed dial or read means: while the reboot is in flight the node is
 // expected to be away, bounded by configRolloutVerifyTimeout; otherwise it is a failure.
 func (a *configRolloutAdvancer) unreachable(
-	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, rebooting bool, err error,
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, rebooting, restarting bool, err error,
 ) (bool, error) {
-	if !rebooting {
+	switch {
+	case restarting:
+		return a.restartWaiting(ctx, cluster, m, err.Error())
+	case rebooting:
+		return false, a.stillWaiting(ctx, cluster, m, err.Error())
+	}
+
+	return false, err
+}
+
+// markRestarting records that this control plane's kube-apiserver is being restarted by the
+// rendered configuration (written before the apply, so a controller killed in between resumes into
+// applying again rather than skipping the wait). baseline is the kube-apiserver container ID read
+// just before; empty skips the "has restarted" check and waits only for /readyz.
+func (a *configRolloutAdvancer) markRestarting(ctx context.Context, m *ichorv1alpha1.TalosMachine, baseline string) error {
+	return setMachineCondition(ctx, a.Client, a.Client, m, metav1.Condition{
+		Type: conditionConfigRollout, Status: metav1.ConditionTrue, Reason: reasonRolloutRestarting, Message: baseline,
+	})
+}
+
+// restartWaiting returns nil while the restart is inside its window (apiServerReadyTimeout) and,
+// past it, pauses the operation with a reason that says the API server did not come back.
+func (a *configRolloutAdvancer) restartWaiting(
+	ctx context.Context, _ *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, why string,
+) (bool, error) {
+	cond := apimeta.FindStatusCondition(m.Status.Conditions, conditionConfigRollout)
+	if cond == nil || time.Since(cond.LastTransitionTime.Time) < apiServerReadyTimeout {
+		return false, nil
+	}
+
+	err := fmt.Errorf("kube-apiserver on %q did not answer /readyz within %s of the configuration being applied (%s); "+
+		"the operation is paused so the next control plane is not restarted too: fix or wait for it, then retry the step",
+		m.Name, apiServerReadyTimeout, why)
+
+	if updErr := setMachineCondition(ctx, a.Client, a.Client, m, metav1.Condition{
+		Type: conditionConfigRollout, Status: metav1.ConditionFalse, Reason: reasonRolloutAPINotReady, Message: err.Error(),
+	}); updErr != nil {
+		return false, fmt.Errorf("%w (and recording it failed: %v)", err, updErr)
+	}
+
+	return false, err
+}
+
+// applyAPIServerRestart applies a change that needs no reboot but restarts this control plane's
+// kube-apiserver: no drain, no evacuation, no reboot. The step finishes in
+// afterRestart, when the API server answers /readyz again.
+func (a *configRolloutAdvancer) applyAPIServerRestart(
+	ctx context.Context, talos TalosClient, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, rendered []byte,
+) error {
+	instCtx, cancelInst := dialBound(ctx)
+	baseline, err := talos.APIServerInstance(instCtx)
+
+	cancelInst()
+
+	if err != nil {
+		return fmt.Errorf("reading %q's kube-apiserver before restarting it: %w", m.Name, err)
+	}
+
+	if err := a.markRestarting(ctx, m, baseline); err != nil {
+		return fmt.Errorf("recording the API server restart of %q: %w", m.Name, err)
+	}
+
+	applyCtx, cancelApply := context.WithTimeout(ctx, rebootCallTimeout)
+	defer cancelApply()
+
+	if err := talos.ApplyNoReboot(applyCtx, rendered); err != nil {
+		return a.fail(ctx, cluster, m, fmt.Errorf("applying the rendered configuration to %q: %w", m.Name, err))
+	}
+
+	return nil
+}
+
+// afterRestart runs once the restart was requested. A node whose configuration is not yet the
+// rendered one means the controller stopped between recording the marker and applying: apply
+// again. Otherwise it waits for the kube-apiserver container to have changed (or a grace period to
+// pass, for a change that turned out not to alter the pod) and for /readyz to answer.
+func (a *configRolloutAdvancer) afterRestart(
+	ctx, dialCtx context.Context, talos TalosClient, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
+	current, rendered []byte, hash string,
+) (bool, error) {
+	if hashConfig(current) != hash {
+		applyCtx, cancelApply := context.WithTimeout(ctx, rebootCallTimeout)
+		defer cancelApply()
+
+		if err := talos.ApplyNoReboot(applyCtx, rendered); err != nil {
+			return false, a.fail(ctx, cluster, m, fmt.Errorf("applying the rendered configuration to %q: %w", m.Name, err))
+		}
+
+		return false, nil
+	}
+
+	cond := apimeta.FindStatusCondition(m.Status.Conditions, conditionConfigRollout)
+
+	instance, err := talos.APIServerInstance(dialCtx)
+	if err != nil {
+		return a.restartWaiting(ctx, cluster, m, "reading the kube-apiserver container: "+err.Error())
+	}
+
+	restarted := cond.Message == "" || instance != cond.Message
+	if !restarted && time.Since(cond.LastTransitionTime.Time) < apiServerRestartGrace {
+		return false, nil
+	}
+
+	readyCtx, cancelReady := dialBound(ctx)
+	defer cancelReady()
+
+	if err := talos.APIServerReady(readyCtx); err != nil {
+		return a.restartWaiting(ctx, cluster, m, err.Error())
+	}
+
+	if err := setMachineCondition(ctx, a.Client, a.Client, m, metav1.Condition{
+		Type: conditionConfigRollout, Status: metav1.ConditionFalse, Reason: reasonRolloutConverged,
+		Message: "running the rendered configuration; kube-apiserver is ready",
+	}); err != nil {
 		return false, err
 	}
 
-	return false, a.stillWaiting(ctx, cluster, m, err.Error())
+	return true, nil
 }
 
 // stillWaiting returns nil while the rollout of m is inside its verification window and an error
@@ -239,6 +386,10 @@ func (a *configRolloutAdvancer) begin(
 	}
 
 	if !impact.RebootRequired {
+		if len(impact.APIServerRestartPaths) > 0 && m.Spec.Role == roleControlPlane {
+			return a.applyAPIServerRestart(ctx, talos, cluster, m, rendered)
+		}
+
 		applyCtx, cancelApply := context.WithTimeout(ctx, rebootCallTimeout)
 		defer cancelApply()
 

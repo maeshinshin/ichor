@@ -387,6 +387,15 @@ type TalosMachineStatus struct {
 	// +listType=atomic
 	// +optional
 	RebootPaths []string `json:"rebootPaths,omitempty"`
+
+	// apiServerRestartPaths lists the configuration field paths whose pending change needs no reboot
+	// but restarts the node's kube-apiserver (pkg/fieldmeta's APIServerRestart class), while Ready is
+	// False with reason APIServerRestartRequired; empty otherwise. This reconciler never applies them
+	// (it would restart every control plane's API server at about the same time); a config-rollout
+	// TalosOperation does, one control plane at a time.
+	// +listType=atomic
+	// +optional
+	APIServerRestartPaths []string `json:"apiServerRestartPaths,omitempty"`
 }
 
 // +kubebuilder:object:root=true

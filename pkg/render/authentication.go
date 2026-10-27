@@ -158,7 +158,9 @@ func AuthenticationConfiguration(
 
 // jwtAuthenticator is one jwt[] element: the issuer, the claim mappings with their prefixes, and
 // the rules that keep a token from naming a system: user or group.
-func jwtAuthenticator(issuer apiserverv1.Issuer, userClaim, userPrefix, groupsClaim, groupsPrefix string) apiserverv1.JWTAuthenticator {
+func jwtAuthenticator(
+	issuer apiserverv1.Issuer, userClaim, userPrefix, groupsClaim, groupsPrefix string,
+) apiserverv1.JWTAuthenticator {
 	// More than one audience needs audienceMatchPolicy MatchAny, or kube-apiserver refuses the file
 	// and crash-loops (hardware spike): Talos does not validate the document.
 	if len(issuer.Audiences) > 1 {
@@ -173,7 +175,10 @@ func jwtAuthenticator(issuer apiserverv1.Issuer, userClaim, userPrefix, groupsCl
 		},
 		UserValidationRules: []apiserverv1.UserValidationRule{
 			{Expression: "!user.username.startsWith('system:')", Message: "username cannot use reserved system: prefix"},
-			{Expression: "!user.groups.exists(g, g.startsWith('system:'))", Message: "groups cannot use reserved system: prefix"},
+			{
+				Expression: "!user.groups.exists(g, g.startsWith('system:'))",
+				Message:    "groups cannot use reserved system: prefix",
+			},
 		},
 	}
 }
@@ -183,13 +188,15 @@ func jwtAuthenticator(issuer apiserverv1.Issuer, userClaim, userPrefix, groupsCl
 func validateAuthenticationConfiguration(cfg *apiserverv1.AuthenticationConfiguration) error {
 	var internal apiserverinternal.AuthenticationConfiguration
 
-	if err := apiserverv1.Convert_v1_AuthenticationConfiguration_To_apiserver_AuthenticationConfiguration(cfg, &internal, nil); err != nil {
+	convert := apiserverv1.Convert_v1_AuthenticationConfiguration_To_apiserver_AuthenticationConfiguration
+	if err := convert(cfg, &internal, nil); err != nil {
 		return fmt.Errorf("converting the authentication configuration: %w", err)
 	}
 
 	// No disallowed issuers: the service-account issuer is the control-plane endpoint, which no
 	// OIDC provider URL here can be in practice. ponytail: pass it if that ever bites.
-	if errs := validation.ValidateAuthenticationConfiguration(authenticationcel.NewDefaultCompiler(), &internal, nil); len(errs) > 0 {
+	compiler := authenticationcel.NewDefaultCompiler()
+	if errs := validation.ValidateAuthenticationConfiguration(compiler, &internal, nil); len(errs) > 0 {
 		return fmt.Errorf("the authentication configuration is invalid: %w", errs.ToAggregate())
 	}
 
@@ -212,11 +219,13 @@ func ValidateAuthentication(cluster *ichorv1alpha1.TalosCluster) error {
 	}
 
 	if !contract.MultidocKubernetesConfigSupported() {
-		return fmt.Errorf("spec.authentication needs versionContract v1.14 or later (Talos has the typed KubeAuthenticationConfig "+
-			"document only from then), the cluster has %s", cluster.Spec.VersionContract)
+		return fmt.Errorf("spec.authentication needs versionContract v1.14 or later (Talos has the typed "+
+			"KubeAuthenticationConfig document only from then), the cluster has %s", cluster.Spec.VersionContract)
 	}
 
-	_, err = AuthenticationConfiguration(spec, &OIDCTrust{DiscoveryURL: "https://ichor-ui-service.ichor-system.svc:8444/.well-known/openid-configuration"})
+	placeholder := &OIDCTrust{DiscoveryURL: "https://ichor-ui-service.ichor-system.svc:8444" +
+		"/.well-known/openid-configuration"}
+	_, err = AuthenticationConfiguration(spec, placeholder)
 
 	return err
 }
@@ -231,12 +240,14 @@ func injectAuthentication(
 	cluster *ichorv1alpha1.TalosCluster, machineType machine.Type, sys *SystemInputs,
 ) (coreconfig.Provider, error) {
 	spec := cluster.Spec.Authentication
-	if spec == nil || (!ichorIssuerEnabled(cluster) && len(spec.External) == 0) || machineType != machine.TypeControlPlane {
+	nothing := spec == nil || (!ichorIssuerEnabled(cluster) && len(spec.External) == 0)
+	if nothing || machineType != machine.TypeControlPlane {
 		return cfg, nil
 	}
 
 	if !contract.MultidocKubernetesConfigSupported() {
-		return nil, fmt.Errorf("render: spec.authentication needs versionContract v1.14 or later, the cluster has %s", cluster.Spec.VersionContract)
+		return nil, fmt.Errorf("render: spec.authentication needs versionContract v1.14 or later, the cluster has %s",
+			cluster.Spec.VersionContract)
 	}
 
 	trust := sys.oidcTrust()

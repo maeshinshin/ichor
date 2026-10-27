@@ -586,7 +586,7 @@ func TestWatchCARotationSurvivesTheAPIRestartingAndFollowsToTheEnd(t *testing.T)
 
 	var errw bytes.Buffer
 
-	if err := watchCARotation(context.Background(), flaky, testNamespace, credOpName, &errw); err != nil {
+	if err := watchCARotation(context.Background(), flaky, testNamespace, credOpName, &errw, nil); err != nil {
 		t.Fatalf("%v\n%s", err, errw.String())
 	}
 
@@ -651,7 +651,7 @@ func TestWatchCARotationPrintsTheStagesAPollJumpedOver(t *testing.T) {
 	}).Build()
 
 	var errw bytes.Buffer
-	if err := watchCARotation(context.Background(), k8s, testNamespace, credOpName, &errw); err != nil {
+	if err := watchCARotation(context.Background(), k8s, testNamespace, credOpName, &errw, nil); err != nil {
 		t.Fatalf("%v\n%s", err, errw.String())
 	}
 

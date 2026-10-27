@@ -66,6 +66,13 @@ type rule struct {
 	// entirely (reset and reinstall), not a reboot either way.
 	safe bool
 
+	// apiServerRestart means no reboot, but applying it re-renders the kube-apiserver static pod and
+	// so restarts that component (15-45 s without /readyz per node on Talos 1.14.3). It is a class
+	// of its own, neither safe nor reboot-required: the machine controller must not apply it (it
+	// would restart every control plane's API server at about the same time), the config operation
+	// does, one control plane at a time (ADR 0080 amendment).
+	apiServerRestart bool
+
 	// installTimeOnly means Talos only reads this field during
 	// installation/imaging; changing it on a running node needs a reset and
 	// reinstall, not an apply of any kind.
@@ -120,7 +127,12 @@ var rules = []rule{
 	// cluster.proxy is deliberately absent: architecture.md's open
 	// questions says Ichor doesn't yet know what happens to the kube-proxy
 	// DaemonSet when it's toggled live, so it stays reboot-required.
-	{prefix: "cluster.apiServer", safe: true},
+	//
+	// cluster.apiServer is the exception among the three: every field under it (extraArgs,
+	// certSANs, admissionControl, auditPolicy, env, resources, extraVolumes, image) ends up in the
+	// kube-apiserver pod spec, its secrets or its config files, and a change recreates that pod. It is
+	// therefore an apiServerRestart, not safe (audit below, next to KubeAuthenticationConfig).
+	{prefix: "cluster.apiServer", apiServerRestart: true},
 	{prefix: "cluster.controllerManager", safe: true},
 	{prefix: "cluster.scheduler", safe: true},
 
@@ -209,7 +221,25 @@ var rules = []rule{
 	// which applies the image fields itself with an explicit no-reboot apply.
 	// The same goes for KubeProxyConfig.image and KubeletConfig.image, which
 	// have no rule at all (so their whole documents stay reboot-required).
-	{prefix: "KubeAPIServerConfig", safe: true},
+	// apiServerRestart audit (ADR 0080 amendment), Talos v1.14.3, controllers/k8s:
+	//   - control_plane.go ControlPlaneAPIServerController copies image, extraArgs, extraVolumes, env,
+	//     resources, startupProbes and useAuthenticationConfig into k8s.APIServerConfig, which
+	//     k8stemplates.APIServerPod renders as the pod spec: the kubelet recreates the pod on any
+	//     difference.
+	//   - ControlPlaneAdmissionControlController, ControlPlaneAuditPolicyController,
+	//     ControlPlaneAuthorizationController and ControlPlaneAuthenticationController publish the
+	//     admission, audit, authorizer and authentication resources; render_config_static_pods.go
+	//     writes them as files and sums their resource versions into ConfigStatus.Version, which the
+	//     pod carries as the AnnotationStaticPodConfigFileVersion annotation (apiserver.go): a change
+	//     recreates the pod.
+	//   - secrets/root.go copies cluster.apiServer.certSANs into the Kubernetes secrets root, whose
+	//     version is the AnnotationStaticPodSecretsVersion annotation: same effect.
+	// The legacy cluster.apiServer.* tree and KubeAPIServerConfig, KubeAdmissionControlConfig,
+	// KubeAuditPolicyConfig, KubeAuthorizerConfig and KubeAuthenticationConfig all feed those. The
+	// controller-manager and scheduler documents stay safe: their pods restart on change too, but
+	// they run leader-elected on every control plane and a brief gap there does not take the
+	// Kubernetes API down.
+	{prefix: "KubeAPIServerConfig", apiServerRestart: true},
 	{prefix: "KubeAPIServerConfig.image"},
 	// KubeAuthenticationConfig (ADR 0094) is read from the machine config by
 	// ControlPlaneAuthenticationController (controllers/k8s/control_plane.go in Talos 1.14.3), which
@@ -217,7 +247,10 @@ var rules = []rule{
 	// authentication-config.yaml, and the kube-apiserver static pod carries the config-file version
 	// as an annotation (k8stemplates/apiserver.go, AnnotationStaticPodConfigFileVersion), so a
 	// change recreates that pod. No node reboot: the same path as KubeAPIServerConfig above.
-	{prefix: "KubeAuthenticationConfig", safe: true, introducedAfter: machineryconfig.TalosVersion1_13},
+	{prefix: "KubeAdmissionControlConfig", apiServerRestart: true},
+	{prefix: "KubeAuditPolicyConfig", apiServerRestart: true},
+	{prefix: "KubeAuthorizerConfig", apiServerRestart: true},
+	{prefix: "KubeAuthenticationConfig", apiServerRestart: true, introducedAfter: machineryconfig.TalosVersion1_13},
 	{prefix: "KubeControllerManagerConfig", safe: true},
 	{prefix: "KubeControllerManagerConfig.image"},
 	{prefix: "KubeSchedulerConfig", safe: true},
@@ -282,6 +315,10 @@ type Impact struct {
 	// rather than any kind of apply.
 	InstallTimeOnly []string
 
+	// APIServerRestartPaths lists the reboot-free paths whose apply restarts kube-apiserver
+	// (rule.apiServerRestart). Nothing else about them needs a reboot.
+	APIServerRestartPaths []string
+
 	// Unsupported lists the paths that need a newer Talos version than the
 	// one passed to Assess.
 	Unsupported []string
@@ -300,6 +337,8 @@ func Assess(paths []string, pinned *machineryconfig.VersionContract) Impact {
 		switch {
 		case r.installTimeOnly:
 			impact.InstallTimeOnly = append(impact.InstallTimeOnly, p)
+		case r.apiServerRestart:
+			impact.APIServerRestartPaths = append(impact.APIServerRestartPaths, p)
 		case !r.safe:
 			impact.RebootRequired = true
 			impact.RebootPaths = append(impact.RebootPaths, p)

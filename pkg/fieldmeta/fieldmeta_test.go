@@ -306,6 +306,41 @@ func TestAssess_NoRebootRules(t *testing.T) {
 	}
 }
 
+// TestAssess_APIServerRestartClass pins the audit in fieldmeta.go (ADR 0080 amendment): everything
+// Talos applies by re-rendering the kube-apiserver static pod is reboot-free but its own class, so
+// the machine controller leaves it to the config operation; the controller-manager and scheduler
+// documents stay plainly safe.
+func TestAssess_APIServerRestartClass(t *testing.T) {
+	for _, path := range []string{
+		"KubeAuthenticationConfig.configuration.jwt", "KubeAPIServerConfig.extraArgs.x",
+		"KubeAdmissionControlConfig.plugins", "KubeAuditPolicyConfig.policy", "KubeAuthorizerConfig.authorizers",
+		"cluster.apiServer.extraArgs", "cluster.apiServer.certSANs", "cluster.apiServer.admissionControl",
+		"cluster.apiServer.auditPolicy",
+	} {
+		got := Assess([]string{path}, nil)
+		if got.RebootRequired || len(got.APIServerRestartPaths) != 1 || len(got.InstallTimeOnly) != 0 {
+			t.Errorf("Assess(%q) = %+v, want exactly one APIServerRestartPath and no reboot", path, got)
+		}
+	}
+
+	for _, path := range []string{"cluster.controllerManager.extraArgs", "KubeSchedulerConfig.extraArgs.x", pathSysctlForward} {
+		if got := Assess([]string{path}, nil); got.RebootRequired || len(got.APIServerRestartPaths) != 0 {
+			t.Errorf("Assess(%q) = %+v, want plainly safe", path, got)
+		}
+	}
+
+	// The image stays reboot-required (the Kubernetes upgrade executor owns it).
+	if got := Assess([]string{"KubeAPIServerConfig.image"}, nil); !got.RebootRequired || len(got.APIServerRestartPaths) != 0 {
+		t.Errorf("KubeAPIServerConfig.image = %+v, want reboot-required only", got)
+	}
+
+	// A mixed set reports each class on its own list.
+	mixed := Assess([]string{"KubeAuthenticationConfig.configuration.jwt", pathClusterProxyDisabled}, nil)
+	if !mixed.RebootRequired || len(mixed.APIServerRestartPaths) != 1 || len(mixed.RebootPaths) != 1 {
+		t.Errorf("mixed = %+v", mixed)
+	}
+}
+
 // TestAssess_KubernetesImagesStayRebootRequired pins a deliberate omission
 // (ADR 0057, fieldmeta.go): a component image path must never be no-reboot,
 // or a spec.kubernetesVersion bump would be applied to every node at once by

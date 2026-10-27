@@ -106,3 +106,4 @@ Deleting the VMs removes the inner cluster and everything in it.
   ichor and ichor-ui. Workers use 1536Mi.
 - Run `make demo-images` from a separate worktree for each agent or user. Two builds in one
   checkout overwrite each other's `dist/install.yaml` and `bin/img`.
+- For a multi-control-plane demo, point the outer LoadBalancer Service at one control plane VM (or only the joined ones); a selector matching VMs still in maintenance mode gives intermittent connection refused.

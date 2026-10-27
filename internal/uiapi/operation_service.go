@@ -260,7 +260,7 @@ func (s *Server) RetryOperation(
 
 	at := time.Now().UTC().Truncate(time.Second)
 	if last := op.Status.LastRetry; last != nil && !at.After(last.Time) {
-		at = last.Time.Add(time.Second) // always newer than the request the controller already acted on
+		at = last.Add(time.Second) // always newer than the request the controller already acted on
 	}
 
 	if op.Annotations == nil {

@@ -41,8 +41,9 @@ func NewKubeProxyAdmin() KubeProxyAdmin { return kubeconfigKubeProxyAdmin{} }
 // "10-kube-proxy" manifest); see removeKubeProxyObjects. talos must be a control plane's client:
 // workers have no admin kubeconfig to give.
 //
-// ponytail: the nftables/iptables rules kube-proxy already programmed stay on each node until the
-// node reboots; there is no per-node cleanup.
+// The nftables/iptables rules kube-proxy already programmed stay on each node until the node
+// reboots; there is no per-node cleanup. The caller probes the kubernetes Service
+// after the removal (removeKubeProxy) before it reports success.
 func (kubeconfigKubeProxyAdmin) RemoveKubeProxy(ctx context.Context, talos TalosClient) error {
 	cfg, err := restConfig(ctx, talos)
 	if err != nil {

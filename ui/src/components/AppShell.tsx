@@ -47,12 +47,12 @@ const healthVariant: Record<Health, 'default' | 'destructive' | 'secondary'> = {
 // The cluster this Ichor manages: name, Talos and Kubernetes versions, health.
 function ClusterBar() {
   const t = useT()
-  const { cluster } = useCluster()
+  const { cluster, opRunning } = useCluster()
   if (!cluster) return null
-  const health = clusterHealth(cluster)
+  const health = clusterHealth(cluster.conditions, !!cluster.rollout, opRunning)
   return (
-    <div class="flex items-center gap-2 text-sm">
-      <span class="font-medium">{cluster.ref?.name}</span>
+    <div class="flex min-w-0 items-center gap-2 text-sm">
+      <span class="hidden truncate font-medium sm:inline">{cluster.ref?.name}</span>
       {cluster.talosVersion && <span class="hidden text-muted-foreground lg:inline">{t('shell.talos', { version: cluster.talosVersion })}</span>}
       {cluster.kubernetesVersion && <span class="hidden text-muted-foreground lg:inline">{t('shell.kubernetes', { version: cluster.kubernetesVersion })}</span>}
       <Badge variant={healthVariant[health]}>{t(`health.${health}`)}</Badge>
@@ -103,14 +103,14 @@ function Crumbs({ path }: { path: string }) {
   const titles = usePageTitles()
   const crumbs = breadcrumbsFor(path, titles)
   return (
-    <Breadcrumb aria-label={t('nav.breadcrumb')} className="min-w-0">
+    <Breadcrumb aria-label={t('nav.breadcrumb')} className="min-w-0 flex-1 overflow-hidden">
       <BreadcrumbList className="flex-nowrap">
         {crumbs.map((c, i) => {
           const text = c.label ? t(c.label) : c.text
           return (
             <Fragment key={i}>
               {i > 0 && <BreadcrumbSeparator />}
-              <BreadcrumbItem className="min-w-0">
+              <BreadcrumbItem className={c.to ? 'shrink-0' : 'min-w-0'}>
                 {c.to ? (
                   <BreadcrumbLink asChild>
                     <Link to={c.to}>{text}</Link>
@@ -196,11 +196,13 @@ export function AppShell({
         <SidebarInset className="min-w-0">
           <header class="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 border-b bg-background/95 px-4 backdrop-blur">
             <SidebarTrigger className="-ml-1" />
-            <Separator orientation="vertical" className="mr-1 h-4" />
+            <Separator orientation="vertical" className="mr-1 h-4 self-center" />
             <Crumbs path={path} />
             <div className="ml-auto flex shrink-0 items-center gap-2">
               <ClusterBar />
-              <IchorVersion />
+              <div class="hidden md:block">
+                <IchorVersion />
+              </div>
               <ThemeSwitch />
               {me && <AccountMenu me={me} />}
             </div>

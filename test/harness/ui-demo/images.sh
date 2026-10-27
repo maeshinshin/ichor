@@ -47,7 +47,7 @@ ship() {
   printf '%-45s %s\n' "$ref" "$(crane digest --insecure "$ref")"
 }
 
-build bin/img/manager/manager cmd/main.go ""
+build bin/img/manager/manager ./cmd ""
 build bin/img/ichor-ui/ichor-ui ./cmd/ichor-ui uiembed no
 build bin/img/ichor/ichor ./cmd/ichor installembed
 

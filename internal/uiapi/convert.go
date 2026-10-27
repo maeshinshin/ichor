@@ -142,7 +142,7 @@ func machineToPB(m *ichorv1alpha1.TalosMachine) *pb.Machine {
 			Serial:       m.Spec.Identity.Serial,
 			MacAddresses: m.Spec.Identity.MACAddresses,
 		},
-		Endpoint:         m.Spec.Endpoint,
+		Endpoint:         m.DialEndpoint(),
 		Role:             specRoleToMachineRole(m.Spec.Role),
 		NodeLabels:       m.Spec.NodeLabels,
 		Hostname:         m.Spec.Hostname,

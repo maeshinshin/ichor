@@ -345,9 +345,15 @@ func (s *Server) findKubernetesNode(ctx context.Context, m *ichorv1alpha1.TalosM
 		}
 	}
 
-	host := m.Spec.Endpoint
-	if h, _, err := net.SplitHostPort(host); err == nil {
-		host = h
+	// The address the node answers on now, then the one spec names: a node that moved is found by the first.
+	var hosts []string
+
+	for _, ep := range []string{m.DialEndpoint(), m.Spec.Endpoint} {
+		if h, _, err := net.SplitHostPort(ep); err == nil {
+			ep = h
+		}
+
+		hosts = append(hosts, ep)
 	}
 
 	var list corev1.NodeList
@@ -355,10 +361,12 @@ func (s *Server) findKubernetesNode(ctx context.Context, m *ichorv1alpha1.TalosM
 		return nil, err
 	}
 
-	for i := range list.Items {
-		for _, addr := range list.Items[i].Status.Addresses {
-			if addr.Address == host {
-				return &list.Items[i], nil
+	for _, host := range hosts {
+		for i := range list.Items {
+			for _, addr := range list.Items[i].Status.Addresses {
+				if addr.Address == host {
+					return &list.Items[i], nil
+				}
 			}
 		}
 	}

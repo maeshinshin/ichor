@@ -28,6 +28,8 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1/ichorv1alpha1connect"
 )
 
 // Identity is who an authenticated request is acting as, already in the form
@@ -39,6 +41,10 @@ type Identity struct {
 	// Source is SourceIchor or SourceOIDC; DisplayName is set
 	// for an Ichor user only.
 	Source, DisplayName string
+	// MustChange is set for an Ichor user whose password must be changed
+	// before anything else; AuthInterceptor then allows only the calls in
+	// mustChangeAllowed.
+	MustChange bool
 }
 
 // The two places an identity can come from.
@@ -188,7 +194,12 @@ func (a *Authenticator) authenticateLocal(ctx context.Context, raw string) (Iden
 		return Identity{}, errors.New("invalid ID token")
 	}
 
-	id := Identity{User: IchorUserPrefix + u.Name, Source: SourceIchor, DisplayName: u.Spec.DisplayName}
+	mc, err := a.users.MustChange(ctx, u.Name)
+	if err != nil {
+		return Identity{}, errors.New("invalid ID token")
+	}
+
+	id := Identity{User: IchorUserPrefix + u.Name, Source: SourceIchor, DisplayName: u.Spec.DisplayName, MustChange: mc}
 	for _, r := range u.Spec.Roles {
 		id.Groups = append(id.Groups, IchorGroupPrefix+r)
 	}
@@ -246,7 +257,14 @@ func AuthInterceptor(a *Authenticator) connect.Interceptor {
 
 type authInterceptor struct{ a *Authenticator }
 
-func (i authInterceptor) auth(ctx context.Context, authz string) (context.Context, error) {
+// mustChangeAllowed are the only RPCs a user who must change the password may
+// call: find out why (WhoAmI) and fix it. Signing out is client-side.
+var mustChangeAllowed = map[string]bool{
+	ichorv1alpha1connect.UserServiceWhoAmIProcedure:            true,
+	ichorv1alpha1connect.UserServiceChangeOwnPasswordProcedure: true,
+}
+
+func (i authInterceptor) auth(ctx context.Context, authz, procedure string) (context.Context, error) {
 	if i.a == nil {
 		return ctx, nil
 	}
@@ -256,12 +274,16 @@ func (i authInterceptor) auth(ctx context.Context, authz string) (context.Contex
 		return ctx, connect.NewError(connect.CodeUnauthenticated, err)
 	}
 
+	if id.MustChange && !mustChangeAllowed[procedure] {
+		return ctx, connect.NewError(connect.CodePermissionDenied, errors.New("change your password first"))
+	}
+
 	return context.WithValue(ctx, identityKey{}, id), nil
 }
 
 func (i authInterceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 	return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
-		ctx, err := i.auth(ctx, req.Header().Get("Authorization"))
+		ctx, err := i.auth(ctx, req.Header().Get("Authorization"), req.Spec().Procedure)
 		if err != nil {
 			return nil, err
 		}
@@ -276,7 +298,7 @@ func (i authInterceptor) WrapStreamingClient(next connect.StreamingClientFunc) c
 
 func (i authInterceptor) WrapStreamingHandler(next connect.StreamingHandlerFunc) connect.StreamingHandlerFunc {
 	return func(ctx context.Context, conn connect.StreamingHandlerConn) error {
-		ctx, err := i.auth(ctx, conn.RequestHeader().Get("Authorization"))
+		ctx, err := i.auth(ctx, conn.RequestHeader().Get("Authorization"), conn.Spec().Procedure)
 		if err != nil {
 			return err
 		}

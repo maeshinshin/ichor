@@ -412,7 +412,6 @@ func main() {
 			Client: mgr.GetClient(), APIReader: mgr.GetAPIReader(),
 			Namespace: os.Getenv("POD_NAMESPACE"), UIServiceName: uiServiceName,
 			RefreshLifetime: refreshLifetime,
-			ExpiryWarning:   time.Duration(certExpiryWarningDays) * 24 * time.Hour,
 		}).SetupWithManager(mgr); err != nil {
 			setupLog.Error(err, "Failed to create controller", "controller", "issuertrust")
 			os.Exit(1)

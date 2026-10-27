@@ -138,8 +138,10 @@ func operationToPB(op *ichorv1alpha1.TalosOperation) *pb.Operation {
 	etcdRestoreToPB(out, op)
 
 	for _, m := range op.Status.Machines {
-		out.Machines = append(out.Machines, &pb.OperationMachine{Name: m.Name, Phase: m.Phase})
+		out.Machines = append(out.Machines, operationMachineToPB(op, m))
 	}
+
+	describeOperation(out, op, nil, nil)
 
 	return out
 }
@@ -207,7 +209,10 @@ func (s *Server) GetOperation(
 		return nil, err
 	}
 
-	return connect.NewResponse(&pb.GetOperationResponse{Operation: operationToPB(op)}), nil
+	out := operationToPB(op)
+	s.enrichOperation(ctx, out, op)
+
+	return connect.NewResponse(&pb.GetOperationResponse{Operation: out}), nil
 }
 
 // SetOperationPaused writes spec.paused: pausing keeps the cluster lock and undoes nothing.
@@ -761,7 +766,7 @@ func (s *Server) CreateOperation(
 
 	cluster := p.cluster
 	op := &ichorv1alpha1.TalosOperation{
-		GenerateName: p.kind + "-", Namespace: cluster.Namespace,
+		GenerateName: p.kind + "-", Namespace: cluster.Namespace, Annotations: s.startedByAnnotation(ctx),
 		Spec: ichorv1alpha1.TalosOperationSpec{
 			ClusterRef: corev1.LocalObjectReference{Name: cluster.Name}, Kind: p.kind, MaxUnavailable: m.GetMaxUnavailable(),
 		},

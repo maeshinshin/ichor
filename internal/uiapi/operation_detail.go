@@ -17,6 +17,7 @@ limitations under the License.
 package uiapi
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"slices"
@@ -80,6 +81,8 @@ func (s *Server) enrichOperation(ctx context.Context, out *pb.Operation, op *ich
 		return
 	}
 
+	s.nameMachines(ctx, out, op.Namespace)
+
 	var install *ichorv1alpha1.IchorInstallation
 
 	if op.Spec.Kind == ichorv1alpha1.TalosOperationKindIchor {
@@ -91,6 +94,28 @@ func (s *Server) enrichOperation(ctx context.Context, out *pb.Operation, op *ich
 
 	out.Details, out.Summary = nil, ""
 	describeOperation(out, op, &cluster, install)
+}
+
+// nameMachines fills each machine's display_name from its TalosMachine: hostname, else node name.
+// A machine the caller cannot list keeps just its name.
+func (s *Server) nameMachines(ctx context.Context, out *pb.Operation, namespace string) {
+	if len(out.GetMachines()) == 0 {
+		return
+	}
+
+	var list ichorv1alpha1.TalosMachineList
+	if err := s.List(ctx, &list, client.InNamespace(namespace)); err != nil {
+		return
+	}
+
+	names := make(map[string]string, len(list.Items))
+	for i := range list.Items {
+		names[list.Items[i].Name] = cmp.Or(list.Items[i].Spec.Hostname, list.Items[i].Status.NodeName)
+	}
+
+	for _, m := range out.GetMachines() {
+		m.DisplayName = names[m.GetName()]
+	}
 }
 
 // fromTo is " from → to" when the starting version was recorded, else " to target".
@@ -160,12 +185,16 @@ func describeOperation(out *pb.Operation, op *ichorv1alpha1.TalosOperation, clus
 		if install != nil {
 			add("Target Ichor version", install.Spec.Version)
 
-			if from := install.Status.InstalledVersion; from != "" && from != install.Spec.Version {
-				out.Summary += fmt.Sprintf(" %s → %s", from, install.Spec.Version)
+			// The stamped from-version outlives the upgrade; installedVersion only helps before it finishes.
+			from := op.Annotations[ichorv1alpha1.OperationFromVersionAnnotation]
+			if from == "" {
+				from = install.Status.InstalledVersion
+			}
 
+			out.Summary += fromTo(from, install.Spec.Version)
+
+			if from != "" && from != install.Spec.Version {
 				add("Installed Ichor version", from)
-			} else {
-				out.Summary += " to " + install.Spec.Version
 			}
 		}
 	case ichorv1alpha1.TalosOperationKindCNI:

@@ -135,17 +135,26 @@ func (s *s3Store) Put(ctx context.Context, key string, r io.Reader, size int64) 
 func (s *s3Store) Get(ctx context.Context, key string) (io.ReadCloser, error) {
 	o, err := s.c.GetObject(ctx, s.bucket, key, minio.GetObjectOptions{})
 	if err != nil {
-		return nil, err
+		return nil, notFound(err)
 	}
 
 	// GetObject is lazy: surface a missing key now rather than on first Read.
 	if _, err := o.Stat(); err != nil {
 		_ = o.Close()
 
-		return nil, err
+		return nil, notFound(err)
 	}
 
 	return o, nil
+}
+
+// notFound wraps a missing-key answer from S3 in ErrNotFound; any other error is returned as it is.
+func notFound(err error) error {
+	if minio.ToErrorResponse(err).Code == "NoSuchKey" {
+		return fmt.Errorf("%w: %w", ErrNotFound, err)
+	}
+
+	return err
 }
 
 func (s *s3Store) Delete(ctx context.Context, key string) error {

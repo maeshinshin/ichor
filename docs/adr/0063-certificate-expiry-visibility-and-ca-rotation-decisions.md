@@ -186,7 +186,7 @@ finalizer knowing that the nodes are then in the stage status last showed and `r
 **Secret write and RBAC.** `update` on Secrets in the controller namespace was added to the manager's namespaced Role (config and
 chart). It is broader than Decision 4 intended: `resourceNames` cannot name the bundle Secret, whose name is `spec.secretsRef.name`,
 chosen by the user. Reads of the bundle, `rotation.yaml` and the machine gate go through the API reader. `talosoperations/finalizers`
-was added too.
+was added too. Amendment (write scope): the broad `update` is kept. A required label (`ichor.maesh.dev/secrets-bundle=true`) was rejected: RBAC cannot filter by label, so it adds no API-side protection, and it would break every existing bundle. Since ADR 0096 only `talosclusters/secret-references` holders can change `secretsRef`, and the executor enforces in code (`caRun.updateBundle`, tested) that it writes only the Secret `secretsRef` names in the controller namespace.
 
 **`BundleBackupStale`.** Raised on the `TalosCluster` (condition, `reason: CARotated`) and as a Warning Event by the executor at
 Finalizing. The message names the command and carries no secret. `ichor cluster bundle-export NAME` reads the live bundle from the

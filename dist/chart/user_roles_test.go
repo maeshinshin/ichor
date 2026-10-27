@@ -24,6 +24,8 @@ import (
 
 // builtinUserRoles are the three built-in roles, lowest first. The chart names them
 // ichor-<name>; config/rbac names them <name> and kustomize's namePrefix adds "ichor-".
+const ichorGroup = "ichor.maesh.dev"
+
 var builtinUserRoles = []string{"viewer", "operator", "admin"}
 
 // TestBuiltinUserRoles guards: the three built-in ClusterRoles render only
@@ -89,17 +91,17 @@ func TestBuiltinUserRoles(t *testing.T) {
 
 	// The explicit verbs live in ichor-admin and nowhere below it.
 	adminOnly := []rbacTriple{
-		{"ichor.maesh.dev", "talosoperations/shutdown", "start", ""},
-		{"ichor.maesh.dev", "talosoperations/ca-rotation", "start", ""},
-		{"ichor.maesh.dev", "talosoperations/etcd-restore", "start", ""},
-		{"ichor.maesh.dev", "talosoperations/node-reset", "start", ""},
-		{"ichor.maesh.dev", "talosoperations/node-shutdown", "start", ""},
-		{"ichor.maesh.dev", "talosclusters/authentication", "update", ""},
-		{"ichor.maesh.dev", "ichorusers/password", "update", ""},
-		{"ichor.maesh.dev", "talosclusters", "break-glass", ""},
-		{"ichor.maesh.dev", "talosclusters/credentials", "download", ""},
-		{"ichor.maesh.dev", "talosmachines/support-bundle", "download", ""},
-		{"ichor.maesh.dev", "ichorusers", "create", ""},
+		{ichorGroup, "talosoperations/shutdown", "start", ""},
+		{ichorGroup, "talosoperations/ca-rotation", "start", ""},
+		{ichorGroup, "talosoperations/etcd-restore", "start", ""},
+		{ichorGroup, "talosoperations/node-reset", "start", ""},
+		{ichorGroup, "talosoperations/node-shutdown", "start", ""},
+		{ichorGroup, "talosclusters/authentication", "update", ""},
+		{ichorGroup, "ichorusers/password", "update", ""},
+		{ichorGroup, "talosclusters", "break-glass", ""},
+		{ichorGroup, "talosclusters/credentials", "download", ""},
+		{ichorGroup, "talosmachines/support-bundle", "download", ""},
+		{ichorGroup, "ichorusers", "create", ""},
 	}
 	admin := rbacTriples(allRules(find(docs, kindClusterRole, "ichor-admin")))
 	for _, tr := range adminOnly {

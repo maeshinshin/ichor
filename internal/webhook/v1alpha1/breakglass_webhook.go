@@ -58,7 +58,7 @@ var breakglasslog = logf.Log.WithName("breakglass-webhook")
 
 // +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-breakglass,mutating=false,failurePolicy=fail,sideEffects=None,groups=ichor.maesh.dev,resources=talosmachines;talosconfigpatches,verbs=update;delete,versions=v1alpha1,name=vbreakglass-v1alpha1.kb.io,admissionReviewVersions=v1
 // +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-breakglass,mutating=false,failurePolicy=fail,sideEffects=None,groups=ichor.maesh.dev,resources=talosoperations,verbs=create,versions=v1alpha1,name=vbreakglassop-v1alpha1.kb.io,admissionReviewVersions=v1
-// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-breakglass,mutating=false,failurePolicy=fail,sideEffects=None,groups=ichor.maesh.dev,resources=talosclusters,verbs=create;update,versions=v1alpha1,name=vauthentication-v1alpha1.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-breakglass,mutating=false,failurePolicy=fail,sideEffects=None,groups=ichor.maesh.dev,resources=talosclusters,verbs=create;update;delete,versions=v1alpha1,name=vauthentication-v1alpha1.kb.io,admissionReviewVersions=v1
 // +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-breakglass,mutating=false,failurePolicy=fail,sideEffects=None,groups=ichor.maesh.dev,resources=talosetcdbackups,verbs=create;update,versions=v1alpha1,name=vsecretrefs-v1alpha1.kb.io,admissionReviewVersions=v1
 // +kubebuilder:rbac:groups=authorization.k8s.io,resources=subjectaccessreviews,verbs=create
 
@@ -322,6 +322,31 @@ const (
 	AuthenticationSubresource = "authentication"
 )
 
+// handleClusterDelete refuses deleting a tracked TalosCluster unless the user holds break-glass on it.
+func (h *BreakGlassHandler) handleClusterDelete(ctx context.Context, req admission.Request) admission.Response {
+	var old ichorv1alpha1.TalosCluster
+	if err := json.Unmarshal(req.OldObject.Raw, &old); err != nil {
+		return admission.Errored(http.StatusBadRequest, fmt.Errorf("decoding the stored cluster: %w", err))
+	}
+
+	allowed, err := h.mayBreakGlass(ctx, req.UserInfo, "talosclusters", req.Name, req.Namespace)
+	if err != nil {
+		return admission.Errored(http.StatusServiceUnavailable, fmt.Errorf("cannot check the %s right: %w", BreakGlassVerb, err))
+	}
+
+	if allowed {
+		breakglasslog.Info("cluster delete admitted under break-glass", "user", req.UserInfo.Username, "cluster", req.Name)
+
+		return admission.Allowed("")
+	}
+
+	if resp := h.refuseIfTracked(ctx, req, &old); resp != nil {
+		return *resp
+	}
+
+	return admission.Allowed("")
+}
+
 // handleCluster gates a change to spec.authentication. An operator who could repoint the IdP could
 // break sign-in for everyone, so the change needs `update` on talosclusters/authentication (asked as
 // the requesting user, so a hand-written CR obeys it too), and the new value must be one the
@@ -329,7 +354,17 @@ const (
 // the apiserver's own validation. A write that leaves spec.authentication as it was is not checked,
 // and the controller and GitOps engines (ExemptUsers) are never stopped.
 func (h *BreakGlassHandler) handleCluster(ctx context.Context, req admission.Request) admission.Response {
-	if (req.Operation != opCreate && req.Operation != opUpdate) || slices.Contains(h.ExemptUsers, req.UserInfo.Username) {
+	if slices.Contains(h.ExemptUsers, req.UserInfo.Username) {
+		return admission.Allowed("")
+	}
+
+	// Deleting a GitOps-tracked cluster needs the break-glass verb too (ADR 0065); the allow-delete
+	// guard is a separate webhook and stays as it is.
+	if req.Operation == "DELETE" {
+		return h.handleClusterDelete(ctx, req)
+	}
+
+	if req.Operation != opCreate && req.Operation != opUpdate {
 		return admission.Allowed("")
 	}
 

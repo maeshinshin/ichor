@@ -174,6 +174,46 @@ var _ = Describe("Break-glass webhook", func() {
 		Expect(asUser(glassUser).Delete(ctx, patch)).To(Succeed())
 	})
 
+	Context("deleting a TalosCluster", func() {
+		var cluster *ichorv1alpha1.TalosCluster
+
+		BeforeEach(func() {
+			rule := rbacv1.PolicyRule{APIGroups: []string{ichorGroup}, Resources: []string{resClusters}, Verbs: []string{verbGet, AuthenticationVerb, "delete"}}
+			bindRole("bg-cluster-plain", plainUser, rule)
+			bindRole("bg-cluster-glass", glassUser, rule, rbacv1.PolicyRule{
+				APIGroups: []string{ichorGroup}, Resources: []string{resClusters}, Verbs: []string{"break-glass"},
+			})
+
+			cluster = newTestCluster()
+			cluster.Annotations = map[string]string{
+				gitopstracking.ArgoTrackingAnnotation: "app:ichor.maesh.dev/TalosCluster:default/x",
+				deleteguard.AllowDeleteAnnotation:     deleteguard.AllowDeleteValue,
+			}
+			Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
+		})
+
+		AfterEach(func() {
+			_ = k8sClient.Delete(ctx, cluster)
+		})
+
+		It("is refused for a tracked cluster without the verb, admitted with it", func() {
+			err := asUser(plainUser).Delete(ctx, cluster)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("break-glass"))
+
+			Expect(asUser(glassUser).Delete(ctx, cluster)).To(Succeed())
+		})
+
+		It("is not affected when the cluster is untracked", func() {
+			var c ichorv1alpha1.TalosCluster
+			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(cluster), &c)).To(Succeed())
+			delete(c.Annotations, gitopstracking.ArgoTrackingAnnotation)
+			Expect(k8sClient.Update(ctx, &c)).To(Succeed())
+
+			Expect(asUser(plainUser).Delete(ctx, &c)).To(Succeed())
+		})
+	})
+
 	Context("removing an ichor.maesh.dev finalizer from a deleting object", func() {
 		BeforeEach(func() {
 			// Untracked: the finalizer rule alone must refuse.

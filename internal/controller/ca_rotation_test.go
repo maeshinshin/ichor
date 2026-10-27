@@ -226,6 +226,8 @@ type caRotFixture struct {
 	rootCAStale  []string
 	rootCAChecks []string
 	settleDelay  time.Duration
+	// nodeChecks counts the live Node reads the executor asked for.
+	nodeChecks int
 	// kube is the in-cluster API the restarts go through; nil leaves the reconciler without one.
 	kube kubernetes.Interface
 }
@@ -263,6 +265,8 @@ func (f *caRotFixture) newReconciler() *TalosOperationReconciler {
 		KubeClient:  f.kube,
 		TalosClient: f.world.factory,
 		NodesReady: func(context.Context, TalosClient) ([]string, error) {
+			f.nodeChecks++
+
 			return f.world.notReady, nil
 		},
 		Recorder: f.recorder,

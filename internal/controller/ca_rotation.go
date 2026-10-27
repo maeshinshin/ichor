@@ -82,8 +82,11 @@ const (
 	reasonCARotationStage     = "StageInProgress"
 	reasonCARotationVerifying = "Verifying"
 	reasonCARotationBlocked   = "Blocked"
-	reasonCARotationSaved     = "NewCAsSaved"
-	reasonCARotationSettling  = "SettlingClients"
+
+	reasonCARotationAwaitingNodes = "AwaitingNodes"
+	reasonCARotationSettlingNodes = "SettlingNodes"
+	reasonCARotationSaved         = "NewCAsSaved"
+	reasonCARotationSettling      = "SettlingClients"
 
 	// caClientSettleDelay is how long pods get, once kube-root-ca.crt carries the new Kubernetes CA,
 	// to see it in their projected ca.crt: kubelet refreshes projected volumes about every minute.
@@ -106,6 +109,11 @@ const (
 	kubernetesCAName  = "kubernetes"
 	bundleStaleReason = "CARotated"
 )
+
+// caKubeletSettleDelay is how long the Nodes must stay Ready after the Dropping stage before the first
+// client is restarted: longer than the node-monitor grace period (40 s) plus a kubelet restart.
+// A variable so tests need not wait.
+var caKubeletSettleDelay = 90 * time.Second
 
 // NodesReadyFunc reports the names of the Kubernetes Nodes that are not Ready, through the
 // Kubernetes API reached with talos's admin kubeconfig. A seam so tests never reach a cluster;
@@ -813,8 +821,8 @@ func (c *caRun) finalize(ctx context.Context) (ctrl.Result, error) {
 	}
 
 	if len(machines) > 0 {
-		if err := c.nodesReady(ctx, machines[0], bundle); err != nil {
-			return c.retry(ctx, "the replaced bundle is not verified: "+err.Error())
+		if res, wait, err := c.awaitNodes(ctx, machines[0], bundle); wait {
+			return res, err
 		}
 	}
 
@@ -831,6 +839,58 @@ func (c *caRun) finalize(ctx context.Context) (ctrl.Result, error) {
 	setStageCertificates(c.op.Status.CARotation)
 
 	return c.complete(ctx)
+}
+
+// awaitNodes holds the first client restart until the Nodes are Ready again after the Dropping stage.
+// The kubelets restart then, and a Node keeps reporting Ready=True until the controller manager's
+// grace period (40 s) passes without a heartbeat, so a single Ready read taken just after Dropping is
+// stale: the restarts began while the kubelets were going down and CoreDNS lost its replicas. The
+// signal is therefore a live read (NodesReady asks the API through a freshly issued admin kubeconfig,
+// never a cache) that stays Ready for caKubeletSettleDelay, which is longer than the grace period plus
+// a kubelet restart: a Node that is going to turn NotReady has done so within it, and that resets the
+// clock. Node condition times are not used because NodesReadyFunc reports only names, and a kubelet
+// that restarts inside the grace period never changes lastTransitionTime. The clock is the CARotation
+// condition's transition time, so it survives a controller restart. Until then the operation waits
+// (InProgress with the reason), it is not Paused. Once the restarts have begun the plain check applies.
+func (c *caRun) awaitNodes(ctx context.Context, first *ichorv1alpha1.TalosMachine, bundle *secrets.Bundle) (ctrl.Result, bool, error) {
+	cond := apimeta.FindStatusCondition(c.op.Status.Conditions, conditionCARotation)
+	restarting := cond != nil && cond.Reason == reasonCARotationRestarting && cond.Status == metav1.ConditionTrue
+
+	if c.r.KubeClient == nil || restarting {
+		if err := c.nodesReady(ctx, first, bundle); err != nil {
+			res, rerr := c.retry(ctx, "the replaced bundle is not verified: "+err.Error())
+
+			return res, true, rerr
+		}
+
+		return ctrl.Result{}, false, nil
+	}
+
+	if err := c.nodesReady(ctx, first, bundle); err != nil {
+		// Reset the clock: a removed condition gets a fresh transition time.
+		apimeta.RemoveStatusCondition(&c.op.Status.Conditions, conditionCARotation)
+
+		err := c.status(ctx, ichorv1alpha1.TalosOperationPhaseInProgress, metav1.ConditionTrue, reasonCARotationAwaitingNodes,
+			"the old CAs are dropped; no client is restarted until the Nodes are Ready again after the kubelets restarted: "+err.Error())
+
+		return ctrl.Result{RequeueAfter: operationRequeueInterval}, true, err
+	}
+
+	if cond == nil || cond.Reason != reasonCARotationSettlingNodes || cond.Status != metav1.ConditionTrue {
+		apimeta.RemoveStatusCondition(&c.op.Status.Conditions, conditionCARotation)
+
+		err := c.status(ctx, ichorv1alpha1.TalosOperationPhaseInProgress, metav1.ConditionTrue, reasonCARotationSettlingNodes,
+			fmt.Sprintf("the old CAs are dropped and the Nodes are Ready; waiting %s to see they stay Ready after the kubelets restarted, "+
+				"before any client is restarted", caKubeletSettleDelay))
+
+		return ctrl.Result{RequeueAfter: min(caKubeletSettleDelay, operationRequeueInterval)}, true, err
+	}
+
+	if left := caKubeletSettleDelay - time.Since(cond.LastTransitionTime.Time); left > 0 {
+		return ctrl.Result{RequeueAfter: min(left, operationRequeueInterval)}, true, nil
+	}
+
+	return ctrl.Result{}, false, nil
 }
 
 // holdsNewCAs reports whether bundle already carries the CAs this rotation is moving to.

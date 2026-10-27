@@ -8,8 +8,9 @@ Decided: the `ca-rotation` stages are `Accepting`, `AwaitingCredentials`, `Issui
 
 The first real rotation (3 control planes, 1 worker) locked the operator out. Within seconds of `Issuing` the kube-apiserver
 served the new CA and the operator's kubeconfig, which trusts the old one only, failed with `x509: certificate signed by
-unknown authority`; about two and a half minutes later the old Talos API CA was dropped and the operator's talosconfig was
-refused on every node. Nothing the operator held reached the cluster afterwards, `bundle-export` needs a working kubeconfig,
+unknown authority`. The nodes served certificates from the new Talos API CA from `Issuing` on, so the operator's talosconfig,
+which trusts the old Talos API CA only, was refused on every node from that pass on, not only after the old CA was dropped
+(about two and a half minutes later, at `Dropping`). Both files therefore stop working from the second pass (`Issuing`). Nothing the operator held reached the cluster afterwards, `bundle-export` needs a working kubeconfig,
 and nothing in Ichor handed the operator new credentials. `talosctl rotate-ca` does: it writes a new talosconfig and builds
 a new kubeconfig from the nodes during the rotation (Talos v1.14.3, `pkg/rotate/pki/kubernetes` fetches a client after the
 swap, `cmd/talosctl/cmd/talos/rotate-ca.go` saves the new talosconfig). ADR 0063 ran the rotation in the controller and

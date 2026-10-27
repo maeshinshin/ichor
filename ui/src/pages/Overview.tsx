@@ -21,7 +21,8 @@ import { enumLabel } from '@/lib/enum'
 import { describeError } from '@/lib/errors'
 import { formatTimestamp } from '@/lib/format'
 import { kubernetesStageProgress, operationState, progressCounts } from '@/lib/operations'
-import { attentionItems, clusterStatus, machineCounts, type ClusterStatus } from '@/lib/overview'
+import { clusterHealth, type Health } from '@/lib/clusterHealth'
+import { attentionItems, machineCounts } from '@/lib/overview'
 import { opStateTone, type Tone } from '@/lib/status'
 import { useCluster } from '@/lib/useCluster'
 import { useT } from '@/lib/useT'
@@ -39,7 +40,7 @@ const toRow = (op: Operation): Row => ({
   created: Number(op.createdAt?.seconds ?? 0n),
 })
 
-const statusTone: Record<ClusterStatus, Tone> = { ready: 'good', degraded: 'bad', upgrading: 'progress' }
+const statusTone: Record<Health, Tone> = { ready: 'good', degraded: 'bad', upgrading: 'progress' }
 
 const readyReason = (m: Machine) => m.conditions.find((c) => c.type === 'Ready')?.reason ?? ''
 
@@ -49,14 +50,14 @@ const readyReason = (m: Machine) => m.conditions.find((c) => c.type === 'Ready')
 // change goes through the dialogs, which ask the server for a plan first.
 export function Overview() {
   const t = useT()
-  const { cluster, loading, error, reload } = useCluster()
+  const { cluster, opRunning, loading, error, reload } = useCluster()
   if (error) return <ErrorAlert {...error} />
   if (loading) return <PageSkeleton label={t('cluster.loading')} />
   if (!cluster?.ref) return <EmptyNote>{t('home.noCluster')}</EmptyNote>
-  return <Home cluster={cluster} reloadCluster={reload} />
+  return <Home cluster={cluster} opRunning={opRunning} reloadCluster={reload} />
 }
 
-function Home({ cluster, reloadCluster }: { cluster: Cluster; reloadCluster: () => void }) {
+function Home({ cluster, opRunning, reloadCluster }: { cluster: Cluster; opRunning: boolean; reloadCluster: () => void }) {
   const t = useT()
   const ref = cluster.ref!
   const [ops, setOps] = useState<Row[] | null>(null)
@@ -118,7 +119,7 @@ function Home({ cluster, reloadCluster }: { cluster: Cluster; reloadCluster: () 
   const counts = machineCounts(approved.map((m) => ({ approval: 'approved' as const, ready: m.conditions.find((c) => c.type === 'Ready')?.status ?? '' })))
   const waiting = approved.filter((m) => rebootPendingCount([{ rebootPaths: m.rebootPaths, readyReason: readyReason(m) }]) > 0)
   const currentState = current ? operationState(current.op.phase, current.op.failureReason) : null
-  const status = clusterStatus(cluster.conditions, !!cluster.rollout, currentState === 'running')
+  const status = clusterHealth(cluster.conditions, !!cluster.rollout, opRunning)
   const busyReason = busy ? t('ops.disabledBusy') : undefined
   const kubeProxy = cluster.kubeProxyMode || 'enabled'
   const items = attentionItems({ conditions: cluster.conditions, pending: pending.length, configWaiting: waiting.length, opState: currentState })

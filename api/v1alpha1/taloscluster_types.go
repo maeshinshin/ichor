@@ -541,3 +541,7 @@ func init() {
 		return nil
 	})
 }
+
+// ConditionCertificatesExpiring is the TalosCluster condition that is True while any CA in the
+// secrets bundle expires within the controller's warning window, or has expired.
+const ConditionCertificatesExpiring = "CertificatesExpiring"

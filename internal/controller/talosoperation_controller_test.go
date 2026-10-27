@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"errors"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -359,6 +360,97 @@ var _ = Describe("TalosOperationReconciler", func() {
 		_, err = reconcileOperation(r, op)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(fake.calls).To(HaveLen(callsBefore), "a paused, failed operation must not retry the failed step automatically")
+	})
+
+	Context("an explicit retry of a failed step (ADR 0095)", func() {
+		// failedOperation leaves an operation Paused with a failureReason: the second of three
+		// control planes failed once, the first is Completed.
+		failedOperation := func(prefix string) (*ichorv1alpha1.TalosOperation, *fakeAdvancer, *TalosOperationReconciler, *ichorv1alpha1.TalosMachine) {
+			cluster := newOpTestCluster()
+			cp1 := newOpTestMachine(cluster.Name, "controlplane", prefix+"-cp1")
+			cp2 := newOpTestMachine(cluster.Name, "controlplane", prefix+"-cp2")
+			cp3 := newOpTestMachine(cluster.Name, "controlplane", prefix+"-cp3")
+			setUpgradeOrder(cp1, "1")
+			setUpgradeOrder(cp2, "2")
+			setUpgradeOrder(cp3, "3")
+
+			op := newOpTestOperation(cluster.Name)
+			fake := &fakeAdvancer{outcomes: map[string]advanceOutcome{cp2.Name: {done: false, err: errors.New("drain blocked")}}}
+			r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: fake.Advance}
+
+			for range 2 {
+				_, err := reconcileOperation(r, op)
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			Expect(fetchOperation(op).Status.FailureReason).To(ContainSubstring("drain blocked"))
+
+			return op, fake, r, cp2
+		}
+
+		requestRetry := func(op *ichorv1alpha1.TalosOperation, at time.Time) {
+			got := fetchOperation(op)
+			got.Annotations = map[string]string{ichorv1alpha1.OperationRetryAnnotation: at.UTC().Format(time.RFC3339)}
+			Expect(k8sClient.Update(ctx, got)).To(Succeed())
+		}
+
+		It("clears the failure, records lastRetry and runs the failed machine's step again", func() {
+			op, fake, r, cp2 := failedOperation("retry")
+			at := time.Now().Truncate(time.Second)
+
+			fake.outcomes[cp2.Name] = advanceOutcome{done: true}
+			callsBefore := len(fake.calls)
+
+			requestRetry(op, at)
+
+			_, err := reconcileOperation(r, op)
+			Expect(err).NotTo(HaveOccurred())
+
+			got := fetchOperation(op)
+			Expect(got.Status.FailureReason).To(BeEmpty())
+			Expect(got.Status.LastRetry).NotTo(BeNil())
+			Expect(got.Status.LastRetry.Unix()).To(Equal(at.Unix()))
+			Expect(fake.calls[callsBefore:]).To(ContainElement(cp2.Name), "the failed machine's step must run again")
+		})
+
+		It("ignores a request that is not newer than lastRetry", func() {
+			op, fake, r, _ := failedOperation("stale")
+			at := time.Now().Truncate(time.Second)
+
+			requestRetry(op, at)
+
+			_, err := reconcileOperation(r, op) // the retry fails again, same outcome
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fetchOperation(op).Status.FailureReason).To(ContainSubstring("drain blocked"))
+			Expect(fetchOperation(op).Status.LastRetry).NotTo(BeNil())
+
+			callsBefore := len(fake.calls)
+
+			requestRetry(op, at.Add(-time.Minute)) // older than lastRetry
+			_, err = reconcileOperation(r, op)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fake.calls).To(HaveLen(callsBefore), "a stale request must not run the step again")
+			Expect(fetchOperation(op).Status.FailureReason).NotTo(BeEmpty())
+
+			requestRetry(op, at) // the same one again
+			_, err = reconcileOperation(r, op)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fake.calls).To(HaveLen(callsBefore))
+		})
+
+		It("does nothing for a request on an operation that is not paused after a failure", func() {
+			cluster := newOpTestCluster()
+			newOpTestMachine(cluster.Name, "controlplane", "norequest-cp1")
+			op := newOpTestOperation(cluster.Name)
+			fake := &fakeAdvancer{outcomes: map[string]advanceOutcome{}}
+			r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: fake.Advance}
+
+			requestRetry(op, time.Now())
+
+			_, err := reconcileOperation(r, op)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fetchOperation(op).Status.LastRetry).To(BeNil(), "no failure, so the request is not acted on")
+		})
 	})
 
 	It("resumes from status after a simulated controller restart, without re-advancing a completed machine", func() {

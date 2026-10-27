@@ -55,6 +55,9 @@ const (
 	// OperationServiceSetOperationPausedProcedure is the fully-qualified name of the OperationService's
 	// SetOperationPaused RPC.
 	OperationServiceSetOperationPausedProcedure = "/ichor.v1alpha1.OperationService/SetOperationPaused"
+	// OperationServiceRetryOperationProcedure is the fully-qualified name of the OperationService's
+	// RetryOperation RPC.
+	OperationServiceRetryOperationProcedure = "/ichor.v1alpha1.OperationService/RetryOperation"
 	// OperationServiceDeleteOperationProcedure is the fully-qualified name of the OperationService's
 	// DeleteOperation RPC.
 	OperationServiceDeleteOperationProcedure = "/ichor.v1alpha1.OperationService/DeleteOperation"
@@ -85,6 +88,9 @@ type OperationServiceClient interface {
 	PlanOperation(context.Context, *connect.Request[v1alpha1.PlanOperationRequest]) (*connect.Response[v1alpha1.PlanOperationResponse], error)
 	CreateOperation(context.Context, *connect.Request[v1alpha1.CreateOperationRequest]) (*connect.Response[v1alpha1.CreateOperationResponse], error)
 	SetOperationPaused(context.Context, *connect.Request[v1alpha1.SetOperationPausedRequest]) (*connect.Response[v1alpha1.SetOperationPausedResponse], error)
+	// RetryOperation asks the controller to run the failed step of a paused-after-failure operation
+	// again, by annotating the operation (ADR 0095). It refuses an operation that has not failed.
+	RetryOperation(context.Context, *connect.Request[v1alpha1.RetryOperationRequest]) (*connect.Response[v1alpha1.RetryOperationResponse], error)
 	DeleteOperation(context.Context, *connect.Request[v1alpha1.DeleteOperationRequest]) (*connect.Response[v1alpha1.DeleteOperationResponse], error)
 	// GetCARotationCredentialsPermission says whether the caller may download a ca-rotation's new
 	// credentials (the RBAC verb "download" on talosclusters/credentials, ADR 0093), so the UI shows
@@ -150,6 +156,12 @@ func NewOperationServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(operationServiceMethods.ByName("SetOperationPaused")),
 			connect.WithClientOptions(opts...),
 		),
+		retryOperation: connect.NewClient[v1alpha1.RetryOperationRequest, v1alpha1.RetryOperationResponse](
+			httpClient,
+			baseURL+OperationServiceRetryOperationProcedure,
+			connect.WithSchema(operationServiceMethods.ByName("RetryOperation")),
+			connect.WithClientOptions(opts...),
+		),
 		deleteOperation: connect.NewClient[v1alpha1.DeleteOperationRequest, v1alpha1.DeleteOperationResponse](
 			httpClient,
 			baseURL+OperationServiceDeleteOperationProcedure,
@@ -196,6 +208,7 @@ type operationServiceClient struct {
 	planOperation                      *connect.Client[v1alpha1.PlanOperationRequest, v1alpha1.PlanOperationResponse]
 	createOperation                    *connect.Client[v1alpha1.CreateOperationRequest, v1alpha1.CreateOperationResponse]
 	setOperationPaused                 *connect.Client[v1alpha1.SetOperationPausedRequest, v1alpha1.SetOperationPausedResponse]
+	retryOperation                     *connect.Client[v1alpha1.RetryOperationRequest, v1alpha1.RetryOperationResponse]
 	deleteOperation                    *connect.Client[v1alpha1.DeleteOperationRequest, v1alpha1.DeleteOperationResponse]
 	getCARotationCredentialsPermission *connect.Client[v1alpha1.GetCARotationCredentialsPermissionRequest, v1alpha1.GetCARotationCredentialsPermissionResponse]
 	downloadCARotationCredentials      *connect.Client[v1alpha1.DownloadCARotationCredentialsRequest, v1alpha1.DownloadCARotationCredentialsResponse]
@@ -227,6 +240,11 @@ func (c *operationServiceClient) CreateOperation(ctx context.Context, req *conne
 // SetOperationPaused calls ichor.v1alpha1.OperationService.SetOperationPaused.
 func (c *operationServiceClient) SetOperationPaused(ctx context.Context, req *connect.Request[v1alpha1.SetOperationPausedRequest]) (*connect.Response[v1alpha1.SetOperationPausedResponse], error) {
 	return c.setOperationPaused.CallUnary(ctx, req)
+}
+
+// RetryOperation calls ichor.v1alpha1.OperationService.RetryOperation.
+func (c *operationServiceClient) RetryOperation(ctx context.Context, req *connect.Request[v1alpha1.RetryOperationRequest]) (*connect.Response[v1alpha1.RetryOperationResponse], error) {
+	return c.retryOperation.CallUnary(ctx, req)
 }
 
 // DeleteOperation calls ichor.v1alpha1.OperationService.DeleteOperation.
@@ -272,6 +290,9 @@ type OperationServiceHandler interface {
 	PlanOperation(context.Context, *connect.Request[v1alpha1.PlanOperationRequest]) (*connect.Response[v1alpha1.PlanOperationResponse], error)
 	CreateOperation(context.Context, *connect.Request[v1alpha1.CreateOperationRequest]) (*connect.Response[v1alpha1.CreateOperationResponse], error)
 	SetOperationPaused(context.Context, *connect.Request[v1alpha1.SetOperationPausedRequest]) (*connect.Response[v1alpha1.SetOperationPausedResponse], error)
+	// RetryOperation asks the controller to run the failed step of a paused-after-failure operation
+	// again, by annotating the operation (ADR 0095). It refuses an operation that has not failed.
+	RetryOperation(context.Context, *connect.Request[v1alpha1.RetryOperationRequest]) (*connect.Response[v1alpha1.RetryOperationResponse], error)
 	DeleteOperation(context.Context, *connect.Request[v1alpha1.DeleteOperationRequest]) (*connect.Response[v1alpha1.DeleteOperationResponse], error)
 	// GetCARotationCredentialsPermission says whether the caller may download a ca-rotation's new
 	// credentials (the RBAC verb "download" on talosclusters/credentials, ADR 0093), so the UI shows
@@ -333,6 +354,12 @@ func NewOperationServiceHandler(svc OperationServiceHandler, opts ...connect.Han
 		connect.WithSchema(operationServiceMethods.ByName("SetOperationPaused")),
 		connect.WithHandlerOptions(opts...),
 	)
+	operationServiceRetryOperationHandler := connect.NewUnaryHandler(
+		OperationServiceRetryOperationProcedure,
+		svc.RetryOperation,
+		connect.WithSchema(operationServiceMethods.ByName("RetryOperation")),
+		connect.WithHandlerOptions(opts...),
+	)
 	operationServiceDeleteOperationHandler := connect.NewUnaryHandler(
 		OperationServiceDeleteOperationProcedure,
 		svc.DeleteOperation,
@@ -381,6 +408,8 @@ func NewOperationServiceHandler(svc OperationServiceHandler, opts ...connect.Han
 			operationServiceCreateOperationHandler.ServeHTTP(w, r)
 		case OperationServiceSetOperationPausedProcedure:
 			operationServiceSetOperationPausedHandler.ServeHTTP(w, r)
+		case OperationServiceRetryOperationProcedure:
+			operationServiceRetryOperationHandler.ServeHTTP(w, r)
 		case OperationServiceDeleteOperationProcedure:
 			operationServiceDeleteOperationHandler.ServeHTTP(w, r)
 		case OperationServiceGetCARotationCredentialsPermissionProcedure:
@@ -420,6 +449,10 @@ func (UnimplementedOperationServiceHandler) CreateOperation(context.Context, *co
 
 func (UnimplementedOperationServiceHandler) SetOperationPaused(context.Context, *connect.Request[v1alpha1.SetOperationPausedRequest]) (*connect.Response[v1alpha1.SetOperationPausedResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.OperationService.SetOperationPaused is not implemented"))
+}
+
+func (UnimplementedOperationServiceHandler) RetryOperation(context.Context, *connect.Request[v1alpha1.RetryOperationRequest]) (*connect.Response[v1alpha1.RetryOperationResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.OperationService.RetryOperation is not implemented"))
 }
 
 func (UnimplementedOperationServiceHandler) DeleteOperation(context.Context, *connect.Request[v1alpha1.DeleteOperationRequest]) (*connect.Response[v1alpha1.DeleteOperationResponse], error) {

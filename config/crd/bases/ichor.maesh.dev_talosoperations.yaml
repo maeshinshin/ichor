@@ -439,6 +439,12 @@ spec:
                     - Kubelets
                     type: string
                 type: object
+              lastRetry:
+                description: |-
+                  lastRetry is the time of the retry request (the ichor.maesh.dev/retry annotation) the
+                  controller last acted on: it cleared failureReason and ran the failed step again.
+                format: date-time
+                type: string
               machines:
                 description: |-
                   machines records every machine this operation has ever selected, and

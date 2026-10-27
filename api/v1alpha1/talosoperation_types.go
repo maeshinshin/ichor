@@ -87,6 +87,11 @@ const (
 // after the request. It is how the restore knows each machine looked at the restored state.
 const EtcdRestoreReconcileAnnotation = "ichor.maesh.dev/reconcile-requested"
 
+// OperationRetryAnnotation, set by `ichor operation retry` (or the UI) to an RFC 3339 time, asks the
+// controller to run the failed step again. The controller never changes spec, so the request is an
+// annotation; it acts once the time is newer than status.lastRetry (ADR 0095).
+const OperationRetryAnnotation = "ichor.maesh.dev/retry"
+
 // Values for TalosOperationNodeSpec.Action.
 const (
 	NodeActionReboot                = "reboot"
@@ -445,6 +450,11 @@ type TalosOperationStatus struct {
 	// machine's own failed step, as opposed to spec.paused.
 	// +optional
 	FailureReason string `json:"failureReason,omitempty"`
+
+	// lastRetry is the time of the retry request (the ichor.maesh.dev/retry annotation) the
+	// controller last acted on: it cleared failureReason and ran the failed step again.
+	// +optional
+	LastRetry *metav1.Time `json:"lastRetry,omitempty"`
 
 	// node is the node kind's state machine.
 	// +optional

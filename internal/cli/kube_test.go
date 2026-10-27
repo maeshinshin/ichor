@@ -22,8 +22,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 )
 
@@ -54,13 +56,33 @@ func TestNewKubeClientForConfig_RejectsUnknownField(t *testing.T) {
 		t.Skip("no envtest binaries found (set KUBEBUILDER_ASSETS or run via `make test`)")
 	}
 
-	env := &envtest.Environment{
-		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "config", "crd", "bases")},
-		ErrorIfCRDPathMissing: true,
-		BinaryAssetsDirectory: assetsDir,
+	// envtest's wait for the "default" namespace is a fixed 5s that cannot
+	// be configured; under load (a parallel full gate) it can miss, so retry
+	// the whole start a bounded number of times.
+	var (
+		env *envtest.Environment
+		cfg *rest.Config
+		err error
+	)
+
+	for attempt := 1; attempt <= 3; attempt++ {
+		env = &envtest.Environment{
+			CRDDirectoryPaths:        []string{filepath.Join("..", "..", "config", "crd", "bases")},
+			ErrorIfCRDPathMissing:    true,
+			BinaryAssetsDirectory:    assetsDir,
+			ControlPlaneStartTimeout: time.Minute,
+		}
+
+		cfg, err = env.Start()
+		if err == nil {
+			break
+		}
+
+		t.Logf("starting envtest (attempt %d/3): %v", attempt, err)
+
+		_ = env.Stop()
 	}
 
-	cfg, err := env.Start()
 	if err != nil {
 		t.Fatalf("starting envtest: %v", err)
 	}

@@ -184,3 +184,5 @@ the snapshot and its time.
   `EtcdJoinTimeout`, a rejoin of a node whose old member the recovered etcd no longer lists, the kubelet keeping the
   process alive through the probe server, the informers' behaviour when the API returns with older objects, and
   an e2e round trip (the design's regular proof of restore).
+
+- Amendment 2026-10-27: the Recovering step verifies and then re-reads the pinned snapshot, i.e. two decrypts; with the old 270 MiB scrypt cost each that OOM-killed the controller within a second (see 0047), and with the 1 MiB work factor both stay streamed and under 64 MiB.

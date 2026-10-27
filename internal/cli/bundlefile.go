@@ -283,10 +283,10 @@ func loadBundleFile(path string) (*secrets.Bundle, error) {
 		return nil, fmt.Errorf("reading secrets bundle %q: %w", path, err)
 	}
 
-	var bundle secrets.Bundle
-	if err := yaml.Unmarshal(raw, &bundle); err != nil {
+	bundle, err := secretsbundle.Decode(raw)
+	if err != nil {
 		return nil, fmt.Errorf("decoding secrets bundle %q: %w", path, err)
 	}
 
-	return &bundle, nil
+	return bundle, nil
 }

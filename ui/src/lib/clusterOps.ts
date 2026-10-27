@@ -76,5 +76,5 @@ export function versionProblem(current: string, target: string): 'required' | 'i
 // rebootPendingCount is how many nodes wait for a reboot to take a config change:
 // status.rebootPaths is set, or Ready says RebootRequired (an older backend sends only that).
 export function rebootPendingCount(machines: readonly { rebootPaths: readonly string[]; readyReason: string }[]): number {
-  return machines.filter((m) => m.rebootPaths.length > 0 || m.readyReason === 'RebootRequired').length
+  return machines.filter((m) => m.rebootPaths.length > 0 || m.readyReason === 'RebootRequired' || m.readyReason === 'APIServerRestartRequired').length
 }

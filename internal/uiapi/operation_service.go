@@ -480,8 +480,9 @@ func (s *Server) planMachines(ctx context.Context, p *opPlan, cluster *ichorv1al
 		}
 
 		// A config rollout visits only the machines with a pending change that needs a reboot
-		// (TalosMachine.status.rebootPaths, ADR 0080).
-		if p.kind == ichorv1alpha1.TalosOperationKindConfig && len(m.Status.RebootPaths) == 0 {
+		// (TalosMachine.status.rebootPaths, ADR 0080) or an API server restart
+		// (status.apiServerRestartPaths, ADR 0080 amendment).
+		if p.kind == ichorv1alpha1.TalosOperationKindConfig && len(m.Status.RebootPaths) == 0 && len(m.Status.APIServerRestartPaths) == 0 {
 			continue
 		}
 
@@ -513,9 +514,25 @@ func (s *Server) planMachines(ctx context.Context, p *opPlan, cluster *ichorv1al
 
 	slices.Sort(p.resp.Held)
 
-	// With one approved control plane, rebooting it takes the Kubernetes API down for the length of
-	// the reboot (the cluster has no other API server to answer).
-	p.resp.KubernetesApiUnavailable = p.resp.Effect == pb.OperationEffect_OPERATION_EFFECT_REBOOT &&
+	// A config rollout whose machines all need only the API server restart (no reboot) says so
+	// instead of "reboot": restarts the API server on each control plane, one at a time.
+	if p.kind == ichorv1alpha1.TalosOperationKindConfig {
+		p.resp.Effect = pb.OperationEffect_OPERATION_EFFECT_RESTART_COMPONENTS
+
+		for _, m := range slices.Concat(cps, workers) {
+			if len(m.Status.RebootPaths) > 0 {
+				p.resp.Effect = pb.OperationEffect_OPERATION_EFFECT_REBOOT
+
+				break
+			}
+		}
+	}
+
+	// With one approved control plane, rebooting it (or, for a config change, restarting its API
+	// server) takes the Kubernetes API down for the length of it (the cluster has no other API
+	// server to answer).
+	p.resp.KubernetesApiUnavailable = (p.resp.Effect == pb.OperationEffect_OPERATION_EFFECT_REBOOT ||
+		p.kind == ichorv1alpha1.TalosOperationKindConfig) &&
 		approvedControlPlanes == 1 && len(cps) == 1
 
 	// Through a single node's address, every kubelet and controller talks to one API server; while
@@ -609,7 +626,7 @@ func (s *Server) blockedReason(
 	}
 
 	if p.kind == ichorv1alpha1.TalosOperationKindConfig && len(p.resp.Machines) == 0 {
-		return "no approved machine has a pending configuration change that needs a reboot (nothing is waiting in Ready=RebootRequired)", nil
+		return "no approved machine has a pending configuration change that needs a reboot or an API server restart (nothing is waiting in Ready=RebootRequired or APIServerRestartRequired)", nil
 	}
 
 	if p.resp.SpecChanges && p.install != nil && p.install.Spec.ManagementMode == ichorv1alpha1.IchorManagementModeExternal {

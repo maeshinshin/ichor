@@ -32,6 +32,10 @@ import (
 const credentialsStopWorking = "kubeconfig and talosconfig STOP WORKING from the second pass (Issuing) on: " +
 	"the nodes start serving certificates from the new CA, and a file that trusts only the old CA can no longer verify them."
 
+// configRestartText is what a config operation whose changes need no reboot does (ADR 0080
+// amendment); the UI says the same in ops.plan.effectConfigRestart.
+const configRestartText = "Restarts the Kubernetes API server on each control plane, one at a time; no reboot."
+
 func pullRequestText(url string) string {
 	return "Opened a pull request that changes Ichor's target version in Git: " + url + "\n" +
 		"Nothing was written to the cluster and no operation was created. Merge it and let Argo CD sync, " +
@@ -56,6 +60,12 @@ func planText(kind pb.OperationKind, cluster string, p *pb.PlanOperationResponse
 			b.WriteString("Each machine is upgraded and REBOOTS.\n")
 		}
 	case pb.OperationEffect_OPERATION_EFFECT_RESTART_COMPONENTS:
+		if kind == pb.OperationKind_OPERATION_KIND_CONFIG {
+			b.WriteString(configRestartText + "\n")
+
+			break
+		}
+
 		b.WriteString("Configuration is applied without a reboot; the kubelet and control plane components restart on each machine.\n")
 		if kind == pb.OperationKind_OPERATION_KIND_KUBERNETES && len(p.GetStages()) > 0 {
 			fmt.Fprintf(&b, "It runs in %d stages, each finished on every machine before the next starts, "+
@@ -97,7 +107,7 @@ func planText(kind pb.OperationKind, cluster string, p *pb.PlanOperationResponse
 	}
 
 	if p.GetKubernetesApiUnavailable() {
-		b.WriteString("This cluster has one control plane: the Kubernetes API is UNAVAILABLE while it reboots.\n")
+		b.WriteString("This cluster has one control plane: the Kubernetes API is UNAVAILABLE while it reboots or restarts its API server.\n")
 	}
 
 	if w := p.GetWarning(); w != "" {
@@ -148,6 +158,10 @@ func headline(kind pb.OperationKind, cluster string, p *pb.PlanOperationResponse
 	case pb.OperationKind_OPERATION_KIND_CA_ROTATION:
 		return fmt.Sprintf("Rotate the Talos API and Kubernetes API certificate authorities (ca-rotation) of cluster %q.", cluster)
 	case pb.OperationKind_OPERATION_KIND_CONFIG:
+		if p.GetEffect() == pb.OperationEffect_OPERATION_EFFECT_RESTART_COMPONENTS {
+			return fmt.Sprintf("Apply the pending configuration changes that restart the Kubernetes API server (config) of cluster %q.", cluster)
+		}
+
 		return fmt.Sprintf("Apply the pending reboot-requiring configuration changes (config) of cluster %q.", cluster)
 	case pb.OperationKind_OPERATION_KIND_SHUTDOWN:
 		return fmt.Sprintf("SHUT DOWN cluster %q.", cluster)
@@ -211,6 +225,14 @@ func orderText(kind pb.OperationKind, p *pb.PlanOperationResponse) string {
 	}
 
 	if kind == pb.OperationKind_OPERATION_KIND_CONFIG {
+		if p.GetEffect() == pb.OperationEffect_OPERATION_EFFECT_REBOOT {
+			for _, m := range p.GetMachines() {
+				if len(m.GetRebootFields()) == 0 {
+					fmt.Fprintf(&b, "  %s only restarts its Kubernetes API server (no reboot)\n", m.GetName())
+				}
+			}
+		}
+
 		b.WriteString("The machine the controller runs on goes last.\n")
 	}
 

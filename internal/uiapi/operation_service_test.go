@@ -474,6 +474,45 @@ func TestPlanConfigListsOnlyMachinesWithAPendingRebootAndTheirFields(t *testing.
 	}
 }
 
+// ADR 0080 amendment: a pending change that only restarts kube-apiserver selects the machine, with no
+// reboot fields, and a plan of such machines is a restart, not a reboot; one reboot makes it a reboot.
+func TestPlanConfigSelectsAPIServerRestartMachinesAndSaysNoReboot(t *testing.T) {
+	restartOnly := func(m *ichorv1alpha1.TalosMachine) *ichorv1alpha1.TalosMachine {
+		m.Status.APIServerRestartPaths = []string{"KubeAuthenticationConfig.configuration"}
+
+		return m
+	}
+	cluster := &ichorv1alpha1.TalosCluster{
+		Name: opCluster, Namespace: opNS,
+		Spec: ichorv1alpha1.TalosClusterSpec{TalosVersion: opOldTalos, KubernetesVersion: "v1.36.0"},
+	}
+	plan := func(objs ...client.Object) *pb.PlanOperationResponse {
+		srv, _ := opServer(t, objs...)
+
+		res, err := srv.PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{
+			Cluster: objectRef(opNS, opCluster), Kind: pb.OperationKind_OPERATION_KIND_CONFIG,
+		}))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		return res.Msg
+	}
+
+	got := plan(cluster, restartOnly(opMachine("cp1", "controlplane", nil, nil)), opMachine("converged", "worker", nil, nil))
+	if len(got.GetMachines()) != 1 || got.GetMachines()[0].GetName() != "cp1" || len(got.GetMachines()[0].GetRebootFields()) != 0 ||
+		got.GetEffect() != pb.OperationEffect_OPERATION_EFFECT_RESTART_COMPONENTS || got.GetBlocked() != "" ||
+		!got.GetKubernetesApiUnavailable() {
+		t.Fatalf("restart-only plan = %v", got)
+	}
+
+	mixed := plan(cluster, restartOnly(opMachine("cp1", "controlplane", nil, nil)),
+		rebootPending(opMachine("w1", "worker", nil, nil), "machine.network.interfaces"))
+	if len(mixed.GetMachines()) != 2 || mixed.GetEffect() != pb.OperationEffect_OPERATION_EFFECT_REBOOT {
+		t.Fatalf("mixed plan = %v", mixed)
+	}
+}
+
 // ADR 0080: the controller reboots the machine it runs on last, so the plan lists that machine last
 // even when it is a control plane.
 func TestPlanConfigListsTheControllersOwnMachineLast(t *testing.T) {

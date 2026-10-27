@@ -746,9 +746,10 @@ export const en = {
   'ops.plan.config': 'Apply the pending configuration changes that need a reboot.',
   'ops.plan.effectConfigReboot':
     'Each node below gets its rendered configuration staged and reboots; Ichor cordons and drains it first (Talos does not drain on a reboot), and uncordons it once it is Ready again.',
+  'ops.plan.effectConfigRestart': 'Restarts the Kubernetes API server on each control plane, one at a time; no reboot.',
   'ops.plan.apiDownTitle': 'The Kubernetes API will be unavailable',
   'ops.plan.apiDown':
-    'This cluster has one control plane. While it reboots there is no Kubernetes API server, so nothing can be scheduled or changed until it is back.',
+    'This cluster has one control plane. While it reboots or restarts its API server there is none, so nothing can be scheduled or changed until it is back.',
   'ops.plan.rebootFields': '{name} needs the reboot for: {fields}',
   'ops.plan.ownNodeLast': 'The node the controller runs on goes last.',
   'ops.plan.effectReboot': 'Each node is upgraded and reboots.',

@@ -76,6 +76,11 @@ func restartFixture(flannelAvailable int32) (*caRotFixture, *fake.Clientset) {
 
 	f.kube = kc
 
+	old := caKubeletSettleDelay
+	caKubeletSettleDelay = time.Nanosecond
+
+	DeferCleanup(func() { caKubeletSettleDelay = old })
+
 	return f, kc
 }
 
@@ -181,6 +186,40 @@ var _ = Describe("TalosOperation ca-rotation client restarts", func() {
 		}
 
 		Expect(order).To(Equal([]string{corednsPatchKey, "daemonsets/kube-flannel", uiPatchKey}))
+	})
+
+	It("starts no restart until the Nodes have stayed Ready for the settle window, asked live", func() {
+		f, kc := restartFixture(flannelNodes)
+		op := f.newOp()
+
+		op, _ = f.runUntil(op, atStage(ichorv1alpha1.CARotationStageFinalizing))
+		caKubeletSettleDelay = time.Hour
+
+		checks := f.nodeChecks
+
+		for range 4 {
+			op = f.step(op)
+		}
+
+		cond := apimeta.FindStatusCondition(op.Status.Conditions, conditionCARotation)
+		Expect(cond.Reason).To(Equal(reasonCARotationSettlingNodes), "a Ready read right after Dropping is not enough")
+		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseInProgress), "it waits, it does not pause")
+		Expect(patchCount(kc)).To(BeEmpty())
+		Expect(f.nodeChecks).To(BeNumerically(">", checks), "every reconcile reads the Nodes again")
+
+		// A kubelet that goes down inside the window resets it, still without a pause or a restart.
+		f.world.notReady = []string{"cp-restart-test"}
+		op = f.step(op)
+
+		cond = apimeta.FindStatusCondition(op.Status.Conditions, conditionCARotation)
+		Expect(cond.Reason).To(Equal(reasonCARotationAwaitingNodes))
+		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseInProgress))
+
+		f.world.notReady = nil
+		caKubeletSettleDelay = time.Nanosecond
+
+		_, _ = f.runUntil(op, completed)
+		Expect(patchCount(kc)).To(HaveKeyWithValue(corednsPatchKey, 1))
 	})
 
 	It("finishes the rotation, naming what is not back, once the wait is over", func() {

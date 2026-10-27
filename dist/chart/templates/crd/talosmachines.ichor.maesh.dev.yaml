@@ -121,6 +121,89 @@ spec:
                 x-kubernetes-validations:
                 - message: clusterRef.name is required
                   rule: self.name != ''
+              disks:
+                description: |-
+                  disks assign roles to disks other than the system disk (spec.install): ephemeral puts
+                  EPHEMERAL on its own disk, userVolume provisions a named user volume.
+                items:
+                  description: |-
+                    TalosMachineDiskRole gives one non-system disk a role. The disk is identified the
+                    same way as spec.install.disk.
+                  properties:
+                    disk:
+                      description: disk selects the disk.
+                      properties:
+                        busPath:
+                          description: busPath is the disk's bus path, e.g. /pci0000:00/0000:00:17.0/ata1/host0/target0:0:0/0:0:0:0.
+                          maxLength: 256
+                          pattern: ^/[^"\s]+$
+                          type: string
+                        byIDPath:
+                          description: byIDPath is a /dev/disk/by-id/ symlink of the
+                            disk.
+                          maxLength: 256
+                          pattern: ^/dev/disk/by-id/[^/\s"]+$
+                          type: string
+                        devPath:
+                          description: devPath is the kernel device path, e.g. /dev/sda.
+                            Not stable across boots; prefer the others.
+                          maxLength: 256
+                          pattern: ^/dev/[^"\s]+$
+                          type: string
+                        serial:
+                          description: serial is the disk's serial number.
+                          maxLength: 256
+                          minLength: 1
+                          type: string
+                        wwid:
+                          description: wwid is the disk's World Wide Identifier.
+                          maxLength: 256
+                          minLength: 1
+                          type: string
+                      type: object
+                      x-kubernetes-validations:
+                      - message: exactly one of wwid, serial, byIDPath, busPath or
+                          devPath must be set
+                        rule: '(has(self.wwid) ? 1 : 0) + (has(self.serial) ? 1 :
+                          0) + (has(self.byIDPath) ? 1 : 0) + (has(self.busPath) ?
+                          1 : 0) + (has(self.devPath) ? 1 : 0) == 1'
+                    maxSize:
+                      description: maxSize caps a user volume, e.g. 200GiB. Unset
+                        lets it use the whole disk.
+                      pattern: ^[1-9][0-9]*(MiB|GiB|TiB)$
+                      type: string
+                    name:
+                      description: name is the user volume's name; it is mounted at
+                        /var/mnt/<name>.
+                      maxLength: 32
+                      pattern: ^[A-Za-z0-9-]+$
+                      type: string
+                    role:
+                      description: role is ephemeral (EPHEMERAL on this disk) or userVolume
+                        (a user volume on it).
+                      enum:
+                      - ephemeral
+                      - userVolume
+                      type: string
+                  required:
+                  - disk
+                  - role
+                  type: object
+                  x-kubernetes-validations:
+                  - message: name is required for userVolume and not allowed for ephemeral,
+                      and so is maxSize
+                    rule: 'self.role == ''userVolume'' ? has(self.name) : (!has(self.name)
+                      && !has(self.maxSize))'
+                maxItems: 8
+                type: array
+                x-kubernetes-list-type: atomic
+                x-kubernetes-validations:
+                - message: at most one disk can have the ephemeral role
+                  rule: self.filter(d, d.role == 'ephemeral').size() <= 1
+                - message: userVolume names must be unique
+                  rule: self.all(a, !(a.role == 'userVolume' && has(a.name)) || self.filter(b,
+                    b.role == 'userVolume' && has(b.name) && b.name == a.name).size()
+                    == 1)
               endpoint:
                 description: endpoint is the machine's Talos API address.
                 minLength: 1
@@ -207,6 +290,69 @@ spec:
                 required:
                 - disk
                 type: object
+              network:
+                description: |-
+                  network is the machine's primary network link and how it is addressed. Unset
+                  leaves networking to Talos's default (DHCP on every physical link).
+                properties:
+                  addresses:
+                    description: addresses are the static addresses with their prefix
+                      length, e.g. 192.168.1.10/24.
+                    items:
+                      type: string
+                      x-kubernetes-validations:
+                      - message: each address must be an IP with a prefix length,
+                          like 192.168.1.10/24
+                        rule: isCIDR(self)
+                    maxItems: 4
+                    type: array
+                    x-kubernetes-list-type: atomic
+                  addressing:
+                    default: dhcp
+                    description: addressing is dhcp (the default) or static.
+                    enum:
+                    - dhcp
+                    - static
+                    type: string
+                  dnsServers:
+                    description: dnsServers are resolver addresses, in order. Valid
+                      with either addressing.
+                    items:
+                      type: string
+                      x-kubernetes-validations:
+                      - message: each DNS server must be an IP address
+                        rule: isIP(self)
+                    maxItems: 4
+                    type: array
+                    x-kubernetes-list-type: atomic
+                  gateway:
+                    description: gateway is the default gateway; unset adds no default
+                      route.
+                    type: string
+                    x-kubernetes-validations:
+                    - message: gateway must be an IP address
+                      rule: isIP(self)
+                  mac:
+                    description: mac is the link's permanent hardware address, as
+                      discovery reported it.
+                    pattern: ^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$
+                    type: string
+                  vlanID:
+                    description: vlanID puts the addressing on a VLAN of the link
+                      instead of the link itself.
+                    format: int32
+                    maximum: 4094
+                    minimum: 1
+                    type: integer
+                required:
+                - mac
+                type: object
+                x-kubernetes-validations:
+                - message: static addressing needs addresses; dhcp takes no addresses
+                    or gateway
+                  rule: '(has(self.addressing) ? self.addressing : ''dhcp'') == ''static''
+                    ? (has(self.addresses) && size(self.addresses) > 0) : (!has(self.addresses)
+                    && !has(self.gateway))'
               nodeLabels:
                 additionalProperties:
                   type: string

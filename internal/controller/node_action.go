@@ -66,7 +66,7 @@ const (
 // nodeActionServices is the allowlist of restart-service: the services whose restart cannot take
 // the node's identity or the cluster's control away. etcd, apid, trustd and machined are
 // deliberately absent.
-var nodeActionServices = []string{"kubelet", "containerd", "cri"}
+var nodeActionServices = []string{serviceKubelet, "containerd", "cri"}
 
 // nodeActionSettle is how long after a service restart the node's Ready condition is trusted
 // again (the condition lags the restart). A variable only so tests can shorten it.

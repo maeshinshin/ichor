@@ -54,7 +54,7 @@ func TestRestoreObjectsAgainstFakeS3(t *testing.T) {
 		Namespace: "ns", Operation: "etcd-restore-x", Cluster: "c", Backup: "nightly", Snapshot: ObjectName(time.Unix(0, 0)),
 		Reason: "bad change", SnapshotTime: time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC), Target: "cp-1",
 		Step: MarkerWiping, StartedAt: time.Date(2026, 6, 2, 0, 0, 0, 0, time.UTC),
-		Nodes: map[string]string{"cp-1": "node-1"}, Own: "cp-1",
+		Nodes: map[string]string{"cp-2": "node-2"}, Own: "cp-2",
 	}
 
 	if err := PutMarker(ctx, st, "p/c", want); err != nil {

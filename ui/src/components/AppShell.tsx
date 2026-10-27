@@ -101,8 +101,7 @@ function NavItems({ path, usersEnabled }: { path: string; usersEnabled: boolean 
 function Crumbs({ path }: { path: string }) {
   const t = useT()
   const titles = usePageTitles()
-  const { cluster } = useCluster()
-  const crumbs = breadcrumbsFor(path, titles, cluster?.ref?.namespace ?? '')
+  const crumbs = breadcrumbsFor(path, titles)
   return (
     <Breadcrumb aria-label={t('nav.breadcrumb')} className="min-w-0">
       <BreadcrumbList className="flex-nowrap">

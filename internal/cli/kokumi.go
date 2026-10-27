@@ -34,6 +34,7 @@ const (
 	kokumiRepoCredsType       = "repo-creds"
 	// kokumiRegistryURL is the bundled registry's Service in the install
 	// manifest (kokumi/kokumi-registry, port 5000, plain HTTP).
+	kokumiForceHTTP   = "true"
 	kokumiRegistryURL = "oci://kokumi-registry.kokumi.svc.cluster.local:5000"
 )
 
@@ -58,7 +59,7 @@ func buildKokumiRepoCredsSecret(namespace string) *corev1.Secret {
 		StringData: map[string]string{
 			"type":                 "oci",
 			"url":                  kokumiRegistryURL,
-			"insecureOCIForceHttp": "true",
+			"insecureOCIForceHttp": kokumiForceHTTP,
 		},
 	}
 }

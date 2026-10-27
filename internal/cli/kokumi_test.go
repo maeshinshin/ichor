@@ -31,9 +31,9 @@ import (
 )
 
 func TestBuildKokumiRepoCredsSecret(t *testing.T) {
-	s := buildKokumiRepoCredsSecret("argocd")
+	s := buildKokumiRepoCredsSecret(trackedArgoNS)
 
-	if s.Namespace != "argocd" || s.Name != kokumiRepoCredsSecretName {
+	if s.Namespace != trackedArgoNS || s.Name != kokumiRepoCredsSecretName {
 		t.Fatalf("name/namespace = %s/%s", s.Namespace, s.Name)
 	}
 
@@ -44,7 +44,7 @@ func TestBuildKokumiRepoCredsSecret(t *testing.T) {
 	want := map[string]string{
 		"type":                 "oci",
 		"url":                  "oci://kokumi-registry.kokumi.svc.cluster.local:5000",
-		"insecureOCIForceHttp": "true",
+		"insecureOCIForceHttp": kokumiForceHTTP,
 	}
 	for k, v := range want {
 		if s.StringData[k] != v {
@@ -88,7 +88,7 @@ func runKokumiVariant(t *testing.T, kokumi bool) (string, client.Client, string)
 	opts := validInitOptions()
 	opts.ArgoCD = true
 	opts.Kokumi = kokumi
-	opts.ArgoCDNamespace = "argocd"
+	opts.ArgoCDNamespace = trackedArgoNS
 	opts.RepoURL = testRepoURL
 	opts.GitOpsDir = t.TempDir()
 
@@ -155,7 +155,7 @@ func TestInitArgoCD_KokumiVariantSkeletonAndSecret(t *testing.T) {
 
 	var got corev1.Secret
 
-	key := client.ObjectKey{Namespace: "argocd", Name: kokumiRepoCredsSecretName}
+	key := client.ObjectKey{Namespace: trackedArgoNS, Name: kokumiRepoCredsSecretName}
 	if err := kokClient.Get(context.Background(), key, &got); err != nil {
 		t.Fatalf("Kokumi repo-creds Secret: %v", err)
 	}
@@ -179,7 +179,7 @@ func TestKokumiImages(t *testing.T) {
 func TestRunImagesList_KokumiFlag(t *testing.T) {
 	var without, with bytes.Buffer
 
-	if err := runImagesList(&without, imagesListOptions{TalosVersions: []string{"v1.11.0"}}); err != nil {
+	if err := runImagesList(&without, imagesListOptions{TalosVersions: []string{testTalosVersion}}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -187,7 +187,7 @@ func TestRunImagesList_KokumiFlag(t *testing.T) {
 		t.Fatalf("Kokumi listed without --kokumi:\n%s", without.String())
 	}
 
-	if err := runImagesList(&with, imagesListOptions{TalosVersions: []string{"v1.11.0"}, Kokumi: true}); err != nil {
+	if err := runImagesList(&with, imagesListOptions{TalosVersions: []string{testTalosVersion}, Kokumi: true}); err != nil {
 		t.Fatal(err)
 	}
 

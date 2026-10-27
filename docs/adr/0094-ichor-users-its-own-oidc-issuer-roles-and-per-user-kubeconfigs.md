@@ -1,6 +1,6 @@
 # 0094. Ichor users, its own OIDC issuer, roles and per-user kubeconfigs
 
-Status: Proposed · Date: 2026-10-27 · Design section: Trust, Secrets, UI backend, Deployment · Extends: 0058 · Touches: 0084, 0091, 0065 (break-glass)
+Status: Accepted · Date: 2026-10-27 · Design section: Trust, Secrets, UI backend, Deployment · Extends: 0058 · Touches: 0084, 0091, 0065 (break-glass)
 Decided: Ichor keeps its own users as `IchorUser` CRs (namespace `ichor-system`, spec = display name, e-mail, `roles[]`, `disabled`; never a password) with argon2id hashes in one Secret `ichor-user-credentials`, and ichor-ui becomes a minimal stateless OIDC issuer (hand-written on `go-jose/v4`, RS256, authorization code + PKCE for the browser and a loopback redirect for the CLI, 5 minute ID tokens, 12 hour non-rotating refresh tokens, signing keys kept and rotated by the controller in a Secret); the controller renders both Ichor's issuer (reached by the kube-apiserver through `discoveryURL` on a ClusterIP with an Ichor-made CA) and the existing external IdP as two `jwt[]` entries of Talos's `KubeAuthenticationConfig` document (Talos v1.14 contract and later), usernames `ichor:<name>` and `oidc:<name>`; permissions are plain Kubernetes RBAC: three built-in ClusterRoles `ichor-viewer`, `ichor-operator`, `ichor-admin` bound to the groups `ichor:viewer|operator|admin`, with new verbs for destructive operation starts, user administration and the trust configuration; a user's kubeconfig holds no secret and runs `ichor auth token` as a client-go exec plugin; no user ever receives a talosconfig, and the two paths that hand out Talos credentials (ADR 0091's CLI hand-off, ADR 0093's UI download) stay admin-only; the whole feature is off by default and the secrets-bundle admin certificate stays as break-glass
 
 ## Context
@@ -175,3 +175,7 @@ Hardware testing found that `mustChange` only stopped the SPA. Now `AuthIntercep
 
 
 Amendment (names): object names differ by install path (kustomize `namePrefix: ichor-` gives `ichor-ichor-ui` and `ichor-ichor-ui-service`), so `ichor init` and the controller find the ichor-ui Deployment and Service by the label `app.kubernetes.io/component=ui` (`--ui-service-name` stays as an override), init also adds `--user-issuer` and `--oidc-refresh-lifetime` to the controller before creating the admin, and gives ichor-ui `--internal-jwks-uri` from the Service ClusterIP instead of the kubelet `*_SERVICE_HOST` variable, whose name follows the Service name.
+
+## Amendment: accepted after the hardware run
+
+Amendment (2026-10-28): verified end to end on hardware; `ichor init --ui-url` works as shipped, and must-change, roles, disable, issuer-down and the one-at-a-time apiserver rollout were each checked, so Status is Accepted.

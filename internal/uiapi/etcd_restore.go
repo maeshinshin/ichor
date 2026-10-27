@@ -162,6 +162,11 @@ func wipeStep(cps []string, own string) string {
 // controllerControlPlane is the control plane machine the Ichor controller pod runs on, "" when it cannot
 // be told (a worker, outside the cluster, or the pod or Node cannot be read): the plan then names nobody.
 func (s *Server) controllerControlPlane(ctx context.Context, machines []ichorv1alpha1.TalosMachine, cluster string) string {
+	return s.controllerMachine(ctx, machines, cluster, opRoleControlPlane)
+}
+
+// controllerMachine is controllerControlPlane for a machine of role, or of any role when role is "".
+func (s *Server) controllerMachine(ctx context.Context, machines []ichorv1alpha1.TalosMachine, cluster, role string) string {
 	// The namespace Ichor runs in, then the cluster's own, then (the in-process server runs on the caller's
 	// credentials and a CLI process has no POD_NAMESPACE) every namespace: the first that has the pod wins.
 	for _, ns := range s.controllerNamespaces(machines) {
@@ -178,7 +183,7 @@ func (s *Server) controllerControlPlane(ctx context.Context, machines []ichorv1a
 
 			for j := range machines {
 				m := &machines[j]
-				if m.Spec.ClusterRef.Name != cluster || m.Spec.Role != opRoleControlPlane || !m.Spec.IsApproved() {
+				if m.Spec.ClusterRef.Name != cluster || (role != "" && m.Spec.Role != role) || !m.Spec.IsApproved() {
 					continue
 				}
 

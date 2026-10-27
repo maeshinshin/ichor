@@ -56,3 +56,8 @@ internal/installmanifest/install.yaml
 
 # Screenshots from `make ui-shots`.
 .ui-shots/
+
+# Binaries that `go build ./cmd/...` drops in the repo root.
+/ichor
+/ichor-ui
+/manager

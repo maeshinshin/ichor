@@ -144,7 +144,7 @@ func runLiveRestore(ctx context.Context, c *apiClients, in io.Reader, out, errw 
 	s.Cluster = cluster.GetName()
 
 	if s.Follow {
-		enableFailover(ctx, c, cluster) // read now, while the control planes still answer
+		enableFailover(ctx, c, errw, cluster) // read now, while the control planes still answer
 	}
 
 	bg := breakGlassOf(apiOpts)

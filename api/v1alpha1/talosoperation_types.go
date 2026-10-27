@@ -76,8 +76,20 @@ const (
 
 // Values for TalosOperationKubernetesStatus.Stage, in the order they run.
 const (
-	// KubernetesStageControlPlanes: every control plane's apiserver, controller-manager and
-	// scheduler move to the target, one control plane at a time; kubelets and kube-proxy stay.
+	// KubernetesStageAPIServers: kube-apiserver moves to the target on every control plane, one at
+	// a time; controller-manager, scheduler, kubelets and kube-proxy stay. The v1.37 scheduler needs
+	// APIs only a v1.37 apiserver serves, and it reaches the apiservers through an endpoint that
+	// balances across all of them, so no controller-manager or scheduler may move before every
+	// apiserver has.
+	KubernetesStageAPIServers = "APIServers"
+
+	// KubernetesStageControlPlaneComponents: controller-manager and scheduler move to the target on
+	// every control plane, one control plane at a time; kubelets and kube-proxy stay.
+	KubernetesStageControlPlaneComponents = "ControlPlaneComponents"
+
+	// KubernetesStageControlPlanes is the first stage of operations that started
+	// was amended (apiserver, controller-manager and scheduler together). The executor takes it as
+	// KubernetesStageAPIServers; nothing writes it any more.
 	KubernetesStageControlPlanes = "ControlPlanes"
 
 	// KubernetesStageKubeProxy: kube-proxy moves to the target and the bootstrap manifests are synced.
@@ -338,10 +350,12 @@ type TalosOperationStatus struct {
 // TalosOperationKubernetesStatus is the stage a Kubernetes upgrade is in. status.machines
 // holds the progress of that stage only; it is cleared when the stage changes.
 type TalosOperationKubernetesStatus struct {
-	// stage is ControlPlanes (apiserver, controller-manager and scheduler on every control plane,
-	// the kubelets and kube-proxy still on the old version), KubeProxy (kube-proxy and the
-	// bootstrap manifests) or Kubelets (every kubelet, control planes first, then workers).
-	// +kubebuilder:validation:Enum=ControlPlanes;KubeProxy;Kubelets
+	// stage is APIServers (kube-apiserver on every control plane), ControlPlaneComponents
+	// (controller-manager and scheduler on every control plane; the kubelets and kube-proxy still on
+	// the old version), KubeProxy (kube-proxy and the bootstrap manifests) or Kubelets (every
+	// kubelet, control planes first, then workers). ControlPlanes is the legacy combined first
+	// stage of operations started before the split; it is read as APIServers.
+	// +kubebuilder:validation:Enum=ControlPlanes;APIServers;ControlPlaneComponents;KubeProxy;Kubelets
 	// +optional
 	Stage string `json:"stage,omitempty"`
 }

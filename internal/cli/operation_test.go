@@ -282,14 +282,14 @@ func TestPlanTextWarnsWhenTheKubernetesAPIGoesDown(t *testing.T) {
 func TestPlanTextForKubernetesNamesTheStagesAndCarriesTheWarning(t *testing.T) {
 	p := &pb.PlanOperationResponse{
 		Effect: pb.OperationEffect_OPERATION_EFFECT_RESTART_COMPONENTS, Current: "v1.36.0", Target: "v1.37.0", MaxUnavailable: 1,
-		Stages:   []string{"control plane components", "kube-proxy and the bootstrap manifests", "kubelets"},
+		Stages:   []string{"apiservers", "controller-manager and scheduler", "kube-proxy and the bootstrap manifests", "kubelets"},
 		Warning:  "The cluster endpoint is the address of a single control plane.",
 		Machines: []*pb.PlannedMachine{{Name: opCP, Role: roleControlPlane, Step: 1}, {Name: "w1", Role: testRoleWorker, Step: 2}},
 	}
 
 	got := planText(pb.OperationKind_OPERATION_KIND_KUBERNETES, "c", p)
 	for _, want := range []string{
-		"in three stages", "1. control plane components", "2. kube-proxy and the bootstrap manifests", "3. kubelets",
+		"in 4 stages", "1. apiservers", "2. controller-manager and scheduler", "3. kube-proxy and the bootstrap manifests", "4. kubelets",
 		"newer than an API server", "Warning: The cluster endpoint is the address of a single control plane.",
 	} {
 		if !strings.Contains(got, want) {

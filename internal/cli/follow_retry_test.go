@@ -73,7 +73,7 @@ type stagesOps struct {
 }
 
 func (s *stagesOps) GetOperation(_ context.Context, req *connect.Request[pb.GetOperationRequest]) (*connect.Response[pb.GetOperationResponse], error) {
-	op := &pb.Operation{Ref: req.Msg.GetOperation(), Kind: pb.OperationKind_OPERATION_KIND_CA_ROTATION, Phase: "InProgress"}
+	op := &pb.Operation{Ref: req.Msg.GetOperation(), Kind: pb.OperationKind_OPERATION_KIND_CA_ROTATION, Phase: ichorv1alpha1.TalosOperationPhaseInProgress}
 	op.CaRotationStage = s.stages[min(s.calls, len(s.stages)-1)]
 	s.calls++
 

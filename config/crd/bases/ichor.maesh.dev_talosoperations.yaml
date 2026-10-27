@@ -425,6 +425,12 @@ spec:
                 description: finishedAt is when the operation reached Completed.
                 format: date-time
                 type: string
+              fromVersion:
+                description: |-
+                  fromVersion is the version a Talos or Kubernetes upgrade moves from, recorded once when the
+                  operation starts: for Talos the version most selected machines run, for Kubernetes the
+                  version the cluster runs. Empty until then, and for other kinds.
+                type: string
               kubernetes:
                 description: |-
                   kubernetes is the kubernetes kind's state machine: which of the three stages the machines

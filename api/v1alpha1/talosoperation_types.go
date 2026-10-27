@@ -464,6 +464,12 @@ type TalosOperationStatus struct {
 	// +optional
 	FailureReason string `json:"failureReason,omitempty"`
 
+	// fromVersion is the version a Talos or Kubernetes upgrade moves from, recorded once when the
+	// operation starts: for Talos the version most selected machines run, for Kubernetes the
+	// version the cluster runs. Empty until then, and for other kinds.
+	// +optional
+	FromVersion string `json:"fromVersion,omitempty"`
+
 	// finishedAt is when the operation reached Completed.
 	// +optional
 	FinishedAt *metav1.Time `json:"finishedAt,omitempty"`

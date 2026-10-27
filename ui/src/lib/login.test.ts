@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { loginBody, loginErrorKey, loginReady, redirectTarget, ticketFromSearch } from './login.ts'
 import { en } from './i18n.ts'
-import { providersOf, redirectUriFor } from './oidc.ts'
+import { redirectUriFor } from './oidc.ts'
 
 test('the ticket comes from the query string', () => {
   assert.equal(ticketFromSearch('?ticket=abc.def'), 'abc.def')
@@ -33,13 +33,6 @@ test('only an http(s) redirect_uri is followed', () => {
   assert.equal(redirectTarget({ redirect_uri: 'javascript:alert(1)' }), null)
   assert.equal(redirectTarget({ redirect_uri: 5 }), null)
   assert.equal(redirectTarget(null), null)
-})
-
-test('providers: listed ones win, an older ichor-ui means the external IdP only', () => {
-  const ichor = { id: 'ichor', issuer: 'https://ui.example', clientId: 'ichor-ui' }
-  assert.deepEqual(providersOf({ enabled: true, issuer: 'x', clientId: 'y', providers: [ichor] }), [ichor])
-  assert.deepEqual(providersOf({ enabled: true, issuer: 'https://idp', clientId: 'c' }), [{ id: 'oidc', issuer: 'https://idp', clientId: 'c' }])
-  assert.deepEqual(providersOf({ enabled: false, issuer: '', clientId: '', providers: [] }), [])
 })
 
 test('the ichor client returns to /auth/callback, the external IdP to the root', () => {

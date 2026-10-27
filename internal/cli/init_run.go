@@ -86,10 +86,6 @@ type initDeps struct {
 // component Synced and Healthy, remove it from inlineManifests"), not
 // something a one-shot CLI command does.
 func runInit(ctx context.Context, opts initOptions, deps initDeps) error {
-	if err := validateKokumiOptions(opts); err != nil {
-		return err
-	}
-
 	// Step 2: settle the cluster's shape.
 	cluster, err := buildInitPlan(opts.initPlanInput, deps.Stderr)
 	if err != nil {

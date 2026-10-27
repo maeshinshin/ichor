@@ -226,8 +226,7 @@ type authProvider struct {
 }
 
 // authConfig builds the /auth/config answer. providers lists every sign-in
-// choice; enabled, issuer and clientId keep their meaning (the
-// external IdP, or the only provider) so an older CLI still sees "enabled".
+// choice; enabled stays top-level because the separately-versioned CLI reads it.
 func authConfig(oidcIssuer, oidcClientID string, users usersFlags) map[string]any {
 	providers := []authProvider{}
 	if oidcIssuer != "" {
@@ -238,10 +237,5 @@ func authConfig(oidcIssuer, oidcClientID string, users usersFlags) map[string]an
 		providers = append(providers, authProvider{ID: uiapi.SourceIchor, Issuer: users.externalURL, ClientID: uiClientID})
 	}
 
-	out := map[string]any{"enabled": len(providers) > 0, "issuer": "", "clientId": "", "providers": providers}
-	if len(providers) > 0 {
-		out["issuer"], out["clientId"] = providers[0].Issuer, providers[0].ClientID
-	}
-
-	return out
+	return map[string]any{"enabled": len(providers) > 0, "providers": providers}
 }

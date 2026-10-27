@@ -55,6 +55,10 @@ type Options struct {
 	// Ready overrides the post-check, for tests (envtest runs no Deployment controller).
 	Ready ReadyFunc
 
+	// RBACSettle bounds how long an apply retries a Forbidden answer (the authorizer's cache
+	// lags the installer's own RBAC write by a moment); zero means 30s.
+	RBACSettle time.Duration
+
 	// Timeout bounds each post-check; zero means five minutes.
 	Timeout time.Duration
 
@@ -96,19 +100,23 @@ func Run(ctx context.Context, c client.Client, opts Options) error {
 
 	logf(opts.Log, "snapshot %s saved: %d objects", opts.RunID, len(snap))
 
-	// Old snapshots are evidence, not state: failing to remove one must not fail an upgrade.
-	if err := pruneSnapshots(ctx, c, opts.Namespace, opts.RunID, SnapshotsKept); err != nil {
-		logf(opts.Log, "could not remove old snapshots: %v", err)
-	}
-
 	steps := []struct {
 		name string
 		objs []*unstructured.Unstructured
-	}{{"CRDs", p.crds}, {"controller", p.controller}, {"UI", p.ui}}
+	}{{"installer RBAC", p.rbac}, {"CRDs", p.crds}, {"controller", p.controller}, {"UI", p.ui}}
 
-	for _, s := range steps {
+	for i, s := range steps {
 		if err := applyStep(ctx, c, opts, s.name, s.objs); err != nil {
 			return failWithRollback(c, opts, snap, err)
+		}
+
+		// Old snapshots are evidence, not state: failing to remove one must not fail an upgrade.
+		// It runs after the installer's own RBAC is applied, because an older release's Role
+		// may not allow deleting ConfigMaps.
+		if i == 0 {
+			if err := pruneSnapshots(ctx, c, opts.Namespace, opts.RunID, SnapshotsKept); err != nil {
+				logf(opts.Log, "could not remove old snapshots: %v", err)
+			}
 		}
 	}
 
@@ -145,7 +153,7 @@ func applyStep(ctx context.Context, c client.Client, opts Options, name string, 
 		u := o.DeepCopy()
 		u.SetManagedFields(nil)
 
-		if err := c.Apply(ctx, client.ApplyConfigurationFromUnstructured(u), client.FieldOwner(FieldOwner), client.ForceOwnership); err != nil {
+		if err := applyWithSettle(ctx, c, u, opts.RBACSettle); err != nil {
 			return fmt.Errorf("applying %s %s: %w", o.GetKind(), o.GetName(), err)
 		}
 	}
@@ -159,6 +167,30 @@ func applyStep(ctx context.Context, c client.Client, opts Options, name string, 
 	logf(opts.Log, "%s are ready", name)
 
 	return nil
+}
+
+// applyWithSettle applies u, retrying a Forbidden answer for up to settle (default 30s). RBAC
+// is evaluated per request against the API server's authorizer cache and the client keeps no
+// authorization state (its REST mapper only caches resource kinds), so rights the installer
+// just granted itself apply to its next call without a restart; they can lag the write by a
+// moment, hence the retry.
+func applyWithSettle(ctx context.Context, c client.Client, u *unstructured.Unstructured, settle time.Duration) error {
+	if settle <= 0 {
+		settle = 30 * time.Second
+	}
+
+	var err error
+
+	pollErr := wait.PollUntilContextTimeout(ctx, time.Second, settle, true, func(ctx context.Context) (bool, error) {
+		err = c.Apply(ctx, client.ApplyConfigurationFromUnstructured(u), client.FieldOwner(FieldOwner), client.ForceOwnership)
+
+		return !apierrors.IsForbidden(err), nil
+	})
+	if err != nil {
+		return err
+	}
+
+	return pollErr
 }
 
 // failWithRollback restores snap and returns cause wrapped with how that went. It uses a
@@ -177,7 +209,7 @@ func failWithRollback(c client.Client, opts Options, snap []entry, cause error) 
 	return fmt.Errorf("%w; rolled back to the previous manifests", cause)
 }
 
-// rollback writes every snapshot entry back, newest step first (UI, controller, CRDs). An
+// rollback writes every snapshot entry back, newest step first (UI, controller, CRDs, installer RBAC). An
 // object that did not exist is deleted, except a CRD: deleting one deletes every custom
 // resource of that kind, and an additive CRD nothing old reads is harmless.
 func rollback(ctx context.Context, c client.Client, snap []entry) error {

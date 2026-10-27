@@ -62,6 +62,13 @@ rules:
 - apiGroups:
   - ichor.maesh.dev
   resources:
+  - talosetcdbackups
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
   - talosmachines
   verbs:
   - delete

@@ -58,6 +58,9 @@ const (
 	// OperationServiceDeleteOperationProcedure is the fully-qualified name of the OperationService's
 	// DeleteOperation RPC.
 	OperationServiceDeleteOperationProcedure = "/ichor.v1alpha1.OperationService/DeleteOperation"
+	// OperationServiceListEtcdBackupsProcedure is the fully-qualified name of the OperationService's
+	// ListEtcdBackups RPC.
+	OperationServiceListEtcdBackupsProcedure = "/ichor.v1alpha1.OperationService/ListEtcdBackups"
 )
 
 // OperationServiceClient is a client for the ichor.v1alpha1.OperationService service.
@@ -71,6 +74,10 @@ type OperationServiceClient interface {
 	CreateOperation(context.Context, *connect.Request[v1alpha1.CreateOperationRequest]) (*connect.Response[v1alpha1.CreateOperationResponse], error)
 	SetOperationPaused(context.Context, *connect.Request[v1alpha1.SetOperationPausedRequest]) (*connect.Response[v1alpha1.SetOperationPausedResponse], error)
 	DeleteOperation(context.Context, *connect.Request[v1alpha1.DeleteOperationRequest]) (*connect.Response[v1alpha1.DeleteOperationResponse], error)
+	// ListEtcdBackups lists the TalosEtcdBackups of a cluster with the snapshots each holds, newest
+	// first: what a restore can choose from (ADR 0089). It reads the backups' status; it does not
+	// touch the storage.
+	ListEtcdBackups(context.Context, *connect.Request[v1alpha1.ListEtcdBackupsRequest]) (*connect.Response[v1alpha1.ListEtcdBackupsResponse], error)
 }
 
 // NewOperationServiceClient constructs a client for the ichor.v1alpha1.OperationService service. By
@@ -120,6 +127,12 @@ func NewOperationServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(operationServiceMethods.ByName("DeleteOperation")),
 			connect.WithClientOptions(opts...),
 		),
+		listEtcdBackups: connect.NewClient[v1alpha1.ListEtcdBackupsRequest, v1alpha1.ListEtcdBackupsResponse](
+			httpClient,
+			baseURL+OperationServiceListEtcdBackupsProcedure,
+			connect.WithSchema(operationServiceMethods.ByName("ListEtcdBackups")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -131,6 +144,7 @@ type operationServiceClient struct {
 	createOperation    *connect.Client[v1alpha1.CreateOperationRequest, v1alpha1.CreateOperationResponse]
 	setOperationPaused *connect.Client[v1alpha1.SetOperationPausedRequest, v1alpha1.SetOperationPausedResponse]
 	deleteOperation    *connect.Client[v1alpha1.DeleteOperationRequest, v1alpha1.DeleteOperationResponse]
+	listEtcdBackups    *connect.Client[v1alpha1.ListEtcdBackupsRequest, v1alpha1.ListEtcdBackupsResponse]
 }
 
 // ListOperations calls ichor.v1alpha1.OperationService.ListOperations.
@@ -163,6 +177,11 @@ func (c *operationServiceClient) DeleteOperation(ctx context.Context, req *conne
 	return c.deleteOperation.CallUnary(ctx, req)
 }
 
+// ListEtcdBackups calls ichor.v1alpha1.OperationService.ListEtcdBackups.
+func (c *operationServiceClient) ListEtcdBackups(ctx context.Context, req *connect.Request[v1alpha1.ListEtcdBackupsRequest]) (*connect.Response[v1alpha1.ListEtcdBackupsResponse], error) {
+	return c.listEtcdBackups.CallUnary(ctx, req)
+}
+
 // OperationServiceHandler is an implementation of the ichor.v1alpha1.OperationService service.
 type OperationServiceHandler interface {
 	ListOperations(context.Context, *connect.Request[v1alpha1.ListOperationsRequest]) (*connect.Response[v1alpha1.ListOperationsResponse], error)
@@ -174,6 +193,10 @@ type OperationServiceHandler interface {
 	CreateOperation(context.Context, *connect.Request[v1alpha1.CreateOperationRequest]) (*connect.Response[v1alpha1.CreateOperationResponse], error)
 	SetOperationPaused(context.Context, *connect.Request[v1alpha1.SetOperationPausedRequest]) (*connect.Response[v1alpha1.SetOperationPausedResponse], error)
 	DeleteOperation(context.Context, *connect.Request[v1alpha1.DeleteOperationRequest]) (*connect.Response[v1alpha1.DeleteOperationResponse], error)
+	// ListEtcdBackups lists the TalosEtcdBackups of a cluster with the snapshots each holds, newest
+	// first: what a restore can choose from (ADR 0089). It reads the backups' status; it does not
+	// touch the storage.
+	ListEtcdBackups(context.Context, *connect.Request[v1alpha1.ListEtcdBackupsRequest]) (*connect.Response[v1alpha1.ListEtcdBackupsResponse], error)
 }
 
 // NewOperationServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -219,6 +242,12 @@ func NewOperationServiceHandler(svc OperationServiceHandler, opts ...connect.Han
 		connect.WithSchema(operationServiceMethods.ByName("DeleteOperation")),
 		connect.WithHandlerOptions(opts...),
 	)
+	operationServiceListEtcdBackupsHandler := connect.NewUnaryHandler(
+		OperationServiceListEtcdBackupsProcedure,
+		svc.ListEtcdBackups,
+		connect.WithSchema(operationServiceMethods.ByName("ListEtcdBackups")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/ichor.v1alpha1.OperationService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case OperationServiceListOperationsProcedure:
@@ -233,6 +262,8 @@ func NewOperationServiceHandler(svc OperationServiceHandler, opts ...connect.Han
 			operationServiceSetOperationPausedHandler.ServeHTTP(w, r)
 		case OperationServiceDeleteOperationProcedure:
 			operationServiceDeleteOperationHandler.ServeHTTP(w, r)
+		case OperationServiceListEtcdBackupsProcedure:
+			operationServiceListEtcdBackupsHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -264,4 +295,8 @@ func (UnimplementedOperationServiceHandler) SetOperationPaused(context.Context, 
 
 func (UnimplementedOperationServiceHandler) DeleteOperation(context.Context, *connect.Request[v1alpha1.DeleteOperationRequest]) (*connect.Response[v1alpha1.DeleteOperationResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.OperationService.DeleteOperation is not implemented"))
+}
+
+func (UnimplementedOperationServiceHandler) ListEtcdBackups(context.Context, *connect.Request[v1alpha1.ListEtcdBackupsRequest]) (*connect.Response[v1alpha1.ListEtcdBackupsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.OperationService.ListEtcdBackups is not implemented"))
 }

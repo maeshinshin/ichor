@@ -48,6 +48,8 @@ package uiapi
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=ichorinstallations,verbs=get;update
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosconfigpatches,verbs=get;list;create;update;delete
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosmachines,verbs=get;list;update;delete
+// An etcd restore (ADR 0089) is planned and chosen from the backups' status: get/list, nothing written.
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosetcdbackups,verbs=get;list
 // GetEffectiveConfig renders through render.ResolveSystemInputs, which lists TalosStorages with
 // the ServiceAccount (ADR 0050); the caller's own list follows. List only, no informer.
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosstorages,verbs=list

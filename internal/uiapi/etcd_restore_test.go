@@ -1,0 +1,327 @@
+/*
+Copyright 2026 maeshinshin.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package uiapi
+
+import (
+	"context"
+	"strings"
+	"testing"
+	"time"
+
+	"connectrpc.com/connect"
+	authv1 "k8s.io/api/authorization/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
+)
+
+// Etcd restore over a fake client (docs/adr/0089): what the plan says, what is refused before
+// anything is written, and what the TalosOperation looks like.
+
+const (
+	restoreBackup = "nightly"
+	restoreSnap   = "etcd-20261001T020000Z.snapshot.age"
+	restoreOlder  = "etcd-20260930T020000Z.snapshot.age"
+)
+
+var restoreSnapTime = time.Date(2026, 10, 1, 2, 0, 0, 0, time.UTC)
+
+func restoreBackupObject() *ichorv1alpha1.TalosEtcdBackup {
+	return &ichorv1alpha1.TalosEtcdBackup{
+		Name: restoreBackup, Namespace: opNS,
+		Spec: ichorv1alpha1.TalosEtcdBackupSpec{ClusterRef: corev1.LocalObjectReference{Name: opCluster}, Schedule: "0 2 * * *"},
+		Status: ichorv1alpha1.TalosEtcdBackupStatus{
+			Snapshots: []ichorv1alpha1.TalosEtcdBackupStored{
+				{Name: restoreSnap, Time: metav1.NewTime(restoreSnapTime), Size: 4096},
+				{Name: restoreOlder, Time: metav1.NewTime(restoreSnapTime.Add(-24 * time.Hour)), Size: 4000},
+			},
+			Conditions: []metav1.Condition{{
+				Type: ichorv1alpha1.TalosEtcdBackupConditionReady, Status: metav1.ConditionTrue, Reason: ichorv1alpha1.TalosEtcdBackupReasonSucceeded,
+			}},
+		},
+	}
+}
+
+func restoreObjects() []client.Object {
+	return append(opObjects(), restoreBackupObject(), opMachine("cp2", "controlplane", nil, nil), opMachine("cp3", "controlplane", nil, nil))
+}
+
+func restoreReq(snapshot, confirm, reason string) *pb.EtcdRestoreRequest {
+	r := &pb.EtcdRestoreRequest{Backup: objectRef(opNS, restoreBackup), Snapshot: snapshot, Confirm: confirm}
+	if reason != "" {
+		r.BreakGlass = &pb.BreakGlass{Reason: reason}
+	}
+
+	return r
+}
+
+func restorePlanReq(r *pb.EtcdRestoreRequest) *connect.Request[pb.PlanOperationRequest] {
+	return connect.NewRequest(&pb.PlanOperationRequest{
+		Cluster: objectRef(opNS, opCluster), Kind: pb.OperationKind_OPERATION_KIND_ETCD_RESTORE, EtcdRestore: r,
+	})
+}
+
+func restoreCreateReq(r *pb.EtcdRestoreRequest) *connect.Request[pb.CreateOperationRequest] {
+	return connect.NewRequest(&pb.CreateOperationRequest{
+		Cluster: objectRef(opNS, opCluster), Kind: pb.OperationKind_OPERATION_KIND_ETCD_RESTORE, EtcdRestore: r,
+	})
+}
+
+func TestEtcdRestorePlanSaysWhatIsLost(t *testing.T) {
+	s, _ := opServer(t, restoreObjects()...)
+
+	res, err := s.PlanOperation(context.Background(), restorePlanReq(restoreReq(restoreSnap, "", "")))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p := res.Msg
+	if p.GetBlocked() != "" {
+		t.Fatalf("blocked: %q", p.GetBlocked())
+	}
+
+	if p.GetConfirmName() != opCluster || !p.GetBreakGlassRequired() || !p.GetKubernetesApiUnavailable() {
+		t.Fatalf("plan = %+v", p)
+	}
+
+	if got := p.GetSnapshotTime().AsTime(); !got.Equal(restoreSnapTime) {
+		t.Fatalf("snapshot time = %v", got)
+	}
+
+	w := p.GetWarning()
+	for _, want := range []string{"2026-10-01 02:00:00 UTC", "Everything written since is lost", "Kubernetes API is unavailable", "reconciles against the restored"} {
+		if !strings.Contains(w, want) {
+			t.Errorf("warning does not say %q: %s", want, w)
+		}
+	}
+
+	if len(p.GetSteps()) != 6 || !strings.Contains(p.GetSteps()[2], "cp1, cp2, cp3") {
+		t.Fatalf("steps = %q", p.GetSteps())
+	}
+
+	if len(p.GetMachines()) != 3 {
+		t.Fatalf("machines = %+v", p.GetMachines())
+	}
+}
+
+func TestEtcdRestorePlanRefusals(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("a snapshot the backup does not list", func(t *testing.T) {
+		s, _ := opServer(t, restoreObjects()...)
+
+		res, err := s.PlanOperation(ctx, restorePlanReq(restoreReq("etcd-20200101T000000Z.snapshot.age", "", "")))
+		if err != nil || !strings.Contains(res.Msg.GetBlocked(), "not among the snapshots") {
+			t.Fatalf("blocked = %q, %v", res.Msg.GetBlocked(), err)
+		}
+	})
+
+	t.Run("a backup of another cluster", func(t *testing.T) {
+		other := restoreBackupObject()
+		other.Spec.ClusterRef.Name = "elsewhere"
+
+		s, _ := opServer(t, append(opObjects(), other)...)
+
+		res, err := s.PlanOperation(ctx, restorePlanReq(restoreReq(restoreSnap, "", "")))
+		if err != nil || !strings.Contains(res.Msg.GetBlocked(), "backs up cluster") {
+			t.Fatalf("blocked = %q, %v", res.Msg.GetBlocked(), err)
+		}
+	})
+
+	t.Run("an unfinished operation", func(t *testing.T) {
+		busy := &ichorv1alpha1.TalosOperation{
+			Name: "upgrade", Namespace: opNS,
+			Spec:   ichorv1alpha1.TalosOperationSpec{ClusterRef: corev1.LocalObjectReference{Name: opCluster}, Kind: ichorv1alpha1.TalosOperationKindTalos},
+			Status: ichorv1alpha1.TalosOperationStatus{Phase: ichorv1alpha1.TalosOperationPhaseInProgress},
+		}
+		s, _ := opServer(t, append(restoreObjects(), busy)...)
+
+		res, err := s.PlanOperation(ctx, restorePlanReq(restoreReq(restoreSnap, "", "")))
+		if err != nil || !strings.Contains(res.Msg.GetBlocked(), "not finished") {
+			t.Fatalf("blocked = %q, %v", res.Msg.GetBlocked(), err)
+		}
+	})
+
+	t.Run("a CA rotation after the snapshot", func(t *testing.T) {
+		rot := &ichorv1alpha1.TalosOperation{
+			Name: "rotation", Namespace: opNS, CreationTimestamp: metav1.NewTime(restoreSnapTime.Add(time.Hour)),
+			Spec:   ichorv1alpha1.TalosOperationSpec{ClusterRef: corev1.LocalObjectReference{Name: opCluster}, Kind: ichorv1alpha1.TalosOperationKindCARotation},
+			Status: ichorv1alpha1.TalosOperationStatus{Phase: ichorv1alpha1.TalosOperationPhaseCompleted},
+		}
+		s, _ := opServer(t, append(restoreObjects(), rot)...)
+
+		res, err := s.PlanOperation(ctx, restorePlanReq(restoreReq(restoreSnap, "", "")))
+		if err != nil || !strings.Contains(res.Msg.GetBlocked(), "rotated the cluster's CAs") {
+			t.Fatalf("blocked = %q, %v", res.Msg.GetBlocked(), err)
+		}
+	})
+
+	t.Run("no backup or snapshot named", func(t *testing.T) {
+		s, _ := opServer(t, restoreObjects()...)
+
+		if _, err := s.PlanOperation(ctx, restorePlanReq(&pb.EtcdRestoreRequest{})); connect.CodeOf(err) != connect.CodeInvalidArgument {
+			t.Fatalf("empty request: %v", err)
+		}
+
+		if _, err := s.PlanOperation(ctx, restorePlanReq(nil)); connect.CodeOf(err) != connect.CodeInvalidArgument {
+			t.Fatalf("no request: %v", err)
+		}
+	})
+}
+
+func TestEtcdRestoreNeedsTheClusterNameAndBreakGlass(t *testing.T) {
+	s, k8s := opServer(t, restoreObjects()...)
+	bg := context.Background()
+
+	if _, err := s.CreateOperation(bg, restoreCreateReq(restoreReq(restoreSnap, "not-the-name", bgReason))); connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Fatalf("wrong name: %v", err)
+	}
+
+	if _, err := s.CreateOperation(bg, restoreCreateReq(restoreReq(restoreSnap, opCluster, ""))); connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Fatalf("no reason: %v", err)
+	}
+
+	// With no signed-in user nobody can be asked whether they may break glass.
+	if _, err := s.CreateOperation(bg, restoreCreateReq(restoreReq(restoreSnap, opCluster, bgReason))); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("no user: %v", err)
+	}
+
+	var asked []authv1.ResourceAttributes
+
+	s.Impersonate = func(Identity) (client.Client, error) { return reviewing(k8s, false, &asked), nil }
+	user := context.WithValue(bg, identityKey{}, Identity{User: bgUser})
+
+	if _, err := s.CreateOperation(user, restoreCreateReq(restoreReq(restoreSnap, opCluster, bgReason))); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("RBAC says no: %v", err)
+	}
+
+	if len(asked) == 0 || asked[0].Verb != "break-glass" || asked[0].Resource != "talosclusters" || asked[0].Name != opCluster {
+		t.Fatalf("the verb is asked on the cluster: %+v", asked)
+	}
+
+	if ops := listOps(t, k8s); len(ops) != 0 {
+		t.Fatalf("nothing may be written: %+v", ops)
+	}
+
+	s.Impersonate = func(Identity) (client.Client, error) { return reviewing(k8s, true, &asked), nil }
+
+	res, err := s.CreateOperation(user, restoreCreateReq(restoreReq(restoreSnap, opCluster, bgReason)))
+	if err != nil {
+		t.Fatalf("allowed: %v", err)
+	}
+
+	if a := res.Msg.GetAudit(); a.GetAction() != "create-break-glass" || a.GetReason() != bgReason {
+		t.Fatalf("audit = %+v", a)
+	}
+
+	ops := listOps(t, k8s)
+	if len(ops) != 1 || ops[0].Spec.Kind != ichorv1alpha1.TalosOperationKindEtcdRestore {
+		t.Fatalf("operations = %+v", ops)
+	}
+
+	e := ops[0].Spec.EtcdRestore
+	if e == nil || e.BackupRef.Name != restoreBackup || e.Snapshot != restoreSnap || e.Confirm != opCluster || e.Reason != bgReason {
+		t.Fatalf("spec.etcdRestore = %+v", e)
+	}
+
+	if got := res.Msg.GetOperation(); got.GetKind() != pb.OperationKind_OPERATION_KIND_ETCD_RESTORE ||
+		got.GetEtcdRestoreSnapshot() != restoreSnap || got.GetEtcdRestoreBackup().GetName() != restoreBackup {
+		t.Fatalf("response = %+v", got)
+	}
+
+	// A second restore is refused while the first has not finished.
+	if _, err := s.CreateOperation(user, restoreCreateReq(restoreReq(restoreOlder, opCluster, bgReason))); connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Fatalf("second restore: %v", err)
+	}
+}
+
+func TestEtcdRestoreRefusedPlanWritesNothing(t *testing.T) {
+	s, k8s := opServer(t, restoreObjects()...)
+
+	if _, err := s.CreateOperation(context.Background(), restoreCreateReq(restoreReq("etcd-20200101T000000Z.snapshot.age", opCluster, bgReason))); connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Fatalf("unlisted snapshot: %v", err)
+	}
+
+	if ops := listOps(t, k8s); len(ops) != 0 {
+		t.Fatalf("nothing may be written: %+v", ops)
+	}
+}
+
+func TestListEtcdBackupsOffersTheSnapshotsOfTheCluster(t *testing.T) {
+	other := restoreBackupObject()
+	other.Name, other.Spec.ClusterRef.Name = "someone-elses", "elsewhere"
+
+	s, _ := opServer(t, append(restoreObjects(), other)...)
+
+	res, err := s.ListEtcdBackups(context.Background(), connect.NewRequest(&pb.ListEtcdBackupsRequest{Cluster: objectRef(opNS, opCluster)}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(res.Msg.GetBackups()) != 1 {
+		t.Fatalf("backups = %+v", res.Msg.GetBackups())
+	}
+
+	b := res.Msg.GetBackups()[0]
+	if b.GetRef().GetName() != restoreBackup || !b.GetReady() || b.GetSchedule() != "0 2 * * *" || len(b.GetSnapshots()) != 2 {
+		t.Fatalf("backup = %+v", b)
+	}
+
+	if b.GetSnapshots()[0].GetName() != restoreSnap || b.GetSnapshots()[0].GetSize() != 4096 || !b.GetSnapshots()[0].GetTime().AsTime().Equal(restoreSnapTime) {
+		t.Fatalf("snapshots = %+v", b.GetSnapshots())
+	}
+
+	if _, err := s.ListEtcdBackups(context.Background(), connect.NewRequest(&pb.ListEtcdBackupsRequest{})); connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Fatalf("no cluster: %v", err)
+	}
+}
+
+func TestAnEtcdRestoreThatStartedCannotBePaused(t *testing.T) {
+	running := &ichorv1alpha1.TalosOperation{
+		Name: "etcd-restore-x", Namespace: opNS,
+		Spec: ichorv1alpha1.TalosOperationSpec{
+			ClusterRef: corev1.LocalObjectReference{Name: opCluster}, Kind: ichorv1alpha1.TalosOperationKindEtcdRestore,
+			EtcdRestore: &ichorv1alpha1.TalosOperationEtcdRestoreSpec{BackupRef: corev1.LocalObjectReference{Name: restoreBackup}, Snapshot: restoreSnap},
+		},
+		Status: ichorv1alpha1.TalosOperationStatus{
+			Phase: ichorv1alpha1.TalosOperationPhaseInProgress,
+			EtcdRestore: &ichorv1alpha1.TalosOperationEtcdRestoreStatus{
+				Step: ichorv1alpha1.EtcdRestoreStepWiping, Message: "wiping", SnapshotTime: &metav1.Time{Time: restoreSnapTime},
+			},
+		},
+	}
+	s, _ := opServer(t, append(restoreObjects(), running)...)
+
+	_, err := s.SetOperationPaused(context.Background(), connect.NewRequest(&pb.SetOperationPausedRequest{Operation: objectRef(opNS, "etcd-restore-x"), Paused: true}))
+	if connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Fatalf("pause: %v", err)
+	}
+
+	got, err := s.GetOperation(context.Background(), connect.NewRequest(&pb.GetOperationRequest{Operation: objectRef(opNS, "etcd-restore-x")}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	op := got.Msg.GetOperation()
+	if op.GetEtcdRestoreStep() != ichorv1alpha1.EtcdRestoreStepWiping || op.GetEtcdRestoreMessage() != "wiping" ||
+		!op.GetEtcdRestoreSnapshotTime().AsTime().Equal(restoreSnapTime) || op.GetKind() != pb.OperationKind_OPERATION_KIND_ETCD_RESTORE {
+		t.Fatalf("operation = %+v", op)
+	}
+}

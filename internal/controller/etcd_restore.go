@@ -63,6 +63,9 @@ import (
 const (
 	etcdRestoreFinalizer = "ichor.maesh.dev/etcd-restore"
 
+	// serviceKubelet is the Talos service id of the kubelet.
+	serviceKubelet = "kubelet"
+
 	// etcdRestoreOverallTimeout bounds a restore from its start: the wipe and recovery, the rejoin of
 	// the other control planes, and the machines' reconcile. Past it the operation pauses.
 	etcdRestoreOverallTimeout = 150 * time.Minute
@@ -1336,7 +1339,7 @@ func (run *restoreRun) restartKubelet(ctx context.Context, w *ichorv1alpha1.Talo
 
 	defer closeTalosClient(c)
 
-	return c.ServiceRestart(dialCtx, "kubelet")
+	return c.ServiceRestart(dialCtx, serviceKubelet)
 }
 
 // agentsWaiting is what is still short on the nodes since the kubelets were restarted: each entry names

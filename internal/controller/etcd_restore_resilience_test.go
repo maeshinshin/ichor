@@ -170,7 +170,7 @@ var _ = Describe("TalosOperation etcd-restore after a restart of the controller"
 		f, op, r, worker := restoreWithWorker(kc)
 
 		got := f.reconcileWith(r, op)
-		Expect(worker.serviceRestarts).To(Equal([]string{"kubelet"}), "the kubelet is restarted through Talos first")
+		Expect(worker.serviceRestarts).To(Equal([]string{compKubelet}), "the kubelet is restarted through Talos first")
 		Expect(podNames(kc, "kube-system")).To(ContainElement("kube-proxy-w"), "the pod is not deleted before the kubelet is back")
 		Expect(got.Status.EtcdRestore.Step).To(Equal(ichorv1alpha1.EtcdRestoreStepRejoining))
 
@@ -219,7 +219,7 @@ var _ = Describe("TalosOperation etcd-restore after a restart of the controller"
 		op := f.newOp(nil)
 		got := f.reconcile(op)
 
-		var order []string
+		order := make([]string, 0, 2)
 		for _, n := range f.lastJob().order {
 			order = append(order, n.name)
 		}

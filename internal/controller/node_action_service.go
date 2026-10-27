@@ -30,46 +30,10 @@ const talosServiceRunning = "Running"
 // workerRole is the Spec.Role of a worker machine.
 const workerRole = "worker"
 
-// serviceStater is the optional half of a TalosClient that reads one Talos service's state. It is
-// a separate interface so the TalosClient contract and its fakes stay as they are; a client
-// without it gets the Node-Ready check alone.
-type serviceStater interface {
-	// ServiceState returns the service's state ("Running", ...) and, when the service has a health
-	// check, whether it is healthy; hasHealth is false when it has none.
-	ServiceState(ctx context.Context, id string) (state string, hasHealth, healthy bool, err error)
-}
-
-// ServiceState reads the service from the Talos ServiceList API.
-func (t *machineryTalosClient) ServiceState(ctx context.Context, id string) (state string, hasHealth, healthy bool, err error) {
-	resp, err := t.c.ServiceList(ctx)
-	if err != nil {
-		return "", false, false, err
-	}
-
-	for _, msg := range resp.GetMessages() {
-		for _, svc := range msg.GetServices() {
-			if svc.GetId() != id {
-				continue
-			}
-
-			h := svc.GetHealth()
-
-			return svc.GetState(), h != nil && !h.GetUnknown(), h.GetHealthy(), nil
-		}
-	}
-
-	return "", false, false, fmt.Errorf("service %q is not reported by the node", id)
-}
-
 // serviceVerified reports whether the restarted service is Running (and healthy when it has a
 // health check). why says what is missing otherwise.
 func (n *nodeRun) serviceVerified() (ok bool, why string) {
-	s, can := n.talos.(serviceStater)
-	if !can {
-		return true, ""
-	}
-
-	state, hasHealth, healthy, err := s.ServiceState(n.dial, n.spec.Service)
+	state, hasHealth, healthy, err := n.talos.ServiceState(n.dial, n.spec.Service)
 	if err != nil {
 		return false, fmt.Sprintf("cannot read the state of service %s: %v", n.spec.Service, err)
 	}

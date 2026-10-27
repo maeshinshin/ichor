@@ -140,6 +140,8 @@ type fakeTalosClient struct {
 	// node-action fields.
 	serviceRestarts   []string
 	serviceRestartErr error
+	serviceState      string // "" means Running
+	serviceUnhealthy  bool
 	etcdStatus        EtcdStatus
 	etcdStatusErr     error
 	etcdAlarms        []string
@@ -1111,6 +1113,15 @@ func (f *fakeTalosClient) ServiceRestart(_ context.Context, id string) error {
 	f.serviceRestarts = append(f.serviceRestarts, id)
 
 	return f.serviceRestartErr
+}
+
+func (f *fakeTalosClient) ServiceState(context.Context, string) (string, bool, bool, error) {
+	state := f.serviceState
+	if state == "" {
+		state = talosServiceRunning
+	}
+
+	return state, true, !f.serviceUnhealthy, nil
 }
 
 func (f *fakeTalosClient) EtcdStatus(context.Context) (EtcdStatus, error) {

@@ -262,11 +262,17 @@ func describeNode(resp *pb.PlanOperationResponse, m *ichorv1alpha1.TalosMachine,
 		resp.Warning = "This cannot be undone. The node leaves the cluster and its data is wiped. Ichor deletes this machine; the node shows up as a new pending machine."
 		resp.ConfirmName, resp.BreakGlassRequired = name, true
 	case nodeActionRemove:
-		resp.Steps = removalSteps(isCP, "")
+		resp.Steps = append(removalSteps(isCP, ""), nodeStaysStep)
 		resp.Warning = "The node leaves the cluster but is not wiped: it still holds the cluster's certificates until you reset it."
 		resp.ConfirmName = name
 	}
 }
+
+// nodeStaysStep is the last line of a remove plan: the kubelet keeps the cluster's
+// credentials and would re-register a deleted Node, so the Node object is the operator's to delete
+// once the machine is off.
+const nodeStaysStep = "The Kubernetes Node stays while the machine runs (its kubelet keeps the cluster's credentials). " +
+	"Power it off or reset it (`ichor node reset`, break-glass), then delete the Node: `kubectl delete node <name>`."
 
 func removalSteps(isCP bool, wipe string) []string {
 	steps := []string{stepEvacuate, "Cordon the node and drain it."}

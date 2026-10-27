@@ -161,9 +161,14 @@ func TestNodeRemoveNeedsTheTypedName(t *testing.T) {
 		t.Fatalf("a wrong name must remove nothing:\n%s", prompt.String())
 	}
 
-	if err := runNodeAction(ctx, c, strings.NewReader(testMachineName+"\n"), &bytes.Buffer{}, &bytes.Buffer{},
+	var done bytes.Buffer
+	if err := runNodeAction(ctx, c, strings.NewReader(testMachineName+"\n"), &bytes.Buffer{}, &done,
 		nodeActionSpec{Machine: testMachineName, Action: pb.NodeAction_NODE_ACTION_REMOVE}); err != nil {
 		t.Fatalf("typed name: %v", err)
+	}
+
+	if !strings.Contains(done.String(), "Next: the Kubernetes Node stays") || !strings.Contains(done.String(), "kubectl delete node "+testMachineName) {
+		t.Fatalf("remove must print the Node next step:\n%s", done.String())
 	}
 
 	var m ichorv1alpha1.TalosMachine

@@ -50,8 +50,8 @@ import (
 const (
 	// uiComponentLabel/Value select the ichor-ui Service on every install path (kustomize prefixes
 	// its name, the chart does not), so the controller never depends on a name.
-	uiComponentLabel = "app.kubernetes.io/component"
-	uiComponentValue = "ui"
+	uiComponentLabel = oidctrust.UIComponentLabel
+	uiComponentValue = oidctrust.UIComponentValue
 
 	issuerRotateEvery     = 30 * 24 * time.Hour
 	issuerActivationDelay = 10 * time.Minute

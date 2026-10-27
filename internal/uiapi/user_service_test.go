@@ -36,6 +36,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
+	"github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1/ichorv1alpha1connect"
 	"github.com/maeshinshin/ichor/pkg/ichorauth"
 )
 
@@ -411,7 +412,7 @@ func TestRevokeSessionsMovesNotBefore(t *testing.T) {
 }
 
 func TestKubeconfigHoldsPublicDataOnly(t *testing.T) {
-	raw, err := buildKubeconfig("c1", "https://10.0.0.5:6443", []byte("CA-PEM"), userAlice, "https://ichor.example.com", "")
+	raw, err := buildKubeconfig("c1", "https://10.0.0.5:6443", "", []byte("CA-PEM"), userAlice, "https://ichor.example.com", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -444,7 +445,7 @@ func TestWhoAmIReportsMustChange(t *testing.T) {
 }
 
 func TestKubeconfigCAFileOnlyWhenAsked(t *testing.T) {
-	without, err := buildKubeconfig("c1", "https://10.0.0.5:6443", []byte("CA"), userAlice, "https://i.example.com", "")
+	without, err := buildKubeconfig("c1", "https://10.0.0.5:6443", "", []byte("CA"), userAlice, "https://i.example.com", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -453,7 +454,7 @@ func TestKubeconfigCAFileOnlyWhenAsked(t *testing.T) {
 		t.Errorf("no ca_file requested, yet:\n%s", without)
 	}
 
-	with, err := buildKubeconfig("c1", "https://10.0.0.5:6443", []byte("CA"), userAlice, "https://i.example.com", "/etc/ichor/ca.pem")
+	with, err := buildKubeconfig("c1", "https://10.0.0.5:6443", "", []byte("CA"), userAlice, "https://i.example.com", "/etc/ichor/ca.pem")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -467,4 +468,69 @@ func pwMatches(password, hash string) bool {
 	ok, _, err := ichorauth.Verify(password, hash)
 
 	return err == nil && ok
+}
+
+func TestKubeconfigServerOverride(t *testing.T) {
+	u := NewUserSettings(nil, "https://i.example.com")
+	if srv, name := u.kubeServer("10.0.0.5"); srv != "https://10.0.0.5:6443" || name != "" {
+		t.Errorf("default = %q %q", srv, name)
+	}
+
+	u.KubeAPIServerURL, u.KubeAPITLSServerName = "https://k8s.example.com:443", "api.internal"
+
+	srv, name := u.kubeServer("10.0.0.5")
+	if srv != "https://k8s.example.com:443" || name != "api.internal" {
+		t.Fatalf("override = %q %q", srv, name)
+	}
+
+	raw, err := buildKubeconfig("c1", srv, name, []byte("CA"), userAlice, "https://i.example.com", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, want := range []string{"server: https://k8s.example.com:443", "tls-server-name: api.internal"} {
+		if !strings.Contains(string(raw), want) {
+			t.Errorf("kubeconfig lacks %q:\n%s", want, raw)
+		}
+	}
+}
+
+func TestMustChangeUserOnlyReachesWhoAmIAndChangeOwnPassword(t *testing.T) {
+	s := userServer(t, true, newUser(userAlice, false, adminRole))
+	ctx := context.Background()
+	now := time.Now()
+	s.Users.Cache.Now = func() time.Time { return now }
+
+	if err := s.setCredential(ctx, userAlice, strongPass, true); err != nil {
+		t.Fatal(err)
+	}
+
+	a := (*Authenticator)(nil).WithLocal("https://i", fakeLocal{"t": userAlice}, s.Users.Cache)
+	tok := "Bearer e30." + b64(`{"iss":"https://i"}`) + ".t"
+	i := authInterceptor{a}
+
+	for proc, ok := range map[string]bool{
+		ichorv1alpha1connect.UserServiceWhoAmIProcedure:            true,
+		ichorv1alpha1connect.UserServiceChangeOwnPasswordProcedure: true,
+		ichorv1alpha1connect.UserServiceListUsersProcedure:         false,
+		ichorv1alpha1connect.UserServiceGetMyKubeconfigProcedure:   false,
+	} {
+		_, err := i.auth(ctx, tok, proc)
+		if ok && err != nil {
+			t.Errorf("%s refused: %v", proc, err)
+		}
+
+		if !ok && connect.CodeOf(err) != connect.CodePermissionDenied {
+			t.Errorf("%s: want PermissionDenied, got %v", proc, err)
+		}
+	}
+
+	// Changing the password lifts the block at once on this replica.
+	if err := s.setCredential(ctx, userAlice, strongPass2, false); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := i.auth(ctx, tok, ichorv1alpha1connect.UserServiceListUsersProcedure); err != nil {
+		t.Errorf("still blocked after the change: %v", err)
+	}
 }

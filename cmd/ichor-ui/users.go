@@ -60,6 +60,8 @@ type usersFlags struct {
 	// internalJWKSURI overrides the jwks_uri of the internal discovery document (default: the Service ClusterIP).
 	internalJWKSURI      string
 	tokenTTL, refreshTTL time.Duration
+	// kubeAPIServerURL and kubeAPITLSServerName shape the kubeconfig GetMyKubeconfig returns.
+	kubeAPIServerURL, kubeAPITLSServerName string
 }
 
 func (f usersFlags) validate() error {
@@ -70,6 +72,12 @@ func (f usersFlags) validate() error {
 	u, err := url.Parse(f.externalURL)
 	if err != nil || u.Scheme != "https" || u.Host == "" || u.RawQuery != "" || u.Fragment != "" {
 		return fmt.Errorf("--external-url must be an https URL, got %q", f.externalURL)
+	}
+
+	if f.kubeAPIServerURL != "" {
+		if k, err := url.Parse(f.kubeAPIServerURL); err != nil || k.Scheme != "https" || k.Host == "" || k.RawQuery != "" || k.Fragment != "" {
+			return fmt.Errorf("--kube-api-server-url must be an https URL, got %q", f.kubeAPIServerURL)
+		}
 	}
 
 	if f.tokenTTL < ichorauth.MinTokenTTL || f.tokenTTL > ichorauth.MaxTokenTTL {

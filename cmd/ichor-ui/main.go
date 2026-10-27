@@ -109,6 +109,9 @@ func main() {
 	flag.DurationVar(&users.tokenTTL, "token-ttl", 5*time.Minute, "lifetime of an ID token (1m to 15m)")
 	flag.DurationVar(&users.refreshTTL, "refresh-lifetime", 12*time.Hour, "absolute lifetime of a refresh token (1h to 30d)")
 
+	flag.StringVar(&users.kubeAPIServerURL, "kube-api-server-url", "", "Kubernetes API URL put in users' kubeconfigs (default: the cluster's spec.endpoint)")
+	flag.StringVar(&users.kubeAPITLSServerName, "kube-api-tls-server-name", "", "tls-server-name in users' kubeconfigs, for a --kube-api-server-url host outside the apiserver certificate's SANs")
+
 	tlsCert := flag.String("tls-cert-file", "", "serve the main listener over TLS with this certificate (with --tls-key-file)")
 	tlsKey := flag.String("tls-key-file", "", "private key for --tls-cert-file")
 
@@ -183,6 +186,7 @@ func main() {
 	if users.enabled {
 		cache := &uiapi.UserCache{Reader: c, Namespace: server.ControllerNamespace}
 		server.Users = uiapi.NewUserSettings(cache, users.externalURL)
+		server.Users.KubeAPIServerURL, server.Users.KubeAPITLSServerName = users.kubeAPIServerURL, users.kubeAPITLSServerName
 
 		var verifier localVerifier
 

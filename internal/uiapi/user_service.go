@@ -518,13 +518,25 @@ func (s *Server) GetMyKubeconfig(ctx context.Context, req *connect.Request[pb.Ge
 		return nil, connect.NewError(connect.CodeInternal, errors.New("reading the cluster CA failed"))
 	}
 
-	raw, err := buildKubeconfig(cluster.Name, "https://"+net.JoinHostPort(cluster.Spec.Endpoint.Address, kubeAPIPort),
+	server, tlsName := s.Users.kubeServer(cluster.Spec.Endpoint.Address)
+
+	raw, err := buildKubeconfig(cluster.Name, server, tlsName,
 		bundle.Certs.K8s.Crt, name, s.Users.IssuerURL, req.Msg.GetCaFile())
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, errors.New("building the kubeconfig failed"))
 	}
 
 	return connect.NewResponse(&pb.GetMyKubeconfigResponse{Kubeconfig: string(raw), Filename: fmt.Sprintf(kubeconfigFileFmt, cluster.Name)}), nil
+}
+
+// kubeServer is the server (and tls-server-name) of a user's kubeconfig: the
+// configured URL when set, else the cluster endpoint on the default port.
+func (u *UserSettings) kubeServer(endpoint string) (server, tlsName string) {
+	if u.KubeAPIServerURL != "" {
+		return u.KubeAPIServerURL, u.KubeAPITLSServerName
+	}
+
+	return "https://" + net.JoinHostPort(endpoint, kubeAPIPort), ""
 }
 
 // userWriteError is mapGetError for a write the caller's own RBAC may refuse.
@@ -555,14 +567,14 @@ func credentialWriteError(err error) error {
 
 // buildKubeconfig writes the kubeconfig GetMyKubeconfig returns. Its only
 // credential is an exec block that runs `ichor auth token`; the CA is public.
-func buildKubeconfig(cluster, server string, ca []byte, user, issuer, caFile string) ([]byte, error) {
+func buildKubeconfig(cluster, server, tlsServerName string, ca []byte, user, issuer, caFile string) ([]byte, error) {
 	args := []string{"auth", "token", "--issuer", issuer, "--client-id", cliClientID, "--audience", kubeAudience}
 	if caFile != "" {
 		args = append(args, "--ca-file", caFile)
 	}
 
 	cfg := clientcmdapi.NewConfig()
-	cfg.Clusters[cluster] = &clientcmdapi.Cluster{Server: server, CertificateAuthorityData: ca}
+	cfg.Clusters[cluster] = &clientcmdapi.Cluster{Server: server, TLSServerName: tlsServerName, CertificateAuthorityData: ca}
 	cfg.AuthInfos[user] = &clientcmdapi.AuthInfo{Exec: &clientcmdapi.ExecConfig{
 		APIVersion:         "client.authentication.k8s.io/v1",
 		Command:            "ichor",

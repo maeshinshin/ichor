@@ -85,9 +85,15 @@ func retryTransient(ctx context.Context, c *apiClients, errw io.Writer, call fun
 	deadline := time.Now().Add(followRetryWindow)
 	delay := followRetryDelay
 
+	var movedTo string // the apiserver tried after the first one failed
+
 	for {
 		err := call()
 		if !isTransient(err) || ctx.Err() != nil {
+			if movedTo != "" && (err == nil || !isTransient(err)) {
+				_, _ = fmt.Fprintf(errw, "ichor: API server %s answered\n", movedTo)
+			}
+
 			return err
 		}
 
@@ -105,7 +111,17 @@ func retryTransient(ctx context.Context, c *apiClients, errw io.Writer, call fun
 
 		delay = min(delay*2, followRetryMax)
 
-		if c.Reconnect != nil {
+		if c.Failover != nil {
+			if name, nc, ferr := c.Failover(ctx); ferr == nil {
+				keep := *c
+				*c = *nc
+				c.Close, c.Reconnect, c.Failover, c.Dial = keep.Close, keep.Reconnect, keep.Failover, keep.Dial
+				c.actor = keep.actor
+				movedTo = name
+
+				_, _ = fmt.Fprintf(errw, "ichor: trying API server %s\n", name)
+			}
+		} else if c.Reconnect != nil {
 			if nc, rerr := c.Reconnect(ctx); rerr == nil {
 				closeFn, reconnect := c.Close, c.Reconnect
 				*c = *nc

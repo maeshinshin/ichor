@@ -143,6 +143,10 @@ func runLiveRestore(ctx context.Context, c *apiClients, in io.Reader, out, errw 
 
 	s.Cluster = cluster.GetName()
 
+	if s.Follow {
+		enableFailover(ctx, c, cluster) // read now, while the control planes still answer
+	}
+
 	bg := breakGlassOf(apiOpts)
 	if bg == nil {
 		return errors.New("restore --live: it needs --break-glass <reason> (and the break-glass RBAC verb on the cluster); the reason goes into the audit record")

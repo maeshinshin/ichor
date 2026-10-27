@@ -37,6 +37,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	authv1client "k8s.io/client-go/kubernetes/typed/authentication/v1"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	sigsyaml "sigs.k8s.io/yaml"
 
@@ -147,6 +148,16 @@ type apiClients struct {
 	// kube-apiserver the port-forward runs through restarted); nil for the
 	// in-process fallback, which has no tunnel.
 	Reconnect func(context.Context) (*apiClients, error)
+
+	// Dial builds in-process clients against another kube-apiserver, same credentials and certificate
+	// name; set for the in-process fallback only. Server is the apiserver these clients use, actor the
+	// name the in-process handlers record. Failover, set by a command that knows the other control
+	// planes (restore --live --follow), moves them to the next apiserver on a transient error
+	// (follow_retry.go).
+	Dial     func(ctx context.Context, server string) (*apiClients, error)
+	Server   string
+	actor    string
+	Failover func(ctx context.Context) (string, *apiClients, error)
 }
 
 // errBackendRequired is what a command that must go through ichor-ui
@@ -243,6 +254,7 @@ func localClients(opts apiOptions, deps apiDeps) *apiClients {
 
 	return &apiClients{
 		Cluster: s, Machine: s, Patch: s, Operation: s, Node: localNode{s}, Diagnostics: diag, Local: true, Close: diag.close,
+		actor: cmp.Or(deps.actor, actorCLI),
 	}
 }
 
@@ -421,6 +433,11 @@ func newAPIDeps(cmd *cobra.Command) (apiDeps, error) {
 		return apiDeps{}, err
 	}
 
+	return newAPIDepsFor(cmd, cfg)
+}
+
+// newAPIDepsFor is newAPIDeps for an already loaded kubeconfig.
+func newAPIDepsFor(cmd *cobra.Command, cfg *rest.Config) (apiDeps, error) {
 	k8sClient, err := newKubeClientForConfig(cfg)
 	if err != nil {
 		return apiDeps{}, err
@@ -444,7 +461,12 @@ func runAPI(cmd *cobra.Command, requireBackend bool, fn func(ctx context.Context
 		return err
 	}
 
-	deps, err := newAPIDeps(cmd)
+	cfg, err := loadKubeconfig(kubeconfigPath)
+	if err != nil {
+		return err
+	}
+
+	deps, err := newAPIDepsFor(cmd, cfg)
 	if err != nil {
 		return err
 	}
@@ -455,6 +477,21 @@ func runAPI(cmd *cobra.Command, requireBackend bool, fn func(ctx context.Context
 	}
 
 	defer c.Close()
+
+	if c.Local {
+		c.Server = cfg.Host
+		c.Dial = func(ctx context.Context, server string) (*apiClients, error) {
+			k8s, err := newKubeClientForConfig(otherServer(cfg, server))
+			if err != nil {
+				return nil, err
+			}
+
+			nc := localClients(apiOpts, apiDeps{K8s: k8s, actor: c.actor})
+			nc.Server = server
+
+			return nc, nil
+		}
+	}
 
 	return fn(cmd.Context(), c)
 }

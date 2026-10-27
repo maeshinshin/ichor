@@ -8,19 +8,37 @@ Ichor only takes care of Talos. Everything that runs on the cluster — the CNI,
 storage, monitoring — is bootstrapped once and then handed over to Argo CD.
 
 > Status: alpha. Exercised end to end on Talos v1.14 test clusters; not yet on bare metal. The design is in
-> [docs/design/architecture.md](docs/design/architecture.md).
+> [docs/design/architecture.md](docs/design/architecture.md); every decision
+> is.
 
 ## What it does
 
-- Turns a node sitting in Talos maintenance mode into a cluster member: discover,
-  approve in the UI, install, join.
+- Turns a node sitting in Talos maintenance mode into a cluster member:
+  discover, approve in the UI or CLI, install, join. At approval you can also
+  set the node's primary NIC (DHCP or static, optional VLAN) and the disk
+  roles for EPHEMERAL and user volumes.
 - Keeps machine configuration declarative. Patches are typed Kubernetes
   resources built on the Talos machinery types; the controller renders and
   applies them, and reports drift.
+- Rolls out changes that need a reboot as one operation, a node at a time:
+  control planes first with an etcd check before each, then workers. API
+  server restarts follow the same rule.
 - Rolls Talos and Kubernetes upgrades through the cluster one node at a time,
-  with etcd quorum in mind.
-- Backs up etcd on a schedule, and can rebuild a cluster from the secrets
-  bundle and a snapshot alone.
+  with etcd quorum in mind. A failed step pauses the operation; `resume`
+  runs that step again.
+- Runs node actions as operations: reboot, shutdown, restart a service, etcd
+  defrag, forfeit etcd leadership, reset, and remove.
+- Rotates the cluster CAs in verified passes. The operation waits until you
+  have the new kubeconfig and talosconfig, from the CLI or the UI, before it
+  stops trusting the old CAs.
+- Backs up etcd on a schedule, restores a snapshot into a running cluster,
+  and can rebuild a cluster from the secrets bundle and a snapshot alone.
+- Can keep its own users with the roles viewer, operator and admin. People
+  sign in to the UI and each gets a personal kubeconfig with no secret in it.
+  Off by default. See [Users and login](docs/guides/users-and-login.md).
+- Gates Secret references: changing a field that names a Secret needs the
+  `secret-references` right in Kubernetes RBAC, which `ichor-admin` holds.
+- Upgrades itself through the `IchorInstallation` resource.
 - Bootstraps a CNI (Cilium by default) and, optionally, Argo CD, then hands
   both over to Argo CD so that Git becomes the source of truth.
 - Prepares disks for storage systems such as Longhorn, and waits for data to
@@ -32,6 +50,7 @@ storage, monitoring — is bootstrapped once and then handed over to Argo CD.
 - Manage the CNI, storage or monitoring after bootstrap. That's Argo CD's job.
 - Boot machines. Get them to maintenance mode (ISO, PXE, whatever you like);
   Ichor takes it from there.
+- Target air-gapped installs. Registry mirrors and private registries work.
 
 ## Components
 
@@ -41,6 +60,19 @@ storage, monitoring — is bootstrapped once and then handed over to Argo CD.
 | `ichor-controller` | The only thing that talks to Talos nodes. Reconciles the CRDs. |
 | `ichor-ui` | Web UI (Preact) and its backend. Changes the world only by writing custom resources; reads node state from Talos directly. |
 
+## Quick start
+
+Inside `nix develop`, with a node in maintenance mode:
+
+```
+ichor init --help          # create the first control plane and install Ichor
+ichor machine approve --help
+ichor status
+```
+
+`ichor <command> --help` lists the rest. Existing clusters are brought in
+with `ichor adopt`.
+
 ## Security
 
 Approving a node talks to Talos's maintenance-mode API, which does not
@@ -48,8 +80,10 @@ authenticate the node at the other end. Ichor assumes you keep a separate
 provisioning network for that reason — it's not something Ichor itself
 enforces. Only the controller holds an `os:admin`-equivalent Talos identity and writes
 to nodes. The UI backend reads with `os:reader`; for the admin-gated downloads
-(etcd snapshot, packet capture) it uses the narrowest role Talos accepts for
-that one call. The browser holds no credentials at all.
+(etcd snapshot, packet capture, CA-rotation credentials) it uses the narrowest
+role Talos accepts for that one call. The browser holds no credentials at all.
+Users never receive a talosconfig, except an administrator during a CA
+rotation.
 The secrets bundle (Talos, Kubernetes and etcd CA keys) is the root of trust
 and lives in a Secret, never in a custom resource. See the Trust section of
 [docs/design/architecture.md](docs/design/architecture.md) for the full

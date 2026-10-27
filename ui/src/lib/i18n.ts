@@ -576,6 +576,10 @@ export const en = {
   'ops.cluster': 'Cluster',
   'ops.maxUnavailable': 'Workers at once',
   'ops.caStage': 'Pass {n} of {total}: {stage}',
+  'ops.kubeStage': 'Stage {n} of {total}: {stage}',
+  'ops.kubeStageName.ControlPlanes': 'control planes',
+  'ops.kubeStageName.KubeProxy': 'kube-proxy',
+  'ops.kubeStageName.Kubelets': 'kubelets',
 
   'cluster.operations': 'Operations',
   'cluster.operationsHint': 'Each of these asks for confirmation and shows which nodes are affected.',
@@ -699,6 +703,11 @@ export const en = {
   'ops.plan.effectCARotation':
     'Every node is reconfigured once per pass, without a reboot. The kubelet restarts on each node in the passes that change the Kubernetes CA.',
   'ops.plan.stages': 'Passes over every node, each verified before the next: {stages}.',
+  'ops.plan.kubeStages': 'The upgrade runs in three stages, each verified before the next:',
+  'ops.plan.kubeStageHint.ControlPlanes': 'Control plane components move to the new version, one control plane at a time.',
+  'ops.plan.kubeStageHint.KubeProxy': 'kube-proxy moves to the new version, then the bootstrap manifests are synced and its rollout is checked.',
+  'ops.plan.kubeStageHint.Kubelets': 'Kubelets move to the new version: control planes one at a time, then workers.',
+  'ops.plan.warningTitle': 'Before you go on',
   'ops.plan.orderCARotation': 'One node at a time, control planes first; every node is visited in each pass:',
   'ops.plan.bundleStaleTitle': 'Your secrets bundle becomes stale',
   'ops.plan.bundleStale':

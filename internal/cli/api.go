@@ -253,9 +253,20 @@ func localClients(opts apiOptions, deps apiDeps) *apiClients {
 	diag := &localDiagnostics{srv: s}
 
 	return &apiClients{
-		Cluster: s, Machine: s, Patch: s, Operation: s, Node: localNode{s}, Diagnostics: diag, Local: true, Close: diag.close,
+		Cluster: s, Machine: s, Patch: s, Operation: localOperation{s}, Node: localNode{s}, Diagnostics: diag, Local: true, Close: diag.close,
 		actor: cmp.Or(deps.actor, actorCLI),
 	}
+}
+
+// localOperation is the in-process OperationService. The credentials download streams, which the
+// in-process server cannot hand a client; the CLI writes the files itself (`ichor cluster credentials`), so it does
+// not use the stream.
+type localOperation struct{ *uiapi.Server }
+
+func (localOperation) DownloadCARotationCredentials(
+	context.Context, *connect.Request[pb.DownloadCARotationCredentialsRequest],
+) (*connect.ServerStreamForClient[pb.DownloadCARotationCredentialsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("use 'ichor cluster credentials NAME' to write the credentials"))
 }
 
 // localNode serves only GetEffectiveConfig, which needs no Talos call.

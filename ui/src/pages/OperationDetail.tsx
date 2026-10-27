@@ -147,7 +147,7 @@ export function OperationDetail({ name }: { name: string }) {
           { label: t('ops.startedBy'), value: op.startedBy || '-' },
           { label: t('ops.startedAt'), value: formatTimestamp(op.createdAt) },
           { label: t('ops.finishedAt'), value: formatTimestamp(op.finishedAt) },
-          { label: t('ops.duration'), value: formatDuration(spanMs(toDate(op.createdAt), toDate(op.finishedAt), now)) },
+          { label: t('ops.duration'), value: formatDuration(spanMs(toDate(op.createdAt), toDate(op.finishedAt), now, state === 'done' || state === 'shutdown')) },
           ...(op.kind === OperationKind.NODE
             ? [
                 { label: t('node.action.actionLabel'), value: enumLabel(NodeAction, op.nodeAction) },
@@ -249,7 +249,7 @@ export function OperationDetail({ name }: { name: string }) {
                   <TableRow key={m.name}>
                     <TableCell>
                       <Link to={nodePath(m.name)} class="hover:underline">
-                        {m.name}
+                        {m.displayName || m.name}
                       </Link>
                     </TableCell>
                     <TableCell>
@@ -259,7 +259,7 @@ export function OperationDetail({ name }: { name: string }) {
                     <TableCell class="max-w-[28rem] whitespace-normal break-words font-mono text-xs">{[m.step, m.message].filter(Boolean).join(': ') || '-'}</TableCell>
                     <TableCell>{formatTimestamp(m.startedAt)}</TableCell>
                     <TableCell>{formatTimestamp(m.finishedAt)}</TableCell>
-                    <TableCell>{formatDuration(spanMs(toDate(m.startedAt), toDate(m.finishedAt), now))}</TableCell>
+                    <TableCell>{formatDuration(spanMs(toDate(m.startedAt), toDate(m.finishedAt), now, m.phase === 'Completed'))}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

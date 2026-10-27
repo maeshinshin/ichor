@@ -18,6 +18,7 @@ package uiapi
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -29,13 +30,15 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
+const ichorV3 = "v0.3.0"
+
 func TestOperationSummaryPerKind(t *testing.T) {
 	cluster := &ichorv1alpha1.TalosCluster{Spec: ichorv1alpha1.TalosClusterSpec{
 		TalosVersion: opNewTalos, KubernetesVersion: "v1.37.1",
 		Schematic: &ichorv1alpha1.TalosClusterSchematic{ID: "abcdef0123456789abcdef"},
 	}}
 	install := &ichorv1alpha1.IchorInstallation{
-		Spec: ichorv1alpha1.IchorInstallationSpec{Version: "v0.3.0"}, Status: ichorv1alpha1.IchorInstallationStatus{InstalledVersion: "v0.2.0"},
+		Spec: ichorv1alpha1.IchorInstallationSpec{Version: ichorV3}, Status: ichorv1alpha1.IchorInstallationStatus{InstalledVersion: "v0.2.0"},
 	}
 	node := func(action, service string) *ichorv1alpha1.TalosOperationNodeSpec {
 		return &ichorv1alpha1.TalosOperationNodeSpec{
@@ -78,7 +81,7 @@ func TestOperationSummaryPerKind(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			op := &ichorv1alpha1.TalosOperation{
-				Name: "op", Namespace: opNS, Annotations: map[string]string{ichorv1alpha1.OperationStartedByAnnotation: "alice"},
+				Name: "op", Namespace: opNS, Annotations: map[string]string{ichorv1alpha1.OperationStartedByAnnotation: userAlice},
 				Spec: tc.spec, Status: tc.st,
 			}
 			if from := map[string]string{"talos from": opOldTalos, "k8s from": "v1.36.2"}[tc.name]; from != "" {
@@ -92,7 +95,7 @@ func TestOperationSummaryPerKind(t *testing.T) {
 				t.Fatalf("summary = %q, want %q", out.GetSummary(), tc.want)
 			}
 
-			if out.GetStartedBy() != "alice" {
+			if out.GetStartedBy() != userAlice {
 				t.Fatalf("started_by = %q", out.GetStartedBy())
 			}
 
@@ -161,5 +164,80 @@ func TestListOperationEventsFiltersByObjectAndTime(t *testing.T) {
 		if got[i] != want[i] {
 			t.Fatalf("events = %v, want %v", got, want)
 		}
+	}
+}
+
+func TestIchorSummaryKeepsTheFromVersionAfterTheUpgrade(t *testing.T) {
+	// Completed: installedVersion has caught up with the target, only the stamp remembers the from.
+	install := &ichorv1alpha1.IchorInstallation{
+		Spec: ichorv1alpha1.IchorInstallationSpec{Version: ichorV3}, Status: ichorv1alpha1.IchorInstallationStatus{InstalledVersion: ichorV3},
+	}
+	op := &ichorv1alpha1.TalosOperation{
+		Annotations: map[string]string{ichorv1alpha1.OperationFromVersionAnnotation: "v0.2.0"},
+		Spec:        ichorv1alpha1.TalosOperationSpec{Kind: ichorv1alpha1.TalosOperationKindIchor},
+	}
+	out := &pb.Operation{}
+	describeOperation(out, op, nil, install)
+
+	if out.GetSummary() != "Upgrade Ichor v0.2.0 → v0.3.0" {
+		t.Fatalf("summary = %q", out.GetSummary())
+	}
+}
+
+func TestCreatingAnIchorUpgradeStampsFromVersionAndStartedBy(t *testing.T) {
+	objs := append(opObjects(), ichorInstallation("", ichorOld, ichorOld, false))
+	srv, k8s := opServer(t, objs...)
+	srv.Actor = userAlice
+
+	if _, err := srv.CreateOperation(context.Background(), opCreate(pb.OperationKind_OPERATION_KIND_ICHOR, ichorNew)); err != nil {
+		t.Fatal(err)
+	}
+
+	ops := listOps(t, k8s)
+	if len(ops) != 1 {
+		t.Fatalf("ops = %d", len(ops))
+	}
+
+	if got := ops[0].Annotations[ichorv1alpha1.OperationFromVersionAnnotation]; got != ichorOld {
+		t.Fatalf("from-version = %q", got)
+	}
+
+	if got := ops[0].Annotations[ichorv1alpha1.OperationStartedByAnnotation]; got != userAlice {
+		t.Fatalf("started-by = %q", got)
+	}
+}
+
+func TestGetOperationNamesMachinesByHostnameThenNodeName(t *testing.T) {
+	withHost := opMachine("uuid-a", "worker", nil, nil)
+	withHost.Spec.Hostname = "worker-a"
+
+	withNode := opMachine("uuid-b", "worker", nil, nil)
+	withNode.Status.NodeName = "node-b"
+
+	bare := opMachine("uuid-c", "worker", nil, nil)
+
+	op := &ichorv1alpha1.TalosOperation{
+		Name: "talos-x", Namespace: opNS,
+		Spec: ichorv1alpha1.TalosOperationSpec{ClusterRef: corev1.LocalObjectReference{Name: opCluster}, Kind: ichorv1alpha1.TalosOperationKindTalos},
+		Status: ichorv1alpha1.TalosOperationStatus{Machines: []ichorv1alpha1.TalosOperationMachineStatus{
+			{Name: "uuid-a"}, {Name: "uuid-b"}, {Name: "uuid-c"},
+		}},
+	}
+
+	s, _ := opServer(t, append(opObjects(), withHost, withNode, bare, op)...)
+
+	resp, err := s.GetOperation(context.Background(), connect.NewRequest(&pb.GetOperationRequest{Operation: objectRef(opNS, "talos-x")}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got := make([]string, 0, len(resp.Msg.GetOperation().GetMachines()))
+	for _, m := range resp.Msg.GetOperation().GetMachines() {
+		got = append(got, m.GetName()+"="+m.GetDisplayName())
+	}
+
+	want := []string{"uuid-a=worker-a", "uuid-b=node-b", "uuid-c="}
+	if !slices.Equal(got, want) {
+		t.Fatalf("machines = %v, want %v", got, want)
 	}
 }

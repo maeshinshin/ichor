@@ -18,14 +18,20 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"time"
 
 	"github.com/siderolabs/talos/pkg/machinery/client"
+	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	"github.com/spf13/cobra"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
+
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/secretsbundle"
 )
 
 var clusterCredentialsOpts struct {
@@ -35,7 +41,12 @@ var clusterCredentialsOpts struct {
 	TalosEndpoints []string
 	Operation      string
 	Acknowledge    bool
+	Force          bool
 }
+
+// staleBundleWarning is printed when a --bundle file's CAs are not the cluster's current ones: the
+// files written from it trust CAs that no node accepts any more.
+const staleBundleWarning = "this bundle predates the current CAs; the files will not work"
 
 // clusterCredentialsCmd implements `ichor cluster credentials` (ADR 0091): write a kubeconfig and a
 // talosconfig for the operator, from the cluster's secrets bundle or, offline, from a bundle file.
@@ -84,6 +95,18 @@ it. 'ichor cluster rotate-ca' does all of this itself.`,
 			}
 		}
 
+		if o.Bundle != "" {
+			// Best effort: without a cluster to compare with, the bundle is taken as it is.
+			var cluster ctrlclient.Client
+			if kc, err := newKubeClient(kubeconfigPath); err == nil {
+				cluster = kc
+			}
+
+			if err := checkBundleCurrent(cmd.Context(), cluster, cmd.ErrOrStderr(), o.Bundle, req, o.Force); err != nil {
+				return err
+			}
+		}
+
 		files, err := writeCredentials(cmd.Context(), k8s, req)
 		if err != nil {
 			return err
@@ -113,6 +136,83 @@ type handoffChecks struct {
 
 func defaultHandoffChecks() handoffChecks {
 	return handoffChecks{Kube: verifyKubeconfig, Talos: verifyTalosconfig}
+}
+
+// checkBundleCurrent warns when the bundle file holds CAs the cluster does not have any more, and
+// refuses to write credentials from it unless force is set. It needs the cluster to compare with:
+// with k8s nil, or when the cluster cannot be read, there is nothing to compare and it passes.
+func checkBundleCurrent(ctx context.Context, k8s ctrlclient.Client, errw io.Writer, bundleFile string,
+	req credentialRequest, force bool) error {
+	if k8s == nil {
+		return nil
+	}
+
+	bundle, err := loadBundleFile(bundleFile)
+	if err != nil {
+		return err
+	}
+
+	dctx, cancel := context.WithTimeout(ctx, apiConnectTimeout)
+	defer cancel()
+
+	current, known := bundleMatchesCluster(dctx, k8s, req, bundle)
+	if !known || current {
+		return nil
+	}
+
+	_, _ = fmt.Fprintln(errw, "warning: "+staleBundleWarning)
+
+	if force {
+		return nil
+	}
+
+	return errors.New("refusing to write credentials from " + bundleFile + "; pass --force to write them anyway")
+}
+
+// bundleMatchesCluster reports whether bundle carries the CAs the cluster holds now: the live secrets
+// bundle's, or during a rotation also the new ones. known is false when the cluster could not be read.
+func bundleMatchesCluster(ctx context.Context, k8s ctrlclient.Client, req credentialRequest,
+	bundle *secrets.Bundle) (current, known bool) {
+	var cluster ichorv1alpha1.TalosCluster
+	if err := k8s.Get(ctx, types.NamespacedName{Namespace: req.Namespace, Name: req.Cluster}, &cluster); err != nil {
+		return false, false
+	}
+
+	live, err := secretsbundle.Load(ctx, k8s, req.IchorNamespace, cluster.Spec.SecretsRef.Name)
+	if err != nil {
+		return false, false
+	}
+
+	rot, err := secretsbundle.LoadRotation(ctx, k8s, req.IchorNamespace, cluster.Spec.SecretsRef.Name)
+	if err != nil {
+		return false, false
+	}
+
+	candidates := []*secrets.Bundle{live}
+
+	if rot != nil && rot.Validate() == nil && live.Certs != nil {
+		certs := *live.Certs
+		certs.OS, certs.K8s = rot.Talos, rot.Kubernetes
+		candidates = append(candidates, &secrets.Bundle{Certs: &certs})
+	}
+
+	want, err := secretsbundle.BundleFingerprint(bundle)
+	if err != nil {
+		return false, false
+	}
+
+	for _, c := range candidates {
+		got, err := secretsbundle.BundleFingerprint(c)
+		if err != nil {
+			return false, false
+		}
+
+		if got == want {
+			return true, true
+		}
+	}
+
+	return false, true
 }
 
 // verifyKubeconfig asks the API server who the kubeconfig's credentials are.
@@ -215,4 +315,6 @@ func init() {
 	f.BoolVar(&clusterCredentialsOpts.Acknowledge, "acknowledge", false,
 		"after checking the new kubeconfig works, tell the CA rotation that is waiting for credentials to continue")
 	f.StringVar(&clusterCredentialsOpts.Operation, "operation", "", "with --acknowledge: the CA rotation operation to acknowledge")
+	f.BoolVar(&clusterCredentialsOpts.Force, "force", false,
+		"with --bundle: write the files even though the bundle predates the cluster's current CAs (they will not work)")
 }

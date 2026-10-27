@@ -121,8 +121,26 @@ spec:
         - name: ICHOR_OIDC_GROUPS_PREFIX
           value: {{ .Values.ichorUI.oidc.groupsPrefix | quote }}
         {{- end }}
-        # No HTTP health endpoint exists yet; a TCP check against the listening
-        # port is the only thing that's actually true about this server today.
+        # No dedicated health endpoint exists yet. With TLS on, a kubelet TCP probe
+        # makes the TLS server log "TLS handshake error ... EOF" every few seconds, so probe
+        # /auth/config over HTTPS instead (cheap, always served; the kubelet skips cert checks).
+        # Without TLS a TCP check against the listening port stays.
+        {{- if .Values.ichorUI.tls.secretName }}
+        livenessProbe:
+          httpGet:
+            path: /auth/config
+            port: {{ .Values.ichorUI.port }}
+            scheme: HTTPS
+          initialDelaySeconds: 5
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /auth/config
+            port: {{ .Values.ichorUI.port }}
+            scheme: HTTPS
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        {{- else }}
         livenessProbe:
           tcpSocket:
             port: {{ .Values.ichorUI.port }}
@@ -133,6 +151,7 @@ spec:
             port: {{ .Values.ichorUI.port }}
           initialDelaySeconds: 5
           periodSeconds: 10
+        {{- end }}
         name: ichor-ui
         ports:
         - containerPort: {{ .Values.ichorUI.port }}

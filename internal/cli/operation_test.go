@@ -24,7 +24,6 @@ import (
 	"testing"
 	"time"
 
-	"connectrpc.com/connect"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -248,7 +247,7 @@ func TestStartCommandsAreMarkedAsWrites(t *testing.T) {
 		"talos": upgradeTalosCmd.Annotations[writesAnnotation], "kubernetes": upgradeKubernetesCmd.Annotations[writesAnnotation],
 		"ichor": upgradeIchorCmd.Annotations[writesAnnotation], "kube-proxy": cniKubeProxyCmd.Annotations[writesAnnotation],
 		"shutdown": clusterShutdownCmd.Annotations[writesAnnotation], "pause": operationPauseCmd.Annotations[writesAnnotation],
-		"resume": operationResumeCmd.Annotations[writesAnnotation], "retry": operationRetryCmd.Annotations[writesAnnotation],
+		"resume": operationResumeCmd.Annotations[writesAnnotation],
 		"delete": operationDeleteCmd.Annotations[writesAnnotation],
 	} {
 		if ann != "true" {
@@ -365,8 +364,8 @@ func failedOpClients(t *testing.T) (*apiClients, client.Client) {
 	return localClients(apiOpts, apiDeps{K8s: k8s}), k8s
 }
 
-func TestResumeOfAFailedOperationPointsAtRetry(t *testing.T) {
-	c, _ := failedOpClients(t)
+func TestResumeOfAFailedOperationReRunsTheStep(t *testing.T) {
+	c, k8s := failedOpClients(t)
 
 	var out, errw bytes.Buffer
 
@@ -374,20 +373,11 @@ func TestResumeOfAFailedOperationPointsAtRetry(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if want := "the step failed: drain blocked; run `ichor operation retry x` after fixing the cause"; !strings.Contains(errw.String(), want) {
+	if want := "re-running the step that failed: drain blocked"; !strings.Contains(errw.String(), want) {
 		t.Fatalf("stderr = %q, want %q", errw.String(), want)
-	}
-}
-
-func TestOperationRetryAnnotatesTheFailedOperation(t *testing.T) {
-	c, k8s := failedOpClients(t)
-
-	if _, err := c.Operation.RetryOperation(context.Background(), connect.NewRequest(&pb.RetryOperationRequest{Operation: objectRef(testNamespace, "x")})); err != nil {
-		t.Fatal(err)
 	}
 
 	if got := opTestOps(t, k8s)[0].Annotations[ichorv1alpha1.OperationRetryAnnotation]; got == "" {
 		t.Fatal("the retry annotation was not set")
 	}
-
 }

@@ -6,8 +6,8 @@ is,
 which builds
 for logins from an external identity provider.
 
-Status: proposed. The steps below are what it decides. Commands
-and flags it does not name are marked as unverified.
+Status: proposed. The steps below are what it decides, plus the
+CLI flags the implementation added (`--ca-file`, `--out`, `--bootstrap`).
 
 Users are off by default. Nothing here applies until you turn them on.
 
@@ -27,21 +27,46 @@ Turning users on needs three things:
 On a new cluster, pass the URL to `ichor init`:
 
 ```
-ichor init --ui-url https://ichor.example.com
+ichor init --ui-url https://ichor.example.com --admin-user admin ...
 ```
 
-This sets `ichorUI.users.*`, creates the first admin, sets the Ichor login in
-`spec.authentication.ichor` and prints that `ichor config apply` must run. The
-first admin gets a generated password. It is printed once and stored nowhere,
-and the first login forces a change. Save it when it is printed.
+`--version-contract` must be v1.14 or later; init refuses the flags before it
+touches the node otherwise. `ichor init` installs Ichor from the manifest in
+the binary, not from the Helm chart, so it applies in place what
+`ichorUI.users.enabled` and `ichorUI.users.externalURL` render: the flags,
+the internal port and the key volumes of the ichor-ui Deployment, the internal
+port of its Service, and the empty `ichor-user-credentials` Secret. It then
+creates the first admin (`--admin-user`, default `admin`, role `admin`) and
+sets `spec.authentication.ichor` on the TalosCluster. The order is: Secret,
+admin, then the switch, so nobody is locked out. At the end it prints, to
+stderr, the Helm values that match (for a GitOps copy) and the generated
+password of the admin. The password is printed once, also when a later step
+failed, and is stored nowhere; the first login forces a change. Save it when it
+is printed. The controller renders the kube-apiserver login settings next; that
+restarts the kube-apiserver on each control plane (see the end of this guide).
 
 On an existing install, set `ichorUI.users.enabled` to `true` and
-`ichorUI.users.externalURL` to the https URL in the chart values. Then run
-`ichor config apply`. Once users are on, every request to ichor-ui needs a
-login.
+`ichorUI.users.externalURL` to the https URL in the chart values, and create
+the first admin before every request starts to need a login:
 
-Unverified: how to create the first admin on an install
-where `ichor init` has already run. Check this before you switch.
+```
+ichor user create admin --role admin --generate --bootstrap
+```
+
+`--bootstrap` needs no login, because nobody can log in yet. It uses your own
+kubeconfig, so Kubernetes decides: you need `create` on `ichorusers` and `get`
+and `patch` on the Secret `ichor-user-credentials`. The CLI creates the
+`IchorUser` and writes the argon2id hash of the password into that Secret with
+the same code ichor-ui uses. It refuses a name that already exists (it never
+resets a password) and a cluster where the Secret does not exist, which means
+users are not turned on yet (the chart creates it with
+`ichorUI.users.enabled`). The generated password is printed once to stderr and
+must be changed at the first login. Instead of `--generate` you can type the
+password at a prompt with no echo, or pipe it with `--password-stdin`. Then set
+`spec.authentication.ichor` (`enabled: true`, `url`) on the TalosCluster, which
+needs `update` on `talosclusters/authentication`, and run `ichor config apply`
+if a change waits for a reboot. Once users are on, every request to ichor-ui
+needs a login.
 
 ## Expose ichor-ui over https
 
@@ -82,25 +107,59 @@ at the next login. A password is 12 to 128 bytes long, with no other rules.
 
 Users can change their own password in the account menu.
 
-Unverified: the exact CLI flags for `ichor user` are not.
+### The `ichor user` commands
+
+They talk to ichor-ui directly at the issuer URL over https, with your login (a
+token for ichor-ui, from the browser sign-in; the first command opens it). They
+do not use a port-forward and need no kubeconfig, so they work from a laptop.
+Give the URL with `--issuer` or `ICHOR_ISSUER`, and `--ca-file` (or
+`ICHOR_CA_FILE`) when a private CA signed ichor-ui's certificate. Output is
+`-o yaml|json`.
+
+```
+ichor user list
+ichor user get alice
+ichor user create alice --display-name "Alice" --role viewer --generate
+ichor user update alice --role operator        # only the flags you pass change
+ichor user update alice --disabled=true
+ichor user set-password alice --password-stdin
+ichor user revoke-sessions alice
+ichor user delete alice                        # asks; --yes skips
+```
+
+`create` and `set-password` take the password from a prompt with no echo (asked
+twice), from the first line of stdin with `--password-stdin`, or generate one
+with `--generate`; a generated password is printed once to stderr. A password is
+never a flag value. The password set by an admin is marked must-change.
+Kubernetes RBAC decides who may do what: the admin role for everything,
+`update` on `ichorusers/password` for `set-password` and `revoke-sessions`.
 
 ## Sign in and get a kubeconfig
 
 To sign in from the terminal:
 
 ```
-ichor auth login
+ichor auth login --issuer https://ichor.example.com --audience ichor-ui
 ```
 
 This opens a browser for the login page. The password is typed only into that
-page; the CLI never sees it. `ichor auth status` shows the current login.
-`ichor auth logout` removes the local login cache.
+page; the CLI never sees it. `ichor auth status` shows who you are and when the
+cached tokens expire; it prints no token. `ichor auth logout` removes the local
+login cache. If the certificate of ichor-ui comes from a private CA, add
+`--ca-file ca.pem` (or `export ICHOR_CA_FILE=ca.pem`) to every `ichor auth`
+and `ichor user` command.
 
 To get a kubeconfig:
 
 ```
-ichor auth kubeconfig -o ~/.kube/ichor.yaml
+ichor auth kubeconfig --issuer https://ichor.example.com --out ~/.kube/ichor.yaml
 ```
+
+`--out -` prints it to stdout. The file is written with mode 0600 and the
+command refuses to overwrite an existing file. With `--ca-file ca.pem`, the
+kubeconfig carries `--ca-file <absolute path>` in the `ichor auth token`
+arguments, so `kubectl` trusts the same CA; without the flag the arguments do
+not change.
 
 You can also use "Download my kubeconfig" in the account menu of ichor-ui. The
 file holds the API server address and the cluster CA. It holds no secret. When
@@ -139,12 +198,12 @@ broken, or every user is locked out, use this credential.
 Once users are on, keep this folder offline and use it only in an incident.
 Do not confuse it with the break-glass write, which is a GitOps override.
 
-## Not verified yet
+## Control plane rollout
 
-These are unknown. Check them on a real cluster before you rely
-on them:
-
-- whether the kube-apiserver on a control plane can reach the ichor-ui service
-  IP;
-- whether Talos applies the login settings without a reboot;
-- whether the kube-apiserver reloads them or restarts.
+A spike on real hardware settled the open points ("Hardware
+results"): the kube-apiserver reaches the ichor-ui ClusterIP, Talos applies the
+login settings without a reboot, and it restarts the kube-apiserver on each
+change (15 to 45 seconds of `/readyz` down per control plane when there is
+only one). The rollout one control plane at a time, waiting for `/readyz`, is
+not built yet: the machine controller applies the change to every control plane
+at once.

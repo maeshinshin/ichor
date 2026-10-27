@@ -45,3 +45,10 @@ func SortByOrder(machines []*ichorv1alpha1.TalosMachine) {
 		}
 	})
 }
+
+// ConfigPending reports whether m waits for a config operation: a pending change that needs a reboot
+// (status.rebootPaths) or an API server restart (status.apiServerRestartPaths). The plan shown for
+// confirmation and the operation both select machines with it.
+func ConfigPending(m *ichorv1alpha1.TalosMachine) bool {
+	return len(m.Status.RebootPaths) > 0 || len(m.Status.APIServerRestartPaths) > 0
+}

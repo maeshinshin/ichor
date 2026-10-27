@@ -3,7 +3,7 @@
 # from the build context -- `make docker-build-installer` writes it to
 # internal/installmanifest/install.yaml first -- so the image carries exactly the manifest
 # the same tree generated, and fetches nothing when it runs.
-FROM golang:1.26 AS builder
+FROM golang:1.27.3 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 ARG VERSION=dev

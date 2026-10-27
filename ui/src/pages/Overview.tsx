@@ -8,6 +8,7 @@ import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/componen
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { BackupNow } from '@/components/BackupNow'
 import { ConditionList } from '@/components/ConditionList'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { OperationControls } from '@/components/OperationControls'
@@ -151,6 +152,9 @@ function Home({
               {t('cluster.addNode')}
             </Link>
           </Button>
+          {backups && backups.length > 0 && (
+            <BackupNow backup={backups[0]} onChanged={(next) => setBackups(backups.map((x) => (x.ref?.name === next.ref?.name ? next : x)))} />
+          )}
           {applyDisabledReason || machines === null ? (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -336,15 +340,7 @@ function Home({
                 <CardTitle>{t('home.versions')}</CardTitle>
               </CardHeader>
               <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t('overview.colComponent')}</TableHead>
-                      <TableHead>{t('overview.colInstalled')}</TableHead>
-                      <TableHead class="w-0" />
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+                <ul class="divide-y">
                     <VersionRow name={t('ops.row.talos')} installed={cluster.talosVersion}>
                       <StartOperationDialog kind="talos" cluster={ref} current={cluster.talosVersion} label={t('ops.action.upgrade')} disabled={!!busy} />
                     </VersionRow>
@@ -357,8 +353,7 @@ function Home({
                     <VersionRow name={t('ops.row.cni')} installed={t(kubeProxy === 'replaced' ? 'ops.modeReplaced' : 'ops.modeEnabled')}>
                       <StartOperationDialog kind="cni" cluster={ref} current={kubeProxy} label={t('ops.action.switch')} disabled={!!busy} />
                     </VersionRow>
-                  </TableBody>
-                </Table>
+                </ul>
                 {busyReason && <p class="mt-2 text-xs text-muted-foreground">{busyReason}</p>}
               </CardContent>
             </Card>
@@ -463,7 +458,8 @@ function NodeRow({ m }: { m: Machine }) {
   const ready = m.conditions.find((c) => c.type === 'Ready')
   const tone: Tone = ready ? conditionStatusTone(ready.type, ready.status) : 'neutral'
   const word = !ready ? t('overview.nodeUnknown') : ready.status === 'True' ? t('overview.nodeReady') : t('overview.nodeNotReady')
-  const name = m.hostname || m.ref?.name || '-'
+  // The hostname, else the address it is reached at; the machine's UUID name is only the link target.
+  const name = m.hostname || m.endpoint || m.ref?.name || '-'
   return (
     <li class="flex items-center justify-between gap-x-4 py-2 first:pt-0 last:pb-0">
       <div class="min-w-0">
@@ -483,11 +479,13 @@ function NodeRow({ m }: { m: Machine }) {
 
 function VersionRow({ name, installed, children }: { name: string; installed: string; children: ComponentChildren }) {
   return (
-    <TableRow>
-      <TableCell className="font-medium">{name}</TableCell>
-      <TableCell className="whitespace-normal [overflow-wrap:anywhere]text-muted-foreground">{installed || '-'}</TableCell>
-      <TableCell className="text-right">{children}</TableCell>
-    </TableRow>
+    <li class="flex items-center justify-between gap-x-3 py-2 first:pt-0 last:pb-0">
+      <div class="min-w-0">
+        <p class="font-medium">{name}</p>
+        <p class="text-sm text-muted-foreground [overflow-wrap:anywhere]">{installed || '-'}</p>
+      </div>
+      <div class="shrink-0">{children}</div>
+    </li>
   )
 }
 

@@ -780,7 +780,10 @@ Application until the Talos side is ready.
    Talos's `Reboot` does not cordon or drain (unlike its `Upgrade` and `Shutdown`),
    so the rollout does both itself before the reboot and uncordons afterwards.
 5. Watch COSI for state and drift. Drift handling is per cluster: warn only
-   (default), or auto-correct non-reboot differences.
+   (default), or auto-correct non-reboot differences. A change in what the
+   renderer emits (an Ichor upgrade, `render.Version`) is a desired-state change,
+   not drift: an Ichor upgrade may apply configuration to nodes, and
+   reboot-requiring changes wait for a config rollout.
 
 ### Upgrades
 

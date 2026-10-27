@@ -76,7 +76,7 @@ var _ = Describe("TalosMachine re-reconcile on render inputs", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		secret := &corev1.Secret{
-			GenerateName: "bundle-", Namespace: ns,
+			GenerateName: bundleGenerate, Namespace: ns,
 			Data: map[string][]byte{bundleSecretKey: raw},
 		}
 		Expect(k8sClient.Create(ctx, secret)).To(Succeed())
@@ -183,7 +183,7 @@ var _ = Describe("TalosMachine re-reconcile on a registry auth Secret", func() {
 		raw, err := yaml.Marshal(bundle)
 		Expect(err).NotTo(HaveOccurred())
 
-		secret := &corev1.Secret{GenerateName: "bundle-", Namespace: ns, Data: map[string][]byte{bundleSecretKey: raw}}
+		secret := &corev1.Secret{GenerateName: bundleGenerate, Namespace: ns, Data: map[string][]byte{bundleSecretKey: raw}}
 		Expect(k8sClient.Create(ctx, secret)).To(Succeed())
 
 		auth := &corev1.Secret{
@@ -249,7 +249,17 @@ var _ = Describe("TalosMachine re-reconcile on a registry auth Secret", func() {
 		latest.Data["password"] = []byte("second")
 		Expect(k8sClient.Update(ctx, &latest)).To(Succeed())
 
-		Eventually(applied, settle, pollGap).ShouldNot(Equal(before))
+		// Registry auth goes into the CRI config and is not reboot-free (fieldmeta), so the
+		// re-render is reported as a reboot-requiring change and not applied. That the machine
+		// reaches that state at all, with nothing else touched, is the watch's doing.
+		Eventually(func() string {
+			if c := readyCondition(fetchMachineIn(ns, m.Name)); c != nil {
+				return c.Reason
+			}
+
+			return ""
+		}, settle, pollGap).Should(Equal(reasonRebootRequired))
+		Expect(applied()).To(Equal(before))
 	})
 })
 
@@ -275,7 +285,8 @@ func fetchMachineIn(ns, name string) *ichorv1alpha1.TalosMachine {
 
 // Literals shared by the fixtures in this file and talosmachine_controller_test.go (goconst).
 const (
-	machinePrefix = "machine-"
-	patchPrefix   = "patch-"
-	kindSysctl    = "SysctlConfig"
+	bundleGenerate = "bundle-"
+	machinePrefix  = "machine-"
+	patchPrefix    = "patch-"
+	kindSysctl     = "SysctlConfig"
 )

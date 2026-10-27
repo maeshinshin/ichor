@@ -19,6 +19,8 @@ package prmode
 import (
 	"strings"
 	"testing"
+
+	yaml "go.yaml.in/yaml/v4"
 )
 
 var mergeTestTarget = Target{
@@ -51,70 +53,55 @@ spec:
 // A merge update rewrites only what differs: comments on unchanged fields, on changed
 // scalars, and on neighbours all survive.
 func TestPatch_MergeKeepsCommentsOutsideChangedFields(t *testing.T) {
-	spec := map[string]any{
-		"clusterRef": map[string]any{"name": "prod"},
-		"layer":      "cluster",
-		"documents": []any{
-			map[string]any{
-				"kind": "SysctlConfig",
-				"sysctlConfig": map[string]any{"params": map[string]any{
-					"net.core.somaxconn": "8192",
-					"vm.max_map_count":   "262144",
-				}},
-			},
-			map[string]any{"kind": "Other", "other": map[string]any{"keep": "me"}},
-		},
-	}
+	spec := specFromYAML(t, `
+clusterRef: {name: prod}
+layer: cluster
+documents:
+  - kind: SysctlConfig
+    sysctlConfig:
+      params: {net.core.somaxconn: "8192", vm.max_map_count: "262144"}
+  - kind: Other
+    other: {keep: me}
+`)
 
-	got, err := Patch([]byte(mergeFixture), mergeTestTarget, []FieldUpdate{{Path: []string{specKey}, Value: spec, Merge: true}})
+	got, err := Patch([]byte(mergeFixture), mergeTestTarget, mergeSpecUpdate(spec))
 	if err != nil {
 		t.Fatalf("Patch: %v", err)
 	}
 
-	want := `# a patch
-apiVersion: ichor.maesh.dev/v1alpha1
-kind: TalosConfigPatch
-metadata:
-  name: p
-  namespace: ichor-system
-spec:
-  # which cluster
-  clusterRef:
-    name: prod # the prod cluster
-  layer: cluster
-  documents:
-    # tune the network
-    - kind: SysctlConfig
-      sysctlConfig:
-        params:
-          net.core.somaxconn: "8192" # raised for ingress
-          vm.max_map_count: "262144"
-    - kind: Other
-      other:
-        keep: me # untouched
-`
+	want := strings.Replace(mergeFixture, `"4096" # raised`, `"8192" # raised`, 1)
 	if string(got) != want {
 		t.Fatalf("mismatch.\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// Keys and list items absent from the new value are removed; new ones are added.
-func TestPatch_MergeAddsAndRemoves(t *testing.T) {
-	spec := map[string]any{
-		"clusterRef": map[string]any{"name": "prod"},
-		"layer":      "cluster",
-		"documents": []any{
-			map[string]any{
-				"kind": "SysctlConfig",
-				"sysctlConfig": map[string]any{"params": map[string]any{
-					"net.core.somaxconn": "4096",
-					"fs.file-max":        "1000",
-				}},
-			},
-		},
+func specFromYAML(t *testing.T, doc string) map[string]any {
+	t.Helper()
+
+	var out map[string]any
+	if err := yaml.Unmarshal([]byte(doc), &out); err != nil {
+		t.Fatal(err)
 	}
 
-	got, err := Patch([]byte(mergeFixture), mergeTestTarget, []FieldUpdate{{Path: []string{specKey}, Value: spec, Merge: true}})
+	return out
+}
+
+func mergeSpecUpdate(spec map[string]any) []FieldUpdate {
+	return []FieldUpdate{{Path: []string{specKey}, Value: spec, Merge: true}}
+}
+
+// Keys and list items absent from the new value are removed; new ones are added.
+func TestPatch_MergeAddsAndRemoves(t *testing.T) {
+	spec := specFromYAML(t, `
+clusterRef: {name: prod}
+layer: cluster
+documents:
+  - kind: SysctlConfig
+    sysctlConfig:
+      params: {net.core.somaxconn: "4096", fs.file-max: "1000"}
+`)
+
+	got, err := Patch([]byte(mergeFixture), mergeTestTarget, mergeSpecUpdate(spec))
 	if err != nil {
 		t.Fatalf("Patch: %v", err)
 	}

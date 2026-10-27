@@ -226,7 +226,7 @@ func (r *TalosMachineReconciler) followStage(
 	if stage == stageRunning {
 		apimeta.SetStatusCondition(&m.Status.Conditions, metav1.Condition{
 			Type: conditionProvisioned, Status: metav1.ConditionTrue, Reason: reasonNodeJoined,
-			Message: "the node installed, rebooted and is running with the cluster's configuration",
+			Message: "the node installed Talos and is running with the cluster's configuration",
 		})
 		r.event(m, corev1.EventTypeNormal, "NodeJoined", "the node finished installing and is running")
 

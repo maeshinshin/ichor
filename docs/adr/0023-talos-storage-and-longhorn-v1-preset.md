@@ -153,3 +153,8 @@ Status fields: `TalosMachine.status.schematic` records what the machine controll
 successful reach of the node, so the plan (which cannot dial nodes) can say "schematic X → Y".
 `PlanOperationResponse` gains `current_schematic` and `target_schematic`, set only for a Talos
 upgrade in which some approved machine's schematic differs; the CLI and UI headlines use them.
+
+## Amendment: the extension check is wired
+
+`CheckExtensions` is now called by the TalosStorage status controller, which sets the informational
+`ExtensionsPresent` condition from the Nodes' `extensions.talos.dev/*` labels (ADR 0050 amendment).

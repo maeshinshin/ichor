@@ -1,8 +1,8 @@
 # 0091. A CA rotation waits for the operator's new credentials before anything they hold stops working
 
-Status: Accepted · Date: 2026-10-27 · Design section: Backup, recovery, certificates; Trust · Supersedes in part: 0063 (stage sequence, "How Ichor stays connected" covers Ichor only), 0068 Decision 7 (the CLI start)
+Status: Accepted · Date: 2026-10-27 · Design section: Backup, recovery, certificates; Trust · Supersedes in part: 0063 (stage sequence, "How Ichor stays connected" covers Ichor only), 0068 Decision 7 (the CLI start) · Amended by: 0093 (the UI download)
 
-Decided: the `ca-rotation` stages are `Accepting`, `AwaitingCredentials`, `Issuing`, `Dropping`, `Finalizing`, `Done`; `AwaitingCredentials` changes nothing on any node and the controller leaves it only when the operation carries the annotation `ichor.maesh.dev/credentials-handoff` with the value `talos=<new talos CA fingerprint>,kubernetes=<new kubernetes CA fingerprint>` (`ichorv1alpha1.CARotationHandoffToken`); the CLI sets it, the controller only reads it and never writes `spec`; `ichor cluster rotate-ca` waits for the gate through the Kubernetes API, then writes a kubeconfig and a talosconfig that trust both the old and the new CAs and are signed by the new ones, checks that the new kubeconfig authenticates to the cluster, and only then sets the annotation; `ichor cluster credentials NAME` writes the same files from the cluster (`--acknowledge` also sets the annotation) or, with `--bundle FILE`, offline from a `bundle-export` file; `rotate-ca --follow` follows through the Kubernetes API with the new kubeconfig, not through the ichor-ui tunnel; the UI offers no download
+Decided: the `ca-rotation` stages are `Accepting`, `AwaitingCredentials`, `Issuing`, `Dropping`, `Finalizing`, `Done`; `AwaitingCredentials` changes nothing on any node and the controller leaves it only when the operation carries the annotation `ichor.maesh.dev/credentials-handoff` with the value `talos=<new talos CA fingerprint>,kubernetes=<new kubernetes CA fingerprint>` (`ichorv1alpha1.CARotationHandoffToken`); the CLI sets it, the controller only reads it and never writes `spec`; `ichor cluster rotate-ca` waits for the gate through the Kubernetes API, then writes a kubeconfig and a talosconfig that trust both the old and the new CAs and are signed by the new ones, checks that the new kubeconfig authenticates to the cluster, and only then sets the annotation; `ichor cluster credentials NAME` writes the same files from the cluster (`--acknowledge` also sets the annotation) or, with `--bundle FILE`, offline from a `bundle-export` file; `rotate-ca --follow` follows through the Kubernetes API with the new kubeconfig, not through the ichor-ui tunnel; the UI offers no download here, which ADR 0093 reverses: it adds an admin-gated download and a continue button
 
 ## Context
 
@@ -69,7 +69,7 @@ real hardware yet; the first run on a disposable cluster should read the check's
 
 The CAs' keys are in the bundle Secret (`rotation.yaml`, written before `Accepting`, ADR 0063). Making credentials needs those keys,
 so the command reads the Secret with the operator's own kubeconfig, as `bundle-export` does, and the keys never travel through the
-ichor-ui API or the browser. For the same reason the UI has **no download** (ADR 0084's downloads are diagnostics; these are
+ichor-ui API or the browser. (ADR 0093 reverses this for the UI: an admin-gated download and a continue button.) For the same reason the UI had **no download** (ADR 0084's downloads are diagnostics; these are
 cluster-admin private keys): the start dialog and the operation page say that the credentials stop working, that the operation waits,
 and which command to run. Choosing the CLI over a gated download is the simpler choice and the safer one: nothing new crosses the
 network, the admin gate and audit of ADR 0084 are not extended to key material, and the only party that can release the gate is one
@@ -110,7 +110,7 @@ exists, and the command does not pretend otherwise.
   machine controller stands aside, as in any stage; `Paused/AwaitingCredentials` is the visible state.
 - `rotate-ca` now needs the operator's kubeconfig to read the Secret and the operation directly; `bundle-export` already did.
   Where the operator has only ichor-ui access, the rotation waits.
-- Not built: a UI download, `--skip-credential-handoff`, writing the new files over the current ones, refreshing a kubeconfig that names several
+- Not built (the UI download was added by ADR 0093): `--skip-credential-handoff`, writing the new files over the current ones, refreshing a kubeconfig that names several
   clusters (only the current context is written), and credentials for the etcd and aggregator CAs (not rotated, ADR 0063).
 - ADR 0063's statement that "Ichor's dial" is the only client it keeps connected stands: the controller's bundle-based dial is
   unaffected; this ADR is about every other client the operator owns.

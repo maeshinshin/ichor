@@ -1,12 +1,12 @@
 // A page that knows a friendlier name for its object than the one in the URL
 // (a machine's hostname instead of its UUID) publishes it here; the top bar
-// shows it in the breadcrumb. Keys are "<section>/<namespace>/<name>".
+// shows it in the breadcrumb. Keys are "<section>/<name>".
 
 let titles: Record<string, string> = {}
 const listeners = new Set<() => void>()
 
-export function titleKey(section: string, namespace: string, name: string): string {
-  return `${section}/${namespace}/${name}`
+export function titleKey(section: string, ...rest: string[]): string {
+  return [section, ...rest].join('/')
 }
 
 export function setPageTitle(key: string, title: string | undefined): void {

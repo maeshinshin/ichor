@@ -6,12 +6,12 @@ import { OperationKind, type Operation } from '@/gen/ichor/v1alpha1/operation_pb
 import { operationClient } from '@/lib/connect'
 import { notifyDone } from '@/lib/notify'
 import { describeError } from '@/lib/errors'
-import { operationState, pauseAction } from '@/lib/operations'
+import { operationState, pauseAction, retryAvailable } from '@/lib/operations'
 import { useT } from '@/lib/useT'
 
 type ErrorShape = { title: string; detail: string }
 
-// OperationControls: pause or resume, and delete. Deleting asks first; pausing
+// OperationControls: pause or resume (retry after a failed step), and delete. Deleting asks first; pausing
 // changes nothing already done and can be undone, so it does not.
 export function OperationControls({
   op,
@@ -30,6 +30,7 @@ export function OperationControls({
   const [error, setError] = useState<ErrorShape | null>(null)
   const [open, setOpen] = useState(false)
   // A restore that has started is half done; the server refuses to pause it, so the button is not offered.
+  const canRetry = retryAvailable(operationState(op.phase, op.failureReason))
   const action = op.kind === OperationKind.ETCD_RESTORE ? null : pauseAction(op.paused, operationState(op.phase, op.failureReason))
 
   async function setPaused(paused: boolean) {
@@ -40,6 +41,21 @@ export function OperationControls({
       const res = await operationClient.setOperationPaused({ operation: op.ref, paused })
       if (res.operation) onChanged(res.operation)
       notifyDone(t(paused ? 'toast.opPaused' : 'toast.opResumed'))
+    } catch (err) {
+      setError(describeError(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function retry() {
+    if (!op.ref) return
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await operationClient.retryOperation({ operation: op.ref })
+      if (res.operation) onChanged(res.operation)
+      notifyDone(t('toast.opRetried'))
     } catch (err) {
       setError(describeError(err))
     } finally {
@@ -69,6 +85,11 @@ export function OperationControls({
         {action && (
           <Button size="sm" variant="outline" disabled={busy} onClick={() => setPaused(action === 'pause')}>
             {busy ? t('ops.pausing') : t(action === 'pause' ? 'ops.pause' : 'ops.resume')}
+          </Button>
+        )}
+        {canRetry && (
+          <Button size="sm" variant="outline" disabled={busy} title={t('ops.retryHint')} onClick={retry}>
+            {busy ? t('ops.pausing') : t('ops.retry')}
           </Button>
         )}
         {showDelete && (

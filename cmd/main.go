@@ -131,6 +131,7 @@ func main() {
 	var probeAddr string
 	var secureMetrics bool
 	var enableHTTP2 bool
+	var certExpiryWarningDays int
 	var tlsOpts []func(*tls.Config)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
@@ -150,6 +151,8 @@ func main() {
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
+	flag.IntVar(&certExpiryWarningDays, "certificate-expiry-warning-days", 90,
+		"Days before a cluster CA expires at which the CertificatesExpiring condition turns True (ADR 0063).")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -390,6 +393,7 @@ func main() {
 	if err := (&controller.CertExpiryReconciler{
 		Client:              mgr.GetClient(),
 		ControllerNamespace: os.Getenv("POD_NAMESPACE"),
+		ExpiryWarning:       time.Duration(certExpiryWarningDays) * 24 * time.Hour,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "certexpiry")
 		os.Exit(1)

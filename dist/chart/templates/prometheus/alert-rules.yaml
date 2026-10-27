@@ -39,4 +39,16 @@ spec:
       annotations:
         summary: "{{`{{ $labels.controller }}`}} has been failing reconciles for 15 minutes."
         description: "Check the controller's logs for the resources it keeps failing to reconcile."
+    # A cluster CA that expires locks Ichor (and everyone else) out of the Talos and
+    # Kubernetes APIs. ichor_certificate_expiry_timestamp_seconds is a timestamp
+    # (ADR 0063), so the remainder is computed here. The window matches the
+    # CertificatesExpiring condition the UI shows. Not paging: rotation is planned work.
+    - alert: IchorCertificateExpiring
+      expr: ichor_certificate_expiry_timestamp_seconds - time() < {{ .Values.prometheus.rules.certificateExpiryDays | default 90 | int }} * 86400
+      for: 1h
+      labels:
+        severity: warning
+      annotations:
+        summary: "The {{`{{ $labels.certificate }}`}} CA of cluster {{`{{ $labels.namespace }}/{{ $labels.name }}`}} expires soon."
+        description: "Rotate the cluster's CAs (ichor cluster rotate-ca) before they expire. A negative remainder means the CA has already expired."
 {{- end }}

@@ -219,3 +219,7 @@ and returned error for any bundle or CA material (and that the redaction happene
 - The etcd and aggregator CAs and the service-account key are not rotated (Decision 3).
 - Nothing here was run against real machines or a real kubelet restart; the sequence follows `talosctl rotate-ca`'s as read from
   Talos v1.14.3 (`pkg/rotate/pki`), and the first real run should be on a disposable cluster.
+
+## Addendum: expiry alerting
+
+`CertExpiryReconciler` also sets the `TalosCluster` condition `CertificatesExpiring` (True while any CA expires within the warning window or has expired; its message names each CA and its UTC date, not the days left, so it does not rewrite status every hour). The window is the controller flag `--certificate-expiry-warning-days` (default 90), not a spec field: it is operator policy, not cluster intent, and a flag needs no CRD change. The chart adds the `IchorCertificateExpiring` rule (`prometheus.rules.enabled`, window `prometheus.rules.certificateExpiryDays`, default 90, to be kept equal to the flag) on `ichor_certificate_expiry_timestamp_seconds`; the UI lists a cluster in Overview's "Needs attention" and shows the message on the cluster page. This supersedes "no condition" in Decision 1.

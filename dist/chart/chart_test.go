@@ -186,7 +186,7 @@ func TestMonitoringOptionsEnabled(t *testing.T) {
 		t.Fatalf("helm template ichor . --set prometheus.rules.enabled=true: expected a "+
 			"PrometheusRule named %q; see docs/adr/0040", ruleName)
 	}
-	wantAlerts := map[string]bool{"IchorControllerDown": false, "IchorReconcileErrorsPersisting": false}
+	wantAlerts := map[string]bool{"IchorControllerDown": false, "IchorReconcileErrorsPersisting": false, "IchorCertificateExpiring": false}
 	spec, _ := rule["spec"].(map[string]any)
 	groups, _ := spec["groups"].([]any)
 	for _, g := range groups {
@@ -196,6 +196,10 @@ func TestMonitoringOptionsEnabled(t *testing.T) {
 			rm, _ := r.(map[string]any)
 			if name, _ := rm["alert"].(string); name != "" {
 				wantAlerts[name] = true
+				if expr, _ := rm["expr"].(string); name == "IchorCertificateExpiring" &&
+					expr != "ichor_certificate_expiry_timestamp_seconds - time() < 90 * 86400" {
+					t.Errorf("IchorCertificateExpiring expr = %q, want the CA expiry metric against 90 days", expr)
+				}
 			}
 		}
 	}

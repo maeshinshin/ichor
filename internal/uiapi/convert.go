@@ -147,6 +147,8 @@ func machineToPB(m *ichorv1alpha1.TalosMachine) *pb.Machine {
 		NodeLabels:       m.Spec.NodeLabels,
 		Hostname:         m.Spec.Hostname,
 		Install:          installToPB(m.Spec.Install),
+		Network:          networkToPB(m.Spec.Network),
+		Disks:            disksToPB(m.Spec.Disks),
 		ApprovalState:    specApprovalStateToPB(m.Spec.ApprovalState),
 		ApprovalDecision: approvalDecisionToPB(m.Spec.ApprovalDecision),
 		Conditions:       conditions(m.Status.Conditions),

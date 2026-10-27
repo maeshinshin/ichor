@@ -359,8 +359,11 @@ type TalosLink struct {
 	SpeedMbit        int32  `protobuf:"varint,6,opt,name=speed_mbit,json=speedMbit,proto3" json:"speed_mbit,omitempty"`
 	// kind is empty for a physical link, otherwise the virtual kind (bridge,
 	// bond, vlan, ...).
-	Kind          string `protobuf:"bytes,7,opt,name=kind,proto3" json:"kind,omitempty"`
-	Driver        string `protobuf:"bytes,8,opt,name=driver,proto3" json:"driver,omitempty"`
+	Kind   string `protobuf:"bytes,7,opt,name=kind,proto3" json:"kind,omitempty"`
+	Driver string `protobuf:"bytes,8,opt,name=driver,proto3" json:"driver,omitempty"`
+	// permanent_mac is the hardware address burned into the NIC, the one
+	// TalosMachine.spec.network.mac matches; empty when the link reports none.
+	PermanentMac  string `protobuf:"bytes,9,opt,name=permanent_mac,json=permanentMac,proto3" json:"permanent_mac,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -447,6 +450,13 @@ func (x *TalosLink) GetKind() string {
 func (x *TalosLink) GetDriver() string {
 	if x != nil {
 		return x.Driver
+	}
+	return ""
+}
+
+func (x *TalosLink) GetPermanentMac() string {
+	if x != nil {
+		return x.PermanentMac
 	}
 	return ""
 }
@@ -1111,7 +1121,7 @@ const file_ichor_v1alpha1_talosdetails_proto_rawDesc = "" +
 	" \x03(\v2#.ichor.v1alpha1.TalosUnmetConditionR\x0funmetConditions\x12/\n" +
 	"\x13kubernetes_nodename\x18\v \x01(\tR\x12kubernetesNodename\x12\x1f\n" +
 	"\vkernel_args\x18\f \x03(\tR\n" +
-	"kernelArgs\"\xd4\x01\n" +
+	"kernelArgs\"\xf9\x01\n" +
 	"\tTalosLink\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x10\n" +
 	"\x03mac\x18\x02 \x01(\tR\x03mac\x12+\n" +
@@ -1121,7 +1131,8 @@ const file_ichor_v1alpha1_talosdetails_proto_rawDesc = "" +
 	"\n" +
 	"speed_mbit\x18\x06 \x01(\x05R\tspeedMbit\x12\x12\n" +
 	"\x04kind\x18\a \x01(\tR\x04kind\x12\x16\n" +
-	"\x06driver\x18\b \x01(\tR\x06driver\"\x80\x03\n" +
+	"\x06driver\x18\b \x01(\tR\x06driver\x12#\n" +
+	"\rpermanent_mac\x18\t \x01(\tR\fpermanentMac\"\x80\x03\n" +
 	"\x13TalosNetworkSection\x12\x14\n" +
 	"\x05error\x18\x01 \x01(\tR\x05error\x12\x1c\n" +
 	"\taddresses\x18\x02 \x03(\tR\taddresses\x12/\n" +

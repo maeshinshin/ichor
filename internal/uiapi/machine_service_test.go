@@ -151,6 +151,36 @@ var _ = Describe("MachineService", func() {
 			Expect(got.Spec.Install.Image).To(Equal("factory.talos.dev/x:v1"))
 		})
 
+		It("records the network and disk roles and refuses a MAC the machine does not have", func() {
+			cluster := newTestCluster("does-not-exist")
+			m := newTestMachine(cluster.Name, strongTestIdentity("uuid-net"), "", ichorv1alpha1.MachineApprovalStatePending)
+			s := &Server{Client: k8sClient}
+
+			_, err := s.ApproveMachine(ctx, connect.NewRequest(&pb.ApproveMachineRequest{
+				Machine: objectRef(m.Namespace, m.Name), Role: pb.MachineRole_MACHINE_ROLE_WORKER,
+				Network: &pb.MachineNetwork{Mac: "00:11:22:33:44:55"},
+			}))
+			Expect(connect.CodeOf(err)).To(Equal(connect.CodeInvalidArgument))
+			Expect(fetchTestMachine(m).Spec.IsApproved()).To(BeFalse())
+
+			resp, err := s.ApproveMachine(ctx, connect.NewRequest(&pb.ApproveMachineRequest{
+				Machine: objectRef(m.Namespace, m.Name), Role: pb.MachineRole_MACHINE_ROLE_WORKER,
+				Network: &pb.MachineNetwork{
+					Mac: testMAC, Addressing: "static", Addresses: []string{"10.0.0.2/24"}, Gateway: "10.0.0.1", VlanId: 30,
+				},
+				Disks: []*pb.MachineDiskRole{{Role: "ephemeral", Disk: &pb.MachineDisk{Serial: "E1"}}},
+			}))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(resp.Msg.GetMachine().GetNetwork().GetVlanId()).To(Equal(int32(30)))
+			Expect(resp.Msg.GetMachine().GetDisks()).To(HaveLen(1))
+
+			got := fetchTestMachine(m)
+			Expect(got.Spec.Network).NotTo(BeNil())
+			Expect(got.Spec.Network.Addressing).To(Equal("static"))
+			Expect(got.Spec.Disks).To(HaveLen(1))
+			Expect(got.Spec.Disks[0].Disk.Serial).To(Equal("E1"))
+		})
+
 		It("condition 1: refuses a weak identity", func() {
 			cluster := newTestCluster("does-not-exist")
 			weak := ichorv1alpha1.TalosMachineIdentity{UUID: "uuid-weak"} // no serial, no MAC

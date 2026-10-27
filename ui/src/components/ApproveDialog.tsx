@@ -15,7 +15,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { BreakGlassDialog, type BreakGlassRun } from '@/components/BreakGlassDialog'
 import { ErrorAlert } from '@/components/ErrorAlert'
+import { DiskRoleFields } from '@/components/DiskRoleFields'
 import { InstallDiskPicker } from '@/components/InstallDiskPicker'
+import { NetworkFields } from '@/components/NetworkFields'
 import type { NodeDetail } from '@/gen/ichor/v1alpha1/node_pb'
 import { MachineRole, type Machine } from '@/gen/ichor/v1alpha1/machine_pb'
 import { machineClient, nodeClient } from '@/lib/connect'
@@ -25,11 +27,22 @@ import { describeError } from '@/lib/errors'
 import { canApprove, isStrongIdentity } from '@/lib/identity'
 import { diskSelector, installChoice, isValidHostname } from '@/lib/installDisk'
 import { formatBytes } from '@/lib/format'
+import type { TalosLink } from '@/gen/ichor/v1alpha1/talosdetails_pb'
+import {
+  diskRolesChoice,
+  networkChoice,
+  selectableLinks,
+  type DiskRolesForm,
+  type NetworkForm,
+} from '@/lib/machineSettings'
 import { useT } from '@/lib/useT'
 
 type ErrorShape = { title: string; detail: string }
 
-// ApproveDialog approves one pending node: role, hostname and install disk.
+const emptyNetwork: NetworkForm = { mac: '', addressing: 'dhcp', addresses: '', gateway: '', dns: '', vlan: '' }
+const emptyRoles: DiskRolesForm = { ephemeral: '', volumes: [] }
+
+// ApproveDialog approves one pending node: role, hostname, install disk, network card and other disk roles.
 // Used by the node list and by the cluster's Add node page.
 export function ApproveDialog({
   machine,
@@ -51,6 +64,9 @@ export function ApproveDialog({
   const [installKey, setInstallKey] = useState('')
   const [installDev, setInstallDev] = useState('')
   const [installImage, setInstallImage] = useState('')
+  const [links, setLinks] = useState<TalosLink[]>([])
+  const [networkForm, setNetworkForm] = useState<NetworkForm>(emptyNetwork)
+  const [rolesForm, setRolesForm] = useState<DiskRolesForm>(emptyRoles)
   const [reason, setReason] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<ErrorShape | null>(null)
@@ -59,10 +75,13 @@ export function ApproveDialog({
   const strong = isStrongIdentity(machine.identity)
   const hostnameOk = isValidHostname(hostname)
   const disks = (node?.disks ?? []).filter((d) => diskSelector(d))
+  const linkChoices = selectableLinks(links, machine.identity?.macAddresses ?? [])
+  const net = networkChoice(networkForm)
+  const roles = diskRolesChoice(rolesForm, installKey)
   // The list comes from the node itself; without it (the Talos API unreachable, or no disk
   // reported) the person can still type a device path.
   const { install, ok: installOk } = installChoice({ disks, key: installKey, typed: installDev, image: installImage })
-  const canSubmit = canApprove(machine.identity, role !== MachineRole.UNSPECIFIED) && hostnameOk && installOk
+  const canSubmit = canApprove(machine.identity, role !== MachineRole.UNSPECIFIED) && hostnameOk && installOk && net.ok && roles.ok
 
   useEffect(() => {
     if (!open || !machine.ref) return
@@ -72,7 +91,15 @@ export function ApproveDialog({
       (res) => setNode(res.node ?? null),
       (err) => setNodeError(describeError(err).detail),
     )
+    // The network cards come from a separate read; without them the MAC can be typed.
+    setLinks([])
+    nodeClient.getNodeTalosDetails({ machine: machine.ref }).then(
+      (res) => setLinks(res.network?.links ?? []),
+      () => setLinks([]),
+    )
     // Reset the form each time the dialog is reopened.
+    setNetworkForm(emptyNetwork)
+    setRolesForm(emptyRoles)
     setRole(MachineRole.UNSPECIFIED)
     setHostname(machine.hostname)
     setInstallKey('')
@@ -90,6 +117,8 @@ export function ApproveDialog({
       role,
       hostname,
       install,
+      network: net.network,
+      disks: roles.disks,
       nodeLabels: {},
       reason,
       breakGlass: bg,
@@ -108,6 +137,8 @@ export function ApproveDialog({
         role,
         hostname,
         install,
+        network: net.network,
+        disks: roles.disks,
         nodeLabels: {},
         reason,
       })
@@ -210,6 +241,22 @@ export function ApproveDialog({
             onValue={setInstallKey}
             onTyped={setInstallDev}
             onImage={setInstallImage}
+          />
+
+          <DiskRoleFields
+            idPrefix="approve"
+            disks={disks}
+            form={rolesForm}
+            errors={roles.errors}
+            onChange={setRolesForm}
+          />
+
+          <NetworkFields
+            idPrefix="approve"
+            links={linkChoices}
+            form={networkForm}
+            errors={net.errors}
+            onChange={setNetworkForm}
           />
 
           <section class="space-y-1">

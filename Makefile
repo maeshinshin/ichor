@@ -216,7 +216,7 @@ lint-config: golangci-lint ## Verify golangci-lint linter configuration
 
 .PHONY: build
 build: manifests generate fmt vet ## Build manager binary.
-	go build -ldflags "$(LDFLAGS)" -o bin/manager cmd/main.go
+	go build -ldflags "$(LDFLAGS)" -o bin/manager ./cmd
 
 .PHONY: build-ichor
 build-ichor: fmt vet ## Build the ichor CLI binary (placeholder install manifest; see build-ichor-embed).
@@ -229,7 +229,7 @@ build-ichor-embed: build-installer ## Build the ichor CLI with Ichor's own insta
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
-	go run ./cmd/main.go
+	go run ./cmd
 
 # If you wish to build the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64). However, you must enable docker buildKit for it.

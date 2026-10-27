@@ -37,7 +37,9 @@ func CacheOptions(namespace string) cache.Options {
 	scoped := cache.ByObject{Namespaces: map[string]cache.Config{namespace: {}}}
 
 	return cache.Options{ByObject: map[client.Object]cache.ByObject{
-		&corev1.Secret{}: scoped,
-		&batchv1.Job{}:   scoped,
+		&corev1.Secret{}:    scoped,
+		&corev1.ConfigMap{}: scoped,
+		&corev1.Service{}:   scoped,
+		&batchv1.Job{}:      scoped,
 	}}
 }

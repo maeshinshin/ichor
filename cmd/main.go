@@ -132,6 +132,9 @@ func main() {
 	var secureMetrics bool
 	var enableHTTP2 bool
 	var certExpiryWarningDays int
+	var userIssuer bool
+	var uiServiceName string
+	var refreshLifetime time.Duration
 	var tlsOpts []func(*tls.Config)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
@@ -151,6 +154,12 @@ func main() {
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
+	flag.BoolVar(&userIssuer, "user-issuer", false,
+		"Keep the signing keys, internal TLS and trust ConfigMap for ichor-ui's own OIDC issuer (ADR 0094).")
+	flag.StringVar(&uiServiceName, "ui-service-name", controller.DefaultUIServiceName,
+		"The ClusterIP Service in front of ichor-ui, named by the issuer's internal certificate.")
+	flag.DurationVar(&refreshLifetime, "oidc-refresh-lifetime", controller.DefaultRefreshLifetime,
+		"The longest-lived token ichor-ui signs; a rotated-out signing key is kept this long.")
 	flag.IntVar(&certExpiryWarningDays, "certificate-expiry-warning-days", 90,
 		"Days before a cluster CA expires at which the CertificatesExpiring condition turns True (ADR 0063).")
 	opts := zap.Options{
@@ -397,6 +406,17 @@ func main() {
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "certexpiry")
 		os.Exit(1)
+	}
+	if userIssuer {
+		if err := (&controller.IssuerTrustReconciler{
+			Client: mgr.GetClient(), APIReader: mgr.GetAPIReader(),
+			Namespace: os.Getenv("POD_NAMESPACE"), UIServiceName: uiServiceName,
+			RefreshLifetime: refreshLifetime,
+			ExpiryWarning:   time.Duration(certExpiryWarningDays) * 24 * time.Hour,
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "Failed to create controller", "controller", "issuertrust")
+			os.Exit(1)
+		}
 	}
 	if err := (&controller.CNIHandoverReconciler{
 		Client: mgr.GetClient(),

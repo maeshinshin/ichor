@@ -103,6 +103,7 @@ rules:
   - ichor.maesh.dev
   resources:
   - ichorinstallations
+  - ichorusers
   - talosclusters
   - talosconfigpatches
   - talosetcdbackups
@@ -115,6 +116,7 @@ rules:
   - ichor.maesh.dev
   resources:
   - ichorinstallations/status
+  - ichorusers/status
   - talosclusters/status
   - talosetcdbackups/status
   - talosmachines/status
@@ -198,6 +200,17 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - configmaps
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
   - secrets
   verbs:
   - create
@@ -218,6 +231,16 @@ rules:
 - apiGroups:
   - ""
   resourceNames:
+  - ichor-user-credentials
+  resources:
+  - secrets
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - ""
+  resourceNames:
   - ichor-webhook-server-cert
   resources:
   - secrets
@@ -225,6 +248,14 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - get
+  - list
+  - watch
 - apiGroups:
   - apps
   resources:

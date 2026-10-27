@@ -33,6 +33,11 @@ import (
 // ADR 0059, decision 5: when Argo CD owns the IchorInstallation, an Ichor upgrade is a pull
 // request that changes spec.version in Git; nothing is written to the cluster.
 
+const (
+	ichorOld = "v0.1.0"
+	ichorNew = "v0.2.0"
+)
+
 func ichorInstallation(mode, version, installed string, tracked bool) *ichorv1alpha1.IchorInstallation {
 	inst := &ichorv1alpha1.IchorInstallation{
 		Name: ichorv1alpha1.IchorInstallationName,
@@ -77,18 +82,18 @@ func (e *prEnv) operations(t *testing.T) int {
 
 func TestIchorUpgradeOfATrackedInstallationOpensAPR(t *testing.T) {
 	e := newPREnv(t, prOpts{})
-	if err := e.k8s.Create(context.Background(), ichorInstallation("ichor", "v0.1.0", "v0.1.0", true)); err != nil {
+	if err := e.k8s.Create(context.Background(), ichorInstallation("ichor", ichorOld, ichorOld, true)); err != nil {
 		t.Fatal(err)
 	}
 
 	plan, err := e.srv.PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{
-		Cluster: objectRef(trackedTestNS, "c"), Kind: pb.OperationKind_OPERATION_KIND_ICHOR, Target: "v0.2.0",
+		Cluster: objectRef(trackedTestNS, "c"), Kind: pb.OperationKind_OPERATION_KIND_ICHOR, Target: ichorNew,
 	}))
 	if err != nil || plan.Msg.GetBlocked() != "" || !plan.Msg.GetOpensPullRequest() {
 		t.Fatalf("plan err=%v msg=%v", err, plan.Msg)
 	}
 
-	res, err := e.srv.CreateOperation(context.Background(), ichorCreate("v0.2.0"))
+	res, err := e.srv.CreateOperation(context.Background(), ichorCreate(ichorNew))
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -97,7 +102,7 @@ func TestIchorUpgradeOfATrackedInstallationOpensAPR(t *testing.T) {
 		t.Fatalf("response = %v", res.Msg)
 	}
 
-	if got := e.installation(t).Spec.Version; got != "v0.1.0" {
+	if got := e.installation(t).Spec.Version; got != ichorOld {
 		t.Fatalf("the cluster's spec.version was written: %s", got)
 	}
 
@@ -110,7 +115,7 @@ func TestIchorUpgradeOfATrackedInstallationOpensAPR(t *testing.T) {
 		t.Fatalf("spec.version was not bumped in Git:\n%s", edited)
 	}
 
-	for _, want := range []string{"Upgrade Ichor to v0.2.0", "v0.1.0"} {
+	for _, want := range []string{"Upgrade Ichor to v0.2.0", ichorOld} {
 		if !strings.Contains(e.host.body["title"]+e.host.body["body"], want) {
 			t.Errorf("the PR text lacks %q: %v", want, e.host.body)
 		}
@@ -119,23 +124,23 @@ func TestIchorUpgradeOfATrackedInstallationOpensAPR(t *testing.T) {
 
 func TestIchorUpgradeOfATrackedInstallationNeedsAConnectedRepository(t *testing.T) {
 	e := newPREnv(t, prOpts{noRepo: true})
-	if err := e.k8s.Create(context.Background(), ichorInstallation("ichor", "v0.1.0", "v0.1.0", true)); err != nil {
+	if err := e.k8s.Create(context.Background(), ichorInstallation("ichor", ichorOld, ichorOld, true)); err != nil {
 		t.Fatal(err)
 	}
 
-	_, err := e.srv.CreateOperation(context.Background(), ichorCreate("v0.2.0"))
+	_, err := e.srv.CreateOperation(context.Background(), ichorCreate(ichorNew))
 	if connect.CodeOf(err) != connect.CodeFailedPrecondition || !strings.Contains(err.Error(), "tracked") {
 		t.Fatalf("err = %v", err)
 	}
 
-	if e.host.hits != 0 || e.installation(t).Spec.Version != "v0.1.0" || e.operations(t) != 0 {
+	if e.host.hits != 0 || e.installation(t).Spec.Version != ichorOld || e.operations(t) != 0 {
 		t.Fatal("something was written")
 	}
 }
 
 func TestIchorUpgradeWithoutATargetStillCreatesTheOperation(t *testing.T) {
 	e := newPREnv(t, prOpts{})
-	if err := e.k8s.Create(context.Background(), ichorInstallation("ichor", "v0.2.0", "v0.1.0", true)); err != nil {
+	if err := e.k8s.Create(context.Background(), ichorInstallation("ichor", ichorNew, ichorOld, true)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -151,16 +156,16 @@ func TestIchorUpgradeWithoutATargetStillCreatesTheOperation(t *testing.T) {
 
 func TestExternalInstallationWithoutGitCannotBeUpgradedFromHere(t *testing.T) {
 	e := newPREnv(t, prOpts{})
-	if err := e.k8s.Create(context.Background(), ichorInstallation("external", "v0.1.0", "v0.1.0", false)); err != nil {
+	if err := e.k8s.Create(context.Background(), ichorInstallation("external", ichorOld, ichorOld, false)); err != nil {
 		t.Fatal(err)
 	}
 
-	_, err := e.srv.CreateOperation(context.Background(), ichorCreate("v0.2.0"))
+	_, err := e.srv.CreateOperation(context.Background(), ichorCreate(ichorNew))
 	if connect.CodeOf(err) != connect.CodeFailedPrecondition || !strings.Contains(err.Error(), "external") {
 		t.Fatalf("err = %v", err)
 	}
 
-	if e.installation(t).Spec.Version != "v0.1.0" || e.operations(t) != 0 {
+	if e.installation(t).Spec.Version != ichorOld || e.operations(t) != 0 {
 		t.Fatal("something was written")
 	}
 }
@@ -179,12 +184,12 @@ func TestGetIchorInstallation(t *testing.T) {
 		installed, target              string
 		upgrading, available, wantNone bool
 	}{
-		"newer target known":        {[]client.Object{ichorInstallation("ichor", "v0.2.0", "v0.1.0", false)}, "v0.1.0", "v0.2.0", false, true, false},
-		"up to date":                {[]client.Object{ichorInstallation("ichor", "v0.1.0", "v0.1.0", false)}, "v0.1.0", "v0.1.0", false, false, false},
-		"older target":              {[]client.Object{ichorInstallation("ichor", "v0.1.0", "v0.2.0", false)}, "v0.2.0", "v0.1.0", false, false, false},
-		"upgrade running":           {[]client.Object{ichorInstallation("ichor", "v0.2.0", "v0.1.0", false), running}, "v0.1.0", "v0.2.0", true, false, false},
-		"other kind running":        {[]client.Object{ichorInstallation("ichor", "v0.2.0", "v0.1.0", false), talosRunning}, "v0.1.0", "v0.2.0", false, true, false},
-		"installed version unknown": {[]client.Object{ichorInstallation("ichor", "v0.2.0", "", false)}, "", "v0.2.0", false, false, false},
+		"newer target known":        {[]client.Object{ichorInstallation("ichor", ichorNew, ichorOld, false)}, ichorOld, ichorNew, false, true, false},
+		"up to date":                {[]client.Object{ichorInstallation("ichor", ichorOld, ichorOld, false)}, ichorOld, ichorOld, false, false, false},
+		"older target":              {[]client.Object{ichorInstallation("ichor", ichorOld, ichorNew, false)}, ichorNew, ichorOld, false, false, false},
+		"upgrade running":           {[]client.Object{ichorInstallation("ichor", ichorNew, ichorOld, false), running}, ichorOld, ichorNew, true, false, false},
+		"other kind running":        {[]client.Object{ichorInstallation("ichor", ichorNew, ichorOld, false), talosRunning}, ichorOld, ichorNew, false, true, false},
+		"installed version unknown": {[]client.Object{ichorInstallation("ichor", ichorNew, "", false)}, "", ichorNew, false, false, false},
 		"no installation":           {nil, "", "", false, false, true},
 	} {
 		t.Run(name, func(t *testing.T) {

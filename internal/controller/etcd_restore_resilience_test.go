@@ -43,6 +43,9 @@ func watchClient() client.WithWatch {
 	return c
 }
 
+// workerNode is the Kubernetes node name of the worker that is not wiped.
+const workerNode = "wk-1"
+
 var _ = Describe("TalosOperation etcd-restore after a restart of the controller", func() {
 	BeforeEach(func() {
 		restoreTailInterval = time.Millisecond
@@ -190,6 +193,29 @@ var _ = Describe("TalosOperation etcd-restore after a restart of the controller"
 
 		got = f.reconcileWith(r, op)
 		Expect(got.Status.EtcdRestore.Step).To(Equal(ichorv1alpha1.EtcdRestoreStepReconciling))
+	})
+
+	It("also restarts the CNI's pod on a node that was not wiped, and waits for its replacement", func() {
+		kc := kubeProxyCluster()
+		cl := map[string]string{labelK8sApp: ciliumName}
+
+		_, err := kc.AppsV1().DaemonSets(kubeSystemNamespace).Create(ctx, &appsv1.DaemonSet{
+			Namespace: kubeSystemNamespace, Name: ciliumName,
+			Spec: appsv1.DaemonSetSpec{Selector: &metav1.LabelSelector{MatchLabels: cl}},
+		}, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = kc.CoreV1().Pods(kubeSystemNamespace).Create(ctx, &corev1.Pod{
+			Namespace: kubeSystemNamespace, Name: "cilium-w", Labels: cl, Spec: corev1.PodSpec{NodeName: workerNode},
+		}, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		f, op, r, _ := restoreWithWorker(kc)
+
+		f.reconcileWith(r, op)
+		f.reconcileWith(r, op)
+		Expect(podNames(kc, "kube-system")).NotTo(ContainElement("cilium-w"), "the CNI pod of the worker went with kube-proxy's")
+		Expect(podNames(kc, "kube-system")).To(ContainElement("coredns-w"))
 	})
 
 	It("says so, rather than claiming success, when the node does not converge", func() {

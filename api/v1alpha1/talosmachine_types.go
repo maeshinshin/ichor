@@ -357,6 +357,13 @@ type TalosMachineStatus struct {
 	// +optional
 	Stage string `json:"stage,omitempty"`
 
+	// schematic is the Image Factory schematic ID the node's running system was built from,
+	// read from the node (its ImageFactorySchematic resource) on every reconcile that reaches
+	// it. Empty when the node did not boot an Image Factory asset or was never read. It is what
+	// a Talos upgrade and its plan compare spec.schematic against (ADR 0023, Amendment).
+	// +optional
+	Schematic string `json:"schematic,omitempty"`
+
 	// configStoredAt is when the node accepted its initial configuration over the insecure
 	// maintenance API. Once set, Ichor never applies to this node insecurely again; it only
 	// follows the node to running. Empty for a node that has not been provisioned by Ichor.

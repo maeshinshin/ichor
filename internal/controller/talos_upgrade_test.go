@@ -109,6 +109,95 @@ func (f *fakeStorageEvacuator) End(context.Context, *evacuationTarget, string) e
 	return f.endErr
 }
 
+var _ = Describe("talosUpgradeAdvancer schematic", func() {
+	const (
+		oldSchematic = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+		newSchematic = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	)
+
+	It("upgrades a machine whose version matches but whose running schematic differs, and finishes on the new one", func() {
+		secret := newTestSecret(newTestBundle("v1.14"))
+		cluster := newTestCluster(secret.Name, "v1.14")
+		cluster.Spec.Schematic = &ichorv1alpha1.TalosClusterSchematic{ID: newSchematic}
+		cp := newTestControlPlane(cluster.Name, "sc1")
+		setHostname(cp, "node-sc1")
+		newTestNode("node-sc1", true)
+
+		fake := &fakeTalosClient{version: cluster.Spec.TalosVersion, schematic: oldSchematic, bootID: testBootIDBefore}
+		adv := newUpgradeAdvancer(fake, nil)
+
+		done, err := adv.Advance(ctx, cluster, fetchMachine(cp), nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(done).To(BeFalse())
+		Expect(fake.upgradeCalls).To(HaveLen(1))
+		Expect(fake.upgradeCalls[0]).To(ContainSubstring(newSchematic + ":" + cluster.Spec.TalosVersion))
+
+		fake.bootID, fake.schematic = testBootIDAfter, newSchematic
+		fake.etcdMembers = []EtcdMember{{ID: 1, Hostname: "node-sc1"}}
+
+		done, err = adv.Advance(ctx, cluster, fetchMachine(cp), nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(done).To(BeTrue())
+	})
+
+	It("fails when the node reboots onto the right version but still the old schematic", func() {
+		secret := newTestSecret(newTestBundle("v1.14"))
+		cluster := newTestCluster(secret.Name, "v1.14")
+		cluster.Spec.Schematic = &ichorv1alpha1.TalosClusterSchematic{ID: newSchematic}
+		cp := newTestControlPlane(cluster.Name, "sc2")
+		setHostname(cp, "node-sc2")
+		newTestNode("node-sc2", true)
+
+		fake := &fakeTalosClient{version: cluster.Spec.TalosVersion, schematic: oldSchematic, bootID: testBootIDBefore}
+		adv := newUpgradeAdvancer(fake, nil)
+
+		_, err := adv.Advance(ctx, cluster, fetchMachine(cp), nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		fake.bootID = testBootIDAfter
+
+		_, err = adv.Advance(ctx, cluster, fetchMachine(cp), nil)
+		Expect(err).To(MatchError(ContainSubstring("fell back")))
+	})
+
+	It("does nothing for a machine already on the target version and schematic", func() {
+		secret := newTestSecret(newTestBundle("v1.14"))
+		cluster := newTestCluster(secret.Name, "v1.14")
+		cluster.Spec.Schematic = &ichorv1alpha1.TalosClusterSchematic{ID: newSchematic}
+		cp := newTestControlPlane(cluster.Name, "sc3")
+		setHostname(cp, "node-sc3")
+		newTestNode("node-sc3", true)
+
+		fake := &fakeTalosClient{
+			version: cluster.Spec.TalosVersion, schematic: newSchematic, bootID: testBootIDBefore,
+			etcdMembers: []EtcdMember{{ID: 1, Hostname: "node-sc3"}},
+		}
+
+		done, err := newUpgradeAdvancer(fake, nil).Advance(ctx, cluster, fetchMachine(cp), nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(done).To(BeTrue())
+		Expect(fake.upgradeCalls).To(BeEmpty())
+	})
+
+	It("treats a node that booted no Image Factory asset as running the stock schematic", func() {
+		secret := newTestSecret(newTestBundle("v1.14"))
+		cluster := newTestCluster(secret.Name, "v1.14")
+		cp := newTestControlPlane(cluster.Name, "sc4")
+		setHostname(cp, "node-sc4")
+		newTestNode("node-sc4", true)
+
+		fake := &fakeTalosClient{
+			version: cluster.Spec.TalosVersion, bootID: testBootIDBefore,
+			etcdMembers: []EtcdMember{{ID: 1, Hostname: "node-sc4"}},
+		}
+
+		done, err := newUpgradeAdvancer(fake, nil).Advance(ctx, cluster, fetchMachine(cp), nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(done).To(BeTrue())
+		Expect(fake.upgradeCalls).To(BeEmpty())
+	})
+})
+
 var _ = Describe("talosUpgradeAdvancer", func() {
 	It("finishes a control plane already on the target without a recorded hostname, using the name the node reports", func() {
 		secret := newTestSecret(newTestBundle("v1.14"))

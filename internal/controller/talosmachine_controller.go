@@ -539,6 +539,13 @@ func (r *TalosMachineReconciler) readNode(
 		return nil, res, true, err
 	}
 
+	schemCtx, cancelSchem := context.WithTimeout(ctx, talosCallTimeout)
+	if schematic, serr := talos.Schematic(schemCtx); serr == nil {
+		m.Status.Schematic = schematic
+	}
+
+	cancelSchem()
+
 	res, stop, err = r.followStage(ctx, talos, m)
 
 	return current, res, stop, err

@@ -127,6 +127,9 @@ type fakeTalosClient struct {
 	// stage and stageErr serve talosmachine_provision_test.go (MachineStage).
 	stage    string
 	stageErr error
+	// schematic is the Image Factory schematic the fake node reports ("" = not an Image Factory asset).
+	schematic    string
+	schematicErr error
 	// node-action fields (ADR 0085).
 	serviceRestarts   []string
 	serviceRestartErr error
@@ -236,6 +239,10 @@ func (f *fakeTalosClient) Shutdown(_ context.Context, force bool) error {
 
 func (f *fakeTalosClient) MachineStage(context.Context) (string, error) {
 	return f.stage, f.stageErr
+}
+
+func (f *fakeTalosClient) Schematic(context.Context) (string, error) {
+	return f.schematic, f.schematicErr
 }
 
 func (f *fakeTalosClient) Version(context.Context) (string, error) {

@@ -42,6 +42,12 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/compatibility"
 )
 
+// DefaultSchematic is the Image Factory schematic of the stock Talos installer: what a cluster
+// without spec.schematic runs, and what a node that did not boot an Image Factory asset is taken
+// to run. It is the talos module's pkg/images DefaultInstallerImageSchematic, copied verbatim
+// (that package is in the top-level talos module, ADR 0022).
+const DefaultSchematic = "376567988ad370138ad8b2698212367b8edcb69b5fd68c80be1f2ec7d603b4ba"
+
 // TalosPath reports whether upgrading Talos from "from" to "to" (both
 // "vX.Y.Z") is a path Talos itself supports. It defers entirely to
 // pkg/machinery/compatibility's TalosVersion.UpgradeableFrom, which encodes

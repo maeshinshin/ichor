@@ -1,5 +1,3 @@
-import { conditionTone } from './conditions.ts'
-
 export type MachineLite = { approval: 'approved' | 'pending' | 'rejected'; ready: string }
 
 // machineCounts counts nodes by state: approval first, then the Ready condition
@@ -16,18 +14,6 @@ export function machineCounts(ms: readonly MachineLite[]) {
   return c
 }
 
-type Cond = { type: string; status: string }
-
-// clusterIsReady: the Ready condition when the cluster reports one. A TalosCluster
-// reports Transitioning but no Ready today, so then it is ready when it is not
-// transitioning and no health-style condition (Available, Healthy ...) is False.
-export function clusterIsReady(conds: readonly Cond[]): boolean {
-  const ready = conds.find((c) => c.type === 'Ready')
-  if (ready) return ready.status === 'True'
-  if (conds.some((c) => c.type === 'Transitioning' && c.status === 'True')) return false
-  return !conds.some((c) => conditionTone(c.type, c.status) === 'bad')
-}
-
 // activeCondition is the message of a condition of this type while it is True, else null.
 function activeCondition(conds: readonly { type: string; status: string; message?: string }[], type: string): string | null {
   const c = conds.find((x) => x.type === type && x.status === 'True')
@@ -38,15 +24,6 @@ function activeCondition(conds: readonly { type: string; status: string; message
 // (a CA is inside the controller's warning window or expired), else null (ADR 0063).
 export function expiringCertificatesMessage(conds: readonly { type: string; status: string; message?: string }[]): string | null {
   return activeCondition(conds, 'CertificatesExpiring')
-}
-
-export type ClusterStatus = 'ready' | 'degraded' | 'upgrading'
-
-// clusterStatus is the badge at the top of the home page: a rollout or a running
-// operation is "upgrading" whatever else is true; else Ready decides.
-export function clusterStatus(conds: readonly Cond[], rolling: boolean, opRunning: boolean): ClusterStatus {
-  if (rolling || opRunning) return 'upgrading'
-  return clusterIsReady(conds) ? 'ready' : 'degraded'
 }
 
 export type Attention =

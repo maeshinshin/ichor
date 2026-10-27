@@ -1,24 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { attentionItems, clusterIsReady, clusterStatus, expiringCertificatesMessage, machineCounts } from './overview.ts'
-
-test('clusterIsReady uses Ready when there is one, else steady and not unhealthy', () => {
-  assert.equal(clusterIsReady([{ type: 'Ready', status: 'True' }]), true)
-  assert.equal(clusterIsReady([{ type: 'Ready', status: 'Unknown' }]), false)
-  assert.equal(clusterIsReady([{ type: 'Transitioning', status: 'False' }]), true)
-  assert.equal(clusterIsReady([]), true)
-  assert.equal(clusterIsReady([{ type: 'Transitioning', status: 'True' }]), false)
-  assert.equal(clusterIsReady([{ type: 'Available', status: 'False' }]), false)
-})
-
-test('clusterStatus: upgrading beats ready and degraded', () => {
-  const ready = [{ type: 'Ready', status: 'True' }]
-  const down = [{ type: 'Ready', status: 'False' }]
-  assert.equal(clusterStatus(ready, false, false), 'ready')
-  assert.equal(clusterStatus(down, false, false), 'degraded')
-  assert.equal(clusterStatus(down, true, false), 'upgrading')
-  assert.equal(clusterStatus(ready, false, true), 'upgrading')
-})
+import { attentionItems, expiringCertificatesMessage, machineCounts } from './overview.ts'
 
 test('attentionItems lists only what applies', () => {
   assert.deepEqual(attentionItems({ conditions: [], pending: 0, configWaiting: 0, opState: 'running' }), [])

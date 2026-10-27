@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -34,6 +35,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/gitopstracking"
+	"github.com/maeshinshin/ichor/pkg/render"
 )
 
 // BreakGlassVerb is the RBAC verb that lets a user write a GitOps-managed CR
@@ -50,6 +52,7 @@ var breakglasslog = logf.Log.WithName("breakglass-webhook")
 
 // +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-breakglass,mutating=false,failurePolicy=fail,sideEffects=None,groups=ichor.maesh.dev,resources=talosmachines;talosconfigpatches,verbs=update;delete,versions=v1alpha1,name=vbreakglass-v1alpha1.kb.io,admissionReviewVersions=v1
 // +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-breakglass,mutating=false,failurePolicy=fail,sideEffects=None,groups=ichor.maesh.dev,resources=talosoperations,verbs=create,versions=v1alpha1,name=vbreakglassop-v1alpha1.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-breakglass,mutating=false,failurePolicy=fail,sideEffects=None,groups=ichor.maesh.dev,resources=talosclusters,verbs=create;update,versions=v1alpha1,name=vauthentication-v1alpha1.kb.io,admissionReviewVersions=v1
 // +kubebuilder:rbac:groups=authorization.k8s.io,resources=subjectaccessreviews,verbs=create
 
 // BreakGlassOptions configures the break-glass admission check.
@@ -109,8 +112,11 @@ func SetupBreakGlassWebhookWithManager(mgr ctrl.Manager, opts BreakGlassOptions)
 
 // Handle implements admission.Handler.
 func (h *BreakGlassHandler) Handle(ctx context.Context, req admission.Request) admission.Response {
-	if req.Resource.Resource == "talosoperations" {
+	switch req.Resource.Resource {
+	case "talosoperations":
 		return h.handleOperation(ctx, req)
+	case "talosclusters":
+		return h.handleCluster(ctx, req)
 	}
 
 	if req.Operation != "UPDATE" && req.Operation != "DELETE" {
@@ -186,6 +192,20 @@ func (h *BreakGlassHandler) handleOperation(ctx context.Context, req admission.R
 		return admission.Errored(http.StatusBadRequest, fmt.Errorf("decoding the operation: %w", err))
 	}
 
+	// A destructive start needs the verb start on its subresource (ADR 0094, Decision 4), on top of
+	// the break-glass requirements below. `create` on talosoperations cannot say which kind it is.
+	if sub := op.Spec.StartSubresource(); sub != "" {
+		allowed, err := h.mayDo(ctx, req.UserInfo, ichorv1alpha1.OperationStartVerb, "talosoperations", sub, req.Name, req.Namespace)
+		if err != nil {
+			return admission.Errored(http.StatusServiceUnavailable, fmt.Errorf("cannot check the %s right: %w", ichorv1alpha1.OperationStartVerb, err))
+		}
+
+		if !allowed {
+			return admission.Denied(fmt.Sprintf("a %s operation needs the %q verb on talosoperations/%s",
+				op.Spec.Kind, ichorv1alpha1.OperationStartVerb, sub))
+		}
+	}
+
 	// An etcd restore rewinds the whole cluster to a snapshot: it needs the verb on the cluster (ADR 0089).
 	if op.Spec.Kind == ichorv1alpha1.TalosOperationKindEtcdRestore {
 		cluster := op.Spec.ClusterRef.Name
@@ -243,6 +263,12 @@ func removesIchorFinalizer(old, updated *unstructured.Unstructured) bool {
 // mayBreakGlass asks Kubernetes whether the requesting user holds the verb on
 // the object, as the user: the webhook never impersonates.
 func (h *BreakGlassHandler) mayBreakGlass(ctx context.Context, user authnv1.UserInfo, resource, name, namespace string) (bool, error) {
+	return h.mayDo(ctx, user, BreakGlassVerb, resource, "", name, namespace)
+}
+
+// mayDo asks Kubernetes, with a SubjectAccessReview on the requesting user, whether they hold
+// verb on resource (and subresource, when set).
+func (h *BreakGlassHandler) mayDo(ctx context.Context, user authnv1.UserInfo, verb, resource, subresource, name, namespace string) (bool, error) {
 	sar := &authzv1.SubjectAccessReview{
 		Spec: authzv1.SubjectAccessReviewSpec{
 			User:   user.Username,
@@ -250,11 +276,12 @@ func (h *BreakGlassHandler) mayBreakGlass(ctx context.Context, user authnv1.User
 			Groups: user.Groups,
 			Extra:  extraOf(user.Extra),
 			ResourceAttributes: &authzv1.ResourceAttributes{
-				Group:     ichorGroup,
-				Resource:  resource,
-				Verb:      BreakGlassVerb,
-				Name:      name,
-				Namespace: namespace,
+				Group:       ichorGroup,
+				Resource:    resource,
+				Subresource: subresource,
+				Verb:        verb,
+				Name:        name,
+				Namespace:   namespace,
 			},
 		},
 	}
@@ -264,6 +291,63 @@ func (h *BreakGlassHandler) mayBreakGlass(ctx context.Context, user authnv1.User
 	}
 
 	return sar.Status.Allowed, nil
+}
+
+// AuthenticationVerb and AuthenticationSubresource are the RBAC right that gates a change to
+// TalosCluster.spec.authentication (ADR 0094, Decision 4): verb update on talosclusters/authentication.
+const (
+	AuthenticationVerb        = "update"
+	AuthenticationSubresource = "authentication"
+)
+
+// handleCluster gates a change to spec.authentication. An operator who could repoint the IdP could
+// break sign-in for everyone, so the change needs `update` on talosclusters/authentication (asked as
+// the requesting user, so a hand-written CR obeys it too), and the new value must be one the
+// kube-apiserver will accept: the contract is v1.14 or later and the configuration it renders passes
+// the apiserver's own validation. A write that leaves spec.authentication as it was is not checked,
+// and the controller and GitOps engines (ExemptUsers) are never stopped.
+func (h *BreakGlassHandler) handleCluster(ctx context.Context, req admission.Request) admission.Response {
+	if (req.Operation != "CREATE" && req.Operation != "UPDATE") || slices.Contains(h.ExemptUsers, req.UserInfo.Username) {
+		return admission.Allowed("")
+	}
+
+	var updated ichorv1alpha1.TalosCluster
+	if err := json.Unmarshal(req.Object.Raw, &updated); err != nil {
+		return admission.Errored(http.StatusBadRequest, fmt.Errorf("decoding the cluster: %w", err))
+	}
+
+	var before *ichorv1alpha1.TalosClusterAuthentication
+
+	if req.Operation == "UPDATE" {
+		var old ichorv1alpha1.TalosCluster
+		if err := json.Unmarshal(req.OldObject.Raw, &old); err != nil {
+			return admission.Errored(http.StatusBadRequest, fmt.Errorf("decoding the stored cluster: %w", err))
+		}
+
+		before = old.Spec.Authentication
+	}
+
+	if reflect.DeepEqual(before, updated.Spec.Authentication) {
+		return admission.Allowed("")
+	}
+
+	allowed, err := h.mayDo(ctx, req.UserInfo, AuthenticationVerb, "talosclusters", AuthenticationSubresource, req.Name, req.Namespace)
+	if err != nil {
+		return admission.Errored(http.StatusServiceUnavailable, fmt.Errorf("cannot check the %s right: %w", AuthenticationVerb, err))
+	}
+
+	if !allowed {
+		return admission.Denied(fmt.Sprintf("changing spec.authentication needs the %q verb on talosclusters/%s: "+
+			"it decides who can sign in to the Kubernetes API", AuthenticationVerb, AuthenticationSubresource))
+	}
+
+	if err := render.ValidateAuthentication(&updated); err != nil {
+		return admission.Denied(err.Error())
+	}
+
+	breakglasslog.Info("spec.authentication changed", "user", req.UserInfo.Username, "cluster", req.Name)
+
+	return admission.Allowed("")
 }
 
 func extraOf(in map[string]authnv1.ExtraValue) map[string]authzv1.ExtraValue {

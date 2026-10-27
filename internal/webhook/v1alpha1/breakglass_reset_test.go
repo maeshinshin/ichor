@@ -99,6 +99,13 @@ func grantOperationRights(user, glassOn string) {
 	rules := []rbacv1.PolicyRule{{
 		APIGroups: []string{ichorGroup}, Resources: []string{"talosoperations"}, Verbs: []string{"create", "get"},
 	}}
+	// These tests are about break-glass; the destructive-start right (ADR 0094) is granted so it is
+	// not what stops them. start_gate_test.go covers the right itself.
+	rules = append(rules, rbacv1.PolicyRule{
+		APIGroups: []string{ichorGroup}, Verbs: []string{ichorv1alpha1.OperationStartVerb},
+		Resources: []string{"talosoperations/etcd-restore", "talosoperations/node-reset"},
+	})
+
 	if glassOn != "" {
 		rules = append(rules, rbacv1.PolicyRule{
 			APIGroups: []string{ichorGroup}, Resources: []string{glassOn}, Verbs: []string{BreakGlassVerb},

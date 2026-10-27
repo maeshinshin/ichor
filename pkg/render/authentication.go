@@ -125,7 +125,9 @@ func AuthenticationConfiguration(
 	}
 
 	if spec.Ichor != nil && spec.Ichor.Enabled {
-		if trust == nil || trust.DiscoveryURL == "" || trust.CAPEM == "" {
+		// An empty CAPEM is checked by the caller that renders (injectAuthentication): the webhook
+		// validates the spec before the controller has published any CA.
+		if trust == nil || trust.DiscoveryURL == "" {
 			return nil, fmt.Errorf("spec.authentication.ichor is enabled but ConfigMap %q is missing or has no %s/%s: "+
 				"the controller publishes it once Ichor's issuer is set up (ichorUI.users.enabled)",
 				OIDCTrustConfigMap, OIDCTrustKeyDiscoveryURL, OIDCTrustKeyCA)
@@ -188,6 +190,31 @@ func validateAuthenticationConfiguration(cfg *apiserverv1.AuthenticationConfigur
 	return nil
 }
 
+// ValidateAuthentication is the admission-time check of spec.authentication (ADR 0094): the
+// version contract must be v1.14 or later, and the configuration it would render must pass the
+// apiserver's own validation. Ichor's trust material does not exist yet when the spec is written,
+// so a placeholder discovery URL stands in for it (the real one is validated again at render).
+func ValidateAuthentication(cluster *ichorv1alpha1.TalosCluster) error {
+	spec := cluster.Spec.Authentication
+	if spec == nil || (!ichorIssuerEnabled(cluster) && len(spec.External) == 0) {
+		return nil
+	}
+
+	contract, err := coreconfig.ParseContractFromVersion(cluster.Spec.VersionContract)
+	if err != nil {
+		return fmt.Errorf("parsing versionContract: %w", err)
+	}
+
+	if !contract.MultidocKubernetesConfigSupported() {
+		return fmt.Errorf("spec.authentication needs versionContract v1.14 or later (Talos has the typed KubeAuthenticationConfig "+
+			"document only from then), the cluster has %s", cluster.Spec.VersionContract)
+	}
+
+	_, err = AuthenticationConfiguration(spec, &OIDCTrust{DiscoveryURL: "https://ichor-ui-service.ichor-system.svc:8444/.well-known/openid-configuration"})
+
+	return err
+}
+
 // injectAuthentication renders spec.authentication (ADR 0094) onto control-plane nodes as the
 // typed KubeAuthenticationConfig document, applied as a strategic merge patch over the document
 // Talos generates (empty jwt). It is a system-layer step; unset, or nothing enabled, returns cfg
@@ -206,7 +233,14 @@ func injectAuthentication(
 		return nil, fmt.Errorf("render: spec.authentication needs versionContract v1.14 or later, the cluster has %s", cluster.Spec.VersionContract)
 	}
 
-	ac, err := AuthenticationConfiguration(spec, sys.oidcTrust())
+	trust := sys.oidcTrust()
+	if ichorIssuerEnabled(cluster) && (trust == nil || trust.CAPEM == "") {
+		return nil, fmt.Errorf("render: spec.authentication.ichor is enabled but ConfigMap %q is missing or has no %s/%s: "+
+			"the controller publishes it once Ichor's issuer is set up (ichorUI.users.enabled)",
+			OIDCTrustConfigMap, OIDCTrustKeyDiscoveryURL, OIDCTrustKeyCA)
+	}
+
+	ac, err := AuthenticationConfiguration(spec, trust)
 	if err != nil {
 		return nil, fmt.Errorf("render: %w", err)
 	}

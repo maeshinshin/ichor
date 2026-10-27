@@ -230,6 +230,9 @@ message Machine {
   // network and disks mirror spec.network and spec.disks.
   MachineNetwork network = 16;
   repeated MachineDiskRole disks = 17;
+  // node_name is the Kubernetes node name the node reports (TalosMachine.status.nodeName);
+  // empty until the controller has read the node. Views name a machine hostname, else node_name.
+  string node_name = 18;
 }
 
 message RemoveMachineRequest {

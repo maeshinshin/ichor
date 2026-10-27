@@ -574,6 +574,23 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(cond.Reason).To(Equal(reasonConverged))
 	})
 
+	It("records the node's Kubernetes name in status.nodeName once it is read", func() {
+		bundle := newTestBundle("v1.14")
+		secret := newTestSecret(bundle)
+		cluster := newTestCluster(secret.Name, "v1.14")
+		m := newTestMachine(cluster.Name, true)
+
+		current, _, err := render.Render(cluster, m, bundle, nil, nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		fake := &fakeTalosClient{current: current, nodeName: "ichor-cp-1"}
+		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
+
+		_, err = reconcileMachine(r, m)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(fetchMachine(m).Status.NodeName).To(Equal("ichor-cp-1"))
+	})
+
 	It("reconciles a TalosCluster that declares registries, resolving auth from the controller namespace", func() {
 		bundle := newTestBundle("v1.14")
 		secret := newTestSecret(bundle)

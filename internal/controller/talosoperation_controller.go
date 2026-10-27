@@ -143,8 +143,6 @@ type TalosOperationReconciler struct {
 
 	// launchTail replaces the goroutine that runs the destructive part of an etcd restore; tests set it.
 	launchTail func(*restoreJob)
-	// staleWipes rate limits the reset of a control plane that holds stale etcd data.
-	staleWipes rateGate
 }
 
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosoperations,verbs=get;list;watch;create;update;patch

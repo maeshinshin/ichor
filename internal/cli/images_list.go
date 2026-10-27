@@ -99,6 +99,9 @@ type imageListResult struct {
 	Images       []string `json:"images" yaml:"images"`
 	Catalogs     []string `json:"catalogs" yaml:"catalogs"`
 	Warning      string   `json:"warning" yaml:"warning"`
+	// KokumiImages is set by --kokumi: Kokumi's own images at the pinned
+	// release, with their upstream registries (ADR 0048).
+	KokumiImages []string `json:"kokumiImages,omitempty" yaml:"kokumiImages,omitempty"`
 }
 
 // buildImageList resolves talosVersion against sourceRegistry (empty
@@ -148,6 +151,9 @@ type imagesListOptions struct {
 	// returns a schematic's resolved image list). This command never
 	// connects to anything, so it cannot do either; see docs/adr/0036.
 	Schematic string
+
+	// Kokumi adds Kokumi's own images (ADR 0048).
+	Kokumi bool
 }
 
 // imagesListCmd implements `ichor images list`
@@ -196,6 +202,8 @@ func init() {
 		"registry to prefix every image reference with")
 	flags.StringVar(&imagesListOpts.Schematic, "schematic", "", "Image Factory schematic ID in use (named in the output only; see Long)")
 
+	flags.BoolVar(&imagesListOpts.Kokumi, "kokumi", false, "also list Kokumi's own images (ADR 0048)")
+
 	_ = imagesListCmd.MarkFlagRequired("talos-version")
 }
 
@@ -212,6 +220,10 @@ func runImagesList(w io.Writer, opts imagesListOptions) error {
 		result, err := buildImageList(opts.SourceRegistry, v)
 		if err != nil {
 			return err
+		}
+
+		if opts.Kokumi {
+			result.KokumiImages = kokumiImages()
 		}
 
 		results = append(results, result)

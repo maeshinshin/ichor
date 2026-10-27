@@ -427,10 +427,10 @@ the nodes Argo CD runs on. The CLI keeps a way out of every corner:
 `ichor cni recover`, `ichor self-upgrade --local`,
 `ichor restore --recover-cluster`.
 
-#### Kokumi as the delivery layer in front of Argo CD (designed, not built)
+#### Kokumi as the delivery layer in front of Argo CD (`--kokumi`, narrow form built)
 
 `ichor init` gains a choice for the Argo CD hand-off: plain repository
-(today's behaviour) or Kokumi (`--delivery kokumi`; the flag name is open, see
+(today's behaviour) or Kokumi (`ichor init --argocd --kokumi`, see
 ADR 0048). Kokumi (`kokumi.dev`, Apache-2.0, self-described as experimental)
 is an OCI-first delivery operator: each render becomes an immutable,
 content-addressed OCI artifact (a Preparation), gated by approvals, and a
@@ -472,8 +472,8 @@ What choosing it changes, as far as Kokumi's published docs say:
 
 Air gap: Kokumi's artifacts are OCI and its docs say its dependencies can be
 mirrored to a private registry, so they plausibly ride the same mirror path
-as `ichor images list`. Which images and artifacts Kokumi itself needs is
-not in the pages read, so `images list` would not yet print them.
+as `ichor images list`; `ichor images list --kokumi` prints the two images
+Kokumi 0.17.0 runs (ADR 0048).
 
 ### Nodes
 
@@ -986,7 +986,7 @@ resumption works. A short set runs per PR, the full set nightly.
 - Calico: the values that avoid a perpetual OutOfSync under Argo CD. No
   reference exists yet; decide when Calico is built, by observing a working
   Argo CD-managed Calico.
-- Cilium with Kokumi: Kokumi's Application cannot carry `ignoreDifferences`.
+- Cilium with Kokumi: resolved by construction (ADR 0048): Ichor never hands Cilium to Kokumi.
   The e2e run found Cilium Synced without it (ADR 0055), so this probably does
   not matter; whether it stays true over a Cilium upgrade or with Gateway API
   and L2 announcements enabled is not observed.

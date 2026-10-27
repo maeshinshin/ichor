@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -325,6 +326,33 @@ var _ = Describe("cniKubeProxyAdvancer", func() {
 		Expect(admin.calls).To(Equal(1))
 		Expect(admin.appliedAt).To(Equal(2), "removed only after both control planes were switched")
 		Expect(kubeProxyExists()).To(BeFalse())
+	})
+
+	It("replaced: after the removal the kubernetes Service must answer before success is declared", func() {
+		newCilium("true", true)
+		newKubeProxyDaemonSet(testK8sOld, 2, 2)
+
+		cluster := cniSwitchCluster(modeReplaced)
+		cp := newK8sControlPlane(cluster.Name, "kp-probe")
+		fake := &fakeTalosClient{current: nodeConfig(cluster, cp, modeReplaced)}
+		adv := newKubeProxyAdvancer(map[string]*fakeTalosClient{cp.Name: fake}, &fakeKubeProxyAdmin{})
+		probeErr := errors.New("connection refused")
+		adv.ServiceProbe = func(context.Context) error { return probeErr }
+		op := &ichorv1alpha1.TalosOperation{}
+
+		done, err := adv.Advance(ctx, cluster, cp, op)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(done).To(BeFalse(), "the Service does not answer: not done")
+
+		cond := apimeta.FindStatusCondition(op.Status.Conditions, conditionVerifyingNewSide)
+		Expect(cond).NotTo(BeNil())
+		Expect(cond.Message).To(ContainSubstring("until it reboots"))
+
+		probeErr = nil
+
+		done, err = adv.Advance(ctx, fetchCluster(cluster), cp, op)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(done).To(BeTrue())
 	})
 
 	It("replaced: when a worker finishes last, kube-proxy is removed through a control plane's client", func() {

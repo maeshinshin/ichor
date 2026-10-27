@@ -337,6 +337,25 @@ func TestAssess_APIServerRestartClass(t *testing.T) {
 		t.Errorf("KubeAPIServerConfig.image = %+v, want reboot-required only", got)
 	}
 
+	// The legacy paths are the only spelling a pre-1.14 contract has: the class holds there too, and
+	// their images stay with the Kubernetes upgrade, never safe or apiServerRestart.
+	for _, pinned := range []*machineryconfig.VersionContract{
+		machineryconfig.TalosVersion1_12, machineryconfig.TalosVersion1_13,
+	} {
+		if got := Assess([]string{"cluster.apiServer.certSANs"}, pinned); got.RebootRequired ||
+			len(got.APIServerRestartPaths) != 1 {
+			t.Errorf("legacy cluster.apiServer.certSANs on %v = %+v, want one APIServerRestartPath", pinned, got)
+		}
+
+		for _, path := range []string{
+			"cluster.apiServer.image", "cluster.controllerManager.image", "cluster.scheduler.image",
+		} {
+			if got := Assess([]string{path}, pinned); !got.RebootRequired || len(got.APIServerRestartPaths) != 0 {
+				t.Errorf("Assess(%q, %v) = %+v, want reboot-required only", path, pinned, got)
+			}
+		}
+	}
+
 	// A mixed set reports each class on its own list.
 	mixed := Assess([]string{pathKubeAuthJWT, pathClusterProxyDisabled}, nil)
 	if !mixed.RebootRequired || len(mixed.APIServerRestartPaths) != 1 || len(mixed.RebootPaths) != 1 {
@@ -352,6 +371,7 @@ func TestAssess_KubernetesImagesStayRebootRequired(t *testing.T) {
 	for _, path := range []string{
 		"KubeAPIServerConfig.image", "KubeControllerManagerConfig.image", "KubeSchedulerConfig.image",
 		"KubeProxyConfig.image", "KubeletConfig.image",
+		"cluster.apiServer.image", "cluster.controllerManager.image", "cluster.scheduler.image",
 	} {
 		if got := Assess([]string{path}, nil); !got.RebootRequired {
 			t.Errorf("Assess(%q).RebootRequired = false, want true", path)

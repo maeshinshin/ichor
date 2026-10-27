@@ -308,7 +308,8 @@ ichorUI:
   resources:
     limits:
       cpu: 500m
-      memory: 128Mi
+      # Two concurrent argon2id hashes (64 MiB each, internal/uiapi/user_hash.go) plus the process.
+      memory: 384Mi
     requests:
       cpu: 10m
       memory: 64Mi

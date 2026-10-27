@@ -49,7 +49,7 @@ func (s *Server) upgradeIchorByPR(ctx context.Context, p *opPlan) (*connect.Resp
 
 	url, err := s.openPR(ctx, p.pr, prChange{
 		verb: "upgrade-ichor", name: target,
-		target: prmode.Target{APIVersion: ichorv1alpha1.GroupVersion.String(), Kind: kindIchorInstallation, Name: p.install.Name},
+		target:  prmode.Target{APIVersion: ichorv1alpha1.GroupVersion.String(), Kind: kindIchorInstallation, Name: p.install.Name},
 		updates: []prmode.FieldUpdate{{Path: []string{specKey, "version"}, Value: target}},
 		title:   "Upgrade Ichor to " + target,
 		impact:  fmt.Sprintf("- Changes IchorInstallation spec.version from %s to %s.\n- %s", current, target, next),

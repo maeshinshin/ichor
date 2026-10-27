@@ -22,16 +22,13 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var _ = Describe("IchorUser validation", func() {
 	newUser := func(name string, roles ...string) *IchorUser {
-		return &IchorUser{
-			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: testNamespace},
-			Spec:       IchorUserSpec{DisplayName: "Test", Roles: roles},
-		}
+		u := &IchorUser{Spec: IchorUserSpec{DisplayName: "Test", Roles: roles}}
+		u.Name, u.Namespace = name, testNamespace
+		return u
 	}
 
 	It("accepts a DNS-label name and built-in and custom roles", func() {

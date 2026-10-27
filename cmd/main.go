@@ -238,7 +238,7 @@ func main() {
 	}
 
 	sigCtx := ctrl.SetupSignalHandler()
-	restConfig, err := waitForAPIServerDefault(logr.NewContext(sigCtx, setupLog))
+	restConfig, err := waitForAPIServerDefault(logr.NewContext(sigCtx, setupLog), probeAddr)
 	if err != nil {
 		setupLog.Error(err, "API server unavailable")
 		os.Exit(1)

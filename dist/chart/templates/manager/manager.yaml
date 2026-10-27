@@ -124,6 +124,12 @@ spec:
         {{- with .Values.manager.image.pullPolicy }}
         imagePullPolicy: {{ . }}
         {{- end }}
+        startupProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          periodSeconds: 10
+          failureThreshold: 36
         livenessProbe:
           httpGet:
             path: /healthz

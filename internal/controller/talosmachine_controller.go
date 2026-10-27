@@ -170,15 +170,12 @@ func (r *TalosMachineReconciler) holdIfOverCap(
 		return false, nil
 	}
 
-	// ponytail: poll (overCapRecheck), not watch -- a sibling leaving does not enqueue this machine.
+	// No poll: a sibling control plane appearing or leaving re-enqueues this machine (controlPlaneSiblings).
 	return true, r.ready(ctx, m, metav1.ConditionFalse, reasonControlPlaneOverCap,
 		fmt.Sprintf("%d control planes are approved against spec.controlPlane.count %d (at most count+1 is allowed); "+
 			"this is among the newest approvals, so no configuration is applied until another control plane "+
 			"is removed or the count is raised", total, cluster.Spec.ControlPlane.Count))
 }
-
-// overCapRecheck is how often a machine held for ControlPlaneOverCap looks again.
-const overCapRecheck = 15 * time.Second
 
 // transientRecheck is how often a machine whose Ready=False has a cause that time can fix (node
 // unreachable, Secret not yet created, lock held ...) looks again. docs/adr/0059.
@@ -304,7 +301,8 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	clusterKey := types.NamespacedName{Namespace: m.Namespace, Name: m.Spec.ClusterRef.Name}
 	if err := r.Get(ctx, clusterKey, &cluster); err != nil {
 		if apierrors.IsNotFound(err) {
-			return r.retryLater(ctx, &m, reasonClusterNotFound,
+			// The TalosCluster watch re-enqueues this machine when the cluster is created.
+			return r.waitForChange(ctx, &m, reasonClusterNotFound,
 				fmt.Sprintf("TalosCluster %q not found", clusterKey.Name))
 		}
 
@@ -332,7 +330,8 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	if err != nil {
 		log.Error(err, "loading secrets bundle")
 
-		return r.retryLater(ctx, &m, reasonSecretsBundleUnavailable,
+		// The Secret watch (machinesOfAuthSecret) re-enqueues this machine when the bundle appears.
+		return r.waitForChange(ctx, &m, reasonSecretsBundleUnavailable,
 			"secrets bundle unavailable")
 	}
 
@@ -347,7 +346,8 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	if err != nil {
 		log.Error(err, "rendering machine configuration")
 
-		return r.retryLater(ctx, &m, reasonRenderFailed,
+		// Every render input is watched, so a correction re-enqueues this machine.
+		return r.waitForChange(ctx, &m, reasonRenderFailed,
 			"rendering machine configuration failed")
 	}
 
@@ -362,7 +362,8 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	if err != nil {
 		log.Error(err, "hashing render inputs")
 
-		return r.retryLater(ctx, &m, reasonRenderFailed,
+		// Every render input is watched, so a correction re-enqueues this machine.
+		return r.waitForChange(ctx, &m, reasonRenderFailed,
 			"rendering machine configuration failed")
 	}
 
@@ -424,7 +425,7 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	contract, err := coreconfig.ParseContractFromVersion(cluster.Spec.VersionContract)
 	if err != nil {
-		return r.retryLater(ctx, &m, reasonRenderFailed,
+		return r.waitForChange(ctx, &m, reasonRenderFailed,
 			"invalid versionContract")
 	}
 
@@ -568,7 +569,7 @@ func (r *TalosMachineReconciler) holdUntilEligible(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
 ) (res ctrl.Result, stop bool, err error) {
 	if stop, err := r.holdIfOverCap(ctx, cluster, m); stop {
-		return ctrl.Result{RequeueAfter: overCapRecheck}, true, err
+		return ctrl.Result{}, true, err
 	}
 
 	rotation, err := activeCARotation(ctx, readerOrClient(r.APIReader, r.Client), m.Namespace, cluster.Name)
@@ -759,6 +760,14 @@ func (r *TalosMachineReconciler) retryLater(
 	return ctrl.Result{RequeueAfter: transientRecheck}, nil
 }
 
+// waitForChange records a False Ready for a failure only a change to a watched object can fix, and
+// does not requeue: the watches in SetupWithManager deliver that change.
+func (r *TalosMachineReconciler) waitForChange(
+	ctx context.Context, m *ichorv1alpha1.TalosMachine, reason, message string,
+) (ctrl.Result, error) {
+	return ctrl.Result{}, r.ready(ctx, m, metav1.ConditionFalse, reason, message)
+}
+
 // ready sets the Ready condition, keeps observedGeneration honest
 // (principle 7: every reconcile attempt, successful or not, is recorded),
 // and persists status in one write.
@@ -843,9 +852,15 @@ func (r *TalosMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		return err
 	}
 
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &ichorv1alpha1.TalosCluster{},
+		bundleSecretIndex, bundleSecretNames); err != nil {
+		return err
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&ichorv1alpha1.TalosMachine{}).
 		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(r.machinesOfAuthSecret)).
+		Watches(&ichorv1alpha1.TalosMachine{}, handler.EnqueueRequestsFromMapFunc(r.controlPlaneSiblings), renderInput).
 		Watches(&corev1.ConfigMap{}, handler.EnqueueRequestsFromMapFunc(r.machinesOfOIDCTrust)).
 		Watches(&ichorv1alpha1.TalosStorage{}, enqueue, renderInput).
 		Watches(&ichorv1alpha1.TalosConfigPatch{}, enqueue, renderInput).
@@ -933,23 +948,54 @@ func (r *TalosMachineReconciler) machinesOfOIDCTrust(ctx context.Context, obj cl
 	return reqs
 }
 
+// bundleSecretIndex indexes a TalosCluster by the name of its secrets bundle Secret.
+const bundleSecretIndex = "spec.secretsRef.name"
+
+// bundleSecretNames is the index function behind bundleSecretIndex.
+func bundleSecretNames(o client.Object) []string {
+	cluster, ok := o.(*ichorv1alpha1.TalosCluster)
+	if !ok || cluster.Spec.SecretsRef.Name == "" {
+		return nil
+	}
+
+	return []string{cluster.Spec.SecretsRef.Name}
+}
+
+// controlPlaneSiblings maps a control plane machine to its cluster's other machines, so one
+// held for ControlPlaneOverCap is re-evaluated when a sibling is created or deleted.
+func (r *TalosMachineReconciler) controlPlaneSiblings(ctx context.Context, obj client.Object) []reconcile.Request {
+	m, ok := obj.(*ichorv1alpha1.TalosMachine)
+	if !ok || m.Spec.Role != roleControlPlane {
+		return nil
+	}
+
+	// machinesOfCluster keys on the cluster name and namespace; a patch stands in for them.
+	var key ichorv1alpha1.TalosConfigPatch
+
+	key.Namespace, key.Spec.ClusterRef = m.Namespace, m.Spec.ClusterRef
+
+	return r.machinesOfCluster(ctx, &key)
+}
+
 // machinesOfAuthSecret maps a Secret to the machines of every TalosCluster whose registries
-// reference it. Only Secrets in the controller's own namespace count: that is the one place
+// reference it or whose secretsRef names it. Only Secrets in the controller's own namespace count: that is the one place
 // ResolveRegistryAuth reads, and the cache holds no other (cache.go).
 func (r *TalosMachineReconciler) machinesOfAuthSecret(ctx context.Context, obj client.Object) []reconcile.Request {
 	if r.ControllerNamespace == "" || obj.GetNamespace() != r.ControllerNamespace {
 		return nil
 	}
 
-	var clusters ichorv1alpha1.TalosClusterList
-	if err := r.List(ctx, &clusters, client.MatchingFields{registryAuthSecretIndex: obj.GetName()}); err != nil {
-		return nil
-	}
-
 	var reqs []reconcile.Request
 
-	for i := range clusters.Items {
-		reqs = append(reqs, r.machinesOfCluster(ctx, &clusters.Items[i])...)
+	for _, index := range []string{registryAuthSecretIndex, bundleSecretIndex} {
+		var clusters ichorv1alpha1.TalosClusterList
+		if err := r.List(ctx, &clusters, client.MatchingFields{index: obj.GetName()}); err != nil {
+			continue
+		}
+
+		for i := range clusters.Items {
+			reqs = append(reqs, r.machinesOfCluster(ctx, &clusters.Items[i])...)
+		}
 	}
 
 	return reqs

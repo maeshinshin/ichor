@@ -22,6 +22,7 @@ import { OperationKind, type EtcdBackup, type Operation } from '@/gen/ichor/v1al
 import { blockingOperation, currentOperation, recentOperations, rebootPendingCount, type OpRow } from '@/lib/clusterOps'
 import { machineClient, operationClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
+import { machineDisplayName } from '@/lib/machineName'
 import { formatTimestamp } from '@/lib/format'
 import { kubernetesStageProgress, operationState, progressCounts } from '@/lib/operations'
 import { attentionItems, backupsValue, machineCounts, nodesValue, tileTargets, versionsValue, type TileTarget } from '@/lib/overview'
@@ -458,8 +459,8 @@ function NodeRow({ m }: { m: Machine }) {
   const ready = m.conditions.find((c) => c.type === 'Ready')
   const tone: Tone = ready ? conditionStatusTone(ready.type, ready.status) : 'neutral'
   const word = !ready ? t('overview.nodeUnknown') : ready.status === 'True' ? t('overview.nodeReady') : t('overview.nodeNotReady')
-  // The hostname, else the address it is reached at; the machine's UUID name is only the link target.
-  const name = m.hostname || m.endpoint || m.ref?.name || '-'
+  // The hostname, else the node name; the machine's UUID name is only the link target.
+  const name = machineDisplayName(m)
   return (
     <li class="flex items-center justify-between gap-x-4 py-2 first:pt-0 last:pb-0">
       <div class="min-w-0">

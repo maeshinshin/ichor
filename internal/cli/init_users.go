@@ -31,7 +31,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -55,10 +54,21 @@ const (
 	uiDeploymentName     = "ichor-ui"
 	uiServiceName        = "ichor-ui-service"
 	uiInternalPort       = 8444
+	uiInternalPortName   = "internal"
+	schemeHTTPS          = "https"
+	appNameIchor         = "ichor"
 )
 
 // validateInitUsers runs before anything irreversible, so a bad URL or an old
 // contract costs nothing.
+func prepareInitUsers(opts initOptions) (initOptions, error) {
+	if opts.UIURL != "" && opts.AdminUser == "" {
+		opts.AdminUser = defaultAdminUser
+	}
+
+	return opts, validateInitUsers(opts)
+}
+
 func validateInitUsers(opts initOptions) error {
 	if opts.UIURL == "" {
 		if opts.AdminUser != "" {
@@ -69,7 +79,7 @@ func validateInitUsers(opts initOptions) error {
 	}
 
 	u, err := url.Parse(opts.UIURL)
-	if err != nil || u.Scheme != "https" || u.Host == "" || u.RawQuery != "" || u.Fragment != "" || u.User != nil {
+	if err != nil || u.Scheme != schemeHTTPS || u.Host == "" || u.RawQuery != "" || u.Fragment != "" || u.User != nil {
 		return fmt.Errorf("init: --ui-url %q must be the https URL of ichor-ui, without query, fragment or credentials", opts.UIURL)
 	}
 
@@ -84,10 +94,11 @@ func validateInitUsers(opts initOptions) error {
 // ensureCredentialsSecret creates the empty store of password hashes ichor-ui's
 // ServiceAccount may patch but cannot create. An existing Secret is kept.
 func ensureCredentialsSecret(ctx context.Context, k client.Client, ns string) error {
-	sec := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
+	sec := &corev1.Secret{
 		Namespace: ns, Name: ichorauth.CredentialsSecretName,
-		Labels: map[string]string{"app.kubernetes.io/name": "ichor", "app.kubernetes.io/component": "ui"},
-	}, Type: corev1.SecretTypeOpaque}
+		Labels: map[string]string{"app.kubernetes.io/name": appNameIchor, "app.kubernetes.io/component": "ui"},
+		Type:   corev1.SecretTypeOpaque,
+	}
 
 	err := retryNoMatch(ctx, func() error { return k.Create(ctx, sec) })
 	if err != nil && !apierrors.IsAlreadyExists(err) {
@@ -118,9 +129,9 @@ func enableUIUsers(ctx context.Context, k client.Client, ns, externalURL string)
 		return fmt.Errorf("init: reading the ichor-ui Service: %w", err)
 	}
 
-	if !slices.ContainsFunc(svc.Spec.Ports, func(p corev1.ServicePort) bool { return p.Name == "internal" }) {
+	if !slices.ContainsFunc(svc.Spec.Ports, func(p corev1.ServicePort) bool { return p.Name == uiInternalPortName }) {
 		svc.Spec.Ports = append(svc.Spec.Ports, corev1.ServicePort{
-			Name: "internal", Port: uiInternalPort, TargetPort: intstr.FromInt32(uiInternalPort), Protocol: corev1.ProtocolTCP,
+			Name: uiInternalPortName, Port: uiInternalPort, TargetPort: intstr.FromInt32(uiInternalPort), Protocol: corev1.ProtocolTCP,
 		})
 	}
 
@@ -145,8 +156,8 @@ func usersOnDeployment(dep *appsv1.Deployment, externalURL string) error {
 	})
 	c.Args = append(c.Args, "--users-enabled=true", "--external-url="+externalURL)
 
-	if !slices.ContainsFunc(c.Ports, func(p corev1.ContainerPort) bool { return p.Name == "internal" }) {
-		c.Ports = append(c.Ports, corev1.ContainerPort{Name: "internal", ContainerPort: uiInternalPort, Protocol: corev1.ProtocolTCP})
+	if !slices.ContainsFunc(c.Ports, func(p corev1.ContainerPort) bool { return p.Name == uiInternalPortName }) {
+		c.Ports = append(c.Ports, corev1.ContainerPort{Name: uiInternalPortName, ContainerPort: uiInternalPort, Protocol: corev1.ProtocolTCP})
 	}
 
 	// Written by the controller; optional so ichor-ui starts before it has made them.
@@ -158,8 +169,8 @@ func usersOnDeployment(dep *appsv1.Deployment, externalURL string) error {
 	} {
 		if !slices.ContainsFunc(dep.Spec.Template.Spec.Volumes, func(x corev1.Volume) bool { return x.Name == v.name }) {
 			dep.Spec.Template.Spec.Volumes = append(dep.Spec.Template.Spec.Volumes, corev1.Volume{
-				Name:         v.name,
-				VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: v.secret, Optional: &optional}},
+				Name:   v.name,
+				Secret: &corev1.SecretVolumeSource{SecretName: v.secret, Optional: &optional},
 			})
 		}
 
@@ -175,9 +186,17 @@ func usersOnDeployment(dep *appsv1.Deployment, externalURL string) error {
 // (spec.authentication.ichor). It is a merge patch after the cluster exists, so
 // the first configuration is the plain one and the rollout is a separate step.
 func setClusterAuthentication(ctx context.Context, k client.Client, cluster *ichorv1alpha1.TalosCluster, externalURL string) error {
-	patch, err := json.Marshal(map[string]any{"spec": map[string]any{"authentication": map[string]any{
-		"ichor": map[string]any{"enabled": true, "url": externalURL},
-	}}})
+	if externalURL == "" {
+		return nil
+	}
+
+	type specPatch struct {
+		Authentication *ichorv1alpha1.TalosClusterAuthentication `json:"authentication"`
+	}
+
+	patch, err := json.Marshal(struct {
+		Spec specPatch `json:"spec"`
+	}{specPatch{&ichorv1alpha1.TalosClusterAuthentication{Ichor: &ichorv1alpha1.TalosClusterIchorIssuer{Enabled: true, URL: externalURL}}}})
 	if err != nil {
 		return err
 	}
@@ -193,6 +212,10 @@ func setClusterAuthentication(ctx context.Context, k client.Client, cluster *ich
 // the TalosCluster exists: credentials Secret, first admin (before the switch,
 // so nobody is locked out), then the switch. It returns the generated password.
 func initUsers(ctx context.Context, opts initOptions, k client.Client, errw io.Writer) (password string, err error) {
+	if opts.UIURL == "" {
+		return "", nil
+	}
+
 	if err := ensureCredentialsSecret(ctx, k, ichorControllerNamespace); err != nil {
 		return "", err
 	}
@@ -203,7 +226,7 @@ func initUsers(ctx context.Context, opts initOptions, k client.Client, errw io.W
 	}
 
 	spec := userSpec{Name: opts.AdminUser, DisplayName: opts.AdminUser, Roles: []string{ichorauth.RoleAdmin}}
-	if err := createUserWithPassword(ctx, k, ichorControllerNamespace, spec, password, time.Now()); err != nil {
+	if err := createUserWithPassword(ctx, k, spec, password, time.Now()); err != nil {
 		return "", fmt.Errorf("init: creating the first admin: %w", err)
 	}
 
@@ -219,6 +242,10 @@ func initUsers(ctx context.Context, opts initOptions, k client.Client, errw io.W
 // initUsersEpilogue is what the operator has to do next. It prints the
 // generated password, once, to stderr.
 func initUsersEpilogue(errw io.Writer, opts initOptions, password string) {
+	if opts.UIURL == "" {
+		return
+	}
+
 	_, _ = fmt.Fprintf(errw, "init: Helm/GitOps equivalent: ichorUI.users.enabled=true, ichorUI.users.externalURL=%s\n", opts.UIURL)
 	_, _ = fmt.Fprintf(errw, "init: make ichor-ui reachable at %s over https (an Ingress, Gateway or LoadBalancer in front of "+
 		"service %s, or ichorUI.tls.secretName); Ichor installs none\n", opts.UIURL, uiServiceName)

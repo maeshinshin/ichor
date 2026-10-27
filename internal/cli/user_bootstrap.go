@@ -61,7 +61,7 @@ func runUserBootstrap(cmd *cobra.Command, name string) error {
 	}
 
 	spec := userSpec{Name: name, DisplayName: userOpts.displayName, Email: userOpts.email, Roles: userOpts.roles}
-	if err := createUserWithPassword(cmd.Context(), k, ichorControllerNamespace, spec, password, time.Now()); err != nil {
+	if err := createUserWithPassword(cmd.Context(), k, spec, password, time.Now()); err != nil {
 		return err
 	}
 
@@ -94,7 +94,9 @@ func bootstrapPassword(cmd *cobra.Command, fromStdin, generate bool) (string, er
 // entry with mustChange set. It refuses an existing user, so it can never reset
 // somebody's password. The credentials Secret must exist (the chart makes it
 // with ichorUI.users.enabled; `ichor init --ui-url` makes it itself).
-func createUserWithPassword(ctx context.Context, k client.Client, ns string, spec userSpec, password string, now time.Time) error {
+func createUserWithPassword(ctx context.Context, k client.Client, spec userSpec, password string, now time.Time) error {
+	ns := ichorControllerNamespace
+
 	if err := errors.Join(ichorauth.ValidateUserName(spec.Name), validateRoleNames(spec.Roles), ichorauth.ValidatePassword(password)); err != nil {
 		return err
 	}
@@ -116,8 +118,8 @@ func createUserWithPassword(ctx context.Context, k client.Client, ns string, spe
 	}
 
 	u := &ichorv1alpha1.IchorUser{
-		ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: spec.Name},
-		Spec:       ichorv1alpha1.IchorUserSpec{DisplayName: spec.DisplayName, Email: spec.Email, Roles: spec.Roles},
+		Namespace: ns, Name: spec.Name,
+		Spec: ichorv1alpha1.IchorUserSpec{DisplayName: spec.DisplayName, Email: spec.Email, Roles: spec.Roles},
 	}
 
 	if err := retryNoMatch(ctx, func() error { return k.Create(ctx, u) }); err != nil {

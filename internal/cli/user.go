@@ -50,6 +50,8 @@ To create the very first admin on an existing install, use
 which needs no login: it writes the user with your kubeconfig's own rights.`,
 }
 
+const useUserDelete = "delete NAME"
+
 var userOpts struct {
 	displayName   string
 	email         string
@@ -224,7 +226,7 @@ func runUserUpdate(ctx context.Context, u ichorv1alpha1connect.UserServiceClient
 }
 
 var userDeleteCmd = &cobra.Command{
-	Use:   "delete NAME",
+	Use:   useUserDelete,
 	Short: "Delete a user (the last enabled admin cannot be deleted)",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {

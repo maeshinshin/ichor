@@ -46,7 +46,7 @@ func uiObjects() []client.Object {
 		&appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{Namespace: ichorControllerNamespace, Name: uiDeploymentName},
 			Spec: appsv1.DeploymentSpec{Template: corev1.PodTemplateSpec{Spec: corev1.PodSpec{
-				Containers: []corev1.Container{{Name: "ichor-ui", Args: []string{"--addr=:8080"}}},
+				Containers: []corev1.Container{{Name: uiDeploymentName, Args: []string{"--addr=:8080"}}},
 			}}},
 		},
 		&corev1.Service{
@@ -82,7 +82,7 @@ func TestRunInit_UIURLTurnsUsersOnAndCreatesTheFirstAdmin(t *testing.T) {
 			if d, ok := obj.(*appsv1.Deployment); ok {
 				// The switch comes after the admin exists (ADR 0094: create the first admin before it).
 				var u ichorv1alpha1.IchorUser
-				if err := c.Get(ctx, types.NamespacedName{Namespace: ichorControllerNamespace, Name: "root"}, &u); err != nil {
+				if err := c.Get(ctx, types.NamespacedName{Namespace: ichorControllerNamespace, Name: testAdminName}, &u); err != nil {
 					t.Errorf("the Deployment was switched before the admin existed: %v", err)
 				}
 
@@ -100,7 +100,7 @@ func TestRunInit_UIURLTurnsUsersOnAndCreatesTheFirstAdmin(t *testing.T) {
 	deps.Stdout, deps.Stderr = &stdout, &stderr
 
 	opts := validInitOptions()
-	opts.UIURL, opts.AdminUser = testUIURL, "root"
+	opts.UIURL, opts.AdminUser = testUIURL, testAdminName
 
 	if err := runInit(context.Background(), opts, deps); err != nil {
 		t.Fatalf("runInit: %v", err)
@@ -109,7 +109,7 @@ func TestRunInit_UIURLTurnsUsersOnAndCreatesTheFirstAdmin(t *testing.T) {
 	ctx := context.Background()
 
 	var u ichorv1alpha1.IchorUser
-	if err := k.Get(ctx, types.NamespacedName{Namespace: ichorControllerNamespace, Name: "root"}, &u); err != nil || !slices.Equal(u.Spec.Roles, []string{"admin"}) {
+	if err := k.Get(ctx, types.NamespacedName{Namespace: ichorControllerNamespace, Name: testAdminName}, &u); err != nil || !slices.Equal(u.Spec.Roles, []string{ichorauth.RoleAdmin}) {
 		t.Fatalf("admin user: %v %+v", err, u.Spec)
 	}
 
@@ -118,7 +118,7 @@ func TestRunInit_UIURLTurnsUsersOnAndCreatesTheFirstAdmin(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cred, err := ichorauth.ParseCredential(sec.Data["root"])
+	cred, err := ichorauth.ParseCredential(sec.Data[testAdminName])
 	if err != nil || !cred.MustChange {
 		t.Fatalf("credential: %v %+v", err, cred)
 	}
@@ -181,7 +181,7 @@ func TestRunInit_UsersFlagsAreCheckedBeforeAnythingHappens(t *testing.T) {
 		"http url":                  func(o *initOptions) { o.UIURL = "http://ichor.example.com" },
 		"url with a path query":     func(o *initOptions) { o.UIURL = "https://ichor.example.com/?a=b" },
 		"old contract":              func(o *initOptions) { o.UIURL, o.VersionContract = testUIURL, "v1.13" },
-		"admin user without ui-url": func(o *initOptions) { o.AdminUser = "root" },
+		"admin user without ui-url": func(o *initOptions) { o.AdminUser = testAdminName },
 		"bad admin user name":       func(o *initOptions) { o.UIURL, o.AdminUser = testUIURL, "Root User" },
 	} {
 		t.Run(name, func(t *testing.T) {

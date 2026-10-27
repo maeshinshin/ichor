@@ -92,7 +92,7 @@ func secureIssuer(raw string) error {
 		return fmt.Errorf("--issuer %q is not a URL", raw)
 	}
 
-	if u.Scheme == "https" {
+	if u.Scheme == schemeHTTPS {
 		return nil
 	}
 

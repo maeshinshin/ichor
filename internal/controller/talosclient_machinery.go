@@ -26,6 +26,7 @@ import (
 
 	"github.com/cosi-project/runtime/pkg/resource"
 	"github.com/cosi-project/runtime/pkg/safe"
+	"github.com/cosi-project/runtime/pkg/state"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -140,6 +141,25 @@ func (t *machineryTalosClient) MachineStage(ctx context.Context) (string, error)
 	}
 
 	return res.TypedSpec().Stage.String(), nil
+}
+
+// Schematic reads the ImageFactorySchematic singleton (runtime namespace). Talos derives it from the
+// "schematic" extension of the booted system, so after an upgrade it names the new installer's
+// schematic. A node that did not boot an Image Factory asset has no such resource.
+func (t *machineryTalosClient) Schematic(ctx context.Context) (string, error) {
+	md := resource.NewMetadata(runtimeres.NamespaceName, runtimeres.ImageFactorySchematicType,
+		runtimeres.ImageFactorySchematicID, resource.VersionUndefined)
+
+	res, err := safe.StateGet[*runtimeres.ImageFactorySchematic](ctx, t.c.COSI, md)
+	if err != nil {
+		if state.IsNotFoundError(err) {
+			return "", nil
+		}
+
+		return "", fmt.Errorf("reading the Image Factory schematic: %w", err)
+	}
+
+	return res.TypedSpec().SchematicID, nil
 }
 
 // DryRunApply validates cfg without applying it and collects every

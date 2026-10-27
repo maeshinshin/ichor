@@ -125,3 +125,31 @@ Layer 1 is now rendered into node configs as the system layer and `TalosStorage`
 (ADR 0050). Wiring it to Talos 1.14.3's validator changed the preset: `TalosPatches` returns only the
 `UserVolumeConfig` (now with `maxSize: 100%`, which Talos requires), the kubelet mount moved to
 `KubeletMounts()`, and node registration is rendered per version contract.
+
+## Amendment (2026-10-27): a schematic-only change is a Talos upgrade
+
+Adding an extension (iscsi-tools, util-linux-tools) means a new schematic, and "this is a Talos
+upgrade to a new schematic" has to be true when `spec.talosVersion` does not move. On hardware it
+was not: `talos_upgrade.go` compared only the running version with the target, so changing only
+`TalosCluster.spec.schematic.id` completed the TalosOperation in seconds with no reboot.
+
+A machine now needs the upgrade when its running version **or** its running schematic differs from
+the target; the same version and schematic is still a no-op. The Upgrade call and the post-reboot
+check (a node that comes back on the old schematic fell back to its previous A/B slot) use the same
+rule.
+
+How the running schematic is read: the node's `ImageFactorySchematic` resource
+(`runtime.ImageFactorySchematics.runtime.talos.dev`, singleton `image-factory-schematic`, read over
+COSI like `Nodename`). Talos fills it from the `schematic` extension that Image Factory bakes into
+every asset and installer image, so it names the schematic of the system actually booted, and
+changes only through an upgrade. Rejected: the `extensions.talos.dev/*` Node labels (they list
+extension names and versions, not the schematic ID, and are written by a Kubernetes-side controller
+that lags a reboot); the installer image in `TalosMachine.spec.install.image` (what was asked for,
+not what runs); the extension list (two schematics can carry the same extensions). A node that
+booted no Image Factory asset has no such resource and is taken to run the stock schematic
+(`pkg/upgrade.DefaultSchematic`), which is what `spec.schematic` unset also means.
+
+Status fields: `TalosMachine.status.schematic` records what the machine controller read on its last
+successful reach of the node, so the plan (which cannot dial nodes) can say "schematic X → Y".
+`PlanOperationResponse` gains `current_schematic` and `target_schematic`, set only for a Talos
+upgrade in which some approved machine's schematic differs; the CLI and UI headlines use them.

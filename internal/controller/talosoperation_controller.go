@@ -202,11 +202,13 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			reasonOperationPaused, "spec.paused is true")
 	}
 
-	// A step already failed: stay paused and never retry it automatically.
-	// Nothing here undoes a machine already marked Completed either --
-	// "pause-on-failure (no automatic cluster-wide rollback)".
+	// A step already failed: stay paused and never retry it automatically; only an explicit
+	// retry request runs it again. Nothing here undoes a machine already marked
+	// Completed either -- "pause-on-failure (no automatic cluster-wide rollback)".
 	if op.Status.Phase == ichorv1alpha1.TalosOperationPhasePaused && op.Status.FailureReason != "" {
-		return ctrl.Result{}, nil
+		if retried, err := r.consumeRetry(ctx, &op); err != nil || !retried {
+			return ctrl.Result{}, err
+		}
 	}
 
 	if res, handled, err := r.advanceOwnStateMachine(ctx, &op, &cluster, lock); handled {
@@ -292,6 +294,27 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	return result, r.setPhase(ctx, &op, ichorv1alpha1.TalosOperationPhaseInProgress,
 		reasonOperationAdvancing, advancingMessage(&op, len(toAdvance)))
+}
+
+// consumeRetry acts on a retry request (OperationRetryAnnotation) newer than status.lastRetry for a
+// failed operation: it clears failureReason, records the request and puts the operation back to
+// InProgress, so the caller runs the failed machine's step again (that machine is still InProgress in
+// status.machines). It reports whether it did; a missing, unparsable or stale request is ignored.
+func (r *TalosOperationReconciler) consumeRetry(ctx context.Context, op *ichorv1alpha1.TalosOperation) (bool, error) {
+	at, err := time.Parse(time.RFC3339, op.Annotations[ichorv1alpha1.OperationRetryAnnotation])
+	if err != nil {
+		return false, nil //nolint:nilerr // no (valid) request: nothing to do
+	}
+
+	if last := op.Status.LastRetry; last != nil && !at.After(last.Time) {
+		return false, nil
+	}
+
+	t := metav1.NewTime(at)
+	op.Status.LastRetry = &t
+
+	return true, r.setPhase(ctx, op, ichorv1alpha1.TalosOperationPhaseInProgress,
+		reasonOperationAdvancing, "retrying the failed step")
 }
 
 // lockUnavailable turns a refusal of acquireDisruptiveLock into the pause that explains it; the

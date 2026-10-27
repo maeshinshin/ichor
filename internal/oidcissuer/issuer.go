@@ -61,6 +61,10 @@ type User struct {
 	Roles     []string  // become the "groups" claim
 	Disabled  bool      // spec.disabled
 	NotBefore time.Time // credentials entry notBefore; zero means none
+	// MustChange is the credentials entry's mustChange: the user may sign in
+	// to the UI (audience ichor-ui) to change the password, but gets no
+	// Kubernetes (ichor-kube) token until then.
+	MustChange bool
 }
 
 // UserDirectory looks up a user by name (a cached read is fine; the ADR allows

@@ -374,6 +374,10 @@ func (i *Issuer) refreshGrant(w http.ResponseWriter, r *http.Request, client str
 // withRefresh), a refresh token. A refresh grant returns no new refresh token:
 // they are not rotated, the client keeps its own.
 func (i *Issuer) respond(w http.ResponseWriter, u User, client, aud, scope, nonce string, withRefresh bool, sessionStart time.Time) {
+	if u.MustChange && aud == AudienceKube {
+		oauthError(w, http.StatusForbidden, errAccessDenied, "change your password first (sign in to the Ichor UI); no Kubernetes token is issued until then")
+		return
+	}
 	now := i.cfg.Now()
 	id, err := randomID()
 	if err != nil {

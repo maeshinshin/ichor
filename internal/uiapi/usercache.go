@@ -21,10 +21,13 @@ import (
 	"sync"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/ichorauth"
 )
 
 // UserCacheTTL is how long a read IchorUser may be reused: the bound on how
@@ -42,6 +45,12 @@ type UserCache struct {
 
 	mu sync.Mutex
 	m  map[string]cachedUser
+	mc map[string]cachedMustChange
+}
+
+type cachedMustChange struct {
+	v  bool
+	at time.Time
 }
 
 type cachedUser struct {
@@ -91,5 +100,43 @@ func (c *UserCache) Get(ctx context.Context, name string) (*ichorv1alpha1.IchorU
 func (c *UserCache) Forget(name string) {
 	c.mu.Lock()
 	delete(c.m, name)
+	delete(c.mc, name)
 	c.mu.Unlock()
+}
+
+// MustChange reports whether name's credentials entry demands a password
+// change, cached for at most UserCacheTTL like Get. A user with no entry (or
+// no credentials Secret) is not flagged; a read error is returned so callers
+// can fail closed.
+func (c *UserCache) MustChange(ctx context.Context, name string) (bool, error) {
+	c.mu.Lock()
+	e, ok := c.mc[name]
+	c.mu.Unlock()
+
+	if ok && c.now().Sub(e.at) < UserCacheTTL {
+		return e.v, nil
+	}
+
+	var sec corev1.Secret
+
+	err := c.Reader.Get(ctx, types.NamespacedName{Namespace: c.Namespace, Name: ichorauth.CredentialsSecretName}, &sec)
+	if err != nil && !apierrors.IsNotFound(err) {
+		return false, err
+	}
+
+	v := false
+
+	if cred, perr := ichorauth.ParseCredential(sec.Data[name]); perr == nil {
+		v = cred.MustChange
+	}
+
+	c.mu.Lock()
+	if c.mc == nil {
+		c.mc = map[string]cachedMustChange{}
+	}
+
+	c.mc[name] = cachedMustChange{v: v, at: c.now()}
+	c.mu.Unlock()
+
+	return v, nil
 }

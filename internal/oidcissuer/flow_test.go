@@ -329,6 +329,27 @@ func TestRefreshGrant(t *testing.T) {
 	})
 }
 
+func TestMustChangeGetsNoKubernetesToken(t *testing.T) {
+	e := newEnv(t, externalURL, "")
+	tr := e.tokens(clientCLI, cliRedirect, clientUI)
+
+	e.dir.set(oidcissuer.User{Name: userAlice, MustChange: true}, "correct horse")
+
+	if s, _ := e.token(refreshForm(clientCLI, tr.RefreshToken, audKube)); s != http.StatusForbidden {
+		t.Fatalf("kube audience for a must-change user: %d", s)
+	}
+
+	if s, r := e.token(refreshForm(clientCLI, tr.RefreshToken, "")); s != http.StatusOK || claimsOf(t, r.IDToken)["aud"] != clientUI {
+		t.Fatalf("ui audience must still work to change the password: %d", s)
+	}
+
+	e.dir.set(oidcissuer.User{Name: userAlice}, "correct horse")
+
+	if s, _ := e.token(refreshForm(clientCLI, tr.RefreshToken, audKube)); s != http.StatusOK {
+		t.Fatalf("kube audience after the change: %d", s)
+	}
+}
+
 func TestAudienceSurvivesRefresh(t *testing.T) {
 	e := newEnv(t, externalURL, "")
 	tr := e.tokens(clientCLI, cliRedirect, clientUI)

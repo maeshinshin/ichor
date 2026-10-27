@@ -44,6 +44,10 @@ type UserSettings struct {
 	Cache *UserCache
 	// IssuerURL is the external URL of ichor-ui and the issuer of its tokens.
 	IssuerURL string
+	// KubeAPIServerURL, when set, is the server of the kubeconfig GetMyKubeconfig
+	// returns instead of the cluster's spec.endpoint; KubeAPITLSServerName, when
+	// set, becomes its tls-server-name.
+	KubeAPIServerURL, KubeAPITLSServerName string
 
 	sem chan struct{}
 }
@@ -143,7 +147,16 @@ func (s *Server) setCredential(ctx context.Context, name, password string, mustC
 		return err
 	}
 
-	return s.writeCredential(ctx, name, cred)
+	if err := s.writeCredential(ctx, name, cred); err != nil {
+		return err
+	}
+
+	// This replica must see the new mustChange at once (the other waits its TTL).
+	if s.Users != nil {
+		s.Users.Cache.Forget(name)
+	}
+
+	return nil
 }
 
 func generatePassword() (string, error) { return ichorauth.GeneratePassword() }

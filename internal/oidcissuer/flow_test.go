@@ -59,9 +59,9 @@ func TestAuthorizeRejectsBadRequests(t *testing.T) {
 	e := newEnv(t, externalURL, "")
 	p := newPKCE()
 	base := url.Values{
-		"response_type": {pCode}, pClientID: {clientCLI}, "redirect_uri": {cliRedirect},
-		pScope: {"openid"}, "state": {"s"}, pNonce: {"n"},
-		pChallenge: {p.challenge}, "code_challenge_method": {pS256},
+		pRespType: {pCode}, pClientID: {clientCLI}, pRedirect: {cliRedirect},
+		pScope: {"openid"}, pState: {"s"}, pNonce: {"n"},
+		pChallenge: {p.challenge}, pMethod: {pS256},
 	}
 	mut := func(f func(url.Values)) url.Values {
 		v := url.Values{}
@@ -72,28 +72,28 @@ func TestAuthorizeRejectsBadRequests(t *testing.T) {
 		return v
 	}
 	cases := map[string]url.Values{
-		"plain pkce":      mut(func(v url.Values) { v.Set("code_challenge_method", "plain") }),
+		"plain pkce":      mut(func(v url.Values) { v.Set(pMethod, "plain") }),
 		"no pkce":         mut(func(v url.Values) { v.Del(pChallenge) }),
 		"short challenge": mut(func(v url.Values) { v.Set(pChallenge, "abc") }),
-		"implicit":        mut(func(v url.Values) { v.Set("response_type", "token") }),
-		"hybrid":          mut(func(v url.Values) { v.Set("response_type", "code id_token") }),
+		"implicit":        mut(func(v url.Values) { v.Set(pRespType, "token") }),
+		"hybrid":          mut(func(v url.Values) { v.Set(pRespType, "code id_token") }),
 		"no openid":       mut(func(v url.Values) { v.Set(pScope, "profile") }),
-		"no state":        mut(func(v url.Values) { v.Del("state") }),
+		"no state":        mut(func(v url.Values) { v.Del(pState) }),
 		"no nonce":        mut(func(v url.Values) { v.Del(pNonce) }),
-		"bad audience":    mut(func(v url.Values) { v.Set("audience", "somebody-else") }),
+		"bad audience":    mut(func(v url.Values) { v.Set(pAudience, "somebody-else") }),
 		"ui asks kube": mut(func(v url.Values) {
 			v.Set(pClientID, clientUI)
-			v.Set("redirect_uri", uiRedirect)
-			v.Set("audience", audKube)
+			v.Set(pRedirect, uiRedirect)
+			v.Set(pAudience, audKube)
 		}),
 	}
 	for name, q := range cases {
 		rec := e.do(e.h, http.MethodGet, "/oidc/authorize?"+q.Encode(), "", "")
 		loc, _ := url.Parse(rec.Header().Get("Location"))
-		if rec.Code != http.StatusFound || loc.Query().Get("error") == "" || loc.Query().Get("ticket") != "" {
+		if rec.Code != http.StatusFound || loc.Query().Get("error") == "" || loc.Query().Get(pTicket) != "" {
 			t.Errorf("%s: status %d location %q", name, rec.Code, rec.Header().Get("Location"))
 		}
-		if loc != nil && !strings.HasPrefix(loc.String(), strings.Split(q.Get("redirect_uri"), "?")[0]) {
+		if loc != nil && !strings.HasPrefix(loc.String(), strings.Split(q.Get(pRedirect), "?")[0]) {
 			t.Errorf("%s: error redirected to %q", name, loc)
 		}
 	}
@@ -349,9 +349,9 @@ func TestNoOfflineAccessNoRefreshToken(t *testing.T) {
 	e := newEnv(t, externalURL, "")
 	p := newPKCE()
 	q := url.Values{
-		"response_type": {pCode}, pClientID: {clientCLI}, "redirect_uri": {cliRedirect},
-		pScope: {"openid"}, "state": {stateVal}, pNonce: {"n1"},
-		pChallenge: {p.challenge}, "code_challenge_method": {pS256},
+		pRespType: {pCode}, pClientID: {clientCLI}, pRedirect: {cliRedirect},
+		pScope: {"openid"}, pState: {stateVal}, pNonce: {"n1"},
+		pChallenge: {p.challenge}, pMethod: {pS256},
 	}
 	ticket := e.ticket(e.do(e.h, http.MethodGet, "/oidc/authorize?"+q.Encode(), "", ""))
 	rec := e.login(ticket, userAlice, "correct horse")

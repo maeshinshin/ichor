@@ -225,6 +225,21 @@ var rules = []rule{
 	// stays reboot-required.
 	{prefix: "NetworkRuleConfig", safe: true},
 	{prefix: "NetworkDefaultActionConfig", safe: true},
+
+	// Link addressing, verified against Talos v1.14.3
+	// internal/app/machined/pkg/controllers/network: link_config.go (LinkConfig, VLANConfig ->
+	// LinkSpec), address_config.go and operator_config.go (static addresses and routes ->
+	// AddressSpec/RouteSpec, DHCPv4Config -> OperatorSpec) and resolver_config.go (nameservers)
+	// all take the active MachineConfig as a weak input and reconcile their specs on every
+	// change, and the spec controllers (link_spec.go, address_spec.go, operator_spec.go) apply
+	// them to the kernel live. A safe rule means a plain apply; it does not mean the node stays
+	// reachable if the change moves the address its Talos API is dialled on. LinkAliasConfig is
+	// deliberately absent (it renames what every other document refers to, so it keeps the
+	// reboot-required default), as are ResolverConfig.hostDNS and the other network kinds.
+	{prefix: "LinkConfig", safe: true},
+	{prefix: "VLANConfig", safe: true},
+	{prefix: "DHCPv4Config", safe: true},
+	{prefix: "ResolverConfig.nameservers", safe: true},
 }
 
 func matchesPrefix(path, prefix string) bool {

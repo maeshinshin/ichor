@@ -450,21 +450,7 @@ func nextBatch(
 // the last stage is done.
 func kubernetesBatch(op *ichorv1alpha1.TalosOperation, controlPlanes, workers []*ichorv1alpha1.TalosMachine) []*ichorv1alpha1.TalosMachine {
 	if op.Status.Kubernetes == nil {
-		// An operation that started before stages existed has only ever applied the whole
-		// configuration to a machine: it is already in the last stage.
-		stage := ichorv1alpha1.KubernetesStageAPIServers
-		if len(op.Status.Machines) > 0 {
-			stage = ichorv1alpha1.KubernetesStageKubelets
-		}
-
-		op.Status.Kubernetes = &ichorv1alpha1.TalosOperationKubernetesStatus{Stage: stage}
-	}
-
-	// An operation recorded in the old combined first stage continues in its first half, keeping
-	// the machines it has already finished: they have all three components on the target, which
-	// the next stage finds and only verifies.
-	if op.Status.Kubernetes.Stage == ichorv1alpha1.KubernetesStageControlPlanes {
-		op.Status.Kubernetes.Stage = ichorv1alpha1.KubernetesStageAPIServers
+		op.Status.Kubernetes = &ichorv1alpha1.TalosOperationKubernetesStatus{Stage: ichorv1alpha1.KubernetesStageAPIServers}
 	}
 
 	next := map[string]string{

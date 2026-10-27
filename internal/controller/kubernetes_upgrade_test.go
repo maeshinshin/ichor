@@ -292,7 +292,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		fake := &fakeTalosClient{version: testTalosVersion, current: renderAt(cluster, w, testK8sOld)}
 		adv := newKubernetesAdvancer(fake, &fakeKubernetesAdmin{})
 
-		done, err := adv.Advance(ctx, cluster, w, nil)
+		done, err := adv.Advance(ctx, cluster, w, opAtStage(ichorv1alpha1.KubernetesStageKubelets))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("skips a minor version"))
 		Expect(done).To(BeFalse())
@@ -309,7 +309,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		fake := &fakeTalosClient{version: "v1.9.0", current: renderAt(cluster, w, testK8sOld)}
 		adv := newKubernetesAdvancer(fake, &fakeKubernetesAdmin{})
 
-		_, err := adv.Advance(ctx, cluster, w, nil)
+		_, err := adv.Advance(ctx, cluster, w, opAtStage(ichorv1alpha1.KubernetesStageKubelets))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("not supported with talos"))
 		Expect(fake.applyCalls).To(BeEmpty())
@@ -330,7 +330,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		fake := &fakeTalosClient{version: testTalosVersion, current: renderAt(cluster, w, testK8sOld)}
 		adv := newKubernetesAdvancer(fake, &fakeKubernetesAdmin{})
 
-		done, err := adv.Advance(ctx, cluster, w, nil)
+		done, err := adv.Advance(ctx, cluster, w, opAtStage(ichorv1alpha1.KubernetesStageKubelets))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("hand-over"))
 		Expect(done).To(BeFalse())
@@ -345,7 +345,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		// config is re-rendered the same way.
 		fake.current = renderAt(cluster, w, testK8sOld)
 
-		_, err = adv.Advance(ctx, cluster, w, nil)
+		_, err = adv.Advance(ctx, cluster, w, opAtStage(ichorv1alpha1.KubernetesStageKubelets))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(fake.applyCalls).To(HaveLen(1))
 	})
@@ -364,7 +364,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		fake := &fakeTalosClient{version: testTalosVersion, current: renderAt(cluster, w, testK8sOld)}
 		adv := newKubernetesAdvancer(fake, &fakeKubernetesAdmin{})
 
-		_, err := adv.Advance(ctx, cluster, w, nil)
+		_, err := adv.Advance(ctx, cluster, w, opAtStage(ichorv1alpha1.KubernetesStageKubelets))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(fake.applyCalls).To(HaveLen(1))
 	})
@@ -377,7 +377,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		fake := &fakeTalosClient{version: testTalosVersion, current: renderAt(cluster, w, testK8sOld)}
 		adv := newKubernetesAdvancer(fake, &fakeKubernetesAdmin{})
 
-		_, err := adv.Advance(ctx, cluster, w, nil)
+		_, err := adv.Advance(ctx, cluster, w, opAtStage(ichorv1alpha1.KubernetesStageKubelets))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(fake.applyCalls).To(HaveLen(1))
 		Expect(fake.applyBudget).To(BeNumerically(">", 4*etcdDialTimeout),
@@ -393,7 +393,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		fake := &fakeTalosClient{version: testTalosVersion, current: renderAt(cluster, w, testK8sOld)}
 		adv := newKubernetesAdvancer(fake, &fakeKubernetesAdmin{})
 
-		_, err := adv.Advance(ctx, cluster, w, nil)
+		_, err := adv.Advance(ctx, cluster, w, opAtStage(ichorv1alpha1.KubernetesStageKubelets))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("not Ready"))
 		Expect(fake.applyCalls).To(BeEmpty())
@@ -409,7 +409,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		fake := &fakeTalosClient{version: testTalosVersion, current: current}
 		adv := newKubernetesAdvancer(fake, &fakeKubernetesAdmin{})
 
-		_, err := adv.Advance(ctx, cluster, w, nil)
+		_, err := adv.Advance(ctx, cluster, w, opAtStage(ichorv1alpha1.KubernetesStageKubelets))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("unrelated"))
 		Expect(fake.applyCalls).To(BeEmpty())
@@ -424,7 +424,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		admin := &fakeKubernetesAdmin{removed: []string{"flowcontrol.apiserver.k8s.io/v1beta3 flowschemas"}}
 		adv := newKubernetesAdvancer(fake, admin)
 
-		op := &ichorv1alpha1.TalosOperation{}
+		op := opAtStage(ichorv1alpha1.KubernetesStageKubelets)
 
 		_, err := adv.Advance(ctx, cluster, w, op)
 		Expect(err).NotTo(HaveOccurred())
@@ -449,7 +449,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		fake := &fakeTalosClient{version: testTalosVersion, current: renderAt(cluster, w, testK8sOld), nodeName: name}
 		adv := newKubernetesAdvancer(fake, &fakeKubernetesAdmin{})
 
-		done, err := adv.Advance(ctx, cluster, fetchMachine(w), nil)
+		done, err := adv.Advance(ctx, cluster, fetchMachine(w), opAtStage(ichorv1alpha1.KubernetesStageKubelets))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(done).To(BeFalse())
 		Expect(fake.applyCalls).To(HaveLen(1), "the node was found by the name it reports, and the step ran")
@@ -464,7 +464,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		admin := &fakeKubernetesAdmin{}
 		adv := newKubernetesAdvancer(fake, admin)
 
-		done, err := adv.Advance(ctx, cluster, w, nil)
+		done, err := adv.Advance(ctx, cluster, w, opAtStage(ichorv1alpha1.KubernetesStageKubelets))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(done).To(BeFalse())
 		Expect(fake.applyCalls).To(HaveLen(1))
@@ -476,14 +476,14 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		// observed state, never apply again.
 		fake.current = fake.applyCalls[0]
 
-		done, err = adv.Advance(ctx, cluster, fetchMachine(w), nil)
+		done, err = adv.Advance(ctx, cluster, fetchMachine(w), opAtStage(ichorv1alpha1.KubernetesStageKubelets))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(done).To(BeFalse())
 		Expect(fake.applyCalls).To(HaveLen(1))
 
 		setK8sNode(w.Spec.Hostname, testK8sTarget)
 
-		done, err = adv.Advance(ctx, cluster, fetchMachine(w), nil)
+		done, err = adv.Advance(ctx, cluster, fetchMachine(w), opAtStage(ichorv1alpha1.KubernetesStageKubelets))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(done).To(BeTrue())
 		Expect(fake.applyCalls).To(HaveLen(1))
@@ -506,7 +506,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		}
 		adv := newKubernetesAdvancer(fake, &fakeKubernetesAdmin{})
 
-		_, err := adv.Advance(ctx, cluster, w, nil)
+		_, err := adv.Advance(ctx, cluster, w, opAtStage(ichorv1alpha1.KubernetesStageKubelets))
 		Expect(err).NotTo(HaveOccurred(), "a stale object must not pause the upgrade")
 
 		got := fetchMachine(w)
@@ -522,7 +522,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		fake := &fakeTalosClient{version: testTalosVersion, current: renderAt(cluster, w, testK8sOld)}
 		adv := newKubernetesAdvancer(fake, &fakeKubernetesAdmin{})
 
-		_, err := adv.Advance(ctx, cluster, w, nil)
+		_, err := adv.Advance(ctx, cluster, w, opAtStage(ichorv1alpha1.KubernetesStageKubelets))
 		Expect(err).NotTo(HaveOccurred())
 
 		fake.current = fake.applyCalls[0]
@@ -533,7 +533,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		cond.LastTransitionTime = metav1.NewTime(time.Now().Add(-2 * kubernetesVerifyTimeout))
 		Expect(k8sClient.Status().Update(ctx, got)).To(Succeed())
 
-		done, err := adv.Advance(ctx, cluster, fetchMachine(w), nil)
+		done, err := adv.Advance(ctx, cluster, fetchMachine(w), opAtStage(ichorv1alpha1.KubernetesStageKubelets))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("did not converge"))
 		Expect(done).To(BeFalse())
@@ -651,20 +651,6 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		Expect(done).To(BeTrue(), "the kubelet is still old and that is what this stage wants")
 		Expect(fake.applyCalls).To(HaveLen(1))
 		Expect(admin.syncCalls).To(BeZero())
-	})
-
-	It("takes the legacy ControlPlanes stage as APIServers", func() {
-		cluster := k8sCluster(testK8sTarget)
-		cp := newK8sControlPlane(cluster.Name, "st1c")
-		newK8sNode(cp.Spec.Hostname, true)
-		setStaticPodsFor(cp.Spec.Hostname, testK8sOld)
-
-		fake := &fakeTalosClient{version: testTalosVersion, current: renderAt(cluster, cp, testK8sOld)}
-
-		_, err := newKubernetesAdvancer(fake, &fakeKubernetesAdmin{}).Advance(ctx, cluster, cp, opAtStage(ichorv1alpha1.KubernetesStageControlPlanes))
-		Expect(err).NotTo(HaveOccurred())
-		Expect(fake.applyCalls).To(HaveLen(1))
-		Expect(imageTags(fake.applyCalls[0])).To(HaveKeyWithValue(compControllerManager, testK8sOld))
 	})
 
 	It("stage KubeProxy moves kube-proxy only, then syncs the manifests and waits for the rollout", func() {
@@ -1040,28 +1026,6 @@ var _ = Describe("a staged Kubernetes upgrade through TalosOperationReconciler",
 		}))
 	})
 
-	It("resumes an operation recorded in the old combined ControlPlanes stage as APIServers", func() {
-		f := newKubernetesFleet("oldcp", 3, 0)
-		cp1 := f.machines[0]
-
-		f.op.Status.Kubernetes = &ichorv1alpha1.TalosOperationKubernetesStatus{Stage: ichorv1alpha1.KubernetesStageControlPlanes}
-		f.op.Status.Phase = ichorv1alpha1.TalosOperationPhaseInProgress
-		Expect(k8sClient.Status().Update(ctx, f.op)).To(Succeed())
-
-		Expect(f.reconcile()).To(Equal([][2]string{{cp1.Name, ichorv1alpha1.KubernetesStageAPIServers}}))
-		Expect(imageTags(f.byName[cp1.Name].current)).To(HaveKeyWithValue(compControllerManager, testK8sOld))
-	})
-
-	It("takes an operation that started before stages existed as already in the last stage", func() {
-		f := newKubernetesFleet("legacy", 1, 0)
-		cp := f.machines[0]
-
-		f.op.Status.Machines = []ichorv1alpha1.TalosOperationMachineStatus{{Name: "someone-else", Phase: ichorv1alpha1.TalosOperationMachinePhaseCompleted}}
-		f.op.Status.Phase = ichorv1alpha1.TalosOperationPhaseInProgress
-		Expect(k8sClient.Status().Update(ctx, f.op)).To(Succeed())
-
-		Expect(f.reconcile()).To(Equal([][2]string{{cp.Name, ichorv1alpha1.KubernetesStageKubelets}}))
-	})
 })
 
 var _ = Describe("kind: kubernetes through TalosOperationReconciler", func() {

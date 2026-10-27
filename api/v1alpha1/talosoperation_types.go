@@ -87,11 +87,6 @@ const (
 	// every control plane, one control plane at a time; kubelets and kube-proxy stay.
 	KubernetesStageControlPlaneComponents = "ControlPlaneComponents"
 
-	// KubernetesStageControlPlanes is the first stage of operations that started before ADR 0087
-	// was amended (apiserver, controller-manager and scheduler together). The executor takes it as
-	// KubernetesStageAPIServers; nothing writes it any more.
-	KubernetesStageControlPlanes = "ControlPlanes"
-
 	// KubernetesStageKubeProxy: kube-proxy moves to the target and the bootstrap manifests are synced.
 	KubernetesStageKubeProxy = "KubeProxy"
 
@@ -353,9 +348,8 @@ type TalosOperationKubernetesStatus struct {
 	// stage is APIServers (kube-apiserver on every control plane), ControlPlaneComponents
 	// (controller-manager and scheduler on every control plane; the kubelets and kube-proxy still on
 	// the old version), KubeProxy (kube-proxy and the bootstrap manifests) or Kubelets (every
-	// kubelet, control planes first, then workers). ControlPlanes is the legacy combined first
-	// stage of operations started before the split; it is read as APIServers.
-	// +kubebuilder:validation:Enum=ControlPlanes;APIServers;ControlPlaneComponents;KubeProxy;Kubelets
+	// kubelet, control planes first, then workers).
+	// +kubebuilder:validation:Enum=APIServers;ControlPlaneComponents;KubeProxy;Kubelets
 	// +optional
 	Stage string `json:"stage,omitempty"`
 }

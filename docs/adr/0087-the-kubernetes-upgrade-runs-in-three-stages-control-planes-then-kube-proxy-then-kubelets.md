@@ -64,3 +64,5 @@ So at no step is a controller-manager, scheduler or kubelet newer than any apise
 **Plan and UI.** The plan lists four stages; the UI shows "Stage N of 4".
 
 **Not verified on hardware.** Tests (fakes and envtest) assert the apply order `APIServers` cp1 cp2 cp3, `ControlPlaneComponents` cp1 cp2 cp3, `KubeProxy`, `Kubelets`, and after every apply that no controller-manager or scheduler is newer than any apiserver and no kubelet is newer than any apiserver.
+
+No compatibility with pre-release stage layouts: Ichor had no release, so the `ControlPlanes` stage and the unstaged-operation rule are gone; an operation with no recorded stage starts at `APIServers`.

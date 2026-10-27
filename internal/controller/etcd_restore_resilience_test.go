@@ -81,7 +81,9 @@ var _ = Describe("TalosOperation etcd-restore after a restart of the controller"
 
 	It("stops retrying when the context ends, and when there is no marker it returns at once", func() {
 		f := newRestoreFixture("")
-		Expect(f.reconciler("").ResumeEtcdRestoresUntilDone(ctx)).To(Succeed())
+		bounded, stop := context.WithTimeout(ctx, 30*time.Second)
+		defer stop()
+		Expect(f.reconciler("").ResumeEtcdRestoresUntilDone(bounded)).To(Succeed())
 
 		op := f.newOp(nil)
 		f.reconcile(op)

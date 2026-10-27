@@ -75,6 +75,13 @@ type restoreJob struct {
 	order  []restoreNode
 	target restoreNode
 
+	// own is the controller's own control plane (marker Own), nil when the controller runs elsewhere. The
+	// job wipes it itself, through Talos alone, once peers (the Kubernetes node names of the other
+	// control planes) are members of the recovered etcd: from that node the Kubernetes API is not
+	// reachable (its etcd and kube-proxy are stale), so the reconcile could not.
+	own   *restoreNode
+	peers []string
+
 	marker etcdbackup.RestoreMarker
 
 	now      func() time.Time
@@ -104,7 +111,7 @@ func (j *restoreJob) setStep(ctx context.Context, step string) error {
 // false, nil with j.note saying why.
 func (j *restoreJob) step(ctx context.Context) (done bool, err error) {
 	if j.marker.Step == etcdbackup.MarkerRejoining {
-		return true, nil
+		return j.ownStep(ctx)
 	}
 
 	if j.now().Sub(j.marker.StartedAt) > etcdRestoreTailTimeout {
@@ -216,7 +223,7 @@ func (j *restoreJob) recoverTarget(ctx context.Context) (bool, error) {
 			return false, nil
 		}
 
-		return true, nil
+		return j.ownStep(ctx)
 	}
 
 	if !j.verified {
@@ -251,6 +258,118 @@ func (j *restoreJob) recoverTarget(ctx context.Context) (bool, error) {
 	}
 
 	return j.recoveryCallFailed("bootstrapping etcd from the snapshot", err)
+}
+
+// ownStep wipes the controller's own control plane, last, once every other control plane is a member of
+// the recovered etcd. It uses the Talos API only. The marker records the intent before the wipe is sent
+// (OwnWipeAt) and the end after (OwnDone), so a process that dies at any point is continued by the next
+// one: an unreachable node after a recorded wipe is waited for, a node that still has data is asked
+// again after etcdRestoreResendAfter, a node that has none or is a member is done. It reports done once
+// there is nothing left for the job.
+func (j *restoreJob) ownStep(ctx context.Context) (bool, error) {
+	if j.own == nil || j.marker.OwnDone {
+		return true, nil
+	}
+
+	if j.now().Sub(j.marker.StartedAt) > etcdRestoreOverallTimeout {
+		return false, fmt.Errorf("the controller's own control plane %s was not wiped within %s (last problem: %s)",
+			j.own.name, etcdRestoreOverallTimeout, j.note)
+	}
+
+	tc, err := j.target.dial(ctx)
+	if err != nil {
+		j.note = fmt.Sprintf("dialing %s: %v", j.target.name, err)
+
+		return false, nil
+	}
+
+	members, err := tc.EtcdMemberList(ctx)
+
+	closeTalosClient(tc)
+
+	if err != nil {
+		j.note = fmt.Sprintf("etcd on %s does not answer yet: %s", j.target.name, j.scrub.clean(err.Error()))
+
+		return false, nil
+	}
+
+	for _, p := range j.peers {
+		if !etcdMemberPresent(members, p) {
+			j.note = fmt.Sprintf("waiting for control plane %s to rejoin etcd before wiping %s, where this controller runs", p, j.own.name)
+
+			return false, nil
+		}
+	}
+
+	if name := j.marker.Nodes[j.marker.Own]; name != "" && etcdMemberPresent(members, name) {
+		return j.ownDone(ctx)
+	}
+
+	c, err := j.own.dial(ctx)
+	if err != nil {
+		j.note = fmt.Sprintf("dialing %s: %v", j.own.name, err)
+
+		return false, nil
+	}
+
+	defer closeTalosClient(c)
+
+	present, err := c.EtcdDataPresent(ctx)
+	if err != nil {
+		j.note = fmt.Sprintf("%s: reading its etcd data: %v", j.own.name, err)
+
+		return false, nil
+	}
+
+	if !present {
+		return j.ownDone(ctx)
+	}
+
+	if at := j.marker.OwnWipeAt; !at.IsZero() && j.now().Sub(at) < etcdRestoreResendAfter {
+		j.note = j.own.name + ": wipe underway"
+
+		return false, nil
+	}
+
+	// The intent is stored before the wipe is sent: this controller dies with the node.
+	next := j.marker
+	next.OwnWipeAt = j.now().UTC()
+
+	if err := etcdbackup.PutMarker(ctx, j.store, j.prefix, &next); err != nil {
+		j.note = fmt.Sprintf("recording the wipe of %s in the backup storage: %v", j.own.name, j.scrub.clean(err.Error()))
+
+		return false, nil
+	}
+
+	j.marker = next
+
+	if err := c.ResetEtcdData(ctx); err != nil {
+		// Not sent: ask again at the next pass rather than after the resend interval.
+		j.marker.OwnWipeAt = time.Time{}
+		j.note = fmt.Sprintf("%s: wiping etcd data: %v", j.own.name, j.scrub.clean(err.Error()))
+
+		return false, nil
+	}
+
+	j.note = j.own.name + ": wipe requested (this controller runs there and stops with it)"
+
+	return false, nil
+}
+
+// ownDone records that the controller's own node needs nothing more.
+func (j *restoreJob) ownDone(ctx context.Context) (bool, error) {
+	next := j.marker
+	next.OwnDone = true
+
+	if err := etcdbackup.PutMarker(ctx, j.store, j.prefix, &next); err != nil {
+		j.note = err.Error()
+
+		return false, nil
+	}
+
+	j.marker = next
+
+	return true, nil
 }
 
 // recoveryCallFailed is a node that is not ready yet (wait) or a refusal (final).

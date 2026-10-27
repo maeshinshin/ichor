@@ -519,6 +519,19 @@ func (run *restoreRun) launch(m *etcdbackup.RestoreMarker, nodes restoreNodes) {
 		job.order = append(job.order, r.restoreNode(run.cluster, n, run.bundle))
 	}
 
+	// The controller's own node comes from the marker, not from where this process runs: a controller
+	// restarted elsewhere still has to see it through.
+	if i := slices.IndexFunc(nodes.all, func(c *ichorv1alpha1.TalosMachine) bool { return c.Name == m.Own && m.Own != "" }); i >= 0 {
+		own := r.restoreNode(run.cluster, nodes.all[i], run.bundle)
+		job.own = &own
+
+		for _, c := range nodes.all {
+			if c.Name != m.Own && nodeNameFor(m.Nodes, c) != "" {
+				job.peers = append(job.peers, nodeNameFor(m.Nodes, c))
+			}
+		}
+	}
+
 	if r.launchTail != nil {
 		r.launchTail(job)
 
@@ -541,13 +554,17 @@ func (run *restoreRun) ensureTail(ctx context.Context, m *etcdbackup.RestoreMark
 	}
 
 	nodes := planRestoreNodes(cps, run.r.NodeName, m.Nodes)
+	if m.Own != "" {
+		// The controller's own node is the one the marker names, wherever this process runs now.
+		nodes.order = slices.DeleteFunc(nodes.order, func(c *ichorv1alpha1.TalosMachine) bool { return c.Name == m.Own })
+	}
 
-	idx := slices.IndexFunc(nodes.order, func(c *ichorv1alpha1.TalosMachine) bool { return c.Name == m.Target })
+	idx := slices.IndexFunc(nodes.all, func(c *ichorv1alpha1.TalosMachine) bool { return c.Name == m.Target })
 	if idx < 0 {
 		return fmt.Errorf("the target control plane %q is no longer an approved control plane", m.Target)
 	}
 
-	nodes.target = nodes.order[idx]
+	nodes.target = nodes.all[idx]
 
 	run.launch(m, nodes)
 
@@ -610,6 +627,14 @@ func (r *TalosOperationReconciler) advanceEtcdRestore(
 
 	if time.Since(marker.StartedAt) > etcdRestoreOverallTimeout {
 		return run.failed(ctx, marker, fmt.Errorf("the restore did not finish within %s", etcdRestoreOverallTimeout))
+	}
+
+	// A job that still has the controller's own node to wipe keeps running (or is started again after a
+	// restart) past Rejoining; it needs only Talos.
+	if marker.Own != "" && !marker.OwnDone && marker.Step == ichorv1alpha1.EtcdRestoreStepRejoining {
+		if err := run.ensureTail(ctx, marker); err != nil {
+			return r.restoreWait(ctx, op, err.Error()), nil
+		}
 	}
 
 	if etcdRestoreStepRank(marker.Step) < etcdRestoreStepRank(ichorv1alpha1.EtcdRestoreStepRejoining) {
@@ -790,6 +815,10 @@ func (run *restoreRun) waitForMembers(ctx context.Context, m *etcdbackup.Restore
 	}
 
 	for _, cp := range cps {
+		if cp.Name == m.Own {
+			continue // the job wipes it, through Talos alone and after the others joined
+		}
+
 		run.wipeIfStale(ctx, cp, members)
 	}
 

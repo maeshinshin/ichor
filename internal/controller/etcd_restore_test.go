@@ -770,7 +770,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 	})
 
 	Describe("the node the controller runs on", func() {
-		It("is left for after the recovery, and wiped then because it holds stale etcd data", func() {
+		It("is left for after the recovery, then wiped by the job through Talos alone once the others joined", func() {
 			f := newRestoreFixture(restoreHostA)
 			f.wipeHooks()
 			op := f.newOp(nil)
@@ -781,23 +781,98 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 
 			job := f.lastJob()
 			Expect(job.order).To(HaveLen(2))
+			Expect(job.own).NotTo(BeNil())
+			Expect(job.peers).To(ConsistOf(restoreHostB, restoreHostC))
 
-			_, err := f.run(job, 5)
+			// Recovered, but the others have not joined: the own node is left alone.
+			f.members(f.target())
+			done, err := f.run(job, 8)
 			Expect(err).NotTo(HaveOccurred())
+			Expect(done).To(BeFalse())
+			Expect(f.marker().Step).To(Equal(etcdbackup.MarkerRejoining))
 			Expect(f.fake(restoreHostA).resetEtcdCalls).To(BeZero(), "wiping it would stop the controller before the recovery")
 			Expect(f.targetFake().recovered).To(HaveLen(1))
 
-			// etcd is back without it: the reconcile wipes it, once.
+			// Both others are members: the intent is recorded, then the wipe is sent, once.
 			f.members(restoreHostB, restoreHostC)
+			_, err = job.step(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(f.fake(restoreHostA).resetEtcdCalls).To(Equal(1))
+			Expect(f.marker().OwnWipeAt.IsZero()).To(BeFalse(), "recorded before the wipe was sent")
+
+			// It reboots wiped (the fake's data is gone), and the job is done.
+			done, err = job.step(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(done).To(BeTrue())
+			Expect(f.marker().OwnDone).To(BeTrue())
+
+			// The reconcile does not wipe it either, and goes on once it is a member.
 			f.reconcile(op)
 			Expect(f.fake(restoreHostA).resetEtcdCalls).To(Equal(1))
 
-			f.reconcile(op)
-			Expect(f.fake(restoreHostA).resetEtcdCalls).To(Equal(1), "not asked again at once")
-
-			// it comes back as a member and the restore goes on
 			f.members(f.hosts()...)
 			Expect(f.reconcile(op).Status.EtcdRestore.Step).To(Equal(ichorv1alpha1.EtcdRestoreStepReconciling))
+		})
+
+		It("continues after a process died with the wipe recorded: waits while unreachable, asks again when it is stale", func() {
+			f := newRestoreFixture(restoreHostA)
+			f.wipeHooks()
+			op := f.newOp(nil)
+			f.reconcile(op)
+			f.members(f.target())
+
+			_, err := f.run(f.lastJob(), 8)
+			Expect(err).NotTo(HaveOccurred())
+
+			// The wipe was recorded, and the process died before (or while) sending it.
+			f.members(restoreHostB, restoreHostC)
+			m := f.marker()
+			m.OwnWipeAt = time.Now().Add(-time.Minute).UTC()
+			Expect(etcdbackup.PutMarker(ctx, f.backup.store, testBackupBase, m)).To(Succeed())
+
+			f.jobs = nil
+			r2 := f.reconciler(restoreHostB) // the replacement runs elsewhere; the marker still names the own node
+			f.reconcileWith(r2, op)
+
+			job := f.lastJob()
+			Expect(job.own).NotTo(BeNil())
+
+			_, err = job.step(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(f.fake(restoreHostA).resetEtcdCalls).To(BeZero(), "a recent request is trusted to be underway")
+
+			// An hour later nothing happened and it still has data: ask again.
+			job.now = func() time.Time { return time.Now().Add(time.Hour) }
+			_, err = job.step(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(f.fake(restoreHostA).resetEtcdCalls).To(Equal(1))
+
+			// Unreachable while it reboots: wait; back and wiped: done.
+			f.fake(restoreHostA).etcdDataErr = errors.New("connection refused")
+			done, err := job.step(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(done).To(BeFalse())
+
+			f.fake(restoreHostA).etcdDataErr = nil
+			done, err = job.step(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(done).To(BeTrue())
+		})
+
+		It("has no own wipe when the controller does not run on a control plane", func() {
+			f := newRestoreFixture("a-worker")
+			f.wipeHooks()
+			op := f.newOp(nil)
+			f.reconcile(op)
+
+			job := f.lastJob()
+			Expect(job.own).To(BeNil())
+
+			f.members(f.hosts()...)
+			done, err := f.run(job, 8)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(done).To(BeTrue())
+			Expect(f.marker().Own).To(BeEmpty())
 		})
 
 		It("does not wipe a control plane that is a member", func() {
@@ -805,10 +880,11 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 			f.wipeHooks()
 			op := f.newOp(nil)
 			f.reconcile(op)
-			_, err := f.run(f.lastJob(), 5)
-			Expect(err).NotTo(HaveOccurred())
-
 			f.members(f.hosts()...)
+			done, err := f.run(f.lastJob(), 8)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(done).To(BeTrue())
+
 			f.reconcile(op)
 			Expect(f.fake(restoreHostA).resetEtcdCalls).To(BeZero())
 		})

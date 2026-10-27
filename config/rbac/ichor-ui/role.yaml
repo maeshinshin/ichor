@@ -50,6 +50,7 @@ rules:
   - ichor.maesh.dev
   resources:
   - talosclusters
+  - talosetcdbackups
   verbs:
   - get
   - list
@@ -65,13 +66,6 @@ rules:
   - get
   - list
   - update
-- apiGroups:
-  - ichor.maesh.dev
-  resources:
-  - talosetcdbackups
-  verbs:
-  - get
-  - list
 - apiGroups:
   - ichor.maesh.dev
   resources:

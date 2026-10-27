@@ -471,9 +471,23 @@ type EtcdBackup struct {
 	// snapshots are the snapshots kept in the destination after the last backup, newest first.
 	Snapshots []*EtcdSnapshot `protobuf:"bytes,3,rep,name=snapshots,proto3" json:"snapshots,omitempty"`
 	// ready is false while the last attempt failed or the newest snapshot is stale.
-	Ready         bool `protobuf:"varint,4,opt,name=ready,proto3" json:"ready,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Ready bool `protobuf:"varint,4,opt,name=ready,proto3" json:"ready,omitempty"`
+	// destination is where snapshots go. Never the credentials.
+	Destination *EtcdBackupDestination `protobuf:"bytes,5,opt,name=destination,proto3" json:"destination,omitempty"`
+	// keep_last is how many snapshots are kept.
+	KeepLast int32 `protobuf:"varint,6,opt,name=keep_last,json=keepLast,proto3" json:"keep_last,omitempty"`
+	// last_success_time is when the newest successful attempt finished; unset before the first.
+	LastSuccessTime *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=last_success_time,json=lastSuccessTime,proto3" json:"last_success_time,omitempty"`
+	// last_error is the Ready condition's message while the last attempt failed; empty otherwise.
+	LastError string `protobuf:"bytes,8,opt,name=last_error,json=lastError,proto3" json:"last_error,omitempty"`
+	// suspended is spec.suspend: no snapshot is taken, on demand included.
+	Suspended bool `protobuf:"varint,9,opt,name=suspended,proto3" json:"suspended,omitempty"`
+	// last_manual_backup is the time of the newest on-demand request the controller acted on.
+	LastManualBackup *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=last_manual_backup,json=lastManualBackup,proto3" json:"last_manual_backup,omitempty"`
+	// manual_backup_pending is true while an on-demand request has not been acted on yet.
+	ManualBackupPending bool `protobuf:"varint,11,opt,name=manual_backup_pending,json=manualBackupPending,proto3" json:"manual_backup_pending,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *EtcdBackup) Reset() {
@@ -534,6 +548,220 @@ func (x *EtcdBackup) GetReady() bool {
 	return false
 }
 
+func (x *EtcdBackup) GetDestination() *EtcdBackupDestination {
+	if x != nil {
+		return x.Destination
+	}
+	return nil
+}
+
+func (x *EtcdBackup) GetKeepLast() int32 {
+	if x != nil {
+		return x.KeepLast
+	}
+	return 0
+}
+
+func (x *EtcdBackup) GetLastSuccessTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LastSuccessTime
+	}
+	return nil
+}
+
+func (x *EtcdBackup) GetLastError() string {
+	if x != nil {
+		return x.LastError
+	}
+	return ""
+}
+
+func (x *EtcdBackup) GetSuspended() bool {
+	if x != nil {
+		return x.Suspended
+	}
+	return false
+}
+
+func (x *EtcdBackup) GetLastManualBackup() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LastManualBackup
+	}
+	return nil
+}
+
+func (x *EtcdBackup) GetManualBackupPending() bool {
+	if x != nil {
+		return x.ManualBackupPending
+	}
+	return false
+}
+
+// EtcdBackupDestination is the S3 location of a backup, without the credentials Secret's content.
+type EtcdBackupDestination struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Endpoint      string                 `protobuf:"bytes,1,opt,name=endpoint,proto3" json:"endpoint,omitempty"`
+	Region        string                 `protobuf:"bytes,2,opt,name=region,proto3" json:"region,omitempty"`
+	Bucket        string                 `protobuf:"bytes,3,opt,name=bucket,proto3" json:"bucket,omitempty"`
+	Prefix        string                 `protobuf:"bytes,4,opt,name=prefix,proto3" json:"prefix,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EtcdBackupDestination) Reset() {
+	*x = EtcdBackupDestination{}
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EtcdBackupDestination) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EtcdBackupDestination) ProtoMessage() {}
+
+func (x *EtcdBackupDestination) ProtoReflect() protoreflect.Message {
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EtcdBackupDestination.ProtoReflect.Descriptor instead.
+func (*EtcdBackupDestination) Descriptor() ([]byte, []int) {
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *EtcdBackupDestination) GetEndpoint() string {
+	if x != nil {
+		return x.Endpoint
+	}
+	return ""
+}
+
+func (x *EtcdBackupDestination) GetRegion() string {
+	if x != nil {
+		return x.Region
+	}
+	return ""
+}
+
+func (x *EtcdBackupDestination) GetBucket() string {
+	if x != nil {
+		return x.Bucket
+	}
+	return ""
+}
+
+func (x *EtcdBackupDestination) GetPrefix() string {
+	if x != nil {
+		return x.Prefix
+	}
+	return ""
+}
+
+type RequestEtcdBackupRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Backup        *ObjectRef             `protobuf:"bytes,1,opt,name=backup,proto3" json:"backup,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RequestEtcdBackupRequest) Reset() {
+	*x = RequestEtcdBackupRequest{}
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RequestEtcdBackupRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RequestEtcdBackupRequest) ProtoMessage() {}
+
+func (x *RequestEtcdBackupRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RequestEtcdBackupRequest.ProtoReflect.Descriptor instead.
+func (*RequestEtcdBackupRequest) Descriptor() ([]byte, []int) {
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *RequestEtcdBackupRequest) GetBackup() *ObjectRef {
+	if x != nil {
+		return x.Backup
+	}
+	return nil
+}
+
+type RequestEtcdBackupResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Backup        *EtcdBackup            `protobuf:"bytes,1,opt,name=backup,proto3" json:"backup,omitempty"`
+	Audit         *AuditRecord           `protobuf:"bytes,2,opt,name=audit,proto3" json:"audit,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RequestEtcdBackupResponse) Reset() {
+	*x = RequestEtcdBackupResponse{}
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RequestEtcdBackupResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RequestEtcdBackupResponse) ProtoMessage() {}
+
+func (x *RequestEtcdBackupResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RequestEtcdBackupResponse.ProtoReflect.Descriptor instead.
+func (*RequestEtcdBackupResponse) Descriptor() ([]byte, []int) {
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *RequestEtcdBackupResponse) GetBackup() *EtcdBackup {
+	if x != nil {
+		return x.Backup
+	}
+	return nil
+}
+
+func (x *RequestEtcdBackupResponse) GetAudit() *AuditRecord {
+	if x != nil {
+		return x.Audit
+	}
+	return nil
+}
+
 type ListEtcdBackupsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Backups       []*EtcdBackup          `protobuf:"bytes,1,rep,name=backups,proto3" json:"backups,omitempty"`
@@ -543,7 +771,7 @@ type ListEtcdBackupsResponse struct {
 
 func (x *ListEtcdBackupsResponse) Reset() {
 	*x = ListEtcdBackupsResponse{}
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[5]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -555,7 +783,7 @@ func (x *ListEtcdBackupsResponse) String() string {
 func (*ListEtcdBackupsResponse) ProtoMessage() {}
 
 func (x *ListEtcdBackupsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[5]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -568,7 +796,7 @@ func (x *ListEtcdBackupsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListEtcdBackupsResponse.ProtoReflect.Descriptor instead.
 func (*ListEtcdBackupsResponse) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{5}
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *ListEtcdBackupsResponse) GetBackups() []*EtcdBackup {
@@ -597,7 +825,7 @@ type EtcdRestoreRequest struct {
 
 func (x *EtcdRestoreRequest) Reset() {
 	*x = EtcdRestoreRequest{}
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[6]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -609,7 +837,7 @@ func (x *EtcdRestoreRequest) String() string {
 func (*EtcdRestoreRequest) ProtoMessage() {}
 
 func (x *EtcdRestoreRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[6]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -622,7 +850,7 @@ func (x *EtcdRestoreRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EtcdRestoreRequest.ProtoReflect.Descriptor instead.
 func (*EtcdRestoreRequest) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{6}
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *EtcdRestoreRequest) GetBackup() *ObjectRef {
@@ -673,7 +901,7 @@ type NodeActionRequest struct {
 
 func (x *NodeActionRequest) Reset() {
 	*x = NodeActionRequest{}
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[7]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -685,7 +913,7 @@ func (x *NodeActionRequest) String() string {
 func (*NodeActionRequest) ProtoMessage() {}
 
 func (x *NodeActionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[7]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -698,7 +926,7 @@ func (x *NodeActionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NodeActionRequest.ProtoReflect.Descriptor instead.
 func (*NodeActionRequest) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{7}
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *NodeActionRequest) GetMachine() *ObjectRef {
@@ -756,7 +984,7 @@ type OperationMachine struct {
 
 func (x *OperationMachine) Reset() {
 	*x = OperationMachine{}
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[8]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -768,7 +996,7 @@ func (x *OperationMachine) String() string {
 func (*OperationMachine) ProtoMessage() {}
 
 func (x *OperationMachine) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[8]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -781,7 +1009,7 @@ func (x *OperationMachine) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OperationMachine.ProtoReflect.Descriptor instead.
 func (*OperationMachine) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{8}
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *OperationMachine) GetName() string {
@@ -840,7 +1068,7 @@ type Operation struct {
 
 func (x *Operation) Reset() {
 	*x = Operation{}
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[9]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -852,7 +1080,7 @@ func (x *Operation) String() string {
 func (*Operation) ProtoMessage() {}
 
 func (x *Operation) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[9]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -865,7 +1093,7 @@ func (x *Operation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Operation.ProtoReflect.Descriptor instead.
 func (*Operation) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{9}
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *Operation) GetRef() *ObjectRef {
@@ -1018,7 +1246,7 @@ type ListOperationsRequest struct {
 
 func (x *ListOperationsRequest) Reset() {
 	*x = ListOperationsRequest{}
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[10]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1030,7 +1258,7 @@ func (x *ListOperationsRequest) String() string {
 func (*ListOperationsRequest) ProtoMessage() {}
 
 func (x *ListOperationsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[10]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1043,7 +1271,7 @@ func (x *ListOperationsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListOperationsRequest.ProtoReflect.Descriptor instead.
 func (*ListOperationsRequest) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{10}
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ListOperationsRequest) GetCluster() *ObjectRef {
@@ -1062,7 +1290,7 @@ type ListOperationsResponse struct {
 
 func (x *ListOperationsResponse) Reset() {
 	*x = ListOperationsResponse{}
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[11]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1074,7 +1302,7 @@ func (x *ListOperationsResponse) String() string {
 func (*ListOperationsResponse) ProtoMessage() {}
 
 func (x *ListOperationsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[11]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1087,7 +1315,7 @@ func (x *ListOperationsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListOperationsResponse.ProtoReflect.Descriptor instead.
 func (*ListOperationsResponse) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{11}
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ListOperationsResponse) GetOperations() []*Operation {
@@ -1106,7 +1334,7 @@ type GetOperationRequest struct {
 
 func (x *GetOperationRequest) Reset() {
 	*x = GetOperationRequest{}
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[12]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1118,7 +1346,7 @@ func (x *GetOperationRequest) String() string {
 func (*GetOperationRequest) ProtoMessage() {}
 
 func (x *GetOperationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[12]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1131,7 +1359,7 @@ func (x *GetOperationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetOperationRequest.ProtoReflect.Descriptor instead.
 func (*GetOperationRequest) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{12}
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *GetOperationRequest) GetOperation() *ObjectRef {
@@ -1150,7 +1378,7 @@ type GetOperationResponse struct {
 
 func (x *GetOperationResponse) Reset() {
 	*x = GetOperationResponse{}
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[13]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1162,7 +1390,7 @@ func (x *GetOperationResponse) String() string {
 func (*GetOperationResponse) ProtoMessage() {}
 
 func (x *GetOperationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[13]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1175,7 +1403,7 @@ func (x *GetOperationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetOperationResponse.ProtoReflect.Descriptor instead.
 func (*GetOperationResponse) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{13}
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *GetOperationResponse) GetOperation() *Operation {
@@ -1200,7 +1428,7 @@ type PlannedMachine struct {
 
 func (x *PlannedMachine) Reset() {
 	*x = PlannedMachine{}
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[14]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1212,7 +1440,7 @@ func (x *PlannedMachine) String() string {
 func (*PlannedMachine) ProtoMessage() {}
 
 func (x *PlannedMachine) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[14]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1225,7 +1453,7 @@ func (x *PlannedMachine) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlannedMachine.ProtoReflect.Descriptor instead.
 func (*PlannedMachine) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{14}
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *PlannedMachine) GetName() string {
@@ -1279,7 +1507,7 @@ type PlanOperationRequest struct {
 
 func (x *PlanOperationRequest) Reset() {
 	*x = PlanOperationRequest{}
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[15]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1291,7 +1519,7 @@ func (x *PlanOperationRequest) String() string {
 func (*PlanOperationRequest) ProtoMessage() {}
 
 func (x *PlanOperationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[15]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1304,7 +1532,7 @@ func (x *PlanOperationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlanOperationRequest.ProtoReflect.Descriptor instead.
 func (*PlanOperationRequest) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{15}
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *PlanOperationRequest) GetCluster() *ObjectRef {
@@ -1401,7 +1629,7 @@ type PlanOperationResponse struct {
 
 func (x *PlanOperationResponse) Reset() {
 	*x = PlanOperationResponse{}
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[16]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1413,7 +1641,7 @@ func (x *PlanOperationResponse) String() string {
 func (*PlanOperationResponse) ProtoMessage() {}
 
 func (x *PlanOperationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[16]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1426,7 +1654,7 @@ func (x *PlanOperationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlanOperationResponse.ProtoReflect.Descriptor instead.
 func (*PlanOperationResponse) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{16}
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *PlanOperationResponse) GetEffect() OperationEffect {
@@ -1578,7 +1806,7 @@ type CreateOperationRequest struct {
 
 func (x *CreateOperationRequest) Reset() {
 	*x = CreateOperationRequest{}
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[17]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1590,7 +1818,7 @@ func (x *CreateOperationRequest) String() string {
 func (*CreateOperationRequest) ProtoMessage() {}
 
 func (x *CreateOperationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[17]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1603,7 +1831,7 @@ func (x *CreateOperationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateOperationRequest.ProtoReflect.Descriptor instead.
 func (*CreateOperationRequest) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{17}
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *CreateOperationRequest) GetCluster() *ObjectRef {
@@ -1665,7 +1893,7 @@ type CreateOperationResponse struct {
 
 func (x *CreateOperationResponse) Reset() {
 	*x = CreateOperationResponse{}
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[18]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1677,7 +1905,7 @@ func (x *CreateOperationResponse) String() string {
 func (*CreateOperationResponse) ProtoMessage() {}
 
 func (x *CreateOperationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[18]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1690,7 +1918,7 @@ func (x *CreateOperationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateOperationResponse.ProtoReflect.Descriptor instead.
 func (*CreateOperationResponse) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{18}
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *CreateOperationResponse) GetOperation() *Operation {
@@ -1731,7 +1959,7 @@ type SetOperationPausedRequest struct {
 
 func (x *SetOperationPausedRequest) Reset() {
 	*x = SetOperationPausedRequest{}
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[19]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1743,7 +1971,7 @@ func (x *SetOperationPausedRequest) String() string {
 func (*SetOperationPausedRequest) ProtoMessage() {}
 
 func (x *SetOperationPausedRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[19]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1756,7 +1984,7 @@ func (x *SetOperationPausedRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetOperationPausedRequest.ProtoReflect.Descriptor instead.
 func (*SetOperationPausedRequest) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{19}
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *SetOperationPausedRequest) GetOperation() *ObjectRef {
@@ -1783,7 +2011,7 @@ type SetOperationPausedResponse struct {
 
 func (x *SetOperationPausedResponse) Reset() {
 	*x = SetOperationPausedResponse{}
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[20]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1795,7 +2023,7 @@ func (x *SetOperationPausedResponse) String() string {
 func (*SetOperationPausedResponse) ProtoMessage() {}
 
 func (x *SetOperationPausedResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[20]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1808,7 +2036,7 @@ func (x *SetOperationPausedResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetOperationPausedResponse.ProtoReflect.Descriptor instead.
 func (*SetOperationPausedResponse) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{20}
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *SetOperationPausedResponse) GetOperation() *Operation {
@@ -1834,7 +2062,7 @@ type DeleteOperationRequest struct {
 
 func (x *DeleteOperationRequest) Reset() {
 	*x = DeleteOperationRequest{}
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[21]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1846,7 +2074,7 @@ func (x *DeleteOperationRequest) String() string {
 func (*DeleteOperationRequest) ProtoMessage() {}
 
 func (x *DeleteOperationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[21]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1859,7 +2087,7 @@ func (x *DeleteOperationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteOperationRequest.ProtoReflect.Descriptor instead.
 func (*DeleteOperationRequest) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{21}
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *DeleteOperationRequest) GetOperation() *ObjectRef {
@@ -1878,7 +2106,7 @@ type DeleteOperationResponse struct {
 
 func (x *DeleteOperationResponse) Reset() {
 	*x = DeleteOperationResponse{}
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[22]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1890,7 +2118,7 @@ func (x *DeleteOperationResponse) String() string {
 func (*DeleteOperationResponse) ProtoMessage() {}
 
 func (x *DeleteOperationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[22]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1903,7 +2131,7 @@ func (x *DeleteOperationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteOperationResponse.ProtoReflect.Descriptor instead.
 func (*DeleteOperationResponse) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{22}
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *DeleteOperationResponse) GetAudit() *AuditRecord {
@@ -1922,7 +2150,7 @@ type DownloadCARotationCredentialsRequest struct {
 
 func (x *DownloadCARotationCredentialsRequest) Reset() {
 	*x = DownloadCARotationCredentialsRequest{}
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[23]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1934,7 +2162,7 @@ func (x *DownloadCARotationCredentialsRequest) String() string {
 func (*DownloadCARotationCredentialsRequest) ProtoMessage() {}
 
 func (x *DownloadCARotationCredentialsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[23]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1947,7 +2175,7 @@ func (x *DownloadCARotationCredentialsRequest) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use DownloadCARotationCredentialsRequest.ProtoReflect.Descriptor instead.
 func (*DownloadCARotationCredentialsRequest) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{23}
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *DownloadCARotationCredentialsRequest) GetOperation() *ObjectRef {
@@ -1969,7 +2197,7 @@ type DownloadCARotationCredentialsResponse struct {
 
 func (x *DownloadCARotationCredentialsResponse) Reset() {
 	*x = DownloadCARotationCredentialsResponse{}
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[24]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1981,7 +2209,7 @@ func (x *DownloadCARotationCredentialsResponse) String() string {
 func (*DownloadCARotationCredentialsResponse) ProtoMessage() {}
 
 func (x *DownloadCARotationCredentialsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[24]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1994,7 +2222,7 @@ func (x *DownloadCARotationCredentialsResponse) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use DownloadCARotationCredentialsResponse.ProtoReflect.Descriptor instead.
 func (*DownloadCARotationCredentialsResponse) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{24}
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *DownloadCARotationCredentialsResponse) GetFilename() string {
@@ -2027,7 +2255,7 @@ type AcknowledgeCARotationCredentialsRequest struct {
 
 func (x *AcknowledgeCARotationCredentialsRequest) Reset() {
 	*x = AcknowledgeCARotationCredentialsRequest{}
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[25]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2039,7 +2267,7 @@ func (x *AcknowledgeCARotationCredentialsRequest) String() string {
 func (*AcknowledgeCARotationCredentialsRequest) ProtoMessage() {}
 
 func (x *AcknowledgeCARotationCredentialsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[25]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2052,7 +2280,7 @@ func (x *AcknowledgeCARotationCredentialsRequest) ProtoReflect() protoreflect.Me
 
 // Deprecated: Use AcknowledgeCARotationCredentialsRequest.ProtoReflect.Descriptor instead.
 func (*AcknowledgeCARotationCredentialsRequest) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{25}
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *AcknowledgeCARotationCredentialsRequest) GetOperation() *ObjectRef {
@@ -2072,7 +2300,7 @@ type AcknowledgeCARotationCredentialsResponse struct {
 
 func (x *AcknowledgeCARotationCredentialsResponse) Reset() {
 	*x = AcknowledgeCARotationCredentialsResponse{}
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[26]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2084,7 +2312,7 @@ func (x *AcknowledgeCARotationCredentialsResponse) String() string {
 func (*AcknowledgeCARotationCredentialsResponse) ProtoMessage() {}
 
 func (x *AcknowledgeCARotationCredentialsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[26]
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2097,7 +2325,7 @@ func (x *AcknowledgeCARotationCredentialsResponse) ProtoReflect() protoreflect.M
 
 // Deprecated: Use AcknowledgeCARotationCredentialsResponse.ProtoReflect.Descriptor instead.
 func (*AcknowledgeCARotationCredentialsResponse) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{26}
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *AcknowledgeCARotationCredentialsResponse) GetOperation() *Operation {
@@ -2131,13 +2359,32 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\fEtcdSnapshot\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12.\n" +
 	"\x04time\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x04time\x12\x12\n" +
-	"\x04size\x18\x03 \x01(\x03R\x04size\"\xa7\x01\n" +
+	"\x04size\x18\x03 \x01(\x03R\x04size\"\x90\x04\n" +
 	"\n" +
 	"EtcdBackup\x12+\n" +
 	"\x03ref\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\x03ref\x12\x1a\n" +
 	"\bschedule\x18\x02 \x01(\tR\bschedule\x12:\n" +
 	"\tsnapshots\x18\x03 \x03(\v2\x1c.ichor.v1alpha1.EtcdSnapshotR\tsnapshots\x12\x14\n" +
-	"\x05ready\x18\x04 \x01(\bR\x05ready\"O\n" +
+	"\x05ready\x18\x04 \x01(\bR\x05ready\x12G\n" +
+	"\vdestination\x18\x05 \x01(\v2%.ichor.v1alpha1.EtcdBackupDestinationR\vdestination\x12\x1b\n" +
+	"\tkeep_last\x18\x06 \x01(\x05R\bkeepLast\x12F\n" +
+	"\x11last_success_time\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\x0flastSuccessTime\x12\x1d\n" +
+	"\n" +
+	"last_error\x18\b \x01(\tR\tlastError\x12\x1c\n" +
+	"\tsuspended\x18\t \x01(\bR\tsuspended\x12H\n" +
+	"\x12last_manual_backup\x18\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\x10lastManualBackup\x122\n" +
+	"\x15manual_backup_pending\x18\v \x01(\bR\x13manualBackupPending\"{\n" +
+	"\x15EtcdBackupDestination\x12\x1a\n" +
+	"\bendpoint\x18\x01 \x01(\tR\bendpoint\x12\x16\n" +
+	"\x06region\x18\x02 \x01(\tR\x06region\x12\x16\n" +
+	"\x06bucket\x18\x03 \x01(\tR\x06bucket\x12\x16\n" +
+	"\x06prefix\x18\x04 \x01(\tR\x06prefix\"M\n" +
+	"\x18RequestEtcdBackupRequest\x121\n" +
+	"\x06backup\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\x06backup\"\x82\x01\n" +
+	"\x19RequestEtcdBackupResponse\x122\n" +
+	"\x06backup\x18\x01 \x01(\v2\x1a.ichor.v1alpha1.EtcdBackupR\x06backup\x121\n" +
+	"\x05audit\x18\x02 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\"O\n" +
 	"\x17ListEtcdBackupsResponse\x124\n" +
 	"\abackups\x18\x01 \x03(\v2\x1a.ichor.v1alpha1.EtcdBackupR\abackups\"\xba\x01\n" +
 	"\x12EtcdRestoreRequest\x121\n" +
@@ -2286,7 +2533,7 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"#OPERATION_EFFECT_RESTART_COMPONENTS\x10\x02\x12\x19\n" +
 	"\x15OPERATION_EFFECT_STOP\x10\x03\x12\x19\n" +
 	"\x15OPERATION_EFFECT_NONE\x10\x04\x12 \n" +
-	"\x1cOPERATION_EFFECT_CA_ROTATION\x10\x052\xe1\b\n" +
+	"\x1cOPERATION_EFFECT_CA_ROTATION\x10\x052\xcb\t\n" +
 	"\x10OperationService\x12_\n" +
 	"\x0eListOperations\x12%.ichor.v1alpha1.ListOperationsRequest\x1a&.ichor.v1alpha1.ListOperationsResponse\x12Y\n" +
 	"\fGetOperation\x12#.ichor.v1alpha1.GetOperationRequest\x1a$.ichor.v1alpha1.GetOperationResponse\x12\\\n" +
@@ -2296,7 +2543,8 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\x0fDeleteOperation\x12&.ichor.v1alpha1.DeleteOperationRequest\x1a'.ichor.v1alpha1.DeleteOperationResponse\x12\x8e\x01\n" +
 	"\x1dDownloadCARotationCredentials\x124.ichor.v1alpha1.DownloadCARotationCredentialsRequest\x1a5.ichor.v1alpha1.DownloadCARotationCredentialsResponse0\x01\x12\x95\x01\n" +
 	" AcknowledgeCARotationCredentials\x127.ichor.v1alpha1.AcknowledgeCARotationCredentialsRequest\x1a8.ichor.v1alpha1.AcknowledgeCARotationCredentialsResponse\x12b\n" +
-	"\x0fListEtcdBackups\x12&.ichor.v1alpha1.ListEtcdBackupsRequest\x1a'.ichor.v1alpha1.ListEtcdBackupsResponse\x12q\n" +
+	"\x0fListEtcdBackups\x12&.ichor.v1alpha1.ListEtcdBackupsRequest\x1a'.ichor.v1alpha1.ListEtcdBackupsResponse\x12h\n" +
+	"\x11RequestEtcdBackup\x12(.ichor.v1alpha1.RequestEtcdBackupRequest\x1a).ichor.v1alpha1.RequestEtcdBackupResponse\x12q\n" +
 	"\x14GetIchorInstallation\x12+.ichor.v1alpha1.GetIchorInstallationRequest\x1a,.ichor.v1alpha1.GetIchorInstallationResponseB\xbf\x01\n" +
 	"\x12com.ichor.v1alpha1B\x0eOperationProtoP\x01Z@github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1;ichorv1alpha1\xa2\x02\x03IXX\xaa\x02\x0eIchor.V1alpha1\xca\x02\x0eIchor\\V1alpha1\xe2\x02\x1aIchor\\V1alpha1\\GPBMetadata\xea\x02\x0fIchor::V1alpha1b\x06proto3"
 
@@ -2313,7 +2561,7 @@ func file_ichor_v1alpha1_operation_proto_rawDescGZIP() []byte {
 }
 
 var file_ichor_v1alpha1_operation_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_ichor_v1alpha1_operation_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
+var file_ichor_v1alpha1_operation_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
 var file_ichor_v1alpha1_operation_proto_goTypes = []any{
 	(OperationKind)(0),                               // 0: ichor.v1alpha1.OperationKind
 	(NodeAction)(0),                                  // 1: ichor.v1alpha1.NodeAction
@@ -2323,106 +2571,117 @@ var file_ichor_v1alpha1_operation_proto_goTypes = []any{
 	(*ListEtcdBackupsRequest)(nil),                   // 5: ichor.v1alpha1.ListEtcdBackupsRequest
 	(*EtcdSnapshot)(nil),                             // 6: ichor.v1alpha1.EtcdSnapshot
 	(*EtcdBackup)(nil),                               // 7: ichor.v1alpha1.EtcdBackup
-	(*ListEtcdBackupsResponse)(nil),                  // 8: ichor.v1alpha1.ListEtcdBackupsResponse
-	(*EtcdRestoreRequest)(nil),                       // 9: ichor.v1alpha1.EtcdRestoreRequest
-	(*NodeActionRequest)(nil),                        // 10: ichor.v1alpha1.NodeActionRequest
-	(*OperationMachine)(nil),                         // 11: ichor.v1alpha1.OperationMachine
-	(*Operation)(nil),                                // 12: ichor.v1alpha1.Operation
-	(*ListOperationsRequest)(nil),                    // 13: ichor.v1alpha1.ListOperationsRequest
-	(*ListOperationsResponse)(nil),                   // 14: ichor.v1alpha1.ListOperationsResponse
-	(*GetOperationRequest)(nil),                      // 15: ichor.v1alpha1.GetOperationRequest
-	(*GetOperationResponse)(nil),                     // 16: ichor.v1alpha1.GetOperationResponse
-	(*PlannedMachine)(nil),                           // 17: ichor.v1alpha1.PlannedMachine
-	(*PlanOperationRequest)(nil),                     // 18: ichor.v1alpha1.PlanOperationRequest
-	(*PlanOperationResponse)(nil),                    // 19: ichor.v1alpha1.PlanOperationResponse
-	(*CreateOperationRequest)(nil),                   // 20: ichor.v1alpha1.CreateOperationRequest
-	(*CreateOperationResponse)(nil),                  // 21: ichor.v1alpha1.CreateOperationResponse
-	(*SetOperationPausedRequest)(nil),                // 22: ichor.v1alpha1.SetOperationPausedRequest
-	(*SetOperationPausedResponse)(nil),               // 23: ichor.v1alpha1.SetOperationPausedResponse
-	(*DeleteOperationRequest)(nil),                   // 24: ichor.v1alpha1.DeleteOperationRequest
-	(*DeleteOperationResponse)(nil),                  // 25: ichor.v1alpha1.DeleteOperationResponse
-	(*DownloadCARotationCredentialsRequest)(nil),     // 26: ichor.v1alpha1.DownloadCARotationCredentialsRequest
-	(*DownloadCARotationCredentialsResponse)(nil),    // 27: ichor.v1alpha1.DownloadCARotationCredentialsResponse
-	(*AcknowledgeCARotationCredentialsRequest)(nil),  // 28: ichor.v1alpha1.AcknowledgeCARotationCredentialsRequest
-	(*AcknowledgeCARotationCredentialsResponse)(nil), // 29: ichor.v1alpha1.AcknowledgeCARotationCredentialsResponse
-	(*ObjectRef)(nil),                                // 30: ichor.v1alpha1.ObjectRef
-	(*timestamppb.Timestamp)(nil),                    // 31: google.protobuf.Timestamp
-	(*BreakGlass)(nil),                               // 32: ichor.v1alpha1.BreakGlass
-	(*Condition)(nil),                                // 33: ichor.v1alpha1.Condition
-	(*AuditRecord)(nil),                              // 34: ichor.v1alpha1.AuditRecord
+	(*EtcdBackupDestination)(nil),                    // 8: ichor.v1alpha1.EtcdBackupDestination
+	(*RequestEtcdBackupRequest)(nil),                 // 9: ichor.v1alpha1.RequestEtcdBackupRequest
+	(*RequestEtcdBackupResponse)(nil),                // 10: ichor.v1alpha1.RequestEtcdBackupResponse
+	(*ListEtcdBackupsResponse)(nil),                  // 11: ichor.v1alpha1.ListEtcdBackupsResponse
+	(*EtcdRestoreRequest)(nil),                       // 12: ichor.v1alpha1.EtcdRestoreRequest
+	(*NodeActionRequest)(nil),                        // 13: ichor.v1alpha1.NodeActionRequest
+	(*OperationMachine)(nil),                         // 14: ichor.v1alpha1.OperationMachine
+	(*Operation)(nil),                                // 15: ichor.v1alpha1.Operation
+	(*ListOperationsRequest)(nil),                    // 16: ichor.v1alpha1.ListOperationsRequest
+	(*ListOperationsResponse)(nil),                   // 17: ichor.v1alpha1.ListOperationsResponse
+	(*GetOperationRequest)(nil),                      // 18: ichor.v1alpha1.GetOperationRequest
+	(*GetOperationResponse)(nil),                     // 19: ichor.v1alpha1.GetOperationResponse
+	(*PlannedMachine)(nil),                           // 20: ichor.v1alpha1.PlannedMachine
+	(*PlanOperationRequest)(nil),                     // 21: ichor.v1alpha1.PlanOperationRequest
+	(*PlanOperationResponse)(nil),                    // 22: ichor.v1alpha1.PlanOperationResponse
+	(*CreateOperationRequest)(nil),                   // 23: ichor.v1alpha1.CreateOperationRequest
+	(*CreateOperationResponse)(nil),                  // 24: ichor.v1alpha1.CreateOperationResponse
+	(*SetOperationPausedRequest)(nil),                // 25: ichor.v1alpha1.SetOperationPausedRequest
+	(*SetOperationPausedResponse)(nil),               // 26: ichor.v1alpha1.SetOperationPausedResponse
+	(*DeleteOperationRequest)(nil),                   // 27: ichor.v1alpha1.DeleteOperationRequest
+	(*DeleteOperationResponse)(nil),                  // 28: ichor.v1alpha1.DeleteOperationResponse
+	(*DownloadCARotationCredentialsRequest)(nil),     // 29: ichor.v1alpha1.DownloadCARotationCredentialsRequest
+	(*DownloadCARotationCredentialsResponse)(nil),    // 30: ichor.v1alpha1.DownloadCARotationCredentialsResponse
+	(*AcknowledgeCARotationCredentialsRequest)(nil),  // 31: ichor.v1alpha1.AcknowledgeCARotationCredentialsRequest
+	(*AcknowledgeCARotationCredentialsResponse)(nil), // 32: ichor.v1alpha1.AcknowledgeCARotationCredentialsResponse
+	(*ObjectRef)(nil),                                // 33: ichor.v1alpha1.ObjectRef
+	(*timestamppb.Timestamp)(nil),                    // 34: google.protobuf.Timestamp
+	(*AuditRecord)(nil),                              // 35: ichor.v1alpha1.AuditRecord
+	(*BreakGlass)(nil),                               // 36: ichor.v1alpha1.BreakGlass
+	(*Condition)(nil),                                // 37: ichor.v1alpha1.Condition
 }
 var file_ichor_v1alpha1_operation_proto_depIdxs = []int32{
-	30, // 0: ichor.v1alpha1.ListEtcdBackupsRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
-	31, // 1: ichor.v1alpha1.EtcdSnapshot.time:type_name -> google.protobuf.Timestamp
-	30, // 2: ichor.v1alpha1.EtcdBackup.ref:type_name -> ichor.v1alpha1.ObjectRef
+	33, // 0: ichor.v1alpha1.ListEtcdBackupsRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	34, // 1: ichor.v1alpha1.EtcdSnapshot.time:type_name -> google.protobuf.Timestamp
+	33, // 2: ichor.v1alpha1.EtcdBackup.ref:type_name -> ichor.v1alpha1.ObjectRef
 	6,  // 3: ichor.v1alpha1.EtcdBackup.snapshots:type_name -> ichor.v1alpha1.EtcdSnapshot
-	7,  // 4: ichor.v1alpha1.ListEtcdBackupsResponse.backups:type_name -> ichor.v1alpha1.EtcdBackup
-	30, // 5: ichor.v1alpha1.EtcdRestoreRequest.backup:type_name -> ichor.v1alpha1.ObjectRef
-	32, // 6: ichor.v1alpha1.EtcdRestoreRequest.break_glass:type_name -> ichor.v1alpha1.BreakGlass
-	30, // 7: ichor.v1alpha1.NodeActionRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
-	1,  // 8: ichor.v1alpha1.NodeActionRequest.action:type_name -> ichor.v1alpha1.NodeAction
-	32, // 9: ichor.v1alpha1.NodeActionRequest.break_glass:type_name -> ichor.v1alpha1.BreakGlass
-	30, // 10: ichor.v1alpha1.Operation.ref:type_name -> ichor.v1alpha1.ObjectRef
-	30, // 11: ichor.v1alpha1.Operation.cluster:type_name -> ichor.v1alpha1.ObjectRef
-	0,  // 12: ichor.v1alpha1.Operation.kind:type_name -> ichor.v1alpha1.OperationKind
-	11, // 13: ichor.v1alpha1.Operation.machines:type_name -> ichor.v1alpha1.OperationMachine
-	33, // 14: ichor.v1alpha1.Operation.conditions:type_name -> ichor.v1alpha1.Condition
-	31, // 15: ichor.v1alpha1.Operation.created_at:type_name -> google.protobuf.Timestamp
-	1,  // 16: ichor.v1alpha1.Operation.node_action:type_name -> ichor.v1alpha1.NodeAction
-	30, // 17: ichor.v1alpha1.Operation.node_machine:type_name -> ichor.v1alpha1.ObjectRef
-	30, // 18: ichor.v1alpha1.Operation.etcd_restore_backup:type_name -> ichor.v1alpha1.ObjectRef
-	31, // 19: ichor.v1alpha1.Operation.etcd_restore_snapshot_time:type_name -> google.protobuf.Timestamp
-	30, // 20: ichor.v1alpha1.ListOperationsRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
-	12, // 21: ichor.v1alpha1.ListOperationsResponse.operations:type_name -> ichor.v1alpha1.Operation
-	30, // 22: ichor.v1alpha1.GetOperationRequest.operation:type_name -> ichor.v1alpha1.ObjectRef
-	12, // 23: ichor.v1alpha1.GetOperationResponse.operation:type_name -> ichor.v1alpha1.Operation
-	30, // 24: ichor.v1alpha1.PlanOperationRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
-	0,  // 25: ichor.v1alpha1.PlanOperationRequest.kind:type_name -> ichor.v1alpha1.OperationKind
-	10, // 26: ichor.v1alpha1.PlanOperationRequest.node:type_name -> ichor.v1alpha1.NodeActionRequest
-	9,  // 27: ichor.v1alpha1.PlanOperationRequest.etcd_restore:type_name -> ichor.v1alpha1.EtcdRestoreRequest
-	2,  // 28: ichor.v1alpha1.PlanOperationResponse.effect:type_name -> ichor.v1alpha1.OperationEffect
-	17, // 29: ichor.v1alpha1.PlanOperationResponse.machines:type_name -> ichor.v1alpha1.PlannedMachine
-	31, // 30: ichor.v1alpha1.PlanOperationResponse.snapshot_time:type_name -> google.protobuf.Timestamp
-	30, // 31: ichor.v1alpha1.CreateOperationRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
-	0,  // 32: ichor.v1alpha1.CreateOperationRequest.kind:type_name -> ichor.v1alpha1.OperationKind
-	10, // 33: ichor.v1alpha1.CreateOperationRequest.node:type_name -> ichor.v1alpha1.NodeActionRequest
-	9,  // 34: ichor.v1alpha1.CreateOperationRequest.etcd_restore:type_name -> ichor.v1alpha1.EtcdRestoreRequest
-	12, // 35: ichor.v1alpha1.CreateOperationResponse.operation:type_name -> ichor.v1alpha1.Operation
-	34, // 36: ichor.v1alpha1.CreateOperationResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
-	30, // 37: ichor.v1alpha1.SetOperationPausedRequest.operation:type_name -> ichor.v1alpha1.ObjectRef
-	12, // 38: ichor.v1alpha1.SetOperationPausedResponse.operation:type_name -> ichor.v1alpha1.Operation
-	34, // 39: ichor.v1alpha1.SetOperationPausedResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
-	30, // 40: ichor.v1alpha1.DeleteOperationRequest.operation:type_name -> ichor.v1alpha1.ObjectRef
-	34, // 41: ichor.v1alpha1.DeleteOperationResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
-	30, // 42: ichor.v1alpha1.DownloadCARotationCredentialsRequest.operation:type_name -> ichor.v1alpha1.ObjectRef
-	30, // 43: ichor.v1alpha1.AcknowledgeCARotationCredentialsRequest.operation:type_name -> ichor.v1alpha1.ObjectRef
-	12, // 44: ichor.v1alpha1.AcknowledgeCARotationCredentialsResponse.operation:type_name -> ichor.v1alpha1.Operation
-	34, // 45: ichor.v1alpha1.AcknowledgeCARotationCredentialsResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
-	13, // 46: ichor.v1alpha1.OperationService.ListOperations:input_type -> ichor.v1alpha1.ListOperationsRequest
-	15, // 47: ichor.v1alpha1.OperationService.GetOperation:input_type -> ichor.v1alpha1.GetOperationRequest
-	18, // 48: ichor.v1alpha1.OperationService.PlanOperation:input_type -> ichor.v1alpha1.PlanOperationRequest
-	20, // 49: ichor.v1alpha1.OperationService.CreateOperation:input_type -> ichor.v1alpha1.CreateOperationRequest
-	22, // 50: ichor.v1alpha1.OperationService.SetOperationPaused:input_type -> ichor.v1alpha1.SetOperationPausedRequest
-	24, // 51: ichor.v1alpha1.OperationService.DeleteOperation:input_type -> ichor.v1alpha1.DeleteOperationRequest
-	26, // 52: ichor.v1alpha1.OperationService.DownloadCARotationCredentials:input_type -> ichor.v1alpha1.DownloadCARotationCredentialsRequest
-	28, // 53: ichor.v1alpha1.OperationService.AcknowledgeCARotationCredentials:input_type -> ichor.v1alpha1.AcknowledgeCARotationCredentialsRequest
-	5,  // 54: ichor.v1alpha1.OperationService.ListEtcdBackups:input_type -> ichor.v1alpha1.ListEtcdBackupsRequest
-	3,  // 55: ichor.v1alpha1.OperationService.GetIchorInstallation:input_type -> ichor.v1alpha1.GetIchorInstallationRequest
-	14, // 56: ichor.v1alpha1.OperationService.ListOperations:output_type -> ichor.v1alpha1.ListOperationsResponse
-	16, // 57: ichor.v1alpha1.OperationService.GetOperation:output_type -> ichor.v1alpha1.GetOperationResponse
-	19, // 58: ichor.v1alpha1.OperationService.PlanOperation:output_type -> ichor.v1alpha1.PlanOperationResponse
-	21, // 59: ichor.v1alpha1.OperationService.CreateOperation:output_type -> ichor.v1alpha1.CreateOperationResponse
-	23, // 60: ichor.v1alpha1.OperationService.SetOperationPaused:output_type -> ichor.v1alpha1.SetOperationPausedResponse
-	25, // 61: ichor.v1alpha1.OperationService.DeleteOperation:output_type -> ichor.v1alpha1.DeleteOperationResponse
-	27, // 62: ichor.v1alpha1.OperationService.DownloadCARotationCredentials:output_type -> ichor.v1alpha1.DownloadCARotationCredentialsResponse
-	29, // 63: ichor.v1alpha1.OperationService.AcknowledgeCARotationCredentials:output_type -> ichor.v1alpha1.AcknowledgeCARotationCredentialsResponse
-	8,  // 64: ichor.v1alpha1.OperationService.ListEtcdBackups:output_type -> ichor.v1alpha1.ListEtcdBackupsResponse
-	4,  // 65: ichor.v1alpha1.OperationService.GetIchorInstallation:output_type -> ichor.v1alpha1.GetIchorInstallationResponse
-	56, // [56:66] is the sub-list for method output_type
-	46, // [46:56] is the sub-list for method input_type
-	46, // [46:46] is the sub-list for extension type_name
-	46, // [46:46] is the sub-list for extension extendee
-	0,  // [0:46] is the sub-list for field type_name
+	8,  // 4: ichor.v1alpha1.EtcdBackup.destination:type_name -> ichor.v1alpha1.EtcdBackupDestination
+	34, // 5: ichor.v1alpha1.EtcdBackup.last_success_time:type_name -> google.protobuf.Timestamp
+	34, // 6: ichor.v1alpha1.EtcdBackup.last_manual_backup:type_name -> google.protobuf.Timestamp
+	33, // 7: ichor.v1alpha1.RequestEtcdBackupRequest.backup:type_name -> ichor.v1alpha1.ObjectRef
+	7,  // 8: ichor.v1alpha1.RequestEtcdBackupResponse.backup:type_name -> ichor.v1alpha1.EtcdBackup
+	35, // 9: ichor.v1alpha1.RequestEtcdBackupResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
+	7,  // 10: ichor.v1alpha1.ListEtcdBackupsResponse.backups:type_name -> ichor.v1alpha1.EtcdBackup
+	33, // 11: ichor.v1alpha1.EtcdRestoreRequest.backup:type_name -> ichor.v1alpha1.ObjectRef
+	36, // 12: ichor.v1alpha1.EtcdRestoreRequest.break_glass:type_name -> ichor.v1alpha1.BreakGlass
+	33, // 13: ichor.v1alpha1.NodeActionRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
+	1,  // 14: ichor.v1alpha1.NodeActionRequest.action:type_name -> ichor.v1alpha1.NodeAction
+	36, // 15: ichor.v1alpha1.NodeActionRequest.break_glass:type_name -> ichor.v1alpha1.BreakGlass
+	33, // 16: ichor.v1alpha1.Operation.ref:type_name -> ichor.v1alpha1.ObjectRef
+	33, // 17: ichor.v1alpha1.Operation.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	0,  // 18: ichor.v1alpha1.Operation.kind:type_name -> ichor.v1alpha1.OperationKind
+	14, // 19: ichor.v1alpha1.Operation.machines:type_name -> ichor.v1alpha1.OperationMachine
+	37, // 20: ichor.v1alpha1.Operation.conditions:type_name -> ichor.v1alpha1.Condition
+	34, // 21: ichor.v1alpha1.Operation.created_at:type_name -> google.protobuf.Timestamp
+	1,  // 22: ichor.v1alpha1.Operation.node_action:type_name -> ichor.v1alpha1.NodeAction
+	33, // 23: ichor.v1alpha1.Operation.node_machine:type_name -> ichor.v1alpha1.ObjectRef
+	33, // 24: ichor.v1alpha1.Operation.etcd_restore_backup:type_name -> ichor.v1alpha1.ObjectRef
+	34, // 25: ichor.v1alpha1.Operation.etcd_restore_snapshot_time:type_name -> google.protobuf.Timestamp
+	33, // 26: ichor.v1alpha1.ListOperationsRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	15, // 27: ichor.v1alpha1.ListOperationsResponse.operations:type_name -> ichor.v1alpha1.Operation
+	33, // 28: ichor.v1alpha1.GetOperationRequest.operation:type_name -> ichor.v1alpha1.ObjectRef
+	15, // 29: ichor.v1alpha1.GetOperationResponse.operation:type_name -> ichor.v1alpha1.Operation
+	33, // 30: ichor.v1alpha1.PlanOperationRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	0,  // 31: ichor.v1alpha1.PlanOperationRequest.kind:type_name -> ichor.v1alpha1.OperationKind
+	13, // 32: ichor.v1alpha1.PlanOperationRequest.node:type_name -> ichor.v1alpha1.NodeActionRequest
+	12, // 33: ichor.v1alpha1.PlanOperationRequest.etcd_restore:type_name -> ichor.v1alpha1.EtcdRestoreRequest
+	2,  // 34: ichor.v1alpha1.PlanOperationResponse.effect:type_name -> ichor.v1alpha1.OperationEffect
+	20, // 35: ichor.v1alpha1.PlanOperationResponse.machines:type_name -> ichor.v1alpha1.PlannedMachine
+	34, // 36: ichor.v1alpha1.PlanOperationResponse.snapshot_time:type_name -> google.protobuf.Timestamp
+	33, // 37: ichor.v1alpha1.CreateOperationRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	0,  // 38: ichor.v1alpha1.CreateOperationRequest.kind:type_name -> ichor.v1alpha1.OperationKind
+	13, // 39: ichor.v1alpha1.CreateOperationRequest.node:type_name -> ichor.v1alpha1.NodeActionRequest
+	12, // 40: ichor.v1alpha1.CreateOperationRequest.etcd_restore:type_name -> ichor.v1alpha1.EtcdRestoreRequest
+	15, // 41: ichor.v1alpha1.CreateOperationResponse.operation:type_name -> ichor.v1alpha1.Operation
+	35, // 42: ichor.v1alpha1.CreateOperationResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
+	33, // 43: ichor.v1alpha1.SetOperationPausedRequest.operation:type_name -> ichor.v1alpha1.ObjectRef
+	15, // 44: ichor.v1alpha1.SetOperationPausedResponse.operation:type_name -> ichor.v1alpha1.Operation
+	35, // 45: ichor.v1alpha1.SetOperationPausedResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
+	33, // 46: ichor.v1alpha1.DeleteOperationRequest.operation:type_name -> ichor.v1alpha1.ObjectRef
+	35, // 47: ichor.v1alpha1.DeleteOperationResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
+	33, // 48: ichor.v1alpha1.DownloadCARotationCredentialsRequest.operation:type_name -> ichor.v1alpha1.ObjectRef
+	33, // 49: ichor.v1alpha1.AcknowledgeCARotationCredentialsRequest.operation:type_name -> ichor.v1alpha1.ObjectRef
+	15, // 50: ichor.v1alpha1.AcknowledgeCARotationCredentialsResponse.operation:type_name -> ichor.v1alpha1.Operation
+	35, // 51: ichor.v1alpha1.AcknowledgeCARotationCredentialsResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
+	16, // 52: ichor.v1alpha1.OperationService.ListOperations:input_type -> ichor.v1alpha1.ListOperationsRequest
+	18, // 53: ichor.v1alpha1.OperationService.GetOperation:input_type -> ichor.v1alpha1.GetOperationRequest
+	21, // 54: ichor.v1alpha1.OperationService.PlanOperation:input_type -> ichor.v1alpha1.PlanOperationRequest
+	23, // 55: ichor.v1alpha1.OperationService.CreateOperation:input_type -> ichor.v1alpha1.CreateOperationRequest
+	25, // 56: ichor.v1alpha1.OperationService.SetOperationPaused:input_type -> ichor.v1alpha1.SetOperationPausedRequest
+	27, // 57: ichor.v1alpha1.OperationService.DeleteOperation:input_type -> ichor.v1alpha1.DeleteOperationRequest
+	29, // 58: ichor.v1alpha1.OperationService.DownloadCARotationCredentials:input_type -> ichor.v1alpha1.DownloadCARotationCredentialsRequest
+	31, // 59: ichor.v1alpha1.OperationService.AcknowledgeCARotationCredentials:input_type -> ichor.v1alpha1.AcknowledgeCARotationCredentialsRequest
+	5,  // 60: ichor.v1alpha1.OperationService.ListEtcdBackups:input_type -> ichor.v1alpha1.ListEtcdBackupsRequest
+	9,  // 61: ichor.v1alpha1.OperationService.RequestEtcdBackup:input_type -> ichor.v1alpha1.RequestEtcdBackupRequest
+	3,  // 62: ichor.v1alpha1.OperationService.GetIchorInstallation:input_type -> ichor.v1alpha1.GetIchorInstallationRequest
+	17, // 63: ichor.v1alpha1.OperationService.ListOperations:output_type -> ichor.v1alpha1.ListOperationsResponse
+	19, // 64: ichor.v1alpha1.OperationService.GetOperation:output_type -> ichor.v1alpha1.GetOperationResponse
+	22, // 65: ichor.v1alpha1.OperationService.PlanOperation:output_type -> ichor.v1alpha1.PlanOperationResponse
+	24, // 66: ichor.v1alpha1.OperationService.CreateOperation:output_type -> ichor.v1alpha1.CreateOperationResponse
+	26, // 67: ichor.v1alpha1.OperationService.SetOperationPaused:output_type -> ichor.v1alpha1.SetOperationPausedResponse
+	28, // 68: ichor.v1alpha1.OperationService.DeleteOperation:output_type -> ichor.v1alpha1.DeleteOperationResponse
+	30, // 69: ichor.v1alpha1.OperationService.DownloadCARotationCredentials:output_type -> ichor.v1alpha1.DownloadCARotationCredentialsResponse
+	32, // 70: ichor.v1alpha1.OperationService.AcknowledgeCARotationCredentials:output_type -> ichor.v1alpha1.AcknowledgeCARotationCredentialsResponse
+	11, // 71: ichor.v1alpha1.OperationService.ListEtcdBackups:output_type -> ichor.v1alpha1.ListEtcdBackupsResponse
+	10, // 72: ichor.v1alpha1.OperationService.RequestEtcdBackup:output_type -> ichor.v1alpha1.RequestEtcdBackupResponse
+	4,  // 73: ichor.v1alpha1.OperationService.GetIchorInstallation:output_type -> ichor.v1alpha1.GetIchorInstallationResponse
+	63, // [63:74] is the sub-list for method output_type
+	52, // [52:63] is the sub-list for method input_type
+	52, // [52:52] is the sub-list for extension type_name
+	52, // [52:52] is the sub-list for extension extendee
+	0,  // [0:52] is the sub-list for field type_name
 }
 
 func init() { file_ichor_v1alpha1_operation_proto_init() }
@@ -2437,7 +2696,7 @@ func file_ichor_v1alpha1_operation_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_ichor_v1alpha1_operation_proto_rawDesc), len(file_ichor_v1alpha1_operation_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   27,
+			NumMessages:   30,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

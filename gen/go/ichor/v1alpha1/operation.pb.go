@@ -981,10 +981,13 @@ type OperationMachine struct {
 	// --- operation detail page ---
 	// message is why the machine's step failed, when it did; step is the operation's stage while
 	// the machine is InProgress (Kubernetes and CA-rotation stages), empty otherwise.
-	Step          string                 `protobuf:"bytes,10,opt,name=step,proto3" json:"step,omitempty"`
-	Message       string                 `protobuf:"bytes,11,opt,name=message,proto3" json:"message,omitempty"`
-	StartedAt     *timestamppb.Timestamp `protobuf:"bytes,12,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
-	FinishedAt    *timestamppb.Timestamp `protobuf:"bytes,13,opt,name=finished_at,json=finishedAt,proto3" json:"finished_at,omitempty"`
+	Step       string                 `protobuf:"bytes,10,opt,name=step,proto3" json:"step,omitempty"`
+	Message    string                 `protobuf:"bytes,11,opt,name=message,proto3" json:"message,omitempty"`
+	StartedAt  *timestamppb.Timestamp `protobuf:"bytes,12,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
+	FinishedAt *timestamppb.Timestamp `protobuf:"bytes,13,opt,name=finished_at,json=finishedAt,proto3" json:"finished_at,omitempty"`
+	// display_name is the machine's hostname, else its node name, else empty (callers show name).
+	// Filled by GetOperation only.
+	DisplayName   string `protobuf:"bytes,14,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1059,6 +1062,13 @@ func (x *OperationMachine) GetFinishedAt() *timestamppb.Timestamp {
 		return x.FinishedAt
 	}
 	return nil
+}
+
+func (x *OperationMachine) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
+	}
+	return ""
 }
 
 type Operation struct {
@@ -2696,7 +2706,7 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\fallow_leader\x18\x04 \x01(\bR\vallowLeader\x12\x18\n" +
 	"\aconfirm\x18\x05 \x01(\tR\aconfirm\x12;\n" +
 	"\vbreak_glass\x18\x06 \x01(\v2\x1a.ichor.v1alpha1.BreakGlassR\n" +
-	"breakGlass\"\xe2\x01\n" +
+	"breakGlass\"\x85\x02\n" +
 	"\x10OperationMachine\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05phase\x18\x02 \x01(\tR\x05phase\x12\x12\n" +
@@ -2706,7 +2716,8 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\n" +
 	"started_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\tstartedAt\x12;\n" +
 	"\vfinished_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"finishedAt\"\xae\t\n" +
+	"finishedAt\x12!\n" +
+	"\fdisplay_name\x18\x0e \x01(\tR\vdisplayName\"\xae\t\n" +
 	"\tOperation\x12+\n" +
 	"\x03ref\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\x03ref\x123\n" +
 	"\acluster\x18\x02 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x121\n" +

@@ -19,6 +19,8 @@ test('a span without an end runs to now, without a start is unknown', () => {
   assert.equal(spanMs(start, end, now), 60_000)
   assert.equal(spanMs(start, undefined, now), 300_000)
   assert.equal(spanMs(undefined, end, now), undefined)
+  assert.equal(spanMs(start, undefined, now, true), undefined)
+  assert.equal(spanMs(start, end, now, true), 60_000)
 })
 
 test('the summary falls back to the kind and the machine', () => {

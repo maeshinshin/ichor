@@ -381,3 +381,21 @@ func TestResumeOfAFailedOperationReRunsTheStep(t *testing.T) {
 		t.Fatal("the retry annotation was not set")
 	}
 }
+
+func TestInProcessOperationIsStartedByTheCallersName(t *testing.T) {
+	setAPITestFlags(t, true)
+
+	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(opTestObjects()...).Build()
+	c := localClients(apiOpts, apiDeps{K8s: k8s, actor: "alice@example.com"})
+
+	err := runStartOperation(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{},
+		startSpec{Kind: pb.OperationKind_OPERATION_KIND_TALOS, Target: opNewVersion})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ops := opTestOps(t, k8s)
+	if len(ops) != 1 || ops[0].Annotations[ichorv1alpha1.OperationStartedByAnnotation] != "alice@example.com" {
+		t.Fatalf("ops = %+v", ops)
+	}
+}

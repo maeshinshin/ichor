@@ -358,6 +358,74 @@ func TestCredentialsFromABundleFileWorkOffline(t *testing.T) {
 	}
 }
 
+func TestBundleFromBeforeTheCurrentCAsIsRefusedUnlessForced(t *testing.T) {
+	f := newCredFixture(t, false, "")
+	t.Setenv("HOME", t.TempDir())
+	ctx := context.Background()
+
+	// newTestBundle is shared: a bundle with CAs of its own needs a fresh one.
+	stalePath, err := saveBundleFile("stale", newFreshTestBundle(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	curPath, err := saveBundleFile("current", f.old)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var errw bytes.Buffer
+
+	if err := checkBundleCurrent(ctx, f.k8s, &errw, stalePath, f.request(), false); err == nil {
+		t.Fatal("a bundle from before the current CAs was accepted without --force")
+	}
+
+	if !strings.Contains(errw.String(), "this bundle predates the current CAs; the files will not work") {
+		t.Fatalf("no warning for a stale bundle, got %q", errw.String())
+	}
+
+	errw.Reset()
+
+	if err := checkBundleCurrent(ctx, f.k8s, &errw, stalePath, f.request(), true); err != nil {
+		t.Fatalf("--force still refused: %v", err)
+	}
+
+	if !strings.Contains(errw.String(), "predates the current CAs") {
+		t.Fatalf("--force printed no warning, got %q", errw.String())
+	}
+
+	errw.Reset()
+
+	if err := checkBundleCurrent(ctx, f.k8s, &errw, curPath, f.request(), false); err != nil || errw.Len() != 0 {
+		t.Fatalf("the cluster's own bundle was refused or warned about: %v, %q", err, errw.String())
+	}
+
+	// No cluster to compare with: the bundle is taken as it is.
+	if err := checkBundleCurrent(ctx, nil, &errw, stalePath, f.request(), false); err != nil || errw.Len() != 0 {
+		t.Fatalf("an unreachable cluster refused the bundle: %v, %q", err, errw.String())
+	}
+}
+
+func TestBundleWithTheNewCAsIsCurrentDuringARotation(t *testing.T) {
+	f := newCredFixture(t, true, ichorv1alpha1.CARotationStageAccepting)
+	t.Setenv("HOME", t.TempDir())
+
+	withNew := *f.old
+	certs := *f.old.Certs
+	certs.OS, certs.K8s = f.rot.Talos, f.rot.Kubernetes
+	withNew.Certs = &certs
+
+	path, err := saveBundleFile("new", &withNew)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var errw bytes.Buffer
+	if err := checkBundleCurrent(context.Background(), f.k8s, &errw, path, f.request(), false); err != nil || errw.Len() != 0 {
+		t.Fatalf("a bundle with the rotation's new CAs was refused or warned about: %v, %q", err, errw.String())
+	}
+}
+
 func TestCredentialsNeverOverwriteTheCurrentFiles(t *testing.T) {
 	f := newCredFixture(t, false, "")
 

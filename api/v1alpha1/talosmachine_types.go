@@ -110,6 +110,20 @@ type TalosMachineSpec struct {
 	// +optional
 	Install *TalosMachineInstall `json:"install,omitempty"`
 
+	// network is the machine's primary network link and how it is addressed (ADR 0091). Unset
+	// leaves networking to Talos's default (DHCP on every physical link).
+	// +optional
+	Network *TalosMachineNetwork `json:"network,omitempty"`
+
+	// disks assign roles to disks other than the system disk (spec.install): ephemeral puts
+	// EPHEMERAL on its own disk, userVolume provisions a named user volume (ADR 0091).
+	// +kubebuilder:validation:MaxItems=8
+	// +kubebuilder:validation:XValidation:rule="self.filter(d, d.role == 'ephemeral').size() <= 1",message="at most one disk can have the ephemeral role"
+	// +kubebuilder:validation:XValidation:rule="self.all(a, !(a.role == 'userVolume' && has(a.name)) || self.filter(b, b.role == 'userVolume' && has(b.name) && b.name == a.name).size() == 1)",message="userVolume names must be unique"
+	// +listType=atomic
+	// +optional
+	Disks []TalosMachineDiskRole `json:"disks,omitempty"`
+
 	// approvalState records the human decision on this machine: pending (the
 	// default, awaiting a decision), approved (the controller renders and
 	// applies configuration), or rejected (an operator explicitly turned it
@@ -181,6 +195,82 @@ type TalosMachineDisk struct {
 	// +kubebuilder:validation:MaxLength=256
 	// +optional
 	DevPath string `json:"devPath,omitempty"`
+}
+
+// Values for TalosMachineNetwork.Addressing and TalosMachineDiskRole.Role.
+const (
+	MachineAddressingDHCP   = "dhcp"
+	MachineAddressingStatic = "static"
+
+	MachineDiskRoleEphemeral  = "ephemeral"
+	MachineDiskRoleUserVolume = "userVolume"
+)
+
+// TalosMachineNetwork is the primary link of one machine and its addressing. The link is picked
+// by permanent MAC, which survives kernel interface renames; pkg/render emits a LinkAliasConfig
+// (alias net0) whose CEL selector matches it, and the other documents refer to the alias.
+// +kubebuilder:validation:XValidation:rule="(has(self.addressing) ? self.addressing : 'dhcp') == 'static' ? (has(self.addresses) && size(self.addresses) > 0) : (!has(self.addresses) && !has(self.gateway))",message="static addressing needs addresses; dhcp takes no addresses or gateway"
+type TalosMachineNetwork struct {
+	// mac is the link's permanent hardware address, as discovery reported it.
+	// +kubebuilder:validation:Pattern=`^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$`
+	// +required
+	MAC string `json:"mac"`
+
+	// addressing is dhcp (the default) or static.
+	// +kubebuilder:validation:Enum=dhcp;static
+	// +kubebuilder:default=dhcp
+	// +optional
+	Addressing string `json:"addressing,omitempty"`
+
+	// addresses are the static addresses with their prefix length, e.g. 192.168.1.10/24.
+	// +kubebuilder:validation:MaxItems=4
+	// +kubebuilder:validation:items:XValidation:rule="isCIDR(self)",message="each address must be an IP with a prefix length, like 192.168.1.10/24"
+	// +listType=atomic
+	// +optional
+	Addresses []string `json:"addresses,omitempty"`
+
+	// gateway is the default gateway; unset adds no default route.
+	// +kubebuilder:validation:XValidation:rule="isIP(self)",message="gateway must be an IP address"
+	// +optional
+	Gateway string `json:"gateway,omitempty"`
+
+	// dnsServers are resolver addresses, in order. Valid with either addressing.
+	// +kubebuilder:validation:MaxItems=4
+	// +kubebuilder:validation:items:XValidation:rule="isIP(self)",message="each DNS server must be an IP address"
+	// +listType=atomic
+	// +optional
+	DNSServers []string `json:"dnsServers,omitempty"`
+
+	// vlanID puts the addressing on a VLAN of the link instead of the link itself.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=4094
+	// +optional
+	VLANID int32 `json:"vlanID,omitempty"`
+}
+
+// TalosMachineDiskRole gives one non-system disk a role (ADR 0091). The disk is identified the
+// same way as spec.install.disk.
+// +kubebuilder:validation:XValidation:rule="self.role == 'userVolume' ? has(self.name) : (!has(self.name) && !has(self.maxSize))",message="name is required for userVolume and not allowed for ephemeral, and so is maxSize"
+type TalosMachineDiskRole struct {
+	// role is ephemeral (EPHEMERAL on this disk) or userVolume (a user volume on it).
+	// +kubebuilder:validation:Enum=ephemeral;userVolume
+	// +required
+	Role string `json:"role"`
+
+	// disk selects the disk.
+	// +required
+	Disk TalosMachineDisk `json:"disk"`
+
+	// name is the user volume's name; it is mounted at /var/mnt/<name>.
+	// +kubebuilder:validation:Pattern=`^[A-Za-z0-9-]+$`
+	// +kubebuilder:validation:MaxLength=32
+	// +optional
+	Name string `json:"name,omitempty"`
+
+	// maxSize caps a user volume, e.g. 200GiB. Unset lets it use the whole disk.
+	// +kubebuilder:validation:Pattern=`^[1-9][0-9]*(MiB|GiB|TiB)$`
+	// +optional
+	MaxSize string `json:"maxSize,omitempty"`
 }
 
 // TalosMachineApprovalDecision is who decided a TalosMachine's current

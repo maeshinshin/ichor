@@ -124,6 +124,16 @@ func headline(kind pb.OperationKind, cluster string, p *pb.PlanOperationResponse
 
 	switch kind {
 	case pb.OperationKind_OPERATION_KIND_TALOS:
+		if p.GetTargetSchematic() != "" && (p.GetTarget() == "" || p.GetTarget() == p.GetCurrent()) {
+			return fmt.Sprintf("Upgrade Talos on cluster %q, keeping %s: schematic %s → %s.",
+				cluster, p.GetCurrent(), p.GetCurrentSchematic(), p.GetTargetSchematic())
+		}
+
+		if p.GetTargetSchematic() != "" {
+			return fmt.Sprintf("Upgrade Talos on cluster %q from %s to %s, and its schematic %s → %s.",
+				cluster, p.GetCurrent(), to, p.GetCurrentSchematic(), p.GetTargetSchematic())
+		}
+
 		return fmt.Sprintf("Upgrade Talos on cluster %q from %s to %s.", cluster, p.GetCurrent(), to)
 	case pb.OperationKind_OPERATION_KIND_KUBERNETES:
 		return fmt.Sprintf("Upgrade Kubernetes on cluster %q from %s to %s.", cluster, p.GetCurrent(), to)

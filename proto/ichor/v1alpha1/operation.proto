@@ -294,6 +294,11 @@ message PlanOperationResponse {
   // opens_pull_request is true when CreateOperation would open a pull request that changes the
   // spec in Git (an Ichor upgrade whose IchorInstallation Argo CD tracks) and create no operation.
   bool opens_pull_request = 17;
+  // current_schematic and target_schematic are set for a Talos upgrade whose Image Factory schematic
+  // differs between at least one approved machine's running system and spec.schematic. current_schematic is the first differing running schematic; target_schematic is
+  // spec.schematic.id (the Talos default schematic when unset). Both are empty otherwise.
+  string current_schematic = 18;
+  string target_schematic = 19;
 }
 
 message CreateOperationRequest {

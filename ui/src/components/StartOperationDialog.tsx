@@ -235,7 +235,11 @@ function PlanView({ kind, plan, clusterName }: { kind: OpKind; plan: PlanOperati
 
   return (
     <div class="space-y-3 text-sm">
-      <p class="font-medium">{t(`ops.plan.${kind}`, { from: plan.current, to })}</p>
+      <p class="font-medium">
+        {kind === 'talos' && plan.targetSchematic !== '' && to === plan.current
+          ? t('ops.plan.talosSchematic', { version: plan.current, from: plan.currentSchematic, to: plan.targetSchematic })
+          : t(`ops.plan.${kind}`, { from: plan.current, to })}
+      </p>
       {plan.opensPullRequest ? (
         <p>{t('ops.plan.opensPullRequest', { to })}</p>
       ) : (

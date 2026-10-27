@@ -279,6 +279,24 @@ func TestPlanTextWarnsWhenTheKubernetesAPIGoesDown(t *testing.T) {
 	}
 }
 
+func TestPlanTextForTalosNamesASchematicOnlyChange(t *testing.T) {
+	p := &pb.PlanOperationResponse{
+		Effect: pb.OperationEffect_OPERATION_EFFECT_REBOOT, Current: "v1.14.3", MaxUnavailable: 1,
+		CurrentSchematic: "aaaa", TargetSchematic: "bbbb",
+		Machines: []*pb.PlannedMachine{{Name: opCP, Role: roleControlPlane, Step: 1}},
+	}
+
+	got := planText(pb.OperationKind_OPERATION_KIND_TALOS, "c", p)
+	if !strings.Contains(got, "keeping v1.14.3: schematic aaaa → bbbb") {
+		t.Errorf("text does not name the schematic change:\n%s", got)
+	}
+
+	p.CurrentSchematic, p.TargetSchematic = "", ""
+	if strings.Contains(planText(pb.OperationKind_OPERATION_KIND_TALOS, "c", p), "schematic") {
+		t.Error("the schematic text appears without a schematic change")
+	}
+}
+
 func TestPlanTextForKubernetesNamesTheStagesAndCarriesTheWarning(t *testing.T) {
 	p := &pb.PlanOperationResponse{
 		Effect: pb.OperationEffect_OPERATION_EFFECT_RESTART_COMPONENTS, Current: "v1.36.0", Target: "v1.37.0", MaxUnavailable: 1,

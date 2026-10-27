@@ -36,6 +36,11 @@ const (
 	TalosEtcdBackupReasonPending   = "Pending"
 )
 
+// BackupNowAnnotation, set by `ichor etcd backup now` (or the UI) to an RFC 3339 time, asks the
+// controller for one snapshot outside the schedule. The controller never changes spec, so the request
+// is an annotation; it acts once the time is newer than status.lastManualBackup.
+const BackupNowAnnotation = "ichor.maesh.dev/backup-now"
+
 // TalosEtcdBackupSpec defines the desired state of TalosEtcdBackup: a
 // schedule, one S3-compatible destination and a retention count. Snapshots
 // are always encrypted; the key is derived from the cluster's secrets bundle, so there is nothing to configure and
@@ -165,6 +170,11 @@ type TalosEtcdBackupStatus struct {
 	// lastSuccessTime is when the newest successful attempt finished.
 	// +optional
 	LastSuccessTime *metav1.Time `json:"lastSuccessTime,omitempty"`
+
+	// lastManualBackup is the time of the newest backup-now request (BackupNowAnnotation) the
+	// controller acted on; a request is acted on once, whether the snapshot succeeded or not.
+	// +optional
+	LastManualBackup *metav1.Time `json:"lastManualBackup,omitempty"`
 
 	// consecutiveFailures counts failed attempts since the last success.
 	// +optional

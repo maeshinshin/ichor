@@ -78,6 +78,28 @@ func installAdmissionPolicies() {
 	}
 }
 
+// awaitKubeProxyPolicyEnforced blocks until the apiserver actually rejects an unannotated
+// kubeProxy switch. A ValidatingAdmissionPolicy is compiled and bound asynchronously after its
+// create returns, so for a short window (long under CPU load) updates are admitted unchecked;
+// without this wait the first spec that relies on the policy is flaky.
+func awaitKubeProxyPolicyEnforced() {
+	ctx := context.Background()
+	probe := newClusterWithCNI(TalosClusterCNI{Preset: cniPresetCilium, KubeProxy: kubeProxyEnabled})
+	Expect(k8sClient.Create(ctx, probe)).To(Succeed())
+	Eventually(func() error {
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(probe), probe)).To(Succeed())
+		// Flip whichever way the stored value is, so an admitted (unenforced) attempt cannot
+		// leave the probe in a state where the next attempt is a no-op.
+		if probe.Spec.CNI.KubeProxy == kubeProxyEnabled {
+			probe.Spec.CNI.KubeProxy = kubeProxyReplaced
+		} else {
+			probe.Spec.CNI.KubeProxy = kubeProxyEnabled
+		}
+		return k8sClient.Update(ctx, probe)
+	}, "30s", "100ms").ShouldNot(Succeed())
+	Expect(k8sClient.Delete(ctx, probe)).To(Succeed())
+}
+
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "v1alpha1 CRD validation suite")
@@ -103,6 +125,7 @@ var _ = BeforeSuite(func() {
 	Expect(k8sClient).NotTo(BeNil())
 
 	installAdmissionPolicies()
+	awaitKubeProxyPolicyEnforced()
 })
 
 var _ = AfterSuite(func() {

@@ -25,11 +25,10 @@ import (
 	"net/http"
 )
 
-// authConfig is ichor-ui's GET /auth/config: the legacy
-// enabled/issuer keys plus the providers a client may log in to.
+// authConfig is ichor-ui's GET /auth/config: the enabled
+// flag plus the providers a client may log in to.
 type authConfig struct {
-	Enabled   bool   `json:"enabled"`
-	Issuer    string `json:"issuer"`
+	Enabled   bool `json:"enabled"`
 	Providers []struct {
 		ID     string `json:"id"`
 		Issuer string `json:"issuer"`
@@ -46,10 +45,6 @@ func (c authConfig) issuers() []string {
 		} else {
 			out = append(out, p.Issuer)
 		}
-	}
-
-	if c.Issuer != "" {
-		out = append(out, c.Issuer)
 	}
 
 	return out

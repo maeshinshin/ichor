@@ -77,7 +77,7 @@ func isB64URL(s string, minLen, maxLen int, extra string) bool {
 		return false
 	}
 	for _, c := range s {
-		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '_' || strings.ContainsRune(extra, c)) {
+		if (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && (c < '0' || c > '9') && c != '-' && c != '_' && !strings.ContainsRune(extra, c) {
 			return false
 		}
 	}
@@ -349,7 +349,11 @@ func (i *Issuer) refreshGrant(w http.ResponseWriter, r *http.Request, client str
 		oauthError(w, http.StatusBadRequest, errInvalidGrant, "invalid refresh token")
 		return
 	}
-	aud, ok := audienceFor(client, f.Get("audience"))
+	requested := f.Get("audience")
+	if requested == "" {
+		requested = rc.TokenAudience // the audience chosen at login
+	}
+	aud, ok := audienceFor(client, requested)
 	if !ok {
 		oauthError(w, http.StatusBadRequest, errInvalidRequest, "audience not allowed")
 		return
@@ -396,7 +400,7 @@ func (i *Issuer) respond(w http.ResponseWriter, u User, client, aud, scope, nonc
 			resp.RefreshToken, err = i.sign(typRefresh, jwt.Claims{
 				Issuer: i.cfg.Issuer, Subject: u.Name, Audience: jwt.Audience{internalAudience}, ID: rid,
 				IssuedAt: jwt.NewNumericDate(sessionStart), Expiry: jwt.NewNumericDate(sessionStart.Add(i.cfg.RefreshLifetime)),
-			}, refreshClaims{ClientID: client, Scope: scope})
+			}, refreshClaims{ClientID: client, Scope: scope, TokenAudience: aud})
 		}
 	}
 	if err != nil {

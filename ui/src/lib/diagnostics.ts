@@ -102,7 +102,7 @@ export async function collect(stream: AsyncIterable<Chunk>, maxBytes: number = m
 }
 
 // fallbackName is used if the server sent none (it always does).
-export function fileNameOf(c: Collected, kind: DownloadKind): string {
+export function fileNameOf(c: Collected, kind: DownloadKind | 'ca-credentials'): string {
   if (c.filename) return c.filename
-  return { 'support-bundle': 'support-bundle.zip', 'etcd-snapshot': 'etcd.snapshot.db', 'packet-capture': 'capture.pcap' }[kind]
+  return { 'support-bundle': 'support-bundle.zip', 'etcd-snapshot': 'etcd.snapshot.db', 'packet-capture': 'capture.pcap', 'ca-credentials': 'credentials.zip' }[kind]
 }

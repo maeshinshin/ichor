@@ -259,6 +259,53 @@ var _ = Describe("TalosOperation node actions", func() {
 			Expect(evacuator.endCalls).To(Equal(1), "a paused operation must not leave the Longhorn node unschedulable")
 		})
 
+		It("ends the storage evacuation when the operation pauses on a drain failure (a bare pod)", func() {
+			f := newNodeFixture(map[string]string{hostW1: roleWorker})
+			hook, err := storage.NewEvacuationHook(storage.LonghornV1)
+			Expect(err).NotTo(HaveOccurred())
+
+			evacuator := &fakeStorageEvacuator{target: &evacuationTarget{hook: hook, timeout: time.Minute, namespace: defaultLonghornNamespace}}
+			f.r.Evacuator = evacuator
+			_, err = f.kube.CoreV1().Pods("default").Create(context.Background(), drainTestPod("bare", hostW1, "", false), metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			op := f.newOp(hostW1, nodeSpec(ichorv1alpha1.NodeActionReboot))
+
+			got := f.reconcile(op) // begins the evacuation
+			Expect(evacuator.beginCalls).To(Equal(1))
+			Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseInProgress))
+
+			got = f.reconcile(op) // replicas are gone, the drain refuses the bare pod
+			Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+			Expect(got.Status.FailureReason).To(ContainSubstring("declare no controller"))
+			Expect(evacuator.endCalls).To(Equal(1), "a paused operation must not leave the Longhorn node unschedulable")
+			Expect(f.unschedulable(hostW1)).To(BeFalse())
+		})
+
+		It("does not pause on a drain failure while ending the storage evacuation fails, and retries", func() {
+			f := newNodeFixture(map[string]string{hostW1: roleWorker})
+			hook, err := storage.NewEvacuationHook(storage.LonghornV1)
+			Expect(err).NotTo(HaveOccurred())
+
+			evacuator := &fakeStorageEvacuator{target: &evacuationTarget{hook: hook, timeout: time.Minute, namespace: defaultLonghornNamespace}}
+			f.r.Evacuator = evacuator
+			_, err = f.kube.CoreV1().Pods("default").Create(context.Background(), drainTestPod("bare", hostW1, "", false), metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			op := f.newOp(hostW1, nodeSpec(ichorv1alpha1.NodeActionReboot))
+			f.reconcile(op) // begins the evacuation
+
+			evacuator.endErr = errors.New("conflict")
+			_, err = reconcileOperation(f.r, op)
+			Expect(err).To(MatchError(ContainSubstring("conflict")))
+			Expect(fetchOperation(op).Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseInProgress), "not paused while the node is still unschedulable")
+
+			evacuator.endErr = nil
+			got := f.reconcile(op)
+			Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+			Expect(evacuator.endCalls).To(Equal(2))
+		})
+
 		It("is refused while another operation holds the cluster lock", func() {
 			f := newNodeFixture(map[string]string{hostW1: roleWorker})
 			Expect(clusterlock.New(k8sClient, types.NamespacedName{Namespace: f.cluster.Namespace, Name: f.cluster.Name}, 0).

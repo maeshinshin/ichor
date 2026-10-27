@@ -43,6 +43,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -145,9 +146,7 @@ func (r *TalosOperationReconciler) advanceNode(
 	if waiting {
 		res, err := n.await(ctx)
 		if err != nil {
-			n.cleanup(ctx)
-
-			return r.nodeFailed(ctx, op, err)
+			return n.pause(ctx, err)
 		}
 
 		return res, nil
@@ -155,9 +154,7 @@ func (r *TalosOperationReconciler) advanceNode(
 
 	res, err := n.begin(ctx)
 	if err != nil {
-		n.cleanup(ctx)
-
-		return r.nodeFailed(ctx, op, err)
+		return n.pause(ctx, err)
 	}
 
 	return res, nil
@@ -199,23 +196,46 @@ func (n *nodeRun) await(ctx context.Context) (ctrl.Result, error) {
 	return ctrl.Result{}, fmt.Errorf("node action %q has nothing to wait for", n.spec.Action)
 }
 
+// pause pauses the operation with cause, after undoing the cordon and the storage evacuation. If
+// that undo fails the operation is not paused: the error is returned so the reconcile is retried
+// (and the same step fails and undoes again), because a paused operation is not reconciled and
+// would leave the node unschedulable.
+func (n *nodeRun) pause(ctx context.Context, cause error) (ctrl.Result, error) {
+	if err := n.cleanup(ctx); err != nil {
+		ctrl.LoggerFrom(ctx).Error(err, "undoing the cordon and storage evacuation of a failed node action; retrying",
+			"machine", n.m.Name, "cause", cause.Error())
+
+		return ctrl.Result{}, fmt.Errorf("undoing the cordon and storage evacuation of %q after %q: %w", n.m.Name, cause, err)
+	}
+
+	return n.r.nodeFailed(ctx, n.op, cause)
+}
+
 // cleanup undoes what a step that failed before sending anything left behind: the cordon and
 // the storage evacuation. A node must not stay unschedulable because an operation paused.
-func (n *nodeRun) cleanup(ctx context.Context) {
+func (n *nodeRun) cleanup(ctx context.Context) error {
 	if n.spec.Action != ichorv1alpha1.NodeActionReboot && n.spec.Action != ichorv1alpha1.NodeActionShutdown {
-		return
+		return nil
 	}
 
 	node, err := resolveNodeName(ctx, n.r.Client, n.talos, n.m)
 	if err != nil {
-		return
+		return nil // no node name, so the step that failed never reached a cordon or an evacuation
 	}
 
+	var uncordonErr error
 	if n.r.KubeClient != nil {
-		_ = uncordonAfterReboot(ctx, n.r.KubeClient, node)
+		uncordonErr = uncordonAfterReboot(ctx, n.r.KubeClient, node)
 	}
 
-	_ = endMachineEvacuation(ctx, n.r.Client, n.r.Evacuator, n.cluster, n.m, node)
+	// Decide from the machine as it is stored now, not the copy this reconcile read before the
+	// evacuation began.
+	fresh := &ichorv1alpha1.TalosMachine{}
+	if err := readerOrClient(n.r.APIReader, n.r.Client).Get(ctx, client.ObjectKeyFromObject(n.m), fresh); err != nil {
+		return errors.Join(uncordonErr, err)
+	}
+
+	return errors.Join(uncordonErr, endMachineEvacuation(ctx, n.r.Client, n.r.Evacuator, n.cluster, fresh, node))
 }
 
 // recordRequest persists, before the action is sent, the boot ID the node is leaving and the
@@ -247,9 +267,7 @@ func (n *nodeRun) recordRequest(ctx context.Context, message string) error {
 func (n *nodeRun) wait(ctx context.Context, why string) (ctrl.Result, error) {
 	st := n.op.Status.Node
 	if st != nil && st.RequestedAt != nil && time.Since(st.RequestedAt.Time) > nodeActionTimeout {
-		n.cleanup(ctx) // the operation pauses: the node must not stay cordoned and unschedulable
-
-		return n.r.nodeFailed(ctx, n.op, fmt.Errorf("%q did not finish within %s: %s", n.m.Name, nodeActionTimeout, why))
+		return n.pause(ctx, fmt.Errorf("%q did not finish within %s: %s", n.m.Name, nodeActionTimeout, why))
 	}
 
 	if st != nil && st.Message != why {

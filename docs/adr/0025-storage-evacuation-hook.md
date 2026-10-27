@@ -99,3 +99,11 @@ once it became clear the returned values never differ by target for any plausibl
 what differs is which spec path the caller writes the two bools to (`spec.allowScheduling` vs.
 `spec.disks[name].allowScheduling`), which the caller already knows from its own choice of
 whole-node or per-disk eviction, not something `EvacuationHook` needs to be told.
+
+## Amendment (2026-10-27): End writes in the reverse order, and absent Longhorn is nothing to evacuate
+
+Found on Longhorn 1.12.1. Longhorn's node webhook refuses any write that leaves `allowScheduling` and `evictionRequested` both true ("need to disable scheduling on node X for node eviction, or cancel eviction to enable scheduling on this node"). Begin's order (scheduling off, then eviction on) is right, but End used the same order and so was always refused while the eviction was still requested, leaving every rebooted Longhorn node paused. **End now writes `evictionRequested=false` first, then `allowScheduling=true`**, as two updates (a field already holding its value is not rewritten). Two updates rather than one: each intermediate state is valid on its own, so the result does not depend on how any Longhorn version validates a combined write.
+
+A `TalosStorage` must exist before Longhorn is installed (the disk comes first), and while longhorn-manager crash-loops (e.g. the schematic still lacks iscsi-tools) no Longhorn `Node` objects exist. If the Longhorn CRD is absent (`meta.IsNoMatchError`) or the node's `nodes.longhorn.io` object is NotFound, Begin, End and the replica count treat it as nothing to evacuate and proceed (zero replicas), logging once per node at info level. Any other error still fails the step.
+
+Every node-operation path that begins an evacuation also ends it when it pauses: the node actions (ADR 0085) now do so on a failed await and on timeout as well as on a failed begin step, matching the config rollout and the Talos upgrade.

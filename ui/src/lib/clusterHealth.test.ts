@@ -1,11 +1,29 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { clusterHealth } from './clusterHealth.ts'
+import { clusterHealth, clusterIsReady } from './clusterHealth.ts'
 
-test('health follows rollout first, then the Ready condition', () => {
+test('clusterIsReady uses Ready when there is one, else steady and not unhealthy', () => {
+  assert.equal(clusterIsReady([{ type: 'Ready', status: 'True' }]), true)
+  assert.equal(clusterIsReady([{ type: 'Ready', status: 'Unknown' }]), false)
+  assert.equal(clusterIsReady([{ type: 'Transitioning', status: 'False' }]), true)
+  assert.equal(clusterIsReady([]), true)
+  assert.equal(clusterIsReady([{ type: 'Transitioning', status: 'True' }]), false)
+  assert.equal(clusterIsReady([{ type: 'Available', status: 'False' }]), false)
+})
+
+test('clusterHealth: upgrading beats ready and degraded', () => {
   const ready = [{ type: 'Ready', status: 'True' }]
-  assert.equal(clusterHealth({ conditions: ready }), 'ready')
-  assert.equal(clusterHealth({ conditions: ready, rollout: {} }), 'upgrading')
-  assert.equal(clusterHealth({ conditions: [{ type: 'Ready', status: 'False' }] }), 'degraded')
-  assert.equal(clusterHealth({ conditions: [] }), 'degraded')
+  const down = [{ type: 'Ready', status: 'False' }]
+  assert.equal(clusterHealth(ready, false, false), 'ready')
+  assert.equal(clusterHealth(down, false, false), 'degraded')
+  assert.equal(clusterHealth(down, true, false), 'upgrading')
+  assert.equal(clusterHealth(ready, false, true), 'upgrading')
+})
+
+test('a cluster with only CertificatesExpiring=False and Transitioning=False is ready', () => {
+  const demo = [
+    { type: 'CertificatesExpiring', status: 'False' },
+    { type: 'Transitioning', status: 'False' },
+  ]
+  assert.equal(clusterHealth(demo, false, false), 'ready')
 })

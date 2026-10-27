@@ -21,9 +21,6 @@ service OperationService {
   rpc PlanOperation(PlanOperationRequest) returns (PlanOperationResponse);
   rpc CreateOperation(CreateOperationRequest) returns (CreateOperationResponse);
   rpc SetOperationPaused(SetOperationPausedRequest) returns (SetOperationPausedResponse);
-  // RetryOperation asks the controller to run the failed step of a paused-after-failure operation
-  // again, by annotating the operation. It refuses an operation that has not failed.
-  rpc RetryOperation(RetryOperationRequest) returns (RetryOperationResponse);
   rpc DeleteOperation(DeleteOperationRequest) returns (DeleteOperationResponse);
   // GetCARotationCredentialsPermission says whether the caller may download a ca-rotation's new
   // credentials (the RBAC verb "download" on talosclusters/credentials), so the UI shows
@@ -333,15 +330,6 @@ message SetOperationPausedRequest {
 }
 
 message SetOperationPausedResponse {
-  Operation operation = 1;
-  AuditRecord audit = 2;
-}
-
-message RetryOperationRequest {
-  ObjectRef operation = 1;
-}
-
-message RetryOperationResponse {
   Operation operation = 1;
   AuditRecord audit = 2;
 }

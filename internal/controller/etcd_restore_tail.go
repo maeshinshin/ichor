@@ -26,6 +26,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"net"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -365,8 +368,18 @@ func (t *restoreTails) forget(key types.NamespacedName) {
 // WaitForRestoreTails blocks until every etcd restore job of this process has finished or timeout
 // passed. main calls it after the manager stopped: the manager stops when the Kubernetes API goes
 // away (leader election is lost), which is exactly when a restore is mid-way and must be finished,
-// not abandoned.
-func WaitForRestoreTails(timeout time.Duration) {
+// not abandoned. The manager's health probe server went with it, and a failing liveness probe would
+// have the kubelet kill the process, so while a job runs the same probe address is served here.
+func WaitForRestoreTails(timeout time.Duration, probeAddr string) {
+	if !defaultRestoreTails.any() {
+		return
+	}
+
+	if probeAddr != "" && probeAddr != "0" {
+		stop := serveProbes(probeAddr)
+		defer stop()
+	}
+
 	done := make(chan struct{})
 
 	go func() {
@@ -378,4 +391,37 @@ func WaitForRestoreTails(timeout time.Duration) {
 	case <-done:
 	case <-time.After(timeout):
 	}
+}
+
+func (t *restoreTails) any() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	return len(t.running) > 0
+}
+
+// serveProbes answers /healthz and /readyz with 200 on addr until the returned func is called. The
+// address was the manager's a moment ago, so binding it is retried for a few seconds.
+func serveProbes(addr string) (stop func()) {
+	mux := http.NewServeMux()
+	ok := func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "ok") }
+	mux.HandleFunc("/healthz", ok)
+	mux.HandleFunc("/readyz", ok)
+
+	srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
+
+	go func() {
+		for range 30 {
+			l, err := net.Listen("tcp", addr)
+			if err == nil {
+				_ = srv.Serve(l)
+
+				return
+			}
+
+			time.Sleep(time.Second)
+		}
+	}()
+
+	return func() { _ = srv.Close() }
 }

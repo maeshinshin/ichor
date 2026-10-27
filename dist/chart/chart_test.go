@@ -133,7 +133,7 @@ func TestChartInvariants(t *testing.T) {
 			checkCRDsMatchConfig(t, release, docs)
 			checkKubeProxySwitchPolicy(t, release, docs)
 			checkUIBackendRBACIsSeparate(t, release, docs)
-			checkUIBackendRBACMatchesConfig(t, release, docs, false)
+			checkUIBackendRBACMatchesConfig(t, release, docs, false, false)
 			checkControllerRBACMatchesConfig(t, release, docs)
 			checkMonitoringOptionsOffByDefault(t, release, docs)
 		})
@@ -260,6 +260,17 @@ func renderChartWithValues(t *testing.T, release string, sets ...string) []map[s
 		t.Fatalf("helm %s produced no documents", strings.Join(args, " "))
 	}
 	return docs
+}
+
+// renderChartWithValuesErr runs "helm template" with --set overrides and returns its error
+// instead of failing, for values the chart must refuse.
+func renderChartWithValuesErr(release string, sets ...string) ([]byte, error) {
+	args := []string{"template", release, "."}
+	for _, s := range sets {
+		args = append(args, "--set", s)
+	}
+
+	return exec.Command("helm", args...).CombinedOutput()
 }
 
 // decodeYAMLDocs decodes every "---"-separated document in data into a generic map,
@@ -594,7 +605,7 @@ func TestUIOIDC(t *testing.T) {
 	if got, _ := containerEnvValue(onDep, "ICHOR_OIDC_ISSUER"); got != "https://idp.example" {
 		t.Errorf("ICHOR_OIDC_ISSUER = %q", got)
 	}
-	checkUIBackendRBACMatchesConfig(t, "ichor", on, true)
+	checkUIBackendRBACMatchesConfig(t, "ichor", on, true, false)
 
 	narrow := renderChartWithValues(t, "ichor", "ichorUI.oidc.enabled=true",
 		"ichorUI.oidc.issuer=https://idp.example", "ichorUI.oidc.clientId=ichor",
@@ -602,6 +613,59 @@ func TestUIOIDC(t *testing.T) {
 	role := find(narrow, kindClusterRole, ichorUIRoleName)
 	if !strings.Contains(fmt.Sprint(role["rules"]), "oidc:platform") {
 		t.Errorf("impersonate.groups did not become resourceNames: %v", role["rules"])
+	}
+}
+
+// TestUIUsers pins ADR 0094's chart switch: off renders nothing of it; on renders the flags, the
+// internal port, the volumes, the credentials Secret, the narrowed impersonate groups and the
+// Role rules, and refuses to render without an external URL.
+func TestUIUsers(t *testing.T) {
+	off := renderChartWithValues(t, "ichor")
+	if find(off, "Secret", "ichor-user-credentials") != nil {
+		t.Error("the credentials Secret renders by default")
+	}
+
+	if args := fmt.Sprint(find(off, kindDeployment, ichorUIDeploymentName)["spec"]); strings.Contains(args, "users-enabled") ||
+		strings.Contains(args, "oidc-signing") {
+		t.Error("users flags or volumes render by default")
+	}
+
+	on := renderChartWithValues(t, "ichor", "ichorUI.users.enabled=true", "ichorUI.users.externalURL=https://ichor.example.com")
+	dep := fmt.Sprint(find(on, kindDeployment, ichorUIDeploymentName)["spec"])
+
+	for _, want := range []string{"--users-enabled=true", "--external-url=https://ichor.example.com", "--internal-addr=:8444",
+		"--token-ttl=5m", "--refresh-lifetime=12h", "ichor-oidc-signing", "ichor-oidc-tls", "containerPort:8444"} {
+		if !strings.Contains(dep, want) {
+			t.Errorf("Deployment lacks %q: %s", want, dep)
+		}
+	}
+
+	if find(on, "Secret", "ichor-user-credentials") == nil {
+		t.Error("the credentials Secret is not rendered")
+	}
+
+	svc := fmt.Sprint(find(on, "Service", "ichor-ui-service")["spec"])
+	if !strings.Contains(svc, "port:8444") {
+		t.Errorf("Service lacks the internal port: %s", svc)
+	}
+
+	role := fmt.Sprint(find(on, kindClusterRole, ichorUIRoleName)["rules"])
+	for _, want := range []string{"ichor:viewer", "ichor:operator", "ichor:admin", "impersonate"} {
+		if !strings.Contains(role, want) {
+			t.Errorf("ClusterRole lacks %q: %s", want, role)
+		}
+	}
+
+	checkUIBackendRBACMatchesConfig(t, "ichor", on, false, true)
+
+	if _, err := renderChartWithValuesErr("ichor", "ichorUI.users.enabled=true"); err == nil {
+		t.Error("users.enabled rendered without an external URL")
+	}
+
+	both := renderChartWithValues(t, "ichor", "ichorUI.users.enabled=true", "ichorUI.users.externalURL=https://x",
+		"ichorUI.oidc.enabled=true", "ichorUI.oidc.issuer=https://idp", "ichorUI.oidc.clientId=c")
+	if strings.Contains(fmt.Sprint(find(both, kindClusterRole, ichorUIRoleName)["rules"]), "ichor:viewer") {
+		t.Error("with an external IdP too, the groups must stay unrestricted unless configured")
 	}
 }
 
@@ -662,7 +726,7 @@ func clusterRoleBindingRefs(binding map[string]any) (roleRef, subject string) {
 // YAML text or document order, so grouping resources/verbs into one apiGroups entry versus
 // several is not a difference. Also checks the namespaced secrets Role the same way; see
 // ichorUISecretsRoleName for why it can't be matched by name.
-func checkUIBackendRBACMatchesConfig(t *testing.T, release string, docs []map[string]any, oidc bool) {
+func checkUIBackendRBACMatchesConfig(t *testing.T, release string, docs []map[string]any, oidc, users bool) {
 	t.Helper()
 
 	configDocs := loadYAMLDocs(t, ichorUIConfigRolePath)
@@ -683,17 +747,35 @@ func checkUIBackendRBACMatchesConfig(t *testing.T, release string, docs []map[st
 		configRole = map[string]any{"rules": kept}
 	}
 
-	checkRBACRulesMatch(t, release,
-		"ClusterRole "+ichorUIRoleName,
-		configRole, find(docs, kindClusterRole, ichorUIRoleName),
-		ichorUIConfigRolePath, "dist/chart/templates/rbac/ichor-ui-role.yaml")
+	// With ichorUI.users.enabled the impersonate groups are narrowed to the built-in roles
+	// (TestUIUsers pins that), so that render compares only the namespaced Role.
+	if !users {
+		checkRBACRulesMatch(t, release,
+			"ClusterRole "+ichorUIRoleName,
+			configRole, find(docs, kindClusterRole, ichorUIRoleName),
+			ichorUIConfigRolePath, "dist/chart/templates/rbac/ichor-ui-role.yaml")
+	}
 
 	// The namespaced Role carrying the secrets rule: same name as the ClusterRole in
 	// config/ (disambiguated only by kind there), but split into its own chart file
 	// under ichorUISecretsRoleName -- matched here by kind/content, not name.
+	// The Ichor users rules (docs/adr/0094) are in the generated role but rendered only with
+	// ichorUI.users.enabled.
+	configNS := find(configDocs, kindRole, ichorUIRoleName)
+	if !users && configNS != nil {
+		var kept []any
+		rules, _ := configNS["rules"].([]any)
+		for _, r := range rules {
+			rm, _ := r.(map[string]any)
+			if !containsStr(rm["resources"], "ichorusers") && !containsStr(rm["resourceNames"], "ichor-user-credentials") {
+				kept = append(kept, r)
+			}
+		}
+		configNS = map[string]any{"rules": kept}
+	}
 	checkRBACRulesMatch(t, release,
 		"Role "+ichorUIRoleName+" (secrets)",
-		find(configDocs, kindRole, ichorUIRoleName), find(docs, kindRole, ichorUISecretsRoleName),
+		configNS, find(docs, kindRole, ichorUISecretsRoleName),
 		ichorUIConfigRolePath, "dist/chart/templates/rbac/ichor-ui-secrets-role.yaml")
 }
 

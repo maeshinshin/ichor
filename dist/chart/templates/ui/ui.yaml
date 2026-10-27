@@ -72,6 +72,20 @@ spec:
       containers:
       - args:
         - --addr=:{{ .Values.ichorUI.port }}
+        {{- if .Values.ichorUI.tls.secretName }}
+        - --tls-cert-file=/etc/ichor/tls/tls.crt
+        - --tls-key-file=/etc/ichor/tls/tls.key
+        {{- end }}
+        {{- if .Values.ichorUI.users.enabled }}
+        # Ichor's own users and issuer (docs/adr/0094).
+        - --users-enabled=true
+        - --external-url={{ required "ichorUI.users.externalURL is required when ichorUI.users.enabled" .Values.ichorUI.users.externalURL }}
+        - --internal-addr=:{{ .Values.ichorUI.users.internalPort }}
+        - --internal-tls-dir=/etc/ichor/oidc-tls
+        - --signing-keys-dir=/etc/ichor/oidc-signing
+        - --token-ttl={{ .Values.ichorUI.users.tokenTTL }}
+        - --refresh-lifetime={{ .Values.ichorUI.users.refreshLifetime }}
+        {{- end }}
         command:
         - /ichor-ui
         image: "{{ .Values.ichorUI.image.repository }}{{- if not (contains "@" .Values.ichorUI.image.repository) }}:{{ .Values.ichorUI.image.tag | default .Chart.AppVersion }}{{- end }}"
@@ -124,6 +138,27 @@ spec:
         - containerPort: {{ .Values.ichorUI.port }}
           name: http
           protocol: TCP
+        {{- if .Values.ichorUI.users.enabled }}
+        - containerPort: {{ .Values.ichorUI.users.internalPort }}
+          name: internal
+          protocol: TCP
+        {{- end }}
+        {{- if or .Values.ichorUI.users.enabled .Values.ichorUI.tls.secretName }}
+        volumeMounts:
+        {{- if .Values.ichorUI.tls.secretName }}
+        - name: tls
+          mountPath: /etc/ichor/tls
+          readOnly: true
+        {{- end }}
+        {{- if .Values.ichorUI.users.enabled }}
+        - name: oidc-signing
+          mountPath: /etc/ichor/oidc-signing
+          readOnly: true
+        - name: oidc-tls
+          mountPath: /etc/ichor/oidc-tls
+          readOnly: true
+        {{- end }}
+        {{- end }}
         resources:
           {{- if .Values.ichorUI.resources }}
           {{- toYaml .Values.ichorUI.resources | nindent 10 }}
@@ -143,6 +178,26 @@ spec:
         {}
         {{- end }}
       serviceAccountName: ichor-ui
+      {{- if or .Values.ichorUI.users.enabled .Values.ichorUI.tls.secretName }}
+      volumes:
+      {{- if .Values.ichorUI.tls.secretName }}
+      - name: tls
+        secret:
+          secretName: {{ .Values.ichorUI.tls.secretName | quote }}
+      {{- end }}
+      {{- if .Values.ichorUI.users.enabled }}
+      # Written by the controller (docs/adr/0094); optional so ichor-ui starts before the
+      # controller has made them and picks them up when the kubelet syncs the volume.
+      - name: oidc-signing
+        secret:
+          secretName: ichor-oidc-signing
+          optional: true
+      - name: oidc-tls
+        secret:
+          secretName: ichor-oidc-tls
+          optional: true
+      {{- end }}
+      {{- end }}
       {{- if and (hasKey .Values.ichorUI "terminationGracePeriodSeconds") (ne .Values.ichorUI.terminationGracePeriodSeconds nil) }}
       terminationGracePeriodSeconds: {{ .Values.ichorUI.terminationGracePeriodSeconds }}
       {{- end }}

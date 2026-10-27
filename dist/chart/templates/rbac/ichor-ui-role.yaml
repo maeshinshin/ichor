@@ -108,9 +108,10 @@ rules:
   - kustomizations
   verbs:
   - list
-{{- if .Values.ichorUI.oidc.enabled }}
-# Only with OIDC login (docs/adr/0058): act as the signed-in user. Optionally narrowed to
-# named users/groups; never serviceaccounts or userextras.
+{{- if or .Values.ichorUI.oidc.enabled .Values.ichorUI.users.enabled }}
+# Only with OIDC login (docs/adr/0058) or Ichor's own users (docs/adr/0094): act as the
+# signed-in user. Optionally narrowed to named users/groups; never serviceaccounts or
+# userextras.
 {{- with .Values.ichorUI.oidc.impersonate.users }}
 - apiGroups:
   - ""
@@ -128,6 +129,22 @@ rules:
   verbs:
   - impersonate
 {{- end }}
+{{- if and .Values.ichorUI.users.enabled (not .Values.ichorUI.oidc.enabled) }}
+# Only Ichor's users are on: the groups are the three built-in roles plus any configured ones.
+- apiGroups:
+  - ""
+  resourceNames:
+  - ichor:viewer
+  - ichor:operator
+  - ichor:admin
+  {{- with .Values.ichorUI.oidc.impersonate.groups }}
+  {{- toYaml . | nindent 2 }}
+  {{- end }}
+  resources:
+  - groups
+  verbs:
+  - impersonate
+{{- else }}
 {{- with .Values.ichorUI.oidc.impersonate.groups }}
 - apiGroups:
   - ""
@@ -144,6 +161,7 @@ rules:
   - groups
   verbs:
   - impersonate
+{{- end }}
 {{- end }}
 {{- end }}
 {{- end }}

@@ -223,16 +223,42 @@ ichorUI:
       users: []
       groups: []
 
-  ## Ichor's own users (docs/adr/0094). Off by default. This unit ships only the built-in roles:
-  ## ClusterRoles ichor-viewer, ichor-operator and ichor-admin bound to the groups ichor:viewer,
-  ## ichor:operator and ichor:admin, plus a Role in the release namespace for `ichor ui`.
+  ## Ichor's own users and OIDC issuer (docs/adr/0094). Off by default: it needs an https URL
+  ## that browsers and the CLI reach, a Talos v1.14 contract and a config rollout on the control
+  ## planes. On: ichor-ui serves a small OIDC issuer, accepts its tokens next to ichorUI.oidc.*'s
+  ## (users "ichor:<name>", groups "ichor:<role>"), and every request needs a token. Create the
+  ## first admin before the switch (ichor init --ui-url does). Passwords are stored as argon2id
+  ## hashes in the Secret ichor-user-credentials; the user CRs hold none.
   ##
   users:
     enabled: false
+    ## The https URL of ichor-ui as a browser reaches it (an Ingress, Gateway or LoadBalancer in
+    ## front of the Service, or ichorUI.tls.secretName). It is the issuer of every token. Required
+    ## when enabled.
+    externalURL: ""
+    ## HTTPS port of the internal listener the kube-apiserver reads discovery and JWKS from, over
+    ## the Service's ClusterIP, with a certificate the controller keeps (Secret ichor-oidc-tls).
+    internalPort: 8444
+    ## ID token lifetime (1m to 15m): the worst-case delay for a disable to reach kubectl.
+    tokenTTL: 5m
+    ## Absolute lifetime of a refresh token (1h to 30d).
+    refreshLifetime: 12h
     ## Built-in role names (viewer, operator, admin) whose group is also bound to cluster-admin.
     ## Empty by default. Doing so lets those users read the secrets bundle, which holds the Talos
     ## credentials.
     clusterAdminRoles: []
+
+  ## ichor-ui's Service. ClusterIP by default; exposing it over https is the operator's job
+  ## (Ichor installs no ingress controller).
+  ##
+  service:
+    type: ClusterIP
+
+  ## Terminate TLS in ichor-ui itself with the kubernetes.io/tls Secret of this name (tls.crt,
+  ## tls.key) instead of in front of it. Empty serves plain HTTP, as before.
+  ##
+  tls:
+    secretName: ""
 
   ## Who may download a support bundle, an etcd snapshot or a packet capture from a node
   ## (docs/adr/0084). Each file can hold secrets: the etcd snapshot holds every Kubernetes

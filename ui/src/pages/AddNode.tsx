@@ -20,8 +20,9 @@ import { clusterClient, machineClient } from '@/lib/connect'
 import { checkDiscoveryAddress, discoveryOn } from '@/lib/discovery'
 import { describeError } from '@/lib/errors'
 import { notifyWrite } from '@/lib/notify'
+import { useCluster } from '@/lib/useCluster'
 import { useT } from '@/lib/useT'
-import { Link, objectRefPath } from '@/router'
+import { Link } from '@/router'
 
 type ErrorShape = { title: string; detail: string }
 
@@ -31,15 +32,18 @@ const POLL_MS = 5000
 // a network: it only looks at the addresses the cluster lists. So the
 // page shows those, lets the person add one, and lists the nodes that were found
 // and now wait for a decision. Approving uses the same dialog as the node list.
-export function AddNode({ namespace, name }: { namespace: string; name: string }) {
+export function AddNode() {
   const t = useT()
+  const { cluster: current, error: clusterError, reload: reloadCurrent } = useCluster()
   const [cluster, setCluster] = useState<Cluster | null>(null)
+  const namespace = current?.ref?.namespace
+  const name = current?.ref?.name
   const [machines, setMachines] = useState<Machine[]>([])
   const [error, setError] = useState<ErrorShape | null>(null)
   const [pullRequest, setPullRequest] = useState<{ url: string; run?: BreakGlassRun } | null>(null)
-  const clusterPath = objectRefPath('/clusters', { namespace, name })
 
   async function reloadMachines() {
+    if (!namespace || !name) return
     try {
       setMachines((await machineClient.listMachines({ cluster: { namespace, name } })).machines)
     } catch {
@@ -47,23 +51,19 @@ export function AddNode({ namespace, name }: { namespace: string; name: string }
     }
   }
 
-  async function reloadCluster() {
-    try {
-      setCluster((await clusterClient.getCluster({ cluster: { namespace, name } })).cluster ?? null)
-    } catch (err) {
-      setError(describeError(err))
-    }
+  function reloadCluster() {
+    reloadCurrent()
   }
 
   useEffect(() => {
-    setCluster(null)
+    setCluster(current)
     setError(null)
-    reloadCluster()
     reloadMachines()
     const id = setInterval(reloadMachines, POLL_MS)
     return () => clearInterval(id)
-  }, [namespace, name])
+  }, [current])
 
+  if (clusterError) return <ErrorAlert {...clusterError} />
   if (error) return <ErrorAlert {...error} />
   if (!cluster) return <PageSkeleton label={t('cluster.loading')} />
 
@@ -75,13 +75,13 @@ export function AddNode({ namespace, name }: { namespace: string; name: string }
   return (
     <>
       <PageHeader
-        title={t('addNode.title', { name: cluster.ref?.name ?? name })}
+        title={t('addNode.pageTitle')}
         kind={t('kind.cluster')}
         actions={
           <Button asChild size="sm" variant="outline">
-            <Link to={clusterPath}>
+            <Link to="/nodes">
               <ArrowLeftIcon />
-              {t('addNode.back')}
+              {t('addNode.backToNodes')}
             </Link>
           </Button>
         }

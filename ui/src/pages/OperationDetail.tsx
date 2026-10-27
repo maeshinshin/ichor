@@ -18,8 +18,9 @@ import { restoreStepProgress } from '@/lib/etcdRestore'
 import { formatTimestamp } from '@/lib/format'
 import { caStageProgress, kubernetesStageProgress, operationState, pollIntervalMs, progressCounts } from '@/lib/operations'
 import { opStateTone } from '@/lib/status'
+import { useCluster } from '@/lib/useCluster'
 import { useT } from '@/lib/useT'
-import { Link, navigate, objectRefPath } from '@/router'
+import { Link, navigate } from '@/router'
 
 type ErrorShape = { title: string; detail: string }
 
@@ -27,12 +28,15 @@ type ErrorShape = { title: string; detail: string }
 // upgrade kinds share a progress view): the phase and each machine's state
 // exactly as the controller recorded them in status. A machine that does not
 // appear has not been reached. It polls while the operation can still change.
-export function OperationDetail({ namespace, name }: { namespace: string; name: string }) {
+export function OperationDetail({ name }: { name: string }) {
   const t = useT()
+  const { cluster, error: clusterError } = useCluster()
+  const namespace = cluster?.ref?.namespace
   const [op, setOp] = useState<Operation | null>(null)
   const [error, setError] = useState<ErrorShape | null>(null)
 
   useEffect(() => {
+    if (!namespace) return
     let cancelled = false
     let timer: ReturnType<typeof setTimeout> | undefined
 
@@ -59,6 +63,7 @@ export function OperationDetail({ namespace, name }: { namespace: string; name: 
     }
   }, [namespace, name])
 
+  if (clusterError) return <ErrorAlert {...clusterError} />
   if (error && !op) return <ErrorAlert {...error} />
   if (!op) return <PageSkeleton label={t('ops.loading')} />
 
@@ -94,17 +99,13 @@ export function OperationDetail({ namespace, name }: { namespace: string; name: 
         }
         meta={[
           { label: t('ops.colKind'), value: enumLabel(OperationKind, op.kind) },
-          {
-            label: t('ops.cluster'),
-            value: op.cluster ? <Link to={objectRefPath('/clusters', op.cluster)} class="hover:underline">{op.cluster.name}</Link> : undefined,
-          },
           ...(op.kind === OperationKind.NODE
             ? [
                 { label: t('node.action.actionLabel'), value: enumLabel(NodeAction, op.nodeAction) },
                 {
                   label: t('node.action.nodeLabel'),
                   value: op.nodeMachine ? (
-                    <Link to={objectRefPath('/nodes', op.nodeMachine)} class="hover:underline">
+                    <Link to={`/nodes/${op.nodeMachine.name}`} class="hover:underline">
                       {op.nodeMachine.name}
                     </Link>
                   ) : undefined,

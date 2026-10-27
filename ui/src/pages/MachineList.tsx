@@ -13,7 +13,7 @@ import { ReadyCell } from '@/components/ReadyCell'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { PullRequestNotice } from '@/components/PullRequestNotice'
 import { MachineApprovalState, MachineRole, type Machine } from '@/gen/ichor/v1alpha1/machine_pb'
-import { clusterClient, machineClient } from '@/lib/connect'
+import { machineClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
 import { offersBreakGlass } from '@/lib/breakGlass'
 import { notifyWrite } from '@/lib/notify'
@@ -21,7 +21,7 @@ import { describeError } from '@/lib/errors'
 import { matchesQuery } from '@/lib/filter'
 import { formatTimestamp } from '@/lib/format'
 import { useT } from '@/lib/useT'
-import { objectRefPath, Link } from '@/router'
+import { Link } from '@/router'
 
 type ErrorShape = { title: string; detail: string }
 
@@ -33,23 +33,11 @@ export function MachineList() {
   const [machines, setMachines] = useState<Machine[] | null>(null)
   const [error, setError] = useState<ErrorShape | null>(null)
   const [query, setQuery] = useState('')
-  const [clusterNames, setClusterNames] = useState<Record<string, string>>({})
   const [pullRequest, setPullRequest] = useState<{ url: string; run?: BreakGlassRun } | null>(null)
 
   async function reload() {
     try {
-      const [machinesRes, clustersRes] = await Promise.all([
-        machineClient.listMachines({}),
-        clusterClient.listClusters({}),
-      ])
-      setMachines(machinesRes.machines)
-      setClusterNames(
-        Object.fromEntries(
-          clustersRes.clusters
-            .filter((c) => c.ref)
-            .map((c) => [`${c.ref!.namespace}/${c.ref!.name}`, c.ref!.name]),
-        ),
-      )
+      setMachines((await machineClient.listMachines({})).machines)
       setError(null)
     } catch (err) {
       setError(describeError(err))
@@ -72,7 +60,7 @@ export function MachineList() {
   // the state existing, so it stops reappearing as a fresh approval
   // request every time this list loads.
   const match = (m: Machine) =>
-    matchesQuery(query, m.hostname, m.ref?.name, m.identity?.uuid, m.endpoint, m.cluster?.name, enumLabel(MachineRole, m.role))
+    matchesQuery(query, m.hostname, m.ref?.name, m.identity?.uuid, m.endpoint, enumLabel(MachineRole, m.role))
   const shown = machines.filter(match)
   const pending = shown.filter((m) => m.approvalState !== MachineApprovalState.APPROVED && m.approvalState !== MachineApprovalState.REJECTED)
   const rejected = shown.filter((m) => m.approvalState === MachineApprovalState.REJECTED)
@@ -80,7 +68,14 @@ export function MachineList() {
 
   return (
     <div class="space-y-6">
-      <PageHeader title={t('nav.machines')} />
+      <PageHeader
+        title={t('nodes.title')}
+        actions={
+          <Button asChild size="sm">
+            <Link to="/nodes/add">{t('nodes.add')}</Link>
+          </Button>
+        }
+      />
       <ListToolbar query={query} onQuery={setQuery} shown={shown.length} total={machines.length} onRefresh={reload} />
       {pullRequest && <PullRequestNotice url={pullRequest.url} breakGlass={pullRequest.run} onBreakGlassDone={reload} />}
       {pending.length > 0 && (
@@ -93,7 +88,6 @@ export function MachineList() {
               <TableHeader>
                 <TableRow>
                   <TableHead>{t('col.identity')}</TableHead>
-                  <TableHead>{t('col.cluster')}</TableHead>
                   <TableHead>{t('col.endpoint')}</TableHead>
                   <TableHead>{t('col.actions')}</TableHead>
                 </TableRow>
@@ -102,7 +96,6 @@ export function MachineList() {
                 {pending.map((m) => (
                   <TableRow key={refKey(m)}>
                     <TableCell>{identitySummary(m, t('machines.unknown'))}</TableCell>
-                    <TableCell>{m.cluster ? clusterNames[`${m.cluster.namespace}/${m.cluster.name}`] ?? m.cluster.name : '-'}</TableCell>
                     <TableCell>{m.endpoint || '-'}</TableCell>
                     <TableCell>
                       <div class="flex gap-2">
@@ -128,7 +121,6 @@ export function MachineList() {
               <TableHeader>
                 <TableRow>
                   <TableHead>{t('col.identity')}</TableHead>
-                  <TableHead>{t('col.cluster')}</TableHead>
                   <TableHead>{t('machines.colReason')}</TableHead>
                   <TableHead>{t('machines.colWhen')}</TableHead>
                   <TableHead>{t('col.actions')}</TableHead>
@@ -138,7 +130,6 @@ export function MachineList() {
                 {rejected.map((m) => (
                   <TableRow key={refKey(m)}>
                     <TableCell>{identitySummary(m, t('machines.unknown'))}</TableCell>
-                    <TableCell>{m.cluster ? clusterNames[`${m.cluster.namespace}/${m.cluster.name}`] ?? m.cluster.name : '-'}</TableCell>
                     {/* The decision record: recorded on the CR
                         itself, not just a one-shot RPC response, so it's still here the
                         next time anyone loads this list. */}
@@ -170,24 +161,22 @@ export function MachineList() {
               <TableHeader>
                 <TableRow>
                   <TableHead>{t('machines.colHostname')}</TableHead>
-                  <TableHead>{t('col.cluster')}</TableHead>
                   <TableHead>{t('col.role')}</TableHead>
                   <TableHead>{t('col.ready')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {approved.map((m) => (
-                  <LinkRow key={refKey(m)} to={m.ref ? objectRefPath('/nodes', m.ref) : '/machines'}>
+                  <LinkRow key={refKey(m)} to={m.ref ? `/nodes/${m.ref.name}` : '/nodes'}>
                     <TableCell>
                       {m.ref ? (
-                        <Link to={objectRefPath('/nodes', m.ref)} class="font-medium hover:underline">
+                        <Link to={`/nodes/${m.ref.name}`} class="font-medium hover:underline">
                           {m.hostname || m.ref.name}
                         </Link>
                       ) : (
                         m.hostname || '-'
                       )}
                     </TableCell>
-                    <TableCell>{m.cluster ? clusterNames[`${m.cluster.namespace}/${m.cluster.name}`] ?? m.cluster.name : '-'}</TableCell>
                     <TableCell>{enumLabel(MachineRole, m.role)}</TableCell>
                     <TableCell>
                       <ReadyCell machine={m} />

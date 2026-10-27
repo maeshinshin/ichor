@@ -7,10 +7,9 @@ import { userClient } from '@/lib/connect'
 import { finishLogin, startLogin, storedToken, tokenUsable, type AuthConfig, type AuthProvider } from '@/lib/oidc'
 import { useT } from '@/lib/useT'
 import { AddNode } from '@/pages/AddNode'
-import { ClusterDetail } from '@/pages/ClusterDetail'
-import { ClusterList } from '@/pages/ClusterList'
 import { GitOps } from '@/pages/GitOps'
 import { MachineList } from '@/pages/MachineList'
+import { Backups } from '@/pages/Backups'
 import { Overview } from '@/pages/Overview'
 import { NodeDetail } from '@/pages/NodeDetail'
 import { OperationDetail } from '@/pages/OperationDetail'
@@ -21,7 +20,11 @@ import { Login } from '@/pages/Login'
 import { Placeholder } from '@/pages/Placeholder'
 import { SignIn } from '@/pages/SignIn'
 import { Users } from '@/pages/Users'
-import { matchRoute, usePath } from '@/router'
+import { matchRoute, replace, usePath } from '@/router'
+import { redirectFor } from '@/lib/routes'
+import { useCluster } from '@/lib/useCluster'
+import { PageSkeleton } from '@/components/PageStates'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { t as translateNow } from '@/lib/i18n'
 
 type LoginState = 'loading' | 'open' | 'choose' | 'ready' | 'error'
@@ -76,6 +79,12 @@ function useWhoAmI(signedIn: boolean): { me: WhoAmIResponse | null; loaded: bool
 
 export function App() {
   const path = usePath()
+  // An old multi-cluster URL is replaced by its new place.
+  const to = redirectFor(path)
+  useEffect(() => {
+    if (to) replace(to)
+  }, [to])
+  if (to) return null
   // The login form is outside the gate: the person is not signed in yet.
   if (path === '/login') return <Login />
   return <Authenticated path={path} />
@@ -99,35 +108,50 @@ function Authenticated({ path }: { path: string }) {
       me={who.me}
       usersEnabled={login.providers.some((p) => p.id === 'ichor')}
     >
-      {renderRoute(path, t('common.notFound'), login.providers.some((p) => p.id === 'ichor'))}
+      <Routes path={path} usersEnabled={login.providers.some((p) => p.id === 'ichor')} />
     </AppShell>
   )
 }
 
-function renderRoute(path: string, notFound: string, usersEnabled: boolean) {
-  if (path === '/') return <Overview />
-  if (path === '/clusters') return <ClusterList />
-  if (path === '/machines') return <MachineList />
-  if (path === '/patches') return <PatchList />
-  if (path === '/patches/new') return <PatchDetail />
-  if (path === '/gitops') return <GitOps />
-  if (path === '/operations') return <OperationList />
+// Routes gates the cluster pages on the one cluster: none shows the empty state, several a
+// warning. /users does not need a cluster.
+function Routes({ path, usersEnabled }: { path: string; usersEnabled: boolean }) {
+  const t = useT()
+  const { cluster, count, loading, error } = useCluster()
   if (path === '/users' && usersEnabled) return <Users />
+  if (error && !cluster) return <ErrorAlert {...error} />
+  if (loading) return <PageSkeleton label={t('shell.loadingCluster')} />
+  if (!cluster) return <p class="p-8 text-sm text-muted-foreground">{t('shell.noCluster')}</p>
+  return (
+    <>
+      {count > 1 && (
+        <Alert className="mb-4">
+          <AlertDescription>{t('shell.manyClusters', { name: cluster.ref?.name ?? '' })}</AlertDescription>
+        </Alert>
+      )}
+      {renderRoute(path, t('common.notFound'))}
+    </>
+  )
+}
 
-  const addNode = matchRoute('/clusters/:namespace/:name/add-node', path)
-  if (addNode) return <AddNode namespace={addNode.namespace} name={addNode.name} />
+function renderRoute(path: string, notFound: string) {
+  if (path === '/') return <Overview />
+  if (path === '/nodes') return <MachineList />
+  if (path === '/nodes/add') return <AddNode />
+  if (path === '/operations') return <OperationList />
+  if (path === '/backups') return <Backups />
+  if (path === '/config') return <PatchList />
+  if (path === '/config/new') return <PatchDetail />
+  if (path === '/gitops') return <GitOps />
 
-  const cluster = matchRoute('/clusters/:namespace/:name', path)
-  if (cluster) return <ClusterDetail namespace={cluster.namespace} name={cluster.name} />
+  const node = matchRoute('/nodes/:name', path)
+  if (node) return <NodeDetail name={node.name} />
 
-  const node = matchRoute('/nodes/:namespace/:name', path)
-  if (node) return <NodeDetail namespace={node.namespace} name={node.name} />
+  const operation = matchRoute('/operations/:name', path)
+  if (operation) return <OperationDetail name={operation.name} />
 
-  const operation = matchRoute('/operations/:namespace/:name', path)
-  if (operation) return <OperationDetail namespace={operation.namespace} name={operation.name} />
-
-  const patch = matchRoute('/patches/:namespace/:name', path)
-  if (patch) return <PatchDetail namespace={patch.namespace} name={patch.name} />
+  const patch = matchRoute('/config/:name', path)
+  if (patch) return <PatchDetail name={patch.name} />
 
   return <Placeholder title={notFound} />
 }

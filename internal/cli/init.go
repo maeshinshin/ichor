@@ -63,6 +63,10 @@ change to this cluster goes through the controller, by writing CRs.`,
 			return err
 		}
 
+		if err := validateKokumiOptions(initOpts); err != nil {
+			return err
+		}
+
 		if initOpts.RepoPath == "" {
 			initOpts.RepoPath = "clusters/" + initOpts.Cluster
 		}

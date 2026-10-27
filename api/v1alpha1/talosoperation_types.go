@@ -97,6 +97,10 @@ const OperationRetryAnnotation = "ichor.maesh.dev/retry"
 // audit log.
 const OperationStartedByAnnotation = "ichor.maesh.dev/started-by"
 
+// OperationFromVersionAnnotation records the version a Talos or Kubernetes upgrade moves from, stamped
+// by the UI backend when it creates the operation together with the spec change. Display only.
+const OperationFromVersionAnnotation = "ichor.maesh.dev/from-version"
+
 // Values for TalosOperationNodeSpec.Action.
 const (
 	NodeActionReboot                = "reboot"
@@ -463,12 +467,6 @@ type TalosOperationStatus struct {
 	// machine's own failed step, as opposed to spec.paused.
 	// +optional
 	FailureReason string `json:"failureReason,omitempty"`
-
-	// fromVersion is the version a Talos or Kubernetes upgrade moves from, recorded once when the
-	// operation starts: for Talos the version most selected machines run, for Kubernetes the
-	// version the cluster runs. Empty until then, and for other kinds.
-	// +optional
-	FromVersion string `json:"fromVersion,omitempty"`
 
 	// finishedAt is when the operation reached Completed.
 	// +optional

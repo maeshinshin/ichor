@@ -34,6 +34,7 @@ const (
 	pathUnattendedSelector   = "UnattendedInstallConfig.provisioning.diskSelector.match"
 
 	pathVolumeConfigSelector = "VolumeConfig.provisioning.diskSelector.match"
+	pathLinkAliasSelector    = "LinkAliasConfig.selector.match"
 	// Uncovered on purpose: trim is read by its own scheduled controller,
 	// not the provisioning state machine, see fieldmeta.go.
 	pathVolumeConfigTrim = "VolumeConfig.trim.enabled"
@@ -127,9 +128,9 @@ func TestAssess_Rules(t *testing.T) {
 			nonMatch: pathClusterProxyDisabled,
 		},
 		{name: "cluster.scheduler is safe", match: "cluster.scheduler.extraArgs", nonMatch: pathClusterProxyDisabled},
-		{name: "LinkConfig is safe", match: "LinkConfig.addresses", nonMatch: "LinkAliasConfig.selector.match"},
-		{name: "VLANConfig is safe", match: "VLANConfig.vlanID", nonMatch: "LinkAliasConfig.selector.match"},
-		{name: "DHCPv4Config is safe", match: "DHCPv4Config.routeMetric", nonMatch: "LinkAliasConfig.selector.match"},
+		{name: "LinkConfig is safe", match: "LinkConfig.addresses", nonMatch: pathLinkAliasSelector},
+		{name: "VLANConfig is safe", match: "VLANConfig.vlanID", nonMatch: pathLinkAliasSelector},
+		{name: "DHCPv4Config is safe", match: "DHCPv4Config.routeMetric", nonMatch: pathLinkAliasSelector},
 		{
 			name: "ResolverConfig.nameservers is safe", match: "ResolverConfig.nameservers",
 			nonMatch: "ResolverConfig.hostDNS.enabled",

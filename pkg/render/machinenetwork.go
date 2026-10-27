@@ -138,7 +138,8 @@ func injectNetwork(
 			return nil, fmt.Errorf("render: network.dnsServers %q: %w", s, err)
 		}
 
-		resolver.ResolverNameservers = append(resolver.ResolverNameservers, network.NameserverConfig{Address: meta.Addr{Addr: a}})
+		resolver.ResolverNameservers = append(resolver.ResolverNameservers,
+			network.NameserverConfig{Address: meta.Addr{Addr: a}})
 	}
 
 	return mergeDocument(cfg, resolver, "resolver")

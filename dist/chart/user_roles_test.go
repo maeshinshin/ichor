@@ -138,3 +138,20 @@ func TestBuiltinUserRoles(t *testing.T) {
 		t.Errorf("clusterAdminRoles={admin} must bind cluster-admin to ichor:admin, got %v", b)
 	}
 }
+
+// TestBreakGlassRole guards: the break-glass verb is grantable on clusters, machines and
+// patches, in the chart and in config/rbac alike.
+func TestBreakGlassRole(t *testing.T) {
+	docs := renderChartWithValues(t, "ichor", "rbac.helpers.enabled=true")
+	chartRole := findNameSuffix(docs, kindClusterRole, "break-glass-role")
+	cfgRole := find(loadYAMLDocs(t, "../../config/rbac/break_glass_role.yaml"), kindClusterRole, "ichor-break-glass-role")
+
+	checkRBACRulesMatch(t, "ichor", "ClusterRole ichor-break-glass-role", cfgRole, chartRole,
+		"config/rbac/break_glass_role.yaml", "dist/chart/templates/rbac/ichor-break-glass-role.yaml")
+
+	for _, res := range []string{"talosclusters", "talosconfigpatches", "talosmachines"} {
+		if !rbacTriples(cfgRole["rules"].([]any))[rbacTriple{ichorGroup, res, "break-glass", ""}] {
+			t.Errorf("config/rbac/break_glass_role.yaml does not grant break-glass on %s", res)
+		}
+	}
+}

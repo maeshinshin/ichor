@@ -269,6 +269,9 @@ type opPlan struct {
 	cluster *ichorv1alpha1.TalosCluster
 	// install is set for the ichor kind.
 	install *ichorv1alpha1.IchorInstallation
+	// pr is set when the target is proposed as a pull request on the installation's file in
+	// Git instead of being written: no operation is created.
+	pr *prPlan
 	// node is set for the node kind.
 	node *nodePlan
 	// restore is set for the etcd-restore kind.
@@ -537,6 +540,18 @@ func (s *Server) blockedReason(
 		return "no approved machine has a pending configuration change that needs a reboot (nothing is waiting in Ready=RebootRequired)", nil
 	}
 
+	if p.resp.SpecChanges && p.install != nil && p.install.Spec.ManagementMode == ichorv1alpha1.IchorManagementModeExternal {
+		by, err := s.trackedBy(ctx, tracked)
+		if err != nil {
+			return "", err
+		}
+
+		if by == "" {
+			return "IchorInstallation is in external mode (Git owns Ichor's manifests) but is not tracked by Argo CD, " +
+				"so this backend can neither write it nor open a pull request: change spec.version in Git", nil
+		}
+	}
+
 	if p.resp.SpecChanges {
 		by, err := s.trackedBy(ctx, tracked)
 		if err != nil {
@@ -547,6 +562,14 @@ func (s *Server) blockedReason(
 			what := kindTalosCluster
 			if p.install != nil {
 				what = "IchorInstallation"
+
+				// Argo CD owns it, but Git can be changed by a pull request when the cluster is
+				// connected to the repository the Application syncs from.
+				if plan, err := s.planWriteIn(ctx, p.install, cluster.Namespace, cluster.Name, false, nil); err == nil && plan != nil {
+					p.pr, p.resp.OpensPullRequest = plan, true
+
+					return "", nil
+				}
 			}
 
 			return fmt.Sprintf("%s %q is tracked by %s, so its spec is read-only here: change it in Git (a pull request), "+
@@ -632,6 +655,10 @@ func (s *Server) CreateOperation(
 		}
 
 		return connect.NewResponse(resp), nil
+	}
+
+	if p.pr != nil {
+		return s.upgradeIchorByPR(ctx, p)
 	}
 
 	cluster := p.cluster

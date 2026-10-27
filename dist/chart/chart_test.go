@@ -1338,6 +1338,14 @@ func TestInstallerRBAC(t *testing.T) {
 			find(configDocs, kindRole, "installer-role"), role,
 			installerConfigRolePath, "dist/chart/templates/rbac/ichor-installer.yaml")
 
+		checkInstallerCoversEveryCRD(t, clusterRole)
+		checkInstallerCoversEveryCRD(t, find(configDocs, kindClusterRole, "installer-role"))
+
+		// Snapshot garbage collection (non-fatal in the installer, but it should work).
+		if !rbacTriples(allRules(role))[rbacTriple{"", "configmaps", "delete", ""}] {
+			t.Errorf("the installer Role cannot delete configmaps, so snapshot GC fails; see %s", adr0058Doc)
+		}
+
 		for triple := range rbacTriples(append(allRules(clusterRole), allRules(role)...)) {
 			if triple.resource == "secrets" || triple.resource == "*" || triple.verb == "*" {
 				t.Errorf("the installer is granted %s; it must never read or write a Secret "+
@@ -1345,6 +1353,61 @@ func TestInstallerRBAC(t *testing.T) {
 			}
 		}
 	})
+}
+
+// checkInstallerCoversEveryCRD fails when a CRD in config/crd/bases is missing from the
+// installer ClusterRole's patch/update resourceNames: server-side apply of that CRD is then
+// Forbidden and the whole upgrade rolls back (ichorusers, found on the demo; ADR 0059).
+func checkInstallerCoversEveryCRD(t *testing.T, clusterRole map[string]any) {
+	t.Helper()
+
+	if clusterRole == nil {
+		t.Fatal("no installer ClusterRole to check")
+	}
+
+	entries, err := os.ReadDir(crdSourceDir)
+	if err != nil {
+		t.Fatalf("reading %s: %v", crdSourceDir, err)
+	}
+
+	triples := rbacTriples(allRules(clusterRole))
+
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".yaml") {
+			continue
+		}
+
+		var crd map[string]any
+		path := filepath.Join(crdSourceDir, entry.Name())
+
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("reading %s: %v", path, err)
+		}
+
+		if err := k8syaml.NewYAMLOrJSONDecoder(bytes.NewReader(data), 4096).Decode(&crd); err != nil {
+			t.Fatalf("decoding %s: %v", path, err)
+		}
+
+		name := nameOf(crd)
+
+		for _, verb := range []string{"patch", "update"} {
+			covered := false
+
+			for tr := range triples {
+				if tr.group == "apiextensions.k8s.io" && tr.resource == "customresourcedefinitions" && tr.verb == verb &&
+					slices.Contains(strings.Split(tr.names, ","), name) {
+					covered = true
+				}
+			}
+
+			if !covered {
+				t.Errorf("the installer ClusterRole cannot %s CRD %s (add it to the resourceNames of the "+
+					"patch/update rule in config/rbac/ichor-installer/role.yaml and the chart template); see %s",
+					verb, name, adr0058Doc)
+			}
+		}
+	}
 }
 
 // TestPodNamespaceFromDownwardAPI pins POD_NAMESPACE on both the manager and ichor-ui

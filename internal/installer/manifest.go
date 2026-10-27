@@ -16,7 +16,7 @@ limitations under the License.
 
 // Package installer is the process the installer Job runs (ADR 0059): it snapshots the live
 // manifests, applies the manifest embedded in this binary -- the target version's own, so
-// nothing is fetched -- in the order CRDs, controller, UI, checks each step, and rolls back
+// nothing is fetched -- in the order installer RBAC, CRDs, controller, UI, checks each step, and rolls back
 // from the snapshot when one fails.
 package installer
 
@@ -33,6 +33,10 @@ import (
 const (
 	kindCRD    = "CustomResourceDefinition"
 	kindSecret = "Secret"
+
+	// installerNamePrefix names the installer's own roles and bindings (config/default prefixes
+	// config/rbac/ichor-installer's names with ichor-).
+	installerNamePrefix = "ichor-installer"
 
 	// uiNameMarker is how the UI objects are told apart from the controller objects: config/default
 	// prefixes every name with ichor-, and config/manager-ui names its objects ui*.
@@ -62,9 +66,9 @@ func Decode(data []byte) ([]*unstructured.Unstructured, error) {
 	}
 }
 
-// plan is the manifest split into the three steps, each in the manifest's own order.
+// plan is the manifest split into the steps, each in the manifest's own order.
 type plan struct {
-	crds, controller, ui []*unstructured.Unstructured
+	rbac, crds, controller, ui []*unstructured.Unstructured
 }
 
 // classify splits objs. A Secret is never part of the plan: the installer neither applies it
@@ -76,6 +80,8 @@ func classify(objs []*unstructured.Unstructured) plan {
 	for _, o := range objs {
 		switch {
 		case o.GetKind() == kindSecret:
+		case isInstallerRBAC(o):
+			p.rbac = append(p.rbac, o)
 		case o.GetKind() == kindCRD:
 			p.crds = append(p.crds, o)
 		case strings.Contains(o.GetName(), uiNameMarker):
@@ -88,8 +94,22 @@ func classify(objs []*unstructured.Unstructured) plan {
 	return p
 }
 
+// isInstallerRBAC reports whether o is one of the installer's own roles or bindings. They are
+// applied first: a run started by an older release holds that release's rights, which may lack
+// a rule the new manifest needs (a new CRD name, a delete verb), and the installer may
+// escalate and patch roles, so it grants itself the new rights before using them.
+func isInstallerRBAC(o *unstructured.Unstructured) bool {
+	switch o.GetKind() {
+	case "ClusterRole", "ClusterRoleBinding", "Role", "RoleBinding":
+		return strings.HasPrefix(o.GetName(), installerNamePrefix)
+	}
+
+	return false
+}
+
 func (p plan) all() []*unstructured.Unstructured {
-	out := make([]*unstructured.Unstructured, 0, len(p.crds)+len(p.controller)+len(p.ui))
+	out := make([]*unstructured.Unstructured, 0, len(p.rbac)+len(p.crds)+len(p.controller)+len(p.ui))
+	out = append(out, p.rbac...)
 	out = append(out, p.crds...)
 	out = append(out, p.controller...)
 

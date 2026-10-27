@@ -117,7 +117,10 @@ backend holds a read-only one. The browser holds no Talos credentials. For three
 packet capture) the UI backend also mints a certificate per call with
 the least Talos role that call needs (`os:reader`, `os:etcd:backup`,
 `os:operator`), only after Kubernetes RBAC has allowed the signed-in user; it has
-no method that changes a node. The restore of an etcd snapshot into a live
+no method that changes a node. A fourth admin-gated download hands
+the operator the new kubeconfig and talosconfig of a CA rotation that waits in
+`AwaitingCredentials`; it needs the verb `download` on `talosclusters/credentials`,
+is granted to nobody by default and leaves a Warning Event first. The restore of an etcd snapshot into a live
 cluster is the controller's, not the UI's: the UI backend only lists the
 snapshots a `TalosEtcdBackup` reports and writes the operation. In the first release the UI is reached through
 `ichor ui` (a port-forward), which needs no https URL.

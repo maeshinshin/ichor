@@ -253,6 +253,12 @@ type TalosMachineStatus struct {
 	// +optional
 	ObservedInputsHash string `json:"observedInputsHash,omitempty"`
 
+	// observedReconcileRequest is the value of the ichor.maesh.dev/reconcile-requested annotation
+	// at the last reconcile. An etcd restore writes a fresh token there and waits for
+	// it to appear here, which proves the machine was looked at again after the rollback.
+	// +optional
+	ObservedReconcileRequest string `json:"observedReconcileRequest,omitempty"`
+
 	// stage is the last stage the node was seen in on its way from maintenance mode to
 	// running: maintenance, installing, rebooting or running (Talos's MachineStatus stages).
 	// installing and rebooting right after the initial apply are inferred (the apply RPC only

@@ -29,6 +29,11 @@ const installDiskUsage = `"wwid:ID", "serial:SERIAL", a /dev/disk/by-id/ path, a
 // parseInstallDisk reads the --install-disk value (ADR 0077). The stable identifiers come first
 // in the design's fallback chain; a bare /dev/sdX path works but the kernel can renumber it.
 func parseInstallDisk(v string) (*ichorv1alpha1.TalosMachineDisk, error) {
+	return parseDiskSelector("--install-disk", v)
+}
+
+// parseDiskSelector is parseInstallDisk for any flag: flag only names the option in the error.
+func parseDiskSelector(flag, v string) (*ichorv1alpha1.TalosMachineDisk, error) {
 	switch {
 	case strings.HasPrefix(v, "wwid:") && len(v) > len("wwid:"):
 		return &ichorv1alpha1.TalosMachineDisk{WWID: strings.TrimPrefix(v, "wwid:")}, nil
@@ -42,15 +47,15 @@ func parseInstallDisk(v string) (*ichorv1alpha1.TalosMachineDisk, error) {
 		return &ichorv1alpha1.TalosMachineDisk{BusPath: v}, nil
 	}
 
-	return nil, fmt.Errorf("--install-disk %q: want %s", v, installDiskUsage)
+	return nil, fmt.Errorf("%s %q: want %s", flag, v, installDiskUsage)
 }
 
 // installDiskToPB is parseInstallDisk's result on the wire.
 func installDiskToPB(d *ichorv1alpha1.TalosMachineDisk, image string) *pb.MachineInstall {
-	return &pb.MachineInstall{
-		Disk: &pb.MachineDisk{
-			Wwid: d.WWID, Serial: d.Serial, ByIdPath: d.ByIDPath, BusPath: d.BusPath, DevPath: d.DevPath,
-		},
-		Image: image,
-	}
+	return &pb.MachineInstall{Disk: diskToPB(d), Image: image}
+}
+
+// diskToPB is a parsed disk selector on the wire.
+func diskToPB(d *ichorv1alpha1.TalosMachineDisk) *pb.MachineDisk {
+	return &pb.MachineDisk{Wwid: d.WWID, Serial: d.Serial, ByIdPath: d.ByIDPath, BusPath: d.BusPath, DevPath: d.DevPath}
 }

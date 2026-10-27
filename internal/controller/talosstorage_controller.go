@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -50,6 +51,18 @@ const (
 	// conditionStorageSystem is informational and never gates Ready: whether the storage
 	// system (layer 3) is present and configured to honour the registration layer 1 renders.
 	conditionStorageSystem = "StorageSystemConsistent"
+
+	// conditionStorageExtensions is informational and never gates Ready: whether every node this
+	// TalosStorage governs runs the Talos system extensions its preset needs (ADR 0050 amendment).
+	conditionStorageExtensions = "ExtensionsPresent"
+
+	// talosExtensionLabelPrefix is the Node label prefix Talos sets for each installed system
+	// extension (extensions.talos.dev/<name>=<version>); the preset names them siderolabs/<name>.
+	talosExtensionLabelPrefix = "extensions.talos.dev/"
+
+	reasonStorageExtensionsPresent = "AllPresent"
+	reasonStorageMissingExtensions = "MissingExtensions"
+	reasonStorageExtensionsUnknown = "NodesNotObserved"
 
 	reasonStoragePrepared         = "Prepared"
 	reasonStorageNodesNotReady    = "NodesNotConverged"
@@ -95,6 +108,7 @@ type TalosStorageReconciler struct {
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters,verbs=get;list;watch
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosmachines,verbs=get;list;watch
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosconfigpatches,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch
 // +kubebuilder:rbac:groups=longhorn.io,resources=settings,resourceNames=create-default-disk-labeled-nodes,verbs=get
 
 // Reconcile computes Ready and StorageSystemConsistent for one TalosStorage.
@@ -104,7 +118,7 @@ func (r *TalosStorageReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	ready, err := r.readyCondition(ctx, &ts)
+	ready, governed, err := r.readyCondition(ctx, &ts)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -114,7 +128,13 @@ func (r *TalosStorageReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, err
 	}
 
+	extensions, err := r.extensionsCondition(ctx, &ts, governed)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
 	apimeta.SetStatusCondition(&ts.Status.Conditions, ready)
+	apimeta.SetStatusCondition(&ts.Status.Conditions, extensions)
 	apimeta.SetStatusCondition(&ts.Status.Conditions, system)
 	ts.Status.ObservedGeneration = ts.Generation
 
@@ -134,7 +154,7 @@ func (r *TalosStorageReconciler) Reconcile(ctx context.Context, req ctrl.Request
 // fine (countplanes_guard_test.go).
 func (r *TalosStorageReconciler) readyCondition(
 	ctx context.Context, ts *ichorv1alpha1.TalosStorage,
-) (metav1.Condition, error) {
+) (metav1.Condition, []*ichorv1alpha1.TalosMachine, error) {
 	cond := metav1.Condition{Type: conditionStorageReady}
 
 	var cluster ichorv1alpha1.TalosCluster
@@ -145,10 +165,10 @@ func (r *TalosStorageReconciler) readyCondition(
 			cond.Status, cond.Reason = metav1.ConditionFalse, reasonStorageClusterNotFound
 			cond.Message = fmt.Sprintf("TalosCluster %q not found", key.Name)
 
-			return cond, nil
+			return cond, nil, nil
 		}
 
-		return cond, err
+		return cond, nil, err
 	}
 
 	var (
@@ -158,7 +178,7 @@ func (r *TalosStorageReconciler) readyCondition(
 
 	for _, l := range []client.ObjectList{&storages, &patches} {
 		if err := r.List(ctx, l, client.InNamespace(ts.Namespace)); err != nil {
-			return cond, err
+			return cond, nil, err
 		}
 	}
 
@@ -169,28 +189,31 @@ func (r *TalosStorageReconciler) readyCondition(
 
 	machines, err := deleteguard.ApprovedMachines(ctx, r.Client, ts.Namespace, cluster.Name, deleteguard.MachineFilter{})
 	if err != nil {
-		return cond, err
+		return cond, nil, err
 	}
 
-	var governed, pending []string
+	var (
+		governed []*ichorv1alpha1.TalosMachine
+		pending  []string
+	)
 
 	for i := range machines {
 		m := &machines[i]
 
 		chosen, err := render.StorageFor(&cluster, m, storages.Items)
 		if err != nil {
-			return cond, err
+			return cond, nil, err
 		}
 
 		if chosen == nil || chosen.Name != ts.Name {
 			continue
 		}
 
-		governed = append(governed, m.Name)
+		governed = append(governed, m)
 
 		want, err := desiredInputsHash(&cluster, m, patches.Items, storages.Items, authHash)
 		if err != nil {
-			return cond, err
+			return cond, nil, err
 		}
 
 		if !apimeta.IsStatusConditionTrue(m.Status.Conditions, conditionReady) || m.Status.ObservedInputsHash != want {
@@ -212,6 +235,84 @@ func (r *TalosStorageReconciler) readyCondition(
 	default:
 		cond.Status, cond.Reason = metav1.ConditionTrue, reasonStoragePrepared
 		cond.Message = fmt.Sprintf("%d machines carry the %s preparation", len(governed), ts.Spec.DiskPreset)
+	}
+
+	return cond, governed, nil
+}
+
+// extensionsCondition checks, for every governed machine, that the Talos system extensions the
+// preset needs are installed. The source is the Kubernetes Node's extensions.talos.dev/<name>
+// labels, which Talos itself sets from the running image: they need no Talos API client or
+// credentials here and reflect what is actually booted, not what a schematic ID says. A machine
+// whose Node cannot be found yet is skipped; if no Node could be observed at all the condition is
+// Unknown. It never gates Ready and never blocks the rest of the reconcile.
+func (r *TalosStorageReconciler) extensionsCondition(
+	ctx context.Context, ts *ichorv1alpha1.TalosStorage, governed []*ichorv1alpha1.TalosMachine,
+) (metav1.Condition, error) {
+	cond := metav1.Condition{Type: conditionStorageExtensions}
+
+	preset, err := storage.NewPreset(ts.Spec.DiskPreset)
+	if err != nil {
+		return cond, err
+	}
+
+	var problems []string
+
+	observed := 0
+
+	for _, m := range governed {
+		name, err := resolveNodeName(ctx, r.Client, nil, m)
+		if err != nil {
+			continue
+		}
+
+		var node corev1.Node
+		if err := r.Get(ctx, types.NamespacedName{Name: name}, &node); err != nil {
+			if apierrors.IsNotFound(err) {
+				continue
+			}
+
+			return cond, err
+		}
+
+		observed++
+
+		var installed []string
+
+		for k := range node.Labels {
+			if ext, ok := strings.CutPrefix(k, talosExtensionLabelPrefix); ok {
+				installed = append(installed, "siderolabs/"+ext)
+			}
+		}
+
+		if preset.CheckExtensions(installed) == nil {
+			continue
+		}
+
+		var missing []string
+
+		for _, want := range preset.RequiredExtensions() {
+			if !slices.Contains(installed, want) {
+				missing = append(missing, want)
+			}
+		}
+
+		problems = append(problems, fmt.Sprintf("%s lacks %s", name, strings.Join(missing, ", ")))
+	}
+
+	slices.Sort(problems)
+
+	switch {
+	case len(problems) > 0:
+		cond.Status, cond.Reason = metav1.ConditionFalse, reasonStorageMissingExtensions
+		cond.Message = fmt.Sprintf("%s: %s. Add them to spec.schematic and run ichor upgrade talos",
+			ts.Spec.DiskPreset, strings.Join(problems, "; "))
+	case observed == 0:
+		cond.Status, cond.Reason = metav1.ConditionUnknown, reasonStorageExtensionsUnknown
+		cond.Message = "no Kubernetes Node of a governed machine was found, so its extensions are not known yet"
+	default:
+		cond.Status, cond.Reason = metav1.ConditionTrue, reasonStorageExtensionsPresent
+		cond.Message = fmt.Sprintf("%d nodes carry the system extensions %s needs", observed, ts.Spec.DiskPreset)
 	}
 
 	return cond, nil

@@ -12,3 +12,8 @@ test('other conditions are neutral whatever their status', () => {
   assert.equal(conditionTone('Transitioning', 'True'), 'neutral')
   assert.equal(conditionTone('Transitioning', 'False'), 'neutral')
 })
+
+test("ExtensionsPresent False reads as a failure", () => {
+  assert.equal(conditionTone("ExtensionsPresent", "False"), "bad")
+  assert.equal(conditionTone("ExtensionsPresent", "True"), "good")
+})

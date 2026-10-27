@@ -41,3 +41,21 @@ export function exampleBackupYaml(cluster: { namespace: string; name: string }):
     '',
   ].join('\n')
 }
+
+type DestinationLike = { endpoint: string; bucket: string; prefix: string; region?: string }
+
+// destinationLabel is "bucket/prefix" on the endpoint; never anything about credentials.
+export function destinationLabel(d: DestinationLike | undefined): string {
+  if (!d) return '-'
+  return `${d.bucket}/${d.prefix} @ ${d.endpoint}`
+}
+
+type BackupLike = { suspended: boolean; manualBackupPending: boolean }
+
+// backNowBlock says why "Back up now" is unavailable, as an i18n key, or undefined when it is available.
+// The server refuses the same two cases.
+export function backNowBlock(b: BackupLike): 'backups.nowSuspended' | 'backups.nowPending' | undefined {
+  if (b.suspended) return 'backups.nowSuspended'
+  if (b.manualBackupPending) return 'backups.nowPending'
+  return undefined
+}

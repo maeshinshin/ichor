@@ -239,18 +239,20 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	// A config rollout reboots nodes, so the machine this controller runs on goes last: its reboot
 	// stops the controller, which resumes from the status and has nothing left to wait for.
+	// A Kubernetes upgrade does the same in its Kubelets stage, where the node is drained first.
 	var own []*ichorv1alpha1.TalosMachine
-	if op.Spec.Kind == ichorv1alpha1.TalosOperationKindConfig {
-		controlPlanes, workers, own = r.holdOwnNodeLast(ctx, &cluster, controlPlanes, workers)
+	heldCPs, heldWorkers := controlPlanes, workers
+	if slices.Contains([]string{ichorv1alpha1.TalosOperationKindConfig, ichorv1alpha1.TalosOperationKindKubernetes}, op.Spec.Kind) {
+		heldCPs, heldWorkers, own = r.holdOwnNodeLast(ctx, &cluster, controlPlanes, workers)
 	}
 
 	// Control planes go one at a time, and only once every one of them is
 	// done do workers start -- never interleaved with workers.
 	var toAdvance []*ichorv1alpha1.TalosMachine
 	if op.Spec.Kind == ichorv1alpha1.TalosOperationKindKubernetes {
-		toAdvance = kubernetesBatch(&op, controlPlanes, workers)
+		toAdvance = kubernetesBatch(&op, controlPlanes, heldCPs, heldWorkers, own)
 	} else {
-		toAdvance = nextBatch(controlPlanes, workers, own, op.Status.Machines, op.Spec.MaxUnavailable)
+		toAdvance = nextBatch(heldCPs, heldWorkers, own, op.Status.Machines, op.Spec.MaxUnavailable)
 	}
 
 	if len(toAdvance) == 0 {
@@ -522,8 +524,12 @@ func nextBatch(
 // first, then workers within maxUnavailable). It records the stage in op.status.kubernetes and, when a stage has no pending
 // machine left, moves to the next and clears status.machines (the progress of that stage), so
 // the stage and the cleared list reach the API in the one status write that follows. Empty when
-// the last stage is done.
-func kubernetesBatch(op *ichorv1alpha1.TalosOperation, controlPlanes, workers []*ichorv1alpha1.TalosMachine) []*ichorv1alpha1.TalosMachine {
+// the last stage is done. The controller's own machine (own, already taken out of heldCPs and
+// heldWorkers) is only held back to last in the Kubelets stage, where its node is drained and the
+// controller restarts; the other stages use the full controlPlanes list.
+func kubernetesBatch(
+	op *ichorv1alpha1.TalosOperation, controlPlanes, heldCPs, heldWorkers, own []*ichorv1alpha1.TalosMachine,
+) []*ichorv1alpha1.TalosMachine {
 	if op.Status.Kubernetes == nil {
 		op.Status.Kubernetes = &ichorv1alpha1.TalosOperationKubernetesStatus{Stage: ichorv1alpha1.KubernetesStageAPIServers}
 	}
@@ -535,12 +541,12 @@ func kubernetesBatch(op *ichorv1alpha1.TalosOperation, controlPlanes, workers []
 	}
 
 	for {
-		ws := workers
-		if op.Status.Kubernetes.Stage != ichorv1alpha1.KubernetesStageKubelets {
-			ws = nil
+		cps, ws, o := controlPlanes, []*ichorv1alpha1.TalosMachine(nil), []*ichorv1alpha1.TalosMachine(nil)
+		if op.Status.Kubernetes.Stage == ichorv1alpha1.KubernetesStageKubelets {
+			cps, ws, o = heldCPs, heldWorkers, own
 		}
 
-		if batch := nextBatch(controlPlanes, ws, nil, op.Status.Machines, op.Spec.MaxUnavailable); len(batch) > 0 {
+		if batch := nextBatch(cps, ws, o, op.Status.Machines, op.Spec.MaxUnavailable); len(batch) > 0 {
 			return batch
 		}
 

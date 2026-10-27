@@ -380,7 +380,7 @@ func TestBundleFromBeforeTheCurrentCAsIsRefusedUnlessForced(t *testing.T) {
 		t.Fatal("a bundle from before the current CAs was accepted without --force")
 	}
 
-	if !strings.Contains(errw.String(), "this bundle predates the current CAs; the files will not work") {
+	if !strings.Contains(errw.String(), "the bundle's CAs differ from the secrets bundle Ichor stores for this cluster") {
 		t.Fatalf("no warning for a stale bundle, got %q", errw.String())
 	}
 
@@ -390,7 +390,7 @@ func TestBundleFromBeforeTheCurrentCAsIsRefusedUnlessForced(t *testing.T) {
 		t.Fatalf("--force still refused: %v", err)
 	}
 
-	if !strings.Contains(errw.String(), "predates the current CAs") {
+	if !strings.Contains(errw.String(), "the bundle's CAs differ from the secrets bundle Ichor stores") {
 		t.Fatalf("--force printed no warning, got %q", errw.String())
 	}
 

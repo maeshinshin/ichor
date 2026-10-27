@@ -85,6 +85,9 @@ type TalosStorageReconciler struct {
 	// LonghornNamespace is where the storage system's settings live; defaults to
 	// defaultLonghornNamespace.
 	LonghornNamespace string
+
+	// ControllerNamespace is where registry auth Secrets are read.
+	ControllerNamespace string
 }
 
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosstorages,verbs=get;list;watch
@@ -159,6 +162,11 @@ func (r *TalosStorageReconciler) readyCondition(
 		}
 	}
 
+	// The same credentials the machine controller fingerprints. Unresolvable ones
+	// leave the fingerprint empty, which cannot equal a converged machine's, so they read as pending.
+	auth, _ := render.ResolveRegistryAuth(ctx, r.Client, r.ControllerNamespace, &cluster)
+	authHash := registryAuthFingerprint(auth)
+
 	machines, err := deleteguard.ApprovedMachines(ctx, r.Client, ts.Namespace, cluster.Name, deleteguard.MachineFilter{})
 	if err != nil {
 		return cond, err
@@ -180,7 +188,7 @@ func (r *TalosStorageReconciler) readyCondition(
 
 		governed = append(governed, m.Name)
 
-		want, err := desiredInputsHash(&cluster, m, patches.Items, storages.Items)
+		want, err := desiredInputsHash(&cluster, m, patches.Items, storages.Items, authHash)
 		if err != nil {
 			return cond, err
 		}

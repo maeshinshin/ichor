@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/maeshinshin/ichor/internal/oidcissuer"
+	"github.com/maeshinshin/ichor/internal/oidctrust"
 )
 
 const (
@@ -79,7 +80,7 @@ func (c *clock) shift(d time.Duration) {
 	c.mu.Unlock()
 }
 
-func keyRecord(t *testing.T, kid string, activeFrom time.Time) oidcissuer.KeyRecord {
+func keyRecord(t *testing.T, kid string, activeFrom time.Time) oidctrust.Key {
 	t.Helper()
 	k, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
@@ -89,15 +90,15 @@ func keyRecord(t *testing.T, kid string, activeFrom time.Time) oidcissuer.KeyRec
 	if err != nil {
 		t.Fatal(err)
 	}
-	return oidcissuer.KeyRecord{
+	return oidctrust.Key{
 		KID: kid, CreatedAt: activeFrom, ActiveFrom: activeFrom,
 		PEM: string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})),
 	}
 }
 
-func keysJSON(t *testing.T, recs ...oidcissuer.KeyRecord) []byte {
+func keysJSON(t *testing.T, recs ...oidctrust.Key) []byte {
 	t.Helper()
-	b, err := json.Marshal(recs)
+	b, err := oidctrust.Keys{Keys: recs}.Marshal()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +111,7 @@ type env struct {
 	h    http.Handler
 	dir  *dir
 	keys *oidcissuer.KeyStore
-	recs []oidcissuer.KeyRecord
+	recs []oidctrust.Key
 	clk  *clock
 }
 
@@ -120,7 +121,7 @@ func newEnv(t *testing.T, issuer, internalJWKS string) *env {
 	t.Helper()
 	clk := &clock{}
 	keys := oidcissuer.NewKeyStore(clk.now)
-	recs := []oidcissuer.KeyRecord{keyRecord(t, "k1", time.Now().Add(-time.Hour))}
+	recs := []oidctrust.Key{keyRecord(t, "k1", time.Now().Add(-time.Hour))}
 	if err := keys.Update(keysJSON(t, recs...)); err != nil {
 		t.Fatal(err)
 	}

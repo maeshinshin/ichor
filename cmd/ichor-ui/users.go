@@ -17,17 +17,26 @@ limitations under the License.
 package main
 
 import (
+	"bytes"
 	"context"
+	"crypto"
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"log"
+	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/coreos/go-oidc/v3/oidc"
+	"github.com/go-jose/go-jose/v4"
+
 	"github.com/maeshinshin/ichor/internal/oidcissuer"
 	"github.com/maeshinshin/ichor/internal/uiapi"
+	"github.com/maeshinshin/ichor/pkg/ichorauth"
 )
 
 // Ichor's own users and issuer. Everything here is off unless
@@ -35,7 +44,7 @@ import (
 
 // uiClientID is the public client of the SPA and the audience of the token
 // ichor-ui itself accepts.
-const uiClientID = "ichor-ui"
+const uiClientID = ichorauth.ClientUI
 
 // usersFlags are the flags that turn Ichor's own users on.
 type usersFlags struct {
@@ -47,7 +56,9 @@ type usersFlags struct {
 	// internalTLSDir holds tls.crt and tls.key of the internal listener (Secret ichor-oidc-tls).
 	internalTLSDir string
 	// signingKeysDir holds keys.json (Secret ichor-oidc-signing), written by the controller only.
-	signingKeysDir       string
+	signingKeysDir string
+	// internalJWKSURI overrides the jwks_uri of the internal discovery document (default: the Service ClusterIP).
+	internalJWKSURI      string
 	tokenTTL, refreshTTL time.Duration
 }
 
@@ -61,7 +72,7 @@ func (f usersFlags) validate() error {
 		return fmt.Errorf("--external-url must be an https URL, got %q", f.externalURL)
 	}
 
-	if f.tokenTTL < time.Minute || f.tokenTTL > 15*time.Minute {
+	if f.tokenTTL < ichorauth.MinTokenTTL || f.tokenTTL > ichorauth.MaxTokenTTL {
 		return errors.New("--token-ttl must be 1 to 15 minutes")
 	}
 
@@ -72,24 +83,107 @@ func (f usersFlags) validate() error {
 	return nil
 }
 
-// localVerifier adapts the issuer to uiapi.LocalVerifier.
-type localVerifier struct{ iss *oidcissuer.Issuer }
+// localVerifier verifies an ID token of Ichor's own issuer for audience
+// ichor-ui, in process, against the issuer's currently published keys.
+type localVerifier struct {
+	keys   interface{ Public() []jose.JSONWebKey }
+	issuer string
+}
 
 func (v localVerifier) Verify(ctx context.Context, raw string) (string, error) {
-	c, err := v.iss.Verify(ctx, raw)
+	var pub []crypto.PublicKey
+
+	for _, k := range v.keys.Public() {
+		pub = append(pub, k.Public().Key)
+	}
+
+	if len(pub) == 0 {
+		return "", errors.New("no signing keys")
+	}
+
+	tok, err := oidc.NewVerifier(v.issuer, &oidc.StaticKeySet{PublicKeys: pub}, &oidc.Config{
+		ClientID: ichorauth.AudienceUI, SupportedSigningAlgs: []string{ichorauth.SigningAlgorithm},
+	}).Verify(ctx, raw)
 	if err != nil {
 		return "", err
 	}
 
-	return c.Subject, nil
+	return tok.Subject, nil
 }
 
-// newIssuer builds Ichor's own issuer.
-func newIssuer(f usersFlags) (*oidcissuer.Issuer, error) {
-	return oidcissuer.New(oidcissuer.Config{
-		Issuer: f.externalURL, Audience: uiClientID, KeysDir: f.signingKeysDir,
-		TokenTTL: f.tokenTTL, RefreshTTL: f.refreshTTL,
+// keysFile is the key list inside the mounted ichor-oidc-signing Secret.
+const keysFile = "keys.json"
+
+// watchKeys loads keys.json now and again whenever it changes. The kubelet
+// swaps the mounted Secret in place, so it polls; a read or parse failure
+// keeps the previous keys and is logged without the content.
+func watchKeys(ctx context.Context, store *oidcissuer.KeyStore, dir string) {
+	var last []byte
+
+	load := func() {
+		data, err := os.ReadFile(filepath.Join(dir, keysFile))
+		if err != nil || bytes.Equal(data, last) {
+			return
+		}
+
+		if err := store.Update(data); err != nil {
+			log.Printf("ichor-ui: signing keys not loaded: %v", err)
+
+			return
+		}
+
+		last = data
+	}
+
+	load()
+
+	go func() {
+		t := time.NewTicker(10 * time.Second)
+		defer t.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				load()
+			}
+		}
+	}()
+}
+
+// internalJWKSURI is the jwks_uri the internal discovery document advertises: the Service's
+// ClusterIP, which the kubelet puts in the environment, unless the flag says otherwise.
+func internalJWKSURI(f usersFlags) string {
+	if f.internalJWKSURI != "" {
+		return f.internalJWKSURI
+	}
+
+	host := os.Getenv("ICHOR_UI_SERVICE_SERVICE_HOST")
+	if host == "" {
+		return ""
+	}
+
+	_, port, err := net.SplitHostPort(f.internalAddr)
+	if err != nil {
+		return ""
+	}
+
+	return "https://" + net.JoinHostPort(host, port) + "/oidc/jwks"
+}
+
+// newIssuer builds Ichor's own issuer and the verifier for its ichor-ui tokens.
+func newIssuer(ctx context.Context, f usersFlags, backend *uiapi.IssuerBackend) (*oidcissuer.Issuer, localVerifier, error) {
+	keys := oidcissuer.NewKeyStore(nil)
+	watchKeys(ctx, keys, f.signingKeysDir)
+
+	iss, err := oidcissuer.New(oidcissuer.Config{
+		Issuer: f.externalURL, InternalJWKSURI: internalJWKSURI(f), UIRedirectURI: f.externalURL + "/auth/callback",
+		TokenTTL: f.tokenTTL, RefreshLifetime: f.refreshTTL,
+		Keys: keys, Users: backend, Passwords: backend,
 	})
+
+	return iss, localVerifier{keys: keys, issuer: f.externalURL}, err
 }
 
 // mountIssuer serves the issuer's external endpoints on mux.

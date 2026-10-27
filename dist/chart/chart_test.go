@@ -634,6 +634,15 @@ func TestUIUsers(t *testing.T) {
 		}
 	}
 
+	mgr := fmt.Sprint(findNameSuffix(on, kindDeployment, "controller-manager")["spec"])
+	if !strings.Contains(mgr, "--user-issuer") || !strings.Contains(mgr, "--oidc-refresh-lifetime=12h") {
+		t.Errorf("the manager does not get --user-issuer: %s", mgr)
+	}
+
+	if strings.Contains(fmt.Sprint(findNameSuffix(off, kindDeployment, "controller-manager")["spec"]), "--user-issuer") {
+		t.Error("the manager gets --user-issuer by default")
+	}
+
 	if find(on, "Secret", "ichor-user-credentials") == nil {
 		t.Error("the credentials Secret is not rendered")
 	}

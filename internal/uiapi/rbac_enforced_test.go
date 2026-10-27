@@ -208,7 +208,7 @@ var _ = Describe("ichor-ui generated RBAC", func() {
 		Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, store))).To(Succeed())
 
 		s := &Server{Client: saClient, ControllerNamespace: testNamespace}
-		Expect(s.writeCredential(ctx, "rbac-user", ichorauth.Credential{Hash: "h"})).To(Succeed())
+		Expect(s.writeCredential(ctx, "rbac-user", ichorauth.Credential{Version: ichorauth.CredentialVersion, Hash: "h"})).To(Succeed())
 
 		_, found, err := s.readCredential(ctx, "rbac-user")
 		Expect(err).NotTo(HaveOccurred())

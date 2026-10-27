@@ -716,11 +716,12 @@ func (c *caRun) finalize(ctx context.Context) (ctrl.Result, error) {
 		}
 	}
 
+	// Done is the last thing this reconcile verified, so the operation completes now: a requeue here
+	// would leave it InProgress at Done for as long as the requeue takes to come back.
 	c.op.Status.CARotation.Stage = ichorv1alpha1.CARotationStageDone
 	setStageCertificates(c.op.Status.CARotation)
 
-	return ctrl.Result{RequeueAfter: caRotationNextStage}, c.status(ctx, ichorv1alpha1.TalosOperationPhaseInProgress, metav1.ConditionTrue,
-		reasonCARotationVerifying, "the replaced bundle is verified against every machine")
+	return c.complete(ctx)
 }
 
 // holdsNewCAs reports whether bundle already carries the CAs this rotation is moving to.

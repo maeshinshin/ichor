@@ -264,6 +264,10 @@ func (s *Server) etcdRestoreBlocked(
 func (s *Server) createEtcdRestore(ctx context.Context, p *opPlan) (*pb.CreateOperationResponse, error) {
 	rp, cluster := p.restore, p.cluster
 
+	if err := s.authorizeStart(ctx, &ichorv1alpha1.TalosOperationSpec{Kind: p.kind}, cluster.Namespace); err != nil {
+		return nil, err
+	}
+
 	if rp.confirm != cluster.Name {
 		return nil, invalid("type the cluster name %q to confirm the restore", cluster.Name)
 	}

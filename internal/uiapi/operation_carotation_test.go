@@ -24,6 +24,7 @@ import (
 	"connectrpc.com/connect"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	authv1 "k8s.io/api/authorization/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -113,6 +114,12 @@ func TestCreateCARotationRefusedWhenTheCallerMayNotCreateOperations(t *testing.T
 	base := fake.NewClientBuilder().WithScheme(trackedScheme(t)).WithObjects(opObjects()...).Build()
 	user := interceptor.NewClient(base, interceptor.Funcs{
 		Create: func(_ context.Context, _ client.WithWatch, obj client.Object, _ ...client.CreateOption) error {
+			if sar, ok := obj.(*authv1.SelfSubjectAccessReview); ok {
+				sar.Status.Allowed = true // the start right is held; creating operations is what is refused
+
+				return nil
+			}
+
 			return apierrors.NewForbidden(schema.GroupResource{Group: ichorv1alpha1.SchemeGroupVersion.Group, Resource: caOpsResource}, obj.GetName(), nil)
 		},
 	})

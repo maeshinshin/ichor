@@ -45,6 +45,10 @@ package uiapi
 // TalosOperation; pausing/deleting writes it. With OIDC on these run as the user (ADR 0058), so
 // the ServiceAccount needs them only for the OIDC-off case.
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosoperations,verbs=get;list;create;update;delete
+// The destructive starts (ADR 0094, Decision 4) need the verb start on talosoperations/<kind>. With
+// OIDC on the backend asks it as the user; with OIDC off the backend is the caller and the validating
+// webhook judges its ServiceAccount, so it holds the verb exactly as it holds create above.
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosoperations/shutdown;talosoperations/ca-rotation;talosoperations/etcd-restore;talosoperations/node-reset;talosoperations/node-shutdown,verbs=start
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=ichorinstallations,verbs=get;update
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosconfigpatches,verbs=get;list;create;update;delete
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosmachines,verbs=get;list;update;delete

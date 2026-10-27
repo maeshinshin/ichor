@@ -80,6 +80,10 @@ func buildAdoptPlan(
 	currentCfg []byte,
 	sys *render.SystemInputs,
 ) (*adoptPlan, error) {
+	if err := refuseJWTAuthenticators(m.Name, currentCfg); err != nil {
+		return nil, err
+	}
+
 	baseline, _, err := render.Render(cluster, m, bundle, existing, sys)
 	if err != nil {
 		return nil, fmt.Errorf("adopt: rendering machine %q's baseline: %w", m.Name, err)
@@ -130,6 +134,30 @@ func buildAdoptPlan(
 	}
 
 	return plan, nil
+}
+
+// refuseJWTAuthenticators refuses a machine whose KubeAuthenticationConfig already carries jwt
+// entries (ADR 0094): the render would replace them (the document is merge:replace), which would
+// silently lock out whoever signs in through them. Refused, not dropped; the external provider
+// belongs in spec.authentication.external.
+func refuseJWTAuthenticators(machine string, currentCfg []byte) error {
+	provider, err := configloader.NewFromBytes(currentCfg)
+	if err != nil {
+		return fmt.Errorf("adopt: decoding machine %q's current configuration: %w", machine, err)
+	}
+
+	auth := provider.K8sAuthenticationConfig()
+	if auth == nil {
+		return nil
+	}
+
+	if jwt, _ := auth.Configuration()["jwt"].([]any); len(jwt) > 0 {
+		return fmt.Errorf("adopt: machine %q has %d jwt authenticator(s) in its KubeAuthenticationConfig, which Ichor would replace "+
+			"when it renders the node; move the identity provider into spec.authentication.external of the TalosCluster and adopt again",
+			machine, len(jwt))
+	}
+
+	return nil
 }
 
 // groupChangedPaths partitions ChangedPaths' output by which

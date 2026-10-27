@@ -742,6 +742,10 @@ func (s *Server) CreateOperation(
 	}
 	clusterKey := client.ObjectKeyFromObject(cluster)
 
+	if err := s.authorizeStart(ctx, &op.Spec, cluster.Namespace); err != nil {
+		return nil, err
+	}
+
 	if err := s.Create(ctx, op.DeepCopy(), client.DryRunAll, strictFieldValidation); err != nil {
 		return nil, mapOperationWriteError("creating operation for", clusterKey, err)
 	}

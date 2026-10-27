@@ -233,7 +233,8 @@ func TestNodeResetNeedsTheNameAndBreakGlass(t *testing.T) {
 		t.Fatalf("RBAC says no: %v", err)
 	}
 
-	if len(asked) == 0 || asked[0].Verb != "break-glass" || asked[0].Name != "w1" {
+	// The start right (ADR 0094) is asked first, and denied here, so break-glass is not reached.
+	if len(asked) == 0 || asked[0].Verb != "start" || asked[0].Subresource != "node-reset" {
 		t.Fatalf("access review = %+v", asked)
 	}
 

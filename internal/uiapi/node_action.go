@@ -335,6 +335,11 @@ func (s *Server) createNodeOperation(ctx context.Context, p *opPlan) (*pb.Create
 		return nil, invalid("removing a node is not an operation: use RemoveMachine")
 	}
 
+	// The right to start a reset or a shutdown, then break-glass on top for the reset (ADR 0094).
+	if err := s.authorizeStart(ctx, &ichorv1alpha1.TalosOperationSpec{Kind: p.kind, Node: &np.spec}, p.cluster.Namespace); err != nil {
+		return nil, err
+	}
+
 	var reason string
 
 	if np.action == ichorv1alpha1.NodeActionReset {

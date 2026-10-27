@@ -248,8 +248,9 @@ func TestEtcdRestoreNeedsTheClusterNameAndBreakGlass(t *testing.T) {
 		t.Fatalf("RBAC says no: %v", err)
 	}
 
-	if len(asked) == 0 || asked[0].Verb != BreakGlassVerb || asked[0].Resource != clusterResource || asked[0].Name != opCluster {
-		t.Fatalf("the verb is asked on the cluster: %+v", asked)
+	// The start right (ADR 0094) is asked first, and denied here, so break-glass is not reached.
+	if len(asked) == 0 || asked[0].Verb != "start" || asked[0].Subresource != "etcd-restore" {
+		t.Fatalf("start is asked first: %+v", asked)
 	}
 
 	if ops := listOps(t, k8s); len(ops) != 0 {

@@ -223,7 +223,8 @@ func TestRestoreLiveNeedsABreakGlassReasonAndTheRight(t *testing.T) {
 	denied, k8sDenied := liveClients(t, true, false)
 
 	err = runLiveRestore(context.Background(), denied, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{}, s)
-	if err == nil || !strings.Contains(err.Error(), "break-glass") {
+	// The start right (ADR 0094) is asked before break-glass, and the same answer denies both.
+	if err == nil || !strings.Contains(err.Error(), "RBAC does not grant") {
 		t.Fatalf("RBAC says no = %v", err)
 	}
 

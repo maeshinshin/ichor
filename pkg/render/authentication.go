@@ -159,6 +159,12 @@ func AuthenticationConfiguration(
 // jwtAuthenticator is one jwt[] element: the issuer, the claim mappings with their prefixes, and
 // the rules that keep a token from naming a system: user or group.
 func jwtAuthenticator(issuer apiserverv1.Issuer, userClaim, userPrefix, groupsClaim, groupsPrefix string) apiserverv1.JWTAuthenticator {
+	// More than one audience needs audienceMatchPolicy MatchAny, or kube-apiserver refuses the file
+	// and crash-loops (hardware spike, ADR 0094 amendment): Talos does not validate the document.
+	if len(issuer.Audiences) > 1 {
+		issuer.AudienceMatchPolicy = apiserverv1.AudienceMatchPolicyMatchAny
+	}
+
 	return apiserverv1.JWTAuthenticator{
 		Issuer: issuer,
 		ClaimMappings: apiserverv1.ClaimMappings{

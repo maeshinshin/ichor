@@ -55,7 +55,7 @@ import (
 // package's own DefaultInstallerImageSchematic constant, copied verbatim.
 const (
 	imageFactoryHost          = "factory.talos.dev"
-	defaultInstallerSchematic = "376567988ad370138ad8b2698212367b8edcb69b5fd68c80be1f2ec7d603b4ba"
+	defaultInstallerSchematic = upgrade.DefaultSchematic
 	installerPlatform         = "metal"
 )
 
@@ -170,10 +170,29 @@ func (a *talosUpgradeAdvancer) Advance(
 		return false, fmt.Errorf("reading %q's Talos version: %w", m.Name, err)
 	}
 
+	currentSchematic, err := talos.Schematic(dialCtx)
+	if err != nil {
+		if rebooting {
+			return false, nil
+		}
+
+		return false, fmt.Errorf("reading %q's schematic: %w", m.Name, err)
+	}
+
+	// A node that did not boot an Image Factory asset is running the stock installer's schematic.
+	if currentSchematic == "" {
+		currentSchematic = defaultInstallerSchematic
+	}
+
+	// A machine needs the upgrade when its running version OR its running schematic differs
+	// from the target: a schematic-only change reinstalls the same release
+	// with different extensions.
+	upToDate := currentVersion == target && currentSchematic == targetSchematic(cluster)
+
 	switch {
 	case rebooting:
-		return a.afterReboot(ctx, dialCtx, talos, cluster, m, currentVersion, target)
-	case currentVersion != target:
+		return a.afterReboot(ctx, dialCtx, talos, cluster, m, upToDate, currentVersion, target)
+	case !upToDate:
 		return a.beginUpgrade(ctx, dialCtx, talos, cluster, m, currentVersion, target)
 	default:
 		return a.finish(ctx, dialCtx, talos, cluster, m)
@@ -264,7 +283,7 @@ func (a *talosUpgradeAdvancer) beginUpgrade(
 // failure, never a success -- or verifies and finishes.
 func (a *talosUpgradeAdvancer) afterReboot(
 	ctx, dialCtx context.Context, talos TalosClient, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
-	currentVersion, target string,
+	upToDate bool, currentVersion, target string,
 ) (bool, error) {
 	cond := apimeta.FindStatusCondition(m.Status.Conditions, conditionTalosUpgrade)
 
@@ -277,7 +296,7 @@ func (a *talosUpgradeAdvancer) afterReboot(
 		return false, nil // hasn't rebooted yet
 	}
 
-	if currentVersion != target {
+	if !upToDate {
 		if endErr := a.endEvacuation(ctx, talos, cluster, m); endErr != nil {
 			return false, endErr
 		}
@@ -333,7 +352,7 @@ func (a *talosUpgradeAdvancer) finish(
 	if apimeta.IsStatusConditionTrue(m.Status.Conditions, conditionTalosUpgrade) {
 		if err := setMachineCondition(ctx, a.Client, a.Client, m, metav1.Condition{
 			Type: conditionTalosUpgrade, Status: metav1.ConditionFalse, Reason: reasonUpgradeConverged,
-			Message: fmt.Sprintf("running %s", cluster.Spec.TalosVersion),
+			Message: fmt.Sprintf("running %s (schematic %s)", cluster.Spec.TalosVersion, targetSchematic(cluster)),
 		}); err != nil {
 			return false, err
 		}
@@ -392,10 +411,15 @@ func (a *talosUpgradeAdvancer) endEvacuation(
 // factory.talos.dev/metal-installer/<schematic>:<talosVersion>, Image
 // Factory's own documented URL shape.
 func installerImage(cluster *ichorv1alpha1.TalosCluster) string {
-	schematic := defaultInstallerSchematic
+	return fmt.Sprintf("%s/%s-installer/%s:%s", imageFactoryHost, installerPlatform, targetSchematic(cluster), cluster.Spec.TalosVersion)
+}
+
+// targetSchematic is the Image Factory schematic cluster's nodes should run: spec.schematic.id, or
+// the stock installer's when unset.
+func targetSchematic(cluster *ichorv1alpha1.TalosCluster) string {
 	if cluster.Spec.Schematic != nil && cluster.Spec.Schematic.ID != "" {
-		schematic = cluster.Spec.Schematic.ID
+		return cluster.Spec.Schematic.ID
 	}
 
-	return fmt.Sprintf("%s/%s-installer/%s:%s", imageFactoryHost, installerPlatform, schematic, cluster.Spec.TalosVersion)
+	return defaultInstallerSchematic
 }

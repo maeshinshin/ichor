@@ -492,6 +492,13 @@ spec:
                   type: string
                 type: array
                 x-kubernetes-list-type: atomic
+              schematic:
+                description: |-
+                  schematic is the Image Factory schematic ID the node's running system was built from,
+                  read from the node (its ImageFactorySchematic resource) on every reconcile that reaches
+                  it. Empty when the node did not boot an Image Factory asset or was never read. It is what
+                  a Talos upgrade and its plan compare spec.schematic against.
+                type: string
               stage:
                 description: |-
                   stage is the last stage the node was seen in on its way from maintenance mode to

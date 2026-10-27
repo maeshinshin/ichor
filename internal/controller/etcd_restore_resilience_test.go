@@ -108,25 +108,25 @@ var _ = Describe("TalosOperation etcd-restore after a restart of the controller"
 		f.wipeHooks()
 
 		cp := func(name string) *corev1.Node {
-			return &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: name, Labels: map[string]string{"node-role.kubernetes.io/control-plane": ""}}}
+			return &corev1.Node{Name: name, Labels: map[string]string{controlPlaneLabel: ""}}
 		}
 		pod := func(ns, name, node string, labels map[string]string) *corev1.Pod {
 			return &corev1.Pod{
-				ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: name, Labels: labels},
-				Spec:       corev1.PodSpec{NodeName: node},
+				Namespace: ns, Name: name, Labels: labels,
+				Spec: corev1.PodSpec{NodeName: node},
 			}
 		}
-		kp := map[string]string{"k8s-app": "kube-proxy"}
+		kp := map[string]string{labelK8sApp: kubeProxyName}
 		kc := kubefake.NewClientset(
-			cp(restoreHostA), cp(restoreHostB), cp(restoreHostC), &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "worker-1"}},
+			cp(restoreHostA), cp(restoreHostB), cp(restoreHostC), &corev1.Node{Name: "wk-1"},
 			&appsv1.DaemonSet{
-				ObjectMeta: metav1.ObjectMeta{Namespace: "kube-system", Name: "kube-proxy"},
-				Spec:       appsv1.DaemonSetSpec{Selector: &metav1.LabelSelector{MatchLabels: kp}},
+				Namespace: kubeSystemNamespace, Name: kubeProxyName,
+				Spec: appsv1.DaemonSetSpec{Selector: &metav1.LabelSelector{MatchLabels: kp}},
 			},
-			pod("kube-system", "kube-proxy-w", "worker-1", kp),
+			pod("kube-system", "kube-proxy-w", "wk-1", kp),
 			pod("kube-system", "kube-proxy-a", restoreHostA, kp),
-			pod("other", "kube-proxy-other", "worker-1", kp),
-			pod("kube-system", "coredns-w", "worker-1", map[string]string{"k8s-app": "kube-dns"}),
+			pod("other", "kube-proxy-other", "wk-1", kp),
+			pod("kube-system", "coredns-w", "wk-1", map[string]string{"k8s-app": "kube-dns"}),
 		)
 
 		op := f.newOp(nil)
@@ -147,7 +147,7 @@ var _ = Describe("TalosOperation etcd-restore after a restart of the controller"
 			l, err := kc.CoreV1().Pods(ns).List(ctx, metav1.ListOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			var names []string
+			names := make([]string, 0, len(l.Items))
 			for _, p := range l.Items {
 				names = append(names, p.Name)
 			}

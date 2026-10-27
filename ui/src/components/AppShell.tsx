@@ -1,7 +1,9 @@
 import { AppToaster } from '@/components/AppToaster'
 import type { ComponentChildren } from 'preact'
 import { Fragment } from 'preact'
-import { BoxesIcon, GitBranchIcon, LayoutDashboardIcon, LayersIcon, ListChecksIcon, ServerIcon, TriangleAlertIcon } from 'lucide-preact'
+import { BoxesIcon, GitBranchIcon, LayoutDashboardIcon, LayersIcon, ListChecksIcon, ServerIcon, TriangleAlertIcon, UsersIcon } from 'lucide-preact'
+import { AccountMenu } from '@/components/AccountMenu'
+import type { WhoAmIResponse } from '@/gen/ichor/v1alpha1/user_pb'
 import { IchorVersion } from '@/components/IchorVersion'
 import { ThemeSwitch } from '@/components/ThemeSwitch'
 import {
@@ -50,17 +52,20 @@ const navRoutes = [
   { path: '/gitops', label: 'nav.gitops', Icon: GitBranchIcon, section: '/gitops/' },
 ] satisfies { path: string; label: Key; Icon: typeof BoxesIcon; section: string }[]
 
+// Shown only when ichor-ui has its own users (docs/adr/0094).
+const usersRoute: { path: string; label: Key; Icon: typeof BoxesIcon; section: string } = { path: '/users', label: 'nav.users', Icon: UsersIcon, section: '' }
+
 // The nav entry is current on its list page and on the detail pages under it.
 function isCurrent(r: { path: string; section: string }, path: string): boolean {
   return path === r.path || (r.section !== '' && path.startsWith(r.section))
 }
 
-function NavItems({ path }: { path: string }) {
+function NavItems({ path, usersEnabled }: { path: string; usersEnabled: boolean }) {
   const t = useT()
   const { setOpenMobile } = useSidebar()
   return (
     <SidebarMenu>
-      {navRoutes.map((r) => (
+      {[...navRoutes, ...(usersEnabled ? [usersRoute] : [])].map((r) => (
         <SidebarMenuItem key={r.path}>
           <SidebarMenuButton asChild isActive={isCurrent(r, path)} tooltip={t(r.label)}>
             <Link to={r.path} onClick={() => setOpenMobile(false)}>
@@ -111,10 +116,14 @@ function Crumbs({ path }: { path: string }) {
 export function AppShell({
   path,
   signInNotConfigured,
+  me,
+  usersEnabled,
   children,
 }: {
   path: string
   signInNotConfigured: boolean
+  me: WhoAmIResponse | null
+  usersEnabled: boolean
   children: ComponentChildren
 }) {
   const t = useT()
@@ -140,7 +149,7 @@ export function AppShell({
             <SidebarGroup>
               <SidebarGroupLabel>{t('nav.menu')}</SidebarGroupLabel>
               <SidebarGroupContent>
-                <NavItems path={path} />
+                <NavItems path={path} usersEnabled={usersEnabled} />
               </SidebarGroupContent>
             </SidebarGroup>
           </SidebarContent>
@@ -173,6 +182,7 @@ export function AppShell({
             <div className="ml-auto flex shrink-0 items-center gap-2">
               <IchorVersion />
               <ThemeSwitch />
+              {me && <AccountMenu me={me} />}
             </div>
           </header>
           <div class="min-w-0 flex-1 p-4 sm:p-6">{children}</div>

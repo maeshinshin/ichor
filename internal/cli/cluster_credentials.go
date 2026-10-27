@@ -46,7 +46,8 @@ var clusterCredentialsOpts struct {
 
 // staleBundleWarning is printed when a --bundle file's CAs are not the cluster's current ones: the
 // files written from it trust CAs that no node accepts any more.
-const staleBundleWarning = "this bundle predates the current CAs; the files will not work"
+const staleBundleWarning = "the bundle's CAs differ from the secrets bundle Ichor stores for this cluster; " +
+	"the files will not work unless that stored bundle is the out-of-date one"
 
 // clusterCredentialsCmd implements `ichor cluster credentials`: write a kubeconfig and a
 // talosconfig for the operator, from the cluster's secrets bundle or, offline, from a bundle file.
@@ -166,7 +167,8 @@ func checkBundleCurrent(ctx context.Context, k8s ctrlclient.Client, errw io.Writ
 		return nil
 	}
 
-	return errors.New("refusing to write credentials from " + bundleFile + "; pass --force to write them anyway")
+	return errors.New("refusing to write credentials from " + bundleFile + ": its CAs differ from the stored secrets bundle; " +
+		"pass --force if the file is the current bundle (for example after a restore)")
 }
 
 // bundleMatchesCluster reports whether bundle carries the CAs the cluster holds now: the live secrets
@@ -316,5 +318,6 @@ func init() {
 		"after checking the new kubeconfig works, tell the CA rotation that is waiting for credentials to continue")
 	f.StringVar(&clusterCredentialsOpts.Operation, "operation", "", "with --acknowledge: the CA rotation operation to acknowledge")
 	f.BoolVar(&clusterCredentialsOpts.Force, "force", false,
-		"with --bundle: write the files even though the bundle predates the cluster's current CAs (they will not work)")
+		"with --bundle: write the files even though the bundle's CAs differ from the stored secrets bundle; pass it when you "+
+			"know the file is the current bundle (for example after a restore)")
 }

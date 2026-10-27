@@ -86,8 +86,8 @@ const (
 
 	// caClientSettleDelay is how long pods get, once kube-root-ca.crt carries the new Kubernetes CA,
 	// to see it in their projected ca.crt: kubelet refreshes projected volumes about every minute.
-	caClientSettleDelay = 2 * time.Minute
-	reasonCARotationComplete  = "Rotated"
+	caClientSettleDelay      = 2 * time.Minute
+	reasonCARotationComplete = "Rotated"
 
 	// reasonCARotationAwaitingCredentials: the operation waits for the operator's credential hand-off.
 	reasonCARotationAwaitingCredentials = "AwaitingCredentials"

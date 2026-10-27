@@ -283,7 +283,7 @@ func (s *Server) createEtcdRestore(ctx context.Context, p *opPlan) (*pb.CreateOp
 	}
 
 	op := &ichorv1alpha1.TalosOperation{
-		GenerateName: p.kind + "-", Namespace: cluster.Namespace,
+		GenerateName: p.kind + "-", Namespace: cluster.Namespace, Annotations: s.startedByAnnotation(ctx),
 		Spec: ichorv1alpha1.TalosOperationSpec{
 			ClusterRef: corev1.LocalObjectReference{Name: cluster.Name}, Kind: p.kind,
 			EtcdRestore: &ichorv1alpha1.TalosOperationEtcdRestoreSpec{

@@ -137,7 +137,7 @@ machinery module).
 | Document and field | No reboot? | Where in the source |
 | --- | --- | --- |
 | `machine.registries.mirrors` | yes | `internal/app/machined/pkg/controllers/cri/registries_config.go` builds `RegistriesConfig` from the config on every change; `internal/app/machined/pkg/controllers/files/cri_config.go` renders it to containerd's `hosts` directory via `internal/pkg/containers/cri/containerd/hosts.go` (`GenerateHosts`), which containerd reads per pull |
-| `machine.registries.config.*.auth` | no (kept default) | `internal/pkg/containers/cri/containerd/containerd.go` `GenerateCRIConfig` puts auth in the CRI plugin's own config; `pkg/machinery/config/types/v1alpha1/v1alpha1_types.go` (`RegistryConfig.RegistryAuth`): "will not be picked up by the CRI containerd plugin without a reboot" |
+| `machine.registries.config` (auth and TLS), `RegistryAuthConfig`, `RegistryTLSConfig`, `RegistryMirrorConfig` | yes (CRI restarts itself; see below) | `controllers/cri/registries_config.go` lines 82-125 fold auth, mirrors and TLS from legacy and document forms into one `RegistriesConfig`; `containerd.GenerateCRIConfig` (`internal/pkg/containers/cri/containerd/containerd.go`:24-50) writes auth into the CRI config file; `controllers/files/cri_config.go`:139-180 re-renders that file on every change; `controllers/cri/service.go`:84-112 compares the file's `SpecVersion` and restarts the CRI service when it moved |
 | `KubeNodeConfig.labels`, `.annotations`, `.taints`; `machine.nodeLabels`, `.nodeAnnotations`, `.nodeTaints` | yes | `controllers/k8s/node_label_spec.go`, `node_annotation_spec.go`, `node_taint_spec.go` write specs from `K8sNodeConfig()`; `node_apply.go` applies them to the Node and removes what it owned. `pkg/machinery/config/types/v1alpha1/v1alpha1_k8s_bridge.go` (`k8sNodeConfigShim`) maps the legacy fields onto the same interface |
 | `cluster.allowSchedulingOnControlPlanes`, `.allowSchedulingOnMasters` | yes | read only by the taint shim above (`v1alpha1_clusterconfig.go` `ScheduleOnControlPlanes`, used only in `v1alpha1_k8s_bridge.go`) |
 | `KubeAPIServerConfig`, `KubeControllerManagerConfig`, `KubeSchedulerConfig`, except `.image` | yes | `controllers/k8s/control_plane.go` reads `K8sAPIServerConfig()` etc. and regenerates the static pod; same consumer as the legacy `cluster.apiServer` rules |
@@ -167,10 +167,13 @@ than the image and `machine.kubelet.*` (kubelet restart behaviour not traced),
 `KubeClusterConfig`, `KubeNetworkConfig`, the CA, admission, audit,
 authentication, authorizer, etcd-encryption, service-account, Prism, Flannel
 and CoreDNS kinds, `VolumeConfig`/`FilesystemTrimConfig` beyond
-`provisioning`, and registry TLS (the host sits inside the path, so a prefix
-rule cannot name it). Ichor's inputs never vary most of these after the first
+`provisioning`. Ichor's inputs never vary most of these after the first
 apply.
 
 ## Addendum: an unchanged hostname needs no reboot
 
 fieldmeta stays path-only, so `HostnameConfig.*` and `machine.network.hostname` are reboot-required. `assessChange` (`internal/controller/hostname_noop.go`) drops those paths when `spec.hostname` equals the node's current Nodename, so the release that began rendering `spec.hostname` does not demand a reboot of every existing node; a real rename stays reboot-required and its message says the Kubernetes node keeps its old name until the reboot.
+
+## Addendum: registry auth and TLS apply without a reboot
+
+The first addendum kept registry auth at reboot-required because machinery's doc comment on `RegistryConfig.RegistryAuth` (`pkg/machinery/config/types/v1alpha1/v1alpha1_types.go`:2058) says "changes to the registry auth will not be picked up by the CRI containerd plugin without a reboot". The v1.14.3 machined source shows that comment is stale. Auth is written into the CRI config file (`GenerateCRIConfig`, `containerd.go`:24-50), which containerd reads only at start; but `ServiceController.reconcile` (`internal/app/machined/pkg/controllers/cri/service.go`:84-112) restarts the CRI service whenever the `SpecVersion` of that file (or the base runtime spec) changes, and `CRIConfigController` (`controllers/files/cri_config.go`:139-180) re-renders it on every registries change. Running pods keep running while containerd restarts. TLS and mirrors become hosts.toml files and need no restart at all. So `machine.registries.config`, `RegistryAuthConfig`, `RegistryTLSConfig` and `RegistryMirrorConfig` are now safe (the legacy host key contains dots, so the rule is the whole subtree). Unverified: Talos versions older than v1.14.3 were not read; Ichor targets v1.14.

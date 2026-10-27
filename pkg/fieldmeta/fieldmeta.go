@@ -164,11 +164,23 @@ var rules = []rule{
 	// there lists the files.
 	// Paths a rule does not name stay reboot-required.
 
-	// Registry mirrors (and TLS) are rendered into containerd's hosts.toml
-	// files, which Talos rewrites on every config change and containerd reads
-	// per pull. Registry AUTH is deliberately absent: it goes into the CRI
-	// plugin's own config, and machinery's docs say it needs a reboot.
+	// Registries: RegistriesConfigController (controllers/cri/registries_config.go)
+	// folds mirrors, auth and TLS, from both the legacy machine.registries and the
+	// RegistryMirrorConfig/RegistryAuthConfig/RegistryTLSConfig documents, into one
+	// resource. Mirrors and TLS become containerd hosts.toml files, read per pull.
+	// Auth goes into the CRI plugin's config file (containerd.GenerateCRIConfig),
+	// which containerd reads only at start; but in v1.14.3 ServiceController
+	// (controllers/cri/service.go) restarts the CRI service whenever that file's
+	// spec version changes, so a changed credential is picked up without a reboot
+	// (running pods keep running). machinery's "without a reboot" doc comment on
+	// RegistryConfig.RegistryAuth is stale.'s addendum has the file:line
+	// references. The legacy path is keyed by a host that contains dots, so the rule
+	// is the whole machine.registries.config subtree.
 	{prefix: "machine.registries.mirrors", safe: true},
+	{prefix: "machine.registries.config", safe: true},
+	{prefix: "RegistryMirrorConfig", safe: true},
+	{prefix: "RegistryAuthConfig", safe: true},
+	{prefix: "RegistryTLSConfig", safe: true},
 
 	// Node labels, annotations and taints are reconciled onto the Kubernetes
 	// Node object by NodeLabelSpec/NodeAnnotationSpec/NodeTaintSpec and

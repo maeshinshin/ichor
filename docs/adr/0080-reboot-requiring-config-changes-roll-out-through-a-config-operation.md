@@ -149,3 +149,28 @@ with a failing test first.
 - A per-machine apply (one named machine) is not offered; hold the others with `upgrade-hold`.
 
 - Addendum: the config rollout, Talos upgrade, evacuation and removal paths write machine conditions on a fresh copy with retry on conflict, as the Kubernetes upgrade does (ADR 0057).
+
+## Amendment: changes that restart the API server without a reboot
+
+Decided: `pkg/fieldmeta` gets a third impact class, `APIServerRestart`: no reboot, but applying it re-renders the kube-apiserver static pod and restarts kube-apiserver (15 to 45 s without `/readyz` per node on Talos 1.14.3, ADR 0094's hardware amendment). The machine controller never applies it to a control plane (it would restart every control plane's API server at about the same time, a full API outage on an HA cluster). It reports `Ready=False/APIServerRestartRequired` with the fields in the new `status.apiServerRestartPaths`, and the `config` operation applies it.
+
+**Audit, Talos v1.14.3 `internal/app/machined/pkg/controllers/k8s`.** The pod is rebuilt by `k8stemplates.APIServerPod(config, secretsVersion, configVersion)`, and the kubelet recreates it on any difference.
+
+| Path | Evidence | Class |
+|---|---|---|
+| `cluster.apiServer.*` (extraArgs, certSANs, admissionControl, auditPolicy, env, resources, extraVolumes, image) | `control_plane.go` `ControlPlaneAPIServerController` copies image, extraArgs, extraVolumes, env, resources, startupProbes into `k8s.APIServerConfig`, which is the pod spec; `secrets/root.go` copies `certSANs` into the Kubernetes secrets root, whose version is the `AnnotationStaticPodSecretsVersion` annotation | APIServerRestart (was safe) |
+| `KubeAPIServerConfig.*` | same controller (`K8sAPIServerConfig()` covers both forms); `.image` keeps its own reboot-required carve-out for the Kubernetes upgrade executor (ADR 0057) | APIServerRestart (was safe) |
+| `KubeAuthenticationConfig` | `ControlPlaneAuthenticationController`; `render_config_static_pods.go` writes `authentication-config.yaml` and sums the resource version into `ConfigStatus.Version`, carried as `AnnotationStaticPodConfigFileVersion` | APIServerRestart (was safe) |
+| `KubeAdmissionControlConfig`, `KubeAuditPolicyConfig`, `KubeAuthorizerConfig` | `ControlPlaneAdmissionControlController`, `ControlPlaneAuditPolicyController`, `ControlPlaneAuthorizationController`, same config-file version | APIServerRestart (had no rule: reboot-required) |
+| `cluster.controllerManager.*`, `cluster.scheduler.*` and their documents | their pods restart too, but they are leader-elected on every control plane, so a gap there does not take the Kubernetes API down | stays safe |
+
+A worker has no kube-apiserver, so on a worker the class is applied like a safe change. The Kubernetes upgrade executor (ADR 0057) still accepts a pending API-server change alongside the image: it already restarts the API server one node at a time.
+
+**Rollout.** `config` selects a machine with `status.rebootPaths` or `status.apiServerRestartPaths`. For a control plane whose changes need only the restart, the step is: dry run, record the marker (`ConfigRollout` True, reason `APIServerRestarting`, message = the running kube-apiserver container ID read from Talos's `StaticPodStatus`), apply with no reboot, no drain, no evacuation and no etcd check (etcd is untouched). It finishes when the container ID differs from the recorded one (or a minute passed, for a change that left the pod alone) and the node's own `https://<node>:6443/readyz` answers 200, verified against the cluster's Kubernetes CA, anonymously. The operation's one-at-a-time order then starts the next control plane. Past three minutes the step records `APIServerNotReady`, the operation pauses with "kube-apiserver on X did not answer /readyz within 3m0s ...", and ADR 0095's retry waits again with a fresh clock instead of calling the node done. A change that needs a reboot as well takes the reboot path, which already covers it.
+
+**Resumable.** The marker is written before the apply, so a controller killed in between sees the old configuration and applies again; killed after, it sees the new one and only waits. While the marker is set, any failure to read the cluster or the node is waiting (bounded by the same three minutes), not a pause: the controller may run on a control plane whose own API server is the one restarting. The node the controller runs on is last, as for reboots.
+
+**Plan.** `PlanOperation` for `config` is `RESTART_COMPONENTS` when no selected machine needs a reboot and `REBOOT` otherwise, and sets `kubernetes_api_unavailable` for a single control plane. The CLI and the UI say "Restarts the Kubernetes API server on each control plane, one at a time; no reboot."
+
+Not verified: against a real node (`/readyz` through the node address, the `StaticPodStatus` container ID changing); the controller tests run over a fake Talos client, and the probe against a local TLS server. The probe assumes the local API port 6443. The container-ID signal is the kubelet's view and can lag; the one-minute fallback covers a change that never alters the pod.
+

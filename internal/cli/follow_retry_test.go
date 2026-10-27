@@ -20,14 +20,22 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"connectrpc.com/connect"
+	"k8s.io/client-go/rest"
 
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 	"github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1/ichorv1alpha1connect"
+)
+
+const (
+	opPhaseDone = "Completed"
+	cp2URL      = "https://10.0.0.2:6443"
+	cp3URL      = "https://10.0.0.3:6443"
 )
 
 // flakyOps fails GetOperation with errs in order, then reports Completed.
@@ -43,7 +51,7 @@ func (f *flakyOps) GetOperation(context.Context, *connect.Request[pb.GetOperatio
 		return nil, f.errs[f.calls-1]
 	}
 
-	return connect.NewResponse(&pb.GetOperationResponse{Operation: &pb.Operation{Phase: "Completed"}}), nil
+	return connect.NewResponse(&pb.GetOperationResponse{Operation: &pb.Operation{Phase: opPhaseDone}}), nil
 }
 
 func shrinkFollowTimers(t *testing.T) {
@@ -164,5 +172,94 @@ func TestWatchRedialsADeadTunnel(t *testing.T) {
 
 	if fresh.calls != 1 {
 		t.Fatalf("fresh calls=%d", fresh.calls)
+	}
+}
+
+// serverOps answers like an apiserver: every call to a dead server fails, a live one completes.
+type serverOps struct {
+	ichorv1alpha1connect.OperationServiceClient
+	dead bool
+}
+
+func (s *serverOps) GetOperation(context.Context, *connect.Request[pb.GetOperationRequest]) (*connect.Response[pb.GetOperationResponse], error) {
+	if s.dead {
+		return nil, errors.New("dial tcp 10.0.0.1:6443: connect: connection refused")
+	}
+
+	return connect.NewResponse(&pb.GetOperationResponse{Operation: &pb.Operation{Phase: opPhaseDone}}), nil
+}
+
+func TestWatchFailsOverToAnotherControlPlane(t *testing.T) {
+	shrinkFollowTimers(t)
+	setAPITestFlags(t, true)
+
+	var tried []string
+
+	c := &apiClients{Operation: &serverOps{dead: true}, Close: func() {}, Server: "https://10.0.0.1:6443", Local: true}
+	c.Dial = func(_ context.Context, server string) (*apiClients, error) {
+		tried = append(tried, server)
+
+		return &apiClients{Operation: &serverOps{dead: server == cp2URL}, Server: server, Close: func() {}}, nil
+	}
+
+	ring := []string{c.Server, cp2URL, cp3URL}
+	at := 0
+	c.Failover = func(ctx context.Context) (string, *apiClients, error) {
+		at = (at + 1) % len(ring)
+		nc, err := c.Dial(ctx, ring[at])
+
+		return ring[at], nc, err
+	}
+
+	var out, errw bytes.Buffer
+
+	if err := watchOperation(context.Background(), c, objectRef(testNamespace, "x"), &out, &errw); err != nil {
+		t.Fatalf("want success through another control plane, got %v", err)
+	}
+
+	if len(tried) != 2 || c.Server != cp3URL {
+		t.Fatalf("tried %v, now on %s", tried, c.Server)
+	}
+
+	if !strings.Contains(errw.String(), "trying API server "+cp2URL) ||
+		!strings.Contains(errw.String(), "API server "+cp3URL+" answered") {
+		t.Fatalf("stderr %q", errw.String())
+	}
+
+	if c.Failover == nil || c.Dial == nil {
+		t.Fatal("the failover hooks were lost when the clients were swapped")
+	}
+}
+
+func TestControlPlaneServersKeepTheKubeconfigsPortAndSkipTheCurrentHost(t *testing.T) {
+	machines := []*pb.Machine{
+		{Endpoint: "10.0.0.1:50000", Role: pb.MachineRole_MACHINE_ROLE_CONTROL_PLANE},
+		{Endpoint: "10.0.0.2", Role: pb.MachineRole_MACHINE_ROLE_CONTROL_PLANE},
+		{Endpoint: "10.0.0.3", Role: pb.MachineRole_MACHINE_ROLE_CONTROL_PLANE},
+		{Endpoint: "10.0.0.9", Role: pb.MachineRole_MACHINE_ROLE_WORKER},
+		{Endpoint: "10.0.0.4", Role: pb.MachineRole_MACHINE_ROLE_CONTROL_PLANE, Deleting: true},
+	}
+
+	got := controlPlaneServers(machines, "https://10.0.0.1:6443")
+	if want := []string{cp2URL, cp3URL}; !slices.Equal(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestOtherServerKeepsTheOriginalCertificateName(t *testing.T) {
+	cfg := &rest.Config{Host: "https://cluster.example:6443"}
+
+	got := otherServer(cfg, cp2URL)
+	if got.Host != cp2URL || got.ServerName != "cluster.example" {
+		t.Fatalf("host %s serverName %q", got.Host, got.ServerName)
+	}
+
+	if cfg.Host != "https://cluster.example:6443" || cfg.ServerName != "" {
+		t.Fatal("the original config was modified")
+	}
+
+	cfg.ServerName = "explicit-name"
+	if otherServer(cfg, cp2URL).ServerName != "explicit-name" {
+		t.Fatal("an explicit tls-server-name must win")
 	}
 }

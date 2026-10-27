@@ -274,12 +274,45 @@ func (j *restoreJob) fail(ctx context.Context, cause error) {
 	}
 }
 
+// recordNote keeps the job's last transient problem in the marker when it changed, so that a process
+// that is killed (or runs out of memory) leaves the reason behind and the next start can show it.
+// Best effort: a failed write is tried again with the next note.
+func (j *restoreJob) recordNote(ctx context.Context) {
+	note := j.scrub.clean(j.note)
+	if len(note) > 500 {
+		note = note[:500]
+	}
+
+	if note == j.marker.LastNote || note == "" {
+		return
+	}
+
+	next := j.marker
+	next.LastNote = note
+
+	if err := etcdbackup.PutMarker(ctx, j.store, j.prefix, &next); err == nil {
+		j.marker = next
+	}
+}
+
+// stepSafely is step, with a panic turned into a final error: a crash must not leave the marker
+// saying nothing happened.
+func (j *restoreJob) stepSafely(ctx context.Context) (done bool, err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			done, err = false, fmt.Errorf("the restore job crashed: %v", p)
+		}
+	}()
+
+	return j.step(ctx)
+}
+
 // run steps until done, failed or cancelled.
 func (j *restoreJob) run(ctx context.Context) {
 	log := logf.Log.WithName("etcd-restore").WithValues("operation", j.key.String())
 
 	for {
-		done, err := j.step(ctx)
+		done, err := j.stepSafely(ctx)
 
 		switch {
 		case err != nil:
@@ -294,6 +327,7 @@ func (j *restoreJob) run(ctx context.Context) {
 		}
 
 		log.V(1).Info("etcd restore waiting", "step", j.marker.Step, "note", j.note)
+		j.recordNote(ctx)
 
 		select {
 		case <-ctx.Done():

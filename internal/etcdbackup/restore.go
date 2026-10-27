@@ -129,7 +129,10 @@ type RestoreMarker struct {
 	// Step is one of the Marker* constants: how far the destructive part got. It only moves forward.
 	Step string `json:"step"`
 	// Failure is why the restore stopped, if it did; set while the step is not finished.
-	Failure   string    `json:"failure,omitempty"`
+	Failure string `json:"failure,omitempty"`
+	// LastNote is the job's last transient problem ("dialing cp-a: ..."), kept so that a process that
+	// died leaves a trace; it is not final.
+	LastNote  string    `json:"lastNote,omitempty"`
 	StartedAt time.Time `json:"startedAt"`
 }
 

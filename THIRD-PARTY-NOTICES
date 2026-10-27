@@ -429,6 +429,14 @@ Copyright 2014 CoreOS, Inc
 This product includes software developed at CoreOS, Inc.
 (http://www.coreos.com/).
 
+github.com/coreos/go-oidc@v2.5.0+incompatible: NOTICE
+
+CoreOS Project
+Copyright 2014 CoreOS, Inc
+
+This product includes software developed at CoreOS, Inc.
+(http://www.coreos.com/).
+
 github.com/go-openapi/jsonpointer@v1.0.1: NOTICE
 
 Copyright 2015-2025 go-swagger maintainers
@@ -930,6 +938,7 @@ Components:
 - github.com/containerd/go-cni@v1.1.13
 - github.com/containernetworking/cni@v1.3.0
 - github.com/coreos/go-oidc/v3@v3.21.0
+- github.com/coreos/go-oidc@v2.5.0+incompatible
 - github.com/go-jose/go-jose/v4@v4.1.4
 - github.com/go-logr/logr@v1.4.4
 - github.com/go-logr/stdr@v1.2.2
@@ -972,6 +981,7 @@ Components:
 - github.com/opencontainers/runtime-spec@v1.3.0
     Copyright 2015 The Linux Foundation.
 - github.com/petermattis/goid@v0.0.0-20260713124913-97594f28f5ca
+- github.com/pquerna/cachecontrol@v0.1.0
 - github.com/prometheus/client_golang@v1.23.2
 - github.com/prometheus/client_model@v0.6.2
 - github.com/prometheus/common@v0.67.5
@@ -1003,6 +1013,7 @@ Components:
 - google.golang.org/genproto/googleapis/api@v0.0.0-20261019180522-ce908d29299b
 - google.golang.org/genproto/googleapis/rpc@v0.0.0-20261019180522-ce908d29299b
 - google.golang.org/grpc@v1.84.0
+- gopkg.in/go-jose/go-jose.v2@v2.6.3
 - gopkg.in/yaml.v2@v2.4.0
 - k8s.io/api@v0.36.0
 - k8s.io/apiextensions-apiserver@v0.36.0

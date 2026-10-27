@@ -82,6 +82,11 @@ const (
 	reasonCARotationVerifying = "Verifying"
 	reasonCARotationBlocked   = "Blocked"
 	reasonCARotationSaved     = "NewCAsSaved"
+	reasonCARotationSettling  = "SettlingClients"
+
+	// caClientSettleDelay is how long pods get, once kube-root-ca.crt carries the new Kubernetes CA,
+	// to see it in their projected ca.crt: kubelet refreshes projected volumes about every minute.
+	caClientSettleDelay = 2 * time.Minute
 	reasonCARotationComplete  = "Rotated"
 
 	// reasonCARotationAwaitingCredentials: the operation waits for the operator's credential hand-off.
@@ -625,6 +630,12 @@ func (c *caRun) pass(ctx context.Context, stage string) (ctrl.Result, error) {
 		return c.retry(ctx, fmt.Sprintf("stage %s is not verified, so the next stage is not started: %v", stage, err))
 	}
 
+	if stage == ichorv1alpha1.CARotationStageIssuing {
+		if res, wait, err := c.awaitClients(ctx, machines[0], verifyBundle); wait {
+			return res, err
+		}
+	}
+
 	// status.machines shows the stage under way: the next one starts empty.
 	c.op.Status.Machines = nil
 	c.op.Status.CARotation.Stage = nextStage(stage)
@@ -632,6 +643,76 @@ func (c *caRun) pass(ctx context.Context, stage string) (ctrl.Result, error) {
 
 	return ctrl.Result{RequeueAfter: caRotationNextStage}, c.status(ctx, ichorv1alpha1.TalosOperationPhaseInProgress, metav1.ConditionTrue,
 		reasonCARotationVerifying, fmt.Sprintf("stage %s verified on %d machine(s)", stage, len(machines)))
+}
+
+// awaitClients holds the rotation between Issuing and Dropping until in-cluster clients can have
+// picked up the Kubernetes API's new serving CA. Talos hands kube-controller-manager only the
+// issuing CA as --root-ca-file, so kube-root-ca.crt (the source of every pod's projected ca.crt)
+// holds the old CA until Issuing and only the new one after: there is no moment with both, and
+// pods that read ca.crt once distrust the API server until the file is refreshed (kubelet needs
+// about a minute; client-go re-reads it at most every 5 minutes). Ichor cannot close that gap, but
+// it does not remove the old CA from the nodes until kube-root-ca.crt carries the new one
+// everywhere and the kubelets have had caClientSettleDelay to project it. wait is false when the
+// rotation may go on. The settle clock is the CARotation condition's transition time, so it
+// survives a controller restart.
+func (c *caRun) awaitClients(ctx context.Context, first *ichorv1alpha1.TalosMachine, bundle *secrets.Bundle) (ctrl.Result, bool, error) {
+	if c.r.RootCAPublished == nil {
+		return ctrl.Result{}, false, nil
+	}
+
+	fingerprint := ""
+
+	for _, cert := range c.op.Status.CARotation.Certificates {
+		if cert.Name == kubernetesCAName {
+			fingerprint = cert.Next
+		}
+	}
+
+	var stale []string
+
+	err := c.withNode(ctx, first, bundle, func(ctx context.Context, talos TalosClient) error {
+		var err error
+
+		stale, err = c.r.RootCAPublished(ctx, talos, fingerprint)
+
+		return err
+	})
+	if err != nil {
+		res, err := c.retry(ctx, "stage Issuing is not settled, so the old CAs stay: could not read kube-root-ca.crt: "+err.Error())
+
+		return res, true, err
+	}
+
+	if len(stale) > 0 {
+		shown := stale[:min(len(stale), 5)]
+		res, err := c.retry(ctx, fmt.Sprintf("stage Issuing is not settled, so the old CAs stay: waiting for kube-root-ca.crt to carry "+
+			"the new Kubernetes CA in %d namespace(s), among them %v; pods there do not trust the API server yet", len(stale), shown))
+
+		return res, true, err
+	}
+
+	delay := c.r.ClientSettleDelay
+	if delay == 0 {
+		delay = caClientSettleDelay
+	}
+
+	cond := apimeta.FindStatusCondition(c.op.Status.Conditions, conditionCARotation)
+	if cond == nil || cond.Reason != reasonCARotationSettling || cond.Status != metav1.ConditionTrue {
+		// Start the clock: a removed condition gets a fresh transition time.
+		apimeta.RemoveStatusCondition(&c.op.Status.Conditions, conditionCARotation)
+
+		err := c.status(ctx, ichorv1alpha1.TalosOperationPhaseInProgress, metav1.ConditionTrue, reasonCARotationSettling,
+			fmt.Sprintf("kube-root-ca.crt carries the new Kubernetes CA everywhere; giving pods %s to load it before the old CAs are dropped. "+
+				"In-cluster clients that read the CA only once may need a restart", delay))
+
+		return ctrl.Result{RequeueAfter: min(delay, operationRequeueInterval)}, true, err
+	}
+
+	if left := delay - time.Since(cond.LastTransitionTime.Time); left > 0 {
+		return ctrl.Result{RequeueAfter: min(left, operationRequeueInterval)}, true, nil
+	}
+
+	return ctrl.Result{}, false, nil
 }
 
 // awaitCredentials holds the rotation, changing nothing, until the operator has acknowledged the

@@ -465,7 +465,8 @@ func main() {
 		NodeName:            os.Getenv("NODE_NAME"),
 		// The ca-rotation kind is, like shutdown, dispatched by the backbone to its own
 		// state machine: it needs the Kubernetes Node readiness check and an Event recorder.
-		NodesReady: controller.NewNodesReady(),
+		NodesReady:      controller.NewNodesReady(),
+		RootCAPublished: controller.NewRootCAPublished(),
 		Recorder:   mgr.GetEventRecorderFor("ichor-controller"), //nolint:staticcheck // typed against record.EventRecorder, as above
 		// The node kind drains with the same clientset and storage hook as the
 		// config rollout.

@@ -33,6 +33,8 @@ export function StartOperationDialog({
   current = '',
   disabled = false,
   label,
+  open: controlledOpen,
+  onOpenChange,
 }: {
   kind: OpKind
   cluster: { namespace: string; name: string }
@@ -41,9 +43,17 @@ export function StartOperationDialog({
   disabled?: boolean
   // label is the trigger's text; the dialog's own title always uses the full action name.
   label?: string
+  // open and onOpenChange make the dialog controlled and without its own button (it is opened from a menu).
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }) {
   const t = useT()
-  const [open, setOpen] = useState(false)
+  const [ownOpen, setOwnOpen] = useState(false)
+  const open = controlledOpen ?? ownOpen
+  const setOpen = (v: boolean) => {
+    setOwnOpen(v)
+    onOpenChange?.(v)
+  }
   // A version starts as the current one, so a person edits the last digits; a mode starts as the other one.
   const [target, setTarget] = useState(kind === 'cni' ? (current === 'replaced' ? 'enabled' : 'replaced') : current)
   const [touched, setTouched] = useState(false)
@@ -111,7 +121,7 @@ export function StartOperationDialog({
       open={open}
       onOpenChange={reset}
       trigger={
-        <Button size="sm" variant={kind === 'shutdown' ? 'destructive' : 'outline'} disabled={disabled} aria-label={label ? t(`ops.start.${kind}`) : undefined}>
+        controlledOpen !== undefined ? undefined : <Button size="sm" variant={kind === 'shutdown' ? 'destructive' : 'outline'} disabled={disabled} aria-label={label ? t(`ops.start.${kind}`) : undefined}>
           {label ?? t(`ops.start.${kind}`)}
         </Button>
       }

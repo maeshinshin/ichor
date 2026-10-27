@@ -372,7 +372,7 @@ func TestRevokeSessionsMovesNotBefore(t *testing.T) {
 }
 
 func TestKubeconfigHoldsPublicDataOnly(t *testing.T) {
-	raw, err := buildKubeconfig("c1", "https://10.0.0.5:6443", []byte("CA-PEM"), userAlice, "https://ichor.example.com")
+	raw, err := buildKubeconfig("c1", "https://10.0.0.5:6443", []byte("CA-PEM"), userAlice, "https://ichor.example.com", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -401,6 +401,26 @@ func TestWhoAmIReportsMustChange(t *testing.T) {
 	resp, err := s.WhoAmI(ichorCtx(userAlice), connect.NewRequest(&pb.WhoAmIRequest{}))
 	if err != nil || !resp.Msg.GetMustChangePassword() || resp.Msg.GetUsername() != "ichor:alice" {
 		t.Fatalf("whoami: %v %v", resp, err)
+	}
+}
+
+func TestKubeconfigCAFileOnlyWhenAsked(t *testing.T) {
+	without, err := buildKubeconfig("c1", "https://10.0.0.5:6443", []byte("CA"), userAlice, "https://i.example.com", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if strings.Contains(string(without), "ca-file") {
+		t.Errorf("no ca_file requested, yet:\n%s", without)
+	}
+
+	with, err := buildKubeconfig("c1", "https://10.0.0.5:6443", []byte("CA"), userAlice, "https://i.example.com", "/etc/ichor/ca.pem")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(string(with), "- --ca-file\n") || !strings.Contains(string(with), "/etc/ichor/ca.pem") {
+		t.Errorf("ca_file requested, but the exec args lack it:\n%s", with)
 	}
 }
 

@@ -142,6 +142,7 @@ rules:
   - configmaps
   verbs:
   - create
+  - delete
   - get
   - list
 - apiGroups:

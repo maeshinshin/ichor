@@ -26,6 +26,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -45,6 +46,14 @@ const (
 	snapshotChunkBytes = 512 * 1024
 
 	snapshotKey = "part"
+
+	// snapshotTakenAnnotation orders snapshots for garbage collection: creationTimestamp has
+	// one-second resolution, and several runs can land in the same second.
+	snapshotTakenAnnotation = SnapshotLabel + "-taken"
+
+	// SnapshotsKept is how many snapshots (the current one included) survive a run: enough to
+	// go back past the last upgrade, few enough that ConfigMaps do not pile up (ADR 0059).
+	SnapshotsKept = 3
 )
 
 // entry is one object of the snapshot. A nil Object records that the object did not exist,
@@ -107,6 +116,7 @@ func takeSnapshot(ctx context.Context, c client.Client, ns, runID string, objs [
 	}
 
 	data := buf.Bytes()
+	taken := time.Now().UTC().Format(time.RFC3339Nano)
 	parts := (len(data) + snapshotChunkBytes - 1) / snapshotChunkBytes
 
 	for i := range parts {
@@ -116,7 +126,10 @@ func takeSnapshot(ctx context.Context, c client.Client, ns, runID string, objs [
 			Namespace:   ns,
 			Name:        snapshotName(runID, i),
 			Labels:      map[string]string{SnapshotLabel: runID},
-			Annotations: map[string]string{SnapshotLabel + "-parts": strconv.Itoa(parts)},
+			Annotations: map[string]string{
+				SnapshotLabel + "-parts": strconv.Itoa(parts),
+				snapshotTakenAnnotation:  taken,
+			},
 			BinaryData:  map[string][]byte{snapshotKey: chunk},
 		}
 		if err := c.Create(ctx, cm); err != nil {
@@ -185,4 +198,54 @@ func stripLive(obj map[string]any) map[string]any {
 
 func runtimeCopy(obj map[string]any) map[string]any {
 	return (&unstructured.Unstructured{Object: obj}).DeepCopy().Object
+}
+
+// pruneSnapshots deletes every snapshot except the keep newest, and never the one named
+// current. A snapshot is all the ConfigMaps carrying one run id.
+func pruneSnapshots(ctx context.Context, c client.Client, ns, current string, keep int) error {
+	var list corev1.ConfigMapList
+	if err := c.List(ctx, &list, client.InNamespace(ns), client.HasLabels{SnapshotLabel}); err != nil {
+		return err
+	}
+
+	taken := map[string]string{}
+	parts := map[string][]*corev1.ConfigMap{}
+
+	for i := range list.Items {
+		cm := &list.Items[i]
+		id := cm.Labels[SnapshotLabel]
+		parts[id] = append(parts[id], cm)
+
+		if t := cm.Annotations[snapshotTakenAnnotation]; t > taken[id] {
+			taken[id] = t
+		}
+	}
+
+	ids := make([]string, 0, len(parts))
+	for id := range parts {
+		ids = append(ids, id)
+	}
+
+	// Newest first. A snapshot without a timestamp (made before this existed) sorts oldest.
+	slices.SortFunc(ids, func(a, b string) int {
+		if d := strings.Compare(taken[b], taken[a]); d != 0 {
+			return d
+		}
+
+		return strings.Compare(b, a)
+	})
+
+	for i, id := range ids {
+		if i < keep || id == current {
+			continue
+		}
+
+		for _, cm := range parts[id] {
+			if err := c.Delete(ctx, cm); err != nil && !apierrors.IsNotFound(err) {
+				return fmt.Errorf("deleting old snapshot %s: %w", id, err)
+			}
+		}
+	}
+
+	return nil
 }

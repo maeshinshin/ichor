@@ -14,6 +14,9 @@ metadata:
   name: ichor-ui-service
   namespace: {{ .Release.Namespace }}
 spec:
+  {{- if ne .Values.ichorUI.service.type "ClusterIP" }}
+  type: {{ .Values.ichorUI.service.type }}
+  {{- end }}
   ports:
   # Named so prometheus/ichor-ui-metrics-monitor.yaml's ServiceMonitor can target it
   # by name, the same way metrics/controller-manager-metrics-service.yaml's port is.
@@ -21,6 +24,13 @@ spec:
     port: {{ .Values.ichorUI.port }}
     protocol: TCP
     targetPort: {{ .Values.ichorUI.port }}
+  {{- if .Values.ichorUI.users.enabled }}
+  # The kube-apiserver reads discovery and JWKS here, over the ClusterIP.
+  - name: internal
+    port: {{ .Values.ichorUI.users.internalPort }}
+    protocol: TCP
+    targetPort: {{ .Values.ichorUI.users.internalPort }}
+  {{- end }}
   selector:
     app.kubernetes.io/name: {{ include "ichor.name" . }}
     control-plane: ui-backend

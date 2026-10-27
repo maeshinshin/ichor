@@ -53,6 +53,7 @@ const (
 	credSecret   = "cred-bundle"
 	credOpName   = "rot-1"
 	credServer   = "https://10.0.0.1:6443"
+	credContext  = "admin@c"
 	credEndpoint = "10.0.0.2:50000"
 )
 
@@ -120,10 +121,10 @@ func newCredFixture(t *testing.T, withRotation bool, stage string) *credFixture 
 	// The operator's current kubeconfig: old CA only, a client certificate from the old CA.
 	f.kubePath = filepath.Join(f.dir, "kubeconfig")
 	cfg := clientcmdapi.Config{
-		CurrentContext: "admin@c",
+		CurrentContext: credContext,
 		Clusters:       map[string]*clientcmdapi.Cluster{"c": {Server: credServer, CertificateAuthorityData: f.old.Certs.K8s.Crt}},
-		AuthInfos:      map[string]*clientcmdapi.AuthInfo{"admin@c": {ClientCertificateData: []byte("old"), ClientKeyData: []byte("old")}},
-		Contexts:       map[string]*clientcmdapi.Context{"admin@c": {Cluster: "c", AuthInfo: "admin@c", Namespace: "kube-system"}},
+		AuthInfos:      map[string]*clientcmdapi.AuthInfo{credContext: {ClientCertificateData: []byte("old"), ClientKeyData: []byte("old")}},
+		Contexts:       map[string]*clientcmdapi.Context{credContext: {Cluster: "c", AuthInfo: credContext, Namespace: "kube-system"}},
 	}
 
 	if err := clientcmd.WriteToFile(cfg, f.kubePath); err != nil {

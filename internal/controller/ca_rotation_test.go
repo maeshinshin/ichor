@@ -40,6 +40,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
@@ -215,6 +216,9 @@ type caRotFixture struct {
 	// reconcilers counts how many fresh reconcilers ran: every step builds a new one, so nothing
 	// the executor needs can live in memory.
 	reconcilers int
+	// holdHandoff keeps step from acknowledging the credential hand-off, as an operator who has not
+	// run the CLI yet.
+	holdHandoff bool
 }
 
 func newCARotFixture() *caRotFixture {
@@ -266,10 +270,31 @@ func (f *caRotFixture) newOp() *ichorv1alpha1.TalosOperation {
 
 // step runs one reconcile on a brand-new reconciler (a controller restarted between any two).
 func (f *caRotFixture) step(op *ichorv1alpha1.TalosOperation) *ichorv1alpha1.TalosOperation {
+	if !f.holdHandoff {
+		f.acknowledge(op)
+	}
+
 	_, err := reconcileOperation(f.newReconciler(), op)
 	Expect(err).NotTo(HaveOccurred())
 
 	return fetchOperation(op)
+}
+
+// acknowledge does what the CLI does once it has written the operator's credentials: it sets the
+// hand-off annotation on the operation, if the operation is waiting for it.
+func (f *caRotFixture) acknowledge(op *ichorv1alpha1.TalosOperation) {
+	cur := fetchOperation(op)
+	if stageOf(cur) != ichorv1alpha1.CARotationStageAwaitingCredentials {
+		return
+	}
+
+	base := cur.DeepCopy()
+	if cur.Annotations == nil {
+		cur.Annotations = map[string]string{}
+	}
+
+	cur.Annotations[ichorv1alpha1.CredentialsHandoffAnnotation] = ichorv1alpha1.CARotationHandoffToken(cur.Status.CARotation)
+	Expect(k8sClient.Patch(ctx, cur, client.MergeFrom(base))).To(Succeed())
 }
 
 func stageOf(op *ichorv1alpha1.TalosOperation) string {
@@ -389,6 +414,64 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 		Expect(f.storedRotation().Talos.Key).To(Equal(rot.Talos.Key))
 	})
 
+	It("waits after Accepting for the operator's credentials and proceeds only once they are acknowledged", func() {
+		f := newCARotFixture()
+		f.holdHandoff = true
+		op := f.newOp()
+
+		op, _ = f.runUntil(op, atStage(ichorv1alpha1.CARotationStageAwaitingCredentials))
+		rot := f.storedRotation()
+		f.nodesIssueAndAccept(f.old.Certs.OS.Crt, rot.Talos.Crt)
+
+		applied := len(f.world.applies)
+
+		// Many reconciles later, nothing has moved: the old CA still issues and nothing else was applied.
+		for range 6 {
+			op = f.step(op)
+			Expect(stageOf(op)).To(Equal(ichorv1alpha1.CARotationStageAwaitingCredentials))
+			Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+		}
+
+		Expect(f.world.applies).To(HaveLen(applied), "no node may be told anything while the hand-off is pending")
+		f.nodesIssueAndAccept(f.old.Certs.OS.Crt, rot.Talos.Crt)
+
+		cond := apimeta.FindStatusCondition(op.Status.Conditions, conditionCARotation)
+		Expect(cond).NotTo(BeNil())
+		Expect(cond.Reason).To(Equal(reasonCARotationAwaitingCredentials))
+		Expect(cond.Message).To(ContainSubstring("ichor cluster credentials"))
+
+		// An acknowledgement for some other rotation does not release this one.
+		base := op.DeepCopy()
+		op.Annotations = map[string]string{ichorv1alpha1.CredentialsHandoffAnnotation: "talos=other,kubernetes=other"}
+		Expect(k8sClient.Patch(ctx, op, client.MergeFrom(base))).To(Succeed())
+
+		op = f.step(op)
+		Expect(stageOf(op)).To(Equal(ichorv1alpha1.CARotationStageAwaitingCredentials))
+
+		// The right one does.
+		f.holdHandoff = false
+		op = f.step(op)
+		op = f.step(op)
+		Expect(stageOf(op)).To(Equal(ichorv1alpha1.CARotationStageIssuing))
+		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseInProgress))
+
+		op, _ = f.runUntil(op, completed)
+		Expect(stageOf(op)).To(Equal(ichorv1alpha1.CARotationStageDone))
+	})
+
+	It("keeps waiting across a controller restart, with the acknowledgement read from the operation", func() {
+		f := newCARotFixture()
+		f.holdHandoff = true
+		op := f.newOp()
+
+		op, _ = f.runUntil(op, atStage(ichorv1alpha1.CARotationStageAwaitingCredentials))
+		before := f.reconcilers
+
+		op = f.step(op)
+		Expect(f.reconcilers).To(BeNumerically(">", before), "every step is a fresh reconciler")
+		Expect(stageOf(op)).To(Equal(ichorv1alpha1.CARotationStageAwaitingCredentials))
+	})
+
 	It("rotates through every stage, and each stage's status names the issuing and the accepted CA", func() {
 		f := newCARotFixture()
 		op := f.newOp()
@@ -396,8 +479,8 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 		var seen []string
 
 		for _, stage := range []string{
-			ichorv1alpha1.CARotationStageAccepting, ichorv1alpha1.CARotationStageIssuing,
-			ichorv1alpha1.CARotationStageDropping, ichorv1alpha1.CARotationStageFinalizing,
+			ichorv1alpha1.CARotationStageAccepting, ichorv1alpha1.CARotationStageAwaitingCredentials,
+			ichorv1alpha1.CARotationStageIssuing, ichorv1alpha1.CARotationStageDropping, ichorv1alpha1.CARotationStageFinalizing,
 		} {
 			var s []string
 
@@ -413,7 +496,7 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 
 			for _, cert := range rs.Certificates {
 				switch stage {
-				case ichorv1alpha1.CARotationStageAccepting:
+				case ichorv1alpha1.CARotationStageAccepting, ichorv1alpha1.CARotationStageAwaitingCredentials:
 					Expect(cert.Issuing).To(Equal(cert.Previous))
 					Expect(cert.Accepted).To(Equal([]string{cert.Next}))
 				case ichorv1alpha1.CARotationStageIssuing:
@@ -430,7 +513,7 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 			case ichorv1alpha1.CARotationStageAccepting:
 				// Entering Accepting: nothing applied yet.
 				Expect(f.world.applies).To(BeEmpty())
-			case ichorv1alpha1.CARotationStageIssuing:
+			case ichorv1alpha1.CARotationStageAwaitingCredentials, ichorv1alpha1.CARotationStageIssuing:
 				// Accepting verified: every node issues from the old CA and accepts the new one.
 				f.nodesIssueAndAccept(f.old.Certs.OS.Crt, rot.Talos.Crt)
 			case ichorv1alpha1.CARotationStageDropping:
@@ -441,8 +524,8 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 		}
 
 		Expect(seen).To(Equal([]string{
-			ichorv1alpha1.CARotationStageAccepting, ichorv1alpha1.CARotationStageIssuing,
-			ichorv1alpha1.CARotationStageDropping, ichorv1alpha1.CARotationStageFinalizing,
+			ichorv1alpha1.CARotationStageAccepting, ichorv1alpha1.CARotationStageAwaitingCredentials,
+			ichorv1alpha1.CARotationStageIssuing, ichorv1alpha1.CARotationStageDropping, ichorv1alpha1.CARotationStageFinalizing,
 		}))
 
 		rot := f.storedRotation()

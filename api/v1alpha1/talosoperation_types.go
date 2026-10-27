@@ -17,6 +17,8 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"strings"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -131,6 +133,12 @@ const (
 	// still issue. The new CAs' keys are already in the bundle Secret's rotation.yaml.
 	CARotationStageAccepting = "Accepting"
 
+	// CARotationStageAwaitingCredentials: Accepting is verified on every node (both CAs accepted, the
+	// old ones still issue) and the operation waits, changing nothing, until the operator has new
+	// credentials: the CLI writes them and sets CredentialsHandoffAnnotation. Nothing the
+	// operator holds stops working before this stage ends.
+	CARotationStageAwaitingCredentials = "AwaitingCredentials"
+
 	// CARotationStageIssuing: the new CAs issue on every node; the old CAs are still accepted.
 	CARotationStageIssuing = "Issuing"
 
@@ -149,6 +157,28 @@ const (
 // ConditionBundleBackupStale is the TalosCluster condition that is True from the end of a CA
 // rotation until the user has exported the new secrets bundle.
 const ConditionBundleBackupStale = "BundleBackupStale"
+
+// CredentialsHandoffAnnotation, set on a ca-rotation TalosOperation by `ichor cluster rotate-ca` (or
+// `ichor cluster credentials --acknowledge`) after it has written the operator a kubeconfig and a
+// talosconfig that work with both the old and the new CAs, holds CARotationHandoffToken of the
+// operation's status. The controller leaves the AwaitingCredentials stage only when it matches.
+const CredentialsHandoffAnnotation = "ichor.maesh.dev/credentials-handoff"
+
+// CARotationHandoffToken is what CredentialsHandoffAnnotation must hold: the fingerprints of the new
+// CAs, so an acknowledgement given for another rotation does not release this one. Empty before the
+// new CAs are known.
+func CARotationHandoffToken(rs *TalosOperationCARotationStatus) string {
+	if rs == nil || len(rs.Certificates) == 0 {
+		return ""
+	}
+
+	parts := make([]string, 0, len(rs.Certificates))
+	for _, c := range rs.Certificates {
+		parts = append(parts, c.Name+"="+c.Next)
+	}
+
+	return strings.Join(parts, ",")
+}
 
 // BundleExportedAnnotation, set on a TalosCluster by `ichor cluster bundle-export` after it has saved
 // the bundle, holds the fingerprint (secretsbundle.Fingerprint) of the bundle it saved. When it
@@ -459,7 +489,7 @@ type TalosOperationKubernetesStatus struct {
 type TalosOperationCARotationStatus struct {
 	// stage is the stage every node is being taken to; see the CARotationStage* constants.
 	// Empty until the new CAs have been generated and saved.
-	// +kubebuilder:validation:Enum=Accepting;Issuing;Dropping;Finalizing;Done
+	// +kubebuilder:validation:Enum=Accepting;AwaitingCredentials;Issuing;Dropping;Finalizing;Done
 	// +optional
 	Stage string `json:"stage,omitempty"`
 

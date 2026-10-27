@@ -30,7 +30,9 @@ limitations under the License.
 //
 //	"" ........ preflight (every machine reachable and converged, Kubernetes Ready), save the new
 //	            CAs to rotation.yaml, then -> Accepting
-//	Accepting . new CA added to every machine's accepted CAs (old issues)      -> Issuing
+//	Accepting . new CA added to every machine's accepted CAs (old issues)      -> AwaitingCredentials
+//	AwaitingCredentials  nothing changes until the operator has credentials that work with both CAs:
+//	            `ichor cluster credentials` writes them and sets the hand-off annotation   -> Issuing
 //	Issuing ... new CA issues, old is accepted                                 -> Dropping
 //	Dropping .. old CA removed from the accepted CAs                           -> Finalizing
 //	Finalizing  Secret replaced, BundleBackupStale raised, Ichor's dial and the machines'
@@ -81,6 +83,9 @@ const (
 	reasonCARotationBlocked   = "Blocked"
 	reasonCARotationSaved     = "NewCAsSaved"
 	reasonCARotationComplete  = "Rotated"
+
+	// reasonCARotationAwaitingCredentials: the operation waits for the operator's credential hand-off.
+	reasonCARotationAwaitingCredentials = "AwaitingCredentials"
 
 	// caRotationFinalizer holds a rotation's TalosOperation while the nodes are between two
 	// settled states: deleting it then would lose the stage, which is the only record of which CA
@@ -226,6 +231,10 @@ func (r *TalosOperationReconciler) advanceCARotation(
 			"the Secret %q has no %s although the rotation is in stage %s; the new CAs' keys cannot be found, so "+
 				"nothing is advanced. Restore %s from the copy made when the rotation started",
 			cluster.Spec.SecretsRef.Name, secretsbundle.RotationKey, rs.Stage, secretsbundle.RotationKey))
+	}
+
+	if rs.Stage == ichorv1alpha1.CARotationStageAwaitingCredentials {
+		return run.awaitCredentials(ctx)
 	}
 
 	return run.pass(ctx, rs.Stage)
@@ -490,7 +499,7 @@ func setStageCertificates(rs *ichorv1alpha1.TalosOperationCARotationStatus) {
 		cert := &rs.Certificates[i]
 
 		switch rs.Stage {
-		case ichorv1alpha1.CARotationStageAccepting:
+		case ichorv1alpha1.CARotationStageAccepting, ichorv1alpha1.CARotationStageAwaitingCredentials:
 			cert.Issuing, cert.Accepted = cert.Previous, []string{cert.Next}
 		case ichorv1alpha1.CARotationStageIssuing:
 			cert.Issuing, cert.Accepted = cert.Next, []string{cert.Previous}
@@ -504,6 +513,8 @@ func setStageCertificates(rs *ichorv1alpha1.TalosOperationCARotationStatus) {
 func nextStage(stage string) string {
 	switch stage {
 	case ichorv1alpha1.CARotationStageAccepting:
+		return ichorv1alpha1.CARotationStageAwaitingCredentials
+	case ichorv1alpha1.CARotationStageAwaitingCredentials:
 		return ichorv1alpha1.CARotationStageIssuing
 	case ichorv1alpha1.CARotationStageIssuing:
 		return ichorv1alpha1.CARotationStageDropping
@@ -621,6 +632,29 @@ func (c *caRun) pass(ctx context.Context, stage string) (ctrl.Result, error) {
 
 	return ctrl.Result{RequeueAfter: caRotationNextStage}, c.status(ctx, ichorv1alpha1.TalosOperationPhaseInProgress, metav1.ConditionTrue,
 		reasonCARotationVerifying, fmt.Sprintf("stage %s verified on %d machine(s)", stage, len(machines)))
+}
+
+// awaitCredentials holds the rotation, changing nothing, until the operator has acknowledged the
+// credential hand-off: from the next stage on the Kubernetes API serves the new CA and,
+// two stages later, the Talos API stops accepting the old one, so a kubeconfig or talosconfig that
+// trusts only the old CAs would be locked out. The annotation is set by the CLI after it has written
+// credentials valid under both CAs; the controller only reads it, and only when it names this
+// rotation's new CAs.
+func (c *caRun) awaitCredentials(ctx context.Context) (ctrl.Result, error) {
+	want := ichorv1alpha1.CARotationHandoffToken(c.op.Status.CARotation)
+	if want != "" && c.op.Annotations[ichorv1alpha1.CredentialsHandoffAnnotation] == want {
+		c.op.Status.CARotation.Stage = nextStage(c.op.Status.CARotation.Stage)
+		setStageCertificates(c.op.Status.CARotation)
+
+		return ctrl.Result{RequeueAfter: caRotationNextStage}, c.status(ctx, ichorv1alpha1.TalosOperationPhaseInProgress,
+			metav1.ConditionTrue, reasonCARotationVerifying, "the operator has new credentials; making the new CAs issue")
+	}
+
+	return ctrl.Result{RequeueAfter: operationRequeueInterval}, c.status(ctx, ichorv1alpha1.TalosOperationPhasePaused,
+		metav1.ConditionFalse, reasonCARotationAwaitingCredentials, fmt.Sprintf(
+			"every machine accepts the new CAs and the old ones still work. Nothing else happens until you have credentials that "+
+				"work after the next stage: run `ichor cluster credentials %s --acknowledge` "+
+				"with your current kubeconfig", c.cluster.Name))
 }
 
 // finalize replaces secrets.yaml with the new CAs and removes rotation.yaml in one Secret update,

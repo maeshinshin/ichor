@@ -91,3 +91,10 @@ on `talosclusters`, `talosmachines`, `talosconfigpatches` and `talosstorages` in
 chart's per-CRD `*-viewer-role` ClusterRoles grant exactly that. Without `talosstorages` list the view fails with
 Forbidden for that user. The ServiceAccount's own `list` on `talosstorages` (ADR 0018 amendment) is separate: it
 serves `ResolveSystemInputs` and the OIDC-off case.
+
+## Amendment: Ichor's own users and issuer (ADR 0094, Proposed)
+
+ADR 0094 adds `IchorUser` accounts and makes ichor-ui an OIDC issuer of its own that runs beside the external IdP
+described here. Nothing in this ADR changes while `ichorUI.users.enabled` stays false. When it is on, the
+authenticator accepts tokens from both sources, the kube-apiserver trusts both through Talos's
+`KubeAuthenticationConfig`, and the CLI can present an Ichor-issued token to the backend (point 5a's "later").

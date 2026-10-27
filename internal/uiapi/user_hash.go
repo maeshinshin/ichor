@@ -25,7 +25,6 @@ import (
 	"connectrpc.com/connect"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -126,9 +125,10 @@ func (s *Server) writeCredential(ctx context.Context, name string, cred ichoraut
 		return err
 	}
 
-	sec := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: s.ControllerNamespace, Name: ichorauth.CredentialsSecretName}}
+	sec := &corev1.Secret{Namespace: s.ControllerNamespace, Name: ichorauth.CredentialsSecretName}
 
-	return s.Client.Patch(ctx, sec, client.RawPatch(types.MergePatchType, patch))
+	// Patch is not shadowed by the Server, so this is the ServiceAccount's client.
+	return s.Patch(ctx, sec, client.RawPatch(types.MergePatchType, patch))
 }
 
 // setCredential hashes password and stores it for name with the given

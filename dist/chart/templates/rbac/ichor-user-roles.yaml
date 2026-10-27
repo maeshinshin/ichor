@@ -1,0 +1,323 @@
+{{- if .Values.ichorUI.users.enabled }}
+# The built-in roles of Ichor's own users: three ClusterRoles bound to the groups
+# the Ichor OIDC issuer puts in a token. Fixed names, because the group names are fixed. None
+# holds secrets, impersonate or '*'; cluster-admin is not part of ichor-admin (see
+# ichorUI.users.clusterAdminRoles).
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/name: {{ include "ichor.name" . }}
+    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  name: ichor-viewer
+rules:
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - ichorinstallations
+  - talosclusters
+  - talosconfigpatches
+  - talosetcdbackups
+  - talosmachines
+  - talosoperations
+  - talosstorages
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  - pods
+  verbs:
+  - get
+  - list
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/name: {{ include "ichor.name" . }}
+    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  name: ichor-viewer-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ichor-viewer
+subjects:
+- apiGroup: rbac.authorization.k8s.io
+  kind: Group
+  name: ichor:viewer
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/name: {{ include "ichor.name" . }}
+    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  name: ichor-operator
+rules:
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - ichorinstallations
+  - talosclusters
+  - talosconfigpatches
+  - talosetcdbackups
+  - talosmachines
+  - talosoperations
+  - talosstorages
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  - pods
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosconfigpatches
+  - talosoperations
+  verbs:
+  - create
+  - delete
+  - patch
+  - update
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - ichorinstallations
+  - talosclusters
+  - talosmachines
+  verbs:
+  - patch
+  - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/name: {{ include "ichor.name" . }}
+    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  name: ichor-operator-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ichor-operator
+subjects:
+- apiGroup: rbac.authorization.k8s.io
+  kind: Group
+  name: ichor:operator
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/name: {{ include "ichor.name" . }}
+    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  name: ichor-admin
+rules:
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - ichorinstallations
+  - talosclusters
+  - talosconfigpatches
+  - talosetcdbackups
+  - talosmachines
+  - talosoperations
+  - talosstorages
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  - pods
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosconfigpatches
+  - talosoperations
+  verbs:
+  - create
+  - delete
+  - patch
+  - update
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - ichorinstallations
+  - talosclusters
+  - talosmachines
+  verbs:
+  - patch
+  - update
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosclusters
+  - talosmachines
+  verbs:
+  - delete
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - ichorusers
+  verbs:
+  - create
+  - delete
+  - deletecollection
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - ichorusers/password
+  - talosclusters/authentication
+  verbs:
+  - update
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosoperations/ca-rotation
+  - talosoperations/etcd-restore
+  - talosoperations/node-reset
+  - talosoperations/node-shutdown
+  - talosoperations/shutdown
+  verbs:
+  - start
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosclusters
+  - talosconfigpatches
+  - talosmachines
+  verbs:
+  - break-glass
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosclusters/credentials
+  - talosmachines/etcd-snapshot
+  - talosmachines/packet-capture
+  - talosmachines/support-bundle
+  verbs:
+  - download
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/name: {{ include "ichor.name" . }}
+    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  name: ichor-admin-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ichor-admin
+subjects:
+- apiGroup: rbac.authorization.k8s.io
+  kind: Group
+  name: ichor:admin
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/name: {{ include "ichor.name" . }}
+    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  name: ichor-user-access
+  namespace: {{ .Release.Namespace }}
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  - services
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - ""
+  resources:
+  - pods/portforward
+  verbs:
+  - create
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/name: {{ include "ichor.name" . }}
+    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  name: ichor-user-access-rolebinding
+  namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ichor-user-access
+subjects:
+- apiGroup: rbac.authorization.k8s.io
+  kind: Group
+  name: ichor:viewer
+- apiGroup: rbac.authorization.k8s.io
+  kind: Group
+  name: ichor:operator
+- apiGroup: rbac.authorization.k8s.io
+  kind: Group
+  name: ichor:admin
+{{- range .Values.ichorUI.users.clusterAdminRoles }}
+---
+# Opt-in: also gives this Ichor role cluster-admin. That includes reading the secrets bundle.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: {{ $.Release.Service }}
+    app.kubernetes.io/name: {{ include "ichor.name" $ }}
+    helm.sh/chart: {{ $.Chart.Name }}-{{ $.Chart.Version | replace "+" "_" }}
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+  name: {{ printf "ichor-%s-cluster-admin" . | quote }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+- apiGroup: rbac.authorization.k8s.io
+  kind: Group
+  name: {{ printf "ichor:%s" . | quote }}
+{{- end }}
+{{- end }}

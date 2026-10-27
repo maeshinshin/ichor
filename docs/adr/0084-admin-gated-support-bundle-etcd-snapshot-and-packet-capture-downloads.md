@@ -49,3 +49,5 @@ The calls were checked in Talos v1.14.3 (`pkg/machinery` and the node's RBAC tab
 - The etcd snapshot goes through ichor-ui's memory-free `io.Copy` to the client; the backend holds at most a 64 KiB chunk at a time except for the support bundle (one file at a time, 8 MiB).
 - Not verified on hardware: nothing here has run against a real Talos node. The Talos side is the vendored client (`client.EtcdSnapshot`, `PacketCapture`, `Dmesg`, `Logs`, COSI `List`) and the roles are read from the node's RBAC table; the fake client in the tests stands in for the node. A Talos version that changes that table makes a download fail visibly with the node's refusal.
 - Whether `os:operator` or `os:admin` is needed for `PacketCapture` on the Talos versions Ichor supports besides 1.14 is not checked.
+
+Amendment: `GetDiagnosticsPermissions` is replaced by `GetMyPermissions(machine?, cluster?)`, one call that answers these three flags and ADR 0093's credentials flag with concurrent `SelfSubjectAccessReview`s; the pages fetch it once and pass the flags down.

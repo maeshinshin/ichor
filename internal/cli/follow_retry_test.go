@@ -28,6 +28,7 @@ import (
 	"connectrpc.com/connect"
 	"k8s.io/client-go/rest"
 
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 	"github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1/ichorv1alpha1connect"
 )
@@ -62,6 +63,57 @@ func shrinkFollowTimers(t *testing.T) {
 	opWatchInterval, followRetryDelay, followRetryWindow = time.Millisecond, time.Millisecond, time.Second
 
 	t.Cleanup(func() { opWatchInterval, followRetryDelay, followRetryWindow = oi, od, ow })
+}
+
+// stagesOps reports a CA rotation one stage per poll, then Completed.
+type stagesOps struct {
+	ichorv1alpha1connect.OperationServiceClient
+	stages []string
+	calls  int
+}
+
+func (s *stagesOps) GetOperation(_ context.Context, req *connect.Request[pb.GetOperationRequest]) (*connect.Response[pb.GetOperationResponse], error) {
+	op := &pb.Operation{Ref: req.Msg.GetOperation(), Kind: pb.OperationKind_OPERATION_KIND_CA_ROTATION, Phase: "InProgress"}
+	op.CaRotationStage = s.stages[min(s.calls, len(s.stages)-1)]
+	s.calls++
+
+	if op.CaRotationStage == ichorv1alpha1.CARotationStageDone {
+		op.Phase = opPhaseDone
+	}
+
+	return connect.NewResponse(&pb.GetOperationResponse{Operation: op}), nil
+}
+
+// TestOperationWatchPrintsTheStagesAPollJumpedOver: operation get --watch prints the stages a poll
+// skipped, between the ones it saw.
+func TestOperationWatchPrintsTheStagesAPollJumpedOver(t *testing.T) {
+	shrinkFollowTimers(t)
+
+	ops := &stagesOps{stages: []string{
+		ichorv1alpha1.CARotationStageAccepting, ichorv1alpha1.CARotationStageIssuing, ichorv1alpha1.CARotationStageDone,
+	}}
+	c := &apiClients{Operation: ops, Close: func() {}}
+
+	var out, errw bytes.Buffer
+
+	if err := watchOperation(context.Background(), c, objectRef(testNamespace, "x"), &out, &errw); err != nil {
+		t.Fatalf("%v\n%s", err, errw.String())
+	}
+
+	at := 0
+
+	for _, stage := range []string{
+		ichorv1alpha1.CARotationStageAccepting, ichorv1alpha1.CARotationStageAwaitingCredentials,
+		ichorv1alpha1.CARotationStageIssuing, ichorv1alpha1.CARotationStageDropping,
+		ichorv1alpha1.CARotationStageFinalizing, ichorv1alpha1.CARotationStageDone,
+	} {
+		i := strings.Index(errw.String()[at:], ", stage "+stage)
+		if i < 0 {
+			t.Fatalf("no line for stage %s after position %d:\n%s", stage, at, errw.String())
+		}
+
+		at += i + len(", stage "+stage)
+	}
 }
 
 func TestWatchRetriesTransientErrors(t *testing.T) {

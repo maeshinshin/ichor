@@ -40,6 +40,7 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -225,6 +226,8 @@ type caRotFixture struct {
 	rootCAStale  []string
 	rootCAChecks []string
 	settleDelay  time.Duration
+	// kube is the in-cluster API the restarts go through; nil leaves the reconciler without one.
+	kube kubernetes.Interface
 }
 
 func newCARotFixture() *caRotFixture {
@@ -257,6 +260,7 @@ func (f *caRotFixture) newReconciler() *TalosOperationReconciler {
 
 	return &TalosOperationReconciler{
 		Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace,
+		KubeClient:  f.kube,
 		TalosClient: f.world.factory,
 		NodesReady: func(context.Context, TalosClient) ([]string, error) {
 			return f.world.notReady, nil

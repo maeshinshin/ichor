@@ -74,6 +74,26 @@ rules:
   verbs:
   - get
 - apiGroups:
+  - apps
+  resourceNames:
+  - cilium
+  - kube-flannel
+  - kube-proxy
+  resources:
+  - daemonsets
+  verbs:
+  - get
+  - patch
+- apiGroups:
+  - apps
+  resourceNames:
+  - coredns
+  resources:
+  - deployments
+  verbs:
+  - get
+  - patch
+- apiGroups:
   - argoproj.io
   resources:
   - applications
@@ -262,6 +282,14 @@ rules:
   - deployments
   verbs:
   - get
+- apiGroups:
+  - apps
+  resourceNames:
+  - ichor-ui
+  resources:
+  - deployments
+  verbs:
+  - patch
 - apiGroups:
   - batch
   resources:

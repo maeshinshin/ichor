@@ -23,6 +23,9 @@ resources:
 # default, aiding admins in cluster management. Those roles are
 # not used by the ichor itself. You can comment the following lines
 # if you do not want those helpers be installed with your Project.
+- ichoruser_admin_role.yaml
+- ichoruser_editor_role.yaml
+- ichoruser_viewer_role.yaml
 - ichorinstallation_admin_role.yaml
 - ichorinstallation_editor_role.yaml
 - ichorinstallation_viewer_role.yaml

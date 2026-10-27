@@ -98,7 +98,7 @@ func runAuthStatus(ctx context.Context, sess *uiSession, out io.Writer) error {
 
 		switch kube {
 		case nil:
-			_, _ = fmt.Fprintln(out, "kubectl token: none cached (the first kubectl call signs in)")
+			_, _ = fmt.Fprintln(out, "kubectl token: none cached (run `ichor auth login --audience ichor-kube` once, or use kubectl from a terminal, where the first call signs in)")
 		default:
 			_, _ = fmt.Fprintf(out, "kubectl token expires: %s (refreshable: %t)\n", kube.Expiry.Local().Format(time.RFC3339), kube.RefreshToken != "")
 		}

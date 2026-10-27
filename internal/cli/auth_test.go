@@ -410,7 +410,7 @@ func TestAuthTokenNeverLogsInUnlessInteractive(t *testing.T) {
 
 	for _, info := range []string{"", interactiveInfo(false)} {
 		var out bytes.Buffer
-		if err := runAuthToken(context.Background(), f, info, &out); err == nil || !strings.Contains(err.Error(), "ichor auth login") {
+		if err := runAuthToken(context.Background(), f, info, &out); err == nil || !strings.Contains(err.Error(), "ichor auth login") || !strings.Contains(err.Error(), "--audience") || !strings.Contains(err.Error(), "from a terminal") {
 			t.Errorf("info %q: err = %v", info, err)
 		}
 

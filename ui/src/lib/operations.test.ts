@@ -8,6 +8,7 @@ import {
   kindNeedsTypedName,
   operationState,
   pauseAction,
+  retryAvailable,
   planCounts,
   planSteps,
   pollIntervalMs,
@@ -38,6 +39,11 @@ test('machines are counted by phase and an unknown phase is neither', () => {
     running: 1,
   })
   assert.deepEqual(progressCounts([]), { done: 0, running: 0 })
+})
+
+test('retry is offered only for an operation that failed', () => {
+  assert.equal(retryAvailable('failed'), true)
+  for (const s of ['pending', 'running', 'paused', 'shutdown', 'done'] as const) assert.equal(retryAvailable(s), false)
 })
 
 test('resume is offered only while paused by a person; nothing once failed or over', () => {

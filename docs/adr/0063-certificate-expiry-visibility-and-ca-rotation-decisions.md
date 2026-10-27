@@ -1,6 +1,6 @@
 # 0063. CA expiry is read from the secrets bundle and published; CA rotation is decided here and built as the `ca-rotation` operation
 
-Status: Accepted · Date: 2026-10-26 · Design section: Backup, recovery, certificates
+Status: Accepted (the stage sequence and the operator's credentials are amended by ADR 0091) · Date: 2026-10-26 · Design section: Backup, recovery, certificates
 Decided: `CertExpiryReconciler` reads the CAs in the secrets bundle (talos, kubernetes, kubernetes-aggregator, etcd) and publishes each `notAfter` in `TalosCluster.status.certificates` and as `ichor_certificate_expiry_timestamp_seconds`; `talosctl rotate-ca` is not reused whole; rotating the CAs does not change the etcd backup key; the `TalosOperation` kind `CARotation` is decided below but is deliberately not implemented in this change; the `ca-rotation` TalosOperation kind is built as its own state machine on the ADR 0026 backbone: three verified passes, the new CAs saved to the Secret's `rotation.yaml` before any node is told, `secrets.yaml` replaced last, `BundleBackupStale` until `ichor cluster bundle-export` (see "Implementation")
 
 ## Context

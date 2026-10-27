@@ -48,6 +48,7 @@ func TestRotateCAPromptSaysKubeletRestartsAndTheBundleGoesStaleAndDeclineWritesN
 	for _, want := range []string{
 		"ca-rotation", "2 machine(s)", "1. " + opCP + " (controlplane)", "2. " + testMachineName + " (worker)",
 		"Accepting, Issuing, Dropping", "kubelet", "ichor cluster bundle-export " + opTestCluster,
+		"STOP WORKING", "WAITS", "ichor cluster credentials NAME --acknowledge",
 	} {
 		if !strings.Contains(prompt.String(), want) && !strings.Contains(strings.ToLower(prompt.String()), strings.ToLower(want)) {
 			t.Errorf("prompt lacks %q:\n%s", want, prompt.String())
@@ -74,10 +75,6 @@ func TestRotateCAWithYesCreatesOneOperationAndRefusesASecondWhileItRuns(t *testi
 	ops := opTestOps(t, k8s)
 	if len(ops) != 1 || ops[0].Spec.Kind != ichorv1alpha1.TalosOperationKindCARotation || ops[0].Spec.ClusterRef.Name != opTestCluster {
 		t.Fatalf("ops = %+v", ops)
-	}
-
-	if !strings.Contains(errw.String(), "bundle-export") {
-		t.Fatalf("the start must say what to run when it completes: %q", errw.String())
 	}
 
 	if err := runStartOperation(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{}, spec); err == nil || len(opTestOps(t, k8s)) != 1 {

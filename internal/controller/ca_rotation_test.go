@@ -40,7 +40,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
@@ -294,7 +294,7 @@ func (f *caRotFixture) acknowledge(op *ichorv1alpha1.TalosOperation) {
 	}
 
 	cur.Annotations[ichorv1alpha1.CredentialsHandoffAnnotation] = ichorv1alpha1.CARotationHandoffToken(cur.Status.CARotation)
-	Expect(k8sClient.Patch(ctx, cur, client.MergeFrom(base))).To(Succeed())
+	Expect(k8sClient.Patch(ctx, cur, ctrlclient.MergeFrom(base))).To(Succeed())
 }
 
 func stageOf(op *ichorv1alpha1.TalosOperation) string {
@@ -443,7 +443,7 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 		// An acknowledgement for some other rotation does not release this one.
 		base := op.DeepCopy()
 		op.Annotations = map[string]string{ichorv1alpha1.CredentialsHandoffAnnotation: "talos=other,kubernetes=other"}
-		Expect(k8sClient.Patch(ctx, op, client.MergeFrom(base))).To(Succeed())
+		Expect(k8sClient.Patch(ctx, op, ctrlclient.MergeFrom(base))).To(Succeed())
 
 		op = f.step(op)
 		Expect(stageOf(op)).To(Equal(ichorv1alpha1.CARotationStageAwaitingCredentials))

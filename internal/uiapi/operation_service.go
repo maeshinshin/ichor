@@ -210,8 +210,9 @@ func (s *Server) GetOperation(
 	return connect.NewResponse(&pb.GetOperationResponse{Operation: operationToPB(op)}), nil
 }
 
-// SetOperationPaused writes spec.paused. It does nothing else: pausing keeps
-// the cluster lock and undoes nothing.
+// SetOperationPaused writes spec.paused: pausing keeps the cluster lock and undoes nothing.
+// Resuming an operation that paused itself after a failed step also sets the retry annotation to a time
+// newer than status.lastRetry, so the controller runs the failed step again.
 func (s *Server) SetOperationPaused(
 	ctx context.Context, req *connect.Request[pb.SetOperationPausedRequest],
 ) (*connect.Response[pb.SetOperationPausedResponse], error) {
@@ -222,11 +223,26 @@ func (s *Server) SetOperationPaused(
 		return nil, err
 	}
 
-	if err := etcdRestoreHoldsPause(op); err != nil {
-		return nil, err
+	if req.Msg.GetPaused() {
+		if err := etcdRestoreHoldsPause(op); err != nil {
+			return nil, err
+		}
 	}
 
 	op.Spec.Paused = req.Msg.GetPaused()
+
+	if !op.Spec.Paused && op.Status.Phase == ichorv1alpha1.TalosOperationPhasePaused && op.Status.FailureReason != "" {
+		at := time.Now().UTC().Truncate(time.Second)
+		if last := op.Status.LastRetry; last != nil && !at.After(last.Time) {
+			at = last.Add(time.Second) // always newer than the request the controller already acted on
+		}
+
+		if op.Annotations == nil {
+			op.Annotations = map[string]string{}
+		}
+
+		op.Annotations[ichorv1alpha1.OperationRetryAnnotation] = at.Format(time.RFC3339)
+	}
 
 	if err := s.Update(ctx, op, strictFieldValidation); err != nil {
 		return nil, mapOperationWriteError("updating operation", namespacedName(ref), err)
@@ -238,42 +254,6 @@ func (s *Server) SetOperationPaused(
 	}
 
 	return connect.NewResponse(&pb.SetOperationPausedResponse{Operation: operationToPB(op), Audit: s.opAudit(ctx, action, ref)}), nil
-}
-
-// RetryOperation asks the controller to run the failed step again: it sets the retry annotation to
-// now and nothing else (the controller never has its spec changed, and acts on the annotation once it
-// is newer than status.lastRetry). An operation that has not failed has nothing to retry.
-func (s *Server) RetryOperation(
-	ctx context.Context, req *connect.Request[pb.RetryOperationRequest],
-) (*connect.Response[pb.RetryOperationResponse], error) {
-	ref := req.Msg.GetOperation()
-
-	op, err := s.getOperation(ctx, ref)
-	if err != nil {
-		return nil, err
-	}
-
-	if op.Status.Phase != ichorv1alpha1.TalosOperationPhasePaused || op.Status.FailureReason == "" {
-		return nil, connect.NewError(connect.CodeFailedPrecondition,
-			errors.New("the operation has not failed: only a step that failed can be retried (resume lifts a pause by an operator)"))
-	}
-
-	at := time.Now().UTC().Truncate(time.Second)
-	if last := op.Status.LastRetry; last != nil && !at.After(last.Time) {
-		at = last.Add(time.Second) // always newer than the request the controller already acted on
-	}
-
-	if op.Annotations == nil {
-		op.Annotations = map[string]string{}
-	}
-
-	op.Annotations[ichorv1alpha1.OperationRetryAnnotation] = at.Format(time.RFC3339)
-
-	if err := s.Update(ctx, op, strictFieldValidation); err != nil {
-		return nil, mapOperationWriteError("updating operation", namespacedName(ref), err)
-	}
-
-	return connect.NewResponse(&pb.RetryOperationResponse{Operation: operationToPB(op), Audit: s.opAudit(ctx, "retry", ref)}), nil
 }
 
 // DeleteOperation removes the record. It does not stop a step already sent to

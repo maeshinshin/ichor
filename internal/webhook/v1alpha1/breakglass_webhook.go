@@ -43,7 +43,10 @@ import (
 // directly, or remove an Ichor finalizer from a deleting one.
 const BreakGlassVerb = "break-glass"
 
-const opUpdate = "UPDATE"
+const (
+	opCreate = "CREATE"
+	opUpdate = "UPDATE"
+)
 
 const (
 	breakGlassWebhookPath = "/validate-ichor-maesh-dev-v1alpha1-breakglass"
@@ -189,7 +192,7 @@ func (h *BreakGlassHandler) Handle(ctx context.Context, req admission.Request) a
 // typed-name confirmation is a CRD rule (confirm == machineRef.name), so it
 // needs no copy here.
 func (h *BreakGlassHandler) handleOperation(ctx context.Context, req admission.Request) admission.Response {
-	if req.Operation != "CREATE" || slices.Contains(h.ExemptUsers, req.UserInfo.Username) {
+	if req.Operation != opCreate || slices.Contains(h.ExemptUsers, req.UserInfo.Username) {
 		return admission.Allowed("")
 	}
 
@@ -313,7 +316,7 @@ const (
 // the apiserver's own validation. A write that leaves spec.authentication as it was is not checked,
 // and the controller and GitOps engines (ExemptUsers) are never stopped.
 func (h *BreakGlassHandler) handleCluster(ctx context.Context, req admission.Request) admission.Response {
-	if (req.Operation != "CREATE" && req.Operation != opUpdate) || slices.Contains(h.ExemptUsers, req.UserInfo.Username) {
+	if (req.Operation != opCreate && req.Operation != opUpdate) || slices.Contains(h.ExemptUsers, req.UserInfo.Username) {
 		return admission.Allowed("")
 	}
 
@@ -408,7 +411,7 @@ func clusterSecretRefChanges(old, updated *ichorv1alpha1.TalosCluster) []string 
 
 // handleEtcdBackup gates spec.destination.s3.credentialsSecretRef the same way.
 func (h *BreakGlassHandler) handleEtcdBackup(ctx context.Context, req admission.Request) admission.Response {
-	if (req.Operation != "CREATE" && req.Operation != opUpdate) || slices.Contains(h.ExemptUsers, req.UserInfo.Username) {
+	if (req.Operation != opCreate && req.Operation != opUpdate) || slices.Contains(h.ExemptUsers, req.UserInfo.Username) {
 		return admission.Allowed("")
 	}
 

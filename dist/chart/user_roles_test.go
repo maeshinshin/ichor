@@ -27,6 +27,7 @@ import (
 const (
 	ichorGroup = "ichor.maesh.dev"
 	verbStart  = "start"
+	verbUpdate = "update"
 )
 
 var builtinUserRoles = []string{"viewer", "operator", "admin"}
@@ -104,10 +105,10 @@ func TestBuiltinUserRoles(t *testing.T) {
 		{ichorGroup, "talosoperations/etcd-restore", verbStart, ""},
 		{ichorGroup, "talosoperations/node-reset", verbStart, ""},
 		{ichorGroup, "talosoperations/node-shutdown", verbStart, ""},
-		{ichorGroup, "talosclusters/authentication", "update", ""},
-		{ichorGroup, "talosclusters/secret-references", "update", ""},
-		{ichorGroup, "talosetcdbackups/secret-references", "update", ""},
-		{ichorGroup, "ichorusers/password", "update", ""},
+		{ichorGroup, "talosclusters/authentication", verbUpdate, ""},
+		{ichorGroup, "talosclusters/secret-references", verbUpdate, ""},
+		{ichorGroup, "talosetcdbackups/secret-references", verbUpdate, ""},
+		{ichorGroup, "ichorusers/password", verbUpdate, ""},
 		{ichorGroup, "talosclusters", "break-glass", ""},
 		{ichorGroup, "talosclusters/credentials", "download", ""},
 		{ichorGroup, "talosmachines/support-bundle", "download", ""},

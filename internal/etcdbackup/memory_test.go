@@ -74,14 +74,17 @@ func peakHeapGrowth(t *testing.T, f func()) uint64 {
 func bigSnapshot(t *testing.T, size int) []byte {
 	t.Helper()
 
-	db := make([]byte, size-sha256.Size)
+	out := make([]byte, size)
+	db := out[:size-sha256.Size]
+
 	if _, err := rand.Read(db); err != nil {
 		t.Fatal(err)
 	}
 
 	sum := sha256.Sum256(db)
+	copy(out[len(db):], sum[:])
 
-	return append(db, sum[:]...)
+	return out
 }
 
 func TestMemoryBackupAndRestoreOfLargeObject(t *testing.T) {

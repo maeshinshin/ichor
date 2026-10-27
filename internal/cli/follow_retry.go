@@ -126,6 +126,10 @@ func retryTransient(ctx context.Context, c *apiClients, errw io.Writer, call fun
 				closeFn, reconnect := c.Close, c.Reconnect
 				*c = *nc
 				c.Close, c.Reconnect = closeFn, reconnect
+			} else {
+				// Say why the tunnel could not be rebuilt (a kubeconfig the cluster no longer
+				// accepts, no ready ichor-ui pod): silence here hid the cause of a stuck follow.
+				_, _ = fmt.Fprintf(errw, "ichor: could not re-open the tunnel to ichor-ui (%v)\n", rerr)
 			}
 		}
 	}

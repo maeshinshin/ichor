@@ -411,6 +411,42 @@ var _ = Describe("TalosEtcdBackupReconciler", func() {
 		Expect(got.Status.LastSnapshot.Key).To(Equal(testBackupBase + "/" + etcdbackup.ObjectName(testBackupNow.Add(30*time.Minute))))
 	})
 
+	It("takes one snapshot outside the schedule for a backup-now request newer than lastManualBackup, and ignores a stale one", func() {
+		f := newBackupFixture()
+		f.addControlPlane("51", 2)
+		bk := f.newBackup(nil)
+
+		_, got := f.reconcile(bk)
+		Expect(f.nodes.total()).To(Equal(1))
+		Expect(got.Status.LastManualBackup).To(BeNil())
+
+		// Same clock, mid-schedule: nothing is due until a request arrives.
+		f.r.Now = func() time.Time { return testBackupNow.Add(5 * time.Minute) }
+		_, _ = f.reconcile(bk)
+		Expect(f.nodes.total()).To(Equal(1))
+
+		at := testBackupNow.Add(5 * time.Minute)
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(bk), bk)).To(Succeed())
+		bk.Annotations = map[string]string{ichorv1alpha1.BackupNowAnnotation: at.Format(time.RFC3339)}
+		Expect(k8sClient.Update(ctx, bk)).To(Succeed())
+
+		_, got = f.reconcile(bk)
+		Expect(f.nodes.total()).To(Equal(2))
+		Expect(got.Status.LastManualBackup).NotTo(BeNil())
+		Expect(got.Status.LastManualBackup.Unix()).To(Equal(at.Unix()))
+		Expect(got.Status.LastSnapshot.Key).To(Equal(testBackupBase + "/" + etcdbackup.ObjectName(at)))
+
+		// The same request again, and an older one, are not acted on.
+		_, _ = f.reconcile(bk)
+		Expect(f.nodes.total()).To(Equal(2))
+
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(bk), bk)).To(Succeed())
+		bk.Annotations[ichorv1alpha1.BackupNowAnnotation] = at.Add(-time.Minute).Format(time.RFC3339)
+		Expect(k8sClient.Update(ctx, bk)).To(Succeed())
+		_, _ = f.reconcile(bk)
+		Expect(f.nodes.total()).To(Equal(2))
+	})
+
 	It("takes nothing while suspended and rejects a bad schedule without retrying", func() {
 		f := newBackupFixture()
 		f.addControlPlane("51", 2)

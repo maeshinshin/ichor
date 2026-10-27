@@ -22,7 +22,153 @@ import type { Message, UnknownEnum } from "@bufbuild/protobuf";
  * Describes the file ichor/v1alpha1/operation.proto.
  */
 export const file_ichor_v1alpha1_operation: GenFile = /*@__PURE__*/
-  fileDesc("Ch5pY2hvci92MWFscGhhMS9vcGVyYXRpb24ucHJvdG8SDmljaG9yLnYxYWxwaGExItQBChFOb2RlQWN0aW9uUmVxdWVzdBIqCgdtYWNoaW5lGAEgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmEioKBmFjdGlvbhgCIAEoDjIaLmljaG9yLnYxYWxwaGExLk5vZGVBY3Rpb24SDwoHc2VydmljZRgDIAEoCRIUCgxhbGxvd19sZWFkZXIYBCABKAgSDwoHY29uZmlybRgFIAEoCRIvCgticmVha19nbGFzcxgGIAEoCzIaLmljaG9yLnYxYWxwaGExLkJyZWFrR2xhc3MiLwoQT3BlcmF0aW9uTWFjaGluZRIMCgRuYW1lGAEgASgJEg0KBXBoYXNlGAIgASgJIpwECglPcGVyYXRpb24SJgoDcmVmGAEgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmEioKB2NsdXN0ZXIYAiABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYSKwoEa2luZBgDIAEoDjIdLmljaG9yLnYxYWxwaGExLk9wZXJhdGlvbktpbmQSDgoGcGF1c2VkGAQgASgIEhcKD21heF91bmF2YWlsYWJsZRgFIAEoBRINCgVwaGFzZRgGIAEoCRIWCg5mYWlsdXJlX3JlYXNvbhgHIAEoCRIyCghtYWNoaW5lcxgIIAMoCzIgLmljaG9yLnYxYWxwaGExLk9wZXJhdGlvbk1hY2hpbmUSLQoKY29uZGl0aW9ucxgJIAMoCzIZLmljaG9yLnYxYWxwaGExLkNvbmRpdGlvbhIuCgpjcmVhdGVkX2F0GAogASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIZChFjYV9yb3RhdGlvbl9zdGFnZRgLIAEoCRIvCgtub2RlX2FjdGlvbhgMIAEoDjIaLmljaG9yLnYxYWxwaGExLk5vZGVBY3Rpb24SLwoMbm9kZV9tYWNoaW5lGA0gASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmEhQKDG5vZGVfbWVzc2FnZRgOIAEoCRIYChBrdWJlcm5ldGVzX3N0YWdlGA8gASgJIkMKFUxpc3RPcGVyYXRpb25zUmVxdWVzdBIqCgdjbHVzdGVyGAEgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmIkcKFkxpc3RPcGVyYXRpb25zUmVzcG9uc2USLQoKb3BlcmF0aW9ucxgBIAMoCzIZLmljaG9yLnYxYWxwaGExLk9wZXJhdGlvbiJDChNHZXRPcGVyYXRpb25SZXF1ZXN0EiwKCW9wZXJhdGlvbhgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZiJEChRHZXRPcGVyYXRpb25SZXNwb25zZRIsCglvcGVyYXRpb24YASABKAsyGS5pY2hvci52MWFscGhhMS5PcGVyYXRpb24iUQoOUGxhbm5lZE1hY2hpbmUSDAoEbmFtZRgBIAEoCRIMCgRyb2xlGAIgASgJEgwKBHN0ZXAYAyABKAUSFQoNcmVib290X2ZpZWxkcxgEIAMoCSLJAQoUUGxhbk9wZXJhdGlvblJlcXVlc3QSKgoHY2x1c3RlchgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhIrCgRraW5kGAIgASgOMh0uaWNob3IudjFhbHBoYTEuT3BlcmF0aW9uS2luZBIOCgZ0YXJnZXQYAyABKAkSFwoPbWF4X3VuYXZhaWxhYmxlGAQgASgFEi8KBG5vZGUYBSABKAsyIS5pY2hvci52MWFscGhhMS5Ob2RlQWN0aW9uUmVxdWVzdCKSAwoVUGxhbk9wZXJhdGlvblJlc3BvbnNlEi8KBmVmZmVjdBgBIAEoDjIfLmljaG9yLnYxYWxwaGExLk9wZXJhdGlvbkVmZmVjdBIwCghtYWNoaW5lcxgCIAMoCzIeLmljaG9yLnYxYWxwaGExLlBsYW5uZWRNYWNoaW5lEgwKBGhlbGQYAyADKAkSFwoPbWF4X3VuYXZhaWxhYmxlGAQgASgFEg8KB2N1cnJlbnQYBSABKAkSDgoGdGFyZ2V0GAYgASgJEhQKDHNwZWNfY2hhbmdlcxgHIAEoCBIPCgdibG9ja2VkGAggASgJEg4KBnN0YWdlcxgJIAMoCRIfChdyZXBsYWNlc19zZWNyZXRzX2J1bmRsZRgKIAEoCBIiChprdWJlcm5ldGVzX2FwaV91bmF2YWlsYWJsZRgLIAEoCBINCgVzdGVwcxgMIAMoCRIPCgd3YXJuaW5nGA0gASgJEhQKDGNvbmZpcm1fbmFtZRgOIAEoCRIcChRicmVha19nbGFzc19yZXF1aXJlZBgPIAEoCCLLAQoWQ3JlYXRlT3BlcmF0aW9uUmVxdWVzdBIqCgdjbHVzdGVyGAEgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmEisKBGtpbmQYAiABKA4yHS5pY2hvci52MWFscGhhMS5PcGVyYXRpb25LaW5kEg4KBnRhcmdldBgDIAEoCRIXCg9tYXhfdW5hdmFpbGFibGUYBCABKAUSLwoEbm9kZRgFIAEoCzIhLmljaG9yLnYxYWxwaGExLk5vZGVBY3Rpb25SZXF1ZXN0IokBChdDcmVhdGVPcGVyYXRpb25SZXNwb25zZRIsCglvcGVyYXRpb24YASABKAsyGS5pY2hvci52MWFscGhhMS5PcGVyYXRpb24SKgoFYXVkaXQYAiABKAsyGy5pY2hvci52MWFscGhhMS5BdWRpdFJlY29yZBIUCgxzcGVjX2NoYW5nZWQYAyABKAgiWQoZU2V0T3BlcmF0aW9uUGF1c2VkUmVxdWVzdBIsCglvcGVyYXRpb24YASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYSDgoGcGF1c2VkGAIgASgIInYKGlNldE9wZXJhdGlvblBhdXNlZFJlc3BvbnNlEiwKCW9wZXJhdGlvbhgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9wZXJhdGlvbhIqCgVhdWRpdBgCIAEoCzIbLmljaG9yLnYxYWxwaGExLkF1ZGl0UmVjb3JkIkYKFkRlbGV0ZU9wZXJhdGlvblJlcXVlc3QSLAoJb3BlcmF0aW9uGAEgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmIkUKF0RlbGV0ZU9wZXJhdGlvblJlc3BvbnNlEioKBWF1ZGl0GAEgASgLMhsuaWNob3IudjFhbHBoYTEuQXVkaXRSZWNvcmQqiwIKDU9wZXJhdGlvbktpbmQSHgoaT1BFUkFUSU9OX0tJTkRfVU5TUEVDSUZJRUQQABIYChRPUEVSQVRJT05fS0lORF9UQUxPUxABEh0KGU9QRVJBVElPTl9LSU5EX0tVQkVSTkVURVMQAhIYChRPUEVSQVRJT05fS0lORF9JQ0hPUhADEhYKEk9QRVJBVElPTl9LSU5EX0NOSRAEEhsKF09QRVJBVElPTl9LSU5EX1NIVVRET1dOEAUSHgoaT1BFUkFUSU9OX0tJTkRfQ0FfUk9UQVRJT04QBhIZChVPUEVSQVRJT05fS0lORF9DT05GSUcQBxIXChNPUEVSQVRJT05fS0lORF9OT0RFEAgq8QEKCk5vZGVBY3Rpb24SGwoXTk9ERV9BQ1RJT05fVU5TUEVDSUZJRUQQABIWChJOT0RFX0FDVElPTl9SRUJPT1QQARIYChROT0RFX0FDVElPTl9TSFVURE9XThACEh8KG05PREVfQUNUSU9OX1JFU1RBUlRfU0VSVklDRRADEhsKF05PREVfQUNUSU9OX0VUQ0RfREVGUkFHEAQSJwojTk9ERV9BQ1RJT05fRVRDRF9GT1JGRUlUX0xFQURFUlNISVAQBRIVChFOT0RFX0FDVElPTl9SRVNFVBAGEhYKEk5PREVfQUNUSU9OX1JFTU9WRRAHKtEBCg9PcGVyYXRpb25FZmZlY3QSIAocT1BFUkFUSU9OX0VGRkVDVF9VTlNQRUNJRklFRBAAEhsKF09QRVJBVElPTl9FRkZFQ1RfUkVCT09UEAESJwojT1BFUkFUSU9OX0VGRkVDVF9SRVNUQVJUX0NPTVBPTkVOVFMQAhIZChVPUEVSQVRJT05fRUZGRUNUX1NUT1AQAxIZChVPUEVSQVRJT05fRUZGRUNUX05PTkUQBBIgChxPUEVSQVRJT05fRUZGRUNUX0NBX1JPVEFUSU9OEAUy4QQKEE9wZXJhdGlvblNlcnZpY2USXwoOTGlzdE9wZXJhdGlvbnMSJS5pY2hvci52MWFscGhhMS5MaXN0T3BlcmF0aW9uc1JlcXVlc3QaJi5pY2hvci52MWFscGhhMS5MaXN0T3BlcmF0aW9uc1Jlc3BvbnNlElkKDEdldE9wZXJhdGlvbhIjLmljaG9yLnYxYWxwaGExLkdldE9wZXJhdGlvblJlcXVlc3QaJC5pY2hvci52MWFscGhhMS5HZXRPcGVyYXRpb25SZXNwb25zZRJcCg1QbGFuT3BlcmF0aW9uEiQuaWNob3IudjFhbHBoYTEuUGxhbk9wZXJhdGlvblJlcXVlc3QaJS5pY2hvci52MWFscGhhMS5QbGFuT3BlcmF0aW9uUmVzcG9uc2USYgoPQ3JlYXRlT3BlcmF0aW9uEiYuaWNob3IudjFhbHBoYTEuQ3JlYXRlT3BlcmF0aW9uUmVxdWVzdBonLmljaG9yLnYxYWxwaGExLkNyZWF0ZU9wZXJhdGlvblJlc3BvbnNlEmsKElNldE9wZXJhdGlvblBhdXNlZBIpLmljaG9yLnYxYWxwaGExLlNldE9wZXJhdGlvblBhdXNlZFJlcXVlc3QaKi5pY2hvci52MWFscGhhMS5TZXRPcGVyYXRpb25QYXVzZWRSZXNwb25zZRJiCg9EZWxldGVPcGVyYXRpb24SJi5pY2hvci52MWFscGhhMS5EZWxldGVPcGVyYXRpb25SZXF1ZXN0GicuaWNob3IudjFhbHBoYTEuRGVsZXRlT3BlcmF0aW9uUmVzcG9uc2VCvwEKEmNvbS5pY2hvci52MWFscGhhMUIOT3BlcmF0aW9uUHJvdG9QAVpAZ2l0aHViLmNvbS9tYWVzaGluc2hpbi9pY2hvci9nZW4vZ28vaWNob3IvdjFhbHBoYTE7aWNob3J2MWFscGhhMaICA0lYWKoCDkljaG9yLlYxYWxwaGExygIOSWNob3JcVjFhbHBoYTHiAhpJY2hvclxWMWFscGhhMVxHUEJNZXRhZGF0YeoCD0ljaG9yOjpWMWFscGhhMWIGcHJvdG8z", [file_google_protobuf_timestamp, file_ichor_v1alpha1_common]);
+  fileDesc("Ch5pY2hvci92MWFscGhhMS9vcGVyYXRpb24ucHJvdG8SDmljaG9yLnYxYWxwaGExIkQKFkxpc3RFdGNkQmFja3Vwc1JlcXVlc3QSKgoHY2x1c3RlchgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZiJUCgxFdGNkU25hcHNob3QSDAoEbmFtZRgBIAEoCRIoCgR0aW1lGAIgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIMCgRzaXplGAMgASgDIoYBCgpFdGNkQmFja3VwEiYKA3JlZhgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhIQCghzY2hlZHVsZRgCIAEoCRIvCglzbmFwc2hvdHMYAyADKAsyHC5pY2hvci52MWFscGhhMS5FdGNkU25hcHNob3QSDQoFcmVhZHkYBCABKAgiRgoXTGlzdEV0Y2RCYWNrdXBzUmVzcG9uc2USKwoHYmFja3VwcxgBIAMoCzIaLmljaG9yLnYxYWxwaGExLkV0Y2RCYWNrdXAikwEKEkV0Y2RSZXN0b3JlUmVxdWVzdBIpCgZiYWNrdXAYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYSEAoIc25hcHNob3QYAiABKAkSDwoHY29uZmlybRgDIAEoCRIvCgticmVha19nbGFzcxgEIAEoCzIaLmljaG9yLnYxYWxwaGExLkJyZWFrR2xhc3Mi1AEKEU5vZGVBY3Rpb25SZXF1ZXN0EioKB21hY2hpbmUYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYSKgoGYWN0aW9uGAIgASgOMhouaWNob3IudjFhbHBoYTEuTm9kZUFjdGlvbhIPCgdzZXJ2aWNlGAMgASgJEhQKDGFsbG93X2xlYWRlchgEIAEoCBIPCgdjb25maXJtGAUgASgJEi8KC2JyZWFrX2dsYXNzGAYgASgLMhouaWNob3IudjFhbHBoYTEuQnJlYWtHbGFzcyIvChBPcGVyYXRpb25NYWNoaW5lEgwKBG5hbWUYASABKAkSDQoFcGhhc2UYAiABKAki7AUKCU9wZXJhdGlvbhImCgNyZWYYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYSKgoHY2x1c3RlchgCIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhIrCgRraW5kGAMgASgOMh0uaWNob3IudjFhbHBoYTEuT3BlcmF0aW9uS2luZBIOCgZwYXVzZWQYBCABKAgSFwoPbWF4X3VuYXZhaWxhYmxlGAUgASgFEg0KBXBoYXNlGAYgASgJEhYKDmZhaWx1cmVfcmVhc29uGAcgASgJEjIKCG1hY2hpbmVzGAggAygLMiAuaWNob3IudjFhbHBoYTEuT3BlcmF0aW9uTWFjaGluZRItCgpjb25kaXRpb25zGAkgAygLMhkuaWNob3IudjFhbHBoYTEuQ29uZGl0aW9uEi4KCmNyZWF0ZWRfYXQYCiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEhkKEWNhX3JvdGF0aW9uX3N0YWdlGAsgASgJEi8KC25vZGVfYWN0aW9uGAwgASgOMhouaWNob3IudjFhbHBoYTEuTm9kZUFjdGlvbhIvCgxub2RlX21hY2hpbmUYDSABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYSFAoMbm9kZV9tZXNzYWdlGA4gASgJEhgKEGt1YmVybmV0ZXNfc3RhZ2UYDyABKAkSGQoRZXRjZF9yZXN0b3JlX3N0ZXAYECABKAkSNgoTZXRjZF9yZXN0b3JlX2JhY2t1cBgRIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhIdChVldGNkX3Jlc3RvcmVfc25hcHNob3QYEiABKAkSPgoaZXRjZF9yZXN0b3JlX3NuYXBzaG90X3RpbWUYEyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEhwKFGV0Y2RfcmVzdG9yZV9tZXNzYWdlGBQgASgJIkMKFUxpc3RPcGVyYXRpb25zUmVxdWVzdBIqCgdjbHVzdGVyGAEgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmIkcKFkxpc3RPcGVyYXRpb25zUmVzcG9uc2USLQoKb3BlcmF0aW9ucxgBIAMoCzIZLmljaG9yLnYxYWxwaGExLk9wZXJhdGlvbiJDChNHZXRPcGVyYXRpb25SZXF1ZXN0EiwKCW9wZXJhdGlvbhgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZiJEChRHZXRPcGVyYXRpb25SZXNwb25zZRIsCglvcGVyYXRpb24YASABKAsyGS5pY2hvci52MWFscGhhMS5PcGVyYXRpb24iUQoOUGxhbm5lZE1hY2hpbmUSDAoEbmFtZRgBIAEoCRIMCgRyb2xlGAIgASgJEgwKBHN0ZXAYAyABKAUSFQoNcmVib290X2ZpZWxkcxgEIAMoCSKDAgoUUGxhbk9wZXJhdGlvblJlcXVlc3QSKgoHY2x1c3RlchgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhIrCgRraW5kGAIgASgOMh0uaWNob3IudjFhbHBoYTEuT3BlcmF0aW9uS2luZBIOCgZ0YXJnZXQYAyABKAkSFwoPbWF4X3VuYXZhaWxhYmxlGAQgASgFEi8KBG5vZGUYBSABKAsyIS5pY2hvci52MWFscGhhMS5Ob2RlQWN0aW9uUmVxdWVzdBI4CgxldGNkX3Jlc3RvcmUYBiABKAsyIi5pY2hvci52MWFscGhhMS5FdGNkUmVzdG9yZVJlcXVlc3QixQMKFVBsYW5PcGVyYXRpb25SZXNwb25zZRIvCgZlZmZlY3QYASABKA4yHy5pY2hvci52MWFscGhhMS5PcGVyYXRpb25FZmZlY3QSMAoIbWFjaGluZXMYAiADKAsyHi5pY2hvci52MWFscGhhMS5QbGFubmVkTWFjaGluZRIMCgRoZWxkGAMgAygJEhcKD21heF91bmF2YWlsYWJsZRgEIAEoBRIPCgdjdXJyZW50GAUgASgJEg4KBnRhcmdldBgGIAEoCRIUCgxzcGVjX2NoYW5nZXMYByABKAgSDwoHYmxvY2tlZBgIIAEoCRIOCgZzdGFnZXMYCSADKAkSHwoXcmVwbGFjZXNfc2VjcmV0c19idW5kbGUYCiABKAgSIgoaa3ViZXJuZXRlc19hcGlfdW5hdmFpbGFibGUYCyABKAgSDQoFc3RlcHMYDCADKAkSDwoHd2FybmluZxgNIAEoCRIUCgxjb25maXJtX25hbWUYDiABKAkSHAoUYnJlYWtfZ2xhc3NfcmVxdWlyZWQYDyABKAgSMQoNc25hcHNob3RfdGltZRgQIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAihQIKFkNyZWF0ZU9wZXJhdGlvblJlcXVlc3QSKgoHY2x1c3RlchgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhIrCgRraW5kGAIgASgOMh0uaWNob3IudjFhbHBoYTEuT3BlcmF0aW9uS2luZBIOCgZ0YXJnZXQYAyABKAkSFwoPbWF4X3VuYXZhaWxhYmxlGAQgASgFEi8KBG5vZGUYBSABKAsyIS5pY2hvci52MWFscGhhMS5Ob2RlQWN0aW9uUmVxdWVzdBI4CgxldGNkX3Jlc3RvcmUYBiABKAsyIi5pY2hvci52MWFscGhhMS5FdGNkUmVzdG9yZVJlcXVlc3QiiQEKF0NyZWF0ZU9wZXJhdGlvblJlc3BvbnNlEiwKCW9wZXJhdGlvbhgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9wZXJhdGlvbhIqCgVhdWRpdBgCIAEoCzIbLmljaG9yLnYxYWxwaGExLkF1ZGl0UmVjb3JkEhQKDHNwZWNfY2hhbmdlZBgDIAEoCCJZChlTZXRPcGVyYXRpb25QYXVzZWRSZXF1ZXN0EiwKCW9wZXJhdGlvbhgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhIOCgZwYXVzZWQYAiABKAgidgoaU2V0T3BlcmF0aW9uUGF1c2VkUmVzcG9uc2USLAoJb3BlcmF0aW9uGAEgASgLMhkuaWNob3IudjFhbHBoYTEuT3BlcmF0aW9uEioKBWF1ZGl0GAIgASgLMhsuaWNob3IudjFhbHBoYTEuQXVkaXRSZWNvcmQiRgoWRGVsZXRlT3BlcmF0aW9uUmVxdWVzdBIsCglvcGVyYXRpb24YASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYiRQoXRGVsZXRlT3BlcmF0aW9uUmVzcG9uc2USKgoFYXVkaXQYASABKAsyGy5pY2hvci52MWFscGhhMS5BdWRpdFJlY29yZCqsAgoNT3BlcmF0aW9uS2luZBIeChpPUEVSQVRJT05fS0lORF9VTlNQRUNJRklFRBAAEhgKFE9QRVJBVElPTl9LSU5EX1RBTE9TEAESHQoZT1BFUkFUSU9OX0tJTkRfS1VCRVJORVRFUxACEhgKFE9QRVJBVElPTl9LSU5EX0lDSE9SEAMSFgoST1BFUkFUSU9OX0tJTkRfQ05JEAQSGwoXT1BFUkFUSU9OX0tJTkRfU0hVVERPV04QBRIeChpPUEVSQVRJT05fS0lORF9DQV9ST1RBVElPThAGEhkKFU9QRVJBVElPTl9LSU5EX0NPTkZJRxAHEhcKE09QRVJBVElPTl9LSU5EX05PREUQCBIfChtPUEVSQVRJT05fS0lORF9FVENEX1JFU1RPUkUQCSrxAQoKTm9kZUFjdGlvbhIbChdOT0RFX0FDVElPTl9VTlNQRUNJRklFRBAAEhYKEk5PREVfQUNUSU9OX1JFQk9PVBABEhgKFE5PREVfQUNUSU9OX1NIVVRET1dOEAISHwobTk9ERV9BQ1RJT05fUkVTVEFSVF9TRVJWSUNFEAMSGwoXTk9ERV9BQ1RJT05fRVRDRF9ERUZSQUcQBBInCiNOT0RFX0FDVElPTl9FVENEX0ZPUkZFSVRfTEVBREVSU0hJUBAFEhUKEU5PREVfQUNUSU9OX1JFU0VUEAYSFgoSTk9ERV9BQ1RJT05fUkVNT1ZFEAcq0QEKD09wZXJhdGlvbkVmZmVjdBIgChxPUEVSQVRJT05fRUZGRUNUX1VOU1BFQ0lGSUVEEAASGwoXT1BFUkFUSU9OX0VGRkVDVF9SRUJPT1QQARInCiNPUEVSQVRJT05fRUZGRUNUX1JFU1RBUlRfQ09NUE9ORU5UUxACEhkKFU9QRVJBVElPTl9FRkZFQ1RfU1RPUBADEhkKFU9QRVJBVElPTl9FRkZFQ1RfTk9ORRAEEiAKHE9QRVJBVElPTl9FRkZFQ1RfQ0FfUk9UQVRJT04QBTLFBQoQT3BlcmF0aW9uU2VydmljZRJfCg5MaXN0T3BlcmF0aW9ucxIlLmljaG9yLnYxYWxwaGExLkxpc3RPcGVyYXRpb25zUmVxdWVzdBomLmljaG9yLnYxYWxwaGExLkxpc3RPcGVyYXRpb25zUmVzcG9uc2USWQoMR2V0T3BlcmF0aW9uEiMuaWNob3IudjFhbHBoYTEuR2V0T3BlcmF0aW9uUmVxdWVzdBokLmljaG9yLnYxYWxwaGExLkdldE9wZXJhdGlvblJlc3BvbnNlElwKDVBsYW5PcGVyYXRpb24SJC5pY2hvci52MWFscGhhMS5QbGFuT3BlcmF0aW9uUmVxdWVzdBolLmljaG9yLnYxYWxwaGExLlBsYW5PcGVyYXRpb25SZXNwb25zZRJiCg9DcmVhdGVPcGVyYXRpb24SJi5pY2hvci52MWFscGhhMS5DcmVhdGVPcGVyYXRpb25SZXF1ZXN0GicuaWNob3IudjFhbHBoYTEuQ3JlYXRlT3BlcmF0aW9uUmVzcG9uc2USawoSU2V0T3BlcmF0aW9uUGF1c2VkEikuaWNob3IudjFhbHBoYTEuU2V0T3BlcmF0aW9uUGF1c2VkUmVxdWVzdBoqLmljaG9yLnYxYWxwaGExLlNldE9wZXJhdGlvblBhdXNlZFJlc3BvbnNlEmIKD0RlbGV0ZU9wZXJhdGlvbhImLmljaG9yLnYxYWxwaGExLkRlbGV0ZU9wZXJhdGlvblJlcXVlc3QaJy5pY2hvci52MWFscGhhMS5EZWxldGVPcGVyYXRpb25SZXNwb25zZRJiCg9MaXN0RXRjZEJhY2t1cHMSJi5pY2hvci52MWFscGhhMS5MaXN0RXRjZEJhY2t1cHNSZXF1ZXN0GicuaWNob3IudjFhbHBoYTEuTGlzdEV0Y2RCYWNrdXBzUmVzcG9uc2VCvwEKEmNvbS5pY2hvci52MWFscGhhMUIOT3BlcmF0aW9uUHJvdG9QAVpAZ2l0aHViLmNvbS9tYWVzaGluc2hpbi9pY2hvci9nZW4vZ28vaWNob3IvdjFhbHBoYTE7aWNob3J2MWFscGhhMaICA0lYWKoCDkljaG9yLlYxYWxwaGExygIOSWNob3JcVjFhbHBoYTHiAhpJY2hvclxWMWFscGhhMVxHUEJNZXRhZGF0YeoCD0ljaG9yOjpWMWFscGhhMWIGcHJvdG8z", [file_google_protobuf_timestamp, file_ichor_v1alpha1_common]);
+
+/**
+ * @generated from message ichor.v1alpha1.ListEtcdBackupsRequest
+ */
+export type ListEtcdBackupsRequest = Message<"ichor.v1alpha1.ListEtcdBackupsRequest"> & {
+  /**
+   * @generated from field: ichor.v1alpha1.ObjectRef cluster = 1;
+   */
+  cluster?: ObjectRef | undefined;
+};
+
+/**
+ * Describes the message ichor.v1alpha1.ListEtcdBackupsRequest.
+ * Use `create(ListEtcdBackupsRequestSchema)` to create a new message.
+ */
+export const ListEtcdBackupsRequestSchema: GenMessage<ListEtcdBackupsRequest> = /*@__PURE__*/
+  messageDesc(file_ichor_v1alpha1_operation, 0);
+
+/**
+ * @generated from message ichor.v1alpha1.EtcdSnapshot
+ */
+export type EtcdSnapshot = Message<"ichor.v1alpha1.EtcdSnapshot"> & {
+  /**
+   * name is the object name; it is what EtcdRestoreRequest.snapshot says.
+   *
+   * @generated from field: string name = 1;
+   */
+  name: string;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp time = 2;
+   */
+  time?: Timestamp | undefined;
+
+  /**
+   * size is the stored (encrypted) size in bytes.
+   *
+   * @generated from field: int64 size = 3;
+   */
+  size: bigint;
+};
+
+/**
+ * Describes the message ichor.v1alpha1.EtcdSnapshot.
+ * Use `create(EtcdSnapshotSchema)` to create a new message.
+ */
+export const EtcdSnapshotSchema: GenMessage<EtcdSnapshot> = /*@__PURE__*/
+  messageDesc(file_ichor_v1alpha1_operation, 1);
+
+/**
+ * @generated from message ichor.v1alpha1.EtcdBackup
+ */
+export type EtcdBackup = Message<"ichor.v1alpha1.EtcdBackup"> & {
+  /**
+   * @generated from field: ichor.v1alpha1.ObjectRef ref = 1;
+   */
+  ref?: ObjectRef | undefined;
+
+  /**
+   * schedule is the cron expression the backup runs on.
+   *
+   * @generated from field: string schedule = 2;
+   */
+  schedule: string;
+
+  /**
+   * snapshots are the snapshots kept in the destination after the last backup, newest first.
+   *
+   * @generated from field: repeated ichor.v1alpha1.EtcdSnapshot snapshots = 3;
+   */
+  snapshots: EtcdSnapshot[];
+
+  /**
+   * ready is false while the last attempt failed or the newest snapshot is stale.
+   *
+   * @generated from field: bool ready = 4;
+   */
+  ready: boolean;
+};
+
+/**
+ * Describes the message ichor.v1alpha1.EtcdBackup.
+ * Use `create(EtcdBackupSchema)` to create a new message.
+ */
+export const EtcdBackupSchema: GenMessage<EtcdBackup> = /*@__PURE__*/
+  messageDesc(file_ichor_v1alpha1_operation, 2);
+
+/**
+ * @generated from message ichor.v1alpha1.ListEtcdBackupsResponse
+ */
+export type ListEtcdBackupsResponse = Message<"ichor.v1alpha1.ListEtcdBackupsResponse"> & {
+  /**
+   * @generated from field: repeated ichor.v1alpha1.EtcdBackup backups = 1;
+   */
+  backups: EtcdBackup[];
+};
+
+/**
+ * Describes the message ichor.v1alpha1.ListEtcdBackupsResponse.
+ * Use `create(ListEtcdBackupsResponseSchema)` to create a new message.
+ */
+export const ListEtcdBackupsResponseSchema: GenMessage<ListEtcdBackupsResponse> = /*@__PURE__*/
+  messageDesc(file_ichor_v1alpha1_operation, 3);
+
+/**
+ * EtcdRestoreRequest names the snapshot of an etcd-restore plan or create. Starting
+ * it needs the cluster's name typed and a break-glass reason: it rewinds the whole cluster.
+ *
+ * @generated from message ichor.v1alpha1.EtcdRestoreRequest
+ */
+export type EtcdRestoreRequest = Message<"ichor.v1alpha1.EtcdRestoreRequest"> & {
+  /**
+   * backup is the TalosEtcdBackup whose storage holds the snapshot.
+   *
+   * @generated from field: ichor.v1alpha1.ObjectRef backup = 1;
+   */
+  backup?: ObjectRef | undefined;
+
+  /**
+   * snapshot is the object name of the snapshot, as listed in the backup's status (ListEtcdBackups).
+   *
+   * @generated from field: string snapshot = 2;
+   */
+  snapshot: string;
+
+  /**
+   * confirm is the cluster's name, typed.
+   *
+   * @generated from field: string confirm = 3;
+   */
+  confirm: string;
+
+  /**
+   * break_glass is required: the reason goes to the audit record and the Event on the cluster, and the caller must hold the break-glass verb on the TalosCluster.
+   *
+   * @generated from field: ichor.v1alpha1.BreakGlass break_glass = 4;
+   */
+  breakGlass?: BreakGlass | undefined;
+};
+
+/**
+ * Describes the message ichor.v1alpha1.EtcdRestoreRequest.
+ * Use `create(EtcdRestoreRequestSchema)` to create a new message.
+ */
+export const EtcdRestoreRequestSchema: GenMessage<EtcdRestoreRequest> = /*@__PURE__*/
+  messageDesc(file_ichor_v1alpha1_operation, 4);
 
 /**
  * NodeActionRequest names the machine and the action of a node-kind plan or create.
@@ -75,7 +221,7 @@ export type NodeActionRequest = Message<"ichor.v1alpha1.NodeActionRequest"> & {
  * Use `create(NodeActionRequestSchema)` to create a new message.
  */
 export const NodeActionRequestSchema: GenMessage<NodeActionRequest> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_operation, 0);
+  messageDesc(file_ichor_v1alpha1_operation, 5);
 
 /**
  * OperationMachine is TalosOperation.status.machines[] as it is: a machine
@@ -102,7 +248,7 @@ export type OperationMachine = Message<"ichor.v1alpha1.OperationMachine"> & {
  * Use `create(OperationMachineSchema)` to create a new message.
  */
 export const OperationMachineSchema: GenMessage<OperationMachine> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_operation, 1);
+  messageDesc(file_ichor_v1alpha1_operation, 6);
 
 /**
  * @generated from message ichor.v1alpha1.Operation
@@ -198,6 +344,35 @@ export type Operation = Message<"ichor.v1alpha1.Operation"> & {
    * @generated from field: string kubernetes_stage = 15;
    */
   kubernetesStage: string;
+
+  /**
+   * etcd_restore_* describe an etcd-restore operation: the step it is in (Wiping, Recovering,
+   * Rejoining, Reconciling), the backup and snapshot it restores, when the snapshot was taken,
+   * and what it is doing or waiting for now.
+   *
+   * @generated from field: string etcd_restore_step = 16;
+   */
+  etcdRestoreStep: string;
+
+  /**
+   * @generated from field: ichor.v1alpha1.ObjectRef etcd_restore_backup = 17;
+   */
+  etcdRestoreBackup?: ObjectRef | undefined;
+
+  /**
+   * @generated from field: string etcd_restore_snapshot = 18;
+   */
+  etcdRestoreSnapshot: string;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp etcd_restore_snapshot_time = 19;
+   */
+  etcdRestoreSnapshotTime?: Timestamp | undefined;
+
+  /**
+   * @generated from field: string etcd_restore_message = 20;
+   */
+  etcdRestoreMessage: string;
 };
 
 /**
@@ -205,7 +380,7 @@ export type Operation = Message<"ichor.v1alpha1.Operation"> & {
  * Use `create(OperationSchema)` to create a new message.
  */
 export const OperationSchema: GenMessage<Operation> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_operation, 2);
+  messageDesc(file_ichor_v1alpha1_operation, 7);
 
 /**
  * @generated from message ichor.v1alpha1.ListOperationsRequest
@@ -224,7 +399,7 @@ export type ListOperationsRequest = Message<"ichor.v1alpha1.ListOperationsReques
  * Use `create(ListOperationsRequestSchema)` to create a new message.
  */
 export const ListOperationsRequestSchema: GenMessage<ListOperationsRequest> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_operation, 3);
+  messageDesc(file_ichor_v1alpha1_operation, 8);
 
 /**
  * @generated from message ichor.v1alpha1.ListOperationsResponse
@@ -241,7 +416,7 @@ export type ListOperationsResponse = Message<"ichor.v1alpha1.ListOperationsRespo
  * Use `create(ListOperationsResponseSchema)` to create a new message.
  */
 export const ListOperationsResponseSchema: GenMessage<ListOperationsResponse> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_operation, 4);
+  messageDesc(file_ichor_v1alpha1_operation, 9);
 
 /**
  * @generated from message ichor.v1alpha1.GetOperationRequest
@@ -258,7 +433,7 @@ export type GetOperationRequest = Message<"ichor.v1alpha1.GetOperationRequest"> 
  * Use `create(GetOperationRequestSchema)` to create a new message.
  */
 export const GetOperationRequestSchema: GenMessage<GetOperationRequest> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_operation, 5);
+  messageDesc(file_ichor_v1alpha1_operation, 10);
 
 /**
  * @generated from message ichor.v1alpha1.GetOperationResponse
@@ -275,7 +450,7 @@ export type GetOperationResponse = Message<"ichor.v1alpha1.GetOperationResponse"
  * Use `create(GetOperationResponseSchema)` to create a new message.
  */
 export const GetOperationResponseSchema: GenMessage<GetOperationResponse> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_operation, 6);
+  messageDesc(file_ichor_v1alpha1_operation, 11);
 
 /**
  * @generated from message ichor.v1alpha1.PlannedMachine
@@ -314,7 +489,7 @@ export type PlannedMachine = Message<"ichor.v1alpha1.PlannedMachine"> & {
  * Use `create(PlannedMachineSchema)` to create a new message.
  */
 export const PlannedMachineSchema: GenMessage<PlannedMachine> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_operation, 7);
+  messageDesc(file_ichor_v1alpha1_operation, 12);
 
 /**
  * @generated from message ichor.v1alpha1.PlanOperationRequest
@@ -355,6 +530,13 @@ export type PlanOperationRequest = Message<"ichor.v1alpha1.PlanOperationRequest"
    * @generated from field: ichor.v1alpha1.NodeActionRequest node = 5;
    */
   node?: NodeActionRequest | undefined;
+
+  /**
+   * etcd_restore is required for kind ETCD_RESTORE.
+   *
+   * @generated from field: ichor.v1alpha1.EtcdRestoreRequest etcd_restore = 6;
+   */
+  etcdRestore?: EtcdRestoreRequest | undefined;
 };
 
 /**
@@ -362,7 +544,7 @@ export type PlanOperationRequest = Message<"ichor.v1alpha1.PlanOperationRequest"
  * Use `create(PlanOperationRequestSchema)` to create a new message.
  */
 export const PlanOperationRequestSchema: GenMessage<PlanOperationRequest> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_operation, 8);
+  messageDesc(file_ichor_v1alpha1_operation, 13);
 
 /**
  * @generated from message ichor.v1alpha1.PlanOperationResponse
@@ -470,6 +652,13 @@ export type PlanOperationResponse = Message<"ichor.v1alpha1.PlanOperationRespons
    * @generated from field: bool break_glass_required = 15;
    */
   breakGlassRequired: boolean;
+
+  /**
+   * snapshot_time is when the snapshot an etcd restore would put back was taken; everything after it is lost.
+   *
+   * @generated from field: google.protobuf.Timestamp snapshot_time = 16;
+   */
+  snapshotTime?: Timestamp | undefined;
 };
 
 /**
@@ -477,7 +666,7 @@ export type PlanOperationResponse = Message<"ichor.v1alpha1.PlanOperationRespons
  * Use `create(PlanOperationResponseSchema)` to create a new message.
  */
 export const PlanOperationResponseSchema: GenMessage<PlanOperationResponse> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_operation, 9);
+  messageDesc(file_ichor_v1alpha1_operation, 14);
 
 /**
  * @generated from message ichor.v1alpha1.CreateOperationRequest
@@ -511,6 +700,11 @@ export type CreateOperationRequest = Message<"ichor.v1alpha1.CreateOperationRequ
    * @generated from field: ichor.v1alpha1.NodeActionRequest node = 5;
    */
   node?: NodeActionRequest | undefined;
+
+  /**
+   * @generated from field: ichor.v1alpha1.EtcdRestoreRequest etcd_restore = 6;
+   */
+  etcdRestore?: EtcdRestoreRequest | undefined;
 };
 
 /**
@@ -518,7 +712,7 @@ export type CreateOperationRequest = Message<"ichor.v1alpha1.CreateOperationRequ
  * Use `create(CreateOperationRequestSchema)` to create a new message.
  */
 export const CreateOperationRequestSchema: GenMessage<CreateOperationRequest> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_operation, 10);
+  messageDesc(file_ichor_v1alpha1_operation, 15);
 
 /**
  * @generated from message ichor.v1alpha1.CreateOperationResponse
@@ -548,7 +742,7 @@ export type CreateOperationResponse = Message<"ichor.v1alpha1.CreateOperationRes
  * Use `create(CreateOperationResponseSchema)` to create a new message.
  */
 export const CreateOperationResponseSchema: GenMessage<CreateOperationResponse> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_operation, 11);
+  messageDesc(file_ichor_v1alpha1_operation, 16);
 
 /**
  * @generated from message ichor.v1alpha1.SetOperationPausedRequest
@@ -570,7 +764,7 @@ export type SetOperationPausedRequest = Message<"ichor.v1alpha1.SetOperationPaus
  * Use `create(SetOperationPausedRequestSchema)` to create a new message.
  */
 export const SetOperationPausedRequestSchema: GenMessage<SetOperationPausedRequest> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_operation, 12);
+  messageDesc(file_ichor_v1alpha1_operation, 17);
 
 /**
  * @generated from message ichor.v1alpha1.SetOperationPausedResponse
@@ -592,7 +786,7 @@ export type SetOperationPausedResponse = Message<"ichor.v1alpha1.SetOperationPau
  * Use `create(SetOperationPausedResponseSchema)` to create a new message.
  */
 export const SetOperationPausedResponseSchema: GenMessage<SetOperationPausedResponse> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_operation, 13);
+  messageDesc(file_ichor_v1alpha1_operation, 18);
 
 /**
  * @generated from message ichor.v1alpha1.DeleteOperationRequest
@@ -609,7 +803,7 @@ export type DeleteOperationRequest = Message<"ichor.v1alpha1.DeleteOperationRequ
  * Use `create(DeleteOperationRequestSchema)` to create a new message.
  */
 export const DeleteOperationRequestSchema: GenMessage<DeleteOperationRequest> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_operation, 14);
+  messageDesc(file_ichor_v1alpha1_operation, 19);
 
 /**
  * @generated from message ichor.v1alpha1.DeleteOperationResponse
@@ -626,7 +820,7 @@ export type DeleteOperationResponse = Message<"ichor.v1alpha1.DeleteOperationRes
  * Use `create(DeleteOperationResponseSchema)` to create a new message.
  */
 export const DeleteOperationResponseSchema: GenMessage<DeleteOperationResponse> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_operation, 15);
+  messageDesc(file_ichor_v1alpha1_operation, 20);
 
 /**
  * @generated from enum ichor.v1alpha1.OperationKind
@@ -683,6 +877,13 @@ export const OperationKind = {
    * @generated from enum value: OPERATION_KIND_NODE = 8;
    */
   NODE: 8,
+
+  /**
+   * ETCD_RESTORE rewinds the whole cluster to a stored etcd snapshot.
+   *
+   * @generated from enum value: OPERATION_KIND_ETCD_RESTORE = 9;
+   */
+  ETCD_RESTORE: 9,
 } as const;
 
 /**
@@ -878,6 +1079,18 @@ export const OperationService: GenService<{
     methodKind: "unary";
     input: typeof DeleteOperationRequestSchema;
     output: typeof DeleteOperationResponseSchema;
+  },
+  /**
+   * ListEtcdBackups lists the TalosEtcdBackups of a cluster with the snapshots each holds, newest
+   * first: what a restore can choose from. It reads the backups' status; it does not
+   * touch the storage.
+   *
+   * @generated from rpc ichor.v1alpha1.OperationService.ListEtcdBackups
+   */
+  listEtcdBackups: {
+    methodKind: "unary";
+    input: typeof ListEtcdBackupsRequestSchema;
+    output: typeof ListEtcdBackupsResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_ichor_v1alpha1_operation, 0);

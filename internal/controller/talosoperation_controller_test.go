@@ -28,6 +28,7 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -286,6 +287,66 @@ var _ = Describe("TalosOperationReconciler", func() {
 		Expect(held).To(BeFalse(), "the lock must be released once every eligible machine is done")
 	})
 
+	It("records an Event when a machine starts and finishes, when it pauses and resumes, and on completion", func() {
+		cluster := newOpTestCluster()
+		cp1 := newOpTestMachine(cluster.Name, "controlplane", "ev-cp1")
+		op := newOpTestOperation(cluster.Name)
+
+		fake := &fakeAdvancer{outcomes: map[string]advanceOutcome{cp1.Name: {done: false}}}
+		recorder := record.NewFakeRecorder(20)
+		r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: fake.Advance, Recorder: recorder}
+
+		_, err := reconcileOperation(r, op)
+		Expect(err).NotTo(HaveOccurred())
+
+		got := fetchOperation(op)
+		Expect(got.Status.Machines).To(HaveLen(1))
+		Expect(got.Status.Machines[0].StartedAt).NotTo(BeNil())
+		Expect(got.Status.Machines[0].FinishedAt).To(BeNil())
+
+		fake.outcomes[cp1.Name] = advanceOutcome{done: true}
+		_, err = reconcileOperation(r, op)
+		Expect(err).NotTo(HaveOccurred())
+
+		got = fetchOperation(op)
+		Expect(got.Status.Machines[0].FinishedAt).NotTo(BeNil())
+
+		_, err = reconcileOperation(r, op)
+		Expect(err).NotTo(HaveOccurred())
+
+		got = fetchOperation(op)
+		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseCompleted))
+		Expect(got.Status.FinishedAt).NotTo(BeNil())
+
+		Expect(drainEvents(recorder)).To(Equal([]string{
+			"Normal " + reasonMachineStarted + " machine " + cp1.Name + " started",
+			"Normal " + reasonMachineFinished + " machine " + cp1.Name + " finished",
+			"Normal " + reasonOperationComplete + " every eligible machine finished",
+		}))
+	})
+
+	It("records a Warning when a step fails and an Event when it resumes", func() {
+		cluster := newOpTestCluster()
+		cp1 := newOpTestMachine(cluster.Name, "controlplane", "evf-cp1")
+		op := newOpTestOperation(cluster.Name)
+
+		fake := &fakeAdvancer{outcomes: map[string]advanceOutcome{cp1.Name: {err: errors.New("boom")}}}
+		recorder := record.NewFakeRecorder(20)
+		r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: fake.Advance, Recorder: recorder}
+
+		_, err := reconcileOperation(r, op)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(drainEvents(recorder)).To(ContainElements(
+			"Normal "+reasonMachineStarted+" machine "+cp1.Name+" started",
+			"Warning "+reasonOperationStepFailed+" paused: machine \""+cp1.Name+"\": boom",
+		))
+
+		// A second reconcile of the same failure raises nothing new.
+		_, err = reconcileOperation(r, op)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(drainEvents(recorder)).To(BeEmpty())
+	})
+
 	It("orders same-tier machines by the upgrade-order label, not creation order", func() {
 		cluster := newOpTestCluster()
 		newOpTestMachine(cluster.Name, "controlplane", "lo-cp1")
@@ -477,3 +538,17 @@ var _ = Describe("TalosOperationReconciler", func() {
 		Expect(fake2.calls).To(Equal([]string{w.Name}), "cp was already Completed in status; a resumed reconciler must not re-advance it")
 	})
 })
+
+// drainEvents returns what a FakeRecorder holds right now, in order, as "Type Reason message".
+func drainEvents(r *record.FakeRecorder) []string {
+	var out []string
+
+	for {
+		select {
+		case e := <-r.Events:
+			out = append(out, e)
+		default:
+			return out
+		}
+	}
+}

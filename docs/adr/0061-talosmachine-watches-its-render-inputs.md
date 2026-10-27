@@ -23,7 +23,7 @@ revisits machines whose last reconcile failed, and a converged machine returns a
 
 ## Secrets are not watched (superseded: they are now)
 
-Follow-up (a changed credential is a reboot-requiring path, so the watch makes the machine report RebootRequired promptly rather than apply it): the machine controller watches Secrets in the controller namespace, mapped through a `TalosCluster` field index on `authSecretRef.name`; the Secret informer already existed (cache.go scopes it to that namespace), so no RBAC changes. `desiredInputsHash` includes `registryAuthFingerprint` (a hash of the resolved password/auth/identityToken, not the resourceVersion, so label edits do not count), and the TalosStorage status controller computes the same value. The text below is the original reasoning.
+Follow-up (a changed credential used to be a reboot-requiring path; since ADR 0009's registry addendum it is applied live, so the watch makes the machine apply it promptly): the machine controller watches Secrets in the controller namespace, mapped through a `TalosCluster` field index on `authSecretRef.name`; the Secret informer already existed (cache.go scopes it to that namespace), so no RBAC changes. `desiredInputsHash` includes `registryAuthFingerprint` (a hash of the resolved password/auth/identityToken, not the resourceVersion, so label edits do not count), and the TalosStorage status controller computes the same value. The text below is the original reasoning.
 
 `spec.registries[].authSecretRef` (ADR 0027) is a render input too, but a Secret watch needs a decision this change
 should not make quietly: the controller's Secret RBAC is namespace-scoped to `ichor-system`, and a watch is a cached

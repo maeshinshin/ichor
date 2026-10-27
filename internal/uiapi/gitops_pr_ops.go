@@ -104,8 +104,8 @@ func (s *Server) rejectByPR(
 }
 
 // updatePatchByPR is UpdatePatch's pull request branch. A patch update is a
-// full replace of spec (patch.proto), so the PR replaces the file's spec
-// node as a whole; comments inside it are not kept (docs/adr/0056).
+// full replace of spec (patch.proto), so the PR makes the file's spec node
+// equal the new spec, merging so that comments and formatting on what did not change stay (docs/adr/0056).
 func (s *Server) updatePatchByPR(
 	ctx context.Context, plan *prPlan, cluster *ichorv1alpha1.TalosCluster, p, stored *ichorv1alpha1.TalosConfigPatch,
 ) (*connect.Response[pb.UpdatePatchResponse], error) {
@@ -121,7 +121,7 @@ func (s *Server) updatePatchByPR(
 
 	url, err := s.openPR(ctx, plan, prChange{
 		verb: "update", name: p.Name, target: patchTarget(p),
-		updates: []prmode.FieldUpdate{{Path: []string{specKey}, Value: spec}},
+		updates: []prmode.FieldUpdate{{Path: []string{specKey}, Value: spec, Merge: true}},
 		title:   "Update patch " + p.Name, impact: impact,
 	})
 	if err != nil {

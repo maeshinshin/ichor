@@ -30,6 +30,10 @@ import (
 type FieldUpdate struct {
 	Path  []string
 	Value any
+	// Merge edits the existing value in place instead of replacing it: only what differs from
+	// Value changes, so comments and formatting on the rest stay (a whole-spec update would
+	// otherwise lose every comment inside it).
+	Merge bool
 }
 
 // defaultIndent is detectIndent's fallback for a document with no
@@ -79,7 +83,7 @@ func Patch(data []byte, target Target, updates []FieldUpdate) ([]byte, error) {
 		}
 
 		for _, u := range updates {
-			if err := setNode(doc, u.Path, u.Value); err != nil {
+			if err := setNode(doc, u.Path, u.Value, u.Merge); err != nil {
 				return nil, fmt.Errorf("prmode: setting %s: %w", strings.Join(u.Path, "."), err)
 			}
 		}
@@ -211,7 +215,7 @@ func detectIndent(data []byte) int {
 // adding index support speculatively is not this unit's job.
 // shortcut: no list-index support; add it if a field under a list ever
 // needs editing in place.
-func setNode(doc *yaml.Node, path []string, newValue any) error {
+func setNode(doc *yaml.Node, path []string, newValue any, merge bool) error {
 	if len(doc.Content) == 0 {
 		return fmt.Errorf("empty document")
 	}
@@ -245,6 +249,12 @@ func setNode(doc *yaml.Node, path []string, newValue any) error {
 		return fmt.Errorf("encoding new value: %w", err)
 	}
 
+	if merge && node.Kind != 0 {
+		mergeNode(node, replacement)
+
+		return nil
+	}
+
 	replacement.HeadComment = node.HeadComment
 	replacement.LineComment = node.LineComment
 	replacement.FootComment = node.FootComment
@@ -268,4 +278,54 @@ func findMappingValue(m *yaml.Node, key string) *yaml.Node {
 	}
 
 	return nil
+}
+
+// mergeNode makes old equal updated while touching as little as it can: an equal scalar keeps
+// its node (style, comments), a changed scalar takes the new value but keeps its comments and
+// style, mappings are merged key by key (old order kept, new keys appended, absent keys
+// removed) and sequences item by item by position. Anything of a different kind is replaced,
+// keeping the old node's own comments.
+func mergeNode(old, updated *yaml.Node) {
+	switch {
+	case old.Kind == yaml.MappingNode && updated.Kind == yaml.MappingNode:
+		merged := make([]*yaml.Node, 0, len(updated.Content))
+
+		for i := 0; i+1 < len(old.Content); i += 2 {
+			if nv := findMappingValue(updated, old.Content[i].Value); nv != nil {
+				mergeNode(old.Content[i+1], nv)
+
+				merged = append(merged, old.Content[i], old.Content[i+1])
+			}
+		}
+
+		for i := 0; i+1 < len(updated.Content); i += 2 {
+			if findMappingValue(old, updated.Content[i].Value) == nil {
+				merged = append(merged, updated.Content[i], updated.Content[i+1])
+			}
+		}
+
+		old.Content = merged
+	case old.Kind == yaml.SequenceNode && updated.Kind == yaml.SequenceNode:
+		n := min(len(old.Content), len(updated.Content))
+		for i := range n {
+			mergeNode(old.Content[i], updated.Content[i])
+		}
+
+		old.Content = append(old.Content[:n], updated.Content[n:]...)
+	case old.Kind == yaml.ScalarNode && updated.Kind == yaml.ScalarNode:
+		if old.ShortTag() == updated.ShortTag() && old.Value == updated.Value {
+			return
+		}
+
+		style := old.Style
+		old.Tag, old.Value, old.Style = updated.Tag, updated.Value, updated.Style
+
+		if old.ShortTag() == updated.ShortTag() && style != 0 && updated.Style == 0 {
+			old.Style = style
+		}
+	default:
+		head, line, foot := old.HeadComment, old.LineComment, old.FootComment
+		*old = *updated
+		old.HeadComment, old.LineComment, old.FootComment = head, line, foot
+	}
 }

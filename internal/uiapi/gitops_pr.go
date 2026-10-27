@@ -18,7 +18,9 @@ package uiapi
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -259,6 +261,35 @@ func sameRepository(a, b string) bool {
 	return norm(a) == norm(b)
 }
 
+// maxBranchName bounds prBranchName's result; git allows far more, but a short ref keeps
+// PR lists readable.
+const maxBranchName = 100
+
+// prBranchName names the branch for verb on namespace/name: deterministic, so the same change
+// asked twice finds its PR, and carrying the namespace so same-named objects in different
+// namespaces do not share one (docs/adr/0056). A name with anything outside [a-z0-9-] or
+// longer than maxBranchName is cut and given a hash of the full name, so it stays a valid ref
+// (no "..", ".lock" or trailing dot can survive) and two long names do not collide.
+func prBranchName(verb, namespace, name string) string {
+	full := verb + "-" + namespace + "-" + name
+	clean := strings.Map(func(r rune) rune {
+		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-' {
+			return r
+		}
+
+		return '-'
+	}, full)
+
+	if clean == full && len(full) <= maxBranchName {
+		return "ichor/" + full
+	}
+
+	sum := sha256.Sum256([]byte(full))
+	suffix := "-" + hex.EncodeToString(sum[:4])
+
+	return "ichor/" + strings.TrimRight(clean[:min(len(clean), maxBranchName-len(suffix))], "-") + suffix
+}
+
 // openPR runs plan with change: clone, edit or add, push a branch, open the
 // PR, and return its URL. Nothing is written to the cluster, and the token
 // never appears in what it returns: it goes to git through an environment
@@ -276,7 +307,7 @@ func (s *Server) openPR(ctx context.Context, plan *prPlan, change prChange) (str
 		BaseBranch: plan.baseBranch,
 		// Deterministic, so the same change asked twice finds the PR the first
 		// one opened instead of opening another (docs/adr/0056).
-		HeadBranch: fmt.Sprintf("ichor/%s-%s", change.verb, change.name),
+		HeadBranch: prBranchName(change.verb, change.target.Namespace, change.name),
 		SourcePath: plan.sourcePath, Target: change.target, Updates: change.updates, NewFile: change.newFile,
 		Delete: change.remove,
 		Title:  change.title, Requester: s.actorName(ctx), ImpactPreview: change.impact,

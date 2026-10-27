@@ -1,7 +1,7 @@
 # 0056. `TalosCluster.spec.gitops`: a repository connection, strict mode, and the UI/CLI opening PRs
 
 Status: Accepted · Date: 2026-10-26 · Design section: GitOps and Argo CD
-Decided: `TalosCluster.spec.gitops` carries `mode` (`relaxed` default, `strict`) and an optional `repository` connection (host, https API URL, owner/repo, https clone URL, base branch, a `tokenSecretRef` read in the UI backend's own namespace, `machinesPath` required for strict); `Server.requireUntracked` becomes `planWrite`, which sends a CR Argo CD tracks to a pull request when a connection exists and refuses otherwise, and sends a strict approval to a pull request that adds the `TalosMachine` file; changing `mode` rewrites nothing; the response carries `pull_request_url` and the audit action gets a `-pr` suffix; amended 2026-10-26: the PR branch is `ichor/<verb>-<name>` and a request whose head branch already has an open PR returns that PR instead of opening another, and deleting a tracked `TalosConfigPatch` becomes a PR that removes its document (or its file)
+Decided: `TalosCluster.spec.gitops` carries `mode` (`relaxed` default, `strict`) and an optional `repository` connection (host, https API URL, owner/repo, https clone URL, base branch, a `tokenSecretRef` read in the UI backend's own namespace, `machinesPath` required for strict); `Server.requireUntracked` becomes `planWrite`, which sends a CR Argo CD tracks to a pull request when a connection exists and refuses otherwise, and sends a strict approval to a pull request that adds the `TalosMachine` file; changing `mode` rewrites nothing; the response carries `pull_request_url` and the audit action gets a `-pr` suffix; amended 2026-10-26: the PR branch is `ichor/<verb>-<name>` (since 2026-10-27 `ichor/<verb>-<namespace>-<name>`) and a request whose head branch already has an open PR returns that PR instead of opening another, and deleting a tracked `TalosConfigPatch` becomes a PR that removes its document (or its file)
 
 ## Context
 
@@ -51,7 +51,7 @@ with the wrong token), uses the Application's `targetRevision` as the base branc
 `baseBranch`), and opens the PR; `ModeReadOnly` refuses with ADR 0051's message. Edits: approve/reject set
 `spec.approvalState`, `approvalDecision`, and `role`/`hostname`/`nodeLabels` when set (`prmode.Patch` now adds a
 missing leaf key; a missing parent is still an error); `UpdatePatch` replaces the file's `spec` node whole,
-matching its full-replace semantics, so comments inside that node are lost (shortcut). `DeletePatch` of a tracked
+matching its full-replace semantics, merged into the existing node (`FieldUpdate.Merge`) so comments and formatting on unchanged fields are kept; a comment on a removed key or item goes with it. `DeletePatch` of a tracked
 patch is a PR too (decision 6). Flux stays read-only (ADR 0037). A cluster that cannot be read (not found) is "relaxed, no
 repository" so an untracked write is never newly blocked; any other read error refuses.
 
@@ -108,9 +108,9 @@ error, the PR body, the response and the pushed file.
 - Until a strict-approval PR merges the machine stays pending and the UI still offers approval; a click now
   returns the open PR's URL (decision 6). Nothing follows a PR to merge, and the UI does not mark a machine
   as having one open.
-- Two objects with the same name and verb in different namespaces share a branch name, so the second asks for
-  the first's PR. Namespaces are not in the name; a layout with the same name in several namespaces of one
-  repository would need them added.
+- Amended 2026-10-27: the branch is `ichor/<verb>-<namespace>-<name>` (`prBranchName`), so same-named objects in
+  different namespaces no longer share one; a name with characters outside `[a-z0-9-]` or over 100 bytes gets an
+  8-hex hash of the full name appended, which keeps it a valid, bounded ref. PRs opened under the old name are not found.
 - `machinesPath` is one directory for every cluster's machines in that connection; a layout that needs more is
   later work.
 - The new-file manifest carries no labels or annotations from the live `TalosMachine`.

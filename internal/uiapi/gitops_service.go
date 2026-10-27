@@ -259,7 +259,7 @@ func (s *Server) FindPullRequests(
 		}), nil
 	}
 
-	return s.findPRs(ctx, plan, req.Msg.GetKind(), obj.GetName())
+	return s.findPRs(ctx, plan, req.Msg.GetKind(), obj.GetNamespace(), obj.GetName())
 }
 
 // requireApplicationRead refuses a caller who may not read the Argo CD
@@ -296,7 +296,7 @@ func (s *Server) requireApplicationRead(ctx context.Context, obj client.Object) 
 }
 
 func (s *Server) findPRs(
-	ctx context.Context, plan *prPlan, kind pb.GitOpsKind, name string,
+	ctx context.Context, plan *prPlan, kind pb.GitOpsKind, namespace, name string,
 ) (*connect.Response[pb.FindPullRequestsResponse], error) {
 	token, err := s.gitToken(ctx, plan.repo)
 	if err != nil {
@@ -307,7 +307,7 @@ func (s *Server) findPRs(
 	oldest := s.now()
 
 	for _, verb := range prVerbs(kind) {
-		head := fmt.Sprintf("ichor/%s-%s", verb, name)
+		head := prBranchName(verb, namespace, name)
 		key := plan.repo.Host + "|" + plan.repo.APIURL + "|" + plan.repo.Owner + "/" + plan.repo.Repo + "|" + head + "|" + plan.baseBranch
 
 		l, ok := s.prs.get(key, s.now())

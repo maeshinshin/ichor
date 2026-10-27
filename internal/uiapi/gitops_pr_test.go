@@ -75,7 +75,7 @@ metadata:
 spec:
   clusterRef:
     name: c
-  layer: cluster
+  layer: cluster # keep me
   priority: 10
   documents: []
 `
@@ -407,8 +407,16 @@ func TestTrackedPatchUpdateOpensAPR(t *testing.T) {
 		t.Fatalf("PR description lacks the impact:\n%s", e.host.body["body"])
 	}
 
-	if edited := fileOnBranch(t, e.bare, prAppPath+"/nodes.yaml"); !strings.Contains(edited, "sysctl") && !strings.Contains(edited, "Sysctl") {
+	edited := fileOnBranch(t, e.bare, prAppPath+"/nodes.yaml")
+	if !strings.Contains(edited, "sysctl") && !strings.Contains(edited, "Sysctl") {
 		t.Fatalf("the patch documents were not written:\n%s", edited)
+	}
+
+	// Comments inside spec on fields that did not change survive the edit (docs/adr/0056).
+	for _, want := range []string{"layer: cluster # keep me", "name: c # the cluster"} {
+		if !strings.Contains(edited, want) {
+			t.Fatalf("edited file lost %q:\n%s", want, edited)
+		}
 	}
 
 	var p ichorv1alpha1.TalosConfigPatch
@@ -504,7 +512,7 @@ func TestTrackedPatchDeleteOpensAPRThatRemovesItsDocument(t *testing.T) {
 		t.Fatalf("file on branch:\n%q\nwant\n%q", got, want)
 	}
 
-	if e.host.body["head"] != "ichor/delete-p1" {
+	if e.host.body["head"] != "ichor/delete-"+trackedTestNS+"-p1" {
 		t.Fatalf("head = %q", e.host.body["head"])
 	}
 

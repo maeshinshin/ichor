@@ -121,7 +121,7 @@ func findPRsReq(kind pb.GitOpsKind, name string) *connect.Request[pb.FindPullReq
 
 func TestFindPullRequestsAsksTheHostOnceWithinTheTTL(t *testing.T) {
 	e := newPREnv(t, prOpts{tracked: true})
-	e.host.open["ichor/approve-m1"] = prPRURL
+	e.host.open[prBranchName("approve", trackedTestNS, "m1")] = prPRURL
 
 	now := time.Date(2026, 10, 26, 12, 0, 0, 0, time.UTC)
 	e.srv.Now = func() time.Time { return now }
@@ -187,7 +187,7 @@ func TestFindPullRequestsHostErrorIsNotCachedAndLeaksNoToken(t *testing.T) {
 
 	// The host recovers: the failure must not have been remembered as "none".
 	e.host.getStatus = 0
-	e.host.open["ichor/approve-m1"] = prPRURL
+	e.host.open[prBranchName("approve", trackedTestNS, "m1")] = prPRURL
 
 	res, err := e.srv.FindPullRequests(context.Background(), findPRsReq(pb.GitOpsKind_GIT_OPS_KIND_MACHINE, "m1"))
 	if err != nil || len(res.Msg.GetPullRequests()) != 1 {

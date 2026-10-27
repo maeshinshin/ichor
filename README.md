@@ -7,7 +7,8 @@ resources; you work with them through a CLI, a web UI, or Git.
 Ichor only takes care of Talos. Everything that runs on the cluster — the CNI,
 storage, monitoring — is bootstrapped once and then handed over to Argo CD.
 
-> Status: pre-alpha. Nothing here is usable yet. The design is in
+> Status: alpha. Exercised end to end on Talos v1.14 clusters running as KubeVirt
+> VMs; not yet on bare metal. The design is in
 > [docs/design/architecture.md](docs/design/architecture.md).
 
 ## What it does
@@ -39,15 +40,17 @@ storage, monitoring — is bootstrapped once and then handed over to Argo CD.
 |---|---|
 | `ichor` | CLI. Bootstraps the first node, adopts existing clusters, and does everything the UI does. |
 | `ichor-controller` | The only thing that talks to Talos nodes. Reconciles the CRDs. |
-| `ichor-ui` | Web UI (Preact) and its backend. Talks to the API server, never directly to nodes. |
+| `ichor-ui` | Web UI (Preact) and its backend. Changes the world only by writing custom resources; reads node state from Talos directly. |
 
 ## Security
 
 Approving a node talks to Talos's maintenance-mode API, which does not
 authenticate the node at the other end. Ichor assumes you keep a separate
 provisioning network for that reason — it's not something Ichor itself
-enforces. Only the controller holds an `os:admin`-equivalent Talos identity;
-the UI backend's is read-only, and the browser holds no credentials at all.
+enforces. Only the controller holds an `os:admin`-equivalent Talos identity and writes
+to nodes. The UI backend reads with `os:reader`; for the admin-gated downloads
+(etcd snapshot, packet capture) it uses the narrowest role Talos accepts for
+that one call. The browser holds no credentials at all.
 The secrets bundle (Talos, Kubernetes and etcd CA keys) is the root of trust
 and lives in a Secret, never in a custom resource. See the Trust section of
 [docs/design/architecture.md](docs/design/architecture.md) for the full

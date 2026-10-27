@@ -113,6 +113,8 @@ type NodesReadyFunc func(ctx context.Context, talos TalosClient) (notReady []str
 
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosoperations/finalizers,verbs=update
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters/status,verbs=get;update;patch
+// The bundle Secret's name is spec.secretsRef.name, so RBAC cannot narrow this to one object;
+// caRun.updateBundle is the code-level guard.
 // +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,verbs=update
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
@@ -445,6 +447,22 @@ func (c *caRun) preflight(ctx context.Context) (ctrl.Result, error) {
 		reasonCARotationSaved, "the new CAs are saved; adding them to every machine's accepted CAs")
 }
 
+// bundleKey is the only Secret this executor ever writes: the one the cluster's spec.secretsRef names, in the
+// controller namespace. The manager's Role grants update on every Secret there (RBAC cannot filter by a name the
+// user chooses), so this and updateBundle are what keep the write to that one object.
+func (c *caRun) bundleKey() types.NamespacedName {
+	return types.NamespacedName{Namespace: c.r.ControllerNamespace, Name: c.cluster.Spec.SecretsRef.Name}
+}
+
+// updateBundle refuses to write any Secret other than bundleKey.
+func (c *caRun) updateBundle(ctx context.Context, secret *corev1.Secret) error {
+	if secret.Name == "" || client.ObjectKeyFromObject(secret) != c.bundleKey() {
+		return fmt.Errorf("refusing to write Secret %s/%s: it is not the secrets bundle %q names", secret.Namespace, secret.Name, c.cluster.Name)
+	}
+
+	return c.r.Update(ctx, secret)
+}
+
 // saveRotation writes rotation.yaml into the bundle Secret, once and only if absent.
 func (c *caRun) saveRotation(ctx context.Context, rot *secretsbundle.Rotation) error {
 	raw, err := rot.Marshal()
@@ -454,7 +472,7 @@ func (c *caRun) saveRotation(ctx context.Context, rot *secretsbundle.Rotation) e
 
 	var secret corev1.Secret
 
-	key := types.NamespacedName{Namespace: c.r.ControllerNamespace, Name: c.cluster.Spec.SecretsRef.Name}
+	key := c.bundleKey()
 	if err := readerOrClient(c.r.APIReader, c.r.Client).Get(ctx, key, &secret); err != nil {
 		return err
 	}
@@ -469,7 +487,7 @@ func (c *caRun) saveRotation(ctx context.Context, rot *secretsbundle.Rotation) e
 
 	secret.Data[secretsbundle.RotationKey] = raw
 
-	return c.r.Update(ctx, &secret)
+	return c.updateBundle(ctx, &secret)
 }
 
 func (c *caRun) initialCertificates() ([]ichorv1alpha1.CARotationCertificate, error) {
@@ -837,7 +855,7 @@ func (c *caRun) replaceBundle(ctx context.Context) (*secrets.Bundle, error) {
 
 	var secret corev1.Secret
 
-	key := types.NamespacedName{Namespace: c.r.ControllerNamespace, Name: c.cluster.Spec.SecretsRef.Name}
+	key := c.bundleKey()
 	if err := readerOrClient(c.r.APIReader, c.r.Client).Get(ctx, key, &secret); err != nil {
 		return nil, err
 	}
@@ -845,7 +863,7 @@ func (c *caRun) replaceBundle(ctx context.Context) (*secrets.Bundle, error) {
 	secret.Data[secretsbundle.SecretKey] = raw
 	delete(secret.Data, secretsbundle.RotationKey)
 
-	if err := c.r.Update(ctx, &secret); err != nil {
+	if err := c.updateBundle(ctx, &secret); err != nil {
 		return nil, err
 	}
 

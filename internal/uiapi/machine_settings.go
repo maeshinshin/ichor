@@ -192,7 +192,7 @@ func disksFromPB(in []*pb.MachineDiskRole) ([]ichorv1alpha1.TalosMachineDiskRole
 }
 
 func disksToPB(in []ichorv1alpha1.TalosMachineDiskRole) []*pb.MachineDiskRole {
-	var out []*pb.MachineDiskRole
+	out := make([]*pb.MachineDiskRole, 0, len(in))
 
 	for _, d := range in {
 		out = append(out, &pb.MachineDiskRole{

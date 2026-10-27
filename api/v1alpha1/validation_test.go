@@ -761,4 +761,95 @@ var _ = Describe("TalosMachine", func() {
 		Entry("a by-id path outside /dev/disk/by-id", &TalosMachineDisk{ByIDPath: "/tmp/x"}, false),
 		Entry("a device path with a quote", &TalosMachineDisk{DevPath: "/dev/sd\"a"}, false),
 	)
+
+	// Spec.network.
+	const nicMAC = "aa:bb:cc:dd:ee:01"
+
+	DescribeTable("network",
+		func(n *TalosMachineNetwork, accepted bool) {
+			m := newMachine()
+			m.Spec.Network = n
+
+			err := k8sClient.Create(context.Background(), m)
+			if accepted {
+				Expect(err).NotTo(HaveOccurred())
+			} else {
+				Expect(err).To(HaveOccurred())
+			}
+		},
+		Entry("dhcp by default", &TalosMachineNetwork{MAC: nicMAC}, true),
+		Entry("dhcp with DNS servers", &TalosMachineNetwork{MAC: nicMAC, DNSServers: []string{"1.1.1.1"}}, true),
+		Entry("static with a gateway", &TalosMachineNetwork{
+			MAC: nicMAC, Addressing: "static", Addresses: []string{"192.168.1.10/24"}, Gateway: "192.168.1.1",
+		}, true),
+		Entry("static IPv6", &TalosMachineNetwork{MAC: nicMAC, Addressing: "static", Addresses: []string{"fd00::10/64"}}, true),
+		Entry("static on a VLAN", &TalosMachineNetwork{
+			MAC: nicMAC, Addressing: "static", Addresses: []string{"10.0.0.2/24"}, VLANID: 100,
+		}, true),
+		Entry("dhcp on a VLAN", &TalosMachineNetwork{MAC: nicMAC, VLANID: 4094}, true),
+		Entry("static without addresses", &TalosMachineNetwork{MAC: nicMAC, Addressing: "static"}, false),
+		Entry("dhcp with addresses", &TalosMachineNetwork{MAC: nicMAC, Addresses: []string{"192.168.1.10/24"}}, false),
+		Entry("dhcp with a gateway", &TalosMachineNetwork{MAC: nicMAC, Gateway: "192.168.1.1"}, false),
+		Entry("an address without a prefix", &TalosMachineNetwork{
+			MAC: nicMAC, Addressing: "static", Addresses: []string{"192.168.1.10"},
+		}, false),
+		Entry("a bad gateway", &TalosMachineNetwork{
+			MAC: nicMAC, Addressing: "static", Addresses: []string{"192.168.1.10/24"}, Gateway: "gw",
+		}, false),
+		Entry("a bad DNS server", &TalosMachineNetwork{MAC: nicMAC, DNSServers: []string{"dns.example.com"}}, false),
+		Entry("a malformed MAC", &TalosMachineNetwork{MAC: "aa-bb-cc-dd-ee-01"}, false),
+		Entry("a missing MAC", &TalosMachineNetwork{}, false),
+		Entry("a negative VLAN", &TalosMachineNetwork{MAC: nicMAC, VLANID: -1}, false),
+		Entry("VLAN 4095", &TalosMachineNetwork{MAC: nicMAC, VLANID: 4095}, false),
+		Entry("an unknown addressing", &TalosMachineNetwork{MAC: nicMAC, Addressing: "slaac"}, false),
+	)
+
+	// Spec.disks.
+	DescribeTable("disks",
+		func(disks []TalosMachineDiskRole, accepted bool) {
+			m := newMachine()
+			m.Spec.Disks = disks
+
+			err := k8sClient.Create(context.Background(), m)
+			if accepted {
+				Expect(err).NotTo(HaveOccurred())
+			} else {
+				Expect(err).To(HaveOccurred())
+			}
+		},
+		Entry("ephemeral", []TalosMachineDiskRole{{Role: "ephemeral", Disk: TalosMachineDisk{Serial: "E1"}}}, true),
+		Entry("a user volume", []TalosMachineDiskRole{
+			{Role: "userVolume", Name: "data", MaxSize: "200GiB", Disk: TalosMachineDisk{WWID: "w1"}},
+		}, true),
+		Entry("ephemeral and two user volumes", []TalosMachineDiskRole{
+			{Role: "ephemeral", Disk: TalosMachineDisk{Serial: "E1"}},
+			{Role: "userVolume", Name: "a", Disk: TalosMachineDisk{Serial: "A"}},
+			{Role: "userVolume", Name: "b", Disk: TalosMachineDisk{Serial: "B"}},
+		}, true),
+		Entry("two ephemeral disks", []TalosMachineDiskRole{
+			{Role: "ephemeral", Disk: TalosMachineDisk{Serial: "E1"}},
+			{Role: "ephemeral", Disk: TalosMachineDisk{Serial: "E2"}},
+		}, false),
+		Entry("duplicate user volume names", []TalosMachineDiskRole{
+			{Role: "userVolume", Name: "a", Disk: TalosMachineDisk{Serial: "A"}},
+			{Role: "userVolume", Name: "a", Disk: TalosMachineDisk{Serial: "B"}},
+		}, false),
+		Entry("a user volume without a name", []TalosMachineDiskRole{
+			{Role: "userVolume", Disk: TalosMachineDisk{Serial: "A"}},
+		}, false),
+		Entry("a name on ephemeral", []TalosMachineDiskRole{
+			{Role: "ephemeral", Name: "x", Disk: TalosMachineDisk{Serial: "A"}},
+		}, false),
+		Entry("a size on ephemeral", []TalosMachineDiskRole{
+			{Role: "ephemeral", MaxSize: "10GiB", Disk: TalosMachineDisk{Serial: "A"}},
+		}, false),
+		Entry("a bad volume name", []TalosMachineDiskRole{
+			{Role: "userVolume", Name: "my data", Disk: TalosMachineDisk{Serial: "A"}},
+		}, false),
+		Entry("a bad size", []TalosMachineDiskRole{
+			{Role: "userVolume", Name: "a", MaxSize: "lots", Disk: TalosMachineDisk{Serial: "A"}},
+		}, false),
+		Entry("an unknown role", []TalosMachineDiskRole{{Role: "storage", Disk: TalosMachineDisk{Serial: "A"}}}, false),
+		Entry("a disk with no selector", []TalosMachineDiskRole{{Role: "ephemeral"}}, false),
+	)
 })

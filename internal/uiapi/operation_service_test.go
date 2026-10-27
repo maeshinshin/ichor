@@ -32,6 +32,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/upgrade"
 )
 
 // OperationService (docs/adr/0068) over a fake client: the order of the two
@@ -337,6 +338,47 @@ func TestPlanTalosListsControlPlanesFirstThenWorkersByOrderLabelAndSkipsHeld(t *
 	if res.Msg.GetEffect() != pb.OperationEffect_OPERATION_EFFECT_REBOOT || !res.Msg.GetSpecChanges() ||
 		res.Msg.GetCurrent() != opOldTalos || strings.Join(res.Msg.GetHeld(), ",") != "held" {
 		t.Fatalf("plan = %v", res.Msg)
+	}
+}
+
+func TestPlanTalosNamesASchematicOnlyChange(t *testing.T) {
+	const newSchematic = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+
+	plan := func(schematic, running string) *pb.PlanOperationResponse {
+		objs := opObjects()
+		if schematic != "" {
+			objs[0].(*ichorv1alpha1.TalosCluster).Spec.Schematic = &ichorv1alpha1.TalosClusterSchematic{ID: schematic}
+		}
+
+		for _, o := range objs[1:] {
+			o.(*ichorv1alpha1.TalosMachine).Status.Schematic = running
+		}
+
+		srv, _ := opServer(t, objs...)
+
+		res, err := srv.PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{
+			Cluster: objectRef(opNS, opCluster), Kind: pb.OperationKind_OPERATION_KIND_TALOS,
+		}))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		return res.Msg
+	}
+
+	got := plan(newSchematic, upgrade.DefaultSchematic)
+	if got.GetCurrentSchematic() != upgrade.DefaultSchematic || got.GetTargetSchematic() != newSchematic || got.GetSpecChanges() {
+		t.Fatalf("plan = %v", got)
+	}
+
+	for name, p := range map[string]*pb.PlanOperationResponse{
+		"same schematic":               plan(newSchematic, newSchematic),
+		"unknown node, stock target":   plan("", ""),
+		"unknown node, stock explicit": plan(upgrade.DefaultSchematic, ""),
+	} {
+		if p.GetCurrentSchematic() != "" || p.GetTargetSchematic() != "" {
+			t.Errorf("%s: plan names a schematic change: %v", name, p)
+		}
 	}
 }
 

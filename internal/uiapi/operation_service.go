@@ -456,6 +456,17 @@ func (s *Server) planMachines(ctx context.Context, p *opPlan, cluster *ichorv1al
 			continue
 		}
 
+		if p.kind == ichorv1alpha1.TalosOperationKindTalos {
+			running := m.Status.Schematic
+			if running == "" {
+				running = upgrade.DefaultSchematic // a node that booted no Image Factory asset runs the stock one
+			}
+
+			if want := targetSchematic(cluster); running != want && p.resp.CurrentSchematic == "" {
+				p.resp.CurrentSchematic, p.resp.TargetSchematic = running, want
+			}
+		}
+
 		if m.Spec.Role == opRoleControlPlane {
 			cps = append(cps, m)
 		} else {
@@ -757,4 +768,13 @@ func isDowngrade(p *opPlan) bool {
 	t, c := p.resp.GetTarget(), p.resp.GetCurrent()
 
 	return t != "" && semver.IsValid(t) && semver.IsValid(c) && semver.Compare(t, c) < 0
+}
+
+// targetSchematic is the schematic a cluster's nodes should run: spec.schematic.id, or the stock one.
+func targetSchematic(cluster *ichorv1alpha1.TalosCluster) string {
+	if cluster.Spec.Schematic != nil && cluster.Spec.Schematic.ID != "" {
+		return cluster.Spec.Schematic.ID
+	}
+
+	return upgrade.DefaultSchematic
 }

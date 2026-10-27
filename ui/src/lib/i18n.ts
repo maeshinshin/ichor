@@ -733,6 +733,7 @@ export const en = {
   'ops.dialog.typeName': 'Type the cluster name ({name}) to confirm',
 
   'ops.plan.talos': 'Upgrade Talos from {from} to {to}.',
+  'ops.plan.talosSchematic': 'Upgrade Talos {version} to a new schematic: schematic {from} → {to}.',
   'ops.plan.kubernetes': 'Upgrade Kubernetes from {from} to {to}.',
   'ops.plan.ichor': 'Upgrade Ichor itself from {from} to {to}.',
   'ops.plan.cni': 'Switch kube-proxy from {from} to {to}.',

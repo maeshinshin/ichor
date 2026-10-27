@@ -1,0 +1,14 @@
+apiVersion: ichor.maesh.dev/v1alpha1
+kind: IchorUser
+metadata:
+  labels:
+    app.kubernetes.io/name: ichor
+    app.kubernetes.io/managed-by: kustomize
+  name: alice
+spec:
+  displayName: Alice Example
+  email: alice@example.com
+  # Each role becomes the Kubernetes group ichor:<role>. There is no password here: an admin
+  # sets it (ichor user set-password), and it is stored as an argon2id hash in a Secret.
+  roles:
+    - operator

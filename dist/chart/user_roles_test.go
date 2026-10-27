@@ -24,7 +24,10 @@ import (
 
 // builtinUserRoles are ADR 0094's three built-in roles, lowest first. The chart names them
 // ichor-<name>; config/rbac names them <name> and kustomize's namePrefix adds "ichor-".
-const ichorGroup = "ichor.maesh.dev"
+const (
+	ichorGroup = "ichor.maesh.dev"
+	verbStart  = "start"
+)
 
 var builtinUserRoles = []string{"viewer", "operator", "admin"}
 
@@ -91,11 +94,11 @@ func TestBuiltinUserRoles(t *testing.T) {
 
 	// The explicit verbs live in ichor-admin and nowhere below it.
 	adminOnly := []rbacTriple{
-		{ichorGroup, "talosoperations/shutdown", "start", ""},
-		{ichorGroup, "talosoperations/ca-rotation", "start", ""},
-		{ichorGroup, "talosoperations/etcd-restore", "start", ""},
-		{ichorGroup, "talosoperations/node-reset", "start", ""},
-		{ichorGroup, "talosoperations/node-shutdown", "start", ""},
+		{ichorGroup, "talosoperations/shutdown", verbStart, ""},
+		{ichorGroup, "talosoperations/ca-rotation", verbStart, ""},
+		{ichorGroup, "talosoperations/etcd-restore", verbStart, ""},
+		{ichorGroup, "talosoperations/node-reset", verbStart, ""},
+		{ichorGroup, "talosoperations/node-shutdown", verbStart, ""},
 		{ichorGroup, "talosclusters/authentication", "update", ""},
 		{ichorGroup, "ichorusers/password", "update", ""},
 		{ichorGroup, "talosclusters", "break-glass", ""},

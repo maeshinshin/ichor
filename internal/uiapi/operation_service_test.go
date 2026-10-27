@@ -44,6 +44,10 @@ const (
 	opCluster  = "c"
 	opOldTalos = "v1.14.3"
 	opNewTalos = "v1.14.4"
+
+	testControllerLabelKey = "control-plane"
+	testControllerPodName  = "ichor-controller"
+	testControllerLabelVal = "controller-manager"
 )
 
 func opMachine(name, role string, labels, annotations map[string]string) *ichorv1alpha1.TalosMachine {
@@ -477,10 +481,10 @@ func TestPlanConfigListsTheControllersOwnMachineLast(t *testing.T) {
 	cp1.Status.ObservedEndpoint, cp1.Status.ObservedEndpointFor = "10.0.0.22:50000", cp1.Spec.Endpoint
 
 	pod := &corev1.Pod{
-		Name: "ichor-controller", Namespace: opNS, Labels: map[string]string{"control-plane": "controller-manager"},
-		Spec: corev1.PodSpec{NodeName: "some-node"},
+		Name: testControllerPodName, Namespace: opNS, Labels: map[string]string{testControllerLabelKey: testControllerLabelVal},
+		Spec: corev1.PodSpec{NodeName: "ctl-node"},
 	}
-	node := &corev1.Node{Name: "some-node", Status: corev1.NodeStatus{Addresses: []corev1.NodeAddress{{Type: corev1.NodeInternalIP, Address: "10.0.0.22"}}}}
+	node := &corev1.Node{Name: "ctl-node", Status: corev1.NodeStatus{Addresses: []corev1.NodeAddress{{Type: corev1.NodeInternalIP, Address: "10.0.0.22"}}}}
 
 	srv, _ := opServer(t, append(objs, node, pod)...)
 
@@ -491,7 +495,7 @@ func TestPlanConfigListsTheControllersOwnMachineLast(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var got []string
+	got := make([]string, 0, len(res.Msg.GetMachines()))
 
 	for _, m := range res.Msg.GetMachines() {
 		got = append(got, fmt.Sprintf("%s@%d", m.GetName(), m.GetStep()))

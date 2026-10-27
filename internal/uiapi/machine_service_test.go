@@ -166,9 +166,9 @@ var _ = Describe("MachineService", func() {
 			resp, err := s.ApproveMachine(ctx, connect.NewRequest(&pb.ApproveMachineRequest{
 				Machine: objectRef(m.Namespace, m.Name), Role: pb.MachineRole_MACHINE_ROLE_WORKER,
 				Network: &pb.MachineNetwork{
-					Mac: testMAC, Addressing: "static", Addresses: []string{"10.0.0.2/24"}, Gateway: "10.0.0.1", VlanId: 30,
+					Mac: testMAC, Addressing: "static", Addresses: []string{"10.0.0.2/24"}, Gateway: gatewayIP, VlanId: 30,
 				},
-				Disks: []*pb.MachineDiskRole{{Role: "ephemeral", Disk: &pb.MachineDisk{Serial: "E1"}}},
+				Disks: []*pb.MachineDiskRole{{Role: ichorv1alpha1.MachineDiskRoleEphemeral, Disk: &pb.MachineDisk{Serial: "E1"}}},
 			}))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(resp.Msg.GetMachine().GetNetwork().GetVlanId()).To(Equal(int32(30)))

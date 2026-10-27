@@ -23,7 +23,10 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
-const testNICMAC = "AA:BB:CC:DD:EE:01"
+const (
+	testNICMAC   = "AA:BB:CC:DD:EE:01"
+	contractV111 = "v1.11"
+)
 
 // renderWith renders a worker at the given contract ("" is the cluster default, v1.14) after
 // mutating the machine.
@@ -84,10 +87,10 @@ func TestRenderNetwork(t *testing.T) {
 		m.Spec.Network.VLANID = 100
 	}
 
-	for _, contract := range []string{"", "v1.13"} {
+	for _, contract := range []string{"", contractV113} {
 		name := contract
 		if name == "" {
-			name = "v1.14"
+			name = versionContract
 		}
 
 		alias := []string{"kind: LinkAliasConfig", "name: net0", `mac(link.permanent_addr) == "aa:bb:cc:dd:ee:01"`}
@@ -126,20 +129,20 @@ func TestRenderNetwork(t *testing.T) {
 	}
 
 	t.Run("v1.11 legacy", func(t *testing.T) {
-		out := renderWith(t, "v1.11", static)
+		out := renderWith(t, contractV111, static)
 		wantAll(t, out, "interfaces:", "permanentAddr: aa:bb:cc:dd:ee:01", "192.168.1.10/24", "gateway: 192.168.1.1",
 			"network: 0.0.0.0/0", "nameservers:", "1.1.1.1")
 		wantNone(t, out, "LinkAliasConfig")
 
-		out = renderWith(t, "v1.11", vlan)
+		out = renderWith(t, contractV111, vlan)
 		wantAll(t, out, "vlans:", "vlanId: 100", "192.168.1.10/24")
 
-		out = renderWith(t, "v1.11", dhcp)
+		out = renderWith(t, contractV111, dhcp)
 		wantAll(t, out, "permanentAddr: aa:bb:cc:dd:ee:01", "dhcp: true")
 	})
 
 	t.Run("an IPv6 gateway routes ::/0 in the legacy form", func(t *testing.T) {
-		out := renderWith(t, "v1.11", func(m *ichorv1alpha1.TalosMachine) {
+		out := renderWith(t, contractV111, func(m *ichorv1alpha1.TalosMachine) {
 			m.Spec.Network = &ichorv1alpha1.TalosMachineNetwork{
 				MAC: testNICMAC, Addressing: "static", Addresses: []string{"fd00::10/64"}, Gateway: "fd00::1",
 			}
@@ -159,10 +162,10 @@ func TestRenderDisks(t *testing.T) {
 		}
 	}
 
-	for _, contract := range []string{"", "v1.13"} {
+	for _, contract := range []string{"", contractV113} {
 		name := contract
 		if name == "" {
-			name = "v1.14"
+			name = versionContract
 		}
 
 		t.Run(name, func(t *testing.T) {

@@ -139,8 +139,10 @@ hands.
 
 - `make test` runs unit tests and envtest; `make ui-ci` runs the UI's typecheck,
   lint, node tests and build.
-- End-to-end tests run Talos nodes as nodes on a host cluster; a full
-  cluster built by `ichor init` is described in `test/harness/ui-demo/README.md`.
+- End-to-end tests run against a Talos cluster from one of two harnesses: nodes
+  on a host cluster, or `talosctl cluster create qemu` on CI runners (`make
+  setup-test-e2e`). A full cluster built by `ichor init` is described in
+  `test/harness/ui-demo/README.md`.
 - `make ui-shots` takes desktop and phone screenshots of the UI in light and dark;
   look at them before calling a UI change done.
 

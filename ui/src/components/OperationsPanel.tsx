@@ -17,7 +17,6 @@ import { restoreStepProgress } from '@/lib/etcdRestore'
 import { describeError } from '@/lib/errors'
 import { formatTimestamp } from '@/lib/format'
 import { kubernetesStageProgress, operationState, progressCounts } from '@/lib/operations'
-import { expiringCertificatesMessage } from '@/lib/overview'
 import { opStateTone } from '@/lib/status'
 import { useT } from '@/lib/useT'
 import { Link, objectRefPath } from '@/router'
@@ -229,24 +228,19 @@ function Action({
   )
 }
 
-// CertificateLines lists each CA with its expiry date. Which CAs are expiring is the
-// controller's call (the CertificatesExpiring condition, ADR 0063): while it is True
-// its message is shown once above the list and the rows are not marked again here.
+// CertificateLines lists each CA with its expiry date. The CertificatesExpiring warning is
+// the alert at the top of the cluster page (ADR 0063), so it isn't repeated here.
 function CertificateLines({ cluster }: { cluster: Cluster }) {
   const t = useT()
   if (cluster.certificates.length === 0) return <span class="text-muted-foreground">{t('ops.caNone')}</span>
-  const expiring = expiringCertificatesMessage(cluster.conditions)
   return (
-    <div class="space-y-1">
-      {expiring !== null && <StatusText tone="warn">{expiring}</StatusText>}
-      <ul class="space-y-0.5">
-        {cluster.certificates.map((c) => {
-          const at = Number(c.notAfter?.seconds ?? 0n)
-          const date = new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(new Date(at * 1000))
-          return <li key={c.name}>{t('ops.caLine', { name: c.name, date })}</li>
-        })}
-      </ul>
-    </div>
+    <ul class="space-y-0.5">
+      {cluster.certificates.map((c) => {
+        const at = Number(c.notAfter?.seconds ?? 0n)
+        const date = new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(new Date(at * 1000))
+        return <li key={c.name}>{t('ops.caLine', { name: c.name, date })}</li>
+      })}
+    </ul>
   )
 }
 

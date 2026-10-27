@@ -90,10 +90,10 @@ func (l *localDiagnostics) close() {
 	}
 }
 
-func (l *localDiagnostics) GetDiagnosticsPermissions(
-	ctx context.Context, req *connect.Request[pb.GetDiagnosticsPermissionsRequest],
-) (*connect.Response[pb.GetDiagnosticsPermissionsResponse], error) {
-	return l.srv.GetDiagnosticsPermissions(ctx, req)
+func (l *localDiagnostics) GetMyPermissions(
+	ctx context.Context, req *connect.Request[pb.GetMyPermissionsRequest],
+) (*connect.Response[pb.GetMyPermissionsResponse], error) {
+	return l.srv.GetMyPermissions(ctx, req)
 }
 
 func (l *localDiagnostics) DownloadSupportBundle(

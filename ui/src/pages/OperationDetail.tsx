@@ -19,6 +19,7 @@ import { formatTimestamp } from '@/lib/format'
 import { caStageProgress, kubernetesStageProgress, operationState, pollIntervalMs, progressCounts } from '@/lib/operations'
 import { opStateTone } from '@/lib/status'
 import { useCluster } from '@/lib/useCluster'
+import { useMyPermissions } from '@/lib/useMyPermissions'
 import { useT } from '@/lib/useT'
 import { Link, navigate } from '@/router'
 
@@ -34,6 +35,7 @@ export function OperationDetail({ name }: { name: string }) {
   const namespace = cluster?.ref?.namespace
   const [op, setOp] = useState<Operation | null>(null)
   const [error, setError] = useState<ErrorShape | null>(null)
+  const perms = useMyPermissions(undefined, op?.kind === OperationKind.CA_ROTATION ? op.cluster : undefined)
 
   useEffect(() => {
     if (!namespace) return
@@ -130,7 +132,7 @@ export function OperationDetail({ name }: { name: string }) {
               <AlertTitle>{t('ops.awaitingCredentialsTitle')}</AlertTitle>
               <AlertDescription>
                 {t('ops.awaitingCredentials', { name: op.cluster?.name ?? '' })}
-                <CARotationCredentials op={op} panel={panel} onChanged={setOp} />
+                <CARotationCredentials op={op} panel={panel} permitted={perms?.clusterCredentials} onChanged={setOp} />
               </AlertDescription>
             </Alert>
           )}
@@ -139,7 +141,7 @@ export function OperationDetail({ name }: { name: string }) {
               <AlertTitle>{t('creds.issuedTitle')}</AlertTitle>
               <AlertDescription>
                 {t('creds.issued')}
-                <CARotationCredentials op={op} panel={panel} onChanged={setOp} />
+                <CARotationCredentials op={op} panel={panel} permitted={perms?.clusterCredentials} onChanged={setOp} />
               </AlertDescription>
             </Alert>
           )}

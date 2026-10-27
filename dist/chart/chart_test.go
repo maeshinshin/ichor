@@ -828,6 +828,33 @@ func checkControllerRBACMatchesConfig(t *testing.T, release string, docs []map[s
 }
 
 // findNameSuffix is find for release-templated names.
+// TestManagerStartupProbe pins the startupProbe that covers the controller's start-up wait
+// for the API server (cmd/waitapi.go, up to 5 minutes): without it the liveness probe kills
+// the pod during a CA rotation.
+const managerContainerName = "manager"
+
+func TestManagerStartupProbe(t *testing.T) {
+	docs := renderChart(t, "ichor")
+	spec, _ := findNameSuffix(docs, kindDeployment, "controller-manager")["spec"].(map[string]any)
+	tmpl, _ := spec["template"].(map[string]any)
+	podSpec, _ := tmpl["spec"].(map[string]any)
+	containers, _ := podSpec["containers"].([]any)
+	for _, c := range containers {
+		container, _ := c.(map[string]any)
+		if container["name"] != managerContainerName {
+			continue
+		}
+		probe, _ := container["startupProbe"].(map[string]any)
+		httpGet, _ := probe["httpGet"].(map[string]any)
+		if httpGet["path"] != "/healthz" || fmt.Sprint(httpGet["port"]) != "8081" ||
+			fmt.Sprint(probe["periodSeconds"]) != "10" || fmt.Sprint(probe["failureThreshold"]) != "36" {
+			t.Fatalf("manager startupProbe = %v, want /healthz :8081 period 10 failureThreshold 36", probe)
+		}
+		return
+	}
+	t.Fatal("no manager container in the controller-manager Deployment")
+}
+
 func findNameSuffix(docs []map[string]any, kind, suffix string) map[string]any {
 	for _, d := range findAll(docs, kind) {
 		if strings.HasSuffix(nameOf(d), suffix) {

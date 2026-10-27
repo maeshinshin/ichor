@@ -1316,13 +1316,17 @@ func TestUICredentialsDownloadVerb(t *testing.T) {
 	if find(off, kindClusterRole, roleName) != nil {
 		t.Errorf("ClusterRole %q rendered by default; it is a helper role (rbac.helpers.enabled)", roleName)
 	}
-	if ui := find(off, kindClusterRole, ichorUIRoleName); ui == nil || strings.Contains(fmt.Sprint(ui["rules"]), "talosclusters/credentials") {
+	const subresource = "talosclusters/credentials"
+
+	ui := find(off, kindClusterRole, ichorUIRoleName)
+	if ui == nil || strings.Contains(fmt.Sprint(ui["rules"]), subresource) {
 		t.Errorf("ichor-ui-role must not hold the credentials download verb")
 	}
 
 	helpers := renderChartWithValues(t, "ichor", "rbac.helpers.enabled=true")
 	role := find(helpers, kindClusterRole, roleName)
-	if role == nil || !strings.Contains(fmt.Sprint(role["rules"]), "talosclusters/credentials") || !strings.Contains(fmt.Sprint(role["rules"]), "download") {
+	rules := fmt.Sprint(role["rules"])
+	if role == nil || !strings.Contains(rules, subresource) || !strings.Contains(rules, "download") {
 		t.Fatalf("expected ClusterRole %q granting download on talosclusters/credentials; got %v", roleName, role)
 	}
 	if b := bindingsTo(helpers); len(b) != 0 {

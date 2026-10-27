@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"slices"
 	"strconv"
 	"time"
 
@@ -55,6 +56,8 @@ const (
 	credentialsMaxBytes    = 1 << 20
 
 	credentialsVerifyTimeout = 30 * time.Second
+
+	resourceTalosClusters = "talosclusters"
 )
 
 // credentialDownloadStages are the stages the credentials may be downloaded in (ADR 0093): from the
@@ -81,10 +84,8 @@ func (s *Server) caRotationOperation(ctx context.Context, ref *pb.ObjectRef, sta
 		stage = op.Status.CARotation.Stage
 	}
 
-	for _, want := range stages {
-		if stage == want {
-			return op, nil
-		}
+	if slices.Contains(stages, stage) {
+		return op, nil
 	}
 
 	return nil, connect.NewError(connect.CodeFailedPrecondition,
@@ -101,7 +102,7 @@ func (s *Server) mayDownloadCredentials(ctx context.Context, op *ichorv1alpha1.T
 
 	review := &authv1.SelfSubjectAccessReview{Spec: authv1.SelfSubjectAccessReviewSpec{ResourceAttributes: &authv1.ResourceAttributes{
 		Namespace: op.Namespace, Verb: DownloadVerb, Group: ichorv1alpha1.GroupVersion.Group,
-		Resource: "talosclusters", Subresource: CredentialsScope, Name: op.Spec.ClusterRef.Name,
+		Resource: resourceTalosClusters, Subresource: CredentialsScope, Name: op.Spec.ClusterRef.Name,
 	}}}
 
 	if err := c.Create(ctx, review); err != nil {
@@ -142,7 +143,7 @@ func (s *Server) emitCredentialsEvent(ctx context.Context, cluster *ichorv1alpha
 			Namespace: cluster.Namespace, Name: cluster.Name, UID: cluster.UID,
 		},
 		Reason: credentialsReason, Message: msg, Type: corev1.EventTypeWarning,
-		Source:         corev1.EventSource{Component: "ichor-ui"},
+		Source:         corev1.EventSource{Component: actor},
 		FirstTimestamp: now, LastTimestamp: now, Count: 1,
 	}
 	ev.GenerateName, ev.Namespace = cluster.Name+".", cluster.Namespace

@@ -50,6 +50,9 @@ const (
 	credAdminUser  = "cred-admin"
 	credEditorUser = "cred-editor"
 	credReaderUser = "cred-reader"
+
+	certTalos             = "talos"
+	resourceTalosMachines = "talosmachines"
 )
 
 func newOperationClientFor(s *Server) (ichorv1alpha1connect.OperationServiceClient, func()) {
@@ -96,7 +99,7 @@ var _ = Describe("CA rotation credentials", func() {
 		o.Status.CARotation = &ichorv1alpha1.TalosOperationCARotationStatus{
 			Stage: stage,
 			Certificates: []ichorv1alpha1.CARotationCertificate{
-				{Name: "kubernetes", Previous: "oldk", Next: "newk"}, {Name: "talos", Previous: "oldt", Next: "newt"},
+				{Name: "kubernetes", Previous: "oldk", Next: "newk"}, {Name: certTalos, Previous: "oldt", Next: "newt"},
 			},
 		}
 		Expect(k8sClient.Status().Update(ctx, o)).To(Succeed())
@@ -107,14 +110,14 @@ var _ = Describe("CA rotation credentials", func() {
 	BeforeEach(func() {
 		read := rbacv1.PolicyRule{
 			APIGroups: []string{ichorv1alpha1.GroupVersion.Group},
-			Resources: []string{"talosoperations", "talosclusters", "talosmachines"},
+			Resources: []string{caOpsResource, resourceTalosClusters, resourceTalosMachines},
 			Verbs:     []string{"get", "list"},
 		}
 		write := rbacv1.PolicyRule{
-			APIGroups: []string{ichorv1alpha1.GroupVersion.Group}, Resources: []string{"talosoperations"}, Verbs: []string{"update"},
+			APIGroups: []string{ichorv1alpha1.GroupVersion.Group}, Resources: []string{caOpsResource}, Verbs: []string{"update"},
 		}
 		download := rbacv1.PolicyRule{
-			APIGroups: []string{ichorv1alpha1.GroupVersion.Group}, Resources: []string{"talosclusters/" + CredentialsScope}, Verbs: []string{DownloadVerb},
+			APIGroups: []string{ichorv1alpha1.GroupVersion.Group}, Resources: []string{resourceTalosClusters + "/" + CredentialsScope}, Verbs: []string{DownloadVerb},
 		}
 
 		// admin: reads, updates, downloads. editor: reads and updates only. reader: reads only.
@@ -276,7 +279,7 @@ var _ = Describe("CA rotation credentials", func() {
 			events := credentialEvents(cluster)
 			Expect(events).To(HaveLen(2))
 
-			var messages []string
+			messages := make([]string, 0, len(events))
 
 			for _, e := range events {
 				Expect(e.Type).To(Equal(corev1.EventTypeWarning))
@@ -328,7 +331,9 @@ var _ = Describe("CA rotation credentials", func() {
 		})
 
 		It("sets nothing when the new kubeconfig does not authenticate", func() {
-			c, closeFn := server(k8sClient, func(context.Context, []byte) error { return errors.New("x509: certificate signed by unknown authority") })
+			c, closeFn := server(k8sClient, func(context.Context, []byte) error {
+				return errors.New("x509: certificate signed by unknown authority")
+			})
 			defer closeFn()
 
 			err := ack(c, credEditorUser, op)
@@ -361,4 +366,3 @@ var _ = Describe("CA rotation credentials", func() {
 		})
 	})
 })
-

@@ -205,7 +205,7 @@ function NodePage({ namespace, name }: { namespace: string; name: string }) {
         </Alert>
       )}
       <Tabs value={tab} onValueChange={(v) => setTab(parseNodeTab(`?tab=${v}`))}>
-        <TabsList variant="line" aria-label={t('node.tabs')} className="h-auto w-full justify-start overflow-x-auto">
+        <TabsList variant="line" aria-label={t('node.tabs')} className="h-auto w-full justify-start overflow-x-auto overflow-y-hidden pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {nodeTabs.map((id) => (
             <TabsTrigger key={id} value={id} className="flex-none px-3 py-1.5">
               {tabLabels[id]}

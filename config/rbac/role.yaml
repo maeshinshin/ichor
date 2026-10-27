@@ -148,6 +148,7 @@ rules:
   resources:
   - talosoperations
   verbs:
+  - create
   - get
   - list
   - patch

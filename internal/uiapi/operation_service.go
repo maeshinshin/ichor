@@ -71,6 +71,8 @@ func kindToSpec(k pb.OperationKind) (string, error) {
 		return ichorv1alpha1.TalosOperationKindConfig, nil
 	case pb.OperationKind_OPERATION_KIND_NODE:
 		return ichorv1alpha1.TalosOperationKindNode, nil
+	case pb.OperationKind_OPERATION_KIND_ETCD_RESTORE:
+		return ichorv1alpha1.TalosOperationKindEtcdRestore, nil
 	case pb.OperationKind_OPERATION_KIND_UNSPECIFIED:
 	}
 
@@ -95,6 +97,8 @@ func kindToPB(k string) pb.OperationKind {
 		return pb.OperationKind_OPERATION_KIND_CONFIG
 	case ichorv1alpha1.TalosOperationKindNode:
 		return pb.OperationKind_OPERATION_KIND_NODE
+	case ichorv1alpha1.TalosOperationKindEtcdRestore:
+		return pb.OperationKind_OPERATION_KIND_ETCD_RESTORE
 	}
 
 	return pb.OperationKind_OPERATION_KIND_UNSPECIFIED
@@ -129,6 +133,8 @@ func operationToPB(op *ichorv1alpha1.TalosOperation) *pb.Operation {
 			out.NodeMessage = op.Status.Node.Message
 		}
 	}
+
+	etcdRestoreToPB(out, op)
 
 	for _, m := range op.Status.Machines {
 		out.Machines = append(out.Machines, &pb.OperationMachine{Name: m.Name, Phase: m.Phase})
@@ -215,6 +221,10 @@ func (s *Server) SetOperationPaused(
 		return nil, err
 	}
 
+	if err := etcdRestoreHoldsPause(op); err != nil {
+		return nil, err
+	}
+
 	op.Spec.Paused = req.Msg.GetPaused()
 
 	if err := s.Update(ctx, op, strictFieldValidation); err != nil {
@@ -261,13 +271,15 @@ type opPlan struct {
 	install *ichorv1alpha1.IchorInstallation
 	// node is set for the node kind.
 	node *nodePlan
+	// restore is set for the etcd-restore kind.
+	restore *etcdRestorePlan
 }
 
 // normalizeTarget validates target for kind and returns it in the form the spec stores.
 func normalizeTarget(kind, target string) (string, error) {
 	switch kind {
 	case ichorv1alpha1.TalosOperationKindShutdown, ichorv1alpha1.TalosOperationKindCARotation, ichorv1alpha1.TalosOperationKindConfig,
-		ichorv1alpha1.TalosOperationKindNode:
+		ichorv1alpha1.TalosOperationKindNode, ichorv1alpha1.TalosOperationKindEtcdRestore:
 		if target != "" {
 			return "", connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("a %s has no target", kind))
 		}
@@ -310,7 +322,7 @@ func (s *Server) trackedBy(ctx context.Context, obj client.Object) (string, erro
 //nolint:gocyclo // one switch over the seven kinds, each a few lines
 func (s *Server) planOperation(
 	ctx context.Context, clusterRef *pb.ObjectRef, pbKind pb.OperationKind, rawTarget string, maxUnavailable int32,
-	node *pb.NodeActionRequest,
+	node *pb.NodeActionRequest, restore *pb.EtcdRestoreRequest,
 ) (*opPlan, error) {
 	kind, err := kindToSpec(pbKind)
 	if err != nil {
@@ -319,6 +331,10 @@ func (s *Server) planOperation(
 
 	if kind == ichorv1alpha1.TalosOperationKindNode {
 		return s.planNode(ctx, node)
+	}
+
+	if kind == ichorv1alpha1.TalosOperationKindEtcdRestore {
+		return s.planEtcdRestore(ctx, clusterRef, restore)
 	}
 
 	target, err := normalizeTarget(kind, rawTarget)
@@ -570,7 +586,7 @@ func (s *Server) unfinishedOperation(ctx context.Context, cluster *ichorv1alpha1
 func (s *Server) PlanOperation(
 	ctx context.Context, req *connect.Request[pb.PlanOperationRequest],
 ) (*connect.Response[pb.PlanOperationResponse], error) {
-	p, err := s.planOperation(ctx, req.Msg.GetCluster(), req.Msg.GetKind(), req.Msg.GetTarget(), req.Msg.GetMaxUnavailable(), req.Msg.GetNode())
+	p, err := s.planOperation(ctx, req.Msg.GetCluster(), req.Msg.GetKind(), req.Msg.GetTarget(), req.Msg.GetMaxUnavailable(), req.Msg.GetNode(), req.Msg.GetEtcdRestore())
 	if err != nil {
 		return nil, err
 	}
@@ -591,7 +607,7 @@ func (s *Server) CreateOperation(
 ) (*connect.Response[pb.CreateOperationResponse], error) {
 	m := req.Msg
 
-	p, err := s.planOperation(ctx, m.GetCluster(), m.GetKind(), m.GetTarget(), m.GetMaxUnavailable(), m.GetNode())
+	p, err := s.planOperation(ctx, m.GetCluster(), m.GetKind(), m.GetTarget(), m.GetMaxUnavailable(), m.GetNode(), m.GetEtcdRestore())
 	if err != nil {
 		return nil, err
 	}
@@ -602,6 +618,15 @@ func (s *Server) CreateOperation(
 
 	if p.node != nil {
 		resp, err := s.createNodeOperation(ctx, p)
+		if err != nil {
+			return nil, err
+		}
+
+		return connect.NewResponse(resp), nil
+	}
+
+	if p.restore != nil {
+		resp, err := s.createEtcdRestore(ctx, p)
 		if err != nil {
 			return nil, err
 		}

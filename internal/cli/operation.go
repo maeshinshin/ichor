@@ -21,12 +21,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"time"
 
 	"connectrpc.com/connect"
 	"github.com/spf13/cobra"
 
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
@@ -165,8 +167,59 @@ func kindName(k pb.OperationKind) string {
 	return strings.ReplaceAll(strings.ToLower(strings.TrimPrefix(k.String(), "OPERATION_KIND_")), "_", "-")
 }
 
+// caStages is the order a CA rotation goes through its stages (ADR 0091).
+var caStages = []string{
+	ichorv1alpha1.CARotationStageAccepting, ichorv1alpha1.CARotationStageAwaitingCredentials,
+	ichorv1alpha1.CARotationStageIssuing, ichorv1alpha1.CARotationStageDropping,
+	ichorv1alpha1.CARotationStageFinalizing, ichorv1alpha1.CARotationStageDone,
+}
+
+// passedStages are the stages between last and stage, which a poll did not see: a stage shorter than
+// the poll interval is still on its way. From the start (last "") every stage before stage is passed.
+func passedStages(last, stage string) []string {
+	to := slices.Index(caStages, stage)
+	from := slices.Index(caStages, last)
+
+	if to < 0 || from >= to {
+		return nil
+	}
+
+	return caStages[from+1 : to]
+}
+
+// stageProgress prints a progress line whenever it changes, and before the line of a stage it saw, a
+// line for each stage a poll jumped over, so the whole sequence is in the output.
+type stageProgress struct {
+	w     io.Writer
+	last  string // the last line printed
+	stage string // the last stage seen
+}
+
+// show prints the lines for stage; line renders the progress line for a given stage.
+func (p *stageProgress) show(stage string, line func(stage string) string) {
+	for _, s := range passedStages(p.stage, stage) {
+		p.print(line(s))
+	}
+
+	p.print(line(stage))
+	p.stage = stage
+}
+
+func (p *stageProgress) print(line string) {
+	if line != p.last {
+		_, _ = fmt.Fprintln(p.w, line)
+		p.last = line
+	}
+}
+
 // progressLine is one line of --watch output.
 func progressLine(op *pb.Operation) string {
+	return progressLineAt(op, op.GetCaRotationStage())
+}
+
+// progressLineAt is progressLine with the CA rotation stage given, so that a stage a poll skipped can be
+// printed in its place.
+func progressLineAt(op *pb.Operation, caStage string) string {
 	var done, running int
 
 	parts := make([]string, 0, len(op.GetMachines()))
@@ -187,8 +240,8 @@ func progressLine(op *pb.Operation) string {
 		line += fmt.Sprintf(", %d done, %d in progress", done, running)
 	}
 
-	if st := op.GetCaRotationStage(); st != "" {
-		line += ", stage " + st
+	if caStage != "" {
+		line += ", stage " + caStage
 	}
 
 	if st := op.GetEtcdRestoreStep(); st != "" {
@@ -236,7 +289,7 @@ func watchRestoreOperation(ctx context.Context, c *apiClients, ref *pb.ObjectRef
 // watchOperationUntil is the watch; goneWindow > 0 treats NotFound as transient for that long.
 func watchOperationUntil(ctx context.Context, c *apiClients, ref *pb.ObjectRef, out, errw io.Writer, goneWindow time.Duration) error {
 	var (
-		last      string
+		progress  = stageProgress{w: errw}
 		goneSince time.Time
 	)
 
@@ -276,10 +329,7 @@ func watchOperationUntil(ctx context.Context, c *apiClients, ref *pb.ObjectRef, 
 
 		op := resp.Msg.GetOperation()
 
-		if line := progressLine(op); line != last {
-			_, _ = fmt.Fprintln(errw, line)
-			last = line
-		}
+		progress.show(op.GetCaRotationStage(), func(stage string) string { return progressLineAt(op, stage) })
 
 		failed := op.GetPhase() == "Paused" && op.GetFailureReason() != ""
 		if op.GetPhase() == "Completed" || op.GetPhase() == "ShutDown" || failed {

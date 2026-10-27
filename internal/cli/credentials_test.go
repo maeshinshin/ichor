@@ -594,6 +594,87 @@ func TestWatchCARotationSurvivesTheAPIRestartingAndFollowsToTheEnd(t *testing.T)
 	}
 }
 
+func TestPassedStagesAreTheOnesBetweenTwoPolls(t *testing.T) {
+	a, aw, i, d, f, done := ichorv1alpha1.CARotationStageAccepting, ichorv1alpha1.CARotationStageAwaitingCredentials,
+		ichorv1alpha1.CARotationStageIssuing, ichorv1alpha1.CARotationStageDropping, ichorv1alpha1.CARotationStageFinalizing,
+		ichorv1alpha1.CARotationStageDone
+
+	for _, tc := range []struct {
+		last, stage string
+		want        []string
+	}{
+		{"", a, nil},
+		{"", i, []string{a, aw}},
+		{a, i, []string{aw}},
+		{i, i, nil},
+		{f, done, nil},
+		{a, done, []string{aw, i, d, f}},
+		{done, a, nil},
+		{a, "", nil},
+	} {
+		if got := passedStages(tc.last, tc.stage); !slices.Equal(got, tc.want) {
+			t.Errorf("passedStages(%q, %q) = %v, want %v", tc.last, tc.stage, got, tc.want)
+		}
+	}
+}
+
+// TestWatchCARotationPrintsTheStagesAPollJumpedOver: the passes are shorter than the poll interval, so
+// the poll sees Accepting, then Issuing; the stages in between are still printed, in order.
+func TestWatchCARotationPrintsTheStagesAPollJumpedOver(t *testing.T) {
+	shrinkFollowTimers(t)
+
+	seen := []string{
+		ichorv1alpha1.CARotationStageAccepting, ichorv1alpha1.CARotationStageIssuing, ichorv1alpha1.CARotationStageDone,
+	}
+	polls := 0
+
+	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithInterceptorFuncs(interceptor.Funcs{
+		Get: func(_ context.Context, _ client.WithWatch, key client.ObjectKey, obj client.Object, _ ...client.GetOption) error {
+			op, ok := obj.(*ichorv1alpha1.TalosOperation)
+			if !ok {
+				return nil
+			}
+
+			op.Name, op.Namespace = key.Name, key.Namespace
+			op.Status.Phase = ichorv1alpha1.TalosOperationPhaseInProgress
+			op.Status.CARotation = &ichorv1alpha1.TalosOperationCARotationStatus{Stage: seen[min(polls, len(seen)-1)]}
+
+			if op.Status.CARotation.Stage == ichorv1alpha1.CARotationStageDone {
+				op.Status.Phase = ichorv1alpha1.TalosOperationPhaseCompleted
+			}
+
+			polls++
+
+			return nil
+		},
+	}).Build()
+
+	var errw bytes.Buffer
+	if err := watchCARotation(context.Background(), k8s, testNamespace, credOpName, &errw); err != nil {
+		t.Fatalf("%v\n%s", err, errw.String())
+	}
+
+	want := []string{
+		"stage " + ichorv1alpha1.CARotationStageAccepting,
+		"stage " + ichorv1alpha1.CARotationStageAwaitingCredentials,
+		"stage " + ichorv1alpha1.CARotationStageIssuing,
+		"stage " + ichorv1alpha1.CARotationStageDropping,
+		"stage " + ichorv1alpha1.CARotationStageFinalizing,
+		"stage " + ichorv1alpha1.CARotationStageDone,
+	}
+
+	at := 0
+
+	for _, w := range want {
+		i := strings.Index(errw.String()[at:], w)
+		if i < 0 {
+			t.Fatalf("no line for %q after position %d:\n%s", w, at, errw.String())
+		}
+
+		at += i + len(w)
+	}
+}
+
 func TestWatchRebuildsATunnelThatDiesAndSaysWhyItCouldNotAtFirst(t *testing.T) {
 	shrinkFollowTimers(t)
 

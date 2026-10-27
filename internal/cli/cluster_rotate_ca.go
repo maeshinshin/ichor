@@ -175,7 +175,7 @@ func runRotateCAHandoff(ctx context.Context, d handoffDeps, req credentialReques
 
 // waitForCredentialsStage polls the operation until it is in AwaitingCredentials.
 func waitForCredentialsStage(ctx context.Context, d handoffDeps, namespace, name string, errw io.Writer) error {
-	last := ""
+	progress := stageProgress{w: errw}
 
 	for {
 		var op ichorv1alpha1.TalosOperation
@@ -191,10 +191,8 @@ func waitForCredentialsStage(ctx context.Context, d handoffDeps, namespace, name
 			return fmt.Errorf("operation %s paused after a failure before the hand-off: %s", name, reason)
 		}
 
-		stage := ""
-		if op.Status.CARotation != nil {
-			stage = op.Status.CARotation.Stage
-		}
+		stage := caStageOf(&op)
+		progress.show(stage, func(s string) string { return caProgressAt(&op, s) })
 
 		switch stage {
 		case ichorv1alpha1.CARotationStageAwaitingCredentials:
@@ -202,11 +200,6 @@ func waitForCredentialsStage(ctx context.Context, d handoffDeps, namespace, name
 		case ichorv1alpha1.CARotationStageIssuing, ichorv1alpha1.CARotationStageDropping, ichorv1alpha1.CARotationStageFinalizing,
 			ichorv1alpha1.CARotationStageDone:
 			return fmt.Errorf("operation %s is already in stage %s, past the hand-off", name, stage)
-		}
-
-		if line := caProgress(&op); line != last {
-			_, _ = fmt.Fprintln(errw, line)
-			last = line
 		}
 
 		select {
@@ -217,11 +210,20 @@ func waitForCredentialsStage(ctx context.Context, d handoffDeps, namespace, name
 	}
 }
 
-// caProgress is one line about a rotation, from its status alone.
-func caProgress(op *ichorv1alpha1.TalosOperation) string {
-	stage := "-"
-	if op.Status.CARotation != nil && op.Status.CARotation.Stage != "" {
-		stage = op.Status.CARotation.Stage
+// caStageOf is the rotation's stage as the status holds it ("" before the first).
+func caStageOf(op *ichorv1alpha1.TalosOperation) string {
+	if op.Status.CARotation == nil {
+		return ""
+	}
+
+	return op.Status.CARotation.Stage
+}
+
+// caProgressAt is one line about a rotation, from its status alone, showing the given stage (a poll
+// that jumped over stages prints the skipped ones with it).
+func caProgressAt(op *ichorv1alpha1.TalosOperation, stage string) string {
+	if stage == "" {
+		stage = "-"
 	}
 
 	line := fmt.Sprintf("ca-rotation %s: phase %s, stage %s", op.Name, orDash(op.Status.Phase), stage)
@@ -236,7 +238,7 @@ func caProgress(op *ichorv1alpha1.TalosOperation) string {
 // watchCARotation follows the rotation through the Kubernetes API until it completes. Transient
 // errors (the API server restarting for the new CA) are retried; a failed step is an error exit.
 func watchCARotation(ctx context.Context, k8s ctrlclient.Client, namespace, name string, errw io.Writer) error {
-	last := ""
+	progress := stageProgress{w: errw}
 
 	for {
 		var op ichorv1alpha1.TalosOperation
@@ -248,10 +250,7 @@ func watchCARotation(ctx context.Context, k8s ctrlclient.Client, namespace, name
 			return fmt.Errorf("following operation %s/%s: %w", namespace, name, err)
 		}
 
-		if line := caProgress(&op); line != last {
-			_, _ = fmt.Fprintln(errw, line)
-			last = line
-		}
+		progress.show(caStageOf(&op), func(stage string) string { return caProgressAt(&op, stage) })
 
 		switch {
 		case op.Status.Phase == ichorv1alpha1.TalosOperationPhaseCompleted:

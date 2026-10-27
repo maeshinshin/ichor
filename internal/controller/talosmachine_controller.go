@@ -259,6 +259,7 @@ type TalosMachineReconciler struct {
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosconfigpatches,verbs=get;list;watch
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosstorages,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",namespace=ichor-system,resources=configmaps,verbs=get;list;watch
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch;patch
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;delete
@@ -801,6 +802,7 @@ func (r *TalosMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&ichorv1alpha1.TalosMachine{}).
 		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(r.machinesOfAuthSecret)).
+		Watches(&corev1.ConfigMap{}, handler.EnqueueRequestsFromMapFunc(r.machinesOfOIDCTrust)).
 		Watches(&ichorv1alpha1.TalosStorage{}, enqueue, renderInput).
 		Watches(&ichorv1alpha1.TalosConfigPatch{}, enqueue, renderInput).
 		Watches(&ichorv1alpha1.TalosCluster{}, enqueue, renderInput).
@@ -861,6 +863,30 @@ func registryAuthSecretNames(o client.Object) []string {
 	}
 
 	return names
+}
+
+// machinesOfOIDCTrust maps the ConfigMap ichor-oidc-trust (a render input) to the
+// machines of every TalosCluster that enables Ichor's issuer, so a changed CA or ClusterIP reaches
+// converged nodes like any other desired-state change. Only the controller's namespace counts.
+func (r *TalosMachineReconciler) machinesOfOIDCTrust(ctx context.Context, obj client.Object) []reconcile.Request {
+	if r.ControllerNamespace == "" || obj.GetNamespace() != r.ControllerNamespace || obj.GetName() != render.OIDCTrustConfigMap {
+		return nil
+	}
+
+	var clusters ichorv1alpha1.TalosClusterList
+	if err := r.List(ctx, &clusters); err != nil {
+		return nil
+	}
+
+	var reqs []reconcile.Request
+
+	for i := range clusters.Items {
+		if a := clusters.Items[i].Spec.Authentication; a != nil && a.Ichor != nil && a.Ichor.Enabled {
+			reqs = append(reqs, r.machinesOfCluster(ctx, &clusters.Items[i])...)
+		}
+	}
+
+	return reqs
 }
 
 // machinesOfAuthSecret maps a Secret to the machines of every TalosCluster whose registries

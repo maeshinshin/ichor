@@ -170,12 +170,12 @@ func (e *env) do(h http.Handler, method, path, ctype, body string) *httptest.Res
 
 func (e *env) authorize(client, redirect, aud string, p pkce) *httptest.ResponseRecorder {
 	q := url.Values{
-		"response_type": {pCode}, pClientID: {client}, "redirect_uri": {redirect},
-		pScope: {"openid offline_access"}, "state": {stateVal}, pNonce: {"n1"},
-		pChallenge: {p.challenge}, "code_challenge_method": {pS256},
+		pRespType: {pCode}, pClientID: {client}, pRedirect: {redirect},
+		pScope: {"openid offline_access"}, pState: {stateVal}, pNonce: {"n1"},
+		pChallenge: {p.challenge}, pMethod: {pS256},
 	}
 	if aud != "" {
-		q.Set("audience", aud)
+		q.Set(pAudience, aud)
 	}
 	return e.do(e.h, http.MethodGet, "/oidc/authorize?"+q.Encode(), "", "")
 }
@@ -186,14 +186,14 @@ func (e *env) ticket(rec *httptest.ResponseRecorder) string {
 		e.t.Fatalf("authorize: status %d body %q", rec.Code, rec.Body.String())
 	}
 	loc, err := url.Parse(rec.Header().Get("Location"))
-	if err != nil || loc.Query().Get("ticket") == "" {
+	if err != nil || loc.Query().Get(pTicket) == "" {
 		e.t.Fatalf("authorize: bad Location %q", rec.Header().Get("Location"))
 	}
-	return loc.Query().Get("ticket")
+	return loc.Query().Get(pTicket)
 }
 
 func (e *env) login(ticket, user, password string) *httptest.ResponseRecorder {
-	b, _ := json.Marshal(map[string]string{"ticket": ticket, "username": user, pPassword: password})
+	b, _ := json.Marshal(map[string]string{pTicket: ticket, "username": user, pPassword: password})
 	return e.do(e.h, http.MethodPost, "/oidc/login", "application/json", string(b))
 }
 
@@ -214,7 +214,7 @@ func (e *env) code(client, redirect, aud string, p pkce) string {
 	if err != nil {
 		e.t.Fatal(err)
 	}
-	if got := u.Query().Get("state"); got != stateVal {
+	if got := u.Query().Get(pState); got != stateVal {
 		e.t.Fatalf("state = %q", got)
 	}
 	if got := u.Query().Get("iss"); got == "" {
@@ -241,15 +241,15 @@ func (e *env) token(form url.Values) (int, tokenResp) {
 
 func codeForm(client, redirect, code string, p pkce) url.Values {
 	return url.Values{
-		pGrant: {"authorization_code"}, pClientID: {client}, "redirect_uri": {redirect},
+		pGrant: {"authorization_code"}, pClientID: {client}, pRedirect: {redirect},
 		"code": {code}, "code_verifier": {p.verifier},
 	}
 }
 
 func refreshForm(client, refresh, aud string) url.Values {
-	f := url.Values{pGrant: {"refresh_token"}, pClientID: {client}, "refresh_token": {refresh}}
+	f := url.Values{pGrant: {pRefresh}, pClientID: {client}, pRefresh: {refresh}}
 	if aud != "" {
-		f.Set("audience", aud)
+		f.Set(pAudience, aud)
 	}
 	return f
 }
@@ -300,4 +300,14 @@ const (
 	pCode      = "code"
 	pScope     = "scope"
 	pChallenge = "code_challenge"
+)
+
+const (
+	pMethod   = "code_challenge_method"
+	pRedirect = "redirect_uri"
+	pState    = "state"
+	pRespType = "response_type"
+	pRefresh  = "refresh_token"
+	pAudience = "audience"
+	pTicket   = "ticket"
 )

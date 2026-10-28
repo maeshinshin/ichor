@@ -124,7 +124,7 @@ func TestRotateCADoneHintNamesTheNewKubeconfig(t *testing.T) {
 	var errw bytes.Buffer
 	rotateCAAfterwards(&errw, opTestCluster, newKubeconfig)
 
-	want := "ichor cluster credentials " + opTestCluster + " --kubeconfig " + newKubeconfig
+	want := "ichor cluster credentials " + opTestCluster + " --kubeconfig " + newKubeconfig + "' for files"
 	if !strings.Contains(errw.String(), want) {
 		t.Errorf("done hint lacks %q:\n%s", want, errw.String())
 	}

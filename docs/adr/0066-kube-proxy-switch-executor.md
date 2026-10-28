@@ -123,3 +123,7 @@ Same cluster as ADR 0057's observation (Cilium 1.18.0 with kube-proxy, `handover
   (`10.249.0.10`) answered and a TCP/TLS connection to the `kubernetes` Service ClusterIP was established.
 - Not observed: `replaced` to `enabled`; the "values in Git" wait after a hand-over.
 - Fixed: the removal goes through a control plane's Talos client when the last machine is a worker, and deletes the DaemonSet, ServiceAccount, ClusterRoleBinding and every `kube-proxy` or `kube-proxy-<checksum>` ConfigMap by name.
+
+## Amendment: one-shot, Git-friendly confirmation
+
+On an Argo CD-tracked cluster the Git change that switches `spec.cni.kubeProxy` was rejected by the admission policy (ADR 0013) because the confirmation annotation was missing, so the tester committed the annotation into Git where it stayed as a standing consent. The annotation value now names the target mode (`replaced` or `enabled`) and the policy admits a switch only when the value equals the new `spec.cni.kubeProxy`. A leftover annotation therefore cannot admit a different later switch, and it is safe to commit for the one switch. The server sets it to the target for the one write it makes and removes it again (it used to write an actor name). For a tracked cluster `ichor cni kube-proxy <mode>` prints the exact YAML to commit (spec field plus annotation) and says to run the same command again, which finds the spec already changed and starts the operation; the old text said "start the operation without a target", which was wrong.

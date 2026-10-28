@@ -21,12 +21,13 @@ spec:
     - expression: >-
         object.spec.cni.kubeProxy == oldObject.spec.cni.kubeProxy ||
         (has(object.metadata.annotations) &&
-         "ichor.maesh.dev/confirm-kube-proxy-switch" in object.metadata.annotations)
+         "ichor.maesh.dev/confirm-kube-proxy-switch" in object.metadata.annotations &&
+         object.metadata.annotations["ichor.maesh.dev/confirm-kube-proxy-switch"] == object.spec.cni.kubeProxy)
       message: >-
         switching spec.cni.kubeProxy requires the
-        ichor.maesh.dev/confirm-kube-proxy-switch annotation, since the switch
-        must run new-side-up, verify, old-side-down and nothing here does that
-        automatically
+        ichor.maesh.dev/confirm-kube-proxy-switch annotation set to the new
+        mode (replaced or enabled), since the switch must run new-side-up,
+        verify, old-side-down and nothing here does that automatically
       reason: Invalid
 ---
 apiVersion: admissionregistration.k8s.io/v1

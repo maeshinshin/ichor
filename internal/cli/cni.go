@@ -37,7 +37,7 @@ var cniKubeProxyCmd = &cobra.Command{
 	Long: `kube-proxy sets spec.cni.kubeProxy and starts the operation that carries the switch out
 node by node: the new side comes up and is verified before the old side is turned off.
 The admission policy that guards this field wants a confirmation annotation; the
-server sets it for this one write and removes it again, so it never stays behind as
+server sets it (to the new mode) for this one write and removes it again, so it never stays behind as
 a standing consent. Ichor does not edit the CNI's own configuration: the operation
 tells you the values to put there and waits for you to.
 

@@ -675,12 +675,28 @@ func (s *Server) blockedReason(
 				}
 			}
 
+			if p.kind == ichorv1alpha1.TalosOperationKindCNI {
+				return kubeProxyGitText(tracked.GetName(), by, p.resp.Target), nil
+			}
+
 			return fmt.Sprintf("%s %q is tracked by %s, so its spec is read-only here: change it in Git (a pull request), "+
 				"then start the operation without a target", what, tracked.GetName(), by), nil
 		}
 	}
 
 	return "", nil
+}
+
+// kubeProxyGitText is what a kube-proxy switch says on a cluster Argo CD tracks: the admission policy
+// admits the change only with the annotation naming the new mode, so Git has to carry both, and the
+// annotation is one-shot because it matches only that target. Re-running the same command afterwards
+// finds the spec already changed and starts the operation.
+func kubeProxyGitText(name, by, target string) string {
+	return fmt.Sprintf("TalosCluster %q is tracked by %s, so its spec is read-only here. Commit this change to Git and let %s sync it:\n\n"+
+		"  metadata:\n    annotations:\n      %s: %s\n  spec:\n    cni:\n      kubeProxy: %s\n\n"+
+		"The annotation lets the admission policy admit exactly this switch and no other; remove it from Git once the operation has started. "+
+		"Then run again: ichor cni kube-proxy %s",
+		name, by, by, ichorv1alpha1.TalosClusterConfirmKubeProxySwitchAnnotation, target, target, target)
 }
 
 // unfinishedOperation names the operation of the cluster that still runs, which blocks a new one.
@@ -830,7 +846,7 @@ func (s *Server) writeTarget(ctx context.Context, p *opPlan) error {
 			cluster.Annotations = map[string]string{}
 		}
 
-		cluster.Annotations[ichorv1alpha1.TalosClusterConfirmKubeProxySwitchAnnotation] = "ichor-" + s.actorName(ctx)
+		cluster.Annotations[ichorv1alpha1.TalosClusterConfirmKubeProxySwitchAnnotation] = target
 		cluster.Spec.CNI.KubeProxy = target
 	}
 
@@ -843,7 +859,7 @@ func (s *Server) writeTarget(ctx context.Context, p *opPlan) error {
 
 		if err := s.Update(ctx, cluster, strictFieldValidation); err != nil {
 			return connect.NewError(connect.CodeInternal, fmt.Errorf("kube-proxy mode is now %q but the annotation %s could not be removed, "+
-				"so no operation was created: remove it and start the operation without a target: %w",
+				"so no operation was created: remove it and run the command again: %w",
 				target, ichorv1alpha1.TalosClusterConfirmKubeProxySwitchAnnotation, err))
 		}
 	}

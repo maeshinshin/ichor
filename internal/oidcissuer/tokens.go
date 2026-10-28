@@ -1,25 +1,16 @@
 package oidcissuer
 
 import (
-	"crypto/rand"
-	"encoding/base64"
 	"errors"
 
 	jose "github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
 )
 
-// JWS "typ" values keep the three internal token kinds (and ID tokens, which
-// carry plain "JWT") from being replayed as each other.
-const (
-	typCode    = "ichor-code+jwt"
-	typTicket  = "ichor-ticket+jwt"
-	typRefresh = "ichor-refresh+jwt"
-
-	// internalAudience is the aud of codes, tickets and refresh tokens. No
-	// consumer accepts it, so none of them is usable as an ID token.
-	internalAudience = "ichor-oidc-internal"
-)
+// internalAudience is the aud of codes, tickets and refresh tokens. No consumer
+// accepts it, so none of them is usable as an ID token. The JWS "typ" values
+// (ichorauth.Typ*) keep the three kinds from being replayed as each other.
+const internalAudience = "ichor-oidc-internal"
 
 // authRequest is the part of an authorize request carried in a ticket and then
 // in a code.
@@ -42,14 +33,6 @@ type refreshClaims struct {
 type idClaims struct {
 	Groups []string `json:"groups"`
 	Nonce  string   `json:"nonce,omitempty"`
-}
-
-func randomID() (string, error) {
-	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
 // sign serializes std plus private claims as a compact JWS signed with the
@@ -78,24 +61,16 @@ var errBadToken = errors.New("invalid token")
 func (i *Issuer) verify(token, typ string, private ...any) (jwt.Claims, error) {
 	var std jwt.Claims
 	t, err := jwt.ParseSigned(token, []jose.SignatureAlgorithm{jose.RS256})
-	if err != nil || len(t.Headers) != 1 {
+	// A compact JWS has exactly one header. The key set lookup by kid rejects a
+	// missing or unknown kid.
+	if err != nil {
 		return std, errBadToken
 	}
-	h := t.Headers[0]
-	if got, _ := h.ExtraHeaders[jose.HeaderType].(string); got != typ || h.KeyID == "" {
+	if got, _ := t.Headers[0].ExtraHeaders[jose.HeaderType].(string); got != typ {
 		return std, errBadToken
 	}
-	var key *jose.JSONWebKey
-	for _, k := range i.cfg.Keys.Public() {
-		if k.KeyID == h.KeyID {
-			key = &k
-			break
-		}
-	}
-	if key == nil {
-		return std, errBadToken
-	}
-	if err := t.Claims(key, append([]any{&std}, private...)...); err != nil {
+	keys := jose.JSONWebKeySet{Keys: i.cfg.Keys.Public()}
+	if err := t.Claims(keys, append([]any{&std}, private...)...); err != nil {
 		return std, errBadToken
 	}
 	err = std.ValidateWithLeeway(jwt.Expected{

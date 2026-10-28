@@ -35,6 +35,7 @@ const (
 	// already running by then (the controller needed a Ready node), so this is a safety margin.
 	defaultCiliumWait = 10 * time.Minute
 
+	ciliumNamespace    = "kube-system"
 	ciliumDaemonSet    = "cilium"
 	ciliumPolicyCRDKey = "ciliumnetworkpolicies.cilium.io"
 )
@@ -91,7 +92,7 @@ func ciliumReady(ctx context.Context, c client.Client) error {
 	ds.SetAPIVersion("apps/v1")
 	ds.SetKind("DaemonSet")
 
-	if err := c.Get(ctx, types.NamespacedName{Namespace: "kube-system", Name: ciliumDaemonSet}, ds); err != nil {
+	if err := c.Get(ctx, types.NamespacedName{Namespace: ciliumNamespace, Name: ciliumDaemonSet}, ds); err != nil {
 		return err
 	}
 
@@ -99,7 +100,7 @@ func ciliumReady(ctx context.Context, c client.Client) error {
 	ready, _, _ := unstructured.NestedInt64(ds.Object, "status", "numberReady")
 
 	if desired == 0 || ready != desired {
-		return fmt.Errorf("daemonset kube-system/%s has %d of %d agents ready", ciliumDaemonSet, ready, desired)
+		return fmt.Errorf("daemonset %s/%s has %d of %d agents ready", ciliumNamespace, ciliumDaemonSet, ready, desired)
 	}
 
 	crd := &unstructured.Unstructured{}

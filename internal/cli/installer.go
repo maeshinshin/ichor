@@ -52,7 +52,7 @@ var installerRunCmd = &cobra.Command{
 			Manifest:  installmanifest.Manifest,
 
 			NetworkPolicies: installmanifest.NetworkPolicies,
-			Log:       cmd.ErrOrStderr(),
+			Log:             cmd.ErrOrStderr(),
 		})
 	},
 }

@@ -24,6 +24,8 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -45,6 +47,7 @@ import (
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/kubetrust"
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
 	"github.com/maeshinshin/ichor/pkg/render"
 )
@@ -432,6 +435,21 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 		Expect(f.world.rotationSavedAtFirstApply).NotTo(BeNil())
 		Expect(*f.world.rotationSavedAtFirstApply).To(BeTrue(), "the first node was told to trust a CA whose key was not yet saved")
 		Expect(f.storedRotation().Talos.Key).To(Equal(rot.Talos.Key))
+	})
+
+	It("publishes only the new Kubernetes CA's certificate to the controller's trust file", func() {
+		prev := kubetrust.TrustFile
+		kubetrust.TrustFile = filepath.Join(GinkgoT().TempDir(), "trust", "kubernetes-ca.crt")
+		DeferCleanup(func() { kubetrust.TrustFile = prev })
+
+		f := newCARotFixture()
+		op := f.step(f.newOp())
+		f.runUntil(op, atStage(ichorv1alpha1.CARotationStageIssuing))
+
+		got, err := os.ReadFile(kubetrust.TrustFile)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(got)).To(ContainSubstring(strings.TrimSpace(string(f.storedRotation().Kubernetes.Crt))))
+		Expect(string(got)).NotTo(ContainSubstring("PRIVATE KEY"))
 	})
 
 	It("waits after Accepting for the operator's credentials and proceeds only once they are acknowledged", func() {

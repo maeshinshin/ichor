@@ -69,6 +69,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -886,9 +887,35 @@ func (r *TalosMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(&corev1.ConfigMap{}, handler.EnqueueRequestsFromMapFunc(r.machinesOfOIDCTrust)).
 		Watches(&ichorv1alpha1.TalosStorage{}, enqueue, renderInput).
 		Watches(&ichorv1alpha1.TalosConfigPatch{}, enqueue, renderInput).
-		Watches(&ichorv1alpha1.TalosCluster{}, enqueue, renderInput).
+		Watches(&ichorv1alpha1.TalosCluster{}, enqueue, builder.WithPredicates(
+			predicate.Or(predicate.GenerationChangedPredicate{}, clusterStatusRenderInputChanged()))).
 		Named("talosmachine").
 		Complete(r)
+}
+
+// clusterStatusRenderInputChanged fires on an update only when one of the two TalosCluster.status
+// values desiredInputsHash reads moves: the CNIHandover condition flipping and the kube-proxy mode
+// from status.cni.kubeProxy. Other status writes, which are frequent, do not match.
+func clusterStatusRenderInputChanged() predicate.Funcs {
+	return predicate.Funcs{
+		CreateFunc:  func(event.CreateEvent) bool { return false },
+		DeleteFunc:  func(event.DeleteEvent) bool { return false },
+		GenericFunc: func(event.GenericEvent) bool { return false },
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			oldC, ok1 := e.ObjectOld.(*ichorv1alpha1.TalosCluster)
+			newC, ok2 := e.ObjectNew.(*ichorv1alpha1.TalosCluster)
+			if !ok1 || !ok2 {
+				return false
+			}
+
+			oldMode, oldFrom := render.KubeProxyMode(oldC)
+			newMode, newFrom := render.KubeProxyMode(newC)
+
+			return apimeta.IsStatusConditionTrue(oldC.Status.Conditions, render.ConditionCNIHandover) !=
+				apimeta.IsStatusConditionTrue(newC.Status.Conditions, render.ConditionCNIHandover) ||
+				oldMode != newMode || oldFrom != newFrom
+		},
+	}
 }
 
 // machinesOfCluster maps a render input (TalosStorage, TalosConfigPatch or TalosCluster) to every

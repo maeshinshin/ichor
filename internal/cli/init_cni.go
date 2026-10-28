@@ -37,22 +37,6 @@ const cniKubeProxy = cni.KubeProxyEnabled
 // several places).
 const cniCilium = "cilium"
 
-// cniPresetWithTunnel selects the pkg/cni.Preset implementation for name,
-// with the cluster's tunnel applied. Cilium is the only CNI (ADR 0099), and
-// buildInitPlan has already rejected any other --cni.
-func cniPresetWithTunnel(name, tunnel string) (cni.Preset, error) {
-	switch name {
-	case cniCilium:
-		p, err := cilium.New().WithTunnel(tunnel)
-		if err != nil {
-			return nil, fmt.Errorf("init: %w", err)
-		}
-		return p, nil
-	default:
-		return nil, fmt.Errorf("init: unknown cni preset %q", name)
-	}
-}
-
 // cniBootstrap is everything step 3 ("cluster.inlineManifests carry...
 // the CNI (unless flannel)") and step 5's CRs need from the CNI preset,
 // computed once so both steps use the same values.
@@ -71,7 +55,7 @@ type cniBootstrap struct {
 // steps need. It never duplicates what pkg/cni already knows (ADR 0014's
 // ponytail note on this unit: "CNI knowledge does not get rewritten in
 // internal/cli") -- every byte here is exactly what the preset returned.
-func buildCNIBootstrap(preset cni.Preset, clusterName, namespace string) (*cniBootstrap, error) {
+func buildCNIBootstrap(preset cilium.Preset, clusterName, namespace string) (*cniBootstrap, error) {
 	out := &cniBootstrap{}
 
 	manifest, err := preset.BootstrapManifest(cniKubeProxy)

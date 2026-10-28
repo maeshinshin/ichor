@@ -26,12 +26,6 @@ import (
 	"github.com/maeshinshin/ichor/pkg/cni"
 )
 
-func TestSupportsKubeProxyReplacement(t *testing.T) {
-	if !New().SupportsKubeProxyReplacement() {
-		t.Fatal("SupportsKubeProxyReplacement() = false, want true")
-	}
-}
-
 func TestTalosPatches(t *testing.T) {
 	p := New()
 

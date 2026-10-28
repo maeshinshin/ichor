@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package cilium implements cni.Preset for TalosCluster.spec.cni.preset
+// Package cilium is the CNI for TalosCluster.spec.cni.preset
 // "cilium": Helm, with Talos's recommended values built in
 // (docs/design/architecture.md, "CNI"). The bootstrap manifest is the pinned
 // chart, embedded in the binary, expanded with those values by Helm's Go SDK
@@ -33,15 +33,13 @@ import (
 // ConfigMap CheckConsistency's caller is expected to read from lives.
 const namespace = "kube-system"
 
-// Preset implements cni.Preset for Cilium. The zero value is ready to use.
+// Preset is the Cilium CNI. The zero value is ready to use.
 type Preset struct {
 	// tunnel is the tunnel protocol ("" keeps Cilium's default, vxlan).
 	tunnel string
 	// user is spec.cni.cilium.values (WithValues).
 	user map[string]any
 }
-
-var _ cni.Preset = Preset{}
 
 // New returns a Cilium Preset.
 func New() Preset { return Preset{} }
@@ -84,12 +82,6 @@ func (p Preset) BootstrapManifest(kubeProxy cni.KubeProxyMode) ([]byte, error) {
 	}
 
 	return renderChart(effective)
-}
-
-// SupportsKubeProxyReplacement is always true: Cilium can run without
-// kube-proxy.
-func (Preset) SupportsKubeProxyReplacement() bool {
-	return true
 }
 
 // CheckConsistency compares live's kube-proxy-replacement state against

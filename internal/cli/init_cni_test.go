@@ -20,15 +20,11 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/maeshinshin/ichor/pkg/cni/cilium"
 )
 
 const tunnelGeneve = "geneve"
-
-func TestCNIPreset_Unknown(t *testing.T) {
-	if _, err := cniPresetWithTunnel("calico", ""); err == nil {
-		t.Fatal("expected an error for an unknown cni preset, got nil")
-	}
-}
 
 // tunnelProtocolRe matches cilium-config's tunnel-protocol key whatever the
 // chart's YAML quoting, followed by the value geneve.
@@ -37,9 +33,9 @@ var tunnelProtocolRe = regexp.MustCompile(`tunnel-protocol"?:\s*"?geneve`)
 // TestCNIPreset_CiliumTunnel proves --cni-tunnel reaches both the bootstrap
 // manifest, and that unset keeps the default.
 func TestCNIPreset_CiliumTunnel(t *testing.T) {
-	preset, err := cniPresetWithTunnel("cilium", tunnelGeneve)
+	preset, err := cilium.New().WithTunnel(tunnelGeneve)
 	if err != nil {
-		t.Fatalf("cniPresetWithTunnel(cilium, geneve): %v", err)
+		t.Fatalf("WithTunnel(geneve): %v", err)
 	}
 
 	out, err := buildCNIBootstrap(preset, "my-cluster", testNamespace)
@@ -51,13 +47,13 @@ func TestCNIPreset_CiliumTunnel(t *testing.T) {
 		t.Error("bootstrap manifest does not carry the geneve tunnel")
 	}
 
-	if _, err := cniPresetWithTunnel("cilium", "gre"); err == nil {
-		t.Error("cniPresetWithTunnel(cilium, gre) succeeded, want an error")
+	if _, err := cilium.New().WithTunnel("gre"); err == nil {
+		t.Error("WithTunnel(gre) succeeded, want an error")
 	}
 
-	def, err := cniPresetWithTunnel("cilium", "")
+	def, err := cilium.New().WithTunnel("")
 	if err != nil {
-		t.Fatalf("cniPresetWithTunnel(cilium, \"\"): %v", err)
+		t.Fatalf("WithTunnel(\"\"): %v", err)
 	}
 
 	defOut, err := buildCNIBootstrap(def, "my-cluster", testNamespace)
@@ -72,7 +68,7 @@ func TestCNIPreset_CiliumTunnel(t *testing.T) {
 
 // TestBuildCNIBootstrap_Cilium proves cilium contributes an inline manifest.
 func TestBuildCNIBootstrap_Cilium(t *testing.T) {
-	preset, err := cniPresetWithTunnel("cilium", "")
+	preset, err := cilium.New().WithTunnel("")
 	if err != nil {
 		t.Fatalf("cniPreset: %v", err)
 	}

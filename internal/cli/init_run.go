@@ -32,6 +32,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/controller"
+	"github.com/maeshinshin/ichor/pkg/cni/cilium"
 	"github.com/maeshinshin/ichor/pkg/render"
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
@@ -116,9 +117,9 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 		return err
 	}
 
-	preset, err := cniPresetWithTunnel(opts.CNIPreset, opts.CNITunnel)
+	preset, err := cilium.New().WithTunnel(opts.CNITunnel)
 	if err != nil {
-		return err
+		return fmt.Errorf("init: %w", err)
 	}
 
 	cniBoot, err := buildCNIBootstrap(preset, cluster.Name, cluster.Namespace)

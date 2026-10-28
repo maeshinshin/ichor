@@ -65,7 +65,7 @@ var _ = Describe("Authentication gate on TalosCluster", func() {
 
 	BeforeEach(func() {
 		clusters := []string{"talosclusters"}
-		get := rbacv1.PolicyRule{APIGroups: []string{ichorGroup}, Resources: clusters, Verbs: []string{verbGet, "update", "patch"}}
+		get := rbacv1.PolicyRule{APIGroups: []string{ichorGroup}, Resources: clusters, Verbs: []string{verbGet, verbUpdate, verbPatch}}
 		bindRole("auth-gate-editor", editor, get)
 		bindRole("auth-gate-admin", authAdmin, get, rbacv1.PolicyRule{
 			APIGroups: []string{ichorGroup}, Resources: []string{"talosclusters/authentication"}, Verbs: []string{AuthenticationVerb},

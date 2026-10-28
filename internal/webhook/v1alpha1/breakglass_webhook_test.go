@@ -59,7 +59,7 @@ func asUser(name string) client.Client {
 // grant gives user the ordinary write rights, and (if glass) the break-glass
 // verb, on machines and patches.
 func grant(user string, glass bool) {
-	verbs := []string{"get", "list", "update", "patch", "delete"}
+	verbs := []string{verbGet, "list", verbUpdate, verbPatch, verbDelete}
 	if glass {
 		verbs = append(verbs, "break-glass")
 	}
@@ -178,7 +178,7 @@ var _ = Describe("Break-glass webhook", func() {
 		var cluster *ichorv1alpha1.TalosCluster
 
 		BeforeEach(func() {
-			rule := rbacv1.PolicyRule{APIGroups: []string{ichorGroup}, Resources: []string{resClusters}, Verbs: []string{verbGet, AuthenticationVerb, "delete"}}
+			rule := rbacv1.PolicyRule{APIGroups: []string{ichorGroup}, Resources: []string{resClusters}, Verbs: []string{verbGet, AuthenticationVerb, verbDelete}}
 			bindRole("bg-cluster-plain", plainUser, rule)
 			bindRole("bg-cluster-glass", glassUser, rule, rbacv1.PolicyRule{
 				APIGroups: []string{ichorGroup}, Resources: []string{resClusters}, Verbs: []string{"break-glass"},

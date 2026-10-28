@@ -24,7 +24,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/ptr"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/stackapply"
@@ -37,10 +36,6 @@ import (
 
 const (
 	stackJobPrefix = "ichor-stack-"
-
-	// stackJobTTL keeps a finished Job (and its log) for a day; the Order, not the Job, is the
-	// record that the component was applied.
-	stackJobTTL = 24 * 60 * 60
 
 	// stackJobDeadline bounds the whole Job: the images of both components are pulled in it.
 	stackJobDeadline = 30 * 60
@@ -80,41 +75,10 @@ func newStackJob(ns string, c *stackComponent, inst *ichorv1alpha1.IchorInstalla
 		env = []corev1.EnvVar{secretEnv(stackapply.EnvArgoRedisPasswd, argoRedisSecret, secretKeyPassword)}
 	}
 
-	return &batchv1.Job{
-		Namespace: ns, Name: stackJobName(c.name),
-		Labels: map[string]string{labelNameKey: stackapply.JobLabel, managedLabel: managedTrue},
-		Spec: batchv1.JobSpec{
-			// One attempt: a failed bootstrap is looked at, not blindly repeated.
-			BackoffLimit:            ptr.To[int32](0),
-			ActiveDeadlineSeconds:   ptr.To[int64](stackJobDeadline),
-			TTLSecondsAfterFinished: ptr.To[int32](stackJobTTL),
-			Template: corev1.PodTemplateSpec{
-				// The label config/cilium-network-policy selects the Job's pod by.
-				Labels: map[string]string{labelNameKey: stackapply.JobLabel},
-				Spec: corev1.PodSpec{
-					RestartPolicy:      corev1.RestartPolicyNever,
-					ServiceAccountName: stackapply.ServiceAccount,
-					SecurityContext: &corev1.PodSecurityContext{
-						RunAsNonRoot:   ptr.To(true),
-						SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
-					},
-					Containers: []corev1.Container{{
-						Name: "stack", Image: stackJobImage(inst), Args: args, Env: env,
-						SecurityContext: &corev1.SecurityContext{
-							AllowPrivilegeEscalation: ptr.To(false),
-							ReadOnlyRootFilesystem:   ptr.To(true),
-							Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{capDropAll}},
-						},
-					}},
-				},
-			},
-		},
-	}
+	return newJob(ns, stackJobName(c.name), stackapply.JobLabel, stackapply.ServiceAccount, stackJobDeadline,
+		map[string]string{managedLabel: managedTrue}, nil,
+		corev1.Container{Name: "stack", Image: stackJobImage(inst), Args: args, Env: env})
 }
-
-const labelNameKey = "app.kubernetes.io/name"
-
-const capDropAll corev1.Capability = "ALL"
 
 // ensureStackJob creates the component's Job if it does not exist and reports whether it has
 // completed. A failed Job is an error, not a wait: it will not retry by itself.
@@ -136,19 +100,11 @@ func (r *IchorInstallationReconciler) ensureStackJob(
 		return false, fmt.Errorf("reading Job %s: %w", key.Name, err)
 	}
 
-	for _, cond := range job.Status.Conditions {
-		if cond.Status != corev1.ConditionTrue {
-			continue
-		}
-
-		switch cond.Type {
-		case batchv1.JobComplete:
-			return true, nil
-		case batchv1.JobFailed:
-			return false, fmt.Errorf("job %s failed (%s: %s); read its pod log, then delete the Job to try again",
-				key.Name, cond.Reason, cond.Message)
-		}
+	done, failed := jobOutcome(&job)
+	if failed != nil {
+		return false, fmt.Errorf("job %s failed (%s: %s); read its pod log, then delete the Job to try again",
+			key.Name, failed.Reason, failed.Message)
 	}
 
-	return false, nil
+	return done, nil
 }

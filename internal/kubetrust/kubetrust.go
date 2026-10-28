@@ -175,10 +175,11 @@ func (p *Pool) Verify(cs tls.ConnectionState, host string) error {
 }
 
 // Apply makes cfg verify the API server against the pool; it expects the in-cluster config (CAFile,
-// bearer token) and leaves a config without a CA file alone. Verification is never skipped: the
-// standard library check is replaced by Verify, which still checks the chain and host name.
+// bearer token) and leaves any other config alone, so `make run` against a client-cert kubeconfig keeps
+// its credentials. Verification is never skipped: the standard library check is replaced by Verify,
+// which still checks the chain and host name.
 func (p *Pool) Apply(cfg *rest.Config) {
-	if cfg.CAFile == "" {
+	if cfg.CAFile == "" || cfg.CertFile != "" || len(cfg.CertData) > 0 || cfg.ExecProvider != nil {
 		return
 	}
 

@@ -135,10 +135,6 @@ const (
 	reasonControlPlaneOverCap      = "ControlPlaneOverCap"
 )
 
-// driftPolicyAutoCorrect is the one TalosCluster.spec.driftPolicy value that
-// allows the reconciler to re-apply on drift. Anything else -- including the
-// zero value, for a cluster the CRD default hasn't reached yet -- is
-// treated as warnOnly, the safe side (design 5.6 step 5).
 // ensureRemovalFinalizer gives an approved control plane machineRemovalFinalizer and reports true
 // when it wrote one, so the caller returns and the update's event re-enters Reconcile.
 func (r *TalosMachineReconciler) ensureRemovalFinalizer(ctx context.Context, m *ichorv1alpha1.TalosMachine) (bool, error) {
@@ -187,6 +183,10 @@ const transientRecheck = 30 * time.Second
 // without it Ready stays True for a machine nobody can reach.
 const reachabilityRecheck = 2 * time.Minute
 
+// driftPolicyAutoCorrect is the one TalosCluster.spec.driftPolicy value that
+// allows the reconciler to re-apply on drift. Anything else -- including the
+// zero value, for a cluster the CRD default hasn't reached yet -- is
+// treated as warnOnly, the safe side (design 5.6 step 5).
 const driftPolicyAutoCorrect = "autoCorrect"
 
 // TalosMachineReconciler reconciles a TalosMachine object.
@@ -387,7 +387,7 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return res, err
 	}
 
-	if hashConfig(current) == hash {
+	if render.Hash(current) == hash {
 		m.Status.AppliedConfigHash = hash
 		m.Status.ObservedInputsHash = inputsHash
 		m.Status.RebootPaths, m.Status.APIServerRestartPaths = nil, nil
@@ -675,21 +675,6 @@ func registryAuthFingerprint(auth map[string]render.RegistryAuth) string {
 	return render.Hash([]byte(b.String()))
 }
 
-// refuseReboot is the reboot-needed branch of design step 5. This reconciler never reboots a node
-// and never takes the cluster lock here: the hook, the drain and the etcd checks that must precede
-// a reboot belong to a config-rollout TalosOperation, which someone has to start and
-// which takes the lock itself when it does the work. Here it only records status.rebootPaths
-// (the rollout's plan reads them) and reports Ready=False/RebootRequired, naming the fields.
-func (r *TalosMachineReconciler) refuseReboot(
-	ctx context.Context, m *ichorv1alpha1.TalosMachine, driftNote string, paths []string,
-) (ctrl.Result, error) {
-	m.Status.RebootPaths = paths
-
-	return ctrl.Result{}, r.ready(ctx, m, metav1.ConditionFalse, reasonRebootRequired,
-		driftNote+"configuration change needs a reboot (fields: "+summarizePaths(paths, rebootPathsInMessage)+
-			")"+renameNote(paths)+"; nothing reboots a node on its own -- start a config rollout (ichor config apply, or the cluster page) to apply it")
-}
-
 // isKubeProxyPath is a field the kube-proxy switch owns.
 func isKubeProxyPath(p string) bool {
 	return strings.HasPrefix(p, "KubeProxyConfig") || strings.HasPrefix(p, "cluster.proxy")
@@ -727,30 +712,33 @@ func needsOperation(m *ichorv1alpha1.TalosMachine, impact fieldmeta.Impact) bool
 	return impact.RebootRequired || (len(impact.APIServerRestartPaths) > 0 && m.Spec.Role == roleControlPlane)
 }
 
-// refuseForOperation reports a change needsOperation holds back: the reboot form when a reboot is
-// needed (the API server restart fields ride along in status), the restart form otherwise.
+// refuseForOperation reports a change needsOperation holds back; the API server restart fields
+// ride along in status when a reboot is needed.
+//
+// Reboot form: this reconciler never reboots a node and never takes the cluster lock here: the
+// hook, the drain and the etcd checks that must precede a reboot belong to a config-rollout
+// TalosOperation, which someone has to start and which takes the lock itself. Here it
+// only records status.rebootPaths (the rollout's plan reads them) and reports
+// Ready=False/RebootRequired, naming the fields.
+//
+// Restart form: a change that needs no reboot but restarts this node's kube-apiserver. Applying it
+// from here would restart every control plane's API server at about the same time, a full API
+// outage on an HA cluster, so it is left to a config-rollout TalosOperation,
+// which does it one control plane at a time and waits for /readyz between them.
 func (r *TalosMachineReconciler) refuseForOperation(
 	ctx context.Context, m *ichorv1alpha1.TalosMachine, driftNote string, current, rendered []byte, impact fieldmeta.Impact,
 ) (ctrl.Result, error) {
-	restart := reportablePaths(current, rendered, impact.APIServerRestartPaths)
+	paths := reportablePaths(current, rendered, impact.APIServerRestartPaths)
 
 	if impact.RebootRequired {
-		m.Status.APIServerRestartPaths = restart
+		m.Status.APIServerRestartPaths = paths
+		m.Status.RebootPaths = reportablePaths(current, rendered, impact.RebootPaths)
 
-		return r.refuseReboot(ctx, m, driftNote, reportablePaths(current, rendered, impact.RebootPaths))
+		return ctrl.Result{}, r.ready(ctx, m, metav1.ConditionFalse, reasonRebootRequired,
+			driftNote+"configuration change needs a reboot (fields: "+summarizePaths(m.Status.RebootPaths, rebootPathsInMessage)+
+				")"+renameNote(m.Status.RebootPaths)+"; nothing reboots a node on its own -- start a config rollout (ichor config apply, or the cluster page) to apply it")
 	}
 
-	return r.refuseAPIServerRestart(ctx, m, driftNote, restart)
-}
-
-// refuseAPIServerRestart is the same for a change that needs no reboot but restarts this node's
-// kube-apiserver (fieldmeta's APIServerRestart class). Applying it from here would restart every
-// control plane's API server at about the same time, a full API outage on an HA cluster, so it is
-// left to a config-rollout TalosOperation, which does it one control plane at
-// a time and waits for /readyz between them.
-func (r *TalosMachineReconciler) refuseAPIServerRestart(
-	ctx context.Context, m *ichorv1alpha1.TalosMachine, driftNote string, paths []string,
-) (ctrl.Result, error) {
 	m.Status.APIServerRestartPaths = paths
 
 	return ctrl.Result{}, r.ready(ctx, m, metav1.ConditionFalse, reasonAPIServerRestartRequired,
@@ -877,12 +865,6 @@ func (r *TalosMachineReconciler) renderMachine(
 	rendered, hash, err := render.Render(cluster, m, bundle, patches, sys)
 
 	return rendered, hash, sys, err
-}
-
-// hashConfig hashes cfg the same way pkg/render.Render hashes its output,
-// so the two are comparable.
-func hashConfig(cfg []byte) string {
-	return render.Hash(cfg)
 }
 
 // SetupWithManager sets up the controller with the Manager.

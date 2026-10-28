@@ -51,7 +51,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"slices"
 	"strings"
 	"time"
@@ -383,13 +382,7 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			"connecting to the node's Talos API failed")
 	}
 
-	// TalosClient is three methods, no Close (the fake test double has
-	// nothing to close); a real implementation's connection is closed here,
-	// through the same optional-capability check client code uses for
-	// io.Closer elsewhere, rather than growing the interface for it.
-	if closer, ok := talos.(io.Closer); ok {
-		defer closer.Close() //nolint:errcheck
-	}
+	defer closeTalosClient(talos)
 
 	// Step 2: read the node's current configuration and compare hashes.
 	current, res, stop, err := r.readNode(ctx, &cluster, &m, talos, rendered, hash)

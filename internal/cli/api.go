@@ -289,13 +289,8 @@ func (localOperation) DownloadCARotationCredentials(
 }
 
 // localNode serves only GetEffectiveConfig, which needs no Talos call.
-type localNode struct{ s *uiapi.Server }
-
-func (l localNode) GetEffectiveConfig(
-	ctx context.Context, req *connect.Request[pb.GetEffectiveConfigRequest],
-) (*connect.Response[pb.GetEffectiveConfigResponse], error) {
-	return l.s.GetEffectiveConfig(ctx, req)
-}
+// The Talos-backed methods below shadow the embedded server's.
+type localNode struct{ *uiapi.Server }
 
 func (localNode) GetNode(context.Context, *connect.Request[pb.GetNodeRequest]) (*connect.Response[pb.GetNodeResponse], error) {
 	return nil, connect.NewError(connect.CodeUnavailable, errBackendRequired)
@@ -557,7 +552,7 @@ func runAPI(cmd *cobra.Command, requireBackend bool, fn func(ctx context.Context
 // writeMessage prints a wire message in the requested format. Everything
 // printed was already masked by the server (docs/adr/0018).
 func writeMessage(w io.Writer, format string, msg proto.Message) error {
-	raw, err := protojson.MarshalOptions{UseProtoNames: false}.Marshal(msg)
+	raw, err := protojson.Marshal(msg)
 	if err != nil {
 		return err
 	}

@@ -18,17 +18,14 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-// DefaultFile is where the extra CA certificates are kept; an emptyDir is mounted on its directory.
-const DefaultFile = "/var/run/ichor/trust/kubernetes-ca.crt"
-
-// TrustFile is the file Publish writes and start-up reads; tests point it elsewhere.
-var TrustFile = DefaultFile
+// TrustFile is where the extra CA certificates are kept (an emptyDir is mounted on its directory);
+// Publish writes it and start-up reads it, tests point it elsewhere.
+var TrustFile = "/var/run/ichor/trust/kubernetes-ca.crt"
 
 // Pool verifies a server chain against base CA plus extra certificates.
 type Pool struct {
 	mu       sync.RWMutex
 	baseFile string
-	baseData []byte
 	extra    []*x509.Certificate
 }
 
@@ -62,8 +59,8 @@ func certs(data []byte) ([]*x509.Certificate, error) {
 	return out, nil
 }
 
-// Add trusts the certificates in pemData (other PEM blocks are ignored).
-func (p *Pool) Add(pemData []byte) error {
+// add trusts the certificates in pemData (other PEM blocks are ignored).
+func (p *Pool) add(pemData []byte) error {
 	cs, err := certs(pemData)
 	if err != nil {
 		return err
@@ -95,19 +92,6 @@ func (p *Pool) Add(pemData []byte) error {
 	return nil
 }
 
-// PEM returns the extra certificates, certificates only.
-func (p *Pool) PEM() []byte {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-
-	out := make([]byte, 0, len(p.extra)*1024)
-	for _, c := range p.extra {
-		out = append(out, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: c.Raw})...)
-	}
-
-	return out
-}
-
 // LoadFile adds the certificates in path; a missing file is not an error.
 func (p *Pool) LoadFile(path string) error {
 	data, err := os.ReadFile(path)
@@ -119,12 +103,12 @@ func (p *Pool) LoadFile(path string) error {
 		return err
 	}
 
-	return p.Add(data)
+	return p.add(data)
 }
 
 // Publish trusts cert (public part only) and writes the extra certificates to path atomically.
 func (p *Pool) Publish(cert []byte, path string) error {
-	if err := p.Add(cert); err != nil {
+	if err := p.add(cert); err != nil {
 		return fmt.Errorf("trusting the new CA: %w", err)
 	}
 
@@ -132,8 +116,17 @@ func (p *Pool) Publish(cert []byte, path string) error {
 		return err
 	}
 
+	p.mu.RLock()
+
+	var out []byte
+	for _, c := range p.extra {
+		out = append(out, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: c.Raw})...)
+	}
+
+	p.mu.RUnlock()
+
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, p.PEM(), 0o644); err != nil {
+	if err := os.WriteFile(tmp, out, 0o644); err != nil {
 		return err
 	}
 
@@ -147,14 +140,9 @@ func (p *Pool) roots() *x509.CertPool {
 
 	pool := x509.NewCertPool()
 
-	base := p.baseData
-	if p.baseFile != "" {
-		if b, err := os.ReadFile(p.baseFile); err == nil {
-			base = b
-		}
+	if base, err := os.ReadFile(p.baseFile); err == nil {
+		pool.AppendCertsFromPEM(base)
 	}
-
-	pool.AppendCertsFromPEM(base)
 
 	for _, c := range p.extra {
 		pool.AddCert(c)
@@ -186,12 +174,11 @@ func (p *Pool) Verify(cs tls.ConnectionState, host string) error {
 	return err
 }
 
-// Apply makes cfg verify the API server against the pool. A config that skips verification, uses
-// client certificates or already has a custom transport is left alone. Verification is never skipped:
-// the standard library check is replaced by Verify, which still checks the chain and host name.
+// Apply makes cfg verify the API server against the pool; it expects the in-cluster config (CAFile,
+// bearer token) and leaves a config without a CA file alone. Verification is never skipped: the
+// standard library check is replaced by Verify, which still checks the chain and host name.
 func (p *Pool) Apply(cfg *rest.Config) {
-	if cfg.Insecure || cfg.Transport != nil || len(cfg.CertData) > 0 || cfg.CertFile != "" || len(cfg.KeyData) > 0 || cfg.KeyFile != "" || cfg.ExecProvider != nil || cfg.AuthProvider != nil ||
-		(len(cfg.CAData) == 0 && cfg.CAFile == "") {
+	if cfg.CAFile == "" {
 		return
 	}
 
@@ -207,7 +194,7 @@ func (p *Pool) Apply(cfg *rest.Config) {
 	}
 
 	p.mu.Lock()
-	p.baseFile, p.baseData = cfg.CAFile, cfg.CAData
+	p.baseFile = cfg.CAFile
 	p.mu.Unlock()
 
 	t := http.DefaultTransport.(*http.Transport).Clone() //nolint:forcetypeassert // stdlib guarantees it

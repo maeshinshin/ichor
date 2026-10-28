@@ -129,9 +129,13 @@ func TestTrustedConfigLoadsTheRotationFileBeforeTheWait(t *testing.T) {
 	pemOf := func(s *httptest.Server) []byte {
 		return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: s.Certificate().Raw})
 	}
+	staleFile := filepath.Join(t.TempDir(), "ca.crt")
+	if err := os.WriteFile(staleFile, stale, 0o600); err != nil {
+		t.Fatal(err)
+	}
 	get := func() (*rest.Config, error) {
 		cfg := &rest.Config{Host: srv.URL}
-		cfg.CAData = stale
+		cfg.CAFile = staleFile
 
 		return cfg, nil
 	}

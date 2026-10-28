@@ -84,6 +84,7 @@ Inside `nix develop`, with a node in maintenance mode:
 ichor init --help          # create the first control plane and install Ichor
 ichor machine approve --help
 ichor status
+ichor version              # CLI version and the installed Ichor version (--client skips the cluster, -o json|yaml)
 ```
 
 `ichor <command> --help` lists the rest. Existing clusters are brought in

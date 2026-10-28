@@ -109,7 +109,7 @@ type Config struct {
 // Issuer is the OIDC provider. Create it with New.
 type Issuer struct {
 	cfg       Config
-	failures  *backoff
+	failures  *Backoff
 	usedCodes *jtiSet
 }
 
@@ -143,7 +143,7 @@ func New(cfg Config) (*Issuer, error) {
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
-	return &Issuer{cfg: cfg, failures: newBackoff(), usedCodes: newJTISet()}, nil
+	return &Issuer{cfg: cfg, failures: NewBackoff(), usedCodes: newJTISet()}, nil
 }
 
 // Handler serves discovery, JWKS, authorize, login and token (port 8080 side).

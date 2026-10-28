@@ -190,14 +190,14 @@ func (i *Issuer) login(w http.ResponseWriter, r *http.Request) {
 		ip = r.RemoteAddr
 	}
 	userKey, ipKey := "u:"+truncate(req.Username, maxUserNameLen+1), "ip:"+ip
-	if d := max(i.failures.wait(userKey, now), i.failures.wait(ipKey, now)); d > 0 {
+	if d := max(i.failures.Wait(userKey, now), i.failures.Wait(ipKey, now)); d > 0 {
 		w.Header().Set("Retry-After", strconv.Itoa(int(d/time.Second)+1))
 		oauthError(w, http.StatusTooManyRequests, "rate_limited", "too many failed logins")
 		return
 	}
 	denied := func() {
-		i.failures.fail(userKey, now)
-		i.failures.fail(ipKey, now)
+		i.failures.Fail(userKey, now)
+		i.failures.Fail(ipKey, now)
 		oauthError(w, http.StatusUnauthorized, errAccessDenied, "invalid credentials")
 	}
 	if len(req.Username) == 0 || len(req.Username) > maxUserNameLen {
@@ -222,7 +222,7 @@ func (i *Issuer) login(w http.ResponseWriter, r *http.Request) {
 		denied()
 		return
 	}
-	i.failures.reset(userKey)
+	i.failures.Reset(userKey)
 	id, err := randomID()
 	if err != nil {
 		oauthError(w, http.StatusInternalServerError, "server_error", "")

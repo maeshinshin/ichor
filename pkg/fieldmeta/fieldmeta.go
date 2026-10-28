@@ -146,6 +146,25 @@ var rules = []rule{
 	{prefix: "cluster.scheduler", safe: true},
 	{prefix: "cluster.scheduler.image"},
 
+	// Extra and inline manifests, Talos v1.14.3, controllers/k8s:
+	//   - control_plane.go:510-552 ControlPlaneExtraManifestsController watches the active
+	//     MachineConfig (controlplaneMapFunc, :44-66: control planes only; a worker never
+	//     reads these fields) and folds cluster.inlineManifests, cluster.extraManifests (+
+	//     extraManifestHeaders) into k8s.ExtraManifestsConfig on every change, live.
+	//   - extra_manifest.go:93-141 ExtraManifestController turns that into k8s.Manifest
+	//     resources and destroys the ones no longer listed (:131-141): it removes a COSI
+	//     resource, nothing in the cluster.
+	//   - manifest_apply.go:230-393 ManifestApplyController only ever server-side-applies
+	//     (skips objects already in the inventory, :335-338); it has no delete or prune path,
+	//     so dropping an entry deletes nothing from the cluster.
+	// No service restarts and nothing reads these once at boot, so an add, change or removal
+	// is a plain apply. Reboot-required here left the CNI hand-over (which drops the inlined
+	// CNI entry) with a pending change that held the control plane Ready=False/RebootRequired
+	// and later paused a CNI operation; only a rebooting config apply could clear it.
+	{prefix: "cluster.inlineManifests", safe: true},
+	{prefix: "cluster.extraManifests", safe: true},
+	{prefix: "cluster.extraManifestHeaders", safe: true},
+
 	// VolumeConfig.provisioning (which disk a system volume -- STATE or
 	// EPHEMERAL -- lives on, and its min/max size) is install-time-only,
 	// the same as machine.install and for the same underlying reason:

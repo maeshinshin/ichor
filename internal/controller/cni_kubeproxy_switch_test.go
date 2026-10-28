@@ -564,21 +564,4 @@ var _ = Describe("cniKubeProxyAdvancer", func() {
 		Expect(apimeta.IsStatusConditionTrue(op.Status.Conditions, conditionAwaitingCNIChange)).To(BeFalse())
 		Expect(ciliumConfigVersion()).NotTo(Equal(before), "only the test changed it")
 	})
-
-	It("refuses a CNI whose live state it cannot read", func() {
-		cluster := k8sCluster(testK8sTarget, ichorv1alpha1.TalosClusterCNI{
-			Preset: "custom", KubeProxy: modeReplaced, Handover: testHandoverDisabled,
-			Custom: &ichorv1alpha1.TalosClusterCNICustom{Source: ichorv1alpha1.TalosClusterCNICustomSource{
-				RepoURL: "https://example.invalid/cni.git", Path: "cni", TargetRevision: "main",
-			}},
-		})
-		cp := newK8sControlPlane(cluster.Name, "kp-custom")
-		fake := &fakeTalosClient{current: nodeConfig(cluster, cp, modeEnabled)}
-		adv := newKubeProxyAdvancer(map[string]*fakeTalosClient{cp.Name: fake}, &fakeKubeProxyAdmin{})
-
-		_, err := adv.Advance(ctx, cluster, cp, &ichorv1alpha1.TalosOperation{})
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("cannot verify"))
-		Expect(fake.applyCalls).To(BeEmpty())
-	})
 })

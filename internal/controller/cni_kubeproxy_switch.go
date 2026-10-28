@@ -219,7 +219,7 @@ func (a *cniKubeProxyAdvancer) Advance(
 // readable today; a switch it cannot verify is refused rather than done on faith.
 func (a *cniKubeProxyAdvancer) verifiablePreset(cluster *ichorv1alpha1.TalosCluster) (cni.Preset, error) {
 	preset, ok := cniPresetFor(cluster.Spec.CNI.Preset)
-	if !ok || cluster.Spec.CNI.Preset != "cilium" || !preset.SupportsKubeProxyReplacement() {
+	if !ok || cluster.Spec.CNI.Preset != ciliumName || !preset.SupportsKubeProxyReplacement() {
 		return nil, fmt.Errorf("the %q CNI preset is not one whose live kube-proxy state Ichor can read, so it "+
 			"cannot verify a kube-proxy switch; refusing to run one", cluster.Spec.CNI.Preset)
 	}

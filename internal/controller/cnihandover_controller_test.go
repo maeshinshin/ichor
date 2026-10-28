@@ -95,7 +95,7 @@ func newTestCiliumCluster(handover string) *ichorv1alpha1.TalosCluster {
 			Endpoint:          ichorv1alpha1.TalosClusterEndpoint{Type: testEndpointType, Address: testClusterAddress},
 			TalosVersion:      testTalosVersion,
 			KubernetesVersion: "v" + constants.DefaultKubernetesVersion,
-			VersionContract:   "v1.14",
+			VersionContract:   testK8sContract,
 			SecretsRef:        corev1.LocalObjectReference{Name: "does-not-exist"},
 			ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: 1, Schedulable: testSchedulable},
 			CNI:               ichorv1alpha1.TalosClusterCNI{Preset: "cilium", Handover: handover},
@@ -107,13 +107,20 @@ func newTestCiliumCluster(handover string) *ichorv1alpha1.TalosCluster {
 }
 
 var _ = Describe("CNIHandoverReconciler", func() {
-	It("does nothing for a cluster with no CNI preset configured", func() {
-		cluster := newTestCluster("does-not-exist", "v1.14")
-		// Preset left at its zero value, "" -- the CRD default ("flannel")
-		// only applies through the apiserver's structural-schema defaulting,
-		// which newTestCluster's Create already went through, so assert the
-		// precondition rather than assume it.
-		Expect(cluster.Spec.CNI.Preset).To(Equal("flannel"))
+	It("sets CNIUnsupported on a flannel cluster and leaves the hand-over condition alone", func() {
+		cluster := &ichorv1alpha1.TalosCluster{
+			GenerateName: testClusterGenerate, Namespace: tmNamespace,
+			Spec: ichorv1alpha1.TalosClusterSpec{
+				Endpoint:          ichorv1alpha1.TalosClusterEndpoint{Type: testEndpointType, Address: testClusterAddress},
+				TalosVersion:      testTalosVersion,
+				KubernetesVersion: "v" + constants.DefaultKubernetesVersion,
+				VersionContract:   "v1.14",
+				SecretsRef:        corev1.LocalObjectReference{Name: "does-not-exist"},
+				ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: 1, Schedulable: testSchedulable},
+				CNI:               ichorv1alpha1.TalosClusterCNI{Preset: "flannel"},
+			},
+		}
+		Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
 
 		r := &CNIHandoverReconciler{Client: k8sClient}
 		result, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
@@ -122,6 +129,9 @@ var _ = Describe("CNIHandoverReconciler", func() {
 
 		var fetched ichorv1alpha1.TalosCluster
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, &fetched)).To(Succeed())
+		cond := apimeta.FindStatusCondition(fetched.Status.Conditions, ichorv1alpha1.ConditionCNIUnsupported)
+		Expect(cond).NotTo(BeNil())
+		Expect(cond.Status).To(Equal(metav1.ConditionTrue))
 		Expect(apimeta.FindStatusCondition(fetched.Status.Conditions, render.ConditionCNIHandover)).To(BeNil())
 	})
 

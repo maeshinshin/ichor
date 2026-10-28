@@ -63,6 +63,9 @@ const (
 	// not controllerIdentity on purpose: Acquire lets the same identity back in, so with the
 	// shared one a node rollout holding the lock would not stop the Job.
 	cniHelmLockIdentity = "ichor-controller/cni-helm"
+
+	// helmOwnerLabel is the label Helm's Secrets driver puts on its release records.
+	helmOwnerLabel = "owner"
 )
 
 const (
@@ -346,7 +349,7 @@ func (r *CNIHandoverReconciler) ciliumReady(ctx context.Context) (ready bool, wh
 func (r *CNIHandoverReconciler) releaseState(ctx context.Context) (status, valuesHash string, err error) {
 	var secrets corev1.SecretList
 	if err := r.reader().List(ctx, &secrets, client.InNamespace(r.Namespace),
-		client.MatchingLabels{"owner": "helm", "name": cilium.ReleaseName}); err != nil {
+		client.MatchingLabels{helmOwnerLabel: "helm", labelName: cilium.ReleaseName}); err != nil {
 		return "", "", err
 	}
 

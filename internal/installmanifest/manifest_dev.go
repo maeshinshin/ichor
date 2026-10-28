@@ -29,3 +29,8 @@ import _ "embed"
 //
 //go:embed placeholder.yaml
 var Manifest []byte
+
+// NetworkPolicies is the placeholder too in this build; callers refuse it like Manifest.
+//
+//go:embed placeholder.yaml
+var NetworkPolicies []byte

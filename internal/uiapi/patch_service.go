@@ -20,11 +20,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 
 	"connectrpc.com/connect"
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -119,7 +120,7 @@ func (s *Server) CreatePatch(
 	}
 
 	if err := s.Create(ctx, p, strictFieldValidation); err != nil {
-		return nil, mapWriteError("creating", namespacedName(ref), err)
+		return nil, mapOperationWriteError("creating patch", namespacedName(ref), err)
 	}
 
 	out, err := patchToPB(p)
@@ -170,7 +171,7 @@ func (s *Server) UpdatePatch(
 	}
 
 	if err := s.Update(ctx, p, strictFieldValidation); err != nil {
-		return nil, mapWriteError("updating", namespacedName(ref), err)
+		return nil, mapOperationWriteError("updating patch", namespacedName(ref), err)
 	}
 
 	out, err := patchToPB(p)
@@ -217,7 +218,7 @@ func (s *Server) DeletePatch(
 	}
 
 	if err := s.Delete(ctx, p); err != nil {
-		return nil, mapWriteError("deleting", namespacedName(ref), err)
+		return nil, mapOperationWriteError("deleting patch", namespacedName(ref), err)
 	}
 
 	audit := &pb.AuditRecord{Actor: s.actorName(ctx), At: timestamppb.New(s.now()), Action: "delete", Target: ref}
@@ -299,29 +300,5 @@ func patchPaths(documents []ichorv1alpha1.TalosConfigPatchDocument) ([]string, e
 		}
 	}
 
-	paths := make([]string, 0, len(seen))
-	for p := range seen {
-		paths = append(paths, p)
-	}
-
-	return paths, nil
-}
-
-// mapWriteError turns a client.Client Create/Update/Delete error into the
-// connect.Code a browser-facing write should report: CodeNotFound for a
-// missing object, CodeInvalidArgument for a rejected CRD validation rule
-// (the CRD's own CEL message, already human-readable -- not re-worded
-// here), CodeAlreadyExists for a name collision on Create, CodeInternal
-// for everything else.
-func mapWriteError(verb string, key types.NamespacedName, err error) error {
-	switch {
-	case apierrors.IsNotFound(err):
-		return connect.NewError(connect.CodeNotFound, fmt.Errorf("%s patch %q: %w", verb, key, err))
-	case apierrors.IsInvalid(err):
-		return connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("%s patch %q: %w", verb, key, err))
-	case apierrors.IsAlreadyExists(err):
-		return connect.NewError(connect.CodeAlreadyExists, fmt.Errorf("%s patch %q: %w", verb, key, err))
-	default:
-		return connect.NewError(connect.CodeInternal, fmt.Errorf("%s patch %q: %w", verb, key, err))
-	}
+	return slices.Collect(maps.Keys(seen)), nil
 }

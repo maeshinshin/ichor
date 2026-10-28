@@ -333,7 +333,7 @@ func (s *Server) cl(ctx context.Context) (client.Client, error) {
 // Get, List, Create, Update and Delete are the calls handlers make on
 // user-requested CRs. They shadow the embedded client's methods so the
 // handlers need no change; reads that must stay on the ServiceAccount
-// (secrets bundle, argocd-cm, Git token) call s.Client.X explicitly.
+// (secrets bundle) call s.Client.X explicitly.
 func (s *Server) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 	c, err := s.cl(ctx)
 	if err != nil {

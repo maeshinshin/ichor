@@ -1,0 +1,174 @@
+# CiliumNetworkPolicies for the kokumi namespace (ADR 0099 decision 10). Part of the Kokumi
+# bundle. The controller applies them after the workloads exist, never before, so the default
+# deny cannot cut off the bootstrap sync.
+#
+# Pods (Kokumi 0.17.0, after Ichor's transformations):
+#   controller-manager  app.kubernetes.io/name=kokumi, control-plane=controller-manager
+#                       probes 8081, metrics 8443 (TLS, behind TokenReview)
+#   server              app.kubernetes.io/name=kokumi, app.kubernetes.io/component=server; 8080
+#   registry            app=registry; 5000 (anonymous and writable, so ingress here is the
+#                       only thing that restricts who can publish)
+# Kokumi ships no webhook configuration, so no apiserver ingress is needed.
+#
+# A call from the apiserver to a pod on another node arrives as remote-node, not kube-apiserver
+# (ADR 0100 amendment). Nothing here is called by the apiserver, so that is not needed.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: default-deny
+  namespace: kokumi
+spec:
+  description: Everything in the namespace is denied unless a policy below allows it.
+  endpointSelector: {}
+  ingress:
+  - {}
+  egress:
+  - {}
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: kokumi
+spec:
+  description: Every pod resolves names through CoreDNS. The dns rule makes the lookups visible in Hubble.
+  endpointSelector: {}
+  egress:
+  - toEndpoints:
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: kube-system
+        k8s:k8s-app: kube-dns
+    toPorts:
+    - ports:
+      - port: "53"
+        protocol: UDP
+      - port: "53"
+        protocol: TCP
+      rules:
+        dns:
+        - matchPattern: "*"
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-kube-apiserver
+  namespace: kokumi
+spec:
+  description: The controller and the server call the Kubernetes API.
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: kokumi
+  egress:
+  - toEntities:
+    - kube-apiserver
+    toPorts:
+    - ports:
+      - port: "6443"
+        protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: controller-manager
+  namespace: kokumi
+spec:
+  description: The controller renders and pushes through the registry. Sources are in-cluster, so nothing else is reachable.
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: kokumi
+      control-plane: controller-manager
+  ingress:
+  # The kubelet's liveness and readiness probes (/healthz, /readyz).
+  - fromEntities:
+    - host
+    toPorts:
+    - ports:
+      - port: "8081"
+        protocol: TCP
+  # /metrics, behind TokenReview and SubjectAccessReview. In-cluster scrapers only.
+  - fromEntities:
+    - cluster
+    toPorts:
+    - ports:
+      - port: "8443"
+        protocol: TCP
+  egress:
+  - toEndpoints:
+    - matchLabels:
+        app: registry
+    toPorts:
+    - ports:
+      - port: "5000"
+        protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: server
+  namespace: kokumi
+spec:
+  description: The Kokumi UI and API. Reached with a port-forward (the Service is ClusterIP), which arrives from the node.
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: kokumi
+      app.kubernetes.io/component: server
+  ingress:
+  - fromEntities:
+    - host
+    toPorts:
+    - ports:
+      - port: "8080"
+        protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: registry
+  namespace: kokumi
+spec:
+  description: >-
+    The registry takes writes from Ichor and Kokumi and reads from Kokumi and Argo CD, and nothing else.
+    It has no authentication, so this ingress is the only restriction on who can publish.
+  endpointSelector:
+    matchLabels:
+      app: registry
+  ingress:
+  # Kokumi's own controller (Kokumi to its own registry).
+  - fromEndpoints:
+    - matchLabels:
+        app.kubernetes.io/name: kokumi
+        control-plane: controller-manager
+    toPorts:
+    - ports:
+      - port: "5000"
+        protocol: TCP
+  # Argo CD pulls the Preparations Kokumi pushed.
+  - fromEndpoints:
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: argocd
+        app.kubernetes.io/name: argocd-repo-server
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: argocd
+        app.kubernetes.io/name: argocd-application-controller
+    toPorts:
+    - ports:
+      - port: "5000"
+        protocol: TCP
+  # The Ichor controller publishes the bundles for Kokumi and Argo CD. Its egress rule is in
+  # config/cilium-network-policy (ADR 0100).
+  - fromEndpoints:
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: ichor-system
+        app.kubernetes.io/name: ichor
+        control-plane: controller-manager
+    toPorts:
+    - ports:
+      - port: "5000"
+        protocol: TCP
+  # The kubelet's probes.
+  - fromEntities:
+    - host
+    toPorts:
+    - ports:
+      - port: "5000"
+        protocol: TCP

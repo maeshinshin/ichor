@@ -33,6 +33,8 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	sigsyaml "sigs.k8s.io/yaml"
+
+	"github.com/maeshinshin/ichor/pkg/stack/policies"
 )
 
 const (
@@ -68,7 +70,14 @@ type Options struct {
 	AdminPasswordHash string
 	// RegistrySize is the emptyDir size limit; DefaultRegistrySize if empty.
 	RegistrySize string
+	// OmitPolicies leaves the CiliumNetworkPolicies (ADR 0099 decision 10) out
+	// of the output, for the first apply, which runs before they may exist.
+	// The published bundle keeps them so Argo CD does not prune them.
+	OmitPolicies bool
 }
+
+// Policies returns the CiliumNetworkPolicies of the kokumi namespace alone.
+func Policies() []byte { return append([]byte{}, policies.Kokumi...) }
 
 // Manifest returns the unmodified upstream install.yaml.
 func Manifest() ([]byte, error) {
@@ -175,7 +184,11 @@ func Render(opts Options) ([]byte, error) {
 		out.Write(b)
 	}
 
-	return out.Bytes(), nil
+	if opts.OmitPolicies {
+		return out.Bytes(), nil
+	}
+
+	return policies.Append(out.Bytes(), policies.Kokumi), nil
 }
 
 // transformer applies each transformation once and remembers which ran.

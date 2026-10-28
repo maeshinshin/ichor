@@ -260,3 +260,11 @@ Units 1, 2, 4 and 5 can start at once on stub commits; 3 follows 1; 6 and 7 foll
 - Whether to wire Kokumi's login to Ichor's OIDC issuer (ADR 0094) in this change or later; until then the generated admin password is the credential.
 - Does `ichor adopt` of an existing Cilium cluster need an adoption path for an Argo CD-managed Cilium Application (a cluster that went through ADR 0024)? It is out of scope here; those clusters are re-created like flannel ones unless the user asks for it.
 - The exact Talos v1.14 inline-manifest document kind and its fields must be confirmed against the pinned machinery (unit 2).
+
+## Amendment (2026-10-29): how decision 10 is realised (unit 13)
+
+- The policies are `pkg/stack/policies/{kokumi,argocd}.yaml`, embedded and appended to each bundle by `kokumi.Render` / `argocd.Render`, so the published bundle keeps them and Argo CD does not prune them. `Options.OmitPolicies` leaves them out for the first apply (steps 4-5) and `stack.Policies(component)` returns them alone for step 8.
+- The Argo CD chart renders Kubernetes NetworkPolicies by default (`global.networkPolicy.create`), and Cilium unions those with CiliumNetworkPolicies; the `argocd-server` one allows all ingress. `DefaultValues` switches them off.
+- The apiserver egress uses port 6443, as ADR 0100 does. Neither Kokumi 0.17.0 nor Argo CD ships a webhook, so no apiserver ingress exists; a test fails if one appears, because it would also need `remote-node` (ADR 0100 amendment).
+- Ichor's side of the publish flow is an egress rule to `kokumi` `app=registry` :5000 in `config/cilium-network-policy/policies.yaml` and the chart copy. A test requires both directions.
+- Users reach `argocd-server` and `kokumi-server` (both ClusterIP) by `kubectl port-forward`, which the policies admit from the `host` entity on 8080. An ingress or gateway needs a policy of the operator's own.

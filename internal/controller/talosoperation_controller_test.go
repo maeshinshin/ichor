@@ -199,6 +199,13 @@ var _ = Describe("TalosOperationReconciler", func() {
 		got := fetchOperation(op)
 		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
 		expectPausedBecause(got, reasonOperationLockHeld)
+		Expect(apimeta.FindStatusCondition(got.Status.Conditions, conditionOperationPaused).Message).To(ContainSubstring(`"someone-else"`))
+	})
+
+	It("words a lock held by an unseen holder without an empty quoted name", func() {
+		msg := (&clusterlock.HeldError{}).Error()
+		Expect(msg).To(ContainSubstring("holder not visible yet"))
+		Expect(msg).NotTo(ContainSubstring(`""`))
 	})
 
 	It("pauses with OperatorPaused and never calls Advance when spec.paused is true, but keeps the lock", func() {

@@ -1,0 +1,196 @@
+{{- /*
+Ichor's CiliumNetworkPolicies, the chart's copy of config/cilium-network-policy. Needs
+Cilium's CiliumNetworkPolicy CRD, so it is off by default: turn it on once Cilium runs. Every
+port below is the one the Deployments open, from the same values.
+*/ -}}
+{{- if .Values.networkPolicy.cilium.enabled }}
+{{- $name := include "ichor.name" . }}
+{{- $ports := .Values.networkPolicy.cilium.externalPorts }}
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/name: {{ $name }}
+  name: {{ include "ichor.resourceName" (dict "suffix" "default-deny" "context" $) }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  description: Everything in the namespace is denied unless a policy below allows it.
+  endpointSelector: {}
+  ingress:
+  - {}
+  egress:
+  - {}
+{{- if .Values.manager.enabled }}
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/name: {{ $name }}
+  name: {{ include "ichor.resourceName" (dict "suffix" "controller-manager" "context" $) }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  description: The controller.
+  endpointSelector:
+    matchLabels:
+      control-plane: controller-manager
+      app.kubernetes.io/name: {{ $name }}
+  ingress:
+  {{- if .Values.webhook.enabled }}
+  # The API server calls the admission webhooks.
+  - fromEntities:
+    - kube-apiserver
+    toPorts:
+    - ports:
+      - port: {{ .Values.webhook.port | quote }}
+        protocol: TCP
+  {{- end }}
+  # The kubelet's probes.
+  - fromEntities:
+    - host
+    toPorts:
+    - ports:
+      - port: "8081"
+        protocol: TCP
+  {{- if .Values.metrics.enabled }}
+  # /metrics: in-cluster scrapers only.
+  - fromEntities:
+    - cluster
+    toPorts:
+    - ports:
+      - port: {{ .Values.metrics.port | quote }}
+        protocol: TCP
+  {{- end }}
+  egress:
+  - toEntities:
+    - kube-apiserver
+    toPorts:
+    - ports:
+      - port: "6443"
+        protocol: TCP
+  # Talos nodes: apid, and the API server's /readyz on a node's own address.
+  - toEntities:
+    - host
+    - remote-node
+    - world
+    toPorts:
+    - ports:
+      - port: "50000"
+        protocol: TCP
+      - port: "6443"
+        protocol: TCP
+  - toEndpoints:
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: kube-system
+        k8s:k8s-app: kube-dns
+    toPorts:
+    - ports:
+      - port: "53"
+        protocol: UDP
+      - port: "53"
+        protocol: TCP
+  # TalosEtcdBackup's S3 endpoint.
+  - toEntities:
+    - world
+    toPorts:
+    - ports:
+      {{- range $ports }}
+      - port: {{ . | quote }}
+        protocol: TCP
+      {{- end }}
+{{- end }}
+{{- if .Values.ichorUI.enabled }}
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/name: {{ $name }}
+  name: {{ include "ichor.resourceName" (dict "suffix" "ui" "context" $) }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  description: ichor-ui.
+  endpointSelector:
+    matchLabels:
+      control-plane: ui-backend
+      app.kubernetes.io/name: {{ $name }}
+  ingress:
+  # Users, in-cluster ingress and gateways, the kubelet's probes, port-forwards.
+  - fromEntities:
+    - world
+    - cluster
+    toPorts:
+    - ports:
+      - port: {{ .Values.ichorUI.port | quote }}
+        protocol: TCP
+  {{- if .Values.ichorUI.users.enabled }}
+  # The API server reads the issuer's discovery document and JWKS.
+  - fromEntities:
+    - kube-apiserver
+    toPorts:
+    - ports:
+      - port: {{ .Values.ichorUI.users.internalPort | quote }}
+        protocol: TCP
+  {{- end }}
+  egress:
+  - toEntities:
+    - kube-apiserver
+    toPorts:
+    - ports:
+      - port: "6443"
+        protocol: TCP
+  - toEntities:
+    - host
+    - remote-node
+    - world
+    toPorts:
+    - ports:
+      - port: "50000"
+        protocol: TCP
+  - toEndpoints:
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: kube-system
+        k8s:k8s-app: kube-dns
+    toPorts:
+    - ports:
+      - port: "53"
+        protocol: UDP
+      - port: "53"
+        protocol: TCP
+  # The external OIDC issuer and the Git host a pull request goes to.
+  - toEntities:
+    - world
+    toPorts:
+    - ports:
+      {{- range $ports }}
+      - port: {{ . | quote }}
+        protocol: TCP
+      {{- end }}
+{{- end }}
+{{- if .Values.installer.enabled }}
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/name: {{ $name }}
+  name: {{ include "ichor.resourceName" (dict "suffix" "installer" "context" $) }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  description: The installer Job. It talks to the API server and nothing else.
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: ichor-installer
+  egress:
+  - toEntities:
+    - kube-apiserver
+    toPorts:
+    - ports:
+      - port: "6443"
+        protocol: TCP
+{{- end }}
+{{- end }}

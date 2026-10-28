@@ -125,6 +125,10 @@ type ApplicationSourceHelm struct {
 // app-of-apps root Application to pick up everything under apps/.
 type ApplicationSourceDir struct {
 	Recurse bool `json:"recurse,omitempty"`
+
+	// Include is a glob (with {a,b} alternatives) of the files, relative to
+	// the source path, the Application applies; empty means all.
+	Include string `json:"include,omitempty"`
 }
 
 // ApplicationDestination is Application.spec.destination.

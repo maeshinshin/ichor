@@ -50,6 +50,33 @@ type fakeKubeProxyAdmin struct {
 	appliedAt int
 	applied   func() int
 	err       error
+
+	// restores counts RestoreKubeProxy calls; like Talos's rendered set it creates the DaemonSet
+	// (one node, not yet ready) unless restoreErr is set.
+	restores   int
+	restoreErr error
+}
+
+func (f *fakeKubeProxyAdmin) RestoreKubeProxy(ctx context.Context, _ TalosClient) error {
+	f.restores++
+	if f.restoreErr != nil {
+		return f.restoreErr
+	}
+
+	if kubeProxyExists() {
+		return nil
+	}
+
+	ds := &appsv1.DaemonSet{}
+	ds.Namespace, ds.Name = testKubeSystem, kubeProxyName
+	ds.Spec.Selector = &metav1.LabelSelector{MatchLabels: map[string]string{labelK8sApp: kubeProxyName}}
+	ds.Spec.Template.Labels = map[string]string{labelK8sApp: kubeProxyName}
+	ds.Spec.Template.Spec.Containers = []corev1.Container{{Name: kubeProxyName, Image: "registry.k8s.io/kube-proxy:" + testK8sTarget}}
+	DeferCleanup(func() {
+		_ = k8sClient.Delete(ctx, ds, client.GracePeriodSeconds(0), client.PropagationPolicy(metav1.DeletePropagationBackground))
+	})
+
+	return k8sClient.Create(ctx, ds)
 }
 
 func (f *fakeKubeProxyAdmin) RemoveKubeProxy(ctx context.Context, talos TalosClient) error {
@@ -425,15 +452,26 @@ var _ = Describe("cniKubeProxyAdvancer", func() {
 
 		fake.current = fake.applyCalls[0]
 
-		// Talos has not created the DaemonSet yet.
+		// Talos has not created the DaemonSet (its inventory still lists it): Ichor restores it.
 		done, err = adv.Advance(ctx, fetchCluster(cluster), cp, op)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(done).To(BeFalse())
+		Expect(admin.restores).To(Equal(1))
+		Expect(kubeProxyExists()).To(BeTrue())
 		Expect(apimeta.IsStatusConditionTrue(op.Status.Conditions, conditionVerifyingNewSide)).To(BeTrue())
 		Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionAwaitingCNIChange)).To(BeNil(),
 			"Cilium is not asked to step aside before kube-proxy runs")
 
-		newKubeProxyDaemonSet(testK8sTarget, 3, 1)
+		var created appsv1.DaemonSet
+		Expect(k8sClient.Get(ctx, client.ObjectKey{Namespace: testKubeSystem, Name: kubeProxyName}, &created)).To(Succeed())
+		created.Status.DesiredNumberScheduled, created.Status.UpdatedNumberScheduled, created.Status.NumberReady = 3, 1, 1
+		Expect(k8sClient.Status().Update(ctx, &created)).To(Succeed())
+
+		// Once it exists nothing is applied again.
+		done, err = adv.Advance(ctx, fetchCluster(cluster), cp, op)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(done).To(BeFalse())
+		Expect(admin.restores).To(Equal(1))
 
 		done, err = adv.Advance(ctx, fetchCluster(cluster), cp, op)
 		Expect(err).NotTo(HaveOccurred())

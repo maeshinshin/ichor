@@ -93,7 +93,8 @@ Amended: after the removal the executor connects to the `kubernetes` Service's c
 
 - Existing replaced clusters at the v1.14 contract render again; the legacy block in their patches is ignored.
 - Applying `KubeProxyConfig.enabled` without a reboot is assumed from the controller reading the config live
-  (as ADR 0057 does for images); not yet exercised against a real node.
+  (as ADR 0057 does for images). Confirmed on hardware for the config apply (no reboot), but not for the
+  DaemonSet appearing: see the amendment at the end.
 - The operation is created by hand (or by the UI/CLI); the admission guard (ADR 0013) still needs the
   annotation on the spec change.
 
@@ -127,3 +128,33 @@ Same cluster as ADR 0057's observation (Cilium 1.18.0 with kube-proxy, `handover
 ## Amendment: one-shot, Git-friendly confirmation
 
 On an Argo CD-tracked cluster the Git change that switches `spec.cni.kubeProxy` was rejected by the admission policy (ADR 0013) because the confirmation annotation was missing, so the tester committed the annotation into Git where it stayed as a standing consent. The annotation value now names the target mode (`replaced` or `enabled`) and the policy admits a switch only when the value equals the new `spec.cni.kubeProxy`. A leftover annotation therefore cannot admit a different later switch, and it is safe to commit for the one switch. The server sets it to the target for the one write it makes and removes it again (it used to write an actor name). For a tracked cluster `ichor cni kube-proxy <mode>` prints the exact YAML to commit (spec field plus annotation) and says to run the same command again, which finds the spec already changed and starts the operation; the old text said "start the operation without a target", which was wrong.
+
+## Amendment (2026-10-28): Talos never recreates kube-proxy after Ichor removed it; Ichor restores it when enabling
+
+Observed on hardware, `replaced` to `enabled`: the configuration applied without a reboot
+(`cluster.proxy.disabled: false`), but the kube-proxy DaemonSet was never created and the operation sat in
+`VerifyingNewSide` ("the kube-proxy DaemonSet has not been created yet") for over 19 minutes. The
+`talos-bootstrap-manifests-inventory` ConfigMap in kube-system still listed the old kube-proxy objects.
+
+Cause, in Talos v1.14.3 `internal/app/machined/pkg/controllers/k8s/manifest_apply.go`
+(`ManifestApplyController.apply`): for every object of the rendered manifests it does
+`if inv.Contains(objMeta) { continue }` before it looks at the cluster, and it never removes an entry from the
+inventory for an object that disappeared from the cluster (only the v1.13 namespaced-cluster-wide migration
+removes entries). The controller also only runs when its inputs change (the Kubernetes secrets, the
+`k8s.Manifest` resources, the etcd service), and it only creates, never deletes. So an object Talos applied once,
+which Ichor deleted when it replaced kube-proxy, is skipped forever: the apply is not tied to a node being the
+bootstrap node, nor to a kubelet or apid event; the inventory alone decides. (`ManifestController` does render
+`10-kube-proxy` again once `cfg.ProxyEnabled` is true; it is the apply that skips it.)
+
+Decision: when enabling, and only while the kube-proxy DaemonSet is missing, the cni executor restores the
+objects itself (`KubeProxyAdmin.RestoreKubeProxy`). It reads the `k8s.Manifest` resources Talos rendered on a
+control plane (`TalosClient.BootstrapManifests`, the `talosctl get manifests` equivalent), keeps only the
+kube-proxy objects (the DaemonSet, ServiceAccount and the `kube-proxy` or `kube-proxy-<checksum>` ConfigMaps in
+kube-system, the ClusterRoleBinding `kube-proxy`) and server-side-applies them under Talos's own field manager,
+through the admin kubeconfig a control plane issues (a worker's step goes through a control plane's client, as
+for the removal). It is idempotent, bounded by the existing 30-minute `VerifyingNewSide` clock, and runs again
+on each requeue only while the DaemonSet is absent; if Talos has not rendered the manifest yet it applies
+nothing and the wait continues. This restores Talos's own component from Talos's own rendering; the inventory is
+left as it is (editing Talos's bookkeeping would not wake its controller, and the entries are correct again once
+the objects exist). Rejected: editing the inventory ConfigMap, because Talos would still need an input event to
+re-run the apply.

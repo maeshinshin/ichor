@@ -113,6 +113,22 @@ func (p Preset) effective(kubeProxy cni.KubeProxyMode) (map[string]any, error) {
 	return values.Effective(defaults, p.user, owned), nil
 }
 
+// Layers returns Ichor's own values split into the overridable defaults and
+// the owned keys, for showing the layers separately.
+// tunnel is "", "vxlan" or "geneve".
+func Layers(kubeProxy cni.KubeProxyMode, tunnel string) (defaults, owned map[string]any, err error) {
+	if err := kubeProxy.Validate(); err != nil {
+		return nil, nil, err
+	}
+
+	p, err := New().WithTunnel(tunnel)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return p.layers(kubeProxy)
+}
+
 // EffectiveValues returns the Helm values Cilium is rendered with: Ichor's
 // defaults, then user, then the Ichor-owned keys.
 // tunnel is "", "vxlan" or "geneve". A user value for an owned key is an

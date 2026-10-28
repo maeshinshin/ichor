@@ -24,13 +24,17 @@ import (
 	"strings"
 	"testing"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 )
 
@@ -225,6 +229,55 @@ func TestRunAppliesCRDsThenControllerThenUI(t *testing.T) {
 
 	if err := k8sClient.Get(context.Background(), types.NamespacedName{Namespace: f.ns, Name: "cert"}, &corev1.Secret{}); !apierrors.IsNotFound(err) {
 		t.Errorf("the Secret in the manifest must not be applied, Get error = %v", err)
+	}
+}
+
+// A status write by the Deployment controller between applyOne's Get and Update surfaces as a
+// Conflict; the pair must be retried rather than fail the step.
+func TestApplyOneRetriesADeploymentUpdateConflict(t *testing.T) {
+	deployment := func(image string) *unstructured.Unstructured {
+		d := &appsv1.Deployment{
+			APIVersion: "apps/v1", Kind: "Deployment",
+			Name: "d", Namespace: "ns",
+		}
+		d.Spec.Template.Spec.Containers = []corev1.Container{{Name: "m", Image: image}}
+
+		obj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(d)
+		if err != nil {
+			t.Fatalf("converting: %v", err)
+		}
+
+		return &unstructured.Unstructured{Object: obj}
+	}
+
+	updates := 0
+	c := fake.NewClientBuilder().WithScheme(k8sClient.Scheme()).WithObjects(deployment("old")).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Update: func(ctx context.Context, cl client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+				updates++
+				if updates == 1 {
+					return apierrors.NewConflict(schema.GroupResource{Group: "apps", Resource: "deployments"}, "d", errors.New("the object has been modified"))
+				}
+
+				return cl.Update(ctx, obj, opts...)
+			},
+		}).Build()
+
+	if err := applyOne(context.Background(), c, deployment("new")); err != nil {
+		t.Fatalf("applyOne: %v", err)
+	}
+
+	if updates != 2 {
+		t.Errorf("Update calls = %d, want 2", updates)
+	}
+
+	got := &appsv1.Deployment{}
+	if err := c.Get(context.Background(), types.NamespacedName{Namespace: "ns", Name: "d"}, got); err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+
+	if image := got.Spec.Template.Spec.Containers[0].Image; image != "new" {
+		t.Errorf("image = %q, want new", image)
 	}
 }
 

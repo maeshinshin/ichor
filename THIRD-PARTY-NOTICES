@@ -719,6 +719,22 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
+gopkg.in/yaml.v3@v3.0.1: NOTICE
+
+Copyright 2011-2016 Canonical Ltd.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
 sigs.k8s.io/randfill@v1.0.0: NOTICE
 
 When donating the randfill project to the CNCF, we could not reach all the
@@ -1061,6 +1077,8 @@ Components:
 - k8s.io/kubelet@v0.36.0
 - k8s.io/streaming@v0.36.2
 - k8s.io/utils@v0.0.0-20260210185600-b8788abfbbc2
+- oras.land/oras-go/v2@v2.6.1
+    Copyright 2021 ORAS Authors.
 - sigs.k8s.io/apiserver-network-proxy/konnectivity-client@v0.34.0
 - sigs.k8s.io/controller-runtime@v0.24.1
 - sigs.k8s.io/kustomize/api@v0.21.1
@@ -1586,6 +1604,10 @@ limitations under the License.
 
 Components:
 - go.yaml.in/yaml/v3@v3.0.5
+    Copyright (c) 2006-2010 Kirill Simonov
+    Copyright (c) 2006-2011 Kirill Simonov
+    Copyright (c) 2011-2019 Canonical Ltd
+- gopkg.in/yaml.v3@v3.0.1
     Copyright (c) 2006-2010 Kirill Simonov
     Copyright (c) 2006-2011 Kirill Simonov
     Copyright (c) 2011-2019 Canonical Ltd
@@ -2869,7 +2891,7 @@ Components:
     Copyright (c) 2012-2016 Dave Collins <dave@davec.name>
 
 --------------------------------------------------------------------------------
-MIT (variant 1 of 7)
+MIT (variant 1 of 8)
 --------------------------------------------------------------------------------
 
 The MIT License (MIT)
@@ -2905,6 +2927,8 @@ Components:
     Copyright (C) 2013-2020 Masterminds
 - github.com/adrg/xdg@v0.5.3
     Copyright (c) 2014 Adrian-George Bostan <adrg@epistack.com>
+- github.com/asaskevich/govalidator@v0.0.0-20230301143203-a9d515a09cc2
+    Copyright (c) 2014-2020 Alex Saskevich
 - github.com/beorn7/perks@v1.0.1
     Copyright (C) 2013 Blake Mizerany
 - github.com/blang/semver/v4@v4.0.0
@@ -2915,12 +2939,16 @@ Components:
     Copyright (c) 2014 Cenk Altı
 - github.com/cespare/xxhash/v2@v2.3.0
     Copyright (c) 2016 Caleb Spare
+- github.com/clipperhouse/uax29/v2@v2.7.0
+    Copyright (c) 2020 Matt Sherman
 - github.com/docker/docker-credential-helpers@v0.9.5
     Copyright (c) 2016 David Calavera
 - github.com/emicklei/go-restful/v3@v3.13.0
     Copyright (c) 2012,2013 Ernest Micklei
 - github.com/exponent-io/jsonpath@v0.0.0-20210407135951-1de76d718b3f
     Copyright (c) 2015 Exponent Labs LLC
+- github.com/fatih/color@v1.19.0
+    Copyright (c) 2013 Fatih Arslan
 - github.com/felixge/httpsnoop@v1.1.0
     Copyright (c) 2016 Felix Geisendörfer (felix@debuggable.com)
 - github.com/fxamacker/cbor/v2@v2.9.0
@@ -2936,10 +2964,24 @@ Components:
     Copyright (c) 2016 Sergey Kamardin
 - github.com/huandu/xstrings@v1.5.0
     Copyright (c) 2015 Huan Du
+- github.com/jmoiron/sqlx@v1.4.0
+    Copyright (c) 2013, Jason Moiron
 - github.com/json-iterator/go@v1.1.12
     Copyright (c) 2016 json-iterator
 - github.com/klauspost/cpuid/v2@v2.4.0
     Copyright (c) 2015 Klaus Post
+- github.com/lann/builder@v0.0.0-20180802200727-47ae307949d0
+    Copyright (c) 2014-2015 Lann Martin
+- github.com/lann/ps@v0.0.0-20150810152359-62de8c46ede0
+    Copyright (c) 2013 Michael Hendricks
+- github.com/lib/pq@v1.12.3
+    Copyright (c) 2011-2013, 'pq' Contributors. Portions Copyright (c) 2011 Blake Mizerany
+- github.com/mattn/go-colorable@v0.1.15
+    Copyright (c) 2016 Yasuhiro Matsumoto
+- github.com/mattn/go-isatty@v0.0.22
+    Copyright (c) Yasuhiro MATSUMOTO <mattn.jp@gmail.com>
+- github.com/mattn/go-runewidth@v0.0.24
+    Copyright (c) 2016 Yasuhiro Matsumoto
 - github.com/mitchellh/copystructure@v1.2.0
     Copyright (c) 2014 Mitchell Hashimoto
 - github.com/mitchellh/go-wordwrap@v1.0.1
@@ -2960,6 +3002,8 @@ Components:
     Copyright (C) 2012 Rob Figueiredo All Rights Reserved.
 - github.com/rs/xid@v1.6.0
     Copyright (c) 2015 Olivier Poitrey <rs@dailymotion.com>
+- github.com/rubenv/sql-migrate@v1.8.1
+    Copyright (C) 2014-2021 by Ruben Vermeersch <ruben@rocketeer.be>
 - github.com/ryanuber/go-glob@v1.0.0
     Copyright (c) 2014 Ryan Uber
 - github.com/sirupsen/logrus@v1.10.2
@@ -3009,7 +3053,7 @@ Components:
     Copyright (c) 2023 Emil Kowalski
 
 --------------------------------------------------------------------------------
-MIT (variant 2 of 7)
+MIT (variant 2 of 8)
 --------------------------------------------------------------------------------
 
 # MIT License
@@ -3031,7 +3075,56 @@ Components:
     Copyright (C) 2021 Matt Layher
 
 --------------------------------------------------------------------------------
-MIT (variant 3 of 7)
+MIT (variant 3 of 8)
+--------------------------------------------------------------------------------
+
+(The MIT License)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to
+deal in the Software without restriction, including without limitation the
+rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+sell copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+IN THE SOFTWARE.
+
+Components:
+- github.com/ProtonMail/gopenpgp/v3@v3.4.1
+    Copyright (c) 2019 Proton Technologies AG
+- github.com/go-gorp/gorp/v3@v3.1.0
+    Copyright (c) 2012 James Cooper <james@bitmechanic.com>
+
+--------------------------------------------------------------------------------
+MIT (variant 4 of 8)
+--------------------------------------------------------------------------------
+
+MIT License
+===========
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+Components:
+- github.com/gosuri/uitable@v0.0.4
+    Copyright (c) 2015, Greg Osuri
+- github.com/jsimonetti/rtnetlink/v2@v2.2.1-0.20260802200809-43bafec815b3
+    Copyright (C) 2016 Jeroen Simonetti
+
+--------------------------------------------------------------------------------
+MIT (variant 5 of 8)
 --------------------------------------------------------------------------------
 
 The following files were ported to Go from C files of libyaml, and thus
@@ -3071,52 +3164,7 @@ Components:
     Copyright (c) 2006 Kirill Simonov
 
 --------------------------------------------------------------------------------
-MIT (variant 4 of 7)
---------------------------------------------------------------------------------
-
-(The MIT License)
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to
-deal in the Software without restriction, including without limitation the
-rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
-sell copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
-IN THE SOFTWARE.
-
-Components:
-- github.com/ProtonMail/gopenpgp/v3@v3.4.1
-    Copyright (c) 2019 Proton Technologies AG
-
---------------------------------------------------------------------------------
-MIT (variant 5 of 7)
---------------------------------------------------------------------------------
-
-MIT License
-===========
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-Components:
-- github.com/jsimonetti/rtnetlink/v2@v2.2.1-0.20260802200809-43bafec815b3
-    Copyright (C) 2016 Jeroen Simonetti
-
---------------------------------------------------------------------------------
-MIT (variant 6 of 7)
+MIT (variant 6 of 8)
 --------------------------------------------------------------------------------
 
 The MIT License (MIT)
@@ -3167,7 +3215,7 @@ Components:
     Copyright (c) 2013 Oguz Bilgic
 
 --------------------------------------------------------------------------------
-MIT (variant 7 of 7)
+MIT (variant 7 of 8)
 --------------------------------------------------------------------------------
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -3193,6 +3241,36 @@ SOFTWARE.
 Components:
 - github.com/dustin/go-humanize@v1.0.1
     Copyright (c) 2005-2008  Dustin Sallings <dustin@spy.net>
+
+--------------------------------------------------------------------------------
+MIT (variant 8 of 8)
+--------------------------------------------------------------------------------
+
+MIT License
+
+Squirrel: The Masterminds
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+Components:
+- github.com/Masterminds/squirrel@v1.5.4
+    Copyright (c) 2014-2015, Lann Martin. Copyright (C) 2015-2016, Google. Copyright (C) 2015, Matt Farina and Matt Butcher.
 
 --------------------------------------------------------------------------------
 MIT + BSD-3-Clause
@@ -3335,19 +3413,19 @@ Packages bundled into the UI:
     declared as Apache-2.0 in its package.json; the package ships no licence file
     Licence: Apache-2.0 (variant 1 of 3) (text in section 3)
 - @floating-ui/core@1.8.0 (https://github.com/floating-ui/floating-ui)
-    Licence: MIT (variant 1 of 7) (text in section 3)
+    Licence: MIT (variant 1 of 8) (text in section 3)
     Copyright (c) 2021-present Floating UI contributors
 - @floating-ui/dom@1.8.0 (https://github.com/floating-ui/floating-ui)
-    Licence: MIT (variant 1 of 7) (text in section 3)
+    Licence: MIT (variant 1 of 8) (text in section 3)
     Copyright (c) 2021-present Floating UI contributors
 - @floating-ui/utils@0.2.12 (https://github.com/floating-ui/floating-ui)
-    Licence: MIT (variant 1 of 7) (text in section 3)
+    Licence: MIT (variant 1 of 8) (text in section 3)
     Copyright (c) 2021-present Floating UI contributors
 - class-variance-authority@0.7.1 (https://github.com/joe-bell/cva)
     Licence: Apache-2.0 (variant 1 of 3) (text in section 3)
     Copyright 2022 Joe Bell
 - clsx@2.1.1 (https://github.com/lukeed/clsx)
-    Licence: MIT (variant 1 of 7) (text in section 3)
+    Licence: MIT (variant 1 of 8) (text in section 3)
     Copyright (c) Luke Edwards <luke.edwards05@gmail.com> (lukeed.com)
 - lucide-preact@1.61.0 (https://github.com/lucide-icons/lucide)
     its licence file also carries the MIT notice for the icons derived from Feather
@@ -3355,22 +3433,22 @@ Packages bundled into the UI:
     Copyright (c) 2026 Lucide Icons and Contributors
     Copyright (c) 2013-present Cole Bemis
 - preact@10.29.8 (https://github.com/preactjs/preact)
-    Licence: MIT (variant 1 of 7) (text in section 3)
+    Licence: MIT (variant 1 of 8) (text in section 3)
     Copyright (c) 2015-present Jason Miller
 - tailwind-merge@3.7.0 (https://github.com/dcastil/tailwind-merge)
-    Licence: MIT (variant 1 of 7) (text in section 3)
+    Licence: MIT (variant 1 of 8) (text in section 3)
     Copyright (c) 2021 Dany Castillo
 
 Packages whose CSS the UI stylesheet inlines:
 
 - shadcn@4.22.1 (https://github.com/shadcn-ui/ui)
-    Licence: MIT (variant 1 of 7) (text in section 3)
+    Licence: MIT (variant 1 of 8) (text in section 3)
     Copyright (c) 2023 shadcn
 - tailwindcss@4.3.3 (https://github.com/tailwindlabs/tailwindcss)
-    Licence: MIT (variant 1 of 7) (text in section 3)
+    Licence: MIT (variant 1 of 8) (text in section 3)
     Copyright (c) Tailwind Labs, Inc.
 - tw-animate-css@1.4.0 (https://github.com/Wombosvideo/tw-animate-css)
-    Licence: MIT (variant 1 of 7) (text in section 3)
+    Licence: MIT (variant 1 of 8) (text in section 3)
     Copyright (c) 2025 Wombosvideo
 
 The UI components under ui/src derive from the preactcn registry (https://github.com/maeshinshin/preactcn),
@@ -3380,23 +3458,23 @@ Upstream projects:
 
 - Base UI (https://github.com/mui/base-ui)
     the Combobox in ui/src/lib/shims
-    Licence: MIT (variant 1 of 7) (text in section 3)
+    Licence: MIT (variant 1 of 8) (text in section 3)
     Copyright (c) 2019 Material-UI SAS
 - Radix UI Primitives (https://github.com/radix-ui/primitives)
     ui/src/lib/radix
-    Licence: MIT (variant 1 of 7) (text in section 3)
+    Licence: MIT (variant 1 of 8) (text in section 3)
     Copyright (c) 2022 WorkOS
 - next-themes (https://github.com/pacocoursey/next-themes)
     ui/src/lib/shims/next-themes.tsx
-    Licence: MIT (variant 1 of 7) (text in section 3)
+    Licence: MIT (variant 1 of 8) (text in section 3)
     Copyright (c) 2022 Paco Coursey
 - shadcn/ui (https://github.com/shadcn-ui/ui)
     ui/src/components/ui and the @shadcn/react ports
-    Licence: MIT (variant 1 of 7) (text in section 3)
+    Licence: MIT (variant 1 of 8) (text in section 3)
     Copyright (c) 2023 shadcn
 - sonner (https://github.com/emilkowalski/sonner)
     ui/src/lib/shims/sonner.tsx
-    Licence: MIT (variant 1 of 7) (text in section 3)
+    Licence: MIT (variant 1 of 8) (text in section 3)
     Copyright (c) 2023 Emil Kowalski
 
 

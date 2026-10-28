@@ -35,6 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/deleteguard"
 	"github.com/maeshinshin/ichor/pkg/gitopstracking"
 	"github.com/maeshinshin/ichor/pkg/render"
 )
@@ -526,6 +527,49 @@ func (h *BreakGlassHandler) gateSecretReferences(ctx context.Context, req admiss
 	breakglasslog.Info("secret reference changed", "user", req.UserInfo.Username, "resource", resource, "name", req.Name, "fields", changed)
 
 	return nil
+}
+
+// BreakGlassCheck tells whether the user behind the admission request in ctx holds the break-glass
+// verb on resource/name. The per-object guards (the last-worker guard, ADR 0065 amended) take one so
+// an operator with the verb can override them; nil means no override.
+type BreakGlassCheck func(ctx context.Context, resource, name, namespace string) (bool, error)
+
+// breakGlassCheckFor asks Kubernetes with a SubjectAccessReview on the requesting user, like the
+// break-glass handler does. Outside an admission request there is no user, so the answer is no.
+func breakGlassCheckFor(c client.Client) BreakGlassCheck {
+	h := &BreakGlassHandler{Client: c}
+
+	return func(ctx context.Context, resource, name, namespace string) (bool, error) {
+		req, err := admission.RequestFromContext(ctx)
+		if err != nil {
+			return false, nil //nolint:nilerr // no admission request, no user to hold the verb
+		}
+
+		return h.mayBreakGlass(ctx, req.UserInfo, resource, name, namespace)
+	}
+}
+
+// checkLastWorker is deleteguard.CheckLastWorker with the break-glass override: it asks the verb only
+// when the guard would refuse, so ordinary requests cost no SubjectAccessReview. A failed check
+// refuses (fail closed).
+func (c BreakGlassCheck) checkLastWorker(ctx context.Context, workersAfter int, resource, name, namespace string) error {
+	err := deleteguard.CheckLastWorker(true, workersAfter, false)
+	if err == nil || c == nil {
+		return err
+	}
+
+	allowed, aerr := c(ctx, resource, name, namespace)
+	if aerr != nil {
+		return fmt.Errorf("%w (and the %s right could not be checked: %w)", err, BreakGlassVerb, aerr)
+	}
+
+	if !allowed {
+		return err
+	}
+
+	breakglasslog.Info("last-worker guard overridden under break-glass", "resource", resource, "name", name)
+
+	return deleteguard.CheckLastWorker(true, workersAfter, true)
 }
 
 func extraOf(in map[string]authnv1.ExtraValue) map[string]authzv1.ExtraValue {

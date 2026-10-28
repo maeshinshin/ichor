@@ -142,7 +142,9 @@ var _ = Describe("IchorInstallation", func() {
 
 		jobs := func() []batchv1.Job {
 			var l batchv1.JobList
-			Expect(k8sClient.List(ctx, &l, client.InNamespace(jobNs))).To(Succeed())
+			// Only installer Jobs: other reconcilers in this suite create Jobs in the same namespace.
+			Expect(k8sClient.List(ctx, &l, client.InNamespace(jobNs),
+				client.MatchingLabels{"app.kubernetes.io/name": "ichor-installer"})).To(Succeed())
 
 			return l.Items
 		}

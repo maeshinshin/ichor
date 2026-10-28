@@ -30,7 +30,11 @@ service CniService {
   rpc SetCiliumValues(SetCiliumValuesRequest) returns (SetCiliumValuesResponse);
 
   // StartCniUpgrade checks that a newer Cilium chart is available and that the
-  // user layer still validates, then starts the cni upgrade operation.
+  // user layer still validates, then starts the cni upgrade operation. The
+  // operation's shape is not defined yet (and the
+  // cni executor today carries out a kube-proxy switch), so after the checks it
+  // answers UNIMPLEMENTED; checks that fail answer FAILED_PRECONDITION with
+  // every problem.
   rpc StartCniUpgrade(StartCniUpgradeRequest) returns (StartCniUpgradeResponse);
 }
 

@@ -363,6 +363,16 @@ func (s *Server) createNodeOperation(ctx context.Context, p *opPlan) (*pb.Create
 		}
 	}
 
+	// Break-glass on a reboot or shutdown overrides the controller's last-worker guard (ADR 0065,
+	// amended): the same reason, verb check, audit and Event as a reset.
+	if r := strings.TrimSpace(np.bg.GetReason()); r != "" && (np.action == ichorv1alpha1.NodeActionReboot || np.action == ichorv1alpha1.NodeActionShutdown) {
+		if err := s.authorizeBreakGlass(ctx, np.machine); err != nil {
+			return nil, err
+		}
+
+		reason, np.spec.BreakGlassReason = r, r
+	}
+
 	cluster := p.cluster
 	op := &ichorv1alpha1.TalosOperation{
 		GenerateName: p.kind + "-", Namespace: cluster.Namespace, Annotations: s.startedByAnnotation(ctx),
@@ -385,7 +395,7 @@ func (s *Server) createNodeOperation(ctx context.Context, p *opPlan) (*pb.Create
 	if reason != "" {
 		audit.Action += "-break-glass"
 		audit.Reason = reason
-		msg := fmt.Sprintf("reset of %s requested by %s under break-glass: %s", np.machine.Name, audit.Actor, reason)
+		msg := fmt.Sprintf("%s of %s requested by %s under break-glass: %s", np.action, np.machine.Name, audit.Actor, reason)
 
 		if err := s.emitBreakGlassEvent(ctx, np.machine, kindTalosMachine, msg); err != nil {
 			audit.Reason += " (the Kubernetes Event could not be recorded)"

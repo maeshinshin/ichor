@@ -181,7 +181,12 @@ Chosen: report it differently, keep the render. The alternative, holding the ren
 and a running cluster edited spec-first look the same from the TalosCluster, and the fresh one must render from spec.
 Guessing from the machine's applied hash would make the render depend on node history.
 
-- While spec says `replaced` and `status.cni.kubeProxy` is unset, a TalosMachine whose only reboot-class paths are
+- The signal that a switch is pending, in either direction, is the consent annotation
+  (`ichor.maesh.dev/confirm-kube-proxy-switch`) naming the spec's mode while `status.cni.kubeProxy` is unset or
+  differs. Spec alone cannot tell a switch from a patch-made `cluster.proxy.disabled` change, and a first version that
+  keyed on "spec says replaced, no status" missed the reverse (a cluster created `replaced`, edited spec-first to
+  `enabled`). The admission rule already requires the annotation for any switch, so Git-first commits carry it.
+- While that holds, a TalosMachine whose only reboot-class paths are
   `KubeProxyConfig*` / `cluster.proxy*` (and no API server restart on a control plane) reports
   `Ready=False/KubeProxySwitchPending`: "run `ichor cni kube-proxy replaced` (or the UI's kube-proxy switch) to apply
   it without a reboot". It does not set `status.rebootPaths`, so `ichor config apply` and the rollout planner (which
@@ -190,6 +195,5 @@ Guessing from the machine's applied hash would make the render depend on node hi
   (`configRolloutAdvancer.begin`) refuses any machine with a kube-proxy path pending in this state ("run
   `ichor cni kube-proxy <mode>` first"). A rollout therefore never reboots a node onto a kube-proxy mode, bypassing the
   switch's Cilium check and ordering. Once the switch sets the status the guard no longer applies.
-- With spec `enabled` and no status the patches still own `cluster.proxy.disabled`, so an ordinary patch edit of it
-  stays `RebootRequired` as before. The reverse spec-first case on a cluster created `replaced` with no status
-  (spec edited to `enabled`) is not covered; it still shows `RebootRequired`.
+- Without the annotation (a patch edit of `cluster.proxy.disabled`, an annotation for the other mode, or a finished
+  switch whose status equals the spec) nothing changes: the change stays `RebootRequired` as before.

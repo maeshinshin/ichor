@@ -553,7 +553,6 @@ func main() {
 		Direct:              directClient,
 		ControllerNamespace: os.Getenv("POD_NAMESPACE"),
 		ArgoCDNamespace:     argoCDNamespace,
-		StackEnabled:        true,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "ichorinstallation")
 		os.Exit(1)

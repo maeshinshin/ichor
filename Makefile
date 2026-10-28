@@ -67,23 +67,6 @@ cilium-chart: ## Fetch the pinned Cilium chart into pkg/cni/cilium/chart/ and ve
 	curl -fsSL -o pkg/cni/cilium/chart/cilium-$(CILIUM_CHART_VERSION).tgz https://helm.cilium.io/cilium-$(CILIUM_CHART_VERSION).tgz
 	echo "$(CILIUM_CHART_SHA256)  pkg/cni/cilium/chart/cilium-$(CILIUM_CHART_VERSION).tgz" | sha256sum -c -
 
-ARGOCD_CHART_VERSION ?= 10.11.6
-ARGOCD_CHART_SHA256 ?= d8f096d87513b41ff754053a7f9604c943bf29c15436a79226fd51595ea67d05
-
-.PHONY: argocd-chart
-argocd-chart: ## Fetch the pinned Argo CD chart into pkg/stack/argocd/chart/ and verify its SHA-256.
-	curl -fsSL -o pkg/stack/argocd/chart/argo-cd-$(ARGOCD_CHART_VERSION).tgz https://github.com/argoproj/argo-helm/releases/download/argo-cd-$(ARGOCD_CHART_VERSION)/argo-cd-$(ARGOCD_CHART_VERSION).tgz
-	echo "$(ARGOCD_CHART_SHA256)  pkg/stack/argocd/chart/argo-cd-$(ARGOCD_CHART_VERSION).tgz" | sha256sum -c -
-
-KOKUMI_VERSION ?= 0.17.0
-KOKUMI_INSTALL_SHA256 ?= 345223726800ca3f08f633c76c91a38265bc0c131551b24dc49c69ee0cd7b840
-
-.PHONY: kokumi-install
-kokumi-install: ## Fetch the pinned Kokumi install.yaml, verify its SHA-256 and store it gzipped in pkg/stack/kokumi/.
-	curl -fsSL -o pkg/stack/kokumi/install.yaml https://github.com/kokumi-dev/kokumi/releases/download/$(KOKUMI_VERSION)/install.yaml
-	echo "$(KOKUMI_INSTALL_SHA256)  pkg/stack/kokumi/install.yaml" | sha256sum -c -
-	gzip -9 -n -f pkg/stack/kokumi/install.yaml
-
 .PHONY: adr-index
 adr-index: ## Regenerate docs/adr/README.md's index table from each ADR's own Decided:/Status: line.
 	go run ./internal/tools/adrindex

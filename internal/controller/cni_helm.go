@@ -27,7 +27,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -47,8 +46,6 @@ const (
 	// egress rules.
 	cniHelmPodLabel = "ichor-cni"
 
-	nameLabel = "app.kubernetes.io/name"
-
 	cniHelmJobPrefix = "ichor-cni-"
 
 	// CNIValuesHashAnnotation records the effective-values hash a Job was started for, so a
@@ -58,10 +55,6 @@ const (
 	// cniClusterLabel carries a hash of the TalosCluster's namespace/name (labels cannot hold
 	// both, and the Job lives in the controller's namespace, not the cluster's).
 	cniClusterLabel = "ichor.maesh.dev/cni-cluster"
-
-	// cniHelmJobTTL is how long a finished Job (and its pod log) stays; as for the installer,
-	// a day is long enough to read why a run failed.
-	cniHelmJobTTL = 24 * 60 * 60
 
 	// cniHelmDeadline bounds one run: the in-Job wait for the rollout is 10 minutes
 	// (cilium.DefaultApplyTimeout), plus a rollback of the same size when an upgrade fails.
@@ -150,20 +143,12 @@ func AdvanceCNIHelmJob(
 		return false, err
 	}
 
-	for _, cond := range job.Status.Conditions {
-		if cond.Status != corev1.ConditionTrue {
-			continue
-		}
-
-		switch cond.Type {
-		case batchv1.JobComplete:
-			return true, nil
-		case batchv1.JobFailed:
-			return false, &CNIHelmJobFailedError{JobName: name, Reason: cond.Reason, Message: cond.Message}
-		}
+	done, failed := jobOutcome(&job)
+	if failed != nil {
+		return false, &CNIHelmJobFailedError{JobName: name, Reason: failed.Reason, Message: failed.Message}
 	}
 
-	return false, nil
+	return done, nil
 }
 
 // newCNIHelmJob is the whole Cilium Helm process: the installer's image, run once, under a
@@ -172,59 +157,38 @@ func AdvanceCNIHelmJob(
 func newCNIHelmJob(
 	ns, name string, cluster *ichorv1alpha1.TalosCluster, inst *ichorv1alpha1.IchorInstallation, valuesHash string,
 ) *batchv1.Job {
-	return &batchv1.Job{
-		Namespace:   ns,
-		Name:        name,
-		Labels:      map[string]string{nameLabel: cniHelmPodLabel, cniClusterLabel: cniHelmClusterHash(cluster)},
-		Annotations: map[string]string{CNIValuesHashAnnotation: valuesHash},
-		Spec: batchv1.JobSpec{
-			// One attempt, as for the installer: an upgrade that failed has been rolled back, and
-			// running it again without anyone looking at why would only repeat it. The caller
-			// reports the failure and starts a new run when asked to.
-			BackoffLimit:            ptr.To[int32](0),
-			ActiveDeadlineSeconds:   ptr.To[int64](cniHelmDeadline),
-			TTLSecondsAfterFinished: ptr.To[int32](cniHelmJobTTL),
-			Template: corev1.PodTemplateSpec{
-				// The label the network policies select the pod by (ADR 0100).
-				Labels: map[string]string{nameLabel: cniHelmPodLabel},
-				Spec: corev1.PodSpec{
-					RestartPolicy:      corev1.RestartPolicyNever,
-					ServiceAccountName: CNIServiceAccount,
-					// The pod has to run where the pod network does not work yet or is being
-					// replaced: on the host network, tolerating every taint (a not-ready node
-					// included), and talking to the API server through KubePrism.
-					HostNetwork: true,
-					DNSPolicy:   corev1.DNSClusterFirstWithHostNet,
-					Tolerations: []corev1.Toleration{{Operator: corev1.TolerationOpExists}},
-					SecurityContext: &corev1.PodSecurityContext{
-						RunAsNonRoot:   ptr.To(true),
-						SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
-					},
-					Containers: []corev1.Container{{
-						Name:  "cni",
-						Image: inst.Spec.InstallerRepository + ":" + inst.Spec.Version,
-						Args: []string{
-							"cni", "helm", "apply",
-							"--cluster=" + cluster.Name,
-							"--namespace=" + cluster.Namespace,
-							"--storage-namespace=" + ns,
-						},
-						Env: []corev1.EnvVar{
-							{Name: "KUBERNETES_SERVICE_HOST", Value: kubePrismHost},
-							{Name: "KUBERNETES_SERVICE_PORT", Value: kubePrismPort},
-							// Discovery's cache lands in the emptyDir below, not in a read-only $HOME.
-							{Name: "HOME", Value: "/tmp"},
-						},
-						VolumeMounts: []corev1.VolumeMount{{Name: "tmp", MountPath: "/tmp"}},
-						SecurityContext: &corev1.SecurityContext{
-							AllowPrivilegeEscalation: ptr.To(false),
-							ReadOnlyRootFilesystem:   ptr.To(true),
-							Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
-						},
-					}},
-					Volumes: []corev1.Volume{{Name: "tmp", EmptyDir: &corev1.EmptyDirVolumeSource{}}},
-				},
+	// One attempt, as for the installer: an upgrade that failed has been rolled back, and
+	// running it again without anyone looking at why would only repeat it. The caller
+	// reports the failure and starts a new run when asked to.
+	job := newJob(ns, name, cniHelmPodLabel, CNIServiceAccount, cniHelmDeadline,
+		map[string]string{cniClusterLabel: cniHelmClusterHash(cluster)},
+		map[string]string{CNIValuesHashAnnotation: valuesHash},
+		corev1.Container{
+			Name:  "cni",
+			Image: inst.Spec.InstallerRepository + ":" + inst.Spec.Version,
+			Args: []string{
+				"cni", "helm", "apply",
+				"--cluster=" + cluster.Name,
+				"--namespace=" + cluster.Namespace,
+				"--storage-namespace=" + ns,
 			},
-		},
-	}
+			Env: []corev1.EnvVar{
+				{Name: "KUBERNETES_SERVICE_HOST", Value: kubePrismHost},
+				{Name: "KUBERNETES_SERVICE_PORT", Value: kubePrismPort},
+				// Discovery's cache lands in the emptyDir below, not in a read-only $HOME.
+				{Name: "HOME", Value: "/tmp"},
+			},
+			VolumeMounts: []corev1.VolumeMount{{Name: "tmp", MountPath: "/tmp"}},
+		})
+
+	// The pod has to run where the pod network does not work yet or is being replaced: on the
+	// host network, tolerating every taint (a not-ready node included), and talking to the API
+	// server through KubePrism.
+	pod := &job.Spec.Template.Spec
+	pod.HostNetwork = true
+	pod.DNSPolicy = corev1.DNSClusterFirstWithHostNet
+	pod.Tolerations = []corev1.Toleration{{Operator: corev1.TolerationOpExists}}
+	pod.Volumes = []corev1.Volume{{Name: "tmp", EmptyDir: &corev1.EmptyDirVolumeSource{}}}
+
+	return job
 }

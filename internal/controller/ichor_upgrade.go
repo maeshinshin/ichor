@@ -28,7 +28,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -52,15 +51,12 @@ const (
 	// ichorInstallerOperationLabel carries a hash of the operation's namespace/name; labels
 	// cannot hold both, and the Job lives in the controller's namespace, not the operation's.
 	ichorInstallerOperationLabel = "ichor.maesh.dev/installer-operation"
-
-	// ichorInstallerJobTTL is how long a finished Job (and its pod log) stays: a day is long
-	// enough to read why an upgrade failed, short enough that Jobs do not pile up. The
-	// operation does not need the Job afterwards: once the upgrade succeeded the new
-	// controller's version equals spec.version, which the executor checks before it looks
-	// for a Job. (If an expired failed Job is resumed, the executor starts a fresh attempt;
-	// the installer reuses the run's snapshot, so that is a retry, not a second snapshot.)
-	ichorInstallerJobTTL = 24 * 60 * 60
 )
+
+// The operation does not need the installer Job after jobTTL: once the upgrade succeeded the new
+// controller's version equals spec.version, which the executor checks before it looks for a Job.
+// (If an expired failed Job is resumed, the executor starts a fresh attempt; the installer
+// reuses the run's snapshot, so that is a retry, not a second snapshot.)
 
 // ichorInstallerJobName derives the Job's name from the operation, so the same operation
 // always finds the same Job (the executor is re-entered every reconcile).
@@ -162,21 +158,13 @@ func advanceInstallerJob(
 			"delete the Job and this operation, then create a new operation", name, got, inst.Spec.Version)
 	}
 
-	for _, cond := range job.Status.Conditions {
-		if cond.Status != corev1.ConditionTrue {
-			continue
-		}
-
-		switch cond.Type {
-		case batchv1.JobComplete:
-			return true, nil
-		case batchv1.JobFailed:
-			return false, fmt.Errorf("installer Job %s failed (%s: %s); the installer rolls back from its snapshot "+
-				"before it fails, see the Job's pod log", name, cond.Reason, cond.Message)
-		}
+	done, failed := jobOutcome(&job)
+	if failed != nil {
+		return false, fmt.Errorf("installer Job %s failed (%s: %s); the installer rolls back from its snapshot "+
+			"before it fails, see the Job's pod log", name, failed.Reason, failed.Message)
 	}
 
-	return false, nil
+	return done, nil
 }
 
 // newInstallerJob is the whole installer process: the target version's own image, run once,
@@ -184,38 +172,14 @@ func advanceInstallerJob(
 func newInstallerJob(ns, name string, op *ichorv1alpha1.TalosOperation, inst *ichorv1alpha1.IchorInstallation) *batchv1.Job {
 	sum := sha256.Sum256([]byte(op.Namespace + "/" + op.Name))
 
-	return &batchv1.Job{
-		Namespace:   ns,
-		Name:        name,
-		Labels:      map[string]string{"app.kubernetes.io/name": "ichor-installer", ichorInstallerOperationLabel: hex.EncodeToString(sum[:])[:32]},
-		Annotations: map[string]string{IchorInstallerTargetAnnotation: inst.Spec.Version},
-		Spec: batchv1.JobSpec{
-			// One attempt: a retry after a rollback would redo a failed upgrade without anyone
-			// having looked at why. The operation pauses instead.
-			BackoffLimit:            ptr.To[int32](0),
-			TTLSecondsAfterFinished: ptr.To[int32](ichorInstallerJobTTL),
-			Template: corev1.PodTemplateSpec{
-				// The label config/cilium-network-policy selects the installer's pod by (ADR 0100).
-				Labels: map[string]string{"app.kubernetes.io/name": "ichor-installer"},
-				Spec: corev1.PodSpec{
-					RestartPolicy:      corev1.RestartPolicyNever,
-					ServiceAccountName: IchorInstallerServiceAccount,
-					SecurityContext: &corev1.PodSecurityContext{
-						RunAsNonRoot:   ptr.To(true),
-						SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
-					},
-					Containers: []corev1.Container{{
-						Name:  "installer",
-						Image: inst.Spec.InstallerRepository + ":" + inst.Spec.Version,
-						Args:  []string{"installer", "run", "--namespace=" + ns, "--run-id=" + name},
-						SecurityContext: &corev1.SecurityContext{
-							AllowPrivilegeEscalation: ptr.To(false),
-							ReadOnlyRootFilesystem:   ptr.To(true),
-							Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
-						},
-					}},
-				},
-			},
-		},
-	}
+	// One attempt: a retry after a rollback would redo a failed upgrade without anyone having
+	// looked at why. The operation pauses instead. Nothing bounds the run in time.
+	return newJob(ns, name, "ichor-installer", IchorInstallerServiceAccount, 0,
+		map[string]string{ichorInstallerOperationLabel: hex.EncodeToString(sum[:])[:32]},
+		map[string]string{IchorInstallerTargetAnnotation: inst.Spec.Version},
+		corev1.Container{
+			Name:  "installer",
+			Image: inst.Spec.InstallerRepository + ":" + inst.Spec.Version,
+			Args:  []string{"installer", "run", "--namespace=" + ns, "--run-id=" + name},
+		})
 }

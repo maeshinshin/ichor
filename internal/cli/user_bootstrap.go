@@ -21,12 +21,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -60,7 +60,7 @@ func runUserBootstrap(cmd *cobra.Command, name string) error {
 	}
 
 	spec := userSpec{Name: name, DisplayName: userOpts.displayName, Email: userOpts.email, Roles: userOpts.roles}
-	if err := createUserWithPassword(cmd.Context(), k, spec, password, time.Now()); err != nil {
+	if err := createUserWithPassword(cmd.Context(), k, spec, password, time.Now(), cmd.ErrOrStderr()); err != nil {
 		return err
 	}
 
@@ -93,7 +93,7 @@ func bootstrapPassword(cmd *cobra.Command, fromStdin, generate bool) (string, er
 // entry with mustChange set. It refuses an existing user, so it can never reset
 // somebody's password. The credentials Secret must exist (the chart makes it
 // with ichorUI.users.enabled; `ichor init --ui-url` makes it itself).
-func createUserWithPassword(ctx context.Context, k client.Client, spec userSpec, password string, now time.Time) error {
+func createUserWithPassword(ctx context.Context, k client.Client, spec userSpec, password string, now time.Time, progress io.Writer) error {
 	ns := ichorControllerNamespace
 
 	if err := errors.Join(ichorauth.ValidateUserName(spec.Name), validateRoleNames(spec.Roles), ichorauth.ValidatePassword(password)); err != nil {
@@ -121,7 +121,7 @@ func createUserWithPassword(ctx context.Context, k client.Client, spec userSpec,
 		Spec: ichorv1alpha1.IchorUserSpec{DisplayName: spec.DisplayName, Email: spec.Email, Roles: spec.Roles},
 	}
 
-	if err := retryNoMatch(ctx, func() error { return k.Create(ctx, u) }); err != nil {
+	if err := createRetrying(ctx, k, u, progress); err != nil {
 		if apierrors.IsAlreadyExists(err) {
 			return fmt.Errorf("user %q already exists; use `ichor user set-password` (as an admin) to change its password", spec.Name)
 		}
@@ -164,30 +164,10 @@ func patchCredential(ctx context.Context, k client.Client, ns, name string, cred
 
 	sec := &corev1.Secret{Namespace: ns, Name: ichorauth.CredentialsSecretName}
 
-	// The error of a failed patch can quote the request, which holds a hash.
-	if err := k.Patch(ctx, sec, client.RawPatch(types.MergePatchType, patch)); err != nil {
+	// The error of a failed patch can quote the request, which holds a hash: retry silently.
+	if err := retryInit(ctx, io.Discard, func() error { return k.Patch(ctx, sec, client.RawPatch(types.MergePatchType, patch)) }); err != nil {
 		return errors.New("the Kubernetes API refused the patch (do you have update on the Secret?)")
 	}
 
 	return nil
-}
-
-// retryNoMatch retries fn while the API server does not know the kind yet (a
-// CRD this install just created needs a moment to become Established).
-func retryNoMatch(ctx context.Context, fn func() error) error {
-	var err error
-
-	for range crdEstablishRetries {
-		if err = fn(); !apimeta.IsNoMatchError(err) {
-			return err
-		}
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(crdEstablishInterval):
-		}
-	}
-
-	return err
 }

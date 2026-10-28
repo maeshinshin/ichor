@@ -26,7 +26,6 @@ import (
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -262,7 +261,7 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 		return err
 	}
 
-	if err := setClusterAuthentication(ctx, k8sClient, cluster, opts.UIURL); err != nil {
+	if err := setClusterAuthentication(ctx, k8sClient, cluster, opts.UIURL, deps.Stderr); err != nil {
 		return err
 	}
 
@@ -278,18 +277,7 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 // createBundleSecret stores the secrets bundle, retrying transient API errors. A Create that
 // timed out may still have gone through, so AlreadyExists after a retry counts as success.
 func createBundleSecret(ctx context.Context, k8sClient client.Client, sec *corev1.Secret, progress io.Writer) error {
-	tries := 0
-
-	err := retryInit(ctx, progress, func() error {
-		tries++
-
-		if err := k8sClient.Create(ctx, sec); !apierrors.IsAlreadyExists(err) || tries == 1 {
-			return err
-		}
-
-		return nil
-	})
-	if err != nil {
+	if err := createRetrying(ctx, k8sClient, sec, progress); err != nil {
 		return fmt.Errorf("init: creating the secrets bundle Secret: %w", err)
 	}
 

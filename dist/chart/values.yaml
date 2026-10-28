@@ -431,28 +431,19 @@ metrics:
 ## prometheus.enabled's ServiceMonitor scrapes it with insecureSkipVerify instead of
 ## a trusted CA. Off by default not because it's unsafe to turn on, but because
 ## cert-controller has no Create path (only Update): enabling this makes
-## --metrics-cert-path non-empty, and controller-runtime's metrics server checks for
-## that cert file once, at startup, with no retry -- on a cluster where the rotator
-## hasn't written it yet, the manager's own Start() fails and the whole controller
-## (not just metrics) crash-loops until it wins that race, the same already-accepted
-## failure mode of the webhook certificate, just not yet worth
-## taking on by default for a metrics-TLS nicety.
+## --metrics-cert-path non-empty. The metrics server reads the certificate per TLS
+## handshake, so it starts before the rotator has written it and a scrape fails until then,
+## with no restart.
 ##
 metricsCert:
   enabled: false
 
 ## Webhook server configuration.
 ##
-## On a brand-new install, expect the controller pod to restart once or twice before it
-## stays up: the webhook's serving certificate is written by cert-controller's in-process
-## rotator only after the pod starts, and the webhook server's own listener does
-## not wait for or retry past a missing certificate -- Kubernetes' own pod restart is what
-## retries. The pod's logs name this explicitly ("certificate not written yet... this is
-## expected on a brand-new install") rather than leaving it to look like a misconfiguration;
-## this is logged rather than fixed (a self-signed bootstrap certificate
-## written before the real one would silently keep DELETE requests rejected forever if the
-## rotator's own write ever failed, which is a worse failure mode than a loud, short-lived
-## crash-loop).
+## On a brand-new install the controller pod stays NotReady, without restarting, until the
+## webhook serving certificate exists: cert-controller's rotator (leader only) writes it, and
+## the webhook server is not started before the file is mounted (cold-start
+## amendment).
 ##
 webhook:
   enabled: true

@@ -126,3 +126,44 @@ one fewer dependency and metrics from day one. Kept as the fallback.
 ingress-nginx, and needs no Go code from us — but it is a point-in-time Job
 with no continuous rotation, and it adds hook-ordering bookkeeping under Argo
 CD that the in-process rotator does not need.
+
+## Amendment: cold-start ordering, no crash restarts
+
+Found on hardware: a fresh install never converged. The rotator is leader-only
+(see the earlier amendment), but controller-runtime's webhook server started at
+once, read `tls.crt`, found nothing and stopped the manager 15 ms after the lease
+was acquired, before the rotator wrote anything. With the 120 s lease and no
+release on cancel (ADR 0063, ADR 0089), every dead holder then blocked the next
+container for up to 120 s and the pod backoff grew to 5 min. The "one or two
+expected restarts" of ADR 0031 won by luck while the lease was short; it lost every
+time afterwards.
+
+Decision: the webhook server does not start until its certificate exists.
+
+- controller-runtime v0.24.1 adds the webhook server to the manager lazily, on the
+  first `mgr.GetWebhookServer()` (`webhookServerOnce`). So that call, every
+  `Setup*WebhookWithManager` and the readiness check all move behind one gate
+  (`webhooksUp` in `cmd/main.go`), in a goroutine.
+- The gate opens on either trigger: the rotator closes `IsReady` (the leader), or
+  `tls.crt` and `tls.key` exist and are non-empty in the cert directory (polled
+  every second, `waitForCertFiles`). The second is how a non-leader replica, which
+  runs no rotator, serves once the leader has written the Secret and the kubelet
+  has synced the volume. Either replica becomes Ready on its own.
+- Readiness stays false until the gate is open (`gatedChecker`) and then delegates
+  to the server's `StartedChecker`, so Ready still means "the webhook answers".
+- Only the leader writes the certificate, so a single writer is kept and the
+  cold-start CA race stays closed.
+- The metrics server, when `--metrics-cert-path` is set, has the same problem and
+  cannot be delayed (it is built into the manager). It now takes its certificate
+  from a `GetCertificate` that reads the files per handshake, so it starts first and
+  follows rotation; scrapes fail until the files exist.
+- Whether a start-up failure before leading should hold the lease is moot: with no
+  failure before the certificate exists, nothing exits holding it. A later failure
+  still holds it for up to the lease duration, which is the accepted ADR 0063
+  trade-off.
+- `logCertStatusBeforeStart` now says the server waits, not that restarts are
+  expected. ADR 0031's "one or two restarts" no longer holds.
+
+`ichor init` waits for the webhooks for 30 min by default (`WebhookWait`, was the
+15 min node wait), and reports the last real server answer when that wait ends
+rather than the client's own "rate limiter ... deadline exceeded".

@@ -441,6 +441,28 @@ Copyright 2014 CoreOS, Inc
 This product includes software developed at CoreOS, Inc.
 (http://www.coreos.com/).
 
+github.com/docker/cli@v29.5.3+incompatible: NOTICE
+
+Docker
+Copyright 2012-2017 Docker, Inc.
+
+This product includes software developed at Docker, Inc. (https://www.docker.com).
+
+This product contains software (https://github.com/creack/pty) developed
+by Keith Rarick, licensed under the MIT License.
+
+The following is courtesy of our legal counsel:
+
+
+Use and transfer of Docker may be subject to certain restrictions by the
+United States and other governments.
+It is your responsibility to ensure that your use and/or transfer does not
+violate applicable laws.
+
+For more information, see https://www.bis.doc.gov
+
+See also https://www.apache.org/dev/crypto.html and/or seek legal counsel.
+
 github.com/go-openapi/jsonpointer@v1.0.1: NOTICE
 
 Copyright 2015-2025 go-swagger maintainers
@@ -732,7 +754,7 @@ Submitted on behalf of a third-party: @disconnect3d (Disconnect3d)
 Each text is followed by the components that carry it and the copyright lines of their licence files.
 
 --------------------------------------------------------------------------------
-Apache-2.0 (variant 1 of 2)
+Apache-2.0 (variant 1 of 3)
 --------------------------------------------------------------------------------
 
 Apache License
@@ -944,6 +966,8 @@ Components:
 - github.com/containernetworking/cni@v1.3.0
 - github.com/coreos/go-oidc/v3@v3.21.0
 - github.com/coreos/go-oidc@v2.5.0+incompatible
+- github.com/docker/cli@v29.5.3+incompatible
+    Copyright 2013-2017 Docker, Inc.
 - github.com/go-jose/go-jose/v4@v4.1.4
 - github.com/go-logr/logr@v1.4.4
 - github.com/go-logr/stdr@v1.2.2
@@ -983,6 +1007,8 @@ Components:
 - github.com/opencontainers/go-digest@v1.0.0
     Copyright 2019, 2020 OCI Contributors
     Copyright 2016 Docker, Inc.
+- github.com/opencontainers/image-spec@v1.1.1
+    Copyright 2016 The Linux Foundation.
 - github.com/opencontainers/runtime-spec@v1.3.0
     Copyright 2015 The Linux Foundation.
 - github.com/petermattis/goid@v0.0.0-20260713124913-97594f28f5ca
@@ -1051,7 +1077,7 @@ Components:
 - Cilium Helm chart 1.18.0
 
 --------------------------------------------------------------------------------
-Apache-2.0 (variant 2 of 2)
+Apache-2.0 (variant 2 of 3)
 --------------------------------------------------------------------------------
 
 Apache License
@@ -1248,6 +1274,26 @@ Components:
 - gopkg.in/ini.v1@v1.67.3
     Copyright 2014 Unknwon
 - k8s.io/klog/v2@v2.140.0
+
+--------------------------------------------------------------------------------
+Apache-2.0 (variant 3 of 3)
+--------------------------------------------------------------------------------
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+Components:
+- gotest.tools/v3@v3.5.2
+    Copyright 2018 gotest.tools authors
 
 --------------------------------------------------------------------------------
 Apache-2.0 + BSD-3-Clause
@@ -2869,6 +2915,8 @@ Components:
     Copyright (c) 2014 Cenk Altı
 - github.com/cespare/xxhash/v2@v2.3.0
     Copyright (c) 2016 Caleb Spare
+- github.com/docker/docker-credential-helpers@v0.9.5
+    Copyright (c) 2016 David Calavera
 - github.com/emicklei/go-restful/v3@v3.13.0
     Copyright (c) 2012,2013 Ernest Micklei
 - github.com/exponent-io/jsonpath@v0.0.0-20210407135951-1de76d718b3f
@@ -2914,6 +2962,8 @@ Components:
     Copyright (c) 2015 Olivier Poitrey <rs@dailymotion.com>
 - github.com/ryanuber/go-glob@v1.0.0
     Copyright (c) 2014 Ryan Uber
+- github.com/sirupsen/logrus@v1.10.2
+    Copyright (c) 2014 Simon Eskildsen
 - github.com/spf13/cast@v1.7.0
     Copyright (c) 2014 Steve Francia
 - github.com/tinylib/msgp@v1.6.4
@@ -3277,13 +3327,13 @@ Packages bundled into the UI:
     declared as (Apache-2.0 AND BSD-3-Clause) in its package.json; the package ships no licence file
     Licence: BSD-3-Clause (variant 7 of 11) (text in section 3)
     Copyright 2008 Google Inc.  All rights reserved.
-    Licence: Apache-2.0 (variant 1 of 2) (text in section 3)
+    Licence: Apache-2.0 (variant 1 of 3) (text in section 3)
 - @connectrpc/connect-web@2.2.0 (https://github.com/connectrpc/connect-es)
     declared as Apache-2.0 in its package.json; the package ships no licence file
-    Licence: Apache-2.0 (variant 1 of 2) (text in section 3)
+    Licence: Apache-2.0 (variant 1 of 3) (text in section 3)
 - @connectrpc/connect@2.2.0 (https://github.com/connectrpc/connect-es)
     declared as Apache-2.0 in its package.json; the package ships no licence file
-    Licence: Apache-2.0 (variant 1 of 2) (text in section 3)
+    Licence: Apache-2.0 (variant 1 of 3) (text in section 3)
 - @floating-ui/core@1.8.0 (https://github.com/floating-ui/floating-ui)
     Licence: MIT (variant 1 of 7) (text in section 3)
     Copyright (c) 2021-present Floating UI contributors
@@ -3294,7 +3344,7 @@ Packages bundled into the UI:
     Licence: MIT (variant 1 of 7) (text in section 3)
     Copyright (c) 2021-present Floating UI contributors
 - class-variance-authority@0.7.1 (https://github.com/joe-bell/cva)
-    Licence: Apache-2.0 (variant 1 of 2) (text in section 3)
+    Licence: Apache-2.0 (variant 1 of 3) (text in section 3)
     Copyright 2022 Joe Bell
 - clsx@2.1.1 (https://github.com/lukeed/clsx)
     Licence: MIT (variant 1 of 7) (text in section 3)
@@ -3358,4 +3408,4 @@ Embedded chart:
 
 - Cilium Helm chart 1.18.0 (https://github.com/cilium/cilium)
     pkg/cni/cilium/chart/cilium-1.18.0.tgz
-    Licence: Apache-2.0 (variant 1 of 2) (text in section 3)
+    Licence: Apache-2.0 (variant 1 of 3) (text in section 3)

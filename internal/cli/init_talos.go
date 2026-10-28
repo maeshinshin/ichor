@@ -179,8 +179,17 @@ func waitForAPIServer(ctx context.Context, c ctrlclient.Client, timeout, interva
 func createWhenWebhooksUp(
 	ctx context.Context, c ctrlclient.Client, obj ctrlclient.Object, timeout, interval time.Duration, progress io.Writer,
 ) error {
+	tries := 0
+
 	return pollWhile(ctx, timeout, interval, progress, "Ichor's webhooks", func(ctx context.Context) error {
-		return c.Create(ctx, obj)
+		tries++
+
+		// An earlier attempt that timed out may still have gone through.
+		if err := c.Create(ctx, obj); !apierrors.IsAlreadyExists(err) || tries == 1 {
+			return err
+		}
+
+		return nil
 	}, func(err error) bool {
 		return (apierrors.IsInternalError(err) && strings.Contains(err.Error(), "webhook")) || initRetryable(err)
 	})

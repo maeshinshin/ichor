@@ -105,14 +105,14 @@ func validateInitUsers(opts initOptions) error {
 
 // ensureCredentialsSecret creates the empty store of password hashes ichor-ui's
 // ServiceAccount may patch but cannot create. An existing Secret is kept.
-func ensureCredentialsSecret(ctx context.Context, k client.Client, ns string) error {
+func ensureCredentialsSecret(ctx context.Context, k client.Client, ns string, progress io.Writer) error {
 	sec := &corev1.Secret{
 		Namespace: ns, Name: ichorauth.CredentialsSecretName,
 		Labels: map[string]string{"app.kubernetes.io/name": appNameIchor, "app.kubernetes.io/component": "ui"},
 		Type:   corev1.SecretTypeOpaque,
 	}
 
-	err := retryNoMatch(ctx, func() error { return k.Create(ctx, sec) })
+	err := createRetrying(ctx, k, sec, progress)
 	if err != nil && !apierrors.IsAlreadyExists(err) {
 		return fmt.Errorf("init: creating the credentials Secret: %w", err)
 	}
@@ -201,12 +201,12 @@ func issuerOnController(dep *appsv1.Deployment) error {
 	return nil
 }
 
-func (t *uiTargets) apply(ctx context.Context, k client.Client) error {
+func (t *uiTargets) apply(ctx context.Context, k client.Client, progress io.Writer) error {
 	for _, o := range []struct {
 		what string
 		obj  client.Object
 	}{{"ichor-ui Deployment", t.ui}, {"ichor-ui Service", t.svc}, {"controller Deployment", t.controller}} {
-		if err := k.Update(ctx, o.obj); err != nil {
+		if err := retryInit(ctx, progress, func() error { return k.Update(ctx, o.obj) }); err != nil {
 			return fmt.Errorf("init: updating the %s: %w", o.what, err)
 		}
 	}
@@ -258,7 +258,9 @@ func usersOnDeployment(dep *appsv1.Deployment, externalURL, clusterIP string) er
 // setClusterAuthentication turns on Ichor's issuer in the kube-apiserver
 // (spec.authentication.ichor). It is a merge patch after the cluster exists, so
 // the first configuration is the plain one and the rollout is a separate step.
-func setClusterAuthentication(ctx context.Context, k client.Client, cluster *ichorv1alpha1.TalosCluster, externalURL string) error {
+func setClusterAuthentication(
+	ctx context.Context, k client.Client, cluster *ichorv1alpha1.TalosCluster, externalURL string, progress io.Writer,
+) error {
 	if externalURL == "" {
 		return nil
 	}
@@ -274,7 +276,8 @@ func setClusterAuthentication(ctx context.Context, k client.Client, cluster *ich
 		return err
 	}
 
-	if err := k.Patch(ctx, cluster, client.RawPatch(types.MergePatchType, patch)); err != nil {
+	err = retryInit(ctx, progress, func() error { return k.Patch(ctx, cluster, client.RawPatch(types.MergePatchType, patch)) })
+	if err != nil {
 		return fmt.Errorf("init: setting spec.authentication.ichor on TalosCluster %q: %w", cluster.Name, err)
 	}
 
@@ -303,11 +306,11 @@ func initUsers(ctx context.Context, opts initOptions, k client.Client, errw io.W
 		return "", err
 	}
 
-	if err := storeUITLSSecret(ctx, k, ichorControllerNamespace, opts); err != nil {
+	if err := storeUITLSSecret(ctx, k, ichorControllerNamespace, opts, errw); err != nil {
 		return "", err
 	}
 
-	if err := ensureCredentialsSecret(ctx, k, ichorControllerNamespace); err != nil {
+	if err := ensureCredentialsSecret(ctx, k, ichorControllerNamespace, errw); err != nil {
 		return "", err
 	}
 
@@ -317,11 +320,11 @@ func initUsers(ctx context.Context, opts initOptions, k client.Client, errw io.W
 	}
 
 	spec := userSpec{Name: opts.AdminUser, DisplayName: opts.AdminUser, Roles: []string{ichorauth.RoleAdmin}}
-	if err := createUserWithPassword(ctx, k, spec, password, time.Now()); err != nil {
+	if err := createUserWithPassword(ctx, k, spec, password, time.Now(), errw); err != nil {
 		return "", fmt.Errorf("init: creating the first admin: %w", err)
 	}
 
-	if err := targets.apply(ctx, k); err != nil {
+	if err := targets.apply(ctx, k, errw); err != nil {
 		return password, err
 	}
 

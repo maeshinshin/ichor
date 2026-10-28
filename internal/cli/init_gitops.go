@@ -179,7 +179,7 @@ func initArgoCD(
 	}
 
 	if secret != nil {
-		if err := k8sClient.Create(ctx, secret); err != nil {
+		if err := createRetrying(ctx, k8sClient, secret, warn); err != nil {
 			_, _ = fmt.Fprintf(warn,
 				"init: warning: could not create the Argo CD repository credentials Secret in namespace %q: %v\n"+
 					"init: the credential was not written anywhere else (not into Git); create it by hand once "+
@@ -192,7 +192,7 @@ func initArgoCD(
 		// ADR 0048: the Secret holds no credential; the skeleton is unchanged
 		// (nothing Ichor writes moves to Kokumi, and the Cilium Application stays
 		// a plain Argo CD Application so it keeps ignoreDifferences).
-		if err := k8sClient.Create(ctx, buildKokumiRepoCredsSecret(opts.ArgoCDNamespace)); err != nil {
+		if err := createRetrying(ctx, k8sClient, buildKokumiRepoCredsSecret(opts.ArgoCDNamespace), warn); err != nil {
 			_, _ = fmt.Fprintf(warn,
 				"init: warning: could not create the Kokumi repo-creds Secret in namespace %q: %v\n", opts.ArgoCDNamespace, err)
 		}

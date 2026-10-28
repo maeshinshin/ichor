@@ -36,20 +36,6 @@ import (
 	"github.com/maeshinshin/ichor/internal/version"
 )
 
-// crdEstablishRetries and crdEstablishInterval bound how long
-// applyIchorManifest retries a resource whose kind the API server
-// doesn't recognize yet -- expected only for a resource defined by a
-// CRD this same manifest just created a moment before, needing a short
-// time to become Established.
-//
-// shortcut: a fixed 10x500ms budget, not a watch on the CRD's
-// Established condition. Upgrade to watching Established if a slower
-// cluster ever needs longer than 5s here.
-const (
-	crdEstablishRetries  = 10
-	crdEstablishInterval = 500 * time.Millisecond
-)
-
 // applyIchorManifest implements the half of design step 3 that no
 // longer lives in cluster.inlineManifests (ADR 0019's revision): once
 // the new cluster's kubeconfig is in hand (design step 4), it applies
@@ -143,6 +129,22 @@ func retryInit(ctx context.Context, progress io.Writer, fn func() error) error {
 
 		delay = min(delay*2, followRetryMax)
 	}
+}
+
+// createRetrying creates obj through retryInit. A Create that timed out may still have gone
+// through, so AlreadyExists after a retry counts as success; on the first try it is returned.
+func createRetrying(ctx context.Context, c client.Client, obj client.Object, progress io.Writer) error {
+	tries := 0
+
+	return retryInit(ctx, progress, func() error {
+		tries++
+
+		if err := c.Create(ctx, obj); !apierrors.IsAlreadyExists(err) || tries == 1 {
+			return err
+		}
+
+		return nil
+	})
 }
 
 // createIchorInstallation records the version `ichor init` just installed -- this binary's

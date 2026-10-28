@@ -76,7 +76,6 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/clusterlock"
-	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
 	"github.com/maeshinshin/ichor/pkg/fieldmeta"
 	"github.com/maeshinshin/ichor/pkg/render"
@@ -700,15 +699,18 @@ func isKubeProxyPath(p string) bool {
 	return strings.HasPrefix(p, "KubeProxyConfig") || strings.HasPrefix(p, "cluster.proxy")
 }
 
-// kubeProxySwitchPending is true while spec.cni.kubeProxy says replaced but no switch has set
-// status.cni.kubeProxy: the render then owns the kube-proxy fields from spec, so a difference on
-// the node means the spec was changed ahead of the switch (Git first), and only the cni operation
-// may apply it. With spec enabled and no status the patches own those fields (as before), so a
-// patch-made cluster.proxy.disabled change stays an ordinary reboot-required change.
+// kubeProxySwitchPending is true while the consent annotation names the spec's kube-proxy mode and
+// status.cni.kubeProxy does not yet: the spec was changed ahead of the switch (Git first), in either
+// direction, and only the cni operation may apply it. The annotation is the signal because spec alone
+// cannot tell a switch from a patch-made cluster.proxy.disabled change, which has no annotation and
+// stays an ordinary reboot-required change.
 func kubeProxySwitchPending(cluster *ichorv1alpha1.TalosCluster) bool {
-	mode, fromStatus := render.KubeProxyMode(cluster)
+	want := cluster.Spec.CNI.KubeProxy
+	if cluster.Annotations[ichorv1alpha1.TalosClusterConfirmKubeProxySwitchAnnotation] != want {
+		return false
+	}
 
-	return !fromStatus && mode == cni.KubeProxyReplaced
+	return cluster.Status.CNI == nil || cluster.Status.CNI.KubeProxy != want
 }
 
 // kubeProxySwitchOnly reports a reboot-class change made only of kube-proxy fields (and no API server

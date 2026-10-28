@@ -121,7 +121,7 @@ func Apply(ctx context.Context, c client.Client, o Options) error {
 		return err
 	}
 
-	_, secrets, err := stack.SplitSecrets(manifest)
+	bundle, secrets, err := stack.SplitSecrets(manifest)
 	if err != nil {
 		return err
 	}
@@ -136,7 +136,7 @@ func Apply(ctx context.Context, c client.Client, o Options) error {
 		}
 	}
 
-	docs, err := parse(manifest)
+	docs, err := parse(bundle) // everything but the Secrets, in order
 	if err != nil {
 		return err
 	}
@@ -159,7 +159,7 @@ func Apply(ctx context.Context, c client.Client, o Options) error {
 	}
 
 	for _, u := range docs {
-		if u.GetKind() == kindNamespace || (u.GetKind() == "Secret" && u.GroupVersionKind().Group == "") {
+		if u.GetKind() == kindNamespace {
 			continue
 		}
 

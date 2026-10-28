@@ -50,7 +50,6 @@ import (
 const conditionStackReady = "StackReady"
 
 const (
-	stackFieldManager = "ichor-bootstrap"
 	stackOrderManager = "ichor-stack"
 
 	// Secrets in the controller's namespace holding what is generated once and reused.
@@ -364,8 +363,7 @@ func (r *IchorInstallationReconciler) getOrCreateSecret(
 func (r *IchorInstallationReconciler) bootstrap(
 	ctx context.Context, c *stackComponent, inst *ichorv1alpha1.IchorInstallation,
 ) error {
-	exists, err := r.orderExists(ctx, c)
-	if err != nil || exists {
+	if o, err := r.readOrder(ctx, c); err != nil || o != nil {
 		return err
 	}
 
@@ -389,16 +387,21 @@ func titleName(n string) string {
 	return "Kokumi"
 }
 
-func (r *IchorInstallationReconciler) orderExists(ctx context.Context, c *stackComponent) (bool, error) {
+// readOrder returns the component's Order, or nil while there is none (or Kokumi's CRD is not served yet).
+func (r *IchorInstallationReconciler) readOrder(ctx context.Context, c *stackComponent) (*unstructured.Unstructured, error) {
 	o := &unstructured.Unstructured{}
 	o.SetGroupVersionKind(orderGVK)
 
 	err := r.Direct.Get(ctx, types.NamespacedName{Namespace: c.namespace, Name: c.name}, o)
 	if apierrors.IsNotFound(err) || meta.IsNoMatchError(err) {
-		return false, nil
+		return nil, nil //nolint:nilnil // nil means absent
 	}
 
-	return err == nil, err
+	if err != nil {
+		return nil, fmt.Errorf("reading Order %s/%s: %w", c.namespace, c.name, err)
+	}
+
+	return o, nil
 }
 
 func (r *IchorInstallationReconciler) registryHost() string {
@@ -446,15 +449,12 @@ func (r *IchorInstallationReconciler) publish(ctx context.Context, c *stackCompo
 func (r *IchorInstallationReconciler) ensureOrder(ctx context.Context, c *stackComponent, promotion string) error {
 	source := "oci://" + kokumi.RegistryHost + "/ichor/" + c.name
 
-	o := &unstructured.Unstructured{}
-	o.SetGroupVersionKind(orderGVK)
-
-	err := r.Direct.Get(ctx, types.NamespacedName{Namespace: c.namespace, Name: c.name}, o)
-	if err != nil && !apierrors.IsNotFound(err) {
-		return fmt.Errorf("reading Order %s/%s: %w", c.namespace, c.name, err)
+	o, err := r.readOrder(ctx, c)
+	if err != nil {
+		return err
 	}
 
-	if err == nil && !c.republished && orderMatches(o, source, c.status.PublishedTag, promotion) {
+	if o != nil && !c.republished && orderMatches(o, source, c.status.PublishedTag, promotion) {
 		return nil
 	}
 
@@ -494,11 +494,9 @@ func orderMatches(o *unstructured.Unstructured, source, tag, promotion string) b
 
 // orderReady reads the Order's Ready condition.
 func (r *IchorInstallationReconciler) orderReady(ctx context.Context, c *stackComponent) (bool, error) {
-	o := &unstructured.Unstructured{}
-	o.SetGroupVersionKind(orderGVK)
-
-	if err := r.Direct.Get(ctx, types.NamespacedName{Namespace: c.namespace, Name: c.name}, o); err != nil {
-		return false, client.IgnoreNotFound(err)
+	o, err := r.readOrder(ctx, c)
+	if o == nil {
+		return false, err
 	}
 
 	conds, _, _ := unstructured.NestedSlice(o.Object, "status", "conditions")

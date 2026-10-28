@@ -22,6 +22,6 @@ test('patches become config', () => {
 })
 
 test('current paths are not redirected', () => {
-  for (const p of ['/', '/nodes', '/nodes/add', '/nodes/n1', '/operations', '/operations/op', '/backups', '/config', '/config/new', '/config/x', '/gitops', '/users', '/nope'])
+  for (const p of ['/', '/nodes', '/nodes/add', '/nodes/n1', '/operations', '/operations/op', '/backups', '/cilium', '/config', '/config/new', '/config/x', '/gitops', '/users', '/nope'])
     assert.equal(redirectFor(p), null, p)
 })

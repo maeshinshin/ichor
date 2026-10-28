@@ -29,6 +29,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
+const (
+	keyAPIVersion = "apiVersion"
+	keyStatus     = "status"
+	keyType       = "type"
+	keyName       = "name"
+	keyNamespace  = "namespace"
+	keyKind       = "kind"
+	keyMetadata   = "metadata"
+)
+
 const testPolicies = `apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
@@ -42,9 +52,9 @@ spec:
 
 func ciliumDaemonSetObj(desired, ready int64) *unstructured.Unstructured {
 	return &unstructured.Unstructured{Object: map[string]any{
-		"apiVersion": "apps/v1", "kind": "DaemonSet",
-		"metadata": map[string]any{"namespace": "kube-system", "name": ciliumDaemonSet},
-		"status":   map[string]any{"desiredNumberScheduled": desired, "numberReady": ready},
+		keyAPIVersion: "apps/v1", keyKind: "DaemonSet",
+		keyMetadata: map[string]any{keyNamespace: ciliumNamespace, keyName: ciliumDaemonSet},
+		keyStatus:   map[string]any{"desiredNumberScheduled": desired, "numberReady": ready},
 	}}
 }
 
@@ -55,10 +65,10 @@ func ciliumCRDObj(established bool) *unstructured.Unstructured {
 	}
 
 	return &unstructured.Unstructured{Object: map[string]any{
-		"apiVersion": "apiextensions.k8s.io/v1", "kind": "CustomResourceDefinition",
-		"metadata": map[string]any{"name": ciliumPolicyCRDKey},
-		"status": map[string]any{"conditions": []any{
-			map[string]any{"type": "Established", "status": status},
+		keyAPIVersion: "apiextensions.k8s.io/v1", keyKind: "CustomResourceDefinition",
+		keyMetadata: map[string]any{keyName: ciliumPolicyCRDKey},
+		keyStatus: map[string]any{"conditions": []any{
+			map[string]any{keyType: "Established", keyStatus: status},
 		}},
 	}}
 }
@@ -85,10 +95,10 @@ func TestApplyNetworkPolicies_WaitsForCiliumReady(t *testing.T) {
 					reads++
 
 					if reads >= 3 {
-						u.Object["status"] = ciliumDaemonSetObj(2, 2).Object["status"]
+						u.Object[keyStatus] = ciliumDaemonSetObj(2, 2).Object[keyStatus]
 					}
 				case u.GetKind() == "CustomResourceDefinition" && reads >= 4:
-					u.Object["status"] = ciliumCRDObj(true).Object["status"]
+					u.Object[keyStatus] = ciliumCRDObj(true).Object[keyStatus]
 				}
 
 				return err
@@ -118,7 +128,7 @@ func TestApplyNetworkPolicies_WaitsForCiliumReady(t *testing.T) {
 	got.SetAPIVersion("cilium.io/v2")
 	got.SetKind("CiliumNetworkPolicy")
 
-	if err := wrapped.Get(ctx, client.ObjectKey{Namespace: "ichor-system", Name: "ichor-default-deny"}, got); err != nil {
+	if err := wrapped.Get(ctx, client.ObjectKey{Namespace: ichorControllerNamespace, Name: "ichor-default-deny"}, got); err != nil {
 		t.Fatalf("the policy was not created: %v", err)
 	}
 }
@@ -197,7 +207,7 @@ func TestRunInit_AppliesNetworkPoliciesAfterCiliumIsReady(t *testing.T) {
 	got.SetAPIVersion("cilium.io/v2")
 	got.SetKind("CiliumNetworkPolicy")
 
-	if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: "ichor-system", Name: "ichor-default-deny"}, got); err != nil {
+	if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: ichorControllerNamespace, Name: "ichor-default-deny"}, got); err != nil {
 		t.Fatalf("runInit did not apply the network policies: %v", err)
 	}
 }

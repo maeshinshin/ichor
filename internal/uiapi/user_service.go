@@ -24,7 +24,6 @@ import (
 	"regexp"
 	"slices"
 	"strings"
-	"sync"
 	"time"
 	"unicode"
 
@@ -40,6 +39,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/oidcissuer"
 )
 
 // UserService (docs/adr/0094). The IchorUser CR is written as the caller, so
@@ -48,75 +48,11 @@ import (
 // hash, a token or a password (but the generated one, once). Errors about
 // credentials say "invalid credentials" and nothing else.
 
-const (
-	freeFailures   = 5
-	maxBackoff     = 15 * time.Minute
-	maxTrackedKeys = 10000
-	trackedIdle    = time.Hour
-)
-
-// changePasswordFailures is the per-user back-off of ChangeOwnPassword, with
-// the parameters of the issuer's login back-off (internal/oidcissuer keeps its
-// own unexported copy): after five failures a user waits 1 s, 2 s, 4 s ... up
-// to 15 minutes since the last failure. Per replica by design (ADR 0094).
-var changePasswordFailures = &failBackoff{m: map[string]failState{}}
-
-type failState struct {
-	n    int
-	last time.Time
-}
-
-type failBackoff struct {
-	mu sync.Mutex
-	m  map[string]failState
-}
-
-// wait returns how long key must still wait; zero means it may try.
-func (b *failBackoff) wait(key string, now time.Time) time.Duration {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	s, ok := b.m[key]
-	if !ok || s.n < freeFailures {
-		return 0
-	}
-
-	d := min(time.Second<<min(s.n-freeFailures, 20), maxBackoff)
-
-	return max(s.last.Add(d).Sub(now), 0)
-}
-
-func (b *failBackoff) fail(key string, now time.Time) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	if len(b.m) >= maxTrackedKeys {
-		for k, s := range b.m {
-			if now.Sub(s.last) > trackedIdle {
-				delete(b.m, k)
-			}
-		}
-
-		for k := range b.m { // still full: evict arbitrary entries
-			if len(b.m) < maxTrackedKeys {
-				break
-			}
-
-			delete(b.m, k)
-		}
-	}
-
-	s := b.m[key]
-	s.n++
-	s.last = now
-	b.m[key] = s
-}
-
-func (b *failBackoff) reset(key string) {
-	b.mu.Lock()
-	delete(b.m, key)
-	b.mu.Unlock()
-}
+// changePasswordFailures is the per-user back-off of ChangeOwnPassword: the
+// same back-off as the issuer's login (oidcissuer.Backoff), so after five
+// failures a user waits 1 s, 2 s, 4 s ... up to 15 minutes since the last
+// failure. Per replica by design (ADR 0094).
+var changePasswordFailures = oidcissuer.NewBackoff()
 
 const (
 	kubeAPIPort       = "6443"
@@ -412,7 +348,7 @@ func (s *Server) ChangeOwnPassword(ctx context.Context, req *connect.Request[pb.
 		return nil, connect.NewError(connect.CodeInternal, errors.New("reading credentials failed"))
 	}
 
-	if d := changePasswordFailures.wait(name, s.now()); d > 0 {
+	if d := changePasswordFailures.Wait(name, s.now()); d > 0 {
 		return nil, connect.NewError(connect.CodeResourceExhausted, fmt.Errorf("too many failed attempts, try again in %d seconds", int(d.Seconds())+1))
 	}
 
@@ -421,13 +357,13 @@ func (s *Server) ChangeOwnPassword(ctx context.Context, req *connect.Request[pb.
 	good, err := s.verifyPassword(ctx, req.Msg.GetOldPassword(), cred.Hash)
 	if err != nil || !found || !good {
 		if err == nil {
-			changePasswordFailures.fail(name, s.now())
+			changePasswordFailures.Fail(name, s.now())
 		}
 
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("invalid credentials"))
 	}
 
-	changePasswordFailures.reset(name)
+	changePasswordFailures.Reset(name)
 
 	if err := s.setCredential(ctx, name, req.Msg.GetNewPassword(), false); err != nil {
 		return nil, credentialWriteError(err)

@@ -93,12 +93,6 @@ rules:
   - get
   - patch
 - apiGroups:
-  - argoproj.io
-  resources:
-  - applications
-  verbs:
-  - get
-- apiGroups:
   - authorization.k8s.io
   resources:
   - subjectaccessreviews
@@ -116,14 +110,6 @@ rules:
   - patch
   - update
   - watch
-- apiGroups:
-  - delivery.kokumi.dev
-  resources:
-  - orders
-  verbs:
-  - create
-  - get
-  - patch
 - apiGroups:
   - ichor.maesh.dev
   resources:

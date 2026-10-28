@@ -87,16 +87,6 @@ spec:
         protocol: UDP
       - port: "53"
         protocol: TCP
-  # Publishing the Kokumi and Argo CD bundles into Kokumi's registry. The receiving
-  # rule is in pkg/stack/policies/kokumi.yaml.
-  - toEndpoints:
-    - matchLabels:
-        k8s:io.kubernetes.pod.namespace: kokumi
-        app: registry
-    toPorts:
-    - ports:
-      - port: "5000"
-        protocol: TCP
   # TalosEtcdBackup's S3 endpoint. Another port or an in-cluster store needs a policy of the
   # operator's own (policies add up).
   - toEntities:
@@ -181,24 +171,6 @@ spec:
   endpointSelector:
     matchLabels:
       app.kubernetes.io/name: ichor-installer
-  egress:
-  - toEntities:
-    - kube-apiserver
-    toPorts:
-    - ports:
-      - port: "6443"
-        protocol: TCP
----
-apiVersion: cilium.io/v2
-kind: CiliumNetworkPolicy
-metadata:
-  name: stack
-  namespace: system
-spec:
-  description: The ichor-stack Job. It talks to the API server and nothing else.
-  endpointSelector:
-    matchLabels:
-      app.kubernetes.io/name: ichor-stack
   egress:
   - toEntities:
     - kube-apiserver

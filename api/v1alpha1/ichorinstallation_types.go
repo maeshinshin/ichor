@@ -62,8 +62,8 @@ type IchorInstallationSpec struct {
 	// +optional
 	InstallerRepository string `json:"installerRepository,omitempty"`
 
-	// stack is the user layer of the Argo CD and Kokumi bundles Ichor publishes into Kokumi's
-	// in-cluster registry.
+	// stack is deprecated and unused: Argo CD and Kokumi are no longer part of Ichor.
+	// It is kept so the CRD never drops a field.
 	// +optional
 	Stack *IchorStackSpec `json:"stack,omitempty"`
 }
@@ -77,7 +77,7 @@ const (
 	IchorStackPromotionManual = "Manual"
 )
 
-// IchorStackSpec is the desired state of the Argo CD and Kokumi stack.
+// IchorStackSpec is deprecated and unused; kept so the CRD never drops a field.
 type IchorStackSpec struct {
 	// argocd is the user layer for the Argo CD bundle.
 	// +optional
@@ -96,7 +96,7 @@ type IchorStackSpec struct {
 	Promotion string `json:"promotion,omitempty"`
 }
 
-// IchorStackComponentSpec is the user layer of one stack component's Helm values.
+// IchorStackComponentSpec is deprecated and unused; kept so the CRD never drops a field.
 type IchorStackComponentSpec struct {
 	// values is the user layer; effective values are Ichor's defaults, then these, then the
 	// Ichor-owned keys.
@@ -114,7 +114,8 @@ type IchorInstallationStatus struct {
 	// +optional
 	InstalledVersion string `json:"installedVersion,omitempty"`
 
-	// stack reports, per component, what Ichor published into Kokumi and what Argo CD made of it.
+	// stack is deprecated and unused: nothing writes it any more. It is kept so the
+	// CRD never drops a field.
 	// +optional
 	Stack *IchorStackStatus `json:"stack,omitempty"`
 
@@ -127,7 +128,7 @@ type IchorInstallationStatus struct {
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
-// IchorStackStatus is the observed state of the stack, keyed by component.
+// IchorStackStatus is deprecated and unused; kept so the CRD never drops a field.
 type IchorStackStatus struct {
 	// argocd is the Argo CD bundle's state.
 	// +optional
@@ -138,7 +139,7 @@ type IchorStackStatus struct {
 	Kokumi *IchorStackComponentStatus `json:"kokumi,omitempty"`
 }
 
-// IchorStackComponentStatus is one component's published bundle and delivery state.
+// IchorStackComponentStatus is deprecated and unused; kept so the CRD never drops a field.
 type IchorStackComponentStatus struct {
 	// publishedTag is the registry tag Ichor last published (<chartVersion>-<hash12>).
 	// +optional

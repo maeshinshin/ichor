@@ -26,6 +26,7 @@ import (
 	"helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chart/loader"
 
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/values"
 )
@@ -127,4 +128,26 @@ func EffectiveValues(user map[string]any, kubeProxy cni.KubeProxyMode, tunnel st
 	}
 
 	return p.WithValues(user).effective(kubeProxy)
+}
+
+// EffectiveValuesFor is EffectiveValues for what cluster stores: its
+// spec.cni.kubeProxy (empty reads as enabled, the CRD default), spec.cni.tunnel
+// and spec.cni.cilium.values.
+func EffectiveValuesFor(cluster *ichorv1alpha1.TalosCluster) (map[string]any, error) {
+	c := cluster.Spec.CNI
+
+	var user map[string]any
+
+	if c.Cilium != nil && c.Cilium.Values != nil && len(c.Cilium.Values.Raw) > 0 {
+		if err := json.Unmarshal(c.Cilium.Values.Raw, &user); err != nil {
+			return nil, fmt.Errorf("cilium: reading spec.cni.cilium.values: %w", err)
+		}
+	}
+
+	mode := cni.KubeProxyMode(c.KubeProxy)
+	if mode == "" {
+		mode = cni.KubeProxyEnabled
+	}
+
+	return EffectiveValues(user, mode, c.Tunnel)
 }

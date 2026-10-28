@@ -85,8 +85,71 @@ func renderChart(values any) ([]byte, error) {
 	var out strings.Builder
 
 	for _, m := range manifests {
-		out.WriteString("---\n# Source: " + m.Name + "\n" + strings.TrimSpace(m.Content) + "\n")
+		content, err := withHelmOwnership(m.Content)
+		if err != nil {
+			return nil, fmt.Errorf("cilium: marking %s as Helm-owned: %w", m.Name, err)
+		}
+
+		out.WriteString("---\n# Source: " + m.Name + "\n" + content)
 	}
 
 	return []byte(out.String()), nil
+}
+
+// Helm's release-ownership metadata (pkg/action/validate.go in Helm): with it on the
+// bootstrap objects, the Helm release the CNI Job creates over them (ADR 0099) adopts
+// them without a conflict check, and `helm` tooling reads them as release members.
+const (
+	// ReleaseName is the Helm release Ichor owns Cilium as; it equals the chart name.
+	ReleaseName = ChartName
+
+	// ReleaseNamespace is where that release and its objects live.
+	ReleaseNamespace = namespace
+
+	annotationReleaseName      = "meta.helm.sh/release-name"
+	annotationReleaseNamespace = "meta.helm.sh/release-namespace"
+	labelManagedBy             = "app.kubernetes.io/managed-by"
+)
+
+// withHelmOwnership returns doc (one rendered manifest) with the three
+// ownership markers set, as Helm sets them when it installs the object.
+func withHelmOwnership(doc string) (string, error) {
+	doc = strings.TrimSpace(doc)
+
+	var obj map[string]any
+	if err := sigsyaml.Unmarshal([]byte(doc), &obj); err != nil {
+		return "", err
+	}
+
+	if len(obj) == 0 {
+		return doc + "\n", nil
+	}
+
+	meta, _ := obj["metadata"].(map[string]any)
+	if meta == nil {
+		meta = map[string]any{}
+		obj["metadata"] = meta
+	}
+
+	for key, set := range map[string]map[string]string{
+		"annotations": {annotationReleaseName: ReleaseName, annotationReleaseNamespace: ReleaseNamespace},
+		"labels":      {labelManagedBy: "Helm"},
+	} {
+		m, _ := meta[key].(map[string]any)
+		if m == nil {
+			m = map[string]any{}
+			meta[key] = m
+		}
+
+		for k, v := range set {
+			m[k] = v
+		}
+	}
+
+	out, err := sigsyaml.Marshal(obj)
+	if err != nil {
+		return "", err
+	}
+
+	return string(out), nil
 }

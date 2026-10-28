@@ -141,8 +141,7 @@ type TalosClusterCNI struct {
 	KubeProxy string `json:"kubeProxy,omitempty"`
 
 	// tunnel is Cilium's tunnel protocol. It only applies to the cilium preset; empty means
-	// Cilium's default (vxlan). It is stored here so `ichor gitops export` reproduces what init
-	// rendered. Immutable once set.
+	// Cilium's default (vxlan). Immutable once set.
 	// +kubebuilder:validation:Enum=vxlan;geneve
 	// +optional
 	Tunnel string `json:"tunnel,omitempty"`
@@ -160,8 +159,7 @@ type TalosClusterCNI struct {
 	// manual and disabled are read as automatic: the inline entry is removed once Ichor's Helm
 	// release of Cilium is deployed. It controlled how the CNI's cluster.inlineManifests entry is
 	// removed once Argo CD reported it Synced and Healthy (docs/design/architecture.md, "GitOps and Argo CD"): automatic (the
-	// controller removes it on its own), manual (removed only once an operator runs
-	// `ichor gitops handoff cni`, which sets this field to automatic), or disabled (never removed
+	// controller removes it on its own), manual (removed only once an operator sets this field to automatic), or disabled (never removed
 	// automatically, for a cluster that does not run Argo CD).
 	// +kubebuilder:validation:Enum=automatic;manual;disabled
 	// +kubebuilder:default=automatic
@@ -234,8 +232,7 @@ type TalosClusterGitOps struct {
 	// mode is relaxed (the default: approving a node writes the TalosMachine directly) or strict
 	// (approving a node opens a pull request that adds it; the node stays pending until that merges
 	// and syncs). In either mode a change to a CR Argo CD tracks goes through a pull request when a
-	// repository is set. Changing mode rewrites nothing: CRs written directly under relaxed stay,
-	// and `ichor gitops export` is how they reach Git.
+	// repository is set. Changing mode rewrites nothing: CRs written directly under relaxed stay.
 	// +kubebuilder:validation:Enum=relaxed;strict
 	// +kubebuilder:default=relaxed
 	// +optional

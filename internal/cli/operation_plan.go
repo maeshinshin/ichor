@@ -23,8 +23,6 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
-// pullRequestText is what `ichor upgrade ichor` says when the installation is managed in Git: the
-// upgrade became a pull request and no operation exists yet.
 // credentialsStopWorking is what a CA rotation does to the operator's credentials, in the words the
 // plan and rotate-ca's help share (the UI's copy says the same in its own strings). The nodes start
 // serving certificates from the new CA at Issuing, the second pass, so a kubeconfig or talosconfig
@@ -35,12 +33,6 @@ const credentialsStopWorking = "kubeconfig and talosconfig STOP WORKING from the
 // configRestartText is what a config operation whose changes need no reboot does; the UI says the same in
 // ops.plan.effectConfigRestart.
 const configRestartText = "Restarts the Kubernetes API server on each control plane, one at a time; no reboot."
-
-func pullRequestText(url string) string {
-	return "Opened a pull request that changes Ichor's target version in Git: " + url + "\n" +
-		"Nothing was written to the cluster and no operation was created. Merge it and let Argo CD sync, " +
-		"then run 'ichor upgrade ichor' again without a version.\n"
-}
 
 // planText is the confirmation a destructive operation asks: what changes,
 // how many machines, in which order, and what happens to each one. It is a
@@ -78,12 +70,7 @@ func planText(kind pb.OperationKind, cluster string, p *pb.PlanOperationResponse
 	case pb.OperationEffect_OPERATION_EFFECT_STOP:
 		b.WriteString("Every machine is POWERED OFF and stays off until you start it again. The Kubernetes API goes down.\n")
 	case pb.OperationEffect_OPERATION_EFFECT_NONE:
-		if p.GetOpensPullRequest() {
-			b.WriteString("Ichor's installation is managed in Git: this opens a pull request that changes its target version. " +
-				"Nothing is written to the cluster and no operation is created until you merge it and run this again.\n")
-		} else {
-			b.WriteString("No machine is touched; a Job applies the new install manifest.\n")
-		}
+		b.WriteString("No machine is touched; a Job applies the new install manifest.\n")
 	case pb.OperationEffect_OPERATION_EFFECT_CA_ROTATION:
 		fmt.Fprintf(&b, "Every machine is reconfigured once per pass (%s), without a reboot. "+
 			"The kubelet RESTARTS on each machine in the passes that change the Kubernetes CA.\n", strings.Join(p.GetStages(), ", "))

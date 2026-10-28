@@ -53,8 +53,8 @@ message ApproveMachineRequest {
   // for rejections," not exclusive to them, so a caller that does have a
   // reason to approve (e.g. "replacing node-3, same role") can record it.
   string reason = 5;
-  // break_glass requests an emergency direct write.
-  BreakGlass break_glass = 6;
+  // Deprecated: GitOps is no longer part of Ichor. Never set; kept so the wire format is unchanged.
+  BreakGlass break_glass = 6 [deprecated = true];
   // install is the system disk (TalosMachine.spec.install). Unset
   // approves without an install target.
   MachineInstall install = 7;
@@ -113,19 +113,17 @@ message ApproveMachineResponse {
   // request merges and syncs.
   Machine machine = 1;
   AuditRecord audit = 2;
-  // pull_request_url is set when the approval was proposed as a pull request
-  // (strict mode, or a machine Argo CD tracks) instead of being written.
-  string pull_request_url = 3;
-  // notice is a warning for the caller, set after a break-glass write: the Argo CD selfHeal caveat, or that the pull request
-  // could not be opened.
-  string notice = 4;
+  // Deprecated: GitOps is no longer part of Ichor. Never set; kept so the wire format is unchanged.
+  string pull_request_url = 3 [deprecated = true];
+  // Deprecated: GitOps is no longer part of Ichor. Never set; kept so the wire format is unchanged.
+  string notice = 4 [deprecated = true];
 }
 
 message RejectMachineRequest {
   ObjectRef machine = 1;
   string reason = 2;
-  // break_glass requests an emergency direct write.
-  BreakGlass break_glass = 3;
+  // Deprecated: GitOps is no longer part of Ichor. Never set; kept so the wire format is unchanged.
+  BreakGlass break_glass = 3 [deprecated = true];
 }
 
 message SetMachineInstallRequest {
@@ -133,8 +131,8 @@ message SetMachineInstallRequest {
   // install is required: the system disk and optionally the installer image.
   MachineInstall install = 2;
   string reason = 3;
-  // break_glass requests an emergency direct write.
-  BreakGlass break_glass = 4;
+  // Deprecated: GitOps is no longer part of Ichor. Never set; kept so the wire format is unchanged.
+  BreakGlass break_glass = 4 [deprecated = true];
 }
 
 message SetMachineInstallResponse {
@@ -142,18 +140,18 @@ message SetMachineInstallResponse {
   // proposed instead).
   Machine machine = 1;
   AuditRecord audit = 2;
-  // pull_request_url and notice: see ApproveMachineResponse.
-  string pull_request_url = 3;
-  string notice = 4;
+  // Deprecated: GitOps is no longer part of Ichor. Never set; kept so the wire format is unchanged.
+  string pull_request_url = 3 [deprecated = true];
+  // Deprecated: GitOps is no longer part of Ichor. Never set; kept so the wire format is unchanged.
+  string notice = 4 [deprecated = true];
 }
 
 message RejectMachineResponse {
   AuditRecord audit = 1;
-  // pull_request_url is set when the machine is tracked by Argo CD and the
-  // rejection was proposed as a pull request instead of being written.
-  string pull_request_url = 2;
-  // notice: see ApproveMachineResponse.notice.
-  string notice = 3;
+  // Deprecated: GitOps is no longer part of Ichor. Never set; kept so the wire format is unchanged.
+  string pull_request_url = 2 [deprecated = true];
+  // Deprecated: GitOps is no longer part of Ichor. Never set; kept so the wire format is unchanged.
+  string notice = 3 [deprecated = true];
 }
 
 enum MachineRole {

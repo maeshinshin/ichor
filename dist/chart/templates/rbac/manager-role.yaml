@@ -13,14 +13,6 @@ rules:
 - apiGroups:
   - ""
   resourceNames:
-  - argocd-cm
-  resources:
-  - configmaps
-  verbs:
-  - get
-- apiGroups:
-  - ""
-  resourceNames:
   - cilium-config
   resources:
   - configmaps
@@ -173,12 +165,6 @@ rules:
   - patch
   - update
   - watch
-- apiGroups:
-  - kustomize.toolkit.fluxcd.io
-  resources:
-  - kustomizations
-  verbs:
-  - list
 - apiGroups:
   - longhorn.io
   resources:

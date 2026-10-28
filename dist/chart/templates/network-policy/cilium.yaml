@@ -166,7 +166,7 @@ spec:
         protocol: UDP
       - port: "53"
         protocol: TCP
-  # The external OIDC issuer and the Git host a pull request goes to.
+  # The external OIDC issuer.
   - toEntities:
     - world
     toPorts:

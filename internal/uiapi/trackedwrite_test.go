@@ -99,7 +99,7 @@ func wantRefused(t *testing.T, err error, tool string) {
 		t.Fatalf("want FailedPrecondition, got %v", err)
 	}
 
-	for _, want := range []string{tool, "ichor gitops export"} {
+	for _, want := range []string{tool, "edit it in Git"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("message %q must mention %q", err.Error(), want)
 		}

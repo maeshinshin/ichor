@@ -34,8 +34,7 @@ import (
 // tests can shrink it instead of running at wall-clock speed.
 var uiPollInterval = 2 * time.Second
 
-// uiOptions is uiCmd's flags, kept as its own type (mirroring
-// gitopsExportOptions/gitopsHandoffOptions) so a test can build one
+// uiOptions is uiCmd's flags, kept as its own type so a test can build one
 // without going through cobra.
 type uiOptions struct {
 	Namespace   string

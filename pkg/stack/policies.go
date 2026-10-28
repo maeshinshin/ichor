@@ -18,9 +18,9 @@ package stack
 
 import (
 	"fmt"
+	"slices"
 
-	"github.com/maeshinshin/ichor/pkg/stack/argocd"
-	"github.com/maeshinshin/ichor/pkg/stack/kokumi"
+	"github.com/maeshinshin/ichor/pkg/stack/policies"
 )
 
 // Policies returns the CiliumNetworkPolicies of a component's namespace
@@ -31,9 +31,9 @@ import (
 func Policies(component string) ([]byte, error) {
 	switch component {
 	case "kokumi":
-		return kokumi.Policies(), nil
+		return slices.Clone(policies.Kokumi), nil
 	case "argocd":
-		return argocd.Policies(), nil
+		return slices.Clone(policies.Argocd), nil
 	}
 
 	return nil, fmt.Errorf("stack: no policies for component %q", component)

@@ -42,8 +42,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
 	sigsyaml "sigs.k8s.io/yaml"
-
-	"github.com/maeshinshin/ichor/pkg/stack/kokumi"
 )
 
 const (
@@ -57,12 +55,6 @@ const (
 
 	hashLen = 12
 )
-
-// Repository returns the registry repository for a component, such as
-// "argocd" or "kokumi", inside Kokumi's in-cluster registry.
-func Repository(component string) string {
-	return kokumi.RegistryHost + "/ichor/" + component
-}
 
 // Tag returns "<version>-<hash12>", where the hash covers the rendered bytes,
 // so the same input always names the same artifact.

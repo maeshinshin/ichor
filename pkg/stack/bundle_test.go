@@ -118,12 +118,6 @@ func TestPushToInProcessRegistry(t *testing.T) {
 	}
 }
 
-func TestRepositoryIsInsideKokumiRegistry(t *testing.T) {
-	if got, want := stack.Repository("argocd"), kokumi.RegistryHost+"/ichor/argocd"; got != want {
-		t.Fatalf("%q != %q", got, want)
-	}
-}
-
 // Kokumi's registry is anonymous, so a Secret in a published bundle is readable by every pod
 // that reaches it.
 func TestPublishedBundlesHoldNoSecret(t *testing.T) {

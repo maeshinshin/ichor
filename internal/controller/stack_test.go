@@ -118,10 +118,10 @@ var _ = Describe("IchorInstallation stack", func() {
 		}
 
 		By("applying Kokumi first and waiting for its registry")
-		got := passUntil("WaitingForKokumi")
+		_ = passUntil("WaitingForKokumi")
 		Expect(k8sClient.Get(ctx, key("", "kokumi"), &corev1.Namespace{})).To(Succeed())
 		Expect(k8sClient.Get(ctx, key("kokumi", "kokumi-registry"), &appsv1.Deployment{})).To(Succeed())
-		Expect(apiErrIsNotFound(k8sClient.Get(ctx, key("", "argocd"), &corev1.Namespace{}))).To(BeTrue(),
+		Expect(apiErrIsNotFound(k8sClient.Get(ctx, key("", componentArgoCD), &corev1.Namespace{}))).To(BeTrue(),
 			"Argo CD must not be applied before Kokumi's registry is ready")
 
 		By("generating the passwords once, outside status")
@@ -133,17 +133,17 @@ var _ = Describe("IchorInstallation stack", func() {
 
 		By("applying Argo CD once Kokumi's registry is ready")
 		deploymentReady("kokumi", "kokumi-registry")
-		got = passUntil("WaitingForArgoCD")
-		Expect(k8sClient.Get(ctx, key("argocd", "argocd-server"), &appsv1.Deployment{})).To(Succeed())
+		got := passUntil("WaitingForArgoCD")
+		Expect(k8sClient.Get(ctx, key(componentArgoCD, "argocd-server"), &appsv1.Deployment{})).To(Succeed())
 		Expect(got.Status.Stack.Kokumi.PublishedTag).To(BeEmpty(), "nothing is published before Argo CD is ready")
 
 		By("publishing both bundles and creating one Order each")
-		deploymentReady("argocd", "argocd-server")
-		deploymentReady("argocd", "argocd-repo-server")
+		deploymentReady(componentArgoCD, "argocd-server")
+		deploymentReady(componentArgoCD, "argocd-repo-server")
 		got = passUntil("WaitingForDelivery")
 
 		for n, st := range map[string]*ichorv1alpha1.IchorStackComponentStatus{
-			"kokumi": got.Status.Stack.Kokumi, "argocd": got.Status.Stack.ArgoCD,
+			componentKokumi: got.Status.Stack.Kokumi, componentArgoCD: got.Status.Stack.ArgoCD,
 		} {
 			Expect(st.PublishedTag).NotTo(BeEmpty())
 			Expect(st.Digest).To(HavePrefix("sha256:"))
@@ -167,19 +167,19 @@ var _ = Describe("IchorInstallation stack", func() {
 		}
 
 		By("reflecting Kokumi and Argo CD's view in status")
-		for _, n := range []string{"kokumi", "argocd"} {
+		for _, n := range []string{componentKokumi, componentArgoCD} {
 			o := getOrder(n, n)
 			Expect(unstructured.SetNestedSlice(o.Object, []any{map[string]any{
-				"type": "Ready", "status": "True", "reason": "Ready", "message": "ok",
+				"type": reasonReady, "status": "True", "reason": reasonReady, "message": "ok",
 				"lastTransitionTime": time.Now().UTC().Format(time.RFC3339),
 			}}, "status", "conditions")).To(Succeed())
 			Expect(k8sClient.Status().Update(ctx, o)).To(Succeed())
 
 			app := &unstructured.Unstructured{Object: map[string]any{
 				"apiVersion": "argoproj.io/v1alpha1", "kind": "Application",
-				"metadata": map[string]any{"name": n, "namespace": "argocd"},
+				metaKey: map[string]any{labelName: n, nsKey: componentArgoCD},
 				"spec": map[string]any{
-					"project": "default",
+					"project": "x",
 					"source":  map[string]any{"repoURL": "oci://x", "path": "."},
 					"destination": map[string]any{
 						"server": "https://kubernetes.default.svc", "namespace": n,
@@ -205,7 +205,7 @@ var _ = Describe("IchorInstallation stack", func() {
 
 		By("doing nothing on a second pass")
 		orderRVs := map[string]string{}
-		for _, n := range []string{"kokumi", "argocd"} {
+		for _, n := range []string{componentKokumi, componentArgoCD} {
 			orderRVs[n] = getOrder(n, n).GetResourceVersion()
 		}
 
@@ -220,7 +220,7 @@ var _ = Describe("IchorInstallation stack", func() {
 		Expect(reason(again)).To(Equal("Ready"))
 		Expect(again.Status.Stack).To(Equal(got.Status.Stack))
 
-		for _, n := range []string{"kokumi", "argocd"} {
+		for _, n := range []string{componentKokumi, componentArgoCD} {
 			Expect(getOrder(n, n).GetResourceVersion()).To(Equal(orderRVs[n]))
 		}
 
@@ -258,7 +258,7 @@ var _ = Describe("IchorInstallation stack", func() {
 		Expect(moved.Status.Stack.ArgoCD.PublishedTag).NotTo(Equal(got.Status.Stack.ArgoCD.PublishedTag))
 		Expect(moved.Status.Stack.Kokumi.PublishedTag).To(Equal(got.Status.Stack.Kokumi.PublishedTag))
 
-		ver, _, _ := unstructured.NestedString(getOrder("argocd", "argocd").Object, "spec", "source", "version")
+		ver, _, _ := unstructured.NestedString(getOrder(componentArgoCD, componentArgoCD).Object, "spec", "source", "version")
 		Expect(ver).To(Equal(moved.Status.Stack.ArgoCD.PublishedTag))
 	})
 })

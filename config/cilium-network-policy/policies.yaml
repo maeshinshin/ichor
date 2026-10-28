@@ -36,6 +36,9 @@ spec:
   # The API server calls the admission webhooks. It runs on the host network of a control plane.
   - fromEntities:
     - kube-apiserver
+    # A call from the apiserver to a pod on another node arrives SNATed to its node's
+    # cilium_host address, which the receiving agent labels remote-node only.
+    - remote-node
     toPorts:
     - ports:
       - port: "9443"
@@ -117,6 +120,9 @@ spec:
   # The API server reads the issuer's discovery document and JWKS.
   - fromEntities:
     - kube-apiserver
+    # A call from the apiserver to a pod on another node arrives SNATed to its node's
+    # cilium_host address, which the receiving agent labels remote-node only.
+    - remote-node
     toPorts:
     - ports:
       - port: "8444"

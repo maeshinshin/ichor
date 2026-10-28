@@ -75,9 +75,7 @@ func ValidateValues(user map[string]any, c ValidationContext) error {
 
 	effective := values.Effective(defaults, user, owned)
 
-	errs := []error{spec.Check(user, effective), guards(effective, c)}
-
-	return errors.Join(errs...)
+	return errors.Join(spec.Check(user, effective), guards(effective, c))
 }
 
 func guards(effective map[string]any, c ValidationContext) error {

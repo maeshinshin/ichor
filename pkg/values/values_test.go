@@ -29,8 +29,8 @@ func TestEffective(t *testing.T) {
 
 	got := Effective(defaults, user, owned)
 	want := map[string]any{
-		"a":     map[string]any{"x": 100, "y": 3, "z": 4},
-		keyList: []any{9},
+		"a":     map[string]any{"x": 100.0, "y": 3.0, "z": 4.0},
+		keyList: []any{9.0},
 		"d":     "def",
 		"o":     "owned",
 	}

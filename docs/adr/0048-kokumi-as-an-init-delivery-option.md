@@ -1,6 +1,6 @@
 # 0048. Kokumi is an option of `ichor init`'s Argo CD hand-off, designed now and built later
 
-Status: Accepted (implemented 2026-10-27); superseded in part by ADR 0090 (`ichor images list --kokumi` removed) · Date: 2026-10-26 · Design section: GitOps and Argo CD
+Status: Accepted (implemented 2026-10-27); superseded in part by ADR 0090 (`ichor images list --kokumi` removed) and in part by ADR 0099 · Date: 2026-10-26 · Design section: GitOps and Argo CD
 
 Decided: `ichor init --argocd --kokumi` prepares the OCI repo-creds Secret, installs neither Kokumi nor Argo CD, and leaves the repository skeleton (including the Cilium Application) unchanged; `ichor images list --kokumi` names Kokumi 0.17.0's images
 

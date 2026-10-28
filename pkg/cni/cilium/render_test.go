@@ -155,13 +155,13 @@ func TestBootstrapManifest_TunnelProtocol(t *testing.T) {
 		t.Errorf("default tunnel-protocol = %q, want vxlan", got)
 	}
 
-	p, err := New().WithTunnel("geneve")
+	p, err := New().WithTunnel(tunnelGeneve)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	geneve, objs := renderObjects(t, p, cni.KubeProxyEnabled)
-	if got := find(objs, "ConfigMap", "cilium-config").Data["tunnel-protocol"]; got != "geneve" {
+	if got := find(objs, "ConfigMap", "cilium-config").Data["tunnel-protocol"]; got != tunnelGeneve {
 		t.Errorf("tunnel-protocol = %q, want geneve", got)
 	}
 	if def == geneve {

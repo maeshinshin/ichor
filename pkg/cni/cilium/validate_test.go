@@ -24,6 +24,16 @@ import (
 	"k8s.io/utils/ptr"
 
 	"github.com/maeshinshin/ichor/pkg/cni"
+	"github.com/maeshinshin/ichor/pkg/values"
+)
+
+const (
+	keyBPF       = "bpf"
+	keyEnabled   = "enabled"
+	keyDebug     = "debug"
+	keyIPAM      = "ipam"
+	keyMode      = "mode"
+	tunnelGeneve = "geneve"
 )
 
 func TestValidateValues(t *testing.T) {
@@ -36,8 +46,8 @@ func TestValidateValues(t *testing.T) {
 		return c
 	}
 
-	masq := map[string]any{"bpf": map[string]any{"masquerade": true}}
-	gw := map[string]any{"gatewayAPI": map[string]any{"enabled": true}}
+	masq := map[string]any{keyBPF: map[string]any{"masquerade": true}}
+	gw := map[string]any{"gatewayAPI": map[string]any{keyEnabled: true}}
 
 	tests := []struct {
 		name    string
@@ -46,22 +56,23 @@ func TestValidateValues(t *testing.T) {
 		wantErr []string // substrings; none means success
 	}{
 		{name: "empty", ctx: replaced},
-		{name: "valid user value", ctx: enabled, user: map[string]any{"debug": map[string]any{"enabled": true}}},
+		{name: "valid user value", ctx: enabled, user: map[string]any{keyDebug: map[string]any{keyEnabled: true}}},
 		{name: "free-form map accepts any key", ctx: enabled,
 			user: map[string]any{"nodeSelector": map[string]any{"disk": "ssd"}}},
 		{name: "bad mode", ctx: ValidationContext{KubeProxy: "nope"}, wantErr: []string{"nope"}},
 
-		{name: "owned key", ctx: enabled, user: map[string]any{"ipam": map[string]any{"mode": "cluster-pool"}},
+		{name: "owned key", ctx: enabled, user: map[string]any{keyIPAM: map[string]any{keyMode: "cluster-pool"}},
 			wantErr: []string{"ipam.mode is set by Ichor"}},
 		{name: "owned top-level key", ctx: replaced, user: map[string]any{"k8sServicePort": 6443},
 			wantErr: []string{"k8sServicePort is set by Ichor"}},
 		{name: "owned nested capability", ctx: enabled,
-			user:    map[string]any{"securityContext": map[string]any{"capabilities": map[string]any{"ciliumAgent": []any{"ALL"}}}},
+			user: map[string]any{"securityContext": map[string]any{
+				"capabilities": map[string]any{"ciliumAgent": []any{"ALL"}}}},
 			wantErr: []string{"securityContext.capabilities.ciliumAgent"}},
 		{name: "sibling of an owned key is fine", ctx: enabled,
 			user: map[string]any{"cgroup": map[string]any{"autoMount": map[string]any{}}}},
 
-		{name: "unknown key with suggestion", ctx: enabled, user: map[string]any{"bpf": map[string]any{"masqurade": true}},
+		{name: "unknown key with suggestion", ctx: enabled, user: map[string]any{keyBPF: map[string]any{"masqurade": true}},
 			wantErr: []string{"unknown key bpf.masqurade", "did you mean bpf.masquerade?"}},
 		{name: "unknown top-level key, no suggestion", ctx: enabled, user: map[string]any{"zzzzzzzzzzzz": 1},
 			wantErr: []string{"unknown key zzzzzzzzzzzz"}},
@@ -106,7 +117,7 @@ func TestValidateValues(t *testing.T) {
 
 		{name: "all problems are reported together", ctx: with(enabled, func(c *ValidationContext) {
 			c.ForwardKubeDNSToHost = ptr.To(true)
-		}), user: map[string]any{"bpf": map[string]any{"masquerade": true}, "ipam": map[string]any{"mode": "x"}},
+		}), user: map[string]any{keyBPF: map[string]any{"masquerade": true}, keyIPAM: map[string]any{keyMode: "x"}},
 			wantErr: []string{"ipam.mode", "forwardKubeDNSToHost"}},
 	}
 
@@ -136,11 +147,11 @@ func TestValidateValues(t *testing.T) {
 
 func TestEffectiveValues_MergePrecedence(t *testing.T) {
 	user := map[string]any{
-		"hubble": map[string]any{"enabled": false, "tls": map[string]any{"auto": map[string]any{"method": "helm"}}},
-		"debug":  map[string]any{"enabled": true},
+		"hubble": map[string]any{keyEnabled: false, "tls": map[string]any{"auto": map[string]any{"method": "helm"}}},
+		keyDebug: map[string]any{keyEnabled: true},
 	}
 
-	got, err := EffectiveValues(user, cni.KubeProxyReplaced, "geneve")
+	got, err := EffectiveValues(user, cni.KubeProxyReplaced, tunnelGeneve)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,12 +163,12 @@ func TestEffectiveValues_MergePrecedence(t *testing.T) {
 		"debug.enabled":            true,   // user-only key
 		"kubeProxyReplacement":     true,   // owned
 		"k8sServiceHost":           "localhost",
-		"tunnelProtocol":           "geneve",
+		"tunnelProtocol":           tunnelGeneve,
 		"ipam.mode":                "kubernetes",
 		"cgroup.autoMount.enabled": false,
 		"cgroup.hostRoot":          "/sys/fs/cgroup",
 	} {
-		v, ok := lookup(got, path)
+		v, ok := values.Get(got, path)
 		if !ok || v != want {
 			t.Errorf("%s = %v (present %t), want %v", path, v, ok, want)
 		}
@@ -169,28 +180,11 @@ func TestEffectiveValues_MergePrecedence(t *testing.T) {
 	}
 }
 
-func lookup(m map[string]any, path string) (any, bool) {
-	var cur any = m
-
-	for _, k := range strings.Split(path, ".") {
-		cm, ok := cur.(map[string]any)
-		if !ok {
-			return nil, false
-		}
-
-		if cur, ok = cm[k]; !ok {
-			return nil, false
-		}
-	}
-
-	return cur, true
-}
-
 // TestBootstrapManifest_EmptyUserValuesAreByteIdentical pins the output of
 // the pre-values-engine renderer (testdata/*.golden.yaml, captured before the
 // change) for empty and nil user values.
 func TestBootstrapManifest_EmptyUserValuesAreByteIdentical(t *testing.T) {
-	for _, tunnel := range []struct{ arg, file string }{{"", "default"}, {"geneve", "geneve"}} {
+	for _, tunnel := range []struct{ arg, file string }{{"", "default"}, {tunnelGeneve, tunnelGeneve}} {
 		for _, mode := range []cni.KubeProxyMode{cni.KubeProxyEnabled, cni.KubeProxyReplaced} {
 			want, err := os.ReadFile("testdata/bootstrap-" + string(mode) + "-tunnel-" + tunnel.file + ".golden.yaml")
 			if err != nil {
@@ -222,7 +216,9 @@ func TestBootstrapManifest_UserValuesAreApplied(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := New().WithValues(map[string]any{"debug": map[string]any{"enabled": true}}).BootstrapManifest(cni.KubeProxyEnabled)
+	debugOn := map[string]any{keyDebug: map[string]any{keyEnabled: true}}
+
+	got, err := New().WithValues(debugOn).BootstrapManifest(cni.KubeProxyEnabled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -231,7 +227,7 @@ func TestBootstrapManifest_UserValuesAreApplied(t *testing.T) {
 		t.Error("user value debug.enabled=true did not change the output")
 	}
 
-	if _, err := New().WithValues(map[string]any{"ipam": map[string]any{"mode": "x"}}).
+	if _, err := New().WithValues(map[string]any{keyIPAM: map[string]any{keyMode: "x"}}).
 		BootstrapManifest(cni.KubeProxyEnabled); err == nil {
 		t.Error("BootstrapManifest accepted an owned key")
 	}

@@ -23,9 +23,6 @@ import (
 	"fmt"
 
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
-	"github.com/siderolabs/talos/pkg/machinery/config/config"
-	"github.com/siderolabs/talos/pkg/machinery/config/configpatcher"
-	"github.com/siderolabs/talos/pkg/machinery/config/container"
 	"github.com/siderolabs/talos/pkg/machinery/config/machine"
 	"github.com/siderolabs/talos/pkg/machinery/config/types/k8s"
 	mmeta "github.com/siderolabs/talos/pkg/machinery/config/types/meta"
@@ -97,14 +94,6 @@ func ichorIssuerEnabled(cluster *ichorv1alpha1.TalosCluster) bool {
 	a := cluster.Spec.Authentication
 
 	return a != nil && a.Ichor != nil && a.Ichor.Enabled
-}
-
-func (s *SystemInputs) oidcTrust() *OIDCTrust {
-	if s == nil {
-		return nil
-	}
-
-	return s.OIDCTrust
 }
 
 // AuthenticationConfiguration builds the kube-apiserver's AuthenticationConfiguration for
@@ -250,7 +239,7 @@ func injectAuthentication(
 			cluster.Spec.VersionContract)
 	}
 
-	trust := sys.oidcTrust()
+	trust := sys.OIDCTrust
 	if ichorIssuerEnabled(cluster) && (trust == nil || trust.CAPEM == "") {
 		return nil, fmt.Errorf("render: spec.authentication.ichor is enabled but ConfigMap %q is missing or has no %s/%s: "+
 			"the controller publishes it once Ichor's issuer is set up (ichorUI.users.enabled)",
@@ -270,18 +259,7 @@ func injectAuthentication(
 	doc := k8s.NewKubeAuthenticationConfigV1Alpha1()
 	doc.AuthConfig = mmeta.Unstructured{Object: obj}
 
-	c, err := container.New([]config.Document{doc}...)
-	if err != nil {
-		return nil, fmt.Errorf("render: authentication configuration: %w", err)
-	}
-
-	out, err := configpatcher.Apply(configpatcher.WithConfig(cfg),
-		[]configpatcher.Patch{configpatcher.NewStrategicMergePatch(c)})
-	if err != nil {
-		return nil, fmt.Errorf("render: applying the authentication configuration: %w", err)
-	}
-
-	return out.Config()
+	return mergeDocument(cfg, "authentication configuration", doc)
 }
 
 // toUnstructured is the JSON round trip every typed Kubernetes block takes into a Talos

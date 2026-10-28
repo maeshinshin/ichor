@@ -17,13 +17,10 @@ limitations under the License.
 package render
 
 import (
-	"fmt"
 	"reflect"
 
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
 	"github.com/siderolabs/talos/pkg/machinery/config/config"
-	"github.com/siderolabs/talos/pkg/machinery/config/configpatcher"
-	"github.com/siderolabs/talos/pkg/machinery/config/container"
 	"github.com/siderolabs/talos/pkg/machinery/config/machine"
 	"github.com/siderolabs/talos/pkg/machinery/config/types/k8s"
 	mv1alpha1 "github.com/siderolabs/talos/pkg/machinery/config/types/v1alpha1"
@@ -54,35 +51,20 @@ func kubeProxyOwned(cluster *ichorv1alpha1.TalosCluster) bool {
 }
 
 // dropProxyDisabled returns ordered with cluster.proxy.disabled cleared from every Config
-// document, deep-copying only the patches that set it (same discipline as
-// dropHandedOverInlineManifest). The legacy block cannot coexist with the KubeProxyConfig
+// document, deep-copying only the patches that set it. The legacy block cannot coexist with the KubeProxyConfig
 // document a v1.14 contract renders, and the value is owned by injectKubeProxy now.
 func dropProxyDisabled(ordered []*ichorv1alpha1.TalosConfigPatch) []*ichorv1alpha1.TalosConfigPatch {
-	out := make([]*ichorv1alpha1.TalosConfigPatch, len(ordered))
-
-	for i, p := range ordered {
-		out[i] = p
-
-		for di, doc := range p.Spec.Documents {
-			if doc.Config == nil || doc.Config.ClusterConfig == nil || doc.Config.ClusterConfig.ProxyConfig == nil ||
-				doc.Config.ClusterConfig.ProxyConfig.Disabled == nil {
-				continue
-			}
-
-			if out[i] == p {
-				out[i] = p.DeepCopy()
-			}
-
-			cc := out[i].Spec.Documents[di].Config.ClusterConfig
+	return rewriteClusterConfigs(ordered,
+		func(cc *typedconfig.ClusterConfig) bool {
+			return cc.ProxyConfig != nil && cc.ProxyConfig.Disabled != nil
+		},
+		func(cc *typedconfig.ClusterConfig) {
 			cc.ProxyConfig.Disabled = nil
 
 			if reflect.DeepEqual(*cc.ProxyConfig, typedconfig.ProxyConfig{}) {
 				cc.ProxyConfig = nil
 			}
-		}
-	}
-
-	return out
+		})
 }
 
 // injectKubeProxy renders the Talos side of the kube-proxy split. "replaced" always renders
@@ -124,16 +106,5 @@ func injectKubeProxy(
 		}
 	}
 
-	c, err := container.New(doc)
-	if err != nil {
-		return nil, fmt.Errorf("render: kube-proxy mode: %w", err)
-	}
-
-	out, err := configpatcher.Apply(configpatcher.WithConfig(cfg),
-		[]configpatcher.Patch{configpatcher.NewStrategicMergePatch(c)})
-	if err != nil {
-		return nil, fmt.Errorf("render: applying kube-proxy mode: %w", err)
-	}
-
-	return out.Config()
+	return mergeDocument(cfg, "kube-proxy mode", doc)
 }

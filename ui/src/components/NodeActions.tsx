@@ -70,6 +70,7 @@ const wireAction: Record<NodeActionId, NodeAction> = {
   remove: NodeAction.REMOVE,
 }
 
+const downloadLabel = { 'support-bundle': 'actions.supportBundle', 'etcd-snapshot': 'actions.etcdSnapshot', 'packet-capture': 'actions.capture' } as const
 
 // The node page's one Actions menu, in three groups. Downloads: three downloads, each
 // shown only when Kubernetes RBAC lets this user start it, and each behind a warning that the file may
@@ -141,15 +142,11 @@ export function NodeActions({
           {actions.length > 0 && (
             <>
               <DropdownMenuLabel>{t('actions.groupDownloads')}</DropdownMenuLabel>
-          {actions.includes('support-bundle') && (
-            <DropdownMenuItem onSelect={() => start('support-bundle')}>{t('actions.supportBundle')}</DropdownMenuItem>
-          )}
-          {actions.includes('etcd-snapshot') && (
-            <DropdownMenuItem onSelect={() => start('etcd-snapshot')}>{t('actions.etcdSnapshot')}</DropdownMenuItem>
-          )}
-          {actions.includes('packet-capture') && (
-            <DropdownMenuItem onSelect={() => start('packet-capture')}>{t('actions.capture')}</DropdownMenuItem>
-          )}
+              {actions.map((k) => (
+                <DropdownMenuItem key={k} onSelect={() => start(k)}>
+                  {t(downloadLabel[k])}
+                </DropdownMenuItem>
+              ))}
             </>
           )}
           {safeDefs.length > 0 && (
@@ -205,7 +202,7 @@ export function NodeActions({
           <AlertDialogHeader>
             <AlertDialogTitle>{t('actions.warnTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              {pending && <span class="block">{warning(t, pending.kind, machine.name)}</span>}
+              {pending && <span class="block">{pending.kind === 'support-bundle' ? t('actions.warnSupportBundle', { name: machine.name }) : t(pending.kind === 'etcd-snapshot' ? 'actions.warnEtcd' : 'actions.warnCapture')}</span>}
               <span class="mt-2 block">{t('actions.warnAudit')}</span>
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -217,17 +214,6 @@ export function NodeActions({
       </AlertDialog>
     </>
   )
-}
-
-function warning(t: ReturnType<typeof useT>, kind: DownloadKind, name: string): string {
-  switch (kind) {
-    case 'support-bundle':
-      return t('actions.warnSupportBundle', { name })
-    case 'etcd-snapshot':
-      return t('actions.warnEtcd')
-    case 'packet-capture':
-      return t('actions.warnCapture')
-  }
 }
 
 type CaptureParams = { interface: string; durationSeconds: number; bpfFilter: string }

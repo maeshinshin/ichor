@@ -121,6 +121,23 @@ function Empty() {
   return <p class="text-muted-foreground">{t('talos.none')}</p>
 }
 
+// Grid is a table with a header row, or the empty note when there is nothing to list.
+function Grid({ heads, empty, children }: { heads: string[]; empty?: boolean; children: ComponentChildren }) {
+  if (empty) return <Empty />
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          {heads.map((h, i) => (
+            <TableHead key={i}>{h}</TableHead>
+          ))}
+        </TableRow>
+      </TableHeader>
+      <TableBody>{children}</TableBody>
+    </Table>
+  )
+}
+
 function EtcdCard({ data, maintenance }: { data: GetNodeTalosRuntimeResponse; maintenance: boolean }) {
   const t = useT()
   const e = data.etcd
@@ -154,35 +171,20 @@ function EtcdCard({ data, maintenance }: { data: GetNodeTalosRuntimeResponse; ma
               <AlertDescription class="break-words font-mono text-xs">{e.statusErrors.join('; ')}</AlertDescription>
             </Alert>
           )}
-          {e.members.length === 0 ? (
-            <Empty />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t('rt.colMember')}</TableHead>
-                  <TableHead>{t('talos.hostname')}</TableHead>
-                  <TableHead>{t('rt.colPeer')}</TableHead>
-                  <TableHead>{t('rt.colClient')}</TableHead>
-                  <TableHead />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {e.members.map((m) => (
-                  <TableRow key={m.id}>
-                    <TableCell className="font-mono text-xs">{m.id}</TableCell>
-                    <TableCell>{m.hostname || '-'}</TableCell>
-                    <TableCell className="break-all font-mono text-xs">{m.peerUrls.join(', ') || '-'}</TableCell>
-                    <TableCell className="break-all font-mono text-xs">{m.clientUrls.join(', ') || '-'}</TableCell>
-                    <TableCell className="space-x-1">
-                      {m.leader && <Badge variant="secondary">{t('rt.leader')}</Badge>}
-                      {m.learner && <Badge variant="outline">{t('rt.learner')}</Badge>}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
+          <Grid heads={[t('rt.colMember'), t('talos.hostname'), t('rt.colPeer'), t('rt.colClient'), '']} empty={e.members.length === 0}>
+            {e.members.map((m) => (
+              <TableRow key={m.id}>
+                <TableCell className="font-mono text-xs">{m.id}</TableCell>
+                <TableCell>{m.hostname || '-'}</TableCell>
+                <TableCell className="break-all font-mono text-xs">{m.peerUrls.join(', ') || '-'}</TableCell>
+                <TableCell className="break-all font-mono text-xs">{m.clientUrls.join(', ') || '-'}</TableCell>
+                <TableCell className="space-x-1">
+                  {m.leader && <Badge variant="secondary">{t('rt.leader')}</Badge>}
+                  {m.learner && <Badge variant="outline">{t('rt.learner')}</Badge>}
+                </TableCell>
+              </TableRow>
+            ))}
+          </Grid>
         </>
       )}
     </Panel>
@@ -205,34 +207,18 @@ function ProcessesCard({ data, maintenance }: { data: GetNodeTalosRuntimeRespons
           {t('rt.sortCpu')}
         </Button>
       </div>
-      {p.processes.length === 0 ? (
-        <Empty />
-      ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>{t('rt.colPid')}</TableHead>
-              <TableHead>{t('talos.colName')}</TableHead>
-              <TableHead>{t('talos.colState')}</TableHead>
-              <TableHead>{t('rt.colThreads')}</TableHead>
-              <TableHead>{t('rt.colCpu')}</TableHead>
-              <TableHead>{t('rt.colRss')}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {sortProcesses(p.processes, by).map((x) => (
-              <TableRow key={x.pid}>
-                <TableCell>{x.pid}</TableCell>
-                <TableCell className="font-mono text-xs">{x.name}</TableCell>
-                <TableCell>{x.state}</TableCell>
-                <TableCell>{x.threads}</TableCell>
-                <TableCell>{formatCpuSeconds(x.cpuSeconds)}</TableCell>
-                <TableCell>{formatBytes(x.residentBytes)}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      )}
+      <Grid heads={[t('rt.colPid'), t('talos.colName'), t('talos.colState'), t('rt.colThreads'), t('rt.colCpu'), t('rt.colRss')]} empty={p.processes.length === 0}>
+        {sortProcesses(p.processes, by).map((x) => (
+          <TableRow key={x.pid}>
+            <TableCell>{x.pid}</TableCell>
+            <TableCell className="font-mono text-xs">{x.name}</TableCell>
+            <TableCell>{x.state}</TableCell>
+            <TableCell>{x.threads}</TableCell>
+            <TableCell>{formatCpuSeconds(x.cpuSeconds)}</TableCell>
+            <TableCell>{formatBytes(x.residentBytes)}</TableCell>
+          </TableRow>
+        ))}
+      </Grid>
     </Panel>
   )
 }
@@ -243,34 +229,19 @@ function ContainersCard({ data, maintenance }: { data: GetNodeTalosRuntimeRespon
   if (!c) return null
   return (
     <Panel id="containers" title={t('rt.containers')} error={c.error} maintenance={maintenance}>
-      {c.containers.length === 0 ? (
-        <Empty />
-      ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>{t('rt.colRuntime')}</TableHead>
-              <TableHead>{t('rt.colPod')}</TableHead>
-              <TableHead>{t('talos.colName')}</TableHead>
-              <TableHead>{t('rt.colImage')}</TableHead>
-              <TableHead>{t('talos.colState')}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {c.containers.map((x) => (
-              <TableRow key={`${x.runtimeNamespace}/${x.id}`}>
-                <TableCell>{x.runtimeNamespace}</TableCell>
-                <TableCell className="break-all font-mono text-xs">{x.pod || '-'}</TableCell>
-                <TableCell className="font-mono text-xs">{x.name || x.id}</TableCell>
-                <TableCell className="break-all font-mono text-xs">{x.image}</TableCell>
-                <TableCell>
-                  <Badge variant="outline">{x.status || '-'}</Badge>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      )}
+      <Grid heads={[t('rt.colRuntime'), t('rt.colPod'), t('talos.colName'), t('rt.colImage'), t('talos.colState')]} empty={c.containers.length === 0}>
+        {c.containers.map((x) => (
+          <TableRow key={`${x.runtimeNamespace}/${x.id}`}>
+            <TableCell>{x.runtimeNamespace}</TableCell>
+            <TableCell className="break-all font-mono text-xs">{x.pod || '-'}</TableCell>
+            <TableCell className="font-mono text-xs">{x.name || x.id}</TableCell>
+            <TableCell className="break-all font-mono text-xs">{x.image}</TableCell>
+            <TableCell>
+              <Badge variant="outline">{x.status || '-'}</Badge>
+            </TableCell>
+          </TableRow>
+        ))}
+      </Grid>
       {c.truncated && <p class="text-xs text-muted-foreground">{t('rt.truncated')}</p>}
     </Panel>
   )
@@ -301,60 +272,37 @@ function KubernetesCard({ data }: { data: GetNodeTalosRuntimeResponse }) {
               </Badge>
             ))}
           </div>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t('rt.colResource')}</TableHead>
-                <TableHead>{t('rt.colCapacity')}</TableHead>
-                <TableHead>{t('rt.colAllocatable')}</TableHead>
+          <Grid heads={[t('rt.colResource'), t('rt.colCapacity'), t('rt.colAllocatable')]}>
+            {k.resources.map((r) => (
+              <TableRow key={r.name}>
+                <TableCell>{r.name}</TableCell>
+                <TableCell>{formatResource(r.name, r.capacity)}</TableCell>
+                <TableCell>{formatResource(r.name, r.allocatable)}</TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {k.resources.map((r) => (
-                <TableRow key={r.name}>
-                  <TableCell>{r.name}</TableCell>
-                  <TableCell>{formatResource(r.name, r.capacity)}</TableCell>
-                  <TableCell>{formatResource(r.name, r.allocatable)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+            ))}
+          </Grid>
           <p class="text-xs text-muted-foreground">{t('rt.pods', { n: k.pods.length })}</p>
           {k.podsError ? (
             <Alert variant="destructive">
               <AlertDescription class="break-words font-mono text-xs">{k.podsError}</AlertDescription>
             </Alert>
-          ) : k.pods.length === 0 ? (
-            <Empty />
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t('rt.colNamespace')}</TableHead>
-                  <TableHead>{t('talos.colName')}</TableHead>
-                  <TableHead>{t('rt.colPhase')}</TableHead>
-                  <TableHead>{t('rt.colReady')}</TableHead>
-                  <TableHead>{t('rt.colRestarts')}</TableHead>
-                  <TableHead>{t('rt.colAge')}</TableHead>
+            <Grid heads={[t('rt.colNamespace'), t('talos.colName'), t('rt.colPhase'), t('rt.colReady'), t('rt.colRestarts'), t('rt.colAge')]} empty={k.pods.length === 0}>
+              {sortPods(k.pods).map((p) => (
+                <TableRow key={`${p.namespace}/${p.name}`}>
+                  <TableCell className="font-mono text-xs">{p.namespace}</TableCell>
+                  <TableCell className="break-all font-mono text-xs">{p.name}</TableCell>
+                  <TableCell>
+                    <Badge variant={badgeVariant(podTone(p))}>{p.phase || '-'}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    {p.readyContainers}/{p.totalContainers}
+                  </TableCell>
+                  <TableCell>{p.restarts}</TableCell>
+                  <TableCell>{formatAge(p.ageSeconds)}</TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sortPods(k.pods).map((p) => (
-                  <TableRow key={`${p.namespace}/${p.name}`}>
-                    <TableCell className="font-mono text-xs">{p.namespace}</TableCell>
-                    <TableCell className="break-all font-mono text-xs">{p.name}</TableCell>
-                    <TableCell>
-                      <Badge variant={badgeVariant(podTone(p))}>{p.phase || '-'}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      {p.readyContainers}/{p.totalContainers}
-                    </TableCell>
-                    <TableCell>{p.restarts}</TableCell>
-                    <TableCell>{formatAge(p.ageSeconds)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+              ))}
+            </Grid>
           )}
           {k.podsTruncated && <p class="text-xs text-muted-foreground">{t('rt.truncated')}</p>}
         </>
@@ -377,89 +325,47 @@ function NetworkStateCard({ data, maintenance }: { data: GetNodeTalosRuntimeResp
         <Field label={t('rt.timeMaxError')} value={n.timeStatus ? formatNanos(n.timeMaxErrorNanos) : ''} />
       </Fields>
       <p class="text-xs text-muted-foreground">{t('rt.routes')}</p>
-      {n.routes.length === 0 ? (
-        <Empty />
-      ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>{t('rt.colDestination')}</TableHead>
-              <TableHead>{t('rt.colGateway')}</TableHead>
-              <TableHead>{t('rt.colLink')}</TableHead>
-              <TableHead>{t('rt.colTable')}</TableHead>
-              <TableHead>{t('rt.colProtocol')}</TableHead>
-              <TableHead>{t('rt.colPriority')}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {n.routes.map((r, i) => (
-              <TableRow key={i}>
-                <TableCell className="font-mono text-xs">{r.destination}</TableCell>
-                <TableCell className="font-mono text-xs">{r.gateway || '-'}</TableCell>
-                <TableCell>{r.link || '-'}</TableCell>
-                <TableCell>{r.table}</TableCell>
-                <TableCell>{r.protocol}</TableCell>
-                <TableCell>{r.priority}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      )}
+      <Grid heads={[t('rt.colDestination'), t('rt.colGateway'), t('rt.colLink'), t('rt.colTable'), t('rt.colProtocol'), t('rt.colPriority')]} empty={n.routes.length === 0}>
+        {n.routes.map((r, i) => (
+          <TableRow key={i}>
+            <TableCell className="font-mono text-xs">{r.destination}</TableCell>
+            <TableCell className="font-mono text-xs">{r.gateway || '-'}</TableCell>
+            <TableCell>{r.link || '-'}</TableCell>
+            <TableCell>{r.table}</TableCell>
+            <TableCell>{r.protocol}</TableCell>
+            <TableCell>{r.priority}</TableCell>
+          </TableRow>
+        ))}
+      </Grid>
       {n.routesTruncated && <p class="text-xs text-muted-foreground">{t('rt.truncated')}</p>}
       <p class="text-xs text-muted-foreground">{t('rt.members')}</p>
-      {n.members.length === 0 ? (
-        <Empty />
-      ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>{t('talos.hostname')}</TableHead>
-              <TableHead>{t('talos.addresses')}</TableHead>
-              <TableHead>{t('talos.colType')}</TableHead>
-              <TableHead>{t('rt.colOs')}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {n.members.map((m, i) => (
-              <TableRow key={i}>
-                <TableCell>{m.hostname || '-'}</TableCell>
-                <TableCell className="break-all font-mono text-xs">{m.addresses.join(', ')}</TableCell>
-                <TableCell>{m.machineType || '-'}</TableCell>
-                <TableCell>{m.operatingSystem || '-'}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      )}
+      <Grid heads={[t('talos.hostname'), t('talos.addresses'), t('talos.colType'), t('rt.colOs')]} empty={n.members.length === 0}>
+        {n.members.map((m, i) => (
+          <TableRow key={i}>
+            <TableCell>{m.hostname || '-'}</TableCell>
+            <TableCell className="break-all font-mono text-xs">{m.addresses.join(', ')}</TableCell>
+            <TableCell>{m.machineType || '-'}</TableCell>
+            <TableCell>{m.operatingSystem || '-'}</TableCell>
+          </TableRow>
+        ))}
+      </Grid>
       {n.kubespanPeers.length > 0 && (
         <>
           <p class="text-xs text-muted-foreground">{t('rt.kubespan')}</p>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t('rt.colPeer')}</TableHead>
-                <TableHead>{t('rt.colEndpoint')}</TableHead>
-                <TableHead>{t('talos.colState')}</TableHead>
-                <TableHead>{t('rt.colRx')}</TableHead>
-                <TableHead>{t('rt.colTx')}</TableHead>
-                <TableHead>{t('rt.colHandshake')}</TableHead>
+          <Grid heads={[t('rt.colPeer'), t('rt.colEndpoint'), t('talos.colState'), t('rt.colRx'), t('rt.colTx'), t('rt.colHandshake')]}>
+            {n.kubespanPeers.map((p, i) => (
+              <TableRow key={i}>
+                <TableCell>{p.label || '-'}</TableCell>
+                <TableCell className="font-mono text-xs">{p.endpoint}</TableCell>
+                <TableCell>
+                  <Badge variant={p.state === 'up' ? 'secondary' : 'outline'}>{p.state}</Badge>
+                </TableCell>
+                <TableCell>{formatBytes(p.receiveBytes)}</TableCell>
+                <TableCell>{formatBytes(p.transmitBytes)}</TableCell>
+                <TableCell>{handshakeAge(p.lastHandshakeUnix, Date.now())}</TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {n.kubespanPeers.map((p, i) => (
-                <TableRow key={i}>
-                  <TableCell>{p.label || '-'}</TableCell>
-                  <TableCell className="font-mono text-xs">{p.endpoint}</TableCell>
-                  <TableCell>
-                    <Badge variant={p.state === 'up' ? 'secondary' : 'outline'}>{p.state}</Badge>
-                  </TableCell>
-                  <TableCell>{formatBytes(p.receiveBytes)}</TableCell>
-                  <TableCell>{formatBytes(p.transmitBytes)}</TableCell>
-                  <TableCell>{handshakeAge(p.lastHandshakeUnix, Date.now())}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+            ))}
+          </Grid>
         </>
       )}
     </Panel>
@@ -472,30 +378,16 @@ function KernelCard({ data, maintenance }: { data: GetNodeTalosRuntimeResponse; 
   if (!k) return null
   return (
     <Panel id="kernel" title={t('rt.kernel')} error={k.error} maintenance={maintenance}>
-      {k.modules.length === 0 ? (
-        <Empty />
-      ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>{t('talos.colName')}</TableHead>
-              <TableHead>{t('node.colSize')}</TableHead>
-              <TableHead>{t('rt.colUsedBy')}</TableHead>
-              <TableHead>{t('talos.colState')}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {k.modules.map((m) => (
-              <TableRow key={m.name}>
-                <TableCell className="font-mono text-xs">{m.name}</TableCell>
-                <TableCell>{formatBytes(m.sizeBytes)}</TableCell>
-                <TableCell>{m.referenceCount}</TableCell>
-                <TableCell>{m.state || '-'}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      )}
+      <Grid heads={[t('talos.colName'), t('node.colSize'), t('rt.colUsedBy'), t('talos.colState')]} empty={k.modules.length === 0}>
+        {k.modules.map((m) => (
+          <TableRow key={m.name}>
+            <TableCell className="font-mono text-xs">{m.name}</TableCell>
+            <TableCell>{formatBytes(m.sizeBytes)}</TableCell>
+            <TableCell>{m.referenceCount}</TableCell>
+            <TableCell>{m.state || '-'}</TableCell>
+          </TableRow>
+        ))}
+      </Grid>
     </Panel>
   )
 }

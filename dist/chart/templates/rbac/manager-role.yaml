@@ -29,21 +29,9 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - configmaps
   - events
-  - secrets
-  - serviceaccounts
-  - services
   verbs:
   - create
-  - patch
-- apiGroups:
-  - ""
-  resources:
-  - namespaces
-  verbs:
-  - create
-  - get
   - patch
 - apiGroups:
   - ""
@@ -71,15 +59,6 @@ rules:
 - apiGroups:
   - admissionregistration.k8s.io
   resources:
-  - validatingadmissionpolicies
-  - validatingadmissionpolicybindings
-  verbs:
-  - create
-  - get
-  - patch
-- apiGroups:
-  - admissionregistration.k8s.io
-  resources:
   - validatingwebhookconfigurations
   verbs:
   - list
@@ -94,14 +73,6 @@ rules:
   - get
   - patch
   - update
-- apiGroups:
-  - apiextensions.k8s.io
-  resources:
-  - customresourcedefinitions
-  verbs:
-  - create
-  - get
-  - patch
 - apiGroups:
   - apps
   resources:
@@ -120,27 +91,12 @@ rules:
   - patch
 - apiGroups:
   - apps
-  resources:
-  - deployments
-  verbs:
-  - create
-  - get
-  - patch
-- apiGroups:
-  - apps
   resourceNames:
   - coredns
   resources:
   - deployments
   verbs:
   - get
-  - patch
-- apiGroups:
-  - apps
-  resources:
-  - statefulsets
-  verbs:
-  - create
   - patch
 - apiGroups:
   - argoproj.io
@@ -150,13 +106,6 @@ rules:
   - get
   - list
   - watch
-- apiGroups:
-  - argoproj.io
-  resources:
-  - appprojects
-  verbs:
-  - create
-  - patch
 - apiGroups:
   - authorization.k8s.io
   resources:
@@ -175,14 +124,6 @@ rules:
   - patch
   - update
   - watch
-- apiGroups:
-  - delivery.kokumi.dev
-  resources:
-  - orders
-  verbs:
-  - create
-  - get
-  - patch
 - apiGroups:
   - ichor.maesh.dev
   resources:
@@ -230,6 +171,14 @@ rules:
   - patch
   - update
 - apiGroups:
+  - delivery.kokumi.dev
+  resources:
+  - orders
+  verbs:
+  - create
+  - get
+  - patch
+- apiGroups:
   - ichor.maesh.dev
   resources:
   - talosoperations
@@ -268,29 +217,9 @@ rules:
   verbs:
   - get
 - apiGroups:
-  - networking.k8s.io
-  resources:
-  - networkpolicies
-  verbs:
-  - create
-  - patch
-- apiGroups:
   - policy
   resources:
   - poddisruptionbudgets
   verbs:
   - get
   - list
-- apiGroups:
-  - rbac.authorization.k8s.io
-  resources:
-  - clusterrolebindings
-  - clusterroles
-  - rolebindings
-  - roles
-  verbs:
-  - bind
-  - create
-  - escalate
-  - get
-  - patch

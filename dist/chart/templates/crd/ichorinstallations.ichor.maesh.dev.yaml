@@ -73,8 +73,8 @@ spec:
                 type: string
               stack:
                 description: |-
-                  stack is the user layer of the Argo CD and Kokumi bundles Ichor publishes into Kokumi's
-                  in-cluster registry (ADR 0099).
+                  stack is deprecated and unused: Argo CD and Kokumi are no longer part of Ichor (ADR 0101).
+                  It is kept so the CRD never drops a field.
                 properties:
                   argocd:
                     description: argocd is the user layer for the Argo CD bundle.
@@ -192,8 +192,8 @@ spec:
                 type: string
               stack:
                 description: |-
-                  stack reports, per component, what Ichor published into Kokumi and what Argo CD made of it
-                  (ADR 0099).
+                  stack is deprecated and unused: nothing writes it any more (ADR 0101). It is kept so the
+                  CRD never drops a field.
                 properties:
                   argocd:
                     description: argocd is the Argo CD bundle's state.

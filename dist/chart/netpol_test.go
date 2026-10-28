@@ -68,7 +68,7 @@ func TestChartCiliumPoliciesEqualTheKustomizeOnes(t *testing.T) {
 	fromChart := cnpSpecs(t, renderChartWithValues(t, "ichor", netpolAllOn...), "ichor-")
 	fromConfig := cnpSpecs(t, loadYAMLDocs(t, netpolConfigPath), "")
 
-	want := []string{"controller-manager", "default-deny", "installer", "stack", "ui"}
+	want := []string{"controller-manager", "default-deny", "installer", "ui"}
 	for _, name := range want {
 		if fromChart[name] == nil || fromConfig[name] == nil {
 			t.Fatalf("policy %q missing: chart has %d, config has %d policies", name, len(fromChart), len(fromConfig))
@@ -195,15 +195,6 @@ func TestChartCiliumPolicyPortsAndSelectorsComeFromTheDeployments(t *testing.T) 
 	// The Cilium Helm Job has none: it runs on the host network, which these policies do not govern (ADR 0100).
 	if specs["cni"] != nil {
 		t.Errorf("a cni policy is rendered, but the Cilium Helm Job runs on the host network")
-	}
-
-	// The ichor-stack Job (ADR 0099 amendment) reaches the API server and nothing else.
-	if got := selectorLabels(specs["stack"]); got["app.kubernetes.io/name"] != "ichor-stack" {
-		t.Errorf("stack policy selector = %v", got)
-	}
-
-	if rules, _ := specs["stack"]["egress"].([]any); len(rules) != 1 {
-		t.Errorf("stack policy egress = %v, want the API server only", rules)
 	}
 }
 

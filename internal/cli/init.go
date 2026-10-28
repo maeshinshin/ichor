@@ -53,11 +53,9 @@ new cluster:
   4. Bootstraps etcd, fetches the kubeconfig (saved alongside the secrets
      bundle), and stores the bundle as a Secret in the new cluster.
   5. Creates the TalosCluster, TalosMachine and any TalosConfigPatch
-     objects the CNI needs, and the IchorInstallation with spec.stack.
-  6. Waits for the controller to bring up the standard stack (ADR 0099):
-     Kokumi and Argo CD (IchorInstallation StackReady) and the hand-over of
-     Cilium to Ichor's Helm release (TalosCluster CNIHandover). Then prints
-     the generated Kokumi admin password once, to stdout.
+     objects the CNI needs, and the IchorInstallation.
+  6. Waits for the controller to hand Cilium over to Ichor's Helm release
+     (ADR 0099, TalosCluster CNIHandover).
 
 init never applies anything to a node again after step 3; every later
 change to this cluster goes through the controller, by writing CRs.`,

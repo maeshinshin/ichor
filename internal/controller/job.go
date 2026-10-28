@@ -24,7 +24,7 @@ import (
 	"k8s.io/utils/ptr"
 )
 
-// The one-shot Jobs of the installer, the Cilium Helm run and the stack apply share this shape:
+// The one-shot Jobs of the installer and the Cilium Helm run share this shape:
 // one attempt, the installer image, a ServiceAccount of their own, a hardened pod.
 
 const (

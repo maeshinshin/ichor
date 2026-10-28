@@ -40,7 +40,7 @@ func CacheOptions(namespace string) cache.Options {
 		&corev1.Secret{}:    scoped,
 		&corev1.ConfigMap{}: scoped,
 		&corev1.Service{}:   scoped,
-		// The installer and stack Jobs run in the controller's namespace, the Cilium Helm Job in
+		// The installer Job runs in the controller's namespace, the Cilium Helm Job in
 		// kube-system (cniJobNamespace, with its own Role: config/rbac/ichor-cni/controller_role.yaml).
 		&batchv1.Job{}: {Namespaces: map[string]cache.Config{namespace: {}, cniJobNamespace: {}}},
 	}}

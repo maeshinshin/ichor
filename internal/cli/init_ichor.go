@@ -179,9 +179,8 @@ func updateRetrying[T client.Object](ctx context.Context, c client.Client, obj T
 // build has no semantic version to record (the CRD would refuse it), so it skips with a
 // notice instead of failing the init.
 //
-// spec.stack asks the controller for the standard stack (ADR 0099): it bootstraps Kokumi and Argo
-// CD through the ichor-stack Job. The bool is false when nothing was created (a dev build), in
-// which case there is no stack to wait for.
+// The bool is false when nothing was created (a dev build), in which case there is no Cilium
+// hand-over to wait for.
 func createIchorInstallation(ctx context.Context, k8sClient client.Client, warn io.Writer) (bool, error) {
 	if !semver.IsValid(version.Version) {
 		_, _ = fmt.Fprintf(warn, "init: not creating IchorInstallation: this ichor binary is %q, not a released version\n", version.Version)
@@ -195,7 +194,6 @@ func createIchorInstallation(ctx context.Context, k8sClient client.Client, warn 
 		Name:       ichorv1alpha1.IchorInstallationName,
 		Spec: ichorv1alpha1.IchorInstallationSpec{
 			ManagementMode: ichorv1alpha1.IchorManagementModeIchor, Version: version.Version,
-			Stack: &ichorv1alpha1.IchorStackSpec{Promotion: ichorv1alpha1.IchorStackPromotionAutomatic},
 		},
 	})
 	if err != nil {

@@ -88,17 +88,15 @@ type initDeps struct {
 	// WebhookWait bounds how long init waits for Ichor's admission webhooks before creating
 	// the first CRs; zero means defaultWebhookWait.
 	WebhookWait time.Duration
-	// StackWait and HandoverWait bound the waits for the controller's stack (StackReady) and for
-	// the Cilium hand-over (CNIHandover); zero means defaultStackWait and defaultHandoverWait.
-	// StackInterval is the poll interval of both; zero means the bootstrap default.
-	StackWait     time.Duration
-	HandoverWait  time.Duration
-	StackInterval time.Duration
+	// HandoverWait bounds the wait for the Cilium hand-over (CNIHandover); zero means
+	// defaultHandoverWait. HandoverInterval is its poll interval; zero means the bootstrap default.
+	HandoverWait     time.Duration
+	HandoverInterval time.Duration
 }
 
 // runInit implements `ichor init` (docs/design/architecture.md, "Bootstrap"): steps 1-5, then it
-// waits for the controller's stack bootstrap and Cilium hand-over (ADR 0099), which are
-// continuous reconciliations the CLI only watches.
+// waits for the Cilium hand-over (ADR 0099), a
+// reconciliation the CLI only watches.
 func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 	opts, err = prepareInitUsers(opts)
 	if err != nil {
@@ -248,7 +246,7 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 		return err
 	}
 
-	stackRequested, err := createIchorInstallation(ctx, k8sClient, deps.Stderr)
+	created, err := createIchorInstallation(ctx, k8sClient, deps.Stderr)
 	if err != nil {
 		return err
 	}
@@ -277,37 +275,23 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 		return err
 	}
 
-	return waitForControllerStack(ctx, k8sClient, stackRequested, cluster, deps)
+	return waitForCiliumHandover(ctx, k8sClient, created, cluster, deps)
 }
 
-// waitForControllerStack is the end of init (ADR 0099): the controller, not the CLI, brings up
-// Kokumi and Argo CD (the ichor-stack Jobs) and hands Cilium over to Ichor's Helm release (the
-// ichor-cni Job). init waits for both, then prints the generated Kokumi admin password once.
-// A dev build creates no IchorInstallation, so there is no stack to wait for and nothing to print.
-func waitForControllerStack(
-	ctx context.Context, k8sClient client.Client, stackRequested bool, cluster *ichorv1alpha1.TalosCluster, deps initDeps,
+// waitForCiliumHandover is the end of init (ADR 0099): the controller, not the CLI, hands Cilium
+// over to Ichor's Helm release (the ichor-cni Job). A dev build creates no IchorInstallation, so
+// there is nothing to wait for.
+func waitForCiliumHandover(
+	ctx context.Context, k8sClient client.Client, created bool, cluster *ichorv1alpha1.TalosCluster, deps initDeps,
 ) error {
-	if !stackRequested {
-		_, _ = fmt.Fprintln(deps.Stderr, "init: not waiting for the Kokumi and Argo CD stack or the Cilium hand-over: no IchorInstallation was created")
+	if !created {
+		_, _ = fmt.Fprintln(deps.Stderr, "init: not waiting for the Cilium hand-over: no IchorInstallation was created")
 
 		return nil
 	}
 
-	if err := waitForStack(ctx, k8sClient, cmp.Or(deps.StackWait, defaultStackWait), deps.StackInterval, deps.Stderr); err != nil {
-		return fmt.Errorf("init: the Kokumi and Argo CD stack is not ready (the controller keeps working on it; "+
-			"watch `kubectl get ichorinstallation ichor -o yaml`; the Kokumi admin password is in Secret %s/%s): %w",
-			ichorControllerNamespace, kokumiAdminSecret, err)
-	}
-
-	_, _ = fmt.Fprintln(deps.Stderr, "init: Kokumi and Argo CD are Synced and Healthy")
-
-	// Printed as soon as it is usable, so a slow hand-over below cannot cost the operator it.
-	if err := printKokumiAdminPassword(ctx, k8sClient, deps.Stdout); err != nil {
-		return err
-	}
-
 	if err := waitForCNIHandover(ctx, k8sClient, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name},
-		cmp.Or(deps.HandoverWait, defaultHandoverWait), deps.StackInterval, deps.Stderr); err != nil {
+		cmp.Or(deps.HandoverWait, defaultHandoverWait), deps.HandoverInterval, deps.Stderr); err != nil {
 		return fmt.Errorf("init: Cilium was not handed over to Ichor: %w", err)
 	}
 

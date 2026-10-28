@@ -91,7 +91,7 @@ export function PatchDetail({ name }: { name?: string }) {
   const [machineRef, setMachineRef] = useState('')
   const [documents, setDocuments] = useState<DocItem[]>([])
 
-  const [saveError, setSaveError] = useState<ErrorShape | string | null>(null)
+  const [saveError, setSaveError] = useState<ErrorShape | null>(null)
   const [saving, setSaving] = useState(false)
   const [pullRequestUrl, setPullRequestUrl] = useState<string | null>(null)
   const [saveRefused, setSaveRefused] = useState(false)
@@ -99,7 +99,7 @@ export function PatchDetail({ name }: { name?: string }) {
   const [preview, setPreview] = useState<{ rebootRequired: boolean; installTimeOnly: string[]; unsupported: string[] } | null>(null)
   // The form state the shown preview was run for (lib/patchDocs previewKey).
   const [previewedKey, setPreviewedKey] = useState<string | null>(null)
-  const [previewError, setPreviewError] = useState<ErrorShape | string | null>(null)
+  const [previewError, setPreviewError] = useState<ErrorShape | null>(null)
   const [previewing, setPreviewing] = useState(false)
 
   // The machine picker lists the chosen cluster's machines.
@@ -161,9 +161,10 @@ export function PatchDetail({ name }: { name?: string }) {
   // patchTarget.ts). Every other rule is left to the apiserver's own CRD
   // validation, surfaced back through describeError (submit and show the
   // server's own rejection).
-  function buildWire(setErr: (e: string | null) => void): PatchInit | null {
+  function buildWire(setErr: (e: ErrorShape | null) => void): PatchInit | null {
+    const invalid = (detail: string) => setErr({ title: t('error.invalidTarget'), detail })
     if (!cluster) {
-      setErr(t('patch.chooseCluster'))
+      invalid(t('patch.chooseCluster'))
       return null
     }
     let target: PatchInit['target']
@@ -171,7 +172,7 @@ export function PatchDetail({ name }: { name?: string }) {
       target = buildPatchTarget(layerKeyOf(layer), role, labelSelectorText, machineRef)
     } catch (err) {
       const reason = (err as { reason?: string }).reason
-      setErr(reason === 'selectorNotJson' ? t('error.selectorNotJson') : reason === 'selectorNotObject' ? t('error.selectorNotObject') : err instanceof Error ? err.message : String(err))
+      invalid(reason === 'selectorNotJson' ? t('error.selectorNotJson') : reason === 'selectorNotObject' ? t('error.selectorNotObject') : err instanceof Error ? err.message : String(err))
       return null
     }
     setErr(null)
@@ -274,13 +275,7 @@ export function PatchDetail({ name }: { name?: string }) {
       <PageHeader
         title={isNew ? t('patch.newTitle') : name!}
         kind={t('kind.patch')}
-        badges={
-          !isNew && (
-            <>
-              <Badge variant="outline">{enumLabel(ConfigLayer, layer)}</Badge>
-            </>
-          )
-        }
+        badges={!isNew && <Badge variant="outline">{enumLabel(ConfigLayer, layer)}</Badge>}
       />
       <div class="min-w-0 space-y-8">
       <Card id="basics" className="scroll-mt-section">
@@ -426,7 +421,7 @@ export function PatchDetail({ name }: { name?: string }) {
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
           <p class="text-muted-foreground">{t('patch.impactNote')}</p>
-          {previewError && (typeof previewError === 'string' ? <ErrorAlert title={t('error.invalidTarget')} detail={previewError} /> : <ErrorAlert {...previewError} />)}
+          {previewError && <ErrorAlert {...previewError} />}
           {!preview && !previewing && !previewError && <p class="font-medium">{t('patch.previewNever')}</p>}
           {preview && !previewFresh && <p class="font-medium">{t('patch.previewStale')}</p>}
           {preview && (
@@ -471,7 +466,7 @@ export function PatchDetail({ name }: { name?: string }) {
       </Card>
 
       {pullRequestUrl && <PullRequestNotice url={pullRequestUrl} breakGlass={saveBreakGlass} onBreakGlassDone={() => navigate('/config')} />}
-      {saveError && (typeof saveError === 'string' ? <ErrorAlert title={t('error.invalidTarget')} detail={saveError} /> : <ErrorAlert {...saveError} />)}
+      {saveError && <ErrorAlert {...saveError} />}
       {saveRefused && <BreakGlassDialog run={saveBreakGlass} onDone={() => navigate('/config')} />}
 
       {!previewFresh && !previewing && <p class="text-sm text-muted-foreground">{t('patch.saveReminder')}</p>}

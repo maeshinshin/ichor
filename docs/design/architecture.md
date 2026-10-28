@@ -11,11 +11,10 @@ to nodes, walks upgrades through the cluster, backs up etcd, and handles the
 lifecycle of nodes from maintenance mode to removal. A CLI and a web UI expose
 the same operations.
 
-Ichor stops at the Talos layer, with one stack it installs itself (ADR 0099):
-Cilium is the only CNI and Ichor's own Helm release; Kokumi and Argo CD are
-bootstrapped once and then manage themselves. Storage systems and monitoring
-are Argo CD's business; Ichor only prepares the Talos side for them and
-coordinates with them around node operations.
+Ichor stops at the Talos layer, with one component it installs itself (ADR 0099,
+ADR 0101): Cilium is the only CNI and Ichor's own Helm release. Storage systems,
+monitoring and any GitOps tool are the user's business; Ichor only prepares the
+Talos side for them and coordinates with them around node operations.
 
 ## Motivation
 
@@ -36,8 +35,7 @@ inventing a new control plane.
   and storage evacuation taken care of.
 - etcd backup to S3-compatible storage, and recovery from nothing but the
   secrets bundle and a snapshot.
-- Bootstrap of Cilium, Kokumi and Argo CD for a brand-new cluster, with no
-  Git repository needed.
+- Bootstrap of Cilium for a brand-new cluster, with no Git repository needed.
 - CLI and UI parity: anything you can do in one, you can do in the other.
 - Ichor's CRs can live in the user's own Git (tracking is detected).
 
@@ -62,12 +60,12 @@ operator ──┬── ichor CLI ─────────┐
                                    ▼
                      ┌────────────────────────────────────────────────────────────┐
                      │              kube-apiserver (CRs, Secrets, Leases)         │
-                     └──────▲──────────────────▲──────────────────────▲──────────┘
-                  reconcile │          publish │             run Jobs │
-                 ┌──────────┴───────┐ ┌────────┴───────┐ ┌─────────────┴─────┐
-                 │ ichor-controller │ │ Kokumi registry│ │ ichor-installer,  │
-                 └──────────┬───────┘ │ ─▶ Argo CD     │ │ ichor-cni, -stack │
-                            │         └────────────────┘ └───────────────────┘
+                     └──────▲──────────────────────────────────────▲──────────────┘
+                  reconcile │                             run Jobs │
+                 ┌──────────┴───────┐                 ┌────────────┴──────┐
+                 │ ichor-controller │                 │ ichor-installer,  │
+                 └──────────┬───────┘                 │ ichor-cni         │
+                            │                         └───────────────────┘
                             │ Talos API
                             ▼
       node in maintenance mode ──approve──▶ Talos node (control plane / worker)
@@ -183,14 +181,13 @@ ichor-ui with an Ingress, a Gateway or a LoadBalancer, or terminate TLS in
 ichor-ui with `ichorUI.tls.secretName`.
 
 Network policy (ADR 0100, ADR 0099 decision 10). Cilium is guaranteed, so
-`ichor-system`, `kokumi` and `argocd` each get a `CiliumNetworkPolicy` default
+`ichor-system` gets a `CiliumNetworkPolicy` default
 deny plus one allow per flow, using Cilium's entities (`kube-apiserver`, `host`,
 `remote-node`, `world`) for peers that run on the host network. They cannot ship
 in `dist/install.yaml` because Cilium's CRD does not exist yet, so `ichor init`
-applies Ichor's four after Cilium is Ready, the installer Job re-applies them on
+applies Ichor's after Cilium is Ready, the installer Job re-applies them on
 every upgrade when the CRD exists, and the chart renders them behind
-`networkPolicy.cilium.enabled`. The `kokumi` and `argocd` policies travel inside
-those bundles. The webhook and OIDC ingress rules also admit `remote-node`,
+`networkPolicy.cilium.enabled`. The webhook and OIDC ingress rules also admit `remote-node`,
 because the apiserver's calls to a pod on another node arrive from the
 control plane's `cilium_host` address (ADR 0100 amendment).
 
@@ -235,7 +232,7 @@ Group `ichor.maesh.dev`, version `v1alpha1`.
 | `TalosStorage` | namespaced | Thin integration with a storage system: node selector, disk preset, evacuation settings | yes |
 | `TalosEtcdBackup` | namespaced | Backup schedule, destination, retention, encryption | yes |
 | `TalosOperation` | namespaced | A Job-style run of one action over the cluster or a node: a Talos, Kubernetes or Ichor upgrade, a kube-proxy switch or Cilium chart upgrade (`cni`), shutdown, CA rotation, config rollout, node action, etcd restore | no |
-| `IchorInstallation` | cluster, singleton | Ichor's own version and management mode, and `spec.stack` (values of the Argo CD and Kokumi bundles) | yes |
+| `IchorInstallation` | cluster, singleton | Ichor's own version and management mode, (`spec.stack` is deprecated and unused, ADR 0101) | yes |
 | `IchorUser` | namespaced | One of Ichor's own users: display name, e-mail, roles, disabled flag (ADR 0094) | yes |
 
 There are no CRDs for installing CNI, storage or monitoring. Their Talos-side
@@ -362,56 +359,45 @@ ichor init --preset standard [--cni-tunnel vxlan|geneve] [--ui-url URL]
    a transient error.
 4. Bootstrap etcd, fetch the kubeconfig, store the bundle as a Secret, apply
    Ichor's install manifest.
-5. Create the CRs and the `IchorInstallation` (with `spec.stack`), then apply
+5. Create the CRs and the `IchorInstallation`, then apply
    Ichor's NetworkPolicies once Cilium is Ready (ADR 0100).
-6. Wait for the controller to finish the stack (below) and for the
-   `CNIHandover` condition on the `TalosCluster`. `init` prints the generated
-   Kokumi admin password once (it stays in Secret `ichor-kokumi-admin`), an
-   `init: waiting for ...` line per poll, and the last reason when a wait runs
+6. Wait for the `CNIHandover` condition on the `TalosCluster`. `init` prints an
+   `init: waiting for ...` line per poll, and the last reason when the wait runs
    out; the controller keeps working either way.
 
-There are no flags to choose a CNI or to skip Kokumi or Argo CD (ADR 0099).
+There are no flags to choose a CNI (ADR 0099).
 Adding later nodes goes through the normal approval flow; `init` is the
 special case of approving the first control plane. `ichor adopt` brings an
 existing Cilium cluster under management by diffing each node's current config
 against a fresh render and storing the difference as initial patches, so
 ownership transfers with zero drift.
 
-### The standard stack
+### Cilium
 
-Three components, installed by every `ichor init` (ADR 0099):
-
-- **Cilium** is Ichor's own Helm release. It boots from the inline manifest;
-  once the DaemonSet is Ready the `ichor-cni` Job (installer image, hidden
-  `ichor cni helm apply`, host network via KubePrism) adopts the bootstrapped
-  objects as release `cilium` with `TakeOwnership`, and the controller then
-  removes the inline entry (`CNIHandover`). Removing it matters: Talos only
-  server-side applies bootstrap manifests and re-applies them on a Kubernetes
-  upgrade, so a stale entry would roll Cilium back. The Job needs
-  cluster-admin-equivalent rights, so the controller does not run Helm itself.
-- **Kokumi** (an OCI delivery operator, experimental) and **Argo CD** are
-  applied once by `ichor-stack` Jobs, then published as pre-rendered bundles
-  into Kokumi's in-cluster registry, with one Kokumi Order each. Argo CD
-  manages itself and Kokumi from there, with no external Git. Secrets are
-  created by the Job and never put in a bundle, because the registry is
-  anonymous.
+Cilium is Ichor's own Helm release (ADR 0099). It boots from the inline manifest;
+once the DaemonSet is Ready the `ichor-cni` Job (installer image, hidden
+`ichor cni helm apply`, host network via KubePrism) adopts the bootstrapped
+objects as release `cilium` with `TakeOwnership`, and the controller then
+removes the inline entry (`CNIHandover`). Removing it matters: Talos only
+server-side applies bootstrap manifests and re-applies them on a Kubernetes
+upgrade, so a stale entry would roll Cilium back. The Job needs
+cluster-admin-equivalent rights, so the controller does not run Helm itself.
+Argo CD and Kokumi are not part of Ichor (ADR 0101).
 
 Values. Cilium's live values are Ichor defaults, then the user's layer in
 `spec.cni.cilium.values`, then Ichor-owned keys (the Talos-required ones, the
 KubePrism address, `kubeProxyReplacement`, `tunnelProtocol`). They are edited
 in the UI (Cilium page) or with `ichor cni values get|set|edit|diff`, validated
 by one function in the webhook, the backend and the controller, and applied by
-the Job. Argo CD and Kokumi values live in `IchorInstallation.spec.stack`.
+the Job.
 
 Upgrades. A new Ichor release carries new pinned charts. Cilium is upgraded
 only when the user starts a `cni` operation (`ichor cni upgrade`, or the UI),
-at most one minor at a time, rolled back by Helm on failure. Argo CD and Kokumi
-upgrade by republishing the bundle (ADR 0099, decision 11).
+at most one minor at a time, rolled back by Helm on failure.
 
 ### GitOps
 
-Ichor's own Argo CD has no repository and tracks only the Kokumi and Argo CD
-bundles. Users may keep Ichor's CRs in their own Git. What goes there:
+Users may keep Ichor's CRs in their own Git. What goes there:
 `TalosCluster`, `TalosConfigPatch`, `TalosStorage`, `TalosEtcdBackup`,
 `IchorInstallation`, `IchorUser`s, approved `TalosMachine`s. What doesn't:
 Secrets, `TalosOperation`s, unapproved machines, and the labels and
@@ -950,7 +936,7 @@ unconfigured, which `--presets maintenance` provides. Scenarios follow the
 features:
 bootstrap and join, patches with and without reboot, drift, removal and
 replacement, topology changes including the even-count rejection, CNI
-Cilium bootstrap, adoption and values edits, the Kokumi and Argo CD stack, PR and strict modes,
+Cilium bootstrap, adoption and values edits, PR and strict modes,
 prune protection, storage preparation and evacuation, all three upgrade kinds
 with rollback, backup, restore and full-loss recovery, certificate rotation.
 Each scenario runs through both the CLI and the backend API. Chaos cases kill
@@ -967,7 +953,7 @@ resumption works. A short set runs per PR, the full set nightly.
    phase 1 ships only checks for the `allow-delete` annotation; the quorum and
    last-control-plane rules land here, and an explicit test has to show that
    the annotation alone does **not** let the last control plane go.
-4. `init` and `adopt`, Cilium, the Kokumi and Argo CD stack.
+4. `init` and `adopt`, Cilium.
 5. Read-only UI, approval UI, backup and restore, client certificate renewal.
 6. Config editing UI, `TalosOperation`, Talos and Kubernetes upgrades,
    Ichor self-upgrade.
@@ -982,8 +968,7 @@ resumption works. A short set runs per PR, the full set nightly.
 
 ## Open questions
 
-The stack's open questions (Kokumi re-rendering after a registry loss, Argo CD
-limits on OCI sources) are listed in ADR 0099.
+The open questions of the removed Kokumi and Argo CD stack are moot (ADR 0101).
 
 ## Alternatives considered
 
@@ -993,8 +978,7 @@ favour of typed documents.
 
 Ichor installing storage and monitoring itself. It would double the surface
 area, duplicate what Argo CD and the storage controllers already do, and keep
-us on the upgrade treadmill of every project we wrap. The stack stops at Cilium,
-Kokumi and Argo CD.
+us on the upgrade treadmill of every project we wrap. Ichor installs Cilium only.
 
 Fewer CRDs. `TalosEtcdBackup` and `TalosStorage` could fold into
 `TalosCluster`. They are kept separate so their RBAC and Git diffs stay

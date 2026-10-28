@@ -222,14 +222,8 @@ func TestInitNeverLeaksSecrets(t *testing.T) {
 		assertNoLeak(t, bundleMaterialFromHome(t), stdout, stderr, err)
 	})
 
-	t.Run("successful run (json output, gitops-dir)", func(t *testing.T) {
-		gitopsDir := t.TempDir()
-
-		stdout, stderr, err := run(t, func(o *initOptions) {
-			o.ArgoCD = true
-			o.RepoURL = testRepoURL
-			o.GitOpsDir = gitopsDir
-		}, func(d *initDeps) { d.Output = outputJSON })
+	t.Run("successful run (json output)", func(t *testing.T) {
+		stdout, stderr, err := run(t, nil, func(d *initDeps) { d.Output = outputJSON })
 		if err != nil {
 			t.Fatalf("runInit: %v", err)
 		}

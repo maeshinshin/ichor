@@ -30,6 +30,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
@@ -361,6 +362,14 @@ func (a *configRolloutAdvancer) begin(
 	contract, err := coreconfig.ParseContractFromVersion(cluster.Spec.VersionContract)
 	if err != nil {
 		return fmt.Errorf("invalid versionContract %q: %w", cluster.Spec.VersionContract, err)
+	}
+
+	// A kube-proxy mode changed in spec ahead of the switch is the cni operation's to apply, with its
+	// safety checks; rebooting a node onto it here would skip them.
+	if kubeProxySwitchPending(cluster) && slices.ContainsFunc(paths, isKubeProxyPath) {
+		return fmt.Errorf("%q has a pending kube-proxy change (spec.cni.kubeProxy is %s); run `ichor cni kube-proxy %s` "+
+			"first -- a config rollout would reboot the node onto it without the switch's checks",
+			m.Name, cluster.Spec.CNI.KubeProxy, cluster.Spec.CNI.KubeProxy)
 	}
 
 	impact := assessChange(ctx, talos, m.Spec.Hostname, paths, contract)

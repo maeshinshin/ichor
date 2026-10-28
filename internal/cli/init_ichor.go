@@ -147,6 +147,32 @@ func createRetrying(ctx context.Context, c client.Client, obj client.Object, pro
 	})
 }
 
+// updateRetrying updates obj through retryInit. An Update that timed out may still have landed,
+// which bumps the resourceVersion and turns the retry into a Conflict; init owns these objects, so
+// a Conflict after the first try re-Gets obj, redoes mutate on it and updates again.
+func updateRetrying[T client.Object](ctx context.Context, c client.Client, obj T, mutate func(T) error, progress io.Writer) error {
+	tries := 0
+
+	return retryInit(ctx, progress, func() error {
+		tries++
+
+		err := c.Update(ctx, obj)
+		if !apierrors.IsConflict(err) || tries == 1 {
+			return err
+		}
+
+		if err := c.Get(ctx, client.ObjectKeyFromObject(obj), obj); err != nil {
+			return err
+		}
+
+		if err := mutate(obj); err != nil {
+			return err
+		}
+
+		return c.Update(ctx, obj)
+	})
+}
+
 // createIchorInstallation records the version `ichor init` just installed -- this binary's
 // own, since the manifest it applied is embedded in it -- as the IchorInstallation singleton, the CR a later
 // TalosOperation of kind ichor reads its target from. A "dev"

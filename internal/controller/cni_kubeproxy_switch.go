@@ -47,6 +47,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/cni"
+	"github.com/maeshinshin/ichor/pkg/cni/cilium"
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
 	"github.com/maeshinshin/ichor/pkg/fieldmeta"
 	"github.com/maeshinshin/ichor/pkg/render"
@@ -146,14 +147,13 @@ func (a *cniKubeProxyAdvancer) Advance(
 		return false, err
 	}
 
-	preset, err := a.verifiablePreset(cluster)
-	if err != nil {
+	if err := verifiableCNI(cluster); err != nil {
 		return false, err
 	}
 
 	if cluster.Status.CNI == nil || cluster.Status.CNI.KubeProxy != string(target) {
 		if target == cni.KubeProxyReplaced {
-			ready, err := a.requireCilium(ctx, preset, cluster, op, cni.KubeProxyReplaced)
+			ready, err := a.requireCilium(ctx, cluster, op, cni.KubeProxyReplaced)
 			if err != nil || !ready {
 				return false, err
 			}
@@ -211,19 +211,18 @@ func (a *cniKubeProxyAdvancer) Advance(
 		return a.removeKubeProxy(ctx, cluster, m, op, bundle, talos)
 	}
 
-	return a.enableTail(ctx, preset, cluster, m, op, bundle, talos)
+	return a.enableTail(ctx, cluster, m, op, bundle, talos)
 }
 
-// verifiablePreset returns the preset whose live kube-proxy state Ichor can read. Only Cilium is
-// readable today; a switch it cannot verify is refused rather than done on faith.
-func (a *cniKubeProxyAdvancer) verifiablePreset(cluster *ichorv1alpha1.TalosCluster) (cni.Preset, error) {
-	preset, ok := cniPresetFor(cluster.Spec.CNI.Preset)
-	if !ok || cluster.Spec.CNI.Preset != ciliumName || !preset.SupportsKubeProxyReplacement() {
-		return nil, fmt.Errorf("the %q CNI preset is not one whose live kube-proxy state Ichor can read, so it "+
+// verifiableCNI refuses a cluster whose live kube-proxy state Ichor cannot read. Only Cilium is
+// readable; a switch it cannot verify is refused rather than done on faith.
+func verifiableCNI(cluster *ichorv1alpha1.TalosCluster) error {
+	if cluster.Spec.CNI.Preset != ciliumName {
+		return fmt.Errorf("the %q CNI preset is not one whose live kube-proxy state Ichor can read, so it "+
 			"cannot verify a kube-proxy switch; refusing to run one", cluster.Spec.CNI.Preset)
 	}
 
-	return preset, nil
+	return nil
 }
 
 // setTalosSide records the Talos-side mode on status. A merge patch, so a concurrent status write
@@ -451,7 +450,7 @@ func (a *cniKubeProxyAdvancer) controlPlaneClient(
 // DaemonSet is missing, Ichor therefore restores them itself from
 // Talos's own rendered manifest set; the call is idempotent and happens only while it is missing.
 func (a *cniKubeProxyAdvancer) enableTail(
-	ctx context.Context, preset cni.Preset, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
 	op *ichorv1alpha1.TalosOperation, bundle *secrets.Bundle, talos TalosClient,
 ) (bool, error) {
 	var ds appsv1.DaemonSet
@@ -486,7 +485,7 @@ func (a *cniKubeProxyAdvancer) enableTail(
 
 	clearWait(op)
 
-	return a.requireCilium(ctx, preset, cluster, op, cni.KubeProxyEnabled)
+	return a.requireCilium(ctx, cluster, op, cni.KubeProxyEnabled)
 }
 
 // requireCilium makes Cilium serve (or stop serving) Services as want says and reports whether it
@@ -498,7 +497,7 @@ func (a *cniKubeProxyAdvancer) enableTail(
 // ponytail: a finished Job for the same values (same name) from an earlier switch within its 24 h
 // TTL counts as done; cilium-config then does not match and the wait times out instead of re-running.
 func (a *cniKubeProxyAdvancer) requireCilium(
-	ctx context.Context, preset cni.Preset, cluster *ichorv1alpha1.TalosCluster, op *ichorv1alpha1.TalosOperation,
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, op *ichorv1alpha1.TalosOperation,
 	want cni.KubeProxyMode,
 ) (bool, error) {
 	var inst ichorv1alpha1.IchorInstallation
@@ -529,7 +528,7 @@ func (a *cniKubeProxyAdvancer) requireCilium(
 	}
 
 	live := cni.LiveConfig{KubeProxyReplacement: ciliumReplaces(cm.Data[ciliumKPRKey])}
-	if err := preset.CheckConsistency(ctx, live, want); err != nil {
+	if err := cilium.New().CheckConsistency(ctx, live, want); err != nil {
 		return false, waitOn(op, reasonCiliumNotSwitched,
 			fmt.Sprintf("the Cilium Helm Job finished but cilium-config does not match yet: %v", err))
 	}

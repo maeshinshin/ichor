@@ -26,8 +26,12 @@ import (
 	"slices"
 	"time"
 
+	authorizationv1 "k8s.io/api/authorization/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
@@ -111,30 +115,49 @@ func Run(ctx context.Context, c client.Client, opts Options) error {
 		return err
 	}
 
-	snap, err := takeSnapshot(ctx, c, opts.Namespace, opts.RunID, append(p.all(), policies...))
+	// Stage 0: the installer's own RBAC. A run started by an older release holds that release's
+	// rights, which may lack a rule for a kind only the new manifest has, so the snapshot of
+	// everything else waits until the new rights are in. The old role can still do this much: it
+	// always held get/patch/update on its own (Cluster)Role and bindings, with escalate and bind.
+	snap, err := takeSnapshot(ctx, c, opts.Namespace, opts.RunID, 0, p.rbac)
 	if err != nil {
 		return err
 	}
+
+	if err := applyStep(ctx, c, opts, "installer RBAC", p.rbac); err != nil {
+		return failWithRollback(c, opts, snap, err)
+	}
+
+	// Old snapshots are evidence, not state: failing to remove one must not fail an upgrade.
+	// It runs after the installer's own RBAC is applied, because an older release's Role
+	// may not allow deleting ConfigMaps.
+	if err := pruneSnapshots(ctx, c, opts.Namespace, opts.RunID, SnapshotsKept); err != nil {
+		logf(opts.Log, "could not remove old snapshots: %v", err)
+	}
+
+	if err := waitRBACEffective(ctx, c, p.rbac, opts.RBACSettle); err != nil {
+		return failWithRollback(c, opts, snap, err)
+	}
+
+	// Stage 1: everything else, now readable under the new rights. A failure here leaves nothing
+	// but the RBAC applied, which the stage-0 snapshot restores.
+	rest, err := takeSnapshot(ctx, c, opts.Namespace, opts.RunID, 1, append(p.nonRBAC(), policies...))
+	if err != nil {
+		return failWithRollback(c, opts, snap, err)
+	}
+
+	snap = append(snap, rest...)
 
 	logf(opts.Log, "snapshot %s saved: %d objects", opts.RunID, len(snap))
 
 	steps := []struct {
 		name string
 		objs []*unstructured.Unstructured
-	}{{"installer RBAC", p.rbac}, {"CRDs", p.crds}, {"controller", p.controller}, {"UI", p.ui}, {"network policies", policies}}
+	}{{"CRDs", p.crds}, {"controller", p.controller}, {"UI", p.ui}, {"network policies", policies}}
 
-	for i, s := range steps {
+	for _, s := range steps {
 		if err := applyStep(ctx, c, opts, s.name, s.objs); err != nil {
 			return failWithRollback(c, opts, snap, err)
-		}
-
-		// Old snapshots are evidence, not state: failing to remove one must not fail an upgrade.
-		// It runs after the installer's own RBAC is applied, because an older release's Role
-		// may not allow deleting ConfigMaps.
-		if i == 0 {
-			if err := pruneSnapshots(ctx, c, opts.Namespace, opts.RunID, SnapshotsKept); err != nil {
-				logf(opts.Log, "could not remove old snapshots: %v", err)
-			}
 		}
 	}
 
@@ -311,6 +334,10 @@ func rollback(ctx context.Context, c client.Client, snap []entry) error {
 		live.SetKind(e.Kind)
 
 		err := c.Get(ctx, types.NamespacedName{Namespace: e.Namespace, Name: e.Name}, live)
+		if meta.IsNoMatchError(err) && e.Object == nil {
+			continue // the kind's CRD is gone or never came: nothing exists to delete
+		}
+
 		if err != nil && !apierrors.IsNotFound(err) {
 			errs = append(errs, fmt.Errorf("%s %s: %w", e.Kind, e.Name, err))
 
@@ -402,4 +429,75 @@ func rolledOut(d *unstructured.Unstructured) bool {
 	available, _, _ := unstructured.NestedInt64(d.Object, "status", "availableReplicas")
 
 	return observed >= d.GetGeneration() && updated == want && total == want && available == want
+}
+
+// waitRBACEffective blocks until the rights the just-applied installer roles grant are visible to
+// the authorizer. RBAC is eventually consistent: the write returns before every apiserver
+// replica's authorizer sees it, and the next Get would answer Forbidden. It asks the apiserver
+// (SelfSubjectAccessReview) about the first rule of each role that names a resource, so a rule
+// the old role lacked is what gets polled, for up to settle (default 30s).
+func waitRBACEffective(ctx context.Context, c client.Client, rbac []*unstructured.Unstructured, settle time.Duration) error {
+	if settle <= 0 {
+		settle = 30 * time.Second
+	}
+
+	var checks []authorizationv1.ResourceAttributes
+
+	for _, o := range rbac {
+		if o.GetKind() != "ClusterRole" && o.GetKind() != "Role" {
+			continue
+		}
+
+		var role rbacv1.ClusterRole
+		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(o.Object, &role); err != nil {
+			return fmt.Errorf("reading %s %s: %w", o.GetKind(), o.GetName(), err)
+		}
+
+		for _, rule := range role.Rules {
+			if len(rule.APIGroups) == 0 || len(rule.Resources) == 0 || len(rule.Verbs) == 0 {
+				continue
+			}
+
+			a := authorizationv1.ResourceAttributes{
+				Namespace: o.GetNamespace(), Verb: rule.Verbs[0], Group: rule.APIGroups[0], Resource: rule.Resources[0],
+			}
+			if slices.Contains(rule.Verbs, "get") {
+				a.Verb = "get"
+			}
+
+			if len(rule.ResourceNames) > 0 {
+				a.Name = rule.ResourceNames[0]
+			}
+
+			checks = append(checks, a)
+		}
+	}
+
+	var denied string
+
+	err := wait.PollUntilContextTimeout(ctx, 500*time.Millisecond, settle, true, func(ctx context.Context) (bool, error) {
+		for _, a := range checks {
+			ssar := &authorizationv1.SelfSubjectAccessReview{Spec: authorizationv1.SelfSubjectAccessReviewSpec{ResourceAttributes: &a}}
+			if err := c.Create(ctx, ssar); err != nil {
+				return false, fmt.Errorf("checking access: %w", err)
+			}
+
+			if !ssar.Status.Allowed {
+				denied = fmt.Sprintf("%s %s.%s in %q", a.Verb, a.Resource, a.Group, a.Namespace)
+
+				return false, nil
+			}
+		}
+
+		return true, nil
+	})
+	if err != nil {
+		if denied != "" {
+			return fmt.Errorf("the installer's new RBAC did not take effect within %s (still cannot %s): %w", settle, denied, err)
+		}
+
+		return err
+	}
+
+	return nil
 }

@@ -76,6 +76,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/clusterlock"
+	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
 	"github.com/maeshinshin/ichor/pkg/fieldmeta"
 	"github.com/maeshinshin/ichor/pkg/render"
@@ -124,6 +125,7 @@ const (
 	reasonInstallTimeOnlyChange    = "InstallTimeOnlyChange"
 	reasonRebootRequired           = "RebootRequired"
 	reasonAPIServerRestartRequired = "APIServerRestartRequired"
+	reasonKubeProxySwitchPending   = "KubeProxySwitchPending"
 	reasonClusterLockHeld          = "ClusterLockHeld"
 	reasonDryRunWarnings           = "DryRunWarnings"
 	reasonNodeDrifted              = "NodeDrifted"
@@ -461,6 +463,11 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			fmt.Sprintf("%sneeds a reset and reinstall, not an apply (install-time-only fields changed: %s)",
 				driftNote, strings.Join(impact.InstallTimeOnly, ", ")))
 
+	case kubeProxySwitchOnly(&cluster, &m, impact):
+		return ctrl.Result{}, r.ready(ctx, &m, metav1.ConditionFalse, reasonKubeProxySwitchPending,
+			driftNote+"spec.cni.kubeProxy changed to "+cluster.Spec.CNI.KubeProxy+"; run `ichor cni kube-proxy "+
+				cluster.Spec.CNI.KubeProxy+"` (or the UI's kube-proxy switch) to apply it without a reboot")
+
 	case needsOperation(&m, impact):
 		return r.refuseForOperation(ctx, &m, driftNote, current, rendered, impact)
 
@@ -682,6 +689,34 @@ func (r *TalosMachineReconciler) refuseReboot(
 	return ctrl.Result{}, r.ready(ctx, m, metav1.ConditionFalse, reasonRebootRequired,
 		driftNote+"configuration change needs a reboot (fields: "+summarizePaths(paths, rebootPathsInMessage)+
 			")"+renameNote(paths)+"; nothing reboots a node on its own -- start a config rollout (ichor config apply, or the cluster page) to apply it")
+}
+
+// isKubeProxyPath is a field the kube-proxy switch owns.
+func isKubeProxyPath(p string) bool {
+	return strings.HasPrefix(p, "KubeProxyConfig") || strings.HasPrefix(p, "cluster.proxy")
+}
+
+// kubeProxySwitchPending is true while spec.cni.kubeProxy says replaced but no switch has set
+// status.cni.kubeProxy: the render then owns the kube-proxy fields from spec, so a difference on
+// the node means the spec was changed ahead of the switch (Git first), and only the cni operation
+// may apply it. With spec enabled and no status the patches own those fields (as before), so a
+// patch-made cluster.proxy.disabled change stays an ordinary reboot-required change.
+func kubeProxySwitchPending(cluster *ichorv1alpha1.TalosCluster) bool {
+	mode, fromStatus := render.KubeProxyMode(cluster)
+
+	return !fromStatus && mode == cni.KubeProxyReplaced
+}
+
+// kubeProxySwitchOnly reports a reboot-class change made only of kube-proxy fields (and no API server
+// restart on a control plane) while a switch is pending. It is not a reboot to schedule: a config
+// rollout would reboot the node and apply the mode without the switch's checks.
+func kubeProxySwitchOnly(cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, impact fieldmeta.Impact) bool {
+	if !kubeProxySwitchPending(cluster) || !impact.RebootRequired ||
+		(len(impact.APIServerRestartPaths) > 0 && m.Spec.Role == roleControlPlane) {
+		return false
+	}
+
+	return slices.IndexFunc(impact.RebootPaths, func(p string) bool { return !isKubeProxyPath(p) }) < 0
 }
 
 // needsOperation reports whether the change is left to a config operation: it needs a reboot, or

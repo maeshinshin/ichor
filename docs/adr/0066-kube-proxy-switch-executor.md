@@ -167,3 +167,29 @@ amendment) was pending. It now classifies each unrelated path with `fieldmeta.As
 those that are safe and need no reboot together with the switch. Unrelated reboot-requiring,
 install-time-only, API-server-restarting or version-unsupported paths are still refused with the
 "converge it first" error.
+
+## Amendment (2026-10-28): a spec-first change reports KubeProxySwitchPending, not RebootRequired
+
+On a Git-tracked cluster the user commits `spec.cni.kubeProxy: replaced` (and the consent annotation) before
+running `ichor cni kube-proxy replaced`. Until the switch sets `status.cni.kubeProxy` the render follows spec, so the
+control plane differed from its node at `KubeProxyConfig.enabled` and showed `Ready=False/RebootRequired` with
+"start a config rollout". That points at the wrong action: `ichor config apply` would reboot the node onto the new
+mode and skip the switch's checks. The reverse direction never showed it because status already overrides the render.
+
+Chosen: report it differently, keep the render. The alternative, holding the render at the current mode, needs a
+"current mode" when `status.cni.kubeProxy` is unset, and nothing records one: a fresh cluster created `replaced`
+and a running cluster edited spec-first look the same from the TalosCluster, and the fresh one must render from spec.
+Guessing from the machine's applied hash would make the render depend on node history.
+
+- While spec says `replaced` and `status.cni.kubeProxy` is unset, a TalosMachine whose only reboot-class paths are
+  `KubeProxyConfig*` / `cluster.proxy*` (and no API server restart on a control plane) reports
+  `Ready=False/KubeProxySwitchPending`: "run `ichor cni kube-proxy replaced` (or the UI's kube-proxy switch) to apply
+  it without a reboot". It does not set `status.rebootPaths`, so `ichor config apply` and the rollout planner (which
+  select on those paths) do not pick the machine up.
+- A machine that also has other reboot-class paths keeps `RebootRequired` and is selectable, so the rollout step
+  (`configRolloutAdvancer.begin`) refuses any machine with a kube-proxy path pending in this state ("run
+  `ichor cni kube-proxy <mode>` first"). A rollout therefore never reboots a node onto a kube-proxy mode, bypassing the
+  switch's Cilium check and ordering. Once the switch sets the status the guard no longer applies.
+- With spec `enabled` and no status the patches still own `cluster.proxy.disabled`, so an ordinary patch edit of it
+  stays `RebootRequired` as before. The reverse spec-first case on a cluster created `replaced` with no status
+  (spec edited to `enabled`) is not covered; it still shows `RebootRequired`.

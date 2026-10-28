@@ -9,14 +9,13 @@ Ichor manages Talos Linux clusters through Kubernetes custom resources. A
 controller renders machine configuration from typed resources and applies it
 to nodes, walks upgrades through the cluster, backs up etcd, and handles the
 lifecycle of nodes from maintenance mode to removal. A CLI and a web UI expose
-the same operations. Git can be the source of truth for all of it through
-Argo CD.
+the same operations.
 
-Ichor deliberately stops at the Talos layer. It bootstraps a CNI and Argo CD
-once so that a new cluster can start syncing from Git, then steps back. CNI
-operations, storage systems and monitoring are Argo CD's business; Ichor only
-prepares the Talos side for them and coordinates with them around node
-operations.
+Ichor stops at the Talos layer, with one stack it installs itself:
+Cilium is the only CNI and Ichor's own Helm release; Kokumi and Argo CD are
+bootstrapped once and then manage themselves. Storage systems and monitoring
+are Argo CD's business; Ichor only prepares the Talos side for them and
+coordinates with them around node operations.
 
 ## Motivation
 
@@ -37,16 +36,15 @@ inventing a new control plane.
   and storage evacuation taken care of.
 - etcd backup to S3-compatible storage, and recovery from nothing but the
   secrets bundle and a snapshot.
-- Bootstrap of a CNI and Argo CD for a brand-new cluster, with a clean
-  hand-over to Argo CD.
+- Bootstrap of Cilium, Kokumi and Argo CD for a brand-new cluster, with no
+  Git repository needed.
 - CLI and UI parity: anything you can do in one, you can do in the other.
-- Everything manageable from Git, including Ichor itself.
+- Ichor's CRs can live in the user's own Git (tracking is detected).
 
 ### Non-goals
 
 - Getting machines to maintenance mode. Boot the ISO however you like.
-- Installing or operating CNI, storage or monitoring beyond the initial
-  bootstrap.
+- Storage or monitoring, and any CNI other than Cilium.
 - Replacing the storage system's own controller. Volumes, replicas and disk
   state belong to Longhorn (or whatever you run).
 - Multi-cluster management. One Ichor manages one cluster, and the UI is built
@@ -59,17 +57,17 @@ inventing a new control plane.
 ## Overview
 
 ```
-operator ──┬── ichor CLI ─────────┐           Git (source of truth)
-           └── browser ─▶ ichor-ui │           ├─ clusters/<name>/  Ichor CRs
-                                   │           ├─ apps/cni, apps/argocd, apps/ichor
-                                   ▼           └─ apps/...          ▲ PR    │ sync
-                     ┌─────────────────────────────────────────────┴────────▼──┐
+operator ──┬── ichor CLI ─────────┐
+           └── browser ─▶ ichor-ui │
+                                   ▼
+                     ┌────────────────────────────────────────────────────────────┐
                      │              kube-apiserver (CRs, Secrets, Leases)         │
                      └──────▲──────────────────▲──────────────────────▲──────────┘
-                  reconcile │            apply │               run Job │
+                  reconcile │          publish │             run Jobs │
                  ┌──────────┴───────┐ ┌────────┴───────┐ ┌─────────────┴─────┐
-                 │ ichor-controller │ │ Argo CD        │ │ ichor-installer   │
-                 └──────────┬───────┘ └────────────────┘ └───────────────────┘
+                 │ ichor-controller │ │ Kokumi registry│ │ ichor-installer,  │
+                 └──────────┬───────┘ │ ─▶ Argo CD     │ │ ichor-cni, -stack │
+                            │         └────────────────┘ └───────────────────┘
                             │ Talos API
                             ▼
       node in maintenance mode ──approve──▶ Talos node (control plane / worker)
@@ -94,10 +92,10 @@ manifests, and the Helm chart in `dist/chart` is generated from it.
 
 ### Data flow
 
-Every write, from the UI, the CLI or Argo CD, is a change to a custom
+Every write, from the UI, the CLI or a user's GitOps, is a change to a custom
 resource. The controller is the only thing that turns those into Talos API
-calls. This keeps validation, RBAC, audit and GitOps identical regardless of
-how a change arrived. Reads come from two places: CR status (via the API
+calls. This keeps validation, RBAC and audit identical regardless of how a
+change arrived. Reads come from two places: CR status (via the API
 server) and raw node state and logs (via the Talos API, read-only).
 
 Long-running work — upgrades, hand-overs, topology changes — keeps its state
@@ -184,6 +182,18 @@ be reachable from the control planes. Ichor installs no ingress. Expose
 ichor-ui with an Ingress, a Gateway or a LoadBalancer, or terminate TLS in
 ichor-ui with `ichorUI.tls.secretName`.
 
+Network policy. Cilium is guaranteed, so
+`ichor-system`, `kokumi` and `argocd` each get a `CiliumNetworkPolicy` default
+deny plus one allow per flow, using Cilium's entities (`kube-apiserver`, `host`,
+`remote-node`, `world`) for peers that run on the host network. They cannot ship
+in `dist/install.yaml` because Cilium's CRD does not exist yet, so `ichor init`
+applies Ichor's four after Cilium is Ready, the installer Job re-applies them on
+every upgrade when the CRD exists, and the chart renders them behind
+`networkPolicy.cilium.enabled`. The `kokumi` and `argocd` policies travel inside
+those bundles. The webhook and OIDC ingress rules also admit `remote-node`,
+because the apiserver's calls to a pod on another node arrive from the
+control plane's `cilium_host` address.
+
 Verified on hardware: a host-network kube-apiserver reaches a
 Service ClusterIP; Talos applies the issuer document without a reboot but the
 kube-apiserver restarts (15 to 45 s without `/readyz` per node), which is why
@@ -199,8 +209,8 @@ the document, so Ichor validates it before rendering.
 3. Status holds hashes and state, never rendered config.
 4. The Talos version contract is pinned in the CR, so a library bump cannot
    silently change what gets applied.
-5. The controller never writes `spec`. Argo CD should never see Ichor fighting
-   it.
+5. The controller never writes `spec`, so it never fights a GitOps tool that
+   tracks the CR.
 6. Disruptive operations (upgrades, reboots, CA rotation, topology changes)
    take a per-cluster Lease. One at a time.
 7. Progress lives in status and resumes idempotently. (A live etcd restore
@@ -219,13 +229,13 @@ Group `ichor.maesh.dev`, version `v1alpha1`.
 
 | Kind | Scope | Purpose | In Git |
 |---|---|---|---|
-| `TalosCluster` | namespaced | Cluster-wide settings: endpoint, versions, topology, CNI bootstrap, GitOps mode, monitoring, integrations, optional components | yes |
+| `TalosCluster` | namespaced | Cluster-wide settings: endpoint, versions, topology, Cilium, GitOps mode, monitoring, integrations | yes |
 | `TalosMachine` | namespaced | One node: identity, role, labels, disk roles, per-node values | yes, once approved (always, in strict mode) |
 | `TalosConfigPatch` | namespaced | A typed config patch with a layer, priority and target | yes |
 | `TalosStorage` | namespaced | Thin integration with a storage system: node selector, disk preset, evacuation settings | yes |
 | `TalosEtcdBackup` | namespaced | Backup schedule, destination, retention, encryption | yes |
-| `TalosOperation` | namespaced | A Job-style run of one action over the cluster or a node: a Talos, Kubernetes or Ichor upgrade, a kube-proxy switch, shutdown, CA rotation, config rollout, node action, etcd restore | no |
-| `IchorInstallation` | cluster, singleton | Ichor's own version and management mode | yes |
+| `TalosOperation` | namespaced | A Job-style run of one action over the cluster or a node: a Talos, Kubernetes or Ichor upgrade, a kube-proxy switch or Cilium chart upgrade (`cni`), shutdown, CA rotation, config rollout, node action, etcd restore | no |
+| `IchorInstallation` | cluster, singleton | Ichor's own version and management mode, and `spec.stack` (values of the Argo CD and Kokumi bundles) | yes |
 | `IchorUser` | namespaced | One of Ichor's own users: display name, e-mail, roles, disabled flag | yes |
 
 There are no CRDs for installing CNI, storage or monitoring. Their Talos-side
@@ -323,10 +333,11 @@ shows which layer each value came from.
 Webhooks enforce, among other things: control-plane count in {1, 3, 5}; no
 approving more control planes than configured; never deleting the last
 control plane; no `schedulable: false` with zero workers; CNI preset is
-immutable after creation; kube-proxy mode changes only with an explicit
+`cilium` and immutable; Cilium values are validated and may not set Ichor-owned
+keys; kube-proxy mode changes only with an explicit
 annotation; disk roles that require reinstall are immutable after install;
 `TalosCluster` and `TalosMachine` can only be deleted with
-`ichor.maesh.dev/allow-delete: "true"` (so an Argo CD prune can't cascade into
+`ichor.maesh.dev/allow-delete: "true"` (so a GitOps prune can't cascade into
 node resets); direct writes to GitOps-managed CRs are rejected except through
 break-glass; Talos/Kubernetes version pairs and upgrade paths are checked.
 
@@ -339,55 +350,73 @@ ichor init --preset standard [--cni-tunnel vxlan|geneve] [--ui-url URL]
 ```
 
 1. Generate the secrets bundle locally; nag the user to back it up.
-2. Settle the shape of the cluster: topology preset, CNI preset, endpoint
-   (a VIP is recommended even for one node, because changing the endpoint
-   later means re-issuing certificates), disk roles for the first node.
-3. Apply the rendered config to the first control plane. Its
-   `cluster.inlineManifests` carry only the CNI (unless flannel) -- the one
-   component Kubernetes itself cannot start without, since nodes never go
-   Ready and nothing can be scheduled before it exists. For Cilium that is
-   the chart pinned in the binary (1.18.0, embedded as an archive), rendered
-   with Helm's Go SDK into plain manifests: no network at init time and the
-   same bytes every run. Ichor itself is not
-   inlined: once step 4 below gets a working kubeconfig, Ichor applies its
-   own install manifest (CRDs, RBAC, the controller Deployment) directly
-   through the API server, the same build's binary carries it (no fetch, no
-   version to get wrong), and a failure there is an ordinary, visible error
-   instead of something buried in Talos's boot log. Every API write init
-   makes is retried for a few minutes on a transient error (a single control
-   plane can answer with etcd timeouts right after the API server comes up).
-   Kokumi and Argo CD are not installed by the CLI either: the controller
-   does it in step 6. There are no flags to turn them off.
-4. Bootstrap etcd, fetch the kubeconfig, store the bundle as a Secret.
-5. Create the CRs and the `IchorInstallation` with `spec.stack`, then apply
+2. Settle the shape of the cluster: topology preset, endpoint (a VIP is
+   recommended even for one node, because changing the endpoint later means
+   re-issuing certificates), disk roles for the first node.
+3. Apply the rendered config to the first control plane. Its inline manifest
+   carries only Cilium, the one component Kubernetes cannot start without: the
+   chart pinned in the binary, rendered with Helm's Go SDK, no network at init
+   time and the same bytes every run. Everything else is applied
+   later through the API server, with every write retried for a few minutes on
+   a transient error.
+4. Bootstrap etcd, fetch the kubeconfig, store the bundle as a Secret, apply
+   Ichor's install manifest.
+5. Create the CRs and the `IchorInstallation` (with `spec.stack`), then apply
    Ichor's NetworkPolicies once Cilium is Ready.
-6. Wait for the controller. It runs the `ichor-stack` Jobs that
-   apply Kokumi and Argo CD once, publishes their bundles into Kokumi's
-   in-cluster registry and creates the Orders, so Argo CD then manages
-   itself and Kokumi from there with no Git repository. `init` waits for
-   `IchorInstallation` `StackReady`, prints the generated Kokumi admin
-   password once to stdout (it stays in Secret `ichor-kokumi-admin` in
-   `ichor-system`), then waits for the `CNIHandover` condition on the
-   `TalosCluster`: the `ichor-cni` Job installs Cilium as a Helm release
-   owned by Ichor over the bootstrapped objects, and the inline manifest
-   is removed from the rendered configuration. `init` prints an
-   `init: waiting for ...` line per poll and fails with the last reason
-   when a wait runs out; the controller keeps working either way.
+6. Wait for the controller to finish the stack (below) and for the
+   `CNIHandover` condition on the `TalosCluster`. `init` prints the generated
+   Kokumi admin password once (it stays in Secret `ichor-kokumi-admin`), an
+   `init: waiting for ...` line per poll, and the last reason when a wait runs
+   out; the controller keeps working either way.
 
+There are no flags to choose a CNI or to skip Kokumi or Argo CD.
 Adding later nodes goes through the normal approval flow; `init` is the
 special case of approving the first control plane. `ichor adopt` brings an
-existing cluster under management by diffing each node's current config against
-a fresh render and storing the difference as initial patches, so ownership
-transfers with zero drift.
+existing Cilium cluster under management by diffing each node's current config
+against a fresh render and storing the difference as initial patches, so
+ownership transfers with zero drift.
 
-### GitOps and Argo CD
+### The standard stack
 
-What goes in Git: `TalosCluster`, `TalosConfigPatch`, `TalosStorage`,
-`TalosEtcdBackup`, `IchorInstallation`, `IchorUser`s, approved `TalosMachine`s, and the
-Applications for CNI, Argo CD, Ichor and anything else. What doesn't: Secrets,
-`TalosOperation`s, unapproved machines, and the labels and annotations Ichor
-writes at runtime on Nodes and on the storage system's node objects. Putting
-those in Git makes Argo CD and Ichor fight; Ichor warns if it sees them tracked.
+Three components, installed by every `ichor init`:
+
+- **Cilium** is Ichor's own Helm release. It boots from the inline manifest;
+  once the DaemonSet is Ready the `ichor-cni` Job (installer image, hidden
+  `ichor cni helm apply`, host network via KubePrism) adopts the bootstrapped
+  objects as release `cilium` with `TakeOwnership`, and the controller then
+  removes the inline entry (`CNIHandover`). Removing it matters: Talos only
+  server-side applies bootstrap manifests and re-applies them on a Kubernetes
+  upgrade, so a stale entry would roll Cilium back. The Job needs
+  cluster-admin-equivalent rights, so the controller does not run Helm itself.
+- **Kokumi** (an OCI delivery operator, experimental) and **Argo CD** are
+  applied once by `ichor-stack` Jobs, then published as pre-rendered bundles
+  into Kokumi's in-cluster registry, with one Kokumi Order each. Argo CD
+  manages itself and Kokumi from there, with no external Git. Secrets are
+  created by the Job and never put in a bundle, because the registry is
+  anonymous.
+
+Values. Cilium's live values are Ichor defaults, then the user's layer in
+`spec.cni.cilium.values`, then Ichor-owned keys (the Talos-required ones, the
+KubePrism address, `kubeProxyReplacement`, `tunnelProtocol`). They are edited
+in the UI (Cilium page) or with `ichor cni values get|set|edit|diff`, validated
+by one function in the webhook, the backend and the controller, and applied by
+the Job. Argo CD and Kokumi values live in `IchorInstallation.spec.stack`.
+
+Upgrades. A new Ichor release carries new pinned charts. Cilium is upgraded
+only when the user starts a `cni` operation (`ichor cni upgrade`, or the UI),
+at most one minor at a time, rolled back by Helm on failure. Argo CD and Kokumi
+upgrade by republishing the bundle.
+
+### GitOps
+
+Ichor's own Argo CD has no repository and tracks only the Kokumi and Argo CD
+bundles. Users may keep Ichor's CRs in their own Git. What goes there:
+`TalosCluster`, `TalosConfigPatch`, `TalosStorage`, `TalosEtcdBackup`,
+`IchorInstallation`, `IchorUser`s, approved `TalosMachine`s. What doesn't:
+Secrets, `TalosOperation`s, unapproved machines, and the labels and
+annotations Ichor writes at runtime on Nodes and on the storage system's node
+objects. Putting those in Git makes the GitOps tool and Ichor fight; Ichor
+warns if it sees them tracked. Ichor writes no repository skeleton.
 
 Detecting "tracked" is two different questions, not one with two keys.
 Argo CD marks the resource: `application.resourceTrackingMethod` in
@@ -416,7 +445,7 @@ the object for Argo CD, a scan over owners for Flux.
 Two modes on `TalosCluster.spec.gitops.mode`:
 
 - `relaxed` (default): approving a node writes the `TalosMachine` directly;
-  you can export it to Git afterwards. Changes to GitOps-managed CRs go
+  you can add it to Git afterwards. Changes to GitOps-managed CRs go
   through PRs.
 - `strict`: approving a node *is* a PR that adds the `TalosMachine`. The node
   stays pending until it merges and syncs. Nothing exists in the cluster that
@@ -429,105 +458,23 @@ open a PR whose description includes the impact preview (affected nodes,
 reboot required or not) and who asked. The UI then follows the PR through
 merge, sync and apply. Plain YAML and Kustomize sources are supported; Helm
 and Jsonnet sources get a diff to apply by hand. Without a repository
-connection the CR is read-only with an export button. GitHub, GitLab and
+connection the CR is read-only. GitHub, GitLab and
 Gitea/Forgejo are supported; the backend only opens PRs, never merges.
 
 Break-glass exists for incidents: a permission-gated direct write that also
 opens the matching PR, so Git catches up. Ichor never changes the sync policy of
-an Application that already exists, the user's or anyone else's. The
-Applications Ichor itself generates when Argo CD is chosen (the CNI hand-over
-and the root app of apps) are created with automated sync, prune and selfHeal,
-because the hand-over waits for Synced and Healthy and would never finish
-without it.
+an Application that already exists, the user's or anyone else's.
 
-Hand-over. The CNI is the only component that follows the inlined-then-removed
-path: injected through `inlineManifests` at bootstrap (it has to be, since
-nothing can schedule before it exists), then adopted by Argo CD, then removed
-from `inlineManifests` once Argo CD reports it Synced and Healthy. It declares
-its main workloads and emits an Argo CD Application template that matches
-what was injected (same release name, namespace and values) so adoption
-produces no diff. Removing the entry matters: Talos re-applies bootstrap
-manifests during Kubernetes upgrades, and a stale entry would roll the CNI
-back. The `ichor gitops handoff` command is gone.
-
-Ichor itself and Argo CD do not go through this path (`### Bootstrap` above):
-Ichor is applied once, directly, through the API server, never through
-`inlineManifests`, so it has no stale-entry risk to guard against on a
-Kubernetes upgrade; Argo CD is never installed by Ichor at all. "One
-mechanism with a component registry, not three special cases" turned out to
-describe only one component once the other two were actually built.
-
-Why removing the entry is what matters, verified in Talos v1.14.3:
-`ManifestApplyController` only ever server-side applies and has no delete
-path, and it refuses to apply over an object carrying a *foreign* inventory
-annotation rather than fighting for it -- but Argo CD's tracking marker is
-not that annotation, so adoption alone does not stop the re-apply. Handing
-over without removing the entry looks finished and is not.
-
-Ichor no longer exports a repository skeleton (`ichor gitops export` was
-removed); users who keep Ichor CRs in their own Git write them
-themselves. Argo CD health checks (Lua) for Ichor's kinds ship with the chart,
-so rollouts are visible in Argo CD's UI.
-
-Optional components (`TalosCluster.spec.components[]`) are things Ichor does
-not install but can put in the skeleton with Talos-tuned values —
-kube-prometheus-stack and Longhorn to start. Selecting one suggests the
-matching Talos-side settings; a consistency check flags when the two sides
-disagree. Users who don't use Argo CD get the same values as documentation.
-
-Ichor under Argo CD. `IchorInstallation.spec.managementMode` is `ichor`
-(upgrades run through the installer Job) or `external` (Argo CD owns Ichor's
-manifests; upgrades are PRs that bump the chart version). Ichor suggests
-`external` when it finds itself tracked by Argo CD, to avoid two writers. The
+Ichor under a user's Argo CD. `IchorInstallation.spec.managementMode` is `ichor`
+(upgrades run through the installer Job) or `external` (a GitOps tool owns
+Ichor's manifests; upgrades are PRs that bump the chart version). Ichor
+suggests `external` when it finds itself tracked, to avoid two writers. The
 chart avoids anything that produces a diff on every sync, such as generated
-certificates.
+certificates. Argo CD health checks (Lua) for Ichor's kinds ship with the chart
+and in the Argo CD bundle's `argocd-cm`.
 
-There is a cycle here: Argo CD manages the CNI and Ichor, and Ichor manages
-the nodes Argo CD runs on. The CLI keeps a way out of the corners that are
-built: `ichor upgrade ichor VERSION --local` (no ichor-ui)
-and `ichor restore --recover-cluster`.
-
-#### Kokumi as the delivery layer in front of Argo CD
-
-`ichor init` always installs Kokumi and Argo CD (those flags are gone). The
-text below is the older, narrow description and is rewritten with the rest
-of the design changes. Kokumi (`kokumi.dev`, Apache-2.0, self-described as experimental)
-is an OCI-first delivery operator: each render becomes an immutable,
-content-addressed OCI artifact (a Preparation), gated by approvals, and a
-Serving creates or updates an Argo CD `Application` in the `argocd`
-namespace whose `spec.source.repoURL` is that artifact and whose
-`targetRevision` is its exact digest. It sits in front of Argo CD and does
-not replace it.
-
-What choosing it changes, as far as Kokumi's published docs say:
-
-- Argo CD still has to exist first (Kokumi requires Argo CD 3.3 or newer in
-  `argocd`, installed before Kokumi). Ichor still installs neither.
-- Ichor installs Kokumi no more than it installs Argo CD, for the same
-  reason: Kokumi ships as a release `install.yaml` applied with `kubectl`,
-  and choosing which third-party release to fetch and trust is not a
-  bootstrap command's call. `init` prepares the inputs and says plainly that
-  Kokumi is not running.
-- `init` additionally prepares the Argo CD repo-creds Secret Kokumi's
-  getting-started guide describes (`argocd.argoproj.io/secret-type:
-  repo-creds`, `type: oci`, `url` of Kokumi's registry,
-  `insecureOCIForceHttp` while that registry serves plain HTTP), created
-  from the CLI and never written to Git, like the existing repository
-  credentials.
-- The root Application's source stops being the repository for what Kokumi
-  delivers: that content arrives through Kokumi-created Applications
-  instead. Which of Ichor's own CRs move to that path, and how the root
-  Application and a Kokumi-created Application coexist, is not settled.
-- Application settings are Kokumi's, not Ichor's. Read from its source
-  (commit 4126144, 2026-10-21): it sets automated prune and selfHeal and
-  `ServerSideApply=true`, offers no field for `ignoreDifferences`, and reverts
-  edits to the Application. The `CiliumIdentity` ignore of the Argo CD-alone
-  case therefore has no home there except `argocd-cm`, which Ichor does not
-  write; a user-merged ConfigMap in the style of the health checks is the
-  candidate, and whether that form works is open.
-- The tracking-detection rules above are unchanged: Applications Kokumi
-  creates are ordinary Argo CD Applications, so `argocd-cm` is still what
-  Ichor reads.
+The CLI keeps a way out of the corners: `ichor upgrade ichor VERSION --local`
+(no ichor-ui) and `ichor restore --recover-cluster`.
 
 ### Nodes
 
@@ -705,67 +652,33 @@ check before each drain.
 
 ### CNI
 
-`TalosCluster.spec.cni.preset` selects one of `flannel` (Talos default, Ichor
-does nothing), `cilium` (Helm, with the Talos-recommended values built in;
-`spec.cni.tunnel`, set by `ichor init --cni-tunnel`, picks `vxlan` or `geneve`
-and is immutable once set, so the Argo CD Application carries the same values
-as the bootstrap),
-`custom` (your chart or manifests, you declare the Talos-side settings), and
-later `calico`. A preset is a Go interface: Talos-side patches, manifest
-rendering for the bootstrap, an Argo CD Application template, whether it can
-replace kube-proxy, a consistency check against the live configuration, and
-the workloads that signal a successful hand-over. New CNIs are new
-implementations of that interface and nothing else.
+Cilium is the only CNI; `spec.cni.preset` is `cilium` and
+immutable. `spec.cni.tunnel` (`ichor init --cni-tunnel`) picks `vxlan` or
+`geneve` and is immutable once set. Talos's own CNI is removed (the
+`KubeFlannelCNIConfig` document, or `cni.name: none` before v1.14). Pod and
+service subnets are `spec.network.{podSubnets,serviceSubnets}`, fixed once set. A cluster stored with another preset is refused, not guessed at:
+the controller sets `CNIUnsupported` and changes nothing.
 
-The preset cannot be changed after the cluster exists; swapping a CNI takes
-the network down and is out of scope. For every preset but `flannel` the
-system layer removes Talos's own CNI (the `KubeFlannelCNIConfig` document, or
-`cni.name: none` before v1.14). Pod and service subnets are
-`spec.network.{podSubnets,serviceSubnets}`, fixed once set.
+How Cilium is installed, owned and edited is described under "The standard
+stack" above. The Talos-recommended values are built in; Hubble certificates
+come from a CronJob, not Helm, so a re-render does not change them.
 
 `spec.cni.kubeProxy` is `enabled` or `replaced`. Replacing kube-proxy splits
-the setting across two owners — Talos (`cluster.proxy.disabled`, Ichor) and
-the CNI (Argo CD) — so the consistency check reads the CNI's live config and
-reports mismatches as health failures. Switching modes is refused unless
-annotated, and then runs in the only safe order: bring the new side up on all
-nodes, verify, then turn the old side off.
+the setting across two owners, Talos (`KubeProxyConfig`, Ichor) and Cilium's
+`kubeProxyReplacement` (the Helm release, also Ichor), so the consistency check
+reads Cilium's live config and reports mismatches as health failures.
+Switching modes is refused unless annotated, and then runs in the only safe
+order: upgrade the Cilium release through the `ichor-cni` Job, verify on all
+nodes, then turn the Talos side off.
 
 Turning the old side off is a deletion Ichor has to perform, not a
 consequence of the config change. Verified against Talos v1.14.3:
-`ManifestController` renders the kube-proxy objects only under
-`if cfg.ProxyEnabled`, and on `cluster.proxy.disabled` it destroys its own
-`k8s.Manifest` COSI resources — but `ManifestApplyController` contains no
-delete path at all, only a server-side `Apply`. So flipping the setting on a
-running cluster stops Talos *managing* kube-proxy and leaves the DaemonSet,
-ServiceAccount, ClusterRoleBinding and ConfigMap running. An operator who
-sets `kubeProxy: replaced` and expects kube-proxy to go away gets two
-proxies instead.
-
-The same controller stamps every object it applies with an inventory
-annotation and refuses to apply over an object carrying a *foreign* one,
-reporting an error rather than fighting for it. That is the boundary
-hand-over has to respect: Argo CD's own tracking label is not that
-annotation, so adoption does not stop Talos re-applying — which is exactly
-why removing the `inlineManifests` entry, not just handing over, is the step
-that matters.
-
-The generated Application template carries the known Argo CD pitfalls: server-
-side apply for the large CRD sets, Cilium's Hubble certificates generated by a
-CronJob rather than Helm (the chart's default `helm` method generates them
-with `genSignedCert` on every render and cannot reuse them under `helm
-template`, so a re-render changes them), and for Calico, exclusions for
-operator-created resources.
-
-Cilium stays Synced with `ignoreDifferences` on `cilium.io/CiliumIdentity` plus
-the `ServerSideApply=true` sync option. `RespectIgnoreDifferences` is not set:
-it only matters for fields of a manifest Argo CD applies, and the chart never
-renders `CiliumIdentity` (the operator creates them). It is kept because the homelab
-reference carries it. The Calico values will be decided when Calico is built,
-by observing a working Argo CD-managed Calico.
-
-With Kokumi (below) Ichor does not write the Application, and as of Kokumi's
-source at 2026-10-21 the Application has `ServerSideApply=true` but no field to
-carry `ignoreDifferences`.
+`ManifestController` renders the kube-proxy objects only while proxying is
+enabled, but `ManifestApplyController` has no delete path, only a server-side
+`Apply`. Flipping the setting stops Talos managing kube-proxy and leaves the
+DaemonSet, ServiceAccount, ClusterRoleBinding and ConfigMap running, so an
+operator would get two proxies. The same controller stamps every object with an
+inventory annotation and refuses to apply over a *foreign* one.
 
 ### Storage
 
@@ -974,8 +887,8 @@ metrics that Talos binds locally by default (controller-manager, scheduler,
 etcd) and restrict scraping to a CIDR with Talos's ingress firewall. The
 controller and UI backend export Prometheus metrics, and ServiceMonitors,
 alert rules and Grafana dashboards ship with the chart as an option. The
-monitoring stack itself is an optional component in the Git skeleton, a
-documented set of Helm values, or nothing — the user's choice.
+monitoring stack itself is a documented set of Helm values, or nothing — the
+user's choice.
 
 Registry mirrors are optional and off by default: they are pushed to every
 node through the system layer, alongside an override for the installer image
@@ -1013,7 +926,8 @@ operation (per-machine state, pause, resume, and the CA-rotation credentials
 hand-over); Backups, with each `TalosEtcdBackup`, its snapshots,
 Back up now and restore; Configuration, for editing patches by layer with an
 effective-config view annotated by origin and secrets masked, impact preview
-before applying, and schema-driven forms; a GitOps page showing each CR's
+before applying, and schema-driven forms; Cilium, with the effective values
+read-only, a YAML editor for the user layer, validation and a diff preview; a GitOps page showing each CR's
 Application, sync state and pending PRs, and where Git, the cluster and the
 nodes disagree, with links into Grafana, Hubble and Longhorn when their URLs are
 registered; Users, only when Ichor's own users are on. A merged multi-node log
@@ -1032,7 +946,7 @@ unconfigured, which `--presets maintenance` provides. Scenarios follow the
 features:
 bootstrap and join, patches with and without reboot, drift, removal and
 replacement, topology changes including the even-count rejection, CNI
-bootstrap and hand-over per preset, Argo CD bootstrap, PR and strict modes,
+Cilium bootstrap, adoption and values edits, the Kokumi and Argo CD stack, PR and strict modes,
 prune protection, storage preparation and evacuation, all three upgrade kinds
 with rollback, backup, restore and full-loss recovery, certificate rotation.
 Each scenario runs through both the CLI and the backend API. Chaos cases kill
@@ -1049,8 +963,7 @@ resumption works. A short set runs per PR, the full set nightly.
    phase 1 ships only checks for the `allow-delete` annotation; the quorum and
    last-control-plane rules land here, and an explicit test has to show that
    the annotation alone does **not** let the last control plane go.
-4. `init` and `adopt`, CNI presets (flannel, cilium, custom), Argo CD
-   bootstrap, hand-over, repository skeleton.
+4. `init` and `adopt`, Cilium, the Kokumi and Argo CD stack.
 5. Read-only UI, approval UI, backup and restore, client certificate renewal.
 6. Config editing UI, `TalosOperation`, Talos and Kubernetes upgrades,
    Ichor self-upgrade.
@@ -1059,18 +972,13 @@ resumption works. A short set runs per PR, the full set nightly.
 9. Monitoring settings, metrics and dashboards, optional components, external
    links, OIDC and impersonation, Ichor's own users and issuer.
 10. UI localisation.
-11. Later: calico, more storage presets, Flux PR mode, IPv6, replica-based
+11. Later: more storage presets, Flux PR mode, IPv6, replica-based
     scaling.
 
 ## Open questions
 
-- Calico: the values that avoid a perpetual OutOfSync under Argo CD. No
-  reference exists yet; decide when Calico is built, by observing a working
-  Argo CD-managed Calico.
-- Cilium with Kokumi: resolved by construction: Ichor never hands Cilium to Kokumi.
-  The e2e run found Cilium Synced without it, so this probably does
-  not matter; whether it stays true over a Cilium upgrade or with Gateway API
-  and L2 announcements enabled is not observed.
+The stack's open questions (Kokumi re-rendering after a registry loss, Argo CD
+limits on OCI sources) are listed.
 
 ## Alternatives considered
 
@@ -1078,11 +986,10 @@ Raw YAML patches. Easier to start with, impossible to validate, preview or
 explain in a UI, and they tie user files to a Talos version. Rejected in
 favour of typed documents.
 
-Ichor installing CNI, storage and monitoring itself. It would make the first
-run smoother and double the surface area, duplicate what Argo CD and the
-storage controllers already do, and keep us on the upgrade treadmill of
-every project we wrap. Bootstrap-and-hand-over gets the smooth first run
-without the rest.
+Ichor installing storage and monitoring itself. It would double the surface
+area, duplicate what Argo CD and the storage controllers already do, and keep
+us on the upgrade treadmill of every project we wrap. The stack stops at Cilium,
+Kokumi and Argo CD.
 
 Fewer CRDs. `TalosEtcdBackup` and `TalosStorage` could fold into
 `TalosCluster`. They are kept separate so their RBAC and Git diffs stay

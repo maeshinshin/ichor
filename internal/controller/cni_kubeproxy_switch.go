@@ -21,8 +21,8 @@ limitations under the License.
 //
 // Ichor changes the Talos side (cluster.proxy.disabled, through status.cni.kubeProxy, which
 // pkg/render turns into configuration) and deletes what Talos leaves behind. It never writes the
-// CNI's own configuration: that lives in a user-owned patch or, after the hand-over, in Git, so the CNI owner
-// changes it and this executor verifies the result.
+// CNI's configuration directly: Ichor owns the Cilium release, so the executor runs
+// the Cilium Helm Job with the target mode and verifies the result (cilium-config, the rollout).
 package controller
 
 import (
@@ -53,12 +53,10 @@ import (
 )
 
 const (
-	// conditionAwaitingCNIChange is set on the TalosOperation while the CNI's owner has to change
-	// the CNI's configuration (a human or Git; Ichor cannot). conditionVerifyingNewSide is set
-	// while Ichor is waiting for something that needs no one: a rollout, a DaemonSet. Both are the
-	// timeout clocks: True since LastTransitionTime, False once satisfied.
-	conditionAwaitingCNIChange = "AwaitingCNIChange"
-	conditionVerifyingNewSide  = "VerifyingNewSide"
+	// conditionVerifyingNewSide is set on the TalosOperation while Ichor waits for something that
+	// needs no one: the Cilium Helm Job, a rollout, a DaemonSet. It is the timeout clock: True
+	// since LastTransitionTime, False once satisfied.
+	conditionVerifyingNewSide = "VerifyingNewSide"
 
 	reasonCiliumNotSwitched = "CiliumNotSwitched"
 	reasonNewSideNotReady   = "NewSideNotReady"
@@ -66,9 +64,6 @@ const (
 
 	// kubeProxyVerifyTimeout bounds each automatic wait (a rollout, the DaemonSet appearing).
 	kubeProxyVerifyTimeout = 30 * time.Minute
-
-	// cniChangeTimeout bounds the wait for the CNI's owner: a pull request may sit in review.
-	cniChangeTimeout = 24 * time.Hour
 
 	// kubeProxyProbeTimeout bounds one connection to the kubernetes Service after kube-proxy's removal.
 	kubeProxyProbeTimeout = 5 * time.Second
@@ -378,12 +373,12 @@ func (a *cniKubeProxyAdvancer) removeKubeProxy(
 		}
 
 		if perr := probe(ctx); perr != nil {
-			return false, waitOn(op, conditionVerifyingNewSide, reasonNewSideNotReady,
+			return false, waitOn(op, reasonNewSideNotReady,
 				fmt.Sprintf("kube-proxy is removed but the kubernetes Service does not answer from the controller (%v); "+
-					"its old iptables/nftables rules stay on each node until it reboots", perr), kubeProxyVerifyTimeout)
+					"its old iptables/nftables rules stay on each node until it reboots", perr))
 		}
 
-		clearWait(op, conditionVerifyingNewSide)
+		clearWait(op)
 
 		return true, nil
 	}
@@ -478,27 +473,47 @@ func (a *cniKubeProxyAdvancer) enableTail(
 	}
 
 	if reason != "" {
-		return false, waitOn(op, conditionVerifyingNewSide, reasonNewSideNotReady, reason, kubeProxyVerifyTimeout)
+		return false, waitOn(op, reasonNewSideNotReady, reason)
 	}
 
-	clearWait(op, conditionVerifyingNewSide)
+	clearWait(op)
 
 	return a.requireCilium(ctx, preset, cluster, op, cni.KubeProxyEnabled)
 }
 
-// requireCilium reports whether Cilium's live kube-proxy replacement matches want and its agents
-// have rolled out. When they do not it waits, under the owner's clock if the CNI's configuration
-// has to change and under the verification clock if only a rollout is pending.
+// requireCilium makes Cilium serve (or stop serving) Services as want says and reports whether it
+// does: Ichor owns the release, so it runs the Cilium Helm Job for the cluster's
+// effective values (spec.cni.kubeProxy is already the target, and kubeProxyReplacement and
+// k8sService* derive from it), then verifies cilium-config and the agents' rollout. A failed Job is
+// an error, which pauses the operation with the Job's reason. Every wait is on the verification clock.
+//
+// ponytail: a finished Job for the same values (same name) from an earlier switch within its 24 h
+// TTL counts as done; cilium-config then does not match and the wait times out instead of re-running.
 func (a *cniKubeProxyAdvancer) requireCilium(
 	ctx context.Context, preset cni.Preset, cluster *ichorv1alpha1.TalosCluster, op *ichorv1alpha1.TalosOperation,
 	want cni.KubeProxyMode,
 ) (bool, error) {
+	var inst ichorv1alpha1.IchorInstallation
+	if err := a.Reader.Get(ctx, types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}, &inst); err != nil {
+		return false, fmt.Errorf("reading IchorInstallation %q for the Cilium Helm Job: %w", ichorv1alpha1.IchorInstallationName, err)
+	}
+
+	jobDone, err := AdvanceCNIHelmJob(ctx, a.Client, a.ControllerNamespace, cluster, &inst)
+	if err != nil && !apierrors.IsAlreadyExists(err) { // AlreadyExists: the cache has not seen the Job just created
+		return false, fmt.Errorf("applying kube-proxy mode %q to the Cilium release: %w", want, err)
+	}
+
+	if !jobDone {
+		return false, waitOn(op, reasonCiliumNotSwitched,
+			fmt.Sprintf("the Cilium Helm Job applying kube-proxy mode %q is running", want))
+	}
+
 	var cm corev1.ConfigMap
 
-	err := a.Reader.Get(ctx, types.NamespacedName{Namespace: kubeSystemNamespace, Name: ciliumConfigName}, &cm)
+	err = a.Reader.Get(ctx, types.NamespacedName{Namespace: kubeSystemNamespace, Name: ciliumConfigName}, &cm)
 	if apierrors.IsNotFound(err) {
-		return false, waitOn(op, conditionVerifyingNewSide, reasonNewSideNotReady,
-			"Cilium's cilium-config ConfigMap does not exist", kubeProxyVerifyTimeout)
+		return false, waitOn(op, reasonNewSideNotReady,
+			"Cilium's cilium-config ConfigMap does not exist")
 	}
 
 	if err != nil {
@@ -507,13 +522,9 @@ func (a *cniKubeProxyAdvancer) requireCilium(
 
 	live := cni.LiveConfig{KubeProxyReplacement: ciliumReplaces(cm.Data[ciliumKPRKey])}
 	if err := preset.CheckConsistency(ctx, live, want); err != nil {
-		clearWait(op, conditionVerifyingNewSide)
-
-		return false, waitOn(op, conditionAwaitingCNIChange, reasonCiliumNotSwitched,
-			ciliumChangeInstructions(cluster, want, err), cniChangeTimeout)
+		return false, waitOn(op, reasonCiliumNotSwitched,
+			fmt.Sprintf("the Cilium Helm Job finished but cilium-config does not match yet: %v", err))
 	}
-
-	clearWait(op, conditionAwaitingCNIChange)
 
 	var ds appsv1.DaemonSet
 	if err := a.Reader.Get(ctx, types.NamespacedName{Namespace: kubeSystemNamespace, Name: ciliumName}, &ds); err != nil {
@@ -523,13 +534,12 @@ func (a *cniKubeProxyAdvancer) requireCilium(
 	if ds.Status.ObservedGeneration < ds.Generation || ds.Status.DesiredNumberScheduled == 0 ||
 		ds.Status.UpdatedNumberScheduled < ds.Status.DesiredNumberScheduled ||
 		ds.Status.NumberReady < ds.Status.DesiredNumberScheduled {
-		return false, waitOn(op, conditionVerifyingNewSide, reasonNewSideNotReady,
+		return false, waitOn(op, reasonNewSideNotReady,
 			fmt.Sprintf("the Cilium agents are rolling out: %d/%d updated and ready",
-				min(ds.Status.UpdatedNumberScheduled, ds.Status.NumberReady), ds.Status.DesiredNumberScheduled),
-			kubeProxyVerifyTimeout)
+				min(ds.Status.UpdatedNumberScheduled, ds.Status.NumberReady), ds.Status.DesiredNumberScheduled))
 	}
 
-	clearWait(op, conditionVerifyingNewSide)
+	clearWait(op)
 
 	return true, nil
 }
@@ -540,50 +550,34 @@ func ciliumReplaces(value string) bool {
 	return value == "true" || value == "strict"
 }
 
-// ciliumChangeInstructions says what the CNI's owner has to change and where, depending on who
-// holds the CNI's configuration.
-func ciliumChangeInstructions(cluster *ichorv1alpha1.TalosCluster, want cni.KubeProxyMode, mismatch error) string {
-	values := "kubeProxyReplacement: false"
-	if want == cni.KubeProxyReplaced {
-		values = "kubeProxyReplacement: true, with k8sServiceHost: localhost and the KubePrism port as k8sServicePort"
-	}
-
-	where := "in the cni entry of cluster.inlineManifests in your cluster-layer TalosConfigPatch"
-	if apimeta.IsStatusConditionTrue(cluster.Status.Conditions, render.ConditionCNIHandover) {
-		where = "in the Cilium Application's Helm values in Git (Argo CD owns them since the hand-over)"
-	}
-
-	return fmt.Sprintf("%v. Ichor does not write the CNI's configuration; set %s %s", mismatch, values, where)
-}
-
-// waitOn starts or continues the clock for condType and fails once it exceeds timeout. op may be
+// waitOn starts or continues the verification clock and fails once it exceeds timeout. op may be
 // nil (a caller with no operation): there is then no clock and the wait is unbounded.
-func waitOn(op *ichorv1alpha1.TalosOperation, condType, reason, message string, timeout time.Duration) error {
+func waitOn(op *ichorv1alpha1.TalosOperation, reason, message string) error {
 	if op == nil {
 		return nil
 	}
 
-	if cond := apimeta.FindStatusCondition(op.Status.Conditions, condType); cond != nil &&
-		cond.Status == metav1.ConditionTrue && time.Since(cond.LastTransitionTime.Time) > timeout {
-		return fmt.Errorf("timed out after %s waiting for the new kube-proxy side: %s", timeout, message)
+	if cond := apimeta.FindStatusCondition(op.Status.Conditions, conditionVerifyingNewSide); cond != nil &&
+		cond.Status == metav1.ConditionTrue && time.Since(cond.LastTransitionTime.Time) > kubeProxyVerifyTimeout {
+		return fmt.Errorf("timed out after %s waiting for the new kube-proxy side: %s", kubeProxyVerifyTimeout, message)
 	}
 
 	apimeta.SetStatusCondition(&op.Status.Conditions, metav1.Condition{
-		Type: condType, Status: metav1.ConditionTrue, Reason: reason, Message: message,
+		Type: conditionVerifyingNewSide, Status: metav1.ConditionTrue, Reason: reason, Message: message,
 	})
 
 	return nil
 }
 
-// clearWait ends the clock for condType.
-func clearWait(op *ichorv1alpha1.TalosOperation, condType string) {
+// clearWait ends the verification clock.
+func clearWait(op *ichorv1alpha1.TalosOperation) {
 	if op == nil {
 		return
 	}
 
-	if cond := apimeta.FindStatusCondition(op.Status.Conditions, condType); cond != nil && cond.Status != metav1.ConditionFalse {
+	if cond := apimeta.FindStatusCondition(op.Status.Conditions, conditionVerifyingNewSide); cond != nil && cond.Status != metav1.ConditionFalse {
 		apimeta.SetStatusCondition(&op.Status.Conditions, metav1.Condition{
-			Type: condType, Status: metav1.ConditionFalse, Reason: reasonSideVerified, Message: "satisfied",
+			Type: conditionVerifyingNewSide, Status: metav1.ConditionFalse, Reason: reasonSideVerified, Message: "satisfied",
 		})
 	}
 }

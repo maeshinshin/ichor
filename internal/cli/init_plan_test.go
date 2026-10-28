@@ -125,8 +125,22 @@ func TestBuildInitPlan_NonVIPWarnsButSucceeds(t *testing.T) {
 	}
 }
 
+func TestBuildInitPlan_CNITunnelLandsOnTheCR(t *testing.T) {
+	in := validInitPlanInput()
+	in.CNITunnel = tunnelGeneve
+
+	cluster, err := buildInitPlan(in, &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("buildInitPlan: %v", err)
+	}
+
+	if got := cluster.Spec.CNI.Tunnel; got != tunnelGeneve {
+		t.Errorf("spec.cni.tunnel = %q, want geneve", got)
+	}
+}
+
 func TestBuildInitPlan_CNITunnelAcceptedWithCilium(t *testing.T) {
-	for _, tunnel := range []string{"", "vxlan", "geneve"} {
+	for _, tunnel := range []string{"", "vxlan", tunnelGeneve} {
 		in := validInitPlanInput()
 		in.CNITunnel = tunnel
 
@@ -147,7 +161,7 @@ func TestBuildInitPlan_Errors(t *testing.T) {
 		{"unsupported preset", func(in *initPlanInput) { in.Preset = "minimal" }},
 		{"invalid cni", func(in *initPlanInput) { in.CNIPreset = "calico" }},
 		{"invalid cni tunnel", func(in *initPlanInput) { in.CNITunnel = "gre" }},
-		{"cni tunnel without cilium", func(in *initPlanInput) { in.CNIPreset = "flannel"; in.CNITunnel = "geneve" }},
+		{"cni tunnel without cilium", func(in *initPlanInput) { in.CNIPreset = "flannel"; in.CNITunnel = tunnelGeneve }},
 		{"invalid endpoint type", func(in *initPlanInput) { in.EndpointType = "carrier-pigeon" }},
 		{"empty endpoint address", func(in *initPlanInput) { in.EndpointAddress = "" }},
 		{"empty install disk", func(in *initPlanInput) { in.InstallDisk = "" }},

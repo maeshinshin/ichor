@@ -97,7 +97,7 @@ func Set(m map[string]any, path string, v any) {
 func Get(m map[string]any, path string) (any, bool) {
 	var cur any = m
 
-	for _, k := range strings.Split(path, ".") {
+	for k := range strings.SplitSeq(path, ".") {
 		cm, ok := cur.(map[string]any)
 		if !ok {
 			return nil, false

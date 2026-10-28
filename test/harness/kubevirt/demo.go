@@ -39,7 +39,15 @@ import (
 const (
 	defaultDemoPrefix = "ichor-ui-demo"
 	demoPrefixEnv     = "ICHOR_UI_DEMO_PREFIX"
+
+	// defaultDemoMemory is the guest memory baked into the VM template; the two envs
+	// below override it per role.
+	defaultDemoMemory = "2560Mi"
+	demoCPMemoryEnv   = "ICHOR_UI_DEMO_CP_MEMORY"
+	demoWorkerMemEnv  = "ICHOR_UI_DEMO_WORKER_MEMORY"
 )
+
+var demoMemoryPattern = regexp.MustCompile(`^[1-9][0-9]*(Mi|Gi)$`)
 
 // demoPrefixPattern keeps the prefix a DNS-1123 label fragment: it ends up in VM and
 // DataVolume names, so a bad value is refused before anything is created or deleted.
@@ -59,9 +67,25 @@ func demoNames() (cp, worker string, err error) {
 	return prefix + "-cp", prefix + "-w", nil
 }
 
-func demoVMManifest(name string) string {
+// demoMemory returns the guest memory for a demo VM: the value of env, or defaultDemoMemory when unset.
+// It ends up in the VM manifest, so only a plain Mi/Gi quantity is accepted.
+func demoMemory(env string) (string, error) {
+	v := os.Getenv(env)
+	if v == "" {
+		return defaultDemoMemory, nil
+	}
+
+	if !demoMemoryPattern.MatchString(v) {
+		return "", fmt.Errorf("%s=%q must be a quantity like 2560Mi or 3Gi", env, v)
+	}
+
+	return v, nil
+}
+
+func demoVMManifest(name, memory string) string {
 	m := fmt.Sprintf(haVMManifestTmpl, name, talosFactorySchematic, talosVersion)
 	m = strings.ReplaceAll(m, "kubevirt-ha", "kubevirt-ui-demo")
+	m = strings.Replace(m, "guest: "+defaultDemoMemory, "guest: "+memory, 1)
 
 	return m
 }
@@ -72,9 +96,21 @@ func upDemo() error {
 		return err
 	}
 
+	cpMem, err := demoMemory(demoCPMemoryEnv)
+	if err != nil {
+		return err
+	}
+
+	workerMem, err := demoMemory(demoWorkerMemEnv)
+	if err != nil {
+		return err
+	}
+
 	names := []string{cp, worker}
+	memory := map[string]string{cp: cpMem, worker: workerMem}
+
 	for _, n := range names {
-		if err := applyManifest(demoVMManifest(n)); err != nil {
+		if err := applyManifest(demoVMManifest(n, memory[n])); err != nil {
 			return fmt.Errorf("creating VM %s: %w", n, err)
 		}
 	}

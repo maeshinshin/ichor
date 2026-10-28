@@ -19,6 +19,8 @@ package controller
 import (
 	"context"
 	"fmt"
+	"reflect"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -60,6 +62,14 @@ type IchorInstallationReconciler struct {
 
 	// ArgoCDNamespace is where argocd-cm lives, for the tracking check.
 	ArgoCDNamespace string
+
+	// StackEnabled turns on the Kokumi and Argo CD stack controller. It is on in the
+	// manager and off in envtest unless a spec opts in, so tests need no Kokumi.
+	StackEnabled bool
+
+	// RegistryHost is where the stack bundles are pushed; Kokumi's in-cluster registry when
+	// empty. The Orders always name the in-cluster address.
+	RegistryHost string
 }
 
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=ichorinstallations,verbs=get;list;watch
@@ -99,11 +109,22 @@ func (r *IchorInstallationReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		ObservedGeneration: inst.Generation,
 	})
 
-	if equalIchorStatus(orig.Status, inst.Status) {
-		return ctrl.Result{}, nil
+	var (
+		requeue  time.Duration
+		stackErr error
+	)
+
+	if r.StackEnabled {
+		requeue, stackErr = r.reconcileStack(ctx, &inst)
 	}
 
-	return ctrl.Result{}, r.Status().Update(ctx, &inst)
+	if !equalIchorStatus(orig.Status, inst.Status) {
+		if err := r.Status().Update(ctx, &inst); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+
+	return ctrl.Result{RequeueAfter: requeue}, stackErr
 }
 
 // externalSuggested is True when the mode is ichor but a GitOps tool tracks the controller's
@@ -139,7 +160,7 @@ func (r *IchorInstallationReconciler) externalSuggested(
 }
 
 func equalIchorStatus(a, b ichorv1alpha1.IchorInstallationStatus) bool {
-	if a.InstalledVersion != b.InstalledVersion || len(a.Conditions) != len(b.Conditions) {
+	if a.InstalledVersion != b.InstalledVersion || len(a.Conditions) != len(b.Conditions) || !reflect.DeepEqual(a.Stack, b.Stack) {
 		return false
 	}
 

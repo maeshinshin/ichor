@@ -1,6 +1,6 @@
 # 0044. Tracking detection moves to `pkg/gitopstracking`; `pkg/prmode.Decide` turns it into a write-vs-PR gate
 
-Status: Accepted · Date: 2026-10-26 · Design section: GitOps and Argo CD ("PR mode")
+Status: Superseded by ADR 0101 · Date: 2026-10-26 · Design section: GitOps and Argo CD ("PR mode")
 Decided: moved `isTracked` from `internal/cli` to a new `pkg/gitopstracking` package with Flux detection corrected to an inventory scan (the field manager is only a first signal; `flux-client-side-apply` was never Flux's), and added a pure `pkg/prmode.Decide(trackedBy, hasRepoConnection) Mode` so "tracked → don't write, open a PR instead" has one place to live rather than zero
 
 ## Context

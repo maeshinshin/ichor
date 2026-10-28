@@ -52,7 +52,7 @@ install.
 ## What it doesn't do
 
 - Run anything on the cluster beyond its own controller and UI.
-- Manage storage or monitoring. That's Argo CD's job.
+- Manage storage or monitoring, or know about GitOps tools.
 - Boot machines. Get them to maintenance mode (ISO, PXE, whatever you like);
   Ichor takes it from there.
 - Target air-gapped installs. Registry mirrors and private registries work.

@@ -26,7 +26,6 @@ import (
 
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -36,6 +35,13 @@ import (
 	"github.com/maeshinshin/ichor/internal/kubetrust"
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
 )
+
+// applyTrustBase makes pool read base as the projected in-cluster ca.crt.
+func applyTrustBase(pool *kubetrust.Pool, base string) {
+	pool.Apply(&rest.Config{
+		Host: "https://127.0.0.1:6443", BearerToken: "x", CAFile: base,
+	})
+}
 
 // A replica that does not run the rotation must still trust the new Kubernetes CA while a rotation is
 // under way and drop it once it is over and the projected ca.crt carries it (ADR 0063).
@@ -54,7 +60,7 @@ func TestCATrustSyncFollowsARotationOnAnyReplica(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rot, err := secretsbundle.NewRotation(time.Now(),contract)
+	rot, err := secretsbundle.NewRotation(time.Now(), contract)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,13 +72,13 @@ func TestCATrustSyncFollowsARotationOnAnyReplica(t *testing.T) {
 
 	const ns = "ichor-system"
 
-	cluster := &ichorv1alpha1.TalosCluster{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "c"}}
-	cluster.Spec.SecretsRef.Name = "bundle"
+	cluster := &ichorv1alpha1.TalosCluster{Namespace: testIchorNamespace, Name: "c"}
+	cluster.Spec.SecretsRef.Name = "rot-bundle"
 	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: "bundle"},
-		Data:       map[string][]byte{secretsbundle.RotationKey: raw},
+		Namespace: ns, Name: "rot-bundle",
+		Data: map[string][]byte{secretsbundle.RotationKey: raw},
 	}
-	op := &ichorv1alpha1.TalosOperation{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "rot"}}
+	op := &ichorv1alpha1.TalosOperation{Namespace: testIchorNamespace, Name: "rot"}
 	op.Spec.ClusterRef.Name, op.Spec.Kind = "c", ichorv1alpha1.TalosOperationKindCARotation
 	op.Status.CARotation = &ichorv1alpha1.TalosOperationCARotationStatus{Stage: ichorv1alpha1.CARotationStageIssuing}
 	op.Status.Phase = ichorv1alpha1.TalosOperationPhaseInProgress
@@ -87,7 +93,7 @@ func TestCATrustSyncFollowsARotationOnAnyReplica(t *testing.T) {
 	}
 
 	pool := &kubetrust.Pool{}
-	pool.Apply(&rest.Config{Host: "https://127.0.0.1:6443", TLSClientConfig: rest.TLSClientConfig{CAFile: base}, BearerToken: "x"})
+	applyTrustBase(pool, base)
 
 	sync := &CATrustSync{Reader: cl, ControllerNamespace: ns, Pool: pool, File: file}
 	if sync.NeedLeaderElection() {
@@ -116,7 +122,7 @@ func TestCATrustSyncFollowsARotationOnAnyReplica(t *testing.T) {
 
 	// A restarted container reads the file back, and clears on its first pass once ca.crt has caught up.
 	restarted := &kubetrust.Pool{}
-	restarted.Apply(&rest.Config{Host: "https://127.0.0.1:6443", TLSClientConfig: rest.TLSClientConfig{CAFile: base}, BearerToken: "x"})
+	applyTrustBase(restarted, base)
 
 	if err := restarted.LoadFile(file); err != nil {
 		t.Fatal(err)

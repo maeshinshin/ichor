@@ -106,10 +106,8 @@ func generateControlPlaneConfig(
 	if err := assertEndpoint(cfg, endpoint); err != nil {
 		return nil, err
 	}
-	if os.Getenv(cniEnv) == cniNone {
-		if cfg, err = withoutFlannel(cfg); err != nil {
-			return nil, err
-		}
+	if cfg, err = withoutFlannel(cfg); err != nil {
+		return nil, err
 	}
 
 	machineConfig, err := cfg.Bytes()
@@ -121,10 +119,8 @@ func generateControlPlaneConfig(
 	if err != nil {
 		return nil, fmt.Errorf("generating worker config: %w", err)
 	}
-	if os.Getenv(cniEnv) == cniNone {
-		if wcfg, err = withoutFlannel(wcfg); err != nil {
-			return nil, err
-		}
+	if wcfg, err = withoutFlannel(wcfg); err != nil {
+		return nil, err
 	}
 	workerConfig, err := wcfg.Bytes()
 	if err != nil {
@@ -155,14 +151,6 @@ func assertEndpoint(cfg coreconfig.Provider, want string) error {
 	}
 	return nil
 }
-
-// cniEnv selects the inner cluster's CNI. "none" drops the flannel document the generator
-// emits, so the cluster comes up with no CNI and a test installs its own (Cilium, for the
-// Argo CD hand-over check). Unset keeps Talos's default flannel.
-const (
-	cniEnv  = "ICHOR_E2E_CNI"
-	cniNone = "none"
-)
 
 // k8sVersionEnv overrides the Kubernetes version the inner cluster boots with (vX.Y.Z or X.Y.Z),
 // so an upgrade run can start one patch or minor behind the newest release.

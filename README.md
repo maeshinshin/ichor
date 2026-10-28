@@ -42,8 +42,8 @@ hands it over.
 - Gates Secret references: changing a field that names a Secret needs the
   `secret-references` right in Kubernetes RBAC, which `ichor-admin` holds.
 - Upgrades itself through the `IchorInstallation` resource.
-- Bootstraps a CNI (`--cni cilium`, rendered from the pinned Cilium 1.18.0
-  chart embedded in the CLI, or `flannel`; `--cni-tunnel vxlan|geneve` picks
+- Bootstraps Cilium, the only CNI (rendered from the pinned Cilium 1.18.0
+  chart embedded in the CLI; `--cni-tunnel vxlan|geneve` picks
   Cilium's tunnel) and, with `--argocd`, prepares Argo CD's repository
   credentials and root Application. The CNI is then handed over to Argo CD so
   that Git becomes the source of truth. Ichor does not install Argo CD.

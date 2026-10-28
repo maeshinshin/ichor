@@ -164,54 +164,6 @@ func TestRunInit_DiskRoles(t *testing.T) {
 	}
 }
 
-// TestRunInit_Flannel proves architecture.md's "unless flannel": the
-// CNI itself contributes no TalosConfigPatch when the preset is
-// flannel. The one patch init always creates regardless of CNI --
-// carrying the install disk -- still shows up.
-func TestRunInit_Flannel(t *testing.T) {
-	withTempHome(t)
-
-	k8sClient := fake.NewClientBuilder().WithScheme(newTestScheme(t)).Build()
-	deps, _, _ := newFakeInitDeps(t, k8sClient)
-
-	opts := validInitOptions()
-	opts.CNIPreset = "flannel"
-
-	if err := runInit(context.Background(), opts, deps); err != nil {
-		t.Fatalf("runInit: %v", err)
-	}
-
-	var patches ichorv1alpha1.TalosConfigPatchList
-	if err := k8sClient.List(context.Background(), &patches); err != nil {
-		t.Fatalf("listing TalosConfigPatches: %v", err)
-	}
-
-	if len(patches.Items) != 1 {
-		t.Fatalf("expected exactly one TalosConfigPatch (install disk, no CNI content) for flannel, got %+v", patches.Items)
-	}
-
-	if patches.Items[0].Spec.Documents[0].Config.ClusterConfig.ClusterInlineManifests != nil {
-		t.Fatalf("expected no inline manifests for flannel, got %+v", patches.Items[0].Spec.Documents[0].Config.ClusterConfig)
-	}
-
-	// The install target is spec.install now; a machine.install in the patch would
-	// conflict with the UnattendedInstallConfig document at v1.14.
-	if patches.Items[0].Spec.Documents[0].Config.MachineConfig.MachineInstall != nil {
-		t.Fatalf("the bootstrap patch must not carry machine.install, got %+v",
-			patches.Items[0].Spec.Documents[0].Config.MachineConfig)
-	}
-
-	var machines ichorv1alpha1.TalosMachineList
-	if err := k8sClient.List(context.Background(), &machines); err != nil {
-		t.Fatalf("listing TalosMachines: %v", err)
-	}
-
-	if len(machines.Items) != 1 || machines.Items[0].Spec.Install == nil ||
-		machines.Items[0].Spec.Install.Disk.DevPath != opts.InstallDisk {
-		t.Fatalf("want spec.install.disk.devPath %q, got %+v", opts.InstallDisk, machines.Items)
-	}
-}
-
 // TestRunInit_ArgoCDWithoutRepoRejected proves --argocd needs --repo.
 func TestRunInit_ArgoCDWithoutRepoRejected(t *testing.T) {
 	withTempHome(t)

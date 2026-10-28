@@ -118,7 +118,8 @@ func init() {
 		"topology preset: single (1 node, schedulable), compact-ha (3 control planes, schedulable), "+
 			"standard (3 control planes + workers added later, tainted; recommended), or "+
 			"large (5 control planes + workers added later, tainted)")
-	flags.StringVar(&initOpts.CNIPreset, "cni", "", "CNI preset: flannel or cilium (required)")
+	flags.StringVar(&initOpts.CNIPreset, "cni", cniCilium, "CNI preset; cilium is the only one")
+	_ = flags.MarkHidden("cni")
 	flags.StringVar(&initOpts.CNITunnel, "cni-tunnel", "",
 		"with --cni cilium: Cilium's tunnel protocol, vxlan or geneve (default: Cilium's vxlan); "+
 			"geneve for virtualised networks that pass geneve but not vxlan")

@@ -24,7 +24,6 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
-	"github.com/maeshinshin/ichor/pkg/cni/flannel"
 	"github.com/maeshinshin/ichor/pkg/gitops"
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
@@ -40,15 +39,10 @@ const cniKubeProxy = cni.KubeProxyEnabled
 const cniCilium = "cilium"
 
 // cniPresetWithTunnel selects the pkg/cni.Preset implementation for name,
-// with the cluster's tunnel applied. "custom" is deliberately absent: it has
-// no Preset implementation and init's own
-// flag validation (buildInitPlan) only ever accepts "flannel" or "cilium".
-// tunnel (TalosCluster spec.cni.tunnel) only reaches the cilium preset;
-// buildInitPlan has already rejected it for any other CNI.
+// with the cluster's tunnel applied. Cilium is the only CNI, and
+// buildInitPlan has already rejected any other --cni.
 func cniPresetWithTunnel(name, tunnel string) (cni.Preset, error) {
 	switch name {
-	case "flannel":
-		return flannel.New(), nil
 	case cniCilium:
 		p, err := cilium.New().WithTunnel(tunnel)
 		if err != nil {
@@ -65,7 +59,7 @@ func cniPresetWithTunnel(name, tunnel string) (cni.Preset, error) {
 // computed once so both steps use the same values.
 type cniBootstrap struct {
 	// InlineManifest is appended to the rendered config's
-	// cluster.inlineManifests; nil for flannel (Talos installs it itself).
+	// cluster.inlineManifests.
 	InlineManifest *typedconfig.ClusterInlineManifest
 
 	// Patch is a cluster-layer TalosConfigPatch carrying the CNI's

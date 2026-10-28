@@ -15,6 +15,7 @@ RUN go mod download
 
 COPY . .
 
+RUN test -f internal/installmanifest/network-policies.yaml || { echo "run make docker-build-installer: network-policies.yaml is not in the build context" >&2; exit 1; }
 RUN test -f internal/installmanifest/install.yaml || { echo "run make docker-build-installer: install.yaml is not in the build context" >&2; exit 1; }
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -tags installembed -a \
     -ldflags "-X github.com/maeshinshin/ichor/internal/version.Version=${VERSION}" -o ichor ./cmd/ichor

@@ -233,6 +233,7 @@ build-ichor: fmt vet ## Build the ichor CLI binary (placeholder install manifest
 .PHONY: build-ichor-embed
 build-ichor-embed: build-installer ## Build the ichor CLI with Ichor's own install manifest embedded (what `ichor init` applies).
 	cp dist/install.yaml internal/installmanifest/install.yaml
+	cp dist/network-policies.yaml internal/installmanifest/network-policies.yaml
 	go build -tags installembed -ldflags "$(LDFLAGS)" -o bin/ichor ./cmd/ichor
 
 .PHONY: run
@@ -253,6 +254,7 @@ docker-push: ## Push docker image with the manager.
 .PHONY: docker-build-installer
 docker-build-installer: build-installer ## Build the installer image: the ichor binary with this tree's install manifest embedded (ADR 0059).
 	cp dist/install.yaml internal/installmanifest/install.yaml
+	cp dist/network-policies.yaml internal/installmanifest/network-policies.yaml
 	$(CONTAINER_TOOL) build -f Dockerfile.installer --build-arg VERSION=$(VERSION) -t ${IMG_INSTALLER} .
 
 .PHONY: demo-images
@@ -288,7 +290,8 @@ build-installer: manifests generate kustomize ## Generate a consolidated YAML wi
 	@work=$$(mktemp -d) && trap 'rm -rf "$$work"' EXIT && cp -r config "$$work/config" && \
 	(cd "$$work/config/manager" && "$(KUSTOMIZE)" edit set image controller=${IMG}) && \
 	(cd "$$work/config/manager-ui" && "$(KUSTOMIZE)" edit set image ichor-ui=${IMG_UI}) && \
-	"$(KUSTOMIZE)" build "$$work/config/default" > dist/install.yaml
+	"$(KUSTOMIZE)" build "$$work/config/default" > dist/install.yaml && \
+	"$(KUSTOMIZE)" build "$$work/config/cilium-network-policy" > dist/network-policies.yaml
 
 ##@ Deployment
 

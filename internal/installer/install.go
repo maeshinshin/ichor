@@ -54,6 +54,10 @@ type Options struct {
 	// Manifest is the install manifest to apply: installmanifest.Manifest in production.
 	Manifest []byte
 
+	// NetworkPolicies is installmanifest.NetworkPolicies (ADR 0100). It is applied last, and only
+	// when Cilium's CiliumNetworkPolicy CRD is Established; empty or the placeholder skips it.
+	NetworkPolicies []byte
+
 	// Ready overrides the post-check, for tests (envtest runs no Deployment controller).
 	Ready ReadyFunc
 
@@ -102,7 +106,12 @@ func Run(ctx context.Context, c client.Client, opts Options) error {
 		return err
 	}
 
-	snap, err := takeSnapshot(ctx, c, opts.Namespace, opts.RunID, p.all())
+	policies, err := networkPolicies(ctx, c, opts)
+	if err != nil {
+		return err
+	}
+
+	snap, err := takeSnapshot(ctx, c, opts.Namespace, opts.RunID, append(p.all(), policies...))
 	if err != nil {
 		return err
 	}
@@ -112,7 +121,7 @@ func Run(ctx context.Context, c client.Client, opts Options) error {
 	steps := []struct {
 		name string
 		objs []*unstructured.Unstructured
-	}{{"installer RBAC", p.rbac}, {"CRDs", p.crds}, {"controller", p.controller}, {"UI", p.ui}}
+	}{{"installer RBAC", p.rbac}, {"CRDs", p.crds}, {"controller", p.controller}, {"UI", p.ui}, {"network policies", policies}}
 
 	for i, s := range steps {
 		if err := applyStep(ctx, c, opts, s.name, s.objs); err != nil {
@@ -130,6 +139,41 @@ func Run(ctx context.Context, c client.Client, opts Options) error {
 	}
 
 	return nil
+}
+
+// ciliumPolicyCRD is the CRD the network policies need: it exists once Cilium runs, which an
+// upgrade can assume and a cluster on another CNI cannot.
+const ciliumPolicyCRD = "ciliumnetworkpolicies.cilium.io"
+
+// networkPolicies returns opts.NetworkPolicies decoded, or nil when there are none or Cilium's
+// CRD is not Established (the policies would only fail to apply, and a CNI that does not enforce
+// them is the operator's choice).
+func networkPolicies(ctx context.Context, c client.Client, opts Options) ([]*unstructured.Unstructured, error) {
+	if len(opts.NetworkPolicies) == 0 || bytes.Contains(opts.NetworkPolicies, []byte(installmanifest.PlaceholderSentinel)) {
+		return nil, nil
+	}
+
+	crd := &unstructured.Unstructured{}
+	crd.SetAPIVersion("apiextensions.k8s.io/v1")
+	crd.SetKind(kindCRD)
+
+	err := c.Get(ctx, types.NamespacedName{Name: ciliumPolicyCRD}, crd)
+
+	switch {
+	case apierrors.IsNotFound(err) || (err == nil && !crdEstablished(crd)):
+		logf(opts.Log, "skipping the network policies: %s is not Established (Cilium is not running)", ciliumPolicyCRD)
+
+		return nil, nil
+	case err != nil:
+		return nil, fmt.Errorf("reading CRD %s: %w", ciliumPolicyCRD, err)
+	}
+
+	objs, err := Decode(opts.NetworkPolicies)
+	if err != nil {
+		return nil, fmt.Errorf("decoding the embedded network policies: %w", err)
+	}
+
+	return objs, nil
 }
 
 // checkCRDs refuses the whole upgrade when any target CRD would remove something from its

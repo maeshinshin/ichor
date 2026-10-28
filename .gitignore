@@ -37,6 +37,7 @@ go.work
 # dist/chart is also generated (kubebuilder edit --plugins=helm/v2-alpha from
 # dist/install.yaml) but is a committed distributable, so it is not ignored.
 dist/install.yaml
+dist/network-policies.yaml
 
 # UI (ADR 0017): npm dependencies and the Vite build. The build lands in
 # cmd/ichor-ui/dist, which `go:embed` picks up with -tags uiembed; it is
@@ -48,6 +49,7 @@ cmd/ichor-ui/dist/
 # -tags installembed (ADR 0019); never committed, same reasoning as
 # dist/install.yaml itself above.
 internal/installmanifest/install.yaml
+internal/installmanifest/network-policies.yaml
 
 # goreleaser's own output directory (.goreleaser.yaml sets dist: to this,
 # instead of the default "dist/", so that "goreleaser build --clean" never

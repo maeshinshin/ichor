@@ -26,3 +26,9 @@ import _ "embed"
 //
 //go:embed install.yaml
 var Manifest []byte
+
+// NetworkPolicies is dist/network-policies.yaml (config/cilium-network-policy, ADR 0100): Ichor's
+// CiliumNetworkPolicies, kept out of Manifest because their CRD exists only once Cilium runs.
+//
+//go:embed network-policies.yaml
+var NetworkPolicies []byte

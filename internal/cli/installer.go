@@ -50,6 +50,8 @@ var installerRunCmd = &cobra.Command{
 			Namespace: installerRunOpts.Namespace,
 			RunID:     installerRunOpts.RunID,
 			Manifest:  installmanifest.Manifest,
+
+			NetworkPolicies: installmanifest.NetworkPolicies,
 			Log:       cmd.ErrOrStderr(),
 		})
 	},

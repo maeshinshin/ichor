@@ -17,18 +17,20 @@ type failState struct {
 	last time.Time
 }
 
-// backoff counts failed logins per key (user name or source IP) in memory:
+// Backoff counts failed logins per key (user name or source IP) in memory:
 // after five failures a key must wait 1 s, 2 s, 4 s ... up to 15 minutes since
-// its last failure. It is per replica by design.
-type backoff struct {
+// its last failure. It is per replica by design. The issuer and the
+// UserService password change share it.
+type Backoff struct {
 	mu sync.Mutex
 	m  map[string]failState
 }
 
-func newBackoff() *backoff { return &backoff{m: map[string]failState{}} }
+// NewBackoff returns an empty Backoff.
+func NewBackoff() *Backoff { return &Backoff{m: map[string]failState{}} }
 
-// wait returns how long key must still wait; zero means it may try.
-func (b *backoff) wait(key string, now time.Time) time.Duration {
+// Wait returns how long key must still wait; zero means it may try.
+func (b *Backoff) Wait(key string, now time.Time) time.Duration {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	s, ok := b.m[key]
@@ -43,7 +45,8 @@ func (b *backoff) wait(key string, now time.Time) time.Duration {
 	return 0
 }
 
-func (b *backoff) fail(key string, now time.Time) {
+// Fail records a failed attempt for key at now.
+func (b *Backoff) Fail(key string, now time.Time) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if len(b.m) >= maxTrackedKeys {
@@ -65,7 +68,8 @@ func (b *backoff) fail(key string, now time.Time) {
 	b.m[key] = s
 }
 
-func (b *backoff) reset(key string) {
+// Reset forgets the failures of key, after a success.
+func (b *Backoff) Reset(key string) {
 	b.mu.Lock()
 	delete(b.m, key)
 	b.mu.Unlock()

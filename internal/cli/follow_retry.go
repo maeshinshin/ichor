@@ -72,7 +72,9 @@ func isTransient(err error) bool {
 
 	msg := err.Error()
 
-	return strings.Contains(msg, "connection refused") || strings.Contains(msg, "connection reset") ||
+	// etcd timing out behind a healthy apiserver arrives as a 500 InternalError carrying its text.
+	return strings.Contains(msg, "etcdserver: request timed out") || strings.Contains(msg, "etcdserver: leader changed") ||
+		strings.Contains(msg, "connection refused") || strings.Contains(msg, "connection reset") ||
 		strings.Contains(msg, "unexpected EOF") || strings.HasSuffix(msg, ": EOF") || strings.Contains(msg, "i/o timeout")
 }
 

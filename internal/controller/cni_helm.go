@@ -47,6 +47,8 @@ const (
 	// egress rules.
 	cniHelmPodLabel = "ichor-cni"
 
+	nameLabel = "app.kubernetes.io/name"
+
 	cniHelmJobPrefix = "ichor-cni-"
 
 	// CNIValuesHashAnnotation records the effective-values hash a Job was started for, so a
@@ -140,7 +142,7 @@ func AdvanceCNIHelmJob(
 		case batchv1.JobComplete:
 			return true, nil
 		case batchv1.JobFailed:
-			return false, fmt.Errorf("Cilium Helm Job %s failed (%s: %s); an upgrade rolled back before it failed, "+
+			return false, fmt.Errorf("cilium Helm Job %s failed (%s: %s); an upgrade rolled back before it failed, "+
 				"see the Job's pod log", name, cond.Reason, cond.Message)
 		}
 	}
@@ -157,7 +159,7 @@ func newCNIHelmJob(
 	return &batchv1.Job{
 		Namespace:   ns,
 		Name:        name,
-		Labels:      map[string]string{"app.kubernetes.io/name": cniHelmPodLabel, cniClusterLabel: cniHelmClusterHash(cluster)},
+		Labels:      map[string]string{nameLabel: cniHelmPodLabel, cniClusterLabel: cniHelmClusterHash(cluster)},
 		Annotations: map[string]string{CNIValuesHashAnnotation: valuesHash},
 		Spec: batchv1.JobSpec{
 			// One attempt, as for the installer: an upgrade that failed has been rolled back, and
@@ -168,7 +170,7 @@ func newCNIHelmJob(
 			TTLSecondsAfterFinished: ptr.To[int32](cniHelmJobTTL),
 			Template: corev1.PodTemplateSpec{
 				// The label the network policies select the pod by (ADR 0100).
-				Labels: map[string]string{"app.kubernetes.io/name": cniHelmPodLabel},
+				Labels: map[string]string{nameLabel: cniHelmPodLabel},
 				Spec: corev1.PodSpec{
 					RestartPolicy:      corev1.RestartPolicyNever,
 					ServiceAccountName: CNIServiceAccount,
@@ -204,7 +206,7 @@ func newCNIHelmJob(
 							Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
 						},
 					}},
-					Volumes: []corev1.Volume{{Name: "tmp", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}}},
+					Volumes: []corev1.Volume{{Name: "tmp", EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 				},
 			},
 		},

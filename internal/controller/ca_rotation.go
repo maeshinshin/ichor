@@ -65,6 +65,7 @@ import (
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/kubetrust"
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
 	"github.com/maeshinshin/ichor/pkg/clusterlock"
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
@@ -230,6 +231,13 @@ func (r *TalosOperationReconciler) advanceCARotation(
 
 	if rot != nil {
 		run.rot = rot
+		// Trust the new Kubernetes CA's certificate (never its key) before the API server switches to it at
+		// Issuing, so this controller's own client keeps verifying. A failure only costs the
+		// restart this avoids, so it does not stop the rotation.
+		if err := kubetrust.Shared.Publish(rot.Kubernetes.Crt, kubetrust.TrustFile); err != nil {
+			ctrl.LoggerFrom(ctx).Error(err, "Could not publish the new Kubernetes CA to this controller's trust pool")
+		}
+
 		run.scrub.add(string(rot.Talos.Key), string(rot.Kubernetes.Key), string(rot.Talos.Crt), string(rot.Kubernetes.Crt))
 	}
 

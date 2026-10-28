@@ -6,8 +6,9 @@ is in [ADR 0094](../adr/0094-ichor-users-its-own-oidc-issuer-roles-and-per-user-
 which builds on [ADR 0058](../adr/0058-oidc-login-and-kubernetes-impersonation-for-ichor-ui.md)
 for logins from an external identity provider.
 
-Status: ADR 0094 is proposed. The steps below are what it decides, plus the
-CLI flags the implementation added (`--ca-file`, `--out`, `--bootstrap`).
+Status: ADR 0094 is accepted and was verified on hardware. The steps below are
+what it decides, plus the CLI flags the implementation added (`--ca-file`,
+`--out`, `--bootstrap`).
 
 Users are off by default. Nothing here applies until you turn them on.
 
@@ -42,8 +43,11 @@ admin, then the switch, so nobody is locked out. At the end it prints, to
 stderr, the Helm values that match (for a GitOps copy) and the generated
 password of the admin. The password is printed once, also when a later step
 failed, and is stored nowhere; the first login forces a change. Save it when it
-is printed. The controller renders the kube-apiserver login settings next; that
-restarts the kube-apiserver on each control plane (see the end of this guide).
+is printed. The kube-apiserver login settings reach the control planes with
+`ichor config apply`, which restarts the kube-apiserver on each control plane
+in turn (see the end of this guide). Init retries transient API errors (such as
+an etcd timeout right after the API server comes up) for a few minutes before
+it gives up.
 
 `ichor init` takes four more flags, all of which need `--ui-url`. They are
 checked before anything is written, and each has a chart value:
@@ -52,8 +56,8 @@ checked before anything is written, and each has a chart value:
 |---|---|---|
 | `--ui-tls-secret NAME` | `ichorUI.tls.secretName` | Mounts the existing `kubernetes.io/tls` Secret `NAME` (in `ichor-system`), sets `--tls-cert-file` and `--tls-key-file`, and probes over HTTPS. |
 | `--ui-tls-cert FILE` with `--ui-tls-key FILE` | `ichorUI.tls.secretName` | Alternative to `--ui-tls-secret`: init stores the PEM pair as the Secret `ichor-ui-tls` and uses it the same way. The key is never printed. |
-| `--kube-api-server-url URL` | `ichorUI.users.kubeAPIServerURL` | `--kube-api-server-url`: the https URL put in users' kubeconfigs (default: the cluster's `spec.endpoint`). |
-| `--kube-api-tls-server-name NAME` | `ichorUI.users.kubeAPITLSServerName` | `--kube-api-tls-server-name`: the `tls-server-name` in users' kubeconfigs, for a URL host outside the kube-apiserver certificate. |
+| `--kube-api-server-url URL` | `ichorUI.users.kubeAPIServerURL` | The https URL put in users' kubeconfigs (default: the cluster's `spec.endpoint`). |
+| `--kube-api-tls-server-name NAME` | `ichorUI.users.kubeAPITLSServerName` | The `tls-server-name` in users' kubeconfigs, for a URL host outside the kube-apiserver certificate. |
 
 Without the TLS flags ichor-ui serves plain HTTP. Making it reachable at the
 `--ui-url` (a LoadBalancer, an Ingress or a Gateway) is your job: init
@@ -157,7 +161,9 @@ ichor auth login --issuer https://ichor.example.com --audience ichor-ui
 ```
 
 This opens a browser for the login page. The password is typed only into that
-page; the CLI never sees it. `ichor auth status` shows who you are and when the
+page; the CLI never sees it. The default audience is `ichor-kube`, the login
+`kubectl` needs; `--audience ichor-ui` is the one the `ichor user` commands use.
+`ichor auth status` shows who you are and when the
 cached tokens expire; it prints no token. `ichor auth logout` removes the local
 login cache. If the certificate of ichor-ui comes from a private CA, add
 `--ca-file ca.pem` (or `export ICHOR_CA_FILE=ca.pem`) to every `ichor auth`
@@ -169,7 +175,8 @@ To get a kubeconfig:
 ichor auth kubeconfig --issuer https://ichor.example.com --out ~/.kube/ichor.yaml
 ```
 
-`--out -` prints it to stdout. The file is written with mode 0600 and the
+`--out -` prints it to stdout; without `--out` the file is named as ichor-ui
+suggests and written to the current directory. The file is written with mode 0600 and the
 command refuses to overwrite an existing file. With `--ca-file ca.pem`, the
 kubeconfig carries `--ca-file <absolute path>` in the `ichor auth token`
 arguments, so `kubectl` trusts the same CA; without the flag the arguments do
@@ -215,10 +222,9 @@ Do not confuse it with the break-glass write in
 
 ## Control plane rollout
 
-A spike on real hardware settled the open points (ADR 0094, "Hardware
-results"): the kube-apiserver reaches the ichor-ui ClusterIP, Talos applies the
-login settings without a reboot, and it restarts the kube-apiserver on each
-change (15 to 45 seconds of `/readyz` down per control plane when there is
-only one). The rollout one control plane at a time, waiting for `/readyz`, is
-not built yet: the machine controller applies the change to every control plane
-at once.
+Talos applies the login settings without a reboot, but restarts the
+kube-apiserver on each change (15 to 45 seconds of `/readyz` down per control
+plane). The machine controller does not apply the change by itself: the
+machines report `APIServerRestartRequired`, and `ichor config apply` rolls it out one control plane at a time with
+no drain, waiting for that node's `/readyz` before the next. On a cluster with
+one control plane the API is unavailable while it restarts.

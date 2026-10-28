@@ -33,7 +33,8 @@ func TestCNIHelmRBAC(t *testing.T) {
 		configDocs := loadYAMLDocs(t, cniConfigRolePath)
 
 		if find(docs, kindServiceAccount, "ichor-cni") == nil {
-			t.Fatalf("the chart renders no ServiceAccount ichor-cni, the name the controller puts in the Job; see %s", adr0099Doc)
+			t.Fatalf("the chart renders no ServiceAccount ichor-cni, the name the controller puts in the Job; see %s",
+				adr0099Doc)
 		}
 
 		clusterRole := find(docs, kindClusterRole, "ichor-cni-role")

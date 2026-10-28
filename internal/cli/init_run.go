@@ -17,6 +17,7 @@ limitations under the License.
 package cli
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"io"
@@ -87,6 +88,9 @@ type initDeps struct {
 	// its new configuration before bootstrapping etcd; zero means the defaults.
 	BootstrapWait     time.Duration
 	BootstrapInterval time.Duration
+	// WebhookWait bounds how long init waits for Ichor's admission webhooks before creating
+	// the first CRs; zero means defaultWebhookWait.
+	WebhookWait time.Duration
 }
 
 // runInit implements `ichor init` steps 1-5 (docs/design/architecture.md,
@@ -254,7 +258,7 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 
 	// Step 5: create the CRs.
 	create := func(ctx context.Context, obj client.Object) error {
-		return createWhenWebhooksUp(ctx, k8sClient, obj, deps.BootstrapWait, deps.BootstrapInterval, deps.Stderr)
+		return createWhenWebhooksUp(ctx, k8sClient, obj, cmp.Or(deps.WebhookWait, deps.BootstrapWait, defaultWebhookWait), deps.BootstrapInterval, deps.Stderr)
 	}
 
 	if err := createCRs(ctx, create, cluster, machine, candidates, deps.Stdout, deps.Output); err != nil {

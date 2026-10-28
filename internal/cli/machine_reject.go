@@ -42,13 +42,8 @@ var machineRejectCmd = &cobra.Command{
 
 func runMachineReject(ctx context.Context, c *apiClients, in io.Reader, out, errw io.Writer, name, reason string) error {
 	if !assumeYes {
-		ok, err := confirm(in, errw, fmt.Sprintf("Reject machine %s/%s? [y/N] ", apiOpts.Namespace, name))
-		if err != nil {
-			return fmt.Errorf("machine reject: reading confirmation: %w", err)
-		}
-
-		if !ok {
-			return fmt.Errorf("machine reject: aborted")
+		if err := confirmOrAbort(in, errw, "machine reject", fmt.Sprintf("Reject machine %s/%s? [y/N] ", apiOpts.Namespace, name), "aborted"); err != nil {
+			return err
 		}
 	}
 

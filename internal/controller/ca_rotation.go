@@ -209,7 +209,7 @@ func (r *TalosOperationReconciler) advanceCARotation(
 	}
 
 	if err := lock.Renew(ctx, controllerIdentity); err != nil {
-		return ctrl.Result{}, err
+		return renewRefusal(ctx, err)
 	}
 
 	// The Secret is read uncached: it decides which CA is trusted, and a stale read after this

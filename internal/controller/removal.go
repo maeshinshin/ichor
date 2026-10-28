@@ -230,7 +230,7 @@ func (r *TalosMachineReconciler) acquireDisruptiveLock(
 		}
 	}
 
-	lock := clusterlock.New(r.Client, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0)
+	lock := clusterlock.New(r.Client, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0).WithReader(r.APIReader)
 	if err := lock.Acquire(ctx, identity); err != nil {
 		return nil, err
 	}

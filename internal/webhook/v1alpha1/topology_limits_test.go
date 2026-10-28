@@ -23,8 +23,10 @@ import (
 	. "github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/uuid"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -54,6 +56,31 @@ func topologyMachine(cluster, role, approval string) *ichorv1alpha1.TalosMachine
 			ApprovalState: approval,
 		},
 	}
+}
+
+// grantLastWorkerRights lets user read and write clusters and machines, and (if glass) hold the
+// break-glass verb on both.
+func grantLastWorkerRights(user string, glass bool) {
+	verbs := []string{verbGet, "list", verbUpdate, verbPatch, verbDelete}
+	if glass {
+		verbs = append(verbs, "break-glass")
+	}
+
+	name := "lw-test-" + user
+	role := &rbacv1.ClusterRole{
+		Name: name,
+		Rules: []rbacv1.PolicyRule{{
+			APIGroups: []string{ichorGroup}, Resources: []string{resClusters, bgUnitMachines}, Verbs: verbs,
+		}},
+	}
+	Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, role))).To(Succeed())
+
+	binding := &rbacv1.ClusterRoleBinding{
+		Name:     name,
+		RoleRef:  rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: kindClusterRole, Name: name},
+		Subjects: []rbacv1.Subject{{APIGroup: rbacv1.GroupName, Kind: kindUser, Name: user}},
+	}
+	Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, binding))).To(Succeed())
 }
 
 // approve creates m pending, then approves it by update, the way the UI and
@@ -102,22 +129,47 @@ var _ = Describe("TalosMachine Webhook control-plane approval cap", func() {
 })
 
 var _ = Describe("schedulable: false with zero workers", func() {
-	setSchedulable := func(cluster, value string) error {
+	setSchedulableAs := func(cl client.Client, cluster, value string) error {
 		c := &ichorv1alpha1.TalosCluster{}
 		Expect(k8sClient.Get(ctx, clusterKey(cluster), c)).To(Succeed())
 		c.Spec.ControlPlane.Schedulable = value
 
-		return k8sClient.Update(ctx, c)
+		return cl.Update(ctx, c)
 	}
+	setSchedulable := func(cluster, value string) error { return setSchedulableAs(k8sClient, cluster, value) }
+
+	// The suite's own client is cluster-admin and so holds break-glass; the guard's refusals are
+	// checked as a user who does not (ADR 0065, amended), and the override as one who does.
+	BeforeEach(func() {
+		grantLastWorkerRights(plainUser, false)
+		grantLastWorkerRights(glassUser, true)
+	})
 
 	It("refuses setting schedulable to false while the cluster has no approved worker", func() {
 		cluster := topologyCluster(3, "true")
 		// A pending worker has not joined, so it does not count.
 		Expect(k8sClient.Create(ctx, topologyMachine(cluster, roleWorker, ichorv1alpha1.MachineApprovalStatePending))).To(Succeed())
 
-		err := setSchedulable(cluster, "false")
+		err := setSchedulableAs(asUser(plainUser), cluster, "false")
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("schedulable"))
+		Expect(err.Error()).To(ContainSubstring("break-glass"))
+
+		Expect(setSchedulableAs(asUser(glassUser), cluster, "false")).To(Succeed())
+	})
+
+	It("lets a break-glass holder remove the last worker and refuses a plain user", func() {
+		cluster := topologyCluster(3, "false")
+		w := topologyMachine(cluster, roleWorker, "")
+		Expect(approve(w)).To(Succeed())
+		allowDelete(w)
+		Expect(k8sClient.Update(ctx, w)).To(Succeed())
+
+		err := asUser(plainUser).Delete(ctx, w)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("break-glass"))
+
+		Expect(asUser(glassUser).Delete(ctx, w)).To(Succeed())
 	})
 
 	It("allows schedulable false once an approved worker exists, then refuses removing the last worker", func() {
@@ -128,7 +180,7 @@ var _ = Describe("schedulable: false with zero workers", func() {
 
 		allowDelete(w1)
 		Expect(k8sClient.Update(ctx, w1)).To(Succeed())
-		err := k8sClient.Delete(ctx, w1)
+		err := asUser(plainUser).Delete(ctx, w1)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("schedulable"))
 
@@ -143,7 +195,7 @@ var _ = Describe("schedulable: false with zero workers", func() {
 		Expect(approve(w)).To(Succeed())
 
 		w.Spec.ApprovalState = ichorv1alpha1.MachineApprovalStateRejected
-		err := k8sClient.Update(ctx, w)
+		err := asUser(plainUser).Update(ctx, w)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("schedulable"))
 	})

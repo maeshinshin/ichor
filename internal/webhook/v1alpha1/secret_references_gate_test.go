@@ -29,10 +29,14 @@ import (
 )
 
 const (
-	resClusters  = "talosclusters"
-	verbCreate   = "create"
-	verbPatch    = "patch"
-	secrefNewK8s = "v1.36.1"
+	resClusters   = "talosclusters"
+	verbCreate    = "create"
+	verbPatch     = "patch"
+	verbUpdate    = "update"
+	lwCluster     = "west"
+	verbDelete    = "delete"
+	resOperations = "talosoperations"
+	secrefNewK8s  = "v1.36.1"
 )
 
 // ADR 0096: setting or changing a field that names a Secret the controller reads with its own

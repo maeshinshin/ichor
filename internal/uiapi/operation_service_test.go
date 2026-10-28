@@ -712,6 +712,32 @@ func TestAPausedOperationBlocksAndNamesBothWaysOut(t *testing.T) {
 	}
 }
 
+func TestUnfinishedOperationTellsAFailedIchorUpgradeToBeDeleted(t *testing.T) {
+	failed := &ichorv1alpha1.TalosOperation{
+		Name: "upgrade-ichor-x", Namespace: opNS,
+		Spec:   ichorv1alpha1.TalosOperationSpec{ClusterRef: corev1.LocalObjectReference{Name: opCluster}, Kind: ichorv1alpha1.TalosOperationKindIchor},
+		Status: ichorv1alpha1.TalosOperationStatus{Phase: ichorv1alpha1.TalosOperationPhasePaused, FailureReason: "installer Job failed"},
+	}
+	srv, k8s := opServer(t, append(opObjects(), failed)...)
+	ctx := context.Background()
+
+	cl := &ichorv1alpha1.TalosCluster{}
+	if err := k8s.Get(ctx, types.NamespacedName{Namespace: opNS, Name: opCluster}, cl); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := srv.unfinishedOperation(ctx, cl)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, want := range []string{"rolled back", "ichor operation delete upgrade-ichor-x", "ichor upgrade ichor <version>"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("message %q lacks %q", got, want)
+		}
+	}
+}
+
 func TestResumeAnnotatesOnlyAFailedOperation(t *testing.T) {
 	newOp := func(name, phase, reason string, last *metav1.Time) *ichorv1alpha1.TalosOperation {
 		return &ichorv1alpha1.TalosOperation{

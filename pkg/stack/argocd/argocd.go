@@ -70,9 +70,6 @@ type Options struct {
 	OmitPolicies bool
 }
 
-// Policies returns the CiliumNetworkPolicies of the argocd namespace alone.
-func Policies() []byte { return append([]byte{}, policies.Argocd...) }
-
 // DefaultValues is the minimal Argo CD: no dex, no notifications, no
 // ApplicationSet controller, no Redis HA. It also ships what Kokumi's
 // Applications need: the `default` AppProject and the OCI repo-creds Secret

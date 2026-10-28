@@ -68,16 +68,11 @@ type Options struct {
 	// admin/admin credential. It is an input, not generated here, because
 	// bcrypt salts randomly and Render must be deterministic.
 	AdminPasswordHash string
-	// RegistrySize is the emptyDir size limit; DefaultRegistrySize if empty.
-	RegistrySize string
 	// OmitPolicies leaves the CiliumNetworkPolicies out
 	// of the output, for the first apply, which runs before they may exist.
 	// The published bundle keeps them so Argo CD does not prune them.
 	OmitPolicies bool
 }
-
-// Policies returns the CiliumNetworkPolicies of the kokumi namespace alone.
-func Policies() []byte { return append([]byte{}, policies.Kokumi...) }
 
 // Manifest returns the unmodified upstream install.yaml.
 func Manifest() ([]byte, error) {
@@ -124,10 +119,6 @@ func NewAdminPassword() (password, hash string, err error) {
 func Render(opts Options) ([]byte, error) {
 	if opts.AdminPasswordHash == "" {
 		return nil, errors.New("kokumi: AdminPasswordHash is required")
-	}
-
-	if opts.RegistrySize == "" {
-		opts.RegistrySize = DefaultRegistrySize
 	}
 
 	raw, err := Manifest()
@@ -237,7 +228,7 @@ func (t *transformer) apply(o *unstructured.Unstructured) (drop bool, err error)
 	case "pvc/kokumi-registry-pvc":
 		drop = true
 	case "deploy/kokumi-registry":
-		err = emptyDirStorage(o, t.opts.RegistrySize)
+		err = emptyDirStorage(o, DefaultRegistrySize)
 	case "deploy/kokumi-controller-manager", "deploy/kokumi-server":
 		err = raiseMemory(o)
 	case "secret/kokumi-server-auth":

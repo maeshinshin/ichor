@@ -120,8 +120,13 @@ spec:
         volumeMounts:
         - name: backup-spool
           mountPath: /var/spool/ichor
+        # The new Kubernetes CA's certificate during a CA rotation; survives a container restart.
+        - name: api-trust
+          mountPath: /var/run/ichor/trust
       volumes:
       - name: backup-spool
+        emptyDir: {}
+      - name: api-trust
         emptyDir: {}
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10

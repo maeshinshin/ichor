@@ -40,6 +40,7 @@ import (
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/clusterlock"
@@ -112,8 +113,7 @@ type CNIHandoverReconciler struct {
 
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters,verbs=get;list;watch
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=ichorinstallations,verbs=get;list;watch
-// +kubebuilder:rbac:groups=batch,namespace=ichor-system,resources=jobs,verbs=get;list;watch;create;delete
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=ichorinstallations,verbs=get;list;watch// +kubebuilder:rbac:groups=batch,namespace=ichor-system,resources=jobs,verbs=get;list;watch;create;delete
 // +kubebuilder:rbac:groups="",namespace=ichor-system,resources=pods,verbs=get;list
 // +kubebuilder:rbac:groups="",namespace=ichor-system,resources=pods/log,verbs=get
 
@@ -137,6 +137,13 @@ func (r *CNIHandoverReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	handedOver := apimeta.IsStatusConditionTrue(cluster.Status.Conditions, render.ConditionCNIHandover)
+	if handedOver {
+		// Whether the embedded chart is newer than the release's.
+		if err := r.syncUpgradeAvailable(ctx, &cluster); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+
 	if handedOver && cluster.Status.CNI != nil && cluster.Status.CNI.AppliedValuesHash == hash {
 		return ctrl.Result{}, nil
 	}
@@ -347,10 +354,27 @@ func (r *CNIHandoverReconciler) ciliumReady(ctx context.Context) (ready bool, wh
 // returns its status and the hash of the values it was deployed with. A missing record has
 // status "".
 func (r *CNIHandoverReconciler) releaseState(ctx context.Context) (status, valuesHash string, err error) {
+	rel, err := readCiliumRelease(ctx, r.reader(), r.Namespace)
+
+	return rel.Status, rel.ValuesHash, err
+}
+
+// ciliumRelease is what the newest Helm release record for cilium says.
+type ciliumRelease struct {
+	// Status is the record's status ("deployed", "failed", ...); empty when there is no record.
+	Status string
+	// ValuesHash is the hash of the values the release was deployed with.
+	ValuesHash string
+	// ChartVersion is the version of the chart the release was deployed from.
+	ChartVersion string
+}
+
+// readCiliumRelease reads the newest release record of cilium in ns.
+func readCiliumRelease(ctx context.Context, reader client.Reader, ns string) (ciliumRelease, error) {
 	var secrets corev1.SecretList
-	if err := r.reader().List(ctx, &secrets, client.InNamespace(r.Namespace),
+	if err := reader.List(ctx, &secrets, client.InNamespace(ns),
 		client.MatchingLabels{helmOwnerLabel: "helm", labelName: cilium.ReleaseName}); err != nil {
-		return "", "", err
+		return ciliumRelease{}, err
 	}
 
 	var (
@@ -366,50 +390,55 @@ func (r *CNIHandoverReconciler) releaseState(ctx context.Context) (status, value
 	}
 
 	if newest == nil {
-		return "", "", nil
+		return ciliumRelease{}, nil
 	}
 
-	vals, err := decodeReleaseConfig(newest.Data["release"])
+	vals, chartVersion, err := decodeRelease(newest.Data["release"])
 	if err != nil {
-		return "", "", fmt.Errorf("reading Helm release record %s: %w", newest.Name, err)
+		return ciliumRelease{}, fmt.Errorf("reading Helm release record %s: %w", newest.Name, err)
 	}
 
-	valuesHash, err = hashCiliumValues(vals)
+	hash, err := hashCiliumValues(vals)
 
-	return newest.Labels["status"], valuesHash, err
+	return ciliumRelease{Status: newest.Labels["status"], ValuesHash: hash, ChartVersion: chartVersion}, err
 }
 
-// decodeReleaseConfig reads the user-supplied values out of a Helm release record (Helm stores
-// base64 of gzipped JSON). Helm's own decoder is unexported.
-func decodeReleaseConfig(data []byte) (map[string]any, error) {
+// decodeRelease reads the user-supplied values and the chart version out of a Helm release record
+// (Helm stores base64 of gzipped JSON). Helm's own decoder is unexported.
+func decodeRelease(data []byte) (config map[string]any, chartVersion string, err error) {
 	raw, err := base64.StdEncoding.DecodeString(string(data))
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	if len(raw) > 2 && raw[0] == 0x1f && raw[1] == 0x8b {
 		zr, err := gzip.NewReader(bytes.NewReader(raw))
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
 
 		if raw, err = io.ReadAll(zr); err != nil {
-			return nil, err
+			return nil, "", err
 		}
 	}
 
 	var rel struct {
 		Config map[string]any `json:"config"`
+		Chart  struct {
+			Metadata struct {
+				Version string `json:"version"`
+			} `json:"metadata"`
+		} `json:"chart"`
 	}
 	if err := json.Unmarshal(raw, &rel); err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	if rel.Config == nil {
 		rel.Config = map[string]any{}
 	}
 
-	return rel.Config, nil
+	return rel.Config, rel.Chart.Metadata.Version, nil
 }
 
 func (r *CNIHandoverReconciler) deleteJob(ctx context.Context, cluster *ichorv1alpha1.TalosCluster, hash string) error {
@@ -491,6 +520,7 @@ func cniPresetFor(preset string) (cni.Preset, bool) {
 func (r *CNIHandoverReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&ichorv1alpha1.TalosCluster{}).
+		Watches(&ichorv1alpha1.TalosOperation{}, handler.EnqueueRequestsFromMapFunc(cniUpgradeOperationClusters)).
 		Named("cnihandover").
 		Complete(r)
 }

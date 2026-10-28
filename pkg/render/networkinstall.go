@@ -23,7 +23,6 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/cel/celenv"
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
 	"github.com/siderolabs/talos/pkg/machinery/config/config"
-	"github.com/siderolabs/talos/pkg/machinery/config/configpatcher"
 	"github.com/siderolabs/talos/pkg/machinery/config/container"
 	"github.com/siderolabs/talos/pkg/machinery/config/types/k8s"
 	"github.com/siderolabs/talos/pkg/machinery/config/types/runtime"
@@ -73,12 +72,12 @@ func injectCNI(
 	}
 
 	//nolint:staticcheck // the legacy block is the only form a pre-1.14 contract accepts
-	return mergeDocument(cfg, &mv1alpha1.Config{
+	return mergeDocument(cfg, "cni", &mv1alpha1.Config{
 		ConfigVersion: mv1alpha1.Version,
 		ClusterConfig: &mv1alpha1.ClusterConfig{
 			ClusterNetwork: &mv1alpha1.ClusterNetworkConfig{CNI: &mv1alpha1.CNIConfig{CNIName: "none"}},
 		},
-	}, "cni")
+	})
 }
 
 // injectInstall renders spec.install (ADR 0077): the UnattendedInstallConfig document from the
@@ -103,7 +102,7 @@ func injectInstall(
 		doc.ProvisioningSpec.Wipe = new(false)
 		doc.ProvisioningSpec.DiskSelector.Match = match
 
-		return mergeDocument(cfg, doc, "install")
+		return mergeDocument(cfg, "install", doc)
 	}
 
 	legacy := &mv1alpha1.InstallConfig{InstallImage: install.Image} //nolint:staticcheck // see below
@@ -123,10 +122,10 @@ func injectInstall(
 	}
 
 	//nolint:staticcheck // the legacy block is the only form a pre-1.14 contract accepts
-	return mergeDocument(cfg, &mv1alpha1.Config{
+	return mergeDocument(cfg, "install", &mv1alpha1.Config{
 		ConfigVersion: mv1alpha1.Version,
 		MachineConfig: &mv1alpha1.MachineConfig{MachineInstall: legacy},
-	}, "install")
+	})
 }
 
 // diskExpression is the v1.14 disk selector for one TalosMachineDisk, checked against Talos's own
@@ -155,20 +154,4 @@ func diskExpression(d ichorv1alpha1.TalosMachineDisk) (cel.Expression, error) {
 	}
 
 	return match, nil
-}
-
-// mergeDocument strategic-merges one document into cfg, the way injectKubeProxy does.
-func mergeDocument(cfg coreconfig.Provider, doc config.Document, what string) (coreconfig.Provider, error) {
-	c, err := container.New(doc)
-	if err != nil {
-		return nil, fmt.Errorf("render: %s: %w", what, err)
-	}
-
-	out, err := configpatcher.Apply(configpatcher.WithConfig(cfg),
-		[]configpatcher.Patch{configpatcher.NewStrategicMergePatch(c)})
-	if err != nil {
-		return nil, fmt.Errorf("render: applying %s: %w", what, err)
-	}
-
-	return out.Config()
 }

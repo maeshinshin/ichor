@@ -151,6 +151,10 @@ func BuildConfig(
 		return nil, fmt.Errorf("render: secrets bundle is required")
 	}
 
+	if sys == nil {
+		sys = &SystemInputs{}
+	}
+
 	contract, err := coreconfig.ParseContractFromVersion(cluster.Spec.VersionContract)
 	if err != nil {
 		return nil, fmt.Errorf("render: parsing versionContract: %w", err)
@@ -173,7 +177,7 @@ func BuildConfig(
 
 	// A CA rotation in progress changes which CA the base configuration is generated from and
 	// which CAs are accepted besides it (ADR 0063).
-	baseBundle, accepted, err := sys.caRotation().apply(bundle)
+	baseBundle, accepted, err := sys.CARotation.apply(bundle)
 	if err != nil {
 		return nil, err
 	}
@@ -193,7 +197,7 @@ func BuildConfig(
 	// taint above -- Ichor-generated, not patch-shaped, and the lowest
 	// layer in the bottom-up stack so a cluster/role/selector/machine patch
 	// that also sets machine.registries still wins.
-	cfg, err = injectRegistries(cfg, cluster, sys.registryAuth())
+	cfg, err = injectRegistries(cfg, cluster, sys.RegistryAuth)
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +251,7 @@ func BuildConfig(
 	}
 
 	// A staged Kubernetes upgrade pins the kubelet and kube-proxy below the spec (ADR 0087).
-	cfg, err = injectStagedVersions(cfg, contract, sys.staged())
+	cfg, err = injectStagedVersions(cfg, contract, sys.Staged)
 	if err != nil {
 		return nil, err
 	}
@@ -463,47 +467,53 @@ func selectorMatches(p *ichorv1alpha1.TalosConfigPatch, m *ichorv1alpha1.TalosMa
 // deep-copied if it actually carries the entry; every other patch passes
 // through as the same pointer.
 func dropHandedOverInlineManifest(ordered []*ichorv1alpha1.TalosConfigPatch) []*ichorv1alpha1.TalosConfigPatch {
+	return rewriteClusterConfigs(ordered,
+		func(cc *typedconfig.ClusterConfig) bool {
+			return slices.ContainsFunc(cc.ClusterInlineManifests, func(e *typedconfig.ClusterInlineManifest) bool {
+				return e.InlineManifestName == cni.InlineManifestName
+			})
+		},
+		func(cc *typedconfig.ClusterConfig) {
+			// A fresh slice, never the original's backing array: the caller still holds the
+			// unmodified patch.
+			var kept []*typedconfig.ClusterInlineManifest
+
+			for _, e := range cc.ClusterInlineManifests {
+				if e.InlineManifestName != cni.InlineManifestName {
+					kept = append(kept, e)
+				}
+			}
+
+			cc.ClusterInlineManifests = kept
+		})
+}
+
+// rewriteClusterConfigs returns ordered with edit applied to the ClusterConfig of every Config
+// document for which needs is true. It deep-copies only the patches it edits; every other patch
+// passes through as the same pointer, and the caller's own objects are never mutated.
+func rewriteClusterConfigs(
+	ordered []*ichorv1alpha1.TalosConfigPatch,
+	needs func(*typedconfig.ClusterConfig) bool, edit func(*typedconfig.ClusterConfig),
+) []*ichorv1alpha1.TalosConfigPatch {
 	out := make([]*ichorv1alpha1.TalosConfigPatch, len(ordered))
 
 	for i, p := range ordered {
 		out[i] = p
 
 		for di, doc := range p.Spec.Documents {
-			if doc.Config == nil || doc.Config.ClusterConfig == nil {
+			if doc.Config == nil || doc.Config.ClusterConfig == nil || !needs(doc.Config.ClusterConfig) {
 				continue
-			}
-
-			kept := withoutInlineManifest(doc.Config.ClusterConfig.ClusterInlineManifests, cni.InlineManifestName)
-			if len(kept) == len(doc.Config.ClusterConfig.ClusterInlineManifests) {
-				continue // this document never carried the entry
 			}
 
 			if out[i] == p {
 				out[i] = p.DeepCopy()
 			}
 
-			out[i].Spec.Documents[di].Config.ClusterConfig.ClusterInlineManifests = kept
+			edit(out[i].Spec.Documents[di].Config.ClusterConfig)
 		}
 	}
 
 	return out
-}
-
-// withoutInlineManifest returns manifests without any entry named name, as
-// a fresh slice (never manifests' own backing array, which dropHandedOverInlineManifest's
-// caller may still hold a pointer to via the original, unmodified patch).
-func withoutInlineManifest(
-	manifests []*typedconfig.ClusterInlineManifest, name string,
-) []*typedconfig.ClusterInlineManifest {
-	var kept []*typedconfig.ClusterInlineManifest
-
-	for _, entry := range manifests {
-		if entry.InlineManifestName != name {
-			kept = append(kept, entry)
-		}
-	}
-
-	return kept
 }
 
 // applyPatches merges each patch's documents onto cfg in the given order,
@@ -544,6 +554,23 @@ func applyPatches(cfg coreconfig.Provider, ordered []*ichorv1alpha1.TalosConfigP
 	return out.Config()
 }
 
+// mergeDocument strategic-merges docs into cfg as one patch, the way every system-layer step
+// does; what names the step in an error.
+func mergeDocument(cfg coreconfig.Provider, what string, docs ...config.Document) (coreconfig.Provider, error) {
+	c, err := container.New(docs...)
+	if err != nil {
+		return nil, fmt.Errorf("render: %s: %w", what, err)
+	}
+
+	out, err := configpatcher.Apply(configpatcher.WithConfig(cfg),
+		[]configpatcher.Patch{configpatcher.NewStrategicMergePatch(c)})
+	if err != nil {
+		return nil, fmt.Errorf("render: applying %s: %w", what, err)
+	}
+
+	return out.Config()
+}
+
 // DocumentFromPatch converts one TalosConfigPatchDocument to the machinery
 // document its kind selects, through the typedconfig mirror type's own
 // ToMachinery conversion (ADR 0003). The CRD's discriminator validation
@@ -558,49 +585,31 @@ func applyPatches(cfg coreconfig.Provider, ordered []*ichorv1alpha1.TalosConfigP
 func DocumentFromPatch(d ichorv1alpha1.TalosConfigPatchDocument) (config.Document, error) {
 	switch d.Kind {
 	case "SysctlConfig":
-		doc, err := d.SysctlConfig.ToMachinery()
-		if err != nil {
-			return nil, fmt.Errorf("sysctlConfig: %w", err)
-		}
-
-		return doc, nil
+		return wrapDocument("sysctlConfig")(d.SysctlConfig.ToMachinery())
 	case "KernelModuleConfig":
-		doc, err := d.KernelModuleConfig.ToMachinery()
-		if err != nil {
-			return nil, fmt.Errorf("kernelModuleConfig: %w", err)
-		}
-
-		return doc, nil
+		return wrapDocument("kernelModuleConfig")(d.KernelModuleConfig.ToMachinery())
 	case "Config":
-		doc, err := d.Config.ToMachinery()
-		if err != nil {
-			return nil, fmt.Errorf("config: %w", err)
-		}
-
-		return doc, nil
+		return wrapDocument("config")(d.Config.ToMachinery())
 	case "VolumeConfig":
-		doc, err := d.VolumeConfig.ToMachinery()
-		if err != nil {
-			return nil, fmt.Errorf("volumeConfig: %w", err)
-		}
-
-		return doc, nil
+		return wrapDocument("volumeConfig")(d.VolumeConfig.ToMachinery())
 	case "UserVolumeConfig":
-		doc, err := d.UserVolumeConfig.ToMachinery()
-		if err != nil {
-			return nil, fmt.Errorf("userVolumeConfig: %w", err)
-		}
-
-		return doc, nil
+		return wrapDocument("userVolumeConfig")(d.UserVolumeConfig.ToMachinery())
 	case "RawVolumeConfig":
-		doc, err := d.RawVolumeConfig.ToMachinery()
-		if err != nil {
-			return nil, fmt.Errorf("rawVolumeConfig: %w", err)
-		}
-
-		return doc, nil
+		return wrapDocument("rawVolumeConfig")(d.RawVolumeConfig.ToMachinery())
 	default:
 		return nil, fmt.Errorf("unknown document kind %q", d.Kind)
+	}
+}
+
+// wrapDocument returns a function that turns a ToMachinery result into DocumentFromPatch's
+// return, naming the kind in an error and never returning a typed nil.
+func wrapDocument(kind string) func(config.Document, error) (config.Document, error) {
+	return func(doc config.Document, err error) (config.Document, error) {
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", kind, err)
+		}
+
+		return doc, nil
 	}
 }
 

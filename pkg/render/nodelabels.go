@@ -22,8 +22,6 @@ import (
 
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
 	"github.com/siderolabs/talos/pkg/machinery/config/config"
-	"github.com/siderolabs/talos/pkg/machinery/config/configpatcher"
-	"github.com/siderolabs/talos/pkg/machinery/config/container"
 	"github.com/siderolabs/talos/pkg/machinery/config/types/k8s"
 	mv1alpha1 "github.com/siderolabs/talos/pkg/machinery/config/types/v1alpha1"
 
@@ -101,16 +99,5 @@ func injectNodeLabels(
 		}
 	}
 
-	c, err := container.New(doc)
-	if err != nil {
-		return nil, fmt.Errorf("render: spec.nodeLabels: %w", err)
-	}
-
-	out, err := configpatcher.Apply(configpatcher.WithConfig(cfg),
-		[]configpatcher.Patch{configpatcher.NewStrategicMergePatch(c)})
-	if err != nil {
-		return nil, fmt.Errorf("render: applying spec.nodeLabels: %w", err)
-	}
-
-	return out.Config()
+	return mergeDocument(cfg, "spec.nodeLabels", doc)
 }

@@ -70,7 +70,7 @@ func injectNetwork(
 	alias := network.NewLinkAliasConfigV1Alpha1(primaryLinkAlias)
 	alias.Selector.Match = match
 
-	if cfg, err = mergeDocument(cfg, alias, "link alias"); err != nil {
+	if cfg, err = mergeDocument(cfg, "link alias", alias); err != nil {
 		return nil, err
 	}
 
@@ -93,7 +93,7 @@ func injectNetwork(
 		parent := network.NewLinkConfigV1Alpha1(primaryLinkAlias)
 		parent.LinkUp = new(true)
 
-		if cfg, err = mergeDocument(cfg, parent, "vlan parent link"); err != nil {
+		if cfg, err = mergeDocument(cfg, "vlan parent link", parent); err != nil {
 			return nil, err
 		}
 
@@ -107,7 +107,7 @@ func injectNetwork(
 			vlan.LinkAddresses, vlan.LinkRoutes = addrs, routes
 		}
 
-		if cfg, err = mergeDocument(cfg, vlan, "vlan"); err != nil {
+		if cfg, err = mergeDocument(cfg, "vlan", vlan); err != nil {
 			return nil, err
 		}
 	} else if n.Addressing == ichorv1alpha1.MachineAddressingStatic {
@@ -115,13 +115,13 @@ func injectNetwork(
 		link.CommonLinkConfig = common
 		link.LinkAddresses, link.LinkRoutes = addrs, routes
 
-		if cfg, err = mergeDocument(cfg, link, "link"); err != nil {
+		if cfg, err = mergeDocument(cfg, "link", link); err != nil {
 			return nil, err
 		}
 	}
 
 	if n.Addressing != ichorv1alpha1.MachineAddressingStatic {
-		if cfg, err = mergeDocument(cfg, network.NewDHCPv4ConfigV1Alpha1(target), "dhcp"); err != nil {
+		if cfg, err = mergeDocument(cfg, "dhcp", network.NewDHCPv4ConfigV1Alpha1(target)); err != nil {
 			return nil, err
 		}
 	}
@@ -142,7 +142,7 @@ func injectNetwork(
 			network.NameserverConfig{Address: meta.Addr{Addr: a}})
 	}
 
-	return mergeDocument(cfg, resolver, "resolver")
+	return mergeDocument(cfg, "resolver", resolver)
 }
 
 // networkRoutes is the default route through spec.network.gateway, or none.
@@ -201,7 +201,7 @@ func injectLegacyNetwork(cfg coreconfig.Provider, n *ichorv1alpha1.TalosMachineN
 		dev.DeviceDHCP = new(true)
 	}
 
-	return mergeDocument(cfg, &mv1alpha1.Config{
+	return mergeDocument(cfg, "network", &mv1alpha1.Config{
 		ConfigVersion: mv1alpha1.Version,
 		MachineConfig: &mv1alpha1.MachineConfig{
 			MachineNetwork: &mv1alpha1.NetworkConfig{
@@ -209,7 +209,7 @@ func injectLegacyNetwork(cfg coreconfig.Provider, n *ichorv1alpha1.TalosMachineN
 				NameServers:       n.DNSServers,
 			},
 		},
-	}, "network")
+	})
 }
 
 // injectDisks renders spec.disks (ADR 0092): a VolumeConfig for EPHEMERAL and a UserVolumeConfig
@@ -227,7 +227,7 @@ func injectDisks(cfg coreconfig.Provider, m *ichorv1alpha1.TalosMachine) (coreco
 			doc.MetaName = ephemeralVolume
 			doc.ProvisioningSpec.DiskSelectorSpec.Match = match
 
-			cfg, err = mergeDocument(cfg, doc, "ephemeral volume")
+			cfg, err = mergeDocument(cfg, "ephemeral volume", doc)
 		case ichorv1alpha1.MachineDiskRoleUserVolume:
 			doc := block.NewUserVolumeConfigV1Alpha1()
 			doc.MetaName = d.Name
@@ -241,7 +241,7 @@ func injectDisks(cfg coreconfig.Provider, m *ichorv1alpha1.TalosMachine) (coreco
 				return nil, fmt.Errorf("render: disks %q maxSize: %w", d.Name, err)
 			}
 
-			cfg, err = mergeDocument(cfg, doc, "user volume")
+			cfg, err = mergeDocument(cfg, "user volume", doc)
 		default:
 			err = fmt.Errorf("render: unknown disk role %q", d.Role)
 		}

@@ -22,8 +22,6 @@ import (
 
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
 	"github.com/siderolabs/talos/pkg/machinery/config/config"
-	"github.com/siderolabs/talos/pkg/machinery/config/configpatcher"
-	"github.com/siderolabs/talos/pkg/machinery/config/container"
 	"github.com/siderolabs/talos/pkg/machinery/config/machine"
 	"github.com/siderolabs/talos/pkg/machinery/config/types/k8s"
 	"github.com/siderolabs/talos/pkg/machinery/config/types/meta"
@@ -96,20 +94,7 @@ func injectControlPlaneMetrics(
 		legacy.ClusterConfig.SchedulerConfig = &mv1alpha1.SchedulerConfig{ExtraArgsConfig: all}
 	}
 
-	docs = append(docs, legacy)
-
-	c, err := container.New(docs...)
-	if err != nil {
-		return nil, fmt.Errorf("render: control-plane metrics: %w", err)
-	}
-
-	out, err := configpatcher.Apply(configpatcher.WithConfig(cfg),
-		[]configpatcher.Patch{configpatcher.NewStrategicMergePatch(c)})
-	if err != nil {
-		return nil, fmt.Errorf("render: applying control-plane metrics: %w", err)
-	}
-
-	return out.Config()
+	return mergeDocument(cfg, "control-plane metrics", append(docs, legacy)...)
 }
 
 // metricsSubnets parses allowedCIDRs, masked to their network address. Empty is an error: with

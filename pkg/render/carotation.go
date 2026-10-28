@@ -71,14 +71,6 @@ func (r *CARotation) apply(bundle *secrets.Bundle) (*secrets.Bundle, *acceptedCA
 
 type acceptedCAs struct{ talos, kubernetes []byte }
 
-func (s *SystemInputs) caRotation() *CARotation {
-	if s == nil {
-		return nil
-	}
-
-	return s.CARotation
-}
-
 // injectAcceptedCAs adds the extra accepted CAs: machine.acceptedCAs for the Talos API and, in
 // whichever form the version contract uses, the Kubernetes API's. These are the same fields
 // `talosctl rotate-ca` patches (pkg/rotate/pki), written through machinery's own rotatepatcher.

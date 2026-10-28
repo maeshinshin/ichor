@@ -17,162 +17,445 @@ limitations under the License.
 package controller
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"strconv"
+	"strings"
 	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/clusterlock"
 	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
+	"github.com/maeshinshin/ichor/pkg/deleteguard"
 	"github.com/maeshinshin/ichor/pkg/render"
 )
 
-// argoApplicationGVK identifies Argo CD's Application CRD (argoproj.io/v1alpha1, per
-// pkg/gitops's own Application type and its doc.go). Read as unstructured.Unstructured --
-// the standard controller-runtime pattern for a foreign CRD this project neither owns nor
-// vendors Go types for -- rather than adding a dependency on Argo CD's module for three
-// status fields.
-var argoApplicationGVK = schema.GroupVersionKind{Group: "argoproj.io", Version: "v1alpha1", Kind: "Application"}
-
-// handoverRequeueInterval is how often CNIHandoverReconciler re-checks the CNI's Argo CD
-// Application while waiting: spec.cni.handover is "automatic" but the Application is not
-// yet Synced and Healthy, or does not exist at all (Argo CD not installed, or not yet
-// adopted it). Thirty seconds: a hand-over is a one-time bootstrap event an operator is
-// watching for, so it is checked more often than DiscoverAll's own five-minute background
-// poll (internal/controller/taloscluster_controller.go).
-const handoverRequeueInterval = 30 * time.Second
-
 const (
-	reasonHandoverDisabled       = "Disabled"
-	reasonHandoverManualPending  = "ManualPending"
-	reasonHandoverWaitingForArgo = "WaitingForArgoCD"
-	reasonHandoverWaitingForSync = "WaitingForSync"
-	reasonHandoverComplete       = "Complete"
-	reasonCNIPresetRemoved       = "PresetRemoved"
+	// handoverRequeueInterval is how often CNIHandoverReconciler re-checks while it waits for
+	// Cilium to come up, for the cluster operation lock, or for a release record: a hand-over
+	// is a one-time bootstrap event an operator is watching for.
+	handoverRequeueInterval = 30 * time.Second
+
+	// cniJobPollInterval is how often it looks at a running Helm Job. It also keeps the cluster
+	// operation lock (a five-minute lease) renewed, so it must stay far below that.
+	cniJobPollInterval = 15 * time.Second
+
+	// cniHelmLockIdentity holds the cluster operation lock while a Cilium Helm Job runs. It is
+	// not controllerIdentity on purpose: Acquire lets the same identity back in, so with the
+	// shared one a node rollout holding the lock would not stop the Job.
+	cniHelmLockIdentity = "ichor-controller/cni-helm"
 )
 
-// CNIHandoverReconciler implements the one real member of what
-// docs/design/architecture.md's "GitOps and Argo CD" section once called "one mechanism
-// with a component registry, not three special cases": the CNI's
-// inject-through-cluster.inlineManifests-then-remove path. Ichor itself is applied
-// directly through the API server, never inlined, and Argo CD is never installed by Ichor
-// at all (ADR 0019) -- so neither one ever needs this path, and there is nothing left to
-// register. ADR 0024 records why that means no registry abstraction here, for one member.
+const (
+	reasonHandoverWaitingForCilium = "WaitingForCilium"
+	reasonHandoverAdopting         = "AdoptingCilium"
+	reasonHandoverComplete         = "Complete"
+	reasonCNIPresetRemoved         = "PresetRemoved"
+	reasonCNIJobRunning            = "Applying"
+	reasonCNIJobFailed             = "JobFailed"
+	reasonCNIWaitingForLock        = "WaitingForLock"
+	reasonCNIWaitingForRelease     = "WaitingForRelease"
+	reasonCNIInvalidValues         = "InvalidValues"
+	reasonCNIApplied               = "Applied"
+)
+
+// CNIHandoverReconciler hands the bootstrapped Cilium to Ichor (ADR 0099, decision 2) and keeps
+// the Helm release at the cluster's Cilium values afterwards. Cilium arrives as an inline
+// manifest; once the control plane is up, a one-shot Helm Job (AdvanceCNIHelmJob) adopts it into
+// the Helm release "cilium". When that Job has completed, the release record is deployed at the
+// effective values and the DaemonSet is fully ready, the reconciler sets CNIHandover=True,
+// which is what pkg/render reads to stop rendering the CNI's inline manifest entry (Talos only
+// creates inline manifests, never updates them, so a stale entry must go; ADR 0024). A later
+// change to spec.cni.cilium.values is a new effective-values hash and so a new Job.
+//
+// While a Job runs the reconciler holds the cluster operation lock (pkg/clusterlock), so it never
+// overlaps a node rollout, and a node rollout never starts under it.
 //
 // A separate controller from TalosClusterReconciler on purpose: that reconciler's own doc
-// comment already warns DiscoverAll can block a TalosCluster's reconcile for up to ~68s at
-// spec.discovery's caps, and a hand-over check waiting behind that would make the "checked
-// every 30s" promise above false whenever discovery is also configured. Two controllers
-// watching the same Kind each get their own work queue, so a slow discovery pass in one
-// never delays the other -- raising TalosClusterReconciler's MaxConcurrentReconciles would
-// not have helped, since a single TalosCluster only ever has one in-flight reconcile
-// through one controller's queue regardless of that setting (ADR 0024).
+// comment warns DiscoverAll can block a reconcile for up to ~68s, and a hand-over check waiting
+// behind that would make the cadence above false (ADR 0024).
 type CNIHandoverReconciler struct {
 	client.Client
+
+	// APIReader reads the release record, the lock and the control-plane count live (the manager's
+	// uncached reader); falls back to Client when nil.
+	APIReader client.Reader
+
+	// Kube reads the Job's pod log for the failure condition; nil leaves the Job's own reason.
+	Kube kubernetes.Interface
+
+	// Namespace is where the Jobs run and the release record lives (ichor-system).
+	Namespace string
 }
 
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters,verbs=get;list;watch
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=argoproj.io,resources=applications,verbs=get;list;watch
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=ichorinstallations,verbs=get;list;watch
+// +kubebuilder:rbac:groups=batch,namespace=ichor-system,resources=jobs,verbs=get;list;watch;create;delete
+// +kubebuilder:rbac:groups="",namespace=ichor-system,resources=pods,verbs=get;list
+// +kubebuilder:rbac:groups="",namespace=ichor-system,resources=pods/log,verbs=get
 
-// Reconcile checks whether cluster's CNI Application is Synced and Healthy and, if so
-// (and spec.cni.handover is "automatic", the default), records that on cluster.status --
-// which is what pkg/render.BuildConfig reads to stop rendering the CNI's
-// cluster.inlineManifests entry. Removal has to happen there, not by rewriting a
-// TalosConfigPatch's spec (principle 5: the controller renders from ingredients, it does
-// not rewrite them) -- and it has to happen at all, because Talos's own
-// ManifestApplyController re-applies cluster.inlineManifests during a Kubernetes upgrade
-// and has no delete path, so a stale entry rolls the CNI back to whatever Ichor originally
-// inlined it as (docs/design/architecture.md, "GitOps and Argo CD").
-//
-// A cluster whose preset is not cilium (ADR 0099) has nothing to hand over; it only gets the
-// CNIUnsupported condition.
+// Reconcile runs the flow in the type's comment. A cluster whose preset is not cilium has nothing
+// to hand over; it only gets the CNIUnsupported condition.
 func (r *CNIHandoverReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	var cluster ichorv1alpha1.TalosCluster
 	if err := r.Get(ctx, req.NamespacedName, &cluster); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	preset, ok := cniPresetFor(cluster.Spec.CNI.Preset)
-	if !ok {
+	if _, ok := cniPresetFor(cluster.Spec.CNI.Preset); !ok {
 		return ctrl.Result{}, r.markCNIUnsupported(ctx, &cluster)
 	}
 
-	app, err := preset.ArgoCDApplication(cni.KubeProxyMode(cluster.Spec.CNI.KubeProxy))
+	hash, err := CNIValuesHash(&cluster)
 	if err != nil {
-		return ctrl.Result{}, err
+		// A values change fixes it and triggers a new reconcile; retrying now would not.
+		return ctrl.Result{}, r.setCondition(ctx, &cluster, ichorv1alpha1.ConditionCNIValuesApplied,
+			metav1.ConditionFalse, reasonCNIInvalidValues, err.Error())
 	}
-	if app == nil {
+
+	handedOver := apimeta.IsStatusConditionTrue(cluster.Status.Conditions, render.ConditionCNIHandover)
+	if handedOver && cluster.Status.CNI != nil && cluster.Status.CNI.AppliedValuesHash == hash {
 		return ctrl.Result{}, nil
 	}
 
-	switch cluster.Spec.CNI.Handover {
-	case "disabled":
-		return ctrl.Result{}, r.setHandoverCondition(ctx, &cluster, metav1.ConditionFalse, reasonHandoverDisabled,
-			`spec.cni.handover is "disabled"; the cluster.inlineManifests entry is never removed automatically`)
-	case "manual":
-		return ctrl.Result{}, r.setHandoverCondition(ctx, &cluster, metav1.ConditionFalse, reasonHandoverManualPending,
-			`spec.cni.handover is "manual"; waiting for an operator-triggered hand-over (ichor gitops handoff cni)`)
+	// Before the first Job the bootstrapped Cilium has to be up: the adoption waits for it, and a
+	// Job on a cluster with no CNI yet would only sit there.
+	if !handedOver {
+		if ready, why, err := r.ciliumReady(ctx); err != nil {
+			return ctrl.Result{}, err
+		} else if !ready {
+			return ctrl.Result{RequeueAfter: handoverRequeueInterval},
+				r.setCondition(ctx, &cluster, render.ConditionCNIHandover, metav1.ConditionFalse, reasonHandoverWaitingForCilium, why)
+		}
 	}
 
-	// "automatic", including the CRD default's zero value not yet reached by an older
-	// object -- treated the same way driftPolicy's own zero value is: the safe side,
-	// which here is the one that still does the work rather than silently skipping it.
-	var live unstructured.Unstructured
-	live.SetGroupVersionKind(argoApplicationGVK)
+	return r.runJob(ctx, &cluster, hash, handedOver)
+}
 
-	err = r.Get(ctx, types.NamespacedName{Namespace: app.Namespace, Name: app.Name}, &live)
-	switch {
-	case apierrors.IsNotFound(err) || apimeta.IsNoMatchError(err):
-		// Either Argo CD has not adopted the Application yet, or its CRDs are not
-		// installed on this cluster at all -- indistinguishable here, and both are
-		// "not here yet", not an error. A cluster that simply does not run Argo CD
-		// should set spec.cni.handover: disabled to silence this; left at the
-		// "automatic" default, this polls forever and reports it plainly, which is
-		// "does not break" (nothing blocks, nothing retries in a tight loop), not
-		// "hangs".
-		return ctrl.Result{RequeueAfter: handoverRequeueInterval}, r.setHandoverCondition(ctx, &cluster, metav1.ConditionFalse, reasonHandoverWaitingForArgo,
-			fmt.Sprintf("no Argo CD Application %q found in namespace %q yet", app.Name, app.Namespace))
-	case err != nil:
+// runJob advances the Helm Job for hash under the cluster operation lock, and on completion
+// records the result.
+func (r *CNIHandoverReconciler) runJob(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, hash string, handedOver bool,
+) (ctrl.Result, error) {
+	var inst ichorv1alpha1.IchorInstallation
+	if err := r.Get(ctx, types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}, &inst); err != nil {
+		if apierrors.IsNotFound(err) {
+			return ctrl.Result{RequeueAfter: handoverRequeueInterval}, r.setProgress(ctx, cluster, handedOver,
+				reasonCNIWaitingForLock, "no IchorInstallation yet: the Helm Job needs its installer image")
+		}
+
 		return ctrl.Result{}, err
 	}
 
-	syncStatus, healthStatus := argoApplicationStatus(&live)
-	if syncStatus != "Synced" || healthStatus != "Healthy" {
-		return ctrl.Result{RequeueAfter: handoverRequeueInterval}, r.setHandoverCondition(ctx, &cluster, metav1.ConditionFalse, reasonHandoverWaitingForSync,
-			fmt.Sprintf("Argo CD reports %q sync=%q health=%q", app.Name, syncStatus, healthStatus))
+	lock := r.lock(cluster)
+
+	if err := r.acquireDisruptiveLock(ctx, cluster, lock); err != nil {
+		var held *clusterlock.HeldError
+
+		var transitioning *transitioningError
+
+		var shutting *shuttingDownError
+
+		if errors.As(err, &held) || errors.As(err, &transitioning) || errors.As(err, &shutting) {
+			return ctrl.Result{RequeueAfter: handoverRequeueInterval}, r.setProgress(ctx, cluster, handedOver,
+				reasonCNIWaitingForLock, "waiting for the cluster operation lock before changing Cilium: "+err.Error())
+		}
+
+		return ctrl.Result{}, err
 	}
 
-	return ctrl.Result{}, r.setHandoverCondition(ctx, &cluster, metav1.ConditionTrue, reasonHandoverComplete,
-		fmt.Sprintf("Argo CD reports %q Synced and Healthy; no longer rendering its cluster.inlineManifests entry", app.Name))
+	done, err := AdvanceCNIHelmJob(ctx, r.Client, r.Namespace, cluster, &inst)
+
+	var failed *CNIHelmJobFailedError
+
+	switch {
+	case errors.As(err, &failed):
+		_ = lock.Release(ctx, cniHelmLockIdentity)
+
+		return ctrl.Result{}, r.setProgress(ctx, cluster, handedOver, reasonCNIJobFailed, r.failureMessage(ctx, failed))
+	case err != nil:
+		return ctrl.Result{}, err
+	case !done:
+		return ctrl.Result{RequeueAfter: cniJobPollInterval}, r.setProgress(ctx, cluster, handedOver,
+			reasonCNIJobRunning, "the Cilium Helm Job is running")
+	}
+
+	// The Job has completed: the lock is no longer needed, whatever the checks below say.
+	if err := lock.Release(ctx, cniHelmLockIdentity); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	return r.finish(ctx, cluster, hash, handedOver)
 }
 
-// argoApplicationStatus reads an Argo CD Application's sync and health status strings
-// (status.sync.status, status.health.status) out of app. A missing field (not yet
-// populated, or not shaped the way expected) reads back as "", which never equals
-// "Synced"/"Healthy", so it is treated as not-ready rather than an error.
-func argoApplicationStatus(app *unstructured.Unstructured) (sync, health string) {
-	sync, _, _ = unstructured.NestedString(app.Object, "status", "sync", "status")
-	health, _, _ = unstructured.NestedString(app.Object, "status", "health", "status")
+// finish checks the Helm release and the DaemonSet after a completed Job and records the hand-over.
+func (r *CNIHandoverReconciler) finish(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, hash string, handedOver bool,
+) (ctrl.Result, error) {
+	status, got, err := r.releaseState(ctx)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 
-	return sync, health
+	switch {
+	case status == "deployed" && got != hash:
+		// A finished Job for this hash is still around (its TTL is a day) from before the values
+		// moved away and back: it proves nothing about the release now. Remove it so the next
+		// pass runs a new one.
+		if err := r.deleteJob(ctx, cluster, hash); err != nil {
+			return ctrl.Result{}, err
+		}
+
+		return ctrl.Result{RequeueAfter: cniJobPollInterval}, r.setProgress(ctx, cluster, handedOver, reasonCNIWaitingForRelease,
+			"the Helm release is deployed at other values than the cluster's; running the Helm Job again")
+	case status != "deployed":
+		return ctrl.Result{RequeueAfter: handoverRequeueInterval}, r.setProgress(ctx, cluster, handedOver, reasonCNIWaitingForRelease,
+			fmt.Sprintf("the Helm Job completed but release %s has status %q, not deployed", cilium.ReleaseName, status))
+	}
+
+	if ready, why, err := r.ciliumReady(ctx); err != nil {
+		return ctrl.Result{}, err
+	} else if !ready {
+		return ctrl.Result{RequeueAfter: handoverRequeueInterval}, r.setProgress(ctx, cluster, handedOver, reasonHandoverWaitingForCilium, why)
+	}
+
+	if cluster.Status.CNI == nil {
+		cluster.Status.CNI = &ichorv1alpha1.TalosClusterCNIStatus{}
+	}
+
+	cluster.Status.CNI.AppliedValuesHash = hash
+
+	apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+		Type: ichorv1alpha1.ConditionCNIValuesApplied, Status: metav1.ConditionTrue, Reason: reasonCNIApplied,
+		Message: "the Cilium Helm release is deployed at the cluster's values and the DaemonSet is ready",
+	})
+	apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+		Type: render.ConditionCNIHandover, Status: metav1.ConditionTrue, Reason: reasonHandoverComplete,
+		Message: fmt.Sprintf("Helm release %s is deployed and Cilium is ready; no longer rendering its cluster.inlineManifests entry",
+			cilium.ReleaseName),
+	})
+
+	return ctrl.Result{}, r.Status().Update(ctx, cluster)
 }
 
-// setHandoverCondition persists render.ConditionCNIHandover on cluster.
-func (r *CNIHandoverReconciler) setHandoverCondition(
-	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, status metav1.ConditionStatus, reason, message string,
+// setProgress records a not-yet-done state. Before the hand-over it is the CNIHandover condition
+// that carries it; afterwards CNIHandover stays True (flipping it back would re-render the
+// inline manifest) and only CNIValuesApplied reports.
+func (r *CNIHandoverReconciler) setProgress(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, handedOver bool, reason, message string,
+) error {
+	if !handedOver {
+		handoverReason := reason
+		if reason == reasonCNIJobRunning {
+			handoverReason = reasonHandoverAdopting
+		}
+
+		apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+			Type: render.ConditionCNIHandover, Status: metav1.ConditionFalse, Reason: handoverReason, Message: message,
+		})
+	}
+
+	apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+		Type: ichorv1alpha1.ConditionCNIValuesApplied, Status: metav1.ConditionFalse, Reason: reason, Message: message,
+	})
+
+	return r.Status().Update(ctx, cluster)
+}
+
+// failureMessage is the Job's last log line, or its own reason when the log cannot be read.
+func (r *CNIHandoverReconciler) failureMessage(ctx context.Context, failed *CNIHelmJobFailedError) string {
+	msg := fmt.Sprintf("Cilium Helm Job %s failed: %s %s", failed.JobName, failed.Reason, failed.Message)
+
+	if line := r.lastLogLine(ctx, failed.JobName); line != "" {
+		msg = fmt.Sprintf("Cilium Helm Job %s failed: %s", failed.JobName, line)
+	}
+
+	return msg
+}
+
+func (r *CNIHandoverReconciler) lastLogLine(ctx context.Context, jobName string) string {
+	if r.Kube == nil {
+		return ""
+	}
+
+	var pods corev1.PodList
+	if err := r.List(ctx, &pods, client.InNamespace(r.Namespace), client.MatchingLabels{"job-name": jobName}); err != nil {
+		return ""
+	}
+
+	for i := range pods.Items {
+		raw, err := r.Kube.CoreV1().Pods(r.Namespace).GetLogs(pods.Items[i].Name, &corev1.PodLogOptions{TailLines: ptr.To[int64](10)}).DoRaw(ctx)
+		if err != nil {
+			continue
+		}
+
+		lines := strings.Split(strings.TrimSpace(string(raw)), "\n")
+		if line := strings.TrimSpace(lines[len(lines)-1]); line != "" {
+			return line
+		}
+	}
+
+	return ""
+}
+
+// ciliumReady reports whether the cilium DaemonSet in kube-system is fully rolled out.
+func (r *CNIHandoverReconciler) ciliumReady(ctx context.Context) (ready bool, why string, err error) {
+	var ds appsv1.DaemonSet
+
+	err = r.reader().Get(ctx, types.NamespacedName{Namespace: cilium.ReleaseNamespace, Name: ciliumName}, &ds)
+
+	switch {
+	case apierrors.IsNotFound(err):
+		return false, "the cilium DaemonSet does not exist yet", nil
+	case err != nil:
+		return false, "", err
+	}
+
+	want := ds.Status.DesiredNumberScheduled
+	if ds.Status.ObservedGeneration < ds.Generation || want == 0 ||
+		ds.Status.NumberReady < want || ds.Status.UpdatedNumberScheduled < want {
+		return false, fmt.Sprintf("the cilium DaemonSet has %d of %d pods ready", ds.Status.NumberReady, want), nil
+	}
+
+	return true, "", nil
+}
+
+// releaseState reads the newest Helm release record for cilium from the storage namespace and
+// returns its status and the hash of the values it was deployed with. A missing record has
+// status "".
+func (r *CNIHandoverReconciler) releaseState(ctx context.Context) (status, valuesHash string, err error) {
+	var secrets corev1.SecretList
+	if err := r.reader().List(ctx, &secrets, client.InNamespace(r.Namespace),
+		client.MatchingLabels{"owner": "helm", "name": cilium.ReleaseName}); err != nil {
+		return "", "", err
+	}
+
+	var (
+		newest *corev1.Secret
+		latest = -1
+	)
+
+	for i := range secrets.Items {
+		v, convErr := strconv.Atoi(secrets.Items[i].Labels["version"])
+		if convErr == nil && v > latest {
+			newest, latest = &secrets.Items[i], v
+		}
+	}
+
+	if newest == nil {
+		return "", "", nil
+	}
+
+	vals, err := decodeReleaseConfig(newest.Data["release"])
+	if err != nil {
+		return "", "", fmt.Errorf("reading Helm release record %s: %w", newest.Name, err)
+	}
+
+	valuesHash, err = hashCiliumValues(vals)
+
+	return newest.Labels["status"], valuesHash, err
+}
+
+// decodeReleaseConfig reads the user-supplied values out of a Helm release record (Helm stores
+// base64 of gzipped JSON). Helm's own decoder is unexported.
+func decodeReleaseConfig(data []byte) (map[string]any, error) {
+	raw, err := base64.StdEncoding.DecodeString(string(data))
+	if err != nil {
+		return nil, err
+	}
+
+	if len(raw) > 2 && raw[0] == 0x1f && raw[1] == 0x8b {
+		zr, err := gzip.NewReader(bytes.NewReader(raw))
+		if err != nil {
+			return nil, err
+		}
+
+		if raw, err = io.ReadAll(zr); err != nil {
+			return nil, err
+		}
+	}
+
+	var rel struct {
+		Config map[string]any `json:"config"`
+	}
+	if err := json.Unmarshal(raw, &rel); err != nil {
+		return nil, err
+	}
+
+	if rel.Config == nil {
+		rel.Config = map[string]any{}
+	}
+
+	return rel.Config, nil
+}
+
+func (r *CNIHandoverReconciler) deleteJob(ctx context.Context, cluster *ichorv1alpha1.TalosCluster, hash string) error {
+	job := &batchv1.Job{}
+	job.Namespace, job.Name = r.Namespace, cniHelmJobName(cluster, hash)
+
+	return client.IgnoreNotFound(r.Delete(ctx, job, client.PropagationPolicy(metav1.DeletePropagationBackground)))
+}
+
+func (r *CNIHandoverReconciler) reader() client.Reader {
+	if r.APIReader != nil {
+		return r.APIReader
+	}
+
+	return r.Client
+}
+
+func (r *CNIHandoverReconciler) lock(cluster *ichorv1alpha1.TalosCluster) *clusterlock.Lock {
+	return clusterlock.New(r.Client, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0).WithReader(r.APIReader)
+}
+
+// acquireDisruptiveLock takes (or renews) the cluster operation lock for the Helm Job. Named like
+// the other call sites because TestAcquireDisruptiveLockIsTheOnlyAcquireCallSite requires it, and
+// it makes the same refusals: a cluster being shut down, or mid control-plane replacement.
+func (r *CNIHandoverReconciler) acquireDisruptiveLock(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, lock *clusterlock.Lock,
+) error {
+	if err := shutdownBlocker(ctx, r.reader(), cluster.Namespace, cluster.Name, nil); err != nil {
+		return err
+	}
+
+	controlPlanes, err := deleteguard.CountApprovedControlPlanes(ctx, r.reader(), cluster.Namespace, cluster.Name)
+	if err != nil {
+		return err
+	}
+
+	if transitioningControlPlanes(controlPlanes) {
+		return &transitioningError{controlPlanes: controlPlanes}
+	}
+
+	return lock.Acquire(ctx, cniHelmLockIdentity)
+}
+
+// setCondition persists one condition on cluster.
+func (r *CNIHandoverReconciler) setCondition(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, condType string, status metav1.ConditionStatus, reason, message string,
 ) error {
 	apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-		Type: render.ConditionCNIHandover, Status: status, Reason: reason, Message: message,
+		Type: condType, Status: status, Reason: reason, Message: message,
 	})
 
 	return r.Status().Update(ctx, cluster)
@@ -185,13 +468,9 @@ func (r *CNIHandoverReconciler) markCNIUnsupported(ctx context.Context, cluster 
 		return nil
 	}
 
-	apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-		Type: ichorv1alpha1.ConditionCNIUnsupported, Status: metav1.ConditionTrue, Reason: reasonCNIPresetRemoved,
-		Message: fmt.Sprintf("spec.cni.preset %q was removed in ADR 0099 (Cilium is the only CNI); "+
-			"no configuration is rendered or applied; delete and recreate the cluster", cluster.Spec.CNI.Preset),
-	})
-
-	return r.Status().Update(ctx, cluster)
+	return r.setCondition(ctx, cluster, ichorv1alpha1.ConditionCNIUnsupported, metav1.ConditionTrue, reasonCNIPresetRemoved,
+		fmt.Sprintf("spec.cni.preset %q was removed in ADR 0099 (Cilium is the only CNI); "+
+			"no configuration is rendered or applied; delete and recreate the cluster", cluster.Spec.CNI.Preset))
 }
 
 // cniPresetFor resolves cluster.Spec.CNI.Preset to its cni.Preset implementation. Cilium is the

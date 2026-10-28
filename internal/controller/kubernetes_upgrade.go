@@ -380,8 +380,8 @@ func (a *kubernetesUpgradeAdvancer) begin(
 
 	if msg := cniHandoverPending(cluster); msg != "" {
 		return fmt.Errorf("the CNI hand-over is not finished (%s); the bootstrap-manifest sync would re-apply the "+
-			"stale inline CNI manifest and roll the CNI back. Finish the hand-over (or set spec.cni.handover to "+
-			"disabled on a cluster without Argo CD) and create the operation again", msg)
+			"stale inline CNI manifest and roll the CNI back. Wait for the Cilium Helm Job to adopt Cilium "+
+			"(see the CNIHandover condition) and create the operation again", msg)
 	}
 
 	scrapeCtx, cancelScrape := context.WithTimeout(ctx, etcdDialTimeout)
@@ -716,22 +716,12 @@ func (a *kubernetesUpgradeAdvancer) waiting(
 
 // cniHandoverPending explains why a Kubernetes upgrade must not start because of an unfinished
 // CNI hand-over, or returns "". The bootstrap-manifest sync re-applies the cluster's inline
-// manifests; while Argo CD is taking the CNI over and the inline entry is still rendered, that
-// would roll the CNI back (ADR 0024). "disabled" is allowed through: nothing ever takes over, so
-// the inline entry is the CNI's source of truth and re-applying it is the intended state. A CNI
-// with nothing to hand over (any preset but cilium, which the controllers refuse) waits for nothing.
+// manifests; while the inline CNI entry is still rendered, that could roll the CNI back to the
+// bootstrap version after Ichor's Helm release changed it (ADR 0024, 0099). spec.cni.handover is
+// not read: every value is automatic now. A CNI with nothing to hand over (any preset but cilium,
+// which the controllers refuse) waits for nothing.
 func cniHandoverPending(cluster *ichorv1alpha1.TalosCluster) string {
-	preset, ok := cniPresetFor(cluster.Spec.CNI.Preset)
-	if !ok {
-		return ""
-	}
-
-	app, err := preset.ArgoCDApplication(cni.KubeProxyMode(cluster.Spec.CNI.KubeProxy))
-	if err != nil {
-		return err.Error()
-	}
-
-	if app == nil || cluster.Spec.CNI.Handover == "disabled" {
+	if _, ok := cniPresetFor(cluster.Spec.CNI.Preset); !ok {
 		return ""
 	}
 

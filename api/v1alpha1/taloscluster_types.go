@@ -606,6 +606,13 @@ type TalosClusterCNIStatus struct {
 	// CiliumUpgradeAvailable condition.
 	// +optional
 	AvailableChartVersion string `json:"availableChartVersion,omitempty"`
+
+	// appliedValuesHash is the hash of the effective Cilium values the last successful Helm Job
+	// applied (ADR 0099, decision 2). The controller starts a new Job when the hash of
+	// spec.cni.cilium.values (merged with Ichor's defaults) differs from it. Written by the
+	// controller only.
+	// +optional
+	AppliedValuesHash string `json:"appliedValuesHash,omitempty"`
 }
 
 // Condition types ADR 0099 adds to TalosCluster.status.conditions.
@@ -616,6 +623,11 @@ const (
 
 	// ConditionCiliumUpgradeAvailable is True when status.cni.availableChartVersion is set.
 	ConditionCiliumUpgradeAvailable = "CiliumUpgradeAvailable"
+
+	// ConditionCNIValuesApplied is True when the Cilium Helm release is deployed at the effective
+	// values status.cni.appliedValuesHash names. False while a Helm Job runs or waits for the
+	// cluster operation lock, and with the Job's last log line or reason when it failed.
+	ConditionCNIValuesApplied = "CNIValuesApplied"
 )
 
 // CertificateExpiry is one certificate authority's end of validity.

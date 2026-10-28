@@ -50,9 +50,8 @@ const (
 	compControllerManager = "kube-controller-manager"
 	compScheduler         = "kube-scheduler"
 
-	testK8sContract      = "v1.14"
-	testCilium           = "cilium"
-	testHandoverDisabled = "disabled"
+	testK8sContract = "v1.14"
+	testCilium      = "cilium"
 )
 
 // fakeKubernetesAdmin is the KubernetesAdmin test double: it records calls and returns
@@ -185,14 +184,19 @@ func k8sCluster(target string, cniSpec ...ichorv1alpha1.TalosClusterCNI) *ichorv
 			ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: 1, Schedulable: testSchedulable},
 		},
 	}
-	// Cilium is the only CNI (ADR 0099); without a spec the hand-over is disabled so it does not
-	// hold the upgrade, which the tests that pass their own spec exercise.
-	cluster.Spec.CNI = ichorv1alpha1.TalosClusterCNI{Preset: testCilium, KubeProxy: modeEnabled, Handover: testHandoverDisabled}
+	// Cilium is the only CNI (ADR 0099). The cluster starts handed over so the hand-over guard
+	// does not hold the upgrade; the test of the guard itself sets the condition to False.
+	cluster.Spec.CNI = ichorv1alpha1.TalosClusterCNI{Preset: testCilium, KubeProxy: modeEnabled}
 	if len(cniSpec) > 0 {
 		cluster.Spec.CNI = cniSpec[0]
 	}
 
 	Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
+
+	apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+		Type: render.ConditionCNIHandover, Status: metav1.ConditionTrue, Reason: reasonHandoverComplete, Message: "handed over",
+	})
+	Expect(k8sClient.Status().Update(ctx, cluster)).To(Succeed())
 
 	return cluster
 }
@@ -328,11 +332,11 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 	})
 
 	It("blocks while the CNI hand-over is unfinished, and proceeds once it is complete", func() {
-		cluster := k8sCluster(testK8sTarget, ichorv1alpha1.TalosClusterCNI{Preset: testCilium, KubeProxy: "enabled", Handover: "automatic"})
+		cluster := k8sCluster(testK8sTarget, ichorv1alpha1.TalosClusterCNI{Preset: testCilium, KubeProxy: "enabled"})
 
 		apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
 			Type: render.ConditionCNIHandover, Status: metav1.ConditionFalse,
-			Reason: reasonHandoverWaitingForSync, Message: "Argo CD reports cilium sync=OutOfSync",
+			Reason: reasonHandoverWaitingForCilium, Message: "the cilium DaemonSet has 0 of 1 pods ready",
 		})
 		Expect(k8sClient.Status().Update(ctx, cluster)).To(Succeed())
 
@@ -358,25 +362,6 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		fake.current = renderAt(cluster, w, testK8sOld)
 
 		_, err = adv.Advance(ctx, cluster, w, opAtStage(ichorv1alpha1.KubernetesStageKubelets))
-		Expect(err).NotTo(HaveOccurred())
-		Expect(fake.applyCalls).To(HaveLen(1))
-	})
-
-	It("lets a cluster whose hand-over is disabled through: re-applying its inline manifest is the intended state", func() {
-		cluster := k8sCluster(testK8sTarget, ichorv1alpha1.TalosClusterCNI{Preset: testCilium, KubeProxy: "enabled", Handover: testHandoverDisabled})
-
-		apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-			Type: render.ConditionCNIHandover, Status: metav1.ConditionFalse, Reason: reasonHandoverDisabled, Message: testHandoverDisabled,
-		})
-		Expect(k8sClient.Status().Update(ctx, cluster)).To(Succeed())
-
-		w := newK8sWorker(cluster.Name, "ho2")
-		newK8sNode(w.Spec.Hostname, true)
-
-		fake := &fakeTalosClient{version: testTalosVersion, current: renderAt(cluster, w, testK8sOld)}
-		adv := newKubernetesAdvancer(fake, &fakeKubernetesAdmin{})
-
-		_, err := adv.Advance(ctx, cluster, w, opAtStage(ichorv1alpha1.KubernetesStageKubelets))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(fake.applyCalls).To(HaveLen(1))
 	})
@@ -778,7 +763,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 	})
 
 	It("stage KubeProxy syncs the manifests but waits for no kube-proxy when the CNI replaces it", func() {
-		cluster := k8sCluster(testK8sTarget, ichorv1alpha1.TalosClusterCNI{Preset: testCilium, KubeProxy: "replaced", Handover: testHandoverDisabled})
+		cluster := k8sCluster(testK8sTarget, ichorv1alpha1.TalosClusterCNI{Preset: testCilium, KubeProxy: "replaced"})
 
 		cp := newK8sControlPlane(cluster.Name, "st2r")
 		newK8sNode(cp.Spec.Hostname, true)

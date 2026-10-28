@@ -116,6 +116,20 @@ func TestRotateCAIsOneCommandThroughTheEntryPoint(t *testing.T) {
 	}
 }
 
+// The done hint names the new kubeconfig rotate-ca wrote: the old one trusts only the old CA and
+// fails with x509 once the rotation is over.
+func TestRotateCADoneHintNamesTheNewKubeconfig(t *testing.T) {
+	const newKubeconfig = "/home/op/.kube/config.ichor-new"
+
+	var errw bytes.Buffer
+	rotateCAAfterwards(&errw, opTestCluster, newKubeconfig)
+
+	want := "ichor cluster credentials " + opTestCluster + " --kubeconfig " + newKubeconfig
+	if !strings.Contains(errw.String(), want) {
+		t.Errorf("done hint lacks %q:\n%s", want, errw.String())
+	}
+}
+
 func TestProgressLineOfAnOperationWithoutMachinesHasNoCounts(t *testing.T) {
 	line := progressLine(&pb.Operation{Ref: objectRef(testNamespace, "x"), Kind: pb.OperationKind_OPERATION_KIND_ICHOR, Phase: ichorv1alpha1.TalosOperationPhaseInProgress})
 	if line != "ichor x: phase InProgress" {

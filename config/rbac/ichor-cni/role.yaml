@@ -1,0 +1,132 @@
+# The Cilium Helm Job's permissions: what Helm needs to adopt and
+# upgrade a release of the pinned Cilium chart, and to wait for its rollout. Cilium's chart
+# creates the kinds listed here; Helm keeps the release records in Secrets (the Role below).
+#
+# Not narrowable further: the clusterroles rule with escalate and bind.
+# The chart's ClusterRoles grant more than this identity holds, so applying them needs
+# escalate, and bind is needed for the ClusterRoleBindings; together they are as strong as
+# cluster-admin. That is why the ServiceAccount exists only for the Job (the controller can
+# create the Job but holds none of this). No wildcard verbs or resources, and nothing for
+# Ichor's own CRDs beyond reading the TalosCluster. A chart value that makes Cilium's chart itself
+# create Secrets (hubble.tls.auto.method=helm) is not covered: Ichor keeps cronJob.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cni-role
+rules:
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosclusters
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  - namespaces
+  - serviceaccounts
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - daemonsets
+  - deployments
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - replicasets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - batch
+  resources:
+  - cronjobs
+  - jobs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - policy
+  resources:
+  - poddisruptionbudgets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - clusterrolebindings
+  - clusterroles
+  - rolebindings
+  - roles
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - clusterroles
+  - roles
+  verbs:
+  - bind
+  - escalate
+---
+# Helm's release records. They live in the controller's namespace, not in kube-system, so the
+# one permission over Secrets stays a namespaced Role like every other in this tree (a
+# cluster-wide Secret rule is refused by dist/chart's invariants); the controller already
+# holds Secret access here, which is where the hand-over reads the record from.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cni-role
+  namespace: system
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - update

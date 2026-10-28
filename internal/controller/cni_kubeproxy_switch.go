@@ -195,7 +195,7 @@ func (a *cniKubeProxyAdvancer) Advance(
 		return false, fmt.Errorf("reading %q's configuration: %w", m.Name, err)
 	}
 
-	if hashConfig(current) != hash {
+	if render.Hash(current) != hash {
 		return false, a.apply(ctx, talos, cluster, m, current, rendered)
 	}
 

@@ -94,6 +94,15 @@ spec:
         protocol: UDP
       - port: "53"
         protocol: TCP
+  # Publishing the Kokumi and Argo CD bundles into Kokumi's registry.
+  - toEndpoints:
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: kokumi
+        app: registry
+    toPorts:
+    - ports:
+      - port: "5000"
+        protocol: TCP
   # TalosEtcdBackup's S3 endpoint.
   - toEntities:
     - world

@@ -383,8 +383,10 @@ func TestPrepareUITargets_FindsByLabelNotName(t *testing.T) {
 func assertControllerIssuerFlags(t *testing.T, k client.Client, uiArgs []string) {
 	t.Helper()
 
-	if !slices.Contains(uiArgs, "--internal-jwks-uri=https://"+testUIClusterIP+":8444/oidc/jwks") {
-		t.Errorf("ichor-ui args lack the internal jwks uri: %v", uiArgs)
+	for _, a := range uiArgs {
+		if strings.HasPrefix(a, "--internal-jwks-uri=") {
+			t.Errorf("ichor-ui args pin the ClusterIP: %v", uiArgs)
+		}
 	}
 
 	var mgr appsv1.Deployment

@@ -307,7 +307,7 @@ build-installer: manifests generate kustomize ## Generate a consolidated YAML wi
 	@work=$$(mktemp -d) && trap 'rm -rf "$$work"' EXIT && cp -r config "$$work/config" && \
 	(cd "$$work/config/manager" && "$(KUSTOMIZE)" edit set image controller=${IMG}) && \
 	(cd "$$work/config/manager-ui" && "$(KUSTOMIZE)" edit set image ichor-ui=${IMG_UI}) && \
-	"$(KUSTOMIZE)" build "$$work/config/default" > dist/install.yaml && \
+	"$(KUSTOMIZE)" build "$$work/config/installer" > dist/install.yaml && \
 	"$(KUSTOMIZE)" build "$$work/config/cilium-network-policy" > dist/network-policies.yaml
 
 ##@ Deployment
@@ -337,7 +337,7 @@ deploy: build-installer ## Deploy controller to the K8s cluster specified in ~/.
 
 .PHONY: undeploy
 undeploy: kustomize ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Set KUBE_CONTEXT to pick a context other than the current one. Call with ignore-not-found=true to ignore resource not found errors during deletion.
-	"$(KUSTOMIZE)" build config/default | "$(KUBECTL)" $(KUBE_CONTEXT_FLAG) delete --ignore-not-found=$(ignore-not-found) -f -
+	"$(KUSTOMIZE)" build config/installer | "$(KUBECTL)" $(KUBE_CONTEXT_FLAG) delete --ignore-not-found=$(ignore-not-found) -f -
 
 ##@ Dependencies
 

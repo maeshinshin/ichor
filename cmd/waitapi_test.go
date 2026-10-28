@@ -2,10 +2,20 @@ package main
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"errors"
 	"io"
+	"math/big"
 	"net"
 	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +23,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/rest"
+
+	"github.com/maeshinshin/ichor/internal/kubetrust"
 )
 
 type fakeGroups struct{ err error }
@@ -95,6 +107,66 @@ func TestWaitWithHealthServesDuringWaitAndClosesAfter(t *testing.T) {
 		t.Fatalf("port not freed before return: %v", err)
 	}
 	_ = ln.Close()
+}
+
+func TestTrustedConfigLoadsTheRotationFileBeforeTheWait(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	defer srv.Close()
+
+	// An unrelated self-signed CA stands for the stale in-cluster ca.crt.
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tpl := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "old"},
+		NotAfter: time.Now().Add(time.Hour), IsCA: true, BasicConstraintsValid: true}
+	der, err := x509.CreateCertificate(rand.Reader, tpl, tpl, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stale := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
+
+	pemOf := func(s *httptest.Server) []byte {
+		return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: s.Certificate().Raw})
+	}
+	get := func() (*rest.Config, error) {
+		cfg := &rest.Config{Host: srv.URL}
+		cfg.CAData = stale
+
+		return cfg, nil
+	}
+	probe := func(cfg *rest.Config) error {
+		rt, err := rest.TransportFor(cfg)
+		if err != nil {
+			return err
+		}
+		resp, err := (&http.Client{Transport: rt}).Get(srv.URL)
+		if err == nil {
+			_ = resp.Body.Close()
+		}
+		return err
+	}
+
+	missing := filepath.Join(t.TempDir(), "none.crt")
+	cfg, err := trustedConfig(get, &kubetrust.Pool{}, missing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if probe(cfg) == nil {
+		t.Fatal("trusted a server signed by neither the in-cluster CA nor the file")
+	}
+
+	file := filepath.Join(t.TempDir(), "kubernetes-ca.crt")
+	if err := os.WriteFile(file, pemOf(srv), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err = trustedConfig(get, &kubetrust.Pool{}, file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := probe(cfg); err != nil {
+		t.Fatalf("the CA in the trust file is not trusted at start: %v", err)
+	}
 }
 
 func TestWaitForAPIServerTimesOut(t *testing.T) {

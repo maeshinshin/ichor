@@ -15,7 +15,7 @@ import { NodeLogs } from '@/components/NodeLogs'
 import { TalosDetails } from '@/components/TalosDetails'
 import { TalosRuntime } from '@/components/TalosRuntime'
 import type { EffectiveConfigValue } from '@/gen/ichor/v1alpha1/node_pb'
-import { ConfigLayer, type NodeDetail as NodeDetailMessage } from '@/gen/ichor/v1alpha1/node_pb'
+import { ConfigLayer } from '@/gen/ichor/v1alpha1/node_pb'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { type BreakGlassRun } from '@/components/BreakGlassDialog'
 import { PullRequestNotice } from '@/components/PullRequestNotice'
@@ -26,16 +26,14 @@ import { clusterClient, machineClient, nodeClient } from '@/lib/connect'
 import { machineDisplayName } from '@/lib/machineName'
 import { needsInstallDisk } from '@/lib/installDisk'
 import { enumLabel } from '@/lib/enum'
-import { describeError } from '@/lib/errors'
 import { formatBytes, formatCores, formatUsage } from '@/lib/format'
 import { nodeTabs, nodeTabSearch, parseNodeTab, type NodeTab } from '@/lib/nodeTabs'
 import { setPageTitle, titleKey } from '@/lib/pageTitle'
 import { useCluster } from '@/lib/useCluster'
+import { useLoad } from '@/lib/useLoad'
 import { useMyPermissions } from '@/lib/useMyPermissions'
 import { useT } from '@/lib/useT'
 import { Link } from '@/router'
-
-type ErrorShape = { title: string; detail: string }
 
 // Node detail: hardware, disks, network, live resource usage, Kubernetes
 // state, effective config (origin-annotated, secrets masked) and logs
@@ -68,29 +66,12 @@ function useNodeTab(): [NodeTab, (tab: NodeTab) => void] {
 function NodePage({ namespace, name }: { namespace: string; name: string }) {
   const t = useT()
   const [tab, setTab] = useNodeTab()
-  const [node, setNode] = useState<NodeDetailMessage | null>(null)
-  const [error, setError] = useState<ErrorShape | null>(null)
   const [machine, setMachine] = useState<Machine | null>(null)
   const [pullRequest, setPullRequest] = useState<{ url: string; run?: BreakGlassRun } | null>(null)
   const [cluster, setCluster] = useState<Cluster | null>(null)
   const perms = useMyPermissions({ namespace, name })
 
-  useEffect(() => {
-    let cancelled = false
-    setNode(null)
-    setError(null)
-    nodeClient.getNode({ machine: { namespace, name } }).then(
-      (res) => {
-        if (!cancelled) setNode(res.node ?? null)
-      },
-      (err) => {
-        if (!cancelled) setError(describeError(err))
-      },
-    )
-    return () => {
-      cancelled = true
-    }
-  }, [namespace, name])
+  const { data: node, error } = useLoad(() => nodeClient.getNode({ machine: { namespace, name } }).then((res) => res.node), [namespace, name])
 
   // The machine and its cluster are context around the node: the overview, and whether it is
   // waiting for an install disk. If either lookup fails the page still renders from
@@ -129,14 +110,7 @@ function NodePage({ namespace, name }: { namespace: string; name: string }) {
   if (!node) return <PageSkeleton label={t('node.loading')} />
 
   const ready = machine?.conditions.find((c) => c.type === 'Ready')
-  const tabLabels: Record<NodeTab, string> = {
-    summary: t('node.tab.summary'),
-    storage: t('node.tab.storage'),
-    talos: t('node.tab.talos'),
-    kubernetes: t('node.tab.kubernetes'),
-    config: t('node.tab.config'),
-    logs: t('node.tab.logs'),
-  }
+  const approved = machine?.approvalState === MachineApprovalState.APPROVED
 
   return (
     <>
@@ -146,7 +120,7 @@ function NodePage({ namespace, name }: { namespace: string; name: string }) {
         badges={
           machine && (
             <>
-              <StatusText tone={machine.approvalState === MachineApprovalState.APPROVED ? 'good' : 'warn'}>
+              <StatusText tone={approved ? 'good' : 'warn'}>
                 {enumLabel(MachineApprovalState, machine.approvalState)}
               </StatusText>
               {ready && <StatusBadge type={ready.type} status={ready.status} />}
@@ -180,7 +154,7 @@ function NodePage({ namespace, name }: { namespace: string; name: string }) {
                 machine={{ namespace, name }}
                 perms={perms}
                 controlPlane={machine.role === MachineRole.CONTROL_PLANE}
-                approved={machine.approvalState === MachineApprovalState.APPROVED}
+                approved={approved}
                 deleting={machine.deleting}
                 onStarted={loadMachine}
               />
@@ -189,7 +163,7 @@ function NodePage({ namespace, name }: { namespace: string; name: string }) {
         }
       />
       {pullRequest && <PullRequestNotice url={pullRequest.url} breakGlass={pullRequest.run} onBreakGlassDone={loadMachine} />}
-      {machine && needsInstallDisk({ ...machine, approved: machine.approvalState === MachineApprovalState.APPROVED }) && (
+      {machine && needsInstallDisk({ ...machine, approved }) && (
         <Alert className="mb-4">
           <AlertTitle>{t('installDisk.waitingTitle')}</AlertTitle>
           <AlertDescription>
@@ -209,7 +183,7 @@ function NodePage({ namespace, name }: { namespace: string; name: string }) {
         <TabsList variant="line" aria-label={t('node.tabs')} className="h-auto w-full justify-start overflow-x-auto overflow-y-hidden pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {nodeTabs.map((id) => (
             <TabsTrigger key={id} value={id} className="flex-none px-3 py-1.5">
-              {tabLabels[id]}
+              {t(`node.tab.${id}`)}
             </TabsTrigger>
           ))}
         </TabsList>
@@ -270,25 +244,10 @@ function NodePage({ namespace, name }: { namespace: string; name: string }) {
 
 function EffectiveConfigSection({ namespace, name }: { namespace: string; name: string }) {
   const t = useT()
-  const [values, setValues] = useState<EffectiveConfigValue[] | null>(null)
-  const [error, setError] = useState<ErrorShape | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    setValues(null)
-    setError(null)
-    nodeClient.getEffectiveConfig({ machine: { namespace, name } }).then(
-      (res) => {
-        if (!cancelled) setValues(res.config?.values ?? [])
-      },
-      (err) => {
-        if (!cancelled) setError(describeError(err))
-      },
-    )
-    return () => {
-      cancelled = true
-    }
-  }, [namespace, name])
+  const { data: values, error } = useLoad(
+    () => nodeClient.getEffectiveConfig({ machine: { namespace, name } }).then((res) => res.config?.values ?? []),
+    [namespace, name],
+  )
 
   // Grouped bottom-up (architecture.md, "Patch layers": "Patches apply
   // bottom-up: 1. System ... 2. Cluster, 3. role, 4. selector, 5.

@@ -174,20 +174,11 @@ export function OperationDetail({ name }: { name: string }) {
       />
       <div class="space-y-8">
         <div class="space-y-4 empty:hidden">
-          {panel === 'gate' && (
-            <Alert variant="destructive">
-              <AlertTitle>{t('ops.awaitingCredentialsTitle')}</AlertTitle>
+          {panel !== 'none' && (
+            <Alert variant={panel === 'gate' ? 'destructive' : 'default'}>
+              <AlertTitle>{panel === 'gate' ? t('ops.awaitingCredentialsTitle') : t('creds.issuedTitle')}</AlertTitle>
               <AlertDescription>
-                {t('ops.awaitingCredentials', { name: op.cluster?.name ?? '' })}
-                <CARotationCredentials op={op} panel={panel} permitted={perms?.clusterCredentials} onChanged={setOp} />
-              </AlertDescription>
-            </Alert>
-          )}
-          {panel === 'issued' && (
-            <Alert>
-              <AlertTitle>{t('creds.issuedTitle')}</AlertTitle>
-              <AlertDescription>
-                {t('creds.issued')}
+                {panel === 'gate' ? t('ops.awaitingCredentials', { name: op.cluster?.name ?? '' }) : t('creds.issued')}
                 <CARotationCredentials op={op} panel={panel} permitted={perms?.clusterCredentials} onChanged={setOp} />
               </AlertDescription>
             </Alert>

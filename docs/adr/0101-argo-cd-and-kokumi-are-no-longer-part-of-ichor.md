@@ -37,4 +37,27 @@ ADR 0099 is superseded in part. These decisions stand: Cilium is the only CNI; i
 
 ## GitOps
 
-(To be written by the change that removes the GitOps, Git-tracking and PR-mode code.)
+GitOps is no longer a requirement, so Ichor stops knowing about GitOps tools at all. The user may still run Argo CD or Flux over Ichor's custom resources; Ichor neither detects it nor reacts to it. This supersedes the tracked-detection bullet under "Kept" above: that code is gone too.
+
+Removed:
+
+- Detection of CRs tracked by Argo CD or Flux (`pkg/gitopstracking`, the `argocd-cm` read, the Flux inventory scan) and every refusal built on it: the tracked-write gate in `internal/uiapi` (machines, patches, discovery, install, operations, node actions, Cilium values), the same refusals in the CLI's in-process fallback, and the tracked-CR denial in the break-glass webhook. The webhook keeps its other jobs: removing an `ichor.maesh.dev/*` finalizer, resetting a node, restoring etcd, the last-worker override, `spec.authentication` and secret-reference changes. It no longer exempts Argo CD or Flux service accounts by name; it still exempts Ichor's controller and the Kubernetes namespace and garbage collectors.
+- Pull-request mode (`pkg/prmode`, `pkg/gitops`) and strict mode: no write opens a pull request, and approving a node always writes the `TalosMachine`. Break-glass no longer means "write a tracked CR and open the matching pull request". It stays as the verb that guards the destructive operations.
+- `GitOpsService`, `proto/ichor/v1alpha1/gitops.proto`, the external-links registry (`ichorUI.links`, `ICHOR_LINK_*`), `ichorUI.argocdNamespace` / `ICHOR_ARGOCD_NAMESPACE` and the CLI's `--argocd-namespace`.
+- The UI GitOps page, its route, navigation entry and strings; the pull-request notice and break-glass dialogs; the Cilium page's tracked-by banner and read-only state.
+- The Argo CD health-check ConfigMap (ADR 0046): `argocdHealth`, `templates/argocd`, the Lua files and their test; and `examples/argocd-application.yaml`.
+- RBAC: `argocd-cm` get, Flux `kustomizations` list and `applications` get for `ichor-ui`; `argocd-cm` get and Flux `kustomizations` list for the manager.
+- The `IchorInstallation` `ExternalSuggested` condition and the controller's read of its own Deployment.
+
+Deprecated, kept (the append-only rule for CRD fields and wire formats):
+
+- `TalosCluster.spec.gitops` (`mode`, `repository` and its fields). Nothing reads it. Its CEL validation is unchanged so stored objects stay valid.
+- `IchorInstallation.spec.managementMode`. `ichor` is the only behaviour. `external` is still accepted by the CRD enum and is treated as `ichor`: the installer Job runs and nothing refuses the upgrade. The `ExternalSuggested` condition is no longer set and is removed from objects that carry it.
+- Proto fields, marked `deprecated = true` and never set: `tracked_by` (`GetCiliumValuesResponse`), `pull_request_url` and `notice` on the approve, reject, set-install, add-discovery, update-patch, delete-patch and create-operation responses, `break_glass` on the approve, reject, set-install, add-discovery, update-patch and delete-patch requests (the server ignores it), `opens_pull_request` on `PlanOperationResponse` and `management_mode` on `GetIchorInstallationResponse`. `break_glass` on node-action and etcd-restore requests is unchanged.
+
+Superseded ADRs: 0015, 0028, 0037, 0038, 0044, 0046, 0051, 0056, 0062 in full; 0059 (decision 5 and the external mode) and 0065 (the tracked-write part; the verb and the destructive-operation checks stand) in part.
+
+Consequences:
+
+- A user who keeps Ichor's CRs in Git with Argo CD or Flux can still do so. Ichor writes them directly from the UI and CLI, and the user's tool may revert those writes. Ichor no longer warns about this.
+- The UI backend and CLI have one write path, no Git token and no outbound call to a Git host.

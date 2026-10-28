@@ -1,6 +1,6 @@
 # 0051. UI and CLI writes refuse a CR that Argo CD or Flux tracks
 
-Status: Accepted · Date: 2026-10-26 · Design section: GitOps and Argo CD
+Status: Superseded by ADR 0101 · Date: 2026-10-26 · Design section: GitOps and Argo CD
 Decided: Every write to an existing CR in `internal/uiapi` (so the UI and the CLI, backend or fallback) goes through one `Server.requireUntracked`, which runs `gitopstracking.IsTracked` and `prmode.Decide(trackedBy, false)` and refuses anything but `ModeDirectWrite` with `FailedPrecondition`; a failed check refuses too; `Create` is not gated; the RBAC is two cluster-scoped rules, one narrowed by `resourceNames`
 
 ## Context

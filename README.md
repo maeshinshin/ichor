@@ -63,7 +63,7 @@ install.
 ## What it doesn't do
 
 - Run anything on the cluster beyond its own controller and UI.
-- Manage storage or monitoring. That's Argo CD's job.
+- Manage storage or monitoring, or know about GitOps tools ([ADR 0101](docs/adr/0101-argo-cd-and-kokumi-are-no-longer-part-of-ichor.md)).
 - Boot machines. Get them to maintenance mode (ISO, PXE, whatever you like);
   Ichor takes it from there.
 - Target air-gapped installs. Registry mirrors and private registries work

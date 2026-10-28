@@ -40,7 +40,7 @@ port of its Service, and the empty `ichor-user-credentials` Secret. It then
 creates the first admin (`--admin-user`, default `admin`, role `admin`) and
 sets `spec.authentication.ichor` on the TalosCluster. The order is: Secret,
 admin, then the switch, so nobody is locked out. At the end it prints, to
-stderr, the Helm values that match (for a GitOps copy) and the generated
+stderr, the Helm values that match and the generated
 password of the admin. The password is printed once, also when a later step
 failed, and is stored nowhere; the first login forces a change. Save it when it
 is printed. The kube-apiserver login settings reach the control planes with
@@ -218,7 +218,7 @@ broken, or every user is locked out, use this credential.
 
 Once users are on, keep this folder offline and use it only in an incident.
 Do not confuse it with the break-glass write in
-[ADR 0065](../adr/0065-break-glass.md), which is a GitOps override.
+[ADR 0065](../adr/0065-break-glass.md), which is an RBAC verb that guards destructive operations.
 
 ## Control plane rollout
 

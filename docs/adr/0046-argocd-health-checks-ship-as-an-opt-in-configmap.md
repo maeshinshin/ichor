@@ -1,6 +1,6 @@
 # 0046. Argo CD health checks ship as an opt-in ConfigMap shaped like argocd-cm keys
 
-Status: Accepted · Date: 2026-10-26 · Design section: GitOps and Argo CD
+Status: Superseded by ADR 0101 · Date: 2026-10-26 · Design section: GitOps and Argo CD
 Decided: Ship Lua health checks for TalosCluster and TalosMachine only, as a chart ConfigMap (`argocdHealth.enabled`, default false) whose keys are exactly `argocd-cm`'s `resource.customizations.health.<group>_<kind>` keys, tested by running the Lua under lua 5.1
 
 ## Context

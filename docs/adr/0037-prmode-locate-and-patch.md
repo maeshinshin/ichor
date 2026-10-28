@@ -1,6 +1,6 @@
 # 0037. PR mode's file-finding and byte-preserving YAML edit, as `pkg/prmode`
 
-Status: Accepted · Date: 2026-10-26 · Design section: GitOps and Argo CD (phase 8, "PR mode")
+Status: Superseded by ADR 0101 · Date: 2026-10-26 · Design section: GitOps and Argo CD (phase 8, "PR mode")
 
 Decided: built `pkg/prmode`'s `ClassifySource`/`Locate`/`Patch`/`Diff` -- finding a tracked CR's file via its Application's source and editing one field with go-yaml's `yaml.Node`, never a PR host API -- as its own host-independent, fully unit-testable unit, separate from opening a PR
 

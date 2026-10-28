@@ -13,7 +13,7 @@ the same operations.
 
 Ichor stops at the Talos layer, with one component it installs itself (ADR 0099,
 ADR 0101): Cilium is the only CNI and Ichor's own Helm release. Storage systems,
-monitoring and any GitOps tool are the user's business; Ichor only prepares the
+monitoring and any GitOps tool are the user's business (ADR 0101); Ichor only prepares the
 Talos side for them and coordinates with them around node operations.
 
 ## Motivation
@@ -22,7 +22,7 @@ Running Talos with `talosctl` works well for one person and a handful of
 nodes. It gets awkward when machine configs live in a directory of YAML files,
 when several people need to see what's applied where, and when upgrades have
 to be sequenced by hand. Putting the configuration into the Kubernetes API
-gives you RBAC, audit, webhooks, GitOps, and a place to hang a UI, without
+gives you RBAC, audit, webhooks, and a place to hang a UI, without
 inventing a new control plane.
 
 ### Goals
@@ -50,7 +50,10 @@ inventing a new control plane.
 - Air-gapped environments (ADR 0090). Nothing is built or tested for an
   installation with no route to public registries; registry mirrors exist for
   pull-through caches and private registries.
-- IPv6, PXE provisioning, Flux PR mode. Later, maybe.
+- IPv6, PXE provisioning. Later, maybe.
+- Know about GitOps tools. Ichor does not detect Argo CD or Flux, does not open
+  pull requests and does not refuse a write because a tool tracks the resource
+  (ADR 0101).
 
 ## Overview
 
@@ -90,7 +93,7 @@ manifests, and the Helm chart in `dist/chart` is generated from it.
 
 ### Data flow
 
-Every write, from the UI, the CLI or a user's GitOps, is a change to a custom
+Every write, from the UI, the CLI or a user's own tooling, is a change to a custom
 resource. The controller is the only thing that turns those into Talos API
 calls. This keeps validation, RBAC and audit identical regardless of how a
 change arrived. Reads come from two places: CR status (via the API
@@ -206,8 +209,8 @@ the document, so Ichor validates it before rendering.
 3. Status holds hashes and state, never rendered config.
 4. The Talos version contract is pinned in the CR, so a library bump cannot
    silently change what gets applied.
-5. The controller never writes `spec`, so it never fights a GitOps tool that
-   tracks the CR.
+5. The controller never writes `spec`, so it never fights whatever tool the user
+   keeps the CRs in.
 6. Disruptive operations (upgrades, reboots, CA rotation, topology changes)
    take a per-cluster Lease. One at a time.
 7. Progress lives in status and resumes idempotently. (A live etcd restore
@@ -215,8 +218,7 @@ the document, so Ichor validates it before rendering.
    storage is the exception, ADR 0089.)
 8. CLI and UI are equivalent. The only CLI-only operations are the ones that
    happen before a cluster exists.
-9. There is always a recovery path that needs neither Argo CD nor a working
-   controller.
+9. There is always a recovery path that needs no working controller.
 10. Dangerous-operation checks live in shared code and are enforced by the UI
     backend and by webhooks, never only in the frontend.
 
@@ -226,7 +228,7 @@ Group `ichor.maesh.dev`, version `v1alpha1`.
 
 | Kind | Scope | Purpose | In Git |
 |---|---|---|---|
-| `TalosCluster` | namespaced | Cluster-wide settings: endpoint, versions, topology, Cilium, GitOps mode, monitoring, integrations | yes |
+| `TalosCluster` | namespaced | Cluster-wide settings: endpoint, versions, topology, Cilium, monitoring, integrations | yes |
 | `TalosMachine` | namespaced | One node: identity, role, labels, disk roles, per-node values | yes, once approved (always, in strict mode) |
 | `TalosConfigPatch` | namespaced | A typed config patch with a layer, priority and target | yes |
 | `TalosStorage` | namespaced | Thin integration with a storage system: node selector, disk preset, evacuation settings | yes |
@@ -335,9 +337,9 @@ control plane; no `schedulable: false` with zero workers; CNI preset is
 keys; kube-proxy mode changes only with an explicit
 annotation; disk roles that require reinstall are immutable after install;
 `TalosCluster` and `TalosMachine` can only be deleted with
-`ichor.maesh.dev/allow-delete: "true"` (so a GitOps prune can't cascade into
-node resets); direct writes to GitOps-managed CRs are rejected except through
-break-glass; Talos/Kubernetes version pairs and upgrade paths are checked.
+`ichor.maesh.dev/allow-delete: "true"` (so a prune by the user's own tooling can't cascade into
+node resets); removing an Ichor finalizer, resetting a node and restoring etcd
+need the break-glass verb; Talos/Kubernetes version pairs and upgrade paths are checked.
 
 ## Design
 
@@ -397,68 +399,24 @@ at most one minor at a time, rolled back by Helm on failure.
 
 ### GitOps
 
-Users may keep Ichor's CRs in their own Git. What goes there:
-`TalosCluster`, `TalosConfigPatch`, `TalosStorage`, `TalosEtcdBackup`,
-`IchorInstallation`, `IchorUser`s, approved `TalosMachine`s. What doesn't:
-Secrets, `TalosOperation`s, unapproved machines, and the labels and
-annotations Ichor writes at runtime on Nodes and on the storage system's node
-objects. Putting those in Git makes the GitOps tool and Ichor fight; Ichor
-warns if it sees them tracked. Ichor writes no repository skeleton.
+Ichor has no GitOps behaviour (ADR 0101). A user may keep Ichor's CRs in their
+own Git and apply them with any tool. Ichor does not detect that, does not
+refuse UI or CLI writes to such CRs and does not open pull requests; a write
+from the UI or CLI lands in the cluster and the user's tool decides what to do
+with the drift. Putting runtime-written state in Git (`TalosOperation`s,
+unapproved machines, the labels and annotations Ichor writes on Nodes and on
+the storage system's node objects) makes that tool and Ichor fight, so keep
+those out. Ichor writes no repository skeleton.
 
-Detecting "tracked" is two different questions, not one with two keys.
-Argo CD marks the resource: `application.resourceTrackingMethod` in
-`argocd-cm` picks `annotation` (`argocd.argoproj.io/tracking-id`, whose value
-is `<app>:<group>/<kind>:<namespace>/<name>`), `label`
-(`app.kubernetes.io/instance`), or `annotation+label`, and
-`application.instanceLabelKey` can replace the label key outright. A resource
-marked under one method is not detected under another, and the default has
-moved between releases — so Ichor reads that ConfigMap rather than looking for
-a marker it guessed. Flux marks nothing on the resource: ownership lives in
-the owning Kustomization's `.status.inventory`
-(`.entries[].id` is `<namespace>_<name>_<group>_<kind>`), so the same question
-becomes "list the Kustomizations and search their inventories". Ichor does
-that by reading them as unstructured objects, with no Flux Go dependency; a
-cluster without Flux's CRD is simply not tracked. Looking for a field manager
-instead is not a substitute, for the same reason Ichor reads `argocd-cm`
-rather than guessing: the name is not Ichor's to assume. Flux sets its own
-manager through `ssa.Owner{Field: r.ControllerName}`, so `kustomize-controller`
-is only a default, and `flux-client-side-apply` is not Flux's applying name at
-all: it is a reserved name that lets a user's own `kubectl` edits survive
-Flux, which Flux does not use for its own applies (ADR 0044). A managed-fields
-hit on `kustomize-controller` or `helm-controller` is used only as a cheap
-first signal before the scan. Two code paths, with different cost: a lookup on
-the object for Argo CD, a scan over owners for Flux.
+Break-glass is the Kubernetes RBAC verb `break-glass`. It guards the dangerous
+operations: removing an Ichor finalizer from a deleting object, resetting a
+node, restoring etcd and overriding the last-worker guard. It is checked with a
+SubjectAccessReview made as the user (ADR 0065).
 
-Two modes on `TalosCluster.spec.gitops.mode`:
-
-- `relaxed` (default): approving a node writes the `TalosMachine` directly;
-  you can add it to Git afterwards. Changes to GitOps-managed CRs go
-  through PRs.
-- `strict`: approving a node *is* a PR that adds the `TalosMachine`. The node
-  stays pending until it merges and syncs. Nothing exists in the cluster that
-  isn't in Git.
-
-PR mode. If a CR is tracked by Argo CD and a repository connection exists, the
-UI and CLI don't write it; they find the file via the Application's source,
-edit the right node of the YAML while preserving comments and formatting, and
-open a PR whose description includes the impact preview (affected nodes,
-reboot required or not) and who asked. The UI then follows the PR through
-merge, sync and apply. Plain YAML and Kustomize sources are supported; Helm
-and Jsonnet sources get a diff to apply by hand. Without a repository
-connection the CR is read-only. GitHub, GitLab and
-Gitea/Forgejo are supported; the backend only opens PRs, never merges.
-
-Break-glass exists for incidents: a permission-gated direct write that also
-opens the matching PR, so Git catches up. Ichor never changes the sync policy of
-an Application that already exists, the user's or anyone else's.
-
-Ichor under a user's Argo CD. `IchorInstallation.spec.managementMode` is `ichor`
-(upgrades run through the installer Job) or `external` (a GitOps tool owns
-Ichor's manifests; upgrades are PRs that bump the chart version). Ichor
-suggests `external` when it finds itself tracked, to avoid two writers. The
-chart avoids anything that produces a diff on every sync, such as generated
-certificates. Argo CD health checks (Lua) for Ichor's kinds ship with the chart
-and in the Argo CD bundle's `argocd-cm`.
+`IchorInstallation.spec.managementMode` is deprecated and unused: upgrades
+always run through the installer Job. The retired value `external` is accepted
+and treated as `ichor`. `TalosCluster.spec.gitops` is likewise deprecated and
+unused; both fields stay in the CRDs because a CRD never drops a field.
 
 The CLI keeps a way out of the corners: `ichor upgrade ichor VERSION --local`
 (no ichor-ui) and `ichor restore --recover-cluster`.
@@ -917,10 +875,7 @@ hand-over); Backups, with each `TalosEtcdBackup`, its snapshots,
 Back up now and restore; Configuration, for editing patches by layer with an
 effective-config view annotated by origin and secrets masked, impact preview
 before applying, and schema-driven forms; Cilium, with the effective values
-read-only, a YAML editor for the user layer, validation and a diff preview; a GitOps page showing each CR's
-Application, sync state and pending PRs, and where Git, the cluster and the
-nodes disagree, with links into Grafana, Hubble and Longhorn when their URLs are
-registered; Users, only when Ichor's own users are on. A merged multi-node log
+read-only, a YAML editor for the user layer, validation and a diff preview; Users, only when Ichor's own users are on. A merged multi-node log
 viewer is planned.
 
 ## Testing
@@ -958,12 +913,12 @@ resumption works. A short set runs per PR, the full set nightly.
 6. Config editing UI, `TalosOperation`, Talos and Kubernetes upgrades,
    Ichor self-upgrade.
 7. Storage integration (longhorn-v1, operation hooks), CA rotation.
-8. PR mode, strict mode, break-glass, Argo CD health checks, GitOps page.
-9. Monitoring settings, metrics and dashboards, optional components, external
-   links, OIDC and impersonation (ADR 0058), Ichor's own users and issuer
+8. Break-glass. (PR mode, strict mode, the Argo CD health checks and the GitOps
+   page were built and then removed, ADR 0101.)
+9. Monitoring settings, metrics and dashboards, optional components, OIDC and impersonation (ADR 0058), Ichor's own users and issuer
    (ADR 0094, ADR 0096).
 10. UI localisation.
-11. Later: more storage presets, Flux PR mode, IPv6, replica-based
+11. Later: more storage presets, IPv6, replica-based
     scaling.
 
 ## Open questions

@@ -21,6 +21,7 @@ trap 'rc=$?; [ $rc -eq 0 ] || cat "$work/crane.log" >&2; rm -rf "$work"' EXIT
 grep -q "$LIVE/ichor-controller:$VERSION" dist/install.yaml || { echo "demo-images: install manifest lacks the controller image" >&2; exit 1; }
 grep -q "$LIVE/ichor-ui:$VERSION" dist/install.yaml || { echo "demo-images: install manifest lacks the UI image" >&2; exit 1; }
 cp dist/install.yaml internal/installmanifest/install.yaml
+cp dist/network-policies.yaml internal/installmanifest/network-policies.yaml
 
 touch "$work/start"
 

@@ -195,6 +195,8 @@ func newInstallerJob(ns, name string, op *ichorv1alpha1.TalosOperation, inst *ic
 			BackoffLimit:            ptr.To[int32](0),
 			TTLSecondsAfterFinished: ptr.To[int32](ichorInstallerJobTTL),
 			Template: corev1.PodTemplateSpec{
+				// The label config/cilium-network-policy selects the installer's pod by.
+				Labels: map[string]string{"app.kubernetes.io/name": "ichor-installer"},
 				Spec: corev1.PodSpec{
 					RestartPolicy:      corev1.RestartPolicyNever,
 					ServiceAccountName: IchorInstallerServiceAccount,

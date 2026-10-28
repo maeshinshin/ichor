@@ -50,6 +50,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/controller"
+	"github.com/maeshinshin/ichor/internal/kubetrust"
 	webhookv1alpha1 "github.com/maeshinshin/ichor/internal/webhook/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
@@ -518,6 +519,14 @@ func main() {
 	// next to the backups.
 	if err := mgr.Add(manager.RunnableFunc(opReconciler.ResumeEtcdRestoresUntilDone)); err != nil {
 		setupLog.Error(err, "Failed to add the etcd restore resumer")
+		os.Exit(1)
+	}
+	// Every replica, not only the leader, keeps its own trust pool right during a CA rotation.
+	if err := mgr.Add(&controller.CATrustSync{
+		Reader: mgr.GetAPIReader(), ControllerNamespace: os.Getenv("POD_NAMESPACE"),
+		Pool: kubetrust.Shared, File: kubetrust.TrustFile,
+	}); err != nil {
+		setupLog.Error(err, "Failed to add the CA trust sync")
 		os.Exit(1)
 	}
 	if err := (&controller.TalosEtcdBackupReconciler{

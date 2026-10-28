@@ -390,7 +390,7 @@ func TestReportPlans_ExplainsUnrepresentablePaths(t *testing.T) {
 		"KubeNetworkConfig.podSubnets: set TalosCluster spec.network.podSubnets",
 		"KubeNetworkConfig.serviceSubnets: set TalosCluster spec.network.serviceSubnets",
 		"UnattendedInstallConfig.installer.image: set TalosMachine spec.install.disk",
-		"KubeFlannelCNIConfig.backendType: Talos's flannel is rendered for spec.cni.preset flannel only",
+		"KubeFlannelCNIConfig.backendType: the cluster runs Talos's flannel, which Ichor no longer supports",
 		"write a TalosConfigPatch for the other fields by hand",
 	} {
 		if !strings.Contains(out.String(), want) {
@@ -405,7 +405,7 @@ func TestExplainUnrepresentable_LegacyPaths(t *testing.T) {
 		"cluster.network.podSubnets", "cluster.network.serviceSubnets", "machine.install.disk", "cluster.network.cni.name",
 	}), "\n")
 
-	for _, want := range []string{"spec.network.podSubnets", "spec.network.serviceSubnets", "spec.install.disk", "spec.cni.preset"} {
+	for _, want := range []string{"spec.network.podSubnets", "spec.network.serviceSubnets", "spec.install.disk"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("legacy report lacks %q:\n%s", want, got)
 		}

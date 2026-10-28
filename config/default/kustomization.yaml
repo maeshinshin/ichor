@@ -37,6 +37,8 @@ resources:
 - ../rbac/ichor-installer
 # The Cilium Helm Job's own RBAC (ADR 0099), separate for the same reason.
 - ../rbac/ichor-cni
+# The ichor-stack Job's own RBAC (ADR 0099 amendment): applies Kokumi and Argo CD once.
+- ../rbac/ichor-stack
 # Ichor does not ship a cluster-wide certificate-issuing dependency (ADR 0006): the
 # webhook serving certificate is generated at runtime by cert-controller, in-process
 # in the manager, so there is no certmanager/ directory here and no caBundle shipped

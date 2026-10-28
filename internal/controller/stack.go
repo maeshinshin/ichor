@@ -17,19 +17,15 @@ limitations under the License.
 package controller
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"time"
 
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -37,9 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	sigsyaml "sigs.k8s.io/yaml"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/stack"
@@ -89,15 +83,8 @@ var (
 	applicationGVK = schema.GroupVersionKind{Group: "argoproj.io", Version: versionV1alpha1, Kind: "Application"}
 )
 
-// +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;create;patch
-// +kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,verbs=get;create;patch
-// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles;clusterrolebindings;roles;rolebindings,verbs=get;create;patch;escalate;bind
-// +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingadmissionpolicies;validatingadmissionpolicybindings,verbs=get;create;patch
-// +kubebuilder:rbac:groups="",resources=configmaps;secrets;services;serviceaccounts,verbs=create;patch
-// +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=create;patch
-// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;create;patch
-// +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=create;patch
-// +kubebuilder:rbac:groups=argoproj.io,resources=appprojects,verbs=create;patch
+// The controller applies nothing itself: the ichor-stack Job does (stack_job.go). It reads and
+// writes only Jobs (the marker in ichor_upgrade.go), Orders, Applications and its own Secrets.
 // +kubebuilder:rbac:groups=argoproj.io,resources=applications,verbs=get
 // +kubebuilder:rbac:groups=delivery.kokumi.dev,resources=orders,verbs=get;create;patch
 
@@ -106,10 +93,11 @@ type stackComponent struct {
 	name      string // also the Order, Application and repository name
 	namespace string
 	version   string // chart or release version, the tag prefix
-	manifest  []byte
-	status    *ichorv1alpha1.IchorStackComponentStatus
-	// waitFor lists the Deployments that must be Ready after the first apply.
-	waitFor []string
+	// manifest is the bundle that gets published: the rendered manifest without its Secrets.
+	manifest []byte
+	status   *ichorv1alpha1.IchorStackComponentStatus
+	// valuesJSON is the user layer handed to the Job (Argo CD only).
+	valuesJSON string
 	// republished is set when this pass had to push the bundle again.
 	republished bool
 }
@@ -170,14 +158,14 @@ func (r *IchorInstallationReconciler) runStack(
 
 	kok, arg := comps[0], comps[1]
 
-	// Step 4: apply Kokumi once, wait for its registry.
-	if err := r.bootstrap(ctx, kok, false); err != nil {
+	// Step 4: the ichor-stack Job applies Kokumi once and waits for its registry.
+	if err := r.bootstrap(ctx, kok, inst); err != nil {
 		return 0, err
 	}
 
-	// Step 5: apply Argo CD once (its manifest carries the repo-creds Secret and the default
-	// AppProject, steps 6), wait for it.
-	if err := r.bootstrap(ctx, arg, true); err != nil {
+	// Step 5: the same for Argo CD. Its Secrets, the repo-creds one included, are created by
+	// the Job directly, never published (step 6 of the ADR, as amended).
+	if err := r.bootstrap(ctx, arg, inst); err != nil {
 		return 0, err
 	}
 
@@ -200,10 +188,8 @@ func (r *IchorInstallationReconciler) runStack(
 		}
 	}
 
-	// Step 8: the network policies of unit 13 go here, once both namespaces have workloads.
-	if err := r.applyStackPolicies(ctx); err != nil {
-		return 0, err
-	}
+	// Step 8: each Job applies its component's CiliumNetworkPolicies after the workloads are
+	// Ready (stackapply.Apply); the published bundles carry them too, so Argo CD keeps them.
 
 	// Step 9: report.
 	healthy := true
@@ -233,10 +219,6 @@ func (r *IchorInstallationReconciler) runStack(
 }
 
 const healthySynced = "Synced/Healthy"
-
-// applyStackPolicies is the hook for the CiliumNetworkPolicies of the kokumi and argocd
-// namespaces (ADR 0099 decision 10, work unit 13). ponytail: nothing to apply until unit 13.
-func (r *IchorInstallationReconciler) applyStackPolicies(context.Context) error { return nil }
 
 // stackComponents renders both bundles from the stored passwords and the user's values.
 func (r *IchorInstallationReconciler) stackComponents(
@@ -283,16 +265,34 @@ func (r *IchorInstallationReconciler) stackComponents(
 		return nil, err
 	}
 
+	// Kokumi's registry is anonymous: no Secret may be in what is published.
+	if kb, _, err = stack.SplitSecrets(kb); err != nil {
+		return nil, err
+	}
+
+	if ab, _, err = stack.SplitSecrets(ab); err != nil {
+		return nil, err
+	}
+
+	argoJSON := ""
+	if len(userValues[componentArgoCD]) > 0 {
+		raw, err := json.Marshal(userValues[componentArgoCD])
+		if err != nil {
+			return nil, err
+		}
+
+		argoJSON = string(raw)
+	}
+
 	st := inst.Status.Stack
 
 	return []*stackComponent{
 		{
 			name: componentKokumi, namespace: kokumi.Namespace, version: kokumi.Version, manifest: kb, status: st.Kokumi,
-			waitFor: []string{"kokumi-registry"},
 		},
 		{
 			name: componentArgoCD, namespace: argocd.Namespace, version: argocd.ChartVersion, manifest: ab, status: st.ArgoCD,
-			waitFor: []string{"argocd-server", "argocd-repo-server"},
+			valuesJSON: argoJSON,
 		},
 	}, nil
 }
@@ -359,45 +359,23 @@ func (r *IchorInstallationReconciler) getOrCreateSecret(
 	return data, nil
 }
 
-// bootstrap server-side-applies the component's manifest unless its Order already exists (from
-// then on Argo CD owns the objects, decision 11), then waits for its Deployments.
-func (r *IchorInstallationReconciler) bootstrap(ctx context.Context, c *stackComponent, ensureNamespace bool) error {
+// bootstrap has the component applied once, by its Job, unless its Order already exists (from
+// then on Argo CD owns the objects, decision 11). Until the Job has completed it is a wait.
+func (r *IchorInstallationReconciler) bootstrap(
+	ctx context.Context, c *stackComponent, inst *ichorv1alpha1.IchorInstallation,
+) error {
 	exists, err := r.orderExists(ctx, c)
+	if err != nil || exists {
+		return err
+	}
+
+	done, err := r.ensureStackJob(ctx, c, inst)
 	if err != nil {
 		return err
 	}
 
-	if !exists {
-		if ensureNamespace {
-			if err := r.Direct.Apply(ctx, client.ApplyConfigurationFromUnstructured(namespaceObject(c.namespace)),
-				client.FieldOwner(stackFieldManager), client.ForceOwnership); err != nil {
-				return fmt.Errorf("applying Namespace %s: %w", c.namespace, err)
-			}
-		}
-
-		if err := r.applyManifest(ctx, c); err != nil {
-			return err
-		}
-	}
-
-	for _, d := range c.waitFor {
-		var dep appsv1.Deployment
-
-		err := r.Direct.Get(ctx, types.NamespacedName{Namespace: c.namespace, Name: d}, &dep)
-		if apierrors.IsNotFound(err) {
-			return &stackWait{"WaitingFor" + titleName(c.name), "Deployment " + c.namespace + "/" + d + " does not exist yet"}
-		} else if err != nil {
-			return fmt.Errorf("reading Deployment %s/%s: %w", c.namespace, d, err)
-		}
-
-		want := int32(1)
-		if dep.Spec.Replicas != nil {
-			want = *dep.Spec.Replicas
-		}
-
-		if dep.Status.ReadyReplicas < want {
-			return &stackWait{"WaitingFor" + titleName(c.name), "Deployment " + c.namespace + "/" + d + " is not Ready"}
-		}
+	if !done {
+		return &stackWait{"WaitingFor" + titleName(c.name), "Job " + stackJobName(c.name) + " is applying " + c.name}
 	}
 
 	return nil
@@ -409,61 +387,6 @@ func titleName(n string) string {
 	}
 
 	return "Kokumi"
-}
-
-func namespaceObject(n string) *unstructured.Unstructured {
-	return &unstructured.Unstructured{Object: map[string]any{
-		"apiVersion": "v1", "kind": "Namespace", metaKey: map[string]any{labelName: n},
-	}}
-}
-
-// applyManifest applies the multi-document manifest in order. A kind whose CRD was applied a
-// moment ago may not be served yet; that is a wait, not a failure.
-func (r *IchorInstallationReconciler) applyManifest(ctx context.Context, c *stackComponent) error {
-	rd := yamlutil.NewYAMLReader(bufio.NewReader(bytes.NewReader(c.manifest)))
-
-	for {
-		doc, err := rd.Read()
-		if errors.Is(err, io.EOF) {
-			return nil
-		}
-
-		if err != nil {
-			return fmt.Errorf("splitting the %s manifest: %w", c.name, err)
-		}
-
-		obj := map[string]any{}
-		if err := sigsyaml.Unmarshal(doc, &obj); err != nil {
-			return fmt.Errorf("parsing the %s manifest: %w", c.name, err)
-		}
-
-		if len(obj) == 0 {
-			continue
-		}
-
-		u := &unstructured.Unstructured{Object: obj}
-
-		if u.GetNamespace() == "" {
-			mapping, err := r.Direct.RESTMapper().RESTMapping(u.GroupVersionKind().GroupKind(), u.GroupVersionKind().Version)
-			if meta.IsNoMatchError(err) {
-				return &stackWait{"WaitingFor" + titleName(c.name), "waiting for " + u.GetKind() + " to be served"}
-			} else if err != nil {
-				return fmt.Errorf("mapping %s: %w", u.GetKind(), err)
-			}
-
-			if mapping.Scope.Name() == meta.RESTScopeNameNamespace {
-				u.SetNamespace(c.namespace)
-			}
-		}
-
-		err = r.Direct.Apply(ctx, client.ApplyConfigurationFromUnstructured(u),
-			client.FieldOwner(stackFieldManager), client.ForceOwnership)
-		if meta.IsNoMatchError(err) {
-			return &stackWait{"WaitingFor" + titleName(c.name), "waiting for " + u.GetKind() + " to be served"}
-		} else if err != nil {
-			return fmt.Errorf("applying %s %s: %w", u.GetKind(), u.GetName(), err)
-		}
-	}
 }
 
 func (r *IchorInstallationReconciler) orderExists(ctx context.Context, c *stackComponent) (bool, error) {

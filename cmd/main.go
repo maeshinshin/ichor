@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -102,22 +103,18 @@ func init() {
 	// +kubebuilder:scaffold:scheme
 }
 
+// certPollInterval is how often a replica checks for the mounted webhook certificate.
+const certPollInterval = time.Second
+
 // logCertStatusBeforeStart logs, once, whether certDir/certName already exists right before
-// mgr.Start below. It is not a guess: controller-runtime's own manager
-// internals confirm that server's own Runnable starts its listener concurrently with the
-// cert-controller rotator that (eventually) writes this file, and that the listener does not
-// retry if it loses that race -- only Kubernetes' pod restart does, by trying again from
-// scratch. Without this line, a brand-new install's first restart or two shows up as
-// CrashLoopBackOff plus a "no such file" TLS error with nothing in the logs saying that is
-// expected, which is indistinguishable from a real misconfiguration.
+// mgr.Start. On a brand-new install it does not, and that is normal: the webhook server (and
+// its readiness) waits for the file instead of crashing, so no restart follows (cold-start amendment).
 func logCertStatusBeforeStart(log logr.Logger, server, certDir, certName string) {
 	path := filepath.Join(certDir, certName)
 	if _, err := os.Stat(path); err != nil {
-		log.Info("certificate not written yet for this server; this is expected on a brand-new "+
-			"install and resolves on its own once cert-controller's rotator writes the Secret and "+
-			"the mounted volume picks it up -- if this server's listener loses that race, the "+
-			"process exits and Kubernetes restarts it, which is one or two expected restarts, not "+
-			"a failure",
+		log.Info("certificate not written yet for this server; expected on a brand-new install. "+
+			"The server starts once the rotator (leader) or the mounted volume provides it; "+
+			"not ready until then, and no restart is needed",
 			"server", server, "path", path)
 	}
 }
@@ -232,9 +229,12 @@ func main() {
 		setupLog.Info("Initializing metrics certificate watcher using provided certificates",
 			"metrics-cert-path", metricsCertPath, "metrics-cert-name", metricsCertName, "metrics-cert-key", metricsCertKey)
 
-		metricsServerOptions.CertDir = metricsCertPath
-		metricsServerOptions.CertName = metricsCertName
-		metricsServerOptions.KeyName = metricsCertKey
+		// Not CertDir/CertName/KeyName: the metrics server would then read the files when it
+		// starts and exit if the rotator has not written them yet (cold start). A
+		// GetCertificate that reads them per handshake lets it start first and follow rotations.
+		metricsServerOptions.TLSOpts = append(slices.Clone(tlsOpts), func(c *tls.Config) {
+			c.GetCertificate = lazyKeyPair(metricsCertPath, metricsCertName, metricsCertKey)
+		})
 	}
 
 	sigCtx := ctrl.SetupSignalHandler()
@@ -265,20 +265,19 @@ func main() {
 		os.Exit(1)
 	}
 
+	webhooksUp := make(chan struct{})
 	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
 		// The webhook serving certificate has no caBundle and no Secret data shipped with
 		// the chart: it is generated at runtime by cert-controller and read back
 		// by controller-runtime's certwatcher via webhookCertPath/CertName/KeyName above.
-		// certsReady only delays SetupTalosClusterWebhookWithManager -- *admission handler
-		// registration*, not the webhook server's own listener, which controller-runtime
-		// starts regardless and which needs the cert file to exist the moment it does (no
-		// retry if it doesn't). On a cold start (Secret shipped empty, no data yet) that is
-		// a real race against this rotator's own first write, not something this gate
-		// prevents "Consequences" already accepts the resulting crash-loop as
-		// the intended failure direction (framed there around the Secret being deleted, the
-		// same mechanism as a cold start), and it was confirmed against
-		// controller-runtime's actual manager internals rather than taking this comment's
-		// older claim on faith.
+		// Nothing may call mgr.GetWebhookServer() before the certificate exists:
+		// controller-runtime adds the webhook server to the manager lazily on that first
+		// call, and the server reads its certificate the moment it starts and exits the
+		// process if the file is missing. So the server, its handlers and its readiness
+		// check all wait behind webhooksUp, which closes once the rotator reports the
+		// certificate ready (the leader) or the files appear on disk (any replica: the
+		// rotator is leader-only, so a follower learns of the leader's write through the
+		// kubelet's Secret volume sync)., cold-start amendment.
 		certsReady := make(chan struct{})
 		if err := rotator.AddRotator(mgr, &rotator.CertRotator{
 			SecretKey:      types.NamespacedName{Namespace: os.Getenv("POD_NAMESPACE"), Name: webhookSecretName},
@@ -302,7 +301,20 @@ func main() {
 		}
 
 		go func() {
-			<-certsReady
+			fileCh := make(chan struct{})
+			go func() {
+				if waitForCertFiles(sigCtx, webhookCertPath, webhookCertName, webhookCertKey, certPollInterval) == nil {
+					close(fileCh)
+				}
+			}()
+			select {
+			case <-certsReady:
+				setupLog.Info("Webhook certificate ready (rotator); starting the webhook server")
+			case <-fileCh:
+				setupLog.Info("Webhook certificate found on disk; starting the webhook server")
+			case <-sigCtx.Done():
+				return
+			}
 			if err := webhookv1alpha1.SetupTalosClusterWebhookWithManager(mgr); err != nil {
 				setupLog.Error(err, "Failed to create webhook", "webhook", "TalosCluster")
 				os.Exit(1)
@@ -329,6 +341,8 @@ func main() {
 				setupLog.Error(err, "Failed to create webhook", "webhook", "BreakGlass")
 				os.Exit(1)
 			}
+			mgr.GetWebhookServer() // idempotent; makes sure the server is a runnable even if no handler did
+			close(webhooksUp)
 		}()
 	}
 
@@ -547,15 +561,15 @@ func main() {
 	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
 		// Ready means the webhook server answers: otherwise a replaced pod is 1/1 Ready while
 		// admission calls still fail (seen as "failed calling webhook" right after a rotation).
-		if err := mgr.AddReadyzCheck("webhook", mgr.GetWebhookServer().StartedChecker()); err != nil {
+		// Not mgr.GetWebhookServer() here: that would start the server before its certificate exists.
+		if err := mgr.AddReadyzCheck("webhook", gatedChecker(webhooksUp, func() healthz.Checker {
+			return mgr.GetWebhookServer().StartedChecker()
+		})); err != nil {
 			setupLog.Error(err, "Failed to set up webhook ready check")
 			os.Exit(1)
 		}
 
 		logCertStatusBeforeStart(setupLog, "webhook", webhookCertPath, webhookCertName)
-	}
-	if len(metricsCertPath) > 0 {
-		logCertStatusBeforeStart(setupLog, "metrics", metricsCertPath, metricsCertName)
 	}
 
 	setupLog.Info("Starting manager")

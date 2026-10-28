@@ -41,6 +41,7 @@ limitations under the License.
 package controller
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -482,7 +483,10 @@ func (r *TalosMachineReconciler) completeRemoval(ctx context.Context, m *ichorv1
 			msg = workerStillHasClusterCredentialsMessage
 		}
 
-		r.Recorder.Eventf(m, corev1.EventTypeWarning, reasonNodeStillHasClusterCredentials, msg, m.Name)
+		// The Node is named after the host, not the machine object; Status.NodeName is the host's name.
+		name := cmp.Or(m.Status.NodeName, m.Name)
+
+		r.Recorder.Eventf(m, corev1.EventTypeWarning, reasonNodeStillHasClusterCredentials, msg, name)
 	}
 
 	controllerutil.RemoveFinalizer(m, machineRemovalFinalizer)

@@ -71,12 +71,17 @@ var _ = Describe("resetNode (ADR 0042)", func() {
 			Expect(err).NotTo(HaveOccurred())
 		}
 
+		var live ichorv1alpha1.TalosMachine
+		Expect(k8sClient.Get(ctx, machineKeyOf(cp1), &live)).To(Succeed())
+		live.Status.NodeName = resetTestNode
+		Expect(k8sClient.Status().Update(ctx, &live)).To(Succeed())
+
 		Expect(k8sClient.Delete(ctx, cp1)).To(Succeed())
 		_, err := reconcileMachine(r, cp1)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(fake.resetCalls).To(Equal(0))
-		Eventually(recorder.Events).Should(Receive(ContainSubstring(reasonNodeStillHasClusterCredentials)))
+		Eventually(recorder.Events).Should(Receive(And(ContainSubstring(reasonNodeStillHasClusterCredentials), ContainSubstring("kubectl delete node "+resetTestNode))))
 
 		var gone ichorv1alpha1.TalosMachine
 		err = k8sClient.Get(ctx, machineKeyOf(cp1), &gone)

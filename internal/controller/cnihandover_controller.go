@@ -67,6 +67,9 @@ const (
 
 	// helmOwnerLabel is the label Helm's Secrets driver puts on its release records.
 	helmOwnerLabel = "owner"
+
+	// helmStatusDeployed is the status of a release record that is the live one.
+	helmStatusDeployed = "deployed"
 )
 
 const (
@@ -228,7 +231,7 @@ func (r *CNIHandoverReconciler) finish(
 	}
 
 	switch {
-	case status == "deployed" && got != hash:
+	case status == helmStatusDeployed && got != hash:
 		// A finished Job for this hash is still around (its TTL is a day) from before the values
 		// moved away and back: it proves nothing about the release now. Remove it so the next
 		// pass runs a new one.
@@ -238,7 +241,7 @@ func (r *CNIHandoverReconciler) finish(
 
 		return ctrl.Result{RequeueAfter: cniJobPollInterval}, r.setProgress(ctx, cluster, handedOver, reasonCNIWaitingForRelease,
 			"the Helm release is deployed at other values than the cluster's; running the Helm Job again")
-	case status != "deployed":
+	case status != helmStatusDeployed:
 		return ctrl.Result{RequeueAfter: handoverRequeueInterval}, r.setProgress(ctx, cluster, handedOver, reasonCNIWaitingForRelease,
 			fmt.Sprintf("the Helm Job completed but release %s has status %q, not deployed", cilium.ReleaseName, status))
 	}

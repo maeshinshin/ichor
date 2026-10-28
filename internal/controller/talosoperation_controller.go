@@ -233,7 +233,7 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	// An Ichor self-upgrade touches no machine: its executor watches one installer Job, so the
 	// operation carries no machine list (ADR 0059). A Cilium chart upgrade is the same shape (ADR 0099).
-	if op.Spec.Kind == ichorv1alpha1.TalosOperationKindIchor || isCNIUpgrade(&op) {
+	if machineless(&op) {
 		return r.advanceIchor(ctx, &op, &cluster, lock)
 	}
 

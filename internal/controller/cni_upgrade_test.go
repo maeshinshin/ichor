@@ -38,13 +38,13 @@ func TestCheckChartStep(t *testing.T) {
 		deployed, target string
 		wantErr          string
 	}{
-		{"1.17.4", "1.18.0", ""},
-		{"1.18.0", "1.18.2", ""},
-		{"1.18.0", "1.18.0", ""},
-		{"1.16.9", "1.18.0", "one minor version at a time"},
-		{"1.18.0", "2.0.0", "one minor version at a time"},
-		{"1.19.0", "1.18.0", "does not downgrade"},
-		{"nonsense", "1.18.0", "cannot compare"},
+		{"1.17.4", chartNext, ""},
+		{chartNext, "1.18.2", ""},
+		{chartNext, chartNext, ""},
+		{"1.16.9", chartNext, "one minor version at a time"},
+		{chartNext, "2.0.0", "one minor version at a time"},
+		{"1.19.0", chartNext, "does not downgrade"},
+		{"nonsense", chartNext, "cannot compare"},
 	} {
 		err := checkChartStep(tc.deployed, tc.target)
 		switch {
@@ -57,6 +57,7 @@ func TestCheckChartStep(t *testing.T) {
 }
 
 const (
+	chartNext  = "1.18.0"
 	olderMinor = "1.17.4"
 	skipMinor  = "1.16.2"
 )

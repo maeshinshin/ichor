@@ -44,7 +44,10 @@ import (
 	"github.com/maeshinshin/ichor/pkg/render"
 )
 
-const helmStatusKey = "status"
+const (
+	helmStatusKey  = "status"
+	helmVersionKey = "version"
+)
 
 func reconcileHandover(r *CNIHandoverReconciler, namespace, name string) (ctrl.Result, error) {
 	return r.Reconcile(ctx, ctrl.Request{Namespace: namespace, Name: name})
@@ -133,8 +136,8 @@ func helmReleaseAt(version int, status, chartVersion string, config map[string]a
 	GinkgoHelper()
 
 	raw, err := json.Marshal(map[string]any{
-		labelName: ciliumName, "version": version, "config": config, "info": map[string]any{helmStatusKey: status},
-		"chart": map[string]any{"metadata": map[string]any{"version": chartVersion}},
+		labelName: ciliumName, helmVersionKey: version, "config": config, "info": map[string]any{helmStatusKey: status},
+		"chart": map[string]any{"metadata": map[string]any{helmVersionKey: chartVersion}},
 	})
 	Expect(err).NotTo(HaveOccurred())
 
@@ -148,7 +151,7 @@ func helmReleaseAt(version int, status, chartVersion string, config map[string]a
 	secret := &corev1.Secret{
 		Namespace: testIchorNamespace, Name: "sh.helm.release.v1.cilium.v" + strconv.Itoa(version),
 		Type:   "helm.sh/release.v1",
-		Labels: map[string]string{helmOwnerLabel: "helm", labelName: ciliumName, helmStatusKey: status, "version": strconv.Itoa(version)},
+		Labels: map[string]string{helmOwnerLabel: "helm", labelName: ciliumName, helmStatusKey: status, helmVersionKey: strconv.Itoa(version)},
 		Data:   map[string][]byte{"release": []byte(base64.StdEncoding.EncodeToString(zipped.Bytes()))},
 	}
 	Expect(k8sClient.Create(ctx, secret)).To(Succeed())

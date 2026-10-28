@@ -34,6 +34,7 @@ import (
 	sigsyaml "sigs.k8s.io/yaml"
 
 	"github.com/maeshinshin/ichor/pkg/stack/kokumi"
+	"github.com/maeshinshin/ichor/pkg/stack/policies"
 )
 
 const (
@@ -63,7 +64,14 @@ type Options struct {
 	// with a hook Job, but hooks are dropped (the output is applied as plain
 	// manifests, and Kokumi/Argo CD would re-run a Job), so Ichor renders it.
 	RedisPassword string
+	// OmitPolicies leaves the CiliumNetworkPolicies out
+	// of the output, for the first apply, which runs before they may exist.
+	// The published bundle keeps them so Argo CD does not prune them.
+	OmitPolicies bool
 }
+
+// Policies returns the CiliumNetworkPolicies of the argocd namespace alone.
+func Policies() []byte { return append([]byte{}, policies.Argocd...) }
 
 // DefaultValues is the minimal Argo CD: no dex, no notifications, no
 // ApplicationSet controller, no Redis HA. It also ships what Kokumi's
@@ -82,6 +90,9 @@ func DefaultValues(redisPassword string) map[string]any {
 		"redis-ha":        off(),
 		"redisSecretInit": off(),
 		"crds":            map[string]any{"keep": true},
+		// The chart's Kubernetes NetworkPolicies add to the CiliumNetworkPolicies and its
+		// argocd-server one allows all ingress; the Cilium ones (pkg/stack/policies) replace them.
+		"global": map[string]any{"networkPolicy": map[string]any{"create": false}},
 		"extraObjects": []any{
 			extra("argoproj.io/v1alpha1", "AppProject", "default", map[string]any{
 				"spec": map[string]any{
@@ -186,7 +197,11 @@ func Render(opts Options) ([]byte, error) {
 		out.WriteString("---\n# Source: " + m.Name + "\n" + strings.TrimSpace(m.Content) + "\n")
 	}
 
-	return []byte(out.String()), nil
+	if opts.OmitPolicies {
+		return []byte(out.String()), nil
+	}
+
+	return policies.Append([]byte(out.String()), policies.Argocd), nil
 }
 
 func roundTrip(in map[string]any) (map[string]any, error) {

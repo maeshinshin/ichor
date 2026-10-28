@@ -547,6 +547,14 @@ func main() {
 		setupLog.Error(err, "Failed to set up ready check")
 		os.Exit(1)
 	}
+	// Ready means the webhook server answers: otherwise a replaced pod is 1/1 Ready while
+	// admission calls still fail (seen as "failed calling webhook" right after a rotation).
+	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+		if err := mgr.AddReadyzCheck("webhook", mgr.GetWebhookServer().StartedChecker()); err != nil {
+			setupLog.Error(err, "Failed to set up webhook ready check")
+			os.Exit(1)
+		}
+	}
 
 	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
 		logCertStatusBeforeStart(setupLog, "webhook", webhookCertPath, webhookCertName)

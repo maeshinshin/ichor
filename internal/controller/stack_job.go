@@ -103,7 +103,7 @@ func newStackJob(ns string, c *stackComponent, inst *ichorv1alpha1.IchorInstalla
 						SecurityContext: &corev1.SecurityContext{
 							AllowPrivilegeEscalation: ptr.To(false),
 							ReadOnlyRootFilesystem:   ptr.To(true),
-							Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
+							Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{capDropAll}},
 						},
 					}},
 				},
@@ -113,6 +113,8 @@ func newStackJob(ns string, c *stackComponent, inst *ichorv1alpha1.IchorInstalla
 }
 
 const labelNameKey = "app.kubernetes.io/name"
+
+const capDropAll corev1.Capability = "ALL"
 
 // ensureStackJob creates the component's Job if it does not exist and reports whether it has
 // completed. A failed Job is an error, not a wait: it will not retry by itself.

@@ -119,7 +119,7 @@ func afterRotateCACreate(ctx context.Context, cmd *cobra.Command, cluster string
 		}
 
 		_, _ = fmt.Fprintf(errw, "Follow it with: ichor operation get %s --watch --kubeconfig %s\n", ref.GetName(), files.Kubeconfig)
-		rotateCAAfterwards(errw, cluster)
+		rotateCAAfterwards(errw, cluster, files.Kubeconfig)
 
 		return nil
 	}
@@ -136,15 +136,16 @@ func afterRotateCACreate(ctx context.Context, cmd *cobra.Command, cluster string
 		return err
 	}
 
-	rotateCAAfterwards(errw, cluster)
+	rotateCAAfterwards(errw, cluster, files.Kubeconfig)
 
 	return nil
 }
 
-// rotateCAAfterwards is what to do once the rotation is over.
-func rotateCAAfterwards(errw io.Writer, cluster string) {
-	_, _ = fmt.Fprintf(errw, "When it completes: run 'ichor cluster credentials %s' for files that trust the new CA only, and "+
-		"'ichor cluster bundle-export %s' to save the new secrets bundle.\n", cluster, cluster)
+// rotateCAAfterwards is what to do once the rotation is over. The old kubeconfig trusts only the old
+// CA, so the credentials command must be pointed at the new kubeconfig that rotate-ca wrote.
+func rotateCAAfterwards(errw io.Writer, cluster, newKubeconfig string) {
+	_, _ = fmt.Fprintf(errw, "When it completes: run 'ichor cluster credentials %s --kubeconfig %s' for files that trust the new CA only, and "+
+		"'ichor cluster bundle-export %s' to save the new secrets bundle.\n", cluster, newKubeconfig, cluster)
 }
 
 // runRotateCAHandoff waits, through the Kubernetes API, until the operation waits for credentials,

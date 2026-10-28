@@ -24,7 +24,6 @@ import (
 	"errors"
 	"fmt"
 
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )
@@ -57,15 +56,7 @@ func NewNodesReady() NodesReadyFunc {
 		var notReady []string
 
 		for i := range nodes.Items {
-			ready := false
-
-			for _, cond := range nodes.Items[i].Status.Conditions {
-				if cond.Type == corev1.NodeReady && cond.Status == corev1.ConditionTrue {
-					ready = true
-				}
-			}
-
-			if !ready {
+			if !nodeIsReady(&nodes.Items[i]) {
 				notReady = append(notReady, nodes.Items[i].Name)
 			}
 		}

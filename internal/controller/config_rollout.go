@@ -32,10 +32,8 @@ import (
 	"fmt"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -405,7 +403,7 @@ func (a *configRolloutAdvancer) begin(
 		return err
 	}
 
-	ready, err := a.nodeReady(ctx, node)
+	ready, err := nodeReadyByName(ctx, a.Kube, a.Client, node)
 	if err != nil {
 		return fmt.Errorf("checking %q's node readiness: %w", m.Name, err)
 	}
@@ -590,7 +588,7 @@ func (a *configRolloutAdvancer) finish(
 		return false, a.stillWaiting(ctx, cluster, m, err.Error())
 	}
 
-	ready, err := a.nodeReady(ctx, node)
+	ready, err := nodeReadyByName(ctx, a.Kube, a.Client, node)
 	if err != nil {
 		// A single control plane has no API server while it reboots; that is waiting, not failing.
 		return false, a.stillWaiting(ctx, cluster, m, "checking the node's readiness: "+err.Error())
@@ -658,23 +656,4 @@ func (a *configRolloutAdvancer) uncordon(ctx context.Context, talos TalosClient,
 	}
 
 	return uncordonAfterReboot(ctx, a.Kube, node)
-}
-
-// nodeReady reports whether hostname's Kubernetes Node is Ready.
-func (a *configRolloutAdvancer) nodeReady(ctx context.Context, hostname string) (bool, error) {
-	if a.Kube != nil {
-		n, err := a.Kube.CoreV1().Nodes().Get(ctx, hostname, metav1.GetOptions{})
-		if err != nil {
-			return false, err
-		}
-
-		return nodeIsReady(n), nil
-	}
-
-	var node corev1.Node
-	if err := a.Get(ctx, types.NamespacedName{Name: hostname}, &node); err != nil {
-		return false, err
-	}
-
-	return nodeIsReady(&node), nil
 }

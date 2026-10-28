@@ -430,18 +430,16 @@ func (r *TalosMachineReconciler) removalNodeName(
 
 	var talos TalosClient
 
+	ctx, cancel := context.WithTimeout(ctx, etcdDialTimeout)
+	defer cancel()
+
 	if r.TalosClient != nil {
 		if bundle, err := loadBundle(ctx, r.Client, r.ControllerNamespace, cluster); err == nil {
-			dialCtx, cancel := context.WithTimeout(ctx, etcdDialTimeout)
-			defer cancel()
-
-			if c, err := r.TalosClient(dialCtx, cluster, m, bundle); err == nil {
+			if c, err := r.TalosClient(ctx, cluster, m, bundle); err == nil {
 				defer closeTalosClient(c)
 
 				talos = c
 			}
-
-			return resolveNodeName(dialCtx, r.Client, talos, m)
 		}
 	}
 

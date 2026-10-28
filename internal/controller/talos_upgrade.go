@@ -29,10 +29,8 @@ import (
 	"fmt"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
@@ -228,7 +226,7 @@ func (a *talosUpgradeAdvancer) beginUpgrade(
 		return false, err
 	}
 
-	ready, err := a.nodeReady(ctx, node)
+	ready, err := nodeReadyByName(ctx, nil, a.Client, node)
 	if err != nil {
 		return false, fmt.Errorf("checking %q's node readiness: %w", m.Name, err)
 	}
@@ -330,7 +328,7 @@ func (a *talosUpgradeAdvancer) finish(
 		return false, err
 	}
 
-	ready, err := a.nodeReady(ctx, node)
+	ready, err := nodeReadyByName(ctx, nil, a.Client, node)
 	if err != nil {
 		return false, fmt.Errorf("checking %q's node readiness: %w", m.Name, err)
 	}
@@ -364,22 +362,6 @@ func (a *talosUpgradeAdvancer) finish(
 	}
 
 	return true, nil
-}
-
-// nodeReady reports whether hostname's Kubernetes Node is Ready.
-func (a *talosUpgradeAdvancer) nodeReady(ctx context.Context, hostname string) (bool, error) {
-	var node corev1.Node
-	if err := a.Get(ctx, types.NamespacedName{Name: hostname}, &node); err != nil {
-		return false, err
-	}
-
-	for _, c := range node.Status.Conditions {
-		if c.Type == corev1.NodeReady {
-			return c.Status == corev1.ConditionTrue, nil
-		}
-	}
-
-	return false, nil
 }
 
 // evacuate drives one storage.EvacuationStatus step for m's node through

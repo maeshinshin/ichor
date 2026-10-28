@@ -185,6 +185,9 @@ func k8sCluster(target string, cniSpec ...ichorv1alpha1.TalosClusterCNI) *ichorv
 			ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: 1, Schedulable: testSchedulable},
 		},
 	}
+	// Cilium is the only CNI; without a spec the hand-over is disabled so it does not
+	// hold the upgrade, which the tests that pass their own spec exercise.
+	cluster.Spec.CNI = ichorv1alpha1.TalosClusterCNI{Preset: testCilium, KubeProxy: modeEnabled, Handover: testHandoverDisabled}
 	if len(cniSpec) > 0 {
 		cluster.Spec.CNI = cniSpec[0]
 	}

@@ -1,0 +1,70 @@
+/*
+Copyright 2026 maeshinshin.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package v1alpha1
+
+import (
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+)
+
+var _ = Describe("TalosCluster Webhook: removed CNI presets", func() {
+	v := &TalosClusterCustomValidator{}
+
+	withPreset := func(p string) *ichorv1alpha1.TalosCluster {
+		c := newTestCluster()
+		c.Spec.CNI.Preset = p
+
+		return c
+	}
+
+	It("refuses to create a flannel or custom cluster", func() {
+		for _, p := range []string{"flannel", "custom"} {
+			_, err := v.ValidateCreate(ctx, withPreset(p))
+			Expect(err).To(MatchError(ContainSubstring("Cilium is the only CNI")))
+		}
+	})
+
+	It("creates a cilium cluster, with the preset set or defaulted", func() {
+		for _, p := range []string{"cilium", ""} {
+			_, err := v.ValidateCreate(ctx, withPreset(p))
+			Expect(err).NotTo(HaveOccurred())
+		}
+	})
+
+	It("refuses to create with a manual or disabled handover", func() {
+		c := withPreset("cilium")
+		c.Spec.CNI.Handover = "manual"
+		_, err := v.ValidateCreate(ctx, c)
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("refuses a spec change to a stored flannel cluster but not a metadata change", func() {
+		old := withPreset("flannel")
+
+		changed := old.DeepCopy()
+		changed.Spec.KubernetesVersion = "v1.36.2"
+		_, err := v.ValidateUpdate(ctx, old, changed)
+		Expect(err).To(MatchError(ContainSubstring("Cilium is the only CNI")))
+
+		labelled := old.DeepCopy()
+		labelled.Labels = map[string]string{"a": "b"}
+		_, err = v.ValidateUpdate(ctx, old, labelled)
+		Expect(err).NotTo(HaveOccurred())
+	})
+})

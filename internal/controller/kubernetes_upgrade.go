@@ -718,7 +718,7 @@ func (a *kubernetesUpgradeAdvancer) waiting(
 // manifests; while Argo CD is taking the CNI over and the inline entry is still rendered, that
 // would roll the CNI back. "disabled" is allowed through: nothing ever takes over, so
 // the inline entry is the CNI's source of truth and re-applying it is the intended state. A CNI
-// with nothing to hand over (flannel, custom) has no hand-over to wait for.
+// with nothing to hand over (any preset but cilium, which the controllers refuse) waits for nothing.
 func cniHandoverPending(cluster *ichorv1alpha1.TalosCluster) string {
 	preset, ok := cniPresetFor(cluster.Spec.CNI.Preset)
 	if !ok {

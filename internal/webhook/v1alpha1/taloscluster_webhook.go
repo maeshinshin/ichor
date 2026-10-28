@@ -17,8 +17,12 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"cmp"
 	"context"
+	"errors"
+	"fmt"
 
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -39,7 +43,7 @@ func SetupTalosClusterWebhookWithManager(mgr ctrl.Manager) error {
 		Complete()
 }
 
-// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-taloscluster,mutating=false,failurePolicy=fail,sideEffects=None,groups=ichor.maesh.dev,resources=talosclusters,verbs=update;delete,versions=v1alpha1,name=vtaloscluster-v1alpha1.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-taloscluster,mutating=false,failurePolicy=fail,sideEffects=None,groups=ichor.maesh.dev,resources=talosclusters,verbs=create;update;delete,versions=v1alpha1,name=vtaloscluster-v1alpha1.kb.io,admissionReviewVersions=v1
 
 // TalosClusterCustomValidator struct is responsible for validating the TalosCluster resource
 // when it is created, updated, or deleted.
@@ -64,12 +68,45 @@ func isUnschedulable(c *ichorv1alpha1.TalosCluster) bool {
 func (v *TalosClusterCustomValidator) ValidateCreate(_ context.Context, obj *ichorv1alpha1.TalosCluster) (admission.Warnings, error) {
 	talosclusterlog.Info("Validation for TalosCluster upon creation", "name", obj.GetName())
 
-	return nil, nil
+	return nil, validateCNICreate(obj)
+}
+
+// presetRemovedMessage is the refusal for a removed preset.
+const presetRemovedMessage = "spec.cni.preset %q was removed: " +
+	"Cilium is the only CNI; delete this cluster and recreate it with cilium"
+
+// removedPreset reports whether a stored preset is a removed one. The CRD default makes an
+// unset preset cilium.
+func removedPreset(c *ichorv1alpha1.TalosCluster) bool {
+	p := c.Spec.CNI.Preset
+
+	return p != "" && p != "cilium"
+}
+
+// validateCNICreate refuses a new cluster that asks for a removed CNI: preset flannel
+// or custom, spec.cni.custom, or a handover other than automatic.
+func validateCNICreate(c *ichorv1alpha1.TalosCluster) error {
+	switch cni := c.Spec.CNI; {
+	case removedPreset(c):
+		return fmt.Errorf(presetRemovedMessage, cni.Preset)
+	case cni.Custom != nil:
+		return errors.New("spec.cni.custom is deprecated and unused: Cilium is the only CNI")
+	case cni.Handover != "" && cni.Handover != "automatic":
+		return fmt.Errorf("spec.cni.handover %q is deprecated: Ichor owns the Cilium release; leave it unset", cni.Handover)
+	}
+
+	return nil
 }
 
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type TalosCluster.
 func (v *TalosClusterCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj *ichorv1alpha1.TalosCluster) (admission.Warnings, error) {
 	talosclusterlog.Info("Validation for TalosCluster upon update", "name", newObj.GetName())
+
+	// A stored flannel/custom cluster keeps its metadata and deletion, but no spec change: its
+	// controllers refuse to render it, so a spec edit could never take effect.
+	if (removedPreset(oldObj) || removedPreset(newObj)) && !apiequality.Semantic.DeepEqual(oldObj.Spec, newObj.Spec) {
+		return nil, fmt.Errorf(presetRemovedMessage, cmp.Or(newObj.Spec.CNI.Preset, oldObj.Spec.CNI.Preset))
+	}
 
 	// Only the transition to "false" is checked: a cluster created
 	// unschedulable has no workers yet (they are discovered afterwards), and

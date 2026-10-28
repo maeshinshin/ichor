@@ -1,6 +1,6 @@
 # 0062. GitOps page and external tool links
 
-Status: Accepted · Date: 2026-10-26 · Design section: CLI and UI
+Status: Superseded by ADR 0101 · Date: 2026-10-26 · Design section: CLI and UI
 Decided: a new `GitOpsService` backs the GitOps page with three read-only RPCs: `ListGitOps` (every TalosCluster, TalosMachine and TalosConfigPatch the caller can list, with its tracking Application's `status.sync.status` and `status.health.status`, read with `get` only, no new RBAC), `FindPullRequests` (open pull requests of one CR, asked of the Git host only when a row's button is pressed, answered from a 30 s per-replica cache, one host call per verb the kind can propose) and `GetLinks`; external tool URLs are registered in the chart's values (`ichorUI.links.{argocd,grafana,hubble,longhorn}`, env `ICHOR_LINK_*`), not in a CRD spec, and a tool with no URL gets no link; links are http(s) only, checked in the backend and again in the UI with the function pull request URLs already use; Argo CD links go to the CR's Application, Grafana to the bundled dashboard's fixed uid, Hubble and Longhorn to their front page
 
 ## Context

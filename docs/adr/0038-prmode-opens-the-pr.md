@@ -1,6 +1,6 @@
 # 0038. PR mode: clone, push and open a PR with `net/http` and the `git` binary, never a host SDK
 
-Status: Accepted · Date: 2026-10-26 · Design section: GitOps and Argo CD (phase 8, "PR mode")
+Status: Superseded by ADR 0101 · Date: 2026-10-26 · Design section: GitOps and Argo CD (phase 8, "PR mode")
 
 Decided: `pkg/prmode` now clones a repository, pushes a branch via the `git` CLI (never `go-git`), and opens a PR/MR via one `net/http` POST per host (never a GitHub/GitLab/Gitea SDK) -- with the token carried only through `git`'s own `GIT_CONFIG_*` environment-variable mechanism and an HTTP request header, never argv, a URL, or a log line
 

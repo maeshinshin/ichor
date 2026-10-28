@@ -1,6 +1,6 @@
 # 0028. `ichor gitops export`/`handoff`: an allow-list, two tracking checks, a one-field patch
 
-Status: Accepted, amended; superseded in part by ADR 0099 · Date: 2026-10-26 · Design section: GitOps and Argo CD
+Status: Superseded by ADR 0101 · Date: 2026-10-26 · Design section: GitOps and Argo CD
 
 Decided: `ichor gitops export`'s allow-list of CR kinds and of the fields it writes for each (no status or server-assigned metadata), its Argo CD/Flux tracked-resource warning, and `ichor gitops handoff`'s one-field `TalosCluster` patch
 

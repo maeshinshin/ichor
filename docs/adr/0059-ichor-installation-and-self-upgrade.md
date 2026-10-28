@@ -1,6 +1,6 @@
 # 0059. IchorInstallation holds the target version; a TalosOperation of kind ichor runs an installer Job that carries its own manifests, snapshots, and rolls back
 
-Status: Accepted; superseded in part by ADR 0090 (no air-gap requirement) · Date: 2026-10-26 · Design section: Upgrades (Ichor), API
+Status: Accepted; superseded in part by ADR 0090 (no air-gap requirement) and in part by ADR 0101 (decision 5 and the external mode) · Date: 2026-10-26 · Design section: Upgrades (Ichor), API
 Decided: Add the cluster-scoped singleton `IchorInstallation` (managementMode, target version, installer repository; installed version reported by the controller), execute `kind: ichor` by creating a one-shot installer Job that runs the target version's own image and embedded manifest (snapshot in ConfigMaps, additive-only CRD check, CRDs then controller then UI with post-checks, rollback from the snapshot), refuse CLI writes more than one minor from the server, and never launch the Job in `external` mode
 
 ## Context

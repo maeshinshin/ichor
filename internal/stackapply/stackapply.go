@@ -70,6 +70,7 @@ const (
 
 	retryInterval = 2 * time.Second
 	metaKey       = "metadata"
+	kindNamespace = "Namespace"
 )
 
 // Options are the inputs to Apply.
@@ -142,7 +143,7 @@ func Apply(ctx context.Context, c client.Client, o Options) error {
 
 	// Namespaces, then Secrets, then the rest: the Secrets must exist before the pods that mount them.
 	for _, u := range docs {
-		if u.GetKind() == "Namespace" {
+		if u.GetKind() == kindNamespace {
 			if err := applyOne(ctx, c, u); err != nil {
 				return err
 			}
@@ -154,11 +155,11 @@ func Apply(ctx context.Context, c client.Client, o Options) error {
 			return err
 		}
 
-		fmt.Fprintf(o.Log, "created Secret %s/%s if absent\n", s.GetNamespace(), s.GetName())
+		_, _ = fmt.Fprintf(o.Log, "created Secret %s/%s if absent\n", s.GetNamespace(), s.GetName())
 	}
 
 	for _, u := range docs {
-		if u.GetKind() == "Namespace" || (u.GetKind() == "Secret" && u.GroupVersionKind().Group == "") {
+		if u.GetKind() == kindNamespace || (u.GetKind() == "Secret" && u.GroupVersionKind().Group == "") {
 			continue
 		}
 
@@ -173,7 +174,7 @@ func Apply(ctx context.Context, c client.Client, o Options) error {
 		}
 	}
 
-	fmt.Fprintf(o.Log, "applied %d objects\n", len(docs))
+	_, _ = fmt.Fprintf(o.Log, "applied %d objects\n", len(docs))
 
 	if err := waitDeployments(ctx, c, ns, waitFor); err != nil {
 		return err
@@ -240,7 +241,7 @@ func parse(manifest []byte) ([]*unstructured.Unstructured, error) {
 
 func namespaceObject(n string) *unstructured.Unstructured {
 	return &unstructured.Unstructured{Object: map[string]any{
-		"apiVersion": "v1", "kind": "Namespace", metaKey: map[string]any{"name": n},
+		"apiVersion": "v1", "kind": kindNamespace, metaKey: map[string]any{"name": n},
 	}}
 }
 
@@ -348,7 +349,7 @@ func waitDeployments(ctx context.Context, c client.Client, ns string, names []st
 
 			select {
 			case <-ctx.Done():
-				return fmt.Errorf("Deployment %s/%s did not become Ready: %w", ns, n, ctx.Err())
+				return fmt.Errorf("deployment %s/%s did not become Ready: %w", ns, n, ctx.Err())
 			case <-time.After(retryInterval):
 			}
 		}

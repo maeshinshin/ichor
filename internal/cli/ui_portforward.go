@@ -50,16 +50,9 @@ func portForwardToPod(cfg *rest.Config, clientset kubernetes.Interface) func(ctx
 
 		dialer := spdy.NewDialer(upgrader, &http.Client{Transport: transport}, http.MethodPost, req.URL())
 
-		stopCh := make(chan struct{})
-
-		go func() {
-			<-ctx.Done()
-			close(stopCh)
-		}()
-
 		fw, err := portforward.NewOnAddresses(
 			dialer, []string{"localhost"}, []string{fmt.Sprintf("%d:%d", localPort, remotePort)},
-			stopCh, ready, io.Discard, io.Discard,
+			ctx.Done(), ready, io.Discard, io.Discard,
 		)
 		if err != nil {
 			return fmt.Errorf("ui: setting up the port-forward: %w", err)

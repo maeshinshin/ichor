@@ -100,6 +100,9 @@ type bootstrapClient interface {
 const (
 	defaultBootstrapWait     = 15 * time.Minute
 	defaultBootstrapInterval = 5 * time.Second
+	// defaultWebhookWait covers a controller that takes a few minutes to become Ready on a
+	// first install: its image pull, then the webhook certificate being written and mounted.
+	defaultWebhookWait = 30 * time.Minute
 )
 
 // notUpYet reports the two answers of a node that is still coming up: Unavailable (it serves
@@ -131,7 +134,14 @@ func pollWhile(
 	var last error
 
 	pollErr := wait.PollUntilContextTimeout(ctx, interval, timeout, true, func(ctx context.Context) (bool, error) {
-		last = attempt(ctx)
+		err := attempt(ctx)
+		if err != nil && ctx.Err() != nil && last != nil {
+			// This wait's own deadline cut the call short ("client rate limiter Wait returned an
+			// error: context deadline exceeded"): report the last answer the server really gave.
+			return false, nil
+		}
+
+		last = err
 		if last == nil || !retryable(last) {
 			return true, nil
 		}

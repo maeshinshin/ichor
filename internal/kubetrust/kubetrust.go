@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -134,6 +135,13 @@ func (p *Pool) Publish(cert []byte, path string) error {
 			"subject", c.Subject.String(), "notBefore", c.NotBefore, "notAfter", c.NotAfter)
 	}
 
+	// Nothing new and the file is there: it already holds exactly the extras.
+	if len(added) == 0 {
+		if _, err := os.Stat(path); err == nil {
+			return nil
+		}
+	}
+
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
@@ -153,6 +161,50 @@ func (p *Pool) Publish(cert []byte, path string) error {
 	}
 
 	return os.Rename(tmp, path)
+}
+
+// Clear drops every extra certificate and removes the trust file at path, so only the base ca.crt is
+// trusted again. It is idempotent: a missing file is not an error.
+func (p *Pool) Clear(path string) error {
+	p.mu.Lock()
+	n := len(p.extra)
+	p.extra = nil
+	p.mu.Unlock()
+
+	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+
+	if n > 0 {
+		ctrllog.Log.WithName("kubetrust").Info("Stopped trusting the extra CA certificates", "count", n)
+	}
+
+	return nil
+}
+
+// ClearOnceBaseTrusts calls Clear when the base ca.crt already carries the newest extra certificate
+// (the latest rotation's new CA), so the pool can drop the extras without losing the API server. Until
+// then the projected file lags and the extras stay. With no extras it only makes sure the file is gone.
+// It reports whether it cleared.
+func (p *Pool) ClearOnceBaseTrusts(path string) (bool, error) {
+	p.mu.RLock()
+
+	var newest *x509.Certificate
+	if len(p.extra) > 0 {
+		newest = p.extra[len(p.extra)-1]
+	}
+
+	base, _ := os.ReadFile(p.baseFile)
+	p.mu.RUnlock()
+
+	if newest != nil {
+		bc, _ := certs(base)
+		if !slices.ContainsFunc(bc, newest.Equal) {
+			return false, nil
+		}
+	}
+
+	return true, p.Clear(path)
 }
 
 // roots builds the current pool; the base file is re-read so a refreshed projected ca.crt counts.

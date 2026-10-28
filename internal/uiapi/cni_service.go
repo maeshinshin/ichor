@@ -28,6 +28,7 @@ import (
 	"connectrpc.com/connect"
 	"github.com/pmezard/go-difflib/difflib"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -394,10 +395,11 @@ func (s *Server) SetCiliumValues(
 	}), nil
 }
 
-// StartCniUpgrade checks that an upgrade is on offer and that the user layer still validates.
-// ponytail: creating the operation is deferred. ADR 0099 names only its kind (cni), the cni
-// executor carries out a kube-proxy switch, and TalosOperationSpec has no field that tells an
-// upgrade from a switch; unit 7 defines it. Until then this answers Unimplemented after the checks.
+// StartCniUpgrade creates the cni TalosOperation that upgrades the Cilium release to the chart this
+// Ichor embeds (spec.cni.action upgrade, ADR 0099). It first checks that an upgrade is on offer, that
+// nothing else is running on the cluster and that the stored user layer still validates; the
+// creation is dry-run before it is real, as the caller, so a caller who may not create operations
+// starts nothing.
 func (s *Server) StartCniUpgrade(
 	ctx context.Context, req *connect.Request[pb.StartCniUpgradeRequest],
 ) (*connect.Response[pb.StartCniUpgradeResponse], error) {
@@ -415,6 +417,34 @@ func (s *Server) StartCniUpgrade(
 			fmt.Errorf("the stored Cilium values do not validate against the new chart:\n- %s", strings.Join(errs, "\n- ")))
 	}
 
-	return nil, connect.NewError(connect.CodeUnimplemented,
-		errors.New("the cni upgrade operation is not defined yet (ADR 0099, work unit 7); nothing was started"))
+	if blocked, err := s.unfinishedOperation(ctx, v.cluster); err != nil {
+		return nil, err
+	} else if blocked != "" {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New(blocked))
+	}
+
+	cluster := v.cluster
+	to := cluster.Status.CNI.AvailableChartVersion
+	op := &ichorv1alpha1.TalosOperation{
+		GenerateName: ichorv1alpha1.TalosOperationKindCNI + "-", Namespace: cluster.Namespace, Annotations: s.startedByAnnotation(ctx),
+		Spec: ichorv1alpha1.TalosOperationSpec{
+			ClusterRef: corev1.LocalObjectReference{Name: cluster.Name},
+			Kind:       ichorv1alpha1.TalosOperationKindCNI,
+			CNI:        &ichorv1alpha1.TalosOperationCNISpec{Action: ichorv1alpha1.TalosOperationCNIActionUpgrade, ChartVersion: to},
+		},
+	}
+	key := client.ObjectKeyFromObject(cluster)
+
+	if err := s.Create(ctx, op.DeepCopy(), client.DryRunAll, strictFieldValidation); err != nil {
+		return nil, mapOperationWriteError("creating operation for", key, err)
+	}
+
+	if err := s.Create(ctx, op, strictFieldValidation); err != nil {
+		return nil, mapOperationWriteError("creating operation for", key, err)
+	}
+
+	return connect.NewResponse(&pb.StartCniUpgradeResponse{
+		Operation: objectRef(op.Namespace, op.Name), ToVersion: to, Audit: s.opAudit(ctx, "create", objectRef(op.Namespace, op.Name)),
+	}), nil
 }
+

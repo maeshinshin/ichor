@@ -125,12 +125,20 @@ func cniHelmJobName(cluster *ichorv1alpha1.TalosCluster, valuesHash string) stri
 func AdvanceCNIHelmJob(
 	ctx context.Context, c client.Client, ns string, cluster *ichorv1alpha1.TalosCluster, inst *ichorv1alpha1.IchorInstallation,
 ) (bool, error) {
+	return advanceCNIHelmJob(ctx, c, ns, cluster, inst, "")
+}
+
+// advanceCNIHelmJob is AdvanceCNIHelmJob with a salt in the Job name: an upgrade operation needs a
+// Job of its own even when a finished one for the same values exists (the hand-over left one).
+func advanceCNIHelmJob(
+	ctx context.Context, c client.Client, ns string, cluster *ichorv1alpha1.TalosCluster, inst *ichorv1alpha1.IchorInstallation, salt string,
+) (bool, error) {
 	hash, err := CNIValuesHash(cluster)
 	if err != nil {
 		return false, err
 	}
 
-	name := cniHelmJobName(cluster, hash)
+	name := cniHelmJobName(cluster, hash+salt)
 
 	var job batchv1.Job
 

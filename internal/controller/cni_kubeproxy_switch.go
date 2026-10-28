@@ -137,6 +137,10 @@ func NewCNIKubeProxyAdvancer(
 func (a *cniKubeProxyAdvancer) Advance(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, op *ichorv1alpha1.TalosOperation,
 ) (bool, error) {
+	if isCNIUpgrade(op) {
+		return a.upgradeChart(ctx, cluster, op)
+	}
+
 	target := cni.KubeProxyMode(cluster.Spec.CNI.KubeProxy)
 	if err := target.Validate(); err != nil {
 		return false, err
@@ -228,7 +232,11 @@ func (a *cniKubeProxyAdvancer) setTalosSide(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, target cni.KubeProxyMode,
 ) error {
 	base := cluster.DeepCopy()
-	cluster.Status.CNI = &ichorv1alpha1.TalosClusterCNIStatus{KubeProxy: string(target)}
+	if cluster.Status.CNI == nil {
+		cluster.Status.CNI = &ichorv1alpha1.TalosClusterCNIStatus{}
+	}
+
+	cluster.Status.CNI.KubeProxy = string(target)
 
 	if err := a.Status().Patch(ctx, cluster, client.MergeFrom(base)); err != nil {
 		return fmt.Errorf("recording the Talos-side kube-proxy mode: %w", err)
@@ -526,6 +534,12 @@ func (a *cniKubeProxyAdvancer) requireCilium(
 			fmt.Sprintf("the Cilium Helm Job finished but cilium-config does not match yet: %v", err))
 	}
 
+	return a.ciliumRolledOut(ctx, op)
+}
+
+// ciliumRolledOut reports whether every Cilium agent runs the current DaemonSet generation and is
+// ready; until then it waits on the verification clock.
+func (a *cniKubeProxyAdvancer) ciliumRolledOut(ctx context.Context, op *ichorv1alpha1.TalosOperation) (bool, error) {
 	var ds appsv1.DaemonSet
 	if err := a.Reader.Get(ctx, types.NamespacedName{Namespace: kubeSystemNamespace, Name: ciliumName}, &ds); err != nil {
 		return false, fmt.Errorf("reading the cilium DaemonSet: %w", err)

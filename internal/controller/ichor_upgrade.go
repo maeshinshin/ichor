@@ -119,6 +119,11 @@ func (r *TalosOperationReconciler) advanceIchor(
 		return renewRefusal(ctx, err)
 	}
 
+	what := "the installer Job"
+	if isCNIUpgrade(op) {
+		what = "the Cilium chart upgrade"
+	}
+
 	done, err := r.Advance(ctx, cluster, nil, op)
 	if err != nil {
 		return ctrl.Result{}, r.setPhase(ctx, op, ichorv1alpha1.TalosOperationPhasePaused, reasonOperationStepFailed, err.Error())
@@ -130,11 +135,11 @@ func (r *TalosOperationReconciler) advanceIchor(
 		}
 
 		return ctrl.Result{}, r.setPhase(ctx, op, ichorv1alpha1.TalosOperationPhaseCompleted,
-			reasonOperationComplete, "the installer Job completed")
+			reasonOperationComplete, what+" completed")
 	}
 
 	return ctrl.Result{RequeueAfter: operationRequeueInterval}, r.setPhase(ctx, op, ichorv1alpha1.TalosOperationPhaseInProgress,
-		reasonOperationAdvancing, "the installer Job is running")
+		reasonOperationAdvancing, what+" is running")
 }
 
 func advanceInstallerJob(

@@ -36,7 +36,7 @@ import (
 // for. They move together: a render change updates the fingerprint and bumps Version (ADR 0088).
 const (
 	pinnedVersion     = 1
-	pinnedFingerprint = "sha256:77b19bf738859cec40165ecf68a8dec26fcd5d7e51b2f0deb0e37f13342b6118"
+	pinnedFingerprint = "sha256:9a0bcb94142e98af8ef70862ba685a6f2e4f2313b8cd9bd1b8be103ba1034114"
 )
 
 // leaves flattens a YAML stream into "doc<n>.path" -> value.

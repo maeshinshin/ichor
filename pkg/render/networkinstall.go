@@ -17,6 +17,7 @@ limitations under the License.
 package render
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/siderolabs/talos/pkg/machinery/cel"
@@ -31,29 +32,26 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
-// cniPresetFlannel is the one preset whose CNI Talos itself runs. Every other preset brings its
-// own CNI, so the Talos-side flannel must not exist (ADR 0077).
-const cniPresetFlannel = "flannel"
+// ErrCNIUnsupported is returned for a cluster whose preset is not cilium (ADR 0099). Rendering
+// one would strip Talos's own flannel document and take a running flannel cluster's network
+// down, so no configuration is produced at all.
+var ErrCNIUnsupported = errors.New(
+	"render: spec.cni.preset must be cilium (ADR 0099): flannel and custom were removed; delete and recreate the cluster")
 
-// talosRunsFlannel reports whether the cluster's CNI is Talos's own flannel. An unset preset is
-// flannel, the CRD default.
-func talosRunsFlannel(cluster *ichorv1alpha1.TalosCluster) bool {
-	p := cluster.Spec.CNI.Preset
-
-	return p == "" || p == cniPresetFlannel
-}
-
-// injectCNI is the CNI half of the system layer (ADR 0077). For a preset other than flannel it
-// removes Talos's own CNI: the KubeFlannelCNIConfig document the generator adds from the v1.14
-// contract, and cluster.network.cni.name: none before it. A custom preset's own documents are
-// patches and still win over this.
-func injectCNI(
-	cfg coreconfig.Provider, contract *coreconfig.VersionContract, cluster *ichorv1alpha1.TalosCluster,
-) (coreconfig.Provider, error) {
-	if talosRunsFlannel(cluster) {
-		return cfg, nil
+// checkCNISupported refuses a cluster whose preset is not cilium. An unset preset is the CRD
+// default, cilium.
+func checkCNISupported(cluster *ichorv1alpha1.TalosCluster) error {
+	if p := cluster.Spec.CNI.Preset; p != "" && p != "cilium" {
+		return fmt.Errorf("%w (preset %q)", ErrCNIUnsupported, p)
 	}
 
+	return nil
+}
+
+// injectCNI is the CNI half of the system layer (ADR 0077). Cilium is the only CNI, so Talos's
+// own is always removed: the KubeFlannelCNIConfig document the generator adds from the v1.14
+// contract, and cluster.network.cni.name: none before it.
+func injectCNI(cfg coreconfig.Provider, contract *coreconfig.VersionContract) (coreconfig.Provider, error) {
 	if contract.MultidocKubernetesConfigSupported() {
 		docs := make([]config.Document, 0, len(cfg.Documents()))
 

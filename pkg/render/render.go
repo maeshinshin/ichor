@@ -154,6 +154,10 @@ func BuildConfig(
 		return nil, fmt.Errorf("render: secrets bundle is required")
 	}
 
+	if err := checkCNISupported(cluster); err != nil {
+		return nil, err
+	}
+
 	if sys == nil {
 		sys = &SystemInputs{}
 	}
@@ -206,7 +210,7 @@ func BuildConfig(
 	}
 
 	// The CNI Talos runs and the install target (ADR 0077) are system layer too.
-	cfg, err = injectCNI(cfg, contract, cluster)
+	cfg, err = injectCNI(cfg, contract)
 	if err != nil {
 		return nil, err
 	}

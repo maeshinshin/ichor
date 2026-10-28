@@ -35,6 +35,10 @@ import (
 // something this command guesses at.
 const cniKubeProxy = cni.KubeProxyEnabled
 
+// cniCilium is the cilium --cni preset name (goconst: it is compared in
+// several places).
+const cniCilium = "cilium"
+
 // cniPreset selects the pkg/cni.Preset implementation for name. "custom"
 // is deliberately absent: it has no Preset implementation (ADR 0013 --
 // "the user's chart/manifests... pass straight through... with nothing
@@ -42,11 +46,22 @@ const cniKubeProxy = cni.KubeProxyEnabled
 // (buildInitPlan) only ever accepts "flannel" or "cilium" in the first
 // place.
 func cniPreset(name string) (cni.Preset, error) {
+	return cniPresetWithTunnel(name, "")
+}
+
+// cniPresetWithTunnel is cniPreset with --cni-tunnel applied. tunnel only
+// reaches the cilium preset; buildInitPlan has already rejected it for any
+// other CNI.
+func cniPresetWithTunnel(name, tunnel string) (cni.Preset, error) {
 	switch name {
 	case "flannel":
 		return flannel.New(), nil
-	case "cilium":
-		return cilium.New(), nil
+	case cniCilium:
+		p, err := cilium.New().WithTunnel(tunnel)
+		if err != nil {
+			return nil, fmt.Errorf("init: %w", err)
+		}
+		return p, nil
 	default:
 		return nil, fmt.Errorf("init: unknown cni preset %q", name)
 	}

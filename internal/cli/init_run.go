@@ -112,7 +112,7 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 		return err
 	}
 
-	preset, err := cniPreset(opts.CNIPreset)
+	preset, err := cniPresetWithTunnel(opts.CNIPreset, opts.CNITunnel)
 	if err != nil {
 		return err
 	}

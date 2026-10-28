@@ -1,5 +1,5 @@
 # Applied to the INNER demo cluster: reaches ichor-ui on node port 30080 so the outer
-# Service ichor-ui-demo (port 80 -> 30080) can forward to the control plane VM.
+# Service ichor-ui-demo (port 443 -> 30080) can forward to the control plane VM.
 apiVersion: v1
 kind: Service
 metadata:

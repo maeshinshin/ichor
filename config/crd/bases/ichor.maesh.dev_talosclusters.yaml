@@ -2597,10 +2597,11 @@ spec:
                   rule: 'self.preset == ''custom'' ? has(self.custom) : !has(self.custom)'
                 - message: flannel cannot replace kube-proxy
                   rule: self.preset != 'flannel' || self.kubeProxy == 'enabled'
-                - message: cni.tunnel cannot change once set; changing the tunnel
+                - message: cni.tunnel cannot change once set, and an existing cluster
+                    can only record vxlan (its running default); changing the tunnel
                     protocol takes pod networking down
-                  rule: '!has(oldSelf.tunnel) || (has(self.tunnel) && self.tunnel
-                    == oldSelf.tunnel)'
+                  rule: 'has(oldSelf.tunnel) ? (has(self.tunnel) && self.tunnel ==
+                    oldSelf.tunnel) : (!has(self.tunnel) || self.tunnel == ''vxlan'')'
                 - message: cni.tunnel only applies to the cilium preset
                   rule: '!has(self.tunnel) || self.preset == ''cilium'''
               controlPlane:

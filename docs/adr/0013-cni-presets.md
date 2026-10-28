@@ -1,6 +1,6 @@
 # 0013. CNI presets: the interface, custom's contract, Hubble's certificates, and where the guards live
 
-Status: Accepted · Date: 2026-10-25 · Design section: CNI
+Status: Accepted; superseded in part by ADR 0099 · Date: 2026-10-25 · Design section: CNI
 
 Decided: Settled the `cni.Preset` interface, `custom`'s required fields, Hubble's certificate handling, and where the two immutability guards live
 

@@ -1,6 +1,6 @@
 # 0019. `ichor init`: scope, the namespace decision, and the gaps it leaves open
 
-Status: Accepted · Date: 2026-10-25 · Design section: Bootstrap (`ichor init`)
+Status: Accepted; superseded in part by ADR 0099 · Date: 2026-10-25 · Design section: Bootstrap (`ichor init`)
 
 Decided: `ichor init`: VIP recommended not required, Ichor applied through the API server not inlined, topology presets carry count/schedulable
 

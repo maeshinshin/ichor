@@ -1,6 +1,6 @@
 # 0024. CNI hand-over: no registry, render-time removal, a separate controller
 
-Status: Accepted (amended 2026-10-26) · Date: 2026-10-25 · Design section: GitOps and Argo CD
+Status: Accepted (amended 2026-10-26); superseded in part by ADR 0099 · Date: 2026-10-25 · Design section: GitOps and Argo CD
 
 Decided: No CNI hand-over registry (one real member); removal happens at render time off a status condition; a separate controller; the generated Application syncs automatically (prune, selfHeal), amended 2026-10-26
 

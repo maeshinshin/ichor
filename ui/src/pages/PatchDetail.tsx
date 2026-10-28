@@ -12,7 +12,6 @@ import { BreakGlassDialog, type BreakGlassRun } from '@/components/BreakGlassDia
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { PageHeader } from '@/components/PageHeader'
 import { PageSkeleton } from '@/components/PageStates'
-import { SectionLayout } from '@/components/SectionNav'
 import { PullRequestNotice } from '@/components/PullRequestNotice'
 import { ConfigLayer } from '@/gen/ichor/v1alpha1/node_pb'
 import { PatchSchema } from '@/gen/ichor/v1alpha1/patch_pb'
@@ -283,13 +282,7 @@ export function PatchDetail({ name }: { name?: string }) {
           )
         }
       />
-      <SectionLayout
-        sections={[
-          { id: 'basics', label: t('patch.basics') },
-          { id: 'documents', label: t('patch.documents') },
-          { id: 'impact', label: t('patch.impact') },
-        ]}
-      >
+      <div class="min-w-0 space-y-8">
       <Card id="basics" className="scroll-mt-section">
         <CardHeader>
           <CardTitle>{t('patch.basics')}</CardTitle>
@@ -494,7 +487,7 @@ export function PatchDetail({ name }: { name?: string }) {
         </div>
         {!isNew && <DeleteButton namespace={namespace!} name={name!} />}
       </div>
-      </SectionLayout>
+      </div>
     </>
   )
 }

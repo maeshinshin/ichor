@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { Field, Fields } from '@/components/PageHeader'
-import { Section } from '@/components/SectionNav'
+import { Section } from '@/components/Section'
 import type { GetNodeTalosRuntimeResponse } from '@/gen/ichor/v1alpha1/talosruntime_pb'
 import { nodeClient } from '@/lib/connect'
 import { describeError } from '@/lib/errors'
@@ -32,7 +32,7 @@ import { useT } from '@/lib/useT'
 // containers, the Kubernetes view of the node, routes/discovery/KubeSpan/time
 // and kernel modules. One call; each card carries its own error, and a card the
 // maintenance API refuses says so instead of showing a failure. Tables scroll
-// inside their own container. The ids feed the machine page's section nav.
+// inside their own container. The ids are the anchors for the page's sections.
 
 function badgeVariant(tone: Tone) {
   return tone === 'bad' ? 'destructive' : tone === 'ok' ? 'secondary' : 'outline'

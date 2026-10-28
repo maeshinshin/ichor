@@ -345,7 +345,8 @@ func (s *Server) SetCiliumValues(
 
 	if by != "" {
 		return nil, connect.NewError(connect.CodeFailedPrecondition,
-			fmt.Errorf("%q is tracked by %s, so it is read-only here: change spec.cni.cilium.values in Git",
+			fmt.Errorf("%q is tracked by %s, so it is read-only here: run `ichor gitops export` to put it in Git "+
+				"and change it with a pull request",
 				client.ObjectKeyFromObject(v.cluster), by))
 	}
 

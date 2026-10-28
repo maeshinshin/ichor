@@ -524,7 +524,7 @@ func main() {
 	// Every replica, not only the leader, keeps its own trust pool right during a CA rotation.
 	if err := mgr.Add(&controller.CATrustSync{
 		Reader: mgr.GetAPIReader(), ControllerNamespace: os.Getenv("POD_NAMESPACE"),
-		Pool: kubetrust.Shared, File: kubetrust.TrustFile,
+		Pool: kubetrust.Shared, File: kubetrust.TrustFile, Informers: mgr.GetCache(),
 	}); err != nil {
 		setupLog.Error(err, "Failed to add the CA trust sync")
 		os.Exit(1)

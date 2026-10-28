@@ -48,14 +48,8 @@ func TestTalosPatches(t *testing.T) {
 	if err != nil {
 		t.Fatalf("TalosPatches(replaced): %v", err)
 	}
-	if len(patches) != 1 {
-		t.Fatalf("TalosPatches(replaced) returned %d documents, want 1", len(patches))
-	}
-	doc := patches[0]
-	if doc.Kind != "Config" || doc.Config == nil || doc.Config.ClusterConfig == nil ||
-		doc.Config.ClusterConfig.ProxyConfig == nil || doc.Config.ClusterConfig.ProxyConfig.Disabled == nil ||
-		!*doc.Config.ClusterConfig.ProxyConfig.Disabled {
-		t.Fatalf("TalosPatches(replaced) = %+v, want a Config document with cluster.proxy.disabled = true", doc)
+	if patches != nil {
+		t.Fatalf("TalosPatches(replaced) = %v, want nil: pkg/render owns the kube-proxy document", patches)
 	}
 }
 

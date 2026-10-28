@@ -31,6 +31,7 @@ package render
 import (
 	"crypto/sha256"
 	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -42,6 +43,8 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/config/generate"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	"github.com/siderolabs/talos/pkg/machinery/config/machine"
+	"github.com/siderolabs/talos/pkg/machinery/config/types/k8s"
+	mv1alpha1 "github.com/siderolabs/talos/pkg/machinery/config/types/v1alpha1"
 	"github.com/siderolabs/talos/pkg/machinery/constants"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -270,7 +273,7 @@ func BuildConfig(
 		ordered = dropProxyDisabled(ordered)
 	}
 
-	cfg, err = applyPatches(cfg, ordered)
+	cfg, err = applyPatches(cfg, contract, ordered)
 	if err != nil {
 		return nil, fmt.Errorf("render: applying patches: %w", err)
 	}
@@ -519,7 +522,9 @@ func rewriteClusterConfigs(
 // applyPatches merges each patch's documents onto cfg in the given order,
 // one patch at a time, so that a later patch's non-zero fields win over an
 // earlier one's (Configuration reconcile step 2).
-func applyPatches(cfg coreconfig.Provider, ordered []*ichorv1alpha1.TalosConfigPatch) (coreconfig.Provider, error) {
+func applyPatches(
+	cfg coreconfig.Provider, contract *coreconfig.VersionContract, ordered []*ichorv1alpha1.TalosConfigPatch,
+) (coreconfig.Provider, error) {
 	patches := make([]configpatcher.Patch, 0, len(ordered))
 
 	for _, p := range ordered {
@@ -532,6 +537,10 @@ func applyPatches(cfg coreconfig.Provider, ordered []*ichorv1alpha1.TalosConfigP
 			}
 
 			docs = append(docs, doc)
+
+			if contract.MultidocKubernetesConfigSupported() {
+				docs = append(docs, takeInlineManifests(doc)...)
+			}
 		}
 
 		if len(docs) == 0 {
@@ -552,6 +561,36 @@ func applyPatches(cfg coreconfig.Provider, ordered []*ichorv1alpha1.TalosConfigP
 	}
 
 	return out.Config()
+}
+
+// takeInlineManifests moves the cluster.inlineManifests entries of a freshly converted legacy
+// Config document out into KubeInlineManifestConfig documents, the v1.14 form (the legacy field
+// is deprecated there). Patches can only carry the legacy field, so this is the one place a
+// v1.14 contract differs. doc is the caller's own conversion result, never a shared object.
+//
+//nolint:staticcheck // reads the deprecated legacy field on purpose: it is what is being converted
+func takeInlineManifests(doc config.Document) []config.Document {
+	c, ok := doc.(*mv1alpha1.Config) //nolint:staticcheck // the legacy block is what patches carry
+	if !ok || c.ClusterConfig == nil || len(c.ClusterConfig.ClusterInlineManifests) == 0 {
+		return nil
+	}
+
+	out := make([]config.Document, 0, len(c.ClusterConfig.ClusterInlineManifests))
+
+	for _, m := range c.ClusterConfig.ClusterInlineManifests {
+		d := k8s.NewKubeInlineManifestConfigV1Alpha1()
+		d.MetaName = m.InlineManifestName
+		d.ManifestSpec = m.InlineManifestContents
+		out = append(out, d)
+	}
+
+	c.ClusterConfig.ClusterInlineManifests = nil
+
+	if reflect.DeepEqual(*c.ClusterConfig, mv1alpha1.ClusterConfig{}) {
+		c.ClusterConfig = nil
+	}
+
+	return out
 }
 
 // mergeDocument strategic-merges docs into cfg as one patch, the way every system-layer step

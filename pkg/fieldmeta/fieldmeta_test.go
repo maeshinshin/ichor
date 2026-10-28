@@ -133,6 +133,10 @@ func TestAssess_Rules(t *testing.T) {
 			name: "cluster.inlineManifests entries are safe", match: "cluster.inlineManifests.0.contents",
 			nonMatch: pathClusterProxyDisabled,
 		},
+		{
+			name: "KubeInlineManifestConfig is safe", match: "KubeInlineManifestConfig.manifest",
+			nonMatch: pathClusterProxyDisabled,
+		},
 		{name: "cluster.extraManifests is safe", match: "cluster.extraManifests", nonMatch: pathClusterProxyDisabled},
 		{
 			name: "cluster.extraManifestHeaders is safe", match: "cluster.extraManifestHeaders.x",

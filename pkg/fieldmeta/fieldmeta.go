@@ -162,6 +162,11 @@ var rules = []rule{
 	// CNI entry) with a pending change that held the control plane Ready=False/RebootRequired
 	// and later paused a CNI operation; only a rebooting config apply could clear it.
 	{prefix: "cluster.inlineManifests", safe: true},
+	// KubeInlineManifestConfig is the v1.14 spelling of the same list: the provider returns both through
+	// K8sInlineManifestConfigs(), so the controllers above fold it identically (machinery v1.14.3,
+	// config/container.K8sInlineManifestConfigs). Without the rule the CNI hand-over on a v1.14 contract
+	// would leave a reboot-required change.
+	{prefix: "KubeInlineManifestConfig", safe: true},
 	{prefix: "cluster.extraManifests", safe: true},
 	{prefix: "cluster.extraManifestHeaders", safe: true},
 

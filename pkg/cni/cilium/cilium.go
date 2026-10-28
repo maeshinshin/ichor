@@ -26,13 +26,11 @@ import (
 	"context"
 	"fmt"
 
-	"k8s.io/utils/ptr"
 	sigsyaml "sigs.k8s.io/yaml"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/gitops"
-	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
 
 // argoCDApplicationNamespace and argoCDDestinationServer are where the
@@ -75,29 +73,15 @@ func (p Preset) WithTunnel(protocol string) (Preset, error) {
 	}
 }
 
-// TalosPatches returns the cluster.proxy.disabled document when kubeProxy
-// is "replaced" -- the Talos-side half of the two-owner split
-// (docs/design/architecture.md, "CNI") -- and nothing when it is
-// "enabled", since that is already Talos's default.
+// TalosPatches returns nothing for either mode: the Talos side of the kube-proxy split
+// (KubeProxyConfig enabled on v1.14, cluster.proxy.disabled before) is rendered by
+// pkg/render's injectKubeProxy from spec.cni.kubeProxy, its single owner (ADR 0099).
 func (Preset) TalosPatches(kubeProxy cni.KubeProxyMode) ([]ichorv1alpha1.TalosConfigPatchDocument, error) {
 	if err := kubeProxy.Validate(); err != nil {
 		return nil, err
 	}
 
-	if kubeProxy != cni.KubeProxyReplaced {
-		return nil, nil
-	}
-
-	return []ichorv1alpha1.TalosConfigPatchDocument{
-		{
-			Kind: "Config",
-			Config: &typedconfig.Config{
-				ClusterConfig: &typedconfig.ClusterConfig{
-					ProxyConfig: &typedconfig.ProxyConfig{Disabled: ptr.To(true)},
-				},
-			},
-		},
-	}, nil
+	return nil, nil
 }
 
 // BootstrapManifest renders the pinned Cilium chart (ChartVersion, embedded in

@@ -28,6 +28,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	"github.com/maeshinshin/ichor/pkg/cni"
+
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
@@ -293,6 +295,23 @@ func TestPlanTextForAConfigRestartSaysNoReboot(t *testing.T) {
 
 	if strings.Contains(got, "REBOOTS") {
 		t.Errorf("text says the machines reboot:\n%s", got)
+	}
+}
+
+func TestHeadlineForAKubeProxySwitchSaysItStartsWhenTheSpecAlreadySaysTheTarget(t *testing.T) {
+	// The second run of `ichor cni kube-proxy replaced --yes`: the spec already says replaced.
+	mode := string(cni.KubeProxyReplaced)
+	same := &pb.PlanOperationResponse{Current: mode, Target: mode}
+
+	want := `Switch kube-proxy on cluster "c": starting the switch to ` + mode + " (the spec already says " + mode + ")."
+	if got := headline(pb.OperationKind_OPERATION_KIND_CNI, "c", same); got != want {
+		t.Errorf("headline = %q, want %q", got, want)
+	}
+
+	// A first run that changes the spec still says what it changes.
+	change := &pb.PlanOperationResponse{Current: "enabled", Target: mode}
+	if got, want := headline(pb.OperationKind_OPERATION_KIND_CNI, "c", change), `Switch kube-proxy on cluster "c" from enabled to `+mode+"."; got != want {
+		t.Errorf("headline = %q, want %q", got, want)
 	}
 }
 

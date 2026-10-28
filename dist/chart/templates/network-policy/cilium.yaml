@@ -42,6 +42,9 @@ spec:
   # The API server calls the admission webhooks.
   - fromEntities:
     - kube-apiserver
+    # A call from the apiserver to a pod on another node arrives SNATed to its node's
+    # cilium_host address, which the receiving agent labels remote-node only (ADR 0100).
+    - remote-node
     toPorts:
     - ports:
       - port: {{ .Values.webhook.port | quote }}
@@ -130,6 +133,9 @@ spec:
   # The API server reads the issuer's discovery document and JWKS (ADR 0094).
   - fromEntities:
     - kube-apiserver
+    # A call from the apiserver to a pod on another node arrives SNATed to its node's
+    # cilium_host address, which the receiving agent labels remote-node only (ADR 0100).
+    - remote-node
     toPorts:
     - ports:
       - port: {{ .Values.ichorUI.users.internalPort | quote }}

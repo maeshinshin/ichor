@@ -51,6 +51,7 @@ const (
 	cniPresetCilium    = "cilium"
 	tunnelVXLAN        = "vxlan"
 	tunnelGeneve       = "geneve"
+	presetCustom       = "custom"
 	kubeProxyEnabled   = "enabled"
 	kubeProxyReplaced  = "replaced"
 	testCIDR           = "192.0.2.0/24"
@@ -611,9 +612,9 @@ var _ = Describe("TalosCluster.spec.cni", func() {
 			TalosClusterCNI{Preset: cniPresetFlannel, KubeProxy: kubeProxyReplaced}, false),
 		Entry("cilium with kubeProxy replaced", TalosClusterCNI{Preset: cniPresetCilium, KubeProxy: kubeProxyReplaced}, true),
 		Entry("custom without custom populated is rejected",
-			TalosClusterCNI{Preset: "custom", KubeProxy: kubeProxyEnabled}, false),
+			TalosClusterCNI{Preset: presetCustom, KubeProxy: kubeProxyEnabled}, false),
 		Entry("custom with custom populated", TalosClusterCNI{
-			Preset: "custom", KubeProxy: kubeProxyEnabled,
+			Preset: presetCustom, KubeProxy: kubeProxyEnabled,
 			Custom: &TalosClusterCNICustom{Source: customCNISource()},
 		}, true),
 		Entry("flannel with custom populated is rejected: custom must be set only when preset is custom",
@@ -697,7 +698,7 @@ var _ = Describe("TalosCluster.spec.cni.tunnel", func() {
 			TalosClusterCNI{Preset: cniPresetFlannel, KubeProxy: kubeProxyEnabled, Tunnel: tunnelGeneve}, false),
 		Entry("custom with tunnel is rejected: tunnel only applies to cilium",
 			TalosClusterCNI{
-				Preset: "custom", KubeProxy: kubeProxyEnabled, Tunnel: tunnelVXLAN,
+				Preset: presetCustom, KubeProxy: kubeProxyEnabled, Tunnel: tunnelVXLAN,
 				Custom: &TalosClusterCNICustom{Source: customCNISource()},
 			}, false),
 	)

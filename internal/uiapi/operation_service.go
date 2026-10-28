@@ -54,52 +54,37 @@ const (
 
 var versionPattern = regexp.MustCompile(`^v?\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$`)
 
+// opKinds pairs each wire kind with the spec string it is stored as.
+var opKinds = []struct {
+	pb   pb.OperationKind
+	spec string
+}{
+	{pb.OperationKind_OPERATION_KIND_TALOS, ichorv1alpha1.TalosOperationKindTalos},
+	{pb.OperationKind_OPERATION_KIND_KUBERNETES, ichorv1alpha1.TalosOperationKindKubernetes},
+	{pb.OperationKind_OPERATION_KIND_ICHOR, ichorv1alpha1.TalosOperationKindIchor},
+	{pb.OperationKind_OPERATION_KIND_CNI, ichorv1alpha1.TalosOperationKindCNI},
+	{pb.OperationKind_OPERATION_KIND_SHUTDOWN, ichorv1alpha1.TalosOperationKindShutdown},
+	{pb.OperationKind_OPERATION_KIND_CA_ROTATION, ichorv1alpha1.TalosOperationKindCARotation},
+	{pb.OperationKind_OPERATION_KIND_CONFIG, ichorv1alpha1.TalosOperationKindConfig},
+	{pb.OperationKind_OPERATION_KIND_NODE, ichorv1alpha1.TalosOperationKindNode},
+	{pb.OperationKind_OPERATION_KIND_ETCD_RESTORE, ichorv1alpha1.TalosOperationKindEtcdRestore},
+}
+
 func kindToSpec(k pb.OperationKind) (string, error) {
-	switch k {
-	case pb.OperationKind_OPERATION_KIND_TALOS:
-		return ichorv1alpha1.TalosOperationKindTalos, nil
-	case pb.OperationKind_OPERATION_KIND_KUBERNETES:
-		return ichorv1alpha1.TalosOperationKindKubernetes, nil
-	case pb.OperationKind_OPERATION_KIND_ICHOR:
-		return ichorv1alpha1.TalosOperationKindIchor, nil
-	case pb.OperationKind_OPERATION_KIND_CNI:
-		return ichorv1alpha1.TalosOperationKindCNI, nil
-	case pb.OperationKind_OPERATION_KIND_SHUTDOWN:
-		return ichorv1alpha1.TalosOperationKindShutdown, nil
-	case pb.OperationKind_OPERATION_KIND_CA_ROTATION:
-		return ichorv1alpha1.TalosOperationKindCARotation, nil
-	case pb.OperationKind_OPERATION_KIND_CONFIG:
-		return ichorv1alpha1.TalosOperationKindConfig, nil
-	case pb.OperationKind_OPERATION_KIND_NODE:
-		return ichorv1alpha1.TalosOperationKindNode, nil
-	case pb.OperationKind_OPERATION_KIND_ETCD_RESTORE:
-		return ichorv1alpha1.TalosOperationKindEtcdRestore, nil
-	case pb.OperationKind_OPERATION_KIND_UNSPECIFIED:
+	for _, e := range opKinds {
+		if e.pb == k {
+			return e.spec, nil
+		}
 	}
 
 	return "", connect.NewError(connect.CodeInvalidArgument, errors.New("kind is required"))
 }
 
 func kindToPB(k string) pb.OperationKind {
-	switch k {
-	case ichorv1alpha1.TalosOperationKindTalos:
-		return pb.OperationKind_OPERATION_KIND_TALOS
-	case ichorv1alpha1.TalosOperationKindKubernetes:
-		return pb.OperationKind_OPERATION_KIND_KUBERNETES
-	case ichorv1alpha1.TalosOperationKindIchor:
-		return pb.OperationKind_OPERATION_KIND_ICHOR
-	case ichorv1alpha1.TalosOperationKindCNI:
-		return pb.OperationKind_OPERATION_KIND_CNI
-	case ichorv1alpha1.TalosOperationKindShutdown:
-		return pb.OperationKind_OPERATION_KIND_SHUTDOWN
-	case ichorv1alpha1.TalosOperationKindCARotation:
-		return pb.OperationKind_OPERATION_KIND_CA_ROTATION
-	case ichorv1alpha1.TalosOperationKindConfig:
-		return pb.OperationKind_OPERATION_KIND_CONFIG
-	case ichorv1alpha1.TalosOperationKindNode:
-		return pb.OperationKind_OPERATION_KIND_NODE
-	case ichorv1alpha1.TalosOperationKindEtcdRestore:
-		return pb.OperationKind_OPERATION_KIND_ETCD_RESTORE
+	for _, e := range opKinds {
+		if e.spec == k {
+			return e.pb
+		}
 	}
 
 	return pb.OperationKind_OPERATION_KIND_UNSPECIFIED
@@ -331,14 +316,10 @@ func normalizeTarget(kind, target string) (string, error) {
 // trackedBy names the tool tracking obj, or "". A spec write to a tracked CR
 // belongs in its repository (ADR 0051); "cannot tell" refuses too (ADR 0044).
 func (s *Server) trackedBy(ctx context.Context, obj client.Object) (string, error) {
-	tracked, by, err := gitopstracking.IsTracked(ctx, s.Client, s.argoNamespace(), obj)
+	_, by, err := gitopstracking.IsTracked(ctx, s.Client, s.argoNamespace(), obj)
 	if err != nil {
 		return "", connect.NewError(connect.CodeUnavailable,
 			fmt.Errorf("cannot tell whether Argo CD or Flux tracks %q, so it is not written: %w", client.ObjectKeyFromObject(obj), err))
-	}
-
-	if !tracked {
-		return "", nil
 	}
 
 	return by, nil
@@ -643,22 +624,15 @@ func (s *Server) blockedReason(
 		return "no approved machine has a pending configuration change that needs a reboot or an API server restart (nothing is waiting in Ready=RebootRequired or APIServerRestartRequired)", nil
 	}
 
-	if p.resp.SpecChanges && p.install != nil && p.install.Spec.ManagementMode == ichorv1alpha1.IchorManagementModeExternal {
-		by, err := s.trackedBy(ctx, tracked)
-		if err != nil {
-			return "", err
-		}
-
-		if by == "" {
-			return "IchorInstallation is in external mode (Git owns Ichor's manifests) but is not tracked by Argo CD, " +
-				"so this backend can neither write it nor open a pull request: change spec.version in Git", nil
-		}
-	}
-
 	if p.resp.SpecChanges {
 		by, err := s.trackedBy(ctx, tracked)
 		if err != nil {
 			return "", err
+		}
+
+		if by == "" && p.install != nil && p.install.Spec.ManagementMode == ichorv1alpha1.IchorManagementModeExternal {
+			return "IchorInstallation is in external mode (Git owns Ichor's manifests) but is not tracked by Argo CD, " +
+				"so this backend can neither write it nor open a pull request: change spec.version in Git", nil
 		}
 
 		if by != "" {
@@ -885,7 +859,7 @@ func isDowngrade(p *opPlan) bool {
 
 	t, c := p.resp.GetTarget(), p.resp.GetCurrent()
 
-	return t != "" && semver.IsValid(t) && semver.IsValid(c) && semver.Compare(t, c) < 0
+	return semver.IsValid(t) && semver.IsValid(c) && semver.Compare(t, c) < 0
 }
 
 // targetSchematic is the schematic a cluster's nodes should run: spec.schematic.id, or the stock one.

@@ -20,27 +20,9 @@ import (
 	"regexp"
 	"strings"
 	"testing"
-
-	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
 const tunnelGeneve = "geneve"
-
-// TestExportCNIApplication_CarriesTunnel proves export reproduces the tunnel
-// init stored on the CR instead of falling back to Cilium's vxlan default.
-func TestExportCNIApplication_CarriesTunnel(t *testing.T) {
-	cluster := &ichorv1alpha1.TalosCluster{}
-	cluster.Spec.CNI = ichorv1alpha1.TalosClusterCNI{Preset: "cilium", Tunnel: tunnelGeneve}
-
-	app, err := exportCNIApplication(cluster)
-	if err != nil {
-		t.Fatalf("exportCNIApplication: %v", err)
-	}
-
-	if values := app.Spec.Source.Helm.Values; !strings.Contains(values, "tunnelProtocol: geneve") {
-		t.Errorf("exported Argo CD values do not carry the geneve tunnel: %q", values)
-	}
-}
 
 func TestCNIPreset_Unknown(t *testing.T) {
 	if _, err := cniPresetWithTunnel("calico", ""); err == nil {

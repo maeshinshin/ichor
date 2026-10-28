@@ -27,7 +27,6 @@ import (
 	"fmt"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
-	"github.com/maeshinshin/ichor/pkg/gitops"
 )
 
 // InlineManifestName is the name `ichor init` writes the CNI's bootstrap
@@ -77,23 +76,9 @@ type LiveConfig struct {
 	KubeProxyReplacement bool
 }
 
-// WorkloadRef names a workload whose readiness is part of a successful
-// hand-over signal.
-type WorkloadRef struct {
-	// Namespace is the workload's namespace.
-	Namespace string
-
-	// Kind is the workload's kind, e.g. "DaemonSet" or "Deployment".
-	Kind string
-
-	// Name is the workload's name.
-	Name string
-}
-
 // Preset is a CNI: Talos-side patches, manifest rendering for the
-// bootstrap, an Argo CD Application template, whether it can replace
-// kube-proxy, a consistency check against the live configuration, and the
-// workloads that signal a successful hand-over
+// bootstrap, whether it can replace
+// kube-proxy, a consistency check against the live configuration
 // (docs/design/architecture.md, "CNI"). A new CNI is a new implementation
 // of this interface and nothing else -- it carries no other extension
 // point.
@@ -109,16 +94,6 @@ type Preset interface {
 	// Talos's own default would return nil; Cilium is the only preset.
 	BootstrapManifest(kubeProxy KubeProxyMode) ([]byte, error)
 
-	// ArgoCDApplication renders the Argo CD Application that takes over
-	// from the bootstrap manifest. A preset Ichor never hands to Argo CD
-	// would return nil. Returning pkg/gitops's own typed Application,
-	// rather than *unstructured.Unstructured, means every Application this
-	// package builds goes through pkg/gitops's guards (RepoURL credential
-	// checks, the ServerSideApply/ignoreDifferences pitfalls, Secret
-	// write refusal) instead of a caller having to re-check an
-	// unstructured value by hand.
-	ArgoCDApplication(kubeProxy KubeProxyMode) (*gitops.Application, error)
-
 	// SupportsKubeProxyReplacement reports whether this preset can run
 	// with kube-proxy replaced.
 	SupportsKubeProxyReplacement() bool
@@ -128,9 +103,4 @@ type Preset interface {
 	// caller as a health failure. It makes no cluster calls itself: live is
 	// already read.
 	CheckConsistency(ctx context.Context, live LiveConfig, kubeProxy KubeProxyMode) error
-
-	// HandoverWorkloads returns the workloads whose readiness signals a
-	// successful hand-over to Argo CD. A preset Ichor never hands over
-	// would return nil.
-	HandoverWorkloads() []WorkloadRef
 }

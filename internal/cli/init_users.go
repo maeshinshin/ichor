@@ -126,6 +126,10 @@ func ensureCredentialsSecret(ctx context.Context, k client.Client, ns string, pr
 type uiTargets struct {
 	ui, controller *appsv1.Deployment
 	svc            *corev1.Service
+
+	// The edits made to each object, kept so a retried Update can redo them on a fresh copy.
+	uiMut, ctrlMut func(*appsv1.Deployment) error
+	svcMut         func(*corev1.Service) error
 }
 
 // findDeploymentByLabel returns the first Deployment in ns with label key=value.
@@ -167,21 +171,30 @@ func prepareUITargets(ctx context.Context, k client.Client, ns, externalURL stri
 		return nil, fmt.Errorf("init: the ichor-ui Service %s has no ClusterIP", svc.Name)
 	}
 
-	if err := usersOnDeployment(ui, externalURL, svc.Spec.ClusterIP); err != nil {
+	t := &uiTargets{ui: ui, controller: mgr, svc: svc}
+	t.uiMut = func(d *appsv1.Deployment) error { return usersOnDeployment(d, externalURL, svc.Spec.ClusterIP) }
+	t.ctrlMut = issuerOnController
+	t.svcMut = func(s *corev1.Service) error {
+		if !slices.ContainsFunc(s.Spec.Ports, func(p corev1.ServicePort) bool { return p.Name == uiInternalPortName }) {
+			s.Spec.Ports = append(s.Spec.Ports, corev1.ServicePort{
+				Name: uiInternalPortName, Port: uiInternalPort, TargetPort: intstr.FromInt32(uiInternalPort), Protocol: corev1.ProtocolTCP,
+			})
+		}
+
+		return nil
+	}
+
+	if err := t.uiMut(ui); err != nil {
 		return nil, err
 	}
 
-	if err := issuerOnController(mgr); err != nil {
+	if err := t.ctrlMut(mgr); err != nil {
 		return nil, err
 	}
 
-	if !slices.ContainsFunc(svc.Spec.Ports, func(p corev1.ServicePort) bool { return p.Name == uiInternalPortName }) {
-		svc.Spec.Ports = append(svc.Spec.Ports, corev1.ServicePort{
-			Name: uiInternalPortName, Port: uiInternalPort, TargetPort: intstr.FromInt32(uiInternalPort), Protocol: corev1.ProtocolTCP,
-		})
-	}
+	_ = t.svcMut(svc)
 
-	return &uiTargets{ui: ui, controller: mgr, svc: svc}, nil
+	return t, nil
 }
 
 // issuerOnController adds the flags that make the controller keep the signing
@@ -202,13 +215,16 @@ func issuerOnController(dep *appsv1.Deployment) error {
 }
 
 func (t *uiTargets) apply(ctx context.Context, k client.Client, progress io.Writer) error {
-	for _, o := range []struct {
-		what string
-		obj  client.Object
-	}{{"ichor-ui Deployment", t.ui}, {"ichor-ui Service", t.svc}, {"controller Deployment", t.controller}} {
-		if err := retryInit(ctx, progress, func() error { return k.Update(ctx, o.obj) }); err != nil {
-			return fmt.Errorf("init: updating the %s: %w", o.what, err)
-		}
+	if err := updateRetrying(ctx, k, t.ui, t.uiMut, progress); err != nil {
+		return fmt.Errorf("init: updating the ichor-ui Deployment: %w", err)
+	}
+
+	if err := updateRetrying(ctx, k, t.svc, t.svcMut, progress); err != nil {
+		return fmt.Errorf("init: updating the ichor-ui Service: %w", err)
+	}
+
+	if err := updateRetrying(ctx, k, t.controller, t.ctrlMut, progress); err != nil {
+		return fmt.Errorf("init: updating the controller Deployment: %w", err)
 	}
 
 	return nil
@@ -304,6 +320,15 @@ func initUsers(ctx context.Context, opts initOptions, k client.Client, errw io.W
 
 	if err := uiExtrasOnDeployment(targets.ui, opts); err != nil {
 		return "", err
+	}
+
+	baseUIMut := targets.uiMut
+	targets.uiMut = func(d *appsv1.Deployment) error {
+		if err := baseUIMut(d); err != nil {
+			return err
+		}
+
+		return uiExtrasOnDeployment(d, opts)
 	}
 
 	if err := storeUITLSSecret(ctx, k, ichorControllerNamespace, opts, errw); err != nil {

@@ -238,6 +238,55 @@ func TestRunInit_UIURLRetriesAnEtcdTimeoutOnTheCredentialsSecret(t *testing.T) {
 	}
 }
 
+// An Update that times out but lands bumps the resourceVersion, so its retry meets a Conflict;
+// init re-Gets, redoes its edit and updates again.
+func TestRunInit_UIURLRetriesAnUpdateThatLandedBeforeTheTimeout(t *testing.T) {
+	withTempHome(t)
+	shrinkInitRetry(t)
+
+	timeouts := 0
+
+	k := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(uiObjects()...).WithInterceptorFuncs(interceptor.Funcs{
+		Update: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+			if obj.GetName() != testPrefixedUIDeployment || timeouts > 0 {
+				return c.Update(ctx, obj, opts...)
+			}
+
+			if err := c.Update(ctx, obj.DeepCopyObject().(client.Object), opts...); err != nil {
+				return err
+			}
+
+			timeouts++
+
+			return apierrors.NewInternalError(errors.New("etcdserver: request timed out"))
+		},
+	}).Build()
+
+	deps, _, _ := newFakeInitDeps(t, k)
+
+	opts := validInitOptions()
+	opts.UIURL, opts.AdminUser = testUIURL, testAdminName
+
+	if err := runInit(context.Background(), opts, deps); err != nil {
+		t.Fatalf("runInit: %v", err)
+	}
+
+	var ui appsv1.Deployment
+	if err := k.Get(context.Background(), types.NamespacedName{Namespace: ichorControllerNamespace, Name: testPrefixedUIDeployment}, &ui); err != nil {
+		t.Fatal(err)
+	}
+
+	n := 0
+
+	for _, c := range ui.Spec.Template.Spec.Containers {
+		n += strings.Count(strings.Join(c.Args, " "), "--users-enabled=true")
+	}
+
+	if timeouts != 1 || n != 1 {
+		t.Errorf("timeouts=%d, --users-enabled=true x%d; want 1 and 1", timeouts, n)
+	}
+}
+
 func TestRunInit_UsersFlagsAreCheckedBeforeAnythingHappens(t *testing.T) {
 	for name, mutate := range map[string]func(*initOptions){
 		"http url":                  func(o *initOptions) { o.UIURL = "http://ichor.example.com" },

@@ -40,6 +40,9 @@ message GetMyPermissionsResponse {
   bool packet_capture = 3;
   // cluster_credentials is the "download" verb on talosclusters/credentials.
   bool cluster_credentials = 4;
+  // cluster_update is the "update" verb on talosclusters/<name>, which is what
+  // changing the Cilium values (CniService.SetCiliumValues) needs.
+  bool cluster_update = 5;
 }
 
 message DownloadSupportBundleRequest {

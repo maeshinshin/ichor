@@ -53,22 +53,17 @@ new cluster:
   4. Bootstraps etcd, fetches the kubeconfig (saved alongside the secrets
      bundle), and stores the bundle as a Secret in the new cluster.
   5. Creates the TalosCluster, TalosMachine and any TalosConfigPatch
-     objects the CNI needs. With --gitops-dir, also writes them as YAML
-     and generates a GitOps repository skeleton.
+     objects the CNI needs, and the IchorInstallation with spec.stack.
+  6. Waits for the controller to bring up the standard stack:
+     Kokumi and Argo CD (IchorInstallation StackReady) and the hand-over of
+     Cilium to Ichor's Helm release (TalosCluster CNIHandover). Then prints
+     the generated Kokumi admin password once, to stdout.
 
 init never applies anything to a node again after step 3; every later
 change to this cluster goes through the controller, by writing CRs.`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		if err := validateOutputFormat(outputFormat); err != nil {
 			return err
-		}
-
-		if err := validateKokumiOptions(initOpts); err != nil {
-			return err
-		}
-
-		if initOpts.RepoPath == "" {
-			initOpts.RepoPath = "clusters/" + initOpts.Cluster
 		}
 
 		deps := initDeps{
@@ -149,15 +144,6 @@ func init() {
 	flags.StringVar(&initOpts.DiskRoles.UserVolumeDiskSelector, "user-volume-disk-selector", "", "CEL disk selector for a UserVolumeConfig disk")
 	flags.StringVar(&initOpts.DiskRoles.UserVolumeName, "user-volume-name", "", "name for --user-volume-disk-selector's volume (default \"data\")")
 
-	flags.BoolVar(&initOpts.ArgoCD, "argocd", false, "bootstrap Argo CD's repository credentials and GitOps CRs for this cluster")
-	flags.StringVar(&initOpts.ArgoCDNamespace, "argocd-namespace", "argocd", "namespace Argo CD runs in (for the repository credentials Secret)")
-	flags.BoolVar(&initOpts.Kokumi, "kokumi", false,
-		"with --argocd: also prepare the Argo CD repo-creds Secret for Kokumi's OCI registry (installs neither Argo CD nor Kokumi)")
-	flags.StringVar(&initOpts.RepoURL, "repo", "", "Git repository URL for GitOps (required with --argocd)")
-	flags.StringVar(&initOpts.RepoPath, "path", "", "path within --repo for this cluster's CRs (defaults to clusters/<cluster>)")
-	flags.StringVar(&initOpts.RepoUsername, "repo-username", "", "username for --repo, if it is private")
-	flags.StringVar(&initOpts.RepoPassword, "repo-password", "", "password or token for --repo, if it is private")
-
 	flags.StringVar(&initOpts.UIURL, "ui-url", "",
 		"turn Ichor's own users on: the https URL at which browsers and the CLI reach ichor-ui, the issuer of every token; "+
 			"needs --version-contract v1.14 or later")
@@ -172,7 +158,6 @@ func init() {
 		"with --ui-url: https URL of the Kubernetes API put in users' kubeconfigs (chart: ichorUI.users.kubeAPIServerURL)")
 	flags.StringVar(&initOpts.KubeAPITLSServerName, "kube-api-tls-server-name", "",
 		"with --ui-url: tls-server-name in users' kubeconfigs (chart: ichorUI.users.kubeAPITLSServerName)")
-	flags.StringVar(&initOpts.GitOpsDir, "gitops-dir", "", "write the GitOps repository skeleton to this local directory")
 
 	for _, name := range []string{flagCluster, cniKey, "endpoint-address", "node-endpoint", "talos-version", "version-contract", "install-disk"} {
 		_ = initCmd.MarkFlagRequired(name)

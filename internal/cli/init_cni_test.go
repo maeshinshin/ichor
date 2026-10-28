@@ -53,24 +53,20 @@ func TestCNIPreset_Unknown(t *testing.T) {
 var tunnelProtocolRe = regexp.MustCompile(`tunnel-protocol"?:\s*"?geneve`)
 
 // TestCNIPreset_CiliumTunnel proves --cni-tunnel reaches both the bootstrap
-// manifest and the Argo CD Application values, and that unset keeps the default.
+// manifest, and that unset keeps the default.
 func TestCNIPreset_CiliumTunnel(t *testing.T) {
 	preset, err := cniPresetWithTunnel("cilium", tunnelGeneve)
 	if err != nil {
 		t.Fatalf("cniPresetWithTunnel(cilium, geneve): %v", err)
 	}
 
-	out, err := buildCNIBootstrap(preset, "my-cluster", testNamespace, true)
+	out, err := buildCNIBootstrap(preset, "my-cluster", testNamespace)
 	if err != nil {
 		t.Fatalf("buildCNIBootstrap: %v", err)
 	}
 
 	if !tunnelProtocolRe.MatchString(out.InlineManifest.InlineManifestContents) || !strings.Contains(out.InlineManifest.InlineManifestContents, tunnelGeneve) {
 		t.Error("bootstrap manifest does not carry the geneve tunnel")
-	}
-
-	if values := out.ArgoCDApplication.Spec.Source.Helm.Values; !strings.Contains(values, tunnelGeneve) {
-		t.Errorf("Argo CD values do not carry the geneve tunnel: %q", values)
 	}
 
 	if _, err := cniPresetWithTunnel("cilium", "gre"); err == nil {
@@ -82,7 +78,7 @@ func TestCNIPreset_CiliumTunnel(t *testing.T) {
 		t.Fatalf("cniPresetWithTunnel(cilium, \"\"): %v", err)
 	}
 
-	defOut, err := buildCNIBootstrap(def, "my-cluster", testNamespace, false)
+	defOut, err := buildCNIBootstrap(def, "my-cluster", testNamespace)
 	if err != nil {
 		t.Fatalf("buildCNIBootstrap: %v", err)
 	}
@@ -92,50 +88,19 @@ func TestCNIPreset_CiliumTunnel(t *testing.T) {
 	}
 }
 
-// TestBuildCNIBootstrap_Cilium proves cilium contributes
-// an inline manifest, and an Argo CD Application only when asked for one.
+// TestBuildCNIBootstrap_Cilium proves cilium contributes an inline manifest.
 func TestBuildCNIBootstrap_Cilium(t *testing.T) {
 	preset, err := cniPresetWithTunnel("cilium", "")
 	if err != nil {
 		t.Fatalf("cniPreset: %v", err)
 	}
 
-	withoutArgoCD, err := buildCNIBootstrap(preset, "my-cluster", testNamespace, false)
+	out, err := buildCNIBootstrap(preset, "my-cluster", testNamespace)
 	if err != nil {
 		t.Fatalf("buildCNIBootstrap: %v", err)
 	}
 
-	if withoutArgoCD.InlineManifest == nil || withoutArgoCD.InlineManifest.InlineManifestContents == "" {
+	if out.InlineManifest == nil || out.InlineManifest.InlineManifestContents == "" {
 		t.Fatal("expected a non-empty inline manifest for cilium")
-	}
-
-	if withoutArgoCD.ArgoCDApplication != nil {
-		t.Fatal("expected no Argo CD Application when wantArgoCD is false")
-	}
-
-	withArgoCD, err := buildCNIBootstrap(preset, "my-cluster", testNamespace, true)
-	if err != nil {
-		t.Fatalf("buildCNIBootstrap: %v", err)
-	}
-
-	if withArgoCD.ArgoCDApplication == nil {
-		t.Fatal("expected an Argo CD Application when wantArgoCD is true")
-	}
-
-	// Without syncPolicy.automated Argo CD never syncs it and the
-	// hand-over never completes.
-	sp := withArgoCD.ArgoCDApplication.Spec.SyncPolicy
-	if sp == nil || sp.Automated == nil || !sp.Automated.Prune || !sp.Automated.SelfHeal {
-		t.Fatalf("cilium syncPolicy = %+v, want automated {prune: true, selfHeal: true}", sp)
-	}
-
-	root, err := buildRootApplication(testRepoURL, "clusters/c")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	sp = root.Spec.SyncPolicy
-	if sp == nil || sp.Automated == nil || !sp.Automated.Prune || !sp.Automated.SelfHeal {
-		t.Fatalf("root syncPolicy = %+v, want automated {prune: true, selfHeal: true}", sp)
 	}
 }

@@ -19,7 +19,6 @@ package cli
 import (
 	"context"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -161,109 +160,6 @@ func TestRunInit_DiskRoles(t *testing.T) {
 
 	if !found.ephemeral || !found.storage || !found.userVolume {
 		t.Fatalf("expected all three disk-role documents across the created patches, got %+v", patches.Items)
-	}
-}
-
-// TestRunInit_ArgoCDWithoutRepoRejected proves --argocd needs --repo.
-func TestRunInit_ArgoCDWithoutRepoRejected(t *testing.T) {
-	withTempHome(t)
-
-	k8sClient := fake.NewClientBuilder().WithScheme(newTestScheme(t)).Build()
-	deps, _, _ := newFakeInitDeps(t, k8sClient)
-
-	opts := validInitOptions()
-	opts.ArgoCD = true
-
-	if err := runInit(context.Background(), opts, deps); err == nil {
-		t.Fatal("expected an error, got nil")
-	}
-}
-
-// TestRunInit_GitOpsDirWritesSkeleton proves --gitops-dir calls
-// pkg/gitops.Skeleton.Write with this run's CRs.
-func TestRunInit_GitOpsDirWritesSkeleton(t *testing.T) {
-	withTempHome(t)
-
-	k8sClient := fake.NewClientBuilder().WithScheme(newTestScheme(t)).Build()
-	deps, _, _ := newFakeInitDeps(t, k8sClient)
-
-	gitopsDir := t.TempDir()
-
-	opts := validInitOptions()
-	opts.ArgoCD = true
-	opts.RepoURL = testRepoURL
-	opts.GitOpsDir = gitopsDir
-
-	if err := runInit(context.Background(), opts, deps); err != nil {
-		t.Fatalf("runInit: %v", err)
-	}
-
-	for _, rel := range []string{
-		"bootstrap/root-app.yaml",
-		"apps/cni/application.yaml", // the cilium CNI's own Argo CD Application (pkg/cni now returns pkg/gitops's typed Application)
-		"clusters/" + testInitClusterName + "/talos-cluster.yaml",
-		"clusters/" + testInitClusterName + "/talos-machine-" + testInitMachineUUID + ".yaml",
-	} {
-		if _, err := os.Stat(gitopsDir + "/" + rel); err != nil {
-			t.Fatalf("expected %s to exist: %v", rel, err)
-		}
-	}
-}
-
-// TestRunInit_GitOpsDirWritesCleanTree is the golden check of the written
-// tree: every CR file is in declared form (apiVersion, kind, no server-side
-// metadata, the same as `ichor gitops export`), and the root Application
-// covers both the cluster's CRs and apps/*.
-func TestRunInit_GitOpsDirWritesCleanTree(t *testing.T) {
-	withTempHome(t)
-
-	k8sClient := fake.NewClientBuilder().WithScheme(newTestScheme(t)).Build()
-	deps, _, _ := newFakeInitDeps(t, k8sClient)
-
-	dir := t.TempDir()
-
-	opts := validInitOptions()
-	opts.ArgoCD = true
-	opts.RepoURL = testRepoURL
-	opts.RepoPath = "clusters/" + testInitClusterName
-	opts.GitOpsDir = dir
-
-	if err := runInit(context.Background(), opts, deps); err != nil {
-		t.Fatalf("runInit: %v", err)
-	}
-
-	files, err := filepath.Glob(filepath.Join(dir, "clusters", testInitClusterName, "*.yaml"))
-	if err != nil || len(files) == 0 {
-		t.Fatalf("no CR files written: %v", err)
-	}
-
-	for _, f := range files {
-		b, err := os.ReadFile(f)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		out := string(b)
-		if !strings.Contains(out, "apiVersion: ichor.") || !strings.Contains(out, "\nkind: Talos") {
-			t.Errorf("%s lacks apiVersion/kind:\n%s", f, out)
-		}
-
-		for _, bad := range []string{"managedFields", "\n  uid:", "resourceVersion", "creationTimestamp", "status:"} {
-			if strings.Contains(out, bad) {
-				t.Errorf("%s carries server-side %q:\n%s", f, bad, out)
-			}
-		}
-	}
-
-	root, err := os.ReadFile(filepath.Join(dir, "bootstrap", "root-app.yaml"))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	for _, want := range []string{"path: .", "recurse: true", "apps/*/application.yaml", "clusters/" + testInitClusterName + "/*.yaml"} {
-		if !strings.Contains(string(root), want) {
-			t.Errorf("root app lacks %q:\n%s", want, root)
-		}
 	}
 }
 

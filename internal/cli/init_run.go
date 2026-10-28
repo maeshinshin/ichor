@@ -27,6 +27,7 @@ import (
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -41,16 +42,6 @@ type initOptions struct {
 	NodeEndpoint string
 
 	DiskRoles diskRoleOptions
-
-	ArgoCD          bool
-	ArgoCDNamespace string
-	Kokumi          bool
-	RepoURL         string
-	RepoPath        string
-	RepoUsername    string
-	RepoPassword    string
-
-	GitOpsDir string
 
 	// UIURL turns Ichor's own users on; AdminUser names the first admin.
 	UIURL     string
@@ -96,13 +87,17 @@ type initDeps struct {
 	// WebhookWait bounds how long init waits for Ichor's admission webhooks before creating
 	// the first CRs; zero means defaultWebhookWait.
 	WebhookWait time.Duration
+	// StackWait and HandoverWait bound the waits for the controller's stack (StackReady) and for
+	// the Cilium hand-over (CNIHandover); zero means defaultStackWait and defaultHandoverWait.
+	// StackInterval is the poll interval of both; zero means the bootstrap default.
+	StackWait     time.Duration
+	HandoverWait  time.Duration
+	StackInterval time.Duration
 }
 
-// runInit implements `ichor init` steps 1-5 (docs/design/architecture.md,
-// "Bootstrap"). Step 6 (hand-over) is a different unit's work: it is a
-// continuous reconciliation ("once Argo CD reports each bootstrapped
-// component Synced and Healthy, remove it from inlineManifests"), not
-// something a one-shot CLI command does.
+// runInit implements `ichor init` (docs/design/architecture.md, "Bootstrap"): steps 1-5, then it
+// waits for the controller's stack bootstrap and Cilium hand-over, which are
+// continuous reconciliations the CLI only watches.
 func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 	opts, err = prepareInitUsers(opts)
 	if err != nil {
@@ -126,7 +121,7 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 		return err
 	}
 
-	cniBoot, err := buildCNIBootstrap(preset, cluster.Name, cluster.Namespace, opts.ArgoCD)
+	cniBoot, err := buildCNIBootstrap(preset, cluster.Name, cluster.Namespace)
 	if err != nil {
 		return err
 	}
@@ -252,7 +247,8 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 		return err
 	}
 
-	if err := createIchorInstallation(ctx, k8sClient, deps.Stderr); err != nil {
+	stackRequested, err := createIchorInstallation(ctx, k8sClient, deps.Stderr)
+	if err != nil {
 		return err
 	}
 
@@ -280,11 +276,41 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 		return err
 	}
 
-	if opts.ArgoCD {
-		if err := initArgoCD(ctx, opts, cluster, machine, candidates, cniBoot.ArgoCDApplication, k8sClient, deps.Stderr); err != nil {
-			return err
-		}
+	return waitForControllerStack(ctx, k8sClient, stackRequested, cluster, deps)
+}
+
+// waitForControllerStack is the end of init: the controller, not the CLI, brings up
+// Kokumi and Argo CD (the ichor-stack Jobs) and hands Cilium over to Ichor's Helm release (the
+// ichor-cni Job). init waits for both, then prints the generated Kokumi admin password once.
+// A dev build creates no IchorInstallation, so there is no stack to wait for and nothing to print.
+func waitForControllerStack(
+	ctx context.Context, k8sClient client.Client, stackRequested bool, cluster *ichorv1alpha1.TalosCluster, deps initDeps,
+) error {
+	if !stackRequested {
+		_, _ = fmt.Fprintln(deps.Stderr, "init: not waiting for the Kokumi and Argo CD stack or the Cilium hand-over: no IchorInstallation was created")
+
+		return nil
 	}
+
+	if err := waitForStack(ctx, k8sClient, cmp.Or(deps.StackWait, defaultStackWait), deps.StackInterval, deps.Stderr); err != nil {
+		return fmt.Errorf("init: the Kokumi and Argo CD stack is not ready (the controller keeps working on it; "+
+			"watch `kubectl get ichorinstallation ichor -o yaml`; the Kokumi admin password is in Secret %s/%s): %w",
+			ichorControllerNamespace, kokumiAdminSecret, err)
+	}
+
+	_, _ = fmt.Fprintln(deps.Stderr, "init: Kokumi and Argo CD are Synced and Healthy")
+
+	// Printed as soon as it is usable, so a slow hand-over below cannot cost the operator it.
+	if err := printKokumiAdminPassword(ctx, k8sClient, deps.Stdout); err != nil {
+		return err
+	}
+
+	if err := waitForCNIHandover(ctx, k8sClient, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name},
+		cmp.Or(deps.HandoverWait, defaultHandoverWait), deps.StackInterval, deps.Stderr); err != nil {
+		return fmt.Errorf("init: Cilium was not handed over to Ichor: %w", err)
+	}
+
+	_, _ = fmt.Fprintln(deps.Stderr, "init: Cilium is now a Helm release owned by Ichor")
 
 	return nil
 }

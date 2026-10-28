@@ -77,6 +77,11 @@ type initDeps struct {
 	// installmanifest.Manifest; a test supplies its own fixture bytes.
 	IchorManifest []byte
 
+	// NetworkPolicies is applied after Cilium is Ready (ADR 0100): production wires
+	// installmanifest.NetworkPolicies; empty skips them. CiliumWait bounds that wait.
+	NetworkPolicies []byte
+	CiliumWait      time.Duration
+
 	Stdout io.Writer
 	Stderr io.Writer
 	Stdin  io.Reader
@@ -262,6 +267,12 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 	}
 
 	if err := createCRs(ctx, create, cluster, machine, candidates, deps.Stdout, deps.Output); err != nil {
+		return err
+	}
+
+	// Once Cilium is Ready: their CRD does not exist when the install manifest is applied (ADR 0100).
+	if err := applyNetworkPolicies(ctx, k8sClient, deps.NetworkPolicies, opts.CNIPreset,
+		cmp.Or(deps.CiliumWait, defaultCiliumWait), deps.BootstrapInterval, deps.Stderr); err != nil {
 		return err
 	}
 

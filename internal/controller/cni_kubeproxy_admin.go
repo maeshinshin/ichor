@@ -26,7 +26,10 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/siderolabs/talos/pkg/machinery/constants"
 )
 
 // kubeconfigKubeProxyAdmin is the real KubeProxyAdmin. Like kubeconfigAdmin it goes through an
@@ -94,4 +97,67 @@ func removeKubeProxyObjects(ctx context.Context, c client.Client) error {
 	}
 
 	return nil
+}
+
+// RestoreKubeProxy applies the kube-proxy objects among talos's bootstrap manifests, see
+// applyKubeProxyObjects. Talos does not: its inventory still lists the objects removeKubeProxyObjects
+// deleted, and ManifestApplyController skips every object the inventory lists (v1.14.3,
+// manifest_apply.go: "if inv.Contains(objMeta) { continue }").
+func (kubeconfigKubeProxyAdmin) RestoreKubeProxy(ctx context.Context, talos TalosClient) error {
+	objects, err := talos.BootstrapManifests(ctx)
+	if err != nil {
+		return err
+	}
+
+	cfg, err := restConfig(ctx, talos)
+	if err != nil {
+		return err
+	}
+
+	c, err := client.New(cfg, client.Options{})
+	if err != nil {
+		return fmt.Errorf("building a client from the admin kubeconfig: %w", err)
+	}
+
+	return applyKubeProxyObjects(ctx, c, objects)
+}
+
+// applyKubeProxyObjects server-side-applies, under Talos's own field manager, the objects of the
+// kube-proxy manifest: kube-system's DaemonSet, ServiceAccount and ConfigMaps named kube-proxy or
+// kube-proxy-<checksum>, and the ClusterRoleBinding kube-proxy. Anything else in objects (CoreDNS,
+// inline CNI manifests) is left alone. Idempotent.
+func applyKubeProxyObjects(ctx context.Context, c client.Client, objects []map[string]any) error {
+	for _, o := range objects {
+		u := &unstructured.Unstructured{Object: o}
+		if !isKubeProxyObject(u) {
+			continue
+		}
+
+		u.SetManagedFields(nil)
+
+		if err := c.Apply(ctx, client.ApplyConfigurationFromUnstructured(u), client.ForceOwnership,
+			client.FieldOwner(constants.KubernetesFieldManagerName)); err != nil {
+			return fmt.Errorf("applying %s %q: %w", u.GetKind(), u.GetName(), err)
+		}
+	}
+
+	return nil
+}
+
+func isKubeProxyObject(u *unstructured.Unstructured) bool {
+	name := u.GetName()
+	if name != kubeProxyName && !strings.HasPrefix(name, kubeProxyName+"-") {
+		return false
+	}
+
+	switch u.GetKind() {
+	case "DaemonSet", "ServiceAccount":
+		return name == kubeProxyName && u.GetNamespace() == kubeSystemNamespace
+	case "ConfigMap":
+		return u.GetNamespace() == kubeSystemNamespace
+	case "ClusterRoleBinding":
+		return name == kubeProxyName
+	}
+
+	return false
 }

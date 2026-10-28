@@ -88,6 +88,10 @@ type KubeProxyAdmin interface {
 	// RemoveKubeProxy deletes the kube-proxy DaemonSet, ServiceAccount, ClusterRoleBinding and
 	// ConfigMaps. Idempotent: absent objects are not an error.
 	RemoveKubeProxy(ctx context.Context, talos TalosClient) error
+
+	// RestoreKubeProxy server-side-applies the kube-proxy objects of the control plane's own rendered
+	// bootstrap manifests (empty until Talos rendered them). Idempotent.
+	RestoreKubeProxy(ctx context.Context, talos TalosClient) error
 }
 
 // cniKubeProxyAdvancer is the cni-kind AdvanceMachineFunc. cmd/main.go selects it for
@@ -206,7 +210,7 @@ func (a *cniKubeProxyAdvancer) Advance(
 		return a.removeKubeProxy(ctx, cluster, m, op, bundle, talos)
 	}
 
-	return a.enableTail(ctx, preset, cluster, op)
+	return a.enableTail(ctx, preset, cluster, m, op, bundle, talos)
 }
 
 // verifiablePreset returns the preset whose live kube-proxy state Ichor can read. Only Cilium is
@@ -333,28 +337,11 @@ func (a *cniKubeProxyAdvancer) removeKubeProxy(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, op *ichorv1alpha1.TalosOperation,
 	bundle *secrets.Bundle, talos TalosClient,
 ) (bool, error) {
-	if m.Spec.Role != roleControlPlane {
-		cps, err := deleteguard.ApprovedMachines(ctx, a.Reader, cluster.Namespace, cluster.Name,
-			deleteguard.MachineFilter{Role: roleControlPlane})
-		if err != nil {
-			return false, err
-		}
-
-		if len(cps) == 0 {
-			return false, errors.New("no approved control plane to fetch an admin kubeconfig from")
-		}
-
-		dialCtx, cancel := context.WithTimeout(ctx, etcdDialTimeout)
-		defer cancel()
-
-		cp, err := a.TalosClient(dialCtx, cluster, &cps[0], bundle)
-		if err != nil {
-			return false, fmt.Errorf("dialing control plane %q to remove kube-proxy: %w", cps[0].Name, err)
-		}
-		defer closeTalosClient(cp)
-
-		talos = cp
+	talos, closeCP, err := a.controlPlaneClient(ctx, cluster, m, bundle, talos)
+	if err != nil {
+		return false, err
 	}
+	defer closeCP()
 
 	if err := a.Admin.RemoveKubeProxy(ctx, talos); err != nil {
 		return false, fmt.Errorf("removing kube-proxy: %w", err)
@@ -362,7 +349,7 @@ func (a *cniKubeProxyAdvancer) removeKubeProxy(
 
 	var ds appsv1.DaemonSet
 
-	err := a.Reader.Get(ctx, types.NamespacedName{Namespace: kubeSystemNamespace, Name: kubeProxyName}, &ds)
+	err = a.Reader.Get(ctx, types.NamespacedName{Namespace: kubeSystemNamespace, Name: kubeProxyName}, &ds)
 	if err != nil && !apierrors.IsNotFound(err) {
 		return false, err
 	}
@@ -408,10 +395,46 @@ func probeKubernetesService(ctx context.Context) error {
 	return conn.Close()
 }
 
+// controlPlaneClient returns talos when m is a control plane, else a client to an approved control
+// plane (only a control plane's Talos API issues an admin kubeconfig) and the func closing it.
+func (a *cniKubeProxyAdvancer) controlPlaneClient(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, bundle *secrets.Bundle, talos TalosClient,
+) (TalosClient, func(), error) {
+	if m.Spec.Role == roleControlPlane {
+		return talos, func() {}, nil
+	}
+
+	cps, err := deleteguard.ApprovedMachines(ctx, a.Reader, cluster.Namespace, cluster.Name,
+		deleteguard.MachineFilter{Role: roleControlPlane})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if len(cps) == 0 {
+		return nil, nil, errors.New("no approved control plane to fetch an admin kubeconfig from")
+	}
+
+	dialCtx, cancel := context.WithTimeout(ctx, etcdDialTimeout)
+	defer cancel()
+
+	cp, err := a.TalosClient(dialCtx, cluster, &cps[0], bundle)
+	if err != nil {
+		return nil, nil, fmt.Errorf("dialing control plane %q for its admin kubeconfig: %w", cps[0].Name, err)
+	}
+
+	return cp, func() { closeTalosClient(cp) }, nil
+}
+
 // enableTail is the enabling tail: kube-proxy runs on every node first (it is the new side), and
 // only then is Cilium asked to step aside.
+//
+// Talos creates the kube-proxy objects only while they are absent from its bootstrap-manifests
+// inventory, which still lists them after removeKubeProxy deleted them, so it never recreates them
+// (ADR 0066, amendment). While the DaemonSet is missing, Ichor therefore restores them itself from
+// Talos's own rendered manifest set; the call is idempotent and happens only while it is missing.
 func (a *cniKubeProxyAdvancer) enableTail(
-	ctx context.Context, preset cni.Preset, cluster *ichorv1alpha1.TalosCluster, op *ichorv1alpha1.TalosOperation,
+	ctx context.Context, preset cni.Preset, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
+	op *ichorv1alpha1.TalosOperation, bundle *secrets.Bundle, talos TalosClient,
 ) (bool, error) {
 	var ds appsv1.DaemonSet
 
@@ -421,6 +444,16 @@ func (a *cniKubeProxyAdvancer) enableTail(
 
 	switch {
 	case apierrors.IsNotFound(err):
+		cp, closeCP, cerr := a.controlPlaneClient(ctx, cluster, m, bundle, talos)
+		if cerr != nil {
+			return false, cerr
+		}
+		defer closeCP()
+
+		if rerr := a.Admin.RestoreKubeProxy(ctx, cp); rerr != nil {
+			return false, fmt.Errorf("restoring kube-proxy: %w", rerr)
+		}
+
 		reason = "the kube-proxy DaemonSet has not been created yet"
 	case err != nil:
 		return false, err

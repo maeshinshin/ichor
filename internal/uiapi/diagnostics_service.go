@@ -703,10 +703,6 @@ func ParseBPFFilter(in string) ([]*machineapi.BPFInstruction, error) {
 		jf, _ := strconv.ParseUint(g[3], 10, 8)
 		k, _ := strconv.ParseUint(g[4], 16, 32)
 
-		if jt > 255 || jf > 255 {
-			return nil, fmt.Errorf("filter line %d: a jump offset is above 255", len(out)+1)
-		}
-
 		out = append(out, &machineapi.BPFInstruction{Op: uint32(op), Jt: uint32(jt), Jf: uint32(jf), K: uint32(k)})
 		raw = append(raw, bpf.RawInstruction{Op: uint16(op), Jt: uint8(jt), Jf: uint8(jf), K: uint32(k)})
 	}

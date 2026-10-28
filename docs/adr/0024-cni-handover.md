@@ -136,3 +136,15 @@ in a tight loop) without guessing that the operator meant `disabled`.
 > Update (ADR 0055 addendum, 2026-10-26): the generated Cilium Application now carries `syncPolicy.automated {prune: true, selfHeal: true}` and `PruneLast=true`. Without it Argo CD never synced the Application, so it never became Synced + Healthy and the hand-over never completed (found on real hardware). Ichor still never changes the sync policy of an existing Application; it only chooses one when it creates its own.
 
 > Update (2026-10-28): `cluster.inlineManifests`, `cluster.extraManifests` and `cluster.extraManifestHeaders` are `safe` in `pkg/fieldmeta`. Found on real hardware: after the hand-over Ichor stops rendering the CNI entry, and with the default (reboot-required) class the single control plane sat `Ready=False/RebootRequired` for that pending removal (the machine controller never reboots), a later CNI operation paused on "unrelated pending configuration change at cluster.inlineManifests", and only `ichor config apply` cleared it, by rebooting the node (~3 min API outage). Talos v1.14.3 needs no reboot: `controllers/k8s/control_plane.go:510-552` rebuilds `ExtraManifestsConfig` live from the active MachineConfig on control planes only (`controlplaneMapFunc`, `:44-66`); `extra_manifest.go:131-141` destroys the no-longer-listed `k8s.Manifest` resource; `manifest_apply.go:230-393` only server-side-applies (skips inventoried objects, `:335-338`) and has no delete path, so removing an entry deletes nothing in the cluster. The machine controller therefore applies the removal live right after the hand-over and nothing reboot-required is left behind.
+
+## Amendment (2026-10-28): the hand-over status is a render input, so its removal is a change, not drift
+
+The machine controller classes a node/render mismatch as drift when `desiredInputsHash` (the
+generations of the cluster, machine, patches, storage, plus the registry credentials) equals the
+hash recorded at the last convergence. The hand-over writes `status.conditions[CNIHandover]`, which
+moves no generation, so the hash stayed put while the render dropped the CNI's
+`cluster.inlineManifests` entry. The removal read as drift and, under the default `warnOnly`, was
+never applied (`NodeDrifted`). `desiredInputsHash` now also folds in whether `CNIHandover` is True
+and `status.cni.kubeProxy` (ADR 0066), the two status values the render reads. The removal is then
+an intended change and is applied live under any `driftPolicy`, since `cluster.inlineManifests` is
+safe and needs no reboot. Hashes of clusters that have neither are unchanged.

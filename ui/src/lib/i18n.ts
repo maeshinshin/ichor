@@ -22,8 +22,6 @@ export const en = {
   'nav.users': 'Users',
   'nav.menu': 'Navigation',
   'nav.breadcrumb': 'Breadcrumb',
-  'nav.onThisPage': 'On this page',
-  'nav.jumpTo': 'Jump to a section',
   'kind.cluster': 'Cluster',
   'kind.machine': 'Node',
   'kind.patch': 'Patch',

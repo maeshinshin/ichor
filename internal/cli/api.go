@@ -151,6 +151,9 @@ type apiClients struct {
 	// Diagnostics serves the three downloads (docs/adr/0084).
 	Diagnostics ichorv1alpha1connect.DiagnosticsServiceClient
 
+	// Cni serves Cilium's values and upgrade (docs/adr/0099).
+	Cni ichorv1alpha1connect.CniServiceClient
+
 	// Local is true when the clients are the in-process fallback.
 	Local bool
 
@@ -272,7 +275,7 @@ func localClients(opts apiOptions, deps apiDeps) *apiClients {
 	diag := &localDiagnostics{srv: s}
 
 	return &apiClients{
-		Cluster: s, Machine: s, Patch: s, Operation: localOperation{s}, Node: localNode{s}, Diagnostics: diag, Local: true, Close: diag.close,
+		Cluster: s, Machine: s, Patch: s, Operation: localOperation{s}, Node: localNode{s}, Cni: s, Diagnostics: diag, Local: true, Close: diag.close,
 		actor: cmp.Or(deps.actor, actorCLI),
 	}
 }
@@ -384,6 +387,7 @@ func dialBackend(ctx context.Context, opts apiOptions, deps apiDeps) (*apiClient
 		Patch:       ichorv1alpha1connect.NewPatchServiceClient(h, base),
 		Operation:   ichorv1alpha1connect.NewOperationServiceClient(h, base),
 		Diagnostics: ichorv1alpha1connect.NewDiagnosticsServiceClient(h, base),
+		Cni:         ichorv1alpha1connect.NewCniServiceClient(h, base),
 		Close:       stop,
 	}, nil
 }

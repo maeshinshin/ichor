@@ -108,6 +108,7 @@ func backendFor(t *testing.T, k8s client.Client, forwards *atomic.Int32, mount f
 	mux.Handle(ichorv1alpha1connect.NewMachineServiceHandler(server))
 	mux.Handle(ichorv1alpha1connect.NewPatchServiceHandler(server))
 	mux.Handle(ichorv1alpha1connect.NewOperationServiceHandler(server))
+	mux.Handle(ichorv1alpha1connect.NewCniServiceHandler(server))
 
 	if mount != nil {
 		mount(mux)

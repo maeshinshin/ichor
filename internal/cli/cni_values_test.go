@@ -31,6 +31,11 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
+const (
+	cniTestEnabled = "enabled"
+	cniTestStored  = `{"debug":{"enabled":true}}`
+)
+
 const cniTestValues = "debug:\n  enabled: true\n"
 
 func cniTestClient(t *testing.T, yes bool) (*apiClients, client.Client) {
@@ -39,7 +44,7 @@ func cniTestClient(t *testing.T, yes bool) (*apiClients, client.Client) {
 	setAPITestFlags(t, yes)
 
 	cl := newTestCluster()
-	cl.Spec.CNI.KubeProxy = "enabled"
+	cl.Spec.CNI.KubeProxy = cniTestEnabled
 	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(cl).Build()
 
 	return localClients(apiOpts, apiDeps{K8s: k8s}), k8s
@@ -72,7 +77,7 @@ func TestCniValuesSetValidatesShowsTheDiffAndWrites(t *testing.T) {
 		t.Fatalf("the diff must be shown: %q", errw.String())
 	}
 
-	if got := cniStoredValues(t, k8s); got != `{"debug":{"enabled":true}}` {
+	if got := cniStoredValues(t, k8s); got != cniTestStored {
 		t.Fatalf("stored values = %q", got)
 	}
 
@@ -158,13 +163,13 @@ func TestCniValuesEditSavesWhatTheEditorLeavesAndSkipsAnUnchangedFile(t *testing
 		t.Fatal(err)
 	}
 
-	if cniStoredValues(t, k8s) != `{"debug":{"enabled":true}}` {
+	if cniStoredValues(t, k8s) != cniTestStored {
 		t.Fatalf("stored = %q", cniStoredValues(t, k8s))
 	}
 
 	bad := func(path string) error { return os.WriteFile(path, []byte("ipam:\n  mode: x\n"), 0o600) }
 	if err := runCniValuesEdit(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{}, "", bad); err == nil ||
-		cniStoredValues(t, k8s) != `{"debug":{"enabled":true}}` {
+		cniStoredValues(t, k8s) != cniTestStored {
 		t.Fatalf("an invalid edit must fail and leave the stored values: %v", err)
 	}
 }

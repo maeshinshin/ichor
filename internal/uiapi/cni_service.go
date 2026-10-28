@@ -28,8 +28,8 @@ import (
 	"connectrpc.com/connect"
 	"github.com/pmezard/go-difflib/difflib"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
@@ -151,7 +151,7 @@ func (s *Server) talosFacts(ctx context.Context, cluster *ichorv1alpha1.TalosClu
 	}
 
 	i := slices.IndexFunc(machines.Items, func(m ichorv1alpha1.TalosMachine) bool {
-		return m.Spec.ClusterRef.Name == cluster.Name && m.Spec.Role == "controlplane" &&
+		return m.Spec.ClusterRef.Name == cluster.Name && m.Spec.Role == opRoleControlPlane &&
 			m.Spec.ApprovalState == ichorv1alpha1.MachineApprovalStateApproved
 	})
 	if i < 0 {
@@ -389,7 +389,7 @@ func (s *Server) SetCiliumValues(
 	}
 
 	return connect.NewResponse(&pb.SetCiliumValuesResponse{
-		Audit:         &pb.AuditRecord{Actor: s.actorName(ctx), At: timestamppb.New(s.now()), Action: "update", Target: ref},
+		Audit:         &pb.AuditRecord{Actor: s.actorName(ctx), At: timestamppb.New(s.now()), Action: verbUpdate, Target: ref},
 		EffectiveYaml: out,
 	}), nil
 }

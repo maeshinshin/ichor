@@ -36,6 +36,10 @@ import (
 const (
 	cniViewerUser   = "cni-viewer"
 	cniOperatorUser = "cni-operator"
+	cniVerbGet      = "get"
+	cniVerbList     = "list"
+	cniClusterRole  = "ClusterRole"
+	cniDebugOn      = "debug:\n  enabled: true\n"
 )
 
 func asCniUser(user string) context.Context {
@@ -53,7 +57,7 @@ var _ = Describe("CniService", func() {
 		read := rbacv1.PolicyRule{
 			APIGroups: []string{ichorv1alpha1.GroupVersion.Group},
 			Resources: []string{resourceTalosClusters, resourceTalosMachines, "talosconfigpatches", "talosstorages"},
-			Verbs:     []string{"get", "list"},
+			Verbs:     []string{cniVerbGet, cniVerbList},
 		}
 		write := rbacv1.PolicyRule{
 			APIGroups: []string{ichorv1alpha1.GroupVersion.Group}, Resources: []string{resourceTalosClusters}, Verbs: []string{"update"},
@@ -64,7 +68,7 @@ var _ = Describe("CniService", func() {
 			Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, &rbacv1.ClusterRole{Name: name, Rules: rules}))).To(Succeed())
 			Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, &rbacv1.ClusterRoleBinding{
 				Name:     name,
-				RoleRef:  rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: name},
+				RoleRef:  rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: cniClusterRole, Name: name},
 				Subjects: []rbacv1.Subject{{APIGroup: rbacv1.GroupName, Kind: rbacv1.UserKind, Name: user}},
 			}))).To(Succeed())
 		}
@@ -102,7 +106,7 @@ var _ = Describe("CniService", func() {
 		Expect(resp.Msg.GetEffectiveYaml()).To(ContainSubstring("ipam"))
 		Expect(resp.Msg.GetDefaultsYaml()).NotTo(BeEmpty())
 
-		paths := []string{}
+		paths := make([]string, 0, len(resp.Msg.GetOwned()))
 		for _, o := range resp.Msg.GetOwned() {
 			paths = append(paths, o.GetPath())
 			Expect(o.GetReason()).NotTo(BeEmpty())
@@ -111,7 +115,7 @@ var _ = Describe("CniService", func() {
 		Expect(paths).To(ContainElements("ipam.mode", "k8sServicePort", "tunnelProtocol"))
 		Expect(resp.Msg.GetDefaultsYaml()).NotTo(ContainSubstring("k8sServicePort"))
 
-		err = set(cniViewerUser, "debug:\n  enabled: true\n")
+		err = set(cniViewerUser, cniDebugOn)
 		Expect(connect.CodeOf(err)).To(Equal(connect.CodePermissionDenied))
 		Expect(stored()).To(BeNil())
 	})
@@ -157,13 +161,13 @@ var _ = Describe("CniService", func() {
 
 	It("lets an operator set the values, shows them in the diff, and clears them again", func() {
 		diff, err := s.DiffCiliumValues(asCniUser(cniViewerUser), connect.NewRequest(&pb.DiffCiliumValuesRequest{
-			Cluster: ref, UserYaml: "debug:\n  enabled: true\n",
+			Cluster: ref, UserYaml: cniDebugOn,
 		}))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(diff.Msg.GetDiff()).To(ContainSubstring("+  enabled: true"))
 
 		resp, err := s.SetCiliumValues(asCniUser(cniOperatorUser), connect.NewRequest(&pb.SetCiliumValuesRequest{
-			Cluster: ref, UserYaml: "debug:\n  enabled: true\n",
+			Cluster: ref, UserYaml: cniDebugOn,
 		}))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(resp.Msg.GetAudit().GetActor()).To(Equal(cniOperatorUser))
@@ -175,7 +179,7 @@ var _ = Describe("CniService", func() {
 		Expect(got.Msg.GetUserYaml()).To(ContainSubstring("enabled: true"))
 
 		same, err := s.DiffCiliumValues(asCniUser(cniViewerUser), connect.NewRequest(&pb.DiffCiliumValuesRequest{
-			Cluster: ref, UserYaml: "debug:\n  enabled: true\n",
+			Cluster: ref, UserYaml: cniDebugOn,
 		}))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(same.Msg.GetDiff()).To(BeEmpty())
@@ -205,7 +209,7 @@ func TestSetCiliumValuesRefusedWhenArgoCDTracks(t *testing.T) {
 	k8s := fake.NewClientBuilder().WithScheme(trackedScheme(t)).WithObjects(cluster, argoCM()).Build()
 
 	_, err := (&Server{Client: k8s}).SetCiliumValues(context.Background(),
-		connect.NewRequest(&pb.SetCiliumValuesRequest{Cluster: objectRef(trackedTestNS, "c"), UserYaml: "debug:\n  enabled: true\n"}))
+		connect.NewRequest(&pb.SetCiliumValuesRequest{Cluster: objectRef(trackedTestNS, "c"), UserYaml: cniDebugOn}))
 	wantRefused(t, err, "Argo CD")
 
 	var got ichorv1alpha1.TalosCluster

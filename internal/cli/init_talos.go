@@ -182,7 +182,7 @@ func createWhenWebhooksUp(
 	return pollWhile(ctx, timeout, interval, progress, "Ichor's webhooks", func(ctx context.Context) error {
 		return c.Create(ctx, obj)
 	}, func(err error) bool {
-		return apierrors.IsInternalError(err) && strings.Contains(err.Error(), "webhook")
+		return (apierrors.IsInternalError(err) && strings.Contains(err.Error(), "webhook")) || initRetryable(err)
 	})
 }
 

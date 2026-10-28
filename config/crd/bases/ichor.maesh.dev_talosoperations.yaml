@@ -425,6 +425,12 @@ spec:
                 description: finishedAt is when the operation reached Completed.
                 format: date-time
                 type: string
+              fromVersion:
+                description: |-
+                  fromVersion is deprecated and unused: Ichor no longer writes or reads it. The from-version
+                  now lives in the ichor.maesh.dev/from-version annotation (OperationFromVersionAnnotation).
+                  The field stays so the CRD never drops a field an installed version has.
+                type: string
               kubernetes:
                 description: |-
                   kubernetes is the kubernetes kind's state machine: which of the three stages the machines

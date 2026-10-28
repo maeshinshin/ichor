@@ -17,8 +17,15 @@ limitations under the License.
 package cli
 
 import (
+	"cmp"
 	"context"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"strings"
 
+	"connectrpc.com/connect"
 	"github.com/spf13/cobra"
 
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
@@ -54,10 +61,327 @@ It shows which machines are touched and in which order, and asks for confirmatio
 	},
 }
 
+var (
+	// cniCluster is --cluster on the values and upgrade commands.
+	cniCluster string
+	// cniValuesFile is --filename on set and diff.
+	cniValuesFile string
+	// cniLayer is --layer on values get.
+	cniLayer string
+)
+
+// Layers of `ichor cni values get --layer`.
+const (
+	cniLayerUser      = "user"
+	cniLayerDefaults  = "defaults"
+	cniLayerEffective = "effective"
+	cniLayerOwned     = "owned"
+)
+
+var cniValuesCmd = &cobra.Command{
+	Use:   "values",
+	Short: "Show, edit and diff Cilium's Helm values (the user layer on the TalosCluster)",
+	Long: `Cilium's Helm values are Ichor's defaults, then your layer (spec.cni.cilium.values)
+merged on top, then the keys Ichor owns. Only your layer is written; the controller applies it.`,
+}
+
+var cniValuesGetCmd = &cobra.Command{
+	Use:   "get",
+	Short: "Print your layer of Cilium's values (--layer shows the others)",
+	Args:  cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
+			return runCniValuesGet(ctx, c, cmd.OutOrStdout(), cniCluster, cniLayer)
+		})
+	},
+}
+
+var cniValuesSetCmd = &cobra.Command{
+	Use:   "set -f FILE",
+	Short: "Replace your layer of Cilium's values with a YAML file (- is stdin; an empty file clears it)",
+	Args:  cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		text, err := readValuesFile(cmd.InOrStdin(), cniValuesFile)
+		if err != nil {
+			return err
+		}
+
+		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
+			return runCniValuesSet(ctx, c, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), cniCluster, text)
+		})
+	},
+}
+
+var cniValuesDiffCmd = &cobra.Command{
+	Use:   "diff -f FILE",
+	Short: "Show how the effective values would change if FILE became your layer",
+	Args:  cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		text, err := readValuesFile(cmd.InOrStdin(), cniValuesFile)
+		if err != nil {
+			return err
+		}
+
+		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
+			return runCniValuesDiff(ctx, c, cmd.OutOrStdout(), cniCluster, text)
+		})
+	},
+}
+
+var cniValuesEditCmd = &cobra.Command{
+	Use:   "edit",
+	Short: "Edit your layer of Cilium's values in $EDITOR, validate it, show the diff and save",
+	Args:  cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
+			return runCniValuesEdit(ctx, c, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), cniCluster, runEditor)
+		})
+	},
+}
+
+var cniUpgradeCmd = &cobra.Command{
+	Use:   "upgrade",
+	Short: "Upgrade Cilium to the chart this Ichor ships",
+	Long: `upgrade checks that a newer Cilium chart is available and that your values still
+validate against it, then starts the cni upgrade operation.`,
+	Args: cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
+			return runCniUpgrade(ctx, c, cmd.OutOrStdout(), cniCluster)
+		})
+	},
+}
+
+// readValuesFile reads the YAML at path; - is stdin.
+func readValuesFile(stdin io.Reader, path string) (string, error) {
+	var (
+		raw []byte
+		err error
+	)
+
+	if path == "-" {
+		raw, err = io.ReadAll(stdin)
+	} else {
+		raw, err = os.ReadFile(path)
+	}
+
+	if err != nil {
+		return "", fmt.Errorf("cni values: reading %s: %w", path, err)
+	}
+
+	return string(raw), nil
+}
+
+func runCniValuesGet(ctx context.Context, c *apiClients, out io.Writer, cluster, layer string) error {
+	ref, err := resolveCluster(ctx, c, cluster)
+	if err != nil {
+		return err
+	}
+
+	resp, err := c.Cni.GetCiliumValues(ctx, connect.NewRequest(&pb.GetCiliumValuesRequest{Cluster: ref}))
+	if err != nil {
+		return err
+	}
+
+	switch layer {
+	case cniLayerUser:
+		_, err = io.WriteString(out, resp.Msg.GetUserYaml())
+	case cniLayerDefaults:
+		_, err = io.WriteString(out, resp.Msg.GetDefaultsYaml())
+	case cniLayerEffective:
+		_, err = io.WriteString(out, resp.Msg.GetEffectiveYaml())
+	case cniLayerOwned:
+		for _, o := range resp.Msg.GetOwned() {
+			if _, err = fmt.Fprintf(out, "%s: %s  # %s\n", o.GetPath(), o.GetValueYaml(), o.GetReason()); err != nil {
+				break
+			}
+		}
+	default:
+		return fmt.Errorf("cni values get: --layer %q is not %s, %s, %s or %s", layer, cniLayerUser, cniLayerDefaults, cniLayerEffective, cniLayerOwned)
+	}
+
+	return err
+}
+
+// cniValidate prints every problem with a proposed layer to errw and returns an error if there is one.
+func cniValidate(ctx context.Context, c *apiClients, errw io.Writer, ref *pb.ObjectRef, text string) error {
+	v, err := c.Cni.ValidateCiliumValues(ctx, connect.NewRequest(&pb.ValidateCiliumValuesRequest{Cluster: ref, UserYaml: text}))
+	if err != nil {
+		return err
+	}
+
+	if v.Msg.GetValid() {
+		return nil
+	}
+
+	for _, e := range v.Msg.GetErrors() {
+		_, _ = fmt.Fprintf(errw, "  - %s\n", e)
+	}
+
+	return fmt.Errorf("cni values: %d problem(s) in the values, nothing was written", len(v.Msg.GetErrors()))
+}
+
+func cniDiff(ctx context.Context, c *apiClients, ref *pb.ObjectRef, text string) (string, error) {
+	d, err := c.Cni.DiffCiliumValues(ctx, connect.NewRequest(&pb.DiffCiliumValuesRequest{Cluster: ref, UserYaml: text}))
+	if err != nil {
+		return "", err
+	}
+
+	return d.Msg.GetDiff(), nil
+}
+
+func runCniValuesDiff(ctx context.Context, c *apiClients, out io.Writer, cluster, text string) error {
+	ref, err := resolveCluster(ctx, c, cluster)
+	if err != nil {
+		return err
+	}
+
+	diff, err := cniDiff(ctx, c, ref, text)
+	if err != nil {
+		return err
+	}
+
+	if diff == "" {
+		diff = "no change to the effective values\n"
+	}
+
+	_, err = io.WriteString(out, diff)
+
+	return err
+}
+
+// runCniValuesSet validates text, shows the diff, asks (unless --yes) and writes it.
+func runCniValuesSet(ctx context.Context, c *apiClients, in io.Reader, out, errw io.Writer, cluster, text string) error {
+	ref, err := resolveCluster(ctx, c, cluster)
+	if err != nil {
+		return err
+	}
+
+	if err := cniValidate(ctx, c, errw, ref, text); err != nil {
+		return err
+	}
+
+	diff, err := cniDiff(ctx, c, ref, text)
+	if err != nil {
+		return err
+	}
+
+	if diff == "" {
+		_, _ = fmt.Fprintln(errw, "No change to the effective values.")
+	} else if err := confirmPlan(in, errw, "cni values", "Effect on Cilium's effective values:\n"+diff+"\n"); err != nil {
+		return err
+	}
+
+	resp, err := c.Cni.SetCiliumValues(ctx, connect.NewRequest(&pb.SetCiliumValuesRequest{Cluster: ref, UserYaml: text}))
+	if err != nil {
+		return err
+	}
+
+	return writeMessage(out, outputFormat, resp.Msg)
+}
+
+// runEditor opens path in $VISUAL, $EDITOR or vi and waits. A var so a test can stand in for the editor.
+var runEditor = func(path string) error {
+	editor := cmp.Or(os.Getenv("VISUAL"), os.Getenv("EDITOR"), "vi")
+	parts := strings.Fields(editor)
+
+	cmd := exec.Command(parts[0], append(parts[1:], path)...) //nolint:gosec // the editor is the user's own choice
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+
+	return cmd.Run()
+}
+
+// runCniValuesEdit opens the current user layer in the editor, validates what comes back
+// (nothing is written on a problem) and saves it through runCniValuesSet.
+func runCniValuesEdit(
+	ctx context.Context, c *apiClients, in io.Reader, out, errw io.Writer, cluster string, edit func(path string) error,
+) error {
+	ref, err := resolveCluster(ctx, c, cluster)
+	if err != nil {
+		return err
+	}
+
+	cur, err := c.Cni.GetCiliumValues(ctx, connect.NewRequest(&pb.GetCiliumValuesRequest{Cluster: ref}))
+	if err != nil {
+		return err
+	}
+
+	if by := cur.Msg.GetTrackedBy(); by != "" {
+		return fmt.Errorf("cni values: the cluster is tracked by %s, so it is read-only here", by)
+	}
+
+	f, err := os.CreateTemp("", "ichor-cilium-values-*.yaml")
+	if err != nil {
+		return err
+	}
+
+	defer func() { _ = os.Remove(f.Name()) }()
+
+	header := "# Your layer of Cilium's Helm values (spec.cni.cilium.values). Ichor-owned keys cannot be set;\n" +
+		"# `ichor cni values get --layer owned` lists them. An empty file clears your layer.\n"
+
+	if _, err := f.WriteString(header + cur.Msg.GetUserYaml()); err != nil {
+		_ = f.Close()
+
+		return err
+	}
+
+	if err := f.Close(); err != nil {
+		return err
+	}
+
+	if err := edit(f.Name()); err != nil {
+		return fmt.Errorf("cni values: editor: %w", err)
+	}
+
+	raw, err := os.ReadFile(f.Name())
+	if err != nil {
+		return err
+	}
+
+	text := string(raw)
+	if strings.TrimSpace(strings.TrimPrefix(text, header)) == strings.TrimSpace(cur.Msg.GetUserYaml()) {
+		_, _ = fmt.Fprintln(errw, "No changes.")
+
+		return nil
+	}
+
+	return runCniValuesSet(ctx, c, in, out, errw, cluster, text)
+}
+
+func runCniUpgrade(ctx context.Context, c *apiClients, out io.Writer, cluster string) error {
+	ref, err := resolveCluster(ctx, c, cluster)
+	if err != nil {
+		return err
+	}
+
+	resp, err := c.Cni.StartCniUpgrade(ctx, connect.NewRequest(&pb.StartCniUpgradeRequest{Cluster: ref}))
+	if err != nil {
+		return err
+	}
+
+	return writeMessage(out, outputFormat, resp.Msg)
+}
+
 func init() {
 	rootCmd.AddCommand(cniCmd)
 	addAPIFlags(cniCmd)
-	cniCmd.AddCommand(cniKubeProxyCmd)
+	cniCmd.AddCommand(cniKubeProxyCmd, cniValuesCmd, cniUpgradeCmd)
 	addStartFlags(cniKubeProxyCmd, &cniFlags)
 	markWrites(cniKubeProxyCmd)
+
+	cniValuesCmd.AddCommand(cniValuesGetCmd, cniValuesSetCmd, cniValuesDiffCmd, cniValuesEditCmd)
+
+	for _, c := range []*cobra.Command{cniValuesGetCmd, cniValuesSetCmd, cniValuesDiffCmd, cniValuesEditCmd, cniUpgradeCmd} {
+		c.Flags().StringVar(&cniCluster, "cluster", "", "the cluster (default: the only one in the namespace)")
+	}
+
+	cniValuesGetCmd.Flags().StringVar(&cniLayer, "layer", cniLayerUser, "which layer to print: user, defaults, effective or owned")
+
+	for _, c := range []*cobra.Command{cniValuesSetCmd, cniValuesDiffCmd} {
+		c.Flags().StringVarP(&cniValuesFile, "filename", "f", "", "YAML file holding your layer of the values; - reads stdin (required)")
+		_ = c.MarkFlagRequired("filename")
+	}
+
+	markWrites(cniValuesSetCmd, cniValuesEditCmd, cniUpgradeCmd)
 }

@@ -158,3 +158,12 @@ nothing and the wait continues. This restores Talos's own component from Talos's
 left as it is (editing Talos's bookkeeping would not wake its controller, and the entries are correct again once
 the objects exist). Rejected: editing the inventory ConfigMap, because Talos would still need an input event to
 re-run the apply.
+
+## Amendment (2026-10-28): safe unrelated pending paths ride along with the switch
+
+The executor refused any pending path outside `KubeProxyConfig` / `cluster.proxy`, which paused a
+switch with no way out when a safe leftover (the CNI's `cluster.inlineManifests` removal, ADR 0024
+amendment) was pending. It now classifies each unrelated path with `fieldmeta.Assess` and applies
+those that are safe and need no reboot together with the switch. Unrelated reboot-requiring,
+install-time-only, API-server-restarting or version-unsupported paths are still refused with the
+"converge it first" error.

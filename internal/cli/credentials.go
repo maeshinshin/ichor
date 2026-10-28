@@ -20,8 +20,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"time"
 
 	clientconfig "github.com/siderolabs/talos/pkg/machinery/client/config"
 	"k8s.io/apimachinery/pkg/types"
@@ -247,10 +249,16 @@ func endpointsOfTalosconfig(path string) []string {
 	return nil
 }
 
+// handoffAckWindow bounds how long acknowledging keeps retrying a transient API error. Var so tests can shrink it.
+var handoffAckWindow = 2 * time.Minute
+
 // acknowledgeHandoff tells the controller the operator has credentials that work with both CAs, by
 // setting the hand-off annotation on the cluster's ca-rotation operation that is waiting for it. name
-// may be empty: then the one waiting operation of the cluster is used.
-func acknowledgeHandoff(ctx context.Context, k8s client.Client, namespace, cluster, name string) (string, error) {
+// may be empty: then the one waiting operation of the cluster is used. A transient API error (the
+// API server restarting) does not fail it outright: the operation is read back, since the patch may
+// have landed, and otherwise sent again with backoff, through redial's client when it is set.
+func acknowledgeHandoff(ctx context.Context, k8s client.Client, namespace, cluster, name string, errw io.Writer,
+	redial func() (client.Client, error)) (string, error) {
 	var ops ichorv1alpha1.TalosOperationList
 	if err := k8s.List(ctx, &ops, client.InNamespace(namespace)); err != nil {
 		return "", fmt.Errorf("listing operations: %w", err)
@@ -276,17 +284,63 @@ func acknowledgeHandoff(ctx context.Context, k8s client.Client, namespace, clust
 	}
 
 	op := waiting[0]
-	base := op.DeepCopy()
+	token := ichorv1alpha1.CARotationHandoffToken(op.Status.CARotation)
+	key := client.ObjectKeyFromObject(op)
+	deadline := time.Now().Add(handoffAckWindow)
+	delay := followRetryDelay
 
-	if op.Annotations == nil {
-		op.Annotations = map[string]string{}
+	for {
+		base := op.DeepCopy()
+
+		if op.Annotations == nil {
+			op.Annotations = map[string]string{}
+		}
+
+		op.Annotations[ichorv1alpha1.CredentialsHandoffAnnotation] = token
+
+		err := k8s.Patch(ctx, op, client.MergeFrom(base))
+		if err == nil {
+			return op.Name, nil
+		}
+
+		if !isTransient(err) || ctx.Err() != nil {
+			return "", fmt.Errorf("acknowledging the hand-off on operation %s/%s: %w", op.Namespace, op.Name, err)
+		}
+
+		// The connection may have dropped after the API server applied the patch: read the operation
+		// back, and send the patch again only if it did not land.
+		var now ichorv1alpha1.TalosOperation
+		if k8s.Get(ctx, key, &now) == nil {
+			if now.Annotations[ichorv1alpha1.CredentialsHandoffAnnotation] == token {
+				_, _ = fmt.Fprintf(errw, "ichor: the hand-off on operation %s had landed before the connection dropped\n", op.Name)
+
+				return op.Name, nil
+			}
+
+			op = &now
+		}
+
+		if time.Now().After(deadline) {
+			return "", fmt.Errorf("acknowledging the hand-off on operation %s/%s kept failing for %s: %w",
+				op.Namespace, op.Name, handoffAckWindow, err)
+		}
+
+		_, _ = fmt.Fprintf(errw, "ichor: acknowledging the hand-off failed (%v); retrying\n", err)
+
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-time.After(delay):
+		}
+
+		delay = min(delay*2, followRetryMax)
+
+		if redial != nil {
+			if nc, rerr := redial(); rerr == nil {
+				k8s = nc
+			} else {
+				_, _ = fmt.Fprintf(errw, "ichor: could not connect with the new kubeconfig (%v); retrying with the current one\n", rerr)
+			}
+		}
 	}
-
-	op.Annotations[ichorv1alpha1.CredentialsHandoffAnnotation] = ichorv1alpha1.CARotationHandoffToken(op.Status.CARotation)
-
-	if err := k8s.Patch(ctx, op, client.MergeFrom(base)); err != nil {
-		return "", fmt.Errorf("acknowledging the hand-off on operation %s/%s: %w", op.Namespace, op.Name, err)
-	}
-
-	return op.Name, nil
 }

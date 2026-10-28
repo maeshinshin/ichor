@@ -24,7 +24,6 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
-	"github.com/maeshinshin/ichor/pkg/gitops"
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
 
@@ -65,13 +64,6 @@ type cniBootstrap struct {
 	// Patch is a cluster-layer TalosConfigPatch carrying the CNI's
 	// TalosPatches documents; nil if the preset needs none.
 	Patch *ichorv1alpha1.TalosConfigPatch
-
-	// ArgoCDApplication is the CNI's hand-over Application, built only
-	// when the caller asks for it (--argocd); nil otherwise, and nil for
-	// any preset that is never handed to Argo CD (flannel). pkg/cni now
-	// returns pkg/gitops's own typed Application (ADR 0013's update), so
-	// this is directly usable as a Skeleton.Apps entry.
-	ArgoCDApplication *gitops.Application
 }
 
 // buildCNIBootstrap calls preset's three bootstrap-relevant methods and
@@ -79,7 +71,7 @@ type cniBootstrap struct {
 // steps need. It never duplicates what pkg/cni already knows (ADR 0014's
 // ponytail note on this unit: "CNI knowledge does not get rewritten in
 // internal/cli") -- every byte here is exactly what the preset returned.
-func buildCNIBootstrap(preset cni.Preset, clusterName, namespace string, wantArgoCD bool) (*cniBootstrap, error) {
+func buildCNIBootstrap(preset cni.Preset, clusterName, namespace string) (*cniBootstrap, error) {
 	out := &cniBootstrap{}
 
 	manifest, err := preset.BootstrapManifest(cniKubeProxy)
@@ -109,17 +101,6 @@ func buildCNIBootstrap(preset cni.Preset, clusterName, namespace string, wantArg
 			},
 		}
 	}
-
-	if !wantArgoCD {
-		return out, nil
-	}
-
-	app, err := preset.ArgoCDApplication(cniKubeProxy)
-	if err != nil {
-		return nil, fmt.Errorf("init: rendering cni Argo CD Application: %w", err)
-	}
-
-	out.ArgoCDApplication = app
 
 	return out, nil
 }

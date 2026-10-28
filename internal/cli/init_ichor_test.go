@@ -105,13 +105,18 @@ func TestCreateIchorInstallation_RecordsTheBinarysVersion(t *testing.T) {
 	c := newIchorInstallationFake(t)
 
 	var warn bytes.Buffer
-	if err := createIchorInstallation(context.Background(), c, &warn); err != nil {
-		t.Fatalf("createIchorInstallation: %v", err)
+	created, err := createIchorInstallation(context.Background(), c, &warn)
+	if err != nil || !created {
+		t.Fatalf("createIchorInstallation = %v, %v", created, err)
 	}
 
 	var got ichorv1alpha1.IchorInstallation
 	if err := c.Get(context.Background(), types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}, &got); err != nil {
 		t.Fatalf("the singleton was not created: %v", err)
+	}
+
+	if got.Spec.Stack == nil || got.Spec.Stack.Promotion != ichorv1alpha1.IchorStackPromotionAutomatic {
+		t.Errorf("spec.stack = %+v, want it set with Automatic promotion (ADR 0099)", got.Spec.Stack)
 	}
 
 	if got.Spec.Version != "v0.3.1" || got.Spec.ManagementMode != ichorv1alpha1.IchorManagementModeIchor {
@@ -128,8 +133,8 @@ func TestCreateIchorInstallation_SkipsADevBuild(t *testing.T) {
 	c := newIchorInstallationFake(t)
 
 	var warn bytes.Buffer
-	if err := createIchorInstallation(context.Background(), c, &warn); err != nil {
-		t.Fatalf("createIchorInstallation: %v", err)
+	if created, err := createIchorInstallation(context.Background(), c, &warn); err != nil || created {
+		t.Fatalf("createIchorInstallation = %v, %v", created, err)
 	}
 
 	var list ichorv1alpha1.IchorInstallationList

@@ -80,6 +80,27 @@ spec:
                 x-kubernetes-validations:
                 - message: clusterRef.name is required
                   rule: self.name != ''
+              cni:
+                description: |-
+                  cni says which cni-kind operation this is. Absent means the kube-proxy switch;
+                  action upgrade is a Cilium chart upgrade.
+                properties:
+                  action:
+                    description: 'action is upgrade: run the Cilium Helm Job to move
+                      the release to the chart this Ichor embeds.'
+                    enum:
+                    - upgrade
+                    type: string
+                  chartVersion:
+                    description: |-
+                      chartVersion is the Cilium chart version the operation upgrades to. The executor refuses to
+                      run when the controller embeds another version (it was upgraded after the operation was created).
+                    minLength: 1
+                    type: string
+                required:
+                - action
+                - chartVersion
+                type: object
               etcdRestore:
                 description: etcdRestore is the snapshot of an etcd-restore-kind operation.
                 properties:
@@ -252,6 +273,11 @@ spec:
               rule: self.kind == oldSelf.kind
             - message: spec.node is required for the node kind and only allowed there
               rule: (self.kind == 'node') == has(self.node)
+            - message: spec.cni is only allowed for the cni kind
+              rule: '!has(self.cni) || self.kind == ''cni'''
+            - message: cni cannot change after creation
+              rule: has(self.cni) == has(oldSelf.cni) && (!has(self.cni) || self.cni
+                == oldSelf.cni)
             - message: spec.etcdRestore is required for the etcd-restore kind and
                 only allowed there
               rule: (self.kind == 'etcd-restore') == has(self.etcdRestore)

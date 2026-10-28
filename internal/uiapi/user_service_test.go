@@ -356,8 +356,8 @@ func TestChangeOwnPasswordBacksOffAfterRepeatedFailures(t *testing.T) {
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	s.Now = func() time.Time { return now }
 
-	t.Cleanup(func() { changePasswordFailures.reset(userAlice) })
-	changePasswordFailures.reset(userAlice)
+	t.Cleanup(func() { changePasswordFailures.Reset(userAlice) })
+	changePasswordFailures.Reset(userAlice)
 
 	change := func(old string) error {
 		_, err := s.ChangeOwnPassword(ichorCtx(userAlice), connect.NewRequest(&pb.ChangeOwnPasswordRequest{OldPassword: old, NewPassword: strongPass2}))
@@ -365,7 +365,7 @@ func TestChangeOwnPasswordBacksOffAfterRepeatedFailures(t *testing.T) {
 		return err
 	}
 
-	for range freeFailures {
+	for range 5 { // the back-off's free failures (oidcissuer.Backoff)
 		if err := change("wrong password!!"); connect.CodeOf(err) != connect.CodePermissionDenied {
 			t.Fatalf("wrong old password: %v", err)
 		}
@@ -381,7 +381,7 @@ func TestChangeOwnPasswordBacksOffAfterRepeatedFailures(t *testing.T) {
 		t.Fatalf("after back-off: %v", err)
 	}
 
-	if changePasswordFailures.wait(userAlice, now) != 0 {
+	if changePasswordFailures.Wait(userAlice, now) != 0 {
 		t.Error("a success did not reset the back-off")
 	}
 }

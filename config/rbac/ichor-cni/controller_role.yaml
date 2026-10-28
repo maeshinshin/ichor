@@ -1,0 +1,60 @@
+# What the controller needs in kube-system to run and watch the Cilium Helm Job there (ADR 0099
+# unit 7 as built, ADR 0100): the Job, its pod and log for the failure message, and the Job
+# controller's FailedCreate events for a pod that cannot be created. Namespaced, never
+# cluster-wide. Hand-written rather than from +kubebuilder:rbac markers: controller-gen names
+# every namespaced Role "manager-role", which would collide with the controller's own once
+# kustomize sets one namespace on everything (config/default patches this file's back to
+# kube-system).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cni-job-role
+  namespace: kube-system
+rules:
+- apiGroups:
+  - batch
+  resources:
+  - jobs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - ""
+  resources:
+  - pods/log
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - get
+  - list
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/name: ichor
+    app.kubernetes.io/managed-by: kustomize
+  name: cni-job-rolebinding
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cni-job-role
+subjects:
+- kind: ServiceAccount
+  name: controller-manager
+  namespace: system

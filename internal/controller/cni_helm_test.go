@@ -18,14 +18,18 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"os"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -66,6 +70,12 @@ func TestCNIHelmJobShape(t *testing.T) {
 	job := newCNIHelmJob("ichor-system", cniHelmJobName(cluster, hash), cluster, cniTestInstallation(), hash)
 	pod := job.Spec.Template.Spec
 
+	// kube-system: hostNetwork is refused by Talos's default Pod Security admission (baseline) in
+	// any other namespace; the release record is stored in the controller's namespace.
+	if job.Namespace != kubeSystemNamespace {
+		t.Errorf("Job namespace = %q, want kube-system (Talos exempts it from Pod Security admission)", job.Namespace)
+	}
+
 	if pod.ServiceAccountName != "ichor-cni" {
 		t.Errorf("ServiceAccountName = %q, want ichor-cni (config/rbac/ichor-cni)", pod.ServiceAccountName)
 	}
@@ -105,24 +115,16 @@ func TestCNIHelmJobShape(t *testing.T) {
 	}
 }
 
-// The network policies select the Job's pod by this label (ADR 0100); without it the default
-// deny would cut the Job off from the API server. The label differs from the installer's.
-func TestCNIHelmJobPodCarriesTheLabelItsNetworkPolicySelects(t *testing.T) {
-	cluster := cniTestCluster("")
-	job := newCNIHelmJob("ichor-system", "x", cluster, cniTestInstallation(), "h")
-
-	got := job.Spec.Template.Labels["app.kubernetes.io/name"]
-	if got != "ichor-cni" {
-		t.Errorf("pod label app.kubernetes.io/name = %q, want ichor-cni", got)
-	}
-
+// The pod keeps a name label, but no Cilium policy selects it: it runs on the host network, which
+// CiliumNetworkPolicy does not govern (ADR 0100).
+func TestCNIHelmJobHasNoNetworkPolicy(t *testing.T) {
 	policies, err := os.ReadFile("../../config/cilium-network-policy/policies.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if !strings.Contains(string(policies), "app.kubernetes.io/name: "+got) {
-		t.Errorf("config/cilium-network-policy selects no pod labelled %s", got)
+	if strings.Contains(string(policies), "ichor-cni") {
+		t.Error("config/cilium-network-policy selects the ichor-cni pod, which runs on the host network and is not policed")
 	}
 }
 
@@ -190,7 +192,7 @@ func TestAdvanceCNIHelmJob(t *testing.T) {
 		t.Fatalf("running Job = %t, %v; want not done, no error", done, err)
 	}
 
-	setCNIJobCondition(t, c, "ichor-system", name, batchv1.JobComplete)
+	setCNIJobCondition(t, c, kubeSystemNamespace, name, batchv1.JobComplete)
 
 	if done, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, inst); !done || err != nil {
 		t.Fatalf("completed Job = %t, %v; want done", done, err)
@@ -219,10 +221,57 @@ func TestAdvanceCNIHelmJobReportsAFailedJob(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	setCNIJobCondition(t, c, "ichor-system", cniHelmJobName(cluster, hash), batchv1.JobFailed)
+	setCNIJobCondition(t, c, kubeSystemNamespace, cniHelmJobName(cluster, hash), batchv1.JobFailed)
 
 	_, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, cniTestInstallation())
 	if err == nil || !strings.Contains(err.Error(), "failed") {
 		t.Fatalf("error = %v, want the Job's failure", err)
+	}
+}
+
+// A Job that never got a pod (admission refused it) is reported and removed once the grace period
+// is over, instead of holding the caller's lock until the deadline.
+func TestAdvanceCNIHelmJobFailsFastWhenNoPodIsCreated(t *testing.T) {
+	ctx := context.Background()
+	c := cniFakeClient(t)
+	cluster := cniTestCluster("")
+
+	hash, _ := CNIValuesHash(cluster)
+	name := cniHelmJobName(cluster, hash)
+
+	if _, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, cniTestInstallation()); err != nil {
+		t.Fatal(err)
+	}
+
+	var job batchv1.Job
+	if err := c.Get(ctx, types.NamespacedName{Namespace: kubeSystemNamespace, Name: name}, &job); err != nil {
+		t.Fatal(err)
+	}
+
+	// Within the grace period a Job without a pod is just starting.
+	if done, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, cniTestInstallation()); done || err != nil {
+		t.Fatalf("young Job = %t, %v; want not done, no error", done, err)
+	}
+
+	// Age it past the grace period.
+	job.CreationTimestamp = metav1.NewTime(time.Now().Add(-cniPodGrace - time.Second))
+	if err := c.Update(ctx, &job); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, cniTestInstallation())
+
+	var failed *CNIHelmJobFailedError
+	if !errors.As(err, &failed) || !failed.NoPod || failed.JobName != name {
+		t.Fatalf("error = %v, want a NoPod failure of %s", err, name)
+	}
+
+	if err := c.Get(ctx, types.NamespacedName{Namespace: kubeSystemNamespace, Name: name}, &job); !apierrors.IsNotFound(err) {
+		t.Fatalf("the stuck Job was not deleted (get: %v)", err)
+	}
+
+	// The next pass starts a fresh Job.
+	if done, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, cniTestInstallation()); done || err != nil {
+		t.Fatalf("after removal = %t, %v; want a new Job and not done", done, err)
 	}
 }

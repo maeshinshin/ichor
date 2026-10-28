@@ -109,16 +109,17 @@ type CNIHandoverReconciler struct {
 	// Kube reads the Job's pod log for the failure condition; nil leaves the Job's own reason.
 	Kube kubernetes.Interface
 
-	// Namespace is where the Jobs run and the release record lives (ichor-system).
+	// Namespace is where the Helm release record lives (ichor-system); the Job runs in kube-system.
 	Namespace string
 }
 
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters,verbs=get;list;watch
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=ichorinstallations,verbs=get;list;watch
-// +kubebuilder:rbac:groups=batch,namespace=ichor-system,resources=jobs,verbs=get;list;watch;create;delete
-// +kubebuilder:rbac:groups="",namespace=ichor-system,resources=pods,verbs=get;list
-// +kubebuilder:rbac:groups="",namespace=ichor-system,resources=pods/log,verbs=get
+
+// The Helm Job runs in kube-system (cniJobNamespace); the controller's namespaced Role there is
+// hand-written (config/rbac/ichor-cni/controller_role.yaml): controller-gen's shared
+// "manager-role" name would collide with this one once kustomize sets every namespace.
 
 // Reconcile runs the flow in the type's comment. A cluster whose preset is not cilium has nothing
 // to hand over; it only gets the CNIUnsupported condition.
@@ -205,7 +206,13 @@ func (r *CNIHandoverReconciler) runJob(
 	case errors.As(err, &failed):
 		_ = lock.Release(ctx, cniHelmLockIdentity)
 
-		return ctrl.Result{}, r.setProgress(ctx, cluster, handedOver, reasonCNIJobFailed, r.failureMessage(ctx, failed))
+		msg := r.failureMessage(ctx, failed)
+		if failed.NoPod {
+			// The Job is gone; try again later, whatever was refusing its pod may have been fixed.
+			return ctrl.Result{RequeueAfter: handoverRequeueInterval}, r.setProgress(ctx, cluster, handedOver, reasonCNIJobFailed, msg)
+		}
+
+		return ctrl.Result{}, r.setProgress(ctx, cluster, handedOver, reasonCNIJobFailed, msg)
 	case err != nil:
 		return ctrl.Result{}, err
 	case !done:
@@ -299,11 +306,58 @@ func (r *CNIHandoverReconciler) setProgress(
 func (r *CNIHandoverReconciler) failureMessage(ctx context.Context, failed *CNIHelmJobFailedError) string {
 	msg := fmt.Sprintf("Cilium Helm Job %s failed: %s %s", failed.JobName, failed.Reason, failed.Message)
 
+	if failed.NoPod {
+		detail := r.failedCreateMessage(ctx, failed.JobName)
+		if detail == "" {
+			detail = failed.Message
+		}
+
+		return fmt.Sprintf("Cilium Helm Job %s created no pod within %s: %s", failed.JobName, cniPodGrace, detail)
+	}
+
 	if line := r.lastLogLine(ctx, failed.JobName); line != "" {
 		msg = fmt.Sprintf("Cilium Helm Job %s failed: %s", failed.JobName, line)
 	}
 
 	return msg
+}
+
+// failedCreateMessage is the newest FailedCreate event the Job controller recorded for jobName
+// (e.g. the admission refusal of its pod), or "" when there is none or it cannot be read.
+func (r *CNIHandoverReconciler) failedCreateMessage(ctx context.Context, jobName string) string {
+	var events corev1.EventList
+	if err := r.reader().List(ctx, &events, client.InNamespace(cniJobNamespace)); err != nil {
+		return ""
+	}
+
+	var (
+		msg    string
+		newest time.Time
+	)
+
+	for i := range events.Items {
+		e := &events.Items[i]
+		if e.InvolvedObject.Kind != "Job" || e.InvolvedObject.Name != jobName || e.Reason != "FailedCreate" {
+			continue
+		}
+
+		if at := eventTime(e); msg == "" || at.After(newest) {
+			msg, newest = e.Message, at
+		}
+	}
+
+	return msg
+}
+
+func eventTime(e *corev1.Event) time.Time {
+	switch {
+	case !e.LastTimestamp.IsZero():
+		return e.LastTimestamp.Time
+	case !e.EventTime.IsZero():
+		return e.EventTime.Time
+	}
+
+	return e.CreationTimestamp.Time
 }
 
 func (r *CNIHandoverReconciler) lastLogLine(ctx context.Context, jobName string) string {
@@ -312,12 +366,12 @@ func (r *CNIHandoverReconciler) lastLogLine(ctx context.Context, jobName string)
 	}
 
 	var pods corev1.PodList
-	if err := r.List(ctx, &pods, client.InNamespace(r.Namespace), client.MatchingLabels{"job-name": jobName}); err != nil {
+	if err := r.reader().List(ctx, &pods, client.InNamespace(cniJobNamespace), client.MatchingLabels{"job-name": jobName}); err != nil {
 		return ""
 	}
 
 	for i := range pods.Items {
-		raw, err := r.Kube.CoreV1().Pods(r.Namespace).GetLogs(pods.Items[i].Name, &corev1.PodLogOptions{TailLines: ptr.To[int64](10)}).DoRaw(ctx)
+		raw, err := r.Kube.CoreV1().Pods(cniJobNamespace).GetLogs(pods.Items[i].Name, &corev1.PodLogOptions{TailLines: ptr.To[int64](10)}).DoRaw(ctx)
 		if err != nil {
 			continue
 		}
@@ -446,7 +500,7 @@ func decodeRelease(data []byte) (config map[string]any, chartVersion string, err
 
 func (r *CNIHandoverReconciler) deleteJob(ctx context.Context, cluster *ichorv1alpha1.TalosCluster, hash string) error {
 	job := &batchv1.Job{}
-	job.Namespace, job.Name = r.Namespace, cniHelmJobName(cluster, hash)
+	job.Namespace, job.Name = cniJobNamespace, cniHelmJobName(cluster, hash)
 
 	return client.IgnoreNotFound(r.Delete(ctx, job, client.PropagationPolicy(metav1.DeletePropagationBackground)))
 }

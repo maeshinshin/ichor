@@ -92,3 +92,35 @@ patches:
 # external certificate issuer would need don't apply here. cert-controller injects
 # caBundle directly via the Kubernetes API at runtime (ADR 0006), so there is nothing
 # for kustomize to template.
+
+# The Cilium Helm Job runs in kube-system (ADR 0099 unit 7 as built, ADR 0100): it needs
+# hostNetwork, which Talos's default Pod Security admission config exempts only there. The
+# namespace transformer above sets ichor-system on everything, so these JSON 6902 patches
+# (applied after it) put the Job's ServiceAccount, the controller's Role and RoleBinding for it,
+# and the Job ServiceAccount's subject namespaces back to kube-system. The Helm release record's
+# Role and its RoleBinding stay in ichor-system.
+patchesJson6902:
+- target: {version: v1, kind: ServiceAccount, name: ichor-cni}
+  patch: |-
+    - {op: replace, path: /metadata/namespace, value: kube-system}
+- target: {group: rbac.authorization.k8s.io, version: v1, kind: Role, name: ichor-cni-job-role}
+  patch: |-
+    - {op: replace, path: /metadata/namespace, value: kube-system}
+- target: {group: rbac.authorization.k8s.io, version: v1, kind: RoleBinding, name: ichor-cni-job-rolebinding}
+  patch: |-
+    - {op: replace, path: /metadata/namespace, value: kube-system}
+    - {op: replace, path: /subjects/0/namespace, value: ichor-system}
+- target: {group: rbac.authorization.k8s.io, version: v1, kind: RoleBinding, name: ichor-cni-rolebinding}
+  patch: |-
+    - {op: replace, path: /subjects/0/namespace, value: kube-system}
+- target: {group: rbac.authorization.k8s.io, version: v1, kind: ClusterRoleBinding, name: ichor-cni-rolebinding}
+  patch: |-
+    - {op: replace, path: /subjects/0/namespace, value: kube-system}
+# The installer needs rights in kube-system to apply the above.
+- target: {group: rbac.authorization.k8s.io, version: v1, kind: Role, name: ichor-installer-kube-system-role}
+  patch: |-
+    - {op: replace, path: /metadata/namespace, value: kube-system}
+- target: {group: rbac.authorization.k8s.io, version: v1, kind: RoleBinding, name: ichor-installer-kube-system-rolebinding}
+  patch: |-
+    - {op: replace, path: /metadata/namespace, value: kube-system}
+    - {op: replace, path: /subjects/0/namespace, value: ichor-system}

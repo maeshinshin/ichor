@@ -7,3 +7,4 @@ resources:
 - service_account.yaml
 - role.yaml
 - role_binding.yaml
+- kube_system_role.yaml

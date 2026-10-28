@@ -5,7 +5,8 @@ Nodes, machine configuration, upgrades and etcd backups are Kubernetes
 resources; you work with them through a CLI, a web UI, or Git.
 
 Ichor only takes care of Talos. Everything that runs on the cluster — the CNI,
-storage, monitoring — is bootstrapped once and then handed over to Argo CD.
+storage, monitoring — is Argo CD's business; Ichor bootstraps the CNI once and
+hands it over.
 
 > Status: alpha. Exercised end to end on Talos v1.14 clusters running as KubeVirt
 > VMs; not yet on bare metal. The design is in
@@ -34,12 +35,14 @@ storage, monitoring — is bootstrapped once and then handed over to Argo CD.
   ([ADR 0085](docs/adr/0085-node-actions-are-controller-run-operations-of-kind-node.md)).
 - Rotates the cluster CAs in verified passes. The operation waits until you
   have the new kubeconfig and talosconfig, from the CLI or the UI, before it
-  stops trusting the old CAs
+  stops trusting the old CAs, then restarts the in-cluster clients that keep
+  the old one
   ([ADR 0063](docs/adr/0063-certificate-expiry-visibility-and-ca-rotation-decisions.md),
   [0091](docs/adr/0091-a-ca-rotation-waits-for-the-operators-new-credentials-before-anything-they-hold-stops-working.md),
   [0093](docs/adr/0093-the-ui-hands-over-a-ca-rotations-new-credentials-to-administrators-who-hold-the-download-verb.md)).
-- Backs up etcd on a schedule, restores a snapshot into a running cluster,
-  and can rebuild a cluster from the secrets bundle and a snapshot alone.
+- Backs up etcd on a schedule or on demand (`ichor etcd backup now`, Back up now
+  in the UI), restores a snapshot into a running cluster, and can rebuild a
+  cluster from the secrets bundle and a snapshot alone.
 - Can keep its own users with the roles viewer, operator and admin. People
   sign in to the UI and each gets a personal kubeconfig with no secret in it.
   Off by default. See [Users and login](docs/guides/users-and-login.md).
@@ -48,8 +51,11 @@ storage, monitoring — is bootstrapped once and then handed over to Argo CD.
   ([ADR 0096](docs/adr/0096-a-secret-reference-is-changed-only-with-update-on-secret-references.md)).
 - Upgrades itself through the `IchorInstallation` resource
   ([ADR 0059](docs/adr/0059-ichor-installation-and-self-upgrade.md)).
-- Bootstraps a CNI (Cilium by default) and, optionally, Argo CD, then hands
-  both over to Argo CD so that Git becomes the source of truth.
+- Bootstraps a CNI (`--cni cilium`, rendered from the pinned Cilium 1.18.0
+  chart embedded in the CLI, or `flannel`; `--cni-tunnel vxlan|geneve` picks
+  Cilium's tunnel) and, with `--argocd`, prepares Argo CD's repository
+  credentials and root Application. The CNI is then handed over to Argo CD so
+  that Git becomes the source of truth. Ichor does not install Argo CD.
 - Prepares disks for storage systems such as Longhorn, and waits for data to
   evacuate before draining or removing a node.
 

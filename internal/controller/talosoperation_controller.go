@@ -401,25 +401,19 @@ func advancingMessage(op *ichorv1alpha1.TalosOperation, n int) string {
 func (r *TalosOperationReconciler) restingPhase(
 	ctx context.Context, op *ichorv1alpha1.TalosOperation, cluster *ichorv1alpha1.TalosCluster,
 ) (res ctrl.Result, handled bool, err error) {
-	switch op.Spec.Kind {
-	case ichorv1alpha1.TalosOperationKindShutdown:
-		if op.Status.Phase == ichorv1alpha1.TalosOperationPhaseShutDown {
-			res, err = r.awaitPowerOn(ctx, op, cluster)
+	kind := op.Spec.Kind
+	if (kind == ichorv1alpha1.TalosOperationKindShutdown || kind == ichorv1alpha1.TalosOperationKindNode) &&
+		op.Status.Phase == ichorv1alpha1.TalosOperationPhaseShutDown {
+		res, err = r.awaitPowerOn(ctx, op, cluster)
 
-			return res, true, err
-		}
-	case ichorv1alpha1.TalosOperationKindNode:
-		if op.Status.Phase == ichorv1alpha1.TalosOperationPhaseShutDown {
-			res, err = r.awaitPowerOn(ctx, op, cluster)
+		return res, true, err
+	}
 
-			return res, true, err
-		}
+	if st := op.Status.Node; kind == ichorv1alpha1.TalosOperationKindNode && st != nil &&
+		st.Step == ichorv1alpha1.NodeStepRemoving && op.Status.FailureReason == "" {
+		res, err = r.awaitRemoval(ctx, op)
 
-		if st := op.Status.Node; st != nil && st.Step == ichorv1alpha1.NodeStepRemoving && op.Status.FailureReason == "" {
-			res, err = r.awaitRemoval(ctx, op)
-
-			return res, true, err
-		}
+		return res, true, err
 	}
 
 	return ctrl.Result{}, false, nil
@@ -584,7 +578,7 @@ func (r *TalosOperationReconciler) candidateMachines(
 		switch m.Spec.Role {
 		case roleControlPlane:
 			controlPlanes = append(controlPlanes, m)
-		case "worker":
+		case workerRole:
 			workers = append(workers, m)
 		}
 	}
@@ -700,24 +694,11 @@ func (r *TalosOperationReconciler) holdOwnNodeLast(
 func pendingMachines(
 	candidates []*ichorv1alpha1.TalosMachine, recorded []ichorv1alpha1.TalosOperationMachineStatus,
 ) []*ichorv1alpha1.TalosMachine {
-	var pending []*ichorv1alpha1.TalosMachine
-
-	for _, m := range candidates {
-		completed := false
-
-		for _, rec := range recorded {
-			if rec.Name == m.Name && rec.Phase == ichorv1alpha1.TalosOperationMachinePhaseCompleted {
-				completed = true
-				break
-			}
-		}
-
-		if !completed {
-			pending = append(pending, m)
-		}
-	}
-
-	return pending
+	return slices.DeleteFunc(slices.Clone(candidates), func(m *ichorv1alpha1.TalosMachine) bool {
+		return slices.ContainsFunc(recorded, func(rec ichorv1alpha1.TalosOperationMachineStatus) bool {
+			return rec.Name == m.Name && rec.Phase == ichorv1alpha1.TalosOperationMachinePhaseCompleted
+		})
+	})
 }
 
 // acquireDisruptiveLock is the only place in this file that calls

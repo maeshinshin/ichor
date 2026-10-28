@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -44,16 +45,14 @@ func lastWorkerFixture(t *testing.T) (*TalosClusterCustomValidator, *TalosMachin
 		t.Fatal(err)
 	}
 
-	cluster := &ichorv1alpha1.TalosCluster{ObjectMeta: metav1.ObjectMeta{Name: "west", Namespace: "default"}}
+	cluster := &ichorv1alpha1.TalosCluster{Name: lwCluster, Namespace: testNamespace}
 	cluster.Spec.ControlPlane.Schedulable = "false"
 
 	worker := &ichorv1alpha1.TalosMachine{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "w1", Namespace: "default",
-			Annotations: map[string]string{deleteguard.AllowDeleteAnnotation: deleteguard.AllowDeleteValue},
-		},
+		Name: "w1", Namespace: testNamespace,
+		Annotations: map[string]string{deleteguard.AllowDeleteAnnotation: deleteguard.AllowDeleteValue},
 		Spec: ichorv1alpha1.TalosMachineSpec{
-			ClusterRef: corev1.LocalObjectReference{Name: "west"}, Role: roleWorker,
+			ClusterRef: corev1.LocalObjectReference{Name: lwCluster}, Role: roleWorker,
 			ApprovalState: ichorv1alpha1.MachineApprovalStateApproved,
 		},
 	}
@@ -67,7 +66,7 @@ func lastWorkerFixture(t *testing.T) (*TalosClusterCustomValidator, *TalosMachin
 
 func admissionCtxAs(user string) context.Context {
 	return admission.NewContextWithRequest(context.Background(), admission.Request{
-		AdmissionRequest: admissionv1.AdmissionRequest{UserInfo: authnv1.UserInfo{Username: user}},
+		UserInfo: authnv1.UserInfo{Username: user},
 	})
 }
 
@@ -107,6 +106,50 @@ func TestLastWorkerGuardMachineUnapprove(t *testing.T) {
 	}
 }
 
+// A node operation that carries breakGlassReason (the controller-side override of the last-worker
+// guard) is admitted only for a user holding the verb on the machine.
+func TestLastWorkerGuardNodeOperationReason(t *testing.T) {
+	t.Parallel()
+
+	h := bgUnitHandler(t, nil)
+
+	handle := func(user, reason string) admission.Response {
+		op := ichorv1alpha1.TalosOperation{
+			Name: "op", Namespace: testNamespace,
+			Spec: ichorv1alpha1.TalosOperationSpec{
+				ClusterRef: corev1.LocalObjectReference{Name: lwCluster}, Kind: ichorv1alpha1.TalosOperationKindNode,
+				Node: &ichorv1alpha1.TalosOperationNodeSpec{
+					MachineRef: corev1.LocalObjectReference{Name: "w1"}, Action: ichorv1alpha1.NodeActionReboot,
+					BreakGlassReason: reason,
+				},
+			},
+		}
+
+		raw, err := json.Marshal(op)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		return h.Handle(context.Background(), admission.Request{
+			Operation: admissionv1.Create, Name: "op", Namespace: testNamespace,
+			Resource: metav1.GroupVersionResource{Group: ichorGroup, Version: "v1alpha1", Resource: resOperations},
+			UserInfo: authnv1.UserInfo{Username: user}, Object: runtime.RawExtension{Raw: raw},
+		})
+	}
+
+	if !handle(bgUnitPlain, "").Allowed {
+		t.Error("a plain reboot needs no break-glass")
+	}
+
+	if handle(bgUnitPlain, "teardown").Allowed {
+		t.Error("a plain user must not set breakGlassReason")
+	}
+
+	if !handle(bgUnitHolder, "teardown").Allowed {
+		t.Error("a break-glass holder may set breakGlassReason")
+	}
+}
+
 func TestLastWorkerGuardClusterUnschedulable(t *testing.T) {
 	t.Parallel()
 
@@ -116,7 +159,7 @@ func TestLastWorkerGuardClusterUnschedulable(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	oldC := &ichorv1alpha1.TalosCluster{ObjectMeta: metav1.ObjectMeta{Name: "west", Namespace: "default"}}
+	oldC := &ichorv1alpha1.TalosCluster{Name: lwCluster, Namespace: testNamespace}
 	oldC.Spec.ControlPlane.Schedulable = "true"
 	newC := oldC.DeepCopy()
 	newC.Spec.ControlPlane.Schedulable = "false"

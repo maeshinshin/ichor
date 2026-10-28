@@ -48,33 +48,27 @@ type Spec struct {
 	Owned map[string]string
 }
 
-// Merge returns a deep copy of base with over merged on top: maps merge key by
-// key, any other value (lists included) in over replaces the one in base.
-func Merge(base, over map[string]any) map[string]any {
-	out := deepCopy(base)
-	if out == nil {
-		out = map[string]any{}
-	}
+// merge returns base with over merged on top, leaving both untouched: maps
+// merge key by key, any other value (lists included) in over replaces the one
+// in base. Helm's MergeTables treats its first argument as the winner and
+// mutates it, so both sides are copied by a JSON round trip (which also turns
+// Go numbers into float64, what the values come in as anyway).
+func merge(base, over map[string]any) map[string]any {
+	return chartutil.MergeTables(clone(over), clone(base))
+}
 
-	for k, v := range over {
-		if vm, ok := v.(map[string]any); ok {
-			if bm, ok := out[k].(map[string]any); ok {
-				out[k] = Merge(bm, vm)
+func clone(m map[string]any) (out map[string]any) {
+	raw, _ := json.Marshal(m) // values are JSON-shaped: they come from a CR or a chart
 
-				continue
-			}
-		}
-
-		out[k] = deepCopyValue(v)
-	}
+	_ = json.Unmarshal(raw, &out)
 
 	return out
 }
 
-// Effective is Merge(Merge(defaults, user), owned): the order
+// Effective is merge(merge(defaults, user), owned): the order
 // decision 3. Owned values win over anything the user set.
 func Effective(defaults, user, owned map[string]any) map[string]any {
-	return Merge(Merge(defaults, user), owned)
+	return merge(merge(defaults, user), owned)
 }
 
 // Set puts v at the dotted path in m, creating the maps on the way.
@@ -193,17 +187,13 @@ func walkUnknown(user, defaults, schema map[string]any, prefix string, errs *[]e
 	}
 }
 
-// freeFormNames are map keys that hold Kubernetes labels, annotations or
-// resource quantities in essentially every chart, even when the chart ships a
-// non-empty default (the schema is generated from values.yaml and then lists
-// that default as the only property).
+// freeFormNames are map keys that hold Kubernetes resource quantities in every
+// chart, even when the chart ships a non-empty default (Cilium's cni.resources
+// lists only requests, but limits are legal). Labels and annotations need no
+// entry: their defaults are empty, bare objects or label-keyed.
 // ponytail: a name heuristic; a chart-specific exempt list can replace it if it
 // ever hides a real typo.
-var freeFormNames = map[string]bool{
-	"annotations": true, "labels": true, "podAnnotations": true, "podLabels": true,
-	"nodeSelector": true, "resources": true, "limits": true, "requests": true,
-	"matchLabels": true, "extraConfig": true,
-}
+var freeFormNames = map[string]bool{"resources": true}
 
 // labelKeyed reports a default map whose keys look like label keys
 // ("kubernetes.io/os"): such a map is a label set, so any key is allowed.
@@ -231,14 +221,9 @@ func isFreeForm(defaults map[string]any, inDefaults bool, schema map[string]any)
 }
 
 func siblings(defaults, props map[string]any) []string {
-	set := map[string]bool{}
-	for k := range defaults {
-		set[k] = true
-	}
-
-	for k := range props {
-		set[k] = true
-	}
+	set := map[string]any{}
+	maps.Copy(set, defaults)
+	maps.Copy(set, props)
 
 	return slices.Sorted(maps.Keys(set))
 }
@@ -263,28 +248,26 @@ func closest(k string, candidates []string) string {
 }
 
 func editDistance(a, b string) int {
-	prev := make([]int, len(b)+1)
-	for j := range prev {
-		prev[j] = j
+	row := make([]int, len(b)+1)
+	for j := range row {
+		row[j] = j
 	}
 
-	for i := 1; i <= len(a); i++ {
-		cur := make([]int, len(b)+1)
-		cur[0] = i
+	for i := range len(a) {
+		diag := row[0] // row[j-1] of the previous pass
+		row[0] = i + 1
 
-		for j := 1; j <= len(b); j++ {
+		for j := range len(b) {
 			cost := 1
-			if a[i-1] == b[j-1] {
+			if a[i] == b[j] {
 				cost = 0
 			}
 
-			cur[j] = min(prev[j]+1, cur[j-1]+1, prev[j-1]+cost)
+			diag, row[j+1] = row[j+1], min(row[j+1]+1, row[j]+1, diag+cost)
 		}
-
-		prev = cur
 	}
 
-	return prev[len(b)]
+	return row[len(b)]
 }
 
 // CheckSchema validates effective, coalesced with the chart's own defaults the
@@ -331,33 +314,4 @@ func (s Spec) Check(user, effective map[string]any) error {
 	}
 
 	return errors.Join(errs...)
-}
-
-func deepCopy(m map[string]any) map[string]any {
-	if m == nil {
-		return nil
-	}
-
-	out := make(map[string]any, len(m))
-	for k, v := range m {
-		out[k] = deepCopyValue(v)
-	}
-
-	return out
-}
-
-func deepCopyValue(v any) any {
-	switch t := v.(type) {
-	case map[string]any:
-		return deepCopy(t)
-	case []any:
-		out := make([]any, len(t))
-		for i := range t {
-			out[i] = deepCopyValue(t[i])
-		}
-
-		return out
-	default:
-		return v
-	}
 }

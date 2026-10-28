@@ -629,7 +629,7 @@ func (a *kubernetesUpgradeAdvancer) nodeNotConverged(
 			return err.Error()
 		}
 
-		if !podIsReady(pod) || imageTag(pod) != target {
+		if !podReady(pod) || imageTag(pod) != target {
 			return fmt.Sprintf("%s on %q is not Ready on %s yet", component, nodeName, target)
 		}
 	}
@@ -756,14 +756,23 @@ func nodeIsReady(node *corev1.Node) bool {
 	return false
 }
 
-func podIsReady(pod *corev1.Pod) bool {
-	for _, c := range pod.Status.Conditions {
-		if c.Type == corev1.PodReady {
-			return c.Status == corev1.ConditionTrue
+// nodeReadyByName reads the Node's Ready condition live when kube is wired, else through reader.
+func nodeReadyByName(ctx context.Context, kube kubernetes.Interface, reader client.Reader, name string) (bool, error) {
+	var node corev1.Node
+	if kube != nil {
+		got, err := kube.CoreV1().Nodes().Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			return false, err
 		}
+
+		return nodeIsReady(got), nil
 	}
 
-	return false
+	if err := reader.Get(ctx, types.NamespacedName{Name: name}, &node); err != nil {
+		return false, err
+	}
+
+	return nodeIsReady(&node), nil
 }
 
 // imageTag is the tag of pod's first container image.

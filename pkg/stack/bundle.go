@@ -21,12 +21,15 @@ package stack
 
 import (
 	"archive/tar"
+	"bufio"
 	"bytes"
 	"compress/gzip"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/google/go-containerregistry/pkg/name"
@@ -36,6 +39,9 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/static"
 	"github.com/google/go-containerregistry/pkg/v1/types"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
+	sigsyaml "sigs.k8s.io/yaml"
 
 	"github.com/maeshinshin/ichor/pkg/stack/kokumi"
 )
@@ -152,4 +158,44 @@ func Push(
 	}
 
 	return d.String(), nil
+}
+
+// SplitSecrets separates the rendered manifest into the bundle that may be published and the
+// Secrets that must not be. Kokumi's registry is anonymous, so anything in a bundle is readable
+// by every pod that can reach it (ADR 0099 amendment); a Secret is created directly in its
+// namespace instead. The bundle keeps the order and bytes of every other document.
+func SplitSecrets(manifest []byte) (bundle []byte, secrets []*unstructured.Unstructured, err error) {
+	rd := yamlutil.NewYAMLReader(bufio.NewReader(bytes.NewReader(manifest)))
+
+	var out bytes.Buffer
+
+	for {
+		doc, err := rd.Read()
+		if errors.Is(err, io.EOF) {
+			return out.Bytes(), secrets, nil
+		}
+
+		if err != nil {
+			return nil, nil, fmt.Errorf("stack: splitting the manifest: %w", err)
+		}
+
+		obj := map[string]any{}
+		if err := sigsyaml.Unmarshal(doc, &obj); err != nil {
+			return nil, nil, fmt.Errorf("stack: parsing the manifest: %w", err)
+		}
+
+		if len(obj) == 0 {
+			continue
+		}
+
+		if u := (&unstructured.Unstructured{Object: obj}); u.GetKind() == "Secret" && u.GroupVersionKind().Group == "" {
+			secrets = append(secrets, u)
+
+			continue
+		}
+
+		out.WriteString("---\n")
+		out.Write(bytes.TrimSpace(doc))
+		out.WriteString("\n")
+	}
 }

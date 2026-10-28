@@ -21,6 +21,8 @@ import (
 	"bytes"
 	"compress/gzip"
 	"io"
+	"regexp"
+	"slices"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -30,6 +32,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 
 	"github.com/maeshinshin/ichor/pkg/stack"
+	"github.com/maeshinshin/ichor/pkg/stack/argocd"
 	"github.com/maeshinshin/ichor/pkg/stack/kokumi"
 )
 
@@ -119,4 +122,85 @@ func TestRepositoryIsInsideKokumiRegistry(t *testing.T) {
 	if got, want := stack.Repository("argocd"), kokumi.RegistryHost+"/ichor/argocd"; got != want {
 		t.Fatalf("%q != %q", got, want)
 	}
+}
+
+// Kokumi's registry is anonymous, so a Secret in a published bundle is readable by every pod
+// that reaches it (ADR 0099 amendment).
+func TestPublishedBundlesHoldNoSecret(t *testing.T) {
+	const redis, hash = "redis-pw-canary", "$2a$10$hash-canary"
+
+	kb, err := kokumi.Render(kokumi.Options{AdminPasswordHash: hash})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ab, err := argocd.Render(argocd.Options{RedisPassword: redis})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for name, c := range map[string]struct {
+		manifest []byte
+		secrets  []string
+		canary   string
+	}{
+		"kokumi": {kb, []string{"kokumi-server-auth"}, hash},
+		"argocd": {ab, []string{"argocd-redis", "argocd-secret", "ichor-kokumi-registry"}, redis},
+	} {
+		bundle, secrets, err := stack.SplitSecrets(c.manifest)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		var got []string
+		for _, s := range secrets {
+			got = append(got, s.GetName())
+		}
+
+		slices.Sort(got)
+
+		if !slices.Equal(got, c.secrets) {
+			t.Errorf("%s: split out Secrets %v, want %v", name, got, c.secrets)
+		}
+
+		// What gets pushed is the tarball of the bundle: unpack it and look at every document.
+		tgz, err := stack.Tar(bundle)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		pushed := untar(t, tgz)
+		if strings.Contains(pushed, c.canary) {
+			t.Errorf("%s: the pushed bundle contains the secret value", name)
+		}
+
+		if regexp.MustCompile(`(?m)^kind:\s*"?Secret"?\s*$`).MatchString(pushed) {
+			t.Errorf("%s: the pushed bundle contains a Secret", name)
+		}
+
+		if !strings.Contains(pushed, "kind: Deployment") {
+			t.Errorf("%s: the bundle lost its other documents", name)
+		}
+	}
+}
+
+func untar(t *testing.T, tgz []byte) string {
+	t.Helper()
+
+	zr, err := gzip.NewReader(bytes.NewReader(tgz))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tr := tar.NewReader(zr)
+	if _, err := tr.Next(); err != nil {
+		t.Fatal(err)
+	}
+
+	b, err := io.ReadAll(tr)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return string(b)
 }

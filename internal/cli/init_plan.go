@@ -110,7 +110,7 @@ type initPlanInput struct {
 	Namespace string
 
 	Preset    string
-	CNIPreset string // ichorv1alpha1.TalosClusterCNI.Preset: "flannel" or "cilium"
+	CNIPreset string // ichorv1alpha1.TalosClusterCNI.Preset: only "cilium"
 	CNITunnel string // --cni-tunnel: "vxlan" or "geneve"; only valid with cilium; "" keeps Cilium's default
 
 	EndpointType    string
@@ -264,18 +264,13 @@ func buildInitPlan(in initPlanInput, warn io.Writer) (*ichorv1alpha1.TalosCluste
 			"init: preset %q would make control planes unschedulable with no workers ever added; rejected", in.Preset)
 	}
 
-	switch in.CNIPreset {
-	case "flannel", cniCilium:
-	default:
-		return nil, fmt.Errorf("init: --cni %q is invalid: must be %q or %q", in.CNIPreset, "flannel", "cilium")
+	if in.CNIPreset != cniCilium {
+		return nil, fmt.Errorf("init: --cni %q is invalid: cilium is the only CNI", in.CNIPreset)
 	}
 
 	switch in.CNITunnel {
 	case "":
 	case "vxlan", "geneve":
-		if in.CNIPreset != cniCilium {
-			return nil, fmt.Errorf("init: --cni-tunnel %q needs --cni cilium", in.CNITunnel)
-		}
 	default:
 		return nil, fmt.Errorf("init: --cni-tunnel %q is invalid: must be %q or %q", in.CNITunnel, "vxlan", "geneve")
 	}

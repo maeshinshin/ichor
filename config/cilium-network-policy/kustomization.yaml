@@ -1,0 +1,7 @@
+# Built on its own into dist/network-policies.yaml (`make build-network-policies`), never
+# through config/default: the CiliumNetworkPolicy CRD is Cilium's.
+namespace: ichor-system
+namePrefix: ichor-
+
+resources:
+- policies.yaml

@@ -117,6 +117,17 @@ rules:
   - get
   - list
 - apiGroups:
+  # The Cilium policies of config/cilium-network-policy, applied only when Cilium's CRD exists.
+  - cilium.io
+  resources:
+  - ciliumnetworkpolicies
+  verbs:
+  - create
+  - delete
+  - get
+  - patch
+  - update
+- apiGroups:
   - rbac.authorization.k8s.io
   resources:
   - rolebindings

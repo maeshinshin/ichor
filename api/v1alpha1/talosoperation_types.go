@@ -252,6 +252,8 @@ const TalosMachineUpgradeOrderLabel = "ichor.maesh.dev/upgrade-order"
 // +kubebuilder:validation:XValidation:rule="self.clusterRef == oldSelf.clusterRef",message="clusterRef cannot change after creation"
 // +kubebuilder:validation:XValidation:rule="self.kind == oldSelf.kind",message="kind cannot change after creation"
 // +kubebuilder:validation:XValidation:rule="(self.kind == 'node') == has(self.node)",message="spec.node is required for the node kind and only allowed there"
+// +kubebuilder:validation:XValidation:rule="!has(self.cni) || self.kind == 'cni'",message="spec.cni is only allowed for the cni kind"
+// +kubebuilder:validation:XValidation:rule="has(self.cni) == has(oldSelf.cni) && (!has(self.cni) || self.cni == oldSelf.cni)",message="cni cannot change after creation"
 // +kubebuilder:validation:XValidation:rule="(self.kind == 'etcd-restore') == has(self.etcdRestore)",message="spec.etcdRestore is required for the etcd-restore kind and only allowed there"
 // +kubebuilder:validation:XValidation:rule="!has(self.etcdRestore) || self.etcdRestore.confirm == self.clusterRef.name",message="an etcd restore needs spec.etcdRestore.confirm equal to the cluster name"
 // +kubebuilder:validation:XValidation:rule="has(self.etcdRestore) == has(oldSelf.etcdRestore) && (!has(self.etcdRestore) || self.etcdRestore == oldSelf.etcdRestore)",message="etcdRestore cannot change after creation"
@@ -280,6 +282,11 @@ type TalosOperationSpec struct {
 	// +optional
 	EtcdRestore *TalosOperationEtcdRestoreSpec `json:"etcdRestore,omitempty"`
 
+	// cni says which cni-kind operation this is. Absent means the kube-proxy switch;
+	// action upgrade is a Cilium chart upgrade.
+	// +optional
+	CNI *TalosOperationCNISpec `json:"cni,omitempty"`
+
 	// node is the action of a node-kind operation: which machine and what to do to it.
 	// +optional
 	Node *TalosOperationNodeSpec `json:"node,omitempty"`
@@ -299,6 +306,23 @@ type TalosOperationSpec struct {
 	// +kubebuilder:default=1
 	// +optional
 	MaxUnavailable int32 `json:"maxUnavailable,omitempty"`
+}
+
+// TalosOperationCNIAction values.
+const TalosOperationCNIActionUpgrade = "upgrade"
+
+// TalosOperationCNISpec makes a cni-kind operation something other than a kube-proxy switch.
+type TalosOperationCNISpec struct {
+	// action is upgrade: run the Cilium Helm Job to move the release to the chart this Ichor embeds.
+	// +kubebuilder:validation:Enum=upgrade
+	// +required
+	Action string `json:"action"`
+
+	// chartVersion is the Cilium chart version the operation upgrades to. The executor refuses to
+	// run when the controller embeds another version (it was upgraded after the operation was created).
+	// +kubebuilder:validation:MinLength=1
+	// +required
+	ChartVersion string `json:"chartVersion"`
 }
 
 // TalosOperationEtcdRestoreSpec names the snapshot an etcd-restore operation puts back.

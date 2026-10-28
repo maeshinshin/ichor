@@ -23,10 +23,9 @@ test('diffLines drops the trailing newline and keeps blank context lines', () =>
 })
 
 test('editing needs the permission and an untracked cluster', () => {
-  assert.equal(canEdit(undefined, ''), false)
-  assert.equal(canEdit({ clusterUpdate: false }, ''), false)
-  assert.equal(canEdit({ clusterUpdate: true }, 'Argo CD'), false)
-  assert.equal(canEdit({ clusterUpdate: true }, ''), true)
+  assert.equal(canEdit(undefined), false)
+  assert.equal(canEdit({ clusterUpdate: false }), false)
+  assert.equal(canEdit({ clusterUpdate: true }), true)
 })
 
 test('apply needs the reviewed text, valid, with a change', () => {

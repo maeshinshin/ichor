@@ -8,16 +8,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import type { MessageInitShape } from '@bufbuild/protobuf'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
-import { BreakGlassDialog, type BreakGlassRun } from '@/components/BreakGlassDialog'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { PageHeader } from '@/components/PageHeader'
 import { PageSkeleton } from '@/components/PageStates'
-import { PullRequestNotice } from '@/components/PullRequestNotice'
 import { ConfigLayer } from '@/gen/ichor/v1alpha1/node_pb'
 import { PatchSchema } from '@/gen/ichor/v1alpha1/patch_pb'
 import { machineClient, patchClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
-import { offersBreakGlass } from '@/lib/breakGlass'
 import { notifyDone, notifyWrite } from '@/lib/notify'
 import { describeError } from '@/lib/errors'
 import { useCluster } from '@/lib/useCluster'
@@ -93,8 +90,6 @@ export function PatchDetail({ name }: { name?: string }) {
 
   const [saveError, setSaveError] = useState<ErrorShape | null>(null)
   const [saving, setSaving] = useState(false)
-  const [pullRequestUrl, setPullRequestUrl] = useState<string | null>(null)
-  const [saveRefused, setSaveRefused] = useState(false)
 
   const [preview, setPreview] = useState<{ rebootRequired: boolean; installTimeOnly: string[]; unsupported: string[] } | null>(null)
   // The form state the shown preview was run for (lib/patchDocs previewKey).
@@ -186,35 +181,22 @@ export function PatchDetail({ name }: { name?: string }) {
     }
   }
 
-  // The same update again with break_glass set.
-  const saveBreakGlass: BreakGlassRun = async (bg) => {
-    const wire = buildWire(setSaveError)
-    if (!wire) throw new Error(t('patch.chooseCluster'))
-    const res = await patchClient.updatePatch({ patch: wire, breakGlass: bg })
-    return { pullRequestUrl: res.pullRequestUrl, notice: res.notice }
-  }
 
   async function save() {
     const wire = buildWire(setSaveError)
     if (!wire) return
-    setSaveRefused(false)
     setSaving(true)
     try {
       if (isNew) {
         await patchClient.createPatch({ patch: wire })
         notifyDone(t('toast.patchCreated', { name: wire.ref?.name ?? '' }))
       } else {
-        const res = await patchClient.updatePatch({ patch: wire })
-        notifyWrite(res, 'toast.patchSaved', { name: wire.ref?.name ?? '' })
-        if (res.pullRequestUrl) {
-          setPullRequestUrl(res.pullRequestUrl)
-          return
-        }
+        await patchClient.updatePatch({ patch: wire })
+        notifyWrite('toast.patchSaved', { name: wire.ref?.name ?? '' })
       }
       navigate('/config')
     } catch (err) {
       setSaveError(describeError(err))
-      setSaveRefused(!isNew && offersBreakGlass({ error: err }))
     } finally {
       setSaving(false)
     }
@@ -465,9 +447,7 @@ export function PatchDetail({ name }: { name?: string }) {
         </CardContent>
       </Card>
 
-      {pullRequestUrl && <PullRequestNotice url={pullRequestUrl} breakGlass={saveBreakGlass} onBreakGlassDone={() => navigate('/config')} />}
       {saveError && <ErrorAlert {...saveError} />}
-      {saveRefused && <BreakGlassDialog run={saveBreakGlass} onDone={() => navigate('/config')} />}
 
       {!previewFresh && !previewing && <p class="text-sm text-muted-foreground">{t('patch.saveReminder')}</p>}
 
@@ -492,32 +472,16 @@ function DeleteButton({ namespace, name }: { namespace: string; name: string }) 
   const [open, setOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<ErrorShape | null>(null)
-  const [pullRequestUrl, setPullRequestUrl] = useState<string | null>(null)
-  const [refused, setRefused] = useState(false)
-
-  // The same deletion again with break_glass set.
-  const breakGlass: BreakGlassRun = async (bg) => {
-    const res = await patchClient.deletePatch({ patch: { namespace, name }, breakGlass: bg })
-    return { pullRequestUrl: res.pullRequestUrl, notice: res.notice }
-  }
-  const done = () => navigate('/config')
 
   async function submit() {
     setSubmitting(true)
     setError(null)
     try {
-      const res = await patchClient.deletePatch({ patch: { namespace, name } })
-      if (res.pullRequestUrl) {
-        // Tracked by Argo CD: the removal is a pull request, nothing was deleted.
-        setPullRequestUrl(res.pullRequestUrl)
-        notifyWrite(res, 'toast.patchDeleted', { name })
-        return
-      }
+      await patchClient.deletePatch({ patch: { namespace, name } })
       notifyDone(t('toast.patchDeleted', { name }))
       navigate('/config')
     } catch (err) {
       setError(describeError(err))
-      setRefused(offersBreakGlass({ error: err }))
     } finally {
       setSubmitting(false)
     }
@@ -528,19 +492,11 @@ function DeleteButton({ namespace, name }: { namespace: string; name: string }) 
       open={open}
       onOpenChange={setOpen}
       trigger={<Button variant="destructive">{t('patches.delete')}</Button>}
-      title={pullRequestUrl ? t('pr.title') : t('patches.deleteTitle', { name })}
-      description={pullRequestUrl ? undefined : t('patch.deleteDescription')}
-      closeLabel={pullRequestUrl ? t('common.close') : undefined}
-      confirm={pullRequestUrl ? undefined : { label: submitting ? t('patches.deleting') : t('patches.delete'), disabled: submitting, onClick: submit }}
+      title={t('patches.deleteTitle', { name })}
+      description={t('patch.deleteDescription')}
+      confirm={{ label: submitting ? t('patches.deleting') : t('patches.delete'), disabled: submitting, onClick: submit }}
     >
-      {pullRequestUrl ? (
-        <PullRequestNotice url={pullRequestUrl} breakGlass={breakGlass} onBreakGlassDone={done} />
-      ) : (
-        <>
-          {error && <ErrorAlert {...error} />}
-          {refused && <BreakGlassDialog run={breakGlass} onDone={done} />}
-        </>
-      )}
+      {error && <ErrorAlert {...error} />}
     </ConfirmDialog>
   )
 }

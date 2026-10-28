@@ -17,8 +17,6 @@ import { TalosRuntime } from '@/components/TalosRuntime'
 import type { EffectiveConfigValue } from '@/gen/ichor/v1alpha1/node_pb'
 import { ConfigLayer } from '@/gen/ichor/v1alpha1/node_pb'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { type BreakGlassRun } from '@/components/BreakGlassDialog'
-import { PullRequestNotice } from '@/components/PullRequestNotice'
 import { SetInstallDialog } from '@/components/SetInstallDialog'
 import type { Cluster } from '@/gen/ichor/v1alpha1/cluster_pb'
 import { MachineApprovalState, MachineRole, type Machine } from '@/gen/ichor/v1alpha1/machine_pb'
@@ -67,7 +65,6 @@ function NodePage({ namespace, name }: { namespace: string; name: string }) {
   const t = useT()
   const [tab, setTab] = useNodeTab()
   const [machine, setMachine] = useState<Machine | null>(null)
-  const [pullRequest, setPullRequest] = useState<{ url: string; run?: BreakGlassRun } | null>(null)
   const [cluster, setCluster] = useState<Cluster | null>(null)
   const perms = useMyPermissions({ namespace, name })
 
@@ -162,7 +159,6 @@ function NodePage({ namespace, name }: { namespace: string; name: string }) {
           </>
         }
       />
-      {pullRequest && <PullRequestNotice url={pullRequest.url} breakGlass={pullRequest.run} onBreakGlassDone={loadMachine} />}
       {machine && needsInstallDisk({ ...machine, approved }) && (
         <Alert className="mb-4">
           <AlertTitle>{t('installDisk.waitingTitle')}</AlertTitle>
@@ -173,7 +169,7 @@ function NodePage({ namespace, name }: { namespace: string; name: string }) {
                 machine={machine}
                 disks={node.disks}
                 onDone={loadMachine}
-                onPullRequest={(url, run) => setPullRequest({ url, run })}
+
               />
             </div>
           </AlertDescription>

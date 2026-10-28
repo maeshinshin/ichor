@@ -169,7 +169,7 @@ func newKubeProxyAdvancer(clients map[string]*fakeTalosClient, admin KubeProxyAd
 }
 
 func cniSwitchCluster(mode string) *ichorv1alpha1.TalosCluster {
-	return k8sCluster(testK8sTarget, ichorv1alpha1.TalosClusterCNI{Preset: testCilium, KubeProxy: mode, Handover: testHandoverDisabled})
+	return k8sCluster(testK8sTarget, ichorv1alpha1.TalosClusterCNI{Preset: testCilium, KubeProxy: mode})
 }
 
 // nodeConfig renders m as a node that still runs the old mode: spec says old, status unset.
@@ -312,6 +312,11 @@ var _ = Describe("cniKubeProxyAdvancer", func() {
 		newKubeProxyDaemonSet(testK8sOld, 2, 2)
 
 		cluster := cniSwitchCluster(modeReplaced)
+		apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+			Type: render.ConditionCNIHandover, Status: metav1.ConditionFalse, Reason: reasonHandoverWaitingForCilium, Message: "not yet",
+		})
+		Expect(k8sClient.Status().Update(ctx, cluster)).To(Succeed())
+
 		cp := newK8sControlPlane(cluster.Name, "kp-wait")
 		fake := &fakeTalosClient{current: nodeConfig(cluster, cp, modeEnabled)}
 		admin := &fakeKubeProxyAdmin{}

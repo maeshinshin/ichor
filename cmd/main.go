@@ -436,7 +436,8 @@ func main() {
 		}
 	}
 	if err := (&controller.CNIHandoverReconciler{
-		Client: mgr.GetClient(),
+		Client: mgr.GetClient(), APIReader: mgr.GetAPIReader(), Kube: kubeClient,
+		Namespace: os.Getenv("POD_NAMESPACE"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "cnihandover")
 		os.Exit(1)

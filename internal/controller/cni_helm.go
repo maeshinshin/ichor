@@ -83,6 +83,12 @@ func CNIValuesHash(cluster *ichorv1alpha1.TalosCluster) (string, error) {
 		return "", err
 	}
 
+	return hashCiliumValues(vals)
+}
+
+// hashCiliumValues hashes a values map; the same function reads a release record's config back
+// so the two sides compare.
+func hashCiliumValues(vals map[string]any) (string, error) {
 	raw, err := json.Marshal(vals) // map keys marshal sorted: the bytes are stable
 	if err != nil {
 		return "", fmt.Errorf("hashing effective Cilium values: %w", err)
@@ -91,6 +97,17 @@ func CNIValuesHash(cluster *ichorv1alpha1.TalosCluster) (string, error) {
 	sum := sha256.Sum256(raw)
 
 	return hex.EncodeToString(sum[:]), nil
+}
+
+// CNIHelmJobFailedError is what AdvanceCNIHelmJob returns for a Job that ended Failed, so a caller
+// can tell it from a transient API error and look up the Job's pod log.
+type CNIHelmJobFailedError struct {
+	JobName, Reason, Message string
+}
+
+func (e *CNIHelmJobFailedError) Error() string {
+	return fmt.Sprintf("cilium Helm Job %s failed (%s: %s); an upgrade rolled back before it failed, "+
+		"see the Job's pod log", e.JobName, e.Reason, e.Message)
 }
 
 func cniHelmClusterHash(cluster *ichorv1alpha1.TalosCluster) string {
@@ -142,8 +159,7 @@ func AdvanceCNIHelmJob(
 		case batchv1.JobComplete:
 			return true, nil
 		case batchv1.JobFailed:
-			return false, fmt.Errorf("cilium Helm Job %s failed (%s: %s); an upgrade rolled back before it failed, "+
-				"see the Job's pod log", name, cond.Reason, cond.Message)
+			return false, &CNIHelmJobFailedError{JobName: name, Reason: cond.Reason, Message: cond.Message}
 		}
 	}
 

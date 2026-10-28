@@ -4130,6 +4130,13 @@ spec:
               cni:
                 description: cni is the observed CNI state that is not a spec ingredient.
                 properties:
+                  appliedValuesHash:
+                    description: |-
+                      appliedValuesHash is the hash of the effective Cilium values the last successful Helm Job
+                      applied. The controller starts a new Job when the hash of
+                      spec.cni.cilium.values (merged with Ichor's defaults) differs from it. Written by the
+                      controller only.
+                    type: string
                   availableChartVersion:
                     description: |-
                       availableChartVersion is the Cilium chart version the running Ichor ships when it differs

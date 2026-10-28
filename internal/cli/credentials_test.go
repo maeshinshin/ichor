@@ -183,6 +183,44 @@ func certCount(pemData []byte) int {
 	}
 }
 
+// A current file gets the suffix appended; a file already carrying it (Ichor's, from rotate-ca) is
+// written back in place, never with the suffix twice and never over the operator's own file.
+func TestDefaultCredentialsOutAppendsOrKeepsTheSuffix(t *testing.T) {
+	kube, talos := "/home/op/.kube/config", "/home/op/.talos/config"
+	for in, want := range map[string]string{
+		kube:                      kube + credentialsSuffix,
+		kube + credentialsSuffix:  kube + credentialsSuffix,
+		talos:                     talos + credentialsSuffix,
+		talos + credentialsSuffix: talos + credentialsSuffix,
+	} {
+		if got := defaultCredentialsOut(in); got != want {
+			t.Errorf("defaultCredentialsOut(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// The guard refuses to replace the operator's current files, and allows rewriting Ichor's own
+// suffixed file in place.
+func TestOverwritesCurrentFileOnlyForTheOperatorsOwnFiles(t *testing.T) {
+	dir := t.TempDir()
+	own := filepath.Join(dir, "config.ichor-new")
+	mine := filepath.Join(dir, "config")
+
+	for _, p := range []string{own, mine} {
+		if err := os.WriteFile(p, []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if overwritesCurrentFile(own, own) {
+		t.Error("rewriting Ichor's own suffixed file in place was refused")
+	}
+
+	if !overwritesCurrentFile(mine, mine) {
+		t.Error("replacing the operator's current kubeconfig was allowed")
+	}
+}
+
 func readKubeconfigCreds(t *testing.T, path string) (caData, crt []byte, cfg *clientcmdapi.Config) {
 	t.Helper()
 

@@ -24,6 +24,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	clientconfig "github.com/siderolabs/talos/pkg/machinery/client/config"
@@ -111,10 +112,10 @@ func writeCredentials(ctx context.Context, k8s client.Client, req credentialRequ
 		return nil, errors.New("no Talos API endpoint known for the talosconfig: pass --talos-endpoints")
 	}
 
-	kubeOut := cmp.Or(req.KubeconfigOut, kubeIn+credentialsSuffix)
-	talosOut := cmp.Or(req.TalosconfigOut, talosIn+credentialsSuffix)
+	kubeOut := cmp.Or(req.KubeconfigOut, defaultCredentialsOut(kubeIn))
+	talosOut := cmp.Or(req.TalosconfigOut, defaultCredentialsOut(talosIn))
 
-	if sameFile(kubeOut, kubeIn) || sameFile(talosOut, talosIn) {
+	if overwritesCurrentFile(kubeOut, kubeIn) || overwritesCurrentFile(talosOut, talosIn) {
 		return nil, errors.New("refusing to overwrite the current kubeconfig or talosconfig; choose another output path")
 	}
 
@@ -164,6 +165,24 @@ func loadCredentialSources(ctx context.Context, k8s client.Client, req credentia
 	}
 
 	return credentials.Load(ctx, k8s, req.IchorNamespace, &cluster)
+}
+
+// defaultCredentialsOut is where credentials are written when no output path is given. A file that
+// already carries the suffix (the one rotate-ca wrote, which Ichor owns and which holds only this
+// cluster) is written back in place; any other file gets the suffix appended, so the user's own files
+// are never the default output.
+func defaultCredentialsOut(current string) string {
+	if strings.HasSuffix(current, credentialsSuffix) {
+		return current
+	}
+
+	return current + credentialsSuffix
+}
+
+// overwritesCurrentFile reports whether writing out would replace the current file in. Only Ichor's
+// own suffixed files may be rewritten; the operator's current kubeconfig or talosconfig never is.
+func overwritesCurrentFile(out, in string) bool {
+	return sameFile(out, in) && !strings.HasSuffix(in, credentialsSuffix)
 }
 
 func sameFile(a, b string) bool {

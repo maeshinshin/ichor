@@ -18,10 +18,9 @@ package cilium
 
 import "github.com/maeshinshin/ichor/pkg/cni"
 
-// Chart coordinates for the upstream Cilium Helm chart (CONTRIBUTING.md:
-// "Helm is used through its Go SDK"; actually invoking Helm against these
-// coordinates is bootstrap wiring and out of this package's scope -- see
-// BootstrapManifest).
+// Chart coordinates for the upstream Cilium Helm chart. The bootstrap renders
+// the copy embedded at chart/cilium-<ChartVersion>.tgz (render.go); Argo CD
+// pulls the same version from the repo.
 const (
 	ChartRepoURL = "https://helm.cilium.io/"
 	ChartName    = "cilium"
@@ -102,14 +101,16 @@ type Values struct {
 	SecurityContext      securityContext `json:"securityContext"`
 	Cgroup               cgroup          `json:"cgroup"`
 	Hubble               hubble          `json:"hubble"`
+	TunnelProtocol       string          `json:"tunnelProtocol,omitempty"`
 }
 
 // valuesFor builds the Helm values for kubeProxy. Both modes share the
 // capabilities and cgroup settings Talos needs regardless of kube-proxy;
 // only the kube-proxy-replacement block changes.
-func valuesFor(kubeProxy cni.KubeProxyMode) Values {
+func (p Preset) valuesFor(kubeProxy cni.KubeProxyMode) Values {
 	v := Values{
-		IPAM: ipam{Mode: "kubernetes"},
+		TunnelProtocol: p.tunnel,
+		IPAM:           ipam{Mode: "kubernetes"},
 		SecurityContext: securityContext{Capabilities: securityContextCapabilities{
 			CiliumAgent: []string{
 				"CHOWN", "KILL", "NET_ADMIN", "NET_RAW", "IPC_LOCK", "SYS_ADMIN",

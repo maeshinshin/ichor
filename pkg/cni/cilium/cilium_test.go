@@ -22,6 +22,8 @@ import (
 	"strings"
 	"testing"
 
+	sigsyaml "sigs.k8s.io/yaml"
+
 	"github.com/maeshinshin/ichor/pkg/cni"
 )
 
@@ -54,42 +56,6 @@ func TestTalosPatches(t *testing.T) {
 		doc.Config.ClusterConfig.ProxyConfig == nil || doc.Config.ClusterConfig.ProxyConfig.Disabled == nil ||
 		!*doc.Config.ClusterConfig.ProxyConfig.Disabled {
 		t.Fatalf("TalosPatches(replaced) = %+v, want a Config document with cluster.proxy.disabled = true", doc)
-	}
-}
-
-func TestBootstrapManifest_CarriesTalosRecommendedValues(t *testing.T) {
-	p := New()
-
-	out, err := p.BootstrapManifest(cni.KubeProxyEnabled)
-	if err != nil {
-		t.Fatalf("BootstrapManifest(enabled): %v", err)
-	}
-	enabled := string(out)
-	for _, want := range []string{"kubeProxyReplacement: false", "hostRoot: /sys/fs/cgroup", "method: cronJob"} {
-		if !strings.Contains(enabled, want) {
-			t.Errorf("BootstrapManifest(enabled) missing %q:\n%s", want, enabled)
-		}
-	}
-	if strings.Contains(enabled, "k8sServiceHost") {
-		t.Errorf("BootstrapManifest(enabled) sets k8sServiceHost, want it absent without kube-proxy replacement:\n%s",
-			enabled)
-	}
-
-	out, err = p.BootstrapManifest(cni.KubeProxyReplaced)
-	if err != nil {
-		t.Fatalf("BootstrapManifest(replaced): %v", err)
-	}
-	replaced := string(out)
-	for _, want := range []string{
-		"kubeProxyReplacement: true",
-		"k8sServiceHost: localhost",
-		"k8sServicePort: 7445",
-		"NET_ADMIN",
-		"method: cronJob",
-	} {
-		if !strings.Contains(replaced, want) {
-			t.Errorf("BootstrapManifest(replaced) missing %q:\n%s", want, replaced)
-		}
 	}
 }
 
@@ -131,14 +97,14 @@ func TestArgoCDApplication(t *testing.T) {
 
 	// ADR 0024: the handed-over Application renders the same values as the
 	// bootstrap manifest, so there is no diff at hand-over.
-	boot, err := p.BootstrapManifest(cni.KubeProxyReplaced)
+	boot, err := sigsyaml.Marshal(p.valuesFor(cni.KubeProxyReplaced))
 	if err != nil {
-		t.Fatalf("BootstrapManifest: %v", err)
+		t.Fatalf("marshalling values: %v", err)
 	}
 	if app.Spec.Source.Helm.Values != string(boot) {
-		t.Errorf("Application values differ from BootstrapManifest values:\n%s\n---\n%s", app.Spec.Source.Helm.Values, boot)
+		t.Errorf("Application values differ from the bootstrap values:\n%s\n---\n%s", app.Spec.Source.Helm.Values, boot)
 	}
-	if app.Spec.Destination.Namespace != "kube-system" {
+	if app.Spec.Destination.Namespace != namespace {
 		t.Errorf("destination namespace = %q, want kube-system", app.Spec.Destination.Namespace)
 	}
 
@@ -183,9 +149,9 @@ func TestCheckConsistency(t *testing.T) {
 // (ADR 0055): ipam, kubeProxyReplacement, securityContext.capabilities,
 // cgroup, and KubePrism's k8sServiceHost/Port.
 func TestValues_TalosRequiredFive(t *testing.T) {
-	out, err := New().BootstrapManifest(cni.KubeProxyReplaced)
+	out, err := sigsyaml.Marshal(New().valuesFor(cni.KubeProxyReplaced))
 	if err != nil {
-		t.Fatalf("BootstrapManifest: %v", err)
+		t.Fatalf("marshalling values: %v", err)
 	}
 	for _, want := range []string{
 		"mode: kubernetes", "kubeProxyReplacement: true", "ciliumAgent:", "cleanCiliumState:", "SYS_ADMIN",

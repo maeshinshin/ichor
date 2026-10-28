@@ -16,11 +16,10 @@ limitations under the License.
 
 // Package cilium implements cni.Preset for TalosCluster.spec.cni.preset
 // "cilium": Helm, with Talos's recommended values built in
-// (docs/design/architecture.md, "CNI"). Actually running the Helm chart --
-// fetching it and expanding its templates -- is bootstrap wiring for a
-// later unit; what this package renders for the bootstrap is the resolved
-// Helm values document the chart would be installed with, alongside the
-// chart's coordinates (values.go).
+// (docs/design/architecture.md, "CNI"). The bootstrap manifest is the pinned
+// chart, embedded in the binary, expanded with those values by Helm's Go SDK
+// (render.go); the Argo CD hand-over uses the same chart coordinates and
+// values (values.go).
 package cilium
 
 import (
@@ -51,12 +50,28 @@ const (
 const namespace = "kube-system"
 
 // Preset implements cni.Preset for Cilium. The zero value is ready to use.
-type Preset struct{}
+type Preset struct {
+	// tunnel is the tunnel protocol ("" keeps Cilium's default, vxlan).
+	tunnel string
+}
 
 var _ cni.Preset = Preset{}
 
 // New returns a Cilium Preset.
 func New() Preset { return Preset{} }
+
+// WithTunnel returns a copy of p that sets Cilium's tunnelProtocol ("vxlan"
+// or "geneve"; "" keeps the chart default, vxlan). Some virtualised networks
+// pass geneve but not vxlan between nodes.
+func (p Preset) WithTunnel(protocol string) (Preset, error) {
+	switch protocol {
+	case "", "vxlan", "geneve":
+		p.tunnel = protocol
+		return p, nil
+	default:
+		return p, fmt.Errorf("cilium: unknown tunnel protocol %q, want vxlan or geneve", protocol)
+	}
+}
 
 // TalosPatches returns the cluster.proxy.disabled document when kubeProxy
 // is "replaced" -- the Talos-side half of the two-owner split
@@ -83,17 +98,15 @@ func (Preset) TalosPatches(kubeProxy cni.KubeProxyMode) ([]ichorv1alpha1.TalosCo
 	}, nil
 }
 
-// BootstrapManifest renders the Helm values Cilium's chart would be
-// installed with for kubeProxy, as YAML. It is the values document, not
-// the chart's expanded templates: producing those needs the real chart,
-// which needs Helm and a network fetch, both out of scope here (package
-// doc).
-func (Preset) BootstrapManifest(kubeProxy cni.KubeProxyMode) ([]byte, error) {
+// BootstrapManifest renders the pinned Cilium chart (ChartVersion, embedded in
+// the binary) with the preset's values for kubeProxy into plain manifests
+// that Talos can apply from cluster.inlineManifests (ADR 0098).
+func (p Preset) BootstrapManifest(kubeProxy cni.KubeProxyMode) ([]byte, error) {
 	if err := kubeProxy.Validate(); err != nil {
 		return nil, err
 	}
 
-	return sigsyaml.Marshal(valuesFor(kubeProxy))
+	return renderChart(p.valuesFor(kubeProxy))
 }
 
 // ArgoCDApplication renders the Argo CD Application that takes over from
@@ -103,18 +116,18 @@ func (Preset) BootstrapManifest(kubeProxy cni.KubeProxyMode) ([]byte, error) {
 // (argo-cd.readthedocs.io, "Sync Options", retrieved 2026-10-25) -- and the
 // Hubble CronJob setting already in Values (values.go), so Argo CD never
 // sees a diff Helm itself introduced.
-func (Preset) ArgoCDApplication(kubeProxy cni.KubeProxyMode) (*gitops.Application, error) {
+func (p Preset) ArgoCDApplication(kubeProxy cni.KubeProxyMode) (*gitops.Application, error) {
 	if err := kubeProxy.Validate(); err != nil {
 		return nil, err
 	}
 
-	valuesYAML, err := sigsyaml.Marshal(valuesFor(kubeProxy))
+	valuesYAML, err := sigsyaml.Marshal(p.valuesFor(kubeProxy))
 	if err != nil {
 		return nil, fmt.Errorf("cilium: rendering Helm values: %w", err)
 	}
 
 	app, err := gitops.New(gitops.Options{
-		Name:      "cilium",
+		Name:      ChartName,
 		Namespace: argoCDApplicationNamespace,
 		Source: &gitops.ApplicationSource{
 			RepoURL:        ChartRepoURL,

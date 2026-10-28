@@ -109,15 +109,10 @@ func runMachineApprove(
 
 		m := got.Msg.GetMachine()
 
-		ok, err := confirm(in, errw, fmt.Sprintf(
+		if err := confirmOrAbort(in, errw, "machine approve", fmt.Sprintf(
 			"Approve machine %s/%s (uuid %q, endpoint %s) as %s? The controller will start configuring it. [y/N] ",
-			ref.GetNamespace(), name, m.GetIdentity().GetUuid(), m.GetEndpoint(), opts.Role))
-		if err != nil {
-			return fmt.Errorf("machine approve: reading confirmation: %w", err)
-		}
-
-		if !ok {
-			return fmt.Errorf("machine approve: aborted")
+			ref.GetNamespace(), name, m.GetIdentity().GetUuid(), m.GetEndpoint(), opts.Role), "aborted"); err != nil {
+			return err
 		}
 	}
 

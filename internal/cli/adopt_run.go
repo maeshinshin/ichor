@@ -17,7 +17,6 @@ limitations under the License.
 package cli
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"io"
@@ -132,14 +131,10 @@ func runAdopt(ctx context.Context, clusterName, namespace string, deps adoptDeps
 	}
 
 	if !deps.AssumeYes {
-		ok, err := confirm(deps.Stdin, deps.Stderr,
-			fmt.Sprintf("Create %d TalosConfigPatch object(s) to adopt cluster %q with zero drift? [y/N]: ", len(patches), clusterName))
-		if err != nil {
-			return fmt.Errorf("adopt: reading confirmation: %w", err)
-		}
-
-		if !ok {
-			return fmt.Errorf("adopt: aborted, nothing was created")
+		if err := confirmOrAbort(deps.Stdin, deps.Stderr, "adopt",
+			fmt.Sprintf("Create %d TalosConfigPatch object(s) to adopt cluster %q with zero drift? [y/N]: ", len(patches), clusterName),
+			"aborted, nothing was created"); err != nil {
+			return err
 		}
 	}
 
@@ -268,14 +263,7 @@ func explainUnrepresentable(paths []string) []string {
 // leading 'y' or 'Y' (architecture.md, "CLI and UI": interactive
 // confirmation with --yes to skip it).
 func confirm(r io.Reader, w io.Writer, prompt string) (bool, error) {
-	_, _ = fmt.Fprint(w, prompt)
+	line, err := readLine(r, w, prompt)
 
-	line, err := bufio.NewReader(r).ReadString('\n')
-	if err != nil && err != io.EOF {
-		return false, err
-	}
-
-	line = strings.TrimSpace(line)
-
-	return line == "y" || line == "Y" || line == "yes" || line == "Yes", nil
+	return err == nil && (line == "y" || line == "Y" || line == "yes" || line == "Yes"), err
 }

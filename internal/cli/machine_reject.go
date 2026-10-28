@@ -48,7 +48,7 @@ func runMachineReject(ctx context.Context, c *apiClients, in io.Reader, out, err
 	}
 
 	resp, err := c.Machine.RejectMachine(ctx, connect.NewRequest(&pb.RejectMachineRequest{
-		Machine: objectRef(apiOpts.Namespace, name), Reason: reason, BreakGlass: breakGlassOf(apiOpts),
+		Machine: objectRef(apiOpts.Namespace, name), Reason: reason,
 	}))
 	if err != nil {
 		return err

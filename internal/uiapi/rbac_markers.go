@@ -79,23 +79,6 @@ package uiapi
 // pods/log, pods/exec or secrets).
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list
 
-// The two reads behind the "is this CR tracked by Argo CD or Flux" gate on
-// every write. Both stay in this ClusterRole: Argo CD's
-// namespace is configurable (Server.ArgoCDNamespace), and a Role/RoleBinding
-// into a namespace that may not exist would fail the chart install. Narrowed instead
-// by resourceNames, so this is get on ConfigMaps named argocd-cm and nothing
-// else -- no cluster-wide ConfigMap or Secret read.
-// +kubebuilder:rbac:groups="",resources=configmaps,resourceNames=argocd-cm,verbs=get
-// +kubebuilder:rbac:groups=kustomize.toolkit.fluxcd.io,resources=kustomizations,verbs=list
-
-// PR mode reads the one Argo CD Application that tracks the CR
-// being changed, to find the repository path its manifests live in. get only:
-// the name comes from the CR's own tracking marker, never from a list. Cluster
-// scoped for the same reason as the rules above (Argo CD's namespace is
-// configurable). The repository token Secret needs no new rule: it is read in
-// the backend's own namespace through the namespaced secrets rule at the top.
-// +kubebuilder:rbac:groups=argoproj.io,resources=applications,verbs=get
-
 // CniService asks whether the Gateway API CRDs exist before it accepts
 // gatewayAPI.enabled: one metadata get of that one CRD, as the ServiceAccount.
 // +kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,resourceNames=gateways.gateway.networking.k8s.io,verbs=get
@@ -109,7 +92,7 @@ package uiapi
 // +kubebuilder:rbac:groups="",resources=users;groups,verbs=impersonate
 
 // Break-glass records a Warning Event on the resource it
-// wrote. create only, on Events: no get/list/update/delete. The break-glass
+// acted on. create only, on Events: no get/list/update/delete. The break-glass
 // permission itself is not here: it is the user's, checked with a
 // SelfSubjectAccessReview made as the user (every authenticated user may ask
 // that), so the ServiceAccount gains nothing for it.

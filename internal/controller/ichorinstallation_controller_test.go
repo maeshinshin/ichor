@@ -20,7 +20,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
@@ -31,7 +30,6 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/version"
-	"github.com/maeshinshin/ichor/pkg/gitopstracking"
 )
 
 const testIchorNamespace = "default"
@@ -87,7 +85,7 @@ var _ = Describe("IchorInstallation", func() {
 
 		newReconciler := func() *IchorInstallationReconciler {
 			return &IchorInstallationReconciler{
-				Client: k8sClient, Direct: k8sClient, ControllerNamespace: testIchorNamespace, ArgoCDNamespace: "argocd-absent",
+				Client: k8sClient,
 			}
 		}
 
@@ -98,38 +96,20 @@ var _ = Describe("IchorInstallation", func() {
 			got := reconcileOnce(newReconciler())
 			Expect(got.Status.InstalledVersion).To(Equal("v0.1.0"))
 			Expect(apimeta.IsStatusConditionFalse(got.Status.Conditions, conditionUpToDate)).To(BeTrue())
-			Expect(apimeta.IsStatusConditionFalse(got.Status.Conditions, conditionExternalSuggested)).To(BeTrue())
+			Expect(apimeta.FindStatusCondition(got.Status.Conditions, conditionExternalSuggested)).To(BeNil())
 		})
 
-		It("suggests external when its own Deployment is tracked by Argo CD", func() {
+		It("removes the ExternalSuggested condition an older build set", func() {
 			withVersion("v0.1.0")
-			createInstallation(ichorv1alpha1.IchorManagementModeIchor, "v0.1.0")
+			inst := createInstallation(ichorv1alpha1.IchorManagementModeIchor, "v0.1.0")
 
-			dep := &appsv1.Deployment{
-				Namespace:   testIchorNamespace,
-				Name:        controllerDeploymentName,
-				Annotations: map[string]string{gitopstracking.ArgoTrackingAnnotation: "ichor:apps/Deployment:default/x"},
-				Spec: appsv1.DeploymentSpec{
-					Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"a": "b"}},
-					Template: corev1.PodTemplateSpec{
-						ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"a": "b"}},
-						Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "m", Image: "x"}}},
-					},
-				},
-			}
-			Expect(k8sClient.Create(ctx, dep)).To(Succeed())
-			DeferCleanup(func() { Expect(k8sClient.Delete(ctx, dep)).To(Succeed()) })
+			apimeta.SetStatusCondition(&inst.Status.Conditions, metav1.Condition{
+				Type: conditionExternalSuggested, Status: metav1.ConditionTrue, Reason: "TrackingChecked",
+			})
+			Expect(k8sClient.Status().Update(ctx, inst)).To(Succeed())
 
-			// argocd-cm is what says the tracking method; without it nothing is "tracked".
-			cm := &corev1.ConfigMap{Namespace: testIchorNamespace, Name: gitopstracking.ArgoConfigMapName}
-			Expect(k8sClient.Create(ctx, cm)).To(Succeed())
-			DeferCleanup(func() { Expect(k8sClient.Delete(ctx, cm)).To(Succeed()) })
-
-			r := newReconciler()
-			r.ArgoCDNamespace = testIchorNamespace
-			got := reconcileOnce(r)
-			Expect(apimeta.IsStatusConditionTrue(got.Status.Conditions, conditionUpToDate)).To(BeTrue())
-			Expect(apimeta.IsStatusConditionTrue(got.Status.Conditions, conditionExternalSuggested)).To(BeTrue())
+			got := reconcileOnce(newReconciler())
+			Expect(apimeta.FindStatusCondition(got.Status.Conditions, conditionExternalSuggested)).To(BeNil())
 		})
 	})
 
@@ -200,13 +180,14 @@ var _ = Describe("IchorInstallation", func() {
 			Expect(err).To(MatchError(ContainSubstring("rolls back")))
 		})
 
-		It("launches no Job in external mode", func() {
+		It("treats the retired external mode as ichor and launches the Job", func() {
 			withVersion("v0.1.0")
 			createInstallation(ichorv1alpha1.IchorManagementModeExternal, "v0.2.0")
 
-			_, err := NewIchorUpgradeAdvancer(k8sClient, jobNs)(ctx, nil, nil, op())
-			Expect(err).To(MatchError(ContainSubstring("pull request")))
-			Expect(jobs()).To(BeEmpty())
+			done, err := NewIchorUpgradeAdvancer(k8sClient, jobNs)(ctx, nil, nil, op())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(done).To(BeFalse())
+			Expect(jobs()).To(HaveLen(1))
 		})
 
 		It("refuses a downgrade and launches no Job", func() {

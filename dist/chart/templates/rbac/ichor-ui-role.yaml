@@ -18,14 +18,6 @@ metadata:
 rules:
 - apiGroups:
   - ""
-  resourceNames:
-  - argocd-cm
-  resources:
-  - configmaps
-  verbs:
-  - get
-- apiGroups:
-  - ""
   resources:
   - events
   verbs:
@@ -45,12 +37,6 @@ rules:
   - gateways.gateway.networking.k8s.io
   resources:
   - customresourcedefinitions
-  verbs:
-  - get
-- apiGroups:
-  - argoproj.io
-  resources:
-  - applications
   verbs:
   - get
 - apiGroups:
@@ -110,12 +96,6 @@ rules:
   - ichor.maesh.dev
   resources:
   - talosstorages
-  verbs:
-  - list
-- apiGroups:
-  - kustomize.toolkit.fluxcd.io
-  resources:
-  - kustomizations
   verbs:
   - list
 {{- if or .Values.ichorUI.oidc.enabled .Values.ichorUI.users.enabled }}

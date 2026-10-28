@@ -20,7 +20,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 
 	"golang.org/x/mod/semver"
@@ -94,11 +93,6 @@ func NewIchorUpgradeAdvancer(c client.Client, controllerNamespace string) Advanc
 		// external in the meantime is still an upgrade that happened.
 		if inst.Spec.Version == version.Version {
 			return true, nil
-		}
-
-		if inst.Spec.ManagementMode == ichorv1alpha1.IchorManagementModeExternal {
-			return false, errors.New("IchorInstallation.spec.managementMode is external: Argo CD owns Ichor's manifests, " +
-				"so no installer Job is launched; upgrade by a pull request that bumps the chart version")
 		}
 
 		if semver.IsValid(version.Version) && semver.Compare(inst.Spec.Version, version.Version) < 0 {

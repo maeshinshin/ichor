@@ -25,8 +25,8 @@ message AddDiscoveryAddressRequest {
   // address is a single IPv4 address, e.g. "192.168.0.50".
   string address = 2;
   string reason = 3;
-  // break_glass requests an emergency direct write.
-  BreakGlass break_glass = 4;
+  // Deprecated: GitOps is no longer part of Ichor. Never set; kept so the wire format is unchanged.
+  BreakGlass break_glass = 4 [deprecated = true];
 }
 
 message AddDiscoveryAddressResponse {
@@ -34,9 +34,10 @@ message AddDiscoveryAddressResponse {
   // proposed instead).
   Cluster cluster = 1;
   AuditRecord audit = 2;
-  // pull_request_url and notice: see ApproveMachineResponse.
-  string pull_request_url = 3;
-  string notice = 4;
+  // Deprecated: GitOps is no longer part of Ichor. Never set; kept so the wire format is unchanged.
+  string pull_request_url = 3 [deprecated = true];
+  // Deprecated: GitOps is no longer part of Ichor. Never set; kept so the wire format is unchanged.
+  string notice = 4 [deprecated = true];
 }
 
 message ListClustersRequest {}

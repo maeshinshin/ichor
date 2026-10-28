@@ -73,13 +73,10 @@ type apiOptions struct {
 	// IchorNamespace is where Ichor is installed: ichor-ui's Service and
 	// the secrets bundle Secret (uiapi.Server.ControllerNamespace).
 	IchorNamespace string
-	// ArgoCDNamespace is where Argo CD runs; the fallback reads its argocd-cm
-	// to refuse writes to CRs Argo CD tracks.
-	ArgoCDNamespace string
 	// Local skips ichor-ui and computes from the Kubernetes API.
 	Local bool
-	// BreakGlass is the reason of an emergency direct write;
-	// empty means off. Setting it implies Local: break-glass is decided by the
+	// BreakGlass is the reason of an emergency override; empty
+	// means off. Setting it implies Local: break-glass is decided by the
 	// caller's own RBAC, never by the backend's ServiceAccount.
 	BreakGlass string
 	// CAFile is a PEM bundle trusted, besides the system roots, when ichor-ui
@@ -105,16 +102,14 @@ func addAPIFlags(cmd *cobra.Command) {
 	f.StringVarP(&apiOpts.Namespace, "namespace", "n", ichorControllerNamespace, "namespace of the Ichor resources the command names")
 	f.StringVar(&apiOpts.IchorNamespace, "ichor-namespace", ichorControllerNamespace,
 		"namespace Ichor is installed in (where ichor-ui runs and the secrets bundle lives)")
-	f.StringVar(&apiOpts.ArgoCDNamespace, "argocd-namespace", "argocd",
-		"namespace Argo CD runs in, used by the --local fallback to read argocd-cm when checking whether a resource is tracked")
 	f.BoolVar(&apiOpts.Local, "local", false, "do not use ichor-ui; compute from the Kubernetes API directly")
 	f.StringVar(&apiOpts.CAFile, "ca-file", os.Getenv(caFileEnv),
 		"PEM file of the CA that signed ichor-ui's serving certificate, when ichor-ui serves TLS (env "+caFileEnv+")")
 	f.StringVar(&apiOpts.TLSServerName, "tls-server-name", "",
 		"name on ichor-ui's serving certificate, when it is not the Service's DNS name (<service>.<namespace>.svc)")
 	f.StringVar(&apiOpts.BreakGlass, "break-glass", "",
-		"incident only: write a GitOps-tracked resource now and open the matching pull request; the value is the reason, "+
-			"recorded in the audit record, an Event and the pull request. Needs the break-glass RBAC verb on the resource; implies --local")
+		"incident only: override a guard (reset a node, restore etcd); the value is the reason, "+
+			"recorded in the audit record and an Event. Needs the break-glass RBAC verb on the resource; implies --local")
 }
 
 // apiDeps is connectAPI's dependencies. Forward and FreePort are the seams
@@ -266,7 +261,7 @@ func connectAPI(ctx context.Context, opts apiOptions, deps apiDeps, requireBacke
 // GetEffectiveConfig -- is the same code, not a copy of it.
 func localClients(opts apiOptions, deps apiDeps) *apiClients {
 	s := &uiapi.Server{
-		Client: deps.K8s, ControllerNamespace: opts.IchorNamespace, ArgoCDNamespace: opts.ArgoCDNamespace, Actor: cmp.Or(deps.actor, actorCLI),
+		Client: deps.K8s, ControllerNamespace: opts.IchorNamespace, Actor: cmp.Or(deps.actor, actorCLI),
 		CallerCredentials: true,
 	}
 

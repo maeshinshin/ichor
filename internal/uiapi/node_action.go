@@ -319,17 +319,6 @@ func (s *Server) nodeBlocked(ctx context.Context, np *nodePlan, cluster *ichorv1
 		}
 	}
 
-	if action == ichorv1alpha1.NodeActionReset || action == nodeActionRemove {
-		by, err := s.trackedBy(ctx, m)
-		if err != nil {
-			return "", err
-		}
-
-		if by != "" {
-			return fmt.Sprintf("TalosMachine %q is tracked by %s, which would create it again: remove it in Git", m.Name, by), nil
-		}
-	}
-
 	return s.unfinishedOperation(ctx, cluster)
 }
 

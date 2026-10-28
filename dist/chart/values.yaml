@@ -147,10 +147,9 @@ manager:
   #   labels: {}
   #   annotations: {}
 
-## The installer Job's identity, used only when IchorInstallation.spec.managementMode
-## is "ichor". Off by default: a chart-installed Ichor is normally owned by Argo CD (mode
-## "external"), and then nothing should hold the cluster-role escalation this ServiceAccount
-## carries. See config/rbac/ichor-installer/role.yaml.
+## The installer Job's identity. Off by default: a chart-installed Ichor is upgraded
+## through the chart, and then nothing should hold the cluster-role escalation this
+## ServiceAccount carries. See config/rbac/ichor-installer/role.yaml.
 ##
 installer:
   enabled: false
@@ -189,23 +188,6 @@ ichorUI:
   ## Address ichor-ui listens on (cmd/ichor-ui's own -addr flag default).
   ##
   port: 8080
-
-  ## Namespace Argo CD runs in. ichor-ui reads argocd-cm there to refuse
-  ## writes to CRs Argo CD tracks; it reaches the container as ICHOR_ARGOCD_NAMESPACE.
-  ## Change this if Argo CD is not installed in the default "argocd" namespace.
-  ##
-  argocdNamespace: argocd
-
-  ## Where the GitOps page links to: the base URL of each tool's own UI, as a
-  ## browser reaches it. http or https only. A tool left empty gets no link. Argo CD links go
-  ## to the CR's Application; Grafana to the bundled dashboard (grafana.dashboards.enabled);
-  ## Hubble and Longhorn to their front page.
-  ##
-  links:
-    argocd: ""
-    grafana: ""
-    hubble: ""
-    longhorn: ""
 
   ## OIDC login with Kubernetes impersonation. Off by default: ichor-ui then
   ## writes with its own ServiceAccount and anyone who can reach it can write, as before (it
@@ -515,17 +497,9 @@ networkPolicy:
   ##
   cilium:
     enabled: false
-    ## TCP ports the controller (S3 for TalosEtcdBackup) and ichor-ui (the external OIDC issuer,
-    ## the Git host of a pull request) may reach outside the cluster. A store or issuer on
+    ## TCP ports the controller (S3 for TalosEtcdBackup) and ichor-ui (the external OIDC issuer)
+    ## may reach outside the cluster. A store or issuer on
     ## another port, or inside the cluster, needs a policy of your own: policies add up.
     externalPorts:
       - 443
 
-
-## Argo CD health checks (Lua) for Ichor's TalosCluster, TalosMachine and TalosStorage, rendered as a
-## ConfigMap whose keys are exactly argocd-cm's resource.customizations.health.<group>_<kind>
-## keys. Ichor never edits argocd-cm: merge the keys into your own. false (the default) renders
-## nothing.
-##
-argocdHealth:
-  enabled: false

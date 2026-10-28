@@ -146,7 +146,9 @@ type AddDiscoveryAddressRequest struct {
 	// address is a single IPv4 address, e.g. "192.168.0.50".
 	Address string `protobuf:"bytes,2,opt,name=address,proto3" json:"address,omitempty"`
 	Reason  string `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
-	// break_glass requests an emergency direct write.
+	// Deprecated: GitOps is no longer part of Ichor. Never set; kept so the wire format is unchanged.
+	//
+	// Deprecated: Marked as deprecated in ichor/v1alpha1/cluster.proto.
 	BreakGlass    *BreakGlass `protobuf:"bytes,4,opt,name=break_glass,json=breakGlass,proto3" json:"break_glass,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -203,6 +205,7 @@ func (x *AddDiscoveryAddressRequest) GetReason() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in ichor/v1alpha1/cluster.proto.
 func (x *AddDiscoveryAddressRequest) GetBreakGlass() *BreakGlass {
 	if x != nil {
 		return x.BreakGlass
@@ -216,11 +219,16 @@ type AddDiscoveryAddressResponse struct {
 	// proposed instead).
 	Cluster *Cluster     `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
 	Audit   *AuditRecord `protobuf:"bytes,2,opt,name=audit,proto3" json:"audit,omitempty"`
-	// pull_request_url and notice: see ApproveMachineResponse.
+	// Deprecated: GitOps is no longer part of Ichor. Never set; kept so the wire format is unchanged.
+	//
+	// Deprecated: Marked as deprecated in ichor/v1alpha1/cluster.proto.
 	PullRequestUrl string `protobuf:"bytes,3,opt,name=pull_request_url,json=pullRequestUrl,proto3" json:"pull_request_url,omitempty"`
-	Notice         string `protobuf:"bytes,4,opt,name=notice,proto3" json:"notice,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// Deprecated: GitOps is no longer part of Ichor. Never set; kept so the wire format is unchanged.
+	//
+	// Deprecated: Marked as deprecated in ichor/v1alpha1/cluster.proto.
+	Notice        string `protobuf:"bytes,4,opt,name=notice,proto3" json:"notice,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *AddDiscoveryAddressResponse) Reset() {
@@ -267,6 +275,7 @@ func (x *AddDiscoveryAddressResponse) GetAudit() *AuditRecord {
 	return nil
 }
 
+// Deprecated: Marked as deprecated in ichor/v1alpha1/cluster.proto.
 func (x *AddDiscoveryAddressResponse) GetPullRequestUrl() string {
 	if x != nil {
 		return x.PullRequestUrl
@@ -274,6 +283,7 @@ func (x *AddDiscoveryAddressResponse) GetPullRequestUrl() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in ichor/v1alpha1/cluster.proto.
 func (x *AddDiscoveryAddressResponse) GetNotice() string {
 	if x != nil {
 		return x.Notice
@@ -800,18 +810,18 @@ var File_ichor_v1alpha1_cluster_proto protoreflect.FileDescriptor
 
 const file_ichor_v1alpha1_cluster_proto_rawDesc = "" +
 	"\n" +
-	"\x1cichor/v1alpha1/cluster.proto\x12\x0eichor.v1alpha1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1bichor/v1alpha1/common.proto\"\xc0\x01\n" +
+	"\x1cichor/v1alpha1/cluster.proto\x12\x0eichor.v1alpha1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1bichor/v1alpha1/common.proto\"\xc4\x01\n" +
 	"\x1aAddDiscoveryAddressRequest\x123\n" +
 	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x12\x18\n" +
 	"\aaddress\x18\x02 \x01(\tR\aaddress\x12\x16\n" +
-	"\x06reason\x18\x03 \x01(\tR\x06reason\x12;\n" +
-	"\vbreak_glass\x18\x04 \x01(\v2\x1a.ichor.v1alpha1.BreakGlassR\n" +
-	"breakGlass\"\xc5\x01\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason\x12?\n" +
+	"\vbreak_glass\x18\x04 \x01(\v2\x1a.ichor.v1alpha1.BreakGlassB\x02\x18\x01R\n" +
+	"breakGlass\"\xcd\x01\n" +
 	"\x1bAddDiscoveryAddressResponse\x121\n" +
 	"\acluster\x18\x01 \x01(\v2\x17.ichor.v1alpha1.ClusterR\acluster\x121\n" +
-	"\x05audit\x18\x02 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\x12(\n" +
-	"\x10pull_request_url\x18\x03 \x01(\tR\x0epullRequestUrl\x12\x16\n" +
-	"\x06notice\x18\x04 \x01(\tR\x06notice\"\x15\n" +
+	"\x05audit\x18\x02 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\x12,\n" +
+	"\x10pull_request_url\x18\x03 \x01(\tB\x02\x18\x01R\x0epullRequestUrl\x12\x1a\n" +
+	"\x06notice\x18\x04 \x01(\tB\x02\x18\x01R\x06notice\"\x15\n" +
 	"\x13ListClustersRequest\"K\n" +
 	"\x14ListClustersResponse\x123\n" +
 	"\bclusters\x18\x01 \x03(\v2\x17.ichor.v1alpha1.ClusterR\bclusters\"H\n" +

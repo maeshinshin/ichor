@@ -33,6 +33,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/render"
+	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
 
 const (
@@ -200,6 +201,67 @@ func markCompleted(op *ichorv1alpha1.TalosOperation, machines ...*ichorv1alpha1.
 }
 
 var _ = Describe("cniKubeProxyAdvancer", func() {
+	Describe("apply with an unrelated pending change", func() {
+		// renderAs renders m as the node with the old mode and baseline, and the cluster's desired
+		// configuration with cfg added: the pending change is cfg alone, besides the kube-proxy mode.
+		renderAs := func(cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, cfg *typedconfig.Config) []byte {
+			bundle, err := loadBundle(ctx, k8sClient, tmNamespace, cluster)
+			Expect(err).NotTo(HaveOccurred())
+
+			patch := ichorv1alpha1.TalosConfigPatch{
+				Name: "extra", Namespace: tmNamespace,
+				Spec: ichorv1alpha1.TalosConfigPatchSpec{
+					ClusterRef: corev1.LocalObjectReference{Name: cluster.Name}, Layer: layerCluster,
+					Documents: []ichorv1alpha1.TalosConfigPatchDocument{{Kind: kindConfig, Config: cfg}},
+				},
+			}
+
+			out, _, _, err := (&TalosMachineReconciler{Client: k8sClient, ControllerNamespace: tmNamespace}).
+				renderMachine(ctx, cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{patch})
+			Expect(err).NotTo(HaveOccurred())
+
+			return out
+		}
+
+		run := func(extra func(*typedconfig.Config)) (*fakeTalosClient, error) {
+			cluster := cniSwitchCluster(modeReplaced)
+			cp := newK8sControlPlane(cluster.Name, "kp-extra")
+
+			old := cluster.DeepCopy()
+			old.Spec.CNI.KubeProxy = modeEnabled
+			base := minimalConfigSkeleton()
+			base.MachineConfig.MachineType = roleControlPlane
+			current := renderAs(old, cp, base)
+
+			cfg := minimalConfigSkeleton()
+			cfg.MachineConfig.MachineType = roleControlPlane
+			extra(cfg)
+
+			fake := &fakeTalosClient{}
+			err := newKubeProxyAdvancer(nil, nil).apply(ctx, fake, cluster, cp, current, renderAs(cluster, cp, cfg))
+
+			return fake, err
+		}
+
+		It("applies a safe pending path together with the switch", func() {
+			fake, err := run(func(c *typedconfig.Config) {
+				c.ClusterConfig.ClusterInlineManifests = []*typedconfig.ClusterInlineManifest{
+					{InlineManifestName: "extra", InlineManifestContents: "kind: List"},
+				}
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fake.applyCalls).To(HaveLen(1))
+		})
+
+		It("still refuses a pending reboot-requiring path", func() {
+			fake, err := run(func(c *typedconfig.Config) {
+				c.MachineConfig.MachineEnv = map[string]string{"HTTP_PROXY": "http://proxy.invalid:3128"}
+			})
+			Expect(err).To(MatchError(ContainSubstring("unrelated pending configuration change")))
+			Expect(fake.applyCalls).To(BeEmpty())
+		})
+	})
+
 	It("replaced: touches nothing while Cilium has not taken over, and says what to change", func() {
 		newCilium("false", true)
 		newKubeProxyDaemonSet(testK8sOld, 2, 2)

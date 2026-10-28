@@ -38,6 +38,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/clusterlock"
+	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/render"
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
@@ -993,6 +994,50 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(fake.applyCalls).To(BeEmpty())
 		Expect(readyCondition(fetchMachine(m)).Reason).To(Equal(reasonNodeDrifted))
+	})
+
+	It("applies the CNI inlineManifests removal under warnOnly once the hand-over completes, not NodeDrifted", func() {
+		bundle := newTestBundle("v1.14")
+		secret := newTestSecret(bundle)
+		cluster := newTestCluster(secret.Name, "v1.14")
+		m := newTestMachine(cluster.Name, true)
+
+		cfg := minimalConfigSkeleton()
+		cfg.ClusterConfig.ClusterInlineManifests = []*typedconfig.ClusterInlineManifest{
+			{InlineManifestName: cni.InlineManifestName, InlineManifestContents: "kind: List"},
+		}
+		patch := newTestPatch(cluster.Name, layerCluster, nil, cfg)
+
+		before, _, err := render.Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{*patch}, nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		fake := &fakeTalosClient{current: before}
+		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
+
+		_, err = reconcileMachine(r, m)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(readyCondition(fetchMachine(m)).Reason).To(Equal(reasonConverged))
+
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, cluster)).To(Succeed())
+		// The hand-over completes: a status write, no generation moves.
+		apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+			Type: render.ConditionCNIHandover, Status: metav1.ConditionTrue, Reason: "Complete", Message: "handed over",
+		})
+		Expect(k8sClient.Status().Update(ctx, cluster)).To(Succeed())
+
+		after, afterHash, err := render.Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{*patch}, nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(after).NotTo(Equal(before))
+
+		_, err = reconcileMachine(r, m)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(fake.applyCalls).To(HaveLen(1))
+		Expect(fake.applyCalls[0]).To(Equal(after))
+
+		got := fetchMachine(m)
+		Expect(got.Status.AppliedConfigHash).To(Equal(afterHash))
+		Expect(readyCondition(got).Reason).NotTo(Equal(reasonNodeDrifted))
 	})
 
 	It("corrects drift when driftPolicy is autoCorrect and every changed path is reboot-free", func() {

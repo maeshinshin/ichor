@@ -105,7 +105,7 @@ func TestPoolTrustsExtraCAAndRejectsUnknown(t *testing.T) {
 		t.Fatal("a server signed by an unknown CA was accepted")
 	}
 
-	if err := p.add(other.pem); err != nil {
+	if _, err := p.add(other.pem); err != nil {
 		t.Fatal(err)
 	}
 
@@ -113,7 +113,7 @@ func TestPoolTrustsExtraCAAndRejectsUnknown(t *testing.T) {
 		t.Fatal("an unrelated extra CA made the server trusted")
 	}
 
-	if err := p.add(newer.pem); err != nil {
+	if _, err := p.add(newer.pem); err != nil {
 		t.Fatal(err)
 	}
 

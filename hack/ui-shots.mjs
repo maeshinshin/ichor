@@ -21,7 +21,7 @@ if (!outDir || !base) {
   console.error('usage: node hack/ui-shots.mjs <outDir> <baseURL> [path ...]')
   process.exit(2)
 }
-const paths = rest.length ? rest : ['/', '/clusters', '/machines', '/patches', '/operations', '/gitops']
+const paths = rest.length ? rest : ['/', '/clusters', '/machines', '/patches', '/operations']
 const sizes = [
   ['desktop', 1440, 900, false],
   ['phone', 390, 844, true],

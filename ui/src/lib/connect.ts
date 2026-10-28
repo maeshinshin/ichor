@@ -5,7 +5,6 @@ import { ClusterService } from '@/gen/ichor/v1alpha1/cluster_pb'
 import { MachineService } from '@/gen/ichor/v1alpha1/machine_pb'
 import { NodeService } from '@/gen/ichor/v1alpha1/node_pb'
 import { PatchService } from '@/gen/ichor/v1alpha1/patch_pb'
-import { GitOpsService } from '@/gen/ichor/v1alpha1/gitops_pb'
 import { OperationService } from '@/gen/ichor/v1alpha1/operation_pb'
 import { DiagnosticsService } from '@/gen/ichor/v1alpha1/diagnostics_pb'
 import { UserService } from '@/gen/ichor/v1alpha1/user_pb'
@@ -39,7 +38,6 @@ export const clusterClient = createClient(ClusterService, transport)
 export const machineClient = createClient(MachineService, transport)
 export const nodeClient = createClient(NodeService, transport)
 export const patchClient = createClient(PatchService, transport)
-export const gitOpsClient = createClient(GitOpsService, transport)
 export const operationClient = createClient(OperationService, transport)
 export const diagnosticsClient = createClient(DiagnosticsService, transport)
 export const userClient = createClient(UserService, transport)

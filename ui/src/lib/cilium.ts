@@ -22,9 +22,9 @@ export function diffLines(diff: string): { kind: DiffKind; text: string }[] {
 }
 
 // canEdit: the write controls show only when the caller may update the cluster (the permission
-// probe answered yes) and no Git tool tracks it.
-export function canEdit(perms: { clusterUpdate: boolean } | undefined, trackedBy: string): boolean {
-  return !!perms?.clusterUpdate && trackedBy === ''
+// probe answered yes).
+export function canEdit(perms: { clusterUpdate: boolean } | undefined): boolean {
+  return !!perms?.clusterUpdate
 }
 
 // canApply: the text must be the exact text that was validated and diffed, and a diff must exist.

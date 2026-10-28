@@ -54,19 +54,12 @@ export function Cilium() {
     )
   }
 
-  const tracked = data.trackedBy !== ''
-  const editable = canEdit(perms, data.trackedBy)
+  const editable = canEdit(perms)
 
   return (
     <div class="space-y-8">
-      <PageHeader title={t('cilium.title')} kind={ref.name} badges={tracked ? <Badge variant="outline">{t('cilium.tracked', { tool: data.trackedBy })}</Badge> : undefined} />
-      {tracked && (
-        <Alert>
-          <AlertTitle>{t('cilium.tracked', { tool: data.trackedBy })}</AlertTitle>
-          <AlertDescription>{t('cilium.trackedBody', { tool: data.trackedBy })}</AlertDescription>
-        </Alert>
-      )}
-      {!tracked && perms && !perms.clusterUpdate && <p class="text-sm text-muted-foreground">{t('cilium.noWrite')}</p>}
+      <PageHeader title={t('cilium.title')} kind={ref.name} />
+      {perms && !perms.clusterUpdate && <p class="text-sm text-muted-foreground">{t('cilium.noWrite')}</p>}
       <Section id="effective" title={t('cilium.effective')}>
         <p class="text-muted-foreground">{t('cilium.effectiveHint')}</p>
         <pre class="max-h-96 overflow-auto rounded-md border bg-muted p-3 font-mono text-xs">{data.effectiveYaml}</pre>

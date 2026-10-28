@@ -118,6 +118,9 @@ func init() {
 			"standard (3 control planes + workers added later, tainted; recommended), or "+
 			"large (5 control planes + workers added later, tainted)")
 	flags.StringVar(&initOpts.CNIPreset, "cni", "", "CNI preset: flannel or cilium (required)")
+	flags.StringVar(&initOpts.CNITunnel, "cni-tunnel", "",
+		"with --cni cilium: Cilium's tunnel protocol, vxlan or geneve (default: Cilium's vxlan); "+
+			"geneve for virtualised networks that pass geneve but not vxlan")
 	flags.StringVar(&initOpts.EndpointType, "endpoint-type", "vip", "cluster endpoint type: vip, loadBalancer, dns or node")
 	flags.StringVar(&initOpts.EndpointAddress, "endpoint-address", "", "cluster endpoint address (required)")
 	flags.StringVar(&initOpts.NodeEndpoint, "node-endpoint", "",

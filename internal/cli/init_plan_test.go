@@ -125,6 +125,19 @@ func TestBuildInitPlan_NonVIPWarnsButSucceeds(t *testing.T) {
 	}
 }
 
+func TestBuildInitPlan_CNITunnelAcceptedWithCilium(t *testing.T) {
+	for _, tunnel := range []string{"", "vxlan", "geneve"} {
+		in := validInitPlanInput()
+		in.CNITunnel = tunnel
+
+		var warn bytes.Buffer
+
+		if _, err := buildInitPlan(in, &warn); err != nil {
+			t.Errorf("buildInitPlan with cilium and tunnel %q: %v", tunnel, err)
+		}
+	}
+}
+
 func TestBuildInitPlan_Errors(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
@@ -133,6 +146,8 @@ func TestBuildInitPlan_Errors(t *testing.T) {
 		{"cluster name is not a valid Kubernetes object name", func(in *initPlanInput) { in.Cluster = "../../../tmp/evil" }},
 		{"unsupported preset", func(in *initPlanInput) { in.Preset = "minimal" }},
 		{"invalid cni", func(in *initPlanInput) { in.CNIPreset = "calico" }},
+		{"invalid cni tunnel", func(in *initPlanInput) { in.CNITunnel = "gre" }},
+		{"cni tunnel without cilium", func(in *initPlanInput) { in.CNIPreset = "flannel"; in.CNITunnel = "geneve" }},
 		{"invalid endpoint type", func(in *initPlanInput) { in.EndpointType = "carrier-pigeon" }},
 		{"empty endpoint address", func(in *initPlanInput) { in.EndpointAddress = "" }},
 		{"empty install disk", func(in *initPlanInput) { in.InstallDisk = "" }},

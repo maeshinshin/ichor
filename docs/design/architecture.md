@@ -1,6 +1,6 @@
 # Ichor architecture
 
-Status: draft, pre-implementation. This document is the source of truth for the
+Status: living document; Ichor is alpha. This document is the source of truth for the
 project. Decisions it leaves open are recorded in `../adr/` as they are made.
 
 ## Summary
@@ -49,8 +49,8 @@ inventing a new control plane.
   bootstrap.
 - Replacing the storage system's own controller. Volumes, replicas and disk
   state belong to Longhorn (or whatever you run).
-- Multi-cluster management. The design keeps a hub mode possible, but it is
-  not a first-release feature.
+- Multi-cluster management. One Ichor manages one cluster, and the UI is built
+  for that (ADR 0097).
 - Air-gapped environments (ADR 0090). Nothing is built or tested for an
   installation with no route to public registries; registry mirrors exist for
   pull-through caches and private registries.
@@ -171,9 +171,7 @@ A separate provisioning network is assumed; the docs say so.
 The default is self-managed: Ichor runs inside the cluster it manages. The
 controller and UI run with two replicas, a PodDisruptionBudget and anti-affinity,
 except on clusters with a single schedulable node, where the installer drops to
-one replica and no PDB (otherwise a drain never finishes). A hub mode, where
-Ichor manages clusters from outside, is left open by the API but not built
-first.
+one replica and no PDB (otherwise a drain never finishes).
 
 Ichor's own users and login (ADR 0094) are off by default. Turning them on
 needs three things a default install lacks: an https URL that browsers and the
@@ -226,8 +224,9 @@ Group `ichor.maesh.dev`, version `v1alpha1`.
 | `TalosConfigPatch` | namespaced | A typed config patch with a layer, priority and target | yes |
 | `TalosStorage` | namespaced | Thin integration with a storage system: node selector, disk preset, evacuation settings | yes |
 | `TalosEtcdBackup` | namespaced | Backup schedule, destination, retention, encryption | yes |
-| `TalosOperation` | namespaced | A one-off imperative action (reboot, reset, snapshot, rollback), Job-style | no |
+| `TalosOperation` | namespaced | A Job-style run of one action over the cluster or a node: a Talos, Kubernetes or Ichor upgrade, a kube-proxy switch, shutdown, CA rotation, config rollout, node action, etcd restore | no |
 | `IchorInstallation` | cluster, singleton | Ichor's own version and management mode | yes |
+| `IchorUser` | namespaced | One of Ichor's own users: display name, e-mail, roles, disabled flag (ADR 0094) | yes |
 
 There are no CRDs for installing CNI, storage or monitoring. Their Talos-side
 needs are expressed on `TalosCluster`, `TalosMachine` and `TalosStorage`.
@@ -337,7 +336,7 @@ break-glass; Talos/Kubernetes version pairs and upgrade paths are checked.
 ### Bootstrap
 
 ```
-ichor init --preset standard --cni cilium [--argocd --repo URL --path clusters/NAME] [--gitops-dir DIR]
+ichor init --preset standard --cni cilium [--cni-tunnel vxlan|geneve] [--argocd --repo URL --path clusters/NAME] [--gitops-dir DIR] [--ui-url URL]
 ```
 
 1. Generate the secrets bundle locally; nag the user to back it up.
@@ -347,12 +346,18 @@ ichor init --preset standard --cni cilium [--argocd --repo URL --path clusters/N
 3. Apply the rendered config to the first control plane. Its
    `cluster.inlineManifests` carry only the CNI (unless flannel) -- the one
    component Kubernetes itself cannot start without, since nodes never go
-   Ready and nothing can be scheduled before it exists. Ichor itself is not
+   Ready and nothing can be scheduled before it exists. For Cilium that is
+   the chart pinned in the binary (1.18.0, embedded as an archive), rendered
+   with Helm's Go SDK into plain manifests: no network at init time and the
+   same bytes every run (ADR 0098). Ichor itself is not
    inlined: once step 4 below gets a working kubeconfig, Ichor applies its
    own install manifest (CRDs, RBAC, the controller Deployment) directly
    through the API server, the same build's binary carries it (no fetch, no
    version to get wrong), and a failure there is an ordinary, visible error
-   instead of something buried in Talos's boot log. Argo CD itself is never
+   instead of something buried in Talos's boot log. Every API write init
+   makes is retried for a few minutes on a transient error (a single control
+   plane can answer with etcd timeouts right after the API server comes up).
+   Argo CD itself is never
    installed by `init` either -- deciding which third-party release to fetch
    and trust during bootstrap is not this command's call to make; with
    `--argocd` it only prepares the root Application (pointing at the repo)
@@ -373,7 +378,7 @@ transfers with zero drift.
 ### GitOps and Argo CD
 
 What goes in Git: `TalosCluster`, `TalosConfigPatch`, `TalosStorage`,
-`TalosEtcdBackup`, `IchorInstallation`, approved `TalosMachine`s, and the
+`TalosEtcdBackup`, `IchorInstallation`, `IchorUser`s, approved `TalosMachine`s, and the
 Applications for CNI, Argo CD, Ichor and anything else. What doesn't: Secrets,
 `TalosOperation`s, unapproved machines, and the labels and annotations Ichor
 writes at runtime on Nodes and on the storage system's node objects. Putting
@@ -486,9 +491,9 @@ chart avoids anything that produces a diff on every sync, such as generated
 certificates.
 
 There is a cycle here: Argo CD manages the CNI and Ichor, and Ichor manages
-the nodes Argo CD runs on. The CLI keeps a way out of every corner:
-`ichor cni recover`, `ichor self-upgrade --local`,
-`ichor restore --recover-cluster`.
+the nodes Argo CD runs on. The CLI keeps a way out of the corners that are
+built: `ichor upgrade ichor VERSION --local` (no ichor-ui),
+`ichor gitops handoff cni` and `ichor restore --recover-cluster`.
 
 #### Kokumi as the delivery layer in front of Argo CD (`--kokumi`, narrow form built)
 
@@ -711,7 +716,10 @@ check before each drain.
 ### CNI
 
 `TalosCluster.spec.cni.preset` selects one of `flannel` (Talos default, Ichor
-does nothing), `cilium` (Helm, with the Talos-recommended values built in),
+does nothing), `cilium` (Helm, with the Talos-recommended values built in;
+`spec.cni.tunnel`, set by `ichor init --cni-tunnel`, picks `vxlan` or `geneve`
+and is immutable once set, so the Argo CD Application carries the same values
+as the bootstrap),
 `custom` (your chart or manifests, you declare the Talos-side settings), and
 later `calico`. A preset is a Go interface: Talos-side patches, manifest
 rendering for the bootstrap, an Argo CD Application template, whether it can
@@ -850,7 +858,7 @@ Application until the Talos side is ready.
    node at a time through the operation hook and drain, control planes with
    etcd checks in between. They never start by themselves: the machine reports
    `RebootRequired` with the fields, and a `config` operation, started from
-   `ichor config apply` or the cluster page after a plan, rolls them out (ADR 0080).
+   `ichor config apply` or Apply configuration on the Overview page after a plan, rolls them out (ADR 0080).
    A third class, `APIServerRestart` (for example `spec.authentication`), needs
    no reboot but restarts the kube-apiserver; the machine controller never
    applies it to a control plane, and the same `config` operation does, one
@@ -937,7 +945,9 @@ itself once every machine answers on a new boot, which lifts the refusal.
 
 `TalosEtcdBackup` takes snapshots on a schedule from a healthy non-leader
 control plane, verifies them, encrypts them (snapshots contain Secrets) and
-stores them in S3-compatible storage with retention. Failures and staleness
+stores them in S3-compatible storage with retention. A snapshot can also be
+taken outside the schedule (`ichor etcd backup now`, Back up now on the Backups
+page), which sets an annotation the controller acts on. Failures and staleness
 surface as metrics and alerts.
 
 Two recovery paths. Restoring into a live cluster stops etcd on all control
@@ -963,7 +973,13 @@ servers present would lock the operator out. The new credentials are written by
 the CLI or downloaded by an administrator in the UI (ADR 0093). In-cluster
 clients cannot hold both Kubernetes CAs (`kube-root-ca.crt` switches at
 Issuing), so before dropping the old CA the controller waits for the new one in
-every namespace and then a settle delay (ADR 0063). Expiry dates are visible in
+every namespace and then a settle delay. Its own client trusts the new
+Kubernetes CA ahead of the switch through a process-wide trust pool, and its
+leader election outlives the API server restart. After the old CAs are dropped
+and every Node has been Ready for a while, it restarts, one at a time, the
+clients that keep the old CA (CoreDNS, kube-proxy, the CNI, ichor-ui); other
+in-cluster clients that load the CA once may still need a restart (ADR 0063).
+Expiry dates are visible in
 status, the UI and metrics.
 
 ### Monitoring and registry mirrors
@@ -1001,14 +1017,22 @@ streams that resume from a token (resourceVersion, last log timestamp,
 progress sequence). `ichor ui` re-establishes its port-forward to another pod
 when the current one goes away.
 
-Screens: cluster and machine lists with pending approvals, rollout progress
-and hand-over state; a node page with hardware, disks, network, live resource
-usage, Kubernetes state, effective config and logs; config editing by layer
-with an effective-config view annotated by origin and secrets masked, impact
-preview before applying, and schema-driven forms; a merged multi-node log
-viewer; a GitOps page showing each CR's Application, sync state and pending
-PRs, and where Git, the cluster and the nodes disagree; deep links into
-Grafana, Hubble, Longhorn and Argo CD when their URLs are registered.
+The UI is built for one cluster (ADR 0097): there is no cluster list, and a top
+bar shows the cluster's name, its Talos, Kubernetes and Ichor versions and a
+health badge. Screens: an Overview with tiles for nodes (and the nodes waiting
+for approval), the running operation, backups and versions, with cluster
+actions such as rotating the CAs and shutting down; a Nodes list and an add-node
+(approval) page; a node page with tabs for Summary, Storage & network, Talos,
+Kubernetes & etcd, Configuration and Logs; Operations, with a detail page per
+operation (per-machine state, pause, resume, and the CA-rotation credentials
+hand-over); Backups, with each `TalosEtcdBackup`, its snapshots,
+Back up now and restore; Configuration, for editing patches by layer with an
+effective-config view annotated by origin and secrets masked, impact preview
+before applying, and schema-driven forms; a GitOps page showing each CR's
+Application, sync state and pending PRs, and where Git, the cluster and the
+nodes disagree, with links into Grafana, Hubble and Longhorn when their URLs are
+registered; Users, only when Ichor's own users are on. A merged multi-node log
+viewer is planned.
 
 ## Testing
 
@@ -1051,8 +1075,8 @@ resumption works. A short set runs per PR, the full set nightly.
    links, OIDC and impersonation (ADR 0058), Ichor's own users and issuer
    (ADR 0094, ADR 0096).
 10. UI localisation.
-11. Later: calico, more storage presets, Flux PR mode, IPv6, hub mode, replica-
-    based scaling.
+11. Later: calico, more storage presets, Flux PR mode, IPv6, replica-based
+    scaling.
 
 ## Open questions
 

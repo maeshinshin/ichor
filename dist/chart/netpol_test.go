@@ -68,7 +68,7 @@ func TestChartCiliumPoliciesEqualTheKustomizeOnes(t *testing.T) {
 	fromChart := cnpSpecs(t, renderChartWithValues(t, "ichor", netpolAllOn...), "ichor-")
 	fromConfig := cnpSpecs(t, loadYAMLDocs(t, netpolConfigPath), "")
 
-	want := []string{"controller-manager", "default-deny", "installer", "ui"}
+	want := []string{"cni", "controller-manager", "default-deny", "installer", "ui"}
 	for _, name := range want {
 		if fromChart[name] == nil || fromConfig[name] == nil {
 			t.Fatalf("policy %q missing: chart has %d, config has %d policies", name, len(fromChart), len(fromConfig))
@@ -190,6 +190,11 @@ func TestChartCiliumPolicyPortsAndSelectorsComeFromTheDeployments(t *testing.T) 
 	// The installer Job's pod carries the label its policy selects.
 	if got := selectorLabels(specs["installer"]); got["app.kubernetes.io/name"] != "ichor-installer" {
 		t.Errorf("installer policy selector = %v", got)
+	}
+
+	// So does the Cilium Helm Job's, which may reach the API server directly or through KubePrism.
+	if got := selectorLabels(specs["cni"]); got["app.kubernetes.io/name"] != "ichor-cni" {
+		t.Errorf("cni policy selector = %v", got)
 	}
 }
 

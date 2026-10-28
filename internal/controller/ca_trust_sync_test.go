@@ -29,6 +29,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	toolscache "k8s.io/client-go/tools/cache"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -137,4 +140,107 @@ func TestCATrustSyncFollowsARotationOnAnyReplica(t *testing.T) {
 	if _, err := os.Stat(file); !os.IsNotExist(err) {
 		t.Fatalf("the restarted replica did not clear the trust file: %v", err)
 	}
+}
+
+// fakeInformers hands CATrustSync's handler back to the test.
+type fakeInformers struct {
+	cache.Informer
+	registered chan toolscache.ResourceEventHandler
+}
+
+func (f *fakeInformers) GetInformer(context.Context, client.Object, ...cache.InformerGetOption) (cache.Informer, error) {
+	return f, nil
+}
+
+func (f *fakeInformers) AddEventHandler(h toolscache.ResourceEventHandler) (toolscache.ResourceEventHandlerRegistration, error) {
+	f.registered <- h
+
+	return nil, nil
+}
+
+// A rotation that appears must be published at once, not at the next tick: Accepting to Issuing
+// takes only a few seconds (ADR 0063).
+func TestCATrustSyncPublishesOnAnOperationEventWithoutWaitingForATick(t *testing.T) {
+	scheme := runtime.NewScheme()
+	if err := clientgoscheme.AddToScheme(scheme); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ichorv1alpha1.AddToScheme(scheme); err != nil {
+		t.Fatal(err)
+	}
+
+	contract, err := coreconfig.ParseContractFromVersion("v1.14")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rot, err := secretsbundle.NewRotation(time.Now(), contract)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	raw, err := rot.Marshal()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cluster := &ichorv1alpha1.TalosCluster{Namespace: testIchorNamespace, Name: "c"}
+	cluster.Spec.SecretsRef.Name = "rot-bundle"
+	secret := &corev1.Secret{
+		Namespace: "ichor-system", Name: "rot-bundle",
+		Data: map[string][]byte{secretsbundle.RotationKey: raw},
+	}
+	op := &ichorv1alpha1.TalosOperation{Namespace: testIchorNamespace, Name: "rot"}
+	op.Spec.ClusterRef.Name, op.Spec.Kind = "c", ichorv1alpha1.TalosOperationKindCARotation
+	cl := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster, secret, op).Build()
+
+	dir := t.TempDir()
+	file := filepath.Join(dir, "trust", "kubernetes-ca.crt")
+	inf := &fakeInformers{registered: make(chan toolscache.ResourceEventHandler, 1)}
+	// An hour-long tick: only the event can make the pass happen.
+	sync := &CATrustSync{
+		Reader: cl, ControllerNamespace: "ichor-system", Pool: &kubetrust.Pool{}, File: file,
+		Interval: time.Hour, Informers: inf,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+
+	go func() { _ = sync.Start(ctx); close(done) }()
+
+	defer func() { cancel(); <-done }()
+
+	var handler toolscache.ResourceEventHandler
+
+	select {
+	case handler = <-inf.registered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("no event handler was registered")
+	}
+
+	// Not under way yet (as at creation, before the status is set): no trigger, nothing published.
+	handler.OnAdd(op, false)
+
+	// The leader saves rotation.yaml, then sets Accepting: that status update is the event.
+	op.Status.CARotation = &ichorv1alpha1.TalosOperationCARotationStatus{Stage: ichorv1alpha1.CARotationStageAccepting}
+	op.Status.Phase = ichorv1alpha1.TalosOperationPhaseInProgress
+
+	if err := cl.Update(context.Background(), op); err != nil {
+		t.Fatal(err)
+	}
+
+	handler.OnUpdate(nil, op)
+
+	deadline := time.Now().Add(5 * time.Second)
+
+	for time.Now().Before(deadline) {
+		if b, _ := os.ReadFile(file); strings.Contains(string(b), strings.TrimSpace(string(rot.Kubernetes.Crt))) {
+			return
+		}
+
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	t.Fatal("the new CA was not published after the operation event")
 }

@@ -37,7 +37,6 @@ import (
 	"slices"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -303,25 +302,6 @@ func (n *nodeRun) nodeName(ctx context.Context) (string, error) {
 	return resolveNodeName(ctx, n.r.Client, n.talos, n.m)
 }
 
-// nodeReady reads the Node's Ready condition live when a clientset is wired, else from the cache.
-func (n *nodeRun) nodeReady(ctx context.Context, node string) (bool, error) {
-	if n.r.KubeClient != nil {
-		got, err := n.r.KubeClient.CoreV1().Nodes().Get(ctx, node, metav1.GetOptions{})
-		if err != nil {
-			return false, err
-		}
-
-		return nodeIsReady(got), nil
-	}
-
-	var got corev1.Node
-	if err := n.r.Get(ctx, types.NamespacedName{Name: node}, &got); err != nil {
-		return false, err
-	}
-
-	return nodeIsReady(&got), nil
-}
-
 // controlPlaneGuard is the quorum guard of reboot and shutdown of a control plane: all
 // members of etcd are present and, with more than one, at least three exist (stopping one of two
 // loses quorum). It also reports whether m is the cluster's only control plane, in which case
@@ -386,7 +366,7 @@ func (n *nodeRun) beginReboot(ctx context.Context) (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	ready, err := n.nodeReady(ctx, node)
+	ready, err := nodeReadyByName(ctx, n.r.KubeClient, n.r.Client, node)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("checking %q's node readiness: %w", n.m.Name, err)
 	}
@@ -454,7 +434,7 @@ func (n *nodeRun) awaitReboot(ctx context.Context) (ctrl.Result, error) {
 		return n.wait(ctx, err.Error())
 	}
 
-	ready, err := n.nodeReady(ctx, node)
+	ready, err := nodeReadyByName(ctx, n.r.KubeClient, n.r.Client, node)
 	if err != nil || !ready {
 		return n.wait(ctx, "the node is back but not Ready yet")
 	}
@@ -596,7 +576,7 @@ func (n *nodeRun) awaitRestartService(ctx context.Context) (ctrl.Result, error) 
 		return n.wait(ctx, err.Error())
 	}
 
-	ready, err := n.nodeReady(ctx, node)
+	ready, err := nodeReadyByName(ctx, n.r.KubeClient, n.r.Client, node)
 	if err != nil || !ready {
 		return n.wait(ctx, "the node is not Ready yet")
 	}

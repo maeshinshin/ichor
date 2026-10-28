@@ -42,6 +42,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
+	"github.com/maeshinshin/ichor/pkg/render"
 	"github.com/maeshinshin/ichor/pkg/storage"
 
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
@@ -167,7 +168,7 @@ func (a *configRolloutAdvancer) Advance(
 		return a.afterRestart(ctx, dialCtx, talos, cluster, m, current, rendered, hash)
 	case rebooting:
 		return a.afterReboot(ctx, dialCtx, talos, cluster, m, current, hash)
-	case hashConfig(current) == hash:
+	case render.Hash(current) == hash:
 		// A retried wait (ADR 0095): the configuration is on the node but its API server did not
 		// answer in time last time; wait again with a fresh clock instead of calling it done.
 		if c := apimeta.FindStatusCondition(m.Status.Conditions, conditionConfigRollout); c != nil &&
@@ -271,7 +272,7 @@ func (a *configRolloutAdvancer) afterRestart(
 	ctx, dialCtx context.Context, talos TalosClient, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
 	current, rendered []byte, hash string,
 ) (bool, error) {
-	if hashConfig(current) != hash {
+	if render.Hash(current) != hash {
 		applyCtx, cancelApply := context.WithTimeout(ctx, rebootCallTimeout)
 		defer cancelApply()
 
@@ -570,7 +571,7 @@ func (a *configRolloutAdvancer) afterReboot(
 		return false, a.stillWaiting(ctx, cluster, m, "the node has not rebooted")
 	}
 
-	if hashConfig(current) != hash {
+	if render.Hash(current) != hash {
 		return false, a.fail(ctx, cluster, m, fmt.Errorf(
 			"machine %q rebooted but is not running the rendered configuration: the staged configuration was not activated", m.Name))
 	}

@@ -271,7 +271,7 @@ func (a *kubernetesUpgradeAdvancer) Advance(
 		return false, fmt.Errorf("reading %q's configuration: %w", m.Name, err)
 	}
 
-	if hashConfig(current) != hash {
+	if render.Hash(current) != hash {
 		return false, a.releaseOnError(ctx, cluster, m, nodeName, stage,
 			a.begin(ctx, talos, cluster, m, op, &node, stage, current, rendered))
 	}

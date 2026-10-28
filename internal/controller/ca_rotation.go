@@ -416,7 +416,7 @@ func (c *caRun) preflight(ctx context.Context) (ctrl.Result, error) {
 				return fmt.Errorf("reading %q's configuration: %w", m.Name, err)
 			}
 
-			if hashConfig(current) != hash {
+			if render.Hash(current) != hash {
 				return fmt.Errorf("%q does not run the configuration Ichor renders for it; converge it before rotating", m.Name)
 			}
 
@@ -610,7 +610,7 @@ func (c *caRun) pass(ctx context.Context, stage string) (ctrl.Result, error) {
 				return fmt.Errorf("reading %q's configuration: %w", m.Name, err)
 			}
 
-			if hashConfig(current) == hash {
+			if render.Hash(current) == hash {
 				return nil
 			}
 
@@ -817,7 +817,7 @@ func (c *caRun) finalize(ctx context.Context) (ctrl.Result, error) {
 				return fmt.Errorf("ichor cannot reach %q with the replaced bundle: %w", m.Name, err)
 			}
 
-			if hashConfig(current) != hash {
+			if render.Hash(current) != hash {
 				return fmt.Errorf("%q does not run the configuration the replaced bundle renders", m.Name)
 			}
 

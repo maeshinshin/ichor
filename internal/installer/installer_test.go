@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -45,6 +46,7 @@ import (
 var (
 	testEnv   *envtest.Environment
 	k8sClient client.Client
+	testCfg   *rest.Config
 )
 
 func TestMain(m *testing.M) {
@@ -55,6 +57,8 @@ func TestMain(m *testing.M) {
 		fmt.Fprintln(os.Stderr, "starting envtest:", err)
 		os.Exit(1)
 	}
+
+	testCfg = cfg
 
 	scheme := runtime.NewScheme()
 	if err := clientgoscheme.AddToScheme(scheme); err != nil {
@@ -455,7 +459,7 @@ func TestPruneNeverDeletesTheCurrentSnapshot(t *testing.T) {
 	f := newFixture(t)
 
 	for _, id := range []string{"b", "a", "c"} {
-		if _, err := takeSnapshot(context.Background(), k8sClient, f.ns, f.run+id, nil); err != nil {
+		if _, err := takeSnapshot(context.Background(), k8sClient, f.ns, f.run+id, 0, nil); err != nil {
 			t.Fatal(err)
 		}
 	}

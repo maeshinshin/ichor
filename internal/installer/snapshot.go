@@ -30,6 +30,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
@@ -51,6 +52,9 @@ const (
 	// one-second resolution, and several runs can land in the same second.
 	snapshotTakenAnnotation = SnapshotLabel + "-taken"
 
+	// snapshotStageAnnotation says which stage of the run's snapshot a ConfigMap belongs to.
+	snapshotStageAnnotation = SnapshotLabel + "-stage"
+
 	// SnapshotsKept is how many snapshots (the current one included) survive a run: enough to
 	// go back past the last upgrade, few enough that ConfigMaps do not pile up (ADR 0059).
 	SnapshotsKept = 3
@@ -66,15 +70,27 @@ type entry struct {
 	Object     map[string]any `json:"object,omitempty"`
 }
 
-func snapshotName(runID string, i int) string { return runID + "-snapshot-" + strconv.Itoa(i) }
+func snapshotName(runID string, stage, i int) string {
+	if stage == 0 {
+		return runID + "-snapshot-" + strconv.Itoa(i)
+	}
 
-// takeSnapshot saves the live state of every object the plan will touch. A snapshot that
-// already exists for runID is kept as it is and returned: a re-run after a crash would
-// otherwise snapshot the half-upgraded cluster over the good one.
-func takeSnapshot(ctx context.Context, c client.Client, ns, runID string, objs []*unstructured.Unstructured) ([]entry, error) {
-	if existing, err := loadSnapshot(ctx, c, ns, runID); err != nil {
+	return runID + "-snapshot-s" + strconv.Itoa(stage) + "-" + strconv.Itoa(i)
+}
+
+// takeSnapshot saves the live state of every object of one stage of the plan. A run snapshots in
+// stages (the installer's own RBAC first, everything else once that RBAC is effective; ADR 0059),
+// all under one run id, and a rollback reads them back as one list. A stage that already exists
+// for runID is kept as it is and returned: a re-run after a crash would otherwise snapshot the
+// half-upgraded cluster over the good one.
+//
+// A NotFound, or a kind whose CRD is not installed yet, means the object does not exist and
+// there is nothing to restore. Any other error, Forbidden included, fails: a rollback depends on
+// the snapshot being complete.
+func takeSnapshot(ctx context.Context, c client.Client, ns, runID string, stage int, objs []*unstructured.Unstructured) ([]entry, error) {
+	if existing, found, err := loadStage(ctx, c, ns, runID, stage); err != nil {
 		return nil, err
-	} else if existing != nil {
+	} else if found {
 		return existing, nil
 	}
 
@@ -89,7 +105,7 @@ func takeSnapshot(ctx context.Context, c client.Client, ns, runID string, objs [
 		err := c.Get(ctx, types.NamespacedName{Namespace: o.GetNamespace(), Name: o.GetName()}, live)
 
 		switch {
-		case apierrors.IsNotFound(err):
+		case apierrors.IsNotFound(err) || meta.IsNoMatchError(err):
 		case err != nil:
 			return nil, fmt.Errorf("snapshotting %s %s: %w", o.GetKind(), o.GetName(), err)
 		default:
@@ -124,10 +140,11 @@ func takeSnapshot(ctx context.Context, c client.Client, ns, runID string, objs [
 
 		cm := &corev1.ConfigMap{
 			Namespace: ns,
-			Name:      snapshotName(runID, i),
+			Name:      snapshotName(runID, stage, i),
 			Labels:    map[string]string{SnapshotLabel: runID},
 			Annotations: map[string]string{
 				SnapshotLabel + "-parts": strconv.Itoa(parts),
+				snapshotStageAnnotation:  strconv.Itoa(stage),
 				snapshotTakenAnnotation:  taken,
 			},
 			BinaryData: map[string][]byte{snapshotKey: chunk},
@@ -140,46 +157,73 @@ func takeSnapshot(ctx context.Context, c client.Client, ns, runID string, objs [
 	return entries, nil
 }
 
-// loadSnapshot reads the snapshot saved for runID, or nil when there is none.
+// loadSnapshot reads the snapshot saved for runID (every stage, in order), or nil when there is none.
 func loadSnapshot(ctx context.Context, c client.Client, ns, runID string) ([]entry, error) {
+	var all []entry
+
+	for stage := 0; ; stage++ {
+		entries, found, err := loadStage(ctx, c, ns, runID, stage)
+		if err != nil {
+			return nil, err
+		}
+
+		if !found {
+			return all, nil
+		}
+
+		all = append(all, entries...)
+	}
+}
+
+// loadStage reads one stage of the snapshot saved for runID. A snapshot made before stages
+// existed has no stage annotation and is stage 0.
+func loadStage(ctx context.Context, c client.Client, ns, runID string, stage int) ([]entry, bool, error) {
 	var list corev1.ConfigMapList
 	if err := c.List(ctx, &list, client.InNamespace(ns), client.MatchingLabels{SnapshotLabel: runID}); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
-	if len(list.Items) == 0 {
-		return nil, nil
+	var parts []corev1.ConfigMap
+
+	for _, cm := range list.Items {
+		if st, _ := strconv.Atoi(cm.Annotations[snapshotStageAnnotation]); st == stage {
+			parts = append(parts, cm)
+		}
 	}
 
-	slices.SortFunc(list.Items, func(a, b corev1.ConfigMap) int { return strings.Compare(a.Name, b.Name) })
+	if len(parts) == 0 {
+		return nil, false, nil
+	}
 
-	want, _ := strconv.Atoi(list.Items[0].Annotations[SnapshotLabel+"-parts"])
-	if want != len(list.Items) {
-		return nil, fmt.Errorf("snapshot %s is incomplete: %d of %d parts found; it cannot be trusted to roll back",
-			runID, len(list.Items), want)
+	slices.SortFunc(parts, func(a, b corev1.ConfigMap) int { return strings.Compare(a.Name, b.Name) })
+
+	want, _ := strconv.Atoi(parts[0].Annotations[SnapshotLabel+"-parts"])
+	if want != len(parts) {
+		return nil, false, fmt.Errorf("snapshot %s is incomplete: %d of %d parts found; it cannot be trusted to roll back",
+			runID, len(parts), want)
 	}
 
 	var data []byte
-	for _, cm := range list.Items {
+	for _, cm := range parts {
 		data = append(data, cm.BinaryData[snapshotKey]...)
 	}
 
 	zr, err := gzip.NewReader(bytes.NewReader(data))
 	if err != nil {
-		return nil, fmt.Errorf("snapshot %s: %w", runID, err)
+		return nil, false, fmt.Errorf("snapshot %s: %w", runID, err)
 	}
 
 	raw, err := io.ReadAll(zr)
 	if err != nil {
-		return nil, fmt.Errorf("snapshot %s: %w", runID, err)
+		return nil, false, fmt.Errorf("snapshot %s: %w", runID, err)
 	}
 
 	var entries []entry
 	if err := json.Unmarshal(raw, &entries); err != nil {
-		return nil, fmt.Errorf("snapshot %s: %w", runID, err)
+		return nil, false, fmt.Errorf("snapshot %s: %w", runID, err)
 	}
 
-	return entries, nil
+	return entries, true, nil
 }
 
 // stripLive removes what the API server owns, so the saved object can be written back.

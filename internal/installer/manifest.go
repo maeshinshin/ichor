@@ -108,9 +108,8 @@ func isInstallerRBAC(o *unstructured.Unstructured) bool {
 	return false
 }
 
-func (p plan) all() []*unstructured.Unstructured {
-	out := make([]*unstructured.Unstructured, 0, len(p.rbac)+len(p.crds)+len(p.controller)+len(p.ui))
-	out = append(out, p.rbac...)
+func (p plan) nonRBAC() []*unstructured.Unstructured {
+	out := make([]*unstructured.Unstructured, 0, len(p.crds)+len(p.controller)+len(p.ui))
 	out = append(out, p.crds...)
 	out = append(out, p.controller...)
 

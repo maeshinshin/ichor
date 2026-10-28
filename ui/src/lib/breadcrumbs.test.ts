@@ -7,6 +7,7 @@ test('a top-level route is a single current crumb', () => {
   assert.deepEqual(breadcrumbsFor('/nodes'), [{ label: 'nodes.title' }])
   assert.deepEqual(breadcrumbsFor('/config'), [{ label: 'config.title' }])
   assert.deepEqual(breadcrumbsFor('/gitops'), [{ label: 'nav.gitops' }])
+  assert.deepEqual(breadcrumbsFor('/cilium'), [{ label: 'nav.cilium' }])
   assert.deepEqual(breadcrumbsFor('/users'), [{ label: 'nav.users' }])
 })
 

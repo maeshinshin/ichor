@@ -69,7 +69,10 @@ kubectl --context $C -n ichor-e2e exec $P-tools -- env HOME=/tmp/home /tmp/ichor
 # `--ui-url` must be https and needs --version-contract v1.14 or later when users are on.
 # init prints the generated admin password ONCE (must change on first login). Save it at once to a
 # 0600 file under bin/ (gitignored), e.g. umask 077 and redirect it to bin/ui-demo.admin-password.
-# init waits for the node, the API server and the webhooks; allow 10-15 minutes. The secrets bundle and
+# init also prints the generated Kokumi admin password ONCE on stdout; save it the same way.
+# init has no --argocd/--kokumi/--repo/--gitops-dir flags any more: Kokumi and Argo CD are always
+# installed by the controller and init waits for StackReady and CNIHandover.
+# init waits for the node, the API server, the webhooks, the stack and the Cilium hand-over; allow 20-45 minutes. The secrets bundle and
 # kubeconfig are under /tmp/home/.ichor/clusters/$P/ in the pod: copy them to bin/ as soon as they appear.
 
 # 6. apply the config. init leaves the control plane at APIServerRestartRequired until this runs.

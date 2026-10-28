@@ -50,3 +50,30 @@ func TestAssertEndpoint(t *testing.T) {
 	}
 	t.Logf("assertEndpoint failed loudly as expected: %v", err)
 }
+
+// TestDemoMemory checks the demo VM memory knob: default kept, override lands in the manifest, junk refused.
+func TestDemoMemory(t *testing.T) {
+	const env = "ICHOR_UI_DEMO_TEST_MEMORY"
+
+	got, err := demoMemory(env)
+	if err != nil || got != "2560Mi" {
+		t.Fatalf("unset: got %q, %v; want 2560Mi", got, err)
+	}
+	if m := demoVMManifest("x-cp", got); !strings.Contains(m, "guest: 2560Mi") {
+		t.Fatalf("default manifest lost 2560Mi:\n%s", m)
+	}
+
+	t.Setenv(env, "3Gi")
+	got, err = demoMemory(env)
+	if err != nil || got != "3Gi" {
+		t.Fatalf("override: got %q, %v; want 3Gi", got, err)
+	}
+	if m := demoVMManifest("x-cp", got); !strings.Contains(m, "guest: 3Gi") || strings.Contains(m, "2560Mi") {
+		t.Fatalf("override manifest wrong:\n%s", m)
+	}
+
+	t.Setenv(env, "2560Mi\n  evil: 1")
+	if _, err := demoMemory(env); err == nil {
+		t.Fatal("accepted a malformed quantity")
+	}
+}

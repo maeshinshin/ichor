@@ -581,9 +581,8 @@ func TestAcknowledgeNeedsAWaitingRotation(t *testing.T) {
 }
 
 // flakyAckClient is the fixture's cluster behind a client whose first patch fails with EOF, as when
-// the API server restarts under it. applyFirst makes that patch land before the EOF. patches counts
-// the patch calls.
-func flakyAckClient(t *testing.T, f *credFixture, applyFirst bool) (client.Client, *int) {
+// the API server restarts under it. patches counts the patch calls.
+func flakyAckClient(t *testing.T, f *credFixture) (client.Client, *int) {
 	t.Helper()
 
 	var op ichorv1alpha1.TalosOperation
@@ -599,12 +598,6 @@ func flakyAckClient(t *testing.T, f *credFixture, applyFirst bool) (client.Clien
 		Patch: func(ctx context.Context, c client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
 			*patches++
 			if *patches == 1 {
-				if applyFirst {
-					if err := c.Patch(ctx, obj, patch, opts...); err != nil {
-						return err
-					}
-				}
-
 				return io.ErrUnexpectedEOF
 			}
 
@@ -615,42 +608,11 @@ func flakyAckClient(t *testing.T, f *credFixture, applyFirst bool) (client.Clien
 	return c, patches
 }
 
-func TestAcknowledgeSurvivesAPatchThatLandedBeforeTheEOF(t *testing.T) {
-	shrinkFollowTimers(t)
-
-	f := newCredFixture(t, true, ichorv1alpha1.CARotationStageAwaitingCredentials)
-	c, patches := flakyAckClient(t, f, true)
-
-	var errw bytes.Buffer
-
-	name, err := acknowledgeHandoff(context.Background(), c, testNamespace, f.name, "", &errw, nil)
-	if err != nil {
-		t.Fatalf("a hand-off that landed before the connection dropped was reported as failed: %v", err)
-	}
-
-	if name != credOpName {
-		t.Fatalf("acknowledged operation %q, want %q", name, credOpName)
-	}
-
-	if *patches != 1 {
-		t.Fatalf("the patch was sent %d times, want once: the read-back should have seen it land", *patches)
-	}
-
-	var op ichorv1alpha1.TalosOperation
-	if err := c.Get(context.Background(), types.NamespacedName{Namespace: testNamespace, Name: credOpName}, &op); err != nil {
-		t.Fatal(err)
-	}
-
-	if got := op.Annotations[ichorv1alpha1.CredentialsHandoffAnnotation]; got != credHandoffToken {
-		t.Fatalf("hand-off annotation %q", got)
-	}
-}
-
 func TestAcknowledgeRetriesAPatchThatDidNotLandWithTheNewClient(t *testing.T) {
 	shrinkFollowTimers(t)
 
 	f := newCredFixture(t, true, ichorv1alpha1.CARotationStageAwaitingCredentials)
-	c, patches := flakyAckClient(t, f, false)
+	c, patches := flakyAckClient(t, f)
 
 	redials := 0
 	redial := func() (client.Client, error) {

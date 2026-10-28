@@ -691,6 +691,14 @@ func (s *Server) unfinishedOperation(ctx context.Context, cluster *ichorv1alpha1
 			continue
 		}
 
+		if o.Status.Phase == ichorv1alpha1.TalosOperationPhasePaused && o.Spec.Kind == ichorv1alpha1.TalosOperationKindIchor && o.Status.FailureReason != "" {
+			// The installer Job failed and rolled back; a resume would only meet the same failed Job
+			// (it is kept for a day), and spec.version still names the failed target.
+			return fmt.Sprintf("the Ichor upgrade %q failed and the installer rolled back (see 'ichor operation get %s' and the installer Job's log); "+
+				"delete it with 'ichor operation delete %s', then run 'ichor upgrade ichor <version>' again",
+				o.Name, o.Name, o.Name), nil
+		}
+
 		if o.Status.Phase == ichorv1alpha1.TalosOperationPhasePaused {
 			return fmt.Sprintf("operation %q (%s) on this cluster is not finished (phase Paused); "+
 				"resume it with 'ichor operation resume %s', or delete it with 'ichor operation delete %s'",

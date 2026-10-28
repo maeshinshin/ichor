@@ -135,6 +135,11 @@ func (s *Server) GetMyPermissions(
 
 			return err
 		})
+		g.Go(func() (err error) {
+			out.ClusterUpdate, err = s.may(ctx, "update", c.GetNamespace(), resourceTalosClusters, "", c.GetName())
+
+			return err
+		})
 	}
 
 	if err := g.Wait(); err != nil {
@@ -150,13 +155,18 @@ func (s *Server) GetMyPermissions(
 // in the CLI's in-process fallback, whoever the kubeconfig is), so a default
 // install, whose ServiceAccount has no such grant, refuses every download.
 func (s *Server) mayDownload(ctx context.Context, namespace, resource, subresource, name string) (bool, error) {
+	return s.may(ctx, DownloadVerb, namespace, resource, subresource, name)
+}
+
+// may asks the same question for any verb.
+func (s *Server) may(ctx context.Context, verb, namespace, resource, subresource, name string) (bool, error) {
 	c, err := s.cl(ctx)
 	if err != nil {
 		return false, connect.NewError(connect.CodeUnavailable, fmt.Errorf("acting as the user: %w", err))
 	}
 
 	review := &authv1.SelfSubjectAccessReview{Spec: authv1.SelfSubjectAccessReviewSpec{ResourceAttributes: &authv1.ResourceAttributes{
-		Namespace: namespace, Verb: DownloadVerb, Group: ichorv1alpha1.GroupVersion.Group,
+		Namespace: namespace, Verb: verb, Group: ichorv1alpha1.GroupVersion.Group,
 		Resource: resource, Subresource: subresource, Name: name,
 	}}}
 

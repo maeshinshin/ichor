@@ -7,7 +7,7 @@ export type DownloadKind = 'support-bundle' | 'etcd-snapshot' | 'packet-capture'
 
 // What the caller may download (DiagnosticsService.GetMyPermissions): the machine's three downloads and
 // the cluster's CA rotation credentials.
-export type Permissions = { supportBundle: boolean; etcdSnapshot: boolean; packetCapture: boolean; clusterCredentials: boolean }
+export type Permissions = { supportBundle: boolean; etcdSnapshot: boolean; packetCapture: boolean; clusterCredentials: boolean; clusterUpdate: boolean }
 
 // toPermissions copies the response's flags; a missing response (not answered yet, or the probe failed)
 // stays undefined, which offers nothing.
@@ -17,6 +17,7 @@ export function toPermissions(res: Permissions | undefined): Permissions | undef
     etcdSnapshot: res.etcdSnapshot,
     packetCapture: res.packetCapture,
     clusterCredentials: res.clusterCredentials,
+    clusterUpdate: res.clusterUpdate,
   }
 }
 

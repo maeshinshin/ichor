@@ -42,11 +42,13 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
+	"github.com/maeshinshin/ichor/pkg/fieldmeta"
 	"github.com/maeshinshin/ichor/pkg/render"
 )
 
@@ -194,7 +196,7 @@ func (a *cniKubeProxyAdvancer) Advance(
 	}
 
 	if hashConfig(current) != hash {
-		return false, a.apply(ctx, talos, m, current, rendered)
+		return false, a.apply(ctx, talos, cluster, m, current, rendered)
 	}
 
 	others, err := a.othersDone(ctx, cluster, m, op, target)
@@ -240,18 +242,31 @@ func (a *cniKubeProxyAdvancer) setTalosSide(
 	return nil
 }
 
-// apply sends the rendered configuration without a reboot, after checking that the only thing it
-// changes is kube-proxy's mode: a pending unrelated change is never swept into a switch.
+// apply sends the rendered configuration without a reboot, after checking that it changes nothing
+// but kube-proxy's mode and paths fieldmeta classifies as safe (applied live, no reboot, no
+// API-server restart: they ride along). An unrelated reboot-requiring, restarting, install-time
+// or unclassified change is never swept into a switch.
 func (a *cniKubeProxyAdvancer) apply(
-	ctx context.Context, talos TalosClient, m *ichorv1alpha1.TalosMachine, current, rendered []byte,
+	ctx context.Context, talos TalosClient, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
+	current, rendered []byte,
 ) error {
 	paths, err := ChangedPaths(current, rendered)
 	if err != nil {
 		return fmt.Errorf("comparing %q's configuration: %w", m.Name, err)
 	}
 
+	contract, err := coreconfig.ParseContractFromVersion(cluster.Spec.VersionContract)
+	if err != nil {
+		return fmt.Errorf("invalid versionContract %q: %w", cluster.Spec.VersionContract, err)
+	}
+
 	for _, p := range paths {
-		if !strings.HasPrefix(p, "KubeProxyConfig") && !strings.HasPrefix(p, "cluster.proxy") {
+		if strings.HasPrefix(p, "KubeProxyConfig") || strings.HasPrefix(p, "cluster.proxy") {
+			continue
+		}
+
+		if impact := fieldmeta.Assess([]string{p}, contract); impact.RebootRequired || len(impact.InstallTimeOnly) > 0 ||
+			len(impact.APIServerRestartPaths) > 0 || len(impact.Unsupported) > 0 {
 			return fmt.Errorf("%q also has an unrelated pending configuration change at %q that a kube-proxy "+
 				"switch will not apply; converge it first", m.Name, p)
 		}

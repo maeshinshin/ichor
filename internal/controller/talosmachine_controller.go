@@ -636,6 +636,18 @@ func desiredInputsHash(
 		parts = append(parts, "registryauth="+registryAuth)
 	}
 
+	// Two TalosCluster.status values feed the render as well (ADR 0024, ADR 0066): the CNI
+	// hand-over drops the CNI's inlineManifests entry, and status.cni.kubeProxy overrides the
+	// kube-proxy mode. metadata.generation does not move for a status write, so without these
+	// the render change they cause would read as the node drifting.
+	if apimeta.IsStatusConditionTrue(cluster.Status.Conditions, render.ConditionCNIHandover) {
+		parts = append(parts, "cnihandover=true")
+	}
+
+	if mode, fromStatus := render.KubeProxyMode(cluster); fromStatus {
+		parts = append(parts, "kubeproxy="+string(mode))
+	}
+
 	return render.Hash([]byte(strings.Join(parts, ";"))), nil
 }
 

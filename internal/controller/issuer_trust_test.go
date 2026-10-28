@@ -180,7 +180,7 @@ var _ = Describe("IssuerTrustReconciler", func() {
 
 		var cm corev1.ConfigMap
 		get(oidctrust.TrustConfigMap, &cm)
-		Expect(cm.Data[oidctrust.DiscoveryURLKey]).To(ContainSubstring("10.0.0.51:8444"))
+		Expect(cm.Data[oidctrust.DiscoveryURLKey]).To(Equal("https://10.0.0.51:8444/.well-known/openid-configuration"))
 	})
 
 	It("does not replace a signing document it cannot read", func() {

@@ -22,10 +22,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/url"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -165,14 +163,8 @@ func prepareUITargets(ctx context.Context, k client.Client, ns, externalURL stri
 		return nil, fmt.Errorf("init: %w", err)
 	}
 
-	// ichor-ui cannot list Services, and the kubelet's *_SERVICE_HOST variable carries the
-	// (prefixed) Service name, so init hands it the ClusterIP; a ClusterIP never changes.
-	if net.ParseIP(svc.Spec.ClusterIP) == nil {
-		return nil, fmt.Errorf("init: the ichor-ui Service %s has no ClusterIP", svc.Name)
-	}
-
 	t := &uiTargets{ui: ui, controller: mgr, svc: svc}
-	t.uiMut = func(d *appsv1.Deployment) error { return usersOnDeployment(d, externalURL, svc.Spec.ClusterIP) }
+	t.uiMut = func(d *appsv1.Deployment) error { return usersOnDeployment(d, externalURL) }
 	t.ctrlMut = issuerOnController
 	t.svcMut = func(s *corev1.Service) error {
 		if !slices.ContainsFunc(s.Spec.Ports, func(p corev1.ServicePort) bool { return p.Name == uiInternalPortName }) {
@@ -230,7 +222,7 @@ func (t *uiTargets) apply(ctx context.Context, k client.Client, progress io.Writ
 	return nil
 }
 
-func usersOnDeployment(dep *appsv1.Deployment, externalURL, clusterIP string) error {
+func usersOnDeployment(dep *appsv1.Deployment, externalURL string) error {
 	i := slices.IndexFunc(dep.Spec.Template.Spec.Containers, func(c corev1.Container) bool { return c.Name == uiContainer })
 	if i < 0 {
 		return fmt.Errorf("init: the ichor-ui Deployment %s has no container %q", dep.Name, uiContainer)
@@ -242,8 +234,9 @@ func usersOnDeployment(dep *appsv1.Deployment, externalURL, clusterIP string) er
 	c.Args = slices.DeleteFunc(c.Args, func(a string) bool {
 		return a == "--users-enabled=true" || strings.HasPrefix(a, "--external-url=") || strings.HasPrefix(a, "--internal-jwks-uri=")
 	})
-	c.Args = append(c.Args, "--users-enabled=true", "--external-url="+externalURL,
-		"--internal-jwks-uri=https://"+net.JoinHostPort(clusterIP, strconv.Itoa(uiInternalPort))+"/oidc/jwks")
+	// --internal-jwks-uri is dropped on purpose: ichor-ui answers with the host the apiserver
+	// used, so a recreated Service (new ClusterIP) needs no change here.
+	c.Args = append(c.Args, "--users-enabled=true", "--external-url="+externalURL)
 
 	if !slices.ContainsFunc(c.Ports, func(p corev1.ContainerPort) bool { return p.Name == uiInternalPortName }) {
 		c.Ports = append(c.Ports, corev1.ContainerPort{Name: uiInternalPortName, ContainerPort: uiInternalPort, Protocol: corev1.ProtocolTCP})

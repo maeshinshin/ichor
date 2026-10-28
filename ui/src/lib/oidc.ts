@@ -112,7 +112,9 @@ export async function startLogin(cfg: AuthProvider): Promise<never> {
 }
 
 // finishLogin completes the redirect back from the IdP, if this page load is
-// one. It returns true when it stored a token.
+// one. It returns true when it stored a token. A stale callback (no pending
+// login, or one naming an unknown provider) returns false so the caller starts
+// a fresh sign-in; a state mismatch or a failed exchange still throws.
 export async function finishLogin(providers: AuthProvider[]): Promise<boolean> {
   const q = new URLSearchParams(window.location.search)
   const code = q.get('code')
@@ -121,11 +123,13 @@ export async function finishLogin(providers: AuthProvider[]): Promise<boolean> {
   const raw = sessionStorage.getItem(PENDING)
   sessionStorage.removeItem(PENDING)
   window.history.replaceState({}, '', '/')
-  if (!raw) throw new Error('Unexpected login response')
+  // No pending login means this is a stale callback (a reopened or restored tab, the back button,
+  // another tab: sessionStorage is per tab). It is not an attack, so start a fresh sign-in instead.
+  if (!raw) return false
   const pending = JSON.parse(raw) as { verifier: string; state: string; nonce: string; provider?: string }
   if (q.get('state') !== pending.state) throw new Error('Login response did not match this session')
   const cfg = providers.find((p) => p.id === (pending.provider ?? 'oidc'))
-  if (!cfg) throw new Error('Unexpected login response')
+  if (!cfg) return false
 
   const d = await discover(cfg.issuer)
   const res = await fetch(d.token_endpoint, {

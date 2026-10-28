@@ -155,6 +155,15 @@ manager:
 installer:
   enabled: false
 
+## The Cilium Helm Job's identity: the ServiceAccount ichor-cni the controller puts
+## in the Job that runs Helm over Cilium. On by default because Cilium is always Ichor's CNI
+## and always Ichor's Helm release. It carries a cluster-role escalation (the chart's
+## ClusterRoles are applied by it), so turn it off only when nothing may run that Job. See
+## config/rbac/ichor-cni/role.yaml.
+##
+cniHelm:
+  enabled: true
+
 ## Configure the ichor-ui deployment. It holds a read-only Kubernetes
 ## identity, separate from the controller's own ServiceAccount (architecture.md "Trust"):
 ## see config/rbac/ichor-ui/ and templates/rbac/ichor-ui-*.yaml.

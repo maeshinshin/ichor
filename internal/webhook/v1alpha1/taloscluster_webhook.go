@@ -35,7 +35,7 @@ var talosclusterlog = logf.Log.WithName("taloscluster-resource")
 // SetupTalosClusterWebhookWithManager registers the webhook for TalosCluster in the manager.
 func SetupTalosClusterWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr, &ichorv1alpha1.TalosCluster{}).
-		WithValidator(&TalosClusterCustomValidator{APIReader: mgr.GetAPIReader()}).
+		WithValidator(&TalosClusterCustomValidator{APIReader: mgr.GetAPIReader(), BreakGlass: breakGlassCheckFor(mgr.GetClient())}).
 		Complete()
 }
 
@@ -50,6 +50,9 @@ type TalosClusterCustomValidator struct {
 	// APIReader counts approved workers for the schedulable check, uncached
 	// for the same reason as TalosMachineCustomValidator.APIReader.
 	APIReader client.Reader
+	// BreakGlass lets a user holding the break-glass verb on the cluster override the
+	// last-worker guard. nil means no override.
+	BreakGlass BreakGlassCheck
 }
 
 // isUnschedulable reports spec.controlPlane.schedulable == "false".
@@ -77,7 +80,7 @@ func (v *TalosClusterCustomValidator) ValidateUpdate(ctx context.Context, oldObj
 			return nil, err
 		}
 
-		return nil, deleteguard.CheckLastWorker(true, workers)
+		return nil, v.BreakGlass.checkLastWorker(ctx, workers, "talosclusters", newObj.Name, newObj.Namespace)
 	}
 
 	return nil, nil

@@ -40,14 +40,6 @@ type StagedKubernetes struct {
 	KubeProxyVersion         string
 }
 
-func (s *SystemInputs) staged() *StagedKubernetes {
-	if s == nil {
-		return nil
-	}
-
-	return s.Staged
-}
-
 // injectStagedVersions pins the controller-manager, scheduler, kubelet and kube-proxy images. It
 // runs below the patch layers, so a patch that sets an image explicitly still wins. The three
 // control-plane components have no document on a worker.

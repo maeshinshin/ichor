@@ -21,8 +21,6 @@ import (
 	"fmt"
 
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
-	"github.com/siderolabs/talos/pkg/machinery/config/configpatcher"
-	"github.com/siderolabs/talos/pkg/machinery/config/container"
 	mv1alpha1 "github.com/siderolabs/talos/pkg/machinery/config/types/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -187,17 +185,5 @@ func injectRegistries(
 		},
 	}
 
-	c, err := container.New(doc)
-	if err != nil {
-		return nil, fmt.Errorf("render: building registries document: %w", err)
-	}
-
-	patch := configpatcher.NewStrategicMergePatch(c)
-
-	out, err := configpatcher.Apply(configpatcher.WithConfig(cfg), []configpatcher.Patch{patch})
-	if err != nil {
-		return nil, fmt.Errorf("render: injecting registry mirrors: %w", err)
-	}
-
-	return out.Config()
+	return mergeDocument(cfg, "registry mirrors", doc)
 }

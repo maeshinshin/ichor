@@ -42,14 +42,14 @@ func injectHostname(
 		doc.ConfigAuto = new(nethelpers.AutoHostnameKindOff)
 		doc.ConfigHostname = m.Spec.Hostname
 
-		return mergeDocument(cfg, doc, "hostname")
+		return mergeDocument(cfg, "hostname", doc)
 	}
 
 	//nolint:staticcheck // the legacy block is the only form a pre-1.14 contract accepts
-	return mergeDocument(cfg, &mv1alpha1.Config{
+	return mergeDocument(cfg, "hostname", &mv1alpha1.Config{
 		ConfigVersion: mv1alpha1.Version,
 		MachineConfig: &mv1alpha1.MachineConfig{
 			MachineNetwork: &mv1alpha1.NetworkConfig{NetworkHostname: m.Spec.Hostname}, //nolint:staticcheck // see above
 		},
-	}, "hostname")
+	})
 }

@@ -22,8 +22,6 @@ import (
 
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
 	"github.com/siderolabs/talos/pkg/machinery/config/config"
-	"github.com/siderolabs/talos/pkg/machinery/config/configpatcher"
-	"github.com/siderolabs/talos/pkg/machinery/config/container"
 	"github.com/siderolabs/talos/pkg/machinery/config/types/k8s"
 	mv1alpha1 "github.com/siderolabs/talos/pkg/machinery/config/types/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -86,14 +84,6 @@ func ResolveSystemInputs(
 	return &SystemInputs{RegistryAuth: auth, Storage: storages.Items, OIDCTrust: trust}, nil
 }
 
-func (s *SystemInputs) registryAuth() map[string]RegistryAuth {
-	if s == nil {
-		return nil
-	}
-
-	return s.RegistryAuth
-}
-
 // StorageFor returns the TalosStorage governing m (storage.Select over m's declared
 // spec.nodeLabels, the labels Talos stamps onto its Node), or nil. It is the single entry point
 // for "does layer 1 apply to this machine": Render, the machine controller's input fingerprint
@@ -111,10 +101,6 @@ func injectStorage(
 	cfg coreconfig.Provider, contract *coreconfig.VersionContract,
 	cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, sys *SystemInputs,
 ) (coreconfig.Provider, error) {
-	if sys == nil {
-		return cfg, nil
-	}
-
 	chosen, err := StorageFor(cluster, m, sys.Storage)
 	if err != nil || chosen == nil {
 		return cfg, err
@@ -145,18 +131,7 @@ func injectStorage(
 	// document carries them depends on the version contract.
 	docs = append(docs, nodeRegistrationDocs(contract, preset)...)
 
-	c, err := container.New(docs...)
-	if err != nil {
-		return nil, fmt.Errorf("render: TalosStorage %q: %w", chosen.Name, err)
-	}
-
-	out, err := configpatcher.Apply(configpatcher.WithConfig(cfg),
-		[]configpatcher.Patch{configpatcher.NewStrategicMergePatch(c)})
-	if err != nil {
-		return nil, fmt.Errorf("render: applying TalosStorage %q: %w", chosen.Name, err)
-	}
-
-	return out.Config()
+	return mergeDocument(cfg, fmt.Sprintf("TalosStorage %q", chosen.Name), docs...)
 }
 
 // nodeRegistrationDocs returns the Node label and annotation that register the disk with the

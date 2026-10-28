@@ -43,7 +43,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -458,9 +457,7 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 		kubetrust.TrustFile = filepath.Join(GinkgoT().TempDir(), "trust", "kubernetes-ca.crt")
 		base := filepath.Join(GinkgoT().TempDir(), "ca.crt")
 		Expect(os.WriteFile(base, []byte("old\n"), 0o600)).To(Succeed())
-		kubetrust.Shared.Apply(&rest.Config{
-			Host: "https://127.0.0.1:6443", BearerToken: "x", TLSClientConfig: rest.TLSClientConfig{CAFile: base},
-		})
+		applyTrustBase(kubetrust.Shared, base)
 		DeferCleanup(func() {
 			Expect(kubetrust.Shared.Clear(kubetrust.TrustFile)).To(Succeed())
 			kubetrust.TrustFile = prev

@@ -498,6 +498,20 @@ grafana:
 networkPolicy:
   enabled: false
 
+  ## Ichor's CiliumNetworkPolicies: a default deny for the release namespace plus one
+  ## allow per flow the controller, ichor-ui and the installer Job need, with entities
+  ## (kube-apiserver, host, remote-node, world) that a plain NetworkPolicy cannot express.
+  ## Needs Cilium's CRD, so turn it on only once Cilium runs. `ichor init` and the installer
+  ## apply the same policies from config/cilium-network-policy and do not read these values.
+  ##
+  cilium:
+    enabled: false
+    ## TCP ports the controller (S3 for TalosEtcdBackup) and ichor-ui (the external OIDC issuer,
+    ## the Git host of a pull request) may reach outside the cluster. A store or issuer on
+    ## another port, or inside the cluster, needs a policy of your own: policies add up.
+    externalPorts:
+      - 443
+
 
 ## Argo CD health checks (Lua) for Ichor's TalosCluster, TalosMachine and TalosStorage, rendered as a
 ## ConfigMap whose keys are exactly argocd-cm's resource.customizations.health.<group>_<kind>

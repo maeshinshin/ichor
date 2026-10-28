@@ -21,9 +21,9 @@ import (
 	"bytes"
 	"compress/gzip"
 	"io"
+	"net/http/httptest"
 	"regexp"
 	"slices"
-	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -139,20 +139,20 @@ func TestPublishedBundlesHoldNoSecret(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for name, c := range map[string]struct {
+	for comp, c := range map[string]struct {
 		manifest []byte
 		secrets  []string
 		canary   string
 	}{
-		"kokumi": {kb, []string{"kokumi-server-auth"}, hash},
-		"argocd": {ab, []string{"argocd-redis", "argocd-secret", "ichor-kokumi-registry"}, redis},
+		kokumi.Namespace: {kb, []string{"kokumi-server-auth"}, hash},
+		argocd.Namespace: {ab, []string{"argocd-redis", "argocd-secret", "ichor-kokumi-registry"}, redis},
 	} {
 		bundle, secrets, err := stack.SplitSecrets(c.manifest)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		var got []string
+		got := make([]string, 0, len(secrets))
 		for _, s := range secrets {
 			got = append(got, s.GetName())
 		}
@@ -160,7 +160,7 @@ func TestPublishedBundlesHoldNoSecret(t *testing.T) {
 		slices.Sort(got)
 
 		if !slices.Equal(got, c.secrets) {
-			t.Errorf("%s: split out Secrets %v, want %v", name, got, c.secrets)
+			t.Errorf("%s: split out Secrets %v, want %v", comp, got, c.secrets)
 		}
 
 		// What gets pushed is the tarball of the bundle: unpack it and look at every document.
@@ -171,15 +171,15 @@ func TestPublishedBundlesHoldNoSecret(t *testing.T) {
 
 		pushed := untar(t, tgz)
 		if strings.Contains(pushed, c.canary) {
-			t.Errorf("%s: the pushed bundle contains the secret value", name)
+			t.Errorf("%s: the pushed bundle contains the secret value", comp)
 		}
 
 		if regexp.MustCompile(`(?m)^kind:\s*"?Secret"?\s*$`).MatchString(pushed) {
-			t.Errorf("%s: the pushed bundle contains a Secret", name)
+			t.Errorf("%s: the pushed bundle contains a Secret", comp)
 		}
 
 		if !strings.Contains(pushed, "kind: Deployment") {
-			t.Errorf("%s: the bundle lost its other documents", name)
+			t.Errorf("%s: the bundle lost its other documents", comp)
 		}
 	}
 }

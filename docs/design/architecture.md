@@ -335,7 +335,7 @@ break-glass; Talos/Kubernetes version pairs and upgrade paths are checked.
 ### Bootstrap
 
 ```
-ichor init --preset standard --cni cilium [--cni-tunnel vxlan|geneve] [--argocd --repo URL --path clusters/NAME] [--gitops-dir DIR] [--ui-url URL]
+ichor init --preset standard [--cni-tunnel vxlan|geneve] [--ui-url URL]
 ```
 
 1. Generate the secrets bundle locally; nag the user to back it up.
@@ -356,17 +356,23 @@ ichor init --preset standard --cni cilium [--cni-tunnel vxlan|geneve] [--argocd 
    instead of something buried in Talos's boot log. Every API write init
    makes is retried for a few minutes on a transient error (a single control
    plane can answer with etcd timeouts right after the API server comes up).
-   Argo CD itself is never
-   installed by `init` either -- deciding which third-party release to fetch
-   and trust during bootstrap is not this command's call to make; with
-   `--argocd` it only prepares the root Application (pointing at the repo)
-   and the repository credentials, as a Secret from the CLI, never into Git,
-   ready for whenever Argo CD is installed by some other means.
+   Kokumi and Argo CD are not installed by the CLI either: the controller
+   does it in step 6. There are no flags to turn them off.
 4. Bootstrap etcd, fetch the kubeconfig, store the bundle as a Secret.
-5. Create the CRs. With `--gitops-dir`, also write them as YAML and generate
-   the repository skeleton described below.
-6. Hand over: once Argo CD reports the CNI Synced and Healthy, remove it from
-   `inlineManifests`.
+5. Create the CRs and the `IchorInstallation` with `spec.stack`, then apply
+   Ichor's NetworkPolicies once Cilium is Ready.
+6. Wait for the controller. It runs the `ichor-stack` Jobs that
+   apply Kokumi and Argo CD once, publishes their bundles into Kokumi's
+   in-cluster registry and creates the Orders, so Argo CD then manages
+   itself and Kokumi from there with no Git repository. `init` waits for
+   `IchorInstallation` `StackReady`, prints the generated Kokumi admin
+   password once to stdout (it stays in Secret `ichor-kokumi-admin` in
+   `ichor-system`), then waits for the `CNIHandover` condition on the
+   `TalosCluster`: the `ichor-cni` Job installs Cilium as a Helm release
+   owned by Ichor over the bootstrapped objects, and the inline manifest
+   is removed from the rendered configuration. `init` prints an
+   `init: waiting for ...` line per poll and fails with the last reason
+   when a wait runs out; the controller keeps working either way.
 
 Adding later nodes goes through the normal approval flow; `init` is the
 special case of approving the first control plane. `ichor adopt` brings an
@@ -493,10 +499,11 @@ the nodes Argo CD runs on. The CLI keeps a way out of the corners that are
 built: `ichor upgrade ichor VERSION --local` (no ichor-ui),
 `ichor gitops handoff cni` and `ichor restore --recover-cluster`.
 
-#### Kokumi as the delivery layer in front of Argo CD (`--kokumi`, narrow form built)
+#### Kokumi as the delivery layer in front of Argo CD
 
-`ichor init` gains a choice for the Argo CD hand-off: plain repository
-(today's behaviour) or Kokumi (`ichor init --argocd --kokumi`). Kokumi (`kokumi.dev`, Apache-2.0, self-described as experimental)
+`ichor init` always installs Kokumi and Argo CD (those flags are gone). The
+text below is the older, narrow description and is rewritten with the rest
+of the design changes. Kokumi (`kokumi.dev`, Apache-2.0, self-described as experimental)
 is an OCI-first delivery operator: each render becomes an immutable,
 content-addressed OCI artifact (a Preparation), gated by approvals, and a
 Serving creates or updates an Argo CD `Application` in the `argocd`

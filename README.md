@@ -44,9 +44,10 @@ hands it over.
 - Upgrades itself through the `IchorInstallation` resource.
 - Bootstraps Cilium, the only CNI (rendered from the pinned Cilium 1.18.0
   chart embedded in the CLI; `--cni-tunnel vxlan|geneve` picks
-  Cilium's tunnel) and, with `--argocd`, prepares Argo CD's repository
-  credentials and root Application. The CNI is then handed over to Argo CD so
-  that Git becomes the source of truth. Ichor does not install Argo CD.
+  Cilium's tunnel), then installs Kokumi and Argo CD through its controller,
+  with no Git repository needed, and hands Cilium over to a Helm release it
+  owns itself.
+  `ichor init` waits for all of it and prints the Kokumi admin password once.
 - Prepares disks for storage systems such as Longhorn, and waits for data to
   evacuate before draining or removing a node.
 

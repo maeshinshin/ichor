@@ -36,6 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/installer"
 	"github.com/maeshinshin/ichor/pkg/ichorauth"
 )
 
@@ -370,7 +371,7 @@ func TestRunInit_MissingUIObjectsLeaveNothingHalfDone(t *testing.T) {
 func TestPrepareUITargets_FindsByLabelNotName(t *testing.T) {
 	k := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(uiObjects()...).Build()
 
-	tg, err := prepareUITargets(context.Background(), k, ichorControllerNamespace, testUIURL)
+	tg, err := prepareUITargets(context.Background(), k, ichorControllerNamespace, installer.UISettings{ExternalURL: testUIURL})
 	if err != nil {
 		t.Fatal(err)
 	}

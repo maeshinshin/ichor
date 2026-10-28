@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"slices"
 	"time"
 
@@ -84,6 +85,13 @@ func Run(ctx context.Context, c client.Client, opts Options) error {
 	objs, err := Decode(opts.Manifest)
 	if err != nil {
 		return fmt.Errorf("decoding the embedded manifest: %w", err)
+	}
+
+	// What init customized is re-derived from the live Deployments and applied to the new
+	// manifest's objects, so an upgrade keeps the cluster as init left it.
+	objs, err = customizeFromLive(ctx, c, objs)
+	if err != nil {
+		return fmt.Errorf("carrying init's customizations over to the new manifest: %w", err)
 	}
 
 	p := classify(objs)
@@ -182,7 +190,7 @@ func applyWithSettle(ctx context.Context, c client.Client, u *unstructured.Unstr
 	var err error
 
 	pollErr := wait.PollUntilContextTimeout(ctx, time.Second, settle, true, func(ctx context.Context) (bool, error) {
-		err = c.Apply(ctx, client.ApplyConfigurationFromUnstructured(u), client.FieldOwner(FieldOwner), client.ForceOwnership)
+		err = applyOne(ctx, c, u)
 
 		return !apierrors.IsForbidden(err), nil
 	})
@@ -191,6 +199,40 @@ func applyWithSettle(ctx context.Context, c client.Client, u *unstructured.Unstr
 	}
 
 	return pollErr
+}
+
+// applyOne server-side applies u, except a Deployment, which is replaced whole. Apply merges
+// into fields other managers own (init's Update owns its probes and args), so a tcpSocket
+// probe applied over init's httpGet one is two handlers in one probe, which is invalid. The
+// replacement keeps the live annotations the Deployment controller writes.
+func applyOne(ctx context.Context, c client.Client, u *unstructured.Unstructured) error {
+	if u.GetKind() != kindDeployment {
+		return c.Apply(ctx, client.ApplyConfigurationFromUnstructured(u), client.FieldOwner(FieldOwner), client.ForceOwnership)
+	}
+
+	live := &unstructured.Unstructured{}
+	live.SetGroupVersionKind(u.GroupVersionKind())
+
+	err := c.Get(ctx, types.NamespacedName{Namespace: u.GetNamespace(), Name: u.GetName()}, live)
+	if apierrors.IsNotFound(err) {
+		return c.Create(ctx, u, client.FieldOwner(FieldOwner))
+	} else if err != nil {
+		return err
+	}
+
+	repl := u.DeepCopy()
+	repl.SetResourceVersion(live.GetResourceVersion())
+	repl.SetAnnotations(mergeStrings(live.GetAnnotations(), u.GetAnnotations()))
+
+	return c.Update(ctx, repl, client.FieldOwner(FieldOwner))
+}
+
+func mergeStrings(base, over map[string]string) map[string]string {
+	out := map[string]string{}
+	maps.Copy(out, base)
+	maps.Copy(out, over)
+
+	return out
 }
 
 // failWithRollback restores snap and returns cause wrapped with how that went. It uses a
@@ -261,7 +303,7 @@ func waitReady(timeout time.Duration) ReadyFunc {
 	}
 
 	return func(ctx context.Context, c client.Client, obj *unstructured.Unstructured) error {
-		if obj.GetKind() != kindCRD && obj.GetKind() != "Deployment" {
+		if obj.GetKind() != kindCRD && obj.GetKind() != kindDeployment {
 			return nil
 		}
 

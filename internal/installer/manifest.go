@@ -31,8 +31,9 @@ import (
 )
 
 const (
-	kindCRD    = "CustomResourceDefinition"
-	kindSecret = "Secret"
+	kindCRD        = "CustomResourceDefinition"
+	kindSecret     = "Secret"
+	kindDeployment = "Deployment"
 
 	// installerNamePrefix names the installer's own roles and bindings (config/default prefixes
 	// config/rbac/ichor-installer's names with ichor-).

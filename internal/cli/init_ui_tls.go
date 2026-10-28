@@ -25,15 +25,11 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"slices"
-	"strconv"
 	"strings"
 
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -45,8 +41,6 @@ import (
 const (
 	// uiTLSStoredSecretName is the Secret --ui-tls-cert/--ui-tls-key are stored in.
 	uiTLSStoredSecretName = "ichor-ui-tls"
-	uiTLSVolume           = "tls"
-	uiTLSMountPath        = "/etc/ichor/tls"
 )
 
 func (o initOptions) uiTLSOn() bool { return o.UITLSSecret != "" || o.UITLSCert != "" }
@@ -182,86 +176,4 @@ func storeUITLSSecret(ctx context.Context, k client.Client, ns string, opts init
 	}
 
 	return nil
-}
-
-// uiExtrasOnDeployment applies the TLS and kubeconfig flags to the ichor-ui
-// Deployment in memory, as the chart renders them.
-func uiExtrasOnDeployment(dep *appsv1.Deployment, opts initOptions) error {
-	i := slices.IndexFunc(dep.Spec.Template.Spec.Containers, func(c corev1.Container) bool { return c.Name == uiContainer })
-	if i < 0 {
-		return fmt.Errorf("init: the ichor-ui Deployment %s has no container %q", dep.Name, uiContainer)
-	}
-
-	c := &dep.Spec.Template.Spec.Containers[i]
-
-	c.Args = slices.DeleteFunc(c.Args, func(a string) bool {
-		return strings.HasPrefix(a, "--kube-api-server-url=") || strings.HasPrefix(a, "--kube-api-tls-server-name=")
-	})
-
-	if opts.KubeAPIServerURL != "" {
-		c.Args = append(c.Args, "--kube-api-server-url="+opts.KubeAPIServerURL)
-	}
-
-	if opts.KubeAPITLSServerName != "" {
-		c.Args = append(c.Args, "--kube-api-tls-server-name="+opts.KubeAPITLSServerName)
-	}
-
-	if !opts.uiTLSOn() {
-		return nil
-	}
-
-	port, err := uiListenPort(c.Args)
-	if err != nil {
-		return fmt.Errorf("init: ichor-ui Deployment %s: %w", dep.Name, err)
-	}
-
-	c.Args = slices.DeleteFunc(c.Args, func(a string) bool {
-		return strings.HasPrefix(a, "--tls-cert-file=") || strings.HasPrefix(a, "--tls-key-file=")
-	})
-	c.Args = append(c.Args, "--tls-cert-file="+uiTLSMountPath+"/tls.crt", "--tls-key-file="+uiTLSMountPath+"/tls.key")
-
-	// A kubelet TCP probe makes a TLS server log a handshake error every few seconds, so probe over HTTPS.
-	probe := func(period int32) *corev1.Probe {
-		return &corev1.Probe{
-			HTTPGet: &corev1.HTTPGetAction{
-				Path: "/auth/config", Port: intstr.FromInt32(port), Scheme: corev1.URISchemeHTTPS,
-			},
-			InitialDelaySeconds: 5, PeriodSeconds: period,
-		}
-	}
-	c.LivenessProbe, c.ReadinessProbe = probe(20), probe(10)
-
-	vols := slices.DeleteFunc(dep.Spec.Template.Spec.Volumes, func(v corev1.Volume) bool { return v.Name == uiTLSVolume })
-	dep.Spec.Template.Spec.Volumes = append(vols, corev1.Volume{
-		Name: uiTLSVolume, Secret: &corev1.SecretVolumeSource{SecretName: opts.uiTLSSecretName()},
-	})
-
-	c.VolumeMounts = slices.DeleteFunc(c.VolumeMounts, func(m corev1.VolumeMount) bool { return m.Name == uiTLSVolume })
-	c.VolumeMounts = append(c.VolumeMounts, corev1.VolumeMount{Name: uiTLSVolume, MountPath: uiTLSMountPath, ReadOnly: true})
-
-	return nil
-}
-
-// uiListenPort reads the port of ichor-ui's --addr.
-func uiListenPort(args []string) (int32, error) {
-	for _, a := range args {
-		v, ok := strings.CutPrefix(a, "--addr=")
-		if !ok {
-			continue
-		}
-
-		_, p, err := net.SplitHostPort(v)
-		if err != nil {
-			return 0, fmt.Errorf("cannot read the port from %q: %w", a, err)
-		}
-
-		n, err := strconv.ParseInt(p, 10, 32)
-		if err != nil {
-			return 0, fmt.Errorf("cannot read the port from %q: %w", a, err)
-		}
-
-		return int32(n), nil
-	}
-
-	return 0, errors.New("no --addr argument to take the listening port from")
 }

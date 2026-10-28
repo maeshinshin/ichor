@@ -686,6 +686,32 @@ func TestListAndGetReturnStatusMachinesAsTheyAre(t *testing.T) {
 	}
 }
 
+func TestAPausedOperationBlocksAndNamesBothWaysOut(t *testing.T) {
+	paused := &ichorv1alpha1.TalosOperation{
+		Name: "upgrade-x", Namespace: opNS,
+		Spec:   ichorv1alpha1.TalosOperationSpec{ClusterRef: corev1.LocalObjectReference{Name: opCluster}, Kind: ichorv1alpha1.TalosOperationKindTalos},
+		Status: ichorv1alpha1.TalosOperationStatus{Phase: ichorv1alpha1.TalosOperationPhasePaused},
+	}
+	srv, k8s := opServer(t, append(opObjects(), paused)...)
+	ctx := context.Background()
+
+	cl := &ichorv1alpha1.TalosCluster{}
+	if err := k8s.Get(ctx, types.NamespacedName{Namespace: opNS, Name: opCluster}, cl); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := srv.unfinishedOperation(ctx, cl)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := `operation "upgrade-x" (talos) on this cluster is not finished (phase Paused); ` +
+		`resume it with 'ichor operation resume upgrade-x', or delete it with 'ichor operation delete upgrade-x'`
+	if got != want {
+		t.Errorf("unfinishedOperation =\n%q\nwant\n%q", got, want)
+	}
+}
+
 func TestResumeAnnotatesOnlyAFailedOperation(t *testing.T) {
 	newOp := func(name, phase, reason string, last *metav1.Time) *ichorv1alpha1.TalosOperation {
 		return &ichorv1alpha1.TalosOperation{

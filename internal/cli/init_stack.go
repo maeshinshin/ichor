@@ -20,10 +20,12 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -62,7 +64,7 @@ func waitForStack(ctx context.Context, c client.Client, timeout, interval time.D
 			return fmt.Errorf("the controller has not reported %s yet", conditionStackReady)
 		}
 
-		if cond.Status != "True" {
+		if cond.Status != metav1.ConditionTrue {
 			return fmt.Errorf("%s is %s (%s): %s%s", conditionStackReady, cond.Status, cond.Reason, cond.Message, stackSummary(inst.Status.Stack))
 		}
 
@@ -76,7 +78,7 @@ func stackSummary(s *ichorv1alpha1.IchorStackStatus) string {
 		return ""
 	}
 
-	out := ""
+	var out strings.Builder
 
 	for _, c := range []struct {
 		name string
@@ -86,10 +88,10 @@ func stackSummary(s *ichorv1alpha1.IchorStackStatus) string {
 			continue
 		}
 
-		out += fmt.Sprintf(" [%s: published=%t orderReady=%t application=%q]", c.name, c.st.PublishedTag != "", c.st.OrderReady, c.st.ApplicationHealth)
+		fmt.Fprintf(&out, " [%s: published=%t orderReady=%t application=%q]", c.name, c.st.PublishedTag != "", c.st.OrderReady, c.st.ApplicationHealth)
 	}
 
-	return out
+	return out.String()
 }
 
 // waitForCNIHandover polls the TalosCluster until CNIHandover is True: Cilium is then a Helm
@@ -108,7 +110,7 @@ func waitForCNIHandover(
 			return fmt.Errorf("the controller has not reported %s yet", render.ConditionCNIHandover)
 		}
 
-		if cond.Status != "True" {
+		if cond.Status != metav1.ConditionTrue {
 			return fmt.Errorf("%s is %s (%s): %s", render.ConditionCNIHandover, cond.Status, cond.Reason, cond.Message)
 		}
 

@@ -238,6 +238,7 @@ func main() {
 	mux.Handle(ichorv1alpha1connect.NewOperationServiceHandler(server, rpcInterceptor))
 	mux.Handle(ichorv1alpha1connect.NewDiagnosticsServiceHandler(server, rpcInterceptor))
 	mux.Handle(ichorv1alpha1connect.NewUserServiceHandler(server, rpcInterceptor))
+	mux.Handle(ichorv1alpha1connect.NewCniServiceHandler(server, rpcInterceptor))
 
 	srv := &http.Server{
 		Addr:              *addr,

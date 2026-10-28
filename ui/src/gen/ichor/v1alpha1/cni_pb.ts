@@ -372,7 +372,11 @@ export const CniService: GenService<{
   },
   /**
    * StartCniUpgrade checks that a newer Cilium chart is available and that the
-   * user layer still validates, then starts the cni upgrade operation.
+   * user layer still validates, then starts the cni upgrade operation. The
+   * operation's shape is not defined yet (ADR 0099 gives only its kind, and the
+   * cni executor today carries out a kube-proxy switch), so after the checks it
+   * answers UNIMPLEMENTED; checks that fail answer FAILED_PRECONDITION with
+   * every problem.
    *
    * @generated from rpc ichor.v1alpha1.CniService.StartCniUpgrade
    */

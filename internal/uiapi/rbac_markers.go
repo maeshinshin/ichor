@@ -98,6 +98,10 @@ package uiapi
 // the backend's own namespace through the namespaced secrets rule at the top.
 // +kubebuilder:rbac:groups=argoproj.io,resources=applications,verbs=get
 
+// CniService (docs/adr/0099) asks whether the Gateway API CRDs exist before it accepts
+// gatewayAPI.enabled: one metadata get of that one CRD, as the ServiceAccount.
+// +kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,resourceNames=gateways.gateway.networking.k8s.io,verbs=get
+
 // OIDC login (docs/adr/0058): the backend calls the Kubernetes API as the
 // signed-in user. impersonate on users/groups is the strongest verb in this
 // file, so the chart only renders it when ichorUI.oidc.enabled and can

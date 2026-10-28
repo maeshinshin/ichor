@@ -38,6 +38,7 @@ const (
 	cniOperatorUser = "cni-operator"
 	cniVerbGet      = "get"
 	cniVerbList     = "list"
+	cniVerbCreate   = "create"
 	cniClusterRole  = "ClusterRole"
 	cniDebugOn      = "debug:\n  enabled: true\n"
 )
@@ -64,7 +65,7 @@ var _ = Describe("CniService", func() {
 		}
 
 		createOps := rbacv1.PolicyRule{
-			APIGroups: []string{ichorv1alpha1.GroupVersion.Group}, Resources: []string{"talosoperations"}, Verbs: []string{"create", cniVerbList},
+			APIGroups: []string{ichorv1alpha1.GroupVersion.Group}, Resources: []string{caOpsResource}, Verbs: []string{cniVerbCreate, cniVerbList},
 		}
 
 		for user, rules := range map[string][]rbacv1.PolicyRule{

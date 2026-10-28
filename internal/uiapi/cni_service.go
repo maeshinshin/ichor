@@ -446,4 +446,3 @@ func (s *Server) StartCniUpgrade(
 		Operation: objectRef(op.Namespace, op.Name), ToVersion: to, Audit: s.opAudit(ctx, "create", objectRef(op.Namespace, op.Name)),
 	}), nil
 }
-

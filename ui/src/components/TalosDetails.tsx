@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks'
+import { useState } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
@@ -9,9 +9,9 @@ import { Field, Fields } from '@/components/PageHeader'
 import { Section } from '@/components/Section'
 import type { GetNodeTalosDetailsResponse } from '@/gen/ichor/v1alpha1/talosdetails_pb'
 import { nodeClient } from '@/lib/connect'
-import { describeError } from '@/lib/errors'
 import { display, formatBytes } from '@/lib/format'
 import { formatSpeed, serviceTone, sortServices, visibleVolumes } from '@/lib/talosDetails'
+import { useLoad } from '@/lib/useLoad'
 import { useT } from '@/lib/useT'
 
 // Read-only Talos details of one machine (docs/adr/0073, 0083): one call, five
@@ -21,25 +21,7 @@ import { useT } from '@/lib/useT'
 // inline and the rest still render. Tables scroll inside their own container.
 export function TalosDetails({ namespace, name, part }: { namespace: string; name: string; part: 'storage' | 'talos' }) {
   const t = useT()
-  const [data, setData] = useState<GetNodeTalosDetailsResponse | null>(null)
-  const [error, setError] = useState<{ title: string; detail: string } | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    setData(null)
-    setError(null)
-    nodeClient.getNodeTalosDetails({ machine: { namespace, name } }).then(
-      (res) => {
-        if (!cancelled) setData(res)
-      },
-      (err) => {
-        if (!cancelled) setError(describeError(err))
-      },
-    )
-    return () => {
-      cancelled = true
-    }
-  }, [namespace, name])
+  const { data, error } = useLoad(() => nodeClient.getNodeTalosDetails({ machine: { namespace, name } }), [namespace, name])
 
   if (error) return <ErrorAlert {...error} />
   if (!data) return <p class="text-muted-foreground">{t('common.loading')}</p>

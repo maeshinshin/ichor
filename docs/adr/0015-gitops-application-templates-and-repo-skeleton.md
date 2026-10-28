@@ -1,6 +1,6 @@
 # 0015. GitOps: a hand-rolled Application type, and a policy-free repo skeleton
 
-Status: Accepted · Date: 2026-10-25 · Design section: "GitOps and Argo CD" (and "Bootstrap")
+Status: Superseded by ADR 0101 · Date: 2026-10-25 · Design section: "GitOps and Argo CD" (and "Bootstrap")
 
 Decided: Built GitOps `Application` as a hand-rolled type (`pkg/gitops`) behind one constructor, plus a policy-free repo skeleton
 

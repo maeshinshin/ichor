@@ -1,6 +1,6 @@
 # 0056. `TalosCluster.spec.gitops`: a repository connection, strict mode, and the UI/CLI opening PRs
 
-Status: Accepted · Date: 2026-10-26 · Design section: GitOps and Argo CD
+Status: Superseded by ADR 0101 · Date: 2026-10-26 · Design section: GitOps and Argo CD
 Decided: `TalosCluster.spec.gitops` carries `mode` (`relaxed` default, `strict`) and an optional `repository` connection (host, https API URL, owner/repo, https clone URL, base branch, a `tokenSecretRef` read in the UI backend's own namespace, `machinesPath` required for strict); `Server.requireUntracked` becomes `planWrite`, which sends a CR Argo CD tracks to a pull request when a connection exists and refuses otherwise, and sends a strict approval to a pull request that adds the `TalosMachine` file; changing `mode` rewrites nothing; the response carries `pull_request_url` and the audit action gets a `-pr` suffix; amended 2026-10-26: the PR branch is `ichor/<verb>-<name>` (since 2026-10-27 `ichor/<verb>-<namespace>-<name>`) and a request whose head branch already has an open PR returns that PR instead of opening another, and deleting a tracked `TalosConfigPatch` becomes a PR that removes its document (or its file)
 
 ## Context

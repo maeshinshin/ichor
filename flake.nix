@@ -34,6 +34,7 @@
               nodejs
               chromium # headless screenshots of the UI (hack/ui-shots.mjs, make ui-shots)
               gnumake
+              openssl # self-signed ichor-ui cert for the UI demo (test/harness/ui-demo/README.md)
               git
             ];
 

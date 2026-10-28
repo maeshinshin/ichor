@@ -232,13 +232,8 @@ var userDeleteCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return withUsers(cmd, func(ctx context.Context, u ichorv1alpha1connect.UserServiceClient) error {
 			if !assumeYes {
-				ok, err := confirm(cmd.InOrStdin(), cmd.ErrOrStderr(), fmt.Sprintf("Delete user %s? Their sessions stop working within minutes. [y/N] ", args[0]))
-				if err != nil {
-					return fmt.Errorf("user delete: reading confirmation: %w", err)
-				}
-
-				if !ok {
-					return errors.New("user delete: aborted")
+				if err := confirmOrAbort(cmd.InOrStdin(), cmd.ErrOrStderr(), "user delete", fmt.Sprintf("Delete user %s? Their sessions stop working within minutes. [y/N] ", args[0]), "aborted"); err != nil {
+					return err
 				}
 			}
 

@@ -147,17 +147,7 @@ type handoffChecks struct {
 }
 
 func defaultHandoffChecks() handoffChecks {
-	return handoffChecks{Kube: verifyKubeconfig, Talos: verifyTalosconfig, Reconnect: newKubeClientFromFile}
-}
-
-// newKubeClientFromFile builds a Kubernetes client from the kubeconfig at path.
-func newKubeClientFromFile(path string) (ctrlclient.Client, error) {
-	cfg, err := loadKubeconfig(path)
-	if err != nil {
-		return nil, err
-	}
-
-	return newKubeClientForConfig(cfg)
+	return handoffChecks{Kube: verifyKubeconfig, Talos: verifyTalosconfig, Reconnect: newKubeClient}
 }
 
 // checkBundleCurrent warns when the bundle file holds CAs the cluster does not have any more, and

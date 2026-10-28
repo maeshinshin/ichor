@@ -17,6 +17,7 @@ limitations under the License.
 package cli
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"io"
@@ -126,12 +127,7 @@ func afterRotateCACreate(ctx context.Context, cmd *cobra.Command, cluster string
 	// The tunnel to ichor-ui goes through the kube-apiserver, which restarts when the Kubernetes CA
 	// changes, and the old kubeconfig stops working: follow through the Kubernetes API itself, with
 	// the new kubeconfig.
-	cfg, err := loadKubeconfig(files.Kubeconfig)
-	if err != nil {
-		return err
-	}
-
-	newClient, err := newKubeClientForConfig(cfg)
+	newClient, err := newKubeClient(files.Kubeconfig)
 	if err != nil {
 		return err
 	}
@@ -227,11 +223,7 @@ func caStageOf(op *ichorv1alpha1.TalosOperation) string {
 // caProgressAt is one line about a rotation, from its status alone, showing the given stage (a poll
 // that jumped over stages prints the skipped ones with it).
 func caProgressAt(op *ichorv1alpha1.TalosOperation, stage string) string {
-	if stage == "" {
-		stage = "-"
-	}
-
-	line := fmt.Sprintf("ca-rotation %s: phase %s, stage %s", op.Name, orDash(op.Status.Phase), stage)
+	line := fmt.Sprintf("ca-rotation %s: phase %s, stage %s", op.Name, cmp.Or(op.Status.Phase, "-"), cmp.Or(stage, "-"))
 
 	if c := apimeta.FindStatusCondition(op.Status.Conditions, "CARotation"); c != nil && c.Status != "True" && c.Message != "" {
 		line += ": " + c.Message

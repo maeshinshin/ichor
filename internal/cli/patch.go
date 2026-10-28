@@ -163,13 +163,8 @@ func runPatchGet(ctx context.Context, c *apiClients, out io.Writer, name string)
 
 func runPatchDelete(ctx context.Context, c *apiClients, in io.Reader, out, errw io.Writer, name string) error {
 	if !assumeYes {
-		ok, err := confirm(in, errw, fmt.Sprintf("Delete patch %s/%s? The controller will re-render the machines it applied to. [y/N] ", apiOpts.Namespace, name))
-		if err != nil {
-			return fmt.Errorf("patch delete: reading confirmation: %w", err)
-		}
-
-		if !ok {
-			return fmt.Errorf("patch delete: aborted")
+		if err := confirmOrAbort(in, errw, "patch delete", fmt.Sprintf("Delete patch %s/%s? The controller will re-render the machines it applied to. [y/N] ", apiOpts.Namespace, name), "aborted"); err != nil {
+			return err
 		}
 	}
 
@@ -218,13 +213,8 @@ func runPatchWrite(
 	_, _ = fmt.Fprintf(errw, "Impact of patch %s/%s: %s\n", p.Namespace, p.Name, cmp.Or(warn, "no reboot needed; nothing install-time-only or too new for the cluster's Talos."))
 
 	if warn != "" && !assumeYes {
-		ok, err := confirm(in, errw, "Continue? [y/N] ")
-		if err != nil {
-			return fmt.Errorf("patch: reading confirmation: %w", err)
-		}
-
-		if !ok {
-			return fmt.Errorf("patch: aborted")
+		if err := confirmOrAbort(in, errw, "patch", "Continue? [y/N] ", "aborted"); err != nil {
+			return err
 		}
 	}
 

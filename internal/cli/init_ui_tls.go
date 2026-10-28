@@ -174,7 +174,7 @@ func storeUITLSSecret(ctx context.Context, k client.Client, ns string, opts init
 		}
 
 		sec.Data = data
-		err = retryInit(ctx, progress, func() error { return k.Update(ctx, sec) })
+		err = updateRetrying(ctx, k, sec, func(s *corev1.Secret) error { s.Data = data; return nil }, progress)
 	}
 
 	if err != nil {

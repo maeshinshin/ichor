@@ -350,7 +350,7 @@ func exportCNIApplication(cluster *ichorv1alpha1.TalosCluster) (*gitops.Applicat
 		return nil, nil //nolint:nilnil // "no Application to build" is a legitimate outcome, not a placeholder
 	}
 
-	p, err := cniPreset(preset)
+	p, err := cniPresetWithTunnel(preset, cluster.Spec.CNI.Tunnel)
 	if err != nil {
 		return nil, fmt.Errorf("gitops export: %w", err)
 	}

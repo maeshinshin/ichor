@@ -75,7 +75,7 @@ func runKokumiVariant(t *testing.T, kokumi bool) (string, client.Client, string)
 	machine := newTestMachine(cluster.Name)
 	c := fake.NewClientBuilder().WithScheme(newTestScheme(t)).Build()
 
-	preset, err := cniPreset("cilium")
+	preset, err := cniPresetWithTunnel("cilium", "")
 	if err != nil {
 		t.Fatalf("cniPreset: %v", err)
 	}

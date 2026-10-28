@@ -104,7 +104,7 @@ type TalosClusterCNICustom struct {
 // +kubebuilder:validation:XValidation:rule="self.preset == oldSelf.preset",message="cni.preset cannot change after the cluster is created; swapping a CNI takes the network down"
 // +kubebuilder:validation:XValidation:rule="self.preset == 'custom' ? has(self.custom) : !has(self.custom)",message="custom must be set when, and only when, preset is custom"
 // +kubebuilder:validation:XValidation:rule="self.preset != 'flannel' || self.kubeProxy == 'enabled'",message="flannel cannot replace kube-proxy"
-// +kubebuilder:validation:XValidation:rule="!has(oldSelf.tunnel) || (has(self.tunnel) && self.tunnel == oldSelf.tunnel)",message="cni.tunnel cannot change once set; changing the tunnel protocol takes pod networking down"
+// +kubebuilder:validation:XValidation:rule="has(oldSelf.tunnel) ? (has(self.tunnel) && self.tunnel == oldSelf.tunnel) : (!has(self.tunnel) || self.tunnel == 'vxlan')",message="cni.tunnel cannot change once set, and an existing cluster can only record vxlan (its running default); changing the tunnel protocol takes pod networking down"
 // +kubebuilder:validation:XValidation:rule="!has(self.tunnel) || self.preset == 'cilium'",message="cni.tunnel only applies to the cilium preset"
 type TalosClusterCNI struct {
 	// preset selects the CNI this cluster bootstraps: flannel (Talos's own default; Ichor does

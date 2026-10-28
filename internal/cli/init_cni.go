@@ -39,17 +39,12 @@ const cniKubeProxy = cni.KubeProxyEnabled
 // several places).
 const cniCilium = "cilium"
 
-// cniPreset selects the pkg/cni.Preset implementation for name. "custom"
-// is deliberately absent: it has no Preset implementation and init's own flag validation
-// (buildInitPlan) only ever accepts "flannel" or "cilium" in the first
-// place.
-func cniPreset(name string) (cni.Preset, error) {
-	return cniPresetWithTunnel(name, "")
-}
-
-// cniPresetWithTunnel is cniPreset with --cni-tunnel applied. tunnel only
-// reaches the cilium preset; buildInitPlan has already rejected it for any
-// other CNI.
+// cniPresetWithTunnel selects the pkg/cni.Preset implementation for name,
+// with the cluster's tunnel applied. "custom" is deliberately absent: it has
+// no Preset implementation and init's own
+// flag validation (buildInitPlan) only ever accepts "flannel" or "cilium".
+// tunnel (TalosCluster spec.cni.tunnel) only reaches the cilium preset;
+// buildInitPlan has already rejected it for any other CNI.
 func cniPresetWithTunnel(name, tunnel string) (cni.Preset, error) {
 	switch name {
 	case "flannel":

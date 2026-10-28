@@ -98,7 +98,7 @@ func newIchorInstallationFake(t *testing.T) client.Client {
 
 func TestCreateIchorInstallation_RecordsTheBinarysVersion(t *testing.T) {
 	old := version.Version
-	version.Version = "v0.3.1"
+	version.Version = testReleasedVersion
 
 	t.Cleanup(func() { version.Version = old })
 
@@ -119,7 +119,7 @@ func TestCreateIchorInstallation_RecordsTheBinarysVersion(t *testing.T) {
 		t.Errorf("spec.stack = %+v, want it set with Automatic promotion (ADR 0099)", got.Spec.Stack)
 	}
 
-	if got.Spec.Version != "v0.3.1" || got.Spec.ManagementMode != ichorv1alpha1.IchorManagementModeIchor {
+	if got.Spec.Version != testReleasedVersion || got.Spec.ManagementMode != ichorv1alpha1.IchorManagementModeIchor {
 		t.Errorf("spec = %+v, want version v0.3.1 in ichor mode", got.Spec)
 	}
 }

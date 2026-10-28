@@ -86,9 +86,8 @@ const (
 	testInitClusterName = "my-cluster"
 	testCNICilium       = "cilium"
 
-	// testRepoURL is a credential-free, unreachable (.invalid TLD) repo
-	// URL shared by every --argocd test fixture.
-	testRepoURL = "https://example.invalid/repo.git"
+	// testReleasedVersion is a semantic version, so init creates an IchorInstallation.
+	testReleasedVersion = "v0.3.1"
 
 	// testEphemeralDiskSelector and testStorageDiskSelector are disk-role
 	// CEL selector fixtures shared across disk-role tests.

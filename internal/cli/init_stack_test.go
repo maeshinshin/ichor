@@ -57,8 +57,8 @@ func newStackFake(t *testing.T, stackAfter, handoverAfter int) *stackFake {
 
 	sf := &stackFake{}
 	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Namespace: ichorControllerNamespace, Name: kokumiAdminSecret},
-		Data:       map[string][]byte{kokumiAdminKey: []byte(testKokumiPassword)},
+		Namespace: ichorControllerNamespace, Name: kokumiAdminSecret,
+		Data: map[string][]byte{kokumiAdminKey: []byte(testKokumiPassword)},
 	}
 
 	flip := func(conds *[]metav1.Condition, typ string, reads *int, after int) {
@@ -96,7 +96,7 @@ func releasedBuild(t *testing.T) {
 	t.Helper()
 
 	old := version.Version
-	version.Version = "v0.3.1"
+	version.Version = testReleasedVersion
 
 	t.Cleanup(func() { version.Version = old })
 }
@@ -129,7 +129,7 @@ func TestRunInit_WaitsForStackAndCNIHandover(t *testing.T) {
 	}
 
 	var inst ichorv1alpha1.IchorInstallation
-	if err := sf.Client.Get(context.Background(), types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}, &inst); err != nil {
+	if err := sf.Get(context.Background(), types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}, &inst); err != nil {
 		t.Fatalf("getting IchorInstallation: %v", err)
 	}
 
@@ -214,14 +214,14 @@ func TestRunInit_HandoverTimeoutStillPrintsPasswordOnce(t *testing.T) {
 // --cni stays hidden and --cni-tunnel stays.
 func TestInitCmd_RemovedFlagsAreGone(t *testing.T) {
 	for _, name := range []string{
-		"argocd", "argocd-namespace", "kokumi", "repo", "path", "repo-username", "repo-password", "gitops-dir",
+		trackedArgoNS, "argocd-namespace", "kokumi", "repo", "path", "repo-username", "repo-password", "gitops-dir",
 	} {
 		if initCmd.Flags().Lookup(name) != nil {
 			t.Errorf("--%s is still defined", name)
 		}
 
 		args := []string{"--" + name}
-		if name != "argocd" && name != "kokumi" {
+		if name != trackedArgoNS && name != "kokumi" {
 			args = []string{"--" + name + "=x"}
 		}
 

@@ -49,6 +49,8 @@ const (
 
 	cniPresetFlannel   = "flannel"
 	cniPresetCilium    = "cilium"
+	tunnelVXLAN        = "vxlan"
+	tunnelGeneve       = "geneve"
 	kubeProxyEnabled   = "enabled"
 	kubeProxyReplaced  = "replaced"
 	testCIDR           = "192.0.2.0/24"
@@ -674,6 +676,61 @@ var _ = Describe("TalosCluster.spec.cni", func() {
 
 		created.Annotations = map[string]string{TalosClusterConfirmKubeProxySwitchAnnotation: "true"}
 		created.Spec.CNI.KubeProxy = kubeProxyReplaced
+		Expect(k8sClient.Update(context.Background(), created)).NotTo(Succeed())
+	})
+})
+
+// cni.tunnel is Cilium-only, immutable once set, and an existing cluster that never recorded one
+// may only add vxlan (its running default). The CEL rules are on TalosClusterCNI.
+var _ = Describe("TalosCluster.spec.cni.tunnel", func() {
+	DescribeTable("tunnel at creation",
+		func(cniSpec TalosClusterCNI, accepted bool) {
+			err := k8sClient.Create(context.Background(), newClusterWithCNI(cniSpec))
+			if accepted {
+				Expect(err).NotTo(HaveOccurred())
+			} else {
+				Expect(err).To(HaveOccurred())
+			}
+		},
+		Entry("cilium with geneve", TalosClusterCNI{Preset: cniPresetCilium, KubeProxy: kubeProxyEnabled, Tunnel: tunnelGeneve}, true),
+		Entry("flannel with geneve is rejected: tunnel only applies to cilium",
+			TalosClusterCNI{Preset: cniPresetFlannel, KubeProxy: kubeProxyEnabled, Tunnel: tunnelGeneve}, false),
+		Entry("custom with tunnel is rejected: tunnel only applies to cilium",
+			TalosClusterCNI{
+				Preset: "custom", KubeProxy: kubeProxyEnabled, Tunnel: tunnelVXLAN,
+				Custom: &TalosClusterCNICustom{Source: customCNISource()},
+			}, false),
+	)
+
+	It("rejects changing tunnel after creation", func() {
+		created := newClusterWithCNI(TalosClusterCNI{Preset: cniPresetCilium, KubeProxy: kubeProxyEnabled, Tunnel: tunnelGeneve})
+		Expect(k8sClient.Create(context.Background(), created)).To(Succeed())
+
+		created.Spec.CNI.Tunnel = tunnelVXLAN
+		Expect(k8sClient.Update(context.Background(), created)).NotTo(Succeed())
+	})
+
+	It("rejects removing tunnel after creation", func() {
+		created := newClusterWithCNI(TalosClusterCNI{Preset: cniPresetCilium, KubeProxy: kubeProxyEnabled, Tunnel: tunnelGeneve})
+		Expect(k8sClient.Create(context.Background(), created)).To(Succeed())
+
+		created.Spec.CNI.Tunnel = ""
+		Expect(k8sClient.Update(context.Background(), created)).NotTo(Succeed())
+	})
+
+	It("accepts adding vxlan to an existing cilium cluster that never recorded a tunnel", func() {
+		created := newClusterWithCNI(TalosClusterCNI{Preset: cniPresetCilium, KubeProxy: kubeProxyEnabled})
+		Expect(k8sClient.Create(context.Background(), created)).To(Succeed())
+
+		created.Spec.CNI.Tunnel = tunnelVXLAN
+		Expect(k8sClient.Update(context.Background(), created)).To(Succeed())
+	})
+
+	It("rejects adding geneve to an existing cilium cluster that never recorded a tunnel", func() {
+		created := newClusterWithCNI(TalosClusterCNI{Preset: cniPresetCilium, KubeProxy: kubeProxyEnabled})
+		Expect(k8sClient.Create(context.Background(), created)).To(Succeed())
+
+		created.Spec.CNI.Tunnel = tunnelGeneve
 		Expect(k8sClient.Update(context.Background(), created)).NotTo(Succeed())
 	})
 })

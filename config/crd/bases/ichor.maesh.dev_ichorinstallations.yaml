@@ -68,6 +68,43 @@ spec:
                 - ichor
                 - external
                 type: string
+              stack:
+                description: |-
+                  stack is the user layer of the Argo CD and Kokumi bundles Ichor publishes into Kokumi's
+                  in-cluster registry.
+                properties:
+                  argocd:
+                    description: argocd is the user layer for the Argo CD bundle.
+                    properties:
+                      values:
+                        description: |-
+                          values is the user layer; effective values are Ichor's defaults, then these, then the
+                          Ichor-owned keys.
+                        type: object
+                        x-kubernetes-preserve-unknown-fields: true
+                    type: object
+                  kokumi:
+                    description: |-
+                      kokumi is the user layer for the Kokumi bundle. Kokumi has no chart, so its values accept
+                      only the keys Ichor maps to patches it controls (memory limits, replica counts).
+                    properties:
+                      values:
+                        description: |-
+                          values is the user layer; effective values are Ichor's defaults, then these, then the
+                          Ichor-owned keys.
+                        type: object
+                        x-kubernetes-preserve-unknown-fields: true
+                    type: object
+                  promotion:
+                    default: Automatic
+                    description: |-
+                      promotion is Kokumi's Order promotion mode for both components: Automatic (default) or
+                      Manual, where a human promotes in Kokumi's UI.
+                    enum:
+                    - Automatic
+                    - Manual
+                    type: string
+                type: object
               version:
                 description: |-
                   version is the Ichor version the installation should run, as a semantic version with a
@@ -150,6 +187,51 @@ spec:
                   itself: the single source of "what is installed", which is also what the CLI compares
                   itself against.
                 type: string
+              stack:
+                description: |-
+                  stack reports, per component, what Ichor published into Kokumi and what Argo CD made of it.
+                properties:
+                  argocd:
+                    description: argocd is the Argo CD bundle's state.
+                    properties:
+                      applicationHealth:
+                        description: |-
+                          applicationHealth is Argo CD's view of the Application Kokumi created: Synced/Healthy,
+                          or the reason it is not.
+                        type: string
+                      digest:
+                        description: digest is the published artifact's OCI digest.
+                        type: string
+                      orderReady:
+                        description: orderReady is whether Kokumi's Order for the
+                          component is Ready.
+                        type: boolean
+                      publishedTag:
+                        description: publishedTag is the registry tag Ichor last published
+                          (<chartVersion>-<hash12>).
+                        type: string
+                    type: object
+                  kokumi:
+                    description: kokumi is the Kokumi bundle's state.
+                    properties:
+                      applicationHealth:
+                        description: |-
+                          applicationHealth is Argo CD's view of the Application Kokumi created: Synced/Healthy,
+                          or the reason it is not.
+                        type: string
+                      digest:
+                        description: digest is the published artifact's OCI digest.
+                        type: string
+                      orderReady:
+                        description: orderReady is whether Kokumi's Order for the
+                          component is Ready.
+                        type: boolean
+                      publishedTag:
+                        description: publishedTag is the registry tag Ichor last published
+                          (<chartVersion>-<hash12>).
+                        type: string
+                    type: object
+                type: object
             type: object
         required:
         - spec

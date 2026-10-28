@@ -654,9 +654,27 @@ var _ = Describe("TalosCluster.spec.cni", func() {
 		created := newClusterWithCNI(TalosClusterCNI{Preset: cniPresetCilium, KubeProxy: kubeProxyEnabled})
 		Expect(k8sClient.Create(context.Background(), created)).To(Succeed())
 
-		created.Annotations = map[string]string{TalosClusterConfirmKubeProxySwitchAnnotation: "true"}
+		created.Annotations = map[string]string{TalosClusterConfirmKubeProxySwitchAnnotation: kubeProxyReplaced}
 		created.Spec.CNI.KubeProxy = kubeProxyReplaced
 		Expect(k8sClient.Update(context.Background(), created)).To(Succeed())
+	})
+
+	It("rejects switching kubeProxy when the annotation names a different mode", func() {
+		created := newClusterWithCNI(TalosClusterCNI{Preset: cniPresetCilium, KubeProxy: kubeProxyReplaced})
+		created.Annotations = map[string]string{TalosClusterConfirmKubeProxySwitchAnnotation: kubeProxyReplaced}
+		Expect(k8sClient.Create(context.Background(), created)).To(Succeed())
+
+		created.Spec.CNI.KubeProxy = kubeProxyEnabled
+		Expect(k8sClient.Update(context.Background(), created)).NotTo(Succeed())
+	})
+
+	It("rejects switching kubeProxy when the annotation is a bare marker", func() {
+		created := newClusterWithCNI(TalosClusterCNI{Preset: cniPresetCilium, KubeProxy: kubeProxyEnabled})
+		Expect(k8sClient.Create(context.Background(), created)).To(Succeed())
+
+		created.Annotations = map[string]string{TalosClusterConfirmKubeProxySwitchAnnotation: "true"}
+		created.Spec.CNI.KubeProxy = kubeProxyReplaced
+		Expect(k8sClient.Update(context.Background(), created)).NotTo(Succeed())
 	})
 })
 

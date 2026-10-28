@@ -583,8 +583,9 @@ type CertificateExpiry struct {
 	NotAfter metav1.Time `json:"notAfter"`
 }
 
-// TalosClusterConfirmKubeProxySwitchAnnotation, when present on a TalosCluster, allows
-// spec.cni.kubeProxy to change on an update that would otherwise be rejected. The guard itself
+// TalosClusterConfirmKubeProxySwitchAnnotation, when its value equals the new spec.cni.kubeProxy
+// ("replaced" or "enabled"), allows spec.cni.kubeProxy to change on an update that would otherwise
+// be rejected. A leftover annotation therefore never admits a different later switch. The guard itself
 // is not a CRD x-kubernetes-validations rule: CRD-embedded CEL only exposes metadata.name and
 // metadata.generateName on self/oldSelf, never annotations (confirmed against envtest: a rule
 // referencing self.metadata.annotations fails CRD creation with "undefined field

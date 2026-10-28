@@ -1,6 +1,7 @@
 package oidcissuer
 
 import (
+	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
@@ -15,6 +16,8 @@ import (
 	"time"
 
 	"github.com/go-jose/go-jose/v4/jwt"
+
+	"github.com/maeshinshin/ichor/pkg/ichorauth"
 )
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
@@ -34,9 +37,9 @@ func oauthError(w http.ResponseWriter, status int, code, desc string) {
 // 8.3), any port, path exactly /callback.
 func (i *Issuer) redirectAllowed(client, raw string) bool {
 	switch client {
-	case ClientUI:
+	case ichorauth.ClientUI:
 		return raw == i.cfg.UIRedirectURI
-	case ClientCLI:
+	case ichorauth.ClientCLI:
 		u, err := url.Parse(raw)
 		if err != nil || u.Scheme != "http" || u.User != nil || u.RawQuery != "" || u.Fragment != "" ||
 			u.Opaque != "" || u.Path != "/callback" || strings.Contains(raw, "#") || strings.Contains(raw, "?") {
@@ -57,15 +60,15 @@ func (i *Issuer) redirectAllowed(client, raw string) bool {
 // audience, so a token in sessionStorage is not a Kubernetes credential.
 func audienceFor(client, requested string) (string, bool) {
 	switch client {
-	case ClientUI:
-		if requested == "" || requested == AudienceUI {
-			return AudienceUI, true
+	case ichorauth.ClientUI:
+		if requested == "" || requested == ichorauth.AudienceUI {
+			return ichorauth.AudienceUI, true
 		}
-	case ClientCLI:
+	case ichorauth.ClientCLI:
 		if requested == "" {
-			return AudienceKube, true
+			return ichorauth.AudienceKube, true
 		}
-		if requested == AudienceKube || requested == AudienceUI {
+		if requested == ichorauth.AudienceKube || requested == ichorauth.AudienceUI {
 			return requested, true
 		}
 	}
@@ -117,14 +120,9 @@ func (i *Issuer) authorize(w http.ResponseWriter, r *http.Request) {
 		fail(errInvalidRequest)
 	default:
 		now := i.cfg.Now()
-		id, err := randomID()
-		if err != nil {
-			fail("server_error")
-			return
-		}
-		ticket, err := i.sign(typTicket, jwt.Claims{
-			Issuer: i.cfg.Issuer, Audience: jwt.Audience{internalAudience}, ID: id,
-			IssuedAt: jwt.NewNumericDate(now), Expiry: jwt.NewNumericDate(now.Add(TicketTTL)),
+		ticket, err := i.sign(ichorauth.TypTicket, jwt.Claims{
+			Issuer: i.cfg.Issuer, Audience: jwt.Audience{internalAudience}, ID: rand.Text(),
+			IssuedAt: jwt.NewNumericDate(now), Expiry: jwt.NewNumericDate(now.Add(ichorauth.DefaultTicketTTL)),
 		}, authRequest{
 			ClientID: client, RedirectURI: redirect, Scope: q.Get("scope"), State: q.Get("state"),
 			Nonce: q.Get("nonce"), CodeChallenge: q.Get("code_challenge"), TokenAudience: aud,
@@ -134,7 +132,7 @@ func (i *Issuer) authorize(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.Header().Set("Cache-Control", "no-store")
-		http.Redirect(w, r, i.cfg.Issuer+i.cfg.LoginPath+"?ticket="+url.QueryEscape(ticket), http.StatusFound)
+		http.Redirect(w, r, i.cfg.Issuer+"/login?ticket="+url.QueryEscape(ticket), http.StatusFound)
 	}
 }
 
@@ -178,7 +176,7 @@ func (i *Issuer) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var ar authRequest
-	if _, err := i.verify(req.Ticket, typTicket, &ar); err != nil {
+	if _, err := i.verify(req.Ticket, ichorauth.TypTicket, &ar); err != nil {
 		oauthError(w, http.StatusBadRequest, errInvalidRequest, "invalid or expired ticket")
 		return
 	}
@@ -223,14 +221,9 @@ func (i *Issuer) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	i.failures.Reset(userKey)
-	id, err := randomID()
-	if err != nil {
-		oauthError(w, http.StatusInternalServerError, "server_error", "")
-		return
-	}
-	code, err := i.sign(typCode, jwt.Claims{
-		Issuer: i.cfg.Issuer, Subject: user.Name, Audience: jwt.Audience{internalAudience}, ID: id,
-		IssuedAt: jwt.NewNumericDate(now), Expiry: jwt.NewNumericDate(now.Add(CodeTTL)),
+	code, err := i.sign(ichorauth.TypCode, jwt.Claims{
+		Issuer: i.cfg.Issuer, Subject: user.Name, Audience: jwt.Audience{internalAudience}, ID: rand.Text(),
+		IssuedAt: jwt.NewNumericDate(now), Expiry: jwt.NewNumericDate(now.Add(ichorauth.DefaultCodeTTL)),
 	}, ar)
 	if err != nil {
 		oauthError(w, http.StatusInternalServerError, "server_error", "")
@@ -294,7 +287,7 @@ func (i *Issuer) token(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	client := f.Get("client_id")
-	if client != ClientUI && client != ClientCLI {
+	if client != ichorauth.ClientUI && client != ichorauth.ClientCLI {
 		oauthError(w, http.StatusUnauthorized, "invalid_client", "unknown client")
 		return
 	}
@@ -311,7 +304,7 @@ func (i *Issuer) token(w http.ResponseWriter, r *http.Request) {
 func (i *Issuer) codeGrant(w http.ResponseWriter, r *http.Request, client string) {
 	f := r.PostForm
 	var ar authRequest
-	std, err := i.verify(f.Get("code"), typCode, &ar)
+	std, err := i.verify(f.Get("code"), ichorauth.TypCode, &ar)
 	if err != nil || ar.ClientID != client || ar.RedirectURI != f.Get("redirect_uri") {
 		oauthError(w, http.StatusBadRequest, errInvalidGrant, "invalid code")
 		return
@@ -344,7 +337,7 @@ func (i *Issuer) codeGrant(w http.ResponseWriter, r *http.Request, client string
 func (i *Issuer) refreshGrant(w http.ResponseWriter, r *http.Request, client string) {
 	f := r.PostForm
 	var rc refreshClaims
-	std, err := i.verify(f.Get("refresh_token"), typRefresh, &rc)
+	std, err := i.verify(f.Get("refresh_token"), ichorauth.TypRefresh, &rc)
 	if err != nil || rc.ClientID != client {
 		oauthError(w, http.StatusBadRequest, errInvalidGrant, "invalid refresh token")
 		return
@@ -374,22 +367,14 @@ func (i *Issuer) refreshGrant(w http.ResponseWriter, r *http.Request, client str
 // withRefresh), a refresh token. A refresh grant returns no new refresh token:
 // they are not rotated, the client keeps its own.
 func (i *Issuer) respond(w http.ResponseWriter, u User, client, aud, scope, nonce string, withRefresh bool, sessionStart time.Time) {
-	if u.MustChange && aud == AudienceKube {
+	if u.MustChange && aud == ichorauth.AudienceKube {
 		oauthError(w, http.StatusForbidden, errAccessDenied, "change your password first (sign in to the Ichor UI); no Kubernetes token is issued until then")
 		return
 	}
 	now := i.cfg.Now()
-	id, err := randomID()
-	if err != nil {
-		oauthError(w, http.StatusInternalServerError, "server_error", "")
-		return
-	}
-	groups := slices.Clone(u.Roles)
-	if groups == nil {
-		groups = []string{}
-	}
+	groups := append([]string{}, u.Roles...) // never null in the token
 	idTok, err := i.sign("JWT", jwt.Claims{
-		Issuer: i.cfg.Issuer, Subject: u.Name, Audience: jwt.Audience{aud}, ID: id,
+		Issuer: i.cfg.Issuer, Subject: u.Name, Audience: jwt.Audience{aud}, ID: rand.Text(),
 		IssuedAt: jwt.NewNumericDate(now), Expiry: jwt.NewNumericDate(now.Add(i.cfg.TokenTTL)),
 	}, idClaims{Groups: groups, Nonce: nonce})
 	resp := tokenResponse{
@@ -397,15 +382,10 @@ func (i *Issuer) respond(w http.ResponseWriter, u User, client, aud, scope, nonc
 		TokenType:   "Bearer", ExpiresIn: int(i.cfg.TokenTTL / time.Second), IDToken: idTok, Scope: scope,
 	}
 	if err == nil && withRefresh {
-		rid, rerr := randomID()
-		if rerr != nil {
-			err = rerr
-		} else {
-			resp.RefreshToken, err = i.sign(typRefresh, jwt.Claims{
-				Issuer: i.cfg.Issuer, Subject: u.Name, Audience: jwt.Audience{internalAudience}, ID: rid,
-				IssuedAt: jwt.NewNumericDate(sessionStart), Expiry: jwt.NewNumericDate(sessionStart.Add(i.cfg.RefreshLifetime)),
-			}, refreshClaims{ClientID: client, Scope: scope, TokenAudience: aud})
-		}
+		resp.RefreshToken, err = i.sign(ichorauth.TypRefresh, jwt.Claims{
+			Issuer: i.cfg.Issuer, Subject: u.Name, Audience: jwt.Audience{internalAudience}, ID: rand.Text(),
+			IssuedAt: jwt.NewNumericDate(sessionStart), Expiry: jwt.NewNumericDate(sessionStart.Add(i.cfg.RefreshLifetime)),
+		}, refreshClaims{ClientID: client, Scope: scope, TokenAudience: aud})
 	}
 	if err != nil {
 		oauthError(w, http.StatusInternalServerError, "server_error", "")

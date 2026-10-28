@@ -15,22 +15,12 @@ import (
 	"time"
 
 	jose "github.com/go-jose/go-jose/v4"
+
+	"github.com/maeshinshin/ichor/pkg/ichorauth"
 )
 
-// Fixed clients and audiences.
+// Fixed clients, audiences and lifetimes live in ichorauth.
 const (
-	ClientUI  = "ichor-ui"
-	ClientCLI = "ichor-cli"
-
-	AudienceUI   = "ichor-ui"
-	AudienceKube = "ichor-kube"
-
-	CodeTTL   = 60 * time.Second
-	TicketTTL = 5 * time.Minute
-
-	DefaultTokenTTL      = 5 * time.Minute
-	DefaultRefreshLife   = 12 * time.Hour
-	defaultLoginPath     = "/login"
 	maxFormBytes         = 64 << 10
 	maxLoginBytes        = 16 << 10
 	maxUserNameLen       = 63
@@ -45,10 +35,6 @@ const (
 	endpointToken        = "/oidc/token"
 	endpointJWKS         = "/oidc/jwks"
 	endpointDiscovery    = "/.well-known/openid-configuration"
-	minTokenTTL          = time.Minute
-	maxTokenTTL          = 15 * time.Minute
-	minRefreshLife       = time.Hour
-	maxRefreshLife       = 30 * 24 * time.Hour
 )
 
 // ErrUserNotFound is returned by UserDirectory.LookupUser for an unknown user.
@@ -94,9 +80,6 @@ type Config struct {
 	// UIRedirectURI is the exact redirect URI of the ichor-ui client,
 	// <externalURL>/auth/callback.
 	UIRedirectURI string
-	// LoginPath is the SPA route the authorize endpoint sends the browser to
-	// (default "/login"); it receives ?ticket=.
-	LoginPath string
 
 	TokenTTL        time.Duration // default 5m, 1m..15m
 	RefreshLifetime time.Duration // default 12h, 1h..30d
@@ -129,19 +112,16 @@ func New(cfg Config) (*Issuer, error) {
 		return nil, errors.New("oidcissuer: UIRedirectURI is required")
 	}
 	if cfg.TokenTTL == 0 {
-		cfg.TokenTTL = DefaultTokenTTL
+		cfg.TokenTTL = ichorauth.DefaultTokenTTL
 	}
 	if cfg.RefreshLifetime == 0 {
-		cfg.RefreshLifetime = DefaultRefreshLife
+		cfg.RefreshLifetime = ichorauth.DefaultRefreshLifetime
 	}
-	if cfg.TokenTTL < minTokenTTL || cfg.TokenTTL > maxTokenTTL {
-		return nil, fmt.Errorf("oidcissuer: TokenTTL must be between %s and %s", minTokenTTL, maxTokenTTL)
+	if cfg.TokenTTL < ichorauth.MinTokenTTL || cfg.TokenTTL > ichorauth.MaxTokenTTL {
+		return nil, fmt.Errorf("oidcissuer: TokenTTL must be between %s and %s", ichorauth.MinTokenTTL, ichorauth.MaxTokenTTL)
 	}
-	if cfg.RefreshLifetime < minRefreshLife || cfg.RefreshLifetime > maxRefreshLife {
-		return nil, fmt.Errorf("oidcissuer: RefreshLifetime must be between %s and %s", minRefreshLife, maxRefreshLife)
-	}
-	if cfg.LoginPath == "" {
-		cfg.LoginPath = defaultLoginPath
+	if cfg.RefreshLifetime < ichorauth.MinRefreshLifetime || cfg.RefreshLifetime > ichorauth.MaxRefreshLifetime {
+		return nil, fmt.Errorf("oidcissuer: RefreshLifetime must be between %s and %s", ichorauth.MinRefreshLifetime, ichorauth.MaxRefreshLifetime)
 	}
 	if cfg.Now == nil {
 		cfg.Now = time.Now
@@ -163,18 +143,17 @@ func (i *Issuer) Handler() http.Handler {
 // InternalHandler serves only discovery (with the internal jwks_uri) and the
 // JWKS, for the kube-apiserver through discoveryURL (port 8444 side).
 func (i *Issuer) InternalHandler() http.Handler {
-	jwksURI := i.cfg.InternalJWKSURI
-	if jwksURI == "" {
-		jwksURI = i.cfg.Issuer + endpointJWKS
-	}
 	mux := http.NewServeMux()
-	if i.cfg.InternalJWKSURI == "" && i.cfg.InternalJWKSFromHost {
+	switch {
+	case i.cfg.InternalJWKSURI != "":
+		mux.HandleFunc("GET "+endpointDiscovery, i.discovery(i.cfg.InternalJWKSURI))
+	case i.cfg.InternalJWKSFromHost:
 		mux.HandleFunc("GET "+endpointDiscovery, func(w http.ResponseWriter, r *http.Request) {
 			u := url.URL{Scheme: "https", Host: r.Host, Path: endpointJWKS}
 			i.discovery(u.String())(w, r)
 		})
-	} else {
-		mux.HandleFunc("GET "+endpointDiscovery, i.discovery(jwksURI))
+	default:
+		mux.HandleFunc("GET "+endpointDiscovery, i.discovery(i.cfg.Issuer+endpointJWKS))
 	}
 	mux.HandleFunc("GET "+endpointJWKS, i.jwks)
 	return mux
@@ -203,14 +182,7 @@ func (i *Issuer) discovery(jwksURI string) http.HandlerFunc {
 
 func (i *Issuer) jwks(w http.ResponseWriter, _ *http.Request) {
 	set := jose.JSONWebKeySet{}
-	for _, k := range i.cfg.Keys.Public() {
-		pub := k.Public()
-		if !pub.Valid() {
-			continue
-		}
-		pub.Use, pub.Algorithm = jwkUseSig, string(jose.RS256)
-		set.Keys = append(set.Keys, pub)
-	}
+	set.Keys = i.cfg.Keys.Public() // public keys with use and alg already set
 	w.Header().Set("Cache-Control", noCache)
 	writeJSON(w, http.StatusOK, set)
 }

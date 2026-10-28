@@ -97,7 +97,9 @@ func Apply(ctx context.Context, cfg *action.Configuration, vals map[string]any, 
 	return upgrade(ctx, cfg, ch, vals, o)
 }
 
-func install(ctx context.Context, cfg *action.Configuration, ch *chart.Chart, vals map[string]any, o ApplyOptions) (ApplyResult, error) {
+func install(
+	ctx context.Context, cfg *action.Configuration, ch *chart.Chart, vals map[string]any, o ApplyOptions,
+) (ApplyResult, error) {
 	i := action.NewInstall(cfg)
 	i.ReleaseName = ReleaseName
 	i.Namespace = ReleaseNamespace
@@ -114,7 +116,9 @@ func install(ctx context.Context, cfg *action.Configuration, ch *chart.Chart, va
 	return ApplyResult{Release: rel, Adopted: true}, nil
 }
 
-func upgrade(ctx context.Context, cfg *action.Configuration, ch *chart.Chart, vals map[string]any, o ApplyOptions) (ApplyResult, error) {
+func upgrade(
+	ctx context.Context, cfg *action.Configuration, ch *chart.Chart, vals map[string]any, o ApplyOptions,
+) (ApplyResult, error) {
 	u := action.NewUpgrade(cfg)
 	u.Namespace = ReleaseNamespace
 	u.Wait = true

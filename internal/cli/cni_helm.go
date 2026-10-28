@@ -45,7 +45,7 @@ var cniHelmCmd = &cobra.Command{
 var cniHelmApplyOpts struct {
 	Cluster          string
 	StorageNamespace string
-	Timeout time.Duration
+	Timeout          time.Duration
 }
 
 var cniHelmApplyCmd = &cobra.Command{

@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/maeshinshin/ichor/internal/installmanifest"
@@ -210,21 +211,24 @@ func applyOne(ctx context.Context, c client.Client, u *unstructured.Unstructured
 		return c.Apply(ctx, client.ApplyConfigurationFromUnstructured(u), client.FieldOwner(FieldOwner), client.ForceOwnership)
 	}
 
-	live := &unstructured.Unstructured{}
-	live.SetGroupVersionKind(u.GroupVersionKind())
+	// The Deployment controller writes status between our Get and Update; retry the pair on Conflict.
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		live := &unstructured.Unstructured{}
+		live.SetGroupVersionKind(u.GroupVersionKind())
 
-	err := c.Get(ctx, types.NamespacedName{Namespace: u.GetNamespace(), Name: u.GetName()}, live)
-	if apierrors.IsNotFound(err) {
-		return c.Create(ctx, u, client.FieldOwner(FieldOwner))
-	} else if err != nil {
-		return err
-	}
+		err := c.Get(ctx, types.NamespacedName{Namespace: u.GetNamespace(), Name: u.GetName()}, live)
+		if apierrors.IsNotFound(err) {
+			return c.Create(ctx, u, client.FieldOwner(FieldOwner))
+		} else if err != nil {
+			return err
+		}
 
-	repl := u.DeepCopy()
-	repl.SetResourceVersion(live.GetResourceVersion())
-	repl.SetAnnotations(mergeStrings(live.GetAnnotations(), u.GetAnnotations()))
+		repl := u.DeepCopy()
+		repl.SetResourceVersion(live.GetResourceVersion())
+		repl.SetAnnotations(mergeStrings(live.GetAnnotations(), u.GetAnnotations()))
 
-	return c.Update(ctx, repl, client.FieldOwner(FieldOwner))
+		return c.Update(ctx, repl, client.FieldOwner(FieldOwner))
+	})
 }
 
 func mergeStrings(base, over map[string]string) map[string]string {

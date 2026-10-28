@@ -349,7 +349,7 @@ func (r *TalosOperationReconciler) lockUnavailable(ctx context.Context, op *icho
 
 	if held, ok := errors.AsType[*clusterlock.HeldError](err); ok {
 		return ctrl.Result{RequeueAfter: operationRequeueInterval}, r.setPhase(ctx, op, ichorv1alpha1.TalosOperationPhasePaused,
-			reasonOperationLockHeld, fmt.Sprintf("cluster lock held by %q", held.Holder))
+			reasonOperationLockHeld, held.Error())
 	}
 
 	return ctrl.Result{}, err

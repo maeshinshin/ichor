@@ -312,7 +312,7 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 		}
 		if held, ok := errors.AsType[*clusterlock.HeldError](err); ok {
 			return r.removalCondition(ctx, m, metav1.ConditionFalse, reasonClusterLockHeld,
-				fmt.Sprintf("cluster lock held by %q; removal deferred", held.Holder))
+				held.Error()+"; removal deferred")
 		}
 		return err
 	}

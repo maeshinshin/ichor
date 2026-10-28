@@ -142,16 +142,12 @@ func (r *TalosOperationReconciler) advanceNode(
 	}
 	defer closeTalosClient(n.talos)
 
+	step := n.begin
 	if waiting {
-		res, err := n.await(ctx)
-		if err != nil {
-			return n.pause(ctx, err)
-		}
-
-		return res, nil
+		step = n.await
 	}
 
-	res, err := n.begin(ctx)
+	res, err := step(ctx)
 	if err != nil {
 		return n.pause(ctx, err)
 	}
@@ -159,37 +155,35 @@ func (r *TalosOperationReconciler) advanceNode(
 	return res, nil
 }
 
-// begin checks the guards and sends the action.
+// nodeActionBegin checks the guards and sends the action; nodeActionAwait runs while a sent action
+// has not shown its effect yet (etcd-defrag and reset finish in begin and have no entry).
+var nodeActionBegin = map[string]func(*nodeRun, context.Context) (ctrl.Result, error){
+	ichorv1alpha1.NodeActionReboot:                (*nodeRun).beginReboot,
+	ichorv1alpha1.NodeActionShutdown:              (*nodeRun).beginShutdown,
+	ichorv1alpha1.NodeActionRestartService:        (*nodeRun).beginRestartService,
+	ichorv1alpha1.NodeActionEtcdDefrag:            (*nodeRun).beginDefrag,
+	ichorv1alpha1.NodeActionEtcdForfeitLeadership: (*nodeRun).beginForfeit,
+	ichorv1alpha1.NodeActionReset:                 (*nodeRun).beginReset,
+}
+
+var nodeActionAwait = map[string]func(*nodeRun, context.Context) (ctrl.Result, error){
+	ichorv1alpha1.NodeActionReboot:                (*nodeRun).awaitReboot,
+	ichorv1alpha1.NodeActionShutdown:              (*nodeRun).awaitShutdown,
+	ichorv1alpha1.NodeActionRestartService:        (*nodeRun).awaitRestartService,
+	ichorv1alpha1.NodeActionEtcdForfeitLeadership: (*nodeRun).awaitForfeit,
+}
+
 func (n *nodeRun) begin(ctx context.Context) (ctrl.Result, error) {
-	switch n.spec.Action {
-	case ichorv1alpha1.NodeActionReboot:
-		return n.beginReboot(ctx)
-	case ichorv1alpha1.NodeActionShutdown:
-		return n.beginShutdown(ctx)
-	case ichorv1alpha1.NodeActionRestartService:
-		return n.beginRestartService(ctx)
-	case ichorv1alpha1.NodeActionEtcdDefrag:
-		return n.beginDefrag(ctx)
-	case ichorv1alpha1.NodeActionEtcdForfeitLeadership:
-		return n.beginForfeit(ctx)
-	case ichorv1alpha1.NodeActionReset:
-		return n.beginReset(ctx)
+	if f, ok := nodeActionBegin[n.spec.Action]; ok {
+		return f(n, ctx)
 	}
 
 	return ctrl.Result{}, fmt.Errorf("unknown node action %q", n.spec.Action)
 }
 
-// await runs while an action that was sent has not shown its effect yet.
 func (n *nodeRun) await(ctx context.Context) (ctrl.Result, error) {
-	switch n.spec.Action {
-	case ichorv1alpha1.NodeActionReboot:
-		return n.awaitReboot(ctx)
-	case ichorv1alpha1.NodeActionShutdown:
-		return n.awaitShutdown(ctx)
-	case ichorv1alpha1.NodeActionRestartService:
-		return n.awaitRestartService(ctx)
-	case ichorv1alpha1.NodeActionEtcdForfeitLeadership:
-		return n.awaitForfeit(ctx)
+	if f, ok := nodeActionAwait[n.spec.Action]; ok {
+		return f(n, ctx)
 	}
 
 	return ctrl.Result{}, fmt.Errorf("node action %q has nothing to wait for", n.spec.Action)
@@ -284,10 +278,6 @@ func (n *nodeRun) wait(ctx context.Context, why string) (ctrl.Result, error) {
 func (n *nodeRun) complete(ctx context.Context, message string) (ctrl.Result, error) {
 	n.r.markMachine(n.op, n.m.Name, ichorv1alpha1.TalosOperationMachinePhaseCompleted)
 
-	if n.op.Status.Node == nil {
-		n.op.Status.Node = &ichorv1alpha1.TalosOperationNodeStatus{}
-	}
-
 	n.op.Status.Node.Message = message
 
 	if err := n.lock.Release(ctx, controllerIdentity); err != nil {
@@ -295,11 +285,6 @@ func (n *nodeRun) complete(ctx context.Context, message string) (ctrl.Result, er
 	}
 
 	return ctrl.Result{}, n.r.setPhase(ctx, n.op, ichorv1alpha1.TalosOperationPhaseCompleted, reasonNodeActionDone, message)
-}
-
-// nodeName is the Kubernetes node (and etcd member) name of the machine.
-func (n *nodeRun) nodeName(ctx context.Context) (string, error) {
-	return resolveNodeName(ctx, n.r.Client, n.talos, n.m)
 }
 
 // controlPlaneGuard is the quorum guard of reboot and shutdown of a control plane: all
@@ -328,21 +313,23 @@ func (n *nodeRun) controlPlaneGuard(ctx context.Context, doing string) (only boo
 }
 
 // evacuate runs the storage hook before a node is taken away. done is false while replicas still
-// move.
-func (n *nodeRun) evacuate(ctx context.Context, node, purpose string) (done bool, err error) {
+// move, and res is then the pending status to return.
+func (n *nodeRun) evacuate(ctx context.Context, node, purpose string) (res ctrl.Result, done bool, err error) {
 	progress, err := evacuateMachine(ctx, n.r.Client, n.r.Evacuator, n.cluster, n.m, node, purpose)
 	if err != nil {
-		return false, err
+		return ctrl.Result{}, false, err
 	}
 
 	switch progress {
 	case storage.EvacuationWaiting:
-		return false, nil
+		res, err = n.pendingStatus(ctx, fmt.Sprintf("waiting for storage replicas to move off node %q", node))
+
+		return res, false, err
 	case storage.EvacuationPaused:
-		return false, fmt.Errorf("evacuating %q timed out with storage replicas still remaining", node)
+		return ctrl.Result{}, false, fmt.Errorf("evacuating %q timed out with storage replicas still remaining", node)
 	}
 
-	return true, nil
+	return ctrl.Result{}, true, nil
 }
 
 func (n *nodeRun) pendingStatus(ctx context.Context, message string) (ctrl.Result, error) {
@@ -361,7 +348,7 @@ func (n *nodeRun) pendingStatus(ctx context.Context, message string) (ctrl.Resul
 // ---- reboot ----
 
 func (n *nodeRun) beginReboot(ctx context.Context) (ctrl.Result, error) {
-	node, err := n.nodeName(ctx)
+	node, err := resolveNodeName(ctx, n.r.Client, n.talos, n.m)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -383,12 +370,8 @@ func (n *nodeRun) beginReboot(ctx context.Context) (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	if done, err := n.evacuate(ctx, node, "rebooting"); err != nil || !done {
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-
-		return n.pendingStatus(ctx, fmt.Sprintf("waiting for storage replicas to move off node %q", node))
+	if res, done, err := n.evacuate(ctx, node, "rebooting"); err != nil || !done {
+		return res, err
 	}
 
 	// Talos 1.14.3's Reboot does not drain, so Ichor does, with the helper the config rollout uses.
@@ -429,7 +412,7 @@ func (n *nodeRun) awaitReboot(ctx context.Context) (ctrl.Result, error) {
 		return n.wait(ctx, "the node has not rebooted yet")
 	}
 
-	node, err := n.nodeName(ctx)
+	node, err := resolveNodeName(ctx, n.r.Client, n.talos, n.m)
 	if err != nil {
 		return n.wait(ctx, err.Error())
 	}
@@ -480,7 +463,7 @@ func (n *nodeRun) beginShutdown(ctx context.Context) (ctrl.Result, error) {
 	force := only
 
 	if !force {
-		node, err := n.nodeName(ctx)
+		node, err := resolveNodeName(ctx, n.r.Client, n.talos, n.m)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
@@ -489,12 +472,8 @@ func (n *nodeRun) beginShutdown(ctx context.Context) (ctrl.Result, error) {
 			return ctrl.Result{}, err
 		}
 
-		if done, err := n.evacuate(ctx, node, "shutting down"); err != nil || !done {
-			if err != nil {
-				return ctrl.Result{}, err
-			}
-
-			return n.pendingStatus(ctx, fmt.Sprintf("waiting for storage replicas to move off node %q", node))
+		if res, done, err := n.evacuate(ctx, node, "shutting down"); err != nil || !done {
+			return res, err
 		}
 	}
 
@@ -571,7 +550,7 @@ func (n *nodeRun) awaitRestartService(ctx context.Context) (ctrl.Result, error) 
 		return ctrl.Result{RequeueAfter: nodeActionSettle}, nil
 	}
 
-	node, err := n.nodeName(ctx)
+	node, err := resolveNodeName(ctx, n.r.Client, n.talos, n.m)
 	if err != nil {
 		return n.wait(ctx, err.Error())
 	}

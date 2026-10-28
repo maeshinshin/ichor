@@ -23,16 +23,16 @@ import (
 )
 
 func TestEffective(t *testing.T) {
-	defaults := map[string]any{"a": map[string]any{"x": 1, "y": 2}, "list": []any{1, 2}, "d": "def"}
-	user := map[string]any{"a": map[string]any{"y": 3, "z": 4}, "list": []any{9}, "o": "user"}
+	defaults := map[string]any{"a": map[string]any{"x": 1, "y": 2}, keyList: []any{1, 2}, "d": "def"}
+	user := map[string]any{"a": map[string]any{"y": 3, "z": 4}, keyList: []any{9}, "o": "user"}
 	owned := map[string]any{"o": "owned", "a": map[string]any{"x": 100}}
 
 	got := Effective(defaults, user, owned)
 	want := map[string]any{
-		"a":    map[string]any{"x": 100, "y": 3, "z": 4},
-		"list": []any{9},
-		"d":    "def",
-		"o":    "owned",
+		"a":     map[string]any{"x": 100, "y": 3, "z": 4},
+		keyList: []any{9},
+		"d":     "def",
+		"o":     "owned",
 	}
 
 	if !reflect.DeepEqual(got, want) {
@@ -59,9 +59,14 @@ func TestEditDistance(t *testing.T) {
 	for _, tc := range []struct {
 		a, b string
 		want int
-	}{{"", "abc", 3}, {"abc", "abc", 0}, {"masqurade", "masquerade", 1}, {"kitten", "sitting", 3}} {
+	}{{"", strABC, 3}, {strABC, strABC, 0}, {"masqurade", "masquerade", 1}, {"kitten", "sitting", 3}} {
 		if got := editDistance(tc.a, tc.b); got != tc.want {
 			t.Errorf("editDistance(%q,%q) = %d, want %d", tc.a, tc.b, got, tc.want)
 		}
 	}
 }
+
+const (
+	keyList = "list"
+	strABC  = "abc"
+)

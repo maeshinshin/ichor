@@ -54,7 +54,8 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: cni-job-role
+# kustomize's name-reference rewriting misses this kube-system binding, so the subject is written out; see TestRoleBindingSubjectsExist in dist/chart.
 subjects:
 - kind: ServiceAccount
-  name: controller-manager
-  namespace: system
+  name: ichor-controller-manager
+  namespace: ichor-system

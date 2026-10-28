@@ -23,6 +23,8 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
+const applyVerb = "apply"
+
 func TestStackJobSpec(t *testing.T) {
 	inst := &ichorv1alpha1.IchorInstallation{Spec: ichorv1alpha1.IchorInstallationSpec{
 		Version: "v0.3.0", InstallerRepository: "registry.example/ichor-installer",
@@ -34,10 +36,10 @@ func TestStackJobSpec(t *testing.T) {
 		wantEnvVar string
 		wantSecret string
 	}{
-		{&stackComponent{name: componentKokumi}, []string{"stack", "apply", "kokumi"}, "ICHOR_KOKUMI_ADMIN_HASH", kokumiAdminSecret},
+		{&stackComponent{name: componentKokumi}, []string{"stack", applyVerb, "kokumi"}, "ICHOR_KOKUMI_ADMIN_HASH", kokumiAdminSecret},
 		{
 			&stackComponent{name: componentArgoCD, valuesJSON: `{"a":1}`},
-			[]string{"stack", "apply", componentArgoCD, `--values={"a":1}`}, "ICHOR_ARGOCD_REDIS_PASSWORD", argoRedisSecret,
+			[]string{"stack", applyVerb, componentArgoCD, `--values={"a":1}`}, "ICHOR_ARGOCD_REDIS_PASSWORD", argoRedisSecret,
 		},
 	} {
 		job := newStackJob("ichor-system", tc.comp, inst)

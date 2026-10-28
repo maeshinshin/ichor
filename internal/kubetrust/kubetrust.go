@@ -16,6 +16,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 // TrustFile is where the extra CA certificates are kept (an emptyDir is mounted on its directory);
@@ -59,19 +60,22 @@ func certs(data []byte) ([]*x509.Certificate, error) {
 	return out, nil
 }
 
-// add trusts the certificates in pemData (other PEM blocks are ignored).
-func (p *Pool) add(pemData []byte) error {
+// add trusts the certificates in pemData (other PEM blocks are ignored) and returns the ones
+// that were not trusted already.
+func (p *Pool) add(pemData []byte) ([]*x509.Certificate, error) {
 	cs, err := certs(pemData)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if len(cs) == 0 {
-		return errors.New("no certificate found")
+		return nil, errors.New("no certificate found")
 	}
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
+	var added []*x509.Certificate
 
 	for _, c := range cs {
 		dup := false
@@ -86,16 +90,21 @@ func (p *Pool) add(pemData []byte) error {
 
 		if !dup {
 			p.extra = append(p.extra, c)
+			added = append(added, c)
 		}
 	}
 
-	return nil
+	return added, nil
 }
 
-// LoadFile adds the certificates in path; a missing file is not an error.
+// LoadFile adds the certificates in path; a missing file is not an error. It logs how many it loaded.
 func (p *Pool) LoadFile(path string) error {
+	log := ctrllog.Log.WithName("kubetrust")
+
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
+		log.Info("Loaded extra CA certificates from the trust file", "count", 0, "path", path)
+
 		return nil
 	}
 
@@ -103,13 +112,26 @@ func (p *Pool) LoadFile(path string) error {
 		return err
 	}
 
-	return p.add(data)
+	added, err := p.add(data)
+	if err != nil {
+		return err
+	}
+
+	log.Info("Loaded extra CA certificates from the trust file", "count", len(added), "path", path)
+
+	return nil
 }
 
 // Publish trusts cert (public part only) and writes the extra certificates to path atomically.
 func (p *Pool) Publish(cert []byte, path string) error {
-	if err := p.add(cert); err != nil {
+	added, err := p.add(cert)
+	if err != nil {
 		return fmt.Errorf("trusting the new CA: %w", err)
+	}
+
+	for _, c := range added {
+		ctrllog.Log.WithName("kubetrust").Info("Trusting a new CA certificate",
+			"subject", c.Subject.String(), "notBefore", c.NotBefore, "notAfter", c.NotAfter)
 	}
 
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

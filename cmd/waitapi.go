@@ -25,6 +25,8 @@ const (
 	apiWaitTimeout    = 5 * time.Minute
 	apiWaitInitialGap = time.Second
 	apiWaitMaxGap     = 30 * time.Second
+	// apiWaitLogEvery limits the failed-probe log to one line per this long.
+	apiWaitLogEvery = 15 * time.Second
 )
 
 // waitForAPIServer returns a rest config once discovery succeeds. getConfig is called on every
@@ -41,6 +43,9 @@ func waitForAPIServer(
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	gap := initial
+
+	var lastLog time.Time
+
 	for {
 		cfg, err := getConfig()
 		if err == nil {
@@ -52,7 +57,12 @@ func waitForAPIServer(
 		if err == nil {
 			return cfg, nil
 		}
-		log.Info("Waiting for the API server", "reason", err.Error(), "retryIn", gap.String())
+		if lastLog.IsZero() || time.Since(lastLog) >= apiWaitLogEvery {
+			log.Info("Waiting for the API server", "reason", err.Error(), "retryIn", gap.String(),
+				"waited", time.Since(start).Round(time.Second).String())
+			lastLog = time.Now()
+		}
+
 		select {
 		case <-ctx.Done():
 			if parent.Err() != nil {

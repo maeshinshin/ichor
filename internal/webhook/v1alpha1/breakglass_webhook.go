@@ -247,7 +247,14 @@ func (h *BreakGlassHandler) handleOperation(ctx context.Context, req admission.R
 		return admission.Allowed("")
 	}
 
-	if op.Spec.Kind != ichorv1alpha1.TalosOperationKindNode || op.Spec.Node == nil || op.Spec.Node.Action != ichorv1alpha1.NodeActionReset {
+	if op.Spec.Kind != ichorv1alpha1.TalosOperationKindNode || op.Spec.Node == nil {
+		return admission.Allowed("")
+	}
+
+	// A reset wipes the node; a breakGlassReason on any other action overrides the last-worker guard.
+	// Either needs the verb on the machine.
+	reset := op.Spec.Node.Action == ichorv1alpha1.NodeActionReset
+	if !reset && op.Spec.Node.BreakGlassReason == "" {
 		return admission.Allowed("")
 	}
 
@@ -259,10 +266,15 @@ func (h *BreakGlassHandler) handleOperation(ctx context.Context, req admission.R
 	}
 
 	if !allowed {
-		return admission.Denied(fmt.Sprintf("a reset wipes the node: it needs the %q verb on talosmachines/%s", BreakGlassVerb, machine))
+		what := "a reset wipes the node"
+		if !reset {
+			what = "spec.node.breakGlassReason overrides the last-worker guard"
+		}
+
+		return admission.Denied(fmt.Sprintf("%s: it needs the %q verb on talosmachines/%s", what, BreakGlassVerb, machine))
 	}
 
-	breakglasslog.Info("reset admitted under break-glass", "user", req.UserInfo.Username, "machine", machine)
+	breakglasslog.Info("node action admitted under break-glass", "user", req.UserInfo.Username, "machine", machine, "action", op.Spec.Node.Action)
 
 	return admission.Allowed("")
 }

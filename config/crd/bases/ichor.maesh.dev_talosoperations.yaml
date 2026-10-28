@@ -183,6 +183,14 @@ spec:
                       allowLeader lets etcd-defrag run on the member that currently leads a multi-member etcd.
                       By default it is refused there.
                     type: boolean
+                  breakGlassReason:
+                    description: |-
+                      breakGlassReason overrides the last-worker guard for reboot and shutdown: the
+                      reason the operator gave for taking the last schedulable, Ready worker away. It is only honoured
+                      when the creator holds the break-glass verb on the machine (the break-glass webhook checks), and
+                      it goes into the audit record and an Event.
+                    minLength: 1
+                    type: string
                   confirm:
                     description: confirm must equal the machine's name for reset,
                       the typed confirmation of an irreversible action.

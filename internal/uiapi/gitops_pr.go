@@ -158,7 +158,7 @@ func (s *Server) planWriteIn(
 		}
 
 		return nil, connect.NewError(connect.CodeFailedPrecondition,
-			fmt.Errorf("%q is tracked by %s, so it is read-only here: run `ichor gitops export` to put it in Git "+
+			fmt.Errorf("%q is tracked by %s, so it is read-only here: edit it in Git "+
 				"and change it with a pull request", key, by))
 	}
 }
@@ -221,7 +221,7 @@ func (s *Server) planEdit(
 	if kind != prmode.SourceFile {
 		return nil, connect.NewError(connect.CodeFailedPrecondition,
 			fmt.Errorf("%q is tracked by Argo CD Application %q, whose source is not a plain path (Helm, plugin or "+
-				"multi-source), so no file can be edited: run `ichor gitops export` and apply the change by hand", key, appKey))
+				"multi-source), so no file can be edited: edit it in Git by hand", key, appKey))
 	}
 
 	if !sameRepository(src.RepoURL, repo.CloneURL) {

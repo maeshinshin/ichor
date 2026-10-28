@@ -16,9 +16,7 @@ limitations under the License.
 
 // Package gitopstracking answers one question -- "is this object already
 // tracked by Argo CD or Flux?" -- for every caller that needs it:
-// `internal/cli`'s `gitops export` (a warning: an unapproved, tracked
-// TalosMachine is surprising enough to flag even though export already
-// leaves it out) and PR mode's write-vs-PR decision
+// PR mode's write-vs-PR decision
 // (`pkg/prmode.Decide`, docs/adr/0044): a tracked CR must never be written
 // to directly, so this package's answer gates a write, not just a log
 // line.

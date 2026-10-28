@@ -43,9 +43,7 @@ spec:
           of an imperative action in progress, not a declarative desired state, so
           it is one of the kinds docs/design/architecture.md's "GitOps and Argo CD"
           section names as not going in Git ("What doesn't [go in Git]: Secrets,
-          TalosOperations, ..."); `ichor gitops export` excluding it is that other
-          command's own responsibility (ADR 0026), not something this type can
-          enforce on its own.
+          TalosOperations, ...").
         properties:
           apiVersion:
             description: |-

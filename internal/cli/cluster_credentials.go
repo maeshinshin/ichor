@@ -140,10 +140,24 @@ type handoffChecks struct {
 	// Talos is best effort (the operator's machine may not reach the nodes directly); a failure is
 	// reported but does not block. nil skips it.
 	Talos func(ctx context.Context, talosconfigPath string) error
+
+	// Reconnect, when set, gives the client the acknowledgement retries through after a transient
+	// error, built from the new kubeconfig. nil keeps the client it was given.
+	Reconnect func(kubeconfigPath string) (ctrlclient.Client, error)
 }
 
 func defaultHandoffChecks() handoffChecks {
-	return handoffChecks{Kube: verifyKubeconfig, Talos: verifyTalosconfig}
+	return handoffChecks{Kube: verifyKubeconfig, Talos: verifyTalosconfig, Reconnect: newKubeClientFromFile}
+}
+
+// newKubeClientFromFile builds a Kubernetes client from the kubeconfig at path.
+func newKubeClientFromFile(path string) (ctrlclient.Client, error) {
+	cfg, err := loadKubeconfig(path)
+	if err != nil {
+		return nil, err
+	}
+
+	return newKubeClientForConfig(cfg)
 }
 
 // checkBundleCurrent warns when the bundle file holds CAs the cluster does not have any more, and
@@ -275,7 +289,12 @@ func acknowledgeWithChecks(
 		}
 	}
 
-	name, err := acknowledgeHandoff(ctx, k8s, req.Namespace, req.Cluster, operation)
+	var redial func() (ctrlclient.Client, error)
+	if checks.Reconnect != nil {
+		redial = func() (ctrlclient.Client, error) { return checks.Reconnect(files.Kubeconfig) }
+	}
+
+	name, err := acknowledgeHandoff(ctx, k8s, req.Namespace, req.Cluster, operation, errw, redial)
 	if err != nil {
 		return err
 	}

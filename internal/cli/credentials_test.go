@@ -23,6 +23,7 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -56,6 +57,8 @@ const (
 	credServer   = "https://10.0.0.1:6443"
 	credContext  = "admin@c"
 	credEndpoint = "10.0.0.2:50000"
+	// credHandoffToken is the hand-off annotation the fixture's rotation (at AwaitingCredentials) expects.
+	credHandoffToken = "talos=n1,kubernetes=n2"
 )
 
 // credFixture is a cluster, its bundle Secret (with a rotation in progress when rot is set), a
@@ -508,7 +511,7 @@ func TestRotateCAHandoffWritesTheFilesChecksThemAndAcknowledges(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got := op.Annotations[ichorv1alpha1.CredentialsHandoffAnnotation]; got != "talos=n1,kubernetes=n2" {
+	if got := op.Annotations[ichorv1alpha1.CredentialsHandoffAnnotation]; got != credHandoffToken {
 		t.Fatalf("hand-off annotation %q", got)
 	}
 
@@ -572,8 +575,111 @@ func TestRotateCAHandoffWaitsForTheGateAndStopsPastIt(t *testing.T) {
 func TestAcknowledgeNeedsAWaitingRotation(t *testing.T) {
 	f := newCredFixture(t, true, ichorv1alpha1.CARotationStageAccepting)
 
-	if _, err := acknowledgeHandoff(context.Background(), f.k8s, testNamespace, f.name, ""); err == nil {
+	if _, err := acknowledgeHandoff(context.Background(), f.k8s, testNamespace, f.name, "", io.Discard, nil); err == nil {
 		t.Fatal("acknowledged a rotation that is not at the gate")
+	}
+}
+
+// flakyAckClient is the fixture's cluster behind a client whose first patch fails with EOF, as when
+// the API server restarts under it. applyFirst makes that patch land before the EOF. patches counts
+// the patch calls.
+func flakyAckClient(t *testing.T, f *credFixture, applyFirst bool) (client.Client, *int) {
+	t.Helper()
+
+	var op ichorv1alpha1.TalosOperation
+	if err := f.k8s.Get(context.Background(), types.NamespacedName{Namespace: testNamespace, Name: credOpName}, &op); err != nil {
+		t.Fatal(err)
+	}
+
+	op.ResourceVersion = ""
+
+	patches := new(int)
+
+	c := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(&op).WithInterceptorFuncs(interceptor.Funcs{
+		Patch: func(ctx context.Context, c client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+			*patches++
+			if *patches == 1 {
+				if applyFirst {
+					if err := c.Patch(ctx, obj, patch, opts...); err != nil {
+						return err
+					}
+				}
+
+				return io.ErrUnexpectedEOF
+			}
+
+			return c.Patch(ctx, obj, patch, opts...)
+		},
+	}).Build()
+
+	return c, patches
+}
+
+func TestAcknowledgeSurvivesAPatchThatLandedBeforeTheEOF(t *testing.T) {
+	shrinkFollowTimers(t)
+
+	f := newCredFixture(t, true, ichorv1alpha1.CARotationStageAwaitingCredentials)
+	c, patches := flakyAckClient(t, f, true)
+
+	var errw bytes.Buffer
+
+	name, err := acknowledgeHandoff(context.Background(), c, testNamespace, f.name, "", &errw, nil)
+	if err != nil {
+		t.Fatalf("a hand-off that landed before the connection dropped was reported as failed: %v", err)
+	}
+
+	if name != credOpName {
+		t.Fatalf("acknowledged operation %q, want %q", name, credOpName)
+	}
+
+	if *patches != 1 {
+		t.Fatalf("the patch was sent %d times, want once: the read-back should have seen it land", *patches)
+	}
+
+	var op ichorv1alpha1.TalosOperation
+	if err := c.Get(context.Background(), types.NamespacedName{Namespace: testNamespace, Name: credOpName}, &op); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := op.Annotations[ichorv1alpha1.CredentialsHandoffAnnotation]; got != credHandoffToken {
+		t.Fatalf("hand-off annotation %q", got)
+	}
+}
+
+func TestAcknowledgeRetriesAPatchThatDidNotLandWithTheNewClient(t *testing.T) {
+	shrinkFollowTimers(t)
+
+	f := newCredFixture(t, true, ichorv1alpha1.CARotationStageAwaitingCredentials)
+	c, patches := flakyAckClient(t, f, false)
+
+	redials := 0
+	redial := func() (client.Client, error) {
+		redials++
+
+		return c, nil
+	}
+
+	var errw bytes.Buffer
+
+	if _, err := acknowledgeHandoff(context.Background(), c, testNamespace, f.name, "", &errw, redial); err != nil {
+		t.Fatalf("a patch that did not land was not sent again: %v\n%s", err, errw.String())
+	}
+
+	if *patches != 2 || redials != 1 {
+		t.Fatalf("patches = %d, redials = %d; want the patch sent twice and the new client used once", *patches, redials)
+	}
+
+	if !strings.Contains(errw.String(), "retrying") {
+		t.Fatalf("the retry was not reported: %s", errw.String())
+	}
+
+	var op ichorv1alpha1.TalosOperation
+	if err := c.Get(context.Background(), types.NamespacedName{Namespace: testNamespace, Name: credOpName}, &op); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := op.Annotations[ichorv1alpha1.CredentialsHandoffAnnotation]; got != credHandoffToken {
+		t.Fatalf("hand-off annotation %q", got)
 	}
 }
 

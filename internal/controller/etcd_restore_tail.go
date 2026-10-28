@@ -94,11 +94,20 @@ type restoreJob struct {
 // setStep records, in the bucket, that the restore reached step. Nothing irreversible follows a step
 // that was not recorded: a failed write is retried by the next call.
 func (j *restoreJob) setStep(ctx context.Context, step string) error {
+	if err := j.update(ctx, func(m *etcdbackup.RestoreMarker) { m.Step = step }); err != nil {
+		return fmt.Errorf("recording step %s in the backup storage: %w", step, err)
+	}
+
+	return nil
+}
+
+// update stores the marker as change leaves it and keeps it in memory only once the store has it.
+func (j *restoreJob) update(ctx context.Context, change func(*etcdbackup.RestoreMarker)) error {
 	next := j.marker
-	next.Step = step
+	change(&next)
 
 	if err := etcdbackup.PutMarker(ctx, j.store, j.prefix, &next); err != nil {
-		return fmt.Errorf("recording step %s in the backup storage: %w", step, err)
+		return err
 	}
 
 	j.marker = next
@@ -141,53 +150,45 @@ func (j *restoreJob) wipe(ctx context.Context) bool {
 	var notes []string
 
 	for _, n := range j.order {
-		c, err := n.dial(ctx)
-		if err != nil {
-			notes = append(notes, fmt.Sprintf("dialing %s: %v", n.name, err))
-
-			continue
+		if note := j.wipeNode(ctx, n); note != "" {
+			notes = append(notes, note)
 		}
-
-		present, err := c.EtcdDataPresent(ctx)
-		if err != nil {
-			closeTalosClient(c)
-
-			notes = append(notes, fmt.Sprintf("%s: reading its etcd data: %v", n.name, err))
-
-			continue
-		}
-
-		if !present {
-			closeTalosClient(c)
-
-			continue
-		}
-
-		if at, ok := j.sent[n.name]; ok && j.now().Sub(at) < etcdRestoreResendAfter {
-			closeTalosClient(c)
-
-			notes = append(notes, n.name+": wipe underway")
-
-			continue
-		}
-
-		err = c.ResetEtcdData(ctx)
-
-		closeTalosClient(c)
-
-		if err != nil {
-			notes = append(notes, fmt.Sprintf("%s: wiping etcd data: %v", n.name, j.scrub.clean(err.Error())))
-
-			continue
-		}
-
-		j.sent[n.name] = j.now()
-		notes = append(notes, n.name+": wipe requested")
 	}
 
 	j.note = strings.Join(notes, "; ")
 
 	return len(notes) == 0
+}
+
+// wipeNode is one node's part of wipe: "" when it has no etcd data, else what is still going on.
+func (j *restoreJob) wipeNode(ctx context.Context, n restoreNode) string {
+	c, err := n.dial(ctx)
+	if err != nil {
+		return fmt.Sprintf("dialing %s: %v", n.name, err)
+	}
+
+	defer closeTalosClient(c)
+
+	present, err := c.EtcdDataPresent(ctx)
+	if err != nil {
+		return fmt.Sprintf("%s: reading its etcd data: %v", n.name, err)
+	}
+
+	if !present {
+		return ""
+	}
+
+	if at, ok := j.sent[n.name]; ok && j.now().Sub(at) < etcdRestoreResendAfter {
+		return n.name + ": wipe underway"
+	}
+
+	if err := c.ResetEtcdData(ctx); err != nil {
+		return fmt.Sprintf("%s: wiping etcd data: %v", n.name, j.scrub.clean(err.Error()))
+	}
+
+	j.sent[n.name] = j.now()
+
+	return n.name + ": wipe requested"
 }
 
 // recoverTarget uploads the pinned snapshot to the target and bootstraps etcd from it, then waits for
@@ -250,8 +251,7 @@ func (j *restoreJob) recoverTarget(ctx context.Context) (bool, error) {
 
 	err = c.BootstrapRecover(ctx)
 
-	switch {
-	case err == nil, errors.Is(err, ErrEtcdDataExists):
+	if err == nil || errors.Is(err, ErrEtcdDataExists) {
 		j.note = j.target.name + ": etcd is starting from the snapshot"
 
 		return false, nil
@@ -332,16 +332,11 @@ func (j *restoreJob) ownStep(ctx context.Context) (bool, error) {
 	}
 
 	// The intent is stored before the wipe is sent: this controller dies with the node.
-	next := j.marker
-	next.OwnWipeAt = j.now().UTC()
-
-	if err := etcdbackup.PutMarker(ctx, j.store, j.prefix, &next); err != nil {
+	if err := j.update(ctx, func(m *etcdbackup.RestoreMarker) { m.OwnWipeAt = j.now().UTC() }); err != nil {
 		j.note = fmt.Sprintf("recording the wipe of %s in the backup storage: %v", j.own.name, j.scrub.clean(err.Error()))
 
 		return false, nil
 	}
-
-	j.marker = next
 
 	if err := c.ResetEtcdData(ctx); err != nil {
 		// Not sent: ask again at the next pass rather than after the resend interval.
@@ -358,16 +353,11 @@ func (j *restoreJob) ownStep(ctx context.Context) (bool, error) {
 
 // ownDone records that the controller's own node needs nothing more.
 func (j *restoreJob) ownDone(ctx context.Context) (bool, error) {
-	next := j.marker
-	next.OwnDone = true
-
-	if err := etcdbackup.PutMarker(ctx, j.store, j.prefix, &next); err != nil {
+	if err := j.update(ctx, func(m *etcdbackup.RestoreMarker) { m.OwnDone = true }); err != nil {
 		j.note = err.Error()
 
 		return false, nil
 	}
-
-	j.marker = next
 
 	return true, nil
 }
@@ -385,12 +375,7 @@ func (j *restoreJob) recoveryCallFailed(what string, err error) (bool, error) {
 
 // fail records a final error in the marker so that the controller (this process or the next) shows it.
 func (j *restoreJob) fail(ctx context.Context, cause error) {
-	next := j.marker
-	next.Failure = j.scrub.clean(cause.Error())
-
-	if err := etcdbackup.PutMarker(ctx, j.store, j.prefix, &next); err == nil {
-		j.marker = next
-	}
+	_ = j.update(ctx, func(m *etcdbackup.RestoreMarker) { m.Failure = j.scrub.clean(cause.Error()) })
 }
 
 // recordNote keeps the job's last transient problem in the marker when it changed, so that a process
@@ -406,12 +391,7 @@ func (j *restoreJob) recordNote(ctx context.Context) {
 		return
 	}
 
-	next := j.marker
-	next.LastNote = note
-
-	if err := etcdbackup.PutMarker(ctx, j.store, j.prefix, &next); err == nil {
-		j.marker = next
-	}
+	_ = j.update(ctx, func(m *etcdbackup.RestoreMarker) { m.LastNote = note })
 }
 
 // stepSafely is step, with a panic turned into a final error: a crash must not leave the marker

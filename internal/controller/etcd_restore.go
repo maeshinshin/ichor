@@ -82,18 +82,10 @@ const (
 
 // etcdRestoreStepRank orders the steps; a marker and a status are compared by it.
 func etcdRestoreStepRank(step string) int {
-	switch step {
-	case ichorv1alpha1.EtcdRestoreStepWiping:
-		return 1
-	case ichorv1alpha1.EtcdRestoreStepRecovering:
-		return 2
-	case ichorv1alpha1.EtcdRestoreStepRejoining:
-		return 3
-	case ichorv1alpha1.EtcdRestoreStepReconciling:
-		return 4
-	}
-
-	return 0
+	return 1 + slices.Index([]string{
+		ichorv1alpha1.EtcdRestoreStepWiping, ichorv1alpha1.EtcdRestoreStepRecovering,
+		ichorv1alpha1.EtcdRestoreStepRejoining, ichorv1alpha1.EtcdRestoreStepReconciling,
+	}, step) // not found is -1, so rank 0
 }
 
 // etcdRestoreStarted reports whether the destructive part of an etcd restore was recorded: from there
@@ -159,12 +151,7 @@ func (r *TalosOperationReconciler) newRestoreRun(
 		return nil, err
 	}
 
-	newStore := r.NewStore
-	if newStore == nil {
-		newStore = etcdbackup.NewS3Store
-	}
-
-	store, err := newStore(s3cfg)
+	store, err := r.openStore(s3cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -175,6 +162,20 @@ func (r *TalosOperationReconciler) newRestoreRun(
 }
 
 func (run *restoreRun) clean(err error) string { return run.scrub.clean(err.Error()) }
+
+// openStore builds the object store; a nil NewStore means S3.
+func (r *TalosOperationReconciler) openStore(cfg etcdbackup.S3Config) (etcdbackup.Store, error) {
+	if r.NewStore == nil {
+		return etcdbackup.NewS3Store(cfg)
+	}
+
+	return r.NewStore(cfg)
+}
+
+// approved lists the approved machines of the run's cluster, live when an API reader is wired.
+func (run *restoreRun) approved(ctx context.Context, f deleteguard.MachineFilter) ([]ichorv1alpha1.TalosMachine, error) {
+	return deleteguard.ApprovedMachines(ctx, readerOrClient(run.r.APIReader, run.r.Client), run.cluster.Namespace, run.cluster.Name, f)
+}
 
 // ours reports whether the marker belongs to this operation.
 func (run *restoreRun) ours(m *etcdbackup.RestoreMarker) bool {
@@ -247,8 +248,7 @@ func planRestoreNodes(cps []*ichorv1alpha1.TalosMachine, nodeName string, names 
 // other count of them. The read is live: an operation that is about to wipe them must not act on a
 // stale list.
 func (r *TalosOperationReconciler) restoreCandidates(ctx context.Context, cluster *ichorv1alpha1.TalosCluster) ([]*ichorv1alpha1.TalosMachine, error) {
-	list, err := deleteguard.ApprovedMachines(ctx, readerOrClient(r.APIReader, r.Client), cluster.Namespace, cluster.Name,
-		deleteguard.MachineFilter{Role: roleControlPlane})
+	list, err := (&restoreRun{r: r, cluster: cluster}).approved(ctx, deleteguard.MachineFilter{Role: roleControlPlane})
 	if err != nil {
 		return nil, err
 	}
@@ -705,7 +705,7 @@ func (run *restoreRun) rejoin(ctx context.Context, m *etcdbackup.RestoreMarker) 
 
 	switch err := reader.Get(ctx, client.ObjectKeyFromObject(op), &live); {
 	case apierrors.IsNotFound(err):
-		return ctrl.Result{}, run.recreate(ctx, m)
+		return ctrl.Result{}, r.recreateRestoreOperation(ctx, m)
 	case err != nil:
 		return r.restoreWait(ctx, op, "waiting for the Kubernetes API to come back: "+err.Error()), nil
 	case live.UID != op.UID:
@@ -891,8 +891,7 @@ func (run *restoreRun) requestReconcile(ctx context.Context, warning string) err
 	r, op := run.r, run.op
 	token := string(op.UID)
 
-	machines, err := deleteguard.ApprovedMachines(ctx, readerOrClient(r.APIReader, r.Client), run.cluster.Namespace, run.cluster.Name,
-		deleteguard.MachineFilter{})
+	machines, err := run.approved(ctx, deleteguard.MachineFilter{})
 	if err != nil {
 		return err
 	}
@@ -927,8 +926,7 @@ func (run *restoreRun) requestReconcile(ctx context.Context, warning string) err
 func (run *restoreRun) reconciled(ctx context.Context) (string, error) {
 	token := run.op.Status.EtcdRestore.ReconcileRequest
 
-	machines, err := deleteguard.ApprovedMachines(ctx, readerOrClient(run.r.APIReader, run.r.Client), run.cluster.Namespace, run.cluster.Name,
-		deleteguard.MachineFilter{})
+	machines, err := run.approved(ctx, deleteguard.MachineFilter{})
 	if err != nil {
 		return "", err
 	}
@@ -1000,11 +998,6 @@ func (run *restoreRun) cleanup(ctx context.Context) error {
 	}
 
 	return nil
-}
-
-// recreate puts back the operation the rollback deleted, from the marker, at Rejoining.
-func (run *restoreRun) recreate(ctx context.Context, m *etcdbackup.RestoreMarker) error {
-	return run.r.recreateRestoreOperation(ctx, m)
 }
 
 // recreateRestoreOperation creates the TalosOperation for marker m, with the status that tells
@@ -1146,12 +1139,7 @@ func (r *TalosOperationReconciler) resumeBackup(ctx context.Context, backup type
 		return fmt.Errorf("%w: %s", errBackupUnusable, scrub.clean(err.Error()))
 	}
 
-	newStore := r.NewStore
-	if newStore == nil {
-		newStore = etcdbackup.NewS3Store
-	}
-
-	store, err := newStore(s3cfg)
+	store, err := r.openStore(s3cfg)
 	if err != nil {
 		return err
 	}
@@ -1258,8 +1246,7 @@ type unwipedNode struct {
 
 // unwipedNodes lists the approved workers with their Kubernetes node names.
 func (run *restoreRun) unwipedNodes(ctx context.Context) ([]unwipedNode, error) {
-	machines, err := deleteguard.ApprovedMachines(ctx, readerOrClient(run.r.APIReader, run.r.Client), run.cluster.Namespace, run.cluster.Name,
-		deleteguard.MachineFilter{})
+	machines, err := run.approved(ctx, deleteguard.MachineFilter{})
 	if err != nil {
 		return nil, err
 	}

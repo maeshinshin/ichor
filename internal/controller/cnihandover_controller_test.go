@@ -17,78 +17,40 @@ limitations under the License.
 package controller
 
 import (
+	"bytes"
+	"compress/gzip"
+	"encoding/base64"
+	"encoding/json"
+	"strconv"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/siderolabs/talos/pkg/machinery/constants"
+	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/ptr"
+	kubefake "k8s.io/client-go/kubernetes/fake"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/clusterlock"
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
 	"github.com/maeshinshin/ichor/pkg/render"
 )
-
-// testArgoApplicationCRD is a minimal stand-in for Argo CD's own Application
-// CRD -- just enough shape (argoproj.io/v1alpha1, namespaced, free-form
-// status) to let this test set status.sync.status/status.health.status the
-// way the real controller would, without vendoring Argo CD's Go types or its
-// actual CRD YAML. Installed on demand (installArgoApplicationCRD below),
-// never from suite_test.go's BeforeSuite, so every other test in this
-// package keeps proving Argo CD's CRD is absent by default -- which is
-// exactly the "Argo CD not installed" case CNIHandoverReconciler must not
-// hang on.
-var testArgoApplicationCRD = &apiextensionsv1.CustomResourceDefinition{
-	Name: "applications.argoproj.io",
-	Spec: apiextensionsv1.CustomResourceDefinitionSpec{
-		Group: "argoproj.io",
-		Names: apiextensionsv1.CustomResourceDefinitionNames{
-			Plural: "applications", Singular: "application", Kind: "Application", ListKind: "ApplicationList",
-		},
-		Scope: apiextensionsv1.NamespaceScoped,
-		Versions: []apiextensionsv1.CustomResourceDefinitionVersion{{
-			Name: "v1alpha1", Served: true, Storage: true,
-			Schema: &apiextensionsv1.CustomResourceValidation{
-				OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
-					Type:                   "object",
-					XPreserveUnknownFields: ptr.To(true),
-				},
-			},
-		}},
-	},
-}
-
-// installArgoApplicationCRD installs testArgoApplicationCRD into envtest's
-// apiserver. envtest.InstallCRDs creates-or-updates (envtest/crd.go), so
-// calling this from more than one It is safe. It also ensures the
-// "argocd" namespace exists -- cilium.New().ArgoCDApplication's own
-// namespace -- since envtest never creates one beyond "default".
-func installArgoApplicationCRD() {
-	_, err := envtest.InstallCRDs(cfg, envtest.CRDInstallOptions{CRDs: []*apiextensionsv1.CustomResourceDefinition{testArgoApplicationCRD}})
-	Expect(err).NotTo(HaveOccurred())
-
-	ns := &corev1.Namespace{Name: "argocd"}
-	Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, ns))).To(Succeed())
-}
 
 func reconcileHandover(r *CNIHandoverReconciler, namespace, name string) (ctrl.Result, error) {
 	return r.Reconcile(ctx, ctrl.Request{Namespace: namespace, Name: name})
 }
 
-// newTestCiliumCluster is newTestCluster with the CNI preset set to cilium
-// (and handover to the given mode) before Create -- spec.cni.preset is
-// immutable once a TalosCluster exists (the CEL rule on TalosClusterCNI), so
-// unlike every other field in these tests it cannot be changed with a
-// follow-up Update.
-func newTestCiliumCluster(handover string) *ichorv1alpha1.TalosCluster {
+// newTestCiliumCluster is newTestCluster with the CNI preset set to cilium before Create --
+// spec.cni.preset is immutable once a TalosCluster exists (the CEL rule on TalosClusterCNI).
+func newTestCiliumCluster() *ichorv1alpha1.TalosCluster {
 	cluster := &ichorv1alpha1.TalosCluster{
 		GenerateName: testClusterGenerate, Namespace: tmNamespace,
 		Spec: ichorv1alpha1.TalosClusterSpec{
@@ -98,15 +60,142 @@ func newTestCiliumCluster(handover string) *ichorv1alpha1.TalosCluster {
 			VersionContract:   testK8sContract,
 			SecretsRef:        corev1.LocalObjectReference{Name: "does-not-exist"},
 			ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: 1, Schedulable: testSchedulable},
-			CNI:               ichorv1alpha1.TalosClusterCNI{Preset: "cilium", Handover: handover},
+			CNI:               ichorv1alpha1.TalosClusterCNI{Preset: "cilium"},
 		},
 	}
 	Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
+	DeferCleanup(func() { Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, cluster))).To(Succeed()) })
 
 	return cluster
 }
 
+func getCluster(cluster *ichorv1alpha1.TalosCluster) *ichorv1alpha1.TalosCluster {
+	GinkgoHelper()
+
+	var fetched ichorv1alpha1.TalosCluster
+	Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, &fetched)).To(Succeed())
+
+	return &fetched
+}
+
+func conditionOf(cluster *ichorv1alpha1.TalosCluster, condType string) *metav1.Condition {
+	GinkgoHelper()
+
+	cond := apimeta.FindStatusCondition(getCluster(cluster).Status.Conditions, condType)
+	Expect(cond).NotTo(BeNil(), "condition "+condType)
+
+	return cond
+}
+
+// ciliumDaemonSet creates the bootstrapped cilium DaemonSet in kube-system (envtest runs no
+// controllers, so its status is whatever the test writes) and returns a setter for readiness.
+func ciliumDaemonSet() (setReady func(ready bool)) {
+	labels := map[string]string{"k8s-app": "cilium"}
+	ds := &appsv1.DaemonSet{
+		Namespace: "kube-system", Name: "cilium",
+		Spec: appsv1.DaemonSetSpec{
+			Selector: &metav1.LabelSelector{MatchLabels: labels},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{Labels: labels},
+				Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "agent", Image: "cilium"}}},
+			},
+		},
+	}
+	Expect(k8sClient.Create(ctx, ds)).To(Succeed())
+	DeferCleanup(func() { Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, ds))).To(Succeed()) })
+
+	return func(ready bool) {
+		GinkgoHelper()
+
+		n := int32(1)
+		ds.Status = appsv1.DaemonSetStatus{
+			ObservedGeneration: ds.Generation, DesiredNumberScheduled: n, CurrentNumberScheduled: n,
+		}
+
+		if ready {
+			ds.Status.NumberReady, ds.Status.UpdatedNumberScheduled = n, n
+		}
+
+		Expect(k8sClient.Status().Update(ctx, ds)).To(Succeed())
+	}
+}
+
+// helmRelease writes a Helm release record for cilium the way Helm's Secrets driver does:
+// base64 of gzipped JSON, with the labels the driver lists by.
+func helmRelease(ns string, version int, status string, config map[string]any) {
+	GinkgoHelper()
+
+	raw, err := json.Marshal(map[string]any{"name": "cilium", "version": version, "config": config, "info": map[string]any{"status": status}})
+	Expect(err).NotTo(HaveOccurred())
+
+	var zipped bytes.Buffer
+
+	zw := gzip.NewWriter(&zipped)
+	_, err = zw.Write(raw)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(zw.Close()).To(Succeed())
+
+	secret := &corev1.Secret{
+		Namespace: ns, Name: "sh.helm.release.v1.cilium.v" + strconv.Itoa(version),
+		Type:   "helm.sh/release.v1",
+		Labels: map[string]string{"owner": "helm", "name": "cilium", "status": status, "version": strconv.Itoa(version)},
+		Data:   map[string][]byte{"release": []byte(base64.StdEncoding.EncodeToString(zipped.Bytes()))},
+	}
+	Expect(k8sClient.Create(ctx, secret)).To(Succeed())
+	DeferCleanup(func() { Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, secret))).To(Succeed()) })
+}
+
+func effectiveValues(cluster *ichorv1alpha1.TalosCluster) map[string]any {
+	GinkgoHelper()
+
+	vals, err := cilium.EffectiveValuesFor(cluster)
+	Expect(err).NotTo(HaveOccurred())
+
+	return vals
+}
+
+func cniJob(cluster *ichorv1alpha1.TalosCluster) *batchv1.Job {
+	GinkgoHelper()
+
+	hash, err := CNIValuesHash(cluster)
+	Expect(err).NotTo(HaveOccurred())
+
+	var job batchv1.Job
+	Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: testIchorNamespace, Name: cniHelmJobName(cluster, hash)}, &job)).To(Succeed())
+	DeferCleanup(func() {
+		Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, &job, client.PropagationPolicy(metav1.DeletePropagationBackground)))).To(Succeed())
+	})
+
+	return &job
+}
+
+func cniJobCount(cluster *ichorv1alpha1.TalosCluster) int {
+	GinkgoHelper()
+
+	var jobs batchv1.JobList
+	Expect(k8sClient.List(ctx, &jobs, client.InNamespace(testIchorNamespace),
+		client.MatchingLabels{cniClusterLabel: cniHelmClusterHash(cluster)})).To(Succeed())
+
+	return len(jobs.Items)
+}
+
+func cniLockHolder(cluster *ichorv1alpha1.TalosCluster) (string, bool) {
+	GinkgoHelper()
+
+	holder, held, err := clusterlock.New(k8sClient, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0).Holder(ctx)
+	Expect(err).NotTo(HaveOccurred())
+
+	return holder, held
+}
+
 var _ = Describe("CNIHandoverReconciler", func() {
+	var r *CNIHandoverReconciler
+
+	BeforeEach(func() {
+		r = &CNIHandoverReconciler{Client: k8sClient, APIReader: k8sClient, Namespace: testIchorNamespace}
+		createInstallation(ichorv1alpha1.IchorManagementModeIchor, "v0.2.0")
+	})
+
 	It("sets CNIUnsupported on a flannel cluster and leaves the hand-over condition alone", func() {
 		cluster := &ichorv1alpha1.TalosCluster{
 			GenerateName: testClusterGenerate, Namespace: tmNamespace,
@@ -122,151 +211,225 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		}
 		Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
 
-		r := &CNIHandoverReconciler{Client: k8sClient}
 		result, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(result.RequeueAfter).To(BeZero())
 
-		var fetched ichorv1alpha1.TalosCluster
-		Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, &fetched)).To(Succeed())
-		cond := apimeta.FindStatusCondition(fetched.Status.Conditions, ichorv1alpha1.ConditionCNIUnsupported)
-		Expect(cond).NotTo(BeNil())
-		Expect(cond.Status).To(Equal(metav1.ConditionTrue))
-		Expect(apimeta.FindStatusCondition(fetched.Status.Conditions, render.ConditionCNIHandover)).To(BeNil())
+		Expect(conditionOf(cluster, ichorv1alpha1.ConditionCNIUnsupported).Status).To(Equal(metav1.ConditionTrue))
+		Expect(apimeta.FindStatusCondition(getCluster(cluster).Status.Conditions, render.ConditionCNIHandover)).To(BeNil())
 	})
 
 	It("ignores a TalosCluster that no longer exists", func() {
-		r := &CNIHandoverReconciler{Client: k8sClient}
 		result, err := reconcileHandover(r, tmNamespace, "no-such-cluster")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(result.RequeueAfter).To(BeZero())
 	})
 
-	It("sets Disabled and never requeues when spec.cni.handover is disabled", func() {
-		cluster := newTestCiliumCluster("disabled")
+	It("waits for the bootstrapped Cilium before it starts a Job", func() {
+		cluster := newTestCiliumCluster()
 
-		r := &CNIHandoverReconciler{Client: k8sClient}
-		result, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(result.RequeueAfter).To(BeZero())
-
-		var fetched ichorv1alpha1.TalosCluster
-		Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, &fetched)).To(Succeed())
-		cond := apimeta.FindStatusCondition(fetched.Status.Conditions, render.ConditionCNIHandover)
-		Expect(cond).NotTo(BeNil())
-		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(cond.Reason).To(Equal("Disabled"))
-	})
-
-	It("sets ManualPending and never requeues when spec.cni.handover is manual", func() {
-		cluster := newTestCiliumCluster("manual")
-
-		r := &CNIHandoverReconciler{Client: k8sClient}
-		result, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(result.RequeueAfter).To(BeZero())
-
-		var fetched ichorv1alpha1.TalosCluster
-		Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, &fetched)).To(Succeed())
-		cond := apimeta.FindStatusCondition(fetched.Status.Conditions, render.ConditionCNIHandover)
-		Expect(cond).NotTo(BeNil())
-		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(cond.Reason).To(Equal("ManualPending"))
-	})
-
-	It("waits and requeues, without erroring, when Argo CD is not installed at all", func() {
-		cluster := newTestCiliumCluster("")
-
-		// This package's envtest apiserver never loads Argo CD's CRD
-		// (suite_test.go only loads config/crd/bases), so this exercises
-		// the "Argo CD absent" path for real.
-		r := &CNIHandoverReconciler{Client: k8sClient}
 		result, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(result.RequeueAfter).To(Equal(handoverRequeueInterval))
 
-		var fetched ichorv1alpha1.TalosCluster
-		Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, &fetched)).To(Succeed())
-		cond := apimeta.FindStatusCondition(fetched.Status.Conditions, render.ConditionCNIHandover)
-		Expect(cond).NotTo(BeNil())
+		cond := conditionOf(cluster, render.ConditionCNIHandover)
 		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(cond.Reason).To(Equal("WaitingForArgoCD"))
+		Expect(cond.Reason).To(Equal("WaitingForCilium"))
+
+		Expect(cniJobCount(cluster)).To(BeZero())
 	})
 
-	Describe("with Argo CD's Application CRD installed", func() {
-		BeforeEach(func() {
-			installArgoApplicationCRD()
-		})
+	It("completes the hand-over after the Job succeeded, the release is deployed and the DaemonSet is ready", func() {
+		cluster := newTestCiliumCluster()
+		setReady := ciliumDaemonSet()
+		setReady(true)
 
-		AfterEach(func() {
-			// Both Its below create the same cilium.New().ArgoCDApplication
-			// Name/Namespace; envtest's apiserver keeps objects across Its
-			// within this suite, so the next one would otherwise collide.
-			app, err := cilium.New().ArgoCDApplication("enabled")
-			Expect(err).NotTo(HaveOccurred())
+		// The Job is created and the cluster lock is held while it runs.
+		result, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.RequeueAfter).To(Equal(cniJobPollInterval))
+		job := cniJob(cluster)
 
-			Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, newUnstructuredApplication(app.Name, app.Namespace)))).To(Succeed())
-		})
+		holder, held := cniLockHolder(cluster)
+		Expect(held).To(BeTrue())
+		Expect(holder).To(Equal(cniHelmLockIdentity))
 
-		It("waits and requeues while the Application exists but is not Synced and Healthy", func() {
-			cluster := newTestCiliumCluster("")
+		cond := conditionOf(cluster, render.ConditionCNIHandover)
+		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(cond.Reason).To(Equal("AdoptingCilium"))
 
-			app, err := cilium.New().ArgoCDApplication("enabled")
-			Expect(err).NotTo(HaveOccurred())
+		// Still running: nothing changes, the lock stays.
+		_, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
+		Expect(err).NotTo(HaveOccurred())
+		_, held = cniLockHolder(cluster)
+		Expect(held).To(BeTrue())
 
-			live := newUnstructuredApplication(app.Name, app.Namespace)
-			Expect(unstructured.SetNestedField(live.Object, "OutOfSync", "status", "sync", "status")).To(Succeed())
-			Expect(unstructured.SetNestedField(live.Object, "Degraded", "status", "health", "status")).To(Succeed())
-			Expect(k8sClient.Create(ctx, live)).To(Succeed())
+		// The Job succeeded but no release record exists: not handed over, lock released.
+		setJobCondition(job, batchv1.JobComplete, "")
+		result, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.RequeueAfter).To(Equal(handoverRequeueInterval))
+		Expect(conditionOf(cluster, render.ConditionCNIHandover).Status).To(Equal(metav1.ConditionFalse))
+		Expect(conditionOf(cluster, render.ConditionCNIHandover).Reason).To(Equal("WaitingForRelease"))
+		_, held = cniLockHolder(cluster)
+		Expect(held).To(BeFalse())
 
-			r := &CNIHandoverReconciler{Client: k8sClient}
-			result, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(result.RequeueAfter).To(Equal(handoverRequeueInterval))
+		// A release that is not deployed does not count either.
+		helmRelease(testIchorNamespace, 1, "pending-install", effectiveValues(cluster))
+		_, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(conditionOf(cluster, render.ConditionCNIHandover).Status).To(Equal(metav1.ConditionFalse))
 
-			var fetched ichorv1alpha1.TalosCluster
-			Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, &fetched)).To(Succeed())
-			cond := apimeta.FindStatusCondition(fetched.Status.Conditions, render.ConditionCNIHandover)
-			Expect(cond).NotTo(BeNil())
-			Expect(cond.Status).To(Equal(metav1.ConditionFalse))
-			Expect(cond.Reason).To(Equal("WaitingForSync"))
-		})
+		// Deployed at the cluster's values, but the DaemonSet is not ready.
+		helmRelease(testIchorNamespace, 2, "deployed", effectiveValues(cluster))
+		setReady(false)
+		result, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.RequeueAfter).To(Equal(handoverRequeueInterval))
+		Expect(conditionOf(cluster, render.ConditionCNIHandover).Status).To(Equal(metav1.ConditionFalse))
 
-		It("sets Complete, with no requeue, once the Application is Synced and Healthy -- "+
-			"at exactly the Name/Namespace preset.ArgoCDApplication itself returns", func() {
-			cluster := newTestCiliumCluster("")
+		// All three: done.
+		setReady(true)
+		result, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.RequeueAfter).To(BeZero())
 
-			app, err := cilium.New().ArgoCDApplication("enabled")
-			Expect(err).NotTo(HaveOccurred())
+		Expect(conditionOf(cluster, render.ConditionCNIHandover).Status).To(Equal(metav1.ConditionTrue))
+		Expect(conditionOf(cluster, render.ConditionCNIHandover).Reason).To(Equal("Complete"))
+		Expect(conditionOf(cluster, ichorv1alpha1.ConditionCNIValuesApplied).Status).To(Equal(metav1.ConditionTrue))
 
-			live := newUnstructuredApplication(app.Name, app.Namespace)
-			Expect(unstructured.SetNestedField(live.Object, "Synced", "status", "sync", "status")).To(Succeed())
-			Expect(unstructured.SetNestedField(live.Object, "Healthy", "status", "health", "status")).To(Succeed())
-			Expect(k8sClient.Create(ctx, live)).To(Succeed())
+		hash, err := CNIValuesHash(cluster)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(getCluster(cluster).Status.CNI.AppliedValuesHash).To(Equal(hash))
 
-			r := &CNIHandoverReconciler{Client: k8sClient}
-			result, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(result.RequeueAfter).To(BeZero())
+		// Steady state: nothing more to do.
+		result, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).To(Equal(ctrl.Result{}))
+	})
 
-			var fetched ichorv1alpha1.TalosCluster
-			Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, &fetched)).To(Succeed())
-			cond := apimeta.FindStatusCondition(fetched.Status.Conditions, render.ConditionCNIHandover)
-			Expect(cond).NotTo(BeNil())
-			Expect(cond.Status).To(Equal(metav1.ConditionTrue))
-			Expect(cond.Reason).To(Equal("Complete"))
-		})
+	It("starts a new Job when the values change after the hand-over", func() {
+		cluster := newTestCiliumCluster()
+		ciliumDaemonSet()(true)
+
+		_, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
+		Expect(err).NotTo(HaveOccurred())
+		setJobCondition(cniJob(cluster), batchv1.JobComplete, "")
+		helmRelease(testIchorNamespace, 1, "deployed", effectiveValues(cluster))
+		_, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(conditionOf(cluster, render.ConditionCNIHandover).Status).To(Equal(metav1.ConditionTrue))
+
+		first, err := CNIValuesHash(cluster)
+		Expect(err).NotTo(HaveOccurred())
+
+		// The user edits the values.
+		edited := getCluster(cluster)
+		edited.Spec.CNI.Cilium = &ichorv1alpha1.TalosClusterCNICilium{
+			Values: &apiextensionsv1.JSON{Raw: []byte(`{"operator":{"replicas":2}}`)},
+		}
+		Expect(k8sClient.Update(ctx, edited)).To(Succeed())
+
+		result, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.RequeueAfter).To(Equal(cniJobPollInterval))
+
+		second, err := CNIValuesHash(getCluster(cluster))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(second).NotTo(Equal(first))
+
+		job := cniJob(getCluster(cluster))
+		Expect(job.Annotations[CNIValuesHashAnnotation]).To(Equal(second))
+
+		// The hand-over is not undone while the new Job runs, and the lock is held.
+		Expect(conditionOf(cluster, render.ConditionCNIHandover).Status).To(Equal(metav1.ConditionTrue))
+		Expect(conditionOf(cluster, ichorv1alpha1.ConditionCNIValuesApplied).Status).To(Equal(metav1.ConditionFalse))
+		Expect(conditionOf(cluster, ichorv1alpha1.ConditionCNIValuesApplied).Reason).To(Equal("Applying"))
+		Expect(getCluster(cluster).Status.CNI.AppliedValuesHash).To(Equal(first))
+
+		holder, held := cniLockHolder(cluster)
+		Expect(held).To(BeTrue())
+		Expect(holder).To(Equal(cniHelmLockIdentity))
+
+		// Done at the new values: recorded, lock released.
+		setJobCondition(job, batchv1.JobComplete, "")
+		helmRelease(testIchorNamespace, 2, "deployed", effectiveValues(getCluster(cluster)))
+		_, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(getCluster(cluster).Status.CNI.AppliedValuesHash).To(Equal(second))
+		Expect(conditionOf(cluster, ichorv1alpha1.ConditionCNIValuesApplied).Status).To(Equal(metav1.ConditionTrue))
+		_, held = cniLockHolder(cluster)
+		Expect(held).To(BeFalse())
+	})
+
+	It("sets the condition with the Job's reason when it failed, and releases the lock", func() {
+		cluster := newTestCiliumCluster()
+		ciliumDaemonSet()(true)
+
+		_, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
+		Expect(err).NotTo(HaveOccurred())
+
+		job := cniJob(cluster)
+		setJobCondition(job, batchv1.JobFailed, "Job has reached the specified backoff limit")
+
+		result, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.RequeueAfter).To(BeZero())
+
+		cond := conditionOf(cluster, ichorv1alpha1.ConditionCNIValuesApplied)
+		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(cond.Reason).To(Equal("JobFailed"))
+		Expect(cond.Message).To(ContainSubstring("backoff limit"))
+		Expect(conditionOf(cluster, render.ConditionCNIHandover).Status).To(Equal(metav1.ConditionFalse))
+
+		_, held := cniLockHolder(cluster)
+		Expect(held).To(BeFalse())
+	})
+
+	It("puts the Job's last log line in the failure condition", func() {
+		cluster := newTestCiliumCluster()
+		ciliumDaemonSet()(true)
+
+		_, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
+		Expect(err).NotTo(HaveOccurred())
+
+		job := cniJob(cluster)
+		pod := &corev1.Pod{
+			Namespace: testIchorNamespace, GenerateName: "cni-job-pod-", Labels: map[string]string{"job-name": job.Name},
+			Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "cni", Image: "x"}}},
+		}
+		Expect(k8sClient.Create(ctx, pod)).To(Succeed())
+		DeferCleanup(func() { Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, pod))).To(Succeed()) })
+
+		// client-go's fake clientset answers every log request with "fake logs".
+		r.Kube = kubefake.NewSimpleClientset()
+		setJobCondition(job, batchv1.JobFailed, "Job has reached the specified backoff limit")
+
+		_, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(conditionOf(cluster, ichorv1alpha1.ConditionCNIValuesApplied).Message).To(ContainSubstring("fake logs"))
+	})
+
+	It("holds back while a node rollout has the cluster lock, and goes on when it ends", func() {
+		cluster := newTestCiliumCluster()
+		ciliumDaemonSet()(true)
+
+		rollout := clusterlock.New(k8sClient, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0)
+		Expect(rollout.Acquire(ctx, controllerIdentity)).To(Succeed())
+		DeferCleanup(func() { Expect(rollout.Release(ctx, controllerIdentity)).To(Succeed()) })
+
+		result, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.RequeueAfter).To(Equal(handoverRequeueInterval))
+		Expect(conditionOf(cluster, ichorv1alpha1.ConditionCNIValuesApplied).Reason).To(Equal("WaitingForLock"))
+
+		Expect(cniJobCount(cluster)).To(BeZero())
+
+		Expect(rollout.Release(ctx, controllerIdentity)).To(Succeed())
+
+		result, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.RequeueAfter).To(Equal(cniJobPollInterval))
+		cniJob(cluster)
 	})
 })
-
-// newUnstructuredApplication builds a bare Argo CD Application object (just
-// the GVK, name and namespace) so a test can set its status fields and
-// Create it against envtest's apiserver.
-func newUnstructuredApplication(name, namespace string) *unstructured.Unstructured {
-	live := &unstructured.Unstructured{}
-	live.SetGroupVersionKind(argoApplicationGVK)
-	live.SetName(name)
-	live.SetNamespace(namespace)
-
-	return live
-}

@@ -1,0 +1,238 @@
+/*
+Copyright 2026 maeshinshin.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package cilium
+
+import (
+	"os"
+	"strings"
+	"testing"
+
+	"k8s.io/utils/ptr"
+
+	"github.com/maeshinshin/ichor/pkg/cni"
+)
+
+func TestValidateValues(t *testing.T) {
+	replaced := ValidationContext{KubeProxy: cni.KubeProxyReplaced}
+	enabled := ValidationContext{KubeProxy: cni.KubeProxyEnabled}
+
+	with := func(c ValidationContext, f func(*ValidationContext)) ValidationContext {
+		f(&c)
+
+		return c
+	}
+
+	masq := map[string]any{"bpf": map[string]any{"masquerade": true}}
+	gw := map[string]any{"gatewayAPI": map[string]any{"enabled": true}}
+
+	tests := []struct {
+		name    string
+		user    map[string]any
+		ctx     ValidationContext
+		wantErr []string // substrings; none means success
+	}{
+		{name: "empty", ctx: replaced},
+		{name: "valid user value", ctx: enabled, user: map[string]any{"debug": map[string]any{"enabled": true}}},
+		{name: "free-form map accepts any key", ctx: enabled,
+			user: map[string]any{"nodeSelector": map[string]any{"disk": "ssd"}}},
+		{name: "bad mode", ctx: ValidationContext{KubeProxy: "nope"}, wantErr: []string{"nope"}},
+
+		{name: "owned key", ctx: enabled, user: map[string]any{"ipam": map[string]any{"mode": "cluster-pool"}},
+			wantErr: []string{"ipam.mode is set by Ichor"}},
+		{name: "owned top-level key", ctx: replaced, user: map[string]any{"k8sServicePort": 6443},
+			wantErr: []string{"k8sServicePort is set by Ichor"}},
+		{name: "owned nested capability", ctx: enabled,
+			user:    map[string]any{"securityContext": map[string]any{"capabilities": map[string]any{"ciliumAgent": []any{"ALL"}}}},
+			wantErr: []string{"securityContext.capabilities.ciliumAgent"}},
+		{name: "sibling of an owned key is fine", ctx: enabled,
+			user: map[string]any{"cgroup": map[string]any{"autoMount": map[string]any{}}}},
+
+		{name: "unknown key with suggestion", ctx: enabled, user: map[string]any{"bpf": map[string]any{"masqurade": true}},
+			wantErr: []string{"unknown key bpf.masqurade", "did you mean bpf.masquerade?"}},
+		{name: "unknown top-level key, no suggestion", ctx: enabled, user: map[string]any{"zzzzzzzzzzzz": 1},
+			wantErr: []string{"unknown key zzzzzzzzzzzz"}},
+
+		{name: "schema type error", ctx: enabled, user: map[string]any{"operator": map[string]any{"replicas": "two"}},
+			wantErr: []string{"chart schema", "operator"}},
+
+		{name: "masquerade with forwardKubeDNSToHost true", ctx: with(enabled, func(c *ValidationContext) {
+			c.ForwardKubeDNSToHost = ptr.To(true)
+		}), user: masq, wantErr: []string{"forwardKubeDNSToHost"}},
+		{name: "masquerade with forwardKubeDNSToHost false", ctx: with(enabled, func(c *ValidationContext) {
+			c.ForwardKubeDNSToHost = ptr.To(false)
+		}), user: masq},
+		{name: "masquerade, forwardKubeDNSToHost unknown passes", ctx: enabled, user: masq},
+		{name: "forwardKubeDNSToHost true without masquerade", ctx: with(enabled, func(c *ValidationContext) {
+			c.ForwardKubeDNSToHost = ptr.To(true)
+		})},
+
+		{name: "gateway API without CRDs", ctx: with(enabled, func(c *ValidationContext) {
+			c.GatewayAPICRDs = ptr.To(false)
+		}), user: gw, wantErr: []string{"Gateway API CRDs"}},
+		{name: "gateway API with CRDs", ctx: with(enabled, func(c *ValidationContext) {
+			c.GatewayAPICRDs = ptr.To(true)
+		}), user: gw},
+		{name: "gateway API, CRDs unknown passes", ctx: enabled, user: gw},
+
+		{name: "replaced, KubePrism off", ctx: with(replaced, func(c *ValidationContext) {
+			c.KubePrism = &KubePrism{Enabled: false}
+		}), wantErr: []string{"KubePrism"}},
+		{name: "replaced, KubePrism on another port", ctx: with(replaced, func(c *ValidationContext) {
+			c.KubePrism = &KubePrism{Enabled: true, Port: 7446}
+		}), wantErr: []string{"7445"}},
+		{name: "replaced, KubePrism on 7445", ctx: with(replaced, func(c *ValidationContext) {
+			c.KubePrism = &KubePrism{Enabled: true, Port: 7445}
+		})},
+		{name: "replaced, KubePrism default port", ctx: with(replaced, func(c *ValidationContext) {
+			c.KubePrism = &KubePrism{Enabled: true}
+		})},
+		{name: "enabled mode ignores KubePrism", ctx: with(enabled, func(c *ValidationContext) {
+			c.KubePrism = &KubePrism{Enabled: false}
+		})},
+
+		{name: "all problems are reported together", ctx: with(enabled, func(c *ValidationContext) {
+			c.ForwardKubeDNSToHost = ptr.To(true)
+		}), user: map[string]any{"bpf": map[string]any{"masquerade": true}, "ipam": map[string]any{"mode": "x"}},
+			wantErr: []string{"ipam.mode", "forwardKubeDNSToHost"}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateValues(tc.user, tc.ctx)
+			if len(tc.wantErr) == 0 {
+				if err != nil {
+					t.Fatalf("ValidateValues() = %v, want nil", err)
+				}
+
+				return
+			}
+
+			if err == nil {
+				t.Fatalf("ValidateValues() = nil, want error containing %q", tc.wantErr)
+			}
+
+			for _, want := range tc.wantErr {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("error %q lacks %q", err, want)
+				}
+			}
+		})
+	}
+}
+
+func TestEffectiveValues_MergePrecedence(t *testing.T) {
+	user := map[string]any{
+		"hubble": map[string]any{"enabled": false, "tls": map[string]any{"auto": map[string]any{"method": "helm"}}},
+		"debug":  map[string]any{"enabled": true},
+	}
+
+	got, err := EffectiveValues(user, cni.KubeProxyReplaced, "geneve")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for path, want := range map[string]any{
+		"hubble.enabled":           false,  // user over Ichor default
+		"hubble.tls.auto.method":   "helm", // user over Ichor default, nested
+		"hubble.tls.auto.enabled":  true,   // Ichor default kept where the user is silent
+		"debug.enabled":            true,   // user-only key
+		"kubeProxyReplacement":     true,   // owned
+		"k8sServiceHost":           "localhost",
+		"tunnelProtocol":           "geneve",
+		"ipam.mode":                "kubernetes",
+		"cgroup.autoMount.enabled": false,
+		"cgroup.hostRoot":          "/sys/fs/cgroup",
+	} {
+		v, ok := lookup(got, path)
+		if !ok || v != want {
+			t.Errorf("%s = %v (present %t), want %v", path, v, ok, want)
+		}
+	}
+
+	if _, err := EffectiveValues(map[string]any{"tunnelProtocol": "vxlan"}, cni.KubeProxyEnabled, ""); err == nil ||
+		!strings.Contains(err.Error(), "tunnelProtocol") {
+		t.Errorf("owned key error = %v, want one naming tunnelProtocol", err)
+	}
+}
+
+func lookup(m map[string]any, path string) (any, bool) {
+	var cur any = m
+
+	for _, k := range strings.Split(path, ".") {
+		cm, ok := cur.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+
+		if cur, ok = cm[k]; !ok {
+			return nil, false
+		}
+	}
+
+	return cur, true
+}
+
+// TestBootstrapManifest_EmptyUserValuesAreByteIdentical pins the output of
+// the pre-values-engine renderer (testdata/*.golden.yaml, captured before the
+// change) for empty and nil user values.
+func TestBootstrapManifest_EmptyUserValuesAreByteIdentical(t *testing.T) {
+	for _, tunnel := range []struct{ arg, file string }{{"", "default"}, {"geneve", "geneve"}} {
+		for _, mode := range []cni.KubeProxyMode{cni.KubeProxyEnabled, cni.KubeProxyReplaced} {
+			want, err := os.ReadFile("testdata/bootstrap-" + string(mode) + "-tunnel-" + tunnel.file + ".golden.yaml")
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			p, err := New().WithTunnel(tunnel.arg)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			for name, user := range map[string]map[string]any{"nil": nil, "empty": {}} {
+				got, err := p.WithValues(user).BootstrapManifest(mode)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				if string(got) != string(want) {
+					t.Errorf("%s/%s/%s user values: output differs from golden", mode, tunnel.file, name)
+				}
+			}
+		}
+	}
+}
+
+func TestBootstrapManifest_UserValuesAreApplied(t *testing.T) {
+	base, err := New().BootstrapManifest(cni.KubeProxyEnabled)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := New().WithValues(map[string]any{"debug": map[string]any{"enabled": true}}).BootstrapManifest(cni.KubeProxyEnabled)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if string(got) == string(base) {
+		t.Error("user value debug.enabled=true did not change the output")
+	}
+
+	if _, err := New().WithValues(map[string]any{"ipam": map[string]any{"mode": "x"}}).
+		BootstrapManifest(cni.KubeProxyEnabled); err == nil {
+		t.Error("BootstrapManifest accepted an owned key")
+	}
+}

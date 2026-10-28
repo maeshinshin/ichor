@@ -53,6 +53,8 @@ const namespace = "kube-system"
 type Preset struct {
 	// tunnel is the tunnel protocol ("" keeps Cilium's default, vxlan).
 	tunnel string
+	// user is spec.cni.cilium.values (WithValues).
+	user map[string]any
 }
 
 var _ cni.Preset = Preset{}
@@ -106,7 +108,12 @@ func (p Preset) BootstrapManifest(kubeProxy cni.KubeProxyMode) ([]byte, error) {
 		return nil, err
 	}
 
-	return renderChart(p.valuesFor(kubeProxy))
+	effective, err := p.effective(kubeProxy)
+	if err != nil {
+		return nil, err
+	}
+
+	return renderChart(effective)
 }
 
 // ArgoCDApplication renders the Argo CD Application that takes over from

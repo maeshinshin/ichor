@@ -39,6 +39,11 @@ import (
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
 )
 
+const (
+	trustNamespace  = "ichor-system"
+	trustBundleName = "rot-bundle"
+)
+
 // applyTrustBase makes pool read base as the projected in-cluster ca.crt.
 func applyTrustBase(pool *kubetrust.Pool, base string) {
 	pool.Apply(&rest.Config{
@@ -73,12 +78,12 @@ func TestCATrustSyncFollowsARotationOnAnyReplica(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	const ns = "ichor-system"
+	const ns = trustNamespace
 
 	cluster := &ichorv1alpha1.TalosCluster{Namespace: testIchorNamespace, Name: "c"}
-	cluster.Spec.SecretsRef.Name = "rot-bundle"
+	cluster.Spec.SecretsRef.Name = trustBundleName
 	secret := &corev1.Secret{
-		Namespace: ns, Name: "rot-bundle",
+		Namespace: ns, Name: trustBundleName,
 		Data: map[string][]byte{secretsbundle.RotationKey: raw},
 	}
 	op := &ichorv1alpha1.TalosOperation{Namespace: testIchorNamespace, Name: "rot"}
@@ -186,9 +191,9 @@ func TestCATrustSyncPublishesOnAnOperationEventWithoutWaitingForATick(t *testing
 	}
 
 	cluster := &ichorv1alpha1.TalosCluster{Namespace: testIchorNamespace, Name: "c"}
-	cluster.Spec.SecretsRef.Name = "rot-bundle"
+	cluster.Spec.SecretsRef.Name = trustBundleName
 	secret := &corev1.Secret{
-		Namespace: "ichor-system", Name: "rot-bundle",
+		Namespace: trustNamespace, Name: trustBundleName,
 		Data: map[string][]byte{secretsbundle.RotationKey: raw},
 	}
 	op := &ichorv1alpha1.TalosOperation{Namespace: testIchorNamespace, Name: "rot"}
@@ -200,7 +205,7 @@ func TestCATrustSyncPublishesOnAnOperationEventWithoutWaitingForATick(t *testing
 	inf := &fakeInformers{registered: make(chan toolscache.ResourceEventHandler, 1)}
 	// An hour-long tick: only the event can make the pass happen.
 	sync := &CATrustSync{
-		Reader: cl, ControllerNamespace: "ichor-system", Pool: &kubetrust.Pool{}, File: file,
+		Reader: cl, ControllerNamespace: trustNamespace, Pool: &kubetrust.Pool{}, File: file,
 		Interval: time.Hour, Informers: inf,
 	}
 

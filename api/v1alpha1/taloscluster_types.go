@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -56,6 +57,21 @@ type TalosClusterControlPlane struct {
 	Schedulable string `json:"schedulable"`
 }
 
+// TalosClusterCNICilium holds the user layer of Cilium's Helm values (ADR 0099). Ichor merges
+// it over its own defaults and then applies its own keys last.
+type TalosClusterCNICilium struct {
+	// values is the user layer of Cilium's Helm values. Effective values are Ichor's defaults,
+	// then these deep-merged on top, then the Ichor-owned keys (ipam.mode,
+	// securityContext.capabilities.ciliumAgent, securityContext.capabilities.cleanCiliumState,
+	// cgroup.autoMount.enabled, cgroup.hostRoot, k8sServiceHost, k8sServicePort,
+	// kubeProxyReplacement, tunnelProtocol); a value for an owned key is a validation error.
+	// The merged values must stay under 64 KiB.
+	// +kubebuilder:validation:Type=object
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +optional
+	Values *apiextensionsv1.JSON `json:"values,omitempty"`
+}
+
 // TalosClusterCNICustomSource is an Argo CD Application source for a user-supplied CNI: a Helm
 // chart or a directory of plain manifests in a Git repository. Exactly one of chart or path is
 // set, matching Argo CD's own ApplicationSource union.
@@ -80,7 +96,8 @@ type TalosClusterCNICustomSource struct {
 	TargetRevision string `json:"targetRevision"`
 }
 
-// TalosClusterCNICustom declares a user-supplied CNI's chart/manifest source and the Talos-side
+// TalosClusterCNICustom is deprecated and unused since ADR 0099 (Cilium is the only CNI); it is
+// kept so the CRD never drops a field. It declares a user-supplied CNI's chart/manifest source and the Talos-side
 // settings it needs -- the two things a "custom" preset cannot infer on its own, since Ichor
 // does not know what the CNI is (docs/design/architecture.md, "CNI").
 type TalosClusterCNICustom struct {
@@ -106,11 +123,10 @@ type TalosClusterCNICustom struct {
 // +kubebuilder:validation:XValidation:rule="has(oldSelf.tunnel) ? (has(self.tunnel) && self.tunnel == oldSelf.tunnel) : (!has(self.tunnel) || self.tunnel == 'vxlan')",message="cni.tunnel cannot change once set, and an existing cluster can only record vxlan (its running default); changing the tunnel protocol takes pod networking down"
 // +kubebuilder:validation:XValidation:rule="!has(self.tunnel) || self.preset == 'cilium'",message="cni.tunnel only applies to the cilium preset"
 type TalosClusterCNI struct {
-	// preset selects the CNI this cluster bootstraps: flannel (Talos's own default; Ichor does
-	// nothing), cilium (Helm, with Talos-recommended values built in), or custom (your chart or
-	// manifests; you declare the Talos-side settings).
+	// preset selects the CNI this cluster bootstraps. Cilium is the only CNI (ADR 0099); the
+	// values flannel and custom are deprecated, unused and kept so the CRD never drops a value.
 	// +kubebuilder:validation:Enum=flannel;cilium;custom
-	// +kubebuilder:default=flannel
+	// +kubebuilder:default=cilium
 	// +optional
 	Preset string `json:"preset,omitempty"`
 
@@ -130,13 +146,19 @@ type TalosClusterCNI struct {
 	// +optional
 	Tunnel string `json:"tunnel,omitempty"`
 
-	// custom declares the chart/manifest source and Talos-side settings for a user-supplied CNI;
-	// set when, and only when, preset is "custom".
+	// custom is deprecated, unused; kept so the CRD never drops a field (ADR 0099). It declared
+	// the chart/manifest source and Talos-side settings for a user-supplied CNI.
 	// +optional
 	Custom *TalosClusterCNICustom `json:"custom,omitempty"`
 
-	// handover controls how the CNI's cluster.inlineManifests entry is removed once Argo CD reports
-	// it Synced and Healthy (docs/design/architecture.md, "GitOps and Argo CD"): automatic (the
+	// cilium holds the user layer of Cilium's Helm values (ADR 0099).
+	// +optional
+	Cilium *TalosClusterCNICilium `json:"cilium,omitempty"`
+
+	// handover is deprecated, unused; kept so the CRD never drops a field (ADR 0099). The values
+	// manual and disabled are read as automatic: the inline entry is removed once Ichor's Helm
+	// release of Cilium is deployed. It controlled how the CNI's cluster.inlineManifests entry is
+	// removed once Argo CD reported it Synced and Healthy (docs/design/architecture.md, "GitOps and Argo CD"): automatic (the
 	// controller removes it on its own), manual (removed only once an operator runs
 	// `ichor gitops handoff cni`, which sets this field to automatic), or disabled (never removed
 	// automatically, for a cluster that does not run Argo CD).
@@ -578,7 +600,23 @@ type TalosClusterCNIStatus struct {
 	// +kubebuilder:validation:Enum=enabled;replaced
 	// +optional
 	KubeProxy string `json:"kubeProxy,omitempty"`
+
+	// availableChartVersion is the Cilium chart version the running Ichor ships when it differs
+	// from the installed release; empty when up to date (ADR 0099, decision 11). It backs the
+	// CiliumUpgradeAvailable condition.
+	// +optional
+	AvailableChartVersion string `json:"availableChartVersion,omitempty"`
 }
+
+// Condition types ADR 0099 adds to TalosCluster.status.conditions.
+const (
+	// ConditionCNIUnsupported is True when the cluster's preset is not cilium; the controllers
+	// refuse to render it and change nothing on its nodes.
+	ConditionCNIUnsupported = "CNIUnsupported"
+
+	// ConditionCiliumUpgradeAvailable is True when status.cni.availableChartVersion is set.
+	ConditionCiliumUpgradeAvailable = "CiliumUpgradeAvailable"
+)
 
 // CertificateExpiry is one certificate authority's end of validity.
 type CertificateExpiry struct {

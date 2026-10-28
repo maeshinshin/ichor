@@ -1,0 +1,114 @@
+syntax = "proto3";
+
+// CniService backs the Cilium settings screen and `ichor cni values|upgrade`
+// (docs/adr/0099, decisions 3, 4 and 11). Cilium's Helm values live on the
+// TalosCluster as spec.cni.cilium.values (the user layer). Ichor merges them
+// over its own defaults and applies its own keys last. The only write here is
+// that spec field (and, later, a cni TalosOperation); the controller applies
+// it. Values travel as YAML text so the screen and the CLI edit one format.
+package ichor.v1alpha1;
+
+import "ichor/v1alpha1/common.proto";
+
+service CniService {
+  // GetCiliumValues returns the three layers of Cilium's values separately:
+  // Ichor's defaults, the user layer, and the Ichor-owned keys, plus the
+  // effective values they produce.
+  rpc GetCiliumValues(GetCiliumValuesRequest) returns (GetCiliumValuesResponse);
+
+  // ValidateCiliumValues checks a proposed user layer without writing it and
+  // returns every problem it finds, not the first.
+  rpc ValidateCiliumValues(ValidateCiliumValuesRequest) returns (ValidateCiliumValuesResponse);
+
+  // DiffCiliumValues compares the effective values now with the effective
+  // values a proposed user layer would give, as a unified diff of YAML text.
+  rpc DiffCiliumValues(DiffCiliumValuesRequest) returns (DiffCiliumValuesResponse);
+
+  // SetCiliumValues replaces spec.cni.cilium.values after validating it. A
+  // dry-run write goes first. A TalosCluster that Argo CD or Flux tracks is
+  // refused.
+  rpc SetCiliumValues(SetCiliumValuesRequest) returns (SetCiliumValuesResponse);
+
+  // StartCniUpgrade checks that a newer Cilium chart is available and that the
+  // user layer still validates, then starts the cni upgrade operation.
+  rpc StartCniUpgrade(StartCniUpgradeRequest) returns (StartCniUpgradeResponse);
+}
+
+// OwnedKey is a Cilium value Ichor sets itself; a user value for it is an error.
+message OwnedKey {
+  // path is the dotted key, for example "ipam.mode".
+  string path = 1;
+  // reason says why Ichor owns it.
+  string reason = 2;
+  // value_yaml is the value Ichor sets, as YAML.
+  string value_yaml = 3;
+}
+
+message GetCiliumValuesRequest {
+  ObjectRef cluster = 1;
+}
+
+message GetCiliumValuesResponse {
+  // defaults_yaml is Ichor's defaults (the overridable layer).
+  string defaults_yaml = 1;
+  // user_yaml is the user layer, spec.cni.cilium.values; empty when unset.
+  string user_yaml = 2;
+  // owned are the keys Ichor applies last and users cannot set.
+  repeated OwnedKey owned = 3;
+  // effective_yaml is what Cilium is rendered with.
+  string effective_yaml = 4;
+  // tracked_by names the tool (Argo CD or Flux) that tracks the TalosCluster,
+  // or is empty. When set, SetCiliumValues is refused.
+  string tracked_by = 5;
+  // available_chart_version is status.cni.availableChartVersion; empty when
+  // Cilium is up to date.
+  string available_chart_version = 6;
+}
+
+message ValidateCiliumValuesRequest {
+  ObjectRef cluster = 1;
+  // user_yaml is the proposed user layer.
+  string user_yaml = 2;
+}
+
+message ValidateCiliumValuesResponse {
+  bool valid = 1;
+  // errors lists every problem found; empty when valid.
+  repeated string errors = 2;
+}
+
+message DiffCiliumValuesRequest {
+  ObjectRef cluster = 1;
+  // user_yaml is the proposed user layer.
+  string user_yaml = 2;
+}
+
+message DiffCiliumValuesResponse {
+  // diff is a unified diff of the effective values, current to proposed; empty
+  // when they are equal.
+  string diff = 1;
+}
+
+message SetCiliumValuesRequest {
+  ObjectRef cluster = 1;
+  // user_yaml is the new user layer; empty clears it.
+  string user_yaml = 2;
+}
+
+message SetCiliumValuesResponse {
+  AuditRecord audit = 1;
+  // effective_yaml is the effective values after the write.
+  string effective_yaml = 2;
+}
+
+message StartCniUpgradeRequest {
+  ObjectRef cluster = 1;
+}
+
+message StartCniUpgradeResponse {
+  // operation is the cni TalosOperation that was created.
+  ObjectRef operation = 1;
+  string from_version = 2;
+  string to_version = 3;
+  AuditRecord audit = 4;
+}

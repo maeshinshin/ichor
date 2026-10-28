@@ -106,12 +106,12 @@ type Preset interface {
 
 	// BootstrapManifest renders what Ichor applies once, before Argo CD
 	// exists, to bring the CNI up. A preset that needs nothing beyond
-	// Talos's own default (flannel) returns nil.
+	// Talos's own default would return nil; Cilium is the only preset (ADR 0099).
 	BootstrapManifest(kubeProxy KubeProxyMode) ([]byte, error)
 
 	// ArgoCDApplication renders the Argo CD Application that takes over
 	// from the bootstrap manifest. A preset Ichor never hands to Argo CD
-	// (flannel) returns nil. Returning pkg/gitops's own typed Application,
+	// would return nil. Returning pkg/gitops's own typed Application,
 	// rather than *unstructured.Unstructured, means every Application this
 	// package builds goes through pkg/gitops's guards (RepoURL credential
 	// checks, the ServerSideApply/ignoreDifferences pitfalls, Secret
@@ -131,6 +131,6 @@ type Preset interface {
 
 	// HandoverWorkloads returns the workloads whose readiness signals a
 	// successful hand-over to Argo CD. A preset Ichor never hands over
-	// (flannel) returns nil.
+	// would return nil.
 	HandoverWorkloads() []WorkloadRef
 }

@@ -71,7 +71,7 @@ func newTestClusterWithCount(count int32, secretName string) *ichorv1alpha1.Talo
 			Endpoint:          ichorv1alpha1.TalosClusterEndpoint{Type: testEndpointType, Address: "10.0.0.6"},
 			TalosVersion:      testTalosVersion,
 			KubernetesVersion: "v1.34.0",
-			VersionContract:   "v1.14",
+			VersionContract:   testK8sContract,
 			SecretsRef:        corev1.LocalObjectReference{Name: secretName},
 			ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: count, Schedulable: testSchedulable},
 		},

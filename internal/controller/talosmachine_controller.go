@@ -112,6 +112,7 @@ const (
 	reasonClusterNotFound          = "ClusterNotFound"
 	reasonSecretsBundleUnavailable = "SecretsBundleUnavailable"
 	reasonRenderFailed             = "RenderFailed"
+	reasonCNIUnsupported           = "CNIUnsupported"
 	reasonTalosClientNotConfigured = "TalosClientNotConfigured"
 	reasonTalosConnectFailed       = "TalosConnectFailed"
 	reasonCurrentConfigUnavailable = "CurrentConfigUnavailable"
@@ -145,6 +146,22 @@ func (r *TalosMachineReconciler) ensureRemovalFinalizer(ctx context.Context, m *
 	controllerutil.AddFinalizer(m, machineRemovalFinalizer)
 
 	return true, r.Update(ctx, m)
+}
+
+// refuseUnsupportedCNI sets Ready=False/CNIUnsupported on m and reports stop=true when the cluster's
+// preset is not cilium (ADR 0099). Nothing is rendered and nothing on the node is touched.
+func (r *TalosMachineReconciler) refuseUnsupportedCNI(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
+) (ctrl.Result, bool, error) {
+	p := cluster.Spec.CNI.Preset
+	if p == "" || p == ciliumName {
+		return ctrl.Result{}, false, nil
+	}
+
+	res, err := r.waitForChange(ctx, m, reasonCNIUnsupported,
+		fmt.Sprintf("spec.cni.preset %q was removed (ADR 0099); delete and recreate the cluster with cilium", p))
+
+	return res, true, err
 }
 
 // holdIfOverCap sets Ready=False/ControlPlaneOverCap on m and reports stop=true when m is a control plane
@@ -310,6 +327,8 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, err
 	}
 
+	// A preset other than cilium is not rendered (ADR 0099): rendering would strip Talos's flannel
+	// and take that cluster's network down. Nothing on the node is touched.
 	// Refreshed here, on every approved machine's reconcile, rather than on
 	// its own schedule: architecture.md's "Nodes" wants the cluster's
 	// Transitioning status kept current, not just recomputed when a
@@ -578,6 +597,10 @@ func (r *TalosMachineReconciler) readNode(
 func (r *TalosMachineReconciler) holdUntilEligible(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
 ) (res ctrl.Result, stop bool, err error) {
+	if res, stop, err := r.refuseUnsupportedCNI(ctx, cluster, m); stop {
+		return res, true, err
+	}
+
 	if stop, err := r.holdIfOverCap(ctx, cluster, m); stop {
 		return ctrl.Result{}, true, err
 	}

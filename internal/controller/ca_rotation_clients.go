@@ -35,13 +35,13 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
-// After the old CAs are dropped, CoreDNS, flannel and kube-proxy keep verifying the API server against
+// After the old CAs are dropped, CoreDNS, Cilium and kube-proxy keep verifying the API server against
 // the CA they loaded at start (measured on hardware: they never recovered by themselves), and ichor-ui
 // re-reads it slowly. A rotation therefore restarts them once (ADR 0063, amendment). It is a write to
 // those workloads, in scope the way the restore's one-time pod restart is: Ichor does not operate the
 // CNI, it recovers from its own action.
 
-// +kubebuilder:rbac:groups=apps,resources=daemonsets,resourceNames=kube-proxy;cilium;kube-flannel,verbs=get;patch
+// +kubebuilder:rbac:groups=apps,resources=daemonsets,resourceNames=kube-proxy;cilium,verbs=get;patch
 // +kubebuilder:rbac:groups=apps,resources=deployments,resourceNames=coredns,verbs=get;patch
 // ichor-ui is found by label (kustomize prefixes its name), which needs list; patch then cannot be pinned to a name.
 // +kubebuilder:rbac:groups=apps,namespace=ichor-system,resources=deployments,verbs=get;list;patch

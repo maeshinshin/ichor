@@ -1278,7 +1278,7 @@ func (run *restoreRun) unwipedNodes(ctx context.Context) ([]unwipedNode, error) 
 // returns why it is not done, or "" when it is. After agentsBound it returns "" anyway and keeps what did
 // not converge in the marker (AgentWarning) rather than claiming success.
 //
-// The CNI's pods (Cilium, flannel) are replaced the same way as kube-proxy's: Ichor does not operate
+// Cilium's pods are replaced the same way as kube-proxy's: Ichor does not operate
 // the CNI, but a one-time pod restart after a restore, so that it drops what it cached from the old
 // cluster, is in scope (ADR 0089). It briefly drops that node's datapath state.
 func (run *restoreRun) refreshAgents(ctx context.Context, m *etcdbackup.RestoreMarker) (string, error) {
@@ -1401,8 +1401,8 @@ func (run *restoreRun) agentsWaiting(ctx context.Context, since time.Time, worke
 }
 
 // restoreAgentNames are the DaemonSets, in kube-system, whose pods on a node that was not wiped are
-// replaced after a restore: kube-proxy and the CNI (Cilium, or Talos's default flannel).
-var restoreAgentNames = []string{kubeProxyName, ciliumName, "kube-flannel"}
+// replaced after a restore: kube-proxy and Cilium.
+var restoreAgentNames = []string{kubeProxyName, ciliumName}
 
 // restoreAgent is one such DaemonSet with the selector of its pods.
 type restoreAgent struct {

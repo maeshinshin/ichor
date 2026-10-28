@@ -22,7 +22,6 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net"
 	"slices"
@@ -38,6 +37,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -318,7 +318,7 @@ func (r *IssuerTrustReconciler) reconcileTLS(ctx context.Context, now time.Time)
 		return time.Time{}, err
 	}
 
-	leaf, leafEnd, err := r.ensureLeaf(ctx, ca, caX509, caKey, spec, now)
+	leaf, err := r.ensureLeaf(ctx, ca, caX509, caKey, spec, now)
 	if err != nil {
 		return time.Time{}, err
 	}
@@ -328,19 +328,10 @@ func (r *IssuerTrustReconciler) reconcileTLS(ctx context.Context, now time.Time)
 	}
 
 	issuerCertExpiry.WithLabelValues("ca").Set(float64(caX509.NotAfter.Unix()))
-	issuerCertExpiry.WithLabelValues("tls").Set(float64(leafEnd.Unix()))
+	issuerCertExpiry.WithLabelValues("tls").Set(float64(leaf.NotAfter.Unix()))
 
 	// Wake for the leaf's renewal point.
 	return leafRenewAt(leaf), nil
-}
-
-func leafRenewAt(leaf keyPair) time.Time {
-	c, err := decodeCert(leaf.certPEM)
-	if err != nil {
-		return time.Time{}
-	}
-
-	return c.NotBefore.Add(c.NotAfter.Sub(c.NotBefore) * 2 / 3)
 }
 
 // ensureCA returns a usable CA, making one when none exists or it is near its end.
@@ -372,49 +363,41 @@ func (r *IssuerTrustReconciler) ensureCA(
 
 	ctrl.LoggerFrom(ctx).Info("Issuer internal CA created")
 
-	cert, key, ok := caUsable(fresh, now)
-	if !ok {
-		return keyPair{}, nil, nil, errors.New("a freshly made CA does not parse")
-	}
+	cert, key, _ := caUsable(fresh, now) // a CA just made always parses
 
 	return fresh, cert, key, nil
 }
 
-// ensureLeaf returns a leaf that matches spec and is signed by ca, reissuing otherwise. The second
-// result is the leaf's NotAfter.
+// ensureLeaf returns the parsed leaf that matches spec and is signed by ca, reissuing otherwise.
 func (r *IssuerTrustReconciler) ensureLeaf(
 	ctx context.Context, ca keyPair, caCert *x509.Certificate, caKey *rsa.PrivateKey, spec leafSpec, now time.Time,
-) (keyPair, time.Time, error) {
+) (*x509.Certificate, error) {
 	var sec corev1.Secret
 
 	err := r.Get(ctx, r.key(oidctrust.TLSSecret), &sec)
 	if err != nil && !apierrors.IsNotFound(err) {
-		return keyPair{}, time.Time{}, fmt.Errorf("reading serving certificate: %w", err)
+		return nil, fmt.Errorf("reading serving certificate: %w", err)
 	}
 
 	have := keyPair{sec.Data[oidctrust.CertKey], sec.Data[oidctrust.PrivateKeyKey]}
 	if leafUsable(have, caCert, spec, now) && bytes.Equal(sec.Data[oidctrust.CAKey], ca.certPEM) {
-		c, _ := decodeCert(have.certPEM)
-
-		return have, c.NotAfter, nil
+		return decodeCert(have.certPEM)
 	}
 
 	fresh, err := newLeaf(caCert, caKey, spec, now)
 	if err != nil {
-		return keyPair{}, time.Time{}, err
+		return nil, err
 	}
 
 	if err := r.apply(ctx, &sec, oidctrust.TLSSecret, corev1.SecretTypeTLS, map[string][]byte{
 		oidctrust.CertKey: fresh.certPEM, oidctrust.PrivateKeyKey: fresh.keyPEM, oidctrust.CAKey: ca.certPEM,
 	}); err != nil {
-		return keyPair{}, time.Time{}, err
+		return nil, err
 	}
 
 	ctrl.LoggerFrom(ctx).Info("Issuer serving certificate issued", "ip", spec.ip.String())
 
-	c, _ := decodeCert(fresh.certPEM)
-
-	return fresh, c.NotAfter, nil
+	return decodeCert(fresh.certPEM)
 }
 
 // ensureTrustMap publishes the public parts. A leaf renewal leaves it untouched.
@@ -425,36 +408,20 @@ func (r *IssuerTrustReconciler) ensureTrustMap(ctx context.Context, ip net.IP, c
 		oidctrust.CAKey: string(caPEM),
 	}
 
-	var cm corev1.ConfigMap
+	cm := &corev1.ConfigMap{Namespace: r.Namespace, Name: oidctrust.TrustConfigMap}
 
-	err := r.Get(ctx, r.key(oidctrust.TrustConfigMap), &cm)
-
-	switch {
-	case apierrors.IsNotFound(err):
-		cm = corev1.ConfigMap{
-			Namespace: r.Namespace, Name: oidctrust.TrustConfigMap,
-			Labels: map[string]string{managedByLabel: managedByValue}, Data: want,
+	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, cm, func() error {
+		if cm.Labels == nil {
+			cm.Labels = map[string]string{}
 		}
 
-		if err := r.Create(ctx, &cm); err != nil {
-			return fmt.Errorf("creating ConfigMap %s: %w", oidctrust.TrustConfigMap, err)
-		}
+		cm.Labels[managedByLabel] = managedByValue
+		cm.Data, cm.BinaryData = want, nil
 
 		return nil
-	case err != nil:
-		return fmt.Errorf("reading ConfigMap %s: %w", oidctrust.TrustConfigMap, err)
-	}
-
-	if len(cm.BinaryData) == 0 && len(cm.Data) == len(want) &&
-		cm.Data[oidctrust.DiscoveryURLKey] == want[oidctrust.DiscoveryURLKey] &&
-		cm.Data[oidctrust.CAKey] == want[oidctrust.CAKey] {
-		return nil
-	}
-
-	cm.Data, cm.BinaryData = want, nil
-
-	if err := r.Update(ctx, &cm); err != nil {
-		return fmt.Errorf("updating ConfigMap %s: %w", oidctrust.TrustConfigMap, err)
+	})
+	if err != nil {
+		return fmt.Errorf("writing ConfigMap %s: %w", oidctrust.TrustConfigMap, err)
 	}
 
 	return nil
@@ -522,16 +489,7 @@ func (r *IssuerTrustReconciler) setUserStatus(ctx context.Context, u *ichorv1alp
 
 	for _, c := range []metav1.Condition{pw, ready} {
 		c.ObservedGeneration = u.Generation
-
-		before := apimeta.FindStatusCondition(u.Status.Conditions, c.Type)
-		if before != nil && before.Status == c.Status && before.Reason == c.Reason &&
-			before.Message == c.Message && before.ObservedGeneration == c.ObservedGeneration {
-			continue
-		}
-
-		apimeta.SetStatusCondition(&u.Status.Conditions, c)
-
-		changed = true
+		changed = apimeta.SetStatusCondition(&u.Status.Conditions, c) || changed
 	}
 
 	if !changed {
@@ -614,12 +572,12 @@ func (r *IssuerTrustReconciler) collectOrphans(ctx context.Context, now time.Tim
 
 	// A JSON merge patch of only the dropped keys, so a concurrent write of another user's entry
 	// by ichor-ui is never overwritten.
-	patch := map[string]any{"data": map[string]any{}}
+	data := map[string]any{}
 	for _, name := range drop {
-		patch["data"].(map[string]any)[name] = nil
+		data[name] = nil
 	}
 
-	raw, err := json.Marshal(patch)
+	raw, err := json.Marshal(map[string]any{"data": data})
 	if err != nil {
 		return fmt.Errorf("encoding credentials patch: %w", err)
 	}

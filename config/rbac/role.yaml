@@ -98,8 +98,6 @@ rules:
   - applications
   verbs:
   - get
-  - list
-  - watch
 - apiGroups:
   - authorization.k8s.io
   resources:
@@ -238,6 +236,19 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - pods
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - ""
+  resources:
+  - pods/log
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resources:
   - secrets
   verbs:
   - create
@@ -297,6 +308,7 @@ rules:
   - jobs
   verbs:
   - create
+  - delete
   - get
   - list
   - watch

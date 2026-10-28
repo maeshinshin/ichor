@@ -691,6 +691,12 @@ func (s *Server) unfinishedOperation(ctx context.Context, cluster *ichorv1alpha1
 			continue
 		}
 
+		if o.Status.Phase == ichorv1alpha1.TalosOperationPhasePaused {
+			return fmt.Sprintf("operation %q (%s) on this cluster is not finished (phase Paused); "+
+				"resume it with 'ichor operation resume %s', or delete it with 'ichor operation delete %s'",
+				o.Name, o.Spec.Kind, o.Name, o.Name), nil
+		}
+
 		return fmt.Sprintf("operation %q (%s) on this cluster is not finished (phase %q); wait for it, or delete it if it is stuck",
 			o.Name, o.Spec.Kind, o.Status.Phase), nil
 	}

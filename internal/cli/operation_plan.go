@@ -154,7 +154,14 @@ func headline(kind pb.OperationKind, cluster string, p *pb.PlanOperationResponse
 	case pb.OperationKind_OPERATION_KIND_ICHOR:
 		return fmt.Sprintf("Upgrade Ichor itself from %s to %s.", p.GetCurrent(), to)
 	case pb.OperationKind_OPERATION_KIND_CNI:
-		return fmt.Sprintf("Switch kube-proxy on cluster %q from %s to %s.", cluster, p.GetCurrent(), to)
+		if p.GetTarget() == "" || p.GetTarget() == p.GetCurrent() {
+			// The spec already says the target, so the first run wrote it to Git and this run
+			// starts the operation that switches the cluster; "from X to X" would read as a no-op.
+			return fmt.Sprintf("Switch kube-proxy on cluster %q: starting the switch to %s (the spec already says %s).",
+				cluster, p.GetCurrent(), p.GetCurrent())
+		}
+
+		return fmt.Sprintf("Switch kube-proxy on cluster %q from %s to %s.", cluster, p.GetCurrent(), p.GetTarget())
 	case pb.OperationKind_OPERATION_KIND_CA_ROTATION:
 		return fmt.Sprintf("Rotate the Talos API and Kubernetes API certificate authorities (ca-rotation) of cluster %q.", cluster)
 	case pb.OperationKind_OPERATION_KIND_CONFIG:

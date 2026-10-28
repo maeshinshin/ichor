@@ -1,0 +1,130 @@
+/*
+Copyright 2026 maeshinshin.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package cilium
+
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"sync"
+
+	"helm.sh/helm/v3/pkg/chart"
+	"helm.sh/helm/v3/pkg/chart/loader"
+
+	"github.com/maeshinshin/ichor/pkg/cni"
+	"github.com/maeshinshin/ichor/pkg/values"
+)
+
+// OwnedKeys are the Cilium Helm values Ichor sets itself (ADR 0099, decision
+// 3); a user value for one is a validation error. Each maps to the reason.
+var OwnedKeys = map[string]string{
+	"ipam.mode": "Talos needs Kubernetes host-scope IPAM",
+	"securityContext.capabilities.ciliumAgent":      "the Talos guide fixes the capability set Cilium runs with",
+	"securityContext.capabilities.cleanCiliumState": "the Talos guide fixes the capability set Cilium runs with",
+	"cgroup.autoMount.enabled":                      "Talos mounts cgroup2 itself, so Cilium must not",
+	"cgroup.hostRoot":                               "Talos mounts cgroup2 at /sys/fs/cgroup",
+	"k8sServiceHost":                                "derived from spec.cni.kubeProxy (KubePrism)",
+	"k8sServicePort":                                "derived from spec.cni.kubeProxy (KubePrism)",
+	"kubeProxyReplacement":                          "owned by the kube-proxy switch, spec.cni.kubeProxy",
+	"tunnelProtocol":                                "owned by spec.cni.tunnel, which is immutable",
+}
+
+var loadChart = sync.OnceValues(func() (*chart.Chart, error) {
+	ch, err := loader.LoadArchive(bytes.NewReader(chartArchive))
+	if err != nil {
+		return nil, fmt.Errorf("cilium: loading embedded chart: %w", err)
+	}
+
+	return ch, nil
+})
+
+func valuesSpec() (values.Spec, error) {
+	ch, err := loadChart()
+	if err != nil {
+		return values.Spec{}, err
+	}
+
+	return values.Spec{Chart: ch, Owned: OwnedKeys}, nil
+}
+
+// WithValues returns a copy of p whose bootstrap manifest also applies the
+// user's Cilium values (spec.cni.cilium.values). Nil or empty changes nothing.
+func (p Preset) WithValues(user map[string]any) Preset {
+	p.user = user
+
+	return p
+}
+
+// layers splits Ichor's own values for kubeProxy into the overridable
+// defaults and the owned keys.
+func (p Preset) layers(kubeProxy cni.KubeProxyMode) (defaults, owned map[string]any, err error) {
+	raw, err := json.Marshal(p.valuesFor(kubeProxy))
+	if err != nil {
+		return nil, nil, fmt.Errorf("cilium: marshalling Ichor values: %w", err)
+	}
+
+	if err := json.Unmarshal(raw, &defaults); err != nil {
+		return nil, nil, fmt.Errorf("cilium: reading Ichor values: %w", err)
+	}
+
+	owned = map[string]any{}
+
+	for path := range OwnedKeys {
+		if v, ok := values.Get(defaults, path); ok {
+			values.Set(owned, path, v)
+			values.Delete(defaults, path)
+		}
+	}
+
+	return defaults, owned, nil
+}
+
+func (p Preset) effective(kubeProxy cni.KubeProxyMode) (map[string]any, error) {
+	defaults, owned, err := p.layers(kubeProxy)
+	if err != nil {
+		return nil, err
+	}
+
+	spec, err := valuesSpec()
+	if err != nil {
+		return nil, err
+	}
+
+	if errs := spec.CheckOwned(p.user); len(errs) > 0 {
+		return nil, errors.Join(errs...)
+	}
+
+	return values.Effective(defaults, p.user, owned), nil
+}
+
+// EffectiveValues returns the Helm values Cilium is rendered with: Ichor's
+// defaults, then user, then the Ichor-owned keys (ADR 0099, decision 3).
+// tunnel is "", "vxlan" or "geneve". A user value for an owned key is an
+// error naming the key.
+func EffectiveValues(user map[string]any, kubeProxy cni.KubeProxyMode, tunnel string) (map[string]any, error) {
+	if err := kubeProxy.Validate(); err != nil {
+		return nil, err
+	}
+
+	p, err := New().WithTunnel(tunnel)
+	if err != nil {
+		return nil, err
+	}
+
+	return p.WithValues(user).effective(kubeProxy)
+}

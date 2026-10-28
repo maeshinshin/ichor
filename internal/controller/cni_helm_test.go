@@ -26,7 +26,6 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -35,8 +34,10 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
+const cniTestName = "home"
+
 func cniTestInstallation() *ichorv1alpha1.IchorInstallation {
-	inst := &ichorv1alpha1.IchorInstallation{ObjectMeta: metav1.ObjectMeta{Name: ichorv1alpha1.IchorInstallationName}}
+	inst := &ichorv1alpha1.IchorInstallation{Name: ichorv1alpha1.IchorInstallationName}
 	inst.Spec.Version = "v0.9.0"
 	inst.Spec.InstallerRepository = "ghcr.io/maeshinshin/ichor-installer"
 
@@ -44,8 +45,8 @@ func cniTestInstallation() *ichorv1alpha1.IchorInstallation {
 }
 
 func cniTestCluster(values string) *ichorv1alpha1.TalosCluster {
-	c := &ichorv1alpha1.TalosCluster{ObjectMeta: metav1.ObjectMeta{Namespace: "clusters", Name: "home"}}
-	c.Spec.CNI.Preset = "cilium"
+	c := &ichorv1alpha1.TalosCluster{Namespace: "clusters", Name: cniTestName}
+	c.Spec.CNI.Preset = ciliumName
 
 	if values != "" {
 		c.Spec.CNI.Cilium = &ichorv1alpha1.TalosClusterCNICilium{Values: &apiextensionsv1.JSON{Raw: []byte(values)}}

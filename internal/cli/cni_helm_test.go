@@ -28,7 +28,6 @@ import (
 	"helm.sh/helm/v3/pkg/storage"
 	"helm.sh/helm/v3/pkg/storage/driver"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -47,8 +46,10 @@ func memoryHelmConfig() *action.Configuration {
 	}
 }
 
+const cniHelmTestCluster = "home"
+
 func ciliumTestCluster(values string) *ichorv1alpha1.TalosCluster {
-	c := &ichorv1alpha1.TalosCluster{ObjectMeta: metav1.ObjectMeta{Namespace: "ichor-system", Name: "home"}}
+	c := &ichorv1alpha1.TalosCluster{Namespace: ichorControllerNamespace, Name: cniHelmTestCluster}
 	c.Spec.CNI.Preset = "cilium"
 
 	if values != "" {
@@ -61,7 +62,7 @@ func ciliumTestCluster(values string) *ichorv1alpha1.TalosCluster {
 // `ichor cni helm apply` adopts on the first run and upgrades on every later one, with the
 // values read from the TalosCluster each time.
 func TestCNIHelmApplyAdoptsThenUpgrades(t *testing.T) {
-	key := types.NamespacedName{Namespace: "ichor-system", Name: "home"}
+	key := types.NamespacedName{Namespace: ichorControllerNamespace, Name: cniHelmTestCluster}
 	cfg := memoryHelmConfig()
 
 	run := func(values string) (string, error) {
@@ -99,7 +100,7 @@ func TestCNIHelmApplyRefusesOwnedKeys(t *testing.T) {
 	cfg := memoryHelmConfig()
 	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(ciliumTestCluster(`{"ipam":{"mode":"cluster-pool"}}`)).Build()
 
-	err := runCNIHelmApply(t.Context(), k8s, cfg, types.NamespacedName{Namespace: "ichor-system", Name: "home"}, 0, io.Discard)
+	err := runCNIHelmApply(t.Context(), k8s, cfg, types.NamespacedName{Namespace: ichorControllerNamespace, Name: "home"}, 0, io.Discard)
 	if err == nil || !strings.Contains(err.Error(), "ipam.mode") {
 		t.Fatalf("error = %v, want one naming ipam.mode", err)
 	}

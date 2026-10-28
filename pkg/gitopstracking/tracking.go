@@ -153,7 +153,7 @@ func argoTracked(cm *corev1.ConfigMap, obj client.Object) bool {
 }
 
 // IsTracked reports whether obj is already tracked by Argo CD or Flux, so a
-// caller can warn (gitops export) or refuse to write it directly
+// caller can warn or refuse to write it directly
 // (pkg/prmode.Decide). It never errors just because Argo CD or
 // Flux isn't installed -- a missing argocd-cm, or a missing Flux CRD, means
 // "not tracked", not "unknown". One function serves both the warning and the

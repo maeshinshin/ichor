@@ -448,8 +448,7 @@ its main workloads and emits an Argo CD Application template that matches
 what was injected (same release name, namespace and values) so adoption
 produces no diff. Removing the entry matters: Talos re-applies bootstrap
 manifests during Kubernetes upgrades, and a stale entry would roll the CNI
-back. Hand-over can be automatic, manual (`ichor gitops handoff cni`), or
-disabled when Argo CD isn't used.
+back. The `ichor gitops handoff` command is gone.
 
 Ichor itself and Argo CD do not go through this path (`### Bootstrap` above):
 Ichor is applied once, directly, through the API server, never through
@@ -465,21 +464,10 @@ annotation rather than fighting for it -- but Argo CD's tracking marker is
 not that annotation, so adoption alone does not stop the re-apply. Handing
 over without removing the entry looks finished and is not.
 
-Repository skeleton (`ichor gitops export`):
-
-```
-bootstrap/root-app.yaml      app of apps
-apps/argocd/                 Argo CD managing itself
-apps/cni/                    from the CNI preset
-apps/ichor/                  Helm chart reference + values
-apps/storage/, apps/monitoring/   optional components, only if selected
-clusters/<name>/             Ichor CRs
-```
-
-Sync waves: Argo CD → CNI → Ichor (including CRDs) → Ichor CRs → storage after
-`TalosStorage` is healthy → everything else. Ichor CR Applications disable
-prune and enable server-side apply. Argo CD health checks (Lua) for Ichor's
-kinds ship with the chart, so rollouts are visible in Argo CD's UI.
+Ichor no longer exports a repository skeleton (`ichor gitops export` was
+removed); users who keep Ichor CRs in their own Git write them
+themselves. Argo CD health checks (Lua) for Ichor's kinds ship with the chart,
+so rollouts are visible in Argo CD's UI.
 
 Optional components (`TalosCluster.spec.components[]`) are things Ichor does
 not install but can put in the skeleton with Talos-tuned values —
@@ -496,8 +484,8 @@ certificates.
 
 There is a cycle here: Argo CD manages the CNI and Ichor, and Ichor manages
 the nodes Argo CD runs on. The CLI keeps a way out of the corners that are
-built: `ichor upgrade ichor VERSION --local` (no ichor-ui),
-`ichor gitops handoff cni` and `ichor restore --recover-cluster`.
+built: `ichor upgrade ichor VERSION --local` (no ichor-ui)
+and `ichor restore --recover-cluster`.
 
 #### Kokumi as the delivery layer in front of Argo CD
 

@@ -33,6 +33,24 @@ function RolePicker({ id, roles, onChange }: { id: string; roles: string[]; onCh
   )
 }
 
+type ProfileProps = { id: string; displayName: string; email: string; setDisplayName: (v: string) => void; setEmail: (v: string) => void }
+
+function ProfileFields({ id, displayName, email, setDisplayName, setEmail }: ProfileProps) {
+  const t = useT()
+  return (
+    <>
+      <div class="space-y-1">
+        <Label htmlFor={`${id}-display`}>{t('users.displayName')}</Label>
+        <Input id={`${id}-display`} value={displayName} onInput={(e) => setDisplayName((e.target as HTMLInputElement).value)} />
+      </div>
+      <div class="space-y-1">
+        <Label htmlFor={`${id}-email`}>{t('users.email')}</Label>
+        <Input id={`${id}-email`} type="email" value={email} onInput={(e) => setEmail((e.target as HTMLInputElement).value)} />
+      </div>
+    </>
+  )
+}
+
 // GeneratedPassword shows a password the server made, once, with a copy button.
 function GeneratedPassword({ password }: { password: string }) {
   const t = useT()
@@ -147,14 +165,7 @@ export function CreateUserDialog({ onDone }: { onDone: () => void }) {
                   <Input id="user-name" autoCapitalize="none" spellcheck={false} aria-invalid={nameBad} value={name} onInput={(e) => setName((e.target as HTMLInputElement).value)} />
                   <p class={`text-xs ${nameBad ? 'text-destructive' : 'text-muted-foreground'}`}>{nameBad ? t('users.nameInvalid') : t('users.nameHint')}</p>
                 </div>
-                <div class="space-y-1">
-                  <Label htmlFor="user-display">{t('users.displayName')}</Label>
-                  <Input id="user-display" value={displayName} onInput={(e) => setDisplayName((e.target as HTMLInputElement).value)} />
-                </div>
-                <div class="space-y-1">
-                  <Label htmlFor="user-email">{t('users.email')}</Label>
-                  <Input id="user-email" type="email" value={email} onInput={(e) => setEmail((e.target as HTMLInputElement).value)} />
-                </div>
+                <ProfileFields id="user" displayName={displayName} email={email} setDisplayName={setDisplayName} setEmail={setEmail} />
                 <RolePicker id="create-role" roles={roles} onChange={setRoles} />
                 <div class="space-y-2">
                   <p class="font-medium">{t('users.passwordMode')}</p>
@@ -221,14 +232,7 @@ export function EditUserDialog({ user, open, onOpenChange, onDone }: { user: Use
           <DialogTitle>{t('users.editTitle', { name: user.name })}</DialogTitle>
         </DialogHeader>
         <div class="space-y-4 text-sm">
-          <div class="space-y-1">
-            <Label htmlFor="edit-display">{t('users.displayName')}</Label>
-            <Input id="edit-display" value={displayName} onInput={(e) => setDisplayName((e.target as HTMLInputElement).value)} />
-          </div>
-          <div class="space-y-1">
-            <Label htmlFor="edit-email">{t('users.email')}</Label>
-            <Input id="edit-email" type="email" value={email} onInput={(e) => setEmail((e.target as HTMLInputElement).value)} />
-          </div>
+          <ProfileFields id="edit" displayName={displayName} email={email} setDisplayName={setDisplayName} setEmail={setEmail} />
           <RolePicker id="edit-role" roles={roles} onChange={setRoles} />
           <div class="space-y-1">
             <div class="flex items-center gap-2">

@@ -43,7 +43,7 @@ const toRow = (op: Operation): Row => ({
   created: Number(op.createdAt?.seconds ?? 0n),
 })
 
-const readyReason = (m: Machine) => m.conditions.find((c) => c.type === 'Ready')?.reason ?? ''
+const readyOf = (m: Machine) => m.conditions.find((c) => c.type === 'Ready')
 
 // Overview is the home of the one cluster Ichor manages: what needs a person, four numbers that
 // say where it stands, the latest operations, the nodes, the versions with their upgrades, and the
@@ -51,11 +51,11 @@ const readyReason = (m: Machine) => m.conditions.find((c) => c.type === 'Ready')
 // through the dialogs, which ask the server for a plan first.
 export function Overview() {
   const t = useT()
-  const { cluster, operations, opRunning, opsError, loading, error, reload } = useCluster()
+  const { cluster, operations, opsError, loading, error, reload } = useCluster()
   if (error) return <ErrorAlert {...error} />
   if (loading) return <PageSkeleton label={t('cluster.loading')} />
   if (!cluster?.ref) return <EmptyNote>{t('home.noCluster')}</EmptyNote>
-  return <Home cluster={cluster} operations={operations} opRunning={opRunning} opsError={opsError} reloadCluster={reload} />
+  return <Home cluster={cluster} operations={operations} opsError={opsError} reloadCluster={reload} />
 }
 
 function Home({
@@ -66,7 +66,6 @@ function Home({
 }: {
   cluster: Cluster
   operations: Operation[]
-  opRunning: boolean
   opsError: ErrorShape | null
   reloadCluster: () => void
 }) {
@@ -103,13 +102,15 @@ function Home({
     }
   }
 
-  // The operations come from the shared cluster poll; a visit refreshes them at once.
-  useEffect(() => {
+  function reloadAll() {
     reloadCluster()
     reloadMachines()
     loadBackups()
     loadIchor()
-  }, [ref.namespace, ref.name])
+  }
+
+  // The operations come from the shared cluster poll; a visit refreshes them at once.
+  useEffect(reloadAll, [ref.namespace, ref.name])
 
   const current = currentOperation(ops)
   const busy = blockingOperation(ops)
@@ -119,17 +120,14 @@ function Home({
       wasBusy.current = true
     } else if (wasBusy.current) {
       wasBusy.current = false
-      reloadCluster()
-      reloadMachines()
-      loadBackups()
-      loadIchor()
+      reloadAll()
     }
   }, [busy !== null])
 
   const approved = (machines ?? []).filter((m) => m.approvalState === MachineApprovalState.APPROVED)
   const pending = (machines ?? []).filter((m) => m.approvalState !== MachineApprovalState.APPROVED && m.approvalState !== MachineApprovalState.REJECTED)
-  const counts = machineCounts(approved.map((m) => ({ approval: 'approved' as const, ready: m.conditions.find((c) => c.type === 'Ready')?.status ?? '' })))
-  const waiting = approved.filter((m) => rebootPendingCount([{ rebootPaths: m.rebootPaths, readyReason: readyReason(m) }]) > 0)
+  const counts = machineCounts(approved.map((m) => ({ approval: 'approved' as const, ready: readyOf(m)?.status ?? '' })))
+  const waiting = approved.filter((m) => rebootPendingCount([{ rebootPaths: m.rebootPaths, readyReason: readyOf(m)?.reason ?? '' }]) > 0)
   const currentState = current ? operationState(current.op.phase, current.op.failureReason) : null
   const busyReason = busy ? t('ops.disabledBusy') : undefined
   const kubeProxy = cluster.kubeProxyMode || 'enabled'
@@ -198,15 +196,9 @@ function Home({
                   <Alert variant={bad ? 'destructive' : 'default'} className={bad ? undefined : 'border-amber-500/50'}>
                     {bad ? <CircleXIcon /> : <TriangleAlertIcon class="text-amber-600 dark:text-amber-400" />}
                     <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-                      {a.kind === 'certs' && (
+                      {(a.kind === 'certs' || a.kind === 'backupStale') && (
                         <>
-                          <span class="min-w-0 break-words font-medium">{t('cluster.certsExpiringTitle')}</span>
-                          <span class="min-w-0 break-words text-muted-foreground">{a.message}</span>
-                        </>
-                      )}
-                      {a.kind === 'backupStale' && (
-                        <>
-                          <span class="min-w-0 break-words font-medium">{t('home.attnBackupStale')}</span>
+                          <span class="min-w-0 break-words font-medium">{t(a.kind === 'certs' ? 'cluster.certsExpiringTitle' : 'home.attnBackupStale')}</span>
                           <span class="min-w-0 break-words text-muted-foreground">{a.message}</span>
                         </>
                       )}
@@ -456,7 +448,7 @@ function Tile({ label, value, sub, tone, target }: { label: string; value: strin
 
 function NodeRow({ m }: { m: Machine }) {
   const t = useT()
-  const ready = m.conditions.find((c) => c.type === 'Ready')
+  const ready = readyOf(m)
   const tone: Tone = ready ? conditionStatusTone(ready.type, ready.status) : 'neutral'
   const word = !ready ? t('overview.nodeUnknown') : ready.status === 'True' ? t('overview.nodeReady') : t('overview.nodeNotReady')
   // The hostname, else the node name; the machine's UUID name is only the link target.

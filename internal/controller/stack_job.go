@@ -23,7 +23,6 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 
@@ -72,7 +71,7 @@ func newStackJob(ns string, c *stackComponent, inst *ichorv1alpha1.IchorInstalla
 
 	secretEnv := func(name, secret, key string) corev1.EnvVar {
 		return corev1.EnvVar{Name: name, ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
-			LocalObjectReference: corev1.LocalObjectReference{Name: secret}, Key: key,
+			Name: secret, Key: key,
 		}}}
 	}
 
@@ -82,10 +81,8 @@ func newStackJob(ns string, c *stackComponent, inst *ichorv1alpha1.IchorInstalla
 	}
 
 	return &batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: ns, Name: stackJobName(c.name),
-			Labels: map[string]string{labelNameKey: stackapply.JobLabel, managedLabel: managedTrue},
-		},
+		Namespace: ns, Name: stackJobName(c.name),
+		Labels: map[string]string{labelNameKey: stackapply.JobLabel, managedLabel: managedTrue},
 		Spec: batchv1.JobSpec{
 			// One attempt: a failed bootstrap is looked at, not blindly repeated.
 			BackoffLimit:            ptr.To[int32](0),
@@ -93,7 +90,7 @@ func newStackJob(ns string, c *stackComponent, inst *ichorv1alpha1.IchorInstalla
 			TTLSecondsAfterFinished: ptr.To[int32](stackJobTTL),
 			Template: corev1.PodTemplateSpec{
 				// The label config/cilium-network-policy selects the Job's pod by.
-				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{labelNameKey: stackapply.JobLabel}},
+				Labels: map[string]string{labelNameKey: stackapply.JobLabel},
 				Spec: corev1.PodSpec{
 					RestartPolicy:      corev1.RestartPolicyNever,
 					ServiceAccountName: stackapply.ServiceAccount,
@@ -146,7 +143,7 @@ func (r *IchorInstallationReconciler) ensureStackJob(
 		case batchv1.JobComplete:
 			return true, nil
 		case batchv1.JobFailed:
-			return false, fmt.Errorf("Job %s failed (%s: %s); read its pod log, then delete the Job to try again",
+			return false, fmt.Errorf("job %s failed (%s: %s); read its pod log, then delete the Job to try again",
 				key.Name, cond.Reason, cond.Message)
 		}
 	}

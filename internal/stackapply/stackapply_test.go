@@ -42,6 +42,8 @@ var resourceOf = map[string]string{
 	"rbac.authorization.k8s.io/RoleBinding":                         "rolebindings",
 }
 
+const verbCreate = "create"
+
 func allows(rules []rbacv1.PolicyRule, group, resource, verb string) bool {
 	for _, r := range rules {
 		if slices.Contains(r.APIGroups, group) && slices.Contains(r.Resources, resource) && slices.Contains(r.Verbs, verb) {
@@ -97,10 +99,10 @@ func TestRoleCoversEveryAppliedKind(t *testing.T) {
 		}
 
 		group, _, _ := strings.Cut(k, "/")
-		verbs := []string{"create", "patch"}
+		verbs := []string{verbCreate, "patch"}
 
 		if res == "secrets" {
-			verbs = []string{"create"}
+			verbs = []string{verbCreate}
 		}
 
 		for _, v := range verbs {
@@ -111,7 +113,7 @@ func TestRoleCoversEveryAppliedKind(t *testing.T) {
 	}
 
 	for _, r := range role.Rules {
-		if slices.Contains(r.Resources, "secrets") && !slices.Equal(r.Verbs, []string{"create"}) {
+		if slices.Contains(r.Resources, "secrets") && !slices.Equal(r.Verbs, []string{verbCreate}) {
 			t.Errorf("the Job may only create Secrets, the role grants %v", r.Verbs)
 		}
 

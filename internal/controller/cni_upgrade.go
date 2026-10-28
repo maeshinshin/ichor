@@ -85,7 +85,7 @@ func minorOf(v string) int {
 // deployed release record is left alone.
 func (r *CNIHandoverReconciler) syncUpgradeAvailable(ctx context.Context, cluster *ichorv1alpha1.TalosCluster) error {
 	rel, err := readCiliumRelease(ctx, r.reader(), r.Namespace)
-	if err != nil || rel.Status != "deployed" || rel.ChartVersion == "" {
+	if err != nil || rel.Status != helmStatusDeployed || rel.ChartVersion == "" {
 		return err
 	}
 
@@ -133,7 +133,17 @@ func cniUpgradeOperationClusters(_ context.Context, obj client.Object) []reconci
 		return nil
 	}
 
-	return []reconcile.Request{{NamespacedName: types.NamespacedName{Namespace: op.Namespace, Name: op.Spec.ClusterRef.Name}}}
+	var req reconcile.Request
+
+	req.Namespace, req.Name = op.Namespace, op.Spec.ClusterRef.Name
+
+	return []reconcile.Request{req}
+}
+
+// machineless reports whether op's executor touches no machine (an Ichor self-upgrade, a Cilium
+// chart upgrade), so the operation carries no machine list.
+func machineless(op *ichorv1alpha1.TalosOperation) bool {
+	return op.Spec.Kind == ichorv1alpha1.TalosOperationKindIchor || isCNIUpgrade(op)
 }
 
 // upgradeChart is the executor of a cni upgrade operation: it runs the Cilium Helm Job (the
@@ -158,7 +168,7 @@ func (a *cniKubeProxyAdvancer) upgradeChart(
 		return false, errors.New("there is no Helm release of Cilium yet: wait for the hand-over to finish")
 	}
 
-	if rel.Status == "deployed" && rel.ChartVersion == target {
+	if rel.Status == helmStatusDeployed && rel.ChartVersion == target {
 		return a.ciliumRolledOut(ctx, op)
 	}
 
@@ -188,7 +198,7 @@ func (a *cniKubeProxyAdvancer) upgradeChart(
 		return false, waitOn(op, reasonCiliumNotSwitched, fmt.Sprintf("the Cilium Helm Job upgrading to chart %s is running", target))
 	}
 
-	if rel.Status != "deployed" || rel.ChartVersion != target {
+	if rel.Status != helmStatusDeployed || rel.ChartVersion != target {
 		return false, waitOn(op, reasonCiliumNotSwitched, fmt.Sprintf(
 			"the Cilium Helm Job finished but the release is %q at chart %q, not deployed at %s yet", rel.Status, rel.ChartVersion, target))
 	}

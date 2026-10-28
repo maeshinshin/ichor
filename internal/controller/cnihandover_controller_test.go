@@ -44,6 +44,8 @@ import (
 	"github.com/maeshinshin/ichor/pkg/render"
 )
 
+const helmStatusKey = "status"
+
 func reconcileHandover(r *CNIHandoverReconciler, namespace, name string) (ctrl.Result, error) {
 	return r.Reconcile(ctx, ctrl.Request{Namespace: namespace, Name: name})
 }
@@ -60,7 +62,7 @@ func newTestCiliumCluster() *ichorv1alpha1.TalosCluster {
 			VersionContract:   testK8sContract,
 			SecretsRef:        corev1.LocalObjectReference{Name: "does-not-exist"},
 			ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: 1, Schedulable: testSchedulable},
-			CNI:               ichorv1alpha1.TalosClusterCNI{Preset: "cilium"},
+			CNI:               ichorv1alpha1.TalosClusterCNI{Preset: ciliumName},
 		},
 	}
 	Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
@@ -90,9 +92,9 @@ func conditionOf(cluster *ichorv1alpha1.TalosCluster, condType string) *metav1.C
 // ciliumDaemonSet creates the bootstrapped cilium DaemonSet in kube-system (envtest runs no
 // controllers, so its status is whatever the test writes) and returns a setter for readiness.
 func ciliumDaemonSet() (setReady func(ready bool)) {
-	labels := map[string]string{"k8s-app": "cilium"}
+	labels := map[string]string{labelK8sApp: ciliumName}
 	ds := &appsv1.DaemonSet{
-		Namespace: "kube-system", Name: "cilium",
+		Namespace: kubeSystemNamespace, Name: ciliumName,
 		Spec: appsv1.DaemonSetSpec{
 			Selector: &metav1.LabelSelector{MatchLabels: labels},
 			Template: corev1.PodTemplateSpec{
@@ -122,10 +124,10 @@ func ciliumDaemonSet() (setReady func(ready bool)) {
 
 // helmRelease writes a Helm release record for cilium the way Helm's Secrets driver does:
 // base64 of gzipped JSON, with the labels the driver lists by.
-func helmRelease(ns string, version int, status string, config map[string]any) {
+func helmRelease(version int, status string, config map[string]any) {
 	GinkgoHelper()
 
-	raw, err := json.Marshal(map[string]any{"name": "cilium", "version": version, "config": config, "info": map[string]any{"status": status}})
+	raw, err := json.Marshal(map[string]any{labelName: ciliumName, "version": version, "config": config, "info": map[string]any{helmStatusKey: status}})
 	Expect(err).NotTo(HaveOccurred())
 
 	var zipped bytes.Buffer
@@ -136,9 +138,9 @@ func helmRelease(ns string, version int, status string, config map[string]any) {
 	Expect(zw.Close()).To(Succeed())
 
 	secret := &corev1.Secret{
-		Namespace: ns, Name: "sh.helm.release.v1.cilium.v" + strconv.Itoa(version),
+		Namespace: testIchorNamespace, Name: "sh.helm.release.v1.cilium.v" + strconv.Itoa(version),
 		Type:   "helm.sh/release.v1",
-		Labels: map[string]string{"owner": "helm", "name": "cilium", "status": status, "version": strconv.Itoa(version)},
+		Labels: map[string]string{helmOwnerLabel: "helm", labelName: ciliumName, helmStatusKey: status, "version": strconv.Itoa(version)},
 		Data:   map[string][]byte{"release": []byte(base64.StdEncoding.EncodeToString(zipped.Bytes()))},
 	}
 	Expect(k8sClient.Create(ctx, secret)).To(Succeed())
@@ -275,13 +277,13 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		Expect(held).To(BeFalse())
 
 		// A release that is not deployed does not count either.
-		helmRelease(testIchorNamespace, 1, "pending-install", effectiveValues(cluster))
+		helmRelease(1, "pending-install", effectiveValues(cluster))
 		_, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(conditionOf(cluster, render.ConditionCNIHandover).Status).To(Equal(metav1.ConditionFalse))
 
 		// Deployed at the cluster's values, but the DaemonSet is not ready.
-		helmRelease(testIchorNamespace, 2, "deployed", effectiveValues(cluster))
+		helmRelease(2, "deployed", effectiveValues(cluster))
 		setReady(false)
 		result, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
 		Expect(err).NotTo(HaveOccurred())
@@ -315,7 +317,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		_, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
 		Expect(err).NotTo(HaveOccurred())
 		setJobCondition(cniJob(cluster), batchv1.JobComplete, "")
-		helmRelease(testIchorNamespace, 1, "deployed", effectiveValues(cluster))
+		helmRelease(1, "deployed", effectiveValues(cluster))
 		_, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(conditionOf(cluster, render.ConditionCNIHandover).Status).To(Equal(metav1.ConditionTrue))
@@ -353,7 +355,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 
 		// Done at the new values: recorded, lock released.
 		setJobCondition(job, batchv1.JobComplete, "")
-		helmRelease(testIchorNamespace, 2, "deployed", effectiveValues(getCluster(cluster)))
+		helmRelease(2, "deployed", effectiveValues(getCluster(cluster)))
 		_, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(getCluster(cluster).Status.CNI.AppliedValuesHash).To(Equal(second))

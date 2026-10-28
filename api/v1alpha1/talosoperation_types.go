@@ -468,6 +468,12 @@ type TalosOperationStatus struct {
 	// +optional
 	FailureReason string `json:"failureReason,omitempty"`
 
+	// fromVersion is deprecated and unused: Ichor no longer writes or reads it. The from-version
+	// now lives in the ichor.maesh.dev/from-version annotation (OperationFromVersionAnnotation).
+	// The field stays so the CRD never drops a field an installed version has.
+	// +optional
+	FromVersion string `json:"fromVersion,omitempty"`
+
 	// finishedAt is when the operation reached Completed.
 	// +optional
 	FinishedAt *metav1.Time `json:"finishedAt,omitempty"`

@@ -23,8 +23,6 @@ import (
 	"fmt"
 	"io"
 	"net/url"
-	"slices"
-	"strings"
 	"time"
 
 	"golang.org/x/mod/semver"
@@ -32,10 +30,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/installer"
 	"github.com/maeshinshin/ichor/pkg/ichorauth"
 )
 
@@ -53,17 +51,26 @@ const (
 	defaultAdminUser     = "admin"
 	// Container names are the same on every install path; object names are not (kustomize
 	// prefixes them), so objects are found by label.
-	uiContainer          = "ichor-ui"
-	controllerContainer  = "manager"
+	uiContainer          = installer.UIContainer
+	controllerContainer  = installer.ControllerContainer
 	controllerLabel      = "control-plane"
 	controllerLabelValue = "controller-manager"
-	// defaultRefreshLifetime is the chart's ichorUI.users.refreshLifetime default.
-	defaultRefreshLifetime = "12h"
-	uiInternalPort         = 8444
-	uiInternalPortName     = "internal"
-	schemeHTTPS            = "https"
-	appNameIchor           = "ichor"
+	schemeHTTPS          = "https"
+	appNameIchor         = "ichor"
 )
+
+// uiSettings is what init customizes, in the form the installer re-derives on every upgrade.
+// The customizing functions are the installer package's, so the two cannot drift.
+func (o initOptions) uiSettings() installer.UISettings {
+	s := installer.UISettings{
+		ExternalURL: o.UIURL, KubeAPIServerURL: o.KubeAPIServerURL, KubeAPITLSServerName: o.KubeAPITLSServerName,
+	}
+	if o.uiTLSOn() {
+		s.TLSSecretName = o.uiTLSSecretName()
+	}
+
+	return s
+}
 
 // validateInitUsers runs before anything irreversible, so a bad URL or an old
 // contract costs nothing.
@@ -147,7 +154,7 @@ func findDeploymentByLabel(ctx context.Context, k client.Client, ns, key, value 
 // prepareUITargets finds and edits (in memory) the ichor-ui Deployment and
 // Service and the controller Deployment: the in-place equivalent of the
 // chart's ichorUI.users.enabled.
-func prepareUITargets(ctx context.Context, k client.Client, ns, externalURL string) (*uiTargets, error) {
+func prepareUITargets(ctx context.Context, k client.Client, ns string, s installer.UISettings) (*uiTargets, error) {
 	ui, err := findDeploymentByLabel(ctx, k, ns, uiComponentLabel, uiComponentValue)
 	if err != nil {
 		return nil, err
@@ -164,17 +171,9 @@ func prepareUITargets(ctx context.Context, k client.Client, ns, externalURL stri
 	}
 
 	t := &uiTargets{ui: ui, controller: mgr, svc: svc}
-	t.uiMut = func(d *appsv1.Deployment) error { return usersOnDeployment(d, externalURL) }
-	t.ctrlMut = issuerOnController
-	t.svcMut = func(s *corev1.Service) error {
-		if !slices.ContainsFunc(s.Spec.Ports, func(p corev1.ServicePort) bool { return p.Name == uiInternalPortName }) {
-			s.Spec.Ports = append(s.Spec.Ports, corev1.ServicePort{
-				Name: uiInternalPortName, Port: uiInternalPort, TargetPort: intstr.FromInt32(uiInternalPort), Protocol: corev1.ProtocolTCP,
-			})
-		}
-
-		return nil
-	}
+	t.uiMut = func(d *appsv1.Deployment) error { return installer.CustomizeUI(d, s) }
+	t.ctrlMut = func(d *appsv1.Deployment) error { return installer.CustomizeController(d, s) }
+	t.svcMut = func(v *corev1.Service) error { installer.CustomizeService(v, s); return nil }
 
 	if err := t.uiMut(ui); err != nil {
 		return nil, err
@@ -189,23 +188,6 @@ func prepareUITargets(ctx context.Context, k client.Client, ns, externalURL stri
 	return t, nil
 }
 
-// issuerOnController adds the flags that make the controller keep the signing
-// keys, internal TLS and trust ConfigMap (the chart renders the same two).
-func issuerOnController(dep *appsv1.Deployment) error {
-	i := slices.IndexFunc(dep.Spec.Template.Spec.Containers, func(c corev1.Container) bool { return c.Name == controllerContainer })
-	if i < 0 {
-		return fmt.Errorf("init: the controller Deployment %s has no container %q", dep.Name, controllerContainer)
-	}
-
-	c := &dep.Spec.Template.Spec.Containers[i]
-	c.Args = slices.DeleteFunc(c.Args, func(a string) bool {
-		return a == "--user-issuer" || a == "--user-issuer=true" || strings.HasPrefix(a, "--oidc-refresh-lifetime=")
-	})
-	c.Args = append(c.Args, "--user-issuer", "--oidc-refresh-lifetime="+defaultRefreshLifetime)
-
-	return nil
-}
-
 func (t *uiTargets) apply(ctx context.Context, k client.Client, progress io.Writer) error {
 	if err := updateRetrying(ctx, k, t.ui, t.uiMut, progress); err != nil {
 		return fmt.Errorf("init: updating the ichor-ui Deployment: %w", err)
@@ -217,48 +199,6 @@ func (t *uiTargets) apply(ctx context.Context, k client.Client, progress io.Writ
 
 	if err := updateRetrying(ctx, k, t.controller, t.ctrlMut, progress); err != nil {
 		return fmt.Errorf("init: updating the controller Deployment: %w", err)
-	}
-
-	return nil
-}
-
-func usersOnDeployment(dep *appsv1.Deployment, externalURL string) error {
-	i := slices.IndexFunc(dep.Spec.Template.Spec.Containers, func(c corev1.Container) bool { return c.Name == uiContainer })
-	if i < 0 {
-		return fmt.Errorf("init: the ichor-ui Deployment %s has no container %q", dep.Name, uiContainer)
-	}
-
-	c := &dep.Spec.Template.Spec.Containers[i]
-
-	// Drop any earlier setting of the same flags so a re-run replaces the URL.
-	c.Args = slices.DeleteFunc(c.Args, func(a string) bool {
-		return a == "--users-enabled=true" || strings.HasPrefix(a, "--external-url=") || strings.HasPrefix(a, "--internal-jwks-uri=")
-	})
-	// --internal-jwks-uri is dropped on purpose: ichor-ui answers with the host the apiserver
-	// used, so a recreated Service (new ClusterIP) needs no change here.
-	c.Args = append(c.Args, "--users-enabled=true", "--external-url="+externalURL)
-
-	if !slices.ContainsFunc(c.Ports, func(p corev1.ContainerPort) bool { return p.Name == uiInternalPortName }) {
-		c.Ports = append(c.Ports, corev1.ContainerPort{Name: uiInternalPortName, ContainerPort: uiInternalPort, Protocol: corev1.ProtocolTCP})
-	}
-
-	// Written by the controller; optional so ichor-ui starts before it has made them.
-	optional := true
-
-	for _, v := range []struct{ name, secret, path string }{
-		{"oidc-signing", ichorauth.SigningSecretName, "/etc/ichor/oidc-signing"},
-		{"oidc-tls", "ichor-oidc-tls", "/etc/ichor/oidc-tls"},
-	} {
-		if !slices.ContainsFunc(dep.Spec.Template.Spec.Volumes, func(x corev1.Volume) bool { return x.Name == v.name }) {
-			dep.Spec.Template.Spec.Volumes = append(dep.Spec.Template.Spec.Volumes, corev1.Volume{
-				Name:   v.name,
-				Secret: &corev1.SecretVolumeSource{SecretName: v.secret, Optional: &optional},
-			})
-		}
-
-		if !slices.ContainsFunc(c.VolumeMounts, func(x corev1.VolumeMount) bool { return x.Name == v.name }) {
-			c.VolumeMounts = append(c.VolumeMounts, corev1.VolumeMount{Name: v.name, MountPath: v.path, ReadOnly: true})
-		}
 	}
 
 	return nil
@@ -302,26 +242,13 @@ func initUsers(ctx context.Context, opts initOptions, k client.Client, errw io.W
 	}
 
 	// Everything that can fail on the cluster's shape is checked before the first write.
-	targets, err := prepareUITargets(ctx, k, ichorControllerNamespace, opts.UIURL)
+	targets, err := prepareUITargets(ctx, k, ichorControllerNamespace, opts.uiSettings())
 	if err != nil {
 		return "", err
 	}
 
 	if err := checkUITLSSecret(ctx, k, ichorControllerNamespace, opts); err != nil {
 		return "", err
-	}
-
-	if err := uiExtrasOnDeployment(targets.ui, opts); err != nil {
-		return "", err
-	}
-
-	baseUIMut := targets.uiMut
-	targets.uiMut = func(d *appsv1.Deployment) error {
-		if err := baseUIMut(d); err != nil {
-			return err
-		}
-
-		return uiExtrasOnDeployment(d, opts)
 	}
 
 	if err := storeUITLSSecret(ctx, k, ichorControllerNamespace, opts, errw); err != nil {

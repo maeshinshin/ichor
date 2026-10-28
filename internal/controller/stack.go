@@ -66,6 +66,14 @@ const (
 	secretKeyPassword = "password"
 	secretKeyHash     = "password-hash"
 
+	componentKokumi = "kokumi"
+	componentArgoCD = "argocd"
+	versionV1alpha1 = "v1alpha1"
+	reasonReady     = "Ready"
+	managedTrue     = "true"
+	metaKey         = "metadata"
+	nsKey           = "namespace"
+
 	managedLabel      = "ichor.maesh.dev/managed"
 	republishAnnotKey = "ichor.maesh.dev/republished"
 
@@ -77,8 +85,8 @@ const (
 )
 
 var (
-	orderGVK       = schema.GroupVersionKind{Group: "delivery.kokumi.dev", Version: "v1alpha1", Kind: "Order"}
-	applicationGVK = schema.GroupVersionKind{Group: "argoproj.io", Version: "v1alpha1", Kind: "Application"}
+	orderGVK       = schema.GroupVersionKind{Group: "delivery.kokumi.dev", Version: versionV1alpha1, Kind: "Order"}
+	applicationGVK = schema.GroupVersionKind{Group: "argoproj.io", Version: versionV1alpha1, Kind: "Application"}
 )
 
 // +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;create;patch
@@ -120,7 +128,7 @@ func (r *IchorInstallationReconciler) reconcileStack(
 	after, err := r.runStack(ctx, inst)
 
 	cond := metav1.Condition{
-		Type: conditionStackReady, Status: metav1.ConditionTrue, Reason: "Ready",
+		Type: conditionStackReady, Status: metav1.ConditionTrue, Reason: reasonReady,
 		Message: "Kokumi and Argo CD are published, ordered and Synced/Healthy", ObservedGeneration: inst.Generation,
 	}
 
@@ -242,7 +250,7 @@ func (r *IchorInstallationReconciler) stackComponents(
 	userValues := map[string]map[string]any{}
 
 	if s := inst.Spec.Stack; s != nil {
-		for n, c := range map[string]*ichorv1alpha1.IchorStackComponentSpec{"kokumi": s.Kokumi, "argocd": s.ArgoCD} {
+		for n, c := range map[string]*ichorv1alpha1.IchorStackComponentSpec{componentKokumi: s.Kokumi, componentArgoCD: s.ArgoCD} {
 			if c == nil || c.Values == nil || len(c.Values.Raw) == 0 {
 				continue
 			}
@@ -261,7 +269,7 @@ func (r *IchorInstallationReconciler) stackComponents(
 	}
 
 	// ponytail: Kokumi has no chart; no key is mapped to a patch yet, so any value is refused.
-	if len(userValues["kokumi"]) > 0 {
+	if len(userValues[componentKokumi]) > 0 {
 		return nil, errors.New("spec.stack.kokumi.values: no key is supported yet")
 	}
 
@@ -270,7 +278,7 @@ func (r *IchorInstallationReconciler) stackComponents(
 		return nil, err
 	}
 
-	ab, err := argocd.Render(argocd.Options{Values: userValues["argocd"], RedisPassword: redisPassword})
+	ab, err := argocd.Render(argocd.Options{Values: userValues[componentArgoCD], RedisPassword: redisPassword})
 	if err != nil {
 		return nil, err
 	}
@@ -279,11 +287,11 @@ func (r *IchorInstallationReconciler) stackComponents(
 
 	return []*stackComponent{
 		{
-			name: "kokumi", namespace: kokumi.Namespace, version: kokumi.Version, manifest: kb, status: st.Kokumi,
+			name: componentKokumi, namespace: kokumi.Namespace, version: kokumi.Version, manifest: kb, status: st.Kokumi,
 			waitFor: []string{"kokumi-registry"},
 		},
 		{
-			name: "argocd", namespace: argocd.Namespace, version: argocd.ChartVersion, manifest: ab, status: st.ArgoCD,
+			name: componentArgoCD, namespace: argocd.Namespace, version: argocd.ChartVersion, manifest: ab, status: st.ArgoCD,
 			waitFor: []string{"argocd-server", "argocd-repo-server"},
 		},
 	}, nil
@@ -341,8 +349,8 @@ func (r *IchorInstallationReconciler) getOrCreateSecret(
 	}
 
 	s = corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Namespace: key.Namespace, Name: key.Name, Labels: map[string]string{managedLabel: "true"}},
-		Data:       data,
+		Namespace: key.Namespace, Name: key.Name, Labels: map[string]string{managedLabel: managedTrue},
+		Data: data,
 	}
 	if err := r.Direct.Create(ctx, &s); err != nil {
 		return nil, fmt.Errorf("creating Secret %s: %w", secretName, err)
@@ -396,7 +404,7 @@ func (r *IchorInstallationReconciler) bootstrap(ctx context.Context, c *stackCom
 }
 
 func titleName(n string) string {
-	if n == "argocd" {
+	if n == componentArgoCD {
 		return "ArgoCD"
 	}
 
@@ -405,7 +413,7 @@ func titleName(n string) string {
 
 func namespaceObject(n string) *unstructured.Unstructured {
 	return &unstructured.Unstructured{Object: map[string]any{
-		"apiVersion": "v1", "kind": "Namespace", "metadata": map[string]any{"name": n},
+		"apiVersion": "v1", "kind": "Namespace", metaKey: map[string]any{labelName: n},
 	}}
 }
 
@@ -529,9 +537,9 @@ func (r *IchorInstallationReconciler) ensureOrder(ctx context.Context, c *stackC
 
 	desired := &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": orderGVK.GroupVersion().String(), "kind": orderGVK.Kind,
-		"metadata": map[string]any{
-			"name": c.name, "namespace": c.namespace,
-			"labels": map[string]any{managedLabel: "true"},
+		metaKey: map[string]any{
+			labelName: c.name, nsKey: c.namespace,
+			"labels": map[string]any{managedLabel: managedTrue},
 		},
 		"spec": map[string]any{
 			"source":    map[string]any{"oci": source, "version": c.status.PublishedTag},
@@ -558,7 +566,7 @@ func orderMatches(o *unstructured.Unstructured, source, tag, promotion string) b
 	gotTag, _, _ := unstructured.NestedString(o.Object, "spec", "source", "version")
 	gotMode, _, _ := unstructured.NestedString(o.Object, "spec", "promotion", "mode")
 
-	return gotSource == source && gotTag == tag && gotMode == promotion && o.GetLabels()[managedLabel] == "true"
+	return gotSource == source && gotTag == tag && gotMode == promotion && o.GetLabels()[managedLabel] == managedTrue
 }
 
 // orderReady reads the Order's Ready condition.

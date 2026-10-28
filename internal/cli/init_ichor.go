@@ -77,7 +77,7 @@ func applyIchorManifest(ctx context.Context, k8sClient client.Client, manifest [
 	}
 
 	for _, obj := range objs {
-		if err := createWithRetry(ctx, k8sClient, obj); err != nil {
+		if err := createWithRetry(ctx, k8sClient, obj, warn); err != nil {
 			return fmt.Errorf("init: applying Ichor's own %s %q: %w", obj.GetKind(), obj.GetName(), err)
 		}
 	}
@@ -99,27 +99,50 @@ func decodeManifest(data []byte) ([]*unstructured.Unstructured, error) {
 // needs a moment to become Established), and treating "already exists"
 // as success -- re-running init against a cluster that already has some
 // of this applied should not fail on that alone.
-func createWithRetry(ctx context.Context, k8sClient client.Client, obj *unstructured.Unstructured) error {
-	var lastErr error
-
-	for range crdEstablishRetries {
-		err := k8sClient.Create(ctx, obj)
-
-		switch {
-		case err == nil, apierrors.IsAlreadyExists(err):
-			return nil
-		case apimeta.IsNoMatchError(err):
-			lastErr = err
-
-			time.Sleep(crdEstablishInterval)
-
-			continue
-		default:
-			return err
-		}
+func createWithRetry(ctx context.Context, k8sClient client.Client, obj *unstructured.Unstructured, progress io.Writer) error {
+	err := retryInit(ctx, progress, func() error { return k8sClient.Create(ctx, obj) })
+	if apierrors.IsAlreadyExists(err) {
+		return nil
 	}
 
-	return lastErr
+	return err
+}
+
+// initRetryWindow bounds how long one init apply step keeps retrying; a single control plane
+// on a loaded host can answer "etcdserver: request timed out" for a minute after the API
+// server first comes up. The delays are followRetryDelay/followRetryMax. A var so tests can
+// shrink it.
+var initRetryWindow = 3 * time.Minute
+
+// initRetryable is an error init's apply steps wait out: a transient API error, or a kind the
+// API server does not know yet (a CRD this install just created is not Established yet).
+func initRetryable(err error) bool {
+	return isTransient(err) || apimeta.IsNoMatchError(err)
+}
+
+// retryInit runs fn, retrying initRetryable errors with backoff for up to initRetryWindow and
+// printing one "retrying" line per attempt. Anything else returns at once, as does the last
+// error once the window is spent.
+func retryInit(ctx context.Context, progress io.Writer, fn func() error) error {
+	deadline := time.Now().Add(initRetryWindow)
+	delay := followRetryDelay
+
+	for {
+		err := fn()
+		if err == nil || !initRetryable(err) || time.Now().After(deadline) {
+			return err
+		}
+
+		_, _ = fmt.Fprintf(progress, "init: retrying in %s: %v\n", delay, err)
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(delay):
+		}
+
+		delay = min(delay*2, followRetryMax)
+	}
 }
 
 // createIchorInstallation records the version `ichor init` just installed -- this binary's
@@ -146,7 +169,7 @@ func createIchorInstallation(ctx context.Context, k8sClient client.Client, warn 
 		return err
 	}
 
-	if err := createWithRetry(ctx, k8sClient, &unstructured.Unstructured{Object: content}); err != nil {
+	if err := createWithRetry(ctx, k8sClient, &unstructured.Unstructured{Object: content}, warn); err != nil {
 		return fmt.Errorf("init: creating the IchorInstallation: %w", err)
 	}
 

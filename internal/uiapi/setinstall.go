@@ -20,14 +20,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"connectrpc.com/connect"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 
-	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
-	"github.com/maeshinshin/ichor/pkg/prmode"
 )
 
 // SetMachineInstall writes only spec.install of an approved machine that has not converged yet: how a machine
@@ -40,11 +37,6 @@ func (s *Server) SetMachineInstall(
 	ref := req.Msg.GetMachine()
 
 	m, err := s.getMachine(ctx, ref)
-	if err != nil {
-		return nil, err
-	}
-
-	plan, err := s.planWrite(ctx, m, m.Spec.ClusterRef.Name, false, req.Msg.GetBreakGlass())
 	if err != nil {
 		return nil, err
 	}
@@ -69,12 +61,7 @@ func (s *Server) SetMachineInstall(
 	}
 
 	now := s.now()
-	stored := m.DeepCopy()
 	m.Spec.Install = install
-
-	if plan != nil && plan.bg == nil {
-		return s.setInstallByPR(ctx, plan, m, stored, now, req.Msg.GetReason())
-	}
 
 	if err := s.Update(ctx, m, strictFieldValidation); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("setting install of machine %q: %w", namespacedName(ref), err))
@@ -85,41 +72,5 @@ func (s *Server) SetMachineInstall(
 		Target: objectRef(m.Namespace, m.Name), Reason: req.Msg.GetReason(),
 	}
 
-	url, notice := s.afterBreakGlass(ctx, plan, m, audit, func() (string, error) {
-		r, err := s.setInstallByPR(ctx, plan, m, stored, now, req.Msg.GetReason())
-		if err != nil {
-			return "", err
-		}
-
-		return r.Msg.GetPullRequestUrl(), nil
-	})
-
-	return connect.NewResponse(&pb.SetMachineInstallResponse{Machine: machineToPB(m), Audit: audit, PullRequestUrl: url, Notice: notice}), nil
-}
-
-// setInstallByPR is SetMachineInstall's pull request branch: it edits spec.install only.
-func (s *Server) setInstallByPR(
-	ctx context.Context, plan *prPlan, m, stored *ichorv1alpha1.TalosMachine, now time.Time, reason string,
-) (*connect.Response[pb.SetMachineInstallResponse], error) {
-	install, err := toGeneric(m.Spec.Install)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-
-	url, err := s.openPR(ctx, plan, prChange{
-		verb: "set-install", name: m.Name, target: machineTarget(m),
-		updates: []prmode.FieldUpdate{{Path: []string{specKey, "install"}, Value: install}},
-		title:   "Set install disk of node " + m.Name,
-		impact: fmt.Sprintf("- Affected nodes: 1 (%s)\n- Sets where the node installs Talos; the controller applies it once synced.\n- Reason: %s",
-			m.Name, orNone(reason)),
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	audit := &pb.AuditRecord{
-		Actor: s.actorName(ctx), At: timestamppb.New(now), Action: "set-install-pr", Target: objectRef(m.Namespace, m.Name), Reason: reason,
-	}
-
-	return connect.NewResponse(&pb.SetMachineInstallResponse{Machine: machineToPB(stored), Audit: audit, PullRequestUrl: url}), nil
+	return connect.NewResponse(&pb.SetMachineInstallResponse{Machine: machineToPB(m), Audit: audit}), nil
 }

@@ -58,7 +58,7 @@ func lastWorkerFixture(t *testing.T) (*TalosClusterCustomValidator, *TalosMachin
 	}
 
 	reader := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster, worker).Build()
-	check := breakGlassCheckFor(bgUnitHandler(t, nil).Client)
+	check := breakGlassCheckFor(bgUnitHandler(t).Client)
 
 	return &TalosClusterCustomValidator{APIReader: reader, BreakGlass: check},
 		&TalosMachineCustomValidator{APIReader: reader, BreakGlass: check}, worker
@@ -111,7 +111,7 @@ func TestLastWorkerGuardMachineUnapprove(t *testing.T) {
 func TestLastWorkerGuardNodeOperationReason(t *testing.T) {
 	t.Parallel()
 
-	h := bgUnitHandler(t, nil)
+	h := bgUnitHandler(t)
 
 	handle := func(user, reason string) admission.Response {
 		op := ichorv1alpha1.TalosOperation{

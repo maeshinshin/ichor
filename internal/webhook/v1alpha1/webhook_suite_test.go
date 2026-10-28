@@ -116,8 +116,7 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 
 	err = SetupBreakGlassWebhookWithManager(mgr, BreakGlassOptions{
-		ArgoCDNamespace: testArgoNamespace,
-		ExemptUsers:     []string{testControllerUser, testArgoUser},
+		ExemptUsers: []string{testControllerUser},
 	})
 	Expect(err).NotTo(HaveOccurred())
 

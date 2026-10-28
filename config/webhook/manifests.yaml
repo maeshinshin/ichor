@@ -21,7 +21,6 @@ webhooks:
     operations:
     - CREATE
     - UPDATE
-    - DELETE
     resources:
     - talosclusters
   sideEffects: None
@@ -41,7 +40,6 @@ webhooks:
     - v1alpha1
     operations:
     - UPDATE
-    - DELETE
     resources:
     - talosmachines
     - talosconfigpatches

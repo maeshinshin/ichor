@@ -64,8 +64,8 @@ message UpdatePatchRequest {
   // other field on patch replaces that object's spec wholesale, the same
   // "no partial-field merge" simplicity CreatePatch has.
   Patch patch = 1;
-  // break_glass requests an emergency direct write.
-  BreakGlass break_glass = 2;
+  // Deprecated: GitOps is no longer part of Ichor. Never set; kept so the wire format is unchanged.
+  BreakGlass break_glass = 2 [deprecated = true];
 }
 
 message UpdatePatchResponse {
@@ -73,27 +73,24 @@ message UpdatePatchResponse {
   // written to the cluster, and this is the unchanged stored patch.
   Patch patch = 1;
   AuditRecord audit = 2;
-  // pull_request_url is set when the patch is tracked by Argo CD and the
-  // change was proposed as a pull request instead of being written.
-  string pull_request_url = 3;
-  // notice: see ApproveMachineResponse.notice.
-  string notice = 4;
+  // Deprecated: GitOps is no longer part of Ichor. Never set; kept so the wire format is unchanged.
+  string pull_request_url = 3 [deprecated = true];
+  // Deprecated: GitOps is no longer part of Ichor. Never set; kept so the wire format is unchanged.
+  string notice = 4 [deprecated = true];
 }
 
 message DeletePatchRequest {
   ObjectRef patch = 1;
-  // break_glass requests an emergency direct write.
-  BreakGlass break_glass = 2;
+  // Deprecated: GitOps is no longer part of Ichor. Never set; kept so the wire format is unchanged.
+  BreakGlass break_glass = 2 [deprecated = true];
 }
 
 message DeletePatchResponse {
   AuditRecord audit = 1;
-  // pull_request_url is set when the patch is tracked by Argo CD and its
-  // removal was proposed as a pull request instead of being written; nothing
-  // was deleted from the cluster.
-  string pull_request_url = 2;
-  // notice: see ApproveMachineResponse.notice.
-  string notice = 3;
+  // Deprecated: GitOps is no longer part of Ichor. Never set; kept so the wire format is unchanged.
+  string pull_request_url = 2 [deprecated = true];
+  // Deprecated: GitOps is no longer part of Ichor. Never set; kept so the wire format is unchanged.
+  string notice = 3 [deprecated = true];
 }
 
 message PreviewImpactRequest {

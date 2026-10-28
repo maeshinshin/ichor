@@ -111,7 +111,7 @@ func TestCreateCARotationRefusedWhileAnotherOperationIsUnfinished(t *testing.T) 
 }
 
 func TestCreateCARotationRefusedWhenTheCallerMayNotCreateOperations(t *testing.T) {
-	base := fake.NewClientBuilder().WithScheme(trackedScheme(t)).WithObjects(opObjects()...).Build()
+	base := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(opObjects()...).Build()
 	user := interceptor.NewClient(base, interceptor.Funcs{
 		Create: func(_ context.Context, _ client.WithWatch, obj client.Object, _ ...client.CreateOption) error {
 			if sar, ok := obj.(*authv1.SelfSubjectAccessReview); ok {

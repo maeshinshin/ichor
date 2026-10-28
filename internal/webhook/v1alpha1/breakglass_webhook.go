@@ -27,7 +27,6 @@ import (
 
 	authnv1 "k8s.io/api/authentication/v1"
 	authzv1 "k8s.io/api/authorization/v1"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -36,12 +35,11 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
-	"github.com/maeshinshin/ichor/pkg/gitopstracking"
 	"github.com/maeshinshin/ichor/pkg/render"
 )
 
-// BreakGlassVerb is the RBAC verb that lets a user write a GitOps-managed CR
-// directly, or remove an Ichor finalizer from a deleting one.
+// BreakGlassVerb is the RBAC verb that lets a user remove an Ichor finalizer from a deleting
+// CR, run a destructive operation or override a per-object guard.
 const BreakGlassVerb = "break-glass"
 
 const (
@@ -57,33 +55,28 @@ const (
 
 var breakglasslog = logf.Log.WithName("breakglass-webhook")
 
-// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-breakglass,mutating=false,failurePolicy=fail,sideEffects=None,groups=ichor.maesh.dev,resources=talosmachines;talosconfigpatches,verbs=update;delete,versions=v1alpha1,name=vbreakglass-v1alpha1.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-breakglass,mutating=false,failurePolicy=fail,sideEffects=None,groups=ichor.maesh.dev,resources=talosmachines;talosconfigpatches,verbs=update,versions=v1alpha1,name=vbreakglass-v1alpha1.kb.io,admissionReviewVersions=v1
 // +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-breakglass,mutating=false,failurePolicy=fail,sideEffects=None,groups=ichor.maesh.dev,resources=talosoperations,verbs=create,versions=v1alpha1,name=vbreakglassop-v1alpha1.kb.io,admissionReviewVersions=v1
-// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-breakglass,mutating=false,failurePolicy=fail,sideEffects=None,groups=ichor.maesh.dev,resources=talosclusters,verbs=create;update;delete,versions=v1alpha1,name=vauthentication-v1alpha1.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-breakglass,mutating=false,failurePolicy=fail,sideEffects=None,groups=ichor.maesh.dev,resources=talosclusters,verbs=create;update,versions=v1alpha1,name=vauthentication-v1alpha1.kb.io,admissionReviewVersions=v1
 // +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-breakglass,mutating=false,failurePolicy=fail,sideEffects=None,groups=ichor.maesh.dev,resources=talosetcdbackups,verbs=create;update,versions=v1alpha1,name=vsecretrefs-v1alpha1.kb.io,admissionReviewVersions=v1
 // +kubebuilder:rbac:groups=authorization.k8s.io,resources=subjectaccessreviews,verbs=create
 
 // BreakGlassOptions configures the break-glass admission check.
 type BreakGlassOptions struct {
-	// ArgoCDNamespace is where argocd-cm lives, for gitopstracking.IsTracked.
-	ArgoCDNamespace string
 	// ExemptUsers are the exact usernames never checked: Ichor's own
-	// controller and the GitOps engines (see DefaultExemptUsers).
+	// controller and the Kubernetes controllers that cascade deletions
+	// (see DefaultExemptUsers).
 	ExemptUsers []string
 }
 
 // DefaultExemptUsers names the identities whose writes the check must never
-// stop: by exact username, never by group or
-// namespace, because a prefix such as system:serviceaccounts:argocd would
-// also exempt argocd-server, which writes on behalf of people.
-func DefaultExemptUsers(controllerNamespace, controllerServiceAccount, argoCDNamespace string) []string {
+// stop, by exact username, never by group or
+// namespace.
+func DefaultExemptUsers(controllerNamespace, controllerServiceAccount string) []string {
 	sa := func(ns, name string) string { return "system:serviceaccount:" + ns + ":" + name }
 
 	users := []string{
-		sa(argoCDNamespace, "argocd-application-controller"),
-		sa("flux-system", "kustomize-controller"),
-		sa("flux-system", "helm-controller"),
-		// A namespace or owner deletion cascades into tracked CRs.
+		// A namespace or owner deletion cascades into Ichor's CRs.
 		sa("kube-system", "namespace-controller"),
 		sa("kube-system", "generic-garbage-collector"),
 	}
@@ -94,15 +87,13 @@ func DefaultExemptUsers(controllerNamespace, controllerServiceAccount, argoCDNam
 	return users
 }
 
-// BreakGlassHandler rejects a direct write to a GitOps-tracked CR, and the
-// removal of an ichor.maesh.dev finalizer from a deleting one, unless the
-// requesting user holds the break-glass verb on that object.
+// BreakGlassHandler rejects the removal of an ichor.maesh.dev finalizer from
+// a deleting CR unless the requesting user holds the break-glass verb on that
+// object.
 type BreakGlassHandler struct {
-	// Client is uncached: it reads argocd-cm and Flux Kustomizations (no
-	// informer, no list/watch grant) and creates SubjectAccessReviews.
-	Client          client.Client
-	ArgoCDNamespace string
-	ExemptUsers     []string
+	// Client is uncached: it creates SubjectAccessReviews.
+	Client      client.Client
+	ExemptUsers []string
 }
 
 // SetupBreakGlassWebhookWithManager registers the check on the manager's webhook server.
@@ -112,7 +103,7 @@ func SetupBreakGlassWebhookWithManager(mgr ctrl.Manager, opts BreakGlassOptions)
 		return fmt.Errorf("creating the uncached client: %w", err)
 	}
 
-	h := &BreakGlassHandler{Client: direct, ArgoCDNamespace: opts.ArgoCDNamespace, ExemptUsers: opts.ExemptUsers}
+	h := &BreakGlassHandler{Client: direct, ExemptUsers: opts.ExemptUsers}
 	mgr.GetWebhookServer().Register(breakGlassWebhookPath, &admission.Webhook{Handler: h})
 
 	return nil
@@ -129,32 +120,27 @@ func (h *BreakGlassHandler) Handle(ctx context.Context, req admission.Request) a
 		return h.handleEtcdBackup(ctx, req)
 	}
 
-	if req.Operation != opUpdate && req.Operation != "DELETE" {
+	if req.Operation != opUpdate {
 		return admission.Allowed("")
 	}
 
 	if slices.Contains(h.ExemptUsers, req.UserInfo.Username) {
-		return admission.Allowed("exempt: Ichor's controller or a GitOps engine")
+		return admission.Allowed("exempt: Ichor's controller or a Kubernetes cascading-delete controller")
 	}
 
-	var old unstructured.Unstructured
+	var old, updated unstructured.Unstructured
 	if err := json.Unmarshal(req.OldObject.Raw, &old); err != nil {
 		return admission.Errored(http.StatusBadRequest, fmt.Errorf("decoding the stored object: %w", err))
 	}
 
-	removing := false
-
-	if req.Operation == opUpdate {
-		var updated unstructured.Unstructured
-		if err := json.Unmarshal(req.Object.Raw, &updated); err != nil {
-			return admission.Errored(http.StatusBadRequest, fmt.Errorf("decoding the new object: %w", err))
-		}
-
-		removing = removesIchorFinalizer(&old, &updated)
+	if err := json.Unmarshal(req.Object.Raw, &updated); err != nil {
+		return admission.Errored(http.StatusBadRequest, fmt.Errorf("decoding the new object: %w", err))
 	}
 
-	// Ask the user's right first: holders skip the tracking lookup, so a
-	// break-glass write still works while Argo CD or Flux is unreadable.
+	if !removesIchorFinalizer(&old, &updated) {
+		return admission.Allowed("")
+	}
+
 	allowed, err := h.mayBreakGlass(ctx, req.UserInfo, req.Resource.Resource, req.Name, req.Namespace)
 	if err != nil {
 		return admission.Errored(http.StatusServiceUnavailable, fmt.Errorf("cannot check the %s right: %w", BreakGlassVerb, err))
@@ -166,38 +152,8 @@ func (h *BreakGlassHandler) Handle(ctx context.Context, req admission.Request) a
 		return admission.Allowed("")
 	}
 
-	if removing {
-		return admission.Denied(fmt.Sprintf("removing an %s* finalizer from a deleting %s is refused unless you hold the %q verb "+
-			"(the controller is still working on it: this orphans a node or an etcd member)", ichorFinalizerPrefix, req.Resource.Resource, BreakGlassVerb))
-	}
-
-	if resp := h.refuseIfTracked(ctx, req, &old); resp != nil {
-		return *resp
-	}
-
-	return admission.Allowed("")
-}
-
-// refuseIfTracked returns a denial when obj (the stored object) is tracked by Argo CD or Flux, and
-// a 503 when that cannot be told, do not write. Argo CD and Flux are exempt before this
-// is reached, so refusing here never blocks a sync. nil means "not tracked, carry on".
-func (h *BreakGlassHandler) refuseIfTracked(ctx context.Context, req admission.Request, obj client.Object) *admission.Response {
-	tracked, by, err := gitopstracking.IsTracked(ctx, h.Client, h.ArgoCDNamespace, obj)
-	if err != nil {
-		r := admission.Errored(http.StatusServiceUnavailable,
-			fmt.Errorf("cannot tell whether %s is managed by GitOps, so the direct write is refused: %w", req.Name, err))
-
-		return &r
-	}
-
-	if tracked {
-		r := admission.Denied(fmt.Sprintf("%s %q is managed by %s: change it in Git, or hold the %q verb to write it directly in an incident",
-			req.Resource.Resource, req.Name, by, BreakGlassVerb))
-
-		return &r
-	}
-
-	return nil
+	return admission.Denied(fmt.Sprintf("removing an %s* finalizer from a deleting %s is refused unless you hold the %q verb "+
+		"(the controller is still working on it: this orphans a node or an etcd member)", ichorFinalizerPrefix, req.Resource.Resource, BreakGlassVerb))
 }
 
 // handleOperation guards the dangerous operations, an etcd restore and the node action reset, wherever
@@ -335,46 +291,15 @@ const (
 	AuthenticationSubresource = "authentication"
 )
 
-// handleClusterDelete refuses deleting a tracked TalosCluster unless the user holds break-glass on it.
-func (h *BreakGlassHandler) handleClusterDelete(ctx context.Context, req admission.Request) admission.Response {
-	var old ichorv1alpha1.TalosCluster
-	if err := json.Unmarshal(req.OldObject.Raw, &old); err != nil {
-		return admission.Errored(http.StatusBadRequest, fmt.Errorf("decoding the stored cluster: %w", err))
-	}
-
-	allowed, err := h.mayBreakGlass(ctx, req.UserInfo, "talosclusters", req.Name, req.Namespace)
-	if err != nil {
-		return admission.Errored(http.StatusServiceUnavailable, fmt.Errorf("cannot check the %s right: %w", BreakGlassVerb, err))
-	}
-
-	if allowed {
-		breakglasslog.Info("cluster delete admitted under break-glass", "user", req.UserInfo.Username, "cluster", req.Name)
-
-		return admission.Allowed("")
-	}
-
-	if resp := h.refuseIfTracked(ctx, req, &old); resp != nil {
-		return *resp
-	}
-
-	return admission.Allowed("")
-}
-
 // handleCluster gates a change to spec.authentication. An operator who could repoint the IdP could
 // break sign-in for everyone, so the change needs `update` on talosclusters/authentication (asked as
 // the requesting user, so a hand-written CR obeys it too), and the new value must be one the
 // kube-apiserver will accept: the contract is v1.14 or later and the configuration it renders passes
 // the apiserver's own validation. A write that leaves spec.authentication as it was is not checked,
-// and the controller and GitOps engines (ExemptUsers) are never stopped.
+// and the controller (ExemptUsers) is never stopped.
 func (h *BreakGlassHandler) handleCluster(ctx context.Context, req admission.Request) admission.Response {
 	if slices.Contains(h.ExemptUsers, req.UserInfo.Username) {
 		return admission.Allowed("")
-	}
-
-	// Deleting a GitOps-tracked cluster needs the break-glass verb too; the allow-delete
-	// guard is a separate webhook and stays as it is.
-	if req.Operation == "DELETE" {
-		return h.handleClusterDelete(ctx, req)
 	}
 
 	if req.Operation != opCreate && req.Operation != opUpdate {
@@ -391,21 +316,6 @@ func (h *BreakGlassHandler) handleCluster(ctx context.Context, req admission.Req
 	if req.Operation == opUpdate {
 		if err := json.Unmarshal(req.OldObject.Raw, &old); err != nil {
 			return admission.Errored(http.StatusBadRequest, fmt.Errorf("decoding the stored cluster: %w", err))
-		}
-	}
-
-	// A direct update of a GitOps-tracked cluster needs the break-glass verb like a machine or a patch. Holders skip
-	// the tracking lookup; the gates below still apply to them.
-	if req.Operation == opUpdate {
-		allowed, err := h.mayBreakGlass(ctx, req.UserInfo, "talosclusters", req.Name, req.Namespace)
-		if err != nil {
-			return admission.Errored(http.StatusServiceUnavailable, fmt.Errorf("cannot check the %s right: %w", BreakGlassVerb, err))
-		}
-
-		if !allowed {
-			if resp := h.refuseIfTracked(ctx, req, &old); resp != nil {
-				return *resp
-			}
 		}
 	}
 
@@ -451,19 +361,6 @@ func clusterSecretRefChanges(old, updated *ichorv1alpha1.TalosCluster) []string 
 
 	if updated.Spec.SecretsRef != old.Spec.SecretsRef {
 		changed = append(changed, "spec.secretsRef")
-	}
-
-	var before, after *corev1.SecretKeySelector
-	if r := old.Spec.GitOps; r != nil && r.Repository != nil {
-		before = &r.Repository.TokenSecretRef
-	}
-
-	if r := updated.Spec.GitOps; r != nil && r.Repository != nil {
-		after = &r.Repository.TokenSecretRef
-	}
-
-	if after != nil && (before == nil || !reflect.DeepEqual(*before, *after)) {
-		changed = append(changed, "spec.gitops.repository.tokenSecretRef")
 	}
 
 	had := map[string]bool{}

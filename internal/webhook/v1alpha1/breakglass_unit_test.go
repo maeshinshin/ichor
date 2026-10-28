@@ -19,14 +19,12 @@ package v1alpha1
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"net/http"
 	"testing"
+	"time"
 
 	admissionv1 "k8s.io/api/admission/v1"
 	authnv1 "k8s.io/api/authentication/v1"
 	authzv1 "k8s.io/api/authorization/v1"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -34,23 +32,21 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
-
-	"github.com/maeshinshin/ichor/pkg/gitopstracking"
 )
 
 const (
 	bgUnitHolder = "holder"
 	bgUnitPlain  = "plain"
-	bgUnitArgo   = "system:serviceaccount:argocd:argocd-application-controller"
 
-	bgUnitMachines = "talosmachines"
+	bgUnitMachines  = "talosmachines"
+	bgUnitFinalizer = "ichor.maesh.dev/machine"
 )
 
-var bgUnitResources = []string{bgUnitMachines, "talosconfigpatches", resClusters}
+var bgUnitResources = []string{bgUnitMachines, "talosconfigpatches"}
 
 // bgUnitHandler builds a handler on a fake client. SubjectAccessReviews are answered by user
-// (only bgUnitHolder holds the verb); argoErr, when set, makes reading argocd-cm fail.
-func bgUnitHandler(t *testing.T, argoErr error) *BreakGlassHandler {
+// (only bgUnitHolder holds the verb).
+func bgUnitHandler(t *testing.T) *BreakGlassHandler {
 	t.Helper()
 
 	scheme := runtime.NewScheme()
@@ -58,12 +54,7 @@ func bgUnitHandler(t *testing.T, argoErr error) *BreakGlassHandler {
 		t.Fatal(err)
 	}
 
-	cm := &corev1.ConfigMap{
-		Name: gitopstracking.ArgoConfigMapName, Namespace: "argocd",
-		Data: map[string]string{gitopstracking.ResourceTrackingMethodKey: "annotation"},
-	}
-
-	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cm).WithInterceptorFuncs(interceptor.Funcs{
+	c := fake.NewClientBuilder().WithScheme(scheme).WithInterceptorFuncs(interceptor.Funcs{
 		Create: func(ctx context.Context, cl client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
 			if sar, ok := obj.(*authzv1.SubjectAccessReview); ok {
 				sar.Status.Allowed = sar.Spec.User == bgUnitHolder
@@ -73,58 +64,74 @@ func bgUnitHandler(t *testing.T, argoErr error) *BreakGlassHandler {
 
 			return cl.Create(ctx, obj, opts...)
 		},
-		Get: func(ctx context.Context, cl client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
-			if _, ok := obj.(*corev1.ConfigMap); ok && argoErr != nil {
-				return argoErr
-			}
-
-			return cl.Get(ctx, key, obj, opts...)
-		},
 	}).Build()
 
-	return &BreakGlassHandler{
-		Client: c, ArgoCDNamespace: "argocd",
-		ExemptUsers: DefaultExemptUsers("ichor-system", "ichor-controller", "argocd"),
-	}
+	return &BreakGlassHandler{Client: c, ExemptUsers: DefaultExemptUsers("ichor-system", "ichor-controller")}
 }
 
-func bgUnitRequest(t *testing.T, resource, user string) admission.Request {
+// bgUnitRequest is an UPDATE of a deleting object; removeFinalizer says whether the new object has
+// dropped the Ichor finalizer the stored one carries. The object carries an Argo CD tracking
+// annotation, which must change nothing: Ichor no longer looks at GitOps tools.
+func bgUnitRequest(t *testing.T, resource, user string, removeFinalizer bool) admission.Request {
 	t.Helper()
 
-	obj := map[string]any{
-		"apiVersion": "ichor.maesh.dev/v1alpha1", "kind": "TalosMachine",
-		"metadata": map[string]any{
-			"name": "x", "namespace": "default",
-			"annotations": map[string]any{gitopstracking.ArgoTrackingAnnotation: "app:ichor.maesh.dev/Kind:default/x"},
-		},
+	obj := func(finalizers []string) runtime.RawExtension {
+		raw, err := json.Marshal(map[string]any{
+			"apiVersion": "ichor.maesh.dev/v1alpha1", "kind": "TalosMachine",
+			"metadata": map[string]any{
+				"name": "x", "namespace": "default", "finalizers": finalizers,
+				"deletionTimestamp": time.Now().UTC().Format(time.RFC3339),
+				"annotations":       map[string]any{"argocd.argoproj.io/tracking-id": "app:ichor.maesh.dev/Kind:default/x"},
+			},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		return runtime.RawExtension{Raw: raw}
 	}
 
-	raw, err := json.Marshal(obj)
-	if err != nil {
-		t.Fatal(err)
+	next := []string{bgUnitFinalizer}
+	if removeFinalizer {
+		next = []string{}
 	}
 
 	return admission.Request{
-		Operation: admissionv1.Update, Name: "x", Namespace: "default",
-		Resource:  metav1.GroupVersionResource{Group: ichorGroup, Version: "v1alpha1", Resource: resource},
-		UserInfo:  authnv1.UserInfo{Username: user},
-		Object:    runtime.RawExtension{Raw: raw},
-		OldObject: runtime.RawExtension{Raw: raw},
+		AdmissionRequest: admissionv1.AdmissionRequest{
+			Operation: admissionv1.Update, Name: "x", Namespace: "default",
+			Resource:  metav1.GroupVersionResource{Group: ichorGroup, Version: "v1alpha1", Resource: resource},
+			UserInfo:  authnv1.UserInfo{Username: user},
+			Object:    obj(next),
+			OldObject: obj([]string{bgUnitFinalizer}),
+		},
 	}
 }
 
-func TestBreakGlassTrackedWrites(t *testing.T) {
+func TestBreakGlassFinalizerRemoval(t *testing.T) {
 	t.Parallel()
 
 	for _, resource := range bgUnitResources {
-		h := bgUnitHandler(t, nil)
+		h := bgUnitHandler(t)
 
-		if r := h.Handle(context.Background(), bgUnitRequest(t, resource, bgUnitPlain)); r.Allowed {
-			t.Errorf("%s: a tracked update without the verb was admitted", resource)
+		if r := h.Handle(context.Background(), bgUnitRequest(t, resource, bgUnitPlain, true)); r.Allowed {
+			t.Errorf("%s: removing an Ichor finalizer without the verb was admitted", resource)
 		}
 
-		if r := h.Handle(context.Background(), bgUnitRequest(t, resource, bgUnitHolder)); !r.Allowed {
+		if r := h.Handle(context.Background(), bgUnitRequest(t, resource, bgUnitHolder, true)); !r.Allowed {
 			t.Errorf("%s: a holder of the verb was refused: %v", resource, r.Result)
+		}
+	}
+}
+
+// A tracked or untracked update that leaves the finalizers alone is nobody's business here.
+func TestBreakGlassOrdinaryUpdatesAreAdmitted(t *testing.T) {
+	t.Parallel()
+
+	for _, resource := range bgUnitResources {
+		h := bgUnitHandler(t)
+
+		if r := h.Handle(context.Background(), bgUnitRequest(t, resource, bgUnitPlain, false)); !r.Allowed {
+			t.Errorf("%s: an ordinary update was refused: %v", resource, r.Result)
 		}
 	}
 }
@@ -132,44 +139,27 @@ func TestBreakGlassTrackedWrites(t *testing.T) {
 func TestBreakGlassExemptUsers(t *testing.T) {
 	t.Parallel()
 
-	h := bgUnitHandler(t, errors.New("argocd-cm is forbidden"))
+	h := bgUnitHandler(t)
 
-	// Exempt identities are admitted before any lookup, so even a failing argocd-cm cannot stop them.
 	for _, user := range []string{
-		bgUnitArgo,
-		"system:serviceaccount:flux-system:kustomize-controller",
-		"system:serviceaccount:flux-system:helm-controller",
 		"system:serviceaccount:kube-system:namespace-controller",
 		"system:serviceaccount:kube-system:generic-garbage-collector",
 		"system:serviceaccount:ichor-system:ichor-controller",
 	} {
 		for _, resource := range bgUnitResources {
-			if r := h.Handle(context.Background(), bgUnitRequest(t, resource, user)); !r.Allowed {
+			if r := h.Handle(context.Background(), bgUnitRequest(t, resource, user, true)); !r.Allowed {
 				t.Errorf("%s as %s: exempt user refused: %v", resource, user, r.Result)
 			}
 		}
 	}
 
-	// Exact names only: another account in the Argo CD namespace is not exempt.
-	if r := h.Handle(context.Background(), bgUnitRequest(t, bgUnitMachines, "system:serviceaccount:argocd:argocd-server")); r.Allowed {
-		t.Error("argocd-server was exempt; the list is exact usernames")
-	}
-}
-
-func TestBreakGlassTrackingLookupFailureIs503(t *testing.T) {
-	t.Parallel()
-
-	h := bgUnitHandler(t, errors.New("argocd-cm is forbidden"))
-
-	for _, resource := range bgUnitResources {
-		r := h.Handle(context.Background(), bgUnitRequest(t, resource, bgUnitPlain))
-		if r.Allowed || r.Result == nil || r.Result.Code != http.StatusServiceUnavailable {
-			t.Errorf("%s: want a refusal with 503, got allowed=%v result=%v", resource, r.Allowed, r.Result)
-		}
-
-		// A holder skips the lookup, so an Argo CD outage does not stop a break-glass write.
-		if r := h.Handle(context.Background(), bgUnitRequest(t, resource, bgUnitHolder)); !r.Allowed {
-			t.Errorf("%s: holder refused during an Argo CD outage: %v", resource, r.Result)
+	// Exact names only, and GitOps engines are not among them any more.
+	for _, user := range []string{
+		"system:serviceaccount:argocd:argocd-application-controller",
+		"system:serviceaccount:flux-system:kustomize-controller",
+	} {
+		if r := h.Handle(context.Background(), bgUnitRequest(t, bgUnitMachines, user, true)); r.Allowed {
+			t.Errorf("%s was exempt", user)
 		}
 	}
 }

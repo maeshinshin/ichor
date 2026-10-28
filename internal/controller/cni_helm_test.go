@@ -92,8 +92,8 @@ func TestCNIHelmJobShape(t *testing.T) {
 		t.Errorf("API server endpoint = %s:%s, want KubePrism localhost:7445", env["KUBERNETES_SERVICE_HOST"], env["KUBERNETES_SERVICE_PORT"])
 	}
 
-	if *job.Spec.BackoffLimit != 0 || *job.Spec.TTLSecondsAfterFinished != cniHelmJobTTL {
-		t.Errorf("backoffLimit=%d ttl=%d, want 0 and %d", *job.Spec.BackoffLimit, *job.Spec.TTLSecondsAfterFinished, cniHelmJobTTL)
+	if *job.Spec.BackoffLimit != 0 || *job.Spec.TTLSecondsAfterFinished != jobTTL {
+		t.Errorf("backoffLimit=%d ttl=%d, want 0 and %d", *job.Spec.BackoffLimit, *job.Spec.TTLSecondsAfterFinished, jobTTL)
 	}
 
 	if len(pod.Tolerations) != 1 || pod.Tolerations[0].Operator != corev1.TolerationOpExists {

@@ -1,6 +1,6 @@
 # 0055. Cilium stays Synced under Argo CD with ignoreDifferences on CiliumIdentity and ServerSideApply
 
-Status: Accepted (amended 2026-10-26) · Date: 2026-10-26 · Design section: CNI, GitOps and Argo CD
+Status: Accepted (amended 2026-10-26); superseded in part by ADR 0099 · Date: 2026-10-26 · Design section: CNI, GitOps and Argo CD
 
 Decided: The generated Cilium Application carries `ignoreDifferences: [{group: cilium.io, kind: CiliumIdentity}]` and `ServerSideApply=true`, without `RespectIgnoreDifferences=true`; Hubble certificates stay on `hubble.tls.auto.method=cronJob`; Kokumi cannot carry either setting today, so that case is an open question; the generated Cilium and root Applications use automated sync with prune and selfHeal (addendum 2026-10-26)
 

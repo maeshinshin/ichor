@@ -4,9 +4,9 @@ Ichor manages [Talos Linux](https://www.talos.dev/) clusters from Kubernetes.
 Nodes, machine configuration, upgrades and etcd backups are Kubernetes
 resources; you work with them through a CLI, a web UI, or Git.
 
-Ichor only takes care of Talos. Everything that runs on the cluster — the CNI,
-storage, monitoring — is Argo CD's business; Ichor bootstraps the CNI once and
-hands it over.
+Ichor takes care of Talos and installs a small stack: Cilium (the only CNI,
+which Ichor keeps), plus Kokumi and Argo CD (which it hands over). Storage and
+monitoring are Argo CD's business.
 
 > Status: alpha. Exercised end to end on Talos v1.14 clusters running as KubeVirt
 > VMs; not yet on bare metal. The design is in
@@ -51,11 +51,11 @@ hands it over.
   ([ADR 0096](docs/adr/0096-a-secret-reference-is-changed-only-with-update-on-secret-references.md)).
 - Upgrades itself through the `IchorInstallation` resource
   ([ADR 0059](docs/adr/0059-ichor-installation-and-self-upgrade.md)).
-- Bootstraps Cilium, the only CNI (rendered from the pinned Cilium 1.18.0
-  chart embedded in the CLI; `--cni-tunnel vxlan|geneve` picks
-  Cilium's tunnel), then installs Kokumi and Argo CD through its controller,
-  with no Git repository needed, and hands Cilium over to a Helm release it
-  owns itself ([ADR 0099](docs/adr/0099-argo-cd-and-kokumi-become-the-standard-stack.md)).
+- Bootstraps Cilium, the only CNI (pinned 1.18.0 chart embedded in the CLI;
+  `--cni-tunnel vxlan|geneve` picks its tunnel) and keeps it as a Helm release
+  whose values you edit in the UI or with `ichor cni values`. Then installs
+  Kokumi and Argo CD, which manage themselves with no Git repository
+  ([ADR 0099](docs/adr/0099-argo-cd-and-kokumi-become-the-standard-stack.md)).
   `ichor init` waits for all of it and prints the Kokumi admin password once.
 - Prepares disks for storage systems such as Longhorn, and waits for data to
   evacuate before draining or removing a node.
@@ -63,7 +63,7 @@ hands it over.
 ## What it doesn't do
 
 - Run anything on the cluster beyond its own controller and UI.
-- Manage the CNI, storage or monitoring after bootstrap. That's Argo CD's job.
+- Manage storage or monitoring. That's Argo CD's job.
 - Boot machines. Get them to maintenance mode (ISO, PXE, whatever you like);
   Ichor takes it from there.
 - Target air-gapped installs. Registry mirrors and private registries work

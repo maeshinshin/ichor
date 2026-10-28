@@ -89,8 +89,11 @@ type GetMyPermissionsResponse struct {
 	PacketCapture bool                   `protobuf:"varint,3,opt,name=packet_capture,json=packetCapture,proto3" json:"packet_capture,omitempty"`
 	// cluster_credentials is the "download" verb on talosclusters/credentials.
 	ClusterCredentials bool `protobuf:"varint,4,opt,name=cluster_credentials,json=clusterCredentials,proto3" json:"cluster_credentials,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// cluster_update is the "update" verb on talosclusters/<name>, which is what
+	// changing the Cilium values (CniService.SetCiliumValues) needs.
+	ClusterUpdate bool `protobuf:"varint,5,opt,name=cluster_update,json=clusterUpdate,proto3" json:"cluster_update,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GetMyPermissionsResponse) Reset() {
@@ -147,6 +150,13 @@ func (x *GetMyPermissionsResponse) GetPacketCapture() bool {
 func (x *GetMyPermissionsResponse) GetClusterCredentials() bool {
 	if x != nil {
 		return x.ClusterCredentials
+	}
+	return false
+}
+
+func (x *GetMyPermissionsResponse) GetClusterUpdate() bool {
+	if x != nil {
+		return x.ClusterUpdate
 	}
 	return false
 }
@@ -552,12 +562,13 @@ const file_ichor_v1alpha1_diagnostics_proto_rawDesc = "" +
 	" ichor/v1alpha1/diagnostics.proto\x12\x0eichor.v1alpha1\x1a\x1bichor/v1alpha1/common.proto\"\x83\x01\n" +
 	"\x17GetMyPermissionsRequest\x123\n" +
 	"\amachine\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\amachine\x123\n" +
-	"\acluster\x18\x02 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\"\xbe\x01\n" +
+	"\acluster\x18\x02 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\"\xe5\x01\n" +
 	"\x18GetMyPermissionsResponse\x12%\n" +
 	"\x0esupport_bundle\x18\x01 \x01(\bR\rsupportBundle\x12#\n" +
 	"\retcd_snapshot\x18\x02 \x01(\bR\fetcdSnapshot\x12%\n" +
 	"\x0epacket_capture\x18\x03 \x01(\bR\rpacketCapture\x12/\n" +
-	"\x13cluster_credentials\x18\x04 \x01(\bR\x12clusterCredentials\"\x96\x01\n" +
+	"\x13cluster_credentials\x18\x04 \x01(\bR\x12clusterCredentials\x12%\n" +
+	"\x0ecluster_update\x18\x05 \x01(\bR\rclusterUpdate\"\x96\x01\n" +
 	"\x1cDownloadSupportBundleRequest\x125\n" +
 	"\amachine\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefH\x00R\amachine\x125\n" +
 	"\acluster\x18\x02 \x01(\v2\x19.ichor.v1alpha1.ObjectRefH\x00R\aclusterB\b\n" +

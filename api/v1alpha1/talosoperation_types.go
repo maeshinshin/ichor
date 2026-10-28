@@ -359,6 +359,14 @@ type TalosOperationNodeSpec struct {
 	// confirm must equal the machine's name for reset, the typed confirmation of an irreversible action.
 	// +optional
 	Confirm string `json:"confirm,omitempty"`
+
+	// breakGlassReason overrides the last-worker guard for reboot and shutdown: the
+	// reason the operator gave for taking the last schedulable, Ready worker away. It is only honoured
+	// when the creator holds the break-glass verb on the machine (the break-glass webhook checks), and
+	// it goes into the audit record and an Event.
+	// +kubebuilder:validation:MinLength=1
+	// +optional
+	BreakGlassReason string `json:"breakGlassReason,omitempty"`
 }
 
 // TalosOperationNodeStatus is the state of a node-kind operation. The machine's own entry in

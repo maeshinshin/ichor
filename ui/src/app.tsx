@@ -7,7 +7,6 @@ import { userClient } from '@/lib/connect'
 import { finishLogin, startLogin, storedToken, tokenUsable, type AuthConfig, type AuthProvider } from '@/lib/oidc'
 import { useT } from '@/lib/useT'
 import { AddNode } from '@/pages/AddNode'
-import { GitOps } from '@/pages/GitOps'
 import { MachineList } from '@/pages/MachineList'
 import { Backups } from '@/pages/Backups'
 import { Cilium } from '@/pages/Cilium'
@@ -143,7 +142,6 @@ function renderRoute(path: string, notFound: string) {
   if (path === '/backups') return <Backups />
   if (path === '/config') return <PatchList />
   if (path === '/config/new') return <PatchDetail />
-  if (path === '/gitops') return <GitOps />
   if (path === '/cilium') return <Cilium />
 
   const node = matchRoute('/nodes/:name', path)

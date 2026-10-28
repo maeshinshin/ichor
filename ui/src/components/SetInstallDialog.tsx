@@ -1,5 +1,4 @@
 import { useState } from 'preact/hooks'
-import { BreakGlassDialog, type BreakGlassRun } from '@/components/BreakGlassDialog'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { InstallDiskPicker } from '@/components/InstallDiskPicker'
 import { Button } from '@/components/ui/button'
@@ -14,7 +13,6 @@ import {
 } from '@/components/ui/dialog'
 import type { Machine } from '@/gen/ichor/v1alpha1/machine_pb'
 import type { Disk } from '@/gen/ichor/v1alpha1/node_pb'
-import { offersBreakGlass } from '@/lib/breakGlass'
 import { machineClient } from '@/lib/connect'
 import { notifyWrite } from '@/lib/notify'
 import { describeError } from '@/lib/errors'
@@ -29,12 +27,10 @@ export function SetInstallDialog({
   machine,
   disks,
   onDone,
-  onPullRequest,
 }: {
   machine: Machine
   disks: Disk[]
   onDone: () => void
-  onPullRequest: (url: string, run: BreakGlassRun) => void
 }) {
   const t = useT()
   const [open, setOpen] = useState(false)
@@ -43,30 +39,22 @@ export function SetInstallDialog({
   const [image, setImage] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<ErrorShape | null>(null)
-  const [refused, setRefused] = useState(false)
 
   const selectable = disks.filter((d) => diskSelector(d))
   const { install, ok } = installChoice({ disks: selectable, key, typed, image })
 
-  // The same write again with break_glass set (docs/adr/0065).
-  const breakGlassSet: BreakGlassRun = async (bg) => {
-    const res = await machineClient.setMachineInstall({ machine: machine.ref, install, breakGlass: bg })
-    return { pullRequestUrl: res.pullRequestUrl, notice: res.notice }
-  }
 
   async function submit() {
     if (!machine.ref || !install) return
     setSubmitting(true)
     setSubmitError(null)
     try {
-      const res = await machineClient.setMachineInstall({ machine: machine.ref, install })
-      if (res.pullRequestUrl) onPullRequest(res.pullRequestUrl, breakGlassSet)
-      notifyWrite(res, 'toast.installSet')
+      await machineClient.setMachineInstall({ machine: machine.ref, install })
+      notifyWrite('toast.installSet')
       setOpen(false)
       onDone()
     } catch (err) {
       setSubmitError(describeError(err))
-      setRefused(offersBreakGlass({ error: err }))
     } finally {
       setSubmitting(false)
     }
@@ -96,7 +84,6 @@ export function SetInstallDialog({
             onImage={setImage}
           />
           {submitError && <ErrorAlert {...submitError} />}
-          {refused && <BreakGlassDialog run={breakGlassSet} onDone={() => setOpen(false)} />}
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => setOpen(false)}>

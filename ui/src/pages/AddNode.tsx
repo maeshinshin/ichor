@@ -6,16 +6,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ApproveDialog } from '@/components/ApproveDialog'
-import { BreakGlassDialog, type BreakGlassRun } from '@/components/BreakGlassDialog'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { PageHeader } from '@/components/PageHeader'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
-import { PullRequestNotice } from '@/components/PullRequestNotice'
 import { Section } from '@/components/Section'
 import { DataTable } from '@/components/ListToolbar'
 import type { Cluster } from '@/gen/ichor/v1alpha1/cluster_pb'
 import { MachineApprovalState, type Machine } from '@/gen/ichor/v1alpha1/machine_pb'
-import { offersBreakGlass } from '@/lib/breakGlass'
 import { clusterClient, machineClient } from '@/lib/connect'
 import { checkDiscoveryAddress, discoveryOn } from '@/lib/discovery'
 import { describeError } from '@/lib/errors'
@@ -40,7 +37,6 @@ export function AddNode() {
   const name = current?.ref?.name
   const [machines, setMachines] = useState<Machine[]>([])
   const [error, setError] = useState<ErrorShape | null>(null)
-  const [pullRequest, setPullRequest] = useState<{ url: string; run?: BreakGlassRun } | null>(null)
 
   async function reloadMachines() {
     if (!namespace || !name) return
@@ -70,7 +66,6 @@ export function AddNode() {
   const pending = machines.filter(
     (m) => m.approvalState !== MachineApprovalState.APPROVED && m.approvalState !== MachineApprovalState.REJECTED,
   )
-  const onPullRequest = (url: string, run: BreakGlassRun) => setPullRequest({ url, run })
 
   return (
     <>
@@ -99,9 +94,8 @@ export function AddNode() {
           <Discovery
             cluster={cluster}
             onAdded={(c) => (c ? setCluster(c) : reloadCluster())}
-            onPullRequest={(url, run) => setPullRequest({ url, run })}
+
           />
-          {pullRequest && <PullRequestNotice url={pullRequest.url} breakGlass={pullRequest.run} onBreakGlassDone={reloadCluster} />}
         </Section>
 
         <Section id="pending" title={t('addNode.pendingTitle', { n: pending.length })}>
@@ -126,7 +120,6 @@ export function AddNode() {
                         <ApproveDialog
                           machine={m}
                           onApproved={() => reloadMachines()}
-                          onPullRequest={onPullRequest}
                         />
                       </TableCell>
                     </TableRow>
@@ -144,42 +137,30 @@ export function AddNode() {
 function Discovery({
   cluster,
   onAdded,
-  onPullRequest,
 }: {
   cluster: Cluster
   onAdded: (c: Cluster | undefined) => void
-  onPullRequest: (url: string, run: BreakGlassRun) => void
 }) {
   const t = useT()
   const [address, setAddress] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<ErrorShape | null>(null)
-  const [refused, setRefused] = useState(false)
 
   const check = checkDiscoveryAddress(address, cluster.discoveryAddresses)
   const on = discoveryOn(cluster.discoveryAddresses, cluster.discoveryCidrs)
 
-  // The same write again with break_glass set (docs/adr/0065).
-  const breakGlassAdd: BreakGlassRun = async (bg) => {
-    const res = await clusterClient.addDiscoveryAddress({ cluster: cluster.ref, address: address.trim(), breakGlass: bg })
-    if (res.cluster) onAdded(res.cluster)
-    return { pullRequestUrl: res.pullRequestUrl, notice: res.notice }
-  }
 
   async function submit() {
     if (check !== 'ok') return
     setSubmitting(true)
     setError(null)
-    setRefused(false)
     try {
       const res = await clusterClient.addDiscoveryAddress({ cluster: cluster.ref, address: address.trim() })
-      if (res.pullRequestUrl) onPullRequest(res.pullRequestUrl, breakGlassAdd)
-      else onAdded(res.cluster)
-      notifyWrite(res, 'toast.discoveryAdded', { address: address.trim() })
+      onAdded(res.cluster)
+      notifyWrite('toast.discoveryAdded', { address: address.trim() })
       setAddress('')
     } catch (err) {
       setError(describeError(err))
-      setRefused(offersBreakGlass({ error: err }))
     } finally {
       setSubmitting(false)
     }
@@ -244,7 +225,6 @@ function Discovery({
         <p class="text-xs text-muted-foreground">{t('addNode.cidrHint')}</p>
       </form>
       {error && <ErrorAlert {...error} />}
-      {refused && <BreakGlassDialog run={breakGlassAdd} onDone={() => onAdded(undefined)} />}
     </div>
   )
 }

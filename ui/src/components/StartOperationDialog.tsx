@@ -6,7 +6,6 @@ import { Label } from '@/components/ui/label'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { AlertDialogCancel, AlertDialogFooter } from '@/components/ui/alert-dialog'
 import { ErrorAlert } from '@/components/ErrorAlert'
-import { PullRequestNotice } from '@/components/PullRequestNotice'
 import { wireKindOf } from '@/components/opkind'
 import { OperationEffect, type PlanOperationResponse } from '@/gen/ichor/v1alpha1/operation_pb'
 import { operationClient } from '@/lib/connect'
@@ -61,7 +60,6 @@ export function StartOperationDialog({
   const [plan, setPlan] = useState<PlanOperationResponse | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<ErrorShape | null>(null)
-  const [prUrl, setPrUrl] = useState('')
 
   const needsTarget = kindNeedsTarget(kind)
   const needsName = kindNeedsTypedName(kind)
@@ -101,11 +99,6 @@ export function StartOperationDialog({
         target: needsTarget ? target.trim() : '',
       })
       reset(false)
-      if (res.pullRequestUrl !== '') {
-        // Managed in Git: a pull request was opened and there is no operation to open.
-        setPrUrl(res.pullRequestUrl)
-        return
-      }
       notifyDone(t('toast.opStarted', { action: t(`ops.start.${kind}`) }))
       if (res.operation?.ref) navigate(`/operations/${encodeURIComponent(res.operation.ref.name)}`)
     } catch (err) {
@@ -206,7 +199,6 @@ export function StartOperationDialog({
       {error && <ErrorAlert {...error} />}
 
     </ConfirmDialog>
-    {prUrl !== '' && <PullRequestNotice url={prUrl} />}
     </>
   )
 }
@@ -250,14 +242,8 @@ function PlanView({ kind, plan, clusterName }: { kind: OpKind; plan: PlanOperati
           ? t('ops.plan.talosSchematic', { version: plan.current, from: plan.currentSchematic, to: plan.targetSchematic })
           : t(`ops.plan.${kind}`, { from: plan.current, to })}
       </p>
-      {plan.opensPullRequest ? (
-        <p>{t('ops.plan.opensPullRequest', { to })}</p>
-      ) : (
-        <>
-          {plan.specChanges && <p class="text-muted-foreground">{t('ops.plan.specChanges', { to })}</p>}
-          <p>{effectText(t, plan.effect, kind)}</p>
-        </>
-      )}
+      {plan.specChanges && <p class="text-muted-foreground">{t('ops.plan.specChanges', { to })}</p>}
+      <p>{effectText(t, plan.effect, kind)}</p>
       {kind === 'kubernetes' && plan.stages.length > 0 && <KubernetesStages names={plan.stages} />}
       {kind === 'ca-rotation' && plan.stages.length > 0 && <p>{t('ops.plan.stages', { stages: plan.stages.join(', ') })}</p>}
       {plan.machines.length > 0 ? (

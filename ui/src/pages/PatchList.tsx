@@ -3,18 +3,15 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
-import { BreakGlassDialog, type BreakGlassRun } from '@/components/BreakGlassDialog'
 import { DataTable, LinkRow, ListToolbar } from '@/components/ListToolbar'
 import { PageHeader } from '@/components/PageHeader'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
 import { ErrorAlert } from '@/components/ErrorAlert'
-import { PullRequestNotice } from '@/components/PullRequestNotice'
 import { ConfigLayer } from '@/gen/ichor/v1alpha1/node_pb'
 import type { Patch } from '@/gen/ichor/v1alpha1/patch_pb'
 import { patchClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
-import { offersBreakGlass } from '@/lib/breakGlass'
-import { notifyDone, notifyWrite } from '@/lib/notify'
+import { notifyDone } from '@/lib/notify'
 import { describeError } from '@/lib/errors'
 import { matchesQuery } from '@/lib/filter'
 import { targetKindOf } from '@/lib/patchTarget'
@@ -154,37 +151,18 @@ function DeleteDialog({ patch, onDeleted }: { patch: Patch; onDeleted: () => voi
   const [open, setOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<ErrorShape | null>(null)
-  const [pullRequestUrl, setPullRequestUrl] = useState<string | null>(null)
-  const [refused, setRefused] = useState(false)
-
-  // The same deletion again with break_glass set (docs/adr/0065).
-  const breakGlass: BreakGlassRun = async (bg) => {
-    const res = await patchClient.deletePatch({ patch: patch.ref, breakGlass: bg })
-    return { pullRequestUrl: res.pullRequestUrl, notice: res.notice }
-  }
-  const done = () => {
-    setOpen(false)
-    onDeleted()
-  }
 
   async function submit() {
     if (!patch.ref) return
     setSubmitting(true)
     setError(null)
     try {
-      const res = await patchClient.deletePatch({ patch: patch.ref })
-      if (res.pullRequestUrl) {
-        // Tracked by Argo CD: the removal is a pull request, nothing was deleted.
-        setPullRequestUrl(res.pullRequestUrl)
-        notifyWrite(res, 'toast.patchDeleted', { name: patch.ref.name })
-        return
-      }
+      await patchClient.deletePatch({ patch: patch.ref })
       setOpen(false)
       notifyDone(t('toast.patchDeleted', { name: patch.ref.name }))
       onDeleted()
     } catch (err) {
       setError(describeError(err))
-      setRefused(offersBreakGlass({ error: err }))
     } finally {
       setSubmitting(false)
     }
@@ -199,19 +177,11 @@ function DeleteDialog({ patch, onDeleted }: { patch: Patch; onDeleted: () => voi
           {t('patches.delete')}
         </Button>
       }
-      title={pullRequestUrl ? t('pr.title') : t('patches.deleteTitle', { name: patch.ref?.name ?? '' })}
-      description={pullRequestUrl ? undefined : t('patches.deleteDescription')}
-      closeLabel={pullRequestUrl ? t('common.close') : undefined}
-      confirm={pullRequestUrl ? undefined : { label: submitting ? t('patches.deleting') : t('patches.delete'), disabled: submitting, onClick: submit }}
+      title={t('patches.deleteTitle', { name: patch.ref?.name ?? '' })}
+      description={t('patches.deleteDescription')}
+      confirm={{ label: submitting ? t('patches.deleting') : t('patches.delete'), disabled: submitting, onClick: submit }}
     >
-      {pullRequestUrl ? (
-        <PullRequestNotice url={pullRequestUrl} breakGlass={breakGlass} onBreakGlassDone={done} />
-      ) : (
-        <>
-          {error && <ErrorAlert {...error} />}
-          {refused && <BreakGlassDialog run={breakGlass} onDone={done} />}
-        </>
-      )}
+      {error && <ErrorAlert {...error} />}
     </ConfirmDialog>
   )
 }

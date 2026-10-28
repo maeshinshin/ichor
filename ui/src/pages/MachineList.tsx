@@ -5,18 +5,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { ApproveDialog } from '@/components/ApproveDialog'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
-import { BreakGlassDialog, type BreakGlassRun } from '@/components/BreakGlassDialog'
 import { DataTable, LinkRow, ListToolbar } from '@/components/ListToolbar'
 import { PageHeader } from '@/components/PageHeader'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
 import { ReadyCell } from '@/components/ReadyCell'
 import { ErrorAlert } from '@/components/ErrorAlert'
-import { PullRequestNotice } from '@/components/PullRequestNotice'
 import { MachineApprovalState, MachineRole, type Machine } from '@/gen/ichor/v1alpha1/machine_pb'
 import { machineClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
 import { machineDisplayName } from '@/lib/machineName'
-import { offersBreakGlass } from '@/lib/breakGlass'
 import { notifyWrite } from '@/lib/notify'
 import { describeError } from '@/lib/errors'
 import { matchesQuery } from '@/lib/filter'
@@ -34,7 +31,6 @@ export function MachineList() {
   const [machines, setMachines] = useState<Machine[] | null>(null)
   const [error, setError] = useState<ErrorShape | null>(null)
   const [query, setQuery] = useState('')
-  const [pullRequest, setPullRequest] = useState<{ url: string; run?: BreakGlassRun } | null>(null)
 
   async function reload() {
     try {
@@ -78,7 +74,6 @@ export function MachineList() {
         }
       />
       <ListToolbar query={query} onQuery={setQuery} shown={shown.length} total={machines.length} onRefresh={reload} />
-      {pullRequest && <PullRequestNotice url={pullRequest.url} breakGlass={pullRequest.run} onBreakGlassDone={reload} />}
       {pending.length > 0 && (
 <section>
 <h2 class="mb-2 text-sm font-medium">{t('machines.pending', { n: pending.length })}</h2>
@@ -100,8 +95,8 @@ export function MachineList() {
                     <TableCell>{m.endpoint || '-'}</TableCell>
                     <TableCell>
                       <div class="flex gap-2">
-                        <ApproveDialog machine={m} onApproved={replaceMachine} onPullRequest={(url, run) => setPullRequest({ url, run })} />
-                        <RejectDialog machine={m} onRejected={reload} onPullRequest={(url, run) => setPullRequest({ url, run })} />
+                        <ApproveDialog machine={m} onApproved={replaceMachine} />
+                        <RejectDialog machine={m} onRejected={reload} />
                       </div>
                     </TableCell>
                   </TableRow>
@@ -141,8 +136,8 @@ export function MachineList() {
                         {/* Rejection is reversible (ADR 0018's amendment): approving a
                             rejected machine simply moves it to approved, no separate
                             "un-reject" action exists. */}
-                        <ApproveDialog machine={m} onApproved={replaceMachine} onPullRequest={(url, run) => setPullRequest({ url, run })} />
-                        <RejectDialog machine={m} onRejected={reload} onPullRequest={(url, run) => setPullRequest({ url, run })} />
+                        <ApproveDialog machine={m} onApproved={replaceMachine} />
+                        <RejectDialog machine={m} onRejected={reload} />
                       </div>
                     </TableCell>
                   </TableRow>
@@ -207,38 +202,28 @@ function identitySummary(m: Machine, unknown: string): string {
 function RejectDialog({
   machine,
   onRejected,
-  onPullRequest,
 }: {
   machine: Machine
   onRejected: () => void
-  onPullRequest: (url: string, run: BreakGlassRun) => void
 }) {
   const t = useT()
   const [open, setOpen] = useState(false)
   const [reason, setReason] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<ErrorShape | null>(null)
-  const [refused, setRefused] = useState(false)
 
-  // The same rejection again with break_glass set (docs/adr/0065).
-  const breakGlassReject: BreakGlassRun = async (bg) => {
-    const res = await machineClient.rejectMachine({ machine: machine.ref, reason, breakGlass: bg })
-    return { pullRequestUrl: res.pullRequestUrl, notice: res.notice }
-  }
 
   async function submit() {
     if (!machine.ref) return
     setSubmitting(true)
     setSubmitError(null)
     try {
-      const res = await machineClient.rejectMachine({ machine: machine.ref, reason })
-      if (res.pullRequestUrl) onPullRequest(res.pullRequestUrl, breakGlassReject)
-      notifyWrite(res, 'toast.rejected', { name: machine.ref.name })
+      await machineClient.rejectMachine({ machine: machine.ref, reason })
+      notifyWrite('toast.rejected', { name: machine.ref.name })
       setOpen(false)
       onRejected()
     } catch (err) {
       setSubmitError(describeError(err))
-      setRefused(offersBreakGlass({ error: err }))
     } finally {
       setSubmitting(false)
     }
@@ -268,7 +253,6 @@ function RejectDialog({
       </div>
 
       {submitError && <ErrorAlert {...submitError} />}
-      {refused && <BreakGlassDialog run={breakGlassReject} onDone={() => { setOpen(false); onRejected() }} />}
     </ConfirmDialog>
   )
 }

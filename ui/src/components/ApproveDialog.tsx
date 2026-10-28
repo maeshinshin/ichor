@@ -13,7 +13,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { BreakGlassDialog, type BreakGlassRun } from '@/components/BreakGlassDialog'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { DiskRoleFields } from '@/components/DiskRoleFields'
 import { InstallDiskPicker } from '@/components/InstallDiskPicker'
@@ -21,7 +20,6 @@ import { NetworkFields } from '@/components/NetworkFields'
 import type { NodeDetail } from '@/gen/ichor/v1alpha1/node_pb'
 import { MachineRole, type Machine } from '@/gen/ichor/v1alpha1/machine_pb'
 import { machineClient, nodeClient } from '@/lib/connect'
-import { offersBreakGlass } from '@/lib/breakGlass'
 import { notifyWrite } from '@/lib/notify'
 import { describeError } from '@/lib/errors'
 import { canApprove, isStrongIdentity } from '@/lib/identity'
@@ -47,11 +45,9 @@ const emptyRoles: DiskRolesForm = { ephemeral: '', volumes: [] }
 export function ApproveDialog({
   machine,
   onApproved,
-  onPullRequest,
 }: {
   machine: Machine
   onApproved: (m: Machine) => void
-  onPullRequest: (url: string, run: BreakGlassRun) => void
 }) {
   const t = useT()
   const [open, setOpen] = useState(false)
@@ -70,7 +66,6 @@ export function ApproveDialog({
   const [reason, setReason] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<ErrorShape | null>(null)
-  const [refused, setRefused] = useState(false)
 
   const strong = isStrongIdentity(machine.identity)
   const hostnameOk = isValidHostname(hostname)
@@ -107,25 +102,8 @@ export function ApproveDialog({
     setInstallImage('')
     setReason('')
     setSubmitError(null)
-    setRefused(false)
   }, [open])
 
-  // The same approval again with break_glass set (docs/adr/0065).
-  const breakGlassApprove: BreakGlassRun = async (bg) => {
-    const res = await machineClient.approveMachine({
-      machine: machine.ref,
-      role,
-      hostname,
-      install,
-      network: net.network,
-      disks: roles.disks,
-      nodeLabels: {},
-      reason,
-      breakGlass: bg,
-    })
-    if (res.machine) onApproved(res.machine)
-    return { pullRequestUrl: res.pullRequestUrl, notice: res.notice }
-  }
 
   async function submit() {
     if (!machine.ref || !canSubmit) return
@@ -142,13 +120,11 @@ export function ApproveDialog({
         nodeLabels: {},
         reason,
       })
-      if (res.pullRequestUrl) onPullRequest(res.pullRequestUrl, breakGlassApprove)
-      else if (res.machine) onApproved(res.machine)
-      notifyWrite(res, 'toast.approved', { name: hostname || machine.ref.name })
+      if (res.machine) onApproved(res.machine)
+      notifyWrite('toast.approved', { name: hostname || machine.ref.name })
       setOpen(false)
     } catch (err) {
       setSubmitError(describeError(err))
-      setRefused(offersBreakGlass({ error: err }))
     } finally {
       setSubmitting(false)
     }
@@ -273,7 +249,6 @@ export function ApproveDialog({
           </section>
 
           {submitError && <ErrorAlert {...submitError} />}
-          {refused && <BreakGlassDialog run={breakGlassApprove} onDone={() => setOpen(false)} />}
         </div>
 
         <DialogFooter>

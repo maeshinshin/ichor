@@ -18,7 +18,6 @@ export const en = {
 
   'nav.overview': 'Overview',
   'nav.machines': 'Nodes',
-  'nav.gitops': 'GitOps',
   'nav.users': 'Users',
   'nav.menu': 'Navigation',
   'nav.breadcrumb': 'Breadcrumb',
@@ -48,23 +47,6 @@ export const en = {
   'error.invalidTarget': 'Invalid target',
   'error.selectorNotJson': 'Label selector must be valid JSON',
   'error.selectorNotObject': 'Label selector must be a JSON object with "matchLabels" and/or "matchExpressions"',
-
-  'pr.title': 'Pull request opened',
-  'pr.body': 'Nothing was changed in the cluster. The change applies once this pull request is merged and synced:',
-
-  'breakGlass.button': 'Emergency: write directly',
-  'breakGlass.title': 'Write directly (break-glass)',
-  'breakGlass.description':
-    'Use this only in an incident. The change is written to the cluster now, and the matching pull request is opened too so the repository catches up. You need the break-glass permission on this resource; if you do not have it, Kubernetes refuses.',
-  'breakGlass.selfHeal':
-    'If the Argo CD Application tracking this resource has selfHeal on, Argo CD can revert the change before the pull request is merged. Pause selfHeal on that Application until it is merged.',
-  'breakGlass.reason': 'Reason (required)',
-  'breakGlass.reasonPlaceholder': 'Why this cannot wait for the pull request',
-  'breakGlass.submit': 'Write directly',
-  'breakGlass.submitting': 'Writing...',
-  'breakGlass.done': 'Written directly',
-  'breakGlass.prBody': 'The change is already in the cluster. Merge this pull request so the repository matches it:',
-  'breakGlass.noticeTitle': 'Read this',
 
   'col.cluster': 'Cluster',
   'col.name': 'Name',
@@ -124,24 +106,6 @@ export const en = {
   'cluster.colComponent': 'Component',
   'cluster.colPhase': 'Phase',
   'cluster.noHandover': 'No hand-over components tracked.',
-
-  'gitops.loading': 'Loading GitOps state…',
-  'gitops.title': 'GitOps',
-  'gitops.empty': 'Nothing to show yet.',
-  'gitops.grafana': 'Grafana dashboard',
-  'gitops.colResource': 'Resource',
-  'gitops.colManagedBy': 'Managed by',
-  'gitops.colApplication': 'Application',
-  'gitops.colSync': 'Sync',
-  'gitops.colHealth': 'Health',
-  'gitops.colPullRequests': 'Pull requests',
-  'gitops.kindCluster': 'Cluster',
-  'gitops.kindMachine': 'Node',
-  'gitops.kindPatch': 'Patch',
-  'gitops.notInGit': 'Not in Git',
-  'gitops.check': 'Check',
-  'gitops.checking': 'Checking…',
-  'gitops.noneOpen': 'none open',
 
   'machines.loading': 'Loading nodes…',
   'machines.pending': 'Pending approval ({n})',
@@ -606,9 +570,6 @@ export const en = {
   'ops.warn.ca-rotation': 'This replaces the cluster certificate authorities. Any client that still holds the old ones stops working.',
   'ops.warn.shutdown': 'This powers the nodes off. They stay off until someone starts them again.',
 
-  'toast.pullRequest': 'Pull request opened. The change applies when it is merged.',
-  'toast.breakGlass': 'Change written directly (break-glass)',
-  'toast.breakGlassPr': 'Change written directly. A pull request was opened to match.',
   'toast.opPaused': 'Operation paused',
   'toast.opResumed': 'Operation resumed',
   'toast.opDeleted': 'Operation deleted',
@@ -705,8 +666,6 @@ export const en = {
   'ops.plan.held': 'Skipped (upgrade-hold): {names}',
   'ops.plan.noMachines': 'No approved node is selected, so nothing would be changed.',
   'ops.plan.pauseOnFailure': 'A node that fails pauses the operation; nothing is rolled back.',
-  'ops.plan.opensPullRequest':
-    'Ichor is managed in Git. Starting opens a pull request that changes its target version to {to}. Nothing is written to the cluster and no operation is created until the pull request is merged and you start the upgrade again.',
   'ops.plan.specChanges': 'The spec is changed to {to} first; the operation is created after that.',
   'ops.plan.blocked': 'Cannot start',
 
@@ -971,8 +930,6 @@ export const en = {
   'cilium.title': 'Cilium settings',
   'cilium.loading': 'Loading Cilium values…',
   'cilium.noCluster': 'There is no cluster to show Cilium settings for.',
-  'cilium.tracked': 'Read-only: {tool} tracks this cluster',
-  'cilium.trackedBody': 'Change the Cilium values in the Git repository that {tool} syncs from. Ichor does not write to a tracked cluster.',
   'cilium.noWrite': 'You may view these values but not change them.',
   'cilium.effective': 'Effective values',
   'cilium.effectiveHint': 'What Cilium is rendered with: Ichor defaults, then your values, then the keys Ichor manages.',

@@ -17,6 +17,7 @@ limitations under the License.
 package cli
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -110,8 +111,8 @@ func writeCredentials(ctx context.Context, k8s client.Client, req credentialRequ
 		return nil, errors.New("no Talos API endpoint known for the talosconfig: pass --talos-endpoints")
 	}
 
-	kubeOut := firstNonEmpty(req.KubeconfigOut, kubeIn+credentialsSuffix)
-	talosOut := firstNonEmpty(req.TalosconfigOut, talosIn+credentialsSuffix)
+	kubeOut := cmp.Or(req.KubeconfigOut, kubeIn+credentialsSuffix)
+	talosOut := cmp.Or(req.TalosconfigOut, talosIn+credentialsSuffix)
 
 	if sameFile(kubeOut, kubeIn) || sameFile(talosOut, talosIn) {
 		return nil, errors.New("refusing to overwrite the current kubeconfig or talosconfig; choose another output path")
@@ -163,14 +164,6 @@ func loadCredentialSources(ctx context.Context, k8s client.Client, req credentia
 	}
 
 	return credentials.Load(ctx, k8s, req.IchorNamespace, &cluster)
-}
-
-func firstNonEmpty(a, b string) string {
-	if a != "" {
-		return a
-	}
-
-	return b
 }
 
 func sameFile(a, b string) bool {

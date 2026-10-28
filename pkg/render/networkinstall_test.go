@@ -17,6 +17,7 @@ limitations under the License.
 package render
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -124,44 +125,39 @@ func TestSubnetsFollowTheContract(t *testing.T) {
 	})
 }
 
-func TestTalosFlannelOnlyForTheFlannelPreset(t *testing.T) {
-	preset := func(p string) mutation {
-		return func(c *ichorv1alpha1.TalosCluster, _ *ichorv1alpha1.TalosMachine) {
-			c.Spec.CNI.Preset = p
-		}
-	}
+func TestTalosFlannelIsAlwaysDropped(t *testing.T) {
+	for _, p := range []string{"", presetCiliumStr} {
+		set := func(c *ichorv1alpha1.TalosCluster, _ *ichorv1alpha1.TalosMachine) { c.Spec.CNI.Preset = p }
 
-	t.Run("v1.14 flannel keeps the flannel document", func(t *testing.T) {
-		requireAll(t, renderFor(t, versionContract, preset("flannel")), docFlannel)
-	})
-
-	t.Run("v1.14 unset preset is flannel", func(t *testing.T) {
-		requireAll(t, renderFor(t, versionContract, nil), docFlannel)
-	})
-
-	for _, p := range []string{presetCiliumStr, "custom"} {
 		t.Run("v1.14 "+p+" drops the flannel document", func(t *testing.T) {
-			out := renderFor(t, versionContract, preset(p))
+			out := renderFor(t, versionContract, set)
 			requireNone(t, out, docFlannel)
 			requireAll(t, out, docKubeNetwork)
 		})
 
 		t.Run("v1.13 "+p+" sets cni none", func(t *testing.T) {
-			requireAll(t, renderFor(t, contractV113, preset(p)), legacyCNINone)
+			requireAll(t, renderFor(t, contractV113, set), legacyCNINone)
 		})
 	}
 
-	t.Run("v1.13 flannel does not set cni none", func(t *testing.T) {
-		requireNone(t, renderFor(t, contractV113, preset("flannel")), legacyCNINone)
-	})
-
-	t.Run("a worker has no flannel document either way", func(t *testing.T) {
-		out := renderFor(t, versionContract, func(c *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine) {
-			preset(presetCiliumStr)(c, m)
+	t.Run("a worker has no flannel document", func(t *testing.T) {
+		out := renderFor(t, versionContract, func(_ *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine) {
 			m.Spec.Role = roleWorker
 		})
 		requireNone(t, out, docFlannel)
 	})
+}
+
+func TestRenderRefusesAPresetOtherThanCilium(t *testing.T) {
+	for _, p := range []string{"flannel", "custom"} {
+		c := testCluster("true")
+		c.Spec.CNI.Preset = p
+
+		_, err := BuildConfig(c, testMachine("node-a", roleControlPlane, nil), testBundle(t), nil, nil)
+		if !errors.Is(err, ErrCNIUnsupported) {
+			t.Errorf("preset %q: err = %v, want ErrCNIUnsupported", p, err)
+		}
+	}
 }
 
 func TestInstallTargetFollowsTheContract(t *testing.T) {

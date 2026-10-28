@@ -3,26 +3,32 @@
 A long-lived throwaway Talos cluster for looking at ichor-ui in a browser, built by the
 product's own bootstrap: `ichor init` creates the control plane, a second VM is approved
 with `ichor machine approve --install-disk`. Everything lives in the outer `ichor-e2e`
-namespace and is named `<prefix>-*` (prefix `ichor-ui-demo`, or `ichor-ui-demo2` for the
-second build).
+namespace and is named `<prefix>-*` (prefix `ichor-ui-demo`; the current build is
+`ichor-ui-demo3`).
 
-ichor-ui runs with **OIDC off**: anyone who can reach the LoadBalancer address can read
-and write every Ichor CR. Tear it down when you are done.
+ichor-ui runs with **users and OIDC on**: `init --admin-user admin` creates the first admin
+and prints its generated password once (must change on first login). It needs an https
+`--ui-url` and a Talos version contract of v1.14 or later. Tear it down when you are done.
 
 ## What it is
 
-- `<prefix>-cp`: one schedulable control plane (preset `single`, flannel), created by `ichor init`.
+- `<prefix>-cp`: one schedulable control plane (preset `single`, Cilium with the geneve tunnel), created by `ichor init`.
 - `<prefix>-w`: a worker found in maintenance mode by `spec.discovery` and approved by hand.
 - Inside the cluster: Ichor (controller + ichor-ui) from `init`'s embedded manifest, pod/service
   subnets 10.248.0.0/16 and 10.249.0.0/16 (the outer cluster owns 10.244.0.0/16).
 - Outside: `<prefix>-registry` (a `registry:2` Deployment + Service, emptyDir), `<prefix>-tools`
   (a busybox pod `ichor init` runs in, because the workstation cannot reach pod IPs) and the
-  LoadBalancer Service `ichor-ui-demo` (`outer-service.yaml`): port 80 -> ichor-ui, 6443 -> the
-  inner kube-apiserver.
+  LoadBalancer Service `ichor-ui-demo` (`outer-service.yaml`): port 443 -> ichor-ui (nodePort
+  30080), 6443 -> the inner kube-apiserver. There is no port 80: the UI URL is https, so
+  nothing uses plain http.
 
 ## Steps
 
-`P=ichor-ui-demo2`, `C=admin@talos-cluster01`; run inside `nix develop`. Replace `__PREFIX__` with `$P`.
+`P=ichor-ui-demo3`, `C=admin@talos-cluster01`; run inside `nix develop`. Replace `__PREFIX__` with `$P`.
+
+VM memory defaults to 2560Mi for both VMs. Override per role before `up-demo` with
+`ICHOR_UI_DEMO_CP_MEMORY` and `ICHOR_UI_DEMO_WORKER_MEMORY` (a plain `Mi`/`Gi` quantity, e.g.
+`ICHOR_UI_DEMO_CP_MEMORY=3Gi`). Talos needs at least 2 GiB for a control plane and 1 GiB for a worker.
 
 ```sh
 export ICHOR_E2E_KUBE_CONTEXT=$C ICHOR_UI_DEMO_PREFIX=$P
@@ -38,28 +44,54 @@ cp bin/img/ichor/ichor bin/ichor-static   # the installembed ichor demo-images b
 # 2. VMs in maintenance mode (prints CP_IP and WORKER_IP)
 ./bin/kubevirt-harness up-demo
 
-# 3. tools pod; copy ichor-static and a static kubectl in; init from inside it
+# 3. the outer LoadBalancer first: init needs its address (LB_IP) for --ui-url and the cert.
+#    (Cilium assigns the address on creation; it reaches the VM once the inner NodePort exists, step 6.)
+sed s/__PREFIX__/$P/ test/harness/ui-demo/outer-service.yaml | kubectl --context $C -n ichor-e2e apply -f -
+LB_IP=$(kubectl --context $C -n ichor-e2e get svc ichor-ui-demo -o jsonpath={.status.loadBalancer.ingress[0].ip})
+
+# 4. self-signed cert for ichor-ui, with the LB address as an IP SAN (openssl is in nix develop)
+nix develop --command openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 30 \
+  -subj "/CN=ichor-ui" -addext "subjectAltName=IP:$LB_IP" -keyout bin/ui-demo.key -out bin/ui-demo.crt
+chmod 0600 bin/ui-demo.key
+
+# 5. tools pod; copy ichor-static, the cert and key in; init from inside it
 kubectl --context $C -n ichor-e2e run $P-tools --image=busybox:1.37 --restart=Never -- sleep 86400
 kubectl --context $C -n ichor-e2e cp bin/ichor-static $P-tools:/tmp/ichor
+kubectl --context $C -n ichor-e2e cp bin/ui-demo.crt $P-tools:/tmp/ui.crt
+kubectl --context $C -n ichor-e2e cp bin/ui-demo.key $P-tools:/tmp/ui.key
 kubectl --context $C -n ichor-e2e exec $P-tools -- env HOME=/tmp/home /tmp/ichor init --yes \
-  --cluster $P --preset single --cni flannel --endpoint-type node --endpoint-address $CP_IP \
+  --cluster $P --preset single --cni cilium --cni-tunnel geneve --endpoint-type node --endpoint-address $CP_IP \
   --node-endpoint $CP_IP:50000 --talos-version v1.14.3 --version-contract v1.14 --install-disk /dev/vda \
   --pod-subnets 10.248.0.0/16 --service-subnets 10.249.0.0/16 --registry-mirror ghcr.io=http://$REG:5000 \
-  --discover-address $WORKER_IP
+  --discover-address $WORKER_IP \
+  --ui-url https://$LB_IP --admin-user admin --ui-tls-cert /tmp/ui.crt --ui-tls-key /tmp/ui.key \
+  --kube-api-server-url https://$LB_IP:6443 --kube-api-tls-server-name $CP_IP
+# `--ui-url` must be https and needs --version-contract v1.14 or later when users are on.
+# init prints the generated admin password ONCE (must change on first login). Save it at once to a
+# 0600 file under bin/ (gitignored), e.g. umask 077 and redirect it to bin/ui-demo.admin-password.
 # init waits for the node, the API server and the webhooks; allow 10-15 minutes. The secrets bundle and
-# kubeconfig are under /tmp/home/.ichor/clusters/$P/ in the pod: copy them to bin/ (gitignored) at once.
+# kubeconfig are under /tmp/home/.ichor/clusters/$P/ in the pod: copy them to bin/ as soon as they appear.
 
-# 4. the worker: init's --discover-address set spec.discovery, so wait for the pending TalosMachine, approve it.
+# 6. apply the config. init leaves the control plane at APIServerRestartRequired until this runs.
+#    With a single control plane the API server is down for about a minute.
+#    Run inside the tools pod (see the --local note below).
+ichor config apply --cluster $P -n ichor-system --yes --follow --local
+
+# 7. the worker: init's --discover-address set spec.discovery, so wait for the pending TalosMachine, approve it.
 #    (inside the pod, KUBECONFIG=/tmp/kc, with a static kubectl copied in)
-KUBECONFIG=/tmp/kc ichor machine approve <pending machine name> --role worker --install-disk /dev/vda --hostname $P-w --yes
+KUBECONFIG=/tmp/kc ichor machine approve <pending machine name> --role worker --install-disk /dev/vda --hostname $P-w --yes --local
 # both TalosMachines go Ready=True and `get nodes` shows two Ready nodes after a few minutes
 
-# 5. expose it: inner NodePort for ichor-ui, then repoint the outer Service
+# 8. expose it: the inner NodePort for ichor-ui (outer Service was applied in step 3)
 kubectl -n ichor-system apply -f test/harness/ui-demo/inner-nodeport.yaml          # inner cluster
-sed s/__PREFIX__/$P/ test/harness/ui-demo/outer-service.yaml | kubectl --context $C -n ichor-e2e apply -f -
-# kubeconfig: init's, with server https://192.168.0.69:6443 and tls-server-name: $CP_IP (a certSAN)
+# kubeconfig: init's, with server https://$LB_IP:6443 and tls-server-name: $CP_IP (a certSAN)
 # written to bin/ui-demo.kubeconfig; `kubectl --kubeconfig bin/ui-demo.kubeconfig get nodes`
+# UI: https://$LB_IP, user admin (self-signed: the browser warns)
 ```
+
+`--local` on CLI calls from the tools pod: ichor-ui's certificate has no in-cluster service name, so
+the CLI cannot verify it through the Service. `--local` skips ichor-ui and computes from the Kubernetes API directly.
+Use it for every `ichor` command run from the tools pod (config apply, machine approve, ...).
 
 ## Update to the current tree
 
@@ -84,7 +116,7 @@ init delete and recreate the VMs (`down-demo`, `up-demo`).
 Every command names its target; nothing uses `-l` or `--all`.
 
 ```sh
-C=admin@talos-cluster01; P=ichor-ui-demo2
+C=admin@talos-cluster01; P=ichor-ui-demo3
 kubectl --context $C -n ichor-e2e delete pod $P-tools
 kubectl --context $C -n ichor-e2e delete deployment $P-registry
 kubectl --context $C -n ichor-e2e delete service $P-registry
@@ -102,8 +134,10 @@ Deleting the VMs removes the inner cluster and everything in it.
   teardown and up steps above instead.
 - `ichor node remove` leaves the Kubernetes Node in place until the VM is deleted. Then run
   `kubectl delete node <name>`.
-- VM sizing: the control plane needs 2560Mi. That is enough; measured use is about 1.6Gi with
-  ichor and ichor-ui. Workers use 1536Mi.
+- VM sizing: the harness gives both VMs 2560Mi by default. For the control plane that is enough;
+  measured use is about 1.6Gi with ichor and ichor-ui. A memory-bound host can shrink the worker
+  with `ICHOR_UI_DEMO_WORKER_MEMORY=1536Mi` (Talos minimum is 1 GiB for a worker, 2 GiB for a
+  control plane); `ICHOR_UI_DEMO_CP_MEMORY` sets the control plane.
 - Run `make demo-images` from a separate worktree for each agent or user. Two builds in one
   checkout overwrite each other's `dist/install.yaml` and `bin/img`.
 - On this KubeVirt harness Cilium's default VXLAN tunnel does not pass traffic between VMs; use the geneve tunnel protocol (`ichor init --cni cilium --cni-tunnel geneve`, recorded as `spec.cni.tunnel`).

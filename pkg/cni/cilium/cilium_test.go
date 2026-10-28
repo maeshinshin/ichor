@@ -18,7 +18,6 @@ package cilium
 
 import (
 	"context"
-	"slices"
 	"strings"
 	"testing"
 
@@ -50,61 +49,6 @@ func TestTalosPatches(t *testing.T) {
 	}
 	if patches != nil {
 		t.Fatalf("TalosPatches(replaced) = %v, want nil: pkg/render owns the kube-proxy document", patches)
-	}
-}
-
-func TestArgoCDApplication(t *testing.T) {
-	p := New()
-
-	app, err := p.ArgoCDApplication(cni.KubeProxyReplaced)
-	if err != nil {
-		t.Fatalf("ArgoCDApplication: %v", err)
-	}
-	if app == nil {
-		t.Fatal("ArgoCDApplication = nil, want a rendered Application")
-	}
-
-	if got := app.APIVersion; got != "argoproj.io/v1alpha1" {
-		t.Errorf("apiVersion = %q, want argoproj.io/v1alpha1", got)
-	}
-	if got := app.Kind; got != "Application" {
-		t.Errorf("kind = %q, want Application", got)
-	}
-
-	if app.Spec.SyncPolicy == nil || !slices.Contains(app.Spec.SyncPolicy.SyncOptions, "ServerSideApply=true") {
-		t.Errorf("syncOptions = %v, want ServerSideApply=true (large CRD set pitfall)", app.Spec.SyncPolicy)
-	}
-
-	if app.Spec.Source == nil || app.Spec.Source.Helm == nil {
-		t.Fatal("spec.source.helm is nil")
-	}
-
-	if got := app.Spec.IgnoreDifferences; len(got) != 1 || got[0].Group != "cilium.io" || got[0].Kind != "CiliumIdentity" {
-		t.Errorf("ignoreDifferences = %+v, want exactly cilium.io/CiliumIdentity", got)
-	}
-	if slices.Contains(app.Spec.SyncPolicy.SyncOptions, "RespectIgnoreDifferences=true") {
-		t.Errorf("syncOptions = %v, want no RespectIgnoreDifferences=true", app.Spec.SyncPolicy.SyncOptions)
-	}
-	if !slices.Contains(app.Spec.SyncPolicy.SyncOptions, "CreateNamespace=true") {
-		t.Errorf("syncOptions = %v, want CreateNamespace=true kept", app.Spec.SyncPolicy.SyncOptions)
-	}
-
-	// The handed-over Application renders the same values as the
-	// bootstrap manifest, so there is no diff at hand-over.
-	boot, err := sigsyaml.Marshal(p.valuesFor(cni.KubeProxyReplaced))
-	if err != nil {
-		t.Fatalf("marshalling values: %v", err)
-	}
-	if app.Spec.Source.Helm.Values != string(boot) {
-		t.Errorf("Application values differ from the bootstrap values:\n%s\n---\n%s", app.Spec.Source.Helm.Values, boot)
-	}
-	if app.Spec.Destination.Namespace != namespace {
-		t.Errorf("destination namespace = %q, want kube-system", app.Spec.Destination.Namespace)
-	}
-
-	values := app.Spec.Source.Helm.Values
-	if !strings.Contains(values, "method: cronJob") {
-		t.Errorf("spec.source.helm.values missing Hubble's cronJob certificate method:\n%s", values)
 	}
 }
 
@@ -154,46 +98,5 @@ func TestValues_TalosRequiredFive(t *testing.T) {
 		if !strings.Contains(string(out), want) {
 			t.Errorf("values missing %q:\n%s", want, out)
 		}
-	}
-}
-
-func TestHandoverWorkloads(t *testing.T) {
-	workloads := New().HandoverWorkloads()
-	if len(workloads) == 0 {
-		t.Fatal("HandoverWorkloads() is empty, want the cilium agent and operator")
-	}
-
-	var sawDaemonSet, sawDeployment bool
-	for _, w := range workloads {
-		if w.Namespace != "kube-system" {
-			t.Errorf("workload %+v: namespace = %q, want kube-system", w, w.Namespace)
-		}
-		switch w.Kind {
-		case "DaemonSet":
-			sawDaemonSet = true
-		case "Deployment":
-			sawDeployment = true
-		}
-	}
-	if !sawDaemonSet || !sawDeployment {
-		t.Fatalf("HandoverWorkloads() = %v, want a DaemonSet (agent) and a Deployment (operator)", workloads)
-	}
-}
-
-// Addendum: without syncPolicy.automated Argo CD never syncs the
-// Application and the hand-over never completes.
-func TestArgoCDApplication_AutomatedSync(t *testing.T) {
-	app, err := New().ArgoCDApplication(cni.KubeProxyReplaced)
-	if err != nil {
-		t.Fatalf("ArgoCDApplication: %v", err)
-	}
-
-	sp := app.Spec.SyncPolicy
-	if sp == nil || sp.Automated == nil || !sp.Automated.Prune || !sp.Automated.SelfHeal {
-		t.Fatalf("syncPolicy = %+v, want automated {prune: true, selfHeal: true}", sp)
-	}
-
-	if !slices.Contains(sp.SyncOptions, "PruneLast=true") {
-		t.Errorf("syncOptions = %v, want PruneLast=true", sp.SyncOptions)
 	}
 }

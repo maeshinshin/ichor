@@ -426,7 +426,7 @@ func (r *TalosOperationReconciler) advanceShutdown(
 	}
 
 	if err := lock.Renew(ctx, controllerIdentity); err != nil {
-		return ctrl.Result{}, err
+		return renewRefusal(ctx, err)
 	}
 
 	// Stage 1: drain and stop the workers; wait until they are down.

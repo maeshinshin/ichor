@@ -71,6 +71,9 @@ type HeldError struct {
 }
 
 func (e *HeldError) Error() string {
+	if e.Holder == "" {
+		return "clusterlock: held by another reconcile (holder not visible yet)"
+	}
 	return fmt.Sprintf("clusterlock: held by %q", e.Holder)
 }
 
@@ -78,8 +81,21 @@ func (e *HeldError) Error() string {
 // Lease. The zero value is not usable; construct one with New.
 type Lock struct {
 	client   client.Client
+	reader   client.Reader
 	key      types.NamespacedName
 	duration time.Duration
+}
+
+// WithReader makes every read of the Lease go through r instead of the client. A manager's client
+// reads from a cache that lags the lock's own writes: a Renew straight after the Acquire that
+// created the Lease sees NotFound, and a renewal races the previous one's resourceVersion. Pass
+// the manager's uncached API reader so the lock decides on the live object. Writes still use the
+// client.
+func (l *Lock) WithReader(r client.Reader) *Lock {
+	if r != nil {
+		l.reader = r
+	}
+	return l
 }
 
 // New returns a Lock for cluster. The Lease is read, created and updated at
@@ -91,7 +107,7 @@ func New(c client.Client, cluster types.NamespacedName, duration time.Duration) 
 	if duration <= 0 {
 		duration = DefaultDuration
 	}
-	return &Lock{client: c, key: cluster, duration: duration}
+	return &Lock{client: c, reader: c, key: cluster, duration: duration}
 }
 
 // Acquire takes the lock for identity. It succeeds if the lock is free, if
@@ -114,7 +130,7 @@ func (l *Lock) Acquire(ctx context.Context, identity string) error {
 	}
 
 	var lease coordinationv1.Lease
-	err := l.client.Get(ctx, l.key, &lease)
+	err := l.reader.Get(ctx, l.key, &lease)
 	switch {
 	case apierrors.IsNotFound(err):
 		return l.create(ctx, identity)
@@ -142,7 +158,7 @@ func (l *Lock) Renew(ctx context.Context, identity string) error {
 	}
 
 	var lease coordinationv1.Lease
-	if err := l.client.Get(ctx, l.key, &lease); err != nil {
+	if err := l.reader.Get(ctx, l.key, &lease); err != nil {
 		if apierrors.IsNotFound(err) {
 			return &HeldError{Holder: ""}
 		}
@@ -167,7 +183,7 @@ func (l *Lock) Release(ctx context.Context, identity string) error {
 	}
 
 	var lease coordinationv1.Lease
-	if err := l.client.Get(ctx, l.key, &lease); err != nil {
+	if err := l.reader.Get(ctx, l.key, &lease); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
 		}
@@ -192,7 +208,7 @@ func (l *Lock) Release(ctx context.Context, identity string) error {
 // created.
 func (l *Lock) Holder(ctx context.Context) (identity string, held bool, err error) {
 	var lease coordinationv1.Lease
-	if err := l.client.Get(ctx, l.key, &lease); err != nil {
+	if err := l.reader.Get(ctx, l.key, &lease); err != nil {
 		if apierrors.IsNotFound(err) {
 			return "", false, nil
 		}
@@ -264,7 +280,7 @@ func (l *Lock) takeOver(ctx context.Context, lease *coordinationv1.Lease, identi
 // HeldError, not a lost or corrupted lock, so the error is swallowed.
 func (l *Lock) currentHolderBestEffort(ctx context.Context) string {
 	var lease coordinationv1.Lease
-	if err := l.client.Get(ctx, l.key, &lease); err != nil {
+	if err := l.reader.Get(ctx, l.key, &lease); err != nil {
 		return "unknown"
 	}
 	return holderOf(&lease)

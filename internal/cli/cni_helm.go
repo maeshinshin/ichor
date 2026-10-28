@@ -43,7 +43,8 @@ var cniHelmCmd = &cobra.Command{
 }
 
 var cniHelmApplyOpts struct {
-	Cluster string
+	Cluster          string
+	StorageNamespace string
 	Timeout time.Duration
 }
 
@@ -64,7 +65,7 @@ while Cilium restarts.`,
 			return err
 		}
 
-		cfg, err := newHelmConfig(kubeconfigPath, cmd.ErrOrStderr())
+		cfg, err := newHelmConfig(kubeconfigPath, cniHelmApplyOpts.StorageNamespace, cmd.ErrOrStderr())
 		if err != nil {
 			return err
 		}
@@ -76,8 +77,9 @@ while Cilium restarts.`,
 }
 
 // newHelmConfig is a Helm configuration over the cluster the kubeconfig (or, in the Job, the
-// pod's own service account) reaches, with release state in Secrets in kube-system.
-func newHelmConfig(kubeconfig string, log io.Writer) (*action.Configuration, error) {
+// pod's own service account) reaches, with release records in Secrets in storageNamespace
+// (the release itself, and Cilium, live in kube-system).
+func newHelmConfig(kubeconfig, storageNamespace string, log io.Writer) (*action.Configuration, error) {
 	flags := genericclioptions.NewConfigFlags(false)
 
 	if kubeconfig != "" {
@@ -93,7 +95,7 @@ func newHelmConfig(kubeconfig string, log io.Writer) (*action.Configuration, err
 
 	cfg := new(action.Configuration)
 
-	err := cfg.Init(flags, ns, "secret", func(format string, v ...any) {
+	err := cfg.Init(flags, storageNamespace, "secret", func(format string, v ...any) {
 		_, _ = fmt.Fprintf(log, "helm: "+format+"\n", v...)
 	})
 	if err != nil {
@@ -142,6 +144,7 @@ func init() {
 
 	f := cniHelmApplyCmd.Flags()
 	f.StringVar(&cniHelmApplyOpts.Cluster, "cluster", "", "name of the TalosCluster whose Cilium values apply (in --namespace)")
+	f.StringVar(&cniHelmApplyOpts.StorageNamespace, "storage-namespace", ichorControllerNamespace, "namespace Helm keeps the release record (a Secret) in")
 	f.DurationVar(&cniHelmApplyOpts.Timeout, "timeout", cilium.DefaultApplyTimeout, "how long to wait for Cilium's workloads to roll out")
 	_ = cniHelmApplyCmd.MarkFlagRequired("cluster")
 }

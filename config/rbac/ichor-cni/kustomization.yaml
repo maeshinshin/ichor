@@ -1,0 +1,9 @@
+# The Cilium Helm Job's own RBAC base (ADR 0099), wired into config/default as its own
+# resource entry, never merged with ../ (the controller never holds these permissions: it
+# only creates the Job, and the Job is the one process that runs Helm over Cilium).
+# Hand-written, not generated: dist/chart/chart_test.go compares the chart's copy of
+# role.yaml against this one.
+resources:
+- service_account.yaml
+- role.yaml
+- role_binding.yaml

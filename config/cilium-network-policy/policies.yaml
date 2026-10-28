@@ -188,3 +188,27 @@ spec:
     - ports:
       - port: "6443"
         protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: cni
+  namespace: system
+spec:
+  description: The Cilium Helm Job (ADR 0099). It talks to the API server, through KubePrism on the node (7445) and directly (6443), and nothing else.
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: ichor-cni
+  egress:
+  - toEntities:
+    - kube-apiserver
+    toPorts:
+    - ports:
+      - port: "6443"
+        protocol: TCP
+  - toEntities:
+    - host
+    toPorts:
+    - ports:
+      - port: "7445"
+        protocol: TCP

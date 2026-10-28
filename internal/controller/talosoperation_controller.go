@@ -33,6 +33,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/etcdbackup"
@@ -276,7 +277,7 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	// same way removal.go's renewWhile already renews repeatedly for a
 	// drain, well inside clusterlock.DefaultDuration's five minutes.
 	if err := lock.Renew(ctx, controllerIdentity); err != nil {
-		return ctrl.Result{}, err
+		return renewRefusal(ctx, err)
 	}
 
 	requeue := false
@@ -349,6 +350,19 @@ func (r *TalosOperationReconciler) lockUnavailable(ctx context.Context, op *icho
 	if held, ok := errors.AsType[*clusterlock.HeldError](err); ok {
 		return ctrl.Result{RequeueAfter: operationRequeueInterval}, r.setPhase(ctx, op, ichorv1alpha1.TalosOperationPhasePaused,
 			reasonOperationLockHeld, fmt.Sprintf("cluster lock held by %q", held.Holder))
+	}
+
+	return ctrl.Result{}, err
+}
+
+// renewRefusal turns the failure of a lock.Renew into a reconcile result. Losing the lock to
+// another reconcile of this controller is expected contention, not a failure: it is logged once at
+// V(1) and the operation is requeued, where acquireDisruptiveLock reports the holder in the Paused
+// condition. Any other error is returned for a retry.
+func renewRefusal(ctx context.Context, err error) (ctrl.Result, error) {
+	if held, ok := errors.AsType[*clusterlock.HeldError](err); ok {
+		logf.FromContext(ctx).V(1).Info("cluster lock not held by this reconcile; requeueing", "holder", held.Holder)
+		return ctrl.Result{RequeueAfter: operationRequeueInterval}, nil
 	}
 
 	return ctrl.Result{}, err
@@ -734,7 +748,7 @@ func (r *TalosOperationReconciler) acquireDisruptiveLock(
 		return nil, &transitioningError{controlPlanes: controlPlanes}
 	}
 
-	lock := clusterlock.New(r.Client, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0)
+	lock := clusterlock.New(r.Client, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0).WithReader(r.APIReader)
 	if err := lock.Acquire(ctx, controllerIdentity); err != nil {
 		return nil, err
 	}

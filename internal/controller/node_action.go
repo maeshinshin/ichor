@@ -114,7 +114,7 @@ func (r *TalosOperationReconciler) advanceNode(
 	}
 
 	if err := lock.Renew(ctx, controllerIdentity); err != nil {
-		return ctrl.Result{}, err
+		return renewRefusal(ctx, err)
 	}
 
 	bundle, err := loadBundle(ctx, r.Client, r.ControllerNamespace, cluster)

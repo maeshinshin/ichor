@@ -380,7 +380,7 @@ func (r *TalosOperationReconciler) beginEtcdRestore(
 	}
 
 	if err := lock.Renew(ctx, controllerIdentity); err != nil {
-		return ctrl.Result{}, err
+		return renewRefusal(ctx, err)
 	}
 
 	if err := etcdbackup.Pin(ctx, run.store, run.prefix, snap.Key, snap.Size); err != nil {

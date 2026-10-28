@@ -120,7 +120,7 @@ func (r *TalosOperationReconciler) advanceIchor(
 	ctx context.Context, op *ichorv1alpha1.TalosOperation, cluster *ichorv1alpha1.TalosCluster, lock *clusterlock.Lock,
 ) (ctrl.Result, error) {
 	if err := lock.Renew(ctx, controllerIdentity); err != nil {
-		return ctrl.Result{}, err
+		return renewRefusal(ctx, err)
 	}
 
 	done, err := r.Advance(ctx, cluster, nil, op)

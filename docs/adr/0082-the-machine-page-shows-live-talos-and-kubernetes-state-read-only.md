@@ -65,3 +65,7 @@ The rule stays: the UI and CLI change the world only by writing CRs, and the con
 - `NodeTalosClient` grows five methods; the fake returns canned sections and the secret-shape tests cover the response.
 - The `ichor-ui` ClusterRole can now list pods cluster-wide when it acts as itself; operators who run OIDC on and want it narrower can bind the user's own role and remove the rule from their values later, which is a chart change this ADR does not make.
 - `ichor` CLI's in-process fallback answers `Unavailable` for this RPC, like `GetNode`.
+
+## Amendment (2026-10-28)
+
+The runtime sections are no longer listed in a section navigation: the node page groups them into tabs (Talos; Kubernetes and etcd), with the active tab in `?tab=` (ADR 0097).

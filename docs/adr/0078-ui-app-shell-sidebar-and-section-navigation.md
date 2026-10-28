@@ -47,3 +47,7 @@ The section was a row of seven buttons with no context. It is now `components/Op
 5. **The last five operations** of the cluster, newest first, with a state icon and a link.
 6. **Data**: the Cluster message gained `kube_proxy_mode` and `certificates` (status.certificates, ADR 0063), the Machine message `reboot_paths` (status.rebootPaths, ADR 0080). The installed Ichor version comes from `PlanOperation` (kind ichor, no target), so no new RPC. A node counts as waiting when `reboot_paths` is set or its Ready reason is RebootRequired. "Update available" for Ichor is not shown: nothing in the cluster knows the latest release.
 7. Phone: groups are cards, the button drops under the text; no horizontal scroll.
+
+## Amendment (2026-10-28): no section navigation
+
+The "On this page" scroll-spy (`SectionLayout`, `lib/sectionNav.ts`) is gone. Users found it highlighted the wrong entry, the node page now uses tabs, and the Overview is the cluster home (ADR 0097), so only the patch page still had it. Pages stack their `Section` blocks (`components/Section.tsx`); section ids stay, so `#anchor` links still work.

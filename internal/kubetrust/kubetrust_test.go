@@ -170,3 +170,94 @@ func TestPublishWritesOnlyCertificates(t *testing.T) {
 		t.Fatalf("file must hold a certificate and no key:\n%s", got)
 	}
 }
+
+func TestPublishWithNothingNewKeepsTheFile(t *testing.T) {
+	c := newCA(t, "new")
+	path := filepath.Join(t.TempDir(), "kubernetes-ca.crt")
+	p := &Pool{}
+
+	if err := p.Publish(c.pem, path); err != nil {
+		t.Fatal(err)
+	}
+
+	old := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(path, old, old); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := p.Publish(c.pem, path); err != nil {
+		t.Fatal(err)
+	}
+
+	if st, _ := os.Stat(path); st.ModTime().After(old.Add(time.Minute)) {
+		t.Fatal("Publish rewrote the file although nothing was added")
+	}
+
+	// A missing file is written again even when the certificate is already trusted.
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := p.Publish(c.pem, path); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("file not restored: %v", err)
+	}
+}
+
+func TestClearRemovesExtrasAndFile(t *testing.T) {
+	c := newCA(t, "new")
+	path := filepath.Join(t.TempDir(), "kubernetes-ca.crt")
+	p := &Pool{}
+
+	if err := p.Publish(c.pem, path); err != nil {
+		t.Fatal(err)
+	}
+
+	for range 2 { // idempotent
+		if err := p.Clear(path); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if len(p.extra) != 0 {
+		t.Fatal("extras not cleared")
+	}
+
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("file still there: %v", err)
+	}
+}
+
+func TestClearOnceBaseTrustsWaitsForTheProjectedCA(t *testing.T) {
+	oldCA, nextCA := newCA(t, "old"), newCA(t, "new")
+	base := filepath.Join(t.TempDir(), "ca.crt")
+	path := filepath.Join(t.TempDir(), "kubernetes-ca.crt")
+	p := &Pool{baseFile: base}
+
+	if err := os.WriteFile(base, oldCA.pem, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := p.Publish(nextCA.pem, path); err != nil {
+		t.Fatal(err)
+	}
+
+	if done, err := p.ClearOnceBaseTrusts(path); err != nil || done {
+		t.Fatalf("cleared while the base lacks the new CA: %v %v", done, err)
+	}
+
+	if err := os.WriteFile(base, nextCA.pem, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if done, err := p.ClearOnceBaseTrusts(path); err != nil || !done {
+		t.Fatalf("not cleared once the base has it: %v %v", done, err)
+	}
+
+	if _, err := os.Stat(path); !os.IsNotExist(err) || len(p.extra) != 0 {
+		t.Fatal("extras or file left")
+	}
+}

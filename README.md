@@ -5,7 +5,8 @@ Nodes, machine configuration, upgrades and etcd backups are Kubernetes
 resources; you work with them through a CLI, a web UI, or Git.
 
 Ichor only takes care of Talos. Everything that runs on the cluster — the CNI,
-storage, monitoring — is bootstrapped once and then handed over to Argo CD.
+storage, monitoring — is Argo CD's business; Ichor bootstraps the CNI once and
+hands it over.
 
 > Status: alpha. Exercised end to end on Talos v1.14 test clusters; not yet on bare metal. The design is in
 > [docs/design/architecture.md](docs/design/architecture.md); every decision
@@ -30,17 +31,22 @@ storage, monitoring — is bootstrapped once and then handed over to Argo CD.
   defrag, forfeit etcd leadership, reset, and remove.
 - Rotates the cluster CAs in verified passes. The operation waits until you
   have the new kubeconfig and talosconfig, from the CLI or the UI, before it
-  stops trusting the old CAs.
-- Backs up etcd on a schedule, restores a snapshot into a running cluster,
-  and can rebuild a cluster from the secrets bundle and a snapshot alone.
+  stops trusting the old CAs, then restarts the in-cluster clients that keep
+  the old one.
+- Backs up etcd on a schedule or on demand (`ichor etcd backup now`, Back up now
+  in the UI), restores a snapshot into a running cluster, and can rebuild a
+  cluster from the secrets bundle and a snapshot alone.
 - Can keep its own users with the roles viewer, operator and admin. People
   sign in to the UI and each gets a personal kubeconfig with no secret in it.
   Off by default. See [Users and login](docs/guides/users-and-login.md).
 - Gates Secret references: changing a field that names a Secret needs the
   `secret-references` right in Kubernetes RBAC, which `ichor-admin` holds.
 - Upgrades itself through the `IchorInstallation` resource.
-- Bootstraps a CNI (Cilium by default) and, optionally, Argo CD, then hands
-  both over to Argo CD so that Git becomes the source of truth.
+- Bootstraps a CNI (`--cni cilium`, rendered from the pinned Cilium 1.18.0
+  chart embedded in the CLI, or `flannel`; `--cni-tunnel vxlan|geneve` picks
+  Cilium's tunnel) and, with `--argocd`, prepares Argo CD's repository
+  credentials and root Application. The CNI is then handed over to Argo CD so
+  that Git becomes the source of truth. Ichor does not install Argo CD.
 - Prepares disks for storage systems such as Longhorn, and waits for data to
   evacuate before draining or removing a node.
 

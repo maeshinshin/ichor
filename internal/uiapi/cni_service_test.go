@@ -63,7 +63,14 @@ var _ = Describe("CniService", func() {
 			APIGroups: []string{ichorv1alpha1.GroupVersion.Group}, Resources: []string{resourceTalosClusters}, Verbs: []string{"update"},
 		}
 
-		for user, rules := range map[string][]rbacv1.PolicyRule{cniViewerUser: {read}, cniOperatorUser: {read, write}} {
+		createOps := rbacv1.PolicyRule{
+			APIGroups: []string{ichorv1alpha1.GroupVersion.Group}, Resources: []string{"talosoperations"}, Verbs: []string{"create", cniVerbList},
+		}
+
+		for user, rules := range map[string][]rbacv1.PolicyRule{
+			cniViewerUser:   {read, {APIGroups: createOps.APIGroups, Resources: createOps.Resources, Verbs: []string{cniVerbList}}},
+			cniOperatorUser: {read, write, createOps},
+		} {
 			name := "cni-test-" + user
 			Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, &rbacv1.ClusterRole{Name: name, Rules: rules}))).To(Succeed())
 			Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, &rbacv1.ClusterRoleBinding{
@@ -78,6 +85,21 @@ var _ = Describe("CniService", func() {
 		_ = newTestMachine(cluster.Name, strongTestIdentity("uuid-cni-cp-"+cluster.Name), roleControlPlane, ichorv1alpha1.MachineApprovalStateApproved)
 		ref = objectRef(cluster.Namespace, cluster.Name)
 	})
+
+	cniOperations := func(c *ichorv1alpha1.TalosCluster) []ichorv1alpha1.TalosOperation {
+		var list ichorv1alpha1.TalosOperationList
+		Expect(k8sClient.List(ctx, &list, client.InNamespace(c.Namespace))).To(Succeed())
+
+		var out []ichorv1alpha1.TalosOperation
+
+		for _, o := range list.Items {
+			if o.Spec.ClusterRef.Name == c.Name {
+				out = append(out, o)
+			}
+		}
+
+		return out
+	}
 
 	stored := func() map[string]any {
 		var got ichorv1alpha1.TalosCluster
@@ -195,8 +217,28 @@ var _ = Describe("CniService", func() {
 		cluster.Status.CNI = &ichorv1alpha1.TalosClusterCNIStatus{AvailableChartVersion: "1.19.0"}
 		Expect(k8sClient.Status().Update(ctx, cluster)).To(Succeed())
 
+		// A viewer may not create the operation, and nothing is created.
+		_, err = s.StartCniUpgrade(asCniUser(cniViewerUser), connect.NewRequest(&pb.StartCniUpgradeRequest{Cluster: ref}))
+		Expect(connect.CodeOf(err)).To(Equal(connect.CodePermissionDenied))
+		Expect(cniOperations(cluster)).To(BeEmpty())
+
+		resp, err := s.StartCniUpgrade(asCniUser(cniOperatorUser), connect.NewRequest(&pb.StartCniUpgradeRequest{Cluster: ref}))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(resp.Msg.GetToVersion()).To(Equal("1.19.0"))
+		Expect(resp.Msg.GetAudit().GetActor()).To(Equal(cniOperatorUser))
+
+		ops := cniOperations(cluster)
+		Expect(ops).To(HaveLen(1))
+		Expect(resp.Msg.GetOperation().GetName()).To(Equal(ops[0].Name))
+		Expect(ops[0].Spec.Kind).To(Equal(ichorv1alpha1.TalosOperationKindCNI))
+		Expect(ops[0].Spec.CNI).To(Equal(&ichorv1alpha1.TalosOperationCNISpec{
+			Action: ichorv1alpha1.TalosOperationCNIActionUpgrade, ChartVersion: "1.19.0",
+		}))
+
+		// One unfinished operation blocks another.
 		_, err = s.StartCniUpgrade(asCniUser(cniOperatorUser), connect.NewRequest(&pb.StartCniUpgradeRequest{Cluster: ref}))
-		Expect(connect.CodeOf(err)).To(Equal(connect.CodeUnimplemented))
+		Expect(connect.CodeOf(err)).To(Equal(connect.CodeFailedPrecondition))
+		Expect(cniOperations(cluster)).To(HaveLen(1))
 	})
 })
 

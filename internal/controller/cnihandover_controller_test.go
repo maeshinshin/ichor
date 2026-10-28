@@ -156,7 +156,7 @@ func effectiveValues(cluster *ichorv1alpha1.TalosCluster) map[string]any {
 	return vals
 }
 
-func cniJob(cluster *ichorv1alpha1.TalosCluster) *batchv1.Job {
+func handoverJob(cluster *ichorv1alpha1.TalosCluster) *batchv1.Job {
 	GinkgoHelper()
 
 	hash, err := CNIValuesHash(cluster)
@@ -250,7 +250,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		result, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(result.RequeueAfter).To(Equal(cniJobPollInterval))
-		job := cniJob(cluster)
+		job := handoverJob(cluster)
 
 		holder, held := cniLockHolder(cluster)
 		Expect(held).To(BeTrue())
@@ -316,7 +316,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 
 		_, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
 		Expect(err).NotTo(HaveOccurred())
-		setJobCondition(cniJob(cluster), batchv1.JobComplete, "")
+		setJobCondition(handoverJob(cluster), batchv1.JobComplete, "")
 		helmRelease(1, "deployed", effectiveValues(cluster))
 		_, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
 		Expect(err).NotTo(HaveOccurred())
@@ -340,7 +340,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(second).NotTo(Equal(first))
 
-		job := cniJob(getCluster(cluster))
+		job := handoverJob(getCluster(cluster))
 		Expect(job.Annotations[CNIValuesHashAnnotation]).To(Equal(second))
 
 		// The hand-over is not undone while the new Job runs, and the lock is held.
@@ -371,7 +371,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		_, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
 		Expect(err).NotTo(HaveOccurred())
 
-		job := cniJob(cluster)
+		job := handoverJob(cluster)
 		setJobCondition(job, batchv1.JobFailed, "Job has reached the specified backoff limit")
 
 		result, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
@@ -395,7 +395,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		_, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
 		Expect(err).NotTo(HaveOccurred())
 
-		job := cniJob(cluster)
+		job := handoverJob(cluster)
 		pod := &corev1.Pod{
 			Namespace: testIchorNamespace, GenerateName: "cni-job-pod-", Labels: map[string]string{"job-name": job.Name},
 			Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "cni", Image: "x"}}},
@@ -432,6 +432,6 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		result, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(result.RequeueAfter).To(Equal(cniJobPollInterval))
-		cniJob(cluster)
+		handoverJob(cluster)
 	})
 })

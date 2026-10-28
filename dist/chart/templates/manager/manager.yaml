@@ -169,6 +169,9 @@ spec:
           # TalosEtcdBackup stages one encrypted snapshot here (cmd/main.go's backupSpoolDir).
           - mountPath: /var/spool/ichor
             name: backup-spool
+          # Extra API-server CA certificate during a CA rotation.
+          - mountPath: /var/run/ichor/trust
+            name: api-trust
           # Unconditional, not gated on metricsCert.enabled: see the arg above.
           - mountPath: /tmp/k8s-webhook-server/serving-certs
             name: webhook-certs
@@ -193,6 +196,8 @@ spec:
         {{- toYaml .Values.manager.extraVolumes | nindent 8 }}
         {{- end }}
       - name: backup-spool
+        emptyDir: {}
+      - name: api-trust
         emptyDir: {}
       - name: webhook-certs
         secret:

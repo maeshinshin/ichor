@@ -253,3 +253,13 @@ Observed on real hardware (three rotations): the controller still restarted once
 - Every pass of a CA rotation that can read `rotation.yaml` adds the new Kubernetes CA's certificate (public part only; the key never leaves the Secret) to the pool and writes the pool's certificates to `/var/run/ichor/trust/kubernetes-ca.crt`, an `emptyDir` mounted into the manager container. Start-up loads that file before the API-server wait, so a restarted container trusts the new CA at once. Publishing failing is logged and does not stop the rotation.
 - The file is not pruned after Done: an extra trusted CA that signed nothing the API server still serves is harmless, and the pod's volume ends with the pod.
 - Limitation: a pod that is rescheduled during Issuing loses the file and falls back to the projected `ca.crt`, as before. Other in-cluster clients are unchanged (see the previous amendments).
+
+## Amendment: leader election outlives an API server restart
+
+Observed on a single-control-plane cluster: after the trust amendment the first rotation still restarted the controller. At Dropping the API server is down for the whole static-pod restart, longer than controller-runtime's default RenewDeadline (10 s); the lease renew got `connection refused`, then `context deadline exceeded`, and the manager exited with `leader election lost`.
+
+- Decision: `LeaseDuration` 120 s, `RenewDeadline` 90 s, `RetryPeriod` 10 s (`cmd/leaderelection.go`). A 60-90 s outage no longer loses the lease. client-go requires LeaseDuration > RenewDeadline > RetryPeriod x 1.2; a unit test builds the elector with these values.
+- Cost: after a crash (not a voluntary stop) a second replica waits up to `LeaseDuration` (120 s) before taking over, where the default took 15 s.
+- `LeaderElectionReleaseOnCancel` stays off: the process outlives the manager in `WaitForRestoreTails` (ADR 0089, up to 70 minutes), and releasing the lease there would let a second replica act mid-restore. Voluntary hand-offs therefore also wait out the lease.
+- Readiness now includes the webhook server (`StartedChecker`), because a replaced pod was 1/1 Ready while admission calls to it still failed.
+- Diagnostics: start-up logs how many extra CA certificates it loaded from the trust file, `Publish` logs each newly trusted certificate (subject and validity only), and the API wait logs each failed probe (at most one line per 15 s) and names the last error when it gives up.

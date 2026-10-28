@@ -75,7 +75,12 @@ func get(t *testing.T, p *Pool, base []byte, url, hostname string) error {
 
 	url = strings.Replace(url, "127.0.0.1", hostname, 1)
 	cfg := &rest.Config{Host: url}
-	cfg.CAData = base
+	cfg.CAFile = filepath.Join(t.TempDir(), "ca.crt")
+
+	if err := os.WriteFile(cfg.CAFile, base, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
 	p.Apply(cfg)
 
 	rt, err := rest.TransportFor(cfg)
@@ -100,7 +105,7 @@ func TestPoolTrustsExtraCAAndRejectsUnknown(t *testing.T) {
 		t.Fatal("a server signed by an unknown CA was accepted")
 	}
 
-	if err := p.Add(other.pem); err != nil {
+	if err := p.add(other.pem); err != nil {
 		t.Fatal(err)
 	}
 
@@ -108,7 +113,7 @@ func TestPoolTrustsExtraCAAndRejectsUnknown(t *testing.T) {
 		t.Fatal("an unrelated extra CA made the server trusted")
 	}
 
-	if err := p.Add(newer.pem); err != nil {
+	if err := p.add(newer.pem); err != nil {
 		t.Fatal(err)
 	}
 

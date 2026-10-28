@@ -19,13 +19,18 @@ package cli
 import (
 	"bytes"
 	"context"
+	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/installmanifest"
@@ -134,5 +139,75 @@ func TestCreateIchorInstallation_SkipsADevBuild(t *testing.T) {
 
 	if !strings.Contains(warn.String(), "not a released version") {
 		t.Errorf("no notice was printed: %q", warn.String())
+	}
+}
+
+// shrinkInitRetry makes init's apply retries fast.
+func shrinkInitRetry(t *testing.T) {
+	t.Helper()
+
+	w, d := initRetryWindow, followRetryDelay
+	initRetryWindow, followRetryDelay = time.Second, time.Millisecond
+
+	t.Cleanup(func() { initRetryWindow, followRetryDelay = w, d })
+}
+
+// failingCreates fails the first n Creates with err, then lets the fake answer.
+func failingCreates(t *testing.T, n int, err error, calls *int) client.Client {
+	return fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithInterceptorFuncs(interceptor.Funcs{
+		Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
+			*calls++
+			if *calls <= n {
+				return err
+			}
+
+			return c.Create(ctx, obj, opts...)
+		},
+	}).Build()
+}
+
+func TestApplyIchorManifest_RetriesEtcdTimeout(t *testing.T) {
+	shrinkInitRetry(t)
+
+	calls := 0
+	etcd := apierrors.NewInternalError(errors.New("etcdserver: request timed out"))
+
+	var warn bytes.Buffer
+
+	if err := applyIchorManifest(context.Background(), failingCreates(t, 2, etcd, &calls), []byte(testIchorManifest), &warn); err != nil {
+		t.Fatalf("applyIchorManifest: %v", err)
+	}
+
+	if got := strings.Count(warn.String(), "init: retrying"); got != 2 {
+		t.Fatalf("want 2 retrying lines, got %d:\n%s", got, warn.String())
+	}
+}
+
+func TestApplyIchorManifest_ForbiddenFailsAtOnce(t *testing.T) {
+	shrinkInitRetry(t)
+
+	calls := 0
+	forbidden := apierrors.NewForbidden(schema.GroupResource{Resource: "namespaces"}, "x", errors.New("no"))
+
+	var warn bytes.Buffer
+
+	if err := applyIchorManifest(context.Background(), failingCreates(t, 100, forbidden, &calls), []byte(testIchorManifest), &warn); err == nil {
+		t.Fatal("want the Forbidden error, got nil")
+	}
+
+	if calls != 1 || strings.Contains(warn.String(), "retrying") {
+		t.Fatalf("Forbidden must not be retried: %d calls, output %q", calls, warn.String())
+	}
+}
+
+func TestIsTransient_EtcdTimeout(t *testing.T) {
+	for _, msg := range []string{"etcdserver: request timed out", "etcdserver: leader changed"} {
+		if !isTransient(apierrors.NewInternalError(errors.New(msg))) {
+			t.Errorf("%q should be transient", msg)
+		}
+	}
+
+	if isTransient(apierrors.NewInternalError(errors.New("boom"))) {
+		t.Error("an unrelated InternalError must not be transient")
 	}
 }

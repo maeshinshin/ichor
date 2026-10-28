@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/maeshinshin/ichor/internal/oidcissuer"
+	"github.com/maeshinshin/ichor/pkg/ichorauth"
 )
 
 func TestRedirectRules(t *testing.T) {
@@ -148,8 +149,8 @@ func TestCodeGrantNegatives(t *testing.T) {
 	})
 	t.Run("expired", func(t *testing.T) {
 		code := e.code(clientCLI, cliRedirect, "", p)
-		e.clk.shift(oidcissuer.CodeTTL + time.Second)
-		defer e.clk.shift(-oidcissuer.CodeTTL - time.Second)
+		e.clk.shift(ichorauth.DefaultCodeTTL + time.Second)
+		defer e.clk.shift(-ichorauth.DefaultCodeTTL - time.Second)
 		if s, _ := e.token(codeForm(clientCLI, cliRedirect, code, p)); s != http.StatusBadRequest {
 			t.Fatal(s)
 		}
@@ -230,7 +231,7 @@ func TestLoginNegatives(t *testing.T) {
 	if rec := e.login(ticket, "bob", "pw-for-bob"); strings.Contains(rec.Body.String(), "disabled") {
 		t.Error("disabled state leaked")
 	}
-	e.clk.shift(oidcissuer.TicketTTL + time.Second)
+	e.clk.shift(ichorauth.DefaultTicketTTL + time.Second)
 	if rec := e.login(ticket, userAlice, "correct horse"); rec.Code != http.StatusBadRequest {
 		t.Errorf("expired ticket: %d", rec.Code)
 	}

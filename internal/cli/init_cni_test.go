@@ -92,34 +92,7 @@ func TestCNIPreset_CiliumTunnel(t *testing.T) {
 	}
 }
 
-// TestBuildCNIBootstrap_Flannel proves architecture.md's "unless flannel":
-// flannel contributes no inline manifest, no Talos patch and no Argo CD
-// Application, even when --argocd is requested.
-func TestBuildCNIBootstrap_Flannel(t *testing.T) {
-	preset, err := cniPresetWithTunnel("flannel", "")
-	if err != nil {
-		t.Fatalf("cniPreset: %v", err)
-	}
-
-	out, err := buildCNIBootstrap(preset, "my-cluster", testNamespace, true)
-	if err != nil {
-		t.Fatalf("buildCNIBootstrap: %v", err)
-	}
-
-	if out.InlineManifest != nil {
-		t.Fatalf("expected no inline manifest for flannel, got %+v", out.InlineManifest)
-	}
-
-	if out.Patch != nil {
-		t.Fatalf("expected no Talos patch for flannel, got %+v", out.Patch)
-	}
-
-	if out.ArgoCDApplication != nil {
-		t.Fatalf("expected no Argo CD Application for flannel, got %+v", out.ArgoCDApplication)
-	}
-}
-
-// TestBuildCNIBootstrap_Cilium proves the opposite: cilium does contribute
+// TestBuildCNIBootstrap_Cilium proves cilium contributes
 // an inline manifest, and an Argo CD Application only when asked for one.
 func TestBuildCNIBootstrap_Cilium(t *testing.T) {
 	preset, err := cniPresetWithTunnel("cilium", "")

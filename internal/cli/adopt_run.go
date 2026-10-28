@@ -219,8 +219,8 @@ var specFieldHints = []struct{ prefix, hint string }{
 	{"KubeNetworkConfig", "the DNS domain has no spec field; Ichor keeps Talos's default"},
 	{"UnattendedInstallConfig", "set TalosMachine spec.install.disk (and .image) for this machine; wipe is always false"},
 	{"machine.install", "set TalosMachine spec.install.disk (and .image) for this machine; other install fields have no spec field"},
-	{"KubeFlannelCNIConfig", "Talos's flannel is rendered for spec.cni.preset flannel only; the preset cannot change after creation"},
-	{"cluster.network.cni", "Talos's flannel is rendered for spec.cni.preset flannel only; other presets render cni.name none"},
+	{"KubeFlannelCNIConfig", "the cluster runs Talos's flannel, which Ichor no longer supports (ADR 0099); delete and recreate it with cilium"},
+	{"cluster.network.cni", "the cluster runs Talos's flannel, which Ichor no longer supports (ADR 0099); delete and recreate it with cilium"},
 }
 
 // explainUnrepresentable turns the paths adopt left alone into the lines a user can act on: the

@@ -22,6 +22,8 @@ import "testing"
 // Helm Job's ClusterRole, whose chart copy templates/rbac/ichor-cni.yaml is compared as a rule set.
 const cniConfigRolePath = "../../config/rbac/ichor-cni/role.yaml"
 
+const kubeSystemNs = "kube-system"
+
 // TestCNIHelmRBAC pins the Cilium Helm Job's identity: the ServiceAccount
 // ichor-cni the controller names in the Job exists, its ClusterRole equals config/rbac/ichor-cni,
 // it can be turned off, and it holds no wildcard.
@@ -48,6 +50,62 @@ func TestCNIHelmRBAC(t *testing.T) {
 		for triple := range rbacTriples(append(allRules(clusterRole), allRules(role)...)) {
 			if triple.resource == "*" || triple.verb == "*" {
 				t.Errorf("the Cilium Job is granted %s; it must hold no wildcard", triple)
+			}
+		}
+	})
+
+	// The Job runs in kube-system (hostNetwork is exempt from Pod Security admission only there); the release record's
+	// Role stays in the release namespace.
+	t.Run("lives in kube-system", func(t *testing.T) {
+		docs := renderChart(t, "ichor")
+
+		nsOf := func(d map[string]any) string {
+			md, _ := d["metadata"].(map[string]any)
+			ns, _ := md["namespace"].(string)
+
+			return ns
+		}
+
+		sa := find(docs, kindServiceAccount, "ichor-cni")
+		if sa == nil || nsOf(sa) != kubeSystemNs {
+			t.Errorf("ServiceAccount ichor-cni = %v, want it in kube-system", sa)
+		}
+
+		jobRole := find(docs, kindRole, "ichor-cni-job-role")
+		if jobRole == nil || nsOf(jobRole) != kubeSystemNs {
+			t.Fatalf("Role ichor-cni-job-role = %v, want it in kube-system", jobRole)
+		}
+
+		checkRBACRulesMatch(t, "ichor", "Role cni-job-role",
+			find(loadYAMLDocs(t, "../../config/rbac/ichor-cni/controller_role.yaml"), kindRole, "cni-job-role"), jobRole,
+			"config/rbac/ichor-cni/controller_role.yaml", "dist/chart/templates/rbac/ichor-cni.yaml")
+
+		installerDocs := renderChartWithValues(t, "ichor", "installer.enabled=true")
+		installerRole := find(installerDocs, kindRole, "ichor-installer-kube-system-role")
+		if installerRole == nil || nsOf(installerRole) != kubeSystemNs {
+			t.Fatalf("Role ichor-installer-kube-system-role = %v, want it in kube-system", installerRole)
+		}
+
+		checkRBACRulesMatch(t, "ichor", "Role installer-kube-system-role",
+			find(loadYAMLDocs(t, "../../config/rbac/ichor-installer/kube_system_role.yaml"), kindRole,
+				"installer-kube-system-role"), installerRole,
+			"config/rbac/ichor-installer/kube_system_role.yaml", "dist/chart/templates/rbac/ichor-installer.yaml")
+
+		secrets := find(docs, kindRole, "ichor-cni-role")
+		if secrets == nil || nsOf(secrets) == kubeSystemNs {
+			t.Errorf("Role ichor-cni-role (release records) = %v, want it in the release namespace", secrets)
+		}
+
+		for _, b := range findAll(docs, "ClusterRoleBinding") {
+			if nameOf(b) != "ichor-cni-rolebinding" {
+				continue
+			}
+
+			subjects, _ := b["subjects"].([]any)
+			s, _ := subjects[0].(map[string]any)
+
+			if s["namespace"] != kubeSystemNs {
+				t.Errorf("ClusterRoleBinding ichor-cni-rolebinding subject namespace = %v, want kube-system", s["namespace"])
 			}
 		}
 	})

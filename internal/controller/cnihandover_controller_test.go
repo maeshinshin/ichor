@@ -22,6 +22,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"strconv"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -174,7 +175,7 @@ func cniJob(cluster *ichorv1alpha1.TalosCluster) *batchv1.Job {
 	Expect(err).NotTo(HaveOccurred())
 
 	var job batchv1.Job
-	Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: testIchorNamespace, Name: cniHelmJobName(cluster, hash)}, &job)).To(Succeed())
+	Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: cniJobNamespace, Name: cniHelmJobName(cluster, hash)}, &job)).To(Succeed())
 	DeferCleanup(func() {
 		Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, &job, client.PropagationPolicy(metav1.DeletePropagationBackground)))).To(Succeed())
 	})
@@ -186,7 +187,7 @@ func cniJobCount(cluster *ichorv1alpha1.TalosCluster) int {
 	GinkgoHelper()
 
 	var jobs batchv1.JobList
-	Expect(k8sClient.List(ctx, &jobs, client.InNamespace(testIchorNamespace),
+	Expect(k8sClient.List(ctx, &jobs, client.InNamespace(cniJobNamespace),
 		client.MatchingLabels{cniClusterLabel: cniHelmClusterHash(cluster)})).To(Succeed())
 
 	return len(jobs.Items)
@@ -408,7 +409,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 
 		job := cniJob(cluster)
 		pod := &corev1.Pod{
-			Namespace: testIchorNamespace, GenerateName: "cni-job-pod-", Labels: map[string]string{"job-name": job.Name},
+			Namespace: cniJobNamespace, GenerateName: "cni-job-pod-", Labels: map[string]string{"job-name": job.Name},
 			Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "cni", Image: "x"}}},
 		}
 		Expect(k8sClient.Create(ctx, pod)).To(Succeed())
@@ -421,6 +422,46 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		_, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(conditionOf(cluster, ichorv1alpha1.ConditionCNIValuesApplied).Message).To(ContainSubstring("fake logs"))
+	})
+
+	It("fails fast with the FailedCreate message when the Job's pod cannot be created, and releases the lock", func() {
+		cluster := newTestCiliumCluster()
+		ciliumDaemonSet()(true)
+
+		_, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
+		Expect(err).NotTo(HaveOccurred())
+
+		job := cniJob(cluster)
+		_, held := cniLockHolder(cluster)
+		Expect(held).To(BeTrue())
+
+		const refusal = `pods "ichor-cni-x" is forbidden: violates PodSecurity "baseline:latest": host namespaces (hostNetwork=true)`
+
+		event := &corev1.Event{
+			Namespace: cniJobNamespace, GenerateName: "cni-job-event-",
+			InvolvedObject: corev1.ObjectReference{Kind: "Job", Namespace: cniJobNamespace, Name: job.Name, APIVersion: "batch/v1"},
+			Reason:         "FailedCreate", Message: refusal, Type: corev1.EventTypeWarning,
+		}
+		Expect(k8sClient.Create(ctx, event)).To(Succeed())
+		DeferCleanup(func() { Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, event))).To(Succeed()) })
+
+		// envtest runs no Job controller, so the Job has no pod; let the grace period be over.
+		grace := cniPodGrace
+		cniPodGrace = -time.Second
+		DeferCleanup(func() { cniPodGrace = grace })
+
+		result, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.RequeueAfter).To(Equal(handoverRequeueInterval))
+
+		cond := conditionOf(cluster, ichorv1alpha1.ConditionCNIValuesApplied)
+		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(cond.Reason).To(Equal("JobFailed"))
+		Expect(cond.Message).To(ContainSubstring("hostNetwork=true"))
+
+		_, held = cniLockHolder(cluster)
+		Expect(held).To(BeFalse())
+		Expect(cniJobCount(cluster)).To(BeZero(), "the stuck Job is removed so the next pass starts a new one")
 	})
 
 	It("holds back while a node rollout has the cluster lock, and goes on when it ends", func() {

@@ -64,7 +64,11 @@ var _ = Describe("manager cache against the generated RBAC", func() {
 		raw, err := os.ReadFile("../../config/rbac/role.yaml")
 		Expect(err).NotTo(HaveOccurred())
 
-		for doc := range strings.SplitSeq(string(raw), "\n---\n") {
+		// The controller's namespaced Role for the Cilium Helm Job in kube-system (hand-written).
+		jobRole, err := os.ReadFile("../../config/rbac/ichor-cni/controller_role.yaml")
+		Expect(err).NotTo(HaveOccurred())
+
+		for doc := range strings.SplitSeq(string(raw)+"\n---\n"+string(jobRole), "\n---\n") {
 			var meta struct{ Kind string }
 			Expect(yaml.Unmarshal([]byte(doc), &meta)).To(Succeed())
 
@@ -81,13 +85,14 @@ var _ = Describe("manager cache against the generated RBAC", func() {
 					RoleRef:  rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: clusterRoleKind, Name: cr.Name},
 					Subjects: subject,
 				}))).To(Succeed())
+			case "RoleBinding":
 			case "Role":
 				var r rbacv1.Role
 				Expect(yaml.Unmarshal([]byte(doc), &r)).To(Succeed())
-				r.Namespace, r.Name = controlNS, "manager-role-test"
+				r.Name = "manager-role-test-" + r.Namespace
 				Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, &r))).To(Succeed())
 				Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, &rbacv1.RoleBinding{
-					Name: "manager-binding-test", Namespace: controlNS,
+					Name: "manager-binding-test", Namespace: r.Namespace,
 					RoleRef:  rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "Role", Name: r.Name},
 					Subjects: subject,
 				}))).To(Succeed())

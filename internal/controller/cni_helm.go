@@ -22,10 +22,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -48,6 +50,13 @@ const (
 
 	cniHelmJobPrefix = "ichor-cni-"
 
+	// cniJobNamespace is where the Job (and its ServiceAccount) run: kube-system, where Cilium
+	// itself lives. The Job needs hostNetwork (below), which Talos's default Pod Security
+	// admission config (baseline enforce, exemptions for kube-system) refuses in ichor-system;
+	// kube-system is the exempted namespace. The release record Secret stays in the controller's
+	// namespace (the storage namespace the callers pass).
+	cniJobNamespace = cilium.ReleaseNamespace
+
 	// CNIValuesHashAnnotation records the effective-values hash a Job was started for, so a
 	// finished Job is only taken as proof for the values it ran with.
 	CNIValuesHashAnnotation = "ichor.maesh.dev/cni-values-hash"
@@ -66,6 +75,11 @@ const (
 	kubePrismHost = "localhost"
 	kubePrismPort = "7445"
 )
+
+// cniPodGrace is how long a Job may exist without a pod before it is taken to be stuck (its pods
+// are refused, e.g. by admission) instead of waiting for the 25-minute deadline. A variable so a
+// test can shorten it.
+var cniPodGrace = 2 * time.Minute
 
 // CNIValuesHash is a stable hash of the effective Cilium values cluster stores; the Job for
 // one value set has one name, and a changed value is a new Job. Hooks for the hand-over
@@ -96,9 +110,17 @@ func hashCiliumValues(vals map[string]any) (string, error) {
 // can tell it from a transient API error and look up the Job's pod log.
 type CNIHelmJobFailedError struct {
 	JobName, Reason, Message string
+
+	// NoPod marks a Job that never got a pod (see cniPodGrace); AdvanceCNIHelmJob has deleted
+	// it, so the next call starts a new one. The reason is in the Job's FailedCreate events.
+	NoPod bool
 }
 
 func (e *CNIHelmJobFailedError) Error() string {
+	if e.NoPod {
+		return fmt.Sprintf("cilium Helm Job %s created no pod within %s: %s", e.JobName, cniPodGrace, e.Message)
+	}
+
 	return fmt.Sprintf("cilium Helm Job %s failed (%s: %s); an upgrade rolled back before it failed, "+
 		"see the Job's pod log", e.JobName, e.Reason, e.Message)
 }
@@ -118,8 +140,9 @@ func cniHelmJobName(cluster *ichorv1alpha1.TalosCluster, valuesHash string) stri
 }
 
 // AdvanceCNIHelmJob makes sure the Cilium Helm Job for cluster's current effective values
-// exists in ns and reports whether it has completed. A failed Job is an error carrying its
-// reason; the Job's pod log has the detail. It is the one entry the hand-over (unit 8) and
+// exists in kube-system (ns is where the release record is stored) and reports whether it has
+// completed. A failed Job is an error carrying its reason; the Job's pod log has the detail. A
+// Job that got no pod within cniPodGrace is deleted and reported the same way (NoPod). It is the one entry the hand-over (unit 8) and
 // the kube-proxy switch (unit 9) call; taking the cluster operation lock around it is theirs
 // (the switch and a values edit must not overlap).
 func AdvanceCNIHelmJob(
@@ -142,7 +165,7 @@ func advanceCNIHelmJob(
 
 	var job batchv1.Job
 
-	err = c.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &job)
+	err = c.Get(ctx, types.NamespacedName{Namespace: cniJobNamespace, Name: name}, &job)
 
 	switch {
 	case apierrors.IsNotFound(err):
@@ -156,19 +179,32 @@ func advanceCNIHelmJob(
 		return false, &CNIHelmJobFailedError{JobName: name, Reason: failed.Reason, Message: failed.Message}
 	}
 
+	// A Job whose pods cannot be created (admission refuses them) would otherwise sit until its
+	// deadline, holding the caller's cluster lock. No pod after the grace period: remove the Job
+	// and report it; the caller releases the lock and the next pass starts a fresh Job.
+	if !done && job.Status.Active == 0 && !job.CreationTimestamp.IsZero() && time.Since(job.CreationTimestamp.Time) > cniPodGrace {
+		if err := c.Delete(ctx, &job, client.PropagationPolicy(metav1.DeletePropagationBackground)); client.IgnoreNotFound(err) != nil {
+			return false, err
+		}
+
+		return false, &CNIHelmJobFailedError{JobName: name, Reason: "PodNotCreated", NoPod: true,
+			Message: "see the Job's FailedCreate events in " + cniJobNamespace}
+	}
+
 	return done, nil
 }
 
-// newCNIHelmJob is the whole Cilium Helm process: the installer's image, run once, under a
+// newCNIHelmJob is the whole Cilium Helm process (in kube-system, storing its release record in
+// storageNS): the installer's image, run once, under a
 // ServiceAccount that exists for this and nothing else, on the node's network so it keeps
 // its API access while Cilium restarts.
 func newCNIHelmJob(
-	ns, name string, cluster *ichorv1alpha1.TalosCluster, inst *ichorv1alpha1.IchorInstallation, valuesHash string,
+	storageNS, name string, cluster *ichorv1alpha1.TalosCluster, inst *ichorv1alpha1.IchorInstallation, valuesHash string,
 ) *batchv1.Job {
 	// One attempt, as for the installer: an upgrade that failed has been rolled back, and
 	// running it again without anyone looking at why would only repeat it. The caller
 	// reports the failure and starts a new run when asked to.
-	job := newJob(ns, name, cniHelmPodLabel, CNIServiceAccount, cniHelmDeadline,
+	job := newJob(cniJobNamespace, name, cniHelmPodLabel, CNIServiceAccount, cniHelmDeadline,
 		map[string]string{cniClusterLabel: cniHelmClusterHash(cluster)},
 		map[string]string{CNIValuesHashAnnotation: valuesHash},
 		corev1.Container{
@@ -178,7 +214,7 @@ func newCNIHelmJob(
 				"cni", "helm", "apply",
 				"--cluster=" + cluster.Name,
 				"--namespace=" + cluster.Namespace,
-				"--storage-namespace=" + ns,
+				"--storage-namespace=" + storageNS,
 			},
 			Env: []corev1.EnvVar{
 				{Name: "KUBERNETES_SERVICE_HOST", Value: kubePrismHost},

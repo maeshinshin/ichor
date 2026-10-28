@@ -69,7 +69,7 @@ var _ = Describe("Cilium chart upgrade", func() {
 		createInstallation(ichorv1alpha1.IchorManagementModeIchor, "v0.2.0")
 		cluster = newTestCiliumCluster()
 		DeferCleanup(func() {
-			Expect(k8sClient.DeleteAllOf(ctx, &batchv1.Job{}, client.InNamespace(testIchorNamespace),
+			Expect(k8sClient.DeleteAllOf(ctx, &batchv1.Job{}, client.InNamespace(cniJobNamespace),
 				client.PropagationPolicy(metav1.DeletePropagationBackground))).To(Succeed())
 		})
 	})
@@ -136,7 +136,7 @@ var _ = Describe("Cilium chart upgrade", func() {
 
 			var job batchv1.Job
 			Expect(k8sClient.Get(ctx, client.ObjectKey{
-				Namespace: testIchorNamespace, Name: cniHelmJobName(cluster, hash+"/upgrade/"+string(op.UID)),
+				Namespace: cniJobNamespace, Name: cniHelmJobName(cluster, hash+"/upgrade/"+string(op.UID)),
 			}, &job)).To(Succeed())
 
 			return &job
@@ -265,6 +265,6 @@ func finishCNIJobAt(cluster *ichorv1alpha1.TalosCluster) {
 	Expect(err).NotTo(HaveOccurred())
 
 	var job batchv1.Job
-	Expect(k8sClient.Get(ctx, client.ObjectKey{Namespace: testIchorNamespace, Name: cniHelmJobName(cluster, hash)}, &job)).To(Succeed())
+	Expect(k8sClient.Get(ctx, client.ObjectKey{Namespace: cniJobNamespace, Name: cniHelmJobName(cluster, hash)}, &job)).To(Succeed())
 	setJobCondition(&job, batchv1.JobComplete, "")
 }

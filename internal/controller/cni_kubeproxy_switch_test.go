@@ -199,7 +199,7 @@ func cniJobExists(cluster *ichorv1alpha1.TalosCluster) bool {
 	hash, err := CNIValuesHash(cluster)
 	Expect(err).NotTo(HaveOccurred())
 
-	err = k8sClient.Get(ctx, client.ObjectKey{Namespace: tmNamespace, Name: cniHelmJobName(cluster, hash)}, &batchv1.Job{})
+	err = k8sClient.Get(ctx, client.ObjectKey{Namespace: cniJobNamespace, Name: cniHelmJobName(cluster, hash)}, &batchv1.Job{})
 	Expect(client.IgnoreNotFound(err)).To(Succeed())
 
 	return err == nil
@@ -229,7 +229,7 @@ var _ = Describe("cniKubeProxyAdvancer", func() {
 	BeforeEach(func() {
 		createInstallation(ichorv1alpha1.IchorManagementModeIchor, "v0.2.0")
 		DeferCleanup(func() {
-			Expect(k8sClient.DeleteAllOf(ctx, &batchv1.Job{}, client.InNamespace(tmNamespace),
+			Expect(k8sClient.DeleteAllOf(ctx, &batchv1.Job{}, client.InNamespace(cniJobNamespace),
 				client.PropagationPolicy(metav1.DeletePropagationBackground))).To(Succeed())
 		})
 	})

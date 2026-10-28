@@ -11,7 +11,9 @@ metadata:
     helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
     app.kubernetes.io/instance: {{ .Release.Name }}
   name: ichor-cni
-  namespace: {{ .Release.Namespace }}
+  # kube-system, not the release namespace: the Job needs hostNetwork, which Talos's default
+  # Pod Security admission config exempts only there.
+  namespace: kube-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -135,7 +137,7 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: ichor-cni
-  namespace: {{ .Release.Namespace }}
+  namespace: kube-system
 ---
 # Helm's release records live here, in the controller's namespace (see config/rbac/ichor-cni/role.yaml).
 apiVersion: rbac.authorization.k8s.io/v1
@@ -177,5 +179,68 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: ichor-cni
+  namespace: kube-system
+---
+# The controller's rights in kube-system to run and watch the Job there (hand-written, not
+# from markers; compared with config/rbac/ichor-cni/controller_role.yaml by chart_test.go).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/name: {{ include "ichor.name" . }}
+    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  name: ichor-cni-job-role
+  namespace: kube-system
+rules:
+- apiGroups:
+  - batch
+  resources:
+  - jobs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - ""
+  resources:
+  - pods/log
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - get
+  - list
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/name: {{ include "ichor.name" . }}
+    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  name: ichor-cni-job-rolebinding
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ichor-cni-job-role
+subjects:
+- kind: ServiceAccount
+  name: {{ include "ichor.serviceAccountName" . }}
   namespace: {{ .Release.Namespace }}
 {{- end }}

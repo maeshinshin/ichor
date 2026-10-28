@@ -115,7 +115,8 @@ type CNIHandoverReconciler struct {
 
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters,verbs=get;list;watch
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=ichorinstallations,verbs=get;list;watch// +kubebuilder:rbac:groups=batch,namespace=ichor-system,resources=jobs,verbs=get;list;watch;create;delete
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=ichorinstallations,verbs=get;list;watch
+// +kubebuilder:rbac:groups=batch,namespace=ichor-system,resources=jobs,verbs=get;list;watch;create;delete
 // +kubebuilder:rbac:groups="",namespace=ichor-system,resources=pods,verbs=get;list
 // +kubebuilder:rbac:groups="",namespace=ichor-system,resources=pods/log,verbs=get
 

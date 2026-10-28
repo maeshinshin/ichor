@@ -37,8 +37,6 @@ func TestRoleBindingSubjectsExist(t *testing.T) {
 		docs  []map[string]any
 	}
 
-	renders := []render{{"kustomize " + kustomizeInstallPath, loadYAMLDocs(t, kustomizeInstallPath)}}
-
 	valueSets := [][]string{
 		nil,
 		{"installer.enabled=true"},
@@ -48,6 +46,10 @@ func TestRoleBindingSubjectsExist(t *testing.T) {
 		{"ichorUI.credentials.serviceAccount=true"},
 		{"ichorUI.diagnostics.serviceAccount=true"},
 	}
+
+	renders := make([]render, 0, 1+len(valueSets))
+	renders = append(renders, render{"kustomize " + kustomizeInstallPath, loadYAMLDocs(t, kustomizeInstallPath)})
+
 	for _, sets := range valueSets {
 		label := "helm template ichor ."
 		if len(sets) > 0 {

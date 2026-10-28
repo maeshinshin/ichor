@@ -195,19 +195,6 @@ func ageCondition(op *ichorv1alpha1.TalosOperation, condType string, by time.Dur
 	cond.LastTransitionTime = metav1.NewTime(time.Now().Add(-by))
 }
 
-// cniJob returns the Cilium Helm Job AdvanceCNIHelmJob created for cluster's current values.
-func cniJob(cluster *ichorv1alpha1.TalosCluster) *batchv1.Job {
-	GinkgoHelper()
-
-	hash, err := CNIValuesHash(cluster)
-	Expect(err).NotTo(HaveOccurred())
-
-	var job batchv1.Job
-	Expect(k8sClient.Get(ctx, client.ObjectKey{Namespace: tmNamespace, Name: cniHelmJobName(cluster, hash)}, &job)).To(Succeed())
-
-	return &job
-}
-
 func cniJobExists(cluster *ichorv1alpha1.TalosCluster) bool {
 	hash, err := CNIValuesHash(cluster)
 	Expect(err).NotTo(HaveOccurred())

@@ -125,9 +125,17 @@ func ciliumDaemonSet() (setReady func(ready bool)) {
 // helmRelease writes a Helm release record for cilium the way Helm's Secrets driver does:
 // base64 of gzipped JSON, with the labels the driver lists by.
 func helmRelease(version int, status string, config map[string]any) {
+	helmReleaseAt(version, status, "", config)
+}
+
+// helmReleaseAt is helmRelease for a release deployed from chart chartVersion.
+func helmReleaseAt(version int, status, chartVersion string, config map[string]any) {
 	GinkgoHelper()
 
-	raw, err := json.Marshal(map[string]any{labelName: ciliumName, "version": version, "config": config, "info": map[string]any{helmStatusKey: status}})
+	raw, err := json.Marshal(map[string]any{
+		labelName: ciliumName, "version": version, "config": config, "info": map[string]any{helmStatusKey: status},
+		"chart": map[string]any{"metadata": map[string]any{"version": chartVersion}},
+	})
 	Expect(err).NotTo(HaveOccurred())
 
 	var zipped bytes.Buffer

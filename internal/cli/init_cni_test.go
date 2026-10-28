@@ -16,11 +16,59 @@ limitations under the License.
 
 package cli
 
-import "testing"
+import (
+	"regexp"
+	"strings"
+	"testing"
+)
 
 func TestCNIPreset_Unknown(t *testing.T) {
 	if _, err := cniPreset("calico"); err == nil {
 		t.Fatal("expected an error for an unknown cni preset, got nil")
+	}
+}
+
+// tunnelProtocolRe matches cilium-config's tunnel-protocol key whatever the
+// chart's YAML quoting, followed by the value geneve.
+var tunnelProtocolRe = regexp.MustCompile(`tunnel-protocol"?:\s*"?geneve`)
+
+// TestCNIPreset_CiliumTunnel proves --cni-tunnel reaches both the bootstrap
+// manifest and the Argo CD Application values, and that unset keeps the default.
+func TestCNIPreset_CiliumTunnel(t *testing.T) {
+	preset, err := cniPresetWithTunnel("cilium", "geneve")
+	if err != nil {
+		t.Fatalf("cniPresetWithTunnel(cilium, geneve): %v", err)
+	}
+
+	out, err := buildCNIBootstrap(preset, "my-cluster", testNamespace, true)
+	if err != nil {
+		t.Fatalf("buildCNIBootstrap: %v", err)
+	}
+
+	if !tunnelProtocolRe.MatchString(out.InlineManifest.InlineManifestContents) || !strings.Contains(out.InlineManifest.InlineManifestContents, "geneve") {
+		t.Error("bootstrap manifest does not carry the geneve tunnel")
+	}
+
+	if values := out.ArgoCDApplication.Spec.Source.Helm.Values; !strings.Contains(values, "geneve") {
+		t.Errorf("Argo CD values do not carry the geneve tunnel: %q", values)
+	}
+
+	if _, err := cniPresetWithTunnel("cilium", "gre"); err == nil {
+		t.Error("cniPresetWithTunnel(cilium, gre) succeeded, want an error")
+	}
+
+	def, err := cniPresetWithTunnel("cilium", "")
+	if err != nil {
+		t.Fatalf("cniPresetWithTunnel(cilium, \"\"): %v", err)
+	}
+
+	defOut, err := buildCNIBootstrap(def, "my-cluster", testNamespace, false)
+	if err != nil {
+		t.Fatalf("buildCNIBootstrap: %v", err)
+	}
+
+	if !strings.Contains(defOut.InlineManifest.InlineManifestContents, "vxlan") || tunnelProtocolRe.MatchString(defOut.InlineManifest.InlineManifestContents) {
+		t.Error("unset tunnel did not render Cilium's default vxlan")
 	}
 }
 

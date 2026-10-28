@@ -148,7 +148,7 @@ func (a *configRolloutAdvancer) Advance(
 		return early(fmt.Errorf("rendering %q's configuration: %w", m.Name, err))
 	}
 
-	dialCtx, cancel := context.WithTimeout(ctx, etcdDialTimeout)
+	dialCtx, cancel := dialBound(ctx)
 	defer cancel()
 
 	talos, err := a.TalosClient(dialCtx, cluster, m, bundle)
@@ -201,8 +201,15 @@ func (a *configRolloutAdvancer) unreachable(
 // applying again rather than skipping the wait). baseline is the kube-apiserver container ID read
 // just before; empty skips the "has restarted" check and waits only for /readyz.
 func (a *configRolloutAdvancer) markRestarting(ctx context.Context, m *ichorv1alpha1.TalosMachine, baseline string) error {
+	return a.setRollout(ctx, m, metav1.ConditionTrue, reasonRolloutRestarting, baseline)
+}
+
+// setRollout writes the ConfigRollout marker on m.
+func (a *configRolloutAdvancer) setRollout(
+	ctx context.Context, m *ichorv1alpha1.TalosMachine, status metav1.ConditionStatus, reason, message string,
+) error {
 	return setMachineCondition(ctx, a.Client, a.Client, m, metav1.Condition{
-		Type: conditionConfigRollout, Status: metav1.ConditionTrue, Reason: reasonRolloutRestarting, Message: baseline,
+		Type: conditionConfigRollout, Status: status, Reason: reason, Message: message,
 	})
 }
 
@@ -220,9 +227,7 @@ func (a *configRolloutAdvancer) restartWaiting(
 		"the operation is paused so the next control plane is not restarted too: fix or wait for it, then retry the step",
 		m.Name, apiServerReadyTimeout, why)
 
-	if updErr := setMachineCondition(ctx, a.Client, a.Client, m, metav1.Condition{
-		Type: conditionConfigRollout, Status: metav1.ConditionFalse, Reason: reasonRolloutAPINotReady, Message: err.Error(),
-	}); updErr != nil {
+	if updErr := a.setRollout(ctx, m, metav1.ConditionFalse, reasonRolloutAPINotReady, err.Error()); updErr != nil {
 		return false, fmt.Errorf("%w (and recording it failed: %v)", err, updErr)
 	}
 
@@ -296,10 +301,8 @@ func (a *configRolloutAdvancer) afterRestart(
 		return a.restartWaiting(ctx, cluster, m, err.Error())
 	}
 
-	if err := setMachineCondition(ctx, a.Client, a.Client, m, metav1.Condition{
-		Type: conditionConfigRollout, Status: metav1.ConditionFalse, Reason: reasonRolloutConverged,
-		Message: "running the rendered configuration; kube-apiserver is ready",
-	}); err != nil {
+	if err := a.setRollout(ctx, m, metav1.ConditionFalse, reasonRolloutConverged,
+		"running the rendered configuration; kube-apiserver is ready"); err != nil {
 		return false, err
 	}
 
@@ -333,9 +336,7 @@ func (a *configRolloutAdvancer) fail(
 		err = fmt.Errorf("%w (and uncordoning failed: %v)", err, uncErr)
 	}
 
-	if updErr := setMachineCondition(ctx, a.Client, a.Client, m, metav1.Condition{
-		Type: conditionConfigRollout, Status: metav1.ConditionFalse, Reason: reasonRolloutFailed, Message: err.Error(),
-	}); updErr != nil {
+	if updErr := a.setRollout(ctx, m, metav1.ConditionFalse, reasonRolloutFailed, err.Error()); updErr != nil {
 		return fmt.Errorf("%w (and recording it failed: %v)", err, updErr)
 	}
 
@@ -383,7 +384,7 @@ func (a *configRolloutAdvancer) begin(
 			m.Name, impact.InstallTimeOnly)
 	}
 
-	dryRunCtx, cancelDryRun := context.WithTimeout(ctx, etcdDialTimeout)
+	dryRunCtx, cancelDryRun := dialBound(ctx)
 	_, err = talos.DryRunApply(dryRunCtx, rendered)
 
 	cancelDryRun()
@@ -422,7 +423,7 @@ func (a *configRolloutAdvancer) begin(
 	}
 
 	if m.Spec.Role == roleControlPlane {
-		if err := a.checkEtcd(ctx, talos, cluster, m); err != nil {
+		if err := etcdAllMembersPresent(ctx, a.Client, talos, cluster, m, "rebooting"); err != nil {
 			return err
 		}
 	}
@@ -490,9 +491,7 @@ func (a *configRolloutAdvancer) stageAndReboot(
 		return fmt.Errorf("staging the rendered configuration on %q: %w", m.Name, err)
 	}
 
-	if err := setMachineCondition(ctx, a.Client, a.Client, m, metav1.Condition{
-		Type: conditionConfigRollout, Status: metav1.ConditionTrue, Reason: reasonRolloutRebooting, Message: bootID,
-	}); err != nil {
+	if err := a.setRollout(ctx, m, metav1.ConditionTrue, reasonRolloutRebooting, bootID); err != nil {
 		return fmt.Errorf("recording the reboot of %q: %w", m.Name, err)
 	}
 
@@ -506,19 +505,11 @@ func (a *configRolloutAdvancer) stageAndReboot(
 	return nil
 }
 
-// checkEtcd refuses to reboot a control plane unless this node's etcd lists every approved
-// control plane as a member: a reboot takes this member down, and with another one already
-// missing a three-member cluster would lose quorum. Talos is not asked to do this for Reboot as
-// it is for Upgrade, so the check is Ichor's.
-func (a *configRolloutAdvancer) checkEtcd(
-	ctx context.Context, talos TalosClient, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
-) error {
-	return etcdAllMembersPresent(ctx, a.Client, talos, cluster, m, "rebooting")
-}
-
 // etcdAllMembersPresent is the quorum guard of every action that takes a control plane's etcd
 // member away for a while: talos's etcd must list every approved control
-// plane. doing completes the refusal ("rebooting", "stopping").
+// plane. A reboot takes this member down, and with another one already missing a three-member
+// cluster would lose quorum; Talos is not asked to do this for Reboot as it is for Upgrade, so the check is Ichor's.
+// doing completes the refusal ("rebooting", "stopping").
 func etcdAllMembersPresent(
 	ctx context.Context, reader client.Reader, talos TalosClient, cluster *ichorv1alpha1.TalosCluster,
 	m *ichorv1alpha1.TalosMachine, doing string,
@@ -626,10 +617,7 @@ func (a *configRolloutAdvancer) finish(
 		return false, err
 	}
 
-	if err := setMachineCondition(ctx, a.Client, a.Client, m, metav1.Condition{
-		Type: conditionConfigRollout, Status: metav1.ConditionFalse, Reason: reasonRolloutConverged,
-		Message: "running the rendered configuration",
-	}); err != nil {
+	if err := a.setRollout(ctx, m, metav1.ConditionFalse, reasonRolloutConverged, "running the rendered configuration"); err != nil {
 		return false, err
 	}
 

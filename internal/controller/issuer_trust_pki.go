@@ -77,23 +77,9 @@ func decodeCert(certPEM []byte) (*x509.Certificate, error) {
 	return x509.ParseCertificate(block.Bytes)
 }
 
+// decodeKey parses a PKCS#8 RSA key; oidctrust already does exactly that for its signing keys.
 func decodeKey(keyPEM []byte) (*rsa.PrivateKey, error) {
-	block, _ := pem.Decode(keyPEM)
-	if block == nil {
-		return nil, errors.New("private key is not PEM")
-	}
-
-	parsed, err := x509.ParsePKCS8PrivateKey(block.Bytes)
-	if err != nil {
-		return nil, errors.New("private key is not PKCS#8")
-	}
-
-	k, ok := parsed.(*rsa.PrivateKey)
-	if !ok {
-		return nil, errors.New("private key is not RSA")
-	}
-
-	return k, nil
+	return oidctrust.Key{PEM: string(keyPEM)}.Private()
 }
 
 // newCA makes the Ichor-made CA (RSA, 10 years; ADR 0094 Decision 3).
@@ -183,9 +169,12 @@ func leafUsable(leaf keyPair, ca *x509.Certificate, spec leafSpec, now time.Time
 		return false
 	}
 
-	renewAt := cert.NotBefore.Add(cert.NotAfter.Sub(cert.NotBefore) * 2 / 3)
+	return now.Before(leafRenewAt(cert))
+}
 
-	return now.Before(renewAt)
+// leafRenewAt is two thirds of the leaf's lifetime.
+func leafRenewAt(c *x509.Certificate) time.Time {
+	return c.NotBefore.Add(c.NotAfter.Sub(c.NotBefore) * 2 / 3)
 }
 
 // newLeaf signs a one-year serving certificate for the internal listener.

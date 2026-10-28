@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
@@ -586,7 +587,7 @@ func customCNISource() TalosClusterCNICustomSource {
 }
 
 var _ = Describe("TalosCluster.spec.cni", func() {
-	It("defaults preset to flannel and kubeProxy to enabled when cni is omitted entirely", func() {
+	It("defaults preset to cilium and kubeProxy to enabled when cni is omitted entirely", func() {
 		created := newCluster(corev1.LocalObjectReference{Name: literalSecrets}, 3, "true")
 		Expect(k8sClient.Create(context.Background(), created)).To(Succeed())
 
@@ -594,7 +595,7 @@ var _ = Describe("TalosCluster.spec.cni", func() {
 		key := types.NamespacedName{Name: created.Name, Namespace: created.Namespace}
 		Expect(k8sClient.Get(context.Background(), key, readBack)).To(Succeed())
 
-		Expect(readBack.Spec.CNI.Preset).To(Equal(cniPresetFlannel))
+		Expect(readBack.Spec.CNI.Preset).To(Equal(cniPresetCilium))
 		Expect(readBack.Spec.CNI.KubeProxy).To(Equal(kubeProxyEnabled))
 	})
 
@@ -733,6 +734,41 @@ var _ = Describe("TalosCluster.spec.cni.tunnel", func() {
 
 		created.Spec.CNI.Tunnel = tunnelGeneve
 		Expect(k8sClient.Update(context.Background(), created)).NotTo(Succeed())
+	})
+})
+
+// Free-form values survive pruning and stack defaults apply.
+var _ = Describe("free-form values", func() {
+	It("keeps unknown keys under spec.cni.cilium.values", func() {
+		created := newClusterWithCNI(TalosClusterCNI{
+			Preset: cniPresetCilium, KubeProxy: kubeProxyEnabled,
+			Cilium: &TalosClusterCNICilium{Values: &apiextensionsv1.JSON{Raw: []byte(`{"hubble":{"relay":{"enabled":true}},"anything":1}`)}},
+		})
+		Expect(k8sClient.Create(context.Background(), created)).To(Succeed())
+
+		readBack := &TalosCluster{}
+		key := types.NamespacedName{Name: created.Name, Namespace: created.Namespace}
+		Expect(k8sClient.Get(context.Background(), key, readBack)).To(Succeed())
+		Expect(readBack.Spec.CNI.Cilium.Values.Raw).To(MatchJSON(`{"hubble":{"relay":{"enabled":true}},"anything":1}`))
+	})
+
+	It("keeps stack values and defaults promotion to Automatic", func() {
+		inst := &IchorInstallation{
+			Name: IchorInstallationName,
+			Spec: IchorInstallationSpec{
+				Version: "v0.1.0",
+				Stack: &IchorStackSpec{
+					ArgoCD: &IchorStackComponentSpec{Values: &apiextensionsv1.JSON{Raw: []byte(`{"server":{"replicas":2}}`)}},
+				},
+			},
+		}
+		Expect(k8sClient.Create(context.Background(), inst)).To(Succeed())
+		DeferCleanup(func() { Expect(k8sClient.Delete(context.Background(), inst)).To(Succeed()) })
+
+		readBack := &IchorInstallation{}
+		Expect(k8sClient.Get(context.Background(), types.NamespacedName{Name: IchorInstallationName}, readBack)).To(Succeed())
+		Expect(readBack.Spec.Stack.Promotion).To(Equal(IchorStackPromotionAutomatic))
+		Expect(readBack.Spec.Stack.ArgoCD.Values.Raw).To(MatchJSON(`{"server":{"replicas":2}}`))
 	})
 })
 

@@ -171,10 +171,24 @@ spec:
                   cni configures which CNI preset this cluster bootstraps and how kube-proxy is split
                   between Talos and the CNI (docs/design/architecture.md, "CNI").
                 properties:
+                  cilium:
+                    description: cilium holds the user layer of Cilium's Helm values.
+                    properties:
+                      values:
+                        description: |-
+                          values is the user layer of Cilium's Helm values. Effective values are Ichor's defaults,
+                          then these deep-merged on top, then the Ichor-owned keys (ipam.mode,
+                          securityContext.capabilities.ciliumAgent, securityContext.capabilities.cleanCiliumState,
+                          cgroup.autoMount.enabled, cgroup.hostRoot, k8sServiceHost, k8sServicePort,
+                          kubeProxyReplacement, tunnelProtocol); a value for an owned key is a validation error.
+                          The merged values must stay under 64 KiB.
+                        type: object
+                        x-kubernetes-preserve-unknown-fields: true
+                    type: object
                   custom:
                     description: |-
-                      custom declares the chart/manifest source and Talos-side settings for a user-supplied CNI;
-                      set when, and only when, preset is "custom".
+                      custom is deprecated, unused; kept so the CRD never drops a field. It declared
+                      the chart/manifest source and Talos-side settings for a user-supplied CNI.
                     properties:
                       documents:
                         description: |-
@@ -3605,8 +3619,10 @@ spec:
                   handover:
                     default: automatic
                     description: |-
-                      handover controls how the CNI's cluster.inlineManifests entry is removed once Argo CD reports
-                      it Synced and Healthy (docs/design/architecture.md, "GitOps and Argo CD"): automatic (the
+                      handover is deprecated, unused; kept so the CRD never drops a field. The values
+                      manual and disabled are read as automatic: the inline entry is removed once Ichor's Helm
+                      release of Cilium is deployed. It controlled how the CNI's cluster.inlineManifests entry is
+                      removed once Argo CD reported it Synced and Healthy (docs/design/architecture.md, "GitOps and Argo CD"): automatic (the
                       controller removes it on its own), manual (removed only once an operator runs
                       `ichor gitops handoff cni`, which sets this field to automatic), or disabled (never removed
                       automatically, for a cluster that does not run Argo CD).
@@ -3627,11 +3643,10 @@ spec:
                     - replaced
                     type: string
                   preset:
-                    default: flannel
+                    default: cilium
                     description: |-
-                      preset selects the CNI this cluster bootstraps: flannel (Talos's own default; Ichor does
-                      nothing), cilium (Helm, with Talos-recommended values built in), or custom (your chart or
-                      manifests; you declare the Talos-side settings).
+                      preset selects the CNI this cluster bootstraps. Cilium is the only CNI; the
+                      values flannel and custom are deprecated, unused and kept so the CRD never drops a value.
                     enum:
                     - flannel
                     - cilium
@@ -4118,6 +4133,12 @@ spec:
               cni:
                 description: cni is the observed CNI state that is not a spec ingredient.
                 properties:
+                  availableChartVersion:
+                    description: |-
+                      availableChartVersion is the Cilium chart version the running Ichor ships when it differs
+                      from the installed release; empty when up to date. It backs the
+                      CiliumUpgradeAvailable condition.
+                    type: string
                   kubeProxy:
                     description: |-
                       kubeProxy is the mode the Talos side (cluster.proxy.disabled) is rendered for. Unset until

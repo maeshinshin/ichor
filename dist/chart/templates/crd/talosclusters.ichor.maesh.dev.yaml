@@ -3803,24 +3803,20 @@ spec:
                 type: object
               gitops:
                 description: |-
-                  gitops selects relaxed or strict GitOps and carries the repository connection pull requests
-                  are opened against (docs/adr/0056). Unset behaves as mode relaxed with no repository.
+                  gitops is deprecated, unused; kept so the CRD never drops a field (docs/adr/0101). Ichor has no
+                  GitOps behaviour any more: it does not detect Argo CD or Flux, does not open pull requests and
+                  writes the CRs directly.
                 properties:
                   mode:
                     default: relaxed
-                    description: |-
-                      mode is relaxed (the default: approving a node writes the TalosMachine directly) or strict
-                      (approving a node opens a pull request that adds it; the node stays pending until that merges
-                      and syncs). In either mode a change to a CR Argo CD tracks goes through a pull request when a
-                      repository is set. Changing mode rewrites nothing: CRs written directly under relaxed stay.
+                    description: 'mode is deprecated, unused: every value behaves
+                      as relaxed.'
                     enum:
                     - relaxed
                     - strict
                     type: string
                   repository:
-                    description: |-
-                      repository is the repository connection. Unset means a tracked CR is read-only with an export
-                      button.
+                    description: repository is deprecated, unused.
                     properties:
                       apiURL:
                         description: |-

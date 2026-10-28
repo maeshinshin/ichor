@@ -168,7 +168,7 @@ func runPatchDelete(ctx context.Context, c *apiClients, in io.Reader, out, errw 
 		}
 	}
 
-	resp, err := c.Patch.DeletePatch(ctx, connect.NewRequest(&pb.DeletePatchRequest{Patch: objectRef(apiOpts.Namespace, name), BreakGlass: breakGlassOf(apiOpts)}))
+	resp, err := c.Patch.DeletePatch(ctx, connect.NewRequest(&pb.DeletePatchRequest{Patch: objectRef(apiOpts.Namespace, name)}))
 	if err != nil {
 		return err
 	}
@@ -219,7 +219,7 @@ func runPatchWrite(
 	}
 
 	if update {
-		resp, err := c.Patch.UpdatePatch(ctx, connect.NewRequest(&pb.UpdatePatchRequest{Patch: wire, BreakGlass: breakGlassOf(apiOpts)}))
+		resp, err := c.Patch.UpdatePatch(ctx, connect.NewRequest(&pb.UpdatePatchRequest{Patch: wire}))
 		if err != nil {
 			return err
 		}

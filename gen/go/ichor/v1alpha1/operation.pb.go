@@ -281,7 +281,9 @@ type GetIchorInstallationResponse struct {
 	InstalledVersion string `protobuf:"bytes,1,opt,name=installed_version,json=installedVersion,proto3" json:"installed_version,omitempty"`
 	// target_version is IchorInstallation.spec.version.
 	TargetVersion string `protobuf:"bytes,2,opt,name=target_version,json=targetVersion,proto3" json:"target_version,omitempty"`
-	// management_mode is "ichor" or "external".
+	// Deprecated: GitOps is no longer part of Ichor (docs/adr/0101). Never set; kept so the wire format is unchanged.
+	//
+	// Deprecated: Marked as deprecated in ichor/v1alpha1/operation.proto.
 	ManagementMode string `protobuf:"bytes,3,opt,name=management_mode,json=managementMode,proto3" json:"management_mode,omitempty"`
 	// upgrading is true while an ichor operation has not finished.
 	Upgrading bool `protobuf:"varint,4,opt,name=upgrading,proto3" json:"upgrading,omitempty"`
@@ -336,6 +338,7 @@ func (x *GetIchorInstallationResponse) GetTargetVersion() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in ichor/v1alpha1/operation.proto.
 func (x *GetIchorInstallationResponse) GetManagementMode() string {
 	if x != nil {
 		return x.ManagementMode
@@ -1920,8 +1923,9 @@ type PlanOperationResponse struct {
 	BreakGlassRequired bool     `protobuf:"varint,15,opt,name=break_glass_required,json=breakGlassRequired,proto3" json:"break_glass_required,omitempty"`
 	// snapshot_time is when the snapshot an etcd restore would put back was taken; everything after it is lost.
 	SnapshotTime *timestamppb.Timestamp `protobuf:"bytes,16,opt,name=snapshot_time,json=snapshotTime,proto3" json:"snapshot_time,omitempty"`
-	// opens_pull_request is true when CreateOperation would open a pull request that changes the
-	// spec in Git (an Ichor upgrade whose IchorInstallation Argo CD tracks) and create no operation.
+	// Deprecated: GitOps is no longer part of Ichor (docs/adr/0101). Never set; kept so the wire format is unchanged.
+	//
+	// Deprecated: Marked as deprecated in ichor/v1alpha1/operation.proto.
 	OpensPullRequest bool `protobuf:"varint,17,opt,name=opens_pull_request,json=opensPullRequest,proto3" json:"opens_pull_request,omitempty"`
 	// current_schematic and target_schematic are set for a Talos upgrade whose Image Factory schematic
 	// differs between at least one approved machine's running system and spec.schematic (ADR 0023,
@@ -2075,6 +2079,7 @@ func (x *PlanOperationResponse) GetSnapshotTime() *timestamppb.Timestamp {
 	return nil
 }
 
+// Deprecated: Marked as deprecated in ichor/v1alpha1/operation.proto.
 func (x *PlanOperationResponse) GetOpensPullRequest() bool {
 	if x != nil {
 		return x.OpensPullRequest
@@ -2189,9 +2194,9 @@ type CreateOperationResponse struct {
 	// spec_changed is true when the cluster's (or the installation's) spec was
 	// changed to the target before the operation was created.
 	SpecChanged bool `protobuf:"varint,3,opt,name=spec_changed,json=specChanged,proto3" json:"spec_changed,omitempty"`
-	// pull_request_url is set instead of an operation when the IchorInstallation is managed in
-	// Git: a pull request that changes its spec.version was opened and nothing was written to
-	// the cluster (ADR 0059). operation is then empty.
+	// Deprecated: GitOps is no longer part of Ichor (docs/adr/0101). Never set; kept so the wire format is unchanged.
+	//
+	// Deprecated: Marked as deprecated in ichor/v1alpha1/operation.proto.
 	PullRequestUrl string `protobuf:"bytes,4,opt,name=pull_request_url,json=pullRequestUrl,proto3" json:"pull_request_url,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
@@ -2248,6 +2253,7 @@ func (x *CreateOperationResponse) GetSpecChanged() bool {
 	return false
 }
 
+// Deprecated: Marked as deprecated in ichor/v1alpha1/operation.proto.
 func (x *CreateOperationResponse) GetPullRequestUrl() string {
 	if x != nil {
 		return x.PullRequestUrl
@@ -2653,11 +2659,11 @@ var File_ichor_v1alpha1_operation_proto protoreflect.FileDescriptor
 const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\n" +
 	"\x1eichor/v1alpha1/operation.proto\x12\x0eichor.v1alpha1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1bichor/v1alpha1/common.proto\"\x1d\n" +
-	"\x1bGetIchorInstallationRequest\"\xe4\x01\n" +
+	"\x1bGetIchorInstallationRequest\"\xe8\x01\n" +
 	"\x1cGetIchorInstallationResponse\x12+\n" +
 	"\x11installed_version\x18\x01 \x01(\tR\x10installedVersion\x12%\n" +
-	"\x0etarget_version\x18\x02 \x01(\tR\rtargetVersion\x12'\n" +
-	"\x0fmanagement_mode\x18\x03 \x01(\tR\x0emanagementMode\x12\x1c\n" +
+	"\x0etarget_version\x18\x02 \x01(\tR\rtargetVersion\x12+\n" +
+	"\x0fmanagement_mode\x18\x03 \x01(\tB\x02\x18\x01R\x0emanagementMode\x12\x1c\n" +
 	"\tupgrading\x18\x04 \x01(\bR\tupgrading\x12)\n" +
 	"\x10update_available\x18\x05 \x01(\bR\x0fupdateAvailable\"M\n" +
 	"\x16ListEtcdBackupsRequest\x123\n" +
@@ -2787,7 +2793,7 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\x06target\x18\x03 \x01(\tR\x06target\x12'\n" +
 	"\x0fmax_unavailable\x18\x04 \x01(\x05R\x0emaxUnavailable\x125\n" +
 	"\x04node\x18\x05 \x01(\v2!.ichor.v1alpha1.NodeActionRequestR\x04node\x12E\n" +
-	"\fetcd_restore\x18\x06 \x01(\v2\".ichor.v1alpha1.EtcdRestoreRequestR\vetcdRestore\"\x92\x06\n" +
+	"\fetcd_restore\x18\x06 \x01(\v2\".ichor.v1alpha1.EtcdRestoreRequestR\vetcdRestore\"\x96\x06\n" +
 	"\x15PlanOperationResponse\x127\n" +
 	"\x06effect\x18\x01 \x01(\x0e2\x1f.ichor.v1alpha1.OperationEffectR\x06effect\x12:\n" +
 	"\bmachines\x18\x02 \x03(\v2\x1e.ichor.v1alpha1.PlannedMachineR\bmachines\x12\x12\n" +
@@ -2805,8 +2811,8 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\awarning\x18\r \x01(\tR\awarning\x12!\n" +
 	"\fconfirm_name\x18\x0e \x01(\tR\vconfirmName\x120\n" +
 	"\x14break_glass_required\x18\x0f \x01(\bR\x12breakGlassRequired\x12?\n" +
-	"\rsnapshot_time\x18\x10 \x01(\v2\x1a.google.protobuf.TimestampR\fsnapshotTime\x12,\n" +
-	"\x12opens_pull_request\x18\x11 \x01(\bR\x10opensPullRequest\x12+\n" +
+	"\rsnapshot_time\x18\x10 \x01(\v2\x1a.google.protobuf.TimestampR\fsnapshotTime\x120\n" +
+	"\x12opens_pull_request\x18\x11 \x01(\bB\x02\x18\x01R\x10opensPullRequest\x12+\n" +
 	"\x11current_schematic\x18\x12 \x01(\tR\x10currentSchematic\x12)\n" +
 	"\x10target_schematic\x18\x13 \x01(\tR\x0ftargetSchematic\"\xbf\x02\n" +
 	"\x16CreateOperationRequest\x123\n" +
@@ -2815,12 +2821,12 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\x06target\x18\x03 \x01(\tR\x06target\x12'\n" +
 	"\x0fmax_unavailable\x18\x04 \x01(\x05R\x0emaxUnavailable\x125\n" +
 	"\x04node\x18\x05 \x01(\v2!.ichor.v1alpha1.NodeActionRequestR\x04node\x12E\n" +
-	"\fetcd_restore\x18\x06 \x01(\v2\".ichor.v1alpha1.EtcdRestoreRequestR\vetcdRestore\"\xd2\x01\n" +
+	"\fetcd_restore\x18\x06 \x01(\v2\".ichor.v1alpha1.EtcdRestoreRequestR\vetcdRestore\"\xd6\x01\n" +
 	"\x17CreateOperationResponse\x127\n" +
 	"\toperation\x18\x01 \x01(\v2\x19.ichor.v1alpha1.OperationR\toperation\x121\n" +
 	"\x05audit\x18\x02 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\x12!\n" +
-	"\fspec_changed\x18\x03 \x01(\bR\vspecChanged\x12(\n" +
-	"\x10pull_request_url\x18\x04 \x01(\tR\x0epullRequestUrl\"l\n" +
+	"\fspec_changed\x18\x03 \x01(\bR\vspecChanged\x12,\n" +
+	"\x10pull_request_url\x18\x04 \x01(\tB\x02\x18\x01R\x0epullRequestUrl\"l\n" +
 	"\x19SetOperationPausedRequest\x127\n" +
 	"\toperation\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\toperation\x12\x16\n" +
 	"\x06paused\x18\x02 \x01(\bR\x06paused\"\x88\x01\n" +

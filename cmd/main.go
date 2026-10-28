@@ -40,7 +40,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -325,20 +324,16 @@ func main() {
 				setupLog.Error(err, "Failed to create webhook", "webhook", "TalosMachine")
 				os.Exit(1)
 			}
-			argoNS := os.Getenv("ICHOR_ARGOCD_NAMESPACE")
-			if argoNS == "" {
-				argoNS = "argocd"
-			}
 			// ICHOR_BREAK_GLASS_EXEMPT_USERS adds exact usernames (comma separated) to the
-			// built-in list, for an Argo CD or Flux that impersonates or lives elsewhere (ADR 0065).
-			exempt := webhookv1alpha1.DefaultExemptUsers(os.Getenv("POD_NAMESPACE"), os.Getenv("POD_SERVICE_ACCOUNT"), argoNS)
+			// built-in list (ADR 0065).
+			exempt := webhookv1alpha1.DefaultExemptUsers(os.Getenv("POD_NAMESPACE"), os.Getenv("POD_SERVICE_ACCOUNT"))
 			for u := range strings.SplitSeq(os.Getenv("ICHOR_BREAK_GLASS_EXEMPT_USERS"), ",") {
 				if u = strings.TrimSpace(u); u != "" {
 					exempt = append(exempt, u)
 				}
 			}
 			if err := webhookv1alpha1.SetupBreakGlassWebhookWithManager(mgr, webhookv1alpha1.BreakGlassOptions{
-				ArgoCDNamespace: argoNS, ExemptUsers: exempt,
+				ExemptUsers: exempt,
 			}); err != nil {
 				setupLog.Error(err, "Failed to create webhook", "webhook", "BreakGlass")
 				os.Exit(1)
@@ -390,9 +385,8 @@ func main() {
 	}
 
 	if err := (&controller.TalosMachineReconciler{
-		Client:              mgr.GetClient(),
+		Client: mgr.GetClient(),
 		APIReader:           mgr.GetAPIReader(),
-		ControllerNamespace: os.Getenv("POD_NAMESPACE"),
 		TalosClient:         controller.NewMachineryTalosClient,
 		MaintenanceClient:   controller.NewMachineryMaintenanceClient,
 		KubeClient:          kubeClient,
@@ -419,8 +413,7 @@ func main() {
 		os.Exit(1)
 	}
 	if err := (&controller.CertExpiryReconciler{
-		Client:              mgr.GetClient(),
-		ControllerNamespace: os.Getenv("POD_NAMESPACE"),
+		Client: mgr.GetClient(),
 		ExpiryWarning:       time.Duration(certExpiryWarningDays) * 24 * time.Hour,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "certexpiry")
@@ -445,7 +438,6 @@ func main() {
 	}
 	if err := (&controller.TalosStorageReconciler{
 		Client: mgr.GetClient(), APIReader: mgr.GetAPIReader(),
-		ControllerNamespace: os.Getenv("POD_NAMESPACE"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "talosstorage")
 		os.Exit(1)
@@ -480,10 +472,9 @@ func main() {
 	// namespace, and the node this pod runs on (NODE_NAME, from the downward API) so that
 	// node can be stopped last.
 	opReconciler := &controller.TalosOperationReconciler{
-		Client:              mgr.GetClient(),
+		Client: mgr.GetClient(),
 		APIReader:           mgr.GetAPIReader(),
 		TalosClient:         controller.NewMachineryTalosClient,
-		ControllerNamespace: os.Getenv("POD_NAMESPACE"),
 		NodeName:            os.Getenv("NODE_NAME"),
 		// The ca-rotation kind (ADR 0063) is, like shutdown, dispatched by the backbone to its own
 		// state machine: it needs the Kubernetes Node readiness check and an Event recorder.
@@ -533,28 +524,15 @@ func main() {
 		os.Exit(1)
 	}
 	if err := (&controller.TalosEtcdBackupReconciler{
-		Client:              mgr.GetClient(),
-		ControllerNamespace: os.Getenv("POD_NAMESPACE"),
+		Client: mgr.GetClient(),
 		SnapshotClient:      controller.NewMachineryEtcdSnapshotClient,
 		SpoolDir:            backupSpoolDir,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "talosetcdbackup")
 		os.Exit(1)
 	}
-	directClient, err := client.New(mgr.GetConfig(), client.Options{Scheme: mgr.GetScheme()})
-	if err != nil {
-		setupLog.Error(err, "Failed to create uncached client")
-		os.Exit(1)
-	}
-	argoCDNamespace := os.Getenv("ICHOR_ARGOCD_NAMESPACE")
-	if argoCDNamespace == "" {
-		argoCDNamespace = "argocd"
-	}
 	if err := (&controller.IchorInstallationReconciler{
-		Client:              mgr.GetClient(),
-		Direct:              directClient,
-		ControllerNamespace: os.Getenv("POD_NAMESPACE"),
-		ArgoCDNamespace:     argoCDNamespace,
+		Client: mgr.GetClient(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "ichorinstallation")
 		os.Exit(1)

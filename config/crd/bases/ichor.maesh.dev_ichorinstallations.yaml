@@ -61,9 +61,10 @@ spec:
               managementMode:
                 default: ichor
                 description: |-
-                  managementMode says who owns Ichor's own manifests. ichor: upgrades run through the
-                  installer Job a TalosOperation of kind ichor starts. external: Argo CD owns them, and
-                  the controller never launches an installer.
+                  managementMode is deprecated, unused; kept so the CRD never drops a field (docs/adr/0101).
+                  Upgrades always run through the installer Job a TalosOperation of kind ichor starts. The
+                  value external, which meant Argo CD owned Ichor's manifests, is still accepted and treated
+                  as ichor.
                 enum:
                 - ichor
                 - external
@@ -121,8 +122,8 @@ spec:
               conditions:
                 description: |-
                   conditions represent the current state of the IchorInstallation resource. UpToDate is
-                  True when installedVersion equals spec.version. ExternalSuggested is True when
-                  managementMode is ichor but the controller's own Deployment is tracked by Argo CD.
+                  True when installedVersion equals spec.version. An ExternalSuggested condition
+                  from an older build is removed.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.

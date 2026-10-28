@@ -30,25 +30,25 @@ import (
 
 const knownAddr = "10.0.0.55"
 
-func discoveryCluster(annotations map[string]string, d *ichorv1alpha1.TalosClusterDiscovery) *ichorv1alpha1.TalosCluster {
+func discoveryCluster(d *ichorv1alpha1.TalosClusterDiscovery) *ichorv1alpha1.TalosCluster {
 	return &ichorv1alpha1.TalosCluster{
-		Name: "c", Namespace: trackedTestNS, Annotations: annotations,
+		Name: "c", Namespace: testNS,
 		Spec: ichorv1alpha1.TalosClusterSpec{Discovery: d},
 	}
 }
 
-func addAddrReq(addr string, bg *pb.BreakGlass) *connect.Request[pb.AddDiscoveryAddressRequest] {
+func addAddrReq(addr string) *connect.Request[pb.AddDiscoveryAddressRequest] {
 	return connect.NewRequest(&pb.AddDiscoveryAddressRequest{
-		Cluster: objectRef(trackedTestNS, "c"), Address: addr, Reason: "new rack", BreakGlass: bg,
+		Cluster: objectRef(testNS, "c"), Address: addr, Reason: "new rack",
 	})
 }
 
 func TestAddDiscoveryAddressAppendsOnlyThatAddress(t *testing.T) {
-	c := discoveryCluster(nil, &ichorv1alpha1.TalosClusterDiscovery{Addresses: []string{knownAddr}, CIDRs: []string{"10.1.0.0/24"}})
-	k8s := fake.NewClientBuilder().WithScheme(trackedScheme(t)).WithObjects(c, argoCM()).Build()
+	c := discoveryCluster(&ichorv1alpha1.TalosClusterDiscovery{Addresses: []string{knownAddr}, CIDRs: []string{"10.1.0.0/24"}})
+	k8s := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(c).Build()
 	s := &Server{Client: k8s}
 
-	resp, err := s.AddDiscoveryAddress(context.Background(), addAddrReq(" 10.0.0.56 ", nil))
+	resp, err := s.AddDiscoveryAddress(context.Background(), addAddrReq(" 10.0.0.56 "))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +58,7 @@ func TestAddDiscoveryAddressAppendsOnlyThatAddress(t *testing.T) {
 	}
 
 	var got ichorv1alpha1.TalosCluster
-	if err := k8s.Get(context.Background(), types.NamespacedName{Namespace: trackedTestNS, Name: "c"}, &got); err != nil {
+	if err := k8s.Get(context.Background(), types.NamespacedName{Namespace: testNS, Name: "c"}, &got); err != nil {
 		t.Fatal(err)
 	}
 
@@ -73,14 +73,14 @@ func TestAddDiscoveryAddressAppendsOnlyThatAddress(t *testing.T) {
 }
 
 func TestAddDiscoveryAddressCreatesTheDiscoveryBlock(t *testing.T) {
-	k8s := fake.NewClientBuilder().WithScheme(trackedScheme(t)).WithObjects(discoveryCluster(nil, nil), argoCM()).Build()
+	k8s := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(discoveryCluster(nil)).Build()
 
-	if _, err := (&Server{Client: k8s}).AddDiscoveryAddress(context.Background(), addAddrReq("192.168.0.50", nil)); err != nil {
+	if _, err := (&Server{Client: k8s}).AddDiscoveryAddress(context.Background(), addAddrReq("192.168.0.50")); err != nil {
 		t.Fatal(err)
 	}
 
 	var got ichorv1alpha1.TalosCluster
-	if err := k8s.Get(context.Background(), types.NamespacedName{Namespace: trackedTestNS, Name: "c"}, &got); err != nil {
+	if err := k8s.Get(context.Background(), types.NamespacedName{Namespace: testNS, Name: "c"}, &got); err != nil {
 		t.Fatal(err)
 	}
 
@@ -90,32 +90,14 @@ func TestAddDiscoveryAddressCreatesTheDiscoveryBlock(t *testing.T) {
 }
 
 func TestAddDiscoveryAddressRefusesBadInput(t *testing.T) {
-	c := discoveryCluster(nil, &ichorv1alpha1.TalosClusterDiscovery{Addresses: []string{knownAddr}})
-	k8s := fake.NewClientBuilder().WithScheme(trackedScheme(t)).WithObjects(c, argoCM()).Build()
+	c := discoveryCluster(&ichorv1alpha1.TalosClusterDiscovery{Addresses: []string{knownAddr}})
+	k8s := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(c).Build()
 	s := &Server{Client: k8s}
 
 	for _, bad := range []string{"", "not-an-ip", "10.0.0.0/24", "fe80::1", knownAddr, "300.1.1.1"} {
-		_, err := s.AddDiscoveryAddress(context.Background(), addAddrReq(bad, nil))
+		_, err := s.AddDiscoveryAddress(context.Background(), addAddrReq(bad))
 		if connect.CodeOf(err) != connect.CodeInvalidArgument {
 			t.Fatalf("%q: want InvalidArgument, got %v", bad, err)
 		}
-	}
-}
-
-func TestAddDiscoveryAddressRefusedWhenFluxOrArgoCDTrackWithoutARepository(t *testing.T) {
-	c := discoveryCluster(map[string]string{argoTrackingAnnot: argoTrackedBy}, nil)
-	k8s := fake.NewClientBuilder().WithScheme(trackedScheme(t)).WithObjects(c, argoCM()).Build()
-
-	_, err := (&Server{Client: k8s}).AddDiscoveryAddress(context.Background(), addAddrReq("10.0.0.9", nil))
-	wantRefused(t, err, "Argo CD")
-}
-
-func TestAddDiscoveryAddressBreakGlassNeedsAUser(t *testing.T) {
-	c := discoveryCluster(map[string]string{argoTrackingAnnot: argoTrackedBy}, nil)
-	k8s := fake.NewClientBuilder().WithScheme(trackedScheme(t)).WithObjects(c, argoCM()).Build()
-
-	_, err := (&Server{Client: k8s}).AddDiscoveryAddress(context.Background(), addAddrReq("10.0.0.9", &pb.BreakGlass{Reason: "now"}))
-	if err == nil {
-		t.Fatal("want a refusal")
 	}
 }

@@ -166,10 +166,9 @@ type TalosClusterCNI struct {
 	Handover string `json:"handover,omitempty"`
 }
 
-// TalosClusterGitRepository is the repository connection PR mode and strict GitOps open pull requests
-// against (docs/adr/0056): which host, where its API and clone URL are, which branch pull requests
-// target, and a reference to the Secret holding the access token. The token itself is never a field
-// here -- this value lives in Git -- and the Secret is read in the UI backend's own namespace (ADR 0011).
+// TalosClusterGitRepository is deprecated, unused; kept so the CRD never drops a field (docs/adr/0101).
+// It was the repository connection pull-request mode opened pull requests against; nothing reads it
+// any more, and its validation is kept as it was so stored objects stay valid.
 type TalosClusterGitRepository struct {
 	// host is the Git hosting API pull requests are opened through.
 	// +kubebuilder:validation:Enum=github;gitlab;gitea
@@ -224,21 +223,18 @@ type TalosClusterGitRepository struct {
 	MachinesPath string `json:"machinesPath,omitempty"`
 }
 
-// TalosClusterGitOps selects how changes reach this cluster's CRs (docs/design/architecture.md,
-// "GitOps and Argo CD"; docs/adr/0056).
+// TalosClusterGitOps is deprecated, unused; kept so the CRD never drops a field (docs/adr/0101).
+// It selected how changes reached this cluster's CRs when Ichor knew Argo CD and Flux; nothing reads
+// it any more, and its validation is kept as it was so stored objects stay valid.
 // +kubebuilder:validation:XValidation:rule="!has(self.mode) || self.mode != 'strict' || (has(self.repository) && has(self.repository.machinesPath))",message="strict mode needs repository with machinesPath: approving a node is a pull request that adds its TalosMachine"
 type TalosClusterGitOps struct {
-	// mode is relaxed (the default: approving a node writes the TalosMachine directly) or strict
-	// (approving a node opens a pull request that adds it; the node stays pending until that merges
-	// and syncs). In either mode a change to a CR Argo CD tracks goes through a pull request when a
-	// repository is set. Changing mode rewrites nothing: CRs written directly under relaxed stay.
+	// mode is deprecated, unused: every value behaves as relaxed.
 	// +kubebuilder:validation:Enum=relaxed;strict
 	// +kubebuilder:default=relaxed
 	// +optional
 	Mode string `json:"mode,omitempty"`
 
-	// repository is the repository connection. Unset means a tracked CR is read-only with an export
-	// button.
+	// repository is deprecated, unused.
 	// +optional
 	Repository *TalosClusterGitRepository `json:"repository,omitempty"`
 }
@@ -457,8 +453,9 @@ type TalosClusterSpec struct {
 	// +optional
 	Registries []TalosClusterRegistry `json:"registries,omitempty"`
 
-	// gitops selects relaxed or strict GitOps and carries the repository connection pull requests
-	// are opened against (docs/adr/0056). Unset behaves as mode relaxed with no repository.
+	// gitops is deprecated, unused; kept so the CRD never drops a field (docs/adr/0101). Ichor has no
+	// GitOps behaviour any more: it does not detect Argo CD or Flux, does not open pull requests and
+	// writes the CRs directly.
 	// +optional
 	GitOps *TalosClusterGitOps `json:"gitops,omitempty"`
 

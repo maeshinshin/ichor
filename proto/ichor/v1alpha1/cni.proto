@@ -59,9 +59,8 @@ message GetCiliumValuesResponse {
   repeated OwnedKey owned = 3;
   // effective_yaml is what Cilium is rendered with.
   string effective_yaml = 4;
-  // tracked_by names the tool (Argo CD or Flux) that tracks the TalosCluster,
-  // or is empty. When set, SetCiliumValues is refused.
-  string tracked_by = 5;
+  // Deprecated: GitOps is no longer part of Ichor (docs/adr/0101). Never set; kept so the wire format is unchanged.
+  string tracked_by = 5 [deprecated = true];
   // available_chart_version is status.cni.availableChartVersion; empty when
   // Cilium is up to date.
   string available_chart_version = 6;

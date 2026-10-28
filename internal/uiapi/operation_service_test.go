@@ -78,7 +78,7 @@ func opObjects() []client.Object {
 func opServer(t *testing.T, objs ...client.Object) (*Server, client.Client) {
 	t.Helper()
 
-	k8s := fake.NewClientBuilder().WithScheme(trackedScheme(t)).WithObjects(objs...).WithStatusSubresource(&ichorv1alpha1.TalosOperation{}).Build()
+	k8s := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(objs...).WithStatusSubresource(&ichorv1alpha1.TalosOperation{}).Build()
 
 	return &Server{Client: k8s}, k8s
 }
@@ -113,7 +113,7 @@ func TestCreateTalosUpgradeChangesTheSpecThenCreatesTheOperation(t *testing.T) {
 	// The order is observed, not assumed: the interceptor records each write.
 	var order []string
 
-	base := fake.NewClientBuilder().WithScheme(trackedScheme(t)).WithObjects(opObjects()...).Build()
+	base := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(opObjects()...).Build()
 	k8s := interceptor.NewClient(base, interceptor.Funcs{
 		Update: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
 			order = append(order, "update cluster "+obj.(*ichorv1alpha1.TalosCluster).Spec.TalosVersion)
@@ -169,7 +169,7 @@ func TestCreateWithSameVersionDoesNotWriteTheSpec(t *testing.T) {
 }
 
 func TestCreateRefusedWhenTheCallerMayNotCreateOperationsLeavesTheSpecAlone(t *testing.T) {
-	base := fake.NewClientBuilder().WithScheme(trackedScheme(t)).WithObjects(opObjects()...).Build()
+	base := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(opObjects()...).Build()
 	user := interceptor.NewClient(base, interceptor.Funcs{
 		Create: func(_ context.Context, _ client.WithWatch, obj client.Object, _ ...client.CreateOption) error {
 			return apierrors.NewForbidden(schema.GroupResource{Group: ichorv1alpha1.SchemeGroupVersion.Group, Resource: "talosoperations"}, obj.GetName(), nil)
@@ -192,7 +192,7 @@ func TestCreateRefusedWhenTheCallerMayNotCreateOperationsLeavesTheSpecAlone(t *t
 }
 
 func TestCreateRefusedWhenTheCallerMayNotUpdateTheCluster(t *testing.T) {
-	base := fake.NewClientBuilder().WithScheme(trackedScheme(t)).WithObjects(opObjects()...).Build()
+	base := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(opObjects()...).Build()
 	user := interceptor.NewClient(base, interceptor.Funcs{
 		Update: func(_ context.Context, _ client.WithWatch, obj client.Object, _ ...client.UpdateOption) error {
 			return apierrors.NewForbidden(schema.GroupResource{Group: ichorv1alpha1.SchemeGroupVersion.Group, Resource: "talosclusters"}, obj.GetName(), nil)
@@ -228,33 +228,10 @@ func TestCreateRefusedWhileAnotherOperationIsUnfinished(t *testing.T) {
 	}
 }
 
-func TestCreateRefusedWhenArgoTracksTheCluster(t *testing.T) {
-	objs := opObjects()
-	c := objs[0].(*ichorv1alpha1.TalosCluster)
-	c.Annotations = map[string]string{argoTrackingAnnot: "app:ichor.maesh.dev/TalosCluster:default/c"}
-	objs = append(objs, argoCM())
-
-	srv, k8s := opServer(t, objs...)
-
-	_, err := srv.CreateOperation(context.Background(), opCreate(pb.OperationKind_OPERATION_KIND_TALOS, opNewTalos))
-	if connect.CodeOf(err) != connect.CodeFailedPrecondition {
-		t.Fatalf("want FailedPrecondition, got %v", err)
-	}
-
-	if getCluster(t, k8s).Spec.TalosVersion != opOldTalos || len(listOps(t, k8s)) != 0 {
-		t.Fatal("something was written")
-	}
-
-	// Without a target nothing in Git needs to change: the operation alone is created.
-	if _, err := srv.CreateOperation(context.Background(), opCreate(pb.OperationKind_OPERATION_KIND_TALOS, "")); err != nil {
-		t.Fatalf("operation without a target: %v", err)
-	}
-}
-
 func TestCreateKubeProxySwitchSetsAndThenRemovesTheConfirmationAnnotation(t *testing.T) {
 	var annotated, cleared bool
 
-	base := fake.NewClientBuilder().WithScheme(trackedScheme(t)).WithObjects(opObjects()...).Build()
+	base := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(opObjects()...).Build()
 	k8s := interceptor.NewClient(base, interceptor.Funcs{
 		Update: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
 			cl := obj.(*ichorv1alpha1.TalosCluster)
@@ -824,19 +801,5 @@ func TestMachineActionsAcceptAHostnameAndRefuseAnAmbiguousOne(t *testing.T) {
 
 	if _, err = srv.resolveMachine(ctx, objectRef(opNS, "nobody")); connect.CodeOf(err) != connect.CodeNotFound {
 		t.Fatalf("unknown: %v", err)
-	}
-}
-
-func TestKubeProxyGitTextNamesTheYAMLAndTheCommand(t *testing.T) {
-	got := kubeProxyGitText("prod", "Argo CD", "replaced")
-	for _, want := range []string{
-		`TalosCluster "prod" is tracked by Argo CD`,
-		"ichor.maesh.dev/confirm-kube-proxy-switch: replaced",
-		"kubeProxy: replaced",
-		"ichor cni kube-proxy replaced",
-	} {
-		if !strings.Contains(got, want) {
-			t.Errorf("message lacks %q:\n%s", want, got)
-		}
 	}
 }

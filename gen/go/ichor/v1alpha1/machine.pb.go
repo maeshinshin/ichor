@@ -326,7 +326,9 @@ type ApproveMachineRequest struct {
 	// for rejections," not exclusive to them, so a caller that does have a
 	// reason to approve (e.g. "replacing node-3, same role") can record it.
 	Reason string `protobuf:"bytes,5,opt,name=reason,proto3" json:"reason,omitempty"`
-	// break_glass requests an emergency direct write (docs/adr/0065).
+	// Deprecated: GitOps is no longer part of Ichor (docs/adr/0101). Never set; kept so the wire format is unchanged.
+	//
+	// Deprecated: Marked as deprecated in ichor/v1alpha1/machine.proto.
 	BreakGlass *BreakGlass `protobuf:"bytes,6,opt,name=break_glass,json=breakGlass,proto3" json:"break_glass,omitempty"`
 	// install is the system disk (TalosMachine.spec.install, ADR 0077). Unset
 	// approves without an install target.
@@ -405,6 +407,7 @@ func (x *ApproveMachineRequest) GetReason() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in ichor/v1alpha1/machine.proto.
 func (x *ApproveMachineRequest) GetBreakGlass() *BreakGlass {
 	if x != nil {
 		return x.BreakGlass
@@ -734,13 +737,13 @@ type ApproveMachineResponse struct {
 	// request merges and syncs.
 	Machine *Machine     `protobuf:"bytes,1,opt,name=machine,proto3" json:"machine,omitempty"`
 	Audit   *AuditRecord `protobuf:"bytes,2,opt,name=audit,proto3" json:"audit,omitempty"`
-	// pull_request_url is set when the approval was proposed as a pull request
-	// (strict mode, or a machine Argo CD tracks) instead of being written
-	// (docs/adr/0056).
+	// Deprecated: GitOps is no longer part of Ichor (docs/adr/0101). Never set; kept so the wire format is unchanged.
+	//
+	// Deprecated: Marked as deprecated in ichor/v1alpha1/machine.proto.
 	PullRequestUrl string `protobuf:"bytes,3,opt,name=pull_request_url,json=pullRequestUrl,proto3" json:"pull_request_url,omitempty"`
-	// notice is a warning for the caller, set after a break-glass write
-	// (docs/adr/0065): the Argo CD selfHeal caveat, or that the pull request
-	// could not be opened.
+	// Deprecated: GitOps is no longer part of Ichor (docs/adr/0101). Never set; kept so the wire format is unchanged.
+	//
+	// Deprecated: Marked as deprecated in ichor/v1alpha1/machine.proto.
 	Notice        string `protobuf:"bytes,4,opt,name=notice,proto3" json:"notice,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -790,6 +793,7 @@ func (x *ApproveMachineResponse) GetAudit() *AuditRecord {
 	return nil
 }
 
+// Deprecated: Marked as deprecated in ichor/v1alpha1/machine.proto.
 func (x *ApproveMachineResponse) GetPullRequestUrl() string {
 	if x != nil {
 		return x.PullRequestUrl
@@ -797,6 +801,7 @@ func (x *ApproveMachineResponse) GetPullRequestUrl() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in ichor/v1alpha1/machine.proto.
 func (x *ApproveMachineResponse) GetNotice() string {
 	if x != nil {
 		return x.Notice
@@ -808,7 +813,9 @@ type RejectMachineRequest struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Machine *ObjectRef             `protobuf:"bytes,1,opt,name=machine,proto3" json:"machine,omitempty"`
 	Reason  string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
-	// break_glass requests an emergency direct write (docs/adr/0065).
+	// Deprecated: GitOps is no longer part of Ichor (docs/adr/0101). Never set; kept so the wire format is unchanged.
+	//
+	// Deprecated: Marked as deprecated in ichor/v1alpha1/machine.proto.
 	BreakGlass    *BreakGlass `protobuf:"bytes,3,opt,name=break_glass,json=breakGlass,proto3" json:"break_glass,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -858,6 +865,7 @@ func (x *RejectMachineRequest) GetReason() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in ichor/v1alpha1/machine.proto.
 func (x *RejectMachineRequest) GetBreakGlass() *BreakGlass {
 	if x != nil {
 		return x.BreakGlass
@@ -871,7 +879,9 @@ type SetMachineInstallRequest struct {
 	// install is required: the system disk and optionally the installer image.
 	Install *MachineInstall `protobuf:"bytes,2,opt,name=install,proto3" json:"install,omitempty"`
 	Reason  string          `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
-	// break_glass requests an emergency direct write (docs/adr/0065).
+	// Deprecated: GitOps is no longer part of Ichor (docs/adr/0101). Never set; kept so the wire format is unchanged.
+	//
+	// Deprecated: Marked as deprecated in ichor/v1alpha1/machine.proto.
 	BreakGlass    *BreakGlass `protobuf:"bytes,4,opt,name=break_glass,json=breakGlass,proto3" json:"break_glass,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -928,6 +938,7 @@ func (x *SetMachineInstallRequest) GetReason() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in ichor/v1alpha1/machine.proto.
 func (x *SetMachineInstallRequest) GetBreakGlass() *BreakGlass {
 	if x != nil {
 		return x.BreakGlass
@@ -941,11 +952,16 @@ type SetMachineInstallResponse struct {
 	// proposed instead).
 	Machine *Machine     `protobuf:"bytes,1,opt,name=machine,proto3" json:"machine,omitempty"`
 	Audit   *AuditRecord `protobuf:"bytes,2,opt,name=audit,proto3" json:"audit,omitempty"`
-	// pull_request_url and notice: see ApproveMachineResponse.
+	// Deprecated: GitOps is no longer part of Ichor (docs/adr/0101). Never set; kept so the wire format is unchanged.
+	//
+	// Deprecated: Marked as deprecated in ichor/v1alpha1/machine.proto.
 	PullRequestUrl string `protobuf:"bytes,3,opt,name=pull_request_url,json=pullRequestUrl,proto3" json:"pull_request_url,omitempty"`
-	Notice         string `protobuf:"bytes,4,opt,name=notice,proto3" json:"notice,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// Deprecated: GitOps is no longer part of Ichor (docs/adr/0101). Never set; kept so the wire format is unchanged.
+	//
+	// Deprecated: Marked as deprecated in ichor/v1alpha1/machine.proto.
+	Notice        string `protobuf:"bytes,4,opt,name=notice,proto3" json:"notice,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SetMachineInstallResponse) Reset() {
@@ -992,6 +1008,7 @@ func (x *SetMachineInstallResponse) GetAudit() *AuditRecord {
 	return nil
 }
 
+// Deprecated: Marked as deprecated in ichor/v1alpha1/machine.proto.
 func (x *SetMachineInstallResponse) GetPullRequestUrl() string {
 	if x != nil {
 		return x.PullRequestUrl
@@ -999,6 +1016,7 @@ func (x *SetMachineInstallResponse) GetPullRequestUrl() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in ichor/v1alpha1/machine.proto.
 func (x *SetMachineInstallResponse) GetNotice() string {
 	if x != nil {
 		return x.Notice
@@ -1009,11 +1027,13 @@ func (x *SetMachineInstallResponse) GetNotice() string {
 type RejectMachineResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Audit *AuditRecord           `protobuf:"bytes,1,opt,name=audit,proto3" json:"audit,omitempty"`
-	// pull_request_url is set when the machine is tracked by Argo CD and the
-	// rejection was proposed as a pull request instead of being written
-	// (docs/adr/0056).
+	// Deprecated: GitOps is no longer part of Ichor (docs/adr/0101). Never set; kept so the wire format is unchanged.
+	//
+	// Deprecated: Marked as deprecated in ichor/v1alpha1/machine.proto.
 	PullRequestUrl string `protobuf:"bytes,2,opt,name=pull_request_url,json=pullRequestUrl,proto3" json:"pull_request_url,omitempty"`
-	// notice: see ApproveMachineResponse.notice.
+	// Deprecated: GitOps is no longer part of Ichor (docs/adr/0101). Never set; kept so the wire format is unchanged.
+	//
+	// Deprecated: Marked as deprecated in ichor/v1alpha1/machine.proto.
 	Notice        string `protobuf:"bytes,3,opt,name=notice,proto3" json:"notice,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1056,6 +1076,7 @@ func (x *RejectMachineResponse) GetAudit() *AuditRecord {
 	return nil
 }
 
+// Deprecated: Marked as deprecated in ichor/v1alpha1/machine.proto.
 func (x *RejectMachineResponse) GetPullRequestUrl() string {
 	if x != nil {
 		return x.PullRequestUrl
@@ -1063,6 +1084,7 @@ func (x *RejectMachineResponse) GetPullRequestUrl() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in ichor/v1alpha1/machine.proto.
 func (x *RejectMachineResponse) GetNotice() string {
 	if x != nil {
 		return x.Notice
@@ -1495,15 +1517,15 @@ const file_ichor_v1alpha1_machine_proto_rawDesc = "" +
 	"\x11GetMachineRequest\x123\n" +
 	"\amachine\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\amachine\"G\n" +
 	"\x12GetMachineResponse\x121\n" +
-	"\amachine\x18\x01 \x01(\v2\x17.ichor.v1alpha1.MachineR\amachine\"\xb0\x04\n" +
+	"\amachine\x18\x01 \x01(\v2\x17.ichor.v1alpha1.MachineR\amachine\"\xb4\x04\n" +
 	"\x15ApproveMachineRequest\x123\n" +
 	"\amachine\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\amachine\x12/\n" +
 	"\x04role\x18\x02 \x01(\x0e2\x1b.ichor.v1alpha1.MachineRoleR\x04role\x12V\n" +
 	"\vnode_labels\x18\x03 \x03(\v25.ichor.v1alpha1.ApproveMachineRequest.NodeLabelsEntryR\n" +
 	"nodeLabels\x12\x1a\n" +
 	"\bhostname\x18\x04 \x01(\tR\bhostname\x12\x16\n" +
-	"\x06reason\x18\x05 \x01(\tR\x06reason\x12;\n" +
-	"\vbreak_glass\x18\x06 \x01(\v2\x1a.ichor.v1alpha1.BreakGlassR\n" +
+	"\x06reason\x18\x05 \x01(\tR\x06reason\x12?\n" +
+	"\vbreak_glass\x18\x06 \x01(\v2\x1a.ichor.v1alpha1.BreakGlassB\x02\x18\x01R\n" +
 	"breakGlass\x128\n" +
 	"\ainstall\x18\a \x01(\v2\x1e.ichor.v1alpha1.MachineInstallR\ainstall\x128\n" +
 	"\anetwork\x18\b \x01(\v2\x1e.ichor.v1alpha1.MachineNetworkR\anetwork\x125\n" +
@@ -1535,32 +1557,32 @@ const file_ichor_v1alpha1_machine_proto_rawDesc = "" +
 	"\bdev_path\x18\x05 \x01(\tR\adevPath\"W\n" +
 	"\x0eMachineInstall\x12/\n" +
 	"\x04disk\x18\x01 \x01(\v2\x1b.ichor.v1alpha1.MachineDiskR\x04disk\x12\x14\n" +
-	"\x05image\x18\x02 \x01(\tR\x05image\"\xc0\x01\n" +
+	"\x05image\x18\x02 \x01(\tR\x05image\"\xc8\x01\n" +
 	"\x16ApproveMachineResponse\x121\n" +
 	"\amachine\x18\x01 \x01(\v2\x17.ichor.v1alpha1.MachineR\amachine\x121\n" +
-	"\x05audit\x18\x02 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\x12(\n" +
-	"\x10pull_request_url\x18\x03 \x01(\tR\x0epullRequestUrl\x12\x16\n" +
-	"\x06notice\x18\x04 \x01(\tR\x06notice\"\xa0\x01\n" +
+	"\x05audit\x18\x02 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\x12,\n" +
+	"\x10pull_request_url\x18\x03 \x01(\tB\x02\x18\x01R\x0epullRequestUrl\x12\x1a\n" +
+	"\x06notice\x18\x04 \x01(\tB\x02\x18\x01R\x06notice\"\xa4\x01\n" +
 	"\x14RejectMachineRequest\x123\n" +
 	"\amachine\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\amachine\x12\x16\n" +
-	"\x06reason\x18\x02 \x01(\tR\x06reason\x12;\n" +
-	"\vbreak_glass\x18\x03 \x01(\v2\x1a.ichor.v1alpha1.BreakGlassR\n" +
-	"breakGlass\"\xde\x01\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason\x12?\n" +
+	"\vbreak_glass\x18\x03 \x01(\v2\x1a.ichor.v1alpha1.BreakGlassB\x02\x18\x01R\n" +
+	"breakGlass\"\xe2\x01\n" +
 	"\x18SetMachineInstallRequest\x123\n" +
 	"\amachine\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\amachine\x128\n" +
 	"\ainstall\x18\x02 \x01(\v2\x1e.ichor.v1alpha1.MachineInstallR\ainstall\x12\x16\n" +
-	"\x06reason\x18\x03 \x01(\tR\x06reason\x12;\n" +
-	"\vbreak_glass\x18\x04 \x01(\v2\x1a.ichor.v1alpha1.BreakGlassR\n" +
-	"breakGlass\"\xc3\x01\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason\x12?\n" +
+	"\vbreak_glass\x18\x04 \x01(\v2\x1a.ichor.v1alpha1.BreakGlassB\x02\x18\x01R\n" +
+	"breakGlass\"\xcb\x01\n" +
 	"\x19SetMachineInstallResponse\x121\n" +
 	"\amachine\x18\x01 \x01(\v2\x17.ichor.v1alpha1.MachineR\amachine\x121\n" +
-	"\x05audit\x18\x02 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\x12(\n" +
-	"\x10pull_request_url\x18\x03 \x01(\tR\x0epullRequestUrl\x12\x16\n" +
-	"\x06notice\x18\x04 \x01(\tR\x06notice\"\x8c\x01\n" +
+	"\x05audit\x18\x02 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\x12,\n" +
+	"\x10pull_request_url\x18\x03 \x01(\tB\x02\x18\x01R\x0epullRequestUrl\x12\x1a\n" +
+	"\x06notice\x18\x04 \x01(\tB\x02\x18\x01R\x06notice\"\x94\x01\n" +
 	"\x15RejectMachineResponse\x121\n" +
-	"\x05audit\x18\x01 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\x12(\n" +
-	"\x10pull_request_url\x18\x02 \x01(\tR\x0epullRequestUrl\x12\x16\n" +
-	"\x06notice\x18\x03 \x01(\tR\x06notice\"b\n" +
+	"\x05audit\x18\x01 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\x12,\n" +
+	"\x10pull_request_url\x18\x02 \x01(\tB\x02\x18\x01R\x0epullRequestUrl\x12\x1a\n" +
+	"\x06notice\x18\x03 \x01(\tB\x02\x18\x01R\x06notice\"b\n" +
 	"\x0fMachineIdentity\x12\x12\n" +
 	"\x04uuid\x18\x01 \x01(\tR\x04uuid\x12\x16\n" +
 	"\x06serial\x18\x02 \x01(\tR\x06serial\x12#\n" +

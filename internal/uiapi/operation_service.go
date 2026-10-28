@@ -34,7 +34,6 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
-	"github.com/maeshinshin/ichor/pkg/gitopstracking"
 	"github.com/maeshinshin/ichor/pkg/upgrade"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -276,9 +275,6 @@ type opPlan struct {
 	cluster *ichorv1alpha1.TalosCluster
 	// install is set for the ichor kind.
 	install *ichorv1alpha1.IchorInstallation
-	// pr is set when the target is proposed as a pull request on the installation's file in
-	// Git instead of being written (ADR 0059): no operation is created.
-	pr *prPlan
 	// node is set for the node kind.
 	node *nodePlan
 	// restore is set for the etcd-restore kind.
@@ -311,18 +307,6 @@ func normalizeTarget(kind, target string) (string, error) {
 	}
 
 	return target, nil
-}
-
-// trackedBy names the tool tracking obj, or "". A spec write to a tracked CR
-// belongs in its repository (ADR 0051); "cannot tell" refuses too (ADR 0044).
-func (s *Server) trackedBy(ctx context.Context, obj client.Object) (string, error) {
-	_, by, err := gitopstracking.IsTracked(ctx, s.Client, s.argoNamespace(), obj)
-	if err != nil {
-		return "", connect.NewError(connect.CodeUnavailable,
-			fmt.Errorf("cannot tell whether Argo CD or Flux tracks %q, so it is not written: %w", client.ObjectKeyFromObject(obj), err))
-	}
-
-	return by, nil
 }
 
 //nolint:gocyclo // one switch over the seven kinds, each a few lines
@@ -366,8 +350,6 @@ func (s *Server) planOperation(
 
 	p := &opPlan{kind: kind, cluster: &cluster, resp: &pb.PlanOperationResponse{MaxUnavailable: maxUnavailable}}
 
-	var tracked client.Object = &cluster
-
 	switch kind {
 	case ichorv1alpha1.TalosOperationKindTalos:
 		p.resp.Effect, p.resp.Current = pb.OperationEffect_OPERATION_EFFECT_REBOOT, cluster.Spec.TalosVersion
@@ -405,7 +387,7 @@ func (s *Server) planOperation(
 
 		// Current is what runs, not what was asked for: after a rolled-back upgrade spec.version
 		// is the failed target while the controller still reports the old version.
-		p.resp.Current, tracked = p.install.Status.InstalledVersion, p.install
+		p.resp.Current = p.install.Status.InstalledVersion
 		if p.resp.Current == "" {
 			p.resp.Current = p.install.Spec.Version
 		}
@@ -424,7 +406,7 @@ func (s *Server) planOperation(
 		return nil, err
 	}
 
-	p.resp.Blocked, err = s.blockedReason(ctx, p, &cluster, tracked)
+	p.resp.Blocked, err = s.blockedReason(ctx, p, &cluster)
 	if err != nil {
 		return nil, err
 	}
@@ -610,7 +592,7 @@ func (s *Server) planMachines(ctx context.Context, p *opPlan, cluster *ichorv1al
 }
 
 func (s *Server) blockedReason(
-	ctx context.Context, p *opPlan, cluster *ichorv1alpha1.TalosCluster, tracked client.Object,
+	ctx context.Context, p *opPlan, cluster *ichorv1alpha1.TalosCluster,
 ) (string, error) {
 	if blocked, err := s.unfinishedOperation(ctx, cluster); err != nil || blocked != "" {
 		return blocked, err
@@ -624,53 +606,7 @@ func (s *Server) blockedReason(
 		return "no approved machine has a pending configuration change that needs a reboot or an API server restart (nothing is waiting in Ready=RebootRequired or APIServerRestartRequired)", nil
 	}
 
-	if p.resp.SpecChanges {
-		by, err := s.trackedBy(ctx, tracked)
-		if err != nil {
-			return "", err
-		}
-
-		if by == "" && p.install != nil && p.install.Spec.ManagementMode == ichorv1alpha1.IchorManagementModeExternal {
-			return "IchorInstallation is in external mode (Git owns Ichor's manifests) but is not tracked by Argo CD, " +
-				"so this backend can neither write it nor open a pull request: change spec.version in Git", nil
-		}
-
-		if by != "" {
-			what := kindTalosCluster
-			if p.install != nil {
-				what = "IchorInstallation"
-
-				// Argo CD owns it, but Git can be changed by a pull request when the cluster is
-				// connected to the repository the Application syncs from.
-				if plan, err := s.planWriteIn(ctx, p.install, cluster.Namespace, cluster.Name, false, nil); err == nil && plan != nil {
-					p.pr, p.resp.OpensPullRequest = plan, true
-
-					return "", nil
-				}
-			}
-
-			if p.kind == ichorv1alpha1.TalosOperationKindCNI {
-				return kubeProxyGitText(tracked.GetName(), by, p.resp.Target), nil
-			}
-
-			return fmt.Sprintf("%s %q is tracked by %s, so its spec is read-only here: change it in Git (a pull request), "+
-				"then start the operation without a target", what, tracked.GetName(), by), nil
-		}
-	}
-
 	return "", nil
-}
-
-// kubeProxyGitText is what a kube-proxy switch says on a cluster Argo CD tracks: the admission policy
-// admits the change only with the annotation naming the new mode, so Git has to carry both, and the
-// annotation is one-shot because it matches only that target. Re-running the same command afterwards
-// finds the spec already changed and starts the operation.
-func kubeProxyGitText(name, by, target string) string {
-	return fmt.Sprintf("TalosCluster %q is tracked by %s, so its spec is read-only here. Commit this change to Git and let %s sync it:\n\n"+
-		"  metadata:\n    annotations:\n      %s: %s\n  spec:\n    cni:\n      kubeProxy: %s\n\n"+
-		"The annotation lets the admission policy admit exactly this switch and no other; remove it from Git once the operation has started. "+
-		"Then run again: ichor cni kube-proxy %s",
-		name, by, by, ichorv1alpha1.TalosClusterConfirmKubeProxySwitchAnnotation, target, target, target)
 }
 
 // unfinishedOperation names the operation of the cluster that still runs, which blocks a new one.
@@ -762,10 +698,6 @@ func (s *Server) CreateOperation(
 		}
 
 		return connect.NewResponse(resp), nil
-	}
-
-	if p.pr != nil {
-		return s.upgradeIchorByPR(ctx, p)
 	}
 
 	cluster := p.cluster

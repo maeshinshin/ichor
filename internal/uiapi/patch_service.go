@@ -26,7 +26,6 @@ import (
 	"connectrpc.com/connect"
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
-	"k8s.io/apimachinery/pkg/types"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
@@ -147,27 +146,8 @@ func (s *Server) UpdatePatch(
 		return nil, err
 	}
 
-	plan, err := s.planWrite(ctx, p, p.Spec.ClusterRef.Name, false, req.Msg.GetBreakGlass())
-	if err != nil {
-		return nil, err
-	}
-
-	stored := p.DeepCopy()
-
 	if err := applyPatchSpec(&p.Spec, wire); err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
-	}
-
-	var cluster ichorv1alpha1.TalosCluster
-
-	if plan != nil {
-		if err := s.Get(ctx, types.NamespacedName{Namespace: p.Namespace, Name: p.Spec.ClusterRef.Name}, &cluster); err != nil {
-			return nil, mapGetError(fmt.Sprintf("cluster %q", p.Spec.ClusterRef.Name), err)
-		}
-
-		if plan.bg == nil {
-			return s.updatePatchByPR(ctx, plan, &cluster, p, stored)
-		}
 	}
 
 	if err := s.Update(ctx, p, strictFieldValidation); err != nil {
@@ -181,16 +161,7 @@ func (s *Server) UpdatePatch(
 
 	audit := &pb.AuditRecord{Actor: s.actorName(ctx), At: timestamppb.New(s.now()), Action: "update", Target: ref}
 
-	url, notice := s.afterBreakGlass(ctx, plan, p, audit, func() (string, error) {
-		r, err := s.updatePatchByPR(ctx, plan, &cluster, p, stored)
-		if err != nil {
-			return "", err
-		}
-
-		return r.Msg.GetPullRequestUrl(), nil
-	})
-
-	return connect.NewResponse(&pb.UpdatePatchResponse{Patch: out, Audit: audit, PullRequestUrl: url, Notice: notice}), nil
+	return connect.NewResponse(&pb.UpdatePatchResponse{Patch: out, Audit: audit}), nil
 }
 
 // DeletePatch removes a TalosConfigPatch outright: unlike RejectMachine
@@ -208,31 +179,13 @@ func (s *Server) DeletePatch(
 		return nil, err
 	}
 
-	plan, err := s.planWrite(ctx, p, p.Spec.ClusterRef.Name, false, req.Msg.GetBreakGlass())
-	if err != nil {
-		return nil, err
-	}
-
-	if plan != nil && plan.bg == nil {
-		return s.deletePatchByPR(ctx, plan, p, ref)
-	}
-
 	if err := s.Delete(ctx, p); err != nil {
 		return nil, mapOperationWriteError("deleting patch", namespacedName(ref), err)
 	}
 
 	audit := &pb.AuditRecord{Actor: s.actorName(ctx), At: timestamppb.New(s.now()), Action: "delete", Target: ref}
 
-	url, notice := s.afterBreakGlass(ctx, plan, p, audit, func() (string, error) {
-		r, err := s.deletePatchByPR(ctx, plan, p, ref)
-		if err != nil {
-			return "", err
-		}
-
-		return r.Msg.GetPullRequestUrl(), nil
-	})
-
-	return connect.NewResponse(&pb.DeletePatchResponse{Audit: audit, PullRequestUrl: url, Notice: notice}), nil
+	return connect.NewResponse(&pb.DeletePatchResponse{Audit: audit}), nil
 }
 
 // PreviewImpact classifies a proposed patch's own fields against

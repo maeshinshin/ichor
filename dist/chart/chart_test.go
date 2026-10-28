@@ -115,8 +115,6 @@ const (
 // backend must keep separate Kubernetes identities (architecture.md "Trust").
 const adr0020Doc = "docs/adr/0020-ichor-ui-shipping-path.md"
 
-const adr0051Doc = "docs/adr/0051-ui-and-cli-writes-refuse-gitops-tracked-crs.md"
-
 // TestChartInvariants renders the committed chart under both the
 // conventional release name (Makefile's HELM_RELEASE) and a non-default one,
 // and checks every invariant the hand-edits in templates/ exist to hold.
@@ -536,60 +534,6 @@ func checkUIBackendRBACIsSeparate(t *testing.T, release string, docs []map[strin
 				"must keep separate identities; see %s",
 			release, kindClusterRoleBinding, ichorUIRoleName, ichorUIServiceAccountName, adr0020Doc,
 		)
-	}
-}
-
-// TestUIArgoCDNamespaceEnv pins ichorUI.argocdNamespace to ichor-ui's ICHOR_ARGOCD_NAMESPACE
-// (docs/adr/0051): without it the UI backend reads argocd-cm in "argocd" whatever Argo CD's
-// real namespace is, and a CR Argo CD tracks there gets written directly.
-func TestUIArgoCDNamespaceEnv(t *testing.T) {
-	const envName = "ICHOR_ARGOCD_NAMESPACE"
-
-	for _, tc := range []struct {
-		name string
-		sets []string
-		want string
-	}{
-		{name: "default", want: "argocd"},
-		{name: "override", sets: []string{"ichorUI.argocdNamespace=gitops-argo"}, want: "gitops-argo"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			docs := renderChartWithValues(t, "ichor", tc.sets...)
-
-			deployment := find(docs, kindDeployment, ichorUIDeploymentName)
-			if deployment == nil {
-				t.Fatalf("helm template . %v: no %s %q", tc.sets, kindDeployment, ichorUIDeploymentName)
-			}
-			got, found := containerEnvValue(deployment, envName)
-			if !found || got != tc.want {
-				t.Errorf("helm template . %v: %s = %q (found=%v), want %q; see %s",
-					tc.sets, envName, got, found, tc.want, adr0051Doc)
-			}
-		})
-	}
-}
-
-// TestUILinksEnv pins ichorUI.links to ICHOR_LINK_* (docs/adr/0061): nothing registered means
-// no env at all, and a registered tool reaches the container under its upper-case name.
-func TestUILinksEnv(t *testing.T) {
-	off := find(renderChartWithValues(t, "ichor"), kindDeployment, ichorUIDeploymentName)
-	for _, n := range []string{"ARGOCD", "GRAFANA", "HUBBLE", "LONGHORN"} {
-		if _, found := containerEnvValue(off, "ICHOR_LINK_"+n); found {
-			t.Errorf("ICHOR_LINK_%s is set by default", n)
-		}
-	}
-
-	rendered := renderChartWithValues(t, "ichor",
-		"ichorUI.links.argocd=https://argo.example", "ichorUI.links.hubble=https://hubble.example")
-	on := find(rendered, kindDeployment, ichorUIDeploymentName)
-	if got, _ := containerEnvValue(on, "ICHOR_LINK_ARGOCD"); got != "https://argo.example" {
-		t.Errorf("ICHOR_LINK_ARGOCD = %q", got)
-	}
-	if got, _ := containerEnvValue(on, "ICHOR_LINK_HUBBLE"); got != "https://hubble.example" {
-		t.Errorf("ICHOR_LINK_HUBBLE = %q", got)
-	}
-	if _, found := containerEnvValue(on, "ICHOR_LINK_GRAFANA"); found {
-		t.Error("ICHOR_LINK_GRAFANA is set though no URL was registered")
 	}
 }
 

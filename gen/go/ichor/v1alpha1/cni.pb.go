@@ -146,8 +146,9 @@ type GetCiliumValuesResponse struct {
 	Owned []*OwnedKey `protobuf:"bytes,3,rep,name=owned,proto3" json:"owned,omitempty"`
 	// effective_yaml is what Cilium is rendered with.
 	EffectiveYaml string `protobuf:"bytes,4,opt,name=effective_yaml,json=effectiveYaml,proto3" json:"effective_yaml,omitempty"`
-	// tracked_by names the tool (Argo CD or Flux) that tracks the TalosCluster,
-	// or is empty. When set, SetCiliumValues is refused.
+	// Deprecated: GitOps is no longer part of Ichor (docs/adr/0101). Never set; kept so the wire format is unchanged.
+	//
+	// Deprecated: Marked as deprecated in ichor/v1alpha1/cni.proto.
 	TrackedBy string `protobuf:"bytes,5,opt,name=tracked_by,json=trackedBy,proto3" json:"tracked_by,omitempty"`
 	// available_chart_version is status.cni.availableChartVersion; empty when
 	// Cilium is up to date.
@@ -214,6 +215,7 @@ func (x *GetCiliumValuesResponse) GetEffectiveYaml() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in ichor/v1alpha1/cni.proto.
 func (x *GetCiliumValuesResponse) GetTrackedBy() string {
 	if x != nil {
 		return x.TrackedBy
@@ -663,14 +665,14 @@ const file_ichor_v1alpha1_cni_proto_rawDesc = "" +
 	"\n" +
 	"value_yaml\x18\x03 \x01(\tR\tvalueYaml\"M\n" +
 	"\x16GetCiliumValuesRequest\x123\n" +
-	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\"\x89\x02\n" +
+	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\"\x8d\x02\n" +
 	"\x17GetCiliumValuesResponse\x12#\n" +
 	"\rdefaults_yaml\x18\x01 \x01(\tR\fdefaultsYaml\x12\x1b\n" +
 	"\tuser_yaml\x18\x02 \x01(\tR\buserYaml\x12.\n" +
 	"\x05owned\x18\x03 \x03(\v2\x18.ichor.v1alpha1.OwnedKeyR\x05owned\x12%\n" +
-	"\x0eeffective_yaml\x18\x04 \x01(\tR\reffectiveYaml\x12\x1d\n" +
+	"\x0eeffective_yaml\x18\x04 \x01(\tR\reffectiveYaml\x12!\n" +
 	"\n" +
-	"tracked_by\x18\x05 \x01(\tR\ttrackedBy\x126\n" +
+	"tracked_by\x18\x05 \x01(\tB\x02\x18\x01R\ttrackedBy\x126\n" +
 	"\x17available_chart_version\x18\x06 \x01(\tR\x15availableChartVersion\"o\n" +
 	"\x1bValidateCiliumValuesRequest\x123\n" +
 	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x12\x1b\n" +

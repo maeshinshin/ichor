@@ -605,10 +605,7 @@ type CARotationCertificate struct {
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=".metadata.creationTimestamp"
 
 // TalosOperation is the Schema for the talosoperations API. It is a record
-// of an imperative action in progress, not a declarative desired state, so
-// it is one of the kinds docs/design/architecture.md's "GitOps and Argo CD"
-// section names as not going in Git ("What doesn't [go in Git]: Secrets,
-// TalosOperations, ...").
+// of an imperative action in progress, not a declarative desired state.
 type TalosOperation struct {
 	metav1.TypeMeta `json:",inline"`
 

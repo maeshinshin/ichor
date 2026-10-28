@@ -20,17 +20,13 @@ import (
 	"context"
 	"fmt"
 
-	appsv1 "k8s.io/api/apps/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/version"
-	"github.com/maeshinshin/ichor/pkg/gitopstracking"
 )
 
 // controllerDeploymentName is the controller's own Deployment as config/default names it
@@ -39,34 +35,22 @@ const controllerDeploymentName = "ichor-controller-manager"
 
 // Condition types IchorInstallation reports.
 const (
-	conditionUpToDate          = "UpToDate"
+	conditionUpToDate = "UpToDate"
+
+	// conditionExternalSuggested was reported while Ichor knew a GitOps tool; it is no longer set and
+	// is removed from the status of installations that carry it (docs/adr/0101).
 	conditionExternalSuggested = "ExternalSuggested"
 )
 
-// IchorInstallationReconciler reports on Ichor's own installation: the running version, and
-// whether the controller finds itself under GitOps. It never changes spec and never launches
+// IchorInstallationReconciler reports on Ichor's own installation: the running version. It never changes spec and never launches
 // the installer -- that is the kind: ichor executor's job, started by a TalosOperation
 // (ADR 0059) -- and, per the design, the controller never upgrades itself.
 type IchorInstallationReconciler struct {
 	client.Client
-
-	// Direct reads the controller's own Deployment and argocd-cm without an informer:
-	// the manager's cached client would need list/watch on every Deployment and
-	// ConfigMap, far more than the two single-object reads this needs.
-	Direct client.Client
-
-	// ControllerNamespace is where the controller's own Deployment lives (POD_NAMESPACE).
-	ControllerNamespace string
-
-	// ArgoCDNamespace is where argocd-cm lives, for the tracking check.
-	ArgoCDNamespace string
 }
 
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=ichorinstallations,verbs=get;list;watch
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=ichorinstallations/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=apps,namespace=ichor-system,resources=deployments,verbs=get
-// +kubebuilder:rbac:groups="",resources=configmaps,resourceNames=argocd-cm,verbs=get
-// +kubebuilder:rbac:groups=kustomize.toolkit.fluxcd.io,resources=kustomizations,verbs=list
 
 // Reconcile writes status.installedVersion and the two conditions.
 func (r *IchorInstallationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -89,15 +73,7 @@ func (r *IchorInstallationReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		ObservedGeneration: inst.Generation,
 	})
 
-	suggested, msg, err := r.externalSuggested(ctx, &inst)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-
-	meta.SetStatusCondition(&inst.Status.Conditions, metav1.Condition{
-		Type: conditionExternalSuggested, Status: suggested, Reason: "TrackingChecked", Message: msg,
-		ObservedGeneration: inst.Generation,
-	})
+	meta.RemoveStatusCondition(&inst.Status.Conditions, conditionExternalSuggested)
 
 	if !equalIchorStatus(orig.Status, inst.Status) {
 		if err := r.Status().Update(ctx, &inst); err != nil {
@@ -106,38 +82,6 @@ func (r *IchorInstallationReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	}
 
 	return ctrl.Result{}, nil
-}
-
-// externalSuggested is True when the mode is ichor but a GitOps tool tracks the controller's
-// own Deployment: two writers on the same manifests (design, "Ichor under Argo CD").
-func (r *IchorInstallationReconciler) externalSuggested(
-	ctx context.Context, inst *ichorv1alpha1.IchorInstallation,
-) (metav1.ConditionStatus, string, error) {
-	if inst.Spec.ManagementMode == ichorv1alpha1.IchorManagementModeExternal {
-		return metav1.ConditionFalse, "managementMode is already external", nil
-	}
-
-	var dep appsv1.Deployment
-
-	key := types.NamespacedName{Namespace: r.ControllerNamespace, Name: controllerDeploymentName}
-	if err := r.Direct.Get(ctx, key, &dep); err != nil {
-		if apierrors.IsNotFound(err) {
-			return metav1.ConditionFalse, "the controller's Deployment is not found", nil
-		}
-
-		return metav1.ConditionUnknown, "", err
-	}
-
-	tracked, by, err := gitopstracking.IsTracked(ctx, r.Direct, r.ArgoCDNamespace, &dep)
-	if err != nil {
-		return metav1.ConditionUnknown, "", err
-	}
-
-	if tracked {
-		return metav1.ConditionTrue, fmt.Sprintf("the controller's Deployment is tracked by %s; consider managementMode external", by), nil
-	}
-
-	return metav1.ConditionFalse, "the controller's Deployment is not tracked", nil
 }
 
 func equalIchorStatus(a, b ichorv1alpha1.IchorInstallationStatus) bool {

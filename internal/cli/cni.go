@@ -306,10 +306,6 @@ func runCniValuesEdit(
 		return err
 	}
 
-	if by := cur.Msg.GetTrackedBy(); by != "" {
-		return fmt.Errorf("cni values: the cluster is tracked by %s, so it is read-only here", by)
-	}
-
 	f, err := os.CreateTemp("", "ichor-cilium-values-*.yaml")
 	if err != nil {
 		return err

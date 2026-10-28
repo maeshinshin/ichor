@@ -82,14 +82,6 @@ type Server struct {
 	// Client "may I?" only then, or through Impersonate (docs/adr/0065).
 	CallerCredentials bool
 
-	// ArgoCDNamespace is where argocd-cm is read to tell whether Argo CD
-	// tracks a CR (docs/adr/0051). Empty means "argocd".
-	ArgoCDNamespace string
-
-	// Links are the external tool URLs from the chart's values (docs/adr/0061).
-	// Empty means "not registered".
-	Links Links
-
 	// DownloadTalosClient opens the connection for the support bundle, etcd
 	// snapshot and packet capture downloads (docs/adr/0084), each with the
 	// least Talos role its call needs. NewMachineryDownloadTalosClient is the
@@ -104,8 +96,6 @@ type Server struct {
 	// Users is non-nil when Ichor's own users are on (docs/adr/0094); UserService
 	// answers FailedPrecondition otherwise.
 	Users *UserSettings
-
-	prs prCache
 
 	diag     diagnostics
 	diagOnce sync.Once
@@ -177,11 +167,6 @@ func mapGetError(what string, err error) error {
 
 	return connect.NewError(connect.CodeInternal, fmt.Errorf("getting %s: %w", what, err))
 }
-
-// defaultArgoCDNamespace is where Argo CD's argocd-cm is read when
-// Server.ArgoCDNamespace is empty (the same default `ichor init --argocd`
-// uses).
-const defaultArgoCDNamespace = "argocd"
 
 // mapListError is mapGetError for a List: forbidden is the caller's answer,
 // anything else is internal.

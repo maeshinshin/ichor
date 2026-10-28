@@ -448,12 +448,6 @@ func runStartOperation(ctx context.Context, c *apiClients, in io.Reader, out, er
 		return err
 	}
 
-	if url := resp.Msg.GetPullRequestUrl(); url != "" {
-		_, _ = fmt.Fprint(errw, pullRequestText(url))
-
-		return writeMessage(out, outputFormat, resp.Msg)
-	}
-
 	if s.AfterCreate != nil {
 		return s.AfterCreate(ctx, resp.Msg.GetOperation().GetRef(), resp.Msg)
 	}

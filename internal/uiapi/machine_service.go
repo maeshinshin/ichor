@@ -181,11 +181,6 @@ func (s *Server) ApproveMachine(
 		return nil, err
 	}
 
-	plan, err := s.planWrite(ctx, m, m.Spec.ClusterRef.Name, true, req.Msg.GetBreakGlass())
-	if err != nil {
-		return nil, err
-	}
-
 	if m.Spec.IsApproved() {
 		return nil, connect.NewError(connect.CodeFailedPrecondition,
 			fmt.Errorf("machine %q is already approved; approving it again would risk an unintended "+
@@ -230,7 +225,6 @@ func (s *Server) ApproveMachine(
 	// (docs/adr/0018). The only state ApproveMachine refuses to touch is
 	// already-approved, checked above.
 	now := s.now()
-	stored := m.DeepCopy()
 
 	m.Spec.Role = machineRoleToSpec(role)
 	m.Spec.NodeLabels = req.Msg.GetNodeLabels()
@@ -243,10 +237,6 @@ func (s *Server) ApproveMachine(
 		Actor: s.actorName(ctx), Reason: req.Msg.GetReason(), At: metav1.NewTime(now),
 	}
 
-	if plan != nil && plan.bg == nil {
-		return s.approveByPR(ctx, plan, m, stored, now, req.Msg.GetReason())
-	}
-
 	if err := s.Update(ctx, m, strictFieldValidation); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("approving machine %q: %w", namespacedName(ref), err))
 	}
@@ -255,16 +245,7 @@ func (s *Server) ApproveMachine(
 		Actor: s.actorName(ctx), At: timestamppb.New(now), Action: "approve", Target: objectRef(m.Namespace, m.Name), Reason: req.Msg.GetReason(),
 	}
 
-	url, notice := s.afterBreakGlass(ctx, plan, m, audit, func() (string, error) {
-		r, err := s.approveByPR(ctx, plan, m, stored, now, req.Msg.GetReason())
-		if err != nil {
-			return "", err
-		}
-
-		return r.Msg.GetPullRequestUrl(), nil
-	})
-
-	return connect.NewResponse(&pb.ApproveMachineResponse{Machine: machineToPB(m), Audit: audit, PullRequestUrl: url, Notice: notice}), nil
+	return connect.NewResponse(&pb.ApproveMachineResponse{Machine: machineToPB(m), Audit: audit}), nil
 }
 
 // installFromPB converts the wire install target to the spec field; nil means "none". Exactly
@@ -331,29 +312,16 @@ func (s *Server) RejectMachine(
 		return nil, err
 	}
 
-	// A rejection is never a strict "add" (allowStrictAdd false): a pending
-	// machine nobody approved is a discovery record, not something that
-	// belongs in Git (docs/adr/0056).
-	plan, err := s.planWrite(ctx, m, m.Spec.ClusterRef.Name, false, req.Msg.GetBreakGlass())
-	if err != nil {
-		return nil, err
-	}
-
 	if m.Spec.IsApproved() {
 		return nil, connect.NewError(connect.CodeFailedPrecondition,
 			fmt.Errorf("machine %q is already approved; reject only applies to a pending machine", namespacedName(ref)))
 	}
 
 	now := s.now()
-	stored := m.DeepCopy()
 
 	m.Spec.ApprovalState = ichorv1alpha1.MachineApprovalStateRejected
 	m.Spec.ApprovalDecision = &ichorv1alpha1.TalosMachineApprovalDecision{
 		Actor: s.actorName(ctx), Reason: req.Msg.GetReason(), At: metav1.NewTime(now),
-	}
-
-	if plan != nil && plan.bg == nil {
-		return s.rejectByPR(ctx, plan, m, stored, now, req.Msg.GetReason())
 	}
 
 	if err := s.Update(ctx, m, strictFieldValidation); err != nil {
@@ -365,14 +333,5 @@ func (s *Server) RejectMachine(
 		Target: objectRef(m.Namespace, m.Name), Reason: req.Msg.GetReason(),
 	}
 
-	url, notice := s.afterBreakGlass(ctx, plan, m, audit, func() (string, error) {
-		r, err := s.rejectByPR(ctx, plan, m, stored, now, req.Msg.GetReason())
-		if err != nil {
-			return "", err
-		}
-
-		return r.Msg.GetPullRequestUrl(), nil
-	})
-
-	return connect.NewResponse(&pb.RejectMachineResponse{Audit: audit, PullRequestUrl: url, Notice: notice}), nil
+	return connect.NewResponse(&pb.RejectMachineResponse{Audit: audit}), nil
 }

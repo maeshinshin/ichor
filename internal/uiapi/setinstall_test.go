@@ -29,25 +29,16 @@ import (
 )
 
 func installReq(in *pb.MachineInstall) *connect.Request[pb.SetMachineInstallRequest] {
-	return connect.NewRequest(&pb.SetMachineInstallRequest{Machine: objectRef(trackedTestNS, "m1"), Install: in})
-}
-
-func TestSetMachineInstallRefusedWhenArgoCDTracks(t *testing.T) {
-	m := trackedMachine(map[string]string{argoTrackingAnnot: argoTrackedBy})
-	m.Spec.ApprovalState = ichorv1alpha1.MachineApprovalStateApproved
-	k8s := fake.NewClientBuilder().WithScheme(trackedScheme(t)).WithObjects(m, argoCM()).Build()
-
-	_, err := (&Server{Client: k8s}).SetMachineInstall(context.Background(), installReq(&pb.MachineInstall{Disk: &pb.MachineDisk{Wwid: "w"}}))
-	wantRefused(t, err, "Argo CD")
+	return connect.NewRequest(&pb.SetMachineInstallRequest{Machine: objectRef(testNS, "m1"), Install: in})
 }
 
 func TestSetMachineInstallWritesOnlyInstall(t *testing.T) {
-	m := trackedMachine(nil)
+	m := testMachine()
 	m.Spec.ApprovalState = ichorv1alpha1.MachineApprovalStateApproved
 	m.Spec.Role = roleWorker
-	k8s := fake.NewClientBuilder().WithScheme(trackedScheme(t)).WithObjects(m, argoCM()).WithStatusSubresource(m).Build()
+	k8s := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(m).WithStatusSubresource(m).Build()
 	s := &Server{Client: k8s}
-	key := types.NamespacedName{Namespace: trackedTestNS, Name: "m1"}
+	key := types.NamespacedName{Namespace: testNS, Name: "m1"}
 
 	// no install, ambiguous disk: refused.
 	for _, bad := range []*pb.MachineInstall{nil, {Disk: &pb.MachineDisk{Wwid: "w", Serial: "s"}}} {
@@ -88,7 +79,7 @@ func TestSetMachineInstallWritesOnlyInstall(t *testing.T) {
 }
 
 func TestSetMachineInstallRefusesAPendingMachine(t *testing.T) {
-	k8s := fake.NewClientBuilder().WithScheme(trackedScheme(t)).WithObjects(trackedMachine(nil), argoCM()).Build()
+	k8s := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(testMachine()).Build()
 
 	_, err := (&Server{Client: k8s}).SetMachineInstall(context.Background(), installReq(&pb.MachineInstall{Disk: &pb.MachineDisk{Wwid: "w"}}))
 	if connect.CodeOf(err) != connect.CodeFailedPrecondition {

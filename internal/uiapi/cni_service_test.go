@@ -19,7 +19,6 @@ package uiapi
 import (
 	"context"
 	"encoding/json"
-	"testing"
 
 	"connectrpc.com/connect"
 	. "github.com/onsi/ginkgo/v2"
@@ -27,7 +26,6 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
@@ -242,31 +240,3 @@ var _ = Describe("CniService", func() {
 		Expect(cniOperations(cluster)).To(HaveLen(1))
 	})
 })
-
-// A TalosCluster that Argo CD tracks is read-only here (ADR 0051): nothing is written.
-func TestSetCiliumValuesRefusedWhenArgoCDTracks(t *testing.T) {
-	cluster := &ichorv1alpha1.TalosCluster{
-		Name: "c", Namespace: trackedTestNS, Annotations: map[string]string{argoTrackingAnnot: argoTrackedBy},
-		Spec: ichorv1alpha1.TalosClusterSpec{CNI: ichorv1alpha1.TalosClusterCNI{KubeProxy: "enabled"}},
-	}
-	k8s := fake.NewClientBuilder().WithScheme(trackedScheme(t)).WithObjects(cluster, argoCM()).Build()
-
-	_, err := (&Server{Client: k8s}).SetCiliumValues(context.Background(),
-		connect.NewRequest(&pb.SetCiliumValuesRequest{Cluster: objectRef(trackedTestNS, "c"), UserYaml: cniDebugOn}))
-	wantRefused(t, err, "Argo CD")
-
-	var got ichorv1alpha1.TalosCluster
-	if err := k8s.Get(context.Background(), client.ObjectKeyFromObject(cluster), &got); err != nil {
-		t.Fatal(err)
-	}
-
-	if got.Spec.CNI.Cilium != nil {
-		t.Fatalf("the values must not be written: %+v", got.Spec.CNI.Cilium)
-	}
-
-	resp, err := (&Server{Client: k8s}).GetCiliumValues(context.Background(),
-		connect.NewRequest(&pb.GetCiliumValuesRequest{Cluster: objectRef(trackedTestNS, "c")}))
-	if err != nil || resp.Msg.GetTrackedBy() == "" {
-		t.Fatalf("a read must say who tracks it: %v, %v", resp, err)
-	}
-}

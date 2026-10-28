@@ -21,7 +21,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file ichor/v1alpha1/patch.proto.
  */
 export const file_ichor_v1alpha1_patch: GenFile = /*@__PURE__*/
-  fileDesc("ChppY2hvci92MWFscGhhMS9wYXRjaC5wcm90bxIOaWNob3IudjFhbHBoYTEiQAoSTGlzdFBhdGNoZXNSZXF1ZXN0EioKB2NsdXN0ZXIYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYiPQoTTGlzdFBhdGNoZXNSZXNwb25zZRImCgdwYXRjaGVzGAEgAygLMhUuaWNob3IudjFhbHBoYTEuUGF0Y2giOwoPR2V0UGF0Y2hSZXF1ZXN0EigKBXBhdGNoGAEgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmIjgKEEdldFBhdGNoUmVzcG9uc2USJAoFcGF0Y2gYASABKAsyFS5pY2hvci52MWFscGhhMS5QYXRjaCI6ChJDcmVhdGVQYXRjaFJlcXVlc3QSJAoFcGF0Y2gYASABKAsyFS5pY2hvci52MWFscGhhMS5QYXRjaCJnChNDcmVhdGVQYXRjaFJlc3BvbnNlEiQKBXBhdGNoGAEgASgLMhUuaWNob3IudjFhbHBoYTEuUGF0Y2gSKgoFYXVkaXQYAiABKAsyGy5pY2hvci52MWFscGhhMS5BdWRpdFJlY29yZCJrChJVcGRhdGVQYXRjaFJlcXVlc3QSJAoFcGF0Y2gYASABKAsyFS5pY2hvci52MWFscGhhMS5QYXRjaBIvCgticmVha19nbGFzcxgCIAEoCzIaLmljaG9yLnYxYWxwaGExLkJyZWFrR2xhc3MikQEKE1VwZGF0ZVBhdGNoUmVzcG9uc2USJAoFcGF0Y2gYASABKAsyFS5pY2hvci52MWFscGhhMS5QYXRjaBIqCgVhdWRpdBgCIAEoCzIbLmljaG9yLnYxYWxwaGExLkF1ZGl0UmVjb3JkEhgKEHB1bGxfcmVxdWVzdF91cmwYAyABKAkSDgoGbm90aWNlGAQgASgJIm8KEkRlbGV0ZVBhdGNoUmVxdWVzdBIoCgVwYXRjaBgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhIvCgticmVha19nbGFzcxgCIAEoCzIaLmljaG9yLnYxYWxwaGExLkJyZWFrR2xhc3MiawoTRGVsZXRlUGF0Y2hSZXNwb25zZRIqCgVhdWRpdBgBIAEoCzIbLmljaG9yLnYxYWxwaGExLkF1ZGl0UmVjb3JkEhgKEHB1bGxfcmVxdWVzdF91cmwYAiABKAkSDgoGbm90aWNlGAMgASgJIjwKFFByZXZpZXdJbXBhY3RSZXF1ZXN0EiQKBXBhdGNoGAEgASgLMhUuaWNob3IudjFhbHBoYTEuUGF0Y2giYAoVUHJldmlld0ltcGFjdFJlc3BvbnNlEhcKD3JlYm9vdF9yZXF1aXJlZBgBIAEoCBIZChFpbnN0YWxsX3RpbWVfb25seRgCIAMoCRITCgt1bnN1cHBvcnRlZBgDIAMoCSJJChhMYWJlbFNlbGVjdG9yUmVxdWlyZW1lbnQSCwoDa2V5GAEgASgJEhAKCG9wZXJhdG9yGAIgASgJEg4KBnZhbHVlcxgDIAMoCSLOAQoNTGFiZWxTZWxlY3RvchJECgxtYXRjaF9sYWJlbHMYASADKAsyLi5pY2hvci52MWFscGhhMS5MYWJlbFNlbGVjdG9yLk1hdGNoTGFiZWxzRW50cnkSQwoRbWF0Y2hfZXhwcmVzc2lvbnMYAiADKAsyKC5pY2hvci52MWFscGhhMS5MYWJlbFNlbGVjdG9yUmVxdWlyZW1lbnQaMgoQTWF0Y2hMYWJlbHNFbnRyeRILCgNrZXkYASABKAkSDQoFdmFsdWUYAiABKAk6AjgBImcKC1BhdGNoVGFyZ2V0EgwKBHJvbGUYASABKAkSNQoObGFiZWxfc2VsZWN0b3IYAiABKAsyHS5pY2hvci52MWFscGhhMS5MYWJlbFNlbGVjdG9yEhMKC21hY2hpbmVfcmVmGAMgASgJIi8KDVBhdGNoRG9jdW1lbnQSDAoEa2luZBgBIAEoCRIQCghkb2N1bWVudBgCIAEoCSL4AQoFUGF0Y2gSJgoDcmVmGAEgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmEioKB2NsdXN0ZXIYAiABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYSKgoFbGF5ZXIYAyABKA4yGy5pY2hvci52MWFscGhhMS5Db25maWdMYXllchIQCghwcmlvcml0eRgEIAEoBRIrCgZ0YXJnZXQYBSABKAsyGy5pY2hvci52MWFscGhhMS5QYXRjaFRhcmdldBIwCglkb2N1bWVudHMYBiADKAsyHS5pY2hvci52MWFscGhhMS5QYXRjaERvY3VtZW50MpsECgxQYXRjaFNlcnZpY2USVgoLTGlzdFBhdGNoZXMSIi5pY2hvci52MWFscGhhMS5MaXN0UGF0Y2hlc1JlcXVlc3QaIy5pY2hvci52MWFscGhhMS5MaXN0UGF0Y2hlc1Jlc3BvbnNlEk0KCEdldFBhdGNoEh8uaWNob3IudjFhbHBoYTEuR2V0UGF0Y2hSZXF1ZXN0GiAuaWNob3IudjFhbHBoYTEuR2V0UGF0Y2hSZXNwb25zZRJWCgtDcmVhdGVQYXRjaBIiLmljaG9yLnYxYWxwaGExLkNyZWF0ZVBhdGNoUmVxdWVzdBojLmljaG9yLnYxYWxwaGExLkNyZWF0ZVBhdGNoUmVzcG9uc2USVgoLVXBkYXRlUGF0Y2gSIi5pY2hvci52MWFscGhhMS5VcGRhdGVQYXRjaFJlcXVlc3QaIy5pY2hvci52MWFscGhhMS5VcGRhdGVQYXRjaFJlc3BvbnNlElYKC0RlbGV0ZVBhdGNoEiIuaWNob3IudjFhbHBoYTEuRGVsZXRlUGF0Y2hSZXF1ZXN0GiMuaWNob3IudjFhbHBoYTEuRGVsZXRlUGF0Y2hSZXNwb25zZRJcCg1QcmV2aWV3SW1wYWN0EiQuaWNob3IudjFhbHBoYTEuUHJldmlld0ltcGFjdFJlcXVlc3QaJS5pY2hvci52MWFscGhhMS5QcmV2aWV3SW1wYWN0UmVzcG9uc2VCuwEKEmNvbS5pY2hvci52MWFscGhhMUIKUGF0Y2hQcm90b1ABWkBnaXRodWIuY29tL21hZXNoaW5zaGluL2ljaG9yL2dlbi9nby9pY2hvci92MWFscGhhMTtpY2hvcnYxYWxwaGExogIDSVhYqgIOSWNob3IuVjFhbHBoYTHKAg5JY2hvclxWMWFscGhhMeICGkljaG9yXFYxYWxwaGExXEdQQk1ldGFkYXRh6gIPSWNob3I6OlYxYWxwaGExYgZwcm90bzM", [file_ichor_v1alpha1_common, file_ichor_v1alpha1_node]);
+  fileDesc("ChppY2hvci92MWFscGhhMS9wYXRjaC5wcm90bxIOaWNob3IudjFhbHBoYTEiQAoSTGlzdFBhdGNoZXNSZXF1ZXN0EioKB2NsdXN0ZXIYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYiPQoTTGlzdFBhdGNoZXNSZXNwb25zZRImCgdwYXRjaGVzGAEgAygLMhUuaWNob3IudjFhbHBoYTEuUGF0Y2giOwoPR2V0UGF0Y2hSZXF1ZXN0EigKBXBhdGNoGAEgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmIjgKEEdldFBhdGNoUmVzcG9uc2USJAoFcGF0Y2gYASABKAsyFS5pY2hvci52MWFscGhhMS5QYXRjaCI6ChJDcmVhdGVQYXRjaFJlcXVlc3QSJAoFcGF0Y2gYASABKAsyFS5pY2hvci52MWFscGhhMS5QYXRjaCJnChNDcmVhdGVQYXRjaFJlc3BvbnNlEiQKBXBhdGNoGAEgASgLMhUuaWNob3IudjFhbHBoYTEuUGF0Y2gSKgoFYXVkaXQYAiABKAsyGy5pY2hvci52MWFscGhhMS5BdWRpdFJlY29yZCJvChJVcGRhdGVQYXRjaFJlcXVlc3QSJAoFcGF0Y2gYASABKAsyFS5pY2hvci52MWFscGhhMS5QYXRjaBIzCgticmVha19nbGFzcxgCIAEoCzIaLmljaG9yLnYxYWxwaGExLkJyZWFrR2xhc3NCAhgBIpkBChNVcGRhdGVQYXRjaFJlc3BvbnNlEiQKBXBhdGNoGAEgASgLMhUuaWNob3IudjFhbHBoYTEuUGF0Y2gSKgoFYXVkaXQYAiABKAsyGy5pY2hvci52MWFscGhhMS5BdWRpdFJlY29yZBIcChBwdWxsX3JlcXVlc3RfdXJsGAMgASgJQgIYARISCgZub3RpY2UYBCABKAlCAhgBInMKEkRlbGV0ZVBhdGNoUmVxdWVzdBIoCgVwYXRjaBgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhIzCgticmVha19nbGFzcxgCIAEoCzIaLmljaG9yLnYxYWxwaGExLkJyZWFrR2xhc3NCAhgBInMKE0RlbGV0ZVBhdGNoUmVzcG9uc2USKgoFYXVkaXQYASABKAsyGy5pY2hvci52MWFscGhhMS5BdWRpdFJlY29yZBIcChBwdWxsX3JlcXVlc3RfdXJsGAIgASgJQgIYARISCgZub3RpY2UYAyABKAlCAhgBIjwKFFByZXZpZXdJbXBhY3RSZXF1ZXN0EiQKBXBhdGNoGAEgASgLMhUuaWNob3IudjFhbHBoYTEuUGF0Y2giYAoVUHJldmlld0ltcGFjdFJlc3BvbnNlEhcKD3JlYm9vdF9yZXF1aXJlZBgBIAEoCBIZChFpbnN0YWxsX3RpbWVfb25seRgCIAMoCRITCgt1bnN1cHBvcnRlZBgDIAMoCSJJChhMYWJlbFNlbGVjdG9yUmVxdWlyZW1lbnQSCwoDa2V5GAEgASgJEhAKCG9wZXJhdG9yGAIgASgJEg4KBnZhbHVlcxgDIAMoCSLOAQoNTGFiZWxTZWxlY3RvchJECgxtYXRjaF9sYWJlbHMYASADKAsyLi5pY2hvci52MWFscGhhMS5MYWJlbFNlbGVjdG9yLk1hdGNoTGFiZWxzRW50cnkSQwoRbWF0Y2hfZXhwcmVzc2lvbnMYAiADKAsyKC5pY2hvci52MWFscGhhMS5MYWJlbFNlbGVjdG9yUmVxdWlyZW1lbnQaMgoQTWF0Y2hMYWJlbHNFbnRyeRILCgNrZXkYASABKAkSDQoFdmFsdWUYAiABKAk6AjgBImcKC1BhdGNoVGFyZ2V0EgwKBHJvbGUYASABKAkSNQoObGFiZWxfc2VsZWN0b3IYAiABKAsyHS5pY2hvci52MWFscGhhMS5MYWJlbFNlbGVjdG9yEhMKC21hY2hpbmVfcmVmGAMgASgJIi8KDVBhdGNoRG9jdW1lbnQSDAoEa2luZBgBIAEoCRIQCghkb2N1bWVudBgCIAEoCSL4AQoFUGF0Y2gSJgoDcmVmGAEgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmEioKB2NsdXN0ZXIYAiABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYSKgoFbGF5ZXIYAyABKA4yGy5pY2hvci52MWFscGhhMS5Db25maWdMYXllchIQCghwcmlvcml0eRgEIAEoBRIrCgZ0YXJnZXQYBSABKAsyGy5pY2hvci52MWFscGhhMS5QYXRjaFRhcmdldBIwCglkb2N1bWVudHMYBiADKAsyHS5pY2hvci52MWFscGhhMS5QYXRjaERvY3VtZW50MpsECgxQYXRjaFNlcnZpY2USVgoLTGlzdFBhdGNoZXMSIi5pY2hvci52MWFscGhhMS5MaXN0UGF0Y2hlc1JlcXVlc3QaIy5pY2hvci52MWFscGhhMS5MaXN0UGF0Y2hlc1Jlc3BvbnNlEk0KCEdldFBhdGNoEh8uaWNob3IudjFhbHBoYTEuR2V0UGF0Y2hSZXF1ZXN0GiAuaWNob3IudjFhbHBoYTEuR2V0UGF0Y2hSZXNwb25zZRJWCgtDcmVhdGVQYXRjaBIiLmljaG9yLnYxYWxwaGExLkNyZWF0ZVBhdGNoUmVxdWVzdBojLmljaG9yLnYxYWxwaGExLkNyZWF0ZVBhdGNoUmVzcG9uc2USVgoLVXBkYXRlUGF0Y2gSIi5pY2hvci52MWFscGhhMS5VcGRhdGVQYXRjaFJlcXVlc3QaIy5pY2hvci52MWFscGhhMS5VcGRhdGVQYXRjaFJlc3BvbnNlElYKC0RlbGV0ZVBhdGNoEiIuaWNob3IudjFhbHBoYTEuRGVsZXRlUGF0Y2hSZXF1ZXN0GiMuaWNob3IudjFhbHBoYTEuRGVsZXRlUGF0Y2hSZXNwb25zZRJcCg1QcmV2aWV3SW1wYWN0EiQuaWNob3IudjFhbHBoYTEuUHJldmlld0ltcGFjdFJlcXVlc3QaJS5pY2hvci52MWFscGhhMS5QcmV2aWV3SW1wYWN0UmVzcG9uc2VCuwEKEmNvbS5pY2hvci52MWFscGhhMUIKUGF0Y2hQcm90b1ABWkBnaXRodWIuY29tL21hZXNoaW5zaGluL2ljaG9yL2dlbi9nby9pY2hvci92MWFscGhhMTtpY2hvcnYxYWxwaGExogIDSVhYqgIOSWNob3IuVjFhbHBoYTHKAg5JY2hvclxWMWFscGhhMeICGkljaG9yXFYxYWxwaGExXEdQQk1ldGFkYXRh6gIPSWNob3I6OlYxYWxwaGExYgZwcm90bzM", [file_ichor_v1alpha1_common, file_ichor_v1alpha1_node]);
 
 /**
  * @generated from message ichor.v1alpha1.ListPatchesRequest
@@ -151,9 +151,10 @@ export type UpdatePatchRequest = Message<"ichor.v1alpha1.UpdatePatchRequest"> & 
   patch?: Patch | undefined;
 
   /**
-   * break_glass requests an emergency direct write (docs/adr/0065).
+   * Deprecated: GitOps is no longer part of Ichor (docs/adr/0101). Never set; kept so the wire format is unchanged.
    *
-   * @generated from field: ichor.v1alpha1.BreakGlass break_glass = 2;
+   * @generated from field: ichor.v1alpha1.BreakGlass break_glass = 2 [deprecated = true];
+   * @deprecated
    */
   breakGlass?: BreakGlass | undefined;
 };
@@ -183,18 +184,18 @@ export type UpdatePatchResponse = Message<"ichor.v1alpha1.UpdatePatchResponse"> 
   audit?: AuditRecord | undefined;
 
   /**
-   * pull_request_url is set when the patch is tracked by Argo CD and the
-   * change was proposed as a pull request instead of being written
-   * (docs/adr/0056).
+   * Deprecated: GitOps is no longer part of Ichor (docs/adr/0101). Never set; kept so the wire format is unchanged.
    *
-   * @generated from field: string pull_request_url = 3;
+   * @generated from field: string pull_request_url = 3 [deprecated = true];
+   * @deprecated
    */
   pullRequestUrl: string;
 
   /**
-   * notice: see ApproveMachineResponse.notice.
+   * Deprecated: GitOps is no longer part of Ichor (docs/adr/0101). Never set; kept so the wire format is unchanged.
    *
-   * @generated from field: string notice = 4;
+   * @generated from field: string notice = 4 [deprecated = true];
+   * @deprecated
    */
   notice: string;
 };
@@ -216,9 +217,10 @@ export type DeletePatchRequest = Message<"ichor.v1alpha1.DeletePatchRequest"> & 
   patch?: ObjectRef | undefined;
 
   /**
-   * break_glass requests an emergency direct write (docs/adr/0065).
+   * Deprecated: GitOps is no longer part of Ichor (docs/adr/0101). Never set; kept so the wire format is unchanged.
    *
-   * @generated from field: ichor.v1alpha1.BreakGlass break_glass = 2;
+   * @generated from field: ichor.v1alpha1.BreakGlass break_glass = 2 [deprecated = true];
+   * @deprecated
    */
   breakGlass?: BreakGlass | undefined;
 };
@@ -240,18 +242,18 @@ export type DeletePatchResponse = Message<"ichor.v1alpha1.DeletePatchResponse"> 
   audit?: AuditRecord | undefined;
 
   /**
-   * pull_request_url is set when the patch is tracked by Argo CD and its
-   * removal was proposed as a pull request instead of being written; nothing
-   * was deleted from the cluster (docs/adr/0056).
+   * Deprecated: GitOps is no longer part of Ichor (docs/adr/0101). Never set; kept so the wire format is unchanged.
    *
-   * @generated from field: string pull_request_url = 2;
+   * @generated from field: string pull_request_url = 2 [deprecated = true];
+   * @deprecated
    */
   pullRequestUrl: string;
 
   /**
-   * notice: see ApproveMachineResponse.notice.
+   * Deprecated: GitOps is no longer part of Ichor (docs/adr/0101). Never set; kept so the wire format is unchanged.
    *
-   * @generated from field: string notice = 3;
+   * @generated from field: string notice = 3 [deprecated = true];
+   * @deprecated
    */
   notice: string;
 };

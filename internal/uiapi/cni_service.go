@@ -241,12 +241,6 @@ func (s *Server) GetCiliumValues(
 		resp.Owned = append(resp.Owned, &pb.OwnedKey{Path: path, Reason: cilium.OwnedKeys[path], ValueYaml: strings.TrimSpace(string(y))})
 	}
 
-	resp.TrackedBy, err = s.trackedBy(ctx, v.cluster)
-	if err != nil {
-		// Reading the layers does not need the answer; a write will refuse on its own.
-		resp.TrackedBy = ""
-	}
-
 	if v.cluster.Status.CNI != nil {
 		resp.AvailableChartVersion = v.cluster.Status.CNI.AvailableChartVersion
 	}
@@ -317,8 +311,7 @@ func (s *Server) DiffCiliumValues(
 	return connect.NewResponse(&pb.DiffCiliumValuesResponse{Diff: diff}), nil
 }
 
-// SetCiliumValues writes spec.cni.cilium.values: validated first, refused when a GitOps tool
-// tracks the cluster, dry-run before the real write. The controller applies it.
+// SetCiliumValues writes spec.cni.cilium.values: validated first, dry-run before the real write. The controller applies it.
 func (s *Server) SetCiliumValues(
 	ctx context.Context, req *connect.Request[pb.SetCiliumValuesRequest],
 ) (*connect.Response[pb.SetCiliumValuesResponse], error) {
@@ -337,18 +330,6 @@ func (s *Server) SetCiliumValues(
 	if errs := flattenErrors(cilium.ValidateValues(user, s.validationContext(ctx, v))); len(errs) > 0 {
 		return nil, connect.NewError(connect.CodeInvalidArgument,
 			fmt.Errorf("the Cilium values are not valid:\n- %s", strings.Join(errs, "\n- ")))
-	}
-
-	by, err := s.trackedBy(ctx, v.cluster)
-	if err != nil {
-		return nil, err
-	}
-
-	if by != "" {
-		return nil, connect.NewError(connect.CodeFailedPrecondition,
-			fmt.Errorf("%q is tracked by %s, so it is read-only here: edit it in Git "+
-				"and change it with a pull request",
-				client.ObjectKeyFromObject(v.cluster), by))
 	}
 
 	effective, err := v.effective(user)

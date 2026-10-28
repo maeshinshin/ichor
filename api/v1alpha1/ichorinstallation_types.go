@@ -27,8 +27,8 @@ const (
 	// IchorManagementModeIchor means upgrades run through the installer Job (ADR 0059).
 	IchorManagementModeIchor = "ichor"
 
-	// IchorManagementModeExternal means Argo CD owns Ichor's manifests: no installer Job
-	// ever runs, and an upgrade is a pull request that bumps the chart version.
+	// IchorManagementModeExternal is deprecated, unused: it was Argo CD owning Ichor's manifests,
+	// with no installer Job. The value is still accepted, and treated as ichor (docs/adr/0101).
 	IchorManagementModeExternal = "external"
 )
 
@@ -40,9 +40,10 @@ const IchorInstallationName = "ichor"
 // TalosOperation of kind ichor holds the execution (ADR 0059), so the target version is
 // written in exactly one place.
 type IchorInstallationSpec struct {
-	// managementMode says who owns Ichor's own manifests. ichor: upgrades run through the
-	// installer Job a TalosOperation of kind ichor starts. external: Argo CD owns them, and
-	// the controller never launches an installer.
+	// managementMode is deprecated, unused; kept so the CRD never drops a field (docs/adr/0101).
+	// Upgrades always run through the installer Job a TalosOperation of kind ichor starts. The
+	// value external, which meant Argo CD owned Ichor's manifests, is still accepted and treated
+	// as ichor.
 	// +kubebuilder:validation:Enum=ichor;external
 	// +kubebuilder:default=ichor
 	// +optional
@@ -120,8 +121,8 @@ type IchorInstallationStatus struct {
 	Stack *IchorStackStatus `json:"stack,omitempty"`
 
 	// conditions represent the current state of the IchorInstallation resource. UpToDate is
-	// True when installedVersion equals spec.version. ExternalSuggested is True when
-	// managementMode is ichor but the controller's own Deployment is tracked by Argo CD.
+	// True when installedVersion equals spec.version. An ExternalSuggested condition
+	// from an older build is removed.
 	// +listType=map
 	// +listMapKey=type
 	// +optional

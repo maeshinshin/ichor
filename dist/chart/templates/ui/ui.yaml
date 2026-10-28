@@ -105,14 +105,6 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
-        - name: ICHOR_ARGOCD_NAMESPACE
-          value: {{ .Values.ichorUI.argocdNamespace | quote }}
-        {{- range $tool, $url := .Values.ichorUI.links }}
-        {{- if $url }}
-        - name: ICHOR_LINK_{{ upper $tool }}
-          value: {{ $url | quote }}
-        {{- end }}
-        {{- end }}
         {{- if .Values.ichorUI.oidc.enabled }}
         # OIDC login (docs/adr/0058). A public client: there is no client secret anywhere.
         - name: ICHOR_OIDC_ISSUER

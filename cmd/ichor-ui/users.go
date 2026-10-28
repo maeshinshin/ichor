@@ -24,7 +24,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -160,33 +159,13 @@ func watchKeys(ctx context.Context, store *oidcissuer.KeyStore, dir string) {
 	}()
 }
 
-// internalJWKSURI is the jwks_uri the internal discovery document advertises: the Service's
-// ClusterIP, which the kubelet puts in the environment, unless the flag says otherwise.
-func internalJWKSURI(f usersFlags) string {
-	if f.internalJWKSURI != "" {
-		return f.internalJWKSURI
-	}
-
-	host := os.Getenv("ICHOR_UI_SERVICE_SERVICE_HOST")
-	if host == "" {
-		return ""
-	}
-
-	_, port, err := net.SplitHostPort(f.internalAddr)
-	if err != nil {
-		return ""
-	}
-
-	return "https://" + net.JoinHostPort(host, port) + "/oidc/jwks"
-}
-
 // newIssuer builds Ichor's own issuer and the verifier for its ichor-ui tokens.
 func newIssuer(ctx context.Context, f usersFlags, backend *uiapi.IssuerBackend) (*oidcissuer.Issuer, localVerifier, error) {
 	keys := oidcissuer.NewKeyStore(nil)
 	watchKeys(ctx, keys, f.signingKeysDir)
 
 	iss, err := oidcissuer.New(oidcissuer.Config{
-		Issuer: f.externalURL, InternalJWKSURI: internalJWKSURI(f), UIRedirectURI: f.externalURL + "/auth/callback",
+		Issuer: f.externalURL, InternalJWKSURI: f.internalJWKSURI, InternalJWKSFromHost: true, UIRedirectURI: f.externalURL + "/auth/callback",
 		TokenTTL: f.tokenTTL, RefreshLifetime: f.refreshTTL,
 		Keys: keys, Users: backend, Passwords: backend,
 	})

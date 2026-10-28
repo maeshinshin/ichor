@@ -88,6 +88,9 @@ type Config struct {
 	// InternalJWKSURI is the jwks_uri advertised by InternalHandler (the
 	// ClusterIP listener). Empty means the external one.
 	InternalJWKSURI string
+	// InternalJWKSFromHost, with InternalJWKSURI empty, advertises the jwks_uri on the host the
+	// caller connected to, so the document follows the Service when its ClusterIP changes.
+	InternalJWKSFromHost bool
 	// UIRedirectURI is the exact redirect URI of the ichor-ui client,
 	// <externalURL>/auth/callback.
 	UIRedirectURI string
@@ -165,7 +168,14 @@ func (i *Issuer) InternalHandler() http.Handler {
 		jwksURI = i.cfg.Issuer + endpointJWKS
 	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET "+endpointDiscovery, i.discovery(jwksURI))
+	if i.cfg.InternalJWKSURI == "" && i.cfg.InternalJWKSFromHost {
+		mux.HandleFunc("GET "+endpointDiscovery, func(w http.ResponseWriter, r *http.Request) {
+			u := url.URL{Scheme: "https", Host: r.Host, Path: endpointJWKS}
+			i.discovery(u.String())(w, r)
+		})
+	} else {
+		mux.HandleFunc("GET "+endpointDiscovery, i.discovery(jwksURI))
+	}
 	mux.HandleFunc("GET "+endpointJWKS, i.jwks)
 	return mux
 }

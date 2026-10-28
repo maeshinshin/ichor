@@ -95,3 +95,7 @@ Everything about real traffic. To check on a Talos cluster with Cilium (`kubectl
 8. `ichor upgrade ichor` from a version with these policies to the next: the installer Job runs (its pod has the label), applies the Deployments and then the policies, and finishes; the same on a cluster without Cilium's CRD skips them with a log line.
 9. Negative checks: a pod in another namespace cannot reach 9443 or 8444 on the controller or ichor-ui pods; the controller pod cannot reach an arbitrary external port (for example 8080 on the internet).
 10. A rolled-back installer run restores or removes the policies listed in its snapshot.
+
+## Amendment (2026-10-29): webhook and issuer ingress also allow remote-node
+
+Hardware (1 CP + 1 worker, Cilium 1.18.0, geneve) showed the `kube-apiserver` entity does not match the apiserver's calls to a pod on another node: they arrive SNATed to the control plane's `cilium_host` address, which the receiving agent labels `reserved:remote-node` only (on its own node that address is `host` + `kube-apiserver`). Admission on 9443 timed out whenever the controller ran off the apiserver's node. The 9443 (webhook) and 8444 (OIDC discovery/JWKS) rules now allow `kube-apiserver` and `remote-node`; with both, edit and delete through the webhook succeeded across nodes. `remote-node` is node host-network traffic only, never pods in other namespaces, so the negative checks (a pod elsewhere cannot reach 9443/8444) still hold.

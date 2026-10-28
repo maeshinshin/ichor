@@ -20,10 +20,30 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
+const tunnelGeneve = "geneve"
+
+// TestExportCNIApplication_CarriesTunnel proves export reproduces the tunnel
+// init stored on the CR instead of falling back to Cilium's vxlan default.
+func TestExportCNIApplication_CarriesTunnel(t *testing.T) {
+	cluster := &ichorv1alpha1.TalosCluster{}
+	cluster.Spec.CNI = ichorv1alpha1.TalosClusterCNI{Preset: "cilium", Tunnel: tunnelGeneve}
+
+	app, err := exportCNIApplication(cluster)
+	if err != nil {
+		t.Fatalf("exportCNIApplication: %v", err)
+	}
+
+	if values := app.Spec.Source.Helm.Values; !strings.Contains(values, "tunnelProtocol: geneve") {
+		t.Errorf("exported Argo CD values do not carry the geneve tunnel: %q", values)
+	}
+}
+
 func TestCNIPreset_Unknown(t *testing.T) {
-	if _, err := cniPreset("calico"); err == nil {
+	if _, err := cniPresetWithTunnel("calico", ""); err == nil {
 		t.Fatal("expected an error for an unknown cni preset, got nil")
 	}
 }
@@ -35,7 +55,7 @@ var tunnelProtocolRe = regexp.MustCompile(`tunnel-protocol"?:\s*"?geneve`)
 // TestCNIPreset_CiliumTunnel proves --cni-tunnel reaches both the bootstrap
 // manifest and the Argo CD Application values, and that unset keeps the default.
 func TestCNIPreset_CiliumTunnel(t *testing.T) {
-	preset, err := cniPresetWithTunnel("cilium", "geneve")
+	preset, err := cniPresetWithTunnel("cilium", tunnelGeneve)
 	if err != nil {
 		t.Fatalf("cniPresetWithTunnel(cilium, geneve): %v", err)
 	}
@@ -45,11 +65,11 @@ func TestCNIPreset_CiliumTunnel(t *testing.T) {
 		t.Fatalf("buildCNIBootstrap: %v", err)
 	}
 
-	if !tunnelProtocolRe.MatchString(out.InlineManifest.InlineManifestContents) || !strings.Contains(out.InlineManifest.InlineManifestContents, "geneve") {
+	if !tunnelProtocolRe.MatchString(out.InlineManifest.InlineManifestContents) || !strings.Contains(out.InlineManifest.InlineManifestContents, tunnelGeneve) {
 		t.Error("bootstrap manifest does not carry the geneve tunnel")
 	}
 
-	if values := out.ArgoCDApplication.Spec.Source.Helm.Values; !strings.Contains(values, "geneve") {
+	if values := out.ArgoCDApplication.Spec.Source.Helm.Values; !strings.Contains(values, tunnelGeneve) {
 		t.Errorf("Argo CD values do not carry the geneve tunnel: %q", values)
 	}
 
@@ -76,7 +96,7 @@ func TestCNIPreset_CiliumTunnel(t *testing.T) {
 // flannel contributes no inline manifest, no Talos patch and no Argo CD
 // Application, even when --argocd is requested.
 func TestBuildCNIBootstrap_Flannel(t *testing.T) {
-	preset, err := cniPreset("flannel")
+	preset, err := cniPresetWithTunnel("flannel", "")
 	if err != nil {
 		t.Fatalf("cniPreset: %v", err)
 	}
@@ -102,7 +122,7 @@ func TestBuildCNIBootstrap_Flannel(t *testing.T) {
 // TestBuildCNIBootstrap_Cilium proves the opposite: cilium does contribute
 // an inline manifest, and an Argo CD Application only when asked for one.
 func TestBuildCNIBootstrap_Cilium(t *testing.T) {
-	preset, err := cniPreset("cilium")
+	preset, err := cniPresetWithTunnel("cilium", "")
 	if err != nil {
 		t.Fatalf("cniPreset: %v", err)
 	}

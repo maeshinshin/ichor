@@ -347,7 +347,7 @@ func buildInitPlan(in initPlanInput, warn io.Writer) (*ichorv1alpha1.TalosCluste
 			VersionContract:   in.VersionContract,
 			SecretsRef:        corev1.LocalObjectReference{Name: secretsRefName(in.Cluster)},
 			ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: top.ControlPlaneCount, Schedulable: top.Schedulable},
-			CNI:               ichorv1alpha1.TalosClusterCNI{Preset: in.CNIPreset, KubeProxy: "enabled"},
+			CNI:               ichorv1alpha1.TalosClusterCNI{Preset: in.CNIPreset, KubeProxy: "enabled", Tunnel: in.CNITunnel},
 		},
 	}, nil
 }

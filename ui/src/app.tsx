@@ -10,6 +10,7 @@ import { AddNode } from '@/pages/AddNode'
 import { GitOps } from '@/pages/GitOps'
 import { MachineList } from '@/pages/MachineList'
 import { Backups } from '@/pages/Backups'
+import { Cilium } from '@/pages/Cilium'
 import { Overview } from '@/pages/Overview'
 import { NodeDetail } from '@/pages/NodeDetail'
 import { OperationDetail } from '@/pages/OperationDetail'
@@ -143,6 +144,7 @@ function renderRoute(path: string, notFound: string) {
   if (path === '/config') return <PatchList />
   if (path === '/config/new') return <PatchDetail />
   if (path === '/gitops') return <GitOps />
+  if (path === '/cilium') return <Cilium />
 
   const node = matchRoute('/nodes/:name', path)
   if (node) return <NodeDetail name={node.name} />

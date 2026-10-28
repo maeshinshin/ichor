@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { PageHeader } from '@/components/PageHeader'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
-import { Section } from '@/components/SectionNav'
+import { Section } from '@/components/Section'
 import { StatusText } from '@/components/Status'
 import { OperationControls } from '@/components/OperationControls'
 import { CARotationCredentials } from '@/components/CARotationCredentials'

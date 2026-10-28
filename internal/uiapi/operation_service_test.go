@@ -774,3 +774,17 @@ func TestMachineActionsAcceptAHostnameAndRefuseAnAmbiguousOne(t *testing.T) {
 		t.Fatalf("unknown: %v", err)
 	}
 }
+
+func TestKubeProxyGitTextNamesTheYAMLAndTheCommand(t *testing.T) {
+	got := kubeProxyGitText("prod", "Argo CD", "replaced")
+	for _, want := range []string{
+		`TalosCluster "prod" is tracked by Argo CD`,
+		"ichor.maesh.dev/confirm-kube-proxy-switch: replaced",
+		"kubeProxy: replaced",
+		"ichor cni kube-proxy replaced",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("message lacks %q:\n%s", want, got)
+		}
+	}
+}

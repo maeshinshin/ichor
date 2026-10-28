@@ -1,0 +1,8 @@
+# The ichor-stack Job's own RBAC, wired into config/default as its own
+# resource entry like ../ichor-installer: the controller only creates the Job; the Job is the
+# one process that applies Kokumi and Argo CD. Hand-written; the Job's kinds are checked by
+# internal/stackapply's test and the chart copy by dist/chart/chart_test.go.
+resources:
+- service_account.yaml
+- role.yaml
+- role_binding.yaml

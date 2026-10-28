@@ -1,0 +1,101 @@
+# The ichor-stack Job's permissions: exactly the kinds the Kokumi and Argo CD
+# manifests contain (internal/stackapply's test fails the build when one is missing), applied once
+# by `ichor stack apply`. The controller creates that Job but holds none of this.
+#
+# Secrets: create only. The Job creates the Secrets that must not be in a published bundle
+# (kokumi-server-auth, argocd-redis, argocd-secret, ichor-kokumi-registry) and never reads,
+# updates or deletes one; the generated values reach it through secretKeyRef.
+#
+# Not narrowable: clusterroles/clusterrolebindings/roles/rolebindings with escalate and bind
+# (the manifests grant roles whose rules the Job does not hold) and CRDs/namespaces by name
+# (a Kokumi or Argo CD bump adds some). As strong as cluster-admin for the minutes the Job
+# runs, which is why this is its own ServiceAccount and the controller is not.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: stack-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - namespaces
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  - serviceaccounts
+  - services
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+- apiGroups:
+  - apiextensions.k8s.io
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - create
+  - get
+  - patch
+- apiGroups:
+  - apps
+  resources:
+  - statefulsets
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - argoproj.io
+  resources:
+  - appprojects
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - cilium.io
+  resources:
+  - ciliumnetworkpolicies
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - admissionregistration.k8s.io
+  resources:
+  - validatingadmissionpolicies
+  - validatingadmissionpolicybindings
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - clusterrolebindings
+  - clusterroles
+  - rolebindings
+  - roles
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - clusterroles
+  - roles
+  verbs:
+  - bind
+  - escalate

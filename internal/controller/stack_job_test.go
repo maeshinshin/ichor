@@ -37,7 +37,7 @@ func TestStackJobSpec(t *testing.T) {
 		{&stackComponent{name: componentKokumi}, []string{"stack", "apply", "kokumi"}, "ICHOR_KOKUMI_ADMIN_HASH", kokumiAdminSecret},
 		{
 			&stackComponent{name: componentArgoCD, valuesJSON: `{"a":1}`},
-			[]string{"stack", "apply", "argocd", `--values={"a":1}`}, "ICHOR_ARGOCD_REDIS_PASSWORD", argoRedisSecret,
+			[]string{"stack", "apply", componentArgoCD, `--values={"a":1}`}, "ICHOR_ARGOCD_REDIS_PASSWORD", argoRedisSecret,
 		},
 	} {
 		job := newStackJob("ichor-system", tc.comp, inst)

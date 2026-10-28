@@ -185,6 +185,27 @@ spec:
         protocol: TCP
       {{- end }}
 {{- end }}
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/name: {{ $name }}
+  name: {{ include "ichor.resourceName" (dict "suffix" "stack" "context" $) }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  description: The ichor-stack Job (ADR 0099 amendment). It talks to the API server and nothing else.
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: ichor-stack
+  egress:
+  - toEntities:
+    - kube-apiserver
+    toPorts:
+    - ports:
+      - port: "6443"
+        protocol: TCP
 {{- if .Values.installer.enabled }}
 ---
 apiVersion: cilium.io/v2

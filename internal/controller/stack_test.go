@@ -37,7 +37,6 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -356,7 +355,7 @@ func ensureCiliumPolicyCRD() {
 
 	preserve := true
 	crd := &apiextensionsv1.CustomResourceDefinition{
-		ObjectMeta: metav1.ObjectMeta{Name: "ciliumnetworkpolicies.cilium.io"},
+		Name: "ciliumnetworkpolicies.cilium.io",
 		Spec: apiextensionsv1.CustomResourceDefinitionSpec{
 			Group: "cilium.io", Scope: apiextensionsv1.NamespaceScoped,
 			Names: apiextensionsv1.CustomResourceDefinitionNames{

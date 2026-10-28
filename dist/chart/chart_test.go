@@ -1400,6 +1400,52 @@ func TestInstallerRBAC(t *testing.T) {
 	})
 }
 
+const stackConfigRolePath = "../../config/rbac/ichor-stack/role.yaml"
+
+const (
+	verbCreateStack = "create"
+	verbGetStack    = "get"
+)
+
+// TestStackRBAC pins the ichor-stack Job's identity (ADR 0099 amendment): the chart's copy equals
+// config/rbac/ichor-stack, it can only create Secrets, and the controller's own ClusterRole
+// holds none of the escalation, CRD or workload rights the Job exists to keep away from it.
+func TestStackRBAC(t *testing.T) {
+	docs := renderChart(t, "ichor")
+	configDocs := loadYAMLDocs(t, stackConfigRolePath)
+
+	if find(docs, kindServiceAccount, "ichor-stack") == nil {
+		t.Fatal("the chart renders no ServiceAccount ichor-stack, the name the controller puts in the Job")
+	}
+
+	checkRBACRulesMatch(t, "ichor", "ClusterRole stack-role",
+		find(configDocs, kindClusterRole, "stack-role"), find(docs, kindClusterRole, "ichor-stack-role"),
+		stackConfigRolePath, "dist/chart/templates/rbac/ichor-stack.yaml")
+
+	for triple := range rbacTriples(allRules(find(docs, kindClusterRole, "ichor-stack-role"))) {
+		if triple.resource == "*" || triple.verb == "*" ||
+			(triple.resource == "secrets" && triple.verb != verbCreateStack) {
+			t.Errorf("the stack Job is granted %s; it may only create Secrets and holds no wildcard", triple)
+		}
+	}
+
+	for _, d := range findAll(docs, kindClusterRole) {
+		if !strings.HasSuffix(nameOf(d), "-manager-role") {
+			continue
+		}
+
+		for triple := range rbacTriples(allRules(d)) {
+			switch {
+			case triple.verb == "escalate" || triple.verb == "bind",
+				triple.resource == "customresourcedefinitions" && triple.verb != verbGetStack,
+				triple.resource == "clusterroles", triple.resource == "clusterrolebindings",
+				triple.resource == "deployments" && triple.verb == verbCreateStack:
+				t.Errorf("the controller holds %s; the ichor-stack Job applies Kokumi and Argo CD, not the controller", triple)
+			}
+		}
+	}
+}
+
 // checkInstallerCoversEveryCRD fails when a CRD in config/crd/bases is missing from the
 // installer ClusterRole's patch/update resourceNames: server-side apply of that CRD is then
 // Forbidden and the whole upgrade rolls back (ichorusers, found on the demo; ADR 0059).

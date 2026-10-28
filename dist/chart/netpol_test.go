@@ -68,7 +68,7 @@ func TestChartCiliumPoliciesEqualTheKustomizeOnes(t *testing.T) {
 	fromChart := cnpSpecs(t, renderChartWithValues(t, "ichor", netpolAllOn...), "ichor-")
 	fromConfig := cnpSpecs(t, loadYAMLDocs(t, netpolConfigPath), "")
 
-	want := []string{"cni", "controller-manager", "default-deny", "installer", "ui"}
+	want := []string{"cni", "controller-manager", "default-deny", "installer", "stack", "ui"}
 	for _, name := range want {
 		if fromChart[name] == nil || fromConfig[name] == nil {
 			t.Fatalf("policy %q missing: chart has %d, config has %d policies", name, len(fromChart), len(fromConfig))
@@ -195,6 +195,15 @@ func TestChartCiliumPolicyPortsAndSelectorsComeFromTheDeployments(t *testing.T) 
 	// So does the Cilium Helm Job's, which may reach the API server directly or through KubePrism.
 	if got := selectorLabels(specs["cni"]); got["app.kubernetes.io/name"] != "ichor-cni" {
 		t.Errorf("cni policy selector = %v", got)
+	}
+
+	// The ichor-stack Job (ADR 0099 amendment) reaches the API server and nothing else.
+	if got := selectorLabels(specs["stack"]); got["app.kubernetes.io/name"] != "ichor-stack" {
+		t.Errorf("stack policy selector = %v", got)
+	}
+
+	if rules, _ := specs["stack"]["egress"].([]any); len(rules) != 1 {
+		t.Errorf("stack policy egress = %v, want the API server only", rules)
 	}
 }
 

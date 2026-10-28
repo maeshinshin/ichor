@@ -44,7 +44,6 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/clusterlock"
-	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
 	"github.com/maeshinshin/ichor/pkg/render"
@@ -128,7 +127,7 @@ func (r *CNIHandoverReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	if _, ok := cniPresetFor(cluster.Spec.CNI.Preset); !ok {
+	if cluster.Spec.CNI.Preset != ciliumName {
 		return ctrl.Result{}, r.markCNIUnsupported(ctx, &cluster)
 	}
 
@@ -506,17 +505,6 @@ func (r *CNIHandoverReconciler) markCNIUnsupported(ctx context.Context, cluster 
 	return r.setCondition(ctx, cluster, ichorv1alpha1.ConditionCNIUnsupported, metav1.ConditionTrue, reasonCNIPresetRemoved,
 		fmt.Sprintf("spec.cni.preset %q was removed (Cilium is the only CNI); "+
 			"no configuration is rendered or applied; delete and recreate the cluster", cluster.Spec.CNI.Preset))
-}
-
-// cniPresetFor resolves cluster.Spec.CNI.Preset to its cni.Preset implementation. Cilium is the
-// only one. Duplicates internal/cli's own cniPreset (this package cannot import
-// internal/cli).
-func cniPresetFor(preset string) (cni.Preset, bool) {
-	if preset == ciliumName {
-		return cilium.New(), true
-	}
-
-	return nil, false
 }
 
 // SetupWithManager sets up the controller with the Manager.

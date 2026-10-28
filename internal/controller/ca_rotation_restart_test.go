@@ -33,9 +33,9 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
-// flannelNodes is the fake DaemonSet's size; the fake has no
+// ciliumNodes is the fake DaemonSet's size; the fake has no
 // controllers, so a rollout is "finished" exactly when its status says so.
-const flannelNodes = 5
+const ciliumNodes = 5
 
 const (
 	corednsPatchKey = "deployments/coredns"
@@ -43,8 +43,8 @@ const (
 )
 
 // restartFixture is a CA rotation whose in-cluster clients are a fake clientset: CoreDNS and ichor-ui
-// (available) and, when flannelAvailable >= 0, a kube-flannel DaemonSet (no kube-proxy, no Cilium).
-func restartFixture(flannelAvailable int32) (*caRotFixture, *fake.Clientset) {
+// (available) and, when ciliumAvailable >= 0, a cilium DaemonSet (no kube-proxy).
+func restartFixture(ciliumAvailable int32) (*caRotFixture, *fake.Clientset) {
 	f := newCARotFixture()
 	one := int32(1)
 
@@ -63,12 +63,12 @@ func restartFixture(flannelAvailable int32) (*caRotFixture, *fake.Clientset) {
 	}
 
 	kc := fake.NewClientset(dep(kubeSystemNamespace, corednsName), uiDep(dep(tmNamespace, "ichor-ichor-ui")))
-	if flannelAvailable >= 0 {
+	if ciliumAvailable >= 0 {
 		_, err := kc.AppsV1().DaemonSets(kubeSystemNamespace).Create(ctx, &appsv1.DaemonSet{
-			Namespace: kubeSystemNamespace, Name: "kube-flannel", Generation: 1,
+			Namespace: kubeSystemNamespace, Name: ciliumName, Generation: 1,
 			Status: appsv1.DaemonSetStatus{
-				ObservedGeneration: 1, DesiredNumberScheduled: flannelNodes, UpdatedNumberScheduled: flannelNodes,
-				NumberAvailable: flannelAvailable,
+				ObservedGeneration: 1, DesiredNumberScheduled: ciliumNodes, UpdatedNumberScheduled: ciliumNodes,
+				NumberAvailable: ciliumAvailable,
 			},
 		}, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
@@ -109,7 +109,7 @@ var _ = Describe("TalosOperation ca-rotation client restarts", func() {
 	}
 
 	It("restarts CoreDNS, the CNI and ichor-ui once, only after the old CAs are dropped, and resumes without repeating", func() {
-		f, kc := restartFixture(flannelNodes)
+		f, kc := restartFixture(ciliumNodes)
 		op := f.newOp()
 
 		op, _ = f.runUntil(op, atStage(ichorv1alpha1.CARotationStageFinalizing))
@@ -117,7 +117,7 @@ var _ = Describe("TalosOperation ca-rotation client restarts", func() {
 
 		op, _ = f.runUntil(op, completed)
 		Expect(patchCount(kc)).To(Equal(map[string]int{
-			corednsPatchKey: 1, "daemonsets/kube-flannel": 1, uiPatchKey: 1,
+			corednsPatchKey: 1, "daemonsets/cilium": 1, uiPatchKey: 1,
 		}))
 
 		d, err := kc.AppsV1().Deployments(kubeSystemNamespace).Get(ctx, corednsName, metav1.GetOptions{})
@@ -145,14 +145,14 @@ var _ = Describe("TalosOperation ca-rotation client restarts", func() {
 		}
 
 		Expect(stageOf(op)).To(Equal(ichorv1alpha1.CARotationStageFinalizing))
-		Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionCARotation).Message).To(ContainSubstring("kube-flannel"))
-		Expect(patchCount(kc)["daemonsets/kube-flannel"]).To(Equal(1), "waiting must not restart again")
+		Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionCARotation).Message).To(ContainSubstring("cilium"))
+		Expect(patchCount(kc)["daemonsets/cilium"]).To(Equal(1), "waiting must not restart again")
 		Expect(patchCount(kc)).NotTo(HaveKey(uiPatchKey), "ichor-ui waits for the CNI to be available")
 
-		ds, err := kc.AppsV1().DaemonSets(kubeSystemNamespace).Get(ctx, "kube-flannel", metav1.GetOptions{})
+		ds, err := kc.AppsV1().DaemonSets(kubeSystemNamespace).Get(ctx, "cilium", metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
-		ds.Status.NumberAvailable = flannelNodes
+		ds.Status.NumberAvailable = ciliumNodes
 		_, err = kc.AppsV1().DaemonSets(kubeSystemNamespace).UpdateStatus(ctx, ds, metav1.UpdateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -162,7 +162,7 @@ var _ = Describe("TalosOperation ca-rotation client restarts", func() {
 	})
 
 	It("restarts nothing while a Node is not Ready, and rolls out CoreDNS before the CNI before ichor-ui", func() {
-		f, kc := restartFixture(flannelNodes)
+		f, kc := restartFixture(ciliumNodes)
 		op := f.newOp()
 
 		op, _ = f.runUntil(op, atStage(ichorv1alpha1.CARotationStageFinalizing))
@@ -185,11 +185,11 @@ var _ = Describe("TalosOperation ca-rotation client restarts", func() {
 			}
 		}
 
-		Expect(order).To(Equal([]string{corednsPatchKey, "daemonsets/kube-flannel", uiPatchKey}))
+		Expect(order).To(Equal([]string{corednsPatchKey, "daemonsets/cilium", uiPatchKey}))
 	})
 
 	It("starts no restart until the Nodes have stayed Ready for the settle window, asked live", func() {
-		f, kc := restartFixture(flannelNodes)
+		f, kc := restartFixture(ciliumNodes)
 		op := f.newOp()
 
 		op, _ = f.runUntil(op, atStage(ichorv1alpha1.CARotationStageFinalizing))
@@ -230,7 +230,7 @@ var _ = Describe("TalosOperation ca-rotation client restarts", func() {
 		op, _ = f.runUntil(op, completed)
 		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseCompleted))
 		Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionCARotation).Message).
-			To(And(ContainSubstring("not back after the restart"), ContainSubstring("kube-flannel")))
+			To(And(ContainSubstring("not back after the restart"), ContainSubstring("cilium")))
 	})
 
 	It("ignores a CNI DaemonSet that is not there", func() {

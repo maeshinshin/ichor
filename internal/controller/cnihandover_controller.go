@@ -33,7 +33,6 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
-	"github.com/maeshinshin/ichor/pkg/cni/flannel"
 	"github.com/maeshinshin/ichor/pkg/render"
 )
 
@@ -58,6 +57,7 @@ const (
 	reasonHandoverWaitingForArgo = "WaitingForArgoCD"
 	reasonHandoverWaitingForSync = "WaitingForSync"
 	reasonHandoverComplete       = "Complete"
+	reasonCNIPresetRemoved       = "PresetRemoved"
 )
 
 // CNIHandoverReconciler implements the one real member of what
@@ -94,9 +94,8 @@ type CNIHandoverReconciler struct {
 // and has no delete path, so a stale entry rolls the CNI back to whatever Ichor originally
 // inlined it as (docs/design/architecture.md, "GitOps and Argo CD").
 //
-// A cluster whose CNI preset never gets inlined in the first place (flannel; "custom") has nothing to hand over and is
-// left alone entirely: no status write, the same shape TalosMachineReconciler already uses
-// for a machine nothing applies to.
+// A cluster whose preset is not cilium has nothing to hand over; it only gets the
+// CNIUnsupported condition.
 func (r *CNIHandoverReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	var cluster ichorv1alpha1.TalosCluster
 	if err := r.Get(ctx, req.NamespacedName, &cluster); err != nil {
@@ -105,7 +104,7 @@ func (r *CNIHandoverReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	preset, ok := cniPresetFor(cluster.Spec.CNI.Preset)
 	if !ok {
-		return ctrl.Result{}, nil
+		return ctrl.Result{}, r.markCNIUnsupported(ctx, &cluster)
 	}
 
 	app, err := preset.ArgoCDApplication(cni.KubeProxyMode(cluster.Spec.CNI.KubeProxy))
@@ -113,7 +112,7 @@ func (r *CNIHandoverReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, err
 	}
 	if app == nil {
-		return ctrl.Result{}, nil // flannel: Talos's own default, never inlined, nothing to hand over
+		return ctrl.Result{}, nil
 	}
 
 	switch cluster.Spec.CNI.Handover {
@@ -179,20 +178,31 @@ func (r *CNIHandoverReconciler) setHandoverCondition(
 	return r.Status().Update(ctx, cluster)
 }
 
-// cniPresetFor resolves cluster.Spec.CNI.Preset to its cni.Preset implementation.
-// Duplicates internal/cli's own cniPreset switch (unexported there, and this package
-// cannot import internal/cli without an upward layering violation -- controllers do not
-// depend on the CLI). "custom" has no Preset implementation and is deliberately
-// absent here too.
-func cniPresetFor(preset string) (cni.Preset, bool) {
-	switch preset {
-	case "cilium":
-		return cilium.New(), true
-	case "flannel":
-		return flannel.New(), true
-	default:
-		return nil, false
+// markCNIUnsupported sets CNIUnsupported=True on a cluster whose preset is not cilium.
+// The controllers refuse to render it and change nothing on its nodes; the condition says why.
+func (r *CNIHandoverReconciler) markCNIUnsupported(ctx context.Context, cluster *ichorv1alpha1.TalosCluster) error {
+	if cluster.Spec.CNI.Preset == "" {
+		return nil
 	}
+
+	apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+		Type: ichorv1alpha1.ConditionCNIUnsupported, Status: metav1.ConditionTrue, Reason: reasonCNIPresetRemoved,
+		Message: fmt.Sprintf("spec.cni.preset %q was removed (Cilium is the only CNI); "+
+			"no configuration is rendered or applied; delete and recreate the cluster", cluster.Spec.CNI.Preset),
+	})
+
+	return r.Status().Update(ctx, cluster)
+}
+
+// cniPresetFor resolves cluster.Spec.CNI.Preset to its cni.Preset implementation. Cilium is the
+// only one. Duplicates internal/cli's own cniPreset (this package cannot import
+// internal/cli).
+func cniPresetFor(preset string) (cni.Preset, bool) {
+	if preset == ciliumName {
+		return cilium.New(), true
+	}
+
+	return nil, false
 }
 
 // SetupWithManager sets up the controller with the Manager.

@@ -83,7 +83,6 @@ rules:
   - apps
   resourceNames:
   - cilium
-  - kube-flannel
   - kube-proxy
   resources:
   - daemonsets

@@ -5,7 +5,9 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/types"
+	toolscache "k8s.io/client-go/tools/cache"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -13,8 +15,9 @@ import (
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
 )
 
-// caTrustSyncInterval is how often CATrustSync looks; it must be well below the time between a
-// rotation's start and its Issuing stage (several node applies), which is what the early publish needs.
+// caTrustSyncInterval is the fallback tick of CATrustSync (and how often it clears). It is NOT fast
+// enough for the early publish: Accepting to Issuing took 6-8 s on hardware, so the publish is driven by
+// operation events (watchOperations) and this tick only backs it up.
 const caTrustSyncInterval = 10 * time.Second
 
 // CATrustSync keeps this process's kubetrust pool right on every replica, leader or not.
@@ -30,12 +33,20 @@ type CATrustSync struct {
 	Pool                *kubetrust.Pool
 	File                string
 	Interval            time.Duration
+	// Informers, when set, is the manager's cache: a CA rotation that appears or changes publishes at
+	// once instead of at the next tick. The informers run on every replica, leader or not.
+	Informers operationInformers
+}
+
+// operationInformers is the part of the manager's cache CATrustSync needs.
+type operationInformers interface {
+	GetInformer(ctx context.Context, obj client.Object, opts ...cache.InformerGetOption) (cache.Informer, error)
 }
 
 // NeedLeaderElection is false: every replica needs its own pool.
 func (s *CATrustSync) NeedLeaderElection() bool { return false }
 
-// Start runs until ctx ends.
+// Start runs until ctx ends. Passes run only in this loop, so the tick and the event trigger never race.
 func (s *CATrustSync) Start(ctx context.Context) error {
 	interval := s.Interval
 	if interval == 0 {
@@ -45,6 +56,9 @@ func (s *CATrustSync) Start(ctx context.Context) error {
 	t := time.NewTicker(interval)
 	defer t.Stop()
 
+	trigger := make(chan struct{}, 1)
+	s.watchOperations(ctx, trigger)
+
 	for {
 		s.syncOnce(ctx)
 
@@ -52,7 +66,37 @@ func (s *CATrustSync) Start(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil
 		case <-t.C:
+		case <-trigger:
 		}
+	}
+}
+
+// watchOperations asks for a pass whenever a CA rotation that is under way is added or changes. The
+// tick stays as the fallback (and does the clearing), so a failure here only costs promptness.
+func (s *CATrustSync) watchOperations(ctx context.Context, trigger chan<- struct{}) {
+	if s.Informers == nil {
+		return
+	}
+
+	wake := func(obj any) {
+		if op, ok := obj.(*ichorv1alpha1.TalosOperation); ok && caRotationUnderway(op) {
+			select {
+			case trigger <- struct{}{}:
+			default: // a pass is already requested
+			}
+		}
+	}
+
+	inf, err := s.Informers.GetInformer(ctx, &ichorv1alpha1.TalosOperation{})
+	if err == nil {
+		_, err = inf.AddEventHandler(toolscache.ResourceEventHandlerFuncs{
+			AddFunc:    wake,
+			UpdateFunc: func(_, obj any) { wake(obj) },
+		})
+	}
+
+	if err != nil {
+		ctrl.LoggerFrom(ctx).WithName("catrustsync").Error(err, "Could not watch operations; relying on the tick")
 	}
 }
 

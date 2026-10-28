@@ -11,13 +11,16 @@ import (
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
+
+	"github.com/maeshinshin/ichor/internal/kubetrust"
 )
 
 // API server wait at start: during a CA rotation the API server restarts and the pod's
 // ca.crt is refreshed late, so the first discovery fails (x509 / "unknown"). Retrying here
 // beats exiting and sitting in CrashLoopBackOff. Once running, client-go reloads a CA read
 // from CAFile by itself (ClientsAllowCARotation, Beta and on by default in v0.36), so no
-// post-start watchdog is needed.
+// post-start watchdog is needed. A CA rotation also leaves the new Kubernetes CA's certificate in
+// kubetrust.TrustFile (an emptyDir), which trustedConfig loads before the first probe.
 const (
 	apiWaitTimeout    = 5 * time.Minute
 	apiWaitInitialGap = time.Second
@@ -100,10 +103,29 @@ func waitWithHealth(
 	return wait(ctx)
 }
 
+// trustedConfig loads the CA certificates a CA rotation left in trustFile into pool (so a restarted
+// container trusts the new Kubernetes CA at once) and makes the config verify against it.
+func trustedConfig(get func() (*rest.Config, error), pool *kubetrust.Pool, trustFile string) (*rest.Config, error) {
+	cfg, err := get()
+	if err != nil {
+		return nil, err
+	}
+
+	if err := pool.LoadFile(trustFile); err != nil {
+		return nil, fmt.Errorf("reading %s: %w", trustFile, err)
+	}
+
+	pool.Apply(cfg)
+
+	return cfg, nil
+}
+
 // waitForAPIServerDefault probes the in-cluster/kubeconfig API server with the production bounds.
 func waitForAPIServerDefault(ctx context.Context, probeAddr string) (*rest.Config, error) {
 	return waitWithHealth(ctx, probeAddr, func(ctx context.Context) (*rest.Config, error) {
-		return waitForAPIServer(ctx, ctrl.GetConfig,
+		return waitForAPIServer(ctx, func() (*rest.Config, error) {
+			return trustedConfig(ctrl.GetConfig, kubetrust.Shared, kubetrust.TrustFile)
+		},
 			func(c *rest.Config) (discovery.ServerGroupsInterface, error) {
 				return discovery.NewDiscoveryClientForConfig(c)
 			},

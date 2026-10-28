@@ -43,6 +43,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -450,6 +451,34 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(string(got)).To(ContainSubstring(strings.TrimSpace(string(f.storedRotation().Kubernetes.Crt))))
 		Expect(string(got)).NotTo(ContainSubstring("PRIVATE KEY"))
+	})
+
+	It("drops the extra trusted CA at the end once the projected ca.crt carries the new one, and not before", func() {
+		prev := kubetrust.TrustFile
+		kubetrust.TrustFile = filepath.Join(GinkgoT().TempDir(), "trust", "kubernetes-ca.crt")
+		base := filepath.Join(GinkgoT().TempDir(), "ca.crt")
+		Expect(os.WriteFile(base, []byte("old\n"), 0o600)).To(Succeed())
+		kubetrust.Shared.Apply(&rest.Config{
+			Host: "https://127.0.0.1:6443", BearerToken: "x", TLSClientConfig: rest.TLSClientConfig{CAFile: base},
+		})
+		DeferCleanup(func() {
+			Expect(kubetrust.Shared.Clear(kubetrust.TrustFile)).To(Succeed())
+			kubetrust.TrustFile = prev
+		})
+
+		f := newCARotFixture()
+		op := f.step(f.newOp())
+		op, _ = f.runUntil(op, atStage(ichorv1alpha1.CARotationStageIssuing))
+		newCA := f.storedRotation().Kubernetes.Crt
+
+		// Until the rotation is over the extra CA is kept.
+		Expect(kubetrust.TrustFile).To(BeAnExistingFile())
+
+		// The kubelet projects the new CA; the terminal step then drops the extra one.
+		Expect(os.WriteFile(base, newCA, 0o600)).To(Succeed())
+		op, _ = f.runUntil(op, completed)
+		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseCompleted))
+		Expect(kubetrust.TrustFile).NotTo(BeAnExistingFile())
 	})
 
 	It("waits after Accepting for the operator's credentials and proceeds only once they are acknowledged", func() {

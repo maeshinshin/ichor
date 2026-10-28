@@ -982,6 +982,12 @@ func (c *caRun) complete(ctx context.Context) (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
+	// The clients are restarted and kube-root-ca.crt carries the new CA, so this controller's projected
+	// ca.crt alone should do. If it has not refreshed yet the extras stay and CATrustSync clears later.
+	if _, err := kubetrust.Shared.ClearOnceBaseTrusts(kubetrust.TrustFile); err != nil {
+		ctrl.LoggerFrom(ctx).Error(err, "Could not clear this controller's extra trusted CAs")
+	}
+
 	return ctrl.Result{}, c.status(ctx, ichorv1alpha1.TalosOperationPhaseCompleted, metav1.ConditionFalse,
 		reasonCARotationComplete, "the Talos API and Kubernetes API CAs are replaced; export the new secrets bundle"+c.restartNote)
 }

@@ -129,17 +129,13 @@ func runRecoverCluster(ctx context.Context, opts restoreOptions, deps restoreDep
 	}
 
 	if !deps.AssumeYes {
-		ok, err := confirm(deps.Stdin, deps.Stderr, fmt.Sprintf(
+		if err := confirmOrAbort(deps.Stdin, deps.Stderr, "restore", fmt.Sprintf(
 			"Recover etcd on %s from snapshot %s (%s, %d bytes, verified)?\n"+
 				"The cluster's state reverts to that time. The node's etcd data directory must be empty. "+
 				"This cannot be undone. [y/N]: ",
-			opts.NodeEndpoint, snap.name, snap.time.Format("2006-01-02 15:04:05 UTC"), snap.data.Len()))
-		if err != nil {
-			return fmt.Errorf("restore: reading confirmation: %w", err)
-		}
-
-		if !ok {
-			return errors.New("restore: aborted before contacting the node; nothing was changed")
+			opts.NodeEndpoint, snap.name, snap.time.Format("2006-01-02 15:04:05 UTC"), snap.data.Len()),
+			"aborted before contacting the node; nothing was changed"); err != nil {
+			return err
 		}
 	}
 

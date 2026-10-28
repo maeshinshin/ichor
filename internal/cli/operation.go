@@ -17,8 +17,8 @@ limitations under the License.
 package cli
 
 import (
+	"cmp"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"slices"
@@ -152,15 +152,10 @@ func runOperationDelete(ctx context.Context, c *apiClients, in io.Reader, out, e
 
 		op := got.Msg.GetOperation()
 
-		ok, err := confirm(in, errw, fmt.Sprintf(
+		if err := confirmOrAbort(in, errw, "operation delete", fmt.Sprintf(
 			"Delete operation %s/%s (%s on cluster %s, phase %q)? Steps already sent to machines are not undone. [y/N] ",
-			ref.GetNamespace(), name, kindName(op.GetKind()), op.GetCluster().GetName(), op.GetPhase()))
-		if err != nil {
-			return fmt.Errorf("operation delete: reading confirmation: %w", err)
-		}
-
-		if !ok {
-			return errors.New("operation delete: aborted")
+			ref.GetNamespace(), name, kindName(op.GetKind()), op.GetCluster().GetName(), op.GetPhase()), "aborted"); err != nil {
+			return err
 		}
 	}
 
@@ -244,7 +239,7 @@ func progressLineAt(op *pb.Operation, caStage string) string {
 		parts = append(parts, m.GetName()+"="+m.GetPhase())
 	}
 
-	line := fmt.Sprintf("%s %s: phase %s", kindName(op.GetKind()), op.GetRef().GetName(), orDash(op.GetPhase()))
+	line := fmt.Sprintf("%s %s: phase %s", kindName(op.GetKind()), op.GetRef().GetName(), cmp.Or(op.GetPhase(), "-"))
 	if len(parts) > 0 {
 		line += fmt.Sprintf(", %d done, %d in progress", done, running)
 	}
@@ -266,14 +261,6 @@ func progressLineAt(op *pb.Operation, caStage string) string {
 	}
 
 	return line
-}
-
-func orDash(s string) string {
-	if s == "" {
-		return "-"
-	}
-
-	return s
 }
 
 // watchOperation polls the operation, prints a progress line whenever it
@@ -411,13 +398,19 @@ func confirmPlan(in io.Reader, errw io.Writer, what, text string) error {
 		return nil
 	}
 
-	ok, err := confirm(in, errw, text+"Proceed? [y/N] ")
+	return confirmOrAbort(in, errw, what, text+"Proceed? [y/N] ", "aborted")
+}
+
+// confirmOrAbort asks prompt and returns nil only on a yes. what prefixes the errors; aborted is
+// the error text for a no.
+func confirmOrAbort(in io.Reader, errw io.Writer, what, prompt, aborted string) error {
+	ok, err := confirm(in, errw, prompt)
 	if err != nil {
 		return fmt.Errorf("%s: reading confirmation: %w", what, err)
 	}
 
 	if !ok {
-		return fmt.Errorf("%s: aborted", what)
+		return fmt.Errorf("%s: %s", what, aborted)
 	}
 
 	return nil

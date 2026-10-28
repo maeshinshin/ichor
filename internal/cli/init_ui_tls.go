@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/url"
 	"os"
@@ -147,7 +148,7 @@ func checkUITLSSecret(ctx context.Context, k client.Client, ns string, opts init
 }
 
 // storeUITLSSecret creates or updates the Secret for --ui-tls-cert/--ui-tls-key.
-func storeUITLSSecret(ctx context.Context, k client.Client, ns string, opts initOptions) error {
+func storeUITLSSecret(ctx context.Context, k client.Client, ns string, opts initOptions, progress io.Writer) error {
 	if opts.UITLSCert == "" {
 		return nil
 	}
@@ -166,14 +167,14 @@ func storeUITLSSecret(ctx context.Context, k client.Client, ns string, opts init
 	case apierrors.IsNotFound(err):
 		sec.Labels = map[string]string{"app.kubernetes.io/name": appNameIchor, "app.kubernetes.io/component": "ui"}
 		sec.Type, sec.Data = corev1.SecretTypeTLS, data
-		err = k.Create(ctx, sec)
+		err = createRetrying(ctx, k, sec, progress)
 	case err == nil:
 		if sec.Type != corev1.SecretTypeTLS {
 			return fmt.Errorf("init: Secret %s/%s exists with type %q, not %s; remove it or use --ui-tls-secret", ns, sec.Name, sec.Type, corev1.SecretTypeTLS)
 		}
 
 		sec.Data = data
-		err = k.Update(ctx, sec)
+		err = retryInit(ctx, progress, func() error { return k.Update(ctx, sec) })
 	}
 
 	if err != nil {

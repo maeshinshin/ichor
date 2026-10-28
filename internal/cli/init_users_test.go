@@ -19,6 +19,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -191,6 +192,49 @@ func TestRunInit_UIURLTurnsUsersOnAndCreatesTheFirstAdmin(t *testing.T) {
 
 	if len(updateOrder) == 0 {
 		t.Error("the Deployment was never updated")
+	}
+}
+
+// A Create of the credentials Secret that times out in etcd but went through is retried, and the
+// AlreadyExists the retry meets counts as success.
+func TestRunInit_UIURLRetriesAnEtcdTimeoutOnTheCredentialsSecret(t *testing.T) {
+	withTempHome(t)
+	shrinkInitRetry(t)
+
+	timeouts := 0
+
+	k := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(uiObjects()...).WithInterceptorFuncs(interceptor.Funcs{
+		Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
+			if obj.GetName() != ichorauth.CredentialsSecretName || timeouts > 0 {
+				return c.Create(ctx, obj, opts...)
+			}
+
+			// The write lands, the answer is lost; a copy keeps obj as a timed-out client leaves it.
+			if err := c.Create(ctx, obj.DeepCopyObject().(client.Object), opts...); err != nil {
+				return err
+			}
+
+			timeouts++
+
+			return apierrors.NewInternalError(errors.New("etcdserver: request timed out"))
+		},
+	}).Build()
+
+	deps, _, _ := newFakeInitDeps(t, k)
+
+	var stderr bytes.Buffer
+
+	deps.Stderr = &stderr
+
+	opts := validInitOptions()
+	opts.UIURL, opts.AdminUser = testUIURL, testAdminName
+
+	if err := runInit(context.Background(), opts, deps); err != nil {
+		t.Fatalf("runInit: %v", err)
+	}
+
+	if timeouts != 1 || !strings.Contains(stderr.String(), "init: retrying") {
+		t.Errorf("the timeout was not retried (timeouts=%d):\n%s", timeouts, stderr.String())
 	}
 }
 

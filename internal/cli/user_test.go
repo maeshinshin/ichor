@@ -383,7 +383,7 @@ func TestBootstrapUserWritesCRAndHash(t *testing.T) {
 	now := time.Date(2026, 10, 27, 12, 0, 0, 0, time.UTC)
 	spec := userSpec{Name: testAdminName, Roles: []string{ichorauth.RoleAdmin}}
 
-	if err := createUserWithPassword(context.Background(), k, spec, testUserPassword, now); err != nil {
+	if err := createUserWithPassword(context.Background(), k, spec, testUserPassword, now, io.Discard); err != nil {
 		t.Fatal(err)
 	}
 
@@ -417,17 +417,17 @@ func TestBootstrapUserRefusals(t *testing.T) {
 
 	// An existing user: never reset its password.
 	k := userKubeClient(t, true)
-	if err := createUserWithPassword(ctx, k, spec, testUserPassword, time.Now()); err != nil {
+	if err := createUserWithPassword(ctx, k, spec, testUserPassword, time.Now(), io.Discard); err != nil {
 		t.Fatal(err)
 	}
 
-	err := createUserWithPassword(ctx, k, spec, "another password entirely", time.Now())
+	err := createUserWithPassword(ctx, k, spec, "another password entirely", time.Now(), io.Discard)
 	if err == nil || !strings.Contains(err.Error(), "already exists") {
 		t.Errorf("existing user: %v", err)
 	}
 
 	// Users not turned on: no credentials Secret.
-	err = createUserWithPassword(ctx, userKubeClient(t, false), spec, testUserPassword, time.Now())
+	err = createUserWithPassword(ctx, userKubeClient(t, false), spec, testUserPassword, time.Now(), io.Discard)
 	if err == nil || !strings.Contains(err.Error(), "not turned on") {
 		t.Errorf("no Secret: %v", err)
 	}
@@ -435,12 +435,12 @@ func TestBootstrapUserRefusals(t *testing.T) {
 	// Policy and name checks leave nothing behind.
 	k = userKubeClient(t, true)
 	for _, bad := range []userSpec{{Name: "Root"}, {Name: "ok", Roles: []string{"Bad Role"}}} {
-		if err := createUserWithPassword(ctx, k, bad, testUserPassword, time.Now()); err == nil {
+		if err := createUserWithPassword(ctx, k, bad, testUserPassword, time.Now(), io.Discard); err == nil {
 			t.Errorf("%+v should be refused", bad)
 		}
 	}
 
-	if err := createUserWithPassword(ctx, k, userSpec{Name: "ok"}, "short", time.Now()); err == nil {
+	if err := createUserWithPassword(ctx, k, userSpec{Name: "ok"}, "short", time.Now(), io.Discard); err == nil {
 		t.Errorf("short password: %v", err)
 	}
 

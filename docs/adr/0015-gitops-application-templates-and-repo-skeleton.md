@@ -221,3 +221,22 @@ already written down here for `pkg/cni` to read.
   from whatever `pkg/cni.Preset.ArgoCDApplication` returned for the
   cluster's chosen preset. It calls `gitops.New` (via `pkg/cni`) and
   `Skeleton.Write` rather than reimplementing either.
+
+## Amendment: one root Application over apps/ and the cluster CRs
+
+Hardware run against Argo CD v3.5.6 found two defects in the skeleton:
+
+- The root Application had `path: clusters/<name>`, so `apps/*/application.yaml`
+  (the CNI hand-over Application) was never applied. The root is now
+  `path: .` with `directory.recurse: true` and
+  `directory.include: {apps/*/application.yaml,clusters/<name>/*.yaml}`
+  (`ApplicationSourceDir.Include`). One Application, no extra file; Ichor's
+  CRs and the apps stay separate by directory, and `bootstrap/root-app.yaml`
+  and other clusters' directories are not synced. A second app-of-apps for
+  `apps/` was rejected as one more file and one more sync to get wrong.
+- `ichor init --gitops-dir` wrote the live typed objects (no
+  `apiVersion`/`kind`, with `managedFields`, `uid`, ...), which syncs zero
+  resources. Init now passes its CRs through `declareCRs`, the same function
+  `ichor gitops export` uses, so both write identical declared-form files
+  and the same names (`talos-machine-<name>.yaml`,
+  `talos-config-patch-<name>.yaml`).

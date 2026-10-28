@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"path"
 
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -47,18 +48,25 @@ const (
 
 // buildRootApplication builds the app-of-apps root Application design
 // step 3 describes ("Argo CD plus a root Application pointing at the
-// repo"): a Directory source over repoPath, recursing so every
-// apps/<name>/application.yaml the skeleton writes is picked up
-// automatically.
-func buildRootApplication(repoURL, repoPath string) (*gitops.Application, error) {
+// repo"). Its source is the repository root with a directory Include of
+// exactly two things: every apps/<name>/application.yaml (the CNI hand-over
+// Application and any later component) and the cluster's own CRs under
+// clusterPath. One Application, no extra file to write, and nothing else
+// (bootstrap/root-app.yaml itself, other clusters) is synced. A path of
+// clusters/<name> alone, as before, never reached apps/. Ichor's CRs and
+// the apps stay separate by directory and by Include.
+func buildRootApplication(repoURL, clusterPath string) (*gitops.Application, error) {
 	return gitops.New(gitops.Options{
 		Name:    "root",
 		Project: "default",
 		Source: &gitops.ApplicationSource{
 			RepoURL:        repoURL,
-			Path:           repoPath,
+			Path:           ".",
 			TargetRevision: "HEAD",
-			Directory:      &gitops.ApplicationSourceDir{Recurse: true},
+			Directory: &gitops.ApplicationSourceDir{
+				Recurse: true,
+				Include: "{apps/*/application.yaml," + path.Join(clusterPath, "*.yaml") + "}",
+			},
 		},
 		Destination: gitops.ApplicationDestination{Server: argoCDDestinationServer},
 		Automated:   true,
@@ -199,13 +207,20 @@ func initArgoCD(
 		return nil
 	}
 
+	// The file names and the declared form are the ones `ichor gitops export`
+	// writes (declareCRs): the live objects carry server-side metadata and,
+	// from a typed client, no apiVersion/kind.
 	crs := map[string]any{
-		"talos-cluster.yaml": cluster,
-		"talos-machine.yaml": machine,
+		"talos-cluster.yaml":                      cluster,
+		"talos-machine-" + machine.Name + ".yaml": machine,
 	}
 
-	for i, p := range candidates {
-		crs[fmt.Sprintf("talos-config-patch-%d.yaml", i)] = &p
+	for i := range candidates {
+		crs["talos-config-patch-"+candidates[i].Name+".yaml"] = &candidates[i]
+	}
+
+	if err := declareCRs(k8sClient.Scheme(), crs); err != nil {
+		return fmt.Errorf("init: %w", err)
 	}
 
 	skeleton := buildSkeleton(cluster, rootApp, cniApp, crs)

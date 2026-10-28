@@ -122,19 +122,8 @@ func runGitopsExport(ctx context.Context, opts gitopsExportOptions, k8sClient cl
 		return err
 	}
 
-	// The one place every exported CR passes through, whatever its kind.
-	for name, obj := range crs {
-		co, ok := obj.(client.Object)
-		if !ok {
-			return fmt.Errorf("gitops export: %s is a %T, not a client.Object", name, obj)
-		}
-
-		declared, err := declaredForm(k8sClient.Scheme(), co)
-		if err != nil {
-			return err
-		}
-
-		crs[name] = declared
+	if err := declareCRs(k8sClient.Scheme(), crs); err != nil {
+		return err
 	}
 
 	cniApp, err := exportCNIApplication(&cluster)
@@ -261,6 +250,27 @@ func exportClusterKinds(ctx context.Context, k8sClient client.Client, opts gitop
 
 			crs[k.filePrefix+obj.GetName()+".yaml"] = obj
 		}
+	}
+
+	return nil
+}
+
+// declareCRs replaces every CR in crs with its declaredForm. It is the one
+// place both `ichor gitops export` and `ichor init --gitops-dir` pass their
+// CRs through, whatever the kind, so the two write identical, clean files.
+func declareCRs(scheme *runtime.Scheme, crs map[string]any) error {
+	for name, obj := range crs {
+		co, ok := obj.(client.Object)
+		if !ok {
+			return fmt.Errorf("gitops export: %s is a %T, not a client.Object", name, obj)
+		}
+
+		declared, err := declaredForm(scheme, co)
+		if err != nil {
+			return err
+		}
+
+		crs[name] = declared
 	}
 
 	return nil

@@ -4,7 +4,6 @@ import {
   caStageProgress,
   confirmMatches,
   kubernetesStageProgress,
-  kindNeedsTarget,
   kindNeedsTypedName,
   operationState,
   pauseAction,
@@ -86,9 +85,6 @@ test('the shutdown gate needs the exact cluster name', () => {
 })
 
 test('a CA rotation takes no target and needs the cluster name typed, as a shutdown does', () => {
-  assert.equal(kindNeedsTarget('ca-rotation'), false)
-  assert.equal(kindNeedsTarget('shutdown'), false)
-  assert.equal(kindNeedsTarget('talos'), true)
   assert.equal(targetError('ca-rotation', ''), null)
   assert.equal(kindNeedsTypedName('ca-rotation'), true)
   assert.equal(kindNeedsTypedName('shutdown'), true)
@@ -96,7 +92,6 @@ test('a CA rotation takes no target and needs the cluster name typed, as a shutd
 })
 
 test('a config rollout takes no target and needs the cluster name typed, because every machine in it reboots', () => {
-  assert.equal(kindNeedsTarget('config'), false)
   assert.equal(targetError('config', ''), null)
   assert.equal(kindNeedsTypedName('config'), true)
 })

@@ -56,12 +56,12 @@ spec:
           capabilities:
             drop:
             - "ALL"
-        # HTTPS probes: a TCP probe makes the TLS listener log a handshake error every few seconds.
+        # Readiness is an HTTPS probe (a TCP probe makes the TLS listener log a handshake error).
+        # Liveness is a TCP connect: the Ichor-made leaf can arrive 60-90 s after the pod starts, and
+        # an HTTPS liveness probe would restart the pod before it does.
         livenessProbe:
-          httpGet:
-            path: /auth/config
+          tcpSocket:
             port: 8443
-            scheme: HTTPS
           initialDelaySeconds: 5
           periodSeconds: 20
         readinessProbe:

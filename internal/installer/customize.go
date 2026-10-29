@@ -266,17 +266,21 @@ func tlsOnUI(dep *appsv1.Deployment, c *corev1.Container, secret string) error {
 	})
 	c.Args = append(c.Args, "--tls-cert-file="+UITLSMountPath+"/tls.crt", "--tls-key-file="+UITLSMountPath+"/tls.key")
 
-	// A kubelet TCP probe makes a TLS server log a handshake error every few seconds, so probe over HTTPS.
+	// Readiness is an HTTPS GET (a kubelet TCP probe makes a TLS server log a handshake error), so the
+	// pod stays out of the Service until the Ichor-made leaf exists. Liveness is a TCP connect on the
+	// same port: the listener accepts before any certificate does, and an HTTPS liveness probe would
+	// restart the pod while the optional Secret volume is still being populated.
 	// Whole probes are replaced: the handler is a oneof, and a tcpSocket left beside an httpGet is invalid.
-	probe := func(period int32) *corev1.Probe {
-		return &corev1.Probe{
-			HTTPGet: &corev1.HTTPGetAction{
-				Path: "/auth/config", Port: intstr.FromInt32(port), Scheme: corev1.URISchemeHTTPS,
-			},
-			InitialDelaySeconds: 5, PeriodSeconds: period,
-		}
+	c.LivenessProbe = &corev1.Probe{
+		ProbeHandler:        corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{Port: intstr.FromInt32(port)}},
+		InitialDelaySeconds: 5, PeriodSeconds: 20,
 	}
-	c.LivenessProbe, c.ReadinessProbe = probe(20), probe(10)
+	c.ReadinessProbe = &corev1.Probe{
+		ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{
+			Path: "/auth/config", Port: intstr.FromInt32(port), Scheme: corev1.URISchemeHTTPS,
+		}},
+		InitialDelaySeconds: 5, PeriodSeconds: 10,
+	}
 
 	vols := slices.DeleteFunc(dep.Spec.Template.Spec.Volumes, func(v corev1.Volume) bool { return v.Name == UITLSVolume })
 	dep.Spec.Template.Spec.Volumes = append(vols, corev1.Volume{

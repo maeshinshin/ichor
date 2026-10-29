@@ -196,7 +196,11 @@ func TestUpgradeKeepsInitsCustomizationsOverALiveUIDeployment(t *testing.T) {
 				t.Errorf("image = %q, want the new release's", c.Image)
 			}
 
-			for _, p := range []*corev1.Probe{c.LivenessProbe, c.ReadinessProbe} {
+			if tc.settings.TLSSecretName != "" && (c.LivenessProbe.TCPSocket == nil || probeHandlers(c.LivenessProbe) != 1) {
+				t.Errorf("liveness must be a lone tcpSocket on a TLS install: %+v", c.LivenessProbe)
+			}
+
+			for _, p := range []*corev1.Probe{c.ReadinessProbe} {
 				if probeHandlers(p) != 1 || (p.HTTPGet != nil) != tc.wantHTTP {
 					t.Errorf("probe has %d handlers, httpGet=%v, want exactly one (httpGet=%v): %+v", probeHandlers(p), p.HTTPGet != nil, tc.wantHTTP, p)
 				}
@@ -319,8 +323,13 @@ func TestCustomizeUIReplacesTCPProbesAndIsIdempotent(t *testing.T) {
 		t.Errorf("customizing twice changed the Deployment")
 	}
 
-	if p := d.Spec.Template.Spec.Containers[0].LivenessProbe; p.TCPSocket != nil || p.HTTPGet == nil {
-		t.Errorf("probe = %+v, want httpGet only", p)
+	c := d.Spec.Template.Spec.Containers[0]
+	if p := c.LivenessProbe; p.TCPSocket == nil || p.HTTPGet != nil {
+		t.Errorf("liveness = %+v, want tcpSocket only", p)
+	}
+
+	if p := c.ReadinessProbe; p.TCPSocket != nil || p.HTTPGet == nil {
+		t.Errorf("readiness = %+v, want httpGet only", p)
 	}
 }
 

@@ -29,6 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/version"
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
 )
 
@@ -68,7 +69,25 @@ func isUnschedulable(c *ichorv1alpha1.TalosCluster) bool {
 func (v *TalosClusterCustomValidator) ValidateCreate(_ context.Context, obj *ichorv1alpha1.TalosCluster) (admission.Warnings, error) {
 	talosclusterlog.Info("Validation for TalosCluster upon creation", "name", obj.GetName())
 
-	return nil, validateCNICreate(obj)
+	if err := validateCNICreate(obj); err != nil {
+		return nil, err
+	}
+
+	if err := validateVersion("talosVersion", obj.Spec.TalosVersion); err != nil {
+		return nil, err
+	}
+
+	return nil, validateVersion("kubernetesVersion", obj.Spec.KubernetesVersion)
+}
+
+// validateVersion refuses a Talos or Kubernetes version that is not a semantic version. The CRD
+// pattern lets "v01.2.3" through, which the upgrade comparisons would misorder.
+func validateVersion(field, v string) error {
+	if err := version.CheckSemver(v); err != nil {
+		return fmt.Errorf("spec.%s: %w", field, err)
+	}
+
+	return nil
 }
 
 // presetRemovedMessage is the refusal for a removed preset.
@@ -112,6 +131,12 @@ func (v *TalosClusterCustomValidator) ValidateUpdate(ctx context.Context, oldObj
 		return nil, fmt.Errorf(presetRemovedMessage, cmp.Or(newObj.Spec.CNI.Preset, oldObj.Spec.CNI.Preset))
 	}
 
+	// A version is checked when this update changes it, so a stored object that predates the
+	// check can still be edited for something else.
+	if err := validateChangedVersions(oldObj, newObj); err != nil {
+		return nil, err
+	}
+
 	// Only the transition to "false" is checked: a cluster created
 	// unschedulable has no workers yet (they are discovered afterwards), and
 	// unrelated edits to one that lost its workers must not be blocked.
@@ -125,6 +150,21 @@ func (v *TalosClusterCustomValidator) ValidateUpdate(ctx context.Context, oldObj
 	}
 
 	return nil, nil
+}
+
+// validateChangedVersions checks only the version fields an update changes.
+func validateChangedVersions(oldObj, newObj *ichorv1alpha1.TalosCluster) error {
+	if oldObj.Spec.TalosVersion != newObj.Spec.TalosVersion {
+		if err := validateVersion("talosVersion", newObj.Spec.TalosVersion); err != nil {
+			return err
+		}
+	}
+
+	if oldObj.Spec.KubernetesVersion != newObj.Spec.KubernetesVersion {
+		return validateVersion("kubernetesVersion", newObj.Spec.KubernetesVersion)
+	}
+
+	return nil
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type TalosCluster.

@@ -396,8 +396,9 @@ func checkWebhookInvariants(t *testing.T, release string, docs []map[string]any)
 			// needs CREATE/UPDATE on TalosMachine, the schedulable check
 			// UPDATE on TalosCluster. Anything else would be a new decision.
 			want := map[string][]any{
-				"vtalosmachine-v1alpha1.kb.io": {"CREATE", opUpdate, opDelete},
-				"vtaloscluster-v1alpha1.kb.io": {opCreate, opUpdate, opDelete},
+				"vtalosmachine-v1alpha1.kb.io":   {"CREATE", opUpdate, opDelete},
+				"vmachinereclaim-v1alpha1.kb.io": {"CREATE", opUpdate},
+				"vtaloscluster-v1alpha1.kb.io":   {opCreate, opUpdate, opDelete},
 				// Break-glass checks writes to existing CRs only.
 				"vbreakglass-v1alpha1.kb.io": {opUpdate},
 				// And the creation of a node reset by hand.

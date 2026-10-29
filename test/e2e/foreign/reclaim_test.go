@@ -121,11 +121,15 @@ func (r *rig) pod(t *testing.T, args ...string) (string, error) {
 	return string(out), err
 }
 
+// machine runs `ichor machine <args>` in the Ichor tools pod.
+func (r *rig) machine(t *testing.T, args ...string) (string, error) {
+	t.Helper()
+	return r.pod(t, append([]string{"env", "HOME=/tmp/home", "/tmp/ichor", "machine"}, args...)...)
+}
+
 func (r *rig) reclaim(t *testing.T, addr string, extra ...string) (string, error) {
 	t.Helper()
-	a := append([]string{"env", "HOME=/tmp/home", "/tmp/ichor", "machine", "reclaim", addr,
-		"--talosconfig", "/tmp/foreign-talosconfig", "--kubeconfig", podKC}, extra...)
-	return r.pod(t, a...)
+	return r.machine(t, append([]string{"reclaim", addr, "--talosconfig", "/tmp/foreign-talosconfig", "--kubeconfig", podKC}, extra...)...)
 }
 
 func (r *rig) ui(t *testing.T, op string, extra ...string) (string, error) {
@@ -156,6 +160,16 @@ func ftc(t *testing.T, f *foreign.Cluster) []byte {
 	return b
 }
 
+// firstUUID returns spec.uuid of the first object of a systeminformation listing ("" when there is none).
+func firstUUID(raw string) string {
+	objs, _ := talosctl.DecodeAll(raw)
+	if len(objs) == 0 {
+		return ""
+	}
+	u, _ := talosctl.SpecField(objs[0], "uuid").(string)
+	return u
+}
+
 // uuidOf reads a configured node's UUID through its authenticated API.
 func uuidOf(t *testing.T, ip string, tc []byte) string {
 	t.Helper()
@@ -163,11 +177,10 @@ func uuidOf(t *testing.T, ip string, tc []byte) string {
 	if err != nil {
 		t.Fatalf("systeminformation %s: %v", ip, err)
 	}
-	objs, err := talosctl.DecodeAll(out)
-	if err != nil || len(objs) == 0 {
-		t.Fatalf("decoding systeminformation: %v", err)
+	u := firstUUID(out)
+	if u == "" {
+		t.Fatalf("no uuid in systeminformation of %s", ip)
 	}
-	u, _ := talosctl.SpecField(objs[0], "uuid").(string)
 	return u
 }
 
@@ -185,12 +198,7 @@ func maintenanceUUID(ip string) string {
 	if err != nil {
 		return ""
 	}
-	objs, _ = talosctl.DecodeAll(out)
-	if len(objs) == 0 {
-		return ""
-	}
-	u, _ := talosctl.SpecField(objs[0], "uuid").(string)
-	return u
+	return firstUUID(out)
 }
 
 func waitMaintenance(t *testing.T, ip string, d time.Duration) string {
@@ -320,7 +328,7 @@ func TestC1C5C7(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if out, err := r.pod(t, "env", "HOME=/tmp/home", "/tmp/ichor", "machine", "approve", uuid, "--role", "worker", "--install-disk", "/dev/vda",
+	if out, err := r.machine(t, "approve", uuid, "--role", "worker", "--install-disk", "/dev/vda",
 		"--hostname", "ichor-e2e-r-w", "--yes", "--local", "-n", crNS, "--kubeconfig", podKC); err != nil {
 		t.Fatalf("approve: %v\n%s", err, out)
 	}
@@ -364,13 +372,23 @@ func TestC3C4Refusals(t *testing.T) {
 
 	// C4: the Ichor control plane, with --force, --confirm-cluster and --force-ungraceful all given.
 	iuuid := r.ikJSON(t, "-n", crNS, "get", "talosmachines.ichor.maesh.dev", "-o", "jsonpath={.items[0].metadata.name}")
-	out, err = r.pod(t, "env", "HOME=/tmp/home", "/tmp/ichor", "machine", "reclaim", r.ichorCP, "--talosconfig", "/tmp/ichor-talosconfig",
+	out, err = r.machine(t, "reclaim", r.ichorCP, "--talosconfig", "/tmp/ichor-talosconfig",
 		"--kubeconfig", podKC, "--confirm", iuuid, "--force", "--confirm-cluster", ichorName, "--force-ungraceful")
 	if err == nil || !strings.Contains(out, "is already an Ichor machine") {
 		t.Errorf("C4: an Ichor machine was not refused: %v", err)
 	}
 	if got := r.ikJSON(t, "get", "node", ichorName+"-cp", "-o", "jsonpath={.status.conditions[?(@.type==\"Ready\")].status}"); got != "True" {
 		t.Errorf("Ichor control plane not Ready after the refusal: %q", got)
+	}
+}
+
+// noLeaks fails for every text that contains credential material.
+func noLeaks(t *testing.T, secrets []string, texts map[string]string) {
+	t.Helper()
+	for what, text := range texts {
+		if l := leaks(text, secrets); len(l) > 0 {
+			t.Errorf("C9: %s contains credential material %v", what, l)
+		}
 	}
 }
 

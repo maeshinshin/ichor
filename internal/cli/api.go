@@ -343,7 +343,9 @@ func dialBackend(ctx context.Context, opts apiOptions, deps apiDeps) (*apiClient
 	ready := make(chan struct{})
 	done := make(chan error, 1)
 
-	go func() { done <- deps.Forward(fctx, pod, port, svc.Spec.Ports[0].Port, ready) }()
+	remotePort, caPEM := uiEndpoint(ctx, deps.K8s, svc, opts.CAFile != "")
+
+	go func() { done <- deps.Forward(fctx, pod, port, remotePort, ready) }()
 
 	select {
 	case <-ready:
@@ -357,7 +359,7 @@ func dialBackend(ctx context.Context, opts apiOptions, deps apiDeps) (*apiClient
 		return nil, fmt.Errorf("port-forward to pod/%s: %w", pod.Name, dctx.Err())
 	}
 
-	h, base, err := tunnelClient(dctx, port, opts.CAFile, cmp.Or(opts.TLSServerName, svc.Name+"."+svc.Namespace+".svc"))
+	h, base, err := tunnelClient(dctx, port, opts.CAFile, caPEM, cmp.Or(opts.TLSServerName, svc.Name+"."+svc.Namespace+".svc"))
 	if err != nil {
 		stop()
 
@@ -392,8 +394,8 @@ func dialBackend(ctx context.Context, opts apiOptions, deps apiDeps) (*apiClient
 // system roots plus caFile; a server that answers plain HTTP is used as such.
 // A certificate that cannot be verified is an error naming the way out: the
 // CLI never skips verification.
-// ponytail: reading the CA from the TLS Secret ichor-ui mounts is deferred; --ca-file covers it.
-func tunnelClient(ctx context.Context, port int32, caFile, serverName string) (*http.Client, string, error) {
+// caPEM is the CA from the ichor-ui-ca ConfigMap when the cluster publishes one.
+func tunnelClient(ctx context.Context, port int32, caFile string, caPEM []byte, serverName string) (*http.Client, string, error) {
 	hc, err := authHTTPClient(caFile)
 	if err != nil {
 		return nil, "", err
@@ -401,6 +403,26 @@ func tunnelClient(ctx context.Context, port int32, caFile, serverName string) (*
 
 	if hc == nil {
 		hc = &http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone()} //nolint:errcheck,forcetypeassert // the default transport is an *http.Transport
+	}
+
+	if len(caPEM) > 0 {
+		tr := hc.Transport.(*http.Transport) //nolint:errcheck,forcetypeassert // built above or by authHTTPClient
+		if tr.TLSClientConfig == nil {
+			tr.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS12}
+		}
+
+		if tr.TLSClientConfig.RootCAs == nil {
+			pool, perr := x509.SystemCertPool()
+			if perr != nil || pool == nil {
+				pool = x509.NewCertPool()
+			}
+
+			tr.TLSClientConfig.RootCAs = pool
+		}
+
+		if !tr.TLSClientConfig.RootCAs.AppendCertsFromPEM(caPEM) {
+			return nil, "", fmt.Errorf("ConfigMap %s holds no PEM certificate in %s", uiCAConfigMap, uiCAKey)
+		}
 	}
 
 	if serverName != "" {

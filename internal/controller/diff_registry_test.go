@@ -17,9 +17,12 @@ limitations under the License.
 package controller
 
 import (
+	"bytes"
 	"slices"
 	"strings"
 	"testing"
+
+	yaml "go.yaml.in/yaml/v4"
 )
 
 const (
@@ -56,6 +59,74 @@ endpoints:
 skipFallback: true
 `
 )
+
+// legacyMirrorForm rewrites a rendered config's RegistryMirrorConfig documents as the
+// machine.registries.mirrors an earlier Ichor build wrote.
+func legacyMirrorForm(cfg []byte) []byte {
+	dec := yaml.NewDecoder(bytes.NewReader(cfg))
+
+	var main map[string]any
+
+	var rest []map[string]any
+
+	mirrors := map[string]any{}
+
+	for {
+		var d map[string]any
+		if err := dec.Decode(&d); err != nil {
+			break
+		}
+
+		switch {
+		case d["kind"] == registryMirrorKind:
+			m := map[string]any{}
+			eps := []any{}
+
+			for _, e := range d["endpoints"].([]any) {
+				ep := e.(map[string]any)
+				eps = append(eps, ep["url"])
+
+				if ep["overridePath"] != nil {
+					m["overridePath"] = ep["overridePath"]
+				}
+			}
+
+			m["endpoints"] = eps
+			if d["skipFallback"] != nil {
+				m["skipFallback"] = d["skipFallback"]
+			}
+
+			mirrors[d["name"].(string)] = m
+		case d["kind"] == nil:
+			main = d
+		default:
+			rest = append(rest, d)
+		}
+	}
+
+	machine := main["machine"].(map[string]any)
+
+	regs, _ := machine["registries"].(map[string]any)
+	if regs == nil {
+		regs = map[string]any{}
+		machine["registries"] = regs
+	}
+
+	regs["mirrors"] = mirrors
+
+	var out bytes.Buffer
+
+	for i, d := range append([]map[string]any{main}, rest...) {
+		if i > 0 {
+			out.WriteString("---\n")
+		}
+
+		b, _ := yaml.Marshal(d)
+		out.Write(b)
+	}
+
+	return out.Bytes()
+}
 
 func TestChangedPaths_RegistryMirrorFormsAreEquivalent(t *testing.T) {
 	for _, tc := range [][2]string{{mirrorLegacyYAML, mirrorDocYAML}, {mirrorDocYAML, mirrorLegacyYAML}} {

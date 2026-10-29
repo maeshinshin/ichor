@@ -641,6 +641,37 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(fake.applyCalls).To(BeEmpty())
 	})
 
+	It("stays Ready when the node carries the same mirrors in the legacy machine.registries.mirrors form (Ichor upgrade)", func() {
+		bundle := newTestBundle("v1.14")
+		secret := newTestSecret(bundle)
+		cluster := newTestCluster(secret.Name, "v1.14")
+		cluster.Spec.Registries = []ichorv1alpha1.TalosClusterRegistry{
+			{Host: "ghcr.io", Endpoints: []string{"http://10.0.0.1:5000"}, SkipFallback: true, OverridePath: true},
+		}
+		Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
+
+		m := newTestMachine(cluster.Name, true)
+
+		rendered, hash, err := render.Render(cluster, m, bundle, nil, nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		fake := &fakeTalosClient{current: legacyMirrorForm(rendered)}
+		Expect(string(fake.current)).To(ContainSubstring("mirrors:"))
+		Expect(string(fake.current)).NotTo(ContainSubstring("RegistryMirrorConfig"))
+
+		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
+
+		_, err = reconcileMachine(r, m)
+		Expect(err).NotTo(HaveOccurred())
+
+		got := fetchMachine(m)
+		cond := readyCondition(got)
+		Expect(cond).NotTo(BeNil())
+		Expect(cond.Reason).To(Equal(reasonConverged), "message: %s", cond.Message)
+		Expect(got.Status.AppliedConfigHash).To(Equal(hash))
+		Expect(fake.applyCalls).To(BeEmpty())
+	})
+
 	It("applies a non-reboot change with NO_REBOOT and converges hash and observedGeneration", func() {
 		bundle := newTestBundle("v1.14")
 		secret := newTestSecret(bundle)

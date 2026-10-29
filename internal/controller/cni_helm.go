@@ -190,6 +190,17 @@ func AdvanceCNIHelmJob(
 	ctx context.Context, c client.Client, ns string, cluster *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode,
 	inst *ichorv1alpha1.IchorInstallation, salt string,
 ) (bool, error) {
+	return advanceCNIHelmJobSince(ctx, c, ns, cluster, mode, inst, salt, time.Time{})
+}
+
+// advanceCNIHelmJobSince is AdvanceCNIHelmJob for a caller that needs a run of its own: the Job name is
+// a hash of the values, so a Job that ended before since (the install's, or an earlier switch's, within
+// its 24 h TTL) is not the caller's run. It is deleted and the next call starts a new one. A zero since
+// takes any Job as it is.
+func advanceCNIHelmJobSince(
+	ctx context.Context, c client.Client, ns string, cluster *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode,
+	inst *ichorv1alpha1.IchorInstallation, salt string, since time.Time,
+) (bool, error) {
 	if mode == "" {
 		mode = cni.KubeProxyEnabled
 	}
@@ -214,6 +225,14 @@ func AdvanceCNIHelmJob(
 	}
 
 	done, failed := jobOutcome(&job)
+	if ended := jobEnded(&job); (done || failed != nil) && !ended.IsZero() && ended.Before(since) {
+		if err := c.Delete(ctx, &job, client.PropagationPolicy(metav1.DeletePropagationBackground)); client.IgnoreNotFound(err) != nil {
+			return false, err
+		}
+
+		return false, nil
+	}
+
 	if failed != nil {
 		return false, &CNIHelmJobFailedError{JobName: name, Reason: failed.Reason, Message: failed.Message}
 	}
@@ -231,6 +250,21 @@ func AdvanceCNIHelmJob(
 	}
 
 	return done, nil
+}
+
+// jobEnded is when a finished Job ended, or the zero time.
+func jobEnded(job *batchv1.Job) time.Time {
+	if job.Status.CompletionTime != nil {
+		return job.Status.CompletionTime.Time
+	}
+
+	for _, cond := range job.Status.Conditions {
+		if cond.Type == batchv1.JobFailed && cond.Status == corev1.ConditionTrue {
+			return cond.LastTransitionTime.Time
+		}
+	}
+
+	return time.Time{}
 }
 
 // takeoverJob is whether the Job takes over a Cilium someone else installed: every Job

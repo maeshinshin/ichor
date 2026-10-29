@@ -2,9 +2,15 @@ import { useEffect, useState } from 'preact/hooks'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { AlertDialogCancel, AlertDialogFooter } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
+import { CircleXIcon } from 'lucide-preact'
+import { Badge } from '@/components/ui/badge'
+import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { Item, ItemContent, ItemGroup, ItemMedia, ItemTitle } from '@/components/ui/item'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { OperationKind, type PlanOperationResponse } from '@/gen/ichor/v1alpha1/operation_pb'
@@ -149,34 +155,38 @@ export function RestoreDialog({ cluster, disabled = false }: { cluster: { namesp
       }
     >
       {!plan && (
-        <div class="space-y-2">
-          <Label htmlFor="restore-snapshot">{t('restore.snapshot')}</Label>
+        <Field>
+          <FieldLabel htmlFor="restore-snapshot">{t('restore.snapshot')}</FieldLabel>
           {choices === null ? (
-            <p class="text-sm text-muted-foreground">{t('restore.loading')}</p>
+            <>
+              <Skeleton className="h-9 w-full" />
+              <span class="sr-only">{t('restore.loading')}</span>
+            </>
           ) : choices.length === 0 ? (
             <Alert>
               <AlertTitle>{t('restore.noneTitle')}</AlertTitle>
               <AlertDescription>{t('restore.none')}</AlertDescription>
             </Alert>
           ) : (
-            <select
-              id="restore-snapshot"
-              class="h-9 w-full rounded-md border bg-background px-2 text-sm"
-              value={chosen}
-              onChange={(e) => setChosen((e.currentTarget as HTMLSelectElement).value)}
-            >
-              {choices.map((c) => (
-                <option key={c.key} value={c.key}>
-                  {t('restore.option', { when: formatDate(new Date(c.seconds * 1000)), backup: c.backup.name, size: formatBytes(c.size) })}
-                </option>
-              ))}
-            </select>
+            <Select value={chosen} onValueChange={setChosen}>
+              <SelectTrigger id="restore-snapshot" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {choices.map((c) => (
+                  <SelectItem key={c.key} value={c.key}>
+                    {t('restore.option', { when: formatDate(new Date(c.seconds * 1000)), backup: c.backup.name, size: formatBytes(c.size) })}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           )}
-        </div>
+        </Field>
       )}
 
       {!plan && (
         <Alert variant="destructive">
+          <CircleXIcon />
           <AlertTitle>{t('restore.warnTitle')}</AlertTitle>
           <AlertDescription>{t('restore.warn')}</AlertDescription>
         </Alert>
@@ -184,42 +194,56 @@ export function RestoreDialog({ cluster, disabled = false }: { cluster: { namesp
 
       {plan && plan.blocked !== '' && (
         <Alert variant="destructive">
+          <CircleXIcon />
           <AlertTitle>{t('ops.plan.blocked')}</AlertTitle>
           <AlertDescription>{plan.blocked}</AlertDescription>
         </Alert>
       )}
 
       {plan && plan.blocked === '' && (
-        <div class="space-y-3 text-sm">
-          <div>
-            <p class="mb-1 font-medium">{t('node.action.stepsTitle')}</p>
-            <ol class="list-inside list-decimal space-y-0.5">
-              {plan.steps.map((s) => (
-                <li key={s}>{s}</li>
-              ))}
-            </ol>
-          </div>
+        <div class="space-y-3">
+          <Card size="sm">
+            <CardHeader>
+              <CardTitle>{t('node.action.stepsTitle')}</CardTitle>
+              <CardDescription>{t('ops.plan.pauseOnFailure')}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ItemGroup>
+                {plan.steps.map((s, i) => (
+                  <Item key={s} size="xs">
+                    <ItemMedia>
+                      <Badge variant="secondary">{i + 1}</Badge>
+                    </ItemMedia>
+                    <ItemContent>
+                      <ItemTitle>{s}</ItemTitle>
+                    </ItemContent>
+                  </Item>
+                ))}
+              </ItemGroup>
+            </CardContent>
+          </Card>
           {plan.kubernetesApiUnavailable && (
             <Alert variant="destructive">
+              <CircleXIcon />
               <AlertTitle>{t('node.action.apiDown')}</AlertTitle>
             </Alert>
           )}
           {plan.warning !== '' && (
             <Alert variant="destructive">
+              <CircleXIcon />
               <AlertTitle>{t('node.action.warning')}</AlertTitle>
               <AlertDescription>{plan.warning}</AlertDescription>
             </Alert>
           )}
-          <p class="text-muted-foreground">{t('ops.plan.pauseOnFailure')}</p>
-          <div class="space-y-2">
-            <Label htmlFor="restore-name">{t('ops.dialog.typeName', { name: cluster.name })}</Label>
+          <Field>
+            <FieldLabel htmlFor="restore-name">{t('ops.dialog.typeName', { name: cluster.name })}</FieldLabel>
             <Input id="restore-name" autoComplete="off" value={typed} onInput={(e) => setTyped((e.currentTarget as HTMLInputElement).value)} />
-          </div>
-          <div class="space-y-2">
-            <Label htmlFor="restore-reason">{t('node.action.reason')}</Label>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="restore-reason">{t('node.action.reason')}</FieldLabel>
             <Textarea id="restore-reason" value={reason} onInput={(e) => setReason((e.currentTarget as HTMLTextAreaElement).value)} />
-            <p class="text-xs text-muted-foreground">{t('restore.reasonHint')}</p>
-          </div>
+            <FieldDescription>{t('restore.reasonHint')}</FieldDescription>
+          </Field>
         </div>
       )}
 

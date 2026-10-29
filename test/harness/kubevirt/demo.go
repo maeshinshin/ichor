@@ -82,8 +82,8 @@ func demoMemory(env string) (string, error) {
 	return v, nil
 }
 
-func demoVMManifest(name, memory string) string {
-	m := fmt.Sprintf(haVMManifestTmpl, name, talosFactorySchematic, talosVersion)
+func demoVMManifest(name, memory string, iso isoSource) string {
+	m := renderVM(haVMManifestTmpl, name, iso)
 	m = strings.ReplaceAll(m, "kubevirt-ha", "kubevirt-ui-demo")
 	m = strings.Replace(m, "guest: "+defaultDemoMemory, "guest: "+memory, 1)
 
@@ -109,8 +109,13 @@ func upDemo() error {
 	names := []string{cp, worker}
 	memory := map[string]string{cp: cpMem, worker: workerMem}
 
+	iso, err := resolveISO()
+	if err != nil {
+		return err
+	}
+
 	for _, n := range names {
-		if err := applyManifest(demoVMManifest(n, memory[n])); err != nil {
+		if err := applyManifest(demoVMManifest(n, memory[n], iso)); err != nil {
 			return fmt.Errorf("creating VM %s: %w", n, err)
 		}
 	}

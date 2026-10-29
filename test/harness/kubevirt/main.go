@@ -78,14 +78,13 @@ spec:
         name: %[1]s-iso
       spec:
         source:
-          http:
-            url: https://factory.talos.dev/image/%[2]s/%[3]s/metal-amd64.iso
+%[2]s
         storage:
           accessModes: [ReadWriteOnce]
           volumeMode: Filesystem
           resources:
             requests:
-              storage: 1Gi
+              storage: %[3]s
           storageClassName: ceph-block
     - metadata:
         name: %[1]s-system
@@ -251,7 +250,10 @@ func up() error {
 // bootToMaintenance creates the VM, waits for its pod IP and for MachineStatus to reach
 // maintenance, and prints the maintenance-mode resources (ADR 0007's entry point).
 func bootToMaintenance() (string, error) {
-	manifest := fmt.Sprintf(vmManifestTmpl, vmName, talosFactorySchematic, talosVersion)
+	manifest, err := vmManifestFor(vmManifestTmpl, vmName)
+	if err != nil {
+		return "", err
+	}
 	if err := applyManifest(manifest); err != nil {
 		return "", fmt.Errorf("creating the VM: %w", err)
 	}

@@ -28,6 +28,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
+	"github.com/maeshinshin/ichor/pkg/deleteguard"
 	"github.com/maeshinshin/ichor/pkg/render"
 )
 
@@ -103,8 +104,8 @@ func (v *TalosConfigPatchCustomValidator) dryRender(ctx context.Context, p *icho
 		return nil
 	}
 
-	var machines ichorv1alpha1.TalosMachineList
-	if err := v.Client.List(ctx, &machines, client.InNamespace(p.Namespace)); err != nil {
+	machines, err := deleteguard.ApprovedMachines(ctx, v.Client, p.Namespace, cluster.Name, deleteguard.MachineFilter{})
+	if err != nil {
 		return err
 	}
 
@@ -122,9 +123,9 @@ func (v *TalosConfigPatchCustomValidator) dryRender(ctx context.Context, p *icho
 
 	with := append(append([]ichorv1alpha1.TalosConfigPatch{}, base...), *p)
 
-	for i := range machines.Items {
-		m := &machines.Items[i]
-		if m.Spec.ClusterRef.Name != cluster.Name || m.Spec.Role == "" || !m.Spec.IsApproved() {
+	for i := range machines {
+		m := &machines[i]
+		if m.Spec.Role == "" {
 			continue
 		}
 

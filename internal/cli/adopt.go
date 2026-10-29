@@ -112,7 +112,7 @@ clusters keep the old CAs, but never starts one.`,
 			return dialTalos(ctx, talosconfigPath, adoptContext, endpoint)
 		}
 
-		bundle, _, err := resolveAdoptBundle(cmd.Context(), adoptSecretsOptions{
+		bundle, saveBundle, err := resolveAdoptBundle(cmd.Context(), adoptSecretsOptions{
 			File: adoptSecretsBundle, Recover: adoptRecover, RecoverFrom: adoptRecoverFrom,
 			Cluster:  adoptCluster,
 			Contract: clusterVersionContract(cmd.Context(), k8sClient, adoptNamespace, adoptCluster),
@@ -132,14 +132,15 @@ clusters keep the old CAs, but never starts one.`,
 		}
 
 		deps := adoptDeps{
-			K8s:       k8sClient,
-			Bundle:    bundle,
-			DialTalos: dial,
-			Stdout:    cmd.OutOrStdout(),
-			Stderr:    cmd.ErrOrStderr(),
-			Stdin:     cmd.InOrStdin(),
-			AssumeYes: assumeYes,
-			Output:    outputFormat,
+			K8s:        k8sClient,
+			Bundle:     bundle,
+			SaveBundle: saveBundle,
+			DialTalos:  dial,
+			Stdout:     cmd.OutOrStdout(),
+			Stderr:     cmd.ErrOrStderr(),
+			Stdin:      cmd.InOrStdin(),
+			AssumeYes:  assumeYes,
+			Output:     outputFormat,
 
 			Target:       k8sClient,
 			CNIUnmanaged: adoptCNIUnmanaged,

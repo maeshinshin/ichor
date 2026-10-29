@@ -1,7 +1,7 @@
 import { AppToaster } from '@/components/AppToaster'
 import type { ComponentChildren } from 'preact'
 import { Fragment } from 'preact'
-import { ArchiveIcon, BoxesIcon, CircleAlertIcon, CircleCheckIcon, LayoutDashboardIcon, LoaderCircleIcon, LayersIcon, ListChecksIcon, NetworkIcon, ServerIcon, TriangleAlertIcon, UsersIcon } from 'lucide-preact'
+import { ArchiveIcon, BoxesIcon, CircleAlertIcon, CircleCheckIcon, LayoutDashboardIcon, LoaderCircleIcon, LayersIcon, ListChecksIcon, NetworkIcon, ServerIcon, SettingsIcon, TriangleAlertIcon, UsersIcon } from 'lucide-preact'
 import { AccountMenu } from '@/components/AccountMenu'
 import type { WhoAmIResponse } from '@/gen/ichor/v1alpha1/user_pb'
 import { IchorVersion } from '@/components/IchorVersion'
@@ -90,6 +90,7 @@ const navRoutes = [
   { path: '/backups', label: 'nav.backups', Icon: ArchiveIcon, section: '' },
   { path: '/config', label: 'nav.config', Icon: LayersIcon, section: '/config/' },
   { path: '/cilium', label: 'nav.cilium', Icon: NetworkIcon, section: '' },
+  { path: '/settings', label: 'nav.settings', Icon: SettingsIcon, section: '' },
 ] satisfies { path: string; label: Key; Icon: typeof BoxesIcon; section: string }[]
 
 // Shown only when ichor-ui has its own users (docs/adr/0094).

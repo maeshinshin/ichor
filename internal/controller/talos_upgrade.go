@@ -273,7 +273,7 @@ func (a *talosUpgradeAdvancer) afterReboot(
 	}
 
 	if !upToDate {
-		if endErr := a.endEvacuation(ctx, talos, cluster, m); endErr != nil {
+		if endErr := endEvacuationOf(ctx, a.Client, a.Evacuator, talos, cluster, m); endErr != nil {
 			return false, endErr
 		}
 
@@ -321,7 +321,7 @@ func (a *talosUpgradeAdvancer) finish(
 		}
 	}
 
-	if err := a.endEvacuation(ctx, talos, cluster, m); err != nil {
+	if err := endEvacuationOf(ctx, a.Client, a.Evacuator, talos, cluster, m); err != nil {
 		return false, err
 	}
 
@@ -335,23 +335,6 @@ func (a *talosUpgradeAdvancer) finish(
 	}
 
 	return true, nil
-}
-
-// endEvacuation undoes a pending evacuation (re-enables scheduling); see
-// endMachineEvacuation.
-func (a *talosUpgradeAdvancer) endEvacuation(
-	ctx context.Context, talos TalosClient, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
-) error {
-	if a.Evacuator == nil || !apimeta.IsStatusConditionTrue(m.Status.Conditions, conditionStorageEvacuation) {
-		return nil
-	}
-
-	node, err := resolveNodeName(ctx, a.Client, talos, m)
-	if err != nil {
-		return err
-	}
-
-	return endMachineEvacuation(ctx, a.Client, a.Evacuator, cluster, m, node)
 }
 
 // installerImage builds cluster's target installer image reference:

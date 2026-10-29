@@ -358,6 +358,15 @@ helm-deploy: install-helm ## Deploy manager to the K8s cluster via Helm. Specify
 		--timeout 5m \
 		$(HELM_EXTRA_ARGS)
 
+## Chart version and appVersion for helm-package (a release tag vX.Y.Z gives CHART_VERSION=X.Y.Z, APP_VERSION=vX.Y.Z, the image tag).
+CHART_VERSION ?= $(shell sed -n 's/^version: //p' $(HELM_CHART_DIR)/Chart.yaml)
+APP_VERSION ?= $(CHART_VERSION)
+CHART_DIST ?= bin/chart
+
+.PHONY: helm-package
+helm-package: ## Package the chart into CHART_DIST (bin/chart) with CHART_VERSION and APP_VERSION.
+	$(HELM) package $(HELM_CHART_DIR) --version $(CHART_VERSION) --app-version $(APP_VERSION) --destination $(CHART_DIST)
+
 .PHONY: helm-uninstall
 helm-uninstall: ## Uninstall the Helm release from the K8s cluster.
 	$(HELM) uninstall $(HELM_RELEASE) --namespace $(HELM_NAMESPACE)

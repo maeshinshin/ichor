@@ -151,11 +151,8 @@ func (n *machineryNode) Inspect(ctx context.Context) (Inspection, error) {
 	}
 
 	in.Volumes, err = n.volumes(ctx)
-	if err != nil {
-		return in, err
-	}
 
-	return in, nil
+	return in, err
 }
 
 // markLocalMember records the dialled node's own member ID and judges its

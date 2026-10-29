@@ -50,14 +50,8 @@ func managedAdopted(t *testing.T, c *foreign.Cluster, before map[string]string) 
 		t.Errorf("spec.cni.preset = %q, want cilium", got)
 	}
 	waitCluster(t, c, "{.status.conditions[?(@.type==\"CNIHandover\")].status}", "True")
-	if jobs, _ := inner(c, "-n", crNS, "get", "jobs", "--no-headers"); strings.Contains(jobs, "ichor-cni") {
-		t.Errorf("an ichor-cni Job exists: %s", jobs)
-	}
-	held, _ := inner(c, "-n", crNS, "get", "talosmachines.ichor.maesh.dev", "-o",
-		"jsonpath={.items[*].metadata.annotations.ichor\\.maesh\\.dev/hold-apply}")
-	if strings.TrimSpace(held) != "" {
-		t.Errorf("hold-apply still set: %q", held)
-	}
+	noCNIJob(t, c)
+	holdCleared(t, c)
 	pods, _ := inner(c, "-n", crNS, "get", "pods", "--no-headers")
 	t.Logf("pods in %s:\n%s", crNS, pods)
 	for _, l := range strings.Split(strings.TrimSpace(pods), "\n") {

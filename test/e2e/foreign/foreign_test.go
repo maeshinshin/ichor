@@ -208,7 +208,8 @@ func TestD1FlannelAdoptedUnmanaged(t *testing.T) {
 		"jsonpath={.status.conditions[?(@.type==\"CNIHandover\")].status}"); got != "" {
 		t.Errorf("CNIHandover condition present: %q", got)
 	}
-	if p, _ := inner(c, "get", "ciliumnetworkpolicies.cilium.io", "-A", "--no-headers"); strings.TrimSpace(p) != "" {
+	// kubectl exits non-zero when the Cilium CRD is not served (the expected state): only a successful, non-empty listing is a failure.
+	if p, err := inner(c, "get", "ciliumnetworkpolicies.cilium.io", "-A", "--no-headers"); err == nil && strings.TrimSpace(p) != "" {
 		t.Errorf("Cilium policies exist on a flannel cluster: %s", p)
 	}
 	// Give the controller time to render and apply (it must change nothing CNI-related).

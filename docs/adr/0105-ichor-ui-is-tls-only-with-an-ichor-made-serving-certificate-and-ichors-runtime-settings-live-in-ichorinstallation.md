@@ -162,3 +162,6 @@ The user decided to remove the transitional plaintext listener now instead of in
 - The migration table row for plain HTTP above now reads: moves to 8443 TLS, 8080 is closed. The Settings/Overview Alert about plain HTTP was never built.
 - No T6 test exists under `test/e2e`; the hardware T6 result above (8080 kept, deprecated) describes the pre-amendment behaviour. After this change, a plaintext install must show no 8080 after the upgrade; not re-run on hardware.
 
+## Amendment (ADR 0107)
+
+`spec.reclaim.enabled`, the `ichorinstallations/reclaim` subresource, the confirmation annotation and the Settings reclaim card are gone: the field is deprecated and ignored, and "Reset and add" is decided by the `reclaim` verb on `machinereclaims` alone.

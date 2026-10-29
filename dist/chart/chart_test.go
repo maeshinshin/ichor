@@ -155,6 +155,38 @@ func checkMonitoringOptionsOffByDefault(t *testing.T, release string, docs []map
 	}
 }
 
+// TestIchorUIMonitorVerifiesTLS guards: the ichor-ui ServiceMonitor verifies the serving
+// certificate against ichor-ui-ca by default, and ichorUI.tls.caSecret redirects it.
+func TestIchorUIMonitorVerifiesTLS(t *testing.T) {
+	tlsOf := func(sets ...string) map[string]any {
+		docs := renderChartWithValues(t, "ichor", append([]string{"prometheus.enabled=true"}, sets...)...)
+		m := find(docs, "ServiceMonitor", ichorUIMetricsMonitorName)
+		if m == nil {
+			t.Fatalf("no ServiceMonitor %q", ichorUIMetricsMonitorName)
+		}
+		eps, _ := m["spec"].(map[string]any)["endpoints"].([]any)
+		tc, _ := eps[0].(map[string]any)["tlsConfig"].(map[string]any)
+		if tc["insecureSkipVerify"] != nil {
+			t.Errorf("tlsConfig must verify, got insecureSkipVerify=%v", tc["insecureSkipVerify"])
+		}
+		return tc
+	}
+	tc := tlsOf()
+	ca, _ := tc["ca"].(map[string]any)
+	cm, _ := ca["configMap"].(map[string]any)
+	if cm["name"] != "ichor-ui-ca" || cm["key"] != "ca.crt" {
+		t.Errorf("default ca: want ConfigMap ichor-ui-ca/ca.crt, got %v", ca)
+	}
+	if tc["serverName"] != "ichor-ui-service.default.svc" {
+		t.Errorf("serverName: got %v", tc["serverName"])
+	}
+	ca, _ = tlsOf("ichorUI.tls.caSecret=my-ca")["ca"].(map[string]any)
+	sec, _ := ca["secret"].(map[string]any)
+	if sec["name"] != "my-ca" || sec["key"] != "ca.crt" || ca["configMap"] != nil {
+		t.Errorf("caSecret: got %v", ca)
+	}
+}
+
 // TestMonitoringOptionsEnabled guards the "actually renders, and renders something
 // usable" half's chart options: ichor-ui's own ServiceMonitor, the
 // PrometheusRule's two alerts, and the Grafana dashboard ConfigMap's JSON payload.

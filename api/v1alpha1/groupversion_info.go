@@ -26,16 +26,12 @@ import (
 )
 
 var (
-	// SchemeGroupVersion is group version used to register these objects.
-	// This name is used by applyconfiguration generators (e.g. controller-gen).
-	SchemeGroupVersion = schema.GroupVersion{Group: "ichor.maesh.dev", Version: "v1alpha1"}
-
-	// GroupVersion is an alias for SchemeGroupVersion, for backward compatibility.
-	GroupVersion = SchemeGroupVersion
+	// GroupVersion is group version used to register these objects.
+	GroupVersion = schema.GroupVersion{Group: "ichor.maesh.dev", Version: "v1alpha1"}
 
 	// SchemeBuilder is used to add go types to the GroupVersionKind scheme.
 	SchemeBuilder = runtime.NewSchemeBuilder(func(scheme *runtime.Scheme) error {
-		metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
+		metav1.AddToGroupVersion(scheme, GroupVersion)
 		return nil
 	})
 

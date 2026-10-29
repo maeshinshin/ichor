@@ -228,7 +228,7 @@ type TalosEtcdBackupList struct {
 
 func init() {
 	SchemeBuilder.Register(func(s *runtime.Scheme) error {
-		s.AddKnownTypes(SchemeGroupVersion, &TalosEtcdBackup{}, &TalosEtcdBackupList{})
+		s.AddKnownTypes(GroupVersion, &TalosEtcdBackup{}, &TalosEtcdBackupList{})
 		return nil
 	})
 }

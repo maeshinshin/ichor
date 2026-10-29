@@ -37,11 +37,3 @@ func (s *TalosOperationSpec) StartSubresource() string {
 
 	return ""
 }
-
-// StartSubresources lists every subresource StartSubresource can return.
-func StartSubresources() []string {
-	return []string{
-		TalosOperationKindShutdown, TalosOperationKindCARotation, TalosOperationKindEtcdRestore,
-		TalosOperationKindNode + "-" + NodeActionReset, TalosOperationKindNode + "-" + NodeActionShutdown,
-	}
-}

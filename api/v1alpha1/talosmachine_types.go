@@ -450,7 +450,7 @@ type TalosMachineList struct {
 
 func init() {
 	SchemeBuilder.Register(func(s *runtime.Scheme) error {
-		s.AddKnownTypes(SchemeGroupVersion, &TalosMachine{}, &TalosMachineList{})
+		s.AddKnownTypes(GroupVersion, &TalosMachine{}, &TalosMachineList{})
 		return nil
 	})
 }

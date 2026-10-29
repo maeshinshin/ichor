@@ -211,7 +211,7 @@ type IchorInstallationList struct {
 
 func init() {
 	SchemeBuilder.Register(func(s *runtime.Scheme) error {
-		s.AddKnownTypes(SchemeGroupVersion, &IchorInstallation{}, &IchorInstallationList{})
+		s.AddKnownTypes(GroupVersion, &IchorInstallation{}, &IchorInstallationList{})
 		return nil
 	})
 }

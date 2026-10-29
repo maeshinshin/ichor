@@ -691,7 +691,7 @@ type TalosClusterList struct {
 
 func init() {
 	SchemeBuilder.Register(func(s *runtime.Scheme) error {
-		s.AddKnownTypes(SchemeGroupVersion, &TalosCluster{}, &TalosClusterList{})
+		s.AddKnownTypes(GroupVersion, &TalosCluster{}, &TalosClusterList{})
 		return nil
 	})
 }

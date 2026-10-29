@@ -110,7 +110,7 @@ type TalosStorageList struct {
 
 func init() {
 	SchemeBuilder.Register(func(s *runtime.Scheme) error {
-		s.AddKnownTypes(SchemeGroupVersion, &TalosStorage{}, &TalosStorageList{})
+		s.AddKnownTypes(GroupVersion, &TalosStorage{}, &TalosStorageList{})
 		return nil
 	})
 }

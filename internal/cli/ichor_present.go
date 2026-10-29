@@ -224,19 +224,15 @@ func checkIchorPresence(ctx context.Context, c client.Reader, w io.Writer, cliVe
 // semverOf is v with its leading "v" made certain, or "" when it is not a release version (a
 // "dev" CLI cannot be compared).
 func semverOf(v string) string {
-	if v == "" {
-		return ""
-	}
-
-	if !strings.HasPrefix(v, "v") {
+	if v != "" && !strings.HasPrefix(v, "v") {
 		v = "v" + v
 	}
 
-	if !semver.IsValid(v) {
-		return ""
+	if semver.IsValid(v) {
+		return v
 	}
 
-	return v
+	return ""
 }
 
 // refuseHelmManaged is the answer of a command that would run the installer Job on an install

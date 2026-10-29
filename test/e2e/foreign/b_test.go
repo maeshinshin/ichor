@@ -25,7 +25,6 @@ package foreign
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -34,7 +33,6 @@ import (
 
 	"github.com/maeshinshin/ichor/test/internal/foreign"
 	"github.com/maeshinshin/ichor/test/internal/kube"
-	"github.com/maeshinshin/ichor/test/internal/talosctl"
 	"github.com/maeshinshin/ichor/test/utils"
 )
 
@@ -158,7 +156,7 @@ func TestHelmSet(t *testing.T) {
 func kubePrismState(t *testing.T, c *foreign.Cluster) map[string]string {
 	t.Helper()
 	res := map[string]string{}
-	for _, ip := range append(append([]string{}, c.CPs...), c.Workers...) {
+	for _, ip := range c.Nodes() {
 		doc, kubeDocs := configDocs(t, c, ip)
 		m, _ := doc["machine"].(map[string]any)
 		feat, _ := m["features"].(map[string]any)
@@ -179,28 +177,6 @@ func kubePrismState(t *testing.T, c *foreign.Cluster) map[string]string {
 func stringify(v any) string {
 	b, _ := json.Marshal(v)
 	return string(b)
-}
-
-// machineConfigVersions returns the resource version of the machineconfig on each node: it changes on every apply.
-func machineConfigVersions(t *testing.T, c *foreign.Cluster) map[string]string {
-	t.Helper()
-	tc, err := os.ReadFile(c.Talosconfig)
-	if err != nil {
-		t.Fatal(err)
-	}
-	res := map[string]string{}
-	for _, ip := range append(append([]string{}, c.CPs...), c.Workers...) {
-		out, err := talosctl.GetAuthenticated(ns, ip, "machineconfig", tc)
-		if err != nil {
-			t.Fatalf("machineconfig %s: %v", ip, err)
-		}
-		objs, _ := talosctl.DecodeAll(out)
-		if len(objs) > 0 {
-			md, _ := objs[0]["metadata"].(map[string]any)
-			res[ip] = fmt.Sprint(md["version"])
-		}
-	}
-	return res
 }
 
 // b3Canary creates the Kubernetes Secret that must stay readable after adoption (it is encrypted at rest with the

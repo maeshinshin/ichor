@@ -56,7 +56,7 @@ func (s *sampler) start(t *testing.T, c *foreign.Cluster) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ips := append(append([]string{}, c.CPs...), c.Workers...)
+	ips := c.Nodes()
 	go func() {
 		defer close(s.done)
 		for {
@@ -205,14 +205,12 @@ func TestB3B4B6EnabledAdopt(t *testing.T) {
 		}
 	}
 	// B3: the controller reaches the nodes with a certificate minted from the recovered bundle.
-	for range 18 {
+	_, _ = kube.Poll("TalosMachines Ready", 3*time.Minute, func() (string, bool) {
 		st, _ := inner(c, "-n", crNS, "get", "talosmachines.ichor.maesh.dev", "-o",
 			"jsonpath={.items[*].status.conditions[?(@.type==\"Ready\")].status}")
-		if f := strings.Fields(st); len(f) == 2 && f[0] == "True" && f[1] == "True" {
-			break
-		}
-		time.Sleep(10 * time.Second)
-	}
+		f := strings.Fields(st)
+		return "", len(f) == 2 && f[0] == "True" && f[1] == "True"
+	})
 	st, _ := inner(c, "-n", crNS, "get", "talosmachines.ichor.maesh.dev", "-o",
 		"jsonpath={range .items[*]}{.metadata.name}={.status.conditions[?(@.type==\"Ready\")].status}/{.status.conditions[?(@.type==\"Ready\")].reason} {end}")
 	t.Logf("TalosMachines Ready: %s", st)

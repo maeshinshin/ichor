@@ -134,11 +134,30 @@ func vmName(prefix, role string, i int) string { return fmt.Sprintf("%s-%s%d", p
 
 // Dir is where a prefix keeps its files.
 func Dir(prefix string) (string, error) {
-	root, err := utils.GetProjectDir()
+	root, err := Root()
 	if err != nil {
 		return "", err
 	}
 	return filepath.Join(root, "bin", "foreign", prefix), nil
+}
+
+// Root is the repository root: the nearest parent of the working directory holding go.mod.
+// (utils.GetProjectDir only strips /test/e2e, which is wrong for test/e2e/foreign.)
+func Root() (string, error) {
+	d, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(d, "go.mod")); err == nil {
+			return d, nil
+		}
+		if parent := filepath.Dir(d); parent != d {
+			d = parent
+			continue
+		}
+		return "", errors.New("go.mod not found above the working directory")
+	}
 }
 
 const vmTmpl = `apiVersion: kubevirt.io/v1

@@ -32,6 +32,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -50,6 +51,19 @@ const (
 	prefixE = "ICHOR_E2E_F_PREFIX"
 )
 
+// repoPath resolves a repository-relative path (the harness helpers run from the repo root).
+func repoPath(t *testing.T, p string) string {
+	t.Helper()
+	if filepath.IsAbs(p) {
+		return p
+	}
+	root, err := foreign.Root()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return filepath.Join(root, p)
+}
+
 func env(k, d string) string {
 	if v := os.Getenv(k); v != "" {
 		return v
@@ -66,7 +80,7 @@ func build(t *testing.T, o foreign.Options) *foreign.Cluster {
 	o.Prefix = env(prefixE, foreign.PrefixRoot)
 	o.TalosVersion = env("ICHOR_E2E_F_TALOS", o.TalosVersion)
 	o.RegistryMirror = true
-	o.CiliumChart = "../../../pkg/cni/cilium/chart/cilium-1.18.0.tgz"
+	o.CiliumChart = repoPath(t, "pkg/cni/cilium/chart/cilium-1.18.0.tgz")
 	if !strings.HasPrefix(o.Prefix, foreign.PrefixRoot) {
 		t.Fatal("bad prefix")
 	}
@@ -138,7 +152,7 @@ func adopt(t *testing.T, c *foreign.Cluster, extra ...string) (string, error) {
 		t.Fatal(err)
 	}
 	for _, cp := range [][2]string{
-		{os.Getenv("ICHOR_E2E_F_ICHOR_BIN"), "/tmp/ichor"}, {c.Talosconfig, "/tmp/talosconfig"}, {c.Kubeconfig, "/tmp/kubeconfig"},
+		{repoPath(t, os.Getenv("ICHOR_E2E_F_ICHOR_BIN")), "/tmp/ichor"}, {c.Talosconfig, "/tmp/talosconfig"}, {c.Kubeconfig, "/tmp/kubeconfig"},
 	} {
 		if _, err := utils.Run(kube.Command("-n", ns, "cp", cp[0], pod+":"+cp[1])); err != nil {
 			t.Fatalf("copying %s: %v", cp[1], err)

@@ -33,9 +33,6 @@ import (
 // foreign Talos admin credential, so no body of this service is ever logged.
 const reclaimPrefix = "/" + ichorv1alpha1connect.ReclaimServiceName + "/"
 
-// bodyLoggable reports whether a procedure's request body may appear in the access log.
-func bodyLoggable(procedure string) bool { return !strings.HasPrefix(procedure, reclaimPrefix) }
-
 // AccessLogInterceptor logs one line per unary RPC: procedure, outcome and duration. With logBodies it adds the
 // request message, except for the reclaim methods, whose body is dropped by method name.
 func AccessLogInterceptor(l *log.Logger, logBodies bool) connect.Interceptor {
@@ -58,7 +55,7 @@ func (a accessLog) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 		}
 
 		body := ""
-		if m, ok := req.Any().(proto.Message); ok && a.bodies && bodyLoggable(req.Spec().Procedure) {
+		if m, ok := req.Any().(proto.Message); ok && a.bodies && !strings.HasPrefix(req.Spec().Procedure, reclaimPrefix) {
 			body = " body=" + prototext.MarshalOptions{}.Format(m)
 		}
 

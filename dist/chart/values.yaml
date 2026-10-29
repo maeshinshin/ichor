@@ -502,10 +502,13 @@ networkPolicy:
   ## allow per flow the controller, ichor-ui and the installer Job need, with entities
   ## (kube-apiserver, host, remote-node, world) that a plain NetworkPolicy cannot express.
   ## Needs Cilium's CRD, so turn it on only once Cilium runs. `ichor init` and the installer
-  ## apply the same policies from config/cilium-network-policy and do not read these values.
+  ## apply the same policies from config/cilium-network-policy. `enabled` is three-valued: unset
+  ## (null, the default) renders nothing here and leaves the installer to apply them when Cilium
+  ## is detected; true renders them here too; an explicit false also tells the installer Job not
+  ## to apply them (a hands-off Cilium cluster that does not want them).
   ##
   cilium:
-    enabled: false
+    enabled: null
     ## TCP ports the controller (S3 for TalosEtcdBackup) and ichor-ui (the external OIDC issuer)
     ## may reach outside the cluster. A store or issuer on
     ## another port, or inside the cluster, needs a policy of your own: policies add up.

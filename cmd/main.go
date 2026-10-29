@@ -132,6 +132,7 @@ func main() {
 	var certExpiryWarningDays int
 	var userIssuer bool
 	var reclaimEnabled bool
+	var noCiliumPolicies bool
 	var uiServiceName string
 	var refreshLifetime time.Duration
 	var tlsOpts []func(*tls.Config)
@@ -156,6 +157,8 @@ func main() {
 	flag.BoolVar(&reclaimEnabled, "reclaim", false,
 		"Allow break-glass machine reclaim: the MachineReclaim controller and webhook act (ADR 0103, section 2.2). "+
 			"Off, they refuse; the credential sweeper runs either way.")
+	flag.BoolVar(&noCiliumPolicies, "no-cilium-policies", false,
+		"Tell the installer Job not to apply Ichor's CiliumNetworkPolicies even on Cilium (the chart sets it from networkPolicy.cilium.enabled=false; ADR 0100).")
 	flag.BoolVar(&userIssuer, "user-issuer", false,
 		"Keep the signing keys, internal TLS and trust ConfigMap for ichor-ui's own OIDC issuer (ADR 0094).")
 	flag.StringVar(&uiServiceName, "ui-service-name", "",
@@ -478,7 +481,7 @@ func main() {
 		&controller.LonghornEvacuator{Client: mgr.GetClient()}, kubeClient,
 	)
 
-	ichorUpgradeAdvance := controller.NewIchorUpgradeAdvancer(mgr.GetClient(), os.Getenv("POD_NAMESPACE"))
+	ichorUpgradeAdvance := controller.NewIchorUpgradeAdvancer(mgr.GetClient(), os.Getenv("POD_NAMESPACE"), noCiliumPolicies)
 	cniKubeProxyAdvance := controller.NewCNIKubeProxyAdvancer(
 		mgr.GetClient(), mgr.GetAPIReader(), os.Getenv("POD_NAMESPACE"), controller.NewMachineryTalosClient,
 		controller.NewKubeProxyAdmin(),

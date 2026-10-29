@@ -67,6 +67,10 @@ type Options struct {
 	// when it is "cilium" (ADR 0103); empty (not detected yet) skips them.
 	CNIDetected string
 
+	// SkipCiliumPolicies is the operator's explicit opt-out (chart value
+	// networkPolicy.cilium.enabled=false): the policies are not applied even on Cilium.
+	SkipCiliumPolicies bool
+
 	// Ready overrides the post-check, for tests (envtest runs no Deployment controller).
 	Ready ReadyFunc
 
@@ -203,6 +207,12 @@ func IncludeCiliumPolicies(detected string, crdPresent bool) bool {
 // them is the operator's choice).
 func networkPolicies(ctx context.Context, c client.Client, opts Options) ([]*unstructured.Unstructured, error) {
 	if len(opts.NetworkPolicies) == 0 || bytes.Contains(opts.NetworkPolicies, []byte(installmanifest.PlaceholderSentinel)) {
+		return nil, nil
+	}
+
+	if opts.SkipCiliumPolicies {
+		logf(opts.Log, "skipping the network policies: the operator opted out (networkPolicy.cilium.enabled=false)")
+
 		return nil, nil
 	}
 

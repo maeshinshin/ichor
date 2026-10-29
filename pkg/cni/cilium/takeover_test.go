@@ -406,7 +406,7 @@ func (c liveCluster) agent(t *testing.T) map[string]any {
 	t.Helper()
 
 	for ref, o := range c {
-		if ref.Kind == "DaemonSet" && ref.Name == "cilium" {
+		if ref.Kind == kindDaemonSet && ref.Name == "cilium" {
 			return o
 		}
 	}
@@ -749,5 +749,41 @@ func TestRetireForeignRecord_OversizeBackupKeepsRecords(t *testing.T) {
 
 	if _, err := kube.CoreV1().Secrets(kubeSystem).Get(ctx, recordV1, metav1.GetOptions{}); err != nil {
 		t.Errorf("record deleted: %v", err)
+	}
+}
+
+func TestDiffLive_IgnoresServerDefaultedRollingUpdateAndServiceType(t *testing.T) {
+	vals := effective(t, nil)
+	live := newLiveCluster(t, vals)
+
+	for ref, o := range live {
+		spec, _ := o["spec"].(map[string]any)
+
+		switch ref.Kind {
+		case "DaemonSet":
+			spec["updateStrategy"].(map[string]any)["rollingUpdate"].(map[string]any)["maxSurge"] = int64(0)
+		case "Service":
+			if ref.Name == "hubble-peer" {
+				spec["type"] = "ClusterIP"
+			}
+		}
+	}
+
+	got, err := DiffLive(t.Context(), vals, live.get)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(got) != 0 {
+		t.Fatalf("server defaults reported:\n%s", strings.Join(diffPaths(got), "\n"))
+	}
+
+	// Only the exact default is ignored: a surge the user set is still a difference.
+	spec := live.agent(t)["spec"].(map[string]any)
+	spec["updateStrategy"].(map[string]any)["rollingUpdate"].(map[string]any)["maxSurge"] = int64(1)
+
+	got, _ = DiffLive(t.Context(), vals, live.get)
+	if len(got) != 1 || got[0].Path != "spec.updateStrategy.rollingUpdate.maxSurge" {
+		t.Fatalf("got %v", diffPaths(got))
 	}
 }

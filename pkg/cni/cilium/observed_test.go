@@ -20,10 +20,15 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/maeshinshin/ichor/pkg/cni"
+)
+
+const (
+	valTrue    = "true"
+	cgroupRoot = "/sys/fs/cgroup"
+	oldVersion = "1.17.5"
 )
 
 func caps(names ...string) *corev1.SecurityContext {
@@ -37,11 +42,11 @@ func caps(names ...string) *corev1.SecurityContext {
 
 // talosGuideCluster is a Cilium installed the way the Talos v1.14 guide's inline manifest does
 // it (kube-proxy replaced): no Helm record, ipam kubernetes, no cgroup auto-mount, KubePrism.
-func talosGuideCluster(image, ipam string) *fake.Clientset {
-	ds := agentDaemonSet(image)
+func talosGuideCluster(ipam string) *fake.Clientset {
+	ds := agentDaemonSet("quay.io/cilium/cilium:v" + ChartVersion)
 	spec := &ds.Spec.Template.Spec
 	spec.Containers[0].Env = []corev1.EnvVar{
-		{Name: "KUBERNETES_SERVICE_HOST", Value: "localhost"},
+		{Name: "KUBERNETES_SERVICE_HOST", Value: valLocalhost},
 		{Name: "KUBERNETES_SERVICE_PORT", Value: "7445"},
 	}
 	spec.Containers[0].SecurityContext = caps("CHOWN", "KILL", "NET_ADMIN", "NET_RAW", "IPC_LOCK",
@@ -52,10 +57,10 @@ func talosGuideCluster(image, ipam string) *fake.Clientset {
 	}
 
 	cm := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{Namespace: ReleaseNamespace, Name: "cilium-config"},
+		Namespace: ReleaseNamespace, Name: configMapName,
 		Data: map[string]string{
-			"ipam": ipam, "tunnel-protocol": "vxlan", "routing-mode": "tunnel",
-			"kube-proxy-replacement": "true", "cgroup-root": "/sys/fs/cgroup",
+			keyIPAM: ipam, "tunnel-protocol": tunnelVxlan, "routing-mode": "tunnel",
+			"kube-proxy-replacement": valTrue, "cgroup-root": cgroupRoot,
 		},
 	}
 
@@ -63,7 +68,7 @@ func talosGuideCluster(image, ipam string) *fake.Clientset {
 }
 
 func TestLiveValuesFromCluster_TalosGuideHasNoConflicts(t *testing.T) {
-	kube := talosGuideCluster("quay.io/cilium/cilium:v"+ChartVersion, "kubernetes")
+	kube := talosGuideCluster("kubernetes")
 
 	live, err := LiveValuesFromCluster(t.Context(), kube, nil)
 	if err != nil {
@@ -88,7 +93,7 @@ func TestLiveValuesFromCluster_TalosGuideHasNoConflicts(t *testing.T) {
 }
 
 func TestLiveValuesFromCluster_ClusterPoolIsStillRefused(t *testing.T) {
-	kube := talosGuideCluster("quay.io/cilium/cilium:v"+ChartVersion, modeClusterPool)
+	kube := talosGuideCluster(modeClusterPool)
 
 	live, err := LiveValuesFromCluster(t.Context(), kube, nil)
 	if err != nil {
@@ -107,8 +112,10 @@ func TestLiveValuesFromCluster_ReadsDefaultsOfAHelmStyleInstall(t *testing.T) {
 	ds := agentDaemonSet("quay.io/cilium/cilium:v" + ChartVersion)
 	ds.Spec.Template.Spec.InitContainers = []corev1.Container{{Name: "mount-cgroup"}}
 	kube := fake.NewSimpleClientset(ds, &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{Namespace: ReleaseNamespace, Name: "cilium-config"},
-		Data:       map[string]string{"ipam": "kubernetes", "cgroup-root": "/run/cilium/cgroupv2", "kube-proxy-replacement": "false"},
+		Namespace: ReleaseNamespace, Name: configMapName,
+		Data: map[string]string{
+			keyIPAM: modeKubernetes, "cgroup-root": "/run/cilium/cgroupv2", "kube-proxy-replacement": "false",
+		},
 	})
 
 	live, err := LiveValuesFromCluster(t.Context(), kube, nil)
@@ -118,7 +125,7 @@ func TestLiveValuesFromCluster_ReadsDefaultsOfAHelmStyleInstall(t *testing.T) {
 
 	cs, _ := OwnedKeyConflicts(live, cni.KubeProxyEnabled, tunnelVxlan)
 
-	for _, key := range []string{"cgroup.autoMount.enabled", "cgroup.hostRoot", "securityContext.capabilities.ciliumAgent"} {
+	for _, key := range []string{keyAutoMount, keyHostRoot, keyCapsAgent} {
 		if findConflict(cs, key) == nil {
 			t.Errorf("no conflict for %s: %v", key, cs)
 		}
@@ -138,8 +145,7 @@ func TestConfigMapValuesAreHelmPaths(t *testing.T) {
 
 	for path := range OwnedKeys {
 		switch path {
-		case "k8sServiceHost", "k8sServicePort", "cgroup.autoMount.enabled", "securityContext.capabilities.ciliumAgent",
-			"securityContext.capabilities.cleanCiliumState":
+		case keyServiceHost, keyServicePort, keyAutoMount, keyCapsAgent, keyCapsCleanState:
 			continue // read from the DaemonSet
 		}
 
@@ -156,7 +162,7 @@ func TestConfigMapValuesAreHelmPaths(t *testing.T) {
 }
 
 func TestPreflight_CaseCTalosGuideIsNotRefused(t *testing.T) {
-	kube := talosGuideCluster("quay.io/cilium/cilium:v"+ChartVersion, "kubernetes")
+	kube := talosGuideCluster("kubernetes")
 	in := preflightInput(t, kube)
 	in.KubeProxy = cni.KubeProxyReplaced
 
@@ -183,7 +189,7 @@ func TestPreflight_CaseCTalosGuideIsNotRefused(t *testing.T) {
 }
 
 func TestPreflight_CaseCClusterPoolRefused(t *testing.T) {
-	kube := talosGuideCluster("quay.io/cilium/cilium:v"+ChartVersion, modeClusterPool)
+	kube := talosGuideCluster(modeClusterPool)
 	in := preflightInput(t, kube)
 	in.KubeProxy = cni.KubeProxyReplaced
 	in.UserValues = nil
@@ -200,26 +206,26 @@ func TestPreflight_CaseCClusterPoolRefused(t *testing.T) {
 
 func TestUserValues_PrunesEmptyMaps(t *testing.T) {
 	in := map[string]any{
-		"cgroup": map[string]any{"autoMount": map[string]any{"enabled": false}, "hostRoot": "/x"},
-		"ipam":   map[string]any{"mode": "kubernetes"},
-		"debug":  map[string]any{"enabled": true},
+		"cgroup": map[string]any{"autoMount": map[string]any{keyEnabled: false}, "hostRoot": "/x"},
+		keyIPAM:  map[string]any{"mode": modeKubernetes},
+		keyDebug: map[string]any{keyEnabled: true},
 	}
 
 	out := UserValues(in)
 
-	if len(out) != 1 || out["debug"] == nil {
+	if len(out) != 1 || out[keyDebug] == nil {
 		t.Errorf("out = %v, want only debug", out)
 	}
 }
 
 func TestVersionCheckString(t *testing.T) {
-	got := VersionCheck{Live: "1.18.0", Target: "1.18.0"}.String()
-	if got != "live version 1.18.0, chart 1.18.0: the same minor" {
+	got := VersionCheck{Live: ChartVersion, Target: ChartVersion}.String()
+	if got != "live version "+ChartVersion+", chart "+ChartVersion+": the same minor" {
 		t.Errorf("got %q", got)
 	}
 
-	if got := (VersionCheck{Live: "1.17.5", Target: "1.18.0", Upgrade: true}).String(); got !=
-		"live version 1.17.5, chart 1.18.0: one minor below (adoption is an upgrade)" {
+	if got := (VersionCheck{Live: oldVersion, Target: ChartVersion, Upgrade: true}).String(); got !=
+		"live version "+oldVersion+", chart "+ChartVersion+": one minor below (adoption is an upgrade)" {
 		t.Errorf("got %q", got)
 	}
 }

@@ -22,6 +22,7 @@ import (
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -96,6 +97,69 @@ var _ = Describe("IchorInstallation", func() {
 			Expect(got.Status.InstalledVersion).To(Equal("v0.1.0"))
 			Expect(apimeta.IsStatusConditionFalse(got.Status.Conditions, conditionUpToDate)).To(BeTrue())
 			Expect(apimeta.FindStatusCondition(got.Status.Conditions, conditionExternalSuggested)).To(BeNil())
+		})
+
+		It("seeds an absent singleton with its version and --deployed-by, and never touches an existing one", func() {
+			withVersion("v0.1.0")
+			DeferCleanup(func() {
+				Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, &ichorv1alpha1.IchorInstallation{Name: ichorv1alpha1.IchorInstallationName}))).To(Succeed())
+			})
+
+			key := types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}
+			r := newReconciler()
+			r.DeployedBy = ichorv1alpha1.IchorManagerHelm
+			Expect(r.Seed(ctx)).To(Succeed())
+
+			var got ichorv1alpha1.IchorInstallation
+			Expect(k8sClient.Get(ctx, key, &got)).To(Succeed())
+			Expect(got.Spec.Version).To(Equal("v0.1.0"))
+			Expect(got.HelmManaged()).To(BeTrue())
+
+			// A later seed by a controller of another version and manager changes nothing.
+			withVersion("v0.9.0")
+			r.DeployedBy = ichorv1alpha1.IchorManagerInstaller
+			Expect(r.Seed(ctx)).To(Succeed())
+			Expect(k8sClient.Get(ctx, key, &got)).To(Succeed())
+			Expect(got.Spec.Version).To(Equal("v0.1.0"))
+			Expect(got.HelmManaged()).To(BeTrue())
+		})
+
+		It("seeds manager installer by default and nothing for a dev build", func() {
+			DeferCleanup(func() {
+				Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, &ichorv1alpha1.IchorInstallation{Name: ichorv1alpha1.IchorInstallationName}))).To(Succeed())
+			})
+
+			key := types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}
+
+			withVersion("dev")
+			Expect(newReconciler().Seed(ctx)).To(Succeed())
+
+			var got ichorv1alpha1.IchorInstallation
+			Expect(apierrors.IsNotFound(k8sClient.Get(ctx, key, &got))).To(BeTrue())
+
+			withVersion("v0.1.0")
+			Expect(newReconciler().Seed(ctx)).To(Succeed())
+			Expect(k8sClient.Get(ctx, key, &got)).To(Succeed())
+			Expect(got.Spec.Deployment.Manager).To(Equal(ichorv1alpha1.IchorManagerInstaller))
+		})
+
+		It("reports UpToDate True with reason ManagedByHelm whatever spec.version says", func() {
+			withVersion("v0.2.0")
+
+			inst := &ichorv1alpha1.IchorInstallation{
+				Name: ichorv1alpha1.IchorInstallationName,
+				Spec: ichorv1alpha1.IchorInstallationSpec{
+					Version: "v0.1.0", Deployment: &ichorv1alpha1.IchorDeploymentSpec{Manager: ichorv1alpha1.IchorManagerHelm},
+				},
+			}
+			Expect(k8sClient.Create(ctx, inst)).To(Succeed())
+			DeferCleanup(func() { Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, inst))).To(Succeed()) })
+
+			got := reconcileOnce(newReconciler())
+			cond := apimeta.FindStatusCondition(got.Status.Conditions, conditionUpToDate)
+			Expect(cond).NotTo(BeNil())
+			Expect(cond.Status).To(Equal(metav1.ConditionTrue))
+			Expect(cond.Reason).To(Equal(ichorv1alpha1.ReasonManagedByHelm))
 		})
 
 		It("removes the ExternalSuggested condition an older build set", func() {
@@ -177,6 +241,23 @@ var _ = Describe("IchorInstallation", func() {
 
 			_, err = advance(ctx, nil, nil, o)
 			Expect(err).To(MatchError(ContainSubstring("rolls back")))
+		})
+
+		It("refuses on a Helm-managed install and launches no Job", func() {
+			withVersion("v0.1.0")
+
+			inst := &ichorv1alpha1.IchorInstallation{
+				Name: ichorv1alpha1.IchorInstallationName,
+				Spec: ichorv1alpha1.IchorInstallationSpec{
+					Version: "v0.3.0", Deployment: &ichorv1alpha1.IchorDeploymentSpec{Manager: ichorv1alpha1.IchorManagerHelm},
+				},
+			}
+			Expect(k8sClient.Create(ctx, inst)).To(Succeed())
+			DeferCleanup(func() { Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, inst))).To(Succeed()) })
+
+			_, err := NewIchorUpgradeAdvancer(k8sClient, jobNs, false)(ctx, nil, nil, op())
+			Expect(err).To(MatchError(ContainSubstring("helm upgrade")))
+			Expect(jobs()).To(BeEmpty())
 		})
 
 		It("refuses a downgrade and launches no Job", func() {

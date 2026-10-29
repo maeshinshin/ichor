@@ -193,7 +193,8 @@ func createIchorInstallation(ctx context.Context, k8sClient client.Client, warn 
 		Kind:       "IchorInstallation",
 		Name:       ichorv1alpha1.IchorInstallationName,
 		Spec: ichorv1alpha1.IchorInstallationSpec{
-			Version: version.Version,
+			Version:    version.Version,
+			Deployment: &ichorv1alpha1.IchorDeploymentSpec{Manager: ichorv1alpha1.IchorManagerInstaller},
 		},
 	})
 	if err != nil {

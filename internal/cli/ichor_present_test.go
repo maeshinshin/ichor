@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -87,12 +88,22 @@ func presenceClient(t *testing.T, objs ...client.Object) client.Client {
 func TestIchorPresent_EachSource(t *testing.T) {
 	inst := &ichorv1alpha1.IchorInstallation{Name: ichorv1alpha1.IchorInstallationName}
 
+	withManager := func(m string) *ichorv1alpha1.IchorInstallation {
+		i := inst.DeepCopy()
+		i.Spec.Deployment = &ichorv1alpha1.IchorDeploymentSpec{Manager: m}
+
+		return i
+	}
+
 	tests := []struct {
 		name                 string
 		objs                 []client.Object
 		present, helmManaged bool
 	}{
 		{"nothing", nil, false, false},
+		{"IchorInstallation manager helm", []client.Object{withManager("helm")}, true, true},
+		{"IchorInstallation manager installer wins over a Helm Deployment", []client.Object{withManager("installer"), controllerDeployment(true)}, true, false},
+		{"IchorInstallation without a manager falls back to the Deployment", []client.Object{inst, controllerDeployment(true)}, true, true},
 		{"IchorInstallation", []client.Object{inst}, true, false},
 		{"Helm release of the chart ichor", []client.Object{ichorHelmRecord(t, "ichor", "0.1.0", nil)}, true, true},
 		{"Helm release of another chart", []client.Object{ichorHelmRecord(t, "cilium", "1.0.0", nil)}, false, false},
@@ -268,5 +279,45 @@ func TestRefuseHelmManaged(t *testing.T) {
 	inst := &ichorv1alpha1.IchorInstallation{Name: ichorv1alpha1.IchorInstallationName}
 	if err := refuseHelmManaged(ctx, presenceClient(t, inst)); err != nil {
 		t.Fatalf("installer-managed: %v", err)
+	}
+}
+
+func TestRefuseHelmManaged_ByManagerField(t *testing.T) {
+	inst := &ichorv1alpha1.IchorInstallation{
+		Name: ichorv1alpha1.IchorInstallationName,
+		Spec: ichorv1alpha1.IchorInstallationSpec{Deployment: &ichorv1alpha1.IchorDeploymentSpec{Manager: ichorv1alpha1.IchorManagerHelm}},
+	}
+
+	err := refuseHelmManaged(context.Background(), presenceClient(t, inst))
+	if err == nil || !strings.Contains(err.Error(), "helm upgrade ichor "+ichorChartRef) {
+		t.Fatalf("got %v, want the Helm command", err)
+	}
+}
+
+// A seeded IchorInstallation with manager helm, and nothing else yet, is enough for adopt to
+// leave the install alone and not apply its manifest.
+func TestWriteAdopt_SeededHelmInstallationSkipsInstall(t *testing.T) {
+	seeded := &ichorv1alpha1.IchorInstallation{
+		Name: ichorv1alpha1.IchorInstallationName,
+		Spec: ichorv1alpha1.IchorInstallationSpec{Version: "v0.1.0", Deployment: &ichorv1alpha1.IchorDeploymentSpec{Manager: ichorv1alpha1.IchorManagerHelm}},
+	}
+
+	c := presenceClient(t, seeded)
+	in := fullWriteInput(t)
+	// A manifest that cannot be applied proves the install step never looks at it.
+	in.Ichor = &adoptWriteIchor{Manifest: []byte("not a manifest: ["), DetectedCNI: string(detectedFlannel), CiliumWait: time.Second}
+	in.Interval = time.Millisecond
+
+	var stderr bytes.Buffer
+
+	in.Stderr = &stderr
+
+	res, err := writeAdopt(context.Background(), c, in)
+	if err != nil {
+		t.Fatalf("writeAdopt: %v", err)
+	}
+
+	if !slices.Contains(res.Unchanged, "Ichor installation") {
+		t.Fatalf("unchanged = %v", res.Unchanged)
 	}
 }

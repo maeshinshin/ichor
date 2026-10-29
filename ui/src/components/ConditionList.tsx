@@ -1,4 +1,5 @@
 import { timestampDate } from '@bufbuild/protobuf/wkt'
+import { EmptyNote } from '@/components/PageStates'
 import { StatusText } from '@/components/Status'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import type { Condition } from '@/gen/ichor/v1alpha1/common_pb'
@@ -16,7 +17,7 @@ export function StatusBadge({ type, status }: { type: string; status: string }) 
 // reason, plain-text message and the last transition time.
 export function ConditionList({ conditions }: { conditions: Condition[] }) {
   const t = useT()
-  if (conditions.length === 0) return <p class="text-muted-foreground">{t('cluster.noConditions')}</p>
+  if (conditions.length === 0) return <EmptyNote>{t('cluster.noConditions')}</EmptyNote>
   return (
       <Table>
         <TableHeader>

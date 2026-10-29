@@ -85,6 +85,27 @@ func TestWaitDiagFailsEarlyOnNotReadyNodes(t *testing.T) {
 	}
 }
 
+func TestWaitDiagKeepsWaitingWhileCiliumIsInstalling(t *testing.T) {
+	agent := &corev1.Pod{}
+	agent.Namespace, agent.Name, agent.Labels = "kube-system", "cilium-x", map[string]string{"k8s-app": "cilium"}
+
+	c := fake.NewClientBuilder().WithObjects(
+		pendingPod("0/1 nodes are available"), agent,
+		nodeWithReady(corev1.ConditionFalse, "container runtime network not ready: cni plugin not initialized"),
+	).Build()
+
+	now := time.Unix(0, 0)
+	d := newWaitDiag(c, &bytes.Buffer{})
+	d.now = func() time.Time { return now }
+
+	_ = d.tick(context.Background())
+
+	now = now.Add(waitDiagGiveUp + time.Minute)
+	if err := d.tick(context.Background()); err != nil {
+		t.Fatalf("gave up while Cilium's agent exists: %v", err)
+	}
+}
+
 func TestWaitDiagKeepsWaitingWhenNodesAreReady(t *testing.T) {
 	c := fake.NewClientBuilder().WithObjects(pendingPod("insufficient memory"), nodeWithReady(corev1.ConditionTrue, "")).Build()
 

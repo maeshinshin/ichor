@@ -500,6 +500,10 @@ func customizeFromLive(ctx context.Context, c client.Client, objs []*unstructure
 		}
 	}
 
+	if helmDeployed(ctrlDep) {
+		return nil, errors.New("this Ichor is installed by Helm; run helm upgrade (the installer does not touch a Helm-owned install, ADR 0105)")
+	}
+
 	s := ReadUISettings(uiDep, ctrlDep)
 	if s.HTTPAddr != "" {
 		log.Printf("DEPRECATED: ichor-ui still serves plain HTTP on %s; move your edge to HTTPS on %s, the plaintext listener is removed in the next minor release (docs/adr/0105)", s.HTTPAddr, UIDefaultAddr)
@@ -548,4 +552,25 @@ func CustomizePolicies(objs []*unstructured.Unstructured, s UISettings) {
 
 		_ = unstructured.SetNestedSlice(o.Object, ing, "spec", "ingress")
 	}
+}
+
+// helmDeployed: the live controller Deployment is Helm's, by its label or by the --deployed-by
+// flag the chart passes. The installer Job's ServiceAccount cannot read the IchorInstallation, so
+// the Deployment is its second line behind the webhook and the executor.
+func helmDeployed(d *appsv1.Deployment) bool {
+	if d == nil {
+		return false
+	}
+
+	if d.Labels["app.kubernetes.io/managed-by"] == "Helm" {
+		return true
+	}
+
+	for _, c := range d.Spec.Template.Spec.Containers {
+		if c.Name == ControllerContainer && slices.Contains(c.Args, "--deployed-by=helm") {
+			return true
+		}
+	}
+
+	return false
 }

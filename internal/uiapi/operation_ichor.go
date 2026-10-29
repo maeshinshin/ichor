@@ -63,7 +63,8 @@ func (s *Server) GetIchorInstallation(
 		InstalledVersion: installed,
 		TargetVersion:    inst.Spec.Version,
 		Upgrading:        upgrading,
-		UpdateAvailable: !upgrading && semver.IsValid(installed) && semver.IsValid(inst.Spec.Version) &&
+		// Helm moves a Helm-installed Ichor; spec.version only records the version at creation.
+		UpdateAvailable: !upgrading && !inst.HelmManaged() && semver.IsValid(installed) && semver.IsValid(inst.Spec.Version) &&
 			semver.Compare(inst.Spec.Version, installed) > 0,
 	}), nil
 }

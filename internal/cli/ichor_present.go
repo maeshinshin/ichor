@@ -60,9 +60,15 @@ func (p ichorPresence) Present() bool {
 	return p.Installation != nil || p.Release != nil || p.Deployment != nil
 }
 
-// HelmManaged reports that Helm owns the install: a deployed release of the chart, or a
-// controller Deployment Helm labels as its own.
+// HelmManaged reports that Helm owns the install. When the IchorInstallation exists its
+// spec.deployment.manager is authoritative (ADR 0105); before the controller has seeded it, and on
+// installs older than that, a deployed release of the chart or a controller Deployment Helm labels
+// as its own says so.
 func (p ichorPresence) HelmManaged() bool {
+	if p.Installation != nil && p.Installation.Spec.Deployment != nil && p.Installation.Spec.Deployment.Manager != "" {
+		return p.Installation.HelmManaged()
+	}
+
 	return p.Release != nil || (p.Deployment != nil && p.Deployment.Labels["app.kubernetes.io/managed-by"] == "Helm")
 }
 

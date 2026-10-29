@@ -394,6 +394,10 @@ func (s *Server) planOperation(
 			return nil, mapGetError("IchorInstallation \""+ichorv1alpha1.IchorInstallationName+"\"", err)
 		}
 
+		if p.install.HelmManaged() {
+			return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New(ichorv1alpha1.IchorHelmManagedMessage))
+		}
+
 		// Current is what runs, not what was asked for: after a rolled-back upgrade spec.version
 		// is the failed target while the controller still reports the old version.
 		p.resp.Current = p.install.Status.InstalledVersion

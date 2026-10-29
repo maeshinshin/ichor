@@ -18,6 +18,7 @@ package uiapi
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"connectrpc.com/connect"
@@ -40,6 +41,13 @@ func ichorInstallation(version, installed string) *ichorv1alpha1.IchorInstallati
 		Spec: ichorv1alpha1.IchorInstallationSpec{Version: version},
 	}
 	inst.Status.InstalledVersion = installed
+
+	return inst
+}
+
+func helmInstallation(version, installed string) *ichorv1alpha1.IchorInstallation {
+	inst := ichorInstallation(version, installed)
+	inst.Spec.Deployment = &ichorv1alpha1.IchorDeploymentSpec{Manager: ichorv1alpha1.IchorManagerHelm}
 
 	return inst
 }
@@ -98,6 +106,7 @@ func TestGetIchorInstallation(t *testing.T) {
 		"other kind running":        {[]client.Object{ichorInstallation(ichorNew, ichorOld), talosRunning}, ichorOld, ichorNew, false, true},
 		"installed version unknown": {[]client.Object{ichorInstallation(ichorNew, "")}, "", ichorNew, false, false},
 		"no installation":           {nil, "", "", false, false},
+		"installed by Helm":         {[]client.Object{helmInstallation(ichorNew, ichorOld)}, ichorOld, ichorNew, false, false},
 	} {
 		t.Run(name, func(t *testing.T) {
 			srv, _ := opServer(t, tc.objs...)
@@ -130,5 +139,15 @@ func TestIchorPlanAfterARolledBackUpgradeReportsTheRunningVersion(t *testing.T) 
 
 	if got := plan.Msg.GetCurrent(); got != ichorOld {
 		t.Fatalf("current = %q, want the running %q, not the failed target", got, ichorOld)
+	}
+}
+
+// An install Helm owns is not upgraded by an Ichor operation, even when the preview is asked for.
+func TestIchorOperationRefusedWhenInstalledByHelm(t *testing.T) {
+	srv, _ := opServer(t, append(opObjects(), helmInstallation(ichorOld, ichorOld))...)
+
+	_, err := srv.CreateOperation(context.Background(), ichorCreate(ichorNew))
+	if connect.CodeOf(err) != connect.CodeFailedPrecondition || !strings.Contains(err.Error(), ichorv1alpha1.IchorHelmManagedMessage) {
+		t.Fatalf("got %v", err)
 	}
 }

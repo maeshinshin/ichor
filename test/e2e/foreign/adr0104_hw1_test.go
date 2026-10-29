@@ -64,10 +64,24 @@ func stageAlt(t *testing.T, c *foreign.Cluster) {
 func adoptKilled(t *testing.T, c *foreign.Cluster, trigger string, killAfter time.Duration, extra ...string) (string, bool) {
 	t.Helper()
 	pod := stage(t, c)
-	args := append([]string{"-n", ns, "exec", pod, "--", "env", "HOME=/tmp/home", "/tmp/ichor", "adopt",
+	kill := func() {
+		kc := exec.Command("kubectl", "--context", os.Getenv(kube.ContextEnv), "-n", ns, "exec", pod, "--", "pkill", "-9", "ichor") //nolint:gosec // fixed
+		o, kerr := kc.CombinedOutput()
+		t.Logf("pkill -9 ichor at %s: %v %s", time.Now().Format("15:04:05"), kerr, o)
+	}
+	out, _, ran, _ := adoptTriggered(t, c, "/tmp/ichor", trigger, killAfter, kill, extra...)
+	return out, ran
+}
+
+// adoptTriggered runs `ichor adopt` (the binary at bin in the tools pod) and runs action delay after its output first
+// contains trigger. It returns the output, how long adopt ran, whether the action ran, and adopt's error.
+func adoptTriggered(t *testing.T, c *foreign.Cluster, bin, trigger string, delay time.Duration, action func(), extra ...string) (string, time.Duration, bool, error) {
+	t.Helper()
+	pod := stage(t, c)
+	args := append([]string{"-n", ns, "exec", pod, "--", "env", "HOME=/tmp/home", bin, "adopt",
 		"--cluster", c.Opts.Prefix, "-n", crNS, "--talosconfig", "/tmp/talosconfig", "--kubeconfig", "/tmp/kubeconfig",
 		"--node", c.CPs[0], "--yes"}, append(recoverArgs(c, extra), extra...)...)
-	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 14*time.Minute)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "kubectl", append([]string{"--context", os.Getenv(kube.ContextEnv)}, args...)...)
 	pipe, err := cmd.StdoutPipe()
@@ -80,8 +94,8 @@ func adoptKilled(t *testing.T, c *foreign.Cluster, trigger string, killAfter tim
 	}
 	var mu sync.Mutex
 	var out strings.Builder
-	var killed bool
-	var killTime time.Time
+	var ran bool
+	start := time.Now()
 	sc := bufio.NewScanner(pipe)
 	for sc.Scan() {
 		line := sc.Text()
@@ -89,14 +103,11 @@ func adoptKilled(t *testing.T, c *foreign.Cluster, trigger string, killAfter tim
 		out.WriteString(line + "\n")
 		mu.Unlock()
 		t.Logf("%s [%s]", line, time.Now().Format("15:04:05"))
-		if !killed && strings.Contains(line, trigger) {
-			killed = true
+		if !ran && strings.Contains(line, trigger) {
+			ran = true
 			go func() {
-				time.Sleep(killAfter)
-				killTime = time.Now()
-				kc := exec.Command("kubectl", "--context", os.Getenv(kube.ContextEnv), "-n", ns, "exec", pod, "--", "pkill", "-9", "ichor") //nolint:gosec // fixed
-				o, kerr := kc.CombinedOutput()
-				t.Logf("pkill -9 ichor at %s: %v %s", killTime.Format("15:04:05"), kerr, o)
+				time.Sleep(delay)
+				action()
 			}()
 		}
 	}
@@ -104,7 +115,7 @@ func adoptKilled(t *testing.T, c *foreign.Cluster, trigger string, killAfter tim
 	t.Logf("adopt exited: %v", err)
 	mu.Lock()
 	defer mu.Unlock()
-	return out.String(), killed
+	return out.String(), time.Since(start), ran, err
 }
 
 // releaseState lists the Helm release records (status label) of the foreign cluster, in every namespace.

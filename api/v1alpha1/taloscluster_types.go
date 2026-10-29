@@ -554,6 +554,10 @@ type TalosClusterCNIStatus struct {
 // webhook requires it on create for spec.cni.preset: unmanaged.
 const TalosClusterAdoptedAnnotation = "ichor.maesh.dev/adopted"
 
+// CNINotManagedMessage is the refusal for anything that would operate the CNI of a cluster whose
+// spec.cni.preset is unmanaged (ADR 0103).
+const CNINotManagedMessage = "the CNI is not managed by Ichor (spec.cni.preset: unmanaged)"
+
 // ConditionCARotationAdvised is True, reason Adopted, on an adopted cluster until the first
 // completed CA rotation or the user dismisses the advice (ADR 0103). Advice only.
 const ConditionCARotationAdvised = "CARotationAdvised"

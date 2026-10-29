@@ -55,18 +55,9 @@ func ChangedPaths(oldCfg, newCfg []byte) ([]string, error) {
 		return nil, fmt.Errorf("decoding rendered configuration: %w", err)
 	}
 
-	keys := make(map[string]struct{}, len(oldDocs)+len(newDocs))
-	for k := range oldDocs {
-		keys[k] = struct{}{}
-	}
-
-	for k := range newDocs {
-		keys[k] = struct{}{}
-	}
-
 	var paths []string
 
-	for k := range keys {
+	for k := range unionKeys(oldDocs, newDocs) {
 		o, oOK := oldDocs[k]
 		n, nOK := newDocs[k]
 
@@ -128,13 +119,9 @@ func collapseDocumentPaths(oldCfg, newCfg []byte, paths []string) ([]string, err
 
 	// Paths carry the kind but not the name, so a kind that also has a document present on both
 	// sides cannot be told apart from it: its paths stay as they are.
-	for _, docs := range []map[string]configDoc{oldDocs, newDocs} {
-		for k, d := range docs {
-			if _, inOld := oldDocs[k]; inOld {
-				if _, inNew := newDocs[k]; inNew {
-					delete(whole, d.root)
-				}
-			}
+	for k, d := range oldDocs {
+		if _, inNew := newDocs[k]; inNew {
+			delete(whole, d.root)
 		}
 	}
 
@@ -234,16 +221,7 @@ func diffPaths(prefix string, oldV, newV any, out *[]string) {
 	newMap, newIsMap := newV.(map[string]any)
 
 	if oldIsMap || newIsMap {
-		keys := make(map[string]struct{}, len(oldMap)+len(newMap))
-		for k := range oldMap {
-			keys[k] = struct{}{}
-		}
-
-		for k := range newMap {
-			keys[k] = struct{}{}
-		}
-
-		for k := range keys {
+		for k := range unionKeys(oldMap, newMap) {
 			diffPaths(joinPath(prefix, k), oldMap[k], newMap[k], out)
 		}
 
@@ -253,6 +231,20 @@ func diffPaths(prefix string, oldV, newV any, out *[]string) {
 	if !reflect.DeepEqual(oldV, newV) {
 		*out = append(*out, prefix)
 	}
+}
+
+// unionKeys is the set of keys present in a or b.
+func unionKeys[V any](a, b map[string]V) map[string]struct{} {
+	keys := make(map[string]struct{}, len(a)+len(b))
+	for k := range a {
+		keys[k] = struct{}{}
+	}
+
+	for k := range b {
+		keys[k] = struct{}{}
+	}
+
+	return keys
 }
 
 func joinPath(prefix, key string) string {

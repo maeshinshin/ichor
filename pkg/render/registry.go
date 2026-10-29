@@ -106,18 +106,10 @@ func ResolveRegistryAuth(
 				reg.Host, key, err)
 		}
 
-		var auth RegistryAuth
-
-		if v, ok := secret.Data[registryAuthPasswordKey]; ok {
-			auth.Password = string(v)
-		}
-
-		if v, ok := secret.Data[registryAuthAuthKey]; ok {
-			auth.Auth = string(v)
-		}
-
-		if v, ok := secret.Data[registryAuthIdentityTokenKey]; ok {
-			auth.IdentityToken = string(v)
+		auth := RegistryAuth{
+			Password:      string(secret.Data[registryAuthPasswordKey]),
+			Auth:          string(secret.Data[registryAuthAuthKey]),
+			IdentityToken: string(secret.Data[registryAuthIdentityTokenKey]),
 		}
 
 		if auth.Password == "" && auth.Auth == "" && auth.IdentityToken == "" {

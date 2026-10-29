@@ -128,5 +128,9 @@ spec:
         emptyDir: {}
       - name: api-trust
         emptyDir: {}
+      tolerations:
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10

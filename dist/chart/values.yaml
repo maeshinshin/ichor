@@ -100,9 +100,13 @@ manager:
   ##
   nodeSelector: {}
 
-  ## Manager pod's tolerations
+  ## Manager pod's tolerations. The default lets it run on control planes, so draining the only
+  ## worker cannot leave it unschedulable.
   ##
-  tolerations: []
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
 
   ## Deployment strategy
   ##

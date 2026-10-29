@@ -333,6 +333,10 @@ func main() {
 				setupLog.Error(err, "Failed to create webhook", "webhook", "TalosMachine")
 				os.Exit(1)
 			}
+			if err := webhookv1alpha1.SetupIchorInstallationWebhookWithManager(mgr); err != nil {
+				setupLog.Error(err, "Failed to create webhook", "webhook", "IchorInstallation")
+				os.Exit(1)
+			}
 			// ICHOR_BREAK_GLASS_EXEMPT_USERS adds exact usernames (comma separated) to the
 			// built-in list.
 			exempt := webhookv1alpha1.DefaultExemptUsers(os.Getenv("POD_NAMESPACE"), os.Getenv("POD_SERVICE_ACCOUNT"))

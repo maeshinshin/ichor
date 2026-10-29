@@ -22,7 +22,9 @@ import (
 	"strings"
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -95,6 +97,62 @@ func TestAdoptTreatsUnservedIchorKindsAsAFreshCluster(t *testing.T) {
 
 	if !strings.Contains(env.stderr.String(), "--plan: nothing was written") {
 		t.Fatalf("plan did not finish:\n%s", env.stderr.String())
+	}
+}
+
+func testNode(name, addr string) *corev1.Node {
+	return &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: name},
+		Status:     corev1.NodeStatus{Addresses: []corev1.NodeAddress{{Type: corev1.NodeInternalIP, Address: addr}}},
+	}
+}
+
+func TestAdoptRefusesWhenDiscoveryMembershipDisagreesWithTheNodes(t *testing.T) {
+	cases := []struct {
+		name    string
+		nodes   []client.Object
+		wantErr []string // empty: proceeds
+	}{
+		{"complete", []client.Object{testNode("cp", flowCPAddr), testNode("wk", flowWKAddr)}, nil},
+		{"node without member", []client.Object{testNode("cp", flowCPAddr), testNode("wk", flowWKAddr), testNode("late", "10.9.9.9")},
+			[]string{"Nodes without a discovery member: [late]", "talosctl get members"}},
+		{"member without node", []client.Object{testNode("cp", flowCPAddr)},
+			[]string{"discovery members without a Node: [wk]", "run adopt again"}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			env, deps := freshFlow(t)
+			deps.PlanOnly = true
+			deps.Target = fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(tc.nodes...).Build()
+
+			saved := 0
+			deps.SaveBundle = func() error { saved++; return nil }
+
+			err := runAdopt(context.Background(), env.cluster.Name, testNamespace, deps)
+
+			if len(tc.wantErr) == 0 {
+				if err != nil {
+					t.Fatalf("runAdopt: %v\n%s", err, env.stderr.String())
+				}
+
+				return
+			}
+
+			if err == nil {
+				t.Fatalf("runAdopt succeeded, want a refusal\n%s", env.stderr.String())
+			}
+
+			for _, w := range tc.wantErr {
+				if !strings.Contains(err.Error(), w) {
+					t.Fatalf("error %q lacks %q", err, w)
+				}
+			}
+
+			if saved != 0 || strings.Contains(env.stderr.String(), "--plan") {
+				t.Fatalf("adopt went on after the refusal (saved=%d):\n%s", saved, env.stderr.String())
+			}
+		})
 	}
 }
 

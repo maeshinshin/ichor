@@ -25,7 +25,6 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -48,7 +47,6 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1/ichorv1alpha1connect"
-	"github.com/maeshinshin/ichor/internal/certreload"
 	"github.com/maeshinshin/ichor/internal/oidcissuer"
 	"github.com/maeshinshin/ichor/internal/uiapi"
 )
@@ -92,7 +90,8 @@ func spaHandler(files fs.FS) http.Handler {
 }
 
 func main() {
-	addr := flag.String("addr", ":8080", "address ichor-ui listens on")
+	addr := flag.String("addr", ":8443", "HTTPS address ichor-ui listens on; it never serves plaintext here (docs/adr/0105)")
+	httpAddr := flag.String("http-addr", "", "DEPRECATED: also serve plain HTTP on this address, for an install that served plaintext before docs/adr/0105; removed in the next minor release")
 	oidcIssuer := flag.String("oidc-issuer", os.Getenv("ICHOR_OIDC_ISSUER"), "OIDC issuer URL; empty disables login (docs/adr/0058)")
 	oidcClientID := flag.String("oidc-client-id", os.Getenv("ICHOR_OIDC_CLIENT_ID"), "OIDC client ID (public client, PKCE); also the expected token audience")
 	oidcUserClaim := flag.String("oidc-username-claim", os.Getenv("ICHOR_OIDC_USERNAME_CLAIM"), "claim used as the Kubernetes user name (default email)")
@@ -114,7 +113,8 @@ func main() {
 	flag.StringVar(&users.kubeAPIServerURL, "kube-api-server-url", "", "Kubernetes API URL put in users' kubeconfigs (default: the cluster's spec.endpoint)")
 	flag.StringVar(&users.kubeAPITLSServerName, "kube-api-tls-server-name", "", "tls-server-name in users' kubeconfigs, for a --kube-api-server-url host outside the apiserver certificate's SANs")
 
-	tlsCert := flag.String("tls-cert-file", "", "serve the main listener over TLS with this certificate (with --tls-key-file)")
+	tlsDir := flag.String("tls-dir", "/etc/ichor/ui-tls", "directory with tls.crt and tls.key of the Ichor-made certificate, served when the operator's pair does not exist")
+	tlsCert := flag.String("tls-cert-file", "", "the operator's certificate; wins over --tls-dir when the files exist (with --tls-key-file)")
 	tlsKey := flag.String("tls-key-file", "", "private key for --tls-cert-file")
 
 	reclaimEnabled := flag.Bool("reclaim-enabled", os.Getenv("ICHOR_RECLAIM_ENABLED") == "true", "enable the break-glass machine reclaim API (docs/adr/0103)")
@@ -242,28 +242,28 @@ func main() {
 	mux.Handle(ichorv1alpha1connect.NewCniServiceHandler(server, rpcInterceptor))
 	mux.Handle(ichorv1alpha1connect.NewReclaimServiceHandler(server, rpcInterceptor))
 
-	srv := &http.Server{
-		Addr:              *addr,
-		Handler:           mux,
-		ReadHeaderTimeout: 10 * time.Second,
-	}
+	srv := httpsServer(*addr, mux, servingCertificate(ctx, *tlsCert, *tlsKey, *tlsDir))
 
 	go func() {
-		log.Printf("ichor-ui: listening on %s", *addr)
+		log.Printf("ichor-ui: HTTPS listening on %s", *addr)
 
-		var err error
-		if *tlsCert != "" {
-			// Certificate files are re-read when they change (cert-manager renewals).
-			srv.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12, GetCertificate: certreload.GetCertificate(ctx, *tlsCert, *tlsKey, certreload.Interval)}
-			err = srv.ListenAndServeTLS("", "")
-		} else {
-			err = srv.ListenAndServe()
-		}
-
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+		// The certificate comes from TLSConfig.GetCertificate, so the file arguments stay empty.
+		if err := srv.ListenAndServeTLS("", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("ichor-ui: %v", err)
 		}
 	}()
+
+	plainSrv := transitionalServer(*httpAddr, mux)
+
+	if plainSrv != nil {
+		log.Printf("ichor-ui: WARNING: --http-addr is deprecated: plain HTTP is still served on %s; move your edge to HTTPS on %s, the plaintext listener is removed in the next minor release", *httpAddr, *addr)
+
+		go func() {
+			if err := plainSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				log.Fatalf("ichor-ui: %v", err)
+			}
+		}()
+	}
 
 	if internalSrv != nil {
 		go func() {
@@ -286,6 +286,10 @@ func main() {
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Printf("ichor-ui: graceful shutdown failed: %v", err)
+	}
+
+	if plainSrv != nil {
+		_ = plainSrv.Shutdown(shutdownCtx)
 	}
 
 	if internalSrv != nil {

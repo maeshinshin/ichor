@@ -1,0 +1,75 @@
+/*
+Copyright 2026 maeshinshin.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package main
+
+import (
+	"context"
+	"crypto/tls"
+	"net/http"
+	"os"
+	"path/filepath"
+	"time"
+
+	"github.com/maeshinshin/ichor/internal/certreload"
+)
+
+type getCert = func(*tls.ClientHelloInfo) (*tls.Certificate, error)
+
+// servingCertificate picks the main listener's certificate on every handshake
+// (docs/adr/0105 decision 2): the operator's pair when its files exist, else
+// the Ichor-made pair in dir. Both follow their files (internal/certreload),
+// and while neither exists the handshake fails; there is no plaintext fallback.
+func servingCertificate(ctx context.Context, opCert, opKey, dir string) getCert {
+	managed := certreload.GetCertificate(ctx, filepath.Join(dir, "tls.crt"), filepath.Join(dir, "tls.key"), certreload.Interval)
+	if opCert == "" {
+		return managed
+	}
+
+	operator := certreload.GetCertificate(ctx, opCert, opKey, certreload.Interval)
+
+	return func(h *tls.ClientHelloInfo) (*tls.Certificate, error) {
+		if fileExists(opCert) && fileExists(opKey) {
+			return operator(h)
+		}
+
+		return managed(h)
+	}
+}
+
+func fileExists(p string) bool {
+	_, err := os.Stat(p)
+
+	return err == nil
+}
+
+// transitionalServer is the deprecated plaintext listener of docs/adr/0105
+// decision 6; nil unless --http-addr is set.
+func transitionalServer(addr string, h http.Handler) *http.Server {
+	if addr == "" {
+		return nil
+	}
+
+	return &http.Server{Addr: addr, Handler: h, ReadHeaderTimeout: 10 * time.Second}
+}
+
+// httpsServer is an HTTPS-only server; start it with ListenAndServeTLS("", "").
+func httpsServer(addr string, h http.Handler, get getCert) *http.Server {
+	return &http.Server{
+		Addr: addr, Handler: h, ReadHeaderTimeout: 10 * time.Second,
+		TLSConfig: &tls.Config{MinVersion: tls.VersionTLS12, GetCertificate: get},
+	}
+}

@@ -17,8 +17,11 @@ limitations under the License.
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
+	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -61,5 +64,20 @@ func httpsServer(addr string, h http.Handler, get getCert) *http.Server {
 	return &http.Server{
 		Addr: addr, Handler: h, ReadHeaderTimeout: 10 * time.Second,
 		TLSConfig: &tls.Config{MinVersion: tls.VersionTLS12, GetCertificate: get},
+		ErrorLog:  log.New(probeLogFilter{log.Writer()}, log.Prefix(), log.Flags()),
 	}
+}
+
+// probeLogFilter drops the handshake errors of the TCP liveness probe, which connects
+// and closes without sending a ClientHello, so net/http logs "TLS handshake error ...: EOF".
+// Every other line goes to next unchanged.
+type probeLogFilter struct{ next io.Writer }
+
+func (f probeLogFilter) Write(p []byte) (int, error) {
+	line := bytes.TrimSuffix(p, []byte("\n"))
+	if bytes.Contains(line, []byte("TLS handshake error")) && bytes.HasSuffix(line, []byte(": EOF")) {
+		return len(p), nil
+	}
+
+	return f.next.Write(p)
 }

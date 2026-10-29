@@ -126,7 +126,7 @@ func (t *machineryTalosClient) CurrentConfig(ctx context.Context) ([]byte, error
 
 // Identity reads the node's hardware identity over the authenticated connection.
 func (t *machineryTalosClient) Identity(ctx context.Context) (HardwareIdentity, error) {
-	return readHardwareIdentity(ctx, t.c.COSI)
+	return ReadHardwareIdentity(ctx, t.c.COSI)
 }
 
 // NodeName reads the Nodename resource (k8s namespace, ID "nodename"): the name Talos registers

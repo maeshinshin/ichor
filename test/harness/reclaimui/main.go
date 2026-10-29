@@ -100,45 +100,25 @@ func run() error {
 
 	switch op {
 	case "can":
-		var r *connect.Response[pb.CanReclaimResponse]
-		r, err = c.CanReclaim(ctx, connect.NewRequest(&pb.CanReclaimRequest{Cluster: clusterRef}))
-		if err == nil {
-			out = r.Msg
-		}
+		out, err = msg(c.CanReclaim(ctx, connect.NewRequest(&pb.CanReclaimRequest{Cluster: clusterRef})))
 	case "create":
 		raw, rerr := os.ReadFile(*tc)
 		if rerr != nil {
 			return fmt.Errorf("reading -talosconfig: %w", rerr)
 		}
 
-		var r *connect.Response[pb.CreateReclaimResponse]
-		r, err = c.CreateReclaim(ctx, connect.NewRequest(&pb.CreateReclaimRequest{
+		out, err = msg(c.CreateReclaim(ctx, connect.NewRequest(&pb.CreateReclaimRequest{
 			Address: *address, Talosconfig: raw, Context: *tcContext,
 			Force: *force, ForceUngraceful: *ungraceful, Cluster: clusterRef,
-		}))
-		if err == nil {
-			out = r.Msg
-		}
+		})))
 	case "get":
-		var r *connect.Response[pb.GetReclaimResponse]
-		r, err = c.GetReclaim(ctx, connect.NewRequest(&pb.GetReclaimRequest{Reclaim: ref(*name)}))
-		if err == nil {
-			out = r.Msg
-		}
+		out, err = msg(c.GetReclaim(ctx, connect.NewRequest(&pb.GetReclaimRequest{Reclaim: ref(*name)})))
 	case "list":
-		var r *connect.Response[pb.ListReclaimsResponse]
-		r, err = c.ListReclaims(ctx, connect.NewRequest(&pb.ListReclaimsRequest{}))
-		if err == nil {
-			out = r.Msg
-		}
+		out, err = msg(c.ListReclaims(ctx, connect.NewRequest(&pb.ListReclaimsRequest{})))
 	case "confirm":
-		var r *connect.Response[pb.ConfirmReclaimResponse]
-		r, err = c.ConfirmReclaim(ctx, connect.NewRequest(&pb.ConfirmReclaimRequest{
+		out, err = msg(c.ConfirmReclaim(ctx, connect.NewRequest(&pb.ConfirmReclaimRequest{
 			Reclaim: ref(*name), Uuid: *uuid, ClusterName: *clusterName,
-		}))
-		if err == nil {
-			out = r.Msg
-		}
+		})))
 	default:
 		return fmt.Errorf("unknown operation %q", op)
 	}
@@ -150,4 +130,15 @@ func run() error {
 	fmt.Println(protojson.Format(out))
 
 	return nil
+}
+
+// msg unwraps a unary response into its message.
+func msg[T any, P interface {
+	*T
+	proto.Message
+}](r *connect.Response[T], err error) (proto.Message, error) {
+	if err != nil {
+		return nil, err
+	}
+	return P(r.Msg), nil
 }

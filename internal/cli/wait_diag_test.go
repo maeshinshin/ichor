@@ -87,7 +87,7 @@ func TestWaitDiagFailsEarlyOnNotReadyNodes(t *testing.T) {
 
 func TestWaitDiagKeepsWaitingWhileCiliumIsInstalling(t *testing.T) {
 	agent := &corev1.Pod{}
-	agent.Namespace, agent.Name, agent.Labels = "kube-system", "cilium-x", map[string]string{"k8s-app": "cilium"}
+	agent.Namespace, agent.Name, agent.Labels = k8sFactsSystemNamespace, "cilium-x", map[string]string{"k8s-app": "cilium"}
 
 	c := fake.NewClientBuilder().WithObjects(
 		pendingPod("0/1 nodes are available"), agent,

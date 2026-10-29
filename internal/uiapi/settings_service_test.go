@@ -22,7 +22,7 @@ func reviewingSubresources(c client.Client, allow ...string) client.Client {
 			if sar, ok := obj.(*authv1.SelfSubjectAccessReview); ok {
 				a := sar.Spec.ResourceAttributes
 				for _, s := range allow {
-					if a.Resource == "ichorinstallations" && a.Verb == "update" && a.Subresource == s {
+					if a.Resource == "ichorinstallations" && a.Verb == verbUpdate && a.Subresource == s {
 						sar.Status.Allowed = true
 					}
 				}
@@ -40,7 +40,7 @@ func settingsServer(t *testing.T, readOnly bool, allow ...string) (*Server, clie
 
 	k8s := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(&ichorv1alpha1.IchorInstallation{
 		Name: settings.SingletonName,
-		Spec: ichorv1alpha1.IchorInstallationSpec{Version: "v0.1.0"},
+		Spec: ichorv1alpha1.IchorInstallationSpec{Version: ichorOld},
 	}).Build()
 
 	return &Server{
@@ -52,37 +52,35 @@ func settingsServer(t *testing.T, readOnly bool, allow ...string) (*Server, clie
 	}, k8s
 }
 
-
-
 func TestGetSettingsEditableFollowsRBAC(t *testing.T) {
 	for _, tc := range []struct {
 		allow             []string
 		readOnly          bool
 		reclaim, settings bool
 	}{
-		{[]string{"reclaim", "settings"}, false, true, true},
-		{[]string{"settings"}, false, false, true},
+		{[]string{subReclaim, subSettings}, false, true, true},
+		{[]string{subSettings}, false, false, true},
 		{nil, false, false, false},
-		{[]string{"reclaim", "settings"}, true, false, false},
+		{[]string{subReclaim, subSettings}, true, false, false},
 	} {
 		s, _ := settingsServer(t, tc.readOnly, tc.allow...)
 
-		resp, err := s.GetSettings(ContextWithIdentity(context.Background(), Identity{User: "alice"}), connect.NewRequest(&pb.GetSettingsRequest{}))
+		resp, err := s.GetSettings(ContextWithIdentity(context.Background(), Identity{User: userAlice}), connect.NewRequest(&pb.GetSettingsRequest{}))
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		if m := resp.Msg; m.CanEditReclaim != tc.reclaim || m.CanEditSettings != tc.settings || m.ReadOnly != tc.readOnly || m.Version != "v0.1.0" {
+		if m := resp.Msg; m.CanEditReclaim != tc.reclaim || m.CanEditSettings != tc.settings || m.ReadOnly != tc.readOnly || m.Version != ichorOld {
 			t.Errorf("%+v: got %+v", tc, m)
 		}
 	}
 }
 
 func TestUpdateSettingsWritesOnlyChangedFields(t *testing.T) {
-	s, k8s := settingsServer(t, false, "reclaim", "settings")
+	s, k8s := settingsServer(t, false, subReclaim, subSettings)
 	policy := "autoCorrect"
 
-	if _, err := s.UpdateSettings(ContextWithIdentity(context.Background(), Identity{User: "alice"}), connect.NewRequest(&pb.UpdateSettingsRequest{
+	if _, err := s.UpdateSettings(ContextWithIdentity(context.Background(), Identity{User: userAlice}), connect.NewRequest(&pb.UpdateSettingsRequest{
 		Changes: &pb.SettingsFields{DriftPolicy: &policy},
 	})); err != nil {
 		t.Fatal(err)
@@ -99,17 +97,17 @@ func TestUpdateSettingsWritesOnlyChangedFields(t *testing.T) {
 }
 
 func TestUpdateSettingsReclaimNeedsConfirmationAndSetsAnnotation(t *testing.T) {
-	s, k8s := settingsServer(t, false, "reclaim")
+	s, k8s := settingsServer(t, false, subReclaim)
 	on := true
 	req := func(confirm bool) *connect.Request[pb.UpdateSettingsRequest] {
 		return connect.NewRequest(&pb.UpdateSettingsRequest{Changes: &pb.SettingsFields{ReclaimEnabled: &on}, ConfirmReclaim: confirm})
 	}
 
-	if _, err := s.UpdateSettings(ContextWithIdentity(context.Background(), Identity{User: "alice"}), req(false)); connect.CodeOf(err) != connect.CodeInvalidArgument {
+	if _, err := s.UpdateSettings(ContextWithIdentity(context.Background(), Identity{User: userAlice}), req(false)); connect.CodeOf(err) != connect.CodeInvalidArgument {
 		t.Fatalf("unconfirmed: %v", err)
 	}
 
-	if _, err := s.UpdateSettings(ContextWithIdentity(context.Background(), Identity{User: "alice"}), req(true)); err != nil {
+	if _, err := s.UpdateSettings(ContextWithIdentity(context.Background(), Identity{User: userAlice}), req(true)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -134,13 +132,13 @@ func TestUpdateSettingsRefusals(t *testing.T) {
 		val      string
 		code     connect.Code
 	}{
-		"no verb":   {false, []string{"reclaim"}, ok, connect.CodePermissionDenied},
-		"bounds":    {false, []string{"settings"}, ttl, connect.CodeInvalidArgument},
-		"read-only": {true, []string{"settings"}, ok, connect.CodeFailedPrecondition},
+		"no verb":   {false, []string{subReclaim}, ok, connect.CodePermissionDenied},
+		"bounds":    {false, []string{subSettings}, ttl, connect.CodeInvalidArgument},
+		"read-only": {true, []string{subSettings}, ok, connect.CodeFailedPrecondition},
 	} {
 		s, k8s := settingsServer(t, tc.readOnly, tc.allow...)
 
-		_, err := s.UpdateSettings(ContextWithIdentity(context.Background(), Identity{User: "alice"}), connect.NewRequest(&pb.UpdateSettingsRequest{
+		_, err := s.UpdateSettings(ContextWithIdentity(context.Background(), Identity{User: userAlice}), connect.NewRequest(&pb.UpdateSettingsRequest{
 			Changes: &pb.SettingsFields{TokenTtl: &tc.val},
 		}))
 		if connect.CodeOf(err) != tc.code {
@@ -153,3 +151,8 @@ func TestUpdateSettingsRefusals(t *testing.T) {
 		}
 	}
 }
+
+const (
+	subReclaim  = ichorv1alpha1.IchorSubresourceReclaim
+	subSettings = ichorv1alpha1.IchorSubresourceSettings
+)

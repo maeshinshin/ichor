@@ -141,7 +141,7 @@ func settingRows(r *pb.GetSettingsResponse) []settingRow {
 		case e != nil:
 			return settingRow{value: e.GetValue(), source: e.GetSource()}
 		case fromSpec != "":
-			return settingRow{value: fromSpec, source: "spec"}
+			return settingRow{value: fromSpec, source: sourceSpec}
 		default:
 			return settingRow{value: "-", source: "-"}
 		}
@@ -161,9 +161,9 @@ func settingRows(r *pb.GetSettingsResponse) []settingRow {
 	}
 
 	rows := []settingRow{
-		{"version", r.GetVersion(), "spec"},
-		{"installedVersion", r.GetInstalledVersion(), "status"},
-		{"deployment.manager", r.GetManager(), "spec"},
+		{"version", r.GetVersion(), sourceSpec},
+		{"installedVersion", r.GetInstalledVersion(), sourceStatus},
+		{"deployment.manager", r.GetManager(), sourceSpec},
 		pick(eff.GetReclaimEnabled(), reclaim),
 		pick(eff.GetTokenTtl(), str(spec.TokenTtl)),
 		pick(eff.GetRefreshLifetime(), str(spec.RefreshLifetime)),
@@ -180,10 +180,10 @@ func settingRows(r *pb.GetSettingsResponse) []settingRow {
 func writeSettingsTable(w io.Writer, r *pb.GetSettingsResponse) error {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 
-	fmt.Fprintln(tw, "SETTING\tVALUE\tSOURCE")
+	_, _ = fmt.Fprintln(tw, "SETTING\tVALUE\tSOURCE")
 
 	for _, row := range settingRows(r) {
-		fmt.Fprintf(tw, "%s\t%s\t%s\n", row.key, row.value, row.source)
+		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\n", row.key, row.value, row.source)
 	}
 
 	if err := tw.Flush(); err != nil {
@@ -198,3 +198,9 @@ func writeSettingsTable(w io.Writer, r *pb.GetSettingsResponse) error {
 
 	return nil
 }
+
+// The source column of the table: where a row's value is read from.
+const (
+	sourceSpec   = "spec"
+	sourceStatus = "status"
+)

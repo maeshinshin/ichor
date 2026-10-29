@@ -46,6 +46,9 @@ type adoptDeps struct {
 
 	AssumeYes bool
 	Output    string
+
+	// CNIUnmanaged is --cni-unmanaged: adopt the cluster with its CNI left as it is.
+	CNIUnmanaged bool
 }
 
 // runAdopt implements `ichor adopt` (docs/design/architecture.md,

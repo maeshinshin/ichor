@@ -30,6 +30,7 @@ var (
 	adoptRecover       bool
 	adoptRecoverFrom   string
 	adoptContext       string
+	adoptCNIUnmanaged  bool
 )
 
 // adoptCmd implements `ichor adopt` (docs/design/architecture.md,
@@ -92,6 +93,8 @@ only ever writes TalosConfigPatch objects to the Kubernetes API.`,
 			Stdin:     cmd.InOrStdin(),
 			AssumeYes: assumeYes,
 			Output:    outputFormat,
+
+			CNIUnmanaged: adoptCNIUnmanaged,
 		}
 
 		return runAdopt(cmd.Context(), adoptCluster, adoptNamespace, deps)
@@ -111,6 +114,8 @@ func init() {
 		"address of the control plane --recover-secrets reads the machine config from")
 	adoptCmd.Flags().StringVar(&adoptContext, "context", "",
 		"context of the talosconfig to use (default: the file's selected context)")
+	adoptCmd.Flags().BoolVar(&adoptCNIUnmanaged, "cni-unmanaged", false,
+		"adopt the cluster with its CNI left exactly as it is: Ichor will not install, upgrade or configure it")
 
 	_ = adoptCmd.MarkFlagRequired(flagCluster)
 	adoptCmd.MarkFlagsMutuallyExclusive("secrets-bundle", "recover-secrets")

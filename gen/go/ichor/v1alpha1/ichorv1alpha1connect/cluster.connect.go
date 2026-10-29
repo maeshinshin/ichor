@@ -46,6 +46,9 @@ const (
 	// ClusterServiceAddDiscoveryAddressProcedure is the fully-qualified name of the ClusterService's
 	// AddDiscoveryAddress RPC.
 	ClusterServiceAddDiscoveryAddressProcedure = "/ichor.v1alpha1.ClusterService/AddDiscoveryAddress"
+	// ClusterServiceDismissCARotationAdviceProcedure is the fully-qualified name of the
+	// ClusterService's DismissCARotationAdvice RPC.
+	ClusterServiceDismissCARotationAdviceProcedure = "/ichor.v1alpha1.ClusterService/DismissCARotationAdvice"
 )
 
 // ClusterServiceClient is a client for the ichor.v1alpha1.ClusterService service.
@@ -57,6 +60,10 @@ type ClusterServiceClient interface {
 	// probes it for a node in maintenance mode. It goes through the same write
 	// gate as the other writes, which writes the CR directly.
 	AddDiscoveryAddress(context.Context, *connect.Request[v1alpha1.AddDiscoveryAddressRequest]) (*connect.Response[v1alpha1.AddDiscoveryAddressResponse], error)
+	// DismissCARotationAdvice sets the annotation ichor.maesh.dev/ca-rotation-advice-dismissed on the
+	// TalosCluster, which the controller reads to clear the CARotationAdvised condition. It writes that annotation and
+	// nothing else.
+	DismissCARotationAdvice(context.Context, *connect.Request[v1alpha1.DismissCARotationAdviceRequest]) (*connect.Response[v1alpha1.DismissCARotationAdviceResponse], error)
 }
 
 // NewClusterServiceClient constructs a client for the ichor.v1alpha1.ClusterService service. By
@@ -88,14 +95,21 @@ func NewClusterServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(clusterServiceMethods.ByName("AddDiscoveryAddress")),
 			connect.WithClientOptions(opts...),
 		),
+		dismissCARotationAdvice: connect.NewClient[v1alpha1.DismissCARotationAdviceRequest, v1alpha1.DismissCARotationAdviceResponse](
+			httpClient,
+			baseURL+ClusterServiceDismissCARotationAdviceProcedure,
+			connect.WithSchema(clusterServiceMethods.ByName("DismissCARotationAdvice")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // clusterServiceClient implements ClusterServiceClient.
 type clusterServiceClient struct {
-	listClusters        *connect.Client[v1alpha1.ListClustersRequest, v1alpha1.ListClustersResponse]
-	getCluster          *connect.Client[v1alpha1.GetClusterRequest, v1alpha1.GetClusterResponse]
-	addDiscoveryAddress *connect.Client[v1alpha1.AddDiscoveryAddressRequest, v1alpha1.AddDiscoveryAddressResponse]
+	listClusters            *connect.Client[v1alpha1.ListClustersRequest, v1alpha1.ListClustersResponse]
+	getCluster              *connect.Client[v1alpha1.GetClusterRequest, v1alpha1.GetClusterResponse]
+	addDiscoveryAddress     *connect.Client[v1alpha1.AddDiscoveryAddressRequest, v1alpha1.AddDiscoveryAddressResponse]
+	dismissCARotationAdvice *connect.Client[v1alpha1.DismissCARotationAdviceRequest, v1alpha1.DismissCARotationAdviceResponse]
 }
 
 // ListClusters calls ichor.v1alpha1.ClusterService.ListClusters.
@@ -113,6 +127,11 @@ func (c *clusterServiceClient) AddDiscoveryAddress(ctx context.Context, req *con
 	return c.addDiscoveryAddress.CallUnary(ctx, req)
 }
 
+// DismissCARotationAdvice calls ichor.v1alpha1.ClusterService.DismissCARotationAdvice.
+func (c *clusterServiceClient) DismissCARotationAdvice(ctx context.Context, req *connect.Request[v1alpha1.DismissCARotationAdviceRequest]) (*connect.Response[v1alpha1.DismissCARotationAdviceResponse], error) {
+	return c.dismissCARotationAdvice.CallUnary(ctx, req)
+}
+
 // ClusterServiceHandler is an implementation of the ichor.v1alpha1.ClusterService service.
 type ClusterServiceHandler interface {
 	ListClusters(context.Context, *connect.Request[v1alpha1.ListClustersRequest]) (*connect.Response[v1alpha1.ListClustersResponse], error)
@@ -122,6 +141,10 @@ type ClusterServiceHandler interface {
 	// probes it for a node in maintenance mode. It goes through the same write
 	// gate as the other writes, which writes the CR directly.
 	AddDiscoveryAddress(context.Context, *connect.Request[v1alpha1.AddDiscoveryAddressRequest]) (*connect.Response[v1alpha1.AddDiscoveryAddressResponse], error)
+	// DismissCARotationAdvice sets the annotation ichor.maesh.dev/ca-rotation-advice-dismissed on the
+	// TalosCluster, which the controller reads to clear the CARotationAdvised condition. It writes that annotation and
+	// nothing else.
+	DismissCARotationAdvice(context.Context, *connect.Request[v1alpha1.DismissCARotationAdviceRequest]) (*connect.Response[v1alpha1.DismissCARotationAdviceResponse], error)
 }
 
 // NewClusterServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -149,6 +172,12 @@ func NewClusterServiceHandler(svc ClusterServiceHandler, opts ...connect.Handler
 		connect.WithSchema(clusterServiceMethods.ByName("AddDiscoveryAddress")),
 		connect.WithHandlerOptions(opts...),
 	)
+	clusterServiceDismissCARotationAdviceHandler := connect.NewUnaryHandler(
+		ClusterServiceDismissCARotationAdviceProcedure,
+		svc.DismissCARotationAdvice,
+		connect.WithSchema(clusterServiceMethods.ByName("DismissCARotationAdvice")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/ichor.v1alpha1.ClusterService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case ClusterServiceListClustersProcedure:
@@ -157,6 +186,8 @@ func NewClusterServiceHandler(svc ClusterServiceHandler, opts ...connect.Handler
 			clusterServiceGetClusterHandler.ServeHTTP(w, r)
 		case ClusterServiceAddDiscoveryAddressProcedure:
 			clusterServiceAddDiscoveryAddressHandler.ServeHTTP(w, r)
+		case ClusterServiceDismissCARotationAdviceProcedure:
+			clusterServiceDismissCARotationAdviceHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -176,4 +207,8 @@ func (UnimplementedClusterServiceHandler) GetCluster(context.Context, *connect.R
 
 func (UnimplementedClusterServiceHandler) AddDiscoveryAddress(context.Context, *connect.Request[v1alpha1.AddDiscoveryAddressRequest]) (*connect.Response[v1alpha1.AddDiscoveryAddressResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.ClusterService.AddDiscoveryAddress is not implemented"))
+}
+
+func (UnimplementedClusterServiceHandler) DismissCARotationAdvice(context.Context, *connect.Request[v1alpha1.DismissCARotationAdviceRequest]) (*connect.Response[v1alpha1.DismissCARotationAdviceResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.ClusterService.DismissCARotationAdvice is not implemented"))
 }

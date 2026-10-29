@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"net/url"
 	"slices"
 	"strings"
 	"time"
@@ -108,6 +109,13 @@ type IssuerTrustReconciler struct {
 	// retirement. Zero means DefaultRefreshLifetime.
 	RefreshLifetime time.Duration
 
+	// UserIssuer turns on the signing-key and user-credential halves (ADR 0094). The TLS half
+	// (CA, serving certificate, trust and ichor-ui-ca objects) runs for every install (ADR 0105).
+	UserIssuer bool
+
+	// ExternalURL is ichor-ui's public URL; its host is added to the serving certificate's SANs.
+	ExternalURL string
+
 	// Now is the clock; nil means time.Now.
 	Now func() time.Time
 
@@ -119,9 +127,11 @@ type IssuerTrustReconciler struct {
 
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=ichorusers,verbs=get;list;watch
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=ichorusers/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups="",namespace=ichor-system,resources=configmaps,verbs=get;list;watch;create;update;patch
+// +kubebuilder:rbac:groups="",namespace=ichor-system,resources=configmaps,verbs=create
+// +kubebuilder:rbac:groups="",namespace=ichor-system,resources=configmaps,resourceNames=ichor-oidc-trust;ichor-ui-ca,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",namespace=ichor-system,resources=services,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,resourceNames=ichor-user-credentials,verbs=get;update;patch
+// +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,resourceNames=ichor-oidc-signing;ichor-oidc-ca;ichor-oidc-tls;ichor-ui-ca,verbs=get;update;patch
 
 func (r *IssuerTrustReconciler) now() time.Time {
 	if r.Now != nil {
@@ -180,12 +190,14 @@ func (r *IssuerTrustReconciler) uiService(ctx context.Context) (*corev1.Service,
 func (r *IssuerTrustReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result, error) {
 	now := r.now()
 
-	nextKeys, err := r.reconcileKeys(ctx, now)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
+	var next time.Time
 
-	next := nextKeys
+	if r.UserIssuer {
+		var err error
+		if next, err = r.reconcileKeys(ctx, now); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
 
 	tlsNext, err := r.reconcileTLS(ctx, now)
 	if err != nil {
@@ -196,8 +208,10 @@ func (r *IssuerTrustReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (
 		next = tlsNext
 	}
 
-	if err := r.reconcileUsers(ctx, now); err != nil {
-		return ctrl.Result{}, err
+	if r.UserIssuer {
+		if err := r.reconcileUsers(ctx, now); err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 
 	wait := issuerRecheck
@@ -311,7 +325,7 @@ func (r *IssuerTrustReconciler) reconcileTLS(ctx context.Context, now time.Time)
 		return now.Add(30 * time.Second), nil
 	}
 
-	spec := leafSpec{ip: ip, dns: []string{fmt.Sprintf("%s.%s.svc", svc.Name, r.Namespace)}}
+	spec := r.leafSpec(svc, ip)
 
 	ca, caX509, caKey, err := r.ensureCA(ctx, now)
 	if err != nil {
@@ -327,11 +341,69 @@ func (r *IssuerTrustReconciler) reconcileTLS(ctx context.Context, now time.Time)
 		return time.Time{}, err
 	}
 
+	if err := r.ensureUICA(ctx, ca.certPEM); err != nil {
+		return time.Time{}, err
+	}
+
 	issuerCertExpiry.WithLabelValues("ca").Set(float64(caX509.NotAfter.Unix()))
 	issuerCertExpiry.WithLabelValues("tls").Set(float64(leaf.NotAfter.Unix()))
 
 	// Wake for the leaf's renewal point.
 	return leafRenewAt(leaf), nil
+}
+
+// leafSpec lists what the serving certificate covers (ADR 0105 decision 2): the ClusterIP, the
+// Service's names, loopback and the host of the external URL.
+func (r *IssuerTrustReconciler) leafSpec(svc *corev1.Service, ip net.IP) leafSpec {
+	base := fmt.Sprintf("%s.%s.svc", svc.Name, r.Namespace)
+	spec := leafSpec{
+		ips: []net.IP{ip, net.IPv4(127, 0, 0, 1)},
+		dns: []string{svc.Name, base, base + ".cluster.local", "localhost"},
+	}
+
+	if u, err := url.Parse(r.ExternalURL); err == nil && u.Hostname() != "" {
+		if hip := net.ParseIP(u.Hostname()); hip != nil {
+			if !slices.ContainsFunc(spec.ips, hip.Equal) {
+				spec.ips = append(spec.ips, hip)
+			}
+		} else if !slices.Contains(spec.dns, u.Hostname()) {
+			spec.dns = append(spec.dns, u.Hostname())
+		}
+	}
+
+	return spec
+}
+
+// ensureUICA publishes the CA certificate, never a key, as the ConfigMap and the Secret
+// ichor-ui-ca for an edge, a BackendTLSPolicy or a client to verify ichor-ui with.
+func (r *IssuerTrustReconciler) ensureUICA(ctx context.Context, caPEM []byte) error {
+	cm := &corev1.ConfigMap{Namespace: r.Namespace, Name: oidctrust.UICAName}
+
+	if _, err := controllerutil.CreateOrUpdate(ctx, r.Client, cm, func() error {
+		if cm.Labels == nil {
+			cm.Labels = map[string]string{}
+		}
+
+		cm.Labels[managedByLabel] = managedByValue
+		cm.Data, cm.BinaryData = map[string]string{oidctrust.CAKey: string(caPEM)}, nil
+
+		return nil
+	}); err != nil {
+		return fmt.Errorf("writing ConfigMap %s: %w", oidctrust.UICAName, err)
+	}
+
+	var sec corev1.Secret
+
+	err := r.Get(ctx, r.key(oidctrust.UICAName), &sec)
+	if err != nil && !apierrors.IsNotFound(err) {
+		return fmt.Errorf("reading Secret %s: %w", oidctrust.UICAName, err)
+	}
+
+	if err == nil && len(sec.Data) == 1 && bytes.Equal(sec.Data[oidctrust.CAKey], caPEM) {
+		return nil
+	}
+
+	return r.apply(ctx, &sec, oidctrust.UICAName, corev1.SecretTypeOpaque, map[string][]byte{oidctrust.CAKey: caPEM})
 }
 
 // ensureCA returns a usable CA, making one when none exists or it is near its end.
@@ -395,7 +467,7 @@ func (r *IssuerTrustReconciler) ensureLeaf(
 		return nil, err
 	}
 
-	ctrl.LoggerFrom(ctx).Info("Issuer serving certificate issued", "ip", spec.ip.String())
+	ctrl.LoggerFrom(ctx).Info("Issuer serving certificate issued", "ips", spec.ips, "dns", spec.dns)
 
 	return decodeCert(fresh.certPEM)
 }
@@ -612,7 +684,7 @@ func (r *IssuerTrustReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 		return slices.Contains([]string{
 			oidctrust.SigningSecret, oidctrust.CASecret, oidctrust.TLSSecret, oidctrust.TrustConfigMap,
-			oidctrust.CredentialsSecret, r.serviceName(),
+			oidctrust.CredentialsSecret, oidctrust.UICAName, r.serviceName(),
 		}, o.GetName())
 	})
 

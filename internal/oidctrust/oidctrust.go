@@ -41,6 +41,9 @@ const (
 	TLSSecret = "ichor-oidc-tls"
 	// TrustConfigMap carries the public parts a render reads: DiscoveryURLKey and CAKey.
 	TrustConfigMap = "ichor-oidc-trust"
+	// UICAName names both the ConfigMap and the Secret that publish the serving CA's public part
+	// (key CAKey) for an edge to verify ichor-ui with (ADR 0105).
+	UICAName = "ichor-ui-ca"
 	// CredentialsSecret is the argon2id hash Secret (ADR 0094 Decision 1); key = user name.
 	CredentialsSecret = "ichor-user-credentials"
 )

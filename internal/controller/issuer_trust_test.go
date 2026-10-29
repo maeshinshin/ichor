@@ -81,7 +81,7 @@ var _ = Describe("IssuerTrustReconciler", func() {
 		clock = time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
 		r = &IssuerTrustReconciler{
 			Client: k8sClient, APIReader: k8sClient, Namespace: itNamespace, UIServiceName: itService,
-			Now: func() time.Time { return clock },
+			UserIssuer: true, Now: func() time.Time { return clock },
 		}
 
 		service("10.0.0.50")
@@ -93,6 +93,8 @@ var _ = Describe("IssuerTrustReconciler", func() {
 				&corev1.Secret{Namespace: itNamespace, Name: oidctrust.TLSSecret},
 				&corev1.Secret{Namespace: itNamespace, Name: oidctrust.CredentialsSecret},
 				&corev1.ConfigMap{Namespace: itNamespace, Name: oidctrust.TrustConfigMap},
+				&corev1.ConfigMap{Namespace: itNamespace, Name: oidctrust.UICAName},
+				&corev1.Secret{Namespace: itNamespace, Name: oidctrust.UICAName},
 			} {
 				Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, o))).To(Succeed())
 			}
@@ -119,9 +121,11 @@ var _ = Describe("IssuerTrustReconciler", func() {
 
 		cert, err := decodeCert(leaf.Data[oidctrust.CertKey])
 		Expect(err).NotTo(HaveOccurred())
-		Expect(cert.IPAddresses).To(HaveLen(1))
+		Expect(cert.IPAddresses).To(HaveLen(2))
 		Expect(cert.IPAddresses[0].String()).To(Equal("10.0.0.50"))
-		Expect(cert.DNSNames).To(ConsistOf("ichor-ui-service.ichor-oidc-it.svc"))
+		Expect(cert.IPAddresses[1].String()).To(Equal("127.0.0.1"))
+		Expect(cert.DNSNames).To(ConsistOf("ichor-ui-service", "ichor-ui-service.ichor-oidc-it.svc",
+			"ichor-ui-service.ichor-oidc-it.svc.cluster.local", "localhost"))
 
 		var caAgain, leafAgain corev1.Secret
 		reconcile()
@@ -129,6 +133,55 @@ var _ = Describe("IssuerTrustReconciler", func() {
 		get(oidctrust.TLSSecret, &leafAgain)
 		Expect(caAgain.ResourceVersion).To(Equal(ca.ResourceVersion))
 		Expect(leafAgain.ResourceVersion).To(Equal(leaf.ResourceVersion))
+	})
+
+	Context("without --user-issuer", func() {
+		BeforeEach(func() { r.UserIssuer = false })
+
+		It("issues the leaf and publishes ichor-ui-ca, and nothing of the issuer", func() {
+			reconcile()
+
+			var ca, leaf, sec corev1.Secret
+			get(oidctrust.CASecret, &ca)
+			get(oidctrust.TLSSecret, &leaf)
+			get(oidctrust.UICAName, &sec)
+
+			var cm corev1.ConfigMap
+			get(oidctrust.UICAName, &cm)
+
+			Expect(cm.Data).To(HaveLen(1))
+			Expect(cm.Data[oidctrust.CAKey]).To(Equal(string(ca.Data[oidctrust.CertKey])))
+			Expect(sec.Data).To(HaveLen(1))
+			Expect(sec.Data[oidctrust.CAKey]).To(Equal(ca.Data[oidctrust.CertKey]))
+
+			// The CA key appears in neither published object.
+			Expect(cm.BinaryData).To(BeEmpty())
+			Expect(string(sec.Data[oidctrust.CAKey])).NotTo(ContainSubstring("PRIVATE KEY"))
+			Expect(cm.Data[oidctrust.CAKey]).NotTo(ContainSubstring("PRIVATE KEY"))
+
+			err := k8sClient.Get(ctx, types.NamespacedName{Namespace: itNamespace, Name: oidctrust.SigningSecret}, &corev1.Secret{})
+			Expect(client.IgnoreNotFound(err)).To(Succeed())
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("adds the host of the external URL, and renews the leaf at two thirds of its life", func() {
+			r.ExternalURL = "https://ichor.example.com:8443/"
+			reconcile()
+
+			var leaf corev1.Secret
+			get(oidctrust.TLSSecret, &leaf)
+
+			cert, err := decodeCert(leaf.Data[oidctrust.CertKey])
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cert.DNSNames).To(ContainElement("ichor.example.com"))
+
+			clock = clock.Add(issuerLeafLifetime*2/3 + time.Hour)
+			reconcile()
+
+			var renewed corev1.Secret
+			get(oidctrust.TLSSecret, &renewed)
+			Expect(renewed.Data[oidctrust.CertKey]).NotTo(Equal(leaf.Data[oidctrust.CertKey]))
+		})
 	})
 
 	It("rotates the signing key every 30 days and drops the old one after its last token", func() {

@@ -214,9 +214,18 @@ rules:
   - create
   - get
   - list
+  - watch
+- apiGroups:
+  - ""
+  resourceNames:
+  - ichor-oidc-trust
+  - ichor-ui-ca
+  resources:
+  - configmaps
+  verbs:
+  - get
   - patch
   - update
-  - watch
 - apiGroups:
   - ""
   resources:
@@ -232,6 +241,19 @@ rules:
   - ""
   resourceNames:
   - ichor-metrics-server-cert
+  resources:
+  - secrets
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - ""
+  resourceNames:
+  - ichor-oidc-ca
+  - ichor-oidc-signing
+  - ichor-oidc-tls
+  - ichor-ui-ca
   resources:
   - secrets
   verbs:

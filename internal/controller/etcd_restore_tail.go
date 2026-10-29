@@ -36,6 +36,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/etcdbackup"
 )
 
@@ -119,7 +120,7 @@ func (j *restoreJob) update(ctx context.Context, change func(*etcdbackup.Restore
 // a non-nil error is final (the job records it in the marker and stops); everything transient is a
 // false, nil with j.note saying why.
 func (j *restoreJob) step(ctx context.Context) (done bool, err error) {
-	if j.marker.Step == etcdbackup.MarkerRejoining {
+	if j.marker.Step == ichorv1alpha1.EtcdRestoreStepRejoining {
 		return j.ownStep(ctx)
 	}
 
@@ -127,12 +128,12 @@ func (j *restoreJob) step(ctx context.Context) (done bool, err error) {
 		return false, fmt.Errorf("the wipe and recovery did not finish within %s (last problem: %s)", etcdRestoreTailTimeout, j.note)
 	}
 
-	if j.marker.Step == etcdbackup.MarkerWiping {
+	if j.marker.Step == ichorv1alpha1.EtcdRestoreStepWiping {
 		if !j.wipe(ctx) {
 			return false, nil
 		}
 
-		if err := j.setStep(ctx, etcdbackup.MarkerRecovering); err != nil {
+		if err := j.setStep(ctx, ichorv1alpha1.EtcdRestoreStepRecovering); err != nil {
 			j.note = err.Error()
 
 			return false, nil
@@ -218,7 +219,7 @@ func (j *restoreJob) recoverTarget(ctx context.Context) (bool, error) {
 			return false, nil
 		}
 
-		if err := j.setStep(ctx, etcdbackup.MarkerRejoining); err != nil {
+		if err := j.setStep(ctx, ichorv1alpha1.EtcdRestoreStepRejoining); err != nil {
 			j.note = err.Error()
 
 			return false, nil

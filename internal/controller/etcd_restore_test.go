@@ -269,7 +269,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 			// Everything the job needs survives in the bucket before anything is wiped.
 			m := f.marker()
 			Expect(m).NotTo(BeNil())
-			Expect(m.Step).To(Equal(etcdbackup.MarkerWiping))
+			Expect(m.Step).To(Equal(ichorv1alpha1.EtcdRestoreStepWiping))
 			Expect(m.Operation).To(Equal(op.Name))
 			Expect(m.Snapshot).To(Equal(f.snapshot))
 			Expect(m.Reason).To(Equal("a bad change deleted the namespace"))
@@ -294,7 +294,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 			done, err = f.run(job, 5)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(done).To(BeTrue())
-			Expect(f.marker().Step).To(Equal(etcdbackup.MarkerRejoining))
+			Expect(f.marker().Step).To(Equal(ichorv1alpha1.EtcdRestoreStepRejoining))
 
 			target := f.targetFake()
 			Expect(target.recovered).To(HaveLen(1))
@@ -406,13 +406,13 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 			f := newRestoreFixture("")
 			op := f.newOp(nil)
 			f.reconcile(op)
-			Expect(f.marker().Step).To(Equal(etcdbackup.MarkerWiping))
+			Expect(f.marker().Step).To(Equal(ichorv1alpha1.EtcdRestoreStepWiping))
 
 			dropOperation(op)
 			Expect(f.reconciler("").ResumeEtcdRestores(ctx)).To(Succeed())
 
 			Expect(fetchOperation(op).Status.EtcdRestore.Step).To(Equal(ichorv1alpha1.EtcdRestoreStepRejoining))
-			Expect(f.marker().Step).To(Equal(etcdbackup.MarkerRejoining), "the marker only moves forward")
+			Expect(f.marker().Step).To(Equal(ichorv1alpha1.EtcdRestoreStepRejoining), "the marker only moves forward")
 		})
 
 		It("leaves an operation that still exists alone", func() {
@@ -493,7 +493,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 			job := f.lastJob()
 			_, err := f.run(job, 3)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(f.marker().Step).To(Equal(etcdbackup.MarkerRecovering))
+			Expect(f.marker().Step).To(Equal(ichorv1alpha1.EtcdRestoreStepRecovering))
 			Expect(target.recovered).To(HaveLen(1))
 
 			resets := map[string]int{}
@@ -643,7 +643,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 		It("refuses while another restore is recorded in the storage", func() {
 			f := newRestoreFixture("")
 			Expect(etcdbackup.PutMarker(ctx, f.backup.store, testBackupBase, &etcdbackup.RestoreMarker{
-				Namespace: tmNamespace, Operation: "someone-else", Step: etcdbackup.MarkerWiping,
+				Namespace: tmNamespace, Operation: "someone-else", Step: ichorv1alpha1.EtcdRestoreStepWiping,
 			})).To(Succeed())
 
 			got := f.reconcile(f.newOp(nil))
@@ -702,7 +702,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 			job := f.lastJob()
 			_, err := f.run(job, 4)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(f.marker().Step).To(Equal(etcdbackup.MarkerRecovering))
+			Expect(f.marker().Step).To(Equal(ichorv1alpha1.EtcdRestoreStepRecovering))
 			Expect(f.marker().Failure).To(BeEmpty())
 
 			f.targetFake().recoverErr = nil
@@ -789,7 +789,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 			done, err := f.run(job, 8)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(done).To(BeFalse())
-			Expect(f.marker().Step).To(Equal(etcdbackup.MarkerRejoining))
+			Expect(f.marker().Step).To(Equal(ichorv1alpha1.EtcdRestoreStepRejoining))
 			Expect(f.fake(restoreHostA).resetEtcdCalls).To(BeZero(), "wiping it would stop the controller before the recovery")
 			Expect(f.targetFake().recovered).To(HaveLen(1))
 
@@ -944,7 +944,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 		It("clears a refused restore's finalizer without touching a marker that is not its own", func() {
 			f := newRestoreFixture("")
 			Expect(etcdbackup.PutMarker(ctx, f.backup.store, testBackupBase, &etcdbackup.RestoreMarker{
-				Namespace: tmNamespace, Operation: "someone-else", Step: etcdbackup.MarkerWiping,
+				Namespace: tmNamespace, Operation: "someone-else", Step: ichorv1alpha1.EtcdRestoreStepWiping,
 			})).To(Succeed())
 
 			op := f.newOp(nil)

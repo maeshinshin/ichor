@@ -132,26 +132,7 @@ func (r *TalosOperationReconciler) newRestoreRun(
 		return nil, fmt.Errorf("TalosEtcdBackup %q backs up cluster %q, not %q", bk.Name, bk.Spec.ClusterRef.Name, cluster.Name)
 	}
 
-	bundle, err := loadBundle(ctx, r.Client, r.ControllerNamespace, cluster)
-	if err != nil {
-		return nil, err
-	}
-
-	run.scrub.add(bundleSecretMaterial(bundle)...)
-
-	passphrase, err := etcdbackup.Passphrase(bundle)
-	if err != nil {
-		return nil, err
-	}
-
-	run.scrub.add(passphrase)
-
-	s3cfg, err := loadS3ConfigFrom(ctx, r.Client, r.ControllerNamespace, bk.Spec.Destination.S3, &run.scrub)
-	if err != nil {
-		return nil, err
-	}
-
-	store, err := r.openStore(s3cfg)
+	bundle, passphrase, store, err := loadBackupStore(ctx, r.Client, r.ControllerNamespace, cluster, bk.Spec.Destination.S3, r.NewStore, &run.scrub)
 	if err != nil {
 		return nil, err
 	}
@@ -162,15 +143,6 @@ func (r *TalosOperationReconciler) newRestoreRun(
 }
 
 func (run *restoreRun) clean(err error) string { return run.scrub.clean(err.Error()) }
-
-// openStore builds the object store; a nil NewStore means S3.
-func (r *TalosOperationReconciler) openStore(cfg etcdbackup.S3Config) (etcdbackup.Store, error) {
-	if r.NewStore == nil {
-		return etcdbackup.NewS3Store(cfg)
-	}
-
-	return r.NewStore(cfg)
-}
 
 // approved lists the approved machines of the run's cluster, live when an API reader is wired.
 func (run *restoreRun) approved(ctx context.Context, f deleteguard.MachineFilter) ([]ichorv1alpha1.TalosMachine, error) {
@@ -391,7 +363,7 @@ func (r *TalosOperationReconciler) beginEtcdRestore(
 	next := etcdbackup.RestoreMarker{
 		Namespace: op.Namespace, Operation: op.Name, Cluster: cluster.Name, Backup: spec.BackupRef.Name,
 		Snapshot: snap.Name, SnapshotTime: snap.Time, Reason: spec.Reason, Target: nodes.target.Name,
-		Step: etcdbackup.MarkerWiping, StartedAt: now, Nodes: names,
+		Step: ichorv1alpha1.EtcdRestoreStepWiping, StartedAt: now, Nodes: names,
 	}
 
 	if nodes.own != nil {
@@ -1139,7 +1111,7 @@ func (r *TalosOperationReconciler) resumeBackup(ctx context.Context, backup type
 		return fmt.Errorf("%w: %s", errBackupUnusable, scrub.clean(err.Error()))
 	}
 
-	store, err := r.openStore(s3cfg)
+	store, err := openStore(r.NewStore, s3cfg)
 	if err != nil {
 		return err
 	}

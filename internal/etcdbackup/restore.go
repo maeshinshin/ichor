@@ -47,8 +47,9 @@ func VerifyObject(ctx context.Context, store Store, key, passphrase string) (int
 	return stream(ctx, store, key, passphrase)
 }
 
-// open downloads key and decrypts it. The caller closes the result.
-func open(ctx context.Context, store Store, key, passphrase string) (io.ReadCloser, error) {
+// Reader downloads key and decrypts it. It is not verified as it streams: call VerifyObject first. The
+// caller closes it.
+func Reader(ctx context.Context, store Store, key, passphrase string) (io.ReadCloser, error) {
 	rc, err := store.Get(ctx, key)
 	if err != nil {
 		return nil, fmt.Errorf("downloading: %w", err)
@@ -70,7 +71,7 @@ func open(ctx context.Context, store Store, key, passphrase string) (io.ReadClos
 // stream downloads and decrypts key, checks the checksum trailer, copies the plaintext to each of sinks
 // and returns its size.
 func stream(ctx context.Context, store Store, key, passphrase string, sinks ...io.Writer) (int64, error) {
-	rc, err := open(ctx, store, key, passphrase)
+	rc, err := Reader(ctx, store, key, passphrase)
 	if err != nil {
 		return 0, err
 	}
@@ -86,12 +87,6 @@ func stream(ctx context.Context, store Store, key, passphrase string, sinks ...i
 	return v.Size(), v.Verify()
 }
 
-// Reader opens key as plaintext. It is not verified as it streams: call VerifyObject first. The caller
-// closes it.
-func Reader(ctx context.Context, store Store, key, passphrase string) (io.ReadCloser, error) {
-	return open(ctx, store, key, passphrase)
-}
-
 // Names of the two objects an etcd restore keeps next to the snapshots, under the same prefix. List
 // skips them (they are not ObjectNames), so retention never prunes them and no other tool takes them
 // for a snapshot.
@@ -101,13 +96,6 @@ const (
 	// PinnedName is the ciphertext copy of the snapshot being restored, taken before anything is wiped, so
 	// pruning cannot take it away mid-restore.
 	PinnedName = "etcd-restore.snapshot.age"
-)
-
-// Steps of a RestoreMarker. They are the same words as TalosOperation.status.etcdRestore.step.
-const (
-	MarkerWiping     = "Wiping"
-	MarkerRecovering = "Recovering"
-	MarkerRejoining  = "Rejoining"
 )
 
 // RestoreMarker is the state of an etcd restore that must outlive the Kubernetes API. A restore rewinds
@@ -126,7 +114,7 @@ type RestoreMarker struct {
 	SnapshotTime time.Time `json:"snapshotTime"`
 	// Target is the control plane the snapshot is recovered on.
 	Target string `json:"target"`
-	// Step is one of the Marker* constants: how far the destructive part got. It only moves forward.
+	// Step is an api EtcdRestoreStep value: how far the destructive part got. It only moves forward.
 	Step string `json:"step"`
 	// Failure is why the restore stopped, if it did; set while the step is not finished.
 	Failure string `json:"failure,omitempty"`

@@ -208,6 +208,25 @@ func TestEtcdRestorePlanRefusals(t *testing.T) {
 		}
 	})
 
+	for _, endpoint := range []string{"http://minio.minio.svc:9000", "http://minio.minio.svc.cluster.local:9000", "http://10.96.4.2:9000"} {
+		t.Run("a backup store inside the cluster: "+endpoint, func(t *testing.T) {
+			inside := restoreBackupObject()
+			inside.Spec.Destination.S3.Endpoint = endpoint
+
+			s, _ := opServer(t, append(opObjects(), inside, opMachine("cp2", "controlplane", nil, nil))...)
+
+			res, err := s.PlanOperation(ctx, restorePlanReq(restoreReq(restoreSnap, "", "")))
+			if err != nil || !strings.Contains(res.Msg.GetBlocked(), "the backup store must live outside the cluster being restored") {
+				t.Fatalf("blocked = %q, %v", res.Msg.GetBlocked(), err)
+			}
+
+			// Break-glass does not lift it: starting the restore is refused as well.
+			if _, err := s.CreateOperation(ctx, restoreCreateReq(restoreReq(restoreSnap, opCluster, bgReason))); connect.CodeOf(err) != connect.CodeFailedPrecondition {
+				t.Fatalf("create: %v", err)
+			}
+		})
+	}
+
 	t.Run("no backup or snapshot named", func(t *testing.T) {
 		s, _ := opServer(t, restoreObjects()...)
 

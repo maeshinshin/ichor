@@ -462,6 +462,28 @@ var _ = Describe("TalosEtcdBackupReconciler", func() {
 		Expect(res.RequeueAfter).To(BeZero())
 	})
 
+	It("warns with StoreInCluster while the destination is inside the cluster, and keeps backing up", func() {
+		f := newBackupFixture()
+		f.addControlPlane("61", 2)
+
+		_, got := f.reconcile(f.newBackup(func(b *ichorv1alpha1.TalosEtcdBackup) {
+			b.Spec.Destination.S3.Endpoint = "http://minio.minio.svc:9000"
+		}))
+
+		cond := apimeta.FindStatusCondition(got.Status.Conditions, ichorv1alpha1.TalosEtcdBackupConditionStoreInCluster)
+		Expect(cond).NotTo(BeNil())
+		Expect(cond.Status).To(Equal(metav1.ConditionTrue))
+		Expect(cond.Message).To(ContainSubstring("the backup store must live outside the cluster being restored"))
+		Expect(readyOf(got).Status).To(Equal(metav1.ConditionTrue))
+
+		// Pointing it outside clears the warning.
+		got.Spec.Destination.S3.Endpoint = "https://s3.example.test"
+		Expect(k8sClient.Update(ctx, got)).To(Succeed())
+
+		_, got = f.reconcile(got)
+		Expect(apimeta.FindStatusCondition(got.Status.Conditions, ichorv1alpha1.TalosEtcdBackupConditionStoreInCluster)).To(BeNil())
+	})
+
 	It("fails clearly when the credentials Secret is missing or incomplete", func() {
 		f := newBackupFixture()
 		f.addControlPlane("71", 2)

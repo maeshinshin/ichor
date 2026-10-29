@@ -194,7 +194,9 @@ func createIchorInstallation(ctx context.Context, k8sClient client.Client, warn 
 		return false, err
 	}
 
-	if err := createWithRetry(ctx, k8sClient, &unstructured.Unstructured{Object: content}, warn); err != nil {
+	// The IchorInstallation has a validating webhook (ADR 0105), served by the controller this
+	// command just deployed: wait for it as long as step 5 waits for the CRs, not initRetryWindow.
+	if err := createWhenWebhooksUp(ctx, k8sClient, &unstructured.Unstructured{Object: content}, defaultWebhookWait, followRetryDelay, warn); err != nil {
 		return false, fmt.Errorf("init: creating the IchorInstallation: %w", err)
 	}
 

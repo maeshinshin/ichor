@@ -18,6 +18,8 @@ package secretsbundle
 
 import (
 	"context"
+	stdx509 "crypto/x509"
+	"encoding/pem"
 	"strings"
 	"testing"
 	"time"
@@ -201,4 +203,37 @@ func TestLoadMalformedYAMLDoesNotLeak(t *testing.T) {
 
 	_, err = Load(context.Background(), newFakeClient(t, secret), testNamespace, testName)
 	assertNoLeak(t, err, bundleSecretMaterial(bundle))
+}
+
+// TestDecodedBundleClientCertificateIsBackdated: a node whose clock is a little behind the
+// controller's must still accept the os:admin certificate minted for a dial.
+func TestDecodedBundleClientCertificateIsBackdated(t *testing.T) {
+	raw, err := yaml.Marshal(newTestBundle(t))
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+
+	got, err := Decode(raw)
+	if err != nil {
+		t.Fatalf("Decode: %v", err)
+	}
+
+	pair, err := got.GenerateTalosAPIClientCertificate(role.MakeSet(role.Admin))
+	if err != nil {
+		t.Fatalf("GenerateTalosAPIClientCertificate: %v", err)
+	}
+
+	block, _ := pem.Decode(pair.Crt)
+	if block == nil {
+		t.Fatal("no certificate PEM")
+	}
+
+	cert, err := stdx509.ParseCertificate(block.Bytes)
+	if err != nil {
+		t.Fatalf("ParseCertificate: %v", err)
+	}
+
+	if want := time.Now().Add(-clockSkew / 2); cert.NotBefore.After(want) {
+		t.Fatalf("NotBefore %s is not backdated (want before %s)", cert.NotBefore, want)
+	}
 }

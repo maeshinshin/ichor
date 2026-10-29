@@ -17,6 +17,8 @@ limitations under the License.
 package controller
 
 import (
+	"strconv"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -37,7 +39,7 @@ var _ = Describe("TalosClusterReconciler CA rotation advice", func() {
 	It("sets CARotationAdvised on a cluster carrying the adoption annotation, and not on another", func() {
 		plain := newTestCluster("advice-plain", "v1.14")
 		adopted := newTestCluster("advice-adopted", "v1.14")
-		adopted.Annotations = map[string]string{ichorv1alpha1.TalosClusterAdoptedAnnotation: "true"}
+		adopted.Annotations = map[string]string{ichorv1alpha1.TalosClusterAdoptedAnnotation: strconv.FormatBool(true)}
 		Expect(k8sClient.Update(ctx, adopted)).To(Succeed())
 
 		r := &TalosClusterReconciler{Client: k8sClient}

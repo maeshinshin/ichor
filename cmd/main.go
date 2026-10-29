@@ -48,6 +48,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/certreload"
 	"github.com/maeshinshin/ichor/internal/controller"
 	"github.com/maeshinshin/ichor/internal/kubetrust"
 	webhookv1alpha1 "github.com/maeshinshin/ichor/internal/webhook/v1alpha1"
@@ -232,19 +233,21 @@ func main() {
 	// metricsCertName/metricsCertKey, if not the defaults) at a directory holding one. Ichor ships no
 	// certificate-issuing dependency by default; how that directory gets populated is up to
 	// the deployment.
+	sigCtx := ctrl.SetupSignalHandler()
+
 	if len(metricsCertPath) > 0 {
 		setupLog.Info("Initializing metrics certificate watcher using provided certificates",
 			"metrics-cert-path", metricsCertPath, "metrics-cert-name", metricsCertName, "metrics-cert-key", metricsCertKey)
 
 		// Not CertDir/CertName/KeyName: the metrics server would then read the files when it
 		// starts and exit if the rotator has not written them yet (cold start). A
-		// GetCertificate that reads them per handshake lets it start first and follow rotations.
+		// certwatcher-backed GetCertificate lets it start first and follow rotations, keeping
+		// the last good certificate if a new pair fails to load.
 		metricsServerOptions.TLSOpts = append(slices.Clone(tlsOpts), func(c *tls.Config) {
-			c.GetCertificate = lazyKeyPair(metricsCertPath, metricsCertName, metricsCertKey)
+			c.GetCertificate = certreload.GetCertificate(sigCtx, filepath.Join(metricsCertPath, metricsCertName), filepath.Join(metricsCertPath, metricsCertKey), certreload.Interval)
 		})
 	}
 
-	sigCtx := ctrl.SetupSignalHandler()
 	restConfig, err := waitForAPIServerDefault(logr.NewContext(sigCtx, setupLog), probeAddr)
 	if err != nil {
 		setupLog.Error(err, "API server unavailable")

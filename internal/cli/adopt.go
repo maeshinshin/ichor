@@ -23,6 +23,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"k8s.io/client-go/kubernetes"
 
 	"github.com/maeshinshin/ichor/internal/controller"
 	"github.com/maeshinshin/ichor/internal/installmanifest"
@@ -39,6 +40,8 @@ var (
 	adoptPlanOnly      bool
 	adoptSeed          string
 	adoptContract      string
+	adoptAcceptChanges bool
+	adoptAcceptDiff    bool
 )
 
 // adoptCmd implements `ichor adopt` (docs/design/architecture.md,
@@ -92,6 +95,16 @@ only ever writes TalosConfigPatch objects to the Kubernetes API.`,
 			return err
 		}
 
+		restCfg, err := loadKubeconfig(kubeconfigPath)
+		if err != nil {
+			return err
+		}
+
+		kube, err := kubernetes.NewForConfig(restCfg)
+		if err != nil {
+			return fmt.Errorf("adopt: building a Kubernetes client: %w", err)
+		}
+
 		deps := adoptDeps{
 			K8s:       k8sClient,
 			Bundle:    bundle,
@@ -104,6 +117,10 @@ only ever writes TalosConfigPatch objects to the Kubernetes API.`,
 
 			Target:       k8sClient,
 			CNIUnmanaged: adoptCNIUnmanaged,
+
+			Preflight:           newCiliumPreflight(kube, k8sClient),
+			AcceptCiliumChanges: adoptAcceptChanges,
+			AcceptCiliumDiff:    adoptAcceptDiff,
 
 			PlanOnly:         adoptPlanOnly,
 			Seed:             cmp.Or(adoptSeed, adoptRecoverFrom),
@@ -151,6 +168,11 @@ func init() {
 		"address of one control plane; adopt discovers the cluster's machines from its membership when the TalosCluster does not exist yet")
 	adoptCmd.Flags().StringVar(&adoptContract, "version-contract", "",
 		"use this Talos version contract (v1.12 to the running minor) instead of the probed one")
+
+	adoptCmd.Flags().BoolVar(&adoptAcceptChanges, "accept-cilium-changes", false,
+		"accept the Ichor-owned Cilium settings the takeover will change on the running data plane (never IPAM or the tunnel protocol)")
+	adoptCmd.Flags().BoolVar(&adoptAcceptDiff, "accept-cilium-diff", false,
+		"accept the differences between the live Cilium objects and the pinned chart")
 
 	_ = adoptCmd.MarkFlagRequired(flagCluster)
 	adoptCmd.MarkFlagsMutuallyExclusive("secrets-bundle", "recover-secrets")

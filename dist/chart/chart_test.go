@@ -408,8 +408,6 @@ func checkWebhookInvariants(t *testing.T, release string, docs []map[string]any)
 				// delete of a tracked cluster.
 				"vauthentication-v1alpha1.kb.io": {opCreate, opUpdate},
 				"vsecretrefs-v1alpha1.kb.io":     {opCreate, opUpdate},
-				// A non-semver spec.version is refused on create and change.
-				"vichorinstallation-v1alpha1.kb.io": {opCreate, opUpdate},
 			}[name]
 			if !reflect.DeepEqual(ops, want) {
 				t.Errorf("webhook %q: expected operations %v; got %v",

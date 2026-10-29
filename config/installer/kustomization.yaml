@@ -30,3 +30,10 @@ patches:
 - target: {group: rbac.authorization.k8s.io, version: v1, kind: ClusterRoleBinding, name: ichor-cni-rolebinding}
   patch: |-
     - {op: replace, path: /subjects/0/namespace, value: kube-system}
+- target: {group: rbac.authorization.k8s.io, version: v1, kind: Role, name: ichor-cni-records-role}
+  patch: |-
+    - {op: replace, path: /metadata/namespace, value: kube-system}
+- target: {group: rbac.authorization.k8s.io, version: v1, kind: RoleBinding, name: ichor-cni-records-rolebinding}
+  patch: |-
+    - {op: replace, path: /metadata/namespace, value: kube-system}
+    - {op: replace, path: /subjects/0/namespace, value: kube-system}

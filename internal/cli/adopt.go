@@ -27,6 +27,8 @@ var (
 	adoptCluster       string
 	adoptNamespace     string
 	adoptSecretsBundle string
+	adoptRecover       bool
+	adoptRecoverFrom   string
 )
 
 // adoptCmd implements `ichor adopt` (docs/design/architecture.md,
@@ -62,22 +64,28 @@ only ever writes TalosConfigPatch objects to the Kubernetes API.`,
 			return err
 		}
 
-		bundle, err := loadBundleFile(adoptSecretsBundle)
-		if err != nil {
-			return err
-		}
-
 		k8sClient, err := newKubeClient(kubeconfigPath)
 		if err != nil {
 			return fmt.Errorf("adopt: building the Kubernetes client: %w", err)
 		}
 
+		dial := func(ctx context.Context, endpoint string) (talosConfigReader, error) {
+			return dialTalos(ctx, talosconfigPath, endpoint)
+		}
+
+		bundle, _, err := resolveAdoptBundle(cmd.Context(), adoptSecretsOptions{
+			File: adoptSecretsBundle, Recover: adoptRecover, RecoverFrom: adoptRecoverFrom,
+			Cluster:  adoptCluster,
+			Contract: clusterVersionContract(cmd.Context(), k8sClient, adoptNamespace, adoptCluster),
+		}, dial, cmd.ErrOrStderr())
+		if err != nil {
+			return err
+		}
+
 		deps := adoptDeps{
-			K8s:    k8sClient,
-			Bundle: bundle,
-			DialTalos: func(ctx context.Context, endpoint string) (talosConfigReader, error) {
-				return dialTalos(ctx, talosconfigPath, endpoint)
-			},
+			K8s:       k8sClient,
+			Bundle:    bundle,
+			DialTalos: dial,
 			Stdout:    cmd.OutOrStdout(),
 			Stderr:    cmd.ErrOrStderr(),
 			Stdin:     cmd.InOrStdin(),
@@ -95,8 +103,13 @@ func init() {
 	adoptCmd.Flags().StringVar(&adoptCluster, flagCluster, "", "name of the TalosCluster to adopt (required)")
 	adoptCmd.Flags().StringVarP(&adoptNamespace, "namespace", "n", "default", "namespace the TalosCluster and its TalosMachines live in")
 	adoptCmd.Flags().StringVar(&adoptSecretsBundle, "secrets-bundle", "",
-		"path to the cluster's existing secrets bundle (the file produced by 'talosctl gen secrets'; required)")
+		"path to the cluster's existing secrets bundle (the file produced by 'talosctl gen secrets'); give this or --recover-secrets")
+	adoptCmd.Flags().BoolVar(&adoptRecover, "recover-secrets", false,
+		"rebuild the secrets bundle from a control plane's machine config (read-only) and store it under ~/.ichor/clusters/<cluster>/ with mode 0600")
+	adoptCmd.Flags().StringVar(&adoptRecoverFrom, "recover-from", "",
+		"address of the control plane --recover-secrets reads the machine config from")
 
 	_ = adoptCmd.MarkFlagRequired(flagCluster)
-	_ = adoptCmd.MarkFlagRequired("secrets-bundle")
+	adoptCmd.MarkFlagsMutuallyExclusive("secrets-bundle", "recover-secrets")
+	adoptCmd.MarkFlagsOneRequired("secrets-bundle", "recover-secrets")
 }

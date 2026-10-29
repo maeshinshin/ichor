@@ -26,6 +26,8 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/client"
 	clusterres "github.com/siderolabs/talos/pkg/machinery/resources/cluster"
 	configres "github.com/siderolabs/talos/pkg/machinery/resources/config"
+
+	"github.com/maeshinshin/ichor/internal/controller"
 )
 
 // talosConfigReader is the one Talos API call adopt needs: a node's current
@@ -66,6 +68,11 @@ type talosClient struct {
 // Close releases the gRPC connection.
 func (t *talosClient) Close() error {
 	return t.c.Close()
+}
+
+// Identity reads the node's hardware identity over the authenticated connection.
+func (t *talosClient) Identity(ctx context.Context) (controller.HardwareIdentity, error) {
+	return controller.ReadHardwareIdentity(ctx, t.c.COSI)
 }
 
 // CurrentConfig reads the MachineConfig COSI resource's active ID, the same

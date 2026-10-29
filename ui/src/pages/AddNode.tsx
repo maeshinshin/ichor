@@ -41,7 +41,6 @@ export function AddNode() {
   const namespace = current?.ref?.namespace
   const name = current?.ref?.name
   const [machines, setMachines] = useState<Machine[]>([])
-  const [error, setError] = useState<ErrorShape | null>(null)
   // Addresses discovery reached that already run a Talos configuration (ADR 0103).
   const [configured, setConfigured] = useState<string[]>([])
 
@@ -56,20 +55,14 @@ export function AddNode() {
     }
   }
 
-  function reloadCluster() {
-    reloadCurrent()
-  }
-
   useEffect(() => {
     setCluster(current)
-    setError(null)
     reloadMachines()
     const id = setInterval(reloadMachines, POLL_MS)
     return () => clearInterval(id)
   }, [current])
 
   if (clusterError) return <ErrorAlert {...clusterError} />
-  if (error) return <ErrorAlert {...error} />
   if (!cluster) return <PageSkeleton label={t('cluster.loading')} />
 
   const pending = machines.filter(
@@ -113,8 +106,7 @@ export function AddNode() {
           <Discovery
             cluster={cluster}
             configured={configured}
-            onAdded={(c) => (c ? setCluster(c) : reloadCluster())}
-
+            onAdded={(c) => (c ? setCluster(c) : reloadCurrent())}
           />
         </SectionCard>
 

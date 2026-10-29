@@ -135,9 +135,7 @@ export const en = {
 
   'machines.loading': 'Loading nodes…',
   'machines.pending': 'Pending approval ({n})',
-  'machines.pendingEmpty': 'Nothing is waiting on a decision.',
   'machines.rejected': 'Rejected ({n})',
-  'machines.rejectedEmpty': 'Nothing has been turned away.',
   'machines.approved': 'Approved ({n})',
   'machines.approvedEmpty': 'No approved nodes yet.',
   'machines.colReason': 'Reason',

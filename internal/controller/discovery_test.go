@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -498,5 +499,62 @@ var _ = Describe("DiscoveryReconciler.DiscoverAll", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(results).To(HaveLen(1))
 		Expect(results[0].Name).To(Equal(uuidMixed))
+	})
+})
+
+var _ = Describe("DiscoveryReconciler.DiscoverAll known addresses", func() {
+	It("skips the addresses of the cluster's machines and Nodes, and still reports an unknown configured node", func() {
+		cluster := &ichorv1alpha1.TalosCluster{Namespace: tmNamespace, Name: "skip-known", Spec: ichorv1alpha1.TalosClusterSpec{
+			Discovery: &ichorv1alpha1.TalosClusterDiscovery{
+				Addresses: []string{"198.51.100.10", "198.51.100.11", "198.51.100.12", "198.51.100.13"},
+			},
+		}}
+
+		// .10 is a machine's spec.endpoint, .11 only its status.observedEndpoint.
+		m := &ichorv1alpha1.TalosMachine{
+			Name: "skip-known-machine", Namespace: tmNamespace,
+			Spec: ichorv1alpha1.TalosMachineSpec{
+				ClusterRef: corev1.LocalObjectReference{Name: cluster.Name},
+				Identity:   ichorv1alpha1.TalosMachineIdentity{UUID: "skip-known-machine", Serial: "S1", MACAddresses: []string{testMAC}},
+				Endpoint:   "198.51.100.10:50000",
+			},
+		}
+		Expect(k8sClient.Create(ctx, m)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, m) })
+
+		m.Status.ObservedEndpoint = "198.51.100.11:50000"
+		m.Status.ObservedEndpointFor = m.Spec.Endpoint
+		Expect(k8sClient.Status().Update(ctx, m)).To(Succeed())
+
+		// .12 matches only a Node's InternalIP.
+		node := &corev1.Node{}
+		node.Name = "skip-known-node"
+		Expect(k8sClient.Create(ctx, node)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, node) })
+
+		node.Status.Addresses = []corev1.NodeAddress{{Type: corev1.NodeInternalIP, Address: "198.51.100.12"}}
+		Expect(k8sClient.Status().Update(ctx, node)).To(Succeed())
+
+		var (
+			mu     sync.Mutex
+			probed []string
+		)
+
+		factory := func(_ context.Context, endpoint string) (MaintenanceClient, error) {
+			mu.Lock()
+			probed = append(probed, endpoint)
+			mu.Unlock()
+
+			return &fakeMaintenanceClient{err: fmt.Errorf("%w: rejected", ErrAlreadyConfigured)}, nil
+		}
+
+		recorder := record.NewFakeRecorder(10)
+		r := &DiscoveryReconciler{Client: k8sClient, Recorder: recorder, MaintenanceClient: factory}
+
+		_, err := r.DiscoverAll(ctx, cluster)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(probed).To(ConsistOf("198.51.100.13:50000"))
+		Expect(recorder.Events).To(Receive(ContainSubstring("198.51.100.13:50000")))
+		Consistently(recorder.Events).ShouldNot(Receive())
 	})
 })

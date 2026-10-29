@@ -45,8 +45,8 @@ var countplanesScanDirs = []string{".", "../webhook/v1alpha1"}
 // countplanesAllowedFuncs names every function, in either scanned
 // directory, allowed to declare a TalosMachineList. Selecting the machines
 // of a cluster that count (approved, by role, not being deleted) is
-// deleteguard.ApprovedMachines's job and nothing else lists for it. The one
-// entry left does not select by that rule at all.
+// deleteguard.ApprovedMachines's job and nothing else lists for it. The
+// entries left do not select by that rule at all.
 // Adding a name here must come with the same kind of justification, in that
 // function's own doc comment, not just to silence this test.
 var countplanesAllowedFuncs = map[string]bool{
@@ -55,6 +55,9 @@ var countplanesAllowedFuncs = map[string]bool{
 	// deleting ones included, since both still need their reconcile (the removal finalizer runs
 	// on a deleting one). Counting nothing and gating nothing, it cannot use the approved filter.
 	"machinesOfCluster": true,
+	// knownHosts (discovery.go) collects the addresses of every machine of the cluster so
+	// discovery does not probe them. It counts nothing and gates nothing.
+	"knownHosts": true,
 }
 
 // TestTalosMachineListCountingStaysCentralized parses every non-test

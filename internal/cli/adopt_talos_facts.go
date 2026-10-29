@@ -105,6 +105,15 @@ type TalosFacts struct {
 	// ExternalManifestURLs are cluster.extraManifests and KubeExternalManifestConfig URLs.
 	ExternalManifestURLs []string
 	Install              InstallFacts
+
+	// What a TalosCluster needs when adopt has to create one (ADR 0103, 1.8 phase 2).
+	PodSubnets, ServiceSubnets []string
+	// EndpointHost is the host of cluster.controlPlane.endpoint.
+	EndpointHost string
+	// KubernetesVersion is the kubelet image's tag ("" if unreadable).
+	KubernetesVersion string
+	// ScheduleOnControlPlanes is cluster.allowSchedulingOnControlPlanes; nil when the form does not say.
+	ScheduleOnControlPlanes *bool
 }
 
 // ReadTalosFacts decodes a node's machine configuration (the bytes talosConfigReader.CurrentConfig
@@ -145,6 +154,28 @@ func ReadTalosFacts(cfgBytes []byte) (*TalosFacts, error) {
 
 	for _, em := range provider.K8sExternalManifestConfigs() {
 		f.ExternalManifestURLs = append(f.ExternalManifestURLs, em.URL())
+	}
+
+	if n := provider.K8sNetworkConfig(); n != nil {
+		for _, p := range n.PodCIDRs() {
+			f.PodSubnets = append(f.PodSubnets, p.String())
+		}
+
+		for _, p := range n.ServiceCIDRs() {
+			f.ServiceSubnets = append(f.ServiceSubnets, p.String())
+		}
+	}
+
+	if c := provider.K8sClusterConfig(); c != nil && c.ClusterEndpoint() != nil {
+		f.EndpointHost = c.ClusterEndpoint().Hostname()
+	}
+
+	if k := provider.K8sKubeletConfig(); k != nil {
+		f.KubernetesVersion = imageTag(k.Image())
+	}
+
+	if raw := provider.RawV1Alpha1(); raw != nil && raw.ClusterConfig != nil { //nolint:staticcheck // the legacy block is where a pre-1.14 configuration states it
+		f.ScheduleOnControlPlanes = raw.ClusterConfig.AllowSchedulingOnControlPlanes //nolint:staticcheck // as above
 	}
 
 	f.CNI = cniFacts(provider.K8sFlannelCNIConfig() != nil, provider)

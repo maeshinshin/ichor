@@ -875,6 +875,11 @@ func (in *TalosClusterSpec) DeepCopyInto(out *TalosClusterSpec) {
 		*out = new(TalosClusterControlPlaneMetrics)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.CertSANs != nil {
+		in, out := &in.CertSANs, &out.CertSANs
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	if in.Registries != nil {
 		in, out := &in.Registries, &out.Registries
 		*out = make([]TalosClusterRegistry, len(*in))

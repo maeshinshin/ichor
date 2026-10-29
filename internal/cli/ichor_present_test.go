@@ -171,6 +171,19 @@ func TestWriteAdopt_HelmInstalledIchorSkipsInstallAndAdvisesPolicies(t *testing.
 	}
 }
 
+// A skipped install still says why the network policies are not applied.
+func TestWriteAdopt_HelmInstalledIchorOnFlannelPrintsThePolicyNotice(t *testing.T) {
+	stderr, _, err := helmInstallWrite(t, true, string(detectedFlannel), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := `not applying Ichor's network policies: the detected CNI is "flannel", not cilium`
+	if !strings.Contains(stderr.String(), want) {
+		t.Fatalf("no policy notice, want %q:\n%s", want, stderr)
+	}
+}
+
 // chartEnabledKey is the key of networkPolicy.cilium.enabled.
 const chartEnabledKey = "enabled"
 

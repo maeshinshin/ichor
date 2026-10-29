@@ -1,13 +1,31 @@
 import type { ComponentChildren } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { ChevronsUpDownIcon, CircleXIcon, EllipsisIcon, PlusIcon, TriangleAlertIcon } from 'lucide-preact'
+import {
+  ActivityIcon,
+  ArrowRightIcon,
+  BoxesIcon,
+  ChevronsUpDownIcon,
+  CircleAlertIcon,
+  CircleCheckIcon,
+  CircleXIcon,
+  DatabaseBackupIcon,
+  EllipsisIcon,
+  InboxIcon,
+  LoaderCircleIcon,
+  NetworkIcon,
+  PlusIcon,
+  ServerIcon,
+  TagIcon,
+  TriangleAlertIcon,
+  type LucideIcon,
+} from 'lucide-preact'
 import { Alert } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemSeparator, ItemTitle } from '@/components/ui/item'
+import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemSeparator, ItemTitle } from '@/components/ui/item'
 import { Progress } from '@/components/ui/progress'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -56,7 +74,7 @@ export function Overview() {
   const { cluster, operations, opsError, loading, error, reload } = useCluster()
   if (error) return <ErrorAlert {...error} />
   if (loading) return <PageSkeleton label={t('cluster.loading')} />
-  if (!cluster?.ref) return <EmptyNote>{t('home.noCluster')}</EmptyNote>
+  if (!cluster?.ref) return <EmptyNote icon={InboxIcon}>{t('home.noCluster')}</EmptyNote>
   return <Home cluster={cluster} operations={operations} opsError={opsError} reloadCluster={reload} />
 }
 
@@ -149,7 +167,7 @@ function Home({
         <div class="flex flex-wrap items-center gap-2">
           <Button asChild size="sm">
             <Link to="/nodes/add">
-              <PlusIcon />
+              <PlusIcon data-icon="inline-start" aria-hidden="true" />
               {t('cluster.addNode')}
             </Link>
           </Button>
@@ -242,6 +260,7 @@ function Home({
         <div class="grid auto-rows-fr grid-cols-2 gap-3 lg:grid-cols-4">
           <Tile
             label={t('overview.tile.nodes')}
+            icon={ServerIcon}
             target={targets.nodes}
             badge={machines !== null && counts.ready !== approved.length ? t('overview.nodeNotReady') : undefined}
             value={machines ? nodesValue(counts.ready, approved.length) : '-'}
@@ -249,14 +268,16 @@ function Home({
           />
           <Tile
             label={t('overview.tile.operation')}
+            icon={ActivityIcon}
             target={targets.operation}
             badge={current && opStateTone(currentState!) === 'bad' ? t(`ops.state.${currentState!}`) : undefined}
             value={current ? enumLabel(OperationKind, current.op.kind) : t('overview.idle')}
             sub={current ? <ActiveProgress row={current} total={approved.length} /> : undefined}
           />
-          <Tile label={t('overview.tile.backups')} target={targets.backups} value={backupsValue(backups, Date.now())} />
+          <Tile label={t('overview.tile.backups')} icon={DatabaseBackupIcon} target={targets.backups} value={backupsValue(backups, Date.now())} />
           <Tile
             label={t('overview.tile.versions')}
+            icon={TagIcon}
             target={targets.versions}
             value={versionsValue(cluster.talosVersion, cluster.kubernetesVersion)}
           />
@@ -268,13 +289,15 @@ function Home({
               <CardTitle>{t('home.recent')}</CardTitle>
               <CardAction>
                 <Button asChild variant="link" size="sm">
-                  <Link to="/operations">{t('overview.viewAll')}</Link>
+                  <Link to="/operations">{t('overview.viewAll')}
+                  <ArrowRightIcon data-icon="inline-end" aria-hidden="true" />
+                </Link>
                 </Button>
               </CardAction>
             </CardHeader>
             <CardContent>
               {recent.length === 0 ? (
-                <EmptyNote>{t('ops.recentNone')}</EmptyNote>
+                <EmptyNote icon={ActivityIcon}>{t('ops.recentNone')}</EmptyNote>
               ) : (
                 <Table>
                   <TableHeader>
@@ -299,7 +322,10 @@ function Home({
                             )}
                           </TableCell>
                           <TableCell>
-                            <Badge variant={toneVariant[opStateTone(state)]}>{t(`ops.state.${state}`)}</Badge>
+                            <Badge variant={toneVariant[opStateTone(state)]}>
+                              <ToneIcon tone={opStateTone(state)} />
+                              {t(`ops.state.${state}`)}
+                            </Badge>
                           </TableCell>
                           <TableCell>{formatTimestamp(op.createdAt)}</TableCell>
                         </TableRow>
@@ -318,7 +344,9 @@ function Home({
                 {approved.length > 5 && (
                   <CardAction>
                     <Button asChild variant="link" size="sm">
-                      <Link to="/nodes">{t('overview.viewAllNodes', { n: approved.length })}</Link>
+                      <Link to="/nodes">{t('overview.viewAllNodes', { n: approved.length })}
+                      <ArrowRightIcon data-icon="inline-end" aria-hidden="true" />
+                    </Link>
                     </Button>
                   </CardAction>
                 )}
@@ -327,7 +355,7 @@ function Home({
                 {machines === null ? (
                   <p>-</p>
                 ) : approved.length === 0 ? (
-                  <EmptyNote>{t('overview.nodesNone')}</EmptyNote>
+                  <EmptyNote icon={ServerIcon}>{t('overview.nodesNone')}</EmptyNote>
                 ) : (
                   <ItemGroup>
                     {approved.slice(0, 5).map((m, i) => (
@@ -344,19 +372,19 @@ function Home({
               </CardHeader>
               <CardContent>
                 <ItemGroup>
-                    <VersionRow name={t('ops.row.talos')} installed={cluster.talosVersion}>
+                    <VersionRow name={t('ops.row.talos')} icon={ServerIcon} installed={cluster.talosVersion}>
                       <StartOperationDialog kind="talos" cluster={ref} current={cluster.talosVersion} label={t('ops.action.upgrade')} disabled={!!busy} />
                     </VersionRow>
                     <ItemSeparator />
-                    <VersionRow name={t('ops.row.kubernetes')} installed={cluster.kubernetesVersion}>
+                    <VersionRow name={t('ops.row.kubernetes')} icon={BoxesIcon} installed={cluster.kubernetesVersion}>
                       <StartOperationDialog kind="kubernetes" cluster={ref} current={cluster.kubernetesVersion} label={t('ops.action.upgrade')} disabled={!!busy} />
                     </VersionRow>
                     <ItemSeparator />
-                    <VersionRow name={t('ops.row.ichor')} installed={ichorVersion ?? t('ops.installedUnknown')}>
+                    <VersionRow name={t('ops.row.ichor')} icon={TagIcon} installed={ichorVersion ?? t('ops.installedUnknown')}>
                       <StartOperationDialog kind="ichor" cluster={ref} current={ichorVersion ?? ''} label={t('ops.action.upgrade')} disabled={!!busy} />
                     </VersionRow>
                     <ItemSeparator />
-                    <VersionRow name={t('ops.row.cni')} installed={t(kubeProxy === 'replaced' ? 'ops.modeReplaced' : 'ops.modeEnabled')}>
+                    <VersionRow name={t('ops.row.cni')} icon={NetworkIcon} installed={t(kubeProxy === 'replaced' ? 'ops.modeReplaced' : 'ops.modeEnabled')}>
                       <StartOperationDialog kind="cni" cluster={ref} current={kubeProxy} label={t('ops.action.switch')} disabled={!!busy} />
                     </VersionRow>
                 </ItemGroup>
@@ -406,13 +434,13 @@ function Home({
                   <Field label={t('cluster.rolloutPhase')} value={cluster.rollout.currentPhase} />
                 </Fields>
               ) : (
-                <EmptyNote>{t('cluster.noRollout')}</EmptyNote>
+                <EmptyNote icon={InboxIcon}>{t('cluster.noRollout')}</EmptyNote>
               )}
             </CardContent></Card>
             <Card size="sm">
 <CardHeader><CardTitle>{t('cluster.handover')}</CardTitle></CardHeader><CardContent>
               {cluster.handovers.length === 0 ? (
-                <EmptyNote>{t('cluster.noHandover')}</EmptyNote>
+                <EmptyNote icon={InboxIcon}>{t('cluster.noHandover')}</EmptyNote>
               ) : (
                 <Table>
                   <TableHeader>
@@ -442,17 +470,22 @@ function Home({
 
 // Tile is one summary number as a stock Card: label (CardDescription), value (CardTitle), and a Badge when something needs attention.
 // The whole tile leads somewhere: a page, or the versions card further down.
-function Tile({ label, value, sub, badge, target }: { label: string; value: string; sub?: ComponentChildren; badge?: string; target: TileTarget }) {
+function Tile({ label, icon: Icon, value, sub, badge, target }: { label: string; icon: LucideIcon; value: string; sub?: ComponentChildren; badge?: string; target: TileTarget }) {
   const body = (
     <Card size="sm" className="h-full">
       <CardHeader>
         <CardDescription>{label}</CardDescription>
         <CardTitle>{value}</CardTitle>
-        {badge && (
-          <CardAction>
-            <Badge variant="destructive">{badge}</Badge>
-          </CardAction>
-        )}
+        <CardAction>
+          {badge ? (
+            <Badge variant="destructive">
+              <CircleAlertIcon data-icon="inline-start" aria-hidden="true" />
+              {badge}
+            </Badge>
+          ) : (
+            <Icon aria-hidden="true" />
+          )}
+        </CardAction>
       </CardHeader>
       {sub && <CardContent>{sub}</CardContent>}
     </Card>
@@ -480,6 +513,14 @@ const toneVariant: Record<Tone, 'secondary' | 'destructive' | 'outline'> = {
   neutral: 'outline',
 }
 
+// ToneIcon is the leading icon of a state Badge; a neutral state has none.
+function ToneIcon({ tone }: { tone: Tone }) {
+  if (tone === 'good') return <CircleCheckIcon data-icon="inline-start" aria-hidden="true" />
+  if (tone === 'progress') return <LoaderCircleIcon data-icon="inline-start" aria-hidden="true" />
+  if (tone === 'bad' || tone === 'warn') return <CircleAlertIcon data-icon="inline-start" aria-hidden="true" />
+  return null
+}
+
 function NodeRow({ m, first }: { m: Machine; first: boolean }) {
   const t = useT()
   const ready = readyOf(m)
@@ -489,12 +530,18 @@ function NodeRow({ m, first }: { m: Machine; first: boolean }) {
   const name = machineDisplayName(m)
   const body = (
     <>
+      <ItemMedia variant="icon">
+        <ServerIcon aria-hidden="true" />
+      </ItemMedia>
       <ItemContent>
         <ItemTitle>{name}</ItemTitle>
         <ItemDescription>{enumLabel(MachineRole, m.role)}</ItemDescription>
       </ItemContent>
       <ItemActions>
-        <Badge variant={toneVariant[tone]}>{word}</Badge>
+        <Badge variant={toneVariant[tone]}>
+          <ToneIcon tone={tone} />
+          {word}
+        </Badge>
       </ItemActions>
     </>
   )
@@ -512,9 +559,12 @@ function NodeRow({ m, first }: { m: Machine; first: boolean }) {
   )
 }
 
-function VersionRow({ name, installed, children }: { name: string; installed: string; children: ComponentChildren }) {
+function VersionRow({ name, icon: Icon, installed, children }: { name: string; icon: LucideIcon; installed: string; children: ComponentChildren }) {
   return (
     <Item>
+      <ItemMedia variant="icon">
+        <Icon aria-hidden="true" />
+      </ItemMedia>
       <ItemContent>
         <ItemTitle>{name}</ItemTitle>
         <ItemDescription>{installed || '-'}</ItemDescription>

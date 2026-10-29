@@ -47,33 +47,8 @@ func VerifyObject(ctx context.Context, store Store, key, passphrase string) (int
 	return stream(ctx, store, key, passphrase)
 }
 
-// stream downloads and decrypts key, checks the checksum trailer, copies the plaintext to each of sinks
-// and returns its size.
-func stream(ctx context.Context, store Store, key, passphrase string, sinks ...io.Writer) (int64, error) {
-	rc, err := store.Get(ctx, key)
-	if err != nil {
-		return 0, fmt.Errorf("downloading: %w", err)
-	}
-
-	defer func() { _ = rc.Close() }()
-
-	plain, err := Decrypt(rc, passphrase)
-	if err != nil {
-		return 0, fmt.Errorf("decrypting (is this the cluster's own secrets bundle?): %w", err)
-	}
-
-	v := NewVerifier()
-
-	if _, err := io.Copy(io.MultiWriter(append([]io.Writer{v}, sinks...)...), plain); err != nil {
-		return 0, fmt.Errorf("decrypting: %w", err)
-	}
-
-	return v.Size(), v.Verify()
-}
-
-// Reader opens key as plaintext. It is not verified as it streams: call VerifyObject first. The caller
-// closes it.
-func Reader(ctx context.Context, store Store, key, passphrase string) (io.ReadCloser, error) {
+// open downloads key and decrypts it. The caller closes the result.
+func open(ctx context.Context, store Store, key, passphrase string) (io.ReadCloser, error) {
 	rc, err := store.Get(ctx, key)
 	if err != nil {
 		return nil, fmt.Errorf("downloading: %w", err)
@@ -90,6 +65,31 @@ func Reader(ctx context.Context, store Store, key, passphrase string) (io.ReadCl
 		io.Reader
 		io.Closer
 	}{plain, rc}, nil
+}
+
+// stream downloads and decrypts key, checks the checksum trailer, copies the plaintext to each of sinks
+// and returns its size.
+func stream(ctx context.Context, store Store, key, passphrase string, sinks ...io.Writer) (int64, error) {
+	rc, err := open(ctx, store, key, passphrase)
+	if err != nil {
+		return 0, err
+	}
+
+	defer func() { _ = rc.Close() }()
+
+	v := NewVerifier()
+
+	if _, err := io.Copy(io.MultiWriter(append([]io.Writer{v}, sinks...)...), rc); err != nil {
+		return 0, fmt.Errorf("decrypting: %w", err)
+	}
+
+	return v.Size(), v.Verify()
+}
+
+// Reader opens key as plaintext. It is not verified as it streams: call VerifyObject first. The caller
+// closes it.
+func Reader(ctx context.Context, store Store, key, passphrase string) (io.ReadCloser, error) {
+	return open(ctx, store, key, passphrase)
 }
 
 // Names of the two objects an etcd restore keeps next to the snapshots, under the same prefix. List
@@ -152,10 +152,7 @@ type RestoreMarker struct {
 	StartedAt    time.Time `json:"startedAt"`
 }
 
-// MarkerKey and PinnedKey are the object keys under a backup's prefix.
-func MarkerKey(prefix string) string { return prefix + "/" + MarkerName }
-
-// PinnedKey: see PinnedName.
+// PinnedKey is the object key of the pinned snapshot under a backup's prefix.
 func PinnedKey(prefix string) string { return prefix + "/" + PinnedName }
 
 // PutMarker writes m.
@@ -165,12 +162,12 @@ func PutMarker(ctx context.Context, store Store, prefix string, m *RestoreMarker
 		return err
 	}
 
-	return store.Put(ctx, MarkerKey(prefix), bytes.NewReader(b), int64(len(b)))
+	return store.Put(ctx, prefix+"/"+MarkerName, bytes.NewReader(b), int64(len(b)))
 }
 
 // GetMarker reads the marker; it returns (nil, nil) when there is none.
 func GetMarker(ctx context.Context, store Store, prefix string) (*RestoreMarker, error) {
-	rc, err := store.Get(ctx, MarkerKey(prefix))
+	rc, err := store.Get(ctx, prefix+"/"+MarkerName)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			return nil, nil //nolint:nilnil // "no marker" is a normal answer
@@ -191,7 +188,7 @@ func GetMarker(ctx context.Context, store Store, prefix string) (*RestoreMarker,
 
 // DeleteMarker removes the marker.
 func DeleteMarker(ctx context.Context, store Store, prefix string) error {
-	return store.Delete(ctx, MarkerKey(prefix))
+	return store.Delete(ctx, prefix+"/"+MarkerName)
 }
 
 // Pin copies the ciphertext at key to the pinned object under prefix, size bytes long.

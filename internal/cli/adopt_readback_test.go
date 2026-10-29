@@ -21,6 +21,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 
 	"helm.sh/helm/v3/pkg/release"
@@ -104,6 +105,50 @@ func TestLiveTunnel(t *testing.T) {
 	vals, err := cilium.EffectiveValues(nil, cni.KubeProxyEnabled, liveTunnel(map[string]string{ciliumTunnelKey: tunnelGeneve}))
 	if err != nil || vals["tunnelProtocol"] != tunnelGeneve {
 		t.Fatalf("effective tunnelProtocol = %v, %v; want geneve", vals["tunnelProtocol"], err)
+	}
+}
+
+// A rerun after an interrupted no-CNI adopt: Ichor's release exists, so --tunnel is accepted when it
+// equals the running tunnel and refused, with the running value named, when it does not.
+func TestReadBackIchorCilium_TunnelFlagOnARerun(t *testing.T) {
+	deployed, err := cilium.EffectiveValues(nil, cni.KubeProxyEnabled, tunnelGeneve)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	raw, err := json.Marshal(&release.Release{Name: string(detectedCilium), Version: 1, Config: deployed})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rec := helmRecord(ichorControllerNamespace)
+	rec.Data = map[string][]byte{"release": []byte(base64.StdEncoding.EncodeToString(raw))}
+
+	for name, tc := range map[string]struct {
+		tunnel  string
+		wantErr string
+	}{
+		"same":      {tunnelGeneve, ""},
+		"not given": {"", ""},
+		"different": {ciliumTunnelVxlan, `Ichor's running Cilium (tunnel "geneve")`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			st := &adoptState{fresh: true, rep: &cniReport{Kind: detectedCilium, Provenance: provenanceIchor}}
+			deps := adoptDeps{Tunnel: tc.tunnel, Target: fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(rec).Build()}
+
+			err := st.readBackIchorCilium(context.Background(), deps)
+
+			switch {
+			case tc.wantErr == "" && err != nil:
+				t.Fatalf("err = %v, want none", err)
+			case tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)):
+				t.Fatalf("err = %v, want %q", err, tc.wantErr)
+			}
+
+			if err := st.planInstallCilium(adoptDeps{Tunnel: tc.tunnel}); err != nil {
+				t.Fatalf("planInstallCilium refused --tunnel for an Ichor-owned Cilium: %v", err)
+			}
+		})
 	}
 }
 

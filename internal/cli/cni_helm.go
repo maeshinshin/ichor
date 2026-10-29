@@ -22,12 +22,15 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 	"helm.sh/helm/v3/pkg/action"
+	"helm.sh/helm/v3/pkg/release"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -47,6 +50,7 @@ var cniHelmApplyOpts struct {
 	Cluster          string
 	StorageNamespace string
 	KubeProxy        string
+	Takeover         bool
 	Timeout          time.Duration
 }
 
@@ -59,7 +63,12 @@ bootstrapped objects into revision 1 when no release exists, and otherwise upgra
 prunes, and rolls back on failure). It then waits for the workloads to roll out.
 
 The Job runs it with hostNetwork against KubePrism (localhost:7445), so it keeps API access
-while Cilium restarts.`,
+while Cilium restarts.
+
+With --takeover (an adopted cluster, ADR 0103) the Cilium it installs over was put there by
+someone else: once the release is deployed and the rollout is ready, the foreign Helm release
+record in kube-system is copied into the Secret ichor-cilium-prior-release in the storage
+namespace, read back, and only then deleted (the record Secrets only, never helm uninstall).`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		c, err := newKubeClient(kubeconfigPath)
@@ -72,9 +81,25 @@ while Cilium restarts.`,
 			return err
 		}
 
+		var tk *takeoverOptions
+
+		if cniHelmApplyOpts.Takeover {
+			restCfg, err := loadKubeconfig(kubeconfigPath)
+			if err != nil {
+				return err
+			}
+
+			kube, err := kubernetes.NewForConfig(restCfg)
+			if err != nil {
+				return fmt.Errorf("building a Kubernetes client: %w", err)
+			}
+
+			tk = &takeoverOptions{Kube: kube, IchorNamespace: cniHelmApplyOpts.StorageNamespace}
+		}
+
 		return runCNIHelmApply(cmd.Context(), c, cfg, types.NamespacedName{
 			Namespace: apiOpts.Namespace, Name: cniHelmApplyOpts.Cluster,
-		}, cniHelmApplyOpts.KubeProxy, cniHelmApplyOpts.Timeout, cmd.OutOrStdout())
+		}, cniHelmApplyOpts.KubeProxy, cniHelmApplyOpts.Timeout, tk, cmd.OutOrStdout())
 	},
 }
 
@@ -107,11 +132,17 @@ func newHelmConfig(kubeconfig, storageNamespace string, log io.Writer) (*action.
 	return cfg, nil
 }
 
+// takeoverOptions switch on the foreign release record's retirement after the rollout (ADR 0103).
+type takeoverOptions struct {
+	Kube           kubernetes.Interface
+	IchorNamespace string
+}
+
 // runCNIHelmApply is the command's body, split out so a test can give it a fake client and a
-// Helm configuration over the memory driver.
+// Helm configuration over the memory driver. takeover is nil unless --takeover.
 func runCNIHelmApply(
 	ctx context.Context, c client.Client, cfg *action.Configuration, key types.NamespacedName,
-	kubeProxy string, timeout time.Duration, out io.Writer,
+	kubeProxy string, timeout time.Duration, takeover *takeoverOptions, out io.Writer,
 ) error {
 	var cluster ichorv1alpha1.TalosCluster
 	if err := c.Get(ctx, key, &cluster); err != nil {
@@ -139,9 +170,43 @@ func runCNIHelmApply(
 		verb = "adopted"
 	}
 
-	_, err = fmt.Fprintf(out, "Helm release %s/%s %s: revision %d, status %s, chart %s\n",
+	if _, err = fmt.Fprintf(out, "Helm release %s/%s %s: revision %d, status %s, chart %s\n",
 		res.Release.Namespace, res.Release.Name, verb, res.Release.Version, res.Release.Info.Status,
-		res.Release.Chart.Metadata.Version)
+		res.Release.Chart.Metadata.Version); err != nil {
+		return err
+	}
+
+	if takeover == nil {
+		return nil
+	}
+
+	return retireForeignRecord(ctx, res, takeover, out)
+}
+
+// retireForeignRecord backs up and deletes the foreign Helm record, only once Ichor's own is
+// deployed and Apply has waited for the rollout (ADR 0103, 1.2). It prints names, never record data.
+func retireForeignRecord(ctx context.Context, res cilium.ApplyResult, tk *takeoverOptions, out io.Writer) error {
+	if res.Release.Info == nil || res.Release.Info.Status != release.StatusDeployed {
+		return fmt.Errorf("not retiring the foreign Helm release record: Ichor's release %s is not deployed", cilium.ReleaseName)
+	}
+
+	rr, err := cilium.RetireForeignRecord(ctx, tk.Kube, cilium.RetireOptions{
+		IchorNamespace:             tk.IchorNamespace,
+		Namespaces:                 []string{cilium.ReleaseNamespace},
+		RemoveForeignReleaseRecord: true,
+	})
+	if err != nil {
+		return err
+	}
+
+	if rr.Kept {
+		_, err = fmt.Fprintln(out, "no foreign Helm release record to retire")
+
+		return err
+	}
+
+	_, err = fmt.Fprintf(out, "foreign Helm release records %s backed up in %s/%s and removed\n",
+		strings.Join(rr.Removed, ", "), tk.IchorNamespace, rr.Backup)
 
 	return err
 }
@@ -154,6 +219,7 @@ func init() {
 	f.StringVar(&cniHelmApplyOpts.Cluster, "cluster", "", "name of the TalosCluster whose Cilium values apply (in --namespace)")
 	f.StringVar(&cniHelmApplyOpts.StorageNamespace, "storage-namespace", ichorControllerNamespace, "namespace Helm keeps the release record (a Secret) in")
 	f.StringVar(&cniHelmApplyOpts.KubeProxy, "kube-proxy", "", "kube-proxy mode to apply (enabled or replaced); default the cluster's spec.cni.kubeProxy")
+	f.BoolVar(&cniHelmApplyOpts.Takeover, "takeover", false, "the Cilium being installed over was installed by someone else (an adopted cluster): retire its Helm release record after the rollout")
 	f.DurationVar(&cniHelmApplyOpts.Timeout, "timeout", cilium.DefaultApplyTimeout, "how long to wait for Cilium's workloads to roll out")
 	_ = cniHelmApplyCmd.MarkFlagRequired("cluster")
 }

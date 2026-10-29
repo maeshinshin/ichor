@@ -64,14 +64,11 @@ const (
 	argKubeAPIName     = "--kube-api-tls-server-name="
 	argRefreshLifetime = "--oidc-refresh-lifetime="
 	argAddr            = "--addr="
-	argHTTPAddr        = "--http-addr="
 	argUIExternalURL   = "--ui-external-url="
 
-	// UIDefaultAddr is the HTTPS address a fresh install serves; UIPlainPortName names
-	// the transitional plaintext port.
-	UIDefaultAddr   = ":8443"
-	UIPortName      = "https"
-	UIPlainPortName = "http"
+	// UIDefaultAddr is the HTTPS address a fresh install serves.
+	UIDefaultAddr = ":8443"
+	UIPortName    = "https"
 )
 
 // UISettings is everything init customizes. The zero value is a plain install (users off).
@@ -90,9 +87,9 @@ type UISettings struct {
 	// Empty keeps the manifest's default.
 	ListenAddr string
 
-	// HTTPAddr is the deprecated plaintext listener (--http-addr) of an install that served
-	// plaintext. Empty on a fresh install.
-	HTTPAddr string
+	// WasPlaintext is the address a plaintext install served (plain
+	// HTTP is gone). It only drives the upgrade notice; such an install moves to HTTPS on 8443.
+	WasPlaintext string
 
 	// RefreshLifetime is the controller's --oidc-refresh-lifetime; empty means the default.
 	RefreshLifetime string
@@ -137,11 +134,10 @@ func ReadUISettings(ui, controller *appsv1.Deployment) UISettings {
 			s.KubeAPITLSServerName = argValue(c.Args, argKubeAPIName)
 
 			// Migration table. An address other than the new default is an install that
-			// predates it: with the operator's pair it is pinned, without it the plaintext listener
-			// stays as a deprecated one. An --http-addr already set is kept.
+			// predates it: with the operator's pair it is pinned, without it the install served
+			// plaintext, which is gone (unit 10), so it moves to HTTPS on the default port.
 			addr := argValue(c.Args, argAddr)
 			old := addr != "" && addr != UIDefaultAddr
-			s.HTTPAddr = argValue(c.Args, argHTTPAddr)
 
 			for _, v := range ui.Spec.Template.Spec.Volumes {
 				if v.Name == UITLSVolume && v.Secret != nil {
@@ -151,13 +147,13 @@ func ReadUISettings(ui, controller *appsv1.Deployment) UISettings {
 
 			switch {
 			case s.TLSSecretName != "":
-				s.HTTPAddr = ""
-
 				if old {
 					s.ListenAddr = addr
 				}
-			case old && s.HTTPAddr == "":
-				s.HTTPAddr = addr
+			case old:
+				s.WasPlaintext = addr
+			case argValue(c.Args, "--http-addr=") != "":
+				s.WasPlaintext = argValue(c.Args, "--http-addr=")
 			}
 		}
 	}
@@ -183,7 +179,7 @@ func CustomizeUI(dep *appsv1.Deployment, s UISettings) error {
 	// Drop any earlier setting of the same flags so a re-run replaces them.
 	c.Args = slices.DeleteFunc(c.Args, func(a string) bool {
 		return a == "--users-enabled=true" || strings.HasPrefix(a, argExternalURL) || strings.HasPrefix(a, "--internal-jwks-uri=") ||
-			strings.HasPrefix(a, argKubeAPIURL) || strings.HasPrefix(a, argKubeAPIName) || strings.HasPrefix(a, argHTTPAddr) ||
+			strings.HasPrefix(a, argKubeAPIURL) || strings.HasPrefix(a, argKubeAPIName) || strings.HasPrefix(a, "--http-addr=") ||
 			(s.ListenAddr != "" && strings.HasPrefix(a, argAddr))
 	})
 
@@ -191,14 +187,6 @@ func CustomizeUI(dep *appsv1.Deployment, s UISettings) error {
 		c.Args = append(c.Args, argAddr+s.ListenAddr)
 
 		if err := setPort(c, UIPortName, s.ListenAddr); err != nil {
-			return fmt.Errorf("ichor-ui Deployment %s: %w", dep.Name, err)
-		}
-	}
-
-	if s.HTTPAddr != "" {
-		c.Args = append(c.Args, argHTTPAddr+s.HTTPAddr)
-
-		if err := setPort(c, UIPlainPortName, s.HTTPAddr); err != nil {
 			return fmt.Errorf("ichor-ui Deployment %s: %w", dep.Name, err)
 		}
 	}
@@ -365,15 +353,11 @@ func CustomizeService(svc *corev1.Service, s UISettings) {
 		svc.Spec.Ports = append(svc.Spec.Ports, corev1.ServicePort{Name: name, Port: port, TargetPort: intstr.FromInt32(port), Protocol: corev1.ProtocolTCP})
 	}
 
-	// Migration: the pinned port replaces the new default; the plaintext one is added.
+	// Migration: the pinned port replaces the new default.
 	if p, err := addrPort(s.ListenAddr); err == nil {
 		if i := has(UIPortName); i >= 0 {
 			svc.Spec.Ports[i].Port, svc.Spec.Ports[i].TargetPort = p, intstr.FromInt32(p)
 		}
-	}
-
-	if p, err := addrPort(s.HTTPAddr); err == nil && has(UIPlainPortName) < 0 {
-		add(UIPlainPortName, p)
 	}
 
 	if s.UsersOn() && has(UIInternalPortName) < 0 {
@@ -503,8 +487,8 @@ func customizeFromLive(ctx context.Context, c client.Client, objs []*unstructure
 	}
 
 	s := ReadUISettings(uiDep, ctrlDep)
-	if s.HTTPAddr != "" {
-		log.Printf("DEPRECATED: ichor-ui still serves plain HTTP on %s; move your edge to HTTPS on %s, the plaintext listener is removed in the next minor release", s.HTTPAddr, UIDefaultAddr)
+	if s.WasPlaintext != "" {
+		log.Printf("NOTICE: ichor-ui no longer serves plain HTTP (it did on %s); point your edge at https://<ichor-ui>:8443 (trust ichor-ui-ca)", s.WasPlaintext)
 	}
 
 	out, err := CustomizeObjects(objs, s)
@@ -520,16 +504,14 @@ func isUIPolicy(o *unstructured.Unstructured) bool {
 	return o.GetKind() == "CiliumNetworkPolicy" && v == "ui-backend"
 }
 
-// CustomizePolicies opens, in the ichor-ui CiliumNetworkPolicy, the ports a migrated install still
-// listens on: the deprecated plaintext one, or the pinned TLS one. The policies list
+// CustomizePolicies opens, in the ichor-ui CiliumNetworkPolicy, the pinned TLS port of a migrated
+// install. The policies list
 // 8443 only, which is all a fresh install needs.
 func CustomizePolicies(objs []*unstructured.Unstructured, s UISettings) {
 	var extra []any
 
-	for _, addr := range []string{s.HTTPAddr, s.ListenAddr} {
-		if p, err := addrPort(addr); err == nil && p != 8443 {
-			extra = append(extra, map[string]any{"port": strconv.Itoa(int(p)), "protocol": "TCP"})
-		}
+	if p, err := addrPort(s.ListenAddr); err == nil && p != 8443 {
+		extra = append(extra, map[string]any{"port": strconv.Itoa(int(p)), "protocol": "TCP"})
 	}
 
 	for _, o := range objs {

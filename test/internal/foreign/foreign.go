@@ -62,6 +62,7 @@ const (
 	CNINone         = "none"
 	CNICiliumInline = "cilium-inline"
 	CNICiliumHelm   = "cilium-helm"
+	CNICiliumCLI    = "cilium-cli" // `cilium install` (ADR 0103 A3): a Helm release written by the Cilium CLI
 	CNICalico       = "calico"
 
 	calicoManifest = "https://raw.githubusercontent.com/projectcalico/calico/v3.30.3/manifests/calico.yaml"
@@ -128,7 +129,7 @@ func (o *Options) defaults() error {
 		return errors.New("control planes must be 1..3 and workers 0..4")
 	}
 	switch o.CNI {
-	case CNIFlannel, CNINone, CNICiliumInline, CNICiliumHelm, CNICalico:
+	case CNIFlannel, CNINone, CNICiliumInline, CNICiliumHelm, CNICiliumCLI, CNICalico:
 	default:
 		return fmt.Errorf("unknown CNI variant %q", o.CNI)
 	}
@@ -655,6 +656,12 @@ func (c *Cluster) bringUp() error {
 		args := append([]string{"helm", "install", "cilium", o.CiliumChart, "--kubeconfig", c.LocalKube}, c.ciliumHelmArgs()...)
 		if out, err := runLocal(args...); err != nil {
 			return fmt.Errorf("helm install cilium: %w: %s", err, tail(out))
+		}
+	}
+	if o.CNI == CNICiliumCLI { // the chart version is pinned to the one the helm variant uses; the CLI downloads it and writes the Helm record
+		args := append([]string{"cilium", "install", "--version", "1.18.0", "--kubeconfig", c.LocalKube, "--wait=false"}, c.ciliumHelmArgs()...)
+		if out, err := runLocal(args...); err != nil {
+			return fmt.Errorf("cilium install: %w: %s", err, tail(out))
 		}
 	}
 	if o.CNI == CNINone {

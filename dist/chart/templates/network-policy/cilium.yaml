@@ -3,17 +3,51 @@ Ichor's CiliumNetworkPolicies, the chart's copy of config/cilium-network-policy.
 Cilium's CiliumNetworkPolicy CRD, so it is off by default: turn it on once Cilium runs. Every
 port below is the one the Deployments open, from the same values.
 */ -}}
+{{- define "ichor.cnp.meta" -}}
+labels:
+  app.kubernetes.io/managed-by: {{ .ctx.Release.Service }}
+  app.kubernetes.io/name: {{ include "ichor.name" .ctx }}
+name: {{ include "ichor.resourceName" (dict "suffix" .suffix "context" .ctx) }}
+namespace: {{ .ctx.Release.Namespace }}
+{{- end }}
+{{- define "ichor.cnp.apiserver" -}}
+- toEntities:
+  - kube-apiserver
+  toPorts:
+  - ports:
+    - port: "6443"
+      protocol: TCP
+{{- end }}
+{{- define "ichor.cnp.dns" -}}
+- toEndpoints:
+  - matchLabels:
+      k8s:io.kubernetes.pod.namespace: kube-system
+      k8s:k8s-app: kube-dns
+  toPorts:
+  - ports:
+    - port: "53"
+      protocol: UDP
+    - port: "53"
+      protocol: TCP
+{{- end }}
+{{- /* Egress to the outside world on the given TCP ports (the dot is the list). */}}
+{{- define "ichor.cnp.world" -}}
+- toEntities:
+  - world
+  toPorts:
+  - ports:
+    {{- range . }}
+    - port: {{ . | quote }}
+      protocol: TCP
+    {{- end }}
+{{- end }}
 {{- if .Values.networkPolicy.cilium.enabled }}
 {{- $name := include "ichor.name" . }}
 {{- $ports := .Values.networkPolicy.cilium.externalPorts }}
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
-  labels:
-    app.kubernetes.io/managed-by: {{ .Release.Service }}
-    app.kubernetes.io/name: {{ $name }}
-  name: {{ include "ichor.resourceName" (dict "suffix" "default-deny" "context" $) }}
-  namespace: {{ .Release.Namespace }}
+  {{- include "ichor.cnp.meta" (dict "suffix" "default-deny" "ctx" $) | nindent 2 }}
 spec:
   description: Everything in the namespace is denied unless a policy below allows it.
   endpointSelector: {}
@@ -26,11 +60,7 @@ spec:
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
-  labels:
-    app.kubernetes.io/managed-by: {{ .Release.Service }}
-    app.kubernetes.io/name: {{ $name }}
-  name: {{ include "ichor.resourceName" (dict "suffix" "controller-manager" "context" $) }}
-  namespace: {{ .Release.Namespace }}
+  {{- include "ichor.cnp.meta" (dict "suffix" "controller-manager" "ctx" $) | nindent 2 }}
 spec:
   description: The controller.
   endpointSelector:
@@ -67,12 +97,7 @@ spec:
         protocol: TCP
   {{- end }}
   egress:
-  - toEntities:
-    - kube-apiserver
-    toPorts:
-    - ports:
-      - port: "6443"
-        protocol: TCP
+  {{- include "ichor.cnp.apiserver" . | nindent 2 }}
   # Talos nodes: apid, and the API server's /readyz on a node's own address.
   - toEntities:
     - host
@@ -84,36 +109,16 @@ spec:
         protocol: TCP
       - port: "6443"
         protocol: TCP
-  - toEndpoints:
-    - matchLabels:
-        k8s:io.kubernetes.pod.namespace: kube-system
-        k8s:k8s-app: kube-dns
-    toPorts:
-    - ports:
-      - port: "53"
-        protocol: UDP
-      - port: "53"
-        protocol: TCP
+  {{- include "ichor.cnp.dns" . | nindent 2 }}
   # TalosEtcdBackup's S3 endpoint.
-  - toEntities:
-    - world
-    toPorts:
-    - ports:
-      {{- range $ports }}
-      - port: {{ . | quote }}
-        protocol: TCP
-      {{- end }}
+  {{- include "ichor.cnp.world" $ports | nindent 2 }}
 {{- end }}
 {{- if .Values.ichorUI.enabled }}
 ---
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
-  labels:
-    app.kubernetes.io/managed-by: {{ .Release.Service }}
-    app.kubernetes.io/name: {{ $name }}
-  name: {{ include "ichor.resourceName" (dict "suffix" "ui" "context" $) }}
-  namespace: {{ .Release.Namespace }}
+  {{- include "ichor.cnp.meta" (dict "suffix" "ui" "ctx" $) | nindent 2 }}
 spec:
   description: ichor-ui.
   endpointSelector:
@@ -146,12 +151,7 @@ spec:
         protocol: TCP
   {{- end }}
   egress:
-  - toEntities:
-    - kube-apiserver
-    toPorts:
-    - ports:
-      - port: "6443"
-        protocol: TCP
+  {{- include "ichor.cnp.apiserver" . | nindent 2 }}
   - toEntities:
     - host
     - remote-node
@@ -160,48 +160,23 @@ spec:
     - ports:
       - port: "50000"
         protocol: TCP
-  - toEndpoints:
-    - matchLabels:
-        k8s:io.kubernetes.pod.namespace: kube-system
-        k8s:k8s-app: kube-dns
-    toPorts:
-    - ports:
-      - port: "53"
-        protocol: UDP
-      - port: "53"
-        protocol: TCP
+  {{- include "ichor.cnp.dns" . | nindent 2 }}
   # The external OIDC issuer.
-  - toEntities:
-    - world
-    toPorts:
-    - ports:
-      {{- range $ports }}
-      - port: {{ . | quote }}
-        protocol: TCP
-      {{- end }}
+  {{- include "ichor.cnp.world" $ports | nindent 2 }}
 {{- end }}
 {{- if .Values.installer.enabled }}
 ---
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
-  labels:
-    app.kubernetes.io/managed-by: {{ .Release.Service }}
-    app.kubernetes.io/name: {{ $name }}
-  name: {{ include "ichor.resourceName" (dict "suffix" "installer" "context" $) }}
-  namespace: {{ .Release.Namespace }}
+  {{- include "ichor.cnp.meta" (dict "suffix" "installer" "ctx" $) | nindent 2 }}
 spec:
   description: The installer Job. It talks to the API server and nothing else.
   endpointSelector:
     matchLabels:
       app.kubernetes.io/name: ichor-installer
   egress:
-  - toEntities:
-    - kube-apiserver
-    toPorts:
-    - ports:
-      - port: "6443"
-        protocol: TCP
+  {{- include "ichor.cnp.apiserver" . | nindent 2 }}
 {{- end }}
 # No policy for the Cilium Helm Job: it runs on the host network in kube-system, which CiliumNetworkPolicy
 # does not govern.

@@ -99,6 +99,9 @@ type Cluster struct {
 	LocalKube    string   // server is the local relay tunnel (use from the workstation)
 }
 
+// Nodes returns every node's pod IP, control planes first.
+func (c *Cluster) Nodes() []string { return append(append([]string{}, c.CPs...), c.Workers...) }
+
 func (o *Options) defaults() error {
 	if !prefixRe.MatchString(o.Prefix) {
 		return fmt.Errorf("prefix %q must match %s", o.Prefix, prefixRe)
@@ -595,8 +598,7 @@ func (c *Cluster) bringUp() error {
 			return fmt.Errorf("apply-config %s: %w: %s", ip, err, tail(out))
 		}
 	}
-	all := append(append([]string{}, c.CPs...), c.Workers...)
-	for _, ip := range all {
+	for _, ip := range c.Nodes() {
 		if _, err := kube.Poll("waiting for "+ip+" authenticated API", 12*time.Minute, func() (string, bool) {
 			_, err := talosctl.GetAuthenticated(namespace, ip, "machinestatus", tcBytes)
 			return "", err == nil
@@ -628,7 +630,7 @@ func (c *Cluster) bringUp() error {
 	}
 	if _, err := kube.Poll("waiting for all nodes to register", 10*time.Minute, func() (string, bool) {
 		out, err := utils.Run(kube.InnerCommand(c.LocalKube, "get", "nodes", "--no-headers"))
-		return "", err == nil && len(strings.Split(strings.TrimSpace(out), "\n")) == len(all) && strings.TrimSpace(out) != ""
+		return "", err == nil && len(strings.Split(strings.TrimSpace(out), "\n")) == len(c.Nodes()) && strings.TrimSpace(out) != ""
 	}); err != nil {
 		return err
 	}
@@ -640,7 +642,7 @@ func (c *Cluster) bringUp() error {
 			return "", false
 		}
 		objs, err := talosctl.DecodeAll(out)
-		return "", err == nil && len(objs) == len(all)
+		return "", err == nil && len(objs) == len(c.Nodes())
 	}); err != nil {
 		return err
 	}
@@ -662,7 +664,7 @@ func (c *Cluster) bringUp() error {
 		out, err := utils.Run(kube.InnerCommand(c.LocalKube, "get", "nodes", "-o",
 			"jsonpath={.items[*].status.conditions[?(@.type==\"Ready\")].status}"))
 		f := strings.Fields(out)
-		if err != nil || len(f) != len(all) {
+		if err != nil || len(f) != len(c.Nodes()) {
 			return "", false
 		}
 		for _, s := range f {

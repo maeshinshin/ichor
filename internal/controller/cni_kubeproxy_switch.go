@@ -500,24 +500,15 @@ func (a *cniKubeProxyAdvancer) requireCilium(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, op *ichorv1alpha1.TalosOperation,
 	want cni.KubeProxyMode,
 ) (bool, error) {
-	var inst ichorv1alpha1.IchorInstallation
-	if err := a.Reader.Get(ctx, types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}, &inst); err != nil {
-		return false, fmt.Errorf("reading IchorInstallation %q for the Cilium Helm Job: %w", ichorv1alpha1.IchorInstallationName, err)
-	}
-
-	jobDone, err := AdvanceCNIHelmJob(ctx, a.Client, a.ControllerNamespace, cluster, &inst)
-	if err != nil && !apierrors.IsAlreadyExists(err) { // AlreadyExists: the cache has not seen the Job just created
-		return false, fmt.Errorf("applying kube-proxy mode %q to the Cilium release: %w", want, err)
-	}
-
-	if !jobDone {
-		return false, waitOn(op, reasonCiliumNotSwitched,
-			fmt.Sprintf("the Cilium Helm Job applying kube-proxy mode %q is running", want))
+	if done, err := a.runCiliumJob(ctx, cluster, op, "",
+		fmt.Sprintf("applying kube-proxy mode %q to the Cilium release", want),
+		fmt.Sprintf("the Cilium Helm Job applying kube-proxy mode %q is running", want)); err != nil || !done {
+		return false, err
 	}
 
 	var cm corev1.ConfigMap
 
-	err = a.Reader.Get(ctx, types.NamespacedName{Namespace: kubeSystemNamespace, Name: ciliumConfigName}, &cm)
+	err := a.Reader.Get(ctx, types.NamespacedName{Namespace: kubeSystemNamespace, Name: ciliumConfigName}, &cm)
 	if apierrors.IsNotFound(err) {
 		return false, waitOn(op, reasonNewSideNotReady,
 			"Cilium's cilium-config ConfigMap does not exist")
@@ -536,6 +527,29 @@ func (a *cniKubeProxyAdvancer) requireCilium(
 	return a.ciliumRolledOut(ctx, op)
 }
 
+// runCiliumJob advances the Cilium Helm Job (salted as AdvanceCNIHelmJob says) and reports whether
+// it has completed; while it runs the operation waits on the verification clock with running as
+// the message, and a failure is wrapped with doing.
+func (a *cniKubeProxyAdvancer) runCiliumJob(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, op *ichorv1alpha1.TalosOperation, salt, doing, running string,
+) (bool, error) {
+	var inst ichorv1alpha1.IchorInstallation
+	if err := a.Reader.Get(ctx, types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}, &inst); err != nil {
+		return false, fmt.Errorf("reading IchorInstallation %q for the Cilium Helm Job: %w", ichorv1alpha1.IchorInstallationName, err)
+	}
+
+	done, err := AdvanceCNIHelmJob(ctx, a.Client, a.ControllerNamespace, cluster, &inst, salt)
+	if err != nil {
+		return false, fmt.Errorf("%s: %w", doing, err)
+	}
+
+	if !done {
+		return false, waitOn(op, reasonCiliumNotSwitched, running)
+	}
+
+	return true, nil
+}
+
 // ciliumRolledOut reports whether every Cilium agent runs the current DaemonSet generation and is
 // ready; until then it waits on the verification clock.
 func (a *cniKubeProxyAdvancer) ciliumRolledOut(ctx context.Context, op *ichorv1alpha1.TalosOperation) (bool, error) {
@@ -544,9 +558,7 @@ func (a *cniKubeProxyAdvancer) ciliumRolledOut(ctx context.Context, op *ichorv1a
 		return false, fmt.Errorf("reading the cilium DaemonSet: %w", err)
 	}
 
-	if ds.Status.ObservedGeneration < ds.Generation || ds.Status.DesiredNumberScheduled == 0 ||
-		ds.Status.UpdatedNumberScheduled < ds.Status.DesiredNumberScheduled ||
-		ds.Status.NumberReady < ds.Status.DesiredNumberScheduled {
+	if !daemonSetRolledOut(&ds) {
 		return false, waitOn(op, reasonNewSideNotReady,
 			fmt.Sprintf("the Cilium agents are rolling out: %d/%d updated and ready",
 				min(ds.Status.UpdatedNumberScheduled, ds.Status.NumberReady), ds.Status.DesiredNumberScheduled))
@@ -555,6 +567,15 @@ func (a *cniKubeProxyAdvancer) ciliumRolledOut(ctx context.Context, op *ichorv1a
 	clearWait(op)
 
 	return true, nil
+}
+
+// daemonSetRolledOut reports whether ds runs its current generation, scheduled somewhere, with
+// every pod updated and ready.
+func daemonSetRolledOut(ds *appsv1.DaemonSet) bool {
+	want := ds.Status.DesiredNumberScheduled
+
+	return ds.Status.ObservedGeneration >= ds.Generation && want > 0 &&
+		ds.Status.UpdatedNumberScheduled >= want && ds.Status.NumberReady >= want
 }
 
 // ciliumReplaces reads cilium-config's kube-proxy-replacement: "true" (and the pre-1.14 "strict")

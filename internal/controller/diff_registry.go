@@ -20,18 +20,16 @@ import "github.com/maeshinshin/ichor/pkg/render"
 
 const registryMirrorKind = "RegistryMirrorConfig"
 
-// sameConfiguration reports whether the node already has the rendered configuration: the same
-// bytes, or the same settings in another form (the registry mirrors an earlier Ichor build wrote
-// as machine.registries.mirrors, say). Nothing is applied or reported then; the node moves to the
-// rendered form the next time it is applied for another reason.
-func sameConfiguration(current, rendered []byte, hash string) bool {
+// changedPaths is ChangedPaths for a node that may already have the rendered configuration: none
+// when current hashes to hash, or holds the same settings in another form (the registry mirrors an
+// earlier Ichor build wrote as machine.registries.mirrors, say). Nothing is applied or reported
+// then; the node moves to the rendered form the next time it is applied for another reason.
+func changedPaths(current, rendered []byte, hash string) ([]string, error) {
 	if render.Hash(current) == hash {
-		return true
+		return nil, nil
 	}
 
-	paths, err := ChangedPaths(current, rendered)
-
-	return err == nil && len(paths) == 0
+	return ChangedPaths(current, rendered)
 }
 
 // normalizeRegistryMirrors rewrites the legacy machine.registries.mirrors of the v1alpha1 Config

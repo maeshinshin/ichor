@@ -132,7 +132,6 @@ const (
 	reasonNodeDrifted              = "NodeDrifted"
 	reasonDriftCorrected           = "DriftCorrected"
 	reasonClusterTransitioning     = "ClusterTransitioning"
-	reasonClusterShuttingDown      = reasonOperationShuttingDown
 	reasonCARotationInProgress     = "CARotationInProgress"
 	reasonControlPlaneOverCap      = "ControlPlaneOverCap"
 	reasonAdoptionHeld             = "AdoptionHeld"
@@ -415,7 +414,17 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return res, err
 	}
 
-	if sameConfiguration(current, rendered, hash) {
+	// Step 3: work out which field paths changed and what that implies. No path means the node
+	// already has the rendered configuration, in the same bytes or in another form (legacy mirrors).
+	paths, err := changedPaths(current, rendered, hash)
+	if err != nil {
+		log.Error(err, "diffing current and rendered configuration")
+
+		return r.retryLater(ctx, &m, reasonConfigDiffFailed,
+			"comparing current and rendered configuration failed")
+	}
+
+	if len(paths) == 0 {
 		m.Status.AppliedConfigHash = hash
 		m.Status.ObservedInputsHash = inputsHash
 		m.Status.RebootPaths, m.Status.APIServerRestartPaths = nil, nil
@@ -432,15 +441,6 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	// convergence to compare against, so a first-time mismatch is treated
 	// the same as any other desired-state change, below.
 	drifted := previousInputsHash != "" && previousInputsHash == inputsHash
-
-	// Step 3: work out which field paths changed and what that implies.
-	paths, err := ChangedPaths(current, rendered)
-	if err != nil {
-		log.Error(err, "diffing current and rendered configuration")
-
-		return r.retryLater(ctx, &m, reasonConfigDiffFailed,
-			"comparing current and rendered configuration failed")
-	}
 
 	contract, err := coreconfig.ParseContractFromVersion(cluster.Spec.VersionContract)
 	if err != nil {

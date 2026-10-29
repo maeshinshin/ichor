@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/maeshinshin/ichor/internal/installer"
 	"github.com/maeshinshin/ichor/internal/installmanifest"
 )
 
@@ -62,7 +63,7 @@ func applyNetworkPolicies(
 		return fmt.Errorf("init: this ichor binary has no network policies embedded (built without -tags installembed)")
 	}
 
-	objs, err := decodeManifest(manifest)
+	objs, err := installer.Decode(manifest)
 	if err != nil {
 		return fmt.Errorf("init: decoding Ichor's network policies: %w", err)
 	}

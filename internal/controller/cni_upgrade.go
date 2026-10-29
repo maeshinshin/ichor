@@ -23,10 +23,8 @@ import (
 	"strconv"
 
 	"golang.org/x/mod/semver"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -178,24 +176,16 @@ func (a *cniKubeProxyAdvancer) upgradeChart(
 		}
 	}
 
-	var inst ichorv1alpha1.IchorInstallation
-	if err := a.Reader.Get(ctx, types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}, &inst); err != nil {
-		return false, fmt.Errorf("reading IchorInstallation %q for the Cilium Helm Job: %w", ichorv1alpha1.IchorInstallationName, err)
-	}
-
 	// The retry request is part of the name: a failed Job stays for a day, and a retry must run a new one.
 	salt := "/upgrade/" + string(op.UID)
 	if op.Status.LastRetry != nil {
 		salt += "/" + strconv.FormatInt(op.Status.LastRetry.Unix(), 10)
 	}
 
-	jobDone, err := advanceCNIHelmJob(ctx, a.Client, a.ControllerNamespace, cluster, &inst, salt)
-	if err != nil && !apierrors.IsAlreadyExists(err) { // AlreadyExists: the cache has not seen the Job just created
-		return false, fmt.Errorf("upgrading the Cilium release to chart %s: %w", target, err)
-	}
-
-	if !jobDone {
-		return false, waitOn(op, reasonCiliumNotSwitched, fmt.Sprintf("the Cilium Helm Job upgrading to chart %s is running", target))
+	if done, err := a.runCiliumJob(ctx, cluster, op, salt,
+		"upgrading the Cilium release to chart "+target,
+		fmt.Sprintf("the Cilium Helm Job upgrading to chart %s is running", target)); err != nil || !done {
+		return false, err
 	}
 
 	if rel.Status != helmStatusDeployed || rel.ChartVersion != target {

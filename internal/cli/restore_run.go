@@ -198,7 +198,7 @@ func pickSnapshot(ctx context.Context, store etcdbackup.Store, opts restoreOptio
 	var problems []string
 
 	for _, o := range objs {
-		buf, err := fetchVerified(ctx, store, o.Key, passphrase)
+		buf, err := etcdbackup.FetchVerified(ctx, store, o.Key, passphrase)
 		if err != nil {
 			err = scrub(err)
 			problems = append(problems, fmt.Sprintf("  %s: %v", o.Name, err))
@@ -212,9 +212,6 @@ func pickSnapshot(ctx context.Context, store etcdbackup.Store, opts restoreOptio
 
 	return nil, fmt.Errorf("restore: no usable snapshot (nothing was sent to any node):\n%s", strings.Join(problems, "\n"))
 }
-
-// fetchVerified is the restore recipe, shared with the controller's live restore.
-var fetchVerified = etcdbackup.FetchVerified
 
 func firstEnv(getenv func(string) string, names ...string) string {
 	for _, n := range names {

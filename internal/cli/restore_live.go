@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"time"
 
@@ -53,15 +54,9 @@ type liveRestoreSpec struct {
 
 // chooseSnapshot picks the backup and snapshot to restore from the cluster's backups.
 func chooseSnapshot(backups []*pb.EtcdBackup, s liveRestoreSpec) (*pb.EtcdBackup, *pb.EtcdSnapshot, error) {
-	var withSnapshots []*pb.EtcdBackup
-
-	for _, b := range backups {
-		if s.Backup != "" && b.GetRef().GetName() != s.Backup {
-			continue
-		}
-
-		withSnapshots = append(withSnapshots, b)
-	}
+	withSnapshots := slices.DeleteFunc(slices.Clone(backups), func(b *pb.EtcdBackup) bool {
+		return s.Backup != "" && b.GetRef().GetName() != s.Backup
+	})
 
 	if len(withSnapshots) == 0 {
 		if s.Backup != "" {

@@ -33,7 +33,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
-	"github.com/maeshinshin/ichor/internal/etcdbackup"
 )
 
 func watchClient() client.WithWatch {
@@ -303,7 +302,7 @@ var _ = Describe("TalosOperation etcd-restore failures", func() {
 
 		job := f.lastJob()
 		job.fail(ctx, errors.New("bootstrapping etcd from the snapshot on x: refused"))
-		Expect(f.marker().Step).To(Equal(etcdbackup.MarkerWiping))
+		Expect(f.marker().Step).To(Equal(ichorv1alpha1.EtcdRestoreStepWiping))
 
 		got := f.reconcile(op)
 		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))

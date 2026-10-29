@@ -197,8 +197,14 @@ func ichorCLI(t *testing.T, c *foreign.Cluster, args ...string) (string, error) 
 // returns its combined output and exit error.
 func adopt(t *testing.T, c *foreign.Cluster, extra ...string) (string, error) {
 	t.Helper()
+	return adoptBin(t, c, "/tmp/ichor", extra...)
+}
+
+// adoptBin is adopt with the ichor binary at bin inside the tools pod (stage puts ICHOR_E2E_F_ICHOR_BIN at /tmp/ichor).
+func adoptBin(t *testing.T, c *foreign.Cluster, bin string, extra ...string) (string, error) {
+	t.Helper()
 	pod := stage(t, c)
-	args := append([]string{"-n", ns, "exec", pod, "--", "env", "HOME=/tmp/home", "/tmp/ichor", "adopt",
+	args := append([]string{"-n", ns, "exec", pod, "--", "env", "HOME=/tmp/home", bin, "adopt",
 		"--cluster", c.Opts.Prefix, "-n", crNS, "--talosconfig", "/tmp/talosconfig", "--kubeconfig", "/tmp/kubeconfig",
 		"--node", c.CPs[0], "--yes"}, append(recoverFlags(c), extra...)...)
 	// kube.Command refuses a "--cluster" argument anywhere; here it belongs to the command run

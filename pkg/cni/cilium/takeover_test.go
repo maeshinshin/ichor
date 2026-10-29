@@ -787,3 +787,12 @@ func TestDiffLive_IgnoresServerDefaultedRollingUpdateAndServiceType(t *testing.T
 		t.Fatalf("got %v", diffPaths(got))
 	}
 }
+
+func TestDifferenceStringTruncatesLargeValues(t *testing.T) {
+	big := strings.Repeat("x", 8000)
+	got := Difference{Path: "data.k", Kind: DiffChanged, Rendered: big, Live: "small"}.String()
+
+	if len(got) > 600 || !strings.Contains(got, "… (8000 bytes)") || !strings.Contains(got, "live small") {
+		t.Errorf("String() = %q", got)
+	}
+}

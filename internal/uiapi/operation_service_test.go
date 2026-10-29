@@ -18,6 +18,7 @@ package uiapi
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -261,6 +262,56 @@ func TestCreateKubeProxySwitchSetsAndThenRemovesTheConfirmationAnnotation(t *tes
 
 	if ops := listOps(t, base); len(ops) != 1 || ops[0].Spec.Kind != ichorv1alpha1.TalosOperationKindCNI {
 		t.Fatalf("operations = %+v", ops)
+	}
+}
+
+// A controller write between the server's read and its update is a conflict; the switch must read
+// again and go on instead of stopping with the mode changed and no operation (hardware run).
+func TestCreateKubeProxySwitchSurvivesConflictingUpdates(t *testing.T) {
+	var conflicts int
+
+	base := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(opObjects()...).Build()
+	k8s := interceptor.NewClient(base, interceptor.Funcs{
+		Update: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+			// The first update of the spec and the first update that removes the annotation both lose a race.
+			_, has := obj.(*ichorv1alpha1.TalosCluster).Annotations[ichorv1alpha1.TalosClusterConfirmKubeProxySwitchAnnotation]
+			if conflicts < 2 && (has && conflicts == 0 || !has && conflicts == 1) {
+				conflicts++
+
+				return apierrors.NewConflict(schema.GroupResource{Group: "ichor.maesh.dev", Resource: "talosclusters"}, obj.GetName(),
+					errors.New("the object has been modified"))
+			}
+
+			return c.Update(ctx, obj, opts...)
+		},
+	})
+
+	if _, err := (&Server{Client: k8s}).CreateOperation(context.Background(), opCreate(pb.OperationKind_OPERATION_KIND_CNI, "replaced")); err != nil {
+		t.Fatal(err)
+	}
+
+	c := getCluster(t, base)
+	if conflicts != 2 || c.Spec.CNI.KubeProxy != "replaced" || len(c.Annotations) != 0 || len(listOps(t, base)) != 1 {
+		t.Fatalf("conflicts=%d cluster=%+v ops=%d", conflicts, c, len(listOps(t, base)))
+	}
+}
+
+// A retry after an earlier failure (or a Git-first change that carries the annotation) finds the
+// spec already changed; the annotation must not outlive the operation it consented to.
+func TestCreateKubeProxySwitchClearsALeftoverAnnotation(t *testing.T) {
+	objs := opObjects()
+	cl := objs[0].(*ichorv1alpha1.TalosCluster)
+	cl.Spec.CNI.KubeProxy = "replaced"
+	cl.Annotations = map[string]string{ichorv1alpha1.TalosClusterConfirmKubeProxySwitchAnnotation: "replaced"}
+
+	srv, k8s := opServer(t, objs...)
+
+	if _, err := srv.CreateOperation(context.Background(), opCreate(pb.OperationKind_OPERATION_KIND_CNI, "replaced")); err != nil {
+		t.Fatal(err)
+	}
+
+	if c := getCluster(t, k8s); len(c.Annotations) != 0 || c.Spec.CNI.KubeProxy != "replaced" || len(listOps(t, k8s)) != 1 {
+		t.Fatalf("cluster=%+v ops=%d", c, len(listOps(t, k8s)))
 	}
 }
 

@@ -30,6 +30,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -733,6 +734,12 @@ func (s *Server) CreateOperation(
 		return nil, mapOperationWriteError("creating operation for", clusterKey, err)
 	}
 
+	if p.kind == ichorv1alpha1.TalosOperationKindCNI {
+		if err := s.clearKubeProxyConsent(ctx, cluster); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+	}
+
 	return connect.NewResponse(&pb.CreateOperationResponse{
 		Operation: operationToPB(op), Audit: s.opAudit(ctx, "create", objectRef(op.Namespace, op.Name)), SpecChanged: p.resp.GetSpecChanges(),
 	}), nil
@@ -741,14 +748,15 @@ func (s *Server) CreateOperation(
 // writeTarget stores the target in the spec it belongs to.
 func (s *Server) writeTarget(ctx context.Context, p *opPlan) error {
 	target := p.resp.GetTarget()
-	cluster := p.cluster
-	key := client.ObjectKeyFromObject(cluster)
+	key := client.ObjectKeyFromObject(p.cluster)
+
+	var mutate func(*ichorv1alpha1.TalosCluster)
 
 	switch p.kind {
 	case ichorv1alpha1.TalosOperationKindTalos:
-		cluster.Spec.TalosVersion = target
+		mutate = func(c *ichorv1alpha1.TalosCluster) { c.Spec.TalosVersion = target }
 	case ichorv1alpha1.TalosOperationKindKubernetes:
-		cluster.Spec.KubernetesVersion = target
+		mutate = func(c *ichorv1alpha1.TalosCluster) { c.Spec.KubernetesVersion = target }
 	case ichorv1alpha1.TalosOperationKindIchor:
 		p.install.Spec.Version = target
 
@@ -760,28 +768,67 @@ func (s *Server) writeTarget(ctx context.Context, p *opPlan) error {
 	case ichorv1alpha1.TalosOperationKindCNI:
 		// ADR 0013's admission policy denies a kubeProxy change without this
 		// annotation. It is set for the one write that changes the mode and
-		// removed again at once, so it never lingers as a standing consent for
-		// someone else's later edit.
-		if cluster.Annotations == nil {
-			cluster.Annotations = map[string]string{}
-		}
+		// removed again once the operation exists (clearKubeProxyConsent), so it never
+		// lingers as a standing consent for someone else's later edit.
+		mutate = func(c *ichorv1alpha1.TalosCluster) {
+			if c.Annotations == nil {
+				c.Annotations = map[string]string{}
+			}
 
-		cluster.Annotations[ichorv1alpha1.TalosClusterConfirmKubeProxySwitchAnnotation] = target
-		cluster.Spec.CNI.KubeProxy = target
+			c.Annotations[ichorv1alpha1.TalosClusterConfirmKubeProxySwitchAnnotation] = target
+			c.Spec.CNI.KubeProxy = target
+		}
 	}
 
-	if err := s.Update(ctx, cluster, strictFieldValidation); err != nil {
+	if err := s.updateCluster(ctx, p.cluster, mutate); err != nil {
 		return mapOperationWriteError("updating cluster", key, err)
 	}
 
-	if p.kind == ichorv1alpha1.TalosOperationKindCNI {
-		delete(cluster.Annotations, ichorv1alpha1.TalosClusterConfirmKubeProxySwitchAnnotation)
+	return nil
+}
 
-		if err := s.Update(ctx, cluster, strictFieldValidation); err != nil {
-			return connect.NewError(connect.CodeInternal, fmt.Errorf("kube-proxy mode is now %q but the annotation %s could not be removed, "+
-				"so no operation was created: remove it and run the command again: %w",
-				target, ichorv1alpha1.TalosClusterConfirmKubeProxySwitchAnnotation, err))
+// updateCluster applies mutate to the cluster and updates it, retrying with a fresh read when the
+// controller (or anyone) wrote it in between: the controller writes the cluster's status and
+// metadata often, and a stale resourceVersion must not strand a half-made switch. cluster holds
+// the stored object afterwards.
+func (s *Server) updateCluster(ctx context.Context, cluster *ichorv1alpha1.TalosCluster, mutate func(*ichorv1alpha1.TalosCluster)) error {
+	key := client.ObjectKeyFromObject(cluster)
+
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		var fresh ichorv1alpha1.TalosCluster
+		if err := s.Get(ctx, key, &fresh); err != nil {
+			return err
 		}
+
+		mutate(&fresh)
+
+		if err := s.Update(ctx, &fresh, strictFieldValidation); err != nil {
+			return err
+		}
+
+		fresh.DeepCopyInto(cluster)
+
+		return nil
+	})
+}
+
+// clearKubeProxyConsent removes the kube-proxy confirmation annotation once the operation exists.
+// It runs after the operation is created, so a failure here can never leave a changed mode with no
+// operation, and for every cni start, also one whose spec was already changed (a retry after an
+// earlier failure, or a Git-first change that carried the annotation): a consent left on the
+// cluster would admit a later hand edit of the mode. The removal is not worth failing a created
+// operation for; a leftover is reported to the caller as an error naming it.
+func (s *Server) clearKubeProxyConsent(ctx context.Context, cluster *ichorv1alpha1.TalosCluster) error {
+	if _, ok := cluster.Annotations[ichorv1alpha1.TalosClusterConfirmKubeProxySwitchAnnotation]; !ok {
+		return nil
+	}
+
+	err := s.updateCluster(ctx, cluster, func(c *ichorv1alpha1.TalosCluster) {
+		delete(c.Annotations, ichorv1alpha1.TalosClusterConfirmKubeProxySwitchAnnotation)
+	})
+	if err != nil {
+		return fmt.Errorf("the operation was created but the annotation %s could not be removed from cluster %q: %w",
+			ichorv1alpha1.TalosClusterConfirmKubeProxySwitchAnnotation, cluster.Name, err)
 	}
 
 	return nil

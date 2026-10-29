@@ -427,6 +427,56 @@ func TestA5Adopt(t *testing.T) {
 	trafficReport(t, c, "across A5 takeover")
 }
 
+// refusedWritesNothing asserts that a refused adopt left the machine configs, Ichor's namespace and the Helm records alone.
+func refusedWritesNothing(t *testing.T, c *foreign.Cluster, hashes map[string]string, records string) {
+	t.Helper()
+	sameHashes(t, hashes, cniPaths(t, c))
+	if got, err := inner(c, "get", "namespace", crNS, "--no-headers"); err == nil {
+		t.Errorf("namespace %s exists after a refusal: %s", crNS, got)
+	}
+	if got := helmRecords(c); got != records {
+		t.Errorf("Helm records changed:\nbefore:\n%s\nafter:\n%s", records, got)
+	}
+}
+
+// TestA7Refused: ipam.mode cluster-pool is refused, and no accept flag changes that.
+// Run `foreign up --workers 0 --cni cilium-helm --cilium-set ipam.mode=cluster-pool,tunnelProtocol=vxlan,tunnelPort=4789` first.
+func TestA7Refused(t *testing.T) {
+	c := build(t, foreign.Options{Workers: 0, CNI: foreign.CNICiliumHelm})
+	hashes, records := cniPaths(t, c), helmRecords(c)
+	if mode, _ := inner(c, "-n", "kube-system", "get", "cm", "cilium-config", "-o", "jsonpath={.data.ipam}"); mode != "cluster-pool" {
+		t.Fatalf("the live ipam is %q, not cluster-pool", mode)
+	}
+	for _, flags := range [][]string{nil, {"--accept-cilium-changes", "--accept-cilium-diff"}} {
+		out, err := adopt(t, c, flags...)
+		if err == nil {
+			t.Fatalf("adopt %v succeeded on a cluster-pool Cilium", flags)
+		}
+		if !strings.Contains(out, "ipam.mode") || !strings.Contains(out, "cannot be taken over") {
+			t.Errorf("adopt %v: the refusal does not say ipam.mode cannot be taken over", flags)
+		}
+		refusedWritesNothing(t, c, hashes, records)
+	}
+}
+
+// TestA6Refused: a Cilium two minors below the embedded 1.18 (here 1.16.x) is refused and nothing is written.
+// (One minor below, 1.17, is accepted as an upgrade by the rule in 1.2; the test plan text and the brief said "1.17 refused".)
+// Run `foreign up --workers 0 --cni cilium-helm --cilium-chart bin/foreign/chart116/cilium-1.16.19.tgz --cilium-set tunnelProtocol=vxlan,tunnelPort=4789` first.
+func TestA6Refused(t *testing.T) {
+	c := build(t, foreign.Options{Workers: 0, CNI: foreign.CNICiliumHelm})
+	hashes, records := cniPaths(t, c), helmRecords(c)
+	img, _ := inner(c, "-n", "kube-system", "get", "ds", "cilium", "-o", "jsonpath={.spec.template.spec.containers[0].image}")
+	t.Logf("live agent image: %s", img)
+	out, err := adopt(t, c, "--accept-cilium-changes", "--accept-cilium-diff")
+	if err == nil {
+		t.Fatal("adopt succeeded on Cilium 1.16")
+	}
+	if !strings.Contains(out, "more than one minor behind") {
+		t.Errorf("the refusal is not the more-than-one-minor message")
+	}
+	refusedWritesNothing(t, c, hashes, records)
+}
+
 // TestA1AcceptAll: on the inline-manifest cluster, adopt with every accept flag is still refused for ipam.mode and writes nothing.
 func TestA1AcceptAll(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 1, CNI: foreign.CNICiliumInline})

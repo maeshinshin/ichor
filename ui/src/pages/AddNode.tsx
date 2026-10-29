@@ -1,16 +1,19 @@
 import { useEffect, useState } from 'preact/hooks'
-import { ArrowLeftIcon } from 'lucide-preact'
+import { ArrowLeftIcon, CircleCheckIcon, CircleXIcon, InboxIcon, PowerIcon, RadarIcon } from 'lucide-preact'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Item, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemSeparator } from '@/components/ui/item'
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ApproveDialog } from '@/components/ApproveDialog'
 import { ErrorAlert } from '@/components/ErrorAlert'
-import { PageHeader } from '@/components/PageHeader'
+import { Field, Fields } from '@/components/PageHeader'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
-import { Section } from '@/components/Section'
-import { DataTable } from '@/components/ListToolbar'
+import { SectionCard } from '@/components/SectionCard'
+import { TitleBar } from '@/components/TitleBar'
 import type { Cluster } from '@/gen/ichor/v1alpha1/cluster_pb'
 import { MachineApprovalState, type Machine } from '@/gen/ichor/v1alpha1/machine_pb'
 import { clusterClient, machineClient } from '@/lib/connect'
@@ -69,40 +72,49 @@ export function AddNode() {
 
   return (
     <>
-      <PageHeader
+      <TitleBar
         title={t('addNode.pageTitle')}
-        kind={t('kind.cluster')}
+        description={t('kind.cluster')}
         actions={
           <Button asChild size="sm" variant="outline">
             <Link to="/nodes">
-              <ArrowLeftIcon />
+              <ArrowLeftIcon data-icon="inline-start" aria-hidden="true" />
               {t('addNode.backToNodes')}
             </Link>
           </Button>
         }
       />
-      <div class="max-w-4xl space-y-8">
-        <Section id="steps" title={t('addNode.stepsTitle')}>
-          <ol class="list-inside list-decimal space-y-2">
-            <li>{t('addNode.step1')}</li>
-            <li>{t('addNode.step2')}</li>
-            <li>{t('addNode.step3')}</li>
-          </ol>
-        </Section>
+      <div class="max-w-4xl space-y-4">
+        <SectionCard id="steps" title={t('addNode.stepsTitle')}>
+          <ItemGroup>
+            {([PowerIcon, RadarIcon, CircleCheckIcon] as const).map((Icon, i) => (
+              <div key={i}>
+                {i > 0 && <ItemSeparator />}
+                <Item>
+                  <ItemMedia variant="icon">
+                    <Icon aria-hidden="true" />
+                  </ItemMedia>
+                  <ItemContent>
+                    <ItemDescription className="line-clamp-none">{t(`addNode.step${i + 1}` as 'addNode.step1')}</ItemDescription>
+                  </ItemContent>
+                </Item>
+              </div>
+            ))}
+          </ItemGroup>
+        </SectionCard>
 
-        <Section id="discovery" title={t('addNode.discoveryTitle')}>
+        <SectionCard id="discovery" title={t('addNode.discoveryTitle')}>
           <Discovery
             cluster={cluster}
             onAdded={(c) => (c ? setCluster(c) : reloadCluster())}
 
           />
-        </Section>
+        </SectionCard>
 
-        <Section id="pending" title={t('addNode.pendingTitle', { n: pending.length })}>
+        <SectionCard id="pending" title={t('addNode.pendingTitle', { n: pending.length })}>
           {pending.length === 0 ? (
-            <EmptyNote>{t('addNode.pendingEmpty')}</EmptyNote>
+            <EmptyNote icon={InboxIcon}>{t('addNode.pendingEmpty')}</EmptyNote>
           ) : (
-            <DataTable>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -114,7 +126,7 @@ export function AddNode() {
                 <TableBody>
                   {pending.map((m) => (
                     <TableRow key={m.ref?.name}>
-                      <TableCell className="font-mono text-xs">{m.identity?.uuid || m.ref?.name}</TableCell>
+                      <TableCell className="font-mono">{m.identity?.uuid || m.ref?.name}</TableCell>
                       <TableCell>{m.endpoint || '-'}</TableCell>
                       <TableCell>
                         <ApproveDialog
@@ -126,9 +138,8 @@ export function AddNode() {
                   ))}
                 </TableBody>
               </Table>
-            </DataTable>
           )}
-        </Section>
+        </SectionCard>
       </div>
     </>
   )
@@ -167,40 +178,38 @@ function Discovery({
   }
 
   return (
-    <div class="space-y-4">
-      <p class="text-muted-foreground">{on ? t('addNode.discoveryOn') : t('addNode.discoveryOff')}</p>
-      <dl class="grid gap-4 sm:grid-cols-2">
-        <div>
-          <dt class="mb-1 text-xs text-muted-foreground">{t('addNode.addresses')}</dt>
-          <dd class="flex flex-wrap gap-1">
-            {cluster.discoveryAddresses.length === 0 ? (
-              <span class="text-muted-foreground">-</span>
-            ) : (
-              cluster.discoveryAddresses.map((a) => (
-                <Badge key={a} variant="outline" className="font-mono">
+    <>
+      <CardDescription>{on ? t('addNode.discoveryOn') : t('addNode.discoveryOff')}</CardDescription>
+      <Fields>
+        <Field label={t('addNode.addresses')}>
+          {cluster.discoveryAddresses.length === 0 ? (
+            '-'
+          ) : (
+            <div class="flex flex-wrap gap-1">
+              {cluster.discoveryAddresses.map((a) => (
+                <Badge key={a} variant="outline">
                   {a}
                 </Badge>
-              ))
-            )}
-          </dd>
-        </div>
-        <div>
-          <dt class="mb-1 text-xs text-muted-foreground">{t('addNode.cidrs')}</dt>
-          <dd class="flex flex-wrap gap-1">
-            {cluster.discoveryCidrs.length === 0 ? (
-              <span class="text-muted-foreground">-</span>
-            ) : (
-              cluster.discoveryCidrs.map((c) => (
-                <Badge key={c} variant="outline" className="font-mono">
+              ))}
+            </div>
+          )}
+        </Field>
+        <Field label={t('addNode.cidrs')}>
+          {cluster.discoveryCidrs.length === 0 ? (
+            '-'
+          ) : (
+            <div class="flex flex-wrap gap-1">
+              {cluster.discoveryCidrs.map((c) => (
+                <Badge key={c} variant="outline">
                   {c}
                 </Badge>
-              ))
-            )}
-          </dd>
-        </div>
-      </dl>
+              ))}
+            </div>
+          )}
+        </Field>
+      </Fields>
       <form
-        class="space-y-1"
+        class="space-y-2"
         onSubmit={(e) => {
           e.preventDefault()
           submit()
@@ -210,7 +219,7 @@ function Discovery({
         <div class="flex gap-2">
           <Input
             id="discovery-address"
-            className="max-w-xs font-mono"
+            className="max-w-xs"
             placeholder="192.168.0.50"
             value={address}
             onInput={(e) => setAddress((e.target as HTMLInputElement).value)}
@@ -220,11 +229,15 @@ function Discovery({
             {submitting ? t('addNode.adding') : t('addNode.add')}
           </Button>
         </div>
-        {check === 'invalid' && <p class="text-xs text-destructive">{t('addNode.invalid')}</p>}
-        {check === 'duplicate' && <p class="text-xs text-destructive">{t('addNode.duplicate')}</p>}
-        <p class="text-xs text-muted-foreground">{t('addNode.cidrHint')}</p>
+        {(check === 'invalid' || check === 'duplicate') && (
+          <Alert variant="destructive">
+            <CircleXIcon />
+            <AlertDescription>{check === 'invalid' ? t('addNode.invalid') : t('addNode.duplicate')}</AlertDescription>
+          </Alert>
+        )}
+        <CardDescription>{t('addNode.cidrHint')}</CardDescription>
       </form>
       {error && <ErrorAlert {...error} />}
-    </div>
+    </>
   )
 }

@@ -68,7 +68,7 @@ func classifyDaemonSet(name string, containers []corev1.Container) cniKind {
 
 	for _, s := range candidates {
 		switch {
-		case s == "cilium" || strings.Contains(s, "cilium/cilium") || strings.Contains(s, "/cilium:"):
+		case s == string(detectedCilium) || strings.Contains(s, "cilium/cilium") || strings.Contains(s, "/cilium:"):
 			return detectedCilium
 		case strings.Contains(s, "flannel"):
 			return detectedFlannel
@@ -123,7 +123,7 @@ func (r *cniReport) String() string {
 // detectCNI builds the report from the Kubernetes facts and the Talos hint.
 func detectCNI(f *k8sFacts, hint talosCNIHint) *cniReport {
 	rep := &cniReport{
-		TalosCNINone: hint.Name == "none",
+		TalosCNINone: hint.Name == string(detectedNone),
 		CustomURLs:   hint.Name == "custom" && len(hint.URLs) > 0,
 	}
 
@@ -149,7 +149,7 @@ func detectCNI(f *k8sFacts, hint talosCNIHint) *cniReport {
 		// anything else has no CNI.
 		rep.Version = ""
 
-		if hint.Name == "" || hint.Name == "flannel" {
+		if hint.Name == "" || hint.Name == string(detectedFlannel) {
 			rep.Kind = detectedFlannel
 		} else {
 			rep.Kind = detectedNone

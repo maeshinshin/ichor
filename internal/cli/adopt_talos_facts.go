@@ -206,7 +206,7 @@ func cniFacts(flannelDoc bool, provider coreconfig.Provider) CNIFacts {
 			out.Kind = CNINone
 		case "custom":
 			out.Kind = CNICustom
-		case "flannel", "":
+		case string(detectedFlannel), "":
 			out.Kind = CNIFlannel
 		default:
 			out.Kind = CNIOther

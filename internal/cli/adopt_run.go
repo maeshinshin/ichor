@@ -458,7 +458,7 @@ func (st *adoptState) inspect(ctx context.Context, deps adoptDeps) error {
 			st.cluster.Spec.CNI.Unmanaged = &ichorv1alpha1.TalosClusterCNIUnmanaged{TalosCNI: "default"}
 
 			if first.Facts.CNI.Kind == CNINone {
-				st.cluster.Spec.CNI.Unmanaged.TalosCNI = "none"
+				st.cluster.Spec.CNI.Unmanaged.TalosCNI = string(detectedNone)
 			}
 		}
 	}

@@ -387,7 +387,7 @@ var _ = Describe("TalosEtcdBackupReconciler", func() {
 
 		for i := range 4 {
 			old := testBackupNow.Add(-time.Duration(i+2) * time.Hour)
-			f.store.objects[testBackupBase+"/"+etcdbackup.ObjectName(old)] = []byte("old")
+			f.store.objects[testBackupBase+"/"+etcdbackup.ObjectName(old)] = []byte(testOldValue)
 		}
 
 		f.store.objects[testBackupBase+"/README.txt"] = []byte("not ours")

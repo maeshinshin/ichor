@@ -97,7 +97,7 @@ var _ = Describe("MachineReclaim Controller", func() {
 
 	newNode := func() *fakeReclaimNode {
 		return &fakeReclaimNode{in: reclaim.Inspection{
-			Address: testNodeAddr, UUID: "uuid-1", Hostname: "n1", ClusterName: "old", ClusterID: "cid-old",
+			Address: testNodeAddr, UUID: "uuid-1", Hostname: "n1", ClusterName: testOldValue, ClusterID: "cid-old",
 			Version: testTalosVer, ClusterReachable: true,
 			Volumes: []reclaim.Volume{{Name: "u-data", Location: testDevice, Size: 10, Encrypted: true}},
 		}}
@@ -105,7 +105,7 @@ var _ = Describe("MachineReclaim Controller", func() {
 
 	BeforeEach(func() {
 		Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{Name: ns},
+			Name: ns,
 		}))).To(Succeed())
 
 		seq++
@@ -136,19 +136,15 @@ var _ = Describe("MachineReclaim Controller", func() {
 	// create makes the credential Secret and the request, as the UI API would.
 	create := func(mutate ...func(*ichorv1alpha1.MachineReclaim)) types.NamespacedName {
 		Expect(k8sClient.Create(ctx, &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: secret, Namespace: ns, Labels: map[string]string{ichorv1alpha1.ReclaimLabel: testTrue},
-			},
+			Name: secret, Namespace: ns, Labels: map[string]string{ichorv1alpha1.ReclaimLabel: testTrue},
 			Type: ichorv1alpha1.ReclaimCredentialSecretType,
 			Data: map[string][]byte{ichorv1alpha1.ReclaimCredentialKey: []byte("context: x\nca: " + reclaimMarker + "\n")},
 		})).To(Succeed())
 
 		mr := &ichorv1alpha1.MachineReclaim{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: fmt.Sprintf("mr-%d", seq), Namespace: ns,
-				Annotations: map[string]string{ichorv1alpha1.ReclaimRequestedByAnnotation: "alice"},
-			},
-			Spec: ichorv1alpha1.MachineReclaimSpec{Address: testNodeAddr, CredentialSecretRef: secret},
+			Name: fmt.Sprintf("mr-%d", seq), Namespace: ns,
+			Annotations: map[string]string{ichorv1alpha1.ReclaimRequestedByAnnotation: "alice"},
+			Spec:        ichorv1alpha1.MachineReclaimSpec{Address: testNodeAddr, CredentialSecretRef: secret},
 		}
 		for _, m := range mutate {
 			m(mr)
@@ -277,8 +273,8 @@ var _ = Describe("MachineReclaim Controller", func() {
 
 	It("waits for a credential Secret that the UI API writes after the request", func() {
 		mr := &ichorv1alpha1.MachineReclaim{
-			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("mr-%d", seq), Namespace: ns},
-			Spec:       ichorv1alpha1.MachineReclaimSpec{Address: testNodeAddr, CredentialSecretRef: secret},
+			Name: fmt.Sprintf("mr-%d", seq), Namespace: ns,
+			Spec: ichorv1alpha1.MachineReclaimSpec{Address: testNodeAddr, CredentialSecretRef: secret},
 		}
 		Expect(k8sClient.Create(ctx, mr)).To(Succeed())
 
@@ -289,12 +285,10 @@ var _ = Describe("MachineReclaim Controller", func() {
 		Expect(get(key).Status.Phase).To(Equal(ichorv1alpha1.MachineReclaimInspecting))
 
 		Expect(k8sClient.Create(ctx, &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: secret, Namespace: ns, Labels: map[string]string{ichorv1alpha1.ReclaimLabel: testTrue},
-				OwnerReferences: []metav1.OwnerReference{{
-					APIVersion: ichorv1alpha1.GroupVersion.String(), Kind: "MachineReclaim", Name: mr.Name, UID: get(key).UID,
-				}},
-			},
+			Name: secret, Namespace: ns, Labels: map[string]string{ichorv1alpha1.ReclaimLabel: testTrue},
+			OwnerReferences: []metav1.OwnerReference{{
+				APIVersion: ichorv1alpha1.GroupVersion.String(), Kind: "MachineReclaim", Name: mr.Name, UID: get(key).UID,
+			}},
 			Type: ichorv1alpha1.ReclaimCredentialSecretType,
 			Data: map[string][]byte{ichorv1alpha1.ReclaimCredentialKey: []byte(reclaimMarker)},
 		})).To(Succeed())
@@ -306,8 +300,8 @@ var _ = Describe("MachineReclaim Controller", func() {
 
 	It("expires a request whose Secret never appears", func() {
 		mr := &ichorv1alpha1.MachineReclaim{
-			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("mr-%d", seq), Namespace: ns},
-			Spec:       ichorv1alpha1.MachineReclaimSpec{Address: testNodeAddr, CredentialSecretRef: secret},
+			Name: fmt.Sprintf("mr-%d", seq), Namespace: ns,
+			Spec: ichorv1alpha1.MachineReclaimSpec{Address: testNodeAddr, CredentialSecretRef: secret},
 		}
 		Expect(k8sClient.Create(ctx, mr)).To(Succeed())
 
@@ -429,13 +423,13 @@ var _ = Describe("MachineReclaim Controller", func() {
 
 	It("will not read or delete a Secret of another type named as the credential", func() {
 		Expect(k8sClient.Create(ctx, &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{Name: secret, Namespace: ns},
-			Data:       map[string][]byte{"talosconfig": []byte("x")},
+			Name: secret, Namespace: ns,
+			Data: map[string][]byte{"talosconfig": []byte("x")},
 		})).To(Succeed())
 
 		mr := &ichorv1alpha1.MachineReclaim{
-			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("mr-%d", seq), Namespace: ns},
-			Spec:       ichorv1alpha1.MachineReclaimSpec{Address: testNodeAddr, CredentialSecretRef: secret},
+			Name: fmt.Sprintf("mr-%d", seq), Namespace: ns,
+			Spec: ichorv1alpha1.MachineReclaimSpec{Address: testNodeAddr, CredentialSecretRef: secret},
 		}
 		Expect(k8sClient.Create(ctx, mr)).To(Succeed())
 
@@ -502,7 +496,7 @@ var _ = Describe("MachineReclaim Controller", func() {
 
 	It("sweeps credentials older than the maximum TTL and nothing else", func() {
 		mk := func(name string, typ corev1.SecretType, labelled bool) {
-			s := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns}, Type: typ}
+			s := &corev1.Secret{Name: name, Namespace: ns, Type: typ}
 			if labelled {
 				s.Labels = map[string]string{ichorv1alpha1.ReclaimLabel: testTrue}
 			}

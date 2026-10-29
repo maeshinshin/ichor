@@ -266,6 +266,12 @@ ichorUI:
   ##
   tls:
     secretName: ""
+    ## The CA prometheus.enabled's ServiceMonitor verifies the HTTPS port against, as key caKey of
+    ## the ConfigMap caConfigMap or, when caSecret is set, of that Secret. The default is the
+    ## Ichor serving CA; with secretName set, point this at the CA that issued that certificate.
+    caConfigMap: ichor-ui-ca
+    caSecret: ""
+    caKey: ca.crt
 
   ## Who may download a support bundle, an etcd snapshot or a packet capture from a node. Each file can hold secrets: the etcd snapshot holds every Kubernetes
   ## Secret. Nobody may by default, including ichor-ui's own ServiceAccount, so with OIDC off

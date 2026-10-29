@@ -57,23 +57,23 @@ func TestStoredTalosClusterWithRetiredFieldsSurvivesTheCRDUpgrade(t *testing.T) 
 	}
 
 	obj := &unstructured.Unstructured{Object: map[string]any{
-		"apiVersion": "ichor.maesh.dev/v1alpha1",
-		"kind":       "TalosCluster",
-		"metadata":   map[string]any{"name": "old", "namespace": "default"},
-		"spec": map[string]any{
-			"endpoint":          map[string]any{"type": "vip", "address": "10.0.0.1"},
+		kAPIVersion: "ichor.maesh.dev/v1alpha1",
+		kKind:       "TalosCluster",
+		kMetadata:   map[string]any{kName: "old", "namespace": "default"},
+		kSpec: map[string]any{
+			"endpoint":          map[string]any{kType: "vip", "address": "10.0.0.1"},
 			"talosVersion":      "v1.14.3",
 			"kubernetesVersion": "v1.36.0",
 			"versionContract":   "v1.14",
-			"secretsRef":        map[string]any{"name": "secrets"},
+			"secretsRef":        map[string]any{kName: "secrets"},
 			"controlPlane":      map[string]any{"count": int64(3), "schedulable": "true"},
-			"cni":               map[string]any{"handover": "manual"},
-			"gitops": map[string]any{
-				"mode":       "strict",
+			"cni":               map[string]any{kHandover: "manual"},
+			kGitops: map[string]any{
+				"mode": "strict",
 				"repository": map[string]any{
 					"host": "github", "apiURL": "https://api.github.com", "owner": "acme", "repo": "infra",
 					"cloneURL":       "https://github.com/acme/infra.git",
-					"tokenSecretRef": map[string]any{"name": "git-token", "key": "pat"},
+					"tokenSecretRef": map[string]any{kName: "git-token", "key": "pat"},
 					"machinesPath":   "machines",
 				},
 			},
@@ -95,7 +95,7 @@ func TestStoredTalosClusterWithRetiredFieldsSurvivesTheCRDUpgrade(t *testing.T) 
 		t.Fatalf("creating the TalosCluster under the old schema: %v", err)
 	}
 
-	if _, found, _ := unstructured.NestedMap(obj.Object, "spec", "gitops"); !found {
+	if _, found, _ := unstructured.NestedMap(obj.Object, kSpec, kGitops); !found {
 		t.Fatal("the old schema did not keep spec.gitops")
 	}
 
@@ -123,7 +123,7 @@ func TestStoredTalosClusterWithRetiredFieldsSurvivesTheCRDUpgrade(t *testing.T) 
 		t.Fatal(err)
 	}
 
-	if err := unstructured.SetNestedField(obj.Object, "10.0.0.2", "spec", "endpoint", "address"); err != nil {
+	if err := unstructured.SetNestedField(obj.Object, "10.0.0.2", kSpec, "endpoint", "address"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -131,7 +131,7 @@ func TestStoredTalosClusterWithRetiredFieldsSurvivesTheCRDUpgrade(t *testing.T) 
 		t.Fatalf("updating the stored TalosCluster under the new CRD: %v", err)
 	}
 
-	for _, path := range [][]string{{"spec", "gitops"}, {"spec", "cni", "handover"}} {
+	for _, path := range [][]string{{kSpec, kGitops}, {kSpec, "cni", kHandover}} {
 		if _, found, _ := unstructured.NestedFieldNoCopy(obj.Object, path...); found {
 			t.Errorf("%v survived the update: the API server should prune it", path)
 		}
@@ -148,13 +148,13 @@ func TestStoredIchorInstallationWithRetiredFieldsSurvivesTheCRDUpgrade(t *testin
 	}
 
 	obj := &unstructured.Unstructured{Object: map[string]any{
-		"apiVersion": "ichor.maesh.dev/v1alpha1",
-		"kind":       "IchorInstallation",
-		"metadata":   map[string]any{"name": "ichor"},
-		"spec": map[string]any{
+		kAPIVersion: "ichor.maesh.dev/v1alpha1",
+		kKind:       "IchorInstallation",
+		kMetadata:   map[string]any{kName: "ichor"},
+		kSpec: map[string]any{
 			"version":        "v0.1.0",
 			"managementMode": "external",
-			"stack":          map[string]any{"promotion": "Manual", "argocd": map[string]any{"values": map[string]any{"a": int64(1)}}},
+			kStack:           map[string]any{"promotion": "Manual", "argocd": map[string]any{"values": map[string]any{"a": int64(1)}}},
 		},
 	}}
 
@@ -172,7 +172,7 @@ func TestStoredIchorInstallationWithRetiredFieldsSurvivesTheCRDUpgrade(t *testin
 		t.Fatalf("creating the IchorInstallation under the old schema: %v", err)
 	}
 
-	if err := unstructured.SetNestedField(obj.Object, map[string]any{"argocd": map[string]any{"publishedTag": "x"}}, "status", "stack"); err != nil {
+	if err := unstructured.SetNestedField(obj.Object, map[string]any{"argocd": map[string]any{"publishedTag": "x"}}, "status", kStack); err != nil {
 		t.Fatal(err)
 	}
 
@@ -203,7 +203,7 @@ func TestStoredIchorInstallationWithRetiredFieldsSurvivesTheCRDUpgrade(t *testin
 		t.Fatal(err)
 	}
 
-	if err := unstructured.SetNestedField(obj.Object, "v0.2.0", "spec", "version"); err != nil {
+	if err := unstructured.SetNestedField(obj.Object, "v0.2.0", kSpec, "version"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -211,7 +211,7 @@ func TestStoredIchorInstallationWithRetiredFieldsSurvivesTheCRDUpgrade(t *testin
 		t.Fatalf("updating the stored IchorInstallation under the new CRD: %v", err)
 	}
 
-	for _, path := range [][]string{{"spec", "managementMode"}, {"spec", "stack"}, {"status", "stack"}} {
+	for _, path := range [][]string{{kSpec, "managementMode"}, {kSpec, kStack}, {"status", kStack}} {
 		if _, found, _ := unstructured.NestedFieldNoCopy(obj.Object, path...); found {
 			t.Errorf("%v survived the update: the API server should prune it", path)
 		}

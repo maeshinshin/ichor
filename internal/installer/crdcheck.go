@@ -32,16 +32,18 @@ type retiredField struct {
 }
 
 // retiredFields is the whole list.
+const ichorInstallationsCRD = "ichorinstallations.ichor.maesh.dev"
+
 var retiredFields = []retiredField{
 	// GitOps is permanently out of scope; spec.gitops (and everything under it) is gone.
 	{crd: "talosclusters.ichor.maesh.dev", path: "spec.gitops"},
 	// (hand-over is always to Ichor), retired.
 	{crd: "talosclusters.ichor.maesh.dev", path: "spec.cni.handover"},
 	// (the stack is gone), retired.
-	{crd: "ichorinstallations.ichor.maesh.dev", path: "spec.stack"},
-	{crd: "ichorinstallations.ichor.maesh.dev", path: "status.stack"},
+	{crd: ichorInstallationsCRD, path: "spec.stack"},
+	{crd: ichorInstallationsCRD, path: "status.stack"},
 	// The only management mode is ichor, so the field is gone.
-	{crd: "ichorinstallations.ichor.maesh.dev", path: "spec.managementMode"},
+	{crd: ichorInstallationsCRD, path: "spec.managementMode"},
 }
 
 func isRetired(crd, path string) bool {

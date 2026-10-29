@@ -278,7 +278,7 @@ func TestCreateKubeProxySwitchSurvivesConflictingUpdates(t *testing.T) {
 			if conflicts < 2 && (has && conflicts == 0 || !has && conflicts == 1) {
 				conflicts++
 
-				return apierrors.NewConflict(schema.GroupResource{Group: "ichor.maesh.dev", Resource: "talosclusters"}, obj.GetName(),
+				return apierrors.NewConflict(schema.GroupResource{Group: "ichor.maesh.dev", Resource: resourceTalosClusters}, obj.GetName(),
 					errors.New("the object has been modified"))
 			}
 
@@ -286,12 +286,12 @@ func TestCreateKubeProxySwitchSurvivesConflictingUpdates(t *testing.T) {
 		},
 	})
 
-	if _, err := (&Server{Client: k8s}).CreateOperation(context.Background(), opCreate(pb.OperationKind_OPERATION_KIND_CNI, "replaced")); err != nil {
+	if _, err := (&Server{Client: k8s}).CreateOperation(context.Background(), opCreate(pb.OperationKind_OPERATION_KIND_CNI, kubeProxyReplaced)); err != nil {
 		t.Fatal(err)
 	}
 
 	c := getCluster(t, base)
-	if conflicts != 2 || c.Spec.CNI.KubeProxy != "replaced" || len(c.Annotations) != 0 || len(listOps(t, base)) != 1 {
+	if conflicts != 2 || c.Spec.CNI.KubeProxy != kubeProxyReplaced || len(c.Annotations) != 0 || len(listOps(t, base)) != 1 {
 		t.Fatalf("conflicts=%d cluster=%+v ops=%d", conflicts, c, len(listOps(t, base)))
 	}
 }
@@ -301,16 +301,16 @@ func TestCreateKubeProxySwitchSurvivesConflictingUpdates(t *testing.T) {
 func TestCreateKubeProxySwitchClearsALeftoverAnnotation(t *testing.T) {
 	objs := opObjects()
 	cl := objs[0].(*ichorv1alpha1.TalosCluster)
-	cl.Spec.CNI.KubeProxy = "replaced"
-	cl.Annotations = map[string]string{ichorv1alpha1.TalosClusterConfirmKubeProxySwitchAnnotation: "replaced"}
+	cl.Spec.CNI.KubeProxy = kubeProxyReplaced
+	cl.Annotations = map[string]string{ichorv1alpha1.TalosClusterConfirmKubeProxySwitchAnnotation: kubeProxyReplaced}
 
 	srv, k8s := opServer(t, objs...)
 
-	if _, err := srv.CreateOperation(context.Background(), opCreate(pb.OperationKind_OPERATION_KIND_CNI, "replaced")); err != nil {
+	if _, err := srv.CreateOperation(context.Background(), opCreate(pb.OperationKind_OPERATION_KIND_CNI, kubeProxyReplaced)); err != nil {
 		t.Fatal(err)
 	}
 
-	if c := getCluster(t, k8s); len(c.Annotations) != 0 || c.Spec.CNI.KubeProxy != "replaced" || len(listOps(t, k8s)) != 1 {
+	if c := getCluster(t, k8s); len(c.Annotations) != 0 || c.Spec.CNI.KubeProxy != kubeProxyReplaced || len(listOps(t, k8s)) != 1 {
 		t.Fatalf("cluster=%+v ops=%d", c, len(listOps(t, k8s)))
 	}
 }

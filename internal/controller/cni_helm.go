@@ -32,7 +32,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
+	"github.com/maeshinshin/ichor/pkg/render"
 )
 
 // The Cilium Helm Job. The controller never runs Helm: running it needs
@@ -84,13 +86,49 @@ var cniPodGrace = 2 * time.Minute
 // CNIValuesHash is a stable hash of the effective Cilium values cluster stores; the Job for
 // one value set has one name, and a changed value is a new Job. Hooks for the hand-over
 // (unit 8: "deployed at the effective-values hash") and the kube-proxy switch (unit 9).
-func CNIValuesHash(cluster *ichorv1alpha1.TalosCluster) (string, error) {
-	vals, err := cilium.EffectiveValuesFor(cluster)
+//
+// mode is the kube-proxy mode Cilium is to run with. The hand-over passes the mode the cluster
+// runs now (currentKubeProxyMode), never spec.cni.kubeProxy: only the kube-proxy switch applies
+// the spec's mode, under its operation.
+func CNIValuesHash(cluster *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode) (string, error) {
+	vals, err := cilium.EffectiveValuesForMode(cluster, mode)
 	if err != nil {
 		return "", err
 	}
 
 	return hashCiliumValues(vals)
+}
+
+// currentKubeProxyMode is the kube-proxy mode Cilium runs with now, which is what every Cilium
+// Helm Job outside a kube-proxy switch must reproduce: cilium-config's kube-proxy-replacement. The
+// switch's own Job is the only thing that changes it, and in the enabling direction it changes only
+// after kube-proxy is back, so it is the one signal that is never ahead of the nodes (status.cni.
+// kubeProxy is set first when enabling). Before Cilium has a cilium-config: status.cni.kubeProxy,
+// then spec.cni.kubeProxy (nothing has been switched yet, so the spec is what the bootstrap rendered).
+func currentKubeProxyMode(ctx context.Context, reader client.Reader, cluster *ichorv1alpha1.TalosCluster) (cni.KubeProxyMode, error) {
+	var cm corev1.ConfigMap
+
+	err := reader.Get(ctx, types.NamespacedName{Namespace: kubeSystemNamespace, Name: ciliumConfigName}, &cm)
+
+	switch {
+	case err == nil:
+		if v, ok := cm.Data[ciliumKPRKey]; ok {
+			if ciliumReplaces(v) {
+				return cni.KubeProxyReplaced, nil
+			}
+
+			return cni.KubeProxyEnabled, nil
+		}
+	case !apierrors.IsNotFound(err):
+		return "", fmt.Errorf("reading cilium-config for the kube-proxy mode Cilium runs: %w", err)
+	}
+
+	mode, _ := render.KubeProxyMode(cluster)
+	if mode == "" {
+		mode = cni.KubeProxyEnabled
+	}
+
+	return mode, nil
 }
 
 // hashCiliumValues hashes a values map; the same function reads a release record's config back
@@ -147,9 +185,14 @@ func cniHelmJobName(cluster *ichorv1alpha1.TalosCluster, valuesHash string) stri
 // (the switch and a values edit must not overlap). A salt in the Job name gives an upgrade
 // operation a Job of its own even when a finished one for the same values exists.
 func AdvanceCNIHelmJob(
-	ctx context.Context, c client.Client, ns string, cluster *ichorv1alpha1.TalosCluster, inst *ichorv1alpha1.IchorInstallation, salt string,
+	ctx context.Context, c client.Client, ns string, cluster *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode,
+	inst *ichorv1alpha1.IchorInstallation, salt string,
 ) (bool, error) {
-	hash, err := CNIValuesHash(cluster)
+	if mode == "" {
+		mode = cni.KubeProxyEnabled
+	}
+
+	hash, err := CNIValuesHash(cluster, mode)
 	if err != nil {
 		return false, err
 	}
@@ -163,7 +206,7 @@ func AdvanceCNIHelmJob(
 	switch {
 	case apierrors.IsNotFound(err):
 		// AlreadyExists: the cache has not seen the Job just created.
-		return false, client.IgnoreAlreadyExists(c.Create(ctx, newCNIHelmJob(ns, name, cluster, inst, hash)))
+		return false, client.IgnoreAlreadyExists(c.Create(ctx, newCNIHelmJob(ns, name, cluster, mode, inst, hash)))
 	case err != nil:
 		return false, err
 	}
@@ -193,7 +236,8 @@ func AdvanceCNIHelmJob(
 // ServiceAccount that exists for this and nothing else, on the node's network so it keeps
 // its API access while Cilium restarts.
 func newCNIHelmJob(
-	storageNS, name string, cluster *ichorv1alpha1.TalosCluster, inst *ichorv1alpha1.IchorInstallation, valuesHash string,
+	storageNS, name string, cluster *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode,
+	inst *ichorv1alpha1.IchorInstallation, valuesHash string,
 ) *batchv1.Job {
 	// One attempt, as for the installer: an upgrade that failed has been rolled back, and
 	// running it again without anyone looking at why would only repeat it. The caller
@@ -208,6 +252,7 @@ func newCNIHelmJob(
 				"cni", "helm", "apply",
 				"--cluster=" + cluster.Name,
 				"--namespace=" + cluster.Namespace,
+				"--kube-proxy=" + string(mode),
 				"--storage-namespace=" + storageNS,
 			},
 			Env: []corev1.EnvVar{

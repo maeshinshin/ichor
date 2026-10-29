@@ -83,12 +83,10 @@ export function sortPods<T extends PodLike & { namespace: string; name: string }
   return [...pods].sort((a, b) => rank(a) - rank(b) || a.namespace.localeCompare(b.namespace) || a.name.localeCompare(b.name))
 }
 
-const GOOD_WHEN_TRUE = new Set(['Ready'])
-
 // Ready=True is ok; any pressure or unavailable condition that is True, or
 // Ready that is not True, is bad.
 export function conditionTone(c: { type: string; status: string }): Tone {
-  if (GOOD_WHEN_TRUE.has(c.type)) return c.status === 'True' ? 'good' : 'bad'
+  if (c.type === 'Ready') return c.status === 'True' ? 'good' : 'bad'
   return c.status === 'False' ? 'good' : c.status === 'True' ? 'bad' : 'neutral'
 }
 

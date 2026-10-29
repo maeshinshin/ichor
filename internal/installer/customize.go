@@ -272,13 +272,13 @@ func tlsOnUI(dep *appsv1.Deployment, c *corev1.Container, secret string) error {
 	// restart the pod while the optional Secret volume is still being populated.
 	// Whole probes are replaced: the handler is a oneof, and a tcpSocket left beside an httpGet is invalid.
 	c.LivenessProbe = &corev1.Probe{
-		ProbeHandler:        corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{Port: intstr.FromInt32(port)}},
+		TCPSocket:           &corev1.TCPSocketAction{Port: intstr.FromInt32(port)},
 		InitialDelaySeconds: 5, PeriodSeconds: 20,
 	}
 	c.ReadinessProbe = &corev1.Probe{
-		ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{
+		HTTPGet: &corev1.HTTPGetAction{
 			Path: "/auth/config", Port: intstr.FromInt32(port), Scheme: corev1.URISchemeHTTPS,
-		}},
+		},
 		InitialDelaySeconds: 5, PeriodSeconds: 10,
 	}
 

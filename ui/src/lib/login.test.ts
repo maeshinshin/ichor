@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { loginBody, loginErrorKey, loginReady, redirectTarget, ticketFromSearch } from './login.ts'
+import { LoginError, loginBody, loginErrorKey, loginReady, passwordSignIn, redirectTarget, signInSections, ticketFromSearch } from './login.ts'
 import { en } from './i18n.ts'
-import { redirectUriFor } from './oidc.ts'
+import { base64url, redirectUriFor, storedToken, type AuthProvider } from './oidc.ts'
 
 test('the ticket comes from the query string', () => {
   assert.equal(ticketFromSearch('?ticket=abc.def'), 'abc.def')
@@ -38,4 +38,87 @@ test('only an http(s) redirect_uri is followed', () => {
 test('the ichor client returns to /auth/callback, the external IdP to the root', () => {
   assert.equal(redirectUriFor('ichor', 'https://ui.example'), 'https://ui.example/auth/callback')
   assert.equal(redirectUriFor('oidc', 'https://ui.example'), 'https://ui.example/')
+})
+
+const ichor: AuthProvider = { id: 'ichor', issuer: 'https://ui.example', clientId: 'ichor-ui' }
+const oidc: AuthProvider = { id: 'oidc', issuer: 'https://idp.example', clientId: 'x' }
+
+test('the sign-in card shows the password form, the IdP button, or both', () => {
+  assert.deepEqual(signInSections([ichor]), { ichor, oidc: null })
+  assert.deepEqual(signInSections([ichor, oidc]), { ichor, oidc })
+  assert.deepEqual(signInSections([oidc]), { ichor: null, oidc })
+})
+
+// Stand-ins for the browser: fetch answers per URL, sessionStorage is a map, and nothing may
+// navigate (window.location has no assign).
+function stubSignIn(answers: Record<string, (init?: RequestInit, url?: string) => Response>) {
+  const store = new Map<string, string>()
+  const calls: string[] = []
+  const stubs: Record<string, unknown> = {
+    sessionStorage: { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v), removeItem: (k: string) => void store.delete(k) },
+    window: { location: { origin: 'https://ui.example' } },
+    fetch: async (url: string, init?: RequestInit) => {
+      const key = new URL(url, 'https://ui.example').pathname
+      calls.push(key)
+      return answers[key](init, url)
+    },
+  }
+  for (const [name, value] of Object.entries(stubs)) Object.defineProperty(globalThis, name, { value, configurable: true, writable: true })
+  return calls
+}
+
+const json = (v: unknown, status = 200) => new Response(JSON.stringify(v), { status, headers: { 'Content-Type': 'application/json' } })
+const discovery = () => json({ authorization_endpoint: 'https://ui.example/oidc/authorize', token_endpoint: 'https://ui.example/oidc/token' })
+const idToken = (nonce: string) => `h.${base64url(new TextEncoder().encode(JSON.stringify({ nonce, exp: 9999999999 })))}.s`
+
+test('the in-page sign-in gets a ticket, logs in and exchanges the code without navigating', async () => {
+  let nonce = ''
+  let state = ''
+  const calls = stubSignIn({
+    '/.well-known/openid-configuration': discovery,
+    '/oidc/authorize': (init, url) => {
+      assert.equal((init?.headers as Record<string, string>).Accept, 'application/json')
+      const q = new URL(url!).searchParams
+      nonce = q.get('nonce')!
+      state = q.get('state')!
+      assert.equal(q.get('code_challenge_method'), 'S256')
+      return json({ ticket: 't1' })
+    },
+    '/oidc/login': (init) => {
+      assert.deepEqual(JSON.parse(init!.body as string), { ticket: 't1', username: 'ann', password: 'pw' })
+      return json({ redirect_uri: `https://ui.example/auth/callback?code=c1&state=${state}` })
+    },
+    '/oidc/token': (init) => {
+      const b = init!.body as URLSearchParams
+      assert.equal(b.get('code'), 'c1')
+      assert.ok(b.get('code_verifier'))
+      return json({ id_token: idToken(nonce) })
+    },
+  })
+  await passwordSignIn(ichor, { username: 'ann', password: 'pw' })
+  assert.deepEqual(calls, ['/.well-known/openid-configuration', '/oidc/authorize', '/oidc/login', '/oidc/token'])
+  assert.ok(storedToken())
+})
+
+test('the in-page sign-in maps refusals to the card messages and stores nothing', async () => {
+  for (const [status, key] of [[401, 'login.invalid'], [429, 'login.rateLimited'], [400, 'login.expired']] as const) {
+    stubSignIn({
+      '/.well-known/openid-configuration': discovery,
+      '/oidc/authorize': () => json({ ticket: 't1' }),
+      '/oidc/login': () => json({ error: 'x' }, status),
+    })
+    await assert.rejects(passwordSignIn(ichor, { username: 'ann', password: 'bad' }), (e: unknown) => e instanceof LoginError && e.key === key)
+    assert.equal(storedToken(), null)
+  }
+})
+
+test('the in-page sign-in refuses a redirect with the wrong state or another origin', async () => {
+  for (const redirect of ['https://ui.example/auth/callback?code=c1&state=other', 'https://evil.example/auth/callback?code=c1&state=x']) {
+    stubSignIn({
+      '/.well-known/openid-configuration': discovery,
+      '/oidc/authorize': () => json({ ticket: 't1' }),
+      '/oidc/login': () => json({ redirect_uri: redirect }),
+    })
+    await assert.rejects(passwordSignIn(ichor, { username: 'ann', password: 'pw' }), LoginError)
+  }
 })

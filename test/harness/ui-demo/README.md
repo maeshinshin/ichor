@@ -19,8 +19,8 @@ and prints its generated password once (must change on first login). It needs an
 - Outside: `<prefix>-registry` (a `registry:2` Deployment + Service, emptyDir), `<prefix>-tools`
   (a busybox pod `ichor init` runs in, because the workstation cannot reach pod IPs) and the
   LoadBalancer Service `ichor-ui-demo` (`outer-service.yaml`): port 443 -> ichor-ui (nodePort
-  30080), 6443 -> the inner kube-apiserver. There is no port 80: the UI URL is https, so
-  nothing uses plain http.
+  30080 -> ichor-ui's HTTPS port 8443), 6443 -> the inner kube-apiserver. There is no port 80:
+  the UI URL is https, and ichor-ui serves nothing but HTTPS (docs/adr/0105).
 
 ## Steps
 
@@ -102,6 +102,10 @@ kubectl -n ichor-system apply -f test/harness/ui-demo/inner-nodeport.yaml       
 # written to bin/ui-demo.kubeconfig; `kubectl --kubeconfig bin/ui-demo.kubeconfig get nodes`
 # UI: https://$LB_IP, user admin (self-signed: the browser warns)
 ```
+
+`inner-nodeport.yaml` targets 8443. A demo that was created before ADR 0105 serves its operator
+certificate on 8080 and keeps that port through every upgrade (the installer pins it), so for such a
+demo apply the file with `8080` in both port fields instead; a demo created from this tree uses 8443 as is.
 
 `--local` on CLI calls from the tools pod: ichor-ui's certificate has no in-cluster service name, so
 the CLI cannot verify it through the Service. `--local` skips ichor-ui and computes from the Kubernetes API directly.

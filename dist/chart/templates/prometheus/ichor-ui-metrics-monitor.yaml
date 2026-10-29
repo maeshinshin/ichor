@@ -15,13 +15,13 @@ metadata:
 spec:
   endpoints:
   - path: /metrics
-    port: http
-    # ichor-ui serves /metrics on the same plain-HTTP port and mux as its Connect API
-    # (cmd/ichor-ui/main.go): the UI backend is reached only in-cluster today
-    # (architecture.md "Trust"), the same trust boundary this scrape already crosses,
-    # so there is no second TLS story to configure here the way the controller's
-    # metricsCert.enabled one exists for.
-    scheme: http
+    port: https
+    # ichor-ui serves /metrics on the same HTTPS port and mux as its Connect API
+    # (cmd/ichor-ui/main.go, docs/adr/0105). /metrics is unauthenticated and the certificate is the
+    # operator's or the Ichor CA's, so the scrape does not verify it.
+    scheme: https
+    tlsConfig:
+      insecureSkipVerify: true
   selector:
     matchLabels:
       app.kubernetes.io/name: {{ include "ichor.name" . }}

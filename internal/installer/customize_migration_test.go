@@ -22,6 +22,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -56,6 +57,36 @@ func TestReadUISettingsMigrationCases(t *testing.T) {
 				t.Errorf("ListenAddr=%q HTTPAddr=%q, want %q and %q", got.ListenAddr, got.HTTPAddr, tc.listen, tc.http)
 			}
 		})
+	}
+}
+
+func TestCustomizePoliciesOpensTheMigratedPort(t *testing.T) {
+	mk := func() []*unstructured.Unstructured {
+		return []*unstructured.Unstructured{{Object: map[string]any{
+			"apiVersion": "cilium.io/v2", "kind": "CiliumNetworkPolicy", "metadata": map[string]any{"name": "ui"},
+			"spec": map[string]any{"ingress": []any{map[string]any{"toPorts": []any{map[string]any{
+				"ports": []any{map[string]any{"port": "8443", "protocol": "TCP"}},
+			}}}}},
+		}}}
+	}
+	ports := func(o *unstructured.Unstructured) []any {
+		ing, _, _ := unstructured.NestedSlice(o.Object, "spec", "ingress")
+
+		return ing[0].(map[string]any)["toPorts"].([]any)[0].(map[string]any)["ports"].([]any)
+	}
+
+	fresh := mk()
+	CustomizePolicies(fresh, UISettings{})
+
+	if n := len(ports(fresh[0])); n != 1 {
+		t.Errorf("a fresh install opens %d ports, want only 8443", n)
+	}
+
+	plain := mk()
+	CustomizePolicies(plain, UISettings{HTTPAddr: ":8080"})
+
+	if got := ports(plain[0]); len(got) != 2 || got[1].(map[string]any)["port"] != "8080" {
+		t.Errorf("a plaintext install opens %v, want 8443 and 8080", got)
 	}
 }
 

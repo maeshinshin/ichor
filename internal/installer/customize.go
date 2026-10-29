@@ -458,7 +458,7 @@ func toUnstructured(obj any, kind, apiVersion string) (*unstructured.Unstructure
 // customizeFromLive reads the live ichor-ui and controller Deployments the manifest names and
 // customizes the manifest's objects with the settings they carry. A Deployment that does not
 // exist yet (a first install by the installer) reads as a plain install.
-func customizeFromLive(ctx context.Context, c client.Client, objs []*unstructured.Unstructured) ([]*unstructured.Unstructured, error) {
+func customizeFromLive(ctx context.Context, c client.Client, objs []*unstructured.Unstructured) ([]*unstructured.Unstructured, UISettings, error) {
 	live := func(o *unstructured.Unstructured) (*appsv1.Deployment, error) {
 		d := &appsv1.Deployment{}
 
@@ -483,7 +483,7 @@ func customizeFromLive(ctx context.Context, c client.Client, objs []*unstructure
 
 		d := &appsv1.Deployment{}
 		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(o.Object, d); err != nil {
-			return nil, err
+			return nil, UISettings{}, err
 		}
 
 		var err error
@@ -496,7 +496,7 @@ func customizeFromLive(ctx context.Context, c client.Client, objs []*unstructure
 		}
 
 		if err != nil {
-			return nil, err
+			return nil, UISettings{}, err
 		}
 	}
 
@@ -505,5 +505,47 @@ func customizeFromLive(ctx context.Context, c client.Client, objs []*unstructure
 		log.Printf("DEPRECATED: ichor-ui still serves plain HTTP on %s; move your edge to HTTPS on %s, the plaintext listener is removed in the next minor release (docs/adr/0105)", s.HTTPAddr, UIDefaultAddr)
 	}
 
-	return CustomizeObjects(objs, s)
+	out, err := CustomizeObjects(objs, s)
+
+	return out, s, err
+}
+
+// uiPolicyName is the CiliumNetworkPolicy of ichor-ui in config/cilium-network-policy.
+const uiPolicyName = "ui"
+
+// CustomizePolicies opens, in the ichor-ui CiliumNetworkPolicy, the ports a migrated install still
+// listens on (ADR 0105): the deprecated plaintext one, or the pinned TLS one. The policies list
+// 8443 only, which is all a fresh install needs.
+func CustomizePolicies(objs []*unstructured.Unstructured, s UISettings) {
+	var extra []any
+
+	for _, addr := range []string{s.HTTPAddr, s.ListenAddr} {
+		if p, err := addrPort(addr); err == nil && p != 8443 {
+			extra = append(extra, map[string]any{"port": strconv.Itoa(int(p)), "protocol": "TCP"})
+		}
+	}
+
+	for _, o := range objs {
+		if o.GetKind() != "CiliumNetworkPolicy" || o.GetName() != uiPolicyName || len(extra) == 0 {
+			continue
+		}
+
+		ing, _, _ := unstructured.NestedSlice(o.Object, "spec", "ingress")
+		if len(ing) == 0 {
+			continue
+		}
+
+		rule, _ := ing[0].(map[string]any)
+		toPorts, _ := rule["toPorts"].([]any)
+
+		if len(toPorts) == 0 {
+			continue
+		}
+
+		tp, _ := toPorts[0].(map[string]any)
+		ports, _ := tp["ports"].([]any)
+		tp["ports"] = append(ports, extra...)
+
+		_ = unstructured.SetNestedSlice(o.Object, ing, "spec", "ingress")
+	}
 }

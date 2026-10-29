@@ -107,7 +107,7 @@ func Run(ctx context.Context, c client.Client, opts Options) error {
 
 	// What init customized is re-derived from the live Deployments and applied to the new
 	// manifest's objects, so an upgrade keeps the cluster as init left it.
-	objs, err = customizeFromLive(ctx, c, objs)
+	objs, uiSettings, err := customizeFromLive(ctx, c, objs)
 	if err != nil {
 		return fmt.Errorf("carrying init's customizations over to the new manifest: %w", err)
 	}
@@ -123,6 +123,8 @@ func Run(ctx context.Context, c client.Client, opts Options) error {
 	if err != nil {
 		return err
 	}
+
+	CustomizePolicies(policies, uiSettings)
 
 	// Stage 0: the installer's cluster-scoped RBAC (ClusterRoles, ClusterRoleBindings). A run
 	// started by an older release holds that release's rights, which cannot reach a namespace

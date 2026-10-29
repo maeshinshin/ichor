@@ -185,9 +185,18 @@ ichorUI:
     # tag: ""
     pullPolicy: IfNotPresent
 
-  ## Address ichor-ui listens on (cmd/ichor-ui's own -addr flag default).
+  ## HTTPS port ichor-ui listens on (cmd/ichor-ui's own -addr flag default). It never serves
+  ## plaintext here (docs/adr/0105). The certificate is the one in tls.secretName, or else the Ichor
+  ## serving certificate the controller keeps (Secret ichor-oidc-tls). An install that used to
+  ## serve TLS on 8080 keeps its Service and edge by setting this to 8080.
   ##
-  port: 8080
+  port: 8443
+
+  ## DEPRECATED, removed in the next minor release. Also serve plain HTTP on this port (for example
+  ## 8080) so an edge that has not moved to HTTPS keeps working through an upgrade. 0 serves none,
+  ## which is what a fresh install wants.
+  ##
+  plaintextPort: 0
 
   ## OIDC login with Kubernetes impersonation (docs/adr/0058). Off by default: ichor-ui then
   ## writes with its own ServiceAccount and anyone who can reach it can write, as before (it
@@ -251,8 +260,9 @@ ichorUI:
   service:
     type: ClusterIP
 
-  ## Terminate TLS in ichor-ui itself with the kubernetes.io/tls Secret of this name (tls.crt,
-  ## tls.key) instead of in front of it. Empty serves plain HTTP, as before.
+  ## Serve this kubernetes.io/tls Secret (tls.crt, tls.key; for example from cert-manager) on the
+  ## HTTPS port instead of the Ichor serving certificate. Empty serves the Ichor certificate, whose
+  ## CA the controller publishes as the ConfigMap and Secret ichor-ui-ca for an edge to verify.
   ##
   tls:
     secretName: ""

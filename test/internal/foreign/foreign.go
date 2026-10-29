@@ -461,9 +461,9 @@ func (c *Cluster) generate(mirror string) error {
 	if err != nil {
 		return err
 	}
-	var patch []byte
+	var patch, cpPatch []byte
 	if multiDoc(o.TalosVersion) {
-		patch = c.patchMultiDoc(manifest)
+		patch, cpPatch = c.patchMultiDoc(manifest)
 	} else if patch, err = c.patchLegacy(manifest); err != nil {
 		return err
 	}
@@ -478,6 +478,13 @@ func (c *Cluster) generate(mirror string) error {
 		"--talos-version", o.TalosVersion,
 		"--additional-sans", "127.0.0.1,localhost," + strings.Join(c.CPs, ","),
 		"--config-patch", "@" + patchFile}
+	if len(cpPatch) > 0 {
+		cpFile := c.path("patch-cp.yaml")
+		if err := os.WriteFile(cpFile, cpPatch, 0o600); err != nil {
+			return err
+		}
+		args = append(args, "--config-patch-control-plane", "@"+cpFile)
+	}
 	if o.K8sVersion != "" {
 		args = append(args, "--kubernetes-version", strings.TrimPrefix(o.K8sVersion, "v"))
 	}
@@ -670,7 +677,7 @@ func Down(prefix string, withRegistry bool) error {
 	}
 	if dir, err := Dir(prefix); err == nil {
 		stopPortForward(dir, "relay")
-		for _, f := range []string{"patch.yaml", "controlplane.yaml", "worker.yaml", "talosconfig", "kubeconfig", "kubeconfig.local", "relay.pid"} {
+		for _, f := range []string{"patch.yaml", "patch-cp.yaml", "controlplane.yaml", "worker.yaml", "talosconfig", "kubeconfig", "kubeconfig.local", "relay.pid"} {
 			_ = os.Remove(filepath.Join(dir, f))
 		}
 		if withRegistry {
@@ -783,7 +790,8 @@ func (c *Cluster) applyCalico() error {
 	return err
 }
 
-func (c *Cluster) patchMultiDoc(manifest string) []byte {
+// patchMultiDoc returns the patch for every machine and the one only control planes accept (KubeProxyConfig).
+func (c *Cluster) patchMultiDoc(manifest string) (all, cpOnly []byte) {
 	o := c.Opts
 	doc := func(kind string, f map[string]any) map[string]any { f["kind"] = kind; return f }
 	disabled := func(kind string) map[string]any { return doc(kind, map[string]any{"enabled": false}) }
@@ -796,19 +804,22 @@ func (c *Cluster) patchMultiDoc(manifest string) []byte {
 	if manifest != "" {
 		docs = append(docs, doc("KubeInlineManifestConfig", map[string]any{"name": o.CNI[:6], "manifest": manifest}))
 	}
-	if o.NoKubeProxy {
-		docs = append(docs, disabled("KubeProxyConfig"))
-	}
 	if o.NoKubePrism {
 		docs = append(docs, doc("KubePrismConfig", map[string]any{"$patch": "delete"})) // the document has no enabled field: absent means off
 	}
-	var b strings.Builder
-	for _, d := range docs {
-		d["apiVersion"] = "v1alpha1"
-		y, _ := yaml.Marshal(d)
-		b.WriteString("---\n" + string(y))
+	render := func(docs []map[string]any) []byte {
+		var b strings.Builder
+		for _, d := range docs {
+			d["apiVersion"] = "v1alpha1"
+			y, _ := yaml.Marshal(d)
+			b.WriteString("---\n" + string(y))
+		}
+		return []byte(b.String())
 	}
-	return []byte(b.String())
+	if o.NoKubeProxy {
+		cpOnly = render([]map[string]any{disabled("KubeProxyConfig")})
+	}
+	return render(docs), cpOnly
 }
 
 type inlineManifest struct {

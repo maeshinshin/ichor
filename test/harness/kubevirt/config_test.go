@@ -59,7 +59,7 @@ func TestDemoMemory(t *testing.T) {
 	if err != nil || got != "2560Mi" {
 		t.Fatalf("unset: got %q, %v; want 2560Mi", got, err)
 	}
-	if m := demoVMManifest("x-cp", got, httpISO()); !strings.Contains(m, "guest: 2560Mi") {
+	if m := demoVMManifest("x-cp", "x", got, httpISO()); !strings.Contains(m, "guest: 2560Mi") {
 		t.Fatalf("default manifest lost 2560Mi:\n%s", m)
 	}
 
@@ -68,7 +68,8 @@ func TestDemoMemory(t *testing.T) {
 	if err != nil || got != "3Gi" {
 		t.Fatalf("override: got %q, %v; want 3Gi", got, err)
 	}
-	if m := demoVMManifest("x-cp", got, httpISO()); !strings.Contains(m, "guest: 3Gi") || strings.Contains(m, "2560Mi") {
+	m := demoVMManifest("x-cp", "x", got, httpISO())
+	if !strings.Contains(m, "guest: 3Gi") || strings.Contains(m, "2560Mi") {
 		t.Fatalf("override manifest wrong:\n%s", m)
 	}
 

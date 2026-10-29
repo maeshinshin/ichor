@@ -76,10 +76,7 @@ func injectKubeProxy(
 ) (coreconfig.Provider, error) {
 	mode, fromStatus := KubeProxyMode(cluster)
 
-	switch {
-	case mode == cni.KubeProxyReplaced:
-	case fromStatus && mode == cni.KubeProxyEnabled:
-	default:
+	if mode != cni.KubeProxyReplaced && (!fromStatus || mode != cni.KubeProxyEnabled) {
 		return cfg, nil
 	}
 

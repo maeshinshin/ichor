@@ -23,6 +23,7 @@ package foreign
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -83,13 +84,14 @@ func (r *rig) ensureForeign(t *testing.T) {
 	for _, mname := range strings.Fields(r.ikJSON(t, "-n", crNS, "get", "talosmachines.ichor.maesh.dev", "-o", "jsonpath={.items[*].metadata.name}")) {
 		role := r.ikJSON(t, "-n", crNS, "get", "talosmachines.ichor.maesh.dev", mname, "-o", "jsonpath={.spec.role}")
 		if !strings.Contains(strings.ToLower(role), "controlplane") {
-			out, err := r.ik("-n", crNS, "delete", "talosmachines.ichor.maesh.dev", mname, "--timeout=2m")
+			_, _ = r.ikDelete("-n", crNS, "annotate", "talosmachines.ichor.maesh.dev", mname, "ichor.maesh.dev/allow-delete=true", "--overwrite")
+			out, err := r.ikDelete("-n", crNS, "delete", "talosmachines.ichor.maesh.dev", mname, "--timeout=2m")
 			t.Logf("deleting TalosMachine %s: %v %s", mname, err, out)
 		}
 	}
 	r.refoereignize(t, r.ichorTC, "ichor-e2e-fj-w0")
 	if strings.Contains(nodes, "ichor-e2e-r-w") {
-		_, _ = r.ik("delete", "node", "ichor-e2e-r-w", "--wait=false")
+		_, _ = r.ikDelete("delete", "node", "ichor-e2e-r-w", "--wait=false")
 	}
 }
 
@@ -115,7 +117,7 @@ func TestC8C9C10(t *testing.T) {
 	tcPath, secrets := r.markedTalosconfig(t, "c9")
 
 	// C8: without the reclaimer binding the webhook denies (ichor-ui acts as its ServiceAccount here: users are off).
-	_, _ = r.ik("-n", crNS, "delete", "rolebinding", "reclaim-lane2", "--ignore-not-found")
+	_, _ = r.ikDelete("-n", crNS, "delete", "rolebinding", "reclaim-lane2", "--ignore-not-found")
 	_, out, err := r.newReclaim(t, tcPath, r.foreignW)
 	if err == nil || !strings.Contains(out, "reclaim") {
 		t.Errorf("C8: a caller without the reclaim verb was not denied: %v / %s", err, out)
@@ -127,7 +129,7 @@ func TestC8C9C10(t *testing.T) {
 	if _, err := r.ik("-n", crNS, "create", "rolebinding", "reclaim-lane2", "--clusterrole=ichor-ichor-machine-reclaimer", "--serviceaccount=ichor-system:ichor-ichor-ui"); err != nil {
 		t.Fatalf("binding the reclaimer role: %v", err)
 	}
-	t.Cleanup(func() { _, _ = r.ik("-n", crNS, "delete", "rolebinding", "reclaim-lane2", "--ignore-not-found") })
+	t.Cleanup(func() { _, _ = r.ikDelete("-n", crNS, "delete", "rolebinding", "reclaim-lane2", "--ignore-not-found") })
 
 	name, _, err := r.newReclaim(t, tcPath, r.foreignW)
 	if err != nil {
@@ -215,4 +217,11 @@ func TestC8C9C10(t *testing.T) {
 func TestEnsureForeign(t *testing.T) {
 	r := newRig(t, foreign.Options{Workers: 1, DataDisk: true})
 	r.ensureForeign(t)
+}
+
+// ikDelete deletes objects of the Ichor-made cluster; the inner-cluster helper refuses deletes by design, and this
+// cluster is ours (its kubeconfig is the only credential passed).
+func (r *rig) ikDelete(args ...string) (string, error) {
+	out, err := exec.Command("kubectl", append([]string{"--kubeconfig", r.ichorKC}, args...)...).CombinedOutput()
+	return string(out), err
 }

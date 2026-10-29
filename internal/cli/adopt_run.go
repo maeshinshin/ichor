@@ -122,6 +122,9 @@ type adoptState struct {
 	// install itself is unit 4.
 	installCilium bool
 	tunnel        string
+
+	// readBack is what Ichor's own Cilium release was installed with (Fix: ADR 0104 F3).
+	readBack *cilium.ReadBack
 }
 
 // own is the class B definition for one node.
@@ -464,6 +467,20 @@ func (st *adoptState) inspect(ctx context.Context, deps adoptDeps) error {
 		st.kubeProxy = kubeProxyReplaced
 	}
 
+	// An Ichor-owned Cilium is already running with a tunnel, a kube-proxy mode and user values: the
+	// spec adopt writes must reproduce them, or the controller would change a running network.
+	if st.fresh && !st.unmanaged && st.rep != nil && st.rep.Provenance == provenanceIchor && deps.Target != nil {
+		rb, err := ichorCiliumReadBack(ctx, deps.Target)
+		if err != nil {
+			return fmt.Errorf("adopt: reading Ichor's Cilium release: %w", err)
+		}
+
+		if rb != nil {
+			st.readBack = rb
+			st.kubeProxy = string(rb.KubeProxy)
+		}
+	}
+
 	// 1.6: replaced mode needs KubePrism on every node, and turning it on and moving Cilium onto it
 	// cannot be ordered safely in one step.
 	if !st.unmanaged && st.kubeProxy == kubeProxyReplaced {
@@ -497,6 +514,16 @@ func (st *adoptState) inspect(ctx context.Context, deps adoptDeps) error {
 
 		if st.installCilium {
 			st.cluster.Spec.CNI.Tunnel = st.tunnel
+		}
+
+		if rb := st.readBack; rb != nil {
+			st.cluster.Spec.CNI.Tunnel = rb.Tunnel
+
+			if len(rb.User) > 0 {
+				if err := setCiliumUserValues(st.cluster, rb.User, st.kubeProxy, rb.Tunnel); err != nil {
+					return fmt.Errorf("adopt: the values of Ichor's Cilium release: %w", err)
+				}
+			}
 		}
 
 		if st.unmanaged {

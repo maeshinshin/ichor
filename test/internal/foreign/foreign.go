@@ -563,6 +563,18 @@ func (c *Cluster) bringUp() error {
 	}); err != nil {
 		return err
 	}
+	// adopt discovers machines from the CP's discovery membership and refuses an incomplete one,
+	// so wait until it lists every node.
+	if _, err := kube.Poll("waiting for discovery to list every member", 10*time.Minute, func() (string, bool) {
+		out, err := talosctl.GetAuthenticated(namespace, c.CPs[0], "members", tcBytes)
+		if err != nil {
+			return "", false
+		}
+		objs, err := talosctl.DecodeAll(out)
+		return "", err == nil && len(objs) == len(all)
+	}); err != nil {
+		return err
+	}
 	if o.CNI == CNICiliumHelm {
 		args := append([]string{"helm", "install", "cilium", o.CiliumChart, "--kubeconfig", c.LocalKube}, c.ciliumHelmArgs()...)
 		if out, err := runLocal(args...); err != nil {

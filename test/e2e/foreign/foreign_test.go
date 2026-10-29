@@ -432,5 +432,4 @@ func TestB8TalosTooOldRefused(t *testing.T) {
 }
 
 // The rest of the ADR 0103 matrix: stubs until their units land.
-func TestC1(t *testing.T)   { t.Skip("C1 reclaim a worker of another cluster") }
 func TestB2B4(t *testing.T) { t.Skip("B2 kube-proxy matrix, B4 KubePrism") }

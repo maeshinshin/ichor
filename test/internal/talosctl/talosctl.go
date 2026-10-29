@@ -295,3 +295,13 @@ func applySecret(namespace, name string, data map[string]string) error {
 func deleteSecret(namespace, name string) {
 	_, _ = utils.Run(kube.Command("-n", namespace, "delete", "secret", name, "--wait=false", "--ignore-not-found"))
 }
+
+// Reset wipes STATE and EPHEMERAL on node's authenticated API and reboots it, without the graceful
+// leave, so a node of a cluster the caller owns comes back in maintenance mode (ADR 0103 harness).
+func Reset(namespace, node string, talosconfig []byte) (string, error) {
+	return run(namespace,
+		[]string{"reset", "--graceful=false", "--reboot", "--wait=false",
+			"--system-labels-to-wipe", "STATE", "--system-labels-to-wipe", "EPHEMERAL",
+			talosconfigFlag, talosconfigMount, nodesFlag, node, "--endpoints", node},
+		map[string]string{talosconfigKey: string(talosconfig)}, 2*time.Minute)
+}

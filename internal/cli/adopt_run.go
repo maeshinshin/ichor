@@ -52,9 +52,11 @@ type ciliumPreflight func(ctx context.Context, in cilium.PreflightInput) (*ciliu
 // runAdopt can be driven by a test with no real cluster, node or file on
 // either end (unit rule 2's spirit, extended to the CLI).
 type adoptDeps struct {
-	K8s       client.Client
-	Bundle    *secrets.Bundle
-	DialTalos func(ctx context.Context, endpoint string) (talosConfigReader, error)
+	K8s    client.Client
+	Bundle *secrets.Bundle
+	// SaveBundle stores a recovered bundle on disk; nil when none was recovered. Called after consent.
+	SaveBundle func() error
+	DialTalos  func(ctx context.Context, endpoint string) (talosConfigReader, error)
 
 	Stdout io.Writer
 	Stderr io.Writer
@@ -187,6 +189,12 @@ func runAdopt(ctx context.Context, clusterName, namespace string, deps adoptDeps
 	}
 
 	// Phase 2: write.
+	if deps.SaveBundle != nil {
+		if err := deps.SaveBundle(); err != nil {
+			return err
+		}
+	}
+
 	if _, err := writeAdopt(ctx, deps.K8s, st.writeInput(ctx, deps, namespace, writable, patches, tp)); err != nil {
 		return err
 	}
@@ -244,7 +252,8 @@ func loadAdoption(ctx context.Context, clusterName, namespace string, deps adopt
 				machines = append(machines, &list.Items[i])
 			}
 		}
-	case apierrors.IsNotFound(err):
+	case apierrors.IsNotFound(err) || apimeta.IsNoMatchError(err):
+		// Ichor is not installed yet: its kinds are not served, which is as fresh as not found.
 		st.fresh = true
 
 		if machines, err = discoverMachines(ctx, deps, clusterName, namespace); err != nil {

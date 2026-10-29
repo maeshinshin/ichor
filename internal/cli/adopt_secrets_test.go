@@ -110,10 +110,26 @@ func TestResolveAdoptBundle_RecoverStoresPrivately(t *testing.T) {
 
 	opts := adoptSecretsOptions{Recover: true, RecoverFrom: "10.0.0.1:50000", Cluster: "c1", Contract: testVersionContract}
 
-	bundle, path, err := resolveAdoptBundle(context.Background(), opts, dialerFor(reader, nil), &stderr)
+	bundle, save, err := resolveAdoptBundle(context.Background(), opts, dialerFor(reader, nil), &stderr)
 	if err != nil || bundle == nil {
 		t.Fatalf("resolveAdoptBundle: %v", err)
 	}
+
+	dir, err := bundleDir("c1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Resolving writes nothing: the plan phase leaves no file (ADR 0103, 1.8).
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Fatalf("resolveAdoptBundle left something on disk: %v", err)
+	}
+
+	if err := save(); err != nil {
+		t.Fatal(err)
+	}
+
+	path := filepath.Join(dir, "secrets.yaml")
 
 	info, err := os.Stat(path)
 	if err != nil {
@@ -178,7 +194,7 @@ func TestResolveAdoptBundle_FileStillWorks(t *testing.T) {
 	}
 
 	bundle, stored, err := resolveAdoptBundle(context.Background(), adoptSecretsOptions{File: path}, nil, &bytes.Buffer{})
-	if err != nil || bundle == nil || stored != "" {
-		t.Fatalf("bundle=%v stored=%q err=%v", bundle, stored, err)
+	if err != nil || bundle == nil || stored != nil {
+		t.Fatalf("bundle=%v stored=%t err=%v", bundle, stored != nil, err)
 	}
 }

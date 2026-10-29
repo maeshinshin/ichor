@@ -329,7 +329,7 @@ func (a *configRolloutAdvancer) stillWaiting(
 func (a *configRolloutAdvancer) fail(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, err error,
 ) error {
-	if endErr := a.endEvacuation(ctx, nil, cluster, m); endErr != nil {
+	if endErr := endEvacuationOf(ctx, a.Client, a.Evacuator, nil, cluster, m); endErr != nil {
 		return fmt.Errorf("%w (and re-enabling scheduling failed: %v)", err, endErr)
 	}
 
@@ -614,7 +614,7 @@ func (a *configRolloutAdvancer) finish(
 		return false, a.stillWaiting(ctx, cluster, m, "uncordoning the node: "+err.Error())
 	}
 
-	if err := a.endEvacuation(ctx, talos, cluster, m); err != nil {
+	if err := endEvacuationOf(ctx, a.Client, a.Evacuator, talos, cluster, m); err != nil {
 		return false, err
 	}
 
@@ -623,23 +623,6 @@ func (a *configRolloutAdvancer) finish(
 	}
 
 	return true, nil
-}
-
-// endEvacuation re-enables scheduling after an evacuation, resolving the node's name like the
-// rest of the rollout (talos may be nil when the node cannot be dialed).
-func (a *configRolloutAdvancer) endEvacuation(
-	ctx context.Context, talos TalosClient, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
-) error {
-	if a.Evacuator == nil || !apimeta.IsStatusConditionTrue(m.Status.Conditions, conditionStorageEvacuation) {
-		return nil
-	}
-
-	node, err := resolveNodeName(ctx, a.Client, talos, m)
-	if err != nil {
-		return err
-	}
-
-	return endMachineEvacuation(ctx, a.Client, a.Evacuator, cluster, m, node)
 }
 
 // uncordon lifts the cordon drainForReboot made, if any (a no-op without Kube).

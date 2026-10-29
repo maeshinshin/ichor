@@ -25,6 +25,8 @@ import (
 
 	"connectrpc.com/connect"
 	corev1 "k8s.io/api/core/v1"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -96,6 +98,16 @@ type nodePlan struct {
 	bg      *pb.BreakGlass
 	// asked is the name the caller used for the machine: its own, its hostname or its Node name.
 	asked string
+	// belowCount is set by nodeBlocked when the removal is allowed below the declared count because
+	// the control plane is unreachable.
+	belowCount bool
+}
+
+// machineUnreachable reports whether m's Ready says its node has stopped answering.
+func machineUnreachable(m *ichorv1alpha1.TalosMachine) bool {
+	c := apimeta.FindStatusCondition(m.Status.Conditions, "Ready")
+
+	return c != nil && c.Status == metav1.ConditionFalse && c.Reason == ichorv1alpha1.TalosMachineReasonNodeUnreachable
 }
 
 func invalid(format string, args ...any) error {
@@ -158,6 +170,12 @@ func (s *Server) planNode(ctx context.Context, req *pb.NodeActionRequest) (*opPl
 	p.resp.Blocked, err = s.nodeBlocked(ctx, np, &cluster, cps)
 	if err != nil {
 		return nil, err
+	}
+
+	if np.belowCount {
+		p.resp.Warning = fmt.Sprintf("Control plane %q does not answer, so it is removed although that leaves fewer control planes than the declared %d. "+
+			"The controller first checks that its etcd member is unhealthy and refuses otherwise. Approve a replacement afterwards to get back to %d.",
+			m.Name, cluster.Spec.ControlPlane.Count, cluster.Spec.ControlPlane.Count)
 	}
 
 	return p, nil
@@ -315,7 +333,14 @@ func (s *Server) nodeBlocked(ctx context.Context, np *nodePlan, cluster *ichorv1
 		}
 
 		if err := deleteguard.CheckControlPlaneCount(cps, int(cluster.Spec.ControlPlane.Count)); err != nil {
-			return strings.TrimPrefix(err.Error(), "delete refused: "), nil
+			// A control plane that does not answer is the one to replace: removing it below the
+			// declared count is how the replacement's etcd can join. The controller
+			// checks the etcd member itself before it removes anything.
+			if action != nodeActionRemove || !machineUnreachable(m) {
+				return strings.TrimPrefix(err.Error(), "delete refused: "), nil
+			}
+
+			np.belowCount = true
 		}
 	}
 

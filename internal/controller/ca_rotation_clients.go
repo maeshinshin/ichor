@@ -42,7 +42,7 @@ import (
 // CNI, it recovers from its own action.
 
 // +kubebuilder:rbac:groups=apps,resources=daemonsets,resourceNames=kube-proxy;cilium,verbs=get;patch
-// +kubebuilder:rbac:groups=apps,resources=deployments,resourceNames=coredns,verbs=get;patch
+// +kubebuilder:rbac:groups=apps,resources=deployments,resourceNames=coredns;cilium-operator,verbs=get;patch
 // ichor-ui is found by label (kustomize prefixes its name), which needs list; patch then cannot be pinned to a name.
 // +kubebuilder:rbac:groups=apps,namespace=ichor-system,resources=deployments,verbs=get;list;patch
 
@@ -59,6 +59,8 @@ const (
 
 	kindDeployment = "Deployment"
 	corednsName    = "coredns"
+
+	ciliumOperatorName = "cilium-operator"
 )
 
 // caClientRestartTimeout is how long the restarted workloads get to become available again.
@@ -72,11 +74,21 @@ type caClient struct {
 
 func (a caClient) String() string { return a.kind + " " + a.namespace + "/" + a.name }
 
+// restartTargets is the restart order: the CNI first (the cilium agents, then cilium-operator), then
+// kube-proxy, CoreDNS, ichor-ui. With the old CA an agent cannot reach the API, goes not Ready and
+// Cilium taints the Nodes node.cilium.io/agent-not-ready:NoSchedule, so a CoreDNS restarted before it
+// stays Pending and the sequence never gets to the CNI (ADR 0063, CNI-first amendment). A cluster
+// whose preset is unmanaged has a CNI Ichor does not know: it restarts none (the completion note says so).
 func (c *caRun) restartTargets(ctx context.Context) ([]caClient, error) {
-	targets := []caClient{{kindDeployment, kubeSystemNamespace, corednsName}}
-	for _, n := range restoreAgentNames {
-		targets = append(targets, caClient{"DaemonSet", kubeSystemNamespace, n})
+	var targets []caClient
+
+	if c.cluster.Spec.CNI.Preset != ichorv1alpha1.TalosClusterCNIPresetUnmanaged {
+		targets = append(targets, caClient{"DaemonSet", kubeSystemNamespace, ciliumName},
+			caClient{kindDeployment, kubeSystemNamespace, ciliumOperatorName})
 	}
+
+	targets = append(targets, caClient{"DaemonSet", kubeSystemNamespace, kubeProxyName},
+		caClient{kindDeployment, kubeSystemNamespace, corednsName})
 
 	// ichor-ui, found by the label every install path sets; none installed is fine.
 	list, err := c.r.KubeClient.AppsV1().Deployments(c.r.ControllerNamespace).List(ctx,
@@ -92,7 +104,7 @@ func (c *caRun) restartTargets(ctx context.Context) ([]caClient, error) {
 	return targets, nil
 }
 
-// restartClients restarts, once and one at a time (CoreDNS, kube-proxy, the CNI, ichor-ui), the in-cluster
+// restartClients restarts, once and one at a time (the CNI, kube-proxy, CoreDNS, ichor-ui), the in-cluster
 // clients known to keep the old CA, and waits (bounded) for each before the next. The caller runs it only
 // after the replaced bundle is verified and every Node is Ready. done is false while the rotation must wait; a workload that is not back after the timeout
 // is named in the returned note and does not hold the rotation.

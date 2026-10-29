@@ -79,6 +79,7 @@ rules:
 - apiGroups:
   - apps
   resourceNames:
+  - cilium-operator
   - coredns
   resources:
   - deployments

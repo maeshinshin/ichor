@@ -93,6 +93,8 @@ const (
 	// to see it in their projected ca.crt: kubelet refreshes projected volumes about every minute.
 	caClientSettleDelay      = 2 * time.Minute
 	reasonCARotationComplete = "Rotated"
+	// reasonCARotationClientsNotBack ends a rotation whose restarted clients were not available in time.
+	reasonCARotationClientsNotBack = "RotatedClientsNotBack"
 
 	// reasonCARotationAwaitingCredentials: the operation waits for the operator's credential hand-off.
 	reasonCARotationAwaitingCredentials = "AwaitingCredentials"
@@ -988,6 +990,49 @@ func (c *caRun) complete(ctx context.Context) (ctrl.Result, error) {
 		ctrl.LoggerFrom(ctx).Error(err, "Could not clear this controller's extra trusted CAs")
 	}
 
-	return ctrl.Result{}, c.status(ctx, ichorv1alpha1.TalosOperationPhaseCompleted, metav1.ConditionFalse,
-		reasonCARotationComplete, "the Talos API and Kubernetes API CAs are replaced; export the new secrets bundle"+c.restartNote)
+	reason, message := reasonCARotationComplete, "the Talos API and Kubernetes API CAs are replaced; export the new secrets bundle"+c.restartNote
+
+	if c.cluster.Spec.CNI.Preset == ichorv1alpha1.TalosClusterCNIPresetUnmanaged {
+		message += "; the CNI is unmanaged, so Ichor did not restart it: restart its pods if they report x509 errors"
+	}
+
+	if c.restartNote != "" {
+		reason = reasonCARotationClientsNotBack
+	}
+
+	if err := c.setClientsNotRestarted(ctx, c.restartNote != "", message); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	return ctrl.Result{}, c.status(ctx, ichorv1alpha1.TalosOperationPhaseCompleted, metav1.ConditionFalse, reason, message)
+}
+
+// setClientsNotRestarted raises (notBack) or lowers the cluster's CAClientsNotRestarted condition. The
+// operation still ends Completed (the CAs are replaced), but with a distinct reason, this condition,
+// which the UI lists under Needs attention, and a Warning Event on the raise: it is not a clean success.
+func (c *caRun) setClientsNotRestarted(ctx context.Context, notBack bool, message string) error {
+	if !notBack && !apimeta.IsStatusConditionTrue(c.cluster.Status.Conditions, ichorv1alpha1.ConditionCAClientsNotRestarted) {
+		return nil
+	}
+
+	cond := metav1.Condition{
+		Type: ichorv1alpha1.ConditionCAClientsNotRestarted, Status: metav1.ConditionFalse, Reason: "Restarted",
+		Message: "the clients restarted after the last CA rotation are back", ObservedGeneration: c.cluster.Generation,
+	}
+	if notBack {
+		cond.Status, cond.Reason, cond.Message = metav1.ConditionTrue, bundleStaleReason, c.scrub.clean(message)
+	}
+
+	base := c.cluster.DeepCopy()
+	apimeta.SetStatusCondition(&c.cluster.Status.Conditions, cond)
+
+	if err := c.r.Status().Patch(ctx, c.cluster, client.MergeFrom(base)); err != nil {
+		return fmt.Errorf("setting CAClientsNotRestarted: %w", err)
+	}
+
+	if notBack && c.r.Recorder != nil {
+		c.r.Recorder.Event(c.cluster, corev1.EventTypeWarning, ichorv1alpha1.ConditionCAClientsNotRestarted, cond.Message)
+	}
+
+	return nil
 }

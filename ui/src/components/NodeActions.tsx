@@ -29,6 +29,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -425,31 +426,26 @@ function NodeActionDialog({
         {def.id === 'restart-service' && (
           <div class="space-y-2">
             <Label htmlFor="node-action-service">{t('node.action.service')}</Label>
-            <select
-              id="node-action-service"
-              class="h-9 w-full rounded-md border bg-background px-2 text-sm"
-              value={service}
-              onChange={(e) => setService((e.currentTarget as HTMLSelectElement).value)}
-            >
-              {restartableServices.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
+            <Select value={service} onValueChange={setService}>
+              <SelectTrigger id="node-action-service" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {restartableServices.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {s}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         )}
 
         {def.id === 'etcd-defrag' && (
-          <label class="flex items-start gap-2 text-sm">
-            <input
-              type="checkbox"
-              class="mt-1"
-              checked={allowLeader}
-              onChange={(e) => setAllowLeader((e.currentTarget as HTMLInputElement).checked)}
-            />
-            <span>{t('node.action.allowLeader')}</span>
-          </label>
+          <div class="flex items-center gap-2 text-sm">
+            <Checkbox id="node-action-leader" checked={allowLeader} onCheckedChange={(on: boolean | 'indeterminate') => setAllowLeader(on === true)} />
+            <Label htmlFor="node-action-leader">{t('node.action.allowLeader')}</Label>
+          </div>
         )}
 
         {plan && plan.blocked !== '' && (

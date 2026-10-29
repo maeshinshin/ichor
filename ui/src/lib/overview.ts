@@ -45,23 +45,17 @@ export function timeAgo(nowMs: number, thenMs: number): string {
   return `${Math.floor(s / 86400)} d ago`
 }
 
-// newestSnapshotSeconds is the time of the newest snapshot over all backups, or null when there is none.
-export function newestSnapshotSeconds(backups: Snapshots): number | null {
+// backupsValue is the Backups tile: the age of the newest snapshot, "No snapshot yet" while a backup
+// exists without one, or "Not configured" when there is no backup (null: not loaded yet, a dash).
+export function backupsValue(backups: Snapshots | null, nowMs: number): string {
+  if (backups === null) return '-'
+  if (backups.length === 0) return 'Not configured'
   let newest: number | null = null
   for (const b of backups) {
     for (const s of b.snapshots) {
       if (s.time && (newest === null || Number(s.time.seconds) > newest)) newest = Number(s.time.seconds)
     }
   }
-  return newest
-}
-
-// backupsValue is the Backups tile: the age of the newest snapshot, "No snapshot yet" while a backup
-// exists without one, or "Not configured" when there is no backup (null: not loaded yet, a dash).
-export function backupsValue(backups: Snapshots | null, nowMs: number): string {
-  if (backups === null) return '-'
-  if (backups.length === 0) return 'Not configured'
-  const newest = newestSnapshotSeconds(backups)
   return newest === null ? 'No snapshot yet' : timeAgo(nowMs, newest * 1000)
 }
 

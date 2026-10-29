@@ -53,7 +53,7 @@ func TestUnmanagedRendersTheLiveCNIConfiguration(t *testing.T) {
 
 	unmanaged := func(talosCNI, proxy string) mutation {
 		return func(c *ichorv1alpha1.TalosCluster, _ *ichorv1alpha1.TalosMachine) {
-			c.Spec.CNI.Preset = PresetUnmanaged
+			c.Spec.CNI.Preset = ichorv1alpha1.TalosClusterCNIPresetUnmanaged
 			c.Spec.CNI.KubeProxy = proxy
 			c.Spec.CNI.Unmanaged = &ichorv1alpha1.TalosClusterCNIUnmanaged{TalosCNI: talosCNI}
 		}

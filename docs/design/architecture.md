@@ -234,7 +234,7 @@ Group `ichor.maesh.dev`, version `v1alpha1`.
 | `TalosStorage` | namespaced | Thin integration with a storage system: node selector, disk preset, evacuation settings | yes |
 | `TalosEtcdBackup` | namespaced | Backup schedule, destination, retention, encryption | yes |
 | `TalosOperation` | namespaced | A Job-style run of one action over the cluster or a node: a Talos, Kubernetes or Ichor upgrade, a kube-proxy switch or Cilium chart upgrade (`cni`), shutdown, CA rotation, config rollout, node action, etcd restore | no |
-| `IchorInstallation` | cluster, singleton | Ichor's own version and management mode, (`spec.stack` is deprecated and unused, ADR 0101) | yes |
+| `IchorInstallation` | cluster, singleton | Ichor's own version | yes |
 | `IchorUser` | namespaced | One of Ichor's own users: display name, e-mail, roles, disabled flag (ADR 0094) | yes |
 
 There are no CRDs for installing CNI, storage or monitoring. Their Talos-side
@@ -413,10 +413,7 @@ operations: removing an Ichor finalizer from a deleting object, resetting a
 node, restoring etcd and overriding the last-worker guard. It is checked with a
 SubjectAccessReview made as the user (ADR 0065).
 
-`IchorInstallation.spec.managementMode` is deprecated and unused: upgrades
-always run through the installer Job. The retired value `external` is accepted
-and treated as `ichor`. `TalosCluster.spec.gitops` is likewise deprecated and
-unused; both fields stay in the CRDs because a CRD never drops a field.
+Upgrades always run through the installer Job. The fields `IchorInstallation.spec.managementMode`, `spec.stack`, `status.stack`, `TalosCluster.spec.gitops` and `spec.cni.handover` are retired (ADR 0101): the installer's CRD check names them explicitly and lets them disappear, and refuses every other removed field.
 
 The CLI keeps a way out of the corners: `ichor upgrade ichor VERSION --local`
 (no ichor-ui) and `ichor restore --recover-cluster`.

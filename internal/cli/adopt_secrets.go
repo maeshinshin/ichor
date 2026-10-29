@@ -17,6 +17,7 @@ limitations under the License.
 package cli
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -24,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 
+	yaml "go.yaml.in/yaml/v4"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -83,16 +85,12 @@ func resolveAdoptBundle(
 		return nil, nil, errNoRecoverFrom
 	}
 
-	// Check the target before dialing, so a refusal costs no node call.
 	dir, err := bundleDir(opts.Cluster)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	target := filepath.Join(dir, secretsbundle.SecretKey)
-	if _, err := os.Stat(target); err == nil {
-		return nil, nil, errRecoveredExists
-	}
 
 	contract, err := parseAdoptContract(opts.Contract)
 	if err != nil {
@@ -111,6 +109,17 @@ func resolveAdoptBundle(
 	bundle, err := recoverSecretsBundle(ctx, talos, contract)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	// A bundle stored by an earlier run (killed after it saved) is fine when this recovery
+	// reproduces it exactly; a different one is never overwritten.
+	if stored, err := os.ReadFile(target); err == nil {
+		again, mErr := yaml.Marshal(bundle)
+		if mErr != nil || !bytes.Equal(stored, again) {
+			return nil, nil, errRecoveredExists
+		}
+
+		return bundle, func() error { return nil }, nil
 	}
 
 	return bundle, func() error {

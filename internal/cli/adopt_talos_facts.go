@@ -178,6 +178,13 @@ func ReadTalosFacts(cfgBytes []byte) (*TalosFacts, error) {
 		f.ScheduleOnControlPlanes = raw.ClusterConfig.AllowSchedulingOnControlPlanes //nolint:staticcheck // as above
 	}
 
+	// The multi-document form states it as the control-plane taint on the node.
+	if n := provider.K8sNodeConfig(); f.ScheduleOnControlPlanes == nil && n != nil {
+		_, tainted := n.Taints()["node-role.kubernetes.io/control-plane"]
+		schedulable := !tainted
+		f.ScheduleOnControlPlanes = &schedulable
+	}
+
 	f.CNI = cniFacts(provider.K8sFlannelCNIConfig() != nil, provider)
 
 	return f, nil

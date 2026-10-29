@@ -520,7 +520,7 @@ func (st *adoptState) plan(deps adoptDeps) ([]*adoptPlan, error) {
 			continue
 		}
 
-		if st.fresh && n.M.Spec.Install == nil {
+		if st.fresh && n.M.Spec.Install == nil && n.Facts.Install.DiskSelector != "" {
 			return nil, fmt.Errorf("adopt: machine %q installs to a disk chosen by a selector; Ichor needs a plain device path in "+
 				"machine.install.disk to record spec.install", n.M.Name)
 		}

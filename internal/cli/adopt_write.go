@@ -376,9 +376,17 @@ func (w *adoptWriter) machines(ctx context.Context, clusterName string) error {
 			return fmt.Errorf("adopt: the node at %q reported no SMBIOS UUID; adopt needs a strong hardware identity", m.Address)
 		}
 
-		disk, err := parseInstallDisk(m.InstallDisk)
-		if err != nil {
-			return fmt.Errorf("adopt: node %q: %w", m.Address, err)
+		// A node whose configuration states no install disk gets no spec.install: the render
+		// then states none either.
+		var install *ichorv1alpha1.TalosMachineInstall
+
+		if m.InstallDisk != "" {
+			disk, err := parseInstallDisk(m.InstallDisk)
+			if err != nil {
+				return fmt.Errorf("adopt: node %q: %w", m.Address, err)
+			}
+
+			install = &ichorv1alpha1.TalosMachineInstall{Disk: *disk}
 		}
 
 		want := &ichorv1alpha1.TalosMachine{
@@ -391,7 +399,7 @@ func (w *adoptWriter) machines(ctx context.Context, clusterName string) error {
 				},
 				Endpoint:      m.Address,
 				Role:          m.Role,
-				Install:       &ichorv1alpha1.TalosMachineInstall{Disk: *disk},
+				Install:       install,
 				ApprovalState: ichorv1alpha1.MachineApprovalStateApproved,
 			},
 		}

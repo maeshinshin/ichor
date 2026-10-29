@@ -100,6 +100,10 @@ spec:
         # Break-glass machine reclaim (ADR 0103, section 2.2).
         - --reclaim
         {{- end }}
+        {{- if .Values.settings.readOnly }}
+        # The runtime settings are owned by this deployment: spec.reclaim/users/defaults are ignored and denied (ADR 0105).
+        - --settings-read-only
+        {{- end }}
         {{- if eq (toString .Values.networkPolicy.cilium.enabled) "false" }}
         # Explicit opt-out: the installer Job skips Ichor's CiliumNetworkPolicies (ADR 0100).
         - --no-cilium-policies

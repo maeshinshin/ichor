@@ -116,6 +116,11 @@ spec:
         - name: ICHOR_RECLAIM_ENABLED
           value: "true"
         {{- end }}
+        {{- if .Values.settings.readOnly }}
+        # The same switch as the controller's --settings-read-only (ADR 0105).
+        - name: ICHOR_SETTINGS_READ_ONLY
+          value: "true"
+        {{- end }}
         {{- if .Values.ichorUI.oidc.enabled }}
         # OIDC login (docs/adr/0058). A public client: there is no client secret anywhere.
         - name: ICHOR_OIDC_ISSUER

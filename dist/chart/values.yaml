@@ -466,6 +466,13 @@ webhook:
 reclaim:
   enabled: false
 
+## Ichor's runtime settings live in the IchorInstallation named ichor (spec.reclaim, spec.users,
+## spec.defaults; ADR 0105) and win over the values here when set. readOnly: true hands them to this
+## chart instead: the spec fields are ignored, the webhook denies writes to them, and the Settings tab
+## is read-only. Use it when Git or Helm owns the configuration.
+settings:
+  readOnly: false
+
 ## ValidatingAdmissionPolicy guarding TalosCluster.spec.cni.kubeProxy
 ## switches (ADR 0013). Independent of webhook.enabled above: it is
 ## enforced by the apiserver itself (stable since Kubernetes 1.30, this

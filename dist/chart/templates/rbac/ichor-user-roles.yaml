@@ -208,6 +208,24 @@ rules:
 - apiGroups:
   - ichor.maesh.dev
   resources:
+  - ichorinstallations/version
+  verbs:
+  - update
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - ichorinstallations/reclaim
+  verbs:
+  - update
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - ichorinstallations/settings
+  verbs:
+  - update
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
   - talosoperations/ca-rotation
   - talosoperations/etcd-restore
   - talosoperations/node-reset

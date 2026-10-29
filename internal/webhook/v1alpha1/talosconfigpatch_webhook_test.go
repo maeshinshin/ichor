@@ -10,7 +10,6 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	yaml "go.yaml.in/yaml/v4"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -19,7 +18,12 @@ import (
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
 
-const dryRenderNS = "ns"
+const (
+	dryRenderNS       = "ns"
+	dryRenderSecretNS = "ichor-system"
+	dryRenderFalse    = "false"
+	dryRenderVersion  = "v1alpha1"
+)
 
 func dryRenderValidator(t *testing.T, objs ...runtime.Object) *TalosConfigPatchCustomValidator {
 	t.Helper()
@@ -49,22 +53,22 @@ func dryRenderValidator(t *testing.T, objs ...runtime.Object) *TalosConfigPatchC
 	}
 
 	cluster := &ichorv1alpha1.TalosCluster{
-		ObjectMeta: metav1.ObjectMeta{Name: "c", Namespace: dryRenderNS},
+		Name: "c", Namespace: dryRenderNS,
 		Spec: ichorv1alpha1.TalosClusterSpec{
 			Endpoint:          ichorv1alpha1.TalosClusterEndpoint{Type: "vip", Address: "10.0.0.5"},
 			TalosVersion:      "v1.14.3",
 			KubernetesVersion: "v1.36.0",
 			VersionContract:   "v1.14",
 			SecretsRef:        corev1.LocalObjectReference{Name: "bundle"},
-			ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: 1, Schedulable: "false"},
+			ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: 1, Schedulable: dryRenderFalse},
 		},
 	}
 	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: "bundle", Namespace: "ichor-system"},
-		Data:       map[string][]byte{secretsbundle.SecretKey: raw},
+		Name: "bundle", Namespace: dryRenderSecretNS,
+		Data: map[string][]byte{secretsbundle.SecretKey: raw},
 	}
 	cp := &ichorv1alpha1.TalosMachine{
-		ObjectMeta: metav1.ObjectMeta{Name: "cp1", Namespace: dryRenderNS},
+		Name: "cp1", Namespace: dryRenderNS,
 		Spec: ichorv1alpha1.TalosMachineSpec{
 			ClusterRef:    corev1.LocalObjectReference{Name: "c"},
 			Identity:      ichorv1alpha1.TalosMachineIdentity{UUID: "u1"},
@@ -76,12 +80,12 @@ func dryRenderValidator(t *testing.T, objs ...runtime.Object) *TalosConfigPatchC
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(append(objs, cluster, secret, cp)...).Build()
 
-	return &TalosConfigPatchCustomValidator{Client: c, SecretNamespace: "ichor-system"}
+	return &TalosConfigPatchCustomValidator{Client: c, SecretNamespace: dryRenderSecretNS}
 }
 
 func configPatch(name string, cfg *typedconfig.Config) *ichorv1alpha1.TalosConfigPatch {
 	return &ichorv1alpha1.TalosConfigPatch{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: dryRenderNS},
+		Name: name, Namespace: dryRenderNS,
 		Spec: ichorv1alpha1.TalosConfigPatchSpec{
 			ClusterRef: corev1.LocalObjectReference{Name: "c"},
 			Layer:      "cluster",
@@ -96,7 +100,7 @@ func TestTalosConfigPatchDryRender(t *testing.T) {
 
 	t.Run("a v1alpha1 apiServer block under the multi-document contract is refused with the render error", func(t *testing.T) {
 		p := configPatch("api", &typedconfig.Config{
-			ConfigVersion: "v1alpha1",
+			ConfigVersion: dryRenderVersion,
 			ClusterConfig: &typedconfig.ClusterConfig{APIServerConfig: &typedconfig.APIServerConfig{
 				ExtraArgsConfig: map[string][]string{"audit-log-maxage": {"3"}},
 			}},
@@ -114,7 +118,7 @@ func TestTalosConfigPatchDryRender(t *testing.T) {
 
 	t.Run("a sparse patch that renders is admitted", func(t *testing.T) {
 		p := configPatch("ok", &typedconfig.Config{
-			ConfigVersion: "v1alpha1",
+			ConfigVersion: dryRenderVersion,
 			ClusterConfig: &typedconfig.ClusterConfig{ExtraManifests: []string{"https://example.invalid/x.yaml"}},
 		})
 
@@ -125,7 +129,7 @@ func TestTalosConfigPatchDryRender(t *testing.T) {
 
 	t.Run("a patch that applies to no machine is admitted", func(t *testing.T) {
 		p := configPatch("none", &typedconfig.Config{
-			ConfigVersion: "v1alpha1",
+			ConfigVersion: dryRenderVersion,
 			ClusterConfig: &typedconfig.ClusterConfig{APIServerConfig: &typedconfig.APIServerConfig{
 				ExtraArgsConfig: map[string][]string{"x": {"y"}},
 			}},
@@ -140,7 +144,7 @@ func TestTalosConfigPatchDryRender(t *testing.T) {
 
 	t.Run("a machine that already fails to render does not block the patch", func(t *testing.T) {
 		broken := configPatch("broken", &typedconfig.Config{
-			ConfigVersion: "v1alpha1",
+			ConfigVersion: dryRenderVersion,
 			ClusterConfig: &typedconfig.ClusterConfig{APIServerConfig: &typedconfig.APIServerConfig{
 				ExtraArgsConfig: map[string][]string{"x": {"y"}},
 			}},
@@ -148,7 +152,7 @@ func TestTalosConfigPatchDryRender(t *testing.T) {
 		v2 := dryRenderValidator(t, broken)
 
 		p := configPatch("fix", &typedconfig.Config{
-			ConfigVersion: "v1alpha1",
+			ConfigVersion: dryRenderVersion,
 			ClusterConfig: &typedconfig.ClusterConfig{ExtraManifests: []string{"https://example.invalid/x.yaml"}},
 		})
 
@@ -162,7 +166,7 @@ func TestTalosConfigPatchDryRender(t *testing.T) {
 		v3.SecretNamespace = "elsewhere"
 
 		p := configPatch("nb", &typedconfig.Config{
-			ConfigVersion: "v1alpha1",
+			ConfigVersion: dryRenderVersion,
 			ClusterConfig: &typedconfig.ClusterConfig{APIServerConfig: &typedconfig.APIServerConfig{
 				ExtraArgsConfig: map[string][]string{"x": {"y"}},
 			}},

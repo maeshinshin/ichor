@@ -356,6 +356,28 @@ func TestAdoptRefusesReplacedKubeProxyWithoutKubePrism(t *testing.T) {
 	}
 }
 
+// kube-proxy enabled mode is refused too: the CNI Job needs KubePrism, and enabling it needs a reboot.
+func TestAdoptRefusesEnabledKubeProxyWithoutKubePrism(t *testing.T) {
+	env := newFlowEnv(t, cniCilium, nil)
+	*env.writes = nil
+
+	for addr, cfg := range env.live {
+		env.live[addr] = dropDocument(cfg, "KubePrismConfig")
+	}
+
+	deps := env.deps(t)
+	deps.AssumeYes = true
+
+	err := runAdopt(context.Background(), env.cluster.Name, testNamespace, deps)
+	if err == nil || !strings.Contains(err.Error(), "KubePrism is off on machine") || !strings.Contains(err.Error(), "port 7445") {
+		t.Fatalf("runAdopt = %v, want the KubePrism refusal", err)
+	}
+
+	if len(*env.writes) != 0 {
+		t.Fatalf("wrote despite the refusal: %v", *env.writes)
+	}
+}
+
 // A cluster Ichor has never seen needs --node to find its machines.
 func TestAdoptNewClusterNeedsNode(t *testing.T) {
 	env := newFlowEnv(t, cniCilium, nil)

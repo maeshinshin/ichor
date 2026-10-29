@@ -50,7 +50,7 @@ func ichorRecords(c *foreign.Cluster) string {
 // cniJobPods returns the pods of the ichor-cni Jobs (pods are named after their Job).
 func cniJobPods(c *foreign.Cluster) []string {
 	var res []string
-	for _, p := range names(c, "-n", crNS, "get", "pods", "-l", "job-name") {
+	for _, p := range names(c, "-n", "kube-system", "get", "pods", "-l", "job-name") {
 		if strings.HasPrefix(p, "ichor-cni") {
 			res = append(res, p)
 		}
@@ -100,7 +100,9 @@ func TestA8KillJob(t *testing.T) {
 			foreignLeft := len(foreignRecs(c))
 			deployed := strings.Contains(mine, "=deployed")
 			if kills == 0 || (deployed && foreignLeft > 0) {
-				out, err := innerDelete(c, "-n", crNS, "delete", "pod", pods[0], "--wait=false")
+				pre, _ := inner(c, "-n", "kube-system", "logs", pods[0], "--tail=10")
+				note("log of %s before the kill: %s", pods[0], strings.ReplaceAll(strings.TrimSpace(pre), "\n", " | "))
+				out, err := innerDelete(c, "-n", "kube-system", "delete", "pod", pods[0], "--wait=false")
 				kills++
 				note("kill %d of %s: ichor records [%s], foreign records left %d: %v %s", kills, pods[0], strings.ReplaceAll(mine, "\n", "; "), foreignLeft, err, strings.TrimSpace(out))
 				time.Sleep(20 * time.Second)
@@ -108,7 +110,7 @@ func TestA8KillJob(t *testing.T) {
 		}
 	}()
 	start := time.Now()
-	_, needed := takeoverAdopt(t, c, geneve...)
+	_, needed := takeoverAdopt(t, c)
 	t.Logf("adopt took %s; diff gate needed --accept-cilium-diff: %v", time.Since(start).Round(time.Second), needed)
 	waitHandover(t, c, "")
 	close(stop)
@@ -136,11 +138,17 @@ func TestA8KillJob(t *testing.T) {
 	if left, _ := inner(c, "-n", "kube-system", "get", "secrets", "-l", "owner=helm", "-o", "jsonpath={.items[*].metadata.name}"); strings.TrimSpace(left) != "" {
 		t.Errorf("foreign release record Secrets remain: %s", left)
 	}
-	jobs, _ := inner(c, "-n", crNS, "get", "jobs,pods", "--no-headers")
-	t.Logf("jobs and pods in %s:\n%s", crNS, jobs)
+	jobs, _ := inner(c, "-n", "kube-system", "get", "jobs,pods", "--no-headers")
+	t.Logf("jobs and pods in kube-system:\n%s", jobs)
 	for _, p := range cniJobPods(c) {
-		logs, _ := inner(c, "-n", crNS, "logs", p, "--tail=30")
+		logs, _ := inner(c, "-n", "kube-system", "logs", p, "--tail=30")
 		t.Logf("log of %s:\n%s", p, logs)
+	}
+	cl, _ := inner(c, "-n", crNS, "logs", "deploy/ichor-controller-manager", "--since=30m")
+	for _, l := range strings.Split(cl, "\n") {
+		if ll := strings.ToLower(l); strings.Contains(ll, "cni") || strings.Contains(ll, "handover") {
+			t.Logf("controller: %.400s", l)
+		}
 	}
 	if h := clusterJSONPath(c, handoverPath); h != "True" {
 		t.Errorf("CNIHandover = %q", h)

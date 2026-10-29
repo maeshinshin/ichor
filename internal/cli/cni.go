@@ -45,8 +45,11 @@ var cniKubeProxyCmd = &cobra.Command{
 node by node: the new side comes up and is verified before the old side is turned off.
 The admission policy that guards this field wants a confirmation annotation; the
 server sets it (to the new mode) for this one write and removes it again, so it never stays behind as
-a standing consent. Ichor does not edit the CNI's own configuration: the operation
-tells you the values to put there and waits for you to.
+a standing consent. Ichor owns the Cilium release (a Helm release applied by a Job), so the
+operation applies the new kube-proxy mode to it itself: replacing starts Cilium's replacement
+first and verifies it on every node before kube-proxy is turned off; enabling restores
+kube-proxy first and then switches Cilium's replacement off. Writing spec.cni.kubeProxy alone
+changes nothing in Cilium; only this operation does.
 
 It shows which machines are touched and in which order, and asks for confirmation unless --yes.`,
 	Args:      cobra.ExactArgs(1),

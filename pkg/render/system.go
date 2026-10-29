@@ -24,6 +24,7 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/config/config"
 	"github.com/siderolabs/talos/pkg/machinery/config/types/k8s"
 	mv1alpha1 "github.com/siderolabs/talos/pkg/machinery/config/types/v1alpha1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -72,7 +73,8 @@ func ResolveSystemInputs(
 	}
 
 	var storages ichorv1alpha1.TalosStorageList
-	if err := c.List(ctx, &storages, client.InNamespace(cluster.Namespace)); err != nil {
+	// A kind the API server does not serve (Ichor is not installed yet, as in a first adopt) has no objects.
+	if err := c.List(ctx, &storages, client.InNamespace(cluster.Namespace)); err != nil && !meta.IsNoMatchError(err) {
 		return nil, fmt.Errorf("listing TalosStorages: %w", err)
 	}
 

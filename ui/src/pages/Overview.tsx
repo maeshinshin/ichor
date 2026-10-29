@@ -7,11 +7,9 @@ import {
   ChevronsUpDownIcon,
   CircleAlertIcon,
   CloudCogIcon,
-  CircleCheckIcon,
   CircleXIcon,
   EllipsisIcon,
   InboxIcon,
-  LoaderCircleIcon,
   NetworkIcon,
   PackageCheckIcon,
   PlusIcon,
@@ -24,6 +22,7 @@ import {
 } from 'lucide-preact'
 import { Alert } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
+import { ToneBadge } from '@/components/ToneBadge'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
@@ -325,10 +324,7 @@ function Home({
                             )}
                           </TableCell>
                           <TableCell>
-                            <Badge variant={toneVariant[opStateTone(state)]}>
-                              <ToneIcon tone={opStateTone(state)} />
-                              {t(`ops.state.${state}`)}
-                            </Badge>
+                            <ToneBadge tone={opStateTone(state)}>{t(`ops.state.${state}`)}</ToneBadge>
                           </TableCell>
                           <TableCell>{formatTimestamp(op.createdAt)}</TableCell>
                         </TableRow>
@@ -507,23 +503,6 @@ function Tile({ label, icon: Icon, value, sub, badge, target }: { label: string;
   )
 }
 
-// A state is a Badge: destructive for bad, secondary for good and running, outline otherwise.
-const toneVariant: Record<Tone, 'secondary' | 'destructive' | 'outline'> = {
-  good: 'secondary',
-  progress: 'secondary',
-  bad: 'destructive',
-  warn: 'outline',
-  neutral: 'outline',
-}
-
-// ToneIcon is the leading icon of a state Badge; a neutral state has none.
-function ToneIcon({ tone }: { tone: Tone }) {
-  if (tone === 'good') return <CircleCheckIcon data-icon="inline-start" aria-hidden="true" />
-  if (tone === 'progress') return <LoaderCircleIcon data-icon="inline-start" aria-hidden="true" />
-  if (tone === 'bad' || tone === 'warn') return <CircleAlertIcon data-icon="inline-start" aria-hidden="true" />
-  return null
-}
-
 function NodeRow({ m, first }: { m: Machine; first: boolean }) {
   const t = useT()
   const ready = readyOf(m)
@@ -541,10 +520,7 @@ function NodeRow({ m, first }: { m: Machine; first: boolean }) {
         <ItemDescription>{enumLabel(MachineRole, m.role)}</ItemDescription>
       </ItemContent>
       <ItemActions>
-        <Badge variant={toneVariant[tone]}>
-          <ToneIcon tone={tone} />
-          {word}
-        </Badge>
+        <ToneBadge tone={tone}>{word}</ToneBadge>
       </ItemActions>
     </>
   )

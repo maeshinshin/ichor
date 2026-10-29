@@ -25,6 +25,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -67,6 +68,35 @@ type k8sFacts struct {
 
 	// CiliumReleaseNamespaces are the namespaces holding Helm release records named "cilium".
 	CiliumReleaseNamespaces []string
+
+	// Nodes are the cluster's Nodes; CiliumNodeCRD is whether the CiliumNode CRD exists.
+	Nodes         []nodeFact
+	CiliumNodeCRD bool
+}
+
+// nodeFact is what the no-CNI detection and its preconditions read from a Node.
+type nodeFact struct {
+	Name    string
+	PodCIDR string
+	Ready   bool
+	// NetworkNotReady: the Ready condition says the network plugin is not ready.
+	NetworkNotReady bool
+}
+
+// networkNotReady reports whether a Node's Ready condition carries the message of a node with no
+// CNI (`cni plugin not initialized`, reason `NetworkPluginNotReady`).
+func networkNotReady(n *corev1.Node) bool {
+	for _, c := range n.Status.Conditions {
+		if c.Type != corev1.NodeReady || c.Status == corev1.ConditionTrue {
+			continue
+		}
+
+		m := strings.ToLower(c.Reason + " " + c.Message)
+
+		return strings.Contains(m, "networkpluginnotready") || strings.Contains(m, "cni plugin not initialized")
+	}
+
+	return false
 }
 
 // gatherK8sFacts reads the CNI and kube-proxy facts from r.
@@ -106,6 +136,26 @@ func gatherK8sFacts(ctx context.Context, r client.Reader) (*k8sFacts, error) {
 	case !apierrors.IsNotFound(err):
 		return nil, fmt.Errorf("reading ConfigMap %s/%s: %w", k8sFactsSystemNamespace, ciliumConfigMapName, err)
 	}
+
+	var nodes corev1.NodeList
+	if err := r.List(ctx, &nodes); err != nil {
+		return nil, fmt.Errorf("listing Nodes: %w", err)
+	}
+
+	for i := range nodes.Items {
+		n := &nodes.Items[i]
+		ready := false
+
+		for _, c := range n.Status.Conditions {
+			ready = ready || (c.Type == corev1.NodeReady && c.Status == corev1.ConditionTrue)
+		}
+
+		facts.Nodes = append(facts.Nodes, nodeFact{Name: n.Name, PodCIDR: n.Spec.PodCIDR, Ready: ready, NetworkNotReady: networkNotReady(n)})
+	}
+
+	crd := &unstructured.Unstructured{}
+	crd.SetGroupVersionKind(crdGVK)
+	facts.CiliumNodeCRD = r.Get(ctx, types.NamespacedName{Name: "ciliumnodes.cilium.io"}, crd) == nil
 
 	releases, err := ciliumHelmReleases(ctx, r)
 	if err != nil {

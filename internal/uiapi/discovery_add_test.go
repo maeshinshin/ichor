@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"connectrpc.com/connect"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -86,6 +87,37 @@ func TestAddDiscoveryAddressCreatesTheDiscoveryBlock(t *testing.T) {
 
 	if got.Spec.Discovery == nil || len(got.Spec.Discovery.Addresses) != 1 {
 		t.Fatalf("got %+v", got.Spec.Discovery)
+	}
+}
+
+func TestAlreadyConfiguredAddressesComeFromThatClusterEvents(t *testing.T) {
+	c := discoveryCluster(nil)
+	ev := func(name, cluster, reason, ep string) *corev1.Event {
+		return &corev1.Event{
+			Name: name, Namespace: testNS, Annotations: map[string]string{annotationAlreadyConfiguredEndpoint: ep},
+			InvolvedObject: corev1.ObjectReference{Kind: "TalosCluster", Name: cluster, Namespace: testNS},
+			Reason:         reason,
+		}
+	}
+	k8s := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(c,
+		ev("a", "c", reasonAlreadyConfigured, "10.0.0.9:50000"),
+		ev("b", "c", reasonAlreadyConfigured, "10.0.0.9:50000"),
+		ev("d", "c", "WeakIdentity", "10.0.0.8:50000"),
+		ev("e", "other", reasonAlreadyConfigured, "10.0.0.7:50000"),
+	).Build()
+
+	got := (&Server{Client: k8s}).alreadyConfiguredAddresses(context.Background(), c)
+	if len(got) != 1 || got[0] != "10.0.0.9:50000" {
+		t.Fatalf("want only the deduplicated AlreadyConfigured endpoint of cluster c, got %v", got)
+	}
+
+	resp, err := (&Server{Client: k8s}).AddDiscoveryAddress(context.Background(), addAddrReq("10.0.0.1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if a := resp.Msg.GetCluster().GetAlreadyConfiguredAddresses(); len(a) != 1 {
+		t.Fatalf("the add-by-IP response should carry them, got %v", a)
 	}
 }
 

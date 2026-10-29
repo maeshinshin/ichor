@@ -26,6 +26,8 @@ import (
 
 	"connectrpc.com/connect"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
+	corev1 "k8s.io/api/core/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
@@ -71,7 +73,46 @@ func (s *Server) AddDiscoveryAddress(
 		Target: objectRef(c.Namespace, c.Name), Reason: req.Msg.GetReason(),
 	}
 
-	return connect.NewResponse(&pb.AddDiscoveryAddressResponse{Cluster: clusterToPB(&c), Audit: audit}), nil
+	out := clusterToPB(&c)
+	out.AlreadyConfiguredAddresses = s.alreadyConfiguredAddresses(ctx, &c)
+
+	return connect.NewResponse(&pb.AddDiscoveryAddressResponse{Cluster: out, Audit: audit}), nil
+}
+
+// The AlreadyConfigured Event internal/controller records when discovery reaches a Talos node that
+// already has a configuration. Kept as literals: this package does not import
+// the controller.
+const (
+	reasonAlreadyConfigured             = "AlreadyConfigured"
+	annotationAlreadyConfiguredEndpoint = "ichor.maesh.dev/endpoint"
+)
+
+// alreadyConfiguredAddresses lists, sorted and without duplicates, the endpoints of c's
+// AlreadyConfigured Events. A failed Events read yields none: the field is advisory and must not fail
+// the call it rides on.
+func (s *Server) alreadyConfiguredAddresses(ctx context.Context, c *ichorv1alpha1.TalosCluster) []string {
+	var list corev1.EventList
+	if err := s.List(ctx, &list, client.InNamespace(c.Namespace)); err != nil {
+		return nil
+	}
+
+	var out []string
+
+	for i := range list.Items {
+		ev := &list.Items[i]
+		if ev.Reason != reasonAlreadyConfigured || ev.InvolvedObject.Kind != "TalosCluster" ||
+			ev.InvolvedObject.Name != c.Name {
+			continue
+		}
+
+		if ep := ev.Annotations[annotationAlreadyConfiguredEndpoint]; ep != "" {
+			out = append(out, ep)
+		}
+	}
+
+	slices.Sort(out)
+
+	return slices.Compact(out)
 }
 
 // ipv4Address trims s and accepts it only as a plain IPv4 address, which is all the CRD allows.

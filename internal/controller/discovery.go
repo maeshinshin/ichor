@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -46,7 +47,17 @@ import (
 const (
 	reasonWeakIdentity      = "WeakIdentity"
 	reasonIdentityCollision = "IdentityCollision"
+
+	// ReasonAlreadyConfigured is the Event reason for a Talos node that already has a configuration; internal/uiapi
+	// lists these.
+	ReasonAlreadyConfigured = "AlreadyConfigured"
+	// AnnotationAlreadyConfiguredEndpoint carries the node's endpoint on that Event.
+	AnnotationAlreadyConfiguredEndpoint = "ichor.maesh.dev/endpoint"
 )
+
+// ErrAlreadyConfigured is what MaintenanceClient.Identity wraps when the node's API rejects the
+// unauthenticated call because the node already has a configuration.
+var ErrAlreadyConfigured = errors.New("the node already has a Talos configuration")
 
 // DiscoveryReconciler turns a maintenance-mode node's hardware identity into
 // a pending, unapproved TalosMachine (docs/design/architecture.md "Nodes":
@@ -119,6 +130,15 @@ func (r *DiscoveryReconciler) Discover(
 	}
 
 	hw, err := mc.Identity(ctx)
+	if errors.Is(err, ErrAlreadyConfigured) {
+		// A Talos API that rejects an unauthenticated call has a config already.
+		// Nothing is created; the Event is how the UI and operators learn of it.
+		log.Info("discovered a Talos node that is already configured; not adding it", "endpoint", endpoint)
+		r.reportAlreadyConfigured(cluster, endpoint)
+
+		return nil, nil
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("reading hardware identity: %w", err)
 	}
@@ -181,6 +201,19 @@ func (r *DiscoveryReconciler) Discover(
 
 		return nil, nil
 	}
+}
+
+// reportAlreadyConfigured records the AlreadyConfigured Event on cluster, with the endpoint in
+// the AnnotationEndpoint annotation so the UI API can list the addresses without parsing text.
+func (r *DiscoveryReconciler) reportAlreadyConfigured(cluster *ichorv1alpha1.TalosCluster, endpoint string) {
+	if r.Recorder == nil {
+		return
+	}
+
+	r.Recorder.AnnotatedEventf(cluster, map[string]string{AnnotationAlreadyConfiguredEndpoint: endpoint},
+		corev1.EventTypeWarning, ReasonAlreadyConfigured,
+		"%s already runs a Talos configuration, so Ichor did not add it; reclaim it first (ichor machine reclaim)",
+		endpoint)
 }
 
 // reportWeak records a Warning event on cluster carrying the discovered

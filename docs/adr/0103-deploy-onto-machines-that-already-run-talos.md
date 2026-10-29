@@ -357,3 +357,7 @@ Record, per case, the time taken, the Talos and Cilium versions and the exact re
 - Adoption needs Talos v1.12 or later.
 - `TalosClient` grows an authenticated `Identity` read; the reset request moves to a shared builder.
 - ADR 0014's statement that adopt "never writes to a node" still holds: reclaim is a different command, and phase 4 is the controller's.
+
+## Amendment (2026-10-29): ADR 0104
+
+A cluster with no CNI is no longer adopted as unmanaged `talosCNI: none`: ADR 0104 has adopt install Cilium first and adopt it managed (the "No CNI installed" row of 1.1, test D5 and open question 3 are superseded), fixes the network-policy wiring found by D3, and adds the Helm install path.

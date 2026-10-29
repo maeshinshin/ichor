@@ -53,6 +53,16 @@ func TestCNIHelmRBAC(t *testing.T) {
 			find(configDocs, kindRole, "cni-role"), role,
 			cniConfigRolePath, "dist/chart/templates/rbac/ichor-cni.yaml")
 
+		// The takeover's Secret rights in kube-system (ADR 0103, 1.2): namespaced, get/list/delete only.
+		records := find(docs, kindRole, "ichor-cni-records-role")
+		if records == nil || docNamespace(records) != kubeSystemNs {
+			t.Fatalf("Role ichor-cni-records-role = %v, want it in kube-system", records)
+		}
+
+		checkRBACRulesMatch(t, "ichor", "Role cni-records-role",
+			find(loadYAMLDocs(t, "../../config/rbac/ichor-cni/records_role.yaml"), kindRole, "cni-records-role"), records,
+			"config/rbac/ichor-cni/records_role.yaml", "dist/chart/templates/rbac/ichor-cni.yaml")
+
 		for triple := range rbacTriples(append(allRules(clusterRole), allRules(role)...)) {
 			if triple.resource == "*" || triple.verb == "*" {
 				t.Errorf("the Cilium Job is granted %s; it must hold no wildcard; see %s", triple, adr0099Doc)

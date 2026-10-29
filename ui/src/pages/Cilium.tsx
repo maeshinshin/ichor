@@ -2,13 +2,15 @@ import { useEffect, useState } from 'preact/hooks'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { CircleXIcon, InfoIcon, NetworkIcon, TriangleAlertIcon } from 'lucide-preact'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { CodeBlock, CodeBlockContent, CodeBlockLine } from '@/components/ui/code-block'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { ErrorAlert } from '@/components/ErrorAlert'
-import { PageHeader } from '@/components/PageHeader'
+import { PageTitle } from '@/components/PageTitle'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
-import { Section } from '@/components/Section'
 import type { GetCiliumValuesResponse } from '@/gen/ichor/v1alpha1/cni_pb'
 import type { ObjectRef } from '@/gen/ichor/v1alpha1/common_pb'
 import { canApply, canEdit, canUpgrade, diffLines, type DiffKind } from '@/lib/cilium'
@@ -23,12 +25,13 @@ import { useT } from '@/lib/useT'
 type ErrorShape = { title: string; detail: string }
 type Reviewed = { text: string; valid: boolean; errors: string[]; diff: string }
 
-const diffClass: Record<DiffKind, string> = {
-  add: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
-  del: 'bg-red-500/15 text-red-700 dark:text-red-300',
-  hunk: 'text-sky-700 dark:text-sky-300',
-  meta: 'font-semibold text-muted-foreground',
-  ctx: '',
+// The code block's documented line variants stand for the kinds of a diff line.
+const diffVariant: Record<DiffKind, 'added' | 'removed' | 'highlighted' | 'default'> = {
+  add: 'added',
+  del: 'removed',
+  hunk: 'highlighted',
+  meta: 'highlighted',
+  ctx: 'default',
 }
 
 // Cilium: the Cilium Helm values of the cluster (docs/adr/0099). Three layers meet here: Ichor's
@@ -48,8 +51,8 @@ export function Cilium() {
   if (!ref || !data) {
     return (
       <div>
-        <PageHeader title={t('cilium.title')} />
-        <EmptyNote>{t('cilium.noCluster')}</EmptyNote>
+        <PageTitle title={t('cilium.title')} />
+        <EmptyNote icon={NetworkIcon}>{t('cilium.noCluster')}</EmptyNote>
       </div>
     )
   }
@@ -57,13 +60,25 @@ export function Cilium() {
   const editable = canEdit(perms)
 
   return (
-    <div class="space-y-8">
-      <PageHeader title={t('cilium.title')} kind={ref.name} />
-      {perms && !perms.clusterUpdate && <p class="text-sm text-muted-foreground">{t('cilium.noWrite')}</p>}
-      <Section id="effective" title={t('cilium.effective')}>
-        <p class="text-muted-foreground">{t('cilium.effectiveHint')}</p>
-        <pre class="max-h-96 overflow-auto rounded-md border bg-muted p-3 font-mono text-xs">{data.effectiveYaml}</pre>
-      </Section>
+    <div class="space-y-4">
+      <PageTitle title={t('cilium.title')} description={ref.name} />
+      {perms && !perms.clusterUpdate && (
+        <Alert>
+          <InfoIcon />
+          <AlertDescription>{t('cilium.noWrite')}</AlertDescription>
+        </Alert>
+      )}
+      <Card id="effective" className="scroll-mt-section">
+        <CardHeader>
+          <CardTitle>{t('cilium.effective')}</CardTitle>
+          <CardDescription>{t('cilium.effectiveHint')}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <CodeBlock>
+            <CodeBlockContent className="max-h-96">{data.effectiveYaml}</CodeBlockContent>
+          </CodeBlock>
+        </CardContent>
+      </Card>
       <OwnedKeys owned={data.owned} />
       <UserValues key={version} cluster={ref} data={data} editable={editable} onApplied={() => setVersion(version + 1)} />
       {canUpgrade(data.availableChartVersion, editable) && <Upgrade cluster={ref} version={data.availableChartVersion} />}
@@ -74,10 +89,14 @@ export function Cilium() {
 function OwnedKeys({ owned }: { owned: GetCiliumValuesResponse['owned'] }) {
   const t = useT()
   return (
-    <Section id="owned" title={t('cilium.owned')}>
-      <p class="text-muted-foreground">{t('cilium.ownedHint')}</p>
+    <Card id="owned" className="scroll-mt-section">
+      <CardHeader>
+        <CardTitle>{t('cilium.owned')}</CardTitle>
+        <CardDescription>{t('cilium.ownedHint')}</CardDescription>
+      </CardHeader>
+      <CardContent>
       {owned.length === 0 ? (
-        <EmptyNote>{t('cilium.ownedNone')}</EmptyNote>
+        <EmptyNote icon={NetworkIcon}>{t('cilium.ownedNone')}</EmptyNote>
       ) : (
         <Table>
           <TableHeader>
@@ -90,20 +109,25 @@ function OwnedKeys({ owned }: { owned: GetCiliumValuesResponse['owned'] }) {
           <TableBody>
             {owned.map((k) => (
               <TableRow key={k.path}>
-                <TableCell class="align-top">
-                  <div class="font-mono text-xs">{k.path}</div>
-                  <Badge variant="secondary" className="mt-1">
-                    {t('cilium.managedBadge')}
-                  </Badge>
+                <TableCell className="align-top">
+                  <div class="flex flex-col items-start gap-1">
+                    {k.path}
+                    <Badge variant="secondary">{t('cilium.managedBadge')}</Badge>
+                  </div>
                 </TableCell>
-                <TableCell class="align-top font-mono text-xs whitespace-pre-wrap">{k.valueYaml.trimEnd()}</TableCell>
-                <TableCell class="align-top whitespace-normal">{k.reason}</TableCell>
+                <TableCell className="align-top">
+                  <CodeBlock size="sm">
+                    <CodeBlockContent wrap>{k.valueYaml.trimEnd()}</CodeBlockContent>
+                  </CodeBlock>
+                </TableCell>
+                <TableCell className="align-top whitespace-normal">{k.reason}</TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       )}
-    </Section>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -158,15 +182,20 @@ function UserValues({
   const lines = reviewed && !stale ? diffLines(reviewed.diff) : []
 
   return (
-    <Section id="user" title={t('cilium.user')}>
-      <p class="text-muted-foreground">{t('cilium.userHint')}</p>
+    <Card id="user" className="scroll-mt-section">
+      <CardHeader>
+        <CardTitle>{t('cilium.user')}</CardTitle>
+        <CardDescription>{t('cilium.userHint')}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
       {!editable ? (
-        <pre class="max-h-96 overflow-auto rounded-md border bg-muted p-3 font-mono text-xs">{data.userYaml || t('cilium.userEmpty')}</pre>
+        <CodeBlock>
+          <CodeBlockContent className="max-h-96">{data.userYaml || t('cilium.userEmpty')}</CodeBlockContent>
+        </CodeBlock>
       ) : (
         <>
           <Textarea
             aria-label={t('cilium.userLabel')}
-            className="font-mono text-xs"
             rows={14}
             spellcheck={false}
             value={text}
@@ -199,9 +228,15 @@ function UserValues({
         </>
       )}
       {!confirm && error && <ErrorAlert {...error} />}
-      {stale && <p class="text-sm text-amber-600 dark:text-amber-400">{t('cilium.stale')}</p>}
+      {stale && (
+        <Alert>
+          <TriangleAlertIcon />
+          <AlertDescription>{t('cilium.stale')}</AlertDescription>
+        </Alert>
+      )}
       {reviewed && !stale && !reviewed.valid && (
         <Alert variant="destructive">
+          <CircleXIcon />
           <AlertTitle>{reviewed.errors.length === 1 ? t('cilium.invalidOne') : t('cilium.invalid', { count: reviewed.errors.length })}</AlertTitle>
           <AlertDescription>
             <ul class="list-disc space-y-1 pl-5">
@@ -214,20 +249,32 @@ function UserValues({
           </AlertDescription>
         </Alert>
       )}
-      {reviewed && !stale && reviewed.valid && reviewed.diff === '' && <p class="text-sm text-muted-foreground">{t('cilium.diffNone')}</p>}
-      {lines.length > 0 && (
-        <div class="space-y-2">
-          <h3 class="text-sm font-medium">{t('cilium.diff')}</h3>
-          <pre class="max-h-96 overflow-auto rounded-md border font-mono text-xs">
-            {lines.map((l, i) => (
-              <div key={i} class={`px-3 whitespace-pre ${diffClass[l.kind]}`}>
-                {l.text || ' '}
-              </div>
-            ))}
-          </pre>
-        </div>
+      {reviewed && !stale && reviewed.valid && reviewed.diff === '' && (
+        <Alert>
+          <InfoIcon />
+          <AlertDescription>{t('cilium.diffNone')}</AlertDescription>
+        </Alert>
       )}
-    </Section>
+      {lines.length > 0 && (
+        <Card size="sm">
+          <CardHeader>
+            <CardTitle>{t('cilium.diff')}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <CodeBlock>
+              <CodeBlockContent className="max-h-96">
+                {lines.map((l, i) => (
+                  <CodeBlockLine key={i} variant={diffVariant[l.kind]}>
+                    {l.text}
+                  </CodeBlockLine>
+                ))}
+              </CodeBlockContent>
+            </CodeBlock>
+          </CardContent>
+        </Card>
+      )}
+      </CardContent>
+    </Card>
   )
 }
 
@@ -256,8 +303,12 @@ function Upgrade({ cluster, version }: { cluster: ObjectRef; version: string }) 
   }
 
   return (
-    <Section id="upgrade" title={t('cilium.upgradeTitle')}>
-      <p>{t('cilium.upgradeAvailable', { version })}</p>
+    <Card id="upgrade" className="scroll-mt-section">
+      <CardHeader>
+        <CardTitle>{t('cilium.upgradeTitle')}</CardTitle>
+        <CardDescription>{t('cilium.upgradeAvailable', { version })}</CardDescription>
+      </CardHeader>
+      <CardFooter>
       <ConfirmDialog
         open={open}
         onOpenChange={(next) => {
@@ -271,6 +322,7 @@ function Upgrade({ cluster, version }: { cluster: ObjectRef; version: string }) 
       >
         {error && <ErrorAlert {...error} />}
       </ConfirmDialog>
-    </Section>
+      </CardFooter>
+    </Card>
   )
 }

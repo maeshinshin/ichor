@@ -424,7 +424,7 @@ var _ = Describe("a config operation on the backbone", func() {
 		setHostname(cp1, "node-cfg-self")
 		pend(cp1, cp2, cp3, w1)
 
-		held.Annotations = map[string]string{ichorv1alpha1.TalosMachineUpgradeHoldAnnotation: "true"}
+		held.Annotations = map[string]string{ichorv1alpha1.TalosMachineUpgradeHoldAnnotation: resetOnDeleteValue}
 		Expect(k8sClient.Update(ctx, held)).To(Succeed())
 
 		op := newConfigOp(cluster.Name)

@@ -27,6 +27,7 @@ import (
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	authnv1 "k8s.io/api/authentication/v1"
 	authv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -69,6 +70,22 @@ func (s *Server) reclaimAllowed(ctx context.Context) (bool, error) {
 	}
 
 	return review.Status.Allowed, nil
+}
+
+// reclaimUser is the Kubernetes user name the API server will see for writes made under ctx: the signed-in
+// identity, else (the backend on its own ServiceAccount) whatever Kubernetes says we are. The webhook compares
+// the audit annotations against it.
+func (s *Server) reclaimUser(ctx context.Context) (string, error) {
+	if id, ok := IdentityFrom(ctx); ok && s.Impersonate != nil {
+		return id.User, nil
+	}
+
+	review := &authnv1.SelfSubjectReview{}
+	if err := s.Client.Create(ctx, review); err != nil {
+		return "", connect.NewError(connect.CodeUnavailable, fmt.Errorf("reclaim: asking Kubernetes who we are: %w", err))
+	}
+
+	return review.Status.UserInfo.Username, nil
 }
 
 // reclaimGate refuses every call when the feature is off, and a caller without the verb.
@@ -125,8 +142,14 @@ func (s *Server) CreateReclaim(
 	// reports and expires.
 	name := "reclaim-" + utilrand.String(8)
 
+	user, err := s.reclaimUser(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	mr := &ichorv1alpha1.MachineReclaim{
 		GenerateName: "reclaim-", Namespace: s.ControllerNamespace,
+		Annotations: map[string]string{ichorv1alpha1.ReclaimRequestedByAnnotation: user},
 		Spec: ichorv1alpha1.MachineReclaimSpec{
 			Address: address, CredentialSecretRef: name, ContextName: m.GetContext(),
 			Force: m.GetForce(), ForceUngraceful: m.GetForceUngraceful(),
@@ -257,6 +280,16 @@ func (s *Server) ConfirmReclaim(
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("uuid is required"))
 	}
 
+	user, err := s.reclaimUser(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if mr.Annotations == nil {
+		mr.Annotations = map[string]string{}
+	}
+
+	mr.Annotations[ichorv1alpha1.ReclaimConfirmedByAnnotation] = user
 	mr.Spec.ConfirmUUID = uuid
 	if n := strings.TrimSpace(req.Msg.GetClusterName()); n != "" {
 		mr.Spec.ConfirmClusterName = n

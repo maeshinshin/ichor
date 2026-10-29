@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import type { User } from '@/gen/ichor/v1alpha1/user_pb'
 import { userClient } from '@/lib/connect'
 import { matchesQuery } from '@/lib/filter'
-import { conditionStatusTone } from '@/lib/status'
+import { conditionTone } from '@/lib/conditions'
 import { userError } from '@/lib/users'
 import { useT } from '@/lib/useT'
 
@@ -107,7 +107,7 @@ function UserRow({ user, onChanged }: { user: User; onChanged: () => void }) {
       <TableCell>
         <Badge variant={user.disabled ? 'destructive' : 'outline'}>{user.disabled ? t('common.yes') : t('common.no')}</Badge>
       </TableCell>
-      <TableCell>{ready ? <ToneBadge tone={conditionStatusTone(ready.type, ready.status)}>{ready.reason || ready.status}</ToneBadge> : '-'}</TableCell>
+      <TableCell>{ready ? <ToneBadge tone={conditionTone(ready.type, ready.status)}>{ready.reason || ready.status}</ToneBadge> : '-'}</TableCell>
       <TableCell>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

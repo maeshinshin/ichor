@@ -194,7 +194,7 @@ function NodePage({ namespace, name }: { namespace: string; name: string }) {
         {/* Radix mounts only the active panel, so a tab's data loads when it is first opened. */}
         <TabsContent value="summary" className="space-y-4">
         <SectionCard id="conditions" title={t('cluster.conditions')}>
-          <ConditionList badges conditions={machine?.conditions ?? []} />
+          <ConditionList conditions={machine?.conditions ?? []} />
         </SectionCard>
 
         <SectionCard id="hardware" title={t('node.hardware')}>

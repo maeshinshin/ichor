@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
@@ -41,6 +42,9 @@ type oldInstaller struct {
 	fixture
 	client   client.Client // authenticated as the installer ServiceAccount
 	gizmoGrp string
+	// clusterRole names the old installer's ClusterRole and ClusterRoleBinding; the new manifest
+	// updates both in place.
+	clusterRole string
 }
 
 const oldRoleRules = `
@@ -63,7 +67,7 @@ func newOldInstaller(t *testing.T) oldInstaller {
 
 	ctx := context.Background()
 	f := newFixture(t)
-	o := oldInstaller{fixture: f, gizmoGrp: "gizmo." + f.group}
+	o := oldInstaller{fixture: f, gizmoGrp: "gizmo." + f.group, clusterRole: "ichor-installer-old-" + f.ns}
 	user := "system:serviceaccount:" + f.ns + ":ichor-installer"
 
 	// A stand-in for CiliumNetworkPolicy: a namespaced kind whose CRD already exists.
@@ -82,7 +86,8 @@ spec:
       openAPIV3Schema: {type: object, x-kubernetes-preserve-unknown-fields: true}
 `, o.gizmoGrp)
 
-	// The cluster-scoped part of the old role: reading and patching CRDs, which the installer needs.
+	// The cluster-scoped part of the old role: reading and patching CRDs, and rewriting its own
+	// ClusterRole (every release holds get/create/patch/update, bind and escalate on clusterroles).
 	cluster := fmt.Sprintf(`---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -91,13 +96,19 @@ rules:
 - apiGroups: [apiextensions.k8s.io]
   resources: [customresourcedefinitions]
   verbs: [create, get, patch, update]
+- apiGroups: [rbac.authorization.k8s.io]
+  resources: [clusterroles, clusterrolebindings]
+  verbs: [create, get, patch, update, delete]
+- apiGroups: [rbac.authorization.k8s.io]
+  resources: [clusterroles]
+  verbs: [bind, escalate]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata: {name: %[1]s}
 roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: %[1]s}
 subjects: [{apiGroup: rbac.authorization.k8s.io, kind: User, name: %[2]s}]
-`, "old-installer-"+f.ns, user)
+`, o.clusterRole, user)
 
 	oldNamespaced := o.installerRBAC(oldRoleRules)
 
@@ -262,6 +273,95 @@ func TestRollbackRestoresTheInstallerRBACSnapshot(t *testing.T) {
 	// The Gizmo the failed run created is gone again.
 	if err := k8sClient.Get(context.Background(), types.NamespacedName{Namespace: o.ns, Name: "ichor-cni"}, o.gizmo()); !apierrors.IsNotFound(err) {
 		t.Errorf("the Gizmo must be deleted by the rollback, got %v", err)
+	}
+}
+
+// A new release adds an installer Role in a namespace the old installer has no rights in (the
+// kube-system Role of commit 8a7199b). The old installer cannot even read it, so the rights must
+// arrive through the cluster-scoped role, which stage 0 applies before it touches that namespace.
+func TestRunUpgradeReachesANewNamespaceThroughTheClusterRole(t *testing.T) {
+	ctx := context.Background()
+	o := newOldInstaller(t)
+
+	other := &corev1.Namespace{GenerateName: "installer-other-"}
+	if err := k8sClient.Create(ctx, other); err != nil {
+		t.Fatal(err)
+	}
+
+	roleKey := types.NamespacedName{Namespace: other.Name, Name: "ichor-installer-other-role"}
+	if err := o.client.Get(ctx, roleKey, o.unstructured("rbac.authorization.k8s.io/v1", "Role")); !apierrors.IsForbidden(err) {
+		t.Fatalf("precondition: the old installer must have no rights in %s, got %v", other.Name, err)
+	}
+
+	// The new ClusterRole keeps the old rules and adds the folded namespaced ones.
+	manifest := append(o.manifest("ctrl:v2", ""), []byte(fmt.Sprintf(`---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata: {name: %[1]s}
+rules:
+- apiGroups: [apiextensions.k8s.io]
+  resources: [customresourcedefinitions]
+  verbs: [create, get, patch, update]
+- apiGroups: [rbac.authorization.k8s.io]
+  resources: [clusterroles, clusterrolebindings]
+  verbs: [create, get, patch, update, delete]
+- apiGroups: [rbac.authorization.k8s.io]
+  resources: [clusterroles]
+  verbs: [bind, escalate]
+- apiGroups: [""]
+  resources: [serviceaccounts]
+  verbs: [create, get, patch, update, delete]
+- apiGroups: [rbac.authorization.k8s.io]
+  resources: [roles, rolebindings]
+  verbs: [create, get, patch, update, delete]
+- apiGroups: [rbac.authorization.k8s.io]
+  resources: [roles]
+  verbs: [bind, escalate]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: {name: %[1]s}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: %[1]s}
+subjects: [{apiGroup: rbac.authorization.k8s.io, kind: User, name: system:serviceaccount:%[2]s:ichor-installer}]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: {name: ichor-installer-other-role, namespace: %[3]s}
+rules:
+- apiGroups: [""]
+  resources: [configmaps]
+  verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: {name: ichor-installer-other-rolebinding, namespace: %[3]s}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: ichor-installer-other-role}
+subjects: [{apiGroup: rbac.authorization.k8s.io, kind: User, name: system:serviceaccount:%[2]s:ichor-installer}]
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata: {name: other-sa, namespace: %[3]s}
+`, o.clusterRole, o.ns, other.Name))...)
+
+	var order []string
+
+	err := Run(ctx, o.client, Options{
+		Namespace: o.ns, RunID: o.run, Manifest: manifest, Ready: noWait(&order), RBACSettle: 20 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if err := k8sClient.Get(ctx, roleKey, o.unstructured("rbac.authorization.k8s.io/v1", "Role")); err != nil {
+		t.Errorf("the new namespaced installer Role was not applied: %v", err)
+	}
+
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: other.Name, Name: "other-sa"}, o.unstructured("v1", "ServiceAccount")); err != nil {
+		t.Errorf("the ServiceAccount in the new namespace was not applied: %v", err)
+	}
+
+	if len(order) == 0 || order[0] != "ClusterRole/"+o.clusterRole {
+		t.Errorf("the cluster-scoped RBAC must be applied first, post-check order = %v", order)
 	}
 }
 

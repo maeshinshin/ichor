@@ -41,6 +41,16 @@ export function ReclaimDialog({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<ErrorShape | null>(null)
 
+  // The cluster is offered only when the caller may update it; otherwise reclaim goes ahead without registering.
+  const [clusterAllowed, setClusterAllowed] = useState(false)
+  useEffect(() => {
+    if (!cluster) return
+    reclaimClient.canReclaim({ cluster }).then(
+      (res) => setClusterAllowed(res.clusterAllowed),
+      () => {},
+    )
+  }, [cluster?.namespace, cluster?.name])
+
   const ref = reclaim?.ref
   const phase = reclaim?.phase ?? ''
   const uuid = reclaim?.inspection?.uuid ?? ''
@@ -66,7 +76,7 @@ export function ReclaimDialog({
         address: address.trim(),
         talosconfig: new TextEncoder().encode(talosconfig),
         context: context.trim(),
-        cluster,
+        cluster: clusterAllowed ? cluster : undefined,
       })
       setTalosconfig('')
       setReclaim(res.reclaim ?? null)

@@ -24,6 +24,8 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
+const leadingZeroTalos = "v01.14.3"
+
 // A TalosCluster whose talosVersion or kubernetesVersion is not semver is refused on create
 // and, when the update changes it, on update: the CRD pattern alone lets "v01.2.3" through.
 func TestTalosClusterRefusesANonSemverVersion(t *testing.T) {
@@ -33,7 +35,7 @@ func TestTalosClusterRefusesANonSemverVersion(t *testing.T) {
 	ctx := context.Background()
 
 	bad := newTestCluster()
-	bad.Spec.TalosVersion = "v01.14.3"
+	bad.Spec.TalosVersion = leadingZeroTalos
 
 	if _, err := v.ValidateCreate(ctx, bad); err == nil || !strings.Contains(err.Error(), "spec.talosVersion: v01.14.3 is not a valid version (semver)") {
 		t.Fatalf("create with talosVersion v01.14.3: err = %v", err)
@@ -52,7 +54,7 @@ func TestTalosClusterRefusesANonSemverVersion(t *testing.T) {
 
 	old := newTestCluster()
 	edited := newTestCluster()
-	edited.Spec.TalosVersion = "v01.14.3"
+	edited.Spec.TalosVersion = leadingZeroTalos
 
 	if _, err := v.ValidateUpdate(ctx, old, edited); err == nil {
 		t.Fatal("update that changes talosVersion to v01.14.3 was accepted")
@@ -60,7 +62,7 @@ func TestTalosClusterRefusesANonSemverVersion(t *testing.T) {
 
 	// A stored object whose version predates the check is still editable for something else.
 	stored := newTestCluster()
-	stored.Spec.TalosVersion = "v01.14.3"
+	stored.Spec.TalosVersion = leadingZeroTalos
 
 	if _, err := v.ValidateUpdate(ctx, stored, stored.DeepCopy()); err != nil {
 		t.Fatalf("update that leaves the version alone: %v", err)

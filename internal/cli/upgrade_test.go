@@ -39,7 +39,7 @@ func TestCheckUpgradeTargetRefusesANonSemver(t *testing.T) {
 func TestCheckUpgradeTargetAcceptsAReleaseWithOrWithoutTheV(t *testing.T) {
 	t.Parallel()
 
-	for _, target := range []string{"v1.12.0", "1.12.0", "v0.1.0-rc.1"} {
+	for _, target := range []string{"v1.13.2", "1.13.2", "v0.1.0-rc.1"} {
 		if err := checkUpgradeTarget(target); err != nil {
 			t.Errorf("checkUpgradeTarget(%q) = %v, want nil", target, err)
 		}

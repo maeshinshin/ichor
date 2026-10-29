@@ -166,6 +166,15 @@ func daemonSetImageTag(ds *appsv1.DaemonSet) string {
 	return img[i+1:]
 }
 
+// detectedCNI is status.cni.detected, empty before the first detection.
+func detectedCNI(cluster *ichorv1alpha1.TalosCluster) string {
+	if cluster == nil || cluster.Status.CNI == nil {
+		return ""
+	}
+
+	return cluster.Status.CNI.Detected
+}
+
 // SetupWithManager sets up the controller with the Manager. Status writes (including its own)
 // do not re-trigger it; the requeue does.
 func (r *CNIDetectReconciler) SetupWithManager(mgr ctrl.Manager) error {

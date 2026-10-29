@@ -34,6 +34,8 @@ var installerCmd = &cobra.Command{
 var installerRunOpts struct {
 	Namespace string
 	RunID     string
+
+	CNIDetected string
 }
 
 var installerRunCmd = &cobra.Command{
@@ -52,6 +54,7 @@ var installerRunCmd = &cobra.Command{
 			Manifest:  installmanifest.Manifest,
 
 			NetworkPolicies: installmanifest.NetworkPolicies,
+			CNIDetected:     installerRunOpts.CNIDetected,
 			Log:             cmd.ErrOrStderr(),
 		})
 	},
@@ -64,5 +67,6 @@ func init() {
 	f := installerRunCmd.Flags()
 	f.StringVar(&installerRunOpts.Namespace, "namespace", ichorControllerNamespace, "namespace the snapshot is saved in")
 	f.StringVar(&installerRunOpts.RunID, "run-id", "", "names the snapshot (the Job passes its own name)")
+	f.StringVar(&installerRunOpts.CNIDetected, "cni-detected", "", "TalosCluster status.cni.detected; Ichor's CiliumNetworkPolicies are applied only for cilium")
 	_ = installerRunCmd.MarkFlagRequired("run-id")
 }

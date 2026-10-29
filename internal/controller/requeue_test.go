@@ -19,13 +19,16 @@ package controller
 import (
 	"context"
 	"errors"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	corev1 "k8s.io/api/core/v1"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/render"
@@ -131,6 +134,77 @@ var _ = Describe("TalosMachineReconciler requeue after a failure", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.RequeueAfter).To(Equal(transientRecheck))
 		Expect(readyCondition(fetchMachine(m)).Reason).To(Equal(reasonCurrentConfigUnavailable))
+	})
+
+	It("reports NodeUnreachable with the endpoint and the dial error once reads fail past the grace, and suggests the Node's new address", func() {
+		cluster, m, bundle := setup()
+		current, _, err := render.Render(cluster, m, bundle, nil, nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		fake := &fakeTalosClient{current: current}
+		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
+
+		_, err = reconcileMachine(r, m)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(readyCondition(fetchMachine(m)).Reason).To(Equal(reasonConverged))
+
+		// The node's IP changed: reads now fail. Within the grace the usual reason stays.
+		fake.currentErr = errors.New("dial tcp " + m.Spec.Endpoint + ": i/o timeout")
+		res, err := reconcileMachine(r, m)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.RequeueAfter).To(Equal(transientRecheck))
+		Expect(readyCondition(fetchMachine(m)).Reason).To(Equal(reasonCurrentConfigUnavailable))
+
+		// Past the grace (the failure began longer ago), Ready says why, and spec is untouched.
+		got := fetchMachine(m)
+		cond := apimeta.FindStatusCondition(got.Status.Conditions, conditionNodeReachable)
+		Expect(cond).NotTo(BeNil())
+		cond.LastTransitionTime = metav1.NewTime(time.Now().Add(-2 * nodeUnreachableGrace))
+		Expect(k8sClient.Status().Update(ctx, got)).To(Succeed())
+
+		_, err = reconcileMachine(r, m)
+		Expect(err).NotTo(HaveOccurred())
+
+		got = fetchMachine(m)
+		ready := readyCondition(got)
+		Expect(ready.Status).To(Equal(metav1.ConditionFalse))
+		Expect(ready.Reason).To(Equal(reasonNodeUnreachable))
+		Expect(ready.Message).To(ContainSubstring(m.Spec.Endpoint))
+		Expect(ready.Message).To(ContainSubstring("i/o timeout"))
+		Expect(ready.Message).NotTo(ContainSubstring("spec.endpoint may need updating"), "no Node, no suggestion")
+		Expect(got.Spec.Endpoint).To(Equal(m.Spec.Endpoint))
+
+		// The machine's Kubernetes Node (matched by its UUID) reports another address: suggested, not applied.
+		node := &corev1.Node{}
+		node.Name = "node-new-ip-1"
+		Expect(k8sClient.Create(ctx, node)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, node) })
+
+		node.Status.NodeInfo.SystemUUID = m.Spec.Identity.UUID
+		node.Status.Addresses = []corev1.NodeAddress{{Type: corev1.NodeInternalIP, Address: "10.77.7.7"}}
+		Expect(k8sClient.Status().Update(ctx, node)).To(Succeed())
+		Eventually(func() string {
+			var n corev1.Node
+			_ = k8sClient.Get(ctx, client.ObjectKeyFromObject(node), &n)
+
+			return n.Status.NodeInfo.SystemUUID
+		}).Should(Equal(m.Spec.Identity.UUID))
+
+		_, err = reconcileMachine(r, m)
+		Expect(err).NotTo(HaveOccurred())
+
+		got = fetchMachine(m)
+		Expect(readyCondition(got).Message).To(ContainSubstring("spec.endpoint may need updating to 10.77.7.7:50000"))
+		Expect(got.Spec.Endpoint).To(Equal(m.Spec.Endpoint), "the controller never mutates spec")
+
+		// The node answers again: converged, and the unreachable marker is gone.
+		fake.currentErr = nil
+		_, err = reconcileMachine(r, m)
+		Expect(err).NotTo(HaveOccurred())
+
+		got = fetchMachine(m)
+		Expect(readyCondition(got).Reason).To(Equal(reasonConverged))
+		Expect(apimeta.FindStatusCondition(got.Status.Conditions, conditionNodeReachable)).To(BeNil())
 	})
 
 	It("waits for the Secret watch, without polling, when the secrets bundle is missing", func() {

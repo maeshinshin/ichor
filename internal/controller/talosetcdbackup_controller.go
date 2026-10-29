@@ -258,31 +258,7 @@ func (r *TalosEtcdBackupReconciler) runBackup(
 		return nil, nil, nil, fmt.Errorf("getting TalosCluster %q: %w", bk.Spec.ClusterRef.Name, err)
 	}
 
-	bundle, err := loadBundle(ctx, r.Client, r.ControllerNamespace, &cluster)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	scrub.add(bundleSecretMaterial(bundle)...)
-
-	passphrase, err := etcdbackup.Passphrase(bundle)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	scrub.add(passphrase)
-
-	s3cfg, err := loadS3ConfigFrom(ctx, r.Client, r.ControllerNamespace, bk.Spec.Destination.S3, scrub)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	newStore := r.NewStore
-	if newStore == nil {
-		newStore = etcdbackup.NewS3Store
-	}
-
-	store, err := newStore(s3cfg)
+	bundle, passphrase, store, err := loadBackupStore(ctx, r.Client, r.ControllerNamespace, &cluster, bk.Spec.Destination.S3, r.NewStore, scrub)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -334,6 +310,46 @@ func storedSnapshots(ctx context.Context, store etcdbackup.Store, prefix string)
 	}
 
 	return out
+}
+
+// loadBackupStore loads what a backup and a restore both start from: the cluster's secrets bundle, the
+// passphrase derived from it, and the opened object store (newStore nil means S3). Each secret is
+// added to scrub as it is loaded.
+func loadBackupStore(
+	ctx context.Context, c client.Reader, controllerNamespace string, cluster *ichorv1alpha1.TalosCluster,
+	dst ichorv1alpha1.TalosEtcdBackupS3, newStore func(etcdbackup.S3Config) (etcdbackup.Store, error), scrub *scrubber,
+) (*secrets.Bundle, string, etcdbackup.Store, error) {
+	bundle, err := loadBundle(ctx, c, controllerNamespace, cluster)
+	if err != nil {
+		return nil, "", nil, err
+	}
+
+	scrub.add(bundleSecretMaterial(bundle)...)
+
+	passphrase, err := etcdbackup.Passphrase(bundle)
+	if err != nil {
+		return nil, "", nil, err
+	}
+
+	scrub.add(passphrase)
+
+	s3cfg, err := loadS3ConfigFrom(ctx, c, controllerNamespace, dst, scrub)
+	if err != nil {
+		return nil, "", nil, err
+	}
+
+	store, err := openStore(newStore, s3cfg)
+
+	return bundle, passphrase, store, err
+}
+
+// openStore builds the object store; a nil newStore means S3.
+func openStore(newStore func(etcdbackup.S3Config) (etcdbackup.Store, error), cfg etcdbackup.S3Config) (etcdbackup.Store, error) {
+	if newStore == nil {
+		newStore = etcdbackup.NewS3Store
+	}
+
+	return newStore(cfg)
 }
 
 // loadS3ConfigFrom reads the credentials Secret from the controller's namespace

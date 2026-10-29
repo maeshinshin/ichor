@@ -203,14 +203,10 @@ func TestC9Restart(t *testing.T) {
 	if !r.gone(t, "secret", cred, time.Minute) {
 		t.Errorf("credential Secret %s still exists after Done", cred)
 	}
-	for what, text := range map[string]string{
+	noLeaks(t, secrets, map[string]string{
 		"controller log": r.logs(t, "ichor-controller-manager"), "ichor-ui log": r.logs(t, "ichor-ichor-ui"),
 		"events": r.ikJSON(t, "get", "events", "-A", "-o", "yaml"),
-	} {
-		if l := leaks(text, secrets); len(l) > 0 {
-			t.Errorf("C9: %s contains credential material %v", what, l)
-		}
-	}
+	})
 }
 
 // TestC9FailedExpiredDeleted: the credential Secret is gone when a request Fails (unreachable node), when it
@@ -219,8 +215,7 @@ func TestC9FailedExpiredDeleted(t *testing.T) {
 	r := newRig(t, foreign.Options{Workers: 1, DataDisk: true})
 	r.ensureForeign(t)
 	tc := string(ftc(t, r.f))
-	tcPath, secrets := r.markedTalosconfig(t, "c9f")
-	_ = tcPath
+	_, secrets := r.markedTalosconfig(t, "c9f")
 
 	// Failed: nothing answers at the address.
 	failed, fsec := r.adminReclaim(t, "10.244.1.250", "5m", tc)
@@ -259,11 +254,7 @@ func TestC9FailedExpiredDeleted(t *testing.T) {
 	if !r.gone(t, "secret", osec, 2*time.Minute) {
 		t.Errorf("C9: the Secret %s survives the deletion of its request", osec)
 	}
-	for what, text := range map[string]string{
+	noLeaks(t, secrets, map[string]string{
 		"controller log": r.logs(t, "ichor-controller-manager"), "events": r.ikJSON(t, "get", "events", "-A", "-o", "yaml"),
-	} {
-		if l := leaks(text, secrets); len(l) > 0 {
-			t.Errorf("C9: %s contains credential material %v", what, l)
-		}
-	}
+	})
 }

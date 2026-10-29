@@ -23,7 +23,6 @@ package foreign
 
 import (
 	"fmt"
-	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -52,10 +51,7 @@ type sampler struct {
 
 func (s *sampler) start(t *testing.T, c *foreign.Cluster) {
 	s.stop, s.done = make(chan struct{}), make(chan struct{})
-	tc, err := os.ReadFile(c.Talosconfig)
-	if err != nil {
-		t.Fatal(err)
-	}
+	tc := ftc(t, c)
 	ips := c.Nodes()
 	go func() {
 		defer close(s.done)

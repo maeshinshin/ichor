@@ -37,7 +37,7 @@ const (
 	// conditionNodeReachable is present (False) only while the periodic read of the node fails; its
 	// lastTransitionTime is when the failures began. It is removed by the first successful read.
 	conditionNodeReachable = "NodeReachable"
-	reasonNodeUnreachable  = "NodeUnreachable"
+	reasonNodeUnreachable  = ichorv1alpha1.TalosMachineReasonNodeUnreachable
 
 	// nodeUnreachableGrace is how long reads may fail (a reboot, a restart) before Ready says the
 	// node is unreachable and names the endpoint.

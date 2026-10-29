@@ -378,6 +378,37 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		Expect(got.Status.CNI.TakenOverInlineManifest).To(Equal("my-cilium"))
 	})
 
+	// `ichor adopt` installed Cilium itself, so Ichor's release is already deployed at
+	// the effective values when the TalosCluster appears. Hand-over needs no Job and nothing to remove.
+	It("hands over without a Job when Ichor's release is already deployed at the cluster's values", func() {
+		cluster := newTestCiliumCluster()
+		ciliumDaemonSet()(true)
+		helmRelease(1, "deployed", effectiveValues(cluster))
+
+		result, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).To(Equal(ctrl.Result{}))
+
+		Expect(conditionOf(cluster, render.ConditionCNIHandover).Status).To(Equal(metav1.ConditionTrue))
+		Expect(conditionOf(cluster, ichorv1alpha1.ConditionCNIValuesApplied).Status).To(Equal(metav1.ConditionTrue))
+		Expect(cniJobCount(cluster)).To(BeZero())
+		Expect(getCluster(cluster).Status.CNI.TakenOverInlineManifest).To(BeEmpty())
+
+		_, held := cniLockHolder(cluster)
+		Expect(held).To(BeFalse())
+	})
+
+	It("still runs a Job when the deployed release is at other values", func() {
+		cluster := newTestCiliumCluster()
+		ciliumDaemonSet()(true)
+		helmRelease(1, "deployed", map[string]any{"debug": map[string]any{"enabled": true}})
+
+		_, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cniJobCount(cluster)).To(Equal(1))
+		cniJob(cluster)
+	})
+
 	It("does not ask a cluster Ichor bootstrapped to take over anything", func() {
 		cluster := newTestCiliumCluster()
 		ciliumDaemonSet()(true)

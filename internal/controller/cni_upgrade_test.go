@@ -66,7 +66,7 @@ var _ = Describe("Cilium chart upgrade", func() {
 	var cluster *ichorv1alpha1.TalosCluster
 
 	BeforeEach(func() {
-		createInstallation(ichorv1alpha1.IchorManagementModeIchor, "v0.2.0")
+		createInstallation("v0.2.0")
 		cluster = newTestCiliumCluster()
 		DeferCleanup(func() {
 			Expect(k8sClient.DeleteAllOf(ctx, &batchv1.Job{}, client.InNamespace(cniJobNamespace),

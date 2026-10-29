@@ -149,60 +149,6 @@ func ValidateExternalPrefix(prefix string) error {
 	return nil
 }
 
-// IDTokenClaims are the claims of an ID token. The audience is one string (ichor-ui or
-// ichor-kube). Groups carries the user's bare role names; the apiserver adds the "ichor:" prefix.
-// Times are Unix seconds.
-type IDTokenClaims struct {
-	Issuer   string   `json:"iss"`
-	Subject  string   `json:"sub"`
-	Audience string   `json:"aud"`
-	Expiry   int64    `json:"exp"`
-	IssuedAt int64    `json:"iat"`
-	Nonce    string   `json:"nonce,omitempty"`
-	Groups   []string `json:"groups"`
-}
-
-// CodeClaims are the claims of an authorization code (typ TypCode, valid DefaultCodeTTL).
-type CodeClaims struct {
-	Issuer        string   `json:"iss"`
-	JTI           string   `json:"jti"`
-	ClientID      string   `json:"client_id"`
-	RedirectURI   string   `json:"redirect_uri"`
-	Subject       string   `json:"sub"`
-	Nonce         string   `json:"nonce,omitempty"`
-	CodeChallenge string   `json:"code_challenge"`
-	Audience      string   `json:"aud"`
-	Scopes        []string `json:"scope,omitempty"`
-	IssuedAt      int64    `json:"iat"`
-	Expiry        int64    `json:"exp"`
-}
-
-// RefreshClaims are the claims of a refresh token (typ TypRefresh). IssuedAt is the session
-// start; the token is valid while the user exists, is enabled and IssuedAt >= the user's
-// notBefore, until Expiry.
-type RefreshClaims struct {
-	Issuer   string `json:"iss"`
-	Subject  string `json:"sub"`
-	ClientID string `json:"client_id"`
-	IssuedAt int64  `json:"iat"`
-	Expiry   int64  `json:"exp"`
-}
-
-// TicketClaims carry an authorize request to the login form (typ TypTicket), so no cookie or
-// server session exists.
-type TicketClaims struct {
-	Issuer        string `json:"iss"`
-	ClientID      string `json:"client_id"`
-	RedirectURI   string `json:"redirect_uri"`
-	State         string `json:"state,omitempty"`
-	Nonce         string `json:"nonce,omitempty"`
-	CodeChallenge string `json:"code_challenge"`
-	Audience      string `json:"aud"`
-	Scope         string `json:"scope,omitempty"`
-	IssuedAt      int64  `json:"iat"`
-	Expiry        int64  `json:"exp"`
-}
-
 // CredentialVersion is the current schema version of Credential.
 const CredentialVersion = 1
 

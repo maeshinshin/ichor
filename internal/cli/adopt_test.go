@@ -390,7 +390,7 @@ func TestReportPlans_ExplainsUnrepresentablePaths(t *testing.T) {
 		"KubeNetworkConfig.podSubnets: set TalosCluster spec.network.podSubnets",
 		"KubeNetworkConfig.serviceSubnets: set TalosCluster spec.network.serviceSubnets",
 		"UnattendedInstallConfig.installer.image: set TalosMachine spec.install.disk",
-		"KubeFlannelCNIConfig.backendType: the cluster runs Talos's flannel, which Ichor no longer supports",
+		"KubeFlannelCNIConfig.backendType: the CNI selection has no spec field",
 		"write a TalosConfigPatch for the other fields by hand",
 	} {
 		if !strings.Contains(out.String(), want) {

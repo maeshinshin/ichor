@@ -94,6 +94,7 @@ only ever writes TalosConfigPatch objects to the Kubernetes API.`,
 			AssumeYes: assumeYes,
 			Output:    outputFormat,
 
+			Target:       k8sClient,
 			CNIUnmanaged: adoptCNIUnmanaged,
 		}
 

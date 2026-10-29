@@ -46,12 +46,8 @@ const annotationTrue = "true"
 // kubeProxyReplaced is spec.cni.kubeProxy for a cluster whose CNI replaces kube-proxy.
 const kubeProxyReplaced = "replaced"
 
-// cniUnmanaged is spec.cni.preset for a cluster whose CNI Ichor leaves alone; kubeProxyEnabled is
-// spec.cni.kubeProxy for a cluster where Talos runs kube-proxy.
-const (
-	cniUnmanaged     = "unmanaged"
-	kubeProxyEnabled = "enabled"
-)
+// kubeProxyEnabled is spec.cni.kubeProxy for a cluster where Talos runs kube-proxy.
+const kubeProxyEnabled = "enabled"
 
 // adoptWriteInput is everything the write phase of `ichor adopt` needs,
 // as plain values: the facts the inspection phase established, not the code that found them. A
@@ -337,7 +333,7 @@ func (w *adoptWriter) cluster0() *ichorv1alpha1.TalosCluster {
 		}
 	}
 
-	if f.CNIPreset == cniUnmanaged {
+	if f.CNIPreset == ichorv1alpha1.TalosClusterCNIPresetUnmanaged {
 		cluster.Spec.CNI.Unmanaged = &ichorv1alpha1.TalosClusterCNIUnmanaged{TalosCNI: cmp.Or(f.TalosCNI, "default")}
 	}
 

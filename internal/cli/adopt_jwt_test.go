@@ -43,7 +43,7 @@ func TestBuildAdoptPlan_RefusesJWTAuthenticators(t *testing.T) {
 		t.Fatalf("rendering the live configuration: %v", err)
 	}
 
-	_, err = buildAdoptPlan(cluster, machine, bundle, nil, currentCfg, nil)
+	_, err = buildAdoptPlan(cluster, machine, bundle, nil, currentCfg, nil, ownership{})
 	if err == nil || !strings.Contains(err.Error(), "spec.authentication.external") {
 		t.Fatalf("buildAdoptPlan error = %v, want a refusal naming spec.authentication.external", err)
 	}

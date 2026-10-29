@@ -68,11 +68,9 @@ type adoptDeps struct {
 	Output   string
 
 	// Target reads the cluster being adopted (the CNI and kube-proxy facts); nil
-	// skips the CNI inspection. CNIUnmanaged is --cni-unmanaged; TalosCNI is the Talos-side CNI
-	// selection, filled from the first node's facts when empty.
+	// skips the CNI inspection. CNIUnmanaged is --cni-unmanaged.
 	Target       client.Reader
 	CNIUnmanaged bool
-	TalosCNI     talosCNIHint
 
 	// Seed is the address of one control plane (--node), used to discover the machines of a
 	// cluster that has no TalosCluster yet.
@@ -388,20 +386,6 @@ func (st *adoptState) firstNode() *adoptNode {
 	return first
 }
 
-// hintFromFacts is the Talos-side CNI selection in the form the CNI inspection takes.
-func hintFromFacts(f *TalosFacts) talosCNIHint {
-	switch f.CNI.Kind {
-	case CNINone:
-		return talosCNIHint{Name: string(detectedNone)}
-	case CNICustom:
-		return talosCNIHint{Name: string(CNICustom), URLs: f.CNI.URLs}
-	case CNIFlannel:
-		return talosCNIHint{Name: string(detectedFlannel)}
-	default:
-		return talosCNIHint{Name: f.CNI.Name}
-	}
-}
-
 // inspect runs the read-only CNI and kube-proxy inspection, applies the refusals,
 // 1.5 and 1.6, and settles the CNI fields of a TalosCluster adopt is going to create.
 func (st *adoptState) inspect(ctx context.Context, deps adoptDeps) error {
@@ -410,19 +394,14 @@ func (st *adoptState) inspect(ctx context.Context, deps adoptDeps) error {
 		return errors.New("adopt: no approved machine to adopt")
 	}
 
-	st.unmanaged = deps.CNIUnmanaged || st.cluster.Spec.CNI.Preset == cniUnmanaged
+	st.unmanaged = deps.CNIUnmanaged || st.cluster.Spec.CNI.Preset == ichorv1alpha1.TalosClusterCNIPresetUnmanaged
 
 	var k8s *k8sFacts
 
 	if deps.Target != nil {
-		hint := deps.TalosCNI
-		if hint.Name == "" && len(hint.URLs) == 0 {
-			hint = hintFromFacts(first.Facts)
-		}
-
 		var err error
 
-		if st.rep, k8s, err = inspectCNI(ctx, deps, hint, st.unmanaged); err != nil {
+		if st.rep, k8s, err = inspectCNI(ctx, deps, first.Facts.CNI, st.unmanaged); err != nil {
 			return err
 		}
 	}
@@ -469,7 +448,7 @@ func (st *adoptState) inspect(ctx context.Context, deps adoptDeps) error {
 		st.cluster.Spec.CNI.Preset = cniCilium
 
 		if st.unmanaged {
-			st.cluster.Spec.CNI.Preset = cniUnmanaged
+			st.cluster.Spec.CNI.Preset = ichorv1alpha1.TalosClusterCNIPresetUnmanaged
 			st.cluster.Spec.CNI.Unmanaged = &ichorv1alpha1.TalosClusterCNIUnmanaged{TalosCNI: "default"}
 
 			if first.Facts.CNI.Kind == CNINone {
@@ -538,7 +517,7 @@ func (st *adoptState) plan(deps adoptDeps) ([]*adoptPlan, error) {
 				"machine.install.disk to record spec.install", n.M.Name)
 		}
 
-		p, err := buildAdoptPlanOwned(st.cluster, n.M, deps.Bundle, st.existing, n.Current, st.sys, st.own(n))
+		p, err := buildAdoptPlan(st.cluster, n.M, deps.Bundle, st.existing, n.Current, st.sys, st.own(n))
 		if err != nil {
 			return nil, err
 		}
@@ -978,13 +957,13 @@ func confirm(r io.Reader, w io.Writer, prompt string) (bool, error) {
 
 // inspectCNI runs the read-only CNI inspection, prints the report, and returns the refusal of
 // When the cluster may not be adopted in the requested mode. Nothing is written.
-func inspectCNI(ctx context.Context, deps adoptDeps, hint talosCNIHint, unmanaged bool) (*cniReport, *k8sFacts, error) {
+func inspectCNI(ctx context.Context, deps adoptDeps, talos CNIFacts, unmanaged bool) (*cniReport, *k8sFacts, error) {
 	facts, err := gatherK8sFacts(ctx, deps.Target)
 	if err != nil {
 		return nil, nil, fmt.Errorf("adopt: inspecting the CNI: %w", err)
 	}
 
-	rep := detectCNI(facts, hint)
+	rep := detectCNI(facts, talos)
 
 	_, _ = fmt.Fprintf(deps.Stderr, "adopt: CNI: %s\n", rep)
 

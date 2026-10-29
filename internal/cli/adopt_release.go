@@ -115,7 +115,7 @@ func releaseHold(
 			return released, fmt.Errorf("adopt: reading machine %q's live configuration: %w", m.Name, err)
 		}
 
-		plan, err := buildAdoptPlanOwned(&cluster, &m, bundle, patches, live, sys, own(n))
+		plan, err := buildAdoptPlan(&cluster, &m, bundle, patches, live, sys, own(n))
 		if err != nil {
 			return released, err
 		}

@@ -33,8 +33,6 @@ import (
 	"golang.org/x/net/bpf"
 	"golang.org/x/sync/errgroup"
 	authv1 "k8s.io/api/authorization/v1"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -196,25 +194,13 @@ func (s *Server) authorizeDownload(ctx context.Context, m *ichorv1alpha1.TalosMa
 // content. It uses the backend's own client (the users have no right to create
 // Events), like break-glass.
 func (s *Server) emitDownloadEvent(ctx context.Context, m *ichorv1alpha1.TalosMachine, scope DownloadScope, detail string) error {
-	now := metav1.NewTime(s.now())
-	msg := fmt.Sprintf("%s download started by %s at %s", scope, s.actorName(ctx), now.UTC().Format(time.RFC3339))
+	msg := fmt.Sprintf("%s download started by %s at %s", scope, s.actorName(ctx), s.now().UTC().Format(time.RFC3339))
 
 	if detail != "" {
 		msg += " (" + detail + ")"
 	}
 
-	ev := &corev1.Event{
-		InvolvedObject: corev1.ObjectReference{
-			APIVersion: ichorv1alpha1.GroupVersion.String(), Kind: kindTalosMachine,
-			Namespace: m.Namespace, Name: m.Name, UID: m.UID,
-		},
-		Reason: "DiagnosticsDownload", Message: msg, Type: corev1.EventTypeWarning,
-		Source:         corev1.EventSource{Component: "ichor-ui"},
-		FirstTimestamp: now, LastTimestamp: now, Count: 1,
-	}
-	ev.GenerateName, ev.Namespace = m.Name+".", m.Namespace
-
-	return s.Client.Create(ctx, ev)
+	return s.emitWarningEvent(ctx, m, kindTalosMachine, "DiagnosticsDownload", msg)
 }
 
 // startDownload runs everything that must hold before a byte is read: the
@@ -252,12 +238,16 @@ func (s *Server) startDownload(
 		return nil, nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("connecting to machine's Talos API: %w", err))
 	}
 
-	closeFn := func() {}
+	return tc, closeFunc(tc), nil
+}
+
+// closeFunc returns tc's Close when it is an io.Closer, else a no-op.
+func closeFunc(tc any) func() {
 	if closer, ok := tc.(io.Closer); ok {
-		closeFn = func() { _ = closer.Close() }
+		return func() { _ = closer.Close() }
 	}
 
-	return tc, closeFn, nil
+	return func() {}
 }
 
 // withDrain cancels ctx when the backend starts draining, so a long download
@@ -606,13 +596,15 @@ func (s *Server) DownloadSupportBundle(
 		return err
 	}
 
+	fail := func(err error) error { return downloadCopyError("support bundle", ctx, err, supportBundleCap) }
+
 	if err := addFile("README.txt", []byte(supportBundleReadme)); err != nil {
-		return downloadCopyError("support bundle", ctx, err, supportBundleCap)
+		return fail(err)
 	}
 
 	for machineName, msg := range failures {
 		if err := addFile(machineName+"/collection-errors.txt", []byte(msg+"\n")); err != nil {
-			return downloadCopyError("support bundle", ctx, err, supportBundleCap)
+			return fail(err)
 		}
 	}
 
@@ -621,18 +613,18 @@ func (s *Server) DownloadSupportBundle(
 
 		problems, err := n.tc.CollectSupport(ctx, func(entry string, data []byte) error { return addFile(prefix+entry, data) })
 		if err != nil {
-			return downloadCopyError("support bundle", ctx, err, supportBundleCap)
+			return fail(err)
 		}
 
 		if len(problems) > 0 {
 			if err := addFile(prefix+"collection-errors.txt", []byte(strings.Join(problems, "\n")+"\n")); err != nil {
-				return downloadCopyError("support bundle", ctx, err, supportBundleCap)
+				return fail(err)
 			}
 		}
 	}
 
 	if err := zw.Close(); err != nil {
-		return downloadCopyError("support bundle", ctx, err, supportBundleCap)
+		return fail(err)
 	}
 
 	return w.finish()

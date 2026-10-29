@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"sync"
 
@@ -48,18 +47,9 @@ var errNoTalosClient = errors.New("no Talos API connectivity is configured for t
 func (s *Server) GetNode(
 	ctx context.Context, req *connect.Request[pb.GetNodeRequest],
 ) (*connect.Response[pb.GetNodeResponse], error) {
-	if s.NodeTalosClient == nil {
-		return nil, connect.NewError(connect.CodeUnavailable, errNoTalosClient)
-	}
-
 	ref := req.Msg.GetMachine()
 
-	m, cluster, err := s.getMachineAndCluster(ctx, ref)
-	if err != nil {
-		return nil, err
-	}
-
-	tc, closeFn, _, err := s.dialNode(ctx, cluster, m)
+	m, tc, closeFn, _, err := s.dialMachine(ctx, ref)
 	if err != nil {
 		return nil, err
 	}
@@ -208,12 +198,7 @@ func (s *Server) StreamNodeLogs(
 
 	for _, ref := range refs {
 		g.Go(func() error {
-			m, cluster, err := s.getMachineAndCluster(gctx, ref)
-			if err != nil {
-				return err
-			}
-
-			tc, closeFn, _, err := s.dialNode(gctx, cluster, m)
+			_, tc, closeFn, _, err := s.dialMachine(gctx, ref)
 			if err != nil {
 				return err
 			}
@@ -256,6 +241,25 @@ func logOptions(req *pb.StreamNodeLogsRequest) LogOptions {
 	}
 
 	return LogOptions{Follow: req.Follow == nil || req.GetFollow(), TailLines: tail}
+}
+
+// dialMachine is dialNode for the machine ref names, read as the caller;
+// it fails Unavailable when no NodeTalosClient factory is wired in.
+func (s *Server) dialMachine(
+	ctx context.Context, ref *pb.ObjectRef,
+) (*ichorv1alpha1.TalosMachine, NodeTalosClient, func(), bool, error) {
+	if s.NodeTalosClient == nil {
+		return nil, nil, nil, false, connect.NewError(connect.CodeUnavailable, errNoTalosClient)
+	}
+
+	m, cluster, err := s.getMachineAndCluster(ctx, ref)
+	if err != nil {
+		return nil, nil, nil, false, err
+	}
+
+	tc, closeFn, maintenance, err := s.dialNode(ctx, cluster, m)
+
+	return m, tc, closeFn, maintenance, err
 }
 
 // dialNode opens m's read-only Talos connection: maintenance mode
@@ -320,12 +324,7 @@ func (s *Server) openNodeClient(
 		return nil, nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("connecting to machine's Talos API: %w", err))
 	}
 
-	closeFn := func() {}
-	if closer, ok := tc.(io.Closer); ok {
-		closeFn = func() { _ = closer.Close() }
-	}
-
-	return tc, closeFn, nil
+	return tc, closeFunc(tc), nil
 }
 
 // findKubernetesNode looks up the corev1.Node that backs m: by name when

@@ -17,6 +17,7 @@ const top: Record<string, Key> = {
   '/operations': 'nav.operations',
   '/cilium': 'nav.cilium',
   '/users': 'nav.users',
+  '/settings': 'nav.settings',
 }
 
 // breadcrumbsFor maps a route path to the trail shown in the top bar. Pure so

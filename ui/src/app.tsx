@@ -21,6 +21,7 @@ import { Placeholder } from '@/pages/Placeholder'
 import { SignIn } from '@/pages/SignIn'
 import { passwordSignIn } from '@/lib/login'
 import { Users } from '@/pages/Users'
+import { Settings } from '@/pages/Settings'
 import { matchRoute, replace, usePath } from '@/router'
 import { redirectFor } from '@/lib/routes'
 import { useCluster } from '@/lib/useCluster'
@@ -120,11 +121,12 @@ function Authenticated({ path }: { path: string }) {
 }
 
 // Routes gates the cluster pages on the one cluster: none shows the empty state, several a
-// warning. /users does not need a cluster.
+// warning. /users and /settings do not need a cluster.
 function Routes({ path, usersEnabled }: { path: string; usersEnabled: boolean }) {
   const t = useT()
   const { cluster, count, loading, error } = useCluster()
   if (path === '/users' && usersEnabled) return <Users />
+  if (path === '/settings') return <Settings />
   if (error && !cluster) return <ErrorAlert {...error} />
   if (loading) return <PageSkeleton label={t('shell.loadingCluster')} />
   if (!cluster) return <p class="p-8 text-sm text-muted-foreground">{t('shell.noCluster')}</p>

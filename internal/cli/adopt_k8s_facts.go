@@ -153,7 +153,7 @@ func gatherK8sFacts(ctx context.Context, r client.Reader) (*k8sFacts, error) {
 func ciliumHelmReleases(ctx context.Context, r client.Reader) ([]helmReleaseFact, error) {
 	var secrets corev1.SecretList
 
-	if err := r.List(ctx, &secrets, client.MatchingLabels{helmOwnerLabel: "helm", helmNameLabel: "cilium"}); err != nil {
+	if err := r.List(ctx, &secrets, client.MatchingLabels{helmOwnerLabel: "helm", helmNameLabel: string(detectedCilium)}); err != nil {
 		return nil, fmt.Errorf("listing Helm release records: %w", err)
 	}
 

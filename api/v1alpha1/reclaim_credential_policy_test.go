@@ -11,7 +11,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -27,7 +26,7 @@ var _ = Describe("ichor-ui reclaim credential policy", Ordered, func() {
 	var admin, ui, other client.Client
 
 	secret := func(name string, typ corev1.SecretType, labelled bool, data map[string][]byte) *corev1.Secret {
-		s := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns}, Type: typ, Data: data}
+		s := &corev1.Secret{Name: name, Namespace: ns, Type: typ, Data: data}
 		if labelled {
 			s.Labels = map[string]string{"ichor.maesh.dev/reclaim": "true"}
 		}
@@ -53,7 +52,7 @@ var _ = Describe("ichor-ui reclaim credential policy", Ordered, func() {
 		ctx := context.Background()
 		admin = as("admin")
 		Expect(client.IgnoreAlreadyExists(admin.Create(ctx, &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{Name: ns},
+			Name: ns,
 		}))).To(Succeed())
 
 		data, err := os.ReadFile("../../config/admission/reclaim-credential-policy.yaml")

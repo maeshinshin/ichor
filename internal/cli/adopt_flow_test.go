@@ -66,7 +66,7 @@ func newFlowEnv(t *testing.T, adoptPreset string, liveMutate func(*ichorv1alpha1
 	cluster.Spec.CNI = ichorv1alpha1.TalosClusterCNI{Preset: adoptPreset, KubeProxy: kubeProxyEnabled}
 
 	if adoptPreset == cniUnmanaged {
-		cluster.Spec.CNI.Unmanaged = &ichorv1alpha1.TalosClusterCNIUnmanaged{TalosCNI: "default"}
+		cluster.Spec.CNI.Unmanaged = &ichorv1alpha1.TalosClusterCNIUnmanaged{TalosCNI: testNamespace}
 	}
 
 	liveCluster := cluster.DeepCopy()
@@ -139,7 +139,7 @@ func (e *flowEnv) deps(t *testing.T) adoptDeps {
 	return adoptDeps{
 		K8s: e.k8s, Bundle: newTestBundle(t),
 		DialTalos: func(_ context.Context, endpoint string) (talosConfigReader, error) {
-			return &versionedReader{fakeTalosReader: fakeTalosReader{current: e.live[endpoint]}, version: testTalosVersion}, nil
+			return &versionedReader{current: e.live[endpoint], version: testTalosVersion}, nil
 		},
 		Stdout: &e.stdout, Stderr: &e.stderr, Stdin: strings.NewReader(""), Output: outputYAML,
 		ReleaseWait: time.Second, Interval: 5 * time.Millisecond,
@@ -160,7 +160,7 @@ func (e *flowEnv) held(t *testing.T, name string) bool {
 func unmanagedLive(c *ichorv1alpha1.TalosCluster) {
 	c.Spec.CNI = ichorv1alpha1.TalosClusterCNI{
 		Preset: cniUnmanaged, KubeProxy: kubeProxyEnabled,
-		Unmanaged: &ichorv1alpha1.TalosClusterCNIUnmanaged{TalosCNI: "default"},
+		Unmanaged: &ichorv1alpha1.TalosClusterCNIUnmanaged{TalosCNI: testNamespace},
 	}
 }
 
@@ -276,7 +276,7 @@ func TestAdoptKeepsHoldWhereLiveDriftRemains(t *testing.T) {
 			return drifting, nil
 		}
 
-		return &versionedReader{fakeTalosReader: fakeTalosReader{current: env.live[endpoint]}, version: testTalosVersion}, nil
+		return &versionedReader{current: env.live[endpoint], version: testTalosVersion}, nil
 	}
 
 	err = runAdopt(context.Background(), env.cluster.Name, testNamespace, deps)
@@ -412,7 +412,7 @@ func TestAdoptHelmCiliumWithoutTakeoverStaysHeld(t *testing.T) {
 func dropDocument(cfg []byte, kind string) []byte {
 	var kept []string
 
-	for _, doc := range strings.Split(string(cfg), "\n---\n") {
+	for doc := range strings.SplitSeq(string(cfg), "\n---\n") {
 		if !strings.Contains(doc, "kind: "+kind+"\n") {
 			kept = append(kept, doc)
 		}
@@ -465,7 +465,7 @@ func TestAdoptDiscoversANewCluster(t *testing.T) {
 	deps.ContractOverride = testVersionContract
 	deps.ReleaseWait = 50 * time.Millisecond
 	deps.DialTalos = func(_ context.Context, endpoint string) (talosConfigReader, error) {
-		return &membersReader{versionedReader: versionedReader{fakeTalosReader: fakeTalosReader{current: env.live[endpoint]}, version: testTalosVersion}, members: members}, nil
+		return &membersReader{current: env.live[endpoint], version: testTalosVersion, members: members}, nil
 	}
 	deps.ReadIdentity = func(_ context.Context, address string) (controller.HardwareIdentity, error) {
 		return controller.HardwareIdentity{UUID: "uuid-" + address, Serial: "s"}, nil

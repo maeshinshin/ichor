@@ -1,0 +1,75 @@
+syntax = "proto3";
+
+// SettingsService backs the Settings page (docs/adr/0105, Part B). It reads and
+// writes the runtime settings in the IchorInstallation singleton as the caller,
+// so RBAC (ichorinstallations/reclaim, /settings) and the settings webhook judge
+// the user. Update changes only the fields it carries.
+package ichor.v1alpha1;
+
+service SettingsService {
+  // GetSettings returns what is set, what is in force and where each value comes
+  // from, who deploys Ichor, whether the deployment froze the settings, and which
+  // groups the caller may edit.
+  rpc GetSettings(GetSettingsRequest) returns (GetSettingsResponse);
+
+  // UpdateSettings changes only the fields present in changes. Enabling reclaim
+  // needs confirm_reclaim; the handler then sets the confirm annotation in the
+  // same write.
+  rpc UpdateSettings(UpdateSettingsRequest) returns (UpdateSettingsResponse);
+}
+
+// SettingValue is one setting in force. source is "spec" or "deployment".
+message SettingValue {
+  string value = 1;
+  string source = 2;
+}
+
+// SettingsFields are the editable settings. A field that is absent is unset (in
+// a GetSettingsResponse) or unchanged (in an UpdateSettingsRequest). Durations
+// are Go duration strings ("15m", "720h").
+message SettingsFields {
+  optional bool reclaim_enabled = 1;
+  optional string token_ttl = 2;
+  optional string refresh_lifetime = 3;
+  // drift_policy is warnOnly or autoCorrect.
+  optional string drift_policy = 4;
+}
+
+// SettingsEffective is every setting in force.
+message SettingsEffective {
+  SettingValue reclaim_enabled = 1;
+  SettingValue token_ttl = 2;
+  SettingValue refresh_lifetime = 3;
+  SettingValue drift_policy = 4;
+}
+
+message GetSettingsRequest {}
+
+message GetSettingsResponse {
+  // version is spec.version; installed_version is status.installedVersion.
+  string version = 1;
+  string installed_version = 2;
+  // manager is installer or helm.
+  string manager = 3;
+  // read_only is true when the deployment owns the settings (--settings-read-only).
+  bool read_only = 4;
+  // spec holds the fields that are set in the IchorInstallation.
+  SettingsFields spec = 5;
+  // effective is what the controller reports in status.effective; empty until it has.
+  SettingsEffective effective = 6;
+  // ui_effective is what ichor-ui itself applies right now (it reads them per issued token).
+  SettingsEffective ui_effective = 7;
+  // The caller may edit the reclaim switch / the users and defaults groups.
+  bool can_edit_reclaim = 8;
+  bool can_edit_settings = 9;
+}
+
+message UpdateSettingsRequest {
+  SettingsFields changes = 1;
+  // confirm_reclaim is the typed confirmation that enabling reclaim needs.
+  bool confirm_reclaim = 2;
+}
+
+message UpdateSettingsResponse {
+  GetSettingsResponse settings = 1;
+}

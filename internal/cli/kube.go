@@ -43,8 +43,7 @@ func loadKubeconfig(path string) (*rest.Config, error) {
 
 // cliScheme is every type a CLI command needs a typed client for: Ichor's
 // own CRDs (TalosCluster, TalosMachine, TalosConfigPatch, ...) plus
-// corev1, since init creates the secrets bundle Secret and, with
-// --argocd, a repository credentials Secret.
+// corev1, since init creates the secrets bundle Secret.
 func cliScheme() (*runtime.Scheme, error) {
 	scheme := runtime.NewScheme()
 

@@ -414,10 +414,9 @@ func candidatePatches(
 
 // buildInlineManifestsPatch builds the cluster-layer Config-kind patch
 // that carries cluster.inlineManifests (design step 3: "cluster.
-// inlineManifests carry Ichor itself, the CNI (unless flannel), and, with
-// --argocd, Argo CD plus a root Application"). Only the CNI's manifest is
-// populated today -- Ichor's own and Argo CD's own install manifests are
-// not sourced by this command yet.
+// inlineManifests carry Ichor itself and the CNI"). Only the CNI's manifest is
+// populated today -- Ichor's own install manifest is not sourced by this
+// command yet.
 //
 // This is authored directly, not reconstructed from a diff, so the
 // required-but-non-secret machine.type/machine.certSANs fields

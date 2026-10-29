@@ -100,11 +100,9 @@ var _ = Describe("Break-glass webhook", func() {
 		_ = k8sClient.Delete(ctx, &m)
 	})
 
-	It("admits an ordinary update, even of a CR a GitOps tool tracks", func() {
+	It("admits an ordinary update", func() {
 		var m ichorv1alpha1.TalosMachine
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(machine), &m)).To(Succeed())
-		m.Annotations["argocd.argoproj.io/tracking-id"] = "app:ichor.maesh.dev/TalosMachine:default/x"
-		Expect(k8sClient.Update(ctx, &m)).To(Succeed())
 
 		m.Spec.Hostname = "changed"
 		Expect(asUser(plainUser).Update(ctx, &m)).To(Succeed())

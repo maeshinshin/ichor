@@ -40,6 +40,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/settings"
 	"github.com/maeshinshin/ichor/pkg/reclaim"
 )
 
@@ -418,6 +419,22 @@ var _ = Describe("MachineReclaim Controller", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(get(key).Status.Phase).To(Equal(ichorv1alpha1.MachineReclaimFailed))
 		Expect(secretExists()).To(BeFalse())
+		Expect(node.resets.Load()).To(BeZero())
+	})
+
+	It("reads the switch per call from the IchorInstallation", func() {
+		off := false
+		inst := createInstallation("v0.1.0")
+		inst.Spec.Reclaim = &ichorv1alpha1.IchorReclaimSettings{Enabled: &off}
+		Expect(k8sClient.Update(ctx, inst)).To(Succeed())
+
+		r.Enabled = true
+		r.Settings = &settings.Reader{Client: k8sClient, Fallback: settings.Fallback{ReclaimEnabled: true}}
+		key := create()
+
+		_, err := reconcileOnce(key)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(get(key).Status.Phase).To(Equal(ichorv1alpha1.MachineReclaimFailed), "spec off beats the flag on")
 		Expect(node.resets.Load()).To(BeZero())
 	})
 

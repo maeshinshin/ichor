@@ -43,6 +43,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -138,11 +139,11 @@ func (l *Lock) Acquire(ctx context.Context, identity string) error {
 		return err
 	}
 
-	if holderOf(&lease) == identity {
+	if ptr.Deref(lease.Spec.HolderIdentity, "") == identity {
 		return l.renew(ctx, &lease)
 	}
 	if !expired(&lease, l.duration) {
-		return &HeldError{Holder: holderOf(&lease)}
+		return &HeldError{Holder: ptr.Deref(lease.Spec.HolderIdentity, "")}
 	}
 	return l.takeOver(ctx, &lease, identity)
 }
@@ -164,8 +165,8 @@ func (l *Lock) Renew(ctx context.Context, identity string) error {
 		}
 		return err
 	}
-	if holderOf(&lease) != identity {
-		return &HeldError{Holder: holderOf(&lease)}
+	if ptr.Deref(lease.Spec.HolderIdentity, "") != identity {
+		return &HeldError{Holder: ptr.Deref(lease.Spec.HolderIdentity, "")}
 	}
 	return l.renew(ctx, &lease)
 }
@@ -189,7 +190,7 @@ func (l *Lock) Release(ctx context.Context, identity string) error {
 		}
 		return err
 	}
-	if holderOf(&lease) != identity {
+	if ptr.Deref(lease.Spec.HolderIdentity, "") != identity {
 		return nil
 	}
 
@@ -217,7 +218,7 @@ func (l *Lock) Holder(ctx context.Context) (identity string, held bool, err erro
 	if expired(&lease, l.duration) {
 		return "", false, nil
 	}
-	return holderOf(&lease), true, nil
+	return ptr.Deref(lease.Spec.HolderIdentity, ""), true, nil
 }
 
 // create makes the Lease for the first time. If it already exists, someone
@@ -244,8 +245,8 @@ func (l *Lock) create(ctx context.Context, identity string) error {
 // expiry, or a release - surfaces as a conflict instead of being silently
 // overwritten.
 func (l *Lock) renew(ctx context.Context, lease *coordinationv1.Lease) error {
-	lease.Spec.RenewTime = ptrMicroTime(metav1.NowMicro())
-	seconds := leaseDurationSeconds(l.duration)
+	lease.Spec.RenewTime = ptr.To(metav1.NowMicro())
+	seconds := max(int32(l.duration.Seconds()), 1)
 	lease.Spec.LeaseDurationSeconds = &seconds
 	if err := l.client.Update(ctx, lease); err != nil {
 		if apierrors.IsConflict(err) {
@@ -283,14 +284,14 @@ func (l *Lock) currentHolderBestEffort(ctx context.Context) string {
 	if err := l.reader.Get(ctx, l.key, &lease); err != nil {
 		return "unknown"
 	}
-	return holderOf(&lease)
+	return ptr.Deref(lease.Spec.HolderIdentity, "")
 }
 
 // heldSpec builds the spec for identity freshly holding the lock, with
 // acquireTime and renewTime both reset to now.
 func heldSpec(identity string, duration time.Duration, transitions int32) coordinationv1.LeaseSpec {
-	now := ptrMicroTime(metav1.NowMicro())
-	seconds := leaseDurationSeconds(duration)
+	now := ptr.To(metav1.NowMicro())
+	seconds := max(int32(duration.Seconds()), 1)
 	return coordinationv1.LeaseSpec{
 		HolderIdentity:       &identity,
 		LeaseDurationSeconds: &seconds,
@@ -298,26 +299,6 @@ func heldSpec(identity string, duration time.Duration, transitions int32) coordi
 		RenewTime:            now,
 		LeaseTransitions:     &transitions,
 	}
-}
-
-func ptrMicroTime(t metav1.MicroTime) *metav1.MicroTime {
-	return &t
-}
-
-// leaseDurationSeconds converts duration to the seconds the API server
-// requires: it rejects spec.leaseDurationSeconds <= 0, so anything under a
-// second - which makes no sense for this lock's real callers anyway - is
-// floored up to 1 rather than truncated down to a value the server refuses.
-func leaseDurationSeconds(duration time.Duration) int32 {
-	seconds := max(int32(duration.Seconds()), 1)
-	return seconds
-}
-
-func holderOf(lease *coordinationv1.Lease) string {
-	if lease.Spec.HolderIdentity == nil {
-		return ""
-	}
-	return *lease.Spec.HolderIdentity
 }
 
 // expired reports whether lease's holder (if any) no longer owns it. A

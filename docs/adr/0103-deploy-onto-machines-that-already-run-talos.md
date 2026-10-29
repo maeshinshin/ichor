@@ -288,7 +288,7 @@ Units 1-16 landed with these differences from the text above. Where a section ab
 - **Hold.** The annotation is `ichor.maesh.dev/hold-apply`; a held machine reports `AdoptionHeld`. Release is one machine at a time, control planes first, each waiting for Ready without `AdoptionHeld`.
 - **Inline entry.** Found by content (`cilium.FindInlineManifest`); adopt writes its name in the annotation `ichor.maesh.dev/cni-inline-manifest`, and the hand-over controller copies it to `status.cni.takenOverInlineManifest` in the same update that sets `CNIHandover=True` (unit 6 note in 1.2).
 - **CA rotation.** The restart order after a rotation now puts the CNI first and an unmanaged cluster's CNI is not restarted (amendment in ADR 0063). A dismissal annotation or a completed rotation clears `CARotationAdvised`.
-- **Stale help text.** The `Long` help of `ichor adopt` still describes the old patch-only behaviour ("never writes anything but TalosConfigPatch objects"). The flag list is current. Follow-up: rewrite the help text.
+- **Help text.** The `Long` help of `ichor adopt` describes the four phases as built.
 - Open questions 2 to 6 are unchanged: non-Cilium inline manifests stay class C, `cni.name: none` is adopted unmanaged only, adopt installs Ichor itself, no standard `NetworkPolicy` objects are written, and the reclaim TTL numbers are as designed.
 
 The user guide is `docs/guides/adopt-and-reclaim.md`. The design text is in the architecture's Bootstrap, Cilium, Nodes, CNI and Trust sections.

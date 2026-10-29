@@ -72,10 +72,6 @@ spec:
         # HTTPS only: the operator's pair when tls.secretName is set, else the Ichor
         # serving certificate from /etc/ichor/ui-tls.
         - --addr=:{{ .Values.ichorUI.port }}
-        {{- with .Values.ichorUI.plaintextPort }}
-        # DEPRECATED, removed in the next minor release: plain HTTP for an edge not yet moved to HTTPS.
-        - --http-addr=:{{ . }}
-        {{- end }}
         {{- if .Values.ichorUI.tls.secretName }}
         - --tls-cert-file=/etc/ichor/tls/tls.crt
         - --tls-key-file=/etc/ichor/tls/tls.key
@@ -156,11 +152,6 @@ spec:
         - containerPort: {{ .Values.ichorUI.port }}
           name: https
           protocol: TCP
-        {{- with .Values.ichorUI.plaintextPort }}
-        - containerPort: {{ . }}
-          name: http
-          protocol: TCP
-        {{- end }}
         {{- if .Values.ichorUI.users.enabled }}
         - containerPort: {{ .Values.ichorUI.users.internalPort }}
           name: internal

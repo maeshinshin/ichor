@@ -215,7 +215,7 @@ func finishCNIJob(cluster *ichorv1alpha1.TalosCluster) {
 	var inst ichorv1alpha1.IchorInstallation
 	Expect(k8sClient.Get(ctx, client.ObjectKey{Name: ichorv1alpha1.IchorInstallationName}, &inst)).To(Succeed())
 
-	_, err := AdvanceCNIHelmJob(ctx, k8sClient, tmNamespace, cluster, specMode(cluster), &inst, "")
+	_, err := AdvanceCNIHelmJob(ctx, k8sClient, tmNamespace, cluster, specMode(cluster), &inst, "", time.Time{})
 	Expect(err).NotTo(HaveOccurred())
 
 	setJobCondition(cniJob(cluster), batchv1.JobComplete, "")
@@ -649,7 +649,7 @@ var _ = Describe("cniKubeProxyAdvancer", func() {
 
 		var inst ichorv1alpha1.IchorInstallation
 		Expect(k8sClient.Get(ctx, client.ObjectKey{Name: ichorv1alpha1.IchorInstallationName}, &inst)).To(Succeed())
-		_, err := AdvanceCNIHelmJob(ctx, k8sClient, tmNamespace, cluster, specMode(cluster), &inst, "")
+		_, err := AdvanceCNIHelmJob(ctx, k8sClient, tmNamespace, cluster, specMode(cluster), &inst, "", time.Time{})
 		Expect(err).NotTo(HaveOccurred())
 
 		old := cniJob(cluster)

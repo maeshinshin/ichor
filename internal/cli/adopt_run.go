@@ -432,7 +432,7 @@ func (st *adoptState) inspect(ctx context.Context, deps adoptDeps) error {
 
 	st.unmanaged = deps.CNIUnmanaged || st.cluster.Spec.CNI.Preset == ichorv1alpha1.TalosClusterCNIPresetUnmanaged
 
-	if err := checkTunnel("--tunnel", deps.Tunnel); err != nil {
+	if err := checkTunnel(deps.Tunnel); err != nil {
 		return fmt.Errorf("adopt: %w", err)
 	}
 
@@ -525,14 +525,6 @@ func (st *adoptState) ichorOwnedCilium() bool {
 	return st.fresh && !st.unmanaged && st.rep != nil && st.rep.Provenance == provenanceIchor
 }
 
-func rbTunnel(rb *cilium.ReadBack) string {
-	if rb == nil {
-		return ""
-	}
-
-	return rb.Tunnel
-}
-
 // readBackIchorCilium reads an Ichor-owned Cilium's release: it is already running with a tunnel, a
 // kube-proxy mode and user values, and the spec adopt writes must reproduce them, or the controller
 // would change a running network.
@@ -546,14 +538,14 @@ func (st *adoptState) readBackIchorCilium(ctx context.Context, deps adoptDeps) e
 		return fmt.Errorf("adopt: reading Ichor's Cilium release: %w", err)
 	}
 
-	if deps.Tunnel != "" && (rb == nil || rb.Tunnel != deps.Tunnel) {
-		return fmt.Errorf("adopt: --tunnel %s does not match Ichor's running Cilium (tunnel %q); the tunnel cannot change on a running cluster, so drop --tunnel or pass the running value",
-			deps.Tunnel, rbTunnel(rb))
+	running := ""
+	if rb != nil {
+		st.readBack, st.kubeProxy, running = rb, string(rb.KubeProxy), rb.Tunnel
 	}
 
-	if rb != nil {
-		st.readBack = rb
-		st.kubeProxy = string(rb.KubeProxy)
+	if deps.Tunnel != "" && deps.Tunnel != running {
+		return fmt.Errorf("adopt: --tunnel %s does not match Ichor's running Cilium (tunnel %q); the tunnel cannot change on a running cluster, so drop --tunnel or pass the running value",
+			deps.Tunnel, running)
 	}
 
 	return nil
@@ -586,16 +578,12 @@ func (st *adoptState) mapRunningCilium(k8s *k8sFacts) error {
 	return nil
 }
 
-// repairPendingCilium: the Cilium found is Ichor's own and its newest release record is pending-*.
-// Only Ichor's record in ichor-system is ever read here (ichorCiliumReadBack); a foreign one is not.
-func (st *adoptState) repairPendingCilium() bool {
-	return !st.installCilium && st.ichorOwnedCilium() && st.readBack != nil && st.readBack.Pending
-}
-
 // bootstrapCilium is step 2 of ADR 0104 1.5: Ichor's Cilium, as its own Helm release, installed
 // with the values the TalosCluster adopt writes will make the controller derive.
 func (st *adoptState) bootstrapCilium(ctx context.Context, deps adoptDeps) error {
-	repair := st.repairPendingCilium()
+	// Repair: the Cilium found is Ichor's own (readBack is set only then; only Ichor's record in
+	// ichor-system is ever read) and its newest release record is pending-*.
+	repair := st.readBack != nil && st.readBack.Pending
 	if !st.installCilium && !repair {
 		if st.ichorOwnedCilium() {
 			_, _ = fmt.Fprintln(deps.Stderr, "adopt: Cilium is already installed (Ichor's own release); not installing it again")
@@ -663,9 +651,9 @@ func setCiliumUserValues(c *ichorv1alpha1.TalosCluster, user map[string]any, kub
 }
 
 // checkTunnel accepts "" (the default), vxlan and geneve.
-func checkTunnel(flag, tunnel string) error {
+func checkTunnel(tunnel string) error {
 	if tunnel != "" && tunnel != ciliumTunnelVxlan && tunnel != ciliumTunnelGeneve {
-		return fmt.Errorf("%s %q is invalid: must be %q or %q", flag, tunnel, ciliumTunnelVxlan, ciliumTunnelGeneve)
+		return fmt.Errorf("--tunnel %q is invalid: must be %q or %q", tunnel, ciliumTunnelVxlan, ciliumTunnelGeneve)
 	}
 
 	return nil

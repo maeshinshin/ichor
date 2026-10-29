@@ -212,12 +212,11 @@ func labelKeyed(defaults map[string]any) bool {
 func isFreeForm(defaults map[string]any, inDefaults bool, schema map[string]any) bool {
 	if schema != nil {
 		_, hasProps := schema["properties"]
-		if !hasProps {
-			return true
-		}
+
+		return !hasProps
 	}
 
-	return schema == nil && inDefaults && len(defaults) == 0
+	return inDefaults && len(defaults) == 0
 }
 
 func siblings(defaults, props map[string]any) []string {

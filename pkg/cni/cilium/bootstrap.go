@@ -50,7 +50,8 @@ const nodePollInterval = 5 * time.Second
 // one place that turns a TalosCluster into the release, for the ichor-cni Job and for Bootstrap
 // alike, so what the CLI installs is what the controller expects to find.
 func ApplyForCluster(
-	ctx context.Context, cfg *action.Configuration, cluster *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode, timeout time.Duration,
+	ctx context.Context, cfg *action.Configuration, cluster *ichorv1alpha1.TalosCluster,
+	mode cni.KubeProxyMode, timeout time.Duration,
 ) (ApplyResult, error) {
 	vals, err := EffectiveValuesForMode(cluster, mode)
 	if err != nil {
@@ -65,7 +66,8 @@ func ApplyForCluster(
 // cluster, and waits, bounded by timeout, for the DaemonSet (Helm's own wait) and then every node to
 // be Ready. It is safe to run again: Apply upgrades an existing release.
 func Bootstrap(
-	ctx context.Context, rc *rest.Config, cluster *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode, timeout time.Duration,
+	ctx context.Context, rc *rest.Config, cluster *ichorv1alpha1.TalosCluster,
+	mode cni.KubeProxyMode, timeout time.Duration,
 ) (ApplyResult, error) {
 	kube, err := kubernetes.NewForConfig(rc)
 	if err != nil {
@@ -85,8 +87,10 @@ func bootstrap(
 	ctx context.Context, kube kubernetes.Interface, cfg *action.Configuration, cluster *ichorv1alpha1.TalosCluster,
 	mode cni.KubeProxyMode, timeout, interval time.Duration,
 ) (ApplyResult, error) {
-	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: RecordNamespace}}
-	if _, err := kube.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+	ns := &corev1.Namespace{Name: RecordNamespace}
+
+	_, err := kube.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
+	if err != nil && !apierrors.IsAlreadyExists(err) {
 		return ApplyResult{}, fmt.Errorf("cilium: creating namespace %s: %w", RecordNamespace, err)
 	}
 
@@ -156,5 +160,7 @@ func (g restGetter) ToRESTMapper() (meta.RESTMapper, error) {
 }
 
 func (g restGetter) ToRawKubeConfigLoader() clientcmd.ClientConfig {
-	return clientcmd.NewDefaultClientConfig(*api.NewConfig(), &clientcmd.ConfigOverrides{Context: api.Context{Namespace: ReleaseNamespace}})
+	overrides := &clientcmd.ConfigOverrides{Context: api.Context{Namespace: ReleaseNamespace}}
+
+	return clientcmd.NewDefaultClientConfig(*api.NewConfig(), overrides)
 }

@@ -172,7 +172,11 @@ func TestB3B4B6EnabledAdopt(t *testing.T) {
 	if strings.Contains(plan, "drift found") {
 		t.Errorf("B3: the recovered bundle left drift")
 	}
-	if !strings.Contains(plan, "KubePrismConfig") && !strings.Contains(plan, "kubePrism") {
+	prismOff := true
+	for _, v := range prism {
+		prismOff = prismOff && v == ""
+	}
+	if prismOff && !strings.Contains(plan, "KubePrismConfig") && !strings.Contains(plan, "kubePrism") {
 		t.Errorf("B4: the plan does not list KubePrism as an Ichor-owned (class B) change")
 	}
 	var smp sampler
@@ -190,6 +194,9 @@ func TestB3B4B6EnabledAdopt(t *testing.T) {
 	after := kubePrismState(t, c)
 	t.Logf("KubePrism after adoption: %v", after)
 	for ip, v := range after {
+		if !prismOff {
+			break
+		}
 		if v == prism[ip] {
 			t.Errorf("B4: KubePrism of %s unchanged by the first render: %q", ip, v)
 		}

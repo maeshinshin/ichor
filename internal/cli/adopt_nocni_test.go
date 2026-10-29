@@ -22,13 +22,14 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 // The no-CNI path: detection, preconditions, refusals and plan text.
+
+const nodeCIDR = "10.244.1.0/24"
 
 const netNotReady = "container runtime network not ready: NetworkReady=false reason:NetworkPluginNotReady message:Network plugin returns error: cni plugin not initialized"
 
@@ -39,8 +40,8 @@ func cniNode(name, podCIDR string, ready bool, msg string) *corev1.Node {
 	}
 
 	return &corev1.Node{
-		ObjectMeta: metav1.ObjectMeta{Name: name},
-		Spec:       corev1.NodeSpec{PodCIDR: podCIDR},
+		Name: name,
+		Spec: corev1.NodeSpec{PodCIDR: podCIDR},
 		Status: corev1.NodeStatus{Conditions: []corev1.NodeCondition{
 			{Type: corev1.NodeReady, Status: status, Reason: reason, Message: msg},
 		}},
@@ -65,7 +66,7 @@ func TestDetectCNI_NoCNIRequiresAllThree(t *testing.T) {
 		{"talos does not say none", CNIFacts{Kind: CNIFlannel}, []client.Object{notReady("a")}, false},
 		{"a CNI workload exists", CNIFacts{Kind: CNINone}, []client.Object{notReady("a"), testDS("calico-node", calicoImage)}, false},
 		{"CiliumNode CRD exists", CNIFacts{Kind: CNINone}, []client.Object{notReady("a"), crd}, false},
-		{"one node is Ready", CNIFacts{Kind: CNINone}, []client.Object{notReady("a"), cniNode("b", "10.244.1.0/24", true, "")}, false},
+		{"one node is Ready", CNIFacts{Kind: CNINone}, []client.Object{notReady("a"), cniNode("b", nodeCIDR, true, "")}, false},
 		{"NotReady for another reason", CNIFacts{Kind: CNINone}, []client.Object{notReady("a"), otherMsg}, false},
 		{"no nodes read", CNIFacts{Kind: CNINone}, nil, false},
 	}
@@ -131,7 +132,7 @@ func noCNIDeps(t *testing.T, podCIDR string) (*flowEnv, adoptDeps) {
 }
 
 func TestAdoptNoCNI_PlanAnnouncesCiliumInstall(t *testing.T) {
-	env, deps := noCNIDeps(t, "10.244.1.0/24")
+	env, deps := noCNIDeps(t, nodeCIDR)
 	deps.PlanOnly = true
 	deps.Tunnel = "geneve"
 
@@ -151,7 +152,7 @@ func TestAdoptNoCNI_PlanAnnouncesCiliumInstall(t *testing.T) {
 }
 
 func TestAdoptNoCNI_RefusesUntilTheInstallIsBuilt(t *testing.T) {
-	env, deps := noCNIDeps(t, "10.244.1.0/24")
+	env, deps := noCNIDeps(t, nodeCIDR)
 
 	err := runAdopt(context.Background(), env.cluster.Name, testNamespace, deps)
 	if err == nil || !strings.Contains(err.Error(), "installing Cilium on a cluster with no CNI is not built yet") {
@@ -170,14 +171,14 @@ func TestAdoptNoCNI_Refusals(t *testing.T) {
 		mutate func(*adoptDeps, *flowEnv)
 		want   string
 	}{
-		{"--cni-unmanaged", "10.244.1.0/24", func(d *adoptDeps, _ *flowEnv) { d.CNIUnmanaged = true }, "no pod can run on it, including Ichor's"},
+		{"--cni-unmanaged", nodeCIDR, func(d *adoptDeps, _ *flowEnv) { d.CNIUnmanaged = true }, "no pod can run on it, including Ichor's"},
 		{"no pod CIDR", "", func(*adoptDeps, *flowEnv) {}, "spec.podCIDR"},
-		{"KubePrism off", "10.244.1.0/24", func(_ *adoptDeps, e *flowEnv) {
+		{"KubePrism off", nodeCIDR, func(_ *adoptDeps, e *flowEnv) {
 			for addr, cfg := range e.live {
 				e.live[addr] = dropDocument(cfg, "KubePrismConfig")
 			}
 		}, "Enable KubePrism"},
-		{"bad tunnel", "10.244.1.0/24", func(d *adoptDeps, _ *flowEnv) { d.Tunnel = "wireguard" }, "--tunnel"},
+		{"bad tunnel", nodeCIDR, func(d *adoptDeps, _ *flowEnv) { d.Tunnel = "wireguard" }, "--tunnel"},
 	}
 
 	for _, tc := range tests {

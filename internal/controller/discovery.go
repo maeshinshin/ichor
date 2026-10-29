@@ -328,6 +328,13 @@ func (r *DiscoveryReconciler) DiscoverAll(
 		return nil, nil
 	}
 
+	known, err := r.knownHosts(ctx, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	candidates = slices.DeleteFunc(candidates, func(c string) bool { return known[hostOf(c)] })
+
 	sem := make(chan struct{}, discoveryConcurrency)
 
 	var (
@@ -361,4 +368,51 @@ func (r *DiscoveryReconciler) DiscoverAll(
 	wg.Wait()
 
 	return results, nil
+}
+
+// hostOf is endpoint without its port; an endpoint with no port is returned as is.
+func hostOf(endpoint string) string {
+	if h, _, err := net.SplitHostPort(endpoint); err == nil {
+		return h
+	}
+
+	return endpoint
+}
+
+// knownHosts is the set of hosts that already belong to cluster: each of its TalosMachines'
+// spec.endpoint and status.observedEndpoint, and every Node's InternalIP (a member whose machine
+// endpoint is stale). They are not probed: a configured member is not a discovery candidate, and
+// probing it would only record AlreadyConfigured for it. spec.discovery is left as the user wrote it.
+func (r *DiscoveryReconciler) knownHosts(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster,
+) (map[string]bool, error) {
+	var machines ichorv1alpha1.TalosMachineList
+	if err := r.List(ctx, &machines, client.InNamespace(cluster.Namespace)); err != nil {
+		return nil, fmt.Errorf("listing TalosMachines: %w", err)
+	}
+
+	known := map[string]bool{}
+
+	for i := range machines.Items {
+		m := &machines.Items[i]
+		if m.Spec.ClusterRef.Name != cluster.Name {
+			continue
+		}
+
+		known[hostOf(m.Spec.Endpoint)] = true
+		known[hostOf(m.Status.ObservedEndpoint)] = true
+	}
+
+	var nodes corev1.NodeList
+	if err := r.List(ctx, &nodes); err != nil {
+		return nil, fmt.Errorf("listing Nodes: %w", err)
+	}
+
+	for i := range nodes.Items {
+		known[internalIP(&nodes.Items[i])] = true
+	}
+
+	delete(known, "")
+
+	return known, nil
 }

@@ -90,7 +90,7 @@ Moving an existing release:
 ## Settings on a Helm install
 
 The controller creates the `IchorInstallation` `ichor` once with
-`spec.deployment.manager: helm`; the chart does not render it. Reclaim, the
+`spec.deployment.manager: helm`; the chart does not render it. The
 sign-in lifetimes and the default drift policy are editable at run time (see
 [Settings](settings.md)) and win over the chart values when set. Set
 `settings.readOnly: true` to make the chart the only source. Upgrading and

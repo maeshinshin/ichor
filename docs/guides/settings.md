@@ -7,13 +7,12 @@ on the next call, with no rollout.
 
 | Setting | Field | Meaning |
 |---|---|---|
-| `reclaim.enabled` | `spec.reclaim.enabled` | Break-glass machine reclaim (ADR 0103). Off by default. |
 | `users.tokenTTL` | `spec.users.tokenTTL` | Lifetime of tokens ichor-ui issues, 1m to 1h. |
 | `users.refreshLifetime` | `spec.users.refreshLifetime` | Refresh lifetime, 1h to 720h; must not be shorter than the token lifetime. |
 | `defaults.driftPolicy` | `spec.defaults.driftPolicy` | `warnOnly` or `autoCorrect`: the drift policy a new `TalosCluster` gets. |
 
 A field that is set wins. A field that is not set falls back to the flag or
-chart value (`reclaim.enabled`, the ichor-ui token flags) or to `warnOnly`. There
+chart value (the ichor-ui token flags) or to `warnOnly`. There
 is no way to unset a field from the UI or the CLI. `status.effective` on the
 `IchorInstallation` shows each value in force and its source, `spec` or
 `deployment`.
@@ -29,10 +28,8 @@ settings. They stay with the installer or Helm.
 ## In the UI
 
 Open "Settings" in the sidebar. The page is a set of cards: Deployment (target
-and running version, installer or Helm, read-only), Break-glass reclaim,
-Sign-in and Defaults. Each value shows whether it is "Set here" or a
-"Deployment default". Enabling reclaim asks for a confirmation in a dialog.
-The page is read-only, with an explanation, when your role cannot change
+and running version, installer or Helm, read-only), Sign-in and Defaults. Each
+value shows whether it is "Set here" or a "Deployment default". The page is read-only, with an explanation, when your role cannot change
 settings or when the deployment manages them (below).
 
 ## With the CLI
@@ -40,7 +37,6 @@ settings or when the deployment manages them (below).
 ```
 ichor settings get
 ichor settings set users.tokenTTL=15m defaults.driftPolicy=autoCorrect
-ichor settings set reclaim.enabled=true --confirm-reclaim
 ```
 
 `ichor settings get` shows each setting, the value in force and its source
@@ -48,19 +44,16 @@ ichor settings set reclaim.enabled=true --confirm-reclaim
 `ichor settings set` writes only the keys you name:
 
 ```
-  reclaim.enabled=true|false         break-glass machine reclaim (ADR 0103)
   users.tokenTTL=15m           token lifetime, 1m to 1h
   users.refreshLifetime=168h  refresh lifetime, 1h to 720h
   defaults.driftPolicy=warnOnly|autoCorrect   default for a new TalosCluster
 ```
 
-Enabling reclaim turns on a way to wipe a configured machine. It needs
-`--confirm-reclaim`; the request then carries the annotation
-`ichor.maesh.dev/confirm-reclaim: enable-<unique>`. The webhook requires a value
-starting with `enable` that the same update adds or changes, so a stray
-`kubectl apply` (or a confirmation left over from an earlier enable) cannot
-turn break-glass on by accident. Disabling needs
-no confirmation. Each accepted change leaves an Event on the
+There is no switch for "Reset and add" (MachineReclaim) any more: `reclaim.enabled`
+and `spec.reclaim` are deprecated and ignored (ADR 0107), `ichor settings set
+reclaim.enabled=...` is refused, and the webhook warns when `spec.reclaim` is
+set. Who may reset and add a machine is decided by RBAC alone; see
+`adopt-and-reclaim.md`. Each accepted change leaves an Event on the
 `IchorInstallation` with the changed fields, old and new values and the user.
 
 ## Who may change what
@@ -72,12 +65,11 @@ the subresource for each part of the change:
 | Changing | Needs `update` on |
 |---|---|
 | `spec.version`, `spec.deployment` | `ichorinstallations/version` |
-| `spec.reclaim` | `ichorinstallations/reclaim` |
 | `spec.users`, `spec.defaults` | `ichorinstallations/settings` |
 
-`ichor-admin` holds all three on separate rule lines, so a custom role can hold
-fewer. The ichor-ui ServiceAccount holds `update` on `reclaim` and `settings`
-for the users it impersonates. Read the other documents in this guide set for
+`ichor-admin` holds both on separate rule lines, so a custom role can hold
+fewer. The ichor-ui ServiceAccount holds `update` on `settings` for the users it
+impersonates. Read the other documents in this guide set for
 roles in general.
 
 ## Read-only mode

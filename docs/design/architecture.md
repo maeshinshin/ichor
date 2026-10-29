@@ -130,11 +130,11 @@ publishes the CA, public part only, as `ichor-ui-ca` (ConfigMap and Secret) so a
 edge or a client with `--ca-file` can verify the backend; certificates are
 reloaded when their files change.
 
-Ichor's runtime settings (break-glass reclaim, the sign-in lifetimes, the default
+Ichor's runtime settings (the sign-in lifetimes, the default
 drift policy) are optional fields of the `IchorInstallation` singleton, read live
 by the controller, the webhooks and ichor-ui, and written by the UI Settings page
 or `ichor settings` as the signed-in user. The webhook splits write rights over
-the subresources `ichorinstallations/version`, `/reclaim` and `/settings`, and
+the subresources `ichorinstallations/version` and `/settings`, and
 requires a confirmation annotation to enable reclaim. A deployment can make them
 read-only with `--settings-read-only`.
 
@@ -177,9 +177,9 @@ stopped ichor-ui or a deleted user cannot lock the operator out. Keep this
 bundle offline once users exist. The guide is `../guides/users-and-login.md`.
 
 Exception: reclaim (ADR 0103). Ichor's controller never holds a credential for
-a node of another cluster, with one break-glass exception. When
-`reclaim.enabled` is set, a user can paste a foreign talosconfig into the UI to
-reset one machine. The credential is scoped (the controller dials only the
+a node of another cluster, with one exception, "Reset and add" (ADR 0107).
+A user who holds the `reclaim` verb on `machinereclaims` can paste a foreign
+talosconfig into the UI to reset one machine; there is no installation switch. The credential is scoped (the controller dials only the
 request's address and ignores the endpoints in the file), user-supplied, and
 expiring: it is a Secret of type `ichor.maesh.dev/foreign-talosconfig` with a
 TTL (default 15 minutes, at most 60), used for one reset, and deleted at
@@ -582,8 +582,8 @@ UUID and the normal add-by-IP flow registers it as pending.
   the node itself, with the operator's own credential, which never leaves the
   operator's machine; like `init` and `adopt` it acts on a node that belongs
   to no Ichor cluster.
-- UI: Machines, "Reclaim a configured machine". Off unless the chart value
-  `reclaim.enabled` is set. The UI API creates a `MachineReclaim` and a
+- UI: the Add node page and Machines, "Reset and add". Offered to users who
+  hold the `reclaim` verb on `machinereclaims` (ADR 0107). The UI API creates a `MachineReclaim` and a
   credential Secret as the signed-in user; the controller inspects the node,
   stops at `AwaitingConfirmation`, and resets only after the user has typed
   the UUID. See "Trust" for the credential.

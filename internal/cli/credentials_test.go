@@ -128,7 +128,7 @@ func newCredFixture(t *testing.T, withRotation bool, stage string) *credFixture 
 		CurrentContext: credContext,
 		Clusters:       map[string]*clientcmdapi.Cluster{"c": {Server: credServer, CertificateAuthorityData: f.old.Certs.K8s.Crt}},
 		AuthInfos:      map[string]*clientcmdapi.AuthInfo{credContext: {ClientCertificateData: []byte("old"), ClientKeyData: []byte("old")}},
-		Contexts:       map[string]*clientcmdapi.Context{credContext: {Cluster: "c", AuthInfo: credContext, Namespace: "kube-system"}},
+		Contexts:       map[string]*clientcmdapi.Context{credContext: {Cluster: "c", AuthInfo: credContext, Namespace: k8sFactsSystemNamespace}},
 	}
 
 	if err := clientcmd.WriteToFile(cfg, f.kubePath); err != nil {

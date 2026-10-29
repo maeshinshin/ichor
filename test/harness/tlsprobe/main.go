@@ -39,7 +39,7 @@ func main() {
 	sni := flag.String("sni", "", "server name to send and verify")
 	plain := flag.Bool("plain", false, "send a plain HTTP request instead of a handshake")
 	watch := flag.Duration("watch", 0, "poll every 500ms for this long and print each serial change")
-	path := flag.String("path", "", "with -addr: HTTPS request path (GET, or POST with -body) instead of a handshake report")
+	path := flag.String("path", "", "with -addr: HTTPS request path (GET, or POST with -body), not a handshake")
 	body := flag.String("body", "", "JSON body: makes -path a Connect unary POST")
 	flag.Parse()
 
@@ -51,7 +51,8 @@ func main() {
 		os.Exit(plainProbe(*addr))
 	}
 
-	cfg := &tls.Config{ServerName: *sni, InsecureSkipVerify: true} //nolint:gosec // inspection tool; verification is reported separately
+	// Inspection tool: verification is reported separately.
+	cfg := &tls.Config{ServerName: *sni, InsecureSkipVerify: true} //nolint:gosec // inspection tool
 
 	var pool *x509.CertPool
 
@@ -91,7 +92,7 @@ func serialOf(addr string, cfg *tls.Config) string {
 	if err != nil {
 		return "error: " + err.Error()
 	}
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 
 	return c.ConnectionState().PeerCertificates[0].SerialNumber.Text(16)
 }
@@ -104,7 +105,7 @@ func once(addr string, cfg *tls.Config, pool *x509.CertPool, verbose bool) int {
 		fmt.Println("handshake failed:", err)
 		return 1
 	}
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 
 	st := c.ConnectionState()
 	leaf := st.PeerCertificates[0]
@@ -135,7 +136,7 @@ func plainProbe(addr string) int {
 		fmt.Println("plaintext: connect failed:", err)
 		return 1
 	}
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 
 	_ = c.SetDeadline(time.Now().Add(5 * time.Second))
 	_, _ = c.Write([]byte("GET /auth/config HTTP/1.0\r\n\r\n"))
@@ -179,7 +180,7 @@ func httpsRequest(addr, caFile, sni, path, body string) int {
 		fmt.Println("request failed:", err)
 		return 1
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	b, _ := io.ReadAll(io.LimitReader(resp.Body, 1500))
 	fmt.Printf("%s %s -> %s\n%s\n", method, path, resp.Status, b)

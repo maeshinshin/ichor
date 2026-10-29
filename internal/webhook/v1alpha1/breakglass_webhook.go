@@ -141,19 +141,15 @@ func (h *BreakGlassHandler) Handle(ctx context.Context, req admission.Request) a
 		return admission.Allowed("")
 	}
 
-	allowed, err := h.mayBreakGlass(ctx, req.UserInfo, req.Resource.Resource, req.Name, req.Namespace)
-	if err != nil {
-		return admission.Errored(http.StatusServiceUnavailable, fmt.Errorf("cannot check the %s right: %w", BreakGlassVerb, err))
+	if r := h.require(ctx, req, BreakGlassVerb, req.Resource.Resource, "", req.Name,
+		fmt.Sprintf("removing an %s* finalizer from a deleting %s is refused unless you hold the %q verb "+
+			"(the controller is still working on it: this orphans a node or an etcd member)", ichorFinalizerPrefix, req.Resource.Resource, BreakGlassVerb)); r != nil {
+		return *r
 	}
 
-	if allowed {
-		breakglasslog.Info("write admitted under break-glass", "user", req.UserInfo.Username, "name", req.Name, "operation", req.Operation)
+	breakglasslog.Info("write admitted under break-glass", "user", req.UserInfo.Username, "name", req.Name, "operation", req.Operation)
 
-		return admission.Allowed("")
-	}
-
-	return admission.Denied(fmt.Sprintf("removing an %s* finalizer from a deleting %s is refused unless you hold the %q verb "+
-		"(the controller is still working on it: this orphans a node or an etcd member)", ichorFinalizerPrefix, req.Resource.Resource, BreakGlassVerb))
+	return admission.Allowed("")
 }
 
 // handleOperation guards the dangerous operations, an etcd restore and the node action reset, wherever
@@ -190,14 +186,9 @@ func (h *BreakGlassHandler) handleOperation(ctx context.Context, req admission.R
 	// A destructive start needs the verb start on its subresource, on top of
 	// the break-glass requirements below. `create` on talosoperations cannot say which kind it is.
 	if sub := op.Spec.StartSubresource(); sub != "" {
-		allowed, err := h.mayDo(ctx, req.UserInfo, ichorv1alpha1.OperationStartVerb, "talosoperations", sub, req.Name, req.Namespace)
-		if err != nil {
-			return admission.Errored(http.StatusServiceUnavailable, fmt.Errorf("cannot check the %s right: %w", ichorv1alpha1.OperationStartVerb, err))
-		}
-
-		if !allowed {
-			return admission.Denied(fmt.Sprintf("a %s operation needs the %q verb on talosoperations/%s",
-				op.Spec.Kind, ichorv1alpha1.OperationStartVerb, sub))
+		if r := h.require(ctx, req, ichorv1alpha1.OperationStartVerb, "talosoperations", sub, req.Name,
+			fmt.Sprintf("a %s operation needs the %q verb on talosoperations/%s", op.Spec.Kind, ichorv1alpha1.OperationStartVerb, sub)); r != nil {
+			return *r
 		}
 	}
 
@@ -205,13 +196,9 @@ func (h *BreakGlassHandler) handleOperation(ctx context.Context, req admission.R
 	if op.Spec.Kind == ichorv1alpha1.TalosOperationKindEtcdRestore {
 		cluster := op.Spec.ClusterRef.Name
 
-		allowed, err := h.mayBreakGlass(ctx, req.UserInfo, "talosclusters", cluster, req.Namespace)
-		if err != nil {
-			return admission.Errored(http.StatusServiceUnavailable, fmt.Errorf("cannot check the %s right: %w", BreakGlassVerb, err))
-		}
-
-		if !allowed {
-			return admission.Denied(fmt.Sprintf("an etcd restore rewinds the whole cluster: it needs the %q verb on talosclusters/%s", BreakGlassVerb, cluster))
+		if r := h.require(ctx, req, BreakGlassVerb, "talosclusters", "", cluster,
+			fmt.Sprintf("an etcd restore rewinds the whole cluster: it needs the %q verb on talosclusters/%s", BreakGlassVerb, cluster)); r != nil {
+			return *r
 		}
 
 		breakglasslog.Info("etcd restore admitted under break-glass", "user", req.UserInfo.Username, "cluster", cluster)
@@ -232,18 +219,14 @@ func (h *BreakGlassHandler) handleOperation(ctx context.Context, req admission.R
 
 	machine := op.Spec.Node.MachineRef.Name
 
-	allowed, err := h.mayBreakGlass(ctx, req.UserInfo, "talosmachines", machine, req.Namespace)
-	if err != nil {
-		return admission.Errored(http.StatusServiceUnavailable, fmt.Errorf("cannot check the %s right: %w", BreakGlassVerb, err))
+	what := "a reset wipes the node"
+	if !reset {
+		what = "spec.node.breakGlassReason overrides the last-worker guard"
 	}
 
-	if !allowed {
-		what := "a reset wipes the node"
-		if !reset {
-			what = "spec.node.breakGlassReason overrides the last-worker guard"
-		}
-
-		return admission.Denied(fmt.Sprintf("%s: it needs the %q verb on talosmachines/%s", what, BreakGlassVerb, machine))
+	if r := h.require(ctx, req, BreakGlassVerb, "talosmachines", "", machine,
+		fmt.Sprintf("%s: it needs the %q verb on talosmachines/%s", what, BreakGlassVerb, machine)); r != nil {
+		return *r
 	}
 
 	breakglasslog.Info("node action admitted under break-glass", "user", req.UserInfo.Username, "machine", machine, "action", op.Spec.Node.Action)
@@ -271,6 +254,25 @@ func removesIchorFinalizer(old, updated *unstructured.Unstructured) bool {
 // the object, as the user: the webhook never impersonates.
 func (h *BreakGlassHandler) mayBreakGlass(ctx context.Context, user authnv1.UserInfo, resource, name, namespace string) (bool, error) {
 	return h.mayDo(ctx, user, BreakGlassVerb, resource, "", name, namespace)
+}
+
+// require returns nil when the requesting user holds verb on resource (and subresource, when set),
+// else the 503 for a failed check or a denial with the given message.
+func (h *BreakGlassHandler) require(ctx context.Context, req admission.Request, verb, resource, subresource, name, denied string) *admission.Response {
+	allowed, err := h.mayDo(ctx, req.UserInfo, verb, resource, subresource, name, req.Namespace)
+
+	var r admission.Response
+
+	switch {
+	case err != nil:
+		r = admission.Errored(http.StatusServiceUnavailable, fmt.Errorf("cannot check the %s right: %w", verb, err))
+	case !allowed:
+		r = admission.Denied(denied)
+	default:
+		return nil
+	}
+
+	return &r
 }
 
 // mayDo asks Kubernetes, with a SubjectAccessReview on the requesting user, whether they hold
@@ -343,14 +345,10 @@ func (h *BreakGlassHandler) handleCluster(ctx context.Context, req admission.Req
 		return admission.Allowed("")
 	}
 
-	allowed, err := h.mayDo(ctx, req.UserInfo, AuthenticationVerb, "talosclusters", AuthenticationSubresource, req.Name, req.Namespace)
-	if err != nil {
-		return admission.Errored(http.StatusServiceUnavailable, fmt.Errorf("cannot check the %s right: %w", AuthenticationVerb, err))
-	}
-
-	if !allowed {
-		return admission.Denied(fmt.Sprintf("changing spec.authentication needs the %q verb on talosclusters/%s: "+
-			"it decides who can sign in to the Kubernetes API", AuthenticationVerb, AuthenticationSubresource))
+	if r := h.require(ctx, req, AuthenticationVerb, "talosclusters", AuthenticationSubresource, req.Name,
+		fmt.Sprintf("changing spec.authentication needs the %q verb on talosclusters/%s: "+
+			"it decides who can sign in to the Kubernetes API", AuthenticationVerb, AuthenticationSubresource)); r != nil {
+		return *r
 	}
 
 	if err := render.ValidateAuthentication(&updated); err != nil {
@@ -435,18 +433,10 @@ func (h *BreakGlassHandler) gateSecretReferences(ctx context.Context, req admiss
 		return nil
 	}
 
-	allowed, err := h.mayDo(ctx, req.UserInfo, SecretReferencesVerb, resource, SecretReferencesSubresource, req.Name, req.Namespace)
-	if err != nil {
-		r := admission.Errored(http.StatusServiceUnavailable, fmt.Errorf("cannot check the %s right: %w", SecretReferencesVerb, err))
-
-		return &r
-	}
-
-	if !allowed {
-		r := admission.Denied(fmt.Sprintf("setting or changing %s needs the %q verb on %s/%s: "+
-			"the Secret it names is read with Ichor's own privileges", strings.Join(changed, ", "), SecretReferencesVerb, resource, SecretReferencesSubresource))
-
-		return &r
+	if r := h.require(ctx, req, SecretReferencesVerb, resource, SecretReferencesSubresource, req.Name,
+		fmt.Sprintf("setting or changing %s needs the %q verb on %s/%s: "+
+			"the Secret it names is read with Ichor's own privileges", strings.Join(changed, ", "), SecretReferencesVerb, resource, SecretReferencesSubresource)); r != nil {
+		return r
 	}
 
 	breakglasslog.Info("secret reference changed", "user", req.UserInfo.Username, "resource", resource, "name", req.Name, "fields", changed)

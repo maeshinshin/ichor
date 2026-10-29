@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-
 )
 
 // A machine that moved has its current address in status.observedEndpoint.

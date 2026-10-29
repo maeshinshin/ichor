@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -25,6 +26,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"io"
+	"log"
 	"math/big"
 	"net"
 	"net/http"
@@ -136,5 +138,20 @@ func TestNoCertificateFailsHandshakeAndNeverPlaintext(t *testing.T) {
 
 	if got, err := servedCN(addr); err != nil || got != "late" {
 		t.Fatalf("served %q, %v after the certificate appeared; want late", got, err)
+	}
+}
+
+func TestProbeLogFilterDropsOnlyEmptyHandshakes(t *testing.T) {
+	var out bytes.Buffer
+
+	l := log.New(probeLogFilter{&out}, "", 0)
+	l.Print("http: TLS handshake error from 10.42.0.7:51234: EOF")
+	l.Print("http: TLS handshake error from 10.42.0.7:51234: remote error: tls: unknown certificate")
+	l.Print("http: superfluous response.WriteHeader call from example.test/x (code=200)")
+
+	want := "http: TLS handshake error from 10.42.0.7:51234: remote error: tls: unknown certificate\n" +
+		"http: superfluous response.WriteHeader call from example.test/x (code=200)\n"
+	if out.String() != want {
+		t.Fatalf("filtered log:\n%q\nwant:\n%q", out.String(), want)
 	}
 }

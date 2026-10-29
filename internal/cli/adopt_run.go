@@ -922,12 +922,7 @@ func printPreflight(w io.Writer, rep *cilium.PreflightReport) {
 	}
 
 	if rep.VersionErr == nil {
-		verb := "equal to"
-		if rep.Version.Upgrade {
-			verb = "one minor below (adoption is an upgrade)"
-		}
-
-		_, _ = fmt.Fprintf(w, "adopt: Cilium takeover: live version %s, chart %s: %s\n", rep.Version.Live, rep.Version.Target, verb)
+		_, _ = fmt.Fprintf(w, "adopt: Cilium takeover: %s\n", rep.Version)
 	}
 
 	for _, e := range []error{rep.ForeignErr, rep.VersionErr, rep.CRDsErr} {

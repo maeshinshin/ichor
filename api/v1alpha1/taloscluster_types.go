@@ -123,10 +123,14 @@ type TalosClusterCNICustom struct {
 // +kubebuilder:validation:XValidation:rule="self.preset != 'flannel' || self.kubeProxy == 'enabled'",message="flannel cannot replace kube-proxy"
 // +kubebuilder:validation:XValidation:rule="has(oldSelf.tunnel) ? (has(self.tunnel) && self.tunnel == oldSelf.tunnel) : (!has(self.tunnel) || self.tunnel == 'vxlan')",message="cni.tunnel cannot change once set, and an existing cluster can only record vxlan (its running default); changing the tunnel protocol takes pod networking down"
 // +kubebuilder:validation:XValidation:rule="!has(self.tunnel) || self.preset == 'cilium'",message="cni.tunnel only applies to the cilium preset"
+// +kubebuilder:validation:XValidation:rule="self.preset != 'unmanaged' || !has(self.cilium)",message="cni.cilium only applies to the cilium preset; Ichor does not manage the CNI when preset is unmanaged"
+// +kubebuilder:validation:XValidation:rule="!has(self.unmanaged) || self.preset == 'unmanaged'",message="cni.unmanaged only applies to the unmanaged preset"
 type TalosClusterCNI struct {
-	// preset selects the CNI this cluster bootstraps. Cilium is the only CNI; the
+	// preset selects the CNI this cluster bootstraps. Cilium is the only CNI Ichor installs; unmanaged leaves the CNI
+	// of an adopted cluster exactly as it is, and
+	// the webhook accepts it on create only for an object carrying the adoption annotation. The
 	// values flannel and custom are deprecated, unused and kept so the CRD never drops a value.
-	// +kubebuilder:validation:Enum=flannel;cilium;custom
+	// +kubebuilder:validation:Enum=flannel;cilium;custom;unmanaged
 	// +kubebuilder:default=cilium
 	// +optional
 	Preset string `json:"preset,omitempty"`
@@ -154,6 +158,23 @@ type TalosClusterCNI struct {
 	// cilium holds the user layer of Cilium's Helm values.
 	// +optional
 	Cilium *TalosClusterCNICilium `json:"cilium,omitempty"`
+
+	// unmanaged configures the unmanaged preset. Only valid when preset is unmanaged;
+	// when omitted there, talosCNI is default.
+	// +optional
+	Unmanaged *TalosClusterCNIUnmanaged `json:"unmanaged,omitempty"`
+}
+
+// TalosClusterCNIUnmanaged records what an adopted cluster's machine config says about the CNI
+// so the render reproduces it.
+type TalosClusterCNIUnmanaged struct {
+	// talosCNI is default (the machine config has no CNI selection, so Talos runs its own
+	// flannel or whatever cluster.network.cni selects by default; render emits nothing about the
+	// CNI) or none (render emits cluster.network.cni.name: none).
+	// +kubebuilder:validation:Enum=default;none
+	// +kubebuilder:default=default
+	// +optional
+	TalosCNI string `json:"talosCNI,omitempty"`
 }
 
 // TalosClusterRegistry declares one private registry mirror this cluster's nodes pull through,
@@ -516,7 +537,25 @@ type TalosClusterCNIStatus struct {
 	// controller only.
 	// +optional
 	AppliedValuesHash string `json:"appliedValuesHash,omitempty"`
+
+	// detected is the CNI the cluster is observed to run, read-only display and the
+	// network-policy gate. Written by the controller only.
+	// +kubebuilder:validation:Enum=cilium;flannel;calico;other;none
+	// +optional
+	Detected string `json:"detected,omitempty"`
+
+	// detectedVersion is the image tag of the detected CNI's DaemonSet where one exposes it.
+	// +optional
+	DetectedVersion string `json:"detectedVersion,omitempty"`
 }
+
+// TalosClusterAdoptedAnnotation marks a TalosCluster that `ichor adopt` created. The
+// webhook requires it on create for spec.cni.preset: unmanaged.
+const TalosClusterAdoptedAnnotation = "ichor.maesh.dev/adopted"
+
+// ConditionCARotationAdvised is True, reason Adopted, on an adopted cluster until the first
+// completed CA rotation or the user dismisses the advice. Advice only.
+const ConditionCARotationAdvised = "CARotationAdvised"
 
 // Condition types added to TalosCluster.status.conditions.
 const (

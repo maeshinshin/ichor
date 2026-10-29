@@ -53,6 +53,7 @@ const (
 	tunnelVXLAN        = "vxlan"
 	tunnelGeneve       = "geneve"
 	presetCustom       = "custom"
+	presetUnmanaged    = "unmanaged"
 	kubeProxyEnabled   = "enabled"
 	kubeProxyReplaced  = "replaced"
 	testCIDR           = "192.0.2.0/24"
@@ -612,6 +613,24 @@ var _ = Describe("TalosCluster.spec.cni", func() {
 		Entry("flannel with kubeProxy replaced is rejected: flannel has no kube-proxy-free mode",
 			TalosClusterCNI{Preset: cniPresetFlannel, KubeProxy: kubeProxyReplaced}, false),
 		Entry("cilium with kubeProxy replaced", TalosClusterCNI{Preset: cniPresetCilium, KubeProxy: kubeProxyReplaced}, true),
+		Entry("unmanaged with kubeProxy enabled", TalosClusterCNI{Preset: presetUnmanaged, KubeProxy: kubeProxyEnabled}, true),
+		Entry("unmanaged with kubeProxy replaced records the node's setting",
+			TalosClusterCNI{Preset: presetUnmanaged, KubeProxy: kubeProxyReplaced}, true),
+		Entry("unmanaged with talosCNI none", TalosClusterCNI{
+			Preset: presetUnmanaged, KubeProxy: kubeProxyEnabled, Unmanaged: &TalosClusterCNIUnmanaged{TalosCNI: "none"},
+		}, true),
+		Entry("unmanaged with an unknown talosCNI is rejected", TalosClusterCNI{
+			Preset: presetUnmanaged, KubeProxy: kubeProxyEnabled, Unmanaged: &TalosClusterCNIUnmanaged{TalosCNI: "flannel"},
+		}, false),
+		Entry("unmanaged with cilium values is rejected: cilium only applies to the cilium preset", TalosClusterCNI{
+			Preset: presetUnmanaged, KubeProxy: kubeProxyEnabled,
+			Cilium: &TalosClusterCNICilium{Values: &apiextensionsv1.JSON{Raw: []byte(`{}`)}},
+		}, false),
+		Entry("unmanaged with a tunnel is rejected: tunnel only applies to cilium",
+			TalosClusterCNI{Preset: presetUnmanaged, KubeProxy: kubeProxyEnabled, Tunnel: tunnelVXLAN}, false),
+		Entry("cilium with unmanaged populated is rejected: unmanaged only applies to the unmanaged preset", TalosClusterCNI{
+			Preset: cniPresetCilium, KubeProxy: kubeProxyEnabled, Unmanaged: &TalosClusterCNIUnmanaged{TalosCNI: "none"},
+		}, false),
 		Entry("custom without custom populated is rejected",
 			TalosClusterCNI{Preset: presetCustom, KubeProxy: kubeProxyEnabled}, false),
 		Entry("custom with custom populated", TalosClusterCNI{
@@ -680,6 +699,48 @@ var _ = Describe("TalosCluster.spec.cni", func() {
 		created.Spec.CNI.KubeProxy = kubeProxyReplaced
 		Expect(k8sClient.Update(context.Background(), created)).NotTo(Succeed())
 	})
+})
+
+var _ = Describe("TalosCluster.spec.cni unmanaged preset", func() {
+	It("defaults unmanaged.talosCNI to default", func() {
+		created := newClusterWithCNI(TalosClusterCNI{
+			Preset: presetUnmanaged, KubeProxy: kubeProxyEnabled, Unmanaged: &TalosClusterCNIUnmanaged{},
+		})
+		Expect(k8sClient.Create(context.Background(), created)).To(Succeed())
+
+		readBack := &TalosCluster{}
+		Expect(k8sClient.Get(context.Background(), types.NamespacedName{Name: created.Name, Namespace: created.Namespace}, readBack)).To(Succeed())
+		Expect(readBack.Spec.CNI.Unmanaged.TalosCNI).To(Equal("default"))
+	})
+
+	It("rejects changing an unmanaged cluster to cilium", func() {
+		created := newClusterWithCNI(TalosClusterCNI{Preset: presetUnmanaged, KubeProxy: kubeProxyEnabled})
+		Expect(k8sClient.Create(context.Background(), created)).To(Succeed())
+
+		created.Spec.CNI.Preset = cniPresetCilium
+		Expect(k8sClient.Update(context.Background(), created)).NotTo(Succeed())
+	})
+
+	DescribeTable("status.cni.detected",
+		func(detected string, accepted bool) {
+			created := newClusterWithCNI(TalosClusterCNI{Preset: presetUnmanaged, KubeProxy: kubeProxyEnabled})
+			Expect(k8sClient.Create(context.Background(), created)).To(Succeed())
+
+			created.Status.CNI = &TalosClusterCNIStatus{Detected: detected, DetectedVersion: "v1.0.0"}
+			err := k8sClient.Status().Update(context.Background(), created)
+			if accepted {
+				Expect(err).NotTo(HaveOccurred())
+			} else {
+				Expect(err).To(HaveOccurred())
+			}
+		},
+		Entry("cilium", "cilium", true),
+		Entry("flannel", "flannel", true),
+		Entry("calico", "calico", true),
+		Entry("other", "other", true),
+		Entry("none", "none", true),
+		Entry("unknown value", "weave", false),
+	)
 })
 
 // cni.tunnel is Cilium-only, immutable once set, and an existing cluster that never recorded one

@@ -197,3 +197,30 @@ Guessing from the machine's applied hash would make the render depend on node hi
   switch's Cilium check and ordering. Once the switch sets the status the guard no longer applies.
 - Without the annotation (a patch edit of `cluster.proxy.disabled`, an annotation for the other mode, or a finished
   switch whose status equals the spec) nothing changes: the change stays `RebootRequired` as before.
+
+## Amendment (2026-10-29): only the operation changes Cilium's kube-proxy mode; the consent annotation is removed after the operation exists
+
+Observed on hardware (replaced, through the Cilium Helm Job): writing `spec.cni.kubeProxy=replaced` alone made
+Cilium run `kube-proxy-replacement: true` while kube-proxy still ran, with no operation and no guard. Cause: the
+hand-over reconciler (ADR 0099 unit 8) hashed the effective values with `spec.cni.kubeProxy`, which derive
+`kubeProxyReplacement` and `k8sService*`, saw a new hash and ran the `ichor-cni` Job at once. The operation then
+found nothing to wait for and completed in about a second.
+
+- The hand-over reconciler, the upgrade operation and every other Cilium Helm Job outside a switch now take the mode
+  Cilium runs now (`currentKubeProxyMode`): `cilium-config`'s `kube-proxy-replacement`; when there is no
+  `cilium-config` yet, `status.cni.kubeProxy`, then the spec (nothing was switched, the bootstrap rendered it). They
+  never read the spec's mode for a changed value. `status.cni.kubeProxy` alone is not the signal, because enabling sets
+  it first (kube-proxy must come back before Cilium steps aside), so the reconciler could otherwise run the Cilium
+  Job ahead of kube-proxy; `cilium-config` is only ever changed by the switch's own Job.
+- Only the switch executor applies the target mode: `requireCilium` passes it to `AdvanceCNIHelmJob`, which names the
+  Job by the hash of the target values and gives it `--kube-proxy=<mode>` (`ichor cni helm apply` reads the mode
+  from the flag, not the spec). Both Cilium-first (replaced) and kube-proxy-first (enabled) ordering therefore run
+  under the operation's lock and verification, and the `VerifyingNewSide` wait shows while the Job runs.
+- No fight: once the switch has changed `cilium-config` and `status.cni.kubeProxy`, the reconciler's hash is the
+  target mode's, equal to the switch Job's, so it adopts that Job and records `appliedValuesHash`; it never runs a
+  Job that reverts it. While the operation holds the cluster lock the reconciler waits anyway.
+- The consent annotation is removed by the server after the operation is created, not before: the spec write
+  (with the annotation) is retried on a conflict with a fresh read, then the operation is created, then the annotation
+  is removed (also retried). A conflict can no longer leave a changed mode with no operation. The removal happens for
+  every `cni` start, including one whose spec was already changed (a retry, or a Git-first change that carried the
+  annotation), which is the case where it used to be left behind.

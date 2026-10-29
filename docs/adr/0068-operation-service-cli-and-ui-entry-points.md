@@ -50,11 +50,10 @@ the spec change and creating the operation later is not done here (below).
 
 ADR 0013's `ValidatingAdmissionPolicy` denies a `spec.cni.kubeProxy` change without
 `ichor.maesh.dev/confirm-kube-proxy-switch`. `CreateOperation` for `kind: cni` sets the annotation in the same
-`Update` as the field, then removes it in a second `Update` at once, before creating the operation. The
+`Update` as the field (retried on a conflict with a fresh read), creates the operation, then removes it in a second `Update` (amended 2026-10-29, ADR 0066). The
 confirmation is the user's, given in the CLI prompt or the UI dialog; leaving the annotation behind would turn it
-into a standing consent for a later hand edit. If the removal fails the call stops with a message that names the
-annotation (the mode is already changed, no operation exists; remove the annotation and start again with the
-mode already in the spec). `--yes` / the dialog's Start is the confirmation; there is no way to set the
+into a standing consent for a later hand edit. If the removal fails the call reports it after the operation exists (naming the
+annotation; remove it by hand). `--yes` / the dialog's Start is the confirmation; there is no way to set the
 annotation without the switch.
 
 ## Decision 4: permissions

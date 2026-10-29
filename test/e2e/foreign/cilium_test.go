@@ -421,7 +421,7 @@ func takeoverHelmRecord(t *testing.T, cni string) {
 		t.Fatal("no foreign cilium release record")
 	}
 	trafficStart(t, c)
-	_, needed := takeoverAdopt(t, c, geneve...)
+	_, needed := takeoverAdopt(t, c)
 	t.Logf("diff gate needed --accept-cilium-diff: %v", needed)
 	waitHandover(t, c, "")
 	membership(t, c)

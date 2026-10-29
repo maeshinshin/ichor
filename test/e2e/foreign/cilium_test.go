@@ -65,9 +65,16 @@ spec:
       labels:
         app: fa-srv
     spec:
-      nodeName: %s
+      # Preferred, not nodeName: a drain must be able to move the pod off the node.
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - {key: kubernetes.io/hostname, operator: In, values: ["%s"]}
       tolerations:
-        - operator: Exists
+        - {key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule}
       containers:
         - name: srv
           image: busybox:1.37
@@ -88,9 +95,16 @@ spec:
       labels:
         app: fa-client
     spec:
-      nodeName: %s
+      # Preferred, not nodeName: a drain must be able to move the pod off the node.
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - {key: kubernetes.io/hostname, operator: In, values: ["%s"]}
       tolerations:
-        - operator: Exists
+        - {key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule}
       containers:
         - name: client
           image: busybox:1.37

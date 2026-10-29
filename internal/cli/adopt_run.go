@@ -84,6 +84,20 @@ func runAdopt(ctx context.Context, clusterName, namespace string, deps adoptDeps
 		}
 	}
 
+	// The Talos v1.12 gate runs before anything is read or written.
+	var approved []*ichorv1alpha1.TalosMachine
+
+	for i := range machineList.Items {
+		m := &machineList.Items[i]
+		if m.Spec.ClusterRef.Name == clusterName && m.Spec.ApprovalState == ichorv1alpha1.MachineApprovalStateApproved {
+			approved = append(approved, m)
+		}
+	}
+
+	if err := gateTalosVersions(ctx, approved, deps.DialTalos); err != nil {
+		return err
+	}
+
 	var plans []*adoptPlan
 
 	for i := range machineList.Items {

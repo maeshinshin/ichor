@@ -231,3 +231,72 @@ func captureDocuments(currentCfg []byte, wantSysctl, wantKernelModule bool) ([]i
 
 	return docs, nil
 }
+
+// contractProbe is the outcome of rendering one machine at one version contract and diffing it
+// against the live configuration.
+type contractProbe struct {
+	Contract string
+	// UnrepresentablePaths are the class C paths: changed paths that are neither
+	// a SysctlConfig nor a KernelModuleConfig difference.
+	UnrepresentablePaths []string
+	// Err is why the render at this contract failed; such a contract is never chosen.
+	Err error
+}
+
+// probeVersionContract renders m at each contract from the nodes' running Talos version down to
+// v1.12 (contractCandidates) and returns the probes plus the chosen contract: the one with the
+// fewest unrepresentable paths, the higher contract on a tie. A cluster generated
+// on an old talosctl and upgraded in place has a legacy-form configuration, so forcing the
+// running version's contract would turn every field into drift.
+//
+// It never mutates cluster. It returns an error if no candidate renders, including when running is
+// below the v1.12 floor.
+func probeVersionContract(
+	cluster *ichorv1alpha1.TalosCluster,
+	m *ichorv1alpha1.TalosMachine,
+	bundle *secrets.Bundle,
+	existing []ichorv1alpha1.TalosConfigPatch,
+	currentCfg []byte,
+	sys *render.SystemInputs,
+	running string,
+) (string, []contractProbe, error) {
+	candidates := contractCandidates(running)
+	if len(candidates) == 0 {
+		return "", nil, fmt.Errorf("adopt: no version contract to probe for Talos %q (the floor is %s)", running, adoptMinTalos)
+	}
+
+	probes := make([]contractProbe, 0, len(candidates))
+	best := -1
+
+	for _, c := range candidates {
+		trial := cluster.DeepCopy()
+		trial.Spec.VersionContract = c
+
+		probe := contractProbe{Contract: c}
+
+		baseline, _, err := render.Render(trial, m, bundle, existing, sys)
+		if err == nil {
+			var paths []string
+
+			paths, err = controller.ChangedPaths(currentCfg, baseline)
+			if err == nil {
+				_, _, probe.UnrepresentablePaths = groupChangedPaths(paths)
+			}
+		}
+
+		probe.Err = err
+		probes = append(probes, probe)
+
+		// candidates run highest first, so a strict less-than keeps the higher contract on a tie.
+		if err == nil && (best < 0 || len(probe.UnrepresentablePaths) < len(probes[best].UnrepresentablePaths)) {
+			best = len(probes) - 1
+		}
+	}
+
+	if best < 0 {
+		return "", probes, fmt.Errorf("adopt: machine %q renders at none of the version contracts %s: %w",
+			m.Name, strings.Join(candidates, ", "), probes[0].Err)
+	}
+
+	return probes[best].Contract, probes, nil
+}

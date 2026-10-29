@@ -19,6 +19,7 @@ package controller
 import (
 	"strings"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -258,7 +259,7 @@ func finishCNIJobAt(cluster *ichorv1alpha1.TalosCluster) {
 	var inst ichorv1alpha1.IchorInstallation
 	Expect(k8sClient.Get(ctx, client.ObjectKey{Name: ichorv1alpha1.IchorInstallationName}, &inst)).To(Succeed())
 
-	_, err := AdvanceCNIHelmJob(ctx, k8sClient, testIchorNamespace, cluster, specMode(cluster), &inst, "")
+	_, err := AdvanceCNIHelmJob(ctx, k8sClient, testIchorNamespace, cluster, specMode(cluster), &inst, "", time.Time{})
 	Expect(err).NotTo(HaveOccurred())
 
 	hash, err := CNIValuesHash(cluster, specMode(cluster))

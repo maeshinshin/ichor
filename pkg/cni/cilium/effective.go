@@ -17,14 +17,10 @@ limitations under the License.
 package cilium
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
-
-	"helm.sh/helm/v3/pkg/chart"
-	"helm.sh/helm/v3/pkg/chart/loader"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/cni"
@@ -45,14 +41,7 @@ var OwnedKeys = map[string]string{
 	"tunnelProtocol":                                "owned by spec.cni.tunnel, which is immutable",
 }
 
-var loadChart = sync.OnceValues(func() (*chart.Chart, error) {
-	ch, err := loader.LoadArchive(bytes.NewReader(chartArchive))
-	if err != nil {
-		return nil, fmt.Errorf("cilium: loading embedded chart: %w", err)
-	}
-
-	return ch, nil
-})
+var loadChart = sync.OnceValues(freshChart)
 
 func valuesSpec() (values.Spec, error) {
 	ch, err := loadChart()
@@ -146,16 +135,10 @@ func EffectiveValues(user map[string]any, kubeProxy cni.KubeProxyMode, tunnel st
 	return p.WithValues(user).effective(kubeProxy)
 }
 
-// EffectiveValuesFor is EffectiveValues for what cluster stores: its
-// spec.cni.kubeProxy (empty reads as enabled, the CRD default), spec.cni.tunnel
-// and spec.cni.cilium.values.
-func EffectiveValuesFor(cluster *ichorv1alpha1.TalosCluster) (map[string]any, error) {
-	return EffectiveValuesForMode(cluster, cni.KubeProxyMode(cluster.Spec.CNI.KubeProxy))
-}
-
-// EffectiveValuesForMode is EffectiveValuesFor with the kube-proxy mode given instead of read from
-// spec.cni.kubeProxy: the controller applies the mode the cluster currently runs, and only a
-// kube-proxy switch applies the spec's. An empty mode reads as enabled.
+// EffectiveValuesForMode is EffectiveValues for what cluster stores (spec.cni.tunnel and
+// spec.cni.cilium.values) with the kube-proxy mode given, not read from spec.cni.kubeProxy: the
+// controller applies the mode the cluster currently runs, and only a kube-proxy switch applies
+// the spec's. An empty mode reads as enabled.
 func EffectiveValuesForMode(cluster *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode) (map[string]any, error) {
 	c := cluster.Spec.CNI
 

@@ -164,7 +164,7 @@ func helmReleaseAt(version int, status, chartVersion string, config map[string]a
 func effectiveValues(cluster *ichorv1alpha1.TalosCluster) map[string]any {
 	GinkgoHelper()
 
-	vals, err := cilium.EffectiveValuesFor(cluster)
+	vals, err := cilium.EffectiveValuesForMode(cluster, specMode(cluster))
 	Expect(err).NotTo(HaveOccurred())
 
 	return vals

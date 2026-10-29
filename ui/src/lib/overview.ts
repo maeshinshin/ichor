@@ -29,6 +29,7 @@ export function expiringCertificatesMessage(conds: readonly { type: string; stat
 export type Attention =
   | { kind: 'certs'; message: string }
   | { kind: 'backupStale'; message: string }
+  | { kind: 'clientsNotRestarted'; message: string }
   | { kind: 'pending'; count: number }
   | { kind: 'config'; count: number }
   | { kind: 'opFailed' }
@@ -48,6 +49,8 @@ export function attentionItems(i: {
   if (certs !== null) out.push({ kind: 'certs', message: certs })
   const stale = activeCondition(i.conditions, 'BundleBackupStale')
   if (stale !== null) out.push({ kind: 'backupStale', message: stale })
+  const clients = activeCondition(i.conditions, 'CAClientsNotRestarted')
+  if (clients !== null) out.push({ kind: 'clientsNotRestarted', message: clients })
   if (i.pending > 0) out.push({ kind: 'pending', count: i.pending })
   if (i.configWaiting > 0) out.push({ kind: 'config', count: i.configWaiting })
   return out

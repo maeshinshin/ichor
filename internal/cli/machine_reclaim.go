@@ -95,8 +95,10 @@ so that Ichor registers it as a pending machine.`,
 		deps := reclaimDeps{
 			Credential: reclaim.NewCredential(raw),
 			Dial:       reclaim.Dial,
-			Known:      func(ctx context.Context) (reclaim.Known, error) { return reclaim.LoadKnown(ctx, k8s, apiOpts.IchorNamespace) },
-			Probe:      reclaim.MaintenanceUUID,
+			Known: func(ctx context.Context) (reclaim.Known, error) {
+				return reclaim.LoadKnown(ctx, k8s, apiOpts.IchorNamespace)
+			},
+			Probe: reclaim.MaintenanceUUID,
 			Register: func(ctx context.Context, address string) error {
 				return registerDiscoveryAddress(ctx, k8s, apiOpts.Namespace, f.Cluster, address)
 			},

@@ -1967,17 +1967,12 @@ spec:
                                     type: string
                                   type: array
                               type: object
-                          required:
-                          - certSANs
-                          - type
                           type: object
                         persist:
                           type: boolean
                         version:
                           type: string
                       required:
-                      - cluster
-                      - machine
                       - version
                       type: object
                     kernelModuleConfig:

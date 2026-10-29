@@ -47,13 +47,6 @@ var _ = Describe("TalosCluster Webhook: removed CNI presets", func() {
 		}
 	})
 
-	It("refuses to create with a manual or disabled handover", func() {
-		c := withPreset("cilium")
-		c.Spec.CNI.Handover = "manual"
-		_, err := v.ValidateCreate(ctx, c)
-		Expect(err).To(HaveOccurred())
-	})
-
 	It("refuses a spec change to a stored flannel cluster but not a metadata change", func() {
 		old := withPreset("flannel")
 

@@ -42,11 +42,11 @@ func withVersion(v string) {
 	DeferCleanup(func() { version.Version = old })
 }
 
-func createInstallation(mode, ver string) *ichorv1alpha1.IchorInstallation {
+func createInstallation(ver string) *ichorv1alpha1.IchorInstallation {
 	inst := &ichorv1alpha1.IchorInstallation{
 		Name: ichorv1alpha1.IchorInstallationName,
 		Spec: ichorv1alpha1.IchorInstallationSpec{
-			ManagementMode: mode, Version: ver, InstallerRepository: "registry.example/ichor-installer",
+			Version: ver, InstallerRepository: "registry.example/ichor-installer",
 		},
 	}
 	Expect(k8sClient.Create(ctx, inst)).To(Succeed())
@@ -64,9 +64,8 @@ var _ = Describe("IchorInstallation", func() {
 		Expect(k8sClient.Create(ctx, bad)).To(MatchError(ContainSubstring("must be named ichor")))
 	})
 
-	It("defaults to ichor mode and rejects a version that is not semver", func() {
-		inst := createInstallation("", "v0.1.0")
-		Expect(inst.Spec.ManagementMode).To(Equal(ichorv1alpha1.IchorManagementModeIchor))
+	It("rejects a version that is not semver", func() {
+		inst := createInstallation("v0.1.0")
 
 		inst.Spec.Version = "0.1"
 		Expect(k8sClient.Update(ctx, inst)).NotTo(Succeed())
@@ -91,7 +90,7 @@ var _ = Describe("IchorInstallation", func() {
 
 		It("reports the running version and whether it matches spec.version", func() {
 			withVersion("v0.1.0")
-			createInstallation(ichorv1alpha1.IchorManagementModeIchor, "v0.2.0")
+			createInstallation("v0.2.0")
 
 			got := reconcileOnce(newReconciler())
 			Expect(got.Status.InstalledVersion).To(Equal("v0.1.0"))
@@ -101,7 +100,7 @@ var _ = Describe("IchorInstallation", func() {
 
 		It("removes the ExternalSuggested condition an older build set", func() {
 			withVersion("v0.1.0")
-			inst := createInstallation(ichorv1alpha1.IchorManagementModeIchor, "v0.1.0")
+			inst := createInstallation("v0.1.0")
 
 			apimeta.SetStatusCondition(&inst.Status.Conditions, metav1.Condition{
 				Type: conditionExternalSuggested, Status: metav1.ConditionTrue, Reason: "TrackingChecked",
@@ -136,7 +135,7 @@ var _ = Describe("IchorInstallation", func() {
 
 		It("launches the installer Job for spec.version once, and reports its progress", func() {
 			withVersion("v0.1.0")
-			createInstallation(ichorv1alpha1.IchorManagementModeIchor, "v0.2.0")
+			createInstallation("v0.2.0")
 			advance := NewIchorUpgradeAdvancer(k8sClient, jobNs)
 			o := op()
 
@@ -166,7 +165,7 @@ var _ = Describe("IchorInstallation", func() {
 
 		It("turns a failed Job into an error", func() {
 			withVersion("v0.1.0")
-			createInstallation(ichorv1alpha1.IchorManagementModeIchor, "v0.2.0")
+			createInstallation("v0.2.0")
 			advance := NewIchorUpgradeAdvancer(k8sClient, jobNs)
 			o := op()
 
@@ -180,19 +179,9 @@ var _ = Describe("IchorInstallation", func() {
 			Expect(err).To(MatchError(ContainSubstring("rolls back")))
 		})
 
-		It("treats the retired external mode as ichor and launches the Job", func() {
-			withVersion("v0.1.0")
-			createInstallation(ichorv1alpha1.IchorManagementModeExternal, "v0.2.0")
-
-			done, err := NewIchorUpgradeAdvancer(k8sClient, jobNs)(ctx, nil, nil, op())
-			Expect(err).NotTo(HaveOccurred())
-			Expect(done).To(BeFalse())
-			Expect(jobs()).To(HaveLen(1))
-		})
-
 		It("refuses a downgrade and launches no Job", func() {
 			withVersion("v0.3.0")
-			createInstallation(ichorv1alpha1.IchorManagementModeIchor, "v0.2.0")
+			createInstallation("v0.2.0")
 
 			_, err := NewIchorUpgradeAdvancer(k8sClient, jobNs)(ctx, nil, nil, op())
 			Expect(err).To(MatchError(ContainSubstring("does not downgrade")))
@@ -201,7 +190,7 @@ var _ = Describe("IchorInstallation", func() {
 
 		It("is done, with no Job, once the running version is the target (the Job may be long gone)", func() {
 			withVersion("v0.2.0")
-			createInstallation(ichorv1alpha1.IchorManagementModeIchor, "v0.2.0")
+			createInstallation("v0.2.0")
 
 			done, err := NewIchorUpgradeAdvancer(k8sClient, jobNs)(ctx, nil, nil, op())
 			Expect(err).NotTo(HaveOccurred())

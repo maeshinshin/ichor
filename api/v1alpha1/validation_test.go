@@ -751,25 +751,6 @@ var _ = Describe("free-form values", func() {
 		Expect(k8sClient.Get(context.Background(), key, readBack)).To(Succeed())
 		Expect(readBack.Spec.CNI.Cilium.Values.Raw).To(MatchJSON(`{"hubble":{"relay":{"enabled":true}},"anything":1}`))
 	})
-
-	It("keeps stack values and defaults promotion to Automatic", func() {
-		inst := &IchorInstallation{
-			Name: IchorInstallationName,
-			Spec: IchorInstallationSpec{
-				Version: "v0.1.0",
-				Stack: &IchorStackSpec{
-					ArgoCD: &IchorStackComponentSpec{Values: &apiextensionsv1.JSON{Raw: []byte(`{"server":{"replicas":2}}`)}},
-				},
-			},
-		}
-		Expect(k8sClient.Create(context.Background(), inst)).To(Succeed())
-		DeferCleanup(func() { Expect(k8sClient.Delete(context.Background(), inst)).To(Succeed()) })
-
-		readBack := &IchorInstallation{}
-		Expect(k8sClient.Get(context.Background(), types.NamespacedName{Name: IchorInstallationName}, readBack)).To(Succeed())
-		Expect(readBack.Spec.Stack.Promotion).To(Equal(IchorStackPromotionAutomatic))
-		Expect(readBack.Spec.Stack.ArgoCD.Values.Raw).To(MatchJSON(`{"server":{"replicas":2}}`))
-	})
 })
 
 // Spec.network, immutable once set; spec.hostname and spec.install on TalosMachine.

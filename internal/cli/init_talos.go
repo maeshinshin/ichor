@@ -191,7 +191,7 @@ func createWhenWebhooksUp(
 ) error {
 	tries := 0
 
-	return pollWhile(ctx, timeout, interval, progress, "Ichor's webhooks", func(ctx context.Context) error {
+	return pollBounded(ctx, timeout, interval, progress, "Ichor's webhooks", newWaitDiag(c, progress), func(ctx context.Context) error {
 		tries++
 
 		// An earlier attempt that timed out may still have gone through.

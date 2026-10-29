@@ -1,6 +1,6 @@
 # 0104. A cluster with no CNI gets Ichor's Cilium before Ichor, and Ichor is installable with Helm
 
-Status: Accepted; built, hardware tests pending · Date: 2026-10-29 · Design section: Bootstrap (`ichor adopt`), Cilium · Builds on: 0098, 0099, 0101, 0103 · Amends: 0103 (the "no CNI" row of 1.1, 1.1a's gate wiring, test D5, open question 3)
+Status: Accepted; built; hardware-verified except E5 (kill during install), E6, E8, E9 · Date: 2026-10-29 · Design section: Bootstrap (`ichor adopt`), Cilium · Builds on: 0098, 0099, 0101, 0103 · Amends: 0103 (the "no CNI" row of 1.1, 1.1a's gate wiring, test D5, open question 3)
 
 Decided: `ichor adopt` on a Talos cluster with no CNI installs Ichor's pinned Cilium itself, in the adopt process with the Helm SDK as Ichor's own release record in `ichor-system`, before Ichor's own pods are installed, and adopts the cluster as the managed `cilium` preset (so ADR 0103's "no CNI becomes unmanaged `talosCNI: none`" row is replaced, and `--cni-unmanaged` is refused there); a cluster that already has a CNI keeps ADR 0103's rules and its network-policy gate follows live detection; every wait for Ichor in `adopt` and `init` is bounded and names why the pods are Pending; and Ichor can be installed with `helm install` of `dist/chart` (published as an OCI chart), after which `ichor adopt` detects the existing install, skips its own install step and registers the cluster, with a new `ichor cni bootstrap` for the one case Helm cannot cover, a cluster with no pod network.
 
@@ -177,6 +177,12 @@ Parallelism: 1, 2, 3 and 7 start together (disjoint files except `adopt_run.go`,
 - F5 `helm template` and `helm install --dry-run` on a no-CNI cluster do not fail on the preflight.
 
 Record the exact refusal and wait texts and the time of each phase, and write down what worked.
+
+## Hardware results (2026-10-30)
+
+- E1, E3, E4, E7 passed. E2 passed on rerun: the first run failed with EPERM, fixed by the bounded webhook wait.
+- E5: kill after the Cilium wait passed; kill during the install is fixed in code (pending-install repair) and not re-verified. E6 is fixed in code (`createIchorInstallation` uses `--wait-timeout`) and not re-verified. E8 and E9 not recorded here.
+- F1 to F5 passed (F3 after the read-back fix a848ed73).
 
 ## Consequences
 

@@ -26,6 +26,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
+const plainAddr = ":8080"
+
 // Migration table, read from fixture Deployments.
 func TestReadUISettingsMigrationCases(t *testing.T) {
 	live := func(secret string, args ...string) *appsv1.Deployment {
@@ -33,7 +35,7 @@ func TestReadUISettingsMigrationCases(t *testing.T) {
 			Containers: []corev1.Container{{Name: UIContainer, Args: args}},
 		}}}}
 		if secret != "" {
-			d.Spec.Template.Spec.Volumes = []corev1.Volume{{Name: UITLSVolume, VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: secret}}}}
+			d.Spec.Template.Spec.Volumes = []corev1.Volume{{Name: UITLSVolume, Secret: &corev1.SecretVolumeSource{SecretName: secret}}}
 		}
 
 		return d
@@ -44,11 +46,11 @@ func TestReadUISettingsMigrationCases(t *testing.T) {
 		dep          *appsv1.Deployment
 		listen, http string
 	}{
-		{"plaintext on 8080 keeps the transitional listener", live("", "--addr=:8080"), "", ":8080"},
-		{"TLS on 8080 is pinned", live("cert", "--addr=:8080", "--tls-cert-file=/x"), ":8080", ""},
+		{"plaintext on 8080 keeps the transitional listener", live("", "--addr=:8080"), "", plainAddr},
+		{"TLS on 8080 is pinned", live("cert", "--addr=:8080", "--tls-cert-file=/x"), plainAddr, ""},
 		{"fresh install serves 8443 only", live("", "--addr=:8443"), "", ""},
 		{"fresh install with a Secret serves 8443 only", live("cert", "--addr=:8443"), "", ""},
-		{"an install already on N keeps its plaintext listener", live("", "--addr=:8443", "--http-addr=:8080"), "", ":8080"},
+		{"an install already on N keeps its plaintext listener", live("", "--addr=:8443", "--http-addr=:8080"), "", plainAddr},
 		{"no live Deployment", nil, "", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -83,7 +85,7 @@ func TestCustomizePoliciesOpensTheMigratedPort(t *testing.T) {
 	}
 
 	plain := mk()
-	CustomizePolicies(plain, UISettings{HTTPAddr: ":8080"})
+	CustomizePolicies(plain, UISettings{HTTPAddr: plainAddr})
 
 	if got := ports(plain[0]); len(got) != 2 || got[1].(map[string]any)["port"] != "8080" {
 		t.Errorf("a plaintext install opens %v, want 8443 and 8080", got)
@@ -94,7 +96,7 @@ func TestMigrationShapesTheManifestObjects(t *testing.T) {
 	objs, err := Decode([]byte(rendered("ns")))
 	must(t, err)
 
-	plain, err := CustomizeObjects(objs, UISettings{HTTPAddr: ":8080"})
+	plain, err := CustomizeObjects(objs, UISettings{HTTPAddr: plainAddr})
 	must(t, err)
 
 	c := toDeployment(t, plain[0].Object).Spec.Template.Spec.Containers[0]
@@ -110,7 +112,7 @@ func TestMigrationShapesTheManifestObjects(t *testing.T) {
 		t.Errorf("plaintext case Service ports = %+v, want https 8443 and http 8080", svc.Spec.Ports)
 	}
 
-	pinned, err := CustomizeObjects(objs, UISettings{ListenAddr: ":8080", TLSSecretName: "cert"})
+	pinned, err := CustomizeObjects(objs, UISettings{ListenAddr: plainAddr, TLSSecretName: "cert"})
 	must(t, err)
 
 	c = toDeployment(t, pinned[0].Object).Spec.Template.Spec.Containers[0]

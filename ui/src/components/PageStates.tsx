@@ -1,5 +1,6 @@
 import type { ComponentChildren } from 'preact'
-import { Empty, EmptyDescription, EmptyHeader } from '@/components/ui/empty'
+import type { LucideIcon } from 'lucide-preact'
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia } from '@/components/ui/empty'
 import { Skeleton } from '@/components/ui/skeleton'
 
 // PageSkeleton stands in for a page while it loads. The label stays in the
@@ -19,10 +20,15 @@ export function PageSkeleton({ label }: { label: string }) {
 }
 
 // EmptyNote is the "nothing here" state of a list or section.
-export function EmptyNote({ children }: { children: ComponentChildren }) {
+export function EmptyNote({ children, icon: Icon }: { children: ComponentChildren; icon?: LucideIcon }) {
   return (
     <Empty className="border p-4">
       <EmptyHeader>
+        {Icon && (
+          <EmptyMedia variant="icon">
+            <Icon aria-hidden="true" />
+          </EmptyMedia>
+        )}
         <EmptyDescription>{children}</EmptyDescription>
       </EmptyHeader>
     </Empty>

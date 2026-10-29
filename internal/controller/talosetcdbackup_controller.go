@@ -134,6 +134,8 @@ func (r *TalosEtcdBackupReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	r.noteStoreLocation(ctx, &bk)
+
 	if bk.Spec.Suspend {
 		return ctrl.Result{}, r.setReady(ctx, &bk, metav1.ConditionUnknown, ichorv1alpha1.TalosEtcdBackupReasonSuspended,
 			"spec.suspend is true; no snapshots are taken and none are pruned")
@@ -190,6 +192,25 @@ func (r *TalosEtcdBackupReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	setReadyCondition(&bk, metav1.ConditionTrue, ichorv1alpha1.TalosEtcdBackupReasonSucceeded, msg)
 
 	return ctrl.Result{RequeueAfter: max(sched.Next(start).Sub(r.now()), time.Second)}, r.Status().Update(ctx, &bk)
+}
+
+// noteStoreLocation sets the warning condition StoreInCluster while the destination is inside the
+// cluster that is backed up, and removes it otherwise. The caller writes status in the same reconcile.
+func (r *TalosEtcdBackupReconciler) noteStoreLocation(ctx context.Context, bk *ichorv1alpha1.TalosEtcdBackup) {
+	var cluster ichorv1alpha1.TalosCluster
+	if err := r.Get(ctx, client.ObjectKey{Namespace: bk.Namespace, Name: bk.Spec.ClusterRef.Name}, &cluster); err == nil {
+		if reason := etcdbackup.InClusterReason(bk.Spec.Destination.S3.Endpoint, &cluster); reason != "" {
+			apimeta.SetStatusCondition(&bk.Status.Conditions, metav1.Condition{
+				Type: ichorv1alpha1.TalosEtcdBackupConditionStoreInCluster, Status: metav1.ConditionTrue,
+				Reason: ichorv1alpha1.TalosEtcdBackupReasonInCluster, Message: etcdbackup.InClusterMessage(reason),
+				ObservedGeneration: bk.Generation,
+			})
+
+			return
+		}
+	}
+
+	apimeta.RemoveStatusCondition(&bk.Status.Conditions, ichorv1alpha1.TalosEtcdBackupConditionStoreInCluster)
 }
 
 // consumeBackupNow reports whether a backup-now request (BackupNowAnnotation) newer than

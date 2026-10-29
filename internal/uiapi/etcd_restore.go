@@ -32,6 +32,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/etcdbackup"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -241,6 +242,9 @@ func (s *Server) etcdRestoreBlocked(
 		return fmt.Sprintf("backup %q backs up cluster %q, not %q", bk.Name, bk.Spec.ClusterRef.Name, cluster.Name), nil
 	case controlPlanes == 0:
 		return "the cluster has no approved control plane", nil
+	case etcdbackup.InClusterReason(bk.Spec.Destination.S3.Endpoint, cluster) != "":
+		// Absolute: break-glass does not override it, the restore marker could never be written.
+		return etcdbackup.InClusterMessage(etcdbackup.InClusterReason(bk.Spec.Destination.S3.Endpoint, cluster)), nil
 	case taken.IsZero():
 		return fmt.Sprintf("snapshot %q is not among the snapshots backup %q last listed (it may have been pruned)", p.restore.snapshot, bk.Name), nil
 	}

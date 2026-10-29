@@ -963,7 +963,13 @@ planes and restores the snapshot; the UI and CLI both offer it, as a
 `TalosOperation` that needs the break-glass right on the cluster and the
 cluster's name typed. Because the restore rolls the Kubernetes API back past the
 operation itself, its progress is kept in a marker next to the backups, not in
-status, and the operation is recreated from the marker. Full-loss
+status, and the operation is recreated from the marker. The backup
+store must therefore live outside the cluster being restored (not a Service
+such as `minio.minio.svc`, nor an address in the cluster's pod or service
+range): the marker is written to the store after the API is down, so a store
+inside the cluster deadlocks the restore. The plan refuses it, break-glass does
+not override that, and the `TalosEtcdBackup` carries a `StoreInCluster`
+warning condition meanwhile. Full-loss
 recovery is CLI-only: `ichor restore --recover-cluster` rebuilds control
 planes from the local bundle and the snapshot, after which the controller
 re-reconciles every node the way `adopt` does and waits for confirmation

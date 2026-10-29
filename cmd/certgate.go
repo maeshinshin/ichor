@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"net/http"
 	"os"
@@ -48,18 +47,5 @@ func gatedChecker(ready <-chan struct{}, get func() healthz.Checker) healthz.Che
 		default:
 			return errors.New("webhook serving certificate not available yet")
 		}
-	}
-}
-
-// lazyKeyPair returns a tls GetCertificate that reads the pair from disk on each handshake, so a
-// listener can start before the rotator has written anything (a handshake fails until then,
-// instead of the process exiting) and follows rotations without a watcher.
-func lazyKeyPair(dir, certName, keyName string) func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
-	return func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
-		c, err := tls.LoadX509KeyPair(filepath.Join(dir, certName), filepath.Join(dir, keyName))
-		if err != nil {
-			return nil, errors.New("certificate not available yet: " + err.Error())
-		}
-		return &c, nil
 	}
 }

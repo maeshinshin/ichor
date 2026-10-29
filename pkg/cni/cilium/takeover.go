@@ -253,7 +253,26 @@ func UserValues(vals map[string]any) map[string]any {
 		values.Delete(out, path)
 	}
 
+	pruneEmptyMaps(out)
+
 	return out
+}
+
+// pruneEmptyMaps removes, recursively, the maps that stripping the owned keys left empty
+// ({"cgroup":{"autoMount":{}}}).
+func pruneEmptyMaps(m map[string]any) {
+	for k, v := range m {
+		sub, ok := v.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		pruneEmptyMaps(sub)
+
+		if len(sub) == 0 {
+			delete(m, k)
+		}
+	}
 }
 
 // --- version rule ----------------------------------------------------------
@@ -298,6 +317,16 @@ func CheckVersion(live string) (VersionCheck, error) {
 		return res, fmt.Errorf("cilium: live version %s is more than one minor behind %s; "+
 			"upgrade it to %d.%d with the tool that installed it first", res.Live, ChartVersion, tmaj, tmin-1)
 	}
+}
+
+// String is the plan wording: "live 1.18.0, chart 1.18.0: the same minor".
+func (c VersionCheck) String() string {
+	how := "the same minor"
+	if c.Upgrade {
+		how = "one minor below (adoption is an upgrade)"
+	}
+
+	return fmt.Sprintf("live version %s, chart %s: %s", c.Live, c.Target, how)
 }
 
 // VersionFromImage reads the Cilium version from an agent image reference.

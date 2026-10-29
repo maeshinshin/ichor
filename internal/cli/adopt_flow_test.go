@@ -19,6 +19,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -31,6 +32,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/controller"
+	"github.com/maeshinshin/ichor/pkg/cni/cilium"
 	"github.com/maeshinshin/ichor/pkg/render"
 )
 
@@ -395,7 +397,7 @@ func TestAdoptHelmCiliumWithoutTakeoverStaysHeld(t *testing.T) {
 
 	out := env.stderr.String()
 
-	for _, want := range []string{"Cilium takeover checks: pending", "ichor-cilium-prior-release", "machines stay held"} {
+	for _, want := range []string{"Cilium takeover checks: pending", "machines stay held"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("missing %q:\n%s", want, out)
 		}
@@ -501,5 +503,74 @@ func TestAdoptDiscoversANewCluster(t *testing.T) {
 
 	if !env.held(t, "uuid-"+flowWKAddr) {
 		t.Fatal("the worker must still be held behind the control plane")
+	}
+}
+
+func ciliumFlowEnv(t *testing.T, preflight ciliumPreflight) (*flowEnv, adoptDeps) {
+	t.Helper()
+
+	env := newFlowEnv(t, cniCilium, nil)
+	deps := env.deps(t)
+	deps.AssumeYes = true
+	deps.Preflight = preflight
+	deps.Target = fake.NewClientBuilder().WithScheme(newTestScheme(t)).
+		WithObjects(testDS("cilium", ciliumImage), ciliumCM("false"), helmRecord("kube-system")).Build()
+
+	return env, deps
+}
+
+// A failing preflight refuses the adoption with nothing written.
+func TestAdoptRefusesWhenCiliumPreflightFails(t *testing.T) {
+	env, deps := ciliumFlowEnv(t, func(context.Context, cilium.PreflightInput) (*cilium.PreflightReport, error) {
+		return &cilium.PreflightReport{VersionErr: errors.New("cilium 1.15 is too old")}, nil
+	})
+
+	err := runAdopt(context.Background(), env.cluster.Name, testNamespace, deps)
+	if err == nil || !strings.Contains(err.Error(), "too old") {
+		t.Fatalf("runAdopt = %v, want the preflight refusal", err)
+	}
+
+	if len(*env.writes) != 0 {
+		t.Fatalf("wrote: %v", *env.writes)
+	}
+}
+
+// With a passing preflight the holds are released only once CNIHandover is True.
+func TestAdoptWaitsForCNIHandoverBeforeRelease(t *testing.T) {
+	ok := func(context.Context, cilium.PreflightInput) (*cilium.PreflightReport, error) {
+		return &cilium.PreflightReport{}, nil
+	}
+
+	env, deps := ciliumFlowEnv(t, ok)
+	deps.ReleaseWait = 50 * time.Millisecond
+
+	err := runAdopt(context.Background(), env.cluster.Name, testNamespace, deps)
+	if err == nil || !strings.Contains(err.Error(), render.ConditionCNIHandover) {
+		t.Fatalf("runAdopt = %v, want the hand-over timeout", err)
+	}
+
+	if !env.held(t, flowCP) || !env.held(t, flowWorker) {
+		t.Fatal("a machine was released before CNIHandover")
+	}
+
+	var c ichorv1alpha1.TalosCluster
+	if err := env.k8s.Get(context.Background(), client.ObjectKeyFromObject(env.cluster), &c); err != nil {
+		t.Fatal(err)
+	}
+
+	c.Status.Conditions = []metav1.Condition{{Type: render.ConditionCNIHandover, Status: metav1.ConditionTrue, Reason: "Test", LastTransitionTime: metav1.Now()}}
+
+	if err := env.k8s.Update(context.Background(), &c); err != nil {
+		t.Fatal(err)
+	}
+
+	deps.ReleaseWait = time.Second
+
+	if err := runAdopt(context.Background(), env.cluster.Name, testNamespace, deps); err != nil {
+		t.Fatalf("runAdopt: %v\n%s", err, env.stderr.String())
+	}
+
+	if env.held(t, flowCP) || env.held(t, flowWorker) {
+		t.Fatal("machines are still held after the hand-over")
 	}
 }

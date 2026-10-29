@@ -178,9 +178,8 @@ func TestS3StoreAgainstFake(t *testing.T) {
 		t.Fatal("list is not newest first")
 	}
 
-	n, err := Prune(ctx, st, "a/b", 2)
-	if err != nil || n != 2 {
-		t.Fatalf("prune: %d %v", n, err)
+	if err := Prune(ctx, st, "a/b", 2); err != nil {
+		t.Fatalf("prune: %v", err)
 	}
 
 	objs, _ = st.List(ctx, "a/b")

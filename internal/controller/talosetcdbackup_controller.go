@@ -273,7 +273,7 @@ func (r *TalosEtcdBackupReconciler) runBackup(
 
 	scrub.add(passphrase)
 
-	s3cfg, err := r.loadS3Config(ctx, bk, scrub)
+	s3cfg, err := loadS3ConfigFrom(ctx, r.Client, r.ControllerNamespace, bk.Spec.Destination.S3, scrub)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -307,7 +307,7 @@ func (r *TalosEtcdBackupReconciler) runBackup(
 		}
 
 		// max(…, 1): a zero value (CRD default not applied) must never mean "keep nothing".
-		_, pruneErr = etcdbackup.Prune(ctx, store, prefix, int(max(bk.Spec.Retention.KeepLast, 1)))
+		pruneErr = etcdbackup.Prune(ctx, store, prefix, int(max(bk.Spec.Retention.KeepLast, 1)))
 
 		return &ichorv1alpha1.TalosEtcdBackupSnapshot{
 			Key: key, Time: metav1.NewTime(start), Size: size, SourceMachine: m.Name,
@@ -337,17 +337,10 @@ func storedSnapshots(ctx context.Context, store etcdbackup.Store, prefix string)
 	return out
 }
 
-// loadS3Config reads the credentials Secret from the controller's namespace
-// (ADR 0011, the same rule as loadBundle and render.ResolveRegistryAuth).
-// Errors name the Secret and key, never a value.
-func (r *TalosEtcdBackupReconciler) loadS3Config(
-	ctx context.Context, bk *ichorv1alpha1.TalosEtcdBackup, scrub *scrubber,
-) (etcdbackup.S3Config, error) {
-	return loadS3ConfigFrom(ctx, r.Client, r.ControllerNamespace, bk.Spec.Destination.S3, scrub)
-}
-
-// loadS3ConfigFrom is loadS3Config for any reader: the etcd restore (ADR 0089) reads the same
-// credentials the backup wrote with.
+// loadS3ConfigFrom reads the credentials Secret from the controller's namespace
+// (ADR 0011, the same rule as loadBundle and render.ResolveRegistryAuth); the etcd restore
+// (ADR 0089) reads the same credentials the backup wrote with. Errors name the Secret and key,
+// never a value.
 func loadS3ConfigFrom(
 	ctx context.Context, c client.Reader, controllerNamespace string, dst ichorv1alpha1.TalosEtcdBackupS3, scrub *scrubber,
 ) (etcdbackup.S3Config, error) {

@@ -30,6 +30,20 @@ VM memory defaults to 2560Mi for both VMs. Override per role before `up-demo` wi
 `ICHOR_UI_DEMO_CP_MEMORY` and `ICHOR_UI_DEMO_WORKER_MEMORY` (a plain `Mi`/`Gi` quantity, e.g.
 `ICHOR_UI_DEMO_CP_MEMORY=3Gi`). Talos needs at least 2 GiB for a control plane and 1 GiB for a worker.
 
+**ISO cache.** `up-demo`, `up` and `up-ha` clone one cached Talos ISO DataVolume
+(`ichor-e2e-talos-v1-14-3-<schematic8>-base`, outer namespace `ichor-e2e`) instead of importing the ISO per VM.
+The first run creates it and waits for the import; no `down*` deletes it, so delete it by hand when the Talos
+version changes. `ICHOR_E2E_BASE_CACHE=0` restores the per-VM import. The VMs still boot the ISO in maintenance
+mode and Ichor still installs Talos, so the install step stays exercised. Both VMs are created together.
+Measured (single control plane + one worker, `ceph-block`, no ichor-ui):
+
+| phase | before | cache cold (first run) | cache warm |
+|---|---|---|---|
+| ISO import / cache ready | 2-5 min per VM | 87 s once | 1 s |
+| `up-demo`, total, both VMs at maintenance | 5-8 min (estimate from the import time) | 151 s | 52 s |
+| `ichor init` (install, reboot, Cilium hand-over) | about 4 min | 309 s | 299 s |
+| approve to worker Ready (install, reboot, join) | about 2 min | 46 s | 48 s |
+
 ```sh
 export ICHOR_E2E_KUBE_CONTEXT=$C ICHOR_UI_DEMO_PREFIX=$P
 go build -o bin/kubevirt-harness ./test/harness/kubevirt

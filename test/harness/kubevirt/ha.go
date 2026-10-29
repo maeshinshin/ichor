@@ -135,14 +135,18 @@ spec:
           guest: 2560Mi
         devices:
           disks:
+            # The system disk boots first: a blank disk is not bootable, so the first boot falls through
+            # to the ISO (maintenance mode), and after the install every cold boot (a VM stopped and
+            # started) comes up from the disk. With the ISO first, Talos halts on a cold boot
+            # ("already installed to disk but booted from another media").
             - name: iso
               cdrom:
                 bus: sata
-              bootOrder: 1
+              bootOrder: 2
             - name: system
               disk:
                 bus: virtio
-              bootOrder: 2
+              bootOrder: 1
           interfaces:
             - name: default
               bridge: {}

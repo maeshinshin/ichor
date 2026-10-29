@@ -60,47 +60,48 @@ var (
 )
 
 // resolveAdoptBundle returns the secrets bundle adopt uses: the given file,
-// or one recovered read-only from a control plane and stored 0600 under
-// ~/.ichor/clusters/<cluster>/ (the path is printed through nagBackup;
-// the bundle itself is never printed). The second result is the path a
-// recovered bundle was stored at, "" when a file was given.
+// or one recovered read-only from a control plane. A recovered bundle is held
+// in memory only: the second result stores it 0600 under
+// ~/.ichor/clusters/<cluster>/ and prints the path through nagBackup (the
+// bundle itself is never printed). It is nil when a file was given. The plan
+// phase writes nothing, so the caller saves after consent.
 func resolveAdoptBundle(
 	ctx context.Context, opts adoptSecretsOptions,
 	dial func(ctx context.Context, endpoint string) (talosConfigReader, error),
 	stderr io.Writer,
-) (*secrets.Bundle, string, error) {
+) (*secrets.Bundle, func() error, error) {
 	switch {
 	case opts.File != "" && opts.Recover:
-		return nil, "", errBothSecretsSource
+		return nil, nil, errBothSecretsSource
 	case opts.File != "":
 		bundle, err := loadBundleFile(opts.File)
 
-		return bundle, "", err
+		return bundle, nil, err
 	case !opts.Recover:
-		return nil, "", errNoSecretsSource
+		return nil, nil, errNoSecretsSource
 	case opts.RecoverFrom == "":
-		return nil, "", errNoRecoverFrom
+		return nil, nil, errNoRecoverFrom
 	}
 
 	// Check the target before dialing, so a refusal costs no node call.
 	dir, err := bundleDir(opts.Cluster)
 	if err != nil {
-		return nil, "", err
+		return nil, nil, err
 	}
 
 	target := filepath.Join(dir, secretsbundle.SecretKey)
 	if _, err := os.Stat(target); err == nil {
-		return nil, "", errRecoveredExists
+		return nil, nil, errRecoveredExists
 	}
 
 	contract, err := parseAdoptContract(opts.Contract)
 	if err != nil {
-		return nil, "", err
+		return nil, nil, err
 	}
 
 	talos, err := dial(ctx, opts.RecoverFrom)
 	if err != nil {
-		return nil, "", fmt.Errorf("adopt: dialing %q to recover the secrets bundle: %w", opts.RecoverFrom, err)
+		return nil, nil, fmt.Errorf("adopt: dialing %q to recover the secrets bundle: %w", opts.RecoverFrom, err)
 	}
 
 	if closer, ok := talos.(io.Closer); ok {
@@ -109,17 +110,19 @@ func resolveAdoptBundle(
 
 	bundle, err := recoverSecretsBundle(ctx, talos, contract)
 	if err != nil {
-		return nil, "", err
+		return nil, nil, err
 	}
 
-	path, err := saveBundleFile(opts.Cluster, bundle)
-	if err != nil {
-		return nil, "", err
-	}
+	return bundle, func() error {
+		path, err := saveBundleFile(opts.Cluster, bundle)
+		if err != nil {
+			return err
+		}
 
-	nagBackup(stderr, path)
+		nagBackup(stderr, path)
 
-	return bundle, path, nil
+		return nil
+	}, nil
 }
 
 func parseAdoptContract(v string) (*coreconfig.VersionContract, error) {

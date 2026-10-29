@@ -10,7 +10,7 @@ import (
 func TestChangesApply(t *testing.T) {
 	yes, no := true, false
 	ttl, bad := 30*time.Minute, 2*time.Hour
-	policy := "autoCorrect"
+	policy := DriftAutoCorrect
 
 	inst := &ichorv1alpha1.IchorInstallation{}
 	if err := (Changes{Reclaim: &yes, TokenTTL: &ttl, DriftPolicy: &policy}).Apply(inst); err != nil {
@@ -43,8 +43,8 @@ func TestChangesApply(t *testing.T) {
 }
 
 func TestParseAssignments(t *testing.T) {
-	c, err := ParseAssignments([]string{"reclaim.enabled=true", "users.tokenTTL=15m", "defaults.driftPolicy=warnOnly"})
-	if err != nil || !*c.Reclaim || *c.TokenTTL != 15*time.Minute || *c.DriftPolicy != "warnOnly" {
+	c, err := ParseAssignments([]string{"reclaim.enabled=true", "users.tokenTTL=15m", "defaults.driftPolicy=" + DriftWarnOnly})
+	if err != nil || !*c.Reclaim || *c.TokenTTL != 15*time.Minute || *c.DriftPolicy != DriftWarnOnly {
 		t.Fatalf("%+v %v", c, err)
 	}
 

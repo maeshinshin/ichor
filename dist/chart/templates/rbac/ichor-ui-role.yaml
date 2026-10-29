@@ -49,6 +49,13 @@ rules:
 - apiGroups:
   - ichor.maesh.dev
   resources:
+  - ichorinstallations/reclaim
+  - ichorinstallations/settings
+  verbs:
+  - update
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
   - talosclusters
   verbs:
   - get

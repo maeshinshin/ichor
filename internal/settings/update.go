@@ -47,7 +47,7 @@ func (c Changes) Validate() error {
 		errs = append(errs, fmt.Errorf("users.refreshLifetime must be between %s and %s", MinRefreshLifetime, MaxRefreshLifetime))
 	}
 
-	if d := c.DriftPolicy; d != nil && *d != "warnOnly" && *d != "autoCorrect" {
+	if d := c.DriftPolicy; d != nil && *d != DriftWarnOnly && *d != DriftAutoCorrect {
 		errs = append(errs, fmt.Errorf("defaults.driftPolicy must be warnOnly or autoCorrect, not %q", *d))
 	}
 
@@ -151,3 +151,9 @@ func ParseAssignments(args []string) (Changes, error) {
 
 	return c, c.Validate()
 }
+
+// The values of spec.defaults.driftPolicy.
+const (
+	DriftWarnOnly    = "warnOnly"
+	DriftAutoCorrect = "autoCorrect"
+)

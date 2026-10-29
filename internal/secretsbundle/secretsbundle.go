@@ -31,6 +31,7 @@ package secretsbundle
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	yaml "go.yaml.in/yaml/v4"
@@ -99,8 +100,19 @@ func Decode(raw []byte) (*secrets.Bundle, error) {
 	// this way. No test anywhere had exercised that combination before: every existing
 	// test faked the Talos client entirely, and every real-hardware pass either had no bundle or never got a working one.
 	if bundle.Clock == nil {
-		bundle.Clock = secrets.NewClock()
+		bundle.Clock = backdatedClock{}
 	}
 
 	return &bundle, nil
 }
+
+// clockSkew is how far a loaded bundle's clock runs behind: the certificates it mints (the os:admin
+// client certificate, minted per dial) then carry a NotBefore that a node whose clock is a little
+// behind the controller's still accepts. Without it such a node answers the TLS handshake with
+// "expired certificate" (Go reports a not-yet-valid certificate that way), which pauses an operation
+// until the next dial. The lifetime is a year, so the shift costs nothing.
+const clockSkew = 5 * time.Minute
+
+type backdatedClock struct{}
+
+func (backdatedClock) Now() time.Time { return time.Now().Add(-clockSkew) }

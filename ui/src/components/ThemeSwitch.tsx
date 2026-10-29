@@ -19,8 +19,8 @@ export function ThemeSwitch() {
         saveTheme(next)
       }}
     >
-      <Sun class="hidden dark:block" />
-      <Moon class="dark:hidden" />
+      <Sun className="hidden dark:block" />
+      <Moon className="dark:hidden" />
     </Button>
   )
 }

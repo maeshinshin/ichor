@@ -267,7 +267,7 @@ function EffectiveConfigSection({ namespace, name }: { namespace: string; name: 
       description={
         <>
           {t('node.configIntroBefore')}
-          <Link to="/config" class="underline">
+          <Link to="/config" className="underline">
             {t('node.configIntroLink')}
           </Link>
           {t('node.configIntroAfter')}

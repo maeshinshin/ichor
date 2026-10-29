@@ -255,7 +255,7 @@ function PlanView({ kind, plan, clusterName }: { kind: OpKind; plan: PlanOperati
           </CardTitle>
           {plan.specChanges && <CardDescription>{t('ops.plan.specChanges', { to })}</CardDescription>}
         </CardHeader>
-        <CardContent class="space-y-3">
+        <CardContent className="space-y-3">
           <p>{effectText(t, plan.effect, kind)}</p>
           {kind === 'kubernetes' && plan.stages.length > 0 && <KubernetesStages names={plan.stages} />}
           {kind === 'ca-rotation' && plan.stages.length > 0 && <p>{t('ops.plan.stages', { stages: plan.stages.join(', ') })}</p>}

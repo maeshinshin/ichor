@@ -215,8 +215,8 @@ function Home({
               const bad = a.kind === 'opFailed'
               return (
                 <li key={a.kind}>
-                  <Alert variant={bad ? 'destructive' : 'default'} className={bad ? undefined : 'border-amber-500/50'}>
-                    {bad ? <CircleXIcon /> : <TriangleAlertIcon class="text-amber-600 dark:text-amber-400" />}
+                  <Alert variant={bad ? 'destructive' : 'default'}>
+                    {bad ? <CircleXIcon /> : <TriangleAlertIcon />}
                     <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
                       {(a.kind === 'certs' || a.kind === 'backupStale') && (
                         <>
@@ -415,7 +415,7 @@ function Home({
               </CardAction>
             </CardHeader>
             <CollapsibleContent>
-              <CardContent class="space-y-4">
+              <CardContent className="space-y-4">
             <Fields>
               <Field label={t('home.endpoint')} value={cluster.endpoint} />
               <Field
@@ -506,7 +506,7 @@ function Tile({ label, icon: Icon, value, sub, badge, target }: { label: string;
   )
   if (target.kind === 'route') {
     return (
-      <Link to={target.to} class="block h-full min-w-0">
+      <Link to={target.to} className="block h-full min-w-0">
         {body}
       </Link>
     )

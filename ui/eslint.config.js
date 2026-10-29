@@ -23,4 +23,19 @@ export default tseslint.config(
       '@typescript-eslint/no-unused-vars': 'off',
     },
   },
+  {
+    // preactcn components merge `className` with their own classes; `class`
+    // would replace the whole list (Preact spreads it last) and break layout.
+    files: ['src/**/*.tsx'],
+    ignores: ['src/components/ui/**'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "JSXOpeningElement[name.name=/^[A-Z]/] > JSXAttribute[name.name='class']",
+          message: 'Use className on components; class replaces their own classes.',
+        },
+      ],
+    },
+  },
 )

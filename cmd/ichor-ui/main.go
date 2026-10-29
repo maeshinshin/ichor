@@ -269,9 +269,12 @@ func main() {
 		}
 	}()
 
-	plainSrv := transitionalServer(*httpAddr, mux)
+	// The deprecated plaintext listener; only with --http-addr.
+	var plainSrv *http.Server
 
-	if plainSrv != nil {
+	if *httpAddr != "" {
+		plainSrv = &http.Server{Addr: *httpAddr, Handler: mux, ReadHeaderTimeout: 10 * time.Second}
+
 		log.Printf("ichor-ui: WARNING: --http-addr is deprecated: plain HTTP is still served on %s; move your edge to HTTPS on %s, the plaintext listener is removed in the next minor release", *httpAddr, *addr)
 
 		go func() {

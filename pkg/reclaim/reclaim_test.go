@@ -177,7 +177,10 @@ func TestAssess(t *testing.T) {
 
 			return i
 		}(), graceful: true},
-		{name: "3 members two unhealthy forced", in: unhealthy(controlPlane(3), 2), opt: Options{Force: true}, graceful: true, needForce: true},
+		{
+			name: "3 members two unhealthy forced", in: unhealthy(controlPlane(3), 2),
+			opt: Options{Force: true}, graceful: true, needForce: true,
+		},
 		{name: "last control plane", in: controlPlane(1), refused: "last control plane"},
 		{name: "last control plane forced", in: controlPlane(1), opt: Options{Force: true}, graceful: true, needForce: true},
 		{name: "unreadable etcd is not a quorum verdict", in: blindEtcd(), graceful: true},

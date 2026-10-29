@@ -46,6 +46,12 @@ const (
 	ReclaimLabel = "ichor.maesh.dev/reclaim"
 	// ReclaimExpiryAnnotation holds the Secret's expiry, RFC 3339.
 	ReclaimExpiryAnnotation = "ichor.maesh.dev/reclaim-expires"
+	// ReclaimRequestedByAnnotation and ReclaimConfirmedByAnnotation carry the Kubernetes user that
+	// created the request and that wrote confirmUUID. The writer sets them; the webhook rejects a
+	// value that is not the authenticated user, so they cannot be forged. The controller copies
+	// them into status.audit.
+	ReclaimRequestedByAnnotation = "ichor.maesh.dev/reclaim-requested-by"
+	ReclaimConfirmedByAnnotation = "ichor.maesh.dev/reclaim-confirmed-by"
 	// ReclaimVerb is the custom RBAC verb on machinereclaims checked by SubjectAccessReview.
 	ReclaimVerb = "reclaim"
 )
@@ -116,7 +122,7 @@ type MachineReclaimEtcdMember struct {
 	ID       uint64 `json:"id"`
 	Hostname string `json:"hostname,omitempty"`
 	// healthy is false when the member did not answer its health check.
-	Healthy bool `json:"healthy,omitempty"`
+	Healthy bool `json:"healthy"`
 }
 
 // MachineReclaimInspection is what the read-only look at the node found. It holds no credential.

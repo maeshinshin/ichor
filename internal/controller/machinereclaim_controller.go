@@ -18,46 +18,584 @@ package controller
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"net"
+	"slices"
+	"strings"
+	"time"
 
-	"k8s.io/apimachinery/pkg/runtime"
+	"google.golang.org/grpc/status"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/reclaim"
 )
 
-// MachineReclaimReconciler reconciles a MachineReclaim object
+// Defaults of MachineReclaimReconciler's timings.
+const (
+	reclaimKind = "MachineReclaim"
+
+	reclaimDefaultTTL         = 15 * time.Minute
+	reclaimRetention          = 7 * 24 * time.Hour
+	reclaimMaintenanceWait    = 10 * time.Minute
+	reclaimWaitWindow         = 20 * time.Second
+	reclaimWaitInterval       = 5 * time.Second
+	reclaimRequeueWhileWaitng = 10 * time.Second
+	// ReclaimMaxCredentialAge is the hard maximum TTL: the sweeper deletes every credential Secret older.
+	ReclaimMaxCredentialAge = 60 * time.Minute
+)
+
+// MachineReclaimReconciler runs the break-glass reclaim of ADR 0103 section 2.2: it inspects a
+// machine of another Talos cluster with a user-supplied credential, waits for the typed UUID,
+// sends the reset once and waits for maintenance mode. It never writes spec, and it does not
+// register the machine: the UI API adds the address to the target cluster's discovery on the
+// user's behalf when it creates the request (spec.clusterRef).
 type MachineReclaimReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+
+	// Enabled is the chart's reclaim.enabled. When false every request fails and its credential is
+	// deleted.
+	Enabled bool
+	// ControllerNamespace is where requests and credentials live (ichor-system). Empty means any.
+	ControllerNamespace string
+	Recorder            record.EventRecorder
+
+	// Dial and Probe default to reclaim.Dial and reclaim.MaintenanceUUID.
+	Dial  func(ctx context.Context, cred reclaim.Credential, address, contextName string) (reclaim.Node, error)
+	Probe func(ctx context.Context, address string) (string, error)
+
+	// Now, WaitWindow, WaitInterval and MaintenanceWait default to the constants above.
+	Now             func() time.Time
+	WaitWindow      time.Duration
+	WaitInterval    time.Duration
+	MaintenanceWait time.Duration
 }
 
-// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=machinereclaims,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=machinereclaims,verbs=get;list;watch;delete
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=machinereclaims/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=machinereclaims/finalizers,verbs=update
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=ichorinstallations,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,verbs=get;list;watch;update;delete
+// +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
-// Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the MachineReclaim object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.24.1/pkg/reconcile
-func (r *MachineReclaimReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = logf.FromContext(ctx)
+func (r *MachineReclaimReconciler) now() time.Time {
+	if r.Now != nil {
+		return r.Now()
+	}
 
-	// TODO(user): your logic here
-
-	return ctrl.Result{}, nil
+	return time.Now()
 }
 
-// SetupWithManager sets up the controller with the Manager.
+func orDuration(d, def time.Duration) time.Duration {
+	if d > 0 {
+		return d
+	}
+
+	return def
+}
+
+// Reconcile advances one MachineReclaim. A panic is turned into a plain error: its value could
+// quote what the code was holding, and nothing about a credential may reach a log.
+func (r *MachineReclaimReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res ctrl.Result, err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			res, err = ctrl.Result{}, errors.New("internal error while reconciling a MachineReclaim (details withheld)")
+		}
+	}()
+
+	var mr ichorv1alpha1.MachineReclaim
+	if err := r.Get(ctx, req.NamespacedName, &mr); err != nil {
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	if r.ControllerNamespace != "" && mr.Namespace != r.ControllerNamespace {
+		return ctrl.Result{}, nil
+	}
+
+	now := r.now()
+
+	if mr.Status.ExpiresAt == nil {
+		ttl := reclaimDefaultTTL
+		if mr.Spec.TTL != nil && mr.Spec.TTL.Duration > 0 {
+			ttl = min(mr.Spec.TTL.Duration, ReclaimMaxCredentialAge)
+		}
+
+		mr.Status.ExpiresAt = &metav1.Time{Time: mr.CreationTimestamp.Add(ttl)}
+		mr.Status.Audit.RequestedBy = mr.Annotations[ichorv1alpha1.ReclaimRequestedByAnnotation]
+		mr.Status.Phase = ichorv1alpha1.MachineReclaimInspecting
+
+		if err := r.Status().Update(ctx, &mr); err != nil {
+			return ctrl.Result{}, err
+		}
+
+		r.audit(&mr, corev1.EventTypeNormal, "ReclaimRequested",
+			fmt.Sprintf("reclaim of %s requested by %s", mr.Spec.Address, orNoneStr(mr.Status.Audit.RequestedBy)))
+	}
+
+	logf.FromContext(ctx).Info("reconciling a reclaim", "phase", mr.Status.Phase)
+
+	switch mr.Status.Phase {
+	case ichorv1alpha1.MachineReclaimDone, ichorv1alpha1.MachineReclaimFailed, ichorv1alpha1.MachineReclaimExpired:
+		return r.retain(ctx, &mr, now)
+	case ichorv1alpha1.MachineReclaimResetting:
+		// The controller stopped between recording the reset and learning its outcome. The reset is
+		// never repeated; whether it took effect shows in maintenance mode.
+		mr.Status.Phase = ichorv1alpha1.MachineReclaimWaitingForMaintenance
+
+		if err := r.Status().Update(ctx, &mr); err != nil {
+			return ctrl.Result{}, err
+		}
+
+		return ctrl.Result{RequeueAfter: time.Second}, nil
+	case ichorv1alpha1.MachineReclaimWaitingForMaintenance:
+		return r.waitForMaintenance(ctx, &mr, now)
+	}
+
+	if !r.Enabled {
+		return r.fail(ctx, &mr, "break-glass machine reclaim is switched off in this installation (reclaim.enabled)")
+	}
+
+	if !now.Before(mr.Status.ExpiresAt.Time) {
+		return r.expire(ctx, &mr)
+	}
+
+	return r.attend(ctx, &mr, now)
+}
+
+// attend inspects the node, and when the user has typed the UUID, sends the reset.
+func (r *MachineReclaimReconciler) attend(ctx context.Context, mr *ichorv1alpha1.MachineReclaim, now time.Time) (ctrl.Result, error) {
+	cred, err := r.adoptCredential(ctx, mr)
+	if errors.Is(err, errSecretPending) {
+		// The UI API writes the request first and the Secret a moment later. If it never appears,
+		// the request expires at its TTL.
+		return ctrl.Result{RequeueAfter: min(2*time.Second, mr.Status.ExpiresAt.Sub(now))}, nil
+	}
+
+	if err != nil {
+		return r.fail(ctx, mr, err.Error())
+	}
+
+	dial := r.Dial
+	if dial == nil {
+		dial = reclaim.Dial
+	}
+
+	node, err := dial(ctx, cred, mr.Spec.Address, mr.Spec.ContextName)
+	if err != nil {
+		return r.fail(ctx, mr, safeError(mr.Spec.Address, "connecting", err))
+	}
+	defer node.Close() //nolint:errcheck
+
+	known, err := reclaim.LoadKnown(ctx, r.Client, r.ControllerNamespace)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("cannot tell which machines Ichor manages: %w", err)
+	}
+
+	opt := reclaim.Options{Force: mr.Spec.Force, ForceUngraceful: mr.Spec.ForceUngraceful}
+
+	if mr.Status.Phase == ichorv1alpha1.MachineReclaimAwaitingConfirmation && mr.Spec.ConfirmUUID != "" {
+		return r.reset(ctx, mr, node, known, opt)
+	}
+
+	in, err := node.Inspect(ctx)
+	if err != nil {
+		return r.fail(ctx, mr, safeError(mr.Spec.Address, "inspecting", err))
+	}
+
+	plan := reclaim.Assess(in, known, opt)
+	first := mr.Status.Phase != ichorv1alpha1.MachineReclaimAwaitingConfirmation
+
+	mr.Status.Inspection = inspectionStatus(in, plan)
+	mr.Status.Phase = ichorv1alpha1.MachineReclaimAwaitingConfirmation
+
+	if err := r.Status().Update(ctx, mr); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if first {
+		r.audit(mr, corev1.EventTypeNormal, "ReclaimInspected",
+			fmt.Sprintf("UUID %s, cluster %q (%s)", in.UUID, in.ClusterName, in.ClusterID))
+	}
+
+	return ctrl.Result{RequeueAfter: mr.Status.ExpiresAt.Sub(now)}, nil
+}
+
+// resetRecorder records the reset in status before it is sent, so that a second reset from the
+// same request is impossible whatever happens next.
+type resetRecorder struct {
+	reclaim.Node
+	before func() error
+	sent   bool
+}
+
+func (n *resetRecorder) Reset(ctx context.Context, graceful bool) error {
+	if err := n.before(); err != nil {
+		return err
+	}
+
+	n.sent = true
+
+	return n.Node.Reset(ctx, graceful)
+}
+
+// reset sends the one reset this request may send.
+func (r *MachineReclaimReconciler) reset(
+	ctx context.Context, mr *ichorv1alpha1.MachineReclaim, node reclaim.Node, known reclaim.Known, opt reclaim.Options,
+) (ctrl.Result, error) {
+	if mr.Status.Audit.ResetSentAt != nil {
+		return r.fail(ctx, mr, "this request already sent its reset; a new request needs a new paste of the credential")
+	}
+
+	confirmedBy := mr.Annotations[ichorv1alpha1.ReclaimConfirmedByAnnotation]
+
+	r.audit(mr, corev1.EventTypeNormal, "ReclaimConfirmed",
+		fmt.Sprintf("%s confirmed UUID %s", orNoneStr(confirmedBy), mr.Spec.ConfirmUUID))
+
+	rec := &resetRecorder{Node: node}
+	rec.before = func() error {
+		t := metav1.NewTime(r.now())
+		mr.Status.Phase = ichorv1alpha1.MachineReclaimResetting
+		mr.Status.Audit.ConfirmedBy = confirmedBy
+		mr.Status.Audit.ConfirmedAt = &t
+		mr.Status.Audit.ResetSentAt = &t
+
+		return r.Status().Update(ctx, mr)
+	}
+
+	in, err := reclaim.Execute(ctx, rec, known, opt, reclaim.Confirmation{
+		UUID: mr.Spec.ConfirmUUID, ClusterName: mr.Spec.ConfirmClusterName,
+	})
+	if err != nil {
+		msg := safeError(mr.Spec.Address, "the reset", err)
+		if rec.sent {
+			msg += "; the reset may or may not have been applied, check the machine"
+		}
+
+		return r.fail(ctx, mr, msg)
+	}
+
+	r.audit(mr, corev1.EventTypeNormal, "ReclaimReset",
+		fmt.Sprintf("reset sent to %s (STATE and EPHEMERAL, reboot), graceful: %t", mr.Spec.Address,
+			reclaim.Assess(in, known, opt).Graceful))
+
+	// The credential has done its one job.
+	r.deleteCredential(ctx, mr)
+
+	mr.Status.Phase = ichorv1alpha1.MachineReclaimWaitingForMaintenance
+	if err := r.Status().Update(ctx, mr); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	return ctrl.Result{RequeueAfter: time.Second}, nil
+}
+
+func (r *MachineReclaimReconciler) waitForMaintenance(ctx context.Context, mr *ichorv1alpha1.MachineReclaim, now time.Time) (ctrl.Result, error) {
+	host := hostOfAddress(mr.Spec.Address)
+	uuid := ""
+
+	if mr.Status.Inspection != nil {
+		uuid = mr.Status.Inspection.UUID
+	}
+
+	probe := r.Probe
+	if probe == nil {
+		probe = reclaim.MaintenanceUUID
+	}
+
+	wctx, cancel := context.WithTimeout(ctx, orDuration(r.WaitWindow, reclaimWaitWindow))
+	defer cancel()
+
+	err := reclaim.WaitMaintenance(wctx, host, uuid, orDuration(r.WaitInterval, reclaimWaitInterval), probe)
+
+	switch {
+	case err == nil:
+		return r.done(ctx, mr, host)
+	case errors.Is(err, reclaim.ErrOtherMachine):
+		return r.fail(ctx, mr, fmt.Sprintf("%s now answers in maintenance mode as a different machine; "+
+			"find the reclaimed one (UUID %s) by scanning", host, uuid))
+	}
+
+	sent := mr.CreationTimestamp.Time
+	if mr.Status.Audit.ResetSentAt != nil {
+		sent = mr.Status.Audit.ResetSentAt.Time
+	}
+
+	if now.Sub(sent) > orDuration(r.MaintenanceWait, reclaimMaintenanceWait) {
+		return r.fail(ctx, mr, fmt.Sprintf("%s did not return to maintenance mode with UUID %s. It may have taken a new "+
+			"address from DHCP: scan for the machine and add its address to a cluster's spec.discovery.addresses", host, uuid))
+	}
+
+	return ctrl.Result{RequeueAfter: reclaimRequeueWhileWaitng}, nil
+}
+
+// done reports the maintenance address. Registration is the user's write (see the type's
+// comment); when spec.clusterRef is set the result says whether that write has happened.
+func (r *MachineReclaimReconciler) done(ctx context.Context, mr *ichorv1alpha1.MachineReclaim, host string) (ctrl.Result, error) {
+	result := fmt.Sprintf("%s is in maintenance mode", host)
+
+	if ref := mr.Spec.ClusterRef; ref != nil && ref.Name != "" {
+		var cluster ichorv1alpha1.TalosCluster
+
+		err := r.Get(ctx, client.ObjectKey{Namespace: mr.Namespace, Name: ref.Name}, &cluster)
+
+		switch {
+		case err == nil && cluster.Spec.Discovery != nil && slices.Contains(cluster.Spec.Discovery.Addresses, host):
+			result += fmt.Sprintf("; cluster %s discovers it and will show it as a pending machine", ref.Name)
+		default:
+			result += fmt.Sprintf("; add %s to cluster %s's spec.discovery.addresses to register it", host, ref.Name)
+		}
+	} else {
+		result += "; add its address to a cluster's spec.discovery.addresses to register it"
+	}
+
+	mr.Status.Phase = ichorv1alpha1.MachineReclaimDone
+	mr.Status.Result = result
+
+	if err := r.Status().Update(ctx, mr); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	r.audit(mr, corev1.EventTypeNormal, "ReclaimCompleted", result)
+
+	return ctrl.Result{RequeueAfter: time.Second}, nil
+}
+
+func (r *MachineReclaimReconciler) fail(ctx context.Context, mr *ichorv1alpha1.MachineReclaim, msg string) (ctrl.Result, error) {
+	r.deleteCredential(ctx, mr)
+
+	mr.Status.Phase = ichorv1alpha1.MachineReclaimFailed
+	mr.Status.Result = msg
+
+	if err := r.Status().Update(ctx, mr); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	r.audit(mr, corev1.EventTypeWarning, "ReclaimFailed", msg)
+
+	return ctrl.Result{RequeueAfter: time.Second}, nil
+}
+
+func (r *MachineReclaimReconciler) expire(ctx context.Context, mr *ichorv1alpha1.MachineReclaim) (ctrl.Result, error) {
+	r.deleteCredential(ctx, mr)
+
+	mr.Status.Phase = ichorv1alpha1.MachineReclaimExpired
+	mr.Status.Result = "the request expired before it was confirmed; nothing was sent to the machine"
+
+	if err := r.Status().Update(ctx, mr); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	r.audit(mr, corev1.EventTypeWarning, "ReclaimExpired", mr.Status.Result)
+
+	return ctrl.Result{RequeueAfter: time.Second}, nil
+}
+
+// retain keeps a finished request as the record for seven days after its expiry time, makes sure
+// its credential is gone, and then deletes it.
+func (r *MachineReclaimReconciler) retain(ctx context.Context, mr *ichorv1alpha1.MachineReclaim, now time.Time) (ctrl.Result, error) {
+	if mr.Status.Audit.CredentialDeletedAt == nil {
+		r.deleteCredential(ctx, mr)
+
+		if err := r.Status().Update(ctx, mr); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+
+	at := mr.Status.ExpiresAt.Add(reclaimRetention)
+	if now.Before(at) {
+		return ctrl.Result{RequeueAfter: at.Sub(now)}, nil
+	}
+
+	return ctrl.Result{}, client.IgnoreNotFound(r.Delete(ctx, mr))
+}
+
+var errSecretPending = errors.New("the credential Secret does not exist yet")
+
+// adoptCredential reads the request's credential Secret and makes the request its owner. It
+// refuses a Secret that is not of the credential type, or that another request already owns:
+// a credential serves one request.
+func (r *MachineReclaimReconciler) adoptCredential(ctx context.Context, mr *ichorv1alpha1.MachineReclaim) (reclaim.Credential, error) {
+	var sec corev1.Secret
+
+	key := client.ObjectKey{Namespace: mr.Namespace, Name: mr.Spec.CredentialSecretRef}
+	if err := r.Get(ctx, key, &sec); err != nil {
+		if apierrors.IsNotFound(err) {
+			return reclaim.Credential{}, errSecretPending
+		}
+
+		return reclaim.Credential{}, errors.New("the credential Secret could not be read")
+	}
+
+	if sec.Type != ichorv1alpha1.ReclaimCredentialSecretType {
+		return reclaim.Credential{}, fmt.Errorf("the credential Secret %s is not of type %s", sec.Name, ichorv1alpha1.ReclaimCredentialSecretType)
+	}
+
+	for _, o := range sec.OwnerReferences {
+		if o.Kind == reclaimKind && o.UID != mr.UID {
+			return reclaim.Credential{}, errors.New("the credential Secret belongs to another request; a new request needs a new paste")
+		}
+	}
+
+	if !ownedBy(&sec, mr) {
+		sec.OwnerReferences = append(sec.OwnerReferences, metav1.OwnerReference{
+			APIVersion: ichorv1alpha1.GroupVersion.String(), Kind: reclaimKind, Name: mr.Name, UID: mr.UID,
+		})
+
+		if err := r.Update(ctx, &sec); err != nil {
+			return reclaim.Credential{}, errors.New("the credential Secret could not be claimed")
+		}
+	}
+
+	cred := reclaim.NewCredential(sec.Data[ichorv1alpha1.ReclaimCredentialKey])
+	if cred.Empty() {
+		return reclaim.Credential{}, fmt.Errorf("the credential Secret %s has no %q key", sec.Name, ichorv1alpha1.ReclaimCredentialKey)
+	}
+
+	return cred, nil
+}
+
+func unclaimed(sec *corev1.Secret) bool {
+	_, labelled := sec.Labels[ichorv1alpha1.ReclaimLabel]
+
+	return labelled && !slices.ContainsFunc(sec.OwnerReferences, func(o metav1.OwnerReference) bool {
+		return o.Kind == reclaimKind
+	})
+}
+
+func ownedBy(sec *corev1.Secret, mr *ichorv1alpha1.MachineReclaim) bool {
+	return slices.ContainsFunc(sec.OwnerReferences, func(o metav1.OwnerReference) bool { return o.UID == mr.UID })
+}
+
+// deleteCredential deletes the request's Secret if, and only if, it is of the credential type and
+// owned by this request (or unclaimed and labelled), so a spec.credentialSecretRef pointing at any other Secret deletes
+// nothing. It records the deletion in memory; the caller writes status.
+func (r *MachineReclaimReconciler) deleteCredential(ctx context.Context, mr *ichorv1alpha1.MachineReclaim) {
+	var sec corev1.Secret
+
+	key := client.ObjectKey{Namespace: mr.Namespace, Name: mr.Spec.CredentialSecretRef}
+	if err := r.Get(ctx, key, &sec); err != nil {
+		if apierrors.IsNotFound(err) && mr.Status.Audit.CredentialDeletedAt == nil {
+			t := metav1.NewTime(r.now())
+			mr.Status.Audit.CredentialDeletedAt = &t
+		}
+
+		return
+	}
+
+	// Ours: of the credential type and either owned by this request or not yet claimed by any.
+	if sec.Type != ichorv1alpha1.ReclaimCredentialSecretType || (!ownedBy(&sec, mr) && !unclaimed(&sec)) {
+		return
+	}
+
+	if err := r.Delete(ctx, &sec, client.Preconditions{UID: &sec.UID}); client.IgnoreNotFound(err) != nil {
+		logf.FromContext(ctx).Info("could not delete a credential Secret; the sweeper will", "secret", sec.Name)
+
+		return
+	}
+
+	t := metav1.NewTime(r.now())
+	mr.Status.Audit.CredentialDeletedAt = &t
+
+	r.audit(mr, corev1.EventTypeNormal, "CredentialDeleted", "Secret "+sec.Name)
+}
+
+// audit emits an Event on the request and on the IchorInstallation (which outlives the request).
+// Messages carry names, addresses and identities, never what is in a Secret.
+func (r *MachineReclaimReconciler) audit(mr *ichorv1alpha1.MachineReclaim, eventType, reason, msg string) {
+	if r.Recorder == nil {
+		return
+	}
+
+	r.Recorder.Event(mr, eventType, reason, msg)
+
+	var installs ichorv1alpha1.IchorInstallationList
+	if err := r.List(context.Background(), &installs); err != nil {
+		return
+	}
+
+	for i := range installs.Items {
+		r.Recorder.Event(&installs.Items[i], eventType, reason, fmt.Sprintf("MachineReclaim %s/%s: %s", mr.Namespace, mr.Name, msg))
+	}
+}
+
+// safeError describes a failure with the address, the stage and, for a Talos API error, the gRPC
+// code. The error text itself is dropped: transport errors can quote what was sent. Refusals and
+// confirmation mismatches are Ichor's own sentences and are kept.
+func safeError(address, stage string, err error) string {
+	msg := err.Error()
+	for _, own := range []string{"refusing to reclaim:", "the typed "} {
+		if strings.HasPrefix(msg, own) {
+			return msg
+		}
+	}
+
+	if st, ok := status.FromError(err); ok && st.Code() != 0 {
+		return fmt.Sprintf("%s: %s failed (Talos API: %s)", address, stage, st.Code())
+	}
+
+	return fmt.Sprintf("%s: %s failed", address, stage)
+}
+
+func inspectionStatus(in reclaim.Inspection, plan reclaim.Plan) *ichorv1alpha1.MachineReclaimInspection {
+	role := "worker"
+	if in.ControlPlane {
+		role = "controlplane"
+	}
+
+	out := &ichorv1alpha1.MachineReclaimInspection{
+		UUID: in.UUID, Hostname: in.Hostname, Role: role, TalosVersion: in.Version,
+		ClusterName: in.ClusterName, ClusterID: in.ClusterID, ClusterReachable: in.ClusterReachable,
+		Graceful: plan.Graceful, NeedsForce: plan.NeedsForce,
+		Refusals: plan.Refusals, Warnings: plan.Warnings,
+	}
+
+	for _, m := range in.EtcdMembers {
+		out.EtcdMembers = append(out.EtcdMembers, ichorv1alpha1.MachineReclaimEtcdMember{
+			ID: m.ID, Hostname: m.Hostname, Healthy: !m.Unhealthy,
+		})
+	}
+
+	for _, v := range in.Volumes {
+		out.Volumes = append(out.Volumes, ichorv1alpha1.MachineReclaimVolume{
+			Name: v.Name, Location: v.Location, SizeBytes: v.Size, Encrypted: v.Encrypted,
+		})
+	}
+
+	return out
+}
+
+func hostOfAddress(address string) string {
+	if h, _, err := net.SplitHostPort(address); err == nil {
+		return h
+	}
+
+	return address
+}
+
+func orNoneStr(s string) string {
+	if s == "" {
+		return "(unknown)"
+	}
+
+	return s
+}
+
+// SetupWithManager sets up the controller and the credential sweeper with the Manager.
 func (r *MachineReclaimReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	if err := mgr.Add(&ReclaimCredentialSweeper{Client: mgr.GetClient(), Namespace: r.ControllerNamespace}); err != nil {
+		return err
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&ichorv1alpha1.MachineReclaim{}).
+		For(&ichorv1alpha1.MachineReclaim{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Named("machinereclaim").
 		Complete(r)
 }

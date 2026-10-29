@@ -158,10 +158,10 @@ func clusterFromNodes(name, namespace, talosVersion string, nodes []*adoptNode) 
 	endpointType := "dns"
 
 	if addr, err := netip.ParseAddr(f.EndpointHost); err == nil {
-		endpointType = "vip"
+		endpointType = endpointVIP
 
 		if slices.ContainsFunc(nodes, func(n *adoptNode) bool { return n.M.Spec.Endpoint == addr.String() }) {
-			endpointType = "node"
+			endpointType = endpointNode
 		}
 	}
 
@@ -196,6 +196,11 @@ func clusterFromNodes(name, namespace, talosVersion string, nodes []*adoptNode) 
 
 	return c, nil
 }
+
+const (
+	endpointVIP  = "vip"
+	endpointNode = "node"
+)
 
 func kubernetesVersionOr(v string) string {
 	if v == "" {

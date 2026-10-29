@@ -19,6 +19,7 @@ package cli
 import (
 	"cmp"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -26,7 +27,9 @@ import (
 	"time"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -34,20 +37,15 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/controller"
 	"github.com/maeshinshin/ichor/internal/installer"
+	"github.com/maeshinshin/ichor/pkg/cni"
+	"github.com/maeshinshin/ichor/pkg/cni/cilium"
 	"github.com/maeshinshin/ichor/pkg/render"
 )
 
-// ciliumTakeover is the seam for the Cilium takeover (ADR 0103, 1.2). The takeover itself is
-// built elsewhere (unit 6); adopt only calls it. nil means "not available yet": the precondition
-// report prints "Cilium takeover checks: pending" and the machines stay held after the write
-// phase, because releasing them would apply a render that drops the cluster's own Cilium entry.
-type ciliumTakeover interface {
-	// Report is the read-only precondition report (version rule, owned keys, diff gate, health).
-	// The lines are printed in the plan; an error refuses the adoption with nothing written.
-	Report(ctx context.Context, rep *cniReport) ([]string, error)
-	// Run performs the takeover after the write phase.
-	Run(ctx context.Context, rep *cniReport) error
-}
+// ciliumPreflight runs the read-only takeover preconditions (cilium.Preflight, ADR 0103 1.2).
+// nil means "not available": the plan prints "Cilium takeover checks: pending" and the machines
+// stay held after the write phase.
+type ciliumPreflight func(ctx context.Context, in cilium.PreflightInput) (*cilium.PreflightReport, error)
 
 // adoptDeps bundles adopt's side effects -- the Kubernetes API, each node's
 // Talos API, and the terminal -- behind small interfaces/funcs, so
@@ -83,8 +81,10 @@ type adoptDeps struct {
 	ReadIdentity func(ctx context.Context, address string) (controller.HardwareIdentity, error)
 	// Ichor, when set, is installed if Ichor is not running yet. nil skips the install.
 	Ichor *adoptWriteIchor
-	// Takeover is the Cilium takeover seam; nil means pending.
-	Takeover ciliumTakeover
+	// Preflight runs the takeover preconditions; nil means pending. AcceptCiliumChanges and
+	// AcceptCiliumDiff are --accept-cilium-changes and --accept-cilium-diff.
+	Preflight                             ciliumPreflight
+	AcceptCiliumChanges, AcceptCiliumDiff bool
 
 	// ReleaseWait bounds the wait for one machine to be Ready after its hold is released;
 	// Interval is the poll interval of that wait and of the webhook wait. Zero uses the defaults.
@@ -109,11 +109,8 @@ func (st *adoptState) own(n *adoptNode) ownership {
 	o := ownership{Managed: !st.unmanaged, KubeProxyReplaced: st.kubeProxy == kubeProxyReplaced}
 
 	if n.Facts != nil {
-		for _, im := range n.Facts.InlineManifests {
-			if strings.Contains(strings.ToLower(im.Contents), "cilium") {
-				o.CiliumInline = true
-			}
-		}
+		name, _ := cilium.FindInlineManifest(inlineEntries(n.Facts))
+		o.CiliumInline = name != ""
 	}
 
 	return o
@@ -174,9 +171,9 @@ func runAdopt(ctx context.Context, clusterName, namespace string, deps adoptDeps
 		}
 	}
 
-	helmDeletion := st.reportTakeover(deps.Stderr, ctx, deps)
-	if helmDeletion.err != nil {
-		return helmDeletion.err
+	tp, err := st.takeoverPlan(ctx, deps)
+	if err != nil {
+		return err
 	}
 
 	if deps.PlanOnly {
@@ -185,25 +182,26 @@ func runAdopt(ctx context.Context, clusterName, namespace string, deps adoptDeps
 		return nil
 	}
 
-	if err := st.consent(deps, clusterName, len(patches), len(writable), owned, helmDeletion.delete); err != nil {
+	if err := st.consent(deps, clusterName, len(patches), len(writable), owned, tp.deleteRecord); err != nil {
 		return err
 	}
 
 	// Phase 2: write.
-	if _, err := writeAdopt(ctx, deps.K8s, st.writeInput(ctx, deps, namespace, writable, patches)); err != nil {
+	if _, err := writeAdopt(ctx, deps.K8s, st.writeInput(ctx, deps, namespace, writable, patches, tp)); err != nil {
 		return err
 	}
 
 	// Phase 3: takeover (never in unmanaged mode, nothing to take over from Ichor's own Cilium).
 	if st.needsTakeover() {
-		if deps.Takeover == nil {
+		if deps.Preflight == nil {
 			_, _ = fmt.Fprintln(deps.Stderr, "adopt: Cilium takeover: pending; the machines stay held, nothing was applied to any node")
 
 			return nil
 		}
 
-		if err := deps.Takeover.Run(ctx, st.rep); err != nil {
-			return fmt.Errorf("adopt: Cilium takeover: %w", err)
+		// The controller's ichor-cni Job takes the Cilium over; adopt waits for CNIHandover.
+		if err := waitHandover(ctx, deps, types.NamespacedName{Namespace: namespace, Name: clusterName}); err != nil {
+			return err
 		}
 	}
 
@@ -379,11 +377,11 @@ func (st *adoptState) firstNode() *adoptNode {
 func hintFromFacts(f *TalosFacts) talosCNIHint {
 	switch f.CNI.Kind {
 	case CNINone:
-		return talosCNIHint{Name: "none"}
+		return talosCNIHint{Name: string(detectedNone)}
 	case CNICustom:
-		return talosCNIHint{Name: "custom", URLs: f.CNI.URLs}
+		return talosCNIHint{Name: string(CNICustom), URLs: f.CNI.URLs}
 	case CNIFlannel:
-		return talosCNIHint{Name: "flannel"}
+		return talosCNIHint{Name: string(detectedFlannel)}
 	default:
 		return talosCNIHint{Name: f.CNI.Name}
 	}
@@ -584,38 +582,173 @@ func reportOwned(w io.Writer, plans []*adoptPlan) int {
 	return total
 }
 
-type takeoverReport struct {
-	delete bool // a foreign Helm release record will be deleted
-	err    error
+// takeoverPlan is what the takeover section of the plan settled.
+type takeoverPlan struct {
+	deleteRecord bool           // a foreign Helm release record will be deleted
+	userValues   map[string]any // spec.cni.cilium.values of a cluster adopt creates
+	inline       string         // name of the Cilium entry in cluster.inlineManifests, "" if none
 }
 
-// reportTakeover prints the takeover section of the plan: the precondition report from the seam
-// (or that it is pending) and the foreign Helm record deletion that the consent covers.
-func (st *adoptState) reportTakeover(w io.Writer, ctx context.Context, deps adoptDeps) takeoverReport {
-	if !st.needsTakeover() {
-		return takeoverReport{}
+func inlineEntries(f *TalosFacts) map[string]string {
+	m := make(map[string]string, len(f.InlineManifests))
+	for _, im := range f.InlineManifests {
+		m[im.Name] = im.Contents
 	}
 
-	if deps.Takeover == nil {
-		_, _ = fmt.Fprintln(w, "adopt: Cilium takeover checks: pending")
-	} else {
-		lines, err := deps.Takeover.Report(ctx, st.rep)
-		for _, l := range lines {
-			_, _ = fmt.Fprintf(w, "adopt: Cilium takeover: %s\n", l)
+	return m
+}
+
+// takeoverPlan prints the takeover section of the plan: the preflight report (names and paths
+// only, never record data) and the foreign Helm record deletion the consent covers. It returns an
+// error when the preflight says no-go. Managed mode only.
+func (st *adoptState) takeoverPlan(ctx context.Context, deps adoptDeps) (takeoverPlan, error) {
+	var tp takeoverPlan
+
+	if st.unmanaged {
+		return tp, nil
+	}
+
+	for _, n := range st.nodes {
+		if n.Skipped != "" {
+			continue
 		}
 
+		name, err := cilium.FindInlineManifest(inlineEntries(n.Facts))
 		if err != nil {
-			return takeoverReport{err: fmt.Errorf("adopt: Cilium takeover checks: %w", err)}
+			return tp, fmt.Errorf("adopt: machine %q: %w", n.M.Name, err)
+		}
+
+		tp.inline = cmp.Or(tp.inline, name)
+	}
+
+	if !st.needsTakeover() {
+		return tp, nil
+	}
+
+	w := deps.Stderr
+
+	if deps.Preflight == nil {
+		_, _ = fmt.Fprintln(w, "adopt: Cilium takeover checks: pending")
+
+		return tp, nil
+	}
+
+	rep, err := st.preflight(ctx, deps, nil)
+	if err != nil {
+		return tp, err
+	}
+
+	// The operator's own values come from the foreign release; the diff gate must see them.
+	if len(rep.UserValues) > 0 {
+		tp.userValues = rep.UserValues
+
+		if rep, err = st.preflight(ctx, deps, rep.UserValues); err != nil {
+			return tp, err
 		}
 	}
 
-	del := st.rep.Provenance == provenanceHelm
-	if del {
+	printPreflight(w, rep)
+
+	if rep.Foreign != nil && st.rep.Provenance == provenanceHelm {
+		tp.deleteRecord = true
+
 		_, _ = fmt.Fprintf(w, "adopt: the Helm release record(s) of the existing Cilium will be copied to Secret ichor-cilium-prior-release in %s "+
 			"and then deleted (the record Secrets only; helm uninstall is never run)\n", ichorControllerNamespace)
 	}
 
-	return takeoverReport{delete: del}
+	if err := rep.Err(deps.AcceptCiliumChanges, deps.AcceptCiliumDiff); err != nil {
+		return tp, fmt.Errorf("adopt: Cilium takeover checks failed, nothing was written: %w", err)
+	}
+
+	return tp, nil
+}
+
+func (st *adoptState) preflight(ctx context.Context, deps adoptDeps, user map[string]any) (*cilium.PreflightReport, error) {
+	mode := cni.KubeProxyMode(st.kubeProxy)
+
+	trial := st.cluster.DeepCopy()
+
+	if len(user) > 0 {
+		raw, err := json.Marshal(user)
+		if err != nil {
+			return nil, fmt.Errorf("adopt: %w", err)
+		}
+
+		trial.Spec.CNI.Cilium = &ichorv1alpha1.TalosClusterCNICilium{Values: &apiextensionsv1.JSON{Raw: raw}}
+	}
+
+	effective, err := cilium.EffectiveValuesForMode(trial, mode)
+	if err != nil {
+		return nil, fmt.Errorf("adopt: %w", err)
+	}
+
+	rep, err := deps.Preflight(ctx, cilium.PreflightInput{
+		IchorNamespace: ichorControllerNamespace, Effective: effective, KubeProxy: mode, Tunnel: st.cluster.Spec.CNI.Tunnel,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("adopt: Cilium takeover checks: %w", err)
+	}
+
+	return rep, nil
+}
+
+func printPreflight(w io.Writer, rep *cilium.PreflightReport) {
+	if rep.Foreign != nil {
+		names := make([]string, 0, len(rep.Foreign.Records))
+		for _, r := range rep.Foreign.Records {
+			names = append(names, r.Secret.Name)
+		}
+
+		_, _ = fmt.Fprintf(w, "adopt: Cilium takeover: Helm release records in %s: %s\n", rep.Foreign.Namespace, strings.Join(names, ", "))
+	}
+
+	if rep.VersionErr == nil {
+		verb := "equal to"
+		if rep.Version.Upgrade {
+			verb = "one minor below (adoption is an upgrade)"
+		}
+
+		_, _ = fmt.Fprintf(w, "adopt: Cilium takeover: live version %s, chart %s: %s\n", rep.Version.Live, rep.Version.Target, verb)
+	}
+
+	for _, e := range []error{rep.ForeignErr, rep.VersionErr, rep.CRDsErr} {
+		if e != nil {
+			_, _ = fmt.Fprintf(w, "adopt: Cilium takeover: %v\n", e)
+		}
+	}
+
+	for _, c := range rep.Conflicts {
+		_, _ = fmt.Fprintf(w, "adopt: Cilium takeover: Ichor-owned key %s\n", c)
+	}
+
+	for _, d := range rep.Differences {
+		_, _ = fmt.Fprintf(w, "adopt: Cilium takeover: live differs from the chart: %s\n", d)
+	}
+}
+
+// waitHandover is phase 3 of ADR 0103 1.8 for an adopted cluster: the controller's ichor-cni Job
+// takes Cilium over; adopt waits for CNIHandover to be True before it releases any hold.
+func waitHandover(ctx context.Context, deps adoptDeps, key types.NamespacedName) error {
+	wait := cmp.Or(deps.ReleaseWait, defaultReleaseWait)
+	interval := cmp.Or(deps.Interval, defaultReleaseInterval)
+
+	ctx, cancel := context.WithTimeout(ctx, wait)
+	defer cancel()
+
+	for {
+		var c ichorv1alpha1.TalosCluster
+
+		if err := deps.K8s.Get(ctx, key, &c); err == nil && apimeta.IsStatusConditionTrue(c.Status.Conditions, render.ConditionCNIHandover) {
+			return nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("adopt: the Cilium takeover (condition %s) did not finish within %s; the machines stay held",
+				render.ConditionCNIHandover, wait)
+		case <-time.After(interval):
+		}
+	}
 }
 
 // consent is the gate before anything is written: --yes, or an interactive yes. The prompt names
@@ -642,7 +775,7 @@ func (st *adoptState) consent(deps adoptDeps, clusterName string, patches, machi
 }
 
 // writeInput assembles the write phase's input from what the plan established.
-func (st *adoptState) writeInput(ctx context.Context, deps adoptDeps, namespace string, writable []*adoptNode, patches []ichorv1alpha1.TalosConfigPatch) adoptWriteInput {
+func (st *adoptState) writeInput(ctx context.Context, deps adoptDeps, namespace string, writable []*adoptNode, patches []ichorv1alpha1.TalosConfigPatch, tp takeoverPlan) adoptWriteInput {
 	in := adoptWriteInput{Namespace: namespace, Patches: patches, Stderr: deps.Stderr, Interval: deps.Interval}
 
 	if !st.fresh {
@@ -656,6 +789,7 @@ func (st *adoptState) writeInput(ctx context.Context, deps adoptDeps, namespace 
 		Name: c.Name, Endpoint: c.Spec.Endpoint, TalosVersion: c.Spec.TalosVersion, KubernetesVersion: c.Spec.KubernetesVersion,
 		VersionContract: c.Spec.VersionContract, ControlPlaneCount: c.Spec.ControlPlane.Count, Schedulable: c.Spec.ControlPlane.Schedulable,
 		CNIPreset: c.Spec.CNI.Preset, KubeProxy: c.Spec.CNI.KubeProxy,
+		CNIInlineManifest: tp.inline, CiliumValues: tp.userValues,
 	}
 
 	if c.Spec.Network != nil {

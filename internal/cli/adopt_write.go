@@ -28,6 +28,7 @@ import (
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/types"
@@ -104,6 +105,12 @@ type adoptWriteCluster struct {
 	TalosCNI  string
 	// KubeProxy is enabled or replaced, as detected; always written explicitly.
 	KubeProxy string
+
+	// CNIInlineManifest is the name of the Cilium entry in cluster.inlineManifests (managed mode),
+	// written as the annotation the controller copies to status at hand-over (ADR 0103, 1.2).
+	CNIInlineManifest string
+	// CiliumValues are the operator's user values taken from the foreign release, or nil.
+	CiliumValues map[string]any
 }
 
 // adoptWriteMachine is one node to adopt. Address is where its Talos API answers.
@@ -309,6 +316,16 @@ func (w *adoptWriter) cluster0() *ichorv1alpha1.TalosCluster {
 
 	if len(f.PodSubnets) > 0 || len(f.ServiceSubnets) > 0 {
 		cluster.Spec.Network = &ichorv1alpha1.TalosClusterNetwork{PodSubnets: f.PodSubnets, ServiceSubnets: f.ServiceSubnets}
+	}
+
+	if f.CNIInlineManifest != "" {
+		cluster.Annotations[ichorv1alpha1.TalosClusterCNIInlineManifestAnnotation] = f.CNIInlineManifest
+	}
+
+	if len(f.CiliumValues) > 0 {
+		if raw, err := json.Marshal(f.CiliumValues); err == nil {
+			cluster.Spec.CNI.Cilium = &ichorv1alpha1.TalosClusterCNICilium{Values: &apiextensionsv1.JSON{Raw: raw}}
+		}
 	}
 
 	if f.CNIPreset == cniUnmanaged {

@@ -16,12 +16,10 @@ import { BackupNow } from '@/components/BackupNow'
 import type { EtcdBackup } from '@/gen/ichor/v1alpha1/operation_pb'
 import { destinationLabel, exampleBackupYaml, newestSnapshot, totalBytes } from '@/lib/backups'
 import { operationClient } from '@/lib/connect'
-import { describeError } from '@/lib/errors'
+import { describeError, type ErrorShape } from '@/lib/errors'
 import { formatBytes, formatTimestamp } from '@/lib/format'
 import { useCluster } from '@/lib/useCluster'
 import { useT } from '@/lib/useT'
-
-type ErrorShape = { title: string; detail: string }
 
 const adrUrl = 'https://github.com/maeshinshin/ichor/blob/main/docs/adr/0047-etcd-backup-format-and-controller.md'
 

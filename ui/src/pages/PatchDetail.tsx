@@ -19,7 +19,7 @@ import { PatchSchema } from '@/gen/ichor/v1alpha1/patch_pb'
 import { machineClient, patchClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
 import { notifyDone, notifyWrite } from '@/lib/notify'
-import { describeError } from '@/lib/errors'
+import { describeError, type ErrorShape } from '@/lib/errors'
 import { useCluster } from '@/lib/useCluster'
 import { useT } from '@/lib/useT'
 import type { Key } from '@/lib/i18n'
@@ -28,8 +28,6 @@ import { defaultDocument, previewKey } from '@/lib/patchDocs'
 import type { Machine } from '@/gen/ichor/v1alpha1/machine_pb'
 import { buildPatchTarget, canSavePatch, stringifyLabelSelector, targetFieldsFor, type LayerKey } from '@/lib/patchTarget'
 import { navigate } from '@/router'
-
-type ErrorShape = { title: string; detail: string }
 
 // A Patch-shaped plain object, not the generated Message type: every field
 // built here comes from form state, not a decoded response, so it never

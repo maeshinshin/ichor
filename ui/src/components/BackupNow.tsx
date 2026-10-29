@@ -5,11 +5,9 @@ import { ErrorAlert } from '@/components/ErrorAlert'
 import type { EtcdBackup } from '@/gen/ichor/v1alpha1/operation_pb'
 import { backNowBlock } from '@/lib/backups'
 import { operationClient } from '@/lib/connect'
-import { describeError } from '@/lib/errors'
+import { describeError, type ErrorShape } from '@/lib/errors'
 import { notifyDone } from '@/lib/notify'
 import { useT } from '@/lib/useT'
-
-type ErrorShape = { title: string; detail: string }
 
 // BackupNow asks for one snapshot outside the schedule (docs/adr/0047). The UI only sets the request;
 // the controller takes the snapshot. onChanged gets the backup as it now stands (request pending).

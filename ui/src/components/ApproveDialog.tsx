@@ -21,7 +21,7 @@ import type { NodeDetail } from '@/gen/ichor/v1alpha1/node_pb'
 import { MachineRole, type Machine } from '@/gen/ichor/v1alpha1/machine_pb'
 import { machineClient, nodeClient } from '@/lib/connect'
 import { notifyWrite } from '@/lib/notify'
-import { describeError } from '@/lib/errors'
+import { describeError, type ErrorShape } from '@/lib/errors'
 import { canApprove, isStrongIdentity } from '@/lib/identity'
 import { diskSelector, installChoice, isValidHostname } from '@/lib/installDisk'
 import { formatBytes } from '@/lib/format'
@@ -34,8 +34,6 @@ import {
   type NetworkForm,
 } from '@/lib/machineSettings'
 import { useT } from '@/lib/useT'
-
-type ErrorShape = { title: string; detail: string }
 
 const emptyNetwork: NetworkForm = { mac: '', addressing: 'dhcp', addresses: '', gateway: '', dns: '', vlan: '' }
 const emptyRoles: DiskRolesForm = { ephemeral: '', volumes: [] }

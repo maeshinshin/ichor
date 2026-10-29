@@ -14,13 +14,11 @@ import { wireKindOf } from '@/components/opkind'
 import { OperationEffect, type PlanOperationResponse } from '@/gen/ichor/v1alpha1/operation_pb'
 import { operationClient } from '@/lib/connect'
 import { notifyDone } from '@/lib/notify'
-import { describeError } from '@/lib/errors'
+import { describeError, type ErrorShape } from '@/lib/errors'
 import { versionProblem } from '@/lib/clusterOps'
 import { confirmMatches, kindNeedsTarget, kindNeedsTypedName, kubernetesStages, planCounts, planSteps, targetError, type OpKind } from '@/lib/operations'
 import { useT } from '@/lib/useT'
 import { navigate } from '@/router'
-
-type ErrorShape = { title: string; detail: string }
 
 const startedByDefault: Record<OpKind, boolean> = { talos: true, kubernetes: true, ichor: true, cni: true, shutdown: false, 'ca-rotation': false, config: false }
 

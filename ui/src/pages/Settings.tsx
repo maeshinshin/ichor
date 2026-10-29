@@ -12,7 +12,7 @@ import { PageTitle } from '@/components/PageTitle'
 import { SectionCard } from '@/components/SectionCard'
 import type { GetSettingsResponse } from '@/gen/ichor/v1alpha1/settings_pb'
 import { settingsClient } from '@/lib/connect'
-import { describeError } from '@/lib/errors'
+import { describeError, type ErrorShape } from '@/lib/errors'
 import { notifyWrite } from '@/lib/notify'
 import {
   changesOf,
@@ -30,8 +30,6 @@ import {
   type Source,
 } from '@/lib/settings'
 import { useT } from '@/lib/useT'
-
-type ErrorShape = { title: string; detail: string }
 
 // The Settings page (docs/adr/0105, Part B): the runtime settings of the IchorInstallation, one card per
 // group. Each value carries a badge for where it comes from. Writes go through SettingsService as the

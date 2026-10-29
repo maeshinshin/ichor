@@ -4,7 +4,7 @@ import { OperationKind, type Operation } from '@/gen/ichor/v1alpha1/operation_pb
 import { currentOperation } from '@/lib/clusterOps'
 import { clusterClient, operationClient } from '@/lib/connect'
 import { operationState } from '@/lib/operations'
-import { describeError } from '@/lib/errors'
+import { describeError, type ErrorShape } from '@/lib/errors'
 
 // Ichor manages one cluster (docs/adr/0097). The list is read once for the whole app and shared:
 // the shell and every page that calls useCluster see the same state, and one timer polls while
@@ -13,7 +13,6 @@ import { describeError } from '@/lib/errors'
 // operations is the cluster's operation list from the same poll, as the server lists it. opRunning
 // is whether the cluster's current operation is running; with the rollout and the conditions it
 // decides the health shown in the top bar and on the Overview.
-type ErrorShape = { title: string; detail: string }
 type State = {
   cluster: Cluster | null
   count: number

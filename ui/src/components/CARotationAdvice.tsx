@@ -5,10 +5,8 @@ import { Button } from '@/components/ui/button'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import type { ObjectRef } from '@/gen/ichor/v1alpha1/common_pb'
 import { clusterClient } from '@/lib/connect'
-import { describeError } from '@/lib/errors'
+import { describeError, type ErrorShape } from '@/lib/errors'
 import { useT } from '@/lib/useT'
-
-type ErrorShape = { title: string; detail: string }
 
 // CARotationAdvice is the notice an adopted cluster carries (docs/adr/0103, section 1.4): the
 // previous administrators' credentials stay valid until the CAs are rotated. It is advice only;

@@ -19,14 +19,12 @@ import type { Cluster } from '@/gen/ichor/v1alpha1/cluster_pb'
 import { MachineApprovalState, type Machine } from '@/gen/ichor/v1alpha1/machine_pb'
 import { clusterClient, machineClient } from '@/lib/connect'
 import { checkDiscoveryAddress, discoveryOn } from '@/lib/discovery'
-import { describeError } from '@/lib/errors'
+import { describeError, type ErrorShape } from '@/lib/errors'
 import { notifyWrite } from '@/lib/notify'
 import { useCluster } from '@/lib/useCluster'
 import { useCanReclaim } from '@/lib/useCanReclaim'
 import { useT } from '@/lib/useT'
 import { Link } from '@/router'
-
-type ErrorShape = { title: string; detail: string }
 
 const POLL_MS = 5000
 

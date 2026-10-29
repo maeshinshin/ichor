@@ -37,6 +37,21 @@ export function redirectTarget(body: unknown): string | null {
   }
 }
 
+// postLogin posts the credentials with the ticket to /oidc/login and returns the redirect_uri it
+// answers (carrying the authorization code).
+export async function postLogin(ticket: string, f: { username: string; password: string }): Promise<string> {
+  let res: Response
+  try {
+    res = await fetch('/oidc/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: loginBody(ticket, f) })
+  } catch {
+    throw new LoginError('login.unavailable')
+  }
+  if (!res.ok) throw new LoginError(loginErrorKey(res.status))
+  const target = redirectTarget(await res.json().catch(() => null))
+  if (!target) throw new LoginError('login.unavailable')
+  return target
+}
+
 // The in-page sign-in (docs/adr/0094 amendment): no navigation. The browser asks the authorize
 // endpoint for a ticket as JSON, posts the credentials, and exchanges the returned code with fetch,
 // with the same PKCE, state and nonce checks as the redirect flow.
@@ -45,17 +60,6 @@ export class LoginError extends Error {
   constructor(key: Key) {
     super(key)
     this.key = key
-  }
-}
-
-export type SignInSections = { ichor: AuthProvider | null; oidc: AuthProvider | null }
-
-// signInSections says what the one sign-in card shows: the password form for the ichor provider and
-// the identity-provider button for the external one.
-export function signInSections(providers: AuthProvider[]): SignInSections {
-  return {
-    ichor: providers.find((p) => p.id === 'ichor') ?? null,
-    oidc: providers.find((p) => p.id === 'oidc') ?? null,
   }
 }
 
@@ -76,16 +80,9 @@ export async function passwordSignIn(cfg: AuthProvider, f: { username: string; p
   }
   if (typeof ticket !== 'string' || !ticket) throw new LoginError('login.unavailable')
 
-  let res: Response
-  try {
-    res = await fetch('/oidc/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: loginBody(ticket, f) })
-  } catch {
-    throw new LoginError('login.unavailable')
-  }
-  if (!res.ok) throw new LoginError(loginErrorKey(res.status))
-  const target = redirectTarget(await res.json().catch(() => null))
-  const back = target ? new URL(target) : null
-  if (!back || back.origin + back.pathname !== redirectUri || back.searchParams.get('state') !== state) throw new LoginError('login.unavailable')
+  const target = await postLogin(ticket, f)
+  const back = new URL(target)
+  if (back.origin + back.pathname !== redirectUri || back.searchParams.get('state') !== state) throw new LoginError('login.unavailable')
   const code = back.searchParams.get('code')
   if (!code) throw new LoginError('login.unavailable')
   try {

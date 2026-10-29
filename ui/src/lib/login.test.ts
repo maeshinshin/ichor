@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { LoginError, loginBody, loginErrorKey, loginReady, passwordSignIn, redirectTarget, signInSections, ticketFromSearch } from './login.ts'
+import { LoginError, loginBody, loginErrorKey, loginReady, passwordSignIn, redirectTarget, ticketFromSearch } from './login.ts'
 import { en } from './i18n.ts'
 import { base64url, redirectUriFor, storedToken, type AuthProvider } from './oidc.ts'
 
@@ -41,13 +41,6 @@ test('the ichor client returns to /auth/callback, the external IdP to the root',
 })
 
 const ichor: AuthProvider = { id: 'ichor', issuer: 'https://ui.example', clientId: 'ichor-ui' }
-const oidc: AuthProvider = { id: 'oidc', issuer: 'https://idp.example', clientId: 'x' }
-
-test('the sign-in card shows the password form, the IdP button, or both', () => {
-  assert.deepEqual(signInSections([ichor]), { ichor, oidc: null })
-  assert.deepEqual(signInSections([ichor, oidc]), { ichor, oidc })
-  assert.deepEqual(signInSections([oidc]), { ichor: null, oidc })
-})
 
 // Stand-ins for the browser: fetch answers per URL, sessionStorage is a map, and nothing may
 // navigate (window.location has no assign).

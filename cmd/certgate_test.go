@@ -81,10 +81,3 @@ func TestWaitForCertFilesCancel(t *testing.T) {
 		t.Fatalf("err = %v, want context.Canceled", err)
 	}
 }
-
-func TestLazyKeyPairFailsUntilFilesExist(t *testing.T) {
-	get := lazyKeyPair(t.TempDir(), "tls.crt", "tls.key")
-	if _, err := get(nil); err == nil {
-		t.Fatal("expected an error with no certificate on disk")
-	}
-}

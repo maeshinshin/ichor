@@ -33,6 +33,7 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/go-jose/go-jose/v4"
 
+	"github.com/maeshinshin/ichor/internal/certreload"
 	"github.com/maeshinshin/ichor/internal/oidcissuer"
 	"github.com/maeshinshin/ichor/internal/uiapi"
 	"github.com/maeshinshin/ichor/pkg/ichorauth"
@@ -184,9 +185,9 @@ func mountIssuer(mux *http.ServeMux, iss *oidcissuer.Issuer) {
 }
 
 // internalServer is the HTTPS listener for the kube-apiserver: discovery and
-// JWKS only. The certificate is read from disk on every handshake, so a leaf
-// the controller renews is picked up without a restart.
-func internalServer(f usersFlags, iss *oidcissuer.Issuer) *http.Server {
+// JWKS only. The certificate files are watched, so a leaf the controller or
+// cert-manager renews is picked up without a restart; a bad new pair keeps the old one.
+func internalServer(ctx context.Context, f usersFlags, iss *oidcissuer.Issuer) *http.Server {
 	mux := http.NewServeMux()
 	h := iss.InternalHandler()
 	mux.Handle("/.well-known/openid-configuration", h)
@@ -195,15 +196,8 @@ func internalServer(f usersFlags, iss *oidcissuer.Issuer) *http.Server {
 	return &http.Server{
 		Addr: f.internalAddr, Handler: mux, ReadHeaderTimeout: 10 * time.Second,
 		TLSConfig: &tls.Config{
-			MinVersion: tls.VersionTLS12,
-			GetCertificate: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
-				c, err := tls.LoadX509KeyPair(filepath.Join(f.internalTLSDir, "tls.crt"), filepath.Join(f.internalTLSDir, "tls.key"))
-				if err != nil {
-					return nil, errors.New("the internal TLS certificate is not available yet")
-				}
-
-				return &c, nil
-			},
+			MinVersion:     tls.VersionTLS12,
+			GetCertificate: certreload.GetCertificate(ctx, filepath.Join(f.internalTLSDir, "tls.crt"), filepath.Join(f.internalTLSDir, "tls.key"), certreload.Interval),
 		},
 	}
 }

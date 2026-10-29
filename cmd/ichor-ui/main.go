@@ -25,6 +25,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -47,6 +48,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1/ichorv1alpha1connect"
+	"github.com/maeshinshin/ichor/internal/certreload"
 	"github.com/maeshinshin/ichor/internal/oidcissuer"
 	"github.com/maeshinshin/ichor/internal/uiapi"
 )
@@ -173,6 +175,9 @@ func main() {
 		log.Printf("ichor-ui: OIDC login enabled (issuer %s); Kubernetes calls are made as the signed-in user", *oidcIssuer)
 	}
 
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	var (
 		issuer      *oidcissuer.Issuer
 		internalSrv *http.Server
@@ -193,7 +198,7 @@ func main() {
 		}
 
 		authn = authn.WithLocal(users.externalURL, verifier, cache)
-		internalSrv = internalServer(users, issuer)
+		internalSrv = internalServer(ctx, users, issuer)
 
 		log.Printf("ichor-ui: Ichor users enabled (issuer %s)", users.externalURL)
 	}
@@ -243,15 +248,14 @@ func main() {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
 	go func() {
 		log.Printf("ichor-ui: listening on %s", *addr)
 
 		var err error
 		if *tlsCert != "" {
-			err = srv.ListenAndServeTLS(*tlsCert, *tlsKey)
+			// Certificate files are re-read when they change (cert-manager renewals).
+			srv.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12, GetCertificate: certreload.GetCertificate(ctx, *tlsCert, *tlsKey, certreload.Interval)}
+			err = srv.ListenAndServeTLS("", "")
 		} else {
 			err = srv.ListenAndServe()
 		}

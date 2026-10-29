@@ -21,6 +21,8 @@ function stubBrowser(search: string, pending?: string) {
     window: {
       location: { search, origin: 'https://ui.example' },
       history: { replaceState: (_s: unknown, _t: string, url: string) => void replaced.push(url) },
+      // The router re-reads the path only on popstate, so the URL change must announce itself.
+      dispatchEvent: (e: Event) => void replaced.push(`event:${e.type}`),
     },
   }
   for (const [name, value] of Object.entries(stubs)) {
@@ -41,7 +43,7 @@ test('a callback with no pending login is stale: it clears the URL and returns f
   const b = stubBrowser('?code=abc&state=xyz')
   try {
     assert.equal(await finishLogin(providers), false)
-    assert.deepEqual(b.replaced, ['/'])
+    assert.deepEqual(b.replaced, ['/', 'event:popstate'])
   } finally {
     b.cleanup()
   }

@@ -71,19 +71,20 @@ var prefixRe = regexp.MustCompile(`^ichor-e2e-f[a-z0-9-]{0,20}$`)
 
 // Options describes a foreign cluster.
 type Options struct {
-	Prefix         string // must start with PrefixRoot
-	TalosVersion   string // e.g. v1.14.3; empty means the cached one
-	K8sVersion     string // empty: talosctl's default for the contract
-	ControlPlanes  int    // 1..3, default 1
-	Workers        int    // 0..4, default 1
-	CNI            string // one of the CNI* constants, default talos-flannel
-	NoKubeProxy    bool   // cluster.proxy.disabled
-	NoKubePrism    bool   // machine.features.kubePrism.enabled=false
-	CPMemory       string // default 2560Mi
-	WorkerMemory   string // default 1536Mi
-	RegistryMirror bool   // nodes mirror ghcr.io to <prefix>-registry
-	RelayPort      string // local port of the kube-apiserver tunnel, default 5015
-	CiliumChart    string // path to the cilium chart archive (cilium-* variants)
+	Prefix         string   // must start with PrefixRoot
+	TalosVersion   string   // e.g. v1.14.3; empty means the cached one
+	K8sVersion     string   // empty: talosctl's default for the contract
+	ControlPlanes  int      // 1..3, default 1
+	Workers        int      // 0..4, default 1
+	CNI            string   // one of the CNI* constants, default talos-flannel
+	NoKubeProxy    bool     // cluster.proxy.disabled
+	NoKubePrism    bool     // machine.features.kubePrism.enabled=false
+	CPMemory       string   // default 2560Mi
+	WorkerMemory   string   // default 1536Mi
+	RegistryMirror bool     // nodes mirror ghcr.io to <prefix>-registry
+	RelayPort      string   // local port of the kube-apiserver tunnel, default 5015
+	CiliumChart    string   // path to the cilium chart archive (cilium-* variants)
+	CiliumSets     []string // extra --set values for the cilium-* variants, e.g. operator.replicas=1
 }
 
 // Cluster is what Up returns. Files live under Dir (gitignored bin/).
@@ -447,6 +448,7 @@ func (c *Cluster) ciliumHelmArgs() []string {
 		}
 		sets = append(sets, "kubeProxyReplacement=true", "k8sServiceHost="+host, "k8sServicePort="+port)
 	}
+	sets = append(sets, c.Opts.CiliumSets...)
 	a := append(make([]string, 0, 2+2*len(sets)), "--namespace", "kube-system")
 	for _, s := range sets {
 		a = append(a, "--set", s)

@@ -35,6 +35,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/cni"
+	"github.com/maeshinshin/ichor/internal/version"
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
 	"github.com/maeshinshin/ichor/pkg/render"
 )
@@ -317,4 +318,27 @@ func newCNIHelmJob(
 	pod.Volumes = []corev1.Volume{{Name: "tmp", EmptyDir: &corev1.EmptyDirVolumeSource{}}}
 
 	return job
+}
+
+// defaultInstallerRepository is the API default of IchorInstallation.spec.installerRepository.
+const defaultInstallerRepository = "ghcr.io/maeshinshin/ichor-installer"
+
+// installerSource is the IchorInstallation whose installer image the Cilium Helm Job runs. A
+// Helm-installed Ichor has no such object (ADR 0104 4.3), so the controller's own version and the
+// default repository stand in for it.
+func installerSource(ctx context.Context, r client.Reader) (*ichorv1alpha1.IchorInstallation, error) {
+	var inst ichorv1alpha1.IchorInstallation
+
+	err := r.Get(ctx, types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}, &inst)
+
+	switch {
+	case err == nil:
+		return &inst, nil
+	case apierrors.IsNotFound(err) || apimeta.IsNoMatchError(err):
+		return &ichorv1alpha1.IchorInstallation{Spec: ichorv1alpha1.IchorInstallationSpec{
+			Version: version.Version, InstallerRepository: defaultInstallerRepository,
+		}}, nil
+	default:
+		return nil, fmt.Errorf("reading IchorInstallation %q for the Cilium Helm Job: %w", ichorv1alpha1.IchorInstallationName, err)
+	}
 }

@@ -36,6 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/version"
 	"github.com/maeshinshin/ichor/pkg/cni"
 )
 
@@ -164,6 +165,10 @@ func cniFakeClient(t *testing.T, objs ...client.Object) client.Client {
 		t.Fatal(err)
 	}
 
+	if err := ichorv1alpha1.AddToScheme(scheme); err != nil {
+		t.Fatal(err)
+	}
+
 	return fake.NewClientBuilder().WithScheme(scheme).WithObjects(objs...).WithStatusSubresource(&batchv1.Job{}).Build()
 }
 
@@ -280,5 +285,32 @@ func TestAdvanceCNIHelmJobFailsFastWhenNoPodIsCreated(t *testing.T) {
 	// The next pass starts a fresh Job.
 	if done, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, specMode(cluster), cniTestInstallation(), "", time.Time{}); done || err != nil {
 		t.Fatalf("after removal = %t, %v; want a new Job and not done", done, err)
+	}
+}
+
+// A Helm-installed Ichor has no IchorInstallation (ADR 0104 4.3); the Cilium Helm Job then runs
+// the installer image of the controller's own version.
+func TestInstallerSourceWithoutAnIchorInstallation(t *testing.T) {
+	ctx := context.Background()
+
+	got, err := installerSource(ctx, cniFakeClient(t))
+	if err != nil {
+		t.Fatalf("installerSource without an IchorInstallation: %v", err)
+	}
+
+	if got.Spec.InstallerRepository != defaultInstallerRepository || got.Spec.Version != version.Version {
+		t.Fatalf("stand-in = %+v; want the default repository at version %q", got.Spec, version.Version)
+	}
+
+	job := newCNIHelmJob("ichor-system", "j", cniTestCluster(""), cni.KubeProxyEnabled, got, "h", false)
+	if img := job.Spec.Template.Spec.Containers[0].Image; img != defaultInstallerRepository+":"+version.Version {
+		t.Fatalf("Job image = %q", img)
+	}
+
+	real := cniTestInstallation()
+
+	got, err = installerSource(ctx, cniFakeClient(t, real))
+	if err != nil || got.Spec.Version != "v0.9.0" {
+		t.Fatalf("with an IchorInstallation = %+v, %v; want its own spec", got, err)
 	}
 }

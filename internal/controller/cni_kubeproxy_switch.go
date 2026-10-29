@@ -539,12 +539,12 @@ func (a *cniKubeProxyAdvancer) runCiliumJob(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode, op *ichorv1alpha1.TalosOperation,
 	salt, doing, running string,
 ) (bool, error) {
-	var inst ichorv1alpha1.IchorInstallation
-	if err := a.Reader.Get(ctx, types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}, &inst); err != nil {
-		return false, fmt.Errorf("reading IchorInstallation %q for the Cilium Helm Job: %w", ichorv1alpha1.IchorInstallationName, err)
+	inst, err := installerSource(ctx, a.Reader)
+	if err != nil {
+		return false, err
 	}
 
-	done, err := AdvanceCNIHelmJob(ctx, a.Client, a.ControllerNamespace, cluster, mode, &inst, salt, op.CreationTimestamp.Time)
+	done, err := AdvanceCNIHelmJob(ctx, a.Client, a.ControllerNamespace, cluster, mode, inst, salt, op.CreationTimestamp.Time)
 	if err != nil {
 		return false, fmt.Errorf("%s: %w", doing, err)
 	}

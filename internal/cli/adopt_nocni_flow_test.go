@@ -450,3 +450,35 @@ func TestReadAdoptCiliumValues(t *testing.T) {
 		t.Fatal("a missing file must fail")
 	}
 }
+
+// Ichor already present (installed with Helm, its pods Pending until a CNI exists): Cilium still
+// goes in first, adopt's install step is skipped, and the CRs wait for the webhooks.
+func TestAdoptNoCNI_IchorAlreadyPresentStillInstallsCiliumFirst(t *testing.T) {
+	f := newNoCNIFlow(t)
+
+	inst := &ichorv1alpha1.IchorInstallation{Name: ichorv1alpha1.IchorInstallationName}
+	if err := f.env.k8s.Create(context.Background(), inst); err != nil {
+		t.Fatal(err)
+	}
+
+	f.env.mu.Lock()
+	*f.env.writes = nil
+	f.env.mu.Unlock()
+
+	if err := f.run(t); err != nil {
+		t.Fatalf("runAdopt: %v\n%s", err, f.env.stderr.String())
+	}
+
+	ev := f.events()
+	if len(ev) == 0 || ev[0] != bootstrapEvent {
+		t.Fatalf("Cilium must come first; events: %v", ev)
+	}
+
+	if indexOfPrefix(ev, "create ichor-install-marker") >= 0 {
+		t.Errorf("Ichor was installed although it is present: %v", ev)
+	}
+
+	if indexOfPrefix(ev, "create "+f.env.cluster.Name) < 0 {
+		t.Errorf("the TalosCluster was not created: %v", ev)
+	}
+}

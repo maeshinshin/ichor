@@ -51,7 +51,8 @@ func main() {
 	fs.StringVar(&o.RelayPort, "relay-port", "5015", "local port of the API tunnel")
 	fs.StringVar(&o.CiliumChart, "cilium-chart", "pkg/cni/cilium/chart/cilium-1.18.0.tgz", "cilium chart archive")
 	var sets string
-	fs.StringVar(&sets, "cilium-set", "", "comma-separated extra --set values for the cilium-* variants, e.g. operator.replicas=1")
+	fs.StringVar(&sets, "cilium-set", "",
+		"comma-separated extra --set values for the cilium-* variants, e.g. operator.replicas=1")
 	fs.StringVar(&regPort, "registry-port", "5014", "registry: local port to forward to")
 	fs.BoolVar(&keepRegistry, "keep-registry", false, "down: keep the registry (and the images in it)")
 	_ = fs.Parse(os.Args[2:])

@@ -65,8 +65,8 @@ func TestReadUISettingsMigrationCases(t *testing.T) {
 func TestCustomizePoliciesOpensTheMigratedPort(t *testing.T) {
 	mk := func() []*unstructured.Unstructured {
 		return []*unstructured.Unstructured{{Object: map[string]any{
-			"apiVersion": "cilium.io/v2", "kind": "CiliumNetworkPolicy", "metadata": map[string]any{"name": "ui"},
-			"spec": map[string]any{"ingress": []any{map[string]any{"toPorts": []any{map[string]any{
+			"apiVersion": "cilium.io/v2", "kind": "CiliumNetworkPolicy", "metadata": map[string]any{"name": "ichor-ui"},
+			"spec": map[string]any{"endpointSelector": map[string]any{"matchLabels": map[string]any{"control-plane": "ui-backend"}}, "ingress": []any{map[string]any{"toPorts": []any{map[string]any{
 				"ports": []any{map[string]any{"port": "8443", "protocol": "TCP"}},
 			}}}}},
 		}}}

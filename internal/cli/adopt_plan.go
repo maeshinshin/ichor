@@ -17,7 +17,6 @@ limitations under the License.
 package cli
 
 import (
-	"bytes"
 	"fmt"
 	"strings"
 
@@ -43,9 +42,13 @@ const (
 // closed safely), plus the field paths -- names only, never values -- that
 // this command left untouched either way.
 type adoptPlan struct {
-	Machine              string
-	Patch                *ichorv1alpha1.TalosConfigPatch
+	Machine string
+	Patch   *ichorv1alpha1.TalosConfigPatch
+	// UnrepresentablePaths are the class C paths: they block the machine.
 	UnrepresentablePaths []string
+	// Owned are the class B paths: Ichor-owned settings the first render will change. They are
+	// listed for consent and do not block.
+	Owned []string
 
 	// Skipped, when set, is why adopt did not look at this machine at all.
 	Skipped string
@@ -80,6 +83,73 @@ func buildAdoptPlan(
 	currentCfg []byte,
 	sys *render.SystemInputs,
 ) (*adoptPlan, error) {
+	return buildAdoptPlanOwned(cluster, m, bundle, existing, currentCfg, sys, ownership{})
+}
+
+// ownership says which config paths Ichor owns on this cluster (class B). The zero
+// value owns nothing, which is what an unmanaged cluster gets: no CNI item is ever class B.
+type ownership struct {
+	// Managed is true for the cilium preset.
+	Managed bool
+	// KubeProxyReplaced makes the kube-proxy paths Ichor's.
+	KubeProxyReplaced bool
+	// CiliumInline makes the inline-manifest paths Ichor's (the node carries a Cilium inline entry).
+	CiliumInline bool
+}
+
+var (
+	ownedCNIPrefixes      = []string{"cluster.network.cni", "KubeFlannelCNIConfig"}
+	ownedKubePrismPrefix  = []string{"machine.features.kubePrism", "KubePrismConfig"}
+	ownedKubeProxyPrefix  = []string{"cluster.proxy", "KubeProxyConfig"}
+	ownedInlineManifestPf = []string{"cluster.inlineManifests", "KubeInlineManifestConfig"}
+)
+
+func hasPathPrefix(p string, prefixes []string) bool {
+	for _, pf := range prefixes {
+		if p == pf || strings.HasPrefix(p, pf+".") || strings.HasPrefix(p, pf+"[") {
+			return true
+		}
+	}
+
+	return false
+}
+
+// owned reports whether path is a class B path.
+func (o ownership) owned(path string) bool {
+	if !o.Managed {
+		return false
+	}
+
+	return hasPathPrefix(path, ownedCNIPrefixes) || hasPathPrefix(path, ownedKubePrismPrefix) ||
+		(o.KubeProxyReplaced && hasPathPrefix(path, ownedKubeProxyPrefix)) ||
+		(o.CiliumInline && hasPathPrefix(path, ownedInlineManifestPf))
+}
+
+// splitOwned separates class B paths from the rest.
+func (o ownership) split(paths []string) (owned, rest []string) {
+	for _, p := range paths {
+		if o.owned(p) {
+			owned = append(owned, p)
+		} else {
+			rest = append(rest, p)
+		}
+	}
+
+	return owned, rest
+}
+
+// buildAdoptPlanOwned is buildAdoptPlan with the three drift classes, 1.7: A (captured
+// as a patch), B (own, listed) and C (unrepresentable, blocks). A patch is returned only when
+// nothing but class B remains once it is applied.
+func buildAdoptPlanOwned(
+	cluster *ichorv1alpha1.TalosCluster,
+	m *ichorv1alpha1.TalosMachine,
+	bundle *secrets.Bundle,
+	existing []ichorv1alpha1.TalosConfigPatch,
+	currentCfg []byte,
+	sys *render.SystemInputs,
+	own ownership,
+) (*adoptPlan, error) {
 	if err := refuseJWTAuthenticators(m.Name, currentCfg); err != nil {
 		return nil, err
 	}
@@ -100,8 +170,15 @@ func buildAdoptPlan(
 		return plan, nil
 	}
 
-	wantSysctl, wantKernelModule, legacy := groupChangedPaths(paths)
+	owned, rest := own.split(paths)
+	plan.Owned = owned
+
+	wantSysctl, wantKernelModule, legacy := groupChangedPaths(rest)
 	plan.UnrepresentablePaths = legacy
+
+	if !wantSysctl && !wantKernelModule {
+		return plan, nil
+	}
 
 	docs, err := captureDocuments(currentCfg, wantSysctl, wantKernelModule)
 	if err != nil {
@@ -126,10 +203,15 @@ func buildAdoptPlan(
 		return nil, fmt.Errorf("adopt: verifying machine %q's zero-drift patch: %w", m.Name, err)
 	}
 
-	// Zero drift, enforced: this is the only path that returns a Patch, and
-	// it never does so unless render(baseline + candidate) is byte-identical
-	// to the node's real current configuration.
-	if bytes.Equal(rendered, currentCfg) {
+	// Zero drift, enforced: this is the only path that returns a Patch, and it never does so
+	// unless render(baseline + candidate) differs from the node's real current configuration in
+	// nothing but class B paths (with none, that is byte-identical).
+	left, err := controller.ChangedPaths(currentCfg, rendered)
+	if err != nil {
+		return nil, fmt.Errorf("adopt: verifying machine %q's zero-drift patch: %w", m.Name, err)
+	}
+
+	if _, notOwned := own.split(left); len(notOwned) == 0 {
 		plan.Patch = &candidate
 	}
 

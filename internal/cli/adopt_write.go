@@ -219,7 +219,7 @@ func (w *adoptWriter) ensure(ctx context.Context, obj client.Object, kind string
 		return fmt.Errorf("adopt: reading %s: %w", label, err)
 	}
 
-	if err := createWhenWebhooksUp(ctx, w.c, obj, cmp.Or(w.in.WebhookWait, defaultWebhookWait), w.in.Interval, w.in.Stderr); err != nil {
+	if err := createWhenWebhooksUp(ctx, w.c, obj, cmp.Or(w.in.WebhookWait, defaultAdoptWebhookWait), w.in.Interval, w.in.Stderr); err != nil {
 		return fmt.Errorf("adopt: creating %s: %w", label, err)
 	}
 

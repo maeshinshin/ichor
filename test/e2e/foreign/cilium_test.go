@@ -1,0 +1,322 @@
+//go:build e2e
+// +build e2e
+
+/*
+Copyright 2026 maeshinshin.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package foreign
+
+// Group A (Cilium takeover). Each case is split into tests that run against a cluster
+// `foreign up` brought up (ICHOR_E2E_F_ATTACH=1, ICHOR_E2E_F_KEEP=1), so every step stays inside one
+// foreground tool call. A4 (data-plane continuity) is the traffic pods the A1 and A2 tests start.
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/maeshinshin/ichor/test/internal/foreign"
+)
+
+const (
+	handoverPath = "{.status.conditions[?(@.type==\"CNIHandover\")].status}"
+	trafficPods  = `apiVersion: v1
+kind: Service
+metadata:
+  name: fa-srv
+  namespace: default
+spec:
+  selector:
+    app: fa-srv
+  ports:
+    - port: 80
+      targetPort: 8080
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fa-srv
+  namespace: default
+  labels:
+    app: fa-srv
+spec:
+  nodeName: %s
+  tolerations:
+    - operator: Exists
+  containers:
+    - name: srv
+      image: busybox:1.37
+      command: ["sh", "-c", "mkdir -p /www; echo ok > /www/index.html; exec httpd -f -p 8080 -h /www"]
+`
+	trafficClient = `apiVersion: v1
+kind: Pod
+metadata:
+  name: fa-client
+  namespace: default
+spec:
+  nodeName: %s
+  tolerations:
+    - operator: Exists
+  containers:
+    - name: client
+      image: busybox:1.37
+      env:
+        - {name: SVC_IP, value: "%s"}
+        - {name: POD_IP, value: "%s"}
+      command:
+        - sh
+        - -c
+        - |
+          ok=0; fail=0; n=0
+          while true; do
+            for u in "http://$SVC_IP" "http://$POD_IP:8080"; do
+              if out=$(wget -q -T 2 -O /dev/null "$u" 2>&1); then ok=$((ok+1)); else fail=$((fail+1)); echo "FAIL $(date +%%T) $u: $out"; fi
+            done
+            n=$((n+1)); [ $((n %% 25)) -eq 0 ] && echo "COUNT $(date +%%T) ok=$ok fail=$fail"
+            sleep 0.2
+          done
+`
+)
+
+func writeApply(t *testing.T, c *foreign.Cluster, name, manifest string) {
+	t.Helper()
+	f := filepath.Join(c.Dir, name)
+	if err := os.WriteFile(f, []byte(manifest), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := inner(c, "apply", "-f", f); err != nil {
+		t.Fatalf("apply %s: %v\n%s", name, err, out)
+	}
+}
+
+func waitPod(t *testing.T, c *foreign.Cluster, pod string) {
+	t.Helper()
+	if out, err := inner(c, "wait", "pod/"+pod, "--for=condition=Ready", "--timeout=240s"); err != nil {
+		t.Fatalf("pod %s not Ready: %v\n%s", pod, err, out)
+	}
+}
+
+// trafficStart (A4) runs a server pod on the control plane and a client pod on the worker, so the
+// traffic crosses nodes: every 0.2 s the client fetches the Service and the server's pod IP.
+func trafficStart(t *testing.T, c *foreign.Cluster) {
+	t.Helper()
+	cp, w := c.Opts.Prefix+"-cp0", c.Opts.Prefix+"-w0"
+	writeApply(t, c, "traffic-srv.yaml", fmt.Sprintf(trafficPods, cp))
+	waitPod(t, c, "fa-srv")
+	podIP, _ := inner(c, "get", "pod", "fa-srv", "-o", "jsonpath={.status.podIP}")
+	svcIP, _ := inner(c, "get", "svc", "fa-srv", "-o", "jsonpath={.spec.clusterIP}")
+	writeApply(t, c, "traffic-client.yaml", fmt.Sprintf(trafficClient, w, strings.TrimSpace(svcIP), strings.TrimSpace(podIP)))
+	waitPod(t, c, "fa-client")
+	time.Sleep(10 * time.Second)
+	t.Logf("traffic started (service %s, pod %s)", strings.TrimSpace(svcIP), strings.TrimSpace(podIP))
+}
+
+var countRe = regexp.MustCompile(`COUNT (\S+) ok=(\d+) fail=(\d+)`)
+
+// trafficReport logs the client's tally and every failure line (A4: the pass criterion is set after the first run).
+func trafficReport(t *testing.T, c *foreign.Cluster, label string) {
+	t.Helper()
+	out, _ := inner(c, "logs", "fa-client")
+	var fails []string
+	last := ""
+	for _, l := range strings.Split(out, "\n") {
+		if strings.HasPrefix(l, "FAIL") {
+			fails = append(fails, l)
+		}
+		if countRe.MatchString(l) {
+			last = l
+		}
+	}
+	t.Logf("A4 traffic %s: last %q, %d failure lines", label, last, len(fails))
+	for i, f := range fails {
+		if i >= 60 {
+			t.Logf("... %d more", len(fails)-i)
+			break
+		}
+		t.Logf("A4 %s", f)
+	}
+}
+
+// ciliumDS is what a takeover or an upgrade must not disturb: the DaemonSet's generation, image and pod UIDs.
+func ciliumDS(c *foreign.Cluster) string {
+	gen, _ := inner(c, "-n", "kube-system", "get", "ds", "cilium", "-o", "jsonpath={.metadata.generation} {.spec.template.spec.containers[0].image} {.status.numberReady}/{.status.desiredNumberScheduled}")
+	uids, _ := inner(c, "-n", "kube-system", "get", "pods", "-l", "k8s-app=cilium", "-o", "jsonpath={.items[*].metadata.uid}")
+	return strings.TrimSpace(gen) + " pods=" + strings.TrimSpace(uids)
+}
+
+// helmRecords lists the Helm release record Secrets of the foreign cluster with their resourceVersion.
+func helmRecords(c *foreign.Cluster) string {
+	out, _ := inner(c, "get", "secrets", "-A", "-l", "owner=helm", "-o",
+		"jsonpath={range .items[*]}{.metadata.namespace}/{.metadata.name} rv={.metadata.resourceVersion} status={.metadata.labels.status}{\"\\n\"}{end}")
+	return out
+}
+
+// inlineNames returns the names of the inline manifests in each node's machine config.
+func inlineNames(t *testing.T, c *foreign.Cluster) map[string][]string {
+	t.Helper()
+	res := map[string][]string{}
+	for _, ip := range append(append([]string{}, c.CPs...), c.Workers...) {
+		doc, kubeDocs := configDocs(t, c, ip)
+		names := []string{}
+		cl, _ := doc["cluster"].(map[string]any)
+		if list, ok := cl["inlineManifests"].([]any); ok {
+			for _, e := range list {
+				if m, ok := e.(map[string]any); ok {
+					names = append(names, fmt.Sprint(m["name"]))
+				}
+			}
+		}
+		for _, d := range kubeDocs {
+			if m, ok := d.(map[string]any); ok && m["kind"] == "KubeInlineManifestConfig" {
+				names = append(names, fmt.Sprint(m["name"]))
+			}
+		}
+		res[ip] = names
+	}
+	return res
+}
+
+func hasName(m map[string][]string, name string) (present, absent int) {
+	for _, l := range m {
+		found := false
+		for _, n := range l {
+			found = found || n == name
+		}
+		if found {
+			present++
+		} else {
+			absent++
+		}
+	}
+	return
+}
+
+// waitHandover polls until CNIHandover is True and asserts the inline entry (when there is one) was never gone from a
+// node's machine config while the condition was not yet True ("Ordering").
+func waitHandover(t *testing.T, c *foreign.Cluster, inline string) {
+	t.Helper()
+	start := time.Now()
+	for time.Since(start) < 14*time.Minute {
+		var present, absent int
+		if inline != "" {
+			present, absent = hasName(inlineNames(t, c), inline) // sampled first: a later True cannot make an earlier removal late
+		}
+		h := clusterJSONPath(c, handoverPath)
+		t.Logf("%s CNIHandover=%q inline %q present on %d nodes, absent on %d", time.Since(start).Round(time.Second), h, inline, present, absent)
+		if inline != "" && absent > 0 && h != "True" {
+			t.Errorf("inline entry %q removed from %d node(s) before CNIHandover was True", inline, absent)
+		}
+		if h == "True" {
+			return
+		}
+		time.Sleep(10 * time.Second)
+	}
+	t.Fatal("CNIHandover did not become True in 14 minutes")
+}
+
+func logState(t *testing.T, c *foreign.Cluster, label string) {
+	t.Helper()
+	t.Logf("%s: cilium DS %s\nhelm records:\n%s", label, ciliumDS(c), helmRecords(c))
+}
+
+// takeoverAdopt runs the plan, then adopt; a refusal naming --accept-cilium-diff is logged and retried with it.
+// It returns the diff-gate verdict.
+func takeoverAdopt(t *testing.T, c *foreign.Cluster, extra ...string) (diffNeeded bool) {
+	t.Helper()
+	plan, err := adopt(t, c, append([]string{"--plan"}, extra...)...)
+	if err != nil {
+		t.Logf("adopt --plan exited with %v", err)
+	}
+	_ = plan
+	out, err := adopt(t, c, extra...)
+	if err != nil && strings.Contains(out, "--accept-cilium-diff") {
+		t.Logf("the diff gate refused without --accept-cilium-diff; retrying with it")
+		diffNeeded = true
+		out, err = adopt(t, c, append([]string{"--accept-cilium-diff"}, extra...)...)
+	}
+	if err != nil {
+		t.Fatalf("adopt failed: %v\n%s", err, out)
+	}
+	return diffNeeded
+}
+
+// TestA1Adopt: Cilium in a Talos inline manifest (Talos-guide values, 1.18) is taken over by a managed adopt.
+func TestA1Adopt(t *testing.T) {
+	c := build(t, foreign.Options{Workers: 1, CNI: foreign.CNICiliumInline})
+	logState(t, c, "before")
+	trafficStart(t, c)
+	before := inlineNames(t, c)
+	t.Logf("inline manifests before: %v", before)
+	t.Logf("diff gate needed --accept-cilium-diff: %v", takeoverAdopt(t, c))
+	waitHandover(t, c, "cilium")
+	membership(t, c)
+	if got := clusterJSONPath(c, "{.status.cni.takenOverInlineManifest}"); got != "cilium" {
+		t.Errorf("status.cni.takenOverInlineManifest = %q, want cilium", got)
+	}
+	if p, a := hasName(inlineNames(t, c), "cilium"); p != 0 {
+		t.Errorf("inline entry still on %d nodes (absent on %d)", p, a)
+	}
+	jobs, _ := inner(c, "-n", crNS, "get", "jobs", "--no-headers")
+	t.Logf("jobs in %s:\n%s", crNS, jobs)
+	logs, _ := inner(c, "-n", crNS, "logs", "-l", "job-name", "--tail=40", "--prefix")
+	t.Logf("ichor-cni job log:\n%s", logs)
+	logState(t, c, "after takeover")
+	if nodes, _ := inner(c, "get", "nodes", "--no-headers"); strings.Contains(nodes, "NotReady") {
+		t.Errorf("nodes not Ready after takeover: %s", nodes)
+	}
+	trafficReport(t, c, "across A1 takeover")
+}
+
+// TestA1Upgrade: a Kubernetes patch upgrade afterwards does not roll Cilium back. Run after TestA1Adopt.
+func TestA1Upgrade(t *testing.T) {
+	c := build(t, foreign.Options{Workers: 1, CNI: foreign.CNICiliumInline})
+	before, recBefore := ciliumDS(c), helmRecords(c)
+	logState(t, c, "before upgrade")
+	target := env("ICHOR_E2E_F_K8S_TARGET", "v1.37.1")
+	out, err := ichorCLI(t, c, "upgrade", "kubernetes", target, "--yes")
+	if err != nil {
+		t.Fatalf("upgrade kubernetes: %v\n%s", err, out)
+	}
+	deadline := time.Now().Add(8 * time.Minute)
+	for time.Now().Before(deadline) {
+		ph, _ := inner(c, "-n", crNS, "get", "talosoperations.ichor.maesh.dev", "-o", "jsonpath={.items[*].status.phase}")
+		t.Logf("operations phases: %q", ph)
+		if strings.Contains(ph, "Completed") && !strings.Contains(ph, "InProgress") && !strings.Contains(ph, "Pending") {
+			break
+		}
+		time.Sleep(15 * time.Second)
+	}
+	vers, _ := inner(c, "get", "nodes", "-o", "jsonpath={.items[*].status.nodeInfo.kubeletVersion}")
+	t.Logf("kubelet versions: %s", vers)
+	if strings.Contains(vers, "v1.37.0") {
+		t.Errorf("a node is still on v1.37.0: %s", vers)
+	}
+	if p, _ := hasName(inlineNames(t, c), "cilium"); p != 0 {
+		t.Errorf("the cilium inline entry is back on %d node(s)", p)
+	}
+	after, recAfter := ciliumDS(c), helmRecords(c)
+	if after != before {
+		t.Errorf("Cilium changed across the Kubernetes upgrade:\nbefore: %s\nafter:  %s", before, after)
+	}
+	if recAfter != recBefore {
+		t.Errorf("Helm records changed across the Kubernetes upgrade:\nbefore:\n%s\nafter:\n%s", recBefore, recAfter)
+	}
+	trafficReport(t, c, "across A1 takeover and the Kubernetes upgrade")
+}

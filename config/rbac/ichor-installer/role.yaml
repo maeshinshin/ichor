@@ -55,6 +55,41 @@ rules:
   verbs:
   - bind
   - escalate
+# The objects the installer applies in kube-system (the Cilium Helm Job's ServiceAccount, the
+# controller's Role for it and their bindings) and in any other
+# namespace a release adds. Installer rights are cluster-scoped only: an upgrade runs
+# under the previous release's role, which can rewrite its own ClusterRole but cannot read or
+# create a Role in a namespace it was never granted, so no namespaced Role outside the release
+# namespace exists. bind and escalate for the same reason as above: the Role it applies grants
+# Jobs and events, which this role does not hold.
+- apiGroups:
+  - ""
+  resources:
+  - serviceaccounts
+  verbs:
+  - create
+  - delete
+  - get
+  - patch
+  - update
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - rolebindings
+  - roles
+  verbs:
+  - create
+  - delete
+  - get
+  - patch
+  - update
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - roles
+  verbs:
+  - bind
+  - escalate
 - apiGroups:
   - admissionregistration.k8s.io
   resources:

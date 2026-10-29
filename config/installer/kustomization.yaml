@@ -30,11 +30,3 @@ patches:
 - target: {group: rbac.authorization.k8s.io, version: v1, kind: ClusterRoleBinding, name: ichor-cni-rolebinding}
   patch: |-
     - {op: replace, path: /subjects/0/namespace, value: kube-system}
-# The installer needs rights in kube-system to apply the above.
-- target: {group: rbac.authorization.k8s.io, version: v1, kind: Role, name: ichor-installer-kube-system-role}
-  patch: |-
-    - {op: replace, path: /metadata/namespace, value: kube-system}
-- target: {group: rbac.authorization.k8s.io, version: v1, kind: RoleBinding, name: ichor-installer-kube-system-rolebinding}
-  patch: |-
-    - {op: replace, path: /metadata/namespace, value: kube-system}
-    - {op: replace, path: /subjects/0/namespace, value: ichor-system}

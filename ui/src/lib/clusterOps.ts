@@ -16,13 +16,11 @@ function newestFirst<T extends OpRow>(ops: readonly T[]): T[] {
   return ops.slice().sort((a, b) => b.created - a.created)
 }
 
-// blockingOperation is the operation that stops a new one from starting, or null.
+// blockingOperation is the operation that stops a new one from starting, or null. It is also the one
+// to show at the top of the section: the newest that is not finished.
 export function blockingOperation<T extends OpRow>(ops: readonly T[]): T | null {
   return newestFirst(ops).find(isUnfinished) ?? null
 }
-
-// currentOperation is the one to show at the top of the section: the newest that is not finished.
-export const currentOperation = blockingOperation
 
 export function recentOperations<T extends OpRow>(ops: readonly T[], n: number): T[] {
   return newestFirst(ops).slice(0, n)

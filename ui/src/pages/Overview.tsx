@@ -47,7 +47,7 @@ import { enumLabel } from '@/lib/enum'
 import { machineDisplayName } from '@/lib/machineName'
 import { formatTimestamp } from '@/lib/format'
 import { kubernetesStageProgress, operationState, progressCounts } from '@/lib/operations'
-import { attentionItems, backupsValue, machineCounts, nodesValue, tileTargets, versionsValue, type TileTarget } from '@/lib/overview'
+import { attentionItems, backupsValue, machineCounts, nodesValue, tileTargets, versionLabel, type TileTarget } from '@/lib/overview'
 import { conditionStatusTone, opStateTone, type Tone } from '@/lib/status'
 import { useCluster } from '@/lib/useCluster'
 import { useT } from '@/lib/useT'
@@ -281,7 +281,12 @@ function Home({
             label={t('overview.tile.versions')}
             icon={PackageCheckIcon}
             target={targets.versions}
-            value={versionsValue(cluster.talosVersion, cluster.kubernetesVersion)}
+            sub={
+              <>
+                <VersionLine label="Talos" version={cluster.talosVersion} />
+                <VersionLine label="Kubernetes" version={cluster.kubernetesVersion} />
+              </>
+            }
           />
         </div>
 
@@ -467,14 +472,24 @@ function Home({
   )
 }
 
+// VersionLine is one labelled version in the versions tile.
+function VersionLine({ label, version }: { label: string; version: string }) {
+  return (
+    <div class="flex items-baseline justify-between gap-2">
+      <CardDescription>{label}</CardDescription>
+      <span>{versionLabel(version)}</span>
+    </div>
+  )
+}
+
 // Tile is one summary number as a stock Card: label (CardDescription), value (CardTitle), and a Badge when something needs attention.
 // The whole tile leads somewhere: a page, or the versions card further down.
-function Tile({ label, icon: Icon, value, sub, badge, target }: { label: string; icon: LucideIcon; value: string; sub?: ComponentChildren; badge?: string; target: TileTarget }) {
+function Tile({ label, icon: Icon, value, sub, badge, target }: { label: string; icon: LucideIcon; value?: string; sub?: ComponentChildren; badge?: string; target: TileTarget }) {
   const body = (
     <Card size="sm" className="h-full">
       <CardHeader>
         <CardDescription>{label}</CardDescription>
-        <CardTitle>{value}</CardTitle>
+        {value && <CardTitle>{value}</CardTitle>}
         <CardAction>
           {badge ? (
             <Badge variant="destructive">

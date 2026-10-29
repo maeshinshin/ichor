@@ -9,7 +9,6 @@ result
 *.so
 *.dylib
 bin/*
-Dockerfile.cross
 
 # Test binary, built with `go test -c`
 *.test

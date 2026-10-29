@@ -36,7 +36,7 @@ test('expiringCertificatesMessage returns the message only while CertificatesExp
   assert.equal(expiringCertificatesMessage([]), null)
 })
 
-import { backupsValue, newestSnapshotSeconds, nodesValue, tileTargets, timeAgo, versionsValue } from './overview.ts'
+import { backupsValue, newestSnapshotSeconds, nodesValue, tileTargets, timeAgo, versionLabel } from './overview.ts'
 
 test('timeAgo picks the coarsest unit', () => {
   const now = 1_000_000_000
@@ -60,8 +60,9 @@ test('backupsValue: not loaded, not configured, no snapshot, newest age', () => 
 
 test('tile values and targets', () => {
   assert.equal(nodesValue(3, 4), '3 / 4 ready')
-  assert.equal(versionsValue('v1.14.3', '1.37.1'), 'Talos v1.14.3 · K8s v1.37.1')
-  assert.equal(versionsValue('', 'v1.37.1'), 'Talos - · K8s v1.37.1')
+  assert.equal(versionLabel('1.37.1'), 'v1.37.1')
+  assert.equal(versionLabel('v1.14.3'), 'v1.14.3')
+  assert.equal(versionLabel(''), '-')
   assert.deepEqual(tileTargets(null).operation, { kind: 'route', to: '/operations' })
   assert.deepEqual(tileTargets('upgrade-1').operation, { kind: 'route', to: '/operations/upgrade-1' })
   assert.deepEqual(tileTargets(null).nodes, { kind: 'route', to: '/nodes' })

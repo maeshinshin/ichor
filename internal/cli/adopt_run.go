@@ -36,7 +36,6 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/controller"
-	"github.com/maeshinshin/ichor/internal/installer"
 	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
 	"github.com/maeshinshin/ichor/pkg/render"
@@ -813,7 +812,8 @@ func (st *adoptState) writeInput(ctx context.Context, deps adoptDeps, namespace 
 			detected = string(st.rep.Kind)
 		}
 
-		ichor.IncludeCiliumPolicies = installer.IncludeCiliumPolicies(detected, ciliumPolicyCRDPresent(ctx, deps.Target))
+		ichor.DetectedCNI = detected
+		ichor.PolicyCRDPresent = ciliumPolicyCRDPresent(ctx, deps.Target)
 		in.Ichor = &ichor
 	}
 

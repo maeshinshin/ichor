@@ -55,15 +55,10 @@ var operationListCmd = &cobra.Command{
 	Short: "List operations",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
-		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
-			resp, err := c.Operation.ListOperations(ctx, connect.NewRequest(&pb.ListOperationsRequest{
+		return showAPI(cmd, false, func(ctx context.Context, c *apiClients) (*connect.Response[pb.ListOperationsResponse], error) {
+			return c.Operation.ListOperations(ctx, connect.NewRequest(&pb.ListOperationsRequest{
 				Cluster: clusterFilter(apiOpts.Namespace, operationClusterFlag),
 			}))
-			if err != nil {
-				return err
-			}
-
-			return writeMessage(cmd.OutOrStdout(), outputFormat, resp.Msg)
 		})
 	},
 }

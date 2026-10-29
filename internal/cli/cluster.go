@@ -39,8 +39,8 @@ var clusterListCmd = &cobra.Command{
 	Short: "List clusters",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
-		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
-			return runClusterList(ctx, c, cmd.OutOrStdout())
+		return showAPI(cmd, false, func(ctx context.Context, c *apiClients) (*connect.Response[pb.ListClustersResponse], error) {
+			return c.Cluster.ListClusters(ctx, connect.NewRequest(&pb.ListClustersRequest{}))
 		})
 	},
 }
@@ -50,8 +50,8 @@ var clusterGetCmd = &cobra.Command{
 	Short: "Show one cluster: versions, conditions, rollout and hand-over state",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
-			return runClusterGet(ctx, c, cmd.OutOrStdout(), args[0])
+		return showAPI(cmd, false, func(ctx context.Context, c *apiClients) (*connect.Response[pb.GetClusterResponse], error) {
+			return c.Cluster.GetCluster(ctx, connect.NewRequest(&pb.GetClusterRequest{Cluster: objectRef(apiOpts.Namespace, args[0])}))
 		})
 	},
 }
@@ -93,24 +93,6 @@ func runClusterStatus(ctx context.Context, c *apiClients, out io.Writer, name st
 		cl.GetEndpoint(), cniStatusLine(cl))
 
 	return err
-}
-
-func runClusterList(ctx context.Context, c *apiClients, out io.Writer) error {
-	resp, err := c.Cluster.ListClusters(ctx, connect.NewRequest(&pb.ListClustersRequest{}))
-	if err != nil {
-		return err
-	}
-
-	return writeMessage(out, outputFormat, resp.Msg)
-}
-
-func runClusterGet(ctx context.Context, c *apiClients, out io.Writer, name string) error {
-	resp, err := c.Cluster.GetCluster(ctx, connect.NewRequest(&pb.GetClusterRequest{Cluster: objectRef(apiOpts.Namespace, name)}))
-	if err != nil {
-		return err
-	}
-
-	return writeMessage(out, outputFormat, resp.Msg)
 }
 
 func init() {

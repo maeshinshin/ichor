@@ -59,13 +59,8 @@ var nodeGetCmd = &cobra.Command{
 	Short: "Show a node's hardware, disks, network interfaces, usage and Kubernetes status",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runAPI(cmd, true, func(ctx context.Context, c *apiClients) error {
-			resp, err := c.Node.GetNode(ctx, connect.NewRequest(&pb.GetNodeRequest{Machine: objectRef(apiOpts.Namespace, args[0])}))
-			if err != nil {
-				return err
-			}
-
-			return writeMessage(cmd.OutOrStdout(), outputFormat, resp.Msg)
+		return showAPI(cmd, true, func(ctx context.Context, c *apiClients) (*connect.Response[pb.GetNodeResponse], error) {
+			return c.Node.GetNode(ctx, connect.NewRequest(&pb.GetNodeRequest{Machine: objectRef(apiOpts.Namespace, args[0])}))
 		})
 	},
 }

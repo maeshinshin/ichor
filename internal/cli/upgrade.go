@@ -66,7 +66,7 @@ It shows which machines restart and in which order, and asks for confirmation un
 			}
 
 			return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
-				return runStartOperation(ctx, c, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), upgradeSpec(kind, args[0], upgradeFlags))
+				return runStartOperation(ctx, c, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), startSpec{Kind: kind, Cluster: upgradeFlags.Cluster, Target: args[0], MaxUnavailable: upgradeFlags.MaxUnavailable, Follow: upgradeFlags.Follow})
 			})
 		},
 	}
@@ -77,10 +77,6 @@ It shows which machines restart and in which order, and asks for confirmation un
 // optional on the command line, as the server takes it, and is added here the same way.
 func checkUpgradeTarget(target string) error {
 	return version.CheckSemver("v" + strings.TrimPrefix(target, "v"))
-}
-
-func upgradeSpec(kind pb.OperationKind, target string, f startFlags) startSpec {
-	return startSpec{Kind: kind, Cluster: f.Cluster, Target: target, MaxUnavailable: f.MaxUnavailable, Follow: f.Follow}
 }
 
 var (

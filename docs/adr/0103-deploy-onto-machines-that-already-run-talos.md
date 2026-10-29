@@ -1,6 +1,6 @@
 # 0103. Deploy onto machines that already run Talos
 
-Status: Accepted; built, hardware tests pending · Date: 2026-10-29 · Design section: Bootstrap (`ichor adopt`), Nodes, Cilium · Builds on: 0014, 0042, 0066, 0075, 0076, 0077, 0099, 0101
+Status: Accepted; built; hardware-verified except A3, A8, D4, D6 and the re-run after an interruption · Date: 2026-10-29 · Design section: Bootstrap (`ichor adopt`), Nodes, Cilium · Builds on: 0014, 0042, 0066, 0075, 0076, 0077, 0099, 0101
 
 Amended by [ADR 0104](0104-a-cluster-with-no-cni-gets-ichors-cilium-before-ichor-and-ichor-is-installable-with-helm.md): a cluster with no CNI is adopted as managed Cilium (Ichor installs it first), not unmanaged `talosCNI: none`; the network-policy gate follows live detection; test D5 and open question 3 are superseded.
 
@@ -303,7 +303,7 @@ The user guide is `docs/guides/adopt-and-reclaim.md`. The design text is in the 
 
 ## Hardware test plan
 
-**Status: group C run (lane 2, 2026-10-29/30; Talos v1.14.3, Cilium chart 1.18.0, Kubernetes v1.37.1).** Groups A, B, D are pending. Tests: `test/e2e/foreign/reclaim_test.go`, `reclaim_ui_test.go`, `reclaim_edges_test.go`; UI client `test/harness/reclaimui`.
+**Status: group C run (lane 2, 2026-10-29/30; Talos v1.14.3, Cilium chart 1.18.0, Kubernetes v1.37.1).** Groups A, B, D are run, see "Results, groups A, B, D". Tests: `test/e2e/foreign/reclaim_test.go`, `reclaim_ui_test.go`, `reclaim_edges_test.go`; UI client `test/harness/reclaimui`.
 
 - C1 passed: worker reset in 11 s, back in maintenance with the same UUID, pending machine registered, approved, Node Ready; 5m56s from reclaim to joined (the pending machine appears at the next discovery probe, about 5 minutes, when the address is already in `spec.discovery.addresses`).
 - C2 passed: graceful reset of 1 of 3 control planes left 2 etcd members, healthy and consistent; the Kubernetes Node object stays (NotReady, cordoned) in the old cluster, so `talosctl health` fails on it. A control plane of the resulting 2-member cluster: `cluster "..." has 2 etcd members; removing one loses quorum; pass --force to override`, nothing sent.
@@ -358,6 +358,13 @@ Run on the e2e harness (ADR 0007, 0102) within the homelab budget: control plane
 - C8 UI path: with `reclaim.enabled` off nothing can be created; a user without the `reclaim` verb gets no page and a webhook denial; with it, a worker is inspected, held at `AwaitingConfirmation`, a wrong UUID is rejected, the right one resets it, and it appears in maintenance.
 - C9 Credential hygiene: a marker in the talosconfig is absent from controller and UI logs, Events, status, the `MachineReclaim` and error text; the Secret is deleted at `Done`, at `Failed`, at TTL expiry with the CR deleted early, and by the sweeper after the controller is restarted mid-request; a talosconfig listing other endpoints sends no call to them; the same request cannot reset twice.
 - C10 Audit: `status.audit` and Events carry user, UUID, foreign cluster and outcome after the Events have expired.
+
+### Results, groups A, B, D (2026-10-30; Talos v1.14.3, Cilium chart 1.18.0, Kubernetes v1.37.1)
+
+- A1 passed after fix 4f9c033c (inline-manifest takeover). A2 passed: the foreign Helm record was backed up byte-identical and removed, 0 traffic failures. A4 continuity: 0 failures in 1950 and 1750 probes. A5 passed. A6: 1.16 refused, 1.17 accepted as an upgrade. A7: `cluster-pool` refused. A3 and A8 not run.
+- B1, B2, B3, B5, B6, B7 passed. B4: `replaced` refused; `enabled` with KubePrism off is now refused up front (fix 3c9eca32, see "As built"). B8: v1.11.5 refused.
+- D1, D2, D3 passed. D5 is replaced by ADR 0104 E1. D7 passed. D4 and D6 not recorded here.
+- Fixed after these runs: tunnel geneve takeover (be69d2a7); KubePrism precondition (3c9eca32). Fixed and not yet re-verified on hardware: adopt re-run after an interruption (pending-install repair 9ae973ca, bundle accept 2acd843b, `--tunnel` 908de05a).
 
 Record, per case, the time taken, the Talos and Cilium versions and the exact refusal text, and write down what worked, not only conclusions.
 

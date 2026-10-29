@@ -42,18 +42,23 @@ func TestSettingsTable(t *testing.T) {
 	var sb strings.Builder
 
 	err := writeSettingsTable(&sb, &pb.GetSettingsResponse{
-		Version: "v0.1.0", Manager: "helm", ReadOnly: true,
+		Version: testSettingsVersion, Manager: "helm", ReadOnly: true,
 		Spec:      &pb.SettingsFields{TokenTtl: &ttl},
-		Effective: &pb.SettingsEffective{ReclaimEnabled: &pb.SettingValue{Value: "false", Source: "deployment"}},
+		Effective: &pb.SettingsEffective{ReclaimEnabled: &pb.SettingValue{Value: testOff, Source: "deployment"}},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	out := sb.String()
-	for _, want := range []string{"reclaim.enabled  false  deployment", "users.tokenTTL", "30m", "defaults.driftPolicy  -", "managed by the deployment"} {
+	for _, want := range []string{"reclaim.enabled  " + testOff + "  deployment", "users.tokenTTL", "30m", "defaults.driftPolicy  -", "managed by the deployment"} {
 		if !strings.Contains(strings.Join(strings.Fields(out), " "), strings.Join(strings.Fields(want), " ")) {
 			t.Errorf("missing %q in:\n%s", want, out)
 		}
 	}
 }
+
+const (
+	testSettingsVersion = "v0.1.0"
+	testOff             = "false"
+)

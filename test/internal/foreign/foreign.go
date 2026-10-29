@@ -438,6 +438,7 @@ func (c *Cluster) ciliumHelmArgs() []string {
 		"securityContext.capabilities.cleanCiliumState={NET_ADMIN,SYS_ADMIN,SYS_RESOURCE}",
 		"cgroup.autoMount.enabled=false",
 		"cgroup.hostRoot=/sys/fs/cgroup",
+		"tunnelProtocol=geneve", // VXLAN does not pass between the KubeVirt VMs (the outer cluster uses its port)
 	}
 	if c.Opts.NoKubeProxy {
 		host, port := "localhost", "7445"

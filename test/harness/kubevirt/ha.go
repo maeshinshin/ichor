@@ -78,89 +78,9 @@ func haTotal() int {
 
 func haVMName(i int) string { return fmt.Sprintf("%s-%d", haCluster, i) }
 
-// haVMManifestTmpl is vmManifestTmpl (main.go) with the fixed name templated: each of the
-// haCount VMs gets its own ISO and system DataVolume, one dataVolumeTemplate pair per VM.
-//
-// A single ISO DataVolume shared read-only across all three was tried first and does not
-// work on this cluster's storage: rook-ceph's RBD CSI driver rejects ReadOnlyMany for a
-// plain CDI HTTP import outright ("readOnly accessMode is supported only with content
-// source" - confirmed against a real DataVolume), since ReadOnlyMany there is
-// only for a PVC cloned from an existing content source, not a fresh import. Cloning one
-// VM's own ISO DataVolume into the other two as a ROX clone would work but is a second CDI
-// mechanism and a second failure mode to debug, for 2Gi x 2 saved on a cluster with
-// terabytes free - not worth it for a nightly-only scenario.
-const haVMManifestTmpl = `apiVersion: kubevirt.io/v1
-kind: VirtualMachine
-metadata:
-  name: %[1]s
-  namespace: ichor-e2e
-  labels:
-    ichor.maesh.dev/e2e-harness: kubevirt-ha
-spec:
-  runStrategy: Always
-  dataVolumeTemplates:
-    - metadata:
-        name: %[1]s-iso
-      spec:
-        source:
-%[2]s
-        storage:
-          accessModes: [ReadWriteOnce]
-          volumeMode: Filesystem
-          resources:
-            requests:
-              storage: %[3]s
-          storageClassName: ceph-block
-    - metadata:
-        name: %[1]s-system
-      spec:
-        source:
-          blank: {}
-        storage:
-          accessModes: [ReadWriteOnce]
-          volumeMode: Filesystem
-          resources:
-            requests:
-              storage: 10Gi
-          storageClassName: ceph-block
-  template:
-    metadata:
-      labels:
-        ichor.maesh.dev/e2e-harness: kubevirt-ha
-    spec:
-      domain:
-        cpu:
-          cores: 2
-        memory:
-          guest: 2560Mi
-        devices:
-          disks:
-            # The system disk boots first: a blank disk is not bootable, so the first boot falls through
-            # to the ISO (maintenance mode), and after the install every cold boot (a VM stopped and
-            # started) comes up from the disk. With the ISO first, Talos halts on a cold boot
-            # ("already installed to disk but booted from another media").
-            - name: iso
-              cdrom:
-                bus: sata
-              bootOrder: 2
-            - name: system
-              disk:
-                bus: virtio
-              bootOrder: 1
-          interfaces:
-            - name: default
-              bridge: {}
-      networks:
-        - name: default
-          pod: {}
-      volumes:
-        - name: iso
-          dataVolume:
-            name: %[1]s-iso
-        - name: system
-          dataVolume:
-            name: %[1]s-system
-`
+// Each VM gets its own ISO and system DataVolume (vmManifestTmpl in main.go): one ISO DataVolume
+// shared read-only across VMs does not work on this cluster's storage, because rook-ceph's RBD CSI
+// driver rejects ReadOnlyMany for a plain CDI HTTP import.
 
 func upHA() error {
 	ips, err := bootHAToMaintenance()
@@ -184,7 +104,7 @@ func bootHAToMaintenance() ([]string, error) {
 
 	for i := range haTotal() {
 		name := haVMName(i)
-		if err := kube.Apply(renderVM(haVMManifestTmpl, name, iso)); err != nil {
+		if err := kube.Apply(renderVM(name, "kubevirt-ha", iso)); err != nil {
 			return nil, fmt.Errorf("creating VM %s: %w", name, err)
 		}
 	}
@@ -192,13 +112,7 @@ func bootHAToMaintenance() ([]string, error) {
 	ips := make([]string, haTotal())
 	for i := range haTotal() {
 		name := haVMName(i)
-		step := "waiting for " + name + "'s VMI to report a pod IP"
-		ip, err := kube.Poll(step, 12*time.Minute, func() (string, bool) {
-			out, err := utils.Run(kube.Command("-n", namespace, "get", "vmi", name,
-				"-o", "jsonpath={.status.interfaces[0].ipAddress}"))
-			ip := strings.TrimSpace(out)
-			return ip, err == nil && ip != ""
-		})
+		ip, err := waitVMIIP(name, 12*time.Minute)
 		if err != nil {
 			return nil, err
 		}

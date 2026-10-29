@@ -20,7 +20,6 @@ import (
 	"context"
 
 	"connectrpc.com/connect"
-	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
@@ -48,8 +47,7 @@ func (s *Server) DismissCARotationAdvice(
 		return nil, mapOperationWriteError("dismissing the CA rotation advice of", key, err)
 	}
 
-	return connect.NewResponse(&pb.DismissCARotationAdviceResponse{Audit: &pb.AuditRecord{
-		Actor: s.actorName(ctx), At: timestamppb.New(s.now()), Action: "dismiss-ca-rotation-advice",
-		Target: objectRef(c.Namespace, c.Name),
-	}}), nil
+	return connect.NewResponse(&pb.DismissCARotationAdviceResponse{
+		Audit: s.opAudit(ctx, "dismiss-ca-rotation-advice", objectRef(c.Namespace, c.Name)),
+	}), nil
 }

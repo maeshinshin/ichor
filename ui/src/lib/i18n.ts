@@ -83,6 +83,7 @@ export const en = {
   'addNode.invalid': 'Use one IPv4 address, for example 192.168.0.50.',
   'addNode.duplicate': 'This address is already listed.',
   'addNode.cidrHint': 'Ranges are set in the cluster spec (spec.discovery.cidrs). This page adds single addresses only.',
+  'addNode.alreadyConfigured': '{address} already runs a Talos configuration, so Ichor did not add it. To reuse the machine, reset it first: ichor machine reclaim {address} --talosconfig FILE',
   'addNode.pendingTitle': 'Waiting for approval ({n})',
   'addNode.pendingEmpty': 'No node is waiting yet. This list refreshes by itself.',
   'cluster.talosVersion': 'Talos version',

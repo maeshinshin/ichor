@@ -112,6 +112,11 @@ message Cluster {
   string kube_proxy_mode = 12;
   // certificates are status.certificates: when each CA expires.
   repeated CertificateExpiry certificates = 13;
+  // already_configured_addresses are the endpoints discovery reached that already run a Talos
+  // configuration: the controller recorded an AlreadyConfigured Event for each and did not
+  // add the node. Set by GetCluster and AddDiscoveryAddress from those Events (which Kubernetes expires
+  // after about an hour); empty in ListClusters.
+  repeated string already_configured_addresses = 14;
 }
 
 // CertificateExpiry is one CA of the cluster and its last instant of validity.

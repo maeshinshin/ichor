@@ -402,8 +402,15 @@ func secretData(c *foreign.Cluster, nsName, name string) map[string]string {
 // TestA2Adopt: `helm install cilium` in kube-system with user values is taken over; the values are
 // lifted, the foreign record is backed up byte-for-byte and its Secrets (not the release) removed.
 // Run `foreign up --cni cilium-helm --cilium-set operator.replicas=1,debug.enabled=true` first.
-func TestA2Adopt(t *testing.T) {
-	c := build(t, foreign.Options{Workers: 1, CNI: foreign.CNICiliumHelm})
+func TestA2Adopt(t *testing.T) { takeoverHelmRecord(t, foreign.CNICiliumHelm) }
+
+// TestA3Adopt: the same expectations for a Cilium installed with `cilium install` (the Cilium CLI writes the Helm
+// release).
+// Run `foreign up --cni cilium-cli --cilium-set operator.replicas=1,debug.enabled=true` first.
+func TestA3Adopt(t *testing.T) { takeoverHelmRecord(t, foreign.CNICiliumCLI) }
+
+func takeoverHelmRecord(t *testing.T, cni string) {
+	c := build(t, foreign.Options{Workers: 1, CNI: cni})
 	logState(t, c, "before")
 	recs := map[string]string{} // record name -> base64 of data.release
 	names, _ := inner(c, "-n", "kube-system", "get", "secrets", "-l", "owner=helm,name=cilium", "-o", "jsonpath={.items[*].metadata.name}")
@@ -414,7 +421,7 @@ func TestA2Adopt(t *testing.T) {
 		t.Fatal("no foreign cilium release record")
 	}
 	trafficStart(t, c)
-	_, needed := takeoverAdopt(t, c)
+	_, needed := takeoverAdopt(t, c, geneve...)
 	t.Logf("diff gate needed --accept-cilium-diff: %v", needed)
 	waitHandover(t, c, "")
 	membership(t, c)

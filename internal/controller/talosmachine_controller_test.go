@@ -20,6 +20,7 @@ import (
 	"context"
 	"io"
 	"reflect"
+	"strconv"
 	"sync"
 	"time"
 
@@ -940,6 +941,54 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(cond.Reason).To(Equal(reasonNodeDrifted))
 		Expect(cond.Message).To(ContainSubstring("cluster.apiServer.extraArgs.foo"))
 		Expect(cond.Message).To(ContainSubstring("warnOnly"))
+	})
+
+	It("reports drift and applies nothing while hold-apply is set, then applies once it is removed", func() {
+		bundle := newTestBundle("v1.14")
+		secret := newTestSecret(bundle)
+		cluster := newTestCluster(secret.Name, "v1.14")
+		m := newTestMachine(cluster.Name, true)
+
+		patch := newTestPatch(cluster.Name, layerCluster, nil, extraArgsConfig())
+		wantRendered, wantHash, err := render.Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{*patch}, nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		m.Annotations = map[string]string{ichorv1alpha1.TalosMachineHoldApplyAnnotation: strconv.FormatBool(true)}
+		Expect(k8sClient.Update(ctx, m)).To(Succeed())
+
+		// The node differs from the render (a first-time mismatch, which would otherwise be applied).
+		other := extraArgsConfig()
+		other.ClusterConfig.APIServerConfig.ExtraArgsConfig["foo"] = []string{"c"}
+
+		fake := &fakeTalosClient{current: renderWithConfig(cluster, m, bundle, layerCluster, nil, other)}
+		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
+
+		_, err = reconcileMachine(r, m)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(fake.applyCalls).To(BeEmpty())
+
+		got := fetchMachine(m)
+		Expect(got.Status.AppliedConfigHash).To(BeEmpty())
+
+		cond := readyCondition(got)
+		Expect(cond).NotTo(BeNil())
+		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(cond.Reason).To(Equal(reasonAdoptionHeld))
+		Expect(cond.Message).To(ContainSubstring("cluster.apiServer.extraArgs.foo"))
+		Expect(apimeta.IsStatusConditionTrue(got.Status.Conditions, conditionAdoptionHeld)).To(BeTrue())
+
+		// Release the hold: the controller applies the render.
+		got.Annotations = nil
+		Expect(k8sClient.Update(ctx, got)).To(Succeed())
+
+		_, err = reconcileMachine(r, m)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(fake.applyCalls).To(HaveLen(1))
+		Expect(fake.applyCalls[0]).To(Equal(wantRendered))
+
+		got = fetchMachine(m)
+		Expect(got.Status.AppliedConfigHash).To(Equal(wantHash))
+		Expect(apimeta.FindStatusCondition(got.Status.Conditions, conditionAdoptionHeld)).To(BeNil())
 	})
 
 	It("applies a render change from an Ichor upgrade under warnOnly instead of calling it drift, and a restart re-applies nothing", func() {

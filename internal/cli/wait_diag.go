@@ -63,7 +63,7 @@ func (d *waitDiag) tick(ctx context.Context) error {
 		}
 	}
 
-	if !allUnschedulable || !d.nodesNoNetwork(ctx) {
+	if !allUnschedulable || !d.nodesNoNetwork(ctx) || d.ciliumInstalling(ctx) {
 		d.stuck = time.Time{}
 
 		return nil
@@ -129,6 +129,15 @@ func podReasons(pods []corev1.Pod) (lines []string, allUnschedulable bool) {
 	slices.Sort(lines)
 
 	return lines, allUnschedulable
+}
+
+// ciliumInstalling reports whether a Cilium agent pod exists: the CNI is on its way (Talos applied
+// it as an inline manifest, as `ichor init` does), so the nodes' missing network is not final.
+func (d *waitDiag) ciliumInstalling(ctx context.Context) bool {
+	var pods corev1.PodList
+
+	return d.c.List(ctx, &pods, client.InNamespace("kube-system"), client.MatchingLabels{"k8s-app": "cilium"}) == nil &&
+		len(pods.Items) > 0
 }
 
 // nodesNoNetwork reports whether there is at least one node and every one is NotReady because

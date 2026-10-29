@@ -11,9 +11,3 @@ export function isCniUnmanaged(preset: string): boolean {
 export function detectedCni(detected: string): string {
   return detected === '' ? 'unknown' : detected
 }
-
-// caRotationAdvised: the CARotationAdvised condition is True (an adopted cluster; docs/adr/0103
-// section 1.4). The advice is only advice; dismissing it writes an annotation.
-export function caRotationAdvised(conds: readonly { type: string; status: string }[]): boolean {
-  return conds.some((c) => c.type === 'CARotationAdvised' && c.status === 'True')
-}

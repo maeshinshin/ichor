@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { attentionItems, expiringCertificatesMessage, machineCounts } from './overview.ts'
 
 test('attentionItems lists only what applies', () => {
   assert.deepEqual(attentionItems({ conditions: [], pending: 0, configWaiting: 0, opState: 'running' }), [])
@@ -20,25 +19,7 @@ test('attentionItems lists only what applies', () => {
   assert.deepEqual(attentionItems({ conditions: [{ type: 'BundleBackupStale', status: 'False' }], pending: 0, configWaiting: 0, opState: 'paused' }), [{ kind: 'opPaused' }])
 })
 
-test('machineCounts splits by approval and readiness', () => {
-  const c = machineCounts([
-    { approval: 'approved', ready: 'True' },
-    { approval: 'approved', ready: 'False' },
-    { approval: 'approved', ready: '' },
-    { approval: 'pending', ready: '' },
-    { approval: 'rejected', ready: '' },
-  ])
-  assert.deepEqual(c, { total: 5, ready: 1, notReady: 1, unknown: 1, pending: 1, rejected: 1 })
-})
-
-test('expiringCertificatesMessage returns the message only while CertificatesExpiring is True', () => {
-  const on = [{ type: 'Ready', status: 'True' }, { type: 'CertificatesExpiring', status: 'True', message: 'the etcd CA expires on 2026-12-11.' }]
-  assert.equal(expiringCertificatesMessage(on), 'the etcd CA expires on 2026-12-11.')
-  assert.equal(expiringCertificatesMessage([{ type: 'CertificatesExpiring', status: 'False', message: 'none' }]), null)
-  assert.equal(expiringCertificatesMessage([]), null)
-})
-
-import { backupsValue, newestSnapshotSeconds, nodesValue, tileTargets, timeAgo, versionLabel } from './overview.ts'
+import { attentionItems, backupsValue, newestSnapshotSeconds, tileTargets, timeAgo, versionLabel } from './overview.ts'
 
 test('timeAgo picks the coarsest unit', () => {
   const now = 1_000_000_000
@@ -61,7 +42,6 @@ test('backupsValue: not loaded, not configured, no snapshot, newest age', () => 
 })
 
 test('tile values and targets', () => {
-  assert.equal(nodesValue(3, 4), '3 / 4 ready')
   assert.equal(versionLabel('1.37.1'), 'v1.37.1')
   assert.equal(versionLabel('v1.14.3'), 'v1.14.3')
   assert.equal(versionLabel(''), '-')

@@ -1,0 +1,117 @@
+syntax = "proto3";
+
+// ReclaimService backs the break-glass "Reclaim a configured machine" dialog. It creates a MachineReclaim and its short-lived
+// credential Secret as the caller and later writes spec.confirmUUID, nothing
+// else. The controller does the node work. Every call is refused when the
+// installation has not enabled reclaim. The talosconfig in CreateReclaim is a
+// credential: the access log drops the body of these calls, and no response
+// ever carries it back.
+package ichor.v1alpha1;
+
+import "google/protobuf/timestamp.proto";
+import "ichor/v1alpha1/common.proto";
+
+service ReclaimService {
+  // CanReclaim says whether reclaim is enabled and whether the caller holds the
+  // verb reclaim on machinereclaims (a SelfSubjectAccessReview). The UI shows
+  // the entry only when both are true.
+  rpc CanReclaim(CanReclaimRequest) returns (CanReclaimResponse);
+
+  // CreateReclaim stores the talosconfig in a Secret and creates the
+  // MachineReclaim. With a cluster it also appends the address to that cluster's
+  // spec.discovery.addresses when it is not already there.
+  rpc CreateReclaim(CreateReclaimRequest) returns (CreateReclaimResponse);
+
+  rpc GetReclaim(GetReclaimRequest) returns (GetReclaimResponse);
+  rpc ListReclaims(ListReclaimsRequest) returns (ListReclaimsResponse);
+
+  // ConfirmReclaim writes spec.confirmUUID, the one field it touches. The webhook
+  // rejects a UUID that differs from the inspected one.
+  rpc ConfirmReclaim(ConfirmReclaimRequest) returns (ConfirmReclaimResponse);
+}
+
+message CanReclaimRequest {}
+
+message CanReclaimResponse {
+  // enabled is the installation switch (reclaim.enabled).
+  bool enabled = 1;
+  // allowed is the caller's RBAC; false when enabled is false.
+  bool allowed = 2;
+}
+
+message CreateReclaimRequest {
+  // address is one IP or host:port.
+  string address = 1;
+  // talosconfig is the foreign cluster's talosconfig file contents.
+  bytes talosconfig = 2;
+  // context names the talosconfig context to use; required when it has several.
+  string context = 3;
+  bool force = 4;
+  bool force_ungraceful = 5;
+  // cluster is optional: the TalosCluster the machine should join.
+  ObjectRef cluster = 6;
+}
+
+message CreateReclaimResponse {
+  Reclaim reclaim = 1;
+}
+
+message GetReclaimRequest {
+  ObjectRef reclaim = 1;
+}
+
+message GetReclaimResponse {
+  Reclaim reclaim = 1;
+}
+
+message ListReclaimsRequest {}
+
+message ListReclaimsResponse {
+  repeated Reclaim reclaims = 1;
+}
+
+message ConfirmReclaimRequest {
+  ObjectRef reclaim = 1;
+  string uuid = 2;
+}
+
+message ConfirmReclaimResponse {
+  Reclaim reclaim = 1;
+}
+
+message ReclaimVolume {
+  string name = 1;
+  string location = 2;
+  uint64 size = 3;
+  bool encrypted = 4;
+}
+
+message ReclaimInspection {
+  string uuid = 1;
+  string hostname = 2;
+  // role is "controlplane" or "worker".
+  string role = 3;
+  string cluster_name = 4;
+  string cluster_id = 5;
+  repeated string etcd_members = 6;
+  repeated ReclaimVolume volumes = 7;
+  // refusals are the reasons the reset is refused; empty when it may go on.
+  repeated string refusals = 8;
+}
+
+message Reclaim {
+  ObjectRef ref = 1;
+  string address = 2;
+  // phase is the MachineReclaim status.phase: Inspecting, AwaitingConfirmation,
+  // Resetting, WaitingForMaintenance, Done, Failed or Expired.
+  string phase = 3;
+  string message = 4;
+  ReclaimInspection inspection = 5;
+  // result is the new maintenance address, or the scan hint.
+  string result = 6;
+  google.protobuf.Timestamp expires_at = 7;
+  bool force = 8;
+  bool force_ungraceful = 9;
+  // confirmed is true once spec.confirmUUID is set.
+  bool confirmed = 10;
+}

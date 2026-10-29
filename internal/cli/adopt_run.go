@@ -74,6 +74,12 @@ type adoptDeps struct {
 	// Tunnel is --tunnel (vxlan|geneve): the tunnel protocol of the Cilium adopt installs on a
 	// cluster with no CNI (ADR 0104 1.4); empty keeps the API default.
 	Tunnel string
+	// CiliumValues is --cilium-values: the user values of the Cilium adopt installs on a cluster with
+	// no CNI (merged like spec.cni.cilium.values, Ichor-owned keys refused).
+	CiliumValues map[string]any
+	// BootstrapCilium installs Ichor's Cilium before Ichor on a cluster with no CNI (ADR 0104 1.5,
+	// step 2): cilium.Bootstrap with the operator's kubeconfig. nil makes that path refuse.
+	BootstrapCilium func(ctx context.Context, cluster *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode) error
 
 	// Seed is the address of one control plane (--node), used to discover the machines of a
 	// cluster that has no TalosCluster yet.
@@ -202,9 +208,8 @@ func runAdopt(ctx context.Context, clusterName, namespace string, deps adoptDeps
 		return nil
 	}
 
-	if st.installCilium {
-		// ponytail: unit 4 replaces this refusal with cilium.Bootstrap and the Cilium-first order.
-		return errors.New("adopt: installing Cilium on a cluster with no CNI is not built yet (ADR 0104 unit 4); nothing was written")
+	if st.installCilium && deps.BootstrapCilium == nil {
+		return errors.New("adopt: no way to install Cilium was given; nothing was written")
 	}
 
 	if err := st.consent(deps, clusterName, len(patches), len(writable), owned, tp.deleteRecord); err != nil {
@@ -218,12 +223,25 @@ func runAdopt(ctx context.Context, clusterName, namespace string, deps adoptDeps
 		}
 	}
 
+	// A cluster with no CNI cannot run Ichor's pods: Cilium goes in first, from here (ADR 0104 1.5).
+	if st.installCilium {
+		if err := st.bootstrapCilium(ctx, deps); err != nil {
+			return err
+		}
+	}
+
 	if _, err := writeAdopt(ctx, deps.K8s, st.writeInput(ctx, deps, namespace, writable, patches, tp)); err != nil {
 		return err
 	}
 
 	// Phase 3: takeover (never in unmanaged mode, nothing to take over from Ichor's own Cilium).
-	if st.needsTakeover() {
+	// Cilium that adopt installed itself has nothing to take over: the controller only sees the
+	// release at its hash and sets CNIHandover, with no Job (ADR 0104 1.5, step 5).
+	if st.installCilium {
+		if err := waitHandover(ctx, deps, types.NamespacedName{Namespace: namespace, Name: clusterName}); err != nil {
+			return err
+		}
+	} else if st.needsTakeover() {
 		if deps.Preflight == nil {
 			_, _ = fmt.Fprintln(deps.Stderr, "adopt: Cilium takeover: pending; the machines stay held, nothing was applied to any node")
 
@@ -477,6 +495,10 @@ func (st *adoptState) inspect(ctx context.Context, deps adoptDeps) error {
 		_, _ = fmt.Fprintf(deps.Stderr, "adopt: cni: unmanaged (%s, not managed by Ichor)\n", detected)
 	}
 
+	if err := st.settleCiliumValues(deps); err != nil {
+		return err
+	}
+
 	st.announceInstallCilium(deps.Stderr)
 
 	if st.fresh {
@@ -500,12 +522,57 @@ func (st *adoptState) inspect(ctx context.Context, deps adoptDeps) error {
 	return nil
 }
 
+// bootstrapCilium is step 2 of ADR 0104 1.5: Ichor's Cilium, as its own Helm release, installed
+// with the values the TalosCluster adopt writes will make the controller derive.
+func (st *adoptState) bootstrapCilium(ctx context.Context, deps adoptDeps) error {
+	_, _ = fmt.Fprintf(deps.Stderr, "adopt: installing Cilium %s (this waits for every node to be Ready)\n", cilium.ChartVersion)
+
+	if err := deps.BootstrapCilium(ctx, st.cluster, cni.KubeProxyMode(st.kubeProxy)); err != nil {
+		return fmt.Errorf("adopt: installing Cilium: %w; run adopt again to continue (the install is safe to repeat)", err)
+	}
+
+	_, _ = fmt.Fprintln(deps.Stderr, "adopt: Cilium is installed and the nodes are Ready")
+
+	return nil
+}
+
+// settleCiliumValues merges --cilium-values into the TalosCluster adopt creates, refusing a key
+// Ichor owns exactly as spec.cni.cilium.values does.
+func (st *adoptState) settleCiliumValues(deps adoptDeps) error {
+	if len(deps.CiliumValues) == 0 {
+		return nil
+	}
+
+	if !st.fresh {
+		return errors.New("adopt: --cilium-values applies to the TalosCluster adopt creates; this one exists, set spec.cni.cilium.values on it")
+	}
+
+	if err := cilium.ValidateValues(deps.CiliumValues, cilium.ValidationContext{
+		KubeProxy: cni.KubeProxyMode(st.kubeProxy), Tunnel: st.tunnel,
+	}); err != nil {
+		return fmt.Errorf("adopt: --cilium-values: %w", err)
+	}
+
+	raw, err := json.Marshal(deps.CiliumValues)
+	if err != nil {
+		return fmt.Errorf("adopt: --cilium-values: %w", err)
+	}
+
+	st.cluster.Spec.CNI.Cilium = &ichorv1alpha1.TalosClusterCNICilium{Values: &apiextensionsv1.JSON{Raw: raw}}
+
+	return nil
+}
+
 // planInstallCilium settles the no-CNI path of ADR 0104: the preconditions of 1.3 and the tunnel.
 // It refuses, with nothing written, when a precondition fails.
 func (st *adoptState) planInstallCilium(deps adoptDeps) error {
 	if st.rep == nil || !st.rep.NoCNI {
 		if deps.Tunnel != "" {
 			return errors.New("adopt: --tunnel only applies when adopt installs Cilium, which it does only on a cluster with no CNI")
+		}
+
+		if len(deps.CiliumValues) > 0 {
+			return errors.New("adopt: --cilium-values only applies when adopt installs Cilium, which it does only on a cluster with no CNI")
 		}
 
 		return nil
@@ -835,6 +902,11 @@ func (st *adoptState) consent(deps adoptDeps, clusterName string, patches, machi
 		what = fmt.Sprintf("Create the Secret, TalosCluster %q, %d held TalosMachine(s) and %d TalosConfigPatch object(s)", clusterName, machines, patches)
 	}
 
+	if st.installCilium {
+		what = fmt.Sprintf("Install Cilium %s (tunnel %s, kube-proxy %s) as Ichor's Helm release in this cluster, install Ichor, then ",
+			cilium.ChartVersion, cmp.Or(st.tunnel, "default"), st.kubeProxy) + strings.ToLower(what[:1]) + what[1:]
+	}
+
 	if owned > 0 {
 		what += fmt.Sprintf(", and let Ichor change the %d Ichor-owned setting(s) listed above", owned)
 	}
@@ -860,8 +932,12 @@ func (st *adoptState) writeInput(ctx context.Context, deps adoptDeps, namespace 
 	in.Cluster = &adoptWriteCluster{
 		Name: c.Name, Endpoint: c.Spec.Endpoint, TalosVersion: c.Spec.TalosVersion, KubernetesVersion: c.Spec.KubernetesVersion,
 		VersionContract: c.Spec.VersionContract, ControlPlaneCount: c.Spec.ControlPlane.Count, Schedulable: c.Spec.ControlPlane.Schedulable,
-		CNIPreset: c.Spec.CNI.Preset, KubeProxy: c.Spec.CNI.KubeProxy,
+		CNIPreset: c.Spec.CNI.Preset, KubeProxy: c.Spec.CNI.KubeProxy, Tunnel: c.Spec.CNI.Tunnel,
 		CNIInlineManifest: tp.inline, CiliumValues: tp.userValues,
+	}
+
+	if st.installCilium {
+		in.Cluster.CiliumValues = deps.CiliumValues
 	}
 
 	in.Cluster.CertSANs, in.Cluster.Registries = c.Spec.CertSANs, c.Spec.Registries
@@ -889,6 +965,10 @@ func (st *adoptState) writeInput(ctx context.Context, deps adoptDeps, namespace 
 
 		if st.rep != nil {
 			detected = string(st.rep.Kind)
+		}
+
+		if st.installCilium {
+			detected = cniCilium // installed by adopt before this point
 		}
 
 		ichor.DetectedCNI = detected

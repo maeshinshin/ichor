@@ -151,19 +151,6 @@ func TestAdoptNoCNI_PlanAnnouncesCiliumInstall(t *testing.T) {
 	}
 }
 
-func TestAdoptNoCNI_RefusesUntilTheInstallIsBuilt(t *testing.T) {
-	env, deps := noCNIDeps(t, nodeCIDR)
-
-	err := runAdopt(context.Background(), env.cluster.Name, testNamespace, deps)
-	if err == nil || !strings.Contains(err.Error(), "installing Cilium on a cluster with no CNI is not built yet (ADR 0104 unit 4)") {
-		t.Fatalf("runAdopt = %v, want the not-built refusal", err)
-	}
-
-	if len(*env.writes) != 0 {
-		t.Fatalf("wrote: %v", *env.writes)
-	}
-}
-
 func TestAdoptNoCNI_Refusals(t *testing.T) {
 	tests := []struct {
 		name   string

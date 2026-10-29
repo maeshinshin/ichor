@@ -2,10 +2,10 @@ import { useState } from 'preact/hooks'
 import { DownloadIcon, KeyRoundIcon, LogOutIcon, UserRoundIcon } from 'lucide-preact'
 import { ChangePasswordDialog } from '@/components/ChangePassword'
 import { Button } from '@/components/ui/button'
-import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/components/ui/item'
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -44,21 +44,21 @@ export function AccountMenu({ me }: { me: WhoAmIResponse }) {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-72">
           <DropdownMenuLabel>{t('account.signedInAs')}</DropdownMenuLabel>
-          <Item size="xs">
-            <ItemMedia variant="icon">
-              <UserRoundIcon aria-hidden="true" />
-            </ItemMedia>
-            <ItemContent>
-              <ItemTitle>{name}</ItemTitle>
-              {me.displayName && <ItemDescription>{me.username}</ItemDescription>}
-              <ItemDescription>
-                {t('account.roles')}: {roles.length > 0 ? roles.join(', ') : t('account.noRoles')}
-              </ItemDescription>
-              <ItemDescription>
-                {t('account.source')}: {sourceLabel(me.source)}
-              </ItemDescription>
-            </ItemContent>
-          </Item>
+          <DropdownMenuGroup>
+            <div className="flex items-start gap-1.5 px-1.5 py-1 text-sm">
+              <UserRoundIcon className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+              <div className="grid min-w-0 flex-1 text-left leading-tight">
+                <span className="truncate font-medium">{name}</span>
+                {me.displayName && <span className="truncate text-xs text-muted-foreground">{me.username}</span>}
+                <span className="truncate text-xs text-muted-foreground">
+                  {t('account.roles')}: {roles.length > 0 ? roles.join(', ') : t('account.noRoles')}
+                </span>
+                <span className="truncate text-xs text-muted-foreground">
+                  {t('account.source')}: {sourceLabel(me.source)}
+                </span>
+              </div>
+            </div>
+          </DropdownMenuGroup>
           <DropdownMenuSeparator />
           {me.source === 'ichor' && (
             <DropdownMenuItem onSelect={() => setPasswordOpen(true)}>

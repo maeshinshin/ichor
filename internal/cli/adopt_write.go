@@ -104,6 +104,8 @@ type adoptWriteCluster struct {
 	TalosCNI  string
 	// KubeProxy is enabled or replaced, as detected; always written explicitly.
 	KubeProxy string
+	// Tunnel is spec.cni.tunnel, set only when adopt installed Cilium; empty is the API default.
+	Tunnel string
 
 	// CNIInlineManifest is the name of the Cilium entry in cluster.inlineManifests (managed mode),
 	// written as the annotation the controller copies to status at hand-over.
@@ -325,7 +327,7 @@ func (w *adoptWriter) cluster0() *ichorv1alpha1.TalosCluster {
 			VersionContract:   f.VersionContract,
 			SecretsRef:        corev1.LocalObjectReference{Name: secretsRefName(f.Name)},
 			ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: f.ControlPlaneCount, Schedulable: f.Schedulable},
-			CNI:               ichorv1alpha1.TalosClusterCNI{Preset: f.CNIPreset, KubeProxy: f.KubeProxy},
+			CNI:               ichorv1alpha1.TalosClusterCNI{Preset: f.CNIPreset, KubeProxy: f.KubeProxy, Tunnel: f.Tunnel},
 			CertSANs:          f.CertSANs,
 			Registries:        f.Registries,
 		},
@@ -371,6 +373,7 @@ func (w *adoptWriter) cluster(ctx context.Context) (string, error) {
 			h.Spec.VersionContract == want.Spec.VersionContract &&
 			h.Spec.CNI.Preset == want.Spec.CNI.Preset &&
 			h.Spec.CNI.KubeProxy == want.Spec.CNI.KubeProxy &&
+			h.Spec.CNI.Tunnel == want.Spec.CNI.Tunnel &&
 			cmpUnmanaged(h.Spec.CNI.Unmanaged) == cmpUnmanaged(want.Spec.CNI.Unmanaged) &&
 			jsonEqual(h.Spec.Network, want.Spec.Network) &&
 			slices.Equal(h.Spec.CertSANs, want.Spec.CertSANs) &&

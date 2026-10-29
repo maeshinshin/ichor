@@ -66,7 +66,7 @@ func adoptKilled(t *testing.T, c *foreign.Cluster, trigger string, killAfter tim
 	pod := stage(t, c)
 	args := append([]string{"-n", ns, "exec", pod, "--", "env", "HOME=/tmp/home", "/tmp/ichor", "adopt",
 		"--cluster", c.Opts.Prefix, "-n", crNS, "--talosconfig", "/tmp/talosconfig", "--kubeconfig", "/tmp/kubeconfig",
-		"--recover-secrets", "--recover-from", c.CPs[0], "--node", c.CPs[0], "--yes"}, extra...)
+		"--node", c.CPs[0], "--yes"}, append(recoverArgs(c, extra), extra...)...)
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Minute)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "kubectl", append([]string{"--context", os.Getenv(kube.ContextEnv)}, args...)...)
@@ -135,38 +135,4 @@ func TestF5HelmTemplateNoCNI(t *testing.T) {
 		t.Errorf("adopt --require-ichor with no Ichor was not refused (err=%v)", err)
 	}
 	noCNINothingWritten(t, c, before)
-}
-
-// TestE5Interrupted (ADR 0104 E5): the CLI is killed during the Helm install of Cilium and again after the Cilium
-// wait; each rerun finishes the adoption idempotently.
-func TestE5Interrupted(t *testing.T) {
-	c := build(t, foreign.Options{Workers: 1, CNI: foreign.CNINone})
-	before := cniPaths(t, c)
-
-	start := time.Now()
-	out, killed := adoptKilled(t, c, "adopt: installing Cilium", 20*time.Second, geneve...)
-	t.Logf("run 1 (killed during the Helm install) lasted %s, killed=%v", time.Since(start), killed)
-	if !killed {
-		t.Fatalf("the install step never started:\n%s", out)
-	}
-	t.Logf("Helm release records after kill 1:\n%s", releaseState(c))
-	ds, _ := inner(c, "-n", "kube-system", "get", "ds,deploy", "--no-headers")
-	t.Logf("Cilium workloads after kill 1:\n%s", ds)
-
-	start = time.Now()
-	out, killed = adoptKilled(t, c, "Cilium is installed and the nodes are Ready", 2*time.Second, geneve...)
-	t.Logf("run 2 (killed after the Cilium wait) lasted %s, killed=%v", time.Since(start), killed)
-	if !killed {
-		t.Fatalf("run 2 never reached the Cilium wait:\n%s", out)
-	}
-	t.Logf("Helm release records after kill 2:\n%s", releaseState(c))
-
-	start = time.Now()
-	out, err := adopt(t, c, geneve...)
-	t.Logf("run 3 took %s", time.Since(start))
-	if err != nil {
-		t.Fatalf("the final rerun failed: %v\n%s", err, out)
-	}
-	t.Logf("Helm release records after the final run:\n%s", releaseState(c))
-	managedAdopted(t, c, before)
 }

@@ -37,6 +37,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/controller"
+	"github.com/maeshinshin/ichor/internal/installer"
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
 )
 
@@ -128,10 +129,11 @@ type adoptWriteIchor struct {
 	Manifest        []byte
 	NetworkPolicies []byte
 
-	// IncludeCiliumPolicies applies NetworkPolicies after the install, as init does. It is the
-	// seam for the network-policy gate: the caller sets it from the
-	// gate's verdict, and sets true to keep init's behaviour.
-	IncludeCiliumPolicies bool
+	// DetectedCNI and PolicyCRDPresent are the two inputs of the network-policy gate
+	// (installer.IncludeCiliumPolicies). The gate alone decides;
+	// the cluster's CNI preset does not veto it.
+	DetectedCNI      string
+	PolicyCRDPresent bool
 	// CiliumWait bounds the wait for Cilium before the policies are applied.
 	CiliumWait time.Duration
 }
@@ -254,17 +256,25 @@ func (w *adoptWriter) installIchor(ctx context.Context) error {
 
 	w.res.Created = append(w.res.Created, "Ichor installation")
 
-	if !ichor.IncludeCiliumPolicies {
+	if !installer.IncludeCiliumPolicies(ichor.DetectedCNI, ichor.PolicyCRDPresent) {
+		if len(ichor.NetworkPolicies) > 0 {
+			_, _ = fmt.Fprintf(w.in.Stderr, "adopt: not applying Ichor's network policies: %s\n", policyGateReason(ichor))
+		}
+
 		return nil
 	}
 
-	preset := cniCilium
-	if w.in.Cluster != nil {
-		preset = w.in.Cluster.CNIPreset
+	return applyNetworkPolicies(ctx, w.c, ichor.NetworkPolicies, cniCilium,
+		cmp.Or(ichor.CiliumWait, defaultCiliumWait), w.in.Interval, w.in.Stderr)
+}
+
+// policyGateReason names the input that failed the network-policy gate.
+func policyGateReason(ichor *adoptWriteIchor) string {
+	if ichor.DetectedCNI != cniCilium {
+		return fmt.Sprintf("the detected CNI is %q, not cilium", ichor.DetectedCNI)
 	}
 
-	return applyNetworkPolicies(ctx, w.c, ichor.NetworkPolicies, preset,
-		cmp.Or(ichor.CiliumWait, defaultCiliumWait), w.in.Interval, w.in.Stderr)
+	return "the CiliumNetworkPolicy CRD is not Established"
 }
 
 // ichorRunning reports whether the IchorInstallation singleton exists. A cluster without the CRD

@@ -369,11 +369,11 @@ type Config struct {
 	// +optional
 	ConfigPersist *bool `json:"persist,omitempty"`
 	// Provides machine specific configuration options.
-	// +required
-	MachineConfig *MachineConfig `json:"machine"`
+	// +optional
+	MachineConfig *MachineConfig `json:"machine,omitempty"`
 	// Provides cluster specific configuration options.
-	// +required
-	ClusterConfig *ClusterConfig `json:"cluster"`
+	// +optional
+	ClusterConfig *ClusterConfig `json:"cluster,omitempty"`
 }
 
 // ControlPlaneConfig represents the control plane configuration options.
@@ -1110,16 +1110,16 @@ type MachineConfig struct {
 	// This means it will be an available compute node for scheduling workloads.
 	//
 	// This node type was previously known as "join"; that value is still supported but deprecated.
-	// +required
-	MachineType string `json:"type"`
+	// +optional
+	MachineType string `json:"type,omitempty"`
 	// The certificates issued by certificate authorities are accepted in addition to issuing 'ca'.
 	// It is composed of a base64 encoded `crt``.
 	// +optional
 	MachineAcceptedCAs []*PEMEncodedCertificate `json:"acceptedCAs,omitempty"`
 	// Extra certificate subject alternative names for the machine's certificate.
 	// By default, all non-loopback interface IPs are automatically added to the certificate's SANs.
-	// +required
-	MachineCertSANs []string `json:"certSANs"`
+	// +optional
+	MachineCertSANs []string `json:"certSANs,omitempty"`
 	// docgen:nodoc Deprecated: Use `KubeControllerManagerConfig`/`KubeSchedulerConfig` instead.
 	// +optional
 	MachineControlPlane *MachineControlPlaneConfig `json:"controlPlane,omitempty"`

@@ -1,0 +1,122 @@
+/*
+Copyright 2026 maeshinshin.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package chart
+
+import (
+	"fmt"
+	"slices"
+	"strings"
+	"testing"
+)
+
+// uiParts returns the ichor-ui container, its pod volumes and the Service's port names and numbers.
+func uiParts(t *testing.T, docs []map[string]any) (c map[string]any, volumes []any, svcPorts map[string]int) {
+	t.Helper()
+
+	dep := find(docs, kindDeployment, ichorUIDeploymentName)
+	podSpec := dep["spec"].(map[string]any)["template"].(map[string]any)["spec"].(map[string]any)
+	c = podSpec["containers"].([]any)[0].(map[string]any)
+	volumes, _ = podSpec["volumes"].([]any)
+
+	svc := find(docs, "Service", "ichor-ui-service")
+	svcPorts = map[string]int{}
+
+	for _, p := range svc["spec"].(map[string]any)["ports"].([]any) {
+		pm := p.(map[string]any)
+		svcPorts[pm["name"].(string)] = int(pm["port"].(float64))
+	}
+
+	return c, volumes, svcPorts
+}
+
+func probePortAndScheme(c map[string]any, probe string) string {
+	g := c[probe].(map[string]any)["httpGet"].(map[string]any)
+
+	return fmt.Sprint(g["scheme"], ":", g["port"])
+}
+
+func hasMount(c map[string]any, name string) bool {
+	for _, m := range c["volumeMounts"].([]any) {
+		if m.(map[string]any)["name"] == name {
+			return true
+		}
+	}
+
+	return false
+}
+
+// A fresh Helm install serves HTTPS on 8443 only.
+func TestUIServesHTTPSOnlyByDefault(t *testing.T) {
+	c, vols, ports := uiParts(t, renderChartWithValues(t, "ichor"))
+
+	args := containerArgs(map[string]any{"spec": map[string]any{"template": map[string]any{"spec": map[string]any{"containers": []any{c}}}}})
+	if !containsStr(args, "--addr=:8443") || strings.Contains(fmt.Sprint(args), "--http-addr") {
+		t.Errorf("args = %v, want --addr=:8443 and no --http-addr", args)
+	}
+
+	for _, p := range []string{"livenessProbe", "readinessProbe"} {
+		if got := probePortAndScheme(c, p); got != "HTTPS:8443" {
+			t.Errorf("%s = %s, want HTTPS:8443", p, got)
+		}
+	}
+
+	if len(ports) != 1 || ports["https"] != 8443 {
+		t.Errorf("Service ports = %v, want https 8443 only", ports)
+	}
+
+	if !hasMount(c, "ui-tls") {
+		t.Errorf("no ui-tls mount: %v", c["volumeMounts"])
+	}
+
+	i := slices.IndexFunc(vols, func(v any) bool { return v.(map[string]any)["name"] == "ui-tls" })
+	if i < 0 {
+		t.Fatalf("no ui-tls volume: %v", vols)
+	}
+
+	s := vols[i].(map[string]any)["secret"].(map[string]any)
+	if s["secretName"] != "ichor-oidc-tls" || s["optional"] != true {
+		t.Errorf("ui-tls volume = %v, want the optional Secret ichor-oidc-tls", s)
+	}
+}
+
+// The operator's Secret is mounted next to the Ichor one, and the transitional plaintext port is
+// opt-in and shows up in the Service and the policy.
+func TestUIOperatorCertificateAndPlaintextMigration(t *testing.T) {
+	docs := renderChartWithValues(t, "ichor", "ichorUI.tls.secretName=my-cert", "ichorUI.plaintextPort=8080",
+		"networkPolicy.cilium.enabled=true")
+	c, _, ports := uiParts(t, docs)
+
+	args := fmt.Sprint(c["args"])
+	for _, want := range []string{"--tls-cert-file=/etc/ichor/tls/tls.crt", "--tls-key-file=/etc/ichor/tls/tls.key", "--http-addr=:8080"} {
+		if !strings.Contains(args, want) {
+			t.Errorf("args %s lack %s", args, want)
+		}
+	}
+
+	if !hasMount(c, "tls") || !hasMount(c, "ui-tls") {
+		t.Errorf("mounts = %v, want tls and ui-tls", c["volumeMounts"])
+	}
+
+	if ports["https"] != 8443 || ports["http"] != 8080 {
+		t.Errorf("Service ports = %v, want https 8443 and http 8080", ports)
+	}
+
+	ui := ingressPorts(cnpSpecs(t, docs, "ichor-")["ui"])
+	if got := strings.Join(ui["world"], ","); got != "8443,8080" {
+		t.Errorf("ui policy ingress = %q, want 8443,8080", got)
+	}
+}

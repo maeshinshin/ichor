@@ -117,9 +117,6 @@ spec:
     - ports:
       - port: "8443"
         protocol: TCP
-      # Only an install that still serves plaintext (--http-addr); removed with it.
-      - port: "8080"
-        protocol: TCP
   # The API server reads the issuer's discovery document and JWKS.
   - fromEntities:
     - kube-apiserver

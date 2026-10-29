@@ -863,10 +863,10 @@ func (c *Cluster) patchMultiDoc(manifest string) (all, cpOnly []byte) {
 		docs = append(docs, doc("KubeFlannelCNIConfig", map[string]any{"$patch": "delete"}))
 	}
 	if manifest != "" {
-		docs = append(docs, doc("KubeInlineManifestConfig", map[string]any{"name": o.CNI[:6], "manifest": manifest}))
+		docs = append(docs, doc("KubeInlineManifestConfig", map[string]any{keyName: o.CNI[:6], "manifest": manifest}))
 	}
 	if o.UserManifest {
-		docs = append(docs, doc("KubeInlineManifestConfig", map[string]any{"name": "userapp", "manifest": userManifest}))
+		docs = append(docs, doc("KubeInlineManifestConfig", map[string]any{keyName: "userapp", "manifest": userManifest}))
 	}
 	if o.NoKubePrism {
 		docs = append(docs, doc("KubePrismConfig", map[string]any{"$patch": "delete"})) // the document has no enabled field: absent means off
@@ -886,6 +886,9 @@ func (c *Cluster) patchMultiDoc(manifest string) (all, cpOnly []byte) {
 	return render(docs), cpOnly
 }
 
+// keyName is the YAML key of a named document field.
+const keyName = "name"
+
 // userManifest is the non-Cilium application of B7: a ConfigMap, nothing Ichor can represent.
 const userManifest = "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: user-app\n  namespace: default\ndata:\n  a: b\n"
 
@@ -900,7 +903,7 @@ func (c *Cluster) patchLegacy(manifest string) ([]byte, error) {
 	cluster := map[string]any{"network": net}
 	machine := map[string]any{}
 	if o.CNI != CNIFlannel {
-		net["cni"] = map[string]any{"name": CNINone}
+		net["cni"] = map[string]any{keyName: CNINone}
 	}
 	if manifest != "" || o.UserManifest {
 		cluster["inlineManifests"] = []inlineManifest{}

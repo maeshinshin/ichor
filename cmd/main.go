@@ -341,6 +341,10 @@ func main() {
 				setupLog.Error(err, "Failed to create webhook", "webhook", "BreakGlass")
 				os.Exit(1)
 			}
+			if err := webhookv1alpha1.SetupMachineReclaimWebhookWithManager(mgr, reclaimEnabled); err != nil {
+				setupLog.Error(err, "Failed to create webhook", "webhook", "MachineReclaim")
+				os.Exit(1)
+			}
 			mgr.GetWebhookServer() // idempotent; makes sure the server is a runnable even if no handler did
 			close(webhooksUp)
 		}()

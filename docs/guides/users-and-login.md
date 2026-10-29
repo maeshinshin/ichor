@@ -224,9 +224,14 @@ controller that can.
 
 ### Port 8080 and migration
 
-A new install serves nothing on 8080. An install that served plain HTTP keeps it for one minor release, flagged deprecated (`--http-addr`;
-chart `ichorUI.plaintextPort`, default `0`). Move the edge to 8443 in that
-time. An install that served TLS on 8080 keeps `--addr` pinned to 8080. See
+A new install serves nothing on 8080. ichor-ui no longer serves plain HTTP at
+all. An install that served plain HTTP before is moved to
+HTTPS on 8443 by `ichor upgrade ichor`, which prints "ichor-ui no longer serves
+plain HTTP; point your edge at https://...:8443 (trust ichor-ui-ca)". Point the
+edge at 8443 and trust `ichor-ui-ca` (see above). The `--http-addr` flag is
+accepted for one more release as a no-op that logs "ignored", so a
+hand-edited Deployment still starts; the chart value `ichorUI.plaintextPort`
+is gone. An install that served TLS on 8080 keeps `--addr` pinned to 8080. See
 "Install Ichor with Helm" for the chart values.
 
 Port 8444 is an internal listener. The kube-apiserver uses it to fetch the

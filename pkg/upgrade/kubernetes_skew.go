@@ -18,7 +18,6 @@ package upgrade
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	"golang.org/x/mod/semver"
@@ -72,10 +71,7 @@ func KubernetesSkew(from, to string) error {
 // minor extracts the minor version number from a "vX.Y..." string already
 // confirmed valid by semver.IsValid.
 func minor(v string) (int, error) {
-	_, minorPart, ok := strings.Cut(strings.TrimPrefix(semver.MajorMinor(v), "v"), ".")
-	if !ok {
-		return 0, fmt.Errorf("version %q has no minor component", v)
-	}
+	_, m, err := splitMinor(strings.TrimPrefix(semver.MajorMinor(v), "v"))
 
-	return strconv.Atoi(minorPart)
+	return m, err
 }

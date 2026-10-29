@@ -162,13 +162,29 @@ func (h *BreakGlassHandler) Handle(ctx context.Context, req admission.Request) a
 // typed-name confirmation is a CRD rule (confirm == machineRef.name), so it
 // needs no copy here.
 func (h *BreakGlassHandler) handleOperation(ctx context.Context, req admission.Request) admission.Response {
-	if req.Operation != opCreate || slices.Contains(h.ExemptUsers, req.UserInfo.Username) {
+	if req.Operation != opCreate {
 		return admission.Allowed("")
 	}
 
 	var op ichorv1alpha1.TalosOperation
 	if err := json.Unmarshal(req.Object.Raw, &op); err != nil {
 		return admission.Errored(http.StatusBadRequest, fmt.Errorf("decoding the operation: %w", err))
+	}
+
+	// There is no Ichor-owned CNI to operate on an unmanaged cluster, for any user.
+	if op.Spec.Kind == ichorv1alpha1.TalosOperationKindCNI {
+		var cluster ichorv1alpha1.TalosCluster
+
+		key := client.ObjectKey{Namespace: req.Namespace, Name: op.Spec.ClusterRef.Name}
+		if err := h.Client.Get(ctx, key, &cluster); client.IgnoreNotFound(err) != nil {
+			return admission.Errored(http.StatusServiceUnavailable, fmt.Errorf("reading cluster %q: %w", key.Name, err))
+		} else if err == nil && cluster.Spec.CNI.Preset == presetUnmanaged {
+			return admission.Denied(ichorv1alpha1.CNINotManagedMessage)
+		}
+	}
+
+	if slices.Contains(h.ExemptUsers, req.UserInfo.Username) {
+		return admission.Allowed("")
 	}
 
 	// A destructive start needs the verb start on its subresource, on top of

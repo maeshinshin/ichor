@@ -452,3 +452,8 @@ func init() {
 // node and, for a control plane, removed its etcd member (ADR 0032). The controller adds it to every
 // approved control plane; a worker gets it when a removal or reset is requested for it (ADR 0085).
 const TalosMachineRemovalFinalizer = "ichor.maesh.dev/machine-removal"
+
+// TalosMachineHoldApplyAnnotation, set to "true", makes the TalosMachine reconciler compute and
+// report drift but never apply anything to the node (ADR 0103). `ichor adopt` creates adopted
+// machines with it and removes it once the live zero-drift check has passed.
+const TalosMachineHoldApplyAnnotation = "ichor.maesh.dev/hold-apply"

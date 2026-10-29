@@ -52,6 +52,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -134,6 +135,10 @@ const (
 	reasonClusterShuttingDown      = reasonOperationShuttingDown
 	reasonCARotationInProgress     = "CARotationInProgress"
 	reasonControlPlaneOverCap      = "ControlPlaneOverCap"
+	reasonAdoptionHeld             = "AdoptionHeld"
+
+	// conditionAdoptionHeld is True while TalosMachineHoldApplyAnnotation is set (ADR 0103).
+	conditionAdoptionHeld = "AdoptionHeld"
 )
 
 // ensureRemovalFinalizer gives an approved control plane machineRemovalFinalizer and reports true
@@ -580,6 +585,11 @@ func (r *TalosMachineReconciler) readNode(
 	}
 
 	res, stop, err = r.followStage(ctx, talos, m)
+	if stop {
+		return current, res, stop, err
+	}
+
+	res, stop, err = r.reportHold(ctx, m, current, rendered, hash)
 
 	return current, res, stop, err
 }
@@ -1083,4 +1093,37 @@ func (r *TalosMachineReconciler) machinesOfAuthSecret(ctx context.Context, obj c
 	}
 
 	return reqs
+}
+
+// reportHold keeps the AdoptionHeld condition in step with the hold-apply annotation (ADR 0103).
+// While it is set and the node differs from the render, stop=true: the drift is reported on Ready
+// and nothing is applied.
+func (r *TalosMachineReconciler) reportHold(
+	ctx context.Context, m *ichorv1alpha1.TalosMachine, current, rendered []byte, hash string,
+) (ctrl.Result, bool, error) {
+	if m.Annotations[ichorv1alpha1.TalosMachineHoldApplyAnnotation] != strconv.FormatBool(true) {
+		apimeta.RemoveStatusCondition(&m.Status.Conditions, conditionAdoptionHeld)
+
+		return ctrl.Result{}, false, nil
+	}
+
+	apimeta.SetStatusCondition(&m.Status.Conditions, metav1.Condition{
+		Type: conditionAdoptionHeld, Status: metav1.ConditionTrue, Reason: reasonAdoptionHeld,
+		Message: "annotation " + ichorv1alpha1.TalosMachineHoldApplyAnnotation + " is set; drift is reported and nothing is applied",
+	})
+
+	if render.Hash(current) == hash {
+		return ctrl.Result{}, false, nil
+	}
+
+	paths, err := ChangedPaths(current, rendered)
+	if err != nil {
+		res, err := r.retryLater(ctx, m, reasonConfigDiffFailed, "comparing current and rendered configuration failed")
+
+		return res, true, err
+	}
+
+	return ctrl.Result{RequeueAfter: reachabilityRecheck}, true, r.ready(ctx, m, metav1.ConditionFalse, reasonAdoptionHeld,
+		fmt.Sprintf("held by %s, nothing was applied (drifted paths: %s)",
+			ichorv1alpha1.TalosMachineHoldApplyAnnotation, strings.Join(paths, ", ")))
 }

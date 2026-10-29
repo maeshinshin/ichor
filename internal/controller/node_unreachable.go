@@ -117,6 +117,11 @@ func (r *TalosMachineReconciler) kubernetesNodeIP(ctx context.Context, m *ichorv
 		return ""
 	}
 
+	return internalIP(node)
+}
+
+// internalIP is the Node's first InternalIP, "" when it has none.
+func internalIP(node *corev1.Node) string {
 	for _, a := range node.Status.Addresses {
 		if a.Type == corev1.NodeInternalIP {
 			return a.Address

@@ -120,7 +120,7 @@ func TestCreateCARotationRefusedWhenTheCallerMayNotCreateOperations(t *testing.T
 				return nil
 			}
 
-			return apierrors.NewForbidden(schema.GroupResource{Group: ichorv1alpha1.SchemeGroupVersion.Group, Resource: caOpsResource}, obj.GetName(), nil)
+			return apierrors.NewForbidden(schema.GroupResource{Group: ichorv1alpha1.GroupVersion.Group, Resource: caOpsResource}, obj.GetName(), nil)
 		},
 	})
 	srv := &Server{Client: base, Impersonate: func(Identity) (client.Client, error) { return user, nil }}

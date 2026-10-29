@@ -249,7 +249,7 @@ func findConflict(cs []Conflict, key string) *Conflict {
 
 func TestOwnedKeyConflicts_MatchingAndSpellings(t *testing.T) {
 	user := map[string]any{
-		keyIPAM:                map[string]any{"mode": modeKubernetes},
+		keyIPAM:                map[string]any{keyMode: modeKubernetes},
 		"kubeProxyReplacement": "true",
 		"k8sServiceHost":       valLocalhost,
 		"k8sServicePort":       "7445", // a string, as a CLI --set would store it
@@ -279,7 +279,7 @@ func TestOwnedKeyConflicts_MatchingAndSpellings(t *testing.T) {
 }
 
 func TestOwnedKeyConflicts_NeedsAcceptAndTunnel(t *testing.T) {
-	live, err := LiveValuesFromUser(map[string]any{"ipam": map[string]any{"mode": modeKubernetes}})
+	live, err := LiveValuesFromUser(map[string]any{"ipam": map[string]any{keyMode: modeKubernetes}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -321,7 +321,7 @@ func TestOwnedKeyConflicts_NeedsAcceptAndTunnel(t *testing.T) {
 func TestUserValues_DropsOwnedKeys(t *testing.T) {
 	in := map[string]any{
 		"debug":           map[string]any{"enabled": true},
-		keyIPAM:           map[string]any{"mode": modeKubernetes, keyOperator: map[string]any{"x": 1}},
+		keyIPAM:           map[string]any{keyMode: modeKubernetes, keyOperator: map[string]any{"x": 1}},
 		keyTunnelProtocol: tunnelVxlan,
 	}
 

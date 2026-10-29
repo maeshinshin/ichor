@@ -1031,6 +1031,40 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(apimeta.FindStatusCondition(got.Status.Conditions, conditionAdoptionHeld)).To(BeNil())
 	})
 
+	It("reports Converged while hold-apply is set when the node differs only in the legacy registry mirror form", func() {
+		bundle := newTestBundle("v1.14")
+		secret := newTestSecret(bundle)
+		cluster := newTestCluster(secret.Name, "v1.14")
+		cluster.Spec.Registries = []ichorv1alpha1.TalosClusterRegistry{
+			{Host: "ghcr.io", Endpoints: []string{"http://10.0.0.1:5000"}, SkipFallback: true, OverridePath: true},
+		}
+		Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
+
+		m := newTestMachine(cluster.Name, true)
+		m.Annotations = map[string]string{ichorv1alpha1.TalosMachineHoldApplyAnnotation: strconv.FormatBool(true)}
+		Expect(k8sClient.Update(ctx, m)).To(Succeed())
+
+		rendered, hash, err := render.Render(cluster, m, bundle, nil, nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		fake := &fakeTalosClient{current: legacyMirrorForm(rendered)}
+		Expect(string(fake.current)).NotTo(ContainSubstring("RegistryMirrorConfig"))
+
+		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
+
+		_, err = reconcileMachine(r, m)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(fake.applyCalls).To(BeEmpty())
+
+		got := fetchMachine(m)
+		cond := readyCondition(got)
+		Expect(cond).NotTo(BeNil())
+		Expect(cond.Status).To(Equal(metav1.ConditionTrue))
+		Expect(cond.Reason).To(Equal(reasonConverged), "message: %s", cond.Message)
+		Expect(got.Status.AppliedConfigHash).To(Equal(hash))
+		Expect(apimeta.IsStatusConditionTrue(got.Status.Conditions, conditionAdoptionHeld)).To(BeTrue())
+	})
+
 	It("applies a render change from an Ichor upgrade under warnOnly instead of calling it drift, and a restart re-applies nothing", func() {
 		bundle := newTestBundle("v1.14")
 		secret := newTestSecret(bundle)

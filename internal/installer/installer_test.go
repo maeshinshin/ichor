@@ -43,6 +43,8 @@ import (
 // handling and the restore-by-update are the behaviour under test, which a fake client
 // would only pretend to have.
 
+const kindRoleName = "Role"
+
 var (
 	testEnv   *envtest.Environment
 	k8sClient client.Client
@@ -524,7 +526,7 @@ subjects: [{kind: ServiceAccount, name: ichor-installer, namespace: %[1]s}]
 		t.Fatalf("loadSnapshot: %v", err)
 	}
 
-	if len(snap) == 0 || snap[0].Kind != "Role" {
+	if len(snap) == 0 || snap[0].Kind != kindRoleName {
 		t.Errorf("the snapshot must start with the installer RBAC so a rollback restores it last, got %+v", snap)
 	}
 }

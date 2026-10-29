@@ -32,6 +32,8 @@ import { Progress } from '@/components/ui/progress'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { BackupNow } from '@/components/BackupNow'
+import { CARotationAdvice } from '@/components/CARotationAdvice'
+import { caRotationAdvised, isCniUnmanaged } from '@/lib/cni'
 import { ConditionList } from '@/components/ConditionList'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { OperationControls } from '@/components/OperationControls'
@@ -209,6 +211,7 @@ function Home({
       </header>
       {opsError && <ErrorAlert {...opsError} />}
       <div class="space-y-4">
+        {caRotationAdvised(cluster.conditions) && <CARotationAdvice cluster={ref} />}
         {items.length > 0 && (
           <ul class="space-y-2">
             {items.map((a) => {
@@ -387,10 +390,14 @@ function Home({
                     <VersionRow name={t('ops.row.ichor')} icon={CloudCogIcon} installed={ichorVersion ?? t('ops.installedUnknown')}>
                       <StartOperationDialog kind="ichor" cluster={ref} current={ichorVersion ?? ''} label={t('ops.action.upgrade')} disabled={!!busy} />
                     </VersionRow>
-                    <ItemSeparator />
-                    <VersionRow name={t('ops.row.cni')} icon={NetworkIcon} installed={t(kubeProxy === 'replaced' ? 'ops.modeReplaced' : 'ops.modeEnabled')}>
-                      <StartOperationDialog kind="cni" cluster={ref} current={kubeProxy} label={t('ops.action.switch')} disabled={!!busy} />
-                    </VersionRow>
+                    {!isCniUnmanaged(cluster.cniPreset) && (
+                      <>
+                        <ItemSeparator />
+                        <VersionRow name={t('ops.row.cni')} icon={NetworkIcon} installed={t(kubeProxy === 'replaced' ? 'ops.modeReplaced' : 'ops.modeEnabled')}>
+                          <StartOperationDialog kind="cni" cluster={ref} current={kubeProxy} label={t('ops.action.switch')} disabled={!!busy} />
+                        </VersionRow>
+                      </>
+                    )}
                 </ItemGroup>
               </CardContent>
               {busyReason && (

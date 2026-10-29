@@ -99,7 +99,10 @@ func TestF3NoCNIHelmPath(t *testing.T) {
 	if strings.TrimSpace(held) != "" {
 		t.Errorf("hold-apply still set: %q", held)
 	}
-	t.Logf("spec.cni = %s, tunnel/kubeProxy read back", clusterJSONPath(c, "{.spec.cni}"))
+	t.Logf("spec.cni = %s", clusterJSONPath(c, "{.spec.cni}"))
+	if got := clusterJSONPath(c, "{.spec.cni.tunnel}"); got != "geneve" { // ADR 0104 F3: the tunnel is read back from Ichor's Cilium
+		t.Errorf("spec.cni.tunnel = %q, want geneve (the controller would flip the live tunnel with an ichor-cni Job)", got)
+	}
 	if jobs, _ := inner(c, "-n", crNS, "get", "jobs", "--no-headers"); strings.Contains(jobs, "ichor-cni") {
 		t.Errorf("an ichor-cni Job exists: %s", jobs)
 	}

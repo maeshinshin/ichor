@@ -79,7 +79,7 @@ func TestBootstrapManifest_IsTheExpandedChart(t *testing.T) {
 	_, objs := renderObjects(t, New(), cni.KubeProxyEnabled)
 
 	for _, want := range [][2]string{
-		{"DaemonSet", ChartName},
+		{kindDaemonSet, ChartName},
 		{"Deployment", "cilium-operator"},
 		{"ConfigMap", "cilium-config"},
 		{"ServiceAccount", ChartName},

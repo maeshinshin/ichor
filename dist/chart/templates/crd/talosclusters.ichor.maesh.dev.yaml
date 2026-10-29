@@ -2966,9 +2966,6 @@ spec:
                                             type: string
                                           type: array
                                       type: object
-                                  required:
-                                  - certSANs
-                                  - type
                                   type: object
                                 persist:
                                   description: 'docgen:nodoc Deprecated: Not supported
@@ -2979,8 +2976,6 @@ spec:
                                     the contents.
                                   type: string
                               required:
-                              - cluster
-                              - machine
                               - version
                               type: object
                             kernelModuleConfig:

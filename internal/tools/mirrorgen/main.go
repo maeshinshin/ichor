@@ -189,6 +189,19 @@ var fieldOverrides = map[string]fieldOverride{
 	"KubeletConfig.KubeletCredentialProviderConfig": {pkgPath: pkgKubeletV1, typeName: "CredentialProviderConfig"},
 }
 
+// sparseFields are machinery fields without `omitempty` that the mirror still emits as optional.
+// Machinery tags them as always-present because a full machine config always has them, but a
+// TalosConfigPatch is a sparse overlay: a patch that only sets cluster.apiServer must not have to
+// repeat machine.type and machine.certSANs (and an empty value is ignored by the strategic merge,
+// so leaving them out changes nothing on the node). Relaxing a required field is additive: no
+// CRD field is removed or renamed. Keyed "StructName.FieldName" like fieldOverrides.
+var sparseFields = map[string]bool{
+	"Config.MachineConfig":          true,
+	"Config.ClusterConfig":          true,
+	"MachineConfig.MachineType":     true,
+	"MachineConfig.MachineCertSANs": true,
+}
+
 // secretFields are machinery fields that carry secret material, keyed
 // "StructName.FieldName" like fieldOverrides above, but for a different
 // reason than fieldOverrides: these are dropped regardless of their Go

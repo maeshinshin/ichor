@@ -456,7 +456,7 @@ func (g *generator) structMapping(named *types.Named, st *types.Struct) *typeMap
 			name:     fld.Name(),
 			jsonName: yamlName,
 			doc:      g.fieldDoc(name, fld.Name()),
-			optional: omitempty,
+			optional: omitempty || sparseFields[fieldKey],
 			mapping:  mapping,
 		})
 	}

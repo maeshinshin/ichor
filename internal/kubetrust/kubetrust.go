@@ -79,17 +79,7 @@ func (p *Pool) add(pemData []byte) ([]*x509.Certificate, error) {
 	var added []*x509.Certificate
 
 	for _, c := range cs {
-		dup := false
-
-		for _, e := range p.extra {
-			if e.Equal(c) {
-				dup = true
-
-				break
-			}
-		}
-
-		if !dup {
+		if !slices.ContainsFunc(p.extra, c.Equal) {
 			p.extra = append(p.extra, c)
 			added = append(added, c)
 		}

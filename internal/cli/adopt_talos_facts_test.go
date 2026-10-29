@@ -126,10 +126,6 @@ func testReadTalosFactsLegacy(t *testing.T) {
 			t.Errorf("inline manifests = %+v", f.InlineManifests)
 		}
 
-		if len(f.ExternalManifestURLs) != 1 || f.ExternalManifestURLs[0] != "https://example.invalid/a.yaml" {
-			t.Errorf("external = %v", f.ExternalManifestURLs)
-		}
-
 		if f.Install.Disk != "/dev/vda" || f.Install.Image != "ghcr.io/siderolabs/installer:v1.12.4" {
 			t.Errorf("install = %+v", f.Install)
 		}

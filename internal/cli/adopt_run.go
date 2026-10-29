@@ -410,12 +410,12 @@ func (st *adoptState) inspect(ctx context.Context, deps adoptDeps) error {
 	case !st.fresh:
 		st.kubeProxy = cmp.Or(st.cluster.Spec.CNI.KubeProxy, kubeProxyEnabled)
 	case k8s != nil:
-		kp, err := detectKubeProxy(k8s, first.Facts.KubeProxyEnabled, st.unmanaged)
+		mode, err := detectKubeProxy(k8s, first.Facts.KubeProxyEnabled, st.unmanaged)
 		if err != nil {
 			return fmt.Errorf("adopt: %w", err)
 		}
 
-		st.kubeProxy = kp.Mode
+		st.kubeProxy = mode
 	case first.Facts.KubeProxyEnabled:
 		st.kubeProxy = kubeProxyEnabled
 	default:

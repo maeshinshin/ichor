@@ -547,7 +547,20 @@ func (d Difference) String() string {
 		return fmt.Sprintf("%s: %s", d.Object, d.Kind)
 	}
 
-	return fmt.Sprintf("%s %s: %s (chart %v, live %v)", d.Object, d.Path, d.Kind, d.Rendered, d.Live)
+	return fmt.Sprintf("%s %s: %s (chart %s, live %s)", d.Object, d.Path, d.Kind, shortValue(d.Rendered), shortValue(d.Live))
+}
+
+// maxPrintedValue bounds one value in the plan output (a ConfigMap entry can be several KB).
+const maxPrintedValue = 200
+
+// shortValue prints v, cut to maxPrintedValue bytes with its full length.
+func shortValue(v any) string {
+	s := fmt.Sprintf("%v", v)
+	if len(s) <= maxPrintedValue {
+		return s
+	}
+
+	return fmt.Sprintf("%s… (%d bytes)", s[:maxPrintedValue], len(s))
 }
 
 // DiffLive is the diff gate (precondition 4): it renders

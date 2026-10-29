@@ -23,7 +23,6 @@ import (
 	"strings"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -165,21 +164,11 @@ func runAdopt(ctx context.Context, clusterName, namespace string, deps adoptDeps
 		}
 	}
 
-	for _, p := range toCreate {
-		if err := deps.K8s.Create(ctx, p.Patch); err != nil {
-			if apierrors.IsAlreadyExists(err) {
-				_, _ = fmt.Fprintf(deps.Stderr, "adopt: TalosConfigPatch %q already exists, skipping\n", p.Patch.Name)
+	// Today's adopt writes only the patches; the other parts of the write phase (adopt_write.go)
+	// are wired in by the four-phase flow.
+	_, err = writeAdopt(ctx, deps.K8s, adoptWriteInput{Namespace: namespace, Patches: patches, Stderr: deps.Stderr})
 
-				continue
-			}
-
-			return fmt.Errorf("adopt: creating TalosConfigPatch for machine %q: %w", p.Machine, err)
-		}
-
-		_, _ = fmt.Fprintf(deps.Stderr, "adopt: created TalosConfigPatch %q for machine %q\n", p.Patch.Name, p.Machine)
-	}
-
-	return nil
+	return err
 }
 
 // planMachine reads m's current configuration over the Talos API and

@@ -11,10 +11,10 @@ spec:
   ports:
     # Named so ../prometheus/ui-monitor.yaml's ServiceMonitor can target it by name,
     # mirroring dist/chart/templates/ui/ui-service.yaml.
-    - name: http
-      port: 8080
+    - name: https
+      port: 8443
       protocol: TCP
-      targetPort: 8080
+      targetPort: 8443
   selector:
     control-plane: ui-backend
     app.kubernetes.io/name: ichor

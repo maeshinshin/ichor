@@ -21,3 +21,5 @@ ADR 0103 section 2.2 made machine reclaim a break-glass feature, off unless `rec
 - A fresh install lets ichor:admin use Reset and add with no step to take; anyone else needs a RoleBinding to `ichor-machine-reclaimer`.
 - An installation that had the switch off and relied on it as a guard now has the verb in `ichor-admin`; an operator who does not want it there must not grant `ichor:admin` or must edit the role.
 - Existing `IchorInstallation` objects with `spec.reclaim` keep working; the Warning tells the person writing them.
+
+- The removed flags `--reclaim` (manager) and `--reclaim-enabled` (ichor-ui) stay accepted as deprecated no-ops for one release, as `--http-addr` in ADR 0105 unit 10, so a hand-edited Deployment that still passes them starts. Delete them in the release after.

@@ -172,6 +172,7 @@ func main() {
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
 	flag.StringVar(&deployedBy, "deployed-by", ichorv1alpha1.IchorManagerInstaller,
 		"Who deploys Ichor, recorded as spec.deployment.manager when the controller creates the missing IchorInstallation (installer or helm; the chart passes helm).")
+	_ = flag.Bool("reclaim", false, "DEPRECATED no-op: Reset and add is decided by RBAC alone; accepted for one release so an old Deployment still starts")
 	flag.BoolVar(&settingsReadOnly, "settings-read-only", false,
 		"Ignore the runtime settings in the IchorInstallation spec and deny writes to them: a Git or Helm deployment owns them (chart settings.readOnly).")
 	flag.BoolVar(&noCiliumPolicies, "no-cilium-policies", false,

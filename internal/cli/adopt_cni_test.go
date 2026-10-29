@@ -33,7 +33,7 @@ import (
 
 func testDS(name, image string) *appsv1.DaemonSet {
 	return &appsv1.DaemonSet{
-		Namespace: "kube-system", Name: name,
+		Namespace: k8sFactsSystemNamespace, Name: name,
 		Spec: appsv1.DaemonSetSpec{Template: corev1.PodTemplateSpec{
 			Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "c", Image: image}}},
 		}},
@@ -177,10 +177,10 @@ func TestDetectKubeProxy(t *testing.T) {
 		wantErr      bool
 	}{
 		{"enabled, replacement off", "false", true, false, string(cni.KubeProxyEnabled), false},
-		{"disabled, replacement on", "true", false, false, string(cni.KubeProxyReplaced), false},
+		{"disabled, replacement on", kprTrue, false, false, string(cni.KubeProxyReplaced), false},
 		{"legacy strict", "strict", false, false, string(cni.KubeProxyReplaced), false},
 		{"disabled, replacement off", "false", false, false, "", true},
-		{"enabled, replacement on", "true", true, false, "", true},
+		{"enabled, replacement on", kprTrue, true, false, "", true},
 		{"partial", "partial", true, false, "", true},
 		{"unmanaged enabled", "", true, true, string(cni.KubeProxyEnabled), false},
 		{"unmanaged replaced", "", false, true, string(cni.KubeProxyReplaced), false},

@@ -174,7 +174,7 @@ export function MachineList() {
                   <LinkRow key={refKey(m)} to={m.ref ? `/nodes/${m.ref.name}` : '/nodes'}>
                     <TableCell>
                       {m.ref ? (
-                        <Link to={`/nodes/${m.ref.name}`} class="font-medium hover:underline">
+                        <Link to={`/nodes/${m.ref.name}`} className="font-medium hover:underline">
                           {machineDisplayName(m)}
                         </Link>
                       ) : (

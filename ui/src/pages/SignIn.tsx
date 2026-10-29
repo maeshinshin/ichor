@@ -21,11 +21,11 @@ export function SignIn({ providers }: { providers: AuthProvider[] }) {
           <CardTitle>{t('signin.title')}</CardTitle>
           <CardDescription>{t('signin.description')}</CardDescription>
         </CardHeader>
-        <CardContent class="flex flex-col gap-3">
+        <CardContent className="flex flex-col gap-3">
           {ordered.map((p, i) => (
             <Button
               key={p.id}
-              class="w-full"
+              className="w-full"
               variant={i === 0 ? 'default' : 'outline'}
               onClick={() => startLogin(p).catch((e) => setError(e instanceof Error ? e.message : t('app.loginFailed')))}
             >

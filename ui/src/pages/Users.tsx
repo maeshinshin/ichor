@@ -64,7 +64,7 @@ export function Users() {
                 <TableHead>{t('users.colRoles')}</TableHead>
                 <TableHead>{t('users.colDisabled')}</TableHead>
                 <TableHead>{t('users.colReady')}</TableHead>
-                <TableHead class="w-10">
+                <TableHead className="w-10">
                   <span class="sr-only">{t('col.actions')}</span>
                 </TableHead>
               </TableRow>

@@ -135,7 +135,7 @@ export function NodeActions({
         <DropdownMenuTrigger asChild>
           <Button variant="outline" size="sm" aria-label={t('actions.menuLabel')}>
             {t('actions.menu')}
-            <ChevronDownIcon class="size-4" />
+            <ChevronDownIcon className="size-4" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-auto min-w-56">
@@ -301,7 +301,7 @@ function CaptureDialog({
             <Label htmlFor="capture-filter">{t('capture.filter')}</Label>
             <Textarea
               id="capture-filter"
-              class="font-mono text-xs"
+              className="font-mono text-xs"
               rows={4}
               value={filter}
               onInput={(e) => setFilter(e.currentTarget.value)}

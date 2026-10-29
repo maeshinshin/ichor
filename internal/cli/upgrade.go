@@ -18,10 +18,12 @@ package cli
 
 import (
 	"context"
+	"strings"
 
 	"github.com/spf13/cobra"
 
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/version"
 )
 
 // startFlags are the flags every command that starts an operation shares.
@@ -53,6 +55,10 @@ func newUpgradeCmd(use, short string, kind pb.OperationKind) *cobra.Command {
 It shows which machines restart and in which order, and asks for confirmation unless --yes.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := checkUpgradeTarget(args[0]); err != nil {
+				return err
+			}
+
 			if kind == pb.OperationKind_OPERATION_KIND_ICHOR {
 				if err := refuseHelmManagedInstall(cmd.Context()); err != nil {
 					return err
@@ -64,6 +70,13 @@ It shows which machines restart and in which order, and asks for confirmation un
 			})
 		},
 	}
+}
+
+// checkUpgradeTarget refuses a target that is not a semantic version before anything is
+// written: the spec would keep the bad value, and the controller would misorder it. The "v" is
+// optional on the command line, as the server takes it, and is added here the same way.
+func checkUpgradeTarget(target string) error {
+	return version.CheckSemver("v" + strings.TrimPrefix(target, "v"))
 }
 
 func upgradeSpec(kind pb.OperationKind, target string, f startFlags) startSpec {

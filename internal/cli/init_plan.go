@@ -269,9 +269,9 @@ func buildInitPlan(in initPlanInput, warn io.Writer) (*ichorv1alpha1.TalosCluste
 
 	switch in.CNITunnel {
 	case "":
-	case "vxlan", "geneve":
+	case ciliumTunnelVxlan, ciliumTunnelGeneve:
 	default:
-		return nil, fmt.Errorf("init: --cni-tunnel %q is invalid: must be %q or %q", in.CNITunnel, "vxlan", "geneve")
+		return nil, fmt.Errorf("init: --cni-tunnel %q is invalid: must be %q or %q", in.CNITunnel, ciliumTunnelVxlan, ciliumTunnelGeneve)
 	}
 
 	switch in.EndpointType {

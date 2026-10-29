@@ -122,7 +122,7 @@ func testReadTalosFactsLegacy(t *testing.T) {
 			t.Errorf("kubeprism = %+v", f.KubePrism)
 		}
 
-		if len(f.InlineManifests) != 1 || f.InlineManifests[0].Name != "cilium" || !strings.Contains(f.InlineManifests[0].Contents, "DaemonSet") {
+		if len(f.InlineManifests) != 1 || f.InlineManifests[0].Name != string(detectedCilium) || !strings.Contains(f.InlineManifests[0].Contents, "DaemonSet") {
 			t.Errorf("inline manifests = %+v", f.InlineManifests)
 		}
 

@@ -46,9 +46,12 @@ func asRecord(t *testing.T, v map[string]any) map[string]any {
 func TestReadBackRelease_ReproducesTheDeployedValues(t *testing.T) {
 	t.Parallel()
 
-	user := map[string]any{"hubble": map[string]any{"relay": map[string]any{"enabled": true}}, "debug": map[string]any{"enabled": true}}
+	user := map[string]any{
+		"hubble": map[string]any{"relay": map[string]any{keyEnabled: true}},
+		keyDebug: map[string]any{keyEnabled: true},
+	}
 
-	for _, tunnel := range []string{"", "vxlan", "geneve"} {
+	for _, tunnel := range []string{"", tunnelVxlan, tunnelGeneve} {
 		for _, kp := range []cni.KubeProxyMode{cni.KubeProxyEnabled, cni.KubeProxyReplaced} {
 			for _, u := range []map[string]any{nil, user} {
 				deployed, err := EffectiveValues(u, kp, tunnel)

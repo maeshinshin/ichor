@@ -83,28 +83,17 @@ const versionPattern = /^v?\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/
 // targetError says what is wrong with the target typed for a kind, or null.
 // The server checks the same rules; this only keeps the button disabled.
 export function targetError(kind: OpKind, input: string): 'required' | 'invalid' | null {
+  if (kindNeedsTypedName(kind)) return null
   const v = input.trim()
-  switch (kind) {
-    case 'shutdown':
-    case 'ca-rotation':
-    case 'config':
-      return null
-    case 'cni':
-      return v === '' ? 'required' : v === 'enabled' || v === 'replaced' ? null : 'invalid'
-    default:
-      return v === '' ? 'required' : versionPattern.test(v) ? null : 'invalid'
-  }
+  if (v === '') return 'required'
+  if (kind === 'cni') return v === 'enabled' || v === 'replaced' ? null : 'invalid'
+  return versionPattern.test(v) ? null : 'invalid'
 }
 
 // confirmMatches is the extra gate of a shutdown: the name of the cluster has
 // to be typed.
 export function confirmMatches(typed: string, name: string): boolean {
   return name !== '' && typed.trim() === name
-}
-
-// kindNeedsTarget is false for the kinds that start without a version or mode.
-export function kindNeedsTarget(kind: OpKind): boolean {
-  return kind !== 'shutdown' && kind !== 'ca-rotation' && kind !== 'config'
 }
 
 // kindNeedsTypedName: the kinds that take every machine through a disruptive

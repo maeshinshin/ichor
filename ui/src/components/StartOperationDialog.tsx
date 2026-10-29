@@ -16,7 +16,7 @@ import { operationClient } from '@/lib/connect'
 import { notifyDone } from '@/lib/notify'
 import { describeError, type ErrorShape } from '@/lib/errors'
 import { versionProblem } from '@/lib/clusterOps'
-import { confirmMatches, kindNeedsTarget, kindNeedsTypedName, kubernetesStages, planCounts, planSteps, targetError, type OpKind } from '@/lib/operations'
+import { confirmMatches, kindNeedsTypedName, kubernetesStages, planCounts, planSteps, targetError, type OpKind } from '@/lib/operations'
 import { useT } from '@/lib/useT'
 import { navigate } from '@/router'
 
@@ -63,8 +63,8 @@ export function StartOperationDialog({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<ErrorShape | null>(null)
 
-  const needsTarget = kindNeedsTarget(kind)
   const needsName = kindNeedsTypedName(kind)
+  const needsTarget = !needsName
   const targetProblem = needsTarget ? checkTarget(kind, current, target) : null
   const startable =
     plan !== null && plan.blocked === '' && (!needsName || confirmMatches(typed, cluster.name)) && !busy

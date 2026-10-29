@@ -154,9 +154,33 @@ func TestResolveAdoptBundle_RecoverStoresPrivately(t *testing.T) {
 		t.Fatalf("stderr should name the path and nothing else: %q", stderr.String())
 	}
 
-	// A second run refuses to overwrite.
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// A rerun that recovers the same bundle (the first run was killed after saving) is accepted
+	// and leaves the file alone.
+	again, saveAgain, err := resolveAdoptBundle(context.Background(), opts, dialerFor(reader, nil), &stderr)
+	if err != nil || again == nil || saveAgain == nil {
+		t.Fatalf("rerun with the identical bundle: %v", err)
+	}
+
+	if err := saveAgain(); err != nil {
+		t.Fatal(err)
+	}
+
+	if after, _ := os.ReadFile(path); !bytes.Equal(before, after) {
+		t.Fatal("the rerun changed the stored bundle")
+	}
+
+	// A different recovered bundle is never allowed to overwrite it.
+	if err := os.WriteFile(path, append(before, []byte("# another cluster's\n")...), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
 	if _, _, err := resolveAdoptBundle(context.Background(), opts, dialerFor(reader, nil), &stderr); !errors.Is(err, errRecoveredExists) {
-		t.Fatalf("second run err = %v, want errRecoveredExists", err)
+		t.Fatalf("different bundle err = %v, want errRecoveredExists", err)
 	}
 }
 

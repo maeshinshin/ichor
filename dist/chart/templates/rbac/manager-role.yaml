@@ -66,6 +66,23 @@ rules:
   - patch
   - update
 - apiGroups:
+  - admissionregistration.k8s.io
+  resources:
+  - mutatingwebhookconfigurations
+  verbs:
+  - list
+  - watch
+- apiGroups:
+  - admissionregistration.k8s.io
+  resourceNames:
+  - ichor-mutating-webhook-configuration
+  resources:
+  - mutatingwebhookconfigurations
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
   - apps
   resources:
   - daemonsets

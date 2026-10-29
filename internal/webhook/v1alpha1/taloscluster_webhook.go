@@ -29,6 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/settings"
 	"github.com/maeshinshin/ichor/internal/version"
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
 )
@@ -38,8 +39,14 @@ import (
 var talosclusterlog = logf.Log.WithName("taloscluster-resource")
 
 // SetupTalosClusterWebhookWithManager registers the webhook for TalosCluster in the manager.
-func SetupTalosClusterWebhookWithManager(mgr ctrl.Manager) error {
+func SetupTalosClusterWebhookWithManager(mgr ctrl.Manager, s ...*settings.Reader) error {
+	d := &TalosClusterDefaulter{}
+	if len(s) > 0 {
+		d.Settings = s[0]
+	}
+
 	return ctrl.NewWebhookManagedBy(mgr, &ichorv1alpha1.TalosCluster{}).
+		WithDefaulter(d).
 		WithValidator(&TalosClusterCustomValidator{APIReader: mgr.GetAPIReader(), BreakGlass: breakGlassCheckFor(mgr.GetClient())}).
 		Complete()
 }

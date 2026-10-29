@@ -44,7 +44,18 @@ rules:
   - create
 - apiGroups:
   - admissionregistration.k8s.io
+  resourceNames:
+  - ichor-mutating-webhook-configuration
   resources:
+  - mutatingwebhookconfigurations
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - admissionregistration.k8s.io
+  resources:
+  - mutatingwebhookconfigurations
   - validatingwebhookconfigurations
   verbs:
   - list

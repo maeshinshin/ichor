@@ -18,10 +18,8 @@ package uiapi
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
-	"connectrpc.com/connect"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
@@ -117,12 +115,7 @@ func (s *Server) readCredential(ctx context.Context, name string) (cred ichoraut
 // replicas never overwrite each other's users. The Secret must exist (the
 // chart creates it; the ServiceAccount cannot).
 func (s *Server) writeCredential(ctx context.Context, name string, cred ichorauth.Credential) error {
-	raw, err := cred.Marshal()
-	if err != nil {
-		return err
-	}
-
-	patch, err := json.Marshal(map[string]any{"data": map[string][]byte{name: raw}})
+	patch, err := cred.MergePatch(name)
 	if err != nil {
 		return err
 	}
@@ -152,20 +145,7 @@ func (s *Server) setCredential(ctx context.Context, name, password string, mustC
 	}
 
 	// This replica must see the new mustChange at once (the other waits its TTL).
-	if s.Users != nil {
-		s.Users.Cache.Forget(name)
-	}
-
-	return nil
-}
-
-func generatePassword() (string, error) { return ichorauth.GeneratePassword() }
-
-// checkPasswordPolicy applies the password policy and says why it failed.
-func checkPasswordPolicy(password string) error {
-	if err := ichorauth.ValidatePassword(password); err != nil {
-		return connect.NewError(connect.CodeInvalidArgument, err)
-	}
+	s.Users.Cache.Forget(name)
 
 	return nil
 }

@@ -48,6 +48,7 @@ resources:
 - taloscluster_editor_role.yaml
 - taloscluster_viewer_role.yaml
 - break_glass_role.yaml
+- machine_reclaimer_role.yaml
 - diagnostics_role.yaml
 - ichor_viewer_role.yaml
 - ichor_operator_role.yaml

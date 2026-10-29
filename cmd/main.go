@@ -130,6 +130,7 @@ func main() {
 	var enableHTTP2 bool
 	var certExpiryWarningDays int
 	var userIssuer bool
+	var reclaimEnabled bool
 	var uiServiceName string
 	var refreshLifetime time.Duration
 	var tlsOpts []func(*tls.Config)
@@ -151,6 +152,9 @@ func main() {
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
+	flag.BoolVar(&reclaimEnabled, "reclaim", false,
+		"Allow break-glass machine reclaim: the MachineReclaim controller and webhook act. "+
+			"Off, they refuse; the credential sweeper runs either way.")
 	flag.BoolVar(&userIssuer, "user-issuer", false,
 		"Keep the signing keys, internal TLS and trust ConfigMap for ichor-ui's own OIDC issuer.")
 	flag.StringVar(&uiServiceName, "ui-service-name", "",
@@ -547,8 +551,10 @@ func main() {
 		os.Exit(1)
 	}
 	if err := (&controller.MachineReclaimReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:              mgr.GetClient(),
+		Enabled:             reclaimEnabled,
+		ControllerNamespace: os.Getenv("POD_NAMESPACE"),
+		Recorder:            mgr.GetEventRecorderFor("ichor-controller"), //nolint:staticcheck // typed against record.EventRecorder, as above
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "machinereclaim")
 		os.Exit(1)

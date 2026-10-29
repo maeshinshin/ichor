@@ -125,6 +125,15 @@ rules:
 - apiGroups:
   - ichor.maesh.dev
   resources:
+  - machinereclaims
+  verbs:
+  - delete
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
   - talosmachines
   verbs:
   - create
@@ -146,6 +155,7 @@ rules:
   resources:
   - ichorinstallations/status
   - ichorusers/status
+  - machinereclaims/status
   - talosclusters/status
   - talosetcdbackups/status
   - talosmachines/status

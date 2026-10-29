@@ -121,6 +121,7 @@ rules:
   resources:
   - ichorinstallations/status
   - ichorusers/status
+  - machinereclaims/status
   - talosclusters/status
   - talosetcdbackups/status
   - talosmachines/status
@@ -133,6 +134,7 @@ rules:
 - apiGroups:
   - ichor.maesh.dev
   resources:
+  - machinereclaims
   - talosmachines
   verbs:
   - create
@@ -145,6 +147,7 @@ rules:
 - apiGroups:
   - ichor.maesh.dev
   resources:
+  - machinereclaims/finalizers
   - talosmachines/finalizers
   - talosoperations/finalizers
   verbs:

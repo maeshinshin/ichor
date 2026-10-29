@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'preact/hooks'
+import { InboxIcon, PlusIcon } from 'lucide-preact'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 import { ApproveDialog } from '@/components/ApproveDialog'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
-import { DataTable, LinkRow, ListToolbar } from '@/components/ListToolbar'
-import { PageHeader } from '@/components/PageHeader'
+import { LinkRow, ListToolbar } from '@/components/ListToolbar'
+import { TitleBar } from '@/components/TitleBar'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
 import { ReadyCell } from '@/components/ReadyCell'
 import { ErrorAlert } from '@/components/ErrorAlert'
@@ -65,22 +67,26 @@ export function MachineList() {
 
   return (
     <div class="space-y-6">
-      <PageHeader
+      <TitleBar
         title={t('nodes.title')}
         actions={
           <Button asChild size="sm">
-            <Link to="/nodes/add">{t('nodes.add')}</Link>
+            <Link to="/nodes/add">
+              <PlusIcon data-icon="inline-start" aria-hidden="true" />
+              {t('nodes.add')}
+            </Link>
           </Button>
         }
       />
       <ListToolbar query={query} onQuery={setQuery} shown={shown.length} total={machines.length} onRefresh={reload} />
       {pending.length > 0 && (
-<section>
-<h2 class="mb-2 text-sm font-medium">{t('machines.pending', { n: pending.length })}</h2>
+<Card>
+<CardHeader><CardTitle>{t('machines.pending', { n: pending.length })}</CardTitle></CardHeader>
+<CardContent>
           {pending.length === 0 ? (
-            <EmptyNote>{t('machines.pendingEmpty')}</EmptyNote>
+            <EmptyNote icon={InboxIcon}>{t('machines.pendingEmpty')}</EmptyNote>
           ) : (
-            <DataTable><Table>
+            <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>{t('col.identity')}</TableHead>
@@ -102,18 +108,19 @@ export function MachineList() {
                   </TableRow>
                 ))}
               </TableBody>
-            </Table></DataTable>
+            </Table>
           )}
-        </section>
+        </CardContent></Card>
 )}
 
       {rejected.length > 0 && (
-<section>
-<h2 class="mb-2 text-sm font-medium">{t('machines.rejected', { n: rejected.length })}</h2>
+<Card>
+<CardHeader><CardTitle>{t('machines.rejected', { n: rejected.length })}</CardTitle></CardHeader>
+<CardContent>
           {rejected.length === 0 ? (
-            <EmptyNote>{t('machines.rejectedEmpty')}</EmptyNote>
+            <EmptyNote icon={InboxIcon}>{t('machines.rejectedEmpty')}</EmptyNote>
           ) : (
-            <DataTable><Table>
+            <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>{t('col.identity')}</TableHead>
@@ -143,17 +150,18 @@ export function MachineList() {
                   </TableRow>
                 ))}
               </TableBody>
-            </Table></DataTable>
+            </Table>
           )}
-        </section>
+        </CardContent></Card>
 )}
 
-      <section>
-<h2 class="mb-2 text-sm font-medium">{t('machines.approved', { n: approved.length })}</h2>
+      <Card>
+<CardHeader><CardTitle>{t('machines.approved', { n: approved.length })}</CardTitle></CardHeader>
+<CardContent>
           {approved.length === 0 ? (
-            <EmptyNote>{t('machines.approvedEmpty')}</EmptyNote>
+            <EmptyNote icon={InboxIcon}>{t('machines.approvedEmpty')}</EmptyNote>
           ) : (
-            <DataTable><Table>
+            <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>{t('machines.colHostname')}</TableHead>
@@ -180,9 +188,9 @@ export function MachineList() {
                   </LinkRow>
                 ))}
               </TableBody>
-            </Table></DataTable>
+            </Table>
           )}
-        </section>
+        </CardContent></Card>
     </div>
   )
 }

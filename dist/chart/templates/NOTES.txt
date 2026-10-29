@@ -13,3 +13,7 @@ To learn more about the release, try:
 
   $ helm status {{ .Release.Name }} -n {{ .Release.Namespace }}
   $ helm get all {{ .Release.Name }} -n {{ .Release.Namespace }}
+
+On a cluster with no CNI the chart refuses to install (preflight.cni): run
+`ichor cni bootstrap` first, which installs Ichor Cilium, then install again.
+After the install, register the cluster with `ichor adopt`.

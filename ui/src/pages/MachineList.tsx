@@ -89,9 +89,6 @@ export function MachineList() {
 <Card>
 <CardHeader><CardTitle>{t('machines.pending', { n: pending.length })}</CardTitle></CardHeader>
 <CardContent>
-          {pending.length === 0 ? (
-            <EmptyNote icon={InboxIcon}>{t('machines.pendingEmpty')}</EmptyNote>
-          ) : (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -115,7 +112,6 @@ export function MachineList() {
                 ))}
               </TableBody>
             </Table>
-          )}
         </CardContent></Card>
 )}
 
@@ -123,9 +119,6 @@ export function MachineList() {
 <Card>
 <CardHeader><CardTitle>{t('machines.rejected', { n: rejected.length })}</CardTitle></CardHeader>
 <CardContent>
-          {rejected.length === 0 ? (
-            <EmptyNote icon={InboxIcon}>{t('machines.rejectedEmpty')}</EmptyNote>
-          ) : (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -157,7 +150,6 @@ export function MachineList() {
                 ))}
               </TableBody>
             </Table>
-          )}
         </CardContent></Card>
 )}
 

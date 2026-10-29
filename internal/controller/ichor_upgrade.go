@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 
 	"golang.org/x/mod/semver"
@@ -93,6 +94,11 @@ func NewIchorUpgradeAdvancer(c client.Client, controllerNamespace string, noCili
 		// external in the meantime is still an upgrade that happened.
 		if inst.Spec.Version == version.Version {
 			return true, nil
+		}
+
+		// Second line behind the webhook (ADR 0105): Helm moves this install, not the installer Job.
+		if inst.HelmManaged() {
+			return false, errors.New(ichorv1alpha1.IchorHelmManagedMessage)
 		}
 
 		if semver.IsValid(version.Version) && semver.Compare(inst.Spec.Version, version.Version) < 0 {

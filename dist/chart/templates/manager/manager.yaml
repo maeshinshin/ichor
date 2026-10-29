@@ -84,6 +84,9 @@ spec:
         - --metrics-bind-address=0
         {{- end }}
         - --health-probe-bind-address=:8081
+        # The controller creates the IchorInstallation once if it is absent, recorded as installed by
+        # Helm (docs/adr/0105).
+        - --deployed-by=helm
         {{- if and .Values.ichorUI.enabled .Values.ichorUI.users.enabled }}
         # Keeps the signing keys, the internal TLS and the trust ConfigMap of ichor-ui's own issuer
         # (docs/adr/0094).

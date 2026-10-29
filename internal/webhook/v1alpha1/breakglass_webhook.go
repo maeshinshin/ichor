@@ -179,6 +179,18 @@ func (h *BreakGlassHandler) handleOperation(ctx context.Context, req admission.R
 		}
 	}
 
+	// Helm moves an install it owns, never the installer Job (ADR 0105), for any user.
+	if op.Spec.Kind == ichorv1alpha1.TalosOperationKindIchor {
+		var inst ichorv1alpha1.IchorInstallation
+
+		err := h.Client.Get(ctx, client.ObjectKey{Name: ichorv1alpha1.IchorInstallationName}, &inst)
+		if client.IgnoreNotFound(err) != nil {
+			return admission.Errored(http.StatusServiceUnavailable, fmt.Errorf("reading the IchorInstallation: %w", err))
+		} else if err == nil && inst.HelmManaged() {
+			return admission.Denied(ichorv1alpha1.IchorHelmManagedMessage)
+		}
+	}
+
 	if slices.Contains(h.ExemptUsers, req.UserInfo.Username) {
 		return admission.Allowed("")
 	}

@@ -37,6 +37,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -134,6 +135,7 @@ func main() {
 	var userIssuer bool
 	var externalURL string
 	var reclaimEnabled bool
+	var deployedBy string
 	var noCiliumPolicies bool
 	var uiServiceName string
 	var refreshLifetime time.Duration
@@ -159,6 +161,8 @@ func main() {
 	flag.BoolVar(&reclaimEnabled, "reclaim", false,
 		"Allow break-glass machine reclaim: the MachineReclaim controller and webhook act (ADR 0103, section 2.2). "+
 			"Off, they refuse; the credential sweeper runs either way.")
+	flag.StringVar(&deployedBy, "deployed-by", ichorv1alpha1.IchorManagerInstaller,
+		"Who deploys Ichor, recorded as spec.deployment.manager when the controller creates the missing IchorInstallation (installer or helm; the chart passes helm; ADR 0105).")
 	flag.BoolVar(&noCiliumPolicies, "no-cilium-policies", false,
 		"Tell the installer Job not to apply Ichor's CiliumNetworkPolicies even on Cilium (the chart sets it from networkPolicy.cilium.enabled=false; ADR 0100).")
 	flag.BoolVar(&userIssuer, "user-issuer", false,
@@ -561,10 +565,25 @@ func main() {
 		setupLog.Error(err, "Failed to create controller", "controller", "talosetcdbackup")
 		os.Exit(1)
 	}
-	if err := (&controller.IchorInstallationReconciler{
-		Client: mgr.GetClient(),
-	}).SetupWithManager(mgr); err != nil {
+	ichorInstReconciler := &controller.IchorInstallationReconciler{Client: mgr.GetClient(), DeployedBy: deployedBy}
+	if err := ichorInstReconciler.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "ichorinstallation")
+		os.Exit(1)
+	}
+	// Create the singleton once if it is absent (ADR 0105, decision 8). The admission webhook may
+	// not be serving yet, so a failed create is retried; losing the race is not an error.
+	if err := mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
+		return wait.PollUntilContextCancel(ctx, 5*time.Second, true, func(ctx context.Context) (bool, error) {
+			if err := ichorInstReconciler.Seed(ctx); err != nil {
+				setupLog.Info("Could not create the IchorInstallation yet", "error", err.Error())
+
+				return false, nil
+			}
+
+			return true, nil
+		})
+	})); err != nil {
+		setupLog.Error(err, "Failed to add the IchorInstallation seed")
 		os.Exit(1)
 	}
 	if err := (&controller.MachineReclaimReconciler{

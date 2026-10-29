@@ -22,6 +22,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/maeshinshin/ichor/test/internal/foreign"
 	"github.com/maeshinshin/ichor/test/internal/kube"
@@ -49,9 +50,14 @@ func main() {
 	fs.BoolVar(&o.RegistryMirror, "registry-mirror", false, "create <prefix>-registry and mirror ghcr.io to it")
 	fs.StringVar(&o.RelayPort, "relay-port", "5015", "local port of the API tunnel")
 	fs.StringVar(&o.CiliumChart, "cilium-chart", "pkg/cni/cilium/chart/cilium-1.18.0.tgz", "cilium chart archive")
+	var sets string
+	fs.StringVar(&sets, "cilium-set", "", "comma-separated extra --set values for the cilium-* variants, e.g. operator.replicas=1")
 	fs.StringVar(&regPort, "registry-port", "5014", "registry: local port to forward to")
 	fs.BoolVar(&keepRegistry, "keep-registry", false, "down: keep the registry (and the images in it)")
 	_ = fs.Parse(os.Args[2:])
+	if sets != "" {
+		o.CiliumSets = strings.Split(sets, ",")
+	}
 
 	if err := kube.VerifyContextExists(); err != nil {
 		fmt.Fprintln(os.Stderr, "foreign:", err)

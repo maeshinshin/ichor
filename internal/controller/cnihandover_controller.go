@@ -198,7 +198,7 @@ func (r *CNIHandoverReconciler) runJob(
 		return ctrl.Result{}, err
 	}
 
-	done, err := AdvanceCNIHelmJob(ctx, r.Client, r.Namespace, cluster, &inst)
+	done, err := AdvanceCNIHelmJob(ctx, r.Client, r.Namespace, cluster, &inst, "")
 
 	var failed *CNIHelmJobFailedError
 
@@ -206,13 +206,13 @@ func (r *CNIHandoverReconciler) runJob(
 	case errors.As(err, &failed):
 		_ = lock.Release(ctx, cniHelmLockIdentity)
 
-		msg := r.failureMessage(ctx, failed)
+		res := ctrl.Result{}
 		if failed.NoPod {
 			// The Job is gone; try again later, whatever was refusing its pod may have been fixed.
-			return ctrl.Result{RequeueAfter: handoverRequeueInterval}, r.setProgress(ctx, cluster, handedOver, reasonCNIJobFailed, msg)
+			res.RequeueAfter = handoverRequeueInterval
 		}
 
-		return ctrl.Result{}, r.setProgress(ctx, cluster, handedOver, reasonCNIJobFailed, msg)
+		return res, r.setProgress(ctx, cluster, handedOver, reasonCNIJobFailed, r.failureMessage(ctx, failed))
 	case err != nil:
 		return ctrl.Result{}, err
 	case !done:
@@ -232,13 +232,13 @@ func (r *CNIHandoverReconciler) runJob(
 func (r *CNIHandoverReconciler) finish(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, hash string, handedOver bool,
 ) (ctrl.Result, error) {
-	status, got, err := r.releaseState(ctx)
+	rel, err := readCiliumRelease(ctx, r.reader(), r.Namespace)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
 	switch {
-	case status == helmStatusDeployed && got != hash:
+	case rel.Status == helmStatusDeployed && rel.ValuesHash != hash:
 		// A finished Job for this hash is still around (its TTL is a day) from before the values
 		// moved away and back: it proves nothing about the release now. Remove it so the next
 		// pass runs a new one.
@@ -248,9 +248,9 @@ func (r *CNIHandoverReconciler) finish(
 
 		return ctrl.Result{RequeueAfter: cniJobPollInterval}, r.setProgress(ctx, cluster, handedOver, reasonCNIWaitingForRelease,
 			"the Helm release is deployed at other values than the cluster's; running the Helm Job again")
-	case status != helmStatusDeployed:
+	case rel.Status != helmStatusDeployed:
 		return ctrl.Result{RequeueAfter: handoverRequeueInterval}, r.setProgress(ctx, cluster, handedOver, reasonCNIWaitingForRelease,
-			fmt.Sprintf("the Helm Job completed but release %s has status %q, not deployed", cilium.ReleaseName, status))
+			fmt.Sprintf("the Helm Job completed but release %s has status %q, not deployed", cilium.ReleaseName, rel.Status))
 	}
 
 	if ready, why, err := r.ciliumReady(ctx); err != nil {
@@ -304,8 +304,6 @@ func (r *CNIHandoverReconciler) setProgress(
 
 // failureMessage is the Job's last log line, or its own reason when the log cannot be read.
 func (r *CNIHandoverReconciler) failureMessage(ctx context.Context, failed *CNIHelmJobFailedError) string {
-	msg := fmt.Sprintf("Cilium Helm Job %s failed: %s %s", failed.JobName, failed.Reason, failed.Message)
-
 	if failed.NoPod {
 		detail := r.failedCreateMessage(ctx, failed.JobName)
 		if detail == "" {
@@ -316,10 +314,10 @@ func (r *CNIHandoverReconciler) failureMessage(ctx context.Context, failed *CNIH
 	}
 
 	if line := r.lastLogLine(ctx, failed.JobName); line != "" {
-		msg = fmt.Sprintf("Cilium Helm Job %s failed: %s", failed.JobName, line)
+		return fmt.Sprintf("Cilium Helm Job %s failed: %s", failed.JobName, line)
 	}
 
-	return msg
+	return fmt.Sprintf("Cilium Helm Job %s failed: %s %s", failed.JobName, failed.Reason, failed.Message)
 }
 
 // failedCreateMessage is the newest FailedCreate event the Job controller recorded for jobName
@@ -398,22 +396,11 @@ func (r *CNIHandoverReconciler) ciliumReady(ctx context.Context) (ready bool, wh
 		return false, "", err
 	}
 
-	want := ds.Status.DesiredNumberScheduled
-	if ds.Status.ObservedGeneration < ds.Generation || want == 0 ||
-		ds.Status.NumberReady < want || ds.Status.UpdatedNumberScheduled < want {
-		return false, fmt.Sprintf("the cilium DaemonSet has %d of %d pods ready", ds.Status.NumberReady, want), nil
+	if !daemonSetRolledOut(&ds) {
+		return false, fmt.Sprintf("the cilium DaemonSet has %d of %d pods ready", ds.Status.NumberReady, ds.Status.DesiredNumberScheduled), nil
 	}
 
 	return true, "", nil
-}
-
-// releaseState reads the newest Helm release record for cilium from the storage namespace and
-// returns its status and the hash of the values it was deployed with. A missing record has
-// status "".
-func (r *CNIHandoverReconciler) releaseState(ctx context.Context) (status, valuesHash string, err error) {
-	rel, err := readCiliumRelease(ctx, r.reader(), r.Namespace)
-
-	return rel.Status, rel.ValuesHash, err
 }
 
 // ciliumRelease is what the newest Helm release record for cilium says.

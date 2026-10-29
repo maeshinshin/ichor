@@ -142,18 +142,11 @@ func cniHelmJobName(cluster *ichorv1alpha1.TalosCluster, valuesHash string) stri
 // AdvanceCNIHelmJob makes sure the Cilium Helm Job for cluster's current effective values
 // exists in kube-system (ns is where the release record is stored) and reports whether it has
 // completed. A failed Job is an error carrying its reason; the Job's pod log has the detail. A
-// Job that got no pod within cniPodGrace is deleted and reported the same way (NoPod). It is the one entry the hand-over (unit 8) and
-// the kube-proxy switch (unit 9) call; taking the cluster operation lock around it is theirs
-// (the switch and a values edit must not overlap).
+// Job that got no pod within cniPodGrace is deleted and reported the same way (NoPod). It is the one entry the hand-over (unit 8),
+// the kube-proxy switch (unit 9) and the upgrade call; taking the cluster operation lock around it is theirs
+// (the switch and a values edit must not overlap). A salt in the Job name gives an upgrade
+// operation a Job of its own even when a finished one for the same values exists.
 func AdvanceCNIHelmJob(
-	ctx context.Context, c client.Client, ns string, cluster *ichorv1alpha1.TalosCluster, inst *ichorv1alpha1.IchorInstallation,
-) (bool, error) {
-	return advanceCNIHelmJob(ctx, c, ns, cluster, inst, "")
-}
-
-// advanceCNIHelmJob is AdvanceCNIHelmJob with a salt in the Job name: an upgrade operation needs a
-// Job of its own even when a finished one for the same values exists (the hand-over left one).
-func advanceCNIHelmJob(
 	ctx context.Context, c client.Client, ns string, cluster *ichorv1alpha1.TalosCluster, inst *ichorv1alpha1.IchorInstallation, salt string,
 ) (bool, error) {
 	hash, err := CNIValuesHash(cluster)
@@ -169,7 +162,8 @@ func advanceCNIHelmJob(
 
 	switch {
 	case apierrors.IsNotFound(err):
-		return false, c.Create(ctx, newCNIHelmJob(ns, name, cluster, inst, hash))
+		// AlreadyExists: the cache has not seen the Job just created.
+		return false, client.IgnoreAlreadyExists(c.Create(ctx, newCNIHelmJob(ns, name, cluster, inst, hash)))
 	case err != nil:
 		return false, err
 	}

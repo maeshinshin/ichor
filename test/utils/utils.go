@@ -51,6 +51,6 @@ func GetProjectDir() (string, error) {
 	if err != nil {
 		return wd, fmt.Errorf("failed to get current working directory: %w", err)
 	}
-	wd = strings.ReplaceAll(wd, "/test/e2e", "")
+	wd, _, _ = strings.Cut(wd, "/test/e2e")
 	return wd, nil
 }

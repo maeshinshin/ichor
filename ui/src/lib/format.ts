@@ -84,3 +84,9 @@ export function formatResource(name: string, quantity: string): string {
 export function formatCores(cores: number, sampled: boolean): string {
   return sampled && Number.isFinite(cores) && cores >= 0 ? cores.toFixed(2) : '-'
 }
+
+// clipValue shortens a long single-line value (a Cilium inline manifest is tens of KB) for a table
+// cell; the caller keeps the full text in a title.
+export function clipValue(v: string, max = 200): string {
+  return v.length > max ? `${v.slice(0, max)}…` : v
+}

@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 import { ApproveDialog } from '@/components/ApproveDialog'
+import { ReclaimDialog } from '@/components/ReclaimDialog'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { LinkRow, ListToolbar } from '@/components/ListToolbar'
 import { PageTitle } from '@/components/PageTitle'
@@ -20,6 +21,7 @@ import { notifyWrite } from '@/lib/notify'
 import { describeError } from '@/lib/errors'
 import { matchesQuery } from '@/lib/filter'
 import { formatTimestamp } from '@/lib/format'
+import { useCanReclaim } from '@/lib/useCanReclaim'
 import { useT } from '@/lib/useT'
 import { Link } from '@/router'
 
@@ -33,6 +35,7 @@ export function MachineList() {
   const [machines, setMachines] = useState<Machine[] | null>(null)
   const [error, setError] = useState<ErrorShape | null>(null)
   const [query, setQuery] = useState('')
+  const canReclaim = useCanReclaim()
 
   async function reload() {
     try {
@@ -70,12 +73,15 @@ export function MachineList() {
       <PageTitle
         title={t('nodes.title')}
         actions={
-          <Button asChild size="sm">
-            <Link to="/nodes/add">
-              <PlusIcon data-icon="inline-start" aria-hidden="true" />
-              {t('nodes.add')}
-            </Link>
-          </Button>
+          <div class="flex gap-2">
+            {canReclaim && <ReclaimDialog />}
+            <Button asChild size="sm">
+              <Link to="/nodes/add">
+                <PlusIcon data-icon="inline-start" aria-hidden="true" />
+                {t('nodes.add')}
+              </Link>
+            </Button>
+          </div>
         }
       />
       <ListToolbar query={query} onQuery={setQuery} shown={shown.length} total={machines.length} onRefresh={reload} />

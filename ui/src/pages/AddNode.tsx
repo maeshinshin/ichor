@@ -9,6 +9,7 @@ import { Item, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemSeparator
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ApproveDialog } from '@/components/ApproveDialog'
+import { ReclaimDialog } from '@/components/ReclaimDialog'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { Field, Fields } from '@/components/PageHeader'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
@@ -21,6 +22,7 @@ import { checkDiscoveryAddress, discoveryOn } from '@/lib/discovery'
 import { describeError } from '@/lib/errors'
 import { notifyWrite } from '@/lib/notify'
 import { useCluster } from '@/lib/useCluster'
+import { useCanReclaim } from '@/lib/useCanReclaim'
 import { useT } from '@/lib/useT'
 import { Link } from '@/router'
 
@@ -163,6 +165,7 @@ function Discovery({
   const [address, setAddress] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<ErrorShape | null>(null)
+  const canReclaim = useCanReclaim()
 
   const check = checkDiscoveryAddress(address, cluster.discoveryAddresses)
   const on = discoveryOn(cluster.discoveryAddresses, cluster.discoveryCidrs)
@@ -248,7 +251,14 @@ function Discovery({
       {configured.map((a) => (
         <Alert key={a}>
           <TriangleAlertIcon />
-          <AlertDescription>{t('addNode.alreadyConfigured', { address: a })}</AlertDescription>
+          <AlertDescription>
+            {t('addNode.alreadyConfigured', { address: a })}
+            {canReclaim && (
+              <div class="mt-2">
+                <ReclaimDialog address={a} cluster={cluster.ref} label={t('reclaim.link')} />
+              </div>
+            )}
+          </AlertDescription>
         </Alert>
       ))}
     </>

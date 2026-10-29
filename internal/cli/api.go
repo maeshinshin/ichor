@@ -149,6 +149,9 @@ type apiClients struct {
 	// Cni serves Cilium's values and upgrade (docs/adr/0099).
 	Cni ichorv1alpha1connect.CniServiceClient
 
+	// Settings serves `ichor settings` (docs/adr/0105).
+	Settings ichorv1alpha1connect.SettingsServiceClient
+
 	// Local is true when the clients are the in-process fallback.
 	Local bool
 
@@ -270,7 +273,7 @@ func localClients(opts apiOptions, deps apiDeps) *apiClients {
 	diag := &localDiagnostics{srv: s}
 
 	return &apiClients{
-		Cluster: s, Machine: s, Patch: s, Operation: localOperation{s}, Node: localNode{s}, Cni: s, Diagnostics: diag, Local: true, Close: diag.close,
+		Cluster: s, Machine: s, Patch: s, Operation: localOperation{s}, Node: localNode{s}, Cni: s, Settings: s, Diagnostics: diag, Local: true, Close: diag.close,
 		actor: cmp.Or(deps.actor, actorCLI),
 	}
 }
@@ -385,6 +388,7 @@ func dialBackend(ctx context.Context, opts apiOptions, deps apiDeps) (*apiClient
 		Operation:   ichorv1alpha1connect.NewOperationServiceClient(h, base),
 		Diagnostics: ichorv1alpha1connect.NewDiagnosticsServiceClient(h, base),
 		Cni:         ichorv1alpha1connect.NewCniServiceClient(h, base),
+		Settings:    ichorv1alpha1connect.NewSettingsServiceClient(h, base),
 		Close:       stop,
 	}, nil
 }

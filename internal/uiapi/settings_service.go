@@ -110,24 +110,20 @@ func (s *Server) settingsResponse(ctx context.Context, inst *ichorv1alpha1.Ichor
 		manager = ichorv1alpha1.IchorManagerHelm
 	}
 
-	// ichor-ui's own view: the live reader, else the startup flag alone.
-	var ui settings.Effective
+	resp := &pb.GetSettingsResponse{
+		Version: inst.Spec.Version, InstalledVersion: inst.Status.InstalledVersion, Manager: manager,
+		ReadOnly: s.settingsReadOnly(), Spec: specFieldsPB(&inst.Spec),
+		Effective: statusEffectivePB(inst.Status.Effective),
+	}
 
+	// ichor-ui's own view of the values it applies; the CLI's in-process server has none.
 	if s.Settings != nil {
 		e, err := s.Settings.Effective(ctx)
 		if err != nil {
 			return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("reading the settings in force: %w", err))
 		}
 
-		ui = e
-	} else {
-		ui = settings.Resolve(inst, settings.Fallback{ReclaimEnabled: s.ReclaimEnabled}, false)
-	}
-
-	resp := &pb.GetSettingsResponse{
-		Version: inst.Spec.Version, InstalledVersion: inst.Status.InstalledVersion, Manager: manager,
-		ReadOnly: s.settingsReadOnly(), Spec: specFieldsPB(&inst.Spec),
-		Effective: statusEffectivePB(inst.Status.Effective), UiEffective: effectivePB(ui),
+		resp.UiEffective = effectivePB(e)
 	}
 
 	if !resp.ReadOnly {

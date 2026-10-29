@@ -54,7 +54,6 @@ Values worth knowing (see `dist/chart/values.yaml` for all of them):
 | `preflight.cni` | `true` | Refuse to install when every node is NotReady with the network-plugin message. Skipped by `helm template` and `--dry-run`. |
 | `installer.enabled` | `false` | Leave off: a Helm install is upgraded by Helm. |
 | `ichorUI.port` | `8443` | The HTTPS port of ichor-ui. |
-| `ichorUI.plaintextPort` | `0` | Deprecated. Also serve plain HTTP on this port (for example `8080`) during a migration. Removed in the next minor release. |
 | `ichorUI.tls.secretName` | unset | Your own certificate for ichor-ui. Unset uses a leaf from the Ichor serving CA. |
 | `ichorUI.tls.caConfigMap`, `caSecret`, `caKey` | `ichor-ui-ca`, unset, `ca.crt` | The CA the ServiceMonitor (`prometheus.enabled`) verifies the HTTPS port against: the ConfigMap, or the Secret when `caSecret` is set. |
 | `settings.readOnly` | `false` | Hand the runtime settings to the chart: the `IchorInstallation` settings fields are ignored and the webhook denies writes. |
@@ -77,9 +76,11 @@ Gateway or a load balancer in front is in [Users and login](users-and-login.md#e
 
 Moving an existing release:
 
-- Plain HTTP edge: upgrade with `--set ichorUI.plaintextPort=8080` to keep
-  the old port while you re-point the edge at 8443, then drop it. The value is
-  removed in the next minor release.
+- Plain HTTP edge: ichor-ui no longer serves plain HTTP. Re-point the edge at
+  `https://<ichor-ui>:8443` and trust `ichor-ui-ca` before you upgrade. The
+  value `ichorUI.plaintextPort` was removed; a values file that still sets it
+  is accepted (Helm ignores unknown values) but renders no plaintext port, no
+  `--http-addr` and no `http` Service port.
 - An install that already served TLS on 8080 sets `ichorUI.port=8080` to keep
   its Service and edge as they are.
 - The ServiceMonitor verifies against `ichor-ui-ca` by default; override with

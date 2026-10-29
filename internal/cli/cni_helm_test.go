@@ -25,8 +25,8 @@ import (
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chartutil"
-	"helm.sh/helm/v3/pkg/release"
 	kubefake "helm.sh/helm/v3/pkg/kube/fake"
+	"helm.sh/helm/v3/pkg/release"
 	"helm.sh/helm/v3/pkg/storage"
 	"helm.sh/helm/v3/pkg/storage/driver"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -122,12 +122,12 @@ func TestCNIHelmApplyTakeoverRetiresTheForeignRecord(t *testing.T) {
 	kube := kubefakeclient.NewSimpleClientset()
 
 	foreign := &release.Release{
-		Name: "cilium", Namespace: "kube-system", Version: 3,
-		Chart:  &chart.Chart{Metadata: &chart.Metadata{Name: "cilium", Version: "1.0.0"}},
+		Name: cniCilium, Namespace: ciliumNamespace, Version: 3,
+		Chart:  &chart.Chart{Metadata: &chart.Metadata{Name: cniCilium, Version: "1.0.0"}},
 		Config: map[string]any{"marker": "sensitive-user-value"},
 		Info:   &release.Info{Status: release.StatusDeployed},
 	}
-	if err := driver.NewSecrets(kube.CoreV1().Secrets("kube-system")).Create("sh.helm.release.v1.cilium.v3", foreign); err != nil {
+	if err := driver.NewSecrets(kube.CoreV1().Secrets(ciliumNamespace)).Create("sh.helm.release.v1.cilium.v3", foreign); err != nil {
 		t.Fatal(err)
 	}
 
@@ -146,7 +146,7 @@ func TestCNIHelmApplyTakeoverRetiresTheForeignRecord(t *testing.T) {
 		t.Errorf("output = %q, want the removed record's name and none of its content", out.String())
 	}
 
-	if _, err := kube.CoreV1().Secrets("kube-system").Get(t.Context(), "sh.helm.release.v1.cilium.v3", metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+	if _, err := kube.CoreV1().Secrets(ciliumNamespace).Get(t.Context(), "sh.helm.release.v1.cilium.v3", metav1.GetOptions{}); !apierrors.IsNotFound(err) {
 		t.Errorf("the foreign record is still there: %v", err)
 	}
 

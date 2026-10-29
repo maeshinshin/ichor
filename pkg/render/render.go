@@ -488,7 +488,9 @@ func takenOverInlineManifest(cluster *ichorv1alpha1.TalosCluster) string {
 // ingredients, it does not rewrite them) -- a patch is only ever
 // deep-copied if it actually carries the entry; every other patch passes
 // through as the same pointer.
-func dropHandedOverInlineManifest(ordered []*ichorv1alpha1.TalosConfigPatch, taken string) []*ichorv1alpha1.TalosConfigPatch {
+func dropHandedOverInlineManifest(
+	ordered []*ichorv1alpha1.TalosConfigPatch, taken string,
+) []*ichorv1alpha1.TalosConfigPatch {
 	handedOver := func(name string) bool { return name == cni.InlineManifestName || (taken != "" && name == taken) }
 
 	return rewriteClusterConfigs(ordered,

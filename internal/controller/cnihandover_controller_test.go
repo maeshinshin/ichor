@@ -398,6 +398,25 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		Expect(held).To(BeFalse())
 	})
 
+	It("refuses to change the tunnel of a running Cilium: TunnelMismatch, no Job", func() {
+		cluster := newTestCiliumCluster()
+		newCilium("false", true)
+
+		var cm corev1.ConfigMap
+		Expect(k8sClient.Get(ctx, client.ObjectKey{Namespace: testKubeSystem, Name: ciliumConfigName}, &cm)).To(Succeed())
+		cm.Data["tunnel-protocol"] = "geneve"
+		Expect(k8sClient.Update(ctx, &cm)).To(Succeed())
+
+		_, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
+		Expect(err).NotTo(HaveOccurred())
+
+		c := conditionOf(cluster, render.ConditionCNIHandover)
+		Expect(c.Status).To(Equal(metav1.ConditionFalse))
+		Expect(c.Reason).To(Equal("TunnelMismatch"))
+		Expect(c.Message).To(ContainSubstring("spec.cni.tunnel is vxlan but the running Cilium uses geneve"))
+		Expect(cniJobCount(cluster)).To(BeZero())
+	})
+
 	It("still runs a Job when the deployed release is at other values", func() {
 		cluster := newTestCiliumCluster()
 		ciliumDaemonSet()(true)

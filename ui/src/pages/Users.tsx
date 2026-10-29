@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'preact/hooks'
-import { EllipsisIcon } from 'lucide-preact'
+import { EllipsisIcon, UsersIcon } from 'lucide-preact'
+import { Badge } from '@/components/ui/badge'
 import { ErrorAlert } from '@/components/ErrorAlert'
-import { DataTable, ListToolbar } from '@/components/ListToolbar'
-import { PageHeader } from '@/components/PageHeader'
+import { ListToolbar } from '@/components/ListToolbar'
+import { PageTitle } from '@/components/PageTitle'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
-import { StatusText } from '@/components/Status'
+import { StateBadge } from '@/components/StateBadge'
+import { TableCard } from '@/components/TableCard'
 import { CreateUserDialog, DeleteUserDialog, EditUserDialog, RevokeUserDialog, SetPasswordDialog } from '@/components/UserDialogs'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -47,13 +49,13 @@ export function Users() {
   const shown = users.filter((u) => matchesQuery(query, u.name, u.displayName, u.email, ...u.roles))
 
   return (
-    <div class="space-y-6">
-      <PageHeader title={t('users.title')} actions={<CreateUserDialog onDone={reload} />} />
-      <ListToolbar query={query} onQuery={setQuery} shown={shown.length} total={users.length} onRefresh={reload} />
+    <div>
+      <PageTitle title={t('users.title')} actions={<CreateUserDialog onDone={reload} />} />
+      <ListToolbar query={query} onQuery={setQuery} shown={shown.length} total={users.length} onRefresh={reload} stock />
       {shown.length === 0 ? (
-        <EmptyNote>{t('users.empty')}</EmptyNote>
+        <EmptyNote icon={UsersIcon}>{t('users.empty')}</EmptyNote>
       ) : (
-        <DataTable>
+        <TableCard>
           <Table>
             <TableHeader>
               <TableRow>
@@ -73,7 +75,7 @@ export function Users() {
               ))}
             </TableBody>
           </Table>
-        </DataTable>
+        </TableCard>
       )}
     </div>
   )
@@ -87,11 +89,25 @@ function UserRow({ user, onChanged }: { user: User; onChanged: () => void }) {
 
   return (
     <TableRow>
-      <TableCell class="font-medium">{user.name}</TableCell>
+      <TableCell>{user.name}</TableCell>
       <TableCell>{user.displayName || '-'}</TableCell>
-      <TableCell>{user.roles.length > 0 ? user.roles.join(', ') : t('common.none')}</TableCell>
-      <TableCell>{user.disabled ? t('common.yes') : t('common.no')}</TableCell>
-      <TableCell>{ready ? <StatusText tone={conditionStatusTone(ready.type, ready.status)}>{ready.reason || ready.status}</StatusText> : '-'}</TableCell>
+      <TableCell>
+        {user.roles.length > 0 ? (
+          <div class="flex flex-wrap gap-1">
+            {user.roles.map((r) => (
+              <Badge key={r} variant="secondary">
+                {r}
+              </Badge>
+            ))}
+          </div>
+        ) : (
+          t('common.none')
+        )}
+      </TableCell>
+      <TableCell>
+        <Badge variant={user.disabled ? 'destructive' : 'outline'}>{user.disabled ? t('common.yes') : t('common.no')}</Badge>
+      </TableCell>
+      <TableCell>{ready ? <StateBadge tone={conditionStatusTone(ready.type, ready.status)}>{ready.reason || ready.status}</StateBadge> : '-'}</TableCell>
       <TableCell>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

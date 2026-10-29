@@ -34,6 +34,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
+	"github.com/maeshinshin/ichor/internal/settings"
 	"github.com/maeshinshin/ichor/pkg/render"
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
 	"github.com/siderolabs/talos/pkg/machinery/constants"
@@ -268,7 +269,7 @@ func newClusterSpec(secretName, versionContract string) ichorv1alpha1.TalosClust
 		VersionContract:   versionContract,
 		SecretsRef:        corev1.LocalObjectReference{Name: secretName},
 		ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: 1, Schedulable: testSchedulable},
-		DriftPolicy:       "warnOnly", // what the defaulting webhook fills; envtest here runs without it
+		DriftPolicy:       settings.DriftPolicyDefault, // what the defaulting webhook fills; envtest here runs without it
 	}
 }
 

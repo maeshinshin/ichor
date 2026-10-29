@@ -1,4 +1,15 @@
 {{- if .Values.webhook.enabled }}
+{{- /* name (without -v1alpha1.kb.io), handler path suffix, operations, resources */}}
+{{- $hooks := list
+  (dict "name" "vbreakglass" "path" "breakglass" "ops" (list "UPDATE") "res" (list "talosmachines" "talosconfigpatches"))
+  (dict "name" "vbreakglassop" "path" "breakglass" "ops" (list "CREATE") "res" (list "talosoperations"))
+  (dict "name" "vsecretrefs" "path" "breakglass" "ops" (list "CREATE" "UPDATE") "res" (list "talosetcdbackups"))
+  (dict "name" "vauthentication" "path" "breakglass" "ops" (list "CREATE" "UPDATE") "res" (list "talosclusters"))
+  (dict "name" "vtaloscluster" "path" "taloscluster" "ops" (list "CREATE" "UPDATE" "DELETE") "res" (list "talosclusters"))
+  (dict "name" "vtalosconfigpatch" "path" "talosconfigpatch" "ops" (list "CREATE" "UPDATE") "res" (list "talosconfigpatches"))
+  (dict "name" "vtalosmachine" "path" "talosmachine" "ops" (list "CREATE" "UPDATE" "DELETE") "res" (list "talosmachines"))
+  (dict "name" "vmachinereclaim" "path" "machinereclaim" "ops" (list "CREATE" "UPDATE") "res" (list "machinereclaims"))
+  (dict "name" "vichorinstallation" "path" "ichorinstallation" "ops" (list "CREATE" "UPDATE") "res" (list "ichorinstallations") "sideEffects" "NoneOnDryRun") }}
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
 metadata:
@@ -8,185 +19,29 @@ metadata:
   # this name and the webhook Service's.
   name: ichor-validating-webhook-configuration
 webhooks:
+{{- range $h := $hooks }}
 - admissionReviewVersions:
   - v1
   clientConfig:
     service:
       name: ichor-webhook-service
-      namespace: {{ .Release.Namespace }}
-      path: /validate-ichor-maesh-dev-v1alpha1-breakglass
+      namespace: {{ $.Release.Namespace }}
+      path: /validate-ichor-maesh-dev-v1alpha1-{{ $h.path }}
   failurePolicy: Fail
-  name: vbreakglass-v1alpha1.kb.io
+  name: {{ $h.name }}-v1alpha1.kb.io
   rules:
   - apiGroups:
     - ichor.maesh.dev
     apiVersions:
     - v1alpha1
     operations:
-    - UPDATE
+    {{- range $h.ops }}
+    - {{ . }}
+    {{- end }}
     resources:
-    - talosmachines
-    - talosconfigpatches
-  sideEffects: None
-- admissionReviewVersions:
-  - v1
-  clientConfig:
-    service:
-      name: ichor-webhook-service
-      namespace: {{ .Release.Namespace }}
-      path: /validate-ichor-maesh-dev-v1alpha1-breakglass
-  failurePolicy: Fail
-  name: vbreakglassop-v1alpha1.kb.io
-  rules:
-  - apiGroups:
-    - ichor.maesh.dev
-    apiVersions:
-    - v1alpha1
-    operations:
-    - CREATE
-    resources:
-    - talosoperations
-  sideEffects: None
-- admissionReviewVersions:
-  - v1
-  clientConfig:
-    service:
-      name: ichor-webhook-service
-      namespace: {{ .Release.Namespace }}
-      path: /validate-ichor-maesh-dev-v1alpha1-breakglass
-  failurePolicy: Fail
-  name: vsecretrefs-v1alpha1.kb.io
-  rules:
-  - apiGroups:
-    - ichor.maesh.dev
-    apiVersions:
-    - v1alpha1
-    operations:
-    - CREATE
-    - UPDATE
-    resources:
-    - talosetcdbackups
-  sideEffects: None
-- admissionReviewVersions:
-  - v1
-  clientConfig:
-    service:
-      name: ichor-webhook-service
-      namespace: {{ .Release.Namespace }}
-      path: /validate-ichor-maesh-dev-v1alpha1-breakglass
-  failurePolicy: Fail
-  name: vauthentication-v1alpha1.kb.io
-  rules:
-  - apiGroups:
-    - ichor.maesh.dev
-    apiVersions:
-    - v1alpha1
-    operations:
-    - CREATE
-    - UPDATE
-    resources:
-    - talosclusters
-  sideEffects: None
-- admissionReviewVersions:
-  - v1
-  clientConfig:
-    service:
-      name: ichor-webhook-service
-      namespace: {{ .Release.Namespace }}
-      path: /validate-ichor-maesh-dev-v1alpha1-taloscluster
-  failurePolicy: Fail
-  name: vtaloscluster-v1alpha1.kb.io
-  rules:
-  - apiGroups:
-    - ichor.maesh.dev
-    apiVersions:
-    - v1alpha1
-    operations:
-    - CREATE
-    - UPDATE
-    - DELETE
-    resources:
-    - talosclusters
-  sideEffects: None
-- admissionReviewVersions:
-  - v1
-  clientConfig:
-    service:
-      name: ichor-webhook-service
-      namespace: {{ .Release.Namespace }}
-      path: /validate-ichor-maesh-dev-v1alpha1-talosconfigpatch
-  failurePolicy: Fail
-  name: vtalosconfigpatch-v1alpha1.kb.io
-  rules:
-  - apiGroups:
-    - ichor.maesh.dev
-    apiVersions:
-    - v1alpha1
-    operations:
-    - CREATE
-    - UPDATE
-    resources:
-    - talosconfigpatches
-  sideEffects: None
-- admissionReviewVersions:
-  - v1
-  clientConfig:
-    service:
-      name: ichor-webhook-service
-      namespace: {{ .Release.Namespace }}
-      path: /validate-ichor-maesh-dev-v1alpha1-talosmachine
-  failurePolicy: Fail
-  name: vtalosmachine-v1alpha1.kb.io
-  rules:
-  - apiGroups:
-    - ichor.maesh.dev
-    apiVersions:
-    - v1alpha1
-    operations:
-    - CREATE
-    - UPDATE
-    - DELETE
-    resources:
-    - talosmachines
-  sideEffects: None
-- admissionReviewVersions:
-  - v1
-  clientConfig:
-    service:
-      name: ichor-webhook-service
-      namespace: {{ .Release.Namespace }}
-      path: /validate-ichor-maesh-dev-v1alpha1-machinereclaim
-  failurePolicy: Fail
-  name: vmachinereclaim-v1alpha1.kb.io
-  rules:
-  - apiGroups:
-    - ichor.maesh.dev
-    apiVersions:
-    - v1alpha1
-    operations:
-    - CREATE
-    - UPDATE
-    resources:
-    - machinereclaims
-  sideEffects: None
-- admissionReviewVersions:
-  - v1
-  clientConfig:
-    service:
-      name: ichor-webhook-service
-      namespace: {{ .Release.Namespace }}
-      path: /validate-ichor-maesh-dev-v1alpha1-ichorinstallation
-  failurePolicy: Fail
-  name: vichorinstallation-v1alpha1.kb.io
-  rules:
-  - apiGroups:
-    - ichor.maesh.dev
-    apiVersions:
-    - v1alpha1
-    operations:
-    - CREATE
-    - UPDATE
-    resources:
-    - ichorinstallations
-  sideEffects: NoneOnDryRun
+    {{- range $h.res }}
+    - {{ . }}
+    {{- end }}
+  sideEffects: {{ $h.sideEffects | default "None" }}
+{{- end }}
 {{- end }}

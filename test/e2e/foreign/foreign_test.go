@@ -200,6 +200,12 @@ func TestD1FlannelAdoptedUnmanaged(t *testing.T) {
 	if strings.TrimSpace(held) != "" {
 		t.Errorf("hold-apply still set: %q", held)
 	}
+	// adopt must never silently adopt a subset of the cluster.
+	ms, _ := inner(c, "-n", crNS, "get", "talosmachines.ichor.maesh.dev", "-o", "name")
+	ns, _ := inner(c, "get", "nodes", "-o", "name")
+	if a, b := len(strings.Fields(ms)), len(strings.Fields(ns)); a != b || a == 0 {
+		t.Errorf("TalosMachines = %d, Nodes = %d, want equal and non-zero", a, b)
+	}
 	jobs, _ := inner(c, "-n", crNS, "get", "jobs", "--no-headers")
 	if strings.Contains(jobs, "ichor-cni") {
 		t.Errorf("an ichor-cni Job exists: %s", jobs)

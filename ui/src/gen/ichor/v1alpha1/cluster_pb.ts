@@ -468,8 +468,7 @@ export const ClusterService: GenService<{
    * AddDiscoveryAddress appends one IPv4 address to
    * TalosCluster.spec.discovery.addresses (ADR 0011), so the controller
    * probes it for a node in maintenance mode. It goes through the same write
-   * gate as the other writes: refused when Flux tracks the cluster, a pull
-   * request when Argo CD does, break-glass on request (ADR 0065).
+   * gate as the other writes, which writes the CR directly (ADR 0101).
    *
    * @generated from rpc ichor.v1alpha1.ClusterService.AddDiscoveryAddress
    */

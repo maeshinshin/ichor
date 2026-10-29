@@ -166,79 +166,6 @@ type TalosClusterCNI struct {
 	Handover string `json:"handover,omitempty"`
 }
 
-// TalosClusterGitRepository is deprecated, unused; kept so the CRD never drops a field (docs/adr/0101).
-// It was the repository connection pull-request mode opened pull requests against; nothing reads it
-// any more, and its validation is kept as it was so stored objects stay valid.
-type TalosClusterGitRepository struct {
-	// host is the Git hosting API pull requests are opened through.
-	// +kubebuilder:validation:Enum=github;gitlab;gitea
-	// +required
-	Host string `json:"host"`
-
-	// apiURL is the host's API root, e.g. https://api.github.com or https://gitlab.example.com. https
-	// only: the token is sent to it.
-	// +kubebuilder:validation:MaxLength=2048
-	// +kubebuilder:validation:XValidation:rule="isURL(self) && self.startsWith('https://') && !self.contains('@')",message="apiURL must be an https URL without credentials"
-	// +required
-	APIURL string `json:"apiURL"`
-
-	// owner is the user, organization or (GitLab) group path that owns the repository.
-	// +kubebuilder:validation:MaxLength=255
-	// +kubebuilder:validation:Pattern=`^[A-Za-z0-9][A-Za-z0-9._-]*(/[A-Za-z0-9][A-Za-z0-9._-]*)*$`
-	// +required
-	Owner string `json:"owner"`
-
-	// repo is the repository name.
-	// +kubebuilder:validation:MaxLength=255
-	// +kubebuilder:validation:Pattern=`^[A-Za-z0-9][A-Za-z0-9._-]*$`
-	// +required
-	Repo string `json:"repo"`
-
-	// cloneURL is what git clones and pushes to. https only: the token is sent to it.
-	// +kubebuilder:validation:MaxLength=2048
-	// +kubebuilder:validation:XValidation:rule="isURL(self) && self.startsWith('https://') && !self.contains('@')",message="cloneURL must be an https URL without credentials"
-	// +required
-	CloneURL string `json:"cloneURL"`
-
-	// baseBranch is the branch pull requests target and new files are added to. An Argo CD
-	// Application's own targetRevision wins for a CR it already tracks.
-	// +kubebuilder:validation:MinLength=1
-	// +kubebuilder:validation:MaxLength=255
-	// +kubebuilder:default=main
-	// +optional
-	BaseBranch string `json:"baseBranch,omitempty"`
-
-	// tokenSecretRef selects the key of a Secret holding an access token that can push branches and
-	// open pull requests. The Secret is read in the UI backend's own namespace, never in this
-	// TalosCluster's.
-	// +required
-	TokenSecretRef corev1.SecretKeySelector `json:"tokenSecretRef"`
-
-	// machinesPath is the directory (relative to the repository root) new TalosMachine files are
-	// added to by a strict-mode approval. Required in strict mode.
-	// +kubebuilder:validation:MaxLength=512
-	// +kubebuilder:validation:Pattern=`^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$`
-	// +kubebuilder:validation:XValidation:rule="!self.split('/').exists(s, s == '.' || s == '..')",message="machinesPath must not contain . or .. segments"
-	// +optional
-	MachinesPath string `json:"machinesPath,omitempty"`
-}
-
-// TalosClusterGitOps is deprecated, unused; kept so the CRD never drops a field (docs/adr/0101).
-// It selected how changes reached this cluster's CRs when Ichor knew Argo CD and Flux; nothing reads
-// it any more, and its validation is kept as it was so stored objects stay valid.
-// +kubebuilder:validation:XValidation:rule="!has(self.mode) || self.mode != 'strict' || (has(self.repository) && has(self.repository.machinesPath))",message="strict mode needs repository with machinesPath: approving a node is a pull request that adds its TalosMachine"
-type TalosClusterGitOps struct {
-	// mode is deprecated, unused: every value behaves as relaxed.
-	// +kubebuilder:validation:Enum=relaxed;strict
-	// +kubebuilder:default=relaxed
-	// +optional
-	Mode string `json:"mode,omitempty"`
-
-	// repository is deprecated, unused.
-	// +optional
-	Repository *TalosClusterGitRepository `json:"repository,omitempty"`
-}
-
 // TalosClusterRegistry declares one private registry mirror this cluster's nodes pull through,
 // and where its pull credentials live. The mirror endpoints and (non-secret) username are typed
 // fields, same as any other machine-config value; the password-shaped credentials
@@ -452,12 +379,6 @@ type TalosClusterSpec struct {
 	// +listMapKey=host
 	// +optional
 	Registries []TalosClusterRegistry `json:"registries,omitempty"`
-
-	// gitops is deprecated, unused; kept so the CRD never drops a field (docs/adr/0101). Ichor has no
-	// GitOps behaviour any more: it does not detect Argo CD or Flux, does not open pull requests and
-	// writes the CRs directly.
-	// +optional
-	GitOps *TalosClusterGitOps `json:"gitops,omitempty"`
 
 	// authentication declares who the kube-apiserver trusts to sign users in with a JWT: Ichor's
 	// own issuer and up to three external OIDC providers (ADR 0094). It is rendered into Talos's

@@ -69,8 +69,7 @@ type CniServiceClient interface {
 	// values a proposed user layer would give, as a unified diff of YAML text.
 	DiffCiliumValues(context.Context, *connect.Request[v1alpha1.DiffCiliumValuesRequest]) (*connect.Response[v1alpha1.DiffCiliumValuesResponse], error)
 	// SetCiliumValues replaces spec.cni.cilium.values after validating it. A
-	// dry-run write goes first. A TalosCluster that Argo CD or Flux tracks is
-	// refused.
+	// dry-run write goes first.
 	SetCiliumValues(context.Context, *connect.Request[v1alpha1.SetCiliumValuesRequest]) (*connect.Response[v1alpha1.SetCiliumValuesResponse], error)
 	// StartCniUpgrade checks that a newer Cilium chart is available and that the
 	// user layer still validates, then creates a cni TalosOperation with
@@ -170,8 +169,7 @@ type CniServiceHandler interface {
 	// values a proposed user layer would give, as a unified diff of YAML text.
 	DiffCiliumValues(context.Context, *connect.Request[v1alpha1.DiffCiliumValuesRequest]) (*connect.Response[v1alpha1.DiffCiliumValuesResponse], error)
 	// SetCiliumValues replaces spec.cni.cilium.values after validating it. A
-	// dry-run write goes first. A TalosCluster that Argo CD or Flux tracks is
-	// refused.
+	// dry-run write goes first.
 	SetCiliumValues(context.Context, *connect.Request[v1alpha1.SetCiliumValuesRequest]) (*connect.Response[v1alpha1.SetCiliumValuesResponse], error)
 	// StartCniUpgrade checks that a newer Cilium chart is available and that the
 	// user layer still validates, then creates a cni TalosOperation with

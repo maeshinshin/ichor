@@ -51,7 +51,7 @@ inventing a new control plane.
   installation with no route to public registries; registry mirrors exist for
   pull-through caches and private registries.
 - IPv6, PXE provisioning. Later, maybe.
-- Know about GitOps tools. Ichor does not detect Argo CD or Flux, does not open
+- Know about GitOps tools. Ichor does not detect GitOps tools, does not open
   pull requests and does not refuse a write because a tool tracks the resource
   (ADR 0101).
 

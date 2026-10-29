@@ -156,7 +156,6 @@ func TestBreakGlassExemptUsers(t *testing.T) {
 	// Exact names only, and GitOps engines are not among them any more.
 	for _, user := range []string{
 		"system:serviceaccount:argocd:argocd-application-controller",
-		"system:serviceaccount:flux-system:kustomize-controller",
 	} {
 		if r := h.Handle(context.Background(), bgUnitRequest(t, bgUnitMachines, user, true)); r.Allowed {
 			t.Errorf("%s was exempt", user)

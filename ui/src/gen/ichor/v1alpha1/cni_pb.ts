@@ -360,8 +360,7 @@ export const CniService: GenService<{
   },
   /**
    * SetCiliumValues replaces spec.cni.cilium.values after validating it. A
-   * dry-run write goes first. A TalosCluster that Argo CD or Flux tracks is
-   * refused.
+   * dry-run write goes first.
    *
    * @generated from rpc ichor.v1alpha1.CniService.SetCiliumValues
    */

@@ -65,7 +65,7 @@ type TalosMachineCustomValidator struct {
 func (v *TalosMachineCustomValidator) ValidateCreate(ctx context.Context, obj *ichorv1alpha1.TalosMachine) (admission.Warnings, error) {
 	talosmachinelog.Info("Validation for TalosMachine upon creation", "name", obj.GetName())
 
-	// A machine created already approved (GitOps) is an approval too.
+	// A machine created already approved is an approval too.
 	return nil, v.checkApprovalCap(ctx, nil, obj)
 }
 

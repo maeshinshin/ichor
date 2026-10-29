@@ -50,7 +50,8 @@ import { machineDisplayName } from '@/lib/machineName'
 import { formatTimestamp } from '@/lib/format'
 import { kubernetesStageProgress, operationState, progressCounts } from '@/lib/operations'
 import { attentionItems, backupsValue, tileTargets, versionLabel, type TileTarget } from '@/lib/overview'
-import { conditionStatusTone, opStateTone, type Tone } from '@/lib/status'
+import { opStateTone, type Tone } from '@/lib/status'
+import { conditionTone } from '@/lib/conditions'
 import { useCluster } from '@/lib/useCluster'
 import { useT } from '@/lib/useT'
 import { Link } from '@/router'
@@ -526,7 +527,7 @@ function Tile({ label, icon: Icon, value, sub, badge, target }: { label: string;
 function NodeRow({ m, first }: { m: Machine; first: boolean }) {
   const t = useT()
   const ready = readyOf(m)
-  const tone: Tone = ready ? conditionStatusTone(ready.type, ready.status) : 'neutral'
+  const tone: Tone = ready ? conditionTone(ready.type, ready.status) : 'neutral'
   const word = !ready ? t('overview.nodeUnknown') : ready.status === 'True' ? t('overview.nodeReady') : t('overview.nodeNotReady')
   // The hostname, else the node name; the machine's UUID name is only the link target.
   const name = machineDisplayName(m)

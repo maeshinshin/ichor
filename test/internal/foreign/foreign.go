@@ -66,6 +66,7 @@ const (
 	CNICalico       = "calico"
 
 	calicoManifest = "https://raw.githubusercontent.com/projectcalico/calico/v3.30.3/manifests/calico.yaml"
+	ciliumName     = "cilium"
 )
 
 var prefixRe = regexp.MustCompile(`^ichor-e2e-f[a-z0-9-]{0,20}$`)
@@ -588,16 +589,8 @@ func (c *Cluster) bringUp() error {
 	if err != nil {
 		return err
 	}
-	fmt.Println("--- applying configs (installs and reboots) ---")
-	for _, ip := range c.CPs {
-		if out, err := talosctl.Apply(namespace, ip, cpCfg); err != nil {
-			return fmt.Errorf("apply-config %s: %w: %s", ip, err, tail(out))
-		}
-	}
-	for _, ip := range c.Workers {
-		if out, err := talosctl.Apply(namespace, ip, wCfg); err != nil {
-			return fmt.Errorf("apply-config %s: %w: %s", ip, err, tail(out))
-		}
+	if err := c.applyConfigs(cpCfg, wCfg); err != nil {
+		return err
 	}
 	for _, ip := range c.Nodes() {
 		if _, err := kube.Poll("waiting for "+ip+" authenticated API", 12*time.Minute, func() (string, bool) {
@@ -647,22 +640,8 @@ func (c *Cluster) bringUp() error {
 	}); err != nil {
 		return err
 	}
-	if o.CNI == CNICalico { // applied to the running cluster, as a user does; a Talos inline manifest would make adopt block the machine
-		if err := c.applyCalico(); err != nil {
-			return err
-		}
-	}
-	if o.CNI == CNICiliumHelm {
-		args := append([]string{"helm", "install", "cilium", o.CiliumChart, "--kubeconfig", c.LocalKube}, c.ciliumHelmArgs()...)
-		if out, err := runLocal(args...); err != nil {
-			return fmt.Errorf("helm install cilium: %w: %s", err, tail(out))
-		}
-	}
-	if o.CNI == CNICiliumCLI { // the chart version is pinned to the one the helm variant uses; the CLI downloads it and writes the Helm record
-		args := append([]string{"cilium", "install", "--version", "1.18.0", "--kubeconfig", c.LocalKube, "--wait=false"}, c.ciliumHelmArgs()...)
-		if out, err := runLocal(args...); err != nil {
-			return fmt.Errorf("cilium install: %w: %s", err, tail(out))
-		}
+	if err := c.installCNI(); err != nil {
+		return err
 	}
 	if o.CNI == CNINone {
 		return nil
@@ -682,6 +661,45 @@ func (c *Cluster) bringUp() error {
 		return "", true
 	})
 	return err
+}
+
+// applyConfigs applies the control-plane and worker configs to their nodes, which installs and reboots them.
+func (c *Cluster) applyConfigs(cpCfg, wCfg []byte) error {
+	fmt.Println("--- applying configs (installs and reboots) ---")
+	for _, ip := range c.CPs {
+		if out, err := talosctl.Apply(namespace, ip, cpCfg); err != nil {
+			return fmt.Errorf("apply-config %s: %w: %s", ip, err, tail(out))
+		}
+	}
+	for _, ip := range c.Workers {
+		if out, err := talosctl.Apply(namespace, ip, wCfg); err != nil {
+			return fmt.Errorf("apply-config %s: %w: %s", ip, err, tail(out))
+		}
+	}
+	return nil
+}
+
+// installCNI installs the CNI variant the cluster asked for; the variants it does not handle are a no-op.
+func (c *Cluster) installCNI() error {
+	o := c.Opts
+	if o.CNI == CNICalico { // applied to the running cluster, as a user does; a Talos inline manifest would make adopt block the machine
+		if err := c.applyCalico(); err != nil {
+			return err
+		}
+	}
+	if o.CNI == CNICiliumHelm {
+		args := append([]string{"helm", "install", ciliumName, o.CiliumChart, "--kubeconfig", c.LocalKube}, c.ciliumHelmArgs()...)
+		if out, err := runLocal(args...); err != nil {
+			return fmt.Errorf("helm install cilium: %w: %s", err, tail(out))
+		}
+	}
+	if o.CNI == CNICiliumCLI { // the chart version is pinned to the one the helm variant uses; the CLI downloads it and writes the Helm record
+		args := append([]string{ciliumName, "install", "--version", "1.18.0", "--kubeconfig", c.LocalKube, "--wait=false"}, c.ciliumHelmArgs()...)
+		if out, err := runLocal(args...); err != nil {
+			return fmt.Errorf("cilium install: %w: %s", err, tail(out))
+		}
+	}
+	return nil
 }
 
 func (c *Cluster) startRelay() error {
@@ -823,7 +841,7 @@ func (c *Cluster) cniManifest() (string, error) {
 		if c.Opts.CiliumChart == "" {
 			return "", errors.New("cilium-inline needs Options.CiliumChart")
 		}
-		out, err := runLocal(append([]string{"helm", "template", "cilium", c.Opts.CiliumChart}, c.ciliumHelmArgs()...)...)
+		out, err := runLocal(append([]string{"helm", "template", ciliumName, c.Opts.CiliumChart}, c.ciliumHelmArgs()...)...)
 		if err != nil {
 			return "", fmt.Errorf("helm template: %w: %s", err, tail(out))
 		}

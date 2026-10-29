@@ -117,6 +117,7 @@ const (
 	reasonTalosClientNotConfigured = "TalosClientNotConfigured"
 	reasonTalosConnectFailed       = "TalosConnectFailed"
 	reasonCurrentConfigUnavailable = "CurrentConfigUnavailable"
+	reasonEndpointIdentityMismatch = "EndpointIdentityMismatch"
 	reasonConfigDiffFailed         = "ConfigDiffFailed"
 	reasonDryRunFailed             = "DryRunFailed"
 	reasonApplyFailed              = "ApplyFailed"
@@ -559,6 +560,10 @@ func (r *TalosMachineReconciler) readNode(
 
 		res, err = r.readFailed(ctx, m, err, time.Now())
 
+		return nil, res, true, err
+	}
+
+	if res, stop, err = r.checkEndpointIdentity(ctx, m, talos); stop {
 		return nil, res, true, err
 	}
 

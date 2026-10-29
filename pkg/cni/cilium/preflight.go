@@ -86,7 +86,7 @@ func Preflight(ctx context.Context, in PreflightInput) (*PreflightReport, error)
 		rep.ForeignErr = foreign.RequireDeployed()
 	}
 
-	live, err := rep.liveValues(in)
+	live, err := rep.liveValues(ctx, in)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +113,7 @@ func Preflight(ctx context.Context, in PreflightInput) (*PreflightReport, error)
 
 // liveValues is the complete live configuration and sets r.UserValues; nil when the foreign
 // record cannot be read (ForeignErr already says so).
-func (r *PreflightReport) liveValues(in PreflightInput) (map[string]any, error) {
+func (r *PreflightReport) liveValues(ctx context.Context, in PreflightInput) (map[string]any, error) {
 	switch {
 	case r.Foreign != nil && r.ForeignErr == nil:
 		rel := r.Foreign.Latest().Release
@@ -123,7 +123,7 @@ func (r *PreflightReport) liveValues(in PreflightInput) (map[string]any, error) 
 	case r.Foreign == nil && r.ForeignErr == nil:
 		r.UserValues = UserValues(in.UserValues)
 
-		return LiveValuesFromUser(in.UserValues)
+		return LiveValuesFromCluster(ctx, in.Kube, in.UserValues)
 	}
 
 	return nil, nil //nolint:nilnil // no readable record: ForeignErr carries the reason

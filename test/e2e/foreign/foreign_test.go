@@ -111,11 +111,7 @@ func build(t *testing.T, o foreign.Options) *foreign.Cluster {
 // configDocs returns the v1alpha1 document and the Kube* documents of a node's machine config.
 func configDocs(t *testing.T, c *foreign.Cluster, ip string) (doc map[string]any, kubeDocs []any) {
 	t.Helper()
-	tc, err := os.ReadFile(c.Talosconfig)
-	if err != nil {
-		t.Fatal(err)
-	}
-	out, err := talosctl.GetAuthenticated(ns, ip, "machineconfig", tc)
+	out, err := talosctl.GetAuthenticated(ns, ip, "machineconfig", ftc(t, c))
 	if err != nil {
 		t.Fatalf("machineconfig %s: %v", ip, err)
 	}

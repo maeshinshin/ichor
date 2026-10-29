@@ -20,7 +20,6 @@ limitations under the License.
 package foreign
 
 import (
-	"os"
 	"strings"
 	"testing"
 
@@ -48,10 +47,7 @@ func TestB5Plan(t *testing.T) {
 func TestB5Upgrade(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 0})
 	to := env("ICHOR_E2E_F_UPGRADE_TO", "v1.14.3")
-	tc, err := os.ReadFile(c.Talosconfig)
-	if err != nil {
-		t.Fatal(err)
-	}
+	tc := ftc(t, c)
 	out, err := talosctl.Upgrade(ns, c.CPs[0], "factory.talos.dev/metal-installer/376567988ad370138ad8b2698212367b8edcb69b5fd68c80be1f2ec7d603b4ba:"+to, tc)
 	t.Logf("talosctl upgrade: %v\n%s", err, out)
 	if err != nil {

@@ -179,14 +179,10 @@ func TestC8C9C10(t *testing.T) {
 		t.Errorf("C9: the credential Secret %s still exists at Done", credName)
 	}
 	events := r.ikJSON(t, "get", "events", "-A", "-o", "yaml")
-	for what, text := range map[string]string{
+	noLeaks(t, secrets, map[string]string{
 		"controller log": r.logs(t, "ichor-controller-manager"), "ichor-ui log": r.logs(t, "ichor-ichor-ui"),
 		"events": events, "MachineReclaim": mr,
-	} {
-		if l := leaks(text, secrets); len(l) > 0 {
-			t.Errorf("C9: %s contains credential material %v", what, l)
-		}
-	}
+	})
 	// The same request cannot reset twice.
 	_, _ = r.ui(t, "confirm", "-name", name, "-uuid", uuid)
 	time.Sleep(30 * time.Second)

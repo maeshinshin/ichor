@@ -18,12 +18,15 @@ package cilium
 
 import (
 	"io"
+	"strings"
 	"testing"
+	"time"
 
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/chartutil"
 	kubefake "helm.sh/helm/v3/pkg/kube/fake"
 	"helm.sh/helm/v3/pkg/release"
+	helmtime "helm.sh/helm/v3/pkg/time"
 	"helm.sh/helm/v3/pkg/storage"
 	"helm.sh/helm/v3/pkg/storage/driver"
 
@@ -105,6 +108,103 @@ func TestApply_AdoptsThenUpgrades(t *testing.T) {
 	third, err := Apply(t.Context(), cfg, effective(t, debugOn), ApplyOptions{})
 	if err != nil || third.Adopted || third.Release.Version != 3 {
 		t.Fatalf("third Apply: %+v, %v; want upgrade to revision 3", third, err)
+	}
+}
+
+// setRevisionState rewrites a stored revision's status and age, as a killed Helm run leaves it.
+func setRevisionState(t *testing.T, cfg *action.Configuration, rev int, st release.Status, age time.Duration) {
+	t.Helper()
+
+	rel, err := cfg.Releases.Get(ReleaseName, rev)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rel.Info.Status = st
+	rel.Info.LastDeployed = helmtime.Time{Time: time.Now().Add(-age)}
+
+	if err := cfg.Releases.Update(rel); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A killed install leaves revision 1 pending-install. Once it is older than the wait timeout, or the
+// caller is exclusive, Apply marks it failed and upgrades; it never uninstalls.
+func TestApply_RepairsPendingInstall(t *testing.T) {
+	for name, tc := range map[string]struct {
+		age  time.Duration
+		opts ApplyOptions
+	}{
+		"older than the timeout": {age: time.Hour, opts: ApplyOptions{Timeout: time.Minute}},
+		"exclusive caller":       {age: 0, opts: ApplyOptions{Timeout: time.Hour, Exclusive: true}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := fakeConfig()
+			if _, err := Apply(t.Context(), cfg, effective(t, nil), ApplyOptions{}); err != nil {
+				t.Fatal(err)
+			}
+
+			setRevisionState(t, cfg, 1, release.StatusPendingInstall, tc.age)
+
+			res, err := Apply(t.Context(), cfg, effective(t, nil), tc.opts)
+			if err != nil {
+				t.Fatalf("Apply over a pending-install record: %v", err)
+			}
+
+			if res.Release.Version != 2 || res.Release.Info.Status != release.StatusDeployed {
+				t.Errorf("got revision %d %s, want revision 2 deployed", res.Release.Version, res.Release.Info.Status)
+			}
+
+			old, _ := cfg.Releases.Get(ReleaseName, 1)
+			if old.Info.Status.IsPending() {
+				t.Errorf("revision 1 is still %s", old.Info.Status)
+			}
+		})
+	}
+}
+
+func TestApply_RepairsPendingUpgradeAndRollback(t *testing.T) {
+	for _, st := range []release.Status{release.StatusPendingUpgrade, release.StatusPendingRollback} {
+		t.Run(string(st), func(t *testing.T) {
+			cfg := fakeConfig()
+			debugOn := map[string]any{keyDebug: map[string]any{keyEnabled: true}}
+
+			for _, v := range []map[string]any{nil, debugOn} {
+				if _, err := Apply(t.Context(), cfg, effective(t, v), ApplyOptions{}); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			setRevisionState(t, cfg, 2, st, time.Hour)
+
+			res, err := Apply(t.Context(), cfg, effective(t, debugOn), ApplyOptions{Timeout: time.Minute})
+			if err != nil || res.Release.Version != 3 || res.Release.Info.Status != release.StatusDeployed {
+				t.Fatalf("Apply = %+v, %v; want revision 3 deployed", res, err)
+			}
+
+			if bad, _ := cfg.Releases.Get(ReleaseName, 2); bad.Info.Status.IsPending() {
+				t.Errorf("revision 2 is still %s", bad.Info.Status)
+			}
+		})
+	}
+}
+
+// A recent pending record may belong to a run that is still going: Apply leaves it alone and Helm refuses.
+func TestApply_LeavesAFreshPendingRecordAlone(t *testing.T) {
+	cfg := fakeConfig()
+	if _, err := Apply(t.Context(), cfg, effective(t, nil), ApplyOptions{}); err != nil {
+		t.Fatal(err)
+	}
+
+	setRevisionState(t, cfg, 1, release.StatusPendingInstall, 0)
+
+	if _, err := Apply(t.Context(), cfg, effective(t, nil), ApplyOptions{Timeout: time.Hour}); err == nil ||
+		!strings.Contains(err.Error(), "in progress") {
+		t.Fatalf("Apply = %v, want Helm's operation-in-progress refusal", err)
+	}
+
+	if rel, _ := cfg.Releases.Get(ReleaseName, 1); rel.Info.Status != release.StatusPendingInstall {
+		t.Errorf("revision 1 is %s, want it untouched", rel.Info.Status)
 	}
 }
 

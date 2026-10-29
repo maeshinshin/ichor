@@ -39,6 +39,11 @@ const DefaultApplyTimeout = 10 * time.Minute
 type ApplyOptions struct {
 	// Timeout bounds the wait for the release's workloads (0: DefaultApplyTimeout).
 	Timeout time.Duration
+
+	// Exclusive is set by a caller that holds the CNI lock, so no other Helm operation on the
+	// release can be running: a pending-* record is then stale whatever its age. Without it a
+	// pending record is repaired only once it is older than Timeout.
+	Exclusive bool
 }
 
 // ApplyResult is what Apply did.
@@ -85,7 +90,7 @@ func Apply(ctx context.Context, cfg *action.Configuration, vals map[string]any, 
 		return ApplyResult{}, err
 	}
 
-	_, err = cfg.Releases.Last(ReleaseName)
+	last, err := cfg.Releases.Last(ReleaseName)
 
 	switch {
 	case errors.Is(err, driver.ErrReleaseNotFound):
@@ -94,7 +99,35 @@ func Apply(ctx context.Context, cfg *action.Configuration, vals map[string]any, 
 		return ApplyResult{}, fmt.Errorf("cilium: looking up Helm release %s: %w", ReleaseName, err)
 	}
 
-	return upgrade(ctx, cfg, ch, vals, o)
+	repaired, err := repairPending(cfg, last, o)
+	if err != nil {
+		return ApplyResult{}, err
+	}
+
+	return upgrade(ctx, cfg, ch, vals, o, repaired)
+}
+
+// repairPending is the pending-* repair of ADR 0103 (Risks). A killed install/upgrade/rollback
+// leaves the newest record pending-*, and Helm's Upgrade then refuses ("another operation is in
+// progress"). When no Helm operation can be running (the caller is Exclusive, or the record is older
+// than the wait timeout) the record is marked failed in storage, so the Upgrade that follows goes
+// ahead. It never uninstalls. It reports whether it changed a record.
+func repairPending(cfg *action.Configuration, last *release.Release, o ApplyOptions) (bool, error) {
+	if last == nil || last.Info == nil || !last.Info.Status.IsPending() {
+		return false, nil
+	}
+
+	if !o.Exclusive && time.Since(last.Info.LastDeployed.Time) < o.Timeout {
+		return false, nil
+	}
+
+	last.SetStatus(release.StatusFailed, fmt.Sprintf("marked failed by Ichor: a previous operation left it %s (ADR 0103)", last.Info.Status))
+
+	if err := cfg.Releases.Update(last); err != nil {
+		return false, fmt.Errorf("cilium: marking the interrupted Helm revision %d of %s failed: %w", last.Version, ReleaseName, err)
+	}
+
+	return true, nil
 }
 
 func install(
@@ -117,9 +150,11 @@ func install(
 }
 
 func upgrade(
-	ctx context.Context, cfg *action.Configuration, ch *chart.Chart, vals map[string]any, o ApplyOptions,
+	ctx context.Context, cfg *action.Configuration, ch *chart.Chart, vals map[string]any, o ApplyOptions, takeOwnership bool,
 ) (ApplyResult, error) {
 	u := action.NewUpgrade(cfg)
+	// After a repaired install the objects may carry no Helm ownership yet.
+	u.TakeOwnership = takeOwnership
 	u.Namespace = ReleaseNamespace
 	u.Wait = true
 	u.Atomic = true

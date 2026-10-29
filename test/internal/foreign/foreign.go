@@ -79,6 +79,7 @@ type Options struct {
 	CNI            string   // one of the CNI* constants, default talos-flannel
 	NoKubeProxy    bool     // cluster.proxy.disabled
 	NoKubePrism    bool     // machine.features.kubePrism.enabled=false
+	UserManifest   bool     // a user inline manifest of a non-Cilium app
 	CPMemory       string   // default 2560Mi
 	WorkerMemory   string   // default 1536Mi
 	RegistryMirror bool     // nodes mirror ghcr.io to <prefix>-registry
@@ -864,6 +865,9 @@ func (c *Cluster) patchMultiDoc(manifest string) (all, cpOnly []byte) {
 	if manifest != "" {
 		docs = append(docs, doc("KubeInlineManifestConfig", map[string]any{"name": o.CNI[:6], "manifest": manifest}))
 	}
+	if o.UserManifest {
+		docs = append(docs, doc("KubeInlineManifestConfig", map[string]any{"name": "userapp", "manifest": userManifest}))
+	}
 	if o.NoKubePrism {
 		docs = append(docs, doc("KubePrismConfig", map[string]any{"$patch": "delete"})) // the document has no enabled field: absent means off
 	}
@@ -882,6 +886,9 @@ func (c *Cluster) patchMultiDoc(manifest string) (all, cpOnly []byte) {
 	return render(docs), cpOnly
 }
 
+// userManifest is the non-Cilium application of B7: a ConfigMap, nothing Ichor can represent.
+const userManifest = "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: user-app\n  namespace: default\ndata:\n  a: b\n"
+
 type inlineManifest struct {
 	Name     string `yaml:"name"`
 	Contents string `yaml:"contents"`
@@ -895,8 +902,14 @@ func (c *Cluster) patchLegacy(manifest string) ([]byte, error) {
 	if o.CNI != CNIFlannel {
 		net["cni"] = map[string]any{"name": CNINone}
 	}
+	if manifest != "" || o.UserManifest {
+		cluster["inlineManifests"] = []inlineManifest{}
+	}
 	if manifest != "" {
 		cluster["inlineManifests"] = []inlineManifest{{o.CNI[:6], manifest}}
+	}
+	if o.UserManifest {
+		cluster["inlineManifests"] = append(cluster["inlineManifests"].([]inlineManifest), inlineManifest{"userapp", userManifest})
 	}
 	if o.NoKubeProxy {
 		cluster["proxy"] = map[string]any{"disabled": true}

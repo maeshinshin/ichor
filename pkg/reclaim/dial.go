@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/url"
 	"strings"
 	"time"
 
@@ -132,9 +133,13 @@ func (n *machineryNode) Inspect(ctx context.Context) (Inspection, error) {
 		if err == nil {
 			for _, msg := range resp.GetMessages() {
 				for _, m := range msg.GetMembers() {
-					in.EtcdMembers = append(in.EtcdMembers, EtcdMember{ID: m.GetId(), Hostname: m.GetHostname()})
+					in.EtcdMembers = append(in.EtcdMembers, EtcdMember{
+						ID: m.GetId(), Hostname: m.GetHostname(), Unhealthy: !memberReachable(ctx, m.GetPeerUrls()),
+					})
 				}
 			}
+
+			n.markLocalMember(ctx, &in)
 
 			in.EtcdKnown = len(in.EtcdMembers) > 0
 			in.ClusterReachable = in.EtcdKnown
@@ -149,6 +154,56 @@ func (n *machineryNode) Inspect(ctx context.Context) (Inspection, error) {
 	}
 
 	return in, nil
+}
+
+// markLocalMember records the dialled node's own member ID and judges its
+// health by its own etcd status (the Talos API reads only the node it is
+// sent to). Other members are judged by whether their peer port answers, set
+// by the caller. ponytail: a member whose peer port is firewalled from the
+// controller counts as unhealthy, which errs toward refusing; --force overrides.
+func (n *machineryNode) markLocalMember(ctx context.Context, in *Inspection) {
+	resp, err := n.c.EtcdStatus(ctx)
+	if err != nil {
+		return
+	}
+
+	for _, msg := range resp.GetMessages() {
+		st := msg.GetMemberStatus()
+		if st == nil {
+			continue
+		}
+
+		in.LocalMemberID = st.GetMemberId()
+
+		for i := range in.EtcdMembers {
+			if in.EtcdMembers[i].ID == st.GetMemberId() {
+				in.EtcdMembers[i].Unhealthy = len(st.GetErrors()) > 0 || st.GetLeader() == 0
+			}
+		}
+
+		return
+	}
+}
+
+// memberReachable is true when any of the member's peer URLs accepts a TCP
+// connection, or when it lists none (nothing to judge by).
+func memberReachable(ctx context.Context, peerURLs []string) bool {
+	if len(peerURLs) == 0 {
+		return true
+	}
+
+	for _, raw := range peerURLs {
+		u, err := url.Parse(raw)
+		if err != nil || u.Host == "" {
+			continue
+		}
+
+		if tcpReachable(ctx, u.Host) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // volumes lists what the reset leaves behind: user volumes (by their "u-" ID),

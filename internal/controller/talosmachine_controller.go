@@ -159,7 +159,7 @@ func (r *TalosMachineReconciler) refuseUnsupportedCNI(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
 ) (ctrl.Result, bool, error) {
 	p := cluster.Spec.CNI.Preset
-	if p == "" || p == ciliumName {
+	if p == "" || p == ciliumName || p == render.PresetUnmanaged {
 		return ctrl.Result{}, false, nil
 	}
 

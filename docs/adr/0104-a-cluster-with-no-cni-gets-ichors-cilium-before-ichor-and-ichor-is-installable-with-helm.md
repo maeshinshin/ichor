@@ -152,6 +152,8 @@ Sizes: S under a day, M one to two days, L three or more. Rows run in parallel u
 | 8 | Docs: architecture Bootstrap and CNI paragraphs, `docs/guides/adopt-and-reclaim.md` (no-CNI row, Helm path), new Helm install guide section, ADR 0103 amendment line, `make adr-index` | `docs/design/architecture.md`, `docs/guides/`, `docs/adr/0103-*.md` | S | all |
 | 9 | Hardware cases E1-E9 below and the cluster generators (a `cni.name: none` cluster; a Helm-installed Ichor) | `test/e2e` | L | 1-7 as they land |
 
+Unit 7, as built (images): `.github/workflows/release-images.yml` runs on the same `v*` tag and calls `make demo-images VERSION=<tag> REGISTRY=ghcr.io CRANE_INSECURE=`, the crane build that already produced the controller, UI and installer images, so the release images are `ghcr.io/maeshinshin/{ichor-controller,ichor-ui,ichor-installer}:<tag>`: the chart defaults, the install manifest and the `IchorInstallation` `installerRepository` default needed no change. linux/amd64 only, as the Makefile builds today; multi-arch is deferred. `images.sh` now reads `CRANE_INSECURE` (default `--insecure`, for the local demo registry).
+
 Parallelism: 1, 2, 3 and 7 start together (disjoint files except `adopt_run.go`, which units 1 and 3 touch in different functions; land 1 first). 4 follows them; 5 starts after 1 and runs beside 4; 6 follows 4. Per the batch rule one hardware run covers units 1-6 integrated.
 
 ## Hardware test plan

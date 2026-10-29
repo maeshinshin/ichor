@@ -112,6 +112,9 @@ var _ = BeforeSuite(func() {
 	err = SetupTalosClusterWebhookWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred())
 
+	err = SetupTalosConfigPatchWebhookWithManager(mgr, testNamespace)
+	Expect(err).NotTo(HaveOccurred())
+
 	err = SetupTalosMachineWebhookWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred())
 

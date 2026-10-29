@@ -1,0 +1,175 @@
+package v1alpha1
+
+import (
+	"context"
+	"strings"
+	"testing"
+	"time"
+
+	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
+	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
+	yaml "go.yaml.in/yaml/v4"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/secretsbundle"
+	"github.com/maeshinshin/ichor/pkg/typedconfig"
+)
+
+const dryRenderNS = "ns"
+
+func dryRenderValidator(t *testing.T, objs ...runtime.Object) *TalosConfigPatchCustomValidator {
+	t.Helper()
+
+	contract, err := coreconfig.ParseContractFromVersion("v1.14")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bundle, err := secrets.NewBundle(secrets.NewFixedClock(time.Now()), contract)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	raw, err := yaml.Marshal(bundle)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	scheme := runtime.NewScheme()
+	if err := ichorv1alpha1.AddToScheme(scheme); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := corev1.AddToScheme(scheme); err != nil {
+		t.Fatal(err)
+	}
+
+	cluster := &ichorv1alpha1.TalosCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "c", Namespace: dryRenderNS},
+		Spec: ichorv1alpha1.TalosClusterSpec{
+			Endpoint:          ichorv1alpha1.TalosClusterEndpoint{Type: "vip", Address: "10.0.0.5"},
+			TalosVersion:      "v1.14.3",
+			KubernetesVersion: "v1.36.0",
+			VersionContract:   "v1.14",
+			SecretsRef:        corev1.LocalObjectReference{Name: "bundle"},
+			ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: 1, Schedulable: "false"},
+		},
+	}
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "bundle", Namespace: "ichor-system"},
+		Data:       map[string][]byte{secretsbundle.SecretKey: raw},
+	}
+	cp := &ichorv1alpha1.TalosMachine{
+		ObjectMeta: metav1.ObjectMeta{Name: "cp1", Namespace: dryRenderNS},
+		Spec: ichorv1alpha1.TalosMachineSpec{
+			ClusterRef:    corev1.LocalObjectReference{Name: "c"},
+			Identity:      ichorv1alpha1.TalosMachineIdentity{UUID: "u1"},
+			Endpoint:      "10.0.0.10:50000",
+			Role:          "controlplane",
+			ApprovalState: ichorv1alpha1.MachineApprovalStateApproved,
+		},
+	}
+
+	c := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(append(objs, cluster, secret, cp)...).Build()
+
+	return &TalosConfigPatchCustomValidator{Client: c, SecretNamespace: "ichor-system"}
+}
+
+func configPatch(name string, cfg *typedconfig.Config) *ichorv1alpha1.TalosConfigPatch {
+	return &ichorv1alpha1.TalosConfigPatch{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: dryRenderNS},
+		Spec: ichorv1alpha1.TalosConfigPatchSpec{
+			ClusterRef: corev1.LocalObjectReference{Name: "c"},
+			Layer:      "cluster",
+			Documents:  []ichorv1alpha1.TalosConfigPatchDocument{{Kind: "Config", Config: cfg}},
+		},
+	}
+}
+
+func TestTalosConfigPatchDryRender(t *testing.T) {
+	ctx := context.Background()
+	v := dryRenderValidator(t)
+
+	t.Run("a v1alpha1 apiServer block under the multi-document contract is refused with the render error", func(t *testing.T) {
+		p := configPatch("api", &typedconfig.Config{
+			ConfigVersion: "v1alpha1",
+			ClusterConfig: &typedconfig.ClusterConfig{APIServerConfig: &typedconfig.APIServerConfig{
+				ExtraArgsConfig: map[string][]string{"audit-log-maxage": {"3"}},
+			}},
+		})
+
+		_, err := v.ValidateCreate(ctx, p)
+		if err == nil || !strings.Contains(err.Error(), ".cluster.apiServer") || !strings.Contains(err.Error(), `"cp1"`) {
+			t.Fatalf("want the render error naming cp1, got %v", err)
+		}
+
+		if _, err := v.ValidateUpdate(ctx, p, p); err == nil {
+			t.Fatal("update must be refused too")
+		}
+	})
+
+	t.Run("a sparse patch that renders is admitted", func(t *testing.T) {
+		p := configPatch("ok", &typedconfig.Config{
+			ConfigVersion: "v1alpha1",
+			ClusterConfig: &typedconfig.ClusterConfig{ExtraManifests: []string{"https://example.invalid/x.yaml"}},
+		})
+
+		if _, err := v.ValidateCreate(ctx, p); err != nil {
+			t.Fatalf("want admitted, got %v", err)
+		}
+	})
+
+	t.Run("a patch that applies to no machine is admitted", func(t *testing.T) {
+		p := configPatch("none", &typedconfig.Config{
+			ConfigVersion: "v1alpha1",
+			ClusterConfig: &typedconfig.ClusterConfig{APIServerConfig: &typedconfig.APIServerConfig{
+				ExtraArgsConfig: map[string][]string{"x": {"y"}},
+			}},
+		})
+		p.Spec.Layer = "role"
+		p.Spec.Target = &ichorv1alpha1.TalosConfigPatchTarget{Role: "worker"}
+
+		if _, err := v.ValidateCreate(ctx, p); err != nil {
+			t.Fatalf("want admitted, got %v", err)
+		}
+	})
+
+	t.Run("a machine that already fails to render does not block the patch", func(t *testing.T) {
+		broken := configPatch("broken", &typedconfig.Config{
+			ConfigVersion: "v1alpha1",
+			ClusterConfig: &typedconfig.ClusterConfig{APIServerConfig: &typedconfig.APIServerConfig{
+				ExtraArgsConfig: map[string][]string{"x": {"y"}},
+			}},
+		})
+		v2 := dryRenderValidator(t, broken)
+
+		p := configPatch("fix", &typedconfig.Config{
+			ConfigVersion: "v1alpha1",
+			ClusterConfig: &typedconfig.ClusterConfig{ExtraManifests: []string{"https://example.invalid/x.yaml"}},
+		})
+
+		if _, err := v2.ValidateCreate(ctx, p); err != nil {
+			t.Fatalf("want admitted, got %v", err)
+		}
+	})
+
+	t.Run("a cluster without a secrets bundle is not checked", func(t *testing.T) {
+		v3 := dryRenderValidator(t)
+		v3.SecretNamespace = "elsewhere"
+
+		p := configPatch("nb", &typedconfig.Config{
+			ConfigVersion: "v1alpha1",
+			ClusterConfig: &typedconfig.ClusterConfig{APIServerConfig: &typedconfig.APIServerConfig{
+				ExtraArgsConfig: map[string][]string{"x": {"y"}},
+			}},
+		})
+
+		if _, err := v3.ValidateCreate(ctx, p); err != nil {
+			t.Fatalf("want admitted, got %v", err)
+		}
+	})
+}

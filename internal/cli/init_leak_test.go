@@ -28,6 +28,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/controller"
+	"github.com/maeshinshin/ichor/internal/secretsbundle"
 )
 
 // bundleMaterialFromHome reads back the secrets bundle runInit just saved
@@ -42,7 +43,7 @@ func bundleMaterialFromHome(t *testing.T) []string {
 		t.Fatalf("bundleDir: %v", err)
 	}
 
-	bundle, err := loadBundleFile(path + "/" + bundleSecretKey)
+	bundle, err := loadBundleFile(path + "/" + secretsbundle.SecretKey)
 	if err != nil {
 		t.Fatalf("loadBundleFile: %v", err)
 	}

@@ -29,13 +29,6 @@ import (
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
 )
 
-// bundleSecretKey is secretsbundle.SecretKey under this package's own
-// name, kept so existing fixtures (leak_test.go,
-// talosmachine_controller_test.go) that build a Secret keyed on it don't
-// need to change -- it is an alias, not a second definition: there is
-// still exactly one literal value, in internal/secretsbundle.
-const bundleSecretKey = secretsbundle.SecretKey
-
 // loadBundle implements design step 1's "load the bundle from the Secret":
 // it reads the Secret cluster.Spec.SecretsRef names, in the controller's own
 // namespace (namespace -- POD_NAMESPACE in practice, see cmd/main.go), via

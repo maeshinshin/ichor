@@ -32,6 +32,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/controller"
+	"github.com/maeshinshin/ichor/internal/secretsbundle"
 	"github.com/maeshinshin/ichor/internal/version"
 )
 
@@ -104,7 +105,7 @@ func TestWriteAdopt_WritesEveryObject(t *testing.T) {
 		t.Fatalf("bundle Secret: %v", err)
 	}
 
-	if len(sec.Data[bundleSecretKey]) == 0 {
+	if len(sec.Data[secretsbundle.SecretKey]) == 0 {
 		t.Fatal("bundle Secret has no bundle")
 	}
 
@@ -224,7 +225,7 @@ func TestWriteAdopt_RefusesADifferingObject(t *testing.T) {
 			t.Helper()
 			mustCreate(t, c, &corev1.Secret{
 				Name: secretsRefName(testInitClusterName), Namespace: testNamespace,
-				Data: map[string][]byte{bundleSecretKey: []byte("another bundle")},
+				Data: map[string][]byte{secretsbundle.SecretKey: []byte("another bundle")},
 			})
 		},
 		"TalosCluster": func(t *testing.T, c client.Client) {

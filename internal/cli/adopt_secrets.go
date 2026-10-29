@@ -28,6 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/secretsbundle"
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
 	"github.com/siderolabs/talos/pkg/machinery/config/configloader"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
@@ -87,7 +88,7 @@ func resolveAdoptBundle(
 		return nil, "", err
 	}
 
-	target := filepath.Join(dir, bundleSecretKey)
+	target := filepath.Join(dir, secretsbundle.SecretKey)
 	if _, err := os.Stat(target); err == nil {
 		return nil, "", errRecoveredExists
 	}

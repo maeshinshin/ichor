@@ -105,44 +105,49 @@ func build(t *testing.T, o foreign.Options) *foreign.Cluster {
 	return c
 }
 
-// cniPaths returns, per node, the canonical JSON of the machine-config paths that decide the CNI.
-func cniPaths(t *testing.T, c *foreign.Cluster) map[string]string {
+// configDocs returns the v1alpha1 document and the Kube* documents of a node's machine config.
+func configDocs(t *testing.T, c *foreign.Cluster, ip string) (doc map[string]any, kubeDocs []any) {
 	t.Helper()
 	tc, err := os.ReadFile(c.Talosconfig)
 	if err != nil {
 		t.Fatal(err)
 	}
+	out, err := talosctl.GetAuthenticated(ns, ip, "machineconfig", tc)
+	if err != nil {
+		t.Fatalf("machineconfig %s: %v", ip, err)
+	}
+	objs, err := talosctl.DecodeAll(out)
+	if err != nil || len(objs) == 0 {
+		t.Fatalf("decoding machineconfig %s: %v", ip, err)
+	}
+	switch s := objs[0]["spec"].(type) {
+	case string: // the v1.14 contract keeps network, CNI, proxy and inline manifests in their own documents
+		for _, part := range strings.Split(s, "\n---\n") {
+			var d map[string]any
+			if yaml.Unmarshal([]byte(part), &d) != nil {
+				continue
+			}
+			if d["machine"] != nil {
+				doc = d
+			} else if k, _ := d["kind"].(string); strings.HasPrefix(k, "Kube") {
+				kubeDocs = append(kubeDocs, d)
+			}
+		}
+	case map[string]any:
+		doc = s
+	}
+	if doc == nil {
+		t.Fatalf("no v1alpha1 document in machineconfig of %s", ip)
+	}
+	return doc, kubeDocs
+}
+
+// cniPaths returns, per node, the canonical JSON of the machine-config paths that decide the CNI.
+func cniPaths(t *testing.T, c *foreign.Cluster) map[string]string {
+	t.Helper()
 	res := map[string]string{}
 	for _, ip := range append(append([]string{}, c.CPs...), c.Workers...) {
-		out, err := talosctl.GetAuthenticated(ns, ip, "machineconfig", tc)
-		if err != nil {
-			t.Fatalf("machineconfig %s: %v", ip, err)
-		}
-		objs, err := talosctl.DecodeAll(out)
-		if err != nil || len(objs) == 0 {
-			t.Fatalf("decoding machineconfig %s: %v", ip, err)
-		}
-		var doc map[string]any
-		var kubeDocs []any // the v1.14 contract keeps network, CNI, proxy and inline manifests in their own documents
-		switch s := objs[0]["spec"].(type) {
-		case string:
-			for _, part := range strings.Split(s, "\n---\n") {
-				var d map[string]any
-				if yaml.Unmarshal([]byte(part), &d) != nil {
-					continue
-				}
-				if d["machine"] != nil {
-					doc = d
-				} else if k, _ := d["kind"].(string); strings.HasPrefix(k, "Kube") {
-					kubeDocs = append(kubeDocs, d)
-				}
-			}
-		case map[string]any:
-			doc = s
-		}
-		if doc == nil {
-			t.Fatalf("no v1alpha1 document in machineconfig of %s", ip)
-		}
+		doc, kubeDocs := configDocs(t, c, ip)
 		cl, _ := doc["cluster"].(map[string]any)
 		m, _ := doc["machine"].(map[string]any)
 		feat, _ := m["features"].(map[string]any)
@@ -427,7 +432,5 @@ func TestB8TalosTooOldRefused(t *testing.T) {
 }
 
 // The rest of the ADR 0103 matrix: stubs until their units land.
-func TestA1(t *testing.T)   { t.Skip("A1 cilium inline manifest takeover") }
-func TestA2(t *testing.T)   { t.Skip("A2 helm install cilium takeover") }
 func TestC1(t *testing.T)   { t.Skip("C1 reclaim a worker of another cluster") }
 func TestB2B4(t *testing.T) { t.Skip("B2 kube-proxy matrix, B4 KubePrism") }

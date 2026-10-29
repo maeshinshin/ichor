@@ -575,6 +575,11 @@ func (c *Cluster) bringUp() error {
 	}); err != nil {
 		return err
 	}
+	if o.CNI == CNICalico { // applied to the running cluster, as a user does; a Talos inline manifest would make adopt block the machine
+		if err := c.applyCalico(); err != nil {
+			return err
+		}
+	}
 	if o.CNI == CNICiliumHelm {
 		args := append([]string{"helm", "install", "cilium", o.CiliumChart, "--kubeconfig", c.LocalKube}, c.ciliumHelmArgs()...)
 		if out, err := runLocal(args...); err != nil {
@@ -745,16 +750,26 @@ func (c *Cluster) cniManifest() (string, error) {
 			return "", fmt.Errorf("helm template: %w: %s", err, tail(out))
 		}
 		return out, nil
-	case CNICalico:
-		resp, err := http.Get(calicoManifest) //nolint:gosec,noctx // fixed URL, test harness
-		if err != nil {
-			return "", err
-		}
-		defer resp.Body.Close() //nolint:errcheck
-		b, err := io.ReadAll(resp.Body)
-		return string(b), err
 	}
 	return "", nil
+}
+
+func (c *Cluster) applyCalico() error {
+	resp, err := http.Get(calicoManifest) //nolint:gosec,noctx // fixed URL, test harness
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close() //nolint:errcheck
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	f := c.path("calico.yaml")
+	if err := os.WriteFile(f, b, 0o600); err != nil {
+		return err
+	}
+	_, err = utils.Run(kube.InnerCommand(c.LocalKube, "apply", "--server-side", "-f", f))
+	return err
 }
 
 func (c *Cluster) patchMultiDoc(manifest string) []byte {

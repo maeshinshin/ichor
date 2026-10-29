@@ -185,7 +185,7 @@ func TestIchorSummaryKeepsTheFromVersionAfterTheUpgrade(t *testing.T) {
 }
 
 func TestCreatingAnIchorUpgradeStampsFromVersionAndStartedBy(t *testing.T) {
-	objs := append(opObjects(), ichorInstallation("", ichorOld, ichorOld))
+	objs := append(opObjects(), ichorInstallation(ichorOld, ichorOld))
 	srv, k8s := opServer(t, objs...)
 	srv.Actor = userAlice
 

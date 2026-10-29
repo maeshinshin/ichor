@@ -153,17 +153,6 @@ type TalosClusterCNI struct {
 	// cilium holds the user layer of Cilium's Helm values (ADR 0099).
 	// +optional
 	Cilium *TalosClusterCNICilium `json:"cilium,omitempty"`
-
-	// handover is deprecated, unused; kept so the CRD never drops a field (ADR 0099). The values
-	// manual and disabled are read as automatic: the inline entry is removed once Ichor's Helm
-	// release of Cilium is deployed. It controlled how the CNI's cluster.inlineManifests entry is
-	// removed once Argo CD reported it Synced and Healthy (docs/design/architecture.md, "GitOps and Argo CD"): automatic (the
-	// controller removes it on its own), manual (removed only once an operator sets this field to automatic), or disabled (never removed
-	// automatically, for a cluster that does not run Argo CD).
-	// +kubebuilder:validation:Enum=automatic;manual;disabled
-	// +kubebuilder:default=automatic
-	// +optional
-	Handover string `json:"handover,omitempty"`
 }
 
 // TalosClusterRegistry declares one private registry mirror this cluster's nodes pull through,

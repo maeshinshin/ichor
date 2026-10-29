@@ -227,7 +227,7 @@ func markCompleted(op *ichorv1alpha1.TalosOperation, machines ...*ichorv1alpha1.
 
 var _ = Describe("cniKubeProxyAdvancer", func() {
 	BeforeEach(func() {
-		createInstallation(ichorv1alpha1.IchorManagementModeIchor, "v0.2.0")
+		createInstallation("v0.2.0")
 		DeferCleanup(func() {
 			Expect(k8sClient.DeleteAllOf(ctx, &batchv1.Job{}, client.InNamespace(cniJobNamespace),
 				client.PropagationPolicy(metav1.DeletePropagationBackground))).To(Succeed())

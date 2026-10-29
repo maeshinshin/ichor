@@ -84,15 +84,13 @@ func removedPreset(c *ichorv1alpha1.TalosCluster) bool {
 }
 
 // validateCNICreate refuses a new cluster that asks for a removed CNI (ADR 0099): preset flannel
-// or custom, spec.cni.custom, or a handover other than automatic.
+// or custom, or spec.cni.custom.
 func validateCNICreate(c *ichorv1alpha1.TalosCluster) error {
 	switch cni := c.Spec.CNI; {
 	case removedPreset(c):
 		return fmt.Errorf(presetRemovedMessage, cni.Preset)
 	case cni.Custom != nil:
 		return errors.New("spec.cni.custom is deprecated and unused (ADR 0099): Cilium is the only CNI")
-	case cni.Handover != "" && cni.Handover != "automatic":
-		return fmt.Errorf("spec.cni.handover %q is deprecated (ADR 0099): Ichor owns the Cilium release; leave it unset", cni.Handover)
 	}
 
 	return nil

@@ -207,7 +207,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 
 	BeforeEach(func() {
 		r = &CNIHandoverReconciler{Client: k8sClient, APIReader: k8sClient, Namespace: testIchorNamespace}
-		createInstallation(ichorv1alpha1.IchorManagementModeIchor, "v0.2.0")
+		createInstallation("v0.2.0")
 	})
 
 	It("sets CNIUnsupported on a flannel cluster and leaves the hand-over condition alone", func() {

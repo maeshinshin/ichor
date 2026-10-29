@@ -115,12 +115,8 @@ func TestCreateIchorInstallation_RecordsTheBinarysVersion(t *testing.T) {
 		t.Fatalf("the singleton was not created: %v", err)
 	}
 
-	if got.Spec.Stack != nil {
-		t.Errorf("spec.stack = %+v, want it unset (ADR 0101)", got.Spec.Stack)
-	}
-
-	if got.Spec.Version != testReleasedVersion || got.Spec.ManagementMode != ichorv1alpha1.IchorManagementModeIchor {
-		t.Errorf("spec = %+v, want version v0.3.1 in ichor mode", got.Spec)
+	if got.Spec.Version != testReleasedVersion {
+		t.Errorf("spec = %+v, want version v0.3.1", got.Spec)
 	}
 }
 

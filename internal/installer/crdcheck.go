@@ -24,6 +24,37 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
+// retiredField names a CRD field that was deliberately removed from the schema. checkAdditive
+// lets exactly these paths disappear and refuses every other removal. A field is retired only by
+// its own ADR (one per removal), so this list stays short and explicit.
+type retiredField struct {
+	crd  string // CRD name
+	path string // dotted property path from the object root, e.g. "spec.gitops"
+}
+
+// retiredFields is the whole list. Add an entry only together with the ADR that removes the field.
+var retiredFields = []retiredField{
+	// ADR 0101: GitOps is permanently out of scope; spec.gitops (and everything under it) is gone.
+	{crd: "talosclusters.ichor.maesh.dev", path: "spec.gitops"},
+	// ADR 0099 (hand-over is always to Ichor), retired by ADR 0101.
+	{crd: "talosclusters.ichor.maesh.dev", path: "spec.cni.handover"},
+	// ADR 0099 (the stack is gone), retired by ADR 0101.
+	{crd: "ichorinstallations.ichor.maesh.dev", path: "spec.stack"},
+	{crd: "ichorinstallations.ichor.maesh.dev", path: "status.stack"},
+	// ADR 0101: the only management mode is ichor, so the field is gone.
+	{crd: "ichorinstallations.ichor.maesh.dev", path: "spec.managementMode"},
+}
+
+func isRetired(crd, path string) bool {
+	for _, r := range retiredFields {
+		if r.crd == crd && r.path == path {
+			return true
+		}
+	}
+
+	return false
+}
+
 // checkAdditive refuses a target CRD that would take something away from the live one: a
 // served version, a schema property, a changed property type, or a changed scope. That is
 // what "additive, never downgraded" means (design, "Upgrades"), judged on the schemas
@@ -63,7 +94,7 @@ func checkAdditive(live, target *unstructured.Unstructured) error {
 			return fmt.Errorf("CRD %s version %s: the target has no schema", l.Name, lv.Name)
 		}
 
-		if err := schemaCovers(tv.Schema.OpenAPIV3Schema, lv.Schema.OpenAPIV3Schema, "spec-of-"+lv.Name); err != nil {
+		if err := schemaCovers(l.Name, tv.Schema.OpenAPIV3Schema, lv.Schema.OpenAPIV3Schema, "spec-of-"+lv.Name, ""); err != nil {
 			return fmt.Errorf("CRD %s: %w (the target is older than what is installed)", l.Name, err)
 		}
 	}
@@ -72,18 +103,30 @@ func checkAdditive(live, target *unstructured.Unstructured) error {
 }
 
 // schemaCovers reports whether target has every property live has, with the same type.
-func schemaCovers(target, live *apiextensionsv1.JSONSchemaProps, path string) error {
+//
+// rel is the dotted property path from the object root (empty at the root), matched against the
+// retired fields of crd.
+func schemaCovers(crd string, target, live *apiextensionsv1.JSONSchemaProps, path, rel string) error {
 	if live.Type != "" && target.Type != live.Type {
 		return fmt.Errorf("%s: type would change from %q to %q", path, live.Type, target.Type)
 	}
 
 	for name, lp := range live.Properties {
 		tp, ok := target.Properties[name]
+		childRel := name
+		if rel != "" {
+			childRel = rel + "." + name
+		}
+
 		if !ok {
+			if isRetired(crd, childRel) {
+				continue
+			}
+
 			return fmt.Errorf("%s.%s would be removed", path, name)
 		}
 
-		if err := schemaCovers(&tp, &lp, path+"."+name); err != nil {
+		if err := schemaCovers(crd, &tp, &lp, path+"."+name, childRel); err != nil {
 			return err
 		}
 	}
@@ -93,7 +136,7 @@ func schemaCovers(target, live *apiextensionsv1.JSONSchemaProps, path string) er
 			return fmt.Errorf("%s: items schema would be removed", path)
 		}
 
-		if err := schemaCovers(target.Items.Schema, live.Items.Schema, path+"[]"); err != nil {
+		if err := schemaCovers(crd, target.Items.Schema, live.Items.Schema, path+"[]", rel+"[]"); err != nil {
 			return err
 		}
 	}
@@ -103,7 +146,7 @@ func schemaCovers(target, live *apiextensionsv1.JSONSchemaProps, path string) er
 			return fmt.Errorf("%s: additionalProperties schema would be removed", path)
 		}
 
-		if err := schemaCovers(target.AdditionalProperties.Schema, live.AdditionalProperties.Schema, path+"{}"); err != nil {
+		if err := schemaCovers(crd, target.AdditionalProperties.Schema, live.AdditionalProperties.Schema, path+"{}", rel+"{}"); err != nil {
 			return err
 		}
 	}

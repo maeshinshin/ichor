@@ -24,7 +24,6 @@ package foreign
 // (ICHOR_E2E_F_ATTACH=1, ICHOR_E2E_F_KEEP=1); the options passed to build must match the `foreign up` flags.
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -32,7 +31,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/maeshinshin/ichor/test/internal/foreign"
 	"github.com/maeshinshin/ichor/test/internal/kube"
@@ -55,21 +53,6 @@ func bOpts(cni string, noProxy, noPrism bool, sets ...string) foreign.Options {
 	}
 	o := foreign.Options{Workers: w, CNI: cni, NoKubeProxy: noProxy, NoKubePrism: noPrism, CiliumSets: sets}
 	return o
-}
-
-// adoptArgs runs `ichor adopt` in the tools pod with the given flags (no recovery flags are added) and returns the
-// combined output and the exit error.
-func adoptArgs(t *testing.T, c *foreign.Cluster, flags ...string) (string, error) {
-	t.Helper()
-	pod := stage(t, c)
-	args := append([]string{"-n", ns, "exec", pod, "--", "env", "HOME=/tmp/home", "/tmp/ichor", "adopt",
-		"--cluster", c.Opts.Prefix, "-n", crNS, "--talosconfig", "/tmp/talosconfig", "--kubeconfig", "/tmp/kubeconfig",
-		"--node", c.CPs[0]}, flags...)
-	ctx, cancel := context.WithTimeout(context.Background(), 9*time.Minute)
-	defer cancel()
-	out, err := exec.CommandContext(ctx, "kubectl", append([]string{"--context", os.Getenv(kube.ContextEnv)}, args...)...).CombinedOutput()
-	t.Logf("ichor adopt %s: err=%v\n%s", strings.Join(flags, " "), err, out)
-	return string(out), err
 }
 
 func recoverFlags(c *foreign.Cluster) []string {
@@ -219,7 +202,6 @@ func machineConfigVersions(t *testing.T, c *foreign.Cluster) map[string]string {
 	}
 	return res
 }
-
 
 // b3Canary creates the Kubernetes Secret that must stay readable after adoption (it is encrypted at rest with the
 // cluster's secretbox key, which the recovered bundle must reproduce).

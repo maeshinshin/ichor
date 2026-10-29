@@ -20,7 +20,7 @@ import (
 const SingletonName = "ichor"
 
 // DriftPolicyDefault is what a new TalosCluster gets when the setting is unset.
-const DriftPolicyDefault = "warnOnly"
+const DriftPolicyDefault = DriftWarnOnly
 
 // Fallback holds the flag or chart values used for an unset field.
 type Fallback struct {

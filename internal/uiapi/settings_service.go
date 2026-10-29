@@ -237,9 +237,7 @@ func (s *Server) UpdateSettings(
 		return nil, mapGetError("the IchorInstallation", err)
 	}
 
-	if err := changes.Apply(&inst); err != nil {
-		return nil, bad(err)
-	}
+	changes.Apply(&inst)
 
 	if err := s.Update(ctx, &inst); err != nil {
 		return nil, mapOperationWriteError("updating", settingsKey(), err)

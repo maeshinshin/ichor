@@ -56,16 +56,6 @@ func fileExists(p string) bool {
 	return err == nil
 }
 
-// transitionalServer is the deprecated plaintext listener of docs/adr/0105
-// decision 6; nil unless --http-addr is set.
-func transitionalServer(addr string, h http.Handler) *http.Server {
-	if addr == "" {
-		return nil
-	}
-
-	return &http.Server{Addr: addr, Handler: h, ReadHeaderTimeout: 10 * time.Second}
-}
-
 // httpsServer is an HTTPS-only server; start it with ListenAndServeTLS("", "").
 func httpsServer(addr string, h http.Handler, get getCert) *http.Server {
 	return &http.Server{

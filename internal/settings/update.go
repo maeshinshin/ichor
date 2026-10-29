@@ -10,14 +10,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
-)
-
-// Bounds from the CRD's CEL rules (ADR 0105, decision 7).
-const (
-	MinTokenTTL        = time.Minute
-	MaxTokenTTL        = time.Hour
-	MinRefreshLifetime = time.Hour
-	MaxRefreshLifetime = 720 * time.Hour
+	"github.com/maeshinshin/ichor/pkg/ichorauth"
 )
 
 // Changes are the settings to change; nil means unchanged. ponytail: no way to unset a field
@@ -39,12 +32,12 @@ func (c Changes) Empty() bool {
 func (c Changes) Validate() error {
 	var errs []error
 
-	if t := c.TokenTTL; t != nil && (*t < MinTokenTTL || *t > MaxTokenTTL) {
-		errs = append(errs, fmt.Errorf("users.tokenTTL must be between %s and %s", MinTokenTTL, MaxTokenTTL))
+	if t := c.TokenTTL; t != nil && (*t < ichorauth.MinTokenTTL || *t > ichorauth.MaxTokenTTL) {
+		errs = append(errs, fmt.Errorf("users.tokenTTL must be between %s and %s", ichorauth.MinTokenTTL, ichorauth.MaxTokenTTL))
 	}
 
-	if r := c.RefreshLifetime; r != nil && (*r < MinRefreshLifetime || *r > MaxRefreshLifetime) {
-		errs = append(errs, fmt.Errorf("users.refreshLifetime must be between %s and %s", MinRefreshLifetime, MaxRefreshLifetime))
+	if r := c.RefreshLifetime; r != nil && (*r < ichorauth.MinRefreshLifetime || *r > ichorauth.MaxRefreshLifetime) {
+		errs = append(errs, fmt.Errorf("users.refreshLifetime must be between %s and %s", ichorauth.MinRefreshLifetime, ichorauth.MaxRefreshLifetime))
 	}
 
 	if d := c.DriftPolicy; d != nil && *d != DriftWarnOnly && *d != DriftAutoCorrect {
@@ -58,12 +51,8 @@ func (c Changes) Validate() error {
 func (c Changes) NeedsConfirmation() bool { return c.Reclaim != nil && *c.Reclaim }
 
 // Apply writes the changes into inst's spec and sets the confirm annotation when it enables
-// reclaim (and drops a stale one otherwise). Only the changed fields are touched.
-func (c Changes) Apply(inst *ichorv1alpha1.IchorInstallation) error {
-	if err := c.Validate(); err != nil {
-		return err
-	}
-
+// reclaim (and drops a stale one otherwise). Only the changed fields are touched. The caller validates.
+func (c Changes) Apply(inst *ichorv1alpha1.IchorInstallation) {
 	s := &inst.Spec
 
 	if c.Reclaim != nil {
@@ -97,8 +86,6 @@ func (c Changes) Apply(inst *ichorv1alpha1.IchorInstallation) error {
 	} else {
 		delete(inst.Annotations, ichorv1alpha1.ConfirmReclaimAnnotation)
 	}
-
-	return nil
 }
 
 // Keys of ParseAssignments, as `ichor settings set` spells them.

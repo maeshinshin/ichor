@@ -13,9 +13,7 @@ func TestChangesApply(t *testing.T) {
 	policy := DriftAutoCorrect
 
 	inst := &ichorv1alpha1.IchorInstallation{}
-	if err := (Changes{Reclaim: &yes, TokenTTL: &ttl, DriftPolicy: &policy}).Apply(inst); err != nil {
-		t.Fatal(err)
-	}
+	(Changes{Reclaim: &yes, TokenTTL: &ttl, DriftPolicy: &policy}).Apply(inst)
 
 	if !*inst.Spec.Reclaim.Enabled || inst.Spec.Users.TokenTTL.Duration != ttl || inst.Spec.Defaults.DriftPolicy != policy {
 		t.Fatalf("spec not written: %+v", inst.Spec)
@@ -29,9 +27,7 @@ func TestChangesApply(t *testing.T) {
 		t.Fatal("enabling reclaim must set the confirm annotation")
 	}
 
-	if err := (Changes{Reclaim: &no}).Apply(inst); err != nil {
-		t.Fatal(err)
-	}
+	(Changes{Reclaim: &no}).Apply(inst)
 
 	if _, ok := inst.Annotations[ichorv1alpha1.ConfirmReclaimAnnotation]; ok {
 		t.Fatal("the annotation should go when reclaim is not being enabled")

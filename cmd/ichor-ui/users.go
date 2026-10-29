@@ -88,7 +88,7 @@ func (f usersFlags) validate() error {
 		return errors.New("--token-ttl must be 1 minute to 1 hour")
 	}
 
-	if f.refreshTTL < time.Hour || f.refreshTTL > 30*24*time.Hour {
+	if f.refreshTTL < ichorauth.MinRefreshLifetime || f.refreshTTL > ichorauth.MaxRefreshLifetime {
 		return errors.New("--refresh-lifetime must be 1 hour to 30 days")
 	}
 

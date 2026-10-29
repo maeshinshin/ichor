@@ -64,9 +64,11 @@ seconds, without a restart: a `kubernetes.io/tls` Secret that cert-manager
 renews works as is. If a new pair is invalid, ichor-ui keeps serving the old
 certificate and logs the error.
 
-Without the TLS flags ichor-ui serves plain HTTP. Making it reachable at the
-`--ui-url` (a LoadBalancer, an Ingress or a Gateway) is your job: init
-installs none of them, with or without `--ui-tls-secret`.
+ichor-ui serves HTTPS only, on port 8443 (ADR 0105). Without
+`--ui-tls-secret` it uses a leaf from the Ichor serving CA. A browser does not
+trust that leaf; see "Expose ichor-ui over https". Making ichor-ui reachable at
+the `--ui-url` (a LoadBalancer, an Ingress or a Gateway) is your job: init
+installs none of them.
 
 On an existing install, set `ichorUI.users.enabled` to `true` and
 `ichorUI.users.externalURL` to the https URL in the chart values, and create
@@ -93,15 +95,143 @@ needs a login.
 
 ## Expose ichor-ui over https
 
-ichor-ui is a ClusterIP service by default (`ichorUI.service.type`). Ichor
-installs no ingress controller, so pick one of these:
+ichor-ui never serves plain HTTP to the network (ADR 0105). One listener on
+port 8443 serves the UI, the API, `/metrics` and the probes over TLS, with one
+of two certificates:
 
-- An Ingress or a Gateway in front of ichor-ui, with TLS at the edge.
-- A LoadBalancer service (`ichorUI.service.type: LoadBalancer`).
-- TLS inside ichor-ui, with `ichorUI.tls.secretName`.
+- The pair you supply with `ichorUI.tls.secretName` (or `--ui-tls-secret`), for
+  example a cert-manager Secret. Browsers trust it if the issuer is public.
+- Otherwise a leaf from the Ichor serving CA (Secret `ichor-oidc-tls`, issued for
+  every install). Its names are the Service ClusterIP, `ichor-ui-service.ichor-system.svc`
+  (and `.cluster.local`), `localhost` and, when users are on, the host of the
+  external URL. Browsers do not trust it, so an edge that terminates the
+  browser's TLS has to verify it, and a client that talks to it directly needs
+  the CA.
+
+The controller publishes the public part of the Ichor serving CA, never a key,
+as the ConfigMap `ichor-ui-ca` and the Secret `ichor-ui-ca` in `ichor-system`
+(key `ca.crt`). Service port 8443 is named `https`. Pick one recipe. The names
+below are for the chart and `ichor init` installs (`ichor-ui-service`); a
+kustomize install prefixes them (`ichor-ichor-ui-service`).
+
+If you supplied your own certificate, the edge verifies your CA instead of
+`ichor-ui-ca`, and the name it checks must be in your certificate.
+
+### Ingress-NGINX (re-encrypt to the backend)
+
+The Ingress must be in `ichor-system`, because it names the Service. Annotations
+(Ingress-NGINX annotations reference, "Backend Protocol" and "Backend Certificate
+Authentication"):
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ichor-ui
+  namespace: ichor-system
+  annotations:
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+    nginx.ingress.kubernetes.io/proxy-ssl-verify: "on"
+    nginx.ingress.kubernetes.io/proxy-ssl-secret: "ichor-system/ichor-ui-ca"
+    nginx.ingress.kubernetes.io/proxy-ssl-name: "ichor-ui-service.ichor-system.svc"
+    nginx.ingress.kubernetes.io/proxy-ssl-server-name: "on"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [ichor.example.com]
+      secretName: ichor-example-com-tls
+  rules:
+    - host: ichor.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ichor-ui-service
+                port:
+                  name: https
+```
+
+- `backend-protocol: "HTTPS"` makes NGINX speak TLS to the pod.
+- `proxy-ssl-verify` is off by default; without it NGINX does not check the
+  pod's certificate.
+- `proxy-ssl-secret` takes `namespace/secretName`. The reference docs describe a
+  Secret with `tls.crt` and `tls.key` (a client certificate, which ichor-ui does
+  not ask for) that "should also contain" `ca.crt`. `ichor-ui-ca` holds only
+  `ca.crt`. Whether Ingress-NGINX accepts a CA-only Secret is part of hardware
+  test T2 of ADR 0105 and is not yet confirmed here.
+- `proxy-ssl-name` overrides the name NGINX verifies; `proxy-ssl-server-name`
+  sends it as SNI. Use a name in the certificate.
+- The public certificate for browsers is the Ingress's own `tls` Secret.
+- If you supplied your own certificate, point `proxy-ssl-secret` at a Secret that
+  holds its CA as `ca.crt`.
+
+### Gateway API: BackendTLSPolicy
+
+`BackendTLSPolicy` is `gateway.networking.k8s.io/v1`, in the Standard channel
+since Gateway API v1.4 (it was `v1alpha3` before). Your Gateway implementation
+must support it, and the CRDs installed in the cluster must be v1.4 or later.
+Release 1.4.1 notes say a policy supports a single `targetRefs` entry.
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: BackendTLSPolicy
+metadata:
+  name: ichor-ui
+  namespace: ichor-system
+spec:
+  targetRefs:
+    - group: ""
+      kind: Service
+      name: ichor-ui-service
+  validation:
+    hostname: ichor-ui-service.ichor-system.svc
+    caCertificateRefs:
+      - group: ""
+        kind: ConfigMap
+        name: ichor-ui-ca
+```
+
+- It lives in the Service's namespace; `caCertificateRefs` may name only objects
+  in the policy's own namespace. That is why Ichor publishes `ichor-ui-ca` in
+  `ichor-system`.
+- The Core-support reference is one ConfigMap with the key `ca.crt`, which is
+  what `ichor-ui-ca` is. A Secret reference is implementation-specific.
+- `validation.hostname` is the SNI and the name the certificate must match.
+- The HTTPRoute that sends traffic to the Service references port 8443 (named
+  `https`). A route in another namespace needs a `ReferenceGrant`.
+- Check the policy's `Accepted` and `ResolvedRefs` conditions.
+
+### Load balancer passthrough (operator certificate)
+
+A `Service` of type `LoadBalancer` (`ichorUI.service.type: LoadBalancer`) or a
+TCP passthrough terminates nothing, so clients see ichor-ui's own certificate
+and the name they typed. Supply your certificate:
+
+```
+ichor init --ui-tls-secret ichor-ui-cert --ui-url https://ichor.example.com ...
+# or in the chart
+helm upgrade ichor ... --set ichorUI.tls.secretName=ichor-ui-cert
+```
+
+The Secret is `kubernetes.io/tls` and its certificate must cover the name
+clients use. Without it, only clients given the Ichor CA verify:
+`ichor --ca-file ca.crt ...` (or `ICHOR_CA_FILE`, from
+`kubectl -n ichor-system get configmap ichor-ui-ca -o jsonpath='{.data.ca\.crt}'`).
+An L7 cloud load balancer that cannot verify its backend is out of scope: use a
+controller that can.
+
+### Port 8080 and migration
+
+A new install serves nothing on 8080. An install that served plain HTTP before
+ADR 0105 keeps it for one minor release, flagged deprecated (`--http-addr`;
+chart `ichorUI.plaintextPort`, default `0`). Move the edge to 8443 in that
+time. An install that served TLS on 8080 keeps `--addr` pinned to 8080. See
+"Install Ichor with Helm" for the chart values.
 
 Port 8444 is an internal listener. The kube-apiserver uses it to fetch the
-login keys. Do not publish it.
+login keys. Never route it from an edge.
 
 ## Create users and roles
 

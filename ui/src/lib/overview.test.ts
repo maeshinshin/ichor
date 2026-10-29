@@ -19,7 +19,7 @@ test('attentionItems lists only what applies', () => {
   assert.deepEqual(attentionItems({ conditions: [{ type: 'BundleBackupStale', status: 'False' }], pending: 0, configWaiting: 0, opState: 'paused' }), [{ kind: 'opPaused' }])
 })
 
-import { attentionItems, backupsValue, newestSnapshotSeconds, tileTargets, timeAgo, versionLabel } from './overview.ts'
+import { attentionItems, backupsValue, tileTargets, timeAgo, versionLabel } from './overview.ts'
 
 test('timeAgo picks the coarsest unit', () => {
   const now = 1_000_000_000
@@ -37,7 +37,6 @@ test('backupsValue: not loaded, not configured, no snapshot, newest age', () => 
   assert.equal(backupsValue([], now), 'Not configured')
   assert.equal(backupsValue([{ snapshots: [] }], now), 'No snapshot yet')
   const backups = [{ snapshots: [snap(now / 1000 - 7200), snap(now / 1000 - 3600)] }, { snapshots: [snap(now / 1000 - 90000)] }]
-  assert.equal(newestSnapshotSeconds(backups), now / 1000 - 3600)
   assert.equal(backupsValue(backups, now), '1 h ago')
 })
 

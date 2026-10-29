@@ -508,8 +508,13 @@ func customizeFromLive(ctx context.Context, c client.Client, objs []*unstructure
 	return out, s, err
 }
 
-// uiPolicyName is the CiliumNetworkPolicy of ichor-ui in config/cilium-network-policy.
-const uiPolicyName = "ui"
+// isUIPolicy: the CiliumNetworkPolicy of ichor-ui in config/cilium-network-policy, found by the
+// pods it selects (control-plane: ui-backend) because kustomize's namePrefix renames it (ichor-ui).
+func isUIPolicy(o *unstructured.Unstructured) bool {
+	v, _, _ := unstructured.NestedString(o.Object, "spec", "endpointSelector", "matchLabels", "control-plane")
+
+	return o.GetKind() == "CiliumNetworkPolicy" && v == "ui-backend"
+}
 
 // CustomizePolicies opens, in the ichor-ui CiliumNetworkPolicy, the ports a migrated install still
 // listens on (ADR 0105): the deprecated plaintext one, or the pinned TLS one. The policies list
@@ -524,7 +529,7 @@ func CustomizePolicies(objs []*unstructured.Unstructured, s UISettings) {
 	}
 
 	for _, o := range objs {
-		if o.GetKind() != "CiliumNetworkPolicy" || o.GetName() != uiPolicyName || len(extra) == 0 {
+		if !isUIPolicy(o) || len(extra) == 0 {
 			continue
 		}
 

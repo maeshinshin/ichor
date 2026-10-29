@@ -130,6 +130,11 @@ func (r *CNIHandoverReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	// Ichor leaves an unmanaged cluster's CNI alone: no hand-over, no Job, no conditions.
+	if cluster.Spec.CNI.Preset == render.PresetUnmanaged {
+		return ctrl.Result{}, nil
+	}
+
 	if cluster.Spec.CNI.Preset != ciliumName {
 		return ctrl.Result{}, r.markCNIUnsupported(ctx, &cluster)
 	}

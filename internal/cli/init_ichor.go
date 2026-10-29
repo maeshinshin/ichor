@@ -18,6 +18,7 @@ package cli
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"fmt"
 	"io"
@@ -175,7 +176,7 @@ func updateRetrying[T client.Object](ctx context.Context, c client.Client, obj T
 //
 // The bool is false when nothing was created (a dev build), in which case there is no Cilium
 // hand-over to wait for.
-func createIchorInstallation(ctx context.Context, k8sClient client.Client, warn io.Writer) (bool, error) {
+func createIchorInstallation(ctx context.Context, k8sClient client.Client, warn io.Writer, wait time.Duration) (bool, error) {
 	if !semver.IsValid(version.Version) {
 		_, _ = fmt.Fprintf(warn, "init: not creating IchorInstallation: this ichor binary is %q, not a released version\n", version.Version)
 
@@ -197,7 +198,7 @@ func createIchorInstallation(ctx context.Context, k8sClient client.Client, warn 
 
 	// The IchorInstallation has a validating webhook, served by the controller this
 	// command just deployed: wait for it as long as step 5 waits for the CRs, not initRetryWindow.
-	if err := createWhenWebhooksUp(ctx, k8sClient, &unstructured.Unstructured{Object: content}, defaultWebhookWait, followRetryDelay, warn); err != nil {
+	if err := createWhenWebhooksUp(ctx, k8sClient, &unstructured.Unstructured{Object: content}, cmp.Or(wait, defaultWebhookWait), followRetryDelay, warn); err != nil {
 		return false, fmt.Errorf("init: creating the IchorInstallation: %w", err)
 	}
 

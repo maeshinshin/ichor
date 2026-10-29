@@ -246,7 +246,7 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 		return err
 	}
 
-	created, err := createIchorInstallation(ctx, k8sClient, deps.Stderr)
+	created, err := createIchorInstallation(ctx, k8sClient, deps.Stderr, 0)
 	if err != nil {
 		return err
 	}

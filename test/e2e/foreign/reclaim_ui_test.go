@@ -104,13 +104,11 @@ func (r *rig) logs(t *testing.T, deploy string) string {
 	return out
 }
 
-// TestC8C9C10 runs the UI/controller path end to end: off, denied, held at AwaitingConfirmation, wrong UUID, right
+// TestC8C9C10 runs the UI/controller path end to end (no installation switch; RBAC alone): denied, held at
+// AwaitingConfirmation, wrong UUID, right
 // UUID, then the credential hygiene and audit checks on the finished request.
 func TestC8C9C10(t *testing.T) {
 	r := newRig(t, foreign.Options{Workers: 1, DataDisk: true})
-	if on := r.ikJSON(t, "get", "ichorinstallations.ichor.maesh.dev", "ichor", "-o", "jsonpath={.spec.reclaim.enabled}"); on != "true" {
-		t.Fatalf("reclaim is not enabled (spec.reclaim.enabled = %q); enable it with the confirm annotation first", on)
-	}
 	r.ensureForeign(t)
 	tc := ftc(t, r.f)
 	uuid := uuidOf(t, r.foreignW, tc)

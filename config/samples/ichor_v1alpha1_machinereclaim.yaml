@@ -1,5 +1,5 @@
-# Break-glass. Normally created by the UI together with the credential
-# Secret named below; needs reclaim.enabled in the chart and the verb "reclaim" on machinereclaims.
+# "Reset and add". Normally created by the UI together with the credential
+# Secret named below; needs the verb "reclaim" on machinereclaims (no installation switch).
 apiVersion: ichor.maesh.dev/v1alpha1
 kind: MachineReclaim
 metadata:

@@ -120,7 +120,6 @@ package uiapi
 // "Reset and add" (MachineReclaim), in ichor-system only. The backend creates the credential
 // Secret, with the owner reference set at creation (the MachineReclaim is written first); it can never read it back or patch it.
 // The MachineReclaim itself is written as the caller, so the ServiceAccount only reads and lists it
-// (when OIDC is off it also creates and updates it, and holds the reclaim verb: the webhook then judges
-// the ServiceAccount, exactly as it does for the talosoperations verbs above).
+// (when OIDC is off it also creates and updates it; the webhook then judges the ServiceAccount).
 // +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,verbs=create
-// +kubebuilder:rbac:groups=ichor.maesh.dev,namespace=ichor-system,resources=machinereclaims,verbs=get;list;create;update;reclaim
+// +kubebuilder:rbac:groups=ichor.maesh.dev,namespace=ichor-system,resources=machinereclaims,verbs=get;list;create;update

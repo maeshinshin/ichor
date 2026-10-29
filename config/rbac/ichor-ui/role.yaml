@@ -130,5 +130,4 @@ rules:
   - create
   - get
   - list
-  - reclaim
   - update

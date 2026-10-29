@@ -559,6 +559,21 @@ func checkUIBackendRBACIsSeparate(t *testing.T, release string, docs []map[strin
 	}
 }
 
+// TestReclaimerRoleName pins the installed name of the reclaimer ClusterRole: the webhook refusal
+// and docs/guides/adopt-and-reclaim.md tell users to bind ichor-machine-reclaimer. The chart renders
+// it under the release's resource-name helper, so release "ichor" gives that name.
+func TestReclaimerRoleName(t *testing.T) {
+	off := renderChartWithValues(t, "ichor", "rbac.helpers.enabled=true")
+	if find(off, kindClusterRole, "ichor-machine-reclaimer") != nil {
+		t.Errorf("ClusterRole ichor-machine-reclaimer rendered with reclaim.enabled off")
+	}
+
+	on := renderChartWithValues(t, "ichor", "rbac.helpers.enabled=true", "reclaim.enabled=true")
+	if find(on, kindClusterRole, "ichor-machine-reclaimer") == nil {
+		t.Errorf("reclaim.enabled=true with release ichor: want ClusterRole ichor-machine-reclaimer")
+	}
+}
+
 // TestUIOIDC pins: OIDC is off by default (no env, no impersonate grant), and when on the
 // env reaches the container, the role equals the generated one including impersonate, and a
 // narrowed impersonate list becomes resourceNames.

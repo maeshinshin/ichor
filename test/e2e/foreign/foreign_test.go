@@ -283,6 +283,30 @@ func inner(c *foreign.Cluster, args ...string) (string, error) {
 	return utils.Run(kube.InnerCommand(c.LocalKube, args...))
 }
 
+// holdCleared asserts no TalosMachine still carries the hold-apply annotation.
+func holdCleared(t *testing.T, c *foreign.Cluster) {
+	t.Helper()
+	held, _ := inner(c, "-n", crNS, "get", "talosmachines.ichor.maesh.dev", "-o",
+		"jsonpath={.items[*].metadata.annotations.ichor\\.maesh\\.dev/hold-apply}")
+	if strings.TrimSpace(held) != "" {
+		t.Errorf("hold-apply still set: %q", held)
+	}
+}
+
+// noCNIJob asserts the controller created no ichor-cni Job.
+func noCNIJob(t *testing.T, c *foreign.Cluster) {
+	t.Helper()
+	noCNIJob(t, c)
+}
+
+// nodesReady asserts no Node of the foreign cluster is NotReady.
+func nodesReady(t *testing.T, c *foreign.Cluster) {
+	t.Helper()
+	if nodes, _ := inner(c, "get", "nodes", "--no-headers"); strings.Contains(nodes, "NotReady") {
+		t.Errorf("nodes not Ready: %s", nodes)
+	}
+}
+
 func sameHashes(t *testing.T, before, after map[string]string) {
 	t.Helper()
 	for ip, h := range before {
@@ -300,28 +324,8 @@ func TestD1FlannelAdoptedUnmanaged(t *testing.T) {
 	if err != nil {
 		t.Fatalf("adopt --cni-unmanaged failed: %v\n%s", err, out)
 	}
-	if got, _ := inner(c, "-n", crNS, "get", "talosclusters.ichor.maesh.dev", c.Opts.Prefix, "-o", "jsonpath={.spec.cni.preset}"); got != "unmanaged" {
-		t.Errorf("spec.cni.preset = %q, want unmanaged", got)
-	}
-	held, _ := inner(c, "-n", crNS, "get", "talosmachines.ichor.maesh.dev", "-o",
-		"jsonpath={.items[*].metadata.annotations.ichor\\.maesh\\.dev/hold-apply}")
-	if strings.TrimSpace(held) != "" {
-		t.Errorf("hold-apply still set: %q", held)
-	}
-	// adopt must never silently adopt a subset of the cluster.
-	ms, _ := inner(c, "-n", crNS, "get", "talosmachines.ichor.maesh.dev", "-o", "name")
-	ns, _ := inner(c, "get", "nodes", "-o", "name")
-	if a, b := len(strings.Fields(ms)), len(strings.Fields(ns)); a != b || a == 0 {
-		t.Errorf("TalosMachines = %d, Nodes = %d, want equal and non-zero", a, b)
-	}
-	jobs, _ := inner(c, "-n", crNS, "get", "jobs", "--no-headers")
-	if strings.Contains(jobs, "ichor-cni") {
-		t.Errorf("an ichor-cni Job exists: %s", jobs)
-	}
-	if got, _ := inner(c, "-n", crNS, "get", "talosclusters.ichor.maesh.dev", c.Opts.Prefix, "-o",
-		"jsonpath={.status.conditions[?(@.type==\"CNIHandover\")].status}"); got != "" {
-		t.Errorf("CNIHandover condition present: %q", got)
-	}
+	unmanagedAdopted(t, c) // also: adopt must never silently adopt a subset of the cluster
+	holdCleared(t, c)
 	// kubectl exits non-zero when the Cilium CRD is not served (the expected state): only a successful, non-empty listing is a failure.
 	if p, err := inner(c, "get", "ciliumnetworkpolicies.cilium.io", "-A", "--no-headers"); err == nil && strings.TrimSpace(p) != "" {
 		t.Errorf("Cilium policies exist on a flannel cluster: %s", p)
@@ -329,9 +333,7 @@ func TestD1FlannelAdoptedUnmanaged(t *testing.T) {
 	// Give the controller time to render and apply (it must change nothing CNI-related).
 	time.Sleep(3 * time.Minute)
 	sameHashes(t, before, cniPaths(t, c))
-	if nodes, _ := inner(c, "get", "nodes", "--no-headers"); strings.Contains(nodes, "NotReady") {
-		t.Errorf("nodes not Ready after adoption: %s", nodes)
-	}
+	nodesReady(t, c)
 }
 
 // TestB1 (ADR 0103 B1): the same cluster without the flag is refused and nothing is written.
@@ -365,16 +367,13 @@ func names(c *foreign.Cluster, args ...string) []string {
 func membership(t *testing.T, c *foreign.Cluster) {
 	t.Helper()
 	var machines, nodes int
-	for range 18 {
+	if _, err := kube.Poll("TalosMachines == Nodes", 3*time.Minute, func() (string, bool) {
 		machines = len(names(c, "-n", crNS, "get", "talosmachines.ichor.maesh.dev"))
 		nodes = len(names(c, "get", "nodes"))
-		if machines == nodes && nodes > 0 {
-			t.Logf("TalosMachines == Nodes == %d", nodes)
-			return
-		}
-		time.Sleep(10 * time.Second)
+		return "", machines == nodes && nodes > 0
+	}); err != nil {
+		t.Errorf("TalosMachines (%d) != Nodes (%d) after 3 minutes", machines, nodes)
 	}
-	t.Errorf("TalosMachines (%d) != Nodes (%d) after 3 minutes", machines, nodes)
 }
 
 func clusterJSONPath(c *foreign.Cluster, path string) string {
@@ -386,13 +385,12 @@ func clusterJSONPath(c *foreign.Cluster, path string) string {
 func waitCluster(t *testing.T, c *foreign.Cluster, path, want string) {
 	t.Helper()
 	var got string
-	for range 30 {
-		if got = clusterJSONPath(c, path); got == want {
-			return
-		}
-		time.Sleep(10 * time.Second)
+	if _, err := kube.Poll("TalosCluster "+path, 5*time.Minute, func() (string, bool) {
+		got = clusterJSONPath(c, path)
+		return got, got == want
+	}); err != nil {
+		t.Errorf("%s = %q, want %q", path, got, want)
 	}
-	t.Errorf("%s = %q, want %q", path, got, want)
 }
 
 // unmanagedAdopted asserts what every --cni-unmanaged adoption shares.
@@ -423,9 +421,7 @@ func TestD2CalicoAdoptedUnmanaged(t *testing.T) {
 	waitCluster(t, c, "{.status.conditions[?(@.type==\"NetworkPoliciesApplied\")].reason}", "CNINotCilium")
 	time.Sleep(3 * time.Minute)
 	sameHashes(t, before, cniPaths(t, c))
-	if nodes, _ := inner(c, "get", "nodes", "--no-headers"); strings.Contains(nodes, "NotReady") {
-		t.Errorf("nodes not Ready after adoption: %s", nodes)
-	}
+	nodesReady(t, c)
 }
 
 const unmanagedText = "the CNI is not managed by Ichor (spec.cni.preset: unmanaged)"

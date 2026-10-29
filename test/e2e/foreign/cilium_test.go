@@ -307,11 +307,7 @@ func logState(t *testing.T, c *foreign.Cluster, label string) {
 // It returns the diff-gate verdict.
 func takeoverAdopt(t *testing.T, c *foreign.Cluster, extra ...string) (first string, diffNeeded bool) {
 	t.Helper()
-	plan, err := adopt(t, c, append([]string{"--plan"}, extra...)...)
-	if err != nil {
-		t.Logf("adopt --plan exited with %v", err)
-	}
-	_ = plan
+	_, _ = adopt(t, c, append([]string{"--plan"}, extra...)...) // the plan's exit is logged by adopt
 	out, err := adopt(t, c, extra...)
 	first = out
 	if err != nil && strings.Contains(out, "--accept-cilium-diff") {
@@ -347,9 +343,7 @@ func TestA1Adopt(t *testing.T) {
 	logs, _ := inner(c, "-n", crNS, "logs", "-l", "job-name", "--tail=40", "--prefix")
 	t.Logf("ichor-cni job log:\n%s", logs)
 	logState(t, c, "after takeover")
-	if nodes, _ := inner(c, "get", "nodes", "--no-headers"); strings.Contains(nodes, "NotReady") {
-		t.Errorf("nodes not Ready after takeover: %s", nodes)
-	}
+	nodesReady(t, c)
 	trafficReport(t, c, "across A1 takeover")
 }
 

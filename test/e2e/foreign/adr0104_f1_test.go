@@ -50,10 +50,7 @@ func TestF1CiliumHelm(t *testing.T) {
 		t.Errorf("adopt did not skip the install step")
 	}
 	membership(t, c)
-	if held, _ := inner(c, "-n", crNS, "get", "talosmachines.ichor.maesh.dev", "-o",
-		"jsonpath={.items[*].metadata.annotations.ichor\\.maesh\\.dev/hold-apply}"); strings.TrimSpace(held) != "" {
-		t.Errorf("hold-apply still set: %q", held)
-	}
+	holdCleared(t, c)
 	if got, _ := inner(c, "get", "ichorinstallations.ichor.maesh.dev", "-o", "jsonpath={.items[*].spec.deployment.manager}"); strings.TrimSpace(got) != "helm" {
 		t.Errorf("IchorInstallation manager = %q, want helm", got)
 	}
@@ -87,7 +84,5 @@ func TestF1CiliumHelm(t *testing.T) {
 	if sec, _ := inner(c, "-n", crNS, "get", "secret", c.Opts.Prefix+"-secrets", "--no-headers"); strings.TrimSpace(sec) == "" {
 		t.Errorf("the cluster's secrets Secret is gone after helm uninstall")
 	}
-	if nodes, _ := inner(c, "get", "nodes", "--no-headers"); strings.Contains(nodes, "NotReady") {
-		t.Errorf("nodes not Ready: %s", nodes)
-	}
+	nodesReady(t, c)
 }

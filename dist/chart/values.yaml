@@ -196,12 +196,6 @@ ichorUI:
   ##
   port: 8443
 
-  ## DEPRECATED, removed in the next minor release. Also serve plain HTTP on this port (for example
-  ## 8080) so an edge that has not moved to HTTPS keeps working through an upgrade. 0 serves none,
-  ## which is what a fresh install wants.
-  ##
-  plaintextPort: 0
-
   ## OIDC login with Kubernetes impersonation (docs/adr/0058). Off by default: ichor-ui then
   ## writes with its own ServiceAccount and anyone who can reach it can write, as before (it
   ## logs a warning and the UI shows a banner). On: every request needs an ID token from this

@@ -99,32 +99,35 @@ func TestUIServesHTTPSOnlyByDefault(t *testing.T) {
 	}
 }
 
-// The operator's Secret is mounted next to the Ichor one, and the transitional plaintext port is
-// opt-in and shows up in the Service and the policy.
-func TestUIOperatorCertificateAndPlaintextMigration(t *testing.T) {
+// The operator's Secret is mounted next to the Ichor one. The removed ichorUI.plaintextPort
+// (ADR 0105 unit 10), still set by an old values file, is ignored: no plaintext port anywhere.
+func TestUIOperatorCertificateAndRemovedPlaintextPort(t *testing.T) {
 	docs := renderChartWithValues(t, "ichor", "ichorUI.tls.secretName=my-cert", "ichorUI.plaintextPort=8080",
 		"networkPolicy.cilium.enabled=true")
 	c, _, ports := uiParts(t, docs)
 
 	args := fmt.Sprint(c["args"])
-	wants := []string{"--tls-cert-file=/etc/ichor/tls/tls.crt", "--tls-key-file=/etc/ichor/tls/tls.key",
-		"--http-addr=:8080"}
+	wants := []string{"--tls-cert-file=/etc/ichor/tls/tls.crt", "--tls-key-file=/etc/ichor/tls/tls.key"}
 	for _, want := range wants {
 		if !strings.Contains(args, want) {
 			t.Errorf("args %s lack %s", args, want)
 		}
 	}
 
+	if strings.Contains(args, "--http-addr") {
+		t.Errorf("args %s still pass --http-addr", args)
+	}
+
 	if !hasMount(c, "tls") || !hasMount(c, "ui-tls") {
 		t.Errorf("mounts = %v, want tls and ui-tls", c["volumeMounts"])
 	}
 
-	if ports["https"] != 8443 || ports["http"] != 8080 {
-		t.Errorf("Service ports = %v, want https 8443 and http 8080", ports)
+	if len(ports) != 1 || ports["https"] != 8443 {
+		t.Errorf("Service ports = %v, want https 8443 only", ports)
 	}
 
 	ui := ingressPorts(cnpSpecs(t, docs, "ichor-")["ui"])
-	if got := strings.Join(ui["world"], ","); got != "8443,8080" {
-		t.Errorf("ui policy ingress = %q, want 8443,8080", got)
+	if got := strings.Join(ui["world"], ","); got != "8443" {
+		t.Errorf("ui policy ingress = %q, want 8443", got)
 	}
 }

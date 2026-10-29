@@ -253,8 +253,7 @@ func TestKustomizeCiliumPolicyPortsMatchTheBaseDeployments(t *testing.T) {
 		{"webhook", strings.Join(ctrl["kube-apiserver"], ","), webhookPatch, "containerPort: 9443"},
 		{"metrics", strings.Join(ctrl["cluster"], ","), metricsPatch, "--metrics-bind-address=:8443"},
 		{"probes", strings.Join(ctrl["host"], ","), managerBase, "--health-probe-bind-address=:8081"},
-		// 8080 is the transitional plaintext port of an install that served it before ADR 0105.
-		{"ui", strings.TrimSuffix(strings.Join(ui["world"], ","), ",8080"), uiBase, "--addr=:8443"},
+		{"ui", strings.Join(ui["world"], ","), uiBase, "--addr=:8443"},
 		{"ui internal", strings.Join(ui["kube-apiserver"], ","), "", fmt.Sprint(installer.UIInternalPort)},
 	} {
 		port := c.want[strings.LastIndex(c.want, ":")+1:]

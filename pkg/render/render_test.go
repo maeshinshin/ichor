@@ -663,7 +663,7 @@ func TestCNIHandoverDropsInlineManifest(t *testing.T) {
 			t.Fatalf("SelectPatches: %v", err)
 		}
 
-		dropped := dropHandedOverInlineManifest(ordered)
+		dropped := dropHandedOverInlineManifest(ordered, "")
 		if len(dropped) != 1 || dropped[0] != ordered[0] {
 			t.Fatalf("expected the untouched patch to pass through as the same pointer, got a copy")
 		}

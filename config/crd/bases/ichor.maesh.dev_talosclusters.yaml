@@ -3003,6 +3003,14 @@ spec:
                     - enabled
                     - replaced
                     type: string
+                  takenOverInlineManifest:
+                    description: |-
+                      takenOverInlineManifest is the name of the cluster.inlineManifests entry of the adopted
+                      machines that held the Cilium DaemonSet Ichor took over, which pkg/render stops rendering
+                      once CNIHandover is True. The controller copies it from the
+                      TalosClusterCNIInlineManifestAnnotation when the hand-over completes; empty when the
+                      adopted Cilium was not in an inline manifest.
+                    type: string
                 type: object
               conditions:
                 description: conditions represent the current state of the TalosCluster

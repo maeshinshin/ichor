@@ -70,6 +70,9 @@ type adoptDeps struct {
 	// skips the CNI inspection. CNIUnmanaged is --cni-unmanaged.
 	Target       client.Reader
 	CNIUnmanaged bool
+	// Tunnel is --tunnel (vxlan|geneve): the tunnel protocol of the Cilium adopt installs on a
+	// cluster with no CNI (ADR 0104 1.4); empty keeps the API default.
+	Tunnel string
 
 	// Seed is the address of one control plane (--node), used to discover the machines of a
 	// cluster that has no TalosCluster yet.
@@ -104,6 +107,12 @@ type adoptState struct {
 	rep       *cniReport // nil when the CNI was not inspected
 	unmanaged bool
 	kubeProxy string
+
+	// installCilium: the cluster has no CNI, so adopt installs Ichor's Cilium before Ichor
+	// (ADR 0104 1.5). tunnel and kubeProxy (above) are the values it is installed with; the
+	// install itself is unit 4.
+	installCilium bool
+	tunnel        string
 }
 
 // own is the class B definition for one node.
@@ -182,6 +191,11 @@ func runAdopt(ctx context.Context, clusterName, namespace string, deps adoptDeps
 		_, _ = fmt.Fprintln(deps.Stderr, "adopt: --plan: nothing was written")
 
 		return nil
+	}
+
+	if st.installCilium {
+		// ponytail: unit 4 replaces this refusal with cilium.Bootstrap and the Cilium-first order.
+		return errors.New("adopt: installing Cilium on a cluster with no CNI is not built yet (ADR 0104 unit 4); nothing was written")
 	}
 
 	if err := st.consent(deps, clusterName, len(patches), len(writable), owned, tp.deleteRecord); err != nil {
@@ -398,6 +412,10 @@ func (st *adoptState) inspect(ctx context.Context, deps adoptDeps) error {
 
 	st.unmanaged = deps.CNIUnmanaged || st.cluster.Spec.CNI.Preset == ichorv1alpha1.TalosClusterCNIPresetUnmanaged
 
+	if deps.Tunnel != "" && deps.Tunnel != "vxlan" && deps.Tunnel != "geneve" {
+		return fmt.Errorf("adopt: --tunnel %q is invalid: must be %q or %q", deps.Tunnel, "vxlan", "geneve")
+	}
+
 	var k8s *k8sFacts
 
 	if deps.Target != nil {
@@ -408,11 +426,16 @@ func (st *adoptState) inspect(ctx context.Context, deps adoptDeps) error {
 		}
 	}
 
+	if err := st.planInstallCilium(deps); err != nil {
+		return err
+	}
+
 	switch {
 	case !st.fresh:
 		st.kubeProxy = cmp.Or(st.cluster.Spec.CNI.KubeProxy, kubeProxyEnabled)
 	case k8s != nil:
-		mode, err := detectKubeProxy(k8s, first.Facts.KubeProxyEnabled, st.unmanaged)
+		// No CNI: there is no Cilium side to compare with, the Talos side alone decides (ADR 0104 1.4).
+		mode, err := detectKubeProxy(k8s, first.Facts.KubeProxyEnabled, st.unmanaged || st.installCilium)
 		if err != nil {
 			return fmt.Errorf("adopt: %w", err)
 		}
@@ -445,9 +468,15 @@ func (st *adoptState) inspect(ctx context.Context, deps adoptDeps) error {
 		_, _ = fmt.Fprintf(deps.Stderr, "adopt: cni: unmanaged (%s, not managed by Ichor)\n", detected)
 	}
 
+	st.announceInstallCilium(deps.Stderr)
+
 	if st.fresh {
 		st.cluster.Spec.CNI.KubeProxy = st.kubeProxy
 		st.cluster.Spec.CNI.Preset = cniCilium
+
+		if st.installCilium {
+			st.cluster.Spec.CNI.Tunnel = st.tunnel
+		}
 
 		if st.unmanaged {
 			st.cluster.Spec.CNI.Preset = ichorv1alpha1.TalosClusterCNIPresetUnmanaged
@@ -460,6 +489,47 @@ func (st *adoptState) inspect(ctx context.Context, deps adoptDeps) error {
 	}
 
 	return nil
+}
+
+// planInstallCilium settles the no-CNI path of ADR 0104: the preconditions of 1.3 and the tunnel.
+// It refuses, with nothing written, when a precondition fails.
+func (st *adoptState) planInstallCilium(deps adoptDeps) error {
+	if st.rep == nil || !st.rep.NoCNI {
+		if deps.Tunnel != "" {
+			return errors.New("adopt: --tunnel only applies when adopt installs Cilium, which it does only on a cluster with no CNI")
+		}
+
+		return nil
+	}
+
+	kp := map[string]KubePrismFacts{}
+
+	for _, n := range st.nodes {
+		if n.Skipped == "" {
+			kp[n.M.Name] = n.Facts.KubePrism
+		}
+	}
+
+	if err := checkNoCNIPreconditions(st.rep, kp); err != nil {
+		return fmt.Errorf("adopt: %w", err)
+	}
+
+	st.installCilium = true
+	st.tunnel = deps.Tunnel
+
+	return nil
+}
+
+// announceInstallCilium is the plan text of the no-CNI path (ADR 0104 1.5, step 1).
+func (st *adoptState) announceInstallCilium(w io.Writer) {
+	if !st.installCilium {
+		return
+	}
+
+	tunnel := cmp.Or(st.tunnel, "the default")
+
+	_, _ = fmt.Fprintf(w, "adopt: no CNI found: Cilium will be installed by adopt (Cilium %s, tunnel %s, kube-proxy %s) as Ichor's own Helm release, "+
+		"then Ichor is installed, then the cluster is adopted with the managed cilium preset\n", cilium.ChartVersion, tunnel, st.kubeProxy)
 }
 
 // chooseContract settles spec.versionContract of a cluster adopt creates: the --version-contract

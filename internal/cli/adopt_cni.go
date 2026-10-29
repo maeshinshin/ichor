@@ -17,7 +17,9 @@ limitations under the License.
 package cli
 
 import (
+	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -94,6 +96,11 @@ type cniReport struct {
 	TalosCNINone bool
 	// CustomURLs: cni.name is custom with manifest URLs, an unrepresentable config path (class C).
 	CustomURLs bool
+	// NoCNI: the cluster has no CNI at all (ADR 0104 1.1): Talos says none, no CNI workload or
+	// CiliumNode CRD exists, and every node is NotReady with the network-plugin message.
+	NoCNI bool
+	// NodesWithoutPodCIDR names the nodes with no spec.podCIDR (a precondition of 1.3).
+	NodesWithoutPodCIDR []string
 }
 
 // Mixed reports whether more than one CNI is installed.
@@ -101,6 +108,10 @@ func (r *cniReport) Mixed() bool { return len(r.Kinds) > 1 }
 
 // String is the one-line description used in plans and refusals.
 func (r *cniReport) String() string {
+	if r.NoCNI {
+		return "none (no CNI installed, every node NotReady)"
+	}
+
 	if r.Kind == detectedCilium && r.Provenance != "" {
 		return fmt.Sprintf("cilium (%s)", r.Provenance)
 	}
@@ -148,6 +159,16 @@ func detectCNI(f *k8sFacts, talos CNIFacts) *cniReport {
 		rep.Kind = rep.Kinds[0]
 	}
 
+	rep.NoCNI = rep.Kind == detectedNone && rep.TalosCNINone && !f.CiliumNodeCRD && len(f.Nodes) > 0
+
+	for _, n := range f.Nodes {
+		rep.NoCNI = rep.NoCNI && !n.Ready && n.NetworkNotReady
+
+		if n.PodCIDR == "" {
+			rep.NodesWithoutPodCIDR = append(rep.NodesWithoutPodCIDR, n.Name)
+		}
+	}
+
 	if rep.Kind == detectedCilium && !rep.Mixed() {
 		rep.Provenance = ciliumProvenance(f)
 	}
@@ -191,6 +212,15 @@ func checkCNIAdoption(r *cniReport, unmanaged bool) error {
 			"so it adopts neither mode. Remove one of them and run adopt again", strings.Join(r.Found, ", "))
 	}
 
+	if r.NoCNI {
+		if unmanaged {
+			return errors.New("this cluster has no CNI, so no pod can run on it, including Ichor's. " +
+				"Run again without --cni-unmanaged and Ichor installs Cilium, or install a CNI yourself first")
+		}
+
+		return nil
+	}
+
 	if r.Kind == detectedCilium || unmanaged {
 		return nil
 	}
@@ -206,4 +236,32 @@ func checkCNIAdoption(r *cniReport, unmanaged bool) error {
 
 	return fmt.Errorf("the cluster runs %s. Ichor will not install or operate it; "+
 		"to adopt the cluster with the CNI left exactly as it is, run again with --cni-unmanaged", what)
+}
+
+// checkNoCNIPreconditions is ADR 0104 1.3: KubePrism on 7445 on every node (checked against the
+// Talos facts of nodes, which the caller passes as name -> setting) and a pod CIDR on every Node.
+func checkNoCNIPreconditions(r *cniReport, kubePrism map[string]KubePrismFacts) error {
+	var bad []string
+
+	for name, kp := range kubePrism {
+		if !kp.Enabled || (kp.Port != 0 && kp.Port != 7445) {
+			bad = append(bad, name)
+		}
+	}
+
+	if len(bad) > 0 {
+		slices.Sort(bad)
+
+		return fmt.Errorf("this cluster has no CNI, so Ichor must install Cilium, and Cilium reaches the API through KubePrism on port 7445, "+
+			"which is not enabled there on %s. Enable KubePrism (machine.features.kubePrism, port 7445) with your usual tool, then run adopt again",
+			strings.Join(bad, ", "))
+	}
+
+	if len(r.NodesWithoutPodCIDR) > 0 {
+		return fmt.Errorf("this cluster has no CNI, so Ichor must install Cilium with ipam.mode=kubernetes, "+
+			"which needs a spec.podCIDR on every node; missing on %s. Enable node CIDR allocation in kube-controller-manager, then run adopt again",
+			strings.Join(r.NodesWithoutPodCIDR, ", "))
+	}
+
+	return nil
 }

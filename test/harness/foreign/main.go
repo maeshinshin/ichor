@@ -42,7 +42,7 @@ func main() {
 	fs.StringVar(&o.K8sVersion, "k8s", "", "Kubernetes version (default: talosctl's)")
 	fs.IntVar(&o.ControlPlanes, "cps", 1, "control planes (1..3)")
 	fs.IntVar(&o.Workers, "workers", 1, "workers (0..4)")
-	fs.StringVar(&o.CNI, "cni", foreign.CNIFlannel, "talos-flannel|none|cilium-inline|cilium-helm|calico")
+	fs.StringVar(&o.CNI, "cni", foreign.CNIFlannel, "talos-flannel|none|cilium-inline|cilium-helm|cilium-cli|calico")
 	fs.BoolVar(&o.NoKubeProxy, "no-kube-proxy", false, "disable kube-proxy")
 	fs.BoolVar(&o.NoKubePrism, "no-kubeprism", false, "disable KubePrism")
 	fs.BoolVar(&o.DataDisk, "data-disk", false, "workers get a second disk with a plain and a LUKS2 user volume (v1.14)")

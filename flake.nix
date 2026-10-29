@@ -22,6 +22,7 @@
               talosctl
               kubectl
               kubernetes-helm
+              cilium-cli # installs Cilium as a Helm release for the foreign-cluster hardware test
               lua5_1 # runs dist/chart/files/argocd-health/*.lua in tests; 5.1 = Argo CD's gopher-lua
               buf
               protoc-gen-go

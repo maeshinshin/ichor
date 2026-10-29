@@ -149,7 +149,7 @@ func configDocs(t *testing.T, c *foreign.Cluster, ip string) (doc map[string]any
 func cniPaths(t *testing.T, c *foreign.Cluster) map[string]string {
 	t.Helper()
 	res := map[string]string{}
-	for _, ip := range append(append([]string{}, c.CPs...), c.Workers...) {
+	for _, ip := range c.Nodes() {
 		doc, kubeDocs := configDocs(t, c, ip)
 		cl, _ := doc["cluster"].(map[string]any)
 		m, _ := doc["machine"].(map[string]any)

@@ -31,8 +31,9 @@ Rules that are easy to get wrong:
 - UI: preactcn only. No React, no `preact/compat`.
 - The controller is the only writer to Talos nodes and never mutates `spec`.
   UI and CLI change the world by writing CRs.
-- Ichor doesn't install or operate CNI, storage or monitoring. It bootstraps
-  CNI and Argo CD once and hands them over.
+- Ichor owns Cilium (its only CNI) as a Helm release. It does not install or
+  operate Argo CD, Kokumi, Flux or any GitOps tooling, nor storage or
+  monitoring.
 
 `kubebuilder init` wants an empty directory: on a fresh repo run it first
 (inside `nix develop`), commit the generated tree as-is, then add docs.

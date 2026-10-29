@@ -94,6 +94,8 @@ var etcdDialTimeout = 15 * time.Second
 const (
 	conditionRemoval           = "Removal"
 	reasonRemovalRefused       = "RemovalRefused"
+	reasonDeadMemberRemoved    = "DeadMemberRemoved"
+	reasonDeadMemberRemoval    = "DeadMemberRemoval"
 	reasonDrainFailed          = "DrainFailed"
 	reasonEvacuationPending    = "StorageEvacuationPending"
 	reasonEvacuationFailed     = "StorageEvacuationFailed"
@@ -330,6 +332,7 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 	// A worker only reaches here when a reset gave it the finalizer (ADR 0085); it was never an
 	// etcd member and is not counted toward quorum, so only the drain and the reset apply to it.
 	isControlPlane := m.Spec.Role == roleControlPlane
+	deadMember := false
 
 	if isControlPlane {
 		siblings, err := r.countApprovedControlPlanes(ctx, m)
@@ -341,8 +344,32 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 			return err
 		}
 
-		if err := checkControlPlaneRemoval(siblings, int(cluster.Spec.ControlPlane.Count)); err != nil {
+		// Quorum and last-control-plane always hold. The declared count does not stop the removal of a
+		// control plane whose etcd member is dead: replacing it is how the cluster gets back to the count.
+		if err := deleteguard.CheckControlPlaneQuorum(siblings); err != nil {
 			return r.removalCondition(ctx, m, metav1.ConditionFalse, reasonRemovalRefused, err.Error())
+		}
+
+		if err := deleteguard.CheckControlPlaneCount(siblings, int(cluster.Spec.ControlPlane.Count)); err != nil {
+			why, dead := r.deadEtcdMember(ctx, &cluster, m)
+			if !dead {
+				return r.removalCondition(ctx, m, metav1.ConditionFalse, reasonRemovalRefused,
+					err.Error()+"; its etcd member is not unhealthy, so this is not a replacement of a dead control plane ("+why+")")
+			}
+
+			deadMember = true
+			msg := fmt.Sprintf("removing control plane %q below the declared count of %d: its etcd member is %s; "+
+				"approve a replacement to get back to the declared count", m.Name, cluster.Spec.ControlPlane.Count, why)
+			log.Info(msg)
+
+			if r.Recorder != nil {
+				r.Recorder.Event(m, corev1.EventTypeWarning, reasonDeadMemberRemoved, msg)
+			}
+
+			// Recorded, so a round that resumes after the member is gone from etcd still knows why it proceeds.
+			if err := r.removalCondition(ctx, m, metav1.ConditionFalse, reasonDeadMemberRemoval, msg); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -366,9 +393,15 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 	// same evacuateMachine the Talos upgrade uses. Its progress lives in
 	// the StorageEvacuation condition, so a restarted controller resumes
 	// from status; a timeout stops the removal here and never advances it.
-	progress, err := evacuateMachine(ctx, r.Client, r.Evacuator, &cluster, m, nodeName, "removal")
-	if err != nil {
-		return r.removalCondition(ctx, m, metav1.ConditionFalse, reasonEvacuationFailed, err.Error())
+	// A dead control plane has no kubelet to evict pods or move replicas: neither would ever finish.
+	progress := storage.EvacuationDone
+	if !deadMember {
+		var err error
+
+		progress, err = evacuateMachine(ctx, r.Client, r.Evacuator, &cluster, m, nodeName, "removal")
+		if err != nil {
+			return r.removalCondition(ctx, m, metav1.ConditionFalse, reasonEvacuationFailed, err.Error())
+		}
 	}
 
 	switch progress {
@@ -392,9 +425,14 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 		return errors.New(msg)
 	}
 
-	stop := renewWhile(ctx, lock, controllerIdentity, removalRenewInterval)
-	drainErr := r.drainNode(ctx, nodeName)
-	stop()
+	var drainErr error
+
+	if !deadMember {
+		stop := renewWhile(ctx, lock, controllerIdentity, removalRenewInterval)
+		drainErr = r.drainNode(ctx, nodeName)
+
+		stop()
+	}
 
 	if drainErr != nil {
 		return r.removalCondition(ctx, m, metav1.ConditionFalse, reasonDrainFailed, drainErr.Error())

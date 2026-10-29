@@ -458,6 +458,11 @@ func init() {
 // TalosMachineRemovalFinalizer holds a TalosMachine's deletion until the controller has drained its
 // node and, for a control plane, removed its etcd member (ADR 0032). The controller adds it to every
 // approved control plane; a worker gets it when a removal or reset is requested for it (ADR 0085).
+// TalosMachineReasonNodeUnreachable is the reason of Ready=False once the node has not answered for
+// longer than a short grace. A control plane in this state may be removed below the declared count
+// (ADR 0106).
+const TalosMachineReasonNodeUnreachable = "NodeUnreachable"
+
 const TalosMachineRemovalFinalizer = "ichor.maesh.dev/machine-removal"
 
 // TalosMachineHoldApplyAnnotation, set to "true", makes the TalosMachine reconciler compute and

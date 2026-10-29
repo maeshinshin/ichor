@@ -114,7 +114,8 @@ func TestBaseCacheName(t *testing.T) {
 func TestVMManifestISOSource(t *testing.T) {
 	for name, tmpl := range map[string]string{"single": vmManifestTmpl, "ha": haVMManifestTmpl} {
 		old := renderVM(tmpl, "x-0", httpISO())
-		if !strings.Contains(old, "metal-amd64.iso") || strings.Contains(old, "pvc:") || !strings.Contains(old, "storage: 1Gi") {
+		if !strings.Contains(old, "metal-amd64.iso") || strings.Contains(old, "pvc:") ||
+			!strings.Contains(old, "storage: 1Gi") {
 			t.Fatalf("%s: old path wrong:\n%s", name, old)
 		}
 		cached := renderVM(tmpl, "x-0", clonedISO(baseCacheName(), "2Gi"))

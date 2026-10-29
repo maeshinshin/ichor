@@ -22,13 +22,6 @@ spec:
     port: {{ .Values.ichorUI.port }}
     protocol: TCP
     targetPort: {{ .Values.ichorUI.port }}
-  {{- with .Values.ichorUI.plaintextPort }}
-  # DEPRECATED, removed in the next minor release.
-  - name: http
-    port: {{ . }}
-    protocol: TCP
-    targetPort: {{ . }}
-  {{- end }}
   {{- if .Values.ichorUI.users.enabled }}
   # The kube-apiserver reads discovery and JWKS here, over the ClusterIP.
   - name: internal

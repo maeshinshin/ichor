@@ -211,7 +211,7 @@ func BuildConfig(
 
 	// The CNI Talos runs and the install target (ADR 0077) are system layer too.
 	// An unmanaged cluster keeps its own CNI: nothing is emitted unless its config selects none.
-	if cluster.Spec.CNI.Preset != PresetUnmanaged || cniSelectionNone(cluster) {
+	if cluster.Spec.CNI.Preset != ichorv1alpha1.TalosClusterCNIPresetUnmanaged || cniSelectionNone(cluster) {
 		cfg, err = injectCNI(cfg, contract)
 		if err != nil {
 			return nil, err

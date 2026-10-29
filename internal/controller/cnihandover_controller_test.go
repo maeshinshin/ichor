@@ -243,7 +243,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 				VersionContract:   "v1.14",
 				SecretsRef:        corev1.LocalObjectReference{Name: "does-not-exist"},
 				ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: 1, Schedulable: testSchedulable},
-				CNI:               ichorv1alpha1.TalosClusterCNI{Preset: render.PresetUnmanaged},
+				CNI:               ichorv1alpha1.TalosClusterCNI{Preset: ichorv1alpha1.TalosClusterCNIPresetUnmanaged},
 			},
 		}
 		cluster.Annotations = map[string]string{ichorv1alpha1.TalosClusterAdoptedAnnotation: "true"}

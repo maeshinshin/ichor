@@ -350,7 +350,7 @@ func (s *Server) planOperation(
 	}
 
 	if kind == ichorv1alpha1.TalosOperationKindCNI && cluster.Spec.CNI.Preset == ichorv1alpha1.TalosClusterCNIPresetUnmanaged {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New(ichorv1alpha1.CNIUnmanagedMessage))
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New(ichorv1alpha1.CNINotManagedMessage))
 	}
 
 	p := &opPlan{kind: kind, cluster: &cluster, resp: &pb.PlanOperationResponse{MaxUnavailable: maxUnavailable}}

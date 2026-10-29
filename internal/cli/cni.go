@@ -56,7 +56,7 @@ func refuseUnmanagedCNI(ctx context.Context, c *apiClients, cluster string) erro
 	}
 
 	if resp.Msg.GetCluster().GetCniPreset() == ichorv1alpha1.TalosClusterCNIPresetUnmanaged {
-		return errors.New(ichorv1alpha1.CNIUnmanagedMessage)
+		return errors.New(ichorv1alpha1.CNINotManagedMessage)
 	}
 
 	return nil

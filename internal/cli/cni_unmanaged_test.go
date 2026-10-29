@@ -66,7 +66,7 @@ func TestClusterStatusPrintsCiliumForAManagedCluster(t *testing.T) {
 
 func TestCniCommandsRefuseAnUnmanagedCluster(t *testing.T) {
 	err := refuseUnmanagedCNI(context.Background(), unmanagedTestClients(t), "")
-	if err == nil || err.Error() != ichorv1alpha1.CNIUnmanagedMessage {
+	if err == nil || err.Error() != ichorv1alpha1.CNINotManagedMessage {
 		t.Fatalf("want the unmanaged message, got %v", err)
 	}
 }

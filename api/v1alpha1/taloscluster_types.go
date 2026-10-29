@@ -663,7 +663,3 @@ func init() {
 // ConditionCertificatesExpiring is the TalosCluster condition that is True while any CA in the
 // secrets bundle expires within the controller's warning window, or has expired (ADR 0063).
 const ConditionCertificatesExpiring = "CertificatesExpiring"
-
-// CNIUnmanagedMessage is what the UI API and the CLI answer when asked to operate the CNI of a
-// cluster whose spec.cni.preset is unmanaged (ADR 0103, section 1.1a).
-const CNIUnmanagedMessage = "the CNI is not managed by Ichor (spec.cni.preset: unmanaged)"

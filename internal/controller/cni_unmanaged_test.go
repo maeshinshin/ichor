@@ -21,12 +21,11 @@ import (
 	"testing"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
-	"github.com/maeshinshin/ichor/pkg/render"
 )
 
 func unmanagedCluster() *ichorv1alpha1.TalosCluster {
 	c := &ichorv1alpha1.TalosCluster{}
-	c.Spec.CNI.Preset = render.PresetUnmanaged
+	c.Spec.CNI.Preset = ichorv1alpha1.TalosClusterCNIPresetUnmanaged
 
 	return c
 }

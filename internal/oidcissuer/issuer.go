@@ -82,8 +82,12 @@ type Config struct {
 	// <externalURL>/auth/callback.
 	UIRedirectURI string
 
-	TokenTTL        time.Duration // default 5m, 1m..15m
+	TokenTTL        time.Duration // default 5m, 1m..1h
 	RefreshLifetime time.Duration // default 12h, 1h..30d
+
+	// Lifetimes, when set, is asked for the lifetimes at every issuance (ADR 0105, spec.users).
+	// A zero or out-of-range answer keeps TokenTTL / RefreshLifetime.
+	Lifetimes func(ctx context.Context) (tokenTTL, refreshLifetime time.Duration)
 
 	Keys      KeySource
 	Users     UserDirectory
@@ -98,6 +102,25 @@ type Issuer struct {
 	cfg       Config
 	failures  *Backoff
 	usedCodes *jtiSet
+}
+
+// lifetimes returns the ID token and refresh token lifetimes for this issuance.
+func (i *Issuer) lifetimes(ctx context.Context) (tokenTTL, refreshLifetime time.Duration) {
+	tokenTTL, refreshLifetime = i.cfg.TokenTTL, i.cfg.RefreshLifetime
+	if i.cfg.Lifetimes == nil {
+		return tokenTTL, refreshLifetime
+	}
+
+	t, r := i.cfg.Lifetimes(ctx)
+	if t >= ichorauth.MinTokenTTL && t <= ichorauth.MaxTokenTTL {
+		tokenTTL = t
+	}
+
+	if r >= ichorauth.MinRefreshLifetime && r <= ichorauth.MaxRefreshLifetime {
+		refreshLifetime = r
+	}
+
+	return tokenTTL, refreshLifetime
 }
 
 // New validates cfg and returns an Issuer.

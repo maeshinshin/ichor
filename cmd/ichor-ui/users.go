@@ -35,6 +35,7 @@ import (
 
 	"github.com/maeshinshin/ichor/internal/certreload"
 	"github.com/maeshinshin/ichor/internal/oidcissuer"
+	"github.com/maeshinshin/ichor/internal/settings"
 	"github.com/maeshinshin/ichor/internal/uiapi"
 	"github.com/maeshinshin/ichor/pkg/ichorauth"
 )
@@ -84,7 +85,7 @@ func (f usersFlags) validate() error {
 	}
 
 	if f.tokenTTL < ichorauth.MinTokenTTL || f.tokenTTL > ichorauth.MaxTokenTTL {
-		return errors.New("--token-ttl must be 1 to 15 minutes")
+		return errors.New("--token-ttl must be 1 minute to 1 hour")
 	}
 
 	if f.refreshTTL < time.Hour || f.refreshTTL > 30*24*time.Hour {
@@ -164,13 +165,18 @@ func watchKeys(ctx context.Context, store *oidcissuer.KeyStore, dir string) {
 }
 
 // newIssuer builds Ichor's own issuer and the verifier for its ichor-ui tokens.
-func newIssuer(ctx context.Context, f usersFlags, backend *uiapi.IssuerBackend) (*oidcissuer.Issuer, localVerifier, error) {
+func newIssuer(ctx context.Context, f usersFlags, live *settings.Reader, backend *uiapi.IssuerBackend) (*oidcissuer.Issuer, localVerifier, error) {
 	keys := oidcissuer.NewKeyStore(nil)
 	watchKeys(ctx, keys, f.signingKeysDir)
 
 	iss, err := oidcissuer.New(oidcissuer.Config{
 		Issuer: f.externalURL, InternalJWKSURI: f.internalJWKSURI, InternalJWKSFromHost: true, UIRedirectURI: f.externalURL + "/auth/callback",
 		TokenTTL: f.tokenTTL, RefreshLifetime: f.refreshTTL,
+		Lifetimes: func(ctx context.Context) (time.Duration, time.Duration) {
+			e, _ := live.Effective(ctx)
+
+			return e.TokenTTL.V, e.RefreshLifetime.V
+		},
 		Keys: keys, Users: backend, Passwords: backend,
 	})
 

@@ -539,7 +539,7 @@ func TestConfigValidation(t *testing.T) {
 		"trailing slash": func(c *oidcissuer.Config) { c.Issuer = externalURL + "/" },
 		"no keys":        func(c *oidcissuer.Config) { c.Keys = nil },
 		"no redirect":    func(c *oidcissuer.Config) { c.UIRedirectURI = "" },
-		"ttl too long":   func(c *oidcissuer.Config) { c.TokenTTL = time.Hour },
+		"ttl too long":   func(c *oidcissuer.Config) { c.TokenTTL = 2 * time.Hour },
 		"ttl too short":  func(c *oidcissuer.Config) { c.TokenTTL = time.Second },
 		"refresh short":  func(c *oidcissuer.Config) { c.RefreshLifetime = time.Minute },
 		"refresh long":   func(c *oidcissuer.Config) { c.RefreshLifetime = 90 * 24 * time.Hour },

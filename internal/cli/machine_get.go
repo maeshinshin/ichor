@@ -18,7 +18,6 @@ package cli
 
 import (
 	"context"
-	"io"
 
 	"connectrpc.com/connect"
 	"github.com/spf13/cobra"
@@ -31,19 +30,10 @@ var machineGetCmd = &cobra.Command{
 	Short: "Show one machine",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
-			return runMachineGet(ctx, c, cmd.OutOrStdout(), args[0])
+		return showAPI(cmd, false, func(ctx context.Context, c *apiClients) (*connect.Response[pb.GetMachineResponse], error) {
+			return c.Machine.GetMachine(ctx, connect.NewRequest(&pb.GetMachineRequest{Machine: objectRef(apiOpts.Namespace, args[0])}))
 		})
 	},
-}
-
-func runMachineGet(ctx context.Context, c *apiClients, out io.Writer, name string) error {
-	resp, err := c.Machine.GetMachine(ctx, connect.NewRequest(&pb.GetMachineRequest{Machine: objectRef(apiOpts.Namespace, name)}))
-	if err != nil {
-		return err
-	}
-
-	return writeMessage(out, outputFormat, resp.Msg)
 }
 
 func init() { machineCmd.AddCommand(machineGetCmd) }

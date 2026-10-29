@@ -1,7 +1,9 @@
 package oidcissuer_test
 
 import (
+	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"slices"
 	"strings"
@@ -101,6 +103,44 @@ func TestAuthorizeRejectsBadRequests(t *testing.T) {
 	dup := base.Encode() + "&state=other"
 	if rec := e.do(e.h, http.MethodGet, "/oidc/authorize?"+dup, "", ""); rec.Code != http.StatusBadRequest {
 		t.Errorf("repeated parameter: status %d", rec.Code)
+	}
+}
+
+// The in-page sign-in: Accept: application/json answers the ticket as JSON,
+// with the same checks as the redirect path and no redirect on any failure.
+func TestAuthorizeJSON(t *testing.T) {
+	e := newEnv(t, externalURL, "")
+	get := func(client, redirect string, mut func(url.Values)) *httptest.ResponseRecorder {
+		p := newPKCE()
+		q := url.Values{
+			pRespType: {pCode}, pClientID: {client}, pRedirect: {redirect},
+			pScope: {"openid"}, pState: {"s"}, pNonce: {"n"},
+			pChallenge: {p.challenge}, pMethod: {pS256},
+		}
+		if mut != nil {
+			mut(q)
+		}
+		req := httptest.NewRequest(http.MethodGet, "/oidc/authorize?"+q.Encode(), nil)
+		req.Header.Set("Accept", "application/json")
+		rec := httptest.NewRecorder()
+		e.h.ServeHTTP(rec, req)
+		return rec
+	}
+	rec := get(clientUI, uiRedirect, nil)
+	var out struct{ Ticket string }
+	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &out) != nil || out.Ticket == "" || rec.Header().Get("Location") != "" {
+		t.Fatalf("good request: %d %q", rec.Code, rec.Body.String())
+	}
+	bad := map[string]*httptest.ResponseRecorder{
+		"bad redirect": get(clientUI, "https://evil.example/auth/callback", nil),
+		"bad client":   get("other", uiRedirect, nil),
+		"plain pkce":   get(clientUI, uiRedirect, func(v url.Values) { v.Set(pMethod, "plain") }),
+		"no nonce":     get(clientUI, uiRedirect, func(v url.Values) { v.Del(pNonce) }),
+	}
+	for name, rec := range bad {
+		if rec.Code != http.StatusBadRequest || rec.Header().Get("Location") != "" || strings.Contains(rec.Body.String(), "ticket") {
+			t.Errorf("%s: %d %q", name, rec.Code, rec.Body.String())
+		}
 	}
 }
 

@@ -800,7 +800,7 @@ func (c *Cluster) patchMultiDoc(manifest string) []byte {
 		docs = append(docs, disabled("KubeProxyConfig"))
 	}
 	if o.NoKubePrism {
-		docs = append(docs, disabled("KubePrismConfig"))
+		docs = append(docs, doc("KubePrismConfig", map[string]any{"$patch": "delete"})) // the document has no enabled field: absent means off
 	}
 	var b strings.Builder
 	for _, d := range docs {

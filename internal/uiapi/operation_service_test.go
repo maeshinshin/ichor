@@ -173,7 +173,7 @@ func TestCreateRefusedWhenTheCallerMayNotCreateOperationsLeavesTheSpecAlone(t *t
 	base := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(opObjects()...).Build()
 	user := interceptor.NewClient(base, interceptor.Funcs{
 		Create: func(_ context.Context, _ client.WithWatch, obj client.Object, _ ...client.CreateOption) error {
-			return apierrors.NewForbidden(schema.GroupResource{Group: ichorv1alpha1.SchemeGroupVersion.Group, Resource: "talosoperations"}, obj.GetName(), nil)
+			return apierrors.NewForbidden(schema.GroupResource{Group: ichorv1alpha1.GroupVersion.Group, Resource: "talosoperations"}, obj.GetName(), nil)
 		},
 	})
 	srv := &Server{Client: base, Impersonate: func(Identity) (client.Client, error) { return user, nil }}
@@ -196,7 +196,7 @@ func TestCreateRefusedWhenTheCallerMayNotUpdateTheCluster(t *testing.T) {
 	base := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(opObjects()...).Build()
 	user := interceptor.NewClient(base, interceptor.Funcs{
 		Update: func(_ context.Context, _ client.WithWatch, obj client.Object, _ ...client.UpdateOption) error {
-			return apierrors.NewForbidden(schema.GroupResource{Group: ichorv1alpha1.SchemeGroupVersion.Group, Resource: "talosclusters"}, obj.GetName(), nil)
+			return apierrors.NewForbidden(schema.GroupResource{Group: ichorv1alpha1.GroupVersion.Group, Resource: "talosclusters"}, obj.GetName(), nil)
 		},
 	})
 	srv := &Server{Client: base, Impersonate: func(Identity) (client.Client, error) { return user, nil }}
@@ -670,7 +670,7 @@ func TestPauseResumeAndDeleteAreMadeAsTheCaller(t *testing.T) {
 
 	denied := interceptor.NewClient(k8s.(client.WithWatch), interceptor.Funcs{
 		Delete: func(_ context.Context, _ client.WithWatch, obj client.Object, _ ...client.DeleteOption) error {
-			return apierrors.NewForbidden(schema.GroupResource{Group: ichorv1alpha1.SchemeGroupVersion.Group, Resource: "talosoperations"}, obj.GetName(), nil)
+			return apierrors.NewForbidden(schema.GroupResource{Group: ichorv1alpha1.GroupVersion.Group, Resource: "talosoperations"}, obj.GetName(), nil)
 		},
 	})
 	srv.Impersonate = func(Identity) (client.Client, error) { return denied, nil }

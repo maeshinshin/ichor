@@ -222,7 +222,7 @@ type MachineReclaimList struct {
 
 func init() {
 	SchemeBuilder.Register(func(s *runtime.Scheme) error {
-		s.AddKnownTypes(SchemeGroupVersion, &MachineReclaim{}, &MachineReclaimList{})
+		s.AddKnownTypes(GroupVersion, &MachineReclaim{}, &MachineReclaimList{})
 		return nil
 	})
 }

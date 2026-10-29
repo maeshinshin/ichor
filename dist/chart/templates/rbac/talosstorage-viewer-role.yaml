@@ -10,10 +10,7 @@ metadata:
   namespace: {{ .Release.Namespace }}
 {{- end }}
   labels:
-    app.kubernetes.io/managed-by: {{ .Release.Service }}
-    app.kubernetes.io/name: {{ include "ichor.name" . }}
-    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
-    app.kubernetes.io/instance: {{ .Release.Name }}
+    {{- include "ichor.labels" . | nindent 4 }}
   name: {{ include "ichor.resourceName" (dict "suffix" "talosstorage-viewer-role" "context" $) }}
 rules:
 - apiGroups:

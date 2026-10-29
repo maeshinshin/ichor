@@ -33,16 +33,18 @@ type retiredField struct {
 }
 
 // retiredFields is the whole list. Add an entry only together with the ADR that removes the field.
+const ichorInstallationsCRD = "ichorinstallations.ichor.maesh.dev"
+
 var retiredFields = []retiredField{
 	// ADR 0101: GitOps is permanently out of scope; spec.gitops (and everything under it) is gone.
 	{crd: "talosclusters.ichor.maesh.dev", path: "spec.gitops"},
 	// ADR 0099 (hand-over is always to Ichor), retired by ADR 0101.
 	{crd: "talosclusters.ichor.maesh.dev", path: "spec.cni.handover"},
 	// ADR 0099 (the stack is gone), retired by ADR 0101.
-	{crd: "ichorinstallations.ichor.maesh.dev", path: "spec.stack"},
-	{crd: "ichorinstallations.ichor.maesh.dev", path: "status.stack"},
+	{crd: ichorInstallationsCRD, path: "spec.stack"},
+	{crd: ichorInstallationsCRD, path: "status.stack"},
 	// ADR 0101: the only management mode is ichor, so the field is gone.
-	{crd: "ichorinstallations.ichor.maesh.dev", path: "spec.managementMode"},
+	{crd: ichorInstallationsCRD, path: "spec.managementMode"},
 }
 
 func isRetired(crd, path string) bool {

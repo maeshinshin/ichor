@@ -259,6 +259,7 @@ docker-build-installer: build-installer ## Build the installer image: the ichor 
 
 .PHONY: demo-images
 demo-images: ui-build ## Build the three demo images with crane and push them to REGISTRY (VERSION=v0.0.8-abc1234 REGISTRY=localhost:5000); the tree stays unchanged.
+	@# CRANE_INSECURE (default --insecure, for a local registry) is read by images.sh; the release workflow sets it empty.
 	$(MAKE) build-installer IMG=ghcr.io/maeshinshin/ichor-controller:$(VERSION) IMG_UI=ghcr.io/maeshinshin/ichor-ui:$(VERSION)
 	VERSION="$(VERSION)" REGISTRY="$(REGISTRY)" test/harness/ui-demo/images.sh
 

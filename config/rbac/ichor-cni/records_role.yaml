@@ -1,0 +1,38 @@
+# What the takeover of an existing Cilium needs in kube-system: to find the
+# foreign Helm release record there, and to delete it after RetireForeignRecord has backed it up
+# byte for byte into ichor-system (the create/update on that backup is the ichor-system Role in
+# role.yaml). Namespaced to kube-system, never cluster-wide: the foreign record is searched in
+# kube-system only. The Job needs no create, update or patch on Secrets here. Hand-written for
+# the same reason as controller_role.yaml; config/installer puts both back in kube-system.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cni-records-role
+  namespace: kube-system
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - delete
+  - get
+  - list
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/name: ichor
+    app.kubernetes.io/managed-by: kustomize
+  name: cni-records-rolebinding
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cni-records-role
+# Written out for the same reason as in controller_role.yaml.
+subjects:
+- kind: ServiceAccount
+  name: ichor-cni
+  namespace: kube-system

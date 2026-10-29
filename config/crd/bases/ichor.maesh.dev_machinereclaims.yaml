@@ -234,6 +234,7 @@ spec:
                           format: int64
                           type: integer
                       required:
+                      - healthy
                       - id
                       type: object
                     type: array

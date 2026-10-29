@@ -135,6 +135,14 @@ rules:
   - ichor.maesh.dev
   resources:
   - machinereclaims
+  verbs:
+  - delete
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
   - talosmachines
   verbs:
   - create
@@ -147,7 +155,6 @@ rules:
 - apiGroups:
   - ichor.maesh.dev
   resources:
-  - machinereclaims/finalizers
   - talosmachines/finalizers
   - talosoperations/finalizers
   verbs:
@@ -215,6 +222,7 @@ rules:
   - secrets
   verbs:
   - create
+  - delete
   - get
   - list
   - update

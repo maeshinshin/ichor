@@ -1,6 +1,6 @@
 # 0105. ichor-ui is TLS-only with an Ichor-made serving certificate and a CA the edge can verify, and Ichor's own runtime settings live in `IchorInstallation`, editable from a Settings tab
 
-Status: Accepted; not built · Date: 2026-10-29 · Design section: Trust, Deployment, CLI and UI · Extends: 0059, 0094, 0100, 0104 · Touches: 0065, 0103 (reclaim)
+Status: Accepted; built, hardware tests pending · Date: 2026-10-29 · Design section: Trust, Deployment, CLI and UI · Extends: 0059, 0094, 0100, 0104 · Touches: 0065, 0103 (reclaim)
 
 Decided: ichor-ui never serves plaintext to the network: it listens for HTTPS only on a new port 8443, with the certificate the operator supplies (`ichorUI.tls.secretName`, for example a cert-manager Secret) or, when none is supplied, a leaf from the Ichor CA that the controller already keeps for the 8444 issuer listener (`ichor-oidc-ca`, `ichor-oidc-tls`), issued for every install and not only with users enabled; the controller publishes that CA, public part only, as a ConfigMap and a Secret named `ichor-ui-ca` so an Ingress-NGINX, a Gateway API `BackendTLSPolicy` or a client holding `--ca-file` can verify the backend, while a plain L4 load balancer needs the operator's own certificate; an edge re-encrypts to ichor-ui; the kube-apiserver's 8444 fetch is unchanged and keeps the Ichor leaf even when the operator supplies a certificate for 8443; an existing install keeps a deprecated plaintext listener on 8080 for exactly one minor release (never on a fresh `init` or Helm install) and then loses it; certificate hot reload is the work of ADR 0094's amendment (branch `cert-reload`) and is used here, not redesigned; Ichor's runtime settings are new optional fields of the existing singleton `IchorInstallation` (not a new kind), live-read by the controller, the webhooks and ichor-ui, edited from a Settings tab and by `ichor settings`, guarded by RBAC verbs checked in the webhook; a Helm install gets an `IchorInstallation` too, created once by the controller if absent, and a new field `spec.deployment.manager` (`installer` or `helm`) is how `ichor upgrade ichor`, the UI, the webhook and ADR 0104's `ichorPresent` tell the installer Job path from Helm
 
@@ -113,3 +113,19 @@ Hardware and e2e (batched per the hardware rule): **T1** fresh `ichor init` serv
 
 1. Rotation of the Ichor CA itself with an overlap period (publishing two CAs in `ichor-ui-ca` and the apiserver's `certificateAuthority`); today the CA is replaced when near its end and everything re-trusts at once. Not needed for this change, needed before the 10 year mark.
 2. Whether the ichor-ui login settings (`--oidc-*`, the external IdP) should become runtime settings too; they need a provider re-discovery path and are left to a later ADR.
+
+## As built (2026-10-29)
+
+Units 1 to 9 are built; the hardware tests T1 to T8 are not run. Differences from the text above:
+
+- **Settings page**: stock `Card`s, not `Tabs` (General, Sign-in, Break-glass, Defaults became cards: Deployment, Break-glass reclaim, Sign-in, Defaults). `Switch` was added with `npx shadcn@latest add @preactcn/switch`.
+- **No "unset"**: neither the UI nor `ichor settings` can clear a field once set; a field set stays set. Precedence is as designed for fields never set.
+- **`defaults.driftPolicy`** is `warnOnly | autoCorrect` (the enum of `TalosCluster.spec.driftPolicy`), not `enforce | warnOnly`.
+- **Plaintext on 8080**: the installer pins any live `--addr` that is not 8443 (not only a TLS-on-8080 install). The chart has no automatic detection; the opt-in value is `ichorUI.plaintextPort` (default 0), and `ichorUI.port` keeps a former 8080 TLS install in place.
+- **CLI trust**: `ichor ui` and the API client stay on 8080 while `ichor-ui-ca` is missing.
+- **Helm denial**: the denial of `kind: ichor` on `manager: helm` lives in the `TalosOperation` validating webhook; the installer refuses by reading the live Deployment, as a second line.
+- **Drift default**: the CRD default of `TalosCluster.spec.driftPolicy` was removed in favour of a create-time defaulting webhook (`failurePolicy: Ignore`; an empty value is read as `warnOnly`, so a down webhook changes nothing). The installer's RBAC gained `mutatingwebhookconfigurations`. The CRD field itself is kept (CRD fields are append-only).
+- **Token lifetime**: `users.tokenTTL` is capped at 1h (`MaxTokenTTL`), as the CEL rule says.
+- **Monitoring**: the ServiceMonitor verifies the HTTPS port against `ichor-ui-ca` (`ichorUI.tls.caConfigMap/caSecret/caKey`) and never skips verification.
+- **Reload**: certificates reload on change through `certwatcher` (ADR 0094 amendment, built).
+- **Docs**: the Ingress-NGINX recipe uses `backend-protocol`, `proxy-ssl-verify`, `proxy-ssl-secret` (`namespace/name`), `proxy-ssl-name` and `proxy-ssl-server-name`; the reference describes `proxy-ssl-secret` as holding a client pair that "should also contain" `ca.crt`, so whether a CA-only Secret is accepted is part of T2. `BackendTLSPolicy` is `gateway.networking.k8s.io/v1`, Standard channel since Gateway API v1.4, same namespace as the Service, `ca.crt` ConfigMap as Core support. The guide for settings is `docs/guides/settings.md`.

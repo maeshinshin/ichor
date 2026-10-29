@@ -1,0 +1,305 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.21.0
+  name: machinereclaims.ichor.maesh.dev
+spec:
+  group: ichor.maesh.dev
+  names:
+    kind: MachineReclaim
+    listKind: MachineReclaimList
+    plural: machinereclaims
+    singular: machinereclaim
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.address
+      name: Address
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: MachineReclaim is the Schema for the machinereclaims API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: spec defines the desired state of MachineReclaim
+            properties:
+              address:
+                description: |-
+                  address is the one node to reclaim: an IP or host:port of its Talos API. Only this address is
+                  dialled; the endpoints in the talosconfig are ignored.
+                minLength: 1
+                type: string
+              clusterRef:
+                description: |-
+                  clusterRef optionally names the TalosCluster (same namespace) the machine is meant to join
+                  after the reset. The controller never writes it or that cluster; the UI API adds the address
+                  to the cluster's discovery addresses on the user's behalf when it creates the request.
+                properties:
+                  name:
+                    default: ""
+                    description: |-
+                      Name of the referent.
+                      This field is effectively required, but due to backwards compatibility is
+                      allowed to be empty. Instances of this type with an empty value here are
+                      almost certainly wrong.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
+              confirmClusterName:
+                description: confirmClusterName is the foreign cluster's name as typed
+                  by the user; only needed with force.
+                type: string
+              confirmUUID:
+                description: |-
+                  confirmUUID is the node's UUID as typed by the user. Empty until then; the webhook rejects a
+                  value that differs from status.inspection.uuid.
+                type: string
+              contextName:
+                description: contextName picks the talosconfig context; empty is the
+                  file's default.
+                type: string
+              credentialSecretRef:
+                description: |-
+                  credentialSecretRef names a Secret of type ichor.maesh.dev/foreign-talosconfig in this
+                  namespace. It is deleted when the request ends or expires.
+                minLength: 1
+                type: string
+              force:
+                description: |-
+                  force allows a control plane whose removal breaks the foreign etcd quorum or is the last of
+                  its cluster. It also needs confirmClusterName.
+                type: boolean
+              forceUngraceful:
+                description: forceUngraceful sends a non-graceful reset, for a foreign
+                  cluster that is dead.
+                type: boolean
+              ttl:
+                default: 15m
+                description: ttl is how long the request and its credential live.
+                  Default 15 minutes, at most 60.
+                type: string
+                x-kubernetes-validations:
+                - message: ttl must be between 1s and 60m
+                  rule: duration(self) > duration('0s') && duration(self) <= duration('60m')
+            required:
+            - address
+            - credentialSecretRef
+            type: object
+            x-kubernetes-validations:
+            - message: address and credentialSecretRef cannot change; make a new request
+              rule: self.address == oldSelf.address && self.credentialSecretRef ==
+                oldSelf.credentialSecretRef
+          status:
+            description: status defines the observed state of MachineReclaim
+            properties:
+              audit:
+                description: audit records who requested and confirmed.
+                properties:
+                  confirmedAt:
+                    description: confirmedAt is when the controller acted on the confirmation.
+                    format: date-time
+                    type: string
+                  confirmedBy:
+                    description: confirmedBy is the user that wrote confirmUUID, recorded
+                      by the webhook.
+                    type: string
+                  credentialDeletedAt:
+                    description: credentialDeletedAt is when the controller deleted
+                      the Secret.
+                    format: date-time
+                    type: string
+                  requestedBy:
+                    description: requestedBy is the Kubernetes user that created the
+                      request, recorded by the webhook.
+                    type: string
+                  resetSentAt:
+                    description: resetSentAt is set before the reset is sent; its
+                      presence refuses a second reset.
+                    format: date-time
+                    type: string
+                type: object
+              conditions:
+                description: conditions represent the current state of the request.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              expiresAt:
+                description: expiresAt is creation time plus ttl; after it the credential
+                  is gone and nothing is sent.
+                format: date-time
+                type: string
+              inspection:
+                description: inspection is the last read-only look at the node.
+                properties:
+                  clusterID:
+                    type: string
+                  clusterName:
+                    type: string
+                  clusterReachable:
+                    type: boolean
+                  etcdMembers:
+                    items:
+                      description: MachineReclaimEtcdMember is one member of the foreign
+                        cluster's etcd.
+                      properties:
+                        healthy:
+                          description: healthy is false when the member did not answer
+                            its health check.
+                          type: boolean
+                        hostname:
+                          type: string
+                        id:
+                          format: int64
+                          type: integer
+                      required:
+                      - id
+                      type: object
+                    type: array
+                  graceful:
+                    type: boolean
+                  hostname:
+                    type: string
+                  needsForce:
+                    type: boolean
+                  refusals:
+                    description: refusals are why the reset cannot be sent; empty
+                      means it can, once confirmed.
+                    items:
+                      type: string
+                    type: array
+                  role:
+                    type: string
+                  talosVersion:
+                    type: string
+                  uuid:
+                    type: string
+                  volumes:
+                    items:
+                      description: MachineReclaimVolume is an orphaned volume the
+                        reset does not wipe.
+                      properties:
+                        encrypted:
+                          description: encrypted volumes lose their key with the reset;
+                            their data becomes unreadable.
+                          type: boolean
+                        location:
+                          type: string
+                        name:
+                          type: string
+                        sizeBytes:
+                          format: int64
+                          type: integer
+                      required:
+                      - name
+                      type: object
+                    type: array
+                  warnings:
+                    items:
+                      type: string
+                    type: array
+                type: object
+              phase:
+                description: phase is where the request is.
+                enum:
+                - Inspecting
+                - AwaitingConfirmation
+                - Resetting
+                - WaitingForMaintenance
+                - Done
+                - Failed
+                - Expired
+                type: string
+              result:
+                description: result is the new maintenance address, or the scan hint,
+                  or why the request failed.
+                type: string
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

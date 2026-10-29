@@ -30,13 +30,20 @@ service ReclaimService {
   rpc ConfirmReclaim(ConfirmReclaimRequest) returns (ConfirmReclaimResponse);
 }
 
-message CanReclaimRequest {}
+message CanReclaimRequest {
+  // cluster is optional: the TalosCluster the caller wants to register the
+  // machine with. When set, cluster_allowed answers for it.
+  ObjectRef cluster = 1;
+}
 
 message CanReclaimResponse {
   // enabled is the installation switch (reclaim.enabled).
   bool enabled = 1;
   // allowed is the caller's RBAC; false when enabled is false.
   bool allowed = 2;
+  // cluster_allowed is true when the request named a cluster and the caller may
+  // get and update that TalosCluster (so CreateReclaim may register the address).
+  bool cluster_allowed = 3;
 }
 
 message CreateReclaimRequest {

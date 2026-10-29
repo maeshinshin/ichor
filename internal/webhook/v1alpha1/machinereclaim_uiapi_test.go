@@ -125,9 +125,8 @@ var _ = Describe("ReclaimService with the MachineReclaim webhook", Ordered, func
 	It("admits a create by a holder, with the audit annotation and the credential Secret the policy accepts", func() {
 		_, err := s.CreateReclaim(as(holder), connect.NewRequest(&pb.CreateReclaimRequest{
 			Address: addr, Talosconfig: []byte("tc"), Context: "ctx-1",
-			Cluster: &pb.ObjectRef{Namespace: ns, Name: "some-cluster"},
 		}))
-		Expect(err).To(HaveOccurred(), "registering the address on the cluster is a user write on talosclusters, which the reclaimer role does not grant, after the writes under test")
+		Expect(err).NotTo(HaveOccurred())
 
 		var list ichorv1alpha1.MachineReclaimList
 		Expect(k8sClient.List(ctx, &list, client.InNamespace(ns))).To(Succeed())
@@ -136,12 +135,40 @@ var _ = Describe("ReclaimService with the MachineReclaim webhook", Ordered, func
 		mr := list.Items[0]
 		Expect(mr.Annotations).To(HaveKeyWithValue(ichorv1alpha1.ReclaimRequestedByAnnotation, holder))
 		Expect(mr.Spec.ContextName).To(Equal("ctx-1"))
-		Expect(mr.Spec.ClusterRef).NotTo(BeNil())
-		Expect(mr.Spec.ClusterRef.Name).To(Equal("some-cluster"))
 
 		var sec corev1.Secret
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: mr.Spec.CredentialSecretRef}, &sec)).To(Succeed())
 		Expect(sec.Type).To(Equal(ichorv1alpha1.ReclaimCredentialSecretType))
+	})
+
+	It("refuses a holder who may not update the named cluster, and writes nothing", func() {
+		cluster := &pb.ObjectRef{Namespace: ns, Name: "some-cluster"}
+
+		res, err := s.CanReclaim(as(holder), connect.NewRequest(&pb.CanReclaimRequest{Cluster: cluster}))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Msg.GetAllowed()).To(BeTrue())
+		Expect(res.Msg.GetClusterAllowed()).To(BeFalse())
+
+		// The namespace is shared with the other specs: compare against what is there before.
+		var before ichorv1alpha1.MachineReclaimList
+		Expect(k8sClient.List(ctx, &before, client.InNamespace(ns))).To(Succeed())
+
+		var secretsBefore corev1.SecretList
+		Expect(k8sClient.List(ctx, &secretsBefore, client.InNamespace(ns))).To(Succeed())
+
+		_, err = s.CreateReclaim(as(holder), connect.NewRequest(&pb.CreateReclaimRequest{
+			Address: addr, Talosconfig: []byte("tc"), Cluster: cluster,
+		}))
+		Expect(connect.CodeOf(err)).To(Equal(connect.CodePermissionDenied))
+		Expect(err).To(MatchError(ContainSubstring("not add addresses to cluster")))
+
+		var list ichorv1alpha1.MachineReclaimList
+		Expect(k8sClient.List(ctx, &list, client.InNamespace(ns))).To(Succeed())
+		Expect(list.Items).To(HaveLen(len(before.Items)))
+
+		var secrets corev1.SecretList
+		Expect(k8sClient.List(ctx, &secrets, client.InNamespace(ns))).To(Succeed())
+		Expect(secrets.Items).To(HaveLen(len(secretsBefore.Items)))
 	})
 
 	It("denies a create by a user without the reclaim role", func() {

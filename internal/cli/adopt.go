@@ -40,6 +40,7 @@ var (
 	adoptCNIUnmanaged  bool
 	adoptTunnel        string
 	adoptPlanOnly      bool
+	adoptRequireIchor  bool
 	adoptSeed          string
 	adoptContract      string
 	adoptAcceptChanges bool
@@ -155,6 +156,7 @@ clusters keep the old CAs, but never starts one.`,
 
 			PlanOnly:         adoptPlanOnly,
 			WebhookWait:      adoptWaitTimeout,
+			RequireIchor:     adoptRequireIchor,
 			Seed:             cmp.Or(adoptSeed, adoptRecoverFrom),
 			ContractOverride: adoptContract,
 			ReadIdentity: func(ctx context.Context, address string) (controller.HardwareIdentity, error) {
@@ -199,6 +201,8 @@ func init() {
 		"how long to wait for Ichor's admission webhooks before giving up")
 	adoptCmd.Flags().StringVar(&adoptTunnel, "tunnel", "",
 		"tunnel protocol (vxlan or geneve) of the Cilium adopt installs on a cluster with no CNI; immutable afterwards")
+	adoptCmd.Flags().BoolVar(&adoptRequireIchor, "require-ichor", false,
+		"fail when Ichor is not installed (for example with Helm) instead of installing it")
 	adoptCmd.Flags().BoolVar(&adoptPlanOnly, "plan", false, "print the plan and write nothing")
 	adoptCmd.Flags().StringVar(&adoptSeed, "node", "",
 		"address of one control plane; adopt discovers the cluster's machines from its membership when the TalosCluster does not exist yet")

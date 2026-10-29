@@ -36,6 +36,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/controller"
+	ichorversion "github.com/maeshinshin/ichor/internal/version"
 	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
 	"github.com/maeshinshin/ichor/pkg/render"
@@ -94,6 +95,8 @@ type adoptDeps struct {
 	// WebhookWait is --wait-timeout: the bound of the wait for Ichor's admission webhooks.
 	// Zero means defaultAdoptWebhookWait.
 	WebhookWait time.Duration
+	// RequireIchor is --require-ichor: a cluster without Ichor is an error, not an install.
+	RequireIchor bool
 }
 
 // adoptState is everything the read-only phase established.
@@ -136,6 +139,12 @@ func (st *adoptState) needsTakeover() bool {
 // only), write, Cilium takeover, release of the hold. Nothing is
 // written before the operator consented to the plan, and nothing is applied to a node by adopt.
 func runAdopt(ctx context.Context, clusterName, namespace string, deps adoptDeps) error {
+	if deps.Ichor != nil || deps.RequireIchor {
+		if err := checkIchorPresence(ctx, deps.K8s, deps.Stderr, ichorversion.Version, deps.RequireIchor); err != nil {
+			return err
+		}
+	}
+
 	st, err := loadAdoption(ctx, clusterName, namespace, deps)
 	if err != nil {
 		return err

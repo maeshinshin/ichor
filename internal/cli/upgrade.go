@@ -53,6 +53,12 @@ func newUpgradeCmd(use, short string, kind pb.OperationKind) *cobra.Command {
 It shows which machines restart and in which order, and asks for confirmation unless --yes.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if kind == pb.OperationKind_OPERATION_KIND_ICHOR {
+				if err := refuseHelmManagedInstall(cmd.Context()); err != nil {
+					return err
+				}
+			}
+
 			return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
 				return runStartOperation(ctx, c, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), upgradeSpec(kind, args[0], upgradeFlags))
 			})
@@ -87,4 +93,16 @@ func init() {
 	}
 
 	markWrites(upgradeTalosCmd, upgradeKubernetesCmd, upgradeIchorCmd)
+}
+
+// refuseHelmManagedInstall stops a command that would run the installer Job when Helm owns the
+// install. Without a usable kubeconfig it cannot judge, and the command goes on
+// to report its own connection problems.
+func refuseHelmManagedInstall(ctx context.Context) error {
+	c, err := newKubeClient(kubeconfigPath)
+	if err != nil {
+		return nil //nolint:nilerr // see the doc comment
+	}
+
+	return refuseHelmManaged(ctx, c)
 }

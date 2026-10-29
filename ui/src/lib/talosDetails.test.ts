@@ -11,7 +11,7 @@ test('link speed is shown in Mbit/s or Gbit/s, and unknown speed as a dash', () 
 })
 
 test('a running healthy service is ok, a running unhealthy one is bad, unknown health is neutral', () => {
-  assert.equal(serviceTone({ state: 'Running', healthUnknown: false, healthy: true }), 'ok')
+  assert.equal(serviceTone({ state: 'Running', healthUnknown: false, healthy: true }), 'good')
   assert.equal(serviceTone({ state: 'Running', healthUnknown: false, healthy: false }), 'bad')
   assert.equal(serviceTone({ state: 'Running', healthUnknown: true, healthy: false }), 'neutral')
   assert.equal(serviceTone({ state: 'Failed', healthUnknown: true, healthy: false }), 'bad')

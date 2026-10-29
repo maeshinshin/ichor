@@ -1,7 +1,7 @@
 // Pure helpers for the Talos details card; no DOM, no preact,
 // so they run under `node --test`.
 
-export type Tone = 'ok' | 'bad' | 'neutral'
+export type Tone = 'good' | 'bad' | 'neutral'
 
 type ServiceLike = { state: string; healthUnknown: boolean; healthy: boolean }
 
@@ -18,7 +18,7 @@ export function serviceTone(s: ServiceLike): Tone {
   if (s.state === 'Failed') return 'bad'
   if (s.state !== 'Running') return 'neutral'
   if (s.healthUnknown) return 'neutral'
-  return s.healthy ? 'ok' : 'bad'
+  return s.healthy ? 'good' : 'bad'
 }
 
 export function sortServices<T extends ServiceLike & { id: string }>(services: readonly T[]): T[] {

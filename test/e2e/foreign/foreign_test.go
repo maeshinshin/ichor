@@ -292,7 +292,9 @@ func holdCleared(t *testing.T, c *foreign.Cluster) {
 // noCNIJob asserts the controller created no ichor-cni Job.
 func noCNIJob(t *testing.T, c *foreign.Cluster) {
 	t.Helper()
-	noCNIJob(t, c)
+	if jobs, _ := inner(c, "-n", crNS, "get", "jobs", "--no-headers"); strings.Contains(jobs, "ichor-cni") {
+		t.Errorf("an ichor-cni Job exists: %s", jobs)
+	}
 }
 
 // nodesReady asserts no Node of the foreign cluster is NotReady.

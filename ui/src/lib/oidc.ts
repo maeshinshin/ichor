@@ -85,9 +85,9 @@ export function clearToken() {
   }
 }
 
-type Discovery = { authorization_endpoint: string; token_endpoint: string }
+export type Discovery = { authorization_endpoint: string; token_endpoint: string }
 
-async function discover(issuer: string): Promise<Discovery> {
+export async function discover(issuer: string): Promise<Discovery> {
   const res = await fetch(`${issuer.replace(/\/$/, '')}/.well-known/openid-configuration`)
   if (!res.ok) throw new Error('OIDC discovery failed')
   return res.json()
@@ -134,7 +134,13 @@ export async function finishLogin(providers: AuthProvider[]): Promise<boolean> {
   const cfg = providers.find((p) => p.id === (pending.provider ?? 'oidc'))
   if (!cfg) return false
 
-  const d = await discover(cfg.issuer)
+  await exchangeCode(await discover(cfg.issuer), cfg, code, pending.verifier, pending.nonce)
+  return true
+}
+
+// exchangeCode trades an authorization code for the ID token at the token endpoint and stores it,
+// after checking the nonce. Shared by the redirect callback and the in-page sign-in.
+export async function exchangeCode(d: Discovery, cfg: AuthProvider, code: string, verifier: string, nonce: string) {
   const res = await fetch(d.token_endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -143,14 +149,13 @@ export async function finishLogin(providers: AuthProvider[]): Promise<boolean> {
       code,
       redirect_uri: redirectUriFor(cfg.id, window.location.origin),
       client_id: cfg.clientId,
-      code_verifier: pending.verifier,
+      code_verifier: verifier,
     }),
   })
   if (!res.ok) throw new Error('Login failed at the identity provider')
   const idToken = (await res.json()).id_token as string | undefined
-  if (!idToken || idTokenClaims(idToken)?.nonce !== pending.nonce) throw new Error('Login response did not match this session')
+  if (!idToken || idTokenClaims(idToken)?.nonce !== nonce) throw new Error('Login response did not match this session')
   sessionStorage.setItem(KEY, idToken)
-  return true
 }
 
 // signOut drops the ID token and reloads, which shows the sign-in screen. The issuer keeps no

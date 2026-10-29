@@ -182,7 +182,13 @@ func (a *cniKubeProxyAdvancer) upgradeChart(
 		salt += "/" + strconv.FormatInt(op.Status.LastRetry.Unix(), 10)
 	}
 
-	if done, err := a.runCiliumJob(ctx, cluster, op, salt,
+	// The upgrade reproduces the mode Cilium runs now, not a spec edit no switch has applied.
+	mode, err := currentKubeProxyMode(ctx, a.Reader, cluster)
+	if err != nil {
+		return false, err
+	}
+
+	if done, err := a.runCiliumJob(ctx, cluster, mode, op, salt,
 		"upgrading the Cilium release to chart "+target,
 		fmt.Sprintf("the Cilium Helm Job upgrading to chart %s is running", target)); err != nil || !done {
 		return false, err

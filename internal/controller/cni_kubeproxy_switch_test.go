@@ -30,9 +30,11 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/render"
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
@@ -196,7 +198,7 @@ func ageCondition(op *ichorv1alpha1.TalosOperation, condType string, by time.Dur
 }
 
 func cniJobExists(cluster *ichorv1alpha1.TalosCluster) bool {
-	hash, err := CNIValuesHash(cluster)
+	hash, err := CNIValuesHash(cluster, specMode(cluster))
 	Expect(err).NotTo(HaveOccurred())
 
 	err = k8sClient.Get(ctx, client.ObjectKey{Namespace: cniJobNamespace, Name: cniHelmJobName(cluster, hash)}, &batchv1.Job{})
@@ -213,7 +215,7 @@ func finishCNIJob(cluster *ichorv1alpha1.TalosCluster) {
 	var inst ichorv1alpha1.IchorInstallation
 	Expect(k8sClient.Get(ctx, client.ObjectKey{Name: ichorv1alpha1.IchorInstallationName}, &inst)).To(Succeed())
 
-	_, err := AdvanceCNIHelmJob(ctx, k8sClient, tmNamespace, cluster, &inst, "")
+	_, err := AdvanceCNIHelmJob(ctx, k8sClient, tmNamespace, cluster, specMode(cluster), &inst, "")
 	Expect(err).NotTo(HaveOccurred())
 
 	setJobCondition(cniJob(cluster), batchv1.JobComplete, "")
@@ -320,13 +322,13 @@ var _ = Describe("cniKubeProxyAdvancer", func() {
 		Expect(fetchCluster(cluster).Status.CNI).To(BeNil(), "the Talos side is not switched yet")
 
 		job := cniJob(cluster)
-		hash, err := CNIValuesHash(cluster)
+		hash, err := CNIValuesHash(cluster, specMode(cluster))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(job.Annotations).To(HaveKeyWithValue(CNIValuesHashAnnotation, hash))
 
 		other := cluster.DeepCopy()
 		other.Spec.CNI.KubeProxy = modeEnabled
-		otherHash, err := CNIValuesHash(other)
+		otherHash, err := CNIValuesHash(other, specMode(other))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(hash).NotTo(Equal(otherHash), "the Job carries the target mode's values")
 
@@ -353,6 +355,82 @@ var _ = Describe("cniKubeProxyAdvancer", func() {
 		Expect(done).To(BeFalse())
 		Expect(fake.applyCalls).To(HaveLen(1))
 		Expect(fetchCluster(cluster).Status.CNI.KubeProxy).To(Equal(modeReplaced))
+	})
+
+	It("a spec-only kube-proxy change flips nothing; the switch operation runs the Job, and the hand-over agrees afterwards", func() {
+		newCilium("false", true)
+		newKubeProxyDaemonSet(testK8sOld, 2, 2)
+
+		cluster := cniSwitchCluster(modeEnabled)
+		r := &CNIHandoverReconciler{Client: k8sClient, APIReader: k8sClient, Namespace: testIchorNamespace}
+
+		// Hand over at kubeProxy=enabled.
+		_, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
+		Expect(err).NotTo(HaveOccurred())
+		setJobCondition(cniJob(cluster), batchv1.JobComplete, "")
+		helmRelease(1, "deployed", effectiveValues(cluster))
+		_, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
+		Expect(err).NotTo(HaveOccurred())
+
+		before := fetchCluster(cluster).Status.CNI.AppliedValuesHash
+		Expect(before).NotTo(BeEmpty())
+		Expect(cniJobCount(cluster)).To(Equal(1))
+
+		// The spec is written, as `ichor cni kube-proxy replaced` does before it creates the operation.
+		edited := fetchCluster(cluster)
+		edited.Spec.CNI.KubeProxy = modeReplaced
+		edited.Annotations = map[string]string{ichorv1alpha1.TalosClusterConfirmKubeProxySwitchAnnotation: modeReplaced}
+		Expect(k8sClient.Update(ctx, edited)).To(Succeed())
+
+		cmVersion := ciliumConfigVersion()
+
+		for range 2 {
+			result, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(Equal(ctrl.Result{}))
+		}
+
+		Expect(cniJobCount(cluster)).To(Equal(1), "the spec write alone starts no Job")
+		Expect(ciliumConfigVersion()).To(Equal(cmVersion))
+		Expect(fetchCluster(cluster).Status.CNI.AppliedValuesHash).To(Equal(before))
+
+		// The operation: Cilium first, inside the operation, under the verification clock.
+		cluster = fetchCluster(cluster)
+		cp := newK8sControlPlane(cluster.Name, "kp-spec")
+		fake := &fakeTalosClient{current: nodeConfig(cluster, cp, modeEnabled)}
+		adv := newKubeProxyAdvancer(map[string]*fakeTalosClient{cp.Name: fake}, &fakeKubeProxyAdmin{})
+
+		op := &ichorv1alpha1.TalosOperation{}
+		done, err := adv.Advance(ctx, cluster, cp, op)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(done).To(BeFalse())
+		Expect(cniJobCount(cluster)).To(Equal(2), "the operation runs the Job")
+		Expect(fake.applyCalls).To(BeEmpty())
+
+		job := cniJob(cluster)
+		Expect(job.Spec.Template.Spec.Containers[0].Args).To(ContainElement("--kube-proxy=replaced"))
+		Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionVerifyingNewSide).Message).To(ContainSubstring("Helm Job"))
+
+		setJobCondition(job, batchv1.JobComplete, "")
+		setCiliumKPR("true")
+
+		done, err = adv.Advance(ctx, cluster, cp, op)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(done).To(BeFalse())
+		Expect(fetchCluster(cluster).Status.CNI.KubeProxy).To(Equal(modeReplaced))
+
+		// The hand-over now computes the replaced values (Cilium runs replaced, status says replaced):
+		// it adopts the switch's finished Job and does not revert it.
+		replaced := fetchCluster(cluster)
+		helmRelease(2, "deployed", effectiveValues(replaced))
+
+		_, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
+		Expect(err).NotTo(HaveOccurred())
+
+		hash, err := CNIValuesHash(replaced, cni.KubeProxyReplaced)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(fetchCluster(cluster).Status.CNI.AppliedValuesHash).To(Equal(hash))
+		Expect(cniJobCount(cluster)).To(Equal(2), "no further Job")
 	})
 
 	It("replaced: a failed Helm Job pauses the operation with its reason and changes nothing", func() {

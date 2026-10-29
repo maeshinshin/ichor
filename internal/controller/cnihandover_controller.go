@@ -44,6 +44,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/clusterlock"
+	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
 	"github.com/maeshinshin/ichor/pkg/render"
@@ -133,7 +134,14 @@ func (r *CNIHandoverReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, r.markCNIUnsupported(ctx, &cluster)
 	}
 
-	hash, err := CNIValuesHash(&cluster)
+	// The mode Cilium runs now, not spec.cni.kubeProxy: a spec edit alone must not flip Cilium. Only
+	// the kube-proxy switch operation applies the spec's mode (ADR 0066).
+	mode, err := currentKubeProxyMode(ctx, r.reader(), &cluster)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	hash, err := CNIValuesHash(&cluster, mode)
 	if err != nil {
 		// A values change fixes it and triggers a new reconcile; retrying now would not.
 		return ctrl.Result{}, r.setCondition(ctx, &cluster, ichorv1alpha1.ConditionCNIValuesApplied,
@@ -163,13 +171,13 @@ func (r *CNIHandoverReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		}
 	}
 
-	return r.runJob(ctx, &cluster, hash, handedOver)
+	return r.runJob(ctx, &cluster, mode, hash, handedOver)
 }
 
 // runJob advances the Helm Job for hash under the cluster operation lock, and on completion
 // records the result.
 func (r *CNIHandoverReconciler) runJob(
-	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, hash string, handedOver bool,
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode, hash string, handedOver bool,
 ) (ctrl.Result, error) {
 	var inst ichorv1alpha1.IchorInstallation
 	if err := r.Get(ctx, types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}, &inst); err != nil {
@@ -198,7 +206,7 @@ func (r *CNIHandoverReconciler) runJob(
 		return ctrl.Result{}, err
 	}
 
-	done, err := AdvanceCNIHelmJob(ctx, r.Client, r.Namespace, cluster, &inst, "")
+	done, err := AdvanceCNIHelmJob(ctx, r.Client, r.Namespace, cluster, mode, &inst, "")
 
 	var failed *CNIHelmJobFailedError
 

@@ -36,6 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/cni"
 )
 
 const cniTestName = "home"
@@ -46,6 +47,12 @@ func cniTestInstallation() *ichorv1alpha1.IchorInstallation {
 	inst.Spec.InstallerRepository = "ghcr.io/maeshinshin/ichor-installer"
 
 	return inst
+}
+
+// specMode is the kube-proxy mode cluster's spec names: what a test that has no cilium-config to
+// read stands in for the mode Cilium runs, and what a switch's target is.
+func specMode(c *ichorv1alpha1.TalosCluster) cni.KubeProxyMode {
+	return cni.KubeProxyMode(c.Spec.CNI.KubeProxy)
 }
 
 func cniTestCluster(values string) *ichorv1alpha1.TalosCluster {
@@ -62,12 +69,12 @@ func cniTestCluster(values string) *ichorv1alpha1.TalosCluster {
 func TestCNIHelmJobShape(t *testing.T) {
 	cluster := cniTestCluster("")
 
-	hash, err := CNIValuesHash(cluster)
+	hash, err := CNIValuesHash(cluster, specMode(cluster))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	job := newCNIHelmJob("ichor-system", cniHelmJobName(cluster, hash), cluster, cniTestInstallation(), hash)
+	job := newCNIHelmJob("ichor-system", cniHelmJobName(cluster, hash), cluster, cni.KubeProxyEnabled, cniTestInstallation(), hash)
 	pod := job.Spec.Template.Spec
 
 	// kube-system: hostNetwork is refused by Talos's default Pod Security admission (baseline) in
@@ -89,7 +96,7 @@ func TestCNIHelmJobShape(t *testing.T) {
 		t.Errorf("image = %q, want the installer image at spec.version", c.Image)
 	}
 
-	if want := []string{"cni", "helm", "apply", "--cluster=home", "--namespace=clusters", "--storage-namespace=ichor-system"}; !slices.Equal(c.Args, want) {
+	if want := []string{"cni", "helm", "apply", "--cluster=home", "--namespace=clusters", "--kube-proxy=enabled", "--storage-namespace=ichor-system"}; !slices.Equal(c.Args, want) {
 		t.Errorf("args = %v, want %v", c.Args, want)
 	}
 
@@ -129,22 +136,22 @@ func TestCNIHelmJobHasNoNetworkPolicy(t *testing.T) {
 }
 
 func TestCNIValuesHashFollowsTheEffectiveValues(t *testing.T) {
-	base, err := CNIValuesHash(cniTestCluster(""))
+	base, err := CNIValuesHash(cniTestCluster(""), "")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	same, _ := CNIValuesHash(cniTestCluster("{}"))
+	same, _ := CNIValuesHash(cniTestCluster("{}"), "")
 	if same != base {
 		t.Error("empty user values changed the hash")
 	}
 
-	changed, err := CNIValuesHash(cniTestCluster(`{"debug":{"enabled":true}}`))
+	changed, err := CNIValuesHash(cniTestCluster(`{"debug":{"enabled":true}}`), "")
 	if err != nil || changed == base {
 		t.Errorf("a user value did not change the hash (err %v)", err)
 	}
 
-	if _, err := CNIValuesHash(cniTestCluster(`{"ipam":{"mode":"x"}}`)); err == nil {
+	if _, err := CNIValuesHash(cniTestCluster(`{"ipam":{"mode":"x"}}`), ""); err == nil {
 		t.Error("an owned key was hashed instead of refused")
 	}
 }
@@ -181,26 +188,26 @@ func TestAdvanceCNIHelmJob(t *testing.T) {
 	inst := cniTestInstallation()
 	cluster := cniTestCluster("")
 
-	hash, _ := CNIValuesHash(cluster)
+	hash, _ := CNIValuesHash(cluster, specMode(cluster))
 	name := cniHelmJobName(cluster, hash)
 
-	if done, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, inst, ""); done || err != nil {
+	if done, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, specMode(cluster), inst, ""); done || err != nil {
 		t.Fatalf("first call = %t, %v; want it to create the Job and not be done", done, err)
 	}
 
-	if done, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, inst, ""); done || err != nil {
+	if done, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, specMode(cluster), inst, ""); done || err != nil {
 		t.Fatalf("running Job = %t, %v; want not done, no error", done, err)
 	}
 
 	setCNIJobCondition(t, c, kubeSystemNamespace, name, batchv1.JobComplete)
 
-	if done, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, inst, ""); !done || err != nil {
+	if done, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, specMode(cluster), inst, ""); !done || err != nil {
 		t.Fatalf("completed Job = %t, %v; want done", done, err)
 	}
 
 	// Other values: the completed Job proves nothing for them, a new Job is created.
 	edited := cniTestCluster(`{"debug":{"enabled":true}}`)
-	if done, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", edited, inst, ""); done || err != nil {
+	if done, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", edited, specMode(edited), inst, ""); done || err != nil {
 		t.Fatalf("edited values = %t, %v; want a new Job and not done", done, err)
 	}
 
@@ -215,15 +222,15 @@ func TestAdvanceCNIHelmJobReportsAFailedJob(t *testing.T) {
 	c := cniFakeClient(t)
 	cluster := cniTestCluster("")
 
-	hash, _ := CNIValuesHash(cluster)
+	hash, _ := CNIValuesHash(cluster, specMode(cluster))
 
-	if _, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, cniTestInstallation(), ""); err != nil {
+	if _, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, specMode(cluster), cniTestInstallation(), ""); err != nil {
 		t.Fatal(err)
 	}
 
 	setCNIJobCondition(t, c, kubeSystemNamespace, cniHelmJobName(cluster, hash), batchv1.JobFailed)
 
-	_, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, cniTestInstallation(), "")
+	_, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, specMode(cluster), cniTestInstallation(), "")
 	if err == nil || !strings.Contains(err.Error(), "failed") {
 		t.Fatalf("error = %v, want the Job's failure", err)
 	}
@@ -236,10 +243,10 @@ func TestAdvanceCNIHelmJobFailsFastWhenNoPodIsCreated(t *testing.T) {
 	c := cniFakeClient(t)
 	cluster := cniTestCluster("")
 
-	hash, _ := CNIValuesHash(cluster)
+	hash, _ := CNIValuesHash(cluster, specMode(cluster))
 	name := cniHelmJobName(cluster, hash)
 
-	if _, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, cniTestInstallation(), ""); err != nil {
+	if _, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, specMode(cluster), cniTestInstallation(), ""); err != nil {
 		t.Fatal(err)
 	}
 
@@ -249,7 +256,7 @@ func TestAdvanceCNIHelmJobFailsFastWhenNoPodIsCreated(t *testing.T) {
 	}
 
 	// Within the grace period a Job without a pod is just starting.
-	if done, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, cniTestInstallation(), ""); done || err != nil {
+	if done, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, specMode(cluster), cniTestInstallation(), ""); done || err != nil {
 		t.Fatalf("young Job = %t, %v; want not done, no error", done, err)
 	}
 
@@ -259,7 +266,7 @@ func TestAdvanceCNIHelmJobFailsFastWhenNoPodIsCreated(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, cniTestInstallation(), "")
+	_, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, specMode(cluster), cniTestInstallation(), "")
 
 	var failed *CNIHelmJobFailedError
 	if !errors.As(err, &failed) || !failed.NoPod || failed.JobName != name {
@@ -271,7 +278,7 @@ func TestAdvanceCNIHelmJobFailsFastWhenNoPodIsCreated(t *testing.T) {
 	}
 
 	// The next pass starts a fresh Job.
-	if done, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, cniTestInstallation(), ""); done || err != nil {
+	if done, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, specMode(cluster), cniTestInstallation(), ""); done || err != nil {
 		t.Fatalf("after removal = %t, %v; want a new Job and not done", done, err)
 	}
 }

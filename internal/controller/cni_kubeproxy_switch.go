@@ -490,8 +490,9 @@ func (a *cniKubeProxyAdvancer) enableTail(
 
 // requireCilium makes Cilium serve (or stop serving) Services as want says and reports whether it
 // does: Ichor owns the release (ADR 0099), so it runs the Cilium Helm Job for the cluster's
-// effective values (spec.cni.kubeProxy is already the target, and kubeProxyReplacement and
-// k8sService* derive from it), then verifies cilium-config and the agents' rollout. A failed Job is
+// effective values for the mode want (the only place the spec's mode is applied: the hand-over
+// reconciler keeps the mode Cilium runs now, so a spec edit alone changes nothing; kubeProxyReplacement
+// and k8sService* derive from the mode), then verifies cilium-config and the agents' rollout. A failed Job is
 // an error, which pauses the operation with the Job's reason. Every wait is on the verification clock.
 //
 // ponytail: a finished Job for the same values (same name) from an earlier switch within its 24 h
@@ -500,7 +501,7 @@ func (a *cniKubeProxyAdvancer) requireCilium(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, op *ichorv1alpha1.TalosOperation,
 	want cni.KubeProxyMode,
 ) (bool, error) {
-	if done, err := a.runCiliumJob(ctx, cluster, op, "",
+	if done, err := a.runCiliumJob(ctx, cluster, want, op, "",
 		fmt.Sprintf("applying kube-proxy mode %q to the Cilium release", want),
 		fmt.Sprintf("the Cilium Helm Job applying kube-proxy mode %q is running", want)); err != nil || !done {
 		return false, err
@@ -531,14 +532,15 @@ func (a *cniKubeProxyAdvancer) requireCilium(
 // it has completed; while it runs the operation waits on the verification clock with running as
 // the message, and a failure is wrapped with doing.
 func (a *cniKubeProxyAdvancer) runCiliumJob(
-	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, op *ichorv1alpha1.TalosOperation, salt, doing, running string,
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode, op *ichorv1alpha1.TalosOperation,
+	salt, doing, running string,
 ) (bool, error) {
 	var inst ichorv1alpha1.IchorInstallation
 	if err := a.Reader.Get(ctx, types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}, &inst); err != nil {
 		return false, fmt.Errorf("reading IchorInstallation %q for the Cilium Helm Job: %w", ichorv1alpha1.IchorInstallationName, err)
 	}
 
-	done, err := AdvanceCNIHelmJob(ctx, a.Client, a.ControllerNamespace, cluster, &inst, salt)
+	done, err := AdvanceCNIHelmJob(ctx, a.Client, a.ControllerNamespace, cluster, mode, &inst, salt)
 	if err != nil {
 		return false, fmt.Errorf("%s: %w", doing, err)
 	}

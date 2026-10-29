@@ -31,6 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
 )
 
@@ -45,6 +46,7 @@ var cniHelmCmd = &cobra.Command{
 var cniHelmApplyOpts struct {
 	Cluster          string
 	StorageNamespace string
+	KubeProxy        string
 	Timeout          time.Duration
 }
 
@@ -72,7 +74,7 @@ while Cilium restarts.`,
 
 		return runCNIHelmApply(cmd.Context(), c, cfg, types.NamespacedName{
 			Namespace: apiOpts.Namespace, Name: cniHelmApplyOpts.Cluster,
-		}, cniHelmApplyOpts.Timeout, cmd.OutOrStdout())
+		}, cniHelmApplyOpts.KubeProxy, cniHelmApplyOpts.Timeout, cmd.OutOrStdout())
 	},
 }
 
@@ -109,14 +111,20 @@ func newHelmConfig(kubeconfig, storageNamespace string, log io.Writer) (*action.
 // Helm configuration over the memory driver.
 func runCNIHelmApply(
 	ctx context.Context, c client.Client, cfg *action.Configuration, key types.NamespacedName,
-	timeout time.Duration, out io.Writer,
+	kubeProxy string, timeout time.Duration, out io.Writer,
 ) error {
 	var cluster ichorv1alpha1.TalosCluster
 	if err := c.Get(ctx, key, &cluster); err != nil {
 		return fmt.Errorf("reading TalosCluster %s: %w", key, err)
 	}
 
-	vals, err := cilium.EffectiveValuesFor(&cluster)
+	// The controller names the mode the Job applies (the cluster's current one, or a switch's
+	// target); only a hand-run command without --kube-proxy falls back to the spec's.
+	if kubeProxy == "" {
+		kubeProxy = cluster.Spec.CNI.KubeProxy
+	}
+
+	vals, err := cilium.EffectiveValuesForMode(&cluster, cni.KubeProxyMode(kubeProxy))
 	if err != nil {
 		return err
 	}
@@ -145,6 +153,7 @@ func init() {
 	f := cniHelmApplyCmd.Flags()
 	f.StringVar(&cniHelmApplyOpts.Cluster, "cluster", "", "name of the TalosCluster whose Cilium values apply (in --namespace)")
 	f.StringVar(&cniHelmApplyOpts.StorageNamespace, "storage-namespace", ichorControllerNamespace, "namespace Helm keeps the release record (a Secret) in")
+	f.StringVar(&cniHelmApplyOpts.KubeProxy, "kube-proxy", "", "kube-proxy mode to apply (enabled or replaced); default the cluster's spec.cni.kubeProxy")
 	f.DurationVar(&cniHelmApplyOpts.Timeout, "timeout", cilium.DefaultApplyTimeout, "how long to wait for Cilium's workloads to roll out")
 	_ = cniHelmApplyCmd.MarkFlagRequired("cluster")
 }

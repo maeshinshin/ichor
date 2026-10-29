@@ -150,6 +150,13 @@ func EffectiveValues(user map[string]any, kubeProxy cni.KubeProxyMode, tunnel st
 // spec.cni.kubeProxy (empty reads as enabled, the CRD default), spec.cni.tunnel
 // and spec.cni.cilium.values.
 func EffectiveValuesFor(cluster *ichorv1alpha1.TalosCluster) (map[string]any, error) {
+	return EffectiveValuesForMode(cluster, cni.KubeProxyMode(cluster.Spec.CNI.KubeProxy))
+}
+
+// EffectiveValuesForMode is EffectiveValuesFor with the kube-proxy mode given instead of read from
+// spec.cni.kubeProxy: the controller applies the mode the cluster currently runs, and only a
+// kube-proxy switch applies the spec's (ADR 0066). An empty mode reads as enabled.
+func EffectiveValuesForMode(cluster *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode) (map[string]any, error) {
 	c := cluster.Spec.CNI
 
 	var user map[string]any
@@ -160,7 +167,6 @@ func EffectiveValuesFor(cluster *ichorv1alpha1.TalosCluster) (map[string]any, er
 		}
 	}
 
-	mode := cni.KubeProxyMode(c.KubeProxy)
 	if mode == "" {
 		mode = cni.KubeProxyEnabled
 	}

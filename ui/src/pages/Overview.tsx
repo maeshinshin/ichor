@@ -1,11 +1,14 @@
 import type { ComponentChildren } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { CircleXIcon, EllipsisIcon, PlusIcon, TriangleAlertIcon } from 'lucide-preact'
+import { ChevronsUpDownIcon, CircleXIcon, EllipsisIcon, PlusIcon, TriangleAlertIcon } from 'lucide-preact'
 import { Alert } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemSeparator, ItemTitle } from '@/components/ui/item'
+import { Progress } from '@/components/ui/progress'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { BackupNow } from '@/components/BackupNow'
@@ -15,7 +18,6 @@ import { OperationControls } from '@/components/OperationControls'
 import { Field, Fields } from '@/components/PageHeader'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
 import { StartOperationDialog } from '@/components/StartOperationDialog'
-import { StatusText } from '@/components/Status'
 import { HandoverPhase, RolloutKind, type Cluster } from '@/gen/ichor/v1alpha1/cluster_pb'
 import { MachineApprovalState, MachineRole, type Machine } from '@/gen/ichor/v1alpha1/machine_pb'
 import { OperationKind, type EtcdBackup, type Operation } from '@/gen/ichor/v1alpha1/operation_pb'
@@ -205,9 +207,9 @@ function Home({
                       {a.kind === 'pending' && (
                         <>
                           <span class="font-medium">{t('home.attnPending', { n: a.count })}</span>
-                          <Link to="/nodes" class="font-medium underline-offset-4 hover:underline">
-                            {t('home.review')}
-                          </Link>
+                          <Button asChild variant="link" size="sm">
+                            <Link to="/nodes">{t('home.review')}</Link>
+                          </Button>
                         </>
                       )}
                       {a.kind === 'config' && (
@@ -221,9 +223,9 @@ function Home({
                           <span class="font-medium">{t(a.kind === 'opFailed' ? 'home.attnOpFailed' : 'home.attnOpPaused')}</span>
                           <div class="flex flex-wrap items-center gap-3">
                             {current.op.ref && (
-                              <Link to={`/operations/${current.op.ref.name}`} class="font-medium underline-offset-4 hover:underline">
-                                {t('home.open')}
-                              </Link>
+                              <Button asChild variant="link" size="sm">
+                                <Link to={`/operations/${current.op.ref.name}`}>{t('home.open')}</Link>
+                              </Button>
                             )}
                             <OperationControls op={current.op} onChanged={reloadCluster} onDeleted={reloadCluster} showDelete={false} />
                           </div>
@@ -237,7 +239,7 @@ function Home({
           </ul>
         )}
 
-        <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div class="grid auto-rows-fr grid-cols-2 gap-3 lg:grid-cols-4">
           <Tile
             label={t('overview.tile.nodes')}
             target={targets.nodes}
@@ -265,37 +267,46 @@ function Home({
             <CardHeader>
               <CardTitle>{t('home.recent')}</CardTitle>
               <CardAction>
-                <Link to="/operations" class="text-sm text-muted-foreground underline-offset-4 hover:underline">
-                  {t('overview.viewAll')}
-                </Link>
+                <Button asChild variant="link" size="sm">
+                  <Link to="/operations">{t('overview.viewAll')}</Link>
+                </Button>
               </CardAction>
             </CardHeader>
             <CardContent>
               {recent.length === 0 ? (
-                <p class="text-muted-foreground">{t('ops.recentNone')}</p>
+                <EmptyNote>{t('ops.recentNone')}</EmptyNote>
               ) : (
-                <ul class="divide-y">
-                  {recent.map(({ op }) => {
-                    const state = operationState(op.phase, op.failureReason)
-                    return (
-                      <li key={op.ref?.name} class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2 first:pt-0 last:pb-0">
-                        <div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-                          {op.ref ? (
-                            <Link to={`/operations/${op.ref.name}`} class="font-medium hover:underline">
-                              {enumLabel(OperationKind, op.kind)}
-                            </Link>
-                          ) : (
-                            enumLabel(OperationKind, op.kind)
-                          )}
-                          <StatusText tone={opStateTone(state)}>{t(`ops.state.${state}`)}</StatusText>
-                        </div>
-                        <span class="text-xs text-muted-foreground" title={t('overview.colStarted')}>
-                          {formatTimestamp(op.createdAt)}
-                        </span>
-                      </li>
-                    )
-                  })}
-                </ul>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{t('ops.colKind')}</TableHead>
+                      <TableHead>{t('ops.colState')}</TableHead>
+                      <TableHead>{t('overview.colStarted')}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {recent.map(({ op }) => {
+                      const state = operationState(op.phase, op.failureReason)
+                      return (
+                        <TableRow key={op.ref?.name}>
+                          <TableCell>
+                            {op.ref ? (
+                              <Button asChild variant="link" size="sm">
+                                <Link to={`/operations/${op.ref.name}`}>{enumLabel(OperationKind, op.kind)}</Link>
+                              </Button>
+                            ) : (
+                              enumLabel(OperationKind, op.kind)
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={toneVariant[opStateTone(state)]}>{t(`ops.state.${state}`)}</Badge>
+                          </TableCell>
+                          <TableCell>{formatTimestamp(op.createdAt)}</TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
               )}
             </CardContent>
           </Card>
@@ -306,23 +317,23 @@ function Home({
                 <CardTitle>{t('overview.tile.nodes')}</CardTitle>
                 {approved.length > 5 && (
                   <CardAction>
-                    <Link to="/nodes" class="text-sm text-muted-foreground underline-offset-4 hover:underline">
-                      {t('overview.viewAllNodes', { n: approved.length })}
-                    </Link>
+                    <Button asChild variant="link" size="sm">
+                      <Link to="/nodes">{t('overview.viewAllNodes', { n: approved.length })}</Link>
+                    </Button>
                   </CardAction>
                 )}
               </CardHeader>
               <CardContent>
                 {machines === null ? (
-                  <p class="text-muted-foreground">-</p>
+                  <p>-</p>
                 ) : approved.length === 0 ? (
-                  <p class="text-muted-foreground">{t('overview.nodesNone')}</p>
+                  <EmptyNote>{t('overview.nodesNone')}</EmptyNote>
                 ) : (
-                  <ul class="divide-y">
-                    {approved.slice(0, 5).map((m) => (
-                      <NodeRow key={m.ref?.name} m={m} />
+                  <ItemGroup>
+                    {approved.slice(0, 5).map((m, i) => (
+                      <NodeRow key={m.ref?.name} m={m} first={i === 0} />
                     ))}
-                  </ul>
+                  </ItemGroup>
                 )}
               </CardContent>
             </Card>
@@ -332,29 +343,47 @@ function Home({
                 <CardTitle>{t('home.versions')}</CardTitle>
               </CardHeader>
               <CardContent>
-                <ul class="divide-y">
+                <ItemGroup>
                     <VersionRow name={t('ops.row.talos')} installed={cluster.talosVersion}>
                       <StartOperationDialog kind="talos" cluster={ref} current={cluster.talosVersion} label={t('ops.action.upgrade')} disabled={!!busy} />
                     </VersionRow>
+                    <ItemSeparator />
                     <VersionRow name={t('ops.row.kubernetes')} installed={cluster.kubernetesVersion}>
                       <StartOperationDialog kind="kubernetes" cluster={ref} current={cluster.kubernetesVersion} label={t('ops.action.upgrade')} disabled={!!busy} />
                     </VersionRow>
+                    <ItemSeparator />
                     <VersionRow name={t('ops.row.ichor')} installed={ichorVersion ?? t('ops.installedUnknown')}>
                       <StartOperationDialog kind="ichor" cluster={ref} current={ichorVersion ?? ''} label={t('ops.action.upgrade')} disabled={!!busy} />
                     </VersionRow>
+                    <ItemSeparator />
                     <VersionRow name={t('ops.row.cni')} installed={t(kubeProxy === 'replaced' ? 'ops.modeReplaced' : 'ops.modeEnabled')}>
                       <StartOperationDialog kind="cni" cluster={ref} current={kubeProxy} label={t('ops.action.switch')} disabled={!!busy} />
                     </VersionRow>
-                </ul>
-                {busyReason && <p class="mt-2 text-xs text-muted-foreground">{busyReason}</p>}
+                </ItemGroup>
               </CardContent>
+              {busyReason && (
+                <CardFooter>
+                  <CardDescription>{busyReason}</CardDescription>
+                </CardFooter>
+              )}
             </Card>
           </div>
         </div>
 
-        <details class="rounded-lg border bg-card px-4 py-3">
-          <summary class="cursor-pointer font-medium">{t('home.details')}</summary>
-          <div class="mt-4 space-y-6">
+        <Collapsible>
+          <Card>
+            <CardHeader>
+              <CardTitle>{t('home.details')}</CardTitle>
+              <CardAction>
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="icon-sm" aria-label={t('home.details')}>
+                    <ChevronsUpDownIcon />
+                  </Button>
+                </CollapsibleTrigger>
+              </CardAction>
+            </CardHeader>
+            <CollapsibleContent>
+              <CardContent class="space-y-4">
             <Fields>
               <Field label={t('home.endpoint')} value={cluster.endpoint} />
               <Field
@@ -362,12 +391,12 @@ function Home({
                 value={`${cluster.controlPlaneCount}${cluster.controlPlaneSchedulable ? ` ${t('clusters.schedulable')}` : ''}`}
               />
             </Fields>
-            <section class="space-y-2">
-              <h3 class="font-medium">{t('cluster.conditions')}</h3>
+            <Card size="sm">
+<CardHeader><CardTitle>{t('cluster.conditions')}</CardTitle></CardHeader><CardContent>
               <ConditionList conditions={cluster.conditions} />
-            </section>
-            <section class="space-y-2">
-              <h3 class="font-medium">{t('cluster.rollout')}</h3>
+            </CardContent></Card>
+            <Card size="sm">
+<CardHeader><CardTitle>{t('cluster.rollout')}</CardTitle></CardHeader><CardContent>
               {cluster.rollout ? (
                 <Fields>
                   <Field label={t('cluster.rolloutKind')} value={enumLabel(RolloutKind, cluster.rollout.kind)} />
@@ -379,9 +408,9 @@ function Home({
               ) : (
                 <EmptyNote>{t('cluster.noRollout')}</EmptyNote>
               )}
-            </section>
-            <section class="space-y-2">
-              <h3 class="font-medium">{t('cluster.handover')}</h3>
+            </CardContent></Card>
+            <Card size="sm">
+<CardHeader><CardTitle>{t('cluster.handover')}</CardTitle></CardHeader><CardContent>
               {cluster.handovers.length === 0 ? (
                 <EmptyNote>{t('cluster.noHandover')}</EmptyNote>
               ) : (
@@ -404,9 +433,8 @@ function Home({
                   </TableBody>
                 </Table>
               )}
-            </section>
-          </div>
-        </details>
+            </CardContent></Card>
+</CardContent></CollapsibleContent></Card></Collapsible>
       </div>
     </TooltipProvider>
   )
@@ -416,7 +444,7 @@ function Home({
 // The whole tile leads somewhere: a page, or the versions card further down.
 function Tile({ label, value, sub, badge, target }: { label: string; value: string; sub?: ComponentChildren; badge?: string; target: TileTarget }) {
   const body = (
-    <Card size="sm">
+    <Card size="sm" className="h-full">
       <CardHeader>
         <CardDescription>{label}</CardDescription>
         <CardTitle>{value}</CardTitle>
@@ -431,51 +459,68 @@ function Tile({ label, value, sub, badge, target }: { label: string; value: stri
   )
   if (target.kind === 'route') {
     return (
-      <Link to={target.to} class="block min-w-0">
+      <Link to={target.to} class="block h-full min-w-0">
         {body}
       </Link>
     )
   }
   return (
-    <button type="button" class="block w-full min-w-0 text-left" onClick={() => document.getElementById(target.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
+    <button type="button" class="block h-full w-full min-w-0 text-left" onClick={() => document.getElementById(target.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
       {body}
     </button>
   )
 }
 
-function NodeRow({ m }: { m: Machine }) {
+// A state is a Badge: destructive for bad, secondary for good and running, outline otherwise.
+const toneVariant: Record<Tone, 'secondary' | 'destructive' | 'outline'> = {
+  good: 'secondary',
+  progress: 'secondary',
+  bad: 'destructive',
+  warn: 'outline',
+  neutral: 'outline',
+}
+
+function NodeRow({ m, first }: { m: Machine; first: boolean }) {
   const t = useT()
   const ready = readyOf(m)
   const tone: Tone = ready ? conditionStatusTone(ready.type, ready.status) : 'neutral'
   const word = !ready ? t('overview.nodeUnknown') : ready.status === 'True' ? t('overview.nodeReady') : t('overview.nodeNotReady')
   // The hostname, else the node name; the machine's UUID name is only the link target.
   const name = machineDisplayName(m)
+  const body = (
+    <>
+      <ItemContent>
+        <ItemTitle>{name}</ItemTitle>
+        <ItemDescription>{enumLabel(MachineRole, m.role)}</ItemDescription>
+      </ItemContent>
+      <ItemActions>
+        <Badge variant={toneVariant[tone]}>{word}</Badge>
+      </ItemActions>
+    </>
+  )
   return (
-    <li class="flex items-center justify-between gap-x-4 py-2 first:pt-0 last:pb-0">
-      <div class="min-w-0">
-        {m.ref ? (
-          <Link to={`/nodes/${m.ref.name}`} class="block truncate font-medium hover:underline">
-            {name}
-          </Link>
-        ) : (
-          name
-        )}
-        <p class="text-xs text-muted-foreground">{enumLabel(MachineRole, m.role)}</p>
-      </div>
-      <StatusText tone={tone}>{word}</StatusText>
-    </li>
+    <>
+      {!first && <ItemSeparator />}
+      {m.ref ? (
+        <Item asChild>
+          <Link to={`/nodes/${m.ref.name}`}>{body}</Link>
+        </Item>
+      ) : (
+        <Item>{body}</Item>
+      )}
+    </>
   )
 }
 
 function VersionRow({ name, installed, children }: { name: string; installed: string; children: ComponentChildren }) {
   return (
-    <li class="flex items-center justify-between gap-x-3 py-2 first:pt-0 last:pb-0">
-      <div class="min-w-0">
-        <p class="font-medium">{name}</p>
-        <p class="text-sm text-muted-foreground [overflow-wrap:anywhere]">{installed || '-'}</p>
-      </div>
-      <div class="shrink-0">{children}</div>
-    </li>
+    <Item>
+      <ItemContent>
+        <ItemTitle>{name}</ItemTitle>
+        <ItemDescription>{installed || '-'}</ItemDescription>
+      </ItemContent>
+      <ItemActions>{children}</ItemActions>
+    </Item>
   )
 }
 
@@ -489,8 +534,11 @@ function ActiveProgress({ row, total }: { row: Row; total: number }) {
     op.kind !== OperationKind.ICHOR && op.kind !== OperationKind.CONFIG && op.kind !== OperationKind.NODE && op.kind !== OperationKind.ETCD_RESTORE && total > 0
   return (
     <>
-      {tracksNodes ? t('ops.currentNodes', { done, total }) : t(`ops.state.${operationState(op.phase, op.failureReason)}`)}
-      {kubeStage && ` · ${t('ops.kubeStage', { stage: t(`ops.kubeStageName.${kubeStage.name}`), n: kubeStage.index, total: kubeStage.total })}`}
+      <p>
+        {tracksNodes ? t('ops.currentNodes', { done, total }) : t(`ops.state.${operationState(op.phase, op.failureReason)}`)}
+        {kubeStage && ` · ${t('ops.kubeStage', { stage: t(`ops.kubeStageName.${kubeStage.name}`), n: kubeStage.index, total: kubeStage.total })}`}
+      </p>
+      {tracksNodes && <Progress value={(done / total) * 100} />}
     </>
   )
 }

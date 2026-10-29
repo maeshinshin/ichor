@@ -1,0 +1,291 @@
+version: v1alpha1
+debug: false
+persist: true
+machine:
+    type: controlplane
+    token: 0ww775.88asloipqrhpcs31
+    ca:
+        crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJQekNCOHFBREFnRUNBaEVBajFMQjUyaUNmN3lYdnFvamJabVVIVEFGQmdNclpYQXdFREVPTUF3R0ExVUUKQ2hNRmRHRnNiM013SGhjTk1qWXhNREk1TURVek5URTFXaGNOTXpZeE1ESTJNRFV6TlRFMVdqQVFNUTR3REFZRApWUVFLRXdWMFlXeHZjekFxTUFVR0F5dGxjQU1oQUhLVjBhQWd0OXR3ekFTcGo5eVVnUUV1UUUvSHVySGdKcEtjCjFtM3RuQXlibzJFd1h6QU9CZ05WSFE4QkFmOEVCQU1DQW9Rd0hRWURWUjBsQkJZd0ZBWUlLd1lCQlFVSEF3RUcKQ0NzR0FRVUZCd01DTUE4R0ExVWRFd0VCL3dRRk1BTUJBZjh3SFFZRFZSME9CQllFRlBXNnhZTjl4MWF5a0YzTgpkZlRteGhBclRmeldNQVVHQXl0bGNBTkJBSU5HRllwZCsxTFBocnIxaEFKZkVlL3YraGZuNmkxc3RJaTVvL3hPCjhTcVI1YVFtd2lzUndJQTV6LzQ2VlVxT2hhWS9Va0UyVDduaVl4T21QZjN0ZGcwPQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg==
+        key: LS0tLS1CRUdJTiBFRDI1NTE5IFBSSVZBVEUgS0VZLS0tLS0KTUM0Q0FRQXdCUVlESzJWd0JDSUVJTkczeGlVU05udXowMHUwZkVuNU9RamROUGphbjNUN2E5VzE0clVIQjZUYwotLS0tLUVORCBFRDI1NTE5IFBSSVZBVEUgS0VZLS0tLS0K
+    certSANs:
+        - 10.5.0.2
+        - cp.example.test
+    features:
+        diskQuotaSupport: true
+cluster:
+    token: 2bpwmi.0o4fo4z3uwslapht
+    etcd:
+        ca:
+            crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJmRENDQVNPZ0F3SUJBZ0lRRGFybWdOZE1aME51Z0c2VVZkY0pwakFLQmdncWhrak9QUVFEQWpBUE1RMHcKQ3dZRFZRUUtFd1JsZEdOa01CNFhEVEkyTVRBeU9UQTFNelV4TlZvWERUTTJNVEF5TmpBMU16VXhOVm93RHpFTgpNQXNHQTFVRUNoTUVaWFJqWkRCWk1CTUdCeXFHU000OUFnRUdDQ3FHU000OUF3RUhBMElBQkZZbXVMei8xQ3czCm9YTlQweFYwVGNMNU5WNEp6WHd6bTIzYUJLRGFDaVpxTndaT0tOdFVJNmlkQnNPU2ZLSUFrYkxsRmF0LzdWNVkKMjZtWnZRbU4ybmVqWVRCZk1BNEdBMVVkRHdFQi93UUVBd0lDaERBZEJnTlZIU1VFRmpBVUJnZ3JCZ0VGQlFjRApBUVlJS3dZQkJRVUhBd0l3RHdZRFZSMFRBUUgvQkFVd0F3RUIvekFkQmdOVkhRNEVGZ1FVVVdkR09FQlJyN2ZLCjMzeUJDOEdtSXVRVFRoZ3dDZ1lJS29aSXpqMEVBd0lEUndBd1JBSWdKNklRbUQxR29jMmlZT0VubjkxR3dYb2cKUWkxeWtwV1k0TWdlVXlvWEp3NENJSFBITWgyOXFuMG85ejhFOVVOYlI5aUVVN2M3Rk1qZDFMOE9vNXdKQnBqOQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg==
+            key: LS0tLS1CRUdJTiBFQyBQUklWQVRFIEtFWS0tLS0tCk1IY0NBUUVFSU5DRndVWXpmMGtoWlJsQWFCOUplMzNsNnI4UllYYUtLS2kxUHI1SUt2NW1vQW9HQ0NxR1NNNDkKQXdFSG9VUURRZ0FFVmlhNHZQL1VMRGVoYzFQVEZYUk53dmsxWGduTmZET2JiZG9Fb05vS0ptbzNCazRvMjFRagpxSjBHdzVKOG9nQ1JzdVVWcTMvdFhsamJxWm05Q1kzYWR3PT0KLS0tLS1FTkQgRUMgUFJJVkFURSBLRVktLS0tLQo=
+---
+apiVersion: v1alpha1
+kind: DiscoveryServiceConfig
+name: default
+endpoint: https://discovery.talos.dev/
+---
+apiVersion: v1alpha1
+kind: DiscoveryIdentityConfig
+clusterID: OXvu/kGnB/D6ZJdHxPNbrDDEORs2ur6UeqnLQPYIWhw=
+clusterSecret: QgZcnQgFPDD782QcETBcmOAGvgMBkwK99SgUgaYJUNU=
+---
+apiVersion: v1alpha1
+kind: UnattendedInstallConfig
+installer:
+    image: factory.talos.dev/metal-installer/376567988ad370138ad8b2698212367b8edcb69b5fd68c80be1f2ec7d603b4ba:v1.14.3
+provisioning:
+    diskSelector:
+        match: disk.dev_path == "/dev/vda"
+    wipe: false
+---
+apiVersion: v1alpha1
+kind: ResolverConfig
+hostDNS:
+    enabled: true
+    forwardKubeDNSToHost: true
+---
+apiVersion: v1alpha1
+kind: VolumeConfig
+name: EPHEMERAL
+mount:
+    secure: true
+---
+apiVersion: v1alpha1
+kind: FilesystemTrimConfig
+interval: 168h0m0s
+---
+apiVersion: v1alpha1
+kind: SecurityProfileConfig
+workloadIsolation: true
+---
+apiVersion: v1alpha1
+kind: RegistryMirrorConfig
+name: docker.io
+endpoints:
+    - url: https://mirror.example.test:5000
+---
+apiVersion: v1alpha1
+kind: HostnameConfig
+auto: stable
+---
+apiVersion: v1alpha1
+kind: KubeClusterConfig
+clusterName: d1
+endpoint: https://10.5.0.2:6443
+---
+apiVersion: v1alpha1
+kind: KubeNodeConfig
+nodeIP: {}
+labels:
+    node-role.kubernetes.io/control-plane: ""
+    node.kubernetes.io/exclude-from-external-load-balancers: ""
+taints:
+    node-role.kubernetes.io/control-plane: NoSchedule
+---
+apiVersion: v1alpha1
+kind: KubeletConfig
+image: ghcr.io/siderolabs/kubelet:v1.37.1
+config: {}
+defaultRuntimeSeccompProfileEnabled: true
+---
+apiVersion: v1alpha1
+kind: KubeNetworkConfig
+dnsDomain: cluster.local
+podSubnets:
+    - 10.244.0.0/16
+serviceSubnets:
+    - 10.96.0.0/12
+---
+apiVersion: v1alpha1
+kind: KubeAPIServerCAConfig
+issuingCA:
+    cert: |
+        -----BEGIN CERTIFICATE-----
+        MIIBijCCAS+gAwIBAgIQH8/ah8concMiQ7/uYPxysTAKBggqhkjOPQQDAjAVMRMw
+        EQYDVQQKEwprdWJlcm5ldGVzMB4XDTI2MTAyOTA1MzUxNVoXDTM2MTAyNjA1MzUx
+        NVowFTETMBEGA1UEChMKa3ViZXJuZXRlczBZMBMGByqGSM49AgEGCCqGSM49AwEH
+        A0IABG4zvYcniWhBtCXl3r3aBx/wTgE9Sdq70X1XEmhyWo+o4SKJzlFzUbnpaKCK
+        o7zYmUL4IcD+CyFKk9G7wGBdQ3ejYTBfMA4GA1UdDwEB/wQEAwIChDAdBgNVHSUE
+        FjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwDwYDVR0TAQH/BAUwAwEB/zAdBgNVHQ4E
+        FgQUx0Xo7FYESX+VguYX/DYB2Lc1vXMwCgYIKoZIzj0EAwIDSQAwRgIhANbhjBFT
+        ZHQM8HJzo7JJqLbrBtHerba523UbXIazqoBGAiEAh2BtDBbDP0kKo0caSU6Vv0B7
+        kfm/IGRf6GRzrH9Ls0k=
+        -----END CERTIFICATE-----
+    key: |
+        -----BEGIN EC PRIVATE KEY-----
+        MHcCAQEEIEyC5qmjqrAxUi9kazjzrleIAbIgQHT21cpR5dKODnNYoAoGCCqGSM49
+        AwEHoUQDQgAEbjO9hyeJaEG0JeXevdoHH/BOAT1J2rvRfVcSaHJaj6jhIonOUXNR
+        uelooIqjvNiZQvghwP4LIUqT0bvAYF1Ddw==
+        -----END EC PRIVATE KEY-----
+---
+apiVersion: v1alpha1
+kind: KubePrismConfig
+port: 7445
+---
+apiVersion: v1alpha1
+kind: KubeAggregatorCAConfig
+issuingCA:
+    cert: |
+        -----BEGIN CERTIFICATE-----
+        MIIBYDCCAQWgAwIBAgIQZKHGMJXQZhSgpzCuyJ79pjAKBggqhkjOPQQDAjAAMB4X
+        DTI2MTAyOTA1MzUxNVoXDTM2MTAyNjA1MzUxNVowADBZMBMGByqGSM49AgEGCCqG
+        SM49AwEHA0IABDXpoFHF8siy1EqGNHr8LILB4K7qKXt78o+FCjD2+y8hxykCOVKs
+        JYX/dhW2Seuz4tl6j+4pqZnt+fhDMc3tApCjYTBfMA4GA1UdDwEB/wQEAwIChDAd
+        BgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwDwYDVR0TAQH/BAUwAwEB/zAd
+        BgNVHQ4EFgQUTG4kgUfffRoW6XbhgKeoau27hKIwCgYIKoZIzj0EAwIDSQAwRgIh
+        ALrSKCsn7wOWVa3NxVZ9KM9sonXyiGxdVLnMBgJU+GaNAiEArY61pLijOoNFaaJA
+        Hpv2tY1kED7J0rVAImJaBHcXCuE=
+        -----END CERTIFICATE-----
+    key: |
+        -----BEGIN EC PRIVATE KEY-----
+        MHcCAQEEIME/AEUNEO5gyuRgsH2Q0tu6Qaf3A+YyMcLMkw88zN7moAoGCCqGSM49
+        AwEHoUQDQgAENemgUcXyyLLUSoY0evwsgsHgruope3vyj4UKMPb7LyHHKQI5Uqwl
+        hf92FbZJ67Pi2XqP7impme35+EMxze0CkA==
+        -----END EC PRIVATE KEY-----
+---
+apiVersion: v1alpha1
+kind: KubeAdmissionControlConfig
+name: PodSecurity
+configuration:
+    apiVersion: pod-security.admission.config.k8s.io/v1alpha1
+    defaults:
+        audit: restricted
+        audit-version: latest
+        enforce: baseline
+        enforce-version: latest
+        warn: restricted
+        warn-version: latest
+    exemptions:
+        namespaces:
+            - kube-system
+        runtimeClasses: []
+        usernames: []
+    kind: PodSecurityConfiguration
+---
+apiVersion: v1alpha1
+kind: KubeAuditPolicyConfig
+configuration:
+    apiVersion: audit.k8s.io/v1
+    kind: Policy
+    rules:
+        - level: Metadata
+---
+apiVersion: v1alpha1
+kind: KubeAuthenticationConfig
+configuration:
+    anonymous:
+        conditions:
+            - path: /livez
+            - path: /readyz
+            - path: /healthz
+        enabled: true
+    jwt: []
+---
+apiVersion: v1alpha1
+kind: KubeAuthorizerConfig
+name: node
+type: Node
+---
+apiVersion: v1alpha1
+kind: KubeAuthorizerConfig
+name: rbac
+type: RBAC
+---
+apiVersion: v1alpha1
+kind: KubeEtcdEncryptionConfig
+config:
+    resources:
+        - providers:
+            - secretbox:
+                keys:
+                    - name: key2
+                      secret: 5bHrZgTgVMDtfUeTCXaI0GSGJbo1V/H1LC2mxpXOz+k=
+          resources:
+            - secrets
+---
+apiVersion: v1alpha1
+kind: KubeServiceAccountConfig
+issuer:
+    privateKey: |
+        -----BEGIN RSA PRIVATE KEY-----
+        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
+        -----END RSA PRIVATE KEY-----
+    issuerURL: https://10.5.0.2:6443
+---
+apiVersion: v1alpha1
+kind: KubeAPIServerConfig
+image: registry.k8s.io/kube-apiserver:v1.37.1
+certExtraSANs:
+    - 10.5.0.2
+    - cp.example.test
+---
+apiVersion: v1alpha1
+kind: KubeControllerManagerConfig
+image: registry.k8s.io/kube-controller-manager:v1.37.1
+---
+apiVersion: v1alpha1
+kind: KubeSchedulerConfig
+image: registry.k8s.io/kube-scheduler:v1.37.1
+config: {}
+---
+apiVersion: v1alpha1
+kind: KubeProxyConfig
+image: registry.k8s.io/kube-proxy:v1.37.1
+config: {}
+---
+apiVersion: v1alpha1
+kind: KubeFlannelCNIConfig
+backendType: vxlan
+backendPort: 4789
+---
+apiVersion: v1alpha1
+kind: KubeCoreDNSConfig
+enabled: true

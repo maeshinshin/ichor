@@ -801,6 +801,8 @@ func (st *adoptState) writeInput(ctx context.Context, deps adoptDeps, namespace 
 		CNIInlineManifest: tp.inline, CiliumValues: tp.userValues,
 	}
 
+	in.Cluster.CertSANs, in.Cluster.Registries = c.Spec.CertSANs, c.Spec.Registries
+
 	if c.Spec.Network != nil {
 		in.Cluster.PodSubnets, in.Cluster.ServiceSubnets = c.Spec.Network.PodSubnets, c.Spec.Network.ServiceSubnets
 	}
@@ -810,7 +812,12 @@ func (st *adoptState) writeInput(ctx context.Context, deps adoptDeps, namespace 
 	}
 
 	for _, n := range writable {
-		in.Machines = append(in.Machines, adoptWriteMachine{Address: n.M.Spec.Endpoint, Role: n.M.Spec.Role, InstallDisk: n.InstallDisk})
+		m := adoptWriteMachine{Address: n.M.Spec.Endpoint, Role: n.M.Spec.Role, InstallDisk: n.InstallDisk}
+		if inst := n.M.Spec.Install; inst != nil {
+			m.InstallImage, m.InstallWipe = inst.Image, inst.Wipe
+		}
+
+		in.Machines = append(in.Machines, m)
 	}
 
 	if deps.Ichor != nil {
@@ -877,14 +884,33 @@ func reportPlans(w io.Writer, plans []*adoptPlan) []*adoptPlan {
 // match wins, so the specific prefixes come before the general ones.
 const cniHint = "the CNI selection has no spec field; Ichor leaves it as the node has it only on a cluster adopted with --cni-unmanaged"
 
+const (
+	installHint = "set TalosMachine spec.install (disk, image, wipe) for this machine; a disk selector that is not one wwid, serial, " +
+		"by-id, bus-path or device-path match, extra kernel arguments, extensions and the bootloader options have no spec field"
+	mirrorHint = "set TalosCluster spec.registries (host, endpoints, skipFallback, overridePath) to the node's value; every node must state the " +
+		"same mirrors, and one overridePath value for all of a host's endpoints"
+	registryAuthHint = "registry credentials are never copied into Ichor: create the TalosCluster yourself with spec.registries[].authSecretRef " +
+		"(a Secret in the controller's namespace holding password, auth or identityToken), then run adopt again"
+	certSANsHint = "set TalosCluster spec.certSANs to the node's list; every node must state the same machine.certSANs, and every control plane " +
+		"the same kube-apiserver SANs"
+)
+
 var specFieldHints = []struct{ prefix, hint string }{
 	{"KubeNetworkConfig.podSubnets", "set TalosCluster spec.network.podSubnets to the node's value (it cannot change once set)"},
 	{"cluster.network.podSubnets", "set TalosCluster spec.network.podSubnets to the node's value (it cannot change once set)"},
 	{"KubeNetworkConfig.serviceSubnets", "set TalosCluster spec.network.serviceSubnets to the node's value (it cannot change once set)"},
 	{"cluster.network.serviceSubnets", "set TalosCluster spec.network.serviceSubnets to the node's value (it cannot change once set)"},
 	{"KubeNetworkConfig", "the DNS domain has no spec field; Ichor keeps Talos's default"},
-	{"UnattendedInstallConfig", "set TalosMachine spec.install.disk (and .image) for this machine; wipe is always false"},
-	{"machine.install", "set TalosMachine spec.install.disk (and .image) for this machine; other install fields have no spec field"},
+	{"UnattendedInstallConfig", installHint},
+	{"machine.install", installHint},
+	{"RegistryMirrorConfig", mirrorHint},
+	{"machine.registries.mirrors", mirrorHint},
+	{"RegistryAuthConfig", registryAuthHint},
+	{"machine.registries.config", registryAuthHint},
+	{"RegistryTLSConfig", "registry TLS settings have no spec field; keep them as the node has them or write a TalosConfigPatch for them"},
+	{"machine.certSANs", certSANsHint},
+	{"cluster.apiServer.certSANs", certSANsHint},
+	{"KubeAPIServerConfig.certExtraSANs", certSANsHint},
 	{"KubeFlannelCNIConfig", cniHint},
 	{"cluster.network.cni", cniHint},
 }
@@ -894,7 +920,8 @@ var specFieldHints = []struct{ prefix, hint string }{
 // has to be written by hand.
 func explainUnrepresentable(paths []string) []string {
 	var (
-		lines  []string
+		hints  []string
+		byHint = map[string][]string{}
 		manual bool
 	)
 
@@ -902,7 +929,7 @@ func explainUnrepresentable(paths []string) []string {
 		hint := ""
 
 		for _, h := range specFieldHints {
-			if p == h.prefix || strings.HasPrefix(p, h.prefix+".") {
+			if p == h.prefix || strings.HasPrefix(p, h.prefix+".") || strings.HasPrefix(p, h.prefix+"[") {
 				hint = h.hint
 
 				break
@@ -915,7 +942,16 @@ func explainUnrepresentable(paths []string) []string {
 			continue
 		}
 
-		lines = append(lines, fmt.Sprintf("%s: %s", p, hint))
+		if _, seen := byHint[hint]; !seen {
+			hints = append(hints, hint)
+		}
+
+		byHint[hint] = append(byHint[hint], p)
+	}
+
+	lines := make([]string, 0, len(hints)+1)
+	for _, hint := range hints {
+		lines = append(lines, fmt.Sprintf("%s: %s", strings.Join(byHint[hint], ", "), hint))
 	}
 
 	if manual {

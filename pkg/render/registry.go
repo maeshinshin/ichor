@@ -144,7 +144,8 @@ func ResolveRegistryAuth(
 // be nil) still gets its mirror endpoints; only RegistryConfig/.auth is conditional on there
 // being a username or resolved credential to put there.
 func injectRegistries(
-	cfg coreconfig.Provider, contract *coreconfig.VersionContract, cluster *ichorv1alpha1.TalosCluster, auth map[string]RegistryAuth,
+	cfg coreconfig.Provider, contract *coreconfig.VersionContract,
+	cluster *ichorv1alpha1.TalosCluster, auth map[string]RegistryAuth,
 ) (coreconfig.Provider, error) {
 	if len(cluster.Spec.Registries) == 0 {
 		return cfg, nil

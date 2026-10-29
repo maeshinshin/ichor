@@ -1,0 +1,61 @@
+version: v1alpha1
+debug: false
+persist: true
+machine:
+    type: worker
+    token: n89w5n.rvz8riyr18h5c29s
+    ca:
+        crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJQakNCOGFBREFnRUNBaEFYVTZYWmJuMSsrS01LQzZwVWN4VFBNQVVHQXl0bGNEQVFNUTR3REFZRFZRUUsKRXdWMFlXeHZjekFlRncweU5qRXdNamt3TlRNMU1qRmFGdzB6TmpFd01qWXdOVE0xTWpGYU1CQXhEakFNQmdOVgpCQW9UQlhSaGJHOXpNQ293QlFZREsyVndBeUVBalZyaytVN3dRWVFIM1RWYmxrUC9ORE1RVkxoZXBFcXJSYjFwCi9PUzQ3SEdqWVRCZk1BNEdBMVVkRHdFQi93UUVBd0lDaERBZEJnTlZIU1VFRmpBVUJnZ3JCZ0VGQlFjREFRWUkKS3dZQkJRVUhBd0l3RHdZRFZSMFRBUUgvQkFVd0F3RUIvekFkQmdOVkhRNEVGZ1FVck5pOExsRHIxSDZ3aGcrTQp5MFZ0dTkzQzdNY3dCUVlESzJWd0EwRUFKZVRxMjVVa0krZzVCVXpUdHEvUklkMkU2YWhEVGl1RU8vTlhmV2pICnpZa2FmUmRKM3ZlRU9hMWowM0VtcmVMc2NML2M0NHk5YzdBUXNKWDRsd3UxRHc9PQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg==
+        key: ""
+    certSANs:
+        - 10.5.0.2
+        - cp.example.test
+    kubelet:
+        image: ghcr.io/siderolabs/kubelet:v1.37.1
+        defaultRuntimeSeccompProfileEnabled: true
+        disableManifestsDirectory: true
+    install:
+        disk: /dev/vda
+        image: factory.talos.dev/metal-installer/376567988ad370138ad8b2698212367b8edcb69b5fd68c80be1f2ec7d603b4ba:v1.14.3
+        wipe: false
+        grubUseUKICmdline: true
+    features:
+        diskQuotaSupport: true
+        kubePrism:
+            enabled: true
+            port: 7445
+        hostDNS:
+            enabled: true
+            forwardKubeDNSToHost: true
+cluster:
+    id: xQo9SrwQh0UuLptuzUHn43h6sB5pAX3ReXfep1NZsio=
+    secret: xv4Rwrl+xgZ3QFXWSSGUPhenlrkGlzbhHXPh6caULOM=
+    controlPlane:
+        endpoint: https://10.5.0.2:6443
+    clusterName: d1
+    network:
+        dnsDomain: cluster.local
+        podSubnets:
+            - 10.244.0.0/16
+        serviceSubnets:
+            - 10.96.0.0/12
+    token: fd9d3l.am32flga6c8bdiuv
+    ca:
+        crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJpakNDQVRDZ0F3SUJBZ0lSQUlqMnFUOGtoU2llS2daSnZtQ3JFa0F3Q2dZSUtvWkl6ajBFQXdJd0ZURVQKTUJFR0ExVUVDaE1LYTNWaVpYSnVaWFJsY3pBZUZ3MHlOakV3TWprd05UTTFNakZhRncwek5qRXdNall3TlRNMQpNakZhTUJVeEV6QVJCZ05WQkFvVENtdDFZbVZ5Ym1WMFpYTXdXVEFUQmdjcWhrak9QUUlCQmdncWhrak9QUU1CCkJ3TkNBQVN5MDJIOW9FRlZpYm5LNi8rWVA4TDlnaUdBcVpvdmVCa3UvemFCcWsrV0QrNWFnODlDRU9iSlpONXEKeFJzU2ljZm9KL1VBYUhRS2VuWk5qUlZLM0c2Tm8yRXdYekFPQmdOVkhROEJBZjhFQkFNQ0FvUXdIUVlEVlIwbApCQll3RkFZSUt3WUJCUVVIQXdFR0NDc0dBUVVGQndNQ01BOEdBMVVkRXdFQi93UUZNQU1CQWY4d0hRWURWUjBPCkJCWUVGSDhhanQrRVpMMUVKRjNaOE9rNm9LcDVsMTFCTUFvR0NDcUdTTTQ5QkFNQ0EwZ0FNRVVDSUdwQzQ5NmoKcS82YXNQYm4xZFN0QkN5TXduODdHaGFLU2FSWk1VT0VzWjduQWlFQTRlaXYvWnl1VG1wOG8vay94Vy8rZGlETQo2cXBCM1V6b0tzYytNYzFsQnJvPQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg==
+        key: ""
+    discovery:
+        enabled: true
+        registries:
+            kubernetes:
+                disabled: true
+            service: {}
+---
+apiVersion: v1alpha1
+kind: RegistryMirrorConfig
+name: docker.io
+endpoints:
+    - url: https://mirror.example.test:5000
+---
+apiVersion: v1alpha1
+kind: HostnameConfig
+auto: stable

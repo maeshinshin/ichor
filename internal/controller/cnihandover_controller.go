@@ -351,7 +351,7 @@ func (r *CNIHandoverReconciler) retryFailedJob(
 		return wait, nil
 	}
 
-	return time.Second, r.deleteJob(ctx, cluster, hash)
+	return time.Second, deleteCNIHelmJob(ctx, r.Client, &job)
 }
 
 // finish checks the Helm release and the DaemonSet after a completed Job and records the hand-over.
@@ -368,7 +368,8 @@ func (r *CNIHandoverReconciler) finish(
 		// A finished Job for this hash is still around (its TTL is a day) from before the values
 		// moved away and back: it proves nothing about the release now. Remove it so the next
 		// pass runs a new one.
-		if err := r.deleteJob(ctx, cluster, hash); err != nil {
+		stale := &batchv1.Job{Namespace: cniJobNamespace, Name: cniHelmJobName(cluster, hash)}
+		if err := deleteCNIHelmJob(ctx, r.Client, stale); err != nil {
 			return ctrl.Result{}, err
 		}
 
@@ -616,13 +617,6 @@ func decodeRelease(data []byte) (config map[string]any, chartVersion string, err
 	}
 
 	return rel.Config, rel.Chart.Metadata.Version, nil
-}
-
-func (r *CNIHandoverReconciler) deleteJob(ctx context.Context, cluster *ichorv1alpha1.TalosCluster, hash string) error {
-	job := &batchv1.Job{}
-	job.Namespace, job.Name = cniJobNamespace, cniHelmJobName(cluster, hash)
-
-	return client.IgnoreNotFound(r.Delete(ctx, job, client.PropagationPolicy(metav1.DeletePropagationBackground)))
 }
 
 func (r *CNIHandoverReconciler) reader() client.Reader {

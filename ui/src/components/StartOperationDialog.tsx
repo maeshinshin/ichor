@@ -1,8 +1,12 @@
 import { useState } from 'preact/hooks'
+import { CircleXIcon, InfoIcon } from 'lucide-preact'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@/components/ui/item'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { AlertDialogCancel, AlertDialogFooter } from '@/components/ui/alert-dialog'
 import { ErrorAlert } from '@/components/ErrorAlert'
@@ -143,21 +147,24 @@ export function StartOperationDialog({
     >
 
       {!plan && needsTarget && (
-        <div class="space-y-2">
-          <Label htmlFor={`op-target-${kind}`}>{t(kind === 'cni' ? 'ops.dialog.targetMode' : 'ops.dialog.targetVersion')}</Label>
-        {kind === 'cni' ? (
-            <select
-              id={`op-target-${kind}`}
-              class="h-9 w-full rounded-md border bg-background px-2 text-sm"
+        <Field data-invalid={touched && targetProblem !== null}>
+          <FieldLabel htmlFor={`op-target-${kind}`}>{t(kind === 'cni' ? 'ops.dialog.targetMode' : 'ops.dialog.targetVersion')}</FieldLabel>
+          {kind === 'cni' ? (
+            <Select
               value={target}
-              onChange={(e) => {
+              onValueChange={(v) => {
                 setTouched(true)
-                setTarget((e.currentTarget as HTMLSelectElement).value)
+                setTarget(v)
               }}
             >
-              <option value="replaced">{t('ops.dialog.modeReplaced')}</option>
-              <option value="enabled">{t('ops.dialog.modeEnabled')}</option>
-            </select>
+              <SelectTrigger id={`op-target-${kind}`} className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="replaced">{t('ops.dialog.modeReplaced')}</SelectItem>
+                <SelectItem value="enabled">{t('ops.dialog.modeEnabled')}</SelectItem>
+              </SelectContent>
+            </Select>
           ) : (
             <Input
               id={`op-target-${kind}`}
@@ -168,13 +175,14 @@ export function StartOperationDialog({
               }}
             />
           )}
-          {current !== '' && <p class="text-xs text-muted-foreground">{t(kind === 'cni' ? 'ops.modeHint' : 'ops.versionHint', { current })}</p>}
-          {touched && targetProblem && <p class="text-xs text-destructive">{problemText(t, kind, targetProblem, current)}</p>}
-        </div>
+          {current !== '' && <FieldDescription>{t(kind === 'cni' ? 'ops.modeHint' : 'ops.versionHint', { current })}</FieldDescription>}
+          {touched && targetProblem && <FieldError>{problemText(t, kind, targetProblem, current)}</FieldError>}
+        </Field>
       )}
 
       {(!plan || plan.blocked === '') && (
         <Alert variant="destructive">
+          <CircleXIcon />
           <AlertTitle>{t('ops.warn.title')}</AlertTitle>
           <AlertDescription>{t(`ops.warn.${kind}`)}</AlertDescription>
         </Alert>
@@ -184,16 +192,17 @@ export function StartOperationDialog({
 
       {plan && plan.warning !== '' && (
         <Alert>
+          <InfoIcon />
           <AlertTitle>{t('ops.plan.warningTitle')}</AlertTitle>
           <AlertDescription>{plan.warning}</AlertDescription>
         </Alert>
       )}
 
       {plan && needsName && plan.blocked === '' && (
-        <div class="space-y-2">
-          <Label htmlFor="op-confirm-name">{t('ops.dialog.typeName', { name: cluster.name })}</Label>
+        <Field>
+          <FieldLabel htmlFor="op-confirm-name">{t('ops.dialog.typeName', { name: cluster.name })}</FieldLabel>
           <Input id="op-confirm-name" value={typed} onInput={(e) => setTyped((e.currentTarget as HTMLInputElement).value)} />
-        </div>
+        </Field>
       )}
 
       {error && <ErrorAlert {...error} />}
@@ -236,67 +245,85 @@ function PlanView({ kind, plan, clusterName }: { kind: OpKind; plan: PlanOperati
   const to = plan.target === '' ? plan.current : plan.target
 
   return (
-    <div class="space-y-3 text-sm">
-      <p class="font-medium">
-        {kind === 'talos' && plan.targetSchematic !== '' && to === plan.current
-          ? t('ops.plan.talosSchematic', { version: plan.current, from: plan.currentSchematic, to: plan.targetSchematic })
-          : t(`ops.plan.${kind}`, { from: plan.current, to })}
-      </p>
-      {plan.specChanges && <p class="text-muted-foreground">{t('ops.plan.specChanges', { to })}</p>}
-      <p>{effectText(t, plan.effect, kind)}</p>
-      {kind === 'kubernetes' && plan.stages.length > 0 && <KubernetesStages names={plan.stages} />}
-      {kind === 'ca-rotation' && plan.stages.length > 0 && <p>{t('ops.plan.stages', { stages: plan.stages.join(', ') })}</p>}
-      {plan.machines.length > 0 ? (
-        <div>
-          <p>{t('ops.plan.counts', { total: plan.machines.length, ...counts })}</p>
-          <p class="text-muted-foreground">
-            {kind === 'shutdown'
-              ? t('ops.plan.orderShutdown')
-              : kind === 'ca-rotation'
-                ? t('ops.plan.orderCARotation')
-                : t('ops.plan.orderRollout', { n: Math.max(plan.maxUnavailable, 1) })}
-          </p>
-          <ol class="mt-1 list-inside list-decimal">
-            {steps.map((s, i) => (
-              <li key={s.step}>
-                {t('ops.plan.step', { n: i + 1, names: s.names.join(', '), role: roleText(t, s.role) })}
-              </li>
-            ))}
-          </ol>
-          {kind === 'config' && (
-            <ul class="mt-2 space-y-1">
-              {plan.machines.filter((m) => m.rebootFields.length > 0).map((m) => (
-                <li key={m.name}>{t('ops.plan.rebootFields', { name: m.name, fields: m.rebootFields.join(', ') })}</li>
-              ))}
-            </ul>
+    <div class="space-y-3">
+      <Card size="sm">
+        <CardHeader>
+          <CardTitle>
+            {kind === 'talos' && plan.targetSchematic !== '' && to === plan.current
+              ? t('ops.plan.talosSchematic', { version: plan.current, from: plan.currentSchematic, to: plan.targetSchematic })
+              : t(`ops.plan.${kind}`, { from: plan.current, to })}
+          </CardTitle>
+          {plan.specChanges && <CardDescription>{t('ops.plan.specChanges', { to })}</CardDescription>}
+        </CardHeader>
+        <CardContent class="space-y-3">
+          <p>{effectText(t, plan.effect, kind)}</p>
+          {kind === 'kubernetes' && plan.stages.length > 0 && <KubernetesStages names={plan.stages} />}
+          {kind === 'ca-rotation' && plan.stages.length > 0 && <p>{t('ops.plan.stages', { stages: plan.stages.join(', ') })}</p>}
+          {plan.machines.length > 0 ? (
+            <>
+              <p>{t('ops.plan.counts', { total: plan.machines.length, ...counts })}</p>
+              <CardDescription>
+                {kind === 'shutdown'
+                  ? t('ops.plan.orderShutdown')
+                  : kind === 'ca-rotation'
+                    ? t('ops.plan.orderCARotation')
+                    : t('ops.plan.orderRollout', { n: Math.max(plan.maxUnavailable, 1) })}
+              </CardDescription>
+              <ItemGroup>
+                {steps.map((s, i) => (
+                  <Item key={s.step} size="xs" variant="outline">
+                    <ItemContent>
+                      <ItemTitle>{t('ops.plan.step', { n: i + 1, names: s.names.join(', '), role: roleText(t, s.role) })}</ItemTitle>
+                    </ItemContent>
+                  </Item>
+                ))}
+              </ItemGroup>
+              {kind === 'config' && (
+                <ItemGroup>
+                  {plan.machines
+                    .filter((m) => m.rebootFields.length > 0)
+                    .map((m) => (
+                      <Item key={m.name} size="xs">
+                        <ItemContent>
+                          <ItemDescription>{t('ops.plan.rebootFields', { name: m.name, fields: m.rebootFields.join(', ') })}</ItemDescription>
+                        </ItemContent>
+                      </Item>
+                    ))}
+                </ItemGroup>
+              )}
+              {kind === 'config' && <CardDescription>{t('ops.plan.ownNodeLast')}</CardDescription>}
+            </>
+          ) : (
+            plan.effect !== OperationEffect.NONE && <p>{t('ops.plan.noMachines')}</p>
           )}
-          {kind === 'config' && <p class="mt-2 text-muted-foreground">{t('ops.plan.ownNodeLast')}</p>}
-        </div>
-      ) : (
-        plan.effect !== OperationEffect.NONE && <p>{t('ops.plan.noMachines')}</p>
-      )}
+          {plan.held.length > 0 && <p>{t('ops.plan.held', { names: plan.held.join(', ') })}</p>}
+          {kind !== 'shutdown' && <CardDescription>{t('ops.plan.pauseOnFailure')}</CardDescription>}
+        </CardContent>
+      </Card>
       {plan.kubernetesApiUnavailable && (
         <Alert>
+          <InfoIcon />
           <AlertTitle>{t('ops.plan.apiDownTitle')}</AlertTitle>
           <AlertDescription>{t('ops.plan.apiDown')}</AlertDescription>
         </Alert>
       )}
       {kind === 'ca-rotation' && (
         <Alert variant="destructive">
+          <CircleXIcon />
           <AlertTitle>{t('ops.plan.credentialsTitle')}</AlertTitle>
           <AlertDescription>{t('ops.plan.credentials', { name: clusterName })}</AlertDescription>
         </Alert>
       )}
       {plan.replacesSecretsBundle && (
         <Alert>
+          <InfoIcon />
           <AlertTitle>{t('ops.plan.bundleStaleTitle')}</AlertTitle>
           <AlertDescription>{t('ops.plan.bundleStale', { name: clusterName })}</AlertDescription>
         </Alert>
       )}
-      {plan.held.length > 0 && <p>{t('ops.plan.held', { names: plan.held.join(', ') })}</p>}
-      {kind !== 'shutdown' && <p class="text-muted-foreground">{t('ops.plan.pauseOnFailure')}</p>}
       {plan.blocked !== '' && (
         <Alert variant="destructive">
+          <CircleXIcon />
           <AlertTitle>{t('ops.plan.blocked')}</AlertTitle>
           <AlertDescription>{plan.blocked}</AlertDescription>
         </Alert>
@@ -310,16 +337,18 @@ function PlanView({ kind, plan, clusterName }: { kind: OpKind; plan: PlanOperati
 function KubernetesStages({ names }: { names: string[] }) {
   const t = useT()
   return (
-    <div>
+    <div class="space-y-2">
       <p>{t('ops.plan.kubeStages', { n: names.length })}</p>
-      <ol class="mt-1 list-inside list-decimal">
+      <ItemGroup>
         {names.map((name, i) => (
-          <li key={name}>
-            <span class="font-medium">{name}</span>
-            {kubernetesStages[i] !== undefined && <>: {t(`ops.plan.kubeStageHint.${kubernetesStages[i]}`)}</>}
-          </li>
+          <Item key={name} size="xs" variant="outline">
+            <ItemContent>
+              <ItemTitle>{name}</ItemTitle>
+              {kubernetesStages[i] !== undefined && <ItemDescription>{t(`ops.plan.kubeStageHint.${kubernetesStages[i]}`)}</ItemDescription>}
+            </ItemContent>
+          </Item>
         ))}
-      </ol>
+      </ItemGroup>
     </div>
   )
 }

@@ -28,6 +28,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/controller"
+	"github.com/maeshinshin/ichor/internal/secretsbundle"
 )
 
 func withTempHome(t *testing.T) string {
@@ -90,8 +91,8 @@ func TestRunInit_Success(t *testing.T) {
 		t.Fatalf("getting created secrets bundle Secret: %v", err)
 	}
 
-	if len(secret.Data[bundleSecretKey]) == 0 {
-		t.Fatal("expected the secrets bundle Secret to carry data under the bundleSecretKey")
+	if len(secret.Data[secretsbundle.SecretKey]) == 0 {
+		t.Fatal("expected the secrets bundle Secret to carry data under the secretsbundle.SecretKey")
 	}
 
 	var patches ichorv1alpha1.TalosConfigPatchList

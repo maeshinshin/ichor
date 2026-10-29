@@ -27,6 +27,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/secretsbundle"
 )
 
 // TestTalosMachineBundleLeak forces every reconcile error/status path that
@@ -62,7 +63,7 @@ var _ = Describe("TalosMachineReconciler bundle leak", func() {
 		secret := newTestSecret(bundle)
 		// A leading tab is never valid YAML indentation, so this is
 		// guaranteed to fail decoding rather than parse as something else.
-		secret.Data[bundleSecretKey] = append([]byte("\tnot valid yaml\n"), secret.Data[bundleSecretKey]...)
+		secret.Data[secretsbundle.SecretKey] = append([]byte("\tnot valid yaml\n"), secret.Data[secretsbundle.SecretKey]...)
 		Expect(k8sClient.Update(ctx, secret)).To(Succeed())
 
 		cluster := newTestCluster(secret.Name, "v1.14")

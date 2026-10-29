@@ -29,6 +29,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/secretsbundle"
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
 
@@ -71,7 +72,7 @@ func newTestSecret(bundle *secrets.Bundle) *corev1.Secret {
 
 	secret := &corev1.Secret{
 		GenerateName: "bundle-", Namespace: testNamespace,
-		Data: map[string][]byte{bundleSecretKey: raw},
+		Data: map[string][]byte{secretsbundle.SecretKey: raw},
 	}
 	Expect(k8sClient.Create(ctx, secret)).To(Succeed())
 

@@ -36,6 +36,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/controller"
+	"github.com/maeshinshin/ichor/internal/secretsbundle"
 )
 
 // annotationTrue is the value of the adoption and hold-apply annotations.
@@ -292,7 +293,7 @@ func (w *adoptWriter) bundleSecret(ctx context.Context) error {
 	}
 
 	return w.ensure(ctx, sec, "Secret", func(have client.Object) bool {
-		return bytes.Equal(have.(*corev1.Secret).Data[bundleSecretKey], sec.Data[bundleSecretKey])
+		return bytes.Equal(have.(*corev1.Secret).Data[secretsbundle.SecretKey], sec.Data[secretsbundle.SecretKey])
 	})
 }
 

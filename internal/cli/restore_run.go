@@ -33,6 +33,7 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/role"
 
 	"github.com/maeshinshin/ichor/internal/etcdbackup"
+	"github.com/maeshinshin/ichor/internal/secretsbundle"
 )
 
 type restoreOptions struct {
@@ -87,7 +88,7 @@ func runRecoverCluster(ctx context.Context, opts restoreOptions, deps restoreDep
 			return fmt.Errorf("restore: %w", err)
 		}
 
-		bundlePath = filepath.Join(dir, bundleSecretKey)
+		bundlePath = filepath.Join(dir, secretsbundle.SecretKey)
 	}
 
 	bundle, err := loadBundleFile(bundlePath)

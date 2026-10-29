@@ -379,7 +379,7 @@ func (f *caRotFixture) storedRotation() *secretsbundle.Rotation {
 
 func (f *caRotFixture) storedBundle() *secrets.Bundle {
 	var bundle secrets.Bundle
-	Expect(yaml.Unmarshal(f.secretData()[bundleSecretKey], &bundle)).To(Succeed())
+	Expect(yaml.Unmarshal(f.secretData()[secretsbundle.SecretKey], &bundle)).To(Succeed())
 
 	return &bundle
 }
@@ -690,7 +690,7 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 
 		var secret corev1.Secret
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: tmNamespace, Name: f.secret.Name}, &secret)).To(Succeed())
-		secret.Data[bundleSecretKey] = replaced
+		secret.Data[secretsbundle.SecretKey] = replaced
 		delete(secret.Data, secretsbundle.RotationKey)
 		Expect(k8sClient.Update(ctx, &secret)).To(Succeed())
 

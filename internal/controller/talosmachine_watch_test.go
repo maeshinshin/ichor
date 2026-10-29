@@ -33,6 +33,7 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/secretsbundle"
 	"github.com/maeshinshin/ichor/pkg/render"
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
 	"github.com/siderolabs/talos/pkg/machinery/constants"
@@ -77,7 +78,7 @@ var _ = Describe("TalosMachine re-reconcile on render inputs", func() {
 
 		secret := &corev1.Secret{
 			GenerateName: bundleGenerate, Namespace: ns,
-			Data: map[string][]byte{bundleSecretKey: raw},
+			Data: map[string][]byte{secretsbundle.SecretKey: raw},
 		}
 		Expect(k8sClient.Create(ctx, secret)).To(Succeed())
 
@@ -183,7 +184,7 @@ var _ = Describe("TalosMachine re-reconcile on a registry auth Secret", func() {
 		raw, err := yaml.Marshal(bundle)
 		Expect(err).NotTo(HaveOccurred())
 
-		secret := &corev1.Secret{GenerateName: bundleGenerate, Namespace: ns, Data: map[string][]byte{bundleSecretKey: raw}}
+		secret := &corev1.Secret{GenerateName: bundleGenerate, Namespace: ns, Data: map[string][]byte{secretsbundle.SecretKey: raw}}
 		Expect(k8sClient.Create(ctx, secret)).To(Succeed())
 
 		auth := &corev1.Secret{

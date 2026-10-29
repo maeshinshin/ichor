@@ -28,6 +28,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/secretsbundle"
 )
 
 // bundleSecretMaterial lists every sensitive scalar in bundle that
@@ -197,7 +198,7 @@ var _ = Describe("GetEffectiveConfig namespace resolution", func() {
 		Expect(err).NotTo(HaveOccurred())
 		secret := &corev1.Secret{
 			GenerateName: "bundle-", Namespace: controllerNamespace,
-			Data: map[string][]byte{bundleSecretKey: raw},
+			Data: map[string][]byte{secretsbundle.SecretKey: raw},
 		}
 		Expect(k8sClient.Create(ctx, secret)).To(Succeed())
 
@@ -232,7 +233,7 @@ var _ = Describe("GetEffectiveConfig with spec.registries", func() {
 		Expect(err).NotTo(HaveOccurred())
 		bundleSecret := &corev1.Secret{
 			GenerateName: "regbundle-", Namespace: controllerNamespace,
-			Data: map[string][]byte{bundleSecretKey: raw},
+			Data: map[string][]byte{secretsbundle.SecretKey: raw},
 		}
 		Expect(k8sClient.Create(ctx, bundleSecret)).To(Succeed())
 

@@ -30,19 +30,6 @@ import (
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
 )
 
-// bundleSecretKey is secretsbundle.SecretKey under this package's own
-// name (the same alias internal/controller/bundle.go and
-// internal/uiapi/bundle.go use, ADR 0033): there is exactly one literal
-// value, in internal/secretsbundle, not a fourth copy of it here.
-//
-// This package also uses it below as the local backup file's name, and
-// that is deliberate, not a coincidence worth splitting apart:
-// secretsbundle.SecretKey's own doc comment says the local file and the
-// Secret's content are meant to be the same bytes under the same name,
-// so `kubectl create secret generic --from-file=secrets.yaml` round-trips
-// and a recovery reading either back gets identical bytes.
-const bundleSecretKey = secretsbundle.SecretKey
-
 // bundleDirPerm and bundleFilePerm are the permissions
 // docs/design/architecture.md's "Trust" section requires for the local
 // backup: 0600 on the file, and the containing directory locked down the
@@ -94,7 +81,7 @@ func saveBundleFile(cluster string, bundle *secrets.Bundle) (string, error) {
 		return "", fmt.Errorf("encoding secrets bundle: %w", err)
 	}
 
-	path := filepath.Join(dir, bundleSecretKey)
+	path := filepath.Join(dir, secretsbundle.SecretKey)
 	if err := writeFileAtomic(path, out); err != nil {
 		return "", fmt.Errorf("writing %s: %w", path, err)
 	}
@@ -133,7 +120,7 @@ func saveKubeconfigFile(cluster string, kubeconfig []byte) (string, error) {
 // buildBundleSecret builds the Secret design step 4 stores the bundle in
 // ("store the bundle as a Secret"), named after
 // cluster.Spec.SecretsRef.Name and keyed the same way the local file is
-// (bundleSecretKey), so a recovery reading either back gets identical
+// (secretsbundle.SecretKey), so a recovery reading either back gets identical
 // bytes. It lives in cluster.Namespace: ADR 0011 resolves the bundle
 // Secret in the controller's own namespace rather than the TalosCluster's,
 // and the default self-managed deployment (one controller, one
@@ -148,7 +135,7 @@ func buildBundleSecret(cluster *ichorv1alpha1.TalosCluster, bundle *secrets.Bund
 
 	return &corev1.Secret{
 		Name: cluster.Spec.SecretsRef.Name, Namespace: cluster.Namespace,
-		Data: map[string][]byte{bundleSecretKey: raw},
+		Data: map[string][]byte{secretsbundle.SecretKey: raw},
 	}, nil
 }
 

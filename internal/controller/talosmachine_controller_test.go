@@ -38,6 +38,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/secretsbundle"
 	"github.com/maeshinshin/ichor/pkg/clusterlock"
 	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/render"
@@ -358,7 +359,7 @@ func newTestSecret(bundle *secrets.Bundle) *corev1.Secret {
 
 	secret := &corev1.Secret{
 		GenerateName: "bundle-", Namespace: tmNamespace,
-		Data: map[string][]byte{bundleSecretKey: raw},
+		Data: map[string][]byte{secretsbundle.SecretKey: raw},
 	}
 	Expect(k8sClient.Create(ctx, secret)).To(Succeed())
 

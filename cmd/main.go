@@ -352,6 +352,10 @@ func main() {
 				setupLog.Error(err, "Failed to create webhook", "webhook", "TalosCluster")
 				os.Exit(1)
 			}
+			if err := webhookv1alpha1.SetupTalosConfigPatchWebhookWithManager(mgr, os.Getenv("POD_NAMESPACE")); err != nil {
+				setupLog.Error(err, "Failed to create webhook", "webhook", "TalosConfigPatch")
+				os.Exit(1)
+			}
 			if err := webhookv1alpha1.SetupTalosMachineWebhookWithManager(mgr); err != nil {
 				setupLog.Error(err, "Failed to create webhook", "webhook", "TalosMachine")
 				os.Exit(1)

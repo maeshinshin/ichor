@@ -175,6 +175,26 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
+      path: /validate-ichor-maesh-dev-v1alpha1-talosconfigpatch
+  failurePolicy: Fail
+  name: vtalosconfigpatch-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - ichor.maesh.dev
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - talosconfigpatches
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
       path: /validate-ichor-maesh-dev-v1alpha1-talosmachine
   failurePolicy: Fail
   name: vtalosmachine-v1alpha1.kb.io

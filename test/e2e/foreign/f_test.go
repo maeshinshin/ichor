@@ -56,8 +56,7 @@ func packagedChart(t *testing.T) string {
 // helmInstall runs `helm install ichor <packaged chart>` against the foreign cluster.
 func helmInstall(t *testing.T, c *foreign.Cluster, wait bool) (string, error) {
 	t.Helper()
-	charts := []string{packagedChart(t)}
-	args := []string{"install", "ichor", charts[0], "--kubeconfig", c.LocalKube, "-n", crNS, "--create-namespace"}
+	args := []string{"install", "ichor", packagedChart(t), "--kubeconfig", c.LocalKube, "-n", crNS, "--create-namespace"}
 	if wait {
 		args = append(args, "--wait", "--timeout", "6m")
 	}
@@ -101,18 +100,12 @@ func TestF3NoCNIHelmPath(t *testing.T) {
 	}
 	membership(t, c)
 	sameHashes(t, before, cniPaths(t, c))
-	held, _ := inner(c, "-n", crNS, "get", "talosmachines.ichor.maesh.dev", "-o",
-		"jsonpath={.items[*].metadata.annotations.ichor\\.maesh\\.dev/hold-apply}")
-	if strings.TrimSpace(held) != "" {
-		t.Errorf("hold-apply still set: %q", held)
-	}
+	holdCleared(t, c)
 	t.Logf("spec.cni = %s", clusterJSONPath(c, "{.spec.cni}"))
 	if got := clusterJSONPath(c, "{.spec.cni.tunnel}"); got != "geneve" { // the tunnel is read back from Ichor's Cilium
 		t.Errorf("spec.cni.tunnel = %q, want geneve (the controller would flip the live tunnel with an ichor-cni Job)", got)
 	}
-	if jobs, _ := inner(c, "-n", crNS, "get", "jobs", "--no-headers"); strings.Contains(jobs, "ichor-cni") {
-		t.Errorf("an ichor-cni Job exists: %s", jobs)
-	}
+	noCNIJob(t, c)
 	if rel, _ := local(t, time.Minute, "helm", "list", "-A", "--kubeconfig", c.LocalKube); !strings.Contains(rel, "ichor") {
 		t.Errorf("helm list does not show the ichor release")
 	}

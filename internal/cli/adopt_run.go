@@ -516,6 +516,14 @@ func (st *adoptState) inspect(ctx context.Context, deps adoptDeps) error {
 			st.cluster.Spec.CNI.Tunnel = st.tunnel
 		}
 
+		// A Cilium Ichor did not install: its running tunnel becomes spec.cni.tunnel, or the takeover
+		// would see an Ichor-owned key (tunnelProtocol) disagree (ADR 0103 A2).
+		if st.readBack == nil && !st.unmanaged && k8s != nil && st.rep != nil && st.rep.Kind == detectedCilium {
+			if t := liveTunnel(k8s.CiliumConfig); t != "" {
+				st.cluster.Spec.CNI.Tunnel = t
+			}
+		}
+
 		if rb := st.readBack; rb != nil {
 			st.cluster.Spec.CNI.Tunnel = rb.Tunnel
 

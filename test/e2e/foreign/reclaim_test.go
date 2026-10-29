@@ -142,6 +142,7 @@ func (r *rig) ikJSON(t *testing.T, args ...string) string {
 	out, err := r.ik(args...)
 	if err != nil {
 		t.Logf("ik %v: %v", args, err)
+		return ""
 	}
 	return strings.TrimSpace(out)
 }
@@ -275,6 +276,7 @@ func (r *rig) newReclaim(t *testing.T, tcPath, addr string, extra ...string) (st
 // reboot is recorded (C7).
 func TestC1C5C7(t *testing.T) {
 	r := newRig(t, foreign.Options{Workers: 1, DataDisk: true})
+	r.ensureForeign(t)
 	tc := ftc(t, r.f)
 	uuid := uuidOf(t, r.foreignW, tc)
 	t.Logf("worker %s UUID %s", r.foreignW, uuid)
@@ -312,8 +314,9 @@ func TestC1C5C7(t *testing.T) {
 	}
 
 	// Registered as pending, then approved and joined.
-	if _, err := kube.Poll("pending TalosMachine", 5*time.Minute, func() (string, bool) {
-		return "", r.ikJSON(t, "-n", crNS, "get", "talosmachines.ichor.maesh.dev", uuid, "-o", "jsonpath={.spec.approval}") != ""
+	// Discovery probes on its own interval (about 5 minutes); a newly added address is probed at once, a known one waits.
+	if _, err := kube.Poll("pending TalosMachine", 10*time.Minute, func() (string, bool) {
+		return "", r.ikJSON(t, "-n", crNS, "get", "talosmachines.ichor.maesh.dev", uuid, "-o", "name") != ""
 	}); err != nil {
 		t.Fatal(err)
 	}

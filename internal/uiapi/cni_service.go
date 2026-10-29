@@ -417,14 +417,9 @@ func (s *Server) StartCniUpgrade(
 			CNI:        &ichorv1alpha1.TalosOperationCNISpec{Action: ichorv1alpha1.TalosOperationCNIActionUpgrade, ChartVersion: to},
 		},
 	}
-	key := client.ObjectKeyFromObject(cluster)
 
-	if err := s.Create(ctx, op.DeepCopy(), client.DryRunAll, strictFieldValidation); err != nil {
-		return nil, mapOperationWriteError("creating operation for", key, err)
-	}
-
-	if err := s.Create(ctx, op, strictFieldValidation); err != nil {
-		return nil, mapOperationWriteError("creating operation for", key, err)
+	if err := s.createOperation(ctx, cluster, op); err != nil {
+		return nil, err
 	}
 
 	return connect.NewResponse(&pb.StartCniUpgradeResponse{

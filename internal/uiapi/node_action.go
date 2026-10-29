@@ -347,6 +347,21 @@ func (s *Server) nodeBlocked(ctx context.Context, np *nodePlan, cluster *ichorv1
 	return s.unfinishedOperation(ctx, cluster)
 }
 
+// createOperation creates op for cluster after a dry run, so a spec the API refuses is refused before anything else is written.
+func (s *Server) createOperation(ctx context.Context, cluster *ichorv1alpha1.TalosCluster, op *ichorv1alpha1.TalosOperation) error {
+	key := client.ObjectKeyFromObject(cluster)
+
+	if err := s.Create(ctx, op.DeepCopy(), client.DryRunAll, strictFieldValidation); err != nil {
+		return mapOperationWriteError("creating operation for", key, err)
+	}
+
+	if err := s.Create(ctx, op, strictFieldValidation); err != nil {
+		return mapOperationWriteError("creating operation for", key, err)
+	}
+
+	return nil
+}
+
 // createNodeOperation checks what the plan could not and creates the TalosOperation.
 func (s *Server) createNodeOperation(ctx context.Context, p *opPlan) (*pb.CreateOperationResponse, error) {
 	np := p.node
@@ -394,14 +409,9 @@ func (s *Server) createNodeOperation(ctx context.Context, p *opPlan) (*pb.Create
 			ClusterRef: corev1.LocalObjectReference{Name: cluster.Name}, Kind: p.kind, Node: &np.spec,
 		},
 	}
-	clusterKey := client.ObjectKeyFromObject(cluster)
 
-	if err := s.Create(ctx, op.DeepCopy(), client.DryRunAll, strictFieldValidation); err != nil {
-		return nil, mapOperationWriteError("creating operation for", clusterKey, err)
-	}
-
-	if err := s.Create(ctx, op, strictFieldValidation); err != nil {
-		return nil, mapOperationWriteError("creating operation for", clusterKey, err)
+	if err := s.createOperation(ctx, cluster, op); err != nil {
+		return nil, err
 	}
 
 	audit := s.opAudit(ctx, "create", objectRef(op.Namespace, op.Name))

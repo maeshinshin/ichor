@@ -97,7 +97,7 @@ func (s *Server) planEtcdRestore(ctx context.Context, clusterRef *pb.ObjectRef, 
 
 	slices.Sort(cps)
 
-	own := s.controllerControlPlane(ctx, machines.Items, cluster.Name)
+	own := s.controllerMachine(ctx, machines.Items, cluster.Name, opRoleControlPlane)
 
 	var taken time.Time
 
@@ -161,13 +161,8 @@ func wipeStep(cps []string, own string) string {
 	return fmt.Sprintf("Wipe etcd data on %s, then %s (where this controller runs) once the others have rejoined.", strings.Join(rest, ", "), own) + tail
 }
 
-// controllerControlPlane is the control plane machine the Ichor controller pod runs on, "" when it cannot
-// be told (a worker, outside the cluster, or the pod or Node cannot be read): the plan then names nobody.
-func (s *Server) controllerControlPlane(ctx context.Context, machines []ichorv1alpha1.TalosMachine, cluster string) string {
-	return s.controllerMachine(ctx, machines, cluster, opRoleControlPlane)
-}
-
-// controllerMachine is controllerControlPlane for a machine of role, or of any role when role is "".
+// controllerMachine is the machine of role (any role when "") the Ichor controller pod runs on, "" when it
+// cannot be told (outside the cluster, or the pod or Node cannot be read): the plan then names nobody.
 func (s *Server) controllerMachine(ctx context.Context, machines []ichorv1alpha1.TalosMachine, cluster, role string) string {
 	// The namespace Ichor runs in, then the cluster's own, then (the in-process server runs on the caller's
 	// credentials and a CLI process has no POD_NAMESPACE) every namespace: the first that has the pod wins.
@@ -199,7 +194,7 @@ func (s *Server) controllerMachine(ctx context.Context, machines []ichorv1alpha1
 	return ""
 }
 
-// controllerNamespaces are the namespaces controllerControlPlane looks for the controller pod in, in order;
+// controllerNamespaces are the namespaces controllerMachine looks for the controller pod in, in order;
 // corev1.NamespaceAll (every namespace) comes last, and only for the in-process server.
 func (s *Server) controllerNamespaces(machines []ichorv1alpha1.TalosMachine) []string {
 	var out []string
@@ -295,14 +290,9 @@ func (s *Server) createEtcdRestore(ctx context.Context, p *opPlan) (*pb.CreateOp
 			},
 		},
 	}
-	clusterKey := client.ObjectKeyFromObject(cluster)
 
-	if err := s.Create(ctx, op.DeepCopy(), client.DryRunAll, strictFieldValidation); err != nil {
-		return nil, mapOperationWriteError("creating operation for", clusterKey, err)
-	}
-
-	if err := s.Create(ctx, op, strictFieldValidation); err != nil {
-		return nil, mapOperationWriteError("creating operation for", clusterKey, err)
+	if err := s.createOperation(ctx, cluster, op); err != nil {
+		return nil, err
 	}
 
 	audit := s.opAudit(ctx, "create-break-glass", objectRef(op.Namespace, op.Name))
@@ -339,9 +329,7 @@ func (s *Server) ListEtcdBackups(
 			continue
 		}
 
-		eb := etcdBackupToPB(bk)
-
-		out.Backups = append(out.Backups, eb)
+		out.Backups = append(out.Backups, etcdBackupToPB(bk))
 	}
 
 	slices.SortFunc(out.Backups, func(a, b *pb.EtcdBackup) int { return strings.Compare(a.GetRef().GetName(), b.GetRef().GetName()) })

@@ -499,8 +499,8 @@ func (a *cniKubeProxyAdvancer) enableTail(
 // and k8sService* derive from the mode), then verifies cilium-config and the agents' rollout. A failed Job is
 // an error, which pauses the operation with the Job's reason. Every wait is on the verification clock.
 //
-// ponytail: a finished Job for the same values (same name) from an earlier switch within its 24 h
-// TTL counts as done; cilium-config then does not match and the wait times out instead of re-running.
+// The Job is this operation's own run (runCiliumJob): one that ended before the operation was created
+// is replaced, not taken as done.
 func (a *cniKubeProxyAdvancer) requireCilium(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, op *ichorv1alpha1.TalosOperation,
 	want cni.KubeProxyMode,
@@ -544,7 +544,7 @@ func (a *cniKubeProxyAdvancer) runCiliumJob(
 		return false, fmt.Errorf("reading IchorInstallation %q for the Cilium Helm Job: %w", ichorv1alpha1.IchorInstallationName, err)
 	}
 
-	done, err := AdvanceCNIHelmJob(ctx, a.Client, a.ControllerNamespace, cluster, mode, &inst, salt)
+	done, err := advanceCNIHelmJobSince(ctx, a.Client, a.ControllerNamespace, cluster, mode, &inst, salt, op.CreationTimestamp.Time)
 	if err != nil {
 		return false, fmt.Errorf("%s: %w", doing, err)
 	}

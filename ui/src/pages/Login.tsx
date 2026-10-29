@@ -1,30 +1,17 @@
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ArrowLeftIcon } from 'lucide-preact'
-import { LoginError, loginBody, loginErrorKey, redirectTarget, ticketFromSearch } from '@/lib/login'
+import { postLogin, ticketFromSearch } from '@/lib/login'
 import { SignIn } from '@/pages/SignIn'
 import { useT } from '@/lib/useT'
 
 // The page ichor-ui's authorize endpoint sends a browser to: /login?ticket=... -
 // what `ichor auth login` opens. It shows the same card as the SPA's own sign-in, posts the form to
 // /oidc/login and follows the redirect_uri that comes back (the CLI's loopback callback).
-async function followTicket(ticket: string, f: { username: string; password: string }) {
-  let res: Response
-  try {
-    res = await fetch('/oidc/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: loginBody(ticket, f) })
-  } catch {
-    throw new LoginError('login.unavailable')
-  }
-  if (!res.ok) throw new LoginError(loginErrorKey(res.status))
-  const target = redirectTarget(await res.json().catch(() => null))
-  if (!target) throw new LoginError('login.unavailable')
-  window.location.assign(target)
-}
-
 export function Login() {
   const t = useT()
   const ticket = ticketFromSearch(window.location.search)
-  if (ticket) return <SignIn ichor oidc={null} signIn={(f) => followTicket(ticket, f)} />
+  if (ticket) return <SignIn ichor oidc={null} signIn={async (f) => window.location.assign(await postLogin(ticket, f))} />
   return (
     <main className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center p-6">
       <Card>

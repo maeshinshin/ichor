@@ -130,6 +130,19 @@ type IchorInstallationStatus struct {
 // settings in spec.
 const ConditionSettingsApplied = "SettingsApplied"
 
+// Writing spec.reclaim.enabled=true needs this annotation on the request, with this value
+// (ADR 0105, decision 9), so a stray kubectl apply cannot turn break-glass on. The RBAC subresources
+// the webhook checks with verb update on ichorinstallations are IchorSubresourceVersion (spec.version,
+// installerRepository, deployment), IchorSubresourceReclaim and IchorSubresourceSettings (users, defaults).
+const (
+	ConfirmReclaimAnnotation = "ichor.maesh.dev/confirm-reclaim"
+	ConfirmReclaimValue      = "enable"
+
+	IchorSubresourceVersion  = "version"
+	IchorSubresourceReclaim  = "reclaim"
+	IchorSubresourceSettings = "settings"
+)
+
 // Values of IchorEffectiveValue.Source.
 const (
 	IchorSourceSpec       = "spec"

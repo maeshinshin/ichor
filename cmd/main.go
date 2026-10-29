@@ -352,10 +352,6 @@ func main() {
 				setupLog.Error(err, "Failed to create webhook", "webhook", "TalosMachine")
 				os.Exit(1)
 			}
-			if err := webhookv1alpha1.SetupIchorInstallationWebhookWithManager(mgr); err != nil {
-				setupLog.Error(err, "Failed to create webhook", "webhook", "IchorInstallation")
-				os.Exit(1)
-			}
 			// ICHOR_BREAK_GLASS_EXEMPT_USERS adds exact usernames (comma separated) to the
 			// built-in list (ADR 0065).
 			exempt := webhookv1alpha1.DefaultExemptUsers(os.Getenv("POD_NAMESPACE"), os.Getenv("POD_SERVICE_ACCOUNT"))
@@ -363,6 +359,13 @@ func main() {
 				if u = strings.TrimSpace(u); u != "" {
 					exempt = append(exempt, u)
 				}
+			}
+			if err := webhookv1alpha1.SetupIchorInstallationWebhookWithManager(mgr, webhookv1alpha1.IchorInstallationOptions{
+				SettingsReadOnly: settingsReadOnly, ExemptUsers: exempt,
+				Recorder: mgr.GetEventRecorderFor("ichor-settings"), //nolint:staticcheck // typed against record.EventRecorder, as above
+			}); err != nil {
+				setupLog.Error(err, "Failed to create webhook", "webhook", "IchorInstallation")
+				os.Exit(1)
 			}
 			if err := webhookv1alpha1.SetupBreakGlassWebhookWithManager(mgr, webhookv1alpha1.BreakGlassOptions{
 				ExemptUsers: exempt,

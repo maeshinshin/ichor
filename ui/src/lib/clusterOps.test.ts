@@ -2,7 +2,6 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
   blockingOperation,
-  currentOperation,
   recentOperations,
   rebootPendingCount,
   versionProblem,
@@ -28,8 +27,8 @@ test('an unfinished operation blocks; a completed one and a node shut down do no
 })
 
 test('the current operation is the newest one that is not finished', () => {
-  assert.equal(currentOperation([op('old', 'InProgress', 1), op('new', 'Paused', 5)])?.name, 'new')
-  assert.equal(currentOperation([op('a', 'Completed', 5)]), null)
+  assert.equal(blockingOperation([op('old', 'InProgress', 1), op('new', 'Paused', 5)])?.name, 'new')
+  assert.equal(blockingOperation([op('a', 'Completed', 5)]), null)
 })
 
 test('recent operations are newest first and limited', () => {

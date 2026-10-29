@@ -43,7 +43,7 @@ import { StartOperationDialog } from '@/components/StartOperationDialog'
 import { HandoverPhase, RolloutKind, type Cluster } from '@/gen/ichor/v1alpha1/cluster_pb'
 import { MachineApprovalState, MachineRole, type Machine } from '@/gen/ichor/v1alpha1/machine_pb'
 import { OperationKind, type EtcdBackup, type Operation } from '@/gen/ichor/v1alpha1/operation_pb'
-import { blockingOperation, currentOperation, recentOperations, rebootPendingCount, type OpRow } from '@/lib/clusterOps'
+import { blockingOperation, recentOperations, rebootPendingCount, type OpRow } from '@/lib/clusterOps'
 import { machineClient, operationClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
 import type { ErrorShape } from '@/lib/errors'
@@ -136,7 +136,7 @@ function Home({
   // The operations come from the shared cluster poll; a visit refreshes them at once.
   useEffect(reloadAll, [ref.namespace, ref.name])
 
-  const current = currentOperation(ops)
+  const current = blockingOperation(ops)
   const busy = blockingOperation(ops)
   // When an operation of this cluster finishes, read the versions, nodes and backups again.
   useEffect(() => {

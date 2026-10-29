@@ -430,6 +430,8 @@ func checkWebhookInvariants(t *testing.T, release string, docs []map[string]any)
 			want := map[string][]any{
 				"vtalosmachine-v1alpha1.kb.io":      {opCreate, opUpdate, opDelete},
 				"vmachinereclaim-v1alpha1.kb.io":    {opCreate, opUpdate},
+				// A patch is dry-rendered against the machines it selects.
+				"vtalosconfigpatch-v1alpha1.kb.io": {opCreate, opUpdate},
 				"vichorinstallation-v1alpha1.kb.io": {opCreate, opUpdate},
 				"vtaloscluster-v1alpha1.kb.io":      {opCreate, opUpdate, opDelete},
 				// Break-glass checks writes to existing CRs only.
@@ -1371,7 +1373,7 @@ func TestInstallerRBAC(t *testing.T) {
 		docs := renderChartWithValues(t, "ichor")
 		if find(docs, kindServiceAccount, "ichor-installer") != nil ||
 			find(docs, kindClusterRole, "ichor-installer-role") != nil {
-			t.Errorf("the installer's ServiceAccount/ClusterRole render by default; " +
+			t.Errorf("the installer's ServiceAccount/ClusterRole render by default; "+
 				"they must need installer.enabled=true")
 		}
 	})
@@ -1381,7 +1383,7 @@ func TestInstallerRBAC(t *testing.T) {
 		configDocs := loadYAMLDocs(t, installerConfigRolePath)
 
 		if find(docs, kindServiceAccount, "ichor-installer") == nil {
-			t.Fatalf("installer.enabled=true renders no ServiceAccount ichor-installer, " +
+			t.Fatalf("installer.enabled=true renders no ServiceAccount ichor-installer, "+
 				"the name the controller puts in the Job")
 		}
 

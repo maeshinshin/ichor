@@ -501,7 +501,7 @@ func customizeFromLive(ctx context.Context, c client.Client, objs []*unstructure
 	}
 
 	if helmDeployed(ctrlDep) {
-		return nil, errors.New("this Ichor is installed by Helm; run helm upgrade (the installer does not touch a Helm-owned install, ADR 0105)")
+		return nil, UISettings{}, errors.New("this Ichor is installed by Helm; run helm upgrade (the installer does not touch a Helm-owned install, ADR 0105)")
 	}
 
 	s := ReadUISettings(uiDep, ctrlDep)

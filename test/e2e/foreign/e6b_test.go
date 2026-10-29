@@ -30,7 +30,8 @@ import (
 
 // cniWipe removes Cilium (agents, envoy, operator) and the CNI configuration it left on every node, so the nodes go
 // NotReady with "cni plugin not initialized": a cluster whose Cilium is gone after adopt's step 2. The wipe is a
-// host-network DaemonSet (no pod network needed) running an image the nodes already have.
+// host-network DaemonSet (no pod network needed) running an image the nodes already have; it keeps removing the
+// files while the agents terminate. The inner kubectl wrapper refuses delete, so Cilium is scaled away by patch.
 const cniWipe = `apiVersion: apps/v1
 kind: DaemonSet
 metadata: {name: cni-wipe, namespace: kube-system}
@@ -45,7 +46,7 @@ spec:
       - name: wipe
         image: quay.io/cilium/cilium:v1.18.0
         securityContext: {privileged: true}
-        command: ["sh", "-c", "rm -f /host/*; sleep 100000"]
+        command: ["sh", "-c", "while true; do rm -f /host/*; sleep 2; done"]
         volumeMounts: [{name: cni, mountPath: /host}]
       volumes: [{name: cni, hostPath: {path: /etc/cni/net.d}}]
 `
@@ -60,7 +61,9 @@ func TestE6NoPodNetwork(t *testing.T) {
 	}
 	wipe := func() {
 		for _, a := range [][]string{
-			{"-n", "kube-system", "delete", "ds/cilium", "ds/cilium-envoy", "deploy/cilium-operator", "--ignore-not-found"},
+			{"-n", "kube-system", "patch", "ds/cilium", "-p", `{"spec":{"template":{"spec":{"nodeSelector":{"gone":"gone"}}}}}`},
+			{"-n", "kube-system", "patch", "ds/cilium-envoy", "-p", `{"spec":{"template":{"spec":{"nodeSelector":{"gone":"gone"}}}}}`},
+			{"-n", "kube-system", "scale", "deploy/cilium-operator", "--replicas=0"},
 			{"apply", "-f", manifest},
 		} {
 			o, err := inner(c, a...)

@@ -90,6 +90,10 @@ spec:
         - --user-issuer
         - --oidc-refresh-lifetime={{ .Values.ichorUI.users.refreshLifetime }}
         {{- end }}
+        {{- if .Values.reclaim.enabled }}
+        # Break-glass machine reclaim (ADR 0103, section 2.2).
+        - --reclaim
+        {{- end }}
         {{- range .Values.manager.args }}
         - {{ . }}
         {{- end }}

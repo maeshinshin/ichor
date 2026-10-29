@@ -1,0 +1,22 @@
+{{- if and .Values.reclaim.enabled .Values.rbac.helpers.enabled }}
+# Not bound to anyone, and in no default role. Bind it with an explicit RoleBinding to the people
+# who may reclaim a machine that another Talos cluster configured (ADR 0103, section 2.2).
+# Ichor's webhook checks the verb `reclaim` with a SubjectAccessReview as the user.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/name: {{ include "ichor.name" . }}
+    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  name: {{ include "ichor.resourceName" (dict "suffix" "machine-reclaimer" "context" $) }}
+rules:
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - machinereclaims
+  verbs:
+  - create
+  - reclaim
+{{- end }}

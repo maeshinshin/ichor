@@ -24,7 +24,6 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -76,27 +75,22 @@ const (
 )
 
 func TestDetectCNI_Table(t *testing.T) {
-	crd := &unstructured.Unstructured{}
-	crd.SetGroupVersionKind(crdGVK)
-	crd.SetName("ciliumnodes.cilium.io")
-
 	tests := []struct {
-		name       string
-		objs       []client.Object
-		hint       CNIFacts
-		wantKind   cniKind
-		wantProv   cniProvenance
-		wantMixed  bool
-		wantNodeCR bool
+		name      string
+		objs      []client.Object
+		hint      CNIFacts
+		wantKind  cniKind
+		wantProv  cniProvenance
+		wantMixed bool
 	}{
-		{"cilium ichor", []client.Object{testDS("cilium", ciliumImage), helmRecord("ichor-system")}, CNIFacts{Kind: CNINone}, detectedCilium, provenanceIchor, false, false},
-		{"cilium helm", []client.Object{testDS("cilium", ciliumImage), helmRecord("kube-system")}, CNIFacts{Kind: CNIFlannel}, detectedCilium, provenanceHelm, false, false},
-		{"cilium manifest", []client.Object{testDS("cilium", ciliumImage), crd}, CNIFacts{Kind: CNICustom}, detectedCilium, provenanceManifest, false, true},
-		{"flannel running", []client.Object{testDS("kube-flannel", flannelImage)}, CNIFacts{Kind: CNIFlannel}, detectedFlannel, "", false, false},
-		{"flannel not yet running", nil, CNIFacts{Kind: CNIFlannel}, detectedFlannel, "", false, false},
-		{string(detectedCalico), []client.Object{testDS("calico-node", calicoImage)}, CNIFacts{Kind: CNICustom}, detectedCalico, "", false, false},
-		{string(detectedNone), nil, CNIFacts{Kind: CNINone}, detectedNone, "", false, false},
-		{"mixed", []client.Object{testDS("cilium", ciliumImage), testDS("calico-node", calicoImage)}, CNIFacts{Kind: CNIFlannel}, detectedCalico, "", true, false},
+		{"cilium ichor", []client.Object{testDS("cilium", ciliumImage), helmRecord("ichor-system")}, CNIFacts{Kind: CNINone}, detectedCilium, provenanceIchor, false},
+		{"cilium helm", []client.Object{testDS("cilium", ciliumImage), helmRecord("kube-system")}, CNIFacts{Kind: CNIFlannel}, detectedCilium, provenanceHelm, false},
+		{"cilium manifest", []client.Object{testDS("cilium", ciliumImage)}, CNIFacts{Kind: CNICustom}, detectedCilium, provenanceManifest, false},
+		{"flannel running", []client.Object{testDS("kube-flannel", flannelImage)}, CNIFacts{Kind: CNIFlannel}, detectedFlannel, "", false},
+		{"flannel not yet running", nil, CNIFacts{Kind: CNIFlannel}, detectedFlannel, "", false},
+		{string(detectedCalico), []client.Object{testDS("calico-node", calicoImage)}, CNIFacts{Kind: CNICustom}, detectedCalico, "", false},
+		{string(detectedNone), nil, CNIFacts{Kind: CNINone}, detectedNone, "", false},
+		{"mixed", []client.Object{testDS("cilium", ciliumImage), testDS("calico-node", calicoImage)}, CNIFacts{Kind: CNIFlannel}, detectedCalico, "", true},
 	}
 
 	for _, tc := range tests {
@@ -106,10 +100,6 @@ func TestDetectCNI_Table(t *testing.T) {
 
 			if rep.Kind != tc.wantKind || rep.Provenance != tc.wantProv || rep.Mixed() != tc.wantMixed {
 				t.Fatalf("got kind=%s prov=%s mixed=%v, want kind=%s prov=%s mixed=%v", rep.Kind, rep.Provenance, rep.Mixed(), tc.wantKind, tc.wantProv, tc.wantMixed)
-			}
-
-			if f.CiliumNodeCRD != tc.wantNodeCR {
-				t.Errorf("CiliumNodeCRD = %v, want %v", f.CiliumNodeCRD, tc.wantNodeCR)
 			}
 		})
 	}
@@ -208,23 +198,13 @@ func TestDetectKubeProxy(t *testing.T) {
 			}
 
 			got, err := detectKubeProxy(f, tc.talosEnabled, tc.unmanaged)
-			if (err != nil) != tc.wantErr || got.Mode != tc.want {
-				t.Fatalf("got %q, %v; want %q, err=%v", got.Mode, err, tc.want, tc.wantErr)
+			if (err != nil) != tc.wantErr || got != tc.want {
+				t.Fatalf("got %q, %v; want %q, err=%v", got, err, tc.want, tc.wantErr)
 			}
 		})
 	}
 
 	if _, err := detectKubeProxy(factsFor(t), true, false); err == nil {
 		t.Error("managed with no cilium-config: want an error")
-	}
-}
-
-func TestGatherK8sFacts_KubeProxyDaemonSet(t *testing.T) {
-	if !factsFor(t, testDS("kube-proxy", "registry.k8s.io/kube-proxy:v1.34.0")).KubeProxyDaemonSet {
-		t.Error("kube-proxy DaemonSet not seen")
-	}
-
-	if factsFor(t).KubeProxyDaemonSet {
-		t.Error("kube-proxy DaemonSet seen on an empty cluster")
 	}
 }

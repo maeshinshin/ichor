@@ -21,7 +21,6 @@ import (
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
@@ -30,8 +29,6 @@ import (
 // (cluster.network.cni) as a hint where the API shows nothing.
 
 var crdGVK = schema.GroupVersionKind{Group: "apiextensions.k8s.io", Version: "v1", Kind: "CustomResourceDefinition"}
-
-func isNoMatch(err error) bool { return meta.IsNoMatchError(err) }
 
 // cniKind is the CNI found; the values are the ones status.cni.detected will use.
 type cniKind string
@@ -161,8 +158,8 @@ func detectCNI(f *k8sFacts, talos CNIFacts) *cniReport {
 func ciliumProvenance(f *k8sFacts) cniProvenance {
 	foreign := false
 
-	for _, r := range f.CiliumReleases {
-		if r.Namespace == ichorControllerNamespace {
+	for _, ns := range f.CiliumReleaseNamespaces {
+		if ns == ichorControllerNamespace {
 			return provenanceIchor
 		}
 

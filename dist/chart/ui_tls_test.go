@@ -23,19 +23,21 @@ import (
 	"testing"
 )
 
+const specKey = "spec"
+
 // uiParts returns the ichor-ui container, its pod volumes and the Service's port names and numbers.
 func uiParts(t *testing.T, docs []map[string]any) (c map[string]any, volumes []any, svcPorts map[string]int) {
 	t.Helper()
 
 	dep := find(docs, kindDeployment, ichorUIDeploymentName)
-	podSpec := dep["spec"].(map[string]any)["template"].(map[string]any)["spec"].(map[string]any)
+	podSpec := dep[specKey].(map[string]any)["template"].(map[string]any)[specKey].(map[string]any)
 	c = podSpec["containers"].([]any)[0].(map[string]any)
 	volumes, _ = podSpec["volumes"].([]any)
 
 	svc := find(docs, "Service", "ichor-ui-service")
 	svcPorts = map[string]int{}
 
-	for _, p := range svc["spec"].(map[string]any)["ports"].([]any) {
+	for _, p := range svc[specKey].(map[string]any)["ports"].([]any) {
 		pm := p.(map[string]any)
 		svcPorts[pm["name"].(string)] = int(pm["port"].(float64))
 	}
@@ -63,8 +65,8 @@ func hasMount(c map[string]any, name string) bool {
 func TestUIServesHTTPSOnlyByDefault(t *testing.T) {
 	c, vols, ports := uiParts(t, renderChartWithValues(t, "ichor"))
 
-	args := containerArgs(map[string]any{"spec": map[string]any{"template": map[string]any{"spec": map[string]any{"containers": []any{c}}}}})
-	if !containsStr(args, "--addr=:8443") || strings.Contains(fmt.Sprint(args), "--http-addr") {
+	args := fmt.Sprint(c["args"])
+	if !strings.Contains(args, "--addr=:8443") || strings.Contains(args, "--http-addr") {
 		t.Errorf("args = %v, want --addr=:8443 and no --http-addr", args)
 	}
 
@@ -101,7 +103,9 @@ func TestUIOperatorCertificateAndPlaintextMigration(t *testing.T) {
 	c, _, ports := uiParts(t, docs)
 
 	args := fmt.Sprint(c["args"])
-	for _, want := range []string{"--tls-cert-file=/etc/ichor/tls/tls.crt", "--tls-key-file=/etc/ichor/tls/tls.key", "--http-addr=:8080"} {
+	wants := []string{"--tls-cert-file=/etc/ichor/tls/tls.crt", "--tls-key-file=/etc/ichor/tls/tls.key",
+		"--http-addr=:8080"}
+	for _, want := range wants {
 		if !strings.Contains(args, want) {
 			t.Errorf("args %s lack %s", args, want)
 		}

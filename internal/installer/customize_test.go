@@ -207,9 +207,9 @@ func TestUpgradeKeepsInitsCustomizationsOverALiveUIDeployment(t *testing.T) {
 			// deprecated plaintext listener.
 			migrated := tc.settings
 			if migrated.TLSSecretName != "" {
-				migrated.ListenAddr = ":8080"
+				migrated.ListenAddr = plainAddr
 			} else {
-				migrated.HTTPAddr = ":8080"
+				migrated.HTTPAddr = plainAddr
 			}
 
 			want := renderedUI(t, f.ns, migrated)

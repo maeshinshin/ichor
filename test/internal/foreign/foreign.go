@@ -631,7 +631,7 @@ spec:
 	if err := PortForward(c.Dir, "relay", "pod/"+name, c.Opts.RelayPort+":6443"); err != nil {
 		return err
 	}
-	_, err := kube.Poll("waiting for the API tunnel", 30*time.Second, func() (string, bool) {
+	_, err := kube.Poll("waiting for the API tunnel", 3*time.Minute, func() (string, bool) {
 		_, err := utils.Run(kube.InnerCommand(c.LocalKube, "get", "--raw", "/readyz"))
 		return "", err == nil
 	})

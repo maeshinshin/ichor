@@ -78,35 +78,29 @@ func TestE2E(t *testing.T) {
 var _ = BeforeSuite(func() {
 	configureKubectlKubeRC()
 
-	raw := os.Getenv(talosNodesEnvVar)
-	if strings.TrimSpace(raw) == "" {
-		Fail(fmt.Sprintf("%s is not set. The harness's setup target must publish its "+
-			"maintenance-mode node endpoint(s) through it before the suite runs.",
-			talosNodesEnvVar))
-	}
+	raw := requireEnv(talosNodesEnvVar, "its maintenance-mode node endpoint(s)")
 	for _, n := range strings.Split(raw, ",") {
 		if n = strings.TrimSpace(n); n != "" {
 			talosNodes = append(talosNodes, n)
 		}
 	}
 
-	innerKubeconfig = os.Getenv(innerKubeconfigEnvVar)
-	if strings.TrimSpace(innerKubeconfig) == "" {
-		Fail(fmt.Sprintf("%s is not set. The harness's setup target must publish the inner "+
-			"cluster's kubeconfig through it before the suite runs.",
-			innerKubeconfigEnvVar))
-	}
-
-	talosconfig = os.Getenv(talosconfigEnvVar)
-	if strings.TrimSpace(talosconfig) == "" {
-		Fail(fmt.Sprintf("%s is not set. The harness's setup target must publish an admin "+
-			"talosconfig for the node through it before the suite runs.",
-			talosconfigEnvVar))
-	}
+	innerKubeconfig = requireEnv(innerKubeconfigEnvVar, "the inner cluster's kubeconfig")
+	talosconfig = requireEnv(talosconfigEnvVar, "an admin talosconfig for the node")
 	var err error
 	talosconfigBytes, err = os.ReadFile(talosconfig)
 	Expect(err).NotTo(HaveOccurred(), "could not read %s=%s", talosconfigEnvVar, talosconfig)
 })
+
+// requireEnv returns the named variable, failing the suite when the harness did not publish it.
+func requireEnv(name, what string) string {
+	v := os.Getenv(name)
+	if strings.TrimSpace(v) == "" {
+		Fail(fmt.Sprintf("%s is not set. The harness's setup target must publish %s through it "+
+			"before the suite runs.", name, what))
+	}
+	return v
+}
 
 // Disable kubectl kuberc by default for test isolation.
 // This prevents local kubectl configurations from affecting test behavior.

@@ -84,6 +84,15 @@ func newTestPatch(runID, layer string, target *v1alpha1.TalosConfigPatchTarget) 
 	}
 }
 
+// getAll reads every object of one resource type from the node, through the authenticated API.
+func getAll(resource string) []map[string]any {
+	out, err := talosctl.GetAuthenticated(namespace, talosNode(), resource, talosconfigBytes)
+	Expect(err).NotTo(HaveOccurred())
+	objs, err := talosctl.DecodeAll(out)
+	Expect(err).NotTo(HaveOccurred())
+	return objs
+}
+
 var _ = Describe("short", Label("short"), Ordered, func() {
 	runID := fmt.Sprintf("short-%d", time.Now().Unix())
 	var k8sClient client.Client
@@ -117,34 +126,23 @@ var _ = Describe("short", Label("short"), Ordered, func() {
 	})
 
 	It("confirms the node is configured and running, and reads systeminformation, disks and links", func() {
-		node := talosNode()
-
 		// The harness has already applied a control-plane config and bootstrapped etcd
 		// (P2-8), so the node is no longer in maintenance mode by the time the
 		// suite runs: it is authenticated-only from here, via talosconfigBytes.
 		By("machinestatus: the node the harness handed us is running and ready")
-		out, err := talosctl.GetAuthenticated(namespace, node, "machinestatus", talosconfigBytes)
-		Expect(err).NotTo(HaveOccurred())
-		objs, err := talosctl.DecodeAll(out)
-		Expect(err).NotTo(HaveOccurred())
+		objs := getAll("machinestatus")
 		Expect(objs).To(HaveLen(1))
 		Expect(talosctl.SpecField(objs[0], "stage")).To(Equal("running"))
 		Expect(talosctl.MachineStatusReady(objs[0])).To(BeTrue())
 
 		By("systeminformation: SMBIOS UUID and serial, the primary key TalosMachine.spec.identity is built on")
-		out, err = talosctl.GetAuthenticated(namespace, node, "systeminformation", talosconfigBytes)
-		Expect(err).NotTo(HaveOccurred())
-		objs, err = talosctl.DecodeAll(out)
-		Expect(err).NotTo(HaveOccurred())
+		objs = getAll("systeminformation")
 		Expect(objs).To(HaveLen(1))
 		Expect(talosctl.SpecField(objs[0], "uuid")).NotTo(BeEmpty())
 		Expect(talosctl.SpecField(objs[0], "manufacturer")).To(Equal("KubeVirt"))
 
 		By("disks: a writable install target")
-		out, err = talosctl.GetAuthenticated(namespace, node, "disks", talosconfigBytes)
-		Expect(err).NotTo(HaveOccurred())
-		objs, err = talosctl.DecodeAll(out)
-		Expect(err).NotTo(HaveOccurred())
+		objs = getAll("disks")
 		devPaths := make([]any, 0, len(objs))
 		for _, obj := range objs {
 			devPaths = append(devPaths, talosctl.SpecField(obj, "dev_path"))
@@ -152,10 +150,7 @@ var _ = Describe("short", Label("short"), Ordered, func() {
 		Expect(devPaths).To(ContainElement(ContainSubstring("vd")))
 
 		By("links: a real NIC plus the bond and dummy devices Talos always creates")
-		out, err = talosctl.GetAuthenticated(namespace, node, "links", talosconfigBytes)
-		Expect(err).NotTo(HaveOccurred())
-		objs, err = talosctl.DecodeAll(out)
-		Expect(err).NotTo(HaveOccurred())
+		objs = getAll("links")
 		ids := make([]any, 0, len(objs))
 		for _, obj := range objs {
 			ids = append(ids, talosctl.MetadataID(obj))

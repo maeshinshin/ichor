@@ -1,0 +1,10 @@
+# Break-glass. Normally created by the UI together with the credential
+# Secret named below; needs reclaim.enabled in the chart and the verb "reclaim" on machinereclaims.
+apiVersion: ichor.maesh.dev/v1alpha1
+kind: MachineReclaim
+metadata:
+  name: machinereclaim-sample
+spec:
+  address: 192.0.2.10
+  credentialSecretRef: machinereclaim-sample-credential
+  ttl: 15m

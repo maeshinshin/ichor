@@ -37,6 +37,9 @@ type Volume struct {
 type EtcdMember struct {
 	ID       uint64
 	Hostname string
+	// Unhealthy is true when the member failed its health probe. The zero value
+	// (healthy or not probed) never causes a refusal.
+	Unhealthy bool
 }
 
 // Inspection is what a read-only look at the node found. It carries no
@@ -64,6 +67,8 @@ type Inspection struct {
 	// whose list could be read (EtcdKnown).
 	EtcdMembers []EtcdMember
 	EtcdKnown   bool
+	// LocalMemberID is the etcd member ID of the dialled node itself.
+	LocalMemberID uint64
 	// Volumes are the orphaned volumes: not wiped by the reset, possibly
 	// encrypted.
 	Volumes []Volume

@@ -111,11 +111,28 @@ func Assess(in Inspection, known Known, opt Options) Plan {
 // n/2+1, which holds from three members up. One member is the last control
 // plane of the cluster.
 func quorumBreak(in Inspection) string {
-	switch n := len(in.EtcdMembers); {
+	n := len(in.EtcdMembers)
+
+	switch {
 	case n <= 1:
 		return fmt.Sprintf("this is the last control plane of cluster %q", in.ClusterName)
 	case n == 2:
 		return fmt.Sprintf("cluster %q has 2 etcd members; removing one loses quorum", in.ClusterName)
+	}
+
+	// Health: the members left after the removal must still hold a majority
+	// of themselves that answer. The node being removed does not count.
+	remaining, healthy := n-1, n-1
+
+	for _, m := range in.EtcdMembers {
+		if m.Unhealthy && (in.LocalMemberID == 0 || m.ID != in.LocalMemberID) {
+			healthy--
+		}
+	}
+
+	if healthy < remaining/2+1 {
+		return fmt.Sprintf("cluster %q has %d etcd members of which %d would be unhealthy after the removal; "+
+			"the remaining %d need %d healthy for quorum", in.ClusterName, n, remaining-healthy, remaining, remaining/2+1)
 	}
 
 	return ""

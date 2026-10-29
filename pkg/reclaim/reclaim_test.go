@@ -129,6 +129,17 @@ func controlPlane(members int) Inspection {
 	return in
 }
 
+// unhealthy marks the last n members unhealthy; the target is member 1.
+func unhealthy(in Inspection, n int) Inspection {
+	in.LocalMemberID = 1
+
+	for i := range n {
+		in.EtcdMembers[len(in.EtcdMembers)-1-i].Unhealthy = true
+	}
+
+	return in
+}
+
 func TestAssess(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -157,6 +168,16 @@ func TestAssess(t *testing.T) {
 		},
 		{name: "3 member control plane ok", in: controlPlane(3), graceful: true},
 		{name: "2 member control plane breaks quorum", in: controlPlane(2), refused: "loses quorum"},
+		{name: "3 members, other two unhealthy", in: unhealthy(controlPlane(3), 2), refused: "unhealthy"},
+		{name: "3 members, one other unhealthy", in: unhealthy(controlPlane(3), 1), refused: "unhealthy"},
+		{name: "3 members, only the target unhealthy", in: func() Inspection {
+			i := controlPlane(3)
+			i.LocalMemberID = 1
+			i.EtcdMembers[0].Unhealthy = true
+
+			return i
+		}(), graceful: true},
+		{name: "3 members two unhealthy forced", in: unhealthy(controlPlane(3), 2), opt: Options{Force: true}, graceful: true, needForce: true},
 		{name: "last control plane", in: controlPlane(1), refused: "last control plane"},
 		{name: "last control plane forced", in: controlPlane(1), opt: Options{Force: true}, graceful: true, needForce: true},
 		{name: "unreadable etcd is not a quorum verdict", in: blindEtcd(), graceful: true},

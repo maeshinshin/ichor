@@ -29,6 +29,7 @@ var (
 	adoptSecretsBundle string
 	adoptRecover       bool
 	adoptRecoverFrom   string
+	adoptContext       string
 )
 
 // adoptCmd implements `ichor adopt` (docs/design/architecture.md,
@@ -70,7 +71,7 @@ only ever writes TalosConfigPatch objects to the Kubernetes API.`,
 		}
 
 		dial := func(ctx context.Context, endpoint string) (talosConfigReader, error) {
-			return dialTalos(ctx, talosconfigPath, endpoint)
+			return dialTalos(ctx, talosconfigPath, adoptContext, endpoint)
 		}
 
 		bundle, _, err := resolveAdoptBundle(cmd.Context(), adoptSecretsOptions{
@@ -108,6 +109,8 @@ func init() {
 		"rebuild the secrets bundle from a control plane's machine config (read-only) and store it under ~/.ichor/clusters/<cluster>/ with mode 0600")
 	adoptCmd.Flags().StringVar(&adoptRecoverFrom, "recover-from", "",
 		"address of the control plane --recover-secrets reads the machine config from")
+	adoptCmd.Flags().StringVar(&adoptContext, "context", "",
+		"context of the talosconfig to use (default: the file's selected context)")
 
 	_ = adoptCmd.MarkFlagRequired(flagCluster)
 	adoptCmd.MarkFlagsMutuallyExclusive("secrets-bundle", "recover-secrets")

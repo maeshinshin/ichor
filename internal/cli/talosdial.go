@@ -18,11 +18,13 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/cosi-project/runtime/pkg/resource"
 	"github.com/cosi-project/runtime/pkg/safe"
 	"github.com/siderolabs/talos/pkg/machinery/client"
+	clusterres "github.com/siderolabs/talos/pkg/machinery/resources/cluster"
 	configres "github.com/siderolabs/talos/pkg/machinery/resources/config"
 )
 
@@ -42,8 +44,13 @@ type talosConfigReader interface {
 // way the controller's NewMachineryTalosClient does for a cluster Ichor
 // already manages. adopt predates that management (ADR 0014), so the
 // talosconfig the operator already uses for this cluster is what it reads.
-func dialTalos(ctx context.Context, talosconfigPath, endpoint string) (talosConfigReader, error) {
-	c, err := client.New(ctx, client.WithConfigFromFile(talosconfigPath), client.WithEndpoints(endpoint))
+func dialTalos(ctx context.Context, talosconfigPath, contextName, endpoint string) (talosConfigReader, error) {
+	opts := []client.OptionFunc{client.WithConfigFromFile(talosconfigPath), client.WithEndpoints(endpoint)}
+	if contextName != "" {
+		opts = append(opts, client.WithContextName(contextName))
+	}
+
+	c, err := client.New(ctx, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("dialing Talos API at %q: %w", endpoint, err)
 	}
@@ -74,4 +81,44 @@ func (t *talosClient) CurrentConfig(ctx context.Context) ([]byte, error) {
 	}
 
 	return res.Provider().Bytes()
+}
+
+// TalosVersion reads the node's Talos version tag over the machine API (read-only).
+func (t *talosClient) TalosVersion(ctx context.Context) (string, error) {
+	resp, err := t.c.Version(ctx)
+	if err != nil {
+		return "", fmt.Errorf("reading the Talos version: %w", err)
+	}
+
+	for _, m := range resp.GetMessages() {
+		if tag := m.GetVersion().GetTag(); tag != "" {
+			return tag, nil
+		}
+	}
+
+	return "", errors.New("the node reported no Talos version")
+}
+
+// ClusterMembers lists the discovery membership (the Members COSI resource) the node sees. Asked
+// of a control plane it names every node of the cluster, with the role each one declares.
+func (t *talosClient) ClusterMembers(ctx context.Context) ([]ClusterMember, error) {
+	list, err := safe.StateListAll[*clusterres.Member](ctx, t.c.COSI)
+	if err != nil {
+		return nil, fmt.Errorf("listing cluster members: %w", err)
+	}
+
+	var out []ClusterMember
+
+	for i := range list.Len() {
+		spec := list.Get(i).TypedSpec()
+		cm := ClusterMember{Hostname: spec.Hostname, Role: spec.MachineType.String()}
+
+		for _, a := range spec.Addresses {
+			cm.Addresses = append(cm.Addresses, a.String())
+		}
+
+		out = append(out, cm)
+	}
+
+	return out, nil
 }

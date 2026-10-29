@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -40,6 +39,7 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/oidcissuer"
+	"github.com/maeshinshin/ichor/pkg/ichorauth"
 )
 
 // UserService (docs/adr/0094). The IchorUser CR is written as the caller, so
@@ -59,16 +59,10 @@ const (
 	cliClientID       = "ichor-cli"
 	kubeAudience      = "ichor-kube"
 	adminRole         = "admin"
-	maxRoles          = 16
 	passwordSubres    = "password"
 	condPasswordSet   = "PasswordSet"
 	kubeconfigFileFmt = "ichor-%s.kubeconfig"
 	maxCAFileLen      = 4096
-)
-
-var (
-	userNameRE = regexp.MustCompile(`^[a-z]([-a-z0-9]{0,61}[a-z0-9])?$`)
-	roleNameRE = regexp.MustCompile(`^[a-z][a-z0-9-]{0,30}$`)
 )
 
 // requireUsers is the start of every UserService method: users must be on,
@@ -125,30 +119,17 @@ func userToPB(u *ichorv1alpha1.IchorUser) *pb.User {
 	return out
 }
 
-func validateUserName(name string) error {
-	if !userNameRE.MatchString(name) {
-		return connect.NewError(connect.CodeInvalidArgument, errors.New("a user name is a lower-case DNS label of at most 63 characters"))
+// invalidArg wraps a validation error as InvalidArgument; nil stays nil.
+func invalidArg(err error) error {
+	if err == nil {
+		return nil
 	}
 
-	return nil
-}
-
-func validateRoles(roles []string) error {
-	if len(roles) > maxRoles {
-		return connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("at most %d roles", maxRoles))
-	}
-
-	for _, r := range roles {
-		if !roleNameRE.MatchString(r) {
-			return connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("role %q: lower-case letters, digits and dashes, starting with a letter", r))
-		}
-	}
-
-	return nil
+	return connect.NewError(connect.CodeInvalidArgument, err)
 }
 
 func (s *Server) getUser(ctx context.Context, name string) (*ichorv1alpha1.IchorUser, error) {
-	if err := validateUserName(name); err != nil {
+	if err := invalidArg(ichorauth.ValidateUserName(name)); err != nil {
 		return nil, err
 	}
 
@@ -223,8 +204,8 @@ func (s *Server) CreateUser(ctx context.Context, req *connect.Request[pb.CreateU
 	}
 
 	m := req.Msg
-	if err := errors.Join(validateUserName(m.GetName()), validateRoles(m.GetRoles())); err != nil {
-		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	if err := invalidArg(errors.Join(ichorauth.ValidateUserName(m.GetName()), ichorauth.ValidateRoles(m.GetRoles()))); err != nil {
+		return nil, err
 	}
 
 	u := &ichorv1alpha1.IchorUser{
@@ -245,7 +226,7 @@ func (s *Server) UpdateUser(ctx context.Context, req *connect.Request[pb.UpdateU
 	}
 
 	m := req.Msg
-	if err := validateRoles(m.GetRoles()); err != nil {
+	if err := invalidArg(ichorauth.ValidateRoles(m.GetRoles())); err != nil {
 		return nil, err
 	}
 
@@ -312,12 +293,12 @@ func (s *Server) SetPassword(ctx context.Context, req *connect.Request[pb.SetPas
 
 	password, generated := req.Msg.GetPassword(), ""
 	if password == "" {
-		if password, err = generatePassword(); err != nil {
+		if password, err = ichorauth.GeneratePassword(); err != nil {
 			return nil, connect.NewError(connect.CodeInternal, errors.New("generating a password failed"))
 		}
 
 		generated = password
-	} else if err := checkPasswordPolicy(password); err != nil {
+	} else if err := invalidArg(ichorauth.ValidatePassword(password)); err != nil {
 		return nil, err
 	}
 
@@ -339,7 +320,7 @@ func (s *Server) ChangeOwnPassword(ctx context.Context, req *connect.Request[pb.
 		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("only an Ichor user has a password here"))
 	}
 
-	if err := checkPasswordPolicy(req.Msg.GetNewPassword()); err != nil {
+	if err := invalidArg(ichorauth.ValidatePassword(req.Msg.GetNewPassword())); err != nil {
 		return nil, err
 	}
 

@@ -104,6 +104,18 @@ func ValidateRole(role string) error {
 	return nil
 }
 
+// ValidateRoles checks a user's whole role list: at most MaxRoles, each a valid role name.
+func ValidateRoles(roles []string) error {
+	if len(roles) > MaxRoles {
+		return fmt.Errorf("at most %d roles", MaxRoles)
+	}
+	errs := make([]error, len(roles))
+	for i, r := range roles {
+		errs[i] = ValidateRole(r)
+	}
+	return errors.Join(errs...)
+}
+
 // IsBuiltinRole reports whether the role is one of the reserved built-in names.
 func IsBuiltinRole(role string) bool {
 	return role == RoleViewer || role == RoleOperator || role == RoleAdmin
@@ -219,6 +231,16 @@ func NewCredential(password string, mustChange bool, now time.Time) (Credential,
 
 // Marshal is the Secret value.
 func (c Credential) Marshal() ([]byte, error) { return json.Marshal(c) }
+
+// MergePatch is a JSON merge patch that sets only this user's key in the credentials Secret, so
+// two writers never overwrite each other's users.
+func (c Credential) MergePatch(name string) ([]byte, error) {
+	raw, err := c.Marshal()
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(map[string]any{"data": map[string][]byte{name: raw}})
+}
 
 // ParseCredential reads a Secret value. The error never includes the value.
 func ParseCredential(data []byte) (Credential, error) {

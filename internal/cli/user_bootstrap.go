@@ -18,7 +18,6 @@ package cli
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -96,7 +95,7 @@ func bootstrapPassword(cmd *cobra.Command, fromStdin, generate bool) (string, er
 func createUserWithPassword(ctx context.Context, k client.Client, spec userSpec, password string, now time.Time, progress io.Writer) error {
 	ns := ichorControllerNamespace
 
-	if err := errors.Join(ichorauth.ValidateUserName(spec.Name), validateRoleNames(spec.Roles), ichorauth.ValidatePassword(password)); err != nil {
+	if err := errors.Join(ichorauth.ValidateUserName(spec.Name), ichorauth.ValidateRoles(spec.Roles), ichorauth.ValidatePassword(password)); err != nil {
 		return err
 	}
 
@@ -136,28 +135,10 @@ func createUserWithPassword(ctx context.Context, k client.Client, spec userSpec,
 	return nil
 }
 
-func validateRoleNames(roles []string) error {
-	if len(roles) > ichorauth.MaxRoles {
-		return fmt.Errorf("at most %d roles", ichorauth.MaxRoles)
-	}
-
-	var errs []error
-	for _, r := range roles {
-		errs = append(errs, ichorauth.ValidateRole(r))
-	}
-
-	return errors.Join(errs...)
-}
-
 // patchCredential merge-patches one key of the credentials Secret, the way
 // ichor-ui does, so it never overwrites another user's entry.
 func patchCredential(ctx context.Context, k client.Client, ns, name string, cred ichorauth.Credential) error {
-	raw, err := cred.Marshal()
-	if err != nil {
-		return err
-	}
-
-	patch, err := json.Marshal(map[string]any{"data": map[string][]byte{name: raw}})
+	patch, err := cred.MergePatch(name)
 	if err != nil {
 		return err
 	}

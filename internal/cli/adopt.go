@@ -38,6 +38,7 @@ var (
 	adoptRecoverFrom   string
 	adoptContext       string
 	adoptCNIUnmanaged  bool
+	adoptTunnel        string
 	adoptPlanOnly      bool
 	adoptSeed          string
 	adoptContract      string
@@ -146,6 +147,7 @@ clusters keep the old CAs, but never starts one.`,
 
 			Target:       k8sClient,
 			CNIUnmanaged: adoptCNIUnmanaged,
+			Tunnel:       adoptTunnel,
 
 			Preflight:           newCiliumPreflight(kube, k8sClient),
 			AcceptCiliumChanges: adoptAcceptChanges,
@@ -195,6 +197,8 @@ func init() {
 
 	adoptCmd.Flags().DurationVar(&adoptWaitTimeout, "wait-timeout", defaultAdoptWebhookWait,
 		"how long to wait for Ichor's admission webhooks before giving up")
+	adoptCmd.Flags().StringVar(&adoptTunnel, "tunnel", "",
+		"tunnel protocol (vxlan or geneve) of the Cilium adopt installs on a cluster with no CNI; immutable afterwards")
 	adoptCmd.Flags().BoolVar(&adoptPlanOnly, "plan", false, "print the plan and write nothing")
 	adoptCmd.Flags().StringVar(&adoptSeed, "node", "",
 		"address of one control plane; adopt discovers the cluster's machines from its membership when the TalosCluster does not exist yet")

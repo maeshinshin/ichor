@@ -10,7 +10,8 @@ metadata:
   labels:
     app.kubernetes.io/name: ichor
     app.kubernetes.io/managed-by: kustomize
-  name: ichor-machine-reclaimer
+  # kustomize's namePrefix ichor- makes this ichor-machine-reclaimer; the chart renders the same name.
+  name: machine-reclaimer
 rules:
 - apiGroups:
   - ichor.maesh.dev

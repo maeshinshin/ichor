@@ -20,6 +20,17 @@ test('clusterHealth: upgrading beats ready and degraded', () => {
   assert.equal(clusterHealth(ready, false, true), 'upgrading')
 })
 
+test('the live demo condition set (CiliumUpgradeAvailable=False) is ready', () => {
+  const demo = [
+    { type: 'Transitioning', status: 'False' },
+    { type: 'CNIHandover', status: 'True' },
+    { type: 'CNIValuesApplied', status: 'True' },
+    { type: 'CiliumUpgradeAvailable', status: 'False' },
+    { type: 'CertificatesExpiring', status: 'False' },
+  ]
+  assert.equal(clusterHealth(demo, false, false), 'ready')
+})
+
 test('a cluster with only CertificatesExpiring=False and Transitioning=False is ready', () => {
   const demo = [
     { type: 'CertificatesExpiring', status: 'False' },

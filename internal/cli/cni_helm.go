@@ -155,12 +155,7 @@ func runCNIHelmApply(
 		kubeProxy = cluster.Spec.CNI.KubeProxy
 	}
 
-	vals, err := cilium.EffectiveValuesForMode(&cluster, cni.KubeProxyMode(kubeProxy))
-	if err != nil {
-		return err
-	}
-
-	res, err := cilium.Apply(ctx, cfg, vals, cilium.ApplyOptions{Timeout: timeout})
+	res, err := cilium.ApplyForCluster(ctx, cfg, &cluster, cni.KubeProxyMode(kubeProxy), timeout)
 	if err != nil {
 		return err
 	}

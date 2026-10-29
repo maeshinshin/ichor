@@ -101,7 +101,7 @@ login keys. Do not publish it.
 ## Create users and roles
 
 Each user is an `IchorUser` object in `ichor-system`. You can create one with
-the CLI or write one in Git. Its name is the login name and cannot change. It
+the CLI or apply one yourself. Its name is the login name and cannot change. It
 has:
 
 - a display name and an e-mail (for information only);
@@ -195,7 +195,7 @@ a new one.
 
 ## Disable a user
 
-Set `disabled: true` on the `IchorUser`, through the CLI or in Git. The effect
+Set `disabled: true` on the `IchorUser`, through the CLI or with kubectl. The effect
 has two parts:
 
 - In ichor-ui, the change applies within 10 seconds.

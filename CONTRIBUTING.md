@@ -96,6 +96,10 @@ hands.
       `resourceNames` — a regression that shipped twice already.
     - `checkCRDsMatchConfig`: every CRD in `config/crd/bases/` has an
       equivalent, schema-identical CRD in the rendered chart.
+    - `TestInstallerRBAC` and `TestControllerRBACHoldsNoEscalation`: the
+      installer's role matches `config/rbac/ichor-installer` and never touches a
+      Secret; the controller's `ClusterRole` holds no escalation, CRD or
+      workload-create rights, which belong to the installer and Cilium Jobs.
   - Add a new invariant to `chart_test.go` instead of trusting memory, the
     next time a hand-edit needs protecting the way these already are.
   - **Why hand-maintenance over "run the plugin, then re-apply a patch
@@ -145,7 +149,9 @@ hands.
   ([ADR 0007](docs/adr/0007-e2e-runs-talos-nodes-as-kubevirt-vms.md)): KubeVirt VMs
   on a host cluster, or `talosctl cluster create qemu` on CI runners (`make
   setup-test-e2e`). A full cluster built by `ichor init` is described in
-  `test/harness/ui-demo/README.md`.
+  `test/harness/ui-demo/README.md`. The KubeVirt harness clones one cached Talos
+  ISO per version instead of importing it per VM; `ICHOR_E2E_BASE_CACHE=0` turns
+  that off ([ADR 0102](docs/adr/0102-the-kubevirt-harness-clones-a-cached-talos-iso-and-still-installs-from-it.md)).
 - `make ui-shots` takes desktop and phone screenshots of the UI in light and dark;
   look at them before calling a UI change done.
 

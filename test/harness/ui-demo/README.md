@@ -74,7 +74,7 @@ kubectl --context $C -n ichor-e2e cp bin/ichor-static $P-tools:/tmp/ichor
 kubectl --context $C -n ichor-e2e cp bin/ui-demo.crt $P-tools:/tmp/ui.crt
 kubectl --context $C -n ichor-e2e cp bin/ui-demo.key $P-tools:/tmp/ui.key
 kubectl --context $C -n ichor-e2e exec $P-tools -- env HOME=/tmp/home /tmp/ichor init --yes \
-  --cluster $P --preset single --cni cilium --cni-tunnel geneve --endpoint-type node --endpoint-address $CP_IP \
+  --cluster $P --preset single --cni-tunnel geneve --endpoint-type node --endpoint-address $CP_IP \
   --node-endpoint $CP_IP:50000 --talos-version v1.14.3 --version-contract v1.14 --install-disk /dev/vda \
   --pod-subnets 10.248.0.0/16 --service-subnets 10.249.0.0/16 --registry-mirror ghcr.io=http://$REG:5000 \
   --discover-address $WORKER_IP \
@@ -83,8 +83,6 @@ kubectl --context $C -n ichor-e2e exec $P-tools -- env HOME=/tmp/home /tmp/ichor
 # `--ui-url` must be https and needs --version-contract v1.14 or later when users are on.
 # init prints the generated admin password ONCE (must change on first login). Save it at once to a
 # 0600 file under bin/ (gitignored), e.g. umask 077 and redirect it to bin/ui-demo.admin-password.
-# init has no --argocd/--kokumi/--repo/--gitops-dir flags any more (ADR 0099, ADR 0101): Ichor installs Cilium only
-# and init waits for CNIHandover.
 # init waits for the node, the API server, the webhooks and the Cilium hand-over; allow 20-45 minutes. The secrets bundle and
 # kubeconfig are under /tmp/home/.ichor/clusters/$P/ in the pod: copy them to bin/ as soon as they appear.
 
@@ -156,5 +154,5 @@ Deleting the VMs removes the inner cluster and everything in it.
   control plane); `ICHOR_UI_DEMO_CP_MEMORY` sets the control plane.
 - Run `make demo-images` from a separate worktree for each agent or user. Two builds in one
   checkout overwrite each other's `dist/install.yaml` and `bin/img`.
-- On this KubeVirt harness Cilium's default VXLAN tunnel does not pass traffic between VMs; use the geneve tunnel protocol (`ichor init --cni cilium --cni-tunnel geneve`, recorded as `spec.cni.tunnel`).
+- On this KubeVirt harness Cilium's default VXLAN tunnel does not pass traffic between VMs; use the geneve tunnel protocol (`ichor init --cni-tunnel geneve`, recorded as `spec.cni.tunnel`).
 - For a multi-control-plane demo, point the outer LoadBalancer Service at one control plane VM (or only the joined ones); a selector matching VMs still in maintenance mode gives intermittent connection refused.

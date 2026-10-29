@@ -1,6 +1,6 @@
 # 0099. Argo CD and Kokumi become Ichor's standard stack; Cilium is the only CNI and Ichor's own Helm release
 
-Status: Proposed; superseded in part by ADR 0101 · Date: 2026-10-29 · Design section: Bootstrap, GitOps and Argo CD, CNI · Supersedes in part: 0013, 0019, 0024, 0028, 0048, 0055
+Status: Accepted; superseded in part by ADR 0101 · Date: 2026-10-29 · Design section: Bootstrap, GitOps and Argo CD, CNI · Supersedes in part: 0013, 0019, 0024, 0028, 0048, 0055
 
 Decided: `ichor init` always installs Cilium, Kokumi and Argo CD with no opt-out; Cilium is the only CNI, bootstrapped through Talos inline manifests and then owned by Ichor as a Helm release run by an installer-style Job with user values stored on the TalosCluster; Kokumi and Argo CD are applied once, then managed by Argo CD from artifacts the Ichor controller publishes into Kokumi's in-cluster registry, so no Git repository is needed
 

@@ -158,6 +158,13 @@ type TalosMachineInstall struct {
 	// +kubebuilder:validation:MaxLength=512
 	// +optional
 	Image string `json:"image,omitempty"`
+
+	// wipe is the install-time wipe flag of the node's configuration (UnattendedInstallConfig
+	// provisioning.wipe, machine.install.wipe before v1.14). It is read only when Talos
+	// installs, so on a running node it records what the configuration says and does nothing.
+	// Default false, which is what Talos's generator writes.
+	// +optional
+	Wipe bool `json:"wipe,omitempty"`
 }
 
 // TalosMachineDisk selects one disk. Exactly one field is set. The first four follow the

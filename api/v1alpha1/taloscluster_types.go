@@ -231,6 +231,17 @@ type TalosClusterRegistry struct {
 	// practice, one secret.
 	// +optional
 	AuthSecretRef *corev1.LocalObjectReference `json:"authSecretRef,omitempty"`
+
+	// skipFallback stops nodes falling back to host itself when none of the endpoints has the
+	// image (RegistryMirrorConfig.skipFallback). Default false, Talos's own default.
+	// +optional
+	SkipFallback bool `json:"skipFallback,omitempty"`
+
+	// overridePath makes the nodes use every endpoint's path as given, without adding the
+	// /v2/ suffix (RegistryMirrorConfig.endpoints[].overridePath). It applies to all of this
+	// entry's endpoints; Talos allows it per endpoint, and a mix cannot be recorded here.
+	// +optional
+	OverridePath bool `json:"overridePath,omitempty"`
 }
 
 // TalosClusterDiscovery lists maintenance-mode candidates for the controller to probe directly.
@@ -373,6 +384,16 @@ type TalosClusterSpec struct {
 	// scraping to a CIDR. Unset (the default) leaves the Talos defaults alone.
 	// +optional
 	ControlPlaneMetrics *TalosClusterControlPlaneMetrics `json:"controlPlaneMetrics,omitempty"`
+
+	// certSANs are extra subject alternative names (hostnames, IPs) for the Talos API certificate
+	// of every node and for the kube-apiserver serving certificate: machine.certSANs and
+	// KubeAPIServerConfig.certExtraSANs, which Talos's generator writes together from one list.
+	// The cluster endpoint host is not added for you here; list it if the nodes should serve it.
+	// Unset adds none.
+	// +kubebuilder:validation:MaxItems=64
+	// +kubebuilder:validation:items:MaxLength=253
+	// +optional
+	CertSANs []string `json:"certSANs,omitempty"`
 
 	// registries declares this cluster's private registry mirrors and where their pull
 	// credentials live, pushed to every node through the system layer (docs/design/architecture.md "Monitoring and

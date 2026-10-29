@@ -18,6 +18,7 @@ package cli
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -40,8 +41,19 @@ func freshFlow(t *testing.T) (*flowEnv, adoptDeps) {
 	deps := env.deps(t)
 
 	deps.K8s = fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithInterceptorFuncs(interceptor.Funcs{
-		Get: func(_ context.Context, _ client.WithWatch, _ client.ObjectKey, _ client.Object, _ ...client.GetOption) error {
-			return &meta.NoKindMatchError{GroupKind: schema.GroupKind{Group: ichorv1alpha1.GroupVersion.Group, Kind: "TalosCluster"}}
+		Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, o ...client.GetOption) error {
+			if err := unserved(obj); err != nil {
+				return err
+			}
+
+			return c.Get(ctx, key, obj, o...)
+		},
+		List: func(ctx context.Context, c client.WithWatch, list client.ObjectList, o ...client.ListOption) error {
+			if err := unserved(list); err != nil {
+				return err
+			}
+
+			return c.List(ctx, list, o...)
 		},
 	}).Build()
 
@@ -61,6 +73,16 @@ func freshFlow(t *testing.T) (*flowEnv, adoptDeps) {
 	}
 
 	return env, deps
+}
+
+// unserved is the error a real API server gives for an Ichor kind before the CRDs exist.
+func unserved(obj any) error {
+	kind := fmt.Sprintf("%T", obj)
+	if !strings.HasPrefix(kind, "*v1alpha1.") {
+		return nil
+	}
+
+	return &meta.NoKindMatchError{GroupKind: schema.GroupKind{Group: ichorv1alpha1.GroupVersion.Group, Kind: kind}}
 }
 
 func TestAdoptTreatsUnservedIchorKindsAsAFreshCluster(t *testing.T) {

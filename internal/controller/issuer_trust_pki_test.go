@@ -149,7 +149,7 @@ func TestLeafLifecycle(t *testing.T) {
 		t.Fatal("a CA near its end must be replaced")
 	}
 
-	spec := leafSpec{ip: net.ParseIP("10.96.0.10"), dns: []string{"ichor-ui-service.ichor-system.svc"}}
+	spec := leafSpec{ips: []net.IP{net.ParseIP("10.96.0.10")}, dns: []string{"ichor-ui-service.ichor-system.svc"}}
 
 	leaf, err := newLeaf(caCert, caKey, spec, now)
 	if err != nil {
@@ -160,7 +160,7 @@ func TestLeafLifecycle(t *testing.T) {
 		t.Fatal("fresh leaf unusable")
 	}
 
-	other := leafSpec{ip: net.ParseIP("10.96.0.11"), dns: spec.dns}
+	other := leafSpec{ips: []net.IP{net.ParseIP("10.96.0.11")}, dns: spec.dns}
 	if leafUsable(leaf, caCert, other, now) {
 		t.Fatal("a leaf for another ClusterIP must be reissued")
 	}

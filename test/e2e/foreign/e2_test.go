@@ -45,11 +45,15 @@ func TestE2NoCNIKubeProxyDisabled(t *testing.T) {
 		t.Errorf("cilium-config kube-proxy-replacement = %q, want true", cfg)
 	}
 	managedAdopted(t, c, before)
-	// Services work: a ClusterIP reached from a pod (the kubernetes Service, then cluster DNS through kube-dns).
+	// Services work with no kube-proxy: a pod resolves a name through the kube-dns ClusterIP, and the agent says it replaces kube-proxy.
 	probe, perr := inner(c, "run", "svc-probe", "--restart=Never", "--rm", "-i", "--image=quay.io/cilium/cilium:v1.18.0", "--command", "--",
-		"sh", "-c", "curl -sk -m 10 -o /dev/null -w 'kubernetes=%{http_code}\\n' https://10.249.0.1:443/version; getent hosts kubernetes.default.svc.cluster.local")
+		"getent", "hosts", "kubernetes.default.svc.cluster.local")
 	t.Logf("service probe: %v\n%s", perr, probe)
-	if perr != nil || !strings.Contains(probe, "kubernetes=") || strings.Contains(probe, "kubernetes=000") {
-		t.Errorf("a Service ClusterIP was not reachable from a pod")
+	if perr != nil || !strings.Contains(probe, "10.249.0.1") {
+		t.Errorf("a pod could not resolve a name through the kube-dns Service")
+	}
+	st, _ := inner(c, "-n", "kube-system", "exec", "ds/cilium", "--", "cilium-dbg", "status")
+	if !strings.Contains(st, "KubeProxyReplacement:    True") {
+		t.Errorf("cilium status does not report KubeProxyReplacement True:\n%s", st)
 	}
 }

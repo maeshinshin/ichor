@@ -50,49 +50,65 @@ spec:
     - port: 80
       targetPort: 8080
 ---
-apiVersion: v1
-kind: Pod
+apiVersion: apps/v1
+kind: Deployment
 metadata:
   name: fa-srv
   namespace: default
-  labels:
-    app: fa-srv
 spec:
-  nodeName: %s
-  tolerations:
-    - operator: Exists
-  containers:
-    - name: srv
-      image: busybox:1.37
-      command: ["sh", "-c", "mkdir -p /www; echo ok > /www/index.html; exec httpd -f -p 8080 -h /www"]
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fa-srv
+  template:
+    metadata:
+      labels:
+        app: fa-srv
+    spec:
+      nodeName: %s
+      tolerations:
+        - operator: Exists
+      containers:
+        - name: srv
+          image: busybox:1.37
+          command: ["sh", "-c", "mkdir -p /www; echo ok > /www/index.html; exec httpd -f -p 8080 -h /www"]
 `
-	trafficClient = `apiVersion: v1
-kind: Pod
+	trafficClient = `apiVersion: apps/v1
+kind: Deployment
 metadata:
   name: fa-client
   namespace: default
 spec:
-  nodeName: %s
-  tolerations:
-    - operator: Exists
-  containers:
-    - name: client
-      image: busybox:1.37
-      env:
-        - {name: SVC_IP, value: "%s"}
-        - {name: POD_IP, value: "%s"}
-      command:
-        - sh
-        - -c
-        - |
-          ok=0; fail=0; n=0
-          while true; do
-            for u in "http://$SVC_IP" "http://$POD_IP:8080"; do
-              if out=$(wget -q -T 2 -O /dev/null "$u" 2>&1); then ok=$((ok+1)); else fail=$((fail+1)); echo "FAIL $(date +%%T) $u: $out"; fi
-            done
-            n=$((n+1)); [ $((n %% 25)) -eq 0 ] && echo "COUNT $(date +%%T) ok=$ok fail=$fail"
-            sleep 0.2
-          done
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fa-client
+  template:
+    metadata:
+      labels:
+        app: fa-client
+    spec:
+      nodeName: %s
+      tolerations:
+        - operator: Exists
+      containers:
+        - name: client
+          image: busybox:1.37
+          env:
+            - {name: SVC_IP, value: "%s"}
+            - {name: POD_IP, value: "%s"}
+          command:
+            - sh
+            - -c
+            - |
+              ok=0; fail=0; n=0
+              while true; do
+                for u in "http://$SVC_IP" "http://$POD_IP:8080"; do
+                  if out=$(wget -q -T 2 -O /dev/null "$u" 2>&1); then ok=$((ok+1)); else fail=$((fail+1)); echo "FAIL $(date +%%T) $u: $out"; fi
+                done
+                n=$((n+1)); [ $((n %% 25)) -eq 0 ] && echo "COUNT $(date +%%T) ok=$ok fail=$fail"
+                sleep 0.2
+              done
 `
 )
 
@@ -107,45 +123,81 @@ func writeApply(t *testing.T, c *foreign.Cluster, name, manifest string) {
 	}
 }
 
-func waitPod(t *testing.T, c *foreign.Cluster, pod string) {
+// waitDeploy waits until a traffic Deployment has its replica available.
+func waitDeploy(t *testing.T, c *foreign.Cluster, name string) {
 	t.Helper()
-	if out, err := inner(c, "wait", "pod/"+pod, "--for=condition=Ready", "--timeout=240s"); err != nil {
-		t.Fatalf("pod %s not Ready: %v\n%s", pod, err, out)
+	if out, err := inner(c, "wait", "deployment/"+name, "--for=condition=Available", "--timeout=240s"); err != nil {
+		t.Fatalf("deployment %s not Available: %v\n%s", name, err, out)
 	}
 }
 
-// trafficStart (A4) runs a server pod on the control plane and a client pod on the worker, so the
+// trafficPodNames returns the names of the pods of an A4 app, selected by label: a drain replaces them with new names.
+func trafficPodNames(c *foreign.Cluster, app string) []string {
+	out, _ := inner(c, "get", "pods", "-l", "app="+app, "-o", "jsonpath={.items[*].metadata.name}")
+	return strings.Fields(out)
+}
+
+// trafficPodIP returns the pod IP of an A4 app's pod, selected by label.
+func trafficPodIP(c *foreign.Cluster, app string) string {
+	out, _ := inner(c, "get", "pod", "-l", "app="+app, "-o", "jsonpath={.items[0].status.podIP}")
+	return strings.TrimSpace(out)
+}
+
+// trafficStart (A4) runs a server Deployment on the control plane and a client Deployment on the worker, so the
 // traffic crosses nodes: every 0.2 s the client fetches the Service and the server's pod IP.
 func trafficStart(t *testing.T, c *foreign.Cluster) {
 	t.Helper()
 	cp, w := c.Opts.Prefix+"-cp0", c.Opts.Prefix+"-w0"
 	writeApply(t, c, "traffic-srv.yaml", fmt.Sprintf(trafficPods, cp))
-	waitPod(t, c, "fa-srv")
-	podIP, _ := inner(c, "get", "pod", "fa-srv", "-o", "jsonpath={.status.podIP}")
+	waitDeploy(t, c, "fa-srv")
+	podIP := trafficPodIP(c, "fa-srv")
 	svcIP, _ := inner(c, "get", "svc", "fa-srv", "-o", "jsonpath={.spec.clusterIP}")
-	writeApply(t, c, "traffic-client.yaml", fmt.Sprintf(trafficClient, w, strings.TrimSpace(svcIP), strings.TrimSpace(podIP)))
-	waitPod(t, c, "fa-client")
+	writeApply(t, c, "traffic-client.yaml", fmt.Sprintf(trafficClient, w, strings.TrimSpace(svcIP), podIP))
+	waitDeploy(t, c, "fa-client")
 	time.Sleep(10 * time.Second)
-	t.Logf("traffic started (service %s, pod %s)", strings.TrimSpace(svcIP), strings.TrimSpace(podIP))
+	t.Logf("traffic started (service %s, pod %s)", strings.TrimSpace(svcIP), podIP)
 }
 
 var countRe = regexp.MustCompile(`COUNT (\S+) ok=(\d+) fail=(\d+)`)
 
+// podLegFail reports whether a FAIL line is from the pod-IP leg (the URL ends in :8080) rather than the Service leg.
+func podLegFail(l string) bool {
+	f := strings.Fields(l)
+	return len(f) > 2 && strings.HasSuffix(f[2], ":8080:")
+}
+
 // trafficReport logs the client's tally and every failure line (A4: the pass criterion is set after the first run).
+// The tally lives in the client pod's log, and a drain that replaces the client pod starts a new log at zero, and the
+// old log is gone with the old pod. So the report takes the last tally of each client pod that exists now and says so;
+// it does not sum across pods, because the replaced pods' tallies are lost.
 func trafficReport(t *testing.T, c *foreign.Cluster, label string) {
 	t.Helper()
-	out, _ := inner(c, "logs", "fa-client")
-	var fails []string
-	last := ""
-	for _, l := range strings.Split(out, "\n") {
-		if strings.HasPrefix(l, "FAIL") {
-			fails = append(fails, l)
-		}
-		if countRe.MatchString(l) {
-			last = l
-		}
+	pods := trafficPodNames(c, "fa-client")
+	if len(pods) == 0 {
+		t.Errorf("A4 traffic %s: no fa-client pod", label)
 	}
-	t.Logf("A4 traffic %s: last %q, %d failure lines", label, last, len(fails))
+	var fails []string
+	svcFails, podFails := 0, 0
+	for _, p := range pods {
+		out, _ := inner(c, "logs", p)
+		last := ""
+		for _, l := range strings.Split(out, "\n") {
+			if strings.HasPrefix(l, "FAIL") {
+				fails = append(fails, l)
+				if podLegFail(l) {
+					podFails++
+				} else {
+					svcFails++
+				}
+			}
+			if countRe.MatchString(l) {
+				last = l
+			}
+		}
+		t.Logf("A4 traffic %s: client pod %s last tally %q", label, p, last)
+	}
+	t.Logf("A4 traffic %s: %d failure lines (service leg %d, pod-IP leg %d) across %d client pod(s) present now",
+		label, len(fails), svcFails, podFails, len(pods))
 	for i, f := range fails {
 		if i >= 60 {
 			t.Logf("... %d more", len(fails)-i)

@@ -15,6 +15,7 @@ import type { GetCiliumValuesResponse } from '@/gen/ichor/v1alpha1/cni_pb'
 import type { ObjectRef } from '@/gen/ichor/v1alpha1/common_pb'
 import { canApply, canEdit, canUpgrade, diffLines, type DiffKind } from '@/lib/cilium'
 import { cniClient } from '@/lib/connect'
+import { detectedCni, isCniUnmanaged } from '@/lib/cni'
 import { describeError } from '@/lib/errors'
 import { notifyDone } from '@/lib/notify'
 import { useCluster } from '@/lib/useCluster'
@@ -41,11 +42,28 @@ export function Cilium() {
   const t = useT()
   const { cluster, loading, error: clusterError } = useCluster()
   const ref = cluster?.ref
+  const unmanaged = !!cluster && isCniUnmanaged(cluster.cniPreset)
   const [version, setVersion] = useState(0)
-  const { data, error } = useLoad(ref ? () => cniClient.getCiliumValues({ cluster: ref }) : undefined, [ref?.namespace, ref?.name, version])
+  // An unmanaged cluster has no values to read; the server would refuse the call.
+  const { data, error } = useLoad(ref && !unmanaged ? () => cniClient.getCiliumValues({ cluster: ref }) : undefined, [ref?.namespace, ref?.name, version])
   const perms = useMyPermissions(undefined, ref)
 
   if (clusterError) return <ErrorAlert {...clusterError} />
+  if (cluster && unmanaged) {
+    const detected = [detectedCni(cluster.cniDetected), cluster.cniDetectedVersion].filter((s) => s !== '').join(' ')
+    return (
+      <div class="space-y-4">
+        <PageTitle title={t('cilium.title')} description={cluster.ref?.name} />
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('cni.unmanagedTitle')}</CardTitle>
+            <CardDescription>{t('cni.unmanagedDetected', { detected })}</CardDescription>
+          </CardHeader>
+          <CardContent>{t('cni.unmanagedNote')}</CardContent>
+        </Card>
+      </div>
+    )
+  }
   if (error) return <ErrorAlert {...error} />
   if (loading || (ref && !data)) return <PageSkeleton label={t('cilium.loading')} />
   if (!ref || !data) {

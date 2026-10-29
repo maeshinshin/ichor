@@ -38,6 +38,7 @@ import type { Key } from '@/lib/i18n'
 import { usePageTitles } from '@/lib/usePageTitles'
 import { useT } from '@/lib/useT'
 import { clusterHealth, type Health } from '@/lib/clusterHealth'
+import { detectedCni, isCniUnmanaged } from '@/lib/cni'
 import { useCluster } from '@/lib/useCluster'
 import { Badge } from '@/components/ui/badge'
 import { Link } from '@/router'
@@ -65,6 +66,11 @@ function ClusterBar() {
       {cluster.kubernetesVersion && (
         <Badge variant="outline" className="hidden lg:inline-flex">
           {t('shell.kubernetes', { version: cluster.kubernetesVersion })}
+        </Badge>
+      )}
+      {isCniUnmanaged(cluster.cniPreset) && (
+        <Badge variant="outline" className="hidden lg:inline-flex">
+          {t('cni.badge', { detected: detectedCni(cluster.cniDetected) })}
         </Badge>
       )}
       <Badge variant={healthVariant[health]}>

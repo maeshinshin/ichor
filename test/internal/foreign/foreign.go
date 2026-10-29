@@ -764,8 +764,18 @@ func (c *Cluster) applyCalico() error {
 	if err != nil {
 		return err
 	}
+	// The pool follows the cluster's pod subnet (the default 192.168.0.0/16 is the LAN's), and VXLAN on its default
+	// port 4789 replaces IP-in-IP, which the outer pod network does not carry.
+	m := strings.NewReplacer(
+		"- name: CALICO_IPV4POOL_IPIP\n              value: \"Always\"", "- name: CALICO_IPV4POOL_IPIP\n              value: \"Never\"",
+		"- name: CALICO_IPV4POOL_VXLAN\n              value: \"Never\"", "- name: CALICO_IPV4POOL_VXLAN\n              value: \"Always\"",
+		"# - name: CALICO_IPV4POOL_CIDR\n            #   value: \"192.168.0.0/16\"", "- name: CALICO_IPV4POOL_CIDR\n              value: \""+podSubnet+"\"",
+	).Replace(string(b))
+	if m == string(b) {
+		return errors.New("calico manifest: none of the pool settings matched")
+	}
 	f := c.path("calico.yaml")
-	if err := os.WriteFile(f, b, 0o600); err != nil {
+	if err := os.WriteFile(f, []byte(m), 0o600); err != nil {
 		return err
 	}
 	_, err = utils.Run(kube.InnerCommand(c.LocalKube, "apply", "--server-side", "-f", f))

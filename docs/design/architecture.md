@@ -161,6 +161,24 @@ Break-glass: the secrets bundle keeps the `admin` client certificate
 stopped ichor-ui or a deleted user cannot lock the operator out. Keep this
 bundle offline once users exist. The guide is `../guides/users-and-login.md`.
 
+Exception: reclaim (ADR 0103). Ichor's controller never holds a credential for
+a node of another cluster, with one break-glass exception. When
+`reclaim.enabled` is set, a user can paste a foreign talosconfig into the UI to
+reset one machine. The credential is scoped (the controller dials only the
+request's address and ignores the endpoints in the file), user-supplied, and
+expiring: it is a Secret of type `ichor.maesh.dev/foreign-talosconfig` with a
+TTL (default 15 minutes, at most 60), used for one reset, and deleted at
+`Done`, `Failed` or `Expired`; a sweeper deletes any such Secret older than the
+maximum TTL. It is the one credential in Ichor that is deleted by time rather
+than by an object's lifecycle. It is redacted from logs, Events, status, error
+text and the UI API's access log. The ClusterRole `ichor-machine-reclaimer`
+(`create`, `get`, `list`, `update` and the verb `reclaim` on `machinereclaims`)
+is in no default role, admin included; the webhook checks the verb with a
+SubjectAccessReview on create and on every write of the typed UUID, and
+`status.audit` keeps who requested and confirmed it. A
+ValidatingAdmissionPolicy limits what ichor-ui's ServiceAccount may create in
+`ichor-system` to that Secret type.
+
 Approval uses Talos's insecure apply, which does not authenticate the node.
 A separate provisioning network is assumed; the docs say so.
 
@@ -368,10 +386,51 @@ ichor init --preset standard [--cni-tunnel vxlan|geneve] [--ui-url URL]
 
 There are no flags to choose a CNI (ADR 0099).
 Adding later nodes goes through the normal approval flow; `init` is the
-special case of approving the first control plane. `ichor adopt` brings an
-existing Cilium cluster under management by diffing each node's current config
-against a fresh render and storing the difference as initial patches, so
-ownership transfers with zero drift.
+special case of approving the first control plane.
+
+`ichor adopt` brings a running Talos cluster that Ichor did not create under
+management (ADR 0103). It needs Talos v1.12 or later on every node it adopts
+and refuses an older or mixed cluster with "upgrade Talos first", writing
+nothing. It works in four phases, and nothing is applied to a node until the
+last one:
+
+1. Plan (`--plan` stops here and writes nothing). Read-only inspection with
+   the operator's own talosconfig: Talos and Kubernetes versions, the CNI and
+   where it came from, the kube-proxy setting, KubePrism, inline manifests
+   and each approved machine's live config. The `versionContract` is probed
+   from the running version down to v1.12 and the one with the fewest
+   unrepresentable paths is chosen (`--version-contract` overrides it).
+2. Write, after consent. The bundle Secret, the `TalosCluster` (annotation
+   `ichor.maesh.dev/adopted`), the `TalosMachine`s (identity read over the
+   authenticated API), the `TalosConfigPatch`es and, if Ichor is not running,
+   Ichor's install manifest. Every `TalosMachine` carries the annotation
+   `ichor.maesh.dev/hold-apply`: the reconciler computes and reports drift
+   (`AdoptionHeld`) and never applies.
+3. Cilium takeover (see "Cilium"), skipped for an unmanaged CNI.
+4. Release of the hold, one machine at a time, control planes first, only
+   after a live zero-drift check passes. The controller then applies the
+   first render under the cluster lock like any rollout.
+
+The old "zero drift or nothing" rule now sorts differences into three classes.
+Class A is representable: sysctl and kernel-module documents, and values that
+have spec fields (subnets, install disk; ADR 0077); adopt stores them as
+patches. Class B is Ichor-owned (the Cilium inline entry, KubePrism,
+kube-proxy when replaced, removal of Talos's flannel); the first render
+changes them, so they are listed and need consent, and they do not block.
+Class C is everything else, including other inline or extra manifests; it
+blocks that machine, with the path list and a hint, and adopt leaves it
+untouched.
+
+Secrets. `--secrets-bundle FILE` takes a `talosctl gen secrets` file. With
+`--recover-secrets` (and `--recover-from ADDRESS`, a control plane) adopt
+rebuilds the bundle from that node's machine config, read-only, and stores it
+under `~/.ichor/clusters/<name>/` with mode 0600. A wrong or partial bundle
+cannot get through, because it shows up as secret-field drift and no patch is
+produced. After adoption the controller uses a certificate minted from the
+bundle. The previous administrators' client certificates stay valid, so adopt
+prints, and the UI shows as a dismissible notice (condition
+`CARotationAdvised`), the advice to run `ichor cluster rotate-ca`. Nothing
+starts a rotation.
 
 ### Cilium
 
@@ -394,6 +453,27 @@ the Job.
 Upgrades. A new Ichor release carries new pinned charts. Cilium is upgraded
 only when the user starts a `cni` operation (`ichor cni upgrade`, or the UI),
 at most one minor at a time, rolled back by Helm on failure.
+
+Takeover (ADR 0103). `ichor adopt` can make a Cilium that someone else
+installed (a Helm release, the Cilium CLI, a Talos inline manifest or an
+applied `helm template`) Ichor's release. Before anything is written it
+checks that the live minor equals the pinned chart's minor or is one lower,
+that `ipam.mode` is `kubernetes` (a `cluster-pool` Cilium is refused), that
+the tunnel protocol is carried over, and that Cilium and KubePrism are
+healthy on every node. The user values come from the newest Helm release
+record; where there is none (a Talos inline manifest or an applied
+`helm template`) Ichor's defaults are used and the diff shows what is missing. Ichor then renders the
+pinned chart with the effective values and compares every object with the
+live one. A difference needs `--accept-cilium-diff`, and a change to an
+Ichor-owned key on the running data plane needs `--accept-cilium-changes`
+(IPAM and the tunnel protocol are never accepted). The `ichor-cni` Job runs
+`cilium.Apply` with `--takeover`, so Helm installs with `TakeOwnership`. Once
+the rollout is Ready the foreign release record Secrets are copied into
+`ichor-cilium-prior-release` in `ichor-system`, read back byte for byte, and
+only then deleted (`RemoveForeignReleaseRecord`; never `helm uninstall`). An
+inline manifest entry is found by content, its name is recorded in
+`status.cni.takenOverInlineManifest`, and it is removed from the machine
+config only after `CNIHandover` is true. There is no rollback of an adoption.
 
 ### Git, break-glass and recovery
 
@@ -443,6 +523,31 @@ disambiguating token to the node is not a fix: it needs an authenticated
 connection Ichor only has after approval, and a reset wipes META anyway. The
 durable record is Ichor's own `TalosMachine.spec.identity`, which is consistent
 with the controller owning durable state rather than the node.
+
+A machine that already runs a configured Talos cannot be discovered this way:
+its API demands a client certificate. Discovery reports it as
+`AlreadyConfigured` (an Event, and in the add-by-IP response) and creates
+nothing (ADR 0103). Joining it needs a reset of STATE and EPHEMERAL, which is
+called a reclaim and is never automatic. Both paths run the same code
+(`pkg/reclaim`) and the same refusals: a machine that is already an Ichor
+machine or cluster, a control plane whose removal would break its cluster's
+etcd quorum, and the last control plane of a reachable cluster (`--force`
+overrides the last two with a second confirmation). The reset is graceful
+unless the foreign cluster is dead (`--force-ungraceful`). It sends the
+request of ADR 0042, built by one shared function; user disks are not touched
+but are listed, and encrypted ones are called out. Consent is the node's UUID,
+typed. After the reboot the machine answers in maintenance mode with the same
+UUID and the normal add-by-IP flow registers it as pending.
+
+- CLI: `ichor machine reclaim ADDRESS --talosconfig FILE`. The CLI writes to
+  the node itself, with the operator's own credential, which never leaves the
+  operator's machine; like `init` and `adopt` it acts on a node that belongs
+  to no Ichor cluster.
+- UI: Machines, "Reclaim a configured machine". Off unless the chart value
+  `reclaim.enabled` is set. The UI API creates a `MachineReclaim` and a
+  credential Secret as the signed-in user; the controller inspects the node,
+  stops at `AwaitingConfirmation`, and resets only after the user has typed
+  the UUID. See "Trust" for the credential.
 
 Approval, in the UI or `ichor machine approve`, sets the role, labels, disk
 roles and basic networking (which NIC, DHCP or static, VLAN or bond if
@@ -599,6 +704,32 @@ immutable. `spec.cni.tunnel` (`ichor init --cni-tunnel`) picks `vxlan` or
 service subnets are `spec.network.{podSubnets,serviceSubnets}`, fixed once set
 (ADR 0077). A cluster stored with another preset is refused, not guessed at:
 the controller sets `CNIUnsupported` and changes nothing.
+
+The one exception is `spec.cni.preset: unmanaged` (ADR 0103), which exists for
+adoption only. `ichor init` has no flag for it and the webhook refuses it on
+create unless the object carries the adoption annotation. The adopted cluster
+keeps whatever CNI it runs (flannel, Calico, another, or none); Ichor does not
+install, upgrade or configure it, and never migrates one. `ichor adopt` refuses
+a non-Cilium CNI unless `--cni-unmanaged` is given, and refuses a cluster with
+two CNIs even then. In this mode:
+
+- `spec.cni.cilium` and `spec.cni.tunnel` are refused. `spec.cni.unmanaged.talosCNI`
+  is `default` (render says nothing about the CNI) or `none` (render keeps
+  `cluster.network.cni.name: none`). `spec.cni.kubeProxy` only records what
+  the node has.
+- The hand-over, the `ichor-cni` Job, `ichor cni` commands, `cni` operations
+  and the kube-proxy switch are refused or skipped. A Kubernetes upgrade is
+  never blocked on a hand-over. A CA rotation restarts no CNI workload.
+- The preset is immutable. Moving between managed and unmanaged means a new
+  cluster.
+- `status.cni.detected` (`cilium`, `flannel`, `calico`, `other`, `none`) is
+  read for display and refreshed on a slow requeue.
+
+Network policy gate. Ichor's `CiliumNetworkPolicy` objects (ADR 0100) are
+applied only when the detected CNI is Cilium and the CRD exists. Otherwise
+`ichor-system` is not isolated by Ichor and the condition
+`NetworkPoliciesApplied` says so. A hands-off Cilium
+gets the policies; set `networkPolicy.cilium.enabled=false` to opt out.
 
 How Cilium is installed, owned and edited is described under "Cilium" above. The Talos-recommended values are built in; Hubble certificates
 come from a CronJob, not Helm, so a re-render does not change them.

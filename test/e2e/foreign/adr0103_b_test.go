@@ -29,6 +29,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -36,6 +37,7 @@ import (
 	"github.com/maeshinshin/ichor/test/internal/foreign"
 	"github.com/maeshinshin/ichor/test/internal/kube"
 	"github.com/maeshinshin/ichor/test/internal/talosctl"
+	"github.com/maeshinshin/ichor/test/utils"
 )
 
 const (
@@ -66,6 +68,9 @@ func adoptArgs(t *testing.T, c *foreign.Cluster, flags ...string) (string, error
 }
 
 func recoverFlags(c *foreign.Cluster) []string {
+	if b := os.Getenv("ICHOR_E2E_F_BUNDLE"); b != "" { // a rerun after adopt wrote the recovered bundle
+		return []string{"--secrets-bundle", b}
+	}
 	return []string{"--recover-secrets", "--recover-from", c.CPs[0]}
 }
 
@@ -145,14 +150,14 @@ func TestB4RefusedReplacedKubePrismOff(t *testing.T) {
 	refusedUntouched(t, c, "KubePrism is off on machine")
 }
 
-// TestHelmSetKPR changes kubeProxyReplacement on the running Cilium: ICHOR_E2E_F_KPR=true|false.
-func TestHelmSetKPR(t *testing.T) {
-	v := os.Getenv("ICHOR_E2E_F_KPR")
+// TestHelmSet changes values on the running Cilium: ICHOR_E2E_F_HELMSET=kubeProxyReplacement=false,tunnelProtocol=vxlan.
+func TestHelmSet(t *testing.T) {
+	v := os.Getenv("ICHOR_E2E_F_HELMSET")
 	if v == "" {
-		t.Skip("ICHOR_E2E_F_KPR not set")
+		t.Skip("ICHOR_E2E_F_HELMSET not set")
 	}
 	c := build(t, bOpts(foreign.CNICiliumHelm, false, false))
-	helmSet(t, c, "kubeProxyReplacement="+v)
+	helmSet(t, c, strings.Split(v, ",")...)
 }
 
 // kubePrismState returns, per node, whether the live machine config enables KubePrism.
@@ -204,3 +209,54 @@ func machineConfigVersions(t *testing.T, c *foreign.Cluster) map[string]string {
 	return res
 }
 
+
+// b3Canary creates the Kubernetes Secret that must stay readable after adoption (it is encrypted at rest with the
+// cluster's secretbox key, which the recovered bundle must reproduce).
+func b3Canary(t *testing.T, c *foreign.Cluster) {
+	t.Helper()
+	if out, err := inner(c, "-n", "default", "create", "secret", "generic", canaryName, "--from-literal=v="+canaryValue); err != nil && !strings.Contains(out, "already exists") {
+		t.Fatalf("creating the canary Secret: %v\n%s", err, out)
+	}
+}
+
+func b3CanaryReadable(t *testing.T, c *foreign.Cluster) {
+	t.Helper()
+	out, err := inner(c, "-n", "default", "get", "secret", canaryName, "-o", "jsonpath={.data.v}")
+	if err != nil || out == "" {
+		t.Errorf("canary Secret not readable: %v %q", err, out)
+		return
+	}
+	t.Logf("canary Secret readable after adoption (%d bytes of base64)", len(out))
+}
+
+// TestB3WrongBundle (B3): a bundle of another cluster produces secret-field drift and no patch. Runs before the real adopt.
+func TestB3WrongBundle(t *testing.T) {
+	c := build(t, bOpts(foreign.CNICiliumHelm, false, true, "kubeProxyReplacement=true"))
+	b3Canary(t, c)
+	wrong := filepath.Join(t.TempDir(), "wrong-secrets.yaml")
+	if out, err := exec.Command("talosctl", "gen", "secrets", "-o", wrong).CombinedOutput(); err != nil {
+		t.Fatalf("talosctl gen secrets: %v\n%s", err, out)
+	}
+	pod := stage(t, c)
+	if out, err := utils.Run(kube.Command("-n", ns, "cp", wrong, pod+":/tmp/wrong-secrets.yaml")); err != nil {
+		t.Fatalf("cp: %v\n%s", err, out)
+	}
+	before := cniPaths(t, c)
+	for _, extra := range []string{"--plan", "--yes"} {
+		out, err := adoptArgs(t, c, "--secrets-bundle", "/tmp/wrong-secrets.yaml", extra)
+		if err == nil {
+			t.Errorf("wrong bundle %s: adopt succeeded", extra)
+		}
+		for _, want := range []string{"machine.ca.key", "cluster.token", "nothing was written"} {
+			if !strings.Contains(out, want) {
+				t.Errorf("wrong bundle %s: output lacks %q", extra, want)
+			}
+		}
+	}
+	sameHashes(t, before, cniPaths(t, c))
+	if got := clusterJSONPath(c, "{.metadata.name}"); got != "" {
+		t.Logf("a TalosCluster was written by the wrong-bundle adopt: %s", got)
+	}
+	ms, _ := inner(c, "-n", crNS, "get", "talosconfigpatches.ichor.maesh.dev,talosmachines.ichor.maesh.dev", "-o", "name")
+	t.Logf("objects after the wrong-bundle adopt:\n%s", ms)
+}

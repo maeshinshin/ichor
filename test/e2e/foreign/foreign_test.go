@@ -200,7 +200,7 @@ func adopt(t *testing.T, c *foreign.Cluster, extra ...string) (string, error) {
 	pod := stage(t, c)
 	args := append([]string{"-n", ns, "exec", pod, "--", "env", "HOME=/tmp/home", "/tmp/ichor", "adopt",
 		"--cluster", c.Opts.Prefix, "-n", crNS, "--talosconfig", "/tmp/talosconfig", "--kubeconfig", "/tmp/kubeconfig",
-		"--recover-secrets", "--recover-from", c.CPs[0], "--node", c.CPs[0], "--yes"}, extra...)
+		"--node", c.CPs[0], "--yes"}, append(recoverFlags(c), extra...)...)
 	// kube.Command refuses a "--cluster" argument anywhere; here it belongs to the command run
 	// inside the pod, so the context is pinned by hand to the same ICHOR_E2E_KUBE_CONTEXT.
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Minute) // adopt waits for Ichor's webhooks without a bound (D5: no CNI, never ready)

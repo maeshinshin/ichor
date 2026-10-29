@@ -49,21 +49,14 @@ func adviseCARotation(ctx context.Context, c client.Client, cluster *ichorv1alph
 
 	if cluster.Annotations[ichorv1alpha1.TalosClusterCARotationAdviceDismissedAnnotation] == strconv.FormatBool(true) {
 		lower = "Dismissed"
-	}
-
-	if lower == "" {
-		rotated, err := caRotationCompleted(ctx, c, cluster)
-		if err != nil {
-			return err
-		}
-
-		if rotated {
-			lower = "Rotated"
-		}
+	} else if rotated, err := caRotationCompleted(ctx, c, cluster); err != nil {
+		return err
+	} else if rotated {
+		lower = "Rotated"
 	}
 
 	switch {
-	case cond == nil && lower != "":
+	case cond == nil && lower != "", cond != nil && lower == "":
 		return nil
 	case cond == nil:
 		apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
@@ -71,13 +64,11 @@ func adviseCARotation(ctx context.Context, c client.Client, cluster *ichorv1alph
 			Message: "this cluster was adopted: previous administrators' client certificates and the CA keys held by its creator " +
 				"remain valid; consider `ichor cluster rotate-ca`",
 		})
-	case lower != "":
+	default:
 		apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
 			Type: ichorv1alpha1.ConditionCARotationAdvised, Status: metav1.ConditionFalse, Reason: lower,
 			Message: "the CA rotation advice no longer applies",
 		})
-	default:
-		return nil
 	}
 
 	return c.Status().Update(ctx, cluster)

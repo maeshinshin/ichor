@@ -31,6 +31,7 @@ import (
 
 	"github.com/maeshinshin/ichor/internal/oidctrust"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -110,8 +111,7 @@ func (c *caRun) restartTargets(ctx context.Context) ([]caClient, error) {
 // after the replaced bundle is verified and every Node is Ready. done is false while the rotation must wait; a workload that is not back after the timeout
 // is named in the returned note and does not hold the rotation.
 func (c *caRun) restartClients(ctx context.Context) (res ctrl.Result, note string, done bool, err error) {
-	kc := c.r.KubeClient
-	if kc == nil {
+	if c.r.KubeClient == nil {
 		return ctrl.Result{}, "", true, nil
 	}
 
@@ -126,8 +126,8 @@ func (c *caRun) restartClients(ctx context.Context) (res ctrl.Result, note strin
 	// One at a time, in order: a workload is restarted only once the one before it is available again,
 	// so DNS and the proxy are never down together. On a wait, the later ones are not touched.
 	for i, t := range targets {
-		ready, gone, rerr := c.restartOne(ctx, t, token)
-		if gone || (rerr == nil && ready) {
+		ready, rerr := c.restartOne(ctx, t, token)
+		if rerr == nil && ready {
 			continue
 		}
 
@@ -163,45 +163,45 @@ func (c *caRun) restartClients(ctx context.Context) (res ctrl.Result, note strin
 }
 
 // restartOne patches t's pod template unless it already carries token, and reports whether the rollout
-// is available. gone is true when t does not exist.
-func (c *caRun) restartOne(ctx context.Context, t caClient, token string) (ready, gone bool, err error) {
+// is available. A t that does not exist counts as ready: there is nothing to wait for.
+func (c *caRun) restartOne(ctx context.Context, t caClient, token string) (ready bool, err error) {
 	kc := c.r.KubeClient
 
-	var template *metav1.ObjectMeta
-
-	var status func() bool
-
-	var patch func([]byte) error
+	var (
+		template  *metav1.ObjectMeta
+		available bool
+		patch     func([]byte) error
+	)
 
 	switch t.kind {
 	case kindDeployment:
 		d, gerr := kc.AppsV1().Deployments(t.namespace).Get(ctx, t.name, metav1.GetOptions{})
 		if gerr != nil {
-			return false, apierrors.IsNotFound(gerr), skipNotFound(gerr)
+			return apierrors.IsNotFound(gerr), client.IgnoreNotFound(gerr)
 		}
 
-		template, status = &d.Spec.Template.ObjectMeta, func() bool { return deploymentAvailable(d) }
-		patch = func(b []byte) error {
-			_, perr := kc.AppsV1().Deployments(t.namespace).Patch(ctx, t.name, types.StrategicMergePatchType, b, metav1.PatchOptions{})
+		template, available = &d.Spec.Template.ObjectMeta, deploymentAvailable(d)
+		patch = func(b []byte) (perr error) {
+			_, perr = kc.AppsV1().Deployments(t.namespace).Patch(ctx, t.name, types.StrategicMergePatchType, b, metav1.PatchOptions{})
 
 			return perr
 		}
 	default:
 		d, gerr := kc.AppsV1().DaemonSets(t.namespace).Get(ctx, t.name, metav1.GetOptions{})
 		if gerr != nil {
-			return false, apierrors.IsNotFound(gerr), skipNotFound(gerr)
+			return apierrors.IsNotFound(gerr), client.IgnoreNotFound(gerr)
 		}
 
-		template, status = &d.Spec.Template.ObjectMeta, func() bool { return daemonSetAvailable(d) }
-		patch = func(b []byte) error {
-			_, perr := kc.AppsV1().DaemonSets(t.namespace).Patch(ctx, t.name, types.StrategicMergePatchType, b, metav1.PatchOptions{})
+		template, available = &d.Spec.Template.ObjectMeta, daemonSetAvailable(d)
+		patch = func(b []byte) (perr error) {
+			_, perr = kc.AppsV1().DaemonSets(t.namespace).Patch(ctx, t.name, types.StrategicMergePatchType, b, metav1.PatchOptions{})
 
 			return perr
 		}
 	}
 
 	if template.Annotations[caRestartMarker] == token {
-		return status(), false, nil
+		return available, nil
 	}
 
 	body, _ := json.Marshal(map[string]any{"spec": map[string]any{"template": map[string]any{"metadata": map[string]any{
@@ -212,15 +212,7 @@ func (c *caRun) restartOne(ctx context.Context, t caClient, token string) (ready
 	}}}})
 
 	// The patch just made the rollout; whatever status was read describes the previous one.
-	return false, false, patch(body)
-}
-
-func skipNotFound(err error) error {
-	if apierrors.IsNotFound(err) {
-		return nil
-	}
-
-	return err
+	return false, patch(body)
 }
 
 func deploymentAvailable(d *appsv1.Deployment) bool {

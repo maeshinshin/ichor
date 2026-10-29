@@ -207,13 +207,10 @@ func TestUpgradeKeepsInitsCustomizationsOverALiveUIDeployment(t *testing.T) {
 			}
 
 			// Every customization, compared against the pure function over the new manifest.
-			// The live objects are the previous release's, on 8080: TLS installs are pinned there and the others keep the
-			// deprecated plaintext listener.
+			// The live objects are the previous release's, on 8080: TLS installs are pinned there and the others move to 8443.
 			migrated := tc.settings
 			if migrated.TLSSecretName != "" {
 				migrated.ListenAddr = plainAddr
-			} else {
-				migrated.HTTPAddr = plainAddr
 			}
 
 			want := renderedUI(t, f.ns, migrated)

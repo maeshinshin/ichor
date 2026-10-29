@@ -18,6 +18,7 @@ package installer
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -42,21 +43,21 @@ func TestReadUISettingsMigrationCases(t *testing.T) {
 	}
 
 	for _, tc := range []struct {
-		name         string
-		dep          *appsv1.Deployment
-		listen, http string
+		name        string
+		dep         *appsv1.Deployment
+		listen, was string
 	}{
-		{"plaintext on 8080 keeps the transitional listener", live("", "--addr=:8080"), "", plainAddr},
+		{"plaintext on 8080 moves to HTTPS on 8443", live("", "--addr=:8080"), "", plainAddr},
 		{"TLS on 8080 is pinned", live("cert", "--addr=:8080", "--tls-cert-file=/x"), plainAddr, ""},
 		{"fresh install serves 8443 only", live("", "--addr=:8443"), "", ""},
 		{"fresh install with a Secret serves 8443 only", live("cert", "--addr=:8443"), "", ""},
-		{"an install already on N keeps its plaintext listener", live("", "--addr=:8443", "--http-addr=:8080"), "", plainAddr},
+		{"an install on 8443 with a hand-set --http-addr drops it", live("", "--addr=:8443", "--http-addr=:8080"), "", plainAddr},
 		{"no live Deployment", nil, "", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := ReadUISettings(tc.dep, nil)
-			if got.ListenAddr != tc.listen || got.HTTPAddr != tc.http {
-				t.Errorf("ListenAddr=%q HTTPAddr=%q, want %q and %q", got.ListenAddr, got.HTTPAddr, tc.listen, tc.http)
+			if got.ListenAddr != tc.listen || got.WasPlaintext != tc.was {
+				t.Errorf("ListenAddr=%q WasPlaintext=%q, want %q and %q", got.ListenAddr, got.WasPlaintext, tc.listen, tc.was)
 			}
 		})
 	}
@@ -85,10 +86,17 @@ func TestCustomizePoliciesOpensTheMigratedPort(t *testing.T) {
 	}
 
 	plain := mk()
-	CustomizePolicies(plain, UISettings{HTTPAddr: plainAddr})
+	CustomizePolicies(plain, UISettings{WasPlaintext: plainAddr})
 
-	if got := ports(plain[0]); len(got) != 2 || got[1].(map[string]any)["port"] != "8080" {
-		t.Errorf("a plaintext install opens %v, want 8443 and 8080", got)
+	if got := ports(plain[0]); len(got) != 1 {
+		t.Errorf("a plaintext install opens %v, want 8443 only", got)
+	}
+
+	pinned := mk()
+	CustomizePolicies(pinned, UISettings{ListenAddr: plainAddr})
+
+	if got := ports(pinned[0]); len(got) != 2 || got[1].(map[string]any)["port"] != "8080" {
+		t.Errorf("a pinned TLS install opens %v, want 8443 and 8080", got)
 	}
 }
 
@@ -96,11 +104,11 @@ func TestMigrationShapesTheManifestObjects(t *testing.T) {
 	objs, err := Decode([]byte(rendered("ns")))
 	must(t, err)
 
-	plain, err := CustomizeObjects(objs, UISettings{HTTPAddr: plainAddr})
+	plain, err := CustomizeObjects(objs, UISettings{WasPlaintext: plainAddr})
 	must(t, err)
 
 	c := toDeployment(t, plain[0].Object).Spec.Template.Spec.Containers[0]
-	if !slices.Contains(c.Args, "--http-addr=:8080") || !slices.Contains(c.Args, "--addr=:8443") {
+	if slices.ContainsFunc(c.Args, func(a string) bool { return strings.HasPrefix(a, "--http-addr") }) || !slices.Contains(c.Args, "--addr=:8443") {
 		t.Errorf("plaintext case args = %v", c.Args)
 	}
 
@@ -108,8 +116,8 @@ func TestMigrationShapesTheManifestObjects(t *testing.T) {
 
 	must(t, runtime.DefaultUnstructuredConverter.FromUnstructured(plain[2].Object, &svc))
 
-	if len(svc.Spec.Ports) != 2 || svc.Spec.Ports[0].Port != 8443 || svc.Spec.Ports[1].Name != UIPlainPortName || svc.Spec.Ports[1].Port != 8080 {
-		t.Errorf("plaintext case Service ports = %+v, want https 8443 and http 8080", svc.Spec.Ports)
+	if len(svc.Spec.Ports) != 1 || svc.Spec.Ports[0].Port != 8443 {
+		t.Errorf("plaintext case Service ports = %+v, want https 8443 only", svc.Spec.Ports)
 	}
 
 	pinned, err := CustomizeObjects(objs, UISettings{ListenAddr: plainAddr, TLSSecretName: "cert"})

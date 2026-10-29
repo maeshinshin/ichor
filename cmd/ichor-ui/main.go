@@ -93,7 +93,7 @@ func spaHandler(files fs.FS) http.Handler {
 
 func main() {
 	addr := flag.String("addr", ":8443", "HTTPS address ichor-ui listens on; it never serves plaintext here")
-	httpAddr := flag.String("http-addr", "", "DEPRECATED: also serve plain HTTP on this address, for an install that served plaintext; removed in the next minor release")
+	httpAddr := flag.String("http-addr", "", "DEPRECATED no-op: plain HTTP was removed; accepted for one release so an old Deployment still starts")
 	oidcIssuer := flag.String("oidc-issuer", os.Getenv("ICHOR_OIDC_ISSUER"), "OIDC issuer URL; empty disables login")
 	oidcClientID := flag.String("oidc-client-id", os.Getenv("ICHOR_OIDC_CLIENT_ID"), "OIDC client ID (public client, PKCE); also the expected token audience")
 	oidcUserClaim := flag.String("oidc-username-claim", os.Getenv("ICHOR_OIDC_USERNAME_CLAIM"), "claim used as the Kubernetes user name (default email)")
@@ -269,19 +269,8 @@ func main() {
 		}
 	}()
 
-	// The deprecated plaintext listener; only with --http-addr.
-	var plainSrv *http.Server
-
 	if *httpAddr != "" {
-		plainSrv = &http.Server{Addr: *httpAddr, Handler: mux, ReadHeaderTimeout: 10 * time.Second}
-
-		log.Printf("ichor-ui: WARNING: --http-addr is deprecated: plain HTTP is still served on %s; move your edge to HTTPS on %s, the plaintext listener is removed in the next minor release", *httpAddr, *addr)
-
-		go func() {
-			if err := plainSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-				log.Fatalf("ichor-ui: %v", err)
-			}
-		}()
+		log.Printf("ichor-ui: --http-addr=%s ignored: plaintext was removed; serve HTTPS on %s", *httpAddr, *addr)
 	}
 
 	if internalSrv != nil {
@@ -305,10 +294,6 @@ func main() {
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Printf("ichor-ui: graceful shutdown failed: %v", err)
-	}
-
-	if plainSrv != nil {
-		_ = plainSrv.Shutdown(shutdownCtx)
 	}
 
 	if internalSrv != nil {

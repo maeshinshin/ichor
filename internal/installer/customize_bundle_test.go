@@ -87,9 +87,7 @@ func TestCustomizePoliciesOnTheRealBundle(t *testing.T) {
 	}
 
 	for name, s := range map[string]UISettings{
-		"pinned TLS port":   {ListenAddr: plainAddr},
-		"deprecated plain":  {HTTPAddr: plainAddr},
-		"plain beside 8443": {ListenAddr: UIDefaultAddr, HTTPAddr: plainAddr},
+		"pinned TLS port": {ListenAddr: plainAddr},
 	} {
 		_, pol := realBundle(t)
 		CustomizePolicies(pol, s)
@@ -113,7 +111,7 @@ func TestCustomizePoliciesOnTheRealBundle(t *testing.T) {
 func TestCustomizeObjectsFindsEveryTargetInTheRealBundle(t *testing.T) {
 	objs, _ := realBundle(t)
 
-	out, err := CustomizeObjects(objs, UISettings{HTTPAddr: plainAddr})
+	out, err := CustomizeObjects(objs, UISettings{WasPlaintext: plainAddr})
 	must(t, err)
 
 	var uiDeps, ctrlDeps, svcs int
@@ -128,8 +126,8 @@ func TestCustomizeObjectsFindsEveryTargetInTheRealBundle(t *testing.T) {
 			case hasContainer(d, UIContainer):
 				uiDeps++
 
-				if !hasPort(d.Spec.Template.Spec.Containers[0].Ports, UIPlainPortName, 8080) {
-					t.Errorf("Deployment %s has no http port 8080 after customising", o.GetName())
+				if !hasPort(d.Spec.Template.Spec.Containers[0].Ports, UIPortName, 8443) {
+					t.Errorf("Deployment %s has no https port 8443 after customising", o.GetName())
 				}
 			case hasContainer(d, ControllerContainer):
 				ctrlDeps++
@@ -139,7 +137,7 @@ func TestCustomizeObjectsFindsEveryTargetInTheRealBundle(t *testing.T) {
 			must(t, runtime.DefaultUnstructuredConverter.FromUnstructured(o.Object, svc))
 
 			for _, p := range svc.Spec.Ports {
-				if p.Name == UIPlainPortName && p.Port == 8080 {
+				if p.Name == UIPortName && p.Port == 8443 {
 					svcs++
 				}
 			}

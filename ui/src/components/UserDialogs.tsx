@@ -5,8 +5,9 @@ import { ErrorAlert } from '@/components/ErrorAlert'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel, FieldLegend, FieldSet } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group'
 import type { User } from '@/gen/ichor/v1alpha1/user_pb'
 import { userClient } from '@/lib/connect'
 import { notifyDone } from '@/lib/notify'
@@ -18,18 +19,18 @@ type ErrorShape = { title: string; detail: string }
 function RolePicker({ id, roles, onChange }: { id: string; roles: string[]; onChange: (roles: string[]) => void }) {
   const t = useT()
   return (
-    <fieldset class="space-y-2">
-      <legend class="text-sm font-medium">{t('users.roles')}</legend>
-      <div class="flex flex-wrap gap-x-5 gap-y-2">
+    <FieldSet>
+      <FieldLegend variant="label">{t('users.roles')}</FieldLegend>
+      <FieldGroup className="gap-2">
         {roleNames.map((r) => (
-          <div key={r} class="flex items-center gap-2">
+          <Field key={r} orientation="horizontal">
             <Checkbox id={`${id}-${r}`} checked={roles.includes(r)} onCheckedChange={(on: boolean | 'indeterminate') => onChange(toggleRole(roles, r, on === true))} />
-            <Label htmlFor={`${id}-${r}`}>{t(`users.role.${r}`)}</Label>
-          </div>
+            <FieldLabel htmlFor={`${id}-${r}`}>{t(`users.role.${r}`)}</FieldLabel>
+          </Field>
         ))}
-      </div>
-      {roles.length === 0 && <p class="text-xs text-muted-foreground">{t('users.rolesNone')}</p>}
-    </fieldset>
+      </FieldGroup>
+      {roles.length === 0 && <FieldDescription>{t('users.rolesNone')}</FieldDescription>}
+    </FieldSet>
   )
 }
 
@@ -39,14 +40,14 @@ function ProfileFields({ id, displayName, email, setDisplayName, setEmail }: Pro
   const t = useT()
   return (
     <>
-      <div class="space-y-1">
-        <Label htmlFor={`${id}-display`}>{t('users.displayName')}</Label>
+      <Field>
+        <FieldLabel htmlFor={`${id}-display`}>{t('users.displayName')}</FieldLabel>
         <Input id={`${id}-display`} value={displayName} onInput={(e) => setDisplayName((e.target as HTMLInputElement).value)} />
-      </div>
-      <div class="space-y-1">
-        <Label htmlFor={`${id}-email`}>{t('users.email')}</Label>
+      </Field>
+      <Field>
+        <FieldLabel htmlFor={`${id}-email`}>{t('users.email')}</FieldLabel>
         <Input id={`${id}-email`} type="email" value={email} onInput={(e) => setEmail((e.target as HTMLInputElement).value)} />
-      </div>
+      </Field>
     </>
   )
 }
@@ -56,22 +57,23 @@ function GeneratedPassword({ password }: { password: string }) {
   const t = useT()
   const [copied, setCopied] = useState(false)
   return (
-    <div class="space-y-2">
-      <p class="text-sm">{t('users.generatedOnce')}</p>
-      <div class="flex items-center gap-2">
-        <Input readOnly value={password} class="font-mono" aria-label={t('users.passwordGenerated')} onFocus={(e) => (e.target as HTMLInputElement).select()} />
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => {
-            navigator.clipboard?.writeText(password).then(() => setCopied(true), () => {})
-          }}
-        >
-          {copied ? <CheckIcon /> : <CopyIcon />}
-          {copied ? t('users.copied') : t('users.copy')}
-        </Button>
-      </div>
-    </div>
+    <Field>
+      <FieldDescription>{t('users.generatedOnce')}</FieldDescription>
+      <InputGroup>
+        <InputGroupInput readOnly value={password} aria-label={t('users.passwordGenerated')} onFocus={(e) => (e.target as HTMLInputElement).select()} />
+        <InputGroupAddon align="inline-end">
+          <InputGroupButton
+            type="button"
+            onClick={() => {
+              navigator.clipboard?.writeText(password).then(() => setCopied(true), () => {})
+            }}
+          >
+            {copied ? <CheckIcon /> : <CopyIcon />}
+            {copied ? t('users.copied') : t('users.copy')}
+          </InputGroupButton>
+        </InputGroupAddon>
+      </InputGroup>
+    </Field>
   )
 }
 
@@ -159,32 +161,32 @@ export function CreateUserDialog({ onDone }: { onDone: () => void }) {
                 <DialogTitle>{t('users.createTitle')}</DialogTitle>
                 <DialogDescription>{t('users.createDescription')}</DialogDescription>
               </DialogHeader>
-              <div class="space-y-4 text-sm">
-                <div class="space-y-1">
-                  <Label htmlFor="user-name">{t('users.name')}</Label>
+              <FieldGroup>
+                <Field data-invalid={nameBad}>
+                  <FieldLabel htmlFor="user-name">{t('users.name')}</FieldLabel>
                   <Input id="user-name" autoCapitalize="none" spellcheck={false} aria-invalid={nameBad} value={name} onInput={(e) => setName((e.target as HTMLInputElement).value)} />
-                  <p class={`text-xs ${nameBad ? 'text-destructive' : 'text-muted-foreground'}`}>{nameBad ? t('users.nameInvalid') : t('users.nameHint')}</p>
-                </div>
+                  {nameBad ? <FieldError>{t('users.nameInvalid')}</FieldError> : <FieldDescription>{t('users.nameHint')}</FieldDescription>}
+                </Field>
                 <ProfileFields id="user" displayName={displayName} email={email} setDisplayName={setDisplayName} setEmail={setEmail} />
                 <RolePicker id="create-role" roles={roles} onChange={setRoles} />
-                <div class="space-y-2">
-                  <p class="font-medium">{t('users.passwordMode')}</p>
-                  <div class="flex items-center gap-2">
+                <FieldSet>
+                  <FieldLegend variant="label">{t('users.passwordMode')}</FieldLegend>
+                  <Field orientation="horizontal">
                     <Checkbox id="user-typed" checked={typePassword} onCheckedChange={(on: boolean | 'indeterminate') => setTypePassword(on === true)} />
-                    <Label htmlFor="user-typed">{t('users.passwordType')}</Label>
-                  </div>
+                    <FieldLabel htmlFor="user-typed">{t('users.passwordType')}</FieldLabel>
+                  </Field>
                   {typePassword ? (
-                    <div class="space-y-1">
+                    <Field>
                       <Input type="password" autoComplete="new-password" aria-label={t('users.passwordType')} value={password} onInput={(e) => setPassword((e.target as HTMLInputElement).value)} />
-                      <p class="text-xs text-muted-foreground">{t('account.passwordHint', { n: minPasswordLength })}</p>
-                    </div>
+                      <FieldDescription>{t('account.passwordHint', { n: minPasswordLength })}</FieldDescription>
+                    </Field>
                   ) : (
-                    <p class="text-xs text-muted-foreground">{t('users.passwordGenerate')}</p>
+                    <FieldDescription>{t('users.passwordGenerate')}</FieldDescription>
                   )}
-                  <p class="text-xs text-muted-foreground">{t('users.mustChange')}</p>
-                </div>
+                  <FieldDescription>{t('users.mustChange')}</FieldDescription>
+                </FieldSet>
                 {error && <ErrorAlert {...error} />}
-              </div>
+              </FieldGroup>
               <DialogFooter>
                 <Button variant="ghost" onClick={() => change(false)}>
                   {t('common.cancel')}
@@ -231,18 +233,16 @@ export function EditUserDialog({ user, open, onOpenChange, onDone }: { user: Use
         <DialogHeader>
           <DialogTitle>{t('users.editTitle', { name: user.name })}</DialogTitle>
         </DialogHeader>
-        <div class="space-y-4 text-sm">
+        <FieldGroup>
           <ProfileFields id="edit" displayName={displayName} email={email} setDisplayName={setDisplayName} setEmail={setEmail} />
           <RolePicker id="edit-role" roles={roles} onChange={setRoles} />
-          <div class="space-y-1">
-            <div class="flex items-center gap-2">
-              <Checkbox id="edit-disabled" checked={disabled} onCheckedChange={(on: boolean | 'indeterminate') => setDisabled(on === true)} />
-              <Label htmlFor="edit-disabled">{t('users.disabled')}</Label>
-            </div>
-            <p class="text-xs text-muted-foreground">{t('users.disabledHint')}</p>
-          </div>
+          <Field orientation="horizontal">
+            <Checkbox id="edit-disabled" checked={disabled} onCheckedChange={(on: boolean | 'indeterminate') => setDisabled(on === true)} />
+            <FieldLabel htmlFor="edit-disabled">{t('users.disabled')}</FieldLabel>
+            <FieldDescription>{t('users.disabledHint')}</FieldDescription>
+          </Field>
           {error && <ErrorAlert {...error} />}
-        </div>
+        </FieldGroup>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             {t('common.cancel')}
@@ -297,11 +297,11 @@ export function SetPasswordDialog({ user, open, onOpenChange }: { user: User; op
         {generated ? (
           <GeneratedPassword password={generated} />
         ) : (
-          <div class="space-y-1 text-sm">
-            <Label htmlFor="set-password">{t('users.newPasswordOptional')}</Label>
+          <Field>
+            <FieldLabel htmlFor="set-password">{t('users.newPasswordOptional')}</FieldLabel>
             <Input id="set-password" type="password" autoComplete="new-password" value={password} onInput={(e) => setPassword((e.target as HTMLInputElement).value)} />
-            <p class="text-xs text-muted-foreground">{t('account.passwordHint', { n: minPasswordLength })}</p>
-          </div>
+            <FieldDescription>{t('account.passwordHint', { n: minPasswordLength })}</FieldDescription>
+          </Field>
         )}
         {error && <ErrorAlert {...error} />}
         <DialogFooter>

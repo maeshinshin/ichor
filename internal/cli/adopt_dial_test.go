@@ -5,7 +5,6 @@ import (
 	"errors"
 	"testing"
 
-	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
 // A machine that moved (docs/adr/0086) has its current address in status.observedEndpoint.
@@ -27,9 +26,9 @@ func TestPlanMachineDialsObservedEndpoint(t *testing.T) {
 		return nil, errors.New("stop after dial")
 	}
 
-	_, err := planMachine(context.Background(), &ichorv1alpha1.TalosCluster{}, m, nil, nil, nil, dial)
+	err := readNode(context.Background(), adoptDeps{DialTalos: dial}, &adoptNode{M: m}, false)
 	if err == nil {
-		t.Fatal("planMachine: want the stubbed dial error")
+		t.Fatal("readNode: want the stubbed dial error")
 	}
 
 	if dialed != observed {

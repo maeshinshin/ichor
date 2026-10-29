@@ -29,6 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/maeshinshin/ichor/pkg/cni"
+	"github.com/maeshinshin/ichor/pkg/render"
 )
 
 func testDS(name, image string) *appsv1.DaemonSet {
@@ -157,11 +158,23 @@ func TestCheckCNIAdoption(t *testing.T) {
 }
 
 func TestRunAdopt_RefusesNonCiliumWithNothingWritten(t *testing.T) {
+	cluster := newTestCluster()
+	machine := newTestMachine(cluster.Name)
+
+	cfg, _, err := render.Render(cluster, machine, newTestBundle(t), nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	target := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(testDS("calico-node", calicoImage)).Build()
+	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(cluster, machine).Build()
 
 	var errOut bytes.Buffer
 
-	err := runAdopt(context.Background(), "c", "default", adoptDeps{Target: target, Stderr: &errOut})
+	err = runAdopt(context.Background(), cluster.Name, testNamespace, adoptDeps{
+		K8s: k8s, Bundle: newTestBundle(t), DialTalos: dialerFor(&fakeTalosReader{current: cfg}, nil),
+		Target: target, Stderr: &errOut, Stdout: &errOut, Stdin: strings.NewReader(""), AssumeYes: true,
+	})
 	if err == nil || !strings.Contains(err.Error(), "--cni-unmanaged") {
 		t.Fatalf("err = %v, want the unmanaged refusal", err)
 	}

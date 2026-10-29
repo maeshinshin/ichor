@@ -19,11 +19,14 @@ package controller
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync/atomic"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -120,6 +123,38 @@ var _ = Describe("strongIdentity", func() {
 		Entry("missing UUID and MAC addresses", HardwareIdentity{Serial: "S1"}, false),
 		Entry("everything empty", HardwareIdentity{}, false),
 	)
+})
+
+var _ = Describe("configuredNodeRejection", func() {
+	DescribeTable("tells a configured node's rejection from an unreachable one",
+		func(err error, want bool) {
+			Expect(configuredNodeRejection(err)).To(Equal(want))
+		},
+		Entry("no error", nil, false),
+		Entry("TLS alert after the handshake", status.Error(codes.Unavailable,
+			`connection error: desc = "error reading server preface: remote error: tls: certificate required"`), true),
+		Entry("bad certificate alert", status.Error(codes.Unavailable, "remote error: tls: bad certificate"), true),
+		Entry("unauthenticated", status.Error(codes.Unauthenticated, "no client cert"), true),
+		Entry("permission denied", status.Error(codes.PermissionDenied, "denied"), true),
+		Entry("nothing listening", status.Error(codes.Unavailable, "connect: connection refused"), false),
+		Entry("not TLS", status.Error(codes.Unavailable, "tls: first record does not look like a TLS handshake"), false),
+		Entry("plain error", errors.New("boom"), false),
+	)
+})
+
+var _ = Describe("DiscoveryReconciler.Discover already configured", func() {
+	It("records an AlreadyConfigured Event with the endpoint and creates nothing", func() {
+		cluster := newTestCluster("does-not-exist", "v1.14")
+		recorder := record.NewFakeRecorder(10)
+		fake := &fakeMaintenanceClient{err: fmt.Errorf("%w: rejected", ErrAlreadyConfigured)}
+		r := &DiscoveryReconciler{Client: k8sClient, Recorder: recorder, MaintenanceClient: maintenanceFactory(fake)}
+
+		m, err := r.Discover(ctx, cluster, "10.0.0.60:50000")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(m).To(BeNil())
+		Expect(recorder.Events).To(Receive(And(
+			ContainSubstring(ReasonAlreadyConfigured), ContainSubstring("10.0.0.60:50000"))))
+	})
 })
 
 var _ = Describe("DiscoveryReconciler.Discover", func() {

@@ -77,10 +77,10 @@ func legacyMirrorForm(cfg []byte) []byte {
 			break
 		}
 
-		switch {
-		case d["kind"] == registryMirrorKind:
+		switch d["kind"] {
+		case registryMirrorKind:
 			m := map[string]any{}
-			eps := []any{}
+			eps := make([]any, 0, len(d["endpoints"].([]any)))
 
 			for _, e := range d["endpoints"].([]any) {
 				ep := e.(map[string]any)
@@ -97,7 +97,7 @@ func legacyMirrorForm(cfg []byte) []byte {
 			}
 
 			mirrors[d["name"].(string)] = m
-		case d["kind"] == nil:
+		case nil:
 			main = d
 		default:
 			rest = append(rest, d)

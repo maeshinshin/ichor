@@ -4,7 +4,7 @@ import { CircleXIcon, EllipsisIcon, PlusIcon, TriangleAlertIcon } from 'lucide-p
 import { Alert } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -241,22 +241,21 @@ function Home({
           <Tile
             label={t('overview.tile.nodes')}
             target={targets.nodes}
-            tone={machines === null ? 'neutral' : counts.ready === approved.length ? 'good' : 'warn'}
+            badge={machines !== null && counts.ready !== approved.length ? t('overview.nodeNotReady') : undefined}
             value={machines ? nodesValue(counts.ready, approved.length) : '-'}
             sub={pending.length > 0 ? t('overview.waitingApproval', { n: pending.length }) : undefined}
           />
           <Tile
             label={t('overview.tile.operation')}
             target={targets.operation}
-            tone={current ? opStateTone(currentState!) : 'neutral'}
+            badge={current && opStateTone(currentState!) === 'bad' ? t(`ops.state.${currentState!}`) : undefined}
             value={current ? enumLabel(OperationKind, current.op.kind) : t('overview.idle')}
             sub={current ? <ActiveProgress row={current} total={approved.length} /> : undefined}
           />
-          <Tile label={t('overview.tile.backups')} target={targets.backups} tone="neutral" value={backupsValue(backups, Date.now())} />
+          <Tile label={t('overview.tile.backups')} target={targets.backups} value={backupsValue(backups, Date.now())} />
           <Tile
             label={t('overview.tile.versions')}
             target={targets.versions}
-            tone="neutral"
             value={versionsValue(cluster.talosVersion, cluster.kubernetesVersion)}
           />
         </div>
@@ -413,34 +412,32 @@ function Home({
   )
 }
 
-const accent: Record<Tone, string> = {
-  good: 'border-l-emerald-500',
-  bad: 'border-l-red-500',
-  warn: 'border-l-amber-500',
-  progress: 'border-l-sky-500',
-  neutral: 'border-l-border',
-}
-
-// Tile is one summary number: a small muted label, the value, and a subtle accent on the left edge.
-// The whole tile leads somewhere: a page, or the versions table further down.
-function Tile({ label, value, sub, tone, target }: { label: string; value: string; sub?: ComponentChildren; tone: Tone; target: TileTarget }) {
-  const cls = `block min-w-0 rounded-lg border border-l-4 bg-card px-3 py-2.5 text-left transition-colors hover:bg-accent/50 ${accent[tone]}`
+// Tile is one summary number as a stock Card: label (CardDescription), value (CardTitle), and a Badge when something needs attention.
+// The whole tile leads somewhere: a page, or the versions card further down.
+function Tile({ label, value, sub, badge, target }: { label: string; value: string; sub?: ComponentChildren; badge?: string; target: TileTarget }) {
   const body = (
-    <>
-      <p class="text-xs text-muted-foreground">{label}</p>
-      <p class="break-words text-base font-semibold leading-snug">{value}</p>
-      {sub && <div class="text-xs text-muted-foreground">{sub}</div>}
-    </>
+    <Card size="sm">
+      <CardHeader>
+        <CardDescription>{label}</CardDescription>
+        <CardTitle>{value}</CardTitle>
+        {badge && (
+          <CardAction>
+            <Badge variant="destructive">{badge}</Badge>
+          </CardAction>
+        )}
+      </CardHeader>
+      {sub && <CardContent>{sub}</CardContent>}
+    </Card>
   )
   if (target.kind === 'route') {
     return (
-      <Link to={target.to} class={cls}>
+      <Link to={target.to} class="block min-w-0">
         {body}
       </Link>
     )
   }
   return (
-    <button type="button" class={`${cls} w-full`} onClick={() => document.getElementById(target.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
+    <button type="button" class="block w-full min-w-0 text-left" onClick={() => document.getElementById(target.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
       {body}
     </button>
   )

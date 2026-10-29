@@ -38,6 +38,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/go-logr/stdr"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -123,6 +124,10 @@ func main() {
 	settingsReadOnly := flag.Bool("settings-read-only", envTrue("ICHOR_SETTINGS_READ_ONLY"), "ignore the runtime settings in the IchorInstallation spec (docs/adr/0105; chart settings.readOnly)")
 
 	flag.Parse()
+
+	// certreload's certwatcher logs through controller-runtime's logger, which dumps a stack
+	// trace when none is set; send it to the std logger this binary uses everywhere else.
+	ctrl.SetLogger(stdr.New(log.Default()))
 
 	if err := users.validate(); err != nil {
 		log.Fatalf("ichor-ui: %v", err)

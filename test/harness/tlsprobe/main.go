@@ -25,8 +25,11 @@ import (
 	"crypto/x509"
 	"flag"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -36,7 +39,13 @@ func main() {
 	sni := flag.String("sni", "", "server name to send and verify")
 	plain := flag.Bool("plain", false, "send a plain HTTP request instead of a handshake")
 	watch := flag.Duration("watch", 0, "poll every 500ms for this long and print each serial change")
+	path := flag.String("path", "", "with -addr: HTTPS request path (GET, or POST with -body) instead of a handshake report")
+	body := flag.String("body", "", "JSON body: makes -path a Connect unary POST")
 	flag.Parse()
+
+	if *path != "" {
+		os.Exit(httpsRequest(*addr, *caFile, *sni, *path, *body))
+	}
 
 	if *plain {
 		os.Exit(plainProbe(*addr))
@@ -134,6 +143,46 @@ func plainProbe(addr string) int {
 	buf := make([]byte, 200)
 	n, err := c.Read(buf)
 	fmt.Printf("plaintext: read %d bytes err=%v first=%q\n", n, err, string(buf[:n]))
+
+	return 0
+}
+
+func httpsRequest(addr, caFile, sni, path, body string) int {
+	cfg := &tls.Config{ServerName: sni, InsecureSkipVerify: caFile == ""} //nolint:gosec // inspection tool
+
+	if caFile != "" {
+		pem, err := os.ReadFile(caFile)
+		if err != nil {
+			fmt.Println("read ca:", err)
+			return 2
+		}
+
+		cfg.RootCAs = x509.NewCertPool()
+		cfg.RootCAs.AppendCertsFromPEM(pem)
+	}
+
+	cl := &http.Client{Timeout: 10 * time.Second, Transport: &http.Transport{TLSClientConfig: cfg}}
+	method := http.MethodGet
+
+	var rd io.Reader
+	if body != "" {
+		method, rd = http.MethodPost, strings.NewReader(body)
+	}
+
+	req, _ := http.NewRequest(method, "https://"+addr+path, rd)
+	if body != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
+
+	resp, err := cl.Do(req)
+	if err != nil {
+		fmt.Println("request failed:", err)
+		return 1
+	}
+	defer resp.Body.Close()
+
+	b, _ := io.ReadAll(io.LimitReader(resp.Body, 1500))
+	fmt.Printf("%s %s -> %s\n%s\n", method, path, resp.Status, b)
 
 	return 0
 }

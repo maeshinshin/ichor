@@ -115,16 +115,34 @@ func Run(ctx context.Context, c client.Client, opts Options) error {
 		return err
 	}
 
-	// Stage 0: the installer's own RBAC. A run started by an older release holds that release's
-	// rights, which may lack a rule for a kind only the new manifest has, so the snapshot of
-	// everything else waits until the new rights are in. The old role can still do this much: it
-	// always held get/patch/update on its own (Cluster)Role and bindings, with escalate and bind.
-	snap, err := takeSnapshot(ctx, c, opts.Namespace, opts.RunID, 0, p.rbac)
+	// Stage 0: the installer's cluster-scoped RBAC (ClusterRoles, ClusterRoleBindings). A run
+	// started by an older release holds that release's rights, which cannot reach a namespace
+	// only the new manifest names, so the cluster-scoped rights go in first, and the namespaced
+	// installer Roles are snapshotted and applied only once they are effective (stage 1). The old
+	// ClusterRole can still do this much: it always held get/patch/update on ClusterRoles and
+	// ClusterRoleBindings, with escalate and bind. Installer rights are cluster-scoped only (ADR 0059).
+	snap, err := takeSnapshot(ctx, c, opts.Namespace, opts.RunID, 0, p.clusterRBAC)
 	if err != nil {
 		return err
 	}
 
-	if err := applyStep(ctx, c, opts, "installer RBAC", p.rbac); err != nil {
+	if err := applyStep(ctx, c, opts, "installer cluster RBAC", p.clusterRBAC); err != nil {
+		return failWithRollback(c, opts, snap, err)
+	}
+
+	if err := waitRBACEffective(ctx, c, p.clusterRBAC, opts.RBACSettle); err != nil {
+		return failWithRollback(c, opts, snap, err)
+	}
+
+	// Stage 1: the installer's namespaced RBAC, readable now under the new ClusterRole.
+	nsSnap, err := takeSnapshot(ctx, c, opts.Namespace, opts.RunID, 1, p.namespacedRBAC)
+	if err != nil {
+		return failWithRollback(c, opts, snap, err)
+	}
+
+	snap = append(snap, nsSnap...)
+
+	if err := applyStep(ctx, c, opts, "installer namespaced RBAC", p.namespacedRBAC); err != nil {
 		return failWithRollback(c, opts, snap, err)
 	}
 
@@ -135,13 +153,13 @@ func Run(ctx context.Context, c client.Client, opts Options) error {
 		logf(opts.Log, "could not remove old snapshots: %v", err)
 	}
 
-	if err := waitRBACEffective(ctx, c, p.rbac, opts.RBACSettle); err != nil {
+	if err := waitRBACEffective(ctx, c, p.namespacedRBAC, opts.RBACSettle); err != nil {
 		return failWithRollback(c, opts, snap, err)
 	}
 
-	// Stage 1: everything else, now readable under the new rights. A failure here leaves nothing
+	// Stage 2: everything else, now readable under the new rights. A failure here leaves nothing
 	// but the RBAC applied, which the stage-0 snapshot restores.
-	rest, err := takeSnapshot(ctx, c, opts.Namespace, opts.RunID, 1, append(p.nonRBAC(), policies...))
+	rest, err := takeSnapshot(ctx, c, opts.Namespace, opts.RunID, 2, append(p.nonRBAC(), policies...))
 	if err != nil {
 		return failWithRollback(c, opts, snap, err)
 	}

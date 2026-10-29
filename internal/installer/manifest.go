@@ -69,7 +69,7 @@ func Decode(data []byte) ([]*unstructured.Unstructured, error) {
 
 // plan is the manifest split into the steps, each in the manifest's own order.
 type plan struct {
-	rbac, crds, controller, ui []*unstructured.Unstructured
+	clusterRBAC, namespacedRBAC, crds, controller, ui []*unstructured.Unstructured
 }
 
 // classify splits objs. A Secret is never part of the plan: the installer neither applies it
@@ -82,7 +82,11 @@ func classify(objs []*unstructured.Unstructured) plan {
 		switch {
 		case o.GetKind() == kindSecret:
 		case isInstallerRBAC(o):
-			p.rbac = append(p.rbac, o)
+			if o.GetNamespace() == "" {
+				p.clusterRBAC = append(p.clusterRBAC, o)
+			} else {
+				p.namespacedRBAC = append(p.namespacedRBAC, o)
+			}
 		case o.GetKind() == kindCRD:
 			p.crds = append(p.crds, o)
 		case strings.Contains(o.GetName(), uiNameMarker):

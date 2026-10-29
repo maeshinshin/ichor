@@ -3,8 +3,10 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
-import { DataTable, LinkRow, ListToolbar } from '@/components/ListToolbar'
-import { PageHeader } from '@/components/PageHeader'
+import { LayersIcon, PlusIcon } from 'lucide-preact'
+import { LinkRow, ListToolbar } from '@/components/ListToolbar'
+import { PageTitle } from '@/components/PageTitle'
+import { TableCard } from '@/components/TableCard'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { ConfigLayer } from '@/gen/ichor/v1alpha1/node_pb'
@@ -53,19 +55,21 @@ export function PatchList() {
 
   return (
     <div>
-      <PageHeader title={t('config.title')} />
-      <p class="mb-4 max-w-3xl text-sm text-muted-foreground">{t('patches.intro')}</p>
-      <ListToolbar query={query} onQuery={setQuery} shown={rows.length} total={patches.length} onRefresh={reload}>
+      <PageTitle title={t('config.title')} description={t('patches.intro')} />
+      <ListToolbar query={query} onQuery={setQuery} shown={rows.length} total={patches.length} onRefresh={reload} stock>
         <Button asChild size="sm">
-          <Link to="/config/new">{t('patches.new')}</Link>
+          <Link to="/config/new">
+            <PlusIcon data-icon="inline-start" aria-hidden="true" />
+            {t('patches.new')}
+          </Link>
         </Button>
       </ListToolbar>
       {patches.length === 0 ? (
-        <EmptyNote>{t('patches.empty')}</EmptyNote>
+        <EmptyNote icon={LayersIcon}>{t('patches.empty')}</EmptyNote>
       ) : rows.length === 0 ? (
-        <EmptyNote>{t('list.noMatch')}</EmptyNote>
+        <EmptyNote icon={LayersIcon}>{t('list.noMatch')}</EmptyNote>
       ) : (
-        <DataTable>
+        <TableCard>
           <Table>
             <TableHeader>
               <TableRow>
@@ -83,9 +87,9 @@ export function PatchList() {
                 <LinkRow key={`${p.ref?.namespace}/${p.ref?.name}`} to={p.ref ? `/config/${p.ref.name}` : '/config'}>
                   <TableCell>
                     {p.ref ? (
-                      <Link to={`/config/${p.ref.name}`} class="font-medium hover:underline">
-                        {p.ref.name}
-                      </Link>
+                      <Button asChild variant="link" size="sm">
+                        <Link to={`/config/${p.ref.name}`}>{p.ref.name}</Link>
+                      </Button>
                     ) : (
                       '-'
                     )}
@@ -100,10 +104,14 @@ export function PatchList() {
                     {p.documents.length === 0 ? (
                       '-'
                     ) : (
-                      <>
-                        <div>{t('patches.docCount', { count: p.documents.length })}</div>
-                        <div class="text-xs text-muted-foreground">{p.documents.map((d) => d.kind).join(', ')}</div>
-                      </>
+                      <div class="flex flex-wrap items-center gap-1">
+                        <span>{t('patches.docCount', { count: p.documents.length })}</span>
+                        {p.documents.map((d, i) => (
+                          <Badge key={i} variant="outline">
+                            {d.kind}
+                          </Badge>
+                        ))}
+                      </div>
                     )}
                   </TableCell>
                   <TableCell>
@@ -118,7 +126,7 @@ export function PatchList() {
               ))}
             </TableBody>
           </Table>
-        </DataTable>
+        </TableCard>
       )}
     </div>
   )

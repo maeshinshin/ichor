@@ -1,16 +1,19 @@
 import { useEffect, useState } from 'preact/hooks'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { EyeIcon, FileCogIcon, InfoIcon, LoaderCircleIcon, PlusIcon } from 'lucide-preact'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemSeparator, ItemTitle } from '@/components/ui/item'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import type { MessageInitShape } from '@bufbuild/protobuf'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { ErrorAlert } from '@/components/ErrorAlert'
-import { PageHeader } from '@/components/PageHeader'
-import { PageSkeleton } from '@/components/PageStates'
+import { PageTitle } from '@/components/PageTitle'
+import { EmptyNote, PageSkeleton } from '@/components/PageStates'
 import { ConfigLayer } from '@/gen/ichor/v1alpha1/node_pb'
 import { PatchSchema } from '@/gen/ichor/v1alpha1/patch_pb'
 import { machineClient, patchClient } from '@/lib/connect'
@@ -256,214 +259,252 @@ export function PatchDetail({ name }: { name?: string }) {
 
   return (
     <>
-      <PageHeader
+      <PageTitle
         title={isNew ? t('patch.newTitle') : name!}
-        kind={t('kind.patch')}
+        description={t('kind.patch')}
         badges={!isNew && <Badge variant="outline">{enumLabel(ConfigLayer, layer)}</Badge>}
       />
-      <div class="min-w-0 space-y-8">
-      <Card id="basics" className="scroll-mt-section">
-        <CardHeader>
-          <CardTitle>{t('patch.basics')}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p class="text-sm text-muted-foreground">{t('patch.intro')}</p>
-          <div class="grid gap-3 sm:grid-cols-2">
-            <div class="space-y-1">
-              <Label htmlFor="patch-name">{t('col.name')}</Label>
-              <Input
-                id="patch-name"
-                value={patchName}
-                disabled={!isNew}
-                onInput={(e) => setPatchName((e.target as HTMLInputElement).value)}
-              />
-              <p class="text-xs text-muted-foreground">{t('patch.nameHelp')}</p>
-            </div>
-            <div class="space-y-1">
-              <Label htmlFor="patch-layer">{t('patch.layer')}</Label>
-              <Select
-                value={layer ? String(layer) : ''}
-                onValueChange={(v) => {
-                  const l = Number(v) as ConfigLayer
-                  setLayer(l)
-                  // The layer picks the target: drop the old one.
-                  applyTargetFields(targetFieldsFor(layerKeyOf(l), undefined))
-                }}
-              >
-                <SelectTrigger id="patch-layer" className="w-full">
-                  <SelectValue placeholder={t('patch.selectLayer')} />
-                </SelectTrigger>
-                <SelectContent>
-                  {EDITABLE_LAYERS.map((l) => (
-                    <SelectItem key={l.layer} value={String(l.layer)}>
-                      {enumLabel(ConfigLayer, l.layer)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p class="text-xs text-muted-foreground">{t('patch.layerHelp')}</p>
-              <ul class="space-y-0.5 text-xs text-muted-foreground">
-                {EDITABLE_LAYERS.map((l) => (
-                  <li key={l.layer} class={l.layer === layer ? 'font-medium text-foreground' : ''}>
-                    {t(l.descKey)}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div class="space-y-1">
-              <Label htmlFor="patch-priority">{t('patch.priority')}</Label>
-              <Input
-                id="patch-priority"
-                type="number"
-                value={String(priority)}
-                onInput={(e) => setPriority(Number((e.target as HTMLInputElement).value) || 0)}
-              />
-              <p class="text-xs text-muted-foreground">{t('patch.priorityHelp')}</p>
-            </div>
-          </div>
-
-          {layer === ConfigLayer.ROLE && (
-            <div class="space-y-2 rounded-md border p-3">
-              <Label htmlFor="patch-target-role">{t('patch.target')}</Label>
-              <Select value={role} onValueChange={setRole}>
-                <SelectTrigger id="patch-target-role" className="w-full">
-                  <SelectValue placeholder={t('approve.selectRole')} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="controlplane">{t('role.controlPlane')}</SelectItem>
-                  <SelectItem value="worker">{t('role.worker')}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          {layer === ConfigLayer.SELECTOR && (
-            <div class="space-y-1 rounded-md border p-3">
-              <Label htmlFor="patch-target-selector">{t('patch.target')}</Label>
-              <p class="text-xs text-muted-foreground">{t('patch.selectorHint')}</p>
-              <Textarea
-                id="patch-target-selector"
-                className="font-mono text-xs"
-                rows={5}
-                value={labelSelectorText}
-                onInput={(e) => setLabelSelectorText((e.target as HTMLTextAreaElement).value)}
-              />
-            </div>
-          )}
-
-          {layer === ConfigLayer.MACHINE && (
-            <div class="space-y-2 rounded-md border p-3">
-              <Label htmlFor="patch-target-machine">{t('patch.target')}</Label>
-              <Select value={machineRef} onValueChange={setMachineRef}>
-                <SelectTrigger id="patch-target-machine" className="w-full">
-                  <SelectValue placeholder={t('patch.selectMachine')} />
-                </SelectTrigger>
-                <SelectContent>
-                  {[...new Set([...(machineRef ? [machineRef] : []), ...machines.map((m) => m.ref?.name ?? '').filter(Boolean)])].map((n) => (
-                    <SelectItem key={n} value={n}>
-                      {n}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {machines.length === 0 && <p class="text-xs text-muted-foreground">{t('patch.noMachines')}</p>}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card id="documents" className="scroll-mt-section">
-        <CardHeader className="flex items-center justify-between">
-          <div class="space-y-1">
-            <CardTitle>{t('patch.documents')}</CardTitle>
-            <p class="text-sm font-normal text-muted-foreground">{t('patch.documentsHelp')}</p>
-          </div>
-          <Button size="sm" variant="outline" onClick={addDocument}>
-            {t('patch.addDocument')}
-          </Button>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {documents.length === 0 && <p class="text-sm text-muted-foreground">{t('patch.noDocuments')}</p>}
-          {documents.map((d) => (
-            <PatchDocumentCard
-              key={d.id}
-              doc={d}
-              startEditing={!!d.fresh}
-              onChange={(next) => updateDocument(d.id, next)}
-              onRemove={() => removeDocument(d.id)}
-            />
-          ))}
-        </CardContent>
-      </Card>
-
-      <Card id="impact" className="scroll-mt-section">
-        <CardHeader className="flex items-center justify-between">
-          <CardTitle>{t('patch.impact')}</CardTitle>
-          <Button size="sm" variant="outline" disabled={previewing} onClick={runPreview}>
-            {previewing ? t('patch.previewing') : t('patch.previewButton')}
-          </Button>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm">
-          <p class="text-muted-foreground">{t('patch.impactNote')}</p>
-          {previewError && <ErrorAlert {...previewError} />}
-          {!preview && !previewing && !previewError && <p class="font-medium">{t('patch.previewNever')}</p>}
-          {preview && !previewFresh && <p class="font-medium">{t('patch.previewStale')}</p>}
-          {preview && (
-            <div class="space-y-3">
-              <div class="flex flex-wrap items-center gap-2">
-                <span class="font-medium">{t('patch.rebootRequired')}</span>
-                <Badge variant={preview.rebootRequired ? 'secondary' : 'outline'}>{preview.rebootRequired ? t('common.yes') : t('common.no')}</Badge>
-                <span class="text-muted-foreground">{preview.rebootRequired ? t('patch.rebootYes') : t('patch.rebootNo')}</span>
+      <div class="min-w-0 space-y-4">
+        <Card id="basics" className="scroll-mt-section">
+          <CardHeader>
+            <CardTitle>{t('patch.basics')}</CardTitle>
+            <CardDescription>{t('patch.intro')}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <FieldGroup>
+              <div class="grid gap-4 sm:grid-cols-2">
+                <Field>
+                  <FieldLabel htmlFor="patch-name">{t('col.name')}</FieldLabel>
+                  <Input id="patch-name" value={patchName} disabled={!isNew} onInput={(e) => setPatchName((e.target as HTMLInputElement).value)} />
+                  <FieldDescription>{t('patch.nameHelp')}</FieldDescription>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="patch-priority">{t('patch.priority')}</FieldLabel>
+                  <Input
+                    id="patch-priority"
+                    type="number"
+                    value={String(priority)}
+                    onInput={(e) => setPriority(Number((e.target as HTMLInputElement).value) || 0)}
+                  />
+                  <FieldDescription>{t('patch.priorityHelp')}</FieldDescription>
+                </Field>
               </div>
-              {preview.installTimeOnly.length > 0 && (
-                <div class="space-y-1">
-                  <p class="font-medium">{t('patch.installTimeOnly')}</p>
-                  <p class="text-xs text-muted-foreground">{t('patch.installTimeOnlyHelp')}</p>
-                  <div class="flex flex-wrap gap-1">
-                    {preview.installTimeOnly.map((p) => (
-                      <Badge key={p} variant="outline" className="font-mono text-xs">
-                        {p}
-                      </Badge>
+              <Field>
+                <FieldLabel htmlFor="patch-layer">{t('patch.layer')}</FieldLabel>
+                <Select
+                  value={layer ? String(layer) : ''}
+                  onValueChange={(v) => {
+                    const l = Number(v) as ConfigLayer
+                    setLayer(l)
+                    // The layer picks the target: drop the old one.
+                    applyTargetFields(targetFieldsFor(layerKeyOf(l), undefined))
+                  }}
+                >
+                  <SelectTrigger id="patch-layer" className="w-full">
+                    <SelectValue placeholder={t('patch.selectLayer')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {EDITABLE_LAYERS.map((l) => (
+                      <SelectItem key={l.layer} value={String(l.layer)}>
+                        {enumLabel(ConfigLayer, l.layer)}
+                      </SelectItem>
                     ))}
-                  </div>
-                </div>
-              )}
-              {preview.unsupported.length > 0 && (
-                <div class="space-y-1">
-                  <p class="font-medium">{t('patch.unsupported')}</p>
-                  <p class="text-xs text-muted-foreground">{t('patch.unsupportedHelp')}</p>
-                  <div class="flex flex-wrap gap-1">
-                    {preview.unsupported.map((p) => (
-                      <Badge key={p} variant="destructive" className="font-mono text-xs">
-                        {p}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {preview.installTimeOnly.length === 0 && preview.unsupported.length === 0 && (
-                <p class="text-muted-foreground">{t('patch.previewAllClear')}</p>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                  </SelectContent>
+                </Select>
+                <FieldDescription>{t('patch.layerHelp')}</FieldDescription>
+                <ItemGroup>
+                  {EDITABLE_LAYERS.map((l) => (
+                    <Item key={l.layer} size="xs" variant={l.layer === layer ? 'outline' : 'default'}>
+                      <ItemContent>
+                        <ItemDescription>{t(l.descKey)}</ItemDescription>
+                      </ItemContent>
+                    </Item>
+                  ))}
+                </ItemGroup>
+              </Field>
 
-      {saveError && <ErrorAlert {...saveError} />}
+              {layer === ConfigLayer.ROLE && (
+                <Field>
+                  <FieldLabel htmlFor="patch-target-role">{t('patch.target')}</FieldLabel>
+                  <Select value={role} onValueChange={setRole}>
+                    <SelectTrigger id="patch-target-role" className="w-full">
+                      <SelectValue placeholder={t('approve.selectRole')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="controlplane">{t('role.controlPlane')}</SelectItem>
+                      <SelectItem value="worker">{t('role.worker')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+              )}
 
-      {!previewFresh && !previewing && <p class="text-sm text-muted-foreground">{t('patch.saveReminder')}</p>}
+              {layer === ConfigLayer.SELECTOR && (
+                <Field>
+                  <FieldLabel htmlFor="patch-target-selector">{t('patch.target')}</FieldLabel>
+                  <FieldDescription>{t('patch.selectorHint')}</FieldDescription>
+                  <Textarea
+                    id="patch-target-selector"
+                    rows={5}
+                    value={labelSelectorText}
+                    onInput={(e) => setLabelSelectorText((e.target as HTMLTextAreaElement).value)}
+                  />
+                </Field>
+              )}
 
-      <div class="flex items-center justify-between">
-        <div class="flex gap-2">
-          <Button disabled={!canSave || saving} onClick={save}>
-            {saving ? t('patch.saving') : isNew ? t('patch.create') : t('patch.save')}
-          </Button>
-          <Button variant="ghost" onClick={() => navigate('/config')}>
-            {t('common.cancel')}
-          </Button>
+              {layer === ConfigLayer.MACHINE && (
+                <Field>
+                  <FieldLabel htmlFor="patch-target-machine">{t('patch.target')}</FieldLabel>
+                  <Select value={machineRef} onValueChange={setMachineRef}>
+                    <SelectTrigger id="patch-target-machine" className="w-full">
+                      <SelectValue placeholder={t('patch.selectMachine')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[...new Set([...(machineRef ? [machineRef] : []), ...machines.map((m) => m.ref?.name ?? '').filter(Boolean)])].map((n) => (
+                        <SelectItem key={n} value={n}>
+                          {n}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {machines.length === 0 && <FieldDescription>{t('patch.noMachines')}</FieldDescription>}
+                </Field>
+              )}
+            </FieldGroup>
+          </CardContent>
+        </Card>
+
+        <Card id="documents" className="scroll-mt-section">
+          <CardHeader>
+            <CardTitle>{t('patch.documents')}</CardTitle>
+            <CardDescription>{t('patch.documentsHelp')}</CardDescription>
+            <CardAction>
+              <Button size="sm" variant="outline" onClick={addDocument}>
+                <PlusIcon data-icon="inline-start" aria-hidden="true" />
+                {t('patch.addDocument')}
+              </Button>
+            </CardAction>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {documents.length === 0 && <EmptyNote icon={FileCogIcon}>{t('patch.noDocuments')}</EmptyNote>}
+            {documents.map((d) => (
+              <PatchDocumentCard
+                key={d.id}
+                doc={d}
+                startEditing={!!d.fresh}
+                onChange={(next) => updateDocument(d.id, next)}
+                onRemove={() => removeDocument(d.id)}
+              />
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card id="impact" className="scroll-mt-section">
+          <CardHeader>
+            <CardTitle>{t('patch.impact')}</CardTitle>
+            <CardDescription>{t('patch.impactNote')}</CardDescription>
+            <CardAction>
+              <Button size="sm" variant="outline" disabled={previewing} onClick={runPreview}>
+                {previewing ? <LoaderCircleIcon data-icon="inline-start" aria-hidden="true" /> : <EyeIcon data-icon="inline-start" aria-hidden="true" />}
+                {previewing ? t('patch.previewing') : t('patch.previewButton')}
+              </Button>
+            </CardAction>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {previewError && <ErrorAlert {...previewError} />}
+            {!preview && !previewing && !previewError && (
+              <Alert>
+                <InfoIcon />
+                <AlertTitle>{t('patch.previewNever')}</AlertTitle>
+              </Alert>
+            )}
+            {preview && !previewFresh && (
+              <Alert>
+                <InfoIcon />
+                <AlertTitle>{t('patch.previewStale')}</AlertTitle>
+              </Alert>
+            )}
+            {preview && (
+              <ItemGroup>
+                <Item>
+                  <ItemContent>
+                    <ItemTitle>{t('patch.rebootRequired')}</ItemTitle>
+                    <ItemDescription>{preview.rebootRequired ? t('patch.rebootYes') : t('patch.rebootNo')}</ItemDescription>
+                  </ItemContent>
+                  <ItemActions>
+                    <Badge variant={preview.rebootRequired ? 'secondary' : 'outline'}>{preview.rebootRequired ? t('common.yes') : t('common.no')}</Badge>
+                  </ItemActions>
+                </Item>
+                {preview.installTimeOnly.length > 0 && (
+                  <>
+                    <ItemSeparator />
+                    <Item>
+                      <ItemContent>
+                        <ItemTitle>{t('patch.installTimeOnly')}</ItemTitle>
+                        <ItemDescription>{t('patch.installTimeOnlyHelp')}</ItemDescription>
+                        <div class="flex flex-wrap gap-1">
+                          {preview.installTimeOnly.map((p) => (
+                            <Badge key={p} variant="outline">
+                              {p}
+                            </Badge>
+                          ))}
+                        </div>
+                      </ItemContent>
+                    </Item>
+                  </>
+                )}
+                {preview.unsupported.length > 0 && (
+                  <>
+                    <ItemSeparator />
+                    <Item>
+                      <ItemContent>
+                        <ItemTitle>{t('patch.unsupported')}</ItemTitle>
+                        <ItemDescription>{t('patch.unsupportedHelp')}</ItemDescription>
+                        <div class="flex flex-wrap gap-1">
+                          {preview.unsupported.map((p) => (
+                            <Badge key={p} variant="destructive">
+                              {p}
+                            </Badge>
+                          ))}
+                        </div>
+                      </ItemContent>
+                    </Item>
+                  </>
+                )}
+                {preview.installTimeOnly.length === 0 && preview.unsupported.length === 0 && (
+                  <>
+                    <ItemSeparator />
+                    <Item>
+                      <ItemContent>
+                        <ItemDescription>{t('patch.previewAllClear')}</ItemDescription>
+                      </ItemContent>
+                    </Item>
+                  </>
+                )}
+              </ItemGroup>
+            )}
+          </CardContent>
+        </Card>
+
+        {saveError && <ErrorAlert {...saveError} />}
+
+        {!previewFresh && !previewing && (
+          <Alert>
+            <InfoIcon />
+            <AlertDescription>{t('patch.saveReminder')}</AlertDescription>
+          </Alert>
+        )}
+
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="flex gap-2">
+            <Button disabled={!canSave || saving} onClick={save}>
+              {saving ? t('patch.saving') : isNew ? t('patch.create') : t('patch.save')}
+            </Button>
+            <Button variant="ghost" onClick={() => navigate('/config')}>
+              {t('common.cancel')}
+            </Button>
+          </div>
+          {!isNew && <DeleteButton namespace={namespace!} name={name!} />}
         </div>
-        {!isNew && <DeleteButton namespace={namespace!} name={name!} />}
-      </div>
       </div>
     </>
   )

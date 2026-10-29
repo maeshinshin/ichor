@@ -126,8 +126,17 @@ func logCertStatusBeforeStart(log logr.Logger, server, certDir, certName string)
 	}
 }
 
+// must exits the process, logging msg with kv, when err is set.
+func must(err error, msg string, kv ...any) {
+	if err != nil {
+		setupLog.Error(err, msg, kv...)
+		os.Exit(1)
+	}
+}
+
 // nolint:gocyclo
 func main() {
+	ns := os.Getenv("POD_NAMESPACE")
 	var metricsAddr string
 	var metricsCertPath, metricsCertName, metricsCertKey string
 	var webhookCertPath, webhookCertName, webhookCertKey string
@@ -264,16 +273,13 @@ func main() {
 	}
 
 	restConfig, err := waitForAPIServerDefault(logr.NewContext(sigCtx, setupLog), probeAddr)
-	if err != nil {
-		setupLog.Error(err, "API server unavailable")
-		os.Exit(1)
-	}
+	must(err, "API server unavailable")
 
 	mgr, err := ctrl.NewManager(restConfig, ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsServerOptions,
 		WebhookServer:          webhookServer,
-		Cache:                  controller.CacheOptions(os.Getenv("POD_NAMESPACE")),
+		Cache:                  controller.CacheOptions(ns),
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "61779df1.maesh.dev",
@@ -285,11 +291,9 @@ func main() {
 		// WaitForRestoreTails (up to restoreTailGrace, ADR 0089) and must keep the lease
 		// then, or a second replica could act while an etcd restore is mid-way.
 	})
-	if err != nil {
-		setupLog.Error(err, "Failed to start manager")
-		os.Exit(1)
-	}
+	must(err, "Failed to start manager")
 
+	evac := &controller.LonghornEvacuator{Client: mgr.GetClient()}
 	// One live reader of the IchorInstallation settings for the controllers and webhooks (ADR 0105).
 	// It reads uncached with a short TTL, so a change applies within seconds and nothing needs an informer.
 	settingsFallback := settings.Fallback{ReclaimEnabled: reclaimEnabled, RefreshLifetime: refreshLifetime}
@@ -311,14 +315,14 @@ func main() {
 		// rotator is leader-only, so a follower learns of the leader's write through the
 		// kubelet's Secret volume sync). ADR 0006, cold-start amendment.
 		certsReady := make(chan struct{})
-		if err := rotator.AddRotator(mgr, &rotator.CertRotator{
-			SecretKey:      types.NamespacedName{Namespace: os.Getenv("POD_NAMESPACE"), Name: webhookSecretName},
+		must(rotator.AddRotator(mgr, &rotator.CertRotator{
+			SecretKey:      types.NamespacedName{Namespace: ns, Name: webhookSecretName},
 			CertDir:        webhookCertPath,
 			CertName:       webhookCertName,
 			KeyName:        webhookCertKey,
 			CAName:         "ichor-ca",
 			CAOrganization: "ichor",
-			DNSName:        fmt.Sprintf("%s.%s.svc", webhookServiceName, os.Getenv("POD_NAMESPACE")),
+			DNSName:        fmt.Sprintf("%s.%s.svc", webhookServiceName, ns),
 			IsReady:        certsReady,
 			FieldOwner:     "ichor-controller",
 			// Two replicas race to generate a CA on a cold start otherwise; one writer
@@ -328,10 +332,7 @@ func main() {
 				{Name: validatingWebhookConfigName, Type: rotator.Validating},
 				{Name: mutatingWebhookConfigName, Type: rotator.Mutating},
 			},
-		}); err != nil {
-			setupLog.Error(err, "Failed to set up webhook certificate rotation")
-			os.Exit(1)
-		}
+		}), "Failed to set up webhook certificate rotation")
 
 		go func() {
 			fileCh := make(chan struct{})
@@ -348,43 +349,25 @@ func main() {
 			case <-sigCtx.Done():
 				return
 			}
-			if err := webhookv1alpha1.SetupTalosClusterWebhookWithManager(mgr, settingsReader); err != nil {
-				setupLog.Error(err, "Failed to create webhook", "webhook", "TalosCluster")
-				os.Exit(1)
-			}
-			if err := webhookv1alpha1.SetupTalosConfigPatchWebhookWithManager(mgr, os.Getenv("POD_NAMESPACE")); err != nil {
-				setupLog.Error(err, "Failed to create webhook", "webhook", "TalosConfigPatch")
-				os.Exit(1)
-			}
-			if err := webhookv1alpha1.SetupTalosMachineWebhookWithManager(mgr); err != nil {
-				setupLog.Error(err, "Failed to create webhook", "webhook", "TalosMachine")
-				os.Exit(1)
-			}
+			must(webhookv1alpha1.SetupTalosClusterWebhookWithManager(mgr, settingsReader), "Failed to create webhook", "webhook", "TalosCluster")
+			must(webhookv1alpha1.SetupTalosConfigPatchWebhookWithManager(mgr, ns), "Failed to create webhook", "webhook", "TalosConfigPatch")
+			must(webhookv1alpha1.SetupTalosMachineWebhookWithManager(mgr), "Failed to create webhook", "webhook", "TalosMachine")
 			// ICHOR_BREAK_GLASS_EXEMPT_USERS adds exact usernames (comma separated) to the
 			// built-in list (ADR 0065).
-			exempt := webhookv1alpha1.DefaultExemptUsers(os.Getenv("POD_NAMESPACE"), os.Getenv("POD_SERVICE_ACCOUNT"))
+			exempt := webhookv1alpha1.DefaultExemptUsers(ns, os.Getenv("POD_SERVICE_ACCOUNT"))
 			for u := range strings.SplitSeq(os.Getenv("ICHOR_BREAK_GLASS_EXEMPT_USERS"), ",") {
 				if u = strings.TrimSpace(u); u != "" {
 					exempt = append(exempt, u)
 				}
 			}
-			if err := webhookv1alpha1.SetupIchorInstallationWebhookWithManager(mgr, webhookv1alpha1.IchorInstallationOptions{
+			must(webhookv1alpha1.SetupIchorInstallationWebhookWithManager(mgr, webhookv1alpha1.IchorInstallationOptions{
 				SettingsReadOnly: settingsReadOnly, ExemptUsers: exempt,
 				Recorder: mgr.GetEventRecorderFor("ichor-settings"), //nolint:staticcheck // typed against record.EventRecorder, as above
-			}); err != nil {
-				setupLog.Error(err, "Failed to create webhook", "webhook", "IchorInstallation")
-				os.Exit(1)
-			}
-			if err := webhookv1alpha1.SetupBreakGlassWebhookWithManager(mgr, webhookv1alpha1.BreakGlassOptions{
+			}), "Failed to create webhook", "webhook", "IchorInstallation")
+			must(webhookv1alpha1.SetupBreakGlassWebhookWithManager(mgr, webhookv1alpha1.BreakGlassOptions{
 				ExemptUsers: exempt,
-			}); err != nil {
-				setupLog.Error(err, "Failed to create webhook", "webhook", "BreakGlass")
-				os.Exit(1)
-			}
-			if err := webhookv1alpha1.SetupMachineReclaimWebhookWithManager(mgr, reclaimEnabled, settingsReader); err != nil {
-				setupLog.Error(err, "Failed to create webhook", "webhook", "MachineReclaim")
-				os.Exit(1)
-			}
+			}), "Failed to create webhook", "webhook", "BreakGlass")
+			must(webhookv1alpha1.SetupMachineReclaimWebhookWithManager(mgr, reclaimEnabled, settingsReader), "Failed to create webhook", "webhook", "MachineReclaim")
 			mgr.GetWebhookServer() // idempotent; makes sure the server is a runnable even if no handler did
 			close(webhooksUp)
 		}()
@@ -404,21 +387,18 @@ func main() {
 	// Secret this targets must already exist, empty, shipped by config/default/
 	// metrics_server_cert_secret.yaml.
 	if len(metricsCertPath) > 0 {
-		if err := rotator.AddRotator(mgr, &rotator.CertRotator{
-			SecretKey:             types.NamespacedName{Namespace: os.Getenv("POD_NAMESPACE"), Name: metricsSecretName},
+		must(rotator.AddRotator(mgr, &rotator.CertRotator{
+			SecretKey:             types.NamespacedName{Namespace: ns, Name: metricsSecretName},
 			CertDir:               metricsCertPath,
 			CertName:              metricsCertName,
 			KeyName:               metricsCertKey,
 			CAName:                "ichor-ca",
 			CAOrganization:        "ichor",
-			DNSName:               fmt.Sprintf("%s.%s.svc", metricsServiceName, os.Getenv("POD_NAMESPACE")),
+			DNSName:               fmt.Sprintf("%s.%s.svc", metricsServiceName, ns),
 			FieldOwner:            "ichor-controller",
 			ControllerName:        "ichor-metrics-cert-rotator",
 			RequireLeaderElection: true,
-		}); err != nil {
-			setupLog.Error(err, "Failed to set up metrics certificate rotation")
-			os.Exit(1)
-		}
+		}), "Failed to set up metrics certificate rotation")
 	}
 
 	// Only the drains (drain.go: removal, and the config rollout before a reboot) need a raw Clientset (k8s.io/kubectl's
@@ -426,25 +406,19 @@ func main() {
 	// cached client.Client); a failure here is fatal rather than leaving
 	// removal silently unable to drain.
 	kubeClient, err := kubernetes.NewForConfig(mgr.GetConfig())
-	if err != nil {
-		setupLog.Error(err, "Failed to create Kubernetes client")
-		os.Exit(1)
-	}
+	must(err, "Failed to create Kubernetes client")
 
-	if err := (&controller.TalosMachineReconciler{
-		ControllerNamespace: os.Getenv("POD_NAMESPACE"),
+	must((&controller.TalosMachineReconciler{
+		ControllerNamespace: ns,
 		Client:              mgr.GetClient(),
 		APIReader:           mgr.GetAPIReader(),
 		TalosClient:         controller.NewMachineryTalosClient,
 		MaintenanceClient:   controller.NewMachineryMaintenanceClient,
 		KubeClient:          kubeClient,
-		Evacuator:           &controller.LonghornEvacuator{Client: mgr.GetClient()},
+		Evacuator:           evac,
 		Recorder:            mgr.GetEventRecorderFor("ichor-controller"), //nolint:staticcheck
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "Failed to create controller", "controller", "talosmachine")
-		os.Exit(1)
-	}
-	if err := (&controller.TalosClusterReconciler{
+	}).SetupWithManager(mgr), "Failed to create controller", "controller", "talosmachine")
+	must((&controller.TalosClusterReconciler{
 		Client: mgr.GetClient(),
 		Discovery: &controller.DiscoveryReconciler{
 			Client: mgr.GetClient(),
@@ -456,68 +430,50 @@ func main() {
 			Recorder:          mgr.GetEventRecorderFor("ichor-controller"), //nolint:staticcheck
 			MaintenanceClient: controller.NewMachineryMaintenanceClient,
 		},
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "Failed to create controller", "controller", "taloscluster")
-		os.Exit(1)
-	}
-	if err := (&controller.CertExpiryReconciler{
-		ControllerNamespace: os.Getenv("POD_NAMESPACE"),
+	}).SetupWithManager(mgr), "Failed to create controller", "controller", "taloscluster")
+	must((&controller.CertExpiryReconciler{
+		ControllerNamespace: ns,
 		Client:              mgr.GetClient(),
 		ExpiryWarning:       time.Duration(certExpiryWarningDays) * 24 * time.Hour,
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "Failed to create controller", "controller", "certexpiry")
-		os.Exit(1)
-	}
-	if err := (&controller.IssuerTrustReconciler{
+	}).SetupWithManager(mgr), "Failed to create controller", "controller", "certexpiry")
+	must((&controller.IssuerTrustReconciler{
 		Client: mgr.GetClient(), APIReader: mgr.GetAPIReader(),
-		Namespace: os.Getenv("POD_NAMESPACE"), UIServiceName: uiServiceName,
+		Namespace: ns, UIServiceName: uiServiceName,
 		RefreshLifetime: refreshLifetime, Settings: settingsReader, UserIssuer: userIssuer, ExternalURL: externalURL,
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "Failed to create controller", "controller", "issuertrust")
-		os.Exit(1)
-	}
-	if err := (&controller.CNIHandoverReconciler{
+	}).SetupWithManager(mgr), "Failed to create controller", "controller", "issuertrust")
+	must((&controller.CNIHandoverReconciler{
 		Client: mgr.GetClient(), APIReader: mgr.GetAPIReader(), Kube: kubeClient,
-		Namespace: os.Getenv("POD_NAMESPACE"),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "Failed to create controller", "controller", "cnihandover")
-		os.Exit(1)
-	}
-	if err := (&controller.CNIDetectReconciler{
+		Namespace: ns,
+	}).SetupWithManager(mgr), "Failed to create controller", "controller", "cnihandover")
+	must((&controller.CNIDetectReconciler{
 		Client: mgr.GetClient(), APIReader: mgr.GetAPIReader(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "Failed to create controller", "controller", "cnidetect")
-		os.Exit(1)
-	}
-	if err := (&controller.TalosStorageReconciler{
-		ControllerNamespace: os.Getenv("POD_NAMESPACE"),
+	}).SetupWithManager(mgr), "Failed to create controller", "controller", "cnidetect")
+	must((&controller.TalosStorageReconciler{
+		ControllerNamespace: ns,
 		Client:              mgr.GetClient(), APIReader: mgr.GetAPIReader(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "Failed to create controller", "controller", "talosstorage")
-		os.Exit(1)
-	}
+	}).SetupWithManager(mgr), "Failed to create controller", "controller", "talosstorage")
 	// The backbone (TalosOperationReconciler) never branches on spec.kind itself (ADR
 	// 0026), so the kind-to-executor selection happens here, in the wiring: Talos
 	// (ADR 0043), Kubernetes (ADR 0057), Ichor (ADR 0059) and the CNI kube-proxy switch (ADR 0066). An unknown kind pauses
 	// immediately with a plain error -- never silently treated as another kind.
 	talosUpgradeAdvance := controller.NewTalosUpgradeAdvancer(
-		mgr.GetClient(), os.Getenv("POD_NAMESPACE"), controller.NewMachineryTalosClient,
-		&controller.LonghornEvacuator{Client: mgr.GetClient()},
+		mgr.GetClient(), ns, controller.NewMachineryTalosClient,
+		evac,
 	)
 	kubernetesUpgradeAdvance := controller.NewKubernetesUpgradeAdvancer(
-		mgr.GetClient(), mgr.GetAPIReader(), os.Getenv("POD_NAMESPACE"), controller.NewMachineryTalosClient,
+		mgr.GetClient(), mgr.GetAPIReader(), ns, controller.NewMachineryTalosClient,
 		controller.NewKubernetesAdmin(),
-		&controller.LonghornEvacuator{Client: mgr.GetClient()}, kubeClient, os.Getenv("NODE_NAME"),
+		evac, kubeClient, os.Getenv("NODE_NAME"),
 	)
 
 	configRolloutAdvance := controller.NewConfigRolloutAdvancer(
-		mgr.GetClient(), os.Getenv("POD_NAMESPACE"), controller.NewMachineryTalosClient,
-		&controller.LonghornEvacuator{Client: mgr.GetClient()}, kubeClient,
+		mgr.GetClient(), ns, controller.NewMachineryTalosClient,
+		evac, kubeClient,
 	)
 
-	ichorUpgradeAdvance := controller.NewIchorUpgradeAdvancer(mgr.GetClient(), os.Getenv("POD_NAMESPACE"), noCiliumPolicies)
+	ichorUpgradeAdvance := controller.NewIchorUpgradeAdvancer(mgr.GetClient(), ns, noCiliumPolicies)
 	cniKubeProxyAdvance := controller.NewCNIKubeProxyAdvancer(
-		mgr.GetClient(), mgr.GetAPIReader(), os.Getenv("POD_NAMESPACE"), controller.NewMachineryTalosClient,
+		mgr.GetClient(), mgr.GetAPIReader(), ns, controller.NewMachineryTalosClient,
 		controller.NewKubeProxyAdmin(),
 	)
 
@@ -526,7 +482,7 @@ func main() {
 	// namespace, and the node this pod runs on (NODE_NAME, from the downward API) so that
 	// node can be stopped last.
 	opReconciler := &controller.TalosOperationReconciler{
-		ControllerNamespace: os.Getenv("POD_NAMESPACE"),
+		ControllerNamespace: ns,
 		Client:              mgr.GetClient(),
 		APIReader:           mgr.GetAPIReader(),
 		TalosClient:         controller.NewMachineryTalosClient,
@@ -539,7 +495,7 @@ func main() {
 		// The node kind (ADR 0085) drains with the same clientset and storage hook as the
 		// config rollout.
 		KubeClient: kubeClient,
-		Evacuator:  &controller.LonghornEvacuator{Client: mgr.GetClient()},
+		Evacuator:  evac,
 		Advance: func(
 			ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, op *ichorv1alpha1.TalosOperation,
 		) (bool, error) {
@@ -559,44 +515,29 @@ func main() {
 			}
 		},
 	}
-	if err := opReconciler.SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "Failed to create controller", "controller", "talosoperation")
-		os.Exit(1)
-	}
+	must(opReconciler.SetupWithManager(mgr), "Failed to create controller", "controller", "talosoperation")
 	// An etcd restore (ADR 0089) rolls the Kubernetes API back past its own operation. When the
 	// controller starts again, with the API up, the operation is recreated from the marker kept
 	// next to the backups.
-	if err := mgr.Add(manager.RunnableFunc(opReconciler.ResumeEtcdRestoresUntilDone)); err != nil {
-		setupLog.Error(err, "Failed to add the etcd restore resumer")
-		os.Exit(1)
-	}
+	must(mgr.Add(manager.RunnableFunc(opReconciler.ResumeEtcdRestoresUntilDone)), "Failed to add the etcd restore resumer")
 	// Every replica, not only the leader, keeps its own trust pool right during a CA rotation (ADR 0063).
-	if err := mgr.Add(&controller.CATrustSync{
-		Reader: mgr.GetAPIReader(), ControllerNamespace: os.Getenv("POD_NAMESPACE"),
+	must(mgr.Add(&controller.CATrustSync{
+		Reader: mgr.GetAPIReader(), ControllerNamespace: ns,
 		Pool: kubetrust.Shared, File: kubetrust.TrustFile, Informers: mgr.GetCache(),
-	}); err != nil {
-		setupLog.Error(err, "Failed to add the CA trust sync")
-		os.Exit(1)
-	}
-	if err := (&controller.TalosEtcdBackupReconciler{
-		ControllerNamespace: os.Getenv("POD_NAMESPACE"),
+	}), "Failed to add the CA trust sync")
+	must((&controller.TalosEtcdBackupReconciler{
+		ControllerNamespace: ns,
 		Client:              mgr.GetClient(),
 		SnapshotClient:      controller.NewMachineryEtcdSnapshotClient,
 		SpoolDir:            backupSpoolDir,
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "Failed to create controller", "controller", "talosetcdbackup")
-		os.Exit(1)
-	}
+	}).SetupWithManager(mgr), "Failed to create controller", "controller", "talosetcdbackup")
 	ichorInstReconciler := &controller.IchorInstallationReconciler{
 		Client: mgr.GetClient(), DeployedBy: deployedBy, SettingsFallback: settingsFallback, SettingsReadOnly: settingsReadOnly,
 	}
-	if err := ichorInstReconciler.SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "Failed to create controller", "controller", "ichorinstallation")
-		os.Exit(1)
-	}
+	must(ichorInstReconciler.SetupWithManager(mgr), "Failed to create controller", "controller", "ichorinstallation")
 	// Create the singleton once if it is absent (ADR 0105, decision 8). The admission webhook may
 	// not be serving yet, so a failed create is retried; losing the race is not an error.
-	if err := mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
+	must(mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
 		return wait.PollUntilContextCancel(ctx, 5*time.Second, true, func(ctx context.Context) (bool, error) {
 			if err := ichorInstReconciler.Seed(ctx); err != nil {
 				setupLog.Info("Could not create the IchorInstallation yet", "error", err.Error())
@@ -606,41 +547,26 @@ func main() {
 
 			return true, nil
 		})
-	})); err != nil {
-		setupLog.Error(err, "Failed to add the IchorInstallation seed")
-		os.Exit(1)
-	}
-	if err := (&controller.MachineReclaimReconciler{
+	})), "Failed to add the IchorInstallation seed")
+	must((&controller.MachineReclaimReconciler{
 		Client:              mgr.GetClient(),
 		Enabled:             reclaimEnabled,
 		Settings:            settingsReader,
-		ControllerNamespace: os.Getenv("POD_NAMESPACE"),
+		ControllerNamespace: ns,
 		Recorder:            mgr.GetEventRecorderFor("ichor-controller"), //nolint:staticcheck // typed against record.EventRecorder, as above
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "Failed to create controller", "controller", "machinereclaim")
-		os.Exit(1)
-	}
+	}).SetupWithManager(mgr), "Failed to create controller", "controller", "machinereclaim")
 	// +kubebuilder:scaffold:builder
 
-	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		setupLog.Error(err, "Failed to set up health check")
-		os.Exit(1)
-	}
-	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		setupLog.Error(err, "Failed to set up ready check")
-		os.Exit(1)
-	}
+	must(mgr.AddHealthzCheck("healthz", healthz.Ping), "Failed to set up health check")
+	must(mgr.AddReadyzCheck("readyz", healthz.Ping), "Failed to set up ready check")
 
 	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
 		// Ready means the webhook server answers: otherwise a replaced pod is 1/1 Ready while
 		// admission calls still fail (seen as "failed calling webhook" right after a rotation).
 		// Not mgr.GetWebhookServer() here: that would start the server before its certificate exists.
-		if err := mgr.AddReadyzCheck("webhook", gatedChecker(webhooksUp, func() healthz.Checker {
+		must(mgr.AddReadyzCheck("webhook", gatedChecker(webhooksUp, func() healthz.Checker {
 			return mgr.GetWebhookServer().StartedChecker()
-		})); err != nil {
-			setupLog.Error(err, "Failed to set up webhook ready check")
-			os.Exit(1)
-		}
+		})), "Failed to set up webhook ready check")
 
 		logCertStatusBeforeStart(setupLog, "webhook", webhookCertPath, webhookCertName)
 	}
@@ -653,8 +579,5 @@ func main() {
 	// only this process can finish it, so it is waited for before the process exits.
 	controller.WaitForRestoreTails(restoreTailGrace, probeAddr)
 
-	if err != nil {
-		setupLog.Error(err, "Failed to run manager")
-		os.Exit(1)
-	}
+	must(err, "Failed to run manager")
 }

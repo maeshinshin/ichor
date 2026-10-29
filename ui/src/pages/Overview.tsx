@@ -325,9 +325,9 @@ function Home({
                         <TableRow key={op.ref?.name}>
                           <TableCell>
                             {op.ref ? (
-                              <Button asChild variant="link" size="sm">
-                                <Link to={`/operations/${op.ref.name}`}>{enumLabel(OperationKind, op.kind)}</Link>
-                              </Button>
+                              <Link to={`/operations/${op.ref.name}`} className="font-medium hover:underline">
+                                {enumLabel(OperationKind, op.kind)}
+                              </Link>
                             ) : (
                               enumLabel(OperationKind, op.kind)
                             )}

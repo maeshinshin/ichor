@@ -477,6 +477,30 @@ func TestA6Refused(t *testing.T) {
 	refusedWritesNothing(t, c, hashes, records)
 }
 
+// TestA6Accepted117 (the other half of the rule): a Cilium one minor below the embedded 1.18 is taken over and
+// upgraded to it. Run `foreign up --cni cilium-helm --cilium-chart bin/foreign/chart117/cilium-1.17.6.tgz --cilium-set tunnelProtocol=vxlan,tunnelPort=4789` first.
+func TestA6Accepted117(t *testing.T) {
+	c := build(t, foreign.Options{Workers: 1, CNI: foreign.CNICiliumHelm})
+	logState(t, c, "before")
+	trafficStart(t, c)
+	first, needed := takeoverAdopt(t, c)
+	t.Logf("diff gate needed --accept-cilium-diff: %v", needed)
+	if !strings.Contains(first, "1.17.6") {
+		t.Errorf("the plan does not name the live version 1.17.6")
+	}
+	waitHandover(t, c, "")
+	membership(t, c)
+	if out, err := inner(c, "-n", "kube-system", "rollout", "status", "ds/cilium", "--timeout=300s"); err != nil {
+		t.Errorf("rollout after takeover: %v\n%s", err, out)
+	}
+	if img := ciliumDS(c); !strings.Contains(img, "cilium:v1.18.0") {
+		t.Errorf("the agent was not upgraded to 1.18.0: %s", img)
+	}
+	logState(t, c, "after takeover")
+	time.Sleep(30 * time.Second)
+	trafficReport(t, c, "across the A6 1.17 to 1.18 takeover")
+}
+
 // TestA1AcceptAll: on the inline-manifest cluster, adopt with every accept flag is still refused for ipam.mode and writes nothing.
 func TestA1AcceptAll(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 1, CNI: foreign.CNICiliumInline})

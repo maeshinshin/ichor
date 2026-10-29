@@ -3,7 +3,7 @@
 # The namespace transformer in ../default sets ichor-system on everything, and a patch inside
 # that kustomization runs before the transformer (it was overwritten), so these patches live one
 # level up: kustomize applies them to ../default's finished output. Build this directory, not
-# ../default, wherever the kube-system objects must be right (build-installer, undeploy).
+# ../default, wherever the kube-system objects must be right (build-installer).
 #
 # The Cilium Helm Job runs in kube-system: it needs
 # hostNetwork, which Talos's default Pod Security admission config exempts only there. These

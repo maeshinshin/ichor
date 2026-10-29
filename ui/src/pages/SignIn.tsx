@@ -1,5 +1,6 @@
 import { useState } from 'preact/hooks'
 import { ErrorAlert } from '@/components/ErrorAlert'
+import { BoxesIcon, KeyRoundIcon } from 'lucide-preact'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { startLogin, type AuthProvider } from '@/lib/oidc'
@@ -20,7 +21,7 @@ export function SignIn({ providers }: { providers: AuthProvider[] }) {
           <CardTitle>{t('signin.title')}</CardTitle>
           <CardDescription>{t('signin.description')}</CardDescription>
         </CardHeader>
-        <CardContent class="space-y-3">
+        <CardContent class="flex flex-col gap-3">
           {ordered.map((p, i) => (
             <Button
               key={p.id}
@@ -28,6 +29,7 @@ export function SignIn({ providers }: { providers: AuthProvider[] }) {
               variant={i === 0 ? 'default' : 'outline'}
               onClick={() => startLogin(p).catch((e) => setError(e instanceof Error ? e.message : t('app.loginFailed')))}
             >
+              {p.id === 'ichor' ? <BoxesIcon data-icon="inline-start" aria-hidden="true" /> : <KeyRoundIcon data-icon="inline-start" aria-hidden="true" />}
               {p.id === 'ichor' ? t('signin.ichor') : t('signin.oidc')}
             </Button>
           ))}

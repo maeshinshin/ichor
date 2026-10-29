@@ -65,7 +65,7 @@ func newFlowEnv(t *testing.T, adoptPreset string, liveMutate func(*ichorv1alpha1
 	cluster := newTestCluster()
 	cluster.Spec.CNI = ichorv1alpha1.TalosClusterCNI{Preset: adoptPreset, KubeProxy: kubeProxyEnabled}
 
-	if adoptPreset == cniUnmanaged {
+	if adoptPreset == ichorv1alpha1.TalosClusterCNIPresetUnmanaged {
 		cluster.Spec.CNI.Unmanaged = &ichorv1alpha1.TalosClusterCNIUnmanaged{TalosCNI: testNamespace}
 	}
 
@@ -159,7 +159,7 @@ func (e *flowEnv) held(t *testing.T, name string) bool {
 
 func unmanagedLive(c *ichorv1alpha1.TalosCluster) {
 	c.Spec.CNI = ichorv1alpha1.TalosClusterCNI{
-		Preset: cniUnmanaged, KubeProxy: kubeProxyEnabled,
+		Preset: ichorv1alpha1.TalosClusterCNIPresetUnmanaged, KubeProxy: kubeProxyEnabled,
 		Unmanaged: &ichorv1alpha1.TalosClusterCNIUnmanaged{TalosCNI: testNamespace},
 	}
 }
@@ -215,7 +215,7 @@ func TestAdoptNeedsConsentForClassB(t *testing.T) {
 }
 
 func TestAdoptReleasesHoldInOrderAndPrintsAdvice(t *testing.T) {
-	for _, preset := range []string{cniCilium, cniUnmanaged} {
+	for _, preset := range []string{cniCilium, ichorv1alpha1.TalosClusterCNIPresetUnmanaged} {
 		t.Run(preset, func(t *testing.T) {
 			var live func(*ichorv1alpha1.TalosCluster)
 			if preset == cniCilium {
@@ -225,7 +225,7 @@ func TestAdoptReleasesHoldInOrderAndPrintsAdvice(t *testing.T) {
 			env := newFlowEnv(t, preset, live)
 			deps := env.deps(t)
 			deps.AssumeYes = true
-			deps.CNIUnmanaged = preset == cniUnmanaged
+			deps.CNIUnmanaged = preset == ichorv1alpha1.TalosClusterCNIPresetUnmanaged
 
 			if err := runAdopt(context.Background(), env.cluster.Name, testNamespace, deps); err != nil {
 				t.Fatalf("runAdopt: %v\n%s", err, env.stderr.String())
@@ -243,7 +243,7 @@ func TestAdoptReleasesHoldInOrderAndPrintsAdvice(t *testing.T) {
 				t.Fatalf("the CA rotation advice was not printed:\n%s", env.stderr.String())
 			}
 
-			if preset == cniUnmanaged && strings.Contains(env.stderr.String(), "Ichor-owned") {
+			if preset == ichorv1alpha1.TalosClusterCNIPresetUnmanaged && strings.Contains(env.stderr.String(), "Ichor-owned") {
 				t.Fatalf("an unmanaged plan lists class B items:\n%s", env.stderr.String())
 			}
 		})
@@ -253,7 +253,7 @@ func TestAdoptReleasesHoldInOrderAndPrintsAdvice(t *testing.T) {
 // A machine whose live configuration still drifts after the write keeps its hold, and so does
 // every machine after it; the one before it was released.
 func TestAdoptKeepsHoldWhereLiveDriftRemains(t *testing.T) {
-	env := newFlowEnv(t, cniUnmanaged, nil)
+	env := newFlowEnv(t, ichorv1alpha1.TalosClusterCNIPresetUnmanaged, nil)
 
 	// The worker drifts in a legacy field only after the plan was made.
 	drifting := &flipReader{first: env.live[flowWKAddr]}
@@ -367,7 +367,7 @@ func TestAdoptNewClusterNeedsNode(t *testing.T) {
 
 // The unmanaged plan says what the CNI is and that Ichor leaves it alone.
 func TestAdoptUnmanagedPlanNamesTheDetectedCNI(t *testing.T) {
-	env := newFlowEnv(t, cniUnmanaged, nil)
+	env := newFlowEnv(t, ichorv1alpha1.TalosClusterCNIPresetUnmanaged, nil)
 	deps := env.deps(t)
 	deps.PlanOnly = true
 	deps.CNIUnmanaged = true
@@ -496,7 +496,7 @@ func TestAdoptDiscoversANewCluster(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got.Annotations[ichorv1alpha1.TalosClusterAdoptedAnnotation] != annotationTrue || got.Spec.CNI.Preset != cniUnmanaged ||
+	if got.Annotations[ichorv1alpha1.TalosClusterAdoptedAnnotation] != annotationTrue || got.Spec.CNI.Preset != ichorv1alpha1.TalosClusterCNIPresetUnmanaged ||
 		got.Spec.ControlPlane.Count != 1 {
 		t.Fatalf("unexpected TalosCluster: %+v", got)
 	}

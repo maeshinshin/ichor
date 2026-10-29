@@ -4,7 +4,7 @@
 
 // SettingsService backs the Settings page. It reads and
 // writes the runtime settings in the IchorInstallation singleton as the caller,
-// so RBAC (ichorinstallations/reclaim, /settings) and the settings webhook judge
+// so RBAC (ichorinstallations/settings) and the settings webhook judge
 // the user. Update changes only the fields it carries.
 
 import type { GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
@@ -50,6 +50,8 @@ export const SettingValueSchema: GenMessage<SettingValue> = /*@__PURE__*/
  */
 export type SettingsFields = Message<"ichor.v1alpha1.SettingsFields"> & {
   /**
+   * reclaim_enabled is removed: never reported, refused when set.
+   *
    * @generated from field: optional bool reclaim_enabled = 1;
    */
   reclaimEnabled?: boolean | undefined;
@@ -86,6 +88,8 @@ export const SettingsFieldsSchema: GenMessage<SettingsFields> = /*@__PURE__*/
  */
 export type SettingsEffective = Message<"ichor.v1alpha1.SettingsEffective"> & {
   /**
+   * reclaim_enabled is removed: never reported.
+   *
    * @generated from field: ichor.v1alpha1.SettingValue reclaim_enabled = 1;
    */
   reclaimEnabled?: SettingValue | undefined;
@@ -178,13 +182,15 @@ export type GetSettingsResponse = Message<"ichor.v1alpha1.GetSettingsResponse"> 
   uiEffective?: SettingsEffective | undefined;
 
   /**
-   * The caller may edit the reclaim switch / the users and defaults groups.
+   * can_edit_reclaim is removed: always false.
    *
    * @generated from field: bool can_edit_reclaim = 8;
    */
   canEditReclaim: boolean;
 
   /**
+   * The caller may edit the users and defaults groups.
+   *
    * @generated from field: bool can_edit_settings = 9;
    */
   canEditSettings: boolean;
@@ -207,7 +213,7 @@ export type UpdateSettingsRequest = Message<"ichor.v1alpha1.UpdateSettingsReques
   changes?: SettingsFields | undefined;
 
   /**
-   * confirm_reclaim is the typed confirmation that enabling reclaim needs.
+   * confirm_reclaim is removed: ignored.
    *
    * @generated from field: bool confirm_reclaim = 2;
    */
@@ -255,9 +261,7 @@ export const SettingsService: GenService<{
     output: typeof GetSettingsResponseSchema;
   },
   /**
-   * UpdateSettings changes only the fields present in changes. Enabling reclaim
-   * needs confirm_reclaim; the handler then sets the confirm annotation in the
-   * same write.
+   * UpdateSettings changes only the fields present in changes.
    *
    * @generated from rpc ichor.v1alpha1.SettingsService.UpdateSettings
    */

@@ -92,12 +92,8 @@ spec:
         {{- with .Values.ichorUI.users.externalURL }}
         - --ui-external-url={{ . }}
         {{- end }}
-        {{- if .Values.reclaim.enabled }}
-        # Break-glass machine reclaim.
-        - --reclaim
-        {{- end }}
         {{- if .Values.settings.readOnly }}
-        # The runtime settings are owned by this deployment: spec.reclaim/users/defaults are ignored and denied.
+        # The runtime settings are owned by this deployment: spec.users/defaults are ignored and denied.
         - --settings-read-only
         {{- end }}
         {{- if eq (toString .Values.networkPolicy.cilium.enabled) "false" }}

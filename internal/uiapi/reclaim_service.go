@@ -45,9 +45,6 @@ import (
 
 const reclaimLabelValue = "true"
 
-var errReclaimOff = connect.NewError(connect.CodeFailedPrecondition,
-	errors.New("reclaim is not enabled in this installation (reclaim.enabled)"))
-
 // mayAll asks Kubernetes, as the caller, whether they hold every one of the attributes (a verb on a resource).
 // With nobody to ask (the backend on its own ServiceAccount) it allows: the webhook then judges the ServiceAccount.
 func (s *Server) mayAll(ctx context.Context, attrs ...authv1.ResourceAttributes) (bool, error) {
@@ -111,22 +108,8 @@ func (s *Server) reclaimUser(ctx context.Context) (string, error) {
 	return review.Status.UserInfo.Username, nil
 }
 
-// reclaimEnabled reads the switch per call from the IchorInstallation when Settings is set, and uses ReclaimEnabled
-// otherwise.
-func (s *Server) reclaimEnabled(ctx context.Context) bool {
-	if s.Settings != nil {
-		return s.Settings.ReclaimEnabled(ctx)
-	}
-
-	return s.ReclaimEnabled
-}
-
-// reclaimGate refuses every call when the feature is off, and a caller without the verb.
+// reclaimGate refuses a caller without the verb: RBAC alone decides.
 func (s *Server) reclaimGate(ctx context.Context) error {
-	if !s.reclaimEnabled(ctx) {
-		return errReclaimOff
-	}
-
 	ok, err := s.reclaimAllowed(ctx)
 	if err != nil {
 		return err
@@ -143,16 +126,12 @@ func (s *Server) reclaimGate(ctx context.Context) error {
 func (s *Server) CanReclaim(
 	ctx context.Context, req *connect.Request[pb.CanReclaimRequest],
 ) (*connect.Response[pb.CanReclaimResponse], error) {
-	if !s.reclaimEnabled(ctx) {
-		return connect.NewResponse(&pb.CanReclaimResponse{}), nil
-	}
-
 	ok, err := s.reclaimAllowed(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	out := &pb.CanReclaimResponse{Enabled: true, Allowed: ok}
+	out := &pb.CanReclaimResponse{Enabled: true, Allowed: ok} // Enabled is deprecated, always true
 
 	if c := req.Msg.GetCluster(); ok && c.GetName() != "" {
 		if out.ClusterAllowed, err = s.clusterWritable(ctx, c); err != nil {

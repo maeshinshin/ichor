@@ -455,15 +455,14 @@ webhook:
   # Webhook server port
   port: 9443
 
-## Break-glass: reclaim a machine that another Talos cluster configured.
-## Off by default. When off, the controller fails every MachineReclaim and its webhook refuses new
-## ones. The credential sweeper runs either way. Turning it on also installs the ClusterRole
-## ichor-machine-reclaimer, which nothing binds: bind it yourself, to the people who may reclaim.
+## DEPRECATED and ignored. "Reset and add" (MachineReclaim) has no
+## installation switch any more: RBAC alone decides who may use it, through the verb reclaim on
+## machinereclaims. ichor:admin holds it; the ClusterRole ichor-machine-reclaimer (installed with
+## rbac.helpers.enabled) grants it to anyone else you bind it to.
 reclaim:
   enabled: false
 
-## Ichor's runtime settings live in the IchorInstallation named ichor (spec.reclaim, spec.users,
-## spec.defaults) and win over the values here when set. readOnly: true hands them to this
+## Ichor's runtime settings live in the IchorInstallation named ichor (spec.users, spec.defaults) and win over the values here when set. readOnly: true hands them to this
 ## chart instead: the spec fields are ignored, the webhook denies writes to them, and the Settings tab
 ## is read-only. Use it when Git or Helm owns the configuration.
 settings:

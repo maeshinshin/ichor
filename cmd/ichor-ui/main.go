@@ -119,8 +119,6 @@ func main() {
 	tlsCert := flag.String("tls-cert-file", "", "the operator's certificate; wins over --tls-dir when the files exist (with --tls-key-file)")
 	tlsKey := flag.String("tls-key-file", "", "private key for --tls-cert-file")
 
-	reclaimEnabled := flag.Bool("reclaim-enabled", envTrue("ICHOR_RECLAIM_ENABLED"), "enable the break-glass machine reclaim API")
-
 	settingsReadOnly := flag.Bool("settings-read-only", envTrue("ICHOR_SETTINGS_READ_ONLY"), "ignore the runtime settings in the IchorInstallation spec (chart settings.readOnly)")
 
 	flag.Parse()
@@ -143,7 +141,7 @@ func main() {
 	// The runtime settings of the IchorInstallation, read live: a set spec field wins over the flags.
 	liveSettings := &settings.Reader{
 		Client: c, ReadOnly: *settingsReadOnly, TTL: 5 * time.Second,
-		Fallback: settings.Fallback{ReclaimEnabled: *reclaimEnabled, TokenTTL: users.tokenTTL, RefreshLifetime: users.refreshTTL},
+		Fallback: settings.Fallback{TokenTTL: users.tokenTTL, RefreshLifetime: users.refreshTTL},
 	}
 
 	// draining is closed once, right when shutdown starts, so every in-flight
@@ -224,7 +222,6 @@ func main() {
 			"writes with this pod's ServiceAccount permissions and is audited as \"ichor-ui\"")
 	}
 
-	server.ReclaimEnabled = *reclaimEnabled
 	server.Settings = liveSettings
 
 	mux := http.NewServeMux()

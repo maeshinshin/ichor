@@ -24,7 +24,6 @@ const DriftPolicyDefault = DriftWarnOnly
 
 // Fallback holds the flag or chart values used for an unset field.
 type Fallback struct {
-	ReclaimEnabled  bool
 	TokenTTL        time.Duration
 	RefreshLifetime time.Duration
 	// DriftPolicy empty means DriftPolicyDefault.
@@ -39,7 +38,6 @@ type Value[T any] struct {
 
 // Effective is every runtime setting in force.
 type Effective struct {
-	Reclaim         Value[bool]
 	TokenTTL        Value[time.Duration]
 	RefreshLifetime Value[time.Duration]
 	DriftPolicy     Value[string]
@@ -66,16 +64,11 @@ func durationOf(d *metav1.Duration) *time.Duration {
 // Resolve applies the precedence rule. inst may be nil (no IchorInstallation).
 func Resolve(inst *ichorv1alpha1.IchorInstallation, fb Fallback, readOnly bool) Effective {
 	var (
-		reclaim     *bool
 		ttl, refr   *time.Duration
 		driftPolicy *string
 	)
 
 	if inst != nil {
-		if s := inst.Spec.Reclaim; s != nil {
-			reclaim = s.Enabled
-		}
-
 		if u := inst.Spec.Users; u != nil {
 			ttl, refr = durationOf(u.TokenTTL), durationOf(u.RefreshLifetime)
 		}
@@ -90,7 +83,6 @@ func Resolve(inst *ichorv1alpha1.IchorInstallation, fb Fallback, readOnly bool) 
 	}
 
 	return Effective{
-		Reclaim:         pick(reclaim, fb.ReclaimEnabled, readOnly),
 		TokenTTL:        pick(ttl, fb.TokenTTL, readOnly),
 		RefreshLifetime: pick(refr, fb.RefreshLifetime, readOnly),
 		DriftPolicy:     pick(driftPolicy, fb.DriftPolicy, readOnly),
@@ -139,15 +131,4 @@ func (r *Reader) Effective(ctx context.Context) (Effective, error) {
 	r.ok, r.at = true, time.Now()
 
 	return r.last, nil
-}
-
-// ReclaimEnabled is the break-glass switch. It fails closed: when the setting cannot be read and
-// nothing is cached, reclaim is off.
-func (r *Reader) ReclaimEnabled(ctx context.Context) bool {
-	e, err := r.Effective(ctx)
-	if err != nil {
-		return false
-	}
-
-	return e.Reclaim.V
 }

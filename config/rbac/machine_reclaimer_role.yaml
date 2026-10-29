@@ -1,6 +1,6 @@
-# Not bound to anyone, and in no default role (the *_admin_role.yaml helpers name their
-# resources and do not list machinereclaims). Bind it with an explicit RoleBinding to the people
-# who may reclaim a machine that another Talos cluster configured.
+# For granting "Reset and add" to people who are not ichor:admin (ichor_admin_role.yaml holds these
+# rules already). Bind it with an explicit RoleBinding to the people who may reset a
+# machine that another Talos cluster configured and add it here.
 # Ichor's webhook checks the verb `reclaim` with a SubjectAccessReview as the user, on every
 # create and on every write of confirmUUID.
 

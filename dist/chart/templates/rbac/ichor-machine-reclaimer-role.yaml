@@ -1,6 +1,6 @@
-{{- if and .Values.reclaim.enabled .Values.rbac.helpers.enabled }}
-# Not bound to anyone, and in no default role. Bind it with an explicit RoleBinding to the people
-# who may reclaim a machine that another Talos cluster configured.
+{{- if .Values.rbac.helpers.enabled }}
+# For granting "Reset and add" to people who are not ichor:admin (which holds these rules already). Bind it with an explicit RoleBinding to the people who may reset a machine that another
+# Talos cluster configured and add it here.
 # Ichor's webhook checks the verb `reclaim` with a SubjectAccessReview as the user.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole

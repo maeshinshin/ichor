@@ -15,26 +15,8 @@ export function toggleRole(roles: string[], role: string, on: boolean): string[]
 // The server's own bound (pkg/ichorauth): length only, counted in characters.
 export const minPasswordLength = 12
 
-export function passwordLength(p: string): number {
-  return [...p].length
-}
-
 export function passwordOk(p: string): boolean {
-  return passwordLength(p) >= minPasswordLength
-}
-
-const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'
-
-// generatePassword draws from a crypto source without modulo bias.
-export function generatePassword(length = 24, random: (a: Uint8Array<ArrayBuffer>) => Iterable<number> = (a) => crypto.getRandomValues(a)): string {
-  const limit = 256 - (256 % alphabet.length)
-  let out = ''
-  while (out.length < length) {
-    for (const b of random(new Uint8Array(length * 2))) {
-      if (b < limit && out.length < length) out += alphabet[b % alphabet.length]
-    }
-  }
-  return out
+  return [...p].length >= minPasswordLength
 }
 
 // userNameOk mirrors what the CRD accepts for a user name: a DNS-1123 label.

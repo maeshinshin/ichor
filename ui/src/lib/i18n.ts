@@ -7,7 +7,6 @@
 // received, never looked up here. "{name}" marks a value filled in by t().
 
 export const en = {
-  'common.noPermission': 'No permission',
   'common.yes': 'yes',
   'common.no': 'no',
   'common.none': 'none',
@@ -951,7 +950,6 @@ export const en = {
   'cilium.apply': 'Apply',
   'cilium.applying': 'Applying…',
   'cilium.revert': 'Revert edits',
-  'cilium.valid': 'The values are valid.',
   'cilium.invalid': 'The values have {count} problems',
   'cilium.invalidOne': 'The values have 1 problem',
   'cilium.diff': 'Changes to the effective values',

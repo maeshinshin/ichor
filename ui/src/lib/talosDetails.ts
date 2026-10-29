@@ -26,11 +26,6 @@ export function sortServices<T extends ServiceLike & { id: string }>(services: r
   return [...services].sort((a, b) => rank(a) - rank(b) || a.id.localeCompare(b.id))
 }
 
-export function timeSyncLabel(synced: boolean, disabled: boolean): 'synced' | 'not synced' | 'sync disabled' {
-  if (disabled) return 'sync disabled'
-  return synced ? 'synced' : 'not synced'
-}
-
 // Volume types that are backed by a disk partition. Directory, overlay,
 // symlink and tmpfs volumes are Talos's own mounts, always present and
 // size-less, so they are hidden until the person asks for all of them.

@@ -49,7 +49,12 @@ const (
 
 // bOpts are the harness options of a B-group cluster (they must match the `foreign up` flags).
 func bOpts(cni string, noProxy, noPrism bool, sets ...string) foreign.Options {
-	return foreign.Options{Workers: 1, CNI: cni, NoKubeProxy: noProxy, NoKubePrism: noPrism, CiliumSets: sets}
+	w := 1
+	if os.Getenv("ICHOR_E2E_F_WORKERS") == "0" {
+		w = 0
+	}
+	o := foreign.Options{Workers: w, CNI: cni, NoKubeProxy: noProxy, NoKubePrism: noPrism, CiliumSets: sets}
+	return o
 }
 
 // adoptArgs runs `ichor adopt` in the tools pod with the given flags (no recovery flags are added) and returns the
@@ -96,6 +101,12 @@ func helmSet(t *testing.T, c *foreign.Cluster, sets ...string) {
 	out, err := exec.Command("helm", args...).CombinedOutput()
 	if err != nil {
 		t.Fatalf("helm upgrade: %v\n%s", err, out)
+	}
+	// A ConfigMap change alone does not restart the agents; the data plane only changes when they do.
+	for _, w := range []string{"ds/cilium", "ds/cilium-envoy", "deploy/cilium-operator"} {
+		if o, err := inner(c, "-n", "kube-system", "rollout", "restart", w); err != nil {
+			t.Fatalf("restart %s: %v\n%s", w, err, o)
+		}
 	}
 	if o, err := inner(c, "-n", "kube-system", "rollout", "status", "ds/cilium", "--timeout=300s"); err != nil {
 		t.Fatalf("cilium rollout: %v\n%s", err, o)

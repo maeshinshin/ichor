@@ -519,17 +519,36 @@ func (st *adoptState) inspect(ctx context.Context, deps adoptDeps) error {
 	return nil
 }
 
+// ichorOwnedCilium is true when the Cilium found is Ichor's own release and adopt creates the
+// TalosCluster (the rerun after an interrupted no-CNI adopt).
+func (st *adoptState) ichorOwnedCilium() bool {
+	return st.fresh && !st.unmanaged && st.rep != nil && st.rep.Provenance == provenanceIchor
+}
+
+func rbTunnel(rb *cilium.ReadBack) string {
+	if rb == nil {
+		return ""
+	}
+
+	return rb.Tunnel
+}
+
 // readBackIchorCilium reads an Ichor-owned Cilium's release: it is already running with a tunnel, a
 // kube-proxy mode and user values, and the spec adopt writes must reproduce them, or the controller
 // would change a running network.
 func (st *adoptState) readBackIchorCilium(ctx context.Context, deps adoptDeps) error {
-	if !st.fresh || st.unmanaged || st.rep == nil || st.rep.Provenance != provenanceIchor || deps.Target == nil {
+	if !st.ichorOwnedCilium() || deps.Target == nil {
 		return nil
 	}
 
 	rb, err := ichorCiliumReadBack(ctx, deps.Target)
 	if err != nil {
 		return fmt.Errorf("adopt: reading Ichor's Cilium release: %w", err)
+	}
+
+	if deps.Tunnel != "" && (rb == nil || rb.Tunnel != deps.Tunnel) {
+		return fmt.Errorf("adopt: --tunnel %s does not match Ichor's running Cilium (tunnel %q); the tunnel cannot change on a running cluster, so drop --tunnel or pass the running value",
+			deps.Tunnel, rbTunnel(rb))
 	}
 
 	if rb != nil {
@@ -638,7 +657,9 @@ func checkTunnel(flag, tunnel string) error {
 // It refuses, with nothing written, when a precondition fails.
 func (st *adoptState) planInstallCilium(deps adoptDeps) error {
 	if st.rep == nil || !st.rep.NoCNI {
-		if deps.Tunnel != "" {
+		// An Ichor-owned Cilium (a rerun after adopt installed it) is compared with the release in
+		// readBackIchorCilium, which has the client.
+		if deps.Tunnel != "" && !st.ichorOwnedCilium() {
 			return errors.New("adopt: --tunnel only applies when adopt installs Cilium, which it does only on a cluster with no CNI")
 		}
 

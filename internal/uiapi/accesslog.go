@@ -1,0 +1,88 @@
+/*
+Copyright 2026 maeshinshin.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package uiapi
+
+import (
+	"context"
+	"log"
+	"strings"
+	"time"
+
+	"connectrpc.com/connect"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/encoding/prototext"
+
+	"github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1/ichorv1alpha1connect"
+)
+
+// reclaimPrefix selects every ReclaimService procedure by name: the request of CreateReclaim carries a
+// foreign Talos admin credential, so no body of this service is ever logged.
+const reclaimPrefix = "/" + ichorv1alpha1connect.ReclaimServiceName + "/"
+
+// bodyLoggable reports whether a procedure's request body may appear in the access log.
+func bodyLoggable(procedure string) bool { return !strings.HasPrefix(procedure, reclaimPrefix) }
+
+// AccessLogInterceptor logs one line per unary RPC: procedure, outcome and duration. With logBodies it adds the
+// request message, except for the reclaim methods, whose body is dropped by method name.
+func AccessLogInterceptor(l *log.Logger, logBodies bool) connect.Interceptor {
+	return accessLog{l: l, bodies: logBodies}
+}
+
+type accessLog struct {
+	l      *log.Logger
+	bodies bool
+}
+
+func (a accessLog) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
+	return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
+		start := time.Now()
+		res, err := next(ctx, req)
+
+		code := "ok"
+		if err != nil {
+			code = connect.CodeOf(err).String()
+		}
+
+		body := ""
+		if m, ok := req.Any().(proto.Message); ok && a.bodies && bodyLoggable(req.Spec().Procedure) {
+			body = " body=" + prototext.MarshalOptions{}.Format(m)
+		}
+
+		a.l.Printf("rpc %s code=%s dur=%s%s", req.Spec().Procedure, code, time.Since(start).Round(time.Millisecond), body)
+
+		return res, err
+	}
+}
+
+func (accessLog) WrapStreamingClient(next connect.StreamingClientFunc) connect.StreamingClientFunc {
+	return next
+}
+
+func (a accessLog) WrapStreamingHandler(next connect.StreamingHandlerFunc) connect.StreamingHandlerFunc {
+	return func(ctx context.Context, conn connect.StreamingHandlerConn) error {
+		err := next(ctx, conn)
+
+		code := "ok"
+		if err != nil {
+			code = connect.CodeOf(err).String()
+		}
+
+		a.l.Printf("rpc %s code=%s", conn.Spec().Procedure, code)
+
+		return err
+	}
+}

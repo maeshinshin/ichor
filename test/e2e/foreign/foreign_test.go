@@ -35,6 +35,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -206,7 +207,7 @@ func adoptBin(t *testing.T, c *foreign.Cluster, bin string, extra ...string) (st
 	pod := stage(t, c)
 	args := append([]string{"-n", ns, "exec", pod, "--", "env", "HOME=/tmp/home", bin, "adopt",
 		"--cluster", c.Opts.Prefix, "-n", crNS, "--talosconfig", "/tmp/talosconfig", "--kubeconfig", "/tmp/kubeconfig",
-		"--node", c.CPs[0], "--yes"}, append(recoverFlags(c), extra...)...)
+		"--node", c.CPs[0], "--yes"}, append(recoverArgs(c, extra), extra...)...)
 	// kube.Command refuses a "--cluster" argument anywhere; here it belongs to the command run
 	// inside the pod, so the context is pinned by hand to the same ICHOR_E2E_KUBE_CONTEXT.
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Minute) // adopt waits for Ichor's webhooks without a bound (D5: no CNI, never ready)
@@ -216,6 +217,14 @@ func adoptBin(t *testing.T, c *foreign.Cluster, bin string, extra ...string) (st
 	// ponytail: the full output is printed; it carries no keys (adopt prints nothing secret).
 	t.Logf("ichor adopt %s:\n%s", strings.Join(extra, " "), out)
 	return string(out), err
+}
+
+// recoverArgs: a rerun that passes --secrets-bundle (the bundle an earlier run wrote) must not recover the secrets again.
+func recoverArgs(c *foreign.Cluster, extra []string) []string {
+	if slices.Contains(extra, "--secrets-bundle") {
+		return nil
+	}
+	return recoverFlags(c)
 }
 
 func inner(c *foreign.Cluster, args ...string) (string, error) {

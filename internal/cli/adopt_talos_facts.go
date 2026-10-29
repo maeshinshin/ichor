@@ -117,9 +117,7 @@ type TalosFacts struct {
 	KubeProxyEnabled bool
 	KubePrism        KubePrismFacts
 	InlineManifests  []InlineManifestFact
-	// ExternalManifestURLs are cluster.extraManifests and KubeExternalManifestConfig URLs.
-	ExternalManifestURLs []string
-	Install              InstallFacts
+	Install          InstallFacts
 
 	// CertSANs is machine.certSANs; APIServerCertSANs is the kube-apiserver's
 	// (KubeAPIServerConfig.certExtraSANs, cluster.apiServer.certSANs), empty on a worker.
@@ -192,10 +190,6 @@ func ReadTalosFacts(cfgBytes []byte) (*TalosFacts, error) {
 
 	for _, im := range provider.K8sInlineManifestConfigs() {
 		f.InlineManifests = append(f.InlineManifests, InlineManifestFact{Name: im.Name(), Contents: im.Contents()})
-	}
-
-	for _, em := range provider.K8sExternalManifestConfigs() {
-		f.ExternalManifestURLs = append(f.ExternalManifestURLs, em.URL())
 	}
 
 	if n := provider.K8sNetworkConfig(); n != nil {

@@ -117,7 +117,7 @@ func runCNIBootstrap(ctx context.Context, d cniBootstrapDeps) error {
 		return fmt.Errorf("cni bootstrap: --kube-proxy %q is invalid: must be %q or %q", d.KubeProxy, kubeProxyEnabled, kubeProxyReplaced)
 	}
 
-	if err := checkTunnel("--tunnel", d.Tunnel); err != nil {
+	if err := checkTunnel(d.Tunnel); err != nil {
 		return fmt.Errorf("cni bootstrap: %w", err)
 	}
 
@@ -139,7 +139,7 @@ func runCNIBootstrap(ctx context.Context, d cniBootstrapDeps) error {
 	rep := detectCNI(facts, CNIFacts{Kind: CNINone})
 
 	// A rerun after a failed wait: Ichor's own Cilium is already there; Apply upgrades it.
-	rerun := rep.Kind == detectedCilium && rep.Provenance == provenanceIchor && !rep.Mixed()
+	rerun := rep.Kind == detectedCilium && rep.Provenance == provenanceIchor
 
 	switch {
 	case rerun:

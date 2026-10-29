@@ -88,7 +88,7 @@ func TestE1NoCNIAdoptedManaged(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 1, CNI: foreign.CNINone})
 	before := cniPaths(t, c)
 	start := time.Now()
-	out, err := adopt(t, c)
+	out, err := adopt(t, c, geneve...)
 	t.Logf("adopt took %s", time.Since(start))
 	if err != nil {
 		t.Fatalf("adopt failed: %v\n%s", err, out)
@@ -120,3 +120,7 @@ func TestE4NoKubePrismRefused(t *testing.T) {
 	}
 	noCNINothingWritten(t, c, before)
 }
+
+// geneve: the outer cluster's own Cilium uses VXLAN on UDP 8472, which swallows a nested VXLAN tunnel (see
+// foreign.ciliumHelmArgs), so every Cilium Ichor installs here uses Geneve.
+var geneve = []string{"--tunnel", "geneve"}

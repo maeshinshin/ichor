@@ -1,6 +1,7 @@
 package oidcissuer
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -351,7 +352,7 @@ func (i *Issuer) codeGrant(w http.ResponseWriter, r *http.Request, client string
 		oauthError(w, http.StatusBadRequest, errInvalidGrant, "user not allowed")
 		return
 	}
-	i.respond(w, user, client, ar.TokenAudience, ar.Scope, ar.Nonce, hasScope(ar.Scope, scopeOffline), i.cfg.Now())
+	i.respond(r.Context(), w, user, client, ar.TokenAudience, ar.Scope, ar.Nonce, hasScope(ar.Scope, scopeOffline), i.cfg.Now())
 }
 
 func (i *Issuer) refreshGrant(w http.ResponseWriter, r *http.Request, client string) {
@@ -380,31 +381,32 @@ func (i *Issuer) refreshGrant(w http.ResponseWriter, r *http.Request, client str
 		oauthError(w, http.StatusBadRequest, errInvalidGrant, "user not allowed")
 		return
 	}
-	i.respond(w, user, client, aud, rc.Scope, "", false, time.Time{})
+	i.respond(r.Context(), w, user, client, aud, rc.Scope, "", false, time.Time{})
 }
 
 // respond signs the ID token and, for a new login (sessionStart non-zero and
 // withRefresh), a refresh token. A refresh grant returns no new refresh token:
 // they are not rotated, the client keeps its own.
-func (i *Issuer) respond(w http.ResponseWriter, u User, client, aud, scope, nonce string, withRefresh bool, sessionStart time.Time) {
+func (i *Issuer) respond(ctx context.Context, w http.ResponseWriter, u User, client, aud, scope, nonce string, withRefresh bool, sessionStart time.Time) {
 	if u.MustChange && aud == ichorauth.AudienceKube {
 		oauthError(w, http.StatusForbidden, errAccessDenied, "change your password first (sign in to the Ichor UI); no Kubernetes token is issued until then")
 		return
 	}
 	now := i.cfg.Now()
+	tokenTTL, refreshLifetime := i.lifetimes(ctx)
 	groups := append([]string{}, u.Roles...) // never null in the token
 	idTok, err := i.sign("JWT", jwt.Claims{
 		Issuer: i.cfg.Issuer, Subject: u.Name, Audience: jwt.Audience{aud}, ID: rand.Text(),
-		IssuedAt: jwt.NewNumericDate(now), Expiry: jwt.NewNumericDate(now.Add(i.cfg.TokenTTL)),
+		IssuedAt: jwt.NewNumericDate(now), Expiry: jwt.NewNumericDate(now.Add(tokenTTL)),
 	}, idClaims{Groups: groups, Nonce: nonce})
 	resp := tokenResponse{
 		AccessToken: idTok, // no userinfo endpoint: the ID token doubles as the bearer
-		TokenType:   "Bearer", ExpiresIn: int(i.cfg.TokenTTL / time.Second), IDToken: idTok, Scope: scope,
+		TokenType:   "Bearer", ExpiresIn: int(tokenTTL / time.Second), IDToken: idTok, Scope: scope,
 	}
 	if err == nil && withRefresh {
 		resp.RefreshToken, err = i.sign(ichorauth.TypRefresh, jwt.Claims{
 			Issuer: i.cfg.Issuer, Subject: u.Name, Audience: jwt.Audience{internalAudience}, ID: rand.Text(),
-			IssuedAt: jwt.NewNumericDate(sessionStart), Expiry: jwt.NewNumericDate(sessionStart.Add(i.cfg.RefreshLifetime)),
+			IssuedAt: jwt.NewNumericDate(sessionStart), Expiry: jwt.NewNumericDate(sessionStart.Add(refreshLifetime)),
 		}, refreshClaims{ClientID: client, Scope: scope, TokenAudience: aud})
 	}
 	if err != nil {

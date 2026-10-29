@@ -111,9 +111,19 @@ func (s *Server) reclaimUser(ctx context.Context) (string, error) {
 	return review.Status.UserInfo.Username, nil
 }
 
+// reclaimEnabled reads the switch per call from the IchorInstallation when Settings is set, and uses ReclaimEnabled
+// otherwise.
+func (s *Server) reclaimEnabled(ctx context.Context) bool {
+	if s.Settings != nil {
+		return s.Settings.ReclaimEnabled(ctx)
+	}
+
+	return s.ReclaimEnabled
+}
+
 // reclaimGate refuses every call when the feature is off, and a caller without the verb.
 func (s *Server) reclaimGate(ctx context.Context) error {
-	if !s.ReclaimEnabled {
+	if !s.reclaimEnabled(ctx) {
 		return errReclaimOff
 	}
 
@@ -133,7 +143,7 @@ func (s *Server) reclaimGate(ctx context.Context) error {
 func (s *Server) CanReclaim(
 	ctx context.Context, req *connect.Request[pb.CanReclaimRequest],
 ) (*connect.Response[pb.CanReclaimResponse], error) {
-	if !s.ReclaimEnabled {
+	if !s.reclaimEnabled(ctx) {
 		return connect.NewResponse(&pb.CanReclaimResponse{}), nil
 	}
 

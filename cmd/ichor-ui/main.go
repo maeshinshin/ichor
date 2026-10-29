@@ -48,6 +48,7 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1/ichorv1alpha1connect"
 	"github.com/maeshinshin/ichor/internal/oidcissuer"
+	"github.com/maeshinshin/ichor/internal/settings"
 	"github.com/maeshinshin/ichor/internal/uiapi"
 )
 
@@ -107,7 +108,7 @@ func main() {
 	flag.StringVar(&users.internalTLSDir, "internal-tls-dir", "/etc/ichor/oidc-tls", "directory with tls.crt and tls.key of the internal listener")
 	flag.StringVar(&users.internalJWKSURI, "internal-jwks-uri", os.Getenv("ICHOR_USERS_INTERNAL_JWKS_URI"), "jwks_uri of the internal discovery document (default: the host the apiserver connected to, so a new Service ClusterIP is followed)")
 	flag.StringVar(&users.signingKeysDir, "signing-keys-dir", "/etc/ichor/oidc-signing", "directory with keys.json, the signing keys the controller keeps")
-	flag.DurationVar(&users.tokenTTL, "token-ttl", 5*time.Minute, "lifetime of an ID token (1m to 15m)")
+	flag.DurationVar(&users.tokenTTL, "token-ttl", 5*time.Minute, "lifetime of an ID token (1m to 1h); spec.users.tokenTTL of the IchorInstallation wins when set")
 	flag.DurationVar(&users.refreshTTL, "refresh-lifetime", 12*time.Hour, "absolute lifetime of a refresh token (1h to 30d)")
 
 	flag.StringVar(&users.kubeAPIServerURL, "kube-api-server-url", "", "Kubernetes API URL put in users' kubeconfigs (default: the cluster's spec.endpoint)")
@@ -118,6 +119,8 @@ func main() {
 	tlsKey := flag.String("tls-key-file", "", "private key for --tls-cert-file")
 
 	reclaimEnabled := flag.Bool("reclaim-enabled", os.Getenv("ICHOR_RECLAIM_ENABLED") == "true", "enable the break-glass machine reclaim API")
+
+	settingsReadOnly := flag.Bool("settings-read-only", os.Getenv("ICHOR_SETTINGS_READ_ONLY") == "true", "ignore the runtime settings in the IchorInstallation spec (chart settings.readOnly)")
 
 	flag.Parse()
 
@@ -130,6 +133,12 @@ func main() {
 	c, err := client.New(restCfg, client.Options{Scheme: scheme})
 	if err != nil {
 		log.Fatalf("ichor-ui: building Kubernetes client: %v", err)
+	}
+
+	// The runtime settings of the IchorInstallation, read live: a set spec field wins over the flags.
+	liveSettings := &settings.Reader{
+		Client: c, ReadOnly: *settingsReadOnly, TTL: 5 * time.Second,
+		Fallback: settings.Fallback{ReclaimEnabled: *reclaimEnabled, TokenTTL: users.tokenTTL, RefreshLifetime: users.refreshTTL},
 	}
 
 	// draining is closed once, right when shutdown starts, so every in-flight
@@ -190,7 +199,7 @@ func main() {
 
 		var verifier localVerifier
 
-		issuer, verifier, err = newIssuer(context.Background(), users, &uiapi.IssuerBackend{
+		issuer, verifier, err = newIssuer(context.Background(), users, liveSettings, &uiapi.IssuerBackend{
 			Users: cache, Reader: c, Writer: c, Namespace: server.ControllerNamespace, Settings: server.Users,
 		})
 		if err != nil {
@@ -211,6 +220,7 @@ func main() {
 	}
 
 	server.ReclaimEnabled = *reclaimEnabled
+	server.Settings = liveSettings
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/auth/config", func(w http.ResponseWriter, _ *http.Request) {

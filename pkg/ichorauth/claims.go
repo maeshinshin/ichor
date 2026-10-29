@@ -73,7 +73,7 @@ const (
 	DefaultTicketTTL       = 5 * time.Minute
 	DefaultTokenTTL        = 5 * time.Minute
 	MinTokenTTL            = 1 * time.Minute
-	MaxTokenTTL            = 15 * time.Minute
+	MaxTokenTTL            = time.Hour
 	DefaultRefreshLifetime = 12 * time.Hour
 	MinRefreshLifetime     = 1 * time.Hour
 	MaxRefreshLifetime     = 30 * 24 * time.Hour

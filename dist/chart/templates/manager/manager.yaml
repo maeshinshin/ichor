@@ -93,6 +93,10 @@ spec:
         # Break-glass machine reclaim.
         - --reclaim
         {{- end }}
+        {{- if eq (toString .Values.networkPolicy.cilium.enabled) "false" }}
+        # Explicit opt-out: the installer Job skips Ichor's CiliumNetworkPolicies.
+        - --no-cilium-policies
+        {{- end }}
         {{- range .Values.manager.args }}
         - {{ . }}
         {{- end }}

@@ -218,6 +218,8 @@ func decodeDocs(b []byte) (map[string]configDoc, error) {
 		docs[kind+":"+name] = configDoc{root: kind, data: m}
 	}
 
+	normalizeRegistryMirrors(docs)
+
 	return docs, nil
 }
 

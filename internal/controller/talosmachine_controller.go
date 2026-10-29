@@ -411,7 +411,7 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return res, err
 	}
 
-	if render.Hash(current) == hash {
+	if sameConfiguration(current, rendered, hash) {
 		m.Status.AppliedConfigHash = hash
 		m.Status.ObservedInputsHash = inputsHash
 		m.Status.RebootPaths, m.Status.APIServerRestartPaths = nil, nil
@@ -436,18 +436,6 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 		return r.retryLater(ctx, &m, reasonConfigDiffFailed,
 			"comparing current and rendered configuration failed")
-	}
-
-	// The bytes differ but no field does: the same settings in another form (the registry mirrors
-	// an earlier Ichor build wrote as machine.registries.mirrors, say). Nothing to apply or report;
-	// the node moves to the rendered form the next time it is applied for another reason.
-	if len(paths) == 0 {
-		m.Status.AppliedConfigHash = hash
-		m.Status.ObservedInputsHash = inputsHash
-		m.Status.RebootPaths, m.Status.APIServerRestartPaths = nil, nil
-
-		return ctrl.Result{RequeueAfter: reachabilityRecheck}, r.ready(ctx, &m, metav1.ConditionTrue, reasonConverged,
-			"node configuration matches the rendered configuration")
 	}
 
 	contract, err := coreconfig.ParseContractFromVersion(cluster.Spec.VersionContract)

@@ -31,8 +31,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	apimeta "k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -235,13 +233,13 @@ func (w *adoptWriter) installIchor(ctx context.Context) error {
 		return nil
 	}
 
-	running, err := ichorRunning(ctx, w.c)
+	present, err := ichorPresent(ctx, w.c)
 	if err != nil {
 		return err
 	}
 
-	if running {
-		w.res.Unchanged = append(w.res.Unchanged, "Ichor installation")
+	if present.Present() {
+		w.skipInstall(present, ichor)
 
 		return nil
 	}
@@ -277,20 +275,24 @@ func policyGateReason(ichor *adoptWriteIchor) string {
 	return "the CiliumNetworkPolicy CRD is not Established"
 }
 
-// ichorRunning reports whether the IchorInstallation singleton exists. A cluster without the CRD
-// has no Ichor.
-func ichorRunning(ctx context.Context, c client.Client) (bool, error) {
-	var inst ichorv1alpha1.IchorInstallation
+// skipInstall is the install step on a cluster that already has Ichor (ADR 0104 4.3): nothing is
+// applied and no IchorInstallation is made. Helm owns ichor-system when it installed Ichor, so the
+// network policies are advised, never applied.
+func (w *adoptWriter) skipInstall(present ichorPresence, ichor *adoptWriteIchor) {
+	w.res.Unchanged = append(w.res.Unchanged, "Ichor installation")
 
-	err := c.Get(ctx, types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}, &inst)
+	if !present.HelmManaged() {
+		return
+	}
 
-	switch {
-	case err == nil:
-		return true, nil
-	case apierrors.IsNotFound(err) || apimeta.IsNoMatchError(err):
-		return false, nil
-	default:
-		return false, fmt.Errorf("adopt: looking for an existing Ichor installation: %w", err)
+	if !installer.IncludeCiliumPolicies(ichor.DetectedCNI, ichor.PolicyCRDPresent) {
+		return
+	}
+
+	if v := present.CiliumPoliciesValue(); v == nil || !*v {
+		_, _ = fmt.Fprintf(w.in.Stderr, "adopt: Ichor's network policies are not applied to a Helm-owned namespace; "+
+			"set networkPolicy.cilium.enabled=true and run `%s --reuse-values --set networkPolicy.cilium.enabled=true`\n",
+			present.helmUpgradeCommand(present.Version()))
 	}
 }
 

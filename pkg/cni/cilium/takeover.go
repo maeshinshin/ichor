@@ -689,6 +689,8 @@ var volatileMeta = []string{
 var volatileAnnotations = []string{
 	"kubectl.kubernetes.io/last-applied-configuration", "deployment.kubernetes.io/revision",
 	annotationReleaseName, annotationReleaseNamespace,
+	// Talos writes this onto the inline-manifest objects it applies; it is its bookkeeping.
+	"config.k8s.io/owning-inventory",
 }
 
 // normalizeObject returns a copy of o without the fields that are never a user

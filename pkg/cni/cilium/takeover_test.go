@@ -502,6 +502,32 @@ func TestDiffLive_ReportsLiveOnlyAnnotationAndArg(t *testing.T) {
 	}
 }
 
+func TestDiffLive_IgnoresTalosOwningInventoryAnnotation(t *testing.T) {
+	vals := effective(t, nil)
+	live := newLiveCluster(t, vals)
+
+	meta := live.agent(t)["metadata"].(map[string]any)
+
+	ann, _ := meta["annotations"].(map[string]any)
+	if ann == nil {
+		ann = map[string]any{}
+		meta["annotations"] = ann
+	}
+
+	ann["config.k8s.io/owning-inventory"] = "abc123"
+	ann["config.k8s.io/owning-inventory-other"] = "x"
+
+	got, err := DiffLive(t.Context(), vals, live.get)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	paths := strings.Join(diffPaths(got), "\n")
+	if len(got) != 1 || !strings.Contains(paths, "metadata.annotations.config.k8s.io/owning-inventory-other") {
+		t.Fatalf("want only the near-miss key reported, got:\n%s", paths)
+	}
+}
+
 func TestDiffLive_ChangedFieldAndMissingObject(t *testing.T) {
 	vals := effective(t, nil)
 	live := newLiveCluster(t, vals)

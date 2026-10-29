@@ -25,7 +25,6 @@ import (
 
 	"connectrpc.com/connect"
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
-	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
@@ -127,7 +126,7 @@ func (s *Server) CreatePatch(
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	audit := &pb.AuditRecord{Actor: s.actorName(ctx), At: timestamppb.New(s.now()), Action: "create", Target: ref}
+	audit := s.opAudit(ctx, "create", ref)
 
 	return connect.NewResponse(&pb.CreatePatchResponse{Patch: out, Audit: audit}), nil
 }
@@ -159,7 +158,7 @@ func (s *Server) UpdatePatch(
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	audit := &pb.AuditRecord{Actor: s.actorName(ctx), At: timestamppb.New(s.now()), Action: "update", Target: ref}
+	audit := s.opAudit(ctx, "update", ref)
 
 	return connect.NewResponse(&pb.UpdatePatchResponse{Patch: out, Audit: audit}), nil
 }
@@ -183,7 +182,7 @@ func (s *Server) DeletePatch(
 		return nil, mapOperationWriteError("deleting patch", namespacedName(ref), err)
 	}
 
-	audit := &pb.AuditRecord{Actor: s.actorName(ctx), At: timestamppb.New(s.now()), Action: "delete", Target: ref}
+	audit := s.opAudit(ctx, "delete", ref)
 
 	return connect.NewResponse(&pb.DeletePatchResponse{Audit: audit}), nil
 }

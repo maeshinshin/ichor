@@ -207,6 +207,69 @@ var _ = Describe("TalosMachineReconciler requeue after a failure", func() {
 		Expect(apimeta.FindStatusCondition(got.Status.Conditions, conditionNodeReachable)).To(BeNil())
 	})
 
+	It("reports a worker whose endpoint answers as another machine as EndpointIdentityMismatch with both UUIDs", func() {
+		cluster, m, bundle := setup()
+		Expect(m.Spec.Role).To(Equal(roleWorker))
+
+		current, _, err := render.Render(cluster, m, bundle, nil, nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		fake := &fakeTalosClient{current: current, identity: HardwareIdentity{UUID: m.Spec.Identity.UUID}}
+		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
+
+		_, err = reconcileMachine(r, m)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(readyCondition(fetchMachine(m)).Reason).To(Equal(reasonConverged))
+
+		// The old address is now held by another node: it answers, with the same configuration.
+		fake.identity = HardwareIdentity{UUID: "other-machine-uuid"}
+		res, err := reconcileMachine(r, m)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.RequeueAfter).To(Equal(transientRecheck))
+
+		got := fetchMachine(m)
+		ready := readyCondition(got)
+		Expect(ready.Status).To(Equal(metav1.ConditionFalse))
+		Expect(ready.Reason).To(Equal(reasonEndpointIdentityMismatch))
+		Expect(ready.Message).To(ContainSubstring("other-machine-uuid"))
+		Expect(ready.Message).To(ContainSubstring(m.Spec.Identity.UUID))
+		Expect(got.Spec.Endpoint).To(Equal(m.Spec.Endpoint), "the controller never mutates spec")
+
+		// The right node is back at the address: converged again.
+		fake.identity = HardwareIdentity{UUID: m.Spec.Identity.UUID}
+		_, err = reconcileMachine(r, m)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(readyCondition(fetchMachine(m)).Reason).To(Equal(reasonConverged))
+	})
+
+	It("reports a worker that cannot be dialed as NodeUnreachable once the grace has passed", func() {
+		cluster, m, bundle := setup()
+		Expect(m.Spec.Role).To(Equal(roleWorker))
+
+		current, _, err := render.Render(cluster, m, bundle, nil, nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		fake := &fakeTalosClient{current: current}
+		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
+
+		_, err = reconcileMachine(r, m)
+		Expect(err).NotTo(HaveOccurred())
+
+		fake.currentErr = errors.New("dial tcp " + m.Spec.Endpoint + ": i/o timeout")
+		_, err = reconcileMachine(r, m)
+		Expect(err).NotTo(HaveOccurred())
+
+		got := fetchMachine(m)
+		cond := apimeta.FindStatusCondition(got.Status.Conditions, conditionNodeReachable)
+		Expect(cond).NotTo(BeNil())
+		cond.LastTransitionTime = metav1.NewTime(time.Now().Add(-2 * nodeUnreachableGrace))
+		Expect(k8sClient.Status().Update(ctx, got)).To(Succeed())
+
+		_, err = reconcileMachine(r, m)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(readyCondition(fetchMachine(m)).Reason).To(Equal(reasonNodeUnreachable))
+	})
+
 	It("waits for the Secret watch, without polling, when the secrets bundle is missing", func() {
 		cluster := newTestCluster("no-such-secret", "v1.14")
 		m := newTestMachine(cluster.Name, true)

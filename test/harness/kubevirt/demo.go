@@ -67,6 +67,15 @@ func demoNames() (cp, worker string, err error) {
 	return prefix + "-cp", prefix + "-w", nil
 }
 
+// demoHAEnv=1 makes up-demo and down-demo use three control planes (<prefix>-cp, -cp2, -cp3) and
+// no worker, for HA verification (ICHOR_UI_DEMO_NO_WORKER is ignored). demoHAEnv=extra creates only
+// a fourth control-plane VM, <prefix>-cp4, next to a running HA demo, to replace one of its control planes.
+const demoHAEnv = "ICHOR_UI_DEMO_HA"
+
+func demoHA() bool { return os.Getenv(demoHAEnv) == "1" || demoExtra() }
+
+func demoExtra() bool { return os.Getenv(demoHAEnv) == "extra" }
+
 // demoMemory returns the guest memory for a demo VM: the value of env, or defaultDemoMemory when unset.
 // It ends up in the VM manifest, so only a plain Mi/Gi quantity is accepted.
 func demoMemory(env string) (string, error) {
@@ -82,9 +91,12 @@ func demoMemory(env string) (string, error) {
 	return v, nil
 }
 
-func demoVMManifest(name, memory string, iso isoSource) string {
+func demoVMManifest(name, group, memory string, iso isoSource) string {
 	m := renderVM(haVMManifestTmpl, name, iso)
 	m = strings.ReplaceAll(m, "kubevirt-ha", "kubevirt-ui-demo")
+	// A group label on the launcher pod, so an outer Service can select all of one demo's VMs.
+	m = strings.Replace(m, "  template:\n    metadata:\n      labels:\n",
+		"  template:\n    metadata:\n      labels:\n        ichor.maesh.dev/e2e-group: "+group+"\n", 1)
 	m = strings.Replace(m, "guest: "+defaultDemoMemory, "guest: "+memory, 1)
 
 	return m
@@ -114,13 +126,23 @@ func upDemo() error {
 		names = []string{cp}
 	}
 
+	if demoHA() {
+		names = []string{cp, cp + "2", cp + "3"}
+		memory = map[string]string{cp: cpMem, cp + "2": cpMem, cp + "3": cpMem}
+	}
+
+	if demoExtra() {
+		names = []string{cp + "4"}
+		memory = map[string]string{cp + "4": cpMem}
+	}
+
 	iso, err := resolveISO()
 	if err != nil {
 		return err
 	}
 
 	for _, n := range names {
-		if err := kube.Apply(demoVMManifest(n, memory[n], iso)); err != nil {
+		if err := kube.Apply(demoVMManifest(n, cp[:len(cp)-len("-cp")], memory[n], iso)); err != nil {
 			return fmt.Errorf("creating VM %s: %w", n, err)
 		}
 	}
@@ -156,7 +178,20 @@ func upDemo() error {
 		}
 	}
 
+	if demoExtra() {
+		fmt.Println("CP4_IP=" + ips[cp+"4"])
+
+		return nil
+	}
+
 	fmt.Println("CP_IP=" + ips[cp])
+	if demoHA() {
+		fmt.Println("CP2_IP=" + ips[cp+"2"])
+		fmt.Println("CP3_IP=" + ips[cp+"3"])
+
+		return nil
+	}
+
 	if ips[worker] != "" {
 		fmt.Println("WORKER_IP=" + ips[worker])
 	}
@@ -170,14 +205,22 @@ func downDemo() error {
 		return err
 	}
 
-	if _, err := utils.Run(kube.Command("-n", namespace, verbDelete, "vm", cp, worker,
-		"--wait=true", "--timeout=120s", "--ignore-not-found")); err != nil {
+	vms := []string{cp, worker}
+	if demoHA() {
+		vms = []string{cp, cp + "2", cp + "3", cp + "4"}
+	}
+
+	if _, err := utils.Run(kube.Command(append([]string{"-n", namespace, verbDelete, "vm"},
+		append(vms, "--wait=true", "--timeout=120s", "--ignore-not-found")...)...)); err != nil {
 		return fmt.Errorf("deleting the VMs: %w", err)
 	}
 
-	args := []string{"-n", namespace, verbDelete, "dv",
-		cp + "-iso", cp + "-system", worker + "-iso", worker + "-system",
-		"--wait=true", "--timeout=120s", "--ignore-not-found"}
+	args := []string{"-n", namespace, verbDelete, "dv"}
+	for _, v := range vms {
+		args = append(args, v+"-iso", v+"-system")
+	}
+
+	args = append(args, "--wait=true", "--timeout=120s", "--ignore-not-found")
 	if _, err := utils.Run(kube.Command(args...)); err != nil {
 		return fmt.Errorf("deleting the DataVolumes: %w", err)
 	}

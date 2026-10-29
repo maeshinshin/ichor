@@ -145,22 +145,12 @@ func (k Key) Private() (*rsa.PrivateKey, error) {
 // Signing returns the key tokens are signed with at now: the one with the latest ActiveFrom that
 // has passed. ok is false when none has.
 func (k Keys) Signing(now time.Time) (Key, bool) {
-	var (
-		best  Key
-		found bool
-	)
-
-	for _, c := range k.Keys {
-		if c.ActiveFrom.After(now) {
-			continue
-		}
-
-		if !found || c.ActiveFrom.After(best.ActiveFrom) {
-			best, found = c, true
-		}
+	active := slices.DeleteFunc(slices.Clone(k.Keys), func(c Key) bool { return c.ActiveFrom.After(now) })
+	if len(active) == 0 {
+		return Key{}, false
 	}
 
-	return best, found
+	return slices.MaxFunc(active, func(a, b Key) int { return a.ActiveFrom.Compare(b.ActiveFrom) }), true
 }
 
 // Published returns the keys the JWKS lists at now: every key that has not been retired,

@@ -1,6 +1,7 @@
 package settings
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -23,7 +24,7 @@ func TestChangesApply(t *testing.T) {
 		t.Fatal("an unchanged field was written")
 	}
 
-	if inst.Annotations[ichorv1alpha1.ConfirmReclaimAnnotation] != ichorv1alpha1.ConfirmReclaimValue {
+	if !strings.HasPrefix(inst.Annotations[ichorv1alpha1.ConfirmReclaimAnnotation], ichorv1alpha1.ConfirmReclaimValue) {
 		t.Fatal("enabling reclaim must set the confirm annotation")
 	}
 

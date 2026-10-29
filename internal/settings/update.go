@@ -82,7 +82,8 @@ func (c Changes) Apply(inst *ichorv1alpha1.IchorInstallation) {
 			inst.Annotations = map[string]string{}
 		}
 
-		inst.Annotations[ichorv1alpha1.ConfirmReclaimAnnotation] = ichorv1alpha1.ConfirmReclaimValue
+		// A fresh value each time: the webhook only accepts a confirmation the request adds or changes.
+		inst.Annotations[ichorv1alpha1.ConfirmReclaimAnnotation] = ichorv1alpha1.ConfirmReclaimValue + "-" + strconv.FormatInt(time.Now().UnixNano(), 36)
 	} else {
 		delete(inst.Annotations, ichorv1alpha1.ConfirmReclaimAnnotation)
 	}

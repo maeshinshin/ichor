@@ -48,6 +48,7 @@ import (
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
 	"github.com/maeshinshin/ichor/pkg/render"
+	"github.com/maeshinshin/ichor/pkg/values"
 )
 
 const (
@@ -83,6 +84,7 @@ const (
 	reasonCNIWaitingForRelease     = "WaitingForRelease"
 	reasonCNIInvalidValues         = "InvalidValues"
 	reasonCNIApplied               = "Applied"
+	reasonCNITunnelMismatch        = "TunnelMismatch"
 )
 
 // CNIHandoverReconciler hands the bootstrapped Cilium to Ichor and keeps
@@ -176,6 +178,15 @@ func (r *CNIHandoverReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		}
 	}
 
+	// The tunnel, routing mode and IPAM of a running Cilium cannot be changed under live pods: a
+	// Job that did would leave the release half-upgraded and the cluster without a network.
+	if mismatch, err := r.networkMismatch(ctx, &cluster, mode); err != nil {
+		return ctrl.Result{}, err
+	} else if mismatch != "" {
+		return ctrl.Result{RequeueAfter: handoverRequeueInterval},
+			r.setProgress(ctx, &cluster, handedOver, reasonCNITunnelMismatch, mismatch)
+	}
+
 	// Ichor's own record is already deployed at this hash (`ichor adopt` installed Cilium itself on
 	// a cluster with no CNI): there is nothing for a Job to change, so no Job runs.
 	// An adopted cluster's own Cilium (inline manifest annotation) still goes through the Job,
@@ -197,6 +208,58 @@ func (r *CNIHandoverReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	return r.runJob(ctx, &cluster, mode, hash, handedOver)
+}
+
+// networkMismatch compares the tunnel protocol, routing mode and IPAM mode the effective values
+// would render with the running cilium-config, and says what differs ("" when nothing does or
+// there is no cilium-config yet).
+func (r *CNIHandoverReconciler) networkMismatch(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode,
+) (string, error) {
+	var cm corev1.ConfigMap
+
+	switch err := r.reader().Get(ctx, types.NamespacedName{Namespace: kubeSystemNamespace, Name: ciliumConfigName}, &cm); {
+	case apierrors.IsNotFound(err):
+		return "", nil
+	case err != nil:
+		return "", err
+	}
+
+	vals, err := cilium.EffectiveValuesForMode(cluster, mode)
+	if err != nil {
+		return "", nil //nolint:nilerr // invalid values are reported by the hash step
+	}
+
+	str := func(path, def string) string {
+		if v, ok := values.Get(vals, path); ok {
+			if s, ok := v.(string); ok && s != "" {
+				return s
+			}
+		}
+
+		return def
+	}
+
+	for _, k := range []struct{ key, path, def, what string }{
+		{"tunnel-protocol", "tunnelProtocol", "vxlan", "tunnel"},
+		{"routing-mode", "routingMode", "tunnel", "routing mode"},
+		{"ipam", "ipam.mode", "cluster-pool", "IPAM mode"},
+	} {
+		want, live := str(k.path, k.def), cm.Data[k.key]
+		if live == "" || live == want {
+			continue
+		}
+
+		if k.what == "tunnel" {
+			return fmt.Sprintf("spec.cni.tunnel is %s but the running Cilium uses %s; Ichor does not change the tunnel of a running network",
+				want, live), nil
+		}
+
+		return fmt.Sprintf("the values would set the %s to %s but the running Cilium uses %s; Ichor does not change it on a running network",
+			k.what, want, live), nil
+	}
+
+	return "", nil
 }
 
 // runJob advances the Helm Job for hash under the cluster operation lock, and on completion

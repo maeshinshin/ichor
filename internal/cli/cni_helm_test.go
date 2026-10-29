@@ -23,15 +23,21 @@ import (
 	"testing"
 
 	"helm.sh/helm/v3/pkg/action"
+	"helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chartutil"
+	"helm.sh/helm/v3/pkg/release"
 	kubefake "helm.sh/helm/v3/pkg/kube/fake"
 	"helm.sh/helm/v3/pkg/storage"
 	"helm.sh/helm/v3/pkg/storage/driver"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	kubefakeclient "k8s.io/client-go/kubernetes/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/cni/cilium"
 )
 
 func memoryHelmConfig() *action.Configuration {
@@ -70,7 +76,7 @@ func TestCNIHelmApplyAdoptsThenUpgrades(t *testing.T) {
 
 		var out bytes.Buffer
 
-		err := runCNIHelmApply(t.Context(), k8s, cfg, key, "", 0, &out)
+		err := runCNIHelmApply(t.Context(), k8s, cfg, key, "", 0, nil, &out)
 
 		return out.String(), err
 	}
@@ -100,13 +106,52 @@ func TestCNIHelmApplyRefusesOwnedKeys(t *testing.T) {
 	cfg := memoryHelmConfig()
 	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(ciliumTestCluster(`{"ipam":{"mode":"cluster-pool"}}`)).Build()
 
-	err := runCNIHelmApply(t.Context(), k8s, cfg, types.NamespacedName{Namespace: ichorControllerNamespace, Name: "home"}, "", 0, io.Discard)
+	err := runCNIHelmApply(t.Context(), k8s, cfg, types.NamespacedName{Namespace: ichorControllerNamespace, Name: "home"}, "", 0, nil, io.Discard)
 	if err == nil || !strings.Contains(err.Error(), "ipam.mode") {
 		t.Fatalf("error = %v, want one naming ipam.mode", err)
 	}
 
 	if _, err := cfg.Releases.Last("cilium"); err == nil {
 		t.Error("a release was recorded for refused values")
+	}
+}
+
+// With --takeover the foreign record is backed up and removed after the install, and nothing
+// of its content reaches the output.
+func TestCNIHelmApplyTakeoverRetiresTheForeignRecord(t *testing.T) {
+	kube := kubefakeclient.NewSimpleClientset()
+
+	foreign := &release.Release{
+		Name: "cilium", Namespace: "kube-system", Version: 3,
+		Chart:  &chart.Chart{Metadata: &chart.Metadata{Name: "cilium", Version: "1.0.0"}},
+		Config: map[string]any{"marker": "sensitive-user-value"},
+		Info:   &release.Info{Status: release.StatusDeployed},
+	}
+	if err := driver.NewSecrets(kube.CoreV1().Secrets("kube-system")).Create("sh.helm.release.v1.cilium.v3", foreign); err != nil {
+		t.Fatal(err)
+	}
+
+	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(ciliumTestCluster("")).Build()
+
+	var out bytes.Buffer
+
+	err := runCNIHelmApply(t.Context(), k8s, memoryHelmConfig(),
+		types.NamespacedName{Namespace: ichorControllerNamespace, Name: cniHelmTestCluster}, "", 0,
+		&takeoverOptions{Kube: kube, IchorNamespace: ichorControllerNamespace}, &out)
+	if err != nil {
+		t.Fatalf("runCNIHelmApply: %v", err)
+	}
+
+	if !strings.Contains(out.String(), "sh.helm.release.v1.cilium.v3") || strings.Contains(out.String(), "sensitive-user-value") {
+		t.Errorf("output = %q, want the removed record's name and none of its content", out.String())
+	}
+
+	if _, err := kube.CoreV1().Secrets("kube-system").Get(t.Context(), "sh.helm.release.v1.cilium.v3", metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+		t.Errorf("the foreign record is still there: %v", err)
+	}
+
+	if _, err := kube.CoreV1().Secrets(ichorControllerNamespace).Get(t.Context(), cilium.PriorReleaseBackupName, metav1.GetOptions{}); err != nil {
+		t.Errorf("no backup Secret: %v", err)
 	}
 }
 

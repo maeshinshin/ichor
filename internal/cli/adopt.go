@@ -70,8 +70,34 @@ itself before ever proposing a patch: if it cannot achieve zero drift for a
 machine automatically, it reports the differing fields and leaves that
 machine untouched rather than writing a patch that would not.
 
-adopt never applies anything to a Talos node; it only ever reads one, and
-only ever writes TalosConfigPatch objects to the Kubernetes API.`,
+adopt runs in four phases, and nothing is applied to a node in any of them:
+
+  1. Plan: reads the nodes and the Kubernetes side, detects the CNI, classifies
+     the drift and prints the plan. --plan stops here and writes nothing.
+  2. Consent: shows what will be written (and any foreign Cilium Helm release
+     record that will be deleted after a backup) and asks; --yes skips the question.
+  3. Write: creates the secrets bundle Secret, the TalosCluster and held
+     TalosMachines (annotated as adopted), the initial TalosConfigPatch objects,
+     and installs Ichor itself. A Cilium that Ichor does not own yet is then taken
+     over as Ichor's Helm release.
+  4. Release: lifts the hold one machine at a time, control planes first, each
+     waiting for Ready, so the first render is applied with zero drift.
+
+Every node must run Talos v1.12 or later; older ones are refused and nothing is
+written. The cluster's secrets are required: pass --secrets-bundle FILE, or
+--recover-secrets with --recover-from ADDRESS to read them from a control
+plane's machine config (not both).
+
+A Cilium cluster is taken over after a diff check against the pinned chart;
+--accept-cilium-diff accepts differences from the live objects and
+--accept-cilium-changes the Ichor-owned settings that will change on the running
+data plane (IPAM and the tunnel protocol are never changed). Any other CNI is
+adopted only with --cni-unmanaged, which leaves the CNI exactly as it is: Ichor
+will not install, upgrade or configure it. A cluster with two CNIs is refused.
+
+adopt only reads the Talos nodes (using --talosconfig); it never applies
+configuration to them. Afterwards it advises a CA rotation, since adopted
+clusters keep the old CAs, but never starts one.`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		if err := validateOutputFormat(outputFormat); err != nil {
 			return err

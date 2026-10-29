@@ -53,6 +53,11 @@ Values worth knowing (see `dist/chart/values.yaml` for all of them):
 | `networkPolicy.cilium.enabled` | `null` | Ichor's `CiliumNetworkPolicy` objects. Needs Cilium's CRD, so turn it on only once Cilium runs. `null` renders none (nothing else applies them on a Helm install), `true` renders them, `false` says so explicitly. |
 | `preflight.cni` | `true` | Refuse to install when every node is NotReady with the network-plugin message. Skipped by `helm template` and `--dry-run`. |
 | `installer.enabled` | `false` | Leave off: a Helm install is upgraded by Helm. |
+| `ichorUI.port` | `8443` | The HTTPS port of ichor-ui. |
+| `ichorUI.plaintextPort` | `0` | Deprecated. Also serve plain HTTP on this port (for example `8080`) during a migration. Removed in the next minor release. |
+| `ichorUI.tls.secretName` | unset | Your own certificate for ichor-ui. Unset uses a leaf from the Ichor serving CA. |
+| `ichorUI.tls.caConfigMap`, `caSecret`, `caKey` | `ichor-ui-ca`, unset, `ca.crt` | The CA the ServiceMonitor (`prometheus.enabled`) verifies the HTTPS port against: the ConfigMap, or the Secret when `caSecret` is set. |
+| `settings.readOnly` | `false` | Hand the runtime settings to the chart: the `IchorInstallation` settings fields are ignored and the webhook denies writes. |
 
 Adopt does not apply the network policies on a Helm install. When they apply,
 it tells you to run:
@@ -61,6 +66,34 @@ it tells you to run:
 helm upgrade ichor oci://ghcr.io/maeshinshin/charts/ichor --version X.Y.Z \
   --namespace ichor-system --reuse-values --set networkPolicy.cilium.enabled=true
 ```
+
+## ichor-ui is HTTPS only
+
+ichor-ui serves TLS on 8443 and no plain HTTP (ADR 0105). The Service port is
+named `https`. The certificate is yours (`ichorUI.tls.secretName`) or a leaf from
+the Ichor serving CA, whose public part the controller publishes as the
+ConfigMap and Secret `ichor-ui-ca` in `ichor-system`. How to put an Ingress, a
+Gateway or a load balancer in front is in [Users and login](users-and-login.md#expose-ichor-ui-over-https).
+
+Moving an existing release:
+
+- Plain HTTP edge: upgrade with `--set ichorUI.plaintextPort=8080` to keep
+  the old port while you re-point the edge at 8443, then drop it. The value is
+  removed in the next minor release.
+- An install that already served TLS on 8080 sets `ichorUI.port=8080` to keep
+  its Service and edge as they are.
+- The ServiceMonitor verifies against `ichor-ui-ca` by default; override with
+  `ichorUI.tls.caConfigMap`, `caSecret` and `caKey`. It never skips
+  verification.
+
+## Settings on a Helm install
+
+The controller creates the `IchorInstallation` `ichor` once with
+`spec.deployment.manager: helm`; the chart does not render it. Reclaim, the
+sign-in lifetimes and the default drift policy are editable at run time (see
+[Settings](settings.md)) and win over the chart values when set. Set
+`settings.readOnly: true` to make the chart the only source. Upgrading and
+`ichor upgrade ichor` stay with Helm.
 
 ## A cluster with no CNI
 
@@ -88,7 +121,7 @@ ichor adopt --cluster NAME --node ADDR --recover-secrets --recover-from ADDR
 
 ## What adopt does on a Helm install
 
-- Skips its install step and creates no `IchorInstallation`.
+- Skips its install step and creates no `IchorInstallation` (the controller seeds it).
 - Requires Ichor's version to equal the CLI's exactly, and prints the `helm
   upgrade` command when it does not.
 - `--require-ichor` makes adopt fail when Ichor is not installed instead of

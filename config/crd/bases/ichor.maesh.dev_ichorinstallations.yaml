@@ -48,6 +48,30 @@ spec:
           spec:
             description: spec defines the desired state of IchorInstallation
             properties:
+              defaults:
+                description: defaults holds defaults for objects created later; an
+                  existing object is never touched.
+                properties:
+                  driftPolicy:
+                    description: |-
+                      driftPolicy is the default for a new TalosCluster's spec.driftPolicy. It takes the
+                      values of that field (warnOnly, autoCorrect); ADR 0105's "enforce" is autoCorrect.
+                    enum:
+                    - warnOnly
+                    - autoCorrect
+                    type: string
+                type: object
+              deployment:
+                description: deployment records who deploys this Ichor (ADR 0105).
+                properties:
+                  manager:
+                    description: manager is installer (the installer Job, `ichor init`)
+                      or helm. Omitted means installer.
+                    enum:
+                    - installer
+                    - helm
+                    type: string
+                type: object
               installerRepository:
                 default: ghcr.io/maeshinshin/ichor-installer
                 description: |-
@@ -55,6 +79,38 @@ spec:
                   <installerRepository>:<version>. Point it at a mirror or private registry if you need to.
                 minLength: 1
                 type: string
+              reclaim:
+                description: reclaim holds the break-glass setting of ADR 0103.
+                properties:
+                  enabled:
+                    description: enabled turns the break-glass reclaim on. Unset falls
+                      back to the controller flag.
+                    type: boolean
+                type: object
+              users:
+                description: users holds the sign-in lifetimes of ADR 0094.
+                properties:
+                  refreshLifetime:
+                    description: refreshLifetime is the lifetime of a refresh token,
+                      1h to 720h. Unset falls back to the flag.
+                    type: string
+                    x-kubernetes-validations:
+                    - message: refreshLifetime must be between 1h and 720h
+                      rule: duration(self) >= duration('1h') && duration(self) <=
+                        duration('720h')
+                  tokenTTL:
+                    description: tokenTTL is the lifetime of an issued token, 1m to
+                      1h. Unset falls back to the flag.
+                    type: string
+                    x-kubernetes-validations:
+                    - message: tokenTTL must be between 1m and 1h
+                      rule: duration(self) >= duration('1m') && duration(self) <=
+                        duration('1h')
+                type: object
+                x-kubernetes-validations:
+                - message: tokenTTL must not exceed refreshLifetime
+                  rule: '!has(self.tokenTTL) || !has(self.refreshLifetime) || duration(self.tokenTTL)
+                    <= duration(self.refreshLifetime)'
               version:
                 description: |-
                   version is the Ichor version the installation should run, as a semantic version with a
@@ -131,6 +187,97 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              effective:
+                description: |-
+                  effective shows each runtime setting with the value in force and where it came from.
+                  Written by the controller.
+                properties:
+                  driftPolicy:
+                    description: IchorEffectiveValue is one setting in force.
+                    properties:
+                      source:
+                        description: source is spec when the field is set, deployment
+                          when the flag or chart value applies.
+                        enum:
+                        - spec
+                        - deployment
+                        type: string
+                      value:
+                        description: value is the setting as a string.
+                        type: string
+                    required:
+                    - source
+                    - value
+                    type: object
+                  manager:
+                    description: IchorEffectiveValue is one setting in force.
+                    properties:
+                      source:
+                        description: source is spec when the field is set, deployment
+                          when the flag or chart value applies.
+                        enum:
+                        - spec
+                        - deployment
+                        type: string
+                      value:
+                        description: value is the setting as a string.
+                        type: string
+                    required:
+                    - source
+                    - value
+                    type: object
+                  reclaimEnabled:
+                    description: IchorEffectiveValue is one setting in force.
+                    properties:
+                      source:
+                        description: source is spec when the field is set, deployment
+                          when the flag or chart value applies.
+                        enum:
+                        - spec
+                        - deployment
+                        type: string
+                      value:
+                        description: value is the setting as a string.
+                        type: string
+                    required:
+                    - source
+                    - value
+                    type: object
+                  refreshLifetime:
+                    description: IchorEffectiveValue is one setting in force.
+                    properties:
+                      source:
+                        description: source is spec when the field is set, deployment
+                          when the flag or chart value applies.
+                        enum:
+                        - spec
+                        - deployment
+                        type: string
+                      value:
+                        description: value is the setting as a string.
+                        type: string
+                    required:
+                    - source
+                    - value
+                    type: object
+                  tokenTTL:
+                    description: IchorEffectiveValue is one setting in force.
+                    properties:
+                      source:
+                        description: source is spec when the field is set, deployment
+                          when the flag or chart value applies.
+                        enum:
+                        - spec
+                        - deployment
+                        type: string
+                      value:
+                        description: value is the setting as a string.
+                        type: string
+                    required:
+                    - source
+                    - value
+                    type: object
+                type: object
               installedVersion:
                 description: |-
                   installedVersion is the version of the running controller, reported by the controller

@@ -42,6 +42,66 @@ type IchorInstallationSpec struct {
 	// +kubebuilder:validation:MinLength=1
 	// +optional
 	InstallerRepository string `json:"installerRepository,omitempty"`
+
+	// deployment records who deploys this Ichor (ADR 0105).
+	// +optional
+	Deployment *IchorDeploymentSpec `json:"deployment,omitempty"`
+
+	// reclaim holds the break-glass setting of ADR 0103.
+	// +optional
+	Reclaim *IchorReclaimSettings `json:"reclaim,omitempty"`
+
+	// users holds the sign-in lifetimes of ADR 0094.
+	// +kubebuilder:validation:XValidation:rule="!has(self.tokenTTL) || !has(self.refreshLifetime) || duration(self.tokenTTL) <= duration(self.refreshLifetime)",message="tokenTTL must not exceed refreshLifetime"
+	// +optional
+	Users *IchorUserSettings `json:"users,omitempty"`
+
+	// defaults holds defaults for objects created later; an existing object is never touched.
+	// +optional
+	Defaults *IchorDefaultSettings `json:"defaults,omitempty"`
+}
+
+// Values of spec.deployment.manager.
+const (
+	IchorManagerInstaller = "installer"
+	IchorManagerHelm      = "helm"
+)
+
+// IchorDeploymentSpec says who deploys Ichor.
+type IchorDeploymentSpec struct {
+	// manager is installer (the installer Job, `ichor init`) or helm. Omitted means installer.
+	// +kubebuilder:validation:Enum=installer;helm
+	// +optional
+	Manager string `json:"manager,omitempty"`
+}
+
+// IchorReclaimSettings is the break-glass reclaim switch.
+type IchorReclaimSettings struct {
+	// enabled turns the break-glass reclaim on. Unset falls back to the controller flag.
+	// +optional
+	Enabled *bool `json:"enabled,omitempty"`
+}
+
+// IchorUserSettings are the lifetimes ichor-ui applies to the tokens it issues.
+type IchorUserSettings struct {
+	// tokenTTL is the lifetime of an issued token, 1m to 1h. Unset falls back to the flag.
+	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1m') && duration(self) <= duration('1h')",message="tokenTTL must be between 1m and 1h"
+	// +optional
+	TokenTTL *metav1.Duration `json:"tokenTTL,omitempty"`
+
+	// refreshLifetime is the lifetime of a refresh token, 1h to 720h. Unset falls back to the flag.
+	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1h') && duration(self) <= duration('720h')",message="refreshLifetime must be between 1h and 720h"
+	// +optional
+	RefreshLifetime *metav1.Duration `json:"refreshLifetime,omitempty"`
+}
+
+// IchorDefaultSettings are defaults applied at create time.
+type IchorDefaultSettings struct {
+	// driftPolicy is the default for a new TalosCluster's spec.driftPolicy. It takes the
+	// values of that field (warnOnly, autoCorrect); ADR 0105's "enforce" is autoCorrect.
+	// +kubebuilder:validation:Enum=warnOnly;autoCorrect
+	// +optional
+	DriftPolicy string `json:"driftPolicy,omitempty"`
 }
 
 // IchorInstallationStatus defines the observed state of IchorInstallation.
@@ -59,6 +119,44 @@ type IchorInstallationStatus struct {
 	// +listMapKey=type
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// effective shows each runtime setting with the value in force and where it came from.
+	// Written by the controller.
+	// +optional
+	Effective *IchorEffectiveSettings `json:"effective,omitempty"`
+}
+
+// ConditionSettingsApplied is True when the controller has seen the generation of the
+// settings in spec.
+const ConditionSettingsApplied = "SettingsApplied"
+
+// Values of IchorEffectiveValue.Source.
+const (
+	IchorSourceSpec       = "spec"
+	IchorSourceDeployment = "deployment"
+)
+
+// IchorEffectiveValue is one setting in force.
+type IchorEffectiveValue struct {
+	// value is the setting as a string.
+	Value string `json:"value"`
+	// source is spec when the field is set, deployment when the flag or chart value applies.
+	// +kubebuilder:validation:Enum=spec;deployment
+	Source string `json:"source"`
+}
+
+// IchorEffectiveSettings lists the settings in force.
+type IchorEffectiveSettings struct {
+	// +optional
+	Manager *IchorEffectiveValue `json:"manager,omitempty"`
+	// +optional
+	ReclaimEnabled *IchorEffectiveValue `json:"reclaimEnabled,omitempty"`
+	// +optional
+	TokenTTL *IchorEffectiveValue `json:"tokenTTL,omitempty"`
+	// +optional
+	RefreshLifetime *IchorEffectiveValue `json:"refreshLifetime,omitempty"`
+	// +optional
+	DriftPolicy *IchorEffectiveValue `json:"driftPolicy,omitempty"`
 }
 
 // +kubebuilder:object:root=true

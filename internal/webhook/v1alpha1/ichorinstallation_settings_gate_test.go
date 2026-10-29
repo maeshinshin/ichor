@@ -92,6 +92,16 @@ func TestSettingsGate(t *testing.T) {
 		return i
 	}
 
+	confirmedWith := func(v string, i *ichorv1alpha1.IchorInstallation) *ichorv1alpha1.IchorInstallation {
+		i.Annotations = map[string]string{ichorv1alpha1.ConfirmReclaimAnnotation: v}
+
+		return i
+	}
+	disable := func(s *ichorv1alpha1.IchorInstallationSpec) {
+		f := false
+		s.Reclaim = &ichorv1alpha1.IchorReclaimSettings{Enabled: &f}
+	}
+
 	table := map[string][]string{
 		gateAdmin:     {"version", "reclaim", gateSettings},
 		gateSettings:  {gateSettings},
@@ -116,6 +126,9 @@ func TestSettingsGate(t *testing.T) {
 		{name: "reclaim needs /reclaim", user: gateSettings, old: inst(nil), new: confirmed(inst(enableReclaim)), wantErr: "ichorinstallations/reclaim"},
 		{name: "reclaim needs the confirm annotation", user: gateAdmin, old: inst(nil), new: inst(enableReclaim), wantErr: "confirm-reclaim"},
 		{name: "reclaim confirmed by admin", user: gateAdmin, old: inst(nil), new: confirmed(inst(enableReclaim)), wantEv: "spec.reclaim.enabled: <unset> -> true"},
+		{name: "a carried-over confirmation does not count", user: gateAdmin, old: confirmed(inst(disable)), new: confirmed(inst(enableReclaim)), wantErr: "left over"},
+		{name: "a changed confirmation counts", user: gateAdmin, old: confirmed(inst(disable)), new: confirmedWith("enable-2", inst(enableReclaim)), wantEv: "false -> true"},
+		{name: "a wrong confirmation value is refused", user: gateAdmin, old: inst(nil), new: confirmedWith("yes", inst(enableReclaim)), wantErr: "confirm-reclaim"},
 		{name: "disabling reclaim needs no annotation", user: gateAdmin, old: inst(enableReclaim),
 			new: inst(func(s *ichorv1alpha1.IchorInstallationSpec) {
 				f := false

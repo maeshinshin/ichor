@@ -183,8 +183,8 @@ func (g *SettingsGate) check(ctx context.Context, oldObj, newObj *ichorv1alpha1.
 		}
 	}
 
-	if reclaimTurnedOn(changes) && newObj.Annotations[ichorv1alpha1.ConfirmReclaimAnnotation] != ichorv1alpha1.ConfirmReclaimValue {
-		return fmt.Errorf("enabling break-glass reclaim needs the annotation %s=%s on the request (ichor settings set --confirm-reclaim, or the confirmation in the UI)",
+	if reclaimTurnedOn(changes) && !confirmAdded(oldObj, newObj) {
+		return fmt.Errorf("enabling break-glass reclaim needs the annotation %s=%s... added or changed in this same update; a confirmation left over from an earlier enable does not count (ichor settings set --confirm-reclaim, or the confirmation in the UI)",
 			ichorv1alpha1.ConfirmReclaimAnnotation, ichorv1alpha1.ConfirmReclaimValue)
 	}
 
@@ -193,6 +193,17 @@ func (g *SettingsGate) check(ctx context.Context, oldObj, newObj *ichorv1alpha1.
 	}
 
 	return nil
+}
+
+// confirmAdded reports that newObj carries a confirmation (value starting with ConfirmReclaimValue)
+// that oldObj (nil on create) did not carry.
+func confirmAdded(oldObj, newObj *ichorv1alpha1.IchorInstallation) bool {
+	v := newObj.Annotations[ichorv1alpha1.ConfirmReclaimAnnotation]
+	if !strings.HasPrefix(v, ichorv1alpha1.ConfirmReclaimValue) {
+		return false
+	}
+
+	return oldObj == nil || oldObj.Annotations[ichorv1alpha1.ConfirmReclaimAnnotation] != v
 }
 
 // denialMessage is the text of a refusal from BreakGlassHandler.require.

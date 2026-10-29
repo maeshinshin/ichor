@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks'
-import { ArrowLeftIcon, CircleCheckIcon, CircleXIcon, InboxIcon, PowerIcon, RadarIcon } from 'lucide-preact'
+import { ArrowLeftIcon, CircleCheckIcon, CircleXIcon, InboxIcon, PowerIcon, RadarIcon, TriangleAlertIcon } from 'lucide-preact'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -40,11 +40,15 @@ export function AddNode() {
   const name = current?.ref?.name
   const [machines, setMachines] = useState<Machine[]>([])
   const [error, setError] = useState<ErrorShape | null>(null)
+  // Addresses discovery reached that already run a Talos configuration (ADR 0103).
+  const [configured, setConfigured] = useState<string[]>([])
 
   async function reloadMachines() {
     if (!namespace || !name) return
     try {
       setMachines((await machineClient.listMachines({ cluster: { namespace, name } })).machines)
+      const res = await clusterClient.getCluster({ cluster: { namespace, name } })
+      setConfigured(res.cluster?.alreadyConfiguredAddresses ?? [])
     } catch {
       // The next poll tries again; the cluster itself loaded or the page shows its error.
     }
@@ -106,6 +110,7 @@ export function AddNode() {
         <SectionCard id="discovery" title={t('addNode.discoveryTitle')}>
           <Discovery
             cluster={cluster}
+            configured={configured}
             onAdded={(c) => (c ? setCluster(c) : reloadCluster())}
 
           />
@@ -147,9 +152,11 @@ export function AddNode() {
 
 function Discovery({
   cluster,
+  configured,
   onAdded,
 }: {
   cluster: Cluster
+  configured: readonly string[]
   onAdded: (c: Cluster | undefined) => void
 }) {
   const t = useT()
@@ -238,6 +245,12 @@ function Discovery({
         <CardDescription>{t('addNode.cidrHint')}</CardDescription>
       </form>
       {error && <ErrorAlert {...error} />}
+      {configured.map((a) => (
+        <Alert key={a}>
+          <TriangleAlertIcon />
+          <AlertDescription>{t('addNode.alreadyConfigured', { address: a })}</AlertDescription>
+        </Alert>
+      ))}
     </>
   )
 }

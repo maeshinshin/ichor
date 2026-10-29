@@ -626,9 +626,14 @@ type Cluster struct {
 	// kube_proxy_mode is spec.cni.kubeProxy: "enabled" (the default) or "replaced".
 	KubeProxyMode string `protobuf:"bytes,12,opt,name=kube_proxy_mode,json=kubeProxyMode,proto3" json:"kube_proxy_mode,omitempty"`
 	// certificates are status.certificates: when each CA expires (ADR 0063).
-	Certificates  []*CertificateExpiry `protobuf:"bytes,13,rep,name=certificates,proto3" json:"certificates,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Certificates []*CertificateExpiry `protobuf:"bytes,13,rep,name=certificates,proto3" json:"certificates,omitempty"`
+	// already_configured_addresses are the endpoints discovery reached that already run a Talos
+	// configuration (ADR 0103): the controller recorded an AlreadyConfigured Event for each and did not
+	// add the node. Set by GetCluster and AddDiscoveryAddress from those Events (which Kubernetes expires
+	// after about an hour); empty in ListClusters.
+	AlreadyConfiguredAddresses []string `protobuf:"bytes,14,rep,name=already_configured_addresses,json=alreadyConfiguredAddresses,proto3" json:"already_configured_addresses,omitempty"`
+	unknownFields              protoimpl.UnknownFields
+	sizeCache                  protoimpl.SizeCache
 }
 
 func (x *Cluster) Reset() {
@@ -752,6 +757,13 @@ func (x *Cluster) GetCertificates() []*CertificateExpiry {
 	return nil
 }
 
+func (x *Cluster) GetAlreadyConfiguredAddresses() []string {
+	if x != nil {
+		return x.AlreadyConfiguredAddresses
+	}
+	return nil
+}
+
 // CertificateExpiry is one CA of the cluster and its last instant of validity.
 type CertificateExpiry struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -841,7 +853,7 @@ const file_ichor_v1alpha1_cluster_proto_rawDesc = "" +
 	"\rHandoverState\x12\x1c\n" +
 	"\tcomponent\x18\x01 \x01(\tR\tcomponent\x123\n" +
 	"\x05phase\x18\x02 \x01(\x0e2\x1d.ichor.v1alpha1.HandoverPhaseR\x05phase\x12L\n" +
-	"\x14last_transition_time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x12lastTransitionTime\"\x8e\x05\n" +
+	"\x14last_transition_time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x12lastTransitionTime\"\xd0\x05\n" +
 	"\aCluster\x12+\n" +
 	"\x03ref\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\x03ref\x12#\n" +
 	"\rtalos_version\x18\x02 \x01(\tR\ftalosVersion\x12-\n" +
@@ -858,7 +870,8 @@ const file_ichor_v1alpha1_cluster_proto_rawDesc = "" +
 	" \x03(\tR\x12discoveryAddresses\x12'\n" +
 	"\x0fdiscovery_cidrs\x18\v \x03(\tR\x0ediscoveryCidrs\x12&\n" +
 	"\x0fkube_proxy_mode\x18\f \x01(\tR\rkubeProxyMode\x12E\n" +
-	"\fcertificates\x18\r \x03(\v2!.ichor.v1alpha1.CertificateExpiryR\fcertificates\"`\n" +
+	"\fcertificates\x18\r \x03(\v2!.ichor.v1alpha1.CertificateExpiryR\fcertificates\x12@\n" +
+	"\x1calready_configured_addresses\x18\x0e \x03(\tR\x1aalreadyConfiguredAddresses\"`\n" +
 	"\x11CertificateExpiry\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x127\n" +
 	"\tnot_after\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\bnotAfter*x\n" +

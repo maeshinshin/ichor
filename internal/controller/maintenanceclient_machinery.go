@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/cosi-project/runtime/pkg/resource"
 	"github.com/cosi-project/runtime/pkg/safe"
@@ -27,6 +28,8 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/client"
 	"github.com/siderolabs/talos/pkg/machinery/resources/hardware"
 	"github.com/siderolabs/talos/pkg/machinery/resources/network"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // NewMachineryMaintenanceClient dials endpoint's Talos API in maintenance
@@ -67,6 +70,28 @@ func (m *machineryMaintenanceClient) ApplyConfiguration(ctx context.Context, cfg
 	return err
 }
 
+// configuredNodeRejection reports whether err is a node that already has a configuration refusing
+// an unauthenticated call (ADR 0103 section 2): its API completed the TLS handshake and then the server
+// rejected the missing client certificate (a TLS alert about the certificate, which gRPC reports as
+// Unavailable) or answered Unauthenticated/PermissionDenied. A handshake that never completes (nothing
+// listening, not TLS) is deliberately not matched.
+func configuredNodeRejection(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	switch status.Code(err) { //nolint:exhaustive
+	case codes.Unauthenticated, codes.PermissionDenied:
+		return true
+	case codes.Unavailable:
+		msg := err.Error()
+
+		return strings.Contains(msg, "remote error: tls:") && strings.Contains(msg, "certificate")
+	default:
+		return false
+	}
+}
+
 // Identity reads hardware.SystemInformation for the SMBIOS UUID, serial
 // number and manufacturer, and network.LinkStatus for the permanent MAC
 // address of every physical link. A missing SystemInformation resource (not
@@ -88,11 +113,17 @@ func (m *machineryMaintenanceClient) Identity(ctx context.Context) (HardwareIden
 	case state.IsNotFoundError(err):
 		// No SMBIOS data on this platform (e.g. virtio-blk-style virtualized
 		// nodes); id stays empty, which is correctly a weak key.
+	case configuredNodeRejection(err):
+		return id, fmt.Errorf("%w: %w", ErrAlreadyConfigured, err)
 	default:
 		return id, fmt.Errorf("reading system information: %w", err)
 	}
 
 	links, err := safe.StateListAll[*network.LinkStatus](ctx, m.c.COSI)
+	if configuredNodeRejection(err) {
+		return id, fmt.Errorf("%w: %w", ErrAlreadyConfigured, err)
+	}
+
 	if err != nil {
 		return id, fmt.Errorf("listing link status: %w", err)
 	}

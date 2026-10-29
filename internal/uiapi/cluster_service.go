@@ -59,5 +59,8 @@ func (s *Server) GetCluster(
 		return nil, mapGetError("cluster "+key.String(), err)
 	}
 
-	return connect.NewResponse(&pb.GetClusterResponse{Cluster: clusterToPB(&c)}), nil
+	out := clusterToPB(&c)
+	out.AlreadyConfiguredAddresses = s.alreadyConfiguredAddresses(ctx, &c)
+
+	return connect.NewResponse(&pb.GetClusterResponse{Cluster: out}), nil
 }

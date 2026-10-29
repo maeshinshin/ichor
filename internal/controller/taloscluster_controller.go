@@ -69,6 +69,10 @@ func (r *TalosClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	if err := adviseCARotation(ctx, r.Client, &cluster); err != nil {
+		return ctrl.Result{}, err
+	}
+
 	if cluster.Spec.Discovery == nil {
 		return ctrl.Result{}, nil
 	}

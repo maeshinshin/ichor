@@ -2,8 +2,9 @@ import { useState } from 'preact/hooks'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { userClient } from '@/lib/connect'
 import { notifyDone } from '@/lib/notify'
 import { minPasswordLength, passwordError, passwordOk } from '@/lib/users'
@@ -45,32 +46,34 @@ export function ChangePasswordForm({ onDone, onCancel }: { onDone: () => void; o
   }
 
   return (
-    <form class="space-y-4" onSubmit={submit}>
-      <div class="space-y-1">
-        <Label htmlFor="pw-old">{t('account.oldPassword')}</Label>
-        <Input id="pw-old" type="password" autoComplete="current-password" value={oldPassword} onInput={(e) => setOld((e.target as HTMLInputElement).value)} />
-      </div>
-      <div class="space-y-1">
-        <Label htmlFor="pw-new">{t('account.newPassword')}</Label>
-        <Input id="pw-new" type="password" autoComplete="new-password" value={next} onInput={(e) => setNext((e.target as HTMLInputElement).value)} />
-        <p class="text-xs text-muted-foreground">{t('account.passwordHint', { n: minPasswordLength })}</p>
-      </div>
-      <div class="space-y-1">
-        <Label htmlFor="pw-again">{t('account.confirmPassword')}</Label>
-        <Input id="pw-again" type="password" autoComplete="new-password" aria-invalid={mismatch} value={again} onInput={(e) => setAgain((e.target as HTMLInputElement).value)} />
-        {mismatch && <p class="text-xs text-destructive">{t('account.mismatch')}</p>}
-      </div>
-      {error && <ErrorAlert {...error} />}
-      <div class="flex justify-end gap-2">
-        {onCancel && (
-          <Button type="button" variant="ghost" onClick={onCancel}>
-            {t('common.cancel')}
+    <form onSubmit={submit}>
+      <FieldGroup>
+        <Field>
+          <FieldLabel htmlFor="pw-old">{t('account.oldPassword')}</FieldLabel>
+          <Input id="pw-old" type="password" autoComplete="current-password" value={oldPassword} onInput={(e) => setOld((e.target as HTMLInputElement).value)} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="pw-new">{t('account.newPassword')}</FieldLabel>
+          <Input id="pw-new" type="password" autoComplete="new-password" value={next} onInput={(e) => setNext((e.target as HTMLInputElement).value)} />
+          <FieldDescription>{t('account.passwordHint', { n: minPasswordLength })}</FieldDescription>
+        </Field>
+        <Field data-invalid={mismatch}>
+          <FieldLabel htmlFor="pw-again">{t('account.confirmPassword')}</FieldLabel>
+          <Input id="pw-again" type="password" autoComplete="new-password" aria-invalid={mismatch} value={again} onInput={(e) => setAgain((e.target as HTMLInputElement).value)} />
+          {mismatch && <FieldError>{t('account.mismatch')}</FieldError>}
+        </Field>
+        {error && <ErrorAlert {...error} />}
+        <Field orientation="horizontal" className="justify-end">
+          {onCancel && (
+            <Button type="button" variant="ghost" onClick={onCancel}>
+              {t('common.cancel')}
+            </Button>
+          )}
+          <Button type="submit" disabled={!ready || busy}>
+            {busy ? t('account.saving') : t('account.save')}
           </Button>
-        )}
-        <Button type="submit" disabled={!ready || busy}>
-          {busy ? t('account.saving') : t('account.save')}
-        </Button>
-      </div>
+        </Field>
+      </FieldGroup>
     </form>
   )
 }
@@ -94,12 +97,16 @@ export function ChangePasswordDialog({ open, onOpenChange }: { open: boolean; on
 export function MustChangePassword({ onDone }: { onDone: () => void }) {
   const t = useT()
   return (
-    <main class="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-4 p-6">
-      <div class="space-y-1">
-        <h1 class="text-xl font-semibold tracking-tight">{t('account.mustChangeTitle')}</h1>
-        <p class="text-sm text-muted-foreground">{t('account.mustChangeBody')}</p>
-      </div>
-      <ChangePasswordForm onDone={onDone} />
+    <main class="mx-auto flex min-h-dvh max-w-md flex-col justify-center p-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>{t('account.mustChangeTitle')}</CardTitle>
+          <CardDescription>{t('account.mustChangeBody')}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ChangePasswordForm onDone={onDone} />
+        </CardContent>
+      </Card>
     </main>
   )
 }

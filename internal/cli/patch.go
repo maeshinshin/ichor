@@ -74,8 +74,8 @@ var patchListCmd = &cobra.Command{
 var patchGetCmd = &cobra.Command{
 	Use: useGetName, Short: "Show one patch", Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
-			return runPatchGet(ctx, c, cmd.OutOrStdout(), args[0])
+		return showAPI(cmd, false, func(ctx context.Context, c *apiClients) (*connect.Response[pb.GetPatchResponse], error) {
+			return c.Patch.GetPatch(ctx, connect.NewRequest(&pb.GetPatchRequest{Patch: objectRef(apiOpts.Namespace, args[0])}))
 		})
 	},
 }
@@ -145,15 +145,6 @@ func readPatchFile(stdin io.Reader, path, defaultNamespace string) (*ichorv1alph
 
 func runPatchList(ctx context.Context, c *apiClients, out io.Writer, cluster string) error {
 	resp, err := c.Patch.ListPatches(ctx, connect.NewRequest(&pb.ListPatchesRequest{Cluster: clusterFilter(apiOpts.Namespace, cluster)}))
-	if err != nil {
-		return err
-	}
-
-	return writeMessage(out, outputFormat, resp.Msg)
-}
-
-func runPatchGet(ctx context.Context, c *apiClients, out io.Writer, name string) error {
-	resp, err := c.Patch.GetPatch(ctx, connect.NewRequest(&pb.GetPatchRequest{Patch: objectRef(apiOpts.Namespace, name)}))
 	if err != nil {
 		return err
 	}

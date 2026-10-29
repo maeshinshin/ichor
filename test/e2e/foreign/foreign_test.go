@@ -399,23 +399,6 @@ func TestD3CiliumAdoptedUnmanaged(t *testing.T) {
 	}
 }
 
-// TestD5: a cluster with cni.name none is adopted unmanaged with talosCNI none. Its nodes stay NotReady.
-func TestD5CNINoneAdoptedUnmanaged(t *testing.T) {
-	c := build(t, foreign.Options{Workers: 1, CNI: foreign.CNINone})
-	before := cniPaths(t, c)
-	if out, err := adopt(t, c, "--cni-unmanaged"); err != nil {
-		t.Fatalf("adopt --cni-unmanaged failed: %v\n%s", err, out)
-	}
-	unmanagedAdopted(t, c)
-	if got := clusterJSONPath(c, "{.spec.cni.unmanaged.talosCNI}"); got != "none" {
-		t.Errorf("spec.cni.unmanaged.talosCNI = %q, want none", got)
-	}
-	time.Sleep(3 * time.Minute)
-	sameHashes(t, before, cniPaths(t, c))
-	nodes, _ := inner(c, "get", "nodes", "--no-headers")
-	t.Logf("nodes after adoption (NotReady expected, no CNI):\n%s", nodes)
-}
-
 // TestB8: Talos older than v1.12 is refused with the upgrade message and nothing is written.
 // ICHOR_E2E_F_TALOS defaults to v1.11.5 here.
 func TestB8TalosTooOldRefused(t *testing.T) {

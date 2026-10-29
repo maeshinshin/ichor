@@ -124,7 +124,7 @@ func TestRunAppliesNetworkPoliciesOnlyWhenCiliumsCRDExists(t *testing.T) {
 
 	err = Run(context.Background(), k8sClient, Options{
 		Namespace: f2.ns, RunID: f2.run, Manifest: f2.manifest("ctrl:v2", ""), Ready: noWait(&order),
-		NetworkPolicies: policyManifest(f2.ns),
+		NetworkPolicies: policyManifest(f2.ns), CNIDetected: "cilium",
 	})
 	if err != nil {
 		t.Fatalf("Run with Cilium: %v", err)
@@ -136,5 +136,36 @@ func TestRunAppliesNetworkPoliciesOnlyWhenCiliumsCRDExists(t *testing.T) {
 
 	if last := order[len(order)-1]; last != "CiliumNetworkPolicy/ichor-default-deny" {
 		t.Errorf("the policies must be the last step, post-checks ran in order %v", order)
+	}
+
+	// ADR 0103: the CRD exists now, but another CNI (or none detected yet) still skips them.
+	for _, detected := range []string{"flannel", ""} {
+		f3 := newFixture(t)
+
+		err = Run(context.Background(), k8sClient, Options{
+			Namespace: f3.ns, RunID: f3.run, Manifest: f3.manifest("ctrl:v2", ""), Ready: noWait(&order),
+			NetworkPolicies: policyManifest(f3.ns), CNIDetected: detected,
+		})
+		if err != nil {
+			t.Fatalf("Run (CNI %q): %v", detected, err)
+		}
+
+		if policyExists(t, f3.ns) {
+			t.Fatalf("a policy was applied with the CNI detected as %q", detected)
+		}
+	}
+}
+
+func TestIncludeCiliumPolicies(t *testing.T) {
+	for _, tc := range []struct {
+		detected  string
+		crd, want bool
+	}{
+		{"cilium", true, true}, {"cilium", false, false}, {"flannel", true, false},
+		{"calico", true, false}, {"other", true, false}, {"none", true, false}, {"", true, false},
+	} {
+		if got := IncludeCiliumPolicies(tc.detected, tc.crd); got != tc.want {
+			t.Errorf("IncludeCiliumPolicies(%q, %v) = %v, want %v", tc.detected, tc.crd, got, tc.want)
+		}
 	}
 }

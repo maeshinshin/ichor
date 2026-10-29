@@ -81,7 +81,7 @@ func ichorInstallerJobName(op *ichorv1alpha1.TalosOperation) string {
 // from the Job and the cluster.
 func NewIchorUpgradeAdvancer(c client.Client, controllerNamespace string) AdvanceMachineFunc {
 	return func(
-		ctx context.Context, _ *ichorv1alpha1.TalosCluster, _ *ichorv1alpha1.TalosMachine, op *ichorv1alpha1.TalosOperation,
+		ctx context.Context, cluster *ichorv1alpha1.TalosCluster, _ *ichorv1alpha1.TalosMachine, op *ichorv1alpha1.TalosOperation,
 	) (bool, error) {
 		var inst ichorv1alpha1.IchorInstallation
 		if err := c.Get(ctx, types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}, &inst); err != nil {
@@ -100,7 +100,7 @@ func NewIchorUpgradeAdvancer(c client.Client, controllerNamespace string) Advanc
 				inst.Spec.Version, version.Version)
 		}
 
-		return advanceInstallerJob(ctx, c, controllerNamespace, op, &inst)
+		return advanceInstallerJob(ctx, c, controllerNamespace, op, &inst, detectedCNI(cluster))
 	}
 }
 
@@ -137,7 +137,7 @@ func (r *TalosOperationReconciler) advanceIchor(
 }
 
 func advanceInstallerJob(
-	ctx context.Context, c client.Client, ns string, op *ichorv1alpha1.TalosOperation, inst *ichorv1alpha1.IchorInstallation,
+	ctx context.Context, c client.Client, ns string, op *ichorv1alpha1.TalosOperation, inst *ichorv1alpha1.IchorInstallation, cni string,
 ) (bool, error) {
 	name := ichorInstallerJobName(op)
 
@@ -147,7 +147,7 @@ func advanceInstallerJob(
 
 	switch {
 	case apierrors.IsNotFound(err):
-		return false, c.Create(ctx, newInstallerJob(ns, name, op, inst))
+		return false, c.Create(ctx, newInstallerJob(ns, name, op, inst, cni))
 	case err != nil:
 		return false, err
 	}
@@ -168,7 +168,7 @@ func advanceInstallerJob(
 
 // newInstallerJob is the whole installer process: the target version's own image, run once,
 // under a ServiceAccount that exists for this and nothing else.
-func newInstallerJob(ns, name string, op *ichorv1alpha1.TalosOperation, inst *ichorv1alpha1.IchorInstallation) *batchv1.Job {
+func newInstallerJob(ns, name string, op *ichorv1alpha1.TalosOperation, inst *ichorv1alpha1.IchorInstallation, cni string) *batchv1.Job {
 	sum := sha256.Sum256([]byte(op.Namespace + "/" + op.Name))
 
 	// One attempt: a retry after a rollback would redo a failed upgrade without anyone having
@@ -179,6 +179,6 @@ func newInstallerJob(ns, name string, op *ichorv1alpha1.TalosOperation, inst *ic
 		corev1.Container{
 			Name:  "installer",
 			Image: inst.Spec.InstallerRepository + ":" + inst.Spec.Version,
-			Args:  []string{"installer", "run", "--namespace=" + ns, "--run-id=" + name},
+			Args:  []string{"installer", "run", "--namespace=" + ns, "--run-id=" + name, "--cni-detected=" + cni},
 		})
 }

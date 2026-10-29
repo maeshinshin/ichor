@@ -62,6 +62,11 @@ type Options struct {
 	// when Cilium's CiliumNetworkPolicy CRD is Established; empty or the placeholder skips it.
 	NetworkPolicies []byte
 
+	// CNIDetected is the TalosCluster's status.cni.detected, passed by the controller that starts
+	// the Job (the installer's role never reads a TalosCluster). The policies are applied only
+	// when it is "cilium" (ADR 0103); empty (not detected yet) skips them.
+	CNIDetected string
+
 	// Ready overrides the post-check, for tests (envtest runs no Deployment controller).
 	Ready ReadyFunc
 
@@ -186,6 +191,13 @@ func Run(ctx context.Context, c client.Client, opts Options) error {
 // upgrade can assume and a cluster on another CNI cannot.
 const ciliumPolicyCRD = "ciliumnetworkpolicies.cilium.io"
 
+// IncludeCiliumPolicies is the gate for Ichor's CiliumNetworkPolicies (ADR 0103): they go in
+// only when the CNI is detected as Cilium and its CiliumNetworkPolicy CRD is Established. The
+// install step of `ichor adopt` calls it with the same inputs.
+func IncludeCiliumPolicies(detected string, crdPresent bool) bool {
+	return detected == "cilium" && crdPresent
+}
+
 // networkPolicies returns opts.NetworkPolicies decoded, or nil when there are none or Cilium's
 // CRD is not Established (the policies would only fail to apply, and a CNI that does not enforce
 // them is the operator's choice).
@@ -199,14 +211,17 @@ func networkPolicies(ctx context.Context, c client.Client, opts Options) ([]*uns
 	crd.SetKind(kindCRD)
 
 	err := c.Get(ctx, types.NamespacedName{Name: ciliumPolicyCRD}, crd)
+	if err != nil && !apierrors.IsNotFound(err) {
+		return nil, fmt.Errorf("reading CRD %s: %w", ciliumPolicyCRD, err)
+	}
 
-	switch {
-	case apierrors.IsNotFound(err) || (err == nil && !crdEstablished(crd)):
-		logf(opts.Log, "skipping the network policies: %s is not Established (Cilium is not running)", ciliumPolicyCRD)
+	crdPresent := err == nil && crdEstablished(crd)
+
+	if !IncludeCiliumPolicies(opts.CNIDetected, crdPresent) {
+		logf(opts.Log, "skipping the network policies: the detected CNI is %q and %s Established; they need Cilium",
+			opts.CNIDetected, map[bool]string{true: "the CRD is", false: "the CRD is not"}[crdPresent])
 
 		return nil, nil
-	case err != nil:
-		return nil, fmt.Errorf("reading CRD %s: %w", ciliumPolicyCRD, err)
 	}
 
 	objs, err := Decode(opts.NetworkPolicies)

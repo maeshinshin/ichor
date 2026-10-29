@@ -34,7 +34,8 @@ func TestPreflightSkippedWithoutACluster(t *testing.T) {
 	renderChartWithValues(t, "ichor", "preflight.cni=false")
 }
 
-const noCNIMessage = `{type: Ready, status: "False", reason: KubeletNotReady, message: "container runtime network not ready: NetworkReady=false reason:NetworkPluginNotReady message:Network plugin returns error: cni plugin not initialized"}`
+const noCNIMessage = `{type: Ready, status: "False", reason: KubeletNotReady, ` +
+	`message: "NetworkReady=false reason:NetworkPluginNotReady message:cni plugin not initialized"}`
 
 func TestPreflightCondition(t *testing.T) {
 	ready := `{type: Ready, status: "True", reason: KubeletReady}`
@@ -43,9 +44,9 @@ func TestPreflightCondition(t *testing.T) {
 	cases := []struct {
 		name, items, want string
 	}{
-		{"every node has no pod network", "[{status: {conditions: [" + noCNIMessage + "]}}, {status: {conditions: [" + noCNIMessage + "]}}]", "true"},
-		{"one node is Ready", "[{status: {conditions: [" + noCNIMessage + "]}}, {status: {conditions: [" + ready + "]}}]", ""},
-		{"NotReady for another reason", "[{status: {conditions: [" + noCNIMessage + "]}}, {status: {conditions: [" + diskPressure + "]}}]", ""},
+		{"every node has no pod network", nodes(noCNIMessage, noCNIMessage), "true"},
+		{"one node is Ready", nodes(noCNIMessage, ready), ""},
+		{"NotReady for another reason", nodes(noCNIMessage, diskPressure), ""},
 		{"a node with no status", "[{metadata: {name: a}}]", ""},
 		{"no nodes", "[]", ""},
 	}
@@ -80,6 +81,16 @@ func TestPreflightMessageNamesTheCommand(t *testing.T) {
 			t.Errorf("_preflight.tpl: the failure message must mention %q", want)
 		}
 	}
+}
+
+// nodes is a Node list whose nodes each carry one condition.
+func nodes(conditions ...string) string {
+	items := make([]string, 0, len(conditions))
+	for _, c := range conditions {
+		items = append(items, "{status: {conditions: ["+c+"]}}")
+	}
+
+	return "[" + strings.Join(items, ", ") + "]"
 }
 
 // copyChart copies this directory's chart (not the tests) to a temp dir.

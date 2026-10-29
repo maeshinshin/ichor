@@ -429,8 +429,8 @@ func (st *adoptState) inspect(ctx context.Context, deps adoptDeps) error {
 
 	st.unmanaged = deps.CNIUnmanaged || st.cluster.Spec.CNI.Preset == ichorv1alpha1.TalosClusterCNIPresetUnmanaged
 
-	if deps.Tunnel != "" && deps.Tunnel != "vxlan" && deps.Tunnel != "geneve" {
-		return fmt.Errorf("adopt: --tunnel %q is invalid: must be %q or %q", deps.Tunnel, "vxlan", "geneve")
+	if err := checkTunnel("--tunnel", deps.Tunnel); err != nil {
+		return fmt.Errorf("adopt: %w", err)
 	}
 
 	var k8s *k8sFacts
@@ -545,18 +545,36 @@ func (st *adoptState) settleCiliumValues(deps adoptDeps) error {
 		return errors.New("adopt: --cilium-values applies to the TalosCluster adopt creates; this one exists, set spec.cni.cilium.values on it")
 	}
 
-	if err := cilium.ValidateValues(deps.CiliumValues, cilium.ValidationContext{
-		KubeProxy: cni.KubeProxyMode(st.kubeProxy), Tunnel: st.tunnel,
-	}); err != nil {
+	if err := setCiliumUserValues(st.cluster, deps.CiliumValues, st.kubeProxy, st.tunnel); err != nil {
 		return fmt.Errorf("adopt: --cilium-values: %w", err)
 	}
 
-	raw, err := json.Marshal(deps.CiliumValues)
+	return nil
+}
+
+// setCiliumUserValues validates --cilium-values for a Cilium in kube-proxy mode kubeProxy with
+// tunnel and stores them as spec.cni.cilium.values: shared by adopt and `ichor cni bootstrap`, so
+// both build the TalosCluster whose effective values the release is installed from.
+func setCiliumUserValues(c *ichorv1alpha1.TalosCluster, user map[string]any, kubeProxy, tunnel string) error {
+	if err := cilium.ValidateValues(user, cilium.ValidationContext{KubeProxy: cni.KubeProxyMode(kubeProxy), Tunnel: tunnel}); err != nil {
+		return err
+	}
+
+	raw, err := json.Marshal(user)
 	if err != nil {
-		return fmt.Errorf("adopt: --cilium-values: %w", err)
+		return err
 	}
 
-	st.cluster.Spec.CNI.Cilium = &ichorv1alpha1.TalosClusterCNICilium{Values: &apiextensionsv1.JSON{Raw: raw}}
+	c.Spec.CNI.Cilium = &ichorv1alpha1.TalosClusterCNICilium{Values: &apiextensionsv1.JSON{Raw: raw}}
+
+	return nil
+}
+
+// checkTunnel accepts "" (the default), vxlan and geneve.
+func checkTunnel(flag, tunnel string) error {
+	if tunnel != "" && tunnel != "vxlan" && tunnel != "geneve" {
+		return fmt.Errorf("%s %q is invalid: must be %q or %q", flag, tunnel, "vxlan", "geneve")
+	}
 
 	return nil
 }

@@ -110,6 +110,11 @@ func container(dep *appsv1.Deployment, name string) (*corev1.Container, error) {
 	return &dep.Spec.Template.Spec.Containers[i], nil
 }
 
+func hasContainer(dep *appsv1.Deployment, name string) bool {
+	_, err := container(dep, name)
+	return err == nil
+}
+
 func argValue(args []string, prefix string) string {
 	for _, a := range args {
 		if v, ok := strings.CutPrefix(a, prefix); ok {
@@ -246,7 +251,12 @@ func usersVolumes(dep *appsv1.Deployment, c *corev1.Container) {
 }
 
 func tlsOnUI(dep *appsv1.Deployment, c *corev1.Container, secret string) error {
-	port, err := uiListenPort(c.Args)
+	addr := argValue(c.Args, argAddr)
+	if addr == "" {
+		return fmt.Errorf("ichor-ui Deployment %s: no --addr argument to take the listening port from", dep.Name)
+	}
+
+	port, err := addrPort(addr)
 	if err != nil {
 		return fmt.Errorf("ichor-ui Deployment %s: %w", dep.Name, err)
 	}
@@ -312,17 +322,6 @@ func setPort(c *corev1.Container, name, addr string) error {
 	return nil
 }
 
-// uiListenPort reads the port of ichor-ui's --addr.
-func uiListenPort(args []string) (int32, error) {
-	for _, a := range args {
-		if v, ok := strings.CutPrefix(a, argAddr); ok {
-			return addrPort(v)
-		}
-	}
-
-	return 0, errors.New("no --addr argument to take the listening port from")
-}
-
 // CustomizeController adds the flags that make the controller keep the signing keys, internal
 // TLS and trust ConfigMap (the chart renders the same two). With users off it removes them.
 func CustomizeController(dep *appsv1.Deployment, s UISettings) error {
@@ -378,11 +377,6 @@ func CustomizeService(svc *corev1.Service, s UISettings) {
 	}
 }
 
-// IsUIService reports whether svc is the ichor-ui Service.
-func IsUIService(svc *corev1.Service) bool {
-	return svc.Labels[oidctrust.UIComponentLabel] == oidctrust.UIComponentValue
-}
-
 // CustomizeObjects returns objs with s applied to the ichor-ui Deployment, the controller
 // Deployment and the ichor-ui Service; other objects are returned untouched. It runs on the
 // installer's copy of the manifest, so the objects are rebuilt rather than merged.
@@ -402,9 +396,9 @@ func CustomizeObjects(objs []*unstructured.Unstructured, s UISettings) ([]*unstr
 			var err error
 
 			switch {
-			case slices.ContainsFunc(dep.Spec.Template.Spec.Containers, func(c corev1.Container) bool { return c.Name == UIContainer }):
+			case hasContainer(dep, UIContainer):
 				err = CustomizeUI(dep, s)
-			case slices.ContainsFunc(dep.Spec.Template.Spec.Containers, func(c corev1.Container) bool { return c.Name == ControllerContainer }):
+			case hasContainer(dep, ControllerContainer):
 				err = CustomizeController(dep, s)
 			default:
 				continue
@@ -423,7 +417,7 @@ func CustomizeObjects(objs []*unstructured.Unstructured, s UISettings) ([]*unstr
 				return nil, fmt.Errorf("reading %s %s: %w", o.GetKind(), o.GetName(), err)
 			}
 
-			if !IsUIService(svc) {
+			if svc.Labels[oidctrust.UIComponentLabel] != oidctrust.UIComponentValue {
 				continue
 			}
 
@@ -489,9 +483,9 @@ func customizeFromLive(ctx context.Context, c client.Client, objs []*unstructure
 		var err error
 
 		switch {
-		case slices.ContainsFunc(d.Spec.Template.Spec.Containers, func(c corev1.Container) bool { return c.Name == UIContainer }):
+		case hasContainer(d, UIContainer):
 			uiDep, err = live(o)
-		case slices.ContainsFunc(d.Spec.Template.Spec.Containers, func(c corev1.Container) bool { return c.Name == ControllerContainer }):
+		case hasContainer(d, ControllerContainer):
 			ctrlDep, err = live(o)
 		}
 
@@ -566,11 +560,7 @@ func helmDeployed(d *appsv1.Deployment) bool {
 		return true
 	}
 
-	for _, c := range d.Spec.Template.Spec.Containers {
-		if c.Name == ControllerContainer && slices.Contains(c.Args, "--deployed-by=helm") {
-			return true
-		}
-	}
+	c, err := container(d, ControllerContainer)
 
-	return false
+	return err == nil && slices.Contains(c.Args, "--deployed-by=helm")
 }

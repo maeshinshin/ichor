@@ -31,8 +31,8 @@ import (
 
 func readyNode(name string, ready corev1.ConditionStatus) *corev1.Node {
 	return &corev1.Node{
-		ObjectMeta: metav1.ObjectMeta{Name: name},
-		Status:     corev1.NodeStatus{Conditions: []corev1.NodeCondition{{Type: corev1.NodeReady, Status: ready}}},
+		Name:   name,
+		Status: corev1.NodeStatus{Conditions: []corev1.NodeCondition{{Type: corev1.NodeReady, Status: ready}}},
 	}
 }
 
@@ -59,7 +59,8 @@ func TestBootstrap_InstallsThenWaitsForNodes(t *testing.T) {
 }
 
 func TestBootstrap_NodeNeverReadyNamesIt(t *testing.T) {
-	kube := kubefakeclient.NewSimpleClientset(readyNode("a", corev1.ConditionTrue), readyNode("stuck", corev1.ConditionFalse))
+	kube := kubefakeclient.NewSimpleClientset(readyNode("a", corev1.ConditionTrue),
+		readyNode("stuck", corev1.ConditionFalse))
 
 	_, err := bootstrap(t.Context(), kube, fakeConfig(), &ichorv1alpha1.TalosCluster{}, cni.KubeProxyEnabled,
 		50*time.Millisecond, 5*time.Millisecond)

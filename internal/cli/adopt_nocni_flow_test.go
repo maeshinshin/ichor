@@ -42,7 +42,16 @@ import (
 // The Cilium-first order, end to end against fakes: Cilium, then Ichor,
 // then the CRs, then the hand-over, then the release of the holds.
 
-const bootstrapEvent = "bootstrap cilium"
+const (
+	bootstrapEvent  = "bootstrap cilium"
+	fakeReason      = "FakeController"
+	keyDebugOn      = "debug"
+	keyDebugEnabled = "enabled"
+)
+
+func debugValues() map[string]any {
+	return map[string]any{keyDebugOn: map[string]any{keyDebugEnabled: true}}
+}
 
 // noCNIFlow is a no-CNI cluster Ichor has never seen. The machines' live configuration is the one
 // the first render gives after the hand-over (no inline Cilium entry). A stand-in controller marks
@@ -72,7 +81,7 @@ func newNoCNIFlow(t *testing.T) *noCNIFlow {
 
 	env := newFlowEnv(t, cniCilium, func(c *ichorv1alpha1.TalosCluster) {
 		apimeta.SetStatusCondition(&c.Status.Conditions, metav1.Condition{
-			Type: render.ConditionCNIHandover, Status: metav1.ConditionTrue, Reason: "Complete",
+			Type: render.ConditionCNIHandover, Status: metav1.ConditionTrue, Reason: fakeReason,
 		})
 	})
 
@@ -168,7 +177,7 @@ func (f *noCNIFlow) reconcileOnce(ctx context.Context) {
 			c := &clusters.Items[i]
 			if !apimeta.IsStatusConditionTrue(c.Status.Conditions, render.ConditionCNIHandover) {
 				apimeta.SetStatusCondition(&c.Status.Conditions, metav1.Condition{
-					Type: render.ConditionCNIHandover, Status: metav1.ConditionTrue, Reason: "Complete",
+					Type: render.ConditionCNIHandover, Status: metav1.ConditionTrue, Reason: fakeReason,
 				})
 				_ = f.env.k8s.Update(ctx, c)
 			}
@@ -180,7 +189,7 @@ func (f *noCNIFlow) reconcileOnce(ctx context.Context) {
 		for i := range machines.Items {
 			m := &machines.Items[i]
 			if !apimeta.IsStatusConditionTrue(m.Status.Conditions, conditionReady) {
-				apimeta.SetStatusCondition(&m.Status.Conditions, metav1.Condition{Type: conditionReady, Status: metav1.ConditionTrue, Reason: "Test"})
+				apimeta.SetStatusCondition(&m.Status.Conditions, metav1.Condition{Type: conditionReady, Status: metav1.ConditionTrue, Reason: fakeReason})
 				_ = f.env.k8s.Update(ctx, m)
 			}
 		}
@@ -269,8 +278,8 @@ func TestAdoptNoCNI_CiliumFirstThenIchorThenTheCRs(t *testing.T) {
 // (the equality test), with a tunnel and operator values in play.
 func TestAdoptNoCNI_InstalledValuesEqualTheControllersValues(t *testing.T) {
 	f := newNoCNIFlow(t)
-	f.deps.Tunnel = "geneve"
-	f.deps.CiliumValues = map[string]any{"debug": map[string]any{"enabled": true}, "hubble": map[string]any{"enabled": false}}
+	f.deps.Tunnel = tunnelGeneve
+	f.deps.CiliumValues = debugValues()
 
 	if err := f.run(t); err != nil {
 		t.Fatalf("runAdopt: %v\n%s", err, f.env.stderr.String())
@@ -311,12 +320,12 @@ func TestAdoptNoCNI_InstalledValuesEqualTheControllersValues(t *testing.T) {
 		t.Fatalf("values hashes differ: %q (%v) vs %q (%v)", h1, err1, h2, err2)
 	}
 
-	if got, _ := installed["tunnelProtocol"].(string); got != "geneve" {
+	if got, _ := installed["tunnelProtocol"].(string); got != tunnelGeneve {
 		t.Errorf("tunnelProtocol = %v, want geneve", installed["tunnelProtocol"])
 	}
 
-	if debug, _ := installed["debug"].(map[string]any); debug["enabled"] != true {
-		t.Errorf("the --cilium-values debug.enabled did not reach the install: %v", installed["debug"])
+	if debug, _ := installed[keyDebugOn].(map[string]any); debug[keyDebugEnabled] != true {
+		t.Errorf("the --cilium-values debug.enabled did not reach the install: %v", installed[keyDebugOn])
 	}
 }
 
@@ -413,7 +422,7 @@ func TestAdoptNoCNI_CiliumValuesRefusals(t *testing.T) {
 		env := newFlowEnv(t, cniCilium, nil)
 		deps := env.deps(t)
 		deps.Target = fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(testDS("cilium", ciliumImage), ciliumCM("false")).Build()
-		deps.CiliumValues = map[string]any{"debug": map[string]any{"enabled": true}}
+		deps.CiliumValues = debugValues()
 
 		err := runAdopt(context.Background(), env.cluster.Name, testNamespace, deps)
 		if err == nil || !strings.Contains(err.Error(), "--cilium-values only applies") {
@@ -433,7 +442,7 @@ func TestReadAdoptCiliumValues(t *testing.T) {
 	}
 
 	v, err := readAdoptCiliumValues(path)
-	if err != nil || !reflect.DeepEqual(v, map[string]any{"debug": map[string]any{"enabled": true}}) {
+	if err != nil || !reflect.DeepEqual(v, debugValues()) {
 		t.Fatalf("values = %v, %v", v, err)
 	}
 

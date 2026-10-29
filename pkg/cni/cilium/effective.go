@@ -30,7 +30,7 @@ import (
 // OwnedKeys are the Cilium Helm values Ichor sets itself; a user value for one is a validation error. Each maps to
 // the reason.
 var OwnedKeys = map[string]string{
-	"ipam.mode": "Talos needs Kubernetes host-scope IPAM",
+	keyIPAMMode: "Talos needs Kubernetes host-scope IPAM",
 	"securityContext.capabilities.ciliumAgent":      "the Talos guide fixes the capability set Cilium runs with",
 	"securityContext.capabilities.cleanCiliumState": "the Talos guide fixes the capability set Cilium runs with",
 	"cgroup.autoMount.enabled":                      "Talos mounts cgroup2 itself, so Cilium must not",

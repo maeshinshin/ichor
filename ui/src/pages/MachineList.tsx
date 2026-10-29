@@ -18,14 +18,12 @@ import { machineClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
 import { machineDisplayName } from '@/lib/machineName'
 import { notifyWrite } from '@/lib/notify'
-import { describeError } from '@/lib/errors'
+import { describeError, type ErrorShape } from '@/lib/errors'
 import { matchesQuery } from '@/lib/filter'
 import { formatTimestamp } from '@/lib/format'
 import { useCanReclaim } from '@/lib/useCanReclaim'
 import { useT } from '@/lib/useT'
 import { Link } from '@/router'
-
-type ErrorShape = { title: string; detail: string }
 
 // Machine list, pending approvals included unconditionally
 // (architecture.md, "CLI and UI"; machine.proto's own doc comment), with

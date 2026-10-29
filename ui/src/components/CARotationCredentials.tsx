@@ -9,11 +9,9 @@ import type { Operation } from '@/gen/ichor/v1alpha1/operation_pb'
 import { operationClient } from '@/lib/connect'
 import { canContinue, canDownload, type CredentialsPanel } from '@/lib/credentials'
 import { download } from '@/lib/download'
-import { describeError } from '@/lib/errors'
+import { describeError, type ErrorShape } from '@/lib/errors'
 import { notifyDone, notifyFailed } from '@/lib/notify'
 import { useT } from '@/lib/useT'
-
-type ErrorShape = { title: string; detail: string }
 
 // The buttons of the CA rotation credential hand-off: download the new kubeconfig and
 // talosconfig, and continue the rotation. The download needs the Kubernetes RBAC verb "download" on

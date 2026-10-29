@@ -15,14 +15,12 @@ import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { OperationKind, type PlanOperationResponse } from '@/gen/ichor/v1alpha1/operation_pb'
 import { operationClient } from '@/lib/connect'
-import { describeError } from '@/lib/errors'
+import { describeError, type ErrorShape } from '@/lib/errors'
 import { canRestore, canReview, snapshotChoices, type SnapshotChoice } from '@/lib/etcdRestore'
 import { formatBytes, formatDate } from '@/lib/format'
 import { notifyDone } from '@/lib/notify'
 import { useT } from '@/lib/useT'
 import { navigate } from '@/router'
-
-type ErrorShape = { title: string; detail: string }
 
 // RestoreDialog is "Restore from backup…" in the cluster page's Danger zone. It never
 // writes on the first click: the user picks a snapshot from the cluster's backups, "Review" asks the

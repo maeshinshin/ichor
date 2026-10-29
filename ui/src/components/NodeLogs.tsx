@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ErrorAlert } from '@/components/ErrorAlert'
 import type { StreamNodeLogsResponse } from '@/gen/ichor/v1alpha1/node_pb'
 import { nodeClient } from '@/lib/connect'
-import { describeError } from '@/lib/errors'
+import { describeError, type ErrorShape } from '@/lib/errors'
 import { formatTimestamp } from '@/lib/format'
 import { createBatcher, type Entry, LogBuffer, truncateMessage } from '@/lib/logBuffer'
 import { streamWithResume } from '@/lib/resumableStream'
@@ -42,8 +42,6 @@ const LOG_SOURCES: { value: string; label: Key | string; wire: string }[] = [
   { value: 'apid', label: 'apid', wire: 'apid' },
   { value: 'machined', label: 'machined', wire: 'machined' },
 ]
-
-type ErrorShape = { title: string; detail: string }
 
 // A render error in the log list must not take the whole page down
 // (preact unmounts the tree on an uncaught render error).

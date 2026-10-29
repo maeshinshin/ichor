@@ -12,9 +12,8 @@ import type { User } from '@/gen/ichor/v1alpha1/user_pb'
 import { userClient } from '@/lib/connect'
 import { notifyDone } from '@/lib/notify'
 import { minPasswordLength, passwordOk, roleNames, toggleRole, userError, userNameOk } from '@/lib/users'
+import type { ErrorShape } from '@/lib/errors'
 import { useT } from '@/lib/useT'
-
-type ErrorShape = { title: string; detail: string }
 
 function RolePicker({ id, roles, onChange }: { id: string; roles: string[]; onChange: (roles: string[]) => void }) {
   const t = useT()

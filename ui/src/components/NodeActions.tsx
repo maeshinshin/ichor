@@ -55,12 +55,10 @@ import {
   type Permissions,
 } from '@/lib/diagnostics'
 import { download, type DiagnosticsDownloadRequest } from '@/lib/download'
-import { describeError } from '@/lib/errors'
+import { describeError, type ErrorShape } from '@/lib/errors'
 import { useT } from '@/lib/useT'
 
 type Ref = { namespace: string; name: string }
-type ErrorShape = { title: string; detail: string }
-
 const wireAction: Record<NodeActionId, NodeAction> = {
   reboot: NodeAction.REBOOT,
   shutdown: NodeAction.SHUTDOWN,

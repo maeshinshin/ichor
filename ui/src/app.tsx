@@ -98,6 +98,7 @@ function Authenticated({ path }: { path: string }) {
   const login = useLogin()
   const signedIn = login.state === 'ready'
   const who = useWhoAmI(signedIn)
+  const usersEnabled = login.providers.some((p) => p.id === 'ichor')
 
   if (login.state === 'loading' || (signedIn && !who.loaded)) return <p class="p-8 text-sm text-muted-foreground">{t('app.signingIn')}</p>
   if (login.state === 'error') return <ErrorAlert title={t('app.signInFailed')} detail={login.error} />
@@ -113,9 +114,9 @@ function Authenticated({ path }: { path: string }) {
       path={path}
       signInNotConfigured={login.state === 'open'}
       me={who.me}
-      usersEnabled={login.providers.some((p) => p.id === 'ichor')}
+      usersEnabled={usersEnabled}
     >
-      <Routes path={path} usersEnabled={login.providers.some((p) => p.id === 'ichor')} />
+      <Routes path={path} usersEnabled={usersEnabled} />
     </AppShell>
   )
 }

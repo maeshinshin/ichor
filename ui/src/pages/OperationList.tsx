@@ -12,14 +12,12 @@ import { OperationControls } from '@/components/OperationControls'
 import { OperationKind, type Operation } from '@/gen/ichor/v1alpha1/operation_pb'
 import { operationClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
-import { describeError } from '@/lib/errors'
+import { describeError, type ErrorShape } from '@/lib/errors'
 import { matchesQuery } from '@/lib/filter'
 import { operationState, progressCounts } from '@/lib/operations'
 import { opStateTone } from '@/lib/status'
 import { useT } from '@/lib/useT'
 import { Link } from '@/router'
-
-type ErrorShape = { title: string; detail: string }
 
 // Operation list: every TalosOperation the signed-in user may list, newest
 // first. The list is read as that user, so a cluster they

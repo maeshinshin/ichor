@@ -84,6 +84,24 @@ func TestClusterToPBCarriesTheCNIFacts(t *testing.T) {
 	}
 }
 
+func TestPlanCNIOperationRefusesAnUnmanagedCluster(t *testing.T) {
+	objs := opObjects()
+	for _, o := range objs {
+		if c, ok := o.(*ichorv1alpha1.TalosCluster); ok {
+			c.Spec.CNI.Preset = ichorv1alpha1.TalosClusterCNIPresetUnmanaged
+		}
+	}
+
+	srv, _ := opServer(t, objs...)
+
+	_, err := srv.PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{
+		Cluster: objectRef(opNS, opCluster), Kind: pb.OperationKind_OPERATION_KIND_CNI, Target: "replaced",
+	}))
+	if connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Fatalf("want FailedPrecondition, got %v", err)
+	}
+}
+
 func TestDismissCARotationAdviceSetsOnlyTheAnnotation(t *testing.T) {
 	k8s := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(unmanagedCluster()).Build()
 

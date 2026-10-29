@@ -18,5 +18,8 @@ rules:
   - machinereclaims
   verbs:
   - create
+  - get
+  - list
+  - update
   - reclaim
 {{- end }}

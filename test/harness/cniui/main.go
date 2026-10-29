@@ -43,7 +43,8 @@ func main() {
 	cluster := flag.String("cluster", "", "TalosCluster name (namespace ichor-system)")
 	flag.Parse()
 
-	hc := &http.Client{Timeout: time.Minute, Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}} //nolint:gosec // test harness only
+	tlsCfg := &tls.Config{InsecureSkipVerify: true} //nolint:gosec // test harness only
+	hc := &http.Client{Timeout: time.Minute, Transport: &http.Transport{TLSClientConfig: tlsCfg}}
 	ref := &pb.ObjectRef{Namespace: "ichor-system", Name: *cluster}
 	ctx := context.Background()
 	cl := ichorv1alpha1connect.NewClusterServiceClient(hc, *url)
@@ -68,7 +69,9 @@ func main() {
 	} else {
 		show("GetCiliumValues", nil, err)
 	}
-	r3, err := cni.SetCiliumValues(ctx, connect.NewRequest(&pb.SetCiliumValuesRequest{Cluster: ref, UserYaml: "debug:\n  enabled: true\n"}))
+	r3, err := cni.SetCiliumValues(ctx, connect.NewRequest(&pb.SetCiliumValuesRequest{
+		Cluster: ref, UserYaml: "debug:\n  enabled: true\n",
+	}))
 	if err == nil {
 		show("SetCiliumValues", r3.Msg, nil)
 	} else {

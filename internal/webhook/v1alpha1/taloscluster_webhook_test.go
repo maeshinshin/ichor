@@ -62,6 +62,10 @@ var _ = Describe("TalosCluster Webhook", func() {
 		// obj was already created in BeforeEach; nothing further to assert.
 	})
 
+	It("fills spec.driftPolicy at create through the mutating webhook", func() {
+		Expect(obj.Spec.DriftPolicy).To(Equal("warnOnly"))
+	})
+
 	It("admits update", func() {
 		obj.Spec.KubernetesVersion = "v1.36.1"
 		Expect(k8sClient.Update(ctx, obj)).To(Succeed())

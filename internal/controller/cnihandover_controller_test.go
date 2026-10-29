@@ -48,6 +48,8 @@ import (
 const (
 	helmStatusKey  = "status"
 	helmVersionKey = "version"
+
+	missingSecretName = "does-not-exist"
 )
 
 func reconcileHandover(r *CNIHandoverReconciler, namespace, name string) (ctrl.Result, error) {
@@ -64,7 +66,7 @@ func newTestCiliumCluster() *ichorv1alpha1.TalosCluster {
 			TalosVersion:      testTalosVersion,
 			KubernetesVersion: "v" + constants.DefaultKubernetesVersion,
 			VersionContract:   testK8sContract,
-			SecretsRef:        corev1.LocalObjectReference{Name: "does-not-exist"},
+			SecretsRef:        corev1.LocalObjectReference{Name: missingSecretName},
 			ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: 1, Schedulable: testSchedulable},
 			CNI:               ichorv1alpha1.TalosClusterCNI{Preset: ciliumName},
 		},
@@ -218,7 +220,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 				TalosVersion:      testTalosVersion,
 				KubernetesVersion: "v" + constants.DefaultKubernetesVersion,
 				VersionContract:   "v1.14",
-				SecretsRef:        corev1.LocalObjectReference{Name: "does-not-exist"},
+				SecretsRef:        corev1.LocalObjectReference{Name: missingSecretName},
 				ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: 1, Schedulable: testSchedulable},
 				CNI:               ichorv1alpha1.TalosClusterCNI{Preset: "flannel"},
 			},
@@ -241,12 +243,12 @@ var _ = Describe("CNIHandoverReconciler", func() {
 				TalosVersion:      testTalosVersion,
 				KubernetesVersion: "v" + constants.DefaultKubernetesVersion,
 				VersionContract:   "v1.14",
-				SecretsRef:        corev1.LocalObjectReference{Name: "does-not-exist"},
+				SecretsRef:        corev1.LocalObjectReference{Name: missingSecretName},
 				ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: 1, Schedulable: testSchedulable},
 				CNI:               ichorv1alpha1.TalosClusterCNI{Preset: ichorv1alpha1.TalosClusterCNIPresetUnmanaged},
 			},
 		}
-		cluster.Annotations = map[string]string{ichorv1alpha1.TalosClusterAdoptedAnnotation: "true"}
+		cluster.Annotations = map[string]string{ichorv1alpha1.TalosClusterAdoptedAnnotation: resetOnDeleteValue}
 		Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
 
 		result, err := reconcileHandover(r, cluster.Namespace, cluster.Name)

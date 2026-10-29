@@ -283,11 +283,15 @@ func policyGateReason(ichor *adoptWriteIchor) string {
 func (w *adoptWriter) skipInstall(present ichorPresence, ichor *adoptWriteIchor) {
 	w.res.Unchanged = append(w.res.Unchanged, "Ichor installation")
 
-	if !present.HelmManaged() {
+	if !installer.IncludeCiliumPolicies(ichor.DetectedCNI, ichor.PolicyCRDPresent) {
+		if len(ichor.NetworkPolicies) > 0 {
+			_, _ = fmt.Fprintf(w.in.Stderr, "adopt: not applying Ichor's network policies: %s\n", policyGateReason(ichor))
+		}
+
 		return
 	}
 
-	if !installer.IncludeCiliumPolicies(ichor.DetectedCNI, ichor.PolicyCRDPresent) {
+	if !present.HelmManaged() {
 		return
 	}
 

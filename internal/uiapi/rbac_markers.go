@@ -50,6 +50,9 @@ package uiapi
 // webhook judges its ServiceAccount, so it holds the verb exactly as it holds create above.
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosoperations/shutdown;talosoperations/ca-rotation;talosoperations/etcd-restore;talosoperations/node-reset;talosoperations/node-shutdown,verbs=start
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=ichorinstallations,verbs=get;update
+// SettingsService: with OIDC off the backend is the caller and the settings webhook judges its
+// ServiceAccount, so it holds the two settings subresources like it holds update above (never .../version).
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=ichorinstallations/reclaim;ichorinstallations/settings,verbs=update
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosconfigpatches,verbs=get;list;create;update;delete
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosmachines,verbs=get;list;update;delete
 // An etcd restore is planned and chosen from the backups' status: get/list, nothing written.

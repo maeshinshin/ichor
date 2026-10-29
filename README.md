@@ -43,15 +43,17 @@ install.
   `secret-references` right in Kubernetes RBAC, which `ichor-admin` holds.
 - Upgrades itself through the `IchorInstallation` resource.
 - Bootstraps Cilium, the only CNI (pinned 1.18.0 chart embedded in the CLI;
-  `--cni-tunnel vxlan|geneve` picks its tunnel) and keeps it as a Helm release
-  whose values you edit in the UI or with `ichor cni values`.
+  `--cni-tunnel vxlan|geneve` picks its tunnel) and keeps it as a Helm release.
+  Edit its values in the UI (Cilium page) or with `ichor cni values`, upgrade
+  it with `ichor cni upgrade`, and switch kube-proxy with `ichor cni kube-proxy`.
   `ichor init` waits for the hand-over of Cilium to Ichor.
+- Locks down its own namespace with CiliumNetworkPolicies.
 - Prepares disks for storage systems such as Longhorn, and waits for data to
   evacuate before draining or removing a node.
 
 ## What it doesn't do
 
-- Run anything on the cluster beyond its own controller and UI.
+- Run anything on the cluster beyond its own controller, UI and Cilium.
 - Manage storage or monitoring, or know about GitOps tools.
 - Boot machines. Get them to maintenance mode (ISO, PXE, whatever you like);
   Ichor takes it from there.
@@ -72,7 +74,7 @@ Inside `nix develop`, with a node in maintenance mode:
 ```
 ichor init --help          # create the first control plane and install Ichor
 ichor machine approve --help
-ichor status
+ichor cluster get
 ichor version              # CLI version and the installed Ichor version (--client skips the cluster, -o json|yaml)
 ```
 
@@ -86,7 +88,7 @@ authenticate the node at the other end. Ichor assumes you keep a separate
 provisioning network for that reason — it's not something Ichor itself
 enforces. Only the controller holds an `os:admin`-equivalent Talos identity and writes
 to nodes. The UI backend reads with `os:reader`; for the admin-gated downloads
-(etcd snapshot, packet capture, CA-rotation credentials) it uses the narrowest
+(support bundle, etcd snapshot, packet capture, CA-rotation credentials) it uses the narrowest
 role Talos accepts for that one call. The browser holds no credentials at all.
 Users never receive a talosconfig, except an administrator during a CA
 rotation.

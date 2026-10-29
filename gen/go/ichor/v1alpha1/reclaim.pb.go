@@ -421,9 +421,11 @@ func (x *ListReclaimsResponse) GetReclaims() []*Reclaim {
 }
 
 type ConfirmReclaimRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Reclaim       *ObjectRef             `protobuf:"bytes,1,opt,name=reclaim,proto3" json:"reclaim,omitempty"`
-	Uuid          string                 `protobuf:"bytes,2,opt,name=uuid,proto3" json:"uuid,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Reclaim *ObjectRef             `protobuf:"bytes,1,opt,name=reclaim,proto3" json:"reclaim,omitempty"`
+	Uuid    string                 `protobuf:"bytes,2,opt,name=uuid,proto3" json:"uuid,omitempty"`
+	// cluster_name is the foreign cluster's name as typed; only needed with force.
+	ClusterName   string `protobuf:"bytes,3,opt,name=cluster_name,json=clusterName,proto3" json:"cluster_name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -468,6 +470,13 @@ func (x *ConfirmReclaimRequest) GetReclaim() *ObjectRef {
 func (x *ConfirmReclaimRequest) GetUuid() string {
 	if x != nil {
 		return x.Uuid
+	}
+	return ""
+}
+
+func (x *ConfirmReclaimRequest) GetClusterName() string {
+	if x != nil {
+		return x.ClusterName
 	}
 	return ""
 }
@@ -830,10 +839,11 @@ const file_ichor_v1alpha1_reclaim_proto_rawDesc = "" +
 	"\areclaim\x18\x01 \x01(\v2\x17.ichor.v1alpha1.ReclaimR\areclaim\"\x15\n" +
 	"\x13ListReclaimsRequest\"K\n" +
 	"\x14ListReclaimsResponse\x123\n" +
-	"\breclaims\x18\x01 \x03(\v2\x17.ichor.v1alpha1.ReclaimR\breclaims\"`\n" +
+	"\breclaims\x18\x01 \x03(\v2\x17.ichor.v1alpha1.ReclaimR\breclaims\"\x83\x01\n" +
 	"\x15ConfirmReclaimRequest\x123\n" +
 	"\areclaim\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\areclaim\x12\x12\n" +
-	"\x04uuid\x18\x02 \x01(\tR\x04uuid\"K\n" +
+	"\x04uuid\x18\x02 \x01(\tR\x04uuid\x12!\n" +
+	"\fcluster_name\x18\x03 \x01(\tR\vclusterName\"K\n" +
 	"\x16ConfirmReclaimResponse\x121\n" +
 	"\areclaim\x18\x01 \x01(\v2\x17.ichor.v1alpha1.ReclaimR\areclaim\"q\n" +
 	"\rReclaimVolume\x12\x12\n" +

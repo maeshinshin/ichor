@@ -115,6 +115,8 @@ func main() {
 	tlsCert := flag.String("tls-cert-file", "", "serve the main listener over TLS with this certificate (with --tls-key-file)")
 	tlsKey := flag.String("tls-key-file", "", "private key for --tls-cert-file")
 
+	reclaimEnabled := flag.Bool("reclaim-enabled", os.Getenv("ICHOR_RECLAIM_ENABLED") == "true", "enable the break-glass machine reclaim API (docs/adr/0103)")
+
 	flag.Parse()
 
 	if err := users.validate(); err != nil {
@@ -203,6 +205,8 @@ func main() {
 			"writes with this pod's ServiceAccount permissions and is audited as \"ichor-ui\"")
 	}
 
+	server.ReclaimEnabled = *reclaimEnabled
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/auth/config", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -222,7 +226,7 @@ func main() {
 	// the exported RPC-latency series comes from (docs/adr/0040).
 	mux.Handle("/metrics", promhttp.Handler())
 
-	rpcInterceptor := connect.WithInterceptors(uiapi.MetricsInterceptor(), uiapi.AuthInterceptor(authn))
+	rpcInterceptor := connect.WithInterceptors(uiapi.MetricsInterceptor(), uiapi.AccessLogInterceptor(log.Default(), false), uiapi.AuthInterceptor(authn))
 	mux.Handle(ichorv1alpha1connect.NewClusterServiceHandler(server, rpcInterceptor))
 	mux.Handle(ichorv1alpha1connect.NewMachineServiceHandler(server, rpcInterceptor))
 	mux.Handle(ichorv1alpha1connect.NewNodeServiceHandler(server, rpcInterceptor))
@@ -231,6 +235,7 @@ func main() {
 	mux.Handle(ichorv1alpha1connect.NewDiagnosticsServiceHandler(server, rpcInterceptor))
 	mux.Handle(ichorv1alpha1connect.NewUserServiceHandler(server, rpcInterceptor))
 	mux.Handle(ichorv1alpha1connect.NewCniServiceHandler(server, rpcInterceptor))
+	mux.Handle(ichorv1alpha1connect.NewReclaimServiceHandler(server, rpcInterceptor))
 
 	srv := &http.Server{
 		Addr:              *addr,

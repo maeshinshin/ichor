@@ -114,3 +114,10 @@ package uiapi
 // caller, so the ServiceAccount needs nothing more on ichorusers.
 // +kubebuilder:rbac:groups=ichor.maesh.dev,namespace=ichor-system,resources=ichorusers,verbs=get
 // +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,resourceNames=ichor-user-credentials,verbs=get;update;patch
+
+// Break-glass reclaim (docs/adr/0103, 2.2), in ichor-system only. The backend creates the credential
+// Secret, with the owner reference set at creation (the MachineReclaim is written first); it can never read it back or patch it.
+// The MachineReclaim itself is written as the caller, so the ServiceAccount only reads and lists it
+// (when OIDC is off it also creates and updates it).
+// +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,verbs=create
+// +kubebuilder:rbac:groups=ichor.maesh.dev,namespace=ichor-system,resources=machinereclaims,verbs=get;list;create;update

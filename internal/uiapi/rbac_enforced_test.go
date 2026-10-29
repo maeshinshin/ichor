@@ -217,6 +217,6 @@ var _ = Describe("ichor-ui generated RBAC", func() {
 		other := &corev1.Secret{Name: "something-else", Namespace: testNamespace}
 		Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, other))).To(Succeed())
 		Expect(apierrors.IsForbidden(saClient.Patch(ctx, other, client.RawPatch(types.MergePatchType, []byte(`{"data":{"a":"Yg=="}}`))))).To(BeTrue())
-		Expect(apierrors.IsForbidden(saClient.Create(ctx, &corev1.Secret{Name: "new-one", Namespace: testNamespace}))).To(BeTrue())
+		// Reclaim (ADR 0103) gives the backend create on Secrets, nothing more: it cannot patch, so the line above holds.
 	})
 })

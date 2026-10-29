@@ -97,6 +97,9 @@ type Server struct {
 	// answers FailedPrecondition otherwise.
 	Users *UserSettings
 
+	// ReclaimEnabled is the installation reclaim.enabled (ADR 0103, 2.2). Off, every ReclaimService call is refused.
+	ReclaimEnabled bool
+
 	diag     diagnostics
 	diagOnce sync.Once
 

@@ -114,7 +114,7 @@ func init() {
 	flags.StringVar(&initOpts.CNIPreset, "cni", cniCilium, "CNI preset; cilium is the only one (ADR 0099)")
 	_ = flags.MarkHidden("cni")
 	flags.StringVar(&initOpts.CNITunnel, "cni-tunnel", "",
-		"with --cni cilium: Cilium's tunnel protocol, vxlan or geneve (default: Cilium's vxlan); "+
+		"Cilium's tunnel protocol, vxlan or geneve (default: Cilium's vxlan); "+
 			"geneve for virtualised networks that pass geneve but not vxlan")
 	flags.StringVar(&initOpts.EndpointType, "endpoint-type", "vip", "cluster endpoint type: vip, loadBalancer, dns or node")
 	flags.StringVar(&initOpts.EndpointAddress, "endpoint-address", "", "cluster endpoint address (required)")

@@ -438,6 +438,12 @@ func main() {
 		setupLog.Error(err, "Failed to create controller", "controller", "cnihandover")
 		os.Exit(1)
 	}
+	if err := (&controller.CNIDetectReconciler{
+		Client: mgr.GetClient(), APIReader: mgr.GetAPIReader(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "Failed to create controller", "controller", "cnidetect")
+		os.Exit(1)
+	}
 	if err := (&controller.TalosStorageReconciler{
 		ControllerNamespace: os.Getenv("POD_NAMESPACE"),
 		Client:              mgr.GetClient(), APIReader: mgr.GetAPIReader(),

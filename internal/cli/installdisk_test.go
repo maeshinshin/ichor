@@ -55,7 +55,7 @@ func TestParseInstallDisk(t *testing.T) {
 func TestApproveWritesTheInstallDisk(t *testing.T) {
 	setAPITestFlags(t, true)
 
-	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(strongMachine("strong")).Build()
+	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(strongMachine()).Build()
 	c := localClients(apiOpts, apiDeps{K8s: k8s})
 
 	// A flag the CLI cannot parse is refused before anything is written.

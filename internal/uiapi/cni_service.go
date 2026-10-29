@@ -27,7 +27,6 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/pmezard/go-difflib/difflib"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -375,7 +374,7 @@ func (s *Server) SetCiliumValues(
 	}
 
 	return connect.NewResponse(&pb.SetCiliumValuesResponse{
-		Audit:         &pb.AuditRecord{Actor: s.actorName(ctx), At: timestamppb.New(s.now()), Action: verbUpdate, Target: ref},
+		Audit:         s.opAudit(ctx, verbUpdate, ref),
 		EffectiveYaml: out,
 	}), nil
 }

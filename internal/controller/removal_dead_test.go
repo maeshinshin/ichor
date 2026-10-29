@@ -22,10 +22,10 @@ var _ = Describe("removing a dead control plane below the declared count", func(
 		departing     map[string]*fakeTalosClient
 	}
 
-	setup := func(suffix string, count int32) *fixture {
+	setup := func(suffix string) *fixture {
 		bundle := newTestBundle("v1.14")
 		secret := newTestSecret(bundle)
-		cluster := newTestClusterWithCount(count, secret.Name)
+		cluster := newTestClusterWithCount(3, secret.Name)
 		f := &fixture{
 			cp1: newTestControlPlane(cluster.Name, suffix+"1"),
 			cp2: newTestControlPlane(cluster.Name, suffix+"2"),
@@ -49,7 +49,7 @@ var _ = Describe("removing a dead control plane below the declared count", func(
 	}
 
 	It("removes it when the node cannot be dialed, and removes its etcd member through a healthy sibling", func() {
-		f := setup("d1", 3)
+		f := setup("d1")
 
 		Expect(k8sClient.Delete(ctx, f.cp1)).To(Succeed())
 		_, err := reconcileMachine(f.r, f.cp1)
@@ -61,7 +61,7 @@ var _ = Describe("removing a dead control plane below the declared count", func(
 	})
 
 	It("removes it when the node dials but its etcd answers nothing", func() {
-		f := setup("d2", 3)
+		f := setup("d2")
 		f.departing[f.cp1.Name] = &fakeTalosClient{etcdStatusErr: errors.New("connection refused")}
 
 		Expect(k8sClient.Delete(ctx, f.cp1)).To(Succeed())
@@ -72,7 +72,7 @@ var _ = Describe("removing a dead control plane below the declared count", func(
 	})
 
 	It("still refuses a healthy member below the declared count, saying so", func() {
-		f := setup("d3", 3)
+		f := setup("d3")
 		f.departing[f.cp1.Name] = &fakeTalosClient{etcdStatus: EtcdStatus{MemberID: 42, LeaderID: 7}}
 
 		Expect(k8sClient.Delete(ctx, f.cp1)).To(Succeed())
@@ -87,7 +87,7 @@ var _ = Describe("removing a dead control plane below the declared count", func(
 	})
 
 	It("still refuses when no healthy control plane can say whether the member is dead", func() {
-		f := setup("d4", 3)
+		f := setup("d4")
 		delete(f.departing, f.cp2.Name)
 		delete(f.departing, f.cp3.Name)
 
@@ -100,7 +100,7 @@ var _ = Describe("removing a dead control plane below the declared count", func(
 	})
 
 	It("never lets quorum be lost: a two control plane cluster refuses even a dead member", func() {
-		f := setup("d5", 3)
+		f := setup("d5")
 		Expect(k8sClient.Delete(ctx, f.cp3)).To(Succeed())
 		f.cp3 = fetchMachine(f.cp3)
 		// cp3 is now being deleted and not counted; 2 approved remain, one of them dead.

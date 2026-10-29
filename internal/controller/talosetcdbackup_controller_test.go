@@ -477,7 +477,7 @@ var _ = Describe("TalosEtcdBackupReconciler", func() {
 		Expect(readyOf(got).Status).To(Equal(metav1.ConditionTrue))
 
 		// Pointing it outside clears the warning.
-		got.Spec.Destination.S3.Endpoint = "https://s3.example.test"
+		got.Spec.Destination.S3.Endpoint = "https://backup.example.net"
 		Expect(k8sClient.Update(ctx, got)).To(Succeed())
 
 		_, got = f.reconcile(got)

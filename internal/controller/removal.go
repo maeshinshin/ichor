@@ -344,32 +344,11 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 			return err
 		}
 
-		// Quorum and last-control-plane always hold. The declared count does not stop the removal of a
-		// control plane whose etcd member is dead: replacing it is how the cluster gets back to the count.
-		if err := deleteguard.CheckControlPlaneQuorum(siblings); err != nil {
-			return r.removalCondition(ctx, m, metav1.ConditionFalse, reasonRemovalRefused, err.Error())
-		}
+		var stop bool
 
-		if err := deleteguard.CheckControlPlaneCount(siblings, int(cluster.Spec.ControlPlane.Count)); err != nil {
-			why, dead := r.deadEtcdMember(ctx, &cluster, m)
-			if !dead {
-				return r.removalCondition(ctx, m, metav1.ConditionFalse, reasonRemovalRefused,
-					err.Error()+"; its etcd member is not unhealthy, so this is not a replacement of a dead control plane ("+why+")")
-			}
-
-			deadMember = true
-			msg := fmt.Sprintf("removing control plane %q below the declared count of %d: its etcd member is %s; "+
-				"approve a replacement to get back to the declared count", m.Name, cluster.Spec.ControlPlane.Count, why)
-			log.Info(msg)
-
-			if r.Recorder != nil {
-				r.Recorder.Event(m, corev1.EventTypeWarning, reasonDeadMemberRemoved, msg)
-			}
-
-			// Recorded, so a round that resumes after the member is gone from etcd still knows why it proceeds.
-			if err := r.removalCondition(ctx, m, metav1.ConditionFalse, reasonDeadMemberRemoval, msg); err != nil {
-				return err
-			}
+		deadMember, stop, err = r.checkRemovalCounts(ctx, &cluster, m, siblings)
+		if stop || err != nil {
+			return err
 		}
 	}
 
@@ -456,6 +435,40 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 	}
 
 	return r.completeRemoval(ctx, m, reset)
+}
+
+// checkRemovalCounts runs the control plane removal refusals that need no node: quorum and
+// last-control-plane always hold. The declared count does not stop the removal of a control plane whose
+// etcd member is dead, since replacing it is how the cluster gets back to the count (ADR 0106). stop is
+// true when the removal is refused (the Removal condition says why); dead when it goes on below the count.
+func (r *TalosMachineReconciler) checkRemovalCounts(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, siblings int,
+) (dead, stop bool, err error) {
+	if err := deleteguard.CheckControlPlaneQuorum(siblings); err != nil {
+		return false, true, r.removalCondition(ctx, m, metav1.ConditionFalse, reasonRemovalRefused, err.Error())
+	}
+
+	countErr := deleteguard.CheckControlPlaneCount(siblings, int(cluster.Spec.ControlPlane.Count))
+	if countErr == nil {
+		return false, false, nil
+	}
+
+	why, dead := r.deadEtcdMember(ctx, cluster, m)
+	if !dead {
+		return false, true, r.removalCondition(ctx, m, metav1.ConditionFalse, reasonRemovalRefused,
+			countErr.Error()+"; its etcd member is not unhealthy, so this is not a replacement of a dead control plane ("+why+")")
+	}
+
+	msg := fmt.Sprintf("removing control plane %q below the declared count of %d: its etcd member is %s; "+
+		"approve a replacement to get back to the declared count", m.Name, cluster.Spec.ControlPlane.Count, why)
+	logf.FromContext(ctx).Info(msg)
+
+	if r.Recorder != nil {
+		r.Recorder.Event(m, corev1.EventTypeWarning, reasonDeadMemberRemoved, msg)
+	}
+
+	// Recorded, so a round that resumes after the member is gone from etcd still knows why it proceeds.
+	return true, false, r.removalCondition(ctx, m, metav1.ConditionFalse, reasonDeadMemberRemoval, msg)
 }
 
 // removalNodeName is resolveNodeName for the departing machine: spec.hostname when set,

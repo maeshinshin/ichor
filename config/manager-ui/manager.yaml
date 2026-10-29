@@ -31,7 +31,7 @@ spec:
       - command:
         - /ichor-ui
         args:
-          - --addr=:8080
+          - --addr=:8443
         image: ichor-ui:latest
         name: ichor-ui
         env:
@@ -41,23 +41,34 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         ports:
-        - containerPort: 8080
-          name: http
+        - containerPort: 8443
+          name: https
           protocol: TCP
+        volumeMounts:
+        # The Ichor serving certificate the controller keeps. Optional on the volume so
+        # ichor-ui starts, and fails handshakes, until the controller has issued the first leaf.
+        - name: ui-tls
+          mountPath: /etc/ichor/ui-tls
+          readOnly: true
         securityContext:
           readOnlyRootFilesystem: true
           allowPrivilegeEscalation: false
           capabilities:
             drop:
             - "ALL"
+        # HTTPS probes: a TCP probe makes the TLS listener log a handshake error every few seconds.
         livenessProbe:
-          tcpSocket:
-            port: 8080
+          httpGet:
+            path: /auth/config
+            port: 8443
+            scheme: HTTPS
           initialDelaySeconds: 5
           periodSeconds: 20
         readinessProbe:
-          tcpSocket:
-            port: 8080
+          httpGet:
+            path: /auth/config
+            port: 8443
+            scheme: HTTPS
           initialDelaySeconds: 5
           periodSeconds: 10
         resources:
@@ -70,5 +81,10 @@ spec:
             memory: 64Mi
       # Fixed name, matching ../rbac/ichor-ui/service_account.yaml: the UI
       # backend's identity must stay separate from the controller's own.
+      volumes:
+      - name: ui-tls
+        secret:
+          secretName: ichor-oidc-tls
+          optional: true
       serviceAccountName: ichor-ui
       terminationGracePeriodSeconds: 10

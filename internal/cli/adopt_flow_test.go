@@ -22,6 +22,7 @@ import (
 	"errors"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -50,6 +51,8 @@ type flowEnv struct {
 	k8s     client.Client
 	// writes records every mutating call, in order, as "verb kind/name".
 	writes *[]string
+	// mu guards writes: a test's stand-in controller writes beside the adopt run.
+	mu sync.Mutex
 	// released records the machines whose hold annotation was removed, in order.
 	released *[]string
 	live     map[string][]byte
@@ -99,6 +102,9 @@ func newFlowEnv(t *testing.T, adoptPreset string, liveMutate func(*ichorv1alpha1
 	}
 
 	record := func(verb string, obj client.Object) {
+		env.mu.Lock()
+		defer env.mu.Unlock()
+
 		*env.writes = append(*env.writes, verb+" "+obj.GetName())
 	}
 

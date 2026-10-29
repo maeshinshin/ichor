@@ -21,13 +21,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/spf13/cobra"
 	"k8s.io/client-go/kubernetes"
+	"sigs.k8s.io/yaml"
 
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/controller"
 	"github.com/maeshinshin/ichor/internal/installmanifest"
+	"github.com/maeshinshin/ichor/pkg/cni"
+	"github.com/maeshinshin/ichor/pkg/cni/cilium"
 )
 
 var (
@@ -39,6 +44,7 @@ var (
 	adoptContext       string
 	adoptCNIUnmanaged  bool
 	adoptTunnel        string
+	adoptCiliumValues  string
 	adoptPlanOnly      bool
 	adoptRequireIchor  bool
 	adoptSeed          string
@@ -135,6 +141,11 @@ clusters keep the old CAs, but never starts one.`,
 			return fmt.Errorf("adopt: building a Kubernetes client: %w", err)
 		}
 
+		ciliumValues, err := readAdoptCiliumValues(adoptCiliumValues)
+		if err != nil {
+			return err
+		}
+
 		deps := adoptDeps{
 			K8s:        k8sClient,
 			Bundle:     bundle,
@@ -149,6 +160,12 @@ clusters keep the old CAs, but never starts one.`,
 			Target:       k8sClient,
 			CNIUnmanaged: adoptCNIUnmanaged,
 			Tunnel:       adoptTunnel,
+			CiliumValues: ciliumValues,
+			BootstrapCilium: func(ctx context.Context, c *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode) error {
+				_, err := cilium.Bootstrap(ctx, restCfg, c, mode, cilium.DefaultApplyTimeout)
+
+				return err
+			},
 
 			Preflight:           newCiliumPreflight(kube, k8sClient),
 			AcceptCiliumChanges: adoptAcceptChanges,
@@ -203,6 +220,8 @@ func init() {
 		"tunnel protocol (vxlan or geneve) of the Cilium adopt installs on a cluster with no CNI; immutable afterwards")
 	adoptCmd.Flags().BoolVar(&adoptRequireIchor, "require-ichor", false,
 		"fail when Ichor is not installed (for example with Helm) instead of installing it")
+	adoptCmd.Flags().StringVar(&adoptCiliumValues, "cilium-values", "",
+		"YAML file of Cilium Helm values for the Cilium adopt installs on a cluster with no CNI (Ichor-owned keys are refused)")
 	adoptCmd.Flags().BoolVar(&adoptPlanOnly, "plan", false, "print the plan and write nothing")
 	adoptCmd.Flags().StringVar(&adoptSeed, "node", "",
 		"address of one control plane; adopt discovers the cluster's machines from its membership when the TalosCluster does not exist yet")
@@ -217,4 +236,23 @@ func init() {
 	_ = adoptCmd.MarkFlagRequired(flagCluster)
 	adoptCmd.MarkFlagsMutuallyExclusive("secrets-bundle", "recover-secrets")
 	adoptCmd.MarkFlagsOneRequired("secrets-bundle", "recover-secrets")
+}
+
+// readAdoptCiliumValues reads --cilium-values: a YAML mapping, or nil when the flag is not given.
+func readAdoptCiliumValues(path string) (map[string]any, error) {
+	if path == "" {
+		return nil, nil //nolint:nilnil // no file, no values
+	}
+
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("adopt: --cilium-values: %w", err)
+	}
+
+	var vals map[string]any
+	if err := yaml.Unmarshal(raw, &vals); err != nil {
+		return nil, fmt.Errorf("adopt: --cilium-values %s: %w", path, err)
+	}
+
+	return vals, nil
 }

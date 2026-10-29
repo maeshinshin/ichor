@@ -25,6 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/cni"
 )
 
 // cniPaths keeps the CNI-relevant parts of a rendered config: the cni block of the
@@ -65,9 +66,11 @@ func TestNoCNIAdoptedClusterRendersTheLiveConfiguration(t *testing.T) {
 		proxyTail = "image: registry.k8s.io/kube-proxy:v" + constants.DefaultKubernetesVersion + "\nconfig: {}\n"
 	)
 
+	proxyOn, proxyOff := string(cni.KubeProxyEnabled), string(cni.KubeProxyReplaced)
+
 	for proxy, want := range map[string]string{
-		"enabled":  prism + "---\n" + proxyHead + proxyTail,
-		"replaced": prism + "---\n" + proxyHead + "enabled: false\n" + proxyTail,
+		proxyOn:  prism + "---\n" + proxyHead + proxyTail,
+		proxyOff: prism + "---\n" + proxyHead + "enabled: false\n" + proxyTail,
 	} {
 		t.Run("v1.14/"+proxy, func(t *testing.T) {
 			out := renderFor(t, versionContract, handedOver(proxy))
@@ -81,7 +84,7 @@ func TestNoCNIAdoptedClusterRendersTheLiveConfiguration(t *testing.T) {
 	}
 
 	t.Run("v1.13 selects cni none", func(t *testing.T) {
-		out := renderFor(t, contractV113, handedOver("enabled"))
+		out := renderFor(t, contractV113, handedOver(proxyOn))
 
 		requireAll(t, out, legacyCNINone)
 		requireNone(t, out, "KubeFlannelCNIConfig", "inlineManifests", "cilium")

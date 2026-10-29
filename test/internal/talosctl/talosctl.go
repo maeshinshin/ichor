@@ -276,7 +276,9 @@ func applySecret(namespace, name string, data map[string]string) error {
 	for k, v := range data {
 		fmt.Fprintf(&b, "  %s: %s\n", k, base64.StdEncoding.EncodeToString([]byte(v)))
 	}
-	cmd := kube.Command("apply", "-f", "-")
+	// create, not apply: apply copies the manifest into a last-applied annotation, which a large
+	// machine config (a Calico inline manifest) pushes over the 256 KiB annotation limit.
+	cmd := kube.Command("create", "-f", "-")
 	cmd.Stdin = strings.NewReader(b.String())
 	_, err := utils.Run(cmd)
 	return err

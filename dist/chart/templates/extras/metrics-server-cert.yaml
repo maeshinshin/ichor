@@ -3,10 +3,7 @@ apiVersion: v1
 kind: Secret
 metadata:
   labels:
-    app.kubernetes.io/managed-by: {{ .Release.Service }}
-    app.kubernetes.io/name: {{ include "ichor.name" . }}
-    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
-    app.kubernetes.io/instance: {{ .Release.Name }}
+    {{- include "ichor.labels" . | nindent 4 }}
   # Fixed name, not release-templated: cmd/main.go's second cert-controller rotator
   # hardcodes this Secret's name (ADR 0006, ADR 0031), same reason
   # ichor-webhook-server-cert is fixed too. No data: cert-controller fills it in at

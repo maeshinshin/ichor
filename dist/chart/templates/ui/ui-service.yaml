@@ -7,10 +7,7 @@ kind: Service
 metadata:
   labels:
     app.kubernetes.io/component: ui
-    app.kubernetes.io/managed-by: {{ .Release.Service }}
-    app.kubernetes.io/name: {{ include "ichor.name" . }}
-    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
-    app.kubernetes.io/instance: {{ .Release.Name }}
+    {{- include "ichor.labels" . | nindent 4 }}
   name: ichor-ui-service
   namespace: {{ .Release.Namespace }}
 spec:

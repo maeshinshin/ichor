@@ -1,6 +1,6 @@
 # 0103. Deploy onto machines that already run Talos
 
-Status: Accepted; built; hardware-verified including A8 (its two gaps were closed by 8ebee126 and 26da779b; rerun passed 2026-10-30, see "Results, A3, A8, D4, D6 (2026-10-30)"; the second kill window remains unhit); Updated: 2026-10-30 · Date: 2026-10-29 · Design section: Bootstrap (`ichor adopt`), Nodes, Cilium · Builds on: 0014, 0042, 0066, 0075, 0076, 0077, 0099, 0101
+Status: Accepted; built; hardware-verified including A8 (its two gaps were closed by 8ebee126 and 26da779b; rerun passed 2026-10-30, see "Results, A3, A8, D4, D6 (2026-10-30)"; the second kill window remains unhit); Updated: 2026-10-30 (C6 recorded: not run, see C6 below) · Date: 2026-10-29 · Design section: Bootstrap (`ichor adopt`), Nodes, Cilium · Builds on: 0014, 0042, 0066, 0075, 0076, 0077, 0099, 0101
 
 Amended by [ADR 0104](0104-a-cluster-with-no-cni-gets-ichors-cilium-before-ichor-and-ichor-is-installable-with-helm.md): a cluster with no CNI is adopted as managed Cilium (Ichor installs it first), not unmanaged `talosCNI: none`; the network-policy gate follows live detection; test D5 and open question 3 are superseded.
 
@@ -275,7 +275,6 @@ Answered on 2026-10-29: non-Cilium CNI (unmanaged mode), reclaim (both paths), C
 5. Should Ichor write standard Kubernetes `NetworkPolicy` objects for `ichor-system` when the CNI enforces them but is not Cilium (for example Calico)? This ADR skips policies there.
 6. Reclaim UI path: default TTL 15 minutes, maximum 60, `reclaim.enabled` default off, 7-day retention of the `MachineReclaim` record. Are these the right numbers?
 
-
 ## As built (2026-10-29)
 
 Units 1-16 landed with these differences from the text above. Where a section above disagrees with this list, this list is what the code does.
@@ -395,3 +394,7 @@ Record, per case, the time taken, the Talos and Cilium versions and the exact re
 ## Amendment (2026-10-29): ADR 0104
 
 A cluster with no CNI is no longer adopted as unmanaged `talosCNI: none`: ADR 0104 has adopt install Cilium first and adopt it managed (the "No CNI installed" row of 1.1, test D5 and open question 3 are superseded), fixes the network-policy wiring found by D3, and adds the Helm install path.
+
+### C6, credential-less wipe by kernel argument (2026-10-30): not run, not feasible in this harness
+
+Talos v1.14 documents `talos.experimental.wipe=system` (wipes the system disk, then reboots) and `talos.experimental.wipe=system:EPHEMERAL,STATE` (wipes those partitions and returns the node to maintenance mode); the reset page describes it as a console/GRUB route. On v1.14 the default UEFI boot is systemd-boot with a UKI whose kernel arguments are embedded and cannot be edited at boot; they are changed only by a boot asset built with an Image Factory schematic (`customization.extraKernelArgs`). A wipe would need a new schematic and ISO with the argument baked in, a second cache disk, and a boot order with that ISO before the installed disk. That is more than the 30 minute time box and out of scope here. Status of C6: unverified; the documented out-of-band routes (reinstall from the ISO, kernel-argument wipe through a rebuilt asset) stay as written in the ADR.

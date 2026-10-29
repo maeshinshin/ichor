@@ -1,0 +1,51 @@
+import { useState } from 'preact/hooks'
+import { InfoIcon } from 'lucide-preact'
+import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
+import { ErrorAlert } from '@/components/ErrorAlert'
+import type { ObjectRef } from '@/gen/ichor/v1alpha1/common_pb'
+import { clusterClient } from '@/lib/connect'
+import { describeError } from '@/lib/errors'
+import { useT } from '@/lib/useT'
+
+type ErrorShape = { title: string; detail: string }
+
+// CARotationAdvice is the notice an adopted cluster carries (docs/adr/0103, section 1.4): the
+// previous administrators' credentials stay valid until the CAs are rotated. It is advice only;
+// Dismiss writes an annotation on the TalosCluster and the controller clears the condition.
+export function CARotationAdvice({ cluster }: { cluster: ObjectRef }) {
+  const t = useT()
+  const [dismissed, setDismissed] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<ErrorShape | null>(null)
+
+  async function dismiss() {
+    setBusy(true)
+    setError(null)
+    try {
+      await clusterClient.dismissCARotationAdvice({ cluster })
+      setDismissed(true)
+    } catch (err) {
+      setError(describeError(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (dismissed) return null
+  return (
+    <>
+      <Alert>
+        <InfoIcon />
+        <AlertTitle>{t('caAdvice.title')}</AlertTitle>
+        <AlertDescription>{t('caAdvice.text')}</AlertDescription>
+        <AlertAction>
+          <Button size="sm" variant="outline" disabled={busy} onClick={dismiss}>
+            {t('caAdvice.dismiss')}
+          </Button>
+        </AlertAction>
+      </Alert>
+      {error && <ErrorAlert {...error} />}
+    </>
+  )
+}

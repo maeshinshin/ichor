@@ -924,6 +924,14 @@ export const en = {
   'node.tab.config': 'Configuration',
   'node.tab.logs': 'Logs',
   // backups
+  'cni.badge': 'CNI: unmanaged ({detected})',
+  'cni.unmanagedTitle': 'CNI not managed by Ichor',
+  'cni.unmanagedDetected': 'Detected CNI: {detected}',
+  'cni.unmanagedNote': 'Ichor does not install, upgrade or configure this CNI',
+  'caAdvice.title': 'Consider rotating the cluster CAs',
+  'caAdvice.text':
+    'The Talos and Kubernetes client certificates of the previous administrators, and the CA keys held by whoever created this cluster, remain valid. Consider rotating the CAs (Rotate CAs, or ichor cluster rotate-ca).',
+  'caAdvice.dismiss': 'Dismiss',
   'cilium.title': 'Cilium settings',
   'cilium.loading': 'Loading Cilium values…',
   'cilium.noCluster': 'There is no cluster to show Cilium settings for.',

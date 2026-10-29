@@ -239,7 +239,7 @@ func logState(t *testing.T, c *foreign.Cluster, label string) {
 
 // takeoverAdopt runs the plan, then adopt; a refusal naming --accept-cilium-diff is logged and retried with it.
 // It returns the diff-gate verdict.
-func takeoverAdopt(t *testing.T, c *foreign.Cluster, extra ...string) (diffNeeded bool) {
+func takeoverAdopt(t *testing.T, c *foreign.Cluster, extra ...string) (first string, diffNeeded bool) {
 	t.Helper()
 	plan, err := adopt(t, c, append([]string{"--plan"}, extra...)...)
 	if err != nil {
@@ -247,6 +247,7 @@ func takeoverAdopt(t *testing.T, c *foreign.Cluster, extra ...string) (diffNeede
 	}
 	_ = plan
 	out, err := adopt(t, c, extra...)
+	first = out
 	if err != nil && strings.Contains(out, "--accept-cilium-diff") {
 		t.Logf("the diff gate refused without --accept-cilium-diff; retrying with it")
 		diffNeeded = true
@@ -255,7 +256,7 @@ func takeoverAdopt(t *testing.T, c *foreign.Cluster, extra ...string) (diffNeede
 	if err != nil {
 		t.Fatalf("adopt failed: %v\n%s", err, out)
 	}
-	return diffNeeded
+	return first, diffNeeded
 }
 
 // TestA1Adopt: Cilium in a Talos inline manifest (Talos-guide values, 1.18) is taken over by a managed adopt.
@@ -265,7 +266,8 @@ func TestA1Adopt(t *testing.T) {
 	trafficStart(t, c)
 	before := inlineNames(t, c)
 	t.Logf("inline manifests before: %v", before)
-	t.Logf("diff gate needed --accept-cilium-diff: %v", takeoverAdopt(t, c))
+	_, needed := takeoverAdopt(t, c)
+	t.Logf("diff gate needed --accept-cilium-diff: %v", needed)
 	waitHandover(t, c, "cilium")
 	membership(t, c)
 	if got := clusterJSONPath(c, "{.status.cni.takenOverInlineManifest}"); got != "cilium" {
@@ -352,7 +354,8 @@ func TestA2Adopt(t *testing.T) {
 		t.Fatal("no foreign cilium release record")
 	}
 	trafficStart(t, c)
-	t.Logf("diff gate needed --accept-cilium-diff: %v", takeoverAdopt(t, c))
+	_, needed := takeoverAdopt(t, c)
+	t.Logf("diff gate needed --accept-cilium-diff: %v", needed)
 	waitHandover(t, c, "")
 	membership(t, c)
 	vals := clusterJSONPath(c, "{.spec.cni.cilium.values}")
@@ -368,7 +371,7 @@ func TestA2Adopt(t *testing.T) {
 			t.Logf("backup of %s byte-identical (%d bytes b64)", n, len(got))
 		}
 	}
-	left, _ := inner(c, "-n", "kube-system", "get", "secrets", "-l", "owner=helm", "--no-headers")
+	left, _ := inner(c, "-n", "kube-system", "get", "secrets", "-l", "owner=helm", "-o", "jsonpath={.items[*].metadata.name}")
 	if strings.TrimSpace(left) != "" {
 		t.Errorf("release record Secrets remain in kube-system:\n%s", left)
 	}
@@ -377,6 +380,51 @@ func TestA2Adopt(t *testing.T) {
 	}
 	logState(t, c, "after takeover")
 	trafficReport(t, c, "across A2 takeover")
+}
+
+// TestA5Adopt: live-only residue. An extra pod-template annotation and an extra agent argument on the
+// live DaemonSet, and an extra ConfigMap, exist before adopt. The diff gate must report the first two and require
+// --accept-cilium-diff; the ConfigMap must stay. Run `foreign up --cni cilium-helm --cilium-set tunnelProtocol=vxlan,tunnelPort=4789` first.
+func TestA5Adopt(t *testing.T) {
+	c := build(t, foreign.Options{Workers: 1, CNI: foreign.CNICiliumHelm})
+	patch := `[{"op":"add","path":"/spec/template/metadata/annotations/fa.test~1extra","value":"yes"},` +
+		`{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--prometheus-serve-addr=:9962"}]`
+	if out, err := inner(c, "-n", "kube-system", "patch", "ds", "cilium", "--type=json", "-p", patch); err != nil {
+		t.Fatalf("patching the DaemonSet: %v\n%s", err, out)
+	}
+	if out, err := inner(c, "-n", "kube-system", "create", "configmap", "fa-extra", "--from-literal=a=b"); err != nil {
+		t.Fatalf("creating the ConfigMap: %v\n%s", err, out)
+	}
+	if out, err := inner(c, "-n", "kube-system", "label", "configmap", "fa-extra", "app.kubernetes.io/part-of=cilium"); err != nil {
+		t.Fatalf("labelling the ConfigMap: %v\n%s", err, out)
+	}
+	if out, err := inner(c, "-n", "kube-system", "rollout", "status", "ds/cilium", "--timeout=300s"); err != nil {
+		t.Fatalf("rollout after the patch: %v\n%s", err, out)
+	}
+	logState(t, c, "before (patched)")
+	trafficStart(t, c)
+	first, needed := takeoverAdopt(t, c)
+	if !needed {
+		t.Errorf("the diff gate did not require --accept-cilium-diff")
+	}
+	for _, want := range []string{"fa.test/extra", "--prometheus-serve-addr"} {
+		if !strings.Contains(first, want) {
+			t.Errorf("the diff gate output does not report %q", want)
+		}
+	}
+	waitHandover(t, c, "")
+	membership(t, c)
+	if out, err := inner(c, "-n", "kube-system", "get", "configmap", "fa-extra", "-o", "name"); err != nil {
+		t.Errorf("the extra ConfigMap is gone after takeover: %v\n%s", err, out)
+	}
+	ds, _ := inner(c, "-n", "kube-system", "get", "ds", "cilium", "-o", "jsonpath={.spec.template.metadata.annotations.fa\\.test/extra}|{.spec.template.spec.containers[0].args}")
+	t.Logf("live DaemonSet after takeover (annotation|args): %s", ds)
+	if out, err := inner(c, "-n", "kube-system", "rollout", "status", "ds/cilium", "--timeout=300s"); err != nil {
+		t.Errorf("rollout after takeover: %v\n%s", err, out)
+	}
+	logState(t, c, "after takeover")
+	time.Sleep(30 * time.Second)
+	trafficReport(t, c, "across A5 takeover")
 }
 
 // TestA1AcceptAll: on the inline-manifest cluster, adopt with every accept flag is still refused for ipam.mode and writes nothing.

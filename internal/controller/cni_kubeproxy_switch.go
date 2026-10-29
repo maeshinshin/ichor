@@ -544,7 +544,7 @@ func (a *cniKubeProxyAdvancer) runCiliumJob(
 		return false, fmt.Errorf("reading IchorInstallation %q for the Cilium Helm Job: %w", ichorv1alpha1.IchorInstallationName, err)
 	}
 
-	done, err := advanceCNIHelmJobSince(ctx, a.Client, a.ControllerNamespace, cluster, mode, &inst, salt, op.CreationTimestamp.Time)
+	done, err := AdvanceCNIHelmJob(ctx, a.Client, a.ControllerNamespace, cluster, mode, &inst, salt, op.CreationTimestamp.Time)
 	if err != nil {
 		return false, fmt.Errorf("%s: %w", doing, err)
 	}

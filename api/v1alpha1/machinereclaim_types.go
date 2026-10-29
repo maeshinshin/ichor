@@ -37,11 +37,13 @@ const (
 )
 
 // Names shared by the controller, the webhook and the UI API for the break-glass credential.
+// ReclaimCredentialSecretType is the Secret type of the foreign talosconfig. Its only key is
+// ReclaimCredentialKey.
+const ReclaimCredentialSecretType corev1.SecretType = "ichor.maesh.dev/foreign-talosconfig"
+
 const (
-	// ReclaimCredentialSecretType is the Secret type of the foreign talosconfig. Its only key is
-	// ReclaimCredentialKey.
-	ReclaimCredentialSecretType corev1.SecretType = "ichor.maesh.dev/foreign-talosconfig"
-	ReclaimCredentialKey                          = "talosconfig"
+	// ReclaimCredentialKey is the credential Secret's only key.
+	ReclaimCredentialKey = "talosconfig"
 	// ReclaimLabel marks a credential Secret; the sweeper selects by it.
 	ReclaimLabel = "ichor.maesh.dev/reclaim"
 	// ReclaimExpiryAnnotation holds the Secret's expiry, RFC 3339.

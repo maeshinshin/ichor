@@ -69,6 +69,26 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
+      path: /validate-ichor-maesh-dev-v1alpha1-machinereclaim
+  failurePolicy: Fail
+  name: vmachinereclaim-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - ichor.maesh.dev
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - machinereclaims
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
       path: /validate-ichor-maesh-dev-v1alpha1-breakglass
   failurePolicy: Fail
   name: vsecretrefs-v1alpha1.kb.io

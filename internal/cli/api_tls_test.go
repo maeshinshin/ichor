@@ -27,7 +27,7 @@ func TestTunnelClientTLSWithCAFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, base, err := tunnelClient(context.Background(), portOf(srv), ca, "example.com")
+	_, base, err := tunnelClient(context.Background(), portOf(srv), ca, nil, "example.com")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +41,7 @@ func TestTunnelClientTLSUnverifiableNamesCAFileAndLocal(t *testing.T) {
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 	t.Cleanup(srv.Close)
 
-	_, _, err := tunnelClient(context.Background(), portOf(srv), "", "")
+	_, _, err := tunnelClient(context.Background(), portOf(srv), "", nil, "")
 	if err == nil || !strings.Contains(err.Error(), "--ca-file") || !strings.Contains(err.Error(), "--local") {
 		t.Fatalf("err = %v, want it to name --ca-file and --local", err)
 	}
@@ -51,7 +51,7 @@ func TestTunnelClientPlainHTTPFallsBack(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 	t.Cleanup(srv.Close)
 
-	_, base, err := tunnelClient(context.Background(), portOf(srv), "", "")
+	_, base, err := tunnelClient(context.Background(), portOf(srv), "", nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}

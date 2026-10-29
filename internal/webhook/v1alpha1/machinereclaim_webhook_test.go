@@ -7,7 +7,6 @@ import (
 
 	admissionv1 "k8s.io/api/admission/v1"
 	authnv1 "k8s.io/api/authentication/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
@@ -18,9 +17,9 @@ func reclaimObject(t *testing.T, confirm, requestedBy, confirmedBy string, phase
 	t.Helper()
 
 	mr := ichorv1alpha1.MachineReclaim{
-		ObjectMeta: metav1.ObjectMeta{Name: "x", Namespace: "ichor-system", Annotations: map[string]string{}},
-		Spec:       ichorv1alpha1.MachineReclaimSpec{Address: "192.0.2.1", CredentialSecretRef: "s", ConfirmUUID: confirm},
-		Status:     ichorv1alpha1.MachineReclaimStatus{Phase: phase},
+		Name: "x", Namespace: "ichor-system", Annotations: map[string]string{},
+		Spec:   ichorv1alpha1.MachineReclaimSpec{Address: "192.0.2.1", CredentialSecretRef: "s", ConfirmUUID: confirm},
+		Status: ichorv1alpha1.MachineReclaimStatus{Phase: phase},
 	}
 
 	if requestedBy != "" {

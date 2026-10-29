@@ -44,7 +44,7 @@ func testDS(name, image string) *appsv1.DaemonSet {
 func helmRecord(ns string) *corev1.Secret {
 	return &corev1.Secret{
 		Namespace: ns, Name: "sh.helm.release.v1.cilium.v3",
-		Labels: map[string]string{"owner": "helm", helmNameLabel: "cilium"},
+		Labels: map[string]string{"owner": "helm", helmNameLabel: string(detectedCilium)},
 		Type:   "helm.sh/release.v1",
 	}
 }
@@ -95,8 +95,8 @@ func TestDetectCNI_Table(t *testing.T) {
 		{"cilium manifest", []client.Object{testDS("cilium", ciliumImage), crd}, talosCNIHint{Name: tCustom}, detectedCilium, provenanceManifest, false, true},
 		{"flannel running", []client.Object{testDS("kube-flannel", flannelImage)}, talosCNIHint{}, detectedFlannel, "", false, false},
 		{"flannel not yet running", nil, talosCNIHint{}, detectedFlannel, "", false, false},
-		{"calico", []client.Object{testDS("calico-node", calicoImage)}, talosCNIHint{Name: tCustom}, detectedCalico, "", false, false},
-		{"none", nil, talosCNIHint{Name: string(detectedNone)}, detectedNone, "", false, false},
+		{string(detectedCalico), []client.Object{testDS("calico-node", calicoImage)}, talosCNIHint{Name: tCustom}, detectedCalico, "", false, false},
+		{string(detectedNone), nil, talosCNIHint{Name: string(detectedNone)}, detectedNone, "", false, false},
 		{"mixed", []client.Object{testDS("cilium", ciliumImage), testDS("calico-node", calicoImage)}, talosCNIHint{}, detectedCalico, "", true, false},
 	}
 

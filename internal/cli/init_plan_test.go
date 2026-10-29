@@ -159,7 +159,7 @@ func TestBuildInitPlan_Errors(t *testing.T) {
 	}{
 		{"cluster name is not a valid Kubernetes object name", func(in *initPlanInput) { in.Cluster = "../../../tmp/evil" }},
 		{"unsupported preset", func(in *initPlanInput) { in.Preset = "minimal" }},
-		{"invalid cni", func(in *initPlanInput) { in.CNIPreset = "calico" }},
+		{"invalid cni", func(in *initPlanInput) { in.CNIPreset = string(detectedCalico) }},
 		{"flannel was removed", func(in *initPlanInput) { in.CNIPreset = "flannel" }},
 		{"invalid cni tunnel", func(in *initPlanInput) { in.CNITunnel = "gre" }},
 		{"invalid endpoint type", func(in *initPlanInput) { in.EndpointType = "carrier-pigeon" }},
@@ -218,7 +218,7 @@ func TestBuildInitPlan_NonControllerNamespaceWarnsButSucceeds(t *testing.T) {
 		t.Fatalf("buildInitPlan: %v", err)
 	}
 
-	if cluster.Namespace != "default" {
+	if cluster.Namespace != testNamespace {
 		t.Fatalf("cluster.Namespace = %q, want default", cluster.Namespace)
 	}
 

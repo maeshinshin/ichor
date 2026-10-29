@@ -17,6 +17,17 @@ service ClusterService {
   // probes it for a node in maintenance mode. It goes through the same write
   // gate as the other writes, which writes the CR directly.
   rpc AddDiscoveryAddress(AddDiscoveryAddressRequest) returns (AddDiscoveryAddressResponse);
+  // DismissCARotationAdvice sets the annotation ichor.maesh.dev/ca-rotation-advice-dismissed on the
+  // TalosCluster, which the controller reads to clear the CARotationAdvised condition. It writes that annotation and nothing else.
+  rpc DismissCARotationAdvice(DismissCARotationAdviceRequest) returns (DismissCARotationAdviceResponse);
+}
+
+message DismissCARotationAdviceRequest {
+  ObjectRef cluster = 1;
+}
+
+message DismissCARotationAdviceResponse {
+  AuditRecord audit = 1;
 }
 
 message AddDiscoveryAddressRequest {
@@ -117,6 +128,13 @@ message Cluster {
   // add the node. Set by GetCluster and AddDiscoveryAddress from those Events (which Kubernetes expires
   // after about an hour); empty in ListClusters.
   repeated string already_configured_addresses = 14;
+  // cni_preset is spec.cni.preset ("cilium", or "unmanaged" for a cluster whose CNI Ichor leaves
+  // alone).
+  string cni_preset = 15;
+  // cni_detected is status.cni.detected: cilium, flannel, calico, other or none; empty until observed.
+  string cni_detected = 16;
+  // cni_detected_version is status.cni.detectedVersion, the detected CNI's image tag where known.
+  string cni_detected_version = 17;
 }
 
 // CertificateExpiry is one CA of the cluster and its last instant of validity.

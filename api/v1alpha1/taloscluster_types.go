@@ -565,6 +565,14 @@ const ConditionCARotationAdvised = "CARotationAdvised"
 // Cilium, so Ichor's CiliumNetworkPolicies are skipped. The message reads
 // "Ichor's network policies are not applied: the CNI is <detected>". Absent when the CNI is Cilium.
 const ConditionNetworkPoliciesApplied = "NetworkPoliciesApplied"
+// TalosClusterCARotationAdviceDismissedAnnotation is set to "true" by the user (UI or CLI) to
+// dismiss the CARotationAdvised advice; the controller clears the condition when it sees it.
+// It is an annotation, not a spec field.
+const TalosClusterCARotationAdviceDismissedAnnotation = "ichor.maesh.dev/ca-rotation-advice-dismissed"
+
+// TalosClusterCNIPresetUnmanaged is the value of spec.cni.preset for a cluster whose CNI Ichor
+// leaves exactly as it is.
+const TalosClusterCNIPresetUnmanaged = "unmanaged"
 
 // Condition types added to TalosCluster.status.conditions.
 const (
@@ -653,3 +661,7 @@ func init() {
 // ConditionCertificatesExpiring is the TalosCluster condition that is True while any CA in the
 // secrets bundle expires within the controller's warning window, or has expired.
 const ConditionCertificatesExpiring = "CertificatesExpiring"
+
+// CNIUnmanagedMessage is what the UI API and the CLI answer when asked to operate the CNI of a
+// cluster whose spec.cni.preset is unmanaged.
+const CNIUnmanagedMessage = "the CNI is not managed by Ichor (spec.cni.preset: unmanaged)"

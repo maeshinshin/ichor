@@ -535,6 +535,10 @@ func TestClassifySplitsByKindThenUIName(t *testing.T) {
 		u.SetKind(kind)
 		u.SetName(name)
 
+		if kind == "Role" || kind == "RoleBinding" {
+			u.SetNamespace("ichor-system")
+		}
+
 		return u
 	}
 
@@ -553,9 +557,9 @@ func TestClassifySplitsByKindThenUIName(t *testing.T) {
 		mk("RoleBinding", "ichor-installer-rolebinding"),
 	})
 
-	if len(p.rbac) != 4 || len(p.crds) != 1 || len(p.ui) != 3 || len(p.controller) != 3 {
-		t.Errorf("rbac/crds/ui/controller = %d/%d/%d/%d, want 4/1/3/3 (the Secret is in none)",
-			len(p.rbac), len(p.crds), len(p.ui), len(p.controller))
+	if len(p.clusterRBAC) != 2 || len(p.namespacedRBAC) != 2 || len(p.crds) != 1 || len(p.ui) != 3 || len(p.controller) != 3 {
+		t.Errorf("cluster rbac/namespaced rbac/crds/ui/controller = %d/%d/%d/%d/%d, want 2/2/1/3/3 (the Secret is in none)",
+			len(p.clusterRBAC), len(p.namespacedRBAC), len(p.crds), len(p.ui), len(p.controller))
 	}
 }
 

@@ -89,9 +89,18 @@ func isB64URL(s string, minLen, maxLen int, extra string) bool {
 
 func hasScope(scope, want string) bool { return slices.Contains(strings.Fields(scope), want) }
 
+// wantsJSON reports whether the caller asked for the in-page flow (ADR 0094
+// amendment): the SPA sends "Accept: application/json" and gets the ticket as
+// JSON instead of a redirect to the login page.
+func wantsJSON(r *http.Request) bool {
+	return strings.Contains(r.Header.Get("Accept"), "application/json")
+}
+
 // authorize validates the request and hands the browser to the login route
-// with a signed ticket. Until client and redirect_uri are proven, errors are
-// shown, not redirected (RFC 6749 section 4.1.2.1).
+// with a signed ticket (or, for Accept: application/json, answers the ticket
+// as JSON). Until client and redirect_uri are proven, errors are shown, not
+// redirected (RFC 6749 section 4.1.2.1); a JSON caller gets a 400 with the
+// error code instead of a redirect.
 func (i *Issuer) authorize(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	for _, v := range q {
@@ -105,7 +114,14 @@ func (i *Issuer) authorize(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unknown client or redirect_uri", http.StatusBadRequest)
 		return
 	}
-	fail := func(code string) { i.redirectResult(w, r, redirect, q.Get("state"), "", code) }
+	asJSON := wantsJSON(r)
+	fail := func(code string) {
+		if asJSON {
+			oauthError(w, http.StatusBadRequest, code, "")
+			return
+		}
+		i.redirectResult(w, r, redirect, q.Get("state"), "", code)
+	}
 	aud, audOK := audienceFor(client, q.Get("audience"))
 	switch {
 	case q.Get("response_type") != "code":
@@ -132,6 +148,10 @@ func (i *Issuer) authorize(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.Header().Set("Cache-Control", "no-store")
+		if asJSON {
+			writeJSON(w, http.StatusOK, map[string]string{"ticket": ticket})
+			return
+		}
 		http.Redirect(w, r, i.cfg.Issuer+"/login?ticket="+url.QueryEscape(ticket), http.StatusFound)
 	}
 }

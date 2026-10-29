@@ -33,6 +33,8 @@ type ReadBack struct {
 	Tunnel string
 	// User are the values beyond Ichor's own layers (spec.cni.cilium.values); empty when none.
 	User map[string]any
+	// Pending is true when the record is pending-install/upgrade/rollback: an operation was killed.
+	Pending bool
 }
 
 // ReadBackRelease reads the tunnel, the kube-proxy mode and the user values out of Ichor's own
@@ -46,7 +48,7 @@ func ReadBackRelease(rel *release.Release) (ReadBack, error) {
 
 	cfg := deepCopy(rel.Config)
 
-	rb := ReadBack{KubeProxy: cni.KubeProxyEnabled}
+	rb := ReadBack{KubeProxy: cni.KubeProxyEnabled, Pending: rel.Info != nil && rel.Info.Status.IsPending()}
 	if v, _ := cfg["kubeProxyReplacement"].(bool); v {
 		rb.KubeProxy = cni.KubeProxyReplaced
 	}

@@ -15,14 +15,12 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
-func bp(b bool) *bool { return &b }
-
 func inst() *ichorv1alpha1.IchorInstallation {
 	return &ichorv1alpha1.IchorInstallation{
 		Name: SingletonName,
 		Spec: ichorv1alpha1.IchorInstallationSpec{
 			Users:    &ichorv1alpha1.IchorUserSettings{TokenTTL: &metav1.Duration{Duration: 10 * time.Minute}},
-			Defaults: &ichorv1alpha1.IchorDefaultSettings{DriftPolicy: "autoCorrect"},
+			Defaults: &ichorv1alpha1.IchorDefaultSettings{DriftPolicy: DriftAutoCorrect},
 		},
 	}
 }
@@ -32,7 +30,7 @@ var fb = Fallback{TokenTTL: 5 * time.Minute, RefreshLifetime: 12 * time.Hour}
 func TestResolvePrecedence(t *testing.T) {
 	e := Resolve(inst(), fb, false)
 	if e.TokenTTL.V != 10*time.Minute || e.TokenTTL.Source != ichorv1alpha1.IchorSourceSpec ||
-		e.DriftPolicy.V != "autoCorrect" || e.DriftPolicy.Source != ichorv1alpha1.IchorSourceSpec {
+		e.DriftPolicy.V != DriftAutoCorrect || e.DriftPolicy.Source != ichorv1alpha1.IchorSourceSpec {
 		t.Fatalf("set fields must win: %+v", e)
 	}
 
@@ -41,14 +39,14 @@ func TestResolvePrecedence(t *testing.T) {
 	}
 
 	e = Resolve(nil, Fallback{}, false)
-	if e.DriftPolicy.V != "warnOnly" || e.DriftPolicy.Source != ichorv1alpha1.IchorSourceDeployment {
+	if e.DriftPolicy.V != DriftWarnOnly || e.DriftPolicy.Source != ichorv1alpha1.IchorSourceDeployment {
 		t.Fatalf("no object means the fallback: %+v", e)
 	}
 }
 
 func TestResolveReadOnlyIgnoresSpec(t *testing.T) {
 	e := Resolve(inst(), fb, true)
-	if e.TokenTTL.V != 5*time.Minute || e.DriftPolicy.V != "warnOnly" {
+	if e.TokenTTL.V != 5*time.Minute || e.DriftPolicy.V != DriftWarnOnly {
 		t.Fatalf("read-only must ignore spec: %+v", e)
 	}
 
@@ -76,7 +74,7 @@ func TestReaderLive(t *testing.T) {
 	r := &Reader{Client: c, Fallback: fb}
 
 	e, err := r.Effective(ctx)
-	if err != nil || e.DriftPolicy.V != "autoCorrect" {
+	if err != nil || e.DriftPolicy.V != DriftAutoCorrect {
 		t.Fatalf("spec must be read: %+v %v", e, err)
 	}
 
@@ -86,12 +84,12 @@ func TestReaderLive(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cur.Spec.Defaults.DriftPolicy = "warnOnly"
+	cur.Spec.Defaults.DriftPolicy = DriftWarnOnly
 	if err := c.Update(ctx, cur); err != nil {
 		t.Fatal(err)
 	}
 
-	if e, _ = r.Effective(ctx); e.DriftPolicy.V != "warnOnly" {
+	if e, _ = r.Effective(ctx); e.DriftPolicy.V != DriftWarnOnly {
 		t.Fatal("the change must take effect on the next call")
 	}
 

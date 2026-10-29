@@ -22,6 +22,7 @@ import (
 	"slices"
 	"strings"
 
+	"helm.sh/helm/v3/pkg/release"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -30,6 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/maeshinshin/ichor/pkg/cni"
+	"github.com/maeshinshin/ichor/pkg/cni/cilium"
 )
 
 // The Kubernetes-side facts `ichor adopt` reads from the cluster it is adopting (1.1
@@ -185,6 +187,47 @@ func ciliumHelmReleases(ctx context.Context, r client.Reader) ([]string, error) 
 	}
 
 	return out, nil
+}
+
+// ichorCiliumReadBack reads what Ichor's own Cilium release (record in ichor-system) was installed
+// with, so adopt writes a spec whose effective values equal the deployed ones. nil when there is
+// no record.
+func ichorCiliumReadBack(ctx context.Context, r client.Reader) (*cilium.ReadBack, error) {
+	var secrets corev1.SecretList
+
+	if err := r.List(ctx, &secrets, client.InNamespace(ichorControllerNamespace),
+		client.MatchingLabels{helmOwnerLabel: "helm", helmNameLabel: string(detectedCilium)}); err != nil {
+		return nil, fmt.Errorf("listing Ichor's Cilium release records: %w", err)
+	}
+
+	var latest *release.Release
+
+	for i := range secrets.Items {
+		s := &secrets.Items[i]
+		if s.Type != helmReleaseSecretType {
+			continue
+		}
+
+		rel, err := cilium.DecodeReleaseRecord(s.Data["release"])
+		if err != nil {
+			return nil, fmt.Errorf("record %s/%s: %w", s.Namespace, s.Name, err)
+		}
+
+		if latest == nil || rel.Version > latest.Version {
+			latest = rel
+		}
+	}
+
+	if latest == nil {
+		return nil, nil //nolint:nilnil // no record is a normal answer
+	}
+
+	rb, err := cilium.ReadBackRelease(latest)
+	if err != nil {
+		return nil, err
+	}
+
+	return &rb, nil
 }
 
 // detectKubeProxy maps the Talos and Cilium sides to spec.cni.kubeProxy. talosEnabled is whether

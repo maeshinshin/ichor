@@ -42,16 +42,7 @@ const (
 func (s *Server) GetNodeTalosDetails(
 	ctx context.Context, req *connect.Request[pb.GetNodeTalosDetailsRequest],
 ) (*connect.Response[pb.GetNodeTalosDetailsResponse], error) {
-	if s.NodeTalosClient == nil {
-		return nil, connect.NewError(connect.CodeUnavailable, errNoTalosClient)
-	}
-
-	m, cluster, err := s.getMachineAndCluster(ctx, req.Msg.GetMachine())
-	if err != nil {
-		return nil, err
-	}
-
-	tc, closeFn, maintenance, err := s.dialNode(ctx, cluster, m)
+	_, tc, closeFn, maintenance, err := s.dialMachine(ctx, req.Msg.GetMachine())
 	if err != nil {
 		return nil, err
 	}

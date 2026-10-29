@@ -93,6 +93,11 @@ func kindOf(obj client.Object) (kind, resource string) {
 // own client (the ServiceAccount, or the CLI user), not the impersonated
 // user: users are not given rights to create Events.
 func (s *Server) emitBreakGlassEvent(ctx context.Context, obj client.Object, kind, message string) error {
+	return s.emitWarningEvent(ctx, obj, kind, "BreakGlass", message)
+}
+
+// emitWarningEvent records a Warning Event with reason on obj, as the backend's own client.
+func (s *Server) emitWarningEvent(ctx context.Context, obj client.Object, kind, reason, message string) error {
 	now := metav1.NewTime(s.now())
 
 	ev := &corev1.Event{
@@ -100,7 +105,7 @@ func (s *Server) emitBreakGlassEvent(ctx context.Context, obj client.Object, kin
 			APIVersion: ichorv1alpha1.GroupVersion.String(), Kind: kind,
 			Namespace: obj.GetNamespace(), Name: obj.GetName(), UID: obj.GetUID(),
 		},
-		Reason: "BreakGlass", Message: message, Type: corev1.EventTypeWarning,
+		Reason: reason, Message: message, Type: corev1.EventTypeWarning,
 		Source:         corev1.EventSource{Component: "ichor-ui"},
 		FirstTimestamp: now, LastTimestamp: now, Count: 1,
 	}

@@ -50,16 +50,7 @@ func (r *TalosMachineReconciler) followNodeAddress(
 		return false, client.IgnoreNotFound(err)
 	}
 
-	var ip string
-
-	for _, a := range node.Status.Addresses {
-		if a.Type == corev1.NodeInternalIP {
-			ip = a.Address
-
-			break
-		}
-	}
-
+	ip := internalIP(&node)
 	if ip == "" {
 		return false, nil
 	}

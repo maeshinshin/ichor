@@ -642,6 +642,47 @@ var _ = Describe("cniKubeProxyAdvancer", func() {
 		Expect(kubeProxyExists()).To(BeTrue())
 	})
 
+	It("enabled: a Job for the same values finished before the operation (init's, or an earlier switch) is replaced, not taken as done", func() {
+		newCilium("true", true)
+
+		cluster := cniSwitchCluster(modeEnabled)
+
+		var inst ichorv1alpha1.IchorInstallation
+		Expect(k8sClient.Get(ctx, client.ObjectKey{Name: ichorv1alpha1.IchorInstallationName}, &inst)).To(Succeed())
+		_, err := AdvanceCNIHelmJob(ctx, k8sClient, tmNamespace, cluster, specMode(cluster), &inst, "")
+		Expect(err).NotTo(HaveOccurred())
+
+		old := cniJob(cluster)
+		setJobCondition(old, batchv1.JobComplete, "")
+
+		adv := newKubeProxyAdvancer(map[string]*fakeTalosClient{}, &fakeKubeProxyAdmin{})
+		op := &ichorv1alpha1.TalosOperation{}
+		op.CreationTimestamp = metav1.NewTime(time.Now().Add(time.Hour))
+
+		ready, err := adv.requireCilium(ctx, cluster, op, cni.KubeProxyEnabled)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ready).To(BeFalse())
+		Eventually(func() bool { return cniJobExists(cluster) }).Should(BeFalse(), "the stale Job is deleted")
+
+		ready, err = adv.requireCilium(ctx, cluster, op, cni.KubeProxyEnabled)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ready).To(BeFalse())
+		Expect(cniJobExists(cluster)).To(BeTrue(), "a new Job runs")
+		Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionVerifyingNewSide).Message).To(ContainSubstring("Helm Job"))
+
+		fresh := cniJob(cluster)
+		Expect(fresh.UID).NotTo(Equal(old.UID))
+		Expect(jobOutcomeDone(fresh)).To(BeFalse())
+
+		setJobCondition(fresh, batchv1.JobComplete, "")
+		op.CreationTimestamp = metav1.NewTime(time.Now().Add(-time.Hour))
+		setCiliumKPR("false")
+
+		ready, err = adv.requireCilium(ctx, cluster, op, cni.KubeProxyEnabled)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ready).To(BeTrue())
+	})
+
 	It("enabled: brings kube-proxy up first and only then waits for Cilium to be turned off", func() {
 		newCilium("true", true)
 
@@ -719,3 +760,9 @@ var _ = Describe("cniKubeProxyAdvancer", func() {
 		Expect(ciliumConfigVersion()).NotTo(Equal(before), "only the test changed it")
 	})
 })
+
+func jobOutcomeDone(job *batchv1.Job) bool {
+	done, _ := jobOutcome(job)
+
+	return done
+}

@@ -141,9 +141,9 @@ clusters keep the old CAs, but never starts one.`,
 			return fmt.Errorf("adopt: building a Kubernetes client: %w", err)
 		}
 
-		ciliumValues, err := readAdoptCiliumValues(adoptCiliumValues)
+		ciliumValues, err := readCiliumValuesFile(adoptCiliumValues)
 		if err != nil {
-			return err
+			return fmt.Errorf("adopt: %w", err)
 		}
 
 		deps := adoptDeps{
@@ -238,20 +238,20 @@ func init() {
 	adoptCmd.MarkFlagsOneRequired("secrets-bundle", "recover-secrets")
 }
 
-// readAdoptCiliumValues reads --cilium-values: a YAML mapping, or nil when the flag is not given.
-func readAdoptCiliumValues(path string) (map[string]any, error) {
+// readCiliumValuesFile reads --cilium-values: a YAML mapping, or nil when the flag is not given.
+func readCiliumValuesFile(path string) (map[string]any, error) {
 	if path == "" {
 		return nil, nil //nolint:nilnil // no file, no values
 	}
 
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("adopt: --cilium-values: %w", err)
+		return nil, fmt.Errorf("--cilium-values: %w", err)
 	}
 
 	var vals map[string]any
 	if err := yaml.Unmarshal(raw, &vals); err != nil {
-		return nil, fmt.Errorf("adopt: --cilium-values %s: %w", path, err)
+		return nil, fmt.Errorf("--cilium-values %s: %w", path, err)
 	}
 
 	return vals, nil

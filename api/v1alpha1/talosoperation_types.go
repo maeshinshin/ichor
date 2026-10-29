@@ -168,6 +168,11 @@ const (
 	CARotationStageDone = "Done"
 )
 
+// ConditionCAClientsNotRestarted is the TalosCluster condition that is True (reason CARotated) when a
+// CA rotation completed but in-cluster clients that keep the old CA were not available again within
+// the bound (CNI-first amendment). The next rotation that restarts them cleanly sets it False.
+const ConditionCAClientsNotRestarted = "CAClientsNotRestarted"
+
 // ConditionBundleBackupStale is the TalosCluster condition that is True from the end of a CA
 // rotation until the user has exported the new secrets bundle.
 const ConditionBundleBackupStale = "BundleBackupStale"

@@ -31,7 +31,10 @@ const (
 )
 
 type CanReclaimRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// cluster is optional: the TalosCluster the caller wants to register the
+	// machine with. When set, cluster_allowed answers for it.
+	Cluster       *ObjectRef `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -66,14 +69,24 @@ func (*CanReclaimRequest) Descriptor() ([]byte, []int) {
 	return file_ichor_v1alpha1_reclaim_proto_rawDescGZIP(), []int{0}
 }
 
+func (x *CanReclaimRequest) GetCluster() *ObjectRef {
+	if x != nil {
+		return x.Cluster
+	}
+	return nil
+}
+
 type CanReclaimResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// enabled is the installation switch (reclaim.enabled).
 	Enabled bool `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`
 	// allowed is the caller's RBAC; false when enabled is false.
-	Allowed       bool `protobuf:"varint,2,opt,name=allowed,proto3" json:"allowed,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Allowed bool `protobuf:"varint,2,opt,name=allowed,proto3" json:"allowed,omitempty"`
+	// cluster_allowed is true when the request named a cluster and the caller may
+	// get and update that TalosCluster (so CreateReclaim may register the address).
+	ClusterAllowed bool `protobuf:"varint,3,opt,name=cluster_allowed,json=clusterAllowed,proto3" json:"cluster_allowed,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *CanReclaimResponse) Reset() {
@@ -116,6 +129,13 @@ func (x *CanReclaimResponse) GetEnabled() bool {
 func (x *CanReclaimResponse) GetAllowed() bool {
 	if x != nil {
 		return x.Allowed
+	}
+	return false
+}
+
+func (x *CanReclaimResponse) GetClusterAllowed() bool {
+	if x != nil {
+		return x.ClusterAllowed
 	}
 	return false
 }
@@ -819,11 +839,13 @@ var File_ichor_v1alpha1_reclaim_proto protoreflect.FileDescriptor
 
 const file_ichor_v1alpha1_reclaim_proto_rawDesc = "" +
 	"\n" +
-	"\x1cichor/v1alpha1/reclaim.proto\x12\x0eichor.v1alpha1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1bichor/v1alpha1/common.proto\"\x13\n" +
-	"\x11CanReclaimRequest\"H\n" +
+	"\x1cichor/v1alpha1/reclaim.proto\x12\x0eichor.v1alpha1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1bichor/v1alpha1/common.proto\"H\n" +
+	"\x11CanReclaimRequest\x123\n" +
+	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\"q\n" +
 	"\x12CanReclaimResponse\x12\x18\n" +
 	"\aenabled\x18\x01 \x01(\bR\aenabled\x12\x18\n" +
-	"\aallowed\x18\x02 \x01(\bR\aallowed\"\xe2\x01\n" +
+	"\aallowed\x18\x02 \x01(\bR\aallowed\x12'\n" +
+	"\x0fcluster_allowed\x18\x03 \x01(\bR\x0eclusterAllowed\"\xe2\x01\n" +
 	"\x14CreateReclaimRequest\x12\x18\n" +
 	"\aaddress\x18\x01 \x01(\tR\aaddress\x12 \n" +
 	"\vtalosconfig\x18\x02 \x01(\fR\vtalosconfig\x12\x18\n" +
@@ -917,32 +939,33 @@ var file_ichor_v1alpha1_reclaim_proto_goTypes = []any{
 	(*timestamppb.Timestamp)(nil),  // 14: google.protobuf.Timestamp
 }
 var file_ichor_v1alpha1_reclaim_proto_depIdxs = []int32{
-	13, // 0: ichor.v1alpha1.CreateReclaimRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
-	12, // 1: ichor.v1alpha1.CreateReclaimResponse.reclaim:type_name -> ichor.v1alpha1.Reclaim
-	13, // 2: ichor.v1alpha1.GetReclaimRequest.reclaim:type_name -> ichor.v1alpha1.ObjectRef
-	12, // 3: ichor.v1alpha1.GetReclaimResponse.reclaim:type_name -> ichor.v1alpha1.Reclaim
-	12, // 4: ichor.v1alpha1.ListReclaimsResponse.reclaims:type_name -> ichor.v1alpha1.Reclaim
-	13, // 5: ichor.v1alpha1.ConfirmReclaimRequest.reclaim:type_name -> ichor.v1alpha1.ObjectRef
-	12, // 6: ichor.v1alpha1.ConfirmReclaimResponse.reclaim:type_name -> ichor.v1alpha1.Reclaim
-	10, // 7: ichor.v1alpha1.ReclaimInspection.volumes:type_name -> ichor.v1alpha1.ReclaimVolume
-	13, // 8: ichor.v1alpha1.Reclaim.ref:type_name -> ichor.v1alpha1.ObjectRef
-	11, // 9: ichor.v1alpha1.Reclaim.inspection:type_name -> ichor.v1alpha1.ReclaimInspection
-	14, // 10: ichor.v1alpha1.Reclaim.expires_at:type_name -> google.protobuf.Timestamp
-	0,  // 11: ichor.v1alpha1.ReclaimService.CanReclaim:input_type -> ichor.v1alpha1.CanReclaimRequest
-	2,  // 12: ichor.v1alpha1.ReclaimService.CreateReclaim:input_type -> ichor.v1alpha1.CreateReclaimRequest
-	4,  // 13: ichor.v1alpha1.ReclaimService.GetReclaim:input_type -> ichor.v1alpha1.GetReclaimRequest
-	6,  // 14: ichor.v1alpha1.ReclaimService.ListReclaims:input_type -> ichor.v1alpha1.ListReclaimsRequest
-	8,  // 15: ichor.v1alpha1.ReclaimService.ConfirmReclaim:input_type -> ichor.v1alpha1.ConfirmReclaimRequest
-	1,  // 16: ichor.v1alpha1.ReclaimService.CanReclaim:output_type -> ichor.v1alpha1.CanReclaimResponse
-	3,  // 17: ichor.v1alpha1.ReclaimService.CreateReclaim:output_type -> ichor.v1alpha1.CreateReclaimResponse
-	5,  // 18: ichor.v1alpha1.ReclaimService.GetReclaim:output_type -> ichor.v1alpha1.GetReclaimResponse
-	7,  // 19: ichor.v1alpha1.ReclaimService.ListReclaims:output_type -> ichor.v1alpha1.ListReclaimsResponse
-	9,  // 20: ichor.v1alpha1.ReclaimService.ConfirmReclaim:output_type -> ichor.v1alpha1.ConfirmReclaimResponse
-	16, // [16:21] is the sub-list for method output_type
-	11, // [11:16] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	13, // 0: ichor.v1alpha1.CanReclaimRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	13, // 1: ichor.v1alpha1.CreateReclaimRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	12, // 2: ichor.v1alpha1.CreateReclaimResponse.reclaim:type_name -> ichor.v1alpha1.Reclaim
+	13, // 3: ichor.v1alpha1.GetReclaimRequest.reclaim:type_name -> ichor.v1alpha1.ObjectRef
+	12, // 4: ichor.v1alpha1.GetReclaimResponse.reclaim:type_name -> ichor.v1alpha1.Reclaim
+	12, // 5: ichor.v1alpha1.ListReclaimsResponse.reclaims:type_name -> ichor.v1alpha1.Reclaim
+	13, // 6: ichor.v1alpha1.ConfirmReclaimRequest.reclaim:type_name -> ichor.v1alpha1.ObjectRef
+	12, // 7: ichor.v1alpha1.ConfirmReclaimResponse.reclaim:type_name -> ichor.v1alpha1.Reclaim
+	10, // 8: ichor.v1alpha1.ReclaimInspection.volumes:type_name -> ichor.v1alpha1.ReclaimVolume
+	13, // 9: ichor.v1alpha1.Reclaim.ref:type_name -> ichor.v1alpha1.ObjectRef
+	11, // 10: ichor.v1alpha1.Reclaim.inspection:type_name -> ichor.v1alpha1.ReclaimInspection
+	14, // 11: ichor.v1alpha1.Reclaim.expires_at:type_name -> google.protobuf.Timestamp
+	0,  // 12: ichor.v1alpha1.ReclaimService.CanReclaim:input_type -> ichor.v1alpha1.CanReclaimRequest
+	2,  // 13: ichor.v1alpha1.ReclaimService.CreateReclaim:input_type -> ichor.v1alpha1.CreateReclaimRequest
+	4,  // 14: ichor.v1alpha1.ReclaimService.GetReclaim:input_type -> ichor.v1alpha1.GetReclaimRequest
+	6,  // 15: ichor.v1alpha1.ReclaimService.ListReclaims:input_type -> ichor.v1alpha1.ListReclaimsRequest
+	8,  // 16: ichor.v1alpha1.ReclaimService.ConfirmReclaim:input_type -> ichor.v1alpha1.ConfirmReclaimRequest
+	1,  // 17: ichor.v1alpha1.ReclaimService.CanReclaim:output_type -> ichor.v1alpha1.CanReclaimResponse
+	3,  // 18: ichor.v1alpha1.ReclaimService.CreateReclaim:output_type -> ichor.v1alpha1.CreateReclaimResponse
+	5,  // 19: ichor.v1alpha1.ReclaimService.GetReclaim:output_type -> ichor.v1alpha1.GetReclaimResponse
+	7,  // 20: ichor.v1alpha1.ReclaimService.ListReclaims:output_type -> ichor.v1alpha1.ListReclaimsResponse
+	9,  // 21: ichor.v1alpha1.ReclaimService.ConfirmReclaim:output_type -> ichor.v1alpha1.ConfirmReclaimResponse
+	17, // [17:22] is the sub-list for method output_type
+	12, // [12:17] is the sub-list for method input_type
+	12, // [12:12] is the sub-list for extension type_name
+	12, // [12:12] is the sub-list for extension extendee
+	0,  // [0:12] is the sub-list for field type_name
 }
 
 func init() { file_ichor_v1alpha1_reclaim_proto_init() }

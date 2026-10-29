@@ -131,6 +131,7 @@ func main() {
 	var enableHTTP2 bool
 	var certExpiryWarningDays int
 	var userIssuer bool
+	var externalURL string
 	var reclaimEnabled bool
 	var noCiliumPolicies bool
 	var uiServiceName string
@@ -160,7 +161,9 @@ func main() {
 	flag.BoolVar(&noCiliumPolicies, "no-cilium-policies", false,
 		"Tell the installer Job not to apply Ichor's CiliumNetworkPolicies even on Cilium (the chart sets it from networkPolicy.cilium.enabled=false).")
 	flag.BoolVar(&userIssuer, "user-issuer", false,
-		"Keep the signing keys, internal TLS and trust ConfigMap for ichor-ui's own OIDC issuer.")
+		"Keep the signing keys and user credentials for ichor-ui's own OIDC issuer. The serving CA and certificate are kept either way.")
+	flag.StringVar(&externalURL, "ui-external-url", "",
+		"ichor-ui's public URL; its host is added to the serving certificate.")
 	flag.StringVar(&uiServiceName, "ui-service-name", "",
 		"Override: the name of the ClusterIP Service in front of ichor-ui. Empty finds it by the app.kubernetes.io/component=ui label.")
 	flag.DurationVar(&refreshLifetime, "oidc-refresh-lifetime", controller.DefaultRefreshLifetime,
@@ -438,15 +441,13 @@ func main() {
 		setupLog.Error(err, "Failed to create controller", "controller", "certexpiry")
 		os.Exit(1)
 	}
-	if userIssuer {
-		if err := (&controller.IssuerTrustReconciler{
-			Client: mgr.GetClient(), APIReader: mgr.GetAPIReader(),
-			Namespace: os.Getenv("POD_NAMESPACE"), UIServiceName: uiServiceName,
-			RefreshLifetime: refreshLifetime,
-		}).SetupWithManager(mgr); err != nil {
-			setupLog.Error(err, "Failed to create controller", "controller", "issuertrust")
-			os.Exit(1)
-		}
+	if err := (&controller.IssuerTrustReconciler{
+		Client: mgr.GetClient(), APIReader: mgr.GetAPIReader(),
+		Namespace: os.Getenv("POD_NAMESPACE"), UIServiceName: uiServiceName,
+		RefreshLifetime: refreshLifetime, UserIssuer: userIssuer, ExternalURL: externalURL,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "Failed to create controller", "controller", "issuertrust")
+		os.Exit(1)
 	}
 	if err := (&controller.CNIHandoverReconciler{
 		Client: mgr.GetClient(), APIReader: mgr.GetAPIReader(), Kube: kubeClient,

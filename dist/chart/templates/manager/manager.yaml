@@ -89,6 +89,9 @@ spec:
         - --user-issuer
         - --oidc-refresh-lifetime={{ .Values.ichorUI.users.refreshLifetime }}
         {{- end }}
+        {{- with .Values.ichorUI.users.externalURL }}
+        - --ui-external-url={{ . }}
+        {{- end }}
         {{- if .Values.reclaim.enabled }}
         # Break-glass machine reclaim.
         - --reclaim

@@ -139,7 +139,7 @@ func caUsable(ca keyPair, now time.Time) (*x509.Certificate, *rsa.PrivateKey, bo
 
 // leafSpec is what the leaf must cover.
 type leafSpec struct {
-	ip  net.IP
+	ips []net.IP
 	dns []string
 }
 
@@ -164,8 +164,7 @@ func leafUsable(leaf keyPair, ca *x509.Certificate, spec leafSpec, now time.Time
 		return false
 	}
 
-	if len(cert.IPAddresses) != 1 || !cert.IPAddresses[0].Equal(spec.ip) ||
-		!slices.Equal(cert.DNSNames, spec.dns) {
+	if !slices.EqualFunc(cert.IPAddresses, spec.ips, net.IP.Equal) || !slices.Equal(cert.DNSNames, spec.dns) {
 		return false
 	}
 
@@ -196,7 +195,7 @@ func newLeaf(ca *x509.Certificate, caKey *rsa.PrivateKey, spec leafSpec, now tim
 		NotAfter:     now.Add(issuerLeafLifetime),
 		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		IPAddresses:  []net.IP{spec.ip},
+		IPAddresses:  spec.ips,
 		DNSNames:     spec.dns,
 	}
 

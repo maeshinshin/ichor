@@ -83,15 +83,6 @@ func classifyDaemonSet(name string, containers []corev1.Container) cniKind {
 	return ""
 }
 
-// talosCNIHint is the Talos-side CNI selection, filled by the Talos facts (unit 1). The zero
-// value means "not read".
-type talosCNIHint struct {
-	// Name is cluster.network.cni.name: "", "flannel", "none", "custom" or "cilium".
-	Name string
-	// URLs are cluster.network.cni.urls; non-empty means Talos applies those manifests.
-	URLs []string
-}
-
 // cniReport is the result of the read-only CNI inspection.
 type cniReport struct {
 	Kind       cniKind
@@ -120,11 +111,11 @@ func (r *cniReport) String() string {
 	return string(r.Kind)
 }
 
-// detectCNI builds the report from the Kubernetes facts and the Talos hint.
-func detectCNI(f *k8sFacts, hint talosCNIHint) *cniReport {
+// detectCNI builds the report from the Kubernetes facts and the Talos-side CNI selection.
+func detectCNI(f *k8sFacts, talos CNIFacts) *cniReport {
 	rep := &cniReport{
-		TalosCNINone: hint.Name == string(detectedNone),
-		CustomURLs:   hint.Name == "custom" && len(hint.URLs) > 0,
+		TalosCNINone: talos.Kind == CNINone,
+		CustomURLs:   talos.Kind == CNICustom && len(talos.URLs) > 0,
 	}
 
 	seen := map[cniKind]bool{}
@@ -145,11 +136,10 @@ func detectCNI(f *k8sFacts, hint talosCNIHint) *cniReport {
 
 	switch {
 	case len(rep.Kinds) == 0:
-		// Nothing is running. A node that Talos would give flannel (name unset or flannel) is that;
-		// anything else has no CNI.
+		// Nothing is running. A node that Talos would give flannel is that; anything else has no CNI.
 		rep.Version = ""
 
-		if hint.Name == "" || hint.Name == string(detectedFlannel) {
+		if talos.Kind == CNIFlannel {
 			rep.Kind = detectedFlannel
 		} else {
 			rep.Kind = detectedNone

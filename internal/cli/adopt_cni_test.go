@@ -70,7 +70,6 @@ func factsFor(t *testing.T, objs ...client.Object) *k8sFacts {
 }
 
 const (
-	tCustom      = "custom"
 	ciliumImage  = "quay.io/cilium/cilium:v1.18.2@sha256:abc"
 	flannelImage = "ghcr.io/flannel-io/flannel:v0.26.0"
 	calicoImage  = "docker.io/calico/node:v3.29.0"
@@ -84,20 +83,20 @@ func TestDetectCNI_Table(t *testing.T) {
 	tests := []struct {
 		name       string
 		objs       []client.Object
-		hint       talosCNIHint
+		hint       CNIFacts
 		wantKind   cniKind
 		wantProv   cniProvenance
 		wantMixed  bool
 		wantNodeCR bool
 	}{
-		{"cilium ichor", []client.Object{testDS("cilium", ciliumImage), helmRecord("ichor-system")}, talosCNIHint{Name: string(detectedNone)}, detectedCilium, provenanceIchor, false, false},
-		{"cilium helm", []client.Object{testDS("cilium", ciliumImage), helmRecord("kube-system")}, talosCNIHint{}, detectedCilium, provenanceHelm, false, false},
-		{"cilium manifest", []client.Object{testDS("cilium", ciliumImage), crd}, talosCNIHint{Name: tCustom}, detectedCilium, provenanceManifest, false, true},
-		{"flannel running", []client.Object{testDS("kube-flannel", flannelImage)}, talosCNIHint{}, detectedFlannel, "", false, false},
-		{"flannel not yet running", nil, talosCNIHint{}, detectedFlannel, "", false, false},
-		{string(detectedCalico), []client.Object{testDS("calico-node", calicoImage)}, talosCNIHint{Name: tCustom}, detectedCalico, "", false, false},
-		{string(detectedNone), nil, talosCNIHint{Name: string(detectedNone)}, detectedNone, "", false, false},
-		{"mixed", []client.Object{testDS("cilium", ciliumImage), testDS("calico-node", calicoImage)}, talosCNIHint{}, detectedCalico, "", true, false},
+		{"cilium ichor", []client.Object{testDS("cilium", ciliumImage), helmRecord("ichor-system")}, CNIFacts{Kind: CNINone}, detectedCilium, provenanceIchor, false, false},
+		{"cilium helm", []client.Object{testDS("cilium", ciliumImage), helmRecord("kube-system")}, CNIFacts{Kind: CNIFlannel}, detectedCilium, provenanceHelm, false, false},
+		{"cilium manifest", []client.Object{testDS("cilium", ciliumImage), crd}, CNIFacts{Kind: CNICustom}, detectedCilium, provenanceManifest, false, true},
+		{"flannel running", []client.Object{testDS("kube-flannel", flannelImage)}, CNIFacts{Kind: CNIFlannel}, detectedFlannel, "", false, false},
+		{"flannel not yet running", nil, CNIFacts{Kind: CNIFlannel}, detectedFlannel, "", false, false},
+		{string(detectedCalico), []client.Object{testDS("calico-node", calicoImage)}, CNIFacts{Kind: CNICustom}, detectedCalico, "", false, false},
+		{string(detectedNone), nil, CNIFacts{Kind: CNINone}, detectedNone, "", false, false},
+		{"mixed", []client.Object{testDS("cilium", ciliumImage), testDS("calico-node", calicoImage)}, CNIFacts{Kind: CNIFlannel}, detectedCalico, "", true, false},
 	}
 
 	for _, tc := range tests {
@@ -117,21 +116,21 @@ func TestDetectCNI_Table(t *testing.T) {
 }
 
 func TestDetectCNI_VersionAndCustomURLs(t *testing.T) {
-	rep := detectCNI(factsFor(t, testDS("cilium", ciliumImage)), talosCNIHint{})
+	rep := detectCNI(factsFor(t, testDS("cilium", ciliumImage)), CNIFacts{Kind: CNIFlannel})
 	if rep.Version != "v1.18.2" {
 		t.Errorf("Version = %q, want v1.18.2", rep.Version)
 	}
 
-	rep = detectCNI(factsFor(t), talosCNIHint{Name: "custom", URLs: []string{"https://x/y.yaml"}})
+	rep = detectCNI(factsFor(t), CNIFacts{Kind: CNICustom, URLs: []string{"https://x/y.yaml"}})
 	if !rep.CustomURLs {
 		t.Error("custom with URLs not flagged")
 	}
 }
 
 func TestCheckCNIAdoption(t *testing.T) {
-	flannel := detectCNI(factsFor(t, testDS("kube-flannel", flannelImage)), talosCNIHint{})
-	cilium := detectCNI(factsFor(t, testDS("cilium", ciliumImage)), talosCNIHint{})
-	mixed := detectCNI(factsFor(t, testDS("cilium", ciliumImage), testDS("calico-node", calicoImage)), talosCNIHint{})
+	flannel := detectCNI(factsFor(t, testDS("kube-flannel", flannelImage)), CNIFacts{Kind: CNIFlannel})
+	cilium := detectCNI(factsFor(t, testDS("cilium", ciliumImage)), CNIFacts{Kind: CNIFlannel})
+	mixed := detectCNI(factsFor(t, testDS("cilium", ciliumImage), testDS("calico-node", calicoImage)), CNIFacts{Kind: CNIFlannel})
 
 	if err := checkCNIAdoption(flannel, false); err == nil || !strings.Contains(err.Error(), "--cni-unmanaged") || !strings.Contains(err.Error(), "flannel") {
 		t.Errorf("flannel without flag: err = %v, want refusal naming flannel and --cni-unmanaged", err)

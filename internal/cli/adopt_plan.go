@@ -54,38 +54,6 @@ type adoptPlan struct {
 	Skipped string
 }
 
-// buildAdoptPlan diffs m's live configuration (currentCfg, as read from the
-// Talos API) against a fresh render of cluster/m/bundle layered on top of
-// whatever TalosConfigPatches already exist, and turns the difference into
-// a single machine-layer TalosConfigPatch (architecture.md, "Bootstrap":
-// `ichor adopt` "diff[s] each node's current config against a fresh render
-// and stor[es] the difference as initial patches, so ownership transfers
-// with zero drift").
-//
-// Only SysctlConfig and KernelModuleConfig documents are ever captured
-// automatically. The legacy v1alpha1 Config document is deliberately never
-// captured: TalosConfigPatchDocument's schema requires machine.token,
-// machine.type and machine.certSANs on any Config document, machine.token
-// mirrors the secrets bundle (the same material pkg/render's own leak test
-// tracks), and there is no sparse way to patch only e.g. cluster.network
-// without also restating it (ADR 0014). Differences confined to that
-// document come back as UnrepresentablePaths instead of a patch, and
-// buildAdoptPlan's own zero-drift check (below) is what actually enforces
-// this: it never returns a Patch unless applying it reproduces currentCfg
-// byte for byte, so a legacy-document difference always surfaces as
-// "nothing to do here automatically" rather than a silently incomplete
-// patch.
-func buildAdoptPlan(
-	cluster *ichorv1alpha1.TalosCluster,
-	m *ichorv1alpha1.TalosMachine,
-	bundle *secrets.Bundle,
-	existing []ichorv1alpha1.TalosConfigPatch,
-	currentCfg []byte,
-	sys *render.SystemInputs,
-) (*adoptPlan, error) {
-	return buildAdoptPlanOwned(cluster, m, bundle, existing, currentCfg, sys, ownership{})
-}
-
 // ownership says which config paths Ichor owns on this cluster (class B, ADR 0103 1.7). The zero
 // value owns nothing, which is what an unmanaged cluster gets: no CNI item is ever class B.
 type ownership struct {
@@ -138,10 +106,32 @@ func (o ownership) split(paths []string) (owned, rest []string) {
 	return owned, rest
 }
 
-// buildAdoptPlanOwned is buildAdoptPlan with the three drift classes of ADR 0103, 1.7: A (captured
-// as a patch), B (own, listed) and C (unrepresentable, blocks). A patch is returned only when
-// nothing but class B remains once it is applied.
-func buildAdoptPlanOwned(
+// buildAdoptPlan diffs m's live configuration (currentCfg, as read from the
+// Talos API) against a fresh render of cluster/m/bundle layered on top of
+// whatever TalosConfigPatches already exist, and turns the difference into
+// a single machine-layer TalosConfigPatch (architecture.md, "Bootstrap":
+// `ichor adopt` "diff[s] each node's current config against a fresh render
+// and stor[es] the difference as initial patches, so ownership transfers
+// with zero drift").
+//
+// Only SysctlConfig and KernelModuleConfig documents are ever captured
+// automatically. The legacy v1alpha1 Config document is deliberately never
+// captured: TalosConfigPatchDocument's schema requires machine.token,
+// machine.type and machine.certSANs on any Config document, machine.token
+// mirrors the secrets bundle (the same material pkg/render's own leak test
+// tracks), and there is no sparse way to patch only e.g. cluster.network
+// without also restating it (ADR 0014). Differences confined to that
+// document come back as UnrepresentablePaths instead of a patch, and
+// buildAdoptPlan's own zero-drift check (below) is what actually enforces
+// this: it never returns a Patch unless applying it reproduces currentCfg
+// byte for byte, so a legacy-document difference always surfaces as
+// "nothing to do here automatically" rather than a silently incomplete
+// patch.
+//
+// The drift is sorted into the three classes of ADR 0103, 1.7: A (captured as a patch), B (own,
+// listed) and C (unrepresentable, blocks). A patch is returned only when nothing but class B
+// remains once it is applied.
+func buildAdoptPlan(
 	cluster *ichorv1alpha1.TalosCluster,
 	m *ichorv1alpha1.TalosMachine,
 	bundle *secrets.Bundle,

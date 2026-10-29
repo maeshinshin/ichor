@@ -266,7 +266,7 @@ func TestBuildAdoptPlan_LegacyDiffIsNeverAutoPatched(t *testing.T) {
 		t.Fatalf("rendering current-config fixture: %v", err)
 	}
 
-	plan, err := buildAdoptPlan(cluster, machine, bundle, nil, currentCfg, nil)
+	plan, err := buildAdoptPlan(cluster, machine, bundle, nil, currentCfg, nil, ownership{})
 	if err != nil {
 		t.Fatalf("buildAdoptPlan: %v", err)
 	}

@@ -2,6 +2,7 @@ package uiapi
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"connectrpc.com/connect"
@@ -116,8 +117,35 @@ func TestUpdateSettingsReclaimNeedsConfirmationAndSetsAnnotation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !*got.Spec.Reclaim.Enabled || got.Annotations[ichorv1alpha1.ConfirmReclaimAnnotation] != ichorv1alpha1.ConfirmReclaimValue {
+	if !*got.Spec.Reclaim.Enabled || !strings.HasPrefix(got.Annotations[ichorv1alpha1.ConfirmReclaimAnnotation], ichorv1alpha1.ConfirmReclaimValue) {
 		t.Fatalf("got %+v %v", got.Spec, got.Annotations)
+	}
+}
+
+func TestUpdateSettingsEnableTwice(t *testing.T) {
+	s, k8s := settingsServer(t, false, subReclaim)
+	on, off := true, false
+	ctx := ContextWithIdentity(context.Background(), Identity{User: userAlice})
+	set := func(v *bool) string {
+		if _, err := s.UpdateSettings(ctx, connect.NewRequest(&pb.UpdateSettingsRequest{Changes: &pb.SettingsFields{ReclaimEnabled: v}, ConfirmReclaim: *v})); err != nil {
+			t.Fatal(err)
+		}
+
+		var got ichorv1alpha1.IchorInstallation
+		if err := k8s.Get(ctx, settingsKey(), &got); err != nil {
+			t.Fatal(err)
+		}
+
+		return got.Annotations[ichorv1alpha1.ConfirmReclaimAnnotation]
+	}
+
+	first := set(&on)
+	if set(&off) != "" {
+		t.Fatal("disabling must drop the confirmation")
+	}
+
+	if second := set(&on); second == first || !strings.HasPrefix(second, ichorv1alpha1.ConfirmReclaimValue) {
+		t.Fatalf("a second enable must write a fresh confirmation: %q then %q", first, second)
 	}
 }
 

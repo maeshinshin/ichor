@@ -56,8 +56,10 @@ ichor settings set reclaim.enabled=true --confirm-reclaim
 
 Enabling reclaim turns on a way to wipe a configured machine. It needs
 `--confirm-reclaim`; the request then carries the annotation
-`ichor.maesh.dev/confirm-reclaim: enable`, which the webhook requires, so a
-stray `kubectl apply` cannot turn break-glass on by accident. Disabling needs
+`ichor.maesh.dev/confirm-reclaim: enable-<unique>`. The webhook requires a value
+starting with `enable` that the same update adds or changes, so a stray
+`kubectl apply` (or a confirmation left over from an earlier enable) cannot
+turn break-glass on by accident. Disabling needs
 no confirmation. Each accepted change leaves an Event on the
 `IchorInstallation` with the changed fields, old and new values and the user.
 

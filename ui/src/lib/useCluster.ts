@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'preact/hooks'
 import type { Cluster } from '@/gen/ichor/v1alpha1/cluster_pb'
 import { OperationKind, type Operation } from '@/gen/ichor/v1alpha1/operation_pb'
-import { currentOperation } from '@/lib/clusterOps'
+import { blockingOperation } from '@/lib/clusterOps'
 import { clusterClient, operationClient } from '@/lib/connect'
 import { operationState } from '@/lib/operations'
 import { describeError, type ErrorShape } from '@/lib/errors'
@@ -35,7 +35,7 @@ function isOpRunning(operations: Operation[]): boolean {
     isNode: op.kind === OperationKind.NODE,
     created: Number(op.createdAt?.seconds ?? 0n),
   }))
-  const cur = currentOperation(rows)
+  const cur = blockingOperation(rows)
   return cur !== null && operationState(cur.phase, cur.failureReason) === 'running'
 }
 const listeners = new Set<() => void>()

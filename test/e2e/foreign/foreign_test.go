@@ -28,6 +28,7 @@ limitations under the License.
 package foreign
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -194,7 +195,9 @@ func adopt(t *testing.T, c *foreign.Cluster, extra ...string) (string, error) {
 		"--recover-secrets", "--recover-from", c.CPs[0], "--node", c.CPs[0], "--yes"}, extra...)
 	// kube.Command refuses a "--cluster" argument anywhere; here it belongs to the command run
 	// inside the pod, so the context is pinned by hand to the same ICHOR_E2E_KUBE_CONTEXT.
-	cmd := exec.Command("kubectl", append([]string{"--context", os.Getenv(kube.ContextEnv)}, args...)...)
+	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Minute) // adopt waits for Ichor's webhooks without a bound (D5: no CNI, never ready)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "kubectl", append([]string{"--context", os.Getenv(kube.ContextEnv)}, args...)...)
 	out, err := cmd.CombinedOutput()
 	// ponytail: the full output is printed; it carries no keys (adopt prints nothing secret).
 	t.Logf("ichor adopt %s:\n%s", strings.Join(extra, " "), out)

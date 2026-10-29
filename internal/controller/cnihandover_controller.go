@@ -278,6 +278,13 @@ func (r *CNIHandoverReconciler) finish(
 
 	cluster.Status.CNI.AppliedValuesHash = hash
 
+	// An adopted cluster's own Cilium inline manifest entry (named by `ichor adopt` in an
+	// annotation) is recorded in the same update that sets CNIHandover, so render drops it exactly
+	// when it drops the bootstrap entry, never before the takeover has succeeded.
+	if name := cluster.Annotations[ichorv1alpha1.TalosClusterCNIInlineManifestAnnotation]; name != "" {
+		cluster.Status.CNI.TakenOverInlineManifest = name
+	}
+
 	apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
 		Type: ichorv1alpha1.ConditionCNIValuesApplied, Status: metav1.ConditionTrue, Reason: reasonCNIApplied,
 		Message: "the Cilium Helm release is deployed at the cluster's values and the DaemonSet is ready",

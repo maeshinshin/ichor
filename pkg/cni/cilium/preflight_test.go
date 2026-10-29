@@ -24,15 +24,16 @@ import (
 	"helm.sh/helm/v3/pkg/release"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/maeshinshin/ichor/pkg/cni"
 )
 
+const modeClusterPool = "cluster-pool"
+
 func agentDaemonSet(image string) *appsv1.DaemonSet {
 	return &appsv1.DaemonSet{
-		ObjectMeta: metav1.ObjectMeta{Namespace: ReleaseNamespace, Name: ReleaseName},
+		Namespace: ReleaseNamespace, Name: ReleaseName,
 		Spec: appsv1.DaemonSetSpec{Template: corev1.PodTemplateSpec{Spec: corev1.PodSpec{
 			Containers: []corev1.Container{{Name: agentContainerName, Image: image}},
 		}}},
@@ -70,7 +71,7 @@ func TestPreflight_CaseCNoRecordPasses(t *testing.T) {
 func TestPreflight_CaseBReadsTheRecordAndGatesIt(t *testing.T) {
 	kube := fake.NewSimpleClientset(agentDaemonSet("quay.io/cilium/cilium:v" + ChartVersion))
 	storeRecord(t, kube, kubeSystem, foreignRelease(t, 1, release.StatusDeployed, ChartVersion,
-		map[string]any{"ipam": map[string]any{"mode": "cluster-pool"}, "mine": "kept"}))
+		map[string]any{"ipam": map[string]any{"mode": modeClusterPool}, "mine": "kept"}))
 
 	rep, err := Preflight(t.Context(), preflightInput(t, kube))
 	if err != nil {

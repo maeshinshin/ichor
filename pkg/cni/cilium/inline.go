@@ -36,7 +36,8 @@ func FindInlineManifest(entries map[string]string) (string, error) {
 			meta, _ := o["metadata"].(map[string]any)
 			if str(o["kind"]) == "DaemonSet" && str(meta["name"]) == ReleaseName && str(meta["namespace"]) == ReleaseNamespace {
 				if found != "" {
-					return "", fmt.Errorf("cilium: cluster.inlineManifests entries %q and %q both hold the cilium DaemonSet", found, name)
+					return "", fmt.Errorf("cilium: cluster.inlineManifests entries %q and %q both hold the cilium DaemonSet",
+						found, name)
 				}
 
 				found = name

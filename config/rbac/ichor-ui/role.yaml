@@ -98,6 +98,7 @@ rules:
   resources:
   - secrets
   verbs:
+  - create
   - get
 - apiGroups:
   - ""
@@ -115,3 +116,12 @@ rules:
   - ichorusers
   verbs:
   - get
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - machinereclaims
+  verbs:
+  - create
+  - get
+  - list
+  - update

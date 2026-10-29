@@ -56,7 +56,7 @@ const cniHelmTestCluster = "home"
 
 func ciliumTestCluster(values string) *ichorv1alpha1.TalosCluster {
 	c := &ichorv1alpha1.TalosCluster{Namespace: ichorControllerNamespace, Name: cniHelmTestCluster}
-	c.Spec.CNI.Preset = "cilium"
+	c.Spec.CNI.Preset = string(detectedCilium)
 
 	if values != "" {
 		c.Spec.CNI.Cilium = &ichorv1alpha1.TalosClusterCNICilium{Values: &apiextensionsv1.JSON{Raw: []byte(values)}}

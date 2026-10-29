@@ -503,7 +503,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 
 		result, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(result.RequeueAfter).To(BeZero())
+		Expect(result.RequeueAfter).To(BeNumerically(">", 0), "a failed Job is retried, not waited on forever")
 
 		cond := conditionOf(cluster, ichorv1alpha1.ConditionCNIValuesApplied)
 		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
@@ -513,6 +513,35 @@ var _ = Describe("CNIHandoverReconciler", func() {
 
 		_, held := cniLockHolder(cluster)
 		Expect(held).To(BeFalse())
+	})
+
+	It("replaces a failed Job with a new one once the retry interval has passed", func() {
+		cluster := newTestCiliumCluster()
+		ciliumDaemonSet()(true)
+		r.JobRetryInterval = time.Nanosecond
+
+		_, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
+		Expect(err).NotTo(HaveOccurred())
+
+		failedJob := cniJob(cluster)
+		setJobCondition(failedJob, batchv1.JobFailed, "another operation (install/upgrade/rollback) is in progress")
+
+		// The failure is reported and the failed Job removed.
+		_, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(conditionOf(cluster, ichorv1alpha1.ConditionCNIValuesApplied).Reason).To(Equal("JobFailed"))
+
+		// The next pass starts a new Job under the same name.
+		Eventually(func(g Gomega) {
+			_, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
+			g.Expect(err).NotTo(HaveOccurred())
+
+			var job batchv1.Job
+			g.Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(failedJob), &job)).To(Succeed())
+			g.Expect(job.UID).NotTo(Equal(failedJob.UID))
+			_, failedCond := jobOutcome(&job)
+			g.Expect(failedCond).To(BeNil())
+		}).Should(Succeed())
 	})
 
 	It("puts the Job's last log line in the failure condition", func() {

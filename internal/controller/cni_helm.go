@@ -287,6 +287,10 @@ func newCNIHelmJob(
 		"--namespace=" + cluster.Namespace,
 		"--kube-proxy=" + string(mode),
 		"--storage-namespace=" + storageNS,
+		// Safe: the callers hold the cluster's operation lock, so at most one such Job per cluster
+		// runs at a time, and the release record is Helm's own lock. A pending-* record left by a
+		// killed run is therefore stale and Apply may repair it at once, not after its timeout.
+		"--exclusive",
 	}
 	if takeover {
 		args = append(args, "--takeover")

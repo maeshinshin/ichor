@@ -97,7 +97,7 @@ func TestCNIHelmJobShape(t *testing.T) {
 		t.Errorf("image = %q, want the installer image at spec.version", c.Image)
 	}
 
-	if want := []string{"cni", "helm", "apply", "--cluster=home", "--namespace=clusters", "--kube-proxy=enabled", "--storage-namespace=ichor-system"}; !slices.Equal(c.Args, want) {
+	if want := []string{"cni", "helm", "apply", "--cluster=home", "--namespace=clusters", "--kube-proxy=enabled", "--storage-namespace=ichor-system", "--exclusive"}; !slices.Equal(c.Args, want) {
 		t.Errorf("args = %v, want %v", c.Args, want)
 	}
 

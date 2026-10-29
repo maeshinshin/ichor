@@ -41,7 +41,8 @@ func TestE6BadImageBoundedWait(t *testing.T) {
 	if err == nil {
 		t.Fatalf("adopt succeeded with an unpullable image:\n%s", out)
 	}
-	if i := strings.Index(out, "Cilium is installed"); i < 0 {
+	// A fresh cluster gets Cilium from adopt; a reused one already runs Ichor's own.
+	if !strings.Contains(out, "Cilium is installed") && !strings.Contains(out, "Cilium is already installed") {
 		t.Errorf("adopt never got past the Cilium step")
 	}
 	if !strings.Contains(out, "did not finish within "+timeout.String()) {

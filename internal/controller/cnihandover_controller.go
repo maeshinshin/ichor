@@ -18,6 +18,7 @@ package controller
 
 import (
 	"bytes"
+	"cmp"
 	"compress/gzip"
 	"context"
 	"encoding/base64"
@@ -60,6 +61,9 @@ const (
 	// cniJobPollInterval is how often it looks at a running Helm Job. It also keeps the cluster
 	// operation lock (a five-minute lease) renewed, so it must stay far below that.
 	cniJobPollInterval = 15 * time.Second
+
+	// cniJobRetryInterval is how long a failed Cilium Helm Job stands before a new one replaces it.
+	cniJobRetryInterval = time.Minute
 
 	// cniHelmLockIdentity holds the cluster operation lock while a Cilium Helm Job runs. It is
 	// not controllerIdentity on purpose: Acquire lets the same identity back in, so with the
@@ -105,6 +109,10 @@ const (
 // behind that would make the cadence above false (ADR 0024).
 type CNIHandoverReconciler struct {
 	client.Client
+
+	// JobRetryInterval is how long a failed Helm Job stands before a new one replaces it
+	// (0: a minute).
+	JobRetryInterval time.Duration
 
 	// APIReader reads the release record, the lock and the control-plane count live (the manager's
 	// uncached reader); falls back to Client when nil.
@@ -302,6 +310,8 @@ func (r *CNIHandoverReconciler) runJob(
 		if failed.NoPod {
 			// The Job is gone; try again later, whatever was refusing its pod may have been fixed.
 			res.RequeueAfter = handoverRequeueInterval
+		} else if res.RequeueAfter, err = r.retryFailedJob(ctx, cluster, hash); err != nil {
+			return ctrl.Result{}, err
 		}
 
 		return res, r.setProgress(ctx, cluster, handedOver, reasonCNIJobFailed, r.failureMessage(ctx, failed))
@@ -318,6 +328,30 @@ func (r *CNIHandoverReconciler) runJob(
 	}
 
 	return r.finish(ctx, cluster, hash, handedOver)
+}
+
+// retryFailedJob schedules the next attempt after a Job failed: a failure may be transient (a
+// pending record another run left behind, a node restarting), and nothing else would ever look at
+// it again. Once the Job has been failed for the retry interval it is deleted, so the next pass
+// creates a fresh one (the failure stays in the condition until that Job reports). Returns when to
+// reconcile again. ponytail: a fixed interval, no growing backoff.
+func (r *CNIHandoverReconciler) retryFailedJob(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, hash string,
+) (time.Duration, error) {
+	interval := cmp.Or(r.JobRetryInterval, cniJobRetryInterval)
+
+	var job batchv1.Job
+
+	err := r.reader().Get(ctx, types.NamespacedName{Namespace: cniJobNamespace, Name: cniHelmJobName(cluster, hash)}, &job)
+	if err != nil {
+		return interval, client.IgnoreNotFound(err)
+	}
+
+	if wait := interval - time.Since(jobEnded(&job)); wait > 0 {
+		return wait, nil
+	}
+
+	return time.Second, r.deleteJob(ctx, cluster, hash)
 }
 
 // finish checks the Helm release and the DaemonSet after a completed Job and records the hand-over.

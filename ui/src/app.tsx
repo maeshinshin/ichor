@@ -19,7 +19,7 @@ import { PatchList } from '@/pages/PatchList'
 import { Login } from '@/pages/Login'
 import { Placeholder } from '@/pages/Placeholder'
 import { SignIn } from '@/pages/SignIn'
-import { passwordSignIn, signInSections } from '@/lib/login'
+import { passwordSignIn } from '@/lib/login'
 import { Users } from '@/pages/Users'
 import { matchRoute, replace, usePath } from '@/router'
 import { redirectFor } from '@/lib/routes'
@@ -101,8 +101,9 @@ function Authenticated({ path }: { path: string }) {
   if (login.state === 'loading' || (signedIn && !who.loaded)) return <p class="p-8 text-sm text-muted-foreground">{t('app.signingIn')}</p>
   if (login.state === 'error') return <ErrorAlert title={t('app.signInFailed')} detail={login.error} />
   if (login.state === 'choose') {
-    const { ichor, oidc } = signInSections(login.providers)
-    return <SignIn ichor={ichor !== null} oidc={oidc} signIn={async (f) => { await passwordSignIn(ichor!, f); login.signedIn() }} />
+    const ichor = login.providers.find((p) => p.id === 'ichor')
+    const oidc = login.providers.find((p) => p.id === 'oidc') ?? null
+    return <SignIn ichor={!!ichor} oidc={oidc} signIn={async (f) => { await passwordSignIn(ichor!, f); login.signedIn() }} />
   }
   if (who.me?.mustChangePassword) return <MustChangePassword onDone={who.reload} />
 

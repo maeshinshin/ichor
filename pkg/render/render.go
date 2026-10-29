@@ -210,9 +210,12 @@ func BuildConfig(
 	}
 
 	// The CNI Talos runs and the install target are system layer too.
-	cfg, err = injectCNI(cfg, contract)
-	if err != nil {
-		return nil, err
+	// An unmanaged cluster keeps its own CNI: nothing is emitted unless its config selects none.
+	if cluster.Spec.CNI.Preset != PresetUnmanaged || cniSelectionNone(cluster) {
+		cfg, err = injectCNI(cfg, contract)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	cfg, err = injectInstall(cfg, contract, m)

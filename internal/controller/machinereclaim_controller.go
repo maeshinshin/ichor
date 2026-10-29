@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"slices"
 	"strings"
 	"time"
@@ -298,7 +297,7 @@ func (r *MachineReclaimReconciler) reset(
 }
 
 func (r *MachineReclaimReconciler) waitForMaintenance(ctx context.Context, mr *ichorv1alpha1.MachineReclaim, now time.Time) (ctrl.Result, error) {
-	host := hostOfAddress(mr.Spec.Address)
+	host := reclaim.HostOnly(mr.Spec.Address)
 	uuid := ""
 
 	if mr.Status.Inspection != nil {
@@ -346,10 +345,9 @@ func (r *MachineReclaimReconciler) done(ctx context.Context, mr *ichorv1alpha1.M
 
 		err := r.Get(ctx, client.ObjectKey{Namespace: mr.Namespace, Name: ref.Name}, &cluster)
 
-		switch {
-		case err == nil && cluster.Spec.Discovery != nil && slices.Contains(cluster.Spec.Discovery.Addresses, host):
+		if err == nil && cluster.Spec.Discovery != nil && slices.Contains(cluster.Spec.Discovery.Addresses, host) {
 			result += fmt.Sprintf("; cluster %s discovers it and will show it as a pending machine", ref.Name)
-		default:
+		} else {
 			result += fmt.Sprintf("; add %s to cluster %s's spec.discovery.addresses to register it", host, ref.Name)
 		}
 	} else {
@@ -570,14 +568,6 @@ func inspectionStatus(in reclaim.Inspection, plan reclaim.Plan) *ichorv1alpha1.M
 	}
 
 	return out
-}
-
-func hostOfAddress(address string) string {
-	if h, _, err := net.SplitHostPort(address); err == nil {
-		return h
-	}
-
-	return address
 }
 
 func orNoneStr(s string) string {

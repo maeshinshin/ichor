@@ -387,6 +387,11 @@ func (s *Server) planOperation(
 		p.install = &ichorv1alpha1.IchorInstallation{}
 
 		if err := s.Get(ctx, types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}, p.install); err != nil {
+			if apierrors.IsNotFound(err) {
+				return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New(
+					"this Ichor has no IchorInstallation, so it was installed with Helm (ADR 0104); upgrade it with `helm upgrade`, not with an Ichor operation"))
+			}
+
 			return nil, mapGetError("IchorInstallation \""+ichorv1alpha1.IchorInstallationName+"\"", err)
 		}
 

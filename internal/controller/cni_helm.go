@@ -34,8 +34,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
-	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/internal/version"
+	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
 	"github.com/maeshinshin/ichor/pkg/render"
 )

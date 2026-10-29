@@ -69,7 +69,7 @@ func nothingWritten(t *testing.T, c *foreign.Cluster) {
 		t.Errorf("namespace %s exists after a refusal: %s", crNS, got)
 	}
 	if got, _ := inner(c, "get", "crd", "--no-headers"); strings.Contains(got, "ichor.maesh.dev") {
-		t.Errorf("Ichor CRDs exist after a refusal")
+		t.Errorf("Ichor CRDs exist after a refusal: %s", got)
 	}
 }
 

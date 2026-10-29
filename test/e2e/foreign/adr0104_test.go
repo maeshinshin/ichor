@@ -33,12 +33,7 @@ import (
 func noCNINothingWritten(t *testing.T, c *foreign.Cluster, before map[string]string) {
 	t.Helper()
 	sameHashes(t, before, cniPaths(t, c))
-	if got, err := inner(c, "get", "namespace", crNS, "--no-headers"); err == nil {
-		t.Errorf("namespace %s exists after a refusal: %s", crNS, got)
-	}
-	if got, _ := inner(c, "get", "crd", "--no-headers"); strings.Contains(got, "ichor.maesh.dev") {
-		t.Errorf("Ichor CRDs exist after a refusal: %s", got)
-	}
+	nothingWritten(t, c)
 	if got, _ := inner(c, "get", "ds", "-A", "--no-headers"); strings.Contains(got, "cilium") {
 		t.Errorf("a Cilium DaemonSet exists after a refusal: %s", got)
 	}

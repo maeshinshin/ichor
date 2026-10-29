@@ -346,13 +346,7 @@ func TestB1FlannelRefusedWithoutFlag(t *testing.T) {
 		t.Errorf("refusal does not name --cni-unmanaged: %s", out)
 	}
 	sameHashes(t, before, cniPaths(t, c))
-	// Ichor is not installed, so its kinds are not served; the namespace must hold nothing either.
-	if got, err := inner(c, "get", "namespace", crNS, "--no-headers"); err == nil {
-		t.Errorf("namespace %s exists after a refusal: %s", crNS, got)
-	}
-	if got, _ := inner(c, "get", "crd", "--no-headers"); strings.Contains(got, "ichor.maesh.dev") {
-		t.Errorf("Ichor CRDs exist after a refusal: %s", got)
-	}
+	nothingWritten(t, c)
 	// ADR 0103 1.8: the plan phase writes nothing anywhere, not even the recovered secrets bundle.
 	if pod, err := foreign.ToolsPod(c.Opts.Prefix); err == nil {
 		if got, err := utils.Run(kube.Command("-n", ns, "exec", pod, "--", "ls", "/tmp/home/.ichor")); err == nil {
@@ -490,13 +484,5 @@ func TestB8TalosTooOldRefused(t *testing.T) {
 		t.Errorf("refusal does not carry the upgrade message: %s", out)
 	}
 	sameHashes(t, before, cniPaths(t, c))
-	if got, err := inner(c, "get", "namespace", crNS, "--no-headers"); err == nil {
-		t.Errorf("namespace %s exists after a refusal: %s", crNS, got)
-	}
-	if got, _ := inner(c, "get", "crd", "--no-headers"); strings.Contains(got, "ichor.maesh.dev") {
-		t.Errorf("Ichor CRDs exist after a refusal: %s", got)
-	}
+	nothingWritten(t, c)
 }
-
-// The rest of the ADR 0103 matrix: stubs until their units land.
-func TestB2B4(t *testing.T) { t.Skip("B2 kube-proxy matrix, B4 KubePrism") }

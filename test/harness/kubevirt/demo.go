@@ -109,6 +109,11 @@ func upDemo() error {
 	names := []string{cp, worker}
 	memory := map[string]string{cp: cpMem, worker: workerMem}
 
+	// ICHOR_UI_DEMO_NO_WORKER=1 boots the control plane only (single-VM test runs).
+	if os.Getenv("ICHOR_UI_DEMO_NO_WORKER") == "1" {
+		names = []string{cp}
+	}
+
 	iso, err := resolveISO()
 	if err != nil {
 		return err
@@ -152,7 +157,9 @@ func upDemo() error {
 	}
 
 	fmt.Println("CP_IP=" + ips[cp])
-	fmt.Println("WORKER_IP=" + ips[worker])
+	if ips[worker] != "" {
+		fmt.Println("WORKER_IP=" + ips[worker])
+	}
 
 	return nil
 }

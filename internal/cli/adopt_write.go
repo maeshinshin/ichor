@@ -250,7 +250,7 @@ func (w *adoptWriter) installIchor(ctx context.Context) error {
 		return err
 	}
 
-	if _, err := createIchorInstallation(ctx, w.c, w.in.Stderr); err != nil {
+	if _, err := createIchorInstallation(ctx, w.c, w.in.Stderr, cmp.Or(w.in.WebhookWait, defaultAdoptWebhookWait)); err != nil {
 		return err
 	}
 

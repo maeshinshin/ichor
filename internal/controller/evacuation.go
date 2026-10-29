@@ -387,6 +387,24 @@ func endMachineEvacuation(
 		fmt.Sprintf("scheduling re-enabled on node %q", node))
 }
 
+// endEvacuationOf is endMachineEvacuation for a machine whose node name is not yet known: it
+// resolves the name (talos may be nil) only when an evacuation is pending.
+func endEvacuationOf(
+	ctx context.Context, c client.Client, ev StorageEvacuator, talos TalosClient,
+	cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
+) error {
+	if ev == nil || !apimeta.IsStatusConditionTrue(m.Status.Conditions, conditionStorageEvacuation) {
+		return nil
+	}
+
+	node, err := resolveNodeName(ctx, c, talos, m)
+	if err != nil {
+		return err
+	}
+
+	return endMachineEvacuation(ctx, c, ev, cluster, m, node)
+}
+
 // setEvacuationCondition writes conditionStorageEvacuation and persists m's status.
 func setEvacuationCondition(
 	ctx context.Context, c client.Client, m *ichorv1alpha1.TalosMachine, status metav1.ConditionStatus, reason, message string,

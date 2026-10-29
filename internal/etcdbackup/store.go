@@ -180,34 +180,20 @@ func (s *s3Store) List(ctx context.Context, prefix string) ([]Object, error) {
 	return out, nil
 }
 
-// Prune deletes all but the newest keep snapshots under prefix and returns how
-// many it deleted. It is only ever called after a successful upload, so the
-// newest snapshot always survives; a failed delete is returned after trying
-// the rest.
-func Prune(ctx context.Context, s Store, prefix string, keep int) (int, error) {
+// Prune deletes all but the newest keep snapshots under prefix. It is only
+// ever called after a successful upload, so the newest snapshot always
+// survives; a failed delete is returned after trying the rest.
+func Prune(ctx context.Context, s Store, prefix string, keep int) error {
 	objs, err := s.List(ctx, prefix)
 	if err != nil {
-		return 0, err
+		return err
 	}
 
-	if len(objs) <= keep {
-		return 0, nil
+	var errs []error
+
+	for _, o := range objs[min(keep, len(objs)):] {
+		errs = append(errs, s.Delete(ctx, o.Key))
 	}
 
-	var (
-		errs    []error
-		deleted int
-	)
-
-	for _, o := range objs[keep:] {
-		if err := s.Delete(ctx, o.Key); err != nil {
-			errs = append(errs, err)
-
-			continue
-		}
-
-		deleted++
-	}
-
-	return deleted, errors.Join(errs...)
+	return errors.Join(errs...)
 }

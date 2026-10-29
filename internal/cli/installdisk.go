@@ -18,6 +18,8 @@ package cli
 
 import (
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -48,6 +50,53 @@ func parseDiskSelector(flag, v string) (*ichorv1alpha1.TalosMachineDisk, error) 
 	}
 
 	return nil, fmt.Errorf("%s %q: want %s", flag, v, installDiskUsage)
+}
+
+var (
+	diskFieldExpr   = regexp.MustCompile(`^disk\.(wwid|serial|bus_path|dev_path) == ("(?:[^"\\]|\\.)*")$`)
+	diskSymlinkExpr = regexp.MustCompile(`^("(?:[^"\\]|\\.)*") in disk\.symlinks$`)
+)
+
+// diskFromExpression is the --install-disk form of a CEL disk selector, or "" when the selector
+// is anything but the five equalities Ichor renders itself (diskExpression in pkg/render): a size
+// range, a model match or a different symlink has no spec.install.disk representation.
+func diskFromExpression(expr string) string {
+	expr = strings.TrimSpace(expr)
+
+	if m := diskSymlinkExpr.FindStringSubmatch(expr); m != nil {
+		if v, err := strconv.Unquote(m[1]); err == nil && strings.HasPrefix(v, "/dev/disk/by-id/") {
+			return v
+		}
+
+		return ""
+	}
+
+	m := diskFieldExpr.FindStringSubmatch(expr)
+	if m == nil {
+		return ""
+	}
+
+	v, err := strconv.Unquote(m[2])
+	if err != nil || v == "" {
+		return ""
+	}
+
+	switch m[1] {
+	case "wwid":
+		return "wwid:" + v
+	case "serial":
+		return "serial:" + v
+	case "dev_path":
+		if strings.HasPrefix(v, "/dev/") && !strings.HasPrefix(v, "/dev/disk/by-id/") {
+			return v
+		}
+	case "bus_path":
+		if strings.HasPrefix(v, "/") && !strings.HasPrefix(v, "/dev/") {
+			return v
+		}
+	}
+
+	return ""
 }
 
 // installDiskToPB is parseInstallDisk's result on the wire.

@@ -68,15 +68,18 @@ func (f usersFlags) validate() error {
 		return nil
 	}
 
-	u, err := url.Parse(f.externalURL)
-	if err != nil || u.Scheme != "https" || u.Host == "" || u.RawQuery != "" || u.Fragment != "" {
+	isHTTPS := func(s string) bool {
+		u, err := url.Parse(s)
+
+		return err == nil && u.Scheme == "https" && u.Host != "" && u.RawQuery == "" && u.Fragment == ""
+	}
+
+	if !isHTTPS(f.externalURL) {
 		return fmt.Errorf("--external-url must be an https URL, got %q", f.externalURL)
 	}
 
-	if f.kubeAPIServerURL != "" {
-		if k, err := url.Parse(f.kubeAPIServerURL); err != nil || k.Scheme != "https" || k.Host == "" || k.RawQuery != "" || k.Fragment != "" {
-			return fmt.Errorf("--kube-api-server-url must be an https URL, got %q", f.kubeAPIServerURL)
-		}
+	if f.kubeAPIServerURL != "" && !isHTTPS(f.kubeAPIServerURL) {
+		return fmt.Errorf("--kube-api-server-url must be an https URL, got %q", f.kubeAPIServerURL)
 	}
 
 	if f.tokenTTL < ichorauth.MinTokenTTL || f.tokenTTL > ichorauth.MaxTokenTTL {

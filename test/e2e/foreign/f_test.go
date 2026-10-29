@@ -43,13 +43,20 @@ func local(t *testing.T, d time.Duration, name string, args ...string) (string, 
 	return string(out), err
 }
 
-// helmInstall runs `helm install ichor <packaged chart>` against the foreign cluster.
-func helmInstall(t *testing.T, c *foreign.Cluster, wait bool) (string, error) {
+// packagedChart is the one chart archive in bin/chart.
+func packagedChart(t *testing.T) string {
 	t.Helper()
 	charts, _ := filepath.Glob(repoPath(t, "bin/chart/ichor-*.tgz"))
 	if len(charts) != 1 {
 		t.Fatalf("want exactly one packaged chart in bin/chart (make helm-package APP_VERSION=<pushed tag>), got %v", charts)
 	}
+	return charts[0]
+}
+
+// helmInstall runs `helm install ichor <packaged chart>` against the foreign cluster.
+func helmInstall(t *testing.T, c *foreign.Cluster, wait bool) (string, error) {
+	t.Helper()
+	charts := []string{packagedChart(t)}
 	args := []string{"install", "ichor", charts[0], "--kubeconfig", c.LocalKube, "-n", crNS, "--create-namespace"}
 	if wait {
 		args = append(args, "--wait", "--timeout", "6m")

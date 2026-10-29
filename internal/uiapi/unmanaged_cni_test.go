@@ -71,7 +71,7 @@ func TestCniServiceRefusesAnUnmanagedCluster(t *testing.T) {
 			t.Fatalf("%s: want FailedPrecondition, got %v", name, err)
 		}
 
-		if want := ichorv1alpha1.CNIUnmanagedMessage; err.(*connect.Error).Message() != want { //nolint:errorlint // test
+		if want := ichorv1alpha1.CNINotManagedMessage; err.(*connect.Error).Message() != want { //nolint:errorlint // test
 			t.Fatalf("%s: message %q, want %q", name, err.(*connect.Error).Message(), want) //nolint:errorlint // test
 		}
 	}

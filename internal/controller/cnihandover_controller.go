@@ -131,7 +131,7 @@ func (r *CNIHandoverReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	// Ichor leaves an unmanaged cluster's CNI alone: no hand-over, no Job, no conditions.
-	if cluster.Spec.CNI.Preset == render.PresetUnmanaged {
+	if cluster.Spec.CNI.Preset == ichorv1alpha1.TalosClusterCNIPresetUnmanaged {
 		return ctrl.Result{}, nil
 	}
 

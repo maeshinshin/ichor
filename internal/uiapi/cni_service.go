@@ -65,7 +65,7 @@ func (s *Server) getCiliumView(ctx context.Context, ref *pb.ObjectRef) (*ciliumV
 	}
 
 	if cluster.Spec.CNI.Preset == ichorv1alpha1.TalosClusterCNIPresetUnmanaged {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New(ichorv1alpha1.CNIUnmanagedMessage))
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New(ichorv1alpha1.CNINotManagedMessage))
 	}
 
 	v := &ciliumView{

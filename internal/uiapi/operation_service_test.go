@@ -319,10 +319,12 @@ func TestCreateValidatesTheTarget(t *testing.T) {
 	srv, k8s := opServer(t, opObjects()...)
 
 	for name, req := range map[string]*connect.Request[pb.CreateOperationRequest]{
-		"shutdown with a target":  opCreate(pb.OperationKind_OPERATION_KIND_SHUTDOWN, "v1"),
-		"unspecified kind":        opCreate(pb.OperationKind_OPERATION_KIND_UNSPECIFIED, ""),
-		"kube-proxy bad mode":     opCreate(pb.OperationKind_OPERATION_KIND_CNI, "off"),
-		"talos target not semver": opCreate(pb.OperationKind_OPERATION_KIND_TALOS, "latest"),
+		"shutdown with a target":     opCreate(pb.OperationKind_OPERATION_KIND_SHUTDOWN, "v1"),
+		"unspecified kind":           opCreate(pb.OperationKind_OPERATION_KIND_UNSPECIFIED, ""),
+		"kube-proxy bad mode":        opCreate(pb.OperationKind_OPERATION_KIND_CNI, "off"),
+		"talos target not semver":    opCreate(pb.OperationKind_OPERATION_KIND_TALOS, "latest"),
+		"ichor target leading zero":  opCreate(pb.OperationKind_OPERATION_KIND_ICHOR, "v0.0.1814000000-02357186"),
+		"kubernetes target no patch": opCreate(pb.OperationKind_OPERATION_KIND_KUBERNETES, "v1.34"),
 	} {
 		if _, err := srv.CreateOperation(context.Background(), req); connect.CodeOf(err) != connect.CodeInvalidArgument {
 			t.Errorf("%s: want InvalidArgument, got %v", name, err)

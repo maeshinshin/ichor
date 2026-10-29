@@ -82,7 +82,7 @@ webhooks:
     - UPDATE
     resources:
     - ichorinstallations
-  sideEffects: None
+  sideEffects: NoneOnDryRun
 - admissionReviewVersions:
   - v1
   clientConfig:

@@ -96,15 +96,15 @@ func bgUnitRequest(t *testing.T, resource, user string, removeFinalizer bool) ad
 		next = []string{}
 	}
 
-	return admission.Request{
-		AdmissionRequest: admissionv1.AdmissionRequest{
-			Operation: admissionv1.Update, Name: "x", Namespace: "default",
-			Resource:  metav1.GroupVersionResource{Group: ichorGroup, Version: "v1alpha1", Resource: resource},
-			UserInfo:  authnv1.UserInfo{Username: user},
-			Object:    obj(next),
-			OldObject: obj([]string{bgUnitFinalizer}),
-		},
-	}
+	var req admission.Request
+
+	req.Operation, req.Name, req.Namespace = admissionv1.Update, "x", "default"
+	req.Resource = metav1.GroupVersionResource{Group: ichorGroup, Version: "v1alpha1", Resource: resource}
+	req.UserInfo = authnv1.UserInfo{Username: user}
+	req.Object = obj(next)
+	req.OldObject = obj([]string{bgUnitFinalizer})
+
+	return req
 }
 
 func TestBreakGlassFinalizerRemoval(t *testing.T) {

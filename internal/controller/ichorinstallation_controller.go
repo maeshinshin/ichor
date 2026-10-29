@@ -29,10 +29,6 @@ import (
 	"github.com/maeshinshin/ichor/internal/version"
 )
 
-// controllerDeploymentName is the controller's own Deployment as config/default names it
-// (namePrefix ichor- on controller-manager).
-const controllerDeploymentName = "ichor-controller-manager"
-
 // Condition types IchorInstallation reports.
 const (
 	conditionUpToDate = "UpToDate"

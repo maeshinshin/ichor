@@ -129,4 +129,24 @@ webhooks:
     resources:
     - talosmachines
   sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: ichor-webhook-service
+      namespace: {{ .Release.Namespace }}
+      path: /validate-ichor-maesh-dev-v1alpha1-machinereclaim
+  failurePolicy: Fail
+  name: vmachinereclaim-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - ichor.maesh.dev
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - machinereclaims
+  sideEffects: None
 {{- end }}

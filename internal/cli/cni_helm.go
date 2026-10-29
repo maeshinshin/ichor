@@ -48,6 +48,7 @@ var cniHelmApplyOpts struct {
 	StorageNamespace string
 	KubeProxy        string
 	Takeover         bool
+	Exclusive        bool
 	Timeout          time.Duration
 }
 
@@ -100,7 +101,7 @@ namespace, read back, and only then deleted (the record Secrets only, never helm
 
 		return runCNIHelmApply(cmd.Context(), c, cfg, types.NamespacedName{
 			Namespace: apiOpts.Namespace, Name: cniHelmApplyOpts.Cluster,
-		}, cniHelmApplyOpts.KubeProxy, cniHelmApplyOpts.Timeout, tk, cmd.OutOrStdout())
+		}, cniHelmApplyOpts.KubeProxy, cniHelmApplyOpts.Timeout, cniHelmApplyOpts.Exclusive, tk, cmd.OutOrStdout())
 	},
 }
 
@@ -114,7 +115,7 @@ type takeoverOptions struct {
 // Helm configuration over the memory driver. takeover is nil unless --takeover.
 func runCNIHelmApply(
 	ctx context.Context, c client.Client, cfg *action.Configuration, key types.NamespacedName,
-	kubeProxy string, timeout time.Duration, takeover *takeoverOptions, out io.Writer,
+	kubeProxy string, timeout time.Duration, exclusive bool, takeover *takeoverOptions, out io.Writer,
 ) error {
 	var cluster ichorv1alpha1.TalosCluster
 	if err := c.Get(ctx, key, &cluster); err != nil {
@@ -127,7 +128,7 @@ func runCNIHelmApply(
 		kubeProxy = cluster.Spec.CNI.KubeProxy
 	}
 
-	res, err := cilium.ApplyForCluster(ctx, cfg, &cluster, cni.KubeProxyMode(kubeProxy), timeout)
+	res, err := cilium.ApplyForCluster(ctx, cfg, &cluster, cni.KubeProxyMode(kubeProxy), timeout, exclusive)
 	if err != nil {
 		return err
 	}
@@ -187,6 +188,7 @@ func init() {
 	f.StringVar(&cniHelmApplyOpts.StorageNamespace, "storage-namespace", ichorControllerNamespace, "namespace Helm keeps the release record (a Secret) in")
 	f.StringVar(&cniHelmApplyOpts.KubeProxy, "kube-proxy", "", "kube-proxy mode to apply (enabled or replaced); default the cluster's spec.cni.kubeProxy")
 	f.BoolVar(&cniHelmApplyOpts.Takeover, "takeover", false, "the Cilium being installed over was installed by someone else (an adopted cluster): retire its Helm release record after the rollout")
+	f.BoolVar(&cniHelmApplyOpts.Exclusive, "exclusive", false, "no other Helm operation on the release can be running (the controller runs one ichor-cni Job per cluster): repair a pending-* record at once instead of after the timeout")
 	f.DurationVar(&cniHelmApplyOpts.Timeout, "timeout", cilium.DefaultApplyTimeout, "how long to wait for Cilium's workloads to roll out")
 	_ = cniHelmApplyCmd.MarkFlagRequired("cluster")
 }

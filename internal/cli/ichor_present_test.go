@@ -62,7 +62,7 @@ func ichorHelmRecord(t *testing.T, chartName, appVersion string, config map[stri
 		Name: "sh.helm.release.v1." + chartName + ".v1", Namespace: ichorControllerNamespace,
 		Labels: map[string]string{"owner": string(provenanceHelm), "status": "deployed", helmNameLabel: ichorChartName},
 		Type:   "helm.sh/release.v1",
-		Data:   map[string][]byte{"release": []byte(base64.StdEncoding.EncodeToString(gz.Bytes()))},
+		Data:   map[string][]byte{helmReleaseKey: []byte(base64.StdEncoding.EncodeToString(gz.Bytes()))},
 	}
 }
 

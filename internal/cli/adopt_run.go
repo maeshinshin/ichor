@@ -586,15 +586,33 @@ func (st *adoptState) mapRunningCilium(k8s *k8sFacts) error {
 	return nil
 }
 
+// repairPendingCilium: the Cilium found is Ichor's own and its newest release record is pending-*.
+// Only Ichor's record in ichor-system is ever read here (ichorCiliumReadBack); a foreign one is not.
+func (st *adoptState) repairPendingCilium() bool {
+	return !st.installCilium && st.ichorOwnedCilium() && st.readBack != nil && st.readBack.Pending
+}
+
 // bootstrapCilium is step 2 of ADR 0104 1.5: Ichor's Cilium, as its own Helm release, installed
 // with the values the TalosCluster adopt writes will make the controller derive.
 func (st *adoptState) bootstrapCilium(ctx context.Context, deps adoptDeps) error {
-	if !st.installCilium {
+	repair := st.repairPendingCilium()
+	if !st.installCilium && !repair {
+		if st.ichorOwnedCilium() {
+			_, _ = fmt.Fprintln(deps.Stderr, "adopt: Cilium is already installed (Ichor's own release); not installing it again")
+		}
+
 		return nil
 	}
 
 	if deps.BootstrapCilium == nil {
 		return errors.New("adopt: no way to install Cilium was given")
+	}
+
+	if repair {
+		// A killed install left Ichor's own record pending-*; Helm refuses every later operation
+		// until it is repaired, and the controller's Job would fail on it. This run is the only
+		// writer, so the same step as on a fresh cluster (which repairs it exclusively) fixes it.
+		_, _ = fmt.Fprintln(deps.Stderr, "adopt: Ichor's Cilium release record was left pending by an interrupted install; repairing it")
 	}
 
 	_, _ = fmt.Fprintf(deps.Stderr, "adopt: installing Cilium %s (this waits for every node to be Ready)\n", cilium.ChartVersion)

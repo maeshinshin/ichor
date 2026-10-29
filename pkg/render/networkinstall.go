@@ -38,10 +38,21 @@ import (
 var ErrCNIUnsupported = errors.New(
 	"render: spec.cni.preset must be cilium (ADR 0099): flannel and custom were removed; delete and recreate the cluster")
 
+// PresetUnmanaged is spec.cni.preset for an adopted cluster whose CNI Ichor leaves alone (ADR 0103).
+const PresetUnmanaged = "unmanaged"
+
+// cniSelectionNone reports whether an unmanaged cluster's machine config selects no CNI, the only
+// CNI-related thing an unmanaged render emits (ADR 0103, 1.1a).
+func cniSelectionNone(cluster *ichorv1alpha1.TalosCluster) bool {
+	u := cluster.Spec.CNI.Unmanaged
+
+	return u != nil && u.TalosCNI == "none"
+}
+
 // checkCNISupported refuses a cluster whose preset is not cilium. An unset preset is the CRD
 // default, cilium.
 func checkCNISupported(cluster *ichorv1alpha1.TalosCluster) error {
-	if p := cluster.Spec.CNI.Preset; p != "" && p != "cilium" {
+	if p := cluster.Spec.CNI.Preset; p != "" && p != "cilium" && p != PresetUnmanaged {
 		return fmt.Errorf("%w (preset %q)", ErrCNIUnsupported, p)
 	}
 

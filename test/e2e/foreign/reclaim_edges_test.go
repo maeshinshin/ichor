@@ -30,6 +30,7 @@ import (
 
 	"github.com/maeshinshin/ichor/test/internal/foreign"
 	"github.com/maeshinshin/ichor/test/internal/kube"
+	"github.com/maeshinshin/ichor/test/internal/talosctl"
 )
 
 func (r *rig) ikApply(t *testing.T, manifest string, verb ...string) string {
@@ -93,6 +94,47 @@ func (r *rig) gone(t *testing.T, kind, name string, d time.Duration) bool {
 		return "", r.ikJSON(t, "-n", crNS, "get", kind, name, "--ignore-not-found", "-o", "name") == ""
 	})
 	return err == nil
+}
+
+// TestC2 (needs `foreign up --cps 3 --workers 0`): a control plane of a 3-member cluster is reclaimed gracefully and the
+// old cluster keeps two healthy etcd members; a second one, of what is now a 2-member cluster, is refused.
+func TestC2ControlPlanes(t *testing.T) {
+	r := newRig(t, foreign.Options{ControlPlanes: 3, Workers: 0})
+	tc := ftc(t, r.f)
+	victim, other, keeper := r.f.CPs[2], r.f.CPs[1], r.f.CPs[0]
+	uuid := uuidOf(t, victim, tc)
+	members, _ := talosctl.EtcdMembers(ns, keeper, tc)
+	t.Logf("etcd members before:\n%s", members)
+
+	out, err := r.reclaim(t, victim, "--confirm", uuid)
+	if err != nil {
+		t.Fatalf("C2: graceful reclaim of one of three control planes failed: %v", err)
+	}
+	if !strings.Contains(out, "graceful: true") || !strings.Contains(out, "is in maintenance mode with UUID "+uuid) {
+		t.Errorf("C2: not graceful or not in maintenance")
+	}
+	members, err = talosctl.EtcdMembers(ns, keeper, tc)
+	t.Logf("etcd members after (err=%v):\n%s", err, members)
+	if n := strings.Count(members, "ichor-e2e-fj-cp"); n != 2 {
+		t.Errorf("C2: etcd lists %d members after the reclaim, want 2", n)
+	}
+	// talosctl health reaches every etcd check (healthy, consistent members) but then fails on the Kubernetes Node object
+	// of the reclaimed machine, which a graceful reset leaves behind (cordoned, drained, not deleted).
+	h, _ := talosctl.Health(ns, []string{keeper, other}, tc)
+	if !strings.Contains(h, "waiting for etcd to be healthy: OK") || !strings.Contains(h, "waiting for etcd members to be consistent across nodes: OK") {
+		t.Errorf("C2: etcd of the old cluster is not healthy with two members:\n%s", h)
+	}
+	t.Logf("old cluster nodes: %s", func() string { o, _ := inner(r.f, "get", "nodes", "--no-headers"); return o }())
+
+	// A 2-member cluster: removing one leaves 1 of 2, no quorum.
+	uuid2 := uuidOf(t, other, tc)
+	out, err = r.reclaim(t, other, "--confirm", uuid2)
+	if err == nil || !strings.Contains(out, "Refused") {
+		t.Errorf("C2: a control plane of a 2-member cluster was not refused: %v", err)
+	}
+	if got := uuidOf(t, other, tc); got != uuid2 {
+		t.Errorf("C2: the node changed after a refusal")
+	}
 }
 
 // TestC3Force: the only control plane of a foreign cluster is reclaimed with --force, the cluster name typed a

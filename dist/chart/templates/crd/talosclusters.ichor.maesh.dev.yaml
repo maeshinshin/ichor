@@ -166,6 +166,18 @@ spec:
                     - url
                     type: object
                 type: object
+              certSANs:
+                description: |-
+                  certSANs are extra subject alternative names (hostnames, IPs) for the Talos API certificate
+                  of every node and for the kube-apiserver serving certificate: machine.certSANs and
+                  KubeAPIServerConfig.certExtraSANs, which Talos's generator writes together from one list.
+                  The cluster endpoint host is not added for you here; list it if the nodes should serve it.
+                  Unset adds none.
+                items:
+                  maxLength: 253
+                  type: string
+                maxItems: 64
+                type: array
               cni:
                 description: |-
                   cni configures which CNI preset this cluster bootstraps and how kube-proxy is split
@@ -3926,6 +3938,17 @@ spec:
                       x-kubernetes-validations:
                       - message: host must be "*" or a hostname[:port]
                         rule: self == '*' || self.matches('^[a-zA-Z0-9.-]+(:[0-9]{1,5})?$')
+                    overridePath:
+                      description: |-
+                        overridePath makes the nodes use every endpoint's path as given, without adding the
+                        /v2/ suffix (RegistryMirrorConfig.endpoints[].overridePath). It applies to all of this
+                        entry's endpoints; Talos allows it per endpoint, and a mix cannot be recorded here.
+                      type: boolean
+                    skipFallback:
+                      description: |-
+                        skipFallback stops nodes falling back to host itself when none of the endpoints has the
+                        image (RegistryMirrorConfig.skipFallback). Default false, Talos's own default.
+                      type: boolean
                     username:
                       description: |-
                         username is this registry's non-secret auth username (RegistryAuthConfig.username). Optional: some private

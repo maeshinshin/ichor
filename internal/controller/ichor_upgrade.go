@@ -79,7 +79,7 @@ func ichorInstallerJobName(op *ichorv1alpha1.TalosOperation) string {
 // Everything is re-derived per call: nothing is remembered in
 // the process, so a restart of the controller -- which the Job itself causes -- resumes
 // from the Job and the cluster.
-func NewIchorUpgradeAdvancer(c client.Client, controllerNamespace string) AdvanceMachineFunc {
+func NewIchorUpgradeAdvancer(c client.Client, controllerNamespace string, noCiliumPolicies bool) AdvanceMachineFunc {
 	return func(
 		ctx context.Context, cluster *ichorv1alpha1.TalosCluster, _ *ichorv1alpha1.TalosMachine, op *ichorv1alpha1.TalosOperation,
 	) (bool, error) {
@@ -100,7 +100,7 @@ func NewIchorUpgradeAdvancer(c client.Client, controllerNamespace string) Advanc
 				inst.Spec.Version, version.Version)
 		}
 
-		return advanceInstallerJob(ctx, c, controllerNamespace, op, &inst, detectedCNI(cluster))
+		return advanceInstallerJob(ctx, c, controllerNamespace, op, &inst, detectedCNI(cluster), noCiliumPolicies)
 	}
 }
 
@@ -137,7 +137,7 @@ func (r *TalosOperationReconciler) advanceIchor(
 }
 
 func advanceInstallerJob(
-	ctx context.Context, c client.Client, ns string, op *ichorv1alpha1.TalosOperation, inst *ichorv1alpha1.IchorInstallation, cni string,
+	ctx context.Context, c client.Client, ns string, op *ichorv1alpha1.TalosOperation, inst *ichorv1alpha1.IchorInstallation, cni string, noPolicies bool,
 ) (bool, error) {
 	name := ichorInstallerJobName(op)
 
@@ -147,7 +147,7 @@ func advanceInstallerJob(
 
 	switch {
 	case apierrors.IsNotFound(err):
-		return false, c.Create(ctx, newInstallerJob(ns, name, op, inst, cni))
+		return false, c.Create(ctx, newInstallerJob(ns, name, op, inst, cni, noPolicies))
 	case err != nil:
 		return false, err
 	}
@@ -168,17 +168,22 @@ func advanceInstallerJob(
 
 // newInstallerJob is the whole installer process: the target version's own image, run once,
 // under a ServiceAccount that exists for this and nothing else.
-func newInstallerJob(ns, name string, op *ichorv1alpha1.TalosOperation, inst *ichorv1alpha1.IchorInstallation, cni string) *batchv1.Job {
+func newInstallerJob(ns, name string, op *ichorv1alpha1.TalosOperation, inst *ichorv1alpha1.IchorInstallation, cni string, noPolicies bool) *batchv1.Job {
 	sum := sha256.Sum256([]byte(op.Namespace + "/" + op.Name))
 
 	// One attempt: a retry after a rollback would redo a failed upgrade without anyone having
 	// looked at why. The operation pauses instead. Nothing bounds the run in time.
+	args := []string{"installer", "run", "--namespace=" + ns, "--run-id=" + name, "--cni-detected=" + cni}
+	if noPolicies {
+		args = append(args, "--no-cilium-policies")
+	}
+
 	return newJob(ns, name, "ichor-installer", IchorInstallerServiceAccount, 0,
 		map[string]string{ichorInstallerOperationLabel: hex.EncodeToString(sum[:])[:32]},
 		map[string]string{IchorInstallerTargetAnnotation: inst.Spec.Version},
 		corev1.Container{
 			Name:  "installer",
 			Image: inst.Spec.InstallerRepository + ":" + inst.Spec.Version,
-			Args:  []string{"installer", "run", "--namespace=" + ns, "--run-id=" + name, "--cni-detected=" + cni},
+			Args:  args,
 		})
 }

@@ -154,6 +154,27 @@ func TestRunAppliesNetworkPoliciesOnlyWhenCiliumsCRDExists(t *testing.T) {
 			t.Fatalf("a policy was applied with the CNI detected as %q", detected)
 		}
 	}
+
+	// The operator's explicit opt-out wins over Cilium plus the CRD, and the reason is logged.
+	f4 := newFixture(t)
+
+	var log strings.Builder
+
+	err = Run(context.Background(), k8sClient, Options{
+		Namespace: f4.ns, RunID: f4.run, Manifest: f4.manifest("ctrl:v2", ""), Ready: noWait(&order),
+		NetworkPolicies: policyManifest(f4.ns), CNIDetected: detectedCilium, SkipCiliumPolicies: true, Log: &log,
+	})
+	if err != nil {
+		t.Fatalf("Run with the opt-out: %v", err)
+	}
+
+	if policyExists(t, f4.ns) {
+		t.Fatal("a policy was applied although the operator opted out")
+	}
+
+	if !strings.Contains(log.String(), "opted out") {
+		t.Errorf("the opt-out reason was not logged: %q", log.String())
+	}
 }
 
 const detectedCilium = "cilium"

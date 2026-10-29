@@ -48,14 +48,14 @@ export const CanReclaimRequestSchema: GenMessage<CanReclaimRequest> = /*@__PURE_
  */
 export type CanReclaimResponse = Message<"ichor.v1alpha1.CanReclaimResponse"> & {
   /**
-   * enabled is the installation switch (reclaim.enabled).
+   * enabled is removed: always true. RBAC alone decides.
    *
    * @generated from field: bool enabled = 1;
    */
   enabled: boolean;
 
   /**
-   * allowed is the caller's RBAC; false when enabled is false.
+   * allowed is the caller's RBAC (the reclaim verb on machinereclaims).
    *
    * @generated from field: bool allowed = 2;
    */

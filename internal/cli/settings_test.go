@@ -8,16 +8,17 @@ import (
 )
 
 func TestSettingsUpdateRequest(t *testing.T) {
-	if _, err := settingsUpdateRequest([]string{"reclaim.enabled=true"}, false); err == nil {
-		t.Fatal("enabling reclaim without --confirm-reclaim must fail")
+	_, err := settingsUpdateRequest([]string{"reclaim.enabled=true"})
+	if err == nil || !strings.Contains(err.Error(), "RBAC") {
+		t.Fatalf("reclaim.enabled must be refused with a pointer: %v", err)
 	}
 
-	req, err := settingsUpdateRequest([]string{"reclaim.enabled=true", "users.tokenTTL=15m"}, true)
+	req, err := settingsUpdateRequest([]string{"users.tokenTTL=15m"})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if !*req.Changes.ReclaimEnabled || *req.Changes.TokenTtl != "15m0s" || !req.ConfirmReclaim {
+	if *req.Changes.TokenTtl != "15m0s" || req.Changes.ReclaimEnabled != nil {
 		t.Fatalf("%v", req)
 	}
 
@@ -25,13 +26,8 @@ func TestSettingsUpdateRequest(t *testing.T) {
 		t.Fatal("unnamed keys must stay unchanged")
 	}
 
-	// Disabling needs no confirmation.
-	if _, err := settingsUpdateRequest([]string{"reclaim.enabled=false"}, false); err != nil {
-		t.Fatal(err)
-	}
-
 	for _, bad := range []string{"users.tokenTTL=2h", "nope=1", "defaults.driftPolicy=enforce"} {
-		if _, err := settingsUpdateRequest([]string{bad}, true); err == nil {
+		if _, err := settingsUpdateRequest([]string{bad}); err == nil {
 			t.Errorf("%q should fail", bad)
 		}
 	}
@@ -44,14 +40,14 @@ func TestSettingsTable(t *testing.T) {
 	err := writeSettingsTable(&sb, &pb.GetSettingsResponse{
 		Version: testSettingsVersion, Manager: "helm", ReadOnly: true,
 		Spec:      &pb.SettingsFields{TokenTtl: &ttl},
-		Effective: &pb.SettingsEffective{ReclaimEnabled: &pb.SettingValue{Value: testOff, Source: "deployment"}},
+		Effective: &pb.SettingsEffective{TokenTtl: &pb.SettingValue{Value: "30m", Source: "spec"}},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	out := sb.String()
-	for _, want := range []string{"reclaim.enabled  " + testOff + "  deployment", "users.tokenTTL", "30m", "defaults.driftPolicy  -", "managed by the deployment"} {
+	for _, want := range []string{"users.tokenTTL  30m  spec", "defaults.driftPolicy  -", "managed by the deployment"} {
 		if !strings.Contains(strings.Join(strings.Fields(out), " "), strings.Join(strings.Fields(want), " ")) {
 			t.Errorf("missing %q in:\n%s", want, out)
 		}
@@ -60,5 +56,4 @@ func TestSettingsTable(t *testing.T) {
 
 const (
 	testSettingsVersion = "v0.1.0"
-	testOff             = "false"
 )

@@ -52,7 +52,6 @@ func settingValuePB[T any](v settings.Value[T], str func(T) string) *pb.SettingV
 
 func effectivePB(e settings.Effective) *pb.SettingsEffective {
 	return &pb.SettingsEffective{
-		ReclaimEnabled:  settingValuePB(e.Reclaim, func(b bool) string { return fmt.Sprint(b) }),
 		TokenTtl:        settingValuePB(e.TokenTTL, time.Duration.String),
 		RefreshLifetime: settingValuePB(e.RefreshLifetime, time.Duration.String),
 		DriftPolicy:     settingValuePB(e.DriftPolicy, func(s string) string { return s }),
@@ -74,16 +73,12 @@ func statusEffectivePB(e *ichorv1alpha1.IchorEffectiveSettings) *pb.SettingsEffe
 	}
 
 	return &pb.SettingsEffective{
-		ReclaimEnabled: v(e.ReclaimEnabled), TokenTtl: v(e.TokenTTL), RefreshLifetime: v(e.RefreshLifetime), DriftPolicy: v(e.DriftPolicy),
+		TokenTtl: v(e.TokenTTL), RefreshLifetime: v(e.RefreshLifetime), DriftPolicy: v(e.DriftPolicy),
 	}
 }
 
 func specFieldsPB(spec *ichorv1alpha1.IchorInstallationSpec) *pb.SettingsFields {
 	out := &pb.SettingsFields{}
-
-	if r := spec.Reclaim; r != nil {
-		out.ReclaimEnabled = r.Enabled
-	}
 
 	if u := spec.Users; u != nil {
 		if u.TokenTTL != nil {
@@ -129,10 +124,6 @@ func (s *Server) settingsResponse(ctx context.Context, inst *ichorv1alpha1.Ichor
 	if !resp.ReadOnly {
 		var err error
 
-		if resp.CanEditReclaim, err = s.mayEditSetting(ctx, ichorv1alpha1.IchorSubresourceReclaim); err != nil {
-			return nil, err
-		}
-
 		if resp.CanEditSettings, err = s.mayEditSetting(ctx, ichorv1alpha1.IchorSubresourceSettings); err != nil {
 			return nil, err
 		}
@@ -160,7 +151,10 @@ func (s *Server) GetSettings(
 func changesOf(f *pb.SettingsFields) (settings.Changes, error) {
 	var c settings.Changes
 
-	c.Reclaim = f.ReclaimEnabled
+	if f.ReclaimEnabled != nil {
+		return c, errors.New("reclaim.enabled is removed: RBAC alone decides who may reset and add a machine")
+	}
+
 	c.DriftPolicy = f.DriftPolicy
 
 	for _, d := range []struct {
@@ -205,16 +199,11 @@ func (s *Server) UpdateSettings(
 		return nil, bad(err)
 	}
 
-	if changes.NeedsConfirmation() && !req.Msg.GetConfirmReclaim() {
-		return nil, bad(errors.New("enabling break-glass reclaim needs the confirmation (confirm_reclaim)"))
-	}
-
 	// RBAC is judged per group before the write, so the message names the verb; the webhook repeats the check.
 	for _, g := range []struct {
 		touched bool
 		sub     string
 	}{
-		{changes.Reclaim != nil, ichorv1alpha1.IchorSubresourceReclaim},
 		{changes.TokenTTL != nil || changes.RefreshLifetime != nil || changes.DriftPolicy != nil, ichorv1alpha1.IchorSubresourceSettings},
 	} {
 		if !g.touched {

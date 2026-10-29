@@ -27,45 +27,37 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
-	"github.com/maeshinshin/ichor/internal/settings"
 )
 
 const machineReclaimWebhookPath = "/validate-ichor-maesh-dev-v1alpha1-machinereclaim"
 
 // +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-machinereclaim,mutating=false,failurePolicy=fail,sideEffects=None,groups=ichor.maesh.dev,resources=machinereclaims,verbs=create;update,versions=v1alpha1,name=vmachinereclaim-v1alpha1.kb.io,admissionReviewVersions=v1
 
-// MachineReclaimHandler guards the break-glass reclaim. Every create and
+// MachineReclaimHandler guards "Reset and add" (MachineReclaim). Every create and
 // every write of spec.confirmUUID needs the custom verb `reclaim` on machinereclaims, asked as the
 // requesting user. A confirmUUID must equal status.inspection.uuid. The identity that did each
 // is an annotation the writer sets and this webhook insists is the authenticated user, so
-// status.audit cannot be forged. When reclaim is off, nothing is admitted.
+// status.audit cannot be forged. There is no installation switch: RBAC alone decides.
 type MachineReclaimHandler struct {
 	// Client is uncached: it creates SubjectAccessReviews.
-	Client  client.Client
-	Enabled bool
-	// Settings, when set, is read per call and wins over Enabled.
-	Settings *settings.Reader
+	Client client.Client
 }
 
 // SetupMachineReclaimWebhookWithManager registers the check on the manager's webhook server.
-func SetupMachineReclaimWebhookWithManager(mgr ctrl.Manager, enabled bool, s *settings.Reader) error {
+func SetupMachineReclaimWebhookWithManager(mgr ctrl.Manager) error {
 	direct, err := client.New(mgr.GetConfig(), client.Options{Scheme: mgr.GetScheme()})
 	if err != nil {
 		return fmt.Errorf("creating the uncached client: %w", err)
 	}
 
 	mgr.GetWebhookServer().Register(machineReclaimWebhookPath,
-		&admission.Webhook{Handler: &MachineReclaimHandler{Client: direct, Enabled: enabled, Settings: s}})
+		&admission.Webhook{Handler: &MachineReclaimHandler{Client: direct}})
 
 	return nil
 }
 
 // Handle implements admission.Handler.
 func (h *MachineReclaimHandler) Handle(ctx context.Context, req admission.Request) admission.Response {
-	if !h.enabled(ctx) {
-		return admission.Denied("break-glass machine reclaim is switched off in this installation (reclaim.enabled)")
-	}
-
 	var mr ichorv1alpha1.MachineReclaim
 	if err := json.Unmarshal(req.Object.Raw, &mr); err != nil {
 		return admission.Errored(http.StatusBadRequest, fmt.Errorf("decoding the request: %w", err))
@@ -128,14 +120,4 @@ func (h *MachineReclaimHandler) needVerb(ctx context.Context, req admission.Requ
 	}
 
 	return admission.Allowed("")
-}
-
-// enabled is the reclaim switch, read per call from the IchorInstallation when Settings is set and the Enabled flag
-// otherwise.
-func (h *MachineReclaimHandler) enabled(ctx context.Context) bool {
-	if h.Settings != nil {
-		return h.Settings.ReclaimEnabled(ctx)
-	}
-
-	return h.Enabled
 }

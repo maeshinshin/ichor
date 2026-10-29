@@ -44,7 +44,6 @@ rules:
 - apiGroups:
   - ichor.maesh.dev
   resources:
-  - ichorinstallations/reclaim
   - ichorinstallations/settings
   verbs:
   - update
@@ -131,4 +130,5 @@ rules:
   - create
   - get
   - list
+  - reclaim
   - update

@@ -41,33 +41,36 @@ const testReclaimAddr = "10.0.0.5"
 
 const reclaimMarker = "TALOSCONFIG-MARKER-9f3a"
 
-func TestReclaimRefusedWhenOff(t *testing.T) {
-	s := &Server{Client: fake.NewClientBuilder().WithScheme(testScheme(t)).Build(), ControllerNamespace: testNS}
-	ctx := context.Background()
+// TestReclaimRefusedWithoutTheVerb: RBAC alone decides; there is no installation switch.
+func TestReclaimRefusedWithoutTheVerb(t *testing.T) {
+	k8s := fake.NewClientBuilder().WithScheme(testScheme(t)).Build()
+	s := &Server{Client: k8s, ControllerNamespace: testNS,
+		Impersonate: func(Identity) (client.Client, error) { return reviewingSubresources(k8s), nil }}
+	ctx := ContextWithIdentity(context.Background(), Identity{User: userAlice})
 
-	if _, err := s.CreateReclaim(ctx, connect.NewRequest(&pb.CreateReclaimRequest{Address: testReclaimAddr, Talosconfig: []byte(reclaimMarker)})); connect.CodeOf(err) != connect.CodeFailedPrecondition {
+	if _, err := s.CreateReclaim(ctx, connect.NewRequest(&pb.CreateReclaimRequest{Address: testReclaimAddr, Talosconfig: []byte(reclaimMarker)})); connect.CodeOf(err) != connect.CodePermissionDenied {
 		t.Fatalf("create: %v", err)
 	}
 
-	if _, err := s.ConfirmReclaim(ctx, connect.NewRequest(&pb.ConfirmReclaimRequest{Uuid: "x"})); connect.CodeOf(err) != connect.CodeFailedPrecondition {
+	if _, err := s.ConfirmReclaim(ctx, connect.NewRequest(&pb.ConfirmReclaimRequest{Uuid: "x"})); connect.CodeOf(err) != connect.CodePermissionDenied {
 		t.Fatalf("confirm: %v", err)
 	}
 
 	res, err := s.CanReclaim(ctx, connect.NewRequest(&pb.CanReclaimRequest{}))
-	if err != nil || res.Msg.GetEnabled() || res.Msg.GetAllowed() {
+	if err != nil || res.Msg.GetAllowed() {
 		t.Fatalf("can: %v %v", res, err)
 	}
 
 	var secrets corev1.SecretList
 	if err := s.Client.List(ctx, &secrets); err != nil || len(secrets.Items) != 0 {
-		t.Fatalf("a Secret was written while off: %v %v", secrets.Items, err)
+		t.Fatalf("a Secret was written without the verb: %v %v", secrets.Items, err)
 	}
 }
 
 func TestCreateReclaimStoresSecretAndRegistersAddress(t *testing.T) {
 	cluster := discoveryCluster(nil)
 	k8s := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(cluster).Build()
-	s := &Server{Client: k8s, ControllerNamespace: testNS, ReclaimEnabled: true,
+	s := &Server{Client: k8s, ControllerNamespace: testNS,
 		Impersonate: func(Identity) (client.Client, error) {
 			return reviewing(k8s, true, &[]authv1.ResourceAttributes{}), nil
 		}}
@@ -122,7 +125,7 @@ func TestConfirmReclaimWritesOnlyConfirmFields(t *testing.T) {
 		},
 	}
 	k8s := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(before.DeepCopy()).Build()
-	s := &Server{Client: k8s, ControllerNamespace: testNS, ReclaimEnabled: true,
+	s := &Server{Client: k8s, ControllerNamespace: testNS,
 		Impersonate: func(Identity) (client.Client, error) {
 			return reviewing(k8s, true, &[]authv1.ResourceAttributes{}), nil
 		}}

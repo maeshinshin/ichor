@@ -146,7 +146,6 @@ func main() {
 	var certExpiryWarningDays int
 	var userIssuer bool
 	var externalURL string
-	var reclaimEnabled bool
 	var deployedBy string
 	var settingsReadOnly bool
 	var noCiliumPolicies bool
@@ -171,9 +170,6 @@ func main() {
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
-	flag.BoolVar(&reclaimEnabled, "reclaim", false,
-		"Allow break-glass machine reclaim: the MachineReclaim controller and webhook act. "+
-			"Off, they refuse; the credential sweeper runs either way.")
 	flag.StringVar(&deployedBy, "deployed-by", ichorv1alpha1.IchorManagerInstaller,
 		"Who deploys Ichor, recorded as spec.deployment.manager when the controller creates the missing IchorInstallation (installer or helm; the chart passes helm).")
 	flag.BoolVar(&settingsReadOnly, "settings-read-only", false,
@@ -295,7 +291,7 @@ func main() {
 	evac := &controller.LonghornEvacuator{Client: mgr.GetClient()}
 	// One live reader of the IchorInstallation settings for the controllers and webhooks.
 	// It reads uncached with a short TTL, so a change applies within seconds and nothing needs an informer.
-	settingsFallback := settings.Fallback{ReclaimEnabled: reclaimEnabled, RefreshLifetime: refreshLifetime}
+	settingsFallback := settings.Fallback{RefreshLifetime: refreshLifetime}
 	settingsReader := &settings.Reader{
 		Client: mgr.GetAPIReader(), Fallback: settingsFallback, ReadOnly: settingsReadOnly, TTL: 2 * time.Second,
 	}
@@ -366,7 +362,7 @@ func main() {
 			must(webhookv1alpha1.SetupBreakGlassWebhookWithManager(mgr, webhookv1alpha1.BreakGlassOptions{
 				ExemptUsers: exempt,
 			}), "Failed to create webhook", "webhook", "BreakGlass")
-			must(webhookv1alpha1.SetupMachineReclaimWebhookWithManager(mgr, reclaimEnabled, settingsReader), "Failed to create webhook", "webhook", "MachineReclaim")
+			must(webhookv1alpha1.SetupMachineReclaimWebhookWithManager(mgr), "Failed to create webhook", "webhook", "MachineReclaim")
 			mgr.GetWebhookServer() // idempotent; makes sure the server is a runnable even if no handler did
 			close(webhooksUp)
 		}()
@@ -548,8 +544,6 @@ func main() {
 	})), "Failed to add the IchorInstallation seed")
 	must((&controller.MachineReclaimReconciler{
 		Client:              mgr.GetClient(),
-		Enabled:             reclaimEnabled,
-		Settings:            settingsReader,
 		ControllerNamespace: ns,
 		Recorder:            mgr.GetEventRecorderFor("ichor-controller"), //nolint:staticcheck // typed against record.EventRecorder, as above
 	}).SetupWithManager(mgr), "Failed to create controller", "controller", "machinereclaim")

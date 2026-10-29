@@ -376,6 +376,7 @@ func newTestCluster(secretName, versionContract string) *ichorv1alpha1.TalosClus
 			VersionContract:   versionContract,
 			SecretsRef:        corev1.LocalObjectReference{Name: secretName},
 			ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: 1, Schedulable: testSchedulable},
+			DriftPolicy:       "warnOnly", // what the defaulting webhook fills; envtest here runs without it
 		},
 	}
 	Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
@@ -908,7 +909,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		bundle := newTestBundle("v1.14")
 		secret := newTestSecret(bundle)
 		cluster := newTestCluster(secret.Name, "v1.14")
-		Expect(cluster.Spec.DriftPolicy).To(Equal("warnOnly"), "CRD default")
+		Expect(cluster.Spec.DriftPolicy).To(Equal("warnOnly"), "set by the helper")
 		m := newTestMachine(cluster.Name, true)
 
 		current := renderWithConfig(cluster, m, bundle, layerCluster, nil, minimalConfigSkeleton())

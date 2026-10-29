@@ -268,6 +268,7 @@ func newClusterSpec(secretName, versionContract string) ichorv1alpha1.TalosClust
 		VersionContract:   versionContract,
 		SecretsRef:        corev1.LocalObjectReference{Name: secretName},
 		ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: 1, Schedulable: testSchedulable},
+		DriftPolicy:       "warnOnly", // what the defaulting webhook fills; envtest here runs without it
 	}
 }
 

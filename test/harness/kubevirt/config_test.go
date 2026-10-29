@@ -59,7 +59,7 @@ func TestDemoMemory(t *testing.T) {
 	if err != nil || got != "2560Mi" {
 		t.Fatalf("unset: got %q, %v; want 2560Mi", got, err)
 	}
-	if m := demoVMManifest("x-cp", got); !strings.Contains(m, "guest: 2560Mi") {
+	if m := demoVMManifest("x-cp", got, httpISO()); !strings.Contains(m, "guest: 2560Mi") {
 		t.Fatalf("default manifest lost 2560Mi:\n%s", m)
 	}
 
@@ -68,12 +68,66 @@ func TestDemoMemory(t *testing.T) {
 	if err != nil || got != "3Gi" {
 		t.Fatalf("override: got %q, %v; want 3Gi", got, err)
 	}
-	if m := demoVMManifest("x-cp", got); !strings.Contains(m, "guest: 3Gi") || strings.Contains(m, "2560Mi") {
+	if m := demoVMManifest("x-cp", got, httpISO()); !strings.Contains(m, "guest: 3Gi") || strings.Contains(m, "2560Mi") {
 		t.Fatalf("override manifest wrong:\n%s", m)
 	}
 
 	t.Setenv(env, "2560Mi\n  evil: 1")
 	if _, err := demoMemory(env); err == nil {
 		t.Fatal("accepted a malformed quantity")
+	}
+}
+
+// TestBaseCacheEnabled: on by default, off only for the explicit off values.
+func TestBaseCacheEnabled(t *testing.T) {
+	t.Setenv(baseCacheEnv, "")
+	if !baseCacheEnabled() {
+		t.Fatal("cache must default to on")
+	}
+	for _, v := range []string{"1", "true", "yes"} {
+		t.Setenv(baseCacheEnv, v)
+		if !baseCacheEnabled() {
+			t.Fatalf("%q turned the cache off", v)
+		}
+	}
+	for _, v := range []string{"0", "false", "OFF", "no"} {
+		t.Setenv(baseCacheEnv, v)
+		if baseCacheEnabled() {
+			t.Fatalf("%q left the cache on", v)
+		}
+	}
+}
+
+// TestBaseCacheName: DNS-safe, per Talos version and schematic.
+func TestBaseCacheName(t *testing.T) {
+	got := baseCacheName()
+	want := "ichor-e2e-talos-v1-14-3-" + talosFactorySchematic[:8] + "-base"
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+	if strings.Contains(got, ".") {
+		t.Fatalf("%q contains a dot", got)
+	}
+}
+
+// TestVMManifestISOSource: the old path keeps the HTTP import; the cache path clones the PVC at the cache's size.
+func TestVMManifestISOSource(t *testing.T) {
+	for name, tmpl := range map[string]string{"single": vmManifestTmpl, "ha": haVMManifestTmpl} {
+		old := renderVM(tmpl, "x-0", httpISO())
+		if !strings.Contains(old, "metal-amd64.iso") || strings.Contains(old, "pvc:") || !strings.Contains(old, "storage: 1Gi") {
+			t.Fatalf("%s: old path wrong:\n%s", name, old)
+		}
+		cached := renderVM(tmpl, "x-0", clonedISO(baseCacheName(), "2Gi"))
+		for _, want := range []string{"pvc:", "name: " + baseCacheName(), "namespace: ichor-e2e", "storage: 2Gi"} {
+			if !strings.Contains(cached, want) {
+				t.Fatalf("%s: cached manifest lacks %q:\n%s", name, want, cached)
+			}
+		}
+		if strings.Contains(cached, "http:") || strings.Contains(cached, "%!") {
+			t.Fatalf("%s: cached manifest still imports or is malformed:\n%s", name, cached)
+		}
+		if !strings.Contains(cached, "blank: {}") {
+			t.Fatalf("%s: the system disk must stay blank so Ichor installs:\n%s", name, cached)
+		}
 	}
 }

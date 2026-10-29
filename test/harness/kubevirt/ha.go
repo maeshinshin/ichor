@@ -103,14 +103,13 @@ spec:
         name: %[1]s-iso
       spec:
         source:
-          http:
-            url: https://factory.talos.dev/image/%[2]s/%[3]s/metal-amd64.iso
+%[2]s
         storage:
           accessModes: [ReadWriteOnce]
           volumeMode: Filesystem
           resources:
             requests:
-              storage: 1Gi
+              storage: %[3]s
           storageClassName: ceph-block
     - metadata:
         name: %[1]s-system
@@ -174,9 +173,14 @@ func upHA() error {
 // bootHAToMaintenance creates the shared ISO DataVolume and haCount VMs referencing it,
 // and waits for every VM to report a pod IP and reach maintenance.
 func bootHAToMaintenance() ([]string, error) {
+	iso, err := resolveISO()
+	if err != nil {
+		return nil, err
+	}
+
 	for i := range haTotal() {
 		name := haVMName(i)
-		if err := applyManifest(fmt.Sprintf(haVMManifestTmpl, name, talosFactorySchematic, talosVersion)); err != nil {
+		if err := applyManifest(renderVM(haVMManifestTmpl, name, iso)); err != nil {
 			return nil, fmt.Errorf("creating VM %s: %w", name, err)
 		}
 	}

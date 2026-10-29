@@ -131,10 +131,6 @@ cleanup-test-e2e: ## Tear down the cluster setup-test-e2e provisioned; a no-op i
 lint: golangci-lint proto-lint ## Run golangci-lint and buf lint (proto-lint is a prerequisite so CI catches proto drift)
 	"$(GOLANGCI_LINT)" run
 
-.PHONY: lint-fix
-lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes
-	"$(GOLANGCI_LINT)" run --fix
-
 .PHONY: lint-config
 lint-config: golangci-lint ## Verify golangci-lint linter configuration
 	"$(GOLANGCI_LINT)" config verify
@@ -166,10 +162,6 @@ run: manifests generate fmt vet ## Run a controller from your host.
 docker-build: ## Build docker image with the manager.
 	$(CONTAINER_TOOL) build --build-arg VERSION=$(VERSION) -t ${IMG} .
 
-.PHONY: docker-push
-docker-push: ## Push docker image with the manager.
-	$(CONTAINER_TOOL) push ${IMG}
-
 .PHONY: docker-build-installer
 docker-build-installer: build-installer ## Build the installer image: the ichor binary with this tree's install manifest embedded.
 	cp dist/install.yaml internal/installmanifest/install.yaml
@@ -185,23 +177,6 @@ demo-images: ui-build ## Build the three demo images with crane and push them to
 .PHONY: docker-build-ichor-ui
 docker-build-ichor-ui: ## Build docker image with ichor-ui, the real UI embedded (not the placeholder).
 	$(CONTAINER_TOOL) build -f Dockerfile.ichor-ui -t ${IMG_UI} .
-
-# PLATFORMS defines the target platforms for the manager image be built to provide support to multiple
-# architectures. (i.e. make docker-buildx IMG=myregistry/mypoperator:0.0.1). To use this option you need to:
-# - be able to use docker buildx. More info: https://docs.docker.com/build/buildx/
-# - have enabled BuildKit. More info: https://docs.docker.com/develop/develop-images/build_enhancements/
-# - be able to push the image to your registry (i.e. if you do not set a valid value via IMG=<myregistry/image:<tag>> then the export will fail)
-# To adequately provide solutions that are compatible with multiple platforms, you should consider using this option.
-PLATFORMS ?= linux/arm64,linux/amd64,linux/s390x,linux/ppc64le
-.PHONY: docker-buildx
-docker-buildx: ## Build and push docker image for the manager for cross-platform support
-	# copy existing Dockerfile and insert --platform=${BUILDPLATFORM} into Dockerfile.cross, and preserve the original Dockerfile
-	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile > Dockerfile.cross
-	- $(CONTAINER_TOOL) buildx create --name ichor-builder
-	$(CONTAINER_TOOL) buildx use ichor-builder
-	- $(CONTAINER_TOOL) buildx build --push --platform=$(PLATFORMS) --tag ${IMG} -f Dockerfile.cross .
-	- $(CONTAINER_TOOL) buildx rm ichor-builder
-	rm Dockerfile.cross
 
 .PHONY: build-installer
 build-installer: manifests generate kustomize ## Generate a consolidated YAML with CRDs and deployment.
@@ -220,27 +195,14 @@ build-installer: manifests generate kustomize ## Generate a consolidated YAML wi
 KUBE_CONTEXT ?=
 KUBE_CONTEXT_FLAG = $(if $(KUBE_CONTEXT),--context $(KUBE_CONTEXT))
 
-ifndef ignore-not-found
-  ignore-not-found = false
-endif
-
 .PHONY: install
 install: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config. Set KUBE_CONTEXT to pick a context other than the current one.
 	@crds="$$( "$(KUSTOMIZE)" build config/crd 2>/dev/null || true )"; \
 	if [ -n "$$crds" ]; then echo "$$crds" | "$(KUBECTL)" $(KUBE_CONTEXT_FLAG) apply -f -; else echo "No CRDs to install; skipping."; fi
 
-.PHONY: uninstall
-uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified in ~/.kube/config. Set KUBE_CONTEXT to pick a context other than the current one. Call with ignore-not-found=true to ignore resource not found errors during deletion.
-	@crds="$$( "$(KUSTOMIZE)" build config/crd 2>/dev/null || true )"; \
-	if [ -n "$$crds" ]; then echo "$$crds" | "$(KUBECTL)" $(KUBE_CONTEXT_FLAG) delete --ignore-not-found=$(ignore-not-found) -f -; else echo "No CRDs to delete; skipping."; fi
-
 .PHONY: deploy
 deploy: build-installer ## Deploy controller to the K8s cluster specified in ~/.kube/config. Set KUBE_CONTEXT to pick a context other than the current one.
 	"$(KUBECTL)" $(KUBE_CONTEXT_FLAG) apply -f dist/install.yaml
-
-.PHONY: undeploy
-undeploy: kustomize ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Set KUBE_CONTEXT to pick a context other than the current one. Call with ignore-not-found=true to ignore resource not found errors during deletion.
-	"$(KUSTOMIZE)" build config/installer | "$(KUBECTL)" $(KUBE_CONTEXT_FLAG) delete --ignore-not-found=$(ignore-not-found) -f -
 
 ##@ Dependencies
 
@@ -368,21 +330,11 @@ CHART_DIST ?= bin/chart
 helm-package: ## Package the chart into CHART_DIST (bin/chart) with CHART_VERSION and APP_VERSION.
 	$(HELM) package $(HELM_CHART_DIR) --version $(CHART_VERSION) --app-version $(APP_VERSION) --destination $(CHART_DIST)
 
-.PHONY: helm-uninstall
-helm-uninstall: ## Uninstall the Helm release from the K8s cluster.
-	$(HELM) uninstall $(HELM_RELEASE) --namespace $(HELM_NAMESPACE)
 
 .PHONY: helm-status
 helm-status: ## Show Helm release status.
 	$(HELM) status $(HELM_RELEASE) --namespace $(HELM_NAMESPACE)
 
-.PHONY: helm-history
-helm-history: ## Show Helm release history.
-	$(HELM) history $(HELM_RELEASE) --namespace $(HELM_NAMESPACE)
-
-.PHONY: helm-rollback
-helm-rollback: ## Rollback to previous Helm release.
-	$(HELM) rollback $(HELM_RELEASE) --namespace $(HELM_NAMESPACE)
 
 ##@ Connect API (proto)
 

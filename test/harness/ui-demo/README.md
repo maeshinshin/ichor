@@ -35,6 +35,18 @@ VM memory defaults to 2560Mi for both VMs. Override per role before `up-demo` wi
 The first run creates it and waits for the import; no `down*` deletes it, so delete it by hand when the Talos
 version changes. `ICHOR_E2E_BASE_CACHE=0` restores the per-VM import. The VMs still boot the ISO in maintenance
 mode and Ichor still installs Talos, so the install step stays exercised. Both VMs are created together.
+
+**Boot order.** Each VM boots its system disk first and the ISO second. A blank disk is not bootable, so the
+first boot falls through to the ISO (maintenance mode); after Ichor installs Talos every cold boot (a VM stopped
+and started) comes up from the disk. With the ISO first Talos halts on a cold boot ("already installed to disk
+but booted from another media").
+
+**Other shapes.** `ICHOR_UI_DEMO_NO_WORKER=1` creates the control plane only. `ICHOR_UI_DEMO_HA=1` creates three
+control planes (`<prefix>-cp`, `-cp2`, `-cp3`, no worker; `NO_WORKER` is ignored) and prints `CP_IP`, `CP2_IP`
+and `CP3_IP`; every launcher pod carries the label `ichor.maesh.dev/e2e-group: <prefix>`, so an outer Service can
+select all of one demo's VMs. `ICHOR_UI_DEMO_HA=extra` creates only a fourth control plane, `<prefix>-cp4`
+(prints `CP4_IP`), next to a running HA demo, to replace one of its control planes. `down-demo` with either
+value also deletes `-cp2`, `-cp3` and `-cp4` and their DataVolumes.
 Measured (single control plane + one worker, `ceph-block`, no ichor-ui):
 
 | phase | before | cache cold (first run) | cache warm |

@@ -138,7 +138,7 @@ func NewCNIKubeProxyAdvancer(
 func (a *cniKubeProxyAdvancer) Advance(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, op *ichorv1alpha1.TalosOperation,
 ) (bool, error) {
-	if cluster.Spec.CNI.Preset == render.PresetUnmanaged {
+	if cluster.Spec.CNI.Preset == ichorv1alpha1.TalosClusterCNIPresetUnmanaged {
 		return false, errors.New(ichorv1alpha1.CNINotManagedMessage)
 	}
 

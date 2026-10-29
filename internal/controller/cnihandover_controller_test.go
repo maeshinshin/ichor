@@ -233,6 +233,34 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		Expect(apimeta.FindStatusCondition(getCluster(cluster).Status.Conditions, render.ConditionCNIHandover)).To(BeNil())
 	})
 
+	It("does nothing for an unmanaged cluster: no conditions, no Job, and not CNIUnsupported", func() {
+		cluster := &ichorv1alpha1.TalosCluster{
+			GenerateName: testClusterGenerate, Namespace: tmNamespace,
+			Spec: ichorv1alpha1.TalosClusterSpec{
+				Endpoint:          ichorv1alpha1.TalosClusterEndpoint{Type: testEndpointType, Address: testClusterAddress},
+				TalosVersion:      testTalosVersion,
+				KubernetesVersion: "v" + constants.DefaultKubernetesVersion,
+				VersionContract:   "v1.14",
+				SecretsRef:        corev1.LocalObjectReference{Name: "does-not-exist"},
+				ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: 1, Schedulable: testSchedulable},
+				CNI:               ichorv1alpha1.TalosClusterCNI{Preset: render.PresetUnmanaged},
+			},
+		}
+		cluster.Annotations = map[string]string{ichorv1alpha1.TalosClusterAdoptedAnnotation: "true"}
+		Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
+
+		result, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.RequeueAfter).To(BeZero())
+
+		got := getCluster(cluster)
+		Expect(got.Status.Conditions).To(BeEmpty())
+
+		var jobs batchv1.JobList
+		Expect(k8sClient.List(ctx, &jobs, client.InNamespace(cniJobNamespace))).To(Succeed())
+		Expect(jobs.Items).To(BeEmpty())
+	})
+
 	It("ignores a TalosCluster that no longer exists", func() {
 		result, err := reconcileHandover(r, tmNamespace, "no-such-cluster")
 		Expect(err).NotTo(HaveOccurred())

@@ -23,9 +23,9 @@ import (
 
 	admissionv1 "k8s.io/api/admission/v1"
 	authnv1 "k8s.io/api/authentication/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
@@ -44,7 +44,8 @@ func TestCNIOperationIsRefusedForAnUnmanagedCluster(t *testing.T) {
 	}
 
 	cluster := func(name, preset string) *ichorv1alpha1.TalosCluster {
-		c := &ichorv1alpha1.TalosCluster{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"}}
+		c := &ichorv1alpha1.TalosCluster{}
+		c.Name, c.Namespace = name, testNamespace
 		c.Spec.CNI.Preset = preset
 
 		return c
@@ -57,7 +58,7 @@ func TestCNIOperationIsRefusedForAnUnmanagedCluster(t *testing.T) {
 
 	request := func(clusterName, user, action string) admission.Request {
 		op := ichorv1alpha1.TalosOperation{
-			ObjectMeta: metav1.ObjectMeta{Name: "op", Namespace: "default"},
+			Name: "op", Namespace: testNamespace,
 			Spec: ichorv1alpha1.TalosOperationSpec{
 				Kind:       ichorv1alpha1.TalosOperationKindCNI,
 				ClusterRef: corev1.LocalObjectReference{Name: clusterName},
@@ -72,8 +73,8 @@ func TestCNIOperationIsRefusedForAnUnmanagedCluster(t *testing.T) {
 
 		var req admission.Request
 
-		req.Operation, req.Name, req.Namespace = admissionv1.Create, "op", "default"
-		req.Resource = metav1.GroupVersionResource{Group: ichorGroup, Version: "v1alpha1", Resource: "talosoperations"}
+		req.Operation, req.Name, req.Namespace = admissionv1.Create, "op", testNamespace
+		req.Resource = metav1.GroupVersionResource{Group: ichorGroup, Version: ichorv1alpha1.GroupVersion.Version, Resource: resOperations}
 		req.UserInfo = authnv1.UserInfo{Username: user}
 		req.Object = runtime.RawExtension{Raw: raw}
 

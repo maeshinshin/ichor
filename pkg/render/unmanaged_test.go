@@ -30,7 +30,7 @@ import (
 func cniDocs(out string) string {
 	var keep []string
 
-	for _, d := range strings.Split(out, "---\n") {
+	for d := range strings.SplitSeq(out, "---\n") {
 		if strings.Contains(d, "kind: KubeFlannelCNIConfig") || strings.Contains(d, "kind: KubeProxyConfig") {
 			keep = append(keep, d)
 		}
@@ -44,9 +44,11 @@ func cniDocs(out string) string {
 // carries, byte for byte.
 func TestUnmanagedRendersTheLiveCNIConfiguration(t *testing.T) {
 	const (
-		flannel  = "apiVersion: v1alpha1\nkind: KubeFlannelCNIConfig\nbackendType: vxlan\nbackendPort: 4789\n"
-		proxyOn  = "apiVersion: v1alpha1\nkind: KubeProxyConfig\nimage: registry.k8s.io/kube-proxy:v" + constants.DefaultKubernetesVersion + "\nconfig: {}\n"
-		proxyOff = "apiVersion: v1alpha1\nkind: KubeProxyConfig\nenabled: false\nimage: registry.k8s.io/kube-proxy:v" + constants.DefaultKubernetesVersion + "\nconfig: {}\n"
+		flannel   = "apiVersion: v1alpha1\nkind: KubeFlannelCNIConfig\nbackendType: vxlan\nbackendPort: 4789\n"
+		proxyHead = "apiVersion: v1alpha1\nkind: KubeProxyConfig\n"
+		proxyTail = "image: registry.k8s.io/kube-proxy:v" + constants.DefaultKubernetesVersion + "\nconfig: {}\n"
+		proxyOn   = proxyHead + proxyTail
+		proxyOff  = proxyHead + "enabled: false\n" + proxyTail
 	)
 
 	unmanaged := func(talosCNI, proxy string) mutation {

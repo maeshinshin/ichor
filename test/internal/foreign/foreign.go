@@ -809,3 +809,36 @@ func (c *Cluster) patchLegacy(manifest string) ([]byte, error) {
 	}
 	return yaml.Marshal(map[string]any{"cluster": cluster, "machine": machine})
 }
+
+// Attach rebuilds the Cluster of a prefix that `foreign up` already brought up (so one case can span
+// several foreground runs). The nodes' pod IPs come from their VMIs; the files and the API tunnel are Up's.
+func Attach(o Options) (*Cluster, error) {
+	if err := o.defaults(); err != nil {
+		return nil, err
+	}
+	dir, err := Dir(o.Prefix)
+	if err != nil {
+		return nil, err
+	}
+	c := &Cluster{Opts: o, Dir: dir, Talosconfig: filepath.Join(dir, "talosconfig"),
+		Kubeconfig: filepath.Join(dir, "kubeconfig"), LocalKube: filepath.Join(dir, "kubeconfig.local")}
+	ip := func(name string) (string, error) {
+		out, err := utils.Run(kube.Command("-n", namespace, "get", "vmi", name, "-o", "jsonpath={.status.interfaces[0].ipAddress}"))
+		return strings.TrimSpace(out), err
+	}
+	for i := range o.ControlPlanes {
+		v, err := ip(vmName(o.Prefix, "cp", i))
+		if err != nil {
+			return nil, err
+		}
+		c.CPs = append(c.CPs, v)
+	}
+	for i := range o.Workers {
+		v, err := ip(vmName(o.Prefix, "w", i))
+		if err != nil {
+			return nil, err
+		}
+		c.Workers = append(c.Workers, v)
+	}
+	return c, nil
+}

@@ -55,8 +55,7 @@ type ClusterServiceClient interface {
 	// AddDiscoveryAddress appends one IPv4 address to
 	// TalosCluster.spec.discovery.addresses, so the controller
 	// probes it for a node in maintenance mode. It goes through the same write
-	// gate as the other writes: refused when Flux tracks the cluster, a pull
-	// request when Argo CD does, break-glass on request.
+	// gate as the other writes, which writes the CR directly.
 	AddDiscoveryAddress(context.Context, *connect.Request[v1alpha1.AddDiscoveryAddressRequest]) (*connect.Response[v1alpha1.AddDiscoveryAddressResponse], error)
 }
 
@@ -121,8 +120,7 @@ type ClusterServiceHandler interface {
 	// AddDiscoveryAddress appends one IPv4 address to
 	// TalosCluster.spec.discovery.addresses, so the controller
 	// probes it for a node in maintenance mode. It goes through the same write
-	// gate as the other writes: refused when Flux tracks the cluster, a pull
-	// request when Argo CD does, break-glass on request.
+	// gate as the other writes, which writes the CR directly.
 	AddDiscoveryAddress(context.Context, *connect.Request[v1alpha1.AddDiscoveryAddressRequest]) (*connect.Response[v1alpha1.AddDiscoveryAddressResponse], error)
 }
 

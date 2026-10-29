@@ -41,11 +41,7 @@ operation that rolls it out machine by machine: control planes one at a time,
 then workers. The spec is changed first, because the operation reads its target
 from it; if the operation cannot be created (no permission, another operation
 running) nothing was changed. Run the command again to retry: a spec that
-already names the version is not written twice.
-
-Where Argo CD or Flux tracks the spec, the CLI refuses to change it: merge the
-change in the repository first, then run the command with the version the spec
-now names, which starts the operation without writing the spec.`,
+already names the version is not written twice.`,
 }
 
 func newUpgradeCmd(use, short string, kind pb.OperationKind) *cobra.Command {

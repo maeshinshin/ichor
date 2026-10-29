@@ -1,5 +1,6 @@
 # Applied to the INNER demo cluster: reaches ichor-ui on node port 30080 so the outer
-# Service ichor-ui-demo (port 443 -> 30080) can forward to the control plane VM.
+# Service ichor-ui-demo (port 443 -> 30080) can forward to the control plane VM. ichor-ui serves
+# HTTPS only on 8443, so the L4 passthrough carries TLS straight to it.
 apiVersion: v1
 kind: Service
 metadata:
@@ -11,6 +12,6 @@ spec:
     app.kubernetes.io/name: ichor
     control-plane: ui-backend
   ports:
-    - port: 8080
-      targetPort: 8080
+    - port: 8443
+      targetPort: 8443
       nodePort: 30080

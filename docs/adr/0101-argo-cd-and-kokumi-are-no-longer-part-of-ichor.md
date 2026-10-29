@@ -2,7 +2,7 @@
 
 Status: Accepted · Date: 2026-10-29 · Design section: Bootstrap, CNI · Supersedes in part: 0099
 
-Decided: Argo CD and Kokumi are not requirements and Ichor no longer installs, publishes or manages either; the whole standard stack (the stack reconciler, the `ichor-stack` Jobs and RBAC, `pkg/stack`, the hidden `ichor stack apply`, the stack wait and Kokumi password print in `ichor init`, the stack network policies) is deleted, while Cilium stays Ichor's own Helm release run by the `ichor-cni` Job, and the CRD fields `IchorInstallation.spec.stack` and `status.stack` stay, deprecated and unused
+Decided: Argo CD and Kokumi are not requirements and Ichor no longer installs, publishes or manages either; the whole standard stack (the stack reconciler, the `ichor-stack` Jobs and RBAC, `pkg/stack`, the hidden `ichor stack apply`, the stack wait and Kokumi password print in `ichor init`, the stack network policies) is deleted, while Cilium stays Ichor's own Helm release run by the `ichor-cni` Job, and the CRD fields it left unused (`TalosCluster.spec.gitops`, `TalosCluster.spec.cni.handover`, `IchorInstallation.spec.managementMode`, `spec.stack`, `status.stack`) are removed, not deprecated, through the installer's explicit retired-field list; GitOps tools, Flux included, are permanently out of scope
 
 ## Context
 
@@ -22,7 +22,7 @@ Removed:
 Kept:
 
 - Cilium as Ichor's Helm release: the inline bootstrap manifest, the `ichor-cni` Job in `kube-system` and its RBAC, `spec.cni.cilium.values`, upgrades through `cni` operations, the kube-proxy switch, the `CNIHandover` condition and `ichor init` waiting for it. Everything in ADR 0099 and its amendments about Cilium stands.
-- `IchorInstallation.spec.stack` (`IchorStackSpec` and its component type) and `status.stack` (`IchorStackStatus`, `IchorStackComponentStatus`), per the append-only rule for CRD fields. They are marked deprecated and unused in the Go types and so in the CRD descriptions. Nothing reads or writes them. The `StackReady` condition is no longer set; an installed `IchorInstallation` that carries a stale one keeps it until the object is rewritten, and nothing depends on it.
+- `IchorInstallation.spec.stack` and `status.stack` were first kept deprecated; they are now removed (see "Retired CRD fields"). Nothing reads or writes them. The `StackReady` condition is no longer set; an installed `IchorInstallation` that carries a stale one keeps it until the object is rewritten, and nothing depends on it.
 - The detection of Ichor's own CRs and Deployment being tracked by a user's Argo CD or Flux, and the `argocd-cm` read behind it, which concern a user's GitOps tool, not an Ichor-installed one. (The GitOps, Git-tracking and PR-mode code is handled separately; see the GitOps section.)
 
 ## What remains of ADR 0099
@@ -49,10 +49,23 @@ Removed:
 - RBAC: `argocd-cm` get, Flux `kustomizations` list and `applications` get for `ichor-ui`; `argocd-cm` get and Flux `kustomizations` list for the manager.
 - The `IchorInstallation` `ExternalSuggested` condition and the controller's read of its own Deployment.
 
-Deprecated, kept (the append-only rule for CRD fields and wire formats):
+Retired CRD fields (a deliberate exception to the append-only rule, decided by the user: these fields are gone for good):
 
-- `TalosCluster.spec.gitops` (`mode`, `repository` and its fields). Nothing reads it. Its CEL validation is unchanged so stored objects stay valid.
-- `IchorInstallation.spec.managementMode`. `ichor` is the only behaviour. `external` is still accepted by the CRD enum and is treated as `ichor`: the installer Job runs and nothing refuses the upgrade. The `ExternalSuggested` condition is no longer set and is removed from objects that carry it.
+- `TalosCluster.spec.gitops` (`mode`, `repository` and everything under it) and its Go types and CEL rules.
+- `TalosCluster.spec.cni.handover` and its enum (ADR 0099 had already made it unused: the hand-over is always to Ichor).
+- `IchorInstallation.spec.managementMode` and its enum. `ichor` was the only behaviour.
+- `IchorInstallation.spec.stack` and `status.stack`, with `IchorStackSpec`, `IchorStackComponentSpec`, `IchorStackStatus`, `IchorStackComponentStatus` and the promotion enum (ADR 0099 added them).
+
+Kept and not retired: `TalosCluster.spec.cni.custom` and the `flannel` and `custom` values of `spec.cni.preset`. They stay deprecated and refused by the webhook and the controller.
+
+The retired-field mechanism: `internal/installer/crdcheck.go` refuses an install whose target CRD would drop a property the installed CRD has (a downgrade). It now carries `retiredFields`, an explicit list of `{crd, path}` entries (the CRD name and the dotted property path from the object root, such as `spec.gitops`, each with a comment citing the ADR). The check lets exactly those paths disappear, on exactly that CRD, and keeps refusing every other removal. The rule: a field is retired only by naming it in that list, one ADR per removal; there is no wildcard and no per-version or prefix match. Enum value changes are not checked by the installer, so dropping an enum alongside its field needs no entry.
+
+Stored objects: once the field is out of the schema the API server prunes it on the next write, and no validation or webhook rejects an object that still carries it (envtest `TestStoredTalosClusterWithRetiredFieldsSurvivesTheCRDUpgrade` and `TestStoredIchorInstallationWithRetiredFieldsSurvivesTheCRDUpgrade` create objects under the pre-removal CRDs, install the new ones and update the objects). The proto fields stay, deprecated, for wire compatibility.
+
+Flux CD is permanently out of scope, like every GitOps tool. Ichor holds no Flux code, RBAC rule or wording.
+
+Deprecated, kept (the append-only rule for wire formats):
+
 - Proto fields, marked `deprecated = true` and never set: `tracked_by` (`GetCiliumValuesResponse`), `pull_request_url` and `notice` on the approve, reject, set-install, add-discovery, update-patch, delete-patch and create-operation responses, `break_glass` on the approve, reject, set-install, add-discovery, update-patch and delete-patch requests (the server ignores it), `opens_pull_request` on `PlanOperationResponse` and `management_mode` on `GetIchorInstallationResponse`. `break_glass` on node-action and etcd-restore requests is unchanged.
 
 Superseded ADRs: 0015, 0028, 0037, 0038, 0044, 0046, 0051, 0056, 0062 in full; 0059 (decision 5 and the external mode) and 0065 (the tracked-write part; the verb and the destructive-operation checks stand) in part.

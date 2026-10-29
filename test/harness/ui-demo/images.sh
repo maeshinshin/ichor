@@ -12,6 +12,7 @@ BASE=gcr.io/distroless/static:nonroot
 NAME=github.com/maeshinshin/ichor/internal/version.Version
 LIVE=ghcr.io/maeshinshin # the names the install manifest carries; nodes mirror them to $REGISTRY
 PUSH=$REGISTRY/maeshinshin
+INSECURE=${CRANE_INSECURE---insecure} # a local plain-HTTP registry by default; the release workflow sets it empty for ghcr.io
 
 work=$(mktemp -d)
 trap 'rc=$?; [ $rc -eq 0 ] || cat "$work/crane.log" >&2; rm -rf "$work"' EXIT
@@ -41,11 +42,11 @@ ship() {
   local bin=$1 repo=$2 ref="$PUSH/$2:$VERSION" layer
   layer="$work/$repo.tar"
   tar -C "$(dirname "$bin")" --owner=0 --group=0 --mode=755 -cf "$layer" "$(basename "$bin")"
-  crane append --insecure -b "$BASE" -f "$layer" -t "$ref" 2>>"$work/crane.log" > /dev/null
-  crane mutate --insecure --entrypoint "/$(basename "$bin")" -t "$ref" "$ref" 2>>"$work/crane.log" > /dev/null
-  crane config --insecure "$ref" | grep -q "sha256:$(sha256sum "$layer" | cut -d' ' -f1)" \
+  crane append $INSECURE -b "$BASE" -f "$layer" -t "$ref" 2>>"$work/crane.log" > /dev/null
+  crane mutate $INSECURE --entrypoint "/$(basename "$bin")" -t "$ref" "$ref" 2>>"$work/crane.log" > /dev/null
+  crane config $INSECURE "$ref" | grep -q "sha256:$(sha256sum "$layer" | cut -d' ' -f1)" \
     || { echo "demo-images: $ref does not carry the layer just built" >&2; exit 1; }
-  printf '%-45s %s\n' "$ref" "$(crane digest --insecure "$ref")"
+  printf '%-45s %s\n' "$ref" "$(crane digest $INSECURE "$ref")"
 }
 
 build bin/img/manager/manager ./cmd ""

@@ -1,13 +1,8 @@
-import { conditionTone } from './conditions.ts'
 import type { OpState } from './operations.ts'
 
 // How a status is drawn: good (green check), bad (red cross), warn (amber
 // triangle), progress (spinner), neutral (grey dot).
 export type Tone = 'good' | 'bad' | 'warn' | 'progress' | 'neutral'
-
-export function conditionStatusTone(type: string, status: string): Tone {
-  return conditionTone(type, status)
-}
 
 export function opStateTone(state: OpState): Tone {
   switch (state) {

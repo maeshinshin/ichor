@@ -1,11 +1,11 @@
 import { ToneBadge } from '@/components/ToneBadge'
 import type { Machine } from '@/gen/ichor/v1alpha1/machine_pb'
-import { conditionStatusTone } from '@/lib/status'
+import { conditionTone } from '@/lib/conditions'
 
 // ReadyCell shows the machine's Ready condition (status and reason), which the
 // controller does record; Talos's own stage is not read for the list (ADR 0071).
 export function ReadyCell({ machine }: { machine: Machine }) {
   const ready = machine.conditions.find((c) => c.type === 'Ready')
   if (!ready) return <>-</>
-  return <ToneBadge tone={conditionStatusTone(ready.type, ready.status)}>{ready.reason || ready.status}</ToneBadge>
+  return <ToneBadge tone={conditionTone(ready.type, ready.status)}>{ready.reason || ready.status}</ToneBadge>
 }

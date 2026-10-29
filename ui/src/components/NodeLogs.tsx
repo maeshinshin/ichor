@@ -1,5 +1,5 @@
 import { Component, type ComponentChildren } from 'preact'
-import { WrapTextIcon } from 'lucide-preact'
+import { PauseIcon, PlayIcon, WrapTextIcon } from 'lucide-preact'
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -12,7 +12,7 @@ import {
   CodeBlockLine,
   CodeBlockTitle,
 } from '@/components/ui/code-block'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import type { StreamNodeLogsResponse } from '@/gen/ichor/v1alpha1/node_pb'
@@ -173,11 +173,15 @@ function LogsSection({ namespace, name }: { namespace: string; name: string }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          {t('node.logs')}
-          {reconnecting && <Badge variant="outline">{t('node.reconnecting')}</Badge>}
-          {paused && <Badge variant="outline">{t('node.logPaused')}</Badge>}
-        </CardTitle>
+        <CardTitle>{t('node.logs')}</CardTitle>
+        {(reconnecting || paused) && (
+          <CardAction>
+            <div class="flex flex-wrap gap-1">
+              {reconnecting && <Badge variant="outline">{t('node.reconnecting')}</Badge>}
+              {paused && <Badge variant="outline">{t('node.logPaused')}</Badge>}
+            </div>
+          </CardAction>
+        )}
       </CardHeader>
       <CardContent>
         <div class="mb-2 flex items-center gap-2">
@@ -196,6 +200,7 @@ function LogsSection({ namespace, name }: { namespace: string; name: string }) {
             </Select>
           </div>
           <Button variant="outline" size="sm" onClick={togglePause}>
+            {paused ? <PlayIcon data-icon="inline-start" aria-hidden="true" /> : <PauseIcon data-icon="inline-start" aria-hidden="true" />}
             {paused ? t('node.logResume') : t('node.logPause')}
           </Button>
         </div>
@@ -230,9 +235,9 @@ function LogsSection({ namespace, name }: { namespace: string; name: string }) {
                     {(truncated || canCollapse) && (
                       <>
                         {truncated && '… '}
-                        <button type="button" class="font-sans text-primary underline" onClick={() => toggleExpanded(e.id)}>
+                        <Button type="button" variant="link" size="xs" onClick={() => toggleExpanded(e.id)}>
                           {truncated ? t('node.logExpand') : t('node.logCollapse')}
-                        </button>
+                        </Button>
                       </>
                     )}
                   </CodeBlockLine>

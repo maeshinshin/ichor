@@ -1,12 +1,17 @@
 import { useState } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { CircleXIcon, InboxIcon, InfoIcon } from 'lucide-preact'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { CodeBlock, CodeBlockContent, CodeBlockLine } from '@/components/ui/code-block'
+import { Item, ItemContent, ItemDescription, ItemGroup, ItemSeparator, ItemTitle } from '@/components/ui/item'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { Field, Fields } from '@/components/PageHeader'
-import { Section } from '@/components/Section'
+import { EmptyNote } from '@/components/PageStates'
+import { SectionCard, SectionSkeleton } from '@/components/SectionCard'
+import { ToneBadge } from '@/components/ToneBadge'
 import type { GetNodeTalosDetailsResponse } from '@/gen/ichor/v1alpha1/talosdetails_pb'
 import { nodeClient } from '@/lib/connect'
 import { display, formatBytes } from '@/lib/format'
@@ -24,7 +29,7 @@ export function TalosDetails({ namespace, name, part }: { namespace: string; nam
   const { data, error } = useLoad(() => nodeClient.getNodeTalosDetails({ machine: { namespace, name } }), [namespace, name])
 
   if (error) return <ErrorAlert {...error} />
-  if (!data) return <p class="text-muted-foreground">{t('common.loading')}</p>
+  if (!data) return <SectionSkeleton label={t('common.loading')} />
   if (part === 'storage') {
     return (
       <>
@@ -47,9 +52,9 @@ function Failed({ error, children }: { error: string; children: ComponentChildre
   if (!error) return <>{children}</>
   return (
     <Alert variant="destructive">
-      <AlertDescription>
-        {t('talos.sectionFailed')} <span class="break-words font-mono text-xs">{error}</span>
-      </AlertDescription>
+      <CircleXIcon />
+      <AlertTitle>{t('talos.sectionFailed')}</AlertTitle>
+      <AlertDescription className="break-words">{error}</AlertDescription>
     </Alert>
   )
 }
@@ -62,9 +67,10 @@ function SystemSection({ data }: { data: GetNodeTalosDetailsResponse }) {
   const t = useT()
   const s = data.system
   return (
-    <Section id="talos" title={t('talos.system')}>
+    <SectionCard id="talos" title={t('talos.system')}>
       {data.maintenanceMode && (
         <Alert>
+          <InfoIcon />
           <AlertDescription>{t('talos.maintenance')}</AlertDescription>
         </Alert>
       )}
@@ -76,33 +82,39 @@ function SystemSection({ data }: { data: GetNodeTalosDetailsResponse }) {
             <Field label={t('talos.platform')} value={[s.platform, s.platformMode].filter(Boolean).join(' / ')} />
             <Field label={t('talos.stage')} value={s.stage} />
             <Field label={t('talos.ready')}>
-              <Badge variant={s.ready ? 'secondary' : 'outline'}>{s.ready ? t('common.yes') : t('common.no')}</Badge>
+              <ToneBadge tone={s.ready ? 'good' : 'neutral'}>{s.ready ? t('common.yes') : t('common.no')}</ToneBadge>
             </Field>
             <Field label={t('talos.hostname')} value={[s.hostname, s.domainname].filter(Boolean).join('.')} />
           </Fields>
           {s.unmetConditions.length > 0 && (
-            <div>
-              <p class="text-xs text-muted-foreground">{t('talos.unmet')}</p>
-              <ul>
-                {s.unmetConditions.map((c) => (
-                  <li key={c.name} class="break-words">
-                    <span class="font-mono text-xs">{c.name}</span> {c.reason && <span class="text-muted-foreground">{c.reason}</span>}
-                  </li>
+            <SectionCard size="sm" title={t('talos.unmet')}>
+              <ItemGroup>
+                {s.unmetConditions.map((c, i) => (
+                  <div key={c.name}>
+                    {i > 0 && <ItemSeparator />}
+                    <Item>
+                      <ItemContent>
+                        <ItemTitle>{c.name}</ItemTitle>
+                        {c.reason && <ItemDescription>{c.reason}</ItemDescription>}
+                      </ItemContent>
+                    </Item>
+                  </div>
                 ))}
-              </ul>
-            </div>
+              </ItemGroup>
+            </SectionCard>
           )}
           {s.kernelArgs.length > 0 && (
-            <div>
-              <p class="text-xs text-muted-foreground">
-                {t('talos.kernelArgs')} - {t('talos.kernelArgsNote')}
-              </p>
-              <p class="break-all rounded-md bg-muted/40 p-2 font-mono text-xs">{s.kernelArgs.join(' ')}</p>
-            </div>
+            <SectionCard size="sm" title={t('talos.kernelArgs')} description={t('talos.kernelArgsNote')}>
+              <CodeBlock size="sm">
+                <CodeBlockContent wrap>
+                  <CodeBlockLine>{s.kernelArgs.join(' ')}</CodeBlockLine>
+                </CodeBlockContent>
+              </CodeBlock>
+            </SectionCard>
           )}
         </Failed>
       )}
-    </Section>
+    </SectionCard>
   )
 }
 
@@ -111,7 +123,7 @@ function NetworkSection({ data }: { data: GetNodeTalosDetailsResponse }) {
   const n = data.network
   if (!n) return null
   return (
-    <Section id="network" title={t('node.network')}>
+    <SectionCard id="network" title={t('node.network')}>
       <Failed error={n.error}>
         <Fields>
           <Field label={t('talos.addresses')} value={list(n.addresses)} />
@@ -136,10 +148,10 @@ function NetworkSection({ data }: { data: GetNodeTalosDetailsResponse }) {
             <TableBody>
               {n.links.map((l) => (
                 <TableRow key={l.name}>
-                  <TableCell className="font-mono text-xs">{l.name}</TableCell>
-                  <TableCell className="font-mono text-xs">{display(l.mac)}</TableCell>
+                  <TableCell className="font-mono">{l.name}</TableCell>
+                  <TableCell className="font-mono">{display(l.mac)}</TableCell>
                   <TableCell>
-                    <Badge variant={l.linkUp ? 'secondary' : 'outline'}>{l.operationalState || (l.linkUp ? t('node.up') : t('node.down'))}</Badge>
+                    <ToneBadge tone={l.linkUp ? 'good' : 'neutral'}>{l.operationalState || (l.linkUp ? t('node.up') : t('node.down'))}</ToneBadge>
                   </TableCell>
                   <TableCell>{l.mtu || '-'}</TableCell>
                   <TableCell>{formatSpeed(l.speedMbit)}</TableCell>
@@ -151,7 +163,7 @@ function NetworkSection({ data }: { data: GetNodeTalosDetailsResponse }) {
           </Table>
         )}
       </Failed>
-    </Section>
+    </SectionCard>
   )
 }
 
@@ -161,81 +173,98 @@ function StorageSection({ data }: { data: GetNodeTalosDetailsResponse }) {
   const s = data.storage
   if (!s) return null
   const volumes = visibleVolumes(s.volumes, showAll)
+  const failedVolumes = volumes.filter((v) => v.errorMessage)
   return (
-    <Section id="storage" title={t('node.disks')}>
-      <Failed error={s.error}>
-        {s.disks.length === 0 ? (
-          <p class="text-muted-foreground">{t('talos.none')}</p>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t('talos.colDevice')}</TableHead>
-                <TableHead>{t('talos.colModel')}</TableHead>
-                <TableHead>{t('talos.colSerial')}</TableHead>
-                <TableHead>{t('node.colSize')}</TableHead>
-                <TableHead>{t('talos.colType')}</TableHead>
-                <TableHead />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {s.disks.map((d) => (
-                <TableRow key={d.id}>
-                  <TableCell className="font-mono text-xs">{d.devPath || d.id}</TableCell>
-                  <TableCell>{display(d.model)}</TableCell>
-                  <TableCell className="font-mono text-xs">{display(d.serial)}</TableCell>
-                  <TableCell>{formatBytes(d.sizeBytes)}</TableCell>
-                  <TableCell>{display(d.type)}</TableCell>
-                  <TableCell className="space-x-1">
-                    {d.systemDisk && <Badge variant="secondary">{t('talos.installDisk')}</Badge>}
-                    {d.readOnly && <Badge variant="outline">{t('talos.readOnly')}</Badge>}
-                  </TableCell>
+    <>
+      <SectionCard id="storage" title={t('node.disks')}>
+        <Failed error={s.error}>
+          {s.disks.length === 0 ? (
+            <EmptyNote icon={InboxIcon}>{t('talos.none')}</EmptyNote>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t('talos.colDevice')}</TableHead>
+                  <TableHead>{t('talos.colModel')}</TableHead>
+                  <TableHead>{t('talos.colSerial')}</TableHead>
+                  <TableHead>{t('node.colSize')}</TableHead>
+                  <TableHead>{t('talos.colType')}</TableHead>
+                  <TableHead />
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-        <div class="flex flex-wrap items-center justify-between gap-2">
-          <h3 class="text-sm font-medium">{t('talos.volumes')}</h3>
+              </TableHeader>
+              <TableBody>
+                {s.disks.map((d) => (
+                  <TableRow key={d.id}>
+                    <TableCell className="font-mono">{d.devPath || d.id}</TableCell>
+                    <TableCell>{display(d.model)}</TableCell>
+                    <TableCell className="font-mono">{display(d.serial)}</TableCell>
+                    <TableCell>{formatBytes(d.sizeBytes)}</TableCell>
+                    <TableCell>{display(d.type)}</TableCell>
+                    <TableCell>
+                      <div class="flex flex-wrap gap-1">
+                        {d.systemDisk && <Badge variant="secondary">{t('talos.installDisk')}</Badge>}
+                        {d.readOnly && <Badge variant="outline">{t('talos.readOnly')}</Badge>}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </Failed>
+      </SectionCard>
+      {!s.error && (
+      <SectionCard
+        id="volumes"
+        title={t('talos.volumes')}
+        actions={
           <Button size="sm" variant="outline" onClick={() => setShowAll(!showAll)}>
             {showAll ? t('talos.volumesDiskOnly') : t('talos.volumesShowAll', { n: s.volumes.length })}
           </Button>
-        </div>
-        {volumes.length === 0 ? (
-          <p class="text-muted-foreground">{t('talos.none')}</p>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t('talos.colName')}</TableHead>
-                <TableHead>{t('talos.colType')}</TableHead>
-                <TableHead>{t('talos.colPhase')}</TableHead>
-                <TableHead>{t('talos.colMount')}</TableHead>
-                <TableHead>{t('node.colSize')}</TableHead>
-                <TableHead>{t('talos.colFilesystem')}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {volumes.map((v) => (
-                <TableRow key={v.id}>
-                  <TableCell className="font-mono text-xs">{v.id}</TableCell>
-                  <TableCell>{display(v.type)}</TableCell>
-                  <TableCell>
-                    <Badge variant={v.errorMessage ? 'destructive' : 'outline'}>{display(v.phase)}</Badge>
-                    {v.errorMessage && <span class="ml-1 break-words text-xs text-destructive">{v.errorMessage}</span>}
-                  </TableCell>
-                  <TableCell className="font-mono text-xs">{display(v.mountLocation)}</TableCell>
-                  <TableCell>{formatBytes(v.sizeBytes)}</TableCell>
-                  <TableCell>
-                    {display(v.filesystem)} {v.encrypted && <Badge variant="outline">{t('talos.encrypted')}</Badge>}
-                  </TableCell>
+        }
+      >
+          {volumes.length === 0 ? (
+            <EmptyNote icon={InboxIcon}>{t('talos.none')}</EmptyNote>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t('talos.colName')}</TableHead>
+                  <TableHead>{t('talos.colType')}</TableHead>
+                  <TableHead>{t('talos.colPhase')}</TableHead>
+                  <TableHead>{t('talos.colMount')}</TableHead>
+                  <TableHead>{t('node.colSize')}</TableHead>
+                  <TableHead>{t('talos.colFilesystem')}</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </Failed>
-    </Section>
+              </TableHeader>
+              <TableBody>
+                {volumes.map((v) => (
+                  <TableRow key={v.id}>
+                    <TableCell className="font-mono">{v.id}</TableCell>
+                    <TableCell>{display(v.type)}</TableCell>
+                    <TableCell>
+                      <Badge variant={v.errorMessage ? 'destructive' : 'outline'}>{display(v.phase)}</Badge>
+                    </TableCell>
+                    <TableCell className="font-mono">{display(v.mountLocation)}</TableCell>
+                    <TableCell>{formatBytes(v.sizeBytes)}</TableCell>
+                    <TableCell>
+                      {display(v.filesystem)} {v.encrypted && <Badge variant="outline">{t('talos.encrypted')}</Badge>}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+          {failedVolumes.map((v) => (
+            <Alert key={v.id} variant="destructive">
+              <CircleXIcon />
+              <AlertTitle>{v.id}</AlertTitle>
+              <AlertDescription className="break-words">{v.errorMessage}</AlertDescription>
+            </Alert>
+          ))}
+      </SectionCard>
+      )}
+    </>
   )
 }
 
@@ -244,10 +273,10 @@ function ServicesSection({ data }: { data: GetNodeTalosDetailsResponse }) {
   const s = data.services
   if (!s) return null
   return (
-    <Section id="services" title={t('talos.services')}>
+    <SectionCard id="services" title={t('talos.services')}>
       <Failed error={s.error}>
         {s.services.length === 0 ? (
-          <p class="text-muted-foreground">{t('talos.none')}</p>
+          <EmptyNote icon={InboxIcon}>{t('talos.none')}</EmptyNote>
         ) : (
           <Table>
             <TableHeader>
@@ -258,26 +287,23 @@ function ServicesSection({ data }: { data: GetNodeTalosDetailsResponse }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sortServices(s.services).map((svc) => {
-                const tone = serviceTone(svc)
-                return (
-                  <TableRow key={svc.id}>
-                    <TableCell className="font-mono text-xs">{svc.id}</TableCell>
-                    <TableCell>
-                      <Badge variant={tone === 'bad' ? 'destructive' : tone === 'ok' ? 'secondary' : 'outline'}>{svc.state}</Badge>
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {svc.healthUnknown ? '-' : svc.healthy ? t('common.yes') : t('common.no')}
-                      {svc.healthMessage && <span class="ml-1 break-words">{svc.healthMessage}</span>}
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
+              {sortServices(s.services).map((svc) => (
+                <TableRow key={svc.id}>
+                  <TableCell className="font-mono">{svc.id}</TableCell>
+                  <TableCell>
+                    <ToneBadge tone={serviceTone(svc)}>{svc.state}</ToneBadge>
+                  </TableCell>
+                  <TableCell>
+                    {svc.healthUnknown ? '-' : svc.healthy ? t('common.yes') : t('common.no')}
+                    {svc.healthMessage && <span class="break-words"> {svc.healthMessage}</span>}
+                  </TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
         )}
       </Failed>
-    </Section>
+    </SectionCard>
   )
 }
 
@@ -286,10 +312,10 @@ function ExtensionsSection({ data }: { data: GetNodeTalosDetailsResponse }) {
   const e = data.extensions
   if (!e) return null
   return (
-    <Section id="extensions" title={t('talos.extensions')}>
+    <SectionCard id="extensions" title={t('talos.extensions')}>
       <Failed error={e.error}>
         {e.extensions.length === 0 ? (
-          <p class="text-muted-foreground">{t('talos.noExtensions')}</p>
+          <EmptyNote icon={InboxIcon}>{t('talos.noExtensions')}</EmptyNote>
         ) : (
           <Table>
             <TableHeader>
@@ -311,6 +337,6 @@ function ExtensionsSection({ data }: { data: GetNodeTalosDetailsResponse }) {
           </Table>
         )}
       </Failed>
-    </Section>
+    </SectionCard>
   )
 }

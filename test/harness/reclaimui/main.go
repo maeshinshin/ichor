@@ -70,15 +70,18 @@ func run() error {
 		return err
 	}
 
-	hc := &http.Client{Timeout: time.Minute, Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}} //nolint:gosec // in-cluster self-signed test endpoint
+	// The in-cluster test endpoint is self-signed.
+	tlsCfg := &tls.Config{InsecureSkipVerify: true} //nolint:gosec // test harness only
+	hc := &http.Client{Timeout: time.Minute, Transport: &http.Transport{TLSClientConfig: tlsCfg}}
 	opts := []connect.ClientOption{}
 	if *token != "" {
-		opts = append(opts, connect.WithInterceptors(connect.UnaryInterceptorFunc(func(next connect.UnaryFunc) connect.UnaryFunc {
+		bearer := connect.UnaryInterceptorFunc(func(next connect.UnaryFunc) connect.UnaryFunc {
 			return func(ctx context.Context, r connect.AnyRequest) (connect.AnyResponse, error) {
 				r.Header().Set("Authorization", "Bearer "+*token)
 				return next(ctx, r)
 			}
-		})))
+		})
+		opts = append(opts, connect.WithInterceptors(bearer))
 	}
 
 	c := ichorv1alpha1connect.NewReclaimServiceClient(hc, *url, opts...)
@@ -110,7 +113,8 @@ func run() error {
 
 		var r *connect.Response[pb.CreateReclaimResponse]
 		r, err = c.CreateReclaim(ctx, connect.NewRequest(&pb.CreateReclaimRequest{
-			Address: *address, Talosconfig: raw, Context: *tcContext, Force: *force, ForceUngraceful: *ungraceful, Cluster: clusterRef,
+			Address: *address, Talosconfig: raw, Context: *tcContext,
+			Force: *force, ForceUngraceful: *ungraceful, Cluster: clusterRef,
 		}))
 		if err == nil {
 			out = r.Msg
@@ -129,7 +133,9 @@ func run() error {
 		}
 	case "confirm":
 		var r *connect.Response[pb.ConfirmReclaimResponse]
-		r, err = c.ConfirmReclaim(ctx, connect.NewRequest(&pb.ConfirmReclaimRequest{Reclaim: ref(*name), Uuid: *uuid, ClusterName: *clusterName}))
+		r, err = c.ConfirmReclaim(ctx, connect.NewRequest(&pb.ConfirmReclaimRequest{
+			Reclaim: ref(*name), Uuid: *uuid, ClusterName: *clusterName,
+		}))
 		if err == nil {
 			out = r.Msg
 		}

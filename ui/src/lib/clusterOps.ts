@@ -4,22 +4,15 @@
 // OpRow is what the section needs of one TalosOperation.
 export type OpRow = { name: string; phase: string; failureReason: string; isNode: boolean; created: number }
 
-// isUnfinished mirrors what the server refuses on (uiapi unfinishedOperation): any
-// operation of the cluster that is not Completed, except a node that was shut
-// down on purpose, which stays off by design.
-function isUnfinished(o: OpRow): boolean {
-  if (o.phase === 'Completed') return false
-  return !(o.isNode && o.phase === 'ShutDown')
-}
-
 function newestFirst<T extends OpRow>(ops: readonly T[]): T[] {
   return ops.slice().sort((a, b) => b.created - a.created)
 }
 
 // blockingOperation is the operation that stops a new one from starting, or null. It is also the one
-// to show at the top of the section: the newest that is not finished.
+// to show at the top of the section: the newest that is not finished. Unfinished mirrors what the server
+// refuses on (uiapi unfinishedOperation): not Completed, except a node shut down on purpose.
 export function blockingOperation<T extends OpRow>(ops: readonly T[]): T | null {
-  return newestFirst(ops).find(isUnfinished) ?? null
+  return newestFirst(ops).find((o) => o.phase !== 'Completed' && !(o.isNode && o.phase === 'ShutDown')) ?? null
 }
 
 export function recentOperations<T extends OpRow>(ops: readonly T[], n: number): T[] {

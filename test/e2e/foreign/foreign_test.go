@@ -81,6 +81,7 @@ func build(t *testing.T, o foreign.Options) *foreign.Cluster {
 	o.Prefix = env(prefixE, foreign.PrefixRoot)
 	o.TalosVersion = env("ICHOR_E2E_F_TALOS", o.TalosVersion)
 	o.RegistryMirror = true
+	o.RelayPort = env("ICHOR_E2E_F_RELAY_PORT", o.RelayPort)
 	o.CiliumChart = repoPath(t, "pkg/cni/cilium/chart/cilium-1.18.0.tgz")
 	if !strings.HasPrefix(o.Prefix, foreign.PrefixRoot) {
 		t.Fatal("bad prefix")
@@ -117,12 +118,18 @@ func cniPaths(t *testing.T, c *foreign.Cluster) map[string]string {
 			t.Fatalf("decoding machineconfig %s: %v", ip, err)
 		}
 		var doc map[string]any
+		var kubeDocs []any // the v1.14 contract keeps network, CNI, proxy and inline manifests in their own documents
 		switch s := objs[0]["spec"].(type) {
 		case string:
 			for _, part := range strings.Split(s, "\n---\n") {
 				var d map[string]any
-				if yaml.Unmarshal([]byte(part), &d) == nil && d["machine"] != nil {
+				if yaml.Unmarshal([]byte(part), &d) != nil {
+					continue
+				}
+				if d["machine"] != nil {
 					doc = d
+				} else if k, _ := d["kind"].(string); strings.HasPrefix(k, "Kube") {
+					kubeDocs = append(kubeDocs, d)
 				}
 			}
 		case map[string]any:
@@ -136,7 +143,7 @@ func cniPaths(t *testing.T, c *foreign.Cluster) map[string]string {
 		feat, _ := m["features"].(map[string]any)
 		pick := map[string]any{
 			"network": cl["network"], "proxy": cl["proxy"], "inlineManifests": cl["inlineManifests"],
-			"extraManifests": cl["extraManifests"], "kubePrism": feat["kubePrism"],
+			"extraManifests": cl["extraManifests"], "kubePrism": feat["kubePrism"], "kubeDocs": kubeDocs,
 		}
 		b, _ := json.Marshal(pick)
 		res[ip] = fmt.Sprintf("%x", sha256.Sum256(b))
@@ -144,9 +151,8 @@ func cniPaths(t *testing.T, c *foreign.Cluster) map[string]string {
 	return res
 }
 
-// adopt runs `ichor adopt` inside the tools pod (the workstation cannot reach pod IPs) and
-// returns its combined output and exit error.
-func adopt(t *testing.T, c *foreign.Cluster, extra ...string) (string, error) {
+// stage copies ichor, the talosconfig and the kubeconfig into the tools pod and returns its name.
+func stage(t *testing.T, c *foreign.Cluster) string {
 	t.Helper()
 	pod, err := foreign.ToolsPod(c.Opts.Prefix)
 	if err != nil {
@@ -159,6 +165,26 @@ func adopt(t *testing.T, c *foreign.Cluster, extra ...string) (string, error) {
 			t.Fatalf("copying %s: %v", cp[1], err)
 		}
 	}
+	return pod
+}
+
+// ichorCLI runs `ichor <args> --cluster <prefix> -n ichor-system --local` in the tools pod (the CLI computes from the
+// Kubernetes API directly: ichor-ui's certificate has no in-cluster name).
+func ichorCLI(t *testing.T, c *foreign.Cluster, args ...string) (string, error) {
+	t.Helper()
+	pod := stage(t, c)
+	a := append([]string{"-n", ns, "exec", pod, "--", "env", "HOME=/tmp/home", "/tmp/ichor"}, args...)
+	a = append(a, "--cluster", c.Opts.Prefix, "-n", crNS, "--kubeconfig", "/tmp/kubeconfig", "--local")
+	out, err := exec.Command("kubectl", append([]string{"--context", os.Getenv(kube.ContextEnv)}, a...)...).CombinedOutput()
+	t.Logf("ichor %s:\n%s", strings.Join(args, " "), out)
+	return string(out), err
+}
+
+// adopt runs `ichor adopt` inside the tools pod (the workstation cannot reach pod IPs) and
+// returns its combined output and exit error.
+func adopt(t *testing.T, c *foreign.Cluster, extra ...string) (string, error) {
+	t.Helper()
+	pod := stage(t, c)
 	args := append([]string{"-n", ns, "exec", pod, "--", "env", "HOME=/tmp/home", "/tmp/ichor", "adopt",
 		"--cluster", c.Opts.Prefix, "-n", crNS, "--talosconfig", "/tmp/talosconfig", "--kubeconfig", "/tmp/kubeconfig",
 		"--recover-secrets", "--recover-from", c.CPs[0], "--node", c.CPs[0], "--yes"}, extra...)
@@ -253,12 +279,162 @@ func TestB1FlannelRefusedWithoutFlag(t *testing.T) {
 	}
 }
 
+// names lists the metadata.name of a resource of the foreign cluster.
+func names(c *foreign.Cluster, args ...string) []string {
+	out, _ := inner(c, append(args, "-o", "jsonpath={.items[*].metadata.name}")...)
+	return strings.Fields(out)
+}
+
+// membership waits for one TalosMachine per Node (adopt may return before the last one is written).
+func membership(t *testing.T, c *foreign.Cluster) {
+	t.Helper()
+	var machines, nodes int
+	for range 18 {
+		machines = len(names(c, "-n", crNS, "get", "talosmachines.ichor.maesh.dev"))
+		nodes = len(names(c, "get", "nodes"))
+		if machines == nodes && nodes > 0 {
+			t.Logf("TalosMachines == Nodes == %d", nodes)
+			return
+		}
+		time.Sleep(10 * time.Second)
+	}
+	t.Errorf("TalosMachines (%d) != Nodes (%d) after 3 minutes", machines, nodes)
+}
+
+func clusterJSONPath(c *foreign.Cluster, path string) string {
+	out, _ := inner(c, "-n", crNS, "get", "talosclusters.ichor.maesh.dev", c.Opts.Prefix, "-o", "jsonpath="+path)
+	return strings.TrimSpace(out)
+}
+
+// waitCluster polls a TalosCluster jsonpath until it equals want.
+func waitCluster(t *testing.T, c *foreign.Cluster, path, want string) {
+	t.Helper()
+	var got string
+	for range 30 {
+		if got = clusterJSONPath(c, path); got == want {
+			return
+		}
+		time.Sleep(10 * time.Second)
+	}
+	t.Errorf("%s = %q, want %q", path, got, want)
+}
+
+// unmanagedAdopted asserts what every --cni-unmanaged adoption shares.
+func unmanagedAdopted(t *testing.T, c *foreign.Cluster) {
+	t.Helper()
+	if got := clusterJSONPath(c, "{.spec.cni.preset}"); got != "unmanaged" {
+		t.Errorf("spec.cni.preset = %q, want unmanaged", got)
+	}
+	if jobs, _ := inner(c, "-n", crNS, "get", "jobs", "--no-headers"); strings.Contains(jobs, "ichor-cni") {
+		t.Errorf("an ichor-cni Job exists: %s", jobs)
+	}
+	if got := clusterJSONPath(c, "{.status.conditions[?(@.type==\"CNIHandover\")].status}"); got != "" {
+		t.Errorf("CNIHandover condition present: %q", got)
+	}
+	membership(t, c)
+}
+
+// TestD2: a Calico cluster is adopted with --cni-unmanaged.
+func TestD2CalicoAdoptedUnmanaged(t *testing.T) {
+	c := build(t, foreign.Options{Workers: 1, CNI: foreign.CNICalico})
+	before := cniPaths(t, c)
+	if out, err := adopt(t, c, "--cni-unmanaged"); err != nil {
+		t.Fatalf("adopt --cni-unmanaged failed: %v\n%s", err, out)
+	}
+	unmanagedAdopted(t, c)
+	waitCluster(t, c, "{.status.cni.detected}", "calico")
+	waitCluster(t, c, "{.status.conditions[?(@.type==\"NetworkPoliciesApplied\")].status}", "False")
+	waitCluster(t, c, "{.status.conditions[?(@.type==\"NetworkPoliciesApplied\")].reason}", "CNINotCilium")
+	time.Sleep(3 * time.Minute)
+	sameHashes(t, before, cniPaths(t, c))
+	if nodes, _ := inner(c, "get", "nodes", "--no-headers"); strings.Contains(nodes, "NotReady") {
+		t.Errorf("nodes not Ready after adoption: %s", nodes)
+	}
+}
+
+const unmanagedText = "the CNI is not managed by Ichor (spec.cni.preset: unmanaged)"
+
+// TestD3: a Cilium (Helm) cluster is adopted with --cni-unmanaged; Ichor touches no release record.
+func TestD3CiliumAdoptedUnmanaged(t *testing.T) {
+	c := build(t, foreign.Options{Workers: 1, CNI: foreign.CNICiliumHelm})
+	records := func() string {
+		out, _ := inner(c, "-n", "kube-system", "get", "secrets", "-l", "owner=helm", "-o",
+			"jsonpath={range .items[*]}{.metadata.name} {.metadata.resourceVersion}{\"\\n\"}{end}")
+		return out
+	}
+	before, hashes := records(), cniPaths(t, c)
+	if strings.TrimSpace(before) == "" {
+		t.Fatal("no Helm release record before adoption")
+	}
+	if out, err := adopt(t, c, "--cni-unmanaged"); err != nil {
+		t.Fatalf("adopt --cni-unmanaged failed: %v\n%s", err, out)
+	}
+	unmanagedAdopted(t, c)
+	waitCluster(t, c, "{.status.cni.detected}", "cilium")
+	time.Sleep(3 * time.Minute)
+	if after := records(); after != before {
+		t.Errorf("Helm release records changed:\nbefore:\n%s\nafter:\n%s", before, after)
+	}
+	sameHashes(t, hashes, cniPaths(t, c))
+	if out, err := ichorCLI(t, c, "cni", "values", "set", "-f", "/dev/null"); err == nil || !strings.Contains(out, unmanagedText) {
+		t.Errorf("cni values set was not refused with the unmanaged text (err=%v)", err)
+	}
+	op := filepath.Join(t.TempDir(), "op.yaml")
+	manifest := "apiVersion: ichor.maesh.dev/v1alpha1\nkind: TalosOperation\nmetadata:\n  name: d3-cni\n  namespace: " + crNS +
+		"\nspec:\n  kind: cni\n  clusterRef:\n    name: " + c.Opts.Prefix + "\n"
+	if err := os.WriteFile(op, []byte(manifest), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cout, cerr := inner(c, "create", "-f", op)
+	t.Logf("create cni TalosOperation: %v\n%s", cerr, cout)
+	if cerr == nil || !strings.Contains(cout, unmanagedText) {
+		t.Errorf("the cni TalosOperation was not refused with the unmanaged text")
+	}
+}
+
+// TestD5: a cluster with cni.name none is adopted unmanaged with talosCNI none. Its nodes stay NotReady.
+func TestD5CNINoneAdoptedUnmanaged(t *testing.T) {
+	c := build(t, foreign.Options{Workers: 1, CNI: foreign.CNINone})
+	before := cniPaths(t, c)
+	if out, err := adopt(t, c, "--cni-unmanaged"); err != nil {
+		t.Fatalf("adopt --cni-unmanaged failed: %v\n%s", err, out)
+	}
+	unmanagedAdopted(t, c)
+	if got := clusterJSONPath(c, "{.spec.cni.unmanaged.talosCNI}"); got != "none" {
+		t.Errorf("spec.cni.unmanaged.talosCNI = %q, want none", got)
+	}
+	time.Sleep(3 * time.Minute)
+	sameHashes(t, before, cniPaths(t, c))
+	nodes, _ := inner(c, "get", "nodes", "--no-headers")
+	t.Logf("nodes after adoption (NotReady expected, no CNI):\n%s", nodes)
+}
+
+// TestB8: Talos older than v1.12 is refused with the upgrade message and nothing is written.
+// ICHOR_E2E_F_TALOS defaults to v1.11.5 here.
+func TestB8TalosTooOldRefused(t *testing.T) {
+	if os.Getenv("ICHOR_E2E_F_TALOS") == "" {
+		t.Setenv("ICHOR_E2E_F_TALOS", "v1.11.5")
+	}
+	c := build(t, foreign.Options{Workers: 0})
+	before := cniPaths(t, c)
+	out, err := adopt(t, c, "--cni-unmanaged")
+	if err == nil {
+		t.Fatal("adopt succeeded on a Talos older than v1.12")
+	}
+	if !strings.Contains(out, "older than the oldest version Ichor adopts (v1.12)") {
+		t.Errorf("refusal does not carry the upgrade message: %s", out)
+	}
+	sameHashes(t, before, cniPaths(t, c))
+	if got, err := inner(c, "get", "namespace", crNS, "--no-headers"); err == nil {
+		t.Errorf("namespace %s exists after a refusal: %s", crNS, got)
+	}
+	if got, _ := inner(c, "get", "crd", "--no-headers"); strings.Contains(got, "ichor.maesh.dev") {
+		t.Errorf("Ichor CRDs exist after a refusal: %s", got)
+	}
+}
+
 // The rest of the matrix: stubs until their units land.
 func TestA1(t *testing.T)   { t.Skip("A1 cilium inline manifest takeover") }
 func TestA2(t *testing.T)   { t.Skip("A2 helm install cilium takeover") }
-func TestB8(t *testing.T)   { t.Skip("B8 Talos older than v1.12 refused") }
 func TestC1(t *testing.T)   { t.Skip("C1 reclaim a worker of another cluster") }
-func TestD2(t *testing.T)   { t.Skip("D2 calico adopted unmanaged") }
-func TestD3(t *testing.T)   { t.Skip("D3 cilium adopted unmanaged") }
-func TestD5(t *testing.T)   { t.Skip("D5 cni none adopted with talosCNI none") }
 func TestB2B4(t *testing.T) { t.Skip("B2 kube-proxy matrix, B4 KubePrism") }

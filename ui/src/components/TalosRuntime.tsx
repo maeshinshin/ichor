@@ -154,7 +154,7 @@ function EtcdCard({ data, maintenance }: { data: GetNodeTalosRuntimeResponse; ma
         <>
           <Fields>
             <Field label={t('rt.etcdHealth')}>
-              <ToneBadge tone={etcdTone(e)}>{etcdTone(e) === 'ok' ? t('rt.healthy') : t('rt.attention')}</ToneBadge>
+              <ToneBadge tone={etcdTone(e)}>{etcdTone(e) === 'good' ? t('rt.healthy') : t('rt.attention')}</ToneBadge>
             </Field>
             <Field label={t('rt.etcdMember')} value={e.memberId} />
             <Field label={t('rt.etcdLeader')} value={e.leaderId} />

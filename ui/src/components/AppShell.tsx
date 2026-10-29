@@ -42,7 +42,7 @@ import { useCluster } from '@/lib/useCluster'
 import { Badge } from '@/components/ui/badge'
 import { Link } from '@/router'
 
-const healthVariant: Record<Health, 'default' | 'destructive' | 'secondary'> = { ready: 'default', degraded: 'destructive', upgrading: 'secondary' }
+const healthVariant: Record<Health, 'success' | 'destructive' | 'secondary'> = { ready: 'success', degraded: 'destructive', upgrading: 'secondary' }
 const HealthIcon: Record<Health, typeof CircleCheckIcon> = { ready: CircleCheckIcon, degraded: CircleAlertIcon, upgrading: LoaderCircleIcon }
 
 // The cluster this Ichor manages: name, Talos and Kubernetes versions, health (docs/adr/0097).

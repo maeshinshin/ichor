@@ -99,8 +99,5 @@ export function tileTargets(runningOperation: string | null): Record<'nodes' | '
 // nodesValue is "x / y ready".
 export const nodesValue = (ready: number, total: number): string => `${ready} / ${total} ready`
 
-// versionsValue is "Talos v1.14.3 · K8s v1.37.1"; a version that already starts with "v" gets no second one.
-export function versionsValue(talos: string, kubernetes: string): string {
-  const v = (s: string) => (s === '' ? '-' : s.startsWith('v') ? s : `v${s}`)
-  return `Talos ${v(talos)} · K8s ${v(kubernetes)}`
-}
+// versionLabel shows a version with one leading "v"; an empty one is "-".
+export const versionLabel = (s: string): string => (s === '' ? '-' : s.startsWith('v') ? s : `v${s}`)

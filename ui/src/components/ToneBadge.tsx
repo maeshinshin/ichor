@@ -6,9 +6,9 @@ import type { Tone } from '@/lib/status'
 // ToneName also takes the talos views' 'ok' for 'good'.
 export type ToneName = Tone | 'ok'
 
-// A state is a Badge: destructive for bad, secondary for good and running, outline otherwise.
-const variantOf = (tone: ToneName): 'secondary' | 'destructive' | 'outline' =>
-  tone === 'good' || tone === 'ok' || tone === 'progress' ? 'secondary' : tone === 'bad' ? 'destructive' : 'outline'
+// A state is a Badge: success (green) for good, destructive for bad, secondary for running, outline otherwise.
+const variantOf = (tone: ToneName): 'success' | 'secondary' | 'destructive' | 'outline' =>
+  tone === 'good' || tone === 'ok' ? 'success' : tone === 'progress' ? 'secondary' : tone === 'bad' ? 'destructive' : 'outline'
 
 // ToneBadge is a state as a stock Badge with a leading icon; a neutral state has none.
 export function ToneBadge({ tone, title, children }: { tone: ToneName; title?: string; children: ComponentChildren }) {

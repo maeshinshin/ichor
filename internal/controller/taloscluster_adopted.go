@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"strconv"
 
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -34,7 +35,7 @@ const reasonAdopted = "Adopted"
 // The condition is set once: absent only, so a later clearing (a completed rotation, a
 // dismissal) is never undone. A cluster that already completed a CA rotation is not advised.
 func adviseCARotation(ctx context.Context, c client.Client, cluster *ichorv1alpha1.TalosCluster) error {
-	if cluster.Annotations[ichorv1alpha1.TalosClusterAdoptedAnnotation] != "true" ||
+	if cluster.Annotations[ichorv1alpha1.TalosClusterAdoptedAnnotation] != strconv.FormatBool(true) ||
 		apimeta.FindStatusCondition(cluster.Status.Conditions, ichorv1alpha1.ConditionCARotationAdvised) != nil {
 		return nil
 	}

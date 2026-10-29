@@ -93,10 +93,10 @@ func configuredNodeRejection(err error) bool {
 }
 
 // Identity reads the node's hardware identity over the unauthenticated maintenance API; see
-// readHardwareIdentity. A node that already has a configuration rejects the call and the error
+// ReadHardwareIdentity. A node that already has a configuration rejects the call and the error
 // wraps ErrAlreadyConfigured.
 func (m *machineryMaintenanceClient) Identity(ctx context.Context) (HardwareIdentity, error) {
-	id, err := readHardwareIdentity(ctx, m.c.COSI)
+	id, err := ReadHardwareIdentity(ctx, m.c.COSI)
 	if configuredNodeRejection(err) {
 		return id, fmt.Errorf("%w: %w", ErrAlreadyConfigured, err)
 	}
@@ -104,14 +104,14 @@ func (m *machineryMaintenanceClient) Identity(ctx context.Context) (HardwareIden
 	return id, err
 }
 
-// readHardwareIdentity reads hardware.SystemInformation for the SMBIOS UUID, serial
+// ReadHardwareIdentity reads hardware.SystemInformation for the SMBIOS UUID, serial
 // number and manufacturer, and network.LinkStatus for the permanent MAC
 // address of every physical link. A missing SystemInformation resource (not
 // every platform reports SMBIOS data) is not an error here: it leaves the
 // identity's UUID and serial empty, which DiscoveryReconciler's
 // strongIdentity treats as a weak key, exactly as architecture.md's "Nodes"
 // requires. Errors wrap the underlying gRPC error so callers can classify them.
-func readHardwareIdentity(ctx context.Context, cosi state.State) (HardwareIdentity, error) {
+func ReadHardwareIdentity(ctx context.Context, cosi state.State) (HardwareIdentity, error) {
 	var id HardwareIdentity
 
 	sysInfo, err := safe.StateGet[*hardware.SystemInformation](ctx, cosi, resource.NewMetadata(

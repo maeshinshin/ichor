@@ -54,6 +54,47 @@ func findUIService(ctx context.Context, c client.Client, ns string) (*corev1.Ser
 	return &list.Items[0], nil
 }
 
+// uiHTTPSPort and uiCAConfigMap: ichor-ui serves HTTPS on 8443
+// and the controller publishes the CA that signs its leaf as this ConfigMap.
+const (
+	uiHTTPSPort   = 8443
+	uiCAConfigMap = "ichor-ui-ca"
+	uiCAKey       = "ca.crt"
+)
+
+// uiEndpoint picks the Service port to forward to and the CA PEM that verifies
+// it. A Service with port 8443 and a published ichor-ui-ca (or a --ca-file the
+// caller holds) is used over HTTPS; an older cluster has
+// neither, and keeps the first port (the old 8080 path).
+func uiEndpoint(ctx context.Context, c client.Client, svc *corev1.Service, haveCAFile bool) (int32, []byte) {
+	has8443 := false
+
+	for _, p := range svc.Spec.Ports {
+		has8443 = has8443 || p.Port == uiHTTPSPort
+	}
+
+	if !has8443 {
+		return svc.Spec.Ports[0].Port, nil
+	}
+
+	var cm corev1.ConfigMap
+	if err := c.Get(ctx, client.ObjectKey{Namespace: svc.Namespace, Name: uiCAConfigMap}, &cm); err == nil && cm.Data[uiCAKey] != "" {
+		return uiHTTPSPort, []byte(cm.Data[uiCAKey])
+	}
+
+	// No CA to read: 8443 is used only if the caller supplied a CA or it is
+	// the only port; otherwise stay on the other (plaintext) port.
+	if !haveCAFile {
+		for _, p := range svc.Spec.Ports {
+			if p.Port != uiHTTPSPort {
+				return p.Port, nil
+			}
+		}
+	}
+
+	return uiHTTPSPort, nil
+}
+
 var uiOpts uiOptions
 
 // uiCmd implements `ichor ui` (docs/design/architecture.md, "CLI and

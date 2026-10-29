@@ -114,6 +114,9 @@ func TestBuiltinUserRoles(t *testing.T) {
 		{ichorGroup, "talosclusters/credentials", "download", ""},
 		{ichorGroup, "talosmachines/support-bundle", "download", ""},
 		{ichorGroup, "ichorusers", "create", ""},
+		{ichorGroup, "ichorinstallations/version", verbUpdate, ""},
+		{ichorGroup, "ichorinstallations/reclaim", verbUpdate, ""},
+		{ichorGroup, "ichorinstallations/settings", verbUpdate, ""},
 	}
 	admin := rbacTriples(allRules(find(docs, kindClusterRole, "ichor-admin")))
 	for _, tr := range adminOnly {

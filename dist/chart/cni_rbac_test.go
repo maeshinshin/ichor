@@ -16,7 +16,10 @@ limitations under the License.
 
 package chart
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // cniConfigRolePath is config/rbac/ichor-cni/role.yaml (hand-written): the Cilium
 // Helm Job's ClusterRole, whose chart copy templates/rbac/ichor-cni.yaml is compared as a rule set.
@@ -81,15 +84,16 @@ func TestCNIHelmRBAC(t *testing.T) {
 			"config/rbac/ichor-cni/controller_role.yaml", "dist/chart/templates/rbac/ichor-cni.yaml")
 
 		installerDocs := renderChartWithValues(t, "ichor", "installer.enabled=true")
-		installerRole := find(installerDocs, kindRole, "ichor-installer-kube-system-role")
-		if installerRole == nil || nsOf(installerRole) != kubeSystemNs {
-			t.Fatalf("Role ichor-installer-kube-system-role = %v, want it in kube-system", installerRole)
-		}
 
-		checkRBACRulesMatch(t, "ichor", "Role installer-kube-system-role",
-			find(loadYAMLDocs(t, "../../config/rbac/ichor-installer/kube_system_role.yaml"), kindRole,
-				"installer-kube-system-role"), installerRole,
-			"config/rbac/ichor-installer/kube_system_role.yaml", "dist/chart/templates/rbac/ichor-installer.yaml")
+		// Installer rights are cluster-scoped only: an upgrade runs under the previous
+		// release's role, which cannot create a Role in kube-system, so the installer holds no
+		// namespaced Role there and its ClusterRole carries what it needs to apply the Job's objects.
+		for _, d := range installerDocs {
+			if (kindOf(d) == kindRole || kindOf(d) == kindRoleBinding) && nsOf(d) == kubeSystemNs &&
+				strings.HasPrefix(nameOf(d), "ichor-installer") {
+				t.Errorf("%s %s is in kube-system; installer rights are cluster-scoped only", kindOf(d), nameOf(d))
+			}
+		}
 
 		secrets := find(docs, kindRole, "ichor-cni-role")
 		if secrets == nil || nsOf(secrets) == kubeSystemNs {

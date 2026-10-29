@@ -397,8 +397,8 @@ func checkWebhookInvariants(t *testing.T, release string, docs []map[string]any)
 			// UPDATE on TalosCluster. Anything else would be a new decision.
 			want := map[string][]any{
 				"vtalosmachine-v1alpha1.kb.io":      {opCreate, opUpdate, opDelete},
-				"vmachinereclaim-v1alpha1.kb.io":    {"CREATE", opUpdate},
-				"vichorinstallation-v1alpha1.kb.io": {"CREATE", opUpdate},
+				"vmachinereclaim-v1alpha1.kb.io":    {opCreate, opUpdate},
+				"vichorinstallation-v1alpha1.kb.io": {opCreate, opUpdate},
 				"vtaloscluster-v1alpha1.kb.io":      {opCreate, opUpdate, opDelete},
 				// Break-glass checks writes to existing CRs only.
 				"vbreakglass-v1alpha1.kb.io": {opUpdate},

@@ -67,7 +67,7 @@ func (r *IchorInstallationReconciler) Seed(ctx context.Context) error {
 	}
 
 	inst := &ichorv1alpha1.IchorInstallation{
-		ObjectMeta: metav1.ObjectMeta{Name: ichorv1alpha1.IchorInstallationName},
+		Name: ichorv1alpha1.IchorInstallationName,
 		Spec: ichorv1alpha1.IchorInstallationSpec{
 			Version:    version.Version,
 			Deployment: &ichorv1alpha1.IchorDeploymentSpec{Manager: manager},

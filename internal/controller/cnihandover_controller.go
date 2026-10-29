@@ -176,6 +176,26 @@ func (r *CNIHandoverReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		}
 	}
 
+	// Ichor's own record is already deployed at this hash (`ichor adopt` installed Cilium itself on
+	// a cluster with no CNI, ADR 0104 1.5): there is nothing for a Job to change, so no Job runs.
+	// An adopted cluster's own Cilium (inline manifest annotation) still goes through the Job,
+	// which retires the foreign record.
+	if !handedOver && cluster.Annotations[ichorv1alpha1.TalosClusterCNIInlineManifestAnnotation] == "" {
+		rel, err := readCiliumRelease(ctx, r.reader(), r.Namespace)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+
+		if rel.Status == helmStatusDeployed && rel.ValuesHash == hash {
+			// A Job that was running when the release landed may still hold the lock.
+			if err := r.lock(&cluster).Release(ctx, cniHelmLockIdentity); err != nil {
+				return ctrl.Result{}, err
+			}
+
+			return r.finish(ctx, &cluster, hash, handedOver)
+		}
+	}
+
 	return r.runJob(ctx, &cluster, mode, hash, handedOver)
 }
 

@@ -16,7 +16,23 @@ limitations under the License.
 
 package controller
 
+import "github.com/maeshinshin/ichor/pkg/render"
+
 const registryMirrorKind = "RegistryMirrorConfig"
+
+// sameConfiguration reports whether the node already has the rendered configuration: the same
+// bytes, or the same settings in another form (the registry mirrors an earlier Ichor build wrote
+// as machine.registries.mirrors, say). Nothing is applied or reported then; the node moves to the
+// rendered form the next time it is applied for another reason.
+func sameConfiguration(current, rendered []byte, hash string) bool {
+	if render.Hash(current) == hash {
+		return true
+	}
+
+	paths, err := ChangedPaths(current, rendered)
+
+	return err == nil && len(paths) == 0
+}
 
 // normalizeRegistryMirrors rewrites the legacy machine.registries.mirrors of the v1alpha1 Config
 // document into RegistryMirrorConfig documents, the form the render uses from contract v1.12, and
@@ -59,7 +75,7 @@ func normalizeRegistryMirrors(docs map[string]configDoc) {
 
 		m, _ := v.(map[string]any)
 		override, _ := m["overridePath"].(bool)
-		doc := map[string]any{"apiVersion": "v1alpha1", "kind": registryMirrorKind, "name": host}
+		doc := map[string]any{"apiVersion": "v1alpha1", "kind": registryMirrorKind, labelName: host}
 
 		if eps, _ := m["endpoints"].([]any); len(eps) > 0 {
 			out := make([]any, 0, len(eps))

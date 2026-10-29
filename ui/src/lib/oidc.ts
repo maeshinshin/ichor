@@ -122,7 +122,10 @@ export async function finishLogin(providers: AuthProvider[]): Promise<boolean> {
 
   const raw = sessionStorage.getItem(PENDING)
   sessionStorage.removeItem(PENDING)
+  // Same as router.replace: the router only re-reads the path on popstate, so without the event it
+  // keeps rendering the callback path (/auth/callback), which is no route.
   window.history.replaceState({}, '', '/')
+  window.dispatchEvent(new Event('popstate'))
   // No pending login means this is a stale callback (a reopened or restored tab, the back button,
   // another tab: sessionStorage is per tab). It is not an attack, so start a fresh sign-in instead.
   if (!raw) return false

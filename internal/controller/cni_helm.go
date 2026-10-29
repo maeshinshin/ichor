@@ -220,11 +220,7 @@ func AdvanceCNIHelmJob(
 
 	done, failed := jobOutcome(&job)
 	if ended := jobEnded(&job); !ended.IsZero() && ended.Before(since) {
-		if err := c.Delete(ctx, &job, client.PropagationPolicy(metav1.DeletePropagationBackground)); client.IgnoreNotFound(err) != nil {
-			return false, err
-		}
-
-		return false, nil
+		return false, deleteCNIHelmJob(ctx, c, &job)
 	}
 
 	if failed != nil {
@@ -235,7 +231,7 @@ func AdvanceCNIHelmJob(
 	// deadline, holding the caller's cluster lock. No pod after the grace period: remove the Job
 	// and report it; the caller releases the lock and the next pass starts a fresh Job.
 	if !done && job.Status.Active == 0 && !job.CreationTimestamp.IsZero() && time.Since(job.CreationTimestamp.Time) > cniPodGrace {
-		if err := c.Delete(ctx, &job, client.PropagationPolicy(metav1.DeletePropagationBackground)); client.IgnoreNotFound(err) != nil {
+		if err := deleteCNIHelmJob(ctx, c, &job); err != nil {
 			return false, err
 		}
 
@@ -244,6 +240,11 @@ func AdvanceCNIHelmJob(
 	}
 
 	return done, nil
+}
+
+// deleteCNIHelmJob removes a Helm Job and its pods; a Job already gone is fine.
+func deleteCNIHelmJob(ctx context.Context, c client.Client, job *batchv1.Job) error {
+	return client.IgnoreNotFound(c.Delete(ctx, job, client.PropagationPolicy(metav1.DeletePropagationBackground)))
 }
 
 // jobEnded is when a finished Job ended, or the zero time.

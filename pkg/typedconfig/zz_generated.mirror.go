@@ -231,10 +231,10 @@ type Config struct {
 	ConfigDebug *bool `json:"debug,omitempty"`
 	// +optional
 	ConfigPersist *bool `json:"persist,omitempty"`
-	// +required
-	MachineConfig *MachineConfig `json:"machine"`
-	// +required
-	ClusterConfig *ClusterConfig `json:"cluster"`
+	// +optional
+	MachineConfig *MachineConfig `json:"machine,omitempty"`
+	// +optional
+	ClusterConfig *ClusterConfig `json:"cluster,omitempty"`
 }
 
 // Talos: ControlPlaneConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
@@ -695,12 +695,12 @@ type LoggingDestination struct {
 
 // Talos: MachineConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type MachineConfig struct {
-	// +required
-	MachineType string `json:"type"`
+	// +optional
+	MachineType string `json:"type,omitempty"`
 	// +optional
 	MachineAcceptedCAs []*PEMEncodedCertificate `json:"acceptedCAs,omitempty"`
-	// +required
-	MachineCertSANs []string `json:"certSANs"`
+	// +optional
+	MachineCertSANs []string `json:"certSANs,omitempty"`
 	// +optional
 	MachineControlPlane *MachineControlPlaneConfig `json:"controlPlane,omitempty"`
 	// +optional

@@ -133,11 +133,11 @@ func ensureBaseCache() (string, error) {
 	name := baseCacheName()
 	started := time.Now()
 
-	if err := applyManifest(fmt.Sprintf(baseCacheManifestTmpl, name, talosFactorySchematic, talosVersion)); err != nil {
+	if err := kube.Apply(fmt.Sprintf(baseCacheManifestTmpl, name, talosFactorySchematic, talosVersion)); err != nil {
 		return "", fmt.Errorf("creating the base cache DataVolume %s: %w", name, err)
 	}
 
-	if _, err := pollFor("waiting for base cache "+name+" to be ready", 15*time.Minute, func() (string, bool) {
+	if _, err := kube.Poll("waiting for base cache "+name+" to be ready", 15*time.Minute, func() (string, bool) {
 		out, err := utils.Run(kube.Command("-n", namespace, "get", "dv", name,
 			"-o", "jsonpath={.status.phase}"))
 

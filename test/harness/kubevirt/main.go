@@ -253,11 +253,11 @@ func bootToMaintenance() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := applyManifest(manifest); err != nil {
+	if err := kube.Apply(manifest); err != nil {
 		return "", fmt.Errorf("creating the VM: %w", err)
 	}
 
-	ip, err := pollFor("waiting for the VMI to report a pod IP", 3*time.Minute, func() (string, bool) {
+	ip, err := kube.Poll("waiting for the VMI to report a pod IP", 3*time.Minute, func() (string, bool) {
 		out, err := utils.Run(kube.Command("-n", namespace, "get", "vmi", vmName,
 			"-o", "jsonpath={.status.interfaces[0].ipAddress}"))
 		ip := strings.TrimSpace(out)
@@ -267,7 +267,7 @@ func bootToMaintenance() (string, error) {
 		return "", err
 	}
 
-	if _, err := pollFor("waiting for MachineStatus stage to reach maintenance", 5*time.Minute, func() (string, bool) {
+	if _, err := kube.Poll("waiting for MachineStatus stage to reach maintenance", 5*time.Minute, func() (string, bool) {
 		out, err := talosctl.Get(namespace, ip, "machinestatus")
 		if err != nil {
 			return "", false
@@ -308,7 +308,7 @@ func installAndBootstrap(ip string) ([]byte, error) {
 	}
 	fmt.Println(out)
 
-	if _, err := pollFor("waiting for the authenticated API to come up", 10*time.Minute, func() (string, bool) {
+	if _, err := kube.Poll("waiting for the authenticated API to come up", 10*time.Minute, func() (string, bool) {
 		_, err := talosctl.GetAuthenticated(namespace, ip, "machinestatus", talosconfigYAML)
 		return "", err == nil
 	}); err != nil {
@@ -328,7 +328,7 @@ func installAndBootstrap(ip string) ([]byte, error) {
 	// than treat it as fatal.
 	var bootstrapOut string
 	var bootstrapErr error
-	if _, err := pollFor("waiting for bootstrap to become available", 2*time.Minute, func() (string, bool) {
+	if _, err := kube.Poll("waiting for bootstrap to become available", 2*time.Minute, func() (string, bool) {
 		bootstrapOut, bootstrapErr = talosctl.Bootstrap(namespace, ip, talosconfigYAML)
 		return "", bootstrapErr == nil
 	}); err != nil {
@@ -338,7 +338,7 @@ func installAndBootstrap(ip string) ([]byte, error) {
 	fmt.Println(bootstrapOut)
 
 	var lastStatus string
-	if _, err := pollFor("waiting for machinestatus stage=running ready=true", 5*time.Minute, func() (string, bool) {
+	if _, err := kube.Poll("waiting for machinestatus stage=running ready=true", 5*time.Minute, func() (string, bool) {
 		out, err := talosctl.GetAuthenticated(namespace, ip, "machinestatus", talosconfigYAML)
 		if err != nil {
 			lastStatus = err.Error()
@@ -391,7 +391,7 @@ func publish(ip string, talosconfigYAML []byte) error {
 		return fmt.Errorf("writing talosconfig: %w", err)
 	}
 
-	if _, err := pollFor("waiting for one Ready node through the tunnel", 3*time.Minute, func() (string, bool) {
+	if _, err := kube.Poll("waiting for one Ready node through the tunnel", 3*time.Minute, func() (string, bool) {
 		out, err := utils.Run(kube.InnerCommand(innerKubeconfigPath, "get", "nodes",
 			"-o", "jsonpath={.items[*].status.conditions[?(@.type==\"Ready\")].status}"))
 		return out, err == nil && strings.TrimSpace(out) == "True"
@@ -460,7 +460,7 @@ func down() error {
 // the lifetime of the whole e2e run, which is a separate `make` invocation.
 func startRelay(nodeIP string) error {
 	manifest := fmt.Sprintf(relayManifestTmpl, relayName, nodeIP)
-	if err := applyManifest(manifest); err != nil {
+	if err := kube.Apply(manifest); err != nil {
 		return fmt.Errorf("creating the relay pod: %w", err)
 	}
 	if _, err := utils.Run(kube.Command("-n", namespace, "wait", "pod/"+relayName,
@@ -489,7 +489,7 @@ func startRelay(nodeIP string) error {
 		return fmt.Errorf("recording port-forward pid: %w", err)
 	}
 
-	_, err = pollFor("waiting for the port-forward tunnel to accept connections", 30*time.Second, func() (string, bool) {
+	_, err = kube.Poll("waiting for the port-forward tunnel to accept connections", 30*time.Second, func() (string, bool) {
 		conn, err := net.DialTimeout("tcp", "127.0.0.1:"+relayLocalPort, 2*time.Second)
 		if err != nil {
 			return "", false
@@ -526,19 +526,4 @@ func projectBin() (string, error) {
 		return "", fmt.Errorf("creating %s: %w", bin, err)
 	}
 	return bin, nil
-}
-
-// pollFor retries check until it reports ready, returning its value, or fails after timeout.
-func pollFor(step string, timeout time.Duration, check func() (string, bool)) (string, error) {
-	fmt.Println(step)
-	deadline := time.Now().Add(timeout)
-	for {
-		if v, ok := check(); ok {
-			return v, nil
-		}
-		if time.Now().After(deadline) {
-			return "", fmt.Errorf("%s: timed out after %s", step, timeout)
-		}
-		time.Sleep(5 * time.Second)
-	}
 }

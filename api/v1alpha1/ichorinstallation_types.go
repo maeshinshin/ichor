@@ -199,3 +199,15 @@ func init() {
 		return nil
 	})
 }
+
+// IchorHelmManagedMessage is the refusal for an Ichor upgrade operation on an install Helm owns
+// (spec.deployment.manager: helm).
+const IchorHelmManagedMessage = "this Ichor is installed by Helm; run helm upgrade"
+
+// ReasonManagedByHelm is the reason of the UpToDate condition on an install Helm owns.
+const ReasonManagedByHelm = "ManagedByHelm"
+
+// HelmManaged reports that Helm deploys this Ichor (spec.deployment.manager: helm).
+func (i *IchorInstallation) HelmManaged() bool {
+	return i != nil && i.Spec.Deployment != nil && i.Spec.Deployment.Manager == IchorManagerHelm
+}

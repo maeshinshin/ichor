@@ -95,7 +95,7 @@ func numberProblem(s string) string {
 // identifiersProblem checks dot-separated pre-release or build identifiers. Only pre-release
 // identifiers forbid leading zeros in their numeric form.
 func identifiersProblem(kind, s string, noLeadingZero bool) string {
-	for _, id := range strings.Split(s, ".") {
+	for id := range strings.SplitSeq(s, ".") {
 		switch {
 		case id == "":
 			return fmt.Sprintf("empty %s identifier", kind)
@@ -129,7 +129,8 @@ func isAlnumHyphen(s string) bool {
 	}
 
 	for _, r := range s {
-		if !(r >= '0' && r <= '9' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r == '-') {
+		ok := r >= '0' && r <= '9' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r == '-'
+		if !ok {
 			return false
 		}
 	}

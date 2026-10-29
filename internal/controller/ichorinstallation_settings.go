@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strconv"
 
-	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -53,8 +52,4 @@ func (r *IchorInstallationReconciler) applySettings(inst *ichorv1alpha1.IchorIns
 		Type: ichorv1alpha1.ConditionSettingsApplied, Status: metav1.ConditionTrue, Reason: reason,
 		Message: fmt.Sprintf("%s (generation %d)", msg, inst.Generation), ObservedGeneration: inst.Generation,
 	})
-}
-
-func equalEffective(a, b *ichorv1alpha1.IchorEffectiveSettings) bool {
-	return apiequality.Semantic.DeepEqual(a, b)
 }

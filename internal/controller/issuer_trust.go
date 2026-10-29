@@ -388,19 +388,8 @@ func (r *IssuerTrustReconciler) leafSpec(svc *corev1.Service, ip net.IP) leafSpe
 // ensureUICA publishes the CA certificate, never a key, as the ConfigMap and the Secret
 // ichor-ui-ca for an edge, a BackendTLSPolicy or a client to verify ichor-ui with.
 func (r *IssuerTrustReconciler) ensureUICA(ctx context.Context, caPEM []byte) error {
-	cm := &corev1.ConfigMap{Namespace: r.Namespace, Name: oidctrust.UICAName}
-
-	if _, err := controllerutil.CreateOrUpdate(ctx, r.Client, cm, func() error {
-		if cm.Labels == nil {
-			cm.Labels = map[string]string{}
-		}
-
-		cm.Labels[managedByLabel] = managedByValue
-		cm.Data, cm.BinaryData = map[string]string{oidctrust.CAKey: string(caPEM)}, nil
-
-		return nil
-	}); err != nil {
-		return fmt.Errorf("writing ConfigMap %s: %w", oidctrust.UICAName, err)
+	if err := r.applyConfigMap(ctx, oidctrust.UICAName, map[string]string{oidctrust.CAKey: string(caPEM)}); err != nil {
+		return err
 	}
 
 	var sec corev1.Secret
@@ -491,20 +480,24 @@ func (r *IssuerTrustReconciler) ensureTrustMap(ctx context.Context, ip net.IP, c
 		oidctrust.CAKey: string(caPEM),
 	}
 
-	cm := &corev1.ConfigMap{Namespace: r.Namespace, Name: oidctrust.TrustConfigMap}
+	return r.applyConfigMap(ctx, oidctrust.TrustConfigMap, want)
+}
 
-	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, cm, func() error {
+// applyConfigMap creates or updates a ConfigMap with exactly data.
+func (r *IssuerTrustReconciler) applyConfigMap(ctx context.Context, name string, data map[string]string) error {
+	cm := &corev1.ConfigMap{Namespace: r.Namespace, Name: name}
+
+	if _, err := controllerutil.CreateOrUpdate(ctx, r.Client, cm, func() error {
 		if cm.Labels == nil {
 			cm.Labels = map[string]string{}
 		}
 
 		cm.Labels[managedByLabel] = managedByValue
-		cm.Data, cm.BinaryData = want, nil
+		cm.Data, cm.BinaryData = data, nil
 
 		return nil
-	})
-	if err != nil {
-		return fmt.Errorf("writing ConfigMap %s: %w", oidctrust.TrustConfigMap, err)
+	}); err != nil {
+		return fmt.Errorf("writing ConfigMap %s: %w", name, err)
 	}
 
 	return nil
@@ -601,12 +594,7 @@ func (r *IssuerTrustReconciler) collectOrphans(ctx context.Context, now time.Tim
 
 	var live ichorv1alpha1.IchorUserList
 
-	reader := r.APIReader
-	if reader == nil {
-		reader = r.Client
-	}
-
-	if err := reader.List(ctx, &live, client.InNamespace(r.Namespace)); err != nil {
+	if err := readerOrClient(r.APIReader, r.Client).List(ctx, &live, client.InNamespace(r.Namespace)); err != nil {
 		return fmt.Errorf("listing IchorUsers for clean-up: %w", err)
 	}
 

@@ -533,6 +533,22 @@ func newAPIDepsFor(cmd *cobra.Command, cfg *rest.Config) (apiDeps, error) {
 	}, nil
 }
 
+// showAPI is runAPI for a read command whose whole job is one call and printing its response.
+func showAPI[T any, PT interface {
+	*T
+	proto.Message
+}](cmd *cobra.Command, requireBackend bool, call func(context.Context, *apiClients) (*connect.Response[T], error),
+) error {
+	return runAPI(cmd, requireBackend, func(ctx context.Context, c *apiClients) error {
+		resp, err := call(ctx, c)
+		if err != nil {
+			return err
+		}
+
+		return writeMessage(cmd.OutOrStdout(), outputFormat, PT(resp.Msg))
+	})
+}
+
 // runAPI is every command's shell: validate -o, connect, run, close.
 func runAPI(cmd *cobra.Command, requireBackend bool, fn func(ctx context.Context, c *apiClients) error) error {
 	if err := validateOutputFormat(outputFormat); err != nil {

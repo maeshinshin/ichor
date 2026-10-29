@@ -18,7 +18,6 @@ package cli
 
 import (
 	"context"
-	"io"
 
 	"connectrpc.com/connect"
 	"github.com/spf13/cobra"
@@ -33,21 +32,12 @@ var machineListCmd = &cobra.Command{
 	Short: "List machines, pending ones included",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
-		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
-			return runMachineList(ctx, c, cmd.OutOrStdout(), machineListCluster)
+		return showAPI(cmd, false, func(ctx context.Context, c *apiClients) (*connect.Response[pb.ListMachinesResponse], error) {
+			return c.Machine.ListMachines(ctx, connect.NewRequest(&pb.ListMachinesRequest{
+				Cluster: clusterFilter(apiOpts.Namespace, machineListCluster),
+			}))
 		})
 	},
-}
-
-func runMachineList(ctx context.Context, c *apiClients, out io.Writer, cluster string) error {
-	resp, err := c.Machine.ListMachines(ctx, connect.NewRequest(&pb.ListMachinesRequest{
-		Cluster: clusterFilter(apiOpts.Namespace, cluster),
-	}))
-	if err != nil {
-		return err
-	}
-
-	return writeMessage(out, outputFormat, resp.Msg)
 }
 
 func init() {

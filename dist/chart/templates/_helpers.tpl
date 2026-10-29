@@ -50,6 +50,16 @@ Dynamically calculates safe truncation to ensure total name length <= 63 chars.
 {{- end }}
 
 {{/*
+The four labels every chart object carries. Context: the root (. or $).
+*/}}
+{{- define "ichor.labels" -}}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+app.kubernetes.io/name: {{ include "ichor.name" . }}
+helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}
+
+{{/*
 ServiceAccount name to use.
 If serviceAccount.enabled is false and serviceAccount.name is set, use that name.
 Otherwise, use the standard resourceName helper with "controller-manager" suffix.

@@ -6,11 +6,9 @@ export type ConditionTone = 'good' | 'bad' | 'neutral'
 // everything else is neutral so a False never looks like a failure by default.
 const healthTypes = /(Ready|Available|Healthy|Synced|Approved|Present)$/
 
-// Informational types that merely end in a health word: "an upgrade is available" is not health.
-const informationalTypes = new Set(['CiliumUpgradeAvailable'])
-
+// CiliumUpgradeAvailable merely ends in a health word: "an upgrade is available" is not health.
 export function conditionTone(type: string, status: string): ConditionTone {
-  if (informationalTypes.has(type)) return 'neutral'
+  if (type === 'CiliumUpgradeAvailable') return 'neutral'
   if (!healthTypes.test(type)) return 'neutral'
   if (status === 'True') return 'good'
   if (status === 'False') return 'bad'

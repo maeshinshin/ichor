@@ -1,6 +1,6 @@
 # 0106. HA findings: a patch is dry-rendered at admission, a restore refuses an in-cluster backup store, an unreachable node says so, and a dead control plane can be removed
 
-Status: Accepted · Date: 2026-10-30 · Design section: Configuration, Backup and restore, Nodes · Touches: 0003, 0065
+Status: Accepted; hardware-verified except H7 · Date: 2026-10-30 · Design section: Configuration, Backup and restore, Nodes · Touches: 0003, 0065
 
 Decided: a `TalosConfigPatch` is dry-rendered by a validating webhook (create and update) against every approved machine of its cluster that it selects, with the controller's own `render.Render`, and refused with the render error when the render would fail and did not already fail without the patch; the generated `Config` mirror makes `machine`, `cluster`, `machine.type` and `machine.certSANs` optional (an additive loosening) so a sparse `Config` document no longer repeats them and no longer reads as "needs a reboot"; `ichor restore --live` and the `TalosEtcdBackup` condition `StoreInCluster` refuse or warn when the backup endpoint is inside the cluster being restored; a `TalosMachine` whose node cannot be read reports `Ready=False` `NodeUnreachable` with the endpoint and, when the Kubernetes Node shows another InternalIP, the likely new address (spec is never changed); `ichor node remove` of a control plane below the declared count is allowed when its etcd member is unhealthy or unreachable.
 
@@ -35,3 +35,17 @@ A node whose IP changed kept `Ready=True` `Converged` with the stale endpoint. T
 - The removal in the controller (`removal.go`, authoritative) reads etcd through a healthy sibling (`deadEtcdMember`, `removal_dead.go`): the sibling must list the member, and the departing machine must be unreachable, its etcd status must fail, or it must see no leader. A member that answers with a leader is healthy and the refusal stands, now saying so. Names that cannot be told, a sibling that cannot be dialed, or a member etcd does not list leave the refusal in place (nothing proves it dead); the one exception is a removal that already proceeded for a dead member (the `Removal` condition reason `DeadMemberRemoval` is the marker), so a round that resumes after the member left etcd goes on. When it proceeds it emits a Warning Event `DeadMemberRemoved` saying the count is below the declared one and a replacement should be approved, and it skips the storage evacuation and the drain, which wait for a kubelet that is not there and would never finish.
 - The plan (`internal/uiapi/node_action.go`, `ichor node remove`, UI) cannot read etcd, so it allows the removal when the machine's `Ready` is False with reason `NodeUnreachable` (section 3), with a warning in the plan; the controller still decides. `node reset` keeps the count check, because a reset needs the node.
 - The admission webhook (`ValidateDelete`) only ever checked quorum, not the declared count, and is unchanged.
+
+## Hardware results (2026-10-30)
+
+HA lane on an Ichor-made three control plane cluster (e2e harness).
+
+- H1 bring-up, H3 one-control-plane-at-a-time rollout, H4 Kubernetes v1.37.1 to v1.37.2 and H5 CA rotation on three control planes passed.
+- H2 control plane loss: the API stayed available (0 hard failures). A halted node could not rejoin on the e2e harness because its pod IP changed. A single-replica controller or UI takes about 6 to 7 minutes to reschedule.
+- H6 `restore --live` passes with an out-of-cluster S3; an in-cluster S3 is now refused (section 2).
+- H7 dead control plane replacement is now allowed (11ac8f3e, section 4); not re-verified on hardware.
+
+## Later additions
+
+- **Endpoint identity check** (a45bafe3): a machine whose endpoint answers as another node is reported as `EndpointIdentityMismatch`.
+- **NodeUnreachable** (77b7b6ac, section 3): verified on the demo; the hint was correct and `Ready` returned after `spec.endpoint` was updated.

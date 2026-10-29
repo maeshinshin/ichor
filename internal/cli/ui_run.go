@@ -161,7 +161,12 @@ func runUI(ctx context.Context, opts uiOptions, deps uiDeps) error {
 		return fmt.Errorf("ui: Service %s/%s has no selector", svc.Namespace, svc.Name)
 	}
 
-	remotePort := svc.Spec.Ports[0].Port
+	remotePort, caPEM := uiEndpoint(ctx, deps.K8s, svc, false)
+	scheme := "http"
+
+	if remotePort == uiHTTPSPort {
+		scheme = "https"
+	}
 
 	localPort := int32(opts.LocalPort)
 	if localPort == 0 {
@@ -214,10 +219,15 @@ func runUI(ctx context.Context, opts uiOptions, deps uiDeps) error {
 		}
 
 		if isReady && !opened {
-			_, _ = fmt.Fprintf(deps.Stderr, "ichor ui: open http://localhost:%d/ in your browser\n", localPort)
+			_, _ = fmt.Fprintf(deps.Stderr, "ichor ui: open %s://localhost:%d/ in your browser\n", scheme, localPort)
+
+			if len(caPEM) > 0 {
+				_, _ = fmt.Fprintf(deps.Stderr, "ichor ui: the certificate is signed by the Ichor serving CA "+
+					"(ConfigMap %s/%s, key %s); import it into your browser to remove the warning\n", svc.Namespace, uiCAConfigMap, uiCAKey)
+			}
 
 			if opts.OpenBrowser {
-				if err := deps.OpenBrowser(fmt.Sprintf("http://localhost:%d/", localPort)); err != nil {
+				if err := deps.OpenBrowser(fmt.Sprintf("%s://localhost:%d/", scheme, localPort)); err != nil {
 					_, _ = fmt.Fprintf(deps.Stderr, "ichor ui: could not open a browser automatically: %v\n", err)
 				}
 			}

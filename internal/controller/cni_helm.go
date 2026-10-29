@@ -186,18 +186,11 @@ func cniHelmJobName(cluster *ichorv1alpha1.TalosCluster, valuesHash string) stri
 // the kube-proxy switch (unit 9) and the upgrade call; taking the cluster operation lock around it is theirs
 // (the switch and a values edit must not overlap). A salt in the Job name gives an upgrade
 // operation a Job of its own even when a finished one for the same values exists.
+//
+// A caller that needs a run of its own passes since: the Job name is a hash of the values, so a Job
+// that ended before since (the install's, or an earlier switch's, within its 24 h TTL) is not its
+// run. It is deleted and the next call starts a new one. A zero since takes any Job as it is.
 func AdvanceCNIHelmJob(
-	ctx context.Context, c client.Client, ns string, cluster *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode,
-	inst *ichorv1alpha1.IchorInstallation, salt string,
-) (bool, error) {
-	return advanceCNIHelmJobSince(ctx, c, ns, cluster, mode, inst, salt, time.Time{})
-}
-
-// advanceCNIHelmJobSince is AdvanceCNIHelmJob for a caller that needs a run of its own: the Job name is
-// a hash of the values, so a Job that ended before since (the install's, or an earlier switch's, within
-// its 24 h TTL) is not the caller's run. It is deleted and the next call starts a new one. A zero since
-// takes any Job as it is.
-func advanceCNIHelmJobSince(
 	ctx context.Context, c client.Client, ns string, cluster *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode,
 	inst *ichorv1alpha1.IchorInstallation, salt string, since time.Time,
 ) (bool, error) {
@@ -225,7 +218,7 @@ func advanceCNIHelmJobSince(
 	}
 
 	done, failed := jobOutcome(&job)
-	if ended := jobEnded(&job); (done || failed != nil) && !ended.IsZero() && ended.Before(since) {
+	if ended := jobEnded(&job); !ended.IsZero() && ended.Before(since) {
 		if err := c.Delete(ctx, &job, client.PropagationPolicy(metav1.DeletePropagationBackground)); client.IgnoreNotFound(err) != nil {
 			return false, err
 		}

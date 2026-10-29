@@ -45,8 +45,6 @@ const (
 	cniNone    = "none"
 
 	reasonCNINotCilium = "CNINotCilium"
-
-	cniNamespace = "kube-system"
 )
 
 // otherCNIDaemonSets are kube-system DaemonSets of CNIs Ichor has no special case for.
@@ -83,7 +81,7 @@ func (r *CNIDetectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	var list appsv1.DaemonSetList
-	if err := reader.List(ctx, &list, client.InNamespace(cniNamespace)); err != nil {
+	if err := reader.List(ctx, &list, client.InNamespace(kubeSystemNamespace)); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -125,7 +123,7 @@ func DetectCNI(sets []appsv1.DaemonSet) (detected, version string) {
 		name := sets[i].Name
 
 		switch {
-		case sets[i].Namespace != "" && sets[i].Namespace != cniNamespace:
+		case sets[i].Namespace != "" && sets[i].Namespace != kubeSystemNamespace:
 		case name == ciliumName:
 			found[ciliumName] = &sets[i]
 		case strings.Contains(name, cniFlannel):

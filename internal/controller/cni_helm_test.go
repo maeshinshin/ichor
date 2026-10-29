@@ -191,23 +191,23 @@ func TestAdvanceCNIHelmJob(t *testing.T) {
 	hash, _ := CNIValuesHash(cluster, specMode(cluster))
 	name := cniHelmJobName(cluster, hash)
 
-	if done, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, specMode(cluster), inst, ""); done || err != nil {
+	if done, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, specMode(cluster), inst, "", time.Time{}); done || err != nil {
 		t.Fatalf("first call = %t, %v; want it to create the Job and not be done", done, err)
 	}
 
-	if done, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, specMode(cluster), inst, ""); done || err != nil {
+	if done, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, specMode(cluster), inst, "", time.Time{}); done || err != nil {
 		t.Fatalf("running Job = %t, %v; want not done, no error", done, err)
 	}
 
 	setCNIJobCondition(t, c, kubeSystemNamespace, name, batchv1.JobComplete)
 
-	if done, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, specMode(cluster), inst, ""); !done || err != nil {
+	if done, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, specMode(cluster), inst, "", time.Time{}); !done || err != nil {
 		t.Fatalf("completed Job = %t, %v; want done", done, err)
 	}
 
 	// Other values: the completed Job proves nothing for them, a new Job is created.
 	edited := cniTestCluster(`{"debug":{"enabled":true}}`)
-	if done, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", edited, specMode(edited), inst, ""); done || err != nil {
+	if done, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", edited, specMode(edited), inst, "", time.Time{}); done || err != nil {
 		t.Fatalf("edited values = %t, %v; want a new Job and not done", done, err)
 	}
 
@@ -224,13 +224,13 @@ func TestAdvanceCNIHelmJobReportsAFailedJob(t *testing.T) {
 
 	hash, _ := CNIValuesHash(cluster, specMode(cluster))
 
-	if _, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, specMode(cluster), cniTestInstallation(), ""); err != nil {
+	if _, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, specMode(cluster), cniTestInstallation(), "", time.Time{}); err != nil {
 		t.Fatal(err)
 	}
 
 	setCNIJobCondition(t, c, kubeSystemNamespace, cniHelmJobName(cluster, hash), batchv1.JobFailed)
 
-	_, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, specMode(cluster), cniTestInstallation(), "")
+	_, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, specMode(cluster), cniTestInstallation(), "", time.Time{})
 	if err == nil || !strings.Contains(err.Error(), "failed") {
 		t.Fatalf("error = %v, want the Job's failure", err)
 	}
@@ -246,7 +246,7 @@ func TestAdvanceCNIHelmJobFailsFastWhenNoPodIsCreated(t *testing.T) {
 	hash, _ := CNIValuesHash(cluster, specMode(cluster))
 	name := cniHelmJobName(cluster, hash)
 
-	if _, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, specMode(cluster), cniTestInstallation(), ""); err != nil {
+	if _, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, specMode(cluster), cniTestInstallation(), "", time.Time{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -256,7 +256,7 @@ func TestAdvanceCNIHelmJobFailsFastWhenNoPodIsCreated(t *testing.T) {
 	}
 
 	// Within the grace period a Job without a pod is just starting.
-	if done, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, specMode(cluster), cniTestInstallation(), ""); done || err != nil {
+	if done, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, specMode(cluster), cniTestInstallation(), "", time.Time{}); done || err != nil {
 		t.Fatalf("young Job = %t, %v; want not done, no error", done, err)
 	}
 
@@ -266,7 +266,7 @@ func TestAdvanceCNIHelmJobFailsFastWhenNoPodIsCreated(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, specMode(cluster), cniTestInstallation(), "")
+	_, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, specMode(cluster), cniTestInstallation(), "", time.Time{})
 
 	var failed *CNIHelmJobFailedError
 	if !errors.As(err, &failed) || !failed.NoPod || failed.JobName != name {
@@ -278,7 +278,7 @@ func TestAdvanceCNIHelmJobFailsFastWhenNoPodIsCreated(t *testing.T) {
 	}
 
 	// The next pass starts a fresh Job.
-	if done, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, specMode(cluster), cniTestInstallation(), ""); done || err != nil {
+	if done, err := AdvanceCNIHelmJob(ctx, c, "ichor-system", cluster, specMode(cluster), cniTestInstallation(), "", time.Time{}); done || err != nil {
 		t.Fatalf("after removal = %t, %v; want a new Job and not done", done, err)
 	}
 }

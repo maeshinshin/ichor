@@ -211,7 +211,7 @@ func (r *CNIHandoverReconciler) runJob(
 		return ctrl.Result{}, err
 	}
 
-	done, err := AdvanceCNIHelmJob(ctx, r.Client, r.Namespace, cluster, mode, &inst, "")
+	done, err := AdvanceCNIHelmJob(ctx, r.Client, r.Namespace, cluster, mode, &inst, "", time.Time{})
 
 	var failed *CNIHelmJobFailedError
 

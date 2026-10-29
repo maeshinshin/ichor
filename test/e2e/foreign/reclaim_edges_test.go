@@ -167,7 +167,7 @@ func TestC9Restart(t *testing.T) {
 	tc := ftc(t, r.f)
 	uuid := uuidOf(t, r.foreignW, tc)
 	tcPath, secrets := r.markedTalosconfig(t, "c9r")
-	_, _ = r.ikDelete("-n", crNS, "create", "rolebinding", "reclaim-lane2", "--clusterrole=ichor-ichor-machine-reclaimer", "--serviceaccount=ichor-system:ichor-ichor-ui")
+	_, _ = r.ikDelete("-n", crNS, "create", "rolebinding", "reclaim-lane2", "--clusterrole=ichor-machine-reclaimer", "--serviceaccount=ichor-system:ichor-ichor-ui")
 	t.Cleanup(func() { _, _ = r.ikDelete("-n", crNS, "delete", "rolebinding", "reclaim-lane2", "--ignore-not-found") })
 
 	name, _, err := r.newReclaim(t, tcPath, r.foreignW)

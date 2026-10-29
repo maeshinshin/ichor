@@ -126,7 +126,7 @@ func TestC8C9C10(t *testing.T) {
 		t.Logf("MachineReclaims after the denial: %s", got)
 	}
 
-	if _, err := r.ik("-n", crNS, "create", "rolebinding", "reclaim-lane2", "--clusterrole=ichor-ichor-machine-reclaimer", "--serviceaccount=ichor-system:ichor-ichor-ui"); err != nil {
+	if _, err := r.ik("-n", crNS, "create", "rolebinding", "reclaim-lane2", "--clusterrole=ichor-machine-reclaimer", "--serviceaccount=ichor-system:ichor-ichor-ui"); err != nil {
 		t.Fatalf("binding the reclaimer role: %v", err)
 	}
 	t.Cleanup(func() { _, _ = r.ikDelete("-n", crNS, "delete", "rolebinding", "reclaim-lane2", "--ignore-not-found") })

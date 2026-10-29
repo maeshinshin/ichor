@@ -577,14 +577,28 @@ func checkUIBackendRBACIsSeparate(t *testing.T, release string, docs []map[strin
 // and docs/guides/adopt-and-reclaim.md tell users to bind ichor-machine-reclaimer. The chart renders
 // it under the release's resource-name helper, so release "ichor" gives that name.
 func TestReclaimerRoleName(t *testing.T) {
-	off := renderChartWithValues(t, "ichor", "rbac.helpers.enabled=true")
-	if find(off, kindClusterRole, "ichor-machine-reclaimer") != nil {
-		t.Errorf("ClusterRole ichor-machine-reclaimer rendered with reclaim.enabled off")
+	on := renderChartWithValues(t, "ichor", "rbac.helpers.enabled=true")
+	if find(on, kindClusterRole, "ichor-machine-reclaimer") == nil {
+		t.Errorf("rbac.helpers.enabled with release ichor: want ClusterRole ichor-machine-reclaimer")
 	}
 
-	on := renderChartWithValues(t, "ichor", "rbac.helpers.enabled=true", "reclaim.enabled=true")
-	if find(on, kindClusterRole, "ichor-machine-reclaimer") == nil {
-		t.Errorf("reclaim.enabled=true with release ichor: want ClusterRole ichor-machine-reclaimer")
+	off := renderChartWithValues(t, "ichor")
+	if find(off, kindClusterRole, "ichor-machine-reclaimer") != nil {
+		t.Errorf("ClusterRole ichor-machine-reclaimer rendered without rbac.helpers.enabled")
+	}
+}
+
+// TestReclaimEnabledIsIgnored pins ADR 0107: the removed reclaim.enabled value changes nothing in
+// the manager or ichor-ui, and no flag or env var for it is rendered.
+func TestReclaimEnabledIsIgnored(t *testing.T) {
+	for _, docs := range [][]map[string]any{
+		renderChartWithValues(t, "ichor", "reclaim.enabled=true", "rbac.helpers.enabled=true"),
+	} {
+		for _, d := range docs {
+			if s := fmt.Sprint(d); strings.Contains(s, "--reclaim") || strings.Contains(s, "ICHOR_RECLAIM_ENABLED") {
+				t.Errorf("%v: reclaim.enabled must be ignored", d["kind"])
+			}
+		}
 	}
 }
 

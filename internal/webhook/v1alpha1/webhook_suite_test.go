@@ -123,7 +123,7 @@ var _ = BeforeSuite(func() {
 	})
 	Expect(err).NotTo(HaveOccurred())
 
-	err = SetupMachineReclaimWebhookWithManager(mgr, true, nil)
+	err = SetupMachineReclaimWebhookWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred())
 
 	// +kubebuilder:scaffold:webhook

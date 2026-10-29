@@ -80,11 +80,13 @@ spec:
                 minLength: 1
                 type: string
               reclaim:
-                description: reclaim holds the break-glass setting of ADR 0103.
+                description: |-
+                  reclaim is deprecated and ignored (ADR 0107): "Reset and add" has no installation switch;
+                  RBAC alone (the reclaim verb on machinereclaims) decides who may use it. The field stays so
+                  that an installed object keeps validating. The admission webhook warns when it is set.
                 properties:
                   enabled:
-                    description: enabled turns the break-glass reclaim on. Unset falls
-                      back to the controller flag.
+                    description: enabled is deprecated and ignored (ADR 0107).
                     type: boolean
                 type: object
               users:
@@ -227,7 +229,8 @@ spec:
                     - value
                     type: object
                   reclaimEnabled:
-                    description: IchorEffectiveValue is one setting in force.
+                    description: 'reclaimEnabled is deprecated: the controller no
+                      longer reports it (ADR 0107).'
                     properties:
                       source:
                         description: source is spec when the field is set, deployment

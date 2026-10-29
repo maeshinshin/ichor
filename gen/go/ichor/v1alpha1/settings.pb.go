@@ -6,7 +6,7 @@
 
 // SettingsService backs the Settings page (docs/adr/0105, Part B). It reads and
 // writes the runtime settings in the IchorInstallation singleton as the caller,
-// so RBAC (ichorinstallations/reclaim, /settings) and the settings webhook judge
+// so RBAC (ichorinstallations/settings) and the settings webhook judge
 // the user. Update changes only the fields it carries.
 
 package ichorv1alpha1
@@ -83,10 +83,11 @@ func (x *SettingValue) GetSource() string {
 // a GetSettingsResponse) or unchanged (in an UpdateSettingsRequest). Durations
 // are Go duration strings ("15m", "720h").
 type SettingsFields struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	ReclaimEnabled  *bool                  `protobuf:"varint,1,opt,name=reclaim_enabled,json=reclaimEnabled,proto3,oneof" json:"reclaim_enabled,omitempty"`
-	TokenTtl        *string                `protobuf:"bytes,2,opt,name=token_ttl,json=tokenTtl,proto3,oneof" json:"token_ttl,omitempty"`
-	RefreshLifetime *string                `protobuf:"bytes,3,opt,name=refresh_lifetime,json=refreshLifetime,proto3,oneof" json:"refresh_lifetime,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// reclaim_enabled is removed (docs/adr/0107): never reported, refused when set.
+	ReclaimEnabled  *bool   `protobuf:"varint,1,opt,name=reclaim_enabled,json=reclaimEnabled,proto3,oneof" json:"reclaim_enabled,omitempty"`
+	TokenTtl        *string `protobuf:"bytes,2,opt,name=token_ttl,json=tokenTtl,proto3,oneof" json:"token_ttl,omitempty"`
+	RefreshLifetime *string `protobuf:"bytes,3,opt,name=refresh_lifetime,json=refreshLifetime,proto3,oneof" json:"refresh_lifetime,omitempty"`
 	// drift_policy is warnOnly or autoCorrect.
 	DriftPolicy   *string `protobuf:"bytes,4,opt,name=drift_policy,json=driftPolicy,proto3,oneof" json:"drift_policy,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -153,11 +154,12 @@ func (x *SettingsFields) GetDriftPolicy() string {
 
 // SettingsEffective is every setting in force.
 type SettingsEffective struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	ReclaimEnabled  *SettingValue          `protobuf:"bytes,1,opt,name=reclaim_enabled,json=reclaimEnabled,proto3" json:"reclaim_enabled,omitempty"`
-	TokenTtl        *SettingValue          `protobuf:"bytes,2,opt,name=token_ttl,json=tokenTtl,proto3" json:"token_ttl,omitempty"`
-	RefreshLifetime *SettingValue          `protobuf:"bytes,3,opt,name=refresh_lifetime,json=refreshLifetime,proto3" json:"refresh_lifetime,omitempty"`
-	DriftPolicy     *SettingValue          `protobuf:"bytes,4,opt,name=drift_policy,json=driftPolicy,proto3" json:"drift_policy,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// reclaim_enabled is removed (docs/adr/0107): never reported.
+	ReclaimEnabled  *SettingValue `protobuf:"bytes,1,opt,name=reclaim_enabled,json=reclaimEnabled,proto3" json:"reclaim_enabled,omitempty"`
+	TokenTtl        *SettingValue `protobuf:"bytes,2,opt,name=token_ttl,json=tokenTtl,proto3" json:"token_ttl,omitempty"`
+	RefreshLifetime *SettingValue `protobuf:"bytes,3,opt,name=refresh_lifetime,json=refreshLifetime,proto3" json:"refresh_lifetime,omitempty"`
+	DriftPolicy     *SettingValue `protobuf:"bytes,4,opt,name=drift_policy,json=driftPolicy,proto3" json:"drift_policy,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -271,8 +273,9 @@ type GetSettingsResponse struct {
 	Effective *SettingsEffective `protobuf:"bytes,6,opt,name=effective,proto3" json:"effective,omitempty"`
 	// ui_effective is what ichor-ui itself applies right now (it reads them per issued token).
 	UiEffective *SettingsEffective `protobuf:"bytes,7,opt,name=ui_effective,json=uiEffective,proto3" json:"ui_effective,omitempty"`
-	// The caller may edit the reclaim switch / the users and defaults groups.
-	CanEditReclaim  bool `protobuf:"varint,8,opt,name=can_edit_reclaim,json=canEditReclaim,proto3" json:"can_edit_reclaim,omitempty"`
+	// can_edit_reclaim is removed (docs/adr/0107): always false.
+	CanEditReclaim bool `protobuf:"varint,8,opt,name=can_edit_reclaim,json=canEditReclaim,proto3" json:"can_edit_reclaim,omitempty"`
+	// The caller may edit the users and defaults groups.
 	CanEditSettings bool `protobuf:"varint,9,opt,name=can_edit_settings,json=canEditSettings,proto3" json:"can_edit_settings,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
@@ -374,7 +377,7 @@ func (x *GetSettingsResponse) GetCanEditSettings() bool {
 type UpdateSettingsRequest struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Changes *SettingsFields        `protobuf:"bytes,1,opt,name=changes,proto3" json:"changes,omitempty"`
-	// confirm_reclaim is the typed confirmation that enabling reclaim needs.
+	// confirm_reclaim is removed (docs/adr/0107): ignored.
 	ConfirmReclaim bool `protobuf:"varint,2,opt,name=confirm_reclaim,json=confirmReclaim,proto3" json:"confirm_reclaim,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache

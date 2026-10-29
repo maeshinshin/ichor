@@ -51,8 +51,8 @@ package uiapi
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosoperations/shutdown;talosoperations/ca-rotation;talosoperations/etcd-restore;talosoperations/node-reset;talosoperations/node-shutdown,verbs=start
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=ichorinstallations,verbs=get;update
 // SettingsService (ADR 0105): with OIDC off the backend is the caller and the settings webhook judges its
-// ServiceAccount, so it holds the two settings subresources like it holds update above (never .../version).
-// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=ichorinstallations/reclaim;ichorinstallations/settings,verbs=update
+// ServiceAccount, so it holds the settings subresource like it holds update above (never .../version).
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=ichorinstallations/settings,verbs=update
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosconfigpatches,verbs=get;list;create;update;delete
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosmachines,verbs=get;list;update;delete
 // An etcd restore (ADR 0089) is planned and chosen from the backups' status: get/list, nothing written.
@@ -118,9 +118,10 @@ package uiapi
 // +kubebuilder:rbac:groups=ichor.maesh.dev,namespace=ichor-system,resources=ichorusers,verbs=get
 // +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,resourceNames=ichor-user-credentials,verbs=get;update;patch
 
-// Break-glass reclaim (docs/adr/0103, 2.2), in ichor-system only. The backend creates the credential
+// "Reset and add" (MachineReclaim; docs/adr/0103, 2.2, docs/adr/0107), in ichor-system only. The backend creates the credential
 // Secret, with the owner reference set at creation (the MachineReclaim is written first); it can never read it back or patch it.
 // The MachineReclaim itself is written as the caller, so the ServiceAccount only reads and lists it
-// (when OIDC is off it also creates and updates it).
+// (when OIDC is off it also creates and updates it, and holds the reclaim verb: the webhook then judges
+// the ServiceAccount, exactly as it does for the talosoperations verbs above).
 // +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,verbs=create
-// +kubebuilder:rbac:groups=ichor.maesh.dev,namespace=ichor-system,resources=machinereclaims,verbs=get;list;create;update
+// +kubebuilder:rbac:groups=ichor.maesh.dev,namespace=ichor-system,resources=machinereclaims,verbs=get;list;create;update;reclaim

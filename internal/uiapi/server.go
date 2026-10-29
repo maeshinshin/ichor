@@ -98,9 +98,7 @@ type Server struct {
 	// answers FailedPrecondition otherwise.
 	Users *UserSettings
 
-	// ReclaimEnabled is the installation reclaim.enabled (ADR 0103, 2.2). Off, every ReclaimService call is refused.
-	ReclaimEnabled bool
-	// Settings, when set, is read per call and wins over ReclaimEnabled (ADR 0105).
+	// Settings, when set, is read per call (ADR 0105).
 	Settings *settings.Reader
 
 	diag     diagnostics

@@ -2,7 +2,6 @@ package controller
 
 import (
 	"fmt"
-	"strconv"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -22,8 +21,7 @@ func (r *IchorInstallationReconciler) applySettings(inst *ichorv1alpha1.IchorIns
 	}
 
 	eff := &ichorv1alpha1.IchorEffectiveSettings{
-		ReclaimEnabled: val(strconv.FormatBool(e.Reclaim.V), e.Reclaim.Source),
-		DriftPolicy:    val(e.DriftPolicy.V, e.DriftPolicy.Source),
+		DriftPolicy: val(e.DriftPolicy.V, e.DriftPolicy.Source),
 	}
 
 	manager, source := ichorv1alpha1.IchorManagerInstaller, ichorv1alpha1.IchorSourceDeployment

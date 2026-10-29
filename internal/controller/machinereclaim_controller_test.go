@@ -40,7 +40,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
-	"github.com/maeshinshin/ichor/internal/settings"
 	"github.com/maeshinshin/ichor/pkg/reclaim"
 )
 
@@ -117,7 +116,7 @@ var _ = Describe("MachineReclaim Controller", func() {
 		now = time.Now()
 
 		r = &MachineReclaimReconciler{
-			Client: inNamespace{k8sClient, ns}, Enabled: true, ControllerNamespace: ns, Recorder: rec,
+			Client: inNamespace{k8sClient, ns}, ControllerNamespace: ns, Recorder: rec,
 			Dial: func(_ context.Context, cred reclaim.Credential, address, _ string) (reclaim.Node, error) {
 				sawCred = strings.Contains(string(cred.Bytes()), reclaimMarker)
 				if address != testNodeAddr {
@@ -409,33 +408,6 @@ var _ = Describe("MachineReclaim Controller", func() {
 
 		err = k8sClient.Get(ctx, key, &ichorv1alpha1.MachineReclaim{})
 		Expect(apierrors.IsNotFound(err)).To(BeTrue())
-	})
-
-	It("fails and deletes the credential when reclaim is switched off", func() {
-		r.Enabled = false
-		key := create()
-
-		_, err := reconcileOnce(key)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(get(key).Status.Phase).To(Equal(ichorv1alpha1.MachineReclaimFailed))
-		Expect(secretExists()).To(BeFalse())
-		Expect(node.resets.Load()).To(BeZero())
-	})
-
-	It("reads the switch per call from the IchorInstallation (ADR 0105)", func() {
-		off := false
-		inst := createInstallation("v0.1.0")
-		inst.Spec.Reclaim = &ichorv1alpha1.IchorReclaimSettings{Enabled: &off}
-		Expect(k8sClient.Update(ctx, inst)).To(Succeed())
-
-		r.Enabled = true
-		r.Settings = &settings.Reader{Client: k8sClient, Fallback: settings.Fallback{ReclaimEnabled: true}}
-		key := create()
-
-		_, err := reconcileOnce(key)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(get(key).Status.Phase).To(Equal(ichorv1alpha1.MachineReclaimFailed), "spec off beats the flag on")
-		Expect(node.resets.Load()).To(BeZero())
 	})
 
 	It("will not read or delete a Secret of another type named as the credential", func() {

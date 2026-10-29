@@ -2,7 +2,7 @@ syntax = "proto3";
 
 // SettingsService backs the Settings page (docs/adr/0105, Part B). It reads and
 // writes the runtime settings in the IchorInstallation singleton as the caller,
-// so RBAC (ichorinstallations/reclaim, /settings) and the settings webhook judge
+// so RBAC (ichorinstallations/settings) and the settings webhook judge
 // the user. Update changes only the fields it carries.
 package ichor.v1alpha1;
 
@@ -12,9 +12,7 @@ service SettingsService {
   // groups the caller may edit.
   rpc GetSettings(GetSettingsRequest) returns (GetSettingsResponse);
 
-  // UpdateSettings changes only the fields present in changes. Enabling reclaim
-  // needs confirm_reclaim; the handler then sets the confirm annotation in the
-  // same write.
+  // UpdateSettings changes only the fields present in changes.
   rpc UpdateSettings(UpdateSettingsRequest) returns (UpdateSettingsResponse);
 }
 
@@ -28,6 +26,7 @@ message SettingValue {
 // a GetSettingsResponse) or unchanged (in an UpdateSettingsRequest). Durations
 // are Go duration strings ("15m", "720h").
 message SettingsFields {
+  // reclaim_enabled is removed (docs/adr/0107): never reported, refused when set.
   optional bool reclaim_enabled = 1;
   optional string token_ttl = 2;
   optional string refresh_lifetime = 3;
@@ -37,6 +36,7 @@ message SettingsFields {
 
 // SettingsEffective is every setting in force.
 message SettingsEffective {
+  // reclaim_enabled is removed (docs/adr/0107): never reported.
   SettingValue reclaim_enabled = 1;
   SettingValue token_ttl = 2;
   SettingValue refresh_lifetime = 3;
@@ -59,14 +59,15 @@ message GetSettingsResponse {
   SettingsEffective effective = 6;
   // ui_effective is what ichor-ui itself applies right now (it reads them per issued token).
   SettingsEffective ui_effective = 7;
-  // The caller may edit the reclaim switch / the users and defaults groups.
+  // can_edit_reclaim is removed (docs/adr/0107): always false.
   bool can_edit_reclaim = 8;
+  // The caller may edit the users and defaults groups.
   bool can_edit_settings = 9;
 }
 
 message UpdateSettingsRequest {
   SettingsFields changes = 1;
-  // confirm_reclaim is the typed confirmation that enabling reclaim needs.
+  // confirm_reclaim is removed (docs/adr/0107): ignored.
   bool confirm_reclaim = 2;
 }
 

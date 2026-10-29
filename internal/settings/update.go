@@ -3,7 +3,6 @@ package settings
 import (
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -16,7 +15,6 @@ import (
 // Changes are the settings to change; nil means unchanged. ponytail: no way to unset a field
 // again (back to the deployment value) yet.
 type Changes struct {
-	Reclaim         *bool
 	TokenTTL        *time.Duration
 	RefreshLifetime *time.Duration
 	// DriftPolicy is warnOnly or autoCorrect.
@@ -25,7 +23,7 @@ type Changes struct {
 
 // Empty reports that nothing is to change.
 func (c Changes) Empty() bool {
-	return c.Reclaim == nil && c.TokenTTL == nil && c.RefreshLifetime == nil && c.DriftPolicy == nil
+	return c.TokenTTL == nil && c.RefreshLifetime == nil && c.DriftPolicy == nil
 }
 
 // Validate checks the bounds the CRD enforces, so the caller gets the message before the API server's.
@@ -47,17 +45,9 @@ func (c Changes) Validate() error {
 	return errors.Join(errs...)
 }
 
-// NeedsConfirmation reports that the change enables reclaim.
-func (c Changes) NeedsConfirmation() bool { return c.Reclaim != nil && *c.Reclaim }
-
-// Apply writes the changes into inst's spec and sets the confirm annotation when it enables
-// reclaim (and drops a stale one otherwise). Only the changed fields are touched. The caller validates.
+// Apply writes the changes into inst's spec. Only the changed fields are touched. The caller validates.
 func (c Changes) Apply(inst *ichorv1alpha1.IchorInstallation) {
 	s := &inst.Spec
-
-	if c.Reclaim != nil {
-		s.Reclaim = &ichorv1alpha1.IchorReclaimSettings{Enabled: c.Reclaim}
-	}
 
 	if c.TokenTTL != nil || c.RefreshLifetime != nil {
 		if s.Users == nil {
@@ -76,21 +66,11 @@ func (c Changes) Apply(inst *ichorv1alpha1.IchorInstallation) {
 	if c.DriftPolicy != nil {
 		s.Defaults = &ichorv1alpha1.IchorDefaultSettings{DriftPolicy: *c.DriftPolicy}
 	}
-
-	if c.NeedsConfirmation() {
-		if inst.Annotations == nil {
-			inst.Annotations = map[string]string{}
-		}
-
-		// A fresh value each time: the webhook only accepts a confirmation the request adds or changes.
-		inst.Annotations[ichorv1alpha1.ConfirmReclaimAnnotation] = ichorv1alpha1.ConfirmReclaimValue + "-" + strconv.FormatInt(time.Now().UnixNano(), 36)
-	} else {
-		delete(inst.Annotations, ichorv1alpha1.ConfirmReclaimAnnotation)
-	}
 }
 
 // Keys of ParseAssignments, as `ichor settings set` spells them.
 const (
+	// KeyReclaim is the removed switch: ParseAssignments refuses it (ADR 0107).
 	KeyReclaim         = "reclaim.enabled"
 	KeyTokenTTL        = "users.tokenTTL"
 	KeyRefreshLifetime = "users.refreshLifetime"
@@ -111,11 +91,7 @@ func ParseAssignments(args []string) (Changes, error) {
 
 		switch k {
 		case KeyReclaim:
-			var b bool
-
-			if b, err = strconv.ParseBool(v); err == nil {
-				c.Reclaim = &b
-			}
+			return c, errors.New("reclaim.enabled is removed: who may reset and add a machine is decided by RBAC alone (the reclaim verb on machinereclaims; docs/adr/0107)")
 		case KeyTokenTTL, KeyRefreshLifetime:
 			var d time.Duration
 
@@ -129,7 +105,7 @@ func ParseAssignments(args []string) (Changes, error) {
 		case KeyDriftPolicy:
 			c.DriftPolicy = &v
 		default:
-			return c, fmt.Errorf("unknown setting %q (known: %s, %s, %s, %s)", k, KeyReclaim, KeyTokenTTL, KeyRefreshLifetime, KeyDriftPolicy)
+			return c, fmt.Errorf("unknown setting %q (known: %s, %s, %s)", k, KeyTokenTTL, KeyRefreshLifetime, KeyDriftPolicy)
 		}
 
 		if err != nil {

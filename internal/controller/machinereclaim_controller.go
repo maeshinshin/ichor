@@ -36,7 +36,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
-	"github.com/maeshinshin/ichor/internal/settings"
 	"github.com/maeshinshin/ichor/pkg/reclaim"
 )
 
@@ -54,7 +53,7 @@ const (
 	ReclaimMaxCredentialAge = 60 * time.Minute
 )
 
-// MachineReclaimReconciler runs the break-glass reclaim of ADR 0103 section 2.2: it inspects a
+// MachineReclaimReconciler runs "Reset and add" (ADR 0103 section 2.2, ADR 0107): it inspects a
 // machine of another Talos cluster with a user-supplied credential, waits for the typed UUID,
 // sends the reset once and waits for maintenance mode. It never writes spec, and it does not
 // register the machine: the UI API adds the address to the target cluster's discovery on the
@@ -62,11 +61,6 @@ const (
 type MachineReclaimReconciler struct {
 	client.Client
 
-	// Enabled is the chart's reclaim.enabled. When false every request fails and its credential is
-	// deleted.
-	Enabled bool
-	// Settings, when set, is read per call and wins over Enabled (ADR 0105).
-	Settings *settings.Reader
 	// ControllerNamespace is where requests and credentials live (ichor-system). Empty means any.
 	ControllerNamespace string
 	Recorder            record.EventRecorder
@@ -159,10 +153,6 @@ func (r *MachineReclaimReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{RequeueAfter: time.Second}, nil
 	case ichorv1alpha1.MachineReclaimWaitingForMaintenance:
 		return r.waitForMaintenance(ctx, &mr, now)
-	}
-
-	if !r.enabled(ctx) {
-		return r.fail(ctx, &mr, "break-glass machine reclaim is switched off in this installation (reclaim.enabled)")
 	}
 
 	if !now.Before(mr.Status.ExpiresAt.Time) {
@@ -591,14 +581,4 @@ func (r *MachineReclaimReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&ichorv1alpha1.MachineReclaim{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Named("machinereclaim").
 		Complete(r)
-}
-
-// enabled is the reclaim switch, read per call from the IchorInstallation when Settings is set
-// (ADR 0105) and the Enabled flag otherwise.
-func (r *MachineReclaimReconciler) enabled(ctx context.Context) bool {
-	if r.Settings != nil {
-		return r.Settings.ReclaimEnabled(ctx)
-	}
-
-	return r.Enabled
 }

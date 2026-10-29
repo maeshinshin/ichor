@@ -18,7 +18,6 @@ package cli
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"text/tabwriter"
@@ -31,14 +30,11 @@ import (
 )
 
 // settingsCmd groups `ichor settings` (docs/adr/0105): the runtime settings in the IchorInstallation, the same
-// ones the UI's Settings page edits. Both go through SettingsService, so RBAC, the bounds and the reclaim
-// confirmation are judged in one place.
+// ones the UI's Settings page edits. Both go through SettingsService, so RBAC and the bounds are judged in one place.
 var settingsCmd = &cobra.Command{
 	Use:   "settings",
-	Short: "Show and change Ichor's runtime settings (reclaim, sign-in lifetimes, default drift policy)",
+	Short: "Show and change Ichor's runtime settings (sign-in lifetimes, default drift policy)",
 }
-
-var settingsConfirmReclaim bool
 
 var settingsGetCmd = &cobra.Command{
 	Use:   "get",
@@ -61,18 +57,17 @@ sets it, "deployment" when the flag or chart value applies. The default is a tab
 
 var settingsSetCmd = &cobra.Command{
 	Use:   "set KEY=VALUE...",
-	Short: "Change settings: " + settings.KeyReclaim + ", " + settings.KeyTokenTTL + ", " + settings.KeyRefreshLifetime + ", " + settings.KeyDriftPolicy,
+	Short: "Change settings: " + settings.KeyTokenTTL + ", " + settings.KeyRefreshLifetime + ", " + settings.KeyDriftPolicy,
 	Long: `Change one or more settings; only the keys you name are written.
 
-  ` + settings.KeyReclaim + `=true|false         break-glass machine reclaim (ADR 0103)
   ` + settings.KeyTokenTTL + `=15m           token lifetime, 1m to 1h
   ` + settings.KeyRefreshLifetime + `=168h  refresh lifetime, 1h to 720h
   ` + settings.KeyDriftPolicy + `=warnOnly|autoCorrect   default for a new TalosCluster
 
-Enabling reclaim turns on a way to wipe a configured machine; it needs --confirm-reclaim.`,
+reclaim.enabled is removed: who may reset and add a machine is decided by RBAC alone (ADR 0107).`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		req, err := settingsUpdateRequest(args, settingsConfirmReclaim)
+		req, err := settingsUpdateRequest(args)
 		if err != nil {
 			return err
 		}
@@ -89,25 +84,19 @@ Enabling reclaim turns on a way to wipe a configured machine; it needs --confirm
 }
 
 func init() {
-	settingsSetCmd.Flags().BoolVar(&settingsConfirmReclaim, "confirm-reclaim", false,
-		"confirm that you are enabling break-glass reclaim (required with "+settings.KeyReclaim+"=true)")
 	settingsCmd.AddCommand(settingsGetCmd, settingsSetCmd)
 	rootCmd.AddCommand(settingsCmd)
 }
 
 // settingsUpdateRequest validates KEY=VALUE arguments the way the server will, so a typo fails before any
-// connection is made, and refuses to enable reclaim without --confirm-reclaim.
-func settingsUpdateRequest(args []string, confirm bool) (*pb.UpdateSettingsRequest, error) {
+// connection is made.
+func settingsUpdateRequest(args []string) (*pb.UpdateSettingsRequest, error) {
 	c, err := settings.ParseAssignments(args)
 	if err != nil {
 		return nil, err
 	}
 
-	if c.NeedsConfirmation() && !confirm {
-		return nil, errors.New("enabling break-glass reclaim needs --confirm-reclaim")
-	}
-
-	f := &pb.SettingsFields{ReclaimEnabled: c.Reclaim, DriftPolicy: c.DriftPolicy}
+	f := &pb.SettingsFields{DriftPolicy: c.DriftPolicy}
 	if c.TokenTTL != nil {
 		v := c.TokenTTL.String()
 		f.TokenTtl = &v
@@ -118,7 +107,7 @@ func settingsUpdateRequest(args []string, confirm bool) (*pb.UpdateSettingsReque
 		f.RefreshLifetime = &v
 	}
 
-	return &pb.UpdateSettingsRequest{Changes: f, ConfirmReclaim: confirm}, nil
+	return &pb.UpdateSettingsRequest{Changes: f}, nil
 }
 
 func writeSettings(cmd *cobra.Command, r *pb.GetSettingsResponse) error {
@@ -155,22 +144,16 @@ func settingRows(r *pb.GetSettingsResponse) []settingRow {
 		return *p
 	}
 
-	reclaim := ""
-	if spec.ReclaimEnabled != nil {
-		reclaim = fmt.Sprint(*spec.ReclaimEnabled)
-	}
-
 	rows := []settingRow{
 		{"version", r.GetVersion(), sourceSpec},
 		{"installedVersion", r.GetInstalledVersion(), sourceStatus},
 		{"deployment.manager", r.GetManager(), sourceSpec},
-		pick(eff.GetReclaimEnabled(), reclaim),
 		pick(eff.GetTokenTtl(), str(spec.TokenTtl)),
 		pick(eff.GetRefreshLifetime(), str(spec.RefreshLifetime)),
 		pick(eff.GetDriftPolicy(), str(spec.DriftPolicy)),
 	}
 
-	for i, k := range []string{settings.KeyReclaim, settings.KeyTokenTTL, settings.KeyRefreshLifetime, settings.KeyDriftPolicy} {
+	for i, k := range []string{settings.KeyTokenTTL, settings.KeyRefreshLifetime, settings.KeyDriftPolicy} {
 		rows[i+3].key = k
 	}
 

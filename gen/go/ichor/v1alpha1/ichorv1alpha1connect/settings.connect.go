@@ -4,7 +4,7 @@
 
 // SettingsService backs the Settings page (docs/adr/0105, Part B). It reads and
 // writes the runtime settings in the IchorInstallation singleton as the caller,
-// so RBAC (ichorinstallations/reclaim, /settings) and the settings webhook judge
+// so RBAC (ichorinstallations/settings) and the settings webhook judge
 // the user. Update changes only the fields it carries.
 package ichorv1alpha1connect
 
@@ -51,9 +51,7 @@ type SettingsServiceClient interface {
 	// from, who deploys Ichor, whether the deployment froze the settings, and which
 	// groups the caller may edit.
 	GetSettings(context.Context, *connect.Request[v1alpha1.GetSettingsRequest]) (*connect.Response[v1alpha1.GetSettingsResponse], error)
-	// UpdateSettings changes only the fields present in changes. Enabling reclaim
-	// needs confirm_reclaim; the handler then sets the confirm annotation in the
-	// same write.
+	// UpdateSettings changes only the fields present in changes.
 	UpdateSettings(context.Context, *connect.Request[v1alpha1.UpdateSettingsRequest]) (*connect.Response[v1alpha1.UpdateSettingsResponse], error)
 }
 
@@ -105,9 +103,7 @@ type SettingsServiceHandler interface {
 	// from, who deploys Ichor, whether the deployment froze the settings, and which
 	// groups the caller may edit.
 	GetSettings(context.Context, *connect.Request[v1alpha1.GetSettingsRequest]) (*connect.Response[v1alpha1.GetSettingsResponse], error)
-	// UpdateSettings changes only the fields present in changes. Enabling reclaim
-	// needs confirm_reclaim; the handler then sets the confirm annotation in the
-	// same write.
+	// UpdateSettings changes only the fields present in changes.
 	UpdateSettings(context.Context, *connect.Request[v1alpha1.UpdateSettingsRequest]) (*connect.Response[v1alpha1.UpdateSettingsResponse], error)
 }
 

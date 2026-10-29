@@ -47,7 +47,9 @@ type IchorInstallationSpec struct {
 	// +optional
 	Deployment *IchorDeploymentSpec `json:"deployment,omitempty"`
 
-	// reclaim holds the break-glass setting of ADR 0103.
+	// reclaim is deprecated and ignored (ADR 0107): "Reset and add" has no installation switch;
+	// RBAC alone (the reclaim verb on machinereclaims) decides who may use it. The field stays so
+	// that an installed object keeps validating. The admission webhook warns when it is set.
 	// +optional
 	Reclaim *IchorReclaimSettings `json:"reclaim,omitempty"`
 
@@ -75,9 +77,9 @@ type IchorDeploymentSpec struct {
 	Manager string `json:"manager,omitempty"`
 }
 
-// IchorReclaimSettings is the break-glass reclaim switch.
+// IchorReclaimSettings is the removed reclaim switch, kept so installed objects validate (ADR 0107).
 type IchorReclaimSettings struct {
-	// enabled turns the break-glass reclaim on. Unset falls back to the controller flag.
+	// enabled is deprecated and ignored (ADR 0107).
 	// +optional
 	Enabled *bool `json:"enabled,omitempty"`
 }
@@ -130,19 +132,11 @@ type IchorInstallationStatus struct {
 // settings in spec.
 const ConditionSettingsApplied = "SettingsApplied"
 
-// Writing spec.reclaim.enabled=true needs this annotation on the request, with a value that starts
-// with ConfirmReclaimValue and differs from the one on the stored object, so a confirmation left
-// over from an earlier enable never counts (the UI API and CLI write "enable-<unique>"; kubectl
-// users write e.g. "enable" once, or "enable-2")
-// (ADR 0105, decision 9), so a stray kubectl apply cannot turn break-glass on. The RBAC subresources
-// the webhook checks with verb update on ichorinstallations are IchorSubresourceVersion (spec.version,
-// installerRepository, deployment), IchorSubresourceReclaim and IchorSubresourceSettings (users, defaults).
+// The RBAC subresources the webhook checks with verb update on ichorinstallations are
+// IchorSubresourceVersion (spec.version, installerRepository, deployment) and
+// IchorSubresourceSettings (users, defaults).
 const (
-	ConfirmReclaimAnnotation = "ichor.maesh.dev/confirm-reclaim"
-	ConfirmReclaimValue      = "enable"
-
 	IchorSubresourceVersion  = "version"
-	IchorSubresourceReclaim  = "reclaim"
 	IchorSubresourceSettings = "settings"
 )
 
@@ -165,6 +159,7 @@ type IchorEffectiveValue struct {
 type IchorEffectiveSettings struct {
 	// +optional
 	Manager *IchorEffectiveValue `json:"manager,omitempty"`
+	// reclaimEnabled is deprecated: the controller no longer reports it (ADR 0107).
 	// +optional
 	ReclaimEnabled *IchorEffectiveValue `json:"reclaimEnabled,omitempty"`
 	// +optional

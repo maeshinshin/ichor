@@ -9,29 +9,18 @@ import (
 )
 
 func TestChangesApply(t *testing.T) {
-	yes, no := true, false
 	ttl, bad := 30*time.Minute, 2*time.Hour
 	policy := DriftAutoCorrect
 
 	inst := &ichorv1alpha1.IchorInstallation{}
-	(Changes{Reclaim: &yes, TokenTTL: &ttl, DriftPolicy: &policy}).Apply(inst)
+	(Changes{TokenTTL: &ttl, DriftPolicy: &policy}).Apply(inst)
 
-	if !*inst.Spec.Reclaim.Enabled || inst.Spec.Users.TokenTTL.Duration != ttl || inst.Spec.Defaults.DriftPolicy != policy {
+	if inst.Spec.Reclaim != nil || inst.Spec.Users.TokenTTL.Duration != ttl || inst.Spec.Defaults.DriftPolicy != policy {
 		t.Fatalf("spec not written: %+v", inst.Spec)
 	}
 
 	if inst.Spec.Users.RefreshLifetime != nil {
 		t.Fatal("an unchanged field was written")
-	}
-
-	if !strings.HasPrefix(inst.Annotations[ichorv1alpha1.ConfirmReclaimAnnotation], ichorv1alpha1.ConfirmReclaimValue) {
-		t.Fatal("enabling reclaim must set the confirm annotation")
-	}
-
-	(Changes{Reclaim: &no}).Apply(inst)
-
-	if _, ok := inst.Annotations[ichorv1alpha1.ConfirmReclaimAnnotation]; ok {
-		t.Fatal("the annotation should go when reclaim is not being enabled")
 	}
 
 	if (Changes{TokenTTL: &bad}).Validate() == nil {
@@ -40,14 +29,19 @@ func TestChangesApply(t *testing.T) {
 }
 
 func TestParseAssignments(t *testing.T) {
-	c, err := ParseAssignments([]string{"reclaim.enabled=true", "users.tokenTTL=15m", "defaults.driftPolicy=" + DriftWarnOnly})
-	if err != nil || !*c.Reclaim || *c.TokenTTL != 15*time.Minute || *c.DriftPolicy != DriftWarnOnly {
+	c, err := ParseAssignments([]string{"users.tokenTTL=15m", "defaults.driftPolicy=" + DriftWarnOnly})
+	if err != nil || *c.TokenTTL != 15*time.Minute || *c.DriftPolicy != DriftWarnOnly {
 		t.Fatalf("%+v %v", c, err)
 	}
 
-	for _, bad := range []string{"nope=1", "reclaim.enabled=maybe", "users.tokenTTL=5h", "users.tokenTTL", "defaults.driftPolicy=enforce"} {
+	for _, bad := range []string{"nope=1", "users.tokenTTL=5h", "users.tokenTTL", "defaults.driftPolicy=enforce"} {
 		if _, err := ParseAssignments([]string{bad}); err == nil {
 			t.Errorf("%q should fail", bad)
 		}
+	}
+
+	_, err = ParseAssignments([]string{"reclaim.enabled=true"})
+	if err == nil || !strings.Contains(err.Error(), "0107") {
+		t.Fatalf("reclaim.enabled must be refused with a pointer to ADR 0107: %v", err)
 	}
 }

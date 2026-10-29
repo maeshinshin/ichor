@@ -78,9 +78,9 @@ func (x *CanReclaimRequest) GetCluster() *ObjectRef {
 
 type CanReclaimResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// enabled is the installation switch (reclaim.enabled).
+	// enabled is removed (docs/adr/0107): always true. RBAC alone decides.
 	Enabled bool `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`
-	// allowed is the caller's RBAC; false when enabled is false.
+	// allowed is the caller's RBAC (the reclaim verb on machinereclaims).
 	Allowed bool `protobuf:"varint,2,opt,name=allowed,proto3" json:"allowed,omitempty"`
 	// cluster_allowed is true when the request named a cluster and the caller may
 	// get and update that TalosCluster (so CreateReclaim may register the address).

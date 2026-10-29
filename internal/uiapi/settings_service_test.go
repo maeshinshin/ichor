@@ -55,14 +55,13 @@ func settingsServer(t *testing.T, readOnly bool, allow ...string) (*Server, clie
 
 func TestGetSettingsEditableFollowsRBAC(t *testing.T) {
 	for _, tc := range []struct {
-		allow             []string
-		readOnly          bool
-		reclaim, settings bool
+		allow    []string
+		readOnly bool
+		settings bool
 	}{
-		{[]string{subReclaim, subSettings}, false, true, true},
-		{[]string{subSettings}, false, false, true},
-		{nil, false, false, false},
-		{[]string{subReclaim, subSettings}, true, false, false},
+		{[]string{subSettings}, false, true},
+		{nil, false, false},
+		{[]string{subSettings}, true, false},
 	} {
 		s, _ := settingsServer(t, tc.readOnly, tc.allow...)
 
@@ -71,14 +70,14 @@ func TestGetSettingsEditableFollowsRBAC(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if m := resp.Msg; m.CanEditReclaim != tc.reclaim || m.CanEditSettings != tc.settings || m.ReadOnly != tc.readOnly || m.Version != ichorOld {
+		if m := resp.Msg; m.CanEditSettings != tc.settings || m.ReadOnly != tc.readOnly || m.Version != ichorOld {
 			t.Errorf("%+v: got %+v", tc, m)
 		}
 	}
 }
 
 func TestUpdateSettingsWritesOnlyChangedFields(t *testing.T) {
-	s, k8s := settingsServer(t, false, subReclaim, subSettings)
+	s, k8s := settingsServer(t, false, subSettings)
 	policy := "autoCorrect"
 
 	if _, err := s.UpdateSettings(ContextWithIdentity(context.Background(), Identity{User: userAlice}), connect.NewRequest(&pb.UpdateSettingsRequest{
@@ -97,55 +96,20 @@ func TestUpdateSettingsWritesOnlyChangedFields(t *testing.T) {
 	}
 }
 
-func TestUpdateSettingsReclaimNeedsConfirmationAndSetsAnnotation(t *testing.T) {
-	s, k8s := settingsServer(t, false, subReclaim)
+func TestUpdateSettingsRefusesTheRemovedReclaimSwitch(t *testing.T) {
+	s, k8s := settingsServer(t, false, subSettings)
 	on := true
-	req := func(confirm bool) *connect.Request[pb.UpdateSettingsRequest] {
-		return connect.NewRequest(&pb.UpdateSettingsRequest{Changes: &pb.SettingsFields{ReclaimEnabled: &on}, ConfirmReclaim: confirm})
-	}
 
-	if _, err := s.UpdateSettings(ContextWithIdentity(context.Background(), Identity{User: userAlice}), req(false)); connect.CodeOf(err) != connect.CodeInvalidArgument {
-		t.Fatalf("unconfirmed: %v", err)
-	}
-
-	if _, err := s.UpdateSettings(ContextWithIdentity(context.Background(), Identity{User: userAlice}), req(true)); err != nil {
-		t.Fatal(err)
+	_, err := s.UpdateSettings(ContextWithIdentity(context.Background(), Identity{User: userAlice}), connect.NewRequest(&pb.UpdateSettingsRequest{
+		Changes: &pb.SettingsFields{ReclaimEnabled: &on}, ConfirmReclaim: true,
+	}))
+	if connect.CodeOf(err) != connect.CodeInvalidArgument || !strings.Contains(err.Error(), "0107") {
+		t.Fatalf("want InvalidArgument pointing at ADR 0107: %v", err)
 	}
 
 	var got ichorv1alpha1.IchorInstallation
-	if err := k8s.Get(context.Background(), settingsKey(), &got); err != nil {
-		t.Fatal(err)
-	}
-
-	if !*got.Spec.Reclaim.Enabled || !strings.HasPrefix(got.Annotations[ichorv1alpha1.ConfirmReclaimAnnotation], ichorv1alpha1.ConfirmReclaimValue) {
-		t.Fatalf("got %+v %v", got.Spec, got.Annotations)
-	}
-}
-
-func TestUpdateSettingsEnableTwice(t *testing.T) {
-	s, k8s := settingsServer(t, false, subReclaim)
-	on, off := true, false
-	ctx := ContextWithIdentity(context.Background(), Identity{User: userAlice})
-	set := func(v *bool) string {
-		if _, err := s.UpdateSettings(ctx, connect.NewRequest(&pb.UpdateSettingsRequest{Changes: &pb.SettingsFields{ReclaimEnabled: v}, ConfirmReclaim: *v})); err != nil {
-			t.Fatal(err)
-		}
-
-		var got ichorv1alpha1.IchorInstallation
-		if err := k8s.Get(ctx, settingsKey(), &got); err != nil {
-			t.Fatal(err)
-		}
-
-		return got.Annotations[ichorv1alpha1.ConfirmReclaimAnnotation]
-	}
-
-	first := set(&on)
-	if set(&off) != "" {
-		t.Fatal("disabling must drop the confirmation")
-	}
-
-	if second := set(&on); second == first || !strings.HasPrefix(second, ichorv1alpha1.ConfirmReclaimValue) {
-		t.Fatalf("a second enable must write a fresh confirmation: %q then %q", first, second)
+	if err := k8s.Get(context.Background(), settingsKey(), &got); err != nil || got.Spec.Reclaim != nil {
+		t.Fatalf("wrote %+v %v", got.Spec, err)
 	}
 }
 
@@ -160,7 +124,7 @@ func TestUpdateSettingsRefusals(t *testing.T) {
 		val      string
 		code     connect.Code
 	}{
-		"no verb":   {false, []string{subReclaim}, ok, connect.CodePermissionDenied},
+		"no verb":   {false, nil, ok, connect.CodePermissionDenied},
 		"bounds":    {false, []string{subSettings}, ttl, connect.CodeInvalidArgument},
 		"read-only": {true, []string{subSettings}, ok, connect.CodeFailedPrecondition},
 	} {
@@ -180,7 +144,4 @@ func TestUpdateSettingsRefusals(t *testing.T) {
 	}
 }
 
-const (
-	subReclaim  = ichorv1alpha1.IchorSubresourceReclaim
-	subSettings = ichorv1alpha1.IchorSubresourceSettings
-)
+const subSettings = ichorv1alpha1.IchorSubresourceSettings

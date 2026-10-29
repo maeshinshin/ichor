@@ -38,9 +38,9 @@ message CanReclaimRequest {
 }
 
 message CanReclaimResponse {
-  // enabled is the installation switch (reclaim.enabled).
+  // enabled is removed (docs/adr/0107): always true. RBAC alone decides.
   bool enabled = 1;
-  // allowed is the caller's RBAC; false when enabled is false.
+  // allowed is the caller's RBAC (the reclaim verb on machinereclaims).
   bool allowed = 2;
   // cluster_allowed is true when the request named a cluster and the caller may
   // get and update that TalosCluster (so CreateReclaim may register the address).

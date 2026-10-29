@@ -16,13 +16,12 @@ import (
 )
 
 // SettingsGate guards the fields of IchorInstallation.spec that are Ichor's settings (ADR 0105,
-// decision 9): the finer RBAC split by SubjectAccessReview on ichorinstallations/{version,reclaim,
-// settings}, the confirmation annotation that enabling reclaim needs, --settings-read-only, and
-// the Event that names who changed what.
+// decision 9): the finer RBAC split by SubjectAccessReview on ichorinstallations/{version,settings},
+// --settings-read-only, and the Event that names who changed what. spec.reclaim is ignored (ADR 0107).
 type SettingsGate struct {
 	// Client is uncached: it creates SubjectAccessReviews.
 	Client client.Client
-	// ReadOnly denies every write to spec.reclaim, spec.users and spec.defaults (--settings-read-only).
+	// ReadOnly denies every write to spec.users and spec.defaults (--settings-read-only).
 	ReadOnly bool
 	// ExemptUsers (the controller) are never stopped.
 	ExemptUsers []string
@@ -45,14 +44,6 @@ func orUnset(s string) string {
 	return s
 }
 
-func boolOf(b *bool) string {
-	if b == nil {
-		return ""
-	}
-
-	return fmt.Sprint(*b)
-}
-
 func durOf(d *metav1.Duration) string {
 	if d == nil {
 		return ""
@@ -68,19 +59,10 @@ func settingChanges(oldSpec, newSpec *ichorv1alpha1.IchorInstallationSpec) []set
 	}
 
 	var (
-		oR, nR     = oldSpec.Reclaim, newSpec.Reclaim
 		oU, nU     = oldSpec.Users, newSpec.Users
 		oD, nD     = oldSpec.Defaults, newSpec.Defaults
 		oDep, nDep = oldSpec.Deployment, newSpec.Deployment
 	)
-
-	if oR == nil {
-		oR = &ichorv1alpha1.IchorReclaimSettings{}
-	}
-
-	if nR == nil {
-		nR = &ichorv1alpha1.IchorReclaimSettings{}
-	}
 
 	if oU == nil {
 		oU = &ichorv1alpha1.IchorUserSettings{}
@@ -108,7 +90,6 @@ func settingChanges(oldSpec, newSpec *ichorv1alpha1.IchorInstallationSpec) []set
 
 	const (
 		ver = ichorv1alpha1.IchorSubresourceVersion
-		rec = ichorv1alpha1.IchorSubresourceReclaim
 		set = ichorv1alpha1.IchorSubresourceSettings
 	)
 
@@ -116,24 +97,12 @@ func settingChanges(oldSpec, newSpec *ichorv1alpha1.IchorInstallationSpec) []set
 		{"spec.version", oldSpec.Version, newSpec.Version, ver},
 		{"spec.installerRepository", oldSpec.InstallerRepository, newSpec.InstallerRepository, ver},
 		{"spec.deployment.manager", oDep.Manager, nDep.Manager, ver},
-		{"spec.reclaim.enabled", boolOf(oR.Enabled), boolOf(nR.Enabled), rec},
 		{"spec.users.tokenTTL", durOf(oU.TokenTTL), durOf(nU.TokenTTL), set},
 		{"spec.users.refreshLifetime", durOf(oU.RefreshLifetime), durOf(nU.RefreshLifetime), set},
 		{"spec.defaults.driftPolicy", oD.DriftPolicy, nD.DriftPolicy, set},
 	}
 
 	return slices.DeleteFunc(all, func(c settingChange) bool { return c.old == c.new })
-}
-
-// reclaimTurnedOn reports whether the change enables reclaim.
-func reclaimTurnedOn(changes []settingChange) bool {
-	for _, c := range changes {
-		if c.path == "spec.reclaim.enabled" && c.new == "true" {
-			return true
-		}
-	}
-
-	return false
 }
 
 // check applies the gate to a write. oldObj is nil on create.
@@ -183,27 +152,11 @@ func (g *SettingsGate) check(ctx context.Context, oldObj, newObj *ichorv1alpha1.
 		}
 	}
 
-	if reclaimTurnedOn(changes) && !confirmAdded(oldObj, newObj) {
-		return fmt.Errorf("enabling break-glass reclaim needs the annotation %s=%s... added or changed in this same update; a confirmation left over from an earlier enable does not count (ichor settings set --confirm-reclaim, or the confirmation in the UI)",
-			ichorv1alpha1.ConfirmReclaimAnnotation, ichorv1alpha1.ConfirmReclaimValue)
-	}
-
 	if req.DryRun == nil || !*req.DryRun {
 		g.emit(newObj, req.UserInfo.Username, changes)
 	}
 
 	return nil
-}
-
-// confirmAdded reports that newObj carries a confirmation (value starting with ConfirmReclaimValue)
-// that oldObj (nil on create) did not carry.
-func confirmAdded(oldObj, newObj *ichorv1alpha1.IchorInstallation) bool {
-	v := newObj.Annotations[ichorv1alpha1.ConfirmReclaimAnnotation]
-	if !strings.HasPrefix(v, ichorv1alpha1.ConfirmReclaimValue) {
-		return false
-	}
-
-	return oldObj == nil || oldObj.Annotations[ichorv1alpha1.ConfirmReclaimAnnotation] != v
 }
 
 // denialMessage is the text of a refusal from BreakGlassHandler.require.
@@ -216,7 +169,7 @@ func denialMessage(r *admission.Response) string {
 }
 
 // emit records one Event listing the changed paths, old and new values and the user. Nothing in
-// the listed fields is secret. Enabling reclaim also warns.
+// the listed fields is secret.
 func (g *SettingsGate) emit(obj *ichorv1alpha1.IchorInstallation, user string, changes []settingChange) {
 	if g.Recorder == nil {
 		return
@@ -228,8 +181,4 @@ func (g *SettingsGate) emit(obj *ichorv1alpha1.IchorInstallation, user string, c
 	}
 
 	g.Recorder.Eventf(obj, "Normal", "SettingsChanged", "%s changed %s", user, strings.Join(parts, "; "))
-
-	if reclaimTurnedOn(changes) {
-		g.Recorder.Eventf(obj, "Warning", "ReclaimEnabled", "%s enabled break-glass machine reclaim (ADR 0103)", user)
-	}
 }

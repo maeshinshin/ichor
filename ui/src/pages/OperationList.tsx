@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'preact/hooks'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { DataTable, LinkRow, ListToolbar } from '@/components/ListToolbar'
-import { PageHeader } from '@/components/PageHeader'
+import { WorkflowIcon } from 'lucide-preact'
+import { Button } from '@/components/ui/button'
+import { LinkRow, ListToolbar } from '@/components/ListToolbar'
+import { PageTitle } from '@/components/PageTitle'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
-import { StatusText } from '@/components/Status'
+import { StateBadge } from '@/components/StateBadge'
+import { TableCard } from '@/components/TableCard'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { OperationControls } from '@/components/OperationControls'
 import { OperationKind, type Operation } from '@/gen/ichor/v1alpha1/operation_pb'
@@ -53,14 +56,14 @@ export function OperationList() {
 
   return (
     <div>
-      <PageHeader title={t('ops.title')} />
-      <ListToolbar query={query} onQuery={setQuery} shown={rows.length} total={ops.length} onRefresh={reload} />
+      <PageTitle title={t('ops.title')} />
+      <ListToolbar query={query} onQuery={setQuery} shown={rows.length} total={ops.length} onRefresh={reload} stock />
       {ops.length === 0 ? (
-        <EmptyNote>{t('ops.empty')}</EmptyNote>
+        <EmptyNote icon={WorkflowIcon}>{t('ops.empty')}</EmptyNote>
       ) : rows.length === 0 ? (
         <EmptyNote>{t('list.noMatch')}</EmptyNote>
       ) : (
-        <DataTable>
+        <TableCard>
           <Table>
             <TableHeader>
               <TableRow>
@@ -77,7 +80,7 @@ export function OperationList() {
               ))}
             </TableBody>
           </Table>
-        </DataTable>
+        </TableCard>
       )}
     </div>
   )
@@ -92,14 +95,14 @@ function OperationRow({ op, onChanged }: { op: Operation; onChanged: () => void 
     <LinkRow to={op.ref ? `/operations/${op.ref.name}` : '/operations'}>
       <TableCell>
         {op.ref && (
-          <Link to={`/operations/${op.ref.name}`} class="font-medium hover:underline">
-            {op.ref.name}
-          </Link>
+          <Button asChild variant="link" size="sm">
+            <Link to={`/operations/${op.ref.name}`}>{op.ref.name}</Link>
+          </Button>
         )}
       </TableCell>
       <TableCell>{enumLabel(OperationKind, op.kind)}</TableCell>
       <TableCell>
-        <StatusText tone={opStateTone(state)}>{t(`ops.state.${state}`)}</StatusText>
+        <StateBadge tone={opStateTone(state)}>{t(`ops.state.${state}`)}</StateBadge>
       </TableCell>
       <TableCell>{op.machines.length === 0 ? '–' : t('ops.progress', { done, running })}</TableCell>
       <TableCell>

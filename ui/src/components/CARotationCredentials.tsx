@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
+import { CircleCheckIcon, DownloadIcon } from 'lucide-preact'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { ErrorAlert } from '@/components/ErrorAlert'
@@ -84,6 +87,7 @@ export function CARotationCredentials({
             onOpenChange={setConfirmDownload}
             trigger={
               <Button size="sm" variant="outline">
+                <DownloadIcon data-icon="inline-start" aria-hidden="true" />
                 {t('creds.download')}
               </Button>
             }
@@ -108,12 +112,19 @@ export function CARotationCredentials({
             description={t('creds.continueDescription')}
             confirm={{ label: busy ? t('creds.continuing') : t('creds.continueConfirm'), onClick: runContinue, disabled: busy }}
           >
-            <p class="text-sm text-muted-foreground">{t('creds.continueNoDownload')}</p>
+            <Alert>
+              <AlertDescription>{t('creds.continueNoDownload')}</AlertDescription>
+            </Alert>
             {error && <ErrorAlert {...error} />}
           </ConfirmDialog>
         )}
       </div>
-      {panel === 'gate' && acknowledged && <p class="text-sm">{t('creds.acknowledged')}</p>}
+      {panel === 'gate' && acknowledged && (
+        <Badge variant="secondary" className="w-fit">
+          <CircleCheckIcon data-icon="inline-start" aria-hidden="true" />
+          {t('creds.acknowledged')}
+        </Badge>
+      )}
     </div>
   )
 }

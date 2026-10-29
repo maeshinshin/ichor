@@ -135,7 +135,6 @@ func clusterFromNodes(name, namespace, talosVersion string, nodes []*adoptNode) 
 	var (
 		cp      *adoptNode
 		cpCount int32
-		workers int
 	)
 
 	for _, n := range nodes {
@@ -147,8 +146,6 @@ func clusterFromNodes(name, namespace, talosVersion string, nodes []*adoptNode) 
 			if cp == nil {
 				cp = n
 			}
-		default:
-			workers++
 		}
 	}
 
@@ -172,11 +169,10 @@ func clusterFromNodes(name, namespace, talosVersion string, nodes []*adoptNode) 
 		return nil, errors.New("adopt: the control plane's configuration names no cluster endpoint")
 	}
 
-	schedulable := "true"
+	// Talos's default, when the configuration does not say, is not to schedule on control planes.
+	schedulable := "false"
 	if f.ScheduleOnControlPlanes != nil {
 		schedulable = fmt.Sprint(*f.ScheduleOnControlPlanes)
-	} else if workers > 0 {
-		schedulable = "false"
 	}
 
 	c := &ichorv1alpha1.TalosCluster{

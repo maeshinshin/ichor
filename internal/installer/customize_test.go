@@ -62,14 +62,16 @@ spec:
       - name: %[3]s
         image: %[4]s
         args: [%[6]s]
+        ports:
+        - {name: https, containerPort: 8443}
         livenessProbe:
-          tcpSocket: {port: 8080}
+          httpGet: {path: /auth/config, port: 8443, scheme: HTTPS}
         readinessProbe:
-          tcpSocket: {port: 8080}
+          httpGet: {path: /auth/config, port: 8443, scheme: HTTPS}
 `, name, ns, container, image, extraLabel, args)
 	}
 
-	return dep(uiName, UIContainer, ", app.kubernetes.io/component: ui", "--addr=:8080") +
+	return dep(uiName, UIContainer, ", app.kubernetes.io/component: ui", "--addr=:8443") +
 		dep(ctrlName, ControllerContainer, "", "--leader-elect") + fmt.Sprintf(`---
 apiVersion: v1
 kind: Service
@@ -80,7 +82,7 @@ metadata:
 spec:
   selector: {app: %s}
   ports:
-  - {name: http, port: 8080, targetPort: 8080}
+  - {name: https, port: 8443, targetPort: 8443}
 `, uiName, ns, uiName)
 }
 
@@ -148,13 +150,13 @@ func TestUpgradeKeepsInitsCustomizationsOverALiveUIDeployment(t *testing.T) {
 		wantHTTP  bool
 		staleHTTP bool
 	}{
-		{"stale httpGet probe, no TLS setting", UISettings{ExternalURL: testExternalURL}, false, true},
+		{"stale httpGet probe, no TLS setting", UISettings{ExternalURL: testExternalURL}, true, true},
 		{"users on with TLS", UISettings{
 			ExternalURL: testExternalURL, TLSSecretName: "ichor-ui-tls",
 			KubeAPIServerURL: "https://k8s.example.com:443", KubeAPITLSServerName: "k8s.example.com", RefreshLifetime: "24h",
 		}, true, false},
-		{"users on without TLS", UISettings{ExternalURL: testExternalURL}, false, false},
-		{"users off", UISettings{}, false, false},
+		{"users on without TLS", UISettings{ExternalURL: testExternalURL}, true, false},
+		{"users off", UISettings{}, true, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFixture(t)
@@ -201,7 +203,16 @@ func TestUpgradeKeepsInitsCustomizationsOverALiveUIDeployment(t *testing.T) {
 			}
 
 			// Every customization, compared against the pure function over the new manifest.
-			want := renderedUI(t, f.ns, tc.settings)
+			// The live objects are the previous release's, on 8080: ADR 0105 pins TLS installs there and
+			// keeps the deprecated plaintext listener on the others.
+			migrated := tc.settings
+			if migrated.TLSSecretName != "" {
+				migrated.ListenAddr = ":8080"
+			} else {
+				migrated.HTTPAddr = ":8080"
+			}
+
+			want := renderedUI(t, f.ns, migrated)
 			if got, exp := shape(c, ui.Spec.Template.Spec.Volumes), shape(want.Spec.Template.Spec.Containers[0], want.Spec.Template.Spec.Volumes); got != exp {
 				t.Errorf("customizations lost or changed:\n got  %s\n want %s", got, exp)
 			}

@@ -115,6 +115,9 @@ spec:
     - cluster
     toPorts:
     - ports:
+      - port: "8443"
+        protocol: TCP
+      # Only an install that still serves plaintext (ADR 0105, --http-addr); removed with it.
       - port: "8080"
         protocol: TCP
   # The API server reads the issuer's discovery document and JWKS (ADR 0094).

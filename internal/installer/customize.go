@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"slices"
 	"strconv"
@@ -62,6 +63,15 @@ const (
 	argKubeAPIURL      = "--kube-api-server-url="
 	argKubeAPIName     = "--kube-api-tls-server-name="
 	argRefreshLifetime = "--oidc-refresh-lifetime="
+	argAddr            = "--addr="
+	argHTTPAddr        = "--http-addr="
+	argUIExternalURL   = "--ui-external-url="
+
+	// UIDefaultAddr is the HTTPS address a fresh install serves (ADR 0105); UIPlainPortName names
+	// the transitional plaintext port.
+	UIDefaultAddr   = ":8443"
+	UIPortName      = "https"
+	UIPlainPortName = "http"
 )
 
 // UISettings is everything init customizes. The zero value is a plain install (users off).
@@ -75,6 +85,14 @@ type UISettings struct {
 
 	// TLSSecretName, when set, makes ichor-ui serve HTTPS from this kubernetes.io/tls Secret.
 	TLSSecretName string
+
+	// ListenAddr pins ichor-ui's --addr (ADR 0105 migration case: TLS on the old port today).
+	// Empty keeps the manifest's default.
+	ListenAddr string
+
+	// HTTPAddr is the deprecated plaintext listener (--http-addr) of an install that served
+	// plaintext before ADR 0105. Empty on a fresh install.
+	HTTPAddr string
 
 	// RefreshLifetime is the controller's --oidc-refresh-lifetime; empty means the default.
 	RefreshLifetime string
@@ -112,11 +130,29 @@ func ReadUISettings(ui, controller *appsv1.Deployment) UISettings {
 			s.ExternalURL = argValue(c.Args, argExternalURL)
 			s.KubeAPIServerURL = argValue(c.Args, argKubeAPIURL)
 			s.KubeAPITLSServerName = argValue(c.Args, argKubeAPIName)
-		}
 
-		for _, v := range ui.Spec.Template.Spec.Volumes {
-			if v.Name == UITLSVolume && v.Secret != nil {
-				s.TLSSecretName = v.Secret.SecretName
+			// ADR 0105 migration table. An address other than the new default is an install that
+			// predates it: with the operator's pair it is pinned, without it the plaintext listener
+			// stays as a deprecated one. An --http-addr already set is kept.
+			addr := argValue(c.Args, argAddr)
+			old := addr != "" && addr != UIDefaultAddr
+			s.HTTPAddr = argValue(c.Args, argHTTPAddr)
+
+			for _, v := range ui.Spec.Template.Spec.Volumes {
+				if v.Name == UITLSVolume && v.Secret != nil {
+					s.TLSSecretName = v.Secret.SecretName
+				}
+			}
+
+			switch {
+			case s.TLSSecretName != "":
+				s.HTTPAddr = ""
+
+				if old {
+					s.ListenAddr = addr
+				}
+			case old && s.HTTPAddr == "":
+				s.HTTPAddr = addr
 			}
 		}
 	}
@@ -142,8 +178,25 @@ func CustomizeUI(dep *appsv1.Deployment, s UISettings) error {
 	// Drop any earlier setting of the same flags so a re-run replaces them.
 	c.Args = slices.DeleteFunc(c.Args, func(a string) bool {
 		return a == "--users-enabled=true" || strings.HasPrefix(a, argExternalURL) || strings.HasPrefix(a, "--internal-jwks-uri=") ||
-			strings.HasPrefix(a, argKubeAPIURL) || strings.HasPrefix(a, argKubeAPIName)
+			strings.HasPrefix(a, argKubeAPIURL) || strings.HasPrefix(a, argKubeAPIName) || strings.HasPrefix(a, argHTTPAddr) ||
+			(s.ListenAddr != "" && strings.HasPrefix(a, argAddr))
 	})
+
+	if s.ListenAddr != "" {
+		c.Args = append(c.Args, argAddr+s.ListenAddr)
+
+		if err := setPort(c, UIPortName, s.ListenAddr); err != nil {
+			return fmt.Errorf("ichor-ui Deployment %s: %w", dep.Name, err)
+		}
+	}
+
+	if s.HTTPAddr != "" {
+		c.Args = append(c.Args, argHTTPAddr+s.HTTPAddr)
+
+		if err := setPort(c, UIPlainPortName, s.HTTPAddr); err != nil {
+			return fmt.Errorf("ichor-ui Deployment %s: %w", dep.Name, err)
+		}
+	}
 
 	if s.UsersOn() {
 		// --internal-jwks-uri is dropped on purpose: ichor-ui answers with the host the apiserver
@@ -226,25 +279,45 @@ func tlsOnUI(dep *appsv1.Deployment, c *corev1.Container, secret string) error {
 	return nil
 }
 
+// addrPort reads the port of a listen address such as ":8080".
+func addrPort(addr string) (int32, error) {
+	_, p, err := net.SplitHostPort(addr)
+	if err != nil {
+		return 0, fmt.Errorf("cannot read the port from %q: %w", addr, err)
+	}
+
+	n, err := strconv.ParseInt(p, 10, 32)
+	if err != nil {
+		return 0, fmt.Errorf("cannot read the port from %q: %w", addr, err)
+	}
+
+	return int32(n), nil
+}
+
+// setPort makes the container port called name listen on addr's port, adding it if absent.
+func setPort(c *corev1.Container, name, addr string) error {
+	n, err := addrPort(addr)
+	if err != nil {
+		return err
+	}
+
+	i := slices.IndexFunc(c.Ports, func(p corev1.ContainerPort) bool { return p.Name == name })
+	if i < 0 {
+		c.Ports = append(c.Ports, corev1.ContainerPort{Name: name, ContainerPort: n, Protocol: corev1.ProtocolTCP})
+		return nil
+	}
+
+	c.Ports[i].ContainerPort = n
+
+	return nil
+}
+
 // uiListenPort reads the port of ichor-ui's --addr.
 func uiListenPort(args []string) (int32, error) {
 	for _, a := range args {
-		v, ok := strings.CutPrefix(a, "--addr=")
-		if !ok {
-			continue
+		if v, ok := strings.CutPrefix(a, argAddr); ok {
+			return addrPort(v)
 		}
-
-		_, p, err := net.SplitHostPort(v)
-		if err != nil {
-			return 0, fmt.Errorf("cannot read the port from %q: %w", a, err)
-		}
-
-		n, err := strconv.ParseInt(p, 10, 32)
-		if err != nil {
-			return 0, fmt.Errorf("cannot read the port from %q: %w", a, err)
-		}
-
-		return int32(n), nil
 	}
 
 	return 0, errors.New("no --addr argument to take the listening port from")
@@ -259,12 +332,16 @@ func CustomizeController(dep *appsv1.Deployment, s UISettings) error {
 	}
 
 	c.Args = slices.DeleteFunc(c.Args, func(a string) bool {
-		return a == "--user-issuer" || a == "--user-issuer=true" || strings.HasPrefix(a, argRefreshLifetime)
+		return a == "--user-issuer" || a == "--user-issuer=true" || strings.HasPrefix(a, argRefreshLifetime) ||
+			strings.HasPrefix(a, argUIExternalURL)
 	})
 
 	if !s.UsersOn() {
 		return nil
 	}
+
+	// The controller puts the host in the Ichor serving leaf's SANs (ADR 0105).
+	c.Args = append(c.Args, argUIExternalURL+s.ExternalURL)
 
 	life := s.RefreshLifetime
 	if life == "" {
@@ -278,13 +355,27 @@ func CustomizeController(dep *appsv1.Deployment, s UISettings) error {
 
 // CustomizeService adds the internal port users need to the ichor-ui Service.
 func CustomizeService(svc *corev1.Service, s UISettings) {
-	if !s.UsersOn() || slices.ContainsFunc(svc.Spec.Ports, func(p corev1.ServicePort) bool { return p.Name == UIInternalPortName }) {
-		return
+	has := func(name string) int {
+		return slices.IndexFunc(svc.Spec.Ports, func(p corev1.ServicePort) bool { return p.Name == name })
+	}
+	add := func(name string, port int32) {
+		svc.Spec.Ports = append(svc.Spec.Ports, corev1.ServicePort{Name: name, Port: port, TargetPort: intstr.FromInt32(port), Protocol: corev1.ProtocolTCP})
 	}
 
-	svc.Spec.Ports = append(svc.Spec.Ports, corev1.ServicePort{
-		Name: UIInternalPortName, Port: UIInternalPort, TargetPort: intstr.FromInt32(UIInternalPort), Protocol: corev1.ProtocolTCP,
-	})
+	// Migration (ADR 0105): the pinned port replaces the new default; the plaintext one is added.
+	if p, err := addrPort(s.ListenAddr); err == nil {
+		if i := has(UIPortName); i >= 0 {
+			svc.Spec.Ports[i].Port, svc.Spec.Ports[i].TargetPort = p, intstr.FromInt32(p)
+		}
+	}
+
+	if p, err := addrPort(s.HTTPAddr); err == nil && has(UIPlainPortName) < 0 {
+		add(UIPlainPortName, p)
+	}
+
+	if s.UsersOn() && has(UIInternalPortName) < 0 {
+		add(UIInternalPortName, UIInternalPort)
+	}
 }
 
 // IsUIService reports whether svc is the ichor-ui Service.
@@ -410,6 +501,9 @@ func customizeFromLive(ctx context.Context, c client.Client, objs []*unstructure
 	}
 
 	s := ReadUISettings(uiDep, ctrlDep)
+	if s.HTTPAddr != "" {
+		log.Printf("DEPRECATED: ichor-ui still serves plain HTTP on %s; move your edge to HTTPS on %s, the plaintext listener is removed in the next minor release (docs/adr/0105)", s.HTTPAddr, UIDefaultAddr)
+	}
 
 	return CustomizeObjects(objs, s)
 }

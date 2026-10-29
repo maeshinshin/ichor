@@ -1,5 +1,5 @@
 # Prometheus Monitor Service (Metrics) for ichor-ui, the UI backend (ADR 0020,
-# ADR 0040). Unlike controller-manager-metrics-monitor above, this is plain HTTP on
+# ADR 0040). Unlike controller-manager-metrics-monitor above, this is HTTPS on
 # ichor-ui's single port: the UI backend is reached only in-cluster today
 # (architecture.md "Trust"), the same trust boundary this scrape already crosses, so
 # there is no second TLS story to configure (contrast with [PROMETHEUS-WITH-CERTS]'s
@@ -16,8 +16,11 @@ metadata:
 spec:
   endpoints:
     - path: /metrics
-      port: http
-      scheme: http
+      port: https
+      scheme: https
+      # /metrics is unauthenticated and the certificate may be the operator's or the Ichor CA's.
+      tlsConfig:
+        insecureSkipVerify: true
   selector:
     matchLabels:
       control-plane: ui-backend

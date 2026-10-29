@@ -72,6 +72,36 @@ func (s *Server) reclaimAllowed(ctx context.Context) (bool, error) {
 	return review.Status.Allowed, nil
 }
 
+// clusterWritable asks Kubernetes, as the caller, whether they may get and update the TalosCluster (registering the
+// reclaimed address is an update made as them). Same shortcut as reclaimAllowed.
+func (s *Server) clusterWritable(ctx context.Context, ref *pb.ObjectRef) (bool, error) {
+	_, signedIn := IdentityFrom(ctx)
+	if (!signedIn || s.Impersonate == nil) && !s.CallerCredentials {
+		return true, nil
+	}
+
+	c, err := s.cl(ctx)
+	if err != nil {
+		return false, connect.NewError(connect.CodeUnavailable, fmt.Errorf("reclaim: acting as the user: %w", err))
+	}
+
+	for _, verb := range []string{"get", "update"} {
+		review := &authv1.SelfSubjectAccessReview{Spec: authv1.SelfSubjectAccessReviewSpec{ResourceAttributes: &authv1.ResourceAttributes{
+			Namespace: ref.GetNamespace(), Verb: verb, Group: ichorv1alpha1.GroupVersion.Group,
+			Resource: "talosclusters", Name: ref.GetName(),
+		}}}
+		if err := c.Create(ctx, review); err != nil {
+			return false, connect.NewError(connect.CodeUnavailable, fmt.Errorf("reclaim: asking Kubernetes whether you may: %w", err))
+		}
+
+		if !review.Status.Allowed {
+			return false, nil
+		}
+	}
+
+	return true, nil
+}
+
 // reclaimUser is the Kubernetes user name the API server will see for writes made under ctx: the signed-in
 // identity, else (the backend on its own ServiceAccount) whatever Kubernetes says we are. The webhook compares
 // the audit annotations against it.
@@ -108,7 +138,7 @@ func (s *Server) reclaimGate(ctx context.Context) error {
 }
 
 func (s *Server) CanReclaim(
-	ctx context.Context, _ *connect.Request[pb.CanReclaimRequest],
+	ctx context.Context, req *connect.Request[pb.CanReclaimRequest],
 ) (*connect.Response[pb.CanReclaimResponse], error) {
 	if !s.ReclaimEnabled {
 		return connect.NewResponse(&pb.CanReclaimResponse{}), nil
@@ -119,7 +149,15 @@ func (s *Server) CanReclaim(
 		return nil, err
 	}
 
-	return connect.NewResponse(&pb.CanReclaimResponse{Enabled: true, Allowed: ok}), nil
+	out := &pb.CanReclaimResponse{Enabled: true, Allowed: ok}
+
+	if c := req.Msg.GetCluster(); ok && c.GetName() != "" {
+		if out.ClusterAllowed, err = s.clusterWritable(ctx, c); err != nil {
+			return nil, err
+		}
+	}
+
+	return connect.NewResponse(out), nil
 }
 
 func (s *Server) CreateReclaim(
@@ -134,6 +172,20 @@ func (s *Server) CreateReclaim(
 	address := strings.TrimSpace(m.GetAddress())
 	if address == "" || len(m.GetTalosconfig()) == 0 {
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("address and talosconfig are required"))
+	}
+
+	// Refuse before anything is written: registering the address is an update made as the caller, and failing it
+	// after the request and the credential exist would leave a half-done request carrying a foreign credential.
+	if c := m.GetCluster(); c.GetName() != "" {
+		ok, err := s.clusterWritable(ctx, c)
+		if err != nil {
+			return nil, err
+		}
+
+		if !ok {
+			return nil, connect.NewError(connect.CodePermissionDenied,
+				fmt.Errorf("you may reclaim machines but not add addresses to cluster %s", namespacedName(c)))
+		}
 	}
 
 	// The request is written first, as the caller, with the name of the Secret it will use; the Secret then

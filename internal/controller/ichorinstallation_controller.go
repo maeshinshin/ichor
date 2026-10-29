@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"golang.org/x/mod/semver"
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -115,28 +116,13 @@ func (r *IchorInstallationReconciler) Reconcile(ctx context.Context, req ctrl.Re
 
 	r.applySettings(&inst)
 
-	if !equalIchorStatus(orig.Status, inst.Status) {
+	if !apiequality.Semantic.DeepEqual(orig.Status, inst.Status) {
 		if err := r.Status().Update(ctx, &inst); err != nil {
 			return ctrl.Result{}, err
 		}
 	}
 
 	return ctrl.Result{}, nil
-}
-
-func equalIchorStatus(a, b ichorv1alpha1.IchorInstallationStatus) bool {
-	if a.InstalledVersion != b.InstalledVersion || len(a.Conditions) != len(b.Conditions) || !equalEffective(a.Effective, b.Effective) {
-		return false
-	}
-
-	for i := range a.Conditions {
-		x, y := a.Conditions[i], b.Conditions[i]
-		if x.Type != y.Type || x.Status != y.Status || x.Message != y.Message || x.ObservedGeneration != y.ObservedGeneration {
-			return false
-		}
-	}
-
-	return true
 }
 
 // SetupWithManager sets up the controller with the Manager.

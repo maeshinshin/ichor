@@ -56,11 +56,10 @@ const (
 	maxCPs        = 3
 	podSubnet     = "10.248.0.0/16"
 	serviceSubnet = "10.249.0.0/16"
-	cniNone       = "none"
 
 	// CNI variants.
 	CNIFlannel      = "talos-flannel"
-	CNINone         = cniNone
+	CNINone         = "none"
 	CNICiliumInline = "cilium-inline"
 	CNICiliumHelm   = "cilium-helm"
 	CNICalico       = "calico"
@@ -235,42 +234,20 @@ spec:
 
 // isoSource clones the cached ISO DataVolume when the version is the cached one and the
 // cache exists (it is never created or deleted here), and imports from the Image Factory otherwise.
-func isoSource(version string) string {
+func isoSource(version string) (src, size string) {
 	if version == cachedVersion {
 		cache := "ichor-e2e-talos-" + strings.ReplaceAll(version, ".", "-") + "-" + schematic[:8] + "-base"
 		out, err := utils.Run(kube.Command("-n", namespace, "get", "pvc", cache, "-o", "jsonpath={.status.capacity.storage}"))
 		if size := strings.TrimSpace(out); err == nil && size != "" {
-			return fmt.Sprintf("          pvc:\n            namespace: %s\n            name: %s\n#SIZE=%s", namespace, cache, size)
+			return fmt.Sprintf("          pvc:\n            namespace: %s\n            name: %s", namespace, cache), size
 		}
 	}
-	return "          http:\n            url: https://factory.talos.dev/image/" + schematic + "/" + version + "/metal-amd64.iso\n#SIZE=1Gi"
+	return "          http:\n            url: https://factory.talos.dev/image/" + schematic + "/" + version + "/metal-amd64.iso", "1Gi"
 }
 
 func renderVM(name, prefix, mem, version string) string {
-	src := isoSource(version)
-	src, size, _ := strings.Cut(src, "\n#SIZE=")
+	src, size := isoSource(version)
 	return fmt.Sprintf(vmTmpl, name, src, size, prefix, Label, mem)
-}
-
-func apply(manifest string) error {
-	cmd := kube.Command("apply", "-f", "-")
-	cmd.Stdin = strings.NewReader(manifest)
-	_, err := utils.Run(cmd)
-	return err
-}
-
-func poll(step string, timeout time.Duration, check func() (string, bool)) (string, error) {
-	fmt.Println(step)
-	deadline := time.Now().Add(timeout)
-	for {
-		if v, ok := check(); ok {
-			return v, nil
-		}
-		if time.Now().After(deadline) {
-			return "", fmt.Errorf("%s: timed out after %s", step, timeout)
-		}
-		time.Sleep(5 * time.Second)
-	}
 }
 
 const registryTmpl = `apiVersion: apps/v1
@@ -318,13 +295,13 @@ func EnsureRegistry(prefix string) (string, error) {
 	if !prefixRe.MatchString(prefix) {
 		return "", fmt.Errorf("prefix %q must match %s", prefix, prefixRe)
 	}
-	if err := apply(fmt.Sprintf(registryTmpl, prefix, Label)); err != nil {
+	if err := kube.Apply(fmt.Sprintf(registryTmpl, prefix, Label)); err != nil {
 		return "", err
 	}
 	if _, err := utils.Run(kube.Command("-n", namespace, "wait", "deployment/"+prefix+"-registry", "--for=condition=Available", "--timeout=180s")); err != nil {
 		return "", err
 	}
-	return poll("waiting for the registry Service IP", time.Minute, func() (string, bool) {
+	return kube.Poll("waiting for the registry Service IP", time.Minute, func() (string, bool) {
 		out, err := utils.Run(kube.Command("-n", namespace, "get", "svc", prefix+"-registry", "-o", "jsonpath={.spec.clusterIP}"))
 		ip := strings.TrimSpace(out)
 		return ip, err == nil && ip != ""
@@ -395,18 +372,18 @@ func Up(o Options) (*Cluster, error) {
 	for i := range o.Workers {
 		names = append(names, vmName(o.Prefix, "w", i))
 	}
-	for _, n := range names {
+	for i, n := range names {
 		mem := o.CPMemory
-		if strings.Contains(n, "-w") {
+		if i >= o.ControlPlanes {
 			mem = o.WorkerMemory
 		}
-		if err := apply(renderVM(n, o.Prefix, mem, o.TalosVersion)); err != nil {
+		if err := kube.Apply(renderVM(n, o.Prefix, mem, o.TalosVersion)); err != nil {
 			return nil, fmt.Errorf("creating VM %s: %w", n, err)
 		}
 	}
 	ips := map[string]string{}
 	for _, n := range names {
-		ip, err := poll("waiting for "+n+" pod IP", 12*time.Minute, func() (string, bool) {
+		ip, err := kube.Poll("waiting for "+n+" pod IP", 12*time.Minute, func() (string, bool) {
 			out, err := utils.Run(kube.Command("-n", namespace, "get", "vmi", n, "-o", "jsonpath={.status.interfaces[0].ipAddress}"))
 			ip := strings.TrimSpace(out)
 			return ip, err == nil && ip != ""
@@ -417,7 +394,7 @@ func Up(o Options) (*Cluster, error) {
 		ips[n] = ip
 	}
 	for _, n := range names {
-		if _, err := poll("waiting for "+n+" maintenance mode", 10*time.Minute, func() (string, bool) {
+		if _, err := kube.Poll("waiting for "+n+" maintenance mode", 10*time.Minute, func() (string, bool) {
 			out, err := talosctl.Get(namespace, ips[n], "machinestatus")
 			if err != nil {
 				return "", false
@@ -455,20 +432,23 @@ func runLocal(args ...string) (string, error) {
 // Talos v1.14): ipam kubernetes, cgroup not auto-mounted, the capability sets, and KubePrism
 // as the API address when kube-proxy is replaced.
 func (c *Cluster) ciliumHelmArgs() []string {
-	a := []string{
-		"--namespace", "kube-system",
-		"--set", "ipam.mode=kubernetes",
-		"--set", "securityContext.capabilities.ciliumAgent={CHOWN,KILL,NET_ADMIN,NET_RAW,IPC_LOCK,SYS_ADMIN,SYS_RESOURCE,DAC_OVERRIDE,FOWNER,SETGID,SETUID}",
-		"--set", "securityContext.capabilities.cleanCiliumState={NET_ADMIN,SYS_ADMIN,SYS_RESOURCE}",
-		"--set", "cgroup.autoMount.enabled=false",
-		"--set", "cgroup.hostRoot=/sys/fs/cgroup",
+	sets := []string{
+		"ipam.mode=kubernetes",
+		"securityContext.capabilities.ciliumAgent={CHOWN,KILL,NET_ADMIN,NET_RAW,IPC_LOCK,SYS_ADMIN,SYS_RESOURCE,DAC_OVERRIDE,FOWNER,SETGID,SETUID}",
+		"securityContext.capabilities.cleanCiliumState={NET_ADMIN,SYS_ADMIN,SYS_RESOURCE}",
+		"cgroup.autoMount.enabled=false",
+		"cgroup.hostRoot=/sys/fs/cgroup",
 	}
 	if c.Opts.NoKubeProxy {
 		host, port := "localhost", "7445"
 		if c.Opts.NoKubePrism {
 			host, port = c.CPs[0], "6443"
 		}
-		a = append(a, "--set", "kubeProxyReplacement=true", "--set", "k8sServiceHost="+host, "--set", "k8sServicePort="+port)
+		sets = append(sets, "kubeProxyReplacement=true", "k8sServiceHost="+host, "k8sServicePort="+port)
+	}
+	a := append(make([]string, 0, 2+2*len(sets)), "--namespace", "kube-system")
+	for _, s := range sets {
+		a = append(a, "--set", s)
 	}
 	return a
 }
@@ -548,14 +528,14 @@ func (c *Cluster) bringUp() error {
 	}
 	all := append(append([]string{}, c.CPs...), c.Workers...)
 	for _, ip := range all {
-		if _, err := poll("waiting for "+ip+" authenticated API", 12*time.Minute, func() (string, bool) {
+		if _, err := kube.Poll("waiting for "+ip+" authenticated API", 12*time.Minute, func() (string, bool) {
 			_, err := talosctl.GetAuthenticated(namespace, ip, "machinestatus", tcBytes)
 			return "", err == nil
 		}); err != nil {
 			return err
 		}
 	}
-	if _, err := poll("bootstrap", 3*time.Minute, func() (string, bool) {
+	if _, err := kube.Poll("bootstrap", 3*time.Minute, func() (string, bool) {
 		_, err := talosctl.Bootstrap(namespace, c.CPs[0], tcBytes)
 		return "", err == nil
 	}); err != nil {
@@ -577,7 +557,7 @@ func (c *Cluster) bringUp() error {
 	if err := c.startRelay(); err != nil {
 		return err
 	}
-	if _, err := poll("waiting for all nodes to register", 10*time.Minute, func() (string, bool) {
+	if _, err := kube.Poll("waiting for all nodes to register", 10*time.Minute, func() (string, bool) {
 		out, err := utils.Run(kube.InnerCommand(c.LocalKube, "get", "nodes", "--no-headers"))
 		return "", err == nil && len(strings.Split(strings.TrimSpace(out), "\n")) == len(all) && strings.TrimSpace(out) != ""
 	}); err != nil {
@@ -592,7 +572,7 @@ func (c *Cluster) bringUp() error {
 	if o.CNI == CNINone {
 		return nil
 	}
-	_, err = poll("waiting for all nodes Ready", 15*time.Minute, func() (string, bool) {
+	_, err = kube.Poll("waiting for all nodes Ready", 15*time.Minute, func() (string, bool) {
 		out, err := utils.Run(kube.InnerCommand(c.LocalKube, "get", "nodes", "-o",
 			"jsonpath={.items[*].status.conditions[?(@.type==\"Ready\")].status}"))
 		f := strings.Fields(out)
@@ -625,7 +605,7 @@ spec:
       image: alpine/socat
       args: ["TCP-LISTEN:6443,fork,reuseaddr", "TCP:%s:6443"]
 `, name, Label, c.Opts.Prefix, c.CPs[0])
-	if err := apply(m); err != nil {
+	if err := kube.Apply(m); err != nil {
 		return err
 	}
 	if _, err := utils.Run(kube.Command("-n", namespace, "wait", "pod/"+name, "--for=condition=Ready", "--timeout=120s")); err != nil {
@@ -634,7 +614,7 @@ spec:
 	if err := PortForward(c.Dir, "relay", "pod/"+name, c.Opts.RelayPort+":6443"); err != nil {
 		return err
 	}
-	_, err := poll("waiting for the API tunnel", 30*time.Second, func() (string, bool) {
+	_, err := kube.Poll("waiting for the API tunnel", 30*time.Second, func() (string, bool) {
 		_, err := utils.Run(kube.InnerCommand(c.LocalKube, "get", "--raw", "/readyz"))
 		return "", err == nil
 	})
@@ -657,7 +637,7 @@ spec:
       image: busybox:1.37
       command: ["sleep", "86400"]
 `, name, Label, prefix)
-	if err := apply(m); err != nil {
+	if err := kube.Apply(m); err != nil {
 		return "", err
 	}
 	_, err := utils.Run(kube.Command("-n", namespace, "wait", "pod/"+name, "--for=condition=Ready", "--timeout=180s"))
@@ -679,37 +659,28 @@ func Down(prefix string, withRegistry bool) error {
 			stopPortForward(dir, "registry")
 		}
 	}
-	type obj struct{ kind, name string }
-	var objs []obj
-	for _, n := range []string{"-relay", "-tools"} {
-		objs = append(objs, obj{"pod", prefix + n})
+	for _, n := range []string{"pod/" + prefix + "-relay", "pod/" + prefix + "-tools"} {
+		if err := deleteOwned(prefix, n); err != nil {
+			return err
+		}
 	}
 	if withRegistry {
-		objs = append(objs, obj{"deployment", prefix + "-registry"}, obj{"service", prefix + "-registry"})
+		for _, n := range []string{"deployment/", "service/"} {
+			if err := deleteOwned(prefix, n+prefix+"-registry"); err != nil {
+				return err
+			}
+		}
 	}
+	var vms []string
 	for i := range maxCPs {
-		objs = append(objs, obj{"vm", vmName(prefix, "cp", i)})
+		vms = append(vms, vmName(prefix, "cp", i))
 	}
 	for i := range maxWorkers {
-		objs = append(objs, obj{"vm", vmName(prefix, "w", i)})
+		vms = append(vms, vmName(prefix, "w", i))
 	}
-	for _, v := range objs {
-		if v.kind == "vm" {
-			continue
-		}
-		if err := deleteOwned(prefix, v.kind, v.name); err != nil {
-			return err
-		}
-	}
-	for _, v := range objs {
-		if v.kind != "vm" {
-			continue
-		}
-		if err := deleteOwned(prefix, "vm", v.name); err != nil {
-			return err
-		}
-		for _, dv := range []string{v.name + "-iso", v.name + "-system"} {
-			if err := deleteOwned(prefix, "dv", dv); err != nil {
+	for _, vm := range vms {
+		for _, n := range []string{"vm/" + vm, "dv/" + vm + "-iso", "dv/" + vm + "-system"} {
+			if err := deleteOwned(prefix, n); err != nil {
 				return err
 			}
 		}
@@ -717,10 +688,10 @@ func Down(prefix string, withRegistry bool) error {
 	return nil
 }
 
-func deleteOwned(prefix, kind, name string) error {
-	out, err := utils.Run(kube.Command("-n", namespace, "get", kind, name, "--ignore-not-found", "-o", "json"))
+func deleteOwned(prefix, ref string) error {
+	out, err := utils.Run(kube.Command("-n", namespace, "get", ref, "--ignore-not-found", "-o", "json"))
 	if err != nil {
-		return fmt.Errorf("looking up %s/%s: %w", kind, name, err)
+		return fmt.Errorf("looking up %s: %w", ref, err)
 	}
 	if strings.TrimSpace(out) == "" {
 		return nil
@@ -734,12 +705,12 @@ func deleteOwned(prefix, kind, name string) error {
 		return err
 	}
 	if o.Metadata.Labels[Label] != prefix {
-		return fmt.Errorf("refusing to delete %s/%s: it does not carry %s=%s", kind, name, Label, prefix)
+		return fmt.Errorf("refusing to delete %s: it does not carry %s=%s", ref, Label, prefix)
 	}
-	if _, err := utils.Run(kube.Command("-n", namespace, "delete", kind, name, "--wait=true", "--timeout=180s", "--ignore-not-found")); err != nil {
-		return fmt.Errorf("deleting %s/%s: %w", kind, name, err)
+	if _, err := utils.Run(kube.Command("-n", namespace, "delete", ref, "--wait=true", "--timeout=180s", "--ignore-not-found")); err != nil {
+		return fmt.Errorf("deleting %s: %w", ref, err)
 	}
-	fmt.Println("deleted", kind+"/"+name)
+	fmt.Println("deleted", ref)
 	return nil
 }
 
@@ -776,20 +747,22 @@ func (c *Cluster) cniManifest() (string, error) {
 
 func (c *Cluster) patchMultiDoc(manifest string) []byte {
 	o := c.Opts
+	doc := func(kind string, f map[string]any) map[string]any { f["kind"] = kind; return f }
+	disabled := func(kind string) map[string]any { return doc(kind, map[string]any{"enabled": false}) }
 	docs := []map[string]any{
-		{"kind": "KubeNetworkConfig", "podSubnets": []string{podSubnet}, "serviceSubnets": []string{serviceSubnet}},
+		doc("KubeNetworkConfig", map[string]any{"podSubnets": []string{podSubnet}, "serviceSubnets": []string{serviceSubnet}}),
 	}
 	if o.CNI != CNIFlannel {
-		docs = append(docs, map[string]any{"kind": "KubeFlannelCNIConfig", "$patch": "delete"})
+		docs = append(docs, doc("KubeFlannelCNIConfig", map[string]any{"$patch": "delete"}))
 	}
 	if manifest != "" {
-		docs = append(docs, map[string]any{"kind": "KubeInlineManifestConfig", "name": string(o.CNI[:6]), "manifest": manifest})
+		docs = append(docs, doc("KubeInlineManifestConfig", map[string]any{"name": o.CNI[:6], "manifest": manifest}))
 	}
 	if o.NoKubeProxy {
-		docs = append(docs, map[string]any{"kind": "KubeProxyConfig", "enabled": false})
+		docs = append(docs, disabled("KubeProxyConfig"))
 	}
 	if o.NoKubePrism {
-		docs = append(docs, map[string]any{"kind": "KubePrismConfig", "enabled": false})
+		docs = append(docs, disabled("KubePrismConfig"))
 	}
 	var b strings.Builder
 	for _, d := range docs {
@@ -800,16 +773,21 @@ func (c *Cluster) patchMultiDoc(manifest string) []byte {
 	return []byte(b.String())
 }
 
+type inlineManifest struct {
+	Name     string `yaml:"name"`
+	Contents string `yaml:"contents"`
+}
+
 func (c *Cluster) patchLegacy(manifest string) ([]byte, error) {
 	o := c.Opts
 	net := map[string]any{"podSubnets": []string{podSubnet}, "serviceSubnets": []string{serviceSubnet}}
 	cluster := map[string]any{"network": net}
 	machine := map[string]any{}
 	if o.CNI != CNIFlannel {
-		net["cni"] = map[string]any{"name": cniNone}
+		net["cni"] = map[string]any{"name": CNINone}
 	}
 	if manifest != "" {
-		cluster["inlineManifests"] = []map[string]string{{"name": o.CNI[:6], "contents": manifest}}
+		cluster["inlineManifests"] = []inlineManifest{{o.CNI[:6], manifest}}
 	}
 	if o.NoKubeProxy {
 		cluster["proxy"] = map[string]any{"disabled": true}

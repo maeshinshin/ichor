@@ -115,7 +115,7 @@ func upDemo() error {
 	}
 
 	for _, n := range names {
-		if err := applyManifest(demoVMManifest(n, memory[n], iso)); err != nil {
+		if err := kube.Apply(demoVMManifest(n, memory[n], iso)); err != nil {
 			return fmt.Errorf("creating VM %s: %w", n, err)
 		}
 	}
@@ -123,7 +123,7 @@ func upDemo() error {
 	ips := map[string]string{}
 
 	for _, n := range names {
-		ip, err := pollFor("waiting for "+n+"'s pod IP", 10*time.Minute, func() (string, bool) {
+		ip, err := kube.Poll("waiting for "+n+"'s pod IP", 10*time.Minute, func() (string, bool) {
 			out, err := utils.Run(kube.Command("-n", namespace, "get", "vmi", n,
 				"-o", "jsonpath={.status.interfaces[0].ipAddress}"))
 			ip := strings.TrimSpace(out)
@@ -139,7 +139,7 @@ func upDemo() error {
 
 	for _, n := range names {
 		ip := ips[n]
-		if _, err := pollFor("waiting for "+n+" ("+ip+") to reach maintenance", 10*time.Minute, func() (string, bool) {
+		if _, err := kube.Poll("waiting for "+n+" ("+ip+") to reach maintenance", 10*time.Minute, func() (string, bool) {
 			out, err := talosctl.Get(namespace, ip, "machinestatus")
 			if err != nil {
 				return "", false

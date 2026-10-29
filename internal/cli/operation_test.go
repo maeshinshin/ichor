@@ -309,7 +309,7 @@ func TestHeadlineForAKubeProxySwitchSaysItStartsWhenTheSpecAlreadySaysTheTarget(
 	}
 
 	// A first run that changes the spec still says what it changes.
-	change := &pb.PlanOperationResponse{Current: "enabled", Target: mode}
+	change := &pb.PlanOperationResponse{Current: kubeProxyEnabled, Target: mode}
 	if got, want := headline(pb.OperationKind_OPERATION_KIND_CNI, "c", change), `Switch kube-proxy on cluster "c" from enabled to `+mode+"."; got != want {
 		t.Errorf("headline = %q, want %q", got, want)
 	}

@@ -121,7 +121,8 @@ func (i *Issuer) authorize(w http.ResponseWriter, r *http.Request) {
 			oauthError(w, http.StatusBadRequest, code, "")
 			return
 		}
-		i.redirectResult(w, r, redirect, q.Get("state"), "", code)
+		w.Header().Set("Cache-Control", "no-store")
+		http.Redirect(w, r, i.callbackURL(redirect, "error", code, q.Get("state")), http.StatusFound)
 	}
 	aud, audOK := audienceFor(client, q.Get("audience"))
 	switch {
@@ -157,21 +158,18 @@ func (i *Issuer) authorize(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (i *Issuer) redirectResult(w http.ResponseWriter, r *http.Request, redirect, state, code, errCode string) {
+// callbackURL is redirect with the result parameter (code or error), state when
+// set, and the RFC 9207 iss.
+func (i *Issuer) callbackURL(redirect, key, val, state string) string {
 	u, _ := url.Parse(redirect)
 	q := u.Query()
-	if errCode != "" {
-		q.Set("error", errCode)
-	} else {
-		q.Set("code", code)
-	}
+	q.Set(key, val)
 	if state != "" {
 		q.Set("state", state)
 	}
-	q.Set("iss", i.cfg.Issuer) // RFC 9207
+	q.Set("iss", i.cfg.Issuer)
 	u.RawQuery = q.Encode()
-	w.Header().Set("Cache-Control", "no-store")
-	http.Redirect(w, r, u.String(), http.StatusFound)
+	return u.String()
 }
 
 type loginRequest struct {
@@ -208,7 +206,7 @@ func (i *Issuer) login(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		ip = r.RemoteAddr
 	}
-	userKey, ipKey := "u:"+truncate(req.Username, maxUserNameLen+1), "ip:"+ip
+	userKey, ipKey := "u:"+req.Username[:min(len(req.Username), maxUserNameLen+1)], "ip:"+ip
 	if d := max(i.failures.Wait(userKey, now), i.failures.Wait(ipKey, now)); d > 0 {
 		w.Header().Set("Retry-After", strconv.Itoa(int(d/time.Second)+1))
 		oauthError(w, http.StatusTooManyRequests, "rate_limited", "too many failed logins")
@@ -250,20 +248,7 @@ func (i *Issuer) login(w http.ResponseWriter, r *http.Request) {
 		oauthError(w, http.StatusInternalServerError, "server_error", "")
 		return
 	}
-	u, _ := url.Parse(ar.RedirectURI)
-	q := u.Query()
-	q.Set("code", code)
-	q.Set("iss", i.cfg.Issuer)
-	q.Set("state", state)
-	u.RawQuery = q.Encode()
-	writeJSON(w, http.StatusOK, map[string]string{"redirect_uri": u.String()})
-}
-
-func truncate(s string, n int) string {
-	if len(s) > n {
-		return s[:n]
-	}
-	return s
+	writeJSON(w, http.StatusOK, map[string]string{"redirect_uri": i.callbackURL(ar.RedirectURI, "code", code, state)})
 }
 
 // activeUser looks the user up and applies the disable and notBefore rules.

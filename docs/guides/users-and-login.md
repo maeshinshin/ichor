@@ -59,6 +59,11 @@ checked before anything is written, and each has a chart value:
 | `--kube-api-server-url URL` | `ichorUI.users.kubeAPIServerURL` | The https URL put in users' kubeconfigs (default: the cluster's `spec.endpoint`). |
 | `--kube-api-tls-server-name NAME` | `ichorUI.users.kubeAPITLSServerName` | The `tls-server-name` in users' kubeconfigs, for a URL host outside the kube-apiserver certificate. |
 
+ichor-ui reloads its certificate files when they change, within about ten
+seconds, without a restart: a `kubernetes.io/tls` Secret that cert-manager
+renews works as is. If a new pair is invalid, ichor-ui keeps serving the old
+certificate and logs the error.
+
 Without the TLS flags ichor-ui serves plain HTTP. Making it reachable at the
 `--ui-url` (a LoadBalancer, an Ingress or a Gateway) is your job: init
 installs none of them, with or without `--ui-tls-secret`.

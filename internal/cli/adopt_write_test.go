@@ -26,6 +26,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -151,7 +152,7 @@ func TestWriteAdopt_UnmanagedClusterRecordsTalosCNI(t *testing.T) {
 	ctx := context.Background()
 	c := newWriteFake(t)
 	in := fullWriteInput(t)
-	in.Cluster.CNIPreset, in.Cluster.TalosCNI, in.Cluster.KubeProxy = "unmanaged", string(detectedNone), cniTestEnabled
+	in.Cluster.CNIPreset, in.Cluster.TalosCNI, in.Cluster.KubeProxy = ichorv1alpha1.TalosClusterCNIPresetUnmanaged, string(detectedNone), cniTestEnabled
 
 	if _, err := writeAdopt(ctx, c, in); err != nil {
 		t.Fatalf("writeAdopt: %v", err)
@@ -162,7 +163,7 @@ func TestWriteAdopt_UnmanagedClusterRecordsTalosCNI(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if cluster.Spec.CNI.Preset != "unmanaged" || cluster.Spec.CNI.Unmanaged == nil ||
+	if cluster.Spec.CNI.Preset != ichorv1alpha1.TalosClusterCNIPresetUnmanaged || cluster.Spec.CNI.Unmanaged == nil ||
 		cluster.Spec.CNI.Unmanaged.TalosCNI != "none" || cluster.Spec.CNI.KubeProxy != cniTestEnabled {
 		t.Errorf("unexpected CNI: %+v", cluster.Spec.CNI)
 	}
@@ -171,6 +172,79 @@ func TestWriteAdopt_UnmanagedClusterRecordsTalosCNI(t *testing.T) {
 	res, err := writeAdopt(ctx, c, in)
 	if err != nil || len(res.Created) != 0 {
 		t.Fatalf("second run: created %v, err %v", res.Created, err)
+	}
+}
+
+// writeDenyPolicy is the default-deny policy testPolicies declares.
+const writeDenyPolicy = "ichor-default-deny"
+
+// The preset does not veto the gate, so an unmanaged cluster that runs Cilium
+// gets Ichor's policies.
+func TestWriteAdopt_UnmanagedCiliumAppliesNetworkPolicies(t *testing.T) {
+	old := version.Version
+	version.Version = testReleasedVersion
+
+	t.Cleanup(func() { version.Version = old })
+
+	ctx := context.Background()
+	c := fake.NewClientBuilder().WithScheme(newTestScheme(t)).
+		WithObjects(ciliumDaemonSetObj(1, 1), ciliumCRDObj(true)).Build()
+	in := fullWriteInput(t)
+	in.Cluster.CNIPreset, in.Cluster.TalosCNI, in.Cluster.KubeProxy = ichorv1alpha1.TalosClusterCNIPresetUnmanaged, string(detectedNone), cniTestEnabled
+	in.Ichor = &adoptWriteIchor{
+		Manifest: []byte(testIchorManifest), NetworkPolicies: []byte(testPolicies),
+		DetectedCNI: string(detectedCilium), PolicyCRDPresent: true, CiliumWait: time.Second,
+	}
+	in.Interval = time.Millisecond
+
+	if _, err := writeAdopt(ctx, c, in); err != nil {
+		t.Fatalf("writeAdopt: %v", err)
+	}
+
+	pol := &unstructured.Unstructured{}
+	pol.SetAPIVersion("cilium.io/v2")
+	pol.SetKind("CiliumNetworkPolicy")
+
+	if err := c.Get(ctx, types.NamespacedName{Namespace: ichorControllerNamespace, Name: writeDenyPolicy}, pol); err != nil {
+		t.Fatalf("Ichor's network policy was not applied: %v", err)
+	}
+}
+
+// A non-Cilium CNI skips the policies and the message names the detected CNI.
+func TestWriteAdopt_UnmanagedFlannelSkipsNetworkPoliciesAndNamesIt(t *testing.T) {
+	old := version.Version
+	version.Version = testReleasedVersion
+
+	t.Cleanup(func() { version.Version = old })
+
+	ctx := context.Background()
+	c := newWriteFake(t)
+	in := fullWriteInput(t)
+	in.Cluster.CNIPreset, in.Cluster.TalosCNI, in.Cluster.KubeProxy = ichorv1alpha1.TalosClusterCNIPresetUnmanaged, string(detectedNone), cniTestEnabled
+
+	var out bytes.Buffer
+
+	in.Stderr = &out
+	in.Ichor = &adoptWriteIchor{
+		Manifest: []byte(testIchorManifest), NetworkPolicies: []byte(testPolicies),
+		DetectedCNI: string(detectedFlannel), PolicyCRDPresent: false,
+	}
+	in.Interval = time.Millisecond
+
+	if _, err := writeAdopt(ctx, c, in); err != nil {
+		t.Fatalf("writeAdopt: %v", err)
+	}
+
+	if !strings.Contains(out.String(), "flannel") {
+		t.Errorf("skip message does not name the detected CNI:\n%s", out.String())
+	}
+
+	pol := &unstructured.Unstructured{}
+	pol.SetAPIVersion("cilium.io/v2")
+	pol.SetKind("CiliumNetworkPolicy")
+
+	if err := c.Get(ctx, types.NamespacedName{Namespace: ichorControllerNamespace, Name: writeDenyPolicy}, pol); err == nil {
+		t.Errorf("a network policy was applied on a flannel cluster")
 	}
 }
 
@@ -357,7 +431,7 @@ func TestWriteAdopt_InstallsIchorOnlyWhenItIsNotRunning(t *testing.T) {
 	ctx := context.Background()
 	c := newWriteFake(t)
 	in := fullWriteInput(t)
-	in.Ichor = &adoptWriteIchor{Manifest: []byte(testIchorManifest), IncludeCiliumPolicies: false}
+	in.Ichor = &adoptWriteIchor{Manifest: []byte(testIchorManifest)}
 	in.Interval = time.Millisecond
 
 	if _, err := writeAdopt(ctx, c, in); err != nil {

@@ -97,6 +97,8 @@ var _ = Describe("ReclaimService with the MachineReclaim webhook", Ordered, func
 
 		var role rbacv1.ClusterRole
 		Expect(yaml.Unmarshal(raw, &role)).To(Succeed())
+		// The base name gets kustomize's ichor- prefix on install; the webhook refusal and the docs name the result.
+		Expect("ichor-" + role.Name).To(Equal("ichor-machine-reclaimer"))
 		Expect(k8sClient.Create(ctx, &role)).To(Succeed())
 		Expect(k8sClient.Create(ctx, &rbacv1.ClusterRoleBinding{
 			Name:     "reclaim-e2e",

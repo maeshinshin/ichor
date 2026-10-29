@@ -272,7 +272,7 @@ func BuildConfig(
 	}
 
 	if apimeta.IsStatusConditionTrue(cluster.Status.Conditions, ConditionCNIHandover) {
-		ordered = dropHandedOverInlineManifest(ordered)
+		ordered = dropHandedOverInlineManifest(ordered, takenOverInlineManifest(cluster))
 	}
 
 	// The Talos side of the kube-proxy split is Ichor's, not a patch's (ADR 0066).
@@ -469,18 +469,32 @@ func selectorMatches(p *ichorv1alpha1.TalosConfigPatch, m *ichorv1alpha1.TalosMa
 	return sel.Matches(labels.Set(m.Spec.NodeLabels)), nil
 }
 
+// takenOverInlineManifest is the name of the adopted cluster's own Cilium inline manifest entry
+// (ADR 0103), recorded in status once the hand-over has completed; "" for a cluster Ichor
+// bootstrapped.
+func takenOverInlineManifest(cluster *ichorv1alpha1.TalosCluster) string {
+	if cluster.Status.CNI == nil {
+		return ""
+	}
+
+	return cluster.Status.CNI.TakenOverInlineManifest
+}
+
 // dropHandedOverInlineManifest returns ordered with the CNI's
-// cni.InlineManifestName entry removed from every Config document's
+// cni.InlineManifestName entry, and the entry named taken (an adopted cluster's own), removed from every
+// Config document's
 // ClusterConfig.ClusterInlineManifests. It never mutates the caller's own
 // TalosConfigPatch objects (principle 5: the controller renders from
 // ingredients, it does not rewrite them) -- a patch is only ever
 // deep-copied if it actually carries the entry; every other patch passes
 // through as the same pointer.
-func dropHandedOverInlineManifest(ordered []*ichorv1alpha1.TalosConfigPatch) []*ichorv1alpha1.TalosConfigPatch {
+func dropHandedOverInlineManifest(ordered []*ichorv1alpha1.TalosConfigPatch, taken string) []*ichorv1alpha1.TalosConfigPatch {
+	handedOver := func(name string) bool { return name == cni.InlineManifestName || (taken != "" && name == taken) }
+
 	return rewriteClusterConfigs(ordered,
 		func(cc *typedconfig.ClusterConfig) bool {
 			return slices.ContainsFunc(cc.ClusterInlineManifests, func(e *typedconfig.ClusterInlineManifest) bool {
-				return e.InlineManifestName == cni.InlineManifestName
+				return handedOver(e.InlineManifestName)
 			})
 		},
 		func(cc *typedconfig.ClusterConfig) {
@@ -489,7 +503,7 @@ func dropHandedOverInlineManifest(ordered []*ichorv1alpha1.TalosConfigPatch) []*
 			var kept []*typedconfig.ClusterInlineManifest
 
 			for _, e := range cc.ClusterInlineManifests {
-				if e.InlineManifestName != cni.InlineManifestName {
+				if !handedOver(e.InlineManifestName) {
 					kept = append(kept, e)
 				}
 			}

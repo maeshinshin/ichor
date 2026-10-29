@@ -548,7 +548,21 @@ type TalosClusterCNIStatus struct {
 	// detectedVersion is the image tag of the detected CNI's DaemonSet where one exposes it.
 	// +optional
 	DetectedVersion string `json:"detectedVersion,omitempty"`
+
+	// takenOverInlineManifest is the name of the cluster.inlineManifests entry of the adopted
+	// machines that held the Cilium DaemonSet Ichor took over, which pkg/render stops rendering
+	// once CNIHandover is True (ADR 0103, 1.2). The controller copies it from the
+	// TalosClusterCNIInlineManifestAnnotation when the hand-over completes; empty when the
+	// adopted Cilium was not in an inline manifest.
+	// +optional
+	TakenOverInlineManifest string `json:"takenOverInlineManifest,omitempty"`
 }
+
+// TalosClusterCNIInlineManifestAnnotation carries, on a TalosCluster that `ichor adopt` created,
+// the name of the Talos cluster.inlineManifests entry that holds the Cilium DaemonSet (found by
+// content). The controller copies it to status.cni.takenOverInlineManifest once the hand-over has
+// completed; render reads only the status, so nothing is dropped from a machine's config before.
+const TalosClusterCNIInlineManifestAnnotation = "ichor.maesh.dev/cni-inline-manifest"
 
 // TalosClusterAdoptedAnnotation marks a TalosCluster that `ichor adopt` created (ADR 0103). The
 // webhook requires it on create for spec.cni.preset: unmanaged.

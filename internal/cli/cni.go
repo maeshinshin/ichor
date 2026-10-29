@@ -19,6 +19,7 @@ package cli
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -28,6 +29,7 @@ import (
 	"connectrpc.com/connect"
 	"github.com/spf13/cobra"
 
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
@@ -36,6 +38,52 @@ var cniFlags startFlags
 var cniCmd = &cobra.Command{
 	Use:   "cni",
 	Short: "Operate on the cluster's CNI settings Ichor owns",
+
+	PersistentPreRunE: cniPreRun,
+}
+
+// refuseUnmanagedCNI fails when the cluster's CNI is not managed by Ichor (ADR 0103, section
+// 1.1a). It is the one check every `ichor cni ...` subcommand shares, run before the subcommand.
+func refuseUnmanagedCNI(ctx context.Context, c *apiClients, cluster string) error {
+	ref, err := resolveCluster(ctx, c, cluster)
+	if err != nil {
+		return err
+	}
+
+	resp, err := c.Cluster.GetCluster(ctx, connect.NewRequest(&pb.GetClusterRequest{Cluster: ref}))
+	if err != nil {
+		return err
+	}
+
+	if resp.Msg.GetCluster().GetCniPreset() == ichorv1alpha1.TalosClusterCNIPresetUnmanaged {
+		return errors.New(ichorv1alpha1.CNIUnmanagedMessage)
+	}
+
+	return nil
+}
+
+// cniPreRun is cniCmd's PersistentPreRunE. cobra runs only the nearest hook, so it calls the
+// root's skew check itself. The hidden `helm` group is what the Cilium Job runs and never
+// reaches an unmanaged cluster.
+func cniPreRun(cmd *cobra.Command, args []string) error {
+	if err := skewPreRun(cmd, args); err != nil {
+		return err
+	}
+
+	for p := cmd; p != nil; p = p.Parent() {
+		if p == cniHelmCmd {
+			return nil
+		}
+	}
+
+	var cluster string
+	if f := cmd.Flags().Lookup("cluster"); f != nil {
+		cluster = f.Value.String()
+	}
+
+	return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
+		return refuseUnmanagedCNI(ctx, c, cluster)
+	})
 }
 
 var cniKubeProxyCmd = &cobra.Command{

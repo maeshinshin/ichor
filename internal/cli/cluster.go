@@ -18,11 +18,13 @@ package cli
 
 import (
 	"context"
+	"fmt"
 	"io"
 
 	"connectrpc.com/connect"
 	"github.com/spf13/cobra"
 
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
@@ -54,6 +56,45 @@ var clusterGetCmd = &cobra.Command{
 	},
 }
 
+var clusterStatusCmd = &cobra.Command{
+	Use:   "status NAME",
+	Short: "Show a cluster's versions, endpoint and CNI in a few lines",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
+			return runClusterStatus(ctx, c, cmd.OutOrStdout(), args[0])
+		})
+	},
+}
+
+// cniStatusLine is the cni line of `ichor cluster status` (ADR 0103, section 1.1a).
+func cniStatusLine(cl *pb.Cluster) string {
+	if cl.GetCniPreset() != ichorv1alpha1.TalosClusterCNIPresetUnmanaged {
+		return "cilium"
+	}
+
+	detected := cl.GetCniDetected()
+	if detected == "" {
+		detected = "not detected yet"
+	}
+
+	return fmt.Sprintf("unmanaged (%s, not managed by Ichor)", detected)
+}
+
+func runClusterStatus(ctx context.Context, c *apiClients, out io.Writer, name string) error {
+	resp, err := c.Cluster.GetCluster(ctx, connect.NewRequest(&pb.GetClusterRequest{Cluster: objectRef(apiOpts.Namespace, name)}))
+	if err != nil {
+		return err
+	}
+
+	cl := resp.Msg.GetCluster()
+	_, err = fmt.Fprintf(out, "cluster: %s/%s\ntalos: %s\nkubernetes: %s\nendpoint: %s\ncni: %s\n",
+		cl.GetRef().GetNamespace(), cl.GetRef().GetName(), cl.GetTalosVersion(), cl.GetKubernetesVersion(),
+		cl.GetEndpoint(), cniStatusLine(cl))
+
+	return err
+}
+
 func runClusterList(ctx context.Context, c *apiClients, out io.Writer) error {
 	resp, err := c.Cluster.ListClusters(ctx, connect.NewRequest(&pb.ListClustersRequest{}))
 	if err != nil {
@@ -75,5 +116,5 @@ func runClusterGet(ctx context.Context, c *apiClients, out io.Writer, name strin
 func init() {
 	rootCmd.AddCommand(clusterCmd)
 	addAPIFlags(clusterCmd)
-	clusterCmd.AddCommand(clusterListCmd, clusterGetCmd)
+	clusterCmd.AddCommand(clusterListCmd, clusterGetCmd, clusterStatusCmd)
 }

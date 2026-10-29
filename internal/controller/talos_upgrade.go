@@ -40,48 +40,25 @@ import (
 	"github.com/maeshinshin/ichor/pkg/upgrade"
 )
 
-// imageFactoryHost and defaultInstallerSchematic build an installer image
-// reference the same way github.com/siderolabs/talos/pkg/images.
-// NewInstallerImage does (factory + "/" + platform + "-installer/" +
-// schematic + ":" + tag, verified by reading that package at v1.14.3) --
-// reimplemented as one format string rather than taking a dependency on
-// it: that package lives in the top-level github.com/siderolabs/talos
-// module, not the pkg/machinery submodule this project already depends on,
-// and pulling in the whole monorepo module for one string format is
-// exactly the "wrong module" problem already declined for
-// go-kubernetes's upgrade package. defaultInstallerSchematic is that same
-// package's own DefaultInstallerImageSchematic constant, copied verbatim.
+// Installer image reference parts, the shape github.com/siderolabs/talos/pkg/images.
+// NewInstallerImage builds; reimplemented because that package lives in the top-level talos
+// module, not the pkg/machinery submodule.
 const (
-	imageFactoryHost          = "factory.talos.dev"
-	defaultInstallerSchematic = upgrade.DefaultSchematic
-	installerPlatform         = "metal"
-)
+	imageFactoryHost  = "factory.talos.dev"
+	installerPlatform = "metal"
 
-// conditionTalosUpgrade and conditionStorageEvacuation are TalosMachine
-// status conditions talosUpgradeAdvancer uses purely as its own
-// resumability markers -- mirroring the existing fire-and-forget-RPC
-// idempotency pattern removal.go's conditionRemoval/reasonResetRequested
-// already uses for resetNode, rather than inventing a second mechanism.
-// Neither is part of TalosOperationStatus: both live on the TalosMachine Advance
-// already receives, so a killed and restarted controller resumes from live
-// state, never from memory.
-const (
-	// conditionTalosUpgrade is True from the moment the Upgrade API call is
-	// acknowledged until the node is confirmed back and converged on the
-	// target version. Message carries the boot ID recorded immediately
-	// before the call, the only way to tell "hasn't rebooted yet" apart
-	// from "rebooted and fell back to the same old version" (both report
-	// an unchanged Version()).
-	conditionTalosUpgrade = "TalosUpgrade"
-)
-
-// upgradeCallTimeout bounds the Upgrade RPC itself, which blocks while the node pulls
-// and installs the installer image.
-const upgradeCallTimeout = 10 * time.Minute
-
-const (
+	// conditionTalosUpgrade is a TalosMachine resumability marker (like removal.go's
+	// conditionRemoval), True from the moment the Upgrade API call is acknowledged until the node
+	// is confirmed on the target version. Message carries the boot ID recorded just before the
+	// call, the only way to tell "hasn't rebooted yet" from "rebooted and fell back to the same
+	// old version".
+	conditionTalosUpgrade  = "TalosUpgrade"
 	reasonUpgradeRequested = "UpgradeRequested"
 	reasonUpgradeConverged = "Converged"
+
+	// upgradeCallTimeout bounds the Upgrade RPC itself, which blocks while the node pulls and
+	// installs the installer image.
+	upgradeCallTimeout = 10 * time.Minute
 )
 
 // talosUpgradeAdvancer is the Talos-kind AdvanceMachineFunc. cmd/main.go
@@ -149,37 +126,33 @@ func (a *talosUpgradeAdvancer) Advance(
 	dialCtx, cancel := context.WithTimeout(ctx, etcdDialTimeout)
 	defer cancel()
 
-	talos, err := a.TalosClient(dialCtx, cluster, m, bundle)
-	if err != nil {
+	settling := func(err error) error {
 		if rebooting {
-			return false, nil
+			return nil
 		}
 
-		return false, fmt.Errorf("dialing %q: %w", m.Name, err)
+		return err
+	}
+
+	talos, err := a.TalosClient(dialCtx, cluster, m, bundle)
+	if err != nil {
+		return false, settling(fmt.Errorf("dialing %q: %w", m.Name, err))
 	}
 	defer closeTalosClient(talos)
 
 	currentVersion, err := talos.Version(dialCtx)
 	if err != nil {
-		if rebooting {
-			return false, nil
-		}
-
-		return false, fmt.Errorf("reading %q's Talos version: %w", m.Name, err)
+		return false, settling(fmt.Errorf("reading %q's Talos version: %w", m.Name, err))
 	}
 
 	currentSchematic, err := talos.Schematic(dialCtx)
 	if err != nil {
-		if rebooting {
-			return false, nil
-		}
-
-		return false, fmt.Errorf("reading %q's schematic: %w", m.Name, err)
+		return false, settling(fmt.Errorf("reading %q's schematic: %w", m.Name, err))
 	}
 
 	// A node that did not boot an Image Factory asset is running the stock installer's schematic.
 	if currentSchematic == "" {
-		currentSchematic = defaultInstallerSchematic
+		currentSchematic = upgrade.DefaultSchematic
 	}
 
 	// A machine needs the upgrade when its running version OR its running schematic differs
@@ -235,7 +208,7 @@ func (a *talosUpgradeAdvancer) beginUpgrade(
 		return false, fmt.Errorf("node %q is not Ready; refusing to start an upgrade", node)
 	}
 
-	progress, err := a.evacuate(ctx, cluster, m, node)
+	progress, err := evacuateMachine(ctx, a.Client, a.Evacuator, cluster, m, node, "upgrading")
 	if err != nil {
 		return false, err
 	}
@@ -364,19 +337,6 @@ func (a *talosUpgradeAdvancer) finish(
 	return true, nil
 }
 
-// evacuate drives one storage.EvacuationStatus step for m's node through
-// the shared evacuateMachine (evacuation.go), which removal.go calls too.
-// On EvacuationDone it deliberately does NOT call End yet: the node is
-// unschedulable until the upgrade's drain-and-reboot is actually confirmed
-// to have worked, by finish's own call to endEvacuation, never before
-// (architecture.md, "Storage": "...then drain; afterwards, re-enable
-// scheduling").
-func (a *talosUpgradeAdvancer) evacuate(
-	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, node string,
-) (storage.EvacuationProgress, error) {
-	return evacuateMachine(ctx, a.Client, a.Evacuator, cluster, m, node, "upgrading")
-}
-
 // endEvacuation undoes a pending evacuation (re-enables scheduling); see
 // endMachineEvacuation.
 func (a *talosUpgradeAdvancer) endEvacuation(
@@ -408,5 +368,5 @@ func targetSchematic(cluster *ichorv1alpha1.TalosCluster) string {
 		return cluster.Spec.Schematic.ID
 	}
 
-	return defaultInstallerSchematic
+	return upgrade.DefaultSchematic
 }

@@ -27,12 +27,6 @@ import (
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
 )
 
-// bundleSecretKey is secretsbundle.SecretKey under this package's own
-// name, kept so fixtures_test.go's existing fixture, keyed on it, doesn't
-// need to change -- it is an alias, not a second definition: there is
-// still exactly one literal value, in internal/secretsbundle.
-const bundleSecretKey = secretsbundle.SecretKey
-
 // loadBundle reads cluster's secrets bundle via internal/secretsbundle.Load -- the same function
 // internal/controller.loadBundle calls --
 // so GetEffectiveConfig and NodeTalosClient dialing (a read-only identity

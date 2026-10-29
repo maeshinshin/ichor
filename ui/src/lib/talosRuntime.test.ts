@@ -42,7 +42,7 @@ test('durations are written in the largest sensible unit', () => {
 
 test('etcd is bad with an alarm, an error or no leader', () => {
   const ok = { alarms: [], statusErrors: [], leaderId: '00ab', dbSizeBytes: 100n, dbSizeInUseBytes: 40n }
-  assert.equal(etcdTone(ok), 'ok')
+  assert.equal(etcdTone(ok), 'good')
   assert.equal(etcdTone({ ...ok, alarms: ['00ab: NOSPACE'] }), 'bad')
   assert.equal(etcdTone({ ...ok, statusErrors: ['x'] }), 'bad')
   assert.equal(etcdTone({ ...ok, leaderId: '0000000000000000' }), 'bad')
@@ -54,7 +54,7 @@ test('pods with trouble sort first and restarts alone are not red', () => {
   const pod = (name: string, phase: string, ready: number, restarts = 0) => ({
     namespace: 'ns', name, phase, readyContainers: ready, totalContainers: 2, restarts,
   })
-  assert.equal(podTone(pod('a', 'Running', 2)), 'ok')
+  assert.equal(podTone(pod('a', 'Running', 2)), 'good')
   assert.equal(podTone(pod('a', 'Running', 1)), 'bad')
   assert.equal(podTone(pod('a', 'Pending', 0)), 'neutral')
   assert.equal(podTone(pod('a', 'Failed', 0)), 'bad')
@@ -66,9 +66,9 @@ test('pods with trouble sort first and restarts alone are not red', () => {
 })
 
 test('node conditions: Ready must be True, pressure must be False', () => {
-  assert.equal(conditionTone({ type: 'Ready', status: 'True' }), 'ok')
+  assert.equal(conditionTone({ type: 'Ready', status: 'True' }), 'good')
   assert.equal(conditionTone({ type: 'Ready', status: 'Unknown' }), 'bad')
-  assert.equal(conditionTone({ type: 'MemoryPressure', status: 'False' }), 'ok')
+  assert.equal(conditionTone({ type: 'MemoryPressure', status: 'False' }), 'good')
   assert.equal(conditionTone({ type: 'DiskPressure', status: 'True' }), 'bad')
   assert.equal(conditionTone({ type: 'Custom', status: 'Unknown' }), 'neutral')
 })

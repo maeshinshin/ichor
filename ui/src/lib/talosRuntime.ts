@@ -54,7 +54,7 @@ type EtcdLike = {
 export function etcdTone(e: EtcdLike): Tone {
   if (e.alarms.length > 0 || e.statusErrors.length > 0) return 'bad'
   if (!e.leaderId || /^0+$/.test(e.leaderId)) return 'bad'
-  return 'ok'
+  return 'good'
 }
 
 // Share of the database file that is live data; a low value means a
@@ -72,7 +72,7 @@ type PodLike = { phase: string; readyContainers: number; totalContainers: number
 export function podTone(p: PodLike): Tone {
   if (p.phase === 'Succeeded') return 'neutral'
   if (p.phase === 'Failed' || p.phase === 'Unknown') return 'bad'
-  if (p.phase === 'Running') return p.readyContainers < p.totalContainers ? 'bad' : 'ok'
+  if (p.phase === 'Running') return p.readyContainers < p.totalContainers ? 'bad' : 'good'
   return 'neutral'
 }
 
@@ -88,8 +88,8 @@ const GOOD_WHEN_TRUE = new Set(['Ready'])
 // Ready=True is ok; any pressure or unavailable condition that is True, or
 // Ready that is not True, is bad.
 export function conditionTone(c: { type: string; status: string }): Tone {
-  if (GOOD_WHEN_TRUE.has(c.type)) return c.status === 'True' ? 'ok' : 'bad'
-  return c.status === 'False' ? 'ok' : c.status === 'True' ? 'bad' : 'neutral'
+  if (GOOD_WHEN_TRUE.has(c.type)) return c.status === 'True' ? 'good' : 'bad'
+  return c.status === 'False' ? 'good' : c.status === 'True' ? 'bad' : 'neutral'
 }
 
 export function formatTaint(t: { key: string; value: string; effect: string }): string {

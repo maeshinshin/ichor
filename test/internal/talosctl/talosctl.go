@@ -97,6 +97,13 @@ func Version(namespace, node string, talosconfig []byte) (string, error) {
 		map[string]string{talosconfigKey: string(talosconfig)}, time.Minute)
 }
 
+// Upgrade runs `talosctl upgrade --image <image> --wait` against node's authenticated API.
+func Upgrade(namespace, node, image string, talosconfig []byte) (string, error) {
+	return run(namespace,
+		[]string{"upgrade", "--image", image, "--wait", "--timeout", "9m", talosconfigFlag, talosconfigMount, nodesFlag, node},
+		map[string]string{talosconfigKey: string(talosconfig)}, 10*time.Minute)
+}
+
 // Kubeconfig downloads the admin kubeconfig from node's authenticated API, unmerged.
 func Kubeconfig(namespace, node string, talosconfig []byte) ([]byte, error) {
 	out, err := run(namespace,

@@ -82,6 +82,31 @@ func TestIchorCiliumReadBack_SpecReproducesTheDeployedValues(t *testing.T) {
 	}
 }
 
+// A foreign Cilium's running tunnel maps to the spec.cni.tunnel that makes Ichor set
+// the same tunnelProtocol.
+func TestLiveTunnel(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cm   map[string]string
+		want string
+	}{
+		"geneve":         {map[string]string{"tunnel-protocol": "geneve", "routing-mode": "tunnel"}, "geneve"},
+		"vxlan":          {map[string]string{"tunnel-protocol": "vxlan"}, "vxlan"},
+		"native routing": {map[string]string{"tunnel-protocol": "vxlan", "routing-mode": "native"}, ""},
+		"nothing":        {map[string]string{}, ""},
+		"nil":            {nil, ""},
+		"unknown":        {map[string]string{"tunnel-protocol": "ipip"}, ""},
+	} {
+		if got := liveTunnel(tc.cm); got != tc.want {
+			t.Errorf("%s: got %q, want %q", name, got, tc.want)
+		}
+	}
+
+	vals, err := cilium.EffectiveValues(nil, cni.KubeProxyEnabled, liveTunnel(map[string]string{"tunnel-protocol": "geneve"}))
+	if err != nil || vals["tunnelProtocol"] != "geneve" {
+		t.Fatalf("effective tunnelProtocol = %v, %v; want geneve", vals["tunnelProtocol"], err)
+	}
+}
+
 func TestIchorCiliumReadBack_NoRecord(t *testing.T) {
 	target := fake.NewClientBuilder().WithScheme(newTestScheme(t)).Build()
 

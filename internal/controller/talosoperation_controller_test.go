@@ -246,7 +246,7 @@ var _ = Describe("TalosOperationReconciler", func() {
 		w2 := newOpTestMachine(cluster.Name, "worker", "full-w2")
 		w3 := newOpTestMachine(cluster.Name, "worker", "full-w3")
 
-		w3.Annotations = map[string]string{ichorv1alpha1.TalosMachineUpgradeHoldAnnotation: "true"}
+		w3.Annotations = map[string]string{ichorv1alpha1.TalosMachineUpgradeHoldAnnotation: resetOnDeleteValue}
 		Expect(k8sClient.Update(ctx, w3)).To(Succeed())
 
 		op := newOpTestOperation(cluster.Name)

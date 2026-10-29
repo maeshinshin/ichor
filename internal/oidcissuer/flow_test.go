@@ -14,6 +14,8 @@ import (
 	"github.com/maeshinshin/ichor/pkg/ichorauth"
 )
 
+const scopeOpenID = "openid"
+
 func TestRedirectRules(t *testing.T) {
 	e := newEnv(t, externalURL, "")
 	cases := []struct {
@@ -63,7 +65,7 @@ func TestAuthorizeRejectsBadRequests(t *testing.T) {
 	p := newPKCE()
 	base := url.Values{
 		pRespType: {pCode}, pClientID: {clientCLI}, pRedirect: {cliRedirect},
-		pScope: {"openid"}, pState: {"s"}, pNonce: {"n"},
+		pScope: {scopeOpenID}, pState: {"s"}, pNonce: {"n"},
 		pChallenge: {p.challenge}, pMethod: {pS256},
 	}
 	mut := func(f func(url.Values)) url.Values {
@@ -114,7 +116,7 @@ func TestAuthorizeJSON(t *testing.T) {
 		p := newPKCE()
 		q := url.Values{
 			pRespType: {pCode}, pClientID: {client}, pRedirect: {redirect},
-			pScope: {"openid"}, pState: {"s"}, pNonce: {"n"},
+			pScope: {scopeOpenID}, pState: {"s"}, pNonce: {"n"},
 			pChallenge: {p.challenge}, pMethod: {pS256},
 		}
 		if mut != nil {
@@ -412,7 +414,7 @@ func TestNoOfflineAccessNoRefreshToken(t *testing.T) {
 	p := newPKCE()
 	q := url.Values{
 		pRespType: {pCode}, pClientID: {clientCLI}, pRedirect: {cliRedirect},
-		pScope: {"openid"}, pState: {stateVal}, pNonce: {"n1"},
+		pScope: {scopeOpenID}, pState: {stateVal}, pNonce: {"n1"},
 		pChallenge: {p.challenge}, pMethod: {pS256},
 	}
 	ticket := e.ticket(e.do(e.h, http.MethodGet, "/oidc/authorize?"+q.Encode(), "", ""))

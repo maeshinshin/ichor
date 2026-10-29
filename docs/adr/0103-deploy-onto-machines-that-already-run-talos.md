@@ -1,6 +1,6 @@
 # 0103. Deploy onto machines that already run Talos
 
-Status: Accepted (design); not yet built · Date: 2026-10-29 · Design section: Bootstrap (`ichor adopt`), Nodes, Cilium · Builds on: 0014, 0042, 0066, 0075, 0076, 0077, 0099, 0101
+Status: Accepted; built, hardware tests pending · Date: 2026-10-29 · Design section: Bootstrap (`ichor adopt`), Nodes, Cilium · Builds on: 0014, 0042, 0066, 0075, 0076, 0077, 0099, 0101
 
 Decided: Ichor adopts a running Talos cluster on Talos v1.12 or later (older is refused with "upgrade Talos first"); a Cilium cluster is taken over as Ichor's own Helm release through a diff-checked `TakeOwnership` Job, while any other CNI (and a Cilium the user wants left alone) is adopted only on the operator's explicit request in a new CNI-unmanaged mode, `spec.cni.preset: unmanaged`, in which Ichor neither installs, operates nor renders the CNI and skips its CiliumNetworkPolicies unless Cilium is present; it recovers the cluster's secrets bundle from a control plane's machine config, holds every adopted machine until zero drift is verified, only advises (never starts) a CA rotation afterwards, and refuses to join an already-configured node unless that node is reclaimed, either by `ichor machine reclaim` with the operator's own talosconfig or, as a break-glass path that is off by default, from the UI through a short-lived, single-node, auto-deleted credential Secret, a typed-UUID confirmation and an audit Event; reclaim resets only STATE and EPHEMERAL
 
@@ -274,7 +274,28 @@ Answered on 2026-10-29: non-Cilium CNI (unmanaged mode), reclaim (both paths), C
 6. Reclaim UI path: default TTL 15 minutes, maximum 60, `reclaim.enabled` default off, 7-day retention of the `MachineReclaim` record. Are these the right numbers?
 
 
+## As built (2026-10-29)
+
+Units 1-16 landed with these differences from the text above. Where a section above disagrees with this list, this list is what the code does.
+
+- **Reclaim registration is the UI API's write, not the controller's** (2.2, unit 14 note). The controller never writes `spec`, so `MachineReclaim.spec.clusterRef` names the target cluster and the UI API adds the address to that cluster's `spec.discovery.addresses` as the user. The CLI does the same with `--cluster`. Audit identity travels in the annotations `ichor.maesh.dev/reclaim-requested-by` and `-confirmed-by`, which the webhook insists equal the authenticated user, and is copied into `status.audit`.
+- **GitOps is out of scope** (ADR 0101), so the GitOps-tracking rule that earlier drafts had for the UI write path does not exist.
+- **Reclaimer role.** `ichor-machine-reclaimer` grants `create`, `get`, `list`, `update` and the custom verb `reclaim` on `machinereclaims`. It is installed with `reclaim.enabled=true`, bound to nobody, and in no default role. The UI API creates the request first and the Secret after; a ValidatingAdmissionPolicy (`ichor-ui-reclaim-credential`) limits ichor-ui's Secret creates to the credential type, the `ichor.maesh.dev/reclaim` label and the key `talosconfig`. `CreateReclaim` checks get and update on the target cluster before writing anything, and the dialog registers with the cluster only when `CanReclaim` says the caller may.
+- **Foreign Helm record (open question 1, decided: delete after backup).** `RetireForeignRecord` runs only when the operator consented (`RemoveForeignReleaseRecord`, set by adopt's consent; the plan states the deletion). Each record Secret is deleted only after the backup in `ichor-cilium-prior-release` is read back and found byte-identical, and only if it is still the Helm `cilium` record with the same UID. The Job gets `--takeover` for every Job of an adopted cluster until hand-over completes; its Role `ichor-cni-records-role` is get/list/delete on Secrets in `kube-system` only.
+- **Flags of `ichor adopt`** (1.3, 1.8, 1.2): `--secrets-bundle FILE` or `--recover-secrets` is required, one of the two and not both (not "optional"); `--recover-from ADDRESS` is required with `--recover-secrets`; `--node ADDRESS` seeds discovery of a cluster that has no `TalosCluster` yet; `--plan` prints the plan and writes nothing (without it adopt shows the plan and asks for consent, which `--yes` skips; there is no "plan unless `--yes`" default); `--version-contract` overrides the probed contract; `--accept-cilium-diff` and `--accept-cilium-changes` are as in 1.2; `--context` and `--cni-unmanaged` as designed. **`--cilium-values FILE` (1.2, step 3) was not built.** A Cilium with no release record (case C) is taken over with Ichor's defaults and the diff gate shows what is missing.
+- **Flags of `ichor machine reclaim`**: `--talosconfig`, `--context`, `--confirm UUID`, `--force` with `--confirm-cluster NAME` as the second typed confirmation, `--force-ungraceful`, `--cluster NAME` (registers the address in that cluster's discovery addresses), `--wait` (default 10m). The etcd health check judges the dialled member by its own etcd status and the others by whether their peer port answers.
+- **`ichor init` has no switch for `reclaim.enabled`**; set it in the Helm chart values.
+- **Hold.** The annotation is `ichor.maesh.dev/hold-apply`; a held machine reports `AdoptionHeld`. Release is one machine at a time, control planes first, each waiting for Ready without `AdoptionHeld`.
+- **Inline entry.** Found by content (`cilium.FindInlineManifest`); adopt writes its name in the annotation `ichor.maesh.dev/cni-inline-manifest`, and the hand-over controller copies it to `status.cni.takenOverInlineManifest` in the same update that sets `CNIHandover=True` (unit 6 note in 1.2).
+- **CA rotation.** The restart order after a rotation now puts the CNI first and an unmanaged cluster's CNI is not restarted (amendment in ADR 0063). A dismissal annotation or a completed rotation clears `CARotationAdvised`.
+- **Stale help text.** The `Long` help of `ichor adopt` still describes the old patch-only behaviour ("never writes anything but TalosConfigPatch objects"). The flag list is current. Follow-up: rewrite the help text.
+- Open questions 2 to 6 are unchanged: non-Cilium inline manifests stay class C, `cni.name: none` is adopted unmanaged only, adopt installs Ichor itself, no standard `NetworkPolicy` objects are written, and the reclaim TTL numbers are as designed.
+
+The user guide is `docs/guides/adopt-and-reclaim.md`. The design text is in the architecture's Bootstrap, Cilium, Nodes, CNI and Trust sections.
+
 ## Hardware test plan
+
+**Status: pending.** No case below has been run. Results go here, case by case, when they are in.
 
 Run on the KubeVirt harness (ADR 0007, 0102) within the homelab budget: control plane 2560Mi-3Gi, worker 1536Mi, at most 10 VMs. Build fixtures with `talosctl` in `test/harness`, not by Ichor, so the clusters are foreign. One run per integrated batch, in its own worktree; failing test names are recorded even when a rerun passes. Cases below are the minimum; the first of each group is 1 control plane plus 1 worker, 3 control planes only where stated.
 

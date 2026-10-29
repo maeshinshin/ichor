@@ -728,8 +728,7 @@ two CNIs even then. In this mode:
 Network policy gate. Ichor's `CiliumNetworkPolicy` objects (ADR 0100) are
 applied only when the detected CNI is Cilium and the CRD exists. Otherwise
 `ichor-system` is not isolated by Ichor and the condition
-`NetworkPoliciesApplied` says so. A hands-off Cilium
-gets the policies; set `networkPolicy.cilium.enabled=false` to opt out.
+`NetworkPoliciesApplied` says so. A hands-off Cilium also gets them.
 
 How Cilium is installed, owned and edited is described under "Cilium" above. The Talos-recommended values are built in; Hubble certificates
 come from a CronJob, not Helm, so a re-render does not change them.

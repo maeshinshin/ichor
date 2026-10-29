@@ -60,8 +60,11 @@ checked before anything is written, and each has a chart value:
 | `--kube-api-tls-server-name NAME` | `ichorUI.users.kubeAPITLSServerName` | The `tls-server-name` in users' kubeconfigs, for a URL host outside the kube-apiserver certificate. |
 
 ichor-ui reloads its certificate files when they change, within about ten
-seconds, without a restart: a `kubernetes.io/tls` Secret that cert-manager
-renews works as is. If a new pair is invalid, ichor-ui keeps serving the old
+seconds of the file changing, without a restart: a `kubernetes.io/tls` Secret
+that cert-manager renews works as is. The kubelet copies a changed Secret into
+the pod on its own schedule, so the new certificate reached the wire 25 to 46
+seconds after cert-manager wrote the Secret in a test (cert-manager v1.21.3,
+pod restart count 0). If a new pair is invalid, ichor-ui keeps serving the old
 certificate and logs the error.
 
 ichor-ui serves HTTPS only, on port 8443. Without
@@ -111,8 +114,11 @@ of two certificates:
 The controller publishes the public part of the Ichor serving CA, never a key,
 as the ConfigMap `ichor-ui-ca` and the Secret `ichor-ui-ca` in `ichor-system`
 (key `ca.crt`). Service port 8443 is named `https`. Pick one recipe. The names
-below are for the chart and `ichor init` installs (`ichor-ui-service`); a
-kustomize install prefixes them (`ichor-ichor-ui-service`).
+below are for the Helm chart install (`ichor-ui-service`). An `ichor init`
+install and a kustomize install prefix them: the Service is
+`ichor-ichor-ui-service` (checked on a cluster made by `ichor init`, with the
+same prefix in the leaf's names). Use that name for `name:` and for the verified
+host name below.
 
 If you supplied your own certificate, the edge verifies your CA instead of
 `ichor-ui-ca`, and the name it checks must be in your certificate.
@@ -158,11 +164,17 @@ spec:
   pod's certificate.
 - `proxy-ssl-secret` takes `namespace/secretName`. The reference docs describe a
   Secret with `tls.crt` and `tls.key` (a client certificate, which ichor-ui does
-  not ask for) that "should also contain" `ca.crt`. `ichor-ui-ca` holds only
-  `ca.crt`. Whether Ingress-NGINX accepts a CA-only Secret is part of hardware
-  test T2 and is not yet confirmed here.
+  not ask for) that "should also contain" `ca.crt`. A Secret with only `ca.crt`,
+  which is what `ichor-ui-ca` is, is accepted: tested with Ingress-NGINX chart
+  4.15.1 (controller 1.15.1), the request reached ichor-ui and nginx used the CA
+  as `proxy_ssl_trusted_certificate`. Pointing the annotation at a Secret that
+  holds another CA gives 502 (`upstream SSL certificate verify error`).
 - `proxy-ssl-name` overrides the name NGINX verifies; `proxy-ssl-server-name`
-  sends it as SNI. Use a name in the certificate.
+  sends it as SNI. Use a name in the certificate. It is required: without it
+  NGINX verifies the literal name `upstream_balancer` and every request is a
+  502. A name that is not in the certificate is a 502 too (`upstream SSL
+  certificate does not match`). Ingress-NGINX takes up to about half a minute
+  to reload after an annotation change, so wait before you read a result.
 - The public certificate for browsers is the Ingress's own `tls` Secret.
 - If you supplied your own certificate, point `proxy-ssl-secret` at a Secret that
   holds its CA as `ca.crt`.
@@ -202,6 +214,13 @@ spec:
 - The HTTPRoute that sends traffic to the Service references port 8443 (named
   `https`). A route in another namespace needs a `ReferenceGrant`.
 - Check the policy's `Accepted` and `ResolvedRefs` conditions.
+- Tested with Envoy Gateway v1.9.2 (its chart installs the Gateway API v1.6.1
+  CRDs, `BackendTLSPolicy` served as `v1`): the policy was `Accepted` and
+  `ResolvedRefs`, requests reached ichor-ui, a ConfigMap with another CA or a
+  `hostname` that is not in the certificate gave 503 from Envoy, and without the
+  policy Envoy spoke plain HTTP to port 8443 (ichor-ui answered 400). Envoy took
+  from 15 s to a minute to apply a change, so wait and repeat the request. A
+  Gateway needs a `listeners[].hostname` (singular), not `hostnames`.
 
 ### Load balancer passthrough (operator certificate)
 

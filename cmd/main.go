@@ -52,6 +52,7 @@ import (
 	"github.com/maeshinshin/ichor/internal/certreload"
 	"github.com/maeshinshin/ichor/internal/controller"
 	"github.com/maeshinshin/ichor/internal/kubetrust"
+	"github.com/maeshinshin/ichor/internal/settings"
 	webhookv1alpha1 "github.com/maeshinshin/ichor/internal/webhook/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
@@ -136,6 +137,7 @@ func main() {
 	var externalURL string
 	var reclaimEnabled bool
 	var deployedBy string
+	var settingsReadOnly bool
 	var noCiliumPolicies bool
 	var uiServiceName string
 	var refreshLifetime time.Duration
@@ -163,6 +165,8 @@ func main() {
 			"Off, they refuse; the credential sweeper runs either way.")
 	flag.StringVar(&deployedBy, "deployed-by", ichorv1alpha1.IchorManagerInstaller,
 		"Who deploys Ichor, recorded as spec.deployment.manager when the controller creates the missing IchorInstallation (installer or helm; the chart passes helm; ADR 0105).")
+	flag.BoolVar(&settingsReadOnly, "settings-read-only", false,
+		"Ignore the runtime settings in the IchorInstallation spec and deny writes to them: a Git or Helm deployment owns them (ADR 0105; chart settings.readOnly).")
 	flag.BoolVar(&noCiliumPolicies, "no-cilium-policies", false,
 		"Tell the installer Job not to apply Ichor's CiliumNetworkPolicies even on Cilium (the chart sets it from networkPolicy.cilium.enabled=false; ADR 0100).")
 	flag.BoolVar(&userIssuer, "user-issuer", false,
@@ -283,6 +287,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	// One live reader of the IchorInstallation settings for the controllers and webhooks (ADR 0105).
+	// It reads uncached with a short TTL, so a change applies within seconds and nothing needs an informer.
+	settingsFallback := settings.Fallback{ReclaimEnabled: reclaimEnabled, RefreshLifetime: refreshLifetime}
+	settingsReader := &settings.Reader{
+		Client: mgr.GetAPIReader(), Fallback: settingsFallback, ReadOnly: settingsReadOnly, TTL: 2 * time.Second,
+	}
+
 	webhooksUp := make(chan struct{})
 	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
 		// The webhook serving certificate has no caBundle and no Secret data shipped with
@@ -359,7 +370,7 @@ func main() {
 				setupLog.Error(err, "Failed to create webhook", "webhook", "BreakGlass")
 				os.Exit(1)
 			}
-			if err := webhookv1alpha1.SetupMachineReclaimWebhookWithManager(mgr, reclaimEnabled); err != nil {
+			if err := webhookv1alpha1.SetupMachineReclaimWebhookWithManager(mgr, reclaimEnabled, settingsReader); err != nil {
 				setupLog.Error(err, "Failed to create webhook", "webhook", "MachineReclaim")
 				os.Exit(1)
 			}
@@ -449,7 +460,7 @@ func main() {
 	if err := (&controller.IssuerTrustReconciler{
 		Client: mgr.GetClient(), APIReader: mgr.GetAPIReader(),
 		Namespace: os.Getenv("POD_NAMESPACE"), UIServiceName: uiServiceName,
-		RefreshLifetime: refreshLifetime, UserIssuer: userIssuer, ExternalURL: externalURL,
+		RefreshLifetime: refreshLifetime, Settings: settingsReader, UserIssuer: userIssuer, ExternalURL: externalURL,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "issuertrust")
 		os.Exit(1)
@@ -565,7 +576,9 @@ func main() {
 		setupLog.Error(err, "Failed to create controller", "controller", "talosetcdbackup")
 		os.Exit(1)
 	}
-	ichorInstReconciler := &controller.IchorInstallationReconciler{Client: mgr.GetClient(), DeployedBy: deployedBy}
+	ichorInstReconciler := &controller.IchorInstallationReconciler{
+		Client: mgr.GetClient(), DeployedBy: deployedBy, SettingsFallback: settingsFallback, SettingsReadOnly: settingsReadOnly,
+	}
 	if err := ichorInstReconciler.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "ichorinstallation")
 		os.Exit(1)
@@ -589,6 +602,7 @@ func main() {
 	if err := (&controller.MachineReclaimReconciler{
 		Client:              mgr.GetClient(),
 		Enabled:             reclaimEnabled,
+		Settings:            settingsReader,
 		ControllerNamespace: os.Getenv("POD_NAMESPACE"),
 		Recorder:            mgr.GetEventRecorderFor("ichor-controller"), //nolint:staticcheck // typed against record.EventRecorder, as above
 	}).SetupWithManager(mgr); err != nil {

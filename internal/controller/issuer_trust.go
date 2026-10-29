@@ -46,6 +46,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/oidctrust"
+	"github.com/maeshinshin/ichor/internal/settings"
 )
 
 const (
@@ -109,6 +110,9 @@ type IssuerTrustReconciler struct {
 	// retirement. Zero means DefaultRefreshLifetime.
 	RefreshLifetime time.Duration
 
+	// Settings, when set, lets spec.users.refreshLifetime lengthen the key retention (ADR 0105).
+	Settings *settings.Reader
+
 	// UserIssuer turns on the signing-key and user-credential halves (ADR 0094). The TLS half
 	// (CA, serving certificate, trust and ichor-ui-ca objects) runs for every install (ADR 0105).
 	UserIssuer bool
@@ -141,10 +145,17 @@ func (r *IssuerTrustReconciler) now() time.Time {
 	return time.Now()
 }
 
-func (r *IssuerTrustReconciler) plan() rotationPlan {
+func (r *IssuerTrustReconciler) plan(ctx context.Context) rotationPlan {
 	life := r.RefreshLifetime
 	if life <= 0 {
 		life = DefaultRefreshLifetime
+	}
+
+	// A longer refreshLifetime in the IchorInstallation must not outlive the keys that sign it.
+	if r.Settings != nil {
+		if e, err := r.Settings.Effective(ctx); err == nil {
+			life = max(life, e.RefreshLifetime.V)
+		}
 	}
 
 	return rotationPlan{
@@ -248,7 +259,7 @@ func (r *IssuerTrustReconciler) reconcileKeys(ctx context.Context, now time.Time
 		}
 	}
 
-	updated, changed, next, err := rotateKeys(current, now, r.plan())
+	updated, changed, next, err := rotateKeys(current, now, r.plan(ctx))
 	if err != nil {
 		return time.Time{}, err
 	}

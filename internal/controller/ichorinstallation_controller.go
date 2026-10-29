@@ -27,6 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/settings"
 	"github.com/maeshinshin/ichor/internal/version"
 )
 
@@ -48,6 +49,9 @@ type IchorInstallationReconciler struct {
 	// DeployedBy is the controller's --deployed-by: the spec.deployment.manager a seeded
 	// singleton gets ("installer" when empty).
 	DeployedBy string
+	// SettingsFallback and SettingsReadOnly are the flag values status.effective reports against (ADR 0105).
+	SettingsFallback settings.Fallback
+	SettingsReadOnly bool
 }
 
 // Seed creates the singleton once when it does not exist (ADR 0105, decision 8): spec.version is
@@ -109,6 +113,8 @@ func (r *IchorInstallationReconciler) Reconcile(ctx context.Context, req ctrl.Re
 
 	meta.RemoveStatusCondition(&inst.Status.Conditions, conditionExternalSuggested)
 
+	r.applySettings(&inst)
+
 	if !equalIchorStatus(orig.Status, inst.Status) {
 		if err := r.Status().Update(ctx, &inst); err != nil {
 			return ctrl.Result{}, err
@@ -119,7 +125,7 @@ func (r *IchorInstallationReconciler) Reconcile(ctx context.Context, req ctrl.Re
 }
 
 func equalIchorStatus(a, b ichorv1alpha1.IchorInstallationStatus) bool {
-	if a.InstalledVersion != b.InstalledVersion || len(a.Conditions) != len(b.Conditions) {
+	if a.InstalledVersion != b.InstalledVersion || len(a.Conditions) != len(b.Conditions) || !equalEffective(a.Effective, b.Effective) {
 		return false
 	}
 

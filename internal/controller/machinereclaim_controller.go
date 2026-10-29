@@ -36,6 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/settings"
 	"github.com/maeshinshin/ichor/pkg/reclaim"
 )
 
@@ -64,6 +65,8 @@ type MachineReclaimReconciler struct {
 	// Enabled is the chart's reclaim.enabled. When false every request fails and its credential is
 	// deleted.
 	Enabled bool
+	// Settings, when set, is read per call and wins over Enabled (ADR 0105).
+	Settings *settings.Reader
 	// ControllerNamespace is where requests and credentials live (ichor-system). Empty means any.
 	ControllerNamespace string
 	Recorder            record.EventRecorder
@@ -158,7 +161,7 @@ func (r *MachineReclaimReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return r.waitForMaintenance(ctx, &mr, now)
 	}
 
-	if !r.Enabled {
+	if !r.enabled(ctx) {
 		return r.fail(ctx, &mr, "break-glass machine reclaim is switched off in this installation (reclaim.enabled)")
 	}
 
@@ -588,4 +591,14 @@ func (r *MachineReclaimReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&ichorv1alpha1.MachineReclaim{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Named("machinereclaim").
 		Complete(r)
+}
+
+// enabled is the reclaim switch, read per call from the IchorInstallation when Settings is set
+// (ADR 0105) and the Enabled flag otherwise.
+func (r *MachineReclaimReconciler) enabled(ctx context.Context) bool {
+	if r.Settings != nil {
+		return r.Settings.ReclaimEnabled(ctx)
+	}
+
+	return r.Enabled
 }

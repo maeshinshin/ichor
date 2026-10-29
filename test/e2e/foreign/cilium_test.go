@@ -320,3 +320,20 @@ func TestA1Upgrade(t *testing.T) {
 	}
 	trafficReport(t, c, "across A1 takeover and the Kubernetes upgrade")
 }
+
+// TestA1AcceptAll: on the inline-manifest cluster, adopt with every accept flag is still refused for ipam.mode and writes nothing.
+func TestA1AcceptAll(t *testing.T) {
+	c := build(t, foreign.Options{Workers: 1, CNI: foreign.CNICiliumInline})
+	before := cniPaths(t, c)
+	out, err := adopt(t, c, "--accept-cilium-changes", "--accept-cilium-diff")
+	if err == nil {
+		t.Fatal("adopt with the accept flags succeeded")
+	}
+	if !strings.Contains(out, "ipam.mode") {
+		t.Errorf("the refusal does not name ipam.mode")
+	}
+	sameHashes(t, before, cniPaths(t, c))
+	if got, err := inner(c, "get", "namespace", crNS, "--no-headers"); err == nil {
+		t.Errorf("namespace %s exists after a refusal: %s", crNS, got)
+	}
+}

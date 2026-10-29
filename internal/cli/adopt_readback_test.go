@@ -51,7 +51,7 @@ func TestIchorCiliumReadBack_SpecReproducesTheDeployedValues(t *testing.T) {
 				}
 
 				rec := helmRecord(ichorControllerNamespace)
-				rec.Data = map[string][]byte{"release": []byte(base64.StdEncoding.EncodeToString(raw))}
+				rec.Data = map[string][]byte{helmReleaseKey: []byte(base64.StdEncoding.EncodeToString(raw))}
 
 				target := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(rec).Build()
 

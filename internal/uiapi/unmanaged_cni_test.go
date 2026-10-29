@@ -43,7 +43,7 @@ func TestCniServiceRefusesAnUnmanagedCluster(t *testing.T) {
 	ref := objectRef(testNS, "c")
 
 	calls := map[string]func() error{
-		"get": func() error {
+		"values get": func() error {
 			_, err := s.GetCiliumValues(ctx, connect.NewRequest(&pb.GetCiliumValuesRequest{Cluster: ref}))
 			return err
 		},
@@ -95,7 +95,7 @@ func TestPlanCNIOperationRefusesAnUnmanagedCluster(t *testing.T) {
 	srv, _ := opServer(t, objs...)
 
 	_, err := srv.PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{
-		Cluster: objectRef(opNS, opCluster), Kind: pb.OperationKind_OPERATION_KIND_CNI, Target: "replaced",
+		Cluster: objectRef(opNS, opCluster), Kind: pb.OperationKind_OPERATION_KIND_CNI, Target: kubeProxyReplaced,
 	}))
 	if connect.CodeOf(err) != connect.CodeFailedPrecondition {
 		t.Fatalf("want FailedPrecondition, got %v", err)

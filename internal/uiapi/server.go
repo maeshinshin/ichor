@@ -30,6 +30,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/settings"
 )
 
 // Server implements ClusterServiceHandler, MachineServiceHandler and
@@ -99,6 +100,8 @@ type Server struct {
 
 	// ReclaimEnabled is the installation reclaim.enabled. Off, every ReclaimService call is refused.
 	ReclaimEnabled bool
+	// Settings, when set, is read per call and wins over ReclaimEnabled.
+	Settings *settings.Reader
 
 	diag     diagnostics
 	diagOnce sync.Once

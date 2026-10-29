@@ -84,7 +84,7 @@ func TestUsersFlagsValidate(t *testing.T) {
 		"no url":        func(f *usersFlags) { f.externalURL = "" },
 		"url with path": func(f *usersFlags) { f.externalURL = "https://x/?a=1" },
 		"short ttl":     func(f *usersFlags) { f.tokenTTL = time.Second },
-		"long ttl":      func(f *usersFlags) { f.tokenTTL = time.Hour },
+		"long ttl":      func(f *usersFlags) { f.tokenTTL = 2 * time.Hour },
 		"short refresh": func(f *usersFlags) { f.refreshTTL = time.Minute },
 	} {
 		f := ok

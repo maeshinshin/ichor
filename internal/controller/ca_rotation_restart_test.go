@@ -263,7 +263,7 @@ var _ = Describe("TalosOperation ca-rotation client restarts", func() {
 		var cluster ichorv1alpha1.TalosCluster
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: tmNamespace, Name: f.cluster.Name}, &cluster)).To(Succeed())
 		apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-			Type: ichorv1alpha1.ConditionCAClientsNotRestarted, Status: metav1.ConditionTrue, Reason: "CARotated", Message: "old",
+			Type: ichorv1alpha1.ConditionCAClientsNotRestarted, Status: metav1.ConditionTrue, Reason: "CARotated", Message: testOldValue,
 		})
 		Expect(k8sClient.Status().Update(ctx, &cluster)).To(Succeed())
 

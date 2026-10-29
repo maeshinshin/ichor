@@ -26,6 +26,7 @@ import (
 const (
 	pathHostnameConfigName = "HostnameConfig.hostname"
 	pathProxyDisabled      = "cluster.proxy.disabled"
+	testOldValue           = "old"
 )
 
 func TestAssessChange_HostnameUnchangedNeedsNoReboot(t *testing.T) {
@@ -51,7 +52,7 @@ func TestAssessChange_HostnameUnchangedKeepsOtherReboots(t *testing.T) {
 
 func TestAssessChange_RenameStaysRebootRequired(t *testing.T) {
 	for _, paths := range [][]string{{pathHostnameConfigName}, {"machine.network.hostname"}} {
-		impact := assessChange(context.Background(), &fakeTalosClient{nodeName: "old"}, "new", paths, nil)
+		impact := assessChange(context.Background(), &fakeTalosClient{nodeName: testOldValue}, "new", paths, nil)
 		if !impact.RebootRequired {
 			t.Errorf("assessChange(%v) = %+v, want reboot-required for a rename", paths, impact)
 		}

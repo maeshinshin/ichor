@@ -110,7 +110,7 @@ func testReadTalosFactsLegacy(t *testing.T) {
 			t.Errorf("role = %q", f.Role)
 		}
 
-		if f.CNI.Kind != CNINone || f.CNI.Name != "none" {
+		if f.CNI.Kind != CNINone || f.CNI.Name != string(detectedNone) {
 			t.Errorf("cni = %+v, want none", f.CNI)
 		}
 
@@ -163,7 +163,7 @@ func testReadTalosFactsLegacy(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if f.CNI.Kind != CNIOther || f.CNI.Name != "calico" {
+		if f.CNI.Kind != CNIOther || f.CNI.Name != string(detectedCalico) {
 			t.Errorf("cni = %+v", f.CNI)
 		}
 	})

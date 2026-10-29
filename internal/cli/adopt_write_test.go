@@ -150,7 +150,7 @@ func TestWriteAdopt_UnmanagedClusterRecordsTalosCNI(t *testing.T) {
 	ctx := context.Background()
 	c := newWriteFake(t)
 	in := fullWriteInput(t)
-	in.Cluster.CNIPreset, in.Cluster.TalosCNI, in.Cluster.KubeProxy = "unmanaged", "none", cniTestEnabled
+	in.Cluster.CNIPreset, in.Cluster.TalosCNI, in.Cluster.KubeProxy = "unmanaged", string(detectedNone), cniTestEnabled
 
 	if _, err := writeAdopt(ctx, c, in); err != nil {
 		t.Fatalf("writeAdopt: %v", err)

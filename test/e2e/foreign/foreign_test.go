@@ -179,7 +179,10 @@ func ichorCLI(t *testing.T, c *foreign.Cluster, args ...string) (string, error) 
 	t.Helper()
 	pod := stage(t, c)
 	a := append([]string{"-n", ns, "exec", pod, "--", "env", "HOME=/tmp/home", "/tmp/ichor"}, args...)
-	a = append(a, "--cluster", c.Opts.Prefix, "-n", crNS, "--kubeconfig", "/tmp/kubeconfig", "--local")
+	if args[0] != "cluster" { // `ichor cluster ...` takes the name as an argument and has no --cluster flag
+		a = append(a, "--cluster", c.Opts.Prefix)
+	}
+	a = append(a, "-n", crNS, "--kubeconfig", "/tmp/kubeconfig", "--local")
 	out, err := exec.Command("kubectl", append([]string{"--context", os.Getenv(kube.ContextEnv)}, a...)...).CombinedOutput()
 	t.Logf("ichor %s:\n%s", strings.Join(args, " "), out)
 	return string(out), err

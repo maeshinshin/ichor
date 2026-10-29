@@ -161,7 +161,7 @@ func upController() error {
 	}
 
 	logPath := filepath.Join(bin, "test-e2e-kubevirt-controller.log")
-	if _, err := pollFor("waiting for the webhook server to start serving", 2*time.Minute, func() (string, bool) {
+	if _, err := kube.Poll("waiting for the webhook server to start serving", 2*time.Minute, func() (string, bool) {
 		log, err := os.ReadFile(logPath)
 		return "", err == nil && strings.Contains(string(log), "Serving webhook server")
 	}); err != nil {
@@ -190,10 +190,10 @@ func downController() error {
 // binary, the inner cluster's kubeconfig and a kubectl binary into it. It returns the
 // pod's own IP.
 func createControllerPod(binaryPath, kubeconfigPath, kubectlPath string) (string, error) {
-	if err := applyManifest(fmt.Sprintf(controllerPodManifestTmpl, controllerPodName)); err != nil {
+	if err := kube.Apply(fmt.Sprintf(controllerPodManifestTmpl, controllerPodName)); err != nil {
 		return "", fmt.Errorf("creating the controller pod: %w", err)
 	}
-	if _, err := pollFor("waiting for the controller pod to be running", 2*time.Minute, func() (string, bool) {
+	if _, err := kube.Poll("waiting for the controller pod to be running", 2*time.Minute, func() (string, bool) {
 		out, err := utils.Run(kube.Command("-n", namespace, "get", "pod", controllerPodName,
 			"-o", "jsonpath={.status.phase}"))
 		return "", err == nil && strings.TrimSpace(out) == "Running"
@@ -201,7 +201,7 @@ func createControllerPod(binaryPath, kubeconfigPath, kubectlPath string) (string
 		return "", err
 	}
 
-	podIP, err := pollFor("waiting for the controller pod's IP", 30*time.Second, func() (string, bool) {
+	podIP, err := kube.Poll("waiting for the controller pod's IP", 30*time.Second, func() (string, bool) {
 		out, err := utils.Run(kube.Command("-n", namespace, "get", "pod", controllerPodName,
 			"-o", "jsonpath={.status.podIP}"))
 		ip := strings.TrimSpace(out)
@@ -277,7 +277,7 @@ func startController(bin string) error {
 // used -- see package webhookcert) and returns the CA certificate's own base64 PEM, read
 // straight out of the Secret's "ca.crt" data key exactly as caBundle wants it.
 func waitForWebhookCert() (string, error) {
-	return pollFor("waiting for cert-controller to generate the webhook CA", 90*time.Second, func() (string, bool) {
+	return kube.Poll("waiting for cert-controller to generate the webhook CA", 90*time.Second, func() (string, bool) {
 		out, runErr := innerKubectl("get", "secret", controllerWebhookCertSecret,
 			"-n", controllerLeaderElectionNamespace, "-o", "json").CombinedOutput()
 		if runErr != nil {

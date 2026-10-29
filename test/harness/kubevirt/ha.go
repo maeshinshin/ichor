@@ -180,7 +180,7 @@ func bootHAToMaintenance() ([]string, error) {
 
 	for i := range haTotal() {
 		name := haVMName(i)
-		if err := applyManifest(renderVM(haVMManifestTmpl, name, iso)); err != nil {
+		if err := kube.Apply(renderVM(haVMManifestTmpl, name, iso)); err != nil {
 			return nil, fmt.Errorf("creating VM %s: %w", name, err)
 		}
 	}
@@ -189,7 +189,7 @@ func bootHAToMaintenance() ([]string, error) {
 	for i := range haTotal() {
 		name := haVMName(i)
 		step := "waiting for " + name + "'s VMI to report a pod IP"
-		ip, err := pollFor(step, 12*time.Minute, func() (string, bool) {
+		ip, err := kube.Poll(step, 12*time.Minute, func() (string, bool) {
 			out, err := utils.Run(kube.Command("-n", namespace, "get", "vmi", name,
 				"-o", "jsonpath={.status.interfaces[0].ipAddress}"))
 			ip := strings.TrimSpace(out)
@@ -203,7 +203,7 @@ func bootHAToMaintenance() ([]string, error) {
 
 	for i, ip := range ips {
 		step := "waiting for " + haVMName(i) + " (" + ip + ") to reach maintenance"
-		if _, err := pollFor(step, 5*time.Minute, func() (string, bool) {
+		if _, err := kube.Poll(step, 5*time.Minute, func() (string, bool) {
 			out, err := talosctl.Get(namespace, ip, "machinestatus")
 			if err != nil {
 				return "", false
@@ -249,7 +249,7 @@ func configureAndBootstrapHA(ips []string) ([]byte, *secrets.Bundle, error) {
 
 	for i, ip := range ips {
 		step := "waiting for " + haVMName(i) + "'s authenticated API"
-		if _, err := pollFor(step, 10*time.Minute, func() (string, bool) {
+		if _, err := kube.Poll(step, 10*time.Minute, func() (string, bool) {
 			_, err := talosctl.GetAuthenticated(namespace, ip, "machinestatus", talosconfigYAML)
 			return "", err == nil
 		}); err != nil {
@@ -260,7 +260,7 @@ func configureAndBootstrapHA(ips []string) ([]byte, *secrets.Bundle, error) {
 	// Bootstrap runs once, on the first control plane: Talos's own controllers on the
 	// other two discover it through the endpoint list already baked into their config and
 	// join etcd on their own (architecture.md "Nodes" never calls bootstrap per-node either).
-	bootstrapOut, err := pollFor("waiting for bootstrap to become available", 2*time.Minute, func() (string, bool) {
+	bootstrapOut, err := kube.Poll("waiting for bootstrap to become available", 2*time.Minute, func() (string, bool) {
 		out, err := talosctl.Bootstrap(namespace, ips[0], talosconfigYAML)
 		return out, err == nil
 	})
@@ -272,7 +272,7 @@ func configureAndBootstrapHA(ips []string) ([]byte, *secrets.Bundle, error) {
 
 	for i, ip := range ips {
 		step := "waiting for " + haVMName(i) + " to report running/ready"
-		if _, err := pollFor(step, 8*time.Minute, func() (string, bool) {
+		if _, err := kube.Poll(step, 8*time.Minute, func() (string, bool) {
 			out, err := talosctl.GetAuthenticated(namespace, ip, "machinestatus", talosconfigYAML)
 			if err != nil {
 				return "", false
@@ -357,13 +357,4 @@ func downHA() error {
 		return fmt.Errorf("deleting the DataVolumes: %w", err)
 	}
 	return nil
-}
-
-// applyManifest runs `kubectl apply -f -` with manifest on stdin; the small piece bootToMaintenance/
-// startRelay each already inline, pulled out once it had a third caller.
-func applyManifest(manifest string) error {
-	cmd := kube.Command("apply", "-f", "-")
-	cmd.Stdin = strings.NewReader(manifest)
-	_, err := utils.Run(cmd)
-	return err
 }

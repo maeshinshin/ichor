@@ -28,6 +28,9 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
+
+	"github.com/maeshinshin/ichor/test/utils"
 )
 
 const (
@@ -177,4 +180,27 @@ func checkDelete(args []string) error {
 		return fmt.Errorf("refusing kubectl delete in namespace %q: only %q is allowed", ns, Namespace)
 	}
 	return nil
+}
+
+// Apply runs `kubectl apply -f -` against the outer cluster with manifest on stdin.
+func Apply(manifest string) error {
+	cmd := Command("apply", "-f", "-")
+	cmd.Stdin = strings.NewReader(manifest)
+	_, err := utils.Run(cmd)
+	return err
+}
+
+// Poll retries check every 5s until it reports ready, returning its value, or fails after timeout.
+func Poll(step string, timeout time.Duration, check func() (string, bool)) (string, error) {
+	fmt.Println(step)
+	deadline := time.Now().Add(timeout)
+	for {
+		if v, ok := check(); ok {
+			return v, nil
+		}
+		if time.Now().After(deadline) {
+			return "", fmt.Errorf("%s: timed out after %s", step, timeout)
+		}
+		time.Sleep(5 * time.Second)
+	}
 }

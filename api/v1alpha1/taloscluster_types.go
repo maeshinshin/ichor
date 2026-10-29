@@ -561,6 +561,11 @@ const CNINotManagedMessage = "the CNI is not managed by Ichor (spec.cni.preset: 
 // completed CA rotation or the user dismisses the advice. Advice only.
 const ConditionCARotationAdvised = "CARotationAdvised"
 
+// ConditionNetworkPoliciesApplied is False, reason CNINotCilium, when the detected CNI is not
+// Cilium, so Ichor's CiliumNetworkPolicies are skipped. The message reads
+// "Ichor's network policies are not applied: the CNI is <detected>". Absent when the CNI is Cilium.
+const ConditionNetworkPoliciesApplied = "NetworkPoliciesApplied"
+
 // Condition types added to TalosCluster.status.conditions.
 const (
 	// ConditionCNIUnsupported is True when the cluster's preset is not cilium; the controllers

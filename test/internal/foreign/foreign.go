@@ -85,6 +85,7 @@ type Options struct {
 	RelayPort      string   // local port of the kube-apiserver tunnel, default 5015
 	CiliumChart    string   // path to the cilium chart archive (cilium-* variants)
 	CiliumSets     []string // extra --set values for the cilium-* variants, e.g. operator.replicas=1
+	DataDisk       bool     // workers get a second 3Gi disk carrying a plain and a LUKS2 user volume (ADR 0103 C5; v1.14 contract only)
 }
 
 // Cluster is what Up returns. Files live under Dir (gitignored bin/).
@@ -246,10 +247,60 @@ func isoSource(version string) (src, size string) {
 	return "          http:\n            url: https://factory.talos.dev/image/" + schematic + "/" + version + "/metal-amd64.iso", "1Gi"
 }
 
-func renderVM(name, prefix, mem, version string) string {
+func renderVM(name, prefix, mem, version string, dataDisk bool) string {
 	src, size := isoSource(version)
-	return fmt.Sprintf(vmTmpl, name, src, size, prefix, Label, mem)
+	m := fmt.Sprintf(vmTmpl, name, src, size, prefix, Label, mem)
+	if !dataDisk {
+		return m
+	}
+	dv := fmt.Sprintf(`    - metadata:
+        name: %[1]s-data
+        labels:
+          %[2]s: %[3]s
+      spec:
+        source:
+          blank: {}
+        storage:
+          accessModes: [ReadWriteOnce]
+          volumeMode: Filesystem
+          resources:
+            requests:
+              storage: 3Gi
+          storageClassName: ceph-block
+  template:
+`, name, Label, prefix)
+	m = strings.Replace(m, "  template:\n", dv, 1)
+	m = strings.Replace(m, "              bootOrder: 2\n", "              bootOrder: 2\n            - name: data\n              disk:\n                bus: virtio\n", 1)
+	return m + "        - name: data\n          dataVolume:\n            name: " + name + "-data\n"
 }
+
+// dataVolumesPatch is the worker patch of Options.DataDisk: one plain and one LUKS2 (node-ID key) user volume on the non-system disk.
+const dataVolumesPatch = `---
+apiVersion: v1alpha1
+kind: UserVolumeConfig
+name: plain
+volumeType: partition
+provisioning:
+  diskSelector:
+    match: '!system_disk'
+  minSize: 500MiB
+  maxSize: 1GiB
+---
+apiVersion: v1alpha1
+kind: UserVolumeConfig
+name: secret
+volumeType: partition
+provisioning:
+  diskSelector:
+    match: '!system_disk'
+  minSize: 500MiB
+  maxSize: 1GiB
+encryption:
+  provider: luks2
+  keys:
+    - slot: 0
+      nodeID: {}
+`
 
 const registryTmpl = `apiVersion: apps/v1
 kind: Deployment
@@ -378,7 +429,7 @@ func Up(o Options) (*Cluster, error) {
 		if i >= o.ControlPlanes {
 			mem = o.WorkerMemory
 		}
-		if err := kube.Apply(renderVM(n, o.Prefix, mem, o.TalosVersion)); err != nil {
+		if err := kube.Apply(renderVM(n, o.Prefix, mem, o.TalosVersion, o.DataDisk && i >= o.ControlPlanes)); err != nil {
 			return nil, fmt.Errorf("creating VM %s: %w", n, err)
 		}
 	}
@@ -486,6 +537,13 @@ func (c *Cluster) generate(mirror string) error {
 			return err
 		}
 		args = append(args, "--config-patch-control-plane", "@"+cpFile)
+	}
+	if o.DataDisk {
+		wFile := c.path("patch-worker.yaml")
+		if err := os.WriteFile(wFile, []byte(dataVolumesPatch), 0o600); err != nil {
+			return err
+		}
+		args = append(args, "--config-patch-worker", "@"+wFile)
 	}
 	if o.K8sVersion != "" {
 		args = append(args, "--kubernetes-version", strings.TrimPrefix(o.K8sVersion, "v"))
@@ -679,7 +737,7 @@ func Down(prefix string, withRegistry bool) error {
 	}
 	if dir, err := Dir(prefix); err == nil {
 		stopPortForward(dir, "relay")
-		for _, f := range []string{"patch.yaml", "patch-cp.yaml", "controlplane.yaml", "worker.yaml", "talosconfig", "kubeconfig", "kubeconfig.local", "relay.pid"} {
+		for _, f := range []string{"patch.yaml", "patch-cp.yaml", "patch-worker.yaml", "controlplane.yaml", "worker.yaml", "talosconfig", "kubeconfig", "kubeconfig.local", "relay.pid"} {
 			_ = os.Remove(filepath.Join(dir, f))
 		}
 		if withRegistry {
@@ -706,7 +764,7 @@ func Down(prefix string, withRegistry bool) error {
 		vms = append(vms, vmName(prefix, "w", i))
 	}
 	for _, vm := range vms {
-		for _, n := range []string{"vm/" + vm, "dv/" + vm + "-iso", "dv/" + vm + "-system"} {
+		for _, n := range []string{"vm/" + vm, "dv/" + vm + "-iso", "dv/" + vm + "-system", "dv/" + vm + "-data"} {
 			if err := deleteOwned(prefix, n); err != nil {
 				return err
 			}

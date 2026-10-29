@@ -45,6 +45,7 @@ func main() {
 	fs.StringVar(&o.CNI, "cni", foreign.CNIFlannel, "talos-flannel|none|cilium-inline|cilium-helm|calico")
 	fs.BoolVar(&o.NoKubeProxy, "no-kube-proxy", false, "disable kube-proxy")
 	fs.BoolVar(&o.NoKubePrism, "no-kubeprism", false, "disable KubePrism")
+	fs.BoolVar(&o.DataDisk, "data-disk", false, "workers get a second disk with a plain and a LUKS2 user volume (v1.14)")
 	fs.StringVar(&o.CPMemory, "cp-memory", "", "control plane memory (default 2560Mi)")
 	fs.StringVar(&o.WorkerMemory, "worker-memory", "", "worker memory (default 1536Mi)")
 	fs.BoolVar(&o.RegistryMirror, "registry-mirror", false, "create <prefix>-registry and mirror ghcr.io to it")

@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -210,5 +211,28 @@ func TestIsTransient_EtcdTimeout(t *testing.T) {
 
 	if isTransient(apierrors.NewInternalError(errors.New("boom"))) {
 		t.Error("an unrelated InternalError must not be transient")
+	}
+}
+
+// adopt's install step creates the IchorInstallation through the same bounded webhook wait as init.
+func TestCreateIchorInstallation_RetriesWhileTheWebhookIsDown(t *testing.T) {
+	old := version.Version
+	version.Version = testReleasedVersion
+
+	t.Cleanup(func() { version.Version = old })
+	shrinkInitRetry(t)
+
+	var calls int
+
+	webhookDown := apierrors.NewInternalError(errors.New(`failed calling webhook "vichorinstallation.kb.io": Post "https://svc:443/validate": dial tcp 10.96.0.1:443: operation not permitted`))
+	c := failingCreates(t, 2, webhookDown, &calls)
+
+	created, err := createIchorInstallation(context.Background(), c, io.Discard)
+	if err != nil || !created {
+		t.Fatalf("createIchorInstallation = %v, %v", created, err)
+	}
+
+	if calls != 3 {
+		t.Errorf("Create called %d times, want 3 (two webhook failures, then success)", calls)
 	}
 }

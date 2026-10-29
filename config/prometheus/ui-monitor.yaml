@@ -1,9 +1,8 @@
 # Prometheus Monitor Service (Metrics) for ichor-ui, the UI backend (ADR 0020,
 # ADR 0040). Unlike controller-manager-metrics-monitor above, this is HTTPS on
-# ichor-ui's single port: the UI backend is reached only in-cluster today
-# (architecture.md "Trust"), the same trust boundary this scrape already crosses, so
-# there is no second TLS story to configure (contrast with [PROMETHEUS-WITH-CERTS]'s
-# monitor_tls_patch.yaml, which exists only for the controller's secure metrics port).
+# ichor-ui's single port and verified against ichor-ui-ca (contrast with
+# [PROMETHEUS-WITH-CERTS]'s monitor_tls_patch.yaml, which exists only for the controller's
+# secure metrics port).
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
@@ -18,9 +17,15 @@ spec:
     - path: /metrics
       port: https
       scheme: https
-      # /metrics is unauthenticated and the certificate may be the operator's or the Ichor CA's.
+      # Verified against the Ichor serving CA the controller publishes (ADR 0105). The default
+      # kustomize install uses the Ichor certificate; for an operator certificate, point ca at
+      # its CA instead. The namespace is kustomize's (ichor-system) and the name carries namePrefix.
       tlsConfig:
-        insecureSkipVerify: true
+        serverName: ichor-ui-service.ichor-system.svc
+        ca:
+          configMap:
+            name: ichor-ui-ca
+            key: ca.crt
   selector:
     matchLabels:
       control-plane: ui-backend

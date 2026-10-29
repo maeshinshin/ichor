@@ -17,11 +17,20 @@ spec:
   - path: /metrics
     port: https
     # ichor-ui serves /metrics on the same HTTPS port and mux as its Connect API
-    # (cmd/ichor-ui/main.go, docs/adr/0105). /metrics is unauthenticated and the certificate is the
-    # operator's or the Ichor CA's, so the scrape does not verify it.
+    # (cmd/ichor-ui/main.go, docs/adr/0105). The scrape verifies the certificate against the CA in
+    # ichorUI.tls.caSecret, else ConfigMap ichorUI.tls.caConfigMap (default: the Ichor serving CA).
     scheme: https
     tlsConfig:
-      insecureSkipVerify: true
+      serverName: ichor-ui-service.{{ .Release.Namespace }}.svc
+      ca:
+        {{- if .Values.ichorUI.tls.caSecret }}
+        secret:
+          name: {{ .Values.ichorUI.tls.caSecret }}
+        {{- else }}
+        configMap:
+          name: {{ .Values.ichorUI.tls.caConfigMap }}
+        {{- end }}
+          key: {{ .Values.ichorUI.tls.caKey }}
   selector:
     matchLabels:
       app.kubernetes.io/name: {{ include "ichor.name" . }}

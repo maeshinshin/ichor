@@ -35,8 +35,7 @@ const cniPatchLayer = "cluster"
 
 // cniKey names the CNI consistently wherever init refers to it by a
 // short key rather than a full flag name: the "--cni" flag itself, the
-// cluster.inlineManifests entry's name, and the GitOps skeleton's
-// apps/cni/ directory.
+// cluster.inlineManifests entry's name.
 const cniKey = "cni"
 
 // defaultPreset is the preset architecture.md's "Nodes" section marks

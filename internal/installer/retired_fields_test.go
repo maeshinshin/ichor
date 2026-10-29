@@ -18,10 +18,12 @@ package installer
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/yaml"
@@ -43,6 +45,42 @@ func loadCRD(t *testing.T, path string) *unstructured.Unstructured {
 	return crd
 }
 
+// installOldCRD installs the CRD and removes it again when the test ends, waiting until it is gone,
+// so the test can run more than once against the same API server (-count=N).
+func installOldCRD(t *testing.T, old *unstructured.Unstructured) {
+	t.Helper()
+
+	ctx := context.Background()
+
+	if err := k8sClient.Create(ctx, old); err != nil {
+		t.Fatalf("installing the old CRD: %v", err)
+	}
+
+	t.Cleanup(func() {
+		crd := &unstructured.Unstructured{}
+		crd.SetAPIVersion("apiextensions.k8s.io/v1")
+		crd.SetKind(kindCRD)
+		crd.SetName(old.GetName())
+
+		if err := k8sClient.Delete(ctx, crd); err != nil && !apierrors.IsNotFound(err) {
+			t.Errorf("deleting the CRD: %v", err)
+
+			return
+		}
+
+		for range 300 {
+			err := k8sClient.Get(ctx, types.NamespacedName{Name: old.GetName()}, crd)
+			if apierrors.IsNotFound(err) {
+				return
+			}
+
+			time.Sleep(100 * time.Millisecond)
+		}
+
+		t.Errorf("the CRD %s was not removed", old.GetName())
+	})
+}
+
 // A TalosCluster stored under the schema that still had spec.gitops (and spec.cni.handover) must
 // stay writable once the current CRD, which no longer has them, is installed: the
 // installer's CRD check allows the removal, the API server prunes the retired fields and no
@@ -52,9 +90,7 @@ func TestStoredTalosClusterWithRetiredFieldsSurvivesTheCRDUpgrade(t *testing.T) 
 
 	// testdata is the TalosCluster CRD as it was before the removal (git show c7902de:config/crd/bases/...).
 	old := loadCRD(t, "testdata/talosclusters-before-retirement.yaml")
-	if err := k8sClient.Create(ctx, old); err != nil {
-		t.Fatalf("installing the old CRD: %v", err)
-	}
+	installOldCRD(t, old)
 
 	obj := &unstructured.Unstructured{Object: map[string]any{
 		kAPIVersion: "ichor.maesh.dev/v1alpha1",
@@ -118,23 +154,58 @@ func TestStoredTalosClusterWithRetiredFieldsSurvivesTheCRDUpgrade(t *testing.T) 
 		t.Fatalf("installing the new CRD: %v", err)
 	}
 
-	// Update the stored object, changing its spec.
-	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "old"}, obj); err != nil {
-		t.Fatal(err)
-	}
+	updateUntilPruned(t, types.NamespacedName{Namespace: "default", Name: "old"}, obj,
+		[]string{kSpec, "endpoint", "address"}, "10.0.0.2",
+		[][]string{{kSpec, kGitops}, {kSpec, "cni", kHandover}})
+}
 
-	if err := unstructured.SetNestedField(obj.Object, "10.0.0.2", kSpec, "endpoint", "address"); err != nil {
-		t.Fatal(err)
-	}
+// updateUntilPruned updates the stored object (setting path to a value that differs on every try)
+// until the response no longer carries any of the retired paths. The API server swaps in the new
+// CRD schema asynchronously after the CRD update returns, so an early update is still pruned by
+// the old schema; pruning applies to the whole object on every update, so a later try prunes what
+// an earlier one left. The paths must be gone before the deadline, or the test fails.
+func updateUntilPruned(t *testing.T, key types.NamespacedName, obj *unstructured.Unstructured, path []string, value string, retired [][]string) {
+	t.Helper()
 
-	if err := k8sClient.Update(ctx, obj); err != nil {
-		t.Fatalf("updating the stored TalosCluster under the new CRD: %v", err)
-	}
+	ctx := context.Background()
+	deadline := time.Now().Add(30 * time.Second)
 
-	for _, path := range [][]string{{kSpec, kGitops}, {kSpec, "cni", kHandover}} {
-		if _, found, _ := unstructured.NestedFieldNoCopy(obj.Object, path...); found {
-			t.Errorf("%v survived the update: the API server should prune it", path)
+	var left [][]string
+
+	for try := 0; ; try++ {
+		if err := k8sClient.Get(ctx, key, obj); err != nil {
+			t.Fatal(err)
 		}
+
+		if err := unstructured.SetNestedField(obj.Object, fmt.Sprintf("%s-%d", value, try), path...); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := k8sClient.Update(ctx, obj); err != nil {
+			t.Fatalf("updating the stored object under the new CRD: %v", err)
+		}
+
+		left = nil
+
+		for _, p := range retired {
+			if _, found, _ := unstructured.NestedFieldNoCopy(obj.Object, p...); found {
+				left = append(left, p)
+			}
+		}
+
+		if len(left) == 0 {
+			return
+		}
+
+		if time.Now().After(deadline) {
+			break
+		}
+
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	for _, p := range left {
+		t.Errorf("%v survived the update: the API server should prune it", p)
 	}
 }
 
@@ -143,9 +214,7 @@ func TestStoredIchorInstallationWithRetiredFieldsSurvivesTheCRDUpgrade(t *testin
 	ctx := context.Background()
 
 	old := loadCRD(t, "testdata/ichorinstallations-before-retirement.yaml")
-	if err := k8sClient.Create(ctx, old); err != nil {
-		t.Fatalf("installing the old CRD: %v", err)
-	}
+	installOldCRD(t, old)
 
 	obj := &unstructured.Unstructured{Object: map[string]any{
 		kAPIVersion: "ichor.maesh.dev/v1alpha1",
@@ -199,21 +268,7 @@ func TestStoredIchorInstallationWithRetiredFieldsSurvivesTheCRDUpgrade(t *testin
 		t.Fatalf("installing the new CRD: %v", err)
 	}
 
-	if err := k8sClient.Get(ctx, types.NamespacedName{Name: "ichor"}, obj); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := unstructured.SetNestedField(obj.Object, "v0.2.0", kSpec, "version"); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := k8sClient.Update(ctx, obj); err != nil {
-		t.Fatalf("updating the stored IchorInstallation under the new CRD: %v", err)
-	}
-
-	for _, path := range [][]string{{kSpec, "managementMode"}, {kSpec, kStack}, {"status", kStack}} {
-		if _, found, _ := unstructured.NestedFieldNoCopy(obj.Object, path...); found {
-			t.Errorf("%v survived the update: the API server should prune it", path)
-		}
-	}
+	updateUntilPruned(t, types.NamespacedName{Name: "ichor"}, obj,
+		[]string{kSpec, "version"}, "v0.2.0",
+		[][]string{{kSpec, "managementMode"}, {kSpec, kStack}, {"status", kStack}})
 }

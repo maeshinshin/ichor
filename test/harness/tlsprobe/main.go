@@ -68,7 +68,7 @@ func main() {
 	}
 
 	if *watch == 0 {
-		os.Exit(once(*addr, cfg, pool, true))
+		os.Exit(once(*addr, cfg, pool))
 	}
 
 	last := ""
@@ -97,7 +97,7 @@ func serialOf(addr string, cfg *tls.Config) string {
 	return c.ConnectionState().PeerCertificates[0].SerialNumber.Text(16)
 }
 
-func once(addr string, cfg *tls.Config, pool *x509.CertPool, verbose bool) int {
+func once(addr string, cfg *tls.Config, pool *x509.CertPool) int {
 	d := net.Dialer{Timeout: 5 * time.Second}
 
 	c, err := tls.DialWithDialer(&d, "tcp", addr, cfg)
@@ -110,12 +110,10 @@ func once(addr string, cfg *tls.Config, pool *x509.CertPool, verbose bool) int {
 	st := c.ConnectionState()
 	leaf := st.PeerCertificates[0]
 
-	if verbose {
-		fmt.Printf("tls=%x subject=%s issuer=%s\nserial=%s notBefore=%s notAfter=%s\ndns=%v ips=%v\n",
-			st.Version, leaf.Subject, leaf.Issuer, leaf.SerialNumber.Text(16),
-			leaf.NotBefore.UTC().Format(time.RFC3339), leaf.NotAfter.UTC().Format(time.RFC3339),
-			leaf.DNSNames, leaf.IPAddresses)
-	}
+	fmt.Printf("tls=%x subject=%s issuer=%s\nserial=%s notBefore=%s notAfter=%s\ndns=%v ips=%v\n",
+		st.Version, leaf.Subject, leaf.Issuer, leaf.SerialNumber.Text(16),
+		leaf.NotBefore.UTC().Format(time.RFC3339), leaf.NotAfter.UTC().Format(time.RFC3339),
+		leaf.DNSNames, leaf.IPAddresses)
 
 	if pool != nil {
 		inter := x509.NewCertPool()

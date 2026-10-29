@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -35,6 +34,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/version"
 	"github.com/maeshinshin/ichor/pkg/upgrade"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -51,8 +51,6 @@ const (
 	kubeProxyEnabled  = "enabled"
 	kubeProxyReplaced = "replaced"
 )
-
-var versionPattern = regexp.MustCompile(`^v?\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$`)
 
 // opKinds pairs each wire kind with the spec string it is stored as.
 var opKinds = []struct {
@@ -300,11 +298,12 @@ func normalizeTarget(kind, target string) (string, error) {
 			return "", nil
 		}
 
-		if !versionPattern.MatchString(target) {
-			return "", connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("version %q is not a semantic version like v1.2.3", target))
+		v := "v" + strings.TrimPrefix(target, "v")
+		if err := version.CheckSemver(v); err != nil {
+			return "", connect.NewError(connect.CodeInvalidArgument, err)
 		}
 
-		return "v" + strings.TrimPrefix(target, "v"), nil
+		return v, nil
 	}
 
 	return target, nil

@@ -75,6 +75,11 @@ func IdentityFrom(ctx context.Context) (Identity, bool) {
 	return id, ok
 }
 
+// ContextWithIdentity is what AuthInterceptor does on success; cross-package tests use it to act as a user.
+func ContextWithIdentity(ctx context.Context, id Identity) context.Context {
+	return context.WithValue(ctx, identityKey{}, id)
+}
+
 // OIDCConfig is the browser-facing OIDC setup. There is deliberately no
 // client secret: the SPA is a public client using the authorization code
 // flow with PKCE, and this backend only verifies the ID token it presents.

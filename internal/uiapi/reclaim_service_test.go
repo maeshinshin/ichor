@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	"connectrpc.com/connect"
+	authv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -66,8 +67,11 @@ func TestReclaimRefusedWhenOff(t *testing.T) {
 func TestCreateReclaimStoresSecretAndRegistersAddress(t *testing.T) {
 	cluster := discoveryCluster(nil)
 	k8s := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(cluster).Build()
-	s := &Server{Client: k8s, ControllerNamespace: testNS, ReclaimEnabled: true}
-	ctx := context.Background()
+	s := &Server{Client: k8s, ControllerNamespace: testNS, ReclaimEnabled: true,
+		Impersonate: func(Identity) (client.Client, error) {
+			return reviewing(k8s, true, &[]authv1.ResourceAttributes{}), nil
+		}}
+	ctx := ContextWithIdentity(context.Background(), Identity{User: bgUser})
 
 	res, err := s.CreateReclaim(ctx, connect.NewRequest(&pb.CreateReclaimRequest{
 		Address: "10.0.0.5:50000", Talosconfig: []byte(reclaimMarker), Cluster: objectRef(testNS, "c"),
@@ -83,6 +87,11 @@ func TestCreateReclaimStoresSecretAndRegistersAddress(t *testing.T) {
 	var mr ichorv1alpha1.MachineReclaim
 	if err := k8s.Get(ctx, types.NamespacedName{Namespace: testNS, Name: res.Msg.GetReclaim().GetRef().GetName()}, &mr); err != nil {
 		t.Fatal(err)
+	}
+
+	if mr.Annotations[ichorv1alpha1.ReclaimRequestedByAnnotation] != bgUser ||
+		mr.Spec.ClusterRef == nil || mr.Spec.ClusterRef.Name != "c" {
+		t.Fatalf("request %+v", mr)
 	}
 
 	var sec corev1.Secret
@@ -105,7 +114,7 @@ func TestCreateReclaimStoresSecretAndRegistersAddress(t *testing.T) {
 	}
 }
 
-func TestConfirmReclaimWritesOnlyConfirmUUID(t *testing.T) {
+func TestConfirmReclaimWritesOnlyConfirmFields(t *testing.T) {
 	before := &ichorv1alpha1.MachineReclaim{
 		Namespace: testNS, Name: "r",
 		Spec: ichorv1alpha1.MachineReclaimSpec{
@@ -113,10 +122,13 @@ func TestConfirmReclaimWritesOnlyConfirmUUID(t *testing.T) {
 		},
 	}
 	k8s := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(before.DeepCopy()).Build()
-	s := &Server{Client: k8s, ControllerNamespace: testNS, ReclaimEnabled: true}
+	s := &Server{Client: k8s, ControllerNamespace: testNS, ReclaimEnabled: true,
+		Impersonate: func(Identity) (client.Client, error) {
+			return reviewing(k8s, true, &[]authv1.ResourceAttributes{}), nil
+		}}
 
-	if _, err := s.ConfirmReclaim(context.Background(), connect.NewRequest(&pb.ConfirmReclaimRequest{
-		Reclaim: objectRef(testNS, "r"), Uuid: " abc ",
+	if _, err := s.ConfirmReclaim(ContextWithIdentity(context.Background(), Identity{User: bgUser}), connect.NewRequest(&pb.ConfirmReclaimRequest{
+		Reclaim: objectRef(testNS, "r"), Uuid: " abc ", ClusterName: "old",
 	})); err != nil {
 		t.Fatal(err)
 	}
@@ -128,6 +140,11 @@ func TestConfirmReclaimWritesOnlyConfirmUUID(t *testing.T) {
 
 	want := before.Spec
 	want.ConfirmUUID = "abc"
+	want.ConfirmClusterName = "old"
+
+	if got.Annotations[ichorv1alpha1.ReclaimConfirmedByAnnotation] != bgUser {
+		t.Fatalf("annotations %v", got.Annotations)
+	}
 
 	if got.Spec != want {
 		t.Fatalf("spec changed beyond confirmUUID: %+v", got.Spec)

@@ -110,6 +110,8 @@ func TestLiveTunnel(t *testing.T) {
 
 // A rerun after an interrupted no-CNI adopt: Ichor's release exists, so --tunnel is accepted when it
 // equals the running tunnel and refused, with the running value named, when it does not.
+const helmReleaseKey = "release"
+
 func TestReadBackIchorCilium_TunnelFlagOnARerun(t *testing.T) {
 	deployed, err := cilium.EffectiveValues(nil, cni.KubeProxyEnabled, tunnelGeneve)
 	if err != nil {
@@ -122,7 +124,7 @@ func TestReadBackIchorCilium_TunnelFlagOnARerun(t *testing.T) {
 	}
 
 	rec := helmRecord(ichorControllerNamespace)
-	rec.Data = map[string][]byte{"release": []byte(base64.StdEncoding.EncodeToString(raw))}
+	rec.Data = map[string][]byte{helmReleaseKey: []byte(base64.StdEncoding.EncodeToString(raw))}
 
 	for name, tc := range map[string]struct {
 		tunnel  string

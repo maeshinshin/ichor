@@ -121,10 +121,12 @@ func repairPending(cfg *action.Configuration, last *release.Release, o ApplyOpti
 		return false, nil
 	}
 
-	last.SetStatus(release.StatusFailed, fmt.Sprintf("marked failed by Ichor: a previous operation left it %s (ADR 0103)", last.Info.Status))
+	last.SetStatus(release.StatusFailed,
+		fmt.Sprintf("marked failed by Ichor: a previous operation left it %s (ADR 0103)", last.Info.Status))
 
 	if err := cfg.Releases.Update(last); err != nil {
-		return false, fmt.Errorf("cilium: marking the interrupted Helm revision %d of %s failed: %w", last.Version, ReleaseName, err)
+		return false, fmt.Errorf("cilium: marking interrupted Helm revision %d of %s failed: %w",
+			last.Version, ReleaseName, err)
 	}
 
 	return true, nil
@@ -150,7 +152,8 @@ func install(
 }
 
 func upgrade(
-	ctx context.Context, cfg *action.Configuration, ch *chart.Chart, vals map[string]any, o ApplyOptions, takeOwnership bool,
+	ctx context.Context, cfg *action.Configuration, ch *chart.Chart, vals map[string]any, o ApplyOptions,
+	takeOwnership bool,
 ) (ApplyResult, error) {
 	u := action.NewUpgrade(cfg)
 	// After a repaired install the objects may carry no Helm ownership yet.

@@ -874,8 +874,14 @@ func podTolerations(d map[string]any) []any {
 // The controller must be able to run on a control plane: draining the only worker evicts it, and
 // with the control plane tainted NoSchedule it could not come back to finish the upgrade it drives.
 // The chart and the kustomize base (the installer manifest) carry the same toleration; ichor-ui does not.
+const keyOperator = "operator"
+
 func TestManagerToleratesTheControlPlaneTaint(t *testing.T) {
-	want := []any{map[string]any{"key": "node-role.kubernetes.io/control-plane", "operator": "Exists", "effect": "NoSchedule"}}
+	const exists = "Exists"
+
+	want := []any{map[string]any{
+		"key": "node-role.kubernetes.io/control-plane", keyOperator: exists, "effect": "NoSchedule",
+	}}
 
 	chart := podTolerations(findNameSuffix(renderChart(t, "ichor"), kindDeployment, "controller-manager"))
 	if !reflect.DeepEqual(chart, want) {

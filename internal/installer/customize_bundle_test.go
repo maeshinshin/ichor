@@ -167,7 +167,7 @@ func TestRealBundle_ControllerToleratesTheControlPlane(t *testing.T) {
 	manifest, _ := realBundle(t)
 
 	for _, o := range manifest {
-		if o.GetKind() != "Deployment" {
+		if o.GetKind() != kindDeployment {
 			continue
 		}
 

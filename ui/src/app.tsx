@@ -19,6 +19,7 @@ import { PatchList } from '@/pages/PatchList'
 import { Login } from '@/pages/Login'
 import { Placeholder } from '@/pages/Placeholder'
 import { SignIn } from '@/pages/SignIn'
+import { passwordSignIn, signInSections } from '@/lib/login'
 import { Users } from '@/pages/Users'
 import { matchRoute, replace, usePath } from '@/router'
 import { redirectFor } from '@/lib/routes'
@@ -31,8 +32,9 @@ type LoginState = 'loading' | 'open' | 'choose' | 'ready' | 'error'
 
 // useLogin gates the app on sign-in (docs/adr/0058, 0094). 'open' means ichor-ui has no login
 // configured and writes with its own ServiceAccount, which the banner says. 'choose' shows the
-// sign-in screen; an external IdP that is the only choice is entered directly, as before.
-function useLogin(): { state: LoginState; error: string; providers: AuthProvider[] } {
+// one sign-in card (password form and/or the external IdP button); an external IdP that is the only
+// choice is entered directly, as before.
+function useLogin(): { state: LoginState; error: string; providers: AuthProvider[]; signedIn: () => void } {
   const [state, setState] = useState<LoginState>('loading')
   const [error, setError] = useState('')
   const [providers, setProviders] = useState<AuthProvider[]>([])
@@ -53,7 +55,7 @@ function useLogin(): { state: LoginState; error: string; providers: AuthProvider
     })
   }, [])
 
-  return { state, error, providers }
+  return { state, error, providers, signedIn: () => setState('ready') }
 }
 
 // useWhoAmI reads who the backend thinks the caller is, once signed in. A failure is not fatal:
@@ -98,7 +100,10 @@ function Authenticated({ path }: { path: string }) {
 
   if (login.state === 'loading' || (signedIn && !who.loaded)) return <p class="p-8 text-sm text-muted-foreground">{t('app.signingIn')}</p>
   if (login.state === 'error') return <ErrorAlert title={t('app.signInFailed')} detail={login.error} />
-  if (login.state === 'choose') return <SignIn providers={login.providers} />
+  if (login.state === 'choose') {
+    const { ichor, oidc } = signInSections(login.providers)
+    return <SignIn ichor={ichor !== null} oidc={oidc} signIn={async (f) => { await passwordSignIn(ichor!, f); login.signedIn() }} />
+  }
   if (who.me?.mustChangePassword) return <MustChangePassword onDone={who.reload} />
 
   return (

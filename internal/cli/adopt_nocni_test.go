@@ -134,7 +134,7 @@ func noCNIDeps(t *testing.T, podCIDR string) (*flowEnv, adoptDeps) {
 func TestAdoptNoCNI_PlanAnnouncesCiliumInstall(t *testing.T) {
 	env, deps := noCNIDeps(t, nodeCIDR)
 	deps.PlanOnly = true
-	deps.Tunnel = "geneve"
+	deps.Tunnel = tunnelGeneve
 
 	if err := runAdopt(context.Background(), env.cluster.Name, testNamespace, deps); err != nil {
 		t.Fatalf("runAdopt: %v\n%s", err, env.stderr.String())

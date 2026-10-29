@@ -64,14 +64,14 @@ func refuseUnmanagedCNI(ctx context.Context, c *apiClients, cluster string) erro
 
 // cniPreRun is cniCmd's PersistentPreRunE. cobra runs only the nearest hook, so it calls the
 // root's skew check itself. The hidden `helm` group is what the Cilium Job runs and never
-// reaches an unmanaged cluster.
+// reaches an unmanaged cluster. `bootstrap` runs before Ichor exists, so it has no cluster to ask.
 func cniPreRun(cmd *cobra.Command, args []string) error {
 	if err := skewPreRun(cmd, args); err != nil {
 		return err
 	}
 
 	for p := cmd; p != nil; p = p.Parent() {
-		if p == cniHelmCmd {
+		if p == cniHelmCmd || p == cniBootstrapCmd {
 			return nil
 		}
 	}

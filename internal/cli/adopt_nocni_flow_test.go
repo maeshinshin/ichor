@@ -432,7 +432,7 @@ func TestAdoptNoCNI_CiliumValuesRefusals(t *testing.T) {
 }
 
 func TestReadAdoptCiliumValues(t *testing.T) {
-	if v, err := readAdoptCiliumValues(""); v != nil || err != nil {
+	if v, err := readCiliumValuesFile(""); v != nil || err != nil {
 		t.Fatalf("no file = %v, %v", v, err)
 	}
 
@@ -441,12 +441,12 @@ func TestReadAdoptCiliumValues(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	v, err := readAdoptCiliumValues(path)
+	v, err := readCiliumValuesFile(path)
 	if err != nil || !reflect.DeepEqual(v, debugValues()) {
 		t.Fatalf("values = %v, %v", v, err)
 	}
 
-	if _, err := readAdoptCiliumValues(path + ".missing"); err == nil {
+	if _, err := readCiliumValuesFile(path + ".missing"); err == nil {
 		t.Fatal("a missing file must fail")
 	}
 }

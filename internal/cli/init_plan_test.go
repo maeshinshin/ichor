@@ -57,7 +57,7 @@ func TestBuildInitPlan_Success(t *testing.T) {
 		t.Fatalf("secretsRef.name = %q, want my-cluster-secrets", cluster.Spec.SecretsRef.Name)
 	}
 
-	if cluster.Spec.CNI.Preset != testCNICilium || cluster.Spec.CNI.KubeProxy != "enabled" {
+	if cluster.Spec.CNI.Preset != testCNICilium || cluster.Spec.CNI.KubeProxy != kubeProxyEnabled {
 		t.Fatalf("cni = %+v, want preset cilium, kubeProxy enabled", cluster.Spec.CNI)
 	}
 

@@ -18,6 +18,7 @@ package reclaim
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
@@ -309,6 +310,10 @@ func tcpReachable(ctx context.Context, hostport string) bool {
 	return true
 }
 
+// ErrOtherMachine is returned (wrapped) by WaitMaintenance when the address
+// answers in maintenance mode with a different UUID: another machine now has it.
+var ErrOtherMachine = errors.New("another machine now has the address")
+
 // MaintenanceUUID dials address's Talos API in maintenance mode (no
 // credential: a node with no configuration offers nothing else) and returns
 // its SMBIOS UUID.
@@ -352,8 +357,8 @@ func WaitMaintenance(
 		case err == nil && strings.EqualFold(got, uuid):
 			return nil
 		case err == nil:
-			return fmt.Errorf("%s answers in maintenance mode with UUID %s, not %s: another machine now has the address",
-				address, got, uuid)
+			return fmt.Errorf("%s answers in maintenance mode with UUID %s, not %s: %w",
+				address, got, uuid, ErrOtherMachine)
 		default:
 			last = err
 		}

@@ -28,6 +28,7 @@ limitations under the License.
 package foreign
 
 import (
+	"bufio"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
@@ -37,6 +38,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -204,19 +206,69 @@ func adopt(t *testing.T, c *foreign.Cluster, extra ...string) (string, error) {
 // adoptBin is adopt with the ichor binary at bin inside the tools pod (stage puts ICHOR_E2E_F_ICHOR_BIN at /tmp/ichor).
 func adoptBin(t *testing.T, c *foreign.Cluster, bin string, extra ...string) (string, error) {
 	t.Helper()
+	out, _, _, err := adoptTriggered(t, c, bin, "", 0, nil, extra...)
+	return out, err
+}
+
+// adoptArgs runs `ichor adopt` with exactly the given flags (no --yes, no recovery flags added).
+func adoptArgs(t *testing.T, c *foreign.Cluster, flags ...string) (string, error) {
+	t.Helper()
+	out, _, _, err := adoptRun(t, c, "/tmp/ichor", flags, "", 0, nil)
+	return out, err
+}
+
+// adoptTriggered runs `ichor adopt --yes` (the binary at bin in the tools pod, recovery flags added) and runs action delay
+// after its output first contains trigger (never when trigger is empty). It returns the output, how long adopt ran, whether
+// the action ran, and adopt's error.
+func adoptTriggered(t *testing.T, c *foreign.Cluster, bin, trigger string, delay time.Duration, action func(), extra ...string) (string, time.Duration, bool, error) {
+	t.Helper()
+	return adoptRun(t, c, bin, append([]string{"--yes"}, append(recoverArgs(c, extra), extra...)...), trigger, delay, action)
+}
+
+func adoptRun(t *testing.T, c *foreign.Cluster, bin string, flags []string, trigger string, delay time.Duration, action func()) (string, time.Duration, bool, error) {
+	t.Helper()
 	pod := stage(t, c)
 	args := append([]string{"-n", ns, "exec", pod, "--", "env", "HOME=/tmp/home", bin, "adopt",
 		"--cluster", c.Opts.Prefix, "-n", crNS, "--talosconfig", "/tmp/talosconfig", "--kubeconfig", "/tmp/kubeconfig",
-		"--node", c.CPs[0], "--yes"}, append(recoverArgs(c, extra), extra...)...)
+		"--node", c.CPs[0]}, flags...)
 	// kube.Command refuses a "--cluster" argument anywhere; here it belongs to the command run
 	// inside the pod, so the context is pinned by hand to the same ICHOR_E2E_KUBE_CONTEXT.
-	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Minute) // adopt waits for Ichor's webhooks without a bound (D5: no CNI, never ready)
+	ctx, cancel := context.WithTimeout(context.Background(), 14*time.Minute) // adopt waits for Ichor's webhooks without a bound (D5: no CNI, never ready)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "kubectl", append([]string{"--context", os.Getenv(kube.ContextEnv)}, args...)...)
-	out, err := cmd.CombinedOutput()
-	// ponytail: the full output is printed; it carries no keys (adopt prints nothing secret).
-	t.Logf("ichor adopt %s:\n%s", strings.Join(extra, " "), out)
-	return string(out), err
+	pipe, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd.Stderr = cmd.Stdout
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	var mu sync.Mutex
+	var out strings.Builder
+	var ran bool
+	start := time.Now()
+	sc := bufio.NewScanner(pipe)
+	sc.Buffer(make([]byte, 1<<20), 1<<20)
+	for sc.Scan() {
+		line := sc.Text()
+		mu.Lock()
+		out.WriteString(line + "\n")
+		mu.Unlock()
+		t.Logf("%s [%s]", line, time.Now().Format("15:04:05")) // the output carries no keys (adopt prints nothing secret)
+		if !ran && trigger != "" && strings.Contains(line, trigger) {
+			ran = true
+			go func() {
+				time.Sleep(delay)
+				action()
+			}()
+		}
+	}
+	err = cmd.Wait()
+	t.Logf("adopt exited: %v", err)
+	mu.Lock()
+	defer mu.Unlock()
+	return out.String(), time.Since(start), ran, err
 }
 
 // recoverArgs: a rerun that passes --secrets-bundle (the bundle an earlier run wrote) must not recover the secrets again.

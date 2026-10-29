@@ -1,6 +1,6 @@
 # 0103. Deploy onto machines that already run Talos
 
-Status: Accepted; built; hardware-verified including A8 (its two gaps were closed by 8ebee126 and 26da779b; rerun passed 2026-10-30, see "Results, A3, A8, D4, D6 (2026-10-30)"; the second kill window remains unhit); Updated: 2026-10-30 (C6 recorded: not run, see C6 below) · Date: 2026-10-29 · Design section: Bootstrap (`ichor adopt`), Nodes, Cilium · Builds on: 0014, 0042, 0066, 0075, 0076, 0077, 0099, 0101
+Status: Accepted; built; hardware-verified including A8 (its two gaps were closed by 8ebee126 and 26da779b; rerun passed 2026-10-30, see "Results, A3, A8, D4, D6 (2026-10-30)"; the second kill window remains unhit); Updated: 2026-10-30 (C6 and C7 hardware-verified, see C6 and C7 below) · Date: 2026-10-29 · Design section: Bootstrap (`ichor adopt`), Nodes, Cilium · Builds on: 0014, 0042, 0066, 0075, 0076, 0077, 0099, 0101
 
 Amended by [ADR 0104](0104-a-cluster-with-no-cni-gets-ichors-cilium-before-ichor-and-ichor-is-installable-with-helm.md): a cluster with no CNI is adopted as managed Cilium (Ichor installs it first), not unmanaged `talosCNI: none`; the network-policy gate follows live detection; test D5 and open question 3 are superseded.
 
@@ -179,7 +179,7 @@ ichor machine reclaim ADDRESS --talosconfig FILE [--context C] [--confirm UUID]
   - Sends exactly the request of ADR 0042 (`STATE` and `EPHEMERAL`, `Reboot: true`), built by the same code, so one place defines what a reset wipes. User disks and non-system volumes are not touched, but they are listed as orphaned, and encrypted ones are called out: their keys derived from STATE or META are gone, so the data is unreadable.
   - Requires **typed consent**: the operator types the node's UUID (or passes `--confirm UUID`; `--yes` does not satisfy it). Consent is the credential plus the typed identity, shown beside the cluster name that will lose the node.
   - Waits for the node to answer the maintenance API with the same UUID, then registers it through the normal add-by-IP path as a pending `TalosMachine`. A changed DHCP address after the reboot is reported with the scan hint instead of guessed.
-- Without the node's credential there is no API route; the documented out-of-band routes are reinstall from the ISO or a wipe by kernel argument. The kernel-argument route is not verified here (test C6).
+- Without the node's credential there is no API route; the documented out-of-band routes are reinstall from the ISO or a wipe by kernel argument. The kernel-argument route works on Talos v1.14.3 with a rebuilt boot asset, then a boot from the disk (test C6, below).
 
 #### 2.2 UI/controller path (break-glass, off by default)
 
@@ -309,7 +309,7 @@ The user guide is `docs/guides/adopt-and-reclaim.md`. The design text is in the 
 - C3 passed: only control plane refused (`this is the last control plane of cluster "..."; pass --force to override`); `--force --force-ungraceful` without `--confirm-cluster` fails at the prompt, with it the node reset and returned to maintenance.
 - C4 passed: Ichor's own control plane refused with `--force --confirm-cluster --force-ungraceful` and the right UUID (`is already an Ichor machine`); a wrong UUID prints `the typed UUID does not match the node's UUID; nothing was sent` and the node was unchanged.
 - C5 passed: a plain user volume and a LUKS2 (node ID key) user volume plus the disk are listed, the encrypted one marked; partitions and LUKS still present after the join.
-- C6 not run (no ISO-less wipe harness). C7: not reachable here, the pod network keeps the address across the reset; the hint path has only its unit test.
+- C6 passed (2026-10-30): the kernel-argument wipe works on Talos v1.14.3 with a rebuilt boot asset; see "C6" below. C7 passed (2026-10-30): a stop and start of the node during the reset changes the pod IP and the CLI prints the DHCP hint; see "C7" below.
 - C8 passed with ichor-ui users off (the caller is the ichor-ui ServiceAccount): reclaim off -> `failed_precondition`; no `reclaim` verb -> webhook `permission_denied`; with a RoleBinding to `ichor-ichor-machine-reclaimer` the request is held at `AwaitingConfirmation` with the inspection, a wrong UUID is rejected by the webhook, the right one reaches `Done` and the node is in maintenance. Enabling: webhook refuses `spec.reclaim.enabled=true` without `ichor.maesh.dev/confirm-reclaim=enable`; `ichor settings set reclaim.enabled=true` needs `--confirm-reclaim`. Not run: a signed-in user without the verb (users were off) and the UI page itself.
 - C9 passed: key and certificate fragments and a comment marker from the talosconfig are in no controller or ichor-ui log, Event or `MachineReclaim`; the Secret is deleted at `Done`, `Failed` (unreachable node), `Expired` (ttl 1m) and with an early-deleted request (owner reference); a controller restart in `AwaitingConfirmation` loses nothing; a second confirm after `Done` produces no second `ReclaimReset`; an orphan credential Secret was deleted by the sweeper at 60 minutes. A talosconfig whose endpoint is another node still inspected only the dialled address.
 - C10 passed: `status.audit` has requestedBy, confirmedBy, resetSentAt and credentialDeletedAt; the inspection has UUID and foreign cluster; after the Events expired (1 hour) these remain.
@@ -395,6 +395,32 @@ Record, per case, the time taken, the Talos and Cilium versions and the exact re
 
 A cluster with no CNI is no longer adopted as unmanaged `talosCNI: none`: ADR 0104 has adopt install Cilium first and adopt it managed (the "No CNI installed" row of 1.1, test D5 and open question 3 are superseded), fixes the network-policy wiring found by D3, and adds the Helm install path.
 
-### C6, credential-less wipe by kernel argument (2026-10-30): not run, not feasible in this harness
+### C6, credential-less wipe by kernel argument (2026-10-30): passed
 
-Talos v1.14 documents `talos.experimental.wipe=system` (wipes the system disk, then reboots) and `talos.experimental.wipe=system:EPHEMERAL,STATE` (wipes those partitions and returns the node to maintenance mode); the reset page describes it as a console/GRUB route. On v1.14 the default UEFI boot is systemd-boot with a UKI whose kernel arguments are embedded and cannot be edited at boot; they are changed only by a boot asset built with an Image Factory schematic (`customization.extraKernelArgs`). A wipe would need a new schematic and ISO with the argument baked in, a second cache disk, and a boot order with that ISO before the installed disk. That is more than the 30 minute time box and out of scope here. Status of C6: unverified; the documented out-of-band routes (reinstall from the ISO, kernel-argument wipe through a rebuilt asset) stay as written in the ADR.
+The earlier note here (not feasible) was wrong about the harness: no kernel-boot is needed. The argument is baked into an Image Factory boot asset and the node boots that ISO.
+
+- **Asset.** Schematic `customization.extraKernelArgs: [talos.experimental.wipe=system:EPHEMERAL,STATE]` posted to `https://factory.talos.dev/schematics` (the same service the harness already uses): id `1ba3a3c502bbb6fc012a1f4b9b6f252c7f5e77b9c7709cc1163e8405a01e1764`; ISO `https://factory.talos.dev/image/<id>/v1.14.3/metal-amd64.iso`, imported as its own disk (`ichor-e2e-fr-wipe-iso`, 3 min 22 s to Ready; the cached ISO disk was not touched). The factory accepted it and the ISO booted Talos v1.14.3.
+- **node edit.** Stop and start gives the node a new pod IP (10.244.0.112 -> 10.244.0.87).
+- **Wipe boot.** Configured foreign worker (UUID `05921e5a-a95f-4ef5-9792-348d4e6d593b`), ISO first. The Talos console showed `task unmountEphemeralPartition`, the STATE volume going `waiting -> closed`, then `error running phase 6 in initialize sequence: task 1/1: failed, failed to get volume status with label "EPHEMERAL"`, `META: loading from /dev/vda4`, `rebooting in 10 seconds`. It is a reboot loop, about 12 s per cycle, for as long as the wipe ISO stays first: the API never answers (connection refused for 3 minutes) and the node never reaches maintenance. The wipe argument is acted on every boot, so it must not stay in the boot order.
+- **Plain ISO first is not enough.** With the plain ISO first again the node halts: `task haltIfInstalled: Talos is already installed to disk but booted from another media and talos.halt_if_installed kernel parameter is set. Please reboot from the disk.` (the boot partitions are still on the disk).
+- **Disk first.** Boot order swapped (system disk 1, ISO 2): the node was in maintenance mode 27 s after the start (07:39:39 start, 07:40:06 `machinestatus` stage `maintenance`, new pod IP 10.244.0.208), same UUID `05921e5a-a95f-4ef5-9792-348d4e6d593b`. Discovered volumes: EFI, BIOS, BOOT, META (`talosmeta`) remain; the STATE (vda5) and EPHEMERAL (vda6) partitions are gone.
+- **Join.** That maintenance node was then given the foreign worker config again (needed for C7), so the join was shown after the C7 reset of the same node (same disk state, STATE and EPHEMERAL gone): address added to `spec.discovery.addresses`, pending `TalosMachine` after 1 s, `ichor machine approve ... --role worker --install-disk /dev/vda --hostname ichor-e2e-fr-w0`, Node Ready 91 s after approve. The join straight from the C6 maintenance state was not run separately.
+- **Meaning for the doc.** The kernel-argument wipe is a real credential-less route, but not a console edit: it needs a rebuilt boot asset (Image Factory schematic), booted once, and then the machine must be started from its disk (or the plain ISO after the install media's `halt_if_installed` is considered). Ichor does not offer it; the guide keeps naming it as an out-of-band route. `wipe=system:EPHEMERAL,STATE` removes the two partitions; `wipe=system` (whole disk, which would also let the plain ISO reach maintenance) was not run.
+
+### C7, address changes after the reset (2026-10-30): passed (CLI); UI path not run
+
+On the e2e harness the guest reset keeps the pod IP, but stopping and starting the node gives it a new one, which is the same effect as a DHCP address change. Result after the 3 minute wait:
+
+```
+Reset accepted (graceful: true). Waiting for 10.244.0.179 to return to maintenance mode.
+
+waiting for 10.244.0.179 to return to maintenance mode: context deadline exceeded (last probe: rpc error: code = DeadlineExceeded desc = context deadline exceeded while waiting for connections to become ready)
+The machine may have taken a new address from DHCP after the reboot. Find it (its UUID is 05921e5a-a95f-4ef5-9792-348d4e6d593b) and add it to a cluster's spec.discovery.addresses or cidrs.
+Error: machine reclaim: the reset was sent but the machine did not come back at 10.244.0.179
+```
+
+Exit code non-zero, nothing registered, no guess at a new address. The reset itself had completed (the STATE and EPHEMERAL wipe finished in the 2 to 3 s before the halt). Adding the new address to `spec.discovery.addresses` produced the pending `TalosMachine` after 1 s.
+
+- A first attempt did not trigger the hint: the node was stopped 17 s after `Reset accepted`, but by then the node had already come back in maintenance at the old address, and the CLI reported success. The reset-to-maintenance time on this harness is about 11 s, so the stop has to come within a few seconds.
+- **Finding (product):** a second `ichor machine reclaim` of the same machine was refused (`node <UUID> is already an Ichor machine`) while the first run's pending `TalosMachine` for that UUID still existed (the machine had been registered as pending by `--cluster`, then given its foreign config again). Deleting that pending `TalosMachine` needs the `ichor.maesh.dev/allow-delete="true"` annotation. A pending (not approved) machine counts as "already an Ichor machine" in the check.
+- The controller path (`MachineReclaim`, `waitForMaintenance`) fails the request with `... did not return to maintenance mode with UUID ... It may have taken a new address from DHCP: scan for the machine ...` after `reclaimMaintenanceWait`; it was not run on hardware here (no ichor-ui users or reclaim chart value in this Ichor cluster).

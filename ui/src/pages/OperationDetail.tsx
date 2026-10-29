@@ -1,15 +1,18 @@
 import { useEffect, useState } from 'preact/hooks'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { CircleAlertIcon, CircleXIcon, InfoIcon, ServerIcon, WorkflowIcon } from 'lucide-preact'
+import { Button } from '@/components/ui/button'
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Label } from '@/components/ui/label'
+import { Field as FormField, FieldLabel } from '@/components/ui/field'
+import { Item, ItemContent, ItemDescription, ItemGroup, ItemSeparator, ItemTitle } from '@/components/ui/item'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ErrorAlert } from '@/components/ErrorAlert'
-import { PageHeader } from '@/components/PageHeader'
+import { Field, Fields } from '@/components/PageHeader'
+import { PageTitle } from '@/components/PageTitle'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
-import { Section } from '@/components/Section'
-import { StatusText } from '@/components/Status'
+import { StateBadge } from '@/components/StateBadge'
 import { OperationControls } from '@/components/OperationControls'
 import { CARotationCredentials } from '@/components/CARotationCredentials'
 import { timestampDate, type Timestamp } from '@bufbuild/protobuf/wkt'
@@ -120,15 +123,21 @@ export function OperationDetail({ name }: { name: string }) {
   const restoreStep = restoreStepProgress(op.etcdRestoreStep)
   const panel = credentialsPanel(op.kind === OperationKind.CA_ROTATION, op.caRotationStage, state === 'done')
 
+  const nodeLink = op.nodeMachine ? (
+    <Button asChild variant="link" size="sm">
+      <Link to={`/nodes/${op.nodeMachine.name}`}>{op.nodeMachine.name}</Link>
+    </Button>
+  ) : undefined
+
   return (
     <>
-      <PageHeader
+      <PageTitle
         title={title}
-        kind={`${t('kind.operation')} ${op.ref?.name ?? name}`}
+        description={`${t('kind.operation')} ${op.ref?.name ?? name}`}
         badges={
           <>
-            <StatusText tone={opStateTone(state)}>{t(`ops.state.${state}`)}</StatusText>
-            {op.machines.length > 0 && <span class="text-sm text-muted-foreground">{t('ops.progress', { done, running })}</span>}
+            <StateBadge tone={opStateTone(state)}>{t(`ops.state.${state}`)}</StateBadge>
+            {op.machines.length > 0 && <Badge variant="outline">{t('ops.progress', { done, running })}</Badge>}
             {stage && <Badge variant="outline">{t('ops.caStage', { stage: stage.name, n: stage.index, total: stage.total })}</Badge>}
             {restoreStep && (
               <Badge variant="outline">
@@ -142,158 +151,181 @@ export function OperationDetail({ name }: { name: string }) {
             )}
           </>
         }
-        meta={[
-          { label: t('ops.colKind'), value: enumLabel(OperationKind, op.kind) },
-          { label: t('ops.startedBy'), value: op.startedBy || '-' },
-          { label: t('ops.startedAt'), value: formatTimestamp(op.createdAt) },
-          { label: t('ops.finishedAt'), value: formatTimestamp(op.finishedAt) },
-          { label: t('ops.duration'), value: formatDuration(spanMs(toDate(op.createdAt), toDate(op.finishedAt), now, state === 'done' || state === 'shutdown')) },
-          ...(op.kind === OperationKind.NODE
-            ? [
-                { label: t('node.action.actionLabel'), value: enumLabel(NodeAction, op.nodeAction) },
-                {
-                  label: t('node.action.nodeLabel'),
-                  value: op.nodeMachine ? (
-                    <Link to={`/nodes/${op.nodeMachine.name}`} class="hover:underline">
-                      {op.nodeMachine.name}
-                    </Link>
-                  ) : undefined,
-                },
-                { label: t('node.action.progress'), value: op.nodeMessage },
-              ]
-            : op.kind === OperationKind.ETCD_RESTORE
-              ? [
-                  { label: t('restore.snapshotLabel'), value: op.etcdRestoreSnapshot },
-                  { label: t('restore.snapshotTaken'), value: formatTimestamp(op.etcdRestoreSnapshotTime) },
-                  { label: t('restore.backupLabel'), value: op.etcdRestoreBackup?.name },
-                  { label: t('restore.progress'), value: op.etcdRestoreMessage },
-                ]
-              : [{ label: t('ops.maxUnavailable'), value: String(op.maxUnavailable || 1) }]),
-        ]}
         actions={<OperationControls op={op} onChanged={setOp} onDeleted={() => navigate('/operations')} />}
       />
-      <div class="space-y-8">
-        <div class="space-y-4 empty:hidden">
-          {panel !== 'none' && (
-            <Alert variant={panel === 'gate' ? 'destructive' : 'default'}>
-              <AlertTitle>{panel === 'gate' ? t('ops.awaitingCredentialsTitle') : t('creds.issuedTitle')}</AlertTitle>
-              <AlertDescription>
-                {panel === 'gate' ? t('ops.awaitingCredentials', { name: op.cluster?.name ?? '' }) : t('creds.issued')}
-                <CARotationCredentials op={op} panel={panel} permitted={perms?.clusterCredentials} onChanged={setOp} />
-              </AlertDescription>
-            </Alert>
-          )}
-          {op.kind === OperationKind.CA_ROTATION && state === 'done' && (
-            <Alert>
-              <AlertTitle>{t('ops.plan.bundleStaleTitle')}</AlertTitle>
-              <AlertDescription>{t('ops.plan.bundleStale', { name: op.cluster?.name ?? '' })}</AlertDescription>
-            </Alert>
-          )}
-          {state === 'failed' && (
-            <Alert variant="destructive">
-              <AlertTitle>{t('ops.failure')}</AlertTitle>
-              <AlertDescription>
-                {op.failureReason}
-                <br />
-                {t('ops.failureHint')}
-              </AlertDescription>
-            </Alert>
-          )}
-          {error && <ErrorAlert {...error} />}
-        </div>
+      <div class="space-y-4">
+        <Card size="sm">
+          <CardContent>
+            <Fields>
+              <Field label={t('ops.colKind')} value={enumLabel(OperationKind, op.kind)} />
+              <Field label={t('ops.startedBy')} value={op.startedBy} />
+              <Field label={t('ops.startedAt')} value={formatTimestamp(op.createdAt)} />
+              <Field label={t('ops.finishedAt')} value={formatTimestamp(op.finishedAt)} />
+              <Field
+                label={t('ops.duration')}
+                value={formatDuration(spanMs(toDate(op.createdAt), toDate(op.finishedAt), now, state === 'done' || state === 'shutdown'))}
+              />
+              {op.kind === OperationKind.NODE ? (
+                <>
+                  <Field label={t('node.action.actionLabel')} value={enumLabel(NodeAction, op.nodeAction)} />
+                  <Field label={t('node.action.nodeLabel')}>{nodeLink ?? '-'}</Field>
+                  <Field label={t('node.action.progress')} value={op.nodeMessage} />
+                </>
+              ) : op.kind === OperationKind.ETCD_RESTORE ? (
+                <>
+                  <Field label={t('restore.snapshotLabel')} value={op.etcdRestoreSnapshot} />
+                  <Field label={t('restore.snapshotTaken')} value={formatTimestamp(op.etcdRestoreSnapshotTime)} />
+                  <Field label={t('restore.backupLabel')} value={op.etcdRestoreBackup?.name} />
+                  <Field label={t('restore.progress')} value={op.etcdRestoreMessage} />
+                </>
+              ) : (
+                <Field label={t('ops.maxUnavailable')} value={String(op.maxUnavailable || 1)} />
+              )}
+            </Fields>
+          </CardContent>
+        </Card>
 
-        <Section id="what" title={t('ops.whatItDoes')}>
-          <Card>
-            <CardHeader>
-              <CardTitle>{title}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <dl class="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-1 text-sm">
-                {op.details.map((d) => (
-                  <div key={d.key} class="contents">
-                    <dt class="text-muted-foreground">{d.key}</dt>
-                    <dd class="min-w-0 break-words font-mono text-xs leading-5">{d.value}</dd>
-                  </div>
-                ))}
-              </dl>
-            </CardContent>
-          </Card>
-        </Section>
+        {panel !== 'none' && (
+          <Alert variant={panel === 'gate' ? 'destructive' : 'default'}>
+            {panel === 'gate' ? <CircleXIcon /> : <InfoIcon />}
+            <AlertTitle>{panel === 'gate' ? t('ops.awaitingCredentialsTitle') : t('creds.issuedTitle')}</AlertTitle>
+            <AlertDescription>
+              {panel === 'gate' ? t('ops.awaitingCredentials', { name: op.cluster?.name ?? '' }) : t('creds.issued')}
+              <CARotationCredentials op={op} panel={panel} permitted={perms?.clusterCredentials} onChanged={setOp} />
+            </AlertDescription>
+          </Alert>
+        )}
+        {op.kind === OperationKind.CA_ROTATION && state === 'done' && (
+          <Alert>
+            <InfoIcon />
+            <AlertTitle>{t('ops.plan.bundleStaleTitle')}</AlertTitle>
+            <AlertDescription>{t('ops.plan.bundleStale', { name: op.cluster?.name ?? '' })}</AlertDescription>
+          </Alert>
+        )}
+        {state === 'failed' && (
+          <Alert variant="destructive">
+            <CircleXIcon />
+            <AlertTitle>{t('ops.failure')}</AlertTitle>
+            <AlertDescription>
+              {op.failureReason}
+              <br />
+              {t('ops.failureHint')}
+            </AlertDescription>
+          </Alert>
+        )}
+        {error && <ErrorAlert {...error} />}
 
-        <Section id="machines" title={t('ops.machines')}>
-          {op.machines.length === 0 ? (
-            <EmptyNote>{t(op.kind === OperationKind.ICHOR ? 'ops.ichorJob' : 'ops.noMachines')}</EmptyNote>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t('col.name')}</TableHead>
-                  <TableHead>{t('ops.colState')}</TableHead>
-                  <TableHead>{t('ops.colStep')}</TableHead>
-                  <TableHead>{t('ops.startedAt')}</TableHead>
-                  <TableHead>{t('ops.finishedAt')}</TableHead>
-                  <TableHead>{t('ops.duration')}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {op.machines.map((m) => (
-                  <TableRow key={m.name}>
-                    <TableCell>
-                      <Link to={nodePath(m.name)} class="hover:underline">
-                        {m.displayName || m.name}
-                      </Link>
-                    </TableCell>
-                    <TableCell>
-                      {/* The controller's own word (InProgress, Completed), as received. */}
-                      <StatusText tone={m.phase === 'Completed' ? 'good' : m.phase === 'InProgress' ? 'progress' : 'neutral'}>{m.phase}</StatusText>
-                    </TableCell>
-                    <TableCell class="max-w-[28rem] whitespace-normal break-words font-mono text-xs">{[m.step, m.message].filter(Boolean).join(': ') || '-'}</TableCell>
-                    <TableCell>{formatTimestamp(m.startedAt)}</TableCell>
-                    <TableCell>{formatTimestamp(m.finishedAt)}</TableCell>
-                    <TableCell>{formatDuration(spanMs(toDate(m.startedAt), toDate(m.finishedAt), now, m.phase === 'Completed'))}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </Section>
+        <Card id="what" className="scroll-mt-section">
+          <CardHeader>
+            <CardTitle>{t('ops.whatItDoes')}</CardTitle>
+            <CardDescription>{title}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ItemGroup>
+              {op.details.map((d, i) => (
+                <div key={d.key}>
+                  {i > 0 && <ItemSeparator />}
+                  <Item>
+                    <ItemContent>
+                      <ItemTitle>{d.key}</ItemTitle>
+                      <ItemDescription className="break-words">{d.value}</ItemDescription>
+                    </ItemContent>
+                  </Item>
+                </div>
+              ))}
+            </ItemGroup>
+          </CardContent>
+        </Card>
 
-        <Section id="activity" title={t('ops.activity')}>
-          <div class="mb-3 flex items-center gap-2">
-            <Checkbox id="op-warnings-only" checked={warningsOnly} onCheckedChange={(on: boolean | 'indeterminate') => setWarningsOnly(on === true)} />
-            <Label htmlFor="op-warnings-only">{t('ops.warningsOnly')}</Label>
-          </div>
-          {eventsError && <ErrorAlert {...eventsError} />}
-          {events !== null &&
-            (shownEvents.length === 0 ? (
-              <EmptyNote>{t('ops.noEvents')}</EmptyNote>
+        <Card id="machines" className="scroll-mt-section">
+          <CardHeader>
+            <CardTitle>{t('ops.machines')}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {op.machines.length === 0 ? (
+              <EmptyNote icon={ServerIcon}>{t(op.kind === OperationKind.ICHOR ? 'ops.ichorJob' : 'ops.noMachines')}</EmptyNote>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>{t('ops.eventTime')}</TableHead>
-                    <TableHead>{t('ops.eventType')}</TableHead>
-                    <TableHead>{t('ops.eventObject')}</TableHead>
-                    <TableHead>{t('ops.eventReason')}</TableHead>
-                    <TableHead>{t('ops.eventMessage')}</TableHead>
+                    <TableHead>{t('col.name')}</TableHead>
+                    <TableHead>{t('ops.colState')}</TableHead>
+                    <TableHead>{t('ops.colStep')}</TableHead>
+                    <TableHead>{t('ops.startedAt')}</TableHead>
+                    <TableHead>{t('ops.finishedAt')}</TableHead>
+                    <TableHead>{t('ops.duration')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {shownEvents.map((e, i) => (
-                    <TableRow key={i}>
-                      <TableCell class="whitespace-nowrap">{formatTimestamp(e.time)}</TableCell>
+                  {op.machines.map((m) => (
+                    <TableRow key={m.name}>
                       <TableCell>
-                        <Badge variant={e.type === 'Warning' ? 'destructive' : 'outline'}>{e.type}</Badge>
+                        <Button asChild variant="link" size="sm">
+                          <Link to={nodePath(m.name)}>{m.displayName || m.name}</Link>
+                        </Button>
                       </TableCell>
-                      <TableCell class="whitespace-nowrap">{`${e.objectKind}/${e.objectName}`}</TableCell>
-                      <TableCell>{e.reason}</TableCell>
-                      <TableCell class="whitespace-normal break-words font-mono text-xs">{e.message}</TableCell>
+                      <TableCell>
+                        {/* The controller's own word (InProgress, Completed), as received. */}
+                        <StateBadge tone={m.phase === 'Completed' ? 'good' : m.phase === 'InProgress' ? 'progress' : 'neutral'}>{m.phase}</StateBadge>
+                      </TableCell>
+                      <TableCell className="whitespace-normal break-words">{[m.step, m.message].filter(Boolean).join(': ') || '-'}</TableCell>
+                      <TableCell>{formatTimestamp(m.startedAt)}</TableCell>
+                      <TableCell>{formatTimestamp(m.finishedAt)}</TableCell>
+                      <TableCell>{formatDuration(spanMs(toDate(m.startedAt), toDate(m.finishedAt), now, m.phase === 'Completed'))}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
-            ))}
-        </Section>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card id="activity" className="scroll-mt-section">
+          <CardHeader>
+            <CardTitle>{t('ops.activity')}</CardTitle>
+            <CardAction>
+              <FormField orientation="horizontal">
+                <Checkbox id="op-warnings-only" checked={warningsOnly} onCheckedChange={(on: boolean | 'indeterminate') => setWarningsOnly(on === true)} />
+                <FieldLabel htmlFor="op-warnings-only">{t('ops.warningsOnly')}</FieldLabel>
+              </FormField>
+            </CardAction>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {eventsError && <ErrorAlert {...eventsError} />}
+            {events !== null &&
+              (shownEvents.length === 0 ? (
+                <EmptyNote icon={WorkflowIcon}>{t('ops.noEvents')}</EmptyNote>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{t('ops.eventTime')}</TableHead>
+                      <TableHead>{t('ops.eventType')}</TableHead>
+                      <TableHead>{t('ops.eventObject')}</TableHead>
+                      <TableHead>{t('ops.eventReason')}</TableHead>
+                      <TableHead>{t('ops.eventMessage')}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {shownEvents.map((e, i) => (
+                      <TableRow key={i}>
+                        <TableCell>{formatTimestamp(e.time)}</TableCell>
+                        <TableCell>
+                          <Badge variant={e.type === 'Warning' ? 'destructive' : 'outline'}>
+                            {e.type === 'Warning' && <CircleAlertIcon data-icon="inline-start" aria-hidden="true" />}
+                            {e.type}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{`${e.objectKind}/${e.objectName}`}</TableCell>
+                        <TableCell>{e.reason}</TableCell>
+                        <TableCell className="whitespace-normal break-words">{e.message}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ))}
+          </CardContent>
+        </Card>
       </div>
     </>
   )

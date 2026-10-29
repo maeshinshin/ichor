@@ -1,5 +1,6 @@
 import type { ComponentChildren } from 'preact'
 import { RefreshCwIcon, SearchIcon } from 'lucide-preact'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group'
 import { TableRow } from '@/components/ui/table'
@@ -14,6 +15,7 @@ export function ListToolbar({
   shown,
   total,
   onRefresh,
+  stock = false,
   children,
 }: {
   query: string
@@ -21,6 +23,8 @@ export function ListToolbar({
   shown: number
   total: number
   onRefresh?: () => void
+  // stock shows the count as a stock Badge instead of muted text.
+  stock?: boolean
   children?: ComponentChildren
 }) {
   const t = useT()
@@ -38,9 +42,15 @@ export function ListToolbar({
           onInput={(e) => onQuery((e.currentTarget as HTMLInputElement).value)}
         />
       </InputGroup>
-      <span class="text-sm text-muted-foreground" aria-live="polite">
-        {shown === total ? t('list.count', { n: total }) : t('list.countOf', { shown, total })}
-      </span>
+      {stock ? (
+        <Badge variant="secondary" aria-live="polite">
+          {shown === total ? t('list.count', { n: total }) : t('list.countOf', { shown, total })}
+        </Badge>
+      ) : (
+        <span class="text-sm text-muted-foreground" aria-live="polite">
+          {shown === total ? t('list.count', { n: total }) : t('list.countOf', { shown, total })}
+        </span>
+      )}
       <div class="ml-auto flex items-center gap-2">
         {children}
         {onRefresh && (

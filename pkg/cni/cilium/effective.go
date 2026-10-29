@@ -102,15 +102,20 @@ func (p Preset) effective(kubeProxy cni.KubeProxyMode) (map[string]any, error) {
 	return values.Effective(defaults, p.user, owned), nil
 }
 
+// newPreset is the Preset for a kube-proxy mode and tunnel, both validated.
+func newPreset(kubeProxy cni.KubeProxyMode, tunnel string) (Preset, error) {
+	if err := kubeProxy.Validate(); err != nil {
+		return Preset{}, err
+	}
+
+	return New().WithTunnel(tunnel)
+}
+
 // Layers returns Ichor's own values split into the overridable defaults and
 // the owned keys, for showing the layers separately.
 // tunnel is "", "vxlan" or "geneve".
 func Layers(kubeProxy cni.KubeProxyMode, tunnel string) (defaults, owned map[string]any, err error) {
-	if err := kubeProxy.Validate(); err != nil {
-		return nil, nil, err
-	}
-
-	p, err := New().WithTunnel(tunnel)
+	p, err := newPreset(kubeProxy, tunnel)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -123,11 +128,7 @@ func Layers(kubeProxy cni.KubeProxyMode, tunnel string) (defaults, owned map[str
 // tunnel is "", "vxlan" or "geneve". A user value for an owned key is an
 // error naming the key.
 func EffectiveValues(user map[string]any, kubeProxy cni.KubeProxyMode, tunnel string) (map[string]any, error) {
-	if err := kubeProxy.Validate(); err != nil {
-		return nil, err
-	}
-
-	p, err := New().WithTunnel(tunnel)
+	p, err := newPreset(kubeProxy, tunnel)
 	if err != nil {
 		return nil, err
 	}

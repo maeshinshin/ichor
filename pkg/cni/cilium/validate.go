@@ -54,16 +54,12 @@ type ValidationContext struct {
 // It checks the chart schema, owned keys, unknown keys, the size cap and the
 // three guards from the Talos guide, and joins every problem it finds.
 func ValidateValues(user map[string]any, c ValidationContext) error {
-	if err := c.KubeProxy.Validate(); err != nil {
-		return err
-	}
-
-	spec, err := valuesSpec()
+	p, err := newPreset(c.KubeProxy, c.Tunnel)
 	if err != nil {
 		return err
 	}
 
-	p, err := New().WithTunnel(c.Tunnel)
+	spec, err := valuesSpec()
 	if err != nil {
 		return err
 	}

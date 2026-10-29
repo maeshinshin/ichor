@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	admissionv1 "k8s.io/api/admission/v1"
 	authnv1 "k8s.io/api/authentication/v1"
 	authzv1 "k8s.io/api/authorization/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,9 +18,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/settings"
 )
 
 // sarByUser answers SubjectAccessReviews from a table user -> allowed ichorinstallations subresources.
+const (
+	gateAdmin     = "admin"
+	gateVersioner = "versioner"
+	gateSettings  = "settings"
+)
+
 func sarByUser(t *testing.T, table map[string][]string) client.Client {
 	t.Helper()
 
@@ -50,17 +56,17 @@ func sarByUser(t *testing.T, table map[string][]string) client.Client {
 }
 
 func settingsCtx(user string, dryRun bool) context.Context {
-	req := admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{
-		UserInfo: authnv1.UserInfo{Username: user}, DryRun: &dryRun,
-	}}
+	var req admission.Request
+
+	req.UserInfo, req.DryRun = authnv1.UserInfo{Username: user}, &dryRun
 
 	return admission.NewContextWithRequest(context.Background(), req)
 }
 
 func inst(mod func(*ichorv1alpha1.IchorInstallationSpec)) *ichorv1alpha1.IchorInstallation {
 	i := &ichorv1alpha1.IchorInstallation{
-		ObjectMeta: metav1.ObjectMeta{Name: "ichor"},
-		Spec:       ichorv1alpha1.IchorInstallationSpec{Version: "v0.1.0"},
+		Name: settings.SingletonName,
+		Spec: ichorv1alpha1.IchorInstallationSpec{Version: "v0.1.0"},
 	}
 	if mod != nil {
 		mod(&i.Spec)
@@ -87,10 +93,10 @@ func TestSettingsGate(t *testing.T) {
 	}
 
 	table := map[string][]string{
-		"admin":     {"version", "reclaim", "settings"},
-		"settings":  {"settings"},
-		"versioner": {"version"},
-		"plain":     nil,
+		gateAdmin:     {"version", "reclaim", gateSettings},
+		gateSettings:  {gateSettings},
+		gateVersioner: {"version"},
+		bgUnitPlain:   nil,
 	}
 
 	tests := []struct {
@@ -102,23 +108,26 @@ func TestSettingsGate(t *testing.T) {
 		wantErr  string // substring; empty means allowed
 		wantEv   string // substring of the Event; empty means none expected
 	}{
-		{name: "no spec change needs nothing", user: "plain", old: inst(nil), new: inst(nil)},
-		{name: "version needs /version", user: "plain", old: inst(nil), new: inst(bump), wantErr: "ichorinstallations/version"},
-		{name: "version by holder", user: "versioner", old: inst(nil), new: inst(bump), wantEv: "spec.version: v0.1.0 -> v0.2.0"},
-		{name: "users need /settings", user: "versioner", old: inst(nil), new: inst(ttl), wantErr: "ichorinstallations/settings"},
-		{name: "users by holder", user: "settings", old: inst(nil), new: inst(ttl), wantEv: "spec.users.tokenTTL: <unset> -> 10m0s"},
-		{name: "reclaim needs /reclaim", user: "settings", old: inst(nil), new: confirmed(inst(enableReclaim)), wantErr: "ichorinstallations/reclaim"},
-		{name: "reclaim needs the confirm annotation", user: "admin", old: inst(nil), new: inst(enableReclaim), wantErr: "confirm-reclaim"},
-		{name: "reclaim confirmed by admin", user: "admin", old: inst(nil), new: confirmed(inst(enableReclaim)), wantEv: "spec.reclaim.enabled: <unset> -> true"},
-		{name: "disabling reclaim needs no annotation", user: "admin", old: inst(enableReclaim),
-			new: inst(func(s *ichorv1alpha1.IchorInstallationSpec) { f := false; s.Reclaim = &ichorv1alpha1.IchorReclaimSettings{Enabled: &f} }),
+		{name: "no spec change needs nothing", user: bgUnitPlain, old: inst(nil), new: inst(nil)},
+		{name: "version needs /version", user: bgUnitPlain, old: inst(nil), new: inst(bump), wantErr: "ichorinstallations/version"},
+		{name: "version by holder", user: gateVersioner, old: inst(nil), new: inst(bump), wantEv: "spec.version: v0.1.0 -> v0.2.0"},
+		{name: "users need /settings", user: gateVersioner, old: inst(nil), new: inst(ttl), wantErr: "ichorinstallations/settings"},
+		{name: "users by holder", user: gateSettings, old: inst(nil), new: inst(ttl), wantEv: "spec.users.tokenTTL: <unset> -> 10m0s"},
+		{name: "reclaim needs /reclaim", user: gateSettings, old: inst(nil), new: confirmed(inst(enableReclaim)), wantErr: "ichorinstallations/reclaim"},
+		{name: "reclaim needs the confirm annotation", user: gateAdmin, old: inst(nil), new: inst(enableReclaim), wantErr: "confirm-reclaim"},
+		{name: "reclaim confirmed by admin", user: gateAdmin, old: inst(nil), new: confirmed(inst(enableReclaim)), wantEv: "spec.reclaim.enabled: <unset> -> true"},
+		{name: "disabling reclaim needs no annotation", user: gateAdmin, old: inst(enableReclaim),
+			new: inst(func(s *ichorv1alpha1.IchorInstallationSpec) {
+				f := false
+				s.Reclaim = &ichorv1alpha1.IchorReclaimSettings{Enabled: &f}
+			}),
 			wantEv: "true -> false"},
-		{name: "read-only denies users", user: "admin", old: inst(nil), new: inst(ttl), readOnly: true, wantErr: "managed by the deployment"},
-		{name: "read-only denies reclaim", user: "admin", old: inst(nil), new: confirmed(inst(enableReclaim)), readOnly: true, wantErr: "managed by the deployment"},
-		{name: "read-only still allows a version bump", user: "versioner", old: inst(nil), new: inst(bump), readOnly: true, wantEv: "spec.version"},
-		{name: "the controller is exempt", user: "system:serviceaccount:ichor-system:ichor-controller", old: nil, new: inst(bump)},
-		{name: "dry run emits no Event", user: "versioner", old: inst(nil), new: inst(bump), dryRun: true},
-		{name: "create is checked as a change from empty", user: "plain", old: nil, new: inst(nil), wantErr: "ichorinstallations/version"},
+		{name: "read-only denies users", user: gateAdmin, old: inst(nil), new: inst(ttl), readOnly: true, wantErr: "managed by the deployment"},
+		{name: "read-only denies reclaim", user: gateAdmin, old: inst(nil), new: confirmed(inst(enableReclaim)), readOnly: true, wantErr: "managed by the deployment"},
+		{name: "read-only still allows a version bump", user: gateVersioner, old: inst(nil), new: inst(bump), readOnly: true, wantEv: "spec.version"},
+		{name: "the controller is exempt", user: testControllerUser, old: nil, new: inst(bump)},
+		{name: "dry run emits no Event", user: gateVersioner, old: inst(nil), new: inst(bump), dryRun: true},
+		{name: "create is checked as a change from empty", user: bgUnitPlain, old: nil, new: inst(nil), wantErr: "ichorinstallations/version"},
 	}
 
 	for _, tt := range tests {
@@ -128,7 +137,7 @@ func TestSettingsGate(t *testing.T) {
 			rec := record.NewFakeRecorder(10)
 			g := &SettingsGate{
 				Client: sarByUser(t, table), ReadOnly: tt.readOnly, Recorder: rec,
-				ExemptUsers: []string{"system:serviceaccount:ichor-system:ichor-controller"},
+				ExemptUsers: []string{testControllerUser},
 			}
 
 			err := g.check(settingsCtx(tt.user, tt.dryRun), tt.old, tt.new)

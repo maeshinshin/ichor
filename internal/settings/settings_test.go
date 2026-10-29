@@ -19,7 +19,7 @@ func bp(b bool) *bool { return &b }
 
 func inst() *ichorv1alpha1.IchorInstallation {
 	return &ichorv1alpha1.IchorInstallation{
-		ObjectMeta: metav1.ObjectMeta{Name: SingletonName},
+		Name: SingletonName,
 		Spec: ichorv1alpha1.IchorInstallationSpec{
 			Reclaim:  &ichorv1alpha1.IchorReclaimSettings{Enabled: bp(true)},
 			Users:    &ichorv1alpha1.IchorUserSettings{TokenTTL: &metav1.Duration{Duration: 10 * time.Minute}},
@@ -32,18 +32,18 @@ var fb = Fallback{TokenTTL: 5 * time.Minute, RefreshLifetime: 12 * time.Hour}
 
 func TestResolvePrecedence(t *testing.T) {
 	e := Resolve(inst(), fb, false)
-	if !e.Reclaim.V || e.Reclaim.Source != "spec" ||
-		e.TokenTTL.V != 10*time.Minute || e.TokenTTL.Source != "spec" ||
-		e.DriftPolicy.V != "autoCorrect" || e.DriftPolicy.Source != "spec" {
+	if !e.Reclaim.V || e.Reclaim.Source != ichorv1alpha1.IchorSourceSpec ||
+		e.TokenTTL.V != 10*time.Minute || e.TokenTTL.Source != ichorv1alpha1.IchorSourceSpec ||
+		e.DriftPolicy.V != "autoCorrect" || e.DriftPolicy.Source != ichorv1alpha1.IchorSourceSpec {
 		t.Fatalf("set fields must win: %+v", e)
 	}
 
-	if e.RefreshLifetime.V != 12*time.Hour || e.RefreshLifetime.Source != "deployment" {
+	if e.RefreshLifetime.V != 12*time.Hour || e.RefreshLifetime.Source != ichorv1alpha1.IchorSourceDeployment {
 		t.Fatalf("unset field must fall back: %+v", e.RefreshLifetime)
 	}
 
 	e = Resolve(nil, Fallback{ReclaimEnabled: true}, false)
-	if !e.Reclaim.V || e.Reclaim.Source != "deployment" || e.DriftPolicy.V != "warnOnly" {
+	if !e.Reclaim.V || e.Reclaim.Source != ichorv1alpha1.IchorSourceDeployment || e.DriftPolicy.V != "warnOnly" {
 		t.Fatalf("no object means the fallback: %+v", e)
 	}
 }
@@ -55,7 +55,7 @@ func TestResolveReadOnlyIgnoresSpec(t *testing.T) {
 	}
 
 	for _, s := range []string{e.Reclaim.Source, e.TokenTTL.Source, e.DriftPolicy.Source} {
-		if s != "deployment" {
+		if s != ichorv1alpha1.IchorSourceDeployment {
 			t.Fatalf("source = %s", s)
 		}
 	}

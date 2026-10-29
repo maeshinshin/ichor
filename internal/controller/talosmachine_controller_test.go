@@ -39,6 +39,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
+	"github.com/maeshinshin/ichor/internal/settings"
 	"github.com/maeshinshin/ichor/pkg/clusterlock"
 	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/render"
@@ -376,7 +377,7 @@ func newTestCluster(secretName, versionContract string) *ichorv1alpha1.TalosClus
 			VersionContract:   versionContract,
 			SecretsRef:        corev1.LocalObjectReference{Name: secretName},
 			ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: 1, Schedulable: testSchedulable},
-			DriftPolicy:       "warnOnly", // what the defaulting webhook fills; envtest here runs without it
+			DriftPolicy:       settings.DriftPolicyDefault, // what the defaulting webhook fills; envtest here runs without it
 		},
 	}
 	Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
@@ -909,7 +910,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		bundle := newTestBundle("v1.14")
 		secret := newTestSecret(bundle)
 		cluster := newTestCluster(secret.Name, "v1.14")
-		Expect(cluster.Spec.DriftPolicy).To(Equal("warnOnly"), "set by the helper")
+		Expect(cluster.Spec.DriftPolicy).To(Equal(settings.DriftPolicyDefault), "set by the helper")
 		m := newTestMachine(cluster.Name, true)
 
 		current := renderWithConfig(cluster, m, bundle, layerCluster, nil, minimalConfigSkeleton())
@@ -1140,7 +1141,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		// mechanism, from a render-affecting change (see the package doc
 		// comment's note on this). Setting it up front keeps this test
 		// about drift, not about that edge case.
-		cluster.Spec.DriftPolicy = "autoCorrect"
+		cluster.Spec.DriftPolicy = driftPolicyAutoCorrect
 		Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
 
 		patch := newTestPatch(cluster.Name, layerCluster, nil, extraArgsConfig())
@@ -1182,7 +1183,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		// See the "corrects drift" test above: driftPolicy is set before the
 		// converging reconcile, not after, so flipping it doesn't itself
 		// look like a render-affecting change.
-		cluster.Spec.DriftPolicy = "autoCorrect"
+		cluster.Spec.DriftPolicy = driftPolicyAutoCorrect
 		Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
 
 		baseline, baseHash, err := render.Render(cluster, m, bundle, nil, nil)

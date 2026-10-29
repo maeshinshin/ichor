@@ -118,9 +118,9 @@ func main() {
 	tlsCert := flag.String("tls-cert-file", "", "the operator's certificate; wins over --tls-dir when the files exist (with --tls-key-file)")
 	tlsKey := flag.String("tls-key-file", "", "private key for --tls-cert-file")
 
-	reclaimEnabled := flag.Bool("reclaim-enabled", os.Getenv("ICHOR_RECLAIM_ENABLED") == "true", "enable the break-glass machine reclaim API")
+	reclaimEnabled := flag.Bool("reclaim-enabled", envTrue("ICHOR_RECLAIM_ENABLED"), "enable the break-glass machine reclaim API")
 
-	settingsReadOnly := flag.Bool("settings-read-only", os.Getenv("ICHOR_SETTINGS_READ_ONLY") == "true", "ignore the runtime settings in the IchorInstallation spec (chart settings.readOnly)")
+	settingsReadOnly := flag.Bool("settings-read-only", envTrue("ICHOR_SETTINGS_READ_ONLY"), "ignore the runtime settings in the IchorInstallation spec (chart settings.readOnly)")
 
 	flag.Parse()
 
@@ -306,3 +306,6 @@ func main() {
 		_ = internalSrv.Shutdown(shutdownCtx)
 	}
 }
+
+// envTrue reports whether the environment variable is "true".
+func envTrue(name string) bool { return os.Getenv(name) == "true" }

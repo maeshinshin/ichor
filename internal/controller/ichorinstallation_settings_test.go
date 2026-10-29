@@ -31,7 +31,7 @@ var _ = Describe("IchorInstallation settings", func() {
 		inst := createInstallation("v0.1.0")
 		inst.Spec.Reclaim = &ichorv1alpha1.IchorReclaimSettings{Enabled: &yes}
 		inst.Spec.Users = &ichorv1alpha1.IchorUserSettings{TokenTTL: &metav1.Duration{Duration: 10 * time.Minute}}
-		inst.Spec.Defaults = &ichorv1alpha1.IchorDefaultSettings{DriftPolicy: "autoCorrect"}
+		inst.Spec.Defaults = &ichorv1alpha1.IchorDefaultSettings{DriftPolicy: driftPolicyAutoCorrect}
 		Expect(k8sClient.Update(ctx, inst)).To(Succeed())
 	}
 
@@ -42,9 +42,9 @@ var _ = Describe("IchorInstallation settings", func() {
 		got := reconcileOnce(&IchorInstallationReconciler{Client: k8sClient})
 		eff := got.Status.Effective
 		Expect(eff).NotTo(BeNil())
-		Expect(*eff.ReclaimEnabled).To(Equal(ichorv1alpha1.IchorEffectiveValue{Value: "true", Source: "spec"}))
-		Expect(*eff.DriftPolicy).To(Equal(ichorv1alpha1.IchorEffectiveValue{Value: "autoCorrect", Source: "spec"}))
-		Expect(*eff.TokenTTL).To(Equal(ichorv1alpha1.IchorEffectiveValue{Value: "10m0s", Source: "spec"}))
+		Expect(*eff.ReclaimEnabled).To(Equal(ichorv1alpha1.IchorEffectiveValue{Value: "true", Source: ichorv1alpha1.IchorSourceSpec}))
+		Expect(*eff.DriftPolicy).To(Equal(ichorv1alpha1.IchorEffectiveValue{Value: driftPolicyAutoCorrect, Source: ichorv1alpha1.IchorSourceSpec}))
+		Expect(*eff.TokenTTL).To(Equal(ichorv1alpha1.IchorEffectiveValue{Value: "10m0s", Source: ichorv1alpha1.IchorSourceSpec}))
 		Expect(eff.RefreshLifetime).To(BeNil(), "ichor-ui reports a value the spec does not set")
 
 		c := apimeta.FindStatusCondition(got.Status.Conditions, ichorv1alpha1.ConditionSettingsApplied)
@@ -59,8 +59,8 @@ var _ = Describe("IchorInstallation settings", func() {
 		got := reconcileOnce(&IchorInstallationReconciler{
 			Client: k8sClient, SettingsFallback: settings.Fallback{ReclaimEnabled: true},
 		})
-		Expect(*got.Status.Effective.ReclaimEnabled).To(Equal(ichorv1alpha1.IchorEffectiveValue{Value: "true", Source: "deployment"}))
-		Expect(*got.Status.Effective.DriftPolicy).To(Equal(ichorv1alpha1.IchorEffectiveValue{Value: "warnOnly", Source: "deployment"}))
+		Expect(*got.Status.Effective.ReclaimEnabled).To(Equal(ichorv1alpha1.IchorEffectiveValue{Value: "true", Source: ichorv1alpha1.IchorSourceDeployment}))
+		Expect(*got.Status.Effective.DriftPolicy).To(Equal(ichorv1alpha1.IchorEffectiveValue{Value: settings.DriftPolicyDefault, Source: ichorv1alpha1.IchorSourceDeployment}))
 	})
 
 	It("ignores the spec settings under --settings-read-only", func() {
@@ -68,7 +68,7 @@ var _ = Describe("IchorInstallation settings", func() {
 		setSpec()
 
 		got := reconcileOnce(&IchorInstallationReconciler{Client: k8sClient, SettingsReadOnly: true})
-		Expect(*got.Status.Effective.ReclaimEnabled).To(Equal(ichorv1alpha1.IchorEffectiveValue{Value: "false", Source: "deployment"}))
+		Expect(*got.Status.Effective.ReclaimEnabled).To(Equal(ichorv1alpha1.IchorEffectiveValue{Value: "false", Source: ichorv1alpha1.IchorSourceDeployment}))
 		Expect(got.Status.Effective.TokenTTL).To(BeNil())
 		Expect(apimeta.FindStatusCondition(got.Status.Conditions, ichorv1alpha1.ConditionSettingsApplied).Reason).To(Equal("ReadOnly"))
 	})

@@ -85,6 +85,7 @@ const (
 	reasonCNIInvalidValues         = "InvalidValues"
 	reasonCNIApplied               = "Applied"
 	reasonCNITunnelMismatch        = "TunnelMismatch"
+	tunnelMode                     = "tunnel"
 )
 
 // CNIHandoverReconciler hands the bootstrapped Cilium to Ichor and keeps
@@ -241,8 +242,8 @@ func (r *CNIHandoverReconciler) networkMismatch(
 	}
 
 	for _, k := range []struct{ key, path, def, what string }{
-		{"tunnel-protocol", "tunnelProtocol", "vxlan", "tunnel"},
-		{"routing-mode", "routingMode", "tunnel", "routing mode"},
+		{"tunnel-protocol", "tunnelProtocol", "vxlan", tunnelMode},
+		{"routing-mode", "routingMode", tunnelMode, "routing mode"},
 		{"ipam", "ipam.mode", "cluster-pool", "IPAM mode"},
 	} {
 		want, live := str(k.path, k.def), cm.Data[k.key]
@@ -250,7 +251,7 @@ func (r *CNIHandoverReconciler) networkMismatch(
 			continue
 		}
 
-		if k.what == "tunnel" {
+		if k.what == tunnelMode {
 			return fmt.Sprintf("spec.cni.tunnel is %s but the running Cilium uses %s; Ichor does not change the tunnel of a running network",
 				want, live), nil
 		}

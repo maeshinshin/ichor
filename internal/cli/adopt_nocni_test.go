@@ -98,7 +98,7 @@ func TestCheckNoCNIPreconditions(t *testing.T) {
 	withCIDR := detectCNI(factsFor(t, cniNode("a", "10.244.0.0/24", false, netNotReady)), CNIFacts{Kind: CNINone})
 	noCIDR := detectCNI(factsFor(t, cniNode("a", "10.244.0.0/24", false, netNotReady), cniNode("b", "", false, netNotReady)), CNIFacts{Kind: CNINone})
 
-	if err := checkNoCNIPreconditions(withCIDR, ok, "v1.14"); err != nil {
+	if err := checkNoCNIPreconditions(withCIDR, ok, kubePrismDocContract); err != nil {
 		t.Errorf("good cluster: %v", err)
 	}
 
@@ -106,7 +106,7 @@ func TestCheckNoCNIPreconditions(t *testing.T) {
 		"disabled":   {"a": {Enabled: true, Port: 7445}, "b": {}},
 		"other port": {"a": {Enabled: true, Port: 7446}},
 	} {
-		err := checkNoCNIPreconditions(withCIDR, kp, "v1.14")
+		err := checkNoCNIPreconditions(withCIDR, kp, kubePrismDocContract)
 		if err == nil || !strings.Contains(err.Error(), "Enable KubePrism") {
 			t.Errorf("%s: err = %v, want the enable-KubePrism message", name, err)
 		}
@@ -115,7 +115,7 @@ func TestCheckNoCNIPreconditions(t *testing.T) {
 	off := map[string]KubePrismFacts{"a": {}}
 
 	for contract, want := range map[string]string{
-		"v1.14": "KubePrismConfig", "v1.14.2": "KubePrismConfig", "": "KubePrismConfig",
+		kubePrismDocContract: kubePrismDoc, "v1.14.2": kubePrismDoc, "": kubePrismDoc,
 		"v1.13": "machine.features.kubePrism", "v1.12": "machine.features.kubePrism",
 	} {
 		err := checkNoCNIPreconditions(withCIDR, off, contract)
@@ -124,7 +124,7 @@ func TestCheckNoCNIPreconditions(t *testing.T) {
 		}
 	}
 
-	err := checkNoCNIPreconditions(noCIDR, ok, "v1.14")
+	err := checkNoCNIPreconditions(noCIDR, ok, kubePrismDocContract)
 	if err == nil || !strings.Contains(err.Error(), "spec.podCIDR") || !strings.Contains(err.Error(), "b") {
 		t.Errorf("no pod CIDR: err = %v, want the podCIDR message naming b", err)
 	}
@@ -202,7 +202,7 @@ func TestAdoptTunnelRefusedWhenCiliumIsNotInstalled(t *testing.T) {
 	env := newFlowEnv(t, cniCilium, nil)
 	deps := env.deps(t)
 	deps.Target = fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(testDS("cilium", ciliumImage), ciliumCM("false")).Build()
-	deps.Tunnel = "vxlan"
+	deps.Tunnel = ciliumTunnelVxlan
 
 	if err := runAdopt(context.Background(), env.cluster.Name, testNamespace, deps); err == nil || !strings.Contains(err.Error(), "--tunnel only applies") {
 		t.Fatalf("runAdopt = %v, want the --tunnel refusal", err)

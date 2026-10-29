@@ -78,8 +78,8 @@ func managedAdopted(t *testing.T, c *foreign.Cluster, before map[string]string) 
 	time.Sleep(3 * time.Minute) // the controller renders and applies; it must change no CNI-relevant path
 	sameHashes(t, before, cniPaths(t, c))
 	out, err := ichorCLI(t, c, "cluster", "status", c.Opts.Prefix)
-	if err != nil || !strings.Contains(strings.ToLower(out), "cilium") {
-		t.Errorf("cluster status does not name Cilium (err=%v)", err)
+	if err != nil || !strings.Contains(out, "cni: cilium\n") || strings.Contains(out, "unmanaged") {
+		t.Errorf("cluster status does not say managed Cilium (err=%v)", err)
 	}
 }
 

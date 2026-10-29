@@ -471,15 +471,11 @@ func (st *adoptState) inspect(ctx context.Context, deps adoptDeps) error {
 		return err
 	}
 
-	// 1.6: replaced mode needs KubePrism on every node, and turning it on and moving Cilium onto it
-	// cannot be ordered safely in one step.
-	if !st.unmanaged && st.kubeProxy == kubeProxyReplaced {
-		for _, n := range st.nodes {
-			if n.Skipped == "" && !n.Facts.KubePrism.Enabled {
-				return fmt.Errorf("adopt: kube-proxy is replaced by Cilium but KubePrism is off on machine %q; Ichor's Cilium needs KubePrism "+
-					"on port 7445, and turning it on while moving Cilium onto it cannot be ordered safely in one step. "+
-					"Enable KubePrism with your usual tool, then run adopt again", n.M.Name)
-			}
+	// 1.6: every adoption that ends in an Ichor-managed Cilium needs KubePrism on 7445 already: the
+	// CNI Job reaches the API through it, and turning it on needs a reboot adopt does not order.
+	if !st.unmanaged {
+		if err := st.checkKubePrism(deps); err != nil {
+			return err
 		}
 	}
 
@@ -1203,4 +1199,23 @@ func inspectCNI(ctx context.Context, deps adoptDeps, talos CNIFacts, unmanaged b
 	}
 
 	return rep, facts, nil
+}
+
+// checkKubePrism refuses, with nothing written, when KubePrism is off (or not on 7445) on a machine.
+func (st *adoptState) checkKubePrism(deps adoptDeps) error {
+	contract := cmp.Or(deps.ContractOverride, st.cluster.Spec.VersionContract, st.cluster.Spec.TalosVersion)
+
+	for _, n := range st.nodes {
+		if n.Skipped != "" || n.Facts == nil {
+			continue
+		}
+
+		if kp := n.Facts.KubePrism; !kp.Enabled || (kp.Port != 0 && kp.Port != 7445) {
+			return fmt.Errorf("adopt: KubePrism is off on machine %s; Ichor's Cilium needs KubePrism on port 7445 "+
+				"(the CNI Job reaches the API through it). Enable KubePrism (%s) with your usual tool, then run adopt again",
+				n.M.Name, kubePrismSetting(contract))
+		}
+	}
+
+	return nil
 }

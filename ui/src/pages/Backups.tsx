@@ -1,8 +1,15 @@
 import { useEffect, useState } from 'preact/hooks'
+import { ExternalLinkIcon, InboxIcon, TriangleAlertIcon } from 'lucide-preact'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { CodeBlock, CodeBlockActions, CodeBlockContent, CodeBlockCopyButton, CodeBlockHeader, CodeBlockLine, CodeBlockTitle } from '@/components/ui/code-block'
+import { Item, ItemContent, ItemDescription, ItemGroup, ItemSeparator, ItemTitle } from '@/components/ui/item'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { PageHeader } from '@/components/PageHeader'
+import { SectionCard } from '@/components/SectionCard'
+import { TitleBar } from '@/components/TitleBar'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
-import { StatusText } from '@/components/Status'
+import { ToneBadge } from '@/components/ToneBadge'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { RestoreDialog } from '@/components/RestoreDialog'
 import { BackupNow } from '@/components/BackupNow'
@@ -46,35 +53,56 @@ export function Backups() {
   if (!ref || !backups) {
     return (
       <div>
-        <PageHeader title={t('backups.title')} />
-        <EmptyNote>{t('backups.noCluster')}</EmptyNote>
+        <TitleBar title={t('backups.title')} />
+        <EmptyNote icon={InboxIcon}>{t('backups.noCluster')}</EmptyNote>
       </div>
     )
   }
 
   const all = backups.flatMap((b) => b.snapshots.map((s) => ({ backup: b, snap: s })))
   all.sort((a, b) => Number((b.snap.time?.seconds ?? 0n) - (a.snap.time?.seconds ?? 0n)) || a.snap.name.localeCompare(b.snap.name))
+  const example = exampleBackupYaml(ref)
 
   return (
-    <div class="space-y-8">
-      <PageHeader
+    <div class="space-y-4">
+      <TitleBar
         title={t('backups.title')}
-        kind={ref.name}
+        description={ref.name}
         actions={backups.length > 0 ? <RestoreDialog cluster={ref} disabled={all.length === 0} /> : undefined}
       />
       {backups.length === 0 ? (
-        <section class="space-y-3">
-          <h2 class="text-lg font-medium">{t('backups.emptyTitle')}</h2>
-          <p class="text-sm text-muted-foreground">{t('backups.emptyBody')}</p>
-          <pre class="overflow-x-auto rounded-md border bg-muted p-3 text-xs">{exampleBackupYaml(ref)}</pre>
-          <a class="text-sm underline" href={adrUrl} target="_blank" rel="noreferrer">
-            {t('backups.emptyDoc')}
-          </a>
-        </section>
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('backups.emptyTitle')}</CardTitle>
+            <CardDescription>{t('backups.emptyBody')}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <CodeBlock size="sm">
+              <CodeBlockHeader>
+                <CodeBlockTitle>TalosEtcdBackup</CodeBlockTitle>
+                <CodeBlockActions>
+                  <CodeBlockCopyButton value={example} />
+                </CodeBlockActions>
+              </CodeBlockHeader>
+              <CodeBlockContent>
+                {example.split('\n').map((line, i) => (
+                  <CodeBlockLine key={i}>{line}</CodeBlockLine>
+                ))}
+              </CodeBlockContent>
+            </CodeBlock>
+          </CardContent>
+          <CardFooter>
+            <Button asChild variant="link" size="sm">
+              <a href={adrUrl} target="_blank" rel="noreferrer">
+                {t('backups.emptyDoc')}
+                <ExternalLinkIcon data-icon="inline-end" aria-hidden="true" />
+              </a>
+            </Button>
+          </CardFooter>
+        </Card>
       ) : (
         <>
-          <section class="space-y-3">
-            <h2 class="text-lg font-medium">{t('backups.configs')}</h2>
+          <SectionCard title={t('backups.configs')} description={t('backups.hint')}>
             <Table>
               <TableHeader>
                 <TableRow>
@@ -94,21 +122,21 @@ export function Backups() {
                   const last = newestSnapshot(b.snapshots)
                   return (
                     <TableRow key={b.ref?.name}>
-                      <TableCell class="font-medium">{b.ref?.name}</TableCell>
-                      <TableCell class="font-mono text-xs">{b.schedule}</TableCell>
-                      <TableCell class="font-mono text-xs">{destinationLabel(b.destination)}</TableCell>
+                      <TableCell className="font-medium">{b.ref?.name}</TableCell>
+                      <TableCell className="font-mono">{b.schedule}</TableCell>
+                      <TableCell className="font-mono">{destinationLabel(b.destination)}</TableCell>
                       <TableCell>{t('backups.keepLast', { count: b.keepLast })}</TableCell>
                       <TableCell>{b.lastSuccessTime ? formatTimestamp(b.lastSuccessTime) : last ? formatTimestamp(last.time) : t('backups.never')}</TableCell>
                       <TableCell>{b.snapshots.length}</TableCell>
                       <TableCell>{formatBytes(totalBytes(b.snapshots))}</TableCell>
                       <TableCell>
                         {b.suspended ? (
-                          <StatusText tone="neutral">{t('backups.suspended')}</StatusText>
+                          <ToneBadge tone="neutral">{t('backups.suspended')}</ToneBadge>
                         ) : (
-                          <StatusText tone={b.ready ? 'good' : 'warn'}>{b.ready ? t('backups.ok') : t('backups.stale')}</StatusText>
+                          <ToneBadge tone={b.ready ? 'good' : 'warn'}>{b.ready ? t('backups.ok') : t('backups.stale')}</ToneBadge>
                         )}
                       </TableCell>
-                      <TableCell class="text-right">
+                      <TableCell className="text-right">
                         <BackupNow backup={b} onChanged={(next) => setBackups(backups.map((x) => (x.ref?.name === next.ref?.name ? next : x)))} />
                       </TableCell>
                     </TableRow>
@@ -116,31 +144,36 @@ export function Backups() {
                 })}
               </TableBody>
             </Table>
-            <dl class="space-y-1 text-sm">
-              {backups.map((b) => (
-                <div key={b.ref?.name} class="flex flex-wrap gap-x-2">
-                  <dt class="font-medium">{b.ref?.name}</dt>
-                  <dd class="text-muted-foreground">
-                    {b.manualBackupPending
-                      ? t('backups.manualPending')
-                      : b.lastManualBackup
-                        ? t('backups.manualDone', { time: formatTimestamp(b.lastManualBackup) })
-                        : t('backups.manualNone')}
-                  </dd>
+            <ItemGroup>
+              {backups.map((b, i) => (
+                <div key={b.ref?.name}>
+                  {i > 0 && <ItemSeparator />}
+                  <Item>
+                    <ItemContent>
+                      <ItemTitle>{b.ref?.name}</ItemTitle>
+                      <ItemDescription>
+                        {b.manualBackupPending
+                          ? t('backups.manualPending')
+                          : b.lastManualBackup
+                            ? t('backups.manualDone', { time: formatTimestamp(b.lastManualBackup) })
+                            : t('backups.manualNone')}
+                      </ItemDescription>
+                    </ItemContent>
+                  </Item>
                   {b.lastError && (
-                    <dd class="w-full break-words text-amber-600 dark:text-amber-400">
-                      {t('backups.lastError')}: {b.lastError}
-                    </dd>
+                    <Alert variant="destructive">
+                      <TriangleAlertIcon />
+                      <AlertTitle>{t('backups.lastError')}</AlertTitle>
+                      <AlertDescription className="break-words">{b.lastError}</AlertDescription>
+                    </Alert>
                   )}
                 </div>
               ))}
-            </dl>
-            <p class="text-sm text-muted-foreground">{t('backups.hint')}</p>
-          </section>
-          <section class="space-y-3">
-            <h2 class="text-lg font-medium">{t('backups.snapshots')}</h2>
+            </ItemGroup>
+          </SectionCard>
+          <SectionCard title={t('backups.snapshots')} description={t('backups.restoreHint')}>
             {all.length === 0 ? (
-              <EmptyNote>{t('backups.snapNone')}</EmptyNote>
+              <EmptyNote icon={InboxIcon}>{t('backups.snapNone')}</EmptyNote>
             ) : (
               <Table>
                 <TableHeader>
@@ -155,7 +188,7 @@ export function Backups() {
                   {all.map(({ backup, snap }) => (
                     <TableRow key={`${backup.ref?.name}/${snap.name}`}>
                       <TableCell>{formatTimestamp(snap.time)}</TableCell>
-                      <TableCell class="font-mono text-xs">{snap.name}</TableCell>
+                      <TableCell className="font-mono">{snap.name}</TableCell>
                       <TableCell>{backup.ref?.name}</TableCell>
                       <TableCell>{formatBytes(snap.size)}</TableCell>
                     </TableRow>
@@ -163,8 +196,7 @@ export function Backups() {
                 </TableBody>
               </Table>
             )}
-            <p class="text-sm text-muted-foreground">{t('backups.restoreHint')}</p>
-          </section>
+          </SectionCard>
         </>
       )}
     </div>

@@ -35,6 +35,7 @@ func main() {
 	fs := flag.NewFlagSet(os.Args[1], flag.ExitOnError)
 	var o foreign.Options
 	var regPort string
+	var keepRegistry bool
 	fs.StringVar(&o.Prefix, "prefix", foreign.PrefixRoot, "object name prefix (must start with "+foreign.PrefixRoot+")")
 	fs.StringVar(&o.TalosVersion, "talos", "", "Talos version, e.g. v1.14.3 (default: the cached ISO's)")
 	fs.StringVar(&o.K8sVersion, "k8s", "", "Kubernetes version (default: talosctl's)")
@@ -49,6 +50,7 @@ func main() {
 	fs.StringVar(&o.RelayPort, "relay-port", "5015", "local port of the API tunnel")
 	fs.StringVar(&o.CiliumChart, "cilium-chart", "pkg/cni/cilium/chart/cilium-1.18.0.tgz", "cilium chart archive")
 	fs.StringVar(&regPort, "registry-port", "5014", "registry: local port to forward to")
+	fs.BoolVar(&keepRegistry, "keep-registry", false, "down: keep the registry (and the images in it)")
 	_ = fs.Parse(os.Args[2:])
 
 	if err := kube.VerifyContextExists(); err != nil {
@@ -65,7 +67,7 @@ func main() {
 			fmt.Fprintln(os.Stderr, "foreign: up failed:", err)
 		}
 	case "down":
-		err = foreign.Down(o.Prefix, true)
+		err = foreign.Down(o.Prefix, !keepRegistry)
 	case "registry":
 		if _, err = foreign.EnsureRegistry(o.Prefix); err == nil {
 			var dir string

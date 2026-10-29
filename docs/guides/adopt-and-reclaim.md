@@ -189,7 +189,7 @@ it: the Talos and Kubernetes client certificates of the previous
 administrators, and the CA keys held by whoever created the cluster, remain
 valid. Consider `ichor cluster rotate-ca`. Nothing starts a rotation for you.
 
-## Reclaim a machine that another cluster configured
+## Reclaim a machine that another cluster configured ("Reset and add", MachineReclaim)
 
 A node that already runs a configured Talos never reaches maintenance mode, so
 Ichor's join flow cannot take it. Discovery reports it as `AlreadyConfigured`
@@ -236,18 +236,20 @@ Flags:
 If the node's DHCP address changed after the reboot, the command says so and
 suggests a scan instead of guessing.
 
-### With the UI (break-glass, off by default)
+### With the UI ("Reset and add")
 
-This path puts a talosconfig for another cluster into a Secret in your Ichor
-cluster for a few minutes. It is off until you turn it on, and nobody has the
-permission until you give it.
+"Reset and add" (the `MachineReclaim` kind) resets the STATE and EPHEMERAL
+partitions of a machine that another Talos cluster configured and adds it to
+your cluster. It puts a talosconfig for the other cluster into a Secret in your
+Ichor cluster for a few minutes. There is no installation switch: the `reclaim`
+verb on `machinereclaims` decides who may use it, and nobody below `ichor-admin`
+has it until you grant it. (The chart value `reclaim.enabled` and
+`IchorInstallation.spec.reclaim` are deprecated and ignored.)
 
-1. Turn it on in the Helm chart: `reclaim.enabled=true`. (`ichor init` has no
-   switch for it yet.) This also installs the ClusterRole
-   `ichor-machine-reclaimer`, which nothing binds.
-2. Bind that role yourself to the people who may use it. It is in no default
-   role, `ichor-admin` included. Use a RoleBinding in the namespace Ichor runs
-   in (default `ichor-system`):
+1. Who may use it. `ichor:admin` holds the verb. To grant it to anyone else,
+   bind the ClusterRole `ichor-machine-reclaimer` (installed with
+   `rbac.helpers.enabled`) in the namespace Ichor runs in (default
+   `ichor-system`):
 
    ```
    kubectl -n ichor-system create rolebinding reclaim-alice \
@@ -255,20 +257,27 @@ permission until you give it.
    ```
 
    The role grants `create`, `get`, `list`, `update` and the verb `reclaim` on
-   `machinereclaims`. The UI checks the verb and does not offer the page to
+   `machinereclaims`. The UI checks the verb and does not offer the button to
    anyone without it; the webhook checks it again on every create and on every
-   confirmation.
-3. In the UI, open Machines and choose "Reclaim a configured machine" (the
-   `AlreadyConfigured` message links there). Enter the machine's address and
-   paste or upload its talosconfig. If the file has several contexts, name the
-   one to use.
-4. Ichor inspects the machine, using only that address (other endpoints in the
+   confirmation. With Ichor's users off, the UI acts as its ServiceAccount, so
+   bind the role to `ichor-system:ichor-ichor-ui` the same way.
+2. In the UI, open the cluster's "Add node" page. When discovery reaches an
+   address that already runs a Talos configuration, the page offers "Reset and
+   add" next to the message; the Machines page has the same button. Enter the
+   machine's address and paste or upload its talosconfig. If the file has several
+   contexts, name the one to use.
+3. Ichor inspects the machine, using only that address (other endpoints in the
    file are ignored) and stops at "Awaiting confirmation". Nothing has been
    written to the node. You see the foreign cluster's name, the orphaned and
    encrypted volumes and the refusals that apply.
-5. Type the UUID. Pasting works; the box is not pre-filled. Only an exact match
+4. Type the UUID. Pasting works; the box is not pre-filled. Only an exact match
    goes through. The controller then resets the node, waits for maintenance
    mode and the machine appears as pending in the target cluster.
+
+Whoever holds the other cluster's admin talosconfig can already reset that
+machine with `talosctl`; the typed UUID, the quorum and last-control-plane
+refusals, the short-lived single-use Secret and the audit Events are what Ichor
+adds.
 
 The credential:
 

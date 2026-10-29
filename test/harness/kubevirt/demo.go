@@ -92,8 +92,7 @@ func demoMemory(env string) (string, error) {
 }
 
 func demoVMManifest(name, group, memory string, iso isoSource) string {
-	m := renderVM(haVMManifestTmpl, name, iso)
-	m = strings.ReplaceAll(m, "kubevirt-ha", "kubevirt-ui-demo")
+	m := renderVM(name, "kubevirt-ui-demo", iso)
 	// A group label on the launcher pod, so an outer Service can select all of one demo's VMs.
 	m = strings.Replace(m, "  template:\n    metadata:\n      labels:\n",
 		"  template:\n    metadata:\n      labels:\n        ichor.maesh.dev/e2e-group: "+group+"\n", 1)
@@ -150,13 +149,7 @@ func upDemo() error {
 	ips := map[string]string{}
 
 	for _, n := range names {
-		ip, err := kube.Poll("waiting for "+n+"'s pod IP", 10*time.Minute, func() (string, bool) {
-			out, err := utils.Run(kube.Command("-n", namespace, "get", "vmi", n,
-				"-o", "jsonpath={.status.interfaces[0].ipAddress}"))
-			ip := strings.TrimSpace(out)
-
-			return ip, err == nil && ip != ""
-		})
+		ip, err := waitVMIIP(n, 10*time.Minute)
 		if err != nil {
 			return err
 		}

@@ -70,7 +70,7 @@ metadata:
   name: %[1]s
   namespace: ichor-e2e
   labels:
-    ichor.maesh.dev/e2e-harness: kubevirt
+    ichor.maesh.dev/e2e-harness: %[4]s
 spec:
   runStrategy: Always
   dataVolumeTemplates:
@@ -101,7 +101,7 @@ spec:
   template:
     metadata:
       labels:
-        ichor.maesh.dev/e2e-harness: kubevirt
+        ichor.maesh.dev/e2e-harness: %[4]s
     spec:
       domain:
         cpu:
@@ -253,20 +253,15 @@ func up() error {
 // bootToMaintenance creates the VM, waits for its pod IP and for MachineStatus to reach
 // maintenance, and prints the maintenance-mode resources.
 func bootToMaintenance() (string, error) {
-	manifest, err := vmManifestFor(vmManifestTmpl, vmName)
+	iso, err := resolveISO()
 	if err != nil {
 		return "", err
 	}
-	if err := kube.Apply(manifest); err != nil {
+	if err := kube.Apply(renderVM(vmName, "kubevirt", iso)); err != nil {
 		return "", fmt.Errorf("creating the VM: %w", err)
 	}
 
-	ip, err := kube.Poll("waiting for the VMI to report a pod IP", 3*time.Minute, func() (string, bool) {
-		out, err := utils.Run(kube.Command("-n", namespace, "get", "vmi", vmName,
-			"-o", "jsonpath={.status.interfaces[0].ipAddress}"))
-		ip := strings.TrimSpace(out)
-		return ip, err == nil && ip != ""
-	})
+	ip, err := waitVMIIP(vmName, 3*time.Minute)
 	if err != nil {
 		return "", err
 	}
@@ -290,6 +285,16 @@ func bootToMaintenance() (string, error) {
 		fmt.Println(out)
 	}
 	return ip, nil
+}
+
+// waitVMIIP waits for the VMI called name to report its pod IP.
+func waitVMIIP(name string, timeout time.Duration) (string, error) {
+	return kube.Poll("waiting for "+name+"'s VMI to report a pod IP", timeout, func() (string, bool) {
+		out, err := utils.Run(kube.Command("-n", namespace, "get", "vmi", name,
+			"-o", "jsonpath={.status.interfaces[0].ipAddress}"))
+		ip := strings.TrimSpace(out)
+		return ip, err == nil && ip != ""
+	})
 }
 
 // installAndBootstrap applies a control-plane config to the node at ip (which installs and

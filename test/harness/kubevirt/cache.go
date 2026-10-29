@@ -74,19 +74,9 @@ func clonedISO(cache, size string) isoSource {
 	}
 }
 
-// renderVM fills a VM manifest template with the VM name and ISO source.
-func renderVM(tmpl, name string, iso isoSource) string {
-	return fmt.Sprintf(tmpl, name, iso.yaml, iso.size)
-}
-
-// vmManifestFor renders tmpl for name, making sure the cache exists first when it is enabled.
-func vmManifestFor(tmpl, name string) (string, error) {
-	iso, err := resolveISO()
-	if err != nil {
-		return "", err
-	}
-
-	return renderVM(tmpl, name, iso), nil
+// renderVM fills vmManifestTmpl with the VM name, ISO source and harness label value.
+func renderVM(name, harness string, iso isoSource) string {
+	return fmt.Sprintf(vmManifestTmpl, name, iso.yaml, iso.size, harness)
 }
 
 // resolveISO returns the ISO source every VM of this run uses.

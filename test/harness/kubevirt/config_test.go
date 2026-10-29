@@ -113,13 +113,13 @@ func TestBaseCacheName(t *testing.T) {
 
 // TestVMManifestISOSource: the old path keeps the HTTP import; the cache path clones the PVC at the cache's size.
 func TestVMManifestISOSource(t *testing.T) {
-	for name, tmpl := range map[string]string{"single": vmManifestTmpl, "ha": haVMManifestTmpl} {
-		old := renderVM(tmpl, "x-0", httpISO())
+	for _, name := range []string{"kubevirt", "kubevirt-ha"} {
+		old := renderVM("x-0", name, httpISO())
 		if !strings.Contains(old, "metal-amd64.iso") || strings.Contains(old, "pvc:") ||
 			!strings.Contains(old, "storage: 1Gi") {
 			t.Fatalf("%s: old path wrong:\n%s", name, old)
 		}
-		cached := renderVM(tmpl, "x-0", clonedISO(baseCacheName(), "2Gi"))
+		cached := renderVM("x-0", name, clonedISO(baseCacheName(), "2Gi"))
 		for _, want := range []string{"pvc:", "name: " + baseCacheName(), "namespace: ichor-e2e", "storage: 2Gi"} {
 			if !strings.Contains(cached, want) {
 				t.Fatalf("%s: cached manifest lacks %q:\n%s", name, want, cached)

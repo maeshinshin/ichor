@@ -1,22 +1,25 @@
 import type { ComponentChildren } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import {
-  ActivityIcon,
+  ArchiveRestoreIcon,
   ArrowRightIcon,
-  BoxesIcon,
+  ContainerIcon,
   ChevronsUpDownIcon,
   CircleAlertIcon,
+  CloudCogIcon,
   CircleCheckIcon,
   CircleXIcon,
-  DatabaseBackupIcon,
   EllipsisIcon,
   InboxIcon,
   LoaderCircleIcon,
   NetworkIcon,
+  PackageCheckIcon,
   PlusIcon,
+  ServerCogIcon,
   ServerIcon,
-  TagIcon,
+  CpuIcon,
   TriangleAlertIcon,
+  WorkflowIcon,
   type LucideIcon,
 } from 'lucide-preact'
 import { Alert } from '@/components/ui/alert'
@@ -268,16 +271,16 @@ function Home({
           />
           <Tile
             label={t('overview.tile.operation')}
-            icon={ActivityIcon}
+            icon={WorkflowIcon}
             target={targets.operation}
             badge={current && opStateTone(currentState!) === 'bad' ? t(`ops.state.${currentState!}`) : undefined}
             value={current ? enumLabel(OperationKind, current.op.kind) : t('overview.idle')}
             sub={current ? <ActiveProgress row={current} total={approved.length} /> : undefined}
           />
-          <Tile label={t('overview.tile.backups')} icon={DatabaseBackupIcon} target={targets.backups} value={backupsValue(backups, Date.now())} />
+          <Tile label={t('overview.tile.backups')} icon={ArchiveRestoreIcon} target={targets.backups} value={backupsValue(backups, Date.now())} />
           <Tile
             label={t('overview.tile.versions')}
-            icon={TagIcon}
+            icon={PackageCheckIcon}
             target={targets.versions}
             value={versionsValue(cluster.talosVersion, cluster.kubernetesVersion)}
           />
@@ -297,7 +300,7 @@ function Home({
             </CardHeader>
             <CardContent>
               {recent.length === 0 ? (
-                <EmptyNote icon={ActivityIcon}>{t('ops.recentNone')}</EmptyNote>
+                <EmptyNote icon={WorkflowIcon}>{t('ops.recentNone')}</EmptyNote>
               ) : (
                 <Table>
                   <TableHeader>
@@ -372,15 +375,15 @@ function Home({
               </CardHeader>
               <CardContent>
                 <ItemGroup>
-                    <VersionRow name={t('ops.row.talos')} icon={ServerIcon} installed={cluster.talosVersion}>
+                    <VersionRow name={t('ops.row.talos')} icon={CpuIcon} installed={cluster.talosVersion}>
                       <StartOperationDialog kind="talos" cluster={ref} current={cluster.talosVersion} label={t('ops.action.upgrade')} disabled={!!busy} />
                     </VersionRow>
                     <ItemSeparator />
-                    <VersionRow name={t('ops.row.kubernetes')} icon={BoxesIcon} installed={cluster.kubernetesVersion}>
+                    <VersionRow name={t('ops.row.kubernetes')} icon={ContainerIcon} installed={cluster.kubernetesVersion}>
                       <StartOperationDialog kind="kubernetes" cluster={ref} current={cluster.kubernetesVersion} label={t('ops.action.upgrade')} disabled={!!busy} />
                     </VersionRow>
                     <ItemSeparator />
-                    <VersionRow name={t('ops.row.ichor')} icon={TagIcon} installed={ichorVersion ?? t('ops.installedUnknown')}>
+                    <VersionRow name={t('ops.row.ichor')} icon={CloudCogIcon} installed={ichorVersion ?? t('ops.installedUnknown')}>
                       <StartOperationDialog kind="ichor" cluster={ref} current={ichorVersion ?? ''} label={t('ops.action.upgrade')} disabled={!!busy} />
                     </VersionRow>
                     <ItemSeparator />
@@ -531,7 +534,7 @@ function NodeRow({ m, first }: { m: Machine; first: boolean }) {
   const body = (
     <>
       <ItemMedia variant="icon">
-        <ServerIcon aria-hidden="true" />
+        {m.role === MachineRole.CONTROL_PLANE ? <ServerCogIcon aria-hidden="true" /> : <ServerIcon aria-hidden="true" />}
       </ItemMedia>
       <ItemContent>
         <ItemTitle>{name}</ItemTitle>

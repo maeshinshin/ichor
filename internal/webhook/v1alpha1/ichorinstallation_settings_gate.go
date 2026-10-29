@@ -68,9 +68,9 @@ func settingChanges(oldSpec, newSpec *ichorv1alpha1.IchorInstallationSpec) []set
 	}
 
 	var (
-		oR, nR   = oldSpec.Reclaim, newSpec.Reclaim
-		oU, nU   = oldSpec.Users, newSpec.Users
-		oD, nD   = oldSpec.Defaults, newSpec.Defaults
+		oR, nR     = oldSpec.Reclaim, newSpec.Reclaim
+		oU, nU     = oldSpec.Users, newSpec.Users
+		oD, nD     = oldSpec.Defaults, newSpec.Defaults
 		oDep, nDep = oldSpec.Deployment, newSpec.Deployment
 	)
 
@@ -188,7 +188,7 @@ func (g *SettingsGate) check(ctx context.Context, oldObj, newObj *ichorv1alpha1.
 			ichorv1alpha1.ConfirmReclaimAnnotation, ichorv1alpha1.ConfirmReclaimValue)
 	}
 
-	if !(req.DryRun != nil && *req.DryRun) {
+	if req.DryRun == nil || !*req.DryRun {
 		g.emit(newObj, req.UserInfo.Username, changes)
 	}
 
@@ -222,4 +222,3 @@ func (g *SettingsGate) emit(obj *ichorv1alpha1.IchorInstallation, user string, c
 		g.Recorder.Eventf(obj, "Warning", "ReclaimEnabled", "%s enabled break-glass machine reclaim", user)
 	}
 }
-

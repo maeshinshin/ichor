@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"connectrpc.com/connect"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -25,8 +24,8 @@ func TestReclaimServiceReadsSettings(t *testing.T) {
 	}
 
 	inst := &ichorv1alpha1.IchorInstallation{
-		ObjectMeta: metav1.ObjectMeta{Name: "ichor"},
-		Spec:       ichorv1alpha1.IchorInstallationSpec{Reclaim: &ichorv1alpha1.IchorReclaimSettings{Enabled: &off}},
+		Name: settings.SingletonName,
+		Spec: ichorv1alpha1.IchorInstallationSpec{Reclaim: &ichorv1alpha1.IchorReclaimSettings{Enabled: &off}},
 	}
 	s := &Server{
 		ReclaimEnabled: true,

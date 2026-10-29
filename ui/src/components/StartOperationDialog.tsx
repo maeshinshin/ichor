@@ -28,8 +28,8 @@ const startedByDefault: Record<OpKind, boolean> = { talos: true, kubernetes: tru
 // It never writes on the first click: "Review" asks the server for the plan
 // (which machines, in which order, what happens to each) and shows it, and
 // only the second, separate "Start" writes. A shutdown also needs the cluster's
-// name typed. What the server refuses (another operation running, a spec that
-// Argo CD tracks, no permission) is shown as the server says it.
+// name typed. What the server refuses (another operation running, no
+// permission) is shown as the server says it.
 export function StartOperationDialog({
   kind,
   cluster,

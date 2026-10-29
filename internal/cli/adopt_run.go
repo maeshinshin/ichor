@@ -208,10 +208,6 @@ func runAdopt(ctx context.Context, clusterName, namespace string, deps adoptDeps
 		return nil
 	}
 
-	if st.installCilium && deps.BootstrapCilium == nil {
-		return errors.New("adopt: no way to install Cilium was given; nothing was written")
-	}
-
 	if err := st.consent(deps, clusterName, len(patches), len(writable), owned, tp.deleteRecord); err != nil {
 		return err
 	}
@@ -224,10 +220,8 @@ func runAdopt(ctx context.Context, clusterName, namespace string, deps adoptDeps
 	}
 
 	// A cluster with no CNI cannot run Ichor's pods: Cilium goes in first, from here.
-	if st.installCilium {
-		if err := st.bootstrapCilium(ctx, deps); err != nil {
-			return err
-		}
+	if err := st.bootstrapCilium(ctx, deps); err != nil {
+		return err
 	}
 
 	if _, err := writeAdopt(ctx, deps.K8s, st.writeInput(ctx, deps, namespace, writable, patches, tp)); err != nil {
@@ -237,12 +231,8 @@ func runAdopt(ctx context.Context, clusterName, namespace string, deps adoptDeps
 	// Phase 3: takeover (never in unmanaged mode, nothing to take over from Ichor's own Cilium).
 	// Cilium that adopt installed itself has nothing to take over: the controller only sees the
 	// release at its hash and sets CNIHandover, with no Job.
-	if st.installCilium {
-		if err := waitHandover(ctx, deps, types.NamespacedName{Namespace: namespace, Name: clusterName}); err != nil {
-			return err
-		}
-	} else if st.needsTakeover() {
-		if deps.Preflight == nil {
+	if st.installCilium || st.needsTakeover() {
+		if !st.installCilium && deps.Preflight == nil {
 			_, _ = fmt.Fprintln(deps.Stderr, "adopt: Cilium takeover: pending; the machines stay held, nothing was applied to any node")
 
 			return nil
@@ -525,6 +515,14 @@ func (st *adoptState) inspect(ctx context.Context, deps adoptDeps) error {
 // bootstrapCilium is step 2: Ichor's Cilium, as its own Helm release, installed
 // with the values the TalosCluster adopt writes will make the controller derive.
 func (st *adoptState) bootstrapCilium(ctx context.Context, deps adoptDeps) error {
+	if !st.installCilium {
+		return nil
+	}
+
+	if deps.BootstrapCilium == nil {
+		return errors.New("adopt: no way to install Cilium was given")
+	}
+
 	_, _ = fmt.Fprintf(deps.Stderr, "adopt: installing Cilium %s (this waits for every node to be Ready)\n", cilium.ChartVersion)
 
 	if err := deps.BootstrapCilium(ctx, st.cluster, cni.KubeProxyMode(st.kubeProxy)); err != nil {

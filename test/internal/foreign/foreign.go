@@ -25,6 +25,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -300,6 +302,9 @@ func EnsureRegistry(prefix string) (string, error) {
 	if err := apply(fmt.Sprintf(registryTmpl, prefix, Label)); err != nil {
 		return "", err
 	}
+	if _, err := utils.Run(kube.Command("-n", namespace, "wait", "deployment/"+prefix+"-registry", "--for=condition=Available", "--timeout=180s")); err != nil {
+		return "", err
+	}
 	return poll("waiting for the registry Service IP", time.Minute, func() (string, bool) {
 		out, err := utils.Run(kube.Command("-n", namespace, "get", "svc", prefix+"-registry", "-o", "jsonpath={.spec.clusterIP}"))
 		ip := strings.TrimSpace(out)
@@ -452,35 +457,14 @@ func (c *Cluster) ciliumHelmArgs() []string {
 // generate runs `talosctl gen config` with one patch file per concern.
 func (c *Cluster) generate(mirror string) error {
 	o := c.Opts
-	cluster := map[string]any{"network": map[string]any{
-		"podSubnets": []string{podSubnet}, "serviceSubnets": []string{serviceSubnet},
-	}}
-	machine := map[string]any{}
-	net := cluster["network"].(map[string]any)
-	switch o.CNI {
-	case CNINone, CNICiliumHelm:
-		net["cni"] = map[string]any{"name": cniNone}
-	case CNICiliumInline:
-		if o.CiliumChart == "" {
-			return errors.New("cilium-inline needs Options.CiliumChart")
-		}
-		out, err := runLocal(append([]string{"helm", "template", "cilium", o.CiliumChart}, c.ciliumHelmArgs()...)...)
-		if err != nil {
-			return fmt.Errorf("helm template: %w: %s", err, tail(out))
-		}
-		net["cni"] = map[string]any{"name": cniNone}
-		cluster["inlineManifests"] = []map[string]string{{"name": "cilium", "contents": out}}
-	case CNICalico:
-		net["cni"] = map[string]any{"name": "custom", "urls": []string{calicoManifest}}
-	}
-	if o.NoKubeProxy {
-		cluster["proxy"] = map[string]any{"disabled": true}
-	}
-	if o.NoKubePrism {
-		machine["features"] = map[string]any{"kubePrism": map[string]any{"enabled": false}}
-	}
-	patch, err := yaml.Marshal(map[string]any{"cluster": cluster, "machine": machine})
+	manifest, err := c.cniManifest()
 	if err != nil {
+		return err
+	}
+	var patch []byte
+	if multiDoc(o.TalosVersion) {
+		patch = c.patchMultiDoc(manifest)
+	} else if patch, err = c.patchLegacy(manifest); err != nil {
 		return err
 	}
 	patchFile := c.path("patch.yaml")
@@ -662,22 +646,28 @@ spec:
 }
 
 // Down deletes the objects Up (and EnsureRegistry/ToolsPod) created for prefix. Each is
-// deleted only if it exists and still carries Label=prefix; a mismatch is reported, not deleted.
-func Down(prefix string) error {
+// deleted only if it exists (the registry only when withRegistry, so images survive between cases) and still carries Label=prefix; a mismatch is reported, not deleted.
+func Down(prefix string, withRegistry bool) error {
 	if !prefixRe.MatchString(prefix) {
 		return fmt.Errorf("prefix %q must match %s", prefix, prefixRe)
 	}
 	if dir, err := Dir(prefix); err == nil {
 		stopPortForward(dir, "relay")
-		stopPortForward(dir, "registry")
-		defer os.RemoveAll(dir) //nolint:errcheck // local scratch files
+		for _, f := range []string{"patch.yaml", "controlplane.yaml", "worker.yaml", "talosconfig", "kubeconfig", "kubeconfig.local", "relay.pid"} {
+			_ = os.Remove(filepath.Join(dir, f))
+		}
+		if withRegistry {
+			stopPortForward(dir, "registry")
+		}
 	}
 	type obj struct{ kind, name string }
 	var objs []obj
 	for _, n := range []string{"-relay", "-tools"} {
 		objs = append(objs, obj{"pod", prefix + n})
 	}
-	objs = append(objs, obj{"deployment", prefix + "-registry"}, obj{"service", prefix + "-registry"})
+	if withRegistry {
+		objs = append(objs, obj{"deployment", prefix + "-registry"}, obj{"service", prefix + "-registry"})
+	}
 	for i := range maxCPs {
 		objs = append(objs, obj{"vm", vmName(prefix, "cp", i)})
 	}
@@ -732,4 +722,81 @@ func deleteOwned(prefix, kind, name string) error {
 	}
 	fmt.Println("deleted", kind+"/"+name)
 	return nil
+}
+
+// multiDoc reports whether the contract is v1.14 or later, where cluster settings are separate documents.
+func multiDoc(version string) bool {
+	var maj, min int
+	_, _ = fmt.Sscanf(version, "v%d.%d", &maj, &min)
+	return maj > 1 || min >= 14
+}
+
+// cniManifest returns the manifest the node config carries for the cilium-inline and calico variants.
+func (c *Cluster) cniManifest() (string, error) {
+	switch c.Opts.CNI {
+	case CNICiliumInline:
+		if c.Opts.CiliumChart == "" {
+			return "", errors.New("cilium-inline needs Options.CiliumChart")
+		}
+		out, err := runLocal(append([]string{"helm", "template", "cilium", c.Opts.CiliumChart}, c.ciliumHelmArgs()...)...)
+		if err != nil {
+			return "", fmt.Errorf("helm template: %w: %s", err, tail(out))
+		}
+		return out, nil
+	case CNICalico:
+		resp, err := http.Get(calicoManifest) //nolint:gosec,noctx // fixed URL, test harness
+		if err != nil {
+			return "", err
+		}
+		defer resp.Body.Close() //nolint:errcheck
+		b, err := io.ReadAll(resp.Body)
+		return string(b), err
+	}
+	return "", nil
+}
+
+func (c *Cluster) patchMultiDoc(manifest string) []byte {
+	o := c.Opts
+	docs := []map[string]any{
+		{"kind": "KubeNetworkConfig", "podSubnets": []string{podSubnet}, "serviceSubnets": []string{serviceSubnet}},
+	}
+	if o.CNI != CNIFlannel {
+		docs = append(docs, map[string]any{"kind": "KubeFlannelCNIConfig", "$patch": "delete"})
+	}
+	if manifest != "" {
+		docs = append(docs, map[string]any{"kind": "KubeInlineManifestConfig", "name": string(o.CNI[:6]), "manifest": manifest})
+	}
+	if o.NoKubeProxy {
+		docs = append(docs, map[string]any{"kind": "KubeProxyConfig", "enabled": false})
+	}
+	if o.NoKubePrism {
+		docs = append(docs, map[string]any{"kind": "KubePrismConfig", "enabled": false})
+	}
+	var b strings.Builder
+	for _, d := range docs {
+		d["apiVersion"] = "v1alpha1"
+		y, _ := yaml.Marshal(d)
+		b.WriteString("---\n" + string(y))
+	}
+	return []byte(b.String())
+}
+
+func (c *Cluster) patchLegacy(manifest string) ([]byte, error) {
+	o := c.Opts
+	net := map[string]any{"podSubnets": []string{podSubnet}, "serviceSubnets": []string{serviceSubnet}}
+	cluster := map[string]any{"network": net}
+	machine := map[string]any{}
+	if o.CNI != CNIFlannel {
+		net["cni"] = map[string]any{"name": cniNone}
+	}
+	if manifest != "" {
+		cluster["inlineManifests"] = []map[string]string{{"name": o.CNI[:6], "contents": manifest}}
+	}
+	if o.NoKubeProxy {
+		cluster["proxy"] = map[string]any{"disabled": true}
+	}
+	if o.NoKubePrism {
+		machine["features"] = map[string]any{"kubePrism": map[string]any{"enabled": false}}
+	}
+	return yaml.Marshal(map[string]any{"cluster": cluster, "machine": machine})
 }

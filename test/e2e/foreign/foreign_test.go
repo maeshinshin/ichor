@@ -72,7 +72,7 @@ func build(t *testing.T, o foreign.Options) *foreign.Cluster {
 	}
 	if os.Getenv("ICHOR_E2E_F_KEEP") != "1" {
 		t.Cleanup(func() {
-			if err := foreign.Down(o.Prefix); err != nil {
+			if err := foreign.Down(o.Prefix, false); err != nil {
 				t.Errorf("teardown: %v", err)
 			}
 		})

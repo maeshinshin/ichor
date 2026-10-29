@@ -65,7 +65,7 @@ func main() {
 			fmt.Fprintln(os.Stderr, "foreign: up failed:", err)
 		}
 	case "down":
-		err = foreign.Down(o.Prefix)
+		err = foreign.Down(o.Prefix, true)
 	case "registry":
 		if _, err = foreign.EnsureRegistry(o.Prefix); err == nil {
 			var dir string

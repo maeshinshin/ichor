@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	admissionv1 "k8s.io/api/admission/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -25,8 +24,8 @@ func TestTalosClusterDefaulter(t *testing.T) {
 	}
 
 	inst := &ichorv1alpha1.IchorInstallation{
-		ObjectMeta: metav1.ObjectMeta{Name: "ichor"},
-		Spec:       ichorv1alpha1.IchorInstallationSpec{Defaults: &ichorv1alpha1.IchorDefaultSettings{DriftPolicy: "autoCorrect"}},
+		Name: settings.SingletonName,
+		Spec: ichorv1alpha1.IchorInstallationSpec{Defaults: &ichorv1alpha1.IchorDefaultSettings{DriftPolicy: "autoCorrect"}},
 	}
 	reader := func(readOnly bool, objs ...*ichorv1alpha1.IchorInstallation) *settings.Reader {
 		b := fake.NewClientBuilder().WithScheme(scheme)
@@ -37,9 +36,11 @@ func TestTalosClusterDefaulter(t *testing.T) {
 		return &settings.Reader{Client: b.Build(), ReadOnly: readOnly}
 	}
 	ctxOf := func(op admissionv1.Operation) context.Context {
-		return admission.NewContextWithRequest(context.Background(), admission.Request{
-			AdmissionRequest: admissionv1.AdmissionRequest{Operation: op},
-		})
+		var req admission.Request
+
+		req.Operation = op
+
+		return admission.NewContextWithRequest(context.Background(), req)
 	}
 
 	tests := []struct {
@@ -50,11 +51,11 @@ func TestTalosClusterDefaulter(t *testing.T) {
 		want   string
 	}{
 		{"setting fills an unset field", &TalosClusterDefaulter{Settings: reader(false, inst)}, admissionv1.Create, "", "autoCorrect"},
-		{"a chosen value is kept", &TalosClusterDefaulter{Settings: reader(false, inst)}, admissionv1.Create, "warnOnly", "warnOnly"},
+		{"a chosen value is kept", &TalosClusterDefaulter{Settings: reader(false, inst)}, admissionv1.Create, settings.DriftPolicyDefault, settings.DriftPolicyDefault},
 		{"update is never touched", &TalosClusterDefaulter{Settings: reader(false, inst)}, admissionv1.Update, "", ""},
-		{"no setting means warnOnly", &TalosClusterDefaulter{Settings: reader(false)}, admissionv1.Create, "", "warnOnly"},
-		{"no reader means warnOnly", &TalosClusterDefaulter{}, admissionv1.Create, "", "warnOnly"},
-		{"read-only ignores the spec", &TalosClusterDefaulter{Settings: reader(true, inst)}, admissionv1.Create, "", "warnOnly"},
+		{"no setting means warnOnly", &TalosClusterDefaulter{Settings: reader(false)}, admissionv1.Create, "", settings.DriftPolicyDefault},
+		{"no reader means warnOnly", &TalosClusterDefaulter{}, admissionv1.Create, "", settings.DriftPolicyDefault},
+		{"read-only ignores the spec", &TalosClusterDefaulter{Settings: reader(true, inst)}, admissionv1.Create, "", settings.DriftPolicyDefault},
 	}
 
 	for _, tt := range tests {

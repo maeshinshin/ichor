@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	admissionv1 "k8s.io/api/admission/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -44,7 +43,7 @@ func TestMachineReclaimWebhookReadsSettings(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			inst := &ichorv1alpha1.IchorInstallation{ObjectMeta: metav1.ObjectMeta{Name: "ichor"}}
+			inst := &ichorv1alpha1.IchorInstallation{Name: settings.SingletonName}
 			if tt.spec != nil {
 				inst.Spec.Reclaim = &ichorv1alpha1.IchorReclaimSettings{Enabled: tt.spec}
 			}

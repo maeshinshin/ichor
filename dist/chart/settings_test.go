@@ -14,7 +14,9 @@ func TestSettingsReadOnly(t *testing.T) {
 			ctrlArg = ctrlArg || a == "--settings-read-only"
 		}
 
-		return ctrlArg, strings.Contains(fmt.Sprint(find(docs, kindDeployment, ichorUIDeploymentName)), "ICHOR_SETTINGS_READ_ONLY")
+		ui := fmt.Sprint(find(docs, kindDeployment, ichorUIDeploymentName))
+
+		return ctrlArg, strings.Contains(ui, "ICHOR_SETTINGS_READ_ONLY")
 	}
 
 	if c, u := has(renderChartWithValues(t, "ichor")); c || u {

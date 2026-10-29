@@ -65,6 +65,7 @@ rules:
   - daemonsets
   verbs:
   - get
+  - list
 - apiGroups:
   - apps
   resourceNames:

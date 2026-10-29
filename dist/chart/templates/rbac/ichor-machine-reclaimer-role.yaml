@@ -6,10 +6,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   labels:
-    app.kubernetes.io/managed-by: {{ .Release.Service }}
-    app.kubernetes.io/name: {{ include "ichor.name" . }}
-    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
-    app.kubernetes.io/instance: {{ .Release.Name }}
+    {{- include "ichor.labels" . | nindent 4 }}
   name: {{ include "ichor.resourceName" (dict "suffix" "machine-reclaimer" "context" $) }}
 rules:
 - apiGroups:

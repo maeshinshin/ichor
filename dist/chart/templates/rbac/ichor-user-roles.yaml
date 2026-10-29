@@ -8,10 +8,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   labels:
-    app.kubernetes.io/managed-by: {{ .Release.Service }}
-    app.kubernetes.io/name: {{ include "ichor.name" . }}
-    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
-    app.kubernetes.io/instance: {{ .Release.Name }}
+    {{- include "ichor.labels" . | nindent 4 }}
   name: ichor-viewer
 rules:
 - apiGroups:
@@ -41,10 +38,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   labels:
-    app.kubernetes.io/managed-by: {{ .Release.Service }}
-    app.kubernetes.io/name: {{ include "ichor.name" . }}
-    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
-    app.kubernetes.io/instance: {{ .Release.Name }}
+    {{- include "ichor.labels" . | nindent 4 }}
   name: ichor-viewer-rolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
@@ -59,10 +53,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   labels:
-    app.kubernetes.io/managed-by: {{ .Release.Service }}
-    app.kubernetes.io/name: {{ include "ichor.name" . }}
-    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
-    app.kubernetes.io/instance: {{ .Release.Name }}
+    {{- include "ichor.labels" . | nindent 4 }}
   name: ichor-operator
 rules:
 - apiGroups:
@@ -111,10 +102,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   labels:
-    app.kubernetes.io/managed-by: {{ .Release.Service }}
-    app.kubernetes.io/name: {{ include "ichor.name" . }}
-    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
-    app.kubernetes.io/instance: {{ .Release.Name }}
+    {{- include "ichor.labels" . | nindent 4 }}
   name: ichor-operator-rolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
@@ -129,10 +117,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   labels:
-    app.kubernetes.io/managed-by: {{ .Release.Service }}
-    app.kubernetes.io/name: {{ include "ichor.name" . }}
-    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
-    app.kubernetes.io/instance: {{ .Release.Name }}
+    {{- include "ichor.labels" . | nindent 4 }}
   name: ichor-admin
 rules:
 - apiGroups:
@@ -255,10 +240,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   labels:
-    app.kubernetes.io/managed-by: {{ .Release.Service }}
-    app.kubernetes.io/name: {{ include "ichor.name" . }}
-    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
-    app.kubernetes.io/instance: {{ .Release.Name }}
+    {{- include "ichor.labels" . | nindent 4 }}
   name: ichor-admin-rolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
@@ -273,10 +255,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   labels:
-    app.kubernetes.io/managed-by: {{ .Release.Service }}
-    app.kubernetes.io/name: {{ include "ichor.name" . }}
-    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
-    app.kubernetes.io/instance: {{ .Release.Name }}
+    {{- include "ichor.labels" . | nindent 4 }}
   name: ichor-user-access
   namespace: {{ .Release.Namespace }}
 rules:
@@ -308,10 +287,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   labels:
-    app.kubernetes.io/managed-by: {{ .Release.Service }}
-    app.kubernetes.io/name: {{ include "ichor.name" . }}
-    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
-    app.kubernetes.io/instance: {{ .Release.Name }}
+    {{- include "ichor.labels" . | nindent 4 }}
   name: ichor-user-access-rolebinding
   namespace: {{ .Release.Namespace }}
 roleRef:
@@ -335,10 +311,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   labels:
-    app.kubernetes.io/managed-by: {{ $.Release.Service }}
-    app.kubernetes.io/name: {{ include "ichor.name" $ }}
-    helm.sh/chart: {{ $.Chart.Name }}-{{ $.Chart.Version | replace "+" "_" }}
-    app.kubernetes.io/instance: {{ $.Release.Name }}
+    {{- include "ichor.labels" $ | nindent 4 }}
   name: {{ printf "ichor-%s-cluster-admin" . | quote }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io

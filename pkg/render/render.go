@@ -204,7 +204,7 @@ func BuildConfig(
 	// taint above -- Ichor-generated, not patch-shaped, and the lowest
 	// layer in the bottom-up stack so a cluster/role/selector/machine patch
 	// that also sets machine.registries still wins.
-	cfg, err = injectRegistries(cfg, cluster, sys.RegistryAuth)
+	cfg, err = injectRegistries(cfg, contract, cluster, sys.RegistryAuth)
 	if err != nil {
 		return nil, err
 	}
@@ -339,6 +339,7 @@ func baseConfig(
 		generate.WithVersionContract(contract),
 		generate.WithSecretsBundle(bundle),
 		generate.WithAllowSchedulingOnControlPlanes(allowScheduling),
+		generate.WithAdditionalSubjectAltNames(cluster.Spec.CertSANs),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("render: preparing generator input: %w", err)

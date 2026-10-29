@@ -105,13 +105,16 @@ func injectInstall(
 
 		doc := runtime.NewUnattendedInstallConfigV1Alpha1()
 		doc.Installer.Image = install.Image
-		doc.ProvisioningSpec.Wipe = new(false)
+		doc.ProvisioningSpec.Wipe = new(install.Wipe)
 		doc.ProvisioningSpec.DiskSelector.Match = match
 
 		return mergeDocument(cfg, "install", doc)
 	}
 
 	legacy := &mv1alpha1.InstallConfig{InstallImage: install.Image} //nolint:staticcheck // see below
+	if install.Wipe {
+		legacy.InstallWipe = new(true) //nolint:staticcheck // see below
+	}
 
 	switch d := install.Disk; {
 	case d.WWID != "":

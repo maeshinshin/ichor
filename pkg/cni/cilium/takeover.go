@@ -18,6 +18,7 @@ package cilium
 
 import (
 	"bytes"
+	"cmp"
 	"compress/gzip"
 	"context"
 	"encoding/base64"
@@ -25,8 +26,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -37,7 +38,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes"
 
@@ -73,6 +73,9 @@ const (
 
 	// maxRecordBytes caps a decoded release record (a zip-bomb guard).
 	maxRecordBytes = 64 << 20
+
+	keyTunnelProtocol       = "tunnelProtocol"
+	keyKubeProxyReplacement = "kubeProxyReplacement"
 
 	backupMetaSuffix    = ".meta"
 	backupReleaseSuffix = ".release"
@@ -185,7 +188,7 @@ func ForeignRecords(ctx context.Context, kube kubernetes.Interface, o ForeignOpt
 		f.Records = append(f.Records, Record{Secret: s, Release: rel})
 	}
 
-	sort.Slice(f.Records, func(i, j int) bool { return f.Records[i].Release.Version < f.Records[j].Release.Version })
+	slices.SortFunc(f.Records, func(a, b Record) int { return cmp.Compare(a.Release.Version, b.Release.Version) })
 
 	return f, nil
 }
@@ -387,16 +390,16 @@ func OwnedKeyConflicts(live map[string]any, kubeProxy cni.KubeProxyMode, tunnel 
 		})
 	}
 
-	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
+	slices.SortFunc(out, func(a, b Conflict) int { return strings.Compare(a.Key, b.Key) })
 
 	return out, nil
 }
 
 func ownedLevel(path string) Level {
 	switch path {
-	case "ipam.mode", "tunnelProtocol":
+	case "ipam.mode", keyTunnelProtocol:
 		return Blocking
-	case "kubeProxyReplacement", "k8sServiceHost", "k8sServicePort":
+	case keyKubeProxyReplacement, "k8sServiceHost", "k8sServicePort":
 		return NeedsAccept
 	default:
 		return Informational
@@ -412,11 +415,11 @@ func sameOwned(path string, have, want any) bool {
 // vxlan, a port may be a number or a string, and capability sets are unordered.
 func normOwned(path string, v any) any {
 	switch path {
-	case "kubeProxyReplacement":
+	case keyKubeProxyReplacement:
 		s := fmt.Sprint(v)
 
 		return s == "true" || s == "strict"
-	case "tunnelProtocol":
+	case keyTunnelProtocol:
 		if v == nil || v == "" {
 			return "vxlan"
 		}
@@ -428,14 +431,14 @@ func normOwned(path string, v any) any {
 			strs[i] = fmt.Sprint(e)
 		}
 
-		sort.Strings(strs)
+		slices.Sort(strs)
 
 		return strs
 	}
 
 	if list, ok := v.([]string); ok {
 		strs := slices.Clone(list)
-		sort.Strings(strs)
+		slices.Sort(strs)
 
 		return strs
 	}
@@ -707,7 +710,7 @@ func diffMaps(ref ObjectRef, path string, want, have map[string]any) []Differenc
 		}
 	}
 
-	sort.Strings(keys)
+	slices.Sort(keys)
 
 	var out []Difference
 
@@ -947,8 +950,10 @@ func ChartCRDs() ([]string, error) {
 }
 
 func crdNames(ch *chart.Chart) []string {
-	var names []string
-	for _, c := range ch.CRDObjects() {
+	crds := ch.CRDObjects()
+	names := make([]string, 0, len(crds))
+
+	for _, c := range crds {
 		names = append(names, c.Name)
 	}
 
@@ -1084,17 +1089,15 @@ func writeBackup(ctx context.Context, kube kubernetes.Interface, ns string, f *F
 	switch {
 	case apierrors.IsNotFound(err):
 		_, err = secrets.Create(ctx, &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{Name: PriorReleaseBackupName, Namespace: ns},
-			Data:       data,
+			Name: PriorReleaseBackupName, Namespace: ns,
+			Data: data,
 		}, metav1.CreateOptions{})
 	case err == nil:
 		if cur.Data == nil {
 			cur.Data = map[string][]byte{}
 		}
 
-		for k, v := range data {
-			cur.Data[k] = v
-		}
+		maps.Copy(cur.Data, data)
 
 		_, err = secrets.Update(ctx, cur, metav1.UpdateOptions{})
 	}
@@ -1139,7 +1142,7 @@ func deleteRecord(ctx context.Context, kube kubernetes.Interface, rec corev1.Sec
 
 	uid := cur.UID
 
-	err = secrets.Delete(ctx, rec.Name, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: (*types.UID)(&uid)}})
+	err = secrets.Delete(ctx, rec.Name, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &uid}})
 	if err != nil && !apierrors.IsNotFound(err) {
 		return fmt.Errorf("cilium: deleting record %s/%s: %w", rec.Namespace, rec.Name, err)
 	}

@@ -123,6 +123,21 @@ cluster is the controller's, not the UI's: the UI backend only lists the
 snapshots a `TalosEtcdBackup` reports and writes the operation. In the first release the UI is reached through
 `ichor ui` (a port-forward), which needs no https URL.
 
+ichor-ui serves HTTPS only, on 8443, never plain HTTP to the network (ADR 0105).
+The certificate is the operator's (`ichorUI.tls.secretName`) or a leaf from the
+Ichor serving CA that the controller keeps for every install. The controller
+publishes the CA, public part only, as `ichor-ui-ca` (ConfigMap and Secret) so an
+edge or a client with `--ca-file` can verify the backend; certificates are
+reloaded when their files change.
+
+Ichor's runtime settings (break-glass reclaim, the sign-in lifetimes, the default
+drift policy) are optional fields of the `IchorInstallation` singleton, read live
+by the controller, the webhooks and ichor-ui, and written by the UI Settings page
+or `ichor settings` as the signed-in user. The webhook splits write rights over
+the subresources `ichorinstallations/version`, `/reclaim` and `/settings`, and
+requires a confirmation annotation to enable reclaim. A deployment can make them
+read-only with `--settings-read-only`.
+
 Users sign in to ichor-ui in one of two ways, and the kube-apiserver accepts
 both, so RBAC and audit apply per user (ADR 0058, ADR 0094).
 
@@ -197,8 +212,15 @@ and an `ichor config apply` rollout of the control planes. ichor-ui is the
 issuer. The kube-apiserver reads discovery and keys from a ClusterIP listener
 on port 8444, signed by an Ichor-made CA, so the external URL does not have to
 be reachable from the control planes. Ichor installs no ingress. Expose
-ichor-ui with an Ingress, a Gateway or a LoadBalancer, or terminate TLS in
-ichor-ui with `ichorUI.tls.secretName`.
+ichor-ui with an Ingress, a Gateway or a LoadBalancer. ichor-ui is HTTPS only on
+8443 (ADR 0105), so an edge re-encrypts to it and verifies the backend against
+`ichor-ui-ca`, or a plain L4 load balancer passes through the certificate the
+operator supplied with `ichorUI.tls.secretName`. An install that served plain
+HTTP keeps a deprecated listener on 8080 for one minor release.
+
+A Helm install (ADR 0104) gets an `IchorInstallation` created once by the
+controller with `spec.deployment.manager: helm`; Helm then owns upgrades and
+`ichor upgrade ichor` refuses.
 
 Network policy (ADR 0100, ADR 0099 decision 10). Cilium is guaranteed, so
 `ichor-system` gets a `CiliumNetworkPolicy` default

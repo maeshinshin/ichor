@@ -1,0 +1,21 @@
+# Not bound to anyone, and in no default role (the *_admin_role.yaml helpers name their
+# resources and do not list machinereclaims). Bind it with an explicit RoleBinding to the people
+# who may reclaim a machine that another Talos cluster configured.
+# Ichor's webhook checks the verb `reclaim` with a SubjectAccessReview as the user, on every
+# create and on every write of confirmUUID.
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: ichor
+    app.kubernetes.io/managed-by: kustomize
+  name: ichor-machine-reclaimer
+rules:
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - machinereclaims
+  verbs:
+  - create
+  - reclaim

@@ -17,6 +17,7 @@ limitations under the License.
 package reclaim
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -50,7 +51,7 @@ func Dial(ctx context.Context, cred Credential, address, contextName string) (No
 	cfg, err := clientconfig.FromBytes(cred.Bytes())
 	if err != nil {
 		// The parse error can quote the input; say only that it failed.
-		return nil, fmt.Errorf("the talosconfig could not be parsed as a Talos client configuration")
+		return nil, errors.New("the talosconfig could not be parsed as a Talos client configuration")
 	}
 
 	opts := []client.OptionFunc{client.WithConfig(cfg), client.WithEndpoints(address)}
@@ -258,7 +259,7 @@ func (n *machineryNode) volumes(ctx context.Context) ([]Volume, error) {
 
 		seen[s.DevPath] = true
 		out = append(out, Volume{
-			Name: firstNonEmpty(s.Label, s.Name, s.DevPath), Location: s.DevPath, Size: s.Size, Encrypted: s.Type == "luks2",
+			Name: cmp.Or(s.Label, s.Name, s.DevPath), Location: s.DevPath, Size: s.Size, Encrypted: s.Type == "luks2",
 		})
 	}
 
@@ -278,19 +279,18 @@ func orphanCandidate(s *blockres.DiscoveredVolumeSpec, systemDisk string) bool {
 		}
 	}
 
-	disk := firstNonEmpty(s.ParentDevPath, s.DevPath)
+	disk := cmp.Or(s.ParentDevPath, s.DevPath)
 
 	return systemDisk != "" && disk != systemDisk
 }
 
-func firstNonEmpty(ss ...string) string {
-	for _, s := range ss {
-		if s != "" {
-			return s
-		}
+// HostOnly drops the port of address, if it has one.
+func HostOnly(address string) string {
+	if h, _, err := net.SplitHostPort(address); err == nil {
+		return h
 	}
 
-	return ""
+	return address
 }
 
 func tcpReachable(ctx context.Context, hostport string) bool {

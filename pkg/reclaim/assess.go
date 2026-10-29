@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -189,11 +190,5 @@ func Execute(ctx context.Context, n Node, known Known, opt Options, c Confirmati
 }
 
 func containsFold(list []string, s string) bool {
-	for _, v := range list {
-		if strings.EqualFold(v, s) {
-			return true
-		}
-	}
-
-	return false
+	return slices.ContainsFunc(list, func(v string) bool { return strings.EqualFold(v, s) })
 }

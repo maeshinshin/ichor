@@ -264,6 +264,28 @@ func TestRestoreLiveRefusesWhatThePlanBlocks(t *testing.T) {
 	}
 }
 
+func TestRestoreLiveRefusesABackupStoreInsideTheCluster(t *testing.T) {
+	for _, endpoint := range []string{"http://minio.minio.svc:9000", "http://minio.minio.svc.cluster.local:9000", "http://10.96.7.7:9000"} {
+		inside := liveBackupObject("inside", opTestCluster)
+		inside.Spec.Destination.S3.Endpoint = endpoint
+
+		c, k8s := liveClients(t, true, true, inside)
+
+		s := liveSpec()
+		s.Backup, s.Confirm = "inside", opTestCluster
+
+		// --break-glass is given (liveClients sets a reason) and does not lift it.
+		err := runLiveRestore(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{}, s)
+		if err == nil || !strings.Contains(err.Error(), "the backup store must live outside the cluster being restored") {
+			t.Fatalf("%s: %v", endpoint, err)
+		}
+
+		if len(opTestOps(t, k8s)) != 0 {
+			t.Fatalf("%s: a blocked restore writes nothing", endpoint)
+		}
+	}
+}
+
 func TestRestoreRequiresAMode(t *testing.T) {
 	old := restoreLiveOpts
 	t.Cleanup(func() { restoreLiveOpts = old })

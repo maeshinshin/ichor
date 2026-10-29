@@ -29,6 +29,12 @@ const (
 	// failed or the newest snapshot is stale.
 	TalosEtcdBackupConditionReady = "Ready"
 
+	// TalosEtcdBackupConditionStoreInCluster is True (a warning, not a failure) while the destination
+	// is inside the cluster being backed up: an etcd restore could not finish, because the restore
+	// marker is written to the store after the Kubernetes API, and with it the store, is down.
+	TalosEtcdBackupConditionStoreInCluster = "StoreInCluster"
+	TalosEtcdBackupReasonInCluster         = "InCluster"
+
 	TalosEtcdBackupReasonSucceeded = "Succeeded"
 	TalosEtcdBackupReasonFailed    = "Failed"
 	TalosEtcdBackupReasonStale     = "Stale"

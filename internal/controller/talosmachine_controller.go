@@ -1112,15 +1112,17 @@ func (r *TalosMachineReconciler) reportHold(
 		Message: "annotation " + ichorv1alpha1.TalosMachineHoldApplyAnnotation + " is set; drift is reported and nothing is applied",
 	})
 
-	if render.Hash(current) == hash {
-		return ctrl.Result{}, false, nil
-	}
-
-	paths, err := ChangedPaths(current, rendered)
+	paths, err := changedPaths(current, rendered, hash)
 	if err != nil {
 		res, err := r.retryLater(ctx, m, reasonConfigDiffFailed, "comparing current and rendered configuration failed")
 
 		return res, true, err
+	}
+
+	// No path: the node already has the render, in the same bytes or in another form. Not held
+	// back; the caller's convergence check reports it Converged.
+	if len(paths) == 0 {
+		return ctrl.Result{}, false, nil
 	}
 
 	return ctrl.Result{RequeueAfter: reachabilityRecheck}, true, r.ready(ctx, m, metav1.ConditionFalse, reasonAdoptionHeld,

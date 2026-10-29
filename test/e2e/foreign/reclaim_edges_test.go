@@ -95,6 +95,28 @@ func (r *rig) gone(t *testing.T, kind, name string, d time.Duration) bool {
 	return err == nil
 }
 
+// TestC3Force: the only control plane of a foreign cluster is reclaimed with --force, the cluster name typed a
+// second time and --force-ungraceful. This destroys the foreign cluster; run it last.
+func TestC3Force(t *testing.T) {
+	r := newRig(t, foreign.Options{Workers: 1, DataDisk: true})
+	cp := r.f.CPs[0]
+	uuid := uuidOf(t, cp, ftc(t, r.f))
+	// --force without the second typed confirmation is refused first.
+	if out, err := r.reclaim(t, cp, "--confirm", uuid, "--force", "--force-ungraceful"); err == nil {
+		t.Errorf("--force without --confirm-cluster was accepted: %s", out)
+	}
+	if got := uuidOf(t, cp, ftc(t, r.f)); got != uuid {
+		t.Fatalf("control plane changed after a refusal")
+	}
+	out, err := r.reclaim(t, cp, "--confirm", uuid, "--force", "--confirm-cluster", r.f.Opts.Prefix, "--force-ungraceful")
+	if err != nil {
+		t.Fatalf("forced reclaim failed: %v", err)
+	}
+	if !strings.Contains(out, "is in maintenance mode with UUID "+uuid) {
+		t.Errorf("no maintenance confirmation")
+	}
+}
+
 // TestC9Restart: the controller is restarted while a request waits for confirmation; the request carries on, resets
 // once and the Secret is deleted at Done.
 func TestC9Restart(t *testing.T) {

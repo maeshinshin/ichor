@@ -18,6 +18,7 @@ package installer
 
 import (
 	"fmt"
+	"slices"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -47,13 +48,7 @@ var retiredFields = []retiredField{
 }
 
 func isRetired(crd, path string) bool {
-	for _, r := range retiredFields {
-		if r.crd == crd && r.path == path {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(retiredFields, retiredField{crd, path})
 }
 
 // checkAdditive refuses a target CRD that would take something away from the live one: a

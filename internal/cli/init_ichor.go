@@ -57,7 +57,7 @@ func applyIchorManifest(ctx context.Context, k8sClient client.Client, manifest [
 				"rebuild with `make build-ichor-embed` before running init")
 	}
 
-	objs, err := decodeManifest(manifest)
+	objs, err := installer.Decode(manifest)
 	if err != nil {
 		return fmt.Errorf("init: decoding Ichor's own install manifest: %w", err)
 	}
@@ -71,13 +71,6 @@ func applyIchorManifest(ctx context.Context, k8sClient client.Client, manifest [
 	_, _ = fmt.Fprintf(warn, "init: applied Ichor's own install manifest (%d objects)\n", len(objs))
 
 	return nil
-}
-
-// decodeManifest splits a multi-document YAML stream into the
-// unstructured objects it contains, skipping any empty document (a
-// trailing "---" produces one).
-func decodeManifest(data []byte) ([]*unstructured.Unstructured, error) {
-	return installer.Decode(data)
 }
 
 // createWithRetry creates obj, retrying briefly if the API server

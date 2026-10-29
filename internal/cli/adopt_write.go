@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"time"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
@@ -97,6 +98,8 @@ type adoptWriteCluster struct {
 	VersionContract   string
 	PodSubnets        []string
 	ServiceSubnets    []string
+	CertSANs          []string
+	Registries        []ichorv1alpha1.TalosClusterRegistry
 
 	ControlPlaneCount int32
 	Schedulable       string
@@ -119,6 +122,9 @@ type adoptWriteMachine struct {
 	Address     string
 	Role        string
 	InstallDisk string
+	// InstallImage and InstallWipe are the installer image and wipe flag the node's configuration states.
+	InstallImage string
+	InstallWipe  bool
 }
 
 // adoptWriteIchor is Ichor's install step, the one `ichor init` runs.
@@ -312,6 +318,8 @@ func (w *adoptWriter) cluster0() *ichorv1alpha1.TalosCluster {
 			SecretsRef:        corev1.LocalObjectReference{Name: secretsRefName(f.Name)},
 			ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: f.ControlPlaneCount, Schedulable: f.Schedulable},
 			CNI:               ichorv1alpha1.TalosClusterCNI{Preset: f.CNIPreset, KubeProxy: f.KubeProxy},
+			CertSANs:          f.CertSANs,
+			Registries:        f.Registries,
 		},
 	}
 
@@ -357,6 +365,8 @@ func (w *adoptWriter) cluster(ctx context.Context) (string, error) {
 			h.Spec.CNI.KubeProxy == want.Spec.CNI.KubeProxy &&
 			cmpUnmanaged(h.Spec.CNI.Unmanaged) == cmpUnmanaged(want.Spec.CNI.Unmanaged) &&
 			jsonEqual(h.Spec.Network, want.Spec.Network) &&
+			slices.Equal(h.Spec.CertSANs, want.Spec.CertSANs) &&
+			jsonEqual(h.Spec.Registries, want.Spec.Registries) &&
 			h.Spec.Endpoint == want.Spec.Endpoint
 	})
 
@@ -404,7 +414,7 @@ func (w *adoptWriter) machines(ctx context.Context, clusterName string) error {
 				return fmt.Errorf("adopt: node %q: %w", m.Address, err)
 			}
 
-			install = &ichorv1alpha1.TalosMachineInstall{Disk: *disk}
+			install = &ichorv1alpha1.TalosMachineInstall{Disk: *disk, Image: m.InstallImage, Wipe: m.InstallWipe}
 		}
 
 		want := &ichorv1alpha1.TalosMachine{

@@ -17,6 +17,7 @@ limitations under the License.
 package cli
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -113,17 +114,21 @@ func completeNode(n *adoptNode) error {
 		n.M.Spec.Role = n.Facts.Role
 	}
 
-	if n.M.Spec.Install != nil || n.Facts.Install.Disk == "" {
+	// The legacy form names a disk path or a selector, v1.14 a CEL selector; a selector that is
+	// not one of the equalities spec.install.disk can hold is left as drift.
+	diskArg := cmp.Or(n.Facts.Install.Disk, diskFromExpression(n.Facts.Install.DiskSelector))
+
+	if n.M.Spec.Install != nil || diskArg == "" {
 		return nil
 	}
 
-	disk, err := parseInstallDisk(n.Facts.Install.Disk)
+	disk, err := parseInstallDisk(diskArg)
 	if err != nil {
 		return fmt.Errorf("adopt: node %q: %w", n.M.Spec.Endpoint, err)
 	}
 
-	n.InstallDisk = n.Facts.Install.Disk
-	n.M.Spec.Install = &ichorv1alpha1.TalosMachineInstall{Disk: *disk}
+	n.InstallDisk = diskArg
+	n.M.Spec.Install = &ichorv1alpha1.TalosMachineInstall{Disk: *disk, Image: n.Facts.Install.Image, Wipe: n.Facts.Install.Wipe}
 
 	return nil
 }
@@ -190,11 +195,67 @@ func clusterFromNodes(name, namespace, talosVersion string, nodes []*adoptNode) 
 		c.Spec.Network = &ichorv1alpha1.TalosClusterNetwork{PodSubnets: f.PodSubnets, ServiceSubnets: f.ServiceSubnets}
 	}
 
+	c.Spec.CertSANs = agreedCertSANs(nodes)
+	c.Spec.Registries = agreedRegistries(nodes)
+
 	if cands := contractCandidates(talosVersion); len(cands) > 0 {
 		c.Spec.VersionContract = cands[0]
 	}
 
 	return c, nil
+}
+
+// agreedCertSANs is spec.certSANs: the extra SANs when every node states the same machine.certSANs
+// and every control plane the same kube-apiserver SANs. Anything else maps to nothing, so the
+// difference stays visible as drift (class C) instead of being flattened into one list.
+func agreedCertSANs(nodes []*adoptNode) []string {
+	var want []string
+
+	for i, n := range readNodes(nodes) {
+		if i == 0 {
+			want = n.Facts.CertSANs
+		}
+
+		if !slices.Equal(want, n.Facts.CertSANs) || (n.controlPlane() && !slices.Equal(want, n.Facts.APIServerCertSANs)) {
+			return nil
+		}
+	}
+
+	return slices.Clone(want)
+}
+
+// agreedRegistries is spec.registries: the mirrors when every node states the same ones and none
+// mixes overridePath among one host's endpoints. Credentials and TLS are never read: they have no
+// representation here and stay in the diff.
+func agreedRegistries(nodes []*adoptNode) []ichorv1alpha1.TalosClusterRegistry {
+	var want []RegistryMirrorFact
+
+	for i, n := range readNodes(nodes) {
+		if i == 0 {
+			want = n.Facts.Registries
+		}
+
+		if !slices.EqualFunc(want, n.Facts.Registries, func(a, b RegistryMirrorFact) bool {
+			return a.Host == b.Host && slices.Equal(a.Endpoints, b.Endpoints) && a.SkipFallback == b.SkipFallback &&
+				a.OverridePath == b.OverridePath && a.OverridePathMixed == b.OverridePathMixed
+		}) || slices.ContainsFunc(n.Facts.Registries, func(r RegistryMirrorFact) bool { return r.OverridePathMixed || len(r.Endpoints) == 0 }) {
+			return nil
+		}
+	}
+
+	out := make([]ichorv1alpha1.TalosClusterRegistry, 0, len(want))
+	for _, r := range want {
+		out = append(out, ichorv1alpha1.TalosClusterRegistry{
+			Host: r.Host, Endpoints: r.Endpoints, SkipFallback: r.SkipFallback, OverridePath: r.OverridePath,
+		})
+	}
+
+	return out
+}
+
+// readNodes are the nodes whose configuration adopt read.
+func readNodes(nodes []*adoptNode) []*adoptNode {
+	return slices.DeleteFunc(slices.Clone(nodes), func(n *adoptNode) bool { return n.Skipped != "" || n.Facts == nil })
 }
 
 const (

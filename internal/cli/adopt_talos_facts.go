@@ -26,6 +26,7 @@ import (
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
 	"github.com/siderolabs/talos/pkg/machinery/config/configloader"
 	"github.com/siderolabs/talos/pkg/machinery/config/types/k8s"
+	mruntime "github.com/siderolabs/talos/pkg/machinery/config/types/runtime"
 	"golang.org/x/mod/semver"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -90,6 +91,20 @@ type InstallFacts struct {
 	// DiskSelector is the CEL expression of the UnattendedInstallConfig document, or the legacy
 	// installDiskSelector, when one is set.
 	DiskSelector string
+	// Wipe is the install-time wipe flag (UnattendedInstallConfig provisioning.wipe, machine.install.wipe).
+	Wipe bool
+}
+
+// RegistryMirrorFact is one registry's mirror setting, whichever form (RegistryMirrorConfig
+// document or machine.registries.mirrors) the configuration states it in.
+type RegistryMirrorFact struct {
+	Host         string
+	Endpoints    []string
+	SkipFallback bool
+	// OverridePath is per endpoint in Talos; Ichor records one flag for all of a host's endpoints,
+	// so a host with mixed values cannot be mapped (OverridePathMixed).
+	OverridePath      bool
+	OverridePathMixed bool
 }
 
 // TalosFacts is everything adopt reads from one node's machine configuration.
@@ -105,6 +120,13 @@ type TalosFacts struct {
 	// ExternalManifestURLs are cluster.extraManifests and KubeExternalManifestConfig URLs.
 	ExternalManifestURLs []string
 	Install              InstallFacts
+
+	// CertSANs is machine.certSANs; APIServerCertSANs is the kube-apiserver's
+	// (KubeAPIServerConfig.certExtraSANs, cluster.apiServer.certSANs), empty on a worker.
+	CertSANs, APIServerCertSANs []string
+	// Registries are the mirror settings, sorted by host. Auth and TLS are not read: they have no
+	// spec representation and stay in the diff.
+	Registries []RegistryMirrorFact
 
 	// What a TalosCluster needs when adopt has to create one (ADR 0103, 1.8 phase 2).
 	PodSubnets, ServiceSubnets []string
@@ -133,12 +155,32 @@ func ReadTalosFacts(cfgBytes []byte) (*TalosFacts, error) {
 		if inst := m.Install(); inst != nil {
 			f.Install.Image = inst.Image()
 			f.Install.Disk = inst.Disk()
+			f.Install.Wipe = inst.Zero()
 
 			if expr, exprErr := inst.DiskMatchExpression(); exprErr == nil && expr != nil {
 				f.Install.DiskSelector = expr.String()
 			}
 		}
 	}
+
+	// The v1.14 form is a document that Machine().Install() does not expose.
+	for _, d := range provider.Documents() {
+		if u, ok := d.(*mruntime.UnattendedInstallConfigV1Alpha1); ok {
+			f.Install.Image = u.Installer.Image
+			f.Install.DiskSelector = u.ProvisioningSpec.DiskSelector.Match.String()
+			f.Install.Wipe = u.VolumeWipe()
+		}
+	}
+
+	if m := provider.Machine(); m != nil && m.Security() != nil {
+		f.CertSANs = m.Security().CertSANs()
+	}
+
+	if a := provider.K8sAPIServerConfig(); a != nil {
+		f.APIServerCertSANs = a.CertSANs()
+	}
+
+	f.Registries = registryFacts(provider)
 
 	if p := provider.K8sProxyConfig(); p != nil {
 		f.KubeProxyEnabled = p.Enabled()
@@ -188,6 +230,33 @@ func ReadTalosFacts(cfgBytes []byte) (*TalosFacts, error) {
 	f.CNI = cniFacts(provider.K8sFlannelCNIConfig() != nil, provider)
 
 	return f, nil
+}
+
+// registryFacts reads the mirror settings of either form, sorted by host.
+func registryFacts(provider coreconfig.Provider) []RegistryMirrorFact {
+	mirrors := provider.RegistryMirrorConfigs()
+	out := make([]RegistryMirrorFact, 0, len(mirrors))
+
+	for host, m := range mirrors {
+		f := RegistryMirrorFact{Host: host, SkipFallback: m.SkipFallback()}
+
+		for i, e := range m.Endpoints() {
+			f.Endpoints = append(f.Endpoints, e.Endpoint())
+
+			switch {
+			case i == 0:
+				f.OverridePath = e.OverridePath()
+			case f.OverridePath != e.OverridePath():
+				f.OverridePathMixed = true
+			}
+		}
+
+		out = append(out, f)
+	}
+
+	slices.SortFunc(out, func(a, b RegistryMirrorFact) int { return strings.Compare(a.Host, b.Host) })
+
+	return out
 }
 
 // cniFacts derives the CNI selection. flannelDoc is true when machinery reports a flannel

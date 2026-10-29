@@ -1,0 +1,74 @@
+package v1alpha1
+
+import (
+	"context"
+	"testing"
+
+	admissionv1 "k8s.io/api/admission/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/settings"
+)
+
+// TestTalosClusterDefaulter: spec.defaults.driftPolicy fills a new cluster's unset driftPolicy, at
+// create only, and never overrides a value the user chose (ADR 0105).
+func TestTalosClusterDefaulter(t *testing.T) {
+	t.Parallel()
+
+	scheme := runtime.NewScheme()
+	if err := ichorv1alpha1.AddToScheme(scheme); err != nil {
+		t.Fatal(err)
+	}
+
+	inst := &ichorv1alpha1.IchorInstallation{
+		ObjectMeta: metav1.ObjectMeta{Name: "ichor"},
+		Spec:       ichorv1alpha1.IchorInstallationSpec{Defaults: &ichorv1alpha1.IchorDefaultSettings{DriftPolicy: "autoCorrect"}},
+	}
+	reader := func(readOnly bool, objs ...*ichorv1alpha1.IchorInstallation) *settings.Reader {
+		b := fake.NewClientBuilder().WithScheme(scheme)
+		for _, o := range objs {
+			b = b.WithObjects(o)
+		}
+
+		return &settings.Reader{Client: b.Build(), ReadOnly: readOnly}
+	}
+	ctxOf := func(op admissionv1.Operation) context.Context {
+		return admission.NewContextWithRequest(context.Background(), admission.Request{
+			AdmissionRequest: admissionv1.AdmissionRequest{Operation: op},
+		})
+	}
+
+	tests := []struct {
+		name   string
+		d      *TalosClusterDefaulter
+		op     admissionv1.Operation
+		preset string
+		want   string
+	}{
+		{"setting fills an unset field", &TalosClusterDefaulter{Settings: reader(false, inst)}, admissionv1.Create, "", "autoCorrect"},
+		{"a chosen value is kept", &TalosClusterDefaulter{Settings: reader(false, inst)}, admissionv1.Create, "warnOnly", "warnOnly"},
+		{"update is never touched", &TalosClusterDefaulter{Settings: reader(false, inst)}, admissionv1.Update, "", ""},
+		{"no setting means warnOnly", &TalosClusterDefaulter{Settings: reader(false)}, admissionv1.Create, "", "warnOnly"},
+		{"no reader means warnOnly", &TalosClusterDefaulter{}, admissionv1.Create, "", "warnOnly"},
+		{"read-only ignores the spec", &TalosClusterDefaulter{Settings: reader(true, inst)}, admissionv1.Create, "", "warnOnly"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			c := &ichorv1alpha1.TalosCluster{Spec: ichorv1alpha1.TalosClusterSpec{DriftPolicy: tt.preset}}
+			if err := tt.d.Default(ctxOf(tt.op), c); err != nil {
+				t.Fatal(err)
+			}
+
+			if c.Spec.DriftPolicy != tt.want {
+				t.Fatalf("driftPolicy = %q, want %q", c.Spec.DriftPolicy, tt.want)
+			}
+		})
+	}
+}

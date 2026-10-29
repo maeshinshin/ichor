@@ -3786,7 +3786,6 @@ spec:
                         cidr(c).prefixLength() >= 24)
                 type: object
               driftPolicy:
-                default: warnOnly
                 description: |-
                   driftPolicy controls what the reconciler does when a node's live configuration no
                   longer matches what Ichor last rendered for it, and nothing on Ichor's side (this
@@ -3797,7 +3796,8 @@ spec:
                   just reported, regardless of this setting. Defaults to warnOnly: unlike
                   controlPlane.schedulable (ADR 0008), the two values here are not wrong half the
                   time each -- silently changing a node is the one that can surprise, so it is never
-                  the default.
+                  the default. The CRD carries no default: the defaulting webhook fills warnOnly, or the
+                  installation's spec.defaults.driftPolicy (ADR 0105), at create; an empty value is warnOnly.
                 enum:
                 - warnOnly
                 - autoCorrect

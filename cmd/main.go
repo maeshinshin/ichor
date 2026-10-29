@@ -64,6 +64,7 @@ const (
 	webhookSecretName           = "ichor-webhook-server-cert"
 	webhookServiceName          = "ichor-webhook-service"
 	validatingWebhookConfigName = "ichor-validating-webhook-configuration"
+	mutatingWebhookConfigName   = "ichor-mutating-webhook-configuration"
 
 	// metricsSecretName and metricsServiceName name the second cert-controller rotator's
 	// Secret and the metrics Service its certificate's DNSName matches (config/default/
@@ -98,6 +99,8 @@ var (
 // name (ADR 0081); get, update and patch can.
 // +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,verbs=list;watch
 // +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,resourceNames=ichor-validating-webhook-configuration,verbs=get;update;patch
+// +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=mutatingwebhookconfigurations,verbs=list;watch
+// +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=mutatingwebhookconfigurations,resourceNames=ichor-mutating-webhook-configuration,verbs=get;update;patch
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
@@ -323,6 +326,7 @@ func main() {
 			RequireLeaderElection: true,
 			Webhooks: []rotator.WebhookInfo{
 				{Name: validatingWebhookConfigName, Type: rotator.Validating},
+				{Name: mutatingWebhookConfigName, Type: rotator.Mutating},
 			},
 		}); err != nil {
 			setupLog.Error(err, "Failed to set up webhook certificate rotation")
@@ -344,7 +348,7 @@ func main() {
 			case <-sigCtx.Done():
 				return
 			}
-			if err := webhookv1alpha1.SetupTalosClusterWebhookWithManager(mgr); err != nil {
+			if err := webhookv1alpha1.SetupTalosClusterWebhookWithManager(mgr, settingsReader); err != nil {
 				setupLog.Error(err, "Failed to create webhook", "webhook", "TalosCluster")
 				os.Exit(1)
 			}

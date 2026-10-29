@@ -97,6 +97,7 @@ rules:
   - admissionregistration.k8s.io
   resources:
   - validatingadmissionpolicies
+  - mutatingwebhookconfigurations
   - validatingadmissionpolicybindings
   - validatingwebhookconfigurations
   verbs:

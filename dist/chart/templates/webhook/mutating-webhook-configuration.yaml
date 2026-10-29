@@ -1,0 +1,30 @@
+{{- if .Values.webhook.enabled }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  # Fixed name, like the validating configuration next to it: one installation per cluster, and
+  # cmd/main.go's cert rotator hardcodes it (ADR 0006).
+  name: ichor-mutating-webhook-configuration
+webhooks:
+# Fills a new TalosCluster's spec.driftPolicy from the installation's spec.defaults.driftPolicy
+# (ADR 0105). failurePolicy Ignore: defaulting is best effort, and an empty driftPolicy is warnOnly.
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: ichor-webhook-service
+      namespace: {{ .Release.Namespace }}
+      path: /mutate-ichor-maesh-dev-v1alpha1-taloscluster
+  failurePolicy: Ignore
+  name: mtaloscluster-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - ichor.maesh.dev
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    resources:
+    - talosclusters
+  sideEffects: None
+{{- end }}

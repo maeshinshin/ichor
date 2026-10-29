@@ -253,12 +253,7 @@ func documentLeafPaths(d ichorv1alpha1.TalosConfigPatchDocument) (map[string]str
 		return nil, err
 	}
 
-	out, err := c.EncodeBytes(encoder.WithComments(encoder.CommentsDisabled))
-	if err != nil {
-		return nil, err
-	}
-
-	return leafPaths(out)
+	return encodeLeaves(c)
 }
 
 // configLayerToPB converts a TalosConfigPatchSpec.layer value to the wire

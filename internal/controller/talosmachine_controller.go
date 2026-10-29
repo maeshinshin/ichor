@@ -561,11 +561,12 @@ func (r *TalosMachineReconciler) readNode(
 
 		logf.FromContext(ctx).Error(err, "reading current machine configuration")
 
-		res, err = r.retryLater(ctx, m, reasonCurrentConfigUnavailable,
-			"reading the node's current configuration failed")
+		res, err = r.readFailed(ctx, m, err, time.Now())
 
 		return nil, res, true, err
 	}
+
+	apimeta.RemoveStatusCondition(&m.Status.Conditions, conditionNodeReachable)
 
 	schemCtx, cancelSchem := context.WithTimeout(ctx, talosCallTimeout)
 	if schematic, serr := talos.Schematic(schemCtx); serr == nil {

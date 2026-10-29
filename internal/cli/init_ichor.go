@@ -140,29 +140,30 @@ func createRetrying(ctx context.Context, c client.Client, obj client.Object, pro
 	})
 }
 
-// updateRetrying updates obj through retryInit. An Update that timed out may still have landed,
-// which bumps the resourceVersion and turns the retry into a Conflict; init owns these objects, so
-// a Conflict after the first try re-Gets obj, redoes mutate on it and updates again.
+// updateRetrying updates obj through retryInit. A Conflict (another writer bumped the
+// resourceVersion: an Update that timed out and landed, or the Deployment controller writing
+// status) re-Gets obj, redoes mutate on it and updates again; init owns these objects.
 func updateRetrying[T client.Object](ctx context.Context, c client.Client, obj T, mutate func(T) error, progress io.Writer) error {
-	tries := 0
-
 	return retryInit(ctx, progress, func() error {
-		tries++
-
 		err := c.Update(ctx, obj)
-		if !apierrors.IsConflict(err) || tries == 1 {
-			return err
+
+		for range 5 {
+			if !apierrors.IsConflict(err) {
+				return err
+			}
+
+			if err = c.Get(ctx, client.ObjectKeyFromObject(obj), obj); err != nil {
+				return err
+			}
+
+			if err = mutate(obj); err != nil {
+				return err
+			}
+
+			err = c.Update(ctx, obj)
 		}
 
-		if err := c.Get(ctx, client.ObjectKeyFromObject(obj), obj); err != nil {
-			return err
-		}
-
-		if err := mutate(obj); err != nil {
-			return err
-		}
-
-		return c.Update(ctx, obj)
+		return err
 	})
 }
 

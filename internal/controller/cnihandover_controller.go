@@ -184,13 +184,8 @@ func (r *CNIHandoverReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 func (r *CNIHandoverReconciler) runJob(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode, hash string, handedOver bool,
 ) (ctrl.Result, error) {
-	var inst ichorv1alpha1.IchorInstallation
-	if err := r.Get(ctx, types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}, &inst); err != nil {
-		if apierrors.IsNotFound(err) {
-			return ctrl.Result{RequeueAfter: handoverRequeueInterval}, r.setProgress(ctx, cluster, handedOver,
-				reasonCNIWaitingForLock, "no IchorInstallation yet: the Helm Job needs its installer image")
-		}
-
+	inst, err := installerSource(ctx, r.Client)
+	if err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -211,7 +206,7 @@ func (r *CNIHandoverReconciler) runJob(
 		return ctrl.Result{}, err
 	}
 
-	done, err := AdvanceCNIHelmJob(ctx, r.Client, r.Namespace, cluster, mode, &inst, "", time.Time{})
+	done, err := AdvanceCNIHelmJob(ctx, r.Client, r.Namespace, cluster, mode, inst, "", time.Time{})
 
 	var failed *CNIHelmJobFailedError
 

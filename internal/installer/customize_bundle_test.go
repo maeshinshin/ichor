@@ -136,6 +136,10 @@ func TestCustomizeObjectsFindsEveryTargetInTheRealBundle(t *testing.T) {
 			svc := &corev1.Service{}
 			must(t, runtime.DefaultUnstructuredConverter.FromUnstructured(o.Object, svc))
 
+			if svc.Labels["app.kubernetes.io/component"] != "ui" {
+				continue // the controller metrics Service also serves https on 8443
+			}
+
 			for _, p := range svc.Spec.Ports {
 				if p.Name == UIPortName && p.Port == 8443 {
 					svcs++

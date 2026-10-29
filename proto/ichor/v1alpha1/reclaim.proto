@@ -73,6 +73,8 @@ message ListReclaimsResponse {
 message ConfirmReclaimRequest {
   ObjectRef reclaim = 1;
   string uuid = 2;
+  // cluster_name is the foreign cluster's name as typed; only needed with force.
+  string cluster_name = 3;
 }
 
 message ConfirmReclaimResponse {

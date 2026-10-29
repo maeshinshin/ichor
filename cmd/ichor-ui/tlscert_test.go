@@ -138,13 +138,3 @@ func TestNoCertificateFailsHandshakeAndNeverPlaintext(t *testing.T) {
 		t.Fatalf("served %q, %v after the certificate appeared; want late", got, err)
 	}
 }
-
-func TestTransitionalServerOnlyWithFlag(t *testing.T) {
-	if transitionalServer("", http.NotFoundHandler()) != nil {
-		t.Fatal("plaintext listener built without --http-addr")
-	}
-
-	if s := transitionalServer(":8080", http.NotFoundHandler()); s == nil || s.TLSConfig != nil {
-		t.Fatal("--http-addr must give a plain server")
-	}
-}

@@ -138,13 +138,13 @@ spec:
         {{- end }}
         # No dedicated health endpoint exists yet. ichor-ui is HTTPS only, and a
         # kubelet TCP probe makes a TLS server log "TLS handshake error ... EOF" every few seconds, so
-        # probe /auth/config over HTTPS (cheap, always served; the kubelet skips cert checks). Until the
-        # controller has issued the Ichor leaf the handshake fails and the pod stays out of the Service.
+        # readiness probes /auth/config over HTTPS (cheap, always served; the kubelet skips cert checks).
+        # Until the controller has issued the Ichor leaf the handshake fails and the pod stays out of the
+        # Service. Liveness is a TCP connect instead: the leaf can arrive 60-90 s after the pod starts
+        # and an HTTPS liveness probe would restart the pod first.
         livenessProbe:
-          httpGet:
-            path: /auth/config
+          tcpSocket:
             port: {{ .Values.ichorUI.port }}
-            scheme: HTTPS
           initialDelaySeconds: 5
           periodSeconds: 20
         readinessProbe:

@@ -125,10 +125,12 @@ func assertUITLS(t *testing.T, dep appsv1.Deployment, secret string) {
 		t.Errorf("tls mount missing: %+v", c.VolumeMounts)
 	}
 
-	for _, p := range []*corev1.Probe{c.LivenessProbe, c.ReadinessProbe} {
-		if p == nil || p.HTTPGet == nil || p.HTTPGet.Scheme != corev1.URISchemeHTTPS || p.HTTPGet.Port.IntValue() != 8080 || p.HTTPGet.Path != "/auth/config" {
-			t.Errorf("probe is not an HTTPS probe on 8080: %+v", p)
-		}
+	if p := c.ReadinessProbe; p == nil || p.HTTPGet == nil || p.HTTPGet.Scheme != corev1.URISchemeHTTPS || p.HTTPGet.Port.IntValue() != 8080 || p.HTTPGet.Path != "/auth/config" {
+		t.Errorf("readiness is not an HTTPS probe on 8080: %+v", p)
+	}
+
+	if p := c.LivenessProbe; p == nil || p.HTTPGet != nil || p.TCPSocket == nil || p.TCPSocket.Port.IntValue() != 8080 {
+		t.Errorf("liveness is not a tcpSocket probe on 8080: %+v", p)
 	}
 }
 

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'preact/hooks'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field'
+import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
@@ -277,7 +277,6 @@ function DefaultsCard({ res, onSaved }: { res: GetSettingsResponse; onSaved: (r:
             ))}
           </SelectContent>
         </Select>
-        <FieldDescription>{t('settings.defaultsDesc')}</FieldDescription>
       </Field>
       {error && <ErrorAlert {...error} />}
       <Button disabled={locked || busy || Object.keys(changes).length === 0} onClick={() => save(changes)}>

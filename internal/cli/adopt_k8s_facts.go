@@ -210,7 +210,7 @@ func ichorCiliumReadBack(ctx context.Context, r client.Reader) (*cilium.ReadBack
 
 		rel, err := cilium.DecodeReleaseRecord(s.Data["release"])
 		if err != nil {
-			return nil, fmt.Errorf("record %s/%s: %w", s.Namespace, s.Name, err)
+			continue // an undecodable record is no evidence of how Cilium was installed
 		}
 
 		if latest == nil || rel.Version > latest.Version {

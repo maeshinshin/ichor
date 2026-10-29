@@ -147,7 +147,7 @@ func runCNIBootstrap(ctx context.Context, d cniBootstrapDeps) error {
 		return fmt.Errorf("cni bootstrap: this cluster is not a cluster with no CNI (found: %s); bootstrap installs Cilium only where no pod can run. "+
 			"If the cluster has a CNI, run helm install ichor, then ichor adopt", rep)
 	default:
-		if err := checkNoCNIPreconditions(rep, nil); err != nil {
+		if err := checkNoCNIPreconditions(rep, nil, ""); err != nil {
 			return fmt.Errorf("cni bootstrap: %w", err)
 		}
 	}

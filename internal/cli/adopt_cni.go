@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
+	"golang.org/x/mod/semver"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
@@ -238,9 +239,19 @@ func checkCNIAdoption(r *cniReport, unmanaged bool) error {
 		"to adopt the cluster with the CNI left exactly as it is, run again with --cni-unmanaged", what)
 }
 
+// kubePrismSetting names where KubePrism is switched on for a version contract: the KubePrismConfig
+// document from v1.14, machine.features.kubePrism before. An empty contract is the newest.
+func kubePrismSetting(contract string) string {
+	if contract == "" || semver.Compare(semver.MajorMinor(contract), "v1.14") >= 0 {
+		return "the KubePrismConfig document"
+	}
+
+	return "machine.features.kubePrism"
+}
+
 // checkNoCNIPreconditions is ADR 0104 1.3: KubePrism on 7445 on every node (checked against the
 // Talos facts of nodes, which the caller passes as name -> setting) and a pod CIDR on every Node.
-func checkNoCNIPreconditions(r *cniReport, kubePrism map[string]KubePrismFacts) error {
+func checkNoCNIPreconditions(r *cniReport, kubePrism map[string]KubePrismFacts, contract string) error {
 	var bad []string
 
 	for name, kp := range kubePrism {
@@ -253,8 +264,8 @@ func checkNoCNIPreconditions(r *cniReport, kubePrism map[string]KubePrismFacts) 
 		slices.Sort(bad)
 
 		return fmt.Errorf("this cluster has no CNI, so Ichor must install Cilium, and Cilium reaches the API through KubePrism on port 7445, "+
-			"which is not enabled there on %s. Enable KubePrism (machine.features.kubePrism, port 7445) with your usual tool, then run adopt again",
-			strings.Join(bad, ", "))
+			"which is not enabled there on %s. Enable KubePrism (%s, port 7445) with your usual tool, then run adopt again",
+			strings.Join(bad, ", "), kubePrismSetting(contract))
 	}
 
 	if len(r.NodesWithoutPodCIDR) > 0 {

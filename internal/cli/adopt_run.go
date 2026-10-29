@@ -629,7 +629,9 @@ func (st *adoptState) planInstallCilium(deps adoptDeps) error {
 		}
 	}
 
-	if err := checkNoCNIPreconditions(st.rep, kp); err != nil {
+	contract := cmp.Or(deps.ContractOverride, st.cluster.Spec.VersionContract, st.cluster.Spec.TalosVersion)
+
+	if err := checkNoCNIPreconditions(st.rep, kp, contract); err != nil {
 		return fmt.Errorf("adopt: %w", err)
 	}
 

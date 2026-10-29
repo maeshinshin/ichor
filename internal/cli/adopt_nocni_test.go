@@ -98,7 +98,7 @@ func TestCheckNoCNIPreconditions(t *testing.T) {
 	withCIDR := detectCNI(factsFor(t, cniNode("a", "10.244.0.0/24", false, netNotReady)), CNIFacts{Kind: CNINone})
 	noCIDR := detectCNI(factsFor(t, cniNode("a", "10.244.0.0/24", false, netNotReady), cniNode("b", "", false, netNotReady)), CNIFacts{Kind: CNINone})
 
-	if err := checkNoCNIPreconditions(withCIDR, ok); err != nil {
+	if err := checkNoCNIPreconditions(withCIDR, ok, "v1.14"); err != nil {
 		t.Errorf("good cluster: %v", err)
 	}
 
@@ -106,13 +106,25 @@ func TestCheckNoCNIPreconditions(t *testing.T) {
 		"disabled":   {"a": {Enabled: true, Port: 7445}, "b": {}},
 		"other port": {"a": {Enabled: true, Port: 7446}},
 	} {
-		err := checkNoCNIPreconditions(withCIDR, kp)
+		err := checkNoCNIPreconditions(withCIDR, kp, "v1.14")
 		if err == nil || !strings.Contains(err.Error(), "Enable KubePrism") {
 			t.Errorf("%s: err = %v, want the enable-KubePrism message", name, err)
 		}
 	}
 
-	err := checkNoCNIPreconditions(noCIDR, ok)
+	off := map[string]KubePrismFacts{"a": {}}
+
+	for contract, want := range map[string]string{
+		"v1.14": "KubePrismConfig", "v1.14.2": "KubePrismConfig", "": "KubePrismConfig",
+		"v1.13": "machine.features.kubePrism", "v1.12": "machine.features.kubePrism",
+	} {
+		err := checkNoCNIPreconditions(withCIDR, off, contract)
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("contract %q: err = %v, want it to name %s", contract, err, want)
+		}
+	}
+
+	err := checkNoCNIPreconditions(noCIDR, ok, "v1.14")
 	if err == nil || !strings.Contains(err.Error(), "spec.podCIDR") || !strings.Contains(err.Error(), "b") {
 		t.Errorf("no pod CIDR: err = %v, want the podCIDR message naming b", err)
 	}

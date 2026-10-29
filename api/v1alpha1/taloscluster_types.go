@@ -358,9 +358,9 @@ type TalosClusterSpec struct {
 	// just reported, regardless of this setting. Defaults to warnOnly: unlike
 	// controlPlane.schedulable, the two values here are not wrong half the
 	// time each -- silently changing a node is the one that can surprise, so it is never
-	// the default.
+	// the default. The CRD carries no default: the defaulting webhook fills warnOnly, or the
+	// installation's spec.defaults.driftPolicy, at create; an empty value is warnOnly.
 	// +kubebuilder:validation:Enum=warnOnly;autoCorrect
-	// +kubebuilder:default=warnOnly
 	// +optional
 	DriftPolicy string `json:"driftPolicy,omitempty"`
 

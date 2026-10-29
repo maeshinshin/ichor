@@ -69,14 +69,14 @@ export function Login() {
                 <Input id="login-password" type="password" autoComplete="current-password" value={password} onInput={(e) => setPassword((e.target as HTMLInputElement).value)} />
               </Field>
               {error && <ErrorAlert title={t('app.signInFailed')} detail={error} />}
-              <Button type="submit" class="w-full" disabled={!loginReady({ username, password }) || busy}>
+              <Button type="submit" className="w-full" disabled={!loginReady({ username, password }) || busy}>
                 <LogInIcon data-icon="inline-start" aria-hidden="true" />
                 {busy ? t('login.submitting') : t('login.submit')}
               </Button>
               </FieldGroup>
             </form>
           ) : (
-            <Button class="w-full" variant="outline" onClick={() => window.location.assign('/')}>
+            <Button className="w-full" variant="outline" onClick={() => window.location.assign('/')}>
               <ArrowLeftIcon data-icon="inline-start" aria-hidden="true" />
               {t('login.backHome')}
             </Button>

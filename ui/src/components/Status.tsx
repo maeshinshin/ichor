@@ -17,11 +17,11 @@ const toneClass: Record<Tone, string> = {
 export function StatusText({ tone, children }: { tone: Tone; children: ComponentChildren }) {
   return (
     <span class={`inline-flex items-center gap-1.5 whitespace-nowrap text-sm ${toneClass[tone]}`}>
-      {tone === 'good' && <CircleCheckIcon class="size-4" aria-hidden="true" />}
-      {tone === 'bad' && <CircleXIcon class="size-4" aria-hidden="true" />}
-      {tone === 'warn' && <TriangleAlertIcon class="size-4" aria-hidden="true" />}
-      {tone === 'progress' && <Spinner class="size-4" role="presentation" aria-label="" aria-hidden="true" />}
-      {tone === 'neutral' && <CircleIcon class="size-4" aria-hidden="true" />}
+      {tone === 'good' && <CircleCheckIcon className="size-4" aria-hidden="true" />}
+      {tone === 'bad' && <CircleXIcon className="size-4" aria-hidden="true" />}
+      {tone === 'warn' && <TriangleAlertIcon className="size-4" aria-hidden="true" />}
+      {tone === 'progress' && <Spinner className="size-4" role="presentation" aria-label="" aria-hidden="true" />}
+      {tone === 'neutral' && <CircleIcon className="size-4" aria-hidden="true" />}
       <span>{children}</span>
     </span>
   )

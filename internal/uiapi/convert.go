@@ -388,7 +388,15 @@ func clusterToPB(c *ichorv1alpha1.TalosCluster) *pb.Cluster {
 		addrs, cidrs = d.Addresses, d.CIDRs
 	}
 
+	var detected, detectedVersion string
+	if st := c.Status.CNI; st != nil {
+		detected, detectedVersion = st.Detected, st.DetectedVersion
+	}
+
 	return &pb.Cluster{
+		CniPreset:               c.Spec.CNI.Preset,
+		CniDetected:             detected,
+		CniDetectedVersion:      detectedVersion,
 		DiscoveryAddresses:      addrs,
 		DiscoveryCidrs:          cidrs,
 		Ref:                     objectRef(c.Namespace, c.Name),

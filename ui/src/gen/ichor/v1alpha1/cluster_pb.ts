@@ -19,7 +19,41 @@ import type { Message, UnknownEnum } from "@bufbuild/protobuf";
  * Describes the file ichor/v1alpha1/cluster.proto.
  */
 export const file_ichor_v1alpha1_cluster: GenFile = /*@__PURE__*/
-  fileDesc("ChxpY2hvci92MWFscGhhMS9jbHVzdGVyLnByb3RvEg5pY2hvci52MWFscGhhMSKeAQoaQWRkRGlzY292ZXJ5QWRkcmVzc1JlcXVlc3QSKgoHY2x1c3RlchgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhIPCgdhZGRyZXNzGAIgASgJEg4KBnJlYXNvbhgDIAEoCRIzCgticmVha19nbGFzcxgEIAEoCzIaLmljaG9yLnYxYWxwaGExLkJyZWFrR2xhc3NCAhgBIqUBChtBZGREaXNjb3ZlcnlBZGRyZXNzUmVzcG9uc2USKAoHY2x1c3RlchgBIAEoCzIXLmljaG9yLnYxYWxwaGExLkNsdXN0ZXISKgoFYXVkaXQYAiABKAsyGy5pY2hvci52MWFscGhhMS5BdWRpdFJlY29yZBIcChBwdWxsX3JlcXVlc3RfdXJsGAMgASgJQgIYARISCgZub3RpY2UYBCABKAlCAhgBIhUKE0xpc3RDbHVzdGVyc1JlcXVlc3QiQQoUTGlzdENsdXN0ZXJzUmVzcG9uc2USKQoIY2x1c3RlcnMYASADKAsyFy5pY2hvci52MWFscGhhMS5DbHVzdGVyIj8KEUdldENsdXN0ZXJSZXF1ZXN0EioKB2NsdXN0ZXIYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYiPgoSR2V0Q2x1c3RlclJlc3BvbnNlEigKB2NsdXN0ZXIYASABKAsyFy5pY2hvci52MWFscGhhMS5DbHVzdGVyIqQBCg9Sb2xsb3V0UHJvZ3Jlc3MSKQoEa2luZBgBIAEoDjIbLmljaG9yLnYxYWxwaGExLlJvbGxvdXRLaW5kEhYKDnRhcmdldF92ZXJzaW9uGAIgASgJEg4KBnBhdXNlZBgDIAEoCBITCgtub2Rlc190b3RhbBgEIAEoBRISCgpub2Rlc19kb25lGAUgASgFEhUKDWN1cnJlbnRfcGhhc2UYBiABKAkiigEKDUhhbmRvdmVyU3RhdGUSEQoJY29tcG9uZW50GAEgASgJEiwKBXBoYXNlGAIgASgOMh0uaWNob3IudjFhbHBoYTEuSGFuZG92ZXJQaGFzZRI4ChRsYXN0X3RyYW5zaXRpb25fdGltZRgDIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAi9wMKB0NsdXN0ZXISJgoDcmVmGAEgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmEhUKDXRhbG9zX3ZlcnNpb24YAiABKAkSGgoSa3ViZXJuZXRlc192ZXJzaW9uGAMgASgJEhAKCGVuZHBvaW50GAQgASgJEhsKE2NvbnRyb2xfcGxhbmVfY291bnQYBSABKAUSIQoZY29udHJvbF9wbGFuZV9zY2hlZHVsYWJsZRgGIAEoCBItCgpjb25kaXRpb25zGAcgAygLMhkuaWNob3IudjFhbHBoYTEuQ29uZGl0aW9uEjAKB3JvbGxvdXQYCCABKAsyHy5pY2hvci52MWFscGhhMS5Sb2xsb3V0UHJvZ3Jlc3MSMAoJaGFuZG92ZXJzGAkgAygLMh0uaWNob3IudjFhbHBoYTEuSGFuZG92ZXJTdGF0ZRIbChNkaXNjb3ZlcnlfYWRkcmVzc2VzGAogAygJEhcKD2Rpc2NvdmVyeV9jaWRycxgLIAMoCRIXCg9rdWJlX3Byb3h5X21vZGUYDCABKAkSNwoMY2VydGlmaWNhdGVzGA0gAygLMiEuaWNob3IudjFhbHBoYTEuQ2VydGlmaWNhdGVFeHBpcnkSJAocYWxyZWFkeV9jb25maWd1cmVkX2FkZHJlc3NlcxgOIAMoCSJQChFDZXJ0aWZpY2F0ZUV4cGlyeRIMCgRuYW1lGAEgASgJEi0KCW5vdF9hZnRlchgCIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAqeAoLUm9sbG91dEtpbmQSHAoYUk9MTE9VVF9LSU5EX1VOU1BFQ0lGSUVEEAASFgoSUk9MTE9VVF9LSU5EX1RBTE9TEAESGwoXUk9MTE9VVF9LSU5EX0tVQkVSTkVURVMQAhIWChJST0xMT1VUX0tJTkRfSUNIT1IQAyqkAQoNSGFuZG92ZXJQaGFzZRIeChpIQU5ET1ZFUl9QSEFTRV9VTlNQRUNJRklFRBAAEhoKFkhBTkRPVkVSX1BIQVNFX1BFTkRJTkcQARIbChdIQU5ET1ZFUl9QSEFTRV9JTkpFQ1RFRBACEhoKFkhBTkRPVkVSX1BIQVNFX0FET1BURUQQAxIeChpIQU5ET1ZFUl9QSEFTRV9IQU5ERURfT1ZFUhAEMrACCg5DbHVzdGVyU2VydmljZRJZCgxMaXN0Q2x1c3RlcnMSIy5pY2hvci52MWFscGhhMS5MaXN0Q2x1c3RlcnNSZXF1ZXN0GiQuaWNob3IudjFhbHBoYTEuTGlzdENsdXN0ZXJzUmVzcG9uc2USUwoKR2V0Q2x1c3RlchIhLmljaG9yLnYxYWxwaGExLkdldENsdXN0ZXJSZXF1ZXN0GiIuaWNob3IudjFhbHBoYTEuR2V0Q2x1c3RlclJlc3BvbnNlEm4KE0FkZERpc2NvdmVyeUFkZHJlc3MSKi5pY2hvci52MWFscGhhMS5BZGREaXNjb3ZlcnlBZGRyZXNzUmVxdWVzdBorLmljaG9yLnYxYWxwaGExLkFkZERpc2NvdmVyeUFkZHJlc3NSZXNwb25zZUK9AQoSY29tLmljaG9yLnYxYWxwaGExQgxDbHVzdGVyUHJvdG9QAVpAZ2l0aHViLmNvbS9tYWVzaGluc2hpbi9pY2hvci9nZW4vZ28vaWNob3IvdjFhbHBoYTE7aWNob3J2MWFscGhhMaICA0lYWKoCDkljaG9yLlYxYWxwaGExygIOSWNob3JcVjFhbHBoYTHiAhpJY2hvclxWMWFscGhhMVxHUEJNZXRhZGF0YeoCD0ljaG9yOjpWMWFscGhhMWIGcHJvdG8z", [file_google_protobuf_timestamp, file_ichor_v1alpha1_common]);
+  fileDesc("ChxpY2hvci92MWFscGhhMS9jbHVzdGVyLnByb3RvEg5pY2hvci52MWFscGhhMSJMCh5EaXNtaXNzQ0FSb3RhdGlvbkFkdmljZVJlcXVlc3QSKgoHY2x1c3RlchgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZiJNCh9EaXNtaXNzQ0FSb3RhdGlvbkFkdmljZVJlc3BvbnNlEioKBWF1ZGl0GAEgASgLMhsuaWNob3IudjFhbHBoYTEuQXVkaXRSZWNvcmQingEKGkFkZERpc2NvdmVyeUFkZHJlc3NSZXF1ZXN0EioKB2NsdXN0ZXIYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYSDwoHYWRkcmVzcxgCIAEoCRIOCgZyZWFzb24YAyABKAkSMwoLYnJlYWtfZ2xhc3MYBCABKAsyGi5pY2hvci52MWFscGhhMS5CcmVha0dsYXNzQgIYASKlAQobQWRkRGlzY292ZXJ5QWRkcmVzc1Jlc3BvbnNlEigKB2NsdXN0ZXIYASABKAsyFy5pY2hvci52MWFscGhhMS5DbHVzdGVyEioKBWF1ZGl0GAIgASgLMhsuaWNob3IudjFhbHBoYTEuQXVkaXRSZWNvcmQSHAoQcHVsbF9yZXF1ZXN0X3VybBgDIAEoCUICGAESEgoGbm90aWNlGAQgASgJQgIYASIVChNMaXN0Q2x1c3RlcnNSZXF1ZXN0IkEKFExpc3RDbHVzdGVyc1Jlc3BvbnNlEikKCGNsdXN0ZXJzGAEgAygLMhcuaWNob3IudjFhbHBoYTEuQ2x1c3RlciI/ChFHZXRDbHVzdGVyUmVxdWVzdBIqCgdjbHVzdGVyGAEgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmIj4KEkdldENsdXN0ZXJSZXNwb25zZRIoCgdjbHVzdGVyGAEgASgLMhcuaWNob3IudjFhbHBoYTEuQ2x1c3RlciKkAQoPUm9sbG91dFByb2dyZXNzEikKBGtpbmQYASABKA4yGy5pY2hvci52MWFscGhhMS5Sb2xsb3V0S2luZBIWCg50YXJnZXRfdmVyc2lvbhgCIAEoCRIOCgZwYXVzZWQYAyABKAgSEwoLbm9kZXNfdG90YWwYBCABKAUSEgoKbm9kZXNfZG9uZRgFIAEoBRIVCg1jdXJyZW50X3BoYXNlGAYgASgJIooBCg1IYW5kb3ZlclN0YXRlEhEKCWNvbXBvbmVudBgBIAEoCRIsCgVwaGFzZRgCIAEoDjIdLmljaG9yLnYxYWxwaGExLkhhbmRvdmVyUGhhc2USOAoUbGFzdF90cmFuc2l0aW9uX3RpbWUYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIr8ECgdDbHVzdGVyEiYKA3JlZhgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhIVCg10YWxvc192ZXJzaW9uGAIgASgJEhoKEmt1YmVybmV0ZXNfdmVyc2lvbhgDIAEoCRIQCghlbmRwb2ludBgEIAEoCRIbChNjb250cm9sX3BsYW5lX2NvdW50GAUgASgFEiEKGWNvbnRyb2xfcGxhbmVfc2NoZWR1bGFibGUYBiABKAgSLQoKY29uZGl0aW9ucxgHIAMoCzIZLmljaG9yLnYxYWxwaGExLkNvbmRpdGlvbhIwCgdyb2xsb3V0GAggASgLMh8uaWNob3IudjFhbHBoYTEuUm9sbG91dFByb2dyZXNzEjAKCWhhbmRvdmVycxgJIAMoCzIdLmljaG9yLnYxYWxwaGExLkhhbmRvdmVyU3RhdGUSGwoTZGlzY292ZXJ5X2FkZHJlc3NlcxgKIAMoCRIXCg9kaXNjb3ZlcnlfY2lkcnMYCyADKAkSFwoPa3ViZV9wcm94eV9tb2RlGAwgASgJEjcKDGNlcnRpZmljYXRlcxgNIAMoCzIhLmljaG9yLnYxYWxwaGExLkNlcnRpZmljYXRlRXhwaXJ5EiQKHGFscmVhZHlfY29uZmlndXJlZF9hZGRyZXNzZXMYDiADKAkSEgoKY25pX3ByZXNldBgPIAEoCRIUCgxjbmlfZGV0ZWN0ZWQYECABKAkSHAoUY25pX2RldGVjdGVkX3ZlcnNpb24YESABKAkiUAoRQ2VydGlmaWNhdGVFeHBpcnkSDAoEbmFtZRgBIAEoCRItCglub3RfYWZ0ZXIYAiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wKngKC1JvbGxvdXRLaW5kEhwKGFJPTExPVVRfS0lORF9VTlNQRUNJRklFRBAAEhYKElJPTExPVVRfS0lORF9UQUxPUxABEhsKF1JPTExPVVRfS0lORF9LVUJFUk5FVEVTEAISFgoSUk9MTE9VVF9LSU5EX0lDSE9SEAMqpAEKDUhhbmRvdmVyUGhhc2USHgoaSEFORE9WRVJfUEhBU0VfVU5TUEVDSUZJRUQQABIaChZIQU5ET1ZFUl9QSEFTRV9QRU5ESU5HEAESGwoXSEFORE9WRVJfUEhBU0VfSU5KRUNURUQQAhIaChZIQU5ET1ZFUl9QSEFTRV9BRE9QVEVEEAMSHgoaSEFORE9WRVJfUEhBU0VfSEFOREVEX09WRVIQBDKsAwoOQ2x1c3RlclNlcnZpY2USWQoMTGlzdENsdXN0ZXJzEiMuaWNob3IudjFhbHBoYTEuTGlzdENsdXN0ZXJzUmVxdWVzdBokLmljaG9yLnYxYWxwaGExLkxpc3RDbHVzdGVyc1Jlc3BvbnNlElMKCkdldENsdXN0ZXISIS5pY2hvci52MWFscGhhMS5HZXRDbHVzdGVyUmVxdWVzdBoiLmljaG9yLnYxYWxwaGExLkdldENsdXN0ZXJSZXNwb25zZRJuChNBZGREaXNjb3ZlcnlBZGRyZXNzEiouaWNob3IudjFhbHBoYTEuQWRkRGlzY292ZXJ5QWRkcmVzc1JlcXVlc3QaKy5pY2hvci52MWFscGhhMS5BZGREaXNjb3ZlcnlBZGRyZXNzUmVzcG9uc2USegoXRGlzbWlzc0NBUm90YXRpb25BZHZpY2USLi5pY2hvci52MWFscGhhMS5EaXNtaXNzQ0FSb3RhdGlvbkFkdmljZVJlcXVlc3QaLy5pY2hvci52MWFscGhhMS5EaXNtaXNzQ0FSb3RhdGlvbkFkdmljZVJlc3BvbnNlQr0BChJjb20uaWNob3IudjFhbHBoYTFCDENsdXN0ZXJQcm90b1ABWkBnaXRodWIuY29tL21hZXNoaW5zaGluL2ljaG9yL2dlbi9nby9pY2hvci92MWFscGhhMTtpY2hvcnYxYWxwaGExogIDSVhYqgIOSWNob3IuVjFhbHBoYTHKAg5JY2hvclxWMWFscGhhMeICGkljaG9yXFYxYWxwaGExXEdQQk1ldGFkYXRh6gIPSWNob3I6OlYxYWxwaGExYgZwcm90bzM", [file_google_protobuf_timestamp, file_ichor_v1alpha1_common]);
+
+/**
+ * @generated from message ichor.v1alpha1.DismissCARotationAdviceRequest
+ */
+export type DismissCARotationAdviceRequest = Message<"ichor.v1alpha1.DismissCARotationAdviceRequest"> & {
+  /**
+   * @generated from field: ichor.v1alpha1.ObjectRef cluster = 1;
+   */
+  cluster?: ObjectRef | undefined;
+};
+
+/**
+ * Describes the message ichor.v1alpha1.DismissCARotationAdviceRequest.
+ * Use `create(DismissCARotationAdviceRequestSchema)` to create a new message.
+ */
+export const DismissCARotationAdviceRequestSchema: GenMessage<DismissCARotationAdviceRequest> = /*@__PURE__*/
+  messageDesc(file_ichor_v1alpha1_cluster, 0);
+
+/**
+ * @generated from message ichor.v1alpha1.DismissCARotationAdviceResponse
+ */
+export type DismissCARotationAdviceResponse = Message<"ichor.v1alpha1.DismissCARotationAdviceResponse"> & {
+  /**
+   * @generated from field: ichor.v1alpha1.AuditRecord audit = 1;
+   */
+  audit?: AuditRecord | undefined;
+};
+
+/**
+ * Describes the message ichor.v1alpha1.DismissCARotationAdviceResponse.
+ * Use `create(DismissCARotationAdviceResponseSchema)` to create a new message.
+ */
+export const DismissCARotationAdviceResponseSchema: GenMessage<DismissCARotationAdviceResponse> = /*@__PURE__*/
+  messageDesc(file_ichor_v1alpha1_cluster, 1);
 
 /**
  * @generated from message ichor.v1alpha1.AddDiscoveryAddressRequest
@@ -56,7 +90,7 @@ export type AddDiscoveryAddressRequest = Message<"ichor.v1alpha1.AddDiscoveryAdd
  * Use `create(AddDiscoveryAddressRequestSchema)` to create a new message.
  */
 export const AddDiscoveryAddressRequestSchema: GenMessage<AddDiscoveryAddressRequest> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_cluster, 0);
+  messageDesc(file_ichor_v1alpha1_cluster, 2);
 
 /**
  * @generated from message ichor.v1alpha1.AddDiscoveryAddressResponse
@@ -97,7 +131,7 @@ export type AddDiscoveryAddressResponse = Message<"ichor.v1alpha1.AddDiscoveryAd
  * Use `create(AddDiscoveryAddressResponseSchema)` to create a new message.
  */
 export const AddDiscoveryAddressResponseSchema: GenMessage<AddDiscoveryAddressResponse> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_cluster, 1);
+  messageDesc(file_ichor_v1alpha1_cluster, 3);
 
 /**
  * @generated from message ichor.v1alpha1.ListClustersRequest
@@ -110,7 +144,7 @@ export type ListClustersRequest = Message<"ichor.v1alpha1.ListClustersRequest"> 
  * Use `create(ListClustersRequestSchema)` to create a new message.
  */
 export const ListClustersRequestSchema: GenMessage<ListClustersRequest> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_cluster, 2);
+  messageDesc(file_ichor_v1alpha1_cluster, 4);
 
 /**
  * @generated from message ichor.v1alpha1.ListClustersResponse
@@ -127,7 +161,7 @@ export type ListClustersResponse = Message<"ichor.v1alpha1.ListClustersResponse"
  * Use `create(ListClustersResponseSchema)` to create a new message.
  */
 export const ListClustersResponseSchema: GenMessage<ListClustersResponse> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_cluster, 3);
+  messageDesc(file_ichor_v1alpha1_cluster, 5);
 
 /**
  * @generated from message ichor.v1alpha1.GetClusterRequest
@@ -144,7 +178,7 @@ export type GetClusterRequest = Message<"ichor.v1alpha1.GetClusterRequest"> & {
  * Use `create(GetClusterRequestSchema)` to create a new message.
  */
 export const GetClusterRequestSchema: GenMessage<GetClusterRequest> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_cluster, 4);
+  messageDesc(file_ichor_v1alpha1_cluster, 6);
 
 /**
  * @generated from message ichor.v1alpha1.GetClusterResponse
@@ -161,7 +195,7 @@ export type GetClusterResponse = Message<"ichor.v1alpha1.GetClusterResponse"> & 
  * Use `create(GetClusterResponseSchema)` to create a new message.
  */
 export const GetClusterResponseSchema: GenMessage<GetClusterResponse> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_cluster, 5);
+  messageDesc(file_ichor_v1alpha1_cluster, 7);
 
 /**
  * RolloutProgress is present only while a rollout is in flight.
@@ -207,7 +241,7 @@ export type RolloutProgress = Message<"ichor.v1alpha1.RolloutProgress"> & {
  * Use `create(RolloutProgressSchema)` to create a new message.
  */
 export const RolloutProgressSchema: GenMessage<RolloutProgress> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_cluster, 6);
+  messageDesc(file_ichor_v1alpha1_cluster, 8);
 
 /**
  * @generated from message ichor.v1alpha1.HandoverState
@@ -236,7 +270,7 @@ export type HandoverState = Message<"ichor.v1alpha1.HandoverState"> & {
  * Use `create(HandoverStateSchema)` to create a new message.
  */
 export const HandoverStateSchema: GenMessage<HandoverState> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_cluster, 7);
+  messageDesc(file_ichor_v1alpha1_cluster, 9);
 
 /**
  * @generated from message ichor.v1alpha1.Cluster
@@ -326,6 +360,28 @@ export type Cluster = Message<"ichor.v1alpha1.Cluster"> & {
    * @generated from field: repeated string already_configured_addresses = 14;
    */
   alreadyConfiguredAddresses: string[];
+
+  /**
+   * cni_preset is spec.cni.preset ("cilium", or "unmanaged" for a cluster whose CNI Ichor leaves
+   * alone, ADR 0103).
+   *
+   * @generated from field: string cni_preset = 15;
+   */
+  cniPreset: string;
+
+  /**
+   * cni_detected is status.cni.detected: cilium, flannel, calico, other or none; empty until observed.
+   *
+   * @generated from field: string cni_detected = 16;
+   */
+  cniDetected: string;
+
+  /**
+   * cni_detected_version is status.cni.detectedVersion, the detected CNI's image tag where known.
+   *
+   * @generated from field: string cni_detected_version = 17;
+   */
+  cniDetectedVersion: string;
 };
 
 /**
@@ -333,7 +389,7 @@ export type Cluster = Message<"ichor.v1alpha1.Cluster"> & {
  * Use `create(ClusterSchema)` to create a new message.
  */
 export const ClusterSchema: GenMessage<Cluster> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_cluster, 8);
+  messageDesc(file_ichor_v1alpha1_cluster, 10);
 
 /**
  * CertificateExpiry is one CA of the cluster and its last instant of validity.
@@ -359,7 +415,7 @@ export type CertificateExpiry = Message<"ichor.v1alpha1.CertificateExpiry"> & {
  * Use `create(CertificateExpirySchema)` to create a new message.
  */
 export const CertificateExpirySchema: GenMessage<CertificateExpiry> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_cluster, 9);
+  messageDesc(file_ichor_v1alpha1_cluster, 11);
 
 /**
  * RolloutKind identifies which of the three upgrade kinds a RolloutProgress
@@ -486,6 +542,18 @@ export const ClusterService: GenService<{
     methodKind: "unary";
     input: typeof AddDiscoveryAddressRequestSchema;
     output: typeof AddDiscoveryAddressResponseSchema;
+  },
+  /**
+   * DismissCARotationAdvice sets the annotation ichor.maesh.dev/ca-rotation-advice-dismissed on the
+   * TalosCluster, which the controller reads to clear the CARotationAdvised condition (ADR 0103,
+   * section 1.4). It writes that annotation and nothing else.
+   *
+   * @generated from rpc ichor.v1alpha1.ClusterService.DismissCARotationAdvice
+   */
+  dismissCARotationAdvice: {
+    methodKind: "unary";
+    input: typeof DismissCARotationAdviceRequestSchema;
+    output: typeof DismissCARotationAdviceResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_ichor_v1alpha1_cluster, 0);

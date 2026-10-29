@@ -64,6 +64,10 @@ func (s *Server) getCiliumView(ctx context.Context, ref *pb.ObjectRef) (*ciliumV
 		return nil, mapGetError(fmt.Sprintf("cluster %q", key), err)
 	}
 
+	if cluster.Spec.CNI.Preset == ichorv1alpha1.TalosClusterCNIPresetUnmanaged {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New(ichorv1alpha1.CNIUnmanagedMessage))
+	}
+
 	v := &ciliumView{
 		cluster: &cluster, kubeProxy: cni.KubeProxyMode(cluster.Spec.CNI.KubeProxy), tunnel: cluster.Spec.CNI.Tunnel,
 	}

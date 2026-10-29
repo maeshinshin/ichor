@@ -1,6 +1,6 @@
 # 0104. A cluster with no CNI gets Ichor's Cilium before Ichor, and Ichor is installable with Helm
 
-Status: Accepted; not built · Date: 2026-10-29 · Design section: Bootstrap (`ichor adopt`), Cilium · Builds on: 0098, 0099, 0101, 0103 · Amends: 0103 (the "no CNI" row of 1.1, 1.1a's gate wiring, test D5, open question 3)
+Status: Accepted; built, hardware tests pending · Date: 2026-10-29 · Design section: Bootstrap (`ichor adopt`), Cilium · Builds on: 0098, 0099, 0101, 0103 · Amends: 0103 (the "no CNI" row of 1.1, 1.1a's gate wiring, test D5, open question 3)
 
 Decided: `ichor adopt` on a Talos cluster with no CNI installs Ichor's pinned Cilium itself, in the adopt process with the Helm SDK as Ichor's own release record in `ichor-system`, before Ichor's own pods are installed, and adopts the cluster as the managed `cilium` preset (so ADR 0103's "no CNI becomes unmanaged `talosCNI: none`" row is replaced, and `--cni-unmanaged` is refused there); a cluster that already has a CNI keeps ADR 0103's rules and its network-policy gate follows live detection; every wait for Ichor in `adopt` and `init` is bounded and names why the pods are Pending; and Ichor can be installed with `helm install` of `dist/chart` (published as an OCI chart), after which `ichor adopt` detects the existing install, skips its own install step and registers the cluster, with a new `ichor cni bootstrap` for the one case Helm cannot cover, a cluster with no pod network.
 
@@ -198,8 +198,25 @@ Record the exact refusal and wait texts and the time of each phase, and write do
 - **The chart has never been published**, and its values defaults were placeholders. Until unit 7 lands the Helm path is checkout-only; this ADR does not hide that.
 - **Hand-over with no inline entry** is a path the hand-over controller has not run on hardware. Case E1 is its first run.
 
+## As built (2026-10-29)
+
+Units 1 to 7 are built; unit 9 (hardware cases) is pending. Where the build differs from the text above, the build is right:
+
+- **The Cilium Helm Job uses `ApplyForCluster`, not `Bootstrap`.** `cilium.Bootstrap` is the CLI's entry (namespace, `Apply`, Ready wait); the `ichor-cni` Job and the CLI share `ApplyForCluster` underneath. The Job also runs without an `IchorInstallation`, which a Helm install does not have.
+- **`ichor cni bootstrap` cannot check KubePrism.** It has no Talos credential, so it states the requirement in its help and relies on adopt's later check (1.3.2). `--kube-proxy enabled|replaced` is required for the same reason.
+- **Strict version equality for Helm installs.** Adopt on a Helm-installed Ichor refuses any version different from the CLI's, not only a skew beyond the usual rule, and prints the `helm upgrade` command.
+- **Chart version has no leading `v`; `appVersion` and image tags have it** (for example chart `0.1.0`, appVersion and tag `v0.1.0`).
+- **Images are linux/amd64 only.** They are built by the existing crane target (`make demo-images`) on a `v*` tag, as `ghcr.io/maeshinshin/{ichor-controller,ichor-ui,ichor-installer}`.
+- **The UI server's Helm detection is limited.** The Ichor upgrade path in the UI points to `helm upgrade` when it can tell the install is Helm-managed, but it cannot detect every Helm install, so some prompts may still describe the installer Job.
+- **No release exists yet.** `oci://ghcr.io/maeshinshin/charts/ichor` and the image repositories are empty until the first `v*` tag is pushed.
+- **Added flags beyond the text:** `ichor adopt --cilium-values FILE` (open question 1) and `ichor cni bootstrap --cilium-values FILE`, `--tunnel`.
+
+Guides: `docs/guides/install-with-helm.md`, and the no-CNI and Helm sections of `docs/guides/adopt-and-reclaim.md`.
+
 ## Open questions
 
-1. `--cilium-values FILE` for the no-CNI path (a user who wants non-default Cilium values at adoption): not built in ADR 0103 either; defaults plus a later `ichor cni values set` cover it. Add now?
-2. Should `ichor cni bootstrap` also be usable by `ichor init` to share one code path, or is `init`'s inline manifest to stay the only fresh-cluster path (this ADR assumes the latter)?
-3. Default timeouts (15 / 10 / 10 minutes in adopt, 30 in init) are estimates; E6 and the first real runs set them.
+All three are resolved.
+
+1. `--cilium-values FILE` for the no-CNI path: **accepted and built**, on `ichor adopt` and `ichor cni bootstrap`. Ichor-owned keys are refused.
+2. `ichor cni bootstrap` for `ichor init`: **no.** `init` keeps the inline-manifest bootstrap; `ichor cni bootstrap` is for an existing cluster with no pod network.
+3. Default timeouts: **kept as built** (15 minutes for the webhooks in adopt, 30 in `init`, 10 for Cilium Ready, 10 for hand-over). Hardware cases E6 and the first real runs tune them.

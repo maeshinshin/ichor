@@ -2,6 +2,8 @@
 
 Status: Accepted; built, hardware tests pending · Date: 2026-10-29 · Design section: Bootstrap (`ichor adopt`), Nodes, Cilium · Builds on: 0014, 0042, 0066, 0075, 0076, 0077, 0099, 0101
 
+Amended by [ADR 0104](0104-a-cluster-with-no-cni-gets-ichors-cilium-before-ichor-and-ichor-is-installable-with-helm.md): a cluster with no CNI is adopted as managed Cilium (Ichor installs it first), not unmanaged `talosCNI: none`; the network-policy gate follows live detection; test D5 and open question 3 are superseded.
+
 Decided: Ichor adopts a running Talos cluster on Talos v1.12 or later (older is refused with "upgrade Talos first"); a Cilium cluster is taken over as Ichor's own Helm release through a diff-checked `TakeOwnership` Job, while any other CNI (and a Cilium the user wants left alone) is adopted only on the operator's explicit request in a new CNI-unmanaged mode, `spec.cni.preset: unmanaged`, in which Ichor neither installs, operates nor renders the CNI and skips its CiliumNetworkPolicies unless Cilium is present; it recovers the cluster's secrets bundle from a control plane's machine config, holds every adopted machine until zero drift is verified, only advises (never starts) a CA rotation afterwards, and refuses to join an already-configured node unless that node is reclaimed, either by `ichor machine reclaim` with the operator's own talosconfig or, as a break-glass path that is off by default, from the UI through a short-lived, single-node, auto-deleted credential Secret, a typed-UUID confirmation and an audit Event; reclaim resets only STATE and EPHEMERAL
 
 ## Decisions by the user (2026-10-29)

@@ -1,8 +1,11 @@
 import { useState } from 'preact/hooks'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { CheckIcon, PencilIcon, PlusIcon, Trash2Icon } from 'lucide-preact'
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Field, FieldDescription, FieldGroup, FieldLabel, FieldTitle } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@/components/ui/item'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { buildSysctlDocument, defaultDocument, DOCUMENT_KINDS, kindInfo, parseSysctlParams, summarizeDocument, type SysctlRow } from '@/lib/patchDocs'
@@ -36,67 +39,73 @@ export function PatchDocumentCard({
   const summary = summarizeDocument(doc.kind, doc.document)
 
   return (
-    <div class="space-y-2 rounded-md border p-3">
-      <div class="flex flex-wrap items-center gap-2">
-        <Badge variant="secondary">{doc.kind}</Badge>
-        <span class="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">{summary || t('patch.docEmptySummary')}</span>
-        <Button size="sm" variant="outline" onClick={() => setEditing(!editing)}>
-          {editing ? t('patch.docDone') : t('patch.docEdit')}
-        </Button>
-        <Button size="sm" variant="ghost" onClick={onRemove}>
-          {t('patch.removeDocument')}
-        </Button>
-      </div>
+    <Card size="sm">
+      <CardHeader>
+        <CardTitle>
+          <Badge variant="secondary">{doc.kind}</Badge>
+        </CardTitle>
+        <CardDescription className="truncate">{summary || t('patch.docEmptySummary')}</CardDescription>
+        <CardAction className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={() => setEditing(!editing)}>
+            {editing ? <CheckIcon data-icon="inline-start" aria-hidden="true" /> : <PencilIcon data-icon="inline-start" aria-hidden="true" />}
+            {editing ? t('patch.docDone') : t('patch.docEdit')}
+          </Button>
+          <Button size="sm" variant="ghost" onClick={onRemove}>
+            <Trash2Icon data-icon="inline-start" aria-hidden="true" />
+            {t('patch.removeDocument')}
+          </Button>
+        </CardAction>
+      </CardHeader>
 
       {editing && (
-        <div class="space-y-3 border-t pt-3">
-          <div class="space-y-1">
-            <Label>{t('patch.kindLabel')}</Label>
-            <Select value={doc.kind} onValueChange={(v) => onChange({ kind: v, document: defaultDocument(v) })}>
-              <SelectTrigger className="w-full sm:w-64">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {DOCUMENT_KINDS.map((k) => (
-                  <SelectItem key={k.kind} value={k.kind}>
-                    {k.kind}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {info && <p class="text-xs text-muted-foreground">{t(info.descKey)}</p>}
-          </div>
+        <CardContent>
+          <FieldGroup>
+            <Field>
+              <FieldLabel>{t('patch.kindLabel')}</FieldLabel>
+              <Select value={doc.kind} onValueChange={(v) => onChange({ kind: v, document: defaultDocument(v) })}>
+                <SelectTrigger className="w-full sm:w-64">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {DOCUMENT_KINDS.map((k) => (
+                    <SelectItem key={k.kind} value={k.kind}>
+                      {k.kind}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {info && <FieldDescription>{t(info.descKey)}</FieldDescription>}
+            </Field>
 
-          {info && (
-            <div class="space-y-1">
-              <p class="text-xs font-medium">{t('patch.fieldsTitle')}</p>
-              <ul class="space-y-0.5 text-xs text-muted-foreground">
-                {info.fields.map((f) => (
-                  <li key={f.name}>
-                    <span class="font-mono text-foreground">{f.name}</span>: {t(f.helpKey)}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+            {info && (
+              <Field>
+                <FieldTitle>{t('patch.fieldsTitle')}</FieldTitle>
+                <ItemGroup>
+                  {info.fields.map((f) => (
+                    <Item key={f.name} size="xs">
+                      <ItemContent>
+                        <ItemTitle>{f.name}</ItemTitle>
+                        <ItemDescription>{t(f.helpKey)}</ItemDescription>
+                      </ItemContent>
+                    </Item>
+                  ))}
+                </ItemGroup>
+              </Field>
+            )}
 
-          {doc.kind === 'SysctlConfig' && parseSysctlParams(doc.document) !== null ? (
-            <SysctlRows key={doc.kind} initial={parseSysctlParams(doc.document) ?? []} onChange={(rows) => onChange({ document: buildSysctlDocument(rows) })} />
-          ) : (
-            <div class="space-y-1">
-              <Label>{t('patch.jsonLabel')}</Label>
-              <Textarea
-                className="font-mono text-xs"
-                rows={6}
-                value={doc.document}
-                onInput={(e) => onChange({ document: (e.target as HTMLTextAreaElement).value })}
-              />
-              <p class="text-xs text-muted-foreground">{t('patch.jsonHelp')}</p>
-            </div>
-          )}
-        </div>
+            {doc.kind === 'SysctlConfig' && parseSysctlParams(doc.document) !== null ? (
+              <SysctlRows key={doc.kind} initial={parseSysctlParams(doc.document) ?? []} onChange={(rows) => onChange({ document: buildSysctlDocument(rows) })} />
+            ) : (
+              <Field>
+                <FieldLabel>{t('patch.jsonLabel')}</FieldLabel>
+                <Textarea rows={6} value={doc.document} onInput={(e) => onChange({ document: (e.target as HTMLTextAreaElement).value })} />
+                <FieldDescription>{t('patch.jsonHelp')}</FieldDescription>
+              </Field>
+            )}
+          </FieldGroup>
+        </CardContent>
       )}
-    </div>
+    </Card>
   )
 }
 
@@ -116,25 +125,27 @@ function SysctlRows({ initial, onChange }: { initial: SysctlRow[]; onChange: (ro
       {rows.map((r, i) => (
         <div key={i} class="flex flex-wrap items-center gap-2">
           <Input
-            className="min-w-0 flex-1 font-mono text-xs"
+            className="min-w-0 flex-1"
             aria-label={t('patch.sysctlKey')}
             placeholder="net.core.somaxconn"
             value={r.key}
             onInput={(e) => update(rows.map((x, j) => (j === i ? { ...x, key: (e.target as HTMLInputElement).value } : x)))}
           />
           <Input
-            className="w-32 font-mono text-xs"
+            className="w-32"
             aria-label={t('patch.sysctlValue')}
             placeholder="1024"
             value={r.value}
             onInput={(e) => update(rows.map((x, j) => (j === i ? { ...x, value: (e.target as HTMLInputElement).value } : x)))}
           />
           <Button size="sm" variant="ghost" aria-label={t('patch.sysctlRemoveRow')} onClick={() => update(rows.filter((_, j) => j !== i))}>
+            <Trash2Icon data-icon="inline-start" aria-hidden="true" />
             {t('patch.removeDocument')}
           </Button>
         </div>
       ))}
       <Button size="sm" variant="outline" onClick={() => update([...rows, { key: '', value: '' }])}>
+        <PlusIcon data-icon="inline-start" aria-hidden="true" />
         {t('patch.sysctlAddRow')}
       </Button>
     </div>

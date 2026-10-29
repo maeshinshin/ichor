@@ -385,13 +385,13 @@ func main() {
 	}
 
 	if err := (&controller.TalosMachineReconciler{
-		Client: mgr.GetClient(),
-		APIReader:           mgr.GetAPIReader(),
-		TalosClient:         controller.NewMachineryTalosClient,
-		MaintenanceClient:   controller.NewMachineryMaintenanceClient,
-		KubeClient:          kubeClient,
-		Evacuator:           &controller.LonghornEvacuator{Client: mgr.GetClient()},
-		Recorder:            mgr.GetEventRecorderFor("ichor-controller"), //nolint:staticcheck
+		Client:            mgr.GetClient(),
+		APIReader:         mgr.GetAPIReader(),
+		TalosClient:       controller.NewMachineryTalosClient,
+		MaintenanceClient: controller.NewMachineryMaintenanceClient,
+		KubeClient:        kubeClient,
+		Evacuator:         &controller.LonghornEvacuator{Client: mgr.GetClient()},
+		Recorder:          mgr.GetEventRecorderFor("ichor-controller"), //nolint:staticcheck
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "talosmachine")
 		os.Exit(1)
@@ -413,8 +413,8 @@ func main() {
 		os.Exit(1)
 	}
 	if err := (&controller.CertExpiryReconciler{
-		Client: mgr.GetClient(),
-		ExpiryWarning:       time.Duration(certExpiryWarningDays) * 24 * time.Hour,
+		Client:        mgr.GetClient(),
+		ExpiryWarning: time.Duration(certExpiryWarningDays) * 24 * time.Hour,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "certexpiry")
 		os.Exit(1)
@@ -472,10 +472,10 @@ func main() {
 	// namespace, and the node this pod runs on (NODE_NAME, from the downward API) so that
 	// node can be stopped last.
 	opReconciler := &controller.TalosOperationReconciler{
-		Client: mgr.GetClient(),
-		APIReader:           mgr.GetAPIReader(),
-		TalosClient:         controller.NewMachineryTalosClient,
-		NodeName:            os.Getenv("NODE_NAME"),
+		Client:      mgr.GetClient(),
+		APIReader:   mgr.GetAPIReader(),
+		TalosClient: controller.NewMachineryTalosClient,
+		NodeName:    os.Getenv("NODE_NAME"),
 		// The ca-rotation kind (ADR 0063) is, like shutdown, dispatched by the backbone to its own
 		// state machine: it needs the Kubernetes Node readiness check and an Event recorder.
 		NodesReady:      controller.NewNodesReady(),
@@ -524,9 +524,9 @@ func main() {
 		os.Exit(1)
 	}
 	if err := (&controller.TalosEtcdBackupReconciler{
-		Client: mgr.GetClient(),
-		SnapshotClient:      controller.NewMachineryEtcdSnapshotClient,
-		SpoolDir:            backupSpoolDir,
+		Client:         mgr.GetClient(),
+		SnapshotClient: controller.NewMachineryEtcdSnapshotClient,
+		SpoolDir:       backupSpoolDir,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "talosetcdbackup")
 		os.Exit(1)

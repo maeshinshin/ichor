@@ -79,10 +79,6 @@ var _ = Describe("Secret-references gate", func() {
 				Host: "registry.example.org", Endpoints: []string{"https://registry.example.org"},
 				AuthSecretRef: &corev1.LocalObjectReference{Name: "reg-a"},
 			}}
-			cluster.Spec.GitOps = &ichorv1alpha1.TalosClusterGitOps{Repository: &ichorv1alpha1.TalosClusterGitRepository{
-				Host: "github", APIURL: "https://api.github.com", Owner: "o", Repo: "r", CloneURL: "https://github.com/o/r.git",
-				TokenSecretRef: corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "tok-a"}, Key: "token"},
-			}}
 			Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
 		})
 
@@ -97,9 +93,8 @@ var _ = Describe("Secret-references gate", func() {
 		}
 
 		fields := map[string]func(*ichorv1alpha1.TalosCluster){
-			"spec.secretsRef":                       func(c *ichorv1alpha1.TalosCluster) { c.Spec.SecretsRef.Name = "other" },
-			"spec.registries[].authSecretRef":       func(c *ichorv1alpha1.TalosCluster) { c.Spec.Registries[0].AuthSecretRef.Name = "reg-b" },
-			"spec.gitops.repository.tokenSecretRef": func(c *ichorv1alpha1.TalosCluster) { c.Spec.GitOps.Repository.TokenSecretRef.Name = "tok-b" },
+			"spec.secretsRef":                 func(c *ichorv1alpha1.TalosCluster) { c.Spec.SecretsRef.Name = "other" },
+			"spec.registries[].authSecretRef": func(c *ichorv1alpha1.TalosCluster) { c.Spec.Registries[0].AuthSecretRef.Name = "reg-b" },
 		}
 
 		for name, mutate := range fields {

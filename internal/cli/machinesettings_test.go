@@ -100,7 +100,7 @@ func TestDisksFromFlags(t *testing.T) {
 func TestApproveWritesNetworkAndDisks(t *testing.T) {
 	setAPITestFlags(t, true)
 
-	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(strongMachine("strong")).Build()
+	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(strongMachine()).Build()
 	c := localClients(apiOpts, apiDeps{K8s: k8s})
 	run := func(o machineApproveOptions) error {
 		o.Role = testRoleWorker

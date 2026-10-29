@@ -71,8 +71,8 @@ func weakMachine(name string) *ichorv1alpha1.TalosMachine {
 	return m
 }
 
-func strongMachine(name string) *ichorv1alpha1.TalosMachine {
-	m := weakMachine(name)
+func strongMachine() *ichorv1alpha1.TalosMachine {
+	m := weakMachine("strong")
 	m.Spec.Identity = ichorv1alpha1.TalosMachineIdentity{UUID: "u", Serial: "s", MACAddresses: []string{"aa:bb:cc:dd:ee:ff"}}
 
 	return m
@@ -152,7 +152,7 @@ func TestApproveThroughBackendRunsTheBackendsChecks(t *testing.T) {
 	setAPITestFlags(t, true)
 
 	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).
-		WithObjects(append(uiBackendObjects(), weakMachine("weak"), strongMachine("strong"))...).Build()
+		WithObjects(append(uiBackendObjects(), weakMachine("weak"), strongMachine())...).Build()
 
 	var forwards atomic.Int32
 
@@ -199,7 +199,7 @@ func TestApproveFallbackKeepsTheChecks(t *testing.T) {
 	setAPITestFlags(t, true)
 
 	// No Service: the backend is unreachable.
-	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(weakMachine("weak"), strongMachine("strong")).Build()
+	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(weakMachine("weak"), strongMachine()).Build()
 
 	var stderr bytes.Buffer
 
@@ -248,7 +248,7 @@ func TestApproveFallbackKeepsTheChecks(t *testing.T) {
 func TestApproveAsksUnlessYes(t *testing.T) {
 	setAPITestFlags(t, false)
 
-	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(strongMachine("strong")).Build()
+	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(strongMachine()).Build()
 	c := localClients(apiOpts, apiDeps{K8s: k8s})
 
 	err := runMachineApprove(context.Background(), c, strings.NewReader("n\n"), &bytes.Buffer{}, &bytes.Buffer{}, "strong", approveWorker)

@@ -140,7 +140,7 @@ func main() {
 		// controller side (ADR 0011): where loadBundle resolves the secrets
 		// bundle Secret, never the TalosCluster's own namespace.
 		ControllerNamespace: os.Getenv("POD_NAMESPACE"),
-		NodeTalosClient: uiapi.NewMachineryNodeTalosClient,
+		NodeTalosClient:     uiapi.NewMachineryNodeTalosClient,
 		// Support bundle, etcd snapshot and packet capture downloads (docs/adr/0084), each
 		// gated by a Kubernetes RBAC verb of the caller's own.
 		DownloadTalosClient: uiapi.NewMachineryDownloadTalosClient,

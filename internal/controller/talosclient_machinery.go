@@ -44,6 +44,7 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/role"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/reclaim"
 )
 
 // bootIDPath is Linux's own per-boot random ID, re-generated on every boot
@@ -249,14 +250,7 @@ func (t *machineryTalosClient) EtcdRemoveMemberByID(ctx context.Context, memberI
 // left etcd itself (ADR 0032) by the time this is ever called, so Talos's
 // own graceful pre-reset routine would find nothing left to do.
 func (t *machineryTalosClient) Reset(ctx context.Context) error {
-	return t.c.ResetGeneric(ctx, &machineapi.ResetRequest{
-		Graceful: false,
-		Reboot:   true,
-		SystemPartitionsToWipe: []*machineapi.ResetPartitionSpec{
-			{Label: constants.StatePartitionLabel, Wipe: true},
-			{Label: constants.EphemeralPartitionLabel, Wipe: true},
-		},
-	})
+	return t.c.ResetGeneric(ctx, reclaim.ResetRequest(false))
 }
 
 // Shutdown calls this node's Shutdown API. See TalosClient.Shutdown.

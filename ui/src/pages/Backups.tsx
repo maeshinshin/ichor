@@ -7,7 +7,7 @@ import { CodeBlock, CodeBlockActions, CodeBlockContent, CodeBlockCopyButton, Cod
 import { Item, ItemContent, ItemDescription, ItemGroup, ItemSeparator, ItemTitle } from '@/components/ui/item'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { SectionCard } from '@/components/SectionCard'
-import { TitleBar } from '@/components/TitleBar'
+import { PageTitle } from '@/components/PageTitle'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
 import { ToneBadge } from '@/components/ToneBadge'
 import { ErrorAlert } from '@/components/ErrorAlert'
@@ -53,7 +53,7 @@ export function Backups() {
   if (!ref || !backups) {
     return (
       <div>
-        <TitleBar title={t('backups.title')} />
+        <PageTitle title={t('backups.title')} />
         <EmptyNote icon={InboxIcon}>{t('backups.noCluster')}</EmptyNote>
       </div>
     )
@@ -65,7 +65,7 @@ export function Backups() {
 
   return (
     <div class="space-y-4">
-      <TitleBar
+      <PageTitle
         title={t('backups.title')}
         description={ref.name}
         actions={backups.length > 0 ? <RestoreDialog cluster={ref} disabled={all.length === 0} /> : undefined}

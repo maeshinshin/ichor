@@ -13,7 +13,7 @@ import { ErrorAlert } from '@/components/ErrorAlert'
 import { Field, Fields } from '@/components/PageHeader'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
 import { SectionCard } from '@/components/SectionCard'
-import { TitleBar } from '@/components/TitleBar'
+import { PageTitle } from '@/components/PageTitle'
 import type { Cluster } from '@/gen/ichor/v1alpha1/cluster_pb'
 import { MachineApprovalState, type Machine } from '@/gen/ichor/v1alpha1/machine_pb'
 import { clusterClient, machineClient } from '@/lib/connect'
@@ -72,7 +72,7 @@ export function AddNode() {
 
   return (
     <>
-      <TitleBar
+      <PageTitle
         title={t('addNode.pageTitle')}
         description={t('kind.cluster')}
         actions={

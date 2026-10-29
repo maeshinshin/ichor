@@ -63,12 +63,6 @@ export function ListToolbar({
   )
 }
 
-// DataTable frames a table as one bordered block (no card around a card); the
-// table scrolls sideways inside it on a phone.
-export function DataTable({ children }: { children: ComponentChildren }) {
-  return <div class="overflow-hidden rounded-md border bg-card [&_td]:px-3 [&_td]:py-2.5 [&_th]:h-9 [&_th]:bg-muted/40 [&_th]:px-3 [&_th]:text-xs [&_th]:font-medium [&_th]:text-muted-foreground [&_tr:last-child]:border-b-0">{children}</div>
-}
-
 // LinkRow is a table row that opens `to` when clicked anywhere; links and
 // buttons inside it keep their own behaviour, and the name cell's link stays
 // the keyboard route in.

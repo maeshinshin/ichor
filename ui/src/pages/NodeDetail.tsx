@@ -10,7 +10,7 @@ import { ErrorAlert } from '@/components/ErrorAlert'
 import { Field, Fields } from '@/components/PageHeader'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
 import { SectionCard } from '@/components/SectionCard'
-import { TitleBar } from '@/components/TitleBar'
+import { PageTitle } from '@/components/PageTitle'
 import { ToneBadge } from '@/components/ToneBadge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { NodeActions } from '@/components/NodeActions'
@@ -114,7 +114,7 @@ function NodePage({ namespace, name }: { namespace: string; name: string }) {
 
   return (
     <>
-      <TitleBar
+      <PageTitle
         title={machine ? machineDisplayName(machine) : name}
         description={t('kind.machine')}
         badges={

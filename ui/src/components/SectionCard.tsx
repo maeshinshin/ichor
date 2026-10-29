@@ -15,18 +15,20 @@ export function SectionCard({
 }: {
   id?: string
   size?: 'default' | 'sm'
-  title: ComponentChildren
+  title?: ComponentChildren
   description?: ComponentChildren
   actions?: ComponentChildren
   children: ComponentChildren
 }) {
   return (
     <Card id={id} size={size} className="scroll-mt-section">
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        {description && <CardDescription>{description}</CardDescription>}
-        {actions && <CardAction>{actions}</CardAction>}
-      </CardHeader>
+      {title && (
+        <CardHeader>
+          <CardTitle>{title}</CardTitle>
+          {description && <CardDescription>{description}</CardDescription>}
+          {actions && <CardAction>{actions}</CardAction>}
+        </CardHeader>
+      )}
       <CardContent className="space-y-4">{children}</CardContent>
     </Card>
   )

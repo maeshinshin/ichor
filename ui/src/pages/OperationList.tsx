@@ -4,9 +4,9 @@ import { WorkflowIcon } from 'lucide-preact'
 import { Button } from '@/components/ui/button'
 import { LinkRow, ListToolbar } from '@/components/ListToolbar'
 import { PageTitle } from '@/components/PageTitle'
+import { SectionCard } from '@/components/SectionCard'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
-import { StateBadge } from '@/components/StateBadge'
-import { TableCard } from '@/components/TableCard'
+import { ToneBadge } from '@/components/ToneBadge'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { OperationControls } from '@/components/OperationControls'
 import { OperationKind, type Operation } from '@/gen/ichor/v1alpha1/operation_pb'
@@ -63,7 +63,7 @@ export function OperationList() {
       ) : rows.length === 0 ? (
         <EmptyNote>{t('list.noMatch')}</EmptyNote>
       ) : (
-        <TableCard>
+        <SectionCard>
           <Table>
             <TableHeader>
               <TableRow>
@@ -80,7 +80,7 @@ export function OperationList() {
               ))}
             </TableBody>
           </Table>
-        </TableCard>
+        </SectionCard>
       )}
     </div>
   )
@@ -102,7 +102,7 @@ function OperationRow({ op, onChanged }: { op: Operation; onChanged: () => void 
       </TableCell>
       <TableCell>{enumLabel(OperationKind, op.kind)}</TableCell>
       <TableCell>
-        <StateBadge tone={opStateTone(state)}>{t(`ops.state.${state}`)}</StateBadge>
+        <ToneBadge tone={opStateTone(state)}>{t(`ops.state.${state}`)}</ToneBadge>
       </TableCell>
       <TableCell>{op.machines.length === 0 ? '–' : t('ops.progress', { done, running })}</TableCell>
       <TableCell>

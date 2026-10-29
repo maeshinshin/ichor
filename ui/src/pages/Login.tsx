@@ -2,8 +2,9 @@ import { useState } from 'preact/hooks'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { ArrowLeftIcon, LogInIcon } from 'lucide-preact'
+import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { loginBody, loginErrorKey, loginReady, redirectTarget, ticketFromSearch } from '@/lib/login'
 import { useT } from '@/lib/useT'
 
@@ -57,22 +58,26 @@ export function Login() {
         </CardHeader>
         <CardContent>
           {ticket ? (
-            <form class="space-y-4" onSubmit={submit}>
-              <div class="space-y-1">
-                <Label htmlFor="login-user">{t('login.username')}</Label>
+            <form onSubmit={submit}>
+              <FieldGroup>
+              <Field>
+                <FieldLabel htmlFor="login-user">{t('login.username')}</FieldLabel>
                 <Input id="login-user" autoComplete="username" autoCapitalize="none" spellcheck={false} autoFocus value={username} onInput={(e) => setUsername((e.target as HTMLInputElement).value)} />
-              </div>
-              <div class="space-y-1">
-                <Label htmlFor="login-password">{t('login.password')}</Label>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="login-password">{t('login.password')}</FieldLabel>
                 <Input id="login-password" type="password" autoComplete="current-password" value={password} onInput={(e) => setPassword((e.target as HTMLInputElement).value)} />
-              </div>
+              </Field>
               {error && <ErrorAlert title={t('app.signInFailed')} detail={error} />}
               <Button type="submit" class="w-full" disabled={!loginReady({ username, password }) || busy}>
+                <LogInIcon data-icon="inline-start" aria-hidden="true" />
                 {busy ? t('login.submitting') : t('login.submit')}
               </Button>
+              </FieldGroup>
             </form>
           ) : (
             <Button class="w-full" variant="outline" onClick={() => window.location.assign('/')}>
+              <ArrowLeftIcon data-icon="inline-start" aria-hidden="true" />
               {t('login.backHome')}
             </Button>
           )}

@@ -412,14 +412,12 @@ function Home({
         <Collapsible>
           <Card>
             <CardHeader>
-              <CardTitle>{t('home.details')}</CardTitle>
-              <CardAction>
-                <CollapsibleTrigger asChild>
-                  <Button variant="ghost" size="icon-sm" aria-label={t('home.details')}>
-                    <ChevronsUpDownIcon />
-                  </Button>
-                </CollapsibleTrigger>
-              </CardAction>
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" className="w-full justify-between">
+                  {t('home.details')}
+                  <ChevronsUpDownIcon aria-hidden="true" />
+                </Button>
+              </CollapsibleTrigger>
             </CardHeader>
             <CollapsibleContent>
               <CardContent className="space-y-4">

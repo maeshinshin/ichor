@@ -33,7 +33,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { BackupNow } from '@/components/BackupNow'
 import { CARotationAdvice } from '@/components/CARotationAdvice'
-import { caRotationAdvised, isCniUnmanaged } from '@/lib/cni'
+import { isCniUnmanaged } from '@/lib/cni'
 import { ConditionList } from '@/components/ConditionList'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { OperationControls } from '@/components/OperationControls'
@@ -49,7 +49,7 @@ import { enumLabel } from '@/lib/enum'
 import { machineDisplayName } from '@/lib/machineName'
 import { formatTimestamp } from '@/lib/format'
 import { kubernetesStageProgress, operationState, progressCounts } from '@/lib/operations'
-import { attentionItems, backupsValue, machineCounts, nodesValue, tileTargets, versionLabel, type TileTarget } from '@/lib/overview'
+import { attentionItems, backupsValue, tileTargets, versionLabel, type TileTarget } from '@/lib/overview'
 import { conditionStatusTone, opStateTone, type Tone } from '@/lib/status'
 import { useCluster } from '@/lib/useCluster'
 import { useT } from '@/lib/useT'
@@ -150,7 +150,7 @@ function Home({
 
   const approved = (machines ?? []).filter((m) => m.approvalState === MachineApprovalState.APPROVED)
   const pending = (machines ?? []).filter((m) => m.approvalState !== MachineApprovalState.APPROVED && m.approvalState !== MachineApprovalState.REJECTED)
-  const counts = machineCounts(approved.map((m) => ({ approval: 'approved' as const, ready: readyOf(m)?.status ?? '' })))
+  const ready = approved.filter((m) => readyOf(m)?.status === 'True').length
   const waiting = approved.filter((m) => rebootPendingCount([{ rebootPaths: m.rebootPaths, readyReason: readyOf(m)?.reason ?? '' }]) > 0)
   const currentState = current ? operationState(current.op.phase, current.op.failureReason) : null
   const busyReason = busy ? t('ops.disabledBusy') : undefined
@@ -211,7 +211,7 @@ function Home({
       </header>
       {opsError && <ErrorAlert {...opsError} />}
       <div class="space-y-4">
-        {caRotationAdvised(cluster.conditions) && <CARotationAdvice cluster={ref} />}
+        {cluster.conditions.some((c) => c.type === 'CARotationAdvised' && c.status === 'True') && <CARotationAdvice cluster={ref} />}
         {items.length > 0 && (
           <ul class="space-y-2">
             {items.map((a) => {
@@ -267,8 +267,8 @@ function Home({
             label={t('overview.tile.nodes')}
             icon={ServerIcon}
             target={targets.nodes}
-            badge={machines !== null && counts.ready !== approved.length ? t('overview.nodeNotReady') : undefined}
-            value={machines ? nodesValue(counts.ready, approved.length) : '-'}
+            badge={machines !== null && ready !== approved.length ? t('overview.nodeNotReady') : undefined}
+            value={machines ? `${ready} / ${approved.length} ready` : '-'}
             sub={pending.length > 0 ? t('overview.waitingApproval', { n: pending.length }) : undefined}
           />
           <Tile

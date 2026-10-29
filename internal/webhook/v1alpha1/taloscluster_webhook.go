@@ -80,8 +80,11 @@ const presetRemovedMessage = "spec.cni.preset %q was removed in ADR 0099 (docs/a
 func removedPreset(c *ichorv1alpha1.TalosCluster) bool {
 	p := c.Spec.CNI.Preset
 
-	return p != "" && p != "cilium"
+	return p != "" && p != "cilium" && p != presetUnmanaged
 }
+
+// presetUnmanaged is spec.cni.preset for an adopted cluster whose CNI Ichor leaves alone (ADR 0103).
+const presetUnmanaged = "unmanaged"
 
 // validateCNICreate refuses a new cluster that asks for a removed CNI (ADR 0099): preset flannel
 // or custom, or spec.cni.custom.
@@ -89,6 +92,9 @@ func validateCNICreate(c *ichorv1alpha1.TalosCluster) error {
 	switch cni := c.Spec.CNI; {
 	case removedPreset(c):
 		return fmt.Errorf(presetRemovedMessage, cni.Preset)
+	case cni.Preset == presetUnmanaged && c.GetAnnotations()[ichorv1alpha1.TalosClusterAdoptedAnnotation] != "true":
+		return fmt.Errorf("spec.cni.preset %q is only for clusters brought in by `ichor adopt` (ADR 0103): "+
+			"the object must carry the annotation %s=\"true\"", presetUnmanaged, ichorv1alpha1.TalosClusterAdoptedAnnotation)
 	case cni.Custom != nil:
 		return errors.New("spec.cni.custom is deprecated and unused (ADR 0099): Cilium is the only CNI")
 	}

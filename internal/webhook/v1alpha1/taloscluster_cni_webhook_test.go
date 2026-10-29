@@ -17,6 +17,8 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"strings"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -58,6 +60,40 @@ var _ = Describe("TalosCluster Webhook: removed CNI presets (ADR 0099)", func() 
 		labelled := old.DeepCopy()
 		labelled.Labels = map[string]string{"a": "b"}
 		_, err = v.ValidateUpdate(ctx, old, labelled)
+		Expect(err).NotTo(HaveOccurred())
+	})
+})
+
+var _ = Describe("TalosCluster Webhook: unmanaged CNI preset (ADR 0103)", func() {
+	v := &TalosClusterCustomValidator{}
+
+	unmanaged := func(annotations map[string]string) *ichorv1alpha1.TalosCluster {
+		c := newTestCluster()
+		c.Spec.CNI.Preset = "unmanaged"
+		c.Annotations = annotations
+
+		return c
+	}
+
+	It("refuses to create an unmanaged cluster without the adoption annotation", func() {
+		for _, a := range []map[string]string{nil, {ichorv1alpha1.TalosClusterAdoptedAnnotation: "no"}} {
+			_, err := v.ValidateCreate(ctx, unmanaged(a))
+			Expect(err).To(MatchError(ContainSubstring(ichorv1alpha1.TalosClusterAdoptedAnnotation)))
+		}
+	})
+
+	adopted := map[string]string{ichorv1alpha1.TalosClusterAdoptedAnnotation: strings.ToLower("TRUE")}
+
+	It("creates an unmanaged cluster that carries the adoption annotation", func() {
+		_, err := v.ValidateCreate(ctx, unmanaged(adopted))
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("does not treat unmanaged as a removed preset on update", func() {
+		old := unmanaged(adopted)
+		changed := old.DeepCopy()
+		changed.Spec.KubernetesVersion = "v1.36.2"
+		_, err := v.ValidateUpdate(ctx, old, changed)
 		Expect(err).NotTo(HaveOccurred())
 	})
 })

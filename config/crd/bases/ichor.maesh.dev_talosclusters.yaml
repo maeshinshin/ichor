@@ -3628,12 +3628,15 @@ spec:
                   preset:
                     default: cilium
                     description: |-
-                      preset selects the CNI this cluster bootstraps. Cilium is the only CNI (ADR 0099); the
+                      preset selects the CNI this cluster bootstraps. Cilium is the only CNI Ichor installs
+                      (ADR 0099); unmanaged (ADR 0103) leaves the CNI of an adopted cluster exactly as it is, and
+                      the webhook accepts it on create only for an object carrying the adoption annotation. The
                       values flannel and custom are deprecated, unused and kept so the CRD never drops a value.
                     enum:
                     - flannel
                     - cilium
                     - custom
+                    - unmanaged
                     type: string
                   tunnel:
                     description: |-
@@ -3643,6 +3646,22 @@ spec:
                     - vxlan
                     - geneve
                     type: string
+                  unmanaged:
+                    description: |-
+                      unmanaged configures the unmanaged preset (ADR 0103). Only valid when preset is unmanaged;
+                      when omitted there, talosCNI is default.
+                    properties:
+                      talosCNI:
+                        default: default
+                        description: |-
+                          talosCNI is default (the machine config has no CNI selection, so Talos runs its own
+                          flannel or whatever cluster.network.cni selects by default; render emits nothing about the
+                          CNI) or none (render emits cluster.network.cni.name: none).
+                        enum:
+                        - default
+                        - none
+                        type: string
+                    type: object
                 type: object
                 x-kubernetes-validations:
                 - message: cni.preset cannot change after the cluster is created;
@@ -3659,6 +3678,11 @@ spec:
                     oldSelf.tunnel) : (!has(self.tunnel) || self.tunnel == ''vxlan'')'
                 - message: cni.tunnel only applies to the cilium preset
                   rule: '!has(self.tunnel) || self.preset == ''cilium'''
+                - message: cni.cilium only applies to the cilium preset; Ichor does
+                    not manage the CNI when preset is unmanaged
+                  rule: self.preset != 'unmanaged' || !has(self.cilium)
+                - message: cni.unmanaged only applies to the unmanaged preset
+                  rule: '!has(self.unmanaged) || self.preset == ''unmanaged'''
               controlPlane:
                 description: controlPlane configures the control-plane topology.
                 properties:
@@ -4016,6 +4040,21 @@ spec:
                       availableChartVersion is the Cilium chart version the running Ichor ships when it differs
                       from the installed release; empty when up to date (ADR 0099, decision 11). It backs the
                       CiliumUpgradeAvailable condition.
+                    type: string
+                  detected:
+                    description: |-
+                      detected is the CNI the cluster is observed to run, read-only display and the
+                      network-policy gate (ADR 0103). Written by the controller only.
+                    enum:
+                    - cilium
+                    - flannel
+                    - calico
+                    - other
+                    - none
+                    type: string
+                  detectedVersion:
+                    description: detectedVersion is the image tag of the detected
+                      CNI's DaemonSet where one exposes it.
                     type: string
                   kubeProxy:
                     description: |-

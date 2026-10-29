@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/netip"
 	"os"
 	"slices"
@@ -185,7 +184,7 @@ func finishReclaim(ctx context.Context, d reclaimDeps, address, uuid string, f r
 		return nil
 	}
 
-	host := hostOnly(address)
+	host := reclaim.HostOnly(address)
 
 	wctx, cancel := context.WithTimeout(ctx, f.Wait)
 	defer cancel()
@@ -272,15 +271,6 @@ func readTypedLine(r *bufio.Reader) (string, error) {
 	}
 
 	return strings.TrimSpace(s), nil
-}
-
-// hostOnly drops a port: the maintenance API is on its fixed port.
-func hostOnly(address string) string {
-	if h, _, err := net.SplitHostPort(address); err == nil {
-		return h
-	}
-
-	return address
 }
 
 // registerDiscoveryAddress appends address to the cluster's spec.discovery.addresses

@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"net/netip"
 	"slices"
 	"strings"
@@ -37,6 +36,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/reclaim"
 )
 
 // ReclaimService. The credential Secret is created with the backend's own identity (users are not
@@ -48,9 +48,9 @@ const reclaimLabelValue = "true"
 var errReclaimOff = connect.NewError(connect.CodeFailedPrecondition,
 	errors.New("reclaim is not enabled in this installation (reclaim.enabled)"))
 
-// reclaimAllowed asks Kubernetes, as the caller, whether they hold the verb reclaim on machinereclaims.
+// mayAll asks Kubernetes, as the caller, whether they hold every one of the attributes (a verb on a resource).
 // With nobody to ask (the backend on its own ServiceAccount) it allows: the webhook then judges the ServiceAccount.
-func (s *Server) reclaimAllowed(ctx context.Context) (bool, error) {
+func (s *Server) mayAll(ctx context.Context, attrs ...authv1.ResourceAttributes) (bool, error) {
 	_, signedIn := IdentityFrom(ctx)
 	if (!signedIn || s.Impersonate == nil) && !s.CallerCredentials {
 		return true, nil
@@ -61,35 +61,8 @@ func (s *Server) reclaimAllowed(ctx context.Context) (bool, error) {
 		return false, connect.NewError(connect.CodeUnavailable, fmt.Errorf("reclaim: acting as the user: %w", err))
 	}
 
-	review := &authv1.SelfSubjectAccessReview{Spec: authv1.SelfSubjectAccessReviewSpec{ResourceAttributes: &authv1.ResourceAttributes{
-		Namespace: s.ControllerNamespace, Verb: ichorv1alpha1.ReclaimVerb, Group: ichorv1alpha1.GroupVersion.Group,
-		Resource: "machinereclaims",
-	}}}
-	if err := c.Create(ctx, review); err != nil {
-		return false, connect.NewError(connect.CodeUnavailable, fmt.Errorf("reclaim: asking Kubernetes whether you may: %w", err))
-	}
-
-	return review.Status.Allowed, nil
-}
-
-// clusterWritable asks Kubernetes, as the caller, whether they may get and update the TalosCluster (registering the
-// reclaimed address is an update made as them). Same shortcut as reclaimAllowed.
-func (s *Server) clusterWritable(ctx context.Context, ref *pb.ObjectRef) (bool, error) {
-	_, signedIn := IdentityFrom(ctx)
-	if (!signedIn || s.Impersonate == nil) && !s.CallerCredentials {
-		return true, nil
-	}
-
-	c, err := s.cl(ctx)
-	if err != nil {
-		return false, connect.NewError(connect.CodeUnavailable, fmt.Errorf("reclaim: acting as the user: %w", err))
-	}
-
-	for _, verb := range []string{"get", "update"} {
-		review := &authv1.SelfSubjectAccessReview{Spec: authv1.SelfSubjectAccessReviewSpec{ResourceAttributes: &authv1.ResourceAttributes{
-			Namespace: ref.GetNamespace(), Verb: verb, Group: ichorv1alpha1.GroupVersion.Group,
-			Resource: "talosclusters", Name: ref.GetName(),
-		}}}
+	for i := range attrs {
+		review := &authv1.SelfSubjectAccessReview{Spec: authv1.SelfSubjectAccessReviewSpec{ResourceAttributes: &attrs[i]}}
 		if err := c.Create(ctx, review); err != nil {
 			return false, connect.NewError(connect.CodeUnavailable, fmt.Errorf("reclaim: asking Kubernetes whether you may: %w", err))
 		}
@@ -100,6 +73,26 @@ func (s *Server) clusterWritable(ctx context.Context, ref *pb.ObjectRef) (bool, 
 	}
 
 	return true, nil
+}
+
+// reclaimAllowed: does the caller hold the verb reclaim on machinereclaims?
+func (s *Server) reclaimAllowed(ctx context.Context) (bool, error) {
+	return s.mayAll(ctx, authv1.ResourceAttributes{
+		Namespace: s.ControllerNamespace, Verb: ichorv1alpha1.ReclaimVerb, Group: ichorv1alpha1.GroupVersion.Group,
+		Resource: "machinereclaims",
+	})
+}
+
+// clusterWritable: may the caller get and update the TalosCluster (registering the reclaimed address is an update
+// made as them)?
+func (s *Server) clusterWritable(ctx context.Context, ref *pb.ObjectRef) (bool, error) {
+	attrs := authv1.ResourceAttributes{
+		Namespace: ref.GetNamespace(), Group: ichorv1alpha1.GroupVersion.Group, Resource: "talosclusters", Name: ref.GetName(),
+	}
+	get, update := attrs, attrs
+	get.Verb, update.Verb = "get", "update"
+
+	return s.mayAll(ctx, get, update)
 }
 
 // reclaimUser is the Kubernetes user name the API server will see for writes made under ctx: the signed-in
@@ -242,11 +235,7 @@ func (s *Server) CreateReclaim(
 // registerReclaimAddress appends the address to the cluster's discovery list when it is not there (the controller
 // leaves registration to this user write).
 func (s *Server) registerReclaimAddress(ctx context.Context, ref *pb.ObjectRef, address string) error {
-	host := address
-	if h, _, err := net.SplitHostPort(address); err == nil {
-		host = h
-	}
-
+	host := reclaim.HostOnly(address)
 	if a, err := netip.ParseAddr(host); err != nil || !a.Is4() {
 		return nil // discovery lists IPv4 addresses only; a name is left to the person
 	}

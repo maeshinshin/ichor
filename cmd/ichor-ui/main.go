@@ -251,6 +251,7 @@ func main() {
 	mux.Handle(ichorv1alpha1connect.NewUserServiceHandler(server, rpcInterceptor))
 	mux.Handle(ichorv1alpha1connect.NewCniServiceHandler(server, rpcInterceptor))
 	mux.Handle(ichorv1alpha1connect.NewReclaimServiceHandler(server, rpcInterceptor))
+	mux.Handle(ichorv1alpha1connect.NewSettingsServiceHandler(server, rpcInterceptor))
 
 	srv := httpsServer(*addr, mux, servingCertificate(ctx, *tlsCert, *tlsKey, *tlsDir))
 

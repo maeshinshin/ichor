@@ -6,7 +6,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { LayersIcon, PlusIcon } from 'lucide-preact'
 import { LinkRow, ListToolbar } from '@/components/ListToolbar'
 import { PageTitle } from '@/components/PageTitle'
-import { TableCard } from '@/components/TableCard'
+import { SectionCard } from '@/components/SectionCard'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { ConfigLayer } from '@/gen/ichor/v1alpha1/node_pb'
@@ -69,7 +69,7 @@ export function PatchList() {
       ) : rows.length === 0 ? (
         <EmptyNote icon={LayersIcon}>{t('list.noMatch')}</EmptyNote>
       ) : (
-        <TableCard>
+        <SectionCard>
           <Table>
             <TableHeader>
               <TableRow>
@@ -126,7 +126,7 @@ export function PatchList() {
               ))}
             </TableBody>
           </Table>
-        </TableCard>
+        </SectionCard>
       )}
     </div>
   )

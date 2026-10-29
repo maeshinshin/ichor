@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { ApproveDialog } from '@/components/ApproveDialog'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { LinkRow, ListToolbar } from '@/components/ListToolbar'
-import { TitleBar } from '@/components/TitleBar'
+import { PageTitle } from '@/components/PageTitle'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
 import { ReadyCell } from '@/components/ReadyCell'
 import { ErrorAlert } from '@/components/ErrorAlert'
@@ -67,7 +67,7 @@ export function MachineList() {
 
   return (
     <div class="space-y-6">
-      <TitleBar
+      <PageTitle
         title={t('nodes.title')}
         actions={
           <Button asChild size="sm">

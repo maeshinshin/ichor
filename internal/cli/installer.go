@@ -36,6 +36,7 @@ var installerRunOpts struct {
 	RunID     string
 
 	CNIDetected string
+	NoPolicies  bool
 }
 
 var installerRunCmd = &cobra.Command{
@@ -53,9 +54,10 @@ var installerRunCmd = &cobra.Command{
 			RunID:     installerRunOpts.RunID,
 			Manifest:  installmanifest.Manifest,
 
-			NetworkPolicies: installmanifest.NetworkPolicies,
-			CNIDetected:     installerRunOpts.CNIDetected,
-			Log:             cmd.ErrOrStderr(),
+			NetworkPolicies:    installmanifest.NetworkPolicies,
+			CNIDetected:        installerRunOpts.CNIDetected,
+			SkipCiliumPolicies: installerRunOpts.NoPolicies,
+			Log:                cmd.ErrOrStderr(),
 		})
 	},
 }
@@ -68,5 +70,6 @@ func init() {
 	f.StringVar(&installerRunOpts.Namespace, "namespace", ichorControllerNamespace, "namespace the snapshot is saved in")
 	f.StringVar(&installerRunOpts.RunID, "run-id", "", "names the snapshot (the Job passes its own name)")
 	f.StringVar(&installerRunOpts.CNIDetected, "cni-detected", "", "TalosCluster status.cni.detected; Ichor's CiliumNetworkPolicies are applied only for cilium")
+	f.BoolVar(&installerRunOpts.NoPolicies, "no-cilium-policies", false, "skip Ichor's CiliumNetworkPolicies even on Cilium (operator opt-out)")
 	_ = installerRunCmd.MarkFlagRequired("run-id")
 }

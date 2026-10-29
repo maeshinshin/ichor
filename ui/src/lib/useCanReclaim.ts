@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'preact/hooks'
 import { reclaimClient } from '@/lib/connect'
 
-// useCanReclaim asks once whether reclaim is enabled and the caller holds the verb (ADR 0103, 2.2).
+// useCanReclaim asks once whether the caller holds the reclaim verb (ADR 0103, 2.2; ADR 0107: RBAC alone).
 // False until answered, and when the probe fails: offer nothing.
 export function useCanReclaim(): boolean {
   const [can, setCan] = useState(false)
@@ -10,7 +10,7 @@ export function useCanReclaim(): boolean {
     let cancelled = false
     reclaimClient.canReclaim({}).then(
       (res) => {
-        if (!cancelled) setCan(res.enabled && res.allowed)
+        if (!cancelled) setCan(res.allowed)
       },
       () => {},
     )

@@ -28,11 +28,9 @@ test('a current value outside the presets is offered, in order', () => {
 
 const view: SettingsView = {
   readOnly: false,
-  canEditReclaim: true,
   canEditSettings: false,
   spec: { tokenTtl: '30m0s' },
   effective: {
-    reclaimEnabled: { value: 'false', source: 'deployment' },
     tokenTtl: { value: '30m0s', source: 'spec' },
     refreshLifetime: { value: '168h0m0s', source: 'deployment' },
     driftPolicy: { value: 'autoCorrect', source: 'spec' },
@@ -40,21 +38,21 @@ const view: SettingsView = {
 }
 
 test('the form starts from spec, then what is in force', () => {
-  assert.deepEqual(formOf(view), { reclaim: false, tokenTtl: '30m', refreshLifetime: '168h', driftPolicy: 'autoCorrect' })
+  assert.deepEqual(formOf(view), { tokenTtl: '30m', refreshLifetime: '168h', driftPolicy: 'autoCorrect' })
 })
 
 test('the source is spec only where the spec or the report says so', () => {
   assert.equal(sourceOf(view, 'tokenTtl'), 'spec')
   assert.equal(sourceOf(view, 'refreshLifetime'), 'deployment')
   assert.equal(sourceOf(view, 'driftPolicy'), 'spec')
-  assert.equal(sourceOf({ ...view, effective: undefined }, 'reclaimEnabled'), 'deployment')
+  assert.equal(sourceOf({ ...view, effective: undefined }, 'refreshLifetime'), 'deployment')
 })
 
 test('only changed fields are sent', () => {
   const before = formOf(view)
   assert.deepEqual(changesOf(before, { ...before, tokenTtl: '15m' }), { tokenTtl: '15m' })
   assert.deepEqual(changesOf(before, before), {})
-  assert.deepEqual(changesOf(before, { ...before, reclaim: true }), { reclaimEnabled: true })
+  assert.deepEqual(changesOf(before, { ...before, driftPolicy: 'warnOnly' }), { driftPolicy: 'warnOnly' })
 })
 
 test('lifetimes are checked against the bounds', () => {
@@ -65,7 +63,7 @@ test('lifetimes are checked against the bounds', () => {
 })
 
 test('controls are locked for read-only mode and a missing verb', () => {
-  assert.equal(lockedReason(view, 'reclaim'), null)
-  assert.equal(lockedReason(view, 'settings'), 'settings.noPermissionAlert')
-  assert.equal(lockedReason({ ...view, readOnly: true }, 'reclaim'), 'settings.readOnlyAlert')
+  assert.equal(lockedReason({ ...view, canEditSettings: true }), null)
+  assert.equal(lockedReason(view), 'settings.noPermissionAlert')
+  assert.equal(lockedReason({ ...view, readOnly: true }), 'settings.readOnlyAlert')
 })

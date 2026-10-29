@@ -242,7 +242,7 @@ function Discovery({
         <Alert key={a}>
           <TriangleAlertIcon />
           <AlertDescription>
-            {t('addNode.alreadyConfigured', { address: a })}
+            {t(canReclaim ? 'addNode.alreadyConfiguredCan' : 'addNode.alreadyConfigured', { address: a })}
             {canReclaim && (
               <div class="mt-2">
                 <ReclaimDialog address={a} cluster={cluster.ref} label={t('reclaim.link')} />

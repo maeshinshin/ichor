@@ -47,19 +47,18 @@ export function durationInBounds(s: string, b: Bounds): boolean {
 }
 
 type Value = { value: string; source: string } | undefined
-export type Fields = { reclaimEnabled?: boolean; tokenTtl?: string; refreshLifetime?: string; driftPolicy?: string }
-type Effective = { reclaimEnabled?: Value; tokenTtl?: Value; refreshLifetime?: Value; driftPolicy?: Value }
+export type Fields = { tokenTtl?: string; refreshLifetime?: string; driftPolicy?: string }
+type Effective = { tokenTtl?: Value; refreshLifetime?: Value; driftPolicy?: Value }
 
 export type SettingsView = {
   readOnly: boolean
-  canEditReclaim: boolean
   canEditSettings: boolean
   spec?: Fields
   effective?: Effective
   uiEffective?: Effective
 }
 
-export type Form = { reclaim: boolean; tokenTtl: string; refreshLifetime: string; driftPolicy: string }
+export type Form = { tokenTtl: string; refreshLifetime: string; driftPolicy: string }
 
 // formOf is the value shown in each control: what the spec sets, else what is in force (the controller's report,
 // else ichor-ui's own), else the default.
@@ -67,7 +66,6 @@ export function formOf(s: SettingsView): Form {
   const pick = (spec: string | undefined, key: 'tokenTtl' | 'refreshLifetime' | 'driftPolicy') =>
     spec ?? s.effective?.[key]?.value ?? s.uiEffective?.[key]?.value ?? ''
   return {
-    reclaim: s.spec?.reclaimEnabled ?? (s.effective?.reclaimEnabled?.value ?? s.uiEffective?.reclaimEnabled?.value) === 'true',
     tokenTtl: normalizeDuration(pick(s.spec?.tokenTtl, 'tokenTtl')),
     refreshLifetime: normalizeDuration(pick(s.spec?.refreshLifetime, 'refreshLifetime')),
     driftPolicy: pick(s.spec?.driftPolicy, 'driftPolicy') || DRIFT_POLICIES[0],
@@ -87,7 +85,6 @@ export function sourceOf(s: SettingsView, key: keyof Fields): Source {
 // changesOf lists only the fields that differ from the form's starting point, in the shape UpdateSettings takes.
 export function changesOf(before: Form, after: Form): Fields {
   const out: Fields = {}
-  if (before.reclaim !== after.reclaim) out.reclaimEnabled = after.reclaim
   if (before.tokenTtl !== after.tokenTtl) out.tokenTtl = after.tokenTtl
   if (before.refreshLifetime !== after.refreshLifetime) out.refreshLifetime = after.refreshLifetime
   if (before.driftPolicy !== after.driftPolicy) out.driftPolicy = after.driftPolicy
@@ -102,8 +99,8 @@ export function usersProblem(f: Pick<Form, 'tokenTtl' | 'refreshLifetime'>): 'se
   return null
 }
 
-// lockedReason is the i18n key of why a group's controls are disabled, or null when they are editable.
-export function lockedReason(s: SettingsView, group: 'reclaim' | 'settings'): 'settings.readOnlyAlert' | 'settings.noPermissionAlert' | null {
+// lockedReason is the i18n key of why the controls are disabled, or null when they are editable.
+export function lockedReason(s: SettingsView): 'settings.readOnlyAlert' | 'settings.noPermissionAlert' | null {
   if (s.readOnly) return 'settings.readOnlyAlert'
-  return (group === 'reclaim' ? s.canEditReclaim : s.canEditSettings) ? null : 'settings.noPermissionAlert'
+  return s.canEditSettings ? null : 'settings.noPermissionAlert'
 }

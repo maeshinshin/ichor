@@ -4,8 +4,6 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Switch } from '@/components/ui/switch'
-import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { PageSkeleton } from '@/components/PageStates'
 import { PageTitle } from '@/components/PageTitle'
@@ -50,7 +48,6 @@ export function Settings() {
     <div className="space-y-4">
       <PageTitle title={t('settings.title')} />
       <DeploymentCard res={res} />
-      <ReclaimCard res={res} onSaved={setRes} />
       <UsersCard res={res} onSaved={setRes} />
       <DefaultsCard res={res} onSaved={setRes} />
     </div>
@@ -62,9 +59,9 @@ function SourceBadge({ source }: { source: Source }) {
   return <Badge variant={source === 'spec' ? 'secondary' : 'outline'}>{t(source === 'spec' ? 'settings.sourceSpec' : 'settings.sourceDeployment')}</Badge>
 }
 
-function Locked({ res, group }: { res: GetSettingsResponse; group: 'reclaim' | 'settings' }) {
+function Locked({ res }: { res: GetSettingsResponse }) {
   const t = useT()
-  const reason = lockedReason(res, group)
+  const reason = lockedReason(res)
   if (!reason) return null
   return (
     <Alert>
@@ -105,11 +102,11 @@ function Fact({ label, value }: { label: string; value: string }) {
 function useSave(onSaved: (r: GetSettingsResponse) => void) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<ErrorShape | null>(null)
-  async function save(changes: Fields, confirmReclaim = false): Promise<boolean> {
+  async function save(changes: Fields): Promise<boolean> {
     setBusy(true)
     setError(null)
     try {
-      const out = await settingsClient.updateSettings({ changes, confirmReclaim })
+      const out = await settingsClient.updateSettings({ changes })
       if (out.settings) onSaved(out.settings)
       notifyWrite('settings.saved')
       return true
@@ -123,57 +120,19 @@ function useSave(onSaved: (r: GetSettingsResponse) => void) {
   return { busy, error, save }
 }
 
-function ReclaimCard({ res, onSaved }: { res: GetSettingsResponse; onSaved: (r: GetSettingsResponse) => void }) {
-  const t = useT()
-  const [confirming, setConfirming] = useState(false)
-  const { busy, error, save } = useSave(onSaved)
-  const form = formOf(res)
-  const locked = lockedReason(res, 'reclaim') !== null
-
-  async function toggle(on: boolean) {
-    if (on) return setConfirming(true)
-    await save({ reclaimEnabled: false })
-  }
-
-  async function confirm() {
-    if (await save({ reclaimEnabled: true }, true)) setConfirming(false)
-  }
-
-  return (
-    <SectionCard title={t('settings.reclaim')} description={t('settings.reclaimDesc')}>
-      <Locked res={res} group="reclaim" />
-      <Field orientation="horizontal">
-        <FieldLabel htmlFor="settings-reclaim">{t('settings.reclaimSwitch')}</FieldLabel>
-        <SourceBadge source={sourceOf(res, 'reclaimEnabled')} />
-        <Switch id="settings-reclaim" checked={form.reclaim} disabled={locked || busy} onCheckedChange={toggle} />
-      </Field>
-      {error && !confirming && <ErrorAlert {...error} />}
-      <ConfirmDialog
-        open={confirming}
-        onOpenChange={setConfirming}
-        title={t('settings.reclaimConfirmTitle')}
-        description={t('settings.reclaimConfirmBody')}
-        confirm={{ label: t('settings.reclaimConfirm'), onClick: confirm, disabled: busy }}
-      >
-        {error && <ErrorAlert {...error} />}
-      </ConfirmDialog>
-    </SectionCard>
-  )
-}
-
 function UsersCard({ res, onSaved }: { res: GetSettingsResponse; onSaved: (r: GetSettingsResponse) => void }) {
   const t = useT()
   const start = formOf(res)
   const [form, setForm] = useState<Form>(start)
   const { busy, error, save } = useSave(onSaved)
-  const locked = lockedReason(res, 'settings') !== null
+  const locked = lockedReason(res) !== null
   const changes = changesOf(start, form)
   const problem = usersProblem(form)
   const ui = res.uiEffective
 
   return (
     <SectionCard title={t('settings.users')} description={t('settings.usersDesc')}>
-      <Locked res={res} group="settings" />
+      <Locked res={res} />
       <FieldGroup>
         <DurationField
           id="settings-token-ttl"
@@ -252,12 +211,12 @@ function DefaultsCard({ res, onSaved }: { res: GetSettingsResponse; onSaved: (r:
   const start = formOf(res)
   const [form, setForm] = useState<Form>(start)
   const { busy, error, save } = useSave(onSaved)
-  const locked = lockedReason(res, 'settings') !== null
+  const locked = lockedReason(res) !== null
   const changes = changesOf(start, form)
 
   return (
     <SectionCard title={t('settings.defaults')} description={t('settings.defaultsDesc')}>
-      <Locked res={res} group="settings" />
+      <Locked res={res} />
       <Field>
         <FieldLabel htmlFor="settings-drift-policy">
           {t('settings.driftPolicy')}

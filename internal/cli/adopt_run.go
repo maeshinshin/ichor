@@ -47,8 +47,12 @@ type adoptDeps struct {
 	AssumeYes bool
 	Output    string
 
-	// CNIUnmanaged is --cni-unmanaged (ADR 0103): adopt the cluster with its CNI left as it is.
+	// Target reads the cluster being adopted (the CNI and kube-proxy facts, ADR 0103 1.1); nil
+	// skips the CNI inspection. CNIUnmanaged is --cni-unmanaged; TalosCNI is the Talos-side CNI
+	// selection once the Talos facts supply it.
+	Target       client.Reader
 	CNIUnmanaged bool
+	TalosCNI     talosCNIHint
 }
 
 // runAdopt implements `ichor adopt` (docs/design/architecture.md,
@@ -57,6 +61,12 @@ type adoptDeps struct {
 // TalosConfigPatch (buildAdoptPlan does the actual diff/verify, this
 // function is only orchestration -- fetch, confirm, create, report).
 func runAdopt(ctx context.Context, clusterName, namespace string, deps adoptDeps) error {
+	if deps.Target != nil {
+		if err := inspectCNI(ctx, deps); err != nil {
+			return err
+		}
+	}
+
 	var cluster ichorv1alpha1.TalosCluster
 	if err := deps.K8s.Get(ctx, types.NamespacedName{Namespace: namespace, Name: clusterName}, &cluster); err != nil {
 		return fmt.Errorf("adopt: getting TalosCluster %q: %w", clusterName, err)
@@ -228,6 +238,8 @@ func reportPlans(w io.Writer, plans []*adoptPlan) []*adoptPlan {
 // The v1.14 documents and the legacy fields they replaced both map, because the same value
 // reaches Ichor through the same field whichever contract the node was generated for. First
 // match wins, so the specific prefixes come before the general ones.
+const cniHint = "the CNI selection has no spec field; Ichor leaves it as the node has it only on a cluster adopted with --cni-unmanaged (ADR 0103)"
+
 var specFieldHints = []struct{ prefix, hint string }{
 	{"KubeNetworkConfig.podSubnets", "set TalosCluster spec.network.podSubnets to the node's value (it cannot change once set)"},
 	{"cluster.network.podSubnets", "set TalosCluster spec.network.podSubnets to the node's value (it cannot change once set)"},
@@ -236,8 +248,8 @@ var specFieldHints = []struct{ prefix, hint string }{
 	{"KubeNetworkConfig", "the DNS domain has no spec field; Ichor keeps Talos's default"},
 	{"UnattendedInstallConfig", "set TalosMachine spec.install.disk (and .image) for this machine; wipe is always false"},
 	{"machine.install", "set TalosMachine spec.install.disk (and .image) for this machine; other install fields have no spec field"},
-	{"KubeFlannelCNIConfig", "the cluster runs Talos's flannel, which Ichor no longer supports (ADR 0099); delete and recreate it with cilium"},
-	{"cluster.network.cni", "the cluster runs Talos's flannel, which Ichor no longer supports (ADR 0099); delete and recreate it with cilium"},
+	{"KubeFlannelCNIConfig", cniHint},
+	{"cluster.network.cni", cniHint},
 }
 
 // explainUnrepresentable turns the paths adopt left alone into the lines a user can act on: the
@@ -283,4 +295,23 @@ func confirm(r io.Reader, w io.Writer, prompt string) (bool, error) {
 	line, err := readLine(r, w, prompt)
 
 	return err == nil && (line == "y" || line == "Y" || line == "yes" || line == "Yes"), err
+}
+
+// inspectCNI runs the read-only CNI inspection, prints the report, and returns the refusal of
+// ADR 0103 1.1 when the cluster may not be adopted in the requested mode. Nothing is written.
+func inspectCNI(ctx context.Context, deps adoptDeps) error {
+	facts, err := gatherK8sFacts(ctx, deps.Target)
+	if err != nil {
+		return fmt.Errorf("adopt: inspecting the CNI: %w", err)
+	}
+
+	rep := detectCNI(facts, deps.TalosCNI)
+
+	_, _ = fmt.Fprintf(deps.Stderr, "adopt: CNI: %s\n", rep)
+
+	if err := checkCNIAdoption(rep, deps.CNIUnmanaged); err != nil {
+		return fmt.Errorf("adopt: %w", err)
+	}
+
+	return nil
 }

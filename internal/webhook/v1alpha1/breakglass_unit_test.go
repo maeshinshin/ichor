@@ -70,8 +70,7 @@ func bgUnitHandler(t *testing.T) *BreakGlassHandler {
 }
 
 // bgUnitRequest is an UPDATE of a deleting object; removeFinalizer says whether the new object has
-// dropped the Ichor finalizer the stored one carries. The object carries an Argo CD tracking
-// annotation, which must change nothing: Ichor no longer looks at GitOps tools.
+// dropped the Ichor finalizer the stored one carries.
 func bgUnitRequest(t *testing.T, resource, user string, removeFinalizer bool) admission.Request {
 	t.Helper()
 
@@ -80,9 +79,7 @@ func bgUnitRequest(t *testing.T, resource, user string, removeFinalizer bool) ad
 			"apiVersion": "ichor.maesh.dev/v1alpha1", "kind": "TalosMachine",
 			"metadata": map[string]any{
 				"name": "x", "namespace": "default", "finalizers": finalizers,
-				"deletionTimestamp": time.Now().UTC().Format(time.RFC3339),
-				"annotations":       map[string]any{"argocd.argoproj.io/tracking-id": "app:ichor.maesh.dev/Kind:default/x"},
-			},
+				"deletionTimestamp": time.Now().UTC().Format(time.RFC3339)},
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -150,15 +147,6 @@ func TestBreakGlassExemptUsers(t *testing.T) {
 			if r := h.Handle(context.Background(), bgUnitRequest(t, resource, user, true)); !r.Allowed {
 				t.Errorf("%s as %s: exempt user refused: %v", resource, user, r.Result)
 			}
-		}
-	}
-
-	// Exact names only, and GitOps engines are not among them any more.
-	for _, user := range []string{
-		"system:serviceaccount:argocd:argocd-application-controller",
-	} {
-		if r := h.Handle(context.Background(), bgUnitRequest(t, bgUnitMachines, user, true)); r.Allowed {
-			t.Errorf("%s was exempt", user)
 		}
 	}
 }

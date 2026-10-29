@@ -1,5 +1,5 @@
-# Break-glass (ADR 0103 section 2.2). Normally created by the UI together with the credential
-# Secret named below; needs reclaim.enabled in the chart and the verb "reclaim" on machinereclaims.
+# "Reset and add" (ADR 0103 section 2.2, ADR 0107). Normally created by the UI together with the credential
+# Secret named below; needs the verb "reclaim" on machinereclaims (no installation switch).
 apiVersion: ichor.maesh.dev/v1alpha1
 kind: MachineReclaim
 metadata:

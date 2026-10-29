@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/spf13/cobra"
 	"k8s.io/client-go/kubernetes"
@@ -42,6 +43,7 @@ var (
 	adoptContract      string
 	adoptAcceptChanges bool
 	adoptAcceptDiff    bool
+	adoptWaitTimeout   time.Duration
 )
 
 // adoptCmd implements `ichor adopt` (docs/design/architecture.md,
@@ -150,6 +152,7 @@ clusters keep the old CAs, but never starts one.`,
 			AcceptCiliumDiff:    adoptAcceptDiff,
 
 			PlanOnly:         adoptPlanOnly,
+			WebhookWait:      adoptWaitTimeout,
 			Seed:             cmp.Or(adoptSeed, adoptRecoverFrom),
 			ContractOverride: adoptContract,
 			ReadIdentity: func(ctx context.Context, address string) (controller.HardwareIdentity, error) {
@@ -190,6 +193,8 @@ func init() {
 	adoptCmd.Flags().BoolVar(&adoptCNIUnmanaged, "cni-unmanaged", false,
 		"adopt the cluster with its CNI left exactly as it is: Ichor will not install, upgrade or configure it")
 
+	adoptCmd.Flags().DurationVar(&adoptWaitTimeout, "wait-timeout", defaultAdoptWebhookWait,
+		"how long to wait for Ichor's admission webhooks before giving up")
 	adoptCmd.Flags().BoolVar(&adoptPlanOnly, "plan", false, "print the plan and write nothing")
 	adoptCmd.Flags().StringVar(&adoptSeed, "node", "",
 		"address of one control plane; adopt discovers the cluster's machines from its membership when the TalosCluster does not exist yet")

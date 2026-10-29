@@ -88,6 +88,9 @@ type adoptDeps struct {
 	// ReleaseWait bounds the wait for one machine to be Ready after its hold is released;
 	// Interval is the poll interval of that wait and of the webhook wait. Zero uses the defaults.
 	ReleaseWait, Interval time.Duration
+	// WebhookWait is --wait-timeout: the bound of the wait for Ichor's admission webhooks.
+	// Zero means defaultAdoptWebhookWait.
+	WebhookWait time.Duration
 }
 
 // adoptState is everything the read-only phase established.
@@ -722,26 +725,23 @@ func printPreflight(w io.Writer, rep *cilium.PreflightReport) {
 // waitHandover is phase 3 for an adopted cluster: the controller's ichor-cni Job
 // takes Cilium over; adopt waits for CNIHandover to be True before it releases any hold.
 func waitHandover(ctx context.Context, deps adoptDeps, key types.NamespacedName) error {
-	wait := cmp.Or(deps.ReleaseWait, defaultReleaseWait)
-	interval := cmp.Or(deps.Interval, defaultReleaseInterval)
+	errPending := errors.New("not finished")
 
-	ctx, cancel := context.WithTimeout(ctx, wait)
-	defer cancel()
+	err := pollBounded(ctx, cmp.Or(deps.ReleaseWait, defaultReleaseWait), cmp.Or(deps.Interval, defaultReleaseInterval), deps.Stderr,
+		"the Cilium takeover ("+render.ConditionCNIHandover+")", newWaitDiag(deps.K8s, deps.Stderr), func(ctx context.Context) error {
+			var c ichorv1alpha1.TalosCluster
 
-	for {
-		var c ichorv1alpha1.TalosCluster
+			if err := deps.K8s.Get(ctx, key, &c); err == nil && apimeta.IsStatusConditionTrue(c.Status.Conditions, render.ConditionCNIHandover) {
+				return nil
+			}
 
-		if err := deps.K8s.Get(ctx, key, &c); err == nil && apimeta.IsStatusConditionTrue(c.Status.Conditions, render.ConditionCNIHandover) {
-			return nil
-		}
-
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf("adopt: the Cilium takeover (condition %s) did not finish within %s; the machines stay held",
-				render.ConditionCNIHandover, wait)
-		case <-time.After(interval):
-		}
+			return errPending
+		}, func(err error) bool { return errors.Is(err, errPending) })
+	if err != nil {
+		return fmt.Errorf("adopt: %w; the machines stay held", err)
 	}
+
+	return nil
 }
 
 // consent is the gate before anything is written: --yes, or an interactive yes. The prompt names
@@ -769,7 +769,7 @@ func (st *adoptState) consent(deps adoptDeps, clusterName string, patches, machi
 
 // writeInput assembles the write phase's input from what the plan established.
 func (st *adoptState) writeInput(ctx context.Context, deps adoptDeps, namespace string, writable []*adoptNode, patches []ichorv1alpha1.TalosConfigPatch, tp takeoverPlan) adoptWriteInput {
-	in := adoptWriteInput{Namespace: namespace, Patches: patches, Stderr: deps.Stderr, Interval: deps.Interval}
+	in := adoptWriteInput{Namespace: namespace, Patches: patches, Stderr: deps.Stderr, Interval: deps.Interval, WebhookWait: deps.WebhookWait}
 
 	if !st.fresh {
 		return in

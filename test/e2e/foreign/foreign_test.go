@@ -93,7 +93,11 @@ func build(t *testing.T, o foreign.Options) *foreign.Cluster {
 			}
 		})
 	}
-	c, err := foreign.Up(o)
+	up := foreign.Up
+	if os.Getenv("ICHOR_E2E_F_ATTACH") == "1" { // the cluster was brought up by `go run ./test/harness/foreign up`
+		up = foreign.Attach
+	}
+	c, err := up(o)
 	if err != nil {
 		t.Fatalf("foreign.Up: %v", err)
 	}

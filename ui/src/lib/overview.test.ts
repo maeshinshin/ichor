@@ -7,11 +7,13 @@ test('attentionItems lists only what applies', () => {
   const conds = [
     { type: 'CertificatesExpiring', status: 'True', message: 'etcd CA expires' },
     { type: 'BundleBackupStale', status: 'True', message: 'bundle is old' },
+    { type: 'CAClientsNotRestarted', status: 'True', message: 'coredns not back' },
   ]
   assert.deepEqual(attentionItems({ conditions: conds, pending: 2, configWaiting: 1, opState: 'failed' }), [
     { kind: 'opFailed' },
     { kind: 'certs', message: 'etcd CA expires' },
     { kind: 'backupStale', message: 'bundle is old' },
+    { kind: 'clientsNotRestarted', message: 'coredns not back' },
     { kind: 'pending', count: 2 },
     { kind: 'config', count: 1 },
   ])

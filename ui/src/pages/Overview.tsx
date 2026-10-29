@@ -221,9 +221,9 @@ function Home({
                   <Alert variant={bad ? 'destructive' : 'default'}>
                     {bad ? <CircleXIcon /> : <TriangleAlertIcon />}
                     <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-                      {(a.kind === 'certs' || a.kind === 'backupStale') && (
+                      {(a.kind === 'certs' || a.kind === 'backupStale' || a.kind === 'clientsNotRestarted') && (
                         <>
-                          <span class="min-w-0 break-words font-medium">{t(a.kind === 'certs' ? 'cluster.certsExpiringTitle' : 'home.attnBackupStale')}</span>
+                          <span class="min-w-0 break-words font-medium">{t(a.kind === 'certs' ? 'cluster.certsExpiringTitle' : a.kind === 'backupStale' ? 'home.attnBackupStale' : 'home.attnClientsNotRestarted')}</span>
                           <span class="min-w-0 break-words text-muted-foreground">{a.message}</span>
                         </>
                       )}

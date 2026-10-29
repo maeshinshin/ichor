@@ -932,6 +932,7 @@ export const en = {
   'home.attnOpFailed': 'An operation failed.',
   'home.attnOpPaused': 'An operation is paused.',
   'home.attnBackupStale': 'The bundle backup is stale.',
+  'home.attnClientsNotRestarted': 'After the CA rotation, some in-cluster clients are not back.',
   'home.attnPending': 'Nodes waiting for approval: {n}.',
   'home.attnConfig': 'Nodes with configuration waiting for a reboot: {n}.',
   'home.review': 'Review',

@@ -234,6 +234,11 @@ type TalosClient interface {
 	// APIServerReady asks this control plane's own kube-apiserver for /readyz, through the node's
 	// own address (the one the Talos API is dialed on), and returns nil only for HTTP 200.
 	APIServerReady(ctx context.Context) error
+
+	// Identity reads this node's hardware identity (SMBIOS UUID, serial, manufacturer and the
+	// permanent MAC of each physical link) over the authenticated API: the same resources as
+	// MaintenanceClient.Identity, for a node that already has a configuration (ADR 0103 1.8).
+	Identity(ctx context.Context) (HardwareIdentity, error)
 }
 
 // EtcdMember is the one piece of each etcd member EtcdMemberList's callers

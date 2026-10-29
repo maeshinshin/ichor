@@ -92,17 +92,29 @@ func configuredNodeRejection(err error) bool {
 	}
 }
 
-// Identity reads hardware.SystemInformation for the SMBIOS UUID, serial
+// Identity reads the node's hardware identity over the unauthenticated maintenance API; see
+// readHardwareIdentity. A node that already has a configuration rejects the call and the error
+// wraps ErrAlreadyConfigured.
+func (m *machineryMaintenanceClient) Identity(ctx context.Context) (HardwareIdentity, error) {
+	id, err := readHardwareIdentity(ctx, m.c.COSI)
+	if configuredNodeRejection(err) {
+		return id, fmt.Errorf("%w: %w", ErrAlreadyConfigured, err)
+	}
+
+	return id, err
+}
+
+// readHardwareIdentity reads hardware.SystemInformation for the SMBIOS UUID, serial
 // number and manufacturer, and network.LinkStatus for the permanent MAC
 // address of every physical link. A missing SystemInformation resource (not
 // every platform reports SMBIOS data) is not an error here: it leaves the
 // identity's UUID and serial empty, which DiscoveryReconciler's
 // strongIdentity treats as a weak key, exactly as architecture.md's "Nodes"
-// requires.
-func (m *machineryMaintenanceClient) Identity(ctx context.Context) (HardwareIdentity, error) {
+// requires. Errors wrap the underlying gRPC error so callers can classify them.
+func readHardwareIdentity(ctx context.Context, cosi state.State) (HardwareIdentity, error) {
 	var id HardwareIdentity
 
-	sysInfo, err := safe.StateGet[*hardware.SystemInformation](ctx, m.c.COSI, resource.NewMetadata(
+	sysInfo, err := safe.StateGet[*hardware.SystemInformation](ctx, cosi, resource.NewMetadata(
 		hardware.NamespaceName, hardware.SystemInformationType, hardware.SystemInformationID, resource.VersionUndefined,
 	))
 
@@ -113,17 +125,11 @@ func (m *machineryMaintenanceClient) Identity(ctx context.Context) (HardwareIden
 	case state.IsNotFoundError(err):
 		// No SMBIOS data on this platform (e.g. virtio-blk-style virtualized
 		// nodes); id stays empty, which is correctly a weak key.
-	case configuredNodeRejection(err):
-		return id, fmt.Errorf("%w: %w", ErrAlreadyConfigured, err)
 	default:
 		return id, fmt.Errorf("reading system information: %w", err)
 	}
 
-	links, err := safe.StateListAll[*network.LinkStatus](ctx, m.c.COSI)
-	if configuredNodeRejection(err) {
-		return id, fmt.Errorf("%w: %w", ErrAlreadyConfigured, err)
-	}
-
+	links, err := safe.StateListAll[*network.LinkStatus](ctx, cosi)
 	if err != nil {
 		return id, fmt.Errorf("listing link status: %w", err)
 	}

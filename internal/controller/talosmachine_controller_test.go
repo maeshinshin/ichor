@@ -137,6 +137,8 @@ type fakeTalosClient struct {
 	stage    string
 	stageErr error
 	// schematic is the Image Factory schematic the fake node reports ("" = not an Image Factory asset).
+	identity     HardwareIdentity
+	identityErr  error
 	schematic    string
 	schematicErr error
 	// node-action fields (ADR 0085).
@@ -265,6 +267,10 @@ func (f *fakeTalosClient) APIServerReady(context.Context) error {
 	}
 
 	return f.apiReadyErr
+}
+
+func (f *fakeTalosClient) Identity(context.Context) (HardwareIdentity, error) {
+	return f.identity, f.identityErr
 }
 
 func (f *fakeTalosClient) Schematic(context.Context) (string, error) {

@@ -24,6 +24,7 @@ package foreign
 // foreground tool call. A4 (data-plane continuity) is the traffic pods the A1 and A2 tests start.
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -319,6 +320,63 @@ func TestA1Upgrade(t *testing.T) {
 		t.Errorf("Helm records changed across the Kubernetes upgrade:\nbefore:\n%s\nafter:\n%s", recBefore, recAfter)
 	}
 	trafficReport(t, c, "across A1 takeover and the Kubernetes upgrade")
+}
+
+// secretData returns the base64 values of a Secret's keys as the API serves them.
+func secretData(c *foreign.Cluster, nsName, name string) map[string]string {
+	out, err := inner(c, "-n", nsName, "get", "secret", name, "-o", "json")
+	if err != nil {
+		return nil
+	}
+	var s struct {
+		Data map[string]string `json:"data"`
+	}
+	if json.Unmarshal([]byte(out), &s) != nil {
+		return nil
+	}
+	return s.Data
+}
+
+// TestA2Adopt (ADR 0103 A2 + A4): `helm install cilium` in kube-system with user values is taken over; the values are
+// lifted, the foreign record is backed up byte-for-byte and its Secrets (not the release) removed.
+// Run `foreign up --cni cilium-helm --cilium-set operator.replicas=1,debug.enabled=true` first.
+func TestA2Adopt(t *testing.T) {
+	c := build(t, foreign.Options{Workers: 1, CNI: foreign.CNICiliumHelm})
+	logState(t, c, "before")
+	recs := map[string]string{} // record name -> base64 of data.release
+	names, _ := inner(c, "-n", "kube-system", "get", "secrets", "-l", "owner=helm,name=cilium", "-o", "jsonpath={.items[*].metadata.name}")
+	for _, n := range strings.Fields(names) {
+		recs[n] = secretData(c, "kube-system", n)["release"]
+	}
+	if len(recs) == 0 {
+		t.Fatal("no foreign cilium release record")
+	}
+	trafficStart(t, c)
+	t.Logf("diff gate needed --accept-cilium-diff: %v", takeoverAdopt(t, c))
+	waitHandover(t, c, "")
+	membership(t, c)
+	vals := clusterJSONPath(c, "{.spec.cni.cilium.values}")
+	t.Logf("spec.cni.cilium.values = %s", vals)
+	if !strings.Contains(vals, `"operator":{"replicas":1}`) || !strings.Contains(vals, `"debug":{"enabled":true}`) {
+		t.Errorf("user values not lifted: %s", vals)
+	}
+	backup := secretData(c, crNS, "ichor-cilium-prior-release")
+	for n, want := range recs {
+		if got := backup["kube-system."+n+".release"]; got != want || got == "" {
+			t.Errorf("backup of %s is not byte-identical (got %d bytes b64, want %d)", n, len(got), len(want))
+		} else {
+			t.Logf("backup of %s byte-identical (%d bytes b64)", n, len(got))
+		}
+	}
+	left, _ := inner(c, "-n", "kube-system", "get", "secrets", "-l", "owner=helm", "--no-headers")
+	if strings.TrimSpace(left) != "" {
+		t.Errorf("release record Secrets remain in kube-system:\n%s", left)
+	}
+	if ds, _ := inner(c, "-n", "kube-system", "get", "ds", "cilium", "--no-headers"); !strings.Contains(ds, "cilium") {
+		t.Errorf("the cilium DaemonSet is gone (helm uninstall?)")
+	}
+	logState(t, c, "after takeover")
+	trafficReport(t, c, "across A2 takeover")
 }
 
 // TestA1AcceptAll: on the inline-manifest cluster, adopt with every accept flag is still refused for ipam.mode and writes nothing.

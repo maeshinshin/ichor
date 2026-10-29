@@ -849,6 +849,44 @@ func TestManagerStartupProbe(t *testing.T) {
 	t.Fatal("no manager container in the controller-manager Deployment")
 }
 
+// podTolerations returns a Deployment's pod tolerations.
+func podTolerations(d map[string]any) []any {
+	spec, _ := d["spec"].(map[string]any)
+	tmpl, _ := spec["template"].(map[string]any)
+	podSpec, _ := tmpl["spec"].(map[string]any)
+	tols, _ := podSpec["tolerations"].([]any)
+
+	return tols
+}
+
+// The controller must be able to run on a control plane: draining the only worker evicts it, and
+// with the control plane tainted NoSchedule it could not come back to finish the upgrade it drives.
+// The chart and the kustomize base (the installer manifest) carry the same toleration; ichor-ui does not.
+func TestManagerToleratesTheControlPlaneTaint(t *testing.T) {
+	want := []any{map[string]any{"key": "node-role.kubernetes.io/control-plane", "operator": "Exists", "effect": "NoSchedule"}}
+
+	chart := podTolerations(findNameSuffix(renderChart(t, "ichor"), kindDeployment, "controller-manager"))
+	if !reflect.DeepEqual(chart, want) {
+		t.Errorf("chart manager tolerations = %v, want %v", chart, want)
+	}
+
+	var base map[string]any
+
+	for _, d := range loadYAMLDocs(t, "../../config/manager/manager.yaml") {
+		if d["kind"] == kindDeployment {
+			base = d
+		}
+	}
+
+	if got := podTolerations(base); !reflect.DeepEqual(got, want) {
+		t.Errorf("config/manager tolerations = %v, want %v", got, want)
+	}
+
+	if ui := podTolerations(findNameSuffix(renderChart(t, "ichor"), kindDeployment, "ichor-ui")); len(ui) != 0 {
+		t.Errorf("ichor-ui tolerations = %v, want none", ui)
+	}
+}
+
 // findNameSuffix is find for release-templated names.
 func findNameSuffix(docs []map[string]any, kind, suffix string) map[string]any {
 	for _, d := range findAll(docs, kind) {

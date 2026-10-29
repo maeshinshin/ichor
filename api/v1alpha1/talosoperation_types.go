@@ -638,7 +638,7 @@ type TalosOperationList struct {
 
 func init() {
 	SchemeBuilder.Register(func(s *runtime.Scheme) error {
-		s.AddKnownTypes(SchemeGroupVersion, &TalosOperation{}, &TalosOperationList{})
+		s.AddKnownTypes(GroupVersion, &TalosOperation{}, &TalosOperationList{})
 		return nil
 	})
 }

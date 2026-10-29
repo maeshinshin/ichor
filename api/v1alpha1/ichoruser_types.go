@@ -109,7 +109,7 @@ type IchorUserList struct {
 
 func init() {
 	SchemeBuilder.Register(func(s *runtime.Scheme) error {
-		s.AddKnownTypes(SchemeGroupVersion, &IchorUser{}, &IchorUserList{})
+		s.AddKnownTypes(GroupVersion, &IchorUser{}, &IchorUserList{})
 		return nil
 	})
 }

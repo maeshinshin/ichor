@@ -163,7 +163,7 @@ type TalosConfigPatchList struct {
 
 func init() {
 	SchemeBuilder.Register(func(s *runtime.Scheme) error {
-		s.AddKnownTypes(SchemeGroupVersion, &TalosConfigPatch{}, &TalosConfigPatchList{})
+		s.AddKnownTypes(GroupVersion, &TalosConfigPatch{}, &TalosConfigPatchList{})
 		return nil
 	})
 }

@@ -7,9 +7,7 @@ export function uuidMatches(typed: string, uuid: string): boolean {
   return u !== '' && typed.trim().toLowerCase() === u
 }
 
-const finished = ['Done', 'Failed', 'Expired']
-
 // reclaimSettled says the phase will not change any more, so polling stops.
 export function reclaimSettled(phase: string): boolean {
-  return finished.includes(phase)
+  return ['Done', 'Failed', 'Expired'].includes(phase)
 }

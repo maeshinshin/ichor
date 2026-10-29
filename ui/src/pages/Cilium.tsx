@@ -16,14 +16,13 @@ import type { ObjectRef } from '@/gen/ichor/v1alpha1/common_pb'
 import { canApply, canEdit, canUpgrade, diffLines, type DiffKind } from '@/lib/cilium'
 import { cniClient } from '@/lib/connect'
 import { detectedCni, isCniUnmanaged } from '@/lib/cni'
-import { describeError } from '@/lib/errors'
+import { describeError, type ErrorShape } from '@/lib/errors'
 import { notifyDone } from '@/lib/notify'
 import { useCluster } from '@/lib/useCluster'
 import { useLoad } from '@/lib/useLoad'
 import { useMyPermissions } from '@/lib/useMyPermissions'
 import { useT } from '@/lib/useT'
 
-type ErrorShape = { title: string; detail: string }
 type Reviewed = { text: string; valid: boolean; errors: string[]; diff: string }
 
 // The code block's documented line variants stand for the kinds of a diff line.

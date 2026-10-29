@@ -16,9 +16,9 @@ import { userClient } from '@/lib/connect'
 import { matchesQuery } from '@/lib/filter'
 import { conditionTone } from '@/lib/conditions'
 import { userError } from '@/lib/users'
+import type { ErrorShape } from '@/lib/errors'
 import { useT } from '@/lib/useT'
 
-type ErrorShape = { title: string; detail: string }
 type Dialog = 'edit' | 'password' | 'revoke' | 'delete'
 
 // The Users page, in the sidebar only when ichor-ui has its own users. Every call

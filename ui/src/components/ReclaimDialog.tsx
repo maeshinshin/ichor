@@ -11,11 +11,9 @@ import { ErrorAlert } from '@/components/ErrorAlert'
 import { Field, Fields } from '@/components/PageHeader'
 import type { Reclaim } from '@/gen/ichor/v1alpha1/reclaim_pb'
 import { reclaimClient } from '@/lib/connect'
-import { describeError } from '@/lib/errors'
+import { describeError, type ErrorShape } from '@/lib/errors'
 import { reclaimSettled, uuidMatches } from '@/lib/reclaim'
 import { useT } from '@/lib/useT'
-
-type ErrorShape = { title: string; detail: string }
 
 const POLL_MS = 2000
 

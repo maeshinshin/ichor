@@ -14,13 +14,11 @@ import type { Patch } from '@/gen/ichor/v1alpha1/patch_pb'
 import { patchClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
 import { notifyDone } from '@/lib/notify'
-import { describeError } from '@/lib/errors'
+import { describeError, type ErrorShape } from '@/lib/errors'
 import { matchesQuery } from '@/lib/filter'
 import { targetKindOf } from '@/lib/patchTarget'
 import { useT } from '@/lib/useT'
 import { Link } from '@/router'
-
-type ErrorShape = { title: string; detail: string }
 
 // Patch list: every TalosConfigPatch the backend can see, across clusters
 // (PatchService.ListPatches with no cluster filter, same "list everything,

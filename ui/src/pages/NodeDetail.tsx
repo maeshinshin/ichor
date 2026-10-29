@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'preact/hooks'
+import { ArrowRightIcon, InboxIcon, TriangleAlertIcon } from 'lucide-preact'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { ConditionList, StatusBadge } from '@/components/ConditionList'
+import { ConditionBadge, ConditionList } from '@/components/ConditionList'
 import { ErrorAlert } from '@/components/ErrorAlert'
-import { Field, Fields, PageHeader } from '@/components/PageHeader'
+import { Field, Fields } from '@/components/PageHeader'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
-import { StatusText } from '@/components/Status'
-import { Section } from '@/components/Section'
+import { SectionCard } from '@/components/SectionCard'
+import { TitleBar } from '@/components/TitleBar'
+import { ToneBadge } from '@/components/ToneBadge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { NodeActions } from '@/components/NodeActions'
 import { NodeLogs } from '@/components/NodeLogs'
@@ -111,39 +114,26 @@ function NodePage({ namespace, name }: { namespace: string; name: string }) {
 
   return (
     <>
-      <PageHeader
+      <TitleBar
         title={machine ? machineDisplayName(machine) : name}
-        kind={t('kind.machine')}
+        description={t('kind.machine')}
         badges={
           machine && (
             <>
-              <StatusText tone={approved ? 'good' : 'warn'}>
-                {enumLabel(MachineApprovalState, machine.approvalState)}
-              </StatusText>
-              {ready && <StatusBadge type={ready.type} status={ready.status} />}
-              {machine.stage && <span class="text-sm text-muted-foreground">{machine.stage}</span>}
+              <ToneBadge tone={approved ? 'good' : 'warn'}>{enumLabel(MachineApprovalState, machine.approvalState)}</ToneBadge>
+              {ready && <ConditionBadge type={ready.type} status={ready.status} />}
+              {machine.stage && <Badge variant="outline">{machine.stage}</Badge>}
             </>
           )
         }
-        meta={[
-          { label: t('col.role'), value: machine ? enumLabel(MachineRole, machine.role) : undefined },
-          {
-            label: t('col.cluster'),
-            value: machine?.cluster ? (
-              <Link to={'/'} class="hover:underline">
-                {machine.cluster.name}
-              </Link>
-            ) : undefined,
-          },
-          { label: t('col.endpoint'), value: machine?.endpoint },
-          { label: t('cluster.talosVersion'), value: cluster?.talosVersion },
-          { label: t('node.k8sKubelet'), value: node.kubernetes?.kubeletVersion },
-        ]}
         actions={
           <>
             {machine?.cluster && (
               <Button asChild variant="outline" size="sm">
-                <Link to={'/'}>{t('node.openCluster')}</Link>
+                <Link to={'/'}>
+                  {t('node.openCluster')}
+                  <ArrowRightIcon data-icon="inline-end" aria-hidden="true" />
+                </Link>
               </Button>
             )}
             {machine && (
@@ -159,8 +149,26 @@ function NodePage({ namespace, name }: { namespace: string; name: string }) {
           </>
         }
       />
+      <Card size="sm" className="mb-4">
+        <CardContent>
+          <Fields>
+            <Field label={t('col.role')} value={machine ? enumLabel(MachineRole, machine.role) : undefined} />
+            <Field label={t('col.cluster')}>
+              {machine?.cluster ? (
+                <Button asChild variant="link" size="sm">
+                  <Link to={'/'}>{machine.cluster.name}</Link>
+                </Button>
+              ) : undefined}
+            </Field>
+            <Field label={t('col.endpoint')} value={machine?.endpoint} />
+            <Field label={t('cluster.talosVersion')} value={cluster?.talosVersion} />
+            <Field label={t('node.k8sKubelet')} value={node.kubernetes?.kubeletVersion} />
+          </Fields>
+        </CardContent>
+      </Card>
       {machine && needsInstallDisk({ ...machine, approved }) && (
         <Alert className="mb-4">
+          <TriangleAlertIcon />
           <AlertTitle>{t('installDisk.waitingTitle')}</AlertTitle>
           <AlertDescription>
             <p>{t('installDisk.waitingBody')}</p>
@@ -176,20 +184,20 @@ function NodePage({ namespace, name }: { namespace: string; name: string }) {
         </Alert>
       )}
       <Tabs value={tab} onValueChange={(v) => setTab(parseNodeTab(`?tab=${v}`))}>
-        <TabsList variant="line" aria-label={t('node.tabs')} className="h-auto w-full justify-start overflow-x-auto overflow-y-hidden pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <TabsList variant="line" aria-label={t('node.tabs')} className="w-full justify-start overflow-x-auto">
           {nodeTabs.map((id) => (
-            <TabsTrigger key={id} value={id} className="flex-none px-3 py-1.5">
+            <TabsTrigger key={id} value={id} className="flex-none">
               {t(`node.tab.${id}`)}
             </TabsTrigger>
           ))}
         </TabsList>
         {/* Radix mounts only the active panel, so a tab's data loads when it is first opened. */}
-        <TabsContent value="summary" className="space-y-8">
-        <Section id="conditions" title={t('cluster.conditions')}>
-          <ConditionList conditions={machine?.conditions ?? []} />
-        </Section>
+        <TabsContent value="summary" className="space-y-4">
+        <SectionCard id="conditions" title={t('cluster.conditions')}>
+          <ConditionList badges conditions={machine?.conditions ?? []} />
+        </SectionCard>
 
-        <Section id="hardware" title={t('node.hardware')}>
+        <SectionCard id="hardware" title={t('node.hardware')}>
           <Fields>
             <Field label={t('node.manufacturer')} value={node.hardware?.manufacturer} />
             <Field label={t('node.model')} value={node.hardware?.model} />
@@ -197,9 +205,9 @@ function NodePage({ namespace, name }: { namespace: string; name: string }) {
             <Field label={t('node.cpuCores')} value={node.hardware ? String(node.hardware.cpuCores) : undefined} />
             <Field label={t('node.memory')} value={node.hardware ? formatBytes(node.hardware.memoryTotalBytes) : undefined} />
           </Fields>
-        </Section>
+        </SectionCard>
 
-        <Section id="usage" title={t('node.usage')}>
+        <SectionCard id="usage" title={t('node.usage')}>
           {node.resourceUsage ? (
             <Fields>
               <Field label={t('node.cpuUsed')} value={formatCores(node.resourceUsage.cpuCoresUsed, node.resourceUsage.cpuSampled)} />
@@ -213,24 +221,24 @@ function NodePage({ namespace, name }: { namespace: string; name: string }) {
               />
             </Fields>
           ) : (
-            <EmptyNote>{t('node.noUsage')}</EmptyNote>
+            <EmptyNote icon={InboxIcon}>{t('node.noUsage')}</EmptyNote>
           )}
-        </Section>
+        </SectionCard>
         </TabsContent>
-        <TabsContent value="storage" className="space-y-8">
+        <TabsContent value="storage" className="space-y-4">
           <TalosDetails namespace={namespace} name={name} part="storage" />
         </TabsContent>
-        <TabsContent value="talos" className="space-y-8">
+        <TabsContent value="talos" className="space-y-4">
           <TalosDetails namespace={namespace} name={name} part="talos" />
           <TalosRuntime namespace={namespace} name={name} part="talos" />
         </TabsContent>
-        <TabsContent value="kubernetes" className="space-y-8">
+        <TabsContent value="kubernetes" className="space-y-4">
           <TalosRuntime namespace={namespace} name={name} part="kubernetes" />
         </TabsContent>
-        <TabsContent value="config" className="space-y-8">
+        <TabsContent value="config" className="space-y-4">
           <EffectiveConfigSection namespace={namespace} name={name} />
         </TabsContent>
-        <TabsContent value="logs" className="space-y-8">
+        <TabsContent value="logs" className="space-y-4">
           <NodeLogs namespace={namespace} name={name} />
         </TabsContent>
       </Tabs>
@@ -253,51 +261,56 @@ function EffectiveConfigSection({ namespace, name }: { namespace: string; name: 
   const groups = groupByLayer(values ?? [])
 
   return (
-    <Section id="config" title={t('node.config')}>
-        <p class="text-sm text-muted-foreground">
+    <SectionCard
+      id="config"
+      title={t('node.config')}
+      description={
+        <>
           {t('node.configIntroBefore')}
           <Link to="/config" class="underline">
             {t('node.configIntroLink')}
           </Link>
           {t('node.configIntroAfter')}
-        </p>
-        {error && <ErrorAlert {...error} />}
-        {!error && !values && <Skeleton className="h-24 w-full" />}
-        {values && values.length === 0 && <EmptyNote>{t('node.configEmpty')}</EmptyNote>}
-        {groups.map(([layer, group]) => (
-          <div key={layer}>
-            <h4 class="mb-1 text-sm font-medium">{enumLabel(ConfigLayer, layer)}</h4>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t('node.colPath')}</TableHead>
-                  <TableHead>{t('node.colValue')}</TableHead>
-                  <TableHead>{t('node.colSource')}</TableHead>
+        </>
+      }
+    >
+      {error && <ErrorAlert {...error} />}
+      {!error && !values && <Skeleton className="h-24 w-full" />}
+      {values && values.length === 0 && <EmptyNote icon={InboxIcon}>{t('node.configEmpty')}</EmptyNote>}
+      {groups.map(([layer, group]) => (
+        <SectionCard key={layer} size="sm" title={enumLabel(ConfigLayer, layer)}>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t('node.colPath')}</TableHead>
+                <TableHead>{t('node.colValue')}</TableHead>
+                <TableHead>{t('node.colSource')}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {group.map((v) => (
+                <TableRow key={v.path}>
+                  <TableCell className="font-mono">{v.path}</TableCell>
+                  <TableCell className="font-mono">
+                    {v.value}
+                    {/* The server masks any secret value before it reaches the browser
+                        (EffectiveConfigValue.secret) - there is nothing here
+                        that can or should reveal it. */}
+                    {v.secret && (
+                      <>
+                        {' '}
+                        <Badge variant="outline">{t('node.secret')}</Badge>
+                      </>
+                    )}
+                  </TableCell>
+                  <TableCell>{v.origin?.source || '-'}</TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {group.map((v) => (
-                  <TableRow key={v.path}>
-                    <TableCell className="font-mono text-xs">{v.path}</TableCell>
-                    <TableCell className="font-mono text-xs">
-                      {v.value}
-                      {/* The server masks any secret value before it reaches the browser
-                          (EffectiveConfigValue.secret) - there is nothing here
-                          that can or should reveal it. */}
-                      {v.secret && (
-                        <Badge variant="outline" className="ml-2">
-                          {t('node.secret')}
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{v.origin?.source || '-'}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        ))}
-    </Section>
+              ))}
+            </TableBody>
+          </Table>
+        </SectionCard>
+      ))}
+    </SectionCard>
   )
 }
 

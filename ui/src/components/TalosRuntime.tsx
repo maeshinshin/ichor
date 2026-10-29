@@ -1,17 +1,20 @@
 import { useEffect, useState } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { CircleXIcon, InboxIcon } from 'lucide-preact'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { Field, Fields } from '@/components/PageHeader'
-import { Section } from '@/components/Section'
+import { EmptyNote } from '@/components/PageStates'
+import { SectionCard, SectionSkeleton } from '@/components/SectionCard'
+import { ToneBadge } from '@/components/ToneBadge'
+import { CardDescription } from '@/components/ui/card'
 import type { GetNodeTalosRuntimeResponse } from '@/gen/ichor/v1alpha1/talosruntime_pb'
 import { nodeClient } from '@/lib/connect'
 import { describeError } from '@/lib/errors'
 import { formatBytes, formatResource } from '@/lib/format'
-import type { Tone } from '@/lib/talosDetails'
 import {
   conditionTone,
   dbInUsePercent,
@@ -33,10 +36,6 @@ import { useT } from '@/lib/useT'
 // and kernel modules. One call; each card carries its own error, and a card the
 // maintenance API refuses says so instead of showing a failure. Tables scroll
 // inside their own container. The ids are the anchors for the page's sections.
-
-function badgeVariant(tone: Tone) {
-  return tone === 'bad' ? 'destructive' : tone === 'ok' ? 'secondary' : 'outline'
-}
 
 // part="talos" renders processes, containers and kernel (the Talos tab);
 // part="kubernetes" renders the k8s node, etcd and network state.
@@ -63,7 +62,7 @@ export function TalosRuntime({ namespace, name, part }: { namespace: string; nam
   }, [namespace, name])
 
   if (error) return <ErrorAlert {...error} />
-  if (!data) return <p class="text-muted-foreground">{t('rt.loading')}</p>
+  if (!data) return <SectionSkeleton label={t('rt.loading')} />
   const m = data.maintenanceMode
   if (part === 'kubernetes') {
     return (
@@ -86,39 +85,43 @@ export function TalosRuntime({ namespace, name, part }: { namespace: string; nam
 function Panel({
   id,
   title,
+  description,
+  actions,
   error,
   maintenance,
   children,
 }: {
   id: string
   title: string
+  description?: ComponentChildren
+  actions?: ComponentChildren
   error: string
   maintenance: boolean
   children: ComponentChildren
 }) {
   const t = useT()
   return (
-    <Section id={id} title={title}>
+    <SectionCard id={id} title={title} description={description} actions={actions}>
       {error ? (
         maintenance ? (
-          <p class="text-muted-foreground">{t('rt.unavailableMaintenance')}</p>
+          <EmptyNote icon={InboxIcon}>{t('rt.unavailableMaintenance')}</EmptyNote>
         ) : (
           <Alert variant="destructive">
-            <AlertDescription>
-              {t('talos.sectionFailed')} <span class="break-words font-mono text-xs">{error}</span>
-            </AlertDescription>
+            <CircleXIcon />
+            <AlertTitle>{t('talos.sectionFailed')}</AlertTitle>
+            <AlertDescription className="break-words">{error}</AlertDescription>
           </Alert>
         )
       ) : (
         children
       )}
-    </Section>
+    </SectionCard>
   )
 }
 
 function Empty() {
   const t = useT()
-  return <p class="text-muted-foreground">{t('talos.none')}</p>
+  return <EmptyNote icon={InboxIcon}>{t('talos.none')}</EmptyNote>
 }
 
 // Grid is a table with a header row, or the empty note when there is nothing to list.
@@ -146,12 +149,12 @@ function EtcdCard({ data, maintenance }: { data: GetNodeTalosRuntimeResponse; ma
   return (
     <Panel id="etcd" title={t('rt.etcd')} error={e.error} maintenance={maintenance}>
       {e.notApplicable ? (
-        <p class="text-muted-foreground">{t('rt.etcdNotApplicable')}</p>
+        <EmptyNote icon={InboxIcon}>{t('rt.etcdNotApplicable')}</EmptyNote>
       ) : (
         <>
           <Fields>
             <Field label={t('rt.etcdHealth')}>
-              <Badge variant={badgeVariant(etcdTone(e))}>{etcdTone(e) === 'ok' ? t('rt.healthy') : t('rt.attention')}</Badge>
+              <ToneBadge tone={etcdTone(e)}>{etcdTone(e) === 'ok' ? t('rt.healthy') : t('rt.attention')}</ToneBadge>
             </Field>
             <Field label={t('rt.etcdMember')} value={e.memberId} />
             <Field label={t('rt.etcdLeader')} value={e.leaderId} />
@@ -161,26 +164,29 @@ function EtcdCard({ data, maintenance }: { data: GetNodeTalosRuntimeResponse; ma
           </Fields>
           {e.alarms.length > 0 && (
             <Alert variant="destructive">
-              <AlertDescription>
-                {t('rt.etcdAlarms')} <span class="break-words font-mono text-xs">{e.alarms.join(', ')}</span>
-              </AlertDescription>
+              <CircleXIcon />
+              <AlertTitle>{t('rt.etcdAlarms')}</AlertTitle>
+              <AlertDescription className="break-words">{e.alarms.join(', ')}</AlertDescription>
             </Alert>
           )}
           {e.statusErrors.length > 0 && (
             <Alert variant="destructive">
-              <AlertDescription class="break-words font-mono text-xs">{e.statusErrors.join('; ')}</AlertDescription>
+              <CircleXIcon />
+              <AlertDescription className="break-words">{e.statusErrors.join('; ')}</AlertDescription>
             </Alert>
           )}
           <Grid heads={[t('rt.colMember'), t('talos.hostname'), t('rt.colPeer'), t('rt.colClient'), '']} empty={e.members.length === 0}>
             {e.members.map((m) => (
               <TableRow key={m.id}>
-                <TableCell className="font-mono text-xs">{m.id}</TableCell>
+                <TableCell className="font-mono">{m.id}</TableCell>
                 <TableCell>{m.hostname || '-'}</TableCell>
-                <TableCell className="break-all font-mono text-xs">{m.peerUrls.join(', ') || '-'}</TableCell>
-                <TableCell className="break-all font-mono text-xs">{m.clientUrls.join(', ') || '-'}</TableCell>
-                <TableCell className="space-x-1">
-                  {m.leader && <Badge variant="secondary">{t('rt.leader')}</Badge>}
-                  {m.learner && <Badge variant="outline">{t('rt.learner')}</Badge>}
+                <TableCell className="break-all font-mono">{m.peerUrls.join(', ') || '-'}</TableCell>
+                <TableCell className="break-all font-mono">{m.clientUrls.join(', ') || '-'}</TableCell>
+                <TableCell>
+                  <div class="flex flex-wrap gap-1">
+                    {m.leader && <Badge variant="secondary">{t('rt.leader')}</Badge>}
+                    {m.learner && <Badge variant="outline">{t('rt.learner')}</Badge>}
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
@@ -197,21 +203,28 @@ function ProcessesCard({ data, maintenance }: { data: GetNodeTalosRuntimeRespons
   const p = data.processes
   if (!p) return null
   return (
-    <Panel id="processes" title={t('rt.processes')} error={p.error} maintenance={maintenance}>
-      <div class="flex flex-wrap items-center gap-2 text-sm">
-        <span class="text-muted-foreground">{t('rt.processesNote', { n: p.processes.length, total: p.total })}</span>
-        <Button size="sm" variant={by === 'memory' ? 'secondary' : 'outline'} onClick={() => setBy('memory')}>
-          {t('rt.sortMemory')}
-        </Button>
-        <Button size="sm" variant={by === 'cpu' ? 'secondary' : 'outline'} onClick={() => setBy('cpu')}>
-          {t('rt.sortCpu')}
-        </Button>
-      </div>
+    <Panel
+      id="processes"
+      title={t('rt.processes')}
+      description={t('rt.processesNote', { n: p.processes.length, total: p.total })}
+      actions={
+        <div class="flex flex-wrap items-center gap-2">
+          <Button size="sm" variant={by === 'memory' ? 'secondary' : 'outline'} onClick={() => setBy('memory')}>
+            {t('rt.sortMemory')}
+          </Button>
+          <Button size="sm" variant={by === 'cpu' ? 'secondary' : 'outline'} onClick={() => setBy('cpu')}>
+            {t('rt.sortCpu')}
+          </Button>
+        </div>
+      }
+      error={p.error}
+      maintenance={maintenance}
+    >
       <Grid heads={[t('rt.colPid'), t('talos.colName'), t('talos.colState'), t('rt.colThreads'), t('rt.colCpu'), t('rt.colRss')]} empty={p.processes.length === 0}>
         {sortProcesses(p.processes, by).map((x) => (
           <TableRow key={x.pid}>
             <TableCell>{x.pid}</TableCell>
-            <TableCell className="font-mono text-xs">{x.name}</TableCell>
+            <TableCell className="font-mono">{x.name}</TableCell>
             <TableCell>{x.state}</TableCell>
             <TableCell>{x.threads}</TableCell>
             <TableCell>{formatCpuSeconds(x.cpuSeconds)}</TableCell>
@@ -233,16 +246,16 @@ function ContainersCard({ data, maintenance }: { data: GetNodeTalosRuntimeRespon
         {c.containers.map((x) => (
           <TableRow key={`${x.runtimeNamespace}/${x.id}`}>
             <TableCell>{x.runtimeNamespace}</TableCell>
-            <TableCell className="break-all font-mono text-xs">{x.pod || '-'}</TableCell>
-            <TableCell className="font-mono text-xs">{x.name || x.id}</TableCell>
-            <TableCell className="break-all font-mono text-xs">{x.image}</TableCell>
+            <TableCell className="break-all font-mono">{x.pod || '-'}</TableCell>
+            <TableCell className="font-mono">{x.name || x.id}</TableCell>
+            <TableCell className="break-all font-mono">{x.image}</TableCell>
             <TableCell>
               <Badge variant="outline">{x.status || '-'}</Badge>
             </TableCell>
           </TableRow>
         ))}
       </Grid>
-      {c.truncated && <p class="text-xs text-muted-foreground">{t('rt.truncated')}</p>}
+      {c.truncated && <CardDescription>{t('rt.truncated')}</CardDescription>}
     </Panel>
   )
 }
@@ -254,9 +267,9 @@ function KubernetesCard({ data }: { data: GetNodeTalosRuntimeResponse }) {
   return (
     <Panel id="k8s-node" title={t('rt.k8s')} error={k.error} maintenance={false}>
       {k.permissionDenied ? (
-        <p class="text-muted-foreground">{t('rt.k8sDenied')}</p>
+        <EmptyNote icon={InboxIcon}>{t('rt.k8sDenied')}</EmptyNote>
       ) : k.notJoined ? (
-        <p class="text-muted-foreground">{t('rt.k8sNotJoined')}</p>
+        <EmptyNote icon={InboxIcon}>{t('rt.k8sNotJoined')}</EmptyNote>
       ) : (
         <>
           <Fields>
@@ -267,9 +280,9 @@ function KubernetesCard({ data }: { data: GetNodeTalosRuntimeResponse }) {
           </Fields>
           <div class="flex flex-wrap gap-1">
             {k.conditions.map((c) => (
-              <Badge key={c.type} variant={badgeVariant(conditionTone(c))} title={[c.reason, c.message].filter(Boolean).join(': ')}>
+              <ToneBadge key={c.type} tone={conditionTone(c)} title={[c.reason, c.message].filter(Boolean).join(': ')}>
                 {c.type}: {c.status}
-              </Badge>
+              </ToneBadge>
             ))}
           </div>
           <Grid heads={[t('rt.colResource'), t('rt.colCapacity'), t('rt.colAllocatable')]}>
@@ -281,19 +294,20 @@ function KubernetesCard({ data }: { data: GetNodeTalosRuntimeResponse }) {
               </TableRow>
             ))}
           </Grid>
-          <p class="text-xs text-muted-foreground">{t('rt.pods', { n: k.pods.length })}</p>
+          <CardDescription>{t('rt.pods', { n: k.pods.length })}</CardDescription>
           {k.podsError ? (
             <Alert variant="destructive">
-              <AlertDescription class="break-words font-mono text-xs">{k.podsError}</AlertDescription>
+              <CircleXIcon />
+              <AlertDescription className="break-words">{k.podsError}</AlertDescription>
             </Alert>
           ) : (
             <Grid heads={[t('rt.colNamespace'), t('talos.colName'), t('rt.colPhase'), t('rt.colReady'), t('rt.colRestarts'), t('rt.colAge')]} empty={k.pods.length === 0}>
               {sortPods(k.pods).map((p) => (
                 <TableRow key={`${p.namespace}/${p.name}`}>
-                  <TableCell className="font-mono text-xs">{p.namespace}</TableCell>
-                  <TableCell className="break-all font-mono text-xs">{p.name}</TableCell>
+                  <TableCell className="font-mono">{p.namespace}</TableCell>
+                  <TableCell className="break-all font-mono">{p.name}</TableCell>
                   <TableCell>
-                    <Badge variant={badgeVariant(podTone(p))}>{p.phase || '-'}</Badge>
+                    <ToneBadge tone={podTone(p)}>{p.phase || '-'}</ToneBadge>
                   </TableCell>
                   <TableCell>
                     {p.readyContainers}/{p.totalContainers}
@@ -304,7 +318,7 @@ function KubernetesCard({ data }: { data: GetNodeTalosRuntimeResponse }) {
               ))}
             </Grid>
           )}
-          {k.podsTruncated && <p class="text-xs text-muted-foreground">{t('rt.truncated')}</p>}
+          {k.podsTruncated && <CardDescription>{t('rt.truncated')}</CardDescription>}
         </>
       )}
     </Panel>
@@ -319,17 +333,17 @@ function NetworkStateCard({ data, maintenance }: { data: GetNodeTalosRuntimeResp
     <Panel id="netstate" title={t('rt.netstate')} error={n.error} maintenance={maintenance}>
       <Fields>
         <Field label={t('rt.timeStatus')}>
-          {n.timeStatus ? <Badge variant={n.timeSync ? 'secondary' : 'outline'}>{n.timeStatus}</Badge> : '-'}
+          {n.timeStatus ? <ToneBadge tone={n.timeSync ? 'good' : 'neutral'}>{n.timeStatus}</ToneBadge> : '-'}
         </Field>
         <Field label={t('rt.timeOffset')} value={n.timeStatus ? formatNanos(n.timeOffsetNanos) : ''} />
         <Field label={t('rt.timeMaxError')} value={n.timeStatus ? formatNanos(n.timeMaxErrorNanos) : ''} />
       </Fields>
-      <p class="text-xs text-muted-foreground">{t('rt.routes')}</p>
+      <CardDescription>{t('rt.routes')}</CardDescription>
       <Grid heads={[t('rt.colDestination'), t('rt.colGateway'), t('rt.colLink'), t('rt.colTable'), t('rt.colProtocol'), t('rt.colPriority')]} empty={n.routes.length === 0}>
         {n.routes.map((r, i) => (
           <TableRow key={i}>
-            <TableCell className="font-mono text-xs">{r.destination}</TableCell>
-            <TableCell className="font-mono text-xs">{r.gateway || '-'}</TableCell>
+            <TableCell className="font-mono">{r.destination}</TableCell>
+            <TableCell className="font-mono">{r.gateway || '-'}</TableCell>
             <TableCell>{r.link || '-'}</TableCell>
             <TableCell>{r.table}</TableCell>
             <TableCell>{r.protocol}</TableCell>
@@ -337,13 +351,13 @@ function NetworkStateCard({ data, maintenance }: { data: GetNodeTalosRuntimeResp
           </TableRow>
         ))}
       </Grid>
-      {n.routesTruncated && <p class="text-xs text-muted-foreground">{t('rt.truncated')}</p>}
-      <p class="text-xs text-muted-foreground">{t('rt.members')}</p>
+      {n.routesTruncated && <CardDescription>{t('rt.truncated')}</CardDescription>}
+      <CardDescription>{t('rt.members')}</CardDescription>
       <Grid heads={[t('talos.hostname'), t('talos.addresses'), t('talos.colType'), t('rt.colOs')]} empty={n.members.length === 0}>
         {n.members.map((m, i) => (
           <TableRow key={i}>
             <TableCell>{m.hostname || '-'}</TableCell>
-            <TableCell className="break-all font-mono text-xs">{m.addresses.join(', ')}</TableCell>
+            <TableCell className="break-all font-mono">{m.addresses.join(', ')}</TableCell>
             <TableCell>{m.machineType || '-'}</TableCell>
             <TableCell>{m.operatingSystem || '-'}</TableCell>
           </TableRow>
@@ -351,14 +365,14 @@ function NetworkStateCard({ data, maintenance }: { data: GetNodeTalosRuntimeResp
       </Grid>
       {n.kubespanPeers.length > 0 && (
         <>
-          <p class="text-xs text-muted-foreground">{t('rt.kubespan')}</p>
+          <CardDescription>{t('rt.kubespan')}</CardDescription>
           <Grid heads={[t('rt.colPeer'), t('rt.colEndpoint'), t('talos.colState'), t('rt.colRx'), t('rt.colTx'), t('rt.colHandshake')]}>
             {n.kubespanPeers.map((p, i) => (
               <TableRow key={i}>
                 <TableCell>{p.label || '-'}</TableCell>
-                <TableCell className="font-mono text-xs">{p.endpoint}</TableCell>
+                <TableCell className="font-mono">{p.endpoint}</TableCell>
                 <TableCell>
-                  <Badge variant={p.state === 'up' ? 'secondary' : 'outline'}>{p.state}</Badge>
+                  <ToneBadge tone={p.state === 'up' ? 'good' : 'neutral'}>{p.state}</ToneBadge>
                 </TableCell>
                 <TableCell>{formatBytes(p.receiveBytes)}</TableCell>
                 <TableCell>{formatBytes(p.transmitBytes)}</TableCell>
@@ -381,7 +395,7 @@ function KernelCard({ data, maintenance }: { data: GetNodeTalosRuntimeResponse; 
       <Grid heads={[t('talos.colName'), t('node.colSize'), t('rt.colUsedBy'), t('talos.colState')]} empty={k.modules.length === 0}>
         {k.modules.map((m) => (
           <TableRow key={m.name}>
-            <TableCell className="font-mono text-xs">{m.name}</TableCell>
+            <TableCell className="font-mono">{m.name}</TableCell>
             <TableCell>{formatBytes(m.sizeBytes)}</TableCell>
             <TableCell>{m.referenceCount}</TableCell>
             <TableCell>{m.state || '-'}</TableCell>

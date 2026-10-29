@@ -22,11 +22,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -206,7 +208,7 @@ func AdvanceCNIHelmJob(
 	switch {
 	case apierrors.IsNotFound(err):
 		// AlreadyExists: the cache has not seen the Job just created.
-		return false, client.IgnoreAlreadyExists(c.Create(ctx, newCNIHelmJob(ns, name, cluster, mode, inst, hash)))
+		return false, client.IgnoreAlreadyExists(c.Create(ctx, newCNIHelmJob(ns, name, cluster, mode, inst, hash, takeoverJob(cluster))))
 	case err != nil:
 		return false, err
 	}
@@ -231,30 +233,44 @@ func AdvanceCNIHelmJob(
 	return done, nil
 }
 
+// takeoverJob is whether the Job takes over a Cilium someone else installed (ADR 0103): every Job
+// for an adopted cluster until the hand-over has completed, so a retry after a failed first run
+// still retires the foreign Helm record (the retirement is idempotent). No Job of a cluster
+// Ichor bootstrapped, and none after the hand-over, takes over anything.
+func takeoverJob(cluster *ichorv1alpha1.TalosCluster) bool {
+	return cluster.Annotations[ichorv1alpha1.TalosClusterAdoptedAnnotation] == strconv.FormatBool(true) &&
+		!apimeta.IsStatusConditionTrue(cluster.Status.Conditions, render.ConditionCNIHandover)
+}
+
 // newCNIHelmJob is the whole Cilium Helm process (in kube-system, storing its release record in
 // storageNS): the installer's image, run once, under a
 // ServiceAccount that exists for this and nothing else, on the node's network so it keeps
 // its API access while Cilium restarts.
 func newCNIHelmJob(
 	storageNS, name string, cluster *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode,
-	inst *ichorv1alpha1.IchorInstallation, valuesHash string,
+	inst *ichorv1alpha1.IchorInstallation, valuesHash string, takeover bool,
 ) *batchv1.Job {
 	// One attempt, as for the installer: an upgrade that failed has been rolled back, and
 	// running it again without anyone looking at why would only repeat it. The caller
 	// reports the failure and starts a new run when asked to.
+	args := []string{
+		"cni", "helm", "apply",
+		"--cluster=" + cluster.Name,
+		"--namespace=" + cluster.Namespace,
+		"--kube-proxy=" + string(mode),
+		"--storage-namespace=" + storageNS,
+	}
+	if takeover {
+		args = append(args, "--takeover")
+	}
+
 	job := newJob(cniJobNamespace, name, cniHelmPodLabel, CNIServiceAccount, cniHelmDeadline,
 		map[string]string{cniClusterLabel: cniHelmClusterHash(cluster)},
 		map[string]string{CNIValuesHashAnnotation: valuesHash},
 		corev1.Container{
 			Name:  "cni",
 			Image: inst.Spec.InstallerRepository + ":" + inst.Spec.Version,
-			Args: []string{
-				"cni", "helm", "apply",
-				"--cluster=" + cluster.Name,
-				"--namespace=" + cluster.Namespace,
-				"--kube-proxy=" + string(mode),
-				"--storage-namespace=" + storageNS,
-			},
+			Args:  args,
 			Env: []corev1.EnvVar{
 				{Name: "KUBERNETES_SERVICE_HOST", Value: kubePrismHost},
 				{Name: "KUBERNETES_SERVICE_PORT", Value: kubePrismPort},

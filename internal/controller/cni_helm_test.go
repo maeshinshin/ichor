@@ -74,7 +74,7 @@ func TestCNIHelmJobShape(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	job := newCNIHelmJob("ichor-system", cniHelmJobName(cluster, hash), cluster, cni.KubeProxyEnabled, cniTestInstallation(), hash)
+	job := newCNIHelmJob("ichor-system", cniHelmJobName(cluster, hash), cluster, cni.KubeProxyEnabled, cniTestInstallation(), hash, false)
 	pod := job.Spec.Template.Spec
 
 	// kube-system: hostNetwork is refused by Talos's default Pod Security admission (baseline) in

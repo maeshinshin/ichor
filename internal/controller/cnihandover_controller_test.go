@@ -350,6 +350,41 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		Expect(result).To(Equal(ctrl.Result{}))
 	})
 
+	It("runs the takeover Job for an adopted cluster and records its inline manifest only once handed over", func() {
+		cluster := newTestCiliumCluster()
+		cluster.Annotations = map[string]string{
+			ichorv1alpha1.TalosClusterAdoptedAnnotation:           strconv.FormatBool(true),
+			ichorv1alpha1.TalosClusterCNIInlineManifestAnnotation: "my-cilium",
+		}
+		Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
+		ciliumDaemonSet()(true)
+
+		_, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
+		Expect(err).NotTo(HaveOccurred())
+
+		job := cniJob(cluster)
+		Expect(job.Spec.Template.Spec.Containers[0].Args).To(ContainElement("--takeover"))
+		Expect(getCluster(cluster).Status.CNI).To(BeNil(), "nothing is recorded before the hand-over completes")
+
+		setJobCondition(job, batchv1.JobComplete, "")
+		helmRelease(1, "deployed", effectiveValues(cluster))
+		_, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
+		Expect(err).NotTo(HaveOccurred())
+
+		got := getCluster(cluster)
+		Expect(conditionOf(cluster, render.ConditionCNIHandover).Status).To(Equal(metav1.ConditionTrue))
+		Expect(got.Status.CNI.TakenOverInlineManifest).To(Equal("my-cilium"))
+	})
+
+	It("does not ask a cluster Ichor bootstrapped to take over anything", func() {
+		cluster := newTestCiliumCluster()
+		ciliumDaemonSet()(true)
+
+		_, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cniJob(cluster).Spec.Template.Spec.Containers[0].Args).NotTo(ContainElement("--takeover"))
+	})
+
 	It("starts a new Job when the values change after the hand-over", func() {
 		cluster := newTestCiliumCluster()
 		ciliumDaemonSet()(true)

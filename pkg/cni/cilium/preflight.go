@@ -77,7 +77,8 @@ type PreflightReport struct {
 func Preflight(ctx context.Context, in PreflightInput) (*PreflightReport, error) {
 	rep := &PreflightReport{CRDsErr: CheckChartCRDs()}
 
-	foreign, err := ForeignRecords(ctx, in.Kube, ForeignOptions{IchorNamespace: in.IchorNamespace, Namespaces: in.Namespaces})
+	foreign, err := ForeignRecords(ctx, in.Kube,
+		ForeignOptions{IchorNamespace: in.IchorNamespace, Namespaces: in.Namespaces})
 	if err != nil {
 		rep.ForeignErr = err
 	} else if foreign != nil {

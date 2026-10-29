@@ -140,7 +140,7 @@ func TestBuildInitPlan_CNITunnelLandsOnTheCR(t *testing.T) {
 }
 
 func TestBuildInitPlan_CNITunnelAcceptedWithCilium(t *testing.T) {
-	for _, tunnel := range []string{"", "vxlan", tunnelGeneve} {
+	for _, tunnel := range []string{"", ciliumTunnelVxlan, tunnelGeneve} {
 		in := validInitPlanInput()
 		in.CNITunnel = tunnel
 

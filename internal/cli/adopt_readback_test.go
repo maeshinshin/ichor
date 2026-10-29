@@ -36,7 +36,7 @@ import (
 func TestIchorCiliumReadBack_SpecReproducesTheDeployedValues(t *testing.T) {
 	user := map[string]any{"debug": map[string]any{"enabled": true}}
 
-	for _, tunnel := range []string{"vxlan", "geneve"} {
+	for _, tunnel := range []string{ciliumTunnelVxlan, tunnelGeneve} {
 		for _, kp := range []cni.KubeProxyMode{cni.KubeProxyEnabled, cni.KubeProxyReplaced} {
 			for _, u := range []map[string]any{nil, user} {
 				deployed, err := cilium.EffectiveValues(u, kp, tunnel)
@@ -44,7 +44,7 @@ func TestIchorCiliumReadBack_SpecReproducesTheDeployedValues(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				raw, err := json.Marshal(&release.Release{Name: "cilium", Version: 1, Config: deployed})
+				raw, err := json.Marshal(&release.Release{Name: string(detectedCilium), Version: 1, Config: deployed})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -89,20 +89,20 @@ func TestLiveTunnel(t *testing.T) {
 		cm   map[string]string
 		want string
 	}{
-		"geneve":         {map[string]string{"tunnel-protocol": "geneve", "routing-mode": "tunnel"}, "geneve"},
-		"vxlan":          {map[string]string{"tunnel-protocol": "vxlan"}, "vxlan"},
-		"native routing": {map[string]string{"tunnel-protocol": "vxlan", "routing-mode": "native"}, ""},
-		"nothing":        {map[string]string{}, ""},
-		"nil":            {nil, ""},
-		"unknown":        {map[string]string{"tunnel-protocol": "ipip"}, ""},
+		tunnelGeneve:      {map[string]string{ciliumTunnelKey: tunnelGeneve, "routing-mode": "tunnel"}, tunnelGeneve},
+		ciliumTunnelVxlan: {map[string]string{ciliumTunnelKey: ciliumTunnelVxlan}, ciliumTunnelVxlan},
+		"native routing":  {map[string]string{ciliumTunnelKey: ciliumTunnelVxlan, "routing-mode": "native"}, ""},
+		"nothing":         {map[string]string{}, ""},
+		"nil":             {nil, ""},
+		"unknown":         {map[string]string{ciliumTunnelKey: "ipip"}, ""},
 	} {
 		if got := liveTunnel(tc.cm); got != tc.want {
 			t.Errorf("%s: got %q, want %q", name, got, tc.want)
 		}
 	}
 
-	vals, err := cilium.EffectiveValues(nil, cni.KubeProxyEnabled, liveTunnel(map[string]string{"tunnel-protocol": "geneve"}))
-	if err != nil || vals["tunnelProtocol"] != "geneve" {
+	vals, err := cilium.EffectiveValues(nil, cni.KubeProxyEnabled, liveTunnel(map[string]string{ciliumTunnelKey: tunnelGeneve}))
+	if err != nil || vals["tunnelProtocol"] != tunnelGeneve {
 		t.Fatalf("effective tunnelProtocol = %v, %v; want geneve", vals["tunnelProtocol"], err)
 	}
 }

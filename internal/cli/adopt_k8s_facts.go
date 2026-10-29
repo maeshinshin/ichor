@@ -47,6 +47,11 @@ const (
 	helmReleaseSecretType = corev1.SecretType("helm.sh/release.v1")
 	helmOwnerLabel        = "owner"
 	helmNameLabel         = "name"
+	helmOwnerValue        = "helm"
+
+	ciliumTunnelVxlan  = "vxlan"
+	ciliumTunnelGeneve = "geneve"
+	ciliumTunnelKey    = "tunnel-protocol"
 
 	kprTrue = "true"
 )
@@ -174,7 +179,7 @@ func gatherK8sFacts(ctx context.Context, r client.Reader) (*k8sFacts, error) {
 func ciliumHelmReleases(ctx context.Context, r client.Reader) ([]string, error) {
 	var secrets corev1.SecretList
 
-	if err := r.List(ctx, &secrets, client.MatchingLabels{helmOwnerLabel: "helm", helmNameLabel: string(detectedCilium)}); err != nil {
+	if err := r.List(ctx, &secrets, client.MatchingLabels{helmOwnerLabel: helmOwnerValue, helmNameLabel: string(detectedCilium)}); err != nil {
 		return nil, fmt.Errorf("listing Helm release records: %w", err)
 	}
 
@@ -196,7 +201,7 @@ func ichorCiliumReadBack(ctx context.Context, r client.Reader) (*cilium.ReadBack
 	var secrets corev1.SecretList
 
 	if err := r.List(ctx, &secrets, client.InNamespace(ichorControllerNamespace),
-		client.MatchingLabels{helmOwnerLabel: "helm", helmNameLabel: string(detectedCilium)}); err != nil {
+		client.MatchingLabels{helmOwnerLabel: helmOwnerValue, helmNameLabel: string(detectedCilium)}); err != nil {
 		return nil, fmt.Errorf("listing Ichor's Cilium release records: %w", err)
 	}
 
@@ -238,8 +243,8 @@ func liveTunnel(cm map[string]string) string {
 		return ""
 	}
 
-	switch t := cm["tunnel-protocol"]; t {
-	case "vxlan", "geneve":
+	switch t := cm[ciliumTunnelKey]; t {
+	case ciliumTunnelVxlan, ciliumTunnelGeneve:
 		return t
 	}
 

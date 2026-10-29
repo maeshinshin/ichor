@@ -467,18 +467,8 @@ func (st *adoptState) inspect(ctx context.Context, deps adoptDeps) error {
 		st.kubeProxy = kubeProxyReplaced
 	}
 
-	// An Ichor-owned Cilium is already running with a tunnel, a kube-proxy mode and user values: the
-	// spec adopt writes must reproduce them, or the controller would change a running network.
-	if st.fresh && !st.unmanaged && st.rep != nil && st.rep.Provenance == provenanceIchor && deps.Target != nil {
-		rb, err := ichorCiliumReadBack(ctx, deps.Target)
-		if err != nil {
-			return fmt.Errorf("adopt: reading Ichor's Cilium release: %w", err)
-		}
-
-		if rb != nil {
-			st.readBack = rb
-			st.kubeProxy = string(rb.KubeProxy)
-		}
+	if err := st.readBackIchorCilium(ctx, deps); err != nil {
+		return err
 	}
 
 	// 1.6: replaced mode needs KubePrism on every node, and turning it on and moving Cilium onto it
@@ -516,22 +506,8 @@ func (st *adoptState) inspect(ctx context.Context, deps adoptDeps) error {
 			st.cluster.Spec.CNI.Tunnel = st.tunnel
 		}
 
-		// A Cilium Ichor did not install: its running tunnel becomes spec.cni.tunnel, or the takeover
-		// would see an Ichor-owned key (tunnelProtocol) disagree (ADR 0103 A2).
-		if st.readBack == nil && !st.unmanaged && k8s != nil && st.rep != nil && st.rep.Kind == detectedCilium {
-			if t := liveTunnel(k8s.CiliumConfig); t != "" {
-				st.cluster.Spec.CNI.Tunnel = t
-			}
-		}
-
-		if rb := st.readBack; rb != nil {
-			st.cluster.Spec.CNI.Tunnel = rb.Tunnel
-
-			if len(rb.User) > 0 {
-				if err := setCiliumUserValues(st.cluster, rb.User, st.kubeProxy, rb.Tunnel); err != nil {
-					return fmt.Errorf("adopt: the values of Ichor's Cilium release: %w", err)
-				}
-			}
+		if err := st.mapRunningCilium(k8s); err != nil {
+			return err
 		}
 
 		if st.unmanaged {
@@ -541,6 +517,54 @@ func (st *adoptState) inspect(ctx context.Context, deps adoptDeps) error {
 			if first.Facts.CNI.Kind == CNINone {
 				st.cluster.Spec.CNI.Unmanaged.TalosCNI = string(detectedNone)
 			}
+		}
+	}
+
+	return nil
+}
+
+// readBackIchorCilium reads an Ichor-owned Cilium's release: it is already running with a tunnel, a
+// kube-proxy mode and user values, and the spec adopt writes must reproduce them, or the controller
+// would change a running network.
+func (st *adoptState) readBackIchorCilium(ctx context.Context, deps adoptDeps) error {
+	if !st.fresh || st.unmanaged || st.rep == nil || st.rep.Provenance != provenanceIchor || deps.Target == nil {
+		return nil
+	}
+
+	rb, err := ichorCiliumReadBack(ctx, deps.Target)
+	if err != nil {
+		return fmt.Errorf("adopt: reading Ichor's Cilium release: %w", err)
+	}
+
+	if rb != nil {
+		st.readBack = rb
+		st.kubeProxy = string(rb.KubeProxy)
+	}
+
+	return nil
+}
+
+// mapRunningCilium puts the running Cilium's tunnel (and, for Ichor's own, its user values) into the
+// spec adopt creates. A foreign Cilium's tunnel becomes spec.cni.tunnel, or the takeover would see
+// an Ichor-owned key (tunnelProtocol) disagree (ADR 0103 A2).
+func (st *adoptState) mapRunningCilium(k8s *k8sFacts) error {
+	if rb := st.readBack; rb != nil {
+		st.cluster.Spec.CNI.Tunnel = rb.Tunnel
+
+		if len(rb.User) == 0 {
+			return nil
+		}
+
+		if err := setCiliumUserValues(st.cluster, rb.User, st.kubeProxy, rb.Tunnel); err != nil {
+			return fmt.Errorf("adopt: the values of Ichor's Cilium release: %w", err)
+		}
+
+		return nil
+	}
+
+	if !st.unmanaged && k8s != nil && st.rep != nil && st.rep.Kind == detectedCilium {
+		if t := liveTunnel(k8s.CiliumConfig); t != "" {
+			st.cluster.Spec.CNI.Tunnel = t
 		}
 	}
 
@@ -607,8 +631,8 @@ func setCiliumUserValues(c *ichorv1alpha1.TalosCluster, user map[string]any, kub
 
 // checkTunnel accepts "" (the default), vxlan and geneve.
 func checkTunnel(flag, tunnel string) error {
-	if tunnel != "" && tunnel != "vxlan" && tunnel != "geneve" {
-		return fmt.Errorf("%s %q is invalid: must be %q or %q", flag, tunnel, "vxlan", "geneve")
+	if tunnel != "" && tunnel != ciliumTunnelVxlan && tunnel != ciliumTunnelGeneve {
+		return fmt.Errorf("%s %q is invalid: must be %q or %q", flag, tunnel, ciliumTunnelVxlan, ciliumTunnelGeneve)
 	}
 
 	return nil

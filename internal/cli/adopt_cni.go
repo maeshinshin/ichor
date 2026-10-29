@@ -22,8 +22,8 @@ import (
 	"slices"
 	"strings"
 
-	corev1 "k8s.io/api/core/v1"
 	"golang.org/x/mod/semver"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
@@ -239,11 +239,16 @@ func checkCNIAdoption(r *cniReport, unmanaged bool) error {
 		"to adopt the cluster with the CNI left exactly as it is, run again with --cni-unmanaged", what)
 }
 
+const (
+	kubePrismDoc         = "the KubePrismConfig document"
+	kubePrismDocContract = "v1.14"
+)
+
 // kubePrismSetting names where KubePrism is switched on for a version contract: the KubePrismConfig
 // document from v1.14, machine.features.kubePrism before. An empty contract is the newest.
 func kubePrismSetting(contract string) string {
-	if contract == "" || semver.Compare(semver.MajorMinor(contract), "v1.14") >= 0 {
-		return "the KubePrismConfig document"
+	if contract == "" || semver.Compare(semver.MajorMinor(contract), kubePrismDocContract) >= 0 {
+		return kubePrismDoc
 	}
 
 	return "machine.features.kubePrism"

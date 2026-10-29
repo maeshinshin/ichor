@@ -28,8 +28,8 @@ import (
 
 	"helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/release"
-	helmtime "helm.sh/helm/v3/pkg/time"
 	"helm.sh/helm/v3/pkg/storage/driver"
+	helmtime "helm.sh/helm/v3/pkg/time"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -41,7 +41,18 @@ import (
 	"github.com/maeshinshin/ichor/pkg/cni"
 )
 
-const ichorNS = "ichor-system"
+const (
+	modeKubernetes = "kubernetes"
+	tunnelVxlan    = "vxlan"
+	recordV1       = "sh.helm.release.v1.cilium.v1"
+	ichorNS        = "ichor-system"
+	kindConfigMap  = "ConfigMap"
+	cfgMapName     = "cilium-config"
+	valLocalhost   = "localhost"
+	keyOperator    = "operator"
+	ownerHelm      = "helm"
+	kubeSystem     = "kube-system"
+)
 
 // storeRecord writes rel the way Helm's own Secrets driver does, so the tests
 // decode real Helm output, not an encoding written from the same reading as the decoder.
@@ -54,7 +65,9 @@ func storeRecord(t *testing.T, kube *fake.Clientset, ns string, rel *release.Rel
 	}
 }
 
-func foreignRelease(t *testing.T, version int, status release.Status, appVersion string, cfg map[string]any) *release.Release {
+func foreignRelease(
+	t *testing.T, version int, status release.Status, appVersion string, cfg map[string]any,
+) *release.Release {
 	t.Helper()
 
 	ch, err := freshChart()
@@ -65,17 +78,17 @@ func foreignRelease(t *testing.T, version int, status release.Status, appVersion
 	ch.Metadata.AppVersion = appVersion
 
 	return &release.Release{
-		Name: "cilium", Namespace: "kube-system", Version: version, Config: cfg, Chart: ch,
+		Name: ChartName, Namespace: kubeSystem, Version: version, Config: cfg, Chart: ch,
 		Info: &release.Info{Status: status, FirstDeployed: helmtime.Unix(1, 0)},
 	}
 }
 
 func TestDecodeReleaseRecord_HelmCompressedRecord(t *testing.T) {
 	kube := fake.NewSimpleClientset()
-	storeRecord(t, kube, "kube-system", foreignRelease(t, 1, release.StatusDeployed, "1.17.5",
+	storeRecord(t, kube, kubeSystem, foreignRelease(t, 1, release.StatusDeployed, "1.17.5",
 		map[string]any{"debug": map[string]any{"enabled": true}}))
 
-	s, err := kube.CoreV1().Secrets("kube-system").Get(t.Context(), "sh.helm.release.v1.cilium.v1", metav1.GetOptions{})
+	s, err := kube.CoreV1().Secrets(kubeSystem).Get(t.Context(), "sh.helm.release.v1.cilium.v1", metav1.GetOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,21 +131,22 @@ func TestForeignRecords(t *testing.T) {
 		t.Fatalf("empty cluster: %v, %v; want nil, nil", f, err)
 	}
 
-	storeRecord(t, kube, "kube-system", foreignRelease(t, 2, release.StatusDeployed, "1.17.5", nil))
-	storeRecord(t, kube, "kube-system", foreignRelease(t, 1, release.StatusSuperseded, "1.17.4", nil))
+	storeRecord(t, kube, kubeSystem, foreignRelease(t, 2, release.StatusDeployed, "1.17.5", nil))
+	storeRecord(t, kube, kubeSystem, foreignRelease(t, 1, release.StatusSuperseded, "1.17.4", nil))
 	// Ichor's own record, and another release, are not foreign.
 	storeRecord(t, kube, ichorNS, foreignRelease(t, 1, release.StatusDeployed, "1.18.0", nil))
 
 	other := foreignRelease(t, 1, release.StatusDeployed, "1.0", nil)
 	other.Name = "other"
-	storeRecord(t, kube, "kube-system", other)
+	storeRecord(t, kube, kubeSystem, other)
 
 	f, err = ForeignRecords(ctx, kube, ForeignOptions{IchorNamespace: ichorNS})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(f.Records) != 2 || f.Records[0].Release.Version != 1 || f.Latest().Release.Version != 2 || f.Namespace != "kube-system" {
+	if len(f.Records) != 2 || f.Records[0].Release.Version != 1 || f.Latest().Release.Version != 2 ||
+		f.Namespace != kubeSystem {
 		t.Fatalf("records: %d, latest %d", len(f.Records), f.Latest().Release.Version)
 	}
 
@@ -150,7 +164,7 @@ func TestForeignRecords(t *testing.T) {
 
 func TestRequireDeployed_RefusesFailedRelease(t *testing.T) {
 	kube := fake.NewSimpleClientset()
-	storeRecord(t, kube, "kube-system", foreignRelease(t, 1, release.StatusFailed, "1.17.5", nil))
+	storeRecord(t, kube, kubeSystem, foreignRelease(t, 1, release.StatusFailed, "1.17.5", nil))
 
 	f, err := ForeignRecords(t.Context(), kube, ForeignOptions{IchorNamespace: ichorNS})
 	if err != nil {
@@ -235,9 +249,9 @@ func findConflict(cs []Conflict, key string) *Conflict {
 
 func TestOwnedKeyConflicts_MatchingAndSpellings(t *testing.T) {
 	user := map[string]any{
-		"ipam":                 map[string]any{"mode": "kubernetes"},
+		keyIPAM:                map[string]any{"mode": modeKubernetes},
 		"kubeProxyReplacement": "true",
-		"k8sServiceHost":       "localhost",
+		"k8sServiceHost":       valLocalhost,
 		"k8sServicePort":       "7445", // a string, as a CLI --set would store it
 	}
 
@@ -265,7 +279,7 @@ func TestOwnedKeyConflicts_MatchingAndSpellings(t *testing.T) {
 }
 
 func TestOwnedKeyConflicts_NeedsAcceptAndTunnel(t *testing.T) {
-	live, err := LiveValuesFromUser(map[string]any{"ipam": map[string]any{"mode": "kubernetes"}})
+	live, err := LiveValuesFromUser(map[string]any{"ipam": map[string]any{"mode": modeKubernetes}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -286,7 +300,7 @@ func TestOwnedKeyConflicts_NeedsAcceptAndTunnel(t *testing.T) {
 	}
 
 	// The tunnel protocol never changes in place; unset on both sides is vxlan.
-	cs, _ = OwnedKeyConflicts(live, cni.KubeProxyEnabled, "vxlan")
+	cs, _ = OwnedKeyConflicts(live, cni.KubeProxyEnabled, tunnelVxlan)
 	if findConflict(cs, "tunnelProtocol") != nil {
 		t.Error("unset tunnelProtocol equals vxlan")
 	}
@@ -306,9 +320,9 @@ func TestOwnedKeyConflicts_NeedsAcceptAndTunnel(t *testing.T) {
 
 func TestUserValues_DropsOwnedKeys(t *testing.T) {
 	in := map[string]any{
-		"debug":          map[string]any{"enabled": true},
-		"ipam":           map[string]any{"mode": "kubernetes", "operator": map[string]any{"x": 1}},
-		"tunnelProtocol": "vxlan",
+		"debug":           map[string]any{"enabled": true},
+		keyIPAM:           map[string]any{"mode": modeKubernetes, keyOperator: map[string]any{"x": 1}},
+		keyTunnelProtocol: tunnelVxlan,
 	}
 
 	out := UserValues(in)
@@ -321,7 +335,7 @@ func TestUserValues_DropsOwnedKeys(t *testing.T) {
 		t.Errorf("ipam = %v", out["ipam"])
 	}
 
-	if in["tunnelProtocol"] != "vxlan" {
+	if in["tunnelProtocol"] != tunnelVxlan {
 		t.Error("the input was modified")
 	}
 }
@@ -418,7 +432,8 @@ func agentContainer(t *testing.T, ds map[string]any) map[string]any {
 }
 
 func diffPaths(ds []Difference) []string {
-	var out []string
+	out := make([]string, 0, len(ds))
+
 	for _, d := range ds {
 		out = append(out, string(d.Kind)+" "+d.Object.Kind+"/"+d.Object.Name+" "+d.Path)
 	}
@@ -436,7 +451,7 @@ func TestDiffLive_IdenticalClusterIsEmpty(t *testing.T) {
 		mergeInto(meta, "labels", "app.kubernetes.io/managed-by", "Talos")
 		mergeInto(meta, "annotations", "kubectl.kubernetes.io/last-applied-configuration", "{}")
 
-		if ref.Kind == "ConfigMap" || ref.Kind == "Service" {
+		if ref.Kind == kindConfigMap || ref.Kind == "Service" {
 			mergeInto(meta, "annotations", "meta.helm.sh/release-name", "mine")
 		}
 	}
@@ -471,7 +486,8 @@ func TestDiffLive_ReportsLiveOnlyAnnotationAndArg(t *testing.T) {
 	ctr := agentContainer(t, ds)
 	ctr["args"] = append(ctr["args"].([]any), "--debug")
 
-	live[ObjectRef{APIVersion: "v1", Kind: "ConfigMap", Namespace: "kube-system", Name: "extra"}] = map[string]any{"kind": "ConfigMap"}
+	extra := ObjectRef{APIVersion: "v1", Kind: kindConfigMap, Namespace: kubeSystem, Name: "extra"}
+	live[extra] = map[string]any{"kind": kindConfigMap}
 
 	got, err := DiffLive(t.Context(), vals, live.get)
 	if err != nil {
@@ -495,7 +511,7 @@ func TestDiffLive_ChangedFieldAndMissingObject(t *testing.T) {
 	var gone ObjectRef
 
 	for ref := range live {
-		if ref.Kind == "ConfigMap" && ref.Name == "cilium-config" {
+		if ref.Kind == kindConfigMap && ref.Name == cfgMapName {
 			gone = ref
 		}
 	}
@@ -604,16 +620,16 @@ func objectsOnly(t *testing.T, kube *fake.Clientset) {
 func TestRetireForeignRecord_BacksUpThenDeletesOnlyTheRecords(t *testing.T) {
 	ctx := t.Context()
 	kube := fake.NewSimpleClientset(
-		&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "unrelated", Namespace: "kube-system"}},
+		&corev1.Secret{Name: "unrelated", Namespace: kubeSystem},
 	)
 
 	rev1 := foreignRelease(t, 1, release.StatusSuperseded, "1.17.4", nil)
 	rev2 := foreignRelease(t, 2, release.StatusDeployed, "1.17.5", nil)
-	storeRecord(t, kube, "kube-system", rev1)
-	storeRecord(t, kube, "kube-system", rev2)
+	storeRecord(t, kube, kubeSystem, rev1)
+	storeRecord(t, kube, kubeSystem, rev2)
 	storeRecord(t, kube, ichorNS, foreignRelease(t, 1, release.StatusDeployed, "1.18.0", nil))
 
-	before, _ := kube.CoreV1().Secrets("kube-system").Get(ctx, "sh.helm.release.v1.cilium.v2", metav1.GetOptions{})
+	before, _ := kube.CoreV1().Secrets(kubeSystem).Get(ctx, "sh.helm.release.v1.cilium.v2", metav1.GetOptions{})
 
 	res, err := RetireForeignRecord(ctx, kube, RetireOptions{IchorNamespace: ichorNS, RemoveForeignReleaseRecord: true})
 	if err != nil {
@@ -625,7 +641,7 @@ func TestRetireForeignRecord_BacksUpThenDeletesOnlyTheRecords(t *testing.T) {
 	}
 
 	// The foreign records are gone ...
-	list, _ := kube.CoreV1().Secrets("kube-system").List(ctx, metav1.ListOptions{})
+	list, _ := kube.CoreV1().Secrets(kubeSystem).List(ctx, metav1.ListOptions{})
 	if len(list.Items) != 1 || list.Items[0].Name != "unrelated" {
 		t.Errorf("kube-system Secrets after = %d", len(list.Items))
 	}
@@ -650,7 +666,7 @@ func TestRetireForeignRecord_BacksUpThenDeletesOnlyTheRecords(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if meta.Name != "sh.helm.release.v1.cilium.v2" || meta.Namespace != "kube-system" ||
+	if meta.Name != "sh.helm.release.v1.cilium.v2" || meta.Namespace != kubeSystem ||
 		meta.Type != "helm.sh/release.v1" || meta.Labels["status"] != "deployed" {
 		t.Errorf("backup metadata = %+v", meta)
 	}
@@ -667,7 +683,7 @@ func TestRetireForeignRecord_BacksUpThenDeletesOnlyTheRecords(t *testing.T) {
 // The option is the user's pending decision: off, nothing is written at all.
 func TestRetireForeignRecord_OptionOffChangesNothing(t *testing.T) {
 	kube := fake.NewSimpleClientset()
-	storeRecord(t, kube, "kube-system", foreignRelease(t, 1, release.StatusDeployed, "1.17.5", nil))
+	storeRecord(t, kube, kubeSystem, foreignRelease(t, 1, release.StatusDeployed, "1.17.5", nil))
 	kube.ClearActions()
 
 	res, err := RetireForeignRecord(t.Context(), kube, RetireOptions{IchorNamespace: ichorNS})
@@ -684,11 +700,13 @@ func TestRetireForeignRecord_OptionOffChangesNothing(t *testing.T) {
 func TestRetireForeignRecord_BackupFailureKeepsRecords(t *testing.T) {
 	ctx := t.Context()
 	kube := fake.NewSimpleClientset()
-	storeRecord(t, kube, "kube-system", foreignRelease(t, 1, release.StatusDeployed, "1.17.5", nil))
+	storeRecord(t, kube, kubeSystem, foreignRelease(t, 1, release.StatusDeployed, "1.17.5", nil))
 
 	kube.PrependReactor("create", "secrets", func(a clienttesting.Action) (bool, runtime.Object, error) {
 		if a.GetNamespace() == ichorNS {
-			return true, nil, apierrors.NewForbidden(schema.GroupResource{Resource: "secrets"}, PriorReleaseBackupName, errors.New("denied"))
+			gr := schema.GroupResource{Resource: "secrets"}
+
+			return true, nil, apierrors.NewForbidden(gr, PriorReleaseBackupName, errors.New("denied"))
 		}
 
 		return false, nil, nil
@@ -699,7 +717,7 @@ func TestRetireForeignRecord_BackupFailureKeepsRecords(t *testing.T) {
 		t.Fatal("want an error")
 	}
 
-	if _, err := kube.CoreV1().Secrets("kube-system").Get(ctx, "sh.helm.release.v1.cilium.v1", metav1.GetOptions{}); err != nil {
+	if _, err := kube.CoreV1().Secrets(kubeSystem).Get(ctx, recordV1, metav1.GetOptions{}); err != nil {
 		t.Errorf("the record was deleted although the backup failed: %v", err)
 	}
 }
@@ -708,21 +726,19 @@ func TestRetireForeignRecord_BackupFailureKeepsRecords(t *testing.T) {
 func TestRetireForeignRecord_OversizeBackupKeepsRecords(t *testing.T) {
 	ctx := t.Context()
 	kube := fake.NewSimpleClientset(&corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "sh.helm.release.v1.cilium.v1", Namespace: "kube-system",
-			Labels: map[string]string{"owner": "helm", "name": "cilium"},
-		},
-		Type: helmReleaseSecretType,
-		Data: map[string][]byte{"release": []byte(base64.StdEncoding.EncodeToString([]byte(`{"version":1}`)))},
+		Name: recordV1, Namespace: kubeSystem,
+		Labels: map[string]string{"owner": ownerHelm, "name": ChartName},
+		Type:   helmReleaseSecretType,
+		Data:   map[string][]byte{"release": []byte(base64.StdEncoding.EncodeToString([]byte(`{"version":1}`)))},
 	})
 
 	// Pad the record past the cap while it still decodes.
-	s, _ := kube.CoreV1().Secrets("kube-system").Get(ctx, "sh.helm.release.v1.cilium.v1", metav1.GetOptions{})
+	s, _ := kube.CoreV1().Secrets(kubeSystem).Get(ctx, "sh.helm.release.v1.cilium.v1", metav1.GetOptions{})
 	s.Data["pad"] = nil
 	s.Data["release"] = []byte(base64.StdEncoding.EncodeToString([]byte(`{"version":1,"config":{"p":"` +
 		strings.Repeat("x", maxBackupBytes) + `"}}`)))
 
-	if _, err := kube.CoreV1().Secrets("kube-system").Update(ctx, s, metav1.UpdateOptions{}); err != nil {
+	if _, err := kube.CoreV1().Secrets(kubeSystem).Update(ctx, s, metav1.UpdateOptions{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -731,7 +747,7 @@ func TestRetireForeignRecord_OversizeBackupKeepsRecords(t *testing.T) {
 		t.Fatalf("want a size refusal, got %v", err)
 	}
 
-	if _, err := kube.CoreV1().Secrets("kube-system").Get(ctx, "sh.helm.release.v1.cilium.v1", metav1.GetOptions{}); err != nil {
+	if _, err := kube.CoreV1().Secrets(kubeSystem).Get(ctx, recordV1, metav1.GetOptions{}); err != nil {
 		t.Errorf("record deleted: %v", err)
 	}
 }

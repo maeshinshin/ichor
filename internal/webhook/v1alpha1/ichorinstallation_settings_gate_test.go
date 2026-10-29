@@ -86,24 +86,8 @@ func TestSettingsGate(t *testing.T) {
 		s.Users = &ichorv1alpha1.IchorUserSettings{TokenTTL: &metav1.Duration{Duration: 10 * time.Minute}}
 	}
 	bump := func(s *ichorv1alpha1.IchorInstallationSpec) { s.Version = "v0.2.0" }
-	confirmed := func(i *ichorv1alpha1.IchorInstallation) *ichorv1alpha1.IchorInstallation {
-		i.Annotations = map[string]string{ichorv1alpha1.ConfirmReclaimAnnotation: ichorv1alpha1.ConfirmReclaimValue}
-
-		return i
-	}
-
-	confirmedWith := func(v string, i *ichorv1alpha1.IchorInstallation) *ichorv1alpha1.IchorInstallation {
-		i.Annotations = map[string]string{ichorv1alpha1.ConfirmReclaimAnnotation: v}
-
-		return i
-	}
-	disable := func(s *ichorv1alpha1.IchorInstallationSpec) {
-		f := false
-		s.Reclaim = &ichorv1alpha1.IchorReclaimSettings{Enabled: &f}
-	}
-
 	table := map[string][]string{
-		gateAdmin:     {"version", "reclaim", gateSettings},
+		gateAdmin:     {"version", gateSettings},
 		gateSettings:  {gateSettings},
 		gateVersioner: {"version"},
 		bgUnitPlain:   nil,
@@ -123,20 +107,8 @@ func TestSettingsGate(t *testing.T) {
 		{name: "version by holder", user: gateVersioner, old: inst(nil), new: inst(bump), wantEv: "spec.version: v0.1.0 -> v0.2.0"},
 		{name: "users need /settings", user: gateVersioner, old: inst(nil), new: inst(ttl), wantErr: "ichorinstallations/settings"},
 		{name: "users by holder", user: gateSettings, old: inst(nil), new: inst(ttl), wantEv: "spec.users.tokenTTL: <unset> -> 10m0s"},
-		{name: "reclaim needs /reclaim", user: gateSettings, old: inst(nil), new: confirmed(inst(enableReclaim)), wantErr: "ichorinstallations/reclaim"},
-		{name: "reclaim needs the confirm annotation", user: gateAdmin, old: inst(nil), new: inst(enableReclaim), wantErr: "confirm-reclaim"},
-		{name: "reclaim confirmed by admin", user: gateAdmin, old: inst(nil), new: confirmed(inst(enableReclaim)), wantEv: "spec.reclaim.enabled: <unset> -> true"},
-		{name: "a carried-over confirmation does not count", user: gateAdmin, old: confirmed(inst(disable)), new: confirmed(inst(enableReclaim)), wantErr: "left over"},
-		{name: "a changed confirmation counts", user: gateAdmin, old: confirmed(inst(disable)), new: confirmedWith("enable-2", inst(enableReclaim)), wantEv: "false -> true"},
-		{name: "a wrong confirmation value is refused", user: gateAdmin, old: inst(nil), new: confirmedWith("yes", inst(enableReclaim)), wantErr: "confirm-reclaim"},
-		{name: "disabling reclaim needs no annotation", user: gateAdmin, old: inst(enableReclaim),
-			new: inst(func(s *ichorv1alpha1.IchorInstallationSpec) {
-				f := false
-				s.Reclaim = &ichorv1alpha1.IchorReclaimSettings{Enabled: &f}
-			}),
-			wantEv: "true -> false"},
+		{name: "the deprecated reclaim field is ignored: no check, no Event", user: bgUnitPlain, old: inst(nil), new: inst(enableReclaim)},
 		{name: "read-only denies users", user: gateAdmin, old: inst(nil), new: inst(ttl), readOnly: true, wantErr: "managed by the deployment"},
-		{name: "read-only denies reclaim", user: gateAdmin, old: inst(nil), new: confirmed(inst(enableReclaim)), readOnly: true, wantErr: "managed by the deployment"},
 		{name: "read-only still allows a version bump", user: gateVersioner, old: inst(nil), new: inst(bump), readOnly: true, wantEv: "spec.version"},
 		{name: "the controller is exempt", user: testControllerUser, old: nil, new: inst(bump)},
 		{name: "dry run emits no Event", user: gateVersioner, old: inst(nil), new: inst(bump), dryRun: true},
@@ -180,5 +152,22 @@ func TestSettingsGate(t *testing.T) {
 				t.Fatalf("unexpected Event %q", ev)
 			}
 		})
+	}
+}
+
+func TestDeprecatedReclaimWarns(t *testing.T) {
+	t.Parallel()
+
+	if w := deprecatedReclaim(inst(nil)); len(w) != 0 {
+		t.Fatalf("no warning expected without the field: %v", w)
+	}
+
+	on := true
+	w := deprecatedReclaim(inst(func(s *ichorv1alpha1.IchorInstallationSpec) {
+		s.Reclaim = &ichorv1alpha1.IchorReclaimSettings{Enabled: &on}
+	}))
+
+	if len(w) != 1 || !strings.Contains(w[0], "RBAC") {
+		t.Fatalf("want one warning pointing: %v", w)
 	}
 }

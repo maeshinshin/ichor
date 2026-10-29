@@ -83,7 +83,7 @@ func (v *IchorInstallationCustomValidator) ValidateCreate(ctx context.Context, o
 		return nil, err
 	}
 
-	return nil, version.CheckSemver(obj.Spec.Version)
+	return deprecatedReclaim(obj), version.CheckSemver(obj.Spec.Version)
 }
 
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type IchorInstallation.
@@ -96,10 +96,10 @@ func (v *IchorInstallationCustomValidator) ValidateUpdate(ctx context.Context, o
 	}
 
 	if oldObj.Spec.Version == newObj.Spec.Version {
-		return nil, nil
+		return deprecatedReclaim(newObj), nil
 	}
 
-	return nil, version.CheckSemver(newObj.Spec.Version)
+	return deprecatedReclaim(newObj), version.CheckSemver(newObj.Spec.Version)
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type IchorInstallation.
@@ -114,4 +114,14 @@ func (v *IchorInstallationCustomValidator) checkSettings(ctx context.Context, ol
 	}
 
 	return v.Settings.check(ctx, oldObj, newObj)
+}
+
+// deprecatedReclaim warns about the removed installation switch: it is kept in the
+// schema, ignored, and RBAC alone decides who may reset and add a machine.
+func deprecatedReclaim(obj *ichorv1alpha1.IchorInstallation) admission.Warnings {
+	if obj.Spec.Reclaim == nil {
+		return nil
+	}
+
+	return admission.Warnings{"spec.reclaim.enabled is deprecated and ignored: who may reset and add a machine is decided by RBAC alone (the reclaim verb on machinereclaims)"}
 }

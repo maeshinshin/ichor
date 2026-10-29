@@ -104,11 +104,6 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
-        {{- if .Values.reclaim.enabled }}
-        # Break-glass machine reclaim; the same switch as the controller's --reclaim.
-        - name: ICHOR_RECLAIM_ENABLED
-          value: "true"
-        {{- end }}
         {{- if .Values.settings.readOnly }}
         # The same switch as the controller's --settings-read-only.
         - name: ICHOR_SETTINGS_READ_ONLY

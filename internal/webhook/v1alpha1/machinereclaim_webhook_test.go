@@ -56,7 +56,7 @@ func TestMachineReclaimWebhook(t *testing.T) {
 	t.Parallel()
 
 	// bgUnitHandler answers SubjectAccessReviews: only bgUnitHolder holds the verb.
-	h := &MachineReclaimHandler{Client: bgUnitHandler(t).Client, Enabled: true}
+	h := &MachineReclaimHandler{Client: bgUnitHandler(t).Client}
 	ctx := context.Background()
 	awaiting := ichorv1alpha1.MachineReclaimAwaitingConfirmation
 	stored := reclaimObject(t, "", bgUnitHolder, "", awaiting, "uuid-1")
@@ -75,8 +75,6 @@ func TestMachineReclaimWebhook(t *testing.T) {
 			reclaimObject(t, "", "someone-else", "", "", ""), runtime.RawExtension{}), false},
 		{"create with confirmUUID", h, reclaimReq(admissionv1.Create, bgUnitHolder,
 			reclaimObject(t, "uuid-1", bgUnitHolder, "", "", ""), runtime.RawExtension{}), false},
-		{"switched off", &MachineReclaimHandler{Client: h.Client}, reclaimReq(admissionv1.Create, bgUnitHolder,
-			reclaimObject(t, "", bgUnitHolder, "", "", ""), runtime.RawExtension{}), false},
 		{"confirm with the right UUID", h, reclaimReq(admissionv1.Update, bgUnitHolder,
 			reclaimObject(t, "uuid-1", bgUnitHolder, bgUnitHolder, awaiting, "uuid-1"), stored), true},
 		{"confirm with a different UUID", h, reclaimReq(admissionv1.Update, bgUnitHolder,

@@ -114,7 +114,7 @@ var _ = Describe("ReclaimService with the MachineReclaim webhook", Ordered, func
 		// ichor-ui's own identity, as the policy names it. system:masters stands in for the RBAC the chart grants it.
 		ui := impersonating("system:serviceaccount:ichor-system:ichor-ui", "system:masters")
 		s = &uiapi.Server{
-			Client: ui, ControllerNamespace: ns, ReclaimEnabled: true,
+			Client: ui, ControllerNamespace: ns,
 			Impersonate: uiapi.NewImpersonator(cfg, client.Options{Scheme: scheme.Scheme}),
 		}
 

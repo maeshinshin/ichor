@@ -230,6 +230,22 @@ func ichorCiliumReadBack(ctx context.Context, r client.Reader) (*cilium.ReadBack
 	return &rb, nil
 }
 
+// liveTunnel is the tunnel protocol a running Cilium's cilium-config says it uses, for the
+// spec.cni.tunnel that reproduces it. "" when Cilium does not run a tunnel (native routing) or says
+// nothing.
+func liveTunnel(cm map[string]string) string {
+	if r := cm["routing-mode"]; r != "" && r != "tunnel" {
+		return ""
+	}
+
+	switch t := cm["tunnel-protocol"]; t {
+	case "vxlan", "geneve":
+		return t
+	}
+
+	return ""
+}
+
 // detectKubeProxy maps the Talos and Cilium sides to spec.cni.kubeProxy. talosEnabled is whether
 // Talos runs kube-proxy (KubeProxyConfig.enabled or the inverse of cluster.proxy.disabled; the
 // Talos-side read is unit 1). In unmanaged mode only the Talos side counts and the result is the

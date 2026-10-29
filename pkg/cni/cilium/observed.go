@@ -36,6 +36,14 @@ const (
 	cleanStateContainer  = "clean-cilium-state"
 	envKubernetesHost    = "KUBERNETES_SERVICE_HOST"
 	envKubernetesPort    = "KUBERNETES_SERVICE_PORT"
+
+	keyIPAMMode       = "ipam.mode"
+	keyHostRoot       = "cgroup.hostRoot"
+	keyAutoMount      = "cgroup.autoMount.enabled"
+	keyServiceHost    = "k8sServiceHost"
+	keyServicePort    = "k8sServicePort"
+	keyCapsAgent      = "securityContext.capabilities.ciliumAgent"
+	keyCapsCleanState = "securityContext.capabilities.cleanCiliumState"
 )
 
 // ConfigMapValues maps the keys of the cilium-config ConfigMap to the Helm value they render
@@ -44,11 +52,11 @@ const (
 // Ichor-owned keys are read back from what runs instead of assumed from the chart defaults.
 // routing-mode is not owned but is read so a native-routing cluster is refused.
 var ConfigMapValues = map[string]string{
-	"ipam":                   "ipam.mode",
+	"ipam":                   keyIPAMMode,
 	"tunnel-protocol":        keyTunnelProtocol,
 	"routing-mode":           "routingMode",
 	"kube-proxy-replacement": keyKubeProxyReplacement,
-	"cgroup-root":            "cgroup.hostRoot",
+	"cgroup-root":            keyHostRoot,
 }
 
 // LiveValuesFromCluster is LiveValuesFromUser with the Ichor-owned keys replaced by what the
@@ -56,7 +64,9 @@ var ConfigMapValues = map[string]string{
 // host and port from the agent's environment, the capability lists, and whether the
 // mount-cgroup init container exists, which is cgroup.autoMount.enabled). A missing ConfigMap or
 // DaemonSet leaves the chart defaults for its keys; the diff gate then shows the object missing.
-func LiveValuesFromCluster(ctx context.Context, kube kubernetes.Interface, user map[string]any) (map[string]any, error) {
+func LiveValuesFromCluster(
+	ctx context.Context, kube kubernetes.Interface, user map[string]any,
+) (map[string]any, error) {
 	vals, err := LiveValuesFromUser(user)
 	if err != nil {
 		return nil, err
@@ -109,7 +119,7 @@ func overlayObserved(vals map[string]any, cm *corev1.ConfigMap, ds *appsv1.Daemo
 			}
 		}
 
-		values.Set(vals, "securityContext.capabilities.ciliumAgent", capabilityList(c))
+		values.Set(vals, keyCapsAgent, capabilityList(c))
 	}
 
 	for _, c := range spec.InitContainers {
@@ -117,13 +127,13 @@ func overlayObserved(vals map[string]any, cm *corev1.ConfigMap, ds *appsv1.Daemo
 		case mountCgroupContainer:
 			autoMount = true
 		case cleanStateContainer:
-			values.Set(vals, "securityContext.capabilities.cleanCiliumState", capabilityList(c))
+			values.Set(vals, keyCapsCleanState, capabilityList(c))
 		}
 	}
 
-	values.Set(vals, "k8sServiceHost", host)
-	values.Set(vals, "k8sServicePort", port)
-	values.Set(vals, "cgroup.autoMount.enabled", autoMount)
+	values.Set(vals, keyServiceHost, host)
+	values.Set(vals, keyServicePort, port)
+	values.Set(vals, keyAutoMount, autoMount)
 }
 
 func capabilityList(c corev1.Container) []any {

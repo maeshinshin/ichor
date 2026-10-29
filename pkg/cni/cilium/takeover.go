@@ -426,7 +426,7 @@ func OwnedKeyConflicts(live map[string]any, kubeProxy cni.KubeProxyMode, tunnel 
 
 func ownedLevel(path string) Level {
 	switch path {
-	case "ipam.mode", keyTunnelProtocol:
+	case keyIPAMMode, keyTunnelProtocol:
 		return Blocking
 	case keyKubeProxyReplacement, "k8sServiceHost", "k8sServicePort":
 		return NeedsAccept
@@ -727,6 +727,28 @@ var serverDefaulted = map[string]bool{
 	"suspend": true, "imagePullPolicy": true, "strategy": true, "updateStrategy": true,
 }
 
+const kindDaemonSet = "DaemonSet"
+
+// serverDefaultValue reports a live-only path whose value is exactly the default the API server
+// fills in when the manifest omits it: the rolling-update surge and unavailable limits the chart
+// leaves half unset, and a Service's type. Matching the value keeps a real change visible.
+func serverDefaultValue(ref ObjectRef, path string, live any) bool {
+	got := fmt.Sprint(live)
+
+	switch ref.Kind {
+	case kindDaemonSet:
+		return (path == "spec.updateStrategy.rollingUpdate.maxSurge" && got == "0") ||
+			(path == "spec.updateStrategy.rollingUpdate.maxUnavailable" && got == "1")
+	case "Deployment":
+		return (path == "spec.strategy.rollingUpdate.maxSurge" || path == "spec.strategy.rollingUpdate.maxUnavailable") &&
+			got == "25%"
+	case "Service":
+		return path == "spec.type" && got == "ClusterIP"
+	}
+
+	return false
+}
+
 func diffMaps(ref ObjectRef, path string, want, have map[string]any) []Difference {
 	keys := make([]string, 0, len(want)+len(have))
 	for k := range want {
@@ -756,7 +778,7 @@ func diffMaps(ref ObjectRef, path string, want, have map[string]any) []Differenc
 			if hm, isMap := h.(map[string]any); isMap {
 				// Name the live-only leaves, not the map that holds them.
 				out = append(out, diffMaps(ref, p, nil, hm)...)
-			} else if !serverDefaulted[k] {
+			} else if !serverDefaulted[k] && !serverDefaultValue(ref, p, h) {
 				out = append(out, Difference{Object: ref, Path: p, Kind: DiffLiveOnly, Live: h})
 			}
 		default:

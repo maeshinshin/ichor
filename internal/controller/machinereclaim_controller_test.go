@@ -116,7 +116,7 @@ var _ = Describe("MachineReclaim Controller", func() {
 		now = time.Now()
 
 		r = &MachineReclaimReconciler{
-			Client: k8sClient, Enabled: true, ControllerNamespace: ns, Recorder: rec,
+			Client: inNamespace{k8sClient, ns}, Enabled: true, ControllerNamespace: ns, Recorder: rec,
 			Dial: func(_ context.Context, cred reclaim.Credential, address, _ string) (reclaim.Node, error) {
 				sawCred = strings.Contains(string(cred.Bytes()), reclaimMarker)
 				if address != testNodeAddr {
@@ -527,6 +527,18 @@ var _ = Describe("MachineReclaim Controller", func() {
 		Expect(exists(old + "-nolabel")).To(BeTrue())
 	})
 })
+
+// inNamespace confines List to one namespace. The suite shares one API server, and other specs
+// leave TalosClusters in "default" whose bundle Secrets are not in ns; reclaim's fail-closed
+// LoadKnown would otherwise refuse because of them.
+type inNamespace struct {
+	client.Client
+	ns string
+}
+
+func (c inNamespace) List(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
+	return c.Client.List(ctx, list, append(opts, client.InNamespace(c.ns))...)
+}
 
 // ctrlLogInto returns ctx carrying a logger that writes to w.
 func ctrlLogInto(ctx context.Context, w *bytes.Buffer) context.Context {

@@ -23,9 +23,11 @@ import (
 	"fmt"
 	"net/netip"
 	"slices"
+	"strings"
 
 	"github.com/siderolabs/talos/pkg/machinery/constants"
 	corev1 "k8s.io/api/core/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -50,24 +52,24 @@ func (n *adoptNode) controlPlane() bool { return n.M.Spec.Role == roleControlPla
 // the discovery membership of the seed node (ADR 0103, 1.4: the node list comes from membership,
 // not from typing every address). Names are the hardware UUID, as the write phase will create
 // them. Nothing is written.
-func discoverMachines(ctx context.Context, deps adoptDeps, clusterName, namespace string) ([]*ichorv1alpha1.TalosMachine, error) {
+func discoverMachines(ctx context.Context, deps adoptDeps, clusterName, namespace string) ([]*ichorv1alpha1.TalosMachine, []ClusterMember, error) {
 	if deps.Seed == "" {
-		return nil, fmt.Errorf("adopt: TalosCluster %q does not exist yet; give --node, the address of one control plane, "+
+		return nil, nil, fmt.Errorf("adopt: TalosCluster %q does not exist yet; give --node, the address of one control plane, "+
 			"so adopt can discover the cluster's machines", clusterName)
 	}
 
 	if deps.ReadIdentity == nil {
-		return nil, errors.New("adopt: no way to read the nodes' hardware identity was given")
+		return nil, nil, errors.New("adopt: no way to read the nodes' hardware identity was given")
 	}
 
 	seed, err := deps.DialTalos(ctx, deps.Seed)
 	if err != nil {
-		return nil, fmt.Errorf("adopt: dialing %q: %w", deps.Seed, err)
+		return nil, nil, fmt.Errorf("adopt: dialing %q: %w", deps.Seed, err)
 	}
 
 	members, ok, err := ReadClusterMembers(ctx, seed)
 	if err != nil {
-		return nil, fmt.Errorf("adopt: listing the cluster members: %w", err)
+		return nil, nil, fmt.Errorf("adopt: listing the cluster members: %w", err)
 	}
 
 	if !ok || len(members) == 0 {
@@ -78,18 +80,18 @@ func discoverMachines(ctx context.Context, deps adoptDeps, clusterName, namespac
 
 	for _, mem := range members {
 		if len(mem.Addresses) == 0 {
-			return nil, fmt.Errorf("adopt: cluster member %q reports no address", mem.Hostname)
+			return nil, nil, fmt.Errorf("adopt: cluster member %q reports no address", mem.Hostname)
 		}
 
 		addr := mem.Addresses[0]
 
 		id, err := deps.ReadIdentity(ctx, addr)
 		if err != nil {
-			return nil, fmt.Errorf("adopt: reading the hardware identity of %q: %w", addr, err)
+			return nil, nil, fmt.Errorf("adopt: reading the hardware identity of %q: %w", addr, err)
 		}
 
 		if id.UUID == "" {
-			return nil, fmt.Errorf("adopt: the node at %q reported no SMBIOS UUID; adopt needs a strong hardware identity", addr)
+			return nil, nil, fmt.Errorf("adopt: the node at %q reported no SMBIOS UUID; adopt needs a strong hardware identity", addr)
 		}
 
 		machines = append(machines, &ichorv1alpha1.TalosMachine{
@@ -104,7 +106,64 @@ func discoverMachines(ctx context.Context, deps adoptDeps, clusterName, namespac
 		})
 	}
 
-	return machines, nil
+	return machines, members, nil
+}
+
+// checkMembership refuses an adoption whose discovered membership and the workload cluster's
+// Nodes disagree: a node that registered but is not yet in Talos discovery would otherwise be
+// silently left out. It runs before anything is written. A nil target skips the check.
+// ponytail: an existing TalosCluster's machines are not cross-checked; their endpoints need not
+// be Node addresses and unapproved machines are legitimate.
+func checkMembership(ctx context.Context, target client.Reader, machines []*ichorv1alpha1.TalosMachine, members []ClusterMember) error {
+	if target == nil {
+		return nil
+	}
+
+	var nodes corev1.NodeList
+	if err := target.List(ctx, &nodes); err != nil {
+		return fmt.Errorf("adopt: listing the cluster's Nodes: %w", err)
+	}
+
+	// The seed-only fallback has no hostname; the machines carry the address it was found at.
+	if len(members) == 0 {
+		for _, m := range machines {
+			members = append(members, ClusterMember{Addresses: []string{m.Spec.Endpoint}})
+		}
+	}
+
+	var noMember, noNode []string
+
+	for i := range nodes.Items {
+		if !slices.ContainsFunc(members, func(m ClusterMember) bool { return memberIsNode(m, &nodes.Items[i]) }) {
+			noMember = append(noMember, nodes.Items[i].Name)
+		}
+	}
+
+	for _, m := range members {
+		if !slices.ContainsFunc(nodes.Items, func(n corev1.Node) bool { return memberIsNode(m, &n) }) {
+			noNode = append(noNode, cmp.Or(m.Hostname, strings.Join(m.Addresses, ",")))
+		}
+	}
+
+	if len(noMember) == 0 && len(noNode) == 0 {
+		return nil
+	}
+
+	return fmt.Errorf("adopt: Nodes without a discovery member: [%s]; discovery members without a Node: [%s]; "+
+		"discovery membership is incomplete; wait until every node is listed (talosctl get members) and run adopt again; nothing was written",
+		strings.Join(noMember, ", "), strings.Join(noNode, ", "))
+}
+
+// memberIsNode matches by hostname (the Node name, or its short form) or by any shared address.
+func memberIsNode(m ClusterMember, n *corev1.Node) bool {
+	if m.Hostname != "" {
+		short, _, _ := strings.Cut(m.Hostname, ".")
+		if strings.EqualFold(m.Hostname, n.Name) || strings.EqualFold(short, n.Name) {
+			return true
+		}
+	}
+
+	return slices.ContainsFunc(n.Status.Addresses, func(a corev1.NodeAddress) bool { return slices.Contains(m.Addresses, a.Address) })
 }
 
 // completeNode fills what only the node's configuration says: the role when membership gave none,

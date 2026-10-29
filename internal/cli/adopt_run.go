@@ -256,7 +256,13 @@ func loadAdoption(ctx context.Context, clusterName, namespace string, deps adopt
 		// Ichor is not installed yet: its kinds are not served, which is as fresh as not found.
 		st.fresh = true
 
-		if machines, err = discoverMachines(ctx, deps, clusterName, namespace); err != nil {
+		var members []ClusterMember
+
+		if machines, members, err = discoverMachines(ctx, deps, clusterName, namespace); err != nil {
+			return nil, err
+		}
+
+		if err = checkMembership(ctx, deps.Target, machines, members); err != nil {
 			return nil, err
 		}
 	default:

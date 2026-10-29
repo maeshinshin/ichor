@@ -12,7 +12,7 @@ import { ErrorAlert } from '@/components/ErrorAlert'
 import { Field, Fields } from '@/components/PageHeader'
 import { PageTitle } from '@/components/PageTitle'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
-import { StateBadge } from '@/components/StateBadge'
+import { ToneBadge } from '@/components/ToneBadge'
 import { OperationControls } from '@/components/OperationControls'
 import { CARotationCredentials } from '@/components/CARotationCredentials'
 import { timestampDate, type Timestamp } from '@bufbuild/protobuf/wkt'
@@ -136,7 +136,7 @@ export function OperationDetail({ name }: { name: string }) {
         description={`${t('kind.operation')} ${op.ref?.name ?? name}`}
         badges={
           <>
-            <StateBadge tone={opStateTone(state)}>{t(`ops.state.${state}`)}</StateBadge>
+            <ToneBadge tone={opStateTone(state)}>{t(`ops.state.${state}`)}</ToneBadge>
             {op.machines.length > 0 && <Badge variant="outline">{t('ops.progress', { done, running })}</Badge>}
             {stage && <Badge variant="outline">{t('ops.caStage', { stage: stage.name, n: stage.index, total: stage.total })}</Badge>}
             {restoreStep && (
@@ -266,7 +266,7 @@ export function OperationDetail({ name }: { name: string }) {
                       </TableCell>
                       <TableCell>
                         {/* The controller's own word (InProgress, Completed), as received. */}
-                        <StateBadge tone={m.phase === 'Completed' ? 'good' : m.phase === 'InProgress' ? 'progress' : 'neutral'}>{m.phase}</StateBadge>
+                        <ToneBadge tone={m.phase === 'Completed' ? 'good' : m.phase === 'InProgress' ? 'progress' : 'neutral'}>{m.phase}</ToneBadge>
                       </TableCell>
                       <TableCell className="whitespace-normal break-words">{[m.step, m.message].filter(Boolean).join(': ') || '-'}</TableCell>
                       <TableCell>{formatTimestamp(m.startedAt)}</TableCell>

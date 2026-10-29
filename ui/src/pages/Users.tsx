@@ -4,9 +4,9 @@ import { Badge } from '@/components/ui/badge'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { ListToolbar } from '@/components/ListToolbar'
 import { PageTitle } from '@/components/PageTitle'
+import { SectionCard } from '@/components/SectionCard'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
-import { StateBadge } from '@/components/StateBadge'
-import { TableCard } from '@/components/TableCard'
+import { ToneBadge } from '@/components/ToneBadge'
 import { CreateUserDialog, DeleteUserDialog, EditUserDialog, RevokeUserDialog, SetPasswordDialog } from '@/components/UserDialogs'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -55,7 +55,7 @@ export function Users() {
       {shown.length === 0 ? (
         <EmptyNote icon={UsersIcon}>{t('users.empty')}</EmptyNote>
       ) : (
-        <TableCard>
+        <SectionCard>
           <Table>
             <TableHeader>
               <TableRow>
@@ -75,7 +75,7 @@ export function Users() {
               ))}
             </TableBody>
           </Table>
-        </TableCard>
+        </SectionCard>
       )}
     </div>
   )
@@ -107,7 +107,7 @@ function UserRow({ user, onChanged }: { user: User; onChanged: () => void }) {
       <TableCell>
         <Badge variant={user.disabled ? 'destructive' : 'outline'}>{user.disabled ? t('common.yes') : t('common.no')}</Badge>
       </TableCell>
-      <TableCell>{ready ? <StateBadge tone={conditionStatusTone(ready.type, ready.status)}>{ready.reason || ready.status}</StateBadge> : '-'}</TableCell>
+      <TableCell>{ready ? <ToneBadge tone={conditionStatusTone(ready.type, ready.status)}>{ready.reason || ready.status}</ToneBadge> : '-'}</TableCell>
       <TableCell>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

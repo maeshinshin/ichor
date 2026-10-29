@@ -17,10 +17,15 @@ limitations under the License.
 package cli
 
 import (
+	"cmp"
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
+
+	"github.com/maeshinshin/ichor/internal/controller"
+	"github.com/maeshinshin/ichor/internal/installmanifest"
 )
 
 var (
@@ -31,6 +36,9 @@ var (
 	adoptRecoverFrom   string
 	adoptContext       string
 	adoptCNIUnmanaged  bool
+	adoptPlanOnly      bool
+	adoptSeed          string
+	adoptContract      string
 )
 
 // adoptCmd implements `ichor adopt` (docs/design/architecture.md,
@@ -96,6 +104,26 @@ only ever writes TalosConfigPatch objects to the Kubernetes API.`,
 
 			Target:       k8sClient,
 			CNIUnmanaged: adoptCNIUnmanaged,
+
+			PlanOnly:         adoptPlanOnly,
+			Seed:             cmp.Or(adoptSeed, adoptRecoverFrom),
+			ContractOverride: adoptContract,
+			ReadIdentity: func(ctx context.Context, address string) (controller.HardwareIdentity, error) {
+				t, err := dialTalos(ctx, talosconfigPath, adoptContext, address)
+				if err != nil {
+					return controller.HardwareIdentity{}, err
+				}
+
+				tc, ok := t.(*talosClient)
+				if !ok {
+					return controller.HardwareIdentity{}, errors.New("the Talos client cannot read a hardware identity")
+				}
+
+				defer tc.Close() //nolint:errcheck // read-only connection
+
+				return tc.Identity(ctx)
+			},
+			Ichor: &adoptWriteIchor{Manifest: installmanifest.Manifest, NetworkPolicies: installmanifest.NetworkPolicies},
 		}
 
 		return runAdopt(cmd.Context(), adoptCluster, adoptNamespace, deps)
@@ -117,6 +145,12 @@ func init() {
 		"context of the talosconfig to use (default: the file's selected context)")
 	adoptCmd.Flags().BoolVar(&adoptCNIUnmanaged, "cni-unmanaged", false,
 		"adopt the cluster with its CNI left exactly as it is: Ichor will not install, upgrade or configure it")
+
+	adoptCmd.Flags().BoolVar(&adoptPlanOnly, "plan", false, "print the plan and write nothing")
+	adoptCmd.Flags().StringVar(&adoptSeed, "node", "",
+		"address of one control plane; adopt discovers the cluster's machines from its membership when the TalosCluster does not exist yet")
+	adoptCmd.Flags().StringVar(&adoptContract, "version-contract", "",
+		"use this Talos version contract (v1.12 to the running minor) instead of the probed one")
 
 	_ = adoptCmd.MarkFlagRequired(flagCluster)
 	adoptCmd.MarkFlagsMutuallyExclusive("secrets-bundle", "recover-secrets")

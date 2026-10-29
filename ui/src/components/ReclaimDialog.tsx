@@ -17,7 +17,7 @@ import { useT } from '@/lib/useT'
 
 const POLL_MS = 2000
 
-// Break-glass reclaim of a machine that runs another cluster's Talos configuration. The
+// "Reset and add": reset a machine that runs another cluster's Talos configuration, then add it here. The
 // caller only renders it when useCanReclaim is true. The typed UUID box starts empty and is never filled
 // in for the person.
 export function ReclaimDialog({

@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 
+	"golang.org/x/mod/semver"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -43,9 +44,40 @@ const (
 // controller never upgrades itself.
 type IchorInstallationReconciler struct {
 	client.Client
+
+	// DeployedBy is the controller's --deployed-by: the spec.deployment.manager a seeded
+	// singleton gets ("installer" when empty).
+	DeployedBy string
 }
 
-// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=ichorinstallations,verbs=get;list;watch
+// Seed creates the singleton once when it does not exist: spec.version is
+// this controller's version and spec.deployment.manager is --deployed-by. It is the one place
+// the controller writes a spec, a narrow exception to "the controller never mutates spec": a
+// missing object is made with computed defaults, no user intent changes, and an object that
+// exists is never read for update or touched. A failure loses nothing (every consumer tolerates
+// an absent object), so the caller only logs it.
+func (r *IchorInstallationReconciler) Seed(ctx context.Context) error {
+	if !semver.IsValid(version.Version) {
+		return nil // a dev build has no version the CRD would accept
+	}
+
+	manager := ichorv1alpha1.IchorManagerInstaller
+	if r.DeployedBy == ichorv1alpha1.IchorManagerHelm {
+		manager = ichorv1alpha1.IchorManagerHelm
+	}
+
+	inst := &ichorv1alpha1.IchorInstallation{
+		ObjectMeta: metav1.ObjectMeta{Name: ichorv1alpha1.IchorInstallationName},
+		Spec: ichorv1alpha1.IchorInstallationSpec{
+			Version:    version.Version,
+			Deployment: &ichorv1alpha1.IchorDeploymentSpec{Manager: manager},
+		},
+	}
+
+	return client.IgnoreAlreadyExists(r.Create(ctx, inst))
+}
+
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=ichorinstallations,verbs=get;list;watch;create
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=ichorinstallations/status,verbs=get;update;patch
 
 // Reconcile writes status.installedVersion and the two conditions.
@@ -58,16 +90,22 @@ func (r *IchorInstallationReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	orig := inst.DeepCopy()
 	inst.Status.InstalledVersion = version.Version
 
-	upToDate := metav1.ConditionFalse
-	if inst.Spec.Version == version.Version {
-		upToDate = metav1.ConditionTrue
-	}
-
-	meta.SetStatusCondition(&inst.Status.Conditions, metav1.Condition{
-		Type: conditionUpToDate, Status: upToDate, Reason: "VersionCompared",
+	cond := metav1.Condition{
+		Type: conditionUpToDate, Status: metav1.ConditionFalse, Reason: "VersionCompared",
 		Message:            fmt.Sprintf("running %s, spec.version %s", version.Version, inst.Spec.Version),
 		ObservedGeneration: inst.Generation,
-	})
+	}
+
+	switch {
+	case inst.HelmManaged():
+		// spec.version only records the version at creation; Helm moves the controller.
+		cond.Status, cond.Reason = metav1.ConditionTrue, ichorv1alpha1.ReasonManagedByHelm
+		cond.Message = fmt.Sprintf("installed by Helm, running %s", version.Version)
+	case inst.Spec.Version == version.Version:
+		cond.Status = metav1.ConditionTrue
+	}
+
+	meta.SetStatusCondition(&inst.Status.Conditions, cond)
 
 	meta.RemoveStatusCondition(&inst.Status.Conditions, conditionExternalSuggested)
 

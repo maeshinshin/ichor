@@ -124,7 +124,7 @@ func TestRunAppliesNetworkPoliciesOnlyWhenCiliumsCRDExists(t *testing.T) {
 
 	err = Run(context.Background(), k8sClient, Options{
 		Namespace: f2.ns, RunID: f2.run, Manifest: f2.manifest("ctrl:v2", ""), Ready: noWait(&order),
-		NetworkPolicies: policyManifest(f2.ns), CNIDetected: "cilium",
+		NetworkPolicies: policyManifest(f2.ns), CNIDetected: detectedCilium,
 	})
 	if err != nil {
 		t.Fatalf("Run with Cilium: %v", err)
@@ -156,12 +156,14 @@ func TestRunAppliesNetworkPoliciesOnlyWhenCiliumsCRDExists(t *testing.T) {
 	}
 }
 
+const detectedCilium = "cilium"
+
 func TestIncludeCiliumPolicies(t *testing.T) {
 	for _, tc := range []struct {
 		detected  string
 		crd, want bool
 	}{
-		{"cilium", true, true}, {"cilium", false, false}, {"flannel", true, false},
+		{detectedCilium, true, true}, {detectedCilium, false, false}, {"flannel", true, false},
 		{"calico", true, false}, {"other", true, false}, {"none", true, false}, {"", true, false},
 	} {
 		if got := IncludeCiliumPolicies(tc.detected, tc.crd); got != tc.want {

@@ -27,7 +27,7 @@ import { clusterClient, machineClient, nodeClient } from '@/lib/connect'
 import { machineDisplayName } from '@/lib/machineName'
 import { needsInstallDisk } from '@/lib/installDisk'
 import { enumLabel } from '@/lib/enum'
-import { formatBytes, formatCores, formatUsage } from '@/lib/format'
+import { clipValue, formatBytes, formatCores, formatUsage } from '@/lib/format'
 import { nodeTabs, nodeTabSearch, parseNodeTab, type NodeTab } from '@/lib/nodeTabs'
 import { setPageTitle, titleKey } from '@/lib/pageTitle'
 import { useCluster } from '@/lib/useCluster'
@@ -291,8 +291,8 @@ function EffectiveConfigSection({ namespace, name }: { namespace: string; name: 
               {group.map((v) => (
                 <TableRow key={v.path}>
                   <TableCell className="font-mono">{v.path}</TableCell>
-                  <TableCell className="font-mono">
-                    {v.value}
+                  <TableCell className="font-mono" title={v.value.length > 200 ? v.value : undefined}>
+                    {clipValue(v.value)}
                     {/* The server masks any secret value before it reaches the browser
                         (ADR 0018, EffectiveConfigValue.secret) - there is nothing here
                         that can or should reveal it. */}

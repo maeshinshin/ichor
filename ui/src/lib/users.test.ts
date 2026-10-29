@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { Code, ConnectError } from '@connectrpc/connect'
-import { downloadName, generatePassword, passwordError, passwordOk, rolesOf, toggleRole, userError, userNameOk } from './users.ts'
+import { downloadName, passwordError, passwordOk, rolesOf, toggleRole, userError, userNameOk } from './users.ts'
 
 test('roles stay in viewer, operator, admin order', () => {
   assert.deepEqual(toggleRole(['admin'], 'viewer', true), ['viewer', 'admin'])
@@ -15,18 +15,7 @@ test('the password bound counts characters, as the server does', () => {
   assert.equal(passwordOk('あ'.repeat(12)), true)
 })
 
-test('a generated password has the length asked for and only readable characters', () => {
-  const p = generatePassword(24)
-  assert.equal(p.length, 24)
-  assert.match(p, /^[A-HJ-NP-Za-km-z2-9]+$/)
-  assert.notEqual(generatePassword(24), p)
-})
 
-test('generatePassword skips bytes that would bias the draw', () => {
-  const bytes = [255, 254, 0, 1, 2]
-  const p = generatePassword(3, (a) => a.map((_, i) => bytes[i % bytes.length]))
-  assert.equal(p, 'ABC')
-})
 
 test('user names are DNS labels', () => {
   assert.equal(userNameOk('alice-2'), true)

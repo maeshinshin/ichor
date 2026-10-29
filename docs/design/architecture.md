@@ -36,7 +36,6 @@ inventing a new control plane.
   secrets bundle and a snapshot.
 - Bootstrap of Cilium for a brand-new cluster, with no Git repository needed.
 - CLI and UI parity: anything you can do in one, you can do in the other.
-- Ichor's CRs can live in the user's own Git (tracking is detected).
 
 ### Non-goals
 
@@ -76,7 +75,7 @@ Three deliverables come out of one repository:
 
 - `ichor`, the CLI. Bootstraps the first node, adopts existing clusters, and
   offers every operation the UI has. It is also the recovery path that does not
-  depend on Argo CD or on a running controller.
+  depend on a running controller.
 - `ichor-controller` (plus `ichor-installer`, a Job image). The controller is
   the only component that writes to Talos nodes. Two replicas, leader election.
 - `ichor-ui`, a Go backend that embeds the Preact SPA. It reads and writes CRs,
@@ -227,7 +226,7 @@ Group `ichor.maesh.dev`, version `v1alpha1`.
 | Kind | Scope | Purpose | In Git |
 |---|---|---|---|
 | `TalosCluster` | namespaced | Cluster-wide settings: endpoint, versions, topology, Cilium, monitoring, integrations | yes |
-| `TalosMachine` | namespaced | One node: identity, role, labels, disk roles, per-node values | yes, once approved (always, in strict mode) |
+| `TalosMachine` | namespaced | One node: identity, role, labels, disk roles, per-node values | yes, once approved |
 | `TalosConfigPatch` | namespaced | A typed config patch with a layer, priority and target | yes |
 | `TalosStorage` | namespaced | Thin integration with a storage system: node selector, disk preset, evacuation settings | yes |
 | `TalosEtcdBackup` | namespaced | Backup schedule, destination, retention, encryption | yes |
@@ -381,7 +380,6 @@ removes the inline entry (`CNIHandover`). Removing it matters: Talos only
 server-side applies bootstrap manifests and re-applies them on a Kubernetes
 upgrade, so a stale entry would roll Cilium back. The Job needs
 cluster-admin-equivalent rights, so the controller does not run Helm itself.
-Argo CD and Kokumi are not part of Ichor.
 
 Values. Cilium's live values are Ichor defaults, then the user's layer in
 `spec.cni.cilium.values`, then Ichor-owned keys (the Talos-required ones, the
@@ -394,13 +392,10 @@ Upgrades. A new Ichor release carries new pinned charts. Cilium is upgraded
 only when the user starts a `cni` operation (`ichor cni upgrade`, or the UI),
 at most one minor at a time, rolled back by Helm on failure.
 
-### GitOps
+### Git, break-glass and recovery
 
-Ichor has no GitOps behaviour. A user may keep Ichor's CRs in their
-own Git and apply them with any tool. Ichor does not detect that, does not
-refuse UI or CLI writes to such CRs and does not open pull requests; a write
-from the UI or CLI lands in the cluster and the user's tool decides what to do
-with the drift. Putting runtime-written state in Git (`TalosOperation`s,
+A user may keep Ichor's CRs in their own Git and apply them with any tool. A write from the UI or CLI lands in the cluster and the user's tool
+decides what to do with the drift. Putting runtime-written state in Git (`TalosOperation`s,
 unapproved machines, the labels and annotations Ichor writes on Nodes and on
 the storage system's node objects) makes that tool and Ichor fight, so keep
 those out. Ichor writes no repository skeleton.
@@ -410,7 +405,8 @@ operations: removing an Ichor finalizer from a deleting object, resetting a
 node, restoring etcd and overriding the last-worker guard. It is checked with a
 SubjectAccessReview made as the user.
 
-Upgrades always run through the installer Job. The fields `IchorInstallation.spec.managementMode`, `spec.stack`, `status.stack`, `TalosCluster.spec.gitops` and `spec.cni.handover` are retired: the installer's CRD check names them explicitly and lets them disappear, and refuses every other removed field.
+Upgrades always run through the installer Job. Its CRD check lets only the
+retired fields disappear and refuses every other removed field.
 
 The CLI keeps a way out of the corners: `ichor upgrade ichor VERSION --local`
 (no ichor-ui) and `ichor restore --recover-cluster`.
@@ -598,15 +594,15 @@ immutable. `spec.cni.tunnel` (`ichor init --cni-tunnel`) picks `vxlan` or
 service subnets are `spec.network.{podSubnets,serviceSubnets}`, fixed once set. A cluster stored with another preset is refused, not guessed at:
 the controller sets `CNIUnsupported` and changes nothing.
 
-How Cilium is installed, owned and edited is described under "The standard
-stack" above. The Talos-recommended values are built in; Hubble certificates
+How Cilium is installed, owned and edited is described under "Cilium" above. The Talos-recommended values are built in; Hubble certificates
 come from a CronJob, not Helm, so a re-render does not change them.
 
 `spec.cni.kubeProxy` is `enabled` or `replaced`. Replacing kube-proxy splits
 the setting across two owners, Talos (`KubeProxyConfig`, Ichor) and Cilium's
 `kubeProxyReplacement` (the Helm release, also Ichor), so the consistency check
 reads Cilium's live config and reports mismatches as health failures.
-Switching modes is refused unless annotated, and then runs in the only safe
+Switching modes (`ichor cni kube-proxy`) is refused unless annotated (the
+server sets the annotation for that one write), and then runs in the only safe
 order: upgrade the Cilium release through the `ichor-cni` Job, verify on all
 nodes, then turn the Talos side off.
 
@@ -626,13 +622,13 @@ The work splits into four layers; Ichor owns the first and the last.
 | | What | Owner |
 |---|---|---|
 | 1 | Talos-side preparation: volumes, extensions, kernel modules, sysctls | Ichor |
-| 2 | Installing and upgrading the storage system | Argo CD |
+| 2 | Installing and upgrading the storage system | You |
 | 3 | Volumes, replicas, disks, settings | The storage system's controller |
 | 4 | Coordination around node operations: evacuate before drain, remove or upgrade | Ichor |
 
 `TalosStorage` stays thin: which nodes, which disk preset, how disks are
 handed to the storage system, and evacuation settings. The storage system's
-own configuration lives in Argo CD's values. Presets start with `longhorn-v1`
+own configuration is yours. Presets start with `longhorn-v1`
 (verify the `iscsi-tools` and `util-linux-tools` extensions are in the node's
 installer image, create the `UserVolumeConfig` Longhorn expects), followed by
 `longhorn-v2`, `raw` (for Rook/Ceph-style consumers) and `filesystem`.
@@ -679,8 +675,8 @@ already read by the caller, plus elapsed time against
 paused -- paused, never proceeding to drain, once the timeout is reached
 with replicas still remaining.
 
-`TalosStorage` reports health so Argo CD's sync waves can hold the storage
-Application until the Talos side is ready.
+`TalosStorage` reports health, so whatever installs the storage system can wait
+until the Talos side is ready.
 
 ### Configuration reconcile
 
@@ -758,13 +754,13 @@ a write to `spec`. A minor upgrade of several control planes behind an
 endpoint of type `node` warns that the endpoint is one apiserver. This is
 `upgrade-k8s`'s order, run on Ichor's own machinery.
 
-Ichor: in `ichor` mode, the controller only launches the installer Job for the
-target version and never upgrades itself. The Job runs with the RBAC of the
-release being replaced, so the installer applies its own RBAC first.
-It then snapshots the current
+Ichor: the controller only launches the installer Job for the target version
+and never upgrades itself. The Job runs with the RBAC of the release being
+replaced, so the installer applies its own RBAC first; its rights are
+cluster-scoped, plus a Role in Ichor's namespace. It then snapshots the current
 manifests, updates CRDs (additive, never downgraded), the controller, then the
-UI, runs post-checks, and rolls back from the snapshot on failure. In
-`external` mode it's a PR. The CLI refuses writes when more than one minor
+UI, applies the network policies when Cilium's CRD exists, runs post-checks, and
+rolls back from the snapshot on failure. The CLI refuses writes when more than one minor
 away from the server; the UI backend sends its version in a header so a stale
 SPA prompts a reload.
 
@@ -847,7 +843,7 @@ predate the cluster.
 
 The UI is a Vite + Preact + TypeScript SPA built with preactcn, embedded in
 the Go backend. The backend talks to the API server, read-only to the Talos
-API, to Git hosting for PRs, and optionally to Prometheus for graphs; the
+API, and optionally to Prometheus for graphs; the
 browser talks only to the backend. It survives drains: stateless, two replicas
 where possible, graceful termination that asks clients to reconnect, and
 streams that resume from a token (resourceVersion, last log timestamp,
@@ -856,9 +852,11 @@ when the current one goes away.
 
 The UI is built for one cluster: there is no cluster list, and a top
 bar shows the cluster's name, its Talos, Kubernetes and Ichor versions and a
-health badge. Screens: an Overview with tiles for nodes (and the nodes waiting
-for approval), the running operation, backups and versions, with cluster
-actions such as rotating the CAs and shutting down; a Nodes list and an add-node
+health badge. Screens: an Overview, built from stock preactcn components, with
+tiles for nodes (and the nodes waiting for approval), the running operation,
+backups and versions, a needs-attention list, recent operations, and a
+collapsible cluster details section, with Apply configuration and cluster
+actions (rotating the CAs, shutting down) in the header; a Nodes list and an add-node
 (approval) page; a node page with tabs for Summary, Storage & network, Talos,
 Kubernetes & etcd, Configuration and Logs; Operations, with a detail page per
 operation (per-machine state, pause, resume, and the CA-rotation credentials
@@ -866,7 +864,8 @@ hand-over); Backups, with each `TalosEtcdBackup`, its snapshots,
 Back up now and restore; Configuration, for editing patches by layer with an
 effective-config view annotated by origin and secrets masked, impact preview
 before applying, and schema-driven forms; Cilium, with the effective values
-read-only, a YAML editor for the user layer, validation and a diff preview; Users, only when Ichor's own users are on. A merged multi-node log
+read-only, a YAML editor for the user layer, validation and a diff preview, and
+an Upgrade card when the embedded chart is newer; Users, only when Ichor's own users are on. A merged multi-node log
 viewer is planned.
 
 ## Testing
@@ -882,8 +881,7 @@ unconfigured, which `--presets maintenance` provides. Scenarios follow the
 features:
 bootstrap and join, patches with and without reboot, drift, removal and
 replacement, topology changes including the even-count rejection, CNI
-Cilium bootstrap, adoption and values edits, PR and strict modes,
-prune protection, storage preparation and evacuation, all three upgrade kinds
+Cilium bootstrap, adoption and values edits, prune protection, storage preparation and evacuation, all three upgrade kinds
 with rollback, backup, restore and full-loss recovery, certificate rotation.
 Each scenario runs through both the CLI and the backend API. Chaos cases kill
 the controller or reboot a node mid-rollout and check that status-driven
@@ -904,16 +902,11 @@ resumption works. A short set runs per PR, the full set nightly.
 6. Config editing UI, `TalosOperation`, Talos and Kubernetes upgrades,
    Ichor self-upgrade.
 7. Storage integration (longhorn-v1, operation hooks), CA rotation.
-8. Break-glass. (PR mode, strict mode, the Argo CD health checks and the GitOps
-   page were built and then removed)
+8. Break-glass.
 9. Monitoring settings, metrics and dashboards, optional components, OIDC and impersonation, Ichor's own users and issuer.
 10. UI localisation.
 11. Later: more storage presets, IPv6, replica-based
     scaling.
-
-## Open questions
-
-The open questions of the removed Kokumi and Argo CD stack are moot.
 
 ## Alternatives considered
 
@@ -922,7 +915,7 @@ explain in a UI, and they tie user files to a Talos version. Rejected in
 favour of typed documents.
 
 Ichor installing storage and monitoring itself. It would double the surface
-area, duplicate what Argo CD and the storage controllers already do, and keep
+area, duplicate what the storage controllers already do, and keep
 us on the upgrade treadmill of every project we wrap. Ichor installs Cilium only.
 
 Fewer CRDs. `TalosEtcdBackup` and `TalosStorage` could fold into

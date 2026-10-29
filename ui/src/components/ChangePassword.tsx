@@ -8,9 +8,8 @@ import { Input } from '@/components/ui/input'
 import { userClient } from '@/lib/connect'
 import { notifyDone } from '@/lib/notify'
 import { minPasswordLength, passwordError, passwordOk } from '@/lib/users'
+import type { ErrorShape } from '@/lib/errors'
 import { useT } from '@/lib/useT'
-
-type ErrorShape = { title: string; detail: string }
 
 // The change-own-password form, used in the account menu's dialog and, with nothing
 // else on the screen, when the account must change its password. Neither password is kept anywhere

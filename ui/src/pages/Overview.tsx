@@ -46,6 +46,7 @@ import { OperationKind, type EtcdBackup, type Operation } from '@/gen/ichor/v1al
 import { blockingOperation, currentOperation, recentOperations, rebootPendingCount, type OpRow } from '@/lib/clusterOps'
 import { machineClient, operationClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
+import type { ErrorShape } from '@/lib/errors'
 import { machineDisplayName } from '@/lib/machineName'
 import { formatTimestamp } from '@/lib/format'
 import { kubernetesStageProgress, operationState, progressCounts } from '@/lib/operations'
@@ -57,8 +58,6 @@ import { useT } from '@/lib/useT'
 import { Link } from '@/router'
 
 type Row = OpRow & { op: Operation }
-type ErrorShape = { title: string; detail: string }
-
 const toRow = (op: Operation): Row => ({
   op,
   name: op.ref?.name ?? '',

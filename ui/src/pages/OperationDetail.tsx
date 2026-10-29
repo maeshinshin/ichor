@@ -20,7 +20,7 @@ import { NodeAction, OperationKind, type Operation, type OperationEvent } from '
 import { operationClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
 import { credentialsPanel } from '@/lib/credentials'
-import { describeError } from '@/lib/errors'
+import { describeError, type ErrorShape } from '@/lib/errors'
 import { restoreStepProgress } from '@/lib/etcdRestore'
 import { formatTimestamp } from '@/lib/format'
 import { formatDuration, nodePath, spanMs, summaryFallback, visibleEvents } from '@/lib/operationDetail'
@@ -32,8 +32,6 @@ import { useT } from '@/lib/useT'
 import { Link, navigate } from '@/router'
 
 const toDate = (ts: Timestamp | undefined): Date | undefined => (ts ? timestampDate(ts) : undefined)
-
-type ErrorShape ={ title: string; detail: string }
 
 // Progress view of one operation (architecture.md, "Upgrades": the three
 // upgrade kinds share a progress view): the phase and each machine's state

@@ -5,11 +5,9 @@ import { ErrorAlert } from '@/components/ErrorAlert'
 import { OperationKind, type Operation } from '@/gen/ichor/v1alpha1/operation_pb'
 import { operationClient } from '@/lib/connect'
 import { notifyDone } from '@/lib/notify'
-import { describeError } from '@/lib/errors'
+import { describeError, type ErrorShape } from '@/lib/errors'
 import { operationState, pauseAction } from '@/lib/operations'
 import { useT } from '@/lib/useT'
-
-type ErrorShape = { title: string; detail: string }
 
 // OperationControls: pause or resume (resuming a failed operation runs the failed step again), and delete. Deleting asks first; pausing
 // changes nothing already done and can be undone, so it does not.

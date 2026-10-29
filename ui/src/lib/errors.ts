@@ -9,7 +9,9 @@ import { t } from './i18n.ts'
 // code-specific headline above that message so the kind of problem is
 // clear at a glance before reading the detail. The headline is in the current
 // language; the server's message is never translated.
-export function describeError(err: unknown): { title: string; detail: string } {
+export type ErrorShape = { title: string; detail: string }
+
+export function describeError(err: unknown): ErrorShape {
   if (err instanceof ConnectError) {
     switch (err.code) {
       case Code.FailedPrecondition:

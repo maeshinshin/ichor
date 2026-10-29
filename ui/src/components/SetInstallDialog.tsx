@@ -15,11 +15,9 @@ import type { Machine } from '@/gen/ichor/v1alpha1/machine_pb'
 import type { Disk } from '@/gen/ichor/v1alpha1/node_pb'
 import { machineClient } from '@/lib/connect'
 import { notifyWrite } from '@/lib/notify'
-import { describeError } from '@/lib/errors'
+import { describeError, type ErrorShape } from '@/lib/errors'
 import { diskSelector, installChoice } from '@/lib/installDisk'
 import { useT } from '@/lib/useT'
-
-type ErrorShape = { title: string; detail: string }
 
 // Sets spec.install of an approved machine that is waiting for an install disk (Ready reason
 // InstallDiskUnknown). The disks come from the machine page's own GetNode read.

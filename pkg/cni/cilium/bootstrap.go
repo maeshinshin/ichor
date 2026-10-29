@@ -74,10 +74,9 @@ func Bootstrap(
 		return ApplyResult{}, fmt.Errorf("cilium: building a Kubernetes client: %w", err)
 	}
 
-	cfg := new(action.Configuration)
-
-	if err := cfg.Init(restGetter{rc: rc}, RecordNamespace, "secret", func(string, ...any) {}); err != nil {
-		return ApplyResult{}, fmt.Errorf("cilium: configuring Helm: %w", err)
+	cfg, err := NewHelmConfig(rc, RecordNamespace, func(string, ...any) {})
+	if err != nil {
+		return ApplyResult{}, err
 	}
 
 	return bootstrap(ctx, kube, cfg, cluster, mode, timeout, nodePollInterval)
@@ -133,6 +132,19 @@ func nodeReady(n *corev1.Node) bool {
 	}
 
 	return false
+}
+
+// NewHelmConfig is the one Helm configuration of the Cilium install paths (the Job, the CLI and
+// Bootstrap): it reaches the cluster rc reaches and keeps release records in Secrets in
+// storageNamespace (the release itself, and Cilium, live in kube-system).
+func NewHelmConfig(rc *rest.Config, storageNamespace string, log action.DebugLog) (*action.Configuration, error) {
+	cfg := new(action.Configuration)
+
+	if err := cfg.Init(restGetter{rc: rc}, storageNamespace, "secret", log); err != nil {
+		return nil, fmt.Errorf("cilium: configuring Helm: %w", err)
+	}
+
+	return cfg, nil
 }
 
 // restGetter lets Helm talk to the cluster a rest.Config reaches (the CLI's kubeconfig, exec

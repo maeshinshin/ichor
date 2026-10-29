@@ -20,8 +20,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -29,7 +27,6 @@ import (
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/release"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -71,12 +68,21 @@ record in kube-system is copied into the Secret ichor-cilium-prior-release in th
 namespace, read back, and only then deleted (the record Secrets only, never helm uninstall).`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
-		c, err := newKubeClient(kubeconfigPath)
+		restCfg, err := loadKubeconfig(kubeconfigPath)
 		if err != nil {
 			return err
 		}
 
-		cfg, err := newHelmConfig(kubeconfigPath, cniHelmApplyOpts.StorageNamespace, cmd.ErrOrStderr())
+		c, err := newKubeClientForConfig(restCfg)
+		if err != nil {
+			return err
+		}
+
+		log := cmd.ErrOrStderr()
+
+		cfg, err := cilium.NewHelmConfig(restCfg, cniHelmApplyOpts.StorageNamespace, func(format string, v ...any) {
+			_, _ = fmt.Fprintf(log, "helm: "+format+"\n", v...)
+		})
 		if err != nil {
 			return err
 		}
@@ -84,11 +90,6 @@ namespace, read back, and only then deleted (the record Secrets only, never helm
 		var tk *takeoverOptions
 
 		if cniHelmApplyOpts.Takeover {
-			restCfg, err := loadKubeconfig(kubeconfigPath)
-			if err != nil {
-				return err
-			}
-
 			kube, err := kubernetes.NewForConfig(restCfg)
 			if err != nil {
 				return fmt.Errorf("building a Kubernetes client: %w", err)
@@ -101,35 +102,6 @@ namespace, read back, and only then deleted (the record Secrets only, never helm
 			Namespace: apiOpts.Namespace, Name: cniHelmApplyOpts.Cluster,
 		}, cniHelmApplyOpts.KubeProxy, cniHelmApplyOpts.Timeout, tk, cmd.OutOrStdout())
 	},
-}
-
-// newHelmConfig is a Helm configuration over the cluster the kubeconfig (or, in the Job, the
-// pod's own service account) reaches, with release records in Secrets in storageNamespace
-// (the release itself, and Cilium, live in kube-system).
-func newHelmConfig(kubeconfig, storageNamespace string, log io.Writer) (*action.Configuration, error) {
-	flags := genericclioptions.NewConfigFlags(false)
-
-	if kubeconfig != "" {
-		flags.KubeConfig = &kubeconfig
-	}
-
-	ns := cilium.ReleaseNamespace
-	flags.Namespace = &ns
-
-	// The Job's root filesystem is read-only; discovery's cache goes to the emptyDir at /tmp.
-	cache := filepath.Join(os.TempDir(), "ichor-cni-cache")
-	flags.CacheDir = &cache
-
-	cfg := new(action.Configuration)
-
-	err := cfg.Init(flags, storageNamespace, "secret", func(format string, v ...any) {
-		_, _ = fmt.Fprintf(log, "helm: "+format+"\n", v...)
-	})
-	if err != nil {
-		return nil, fmt.Errorf("configuring Helm: %w", err)
-	}
-
-	return cfg, nil
 }
 
 // takeoverOptions switch on the foreign release record's retirement after the rollout (ADR 0103).

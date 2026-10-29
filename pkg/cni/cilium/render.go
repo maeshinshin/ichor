@@ -17,12 +17,10 @@ limitations under the License.
 package cilium
 
 import (
-	"bytes"
 	_ "embed" // the pinned chart archive
 	"fmt"
 	"strings"
 
-	"helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/chartutil"
 	"helm.sh/helm/v3/pkg/engine"
 	"helm.sh/helm/v3/pkg/releaseutil"
@@ -43,9 +41,9 @@ var chartArchive []byte
 // itself -- so nothing else is included. Output order is Helm's install
 // order, then template path, so it is deterministic.
 func renderChart(values any) ([]byte, error) {
-	ch, err := loader.LoadArchive(bytes.NewReader(chartArchive))
+	ch, err := freshChart()
 	if err != nil {
-		return nil, fmt.Errorf("cilium: loading embedded chart: %w", err)
+		return nil, err
 	}
 
 	raw, err := sigsyaml.Marshal(values)

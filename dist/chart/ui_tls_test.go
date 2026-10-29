@@ -70,10 +70,14 @@ func TestUIServesHTTPSOnlyByDefault(t *testing.T) {
 		t.Errorf("args = %v, want --addr=:8443 and no --http-addr", args)
 	}
 
-	for _, p := range []string{"livenessProbe", "readinessProbe"} {
-		if got := probePortAndScheme(c, p); got != "HTTPS:8443" {
-			t.Errorf("%s = %s, want HTTPS:8443", p, got)
-		}
+	if got := probePortAndScheme(c, "readinessProbe"); got != "HTTPS:8443" {
+		t.Errorf("readinessProbe = %s, want HTTPS:8443", got)
+	}
+
+	// Liveness must not depend on the certificate, which can arrive 60-90 s after the pod starts.
+	live := c["livenessProbe"].(map[string]any)
+	if _, ok := live["httpGet"]; ok || fmt.Sprint(live["tcpSocket"].(map[string]any)["port"]) != "8443" {
+		t.Errorf("livenessProbe = %v, want a tcpSocket on 8443", live)
 	}
 
 	if len(ports) != 1 || ports["https"] != 8443 {

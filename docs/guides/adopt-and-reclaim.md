@@ -6,7 +6,7 @@ resetting one machine that another cluster configured so it can join an Ichor
 cluster (`ichor machine reclaim`, or the UI). The design and the reasons are in
 [ADR 0103](../adr/0103-deploy-onto-machines-that-already-run-talos.md).
 
-Status: ADR 0103 is built. The hardware test plan in the ADR has not been run
+Status: ADR 0103 and ADR 0104 are built. The hardware test plan in the ADR has not been run
 yet, so treat both features as untested on real clusters until it has.
 
 ## Adopt a running cluster
@@ -81,7 +81,8 @@ Adopt inspects the CNI before it writes anything.
 | Cilium Ichor bootstrapped | Checks the release exists. |
 | Cilium from Helm, the Cilium CLI, a Talos inline manifest or an applied `helm template` | Takes it over as Ichor's own Helm release (below), or leaves it alone with `--cni-unmanaged`. |
 | Talos's flannel, Calico or another CNI | Refused unless you pass `--cni-unmanaged`. |
-| `cni.name: none` | Adopted unmanaged with the CNI left as `none`. |
+| No CNI at all (`cni.name: none`, no CNI workload, every node NotReady with "cni plugin not initialized") | Installs Ichor's pinned Cilium first, then Ichor, then adopts as managed Cilium. `--cni-unmanaged` is refused. |
+| `cni.name: none` with a CNI you applied by hand | Adopted unmanaged (`talosCNI: none`), the CNI left as it is. |
 | Two CNIs at once | Refused, even with `--cni-unmanaged`. |
 
 The mode is never chosen for you. The refusal for a non-Cilium cluster names
@@ -95,6 +96,24 @@ remove. This cannot be changed later (`spec.cni.preset` is immutable); going
 from unmanaged to managed means a new cluster. Ichor's own network policies
 are applied only if Cilium is detected; otherwise `ichor-system` is not
 isolated by Ichor.
+
+A cluster with no CNI (ADR 0104):
+
+- Its nodes are NotReady, so no pod, Ichor's included, can run. Adopt installs
+  the Cilium pinned in your `ichor` binary as Ichor's own Helm release (release
+  `cilium` in `kube-system`, records in `ichor-system`) before it installs
+  Ichor, and waits up to 10 minutes for the nodes to be Ready.
+- Preconditions, checked read-only before the plan asks for consent: Talos
+  v1.12 or later, KubePrism enabled on port 7445 on every node (Talos's
+  default), and a pod CIDR on every node.
+- Nothing is detected from an existing Cilium. `--tunnel vxlan|geneve` picks
+  the tunnel (immutable afterwards). Kube-proxy is read from Talos: enabled
+  gives `kubeProxyReplacement=false`, disabled gives `true`.
+  `--cilium-values FILE` merges your Cilium Helm values over Ichor's defaults;
+  Ichor-owned keys are refused.
+- The plan says what will be installed and needs your consent. There is no
+  `ichor-cni` Job and no inline manifest to remove, so hand-over completes at
+  once. If adopt stops half-way, run it again.
 
 Taking over Cilium:
 
@@ -131,7 +150,8 @@ Adopt prints the plan again and asks for consent (`--yes` skips the prompt).
 Then it works in phases:
 
 1. Writes the bundle Secret, the `TalosCluster`, the `TalosMachine`s (held),
-   the patches and, if Ichor is not running yet, Ichor's install manifest.
+   the patches and, if Ichor is not running yet, Ichor's install manifest. On a
+   cluster with no CNI Cilium is installed before this, as above.
    A held machine has the annotation `ichor.maesh.dev/hold-apply`; the
    controller reports its drift (condition `AdoptionHeld`) and applies
    nothing.
@@ -145,6 +165,23 @@ approve it and run adopt again.
 
 If adopt stops half-way, run it again. The writes are idempotent. A run where
 every machine already matches a fresh render says so and exits.
+
+### When Ichor was installed with Helm
+
+If a Helm release of the chart `ichor` is deployed (or the controller
+Deployment carries the chart's labels), adopt skips its install step, creates
+no `IchorInstallation`, and the plan says "Ichor is installed by Helm; not
+touching it".
+
+- Ichor's version must equal the CLI's exactly. On a mismatch adopt refuses and
+  prints the `helm upgrade` command.
+- Adopt does not apply Ichor's Cilium network policies on a Helm install. If
+  they apply to your cluster it tells you to set
+  `networkPolicy.cilium.enabled=true` and run `helm upgrade`.
+- `--require-ichor` makes adopt fail when Ichor is not installed, instead of
+  installing it.
+
+See [Install Ichor with Helm](install-with-helm.md).
 
 ### After adoption
 

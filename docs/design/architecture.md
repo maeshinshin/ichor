@@ -406,7 +406,14 @@ last one:
    Ichor's install manifest. Every `TalosMachine` carries the annotation
    `ichor.maesh.dev/hold-apply`: the reconciler computes and reports drift
    (`AdoptionHeld`) and never applies.
-3. Cilium takeover (see "Cilium"), skipped for an unmanaged CNI.
+3. Cilium takeover (see "Cilium"), skipped for an unmanaged CNI. A cluster
+   with no CNI at all is different (ADR 0104): its nodes are NotReady, so
+   Ichor's own pods could not start. Adopt then installs Ichor's pinned Cilium
+   itself, in process, as Ichor's own Helm release, and waits for the nodes to
+   be Ready before it installs Ichor or writes any CR; the order is Cilium,
+   Ichor, CRs, hand-over, release. The cluster is adopted as the managed
+   `cilium` preset and `--cni-unmanaged` is refused there. This needs KubePrism
+   on port 7445 on every node and a pod CIDR on every node.
 4. Release of the hold, one machine at a time, control planes first, only
    after a live zero-drift check passes. The controller then applies the
    first render under the cluster lock like any rollout.
@@ -431,6 +438,16 @@ bundle. The previous administrators' client certificates stay valid, so adopt
 prints, and the UI shows as a dismissible notice (condition
 `CARotationAdvised`), the advice to run `ichor cluster rotate-ca`. Nothing
 starts a rotation.
+
+Ichor can also be installed with Helm (ADR 0104): `helm install` of the chart
+in `dist/chart` (published as `oci://ghcr.io/maeshinshin/charts/ichor` once a
+release tag is pushed) installs Ichor, not a cluster. `ichor adopt` then
+detects the Helm release, skips its own install step, never creates an
+`IchorInstallation`, requires Ichor's version to equal the CLI's, and registers
+the cluster. A Helm-installed Ichor is upgraded with `helm upgrade`. The chart
+refuses to install on a cluster with no pod network (`preflight.cni`); that one
+case is covered by `ichor cni bootstrap`, which runs the same Cilium step as
+adopt. The chart never ships Cilium. See `docs/guides/install-with-helm.md`.
 
 ### Cilium
 
@@ -704,6 +721,12 @@ immutable. `spec.cni.tunnel` (`ichor init --cni-tunnel`) picks `vxlan` or
 service subnets are `spec.network.{podSubnets,serviceSubnets}`, fixed once set
 (ADR 0077). A cluster stored with another preset is refused, not guessed at:
 the controller sets `CNIUnsupported` and changes nothing.
+
+A cluster adopted with no CNI (ADR 0104) is a managed `cilium` cluster: adopt
+installs the pinned Cilium with `spec.cni.tunnel` from `--tunnel` (or the
+default) and `spec.cni.kubeProxy` read from Talos (kube-proxy enabled gives
+`enabled`, disabled gives `replaced`); `--cilium-values FILE` sets the initial
+`spec.cni.cilium.values`. `ichor init` keeps its inline-manifest bootstrap.
 
 The one exception is `spec.cni.preset: unmanaged` (ADR 0103), which exists for
 adoption only. `ichor init` has no flag for it and the webhook refuses it on

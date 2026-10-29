@@ -58,6 +58,7 @@ const (
 	caClientPoll = 10 * time.Second
 
 	kindDeployment = "Deployment"
+	kindDaemonSet  = "DaemonSet"
 	corednsName    = "coredns"
 
 	ciliumOperatorName = "cilium-operator"
@@ -83,11 +84,11 @@ func (c *caRun) restartTargets(ctx context.Context) ([]caClient, error) {
 	var targets []caClient
 
 	if c.cluster.Spec.CNI.Preset != ichorv1alpha1.TalosClusterCNIPresetUnmanaged {
-		targets = append(targets, caClient{"DaemonSet", kubeSystemNamespace, ciliumName},
+		targets = append(targets, caClient{kindDaemonSet, kubeSystemNamespace, ciliumName},
 			caClient{kindDeployment, kubeSystemNamespace, ciliumOperatorName})
 	}
 
-	targets = append(targets, caClient{"DaemonSet", kubeSystemNamespace, kubeProxyName},
+	targets = append(targets, caClient{kindDaemonSet, kubeSystemNamespace, kubeProxyName},
 		caClient{kindDeployment, kubeSystemNamespace, corednsName})
 
 	// ichor-ui, found by the label every install path sets; none installed is fine.

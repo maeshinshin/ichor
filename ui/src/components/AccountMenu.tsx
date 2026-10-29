@@ -2,6 +2,7 @@ import { useState } from 'preact/hooks'
 import { DownloadIcon, KeyRoundIcon, LogOutIcon, UserRoundIcon } from 'lucide-preact'
 import { ChangePasswordDialog } from '@/components/ChangePassword'
 import { Button } from '@/components/ui/button'
+import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/components/ui/item'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,17 +43,22 @@ export function AccountMenu({ me }: { me: WhoAmIResponse }) {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-72">
-          <DropdownMenuLabel class="space-y-0.5 font-normal">
-            <p class="text-xs text-muted-foreground">{t('account.signedInAs')}</p>
-            <p class="break-words text-sm font-medium">{name}</p>
-            {me.displayName && <p class="break-words text-xs text-muted-foreground">{me.username}</p>}
-            <p class="text-xs text-muted-foreground">
-              {t('account.roles')}: {roles.length > 0 ? roles.join(', ') : t('account.noRoles')}
-            </p>
-            <p class="text-xs text-muted-foreground">
-              {t('account.source')}: {sourceLabel(me.source)}
-            </p>
-          </DropdownMenuLabel>
+          <DropdownMenuLabel>{t('account.signedInAs')}</DropdownMenuLabel>
+          <Item size="xs">
+            <ItemMedia variant="icon">
+              <UserRoundIcon aria-hidden="true" />
+            </ItemMedia>
+            <ItemContent>
+              <ItemTitle>{name}</ItemTitle>
+              {me.displayName && <ItemDescription>{me.username}</ItemDescription>}
+              <ItemDescription>
+                {t('account.roles')}: {roles.length > 0 ? roles.join(', ') : t('account.noRoles')}
+              </ItemDescription>
+              <ItemDescription>
+                {t('account.source')}: {sourceLabel(me.source)}
+              </ItemDescription>
+            </ItemContent>
+          </Item>
           <DropdownMenuSeparator />
           {me.source === 'ichor' && (
             <DropdownMenuItem onSelect={() => setPasswordOpen(true)}>
@@ -64,7 +70,7 @@ export function AccountMenu({ me }: { me: WhoAmIResponse }) {
             <DownloadIcon />
             {t('account.kubeconfig')}
           </DropdownMenuItem>
-          <p class="px-2 pb-1.5 text-xs text-muted-foreground">{t('account.kubeconfigHint')}</p>
+          <DropdownMenuLabel>{t('account.kubeconfigHint')}</DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={signOut}>
             <LogOutIcon />

@@ -1,7 +1,7 @@
 import { AppToaster } from '@/components/AppToaster'
 import type { ComponentChildren } from 'preact'
 import { Fragment } from 'preact'
-import { ArchiveIcon, BoxesIcon, LayoutDashboardIcon, LayersIcon, ListChecksIcon, NetworkIcon, ServerIcon, TriangleAlertIcon, UsersIcon } from 'lucide-preact'
+import { ArchiveIcon, BoxesIcon, CircleAlertIcon, CircleCheckIcon, LayoutDashboardIcon, LoaderCircleIcon, LayersIcon, ListChecksIcon, NetworkIcon, ServerIcon, TriangleAlertIcon, UsersIcon } from 'lucide-preact'
 import { AccountMenu } from '@/components/AccountMenu'
 import type { WhoAmIResponse } from '@/gen/ichor/v1alpha1/user_pb'
 import { IchorVersion } from '@/components/IchorVersion'
@@ -43,6 +43,7 @@ import { Badge } from '@/components/ui/badge'
 import { Link } from '@/router'
 
 const healthVariant: Record<Health, 'default' | 'destructive' | 'secondary'> = { ready: 'default', degraded: 'destructive', upgrading: 'secondary' }
+const HealthIcon: Record<Health, typeof CircleCheckIcon> = { ready: CircleCheckIcon, degraded: CircleAlertIcon, upgrading: LoaderCircleIcon }
 
 // The cluster this Ichor manages: name, Talos and Kubernetes versions, health.
 function ClusterBar() {
@@ -50,12 +51,26 @@ function ClusterBar() {
   const { cluster, opRunning } = useCluster()
   if (!cluster) return null
   const health = clusterHealth(cluster.conditions, !!cluster.rollout, opRunning)
+  const Icon = HealthIcon[health]
   return (
-    <div class="flex min-w-0 items-center gap-2 text-sm">
-      <span class="hidden truncate font-medium sm:inline">{cluster.ref?.name}</span>
-      {cluster.talosVersion && <span class="hidden text-muted-foreground lg:inline">{t('shell.talos', { version: cluster.talosVersion })}</span>}
-      {cluster.kubernetesVersion && <span class="hidden text-muted-foreground lg:inline">{t('shell.kubernetes', { version: cluster.kubernetesVersion })}</span>}
-      <Badge variant={healthVariant[health]}>{t(`health.${health}`)}</Badge>
+    <div class="flex min-w-0 items-center gap-2">
+      <Badge variant="outline" className="hidden sm:inline-flex">
+        {cluster.ref?.name}
+      </Badge>
+      {cluster.talosVersion && (
+        <Badge variant="outline" className="hidden lg:inline-flex">
+          {t('shell.talos', { version: cluster.talosVersion })}
+        </Badge>
+      )}
+      {cluster.kubernetesVersion && (
+        <Badge variant="outline" className="hidden lg:inline-flex">
+          {t('shell.kubernetes', { version: cluster.kubernetesVersion })}
+        </Badge>
+      )}
+      <Badge variant={healthVariant[health]}>
+        <Icon data-icon="inline-start" aria-hidden="true" />
+        {t(`health.${health}`)}
+      </Badge>
     </div>
   )
 }
@@ -155,10 +170,8 @@ export function AppShell({
               <SidebarMenuItem>
                 <SidebarMenuButton asChild size="lg" tooltip="Ichor">
                   <Link to="/">
-                    <span class="flex size-8 shrink-0 items-center justify-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground">
-                      <BoxesIcon class="size-4" />
-                    </span>
-                    <span class="text-base font-semibold">Ichor</span>
+                    <BoxesIcon />
+                    <span>Ichor</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -178,7 +191,7 @@ export function AppShell({
                 <SidebarMenuItem>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <SidebarMenuButton className="text-amber-600 dark:text-amber-400">
+                      <SidebarMenuButton>
                         <TriangleAlertIcon />
                         <span>{t('app.noLoginTitle')}</span>
                       </SidebarMenuButton>
@@ -194,9 +207,9 @@ export function AppShell({
           <SidebarRail />
         </Sidebar>
         <SidebarInset className="min-w-0">
-          <header class="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 border-b bg-background/95 px-4 backdrop-blur">
+          <header class="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 bg-background px-4">
             <SidebarTrigger className="-ml-1" />
-            <Separator orientation="vertical" className="mr-1 h-4 self-center" />
+            <Separator orientation="vertical" className="mr-1 data-[orientation=vertical]:h-4" />
             <Crumbs path={path} />
             <div className="ml-auto flex shrink-0 items-center gap-2">
               <ClusterBar />

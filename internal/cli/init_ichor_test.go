@@ -27,6 +27,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -164,6 +165,14 @@ func failingCreates(t *testing.T, n int, err error, calls *int) client.Client {
 			}
 
 			return c.Create(ctx, obj, opts...)
+		},
+		Apply: func(ctx context.Context, c client.WithWatch, obj runtime.ApplyConfiguration, opts ...client.ApplyOption) error {
+			*calls++
+			if *calls <= n {
+				return err
+			}
+
+			return c.Apply(ctx, obj, opts...)
 		},
 	}).Build()
 }

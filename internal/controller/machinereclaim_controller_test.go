@@ -386,6 +386,84 @@ var _ = Describe("MachineReclaim Controller", func() {
 		Expect(secretExists()).To(BeFalse())
 	})
 
+	// toWaiting drives a request to WaitingForMaintenance and returns when the reset was sent.
+	toWaiting := func(key types.NamespacedName) time.Time {
+		GinkgoHelper()
+
+		_, err := reconcileOnce(key)
+		Expect(err).NotTo(HaveOccurred())
+		confirm(key, "uuid-1")
+		_, err = reconcileOnce(key)
+		Expect(err).NotTo(HaveOccurred())
+
+		mr := get(key)
+		Expect(mr.Status.Phase).To(Equal(ichorv1alpha1.MachineReclaimWaitingForMaintenance))
+
+		return mr.Status.Audit.ResetSentAt.Time
+	}
+
+	It("fails a machine that never returns exactly reclaimMaintenanceWait after the reset", func() {
+		key := create()
+		sent := toWaiting(key)
+
+		// Each failing probe costs 100 ms of clock; a reconcile therefore takes about the wait window.
+		r.Probe = func(context.Context, string) (string, error) {
+			now = now.Add(100 * time.Millisecond)
+
+			return "", errors.New("no route to host")
+		}
+
+		var failedAt time.Time
+
+		for range 200 {
+			res, err := reconcileOnce(key)
+			Expect(err).NotTo(HaveOccurred())
+
+			if get(key).Status.Phase == ichorv1alpha1.MachineReclaimFailed {
+				failedAt = now
+
+				break
+			}
+
+			now = now.Add(res.RequeueAfter)
+		}
+
+		Expect(failedAt).NotTo(BeZero(), "the request never failed")
+		Expect(failedAt.Sub(sent)).To(BeNumerically(">=", reclaimMaintenanceWait))
+		Expect(failedAt.Sub(sent)).To(BeNumerically("<=", reclaimMaintenanceWait+time.Second))
+		Expect(get(key).Status.Result).To(ContainSubstring("did not return to maintenance mode"))
+	})
+
+	It("does not let the request TTL cut short the wait for maintenance mode", func() {
+		key := create(func(mr *ichorv1alpha1.MachineReclaim) { mr.Spec.TTL = &metav1.Duration{Duration: time.Minute} })
+		sent := toWaiting(key)
+
+		r.Probe = func(context.Context, string) (string, error) { return "", errors.New("down") }
+		now = sent.Add(5 * time.Minute) // well past the 1 minute TTL, inside the 10 minute wait
+
+		res, err := reconcileOnce(key)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(get(key).Status.Phase).To(Equal(ichorv1alpha1.MachineReclaimWaitingForMaintenance))
+		Expect(res.RequeueAfter).To(BeNumerically(">", 0))
+	})
+
+	It("stops a reconcile whose node call hangs, so one request cannot starve the others", func() {
+		key := create()
+		r.ReconcileTimeout = 200 * time.Millisecond
+		r.Dial = func(ctx context.Context, _ reclaim.Credential, _, _ string) (reclaim.Node, error) {
+			select {
+			case <-ctx.Done():
+			case <-time.After(30 * time.Second):
+			}
+
+			return nil, ctx.Err()
+		}
+
+		start := time.Now()
+		_, _ = reconcileOnce(key) // the error (or retry) is fine; hanging is not
+		Expect(time.Since(start)).To(BeNumerically("<", 5*time.Second))
+	})
+
 	It("keeps a finished request for seven days after its expiry, then deletes it", func() {
 		key := create()
 

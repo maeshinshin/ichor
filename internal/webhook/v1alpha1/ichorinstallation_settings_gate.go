@@ -148,7 +148,7 @@ func (g *SettingsGate) check(ctx context.Context, oldObj, newObj *ichorv1alpha1.
 		r := bg.require(ctx, req, "update", "ichorinstallations", c.subresource, newObj.Name,
 			fmt.Sprintf("changing %s needs the \"update\" verb on ichorinstallations/%s", c.path, c.subresource))
 		if r != nil {
-			return errors.New(denialMessage(r))
+			return errors.New(r.Result.Message)
 		}
 	}
 
@@ -157,15 +157,6 @@ func (g *SettingsGate) check(ctx context.Context, oldObj, newObj *ichorv1alpha1.
 	}
 
 	return nil
-}
-
-// denialMessage is the text of a refusal from BreakGlassHandler.require.
-func denialMessage(r *admission.Response) string {
-	if r.Result != nil && r.Result.Message != "" {
-		return r.Result.Message
-	}
-
-	return "denied"
 }
 
 // emit records one Event listing the changed paths, old and new values and the user. Nothing in

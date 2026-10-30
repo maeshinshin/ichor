@@ -578,8 +578,10 @@ func main() {
 
 	if lock != nil {
 		rctx, stop := context.WithTimeout(context.Background(), 5*time.Second)
-		if rerr := releaseLeaseUnlessRestoring(rctx, lock, controller.RestoreTailsRunning); rerr != nil {
+		if released, rerr := releaseLeaseUnlessRestoring(rctx, lock, controller.RestoreTailsRunning); rerr != nil {
 			setupLog.Error(rerr, "Could not hand the leader lease over; it runs out by itself")
+		} else if released {
+			setupLog.Info("Handed the leader lease over")
 		}
 
 		stop()

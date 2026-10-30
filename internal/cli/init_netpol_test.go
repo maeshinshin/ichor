@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -108,6 +109,11 @@ func TestApplyNetworkPolicies_WaitsForCiliumReady(t *testing.T) {
 
 				return cl.Create(ctx, obj, opts...)
 			},
+			Apply: func(ctx context.Context, cl client.WithWatch, obj runtime.ApplyConfiguration, opts ...client.ApplyOption) error {
+				ready = ready || reads >= 4
+
+				return cl.Apply(ctx, obj, opts...)
+			},
 		}).Build()
 
 	var out bytes.Buffer
@@ -140,6 +146,11 @@ func TestApplyNetworkPolicies_NothingIsCreatedWhileCiliumIsNotReady(t *testing.T
 	c := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(ciliumDaemonSetObj(1, 0), ciliumCRDObj(true)).
 		WithInterceptorFuncs(interceptor.Funcs{
 			Create: func(context.Context, client.WithWatch, client.Object, ...client.CreateOption) error {
+				created = true
+
+				return nil
+			},
+			Apply: func(context.Context, client.WithWatch, runtime.ApplyConfiguration, ...client.ApplyOption) error {
 				created = true
 
 				return nil

@@ -242,8 +242,9 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 		return err
 	}
 
-	if err := createBundleSecret(ctx, k8sClient, bundleSecret, deps.Stderr); err != nil {
-		return err
+	// A Create that timed out may still have gone through; createRetrying counts that as success.
+	if err := createRetrying(ctx, k8sClient, bundleSecret, deps.Stderr); err != nil {
+		return fmt.Errorf("init: creating the secrets bundle Secret: %w", err)
 	}
 
 	created, err := createIchorInstallation(ctx, k8sClient, deps.Stderr, 0)
@@ -296,16 +297,6 @@ func waitForCiliumHandover(
 	}
 
 	_, _ = fmt.Fprintln(deps.Stderr, "init: Cilium is now a Helm release owned by Ichor")
-
-	return nil
-}
-
-// createBundleSecret stores the secrets bundle, retrying transient API errors. A Create that
-// timed out may still have gone through, so AlreadyExists after a retry counts as success.
-func createBundleSecret(ctx context.Context, k8sClient client.Client, sec *corev1.Secret, progress io.Writer) error {
-	if err := createRetrying(ctx, k8sClient, sec, progress); err != nil {
-		return fmt.Errorf("init: creating the secrets bundle Secret: %w", err)
-	}
 
 	return nil
 }

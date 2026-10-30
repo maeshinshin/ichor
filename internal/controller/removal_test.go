@@ -65,17 +65,12 @@ func newTestControlPlane(clusterName, suffix string) *ichorv1alpha1.TalosMachine
 // decided before removeEtcdMember ever loads a bundle, so only the tests
 // that expect a removal to actually reach RemovalApproved pass a real one.
 func newTestClusterWithCount(count int32, secretName string) *ichorv1alpha1.TalosCluster {
-	cluster := &ichorv1alpha1.TalosCluster{
-		GenerateName: testClusterGenerate, Namespace: tmNamespace,
-		Spec: ichorv1alpha1.TalosClusterSpec{
-			Endpoint:          ichorv1alpha1.TalosClusterEndpoint{Type: testEndpointType, Address: "10.0.0.6"},
-			TalosVersion:      testTalosVersion,
-			KubernetesVersion: "v1.34.0",
-			VersionContract:   testK8sContract,
-			SecretsRef:        corev1.LocalObjectReference{Name: secretName},
-			ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: count, Schedulable: testSchedulable},
-		},
-	}
+	spec := newClusterSpec(secretName, testK8sContract)
+	spec.Endpoint.Address = "10.0.0.6"
+	spec.KubernetesVersion = "v1.34.0"
+	spec.ControlPlane.Count = count
+
+	cluster := &ichorv1alpha1.TalosCluster{GenerateName: testClusterGenerate, Namespace: tmNamespace, Spec: spec}
 	Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
 
 	return cluster

@@ -59,18 +59,10 @@ func reconcileHandover(r *CNIHandoverReconciler, namespace, name string) (ctrl.R
 // newTestCiliumCluster is newTestCluster with the CNI preset set to cilium before Create --
 // spec.cni.preset is immutable once a TalosCluster exists (the CEL rule on TalosClusterCNI).
 func newTestCiliumCluster() *ichorv1alpha1.TalosCluster {
-	cluster := &ichorv1alpha1.TalosCluster{
-		GenerateName: testClusterGenerate, Namespace: tmNamespace,
-		Spec: ichorv1alpha1.TalosClusterSpec{
-			Endpoint:          ichorv1alpha1.TalosClusterEndpoint{Type: testEndpointType, Address: testClusterAddress},
-			TalosVersion:      testTalosVersion,
-			KubernetesVersion: "v" + constants.DefaultKubernetesVersion,
-			VersionContract:   testK8sContract,
-			SecretsRef:        corev1.LocalObjectReference{Name: missingSecretName},
-			ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: 1, Schedulable: testSchedulable},
-			CNI:               ichorv1alpha1.TalosClusterCNI{Preset: ciliumName},
-		},
-	}
+	spec := newClusterSpec(missingSecretName, testK8sContract)
+	spec.CNI = ichorv1alpha1.TalosClusterCNI{Preset: ciliumName}
+
+	cluster := &ichorv1alpha1.TalosCluster{GenerateName: testClusterGenerate, Namespace: tmNamespace, Spec: spec}
 	Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
 	DeferCleanup(func() { Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, cluster))).To(Succeed()) })
 

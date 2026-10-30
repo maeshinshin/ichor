@@ -22,7 +22,6 @@ import (
 
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -117,5 +116,9 @@ func reclaimDoneClusters(_ context.Context, obj client.Object) []reconcile.Reque
 		return nil
 	}
 
-	return []reconcile.Request{{NamespacedName: types.NamespacedName{Namespace: mr.Namespace, Name: mr.Spec.ClusterRef.Name}}}
+	var req reconcile.Request
+
+	req.Namespace, req.Name = mr.Namespace, mr.Spec.ClusterRef.Name
+
+	return []reconcile.Request{req}
 }

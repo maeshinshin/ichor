@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"maps"
 	"slices"
 	"time"
@@ -33,7 +34,9 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/util/csaupgrade"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -314,12 +317,44 @@ func applyWithSettle(ctx context.Context, c client.Client, u *unstructured.Unstr
 	return pollErr
 }
 
+// initFieldManagers are the managers an `ichor init` made before it applied server-side:
+// controller-runtime named them after the binary, and Create is an Update operation.
+var initFieldManagers = sets.New("ichor")
+
+// adoptInitFields hands the fields an older `ichor init` wrote with Update over to FieldOwner
+// (client-go's csaupgrade, the documented client-side-to-server-side upgrade), so this apply can
+// remove an item init created and the new manifest dropped (the plaintext ichor-ui Service port).
+func adoptInitFields(ctx context.Context, c client.Client, u *unstructured.Unstructured) error {
+	live := &unstructured.Unstructured{}
+	live.SetGroupVersionKind(u.GroupVersionKind())
+
+	err := c.Get(ctx, types.NamespacedName{Namespace: u.GetNamespace(), Name: u.GetName()}, live)
+	if apierrors.IsNotFound(err) || meta.IsNoMatchError(err) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+
+	patch, err := csaupgrade.UpgradeManagedFieldsPatch(live, initFieldManagers, FieldOwner)
+	if err != nil || patch == nil {
+		return err
+	}
+
+	log.Printf("handing the fields ichor init wrote on %s %s over to %s", u.GetKind(), u.GetName(), FieldOwner)
+
+	return c.Patch(ctx, live, client.RawPatch(types.JSONPatchType, patch))
+}
+
 // applyOne server-side applies u, except a Deployment, which is replaced whole. Apply merges
 // into fields other managers own (init's Update owns its probes and args), so a tcpSocket
 // probe applied over init's httpGet one is two handlers in one probe, which is invalid. The
 // replacement keeps the live annotations the Deployment controller writes.
 func applyOne(ctx context.Context, c client.Client, u *unstructured.Unstructured) error {
 	if u.GetKind() != kindDeployment {
+		if err := adoptInitFields(ctx, c, u); err != nil {
+			return err
+		}
+
 		return c.Apply(ctx, client.ApplyConfigurationFromUnstructured(u), client.FieldOwner(FieldOwner), client.ForceOwnership)
 	}
 

@@ -39,7 +39,7 @@ func TestApplyOneRemovesAPortOwnedByAnOlderInit(t *testing.T) {
 		return corev1.ServicePort{Name: name, Port: p, TargetPort: intstr.FromInt32(p), Protocol: corev1.ProtocolTCP}
 	}
 	svc := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{Name: "ichor-ichor-ui-service", Namespace: f.ns},
+		ObjectMeta: metav1.ObjectMeta{Name: "ichor-ichor-ui-service", Namespace: f.ns}, //nolint:modernize
 		Spec:       corev1.ServiceSpec{Ports: []corev1.ServicePort{port("http", 8080)}, Selector: map[string]string{"a": "b"}},
 	}
 
@@ -55,8 +55,8 @@ func TestApplyOneRemovesAPortOwnedByAnOlderInit(t *testing.T) {
 
 	want := &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "v1", "kind": "Service",
-		"metadata": map[string]any{"name": svc.Name, "namespace": f.ns},
-		"spec": map[string]any{
+		"metadata": map[string]any{kName: svc.Name, "namespace": f.ns},
+		kSpec: map[string]any{
 			"selector": map[string]any{"a": "b"},
 			"ports":    []any{map[string]any{"name": "https", "port": int64(8443), "targetPort": int64(8443), "protocol": "TCP"}},
 		},
@@ -71,7 +71,7 @@ func TestApplyOneRemovesAPortOwnedByAnOlderInit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var names []string
+	names := make([]string, 0, len(got.Spec.Ports))
 	for _, p := range got.Spec.Ports {
 		names = append(names, p.Name)
 	}

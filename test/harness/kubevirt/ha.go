@@ -259,22 +259,27 @@ func publishHA(ips []string, talosconfigYAML []byte, bundle *secrets.Bundle) err
 // Ceph storage pinned).
 func downHA() error {
 	names := make([]string, haMaxVMs)
-	dvs := make([]string, 0, haMaxVMs*2)
 	for i := range haMaxVMs {
 		names[i] = haVMName(i)
-		dvs = append(dvs, haVMName(i)+"-iso", haVMName(i)+"-system")
 	}
+	return deleteVMs(names...)
+}
 
-	args := append([]string{"-n", namespace, verbDelete, "vm"}, names...)
-	args = append(args, "--wait=true", "--timeout=120s", "--ignore-not-found")
-	if _, err := utils.Run(kube.Command(args...)); err != nil {
-		return fmt.Errorf("deleting the VMs: %w", err)
+// deleteVMs deletes the named VMs, then their "-iso" and "-system" DataVolumes; absent ones are fine.
+func deleteVMs(names ...string) error {
+	dvs := make([]string, 0, len(names)*2)
+	for _, n := range names {
+		dvs = append(dvs, n+"-iso", n+"-system")
 	}
-
-	args = append([]string{"-n", namespace, verbDelete, "dv"}, dvs...)
-	args = append(args, "--wait=true", "--timeout=120s", "--ignore-not-found")
-	if _, err := utils.Run(kube.Command(args...)); err != nil {
-		return fmt.Errorf("deleting the DataVolumes: %w", err)
+	for _, kind := range []struct {
+		resource, label string
+		names           []string
+	}{{"vm", "VMs", names}, {"dv", "DataVolumes", dvs}} {
+		args := append([]string{"-n", namespace, verbDelete, kind.resource}, kind.names...)
+		args = append(args, "--wait=true", "--timeout=120s", "--ignore-not-found")
+		if _, err := utils.Run(kube.Command(args...)); err != nil {
+			return fmt.Errorf("deleting the %s: %w", kind.label, err)
+		}
 	}
 	return nil
 }

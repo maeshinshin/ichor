@@ -33,7 +33,6 @@ import (
 
 	"github.com/maeshinshin/ichor/test/internal/kube"
 	"github.com/maeshinshin/ichor/test/internal/talosctl"
-	"github.com/maeshinshin/ichor/test/utils"
 )
 
 const (
@@ -203,20 +202,5 @@ func downDemo() error {
 		vms = []string{cp, cp + "2", cp + "3", cp + "4"}
 	}
 
-	if _, err := utils.Run(kube.Command(append([]string{"-n", namespace, verbDelete, "vm"},
-		append(vms, "--wait=true", "--timeout=120s", "--ignore-not-found")...)...)); err != nil {
-		return fmt.Errorf("deleting the VMs: %w", err)
-	}
-
-	args := []string{"-n", namespace, verbDelete, "dv"}
-	for _, v := range vms {
-		args = append(args, v+"-iso", v+"-system")
-	}
-
-	args = append(args, "--wait=true", "--timeout=120s", "--ignore-not-found")
-	if _, err := utils.Run(kube.Command(args...)); err != nil {
-		return fmt.Errorf("deleting the DataVolumes: %w", err)
-	}
-
-	return nil
+	return deleteVMs(vms...)
 }

@@ -454,15 +454,7 @@ func down() error {
 		"--wait=false", "--ignore-not-found")); err != nil {
 		return fmt.Errorf("deleting the relay pod: %w", err)
 	}
-	if _, err := utils.Run(kube.Command("-n", namespace, verbDelete, "vm", vmName,
-		"--wait=true", "--timeout=120s", "--ignore-not-found")); err != nil {
-		return fmt.Errorf("deleting the VM: %w", err)
-	}
-	if _, err := utils.Run(kube.Command("-n", namespace, verbDelete, "dv",
-		vmName+"-iso", vmName+"-system", "--wait=true", "--timeout=120s", "--ignore-not-found")); err != nil {
-		return fmt.Errorf("deleting the DataVolumes: %w", err)
-	}
-	return nil
+	return deleteVMs(vmName)
 }
 
 // startRelay creates the relay pod pointed at nodeIP, waits for it to run, and starts a

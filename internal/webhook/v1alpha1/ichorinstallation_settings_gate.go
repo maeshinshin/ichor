@@ -105,8 +105,12 @@ func settingChanges(oldSpec, newSpec *ichorv1alpha1.IchorInstallationSpec) []set
 	return slices.DeleteFunc(all, func(c settingChange) bool { return c.old == c.new })
 }
 
-// check applies the gate to a write. oldObj is nil on create.
+// check applies the gate to a write; a nil gate is off. oldObj is nil on create.
 func (g *SettingsGate) check(ctx context.Context, oldObj, newObj *ichorv1alpha1.IchorInstallation) error {
+	if g == nil {
+		return nil
+	}
+
 	var oldSpec *ichorv1alpha1.IchorInstallationSpec
 	if oldObj != nil {
 		oldSpec = &oldObj.Spec

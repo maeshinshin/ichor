@@ -58,10 +58,6 @@ func (s nodeActionSpec) request(bg *pb.BreakGlass) *pb.NodeActionRequest {
 	}
 }
 
-func nodeActionName(a pb.NodeAction) string {
-	return strings.ReplaceAll(strings.ToLower(strings.TrimPrefix(a.String(), "NODE_ACTION_")), "_", "-")
-}
-
 // nodePlanText is the confirmation of a node action, from the server's plan.
 func nodePlanText(s nodeActionSpec, p *pb.PlanOperationResponse) string {
 	var b strings.Builder
@@ -122,7 +118,7 @@ func runNodeAction(ctx context.Context, c *apiClients, in io.Reader, out, errw i
 		return err
 	}
 
-	name := nodeActionName(s.Action)
+	name := strings.ReplaceAll(strings.ToLower(strings.TrimPrefix(s.Action.String(), "NODE_ACTION_")), "_", "-")
 
 	if b := plan.Msg.GetBlocked(); b != "" {
 		return fmt.Errorf("node %s: %s", name, b)

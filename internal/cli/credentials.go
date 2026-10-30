@@ -30,7 +30,6 @@ import (
 	clientconfig "github.com/siderolabs/talos/pkg/machinery/client/config"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/clientcmd"
-	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -94,9 +93,12 @@ func writeCredentials(ctx context.Context, k8s client.Client, req credentialRequ
 
 	kubeIn := currentKubeconfigFile(req.KubeconfigIn)
 
-	current, err := loadKubeconfigTemplate(req.KubeconfigIn)
+	rules := clientcmd.NewDefaultClientConfigLoadingRules()
+	rules.ExplicitPath = req.KubeconfigIn
+
+	current, err := rules.Load()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("reading the current kubeconfig: %w", err)
 	}
 
 	talosIn := currentTalosconfigFile(req.TalosconfigIn)
@@ -212,18 +214,6 @@ func currentKubeconfigFile(explicit string) string {
 	home, _ := os.UserHomeDir()
 
 	return filepath.Join(home, ".kube", "config")
-}
-
-func loadKubeconfigTemplate(explicit string) (*clientcmdapi.Config, error) {
-	rules := clientcmd.NewDefaultClientConfigLoadingRules()
-	rules.ExplicitPath = explicit
-
-	cfg, err := rules.Load()
-	if err != nil {
-		return nil, fmt.Errorf("reading the current kubeconfig: %w", err)
-	}
-
-	return cfg, nil
 }
 
 // currentTalosconfigFile is the talosconfig talosctl would read: the explicit path, $TALOSCONFIG, or

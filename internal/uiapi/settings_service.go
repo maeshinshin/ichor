@@ -36,10 +36,10 @@ import (
 
 func settingsKey() types.NamespacedName { return types.NamespacedName{Name: settings.SingletonName} }
 
-// mayEditSetting asks, as the caller, for update on ichorinstallations/<sub>.
-func (s *Server) mayEditSetting(ctx context.Context, sub string) (bool, error) {
+// mayEditSetting asks, as the caller, for update on ichorinstallations/settings.
+func (s *Server) mayEditSetting(ctx context.Context) (bool, error) {
 	return s.mayAll(ctx, authv1.ResourceAttributes{
-		Verb: "update", Group: ichorv1alpha1.GroupVersion.Group, Resource: "ichorinstallations", Subresource: sub,
+		Verb: "update", Group: ichorv1alpha1.GroupVersion.Group, Resource: "ichorinstallations", Subresource: ichorv1alpha1.IchorSubresourceSettings,
 		Name: settings.SingletonName,
 	})
 }
@@ -124,7 +124,7 @@ func (s *Server) settingsResponse(ctx context.Context, inst *ichorv1alpha1.Ichor
 	if !resp.ReadOnly {
 		var err error
 
-		if resp.CanEditSettings, err = s.mayEditSetting(ctx, ichorv1alpha1.IchorSubresourceSettings); err != nil {
+		if resp.CanEditSettings, err = s.mayEditSetting(ctx); err != nil {
 			return nil, err
 		}
 	}
@@ -199,26 +199,15 @@ func (s *Server) UpdateSettings(
 		return nil, bad(err)
 	}
 
-	// RBAC is judged per group before the write, so the message names the verb; the webhook repeats the check.
-	for _, g := range []struct {
-		touched bool
-		sub     string
-	}{
-		{changes.TokenTTL != nil || changes.RefreshLifetime != nil || changes.DriftPolicy != nil, ichorv1alpha1.IchorSubresourceSettings},
-	} {
-		if !g.touched {
-			continue
-		}
+	// RBAC is judged before the write, so the message names the verb; the webhook repeats the check.
+	ok, err := s.mayEditSetting(ctx)
+	if err != nil {
+		return nil, err
+	}
 
-		ok, err := s.mayEditSetting(ctx, g.sub)
-		if err != nil {
-			return nil, err
-		}
-
-		if !ok {
-			return nil, connect.NewError(connect.CodePermissionDenied,
-				fmt.Errorf("RBAC does not grant you the \"update\" verb on ichorinstallations/%s", g.sub))
-		}
+	if !ok {
+		return nil, connect.NewError(connect.CodePermissionDenied,
+			errors.New("RBAC does not grant you the \"update\" verb on ichorinstallations/settings"))
 	}
 
 	var inst ichorv1alpha1.IchorInstallation

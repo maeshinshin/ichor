@@ -155,26 +155,36 @@ func shrinkInitRetry(t *testing.T) {
 	t.Cleanup(func() { initRetryWindow, followRetryDelay = w, d })
 }
 
-// failingCreates fails the first n Creates with err, then lets the fake answer.
-func failingCreates(t *testing.T, n int, err error, calls *int) client.Client {
-	return fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithInterceptorFuncs(interceptor.Funcs{
+// beforeWrites runs before on every Create and Apply, fails the write with its error, else lets the fake answer.
+func beforeWrites(before func() error) interceptor.Funcs {
+	return interceptor.Funcs{
 		Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
-			*calls++
-			if *calls <= n {
+			if err := before(); err != nil {
 				return err
 			}
 
 			return c.Create(ctx, obj, opts...)
 		},
 		Apply: func(ctx context.Context, c client.WithWatch, obj runtime.ApplyConfiguration, opts ...client.ApplyOption) error {
-			*calls++
-			if *calls <= n {
+			if err := before(); err != nil {
 				return err
 			}
 
 			return c.Apply(ctx, obj, opts...)
 		},
-	}).Build()
+	}
+}
+
+// failingCreates fails the first n writes with err, then lets the fake answer.
+func failingCreates(t *testing.T, n int, err error, calls *int) client.Client {
+	return fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithInterceptorFuncs(beforeWrites(func() error {
+		*calls++
+		if *calls <= n {
+			return err
+		}
+
+		return nil
+	})).Build()
 }
 
 func TestApplyIchorManifest_RetriesEtcdTimeout(t *testing.T) {

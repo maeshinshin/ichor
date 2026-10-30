@@ -58,30 +58,25 @@ func main() {
 		fmt.Printf("%s: OK %s\n", name, protojson.MarshalOptions{}.Format(m))
 	}
 	r1, err := cl.GetCluster(ctx, connect.NewRequest(&pb.GetClusterRequest{Cluster: ref}))
-	if err == nil {
-		show("GetCluster", r1.Msg, nil)
-	} else {
-		show("GetCluster", nil, err)
-	}
+	show("GetCluster", msg(r1), err)
 	r2, err := cni.GetCiliumValues(ctx, connect.NewRequest(&pb.GetCiliumValuesRequest{Cluster: ref}))
-	if err == nil {
-		show("GetCiliumValues", r2.Msg, nil)
-	} else {
-		show("GetCiliumValues", nil, err)
-	}
+	show("GetCiliumValues", msg(r2), err)
 	r3, err := cni.SetCiliumValues(ctx, connect.NewRequest(&pb.SetCiliumValuesRequest{
 		Cluster: ref, UserYaml: "debug:\n  enabled: true\n",
 	}))
-	if err == nil {
-		show("SetCiliumValues", r3.Msg, nil)
-	} else {
-		show("SetCiliumValues", nil, err)
-	}
-	r4, err := cni.StartCniUpgrade(context.Background(), connect.NewRequest(&pb.StartCniUpgradeRequest{Cluster: ref}))
-	if err == nil {
-		show("StartCniUpgrade", r4.Msg, nil)
-	} else {
-		show("StartCniUpgrade", nil, err)
-	}
+	show("SetCiliumValues", msg(r3), err)
+	r4, err := cni.StartCniUpgrade(ctx, connect.NewRequest(&pb.StartCniUpgradeRequest{Cluster: ref}))
+	show("StartCniUpgrade", msg(r4), err)
 	_ = os.Stdout.Sync()
+}
+
+// msg returns the response message, or nil when the call failed (r is nil then).
+func msg[T any, P interface {
+	*T
+	proto.Message
+}](r *connect.Response[T]) proto.Message {
+	if r == nil {
+		return nil
+	}
+	return P(r.Msg)
 }

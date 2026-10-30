@@ -384,31 +384,28 @@ func (r *MachineReclaimReconciler) done(ctx context.Context, mr *ichorv1alpha1.M
 }
 
 func (r *MachineReclaimReconciler) fail(ctx context.Context, mr *ichorv1alpha1.MachineReclaim, msg string) (ctrl.Result, error) {
+	return r.end(ctx, mr, ichorv1alpha1.MachineReclaimFailed, "ReclaimFailed", msg)
+}
+
+func (r *MachineReclaimReconciler) expire(ctx context.Context, mr *ichorv1alpha1.MachineReclaim) (ctrl.Result, error) {
+	return r.end(ctx, mr, ichorv1alpha1.MachineReclaimExpired, "ReclaimExpired",
+		"the request expired before it was confirmed; nothing was sent to the machine")
+}
+
+// end deletes the credential and records a terminal phase that did not succeed.
+func (r *MachineReclaimReconciler) end(
+	ctx context.Context, mr *ichorv1alpha1.MachineReclaim, phase ichorv1alpha1.MachineReclaimPhase, reason, msg string,
+) (ctrl.Result, error) {
 	r.deleteCredential(ctx, mr)
 
-	mr.Status.Phase = ichorv1alpha1.MachineReclaimFailed
+	mr.Status.Phase = phase
 	mr.Status.Result = msg
 
 	if err := r.Status().Update(ctx, mr); err != nil {
 		return ctrl.Result{}, err
 	}
 
-	r.audit(mr, corev1.EventTypeWarning, "ReclaimFailed", msg)
-
-	return ctrl.Result{RequeueAfter: time.Second}, nil
-}
-
-func (r *MachineReclaimReconciler) expire(ctx context.Context, mr *ichorv1alpha1.MachineReclaim) (ctrl.Result, error) {
-	r.deleteCredential(ctx, mr)
-
-	mr.Status.Phase = ichorv1alpha1.MachineReclaimExpired
-	mr.Status.Result = "the request expired before it was confirmed; nothing was sent to the machine"
-
-	if err := r.Status().Update(ctx, mr); err != nil {
-		return ctrl.Result{}, err
-	}
-
-	r.audit(mr, corev1.EventTypeWarning, "ReclaimExpired", mr.Status.Result)
+	r.audit(mr, corev1.EventTypeWarning, reason, msg)
 
 	return ctrl.Result{RequeueAfter: time.Second}, nil
 }

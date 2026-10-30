@@ -23,19 +23,10 @@ golangci-lint is lower than the targeted Go version" on every later run, inside
 the shell or not. If you see that, `rm -rf bin` and run it again inside
 `nix develop`.
 
-One command tells you whether that is what you are looking at:
-
-```
-./bin/golangci-lint version
-```
-
-It has to say `built with go1.27.3` (or whatever `flake.nix` pins now). If it
-names an older Go, the cache is poisoned and `make lint` cannot run at all --
-which looks exactly like "lint is broken for everyone" or "an unrelated
-environment problem", and has twice been reported as one. Check this before
-concluding that lint failures are not yours: a poisoned cache means your work
-was never linted, so findings surface later, at integration, in someone else's
-hands.
+Check with `./bin/golangci-lint version`: it has to say `built with go1.27.3`
+(or whatever `flake.nix` pins now). If it names an older Go, the cache is
+poisoned and your work was never linted, so check this before concluding that
+lint failures are not yours.
 
 ## Project conventions
 

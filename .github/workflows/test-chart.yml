@@ -53,13 +53,6 @@ jobs:
       # No cert-manager install step: it is off by default, the
       # webhook serving certificate is generated in-process by cert-controller.
 
-# TODO: Uncomment if Prometheus is enabled
-#      - name: Install Prometheus Operator CRDs
-#        run: |
-#          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-#          helm repo update
-#          helm install prometheus-crds prometheus-community/prometheus-operator-crds
-
       - name: Deploy manager via Helm
         run: |
           make helm-deploy

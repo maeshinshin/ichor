@@ -53,7 +53,7 @@ There is no switch for "Reset and add" (MachineReclaim) any more: `reclaim.enabl
 and `spec.reclaim` are deprecated and ignored (ADR 0107), `ichor settings set
 reclaim.enabled=...` is refused, and the webhook warns when `spec.reclaim` is
 set. Who may reset and add a machine is decided by RBAC alone; see
-`adopt-and-reclaim.md`. Each accepted change leaves an Event on the
+[Adopt and reclaim](adopt-and-reclaim.md). Each accepted change leaves an Event on the
 `IchorInstallation` with the changed fields, old and new values and the user.
 
 ## Who may change what
@@ -69,8 +69,7 @@ the subresource for each part of the change:
 
 `ichor-admin` holds both on separate rule lines, so a custom role can hold
 fewer. The ichor-ui ServiceAccount holds `update` on `settings` for the users it
-impersonates. Read the other documents in this guide set for
-roles in general.
+impersonates.
 
 ## Read-only mode
 

@@ -79,7 +79,7 @@ type IchorInstallationCustomValidator struct {
 func (v *IchorInstallationCustomValidator) ValidateCreate(ctx context.Context, obj *ichorv1alpha1.IchorInstallation) (admission.Warnings, error) {
 	ichorinstallationlog.Info("Validation for IchorInstallation upon creation", "name", obj.GetName())
 
-	if err := v.checkSettings(ctx, nil, obj); err != nil {
+	if err := v.Settings.check(ctx, nil, obj); err != nil {
 		return nil, err
 	}
 
@@ -91,7 +91,7 @@ func (v *IchorInstallationCustomValidator) ValidateCreate(ctx context.Context, o
 func (v *IchorInstallationCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj *ichorv1alpha1.IchorInstallation) (admission.Warnings, error) {
 	ichorinstallationlog.Info("Validation for IchorInstallation upon update", "name", newObj.GetName())
 
-	if err := v.checkSettings(ctx, oldObj, newObj); err != nil {
+	if err := v.Settings.check(ctx, oldObj, newObj); err != nil {
 		return nil, err
 	}
 
@@ -105,15 +105,6 @@ func (v *IchorInstallationCustomValidator) ValidateUpdate(ctx context.Context, o
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type IchorInstallation.
 func (v *IchorInstallationCustomValidator) ValidateDelete(_ context.Context, _ *ichorv1alpha1.IchorInstallation) (admission.Warnings, error) {
 	return nil, nil
-}
-
-// checkSettings runs the settings gate when it is on.
-func (v *IchorInstallationCustomValidator) checkSettings(ctx context.Context, oldObj, newObj *ichorv1alpha1.IchorInstallation) error {
-	if v.Settings == nil {
-		return nil
-	}
-
-	return v.Settings.check(ctx, oldObj, newObj)
 }
 
 // deprecatedReclaim warns about the removed installation switch: it is kept in the

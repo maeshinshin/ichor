@@ -105,7 +105,7 @@ of two certificates:
 - The pair you supply with `ichorUI.tls.secretName` (or `--ui-tls-secret`), for
   example a cert-manager Secret. Browsers trust it if the issuer is public.
 - Otherwise a leaf from the Ichor serving CA (Secret `ichor-oidc-tls`, issued for
-  every install). Its names are the Service ClusterIP, `ichor-ui-service.ichor-system.svc`
+  every install). Its names are the Service ClusterIP, `ichor-ui-service.ichor-system.svc` (`ichor-ichor-ui-service...` on an `ichor init` install)
   (and `.cluster.local`), `localhost` and, when users are on, the host of the
   external URL. Browsers do not trust it, so an edge that terminates the
   browser's TLS has to verify it, and a client that talks to it directly needs

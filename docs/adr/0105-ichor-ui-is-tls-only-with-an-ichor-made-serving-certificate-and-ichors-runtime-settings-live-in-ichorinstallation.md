@@ -198,3 +198,7 @@ Fixes the failed expectation in "Unit 10, plaintext install upgraded" above. The
 ## Amendment (ADR 0107)
 
 `spec.reclaim.enabled`, the `ichorinstallations/reclaim` subresource, the confirmation annotation and the Settings reclaim card are gone: the field is deprecated and ignored, and "Reset and add" is decided by the `reclaim` verb on `machinereclaims` alone.
+
+## Amendment (2026-10-30): why the upgraded ichor-ui waited about 2.5 minutes
+
+The Secrets are issued by the controller leader (`IssuerTrustReconciler`, event driven, it runs once at start). After an upgrade the new controller pod was not the leader: `LeaseDuration` is 120 s (ADR 0063) and the old pod did not release the lease when it stopped, so the new one waited out the lease before issuing `ichor-oidc-ca`, `ichor-oidc-tls` and `ichor-ui-ca`. That is the 00:13:30 to 00:16:00 gap. The manager now releases the lease when it stops (`LeaderElectionReleaseOnCancel`), so an upgrade hands over at once; after it the remaining wait is the kubelet copying the new Secrets into ichor-ui's volume, up to about a minute (an optional Secret volume is refreshed on the kubelet sync period). A crash still waits out the lease. ADR 0063's "stays off" is superseded: an etcd restore (ADR 0089) removes the API server, so the release fails there and the lease runs out as before.

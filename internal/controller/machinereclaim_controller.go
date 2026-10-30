@@ -310,8 +310,6 @@ func (r *MachineReclaimReconciler) waitForMaintenance(ctx context.Context, mr *i
 		probe = reclaim.MaintenanceUUID
 	}
 
-	window := orDuration(r.WaitWindow, reclaimWaitWindow)
-
 	sent := mr.CreationTimestamp.Time
 	if mr.Status.Audit.ResetSentAt != nil {
 		sent = mr.Status.Audit.ResetSentAt.Time
@@ -326,14 +324,13 @@ func (r *MachineReclaimReconciler) waitForMaintenance(ctx context.Context, mr *i
 			"address from DHCP: scan for the machine and add its address to a cluster's spec.discovery.addresses", host, uuid))
 	}
 
-	if remaining := deadline.Sub(now); remaining <= 0 {
+	remaining := deadline.Sub(now)
+	if remaining <= 0 {
 		return failed()
-	} else if remaining < orDuration(r.WaitWindow, reclaimWaitWindow) {
-		// Never probe past the deadline.
-		window = remaining
 	}
 
-	wctx, cancel := context.WithTimeout(ctx, window)
+	// Never probe past the deadline.
+	wctx, cancel := context.WithTimeout(ctx, min(orDuration(r.WaitWindow, reclaimWaitWindow), remaining))
 	defer cancel()
 
 	err := reclaim.WaitMaintenance(wctx, host, uuid, orDuration(r.WaitInterval, reclaimWaitInterval), probe)
@@ -347,7 +344,7 @@ func (r *MachineReclaimReconciler) waitForMaintenance(ctx context.Context, mr *i
 	}
 
 	// The probes took time: measure again, and come back exactly at the deadline at the latest.
-	remaining := deadline.Sub(r.now())
+	remaining = deadline.Sub(r.now())
 	if remaining <= 0 {
 		return failed()
 	}

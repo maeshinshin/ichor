@@ -29,7 +29,6 @@ import (
 
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
-	"github.com/siderolabs/talos/pkg/machinery/constants"
 	yaml "go.yaml.in/yaml/v4"
 	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
@@ -369,16 +368,7 @@ func newTestSecret(bundle *secrets.Bundle) *corev1.Secret {
 
 func newTestCluster(secretName, versionContract string) *ichorv1alpha1.TalosCluster {
 	cluster := &ichorv1alpha1.TalosCluster{
-		GenerateName: testClusterGenerate, Namespace: tmNamespace,
-		Spec: ichorv1alpha1.TalosClusterSpec{
-			Endpoint:          ichorv1alpha1.TalosClusterEndpoint{Type: testEndpointType, Address: testClusterAddress},
-			TalosVersion:      testTalosVersion,
-			KubernetesVersion: "v" + constants.DefaultKubernetesVersion,
-			VersionContract:   versionContract,
-			SecretsRef:        corev1.LocalObjectReference{Name: secretName},
-			ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: 1, Schedulable: testSchedulable},
-			DriftPolicy:       settings.DriftPolicyDefault, // what the defaulting webhook fills; envtest here runs without it
-		},
+		GenerateName: testClusterGenerate, Namespace: tmNamespace, Spec: newClusterSpec(secretName, versionContract),
 	}
 	Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
 

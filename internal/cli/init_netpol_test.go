@@ -24,10 +24,8 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
 const (
@@ -84,37 +82,31 @@ func TestApplyNetworkPolicies_WaitsForCiliumReady(t *testing.T) {
 	// DaemonSet, then both, and the CRD not Established until the fourth read of the DaemonSet.
 	reads, ready := 0, false
 
-	wrapped := fake.NewClientBuilder().WithScheme(scheme).WithObjects(ciliumDaemonSetObj(2, 1), ciliumCRDObj(false)).
-		WithInterceptorFuncs(interceptor.Funcs{
-			Get: func(ctx context.Context, cl client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
-				err := cl.Get(ctx, key, obj, opts...)
-				u, ok := obj.(*unstructured.Unstructured)
+	funcs := beforeWrites(func() error {
+		ready = ready || reads >= 4
 
-				switch {
-				case err != nil || !ok:
-				case u.GetKind() == "DaemonSet":
-					reads++
+		return nil
+	})
+	funcs.Get = func(ctx context.Context, cl client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+		err := cl.Get(ctx, key, obj, opts...)
+		u, ok := obj.(*unstructured.Unstructured)
 
-					if reads >= 3 {
-						u.Object[keyStatus] = ciliumDaemonSetObj(2, 2).Object[keyStatus]
-					}
-				case u.GetKind() == "CustomResourceDefinition" && reads >= 4:
-					u.Object[keyStatus] = ciliumCRDObj(true).Object[keyStatus]
-				}
+		switch {
+		case err != nil || !ok:
+		case u.GetKind() == "DaemonSet":
+			reads++
 
-				return err
-			},
-			Create: func(ctx context.Context, cl client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
-				ready = ready || reads >= 4
+			if reads >= 3 {
+				u.Object[keyStatus] = ciliumDaemonSetObj(2, 2).Object[keyStatus]
+			}
+		case u.GetKind() == "CustomResourceDefinition" && reads >= 4:
+			u.Object[keyStatus] = ciliumCRDObj(true).Object[keyStatus]
+		}
 
-				return cl.Create(ctx, obj, opts...)
-			},
-			Apply: func(ctx context.Context, cl client.WithWatch, obj runtime.ApplyConfiguration, opts ...client.ApplyOption) error {
-				ready = ready || reads >= 4
+		return err
+	}
 
-				return cl.Apply(ctx, obj, opts...)
-			},
-		}).Build()
+	wrapped := fake.NewClientBuilder().WithScheme(scheme).WithObjects(ciliumDaemonSetObj(2, 1), ciliumCRDObj(false)).WithInterceptorFuncs(funcs).Build()
 
 	var out bytes.Buffer
 
@@ -144,18 +136,11 @@ func TestApplyNetworkPolicies_NothingIsCreatedWhileCiliumIsNotReady(t *testing.T
 
 	created := false
 	c := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(ciliumDaemonSetObj(1, 0), ciliumCRDObj(true)).
-		WithInterceptorFuncs(interceptor.Funcs{
-			Create: func(context.Context, client.WithWatch, client.Object, ...client.CreateOption) error {
-				created = true
+		WithInterceptorFuncs(beforeWrites(func() error {
+			created = true
 
-				return nil
-			},
-			Apply: func(context.Context, client.WithWatch, runtime.ApplyConfiguration, ...client.ApplyOption) error {
-				created = true
-
-				return nil
-			},
-		}).Build()
+			return nil
+		})).Build()
 
 	var out bytes.Buffer
 
@@ -171,13 +156,11 @@ func TestApplyNetworkPolicies_NothingIsCreatedWhileCiliumIsNotReady(t *testing.T
 
 func TestApplyNetworkPolicies_SkipsWithoutCilium(t *testing.T) {
 	created := false
-	c := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithInterceptorFuncs(interceptor.Funcs{
-		Create: func(context.Context, client.WithWatch, client.Object, ...client.CreateOption) error {
-			created = true
+	c := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithInterceptorFuncs(beforeWrites(func() error {
+		created = true
 
-			return nil
-		},
-	}).Build()
+		return nil
+	})).Build()
 
 	var out bytes.Buffer
 

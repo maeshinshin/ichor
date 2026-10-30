@@ -213,8 +213,7 @@ be reachable from the control planes. Ichor installs no ingress. Expose
 ichor-ui with an Ingress, a Gateway or a LoadBalancer. ichor-ui is HTTPS only on
 8443, so an edge re-encrypts to it and verifies the backend against
 `ichor-ui-ca`, or a plain L4 load balancer passes through the certificate the
-operator supplied with `ichorUI.tls.secretName`. An install that served plain
-HTTP keeps a deprecated listener on 8080 for one minor release.
+operator supplied with `ichorUI.tls.secretName`.
 
 A Helm install gets an `IchorInstallation` created once by the
 controller with `spec.deployment.manager: helm`; Helm then owns upgrades and

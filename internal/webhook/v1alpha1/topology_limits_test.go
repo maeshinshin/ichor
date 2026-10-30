@@ -61,26 +61,9 @@ func topologyMachine(cluster, role, approval string) *ichorv1alpha1.TalosMachine
 // grantLastWorkerRights lets user read and write clusters and machines, and (if glass) hold the
 // break-glass verb on both.
 func grantLastWorkerRights(user string, glass bool) {
-	verbs := []string{verbGet, "list", verbUpdate, verbPatch, verbDelete}
-	if glass {
-		verbs = append(verbs, "break-glass")
-	}
-
-	name := "lw-test-" + user
-	role := &rbacv1.ClusterRole{
-		Name: name,
-		Rules: []rbacv1.PolicyRule{{
-			APIGroups: []string{ichorGroup}, Resources: []string{resClusters, bgUnitMachines}, Verbs: verbs,
-		}},
-	}
-	Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, role))).To(Succeed())
-
-	binding := &rbacv1.ClusterRoleBinding{
-		Name:     name,
-		RoleRef:  rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: kindClusterRole, Name: name},
-		Subjects: []rbacv1.Subject{{APIGroup: rbacv1.GroupName, Kind: kindUser, Name: user}},
-	}
-	Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, binding))).To(Succeed())
+	bindRole("lw-test-"+user, user, rbacv1.PolicyRule{
+		APIGroups: []string{ichorGroup}, Resources: []string{resClusters, bgUnitMachines}, Verbs: writeVerbs(glass),
+	})
 }
 
 // approve creates m pending, then approves it by update, the way the UI and

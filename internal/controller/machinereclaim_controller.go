@@ -32,6 +32,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
@@ -49,6 +50,7 @@ const (
 	reclaimWaitWindow         = 20 * time.Second
 	reclaimWaitInterval       = 5 * time.Second
 	reclaimRequeueWhileWaitng = 10 * time.Second
+	reclaimReconcileTimeout   = 2 * time.Minute
 	// ReclaimMaxCredentialAge is the hard maximum TTL: the sweeper deletes every credential Secret older.
 	ReclaimMaxCredentialAge = 60 * time.Minute
 )
@@ -74,6 +76,9 @@ type MachineReclaimReconciler struct {
 	WaitWindow      time.Duration
 	WaitInterval    time.Duration
 	MaintenanceWait time.Duration
+	// ReconcileTimeout bounds one reconcile (default reclaimReconcileTimeout), so a node call that
+	// hangs cannot hold a worker for minutes while other requests wait.
+	ReconcileTimeout time.Duration
 }
 
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=machinereclaims,verbs=get;list;watch;delete
@@ -106,6 +111,9 @@ func (r *MachineReclaimReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			res, err = ctrl.Result{}, errors.New("internal error while reconciling a MachineReclaim (details withheld)")
 		}
 	}()
+
+	ctx, stop := context.WithTimeout(ctx, orDuration(r.ReconcileTimeout, reclaimReconcileTimeout))
+	defer stop()
 
 	var mr ichorv1alpha1.MachineReclaim
 	if err := r.Get(ctx, req.NamespacedName, &mr); err != nil {
@@ -302,7 +310,30 @@ func (r *MachineReclaimReconciler) waitForMaintenance(ctx context.Context, mr *i
 		probe = reclaim.MaintenanceUUID
 	}
 
-	wctx, cancel := context.WithTimeout(ctx, orDuration(r.WaitWindow, reclaimWaitWindow))
+	window := orDuration(r.WaitWindow, reclaimWaitWindow)
+
+	sent := mr.CreationTimestamp.Time
+	if mr.Status.Audit.ResetSentAt != nil {
+		sent = mr.Status.Audit.ResetSentAt.Time
+	}
+
+	// The deadline counts from the reset, not from the TTL: once the reset is sent the request
+	// lives until the machine is back or this deadline passes.
+	deadline := sent.Add(orDuration(r.MaintenanceWait, reclaimMaintenanceWait))
+
+	failed := func() (ctrl.Result, error) {
+		return r.fail(ctx, mr, fmt.Sprintf("%s did not return to maintenance mode with UUID %s. It may have taken a new "+
+			"address from DHCP: scan for the machine and add its address to a cluster's spec.discovery.addresses", host, uuid))
+	}
+
+	if remaining := deadline.Sub(now); remaining <= 0 {
+		return failed()
+	} else if remaining < orDuration(r.WaitWindow, reclaimWaitWindow) {
+		// Never probe past the deadline.
+		window = remaining
+	}
+
+	wctx, cancel := context.WithTimeout(ctx, window)
 	defer cancel()
 
 	err := reclaim.WaitMaintenance(wctx, host, uuid, orDuration(r.WaitInterval, reclaimWaitInterval), probe)
@@ -315,17 +346,13 @@ func (r *MachineReclaimReconciler) waitForMaintenance(ctx context.Context, mr *i
 			"find the reclaimed one (UUID %s) by scanning", host, uuid))
 	}
 
-	sent := mr.CreationTimestamp.Time
-	if mr.Status.Audit.ResetSentAt != nil {
-		sent = mr.Status.Audit.ResetSentAt.Time
+	// The probes took time: measure again, and come back exactly at the deadline at the latest.
+	remaining := deadline.Sub(r.now())
+	if remaining <= 0 {
+		return failed()
 	}
 
-	if now.Sub(sent) > orDuration(r.MaintenanceWait, reclaimMaintenanceWait) {
-		return r.fail(ctx, mr, fmt.Sprintf("%s did not return to maintenance mode with UUID %s. It may have taken a new "+
-			"address from DHCP: scan for the machine and add its address to a cluster's spec.discovery.addresses", host, uuid))
-	}
-
-	return ctrl.Result{RequeueAfter: reclaimRequeueWhileWaitng}, nil
+	return ctrl.Result{RequeueAfter: min(reclaimRequeueWhileWaitng, remaining)}, nil
 }
 
 // done reports the maintenance address. Registration is the user's write (see the type's
@@ -580,5 +607,7 @@ func (r *MachineReclaimReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&ichorv1alpha1.MachineReclaim{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Named("machinereclaim").
+		// A request waits on a node that may be gone; four workers keep one from blocking the rest.
+		WithOptions(controller.Options{MaxConcurrentReconciles: 4}).
 		Complete(r)
 }

@@ -284,9 +284,10 @@ func main() {
 		LeaseDuration: &leaseDuration,
 		RenewDeadline: &renewDeadline,
 		RetryPeriod:   &retryPeriod,
-		// LeaderElectionReleaseOnCancel stays off: the process outlives its manager in
-		// WaitForRestoreTails (up to restoreTailGrace, ADR 0089) and must keep the lease
-		// then, or a second replica could act while an etcd restore is mid-way.
+		// Released on a stop so an upgraded controller issues the certificates ichor-ui waits for
+		// at once (ADR 0105). An etcd restore (ADR 0089) takes the API away, so there the release
+		// fails and the lease is kept until it expires, as before.
+		LeaderElectionReleaseOnCancel: releaseLeaseOnCancel,
 	})
 	must(err, "Failed to start manager")
 

@@ -246,11 +246,102 @@ func (s *Server) registerReclaimAddress(ctx context.Context, ref *pb.ObjectRef, 
 
 	c.Spec.Discovery.Addresses = append(c.Spec.Discovery.Addresses, host)
 
+	// Remember that Ichor, not the user, added it, so a request that fails can take it back out.
+	if c.Annotations == nil {
+		c.Annotations = map[string]string{}
+	}
+
+	c.Annotations[ichorv1alpha1.ReclaimAddedAddressesAnnotation] = strings.Join(
+		append(splitAddresses(c.Annotations[ichorv1alpha1.ReclaimAddedAddressesAnnotation]), host), ",")
+
 	if err := s.Update(ctx, &c, strictFieldValidation); err != nil {
 		return mapOperationWriteError("adding the reclaim address to", key, err)
 	}
 
 	return nil
+}
+
+func splitAddresses(v string) []string {
+	return slices.DeleteFunc(strings.Split(v, ","), func(a string) bool { return a == "" })
+}
+
+// pruneReclaimAddresses takes back out of spec.discovery.addresses the addresses CreateReclaim added
+// (ReclaimAddedAddressesAnnotation) for requests that did not end Done: failed, expired or deleted ones. An
+// address stays when a Done or still running request names it, or a TalosMachine of the cluster is at it.
+// An address the user had added never carries the annotation. The update is made as the caller and is best
+// effort: a caller who may not update the cluster just leaves the cleanup to the next one.
+func (s *Server) pruneReclaimAddresses(ctx context.Context) {
+	var clusters ichorv1alpha1.TalosClusterList
+	if err := s.List(ctx, &clusters, client.InNamespace(s.ControllerNamespace)); err != nil {
+		return
+	}
+
+	var requests ichorv1alpha1.MachineReclaimList
+	if err := s.List(ctx, &requests, client.InNamespace(s.ControllerNamespace)); err != nil {
+		return
+	}
+
+	var machines ichorv1alpha1.TalosMachineList
+
+	for i := range clusters.Items {
+		c := &clusters.Items[i]
+
+		added := splitAddresses(c.Annotations[ichorv1alpha1.ReclaimAddedAddressesAnnotation])
+		if len(added) == 0 {
+			continue
+		}
+
+		if machines.Items == nil {
+			if err := s.List(ctx, &machines, client.InNamespace(s.ControllerNamespace)); err != nil {
+				return
+			}
+		}
+
+		inUse := func(a string) bool {
+			for _, r := range requests.Items {
+				if r.Spec.ClusterRef != nil && r.Spec.ClusterRef.Name == c.Name && reclaim.HostOnly(r.Spec.Address) == a &&
+					r.Status.Phase != ichorv1alpha1.MachineReclaimFailed && r.Status.Phase != ichorv1alpha1.MachineReclaimExpired {
+					return true
+				}
+			}
+
+			for j := range machines.Items {
+				m := &machines.Items[j]
+				if m.Spec.ClusterRef.Name == c.Name &&
+					(reclaim.HostOnly(m.Spec.Endpoint) == a || reclaim.HostOnly(m.Status.ObservedEndpoint) == a) {
+					return true
+				}
+			}
+
+			return false
+		}
+
+		var keep []string
+
+		for _, a := range added {
+			if !inUse(a) {
+				if c.Spec.Discovery != nil {
+					c.Spec.Discovery.Addresses = slices.DeleteFunc(c.Spec.Discovery.Addresses, func(x string) bool { return x == a })
+				}
+
+				continue
+			}
+
+			keep = append(keep, a)
+		}
+
+		if len(keep) == len(added) {
+			continue
+		}
+
+		if len(keep) == 0 {
+			delete(c.Annotations, ichorv1alpha1.ReclaimAddedAddressesAnnotation)
+		} else {
+			c.Annotations[ichorv1alpha1.ReclaimAddedAddressesAnnotation] = strings.Join(keep, ",")
+		}
+
+		_ = s.Update(ctx, c, strictFieldValidation)
+	}
 }
 
 func (s *Server) GetReclaim(
@@ -259,6 +350,8 @@ func (s *Server) GetReclaim(
 	if err := s.reclaimGate(ctx); err != nil {
 		return nil, err
 	}
+
+	s.pruneReclaimAddresses(ctx)
 
 	var mr ichorv1alpha1.MachineReclaim
 
@@ -276,6 +369,8 @@ func (s *Server) ListReclaims(
 	if err := s.reclaimGate(ctx); err != nil {
 		return nil, err
 	}
+
+	s.pruneReclaimAddresses(ctx)
 
 	var list ichorv1alpha1.MachineReclaimList
 	if err := s.List(ctx, &list, client.InNamespace(s.ControllerNamespace)); err != nil {

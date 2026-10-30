@@ -54,6 +54,10 @@ const (
 	// them into status.audit.
 	ReclaimRequestedByAnnotation = "ichor.maesh.dev/reclaim-requested-by"
 	ReclaimConfirmedByAnnotation = "ichor.maesh.dev/reclaim-confirmed-by"
+	// ReclaimAddedAddressesAnnotation is set on a TalosCluster by the UI API: the comma-separated
+	// addresses it appended to spec.discovery.addresses for a reclaim request. Only those are ever
+	// taken out again (ADR 0107 amendment); an address the user added is never listed here.
+	ReclaimAddedAddressesAnnotation = "ichor.maesh.dev/reclaim-added-addresses"
 	// ReclaimVerb is the custom RBAC verb on machinereclaims checked by SubjectAccessReview.
 	ReclaimVerb = "reclaim"
 )

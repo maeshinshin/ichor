@@ -262,12 +262,6 @@ func removesIchorFinalizer(old, updated *unstructured.Unstructured) bool {
 	return false
 }
 
-// mayBreakGlass asks Kubernetes whether the requesting user holds the verb on
-// the object, as the user: the webhook never impersonates.
-func (h *BreakGlassHandler) mayBreakGlass(ctx context.Context, user authnv1.UserInfo, resource, name, namespace string) (bool, error) {
-	return h.mayDo(ctx, user, BreakGlassVerb, resource, "", name, namespace)
-}
-
 // require returns nil when the requesting user holds verb on resource (and subresource, when set),
 // else the 503 for a failed check or a denial with the given message.
 func (h *BreakGlassHandler) require(ctx context.Context, req admission.Request, verb, resource, subresource, name, denied string) *admission.Response {
@@ -472,7 +466,7 @@ func breakGlassCheckFor(c client.Client) BreakGlassCheck {
 			return false, nil //nolint:nilerr // no admission request, no user to hold the verb
 		}
 
-		return h.mayBreakGlass(ctx, req.UserInfo, resource, name, namespace)
+		return h.mayDo(ctx, req.UserInfo, BreakGlassVerb, resource, "", name, namespace)
 	}
 }
 

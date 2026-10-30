@@ -54,27 +54,19 @@ func asUser(name string) client.Client {
 // grant gives user the ordinary write rights, and (if glass) the break-glass
 // verb, on machines and patches.
 func grant(user string, glass bool) {
+	bindRole("bg-test-"+user, user, rbacv1.PolicyRule{
+		APIGroups: []string{ichorGroup}, Resources: []string{"talosmachines", "talosconfigpatches"}, Verbs: writeVerbs(glass),
+	})
+}
+
+// writeVerbs are the ordinary read and write verbs, plus break-glass when glass.
+func writeVerbs(glass bool) []string {
 	verbs := []string{verbGet, "list", verbUpdate, verbPatch, verbDelete}
 	if glass {
 		verbs = append(verbs, "break-glass")
 	}
 
-	role := &rbacv1.ClusterRole{
-		Name: "bg-test-" + user,
-		Rules: []rbacv1.PolicyRule{{
-			APIGroups: []string{ichorGroup},
-			Resources: []string{"talosmachines", "talosconfigpatches"},
-			Verbs:     verbs,
-		}},
-	}
-	Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, role))).To(Succeed())
-
-	binding := &rbacv1.ClusterRoleBinding{
-		Name:     "bg-test-" + user,
-		RoleRef:  rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: role.Name},
-		Subjects: []rbacv1.Subject{{APIGroup: rbacv1.GroupName, Kind: "User", Name: user}},
-	}
-	Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, binding))).To(Succeed())
+	return verbs
 }
 
 var _ = Describe("Break-glass webhook", func() {

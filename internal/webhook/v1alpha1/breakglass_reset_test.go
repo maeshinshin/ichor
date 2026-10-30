@@ -22,7 +22,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -112,13 +111,7 @@ func grantOperationRights(user, glassOn string) {
 		})
 	}
 
-	role := &rbacv1.ClusterRole{Name: "bg-ops-" + user + "-" + glassOn, Rules: rules}
-	Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, role))).To(Succeed())
-	Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, &rbacv1.ClusterRoleBinding{
-		Name:     role.Name,
-		RoleRef:  rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: role.Name},
-		Subjects: []rbacv1.Subject{{APIGroup: rbacv1.GroupName, Kind: "User", Name: user}},
-	}))).To(Succeed())
+	bindRole("bg-ops-"+user+"-"+glassOn, user, rules...)
 }
 
 // confirmFor is the typed confirmation the CRD demands of a reset (the

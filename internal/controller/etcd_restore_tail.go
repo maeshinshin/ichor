@@ -524,6 +524,9 @@ func WaitForRestoreTails(timeout time.Duration, probeAddr string) {
 	}
 }
 
+// RestoreTailsRunning reports whether an etcd restore job of this process is mid-way.
+func RestoreTailsRunning() bool { return defaultRestoreTails.any() }
+
 func (t *restoreTails) any() bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()

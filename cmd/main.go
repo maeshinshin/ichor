@@ -39,6 +39,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -272,6 +273,13 @@ func main() {
 	restConfig, err := waitForAPIServerDefault(logr.NewContext(sigCtx, setupLog), probeAddr)
 	must(err, "API server unavailable")
 
+	var lock resourcelock.Interface
+
+	if enableLeaderElection {
+		lock, err = newLeaseLock(restConfig, ns, "61779df1.maesh.dev")
+		must(err, "Failed to build the leader election lock")
+	}
+
 	mgr, err := ctrl.NewManager(restConfig, ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsServerOptions,
@@ -284,10 +292,10 @@ func main() {
 		LeaseDuration: &leaseDuration,
 		RenewDeadline: &renewDeadline,
 		RetryPeriod:   &retryPeriod,
-		// Released on a stop so an upgraded controller issues the certificates ichor-ui waits for
-		// at once (ADR 0105). An etcd restore (ADR 0089) takes the API away, so there the release
-		// fails and the lease is kept until it expires, as before.
-		LeaderElectionReleaseOnCancel: releaseLeaseOnCancel,
+		// LeaderElectionReleaseOnCancel stays off: the process outlives its manager in
+		// WaitForRestoreTails (up to restoreTailGrace, ADR 0089) and must keep the lease then.
+		// A plain voluntary stop hands the Lease over below (releaseLeaseUnlessRestoring).
+		LeaderElectionResourceLockInterface: lock,
 	})
 	must(err, "Failed to start manager")
 
@@ -569,6 +577,15 @@ func main() {
 
 	setupLog.Info("Starting manager")
 	err = mgr.Start(sigCtx)
+
+	if lock != nil {
+		rctx, stop := context.WithTimeout(context.Background(), 5*time.Second)
+		if rerr := releaseLeaseUnlessRestoring(rctx, lock, controller.RestoreTailsRunning); rerr != nil {
+			setupLog.Error(rerr, "Could not hand the leader lease over; it runs out by itself")
+		}
+
+		stop()
+	}
 
 	// An etcd restore (ADR 0089) takes the Kubernetes API away, which costs the manager its leader
 	// lease and stops it. The restore is then mid-way (etcd wiped, snapshot not yet recovered) and

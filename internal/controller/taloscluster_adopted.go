@@ -22,6 +22,7 @@ import (
 
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -105,4 +106,16 @@ func caRotationOperationClusters(_ context.Context, obj client.Object) []reconci
 	req.Namespace, req.Name = op.Namespace, op.Spec.ClusterRef.Name
 
 	return []reconcile.Request{req}
+}
+
+// reclaimDoneClusters maps a MachineReclaim that ended Done to its target cluster, so discovery
+// probes the machine that just reached maintenance mode now and not at the next 5 minute pass.
+// Nothing is written: the cluster is only enqueued.
+func reclaimDoneClusters(_ context.Context, obj client.Object) []reconcile.Request {
+	mr, ok := obj.(*ichorv1alpha1.MachineReclaim)
+	if !ok || mr.Status.Phase != ichorv1alpha1.MachineReclaimDone || mr.Spec.ClusterRef == nil || mr.Spec.ClusterRef.Name == "" {
+		return nil
+	}
+
+	return []reconcile.Request{{NamespacedName: types.NamespacedName{Namespace: mr.Namespace, Name: mr.Spec.ClusterRef.Name}}}
 }

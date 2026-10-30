@@ -170,6 +170,8 @@ func (s *Server) CreateReclaim(
 		}
 	}
 
+	s.pruneReclaimAddresses(ctx) // before this request adds its own address
+
 	// The request is written first, as the caller, with the name of the Secret it will use; the Secret then
 	// carries its owner reference from the start. The backend holds only `create` on Secrets: no patch, no
 	// read, no delete. A failed Secret create leaves a request without a credential, which the controller
@@ -265,7 +267,7 @@ func splitAddresses(v string) []string {
 	return slices.DeleteFunc(strings.Split(v, ","), func(a string) bool { return a == "" })
 }
 
-// pruneReclaimAddresses takes back out of spec.discovery.addresses the addresses CreateReclaim added
+// pruneReclaimAddresses (called from the write paths CreateReclaim and ConfirmReclaim only, never from a read) takes back out of spec.discovery.addresses the addresses CreateReclaim added
 // (ReclaimAddedAddressesAnnotation) for requests that did not end Done: failed, expired or deleted ones. An
 // address stays when a Done or still running request names it, or a TalosMachine of the cluster is at it.
 // An address the user had added never carries the annotation. The update is made as the caller and is best
@@ -351,8 +353,6 @@ func (s *Server) GetReclaim(
 		return nil, err
 	}
 
-	s.pruneReclaimAddresses(ctx)
-
 	var mr ichorv1alpha1.MachineReclaim
 
 	key := namespacedName(req.Msg.GetReclaim())
@@ -369,8 +369,6 @@ func (s *Server) ListReclaims(
 	if err := s.reclaimGate(ctx); err != nil {
 		return nil, err
 	}
-
-	s.pruneReclaimAddresses(ctx)
 
 	var list ichorv1alpha1.MachineReclaimList
 	if err := s.List(ctx, &list, client.InNamespace(s.ControllerNamespace)); err != nil {
@@ -392,6 +390,8 @@ func (s *Server) ConfirmReclaim(
 	if err := s.reclaimGate(ctx); err != nil {
 		return nil, err
 	}
+
+	s.pruneReclaimAddresses(ctx)
 
 	var mr ichorv1alpha1.MachineReclaim
 

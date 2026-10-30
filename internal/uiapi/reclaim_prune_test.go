@@ -99,19 +99,36 @@ func TestReclaimAddressesOfFailedRequestsAreTakenBackOut(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	addresses := func() []string {
+		var got ichorv1alpha1.TalosCluster
+		if err := k8s.Get(ctx, types.NamespacedName{Namespace: testNS, Name: "c"}, &got); err != nil {
+			t.Fatal(err)
+		}
+
+		return got.Spec.Discovery.Addresses
+	}
+
+	// Reads never write the cluster.
 	if _, err := s.GetReclaim(ctx, connect.NewRequest(&pb.GetReclaimRequest{Reclaim: objectRef(testNS, failed)})); err != nil {
 		t.Fatal(err)
 	}
 
-	var got ichorv1alpha1.TalosCluster
-	if err := k8s.Get(ctx, types.NamespacedName{Namespace: testNS, Name: "c"}, &got); err != nil {
+	if _, err := s.ListReclaims(ctx, connect.NewRequest(&pb.ListReclaimsRequest{})); err != nil {
+		t.Fatal(err)
+	}
+
+	if n := len(addresses()); n != 7 {
+		t.Fatalf("a read changed the discovery list: %v", addresses())
+	}
+
+	if _, err := s.ConfirmReclaim(ctx, connect.NewRequest(&pb.ConfirmReclaimRequest{Reclaim: objectRef(testNS, done), Uuid: "u"})); err != nil {
 		t.Fatal(err)
 	}
 
 	want := []string{mine, "10.0.0.6", "10.0.0.8", "10.0.0.3"}
 	slices.Sort(want)
 
-	have := slices.Clone(got.Spec.Discovery.Addresses)
+	have := slices.Clone(addresses())
 	slices.Sort(have)
 
 	if !slices.Equal(have, want) {

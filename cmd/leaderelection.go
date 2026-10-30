@@ -50,19 +50,23 @@ func newLeaseLock(cfg *rest.Config, namespace, name string) (resourcelock.Interf
 // rollout), so the next controller pod leads at once instead of after leaseDuration. It does nothing
 // when the process goes on into the etcd restore tail (ADR 0089): it must keep the lease then
 // (ADR 0063). The Lease is only cleared while this process still holds it, with an update that
-// fails if anyone changed it since it was read.
-func releaseLeaseUnlessRestoring(ctx context.Context, lock resourcelock.Interface, restoring func() bool) error {
+// fails if anyone changed it since it was read. It reports whether it released the Lease.
+func releaseLeaseUnlessRestoring(ctx context.Context, lock resourcelock.Interface, restoring func() bool) (bool, error) {
 	if restoring() {
-		return nil
+		return false, nil
 	}
 
 	rec, _, err := lock.Get(ctx)
 	if err != nil || rec.HolderIdentity != lock.Identity() {
-		return err
+		return false, err
 	}
 
 	now := metav1.NewTime(time.Now())
 	rec.HolderIdentity, rec.LeaseDurationSeconds, rec.RenewTime = "", 1, now
 
-	return lock.Update(ctx, *rec)
+	if err := lock.Update(ctx, *rec); err != nil {
+		return false, err
+	}
+
+	return true, nil
 }

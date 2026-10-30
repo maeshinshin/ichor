@@ -31,8 +31,8 @@ func TestVoluntaryStopReleasesTheLease(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := releaseLeaseUnlessRestoring(ctx, lock, func() bool { return false }); err != nil {
-		t.Fatal(err)
+	if released, err := releaseLeaseUnlessRestoring(ctx, lock, func() bool { return false }); err != nil || !released {
+		t.Fatalf("released %v, %v", released, err)
 	}
 
 	rec, _, err := lock.Get(ctx)
@@ -56,8 +56,8 @@ func TestLeaseIsKeptInTheRestoreTailAndWhenHeldByAnother(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if err := releaseLeaseUnlessRestoring(ctx, lock, func() bool { return tc.restoring }); err != nil {
-				t.Fatal(err)
+			if released, err := releaseLeaseUnlessRestoring(ctx, lock, func() bool { return tc.restoring }); err != nil || released {
+				t.Fatalf("released %v, %v", released, err)
 			}
 
 			if rec, _, err := lock.Get(ctx); err != nil || rec.HolderIdentity != tc.holder {

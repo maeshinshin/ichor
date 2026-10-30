@@ -29,6 +29,7 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -78,9 +79,27 @@ func applyIchorManifest(ctx context.Context, k8sClient client.Client, manifest [
 // doesn't recognize its kind yet (a CRD this same manifest just created
 // needs a moment to become Established), and treating "already exists"
 // as success -- re-running init against a cluster that already has some
-// of this applied should not fail on that alone.
+// of this applied should not fail on that alone. It creates with a
+// server-side apply as the installer's field manager, so a later `ichor
+// upgrade` owns every field it wrote and can remove what a release drops;
+// a Deployment is created, as the installer replaces those whole.
 func createWithRetry(ctx context.Context, k8sClient client.Client, obj *unstructured.Unstructured, progress io.Writer) error {
-	err := retryInit(ctx, progress, func() error { return k8sClient.Create(ctx, obj) })
+	err := retryInit(ctx, progress, func() error {
+		if obj.GetKind() == "Deployment" {
+			return k8sClient.Create(ctx, obj, client.FieldOwner(installer.FieldOwner))
+		}
+
+		live := &unstructured.Unstructured{}
+		live.SetGroupVersionKind(obj.GroupVersionKind())
+
+		if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(obj), live); err == nil {
+			return apierrors.NewAlreadyExists(schema.GroupResource{Resource: obj.GetKind()}, obj.GetName())
+		} else if !apierrors.IsNotFound(err) {
+			return err
+		}
+
+		return k8sClient.Apply(ctx, client.ApplyConfigurationFromUnstructured(obj), client.FieldOwner(installer.FieldOwner), client.ForceOwnership)
+	})
 	if apierrors.IsAlreadyExists(err) {
 		return nil
 	}

@@ -472,7 +472,7 @@ func (r *TalosOperationReconciler) markMachine(op *ichorv1alpha1.TalosOperation,
 
 // operationEvent records an Event on op when a Recorder is wired. Messages carry names and
 // reasons only, never secret material.
-func (r *TalosOperationReconciler) operationEvent(op *ichorv1alpha1.TalosOperation, eventType, reason, message string) {
+func (r *TalosOperationReconciler) operationEvent(op client.Object, eventType, reason, message string) {
 	if r.Recorder != nil {
 		r.Recorder.Event(op, eventType, reason, message)
 	}

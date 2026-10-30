@@ -971,9 +971,7 @@ func (c *caRun) markBundleBackupStale(ctx context.Context) error {
 		return fmt.Errorf("raising BundleBackupStale: %w", err)
 	}
 
-	if c.r.Recorder != nil {
-		c.r.Recorder.Event(c.cluster, corev1.EventTypeWarning, ichorv1alpha1.ConditionBundleBackupStale, message)
-	}
+	c.r.operationEvent(c.cluster, corev1.EventTypeWarning, ichorv1alpha1.ConditionBundleBackupStale, message)
 
 	return nil
 }
@@ -1030,8 +1028,8 @@ func (c *caRun) setClientsNotRestarted(ctx context.Context, notBack bool, messag
 		return fmt.Errorf("setting CAClientsNotRestarted: %w", err)
 	}
 
-	if notBack && c.r.Recorder != nil {
-		c.r.Recorder.Event(c.cluster, corev1.EventTypeWarning, ichorv1alpha1.ConditionCAClientsNotRestarted, cond.Message)
+	if notBack {
+		c.r.operationEvent(c.cluster, corev1.EventTypeWarning, ichorv1alpha1.ConditionCAClientsNotRestarted, cond.Message)
 	}
 
 	return nil

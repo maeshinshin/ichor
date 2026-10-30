@@ -398,9 +398,7 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 		if err := r.removalCondition(ctx, m, metav1.ConditionFalse, reasonEvacuationFailed, msg); err != nil {
 			return err
 		}
-		if r.Recorder != nil {
-			r.Recorder.Event(m, corev1.EventTypeWarning, reasonEvacuationFailed, msg)
-		}
+		r.event(m, corev1.EventTypeWarning, reasonEvacuationFailed, msg)
 		return errors.New(msg)
 	}
 
@@ -463,9 +461,7 @@ func (r *TalosMachineReconciler) checkRemovalCounts(
 		"approve a replacement to get back to the declared count", m.Name, cluster.Spec.ControlPlane.Count, why)
 	logf.FromContext(ctx).Info(msg)
 
-	if r.Recorder != nil {
-		r.Recorder.Event(m, corev1.EventTypeWarning, reasonDeadMemberRemoved, msg)
-	}
+	r.event(m, corev1.EventTypeWarning, reasonDeadMemberRemoved, msg)
 
 	// Recorded, so a round that resumes after the member is gone from etcd still knows why it proceeds.
 	return true, false, r.removalCondition(ctx, m, metav1.ConditionFalse, reasonDeadMemberRemoval, msg)

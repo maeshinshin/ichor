@@ -19,6 +19,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"slices"
 	"strings"
@@ -27,6 +28,8 @@ import (
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -110,6 +113,15 @@ func newFlowEnv(t *testing.T, adoptPreset string, liveMutate func(*ichorv1alpha1
 
 	env.k8s = fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(cluster, cp, wk).
 		WithInterceptorFuncs(interceptor.Funcs{
+			// init applies server-side now; the order checks still read it as a create.
+			Apply: func(ctx context.Context, c client.WithWatch, obj runtime.ApplyConfiguration, o ...client.ApplyOption) error {
+				u := &unstructured.Unstructured{}
+				b, _ := json.Marshal(obj)
+				_ = u.UnmarshalJSON(b)
+				record("create", u)
+
+				return c.Apply(ctx, obj, o...)
+			},
 			Create: func(ctx context.Context, c client.WithWatch, obj client.Object, o ...client.CreateOption) error {
 				record("create", obj)
 

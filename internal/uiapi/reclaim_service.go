@@ -318,25 +318,16 @@ func (s *Server) pruneReclaimAddresses(ctx context.Context) {
 			return false
 		}
 
-		var keep []string
-
-		for _, a := range added {
-			if !inUse(a) {
-				if c.Spec.Discovery != nil {
-					c.Spec.Discovery.Addresses = slices.DeleteFunc(c.Spec.Discovery.Addresses, func(x string) bool { return x == a })
-				}
-
-				continue
-			}
-
-			keep = append(keep, a)
-		}
-
-		if len(keep) == len(added) {
+		gone := slices.DeleteFunc(slices.Clone(added), inUse)
+		if len(gone) == 0 {
 			continue
 		}
 
-		if len(keep) == 0 {
+		if c.Spec.Discovery != nil {
+			c.Spec.Discovery.Addresses = slices.DeleteFunc(c.Spec.Discovery.Addresses, func(x string) bool { return slices.Contains(gone, x) })
+		}
+
+		if keep := slices.DeleteFunc(added, func(a string) bool { return slices.Contains(gone, a) }); len(keep) == 0 {
 			delete(c.Annotations, ichorv1alpha1.ReclaimAddedAddressesAnnotation)
 		} else {
 			c.Annotations[ichorv1alpha1.ReclaimAddedAddressesAnnotation] = strings.Join(keep, ",")

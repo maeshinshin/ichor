@@ -185,6 +185,16 @@ Envoy Gateway v1.9.2 (`oci://docker.io/envoyproxy/gateway-helm`) installed only 
 
 No product defect in T2.
 
+## Amendment 2026-10-30: the stale `http` Service port of an `ichor init` install is removed
+
+Fixes the failed expectation in "Unit 10, plaintext install upgraded" above. The cause was general: `ichor init` created every object of Ichor's manifest with `Create` (field manager `ichor`, operation `Update`), and the installer's server-side apply as `ichor-installer` cannot remove a list item (or any field) another manager owns, so anything a release drops from the manifest stayed on an init-made install.
+
+- **Installer.** Before it applies any object other than a Deployment, `applyOne` reads the live object and, if manager `ichor` holds `Update` entries, hands those fields to `ichor-installer` with `k8s.io/client-go/util/csaupgrade` (`UpgradeManagedFieldsPatch`, the documented client-side to server-side upgrade; the patch guards on the resourceVersion) and logs it. The apply then owns the whole object it knew and drops what the manifest no longer has: the `http` 8080 port of the ichor-ui Service, and equally a dropped field on a CRD, ClusterRole, ConfigMap or CiliumNetworkPolicy. Fields set by other managers (an operator's `kubectl edit` port) are untouched. Deployments need nothing: the installer replaces them whole.
+- **Objects affected** (all objects `ichor init` creates from the manifest except Deployments): in practice only the Service had a dropped item on this upgrade; the others had no fields removed, but the same hand-over now protects them on later releases.
+- **`ichor init`.** New installs create every non-Deployment object with a server-side apply as `ichor-installer` (a Deployment is still created, with that field manager). An existing object is still skipped, so re-running init is unchanged. Init's own later `Update`s (the internal port, the Deployment args) remain manager `ichor`, and the next upgrade hands them over like any older install.
+- **Tests.** `TestApplyOneRemovesAPortOwnedByAnOlderInit` (envtest): a Service created as `ichor` with an `http` 8080 port and an operator port `extra` added by `kubectl-edit`; after `applyOne` of a manifest with `https` only, the ports are `extra` and `https`.
+- **Docs.** `docs/guides/users-and-login.md` named the Service `ichor-ui-service` where an `ichor init` install has `ichor-ichor-ui-service`; the certificate-names bullet is corrected.
+
 ## Amendment (ADR 0107)
 
 `spec.reclaim.enabled`, the `ichorinstallations/reclaim` subresource, the confirmation annotation and the Settings reclaim card are gone: the field is deprecated and ignored, and "Reset and add" is decided by the `reclaim` verb on `machinereclaims` alone.

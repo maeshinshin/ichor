@@ -78,8 +78,7 @@ Moving an existing release:
 - Plain HTTP edge: ichor-ui no longer serves plain HTTP. Re-point the edge at
   `https://<ichor-ui>:8443` and trust `ichor-ui-ca` before you upgrade. The
   value `ichorUI.plaintextPort` was removed; a values file that still sets it
-  is accepted (Helm ignores unknown values) but renders no plaintext port, no
-  `--http-addr` and no `http` Service port.
+  is ignored.
 - An install that already served TLS on 8080 sets `ichorUI.port=8080` to keep
   its Service and edge as they are.
 - The ServiceMonitor verifies against `ichor-ui-ca` by default; override with
@@ -88,12 +87,8 @@ Moving an existing release:
 
 ## Settings on a Helm install
 
-The controller creates the `IchorInstallation` `ichor` once with
-`spec.deployment.manager: helm`; the chart does not render it. The
-sign-in lifetimes and the default drift policy are editable at run time (see
-[Settings](settings.md)) and win over the chart values when set. Set
-`settings.readOnly: true` to make the chart the only source. Upgrading and
-`ichor upgrade ichor` stay with Helm.
+See [Settings](settings.md#a-helm-install). `settings.readOnly: true` makes the
+chart the only source.
 
 ## A cluster with no CNI
 
@@ -119,13 +114,8 @@ ichor adopt --cluster NAME --node ADDR --recover-secrets --recover-from ADDR
 - `ichor adopt` then finds Cilium with an Ichor release record, and checks the
   tunnel and kube-proxy mode against it.
 
-## What adopt does on a Helm install
-
-- Skips its install step and creates no `IchorInstallation` (the controller seeds it).
-- Requires Ichor's version to equal the CLI's exactly, and prints the `helm
-  upgrade` command when it does not.
-- `--require-ichor` makes adopt fail when Ichor is not installed instead of
-  installing it.
+What adopt does on a Helm install is in
+[Adopt a running cluster](adopt-and-reclaim.md#when-ichor-was-installed-with-helm).
 
 ## Upgrade and uninstall
 

@@ -317,11 +317,8 @@ func applyWithSettle(ctx context.Context, c client.Client, u *unstructured.Unstr
 	return pollErr
 }
 
-// initFieldManagers are the managers an `ichor init` made before it applied server-side:
-// controller-runtime named them after the binary, and Create is an Update operation.
-var initFieldManagers = sets.New("ichor")
-
-// adoptInitFields hands the fields an older `ichor init` wrote with Update over to FieldOwner
+// adoptInitFields hands the fields an older `ichor init` wrote with Update (field manager "ichor",
+// the binary's name) over to FieldOwner
 // (client-go's csaupgrade, the documented client-side-to-server-side upgrade), so this apply can
 // remove an item init created and the new manifest dropped (the plaintext ichor-ui Service port).
 func adoptInitFields(ctx context.Context, c client.Client, u *unstructured.Unstructured) error {
@@ -335,7 +332,7 @@ func adoptInitFields(ctx context.Context, c client.Client, u *unstructured.Unstr
 		return err
 	}
 
-	patch, err := csaupgrade.UpgradeManagedFieldsPatch(live, initFieldManagers, FieldOwner)
+	patch, err := csaupgrade.UpgradeManagedFieldsPatch(live, sets.New("ichor"), FieldOwner)
 	if err != nil || patch == nil {
 		return err
 	}

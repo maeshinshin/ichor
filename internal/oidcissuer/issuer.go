@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -149,8 +150,8 @@ func (i *Issuer) clientIP(r *http.Request) string {
 		return host
 	}
 	hops := strings.Split(strings.Join(r.Header.Values("X-Forwarded-For"), ","), ",")
-	for n := len(hops) - 1; n >= 0; n-- {
-		a, err := netip.ParseAddr(strings.TrimSpace(hops[n]))
+	for _, hop := range slices.Backward(hops) {
+		a, err := netip.ParseAddr(strings.TrimSpace(hop))
 		if err != nil {
 			return host
 		}

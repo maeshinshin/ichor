@@ -75,12 +75,12 @@ func mountRPC(mux *http.ServeMux, s *uiapi.Server, authn *uiapi.Authenticator, a
 // fetches the provider's discovery document and token endpoint, whose origins are not
 // known here, so connect-src widens to any https origin; scripts stay 'self' only.
 func contentSecurityPolicy(externalOIDC bool) string {
-	connect := "'self'"
+	connectSrc := "'self'"
 	if externalOIDC {
-		connect = "'self' https:"
+		connectSrc = "'self' https:"
 	}
 
-	return "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src " + connect + "; " +
+	return "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src " + connectSrc + "; " +
 		"img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
 }
 

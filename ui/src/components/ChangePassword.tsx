@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { userClient } from '@/lib/connect'
-import { notifyDone } from '@/lib/notify'
+import { signOut } from '@/lib/oidc'
 import { minPasswordLength, passwordError, passwordOk } from '@/lib/users'
 import type { ErrorShape } from '@/lib/errors'
 import { useT } from '@/lib/useT'
@@ -14,7 +14,7 @@ import { useT } from '@/lib/useT'
 // The change-own-password form, used in the account menu's dialog and, with nothing
 // else on the screen, when the account must change its password. Neither password is kept anywhere
 // but in these fields, and they are cleared once the call succeeds.
-export function ChangePasswordForm({ onDone, onCancel }: { onDone: () => void; onCancel?: () => void }) {
+export function ChangePasswordForm({ onCancel }: { onCancel?: () => void }) {
   const t = useT()
   const [oldPassword, setOld] = useState('')
   const [next, setNext] = useState('')
@@ -35,8 +35,8 @@ export function ChangePasswordForm({ onDone, onCancel }: { onDone: () => void; o
       setOld('')
       setNext('')
       setAgain('')
-      notifyDone(t('account.passwordChanged'))
-      onDone()
+      // A password change ends every token issued before it, this tab's included, so sign in again with the new password.
+      signOut()
     } catch (err) {
       setError(passwordError(err))
     } finally {
@@ -86,14 +86,14 @@ export function ChangePasswordDialog({ open, onOpenChange }: { open: boolean; on
           <DialogTitle>{t('account.changePassword')}</DialogTitle>
           <DialogDescription>{t('account.passwordHint', { n: minPasswordLength })}</DialogDescription>
         </DialogHeader>
-        <ChangePasswordForm onDone={() => onOpenChange(false)} onCancel={() => onOpenChange(false)} />
+        <ChangePasswordForm onCancel={() => onOpenChange(false)} />
       </DialogContent>
     </Dialog>
   )
 }
 
 // MustChangePassword blocks the whole app until the password is changed.
-export function MustChangePassword({ onDone }: { onDone: () => void }) {
+export function MustChangePassword() {
   const t = useT()
   return (
     <main class="mx-auto flex min-h-dvh max-w-md flex-col justify-center p-6">
@@ -103,7 +103,7 @@ export function MustChangePassword({ onDone }: { onDone: () => void }) {
           <CardDescription>{t('account.mustChangeBody')}</CardDescription>
         </CardHeader>
         <CardContent>
-          <ChangePasswordForm onDone={onDone} />
+          <ChangePasswordForm />
         </CardContent>
       </Card>
     </main>

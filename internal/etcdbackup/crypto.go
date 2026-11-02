@@ -21,6 +21,7 @@ limitations under the License.
 package etcdbackup
 
 import (
+	"bytes"
 	"crypto/hkdf"
 	"crypto/sha256"
 	"encoding/hex"
@@ -32,29 +33,62 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 )
 
-// hkdfInfo domain-separates the backup key from any other use of the bundle.
-// Changing it makes every existing backup undecryptable: it is part of the
-// format, bump the "v1" only together with a new key-derivation scheme.
-const hkdfInfo = "ichor.maesh.dev/etcd-backup/v1"
+// The HKDF info strings domain-separate the backup key from any other use of the bundle. They are part of
+// the format: changing one makes every backup sealed with it undecryptable.
+const (
+	// hkdfInfoV1 derived the key from Cluster.Secret, which Talos writes into every worker machine
+	// config, so a worker node plus the bucket was enough to decrypt a backup. It is kept only to read
+	// backups sealed.
+	hkdfInfoV1 = "ichor.maesh.dev/etcd-backup/v1"
 
-// Passphrase derives the age passphrase snapshots are encrypted with from the
-// cluster's secrets bundle. Nothing about it is stored anywhere: whoever holds
-// the bundle can derive it again, which is what lets "bundle + snapshot" be
-// enough to recover (design, "Backup, recovery, certificates"), and whoever
-// has only the bucket cannot.
+	// hkdfInfoV2 derives the key from a secret only control planes hold.
+	hkdfInfoV2 = "ichor.maesh.dev/etcd-backup/v2"
+)
+
+// Key is the pair of passphrases of one cluster: Current seals new backups, Legacy (v1) is only tried when
+// reading. Nothing about either is stored anywhere: whoever holds the bundle can derive them again, which is
+// what lets "bundle + snapshot" be enough to recover (design, "Backup, recovery, certificates"), and
+// whoever has only the bucket cannot.
 //
-// The result is secret material: never log it or put it in an error.
-func Passphrase(bundle *secrets.Bundle) (string, error) {
+// The values are secret material: never log them or put them in an error. Secrets lists both for a scrubber.
+type Key struct{ Current, Legacy string }
+
+// Secrets is every passphrase of k, for a scrubber.
+func (k Key) Secrets() []string { return []string{k.Current, k.Legacy} }
+
+// DeriveKey derives the backup passphrases from the cluster's secrets bundle. The v2 input is the
+// secretbox key (then the legacy AES-CBC key) of the Kubernetes API server: control planes alone hold it,
+// and Ichor never rotates it, so it keeps older backups readable across a CA rotation. The v1
+// input, Cluster.Secret, is in every worker's machine config.
+func DeriveKey(bundle *secrets.Bundle) (Key, error) {
 	if bundle == nil || bundle.Cluster == nil || bundle.Cluster.Secret == "" {
-		return "", errors.New("secrets bundle carries no cluster secret to derive the backup key from")
+		return Key{}, errors.New("secrets bundle carries no cluster secret to derive the backup key from")
 	}
 
-	key, err := hkdf.Key(sha256.New, []byte(bundle.Cluster.Secret), []byte(bundle.Cluster.ID), hkdfInfo, 32)
+	var ikm string
+
+	if bundle.Secrets != nil {
+		ikm = bundle.Secrets.SecretboxEncryptionSecret
+		if ikm == "" {
+			ikm = bundle.Secrets.AESCBCEncryptionSecret
+		}
+	}
+
+	if ikm == "" {
+		return Key{}, errors.New("secrets bundle carries no control-plane-only secret (secretbox key) to derive the backup key from")
+	}
+
+	v1, err := hkdf.Key(sha256.New, []byte(bundle.Cluster.Secret), []byte(bundle.Cluster.ID), hkdfInfoV1, 32)
 	if err != nil {
-		return "", fmt.Errorf("deriving backup key: %w", err)
+		return Key{}, fmt.Errorf("deriving backup key: %w", err)
 	}
 
-	return hex.EncodeToString(key), nil
+	v2, err := hkdf.Key(sha256.New, []byte(ikm), []byte(bundle.Cluster.ID), hkdfInfoV2, 32)
+	if err != nil {
+		return Key{}, fmt.Errorf("deriving backup key: %w", err)
+	}
+
+	return Key{Current: hex.EncodeToString(v2), Legacy: hex.EncodeToString(v1)}, nil
 }
 
 // encryptWorkFactor is log2 of scrypt's N, r=8 (1 MiB). The passphrase is a 256-bit HKDF output, not something
@@ -63,10 +97,14 @@ func Passphrase(bundle *secrets.Bundle) (string, error) {
 // Decrypt caps at the same value.
 const encryptWorkFactor = 10
 
+// headerProbeBytes is how much of a backup Decrypt buffers so a second passphrase can be tried: an age
+// header with one scrypt recipient is a few hundred bytes, and a wrong passphrase fails inside it.
+const headerProbeBytes = 4096
+
 // Encrypt returns a writer that age-encrypts (scrypt recipient) into dst. The
 // caller must Close it to flush the final chunk.
-func Encrypt(dst io.Writer, passphrase string) (io.WriteCloser, error) {
-	r, err := age.NewScryptRecipient(passphrase)
+func Encrypt(dst io.Writer, key Key) (io.WriteCloser, error) {
+	r, err := age.NewScryptRecipient(key.Current)
 	if err != nil {
 		return nil, err
 	}
@@ -76,15 +114,43 @@ func Encrypt(dst io.Writer, passphrase string) (io.WriteCloser, error) {
 	return age.Encrypt(dst, r)
 }
 
-// Decrypt is Encrypt's inverse. A wrong key and a corrupted file both fail
-// with age's own error, which names neither the passphrase nor any content.
-func Decrypt(src io.Reader, passphrase string) (io.Reader, error) {
-	i, err := age.NewScryptIdentity(passphrase)
+// Decrypt is Encrypt's inverse; it opens a backup sealed with either passphrase of key, current first. A
+// wrong key and a corrupted file both fail with age's own error, which names neither the passphrase nor any
+// content.
+func Decrypt(src io.Reader, key Key) (io.Reader, error) {
+	// age reads the header before returning, so src must be replayable for the second try.
+	buf, err := io.ReadAll(io.LimitReader(src, headerProbeBytes))
 	if err != nil {
 		return nil, err
 	}
 
-	i.SetMaxWorkFactor(encryptWorkFactor)
+	var first error
 
-	return age.Decrypt(src, i)
+	for _, pass := range []string{key.Current, key.Legacy} {
+		if pass == "" {
+			continue
+		}
+
+		i, err := age.NewScryptIdentity(pass)
+		if err != nil {
+			return nil, err
+		}
+
+		i.SetMaxWorkFactor(encryptWorkFactor)
+
+		r, err := age.Decrypt(io.MultiReader(bytes.NewReader(buf), src), i)
+		if err == nil {
+			return r, nil
+		}
+
+		if first == nil {
+			first = err
+		}
+	}
+
+	if first == nil {
+		first = errors.New("no backup passphrase")
+	}
+
+	return nil, first
 }

@@ -17,6 +17,7 @@ limitations under the License.
 package etcdbackup
 
 import (
+	"errors"
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -71,22 +72,25 @@ func TestVerifier(t *testing.T) {
 func testBundle(t *testing.T, clusterSecret string) *secrets.Bundle {
 	t.Helper()
 
-	return &secrets.Bundle{Cluster: &secrets.Cluster{ID: "cluster-id", Secret: clusterSecret}}
+	return &secrets.Bundle{
+		Cluster: &secrets.Cluster{ID: "cluster-id", Secret: clusterSecret},
+		Secrets: &secrets.Secrets{SecretboxEncryptionSecret: "box-" + clusterSecret},
+	}
 }
 
 func TestEncryptRoundTripAndKeyBinding(t *testing.T) {
-	pass, err := Passphrase(testBundle(t, "s3cr3t-one"))
+	pass, err := DeriveKey(testBundle(t, "s3cr3t-one"))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	again, _ := Passphrase(testBundle(t, "s3cr3t-one"))
+	again, _ := DeriveKey(testBundle(t, "s3cr3t-one"))
 	if pass != again {
 		t.Fatal("passphrase derivation is not deterministic: a restore could not re-derive it")
 	}
 
-	other, _ := Passphrase(testBundle(t, "s3cr3t-two"))
-	if pass == other {
+	other, _ := DeriveKey(testBundle(t, "s3cr3t-two"))
+	if pass.Current == other.Current {
 		t.Fatal("different bundles derived the same key")
 	}
 
@@ -123,7 +127,7 @@ func TestEncryptRoundTripAndKeyBinding(t *testing.T) {
 		t.Fatal("decrypted with a key derived from a different bundle")
 	}
 
-	if _, err := Passphrase(testBundle(t, "")); err == nil {
+	if _, err := DeriveKey(testBundle(t, "")); err == nil {
 		t.Fatal("empty cluster secret accepted")
 	}
 }
@@ -233,10 +237,79 @@ func TestPassphraseSurvivesCARotation(t *testing.T) {
 	after := testBundle(t, "s3cr3t-one")
 	after.Certs = fresh.Certs
 
-	a, _ := Passphrase(before)
+	a, _ := DeriveKey(before)
 
-	b, _ := Passphrase(after)
+	b, _ := DeriveKey(after)
 	if a != b {
 		t.Fatal("rotating the CAs changed the backup key: older snapshots would no longer decrypt")
+	}
+}
+
+// The v2 key comes from a control-plane-only secret, so the Cluster.Secret that every worker
+// machine config carries no longer opens a backup, while a backup sealed before (v1) still opens.
+func TestBackupKeyV2NeedsAControlPlaneSecret(t *testing.T) {
+	b := testBundle(t, "cluster-secret")
+
+	key, err := DeriveKey(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if key.Current == key.Legacy {
+		t.Fatal("v2 and v1 keys are equal")
+	}
+
+	plain := makeSnapshot("etcd data")
+
+	seal := func(pass string) []byte {
+		var enc bytes.Buffer
+
+		w, err := Encrypt(&enc, Key{Current: pass})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		_, _ = w.Write(plain)
+
+		if err := w.Close(); err != nil {
+			t.Fatal(err)
+		}
+
+		return enc.Bytes()
+	}
+
+	open := func(enc []byte, k Key) error {
+		r, err := Decrypt(bytes.NewReader(enc), k)
+		if err != nil {
+			return err
+		}
+
+		got, err := io.ReadAll(r)
+		if err == nil && !bytes.Equal(got, plain) {
+			err = errors.New("plaintext differs")
+		}
+
+		return err
+	}
+
+	if err := open(seal(key.Current), key); err != nil {
+		t.Fatalf("v2 backup: %v", err)
+	}
+
+	if err := open(seal(key.Legacy), key); err != nil {
+		t.Fatalf("v1 backup must stay readable: %v", err)
+	}
+
+	// An attacker with a worker's config knows the v1 key; a v2 backup must not open with it.
+	if err := open(seal(key.Current), Key{Current: key.Legacy}); err == nil {
+		t.Fatal("a v2 backup opened with the worker-derivable v1 key")
+	}
+
+	// A bundle without any control-plane-only secret cannot derive a key.
+	noBox := testBundle(t, "cluster-secret")
+	noBox.Secrets = &secrets.Secrets{}
+
+	if _, err := DeriveKey(noBox); err == nil {
+		t.Fatal("derived a backup key without a control-plane-only secret")
 	}
 }

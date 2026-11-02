@@ -43,6 +43,8 @@ var clusterCredentialsOpts struct {
 	Operation      string
 	Acknowledge    bool
 	Force          bool
+	TTL            time.Duration
+	ReadOnly       bool
 }
 
 // staleBundleWarning is printed when a --bundle file's CAs are not the cluster's current ones: the
@@ -61,6 +63,10 @@ var clusterCredentialsCmd = &cobra.Command{
   the newest Kubernetes CA, and
   a talosconfig whose CA bundle holds the Talos API CA(s) and whose os:admin client certificate is
   signed by the newest Talos API CA.
+
+By default the client certificates live a year, which is also the maximum; --ttl asks for fewer
+hours and --read-only makes the talosconfig os:reader instead of os:admin, for access that cannot
+change a node.
 
 The server and context names are copied from your current kubeconfig, the Talos endpoints from the
 cluster's control-plane machines (or --talos-endpoints, or your current talosconfig). The files are
@@ -82,10 +88,15 @@ it. 'ichor cluster rotate-ca' does all of this itself.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		o := clusterCredentialsOpts
 
+		if o.TTL < 0 || o.TTL > credentials.MaxLifetime {
+			return fmt.Errorf("--ttl must be between 0 and %s", credentials.MaxLifetime)
+		}
+
 		req := credentialRequest{
 			Cluster: args[0], Namespace: apiOpts.Namespace, IchorNamespace: apiOpts.IchorNamespace,
 			BundleFile: o.Bundle, KubeconfigIn: kubeconfigPath, TalosconfigIn: talosconfigPath,
 			KubeconfigOut: o.KubeconfigOut, TalosconfigOut: o.TalosconfigOut, TalosEndpoints: o.TalosEndpoints,
+			TTL: o.TTL, ReadOnly: o.ReadOnly,
 		}
 
 		var k8s ctrlclient.Client
@@ -332,6 +343,11 @@ func init() {
 		"where to write the talosconfig (default: your current talosconfig's path plus "+credentialsSuffix+")")
 	f.StringSliceVar(&clusterCredentialsOpts.TalosEndpoints, "talos-endpoints", nil,
 		"the Talos API endpoints for the talosconfig (default: the cluster's control-plane machines, else your current talosconfig's)")
+	f.DurationVar(&clusterCredentialsOpts.TTL, "ttl", 0,
+		"how long the client certificates in the files are valid; the default and the maximum is "+credentials.MaxLifetime.String()+
+			" (a rotation hand-off must outlive the rotation)")
+	f.BoolVar(&clusterCredentialsOpts.ReadOnly, "read-only", false,
+		"make the talosconfig an os:reader client (read-only Talos API access) instead of os:admin")
 	f.BoolVar(&clusterCredentialsOpts.Acknowledge, "acknowledge", false,
 		"after checking the new kubeconfig works, tell the CA rotation that is waiting for credentials to continue")
 	f.StringVar(&clusterCredentialsOpts.Operation, "operation", "", "with --acknowledge: the CA rotation operation to acknowledge")

@@ -41,7 +41,7 @@ var talosconfigpatchlog = logf.Log.WithName("talosconfigpatch-resource")
 func SetupTalosConfigPatchWebhookWithManager(mgr ctrl.Manager, secretNamespace string) error {
 	return ctrl.NewWebhookManagedBy(mgr, &ichorv1alpha1.TalosConfigPatch{}).
 		WithValidator(&TalosConfigPatchCustomValidator{
-			Client: mgr.GetClient(), SecretNamespace: secretNamespace, BreakGlass: breakGlassCheckFor(mgr.GetClient()),
+			Client: mgr.GetClient(), SecretNamespace: secretNamespace,
 		}).
 		Complete()
 }
@@ -58,9 +58,6 @@ func SetupTalosConfigPatchWebhookWithManager(mgr ctrl.Manager, secretNamespace s
 type TalosConfigPatchCustomValidator struct {
 	Client          client.Client
 	SecretNamespace string
-	// BreakGlass lets a user holding the break-glass verb on the patch grant os:admin to pods
-	// through kubernetesTalosAPIAccess. nil means no override.
-	BreakGlass BreakGlassCheck
 }
 
 // ValidateCreate implements admission.Validator.
@@ -70,12 +67,7 @@ func (v *TalosConfigPatchCustomValidator) ValidateCreate(ctx context.Context, ob
 
 // validate runs the Talos API access rule, then the dry render.
 func (v *TalosConfigPatchCustomValidator) validate(ctx context.Context, p *ichorv1alpha1.TalosConfigPatch) (admission.Warnings, error) {
-	warnings, err := v.talosAPIAccessWarnings(ctx, p)
-	if err != nil {
-		return nil, err
-	}
-
-	return warnings, v.dryRender(ctx, p)
+	return talosAPIAccessWarnings(p), v.dryRender(ctx, p)
 }
 
 // ValidateUpdate implements admission.Validator.

@@ -5,14 +5,7 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Ichor</title>
-    <script>
-      // First paint in the chosen theme (same rule as src/lib/theme.ts).
-      try {
-        var s = localStorage.getItem('ichor-ui-theme')
-        var d = s ? s === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches
-        document.documentElement.classList.toggle('dark', d)
-      } catch (e) {}
-    </script>
+    <script src="/theme-init.js"></script>
   </head>
   <body>
     <div id="app"></div>

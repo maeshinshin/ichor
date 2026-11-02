@@ -37,7 +37,6 @@ import (
 	"syscall"
 	"time"
 
-	"connectrpc.com/connect"
 	"github.com/go-logr/stdr"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	runtime "k8s.io/apimachinery/pkg/runtime"
@@ -47,7 +46,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
-	"github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1/ichorv1alpha1connect"
 	"github.com/maeshinshin/ichor/internal/oidcissuer"
 	"github.com/maeshinshin/ichor/internal/settings"
 	"github.com/maeshinshin/ichor/internal/uiapi"
@@ -244,19 +242,9 @@ func main() {
 	// the exported RPC-latency series comes from.
 	mux.Handle("/metrics", promhttp.Handler())
 
-	rpcInterceptor := connect.WithInterceptors(uiapi.MetricsInterceptor(), uiapi.AccessLogInterceptor(log.Default(), false), uiapi.AuthInterceptor(authn))
-	mux.Handle(ichorv1alpha1connect.NewClusterServiceHandler(server, rpcInterceptor))
-	mux.Handle(ichorv1alpha1connect.NewMachineServiceHandler(server, rpcInterceptor))
-	mux.Handle(ichorv1alpha1connect.NewNodeServiceHandler(server, rpcInterceptor))
-	mux.Handle(ichorv1alpha1connect.NewPatchServiceHandler(server, rpcInterceptor))
-	mux.Handle(ichorv1alpha1connect.NewOperationServiceHandler(server, rpcInterceptor))
-	mux.Handle(ichorv1alpha1connect.NewDiagnosticsServiceHandler(server, rpcInterceptor))
-	mux.Handle(ichorv1alpha1connect.NewUserServiceHandler(server, rpcInterceptor))
-	mux.Handle(ichorv1alpha1connect.NewCniServiceHandler(server, rpcInterceptor))
-	mux.Handle(ichorv1alpha1connect.NewReclaimServiceHandler(server, rpcInterceptor))
-	mux.Handle(ichorv1alpha1connect.NewSettingsServiceHandler(server, rpcInterceptor))
+	mountRPC(mux, server, authn)
 
-	srv := httpsServer(*addr, mux, servingCertificate(ctx, *tlsCert, *tlsKey, *tlsDir))
+	srv := httpsServer(*addr, securityHeaders(http.MaxBytesHandler(mux, bodyBackstop)), servingCertificate(ctx, *tlsCert, *tlsKey, *tlsDir))
 
 	go func() {
 		log.Printf("ichor-ui: HTTPS listening on %s", *addr)

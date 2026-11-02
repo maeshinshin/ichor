@@ -32,8 +32,11 @@ jobs:
         run: nix develop --command make setup-test-e2e
       # --- end cluster provisioning ---
 
+      - name: Verify go.mod and go.sum
+        run: nix develop --command bash -c "go mod tidy -diff && go mod verify"
+
       - name: Running Test e2e
-        run: nix develop --command bash -c "go mod tidy && make test-e2e"
+        run: nix develop --command make test-e2e
 
       - name: Tear down the e2e cluster
         if: always()

@@ -455,6 +455,24 @@ func (h *BreakGlassHandler) gateSecretReferences(ctx context.Context, req admiss
 // an operator with the verb can override them; nil means no override.
 type BreakGlassCheck func(ctx context.Context, resource, name, namespace string) (bool, error)
 
+// RightCheck tells whether the user behind the admission request in ctx holds verb on resource
+// (and subresource, when set). Outside an admission request there is no user, so the answer is no.
+type RightCheck func(ctx context.Context, verb, resource, subresource, name, namespace string) (bool, error)
+
+// rightCheckFor asks Kubernetes with a SubjectAccessReview on the requesting user.
+func rightCheckFor(c client.Client) RightCheck {
+	h := &BreakGlassHandler{Client: c}
+
+	return func(ctx context.Context, verb, resource, subresource, name, namespace string) (bool, error) {
+		req, err := admission.RequestFromContext(ctx)
+		if err != nil {
+			return false, nil //nolint:nilerr // no admission request, no user to hold the verb
+		}
+
+		return h.mayDo(ctx, req.UserInfo, verb, resource, subresource, name, namespace)
+	}
+}
+
 // breakGlassCheckFor asks Kubernetes with a SubjectAccessReview on the requesting user, like the
 // break-glass handler does. Outside an admission request there is no user, so the answer is no.
 func breakGlassCheckFor(c client.Client) BreakGlassCheck {

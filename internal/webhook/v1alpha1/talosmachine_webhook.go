@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	"context"
+	"fmt"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -26,6 +27,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
+	"github.com/maeshinshin/ichor/pkg/endpointguard"
 )
 
 // nolint:unused
@@ -35,7 +37,7 @@ var talosmachinelog = logf.Log.WithName("talosmachine-resource")
 // SetupTalosMachineWebhookWithManager registers the webhook for TalosMachine in the manager.
 func SetupTalosMachineWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr, &ichorv1alpha1.TalosMachine{}).
-		WithValidator(&TalosMachineCustomValidator{APIReader: mgr.GetAPIReader(), BreakGlass: breakGlassCheckFor(mgr.GetClient())}).
+		WithValidator(&TalosMachineCustomValidator{APIReader: mgr.GetAPIReader(), BreakGlass: breakGlassCheckFor(mgr.GetClient()), Can: rightCheckFor(mgr.GetClient())}).
 		Complete()
 }
 
@@ -59,6 +61,10 @@ type TalosMachineCustomValidator struct {
 	// BreakGlass lets a user holding the break-glass verb on the machine override the
 	// last-worker guard (ADR 0065, amended). nil means no override.
 	BreakGlass BreakGlassCheck
+	// Can asks whether the requesting user holds a verb (ADR 0108): approve on
+	// talosmachines/approval, and update on talosmachines/endpoint for an address
+	// the cluster does not declare. nil means nobody does.
+	Can RightCheck
 }
 
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type TalosMachine.
@@ -66,12 +72,28 @@ func (v *TalosMachineCustomValidator) ValidateCreate(ctx context.Context, obj *i
 	talosmachinelog.Info("Validation for TalosMachine upon creation", "name", obj.GetName())
 
 	// A machine created already approved is an approval too.
+	if err := v.checkEndpoint(ctx, nil, obj); err != nil {
+		return nil, err
+	}
+
+	if err := v.checkApprover(ctx, nil, obj); err != nil {
+		return nil, err
+	}
+
 	return nil, v.checkApprovalCap(ctx, nil, obj)
 }
 
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type TalosMachine.
 func (v *TalosMachineCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj *ichorv1alpha1.TalosMachine) (admission.Warnings, error) {
 	talosmachinelog.Info("Validation for TalosMachine upon update", "name", newObj.GetName())
+
+	if err := v.checkEndpoint(ctx, oldObj, newObj); err != nil {
+		return nil, err
+	}
+
+	if err := v.checkApprover(ctx, oldObj, newObj); err != nil {
+		return nil, err
+	}
 
 	if err := v.checkApprovalCap(ctx, oldObj, newObj); err != nil {
 		return nil, err
@@ -113,6 +135,73 @@ func (v *TalosMachineCustomValidator) getCluster(ctx context.Context, m *ichorv1
 	}
 
 	return &c, nil
+}
+
+// can asks the requesting user's right; a missing checker or a failed check refuses.
+func (v *TalosMachineCustomValidator) can(ctx context.Context, verb, sub string, m *ichorv1alpha1.TalosMachine) error {
+	if v.Can == nil {
+		return fmt.Errorf("you need the %q verb on talosmachines/%s", verb, sub)
+	}
+
+	ok, err := v.Can(ctx, verb, "talosmachines", sub, m.Name, m.Namespace)
+	if err != nil {
+		return fmt.Errorf("cannot check the %q right on talosmachines/%s: %w", verb, sub, err)
+	}
+
+	if !ok {
+		return fmt.Errorf("you need the %q verb on talosmachines/%s", verb, sub)
+	}
+
+	return nil
+}
+
+// checkApprover requires approve on talosmachines/approval for the transition into approved (at
+// creation too): the controller then pushes the cluster's rendered configuration, with its CA keys,
+// to the machine, on the requester's behalf.
+func (v *TalosMachineCustomValidator) checkApprover(ctx context.Context, oldObj, newObj *ichorv1alpha1.TalosMachine) error {
+	if !newObj.Spec.IsApproved() || (oldObj != nil && oldObj.Spec.IsApproved()) {
+		return nil
+	}
+
+	if err := v.can(ctx, ichorv1alpha1.MachineApproveVerb, ichorv1alpha1.MachineApprovalSubresource, newObj); err != nil {
+		return fmt.Errorf("approving a machine hands it the cluster's configuration: %w", err)
+	}
+
+	return nil
+}
+
+// checkEndpoint judges spec.endpoint when a machine is created, changes endpoint, or changes
+// cluster: never loopback, link-local, unspecified, multicast or inside the cluster's own pod or
+// service ranges; and only an address the cluster's spec.discovery declares, unless the user holds
+// update on talosmachines/endpoint. An update that leaves both alone is not judged, so a machine
+// whose address was declared once stays editable.
+func (v *TalosMachineCustomValidator) checkEndpoint(ctx context.Context, oldObj, newObj *ichorv1alpha1.TalosMachine) error {
+	if oldObj != nil && oldObj.Spec.Endpoint == newObj.Spec.Endpoint && sameCluster(oldObj, newObj) {
+		return nil
+	}
+
+	cluster, err := v.getCluster(ctx, newObj)
+	if err != nil {
+		return err
+	}
+
+	if cluster == nil {
+		cluster = &ichorv1alpha1.TalosCluster{}
+	}
+
+	if err := endpointguard.Forbidden(newObj.Spec.Endpoint, cluster); err != nil {
+		return fmt.Errorf("spec.endpoint %q is refused: %w", newObj.Spec.Endpoint, err)
+	}
+
+	if endpointguard.InDiscovery(newObj.Spec.Endpoint, cluster) {
+		return nil
+	}
+
+	if err := v.can(ctx, ichorv1alpha1.MachineEndpointVerb, ichorv1alpha1.MachineEndpointSubresource, newObj); err != nil {
+		return fmt.Errorf("spec.endpoint %q is not an address of the cluster's spec.discovery (addresses, cidrs): %w", newObj.Spec.Endpoint, err)
+	}
+
+	return nil
 }
 
 // checkApprovalCap enforces "no approving more control planes than

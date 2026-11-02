@@ -31,6 +31,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/endpointguard"
 )
 
 // Provisioning is the first-configuration path of an approved machine: a node still in
@@ -44,6 +45,7 @@ const conditionProvisioned = "Provisioned"
 
 const (
 	reasonIdentityMismatch   = "IdentityMismatch"
+	reasonEndpointRefused    = "EndpointRefused"
 	reasonInstallDiskUnknown = "InstallDiskUnknown"
 	reasonConfigStored       = "ConfigStored"
 	reasonAwaitingInstall    = "AwaitingInstall"
@@ -77,6 +79,13 @@ func (r *TalosMachineReconciler) provision(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, rendered []byte, hash string,
 ) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
+
+	// Defence in depth behind the admission webhook (ADR 0108): the rendered configuration carries
+	// the cluster's CA keys, so it is never sent to the controller's own network position.
+	if err := endpointguard.ForbiddenResolved(ctx, m.DialEndpoint(), cluster); err != nil {
+		return r.retryLater(ctx, m, reasonEndpointRefused,
+			fmt.Sprintf("the endpoint %s is not a valid target for this cluster's configuration: %v; nothing was dialled or applied", m.DialEndpoint(), err))
+	}
 
 	hw, mc, err := r.probeMaintenance(ctx, m.DialEndpoint())
 	if err != nil {

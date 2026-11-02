@@ -23,6 +23,9 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/go-logr/stdr"
+	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 
 	"github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1/ichorv1alpha1connect"
 	"github.com/maeshinshin/ichor/internal/uiapi"
@@ -111,6 +114,22 @@ func tlsConfig(get getCert) *tls.Config {
 		CurvePreferences: []tls.CurveID{tls.X25519, tls.CurveP256},
 		GetCertificate:   get,
 	}
+}
+
+// authenticatedMetrics wraps h so only a caller with a Kubernetes token that may `get` the
+// non-resource URL /metrics reaches it.
+func authenticatedMetrics(cfg *rest.Config, h http.Handler) (http.Handler, error) {
+	hc, err := rest.HTTPClientFor(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	filter, err := filters.WithAuthenticationAndAuthorization(cfg, hc)
+	if err != nil {
+		return nil, err
+	}
+
+	return filter(stdr.New(log.Default()), h)
 }
 
 // newInternalHTTPServer is the kube-apiserver-only listener: tiny discovery and

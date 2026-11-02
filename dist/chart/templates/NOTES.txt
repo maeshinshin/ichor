@@ -10,6 +10,14 @@ profile, so enforce it (ADR 0108):
   kubectl label namespace {{ .Release.Namespace }} pod-security.kubernetes.io/enforce=restricted \
     pod-security.kubernetes.io/audit=restricted pod-security.kubernetes.io/warn=restricted
 
+{{- if include "ichor.cnp.enabled" . }}
+Network: Ichor's CiliumNetworkPolicies are on for namespace {{ .Release.Namespace }} (default deny, one allow per flow; ADR 0100).
+{{- if .Release.IsUpgrade }}
+NOTICE: an earlier release of this chart did not render them by default. To opt out, set networkPolicy.cilium.enabled=false
+(or delete the ciliumnetworkpolicies in the namespace after setting it).
+{{- end }}
+{{- end }}
+
 To verify the installation:
 
   kubectl get pods -n {{ .Release.Namespace }}

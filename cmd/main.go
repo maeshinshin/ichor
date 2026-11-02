@@ -153,6 +153,7 @@ func main() {
 	var noCiliumPolicies bool
 	var uiServiceName string
 	var talosEgressPolicy string
+	var talosEgressManage bool
 	var refreshLifetime time.Duration
 	var tlsOpts []func(*tls.Config)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
@@ -182,6 +183,8 @@ func main() {
 		"Tell the installer Job not to apply Ichor's CiliumNetworkPolicies even on Cilium (the chart sets it from networkPolicy.cilium.enabled=false; ADR 0100).")
 	flag.StringVar(&talosEgressPolicy, "talos-egress-policy-name", controller.DefaultTalosEgressPolicyName,
 		"Name of the CiliumNetworkPolicy the controller keeps with the addresses of the machines, clusters and S3 stores it manages (ADR 0100).")
+	flag.BoolVar(&talosEgressManage, "talos-egress-policy", true,
+		"Keep the CiliumNetworkPolicy of egress to managed machines and S3 current. Off when the chart sets networkPolicy.cilium.dynamicTalosEgress=false (ADR 0100).")
 	flag.BoolVar(&userIssuer, "user-issuer", false,
 		"Keep the signing keys and user credentials for ichor-ui's own OIDC issuer (ADR 0094). The serving CA and certificate are kept either way (ADR 0105).")
 	flag.StringVar(&externalURL, "ui-external-url", "",
@@ -427,7 +430,7 @@ func main() {
 		Evacuator:           evac,
 		Recorder:            mgr.GetEventRecorderFor("ichor-controller"), //nolint:staticcheck
 	}).SetupWithManager(mgr), "Failed to create controller", "controller", "talosmachine")
-	egress := &controller.TalosEgress{Client: mgr.GetClient(), Namespace: ns, Name: talosEgressPolicy, Disabled: noCiliumPolicies, Settle: 3 * time.Second}
+	egress := &controller.TalosEgress{Client: mgr.GetClient(), Namespace: ns, Name: talosEgressPolicy, Disabled: noCiliumPolicies || !talosEgressManage, Settle: 3 * time.Second}
 	must(egress.SetupWithManager(mgr), "Failed to create controller", "controller", "talosegress")
 	must((&controller.TalosClusterReconciler{
 		Client: mgr.GetClient(),

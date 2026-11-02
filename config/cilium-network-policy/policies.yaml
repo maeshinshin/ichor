@@ -65,17 +65,19 @@ spec:
     - ports:
       - port: "6443"
         protocol: TCP
-  # Talos nodes: apid (every node, also ones that have not joined yet or are in maintenance mode,
-  # which are "world") and the API server's /readyz on a node's own address.
+  # Talos nodes of this cluster: apid, the API server's /readyz on a node's own address and etcd's
+  # peer port (MachineReclaim). Machines outside the cluster (maintenance mode, other clusters) are
+  # allowed by the policy the controller maintains from its own CRs, ichor-controller-talos-egress.
   - toEntities:
     - host
     - remote-node
-    - world
     toPorts:
     - ports:
       - port: "50000"
         protocol: TCP
       - port: "6443"
+        protocol: TCP
+      - port: "2380"
         protocol: TCP
   - toEndpoints:
     - matchLabels:
@@ -87,14 +89,11 @@ spec:
         protocol: UDP
       - port: "53"
         protocol: TCP
-  # TalosEtcdBackup's S3 endpoint. Another port or an in-cluster store needs a policy of the
-  # operator's own (policies add up).
-  - toEntities:
-    - world
-    toPorts:
-    - ports:
-      - port: "443"
-        protocol: TCP
+      # Through Cilium's DNS proxy: it is what lets toFQDNs rules (the controller's egress policy,
+      # ADR 0100 amendment 2026-11-02) learn the addresses a name resolves to.
+      rules:
+        dns:
+        - matchPattern: "*"
 ---
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
@@ -134,11 +133,11 @@ spec:
     - ports:
       - port: "6443"
         protocol: TCP
-  # Support bundles, logs, etcd snapshots and discovery dial a node's apid.
+  # Support bundles, logs, etcd snapshots and discovery dial a node's apid. Nodes of this cluster here;
+  # others by ichor-controller-talos-egress, which also selects these pods.
   - toEntities:
     - host
     - remote-node
-    - world
     toPorts:
     - ports:
       - port: "50000"
@@ -153,7 +152,13 @@ spec:
         protocol: UDP
       - port: "53"
         protocol: TCP
-  # The external OIDC issuer (ichorUI.oidc).
+      # Through Cilium's DNS proxy: it is what lets toFQDNs rules (the controller's egress policy,
+      # ADR 0100 amendment 2026-11-02) learn the addresses a name resolves to.
+      rules:
+        dns:
+        - matchPattern: "*"
+  # The external OIDC issuer (ichorUI.oidc) and the host of a pull request. Their names are not
+  # known here; the chart's externalCIDRs narrow this.
   - toEntities:
     - world
     toPorts:

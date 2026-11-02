@@ -101,6 +101,10 @@ spec:
         # Explicit opt-out: the installer Job skips Ichor's CiliumNetworkPolicies (ADR 0100).
         - --no-cilium-policies
         {{- end }}
+        {{- if not .Values.networkPolicy.cilium.dynamicTalosEgress }}
+        - --talos-egress-policy=false
+        {{- end }}
+        - --talos-egress-policy-name={{ include "ichor.resourceName" (dict "suffix" "controller-talos-egress" "context" $) }}
         {{- range .Values.manager.args }}
         - {{ . }}
         {{- end }}

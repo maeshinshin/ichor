@@ -553,17 +553,25 @@ priorityClass:
 networkPolicy:
   enabled: false
 
-  ## Ichor's CiliumNetworkPolicies (ADR 0100): a default deny for the release namespace plus one
-  ## allow per flow the controller, ichor-ui and the installer Job need, with entities
-  ## (kube-apiserver, host, remote-node, world) that a plain NetworkPolicy cannot express.
-  ## Needs Cilium's CRD, so turn it on only once Cilium runs. `ichor init` and the installer
-  ## apply the same policies from config/cilium-network-policy. `enabled` is three-valued: unset
-  ## (null, the default) renders nothing here and leaves the installer to apply them when Cilium
-  ## is detected; true renders them here too; an explicit false also tells the installer Job not
-  ## to apply them (a hands-off Cilium cluster that does not want them).
+  ## Ichor's CiliumNetworkPolicies (ADR 0100, amended 2026-11-02): a default deny, ingress and egress, for the
+  ## release namespace plus one allow per flow the controller, ichor-ui and the installer Job need, with
+  ## entities (kube-apiserver, host, remote-node, world) that a plain NetworkPolicy cannot express.
+  ## `enabled` is three-valued: unset (null, the default) renders them when the cluster serves Cilium's
+  ## cilium.io/v2 CiliumNetworkPolicy API (and renders nothing under `helm template`, which has no cluster);
+  ## true renders them regardless (Cilium's CRD must exist when the chart is applied); false renders none and
+  ## tells the installer Job not to apply its copy. UPGRADE NOTICE: a release that had them off now gets them
+  ## on when Cilium is present; set false to keep the old behaviour.
   ##
   cilium:
     enabled: null
+    ## The controller keeps a second policy, <release>-controller-talos-egress, with exactly the addresses
+    ## and names of the TalosClusters, TalosMachines, MachineReclaims and TalosEtcdBackups it manages, for
+    ## the controller and ichor-ui. While true the rules here stop allowing `world` to Talos nodes, API
+    ## servers and S3. Set false to fall back to `world` (the pre-amendment behaviour).
+    dynamicTalosEgress: true
+    ## Namespaces whose pods may scrape the controller's metrics port. Empty (default): any in-cluster
+    ## source (the `cluster` entity).
+    metricsNamespaces: []
     ## TCP ports the controller (S3 for TalosEtcdBackup) and ichor-ui (the external OIDC issuer)
     ## may reach outside the cluster. A store or issuer on
     ## another port, or inside the cluster, needs a policy of your own: policies add up.

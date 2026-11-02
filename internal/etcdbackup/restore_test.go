@@ -179,7 +179,7 @@ func TestFetchVerifiedVerifyObjectAndReader(t *testing.T) {
 		t.Fatal("a corrupt snapshot passed")
 	}
 
-	if _, err := FetchVerified(ctx, st, "good", Key{Current: "other"}); err == nil {
+	if _, err := FetchVerified(ctx, st, "good", Key{Current: wrongPass}); err == nil {
 		t.Fatal("a snapshot opened with the wrong key")
 	}
 
@@ -199,7 +199,7 @@ func TestFetchVerifiedVerifyObjectAndReader(t *testing.T) {
 		t.Fatal("Reader returned different bytes")
 	}
 
-	if _, err := Reader(ctx, st, "good", Key{Current: "other"}); err == nil {
+	if _, err := Reader(ctx, st, "good", Key{Current: wrongPass}); err == nil {
 		t.Fatal("Reader opened with the wrong key")
 	}
 }
@@ -213,7 +213,7 @@ func TestMarkerSignature(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := GetMarker(ctx, st, "p", Key{Current: "other"}); err == nil {
+	if _, err := GetMarker(ctx, st, "p", Key{Current: wrongPass}); err == nil {
 		t.Fatal("a marker read with another key must be refused")
 	}
 
@@ -233,3 +233,5 @@ func TestMarkerSignature(t *testing.T) {
 		t.Fatalf("legacy marker: %+v, %v", got, err)
 	}
 }
+
+const wrongPass = "other"

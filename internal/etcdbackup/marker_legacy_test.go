@@ -34,7 +34,7 @@ func TestMarkerSignedWithTheV1KeyIsAccepted(t *testing.T) {
 		t.Fatalf("v1-signed marker refused: %v", err)
 	}
 
-	if _, err := GetMarker(ctx, st, "p", Key{Current: "v2", Legacy: "other"}); err == nil {
+	if _, err := GetMarker(ctx, st, "p", Key{Current: "v2", Legacy: "unknown"}); err == nil {
 		t.Fatal("a marker signed with an unknown key was accepted")
 	}
 }

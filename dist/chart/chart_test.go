@@ -1535,7 +1535,7 @@ func TestControllerRBACHoldsNoEscalation(t *testing.T) {
 			// The one exception: the controller keeps the list of Ichor users that ichor-ui may
 			// impersonate in one named ClusterRole, and needs `escalate` on that role alone to grant the
 			// impersonate right it does not hold. Only the exact name qualifies.
-			managed := triple.group == "rbac.authorization.k8s.io" && triple.resource == "clusterroles" &&
+			managed := triple.group == "rbac.authorization.k8s.io" && triple.resource == resClusterRoles &&
 				triple.names == "ichor-ui-impersonate"
 			if managed && (triple.verb == "escalate" || triple.verb == verbGetController || triple.verb == "update") {
 				continue
@@ -1776,3 +1776,5 @@ func TestUIDiagnosticsDownloadVerb(t *testing.T) {
 		t.Errorf("a bound diagnostics role must render without the helper roles")
 	}
 }
+
+const resClusterRoles = "clusterroles"

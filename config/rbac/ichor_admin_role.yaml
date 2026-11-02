@@ -49,6 +49,7 @@ rules:
   resources:
   - ichorinstallations
   - talosclusters
+  - talosetcdbackups
   - talosmachines
   verbs:
   - patch
@@ -143,3 +144,18 @@ rules:
   - talosmachines/support-bundle
   verbs:
   - download
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosetcdbackups
+  verbs:
+  - create
+  - delete
+# Every download asks the controller for a short-lived certificate with a TalosCredentialRequest;
+# creating one is plain RBAC, the validating webhook checks the download verb.
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - taloscredentialrequests
+  verbs:
+  - create

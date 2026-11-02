@@ -48,6 +48,7 @@ rules:
   resources:
   - ichorinstallations
   - talosclusters
+  - talosetcdbackups
   - talosmachines
   verbs:
   - patch

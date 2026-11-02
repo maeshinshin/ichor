@@ -19,6 +19,7 @@ package installer
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -86,23 +87,11 @@ func TestCustomizePoliciesOnTheRealBundle(t *testing.T) {
 		t.Errorf("a fresh install opens %v, want only 8443", got)
 	}
 
-	for name, s := range map[string]UISettings{
-		"pinned TLS port": {ListenAddr: plainAddr},
-	} {
-		_, pol := realBundle(t)
-		CustomizePolicies(pol, s)
+	_, pol := realBundle(t)
+	CustomizePolicies(pol, UISettings{ListenAddr: plainAddr})
 
-		got := uiPolicyPorts(t, pol)
-
-		found := false
-
-		for _, p := range got {
-			found = found || p == "8080"
-		}
-
-		if !found || got[0] != "8443" {
-			t.Errorf("%s: the ichor-ui policy opens %v, want 8443 and 8080", name, got)
-		}
+	if got := uiPolicyPorts(t, pol); !slices.Equal(got, []string{"8443", "8080"}) {
+		t.Errorf("a pinned TLS port: the ichor-ui policy opens %v, want 8443 and 8080", got)
 	}
 }
 

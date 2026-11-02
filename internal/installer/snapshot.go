@@ -228,7 +228,7 @@ func loadStage(ctx context.Context, c client.Client, ns, runID string, stage int
 
 // stripLive removes what the API server owns, so the saved object can be written back.
 func stripLive(obj map[string]any) map[string]any {
-	u := &unstructured.Unstructured{Object: runtimeCopy(obj)}
+	u := (&unstructured.Unstructured{Object: obj}).DeepCopy()
 	u.SetUID("")
 	u.SetResourceVersion("")
 	u.SetGeneration(0)
@@ -238,10 +238,6 @@ func stripLive(obj map[string]any) map[string]any {
 	unstructured.RemoveNestedField(u.Object, "status")
 
 	return u.Object
-}
-
-func runtimeCopy(obj map[string]any) map[string]any {
-	return (&unstructured.Unstructured{Object: obj}).DeepCopy().Object
 }
 
 // pruneSnapshots deletes every snapshot except the keep newest, and never the one named

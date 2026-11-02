@@ -383,20 +383,35 @@ func clusterSecretRefChanges(old, updated *ichorv1alpha1.TalosCluster) []string 
 		changed = append(changed, "spec.secretsRef")
 	}
 
-	had := map[string]bool{}
+	// A registry's credential goes to its endpoints, so a changed endpoint list counts as much as a
+	// changed Secret name. hadPair remembers the (host, Secret) pairs to tell the two apart.
+	had, hadPair := map[string]bool{}, map[string]bool{}
 
 	for _, r := range old.Spec.Registries {
 		if r.AuthSecretRef != nil {
-			had[r.Host+"\x00"+r.AuthSecretRef.Name] = true
+			pair := r.Host + "\x00" + r.AuthSecretRef.Name
+			hadPair[pair] = true
+			had[pair+"\x00"+strings.Join(r.Endpoints, "\x00")] = true
 		}
 	}
 
 	for _, r := range updated.Spec.Registries {
-		if r.AuthSecretRef != nil && !had[r.Host+"\x00"+r.AuthSecretRef.Name] {
-			changed = append(changed, "spec.registries[].authSecretRef")
-
-			break
+		if r.AuthSecretRef == nil {
+			continue
 		}
+
+		pair := r.Host + "\x00" + r.AuthSecretRef.Name
+		if had[pair+"\x00"+strings.Join(r.Endpoints, "\x00")] {
+			continue
+		}
+
+		if hadPair[pair] {
+			changed = append(changed, "spec.registries[].endpoints")
+		} else {
+			changed = append(changed, "spec.registries[].authSecretRef")
+		}
+
+		break
 	}
 
 	return changed

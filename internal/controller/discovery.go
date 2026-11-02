@@ -174,6 +174,8 @@ func (r *DiscoveryReconciler) Discover(
 			return nil, fmt.Errorf("creating pending TalosMachine: %w", err)
 		}
 
+		r.pinMaintenance(ctx, mc, m)
+
 		return m, nil
 
 	case err != nil:
@@ -189,6 +191,10 @@ func (r *DiscoveryReconciler) Discover(
 			}
 		}
 
+		if !existing.Spec.IsApproved() {
+			r.pinMaintenance(ctx, mc, &existing)
+		}
+
 		return &existing, nil
 
 	default:
@@ -200,6 +206,20 @@ func (r *DiscoveryReconciler) Discover(
 				"one reusing the UUID", hw.UUID))
 
 		return nil, nil
+	}
+}
+
+// pinMaintenance records the certificate fingerprint the node presented, so the first configuration is
+// only pushed to that node again. Failing to record it is not fatal: provisioning pins at its
+// first probe instead.
+func (r *DiscoveryReconciler) pinMaintenance(ctx context.Context, mc MaintenanceClient, m *ichorv1alpha1.TalosMachine) {
+	pf, ok := mc.(PeerFingerprinter)
+	if !ok {
+		return
+	}
+
+	if err := recordMaintenanceFingerprint(ctx, r.Client, r.Client, m, pf.PeerFingerprint()); err != nil {
+		logf.FromContext(ctx).Error(err, "recording the maintenance certificate fingerprint", "machine", m.Name)
 	}
 }
 

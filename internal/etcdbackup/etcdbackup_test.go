@@ -17,10 +17,10 @@ limitations under the License.
 package etcdbackup
 
 import (
-	"errors"
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"errors"
 	"io"
 	"strings"
 	"testing"

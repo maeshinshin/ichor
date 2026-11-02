@@ -17,7 +17,7 @@ by writing the CR). The controller applies it; it never edits your `spec`.
 | Pod Security | `spec.security.podSecurity` | Pod Security admission levels and exempt namespaces | kube-apiserver restarts on each control plane, no node reboot |
 | Audit policy | `spec.security.audit` | One of three kube-apiserver audit policy presets | kube-apiserver restarts on each control plane, no node reboot |
 | Disk encryption | `spec.security.diskEncryption` | LUKS2 on STATE and EPHEMERAL | Wipe and rejoin of every node, see below |
-| Talos API from pods | (a `Config` patch) | Refuses `os:admin` in `kubernetesTalosAPIAccess`; control planes only | None |
+| Talos API from pods | (a `Config` patch) | Warns about `kubernetesTalosAPIAccess` (`os:admin` most strongly); rendered on control planes only | None |
 
 ## Ingress firewall
 
@@ -69,10 +69,12 @@ the controller connects to the cluster endpoint from (it asks the routing table
 of the webhook's own pod). If the controller runs in a pod, list the pod network
 and its node's address: with Cilium the controller reaches apid on its own node
 from its pod IP, but on any other node from its node's address (masqueraded),
-measured on hardware. The webhook also refuses a firewall whose `nodeCIDRs`
-miss the address of an approved machine, or whose `controlPlaneCIDRs` miss the
-address of an approved control plane (a machine whose endpoint is a hostname is
-not checked), and warns when `talosAPICIDRs` is empty: list your own
+measured on hardware. The webhook also refuses a firewall whose `controlPlaneCIDRs`
+miss the address of an approved control plane (the controller reaches the other
+nodes from a control plane's address, so Ichor itself would be cut off; a
+machine whose endpoint is a hostname is not checked). It only warns when
+`nodeCIDRs` miss a machine (that machine loses its Cilium and trustd rules, but
+Ichor's own path is intact) and when `talosAPICIDRs` is empty: list your own
 workstation there, it is the only way back if Ichor is cut off. If the endpoint
 does not resolve yet, the controller-address check is skipped; machines
 approved after the firewall was enabled are not re-checked, so keep the CIDRs
@@ -219,9 +221,10 @@ in `talosctl get volumestatus`.
 
 `machine.features.kubernetesTalosAPIAccess` in a `Config` patch with `os:admin` in
 `allowedRoles` hands a Talos administrator to every pod in the allowed
-namespaces. Talos allows the feature on control planes only, so the webhook
-refuses a patch that enables it at the cluster layer or for the worker role;
-use `layer: role` with `target.role: controlplane`. The `TalosConfigPatch` webhook refuses it unless the user holds the
+namespaces. That is your cluster's choice, so the `TalosConfigPatch` webhook
+only warns (with extra wording for `os:admin`) and admits the patch. Talos
+allows the feature on control planes only, so Ichor renders it on control
+planes and leaves it out of workers, whatever layer the patch is on. The `TalosConfigPatch` webhook refuses it unless the user holds the
 `break-glass` verb on that patch. Any enabled `kubernetesTalosAPIAccess` is
 admitted with a warning naming the roles and namespaces. An update that does not
 touch the documents is not re-checked, so a patch stored earlier stays editable.

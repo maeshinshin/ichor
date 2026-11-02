@@ -42,6 +42,10 @@ const (
 	// IchorInstallerServiceAccount is the Job's ServiceAccount.
 	IchorInstallerServiceAccount = "ichor-installer"
 
+	// installerDeadline is the longest an installer Job may run, in seconds: a post-check and a rollback
+	// are five minutes each per step, so half an hour is generous and still finite.
+	installerDeadline = 30 * 60
+
 	ichorInstallerJobPrefix = "ichor-installer-"
 
 	// IchorInstallerTargetAnnotation records the version a Job was started for, so a changed
@@ -178,13 +182,13 @@ func newInstallerJob(ns, name string, op *ichorv1alpha1.TalosOperation, inst *ic
 	sum := sha256.Sum256([]byte(op.Namespace + "/" + op.Name))
 
 	// One attempt: a retry after a rollback would redo a failed upgrade without anyone having
-	// looked at why. The operation pauses instead. Nothing bounds the run in time.
+	// looked at why. The operation pauses instead. installerDeadline bounds the run in time.
 	args := []string{"installer", "run", "--namespace=" + ns, "--run-id=" + name, "--cni-detected=" + cni}
 	if noPolicies {
 		args = append(args, "--no-cilium-policies")
 	}
 
-	return newJob(ns, name, "ichor-installer", IchorInstallerServiceAccount, 0,
+	return newJob(ns, name, "ichor-installer", IchorInstallerServiceAccount, installerDeadline,
 		map[string]string{ichorInstallerOperationLabel: hex.EncodeToString(sum[:])[:32]},
 		map[string]string{IchorInstallerTargetAnnotation: inst.Spec.Version},
 		corev1.Container{

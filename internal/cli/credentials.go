@@ -70,6 +70,11 @@ type credentialRequest struct {
 	KubeconfigOut  string
 	TalosconfigOut string
 	TalosEndpoints []string
+
+	// TTL is how long the client certificates are valid (zero: a year, which is also the cap); ReadOnly makes
+	// the talosconfig os:reader instead of os:admin.
+	TTL      time.Duration
+	ReadOnly bool
 }
 
 // credentialFiles says what was written.
@@ -90,6 +95,8 @@ func writeCredentials(ctx context.Context, k8s client.Client, req credentialRequ
 	if err != nil {
 		return nil, err
 	}
+
+	src.TTL, src.Reader = req.TTL, req.ReadOnly
 
 	kubeIn := currentKubeconfigFile(req.KubeconfigIn)
 

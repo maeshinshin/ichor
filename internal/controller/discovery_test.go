@@ -31,6 +31,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 
@@ -563,5 +564,50 @@ var _ = Describe("DiscoveryReconciler.DiscoverAll known addresses", func() {
 		Expect(probed).To(ConsistOf("198.51.100.13:50000"))
 		Expect(recorder.Events).To(Receive(ContainSubstring("198.51.100.13:50000")))
 		Consistently(recorder.Events).ShouldNot(Receive())
+	})
+
+	It("probes the address of a Node that a reset by Ichor left behind, but not once it is Ready again", func() {
+		cluster := &ichorv1alpha1.TalosCluster{ObjectMeta: metav1.ObjectMeta{Name: "reset-node-cluster", Namespace: tmNamespace},
+			Spec: ichorv1alpha1.TalosClusterSpec{Discovery: &ichorv1alpha1.TalosClusterDiscovery{
+				Addresses: []string{"198.51.100.20", "198.51.100.21"},
+			}}}
+
+		mkNode := func(name, ip string, ready corev1.ConditionStatus, annotated bool) {
+			node := &corev1.Node{}
+			node.Name = name
+
+			if annotated {
+				node.Annotations = map[string]string{nodeResetByIchorAnnotation: "2026-11-02T00:00:00Z"}
+			}
+
+			Expect(k8sClient.Create(ctx, node)).To(Succeed())
+			DeferCleanup(func() { _ = k8sClient.Delete(ctx, node) })
+
+			node.Status.Addresses = []corev1.NodeAddress{{Type: corev1.NodeInternalIP, Address: ip}}
+			node.Status.Conditions = []corev1.NodeCondition{{Type: corev1.NodeReady, Status: ready}}
+			Expect(k8sClient.Status().Update(ctx, node)).To(Succeed())
+		}
+
+		mkNode("reset-left-node", "198.51.100.20", corev1.ConditionUnknown, true)
+		mkNode("reset-rejoined-node", "198.51.100.21", corev1.ConditionTrue, true)
+
+		var (
+			mu     sync.Mutex
+			probed []string
+		)
+
+		factory := func(_ context.Context, endpoint string) (MaintenanceClient, error) {
+			mu.Lock()
+			probed = append(probed, endpoint)
+			mu.Unlock()
+
+			return &fakeMaintenanceClient{err: fmt.Errorf("%w: rejected", ErrAlreadyConfigured)}, nil
+		}
+
+		r := &DiscoveryReconciler{Client: k8sClient, Recorder: record.NewFakeRecorder(10), MaintenanceClient: factory}
+
+		_, err := r.DiscoverAll(ctx, cluster)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(probed).To(ConsistOf("198.51.100.20:50000"))
 	})
 })

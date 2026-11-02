@@ -26,6 +26,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -83,5 +84,22 @@ var _ = Describe("a removal whose drain is blocked", func() {
 
 		var gone ichorv1alpha1.TalosMachine
 		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, machineKeyOf(cp1), &gone))).To(BeTrue())
+	})
+})
+
+var _ = Describe("markNodeReset", func() {
+	It("annotates the Node of a reset machine once, and ignores a missing Node", func() {
+		node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "mark-reset-node"}}
+		Expect(k8sClient.Create(ctx, node)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, node) })
+
+		r := &TalosMachineReconciler{Client: k8sClient}
+		r.markNodeReset(ctx, "mark-reset-node")
+		r.markNodeReset(ctx, "no-such-node")
+		r.markNodeReset(ctx, "")
+
+		var got corev1.Node
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: node.Name}, &got)).To(Succeed())
+		Expect(got.Annotations).To(HaveKey(nodeResetByIchorAnnotation))
 	})
 })

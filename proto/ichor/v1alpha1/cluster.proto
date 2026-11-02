@@ -20,6 +20,48 @@ service ClusterService {
   // DismissCARotationAdvice sets the annotation ichor.maesh.dev/ca-rotation-advice-dismissed on the
   // TalosCluster, which the controller reads to clear the CARotationAdvised condition. It writes that annotation and nothing else.
   rpc DismissCARotationAdvice(DismissCARotationAdviceRequest) returns (DismissCARotationAdviceResponse);
+  // AddDiscoveryCidr appends one IPv4 range (/24 or smaller) to TalosCluster.spec.discovery.cidrs. The controller scans it address by address; the write itself wakes the cluster's
+  // reconcile, so the first pass starts now and not at the next 5 minute interval.
+  rpc AddDiscoveryCidr(AddDiscoveryCidrRequest) returns (AddDiscoveryCidrResponse);
+  // RemoveDiscoveryAddress removes one address from spec.discovery.addresses. Machines already found
+  // stay; only the scan target goes.
+  rpc RemoveDiscoveryAddress(RemoveDiscoveryAddressRequest) returns (RemoveDiscoveryAddressResponse);
+  // RemoveDiscoveryCidr removes one range from spec.discovery.cidrs.
+  rpc RemoveDiscoveryCidr(RemoveDiscoveryCidrRequest) returns (RemoveDiscoveryCidrResponse);
+}
+
+message AddDiscoveryCidrRequest {
+  ObjectRef cluster = 1;
+  // cidr is an IPv4 range of /24 or smaller, e.g. "192.168.0.0/24".
+  string cidr = 2;
+  string reason = 3;
+}
+
+message AddDiscoveryCidrResponse {
+  Cluster cluster = 1;
+  AuditRecord audit = 2;
+}
+
+message RemoveDiscoveryAddressRequest {
+  ObjectRef cluster = 1;
+  string address = 2;
+  string reason = 3;
+}
+
+message RemoveDiscoveryCidrRequest {
+  ObjectRef cluster = 1;
+  string cidr = 2;
+  string reason = 3;
+}
+
+message RemoveDiscoveryAddressResponse {
+  Cluster cluster = 1;
+  AuditRecord audit = 2;
+}
+
+message RemoveDiscoveryCidrResponse {
+  Cluster cluster = 1;
+  AuditRecord audit = 2;
 }
 
 message DismissCARotationAdviceRequest {

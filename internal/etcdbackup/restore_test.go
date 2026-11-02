@@ -101,7 +101,7 @@ func TestRestoreObjectsAgainstFakeS3(t *testing.T) {
 }
 
 func TestPinCopiesTheCiphertext(t *testing.T) {
-	st := memStore{"p/c/" + ObjectName(time.Unix(0, 0)): sealed(t, makeSnapshot("etcd"), "pw")}
+	st := memStore{"p/c/" + ObjectName(time.Unix(0, 0)): sealed(t, makeSnapshot("etcd"), Key{Current: "pw"})}
 
 	if err := Pin(context.Background(), st, "p/c", "p/c/"+ObjectName(time.Unix(0, 0)), 0); err != nil {
 		t.Fatal(err)
@@ -139,7 +139,7 @@ func (m memStore) Get(_ context.Context, key string) (io.ReadCloser, error) {
 
 func (m memStore) Delete(_ context.Context, key string) error { delete(m, key); return nil }
 
-func sealed(t *testing.T, plain []byte, pass string) []byte {
+func sealed(t *testing.T, plain []byte, pass Key) []byte {
 	t.Helper()
 
 	var buf bytes.Buffer
@@ -164,30 +164,30 @@ func TestFetchVerifiedVerifyObjectAndReader(t *testing.T) {
 	bad := append([]byte(nil), plain...)
 	bad[1] ^= 0xff
 
-	st := memStore{"good": sealed(t, plain, "pw"), "bad": sealed(t, bad, "pw")}
+	st := memStore{"good": sealed(t, plain, Key{Current: "pw"}), "bad": sealed(t, bad, Key{Current: "pw"})}
 
-	buf, err := FetchVerified(ctx, st, "good", "pw")
+	buf, err := FetchVerified(ctx, st, "good", Key{Current: "pw"})
 	if err != nil || !bytes.Equal(buf.Bytes(), plain) {
 		t.Fatalf("FetchVerified: %v", err)
 	}
 
-	if n, err := VerifyObject(ctx, st, "good", "pw"); err != nil || n != int64(len(plain)) {
+	if n, err := VerifyObject(ctx, st, "good", Key{Current: "pw"}); err != nil || n != int64(len(plain)) {
 		t.Fatalf("VerifyObject: %d, %v", n, err)
 	}
 
-	if _, err := VerifyObject(ctx, st, "bad", "pw"); err == nil {
+	if _, err := VerifyObject(ctx, st, "bad", Key{Current: "pw"}); err == nil {
 		t.Fatal("a corrupt snapshot passed")
 	}
 
-	if _, err := FetchVerified(ctx, st, "good", "other"); err == nil {
+	if _, err := FetchVerified(ctx, st, "good", Key{Current: "other"}); err == nil {
 		t.Fatal("a snapshot opened with the wrong key")
 	}
 
-	if _, err := VerifyObject(ctx, st, "nope", "pw"); !errors.Is(err, ErrNotFound) {
+	if _, err := VerifyObject(ctx, st, "nope", Key{Current: "pw"}); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("a missing snapshot: %v", err)
 	}
 
-	rd, err := Reader(ctx, st, "good", "pw")
+	rd, err := Reader(ctx, st, "good", Key{Current: "pw"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +199,7 @@ func TestFetchVerifiedVerifyObjectAndReader(t *testing.T) {
 		t.Fatal("Reader returned different bytes")
 	}
 
-	if _, err := Reader(ctx, st, "good", "other"); err == nil {
+	if _, err := Reader(ctx, st, "good", Key{Current: "other"}); err == nil {
 		t.Fatal("Reader opened with the wrong key")
 	}
 }

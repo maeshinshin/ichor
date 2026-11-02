@@ -105,7 +105,7 @@ type restoreRun struct {
 	bundle     *secrets.Bundle
 	store      etcdbackup.Store
 	prefix     string
-	passphrase string
+	passphrase etcdbackup.Key
 	scrub      scrubber
 	backup     *ichorv1alpha1.TalosEtcdBackup
 	warn       string // what did not converge on the nodes that were not wiped

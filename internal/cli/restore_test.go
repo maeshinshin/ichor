@@ -121,7 +121,7 @@ func goodSnapshot(t *testing.T) []byte {
 func putSnapshot(t *testing.T, s *memStore, at time.Time, plain []byte, bundle *secrets.Bundle) {
 	t.Helper()
 
-	pass, err := etcdbackup.Passphrase(bundle)
+	pass, err := etcdbackup.DeriveKey(bundle)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,8 +195,8 @@ func (h *restoreHarness) run() error {
 func (h *restoreHarness) assertNoLeak(t *testing.T, err error) {
 	t.Helper()
 
-	pass, _ := etcdbackup.Passphrase(h.bundle)
-	all := append(bundleSecretMaterial(h.bundle), pass, testS3AccessKey, testS3SecretKey)
+	pass, _ := etcdbackup.DeriveKey(h.bundle)
+	all := append(append(bundleSecretMaterial(h.bundle), pass.Secrets()...), testS3AccessKey, testS3SecretKey)
 
 	hay := h.stdout.String() + h.stderr.String()
 	if err != nil {

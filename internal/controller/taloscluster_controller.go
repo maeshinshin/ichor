@@ -55,6 +55,11 @@ type TalosClusterReconciler struct {
 	// Discovery runs the actual probe (EnumerateCandidates + Discover per
 	// candidate); this reconciler only decides when to call it.
 	Discovery *DiscoveryReconciler
+
+	// Egress, when set, brings the controller's CiliumNetworkPolicy up to date with this
+	// cluster's declared addresses before any probe is dialled (ADR 0100): a newly added
+	// discovery address or CIDR is reachable on the first pass.
+	Egress *TalosEgress
 }
 
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters,verbs=get;list;watch
@@ -76,6 +81,15 @@ func (r *TalosClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	if cluster.Spec.Discovery == nil {
 		return ctrl.Result{}, nil
+	}
+
+	if r.Egress != nil {
+		changed, err := r.Egress.Sync(ctx)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+
+		r.Egress.SettleAfter(ctx, changed)
 	}
 
 	if _, err := r.Discovery.DiscoverAll(ctx, &cluster); err != nil {

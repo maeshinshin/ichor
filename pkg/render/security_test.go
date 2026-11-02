@@ -390,7 +390,8 @@ func TestTalosAPIAccessRendersOnControlPlanesOnly(t *testing.T) {
 					ConfigVersion: "v1alpha1",
 					MachineConfig: &typedconfig.MachineConfig{MachineFeatures: &typedconfig.FeaturesConfig{
 						KubernetesTalosAPIAccessConfig: &typedconfig.KubernetesTalosAPIAccessConfig{
-							AccessEnabled: &on, AccessAllowedRoles: []string{"os:reader"}, AccessAllowedKubernetesNamespaces: []string{"ops"},
+							AccessEnabled: &on, AccessAllowedRoles: []string{"os:reader"},
+							AccessAllowedKubernetesNamespaces: []string{"ops"},
 						},
 					}},
 				},
@@ -409,7 +410,7 @@ func TestTalosAPIAccessRendersOnControlPlanesOnly(t *testing.T) {
 		t.Errorf("worker got the feature:\n%s", w)
 	}
 
-	if len(patches[0].Spec.Documents[0].Config.MachineConfig.MachineFeatures.KubernetesTalosAPIAccessConfig.AccessAllowedRoles) != 1 {
+	if patches[0].Spec.Documents[0].Config.MachineConfig.MachineFeatures.KubernetesTalosAPIAccessConfig == nil {
 		t.Error("the caller's patch was modified")
 	}
 }

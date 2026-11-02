@@ -2,7 +2,7 @@
 # Not bound to anyone. Bind it to the people who may reset a node, restore etcd, override a
 # guard or remove an Ichor finalizer in an incident (ADR 0065). Ichor checks this verb with a
 # SelfSubjectAccessReview made as the user.
-# Roles with verbs '*' on these resources (the *-admin-role helpers) include it.
+# The *-admin-role helpers list their verbs and do not include it.
 apiVersion: rbac.authorization.k8s.io/v1
 {{- if .Values.rbac.namespaced }}
 kind: Role

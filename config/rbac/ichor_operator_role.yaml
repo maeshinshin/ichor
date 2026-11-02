@@ -52,3 +52,9 @@ rules:
   verbs:
   - patch
   - update
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosmachines/approval
+  verbs:
+  - approve

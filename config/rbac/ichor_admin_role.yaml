@@ -56,6 +56,18 @@ rules:
 - apiGroups:
   - ichor.maesh.dev
   resources:
+  - talosmachines/approval
+  verbs:
+  - approve
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosmachines/endpoint
+  verbs:
+  - update
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
   - talosclusters
   - talosmachines
   verbs:

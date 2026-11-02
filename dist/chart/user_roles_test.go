@@ -18,6 +18,7 @@ package chart
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -189,6 +190,62 @@ func TestBreakGlassRole(t *testing.T) {
 	for _, res := range []string{"talosclusters", "talosconfigpatches", "talosmachines"} {
 		if !rbacTriples(cfgRole["rules"].([]any))[rbacTriple{ichorGroup, res, "break-glass", ""}] {
 			t.Errorf("config/rbac/break_glass_role.yaml does not grant break-glass on %s", res)
+		}
+	}
+}
+
+// TestMachineApprovalRightsAndNoImplicitCustomVerbs guards ADR 0108: approving a machine needs
+// approve on talosmachines/approval (operators and admins hold it), an endpoint outside discovery needs
+// update on talosmachines/endpoint (admins), and no helper role lists '*' verbs, so none of them grants a
+// custom verb such as break-glass by accident. The chart and config/rbac copies agree.
+func TestMachineApprovalRightsAndNoImplicitCustomVerbs(t *testing.T) {
+	docs := renderChartWithValues(t, "ichor", usersOn, usersURL, "rbac.helpers.enabled=true")
+
+	approve := rbacTriple{ichorGroup, "talosmachines/approval", "approve", ""}
+	endpoint := rbacTriple{ichorGroup, "talosmachines/endpoint", verbUpdate, ""}
+
+	for name, want := range map[string]map[rbacTriple]bool{
+		"ichor-viewer":   {approve: false, endpoint: false},
+		"ichor-operator": {approve: true, endpoint: false},
+		"ichor-admin":    {approve: true, endpoint: true},
+	} {
+		got := rbacTriples(allRules(find(docs, kindClusterRole, name)))
+		for tr, has := range want {
+			if got[tr] != has {
+				t.Errorf("%s: %s granted = %v, want %v", name, tr, got[tr], has)
+			}
+		}
+	}
+
+	helper := findNameSuffix(docs, kindClusterRole, "talosmachine-admin-role")
+	if !rbacTriples(allRules(helper))[approve] {
+		t.Errorf("talosmachine-admin-role lacks %s", approve)
+	}
+
+	for _, d := range findAll(docs, kindClusterRole) {
+		if !strings.HasSuffix(nameOf(d), "-admin-role") {
+			continue
+		}
+
+		for tr := range rbacTriples(allRules(d)) {
+			if tr.verb == "*" || tr.verb == "break-glass" {
+				t.Errorf("helper %s grants %s", nameOf(d), tr)
+			}
+		}
+	}
+
+	cfgFiles, err := filepath.Glob("../../config/rbac/*_admin_role.yaml")
+	if err != nil || len(cfgFiles) == 0 {
+		t.Fatalf("no config/rbac helper roles found: %v", err)
+	}
+
+	for _, f := range cfgFiles {
+		for _, d := range loadYAMLDocs(t, f) {
+			for tr := range rbacTriples(allRules(d)) {
+				if tr.verb == "*" {
+					t.Errorf("%s grants %s", f, tr)
+				}
+			}
 		}
 	}
 }

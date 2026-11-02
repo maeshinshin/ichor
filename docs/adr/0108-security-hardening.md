@@ -16,6 +16,29 @@ The user asked for security to be hardened "to the extreme" (2026-11-02). Five a
 
 ## Secrets handling
 
+- **Restore marker (S7).** The marker in the backup bucket is stored as `{"marker": ..., "mac": ...}`. The MAC is
+  HMAC-SHA256 over the marker JSON, keyed by HKDF over the backup passphrase with info
+  `ichor.maesh.dev/etcd-backup/marker/v1`, so it follows whatever key material the backup passphrase derives from.
+  A signature mismatch is an error. A legacy unsigned marker is accepted with a logged warning and re-signed by the
+  next write: refusing it would strand a restore that is half done across an upgrade, since the marker is the only
+  record of how far the destructive part got. The cost is that an attacker with bucket write access can still strip the
+  signature; refusing unsigned markers is planned for the release after this one. Snapshot rollback by replaying an
+  older valid snapshot is not addressed here.
+- **Scrubber (S8).** `bundleSecretMaterial` is derived by reflection over every exported string and `[]byte` field of
+  the Talos secrets bundle (trimmed, so a PEM that lost its trailing newline still matches), so keys the bundle gains
+  or that were missing (etcd, aggregator and service-account keys, encryption secrets) are redacted. Rotation CAs were
+  already added by the rotation code. Base64 re-encodings are not scrubbed.
+- **Local files (S9).** `saveKubeconfigFile` now chmods an existing directory to 0700 like `saveBundleFile`. The local
+  `secrets.yaml` stays plaintext (0600, atomic); encrypting it is deferred, but `loadBundleFile` now warns on stderr when
+  the file is group or world accessible. Downloaded etcd snapshots were already written 0600; the CLI now states that
+  they are not encrypted.
+- **Reclaim Secret name (S10).** Uses `crypto/rand` (`rand.Text`, lowercased, 16 characters) instead of the
+  `math/rand` based `utilrand`.
+- **Other (S11).** The manager logs in production mode (JSON, no stack traces on warn); `--zap-devel` turns development
+  mode back on, other zap flags are unchanged. The kubetrust trust file is written through a unique `os.CreateTemp`
+  file in the same directory and renamed (mode 0644, public CAs only). Refusing `http://` S3 endpoints is left to the
+  endpoint gating work.
+
 ## Supply chain and workloads
 
 Audit: workload hardening and the supply chain. Fixed here, all of it without a CRD change.

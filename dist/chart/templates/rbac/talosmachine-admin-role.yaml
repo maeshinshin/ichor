@@ -18,7 +18,26 @@ rules:
   resources:
   - talosmachines
   verbs:
-  - '*'
+  - create
+  - delete
+  - deletecollection
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosmachines/approval
+  verbs:
+  - approve
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosmachines/endpoint
+  verbs:
+  - update
 - apiGroups:
   - ichor.maesh.dev
   resources:

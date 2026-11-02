@@ -101,12 +101,7 @@ func Render(
 	candidates []ichorv1alpha1.TalosConfigPatch,
 	sys *SystemInputs,
 ) ([]byte, string, error) {
-	return encodeAndHash(BuildConfig(cluster, m, bundle, candidates, sys))
-}
-
-// encodeAndHash encodes the validated Provider BuildConfig produced and
-// hashes the result.
-func encodeAndHash(cfg coreconfig.Provider, err error) ([]byte, string, error) {
+	cfg, err := BuildConfig(cluster, m, bundle, candidates, sys)
 	if err != nil {
 		return nil, "", err
 	}

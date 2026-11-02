@@ -27,6 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/endpointguard"
 )
 
 const machineReclaimWebhookPath = "/validate-ichor-maesh-dev-v1alpha1-machinereclaim"
@@ -69,6 +70,12 @@ func (h *MachineReclaimHandler) Handle(ctx context.Context, req admission.Reques
 	case opCreate:
 		if mr.Spec.ConfirmUUID != "" {
 			return admission.Denied("confirmUUID cannot be set on creation: the node has not been inspected yet")
+		}
+
+		// The controller dials this address with the talosconfig of the Secret: never itself or a
+		// metadata service. The cluster's own ranges are not known here.
+		if err := endpointguard.Forbidden(mr.Spec.Address, &ichorv1alpha1.TalosCluster{}); err != nil {
+			return admission.Denied(fmt.Sprintf("spec.address %q is refused: %v", mr.Spec.Address, err))
 		}
 
 		if got := mr.Annotations[ichorv1alpha1.ReclaimRequestedByAnnotation]; got != user {

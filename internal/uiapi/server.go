@@ -148,14 +148,22 @@ func (s *Server) getMachineAndCluster(
 		return nil, nil, err
 	}
 
-	var c ichorv1alpha1.TalosCluster
-
-	ckey := types.NamespacedName{Namespace: m.Namespace, Name: m.Spec.ClusterRef.Name}
-	if err := s.Get(ctx, ckey, &c); err != nil {
-		return nil, nil, mapGetError(fmt.Sprintf("cluster %q for machine %q", ckey, m.Name), err)
+	c, err := s.loadCluster(ctx, types.NamespacedName{Namespace: m.Namespace, Name: m.Spec.ClusterRef.Name})
+	if err != nil {
+		return nil, nil, err
 	}
 
-	return m, &c, nil
+	return m, c, nil
+}
+
+// loadCluster reads the TalosCluster at key, mapping a failed read to its connect.Code.
+func (s *Server) loadCluster(ctx context.Context, key types.NamespacedName) (*ichorv1alpha1.TalosCluster, error) {
+	var c ichorv1alpha1.TalosCluster
+	if err := s.Get(ctx, key, &c); err != nil {
+		return nil, mapGetError(fmt.Sprintf("cluster %q", key), err)
+	}
+
+	return &c, nil
 }
 
 // mapGetError turns a client.Client Get error into the connect.Code a

@@ -52,15 +52,13 @@ func (s *Server) ListClusters(
 func (s *Server) GetCluster(
 	ctx context.Context, req *connect.Request[pb.GetClusterRequest],
 ) (*connect.Response[pb.GetClusterResponse], error) {
-	var c ichorv1alpha1.TalosCluster
-
-	key := namespacedName(req.Msg.GetCluster())
-	if err := s.Get(ctx, key, &c); err != nil {
-		return nil, mapGetError("cluster "+key.String(), err)
+	c, err := s.loadCluster(ctx, namespacedName(req.Msg.GetCluster()))
+	if err != nil {
+		return nil, err
 	}
 
-	out := clusterToPB(&c)
-	out.AlreadyConfiguredAddresses = s.alreadyConfiguredAddresses(ctx, &c)
+	out := clusterToPB(c)
+	out.AlreadyConfiguredAddresses = s.alreadyConfiguredAddresses(ctx, c)
 
 	return connect.NewResponse(&pb.GetClusterResponse{Cluster: out}), nil
 }

@@ -17,6 +17,7 @@ limitations under the License.
 package chart
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -159,6 +160,37 @@ func TestControllerLooksUpNamesThatExist(t *testing.T) {
 			if !triples[rbacTriple{"rbac.authorization.k8s.io", "clusterroles", verb, name}] {
 				t.Errorf("%s: the manager ClusterRole cannot %s clusterroles named %q", label, verb, name)
 			}
+		}
+	}
+}
+
+// TestManagerPrefersAControlPlane: after an etcd restore a worker's kube-proxy is stale and the controller on
+// it cannot reach the kubernetes Service to repair it, so both install paths ask the scheduler for a control
+// plane (a preference, never a requirement).
+func TestManagerPrefersAControlPlane(t *testing.T) {
+	pods := map[string]map[string]any{
+		"chart": findNameSuffix(renderChart(t, "ichor"), kindDeployment, "controller-manager"),
+	}
+
+	for _, d := range loadYAMLDocs(t, "../../config/manager/manager.yaml") {
+		if d["kind"] == kindDeployment {
+			pods["config/manager"] = d
+		}
+	}
+
+	for label, d := range pods {
+		spec, _ := d["spec"].(map[string]any)
+		tmpl, _ := spec["template"].(map[string]any)
+		podSpec, _ := tmpl["spec"].(map[string]any)
+		aff, _ := podSpec["affinity"].(map[string]any)
+		na, _ := aff["nodeAffinity"].(map[string]any)
+
+		if _, required := na["requiredDuringSchedulingIgnoredDuringExecution"]; required {
+			t.Errorf("%s: the controller must not require a node kind", label)
+		}
+
+		if !strings.Contains(fmt.Sprint(na["preferredDuringSchedulingIgnoredDuringExecution"]), "node-role.kubernetes.io/control-plane") {
+			t.Errorf("%s: the controller does not prefer a control plane: %v", label, na)
 		}
 	}
 }

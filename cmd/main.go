@@ -569,6 +569,7 @@ func main() {
 		ControllerNamespace: ns,
 		Recorder:            mgr.GetEventRecorderFor("ichor-controller"), //nolint:staticcheck // typed against record.EventRecorder, as above
 	}).SetupWithManager(mgr), "Failed to create controller", "controller", "machinereclaim")
+	must(mgr.Add(&apiServerRecorder{reader: mgr.GetAPIReader(), path: apiServersFile(kubetrust.TrustFile)}), "Failed to add the control plane address recorder")
 	must((&controller.ImpersonationRoleReconciler{
 		Client: mgr.GetClient(), APIReader: mgr.GetAPIReader(), ControllerNamespace: ns,
 		Recorder: mgr.GetEventRecorderFor("ichor-controller"), //nolint:staticcheck // typed against record.EventRecorder, as above

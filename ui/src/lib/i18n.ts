@@ -862,7 +862,6 @@ export const en = {
   'account.passwordHint': 'At least {n} characters.',
   'account.mismatch': 'The two passwords differ.',
   'account.oldPasswordWrong': 'The current password is not correct.',
-  'account.passwordChanged': 'Password changed',
   'account.mustChangeTitle': 'Choose a new password',
   'account.mustChangeBody': 'Your password was set by an administrator. Choose your own before you continue.',
   'account.save': 'Change password',

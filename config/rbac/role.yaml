@@ -130,6 +130,7 @@ rules:
   - ichorusers/status
   - machinereclaims/status
   - talosclusters/status
+  - taloscredentialrequests/status
   - talosetcdbackups/status
   - talosmachines/status
   - talosoperations/status
@@ -154,6 +155,7 @@ rules:
   - ichor.maesh.dev
   resources:
   - machinereclaims
+  - taloscredentialrequests
   verbs:
   - delete
   - get

@@ -70,6 +70,13 @@ type Sources struct {
 	TalosTrust  []byte
 	TalosSigner *x509.PEMEncodedCertificateAndKey
 
+	// TTL is how long the client certificates Kubeconfig and Talosconfig make are valid; zero means Lifetime.
+	// It is never longer than MaxLifetime.
+	TTL time.Duration
+
+	// Reader makes Talosconfig an os:reader client instead of os:admin.
+	Reader bool
+
 	// bundle is the secrets bundle the Talos client certificate is generated from (its OS CA is the
 	// signer).
 	bundle *secrets.Bundle
@@ -145,6 +152,15 @@ func Load(ctx context.Context, c client.Client, ichorNamespace string, cluster *
 	return src, endpoints, nil
 }
 
+// lifetime is TTL within [Lifetime default, MaxLifetime cap].
+func (s *Sources) lifetime() time.Duration {
+	if s.TTL <= 0 || s.TTL > MaxLifetime {
+		return Lifetime
+	}
+
+	return s.TTL
+}
+
 func pemWithNewline(b []byte) []byte {
 	if len(b) > 0 && b[len(b)-1] != '\n' {
 		return append(slices.Clone(b), '\n')
@@ -186,7 +202,7 @@ func (s *Sources) Kubeconfig(current clientcmdapi.Config) ([]byte, error) {
 
 	pair, err := x509.NewKeyPair(ca,
 		x509.CommonName(KubeAdminCommonName), x509.Organization(KubeAdminOrganization),
-		x509.NotBefore(time.Now().Add(-skew)), x509.NotAfter(time.Now().Add(Lifetime)),
+		x509.NotBefore(time.Now().Add(-skew)), x509.NotAfter(time.Now().Add(s.lifetime())),
 		x509.KeyUsage(stdx509.KeyUsageDigitalSignature|stdx509.KeyUsageKeyEncipherment),
 		x509.ExtKeyUsage([]stdx509.ExtKeyUsage{stdx509.ExtKeyUsageClientAuth}),
 	)
@@ -219,7 +235,12 @@ func (s *Sources) Kubeconfig(current clientcmdapi.Config) ([]byte, error) {
 // Talosconfig is a one-context talosconfig named name that trusts the Talos API CAs and presents an
 // os:admin client certificate signed by the signer.
 func (s *Sources) Talosconfig(name string, endpoints []string) ([]byte, error) {
-	cert, err := s.bundle.GenerateTalosAPIClientCertificate(role.MakeSet(role.Admin))
+	r := role.Admin
+	if s.Reader {
+		r = role.Reader
+	}
+
+	cert, err := s.bundle.GenerateTalosAPIClientCertificateWithTTL(role.MakeSet(r), s.lifetime())
 	if err != nil {
 		return nil, fmt.Errorf("generating a Talos client certificate: %w", err)
 	}

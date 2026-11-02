@@ -1,0 +1,21 @@
+# Every kind of dist/install.yaml the installer applies, as "<apiGroup>/<resource>" (install_names_test.go).
+# Secret is skipped by the installer (internal/installer/manifest.go) and the Namespace exists before the
+# installer runs, so neither is listed. A new kind fails the test until it is added here and the installer
+# is given its rights. paramKinds are the kinds a ValidatingAdmissionPolicy names, which the installer must
+# be able to get on every object.
+kinds:
+  MutatingWebhookConfiguration: admissionregistration.k8s.io/mutatingwebhookconfigurations
+  ValidatingWebhookConfiguration: admissionregistration.k8s.io/validatingwebhookconfigurations
+  ValidatingAdmissionPolicy: admissionregistration.k8s.io/validatingadmissionpolicies
+  ValidatingAdmissionPolicyBinding: admissionregistration.k8s.io/validatingadmissionpolicybindings
+  CustomResourceDefinition: apiextensions.k8s.io/customresourcedefinitions
+  Deployment: apps/deployments
+  ClusterRole: rbac.authorization.k8s.io/clusterroles
+  ClusterRoleBinding: rbac.authorization.k8s.io/clusterrolebindings
+  Role: rbac.authorization.k8s.io/roles
+  RoleBinding: rbac.authorization.k8s.io/rolebindings
+  PriorityClass: scheduling.k8s.io/priorityclasses
+  Service: /services
+  ServiceAccount: /serviceaccounts
+paramKinds:
+  IchorInstallation: ichor.maesh.dev/ichorinstallations

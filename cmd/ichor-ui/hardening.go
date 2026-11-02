@@ -25,9 +25,9 @@ import (
 	"connectrpc.com/connect"
 	"github.com/go-logr/stdr"
 	"k8s.io/client-go/rest"
-	"github.com/maeshinshin/ichor/internal/metricsauth"
 
 	"github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1/ichorv1alpha1connect"
+	"github.com/maeshinshin/ichor/internal/metricsauth"
 	"github.com/maeshinshin/ichor/internal/uiapi"
 )
 

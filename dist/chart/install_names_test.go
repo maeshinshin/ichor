@@ -18,30 +18,18 @@ package chart
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/maeshinshin/ichor/internal/controller"
 )
 
-// installResources maps every kind of dist/install.yaml the installer applies to its (apiGroup, resource).
-// Secret is skipped by the installer (internal/installer/manifest.go) and the Namespace exists before the
-// installer runs, so neither is listed. A new kind fails the test below until it is added here.
-var installResources = map[string][2]string{
-	"MutatingWebhookConfiguration":     {"admissionregistration.k8s.io", "mutatingwebhookconfigurations"},
-	"ValidatingWebhookConfiguration":   {"admissionregistration.k8s.io", "validatingwebhookconfigurations"},
-	"ValidatingAdmissionPolicy":        {"admissionregistration.k8s.io", "validatingadmissionpolicies"},
-	"ValidatingAdmissionPolicyBinding": {"admissionregistration.k8s.io", "validatingadmissionpolicybindings"},
-	"CustomResourceDefinition":         {"apiextensions.k8s.io", "customresourcedefinitions"},
-	"Deployment":                       {"apps", "deployments"},
-	"ClusterRole":                      {"rbac.authorization.k8s.io", "clusterroles"},
-	"ClusterRoleBinding":               {"rbac.authorization.k8s.io", "clusterrolebindings"},
-	"Role":                             {"rbac.authorization.k8s.io", "roles"},
-	"RoleBinding":                      {"rbac.authorization.k8s.io", "rolebindings"},
-	"PriorityClass":                    {"scheduling.k8s.io", "priorityclasses"},
-	"Service":                          {"", "services"},
-	"ServiceAccount":                   {"", "serviceaccounts"},
-}
+const (
+	kustomizeInstall = "kustomize"
+	verbEscalate     = "escalate"
+	rbacGroup        = "rbac.authorization.k8s.io"
+)
 
 // grantedOn reports whether grants allow verb on res for name ("" = a rule that holds every name).
 func grantedOn(grants map[rbacTriple]bool, res [2]string, verb, name string) bool {
@@ -50,18 +38,30 @@ func grantedOn(grants map[rbacTriple]bool, res [2]string, verb, name string) boo
 			continue
 		}
 
-		if tr.names == "" {
+		if tr.names == "" || (name != "" && slices.Contains(strings.Split(tr.names, ","), name)) {
 			return true
-		}
-
-		for _, n := range strings.Split(tr.names, ",") {
-			if name != "" && n == name {
-				return true
-			}
 		}
 	}
 
 	return false
+}
+
+// resourceOf splits "<apiGroup>/<resource>" (testdata/install_resources.yaml).
+func resourceOf(s string) [2]string {
+	group, resource, _ := strings.Cut(s, "/")
+
+	return [2]string{group, resource}
+}
+
+func stringMap(v any) map[string]string {
+	out := map[string]string{}
+
+	m, _ := v.(map[string]any)
+	for k, val := range m {
+		out[k], _ = val.(string)
+	}
+
+	return out
 }
 
 // TestInstallerCanApplyEveryObjectOfTheInstallManifest checks, for the installer ClusterRole and Role in
@@ -71,13 +71,16 @@ func grantedOn(grants map[rbacTriple]bool, res [2]string, verb, name string) boo
 // referenced paramKind"). It needs `make build-installer`.
 func TestInstallerCanApplyEveryObjectOfTheInstallManifest(t *testing.T) {
 	install := loadYAMLDocs(t, "../install.yaml")
-	paramResources := map[string][2]string{"IchorInstallation": {"ichor.maesh.dev", "ichorinstallations"}}
+	table := loadYAMLDocs(t, "testdata/install_resources.yaml")[0]
+	kinds, paramKinds := stringMap(table["kinds"]), stringMap(table["paramKinds"])
 
 	cfg := loadYAMLDocs(t, installerConfigRolePath)
 	chartDocs := renderChartWithValues(t, "ichor", "installer.enabled=true")
 	grants := map[string]map[rbacTriple]bool{
-		labelConfig: rbacTriples(append(allRules(find(cfg, kindClusterRole, "installer-role")), allRules(find(cfg, kindRole, "installer-role"))...)),
-		labelChart:  rbacTriples(append(allRules(find(chartDocs, kindClusterRole, "ichor-installer-role")), allRules(find(chartDocs, kindRole, "ichor-installer-role"))...)),
+		labelConfig: rbacTriples(append(allRules(find(cfg, kindClusterRole, "installer-role")),
+			allRules(find(cfg, kindRole, "installer-role"))...)),
+		labelChart: rbacTriples(append(allRules(find(chartDocs, kindClusterRole, "ichor-installer-role")),
+			allRules(find(chartDocs, kindRole, "ichor-installer-role"))...)),
 	}
 
 	for label, g := range grants {
@@ -87,19 +90,22 @@ func TestInstallerCanApplyEveryObjectOfTheInstallManifest(t *testing.T) {
 				continue
 			}
 
-			res, ok := installResources[kind]
+			entry, ok := kinds[kind]
 			if !ok {
-				t.Errorf("%s: install.yaml holds a %s; add it to installResources and give the installer its rights", label, kind)
+				t.Errorf("%s: install.yaml holds a %s; add it to testdata/install_resources.yaml and give the "+
+					"installer its rights", label, kind)
 
 				continue
 			}
 
-			if !grantedOn(g, res, "get", nameOf(d)) {
+			res := resourceOf(entry)
+
+			if !grantedOn(g, res, verbGetController, nameOf(d)) {
 				t.Errorf("%s: the installer cannot get %s %q", label, kind, nameOf(d))
 			}
 
 			// create cannot be limited by name: only a rule that holds every name counts.
-			if !grantedOn(g, res, "create", "") {
+			if !grantedOn(g, res, verbCreateController, "") {
 				t.Errorf("%s: the installer cannot create %s %q", label, kind, nameOf(d))
 			}
 
@@ -116,11 +122,12 @@ func TestInstallerCanApplyEveryObjectOfTheInstallManifest(t *testing.T) {
 
 			pkKind, _ := pk["kind"].(string)
 
-			pres, known := paramResources[pkKind]
-			if !known {
-				t.Errorf("%s: %s names paramKind %s; add it to paramResources", label, nameOf(d), pkKind)
-			} else if !grantedOn(g, pres, "get", "") {
-				t.Errorf("%s: %s names paramKind %s and the installer cannot get every object of it", label, nameOf(d), pkKind)
+			if pres, known := paramKinds[pkKind]; !known {
+				t.Errorf("%s: %s names paramKind %s; add it to paramKinds in testdata/install_resources.yaml",
+					label, nameOf(d), pkKind)
+			} else if !grantedOn(g, resourceOf(pres), verbGetController, "") {
+				t.Errorf("%s: %s names paramKind %s and the installer cannot get every object of it",
+					label, nameOf(d), pkKind)
 			}
 		}
 	}
@@ -132,8 +139,8 @@ func TestInstallerCanApplyEveryObjectOfTheInstallManifest(t *testing.T) {
 // ichor-ui-impersonate), and the controller's own role must name it for get, update and escalate.
 func TestControllerLooksUpNamesThatExist(t *testing.T) {
 	renders := map[string][]map[string]any{
-		"kustomize": loadYAMLDocs(t, "../install.yaml"),
-		"chart":     renderChartWithValues(t, "ichor", "ichorUI.users.enabled=true", "ichorUI.users.externalURL=https://x"),
+		kustomizeInstall: loadYAMLDocs(t, "../install.yaml"),
+		labelChart:       renderChartWithValues(t, "ichor", usersOn, usersURL),
 	}
 
 	for label, docs := range renders {
@@ -156,8 +163,8 @@ func TestControllerLooksUpNamesThatExist(t *testing.T) {
 		}
 
 		triples := rbacTriples(allRules(managerRole))
-		for _, verb := range []string{"get", "update", "escalate"} {
-			if !triples[rbacTriple{"rbac.authorization.k8s.io", "clusterroles", verb, name}] {
+		for _, verb := range []string{verbGetController, verbUpdate, verbEscalate} {
+			if !triples[rbacTriple{rbacGroup, resClusterRoles, verb, name}] {
 				t.Errorf("%s: the manager ClusterRole cannot %s clusterroles named %q", label, verb, name)
 			}
 		}
@@ -169,12 +176,12 @@ func TestControllerLooksUpNamesThatExist(t *testing.T) {
 // plane (a preference, never a requirement).
 func TestManagerPrefersAControlPlane(t *testing.T) {
 	pods := map[string]map[string]any{
-		"chart": findNameSuffix(renderChart(t, "ichor"), kindDeployment, "controller-manager"),
+		labelChart: findNameSuffix(renderChart(t, "ichor"), kindDeployment, "controller-manager"),
 	}
 
 	for _, d := range loadYAMLDocs(t, "../../config/manager/manager.yaml") {
 		if d["kind"] == kindDeployment {
-			pods["config/manager"] = d
+			pods[labelConfig] = d
 		}
 	}
 
@@ -189,7 +196,8 @@ func TestManagerPrefersAControlPlane(t *testing.T) {
 			t.Errorf("%s: the controller must not require a node kind", label)
 		}
 
-		if !strings.Contains(fmt.Sprint(na["preferredDuringSchedulingIgnoredDuringExecution"]), "node-role.kubernetes.io/control-plane") {
+		preferred := fmt.Sprint(na["preferredDuringSchedulingIgnoredDuringExecution"])
+		if !strings.Contains(preferred, "node-role.kubernetes.io/control-plane") {
 			t.Errorf("%s: the controller does not prefer a control plane: %v", label, na)
 		}
 	}

@@ -201,11 +201,9 @@ func (s *Server) PreviewImpact(
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("patch.cluster is required"))
 	}
 
-	var cluster ichorv1alpha1.TalosCluster
-
-	clusterKey := namespacedName(clusterRef)
-	if err := s.Get(ctx, clusterKey, &cluster); err != nil {
-		return nil, mapGetError(fmt.Sprintf("cluster %q", clusterKey), err)
+	cluster, err := s.loadCluster(ctx, namespacedName(clusterRef))
+	if err != nil {
+		return nil, err
 	}
 
 	pinned, err := coreconfig.ParseContractFromVersion(cluster.Spec.VersionContract)

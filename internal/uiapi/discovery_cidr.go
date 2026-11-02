@@ -41,11 +41,11 @@ func (s *Server) editDiscovery(
 	ctx context.Context, ref *pb.ObjectRef, action, reason, doing string,
 	edit func(d *ichorv1alpha1.TalosClusterDiscovery) error,
 ) (*pb.Cluster, *pb.AuditRecord, error) {
-	var c ichorv1alpha1.TalosCluster
-
 	key := namespacedName(ref)
-	if err := s.Get(ctx, key, &c); err != nil {
-		return nil, nil, mapGetError("cluster "+key.String(), err)
+
+	c, err := s.loadCluster(ctx, key)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	if c.Spec.Discovery == nil {
@@ -56,7 +56,7 @@ func (s *Server) editDiscovery(
 		return nil, nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 
-	if err := s.Update(ctx, &c, strictFieldValidation); err != nil {
+	if err := s.Update(ctx, c, strictFieldValidation); err != nil {
 		return nil, nil, mapOperationWriteError(doing, key, err)
 	}
 
@@ -65,7 +65,7 @@ func (s *Server) editDiscovery(
 		Target: objectRef(c.Namespace, c.Name), Reason: reason,
 	}
 
-	return clusterToPB(&c), audit, nil
+	return clusterToPB(c), audit, nil
 }
 
 // AddDiscoveryCidr appends one IPv4 range (/24 or smaller) to spec.discovery.cidrs.

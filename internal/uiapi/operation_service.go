@@ -341,18 +341,16 @@ func (s *Server) planOperation(
 		maxUnavailable = 1
 	}
 
-	var cluster ichorv1alpha1.TalosCluster
-
-	key := namespacedName(clusterRef)
-	if err := s.Get(ctx, key, &cluster); err != nil {
-		return nil, mapGetError(fmt.Sprintf("cluster %q", key), err)
+	cluster, err := s.loadCluster(ctx, namespacedName(clusterRef))
+	if err != nil {
+		return nil, err
 	}
 
 	if kind == ichorv1alpha1.TalosOperationKindCNI && cluster.Spec.CNI.Preset == ichorv1alpha1.TalosClusterCNIPresetUnmanaged {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New(ichorv1alpha1.CNINotManagedMessage))
 	}
 
-	p := &opPlan{kind: kind, cluster: &cluster, resp: &pb.PlanOperationResponse{MaxUnavailable: maxUnavailable}}
+	p := &opPlan{kind: kind, cluster: cluster, resp: &pb.PlanOperationResponse{MaxUnavailable: maxUnavailable}}
 
 	switch kind {
 	case ichorv1alpha1.TalosOperationKindTalos:
@@ -415,11 +413,11 @@ func (s *Server) planOperation(
 	p.resp.Target = target
 	p.resp.SpecChanges = target != "" && target != specVersion
 
-	if err := s.planMachines(ctx, p, &cluster, maxUnavailable); err != nil {
+	if err := s.planMachines(ctx, p, cluster, maxUnavailable); err != nil {
 		return nil, err
 	}
 
-	p.resp.Blocked, err = s.blockedReason(ctx, p, &cluster)
+	p.resp.Blocked, err = s.blockedReason(ctx, p, cluster)
 	if err != nil {
 		return nil, err
 	}

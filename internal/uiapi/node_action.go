@@ -130,11 +130,9 @@ func (s *Server) planNode(ctx context.Context, req *pb.NodeActionRequest) (*opPl
 		return nil, err
 	}
 
-	var cluster ichorv1alpha1.TalosCluster
-
-	key := client.ObjectKey{Namespace: m.Namespace, Name: m.Spec.ClusterRef.Name}
-	if err := s.Get(ctx, key, &cluster); err != nil {
-		return nil, mapGetError(fmt.Sprintf("cluster %q", key), err)
+	cluster, err := s.loadCluster(ctx, client.ObjectKey{Namespace: m.Namespace, Name: m.Spec.ClusterRef.Name})
+	if err != nil {
+		return nil, err
 	}
 
 	if req.GetService() != "" && action != ichorv1alpha1.NodeActionRestartService {
@@ -153,21 +151,21 @@ func (s *Server) planNode(ctx context.Context, req *pb.NodeActionRequest) (*opPl
 		},
 	}
 	p := &opPlan{
-		kind: ichorv1alpha1.TalosOperationKindNode, cluster: &cluster, node: np,
+		kind: ichorv1alpha1.TalosOperationKindNode, cluster: cluster, node: np,
 		resp: &pb.PlanOperationResponse{
 			MaxUnavailable: 1, Effect: pb.OperationEffect_OPERATION_EFFECT_NONE,
 			Machines: []*pb.PlannedMachine{{Name: m.Name, Role: m.Spec.Role, Step: 1}},
 		},
 	}
 
-	cps, err := s.approvedControlPlanes(ctx, &cluster, m)
+	cps, err := s.approvedControlPlanes(ctx, cluster, m)
 	if err != nil {
 		return nil, err
 	}
 
 	describeNode(p.resp, m, action, np.spec, cps)
 
-	p.resp.Blocked, err = s.nodeBlocked(ctx, np, &cluster, cps)
+	p.resp.Blocked, err = s.nodeBlocked(ctx, np, cluster, cps)
 	if err != nil {
 		return nil, err
 	}

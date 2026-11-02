@@ -133,6 +133,72 @@ func TestSecurityContractAndKMS(t *testing.T) {
 	}
 }
 
+func TestSecurityFirewallCoversMachines(t *testing.T) {
+	ctx := context.Background()
+
+	scheme := runtime.NewScheme()
+	if err := ichorv1alpha1.AddToScheme(scheme); err != nil {
+		t.Fatal(err)
+	}
+
+	mach := func(name, role, endpoint string) *ichorv1alpha1.TalosMachine {
+		return &ichorv1alpha1.TalosMachine{
+			Name: name, Namespace: testNamespace,
+			Spec: ichorv1alpha1.TalosMachineSpec{
+				ClusterRef: corev1.LocalObjectReference{Name: "c"}, Role: role, Endpoint: endpoint,
+				ApprovalState: ichorv1alpha1.MachineApprovalStateApproved,
+			},
+		}
+	}
+
+	v := &TalosClusterCustomValidator{
+		ControllerSource: fixedSource("192.168.10.9"),
+		APIReader: fake.NewClientBuilder().WithScheme(scheme).WithObjects(
+			mach("cp", roleControlPlane, "10.0.0.10:50000"), mach("w", "worker", "10.0.0.20"),
+		).Build(),
+	}
+
+	t.Run("controlPlaneCIDRs that exclude a control plane are refused", func(t *testing.T) {
+		s := firewallSecurity()
+		s.Firewall.ControlPlaneCIDRs = []string{"10.0.0.99/32"}
+
+		_, err := v.ValidateUpdate(ctx, secTestCluster(nil), secTestCluster(s))
+		if err == nil || !strings.Contains(err.Error(), "controlPlaneCIDRs") || !strings.Contains(err.Error(), "10.0.0.10") {
+			t.Fatalf("want a refusal naming the control plane address, got %v", err)
+		}
+	})
+
+	t.Run("nodeCIDRs that exclude a machine are refused", func(t *testing.T) {
+		s := firewallSecurity()
+		s.Firewall.NodeCIDRs = []string{"10.0.0.0/28"}
+
+		_, err := v.ValidateUpdate(ctx, secTestCluster(nil), secTestCluster(s))
+		if err == nil || !strings.Contains(err.Error(), "nodeCIDRs") || !strings.Contains(err.Error(), "10.0.0.20") {
+			t.Fatalf("want a refusal naming the worker address, got %v", err)
+		}
+	})
+
+	t.Run("covering CIDRs are admitted, an empty talosAPICIDRs warns", func(t *testing.T) {
+		s := firewallSecurity()
+		s.Firewall.ControlPlaneCIDRs = []string{"10.0.0.10/32"}
+
+		warns, err := v.ValidateUpdate(ctx, secTestCluster(nil), secTestCluster(s))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if len(warns) != 1 || !strings.Contains(warns[0], "talosAPICIDRs") {
+			t.Fatalf("want one warning about talosAPICIDRs, got %v", warns)
+		}
+
+		s.Firewall.TalosAPICIDRs = []string{"172.16.0.0/12"}
+
+		if warns, err = v.ValidateUpdate(ctx, secTestCluster(nil), secTestCluster(s)); err != nil || len(warns) != 0 {
+			t.Fatalf("want no warning, got %v %v", warns, err)
+		}
+	})
+}
+
 func TestSecurityDiskEncryptionNeedsConfirmation(t *testing.T) {
 	ctx := context.Background()
 

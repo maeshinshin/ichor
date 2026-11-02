@@ -22,6 +22,7 @@ import (
 	"net"
 	"net/netip"
 	"slices"
+	"strings"
 	"time"
 
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
@@ -62,33 +63,115 @@ func routeSource(ctx context.Context, host string) (netip.Addr, error) {
 }
 
 // validateSecurityCreate checks spec.security of a new cluster.
-func (v *TalosClusterCustomValidator) validateSecurityCreate(ctx context.Context, c *ichorv1alpha1.TalosCluster) error {
+func (v *TalosClusterCustomValidator) validateSecurityCreate(ctx context.Context, c *ichorv1alpha1.TalosCluster) (admission.Warnings, error) {
 	if err := render.ValidateSecurity(c); err != nil {
-		return err
+		return nil, err
 	}
 
-	return v.checkControllerReach(ctx, c)
+	if err := v.checkControllerReach(ctx, c); err != nil {
+		return nil, err
+	}
+
+	return firewallWarnings(c), nil
 }
 
 // validateSecurityUpdate checks spec.security of an updated cluster. Only what the update
 // changes is checked beyond the static rules, so an object stored before a rule existed can
 // still be edited for something else.
-func (v *TalosClusterCustomValidator) validateSecurityUpdate(ctx context.Context, oldC, newC *ichorv1alpha1.TalosCluster) error {
+func (v *TalosClusterCustomValidator) validateSecurityUpdate(ctx context.Context, oldC, newC *ichorv1alpha1.TalosCluster) (admission.Warnings, error) {
 	if apiequality.Semantic.DeepEqual(oldC.Spec.Security, newC.Spec.Security) {
-		return nil
+		return nil, nil
 	}
 
 	if err := render.ValidateSecurity(newC); err != nil {
-		return err
+		return nil, err
 	}
+
+	var warns admission.Warnings
 
 	if !apiequality.Semantic.DeepEqual(firewallOf(oldC), firewallOf(newC)) || oldC.Spec.Endpoint != newC.Spec.Endpoint {
 		if err := v.checkControllerReach(ctx, newC); err != nil {
-			return err
+			return nil, err
+		}
+
+		if err := v.checkFirewallCoversMachines(ctx, newC); err != nil {
+			return nil, err
+		}
+
+		warns = firewallWarnings(newC)
+	}
+
+	return warns, v.checkDiskEncryptionConfirmed(ctx, oldC, newC)
+}
+
+// firewallWarnings warns about a firewall with no talosAPICIDRs: nobody but the controller and
+// the control planes can then reach apid, so a lock-out has no operator break-in path.
+func firewallWarnings(c *ichorv1alpha1.TalosCluster) admission.Warnings {
+	if !render.FirewallEnabled(c) || len(c.Spec.Security.Firewall.TalosAPICIDRs) > 0 {
+		return nil
+	}
+
+	return admission.Warnings{"spec.security.firewall.talosAPICIDRs is empty: only the controller and the control planes can " +
+		"reach the Talos API, so if the firewall locks Ichor out there is no talosctl path back (docs/guides/hardening.md); " +
+		"list your workstation's network"}
+}
+
+// machineAddr is the address of a machine's Talos API endpoint ("10.0.0.1", "10.0.0.1:50000" or
+// "[fd00::1]:50000"); false for a hostname, which is not checked.
+func machineAddr(endpoint string) (netip.Addr, bool) {
+	if ap, err := netip.ParseAddrPort(endpoint); err == nil {
+		return ap.Addr().Unmap(), true
+	}
+
+	a, err := netip.ParseAddr(strings.Trim(endpoint, "[]"))
+
+	return a.Unmap(), err == nil
+}
+
+// checkFirewallCoversMachines refuses a firewall whose nodeCIDRs miss an approved machine or whose
+// controlPlaneCIDRs miss an approved control plane: the rules built from them would cut the
+// controller off that machine, and the controller could not deliver a corrected spec. Needs APIReader; machines
+// whose endpoint is a hostname are skipped.
+func (v *TalosClusterCustomValidator) checkFirewallCoversMachines(ctx context.Context, c *ichorv1alpha1.TalosCluster) error {
+	if !render.FirewallEnabled(c) || v.APIReader == nil {
+		return nil
+	}
+
+	machines, err := deleteguard.ApprovedMachines(ctx, v.APIReader, c.Namespace, c.Name, deleteguard.MachineFilter{IncludeDeleting: true})
+	if err != nil {
+		return err
+	}
+
+	fw := c.Spec.Security.Firewall
+
+	for i := range machines {
+		m := &machines[i]
+
+		addr, ok := machineAddr(m.DialEndpoint())
+		if !ok {
+			continue
+		}
+
+		if !prefixesContain(fw.NodeCIDRs, addr) {
+			return fmt.Errorf("spec.security.firewall.nodeCIDRs %v does not contain %s, the address of machine %s: "+
+				"the firewall would cut it off from the cluster", fw.NodeCIDRs, addr, m.Name)
+		}
+
+		if m.Spec.Role == roleControlPlane && len(fw.ControlPlaneCIDRs) > 0 && !prefixesContain(fw.ControlPlaneCIDRs, addr) {
+			return fmt.Errorf("spec.security.firewall.controlPlaneCIDRs %v does not contain %s, the address of control plane %s: "+
+				"the other nodes (and Ichor, reaching them) would lose it", fw.ControlPlaneCIDRs, addr, m.Name)
 		}
 	}
 
-	return v.checkDiskEncryptionConfirmed(ctx, oldC, newC)
+	return nil
+}
+
+func prefixesContain(cidrs []string, addr netip.Addr) bool {
+	return slices.ContainsFunc(cidrs, func(s string) bool {
+		p, err := netip.ParsePrefix(s)
+
+		return err == nil && p.Contains(addr)
+	})
 }
 
 func firewallOf(c *ichorv1alpha1.TalosCluster) *ichorv1alpha1.TalosClusterFirewall {

@@ -155,5 +155,25 @@ func EffectiveValuesForMode(cluster *ichorv1alpha1.TalosCluster, mode cni.KubePr
 		mode = cni.KubeProxyEnabled
 	}
 
-	return EffectiveValues(user, mode, c.Tunnel)
+	eff, err := EffectiveValues(user, mode, c.Tunnel)
+	if err != nil {
+		return nil, err
+	}
+
+	// spec.security.wireGuard (ADR 0108) is typed and wins over a conflicting user value.
+	if w := wireGuardOf(cluster); w != nil && w.Enabled {
+		values.Set(eff, "encryption.enabled", true)
+		values.Set(eff, "encryption.type", "wireguard")
+		values.Set(eff, "encryption.nodeEncryption", w.NodeEncryption)
+	}
+
+	return eff, nil
+}
+
+func wireGuardOf(c *ichorv1alpha1.TalosCluster) *ichorv1alpha1.TalosClusterWireGuard {
+	if c.Spec.Security == nil {
+		return nil
+	}
+
+	return c.Spec.Security.WireGuard
 }

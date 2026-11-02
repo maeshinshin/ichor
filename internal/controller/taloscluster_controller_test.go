@@ -19,6 +19,8 @@ package controller
 import (
 	"context"
 	"errors"
+	"strings"
+	"sync"
 	"sync/atomic"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -88,5 +90,37 @@ var _ = Describe("TalosClusterReconciler", func() {
 		Expect(result.RequeueAfter).To(Equal(discoveryRequeueInterval))
 
 		Expect(getMachine(cluster.Namespace, uuidClusterReconcile)).NotTo(BeNil())
+	})
+
+	It("scans a range added to spec.discovery.cidrs at the next reconcile, which the spec update itself triggers", func() {
+		cluster := newTestCluster("does-not-exist", "v1.14")
+		cluster.Spec.Discovery = &ichorv1alpha1.TalosClusterDiscovery{CIDRs: []string{"10.9.9.0/30"}}
+		Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
+
+		var mu sync.Mutex
+
+		var dialed []string
+
+		factory := func(_ context.Context, endpoint string) (MaintenanceClient, error) {
+			mu.Lock()
+			dialed = append(dialed, endpoint)
+			mu.Unlock()
+
+			return nil, errFactoryMustNotBeCalled
+		}
+
+		r := &TalosClusterReconciler{
+			Client:    k8sClient,
+			Discovery: &DiscoveryReconciler{Client: k8sClient, MaintenanceClient: factory},
+		}
+
+		result, err := reconcileCluster(r, cluster)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.RequeueAfter).To(Equal(discoveryRequeueInterval))
+
+		mu.Lock()
+		Expect(dialed).To(HaveLen(4))
+		Expect(strings.Join(dialed, " ")).NotTo(ContainSubstring("10.9.8."))
+		mu.Unlock()
 	})
 })

@@ -329,9 +329,6 @@ func (c VersionCheck) String() string {
 	return fmt.Sprintf("live version %s, chart %s: %s", c.Live, c.Target, how)
 }
 
-// VersionFromImage reads the Cilium version from an agent image reference.
-func VersionFromImage(image string) (string, error) { return parseVersion(image) }
-
 func parseVersion(s string) (string, error) {
 	v := s
 	if i := strings.Index(v, "@"); i >= 0 {

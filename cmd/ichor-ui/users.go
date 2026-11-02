@@ -201,7 +201,7 @@ func newIssuer(ctx context.Context, f usersFlags, live *settings.Reader, backend
 
 	iss, err := oidcissuer.New(oidcissuer.Config{
 		TrustedProxies: proxies,
-		Issuer: f.externalURL, InternalJWKSURI: f.internalJWKSURI, InternalJWKSFromHost: true, UIRedirectURI: f.externalURL + "/auth/callback",
+		Issuer:         f.externalURL, InternalJWKSURI: f.internalJWKSURI, InternalJWKSFromHost: true, UIRedirectURI: f.externalURL + "/auth/callback",
 		TokenTTL: f.tokenTTL, RefreshLifetime: f.refreshTTL,
 		Lifetimes: func(ctx context.Context) (time.Duration, time.Duration) {
 			e, _ := live.Effective(ctx)

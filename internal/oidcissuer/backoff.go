@@ -166,7 +166,9 @@ type bucketState struct {
 
 const maxBuckets = 20000
 
-func newBucket(rate, burst float64) *bucket { return &bucket{m: map[string]bucketState{}, rate: rate, burst: burst} }
+func newBucket(rate, burst float64) *bucket {
+	return &bucket{m: map[string]bucketState{}, rate: rate, burst: burst}
+}
 
 // allow takes a token for key; false means the source is over its rate.
 func (b *bucket) allow(key string, now time.Time) bool {

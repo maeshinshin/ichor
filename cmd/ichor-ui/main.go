@@ -246,7 +246,14 @@ func main() {
 	// behind, so a second port and its own TLS/auth story (the controller's secure
 	// metrics server, cmd/main.go) would buy nothing here. rpcInterceptor below is what
 	// the exported RPC-latency series comes from (docs/adr/0040).
-	mux.Handle("/metrics", promhttp.Handler())
+	// Since ADR 0108 it answers only a caller with a Kubernetes token that may `get` /metrics (TokenReview
+	// and SubjectAccessReview, as the controller's secure metrics endpoint does).
+	metricsHandler, err := authenticatedMetrics(restCfg, promhttp.Handler())
+	if err != nil {
+		log.Fatalf("ichor-ui: protecting /metrics: %v", err)
+	}
+
+	mux.Handle("/metrics", metricsHandler)
 
 	mountRPC(mux, server, authn, *allowAnonymous)
 

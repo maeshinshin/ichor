@@ -143,4 +143,3 @@ func (b *IssuerBackend) updateCredential(ctx context.Context, user string, fn fu
 
 	return errors.New("storing the refresh state kept conflicting")
 }
-

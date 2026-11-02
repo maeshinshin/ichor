@@ -37,7 +37,7 @@ var ErrNotFound = errors.New("object not found")
 
 // FetchVerified is the restore recipe: Get, Decrypt, check the etcd checksum trailer. The
 // plaintext is held in memory rather than on disk, since it contains every Secret in the cluster.
-func FetchVerified(ctx context.Context, store Store, key, passphrase string) (*bytes.Buffer, error) {
+func FetchVerified(ctx context.Context, store Store, key string, passphrase Key) (*bytes.Buffer, error) {
 	var buf bytes.Buffer
 
 	if _, err := stream(ctx, store, key, passphrase, &buf); err != nil {
@@ -49,13 +49,13 @@ func FetchVerified(ctx context.Context, store Store, key, passphrase string) (*b
 
 // VerifyObject runs the same recipe as FetchVerified without keeping the plaintext: nothing of it is held
 // beyond one copy buffer, so a snapshot of any size can be checked. It returns the plaintext size.
-func VerifyObject(ctx context.Context, store Store, key, passphrase string) (int64, error) {
+func VerifyObject(ctx context.Context, store Store, key string, passphrase Key) (int64, error) {
 	return stream(ctx, store, key, passphrase)
 }
 
 // Reader downloads key and decrypts it. It is not verified as it streams: call VerifyObject first. The
 // caller closes it.
-func Reader(ctx context.Context, store Store, key, passphrase string) (io.ReadCloser, error) {
+func Reader(ctx context.Context, store Store, key string, passphrase Key) (io.ReadCloser, error) {
 	rc, err := store.Get(ctx, key)
 	if err != nil {
 		return nil, fmt.Errorf("downloading: %w", err)
@@ -76,7 +76,7 @@ func Reader(ctx context.Context, store Store, key, passphrase string) (io.ReadCl
 
 // stream downloads and decrypts key, checks the checksum trailer, copies the plaintext to each of sinks
 // and returns its size.
-func stream(ctx context.Context, store Store, key, passphrase string, sinks ...io.Writer) (int64, error) {
+func stream(ctx context.Context, store Store, key string, passphrase Key, sinks ...io.Writer) (int64, error) {
 	rc, err := Reader(ctx, store, key, passphrase)
 	if err != nil {
 		return 0, err

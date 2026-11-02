@@ -1117,6 +1117,12 @@ func (r *TalosOperationReconciler) resumeBackup(ctx context.Context, backup type
 	}
 
 	m, err := etcdbackup.GetMarker(ctx, store, bk.Spec.Destination.S3.Prefix, passphrase)
+	if errors.Is(err, etcdbackup.ErrMarkerSignature) {
+		// A marker this cluster did not sign is never acted on, and waiting does not change that: a
+		// retry loop here would never end (and would hold up ResumeEtcdRestoresUntilDone for ever).
+		return fmt.Errorf("%w: %s", errBackupUnusable, err.Error())
+	}
+
 	if err != nil {
 		return errors.New(scrub.clean(err.Error()))
 	}

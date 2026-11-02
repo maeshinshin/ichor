@@ -242,7 +242,7 @@ func GetMarker(ctx context.Context, store Store, prefix string, passphrase Key) 
 		}
 
 		if !ok {
-			return nil, errors.New("the restore marker's signature does not match: it was not written by this cluster's controller")
+			return nil, ErrMarkerSignature
 		}
 	}
 
@@ -253,6 +253,10 @@ func GetMarker(ctx context.Context, store Store, prefix string, passphrase Key) 
 
 	return &m, nil
 }
+
+// ErrMarkerSignature is returned by GetMarker for a marker that no key of this cluster signed. No
+// retry fixes it, so callers that poll must not wait for it to go away.
+var ErrMarkerSignature = errors.New("the restore marker's signature does not match: it was not written by this cluster's controller")
 
 // DeleteMarker removes the marker.
 func DeleteMarker(ctx context.Context, store Store, prefix string) error {

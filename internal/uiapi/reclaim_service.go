@@ -231,11 +231,11 @@ func (s *Server) registerReclaimAddress(ctx context.Context, ref *pb.ObjectRef, 
 		return nil // discovery lists IPv4 addresses only; a name is left to the person
 	}
 
-	var c ichorv1alpha1.TalosCluster
-
 	key := namespacedName(ref)
-	if err := s.Get(ctx, key, &c); err != nil {
-		return mapGetError("cluster "+key.String(), err)
+
+	c, err := s.loadCluster(ctx, key)
+	if err != nil {
+		return err
 	}
 
 	if c.Spec.Discovery != nil && slices.Contains(c.Spec.Discovery.Addresses, host) {
@@ -256,7 +256,7 @@ func (s *Server) registerReclaimAddress(ctx context.Context, ref *pb.ObjectRef, 
 	c.Annotations[ichorv1alpha1.ReclaimAddedAddressesAnnotation] = strings.Join(
 		append(splitAddresses(c.Annotations[ichorv1alpha1.ReclaimAddedAddressesAnnotation]), host), ",")
 
-	if err := s.Update(ctx, &c, strictFieldValidation); err != nil {
+	if err := s.Update(ctx, c, strictFieldValidation); err != nil {
 		return mapOperationWriteError("adding the reclaim address to", key, err)
 	}
 

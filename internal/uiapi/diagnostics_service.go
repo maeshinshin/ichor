@@ -498,9 +498,9 @@ func (s *Server) DownloadSupportBundle(
 
 		machines, cluster, name = []*ichorv1alpha1.TalosMachine{m}, c, m.Name
 	case *pb.DownloadSupportBundleRequest_Cluster:
-		var c ichorv1alpha1.TalosCluster
-		if err := s.Get(ctx, client.ObjectKey{Namespace: t.Cluster.GetNamespace(), Name: t.Cluster.GetName()}, &c); err != nil {
-			return mapGetError(fmt.Sprintf("cluster %q", t.Cluster.GetName()), err)
+		c, err := s.loadCluster(ctx, namespacedName(t.Cluster))
+		if err != nil {
+			return err
 		}
 
 		var list ichorv1alpha1.TalosMachineList
@@ -518,7 +518,7 @@ func (s *Server) DownloadSupportBundle(
 			return connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("cluster %q has no approved machines", c.Name))
 		}
 
-		cluster, name = &c, c.Name
+		cluster, name = c, c.Name
 	default:
 		return connect.NewError(connect.CodeInvalidArgument, errors.New("name a machine or a cluster"))
 	}

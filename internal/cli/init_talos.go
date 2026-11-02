@@ -39,6 +39,7 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/role"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/controller"
 )
 
 // maintenanceApplier is the one maintenance-mode Talos API call init
@@ -57,7 +58,9 @@ type maintenanceApplier interface {
 // NewMachineryMaintenanceClient dials for discovery -- it is the only
 // connection a node with no configuration yet can offer.
 func dialMaintenance(ctx context.Context, endpoint string) (maintenanceApplier, error) {
-	c, err := client.New(ctx, client.WithMaintenanceMode(endpoint, nil))
+	// The identity read and this apply share one pin (runInit): a node that answers with another
+	// certificate in between is refused (ADR 0108).
+	c, err := client.New(ctx, controller.PinFromContext(ctx).ClientOptions(endpoint)...)
 	if err != nil {
 		return nil, fmt.Errorf("dialing maintenance Talos API at %q: %w", endpoint, err)
 	}

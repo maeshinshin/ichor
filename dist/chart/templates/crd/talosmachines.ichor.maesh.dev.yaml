@@ -473,6 +473,17 @@ spec:
                   follows the node to running. Empty for a node that has not been provisioned by Ichor.
                 format: date-time
                 type: string
+              maintenanceFingerprint:
+                description: |-
+                  maintenanceFingerprint is the SPKI fingerprint (SHA-256, base64) of the
+                  certificate the node's maintenance-mode Talos API presented when it was discovered. The
+                  controller pushes the first machine configuration, which carries the CA keys, only to a node
+                  that presents this certificate again (ADR 0108). A node that was never discovered through
+                  this controller (added by IP, reclaimed) is pinned at its first provisioning probe instead.
+                  It is refreshed while the machine is not approved. Talos issues a new certificate when the
+                  node reboots or changes address; an operator who has checked the new one accepts it with
+                  the TalosMachineTrustMaintenanceFingerprintAnnotation.
+                type: string
               nodeName:
                 description: |-
                   nodeName is the Kubernetes node name the node reports (its Nodename resource), recorded

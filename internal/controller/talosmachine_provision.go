@@ -46,6 +46,7 @@ const conditionProvisioned = "Provisioned"
 const (
 	reasonIdentityMismatch   = "IdentityMismatch"
 	reasonEndpointRefused    = "EndpointRefused"
+	reasonMaintenanceChanged = "MaintenanceIdentityChanged"
 	reasonInstallDiskUnknown = "InstallDiskUnknown"
 	reasonConfigStored       = "ConfigStored"
 	reasonAwaitingInstall    = "AwaitingInstall"
@@ -87,8 +88,29 @@ func (r *TalosMachineReconciler) provision(
 			fmt.Sprintf("the endpoint %s is not a valid target for this cluster's configuration: %v; nothing was dialled or applied", m.DialEndpoint(), err))
 	}
 
-	hw, mc, err := r.probeMaintenance(ctx, m.DialEndpoint())
+	// The first configuration carries the CA keys, so it only goes to the node whose maintenance
+	// certificate was pinned at discovery (ADR 0108). Without a pin the first handshake is trusted
+	// and recorded below.
+	want := m.Status.MaintenanceFingerprint
+	if v := m.Annotations[ichorv1alpha1.TalosMachineTrustMaintenanceFingerprintAnnotation]; v != "" {
+		want = v
+	}
+
+	pin, perr := NewMaintenancePin(want)
+	if perr != nil {
+		return r.retryLater(ctx, m, reasonMaintenanceChanged, perr.Error())
+	}
+
+	hw, mc, err := r.probeMaintenance(WithMaintenancePin(ctx, pin), m.DialEndpoint())
 	if err != nil {
+		if IsMaintenancePinMismatch(err) && m.Status.ConfigStoredAt == nil {
+			return r.retryLater(ctx, m, reasonMaintenanceChanged,
+				fmt.Sprintf("the node at %s presents a different maintenance certificate (%s) than the one pinned (%s), so the "+
+					"configuration, which carries the cluster's CA keys, was not sent; if you have checked that this is the "+
+					"node, accept the new fingerprint with the %s annotation",
+					m.DialEndpoint(), pin.Seen(), want, ichorv1alpha1.TalosMachineTrustMaintenanceFingerprintAnnotation))
+		}
+
 		log.V(1).Info("node is not answering the maintenance API", "error", err.Error())
 
 		if m.Status.ConfigStoredAt != nil {
@@ -105,6 +127,10 @@ func (r *TalosMachineReconciler) provision(
 
 	if closer, ok := mc.(io.Closer); ok {
 		defer closer.Close() //nolint:errcheck
+	}
+
+	if pf, ok := mc.(PeerFingerprinter); ok && want == "" && pf.PeerFingerprint() != "" {
+		m.Status.MaintenanceFingerprint = pf.PeerFingerprint()
 	}
 
 	// Answering insecurely means maintenance mode. After a store that is the stage before the

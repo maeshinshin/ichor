@@ -70,6 +70,20 @@ func setMachineCondition(
 	})
 }
 
+// recordMaintenanceFingerprint pins the maintenance certificate fingerprint a discovery saw on m
+// (ADR 0108). It is a no-op for an empty or unchanged fingerprint.
+func recordMaintenanceFingerprint(
+	ctx context.Context, rd client.Reader, c client.Client, m *ichorv1alpha1.TalosMachine, fingerprint string,
+) error {
+	if fingerprint == "" || m.Status.MaintenanceFingerprint == fingerprint {
+		return nil
+	}
+
+	return updateMachineStatus(ctx, rd, c, m, func(fresh *ichorv1alpha1.TalosMachine) {
+		fresh.Status.MaintenanceFingerprint = fingerprint
+	})
+}
+
 // recordObservedEndpoint stores the address m answers at in its status (never in spec: the
 // controller does not mutate spec; ADR 0086) and persists it.
 func recordObservedEndpoint(

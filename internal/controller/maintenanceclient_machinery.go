@@ -37,20 +37,29 @@ import (
 // offer (docs/design/architecture.md "Nodes") -- and adapts the connection
 // to MaintenanceClient. It is what cmd/main.go wires into
 // DiscoveryReconciler.MaintenanceClient.
+//
+// The connection is held to the MaintenancePin of ctx (WithMaintenancePin), or to the certificate of
+// its own first handshake: a node that answers with another certificate halfway is refused (ADR 0108).
 func NewMachineryMaintenanceClient(ctx context.Context, endpoint string) (MaintenanceClient, error) {
-	c, err := client.New(ctx, client.WithMaintenanceMode(endpoint, nil))
+	pin := PinFromContext(ctx)
+
+	c, err := client.New(ctx, pin.ClientOptions(endpoint)...)
 	if err != nil {
 		return nil, fmt.Errorf("dialing maintenance Talos API: %w", err)
 	}
 
-	return &machineryMaintenanceClient{c: c}, nil
+	return &machineryMaintenanceClient{c: c, pin: pin}, nil
 }
 
 // machineryMaintenanceClient adapts a real *client.Client, connected in
 // maintenance mode, to MaintenanceClient.
 type machineryMaintenanceClient struct {
-	c *client.Client
+	c   *client.Client
+	pin *MaintenancePin
 }
+
+// PeerFingerprint is the SPKI fingerprint of the certificate the node presented.
+func (m *machineryMaintenanceClient) PeerFingerprint() string { return m.pin.Seen() }
 
 // Close releases the gRPC connection, through the same io.Closer convention
 // talosclient_machinery.go uses.

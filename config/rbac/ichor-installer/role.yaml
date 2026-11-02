@@ -91,6 +91,17 @@ rules:
   verbs:
   - bind
   - escalate
+# The PriorityClass the controller and UI pods run under. Cluster-scoped, so it cannot
+# be restricted by name for create.
+- apiGroups:
+  - scheduling.k8s.io
+  resources:
+  - priorityclasses
+  verbs:
+  - create
+  - get
+  - patch
+  - update
 - apiGroups:
   - admissionregistration.k8s.io
   resources:

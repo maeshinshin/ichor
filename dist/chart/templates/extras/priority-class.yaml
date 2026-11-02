@@ -1,0 +1,12 @@
+{{- if .Values.priorityClass.create }}
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  labels:
+    {{- include "ichor.labels" . | nindent 4 }}
+  name: {{ .Values.priorityClass.name }}
+value: {{ .Values.priorityClass.value }}
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority
+description: Ichor controller and UI pods.
+{{- end }}

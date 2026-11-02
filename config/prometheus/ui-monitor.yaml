@@ -13,7 +13,9 @@ metadata:
   namespace: system
 spec:
   endpoints:
-    - path: /metrics
+    # /metrics needs a Kubernetes token that may `get` the non-resource URL /metrics.
+    - bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+      path: /metrics
       port: https
       scheme: https
       # Verified against the Ichor serving CA the controller publishes. The default

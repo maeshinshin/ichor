@@ -24,6 +24,8 @@ import (
 	"testing"
 	"time"
 
+	"k8s.io/client-go/rest"
+
 	"github.com/maeshinshin/ichor/internal/uiapi"
 )
 
@@ -119,6 +121,23 @@ func assertTLS(t *testing.T, c *tls.Config) {
 
 	if len(c.CipherSuites) == 0 || len(c.CurvePreferences) != 2 {
 		t.Errorf("cipher suites / curves unpinned: %v %v", c.CipherSuites, c.CurvePreferences)
+	}
+}
+
+func TestMetricsNeedAKubernetesToken(t *testing.T) {
+	called := false
+	inner := http.HandlerFunc(func(http.ResponseWriter, *http.Request) { called = true })
+
+	h, err := authenticatedMetrics(&rest.Config{Host: "https://127.0.0.1:1"}, inner)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+
+	if rec.Code != http.StatusUnauthorized || called {
+		t.Fatalf("an anonymous /metrics scrape got %d (handler called: %v)", rec.Code, called)
 	}
 }
 

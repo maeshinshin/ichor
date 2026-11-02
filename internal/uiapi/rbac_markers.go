@@ -123,3 +123,9 @@ package uiapi
 // (when OIDC is off it also creates and updates it; the webhook then judges the ServiceAccount).
 // +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,verbs=create
 // +kubebuilder:rbac:groups=ichor.maesh.dev,namespace=ichor-system,resources=machinereclaims,verbs=get;list;create;update
+
+// /metrics is served only to a caller that proves a Kubernetes token and may `get` the
+// non-resource URL /metrics: the same TokenReview and SubjectAccessReview the controller's secure metrics
+// endpoint makes. create only, on those two review kinds.
+// +kubebuilder:rbac:groups=authentication.k8s.io,resources=tokenreviews,verbs=create
+// +kubebuilder:rbac:groups=authorization.k8s.io,resources=subjectaccessreviews,verbs=create

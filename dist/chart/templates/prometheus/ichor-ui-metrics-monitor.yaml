@@ -11,7 +11,10 @@ metadata:
   namespace: {{ .Release.Namespace }}
 spec:
   endpoints:
-  - path: /metrics
+  # ichor-ui answers /metrics only to a caller with a Kubernetes token that may `get` the non-resource
+  # URL /metrics: the scraping Prometheus ServiceAccount needs the metrics-reader ClusterRole.
+  - bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+    path: /metrics
     port: https
     # ichor-ui serves /metrics on the same HTTPS port and mux as its Connect API
     # (cmd/ichor-ui/main.go). The scrape verifies the certificate against the CA in

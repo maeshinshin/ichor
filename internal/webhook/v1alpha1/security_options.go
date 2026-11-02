@@ -260,6 +260,14 @@ func (v *TalosConfigPatchCustomValidator) talosAPIAccessWarnings(ctx context.Con
 
 		where := fmt.Sprintf("spec.documents[%d].config.machine.features.kubernetesTalosAPIAccess", i)
 
+		// Talos allows it on control planes only; rendering it for a worker fails, so refuse a
+		// patch that would reach one (the cluster layer, a worker role). Selector and machine
+		// layers are rendered per machine and fail there with the same message.
+		if p.Spec.Layer == "cluster" || (p.Spec.Layer == "role" && p.Spec.Target != nil && p.Spec.Target.Role != roleControlPlane) {
+			return nil, fmt.Errorf("%s can only be enabled on control plane machines: use layer \"role\" with target.role %q, "+
+				"(layer %q targets machines it cannot enable this on)", where, roleControlPlane, p.Spec.Layer)
+		}
+
 		if slices.Contains(a.AccessAllowedRoles, roleOSAdmin) {
 			allowed := false
 

@@ -189,7 +189,7 @@ func main() {
 	flag.IntVar(&certExpiryWarningDays, "certificate-expiry-warning-days", 90,
 		"Days before a cluster CA expires at which the CertificatesExpiring condition turns True.")
 	opts := zap.Options{
-		Development: true,
+		Development: false, // production logging (JSON, no stack traces on warn); --zap-devel turns it on
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()

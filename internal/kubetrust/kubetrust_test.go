@@ -169,6 +169,14 @@ func TestPublishWritesOnlyCertificates(t *testing.T) {
 	if strings.Contains(string(got), "PRIVATE KEY") || !strings.Contains(string(got), "BEGIN CERTIFICATE") {
 		t.Fatalf("file must hold a certificate and no key:\n%s", got)
 	}
+
+	if fi, err := os.Stat(path); err != nil || fi.Mode().Perm() != 0o644 {
+		t.Fatalf("trust file mode = %v, %v; want 0644", fi, err)
+	}
+
+	if entries, _ := os.ReadDir(filepath.Dir(path)); len(entries) != 1 {
+		t.Fatalf("a temp file was left next to the trust file: %v", entries)
+	}
 }
 
 func TestPublishWithNothingNewKeepsTheFile(t *testing.T) {

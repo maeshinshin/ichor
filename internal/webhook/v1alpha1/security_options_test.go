@@ -168,13 +168,18 @@ func TestSecurityFirewallCoversMachines(t *testing.T) {
 		}
 	})
 
-	t.Run("nodeCIDRs that exclude a machine are refused", func(t *testing.T) {
+	t.Run("nodeCIDRs that exclude a machine only warn", func(t *testing.T) {
 		s := firewallSecurity()
 		s.Firewall.NodeCIDRs = []string{"10.0.0.0/28"}
+		s.Firewall.TalosAPICIDRs = []string{"172.16.0.0/12"}
 
-		_, err := v.ValidateUpdate(ctx, secTestCluster(nil), secTestCluster(s))
-		if err == nil || !strings.Contains(err.Error(), "nodeCIDRs") || !strings.Contains(err.Error(), "10.0.0.20") {
-			t.Fatalf("want a refusal naming the worker address, got %v", err)
+		warns, err := v.ValidateUpdate(ctx, secTestCluster(nil), secTestCluster(s))
+		if err != nil {
+			t.Fatalf("Ichor's own path is intact: %v", err)
+		}
+
+		if len(warns) != 1 || !strings.Contains(warns[0], "nodeCIDRs") || !strings.Contains(warns[0], "10.0.0.20") {
+			t.Fatalf("want a warning naming the worker address, got %v", warns)
 		}
 	})
 
@@ -267,7 +272,7 @@ func TestTalosAPIAccessInPatch(t *testing.T) {
 	on := true
 
 	patch := func(roles ...string) *ichorv1alpha1.TalosConfigPatch {
-		p := configPatch("access", &typedconfig.Config{
+		return configPatch("access", &typedconfig.Config{
 			ConfigVersion: dryRenderVersion,
 			MachineConfig: &typedconfig.MachineConfig{MachineFeatures: &typedconfig.FeaturesConfig{
 				KubernetesTalosAPIAccessConfig: &typedconfig.KubernetesTalosAPIAccessConfig{
@@ -275,89 +280,42 @@ func TestTalosAPIAccessInPatch(t *testing.T) {
 				},
 			}},
 		})
-		p.Spec.Layer = "role"
-		p.Spec.Target = &ichorv1alpha1.TalosConfigPatchTarget{Role: roleControlPlane}
-
-		return p
 	}
 
-	t.Run("a patch that reaches workers is refused", func(t *testing.T) {
-		for name, mut := range map[string]func(*ichorv1alpha1.TalosConfigPatch){
-			"cluster layer": func(p *ichorv1alpha1.TalosConfigPatch) { p.Spec.Layer, p.Spec.Target = "cluster", nil },
-			"worker role":   func(p *ichorv1alpha1.TalosConfigPatch) { p.Spec.Target.Role = roleWorker },
-		} {
-			p := patch("os:reader")
-			mut(p)
-
-			_, err := dryRenderValidator(t).ValidateCreate(ctx, p)
-			if err == nil || !strings.Contains(err.Error(), "control plane") {
-				t.Errorf("%s: want a refusal naming control planes, got %v", name, err)
-			}
-		}
-	})
-
-	holder := func(allowed bool, err error) BreakGlassCheck {
-		return func(context.Context, string, string, string) (bool, error) { return allowed, err }
-	}
-
-	t.Run("os:admin is refused", func(t *testing.T) {
-		v := dryRenderValidator(t)
-		v.BreakGlass = holder(false, nil)
-
-		_, err := v.ValidateCreate(ctx, patch("os:reader", "os:admin"))
-		if err == nil || !strings.Contains(err.Error(), "os:admin") || !strings.Contains(err.Error(), BreakGlassVerb) {
-			t.Fatalf("want a refusal, got %v", err)
-		}
-
-		if _, err := v.ValidateUpdate(ctx, patch("os:reader"), patch("os:admin")); err == nil {
-			t.Fatal("update must be refused too")
-		}
-	})
-
-	t.Run("without a break-glass check os:admin is refused", func(t *testing.T) {
-		if _, err := dryRenderValidator(t).ValidateCreate(ctx, patch("os:admin")); err == nil {
-			t.Fatal("want a refusal")
-		}
-	})
-
-	t.Run("a failed break-glass check refuses", func(t *testing.T) {
-		v := dryRenderValidator(t)
-		v.BreakGlass = holder(false, errors.New("boom"))
-
-		if _, err := v.ValidateCreate(ctx, patch("os:admin")); err == nil {
-			t.Fatal("want a refusal")
-		}
-	})
-
-	t.Run("the break-glass verb admits it with a warning", func(t *testing.T) {
-		v := dryRenderValidator(t)
-		v.BreakGlass = holder(true, nil)
-
-		warnings, err := v.ValidateCreate(ctx, patch("os:admin"))
+	t.Run("os:admin is admitted with a warning naming it", func(t *testing.T) {
+		warnings, err := dryRenderValidator(t).ValidateCreate(ctx, patch("os:reader", "os:admin"))
 		if err != nil {
+			t.Fatalf("a user's choice for their own cluster must not be refused: %v", err)
+		}
+
+		if len(warnings) != 2 || !strings.Contains(warnings[0], "os:admin") || !strings.Contains(warnings[1], "ops") {
+			t.Fatalf("want an os:admin warning and the general one, got %v", warnings)
+		}
+
+		if _, err := dryRenderValidator(t).ValidateUpdate(ctx, patch("os:reader"), patch("os:admin")); err != nil {
+			t.Fatalf("update: %v", err)
+		}
+	})
+
+	t.Run("a cluster-layer patch is admitted (it renders on control planes only)", func(t *testing.T) {
+		if _, err := dryRenderValidator(t).ValidateCreate(ctx, patch("os:reader")); err != nil {
 			t.Fatal(err)
 		}
-
-		if len(warnings) != 1 || !strings.Contains(warnings[0], "ops") {
-			t.Fatalf("want one warning naming the namespace, got %v", warnings)
-		}
 	})
 
-	t.Run("os:reader is admitted with a warning", func(t *testing.T) {
-		v := dryRenderValidator(t)
-
-		warnings, err := v.ValidateCreate(ctx, patch("os:reader"))
+	t.Run("os:reader is admitted with one warning", func(t *testing.T) {
+		warnings, err := dryRenderValidator(t).ValidateCreate(ctx, patch("os:reader"))
 		if err != nil || len(warnings) != 1 {
 			t.Fatalf("want admitted with one warning, got %v, %v", warnings, err)
 		}
 	})
 
 	t.Run("an update that leaves the documents alone is not re-checked", func(t *testing.T) {
-		v := dryRenderValidator(t)
 		old, same := patch("os:admin"), patch("os:admin")
 
-		if _, err := v.ValidateUpdate(ctx, old, same); err != nil {
-			t.Fatalf("stored patch must stay editable: %v", err)
+		warnings, err := dryRenderValidator(t).ValidateUpdate(ctx, old, same)
+		if err != nil || len(warnings) != 0 {
+			t.Fatalf("stored patch must stay editable and silent: %v, %v", warnings, err)
 		}
 	})
 

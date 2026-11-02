@@ -94,11 +94,12 @@ func (v *TalosClusterCustomValidator) validateSecurityUpdate(ctx context.Context
 			return nil, err
 		}
 
-		if err := v.checkFirewallCoversMachines(ctx, newC); err != nil {
+		covers, err := v.checkFirewallCoversMachines(ctx, newC)
+		if err != nil {
 			return nil, err
 		}
 
-		warns = firewallWarnings(newC)
+		warns = append(covers, firewallWarnings(newC)...)
 	}
 
 	return warns, v.checkDiskEncryptionConfirmed(ctx, oldC, newC)
@@ -128,21 +129,25 @@ func machineAddr(endpoint string) (netip.Addr, bool) {
 	return a.Unmap(), err == nil
 }
 
-// checkFirewallCoversMachines refuses a firewall whose nodeCIDRs miss an approved machine or whose
-// controlPlaneCIDRs miss an approved control plane: the rules built from them would cut the
-// controller off that machine, and the controller could not deliver a corrected spec (hardware run
-// of ADR 0108). Needs APIReader; machines whose endpoint is a hostname are skipped.
-func (v *TalosClusterCustomValidator) checkFirewallCoversMachines(ctx context.Context, c *ichorv1alpha1.TalosCluster) error {
+// checkFirewallCoversMachines looks at the machines the firewall's CIDRs must cover. A
+// controlPlaneCIDRs that misses an approved control plane is refused: the controller reaches the
+// other nodes from a control plane's address, so Ichor would lose them and could not deliver a
+// corrected spec (hardware run of ADR 0108). A nodeCIDRs that misses a machine only costs that
+// machine its Cilium and trustd rules, so it is a warning. Needs APIReader; machines whose
+// endpoint is a hostname are skipped.
+func (v *TalosClusterCustomValidator) checkFirewallCoversMachines(ctx context.Context, c *ichorv1alpha1.TalosCluster) (admission.Warnings, error) {
 	if !render.FirewallEnabled(c) || v.APIReader == nil {
-		return nil
+		return nil, nil
 	}
 
 	machines, err := deleteguard.ApprovedMachines(ctx, v.APIReader, c.Namespace, c.Name, deleteguard.MachineFilter{IncludeDeleting: true})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	fw := c.Spec.Security.Firewall
+
+	var warns admission.Warnings
 
 	for i := range machines {
 		m := &machines[i]
@@ -152,18 +157,18 @@ func (v *TalosClusterCustomValidator) checkFirewallCoversMachines(ctx context.Co
 			continue
 		}
 
-		if !prefixesContain(fw.NodeCIDRs, addr) {
-			return fmt.Errorf("spec.security.firewall.nodeCIDRs %v does not contain %s, the address of machine %s: "+
-				"the firewall would cut it off from the cluster", fw.NodeCIDRs, addr, m.Name)
+		if m.Spec.Role == roleControlPlane && len(fw.ControlPlaneCIDRs) > 0 && !prefixesContain(fw.ControlPlaneCIDRs, addr) {
+			return nil, fmt.Errorf("spec.security.firewall.controlPlaneCIDRs %v does not contain %s, the address of control plane %s: "+
+				"the other nodes (and Ichor, reaching them) would lose it", fw.ControlPlaneCIDRs, addr, m.Name)
 		}
 
-		if m.Spec.Role == roleControlPlane && len(fw.ControlPlaneCIDRs) > 0 && !prefixesContain(fw.ControlPlaneCIDRs, addr) {
-			return fmt.Errorf("spec.security.firewall.controlPlaneCIDRs %v does not contain %s, the address of control plane %s: "+
-				"the other nodes (and Ichor, reaching them) would lose it", fw.ControlPlaneCIDRs, addr, m.Name)
+		if !prefixesContain(fw.NodeCIDRs, addr) {
+			warns = append(warns, fmt.Sprintf("spec.security.firewall.nodeCIDRs %v does not contain %s, the address of machine %s: "+
+				"the nodes' Cilium and trustd rules will not admit it", fw.NodeCIDRs, addr, m.Name))
 		}
 	}
 
-	return nil
+	return warns, nil
 }
 
 func prefixesContain(cidrs []string, addr netip.Addr) bool {
@@ -241,11 +246,12 @@ func (v *TalosClusterCustomValidator) checkDiskEncryptionConfirmed(ctx context.C
 // Talos API roles that must not be handed to pods (docs: Talos role-based access control).
 const roleOSAdmin = "os:admin"
 
-// talosAPIAccessWarnings checks every Config document of a TalosConfigPatch for
-// machine.features.kubernetesTalosAPIAccess (ADR 0108). os:admin in allowedRoles hands a Talos
-// administrator to every pod in the allowed namespaces, so it is refused unless the user holds the
-// break-glass verb on the patch; any enabled access is warned about.
-func (v *TalosConfigPatchCustomValidator) talosAPIAccessWarnings(ctx context.Context, p *ichorv1alpha1.TalosConfigPatch) (admission.Warnings, error) {
+// talosAPIAccessWarnings warns about every Config document of a TalosConfigPatch that enables
+// machine.features.kubernetesTalosAPIAccess (ADR 0108, amended). It is the user's choice for their
+// own cluster, so nothing is refused: os:admin in allowedRoles gets the strongest wording, as it
+// hands a Talos administrator to every pod in the allowed namespaces. The feature renders on
+// control planes only (pkg/render leaves it out of workers).
+func talosAPIAccessWarnings(p *ichorv1alpha1.TalosConfigPatch) admission.Warnings {
 	var warnings admission.Warnings
 
 	for i, d := range p.Spec.Documents {
@@ -260,39 +266,14 @@ func (v *TalosConfigPatchCustomValidator) talosAPIAccessWarnings(ctx context.Con
 
 		where := fmt.Sprintf("spec.documents[%d].config.machine.features.kubernetesTalosAPIAccess", i)
 
-		// Talos allows it on control planes only; rendering it for a worker fails, so refuse a
-		// patch that would reach one (the cluster layer, a worker role). Selector and machine
-		// layers are rendered per machine and fail there with the same message.
-		if p.Spec.Layer == "cluster" || (p.Spec.Layer == "role" && p.Spec.Target != nil && p.Spec.Target.Role != roleControlPlane) {
-			return nil, fmt.Errorf("%s can only be enabled on control plane machines: use layer \"role\" with target.role %q, "+
-				"(layer %q targets machines it cannot enable this on)", where, roleControlPlane, p.Spec.Layer)
-		}
-
 		if slices.Contains(a.AccessAllowedRoles, roleOSAdmin) {
-			allowed := false
-
-			if v.BreakGlass != nil {
-				ok, err := v.BreakGlass(ctx, "talosconfigpatches", p.Name, p.Namespace)
-				if err != nil {
-					return nil, fmt.Errorf("%s: %s in allowedRoles is refused, and the %s right could not be checked: %w",
-						where, roleOSAdmin, BreakGlassVerb, err)
-				}
-
-				allowed = ok
-			}
-
-			if !allowed {
-				return nil, fmt.Errorf("%s: allowedRoles contains %s, which gives every pod in %v a Talos administrator "+
-					"(use os:reader, or hold the %q verb on this patch to override)",
-					where, roleOSAdmin, a.AccessAllowedKubernetesNamespaces, BreakGlassVerb)
-			}
-
-			breakglasslog.Info("os:admin Talos API access admitted under break-glass", "patch", p.Name)
+			warnings = append(warnings, fmt.Sprintf("%s: allowedRoles contains %s, which gives every pod in %v a Talos administrator "+
+				"(os:reader is enough for most uses)", where, roleOSAdmin, a.AccessAllowedKubernetesNamespaces))
 		}
 
-		warnings = append(warnings, fmt.Sprintf("%s grants Talos API access (%v) to pods in namespaces %v: a pod there can act on the nodes",
-			where, a.AccessAllowedRoles, a.AccessAllowedKubernetesNamespaces))
+		warnings = append(warnings, fmt.Sprintf("%s grants Talos API access (%v) to pods in namespaces %v: a pod there can act on the nodes; "+
+			"it applies to control planes only", where, a.AccessAllowedRoles, a.AccessAllowedKubernetesNamespaces))
 	}
 
-	return warnings, nil
+	return warnings
 }

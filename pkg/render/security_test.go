@@ -22,7 +22,10 @@ import (
 	"strings"
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
+
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
 
 const (
@@ -368,4 +371,45 @@ func TestDiskEncryption(t *testing.T) {
 			}
 		}
 	})
+}
+
+// kubernetesTalosAPIAccess is valid on control planes only; a cluster-layer patch that enables it
+// renders on them and is left out of workers instead of failing their render.
+func TestTalosAPIAccessRendersOnControlPlanesOnly(t *testing.T) {
+	bundle := testBundle(t)
+	on := true
+
+	patch := ichorv1alpha1.TalosConfigPatch{
+		Namespace: testNamespace, Name: "api-access",
+		Spec: ichorv1alpha1.TalosConfigPatchSpec{
+			ClusterRef: corev1.LocalObjectReference{Name: testClusterName},
+			Layer:      "cluster",
+			Documents: []ichorv1alpha1.TalosConfigPatchDocument{{
+				Kind: "Config",
+				Config: &typedconfig.Config{
+					ConfigVersion: "v1alpha1",
+					MachineConfig: &typedconfig.MachineConfig{MachineFeatures: &typedconfig.FeaturesConfig{
+						KubernetesTalosAPIAccessConfig: &typedconfig.KubernetesTalosAPIAccessConfig{
+							AccessEnabled: &on, AccessAllowedRoles: []string{"os:reader"}, AccessAllowedKubernetesNamespaces: []string{"ops"},
+						},
+					}},
+				},
+			}},
+		},
+	}
+	patches := []ichorv1alpha1.TalosConfigPatch{patch}
+
+	cp := mustRender(t, testCluster("true"), testMachine("cp", roleControlPlane, nil), bundle, patches)
+	if !strings.Contains(cp, "kubernetesTalosAPIAccess") {
+		t.Errorf("control plane lacks the feature:\n%s", cp)
+	}
+
+	w := mustRender(t, testCluster("true"), testMachine("w", roleWorker, nil), bundle, patches)
+	if strings.Contains(w, "kubernetesTalosAPIAccess") {
+		t.Errorf("worker got the feature:\n%s", w)
+	}
+
+	if len(patches[0].Spec.Documents[0].Config.MachineConfig.MachineFeatures.KubernetesTalosAPIAccessConfig.AccessAllowedRoles) != 1 {
+		t.Error("the caller's patch was modified")
+	}
 }

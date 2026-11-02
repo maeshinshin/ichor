@@ -382,6 +382,9 @@ func (s *Server) createNodeOperation(ctx context.Context, p *opPlan) (*pb.Create
 			return nil, invalid("type the machine name %q to confirm the reset", np.machine.Name)
 		}
 
+		// The user may have named the node by its hostname; the CRD compares confirm with machineRef.name.
+		np.spec.Confirm = np.machine.Name
+
 		reason = strings.TrimSpace(np.bg.GetReason())
 		if reason == "" {
 			return nil, invalid("a reset needs a break-glass reason: it goes into the audit record and the Event")

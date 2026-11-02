@@ -66,6 +66,22 @@ type PasswordVerifier interface {
 	VerifyPassword(ctx context.Context, name, password string) (ok bool, err error)
 }
 
+// ErrRefreshReused is returned by RefreshStore.Rotate when the presented token
+// is not the family's current one (a replay: the family has been revoked) or
+// the family is unknown (revoked, expired or pruned). Both mean the grant fails.
+var ErrRefreshReused = errors.New("oidcissuer: refresh token reused or revoked")
+
+// RefreshStore keeps one entry per refresh-token family so a refresh token is
+// good once: every use rotates it, and a second use of a retired token revokes
+// the whole family. It must be shared by all replicas.
+type RefreshStore interface {
+	// Start registers a new family whose current token has id jti, until exp.
+	Start(ctx context.Context, user, family, jti string, exp time.Time) error
+	// Rotate makes newJTI the current token of family if oldJTI is, else
+	// revokes the family. Either failure returns ErrRefreshReused.
+	Rotate(ctx context.Context, user, family, oldJTI, newJTI string) error
+}
+
 // Config configures an Issuer.
 type Config struct {
 	// Issuer is the external https URL (no path, no trailing slash): the "iss"
@@ -91,6 +107,9 @@ type Config struct {
 	Keys      KeySource
 	Users     UserDirectory
 	Passwords PasswordVerifier
+	// Refresh, when set, rotates refresh tokens with reuse detection. nil keeps
+	// them stateless and unrotated (tests only).
+	Refresh RefreshStore
 
 	// Now is the clock; nil means time.Now.
 	Now func() time.Time

@@ -37,3 +37,10 @@ patches:
   patch: |-
     - {op: replace, path: /metadata/namespace, value: kube-system}
     - {op: replace, path: /subjects/0/namespace, value: kube-system}
+- target: {group: rbac.authorization.k8s.io, version: v1, kind: Role, name: ichor-pod-restart-role}
+  patch: |-
+    - {op: replace, path: /metadata/namespace, value: kube-system}
+- target: {group: rbac.authorization.k8s.io, version: v1, kind: RoleBinding, name: ichor-pod-restart-rolebinding}
+  patch: |-
+    - {op: replace, path: /metadata/namespace, value: kube-system}
+    - {op: replace, path: /subjects/0/namespace, value: ichor-system}

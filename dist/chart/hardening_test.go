@@ -161,3 +161,53 @@ func TestControllerJobsPolicyMirrorsConfig(t *testing.T) {
 		}
 	}
 }
+
+// TestControllerDeletesPodsOnlyInKubeSystem guards ADR 0108: the controller's cluster-wide rules
+// grant no delete on pods (it evicts to drain); the one direct delete, the stale agent pod of an etcd
+// restore, is a Role in kube-system, in config/rbac and in the chart.
+func TestControllerDeletesPodsOnlyInKubeSystem(t *testing.T) {
+	deletePods := rbacTriple{"", "pods", "delete", ""}
+
+	chartDocs := renderChart(t, "ichor")
+	cfgDocs := loadYAMLDocs(t, "../../config/rbac/pod_restart_role.yaml")
+
+	for _, d := range findAll(chartDocs, kindClusterRole) {
+		if strings.HasSuffix(nameOf(d), "-manager-role") && rbacTriples(allRules(d))[deletePods] {
+			t.Errorf("chart ClusterRole %s grants %s cluster-wide", nameOf(d), deletePods)
+		}
+	}
+
+	for _, d := range loadYAMLDocs(t, controllerConfigRolePath) {
+		if kindOf(d) == kindClusterRole && rbacTriples(allRules(d))[deletePods] {
+			t.Errorf("config/rbac/role.yaml ClusterRole %s grants %s cluster-wide", nameOf(d), deletePods)
+		}
+	}
+
+	for label, docs := range map[string][]map[string]any{"chart": chartDocs, "config/rbac": cfgDocs} {
+		var role map[string]any
+
+		for _, d := range findAll(docs, kindRole) {
+			if namespaceOf(d) == "kube-system" && rbacTriples(allRules(d))[deletePods] {
+				role = d
+			}
+		}
+
+		if role == nil {
+			t.Errorf("%s: no Role in kube-system grants %s", label, deletePods)
+			continue
+		}
+
+		var bound bool
+
+		for _, b := range findAll(docs, kindRoleBinding) {
+			ref, _ := b["roleRef"].(map[string]any)
+			if namespaceOf(b) == "kube-system" && ref["name"] == nameOf(role) {
+				bound = true
+			}
+		}
+
+		if !bound {
+			t.Errorf("%s: Role %s in kube-system has no RoleBinding", label, nameOf(role))
+		}
+	}
+}

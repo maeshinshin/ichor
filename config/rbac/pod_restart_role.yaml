@@ -1,0 +1,36 @@
+# The one place the controller deletes a pod: the stale agent pod (Cilium, kube-proxy, ...) of a
+# node after an etcd restore rewinds the API (internal/controller/etcd_restore.go). Everywhere else it
+# evicts. A Role in kube-system, not a cluster-wide rule (ADR 0108). Hand-written: controller-gen
+# cannot name a namespace other than the one kustomize rewrites. dist/chart mirrors it.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    app.kubernetes.io/name: ichor
+    app.kubernetes.io/managed-by: kustomize
+  name: pod-restart-role
+  namespace: kube-system
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - delete
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/name: ichor
+    app.kubernetes.io/managed-by: kustomize
+  name: pod-restart-rolebinding
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: pod-restart-role
+subjects:
+- kind: ServiceAccount
+  name: ichor-controller-manager
+  namespace: ichor-system

@@ -109,6 +109,11 @@ func saveKubeconfigFile(cluster string, kubeconfig []byte) (string, error) {
 		return "", fmt.Errorf("creating %s: %w", dir, err)
 	}
 
+	// MkdirAll leaves an existing directory's mode alone; see saveBundleFile.
+	if err := os.Chmod(dir, bundleDirPerm); err != nil {
+		return "", fmt.Errorf("setting permissions on %s: %w", dir, err)
+	}
+
 	path := filepath.Join(dir, kubeconfigFilename)
 	if err := writeFileAtomic(path, kubeconfig); err != nil {
 		return "", fmt.Errorf("writing %s: %w", path, err)
@@ -269,6 +274,12 @@ func loadBundleFile(path string) (*secrets.Bundle, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("reading secrets bundle %q: %w", path, err)
+	}
+
+	// The file is the cluster's root of trust and is stored in plaintext (ponytail: no passphrase or age
+	// encryption yet); at least say so when other users can read it.
+	if st, err := os.Stat(path); err == nil && st.Mode().Perm()&0o077 != 0 {
+		_, _ = fmt.Fprintf(os.Stderr, "ichor: warning: %s is accessible to other users (mode %04o); run: chmod 600 %s\n", path, st.Mode().Perm(), path)
 	}
 
 	bundle, err := secretsbundle.Decode(raw)

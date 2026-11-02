@@ -18,12 +18,14 @@ package cilium
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
 	sigsyaml "sigs.k8s.io/yaml"
 
 	"github.com/maeshinshin/ichor/pkg/cni"
+	"github.com/maeshinshin/ichor/pkg/values"
 )
 
 func TestTalosPatches(t *testing.T) {
@@ -92,5 +94,20 @@ func TestValues_TalosRequiredFive(t *testing.T) {
 		if !strings.Contains(string(out), want) {
 			t.Errorf("values missing %q:\n%s", want, out)
 		}
+	}
+}
+
+// TestValues_HubbleCertgenToleratesControlPlane: the hubble-generate-certs Job has to run on a tainted
+// control plane, or the agents wait for its secrets and a preset with tainted control planes never
+// finishes its hand-over before a worker is approved. The chart's default (no tolerations) would not.
+func TestValues_HubbleCertgenToleratesControlPlane(t *testing.T) {
+	got, err := EffectiveValues(nil, cni.KubeProxyEnabled, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tols, _ := values.Get(got, "certgen.tolerations")
+	if !strings.Contains(fmt.Sprint(tols), "node-role.kubernetes.io/control-plane") {
+		t.Errorf("certgen.tolerations = %v, want the control-plane taint tolerated", tols)
 	}
 }

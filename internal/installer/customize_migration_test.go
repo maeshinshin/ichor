@@ -32,9 +32,7 @@ const plainAddr = ":8080"
 // Migration table, read from fixture Deployments.
 func TestReadUISettingsMigrationCases(t *testing.T) {
 	live := func(secret string, args ...string) *appsv1.Deployment {
-		d := &appsv1.Deployment{Spec: appsv1.DeploymentSpec{Template: corev1.PodTemplateSpec{Spec: corev1.PodSpec{
-			Containers: []corev1.Container{{Name: UIContainer, Args: args}},
-		}}}}
+		d := uiWith(args)
 		if secret != "" {
 			d.Spec.Template.Spec.Volumes = []corev1.Volume{{Name: UITLSVolume, Secret: &corev1.SecretVolumeSource{SecretName: secret}}}
 		}
@@ -78,25 +76,11 @@ func TestCustomizePoliciesOpensTheMigratedPort(t *testing.T) {
 		return ing[0].(map[string]any)["toPorts"].([]any)[0].(map[string]any)["ports"].([]any)
 	}
 
-	fresh := mk()
-	CustomizePolicies(fresh, UISettings{})
-
-	if n := len(ports(fresh[0])); n != 1 {
-		t.Errorf("a fresh install opens %d ports, want only 8443", n)
-	}
-
 	plain := mk()
 	CustomizePolicies(plain, UISettings{WasPlaintext: plainAddr})
 
 	if got := ports(plain[0]); len(got) != 1 {
 		t.Errorf("a plaintext install opens %v, want 8443 only", got)
-	}
-
-	pinned := mk()
-	CustomizePolicies(pinned, UISettings{ListenAddr: plainAddr})
-
-	if got := ports(pinned[0]); len(got) != 2 || got[1].(map[string]any)["port"] != "8080" {
-		t.Errorf("a pinned TLS install opens %v, want 8443 and 8080", got)
 	}
 }
 

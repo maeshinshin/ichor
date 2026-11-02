@@ -111,3 +111,66 @@ The `cni` policy (egress to `kube-apiserver` 6443 and `host` 7445) is removed fr
 ADR 0103 gates the policies on `status.cni.detected`: `ichor init`, the adopt install step and the installer Job apply the `CiliumNetworkPolicy` objects only when the detected CNI is `cilium` and the CRD exists. On an adopted cluster with another CNI, `ichor-system` is not isolated by Ichor and the condition `NetworkPoliciesApplied` says so. The chart renders them only when `networkPolicy.cilium.enabled` is true (the installer applies them otherwise); the value is now three-valued: unset (`null`, the default) leaves the installer to decide from the detected CNI and the CRD, and an explicit `networkPolicy.cilium.enabled=false` adds `--no-cilium-policies` to the controller, which passes it to the installer Job (the upgrade operation), so a hands-off Cilium cluster can opt out; the skip is logged. `ichor init` and the adopt install step have no switch: they run once and apply the policies on Cilium. Ichor writes no standard `NetworkPolicy` objects (ADR 0103, open question 5).
 
 Amendment 2026-10-29 (ADR 0105): the ichor-ui ingress rule moves from 8080 to 8443 (and 8080 only while the deprecated plaintext listener is on). Port 8444 stays limited to `kube-apiserver`.
+
+## Amendment (2026-11-02): least-privilege egress, on by default, with a policy the controller maintains
+
+The user asked for Ichor's own security to be raised with CiliumNetworkPolicies (ADR 0108). Scope is `ichor-system` and its Jobs only; the managed clusters' policies stay opt-in. The default deny in both directions and the per-flow allows already existed; this amendment removes the `world` rules that no longer need to be wide, makes the chart on by default, and lets the controller write the one policy whose content depends on user objects.
+
+### Cilium semantics relied on (Cilium 1.18 docs via Context7 `/cilium/cilium/v1_18_2`, `Documentation/security/policy/language.rst`)
+
+- A rule that selects an endpoint and has an `egress` (or `ingress`) section puts that direction in deny mode; `egress: [{}]` allows nothing. Policies are additive, so one wide `world` rule in a static policy would cancel any narrowing done elsewhere. That is why the static controller rules lose `world` instead of the dynamic policy merely adding to it.
+- `toFQDNs` only works if the endpoint's DNS lookups go through Cilium's DNS proxy: the documented form is a `toEndpoints` rule to `kube-system` `k8s-app=kube-dns` on port 53 with `rules.dns` (`matchPattern: "*"` allows every query), next to the `toFQDNs` rule. The static DNS rules now carry that L7 rule; before they were port-level only.
+- `toCIDR` / `toCIDRSet` select addresses outside the cluster; the entities `host`, `remote-node` and `kube-apiserver` select the cluster's own nodes. Hence node addresses of Ichor's own cluster stay on entities, and everything else (machines in maintenance mode, other clusters, an S3 service) goes through the dynamic CIDR or FQDN rules.
+- `toServices` with `k8sService: {serviceName, namespace}` selects a Kubernetes Service's backends (used for an in-cluster S3 store such as `http://minio.minio.svc:9000`, which `toFQDNs` cannot express: the ClusterIP is translated to a backend before policy). The docs page fetched shows a `name`/`namespace` form; the `k8sService` form is from the CRD and is on the hardware list.
+
+### Flows from the code
+
+| Workload | Direction | Peer | Port | Evidence in code | Rule |
+|---|---|---|---|---|---|
+| controller | ingress | `kube-apiserver`, `remote-node` | 9443 | webhook server (`cmd/main.go`) | static |
+| controller | ingress | `host` | 8081 | `--health-probe-bind-address` | static |
+| controller | ingress | `cluster`, or the namespaces in `metricsNamespaces` (chart) | 8443 | `--metrics-bind-address`, protected by TokenReview and SubjectAccessReview | static |
+| controller | egress | `kube-apiserver` | 6443 | controller-runtime client, leader election | static |
+| controller | egress | `host`, `remote-node` | 50000, 6443, 2380 | apid (`constants.ApidPort`), `APIServerReady`/`probeReadyz`, etcd peer probe (`pkg/reclaim memberReachable`), all on this cluster's nodes | static |
+| controller | egress | kube-dns | 53/UDP+TCP with DNS L7 `*` | resolving node, S3 and endpoint names | static |
+| controller, ichor-ui | egress | `toCIDRSet`: `TalosMachine.spec.endpoint` and `status.observedEndpoint` hosts, `TalosCluster.spec.discovery` addresses and cidrs, `MachineReclaim.spec.address`, an IP `TalosCluster.spec.endpoint.address` | 50000, 6443, 2380 | `DiscoverAll`/`EnumerateCandidates` (maintenance API on 50000), `pkg/reclaim.Dial`, node reads | dynamic |
+| controller, ichor-ui | egress | `toFQDNs`: host names among the same fields | 50000, 6443, 2380 | a `dns` or `loadBalancer` cluster endpoint, a host name endpoint | dynamic |
+| controller, ichor-ui | egress | `toFQDNs`, `toCIDRSet` or `toServices` from each `TalosEtcdBackup` S3 endpoint | the URL's port (443 or 80 by scheme) | `etcdbackup.NewS3Store` (controller backups, `uiapi/etcd_restore.go`) | dynamic |
+| ichor-ui | ingress | `world`, `cluster` (chart: `uiIngressCIDRs` replaces `world`) | 8443 (`ichorUI.port`) | `--addr`; the demo path outer LB, NodePort, pinned port | static |
+| ichor-ui | ingress | `kube-apiserver`, `remote-node` | 8444 | `--internal-addr`, the OIDC issuer's discovery and JWKS (ADR 0094) | static |
+| ichor-ui | egress | `kube-apiserver` | 6443 | client with impersonation | static |
+| ichor-ui | egress | `host`, `remote-node` | 50000 | logs, support bundles, snapshots, captures | static |
+| ichor-ui | egress | kube-dns | 53 with DNS L7 `*` | name resolution | static |
+| ichor-ui | egress | `world` (chart: `externalCIDRs`) | 443 (`externalPorts`) | external OIDC issuer (`go-oidc`), the pull request host (`pkg/prmode`). Those names live in Deployment args and user settings, not in anything a static policy sees: the one `world` rule left; an FQDN rule for it is deferred | static |
+| installer Job | egress | `kube-apiserver` | 6443 | API calls only; no DNS (the Service is an IP), no registry (the kubelet pulls images) | static |
+| Cilium Helm Job | not covered | | | host network in `kube-system`; Cilium applies no endpoint policy to it (earlier amendment) | none |
+
+The controller pulls no Helm chart or OCI image in process (the Cilium Helm Job does, from `kube-system`, outside these policies). MachineReclaim dials the cluster endpoint and etcd peers named in the machine's own configuration: only addresses Ichor's CRs name are allowed, so a reclaim from a cluster Ichor has no object for needs `talosCIDRs` or a policy of the operator's own (the probe then reports unreachable, which errs toward refusing, as before).
+
+### The policy the controller maintains
+
+`ichor-controller-talos-egress` (the chart passes `--talos-egress-policy-name` for a prefixed release) is created and updated by `TalosEgress` (`internal/controller/talos_egress.go`). It selects both the controller and ichor-ui pods (the UI dials the same machines and S3 stores), takes its `app.kubernetes.io/name` from the installed `controller-manager` policy, and holds exactly the addresses and names in the dynamic rows above. It is rebuilt on every change of a TalosCluster, TalosMachine, MachineReclaim or TalosEtcdBackup (a watch mapped to one key) and once a minute. It writes a Kubernetes object in the controller's own namespace only (a Role rule on `ciliumnetworkpolicies`); it never edits an Ichor `spec` and sends nothing to a node.
+
+- Gating. It does nothing until a policy selecting `control-plane: controller-manager` exists in the namespace, or when `--no-cilium-policies` or `--talos-egress-policy=false` is set: a lone egress rule would itself put the pods in egress deny with no other allow. When Cilium's CRD is absent the list fails with a no-match error and it does nothing.
+- Order. `TalosClusterReconciler` calls `Sync` before `DiscoverAll`, so an address or CIDR added to `spec.discovery` is in the policy before the first probe is dialled; it returns the error instead of probing when the policy cannot be written, and waits a settle time (3 s) after a write for the agents to install the rule. The envtest spec "lets a newly added discovery address through before the first probe" fails if the order is swapped. Other reconcilers (TalosMachine) rely on the watch plus their normal retry: a machine added in the same second may fail one dial and succeed on the next backoff.
+- Static fallback. `networkPolicy.cilium.talosCIDRs` and `externalCIDRs` still render rules in the chart, next to the dynamic policy. `dynamicTalosEgress: false` restores the old `world` rules and passes `--talos-egress-policy=false`.
+- Not allowed by it: any port other than 50000, 6443, 2380 to machines, anything but the S3 URL's own port to its host, and names that are not valid DNS names or IPs.
+
+### Default on and migration
+
+- The installer Job and `ichor init` already applied the policies whenever Cilium was detected (ADR 0103). The chart now does the same: `networkPolicy.cilium.enabled` unset renders them when `.Capabilities.APIVersions.Has "cilium.io/v2/CiliumNetworkPolicy"`; `true` forces; `false` is the escape hatch (it also passes `--no-cilium-policies`). `helm template` has no cluster and renders none unless forced.
+- An upgrade that had them off gets them on. The chart's NOTES.txt prints a NOTICE on `helm upgrade`, the installer logs a NOTICE when it applies them, and both name the opt-out.
+- ichor-ui's serving port stays open to `world` and `cluster` by default (outer LB, NodePort, pinned port). `uiIngressCIDRs` narrows it.
+
+### Tests
+
+`dist/chart/netpol_egress_test.go`: auto-detect and escape hatch, no `world` for the controller, ichor-ui `world` limited to 443, the DNS L7 rule in both copies, every dialed port covered (from the Talos constants `ApidPort`, `DefaultControlPlanePort`, `EtcdPeerPort` and the dynamic policy's own port list), `metricsNamespaces`, fallback CIDRs. The existing `netpol_test.go` still holds chart equals kustomize and ingress ports equal the Deployments'. `internal/controller/talos_egress_test.go` (envtest with a minimal CiliumNetworkPolicy CRD): contents, no rewrite when unchanged, removal, gating, disabled, ordering before the probe, no probe when the policy cannot be written.
+
+### Needs hardware
+
+1. The DNS L7 rule on kube-dns works on Talos with Cilium 1.18 (no DNS timeouts on the controller after the upgrade), including TCP/53.
+2. `toFQDNs` for a `dns` cluster endpoint and an S3 host: a policy written just before the dial is in effect (the name manager must match addresses already cached; if not, the first dial after a change fails once).
+3. `toCIDRSet` matches a maintenance-mode machine and a machine of another cluster; nodes of Ichor's own cluster still match `host` or `remote-node`.
+4. `toServices` `k8sService` for an in-cluster MinIO.
+5. The UI demo path (outer LB, NodePort, pinned port) with default-deny ingress and `world` allowed on the serving port.
+6. Hubble shows no drops for controller and ichor-ui at steady state and while a newly added CIDR is discovered.

@@ -1,3 +1,6 @@
+# Named without the "ichor-" of the other roles on purpose: kustomize's namePrefix adds it, and the controller looks
+# the role up as internal/controller.ImpersonationRoleName ("ichor-ui-impersonate"), the chart's name too.
+# dist/chart/install_names_test.go checks that both install paths agree.
 # The users and Ichor role groups ichor-ui may impersonate (ADR 0108). The controller keeps the rules equal
 # to the IchorUsers that exist (internal/controller/impersonation_role.go); it starts with none, which
 # grants nothing. Never put a rule here without resourceNames: that would allow every name.
@@ -7,7 +10,7 @@ metadata:
   labels:
     app.kubernetes.io/name: ichor
     app.kubernetes.io/managed-by: kustomize
-  name: ichor-ui-impersonate
+  name: ui-impersonate
 rules: []
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -16,11 +19,11 @@ metadata:
   labels:
     app.kubernetes.io/name: ichor
     app.kubernetes.io/managed-by: kustomize
-  name: ichor-ui-impersonate
+  name: ui-impersonate
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: ichor-ui-impersonate
+  name: ui-impersonate
 subjects:
 - kind: ServiceAccount
   name: ichor-ui

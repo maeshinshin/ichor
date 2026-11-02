@@ -830,6 +830,21 @@ func (r *TalosMachineReconciler) drainNode(ctx context.Context, hostname string)
 		return err
 	}
 
+	// Mark the cordon as Ichor's own so it can be undone when the machine joins again (a Node an
+	// administrator cordoned is left alone).
+	if !node.Spec.Unschedulable {
+		patch := client.MergeFrom(node.DeepCopy())
+		if node.Annotations == nil {
+			node.Annotations = map[string]string{}
+		}
+
+		node.Annotations[cordonedByIchorAnnotation] = "removal"
+
+		if err := r.Patch(ctx, &node, patch); err != nil {
+			return fmt.Errorf("marking the cordon of node %q: %w", hostname, err)
+		}
+	}
+
 	// Unbounded, as before: removal is one blocking call under its own lock renewal (renewWhile).
 	return cordonAndDrain(newDrainHelper(ctx, r.KubeClient, 0), &node)
 }
@@ -891,4 +906,44 @@ func (r *TalosMachineReconciler) markNodeReset(ctx context.Context, nodeName str
 	if err := r.Patch(ctx, node, patch); err != nil {
 		logf.FromContext(ctx).Error(err, "marking the reset node", "node", nodeName)
 	}
+}
+
+// uncordonRejoinedNode undoes the cordon of a removal when the machine behind nodeName has joined
+// again: a reset machine's Node is kept, still cordoned by the drain. Only a Ready Node that carries
+// Ichor's reset annotation or Ichor's cordon marker is touched, so a cordon an administrator made
+// stays. A missing Node is not an error (the kubelet has not registered yet).
+func (r *TalosMachineReconciler) uncordonRejoinedNode(ctx context.Context, nodeName string) error {
+	if nodeName == "" {
+		return nil
+	}
+
+	var node corev1.Node
+	if err := r.Get(ctx, types.NamespacedName{Name: nodeName}, &node); err != nil {
+		return client.IgnoreNotFound(err)
+	}
+
+	_, reset := node.Annotations[nodeResetByIchorAnnotation]
+	_, cordoned := node.Annotations[cordonedByIchorAnnotation]
+
+	if (!reset && !cordoned) || !nodeIsReady(&node) {
+		return nil
+	}
+
+	// A rollout's own drain owns its marker while it runs (drain.go); leave that cordon to it.
+	if _, draining := node.Annotations[drainStartedAnnotation]; draining {
+		return nil
+	}
+
+	patch := client.MergeFrom(node.DeepCopy())
+	node.Spec.Unschedulable = false
+	delete(node.Annotations, nodeResetByIchorAnnotation)
+	delete(node.Annotations, cordonedByIchorAnnotation)
+
+	if err := r.Patch(ctx, &node, patch); err != nil {
+		return fmt.Errorf("uncordoning node %q after its machine joined again: %w", nodeName, err)
+	}
+
+	logf.FromContext(ctx).Info("uncordoned a node whose machine joined again", "node", nodeName)
+
+	return nil
 }

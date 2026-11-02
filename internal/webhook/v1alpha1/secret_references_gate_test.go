@@ -190,7 +190,13 @@ var _ = Describe("Secret-references gate", func() {
 
 		for name, mutate := range mutateS3 {
 			It("refuses an operator who changes s3."+name+", and admits an admin", func() {
-				for user, ok := range map[string]bool{operator: false, admin: true, testControllerUser: true} {
+				// Operator first: a map's random order let an admin change the value
+				// before it, turning the operator's update into an unchanged one.
+				for _, c := range []struct {
+					user string
+					ok   bool
+				}{{operator, false}, {admin, true}, {testControllerUser, true}} {
+					user, ok := c.user, c.ok
 					b := &ichorv1alpha1.TalosEtcdBackup{}
 					Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(backup), b)).To(Succeed())
 					mutate(&b.Spec.Destination.S3)

@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -63,15 +64,38 @@ func loadBundle(
 // use, so the two can never silently check (or redact) a different set
 // of fields than each other.
 func bundleSecretMaterial(bundle *secrets.Bundle) []string {
-	return []string{
-		bundle.Secrets.BootstrapToken,
-		bundle.TrustdInfo.Token,
-		bundle.Cluster.ID,
-		bundle.Cluster.Secret,
-		string(bundle.Certs.OS.Crt),
-		string(bundle.Certs.OS.Key),
-		string(bundle.Certs.K8s.Crt),
-		string(bundle.Certs.K8s.Key),
+	var out []string
+
+	collectStrings(reflect.ValueOf(bundle), &out)
+
+	return out
+}
+
+// collectStrings appends every non-empty string and []byte reachable from v (trimmed, so a PEM that lost
+// its trailing newline in an error text is still matched). Deriving the list from the type means a field
+// Talos adds to the bundle is scrubbed without anyone remembering to list it.
+func collectStrings(v reflect.Value, out *[]string) {
+	switch v.Kind() {
+	case reflect.Pointer:
+		if !v.IsNil() {
+			collectStrings(v.Elem(), out)
+		}
+	case reflect.Struct:
+		for i := range v.NumField() {
+			if v.Type().Field(i).IsExported() {
+				collectStrings(v.Field(i), out)
+			}
+		}
+	case reflect.String:
+		if s := strings.TrimSpace(v.String()); s != "" {
+			*out = append(*out, s)
+		}
+	case reflect.Slice:
+		if v.Type().Elem().Kind() == reflect.Uint8 {
+			if s := strings.TrimSpace(string(v.Bytes())); s != "" {
+				*out = append(*out, s)
+			}
+		}
 	}
 }
 

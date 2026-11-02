@@ -1,8 +1,16 @@
 {{- /*
-Ichor's CiliumNetworkPolicies, the chart's copy of config/cilium-network-policy. Needs
-Cilium's CiliumNetworkPolicy CRD, so it is off by default: turn it on once Cilium runs. Every
-port below is the one the Deployments open, from the same values.
+Ichor's CiliumNetworkPolicies, the chart's copy of config/cilium-network-policy. On by
+default where Cilium's CiliumNetworkPolicy API is served (networkPolicy.cilium.enabled null), forced
+either way by true or false. Every port below is the one the Deployments open, from the same values.
 */ -}}
+{{- /* "true" when the policies are rendered: forced by networkPolicy.cilium.enabled, or (unset) when the
+cluster serves Cilium's API. helm template has no cluster, so it renders nothing unless forced. */}}
+{{- define "ichor.cnp.enabled" -}}
+{{- $e := .Values.networkPolicy.cilium.enabled -}}
+{{- if kindIs "invalid" $e -}}
+{{- if .Capabilities.APIVersions.Has "cilium.io/v2/CiliumNetworkPolicy" }}true{{ end -}}
+{{- else if $e }}true{{ end -}}
+{{- end }}
 {{- define "ichor.cnp.meta" -}}
 labels:
   app.kubernetes.io/managed-by: {{ .ctx.Release.Service }}
@@ -29,6 +37,10 @@ namespace: {{ .ctx.Release.Namespace }}
       protocol: UDP
     - port: "53"
       protocol: TCP
+    # Through Cilium's DNS proxy, which lets the controller's toFQDNs policy learn addresses.
+    rules:
+      dns:
+      - matchPattern: "*"
 {{- end }}
 {{- /* Egress outside the cluster on the given TCP ports. The dot is a dict: ports, and cidrs. With cidrs the
 rule names them, without the whole world is allowed. */}}
@@ -49,11 +61,14 @@ rule names them, without the whole world is allowed. */}}
       protocol: TCP
     {{- end }}
 {{- end }}
-{{- if .Values.networkPolicy.cilium.enabled }}
+{{- if include "ichor.cnp.enabled" . }}
 {{- $name := include "ichor.name" . }}
 {{- $ports := .Values.networkPolicy.cilium.externalPorts }}
 {{- $external := dict "ports" $ports "cidrs" .Values.networkPolicy.cilium.externalCIDRs }}
 {{- $talosCIDRs := .Values.networkPolicy.cilium.talosCIDRs }}
+{{- $externalCIDRs := .Values.networkPolicy.cilium.externalCIDRs }}
+{{- $dynamic := .Values.networkPolicy.cilium.dynamicTalosEgress }}
+{{- $metricsNamespaces := .Values.networkPolicy.cilium.metricsNamespaces }}
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
@@ -98,9 +113,13 @@ spec:
       - port: "8081"
         protocol: TCP
   {{- if .Values.metrics.enabled }}
-  # /metrics: in-cluster scrapers only.
-  - fromEntities:
-    - cluster
+  # /metrics: in-cluster scrapers only; with metricsNamespaces, only pods of those namespaces.
+  - {{ if $metricsNamespaces }}fromEndpoints:
+    {{- range $metricsNamespaces }}
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: {{ . | quote }}
+    {{- end }}{{ else }}fromEntities:
+    - cluster{{ end }}
     toPorts:
     - ports:
       - port: {{ .Values.metrics.port | quote }}
@@ -108,11 +127,13 @@ spec:
   {{- end }}
   egress:
   {{- include "ichor.cnp.apiserver" . | nindent 2 }}
-  # Talos nodes: apid, and the API server's /readyz on a node's own address.
+  # Talos nodes of this cluster: apid, the API server's /readyz and etcd's peer port. Machines outside it
+  # come from ichor-controller-talos-egress (the controller keeps it), or from world when
+  # networkPolicy.cilium.dynamicTalosEgress is false.
   - toEntities:
     - host
     - remote-node
-    {{- if not $talosCIDRs }}
+    {{- if and (not $talosCIDRs) (not $dynamic) }}
     - world
     {{- end }}
     toPorts:
@@ -120,6 +141,8 @@ spec:
       - port: "50000"
         protocol: TCP
       - port: "6443"
+        protocol: TCP
+      - port: "2380"
         protocol: TCP
   {{- if $talosCIDRs }}
   - toCIDR:
@@ -132,10 +155,14 @@ spec:
         protocol: TCP
       - port: "6443"
         protocol: TCP
+      - port: "2380"
+        protocol: TCP
   {{- end }}
   {{- include "ichor.cnp.dns" . | nindent 2 }}
-  # TalosEtcdBackup's S3 endpoint.
+  {{- if or (not $dynamic) $externalCIDRs }}
+  # TalosEtcdBackup's S3 endpoint (dynamic mode: the controller's policy names it; these CIDRs are the fallback).
   {{- include "ichor.cnp.world" $external | nindent 2 }}
+  {{- end }}
 {{- end }}
 {{- if .Values.ichorUI.enabled }}
 ---
@@ -182,10 +209,11 @@ spec:
   {{- end }}
   egress:
   {{- include "ichor.cnp.apiserver" . | nindent 2 }}
+  # Talos nodes of this cluster; the rest by ichor-controller-talos-egress, which selects these pods too.
   - toEntities:
     - host
     - remote-node
-    {{- if not $talosCIDRs }}
+    {{- if and (not $talosCIDRs) (not $dynamic) }}
     - world
     {{- end }}
     toPorts:

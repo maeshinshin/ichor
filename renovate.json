@@ -1,0 +1,30 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", "helpers:pinGitHubActionDigests", "docker:pinDigests"],
+  "enabledManagers": ["gomod", "npm", "github-actions", "dockerfile", "nix", "custom.regex"],
+  "schedule": ["before 6am on monday"],
+  "prConcurrentLimit": 3,
+  "prHourlyLimit": 2,
+  "minimumReleaseAge": "3 days",
+  "labels": ["dependencies"],
+  "lockFileMaintenance": { "enabled": true, "schedule": ["before 6am on the first day of the month"] },
+  "vulnerabilityAlerts": { "schedule": ["at any time"], "labels": ["security"] },
+  "nix": { "enabled": true },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "The distroless base image in images.sh",
+      "managerFilePatterns": ["/^test/harness/ui-demo/images\\.sh$/"],
+      "matchStrings": ["BASE=(?<depName>[^:\\s]+):(?<currentValue>[^@\\s]+)@(?<currentDigest>sha256:[a-f0-9]+)"],
+      "datasourceTemplate": "docker"
+    }
+  ],
+  "packageRules": [
+    { "matchManagers": ["github-actions"], "groupName": "github actions" },
+    { "matchManagers": ["dockerfile", "custom.regex"], "groupName": "container base images" },
+    { "matchManagers": ["npm"], "matchUpdateTypes": ["minor", "patch"], "groupName": "ui npm minor and patch" },
+    { "matchManagers": ["gomod"], "matchUpdateTypes": ["minor", "patch"], "groupName": "go modules minor and patch" },
+    { "matchManagers": ["gomod"], "matchPackageNames": ["k8s.io/**", "sigs.k8s.io/**"], "groupName": "kubernetes libraries" },
+    { "matchManagers": ["gomod"], "matchPackageNames": ["github.com/siderolabs/**"], "groupName": "talos machinery" }
+  ]
+}

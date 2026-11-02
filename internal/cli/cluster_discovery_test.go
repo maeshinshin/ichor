@@ -31,12 +31,14 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
+const discoveryCIDR = "10.1.0.0/24"
+
 func discoveryTestCluster(t *testing.T) (client.Client, *apiClients) {
 	t.Helper()
 	setAPITestFlags(t, false)
 
 	cl := newTestCluster()
-	cl.Spec.Discovery = &ichorv1alpha1.TalosClusterDiscovery{Addresses: []string{"10.0.0.5"}, CIDRs: []string{"10.1.0.0/24"}}
+	cl.Spec.Discovery = &ichorv1alpha1.TalosClusterDiscovery{Addresses: []string{testEndpointAddr}, CIDRs: []string{discoveryCIDR}}
 	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(cl).Build()
 
 	return k8s, localClients(apiOpts, apiDeps{K8s: k8s})
@@ -53,19 +55,18 @@ func storedCLIDiscovery(t *testing.T, k8s client.Client) *ichorv1alpha1.TalosClu
 	return cl.Spec.Discovery
 }
 
-func discoveryCmdIO(in string) (*cobra.Command, *bytes.Buffer) {
+func discoveryCmdIO(in string) *cobra.Command {
 	cmd := &cobra.Command{}
-	out := &bytes.Buffer{}
 	cmd.SetIn(strings.NewReader(in))
-	cmd.SetOut(out)
+	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
 
-	return cmd, out
+	return cmd
 }
 
 func TestDiscoveryAddPicksTheCallByWhatWasTyped(t *testing.T) {
 	k8s, c := discoveryTestCluster(t)
-	cmd, _ := discoveryCmdIO("")
+	cmd := discoveryCmdIO("")
 
 	for _, target := range []string{"10.0.0.6", "192.168.0.9/24"} {
 		if err := runDiscoveryEdit(context.Background(), c, cmd, target, false); err != nil {
@@ -74,7 +75,7 @@ func TestDiscoveryAddPicksTheCallByWhatWasTyped(t *testing.T) {
 	}
 
 	d := storedCLIDiscovery(t, k8s)
-	if !slices.Equal(d.Addresses, []string{"10.0.0.5", "10.0.0.6"}) || !slices.Equal(d.CIDRs, []string{"10.1.0.0/24", "192.168.0.0/24"}) {
+	if !slices.Equal(d.Addresses, []string{testEndpointAddr, "10.0.0.6"}) || !slices.Equal(d.CIDRs, []string{discoveryCIDR, "192.168.0.0/24"}) {
 		t.Fatalf("got %+v", d)
 	}
 
@@ -86,8 +87,8 @@ func TestDiscoveryAddPicksTheCallByWhatWasTyped(t *testing.T) {
 func TestDiscoveryRemoveAsksBeforeRemovingARange(t *testing.T) {
 	k8s, c := discoveryTestCluster(t)
 
-	cmd, _ := discoveryCmdIO("n\n")
-	if err := runDiscoveryEdit(context.Background(), c, cmd, "10.1.0.0/24", true); err == nil || !strings.Contains(err.Error(), "aborted") {
+	cmd := discoveryCmdIO("n\n")
+	if err := runDiscoveryEdit(context.Background(), c, cmd, discoveryCIDR, true); err == nil || !strings.Contains(err.Error(), "aborted") {
 		t.Fatalf("want aborted, got %v", err)
 	}
 
@@ -95,14 +96,14 @@ func TestDiscoveryRemoveAsksBeforeRemovingARange(t *testing.T) {
 		t.Fatal("the range was removed without consent")
 	}
 
-	cmd, _ = discoveryCmdIO("y\n")
-	if err := runDiscoveryEdit(context.Background(), c, cmd, "10.1.0.0/24", true); err != nil {
+	cmd = discoveryCmdIO("y\n")
+	if err := runDiscoveryEdit(context.Background(), c, cmd, discoveryCIDR, true); err != nil {
 		t.Fatal(err)
 	}
 
 	// An address needs no question.
-	cmd, _ = discoveryCmdIO("")
-	if err := runDiscoveryEdit(context.Background(), c, cmd, "10.0.0.5", true); err != nil {
+	cmd = discoveryCmdIO("")
+	if err := runDiscoveryEdit(context.Background(), c, cmd, testEndpointAddr, true); err != nil {
 		t.Fatal(err)
 	}
 

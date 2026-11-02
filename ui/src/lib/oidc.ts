@@ -8,7 +8,8 @@
 // A sign-in choice from /auth/config: 'oidc' is the external IdP,
 // 'ichor' is ichor-ui's own issuer.
 export type AuthProvider = { id: string; issuer: string; clientId: string }
-export type AuthConfig = { enabled: boolean; providers: AuthProvider[] }
+// anonymous is set when no sign-in is configured: 'readonly' (reads only) or 'open' (--allow-unauthenticated).
+export type AuthConfig = { enabled: boolean; providers: AuthProvider[]; anonymous?: 'readonly' | 'open' }
 
 // The redirect URI each provider has registered: the issuer's UI client takes /auth/callback, the
 // external IdP keeps the page root.

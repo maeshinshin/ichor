@@ -29,7 +29,7 @@ import (
 
 func TestRPCBodyLimit(t *testing.T) {
 	mux := http.NewServeMux()
-	mountRPC(mux, &uiapi.Server{}, nil)
+	mountRPC(mux, &uiapi.Server{}, nil, true)
 
 	post := func(path string, n int) int {
 		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"x":"`+strings.Repeat("a", n)+`"}`))
@@ -51,7 +51,7 @@ func TestRPCBodyLimit(t *testing.T) {
 }
 
 func TestSecurityHeaders(t *testing.T) {
-	h := securityHeaders(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	h := securityHeaders(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), contentSecurityPolicy(false))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 
@@ -78,6 +78,12 @@ func TestSecurityHeaders(t *testing.T) {
 
 	if strings.Contains(csp, "script-src 'self' 'unsafe") {
 		t.Errorf("CSP allows inline script: %q", csp)
+	}
+}
+
+func TestExternalOIDCWidensConnectSrcOnly(t *testing.T) {
+	if got := contentSecurityPolicy(true); !strings.Contains(got, "connect-src 'self' https:;") || !strings.Contains(got, "script-src 'self';") {
+		t.Fatalf("csp = %q", got)
 	}
 }
 

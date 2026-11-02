@@ -991,8 +991,8 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 })
 
 // mustPass is the backup passphrase of bundle, which also keys the restore marker's HMAC.
-func mustPass(b *secrets.Bundle) string {
-	pass, err := etcdbackup.Passphrase(b)
+func mustPass(b *secrets.Bundle) etcdbackup.Key {
+	pass, err := etcdbackup.DeriveKey(b)
 	Expect(err).NotTo(HaveOccurred())
 
 	return pass

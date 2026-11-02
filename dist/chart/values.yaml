@@ -307,7 +307,8 @@ ichorUI:
 
   ## Who may download the new kubeconfig and talosconfig of a CA rotation from the UI. They hold cluster-admin private keys. Nobody may by default, including
   ## ichor-ui's own ServiceAccount. Ichor checks the "download" verb on talosclusters/credentials
-  ## as the signed-in user. Continuing a rotation does not need it (only patching the operation).
+  ## as the signed-in user, and the controller signs the certificates in the files (a TalosCredentialRequest), valid a year unless a shorter time is chosen. Continuing a rotation needs it too: the
+  ## check that the new kubeconfig works uses a ten-minute certificate asked for as the signed-in user.
   ##
   credentials:
     ## Groups to grant the verb to, with ichorUI.oidc.groupsPrefix applied. Only meaningful with

@@ -45,7 +45,7 @@ func TestRestoreObjectsAgainstFakeS3(t *testing.T) {
 
 	ctx := context.Background()
 
-	if m, err := GetMarker(ctx, st, "p/c", "pw"); err != nil || m != nil {
+	if m, err := GetMarker(ctx, st, "p/c", Key{Current: "pw"}); err != nil || m != nil {
 		t.Fatalf("no marker: got %v, %v", m, err)
 	}
 
@@ -60,11 +60,11 @@ func TestRestoreObjectsAgainstFakeS3(t *testing.T) {
 		Nodes: map[string]string{"cp-2": "node-2"}, Own: "cp-2",
 	}
 
-	if err := PutMarker(ctx, st, "p/c", "pw", want); err != nil {
+	if err := PutMarker(ctx, st, "p/c", Key{Current: "pw"}, want); err != nil {
 		t.Fatal(err)
 	}
 
-	got, err := GetMarker(ctx, st, "p/c", "pw")
+	got, err := GetMarker(ctx, st, "p/c", Key{Current: "pw"})
 	if err != nil || got == nil || !reflect.DeepEqual(got, want) {
 		t.Fatalf("marker round trip: %+v, %v", got, err)
 	}
@@ -95,7 +95,7 @@ func TestRestoreObjectsAgainstFakeS3(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if m, err := GetMarker(ctx, st, "p/c", "pw"); err != nil || m != nil {
+	if m, err := GetMarker(ctx, st, "p/c", Key{Current: "pw"}); err != nil || m != nil {
 		t.Fatalf("after delete: %v, %v", m, err)
 	}
 }
@@ -209,18 +209,18 @@ func TestMarkerSignature(t *testing.T) {
 	st := memStore{}
 	m := &RestoreMarker{Namespace: "ns", Step: wipingStep}
 
-	if err := PutMarker(ctx, st, "p", "pw", m); err != nil {
+	if err := PutMarker(ctx, st, "p", Key{Current: "pw"}, m); err != nil {
 		t.Fatal(err)
 	}
 
-	if _, err := GetMarker(ctx, st, "p", "other"); err == nil {
+	if _, err := GetMarker(ctx, st, "p", Key{Current: "other"}); err == nil {
 		t.Fatal("a marker read with another key must be refused")
 	}
 
 	forged := bytes.Replace(st["p/"+MarkerName], []byte(wipingStep), []byte("Rejoin"), 1)
 	st["p/"+MarkerName] = forged
 
-	if _, err := GetMarker(ctx, st, "p", "pw"); err == nil {
+	if _, err := GetMarker(ctx, st, "p", Key{Current: "pw"}); err == nil {
 		t.Fatal("an edited marker must be refused")
 	}
 
@@ -228,7 +228,7 @@ func TestMarkerSignature(t *testing.T) {
 	legacy, _ := json.Marshal(m)
 	st["p/"+MarkerName] = legacy
 
-	got, err := GetMarker(ctx, st, "p", "pw")
+	got, err := GetMarker(ctx, st, "p", Key{Current: "pw"})
 	if err != nil || got == nil || got.Step != wipingStep {
 		t.Fatalf("legacy marker: %+v, %v", got, err)
 	}

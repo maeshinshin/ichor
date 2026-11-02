@@ -38,7 +38,7 @@ const downloadVerb = "download"
 
 const credentialClusters = "talosclusters"
 
-// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-taloscredentialrequest,mutating=false,failurePolicy=fail,sideEffects=None,groups=ichor.maesh.dev,resources=taloscredentialrequests,verbs=create,versions=v1alpha1,name=vtaloscredentialrequest-v1alpha1.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-taloscredentialrequest,mutating=false,failurePolicy=fail,timeoutSeconds=5,sideEffects=None,groups=ichor.maesh.dev,resources=taloscredentialrequests,verbs=create,versions=v1alpha1,name=vtaloscredentialrequest-v1alpha1.kb.io,admissionReviewVersions=v1
 
 // CredentialRequestHandler is the gate in front of the controller's signing key (ADR 0108). A
 // TalosCredentialRequest asks the controller, which alone reads the secrets bundle, for a certificate; the

@@ -219,6 +219,7 @@ webhooks:
     resources:
     - taloscredentialrequests
   sideEffects: None
+  timeoutSeconds: 5
 - admissionReviewVersions:
   - v1
   clientConfig:

@@ -58,6 +58,7 @@ rules:
   - ichor-ichor-break-glass-role
   - ichor-ichor-credentials-role
   - ichor-ichor-diagnostics-role
+  - ichor-ichor-ui-impersonate
   - ichor-ichor-ui-role
   - ichor-ichorinstallation-admin-role
   - ichor-ichorinstallation-editor-role

@@ -418,6 +418,12 @@ type TalosClusterSpec struct {
 	// Talos default: no JWT authenticator, anonymous access to the health endpoints only.
 	// +optional
 	Authentication *TalosClusterAuthentication `json:"authentication,omitempty"`
+
+	// security holds opt-in hardening of this cluster (ADR 0108): an ingress firewall, Cilium
+	// WireGuard encryption, Pod Security levels, an audit policy preset and disk encryption.
+	// Unset (the default) changes nothing.
+	// +optional
+	Security *TalosClusterSecurity `json:"security,omitempty"`
 }
 
 // TalosClusterAuthentication is spec.authentication (ADR 0094, Decision 3). Each enabled entry

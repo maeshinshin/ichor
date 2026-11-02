@@ -243,6 +243,22 @@ func BuildConfig(
 		return nil, err
 	}
 
+	// Opt-in hardening (ADR 0108): each step returns cfg untouched when its option is unset.
+	if err := ValidateSecurity(cluster); err != nil {
+		return nil, fmt.Errorf("render: spec.security: %w", err)
+	}
+
+	for _, inject := range []func() (coreconfig.Provider, error){
+		func() (coreconfig.Provider, error) { return injectFirewall(cfg, cluster, machineType) },
+		func() (coreconfig.Provider, error) { return injectPodSecurity(cfg, cluster, machineType) },
+		func() (coreconfig.Provider, error) { return injectAudit(cfg, cluster, machineType) },
+		func() (coreconfig.Provider, error) { return injectDiskEncryption(cfg, cluster) },
+	} {
+		if cfg, err = inject(); err != nil {
+			return nil, err
+		}
+	}
+
 	// Who the kube-apiserver trusts to sign users in (ADR 0094): the typed KubeAuthenticationConfig.
 	cfg, err = injectAuthentication(cfg, contract, cluster, machineType, sys)
 	if err != nil {

@@ -25,3 +25,12 @@ A person looking at a cluster could not see its nodes, and there was no way to b
 - Not tested in a browser against a write: the screenshots only navigate. The Go side is covered by fake-client tests; the UI logic by node tests.
 - A node's own Talos version is not on the cluster page; revisit if a cheap read appears.
 - The proposed node actions (reboot, shutdown per node, ADR 0082) will use `ConfirmDialog` and have a place in the node page header.
+
+## Amendment (2026-11-02): ranges and removal
+
+Adding a node must also work for a whole range, not only one address. The decisions:
+
+1. **New RPCs** (append-only): `ClusterService.AddDiscoveryCidr`, `RemoveDiscoveryAddress` and `RemoveDiscoveryCidr`. Each reads the cluster, changes only `spec.discovery` and writes it as the caller (impersonated, so RBAC is the API server's), and returns the stored cluster plus an `AuditRecord` (`add-discovery-cidr`, `remove-discovery-address`, `remove-discovery-cidr`). A range must be IPv4 and /24 or smaller (the CRD rule, ADR 0011), is stored masked (`192.168.0.5/24` becomes `192.168.0.0/24`), and is refused as `InvalidArgument` with the reason when it is larger, not IPv4, already listed, or would be the fifth. Removing something not listed is `InvalidArgument` too. Removing a scan target never touches machines already found.
+2. **Immediate scan.** Nothing new is needed in the controller: `TalosClusterReconciler` watches `TalosCluster` without a predicate, so the spec write itself enqueues the cluster and `DiscoverAll` runs at once instead of at the 5 minute requeue. The controller still never writes `spec` (a test pins that one pass probes every address of a declared range). Machines found in the range show up as pending in the existing view, which the page polls every 5 seconds.
+3. **UI.** One input takes an address or a CIDR; a slash means a range. It is checked client-side with the same rules (`lib/discovery.ts`) and calls the matching RPC. Every listed address and range has a remove button (ghost icon button with an aria-label); removing a range asks first in a `ConfirmDialog`, an address does not.
+4. **CLI.** `ichor cluster discovery list|add|remove [--cluster NAME]`, through ichor-ui like the other writes; `add` and `remove` pick the RPC by the slash, and `remove` of a range asks unless `--yes`.

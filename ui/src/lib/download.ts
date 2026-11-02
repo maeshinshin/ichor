@@ -19,7 +19,7 @@ export type DiagnosticsDownloadRequest =
   | { kind: 'packet-capture'; capture: Pick<CapturePacketsRequest, 'interface' | 'bpfFilter' | 'durationSeconds'> & { machine: Ref } }
 
 // The new credentials of a CA rotation (docs/adr/0093) are saved the same way.
-export type DownloadRequest = DiagnosticsDownloadRequest | { kind: 'ca-credentials'; operation: Ref }
+export type DownloadRequest = DiagnosticsDownloadRequest | { kind: 'ca-credentials'; operation: Ref; lifetimeSeconds?: number; readOnly?: boolean }
 
 function open(req: DownloadRequest, signal: AbortSignal): AsyncIterable<{ filename: string; contentType: string; data: Uint8Array }> {
   switch (req.kind) {
@@ -30,7 +30,10 @@ function open(req: DownloadRequest, signal: AbortSignal): AsyncIterable<{ filena
     case 'packet-capture':
       return diagnosticsClient.capturePackets(req.capture, { signal })
     case 'ca-credentials':
-      return operationClient.downloadCARotationCredentials({ operation: req.operation }, { signal })
+      return operationClient.downloadCARotationCredentials(
+        { operation: req.operation, lifetimeSeconds: BigInt(req.lifetimeSeconds ?? 0), readOnly: req.readOnly ?? false },
+        { signal },
+      )
   }
 }
 

@@ -4050,7 +4050,7 @@ spec:
                     - message: kmsEndpoint is required for type kms and not allowed
                         otherwise
                       rule: 'self.type == ''kms'' ? has(self.kmsEndpoint) && self.kmsEndpoint
-                        != '''' : !has(self.kmsEndpoint)'
+                        != ” : !has(self.kmsEndpoint)'
                     - message: requireSecureBoot applies to type tpm only
                       rule: self.type == 'tpm' || !has(self.requireSecureBoot)
                   firewall:

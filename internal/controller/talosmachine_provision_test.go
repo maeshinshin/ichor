@@ -174,6 +174,24 @@ var _ = Describe("TalosMachineReconciler provisioning a node in maintenance mode
 		Expect(maint.applyCalls).To(BeEmpty())
 	})
 
+	// The webhook already refuses these, but a CR written while it was down (or before it
+	// existed) must still not make the controller push CA keys to the controller's own network position.
+	It("never probes or applies to an endpoint that is loopback, link-local or inside the cluster's pod range", func() {
+		setup(roleWorker)
+		installDiskPatch(roleWorker)
+
+		for _, ep := range []string{"127.0.0.1:50000", "169.254.169.254:80", "[::1]:50000"} {
+			got := fetchMachine(machine)
+			got.Spec.Endpoint = ep
+			Expect(k8sClient.Update(ctx, got)).To(Succeed())
+
+			got = reconcileOnce()
+			Expect(maint.applyCalls).To(BeEmpty(), ep)
+			Expect(readyCondition(got).Reason).To(Equal(reasonEndpointRefused), ep)
+			Expect(got.Status.ConfigStoredAt).To(BeNil(), ep)
+		}
+	})
+
 	It("refuses to apply a configuration that names no install disk", func() {
 		setup(roleWorker)
 

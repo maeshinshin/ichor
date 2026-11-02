@@ -17,7 +17,6 @@ limitations under the License.
 package render
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/siderolabs/talos/pkg/machinery/constants"
@@ -27,22 +26,6 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/cni"
 )
-
-// cniPaths keeps the CNI-relevant parts of a rendered config (ADR 0104 1.6): the cni block of the
-// legacy cluster document, and the flannel, kube-proxy and KubePrism documents.
-func cniPaths(out string) string {
-	var keep []string
-
-	for d := range strings.SplitSeq(out, "---\n") {
-		for _, kind := range []string{"KubeFlannelCNIConfig", "KubeProxyConfig", "KubePrismConfig"} {
-			if strings.Contains(d, "kind: "+kind) {
-				keep = append(keep, d)
-			}
-		}
-	}
-
-	return strings.Join(keep, "---\n")
-}
 
 // TestNoCNIAdoptedClusterRendersTheLiveConfiguration is the render side of ADR 0104 1.6. A cluster
 // adopted with no CNI has, live, no CNI selected (`cluster.network.cni.name: none`, or from the
@@ -75,7 +58,7 @@ func TestNoCNIAdoptedClusterRendersTheLiveConfiguration(t *testing.T) {
 		t.Run("v1.14/"+proxy, func(t *testing.T) {
 			out := renderFor(t, versionContract, handedOver(proxy))
 
-			if got := cniPaths(out); got != want {
+			if got := cniDocs(out, "KubeFlannelCNIConfig", "KubeProxyConfig", "KubePrismConfig"); got != want {
 				t.Errorf("CNI documents differ from the live no-CNI fixture:\n got: %q\nwant: %q", got, want)
 			}
 

@@ -1,15 +1,32 @@
 package oidcissuer
 
 import (
+	"net/http"
+	"sort"
 	"sync"
 	"time"
 )
 
 const (
-	freeFailures   = 5
-	maxBackoff     = 15 * time.Minute
-	maxTrackedKeys = 10000
+	freeFailures = 5
+	maxBackoff   = 15 * time.Minute
+	// maxTrackedKeys bounds each table. When full, the entries with the fewest failures go first
+	// (oldest first among equals), so flooding with fresh names evicts other fresh names and never
+	// a key that is already being slowed down.
+	maxTrackedKeys = 50000
 	trackedIdle    = time.Hour
+
+	// Per source: a looser limit than per (user, source), because clients behind one NAT or
+	// proxy share a source. It only ever slows, to at most srcMaxBackoff.
+	srcFreeFailures = 30
+	srcMaxBackoff   = time.Minute
+
+	// Per user, from any source: past userCeilingFailures failures within userCeilingWindow every
+	// login of that user waits userCeilingDelay before its password is checked. The delay is
+	// never a refusal, so an attacker cannot lock a user out with it, only cap the guess rate.
+	userCeilingFailures = 30
+	userCeilingWindow   = time.Hour
+	userCeilingDelay    = 2 * time.Second
 )
 
 type failState struct {
@@ -17,28 +34,99 @@ type failState struct {
 	last time.Time
 }
 
-// Backoff counts failed logins per key (user name or source IP) in memory:
-// after five failures a key must wait 1 s, 2 s, 4 s ... up to 15 minutes since
-// its last failure. It is per replica by design. The issuer and the
-// UserService password change share it.
-type Backoff struct {
+// failTable is a bounded map of failure counters.
+type failTable struct {
 	mu sync.Mutex
 	m  map[string]failState
 }
 
-// NewBackoff returns an empty Backoff.
-func NewBackoff() *Backoff { return &Backoff{m: map[string]failState{}} }
+// bump counts one failure of key at now and returns the new state. window > 0 restarts the
+// count when the last failure is older than window.
+func (t *failTable) bump(key string, now time.Time, window time.Duration) failState {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.m == nil {
+		t.m = map[string]failState{}
+	}
+	if _, ok := t.m[key]; !ok && len(t.m) >= maxTrackedKeys {
+		t.evict(now)
+	}
+	s := t.m[key]
+	if window > 0 && now.Sub(s.last) > window {
+		s.n = 0
+	}
+	s.n++
+	s.last = now
+	t.m[key] = s
+	return s
+}
+
+func (t *failTable) get(key string) (failState, bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	s, ok := t.m[key]
+	return s, ok
+}
+
+func (t *failTable) forget(key string) {
+	t.mu.Lock()
+	delete(t.m, key)
+	t.mu.Unlock()
+}
+
+// evict makes room: idle entries first, then a tenth of the table, fewest failures and oldest first.
+func (t *failTable) evict(now time.Time) {
+	for k, s := range t.m {
+		if now.Sub(s.last) > trackedIdle {
+			delete(t.m, k)
+		}
+	}
+	if len(t.m) < maxTrackedKeys {
+		return
+	}
+	type entry struct {
+		k string
+		s failState
+	}
+	all := make([]entry, 0, len(t.m))
+	for k, s := range t.m {
+		all = append(all, entry{k, s})
+	}
+	sort.Slice(all, func(i, j int) bool {
+		if all[i].s.n != all[j].s.n {
+			return all[i].s.n < all[j].s.n
+		}
+		return all[i].s.last.Before(all[j].s.last)
+	})
+	for _, e := range all[:len(all)/10+1] {
+		delete(t.m, e.k)
+	}
+}
+
+// Backoff counts failed attempts per key in memory: after free failures a key
+// must wait 1 s, 2 s, 4 s ... up to max since its last failure. It is per
+// replica: with N replicas an attacker gets N times the free
+// guesses. The login keys it by (user, source); the UserService password
+// change keys it by the signed-in user.
+type Backoff struct {
+	t    failTable
+	free int
+	max  time.Duration
+}
+
+// NewBackoff returns an empty Backoff with five free failures and a 15 minute ceiling.
+func NewBackoff() *Backoff { return &Backoff{free: freeFailures, max: maxBackoff} }
+
+func newSourceBackoff() *Backoff { return &Backoff{free: srcFreeFailures, max: srcMaxBackoff} }
 
 // Wait returns how long key must still wait; zero means it may try.
 func (b *Backoff) Wait(key string, now time.Time) time.Duration {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	s, ok := b.m[key]
-	if !ok || s.n < freeFailures {
+	s, ok := b.t.get(key)
+	if !ok || s.n < b.free {
 		return 0
 	}
-	shift := min(s.n-freeFailures, 20)
-	d := min(time.Second<<shift, maxBackoff)
+	shift := min(s.n-b.free, 20)
+	d := min(time.Second<<shift, b.max)
 	if left := s.last.Add(d).Sub(now); left > 0 {
 		return left
 	}
@@ -46,36 +134,85 @@ func (b *Backoff) Wait(key string, now time.Time) time.Duration {
 }
 
 // Fail records a failed attempt for key at now.
-func (b *Backoff) Fail(key string, now time.Time) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if len(b.m) >= maxTrackedKeys {
-		for k, s := range b.m {
-			if now.Sub(s.last) > trackedIdle {
-				delete(b.m, k)
-			}
-		}
-		for k := range b.m { // still full: evict arbitrary entries
-			if len(b.m) < maxTrackedKeys {
-				break
-			}
-			delete(b.m, k)
-		}
-	}
-	s := b.m[key]
-	s.n++
-	s.last = now
-	b.m[key] = s
-}
+func (b *Backoff) Fail(key string, now time.Time) { b.t.bump(key, now, 0) }
 
 // Reset forgets the failures of key, after a success.
-func (b *Backoff) Reset(key string) {
-	b.mu.Lock()
-	delete(b.m, key)
-	b.mu.Unlock()
+func (b *Backoff) Reset(key string) { b.t.forget(key) }
+
+// userCeiling counts failures per user across all sources.
+type userCeiling struct{ t failTable }
+
+// delay is how long a login of user waits before its password is checked.
+func (c *userCeiling) delay(user string, now time.Time) time.Duration {
+	if s, ok := c.t.get(user); ok && s.n >= userCeilingFailures && now.Sub(s.last) <= userCeilingWindow {
+		return userCeilingDelay
+	}
+	return 0
 }
 
-// jtiSet remembers consumed authorization-code ids until they expire.
+func (c *userCeiling) fail(user string, now time.Time) { c.t.bump(user, now, userCeilingWindow) }
+
+// bucket is a token-bucket rate limit per source: burst requests at once, rate per second after.
+type bucket struct {
+	mu          sync.Mutex
+	m           map[string]bucketState
+	rate, burst float64
+}
+
+type bucketState struct {
+	tokens float64
+	at     time.Time
+}
+
+const maxBuckets = 20000
+
+func newBucket(rate, burst float64) *bucket { return &bucket{m: map[string]bucketState{}, rate: rate, burst: burst} }
+
+// allow takes a token for key; false means the source is over its rate.
+func (b *bucket) allow(key string, now time.Time) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	s, ok := b.m[key]
+	if !ok {
+		if len(b.m) >= maxBuckets {
+			// Drop sources that have refilled completely; they cost nothing to forget. A full table
+			// of active sources is an attack by that many addresses: refuse the new one.
+			for k, v := range b.m {
+				if v.tokens+now.Sub(v.at).Seconds()*b.rate >= b.burst {
+					delete(b.m, k)
+				}
+			}
+			if len(b.m) >= maxBuckets {
+				return false
+			}
+		}
+		s = bucketState{tokens: b.burst, at: now}
+	}
+	if dt := now.Sub(s.at).Seconds(); dt > 0 { // a clock step back refills nothing
+		s.tokens = min(b.burst, s.tokens+dt*b.rate)
+		s.at = now
+	}
+	ok = s.tokens >= 1
+	if ok {
+		s.tokens--
+	}
+	b.m[key] = s
+	return ok
+}
+
+// limit wraps h with the per-source rate limit.
+func (i *Issuer) limit(b *bucket, h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !b.allow(i.clientIP(r), i.cfg.Now()) {
+			w.Header().Set("Retry-After", "1")
+			oauthError(w, http.StatusTooManyRequests, "rate_limited", "too many requests")
+			return
+		}
+		h(w, r)
+	}
+}
+
+// jtiSet remembers consumed token ids until they expire.
 type jtiSet struct {
 	mu sync.Mutex
 	m  map[string]time.Time

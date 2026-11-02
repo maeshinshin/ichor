@@ -64,7 +64,7 @@ func TestLocalVerifierChecksIssuerAudienceAndSignature(t *testing.T) {
 
 	future := time.Now().Add(time.Minute)
 
-	if sub, err := v.Verify(context.Background(), mint(key, testIssuer, "ichor-ui", future)); err != nil || sub != "alice" {
+	if sub, _, err := v.Verify(context.Background(), mint(key, testIssuer, "ichor-ui", future)); err != nil || sub != "alice" {
 		t.Fatalf("valid token: %q %v", sub, err)
 	}
 
@@ -74,7 +74,7 @@ func TestLocalVerifierChecksIssuerAudienceAndSignature(t *testing.T) {
 		"other key":     mint(other, testIssuer, "ichor-ui", future),
 		"expired":       mint(key, testIssuer, "ichor-ui", time.Now().Add(-time.Hour)),
 	} {
-		if _, err := v.Verify(context.Background(), tok); err == nil {
+		if _, _, err := v.Verify(context.Background(), tok); err == nil {
 			t.Errorf("%s accepted", name)
 		}
 	}

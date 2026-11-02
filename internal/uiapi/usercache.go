@@ -45,12 +45,14 @@ type UserCache struct {
 
 	mu sync.Mutex
 	m  map[string]cachedUser
-	mc map[string]cachedMustChange
+	mc map[string]cachedSession
 }
 
-type cachedMustChange struct {
-	v  bool
-	at time.Time
+// cachedSession is what a token check needs from the credentials entry.
+type cachedSession struct {
+	mustChange bool
+	notBefore  time.Time
+	at         time.Time
 }
 
 type cachedUser struct {
@@ -105,38 +107,47 @@ func (c *UserCache) Forget(name string) {
 }
 
 // MustChange reports whether name's credentials entry demands a password
-// change, cached for at most UserCacheTTL like Get. A user with no entry (or
-// no credentials Secret) is not flagged; a read error is returned so callers
-// can fail closed.
+// change; see Session.
 func (c *UserCache) MustChange(ctx context.Context, name string) (bool, error) {
+	mc, _, err := c.Session(ctx, name)
+
+	return mc, err
+}
+
+// Session returns name's credentials entry's mustChange and notBefore, cached for at
+// most UserCacheTTL like Get: a revoke or password change ends the user's tokens on
+// this replica within that time. A user with no entry (or no credentials Secret) is
+// not flagged and has a zero notBefore; a read error is returned so callers can fail
+// closed.
+func (c *UserCache) Session(ctx context.Context, name string) (mustChange bool, notBefore time.Time, err error) {
 	c.mu.Lock()
 	e, ok := c.mc[name]
 	c.mu.Unlock()
 
 	if ok && c.now().Sub(e.at) < UserCacheTTL {
-		return e.v, nil
+		return e.mustChange, e.notBefore, nil
 	}
 
 	var sec corev1.Secret
 
-	err := c.Reader.Get(ctx, types.NamespacedName{Namespace: c.Namespace, Name: ichorauth.CredentialsSecretName}, &sec)
+	err = c.Reader.Get(ctx, types.NamespacedName{Namespace: c.Namespace, Name: ichorauth.CredentialsSecretName}, &sec)
 	if err != nil && !apierrors.IsNotFound(err) {
-		return false, err
+		return false, time.Time{}, err
 	}
 
-	v := false
+	s := cachedSession{at: c.now()}
 
 	if cred, perr := ichorauth.ParseCredential(sec.Data[name]); perr == nil {
-		v = cred.MustChange
+		s.mustChange, s.notBefore = cred.MustChange, cred.NotBefore
 	}
 
 	c.mu.Lock()
 	if c.mc == nil {
-		c.mc = map[string]cachedMustChange{}
+		c.mc = map[string]cachedSession{}
 	}
 
-	c.mc[name] = cachedMustChange{v: v, at: c.now()}
+	c.mc[name] = s
 	c.mu.Unlock()
 
-	return v, nil
+	return s.mustChange, s.notBefore, nil
 }

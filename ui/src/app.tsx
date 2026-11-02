@@ -107,7 +107,7 @@ function Authenticated({ path }: { path: string }) {
     const oidc = login.providers.find((p) => p.id === 'oidc') ?? null
     return <SignIn ichor={!!ichor} oidc={oidc} signIn={async (f) => { await passwordSignIn(ichor!, f); login.signedIn() }} />
   }
-  if (who.me?.mustChangePassword) return <MustChangePassword onDone={who.reload} />
+  if (who.me?.mustChangePassword) return <MustChangePassword />
 
   return (
     <AppShell

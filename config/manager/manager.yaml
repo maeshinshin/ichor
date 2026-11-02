@@ -5,6 +5,15 @@ metadata:
     control-plane: controller-manager
     app.kubernetes.io/name: ichor
     app.kubernetes.io/managed-by: kustomize
+    # Pod Security Admission: every pod in this namespace already meets "restricted"
+    # (non-root, seccomp RuntimeDefault, no privilege escalation, all capabilities dropped, no host
+    # namespaces or hostPath). The Cilium Helm Job needs hostNetwork and runs in kube-system.
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.32
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
   name: system
 ---
 apiVersion: apps/v1
@@ -55,8 +64,11 @@ spec:
         # This ensures that deployments meet the highest security requirements for Kubernetes.
         # For more details, see: https://kubernetes.io/docs/concepts/security/pod-security-standards/#restricted
         runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
         seccompProfile:
           type: RuntimeDefault
+      priorityClassName: ichor-critical
       containers:
       - command:
         - /manager
@@ -134,3 +146,18 @@ spec:
         effect: NoSchedule
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10
+---
+# Keeps the controller (the only Talos writer) and the UI from being evicted before ordinary
+# workloads under node pressure. A user-namespace pod cannot use system-cluster-critical, so Ichor
+# ships its own class, below the system ones.
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: critical
+  labels:
+    app.kubernetes.io/name: ichor
+    app.kubernetes.io/managed-by: kustomize
+value: 1000000
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority
+description: Ichor controller and UI pods.

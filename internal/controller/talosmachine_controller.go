@@ -412,11 +412,6 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return res, err
 	}
 
-	// A machine that was reset and approved again comes back to its old Node, still cordoned by the drain.
-	if err := r.uncordonRejoinedNode(ctx, m.Status.NodeName); err != nil {
-		log.Error(err, "uncordoning the rejoined node")
-	}
-
 	// Step 3: work out which field paths changed and what that implies. No path means the node
 	// already has the rendered configuration, in the same bytes or in another form (legacy mirrors).
 	paths, err := changedPaths(current, rendered, hash)
@@ -507,12 +502,16 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 				driftNote, strings.Join(paths, ", ")))
 
 	default:
+		log.Info("applying the rendered configuration without a reboot", "machine", m.Name, "paths", paths, "drift", drifted)
+
 		if err := talos.ApplyNoReboot(ctx, rendered); err != nil {
 			log.Error(err, "applying rendered configuration")
 
 			return r.retryLater(ctx, &m, reasonApplyFailed,
 				"applying rendered configuration failed")
 		}
+
+		log.Info("applied the rendered configuration", "machine", m.Name, "configHash", hash)
 
 		m.Status.AppliedConfigHash = hash
 		m.Status.ObservedInputsHash = inputsHash
@@ -590,6 +589,11 @@ func (r *TalosMachineReconciler) readNode(
 		}
 
 		cancelName()
+	}
+
+	// A machine that was reset and approved again comes back to its old Node, still cordoned by the drain.
+	if uerr := r.uncordonRejoinedNode(ctx, m.Status.NodeName); uerr != nil {
+		logf.FromContext(ctx).Error(uerr, "uncordoning the rejoined node")
 	}
 
 	res, stop, err = r.followStage(ctx, talos, m)

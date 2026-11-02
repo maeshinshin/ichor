@@ -21,7 +21,10 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -30,6 +33,39 @@ import (
 
 // Ichor-ui may impersonate exactly the Ichor users that exist, and the groups their roles name.
 var _ = Describe("impersonation role", func() {
+	It("reports on the IchorInstallation, with an Event, when the role does not exist", func() {
+		ns := "ichor-impersonation-missing"
+		Expect(k8sClient.Create(ctx, &corev1.Namespace{Name: ns})).To(Succeed())
+
+		role := &rbacv1.ClusterRole{Name: ImpersonationRoleName}
+		Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, role))).To(Succeed())
+		DeferCleanup(func() { Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, &rbacv1.ClusterRole{Name: ImpersonationRoleName}))).To(Succeed()) })
+
+		createInstallation("v0.1.0")
+
+		rec := record.NewFakeRecorder(4)
+		r := &ImpersonationRoleReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: ns, Recorder: rec}
+		_, err := r.Reconcile(ctx, ctrl.Request{Name: ImpersonationRoleName})
+		Expect(err).NotTo(HaveOccurred())
+
+		condition := func() *metav1.Condition {
+			var inst ichorv1alpha1.IchorInstallation
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}, &inst)).To(Succeed())
+
+			return meta.FindStatusCondition(inst.Status.Conditions, ConditionImpersonationRole)
+		}
+
+		Expect(condition()).NotTo(BeNil())
+		Expect(condition().Status).To(Equal(metav1.ConditionFalse))
+		Expect(condition().Message).To(ContainSubstring(ImpersonationRoleName))
+		Expect(rec.Events).To(Receive(ContainSubstring("RoleMissing")))
+
+		Expect(k8sClient.Create(ctx, &rbacv1.ClusterRole{Name: ImpersonationRoleName})).To(Succeed())
+		_, err = r.Reconcile(ctx, ctrl.Request{Name: ImpersonationRoleName})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(condition().Status).To(Equal(metav1.ConditionTrue))
+	})
+
 	It("lists the IchorUsers and their role groups by name, and nothing when there are none", func() {
 		ns := "ichor-impersonation"
 		Expect(k8sClient.Create(ctx, &corev1.Namespace{Name: ns})).To(Succeed())

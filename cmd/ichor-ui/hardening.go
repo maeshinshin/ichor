@@ -25,7 +25,7 @@ import (
 	"connectrpc.com/connect"
 	"github.com/go-logr/stdr"
 	"k8s.io/client-go/rest"
-	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
+	"github.com/maeshinshin/ichor/internal/metricsauth"
 
 	"github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1/ichorv1alpha1connect"
 	"github.com/maeshinshin/ichor/internal/uiapi"
@@ -124,7 +124,7 @@ func authenticatedMetrics(cfg *rest.Config, h http.Handler) (http.Handler, error
 		return nil, err
 	}
 
-	filter, err := filters.WithAuthenticationAndAuthorization(cfg, hc)
+	filter, err := metricsauth.WithAuthenticationAndAuthorization(cfg, hc)
 	if err != nil {
 		return nil, err
 	}

@@ -87,7 +87,8 @@ func (v *TalosClusterCustomValidator) ValidateCreate(ctx context.Context, obj *i
 		return nil, err
 	}
 
-	if err := v.validateSecurityCreate(ctx, obj); err != nil {
+	warns, err := v.validateSecurityCreate(ctx, obj)
+	if err != nil {
 		return nil, err
 	}
 
@@ -95,7 +96,7 @@ func (v *TalosClusterCustomValidator) ValidateCreate(ctx context.Context, obj *i
 		return nil, err
 	}
 
-	return nil, validateVersion("kubernetesVersion", obj.Spec.KubernetesVersion)
+	return warns, validateVersion("kubernetesVersion", obj.Spec.KubernetesVersion)
 }
 
 // validateVersion refuses a Talos or Kubernetes version that is not a semantic version. The CRD
@@ -155,7 +156,8 @@ func (v *TalosClusterCustomValidator) ValidateUpdate(ctx context.Context, oldObj
 		return nil, err
 	}
 
-	if err := v.validateSecurityUpdate(ctx, oldObj, newObj); err != nil {
+	warns, err := v.validateSecurityUpdate(ctx, oldObj, newObj)
+	if err != nil {
 		return nil, err
 	}
 
@@ -168,10 +170,10 @@ func (v *TalosClusterCustomValidator) ValidateUpdate(ctx context.Context, oldObj
 			return nil, err
 		}
 
-		return nil, v.BreakGlass.checkLastWorker(ctx, workers, "talosclusters", newObj.Name, newObj.Namespace)
+		return warns, v.BreakGlass.checkLastWorker(ctx, workers, "talosclusters", newObj.Name, newObj.Namespace)
 	}
 
-	return nil, nil
+	return warns, nil
 }
 
 // validateChangedVersions checks only the version fields an update changes.

@@ -13,6 +13,7 @@ jobs:
       contents: read
     name: Run on Ubuntu
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Clone the code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -40,8 +41,19 @@ jobs:
             echo "devShell Go $have satisfies the go.mod floor of $want"
           '
 
+      # Fail on drift instead of rewriting go.mod/go.sum in CI, and check the module cache hashes.
+      - name: Verify go.mod, go.sum and the module cache
+        run: nix develop --command bash -c "go mod tidy -diff && go mod verify"
+
       - name: Running Tests
-        run: nix develop --command bash -c "go mod tidy && make test"
+        run: nix develop --command make test
+
+      # Known-vulnerable Go and npm dependencies fail the build (ADR 0108).
+      - name: govulncheck
+        run: nix develop --command govulncheck ./...
+
+      - name: npm audit (production dependencies, high and above)
+        run: nix develop --command bash -c "cd ui && npm audit --omit=dev --audit-level=high"
 
       - name: Running UI CI (type-check, lint, unit tests, build)
         run: nix develop --command make ui-ci
@@ -56,6 +68,7 @@ jobs:
       contents: read
     name: Generated manifests are up to date
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Clone the code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2

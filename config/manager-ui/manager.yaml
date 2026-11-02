@@ -89,5 +89,9 @@ spec:
         secret:
           secretName: ichor-oidc-tls
           optional: true
+      tolerations:
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
       serviceAccountName: ichor-ui
       terminationGracePeriodSeconds: 10

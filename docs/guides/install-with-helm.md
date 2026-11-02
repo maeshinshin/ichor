@@ -66,6 +66,63 @@ helm upgrade ichor oci://ghcr.io/maeshinshin/charts/ichor --version X.Y.Z \
   --namespace ichor-system --reuse-values --set networkPolicy.cilium.enabled=true
 ```
 
+## Verify a release
+
+Every release image (`ichor-controller`, `ichor-ui`, `ichor-installer`) and the
+chart is signed keylessly with cosign by the release workflow, and carries an
+SPDX SBOM and a build provenance attestation (ADR 0108). Verify by digest, with
+the identity of this repository's workflow:
+
+```
+cosign verify ghcr.io/maeshinshin/ichor-controller:vX.Y.Z \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity-regexp '^https://github.com/maeshinshin/ichor/\.github/workflows/release\.yml@refs/tags/v.*$'
+```
+
+The same command verifies `ichor-ui`, `ichor-installer` and the chart
+(`ghcr.io/maeshinshin/charts/ichor:X.Y.Z`). The provenance attestation is
+checked with `gh attestation verify oci://ghcr.io/maeshinshin/ichor-controller:vX.Y.Z --repo maeshinshin/ichor`.
+Ichor does not check signatures itself before it runs the installer Job (the
+Job's image is `installerRepository:version`, resolved by tag; resolving it to a
+digest is not built). Verify the image yourself, or enforce signatures with an
+admission policy of your own. The base image of each release is pinned by
+digest and named in the image's `org.opencontainers.image.base.digest`
+annotation. The images are reproducible from the tag: the same commit and the
+same Nix shell build the same binaries (`-trimpath`, stripped, no build
+timestamps).
+
+## Hardening the install
+
+- Pod Security: the install manifest labels `ichor-system` with
+  `pod-security.kubernetes.io/enforce: restricted` (and audit and warn). Every
+  Ichor pod meets that profile; the Cilium Helm Job needs the host network and
+  runs in `kube-system`. The chart does not own the namespace, so a Helm install
+  labels it once: `kubectl label namespace ichor-system
+  pod-security.kubernetes.io/enforce=restricted
+  pod-security.kubernetes.io/audit=restricted
+  pod-security.kubernetes.io/warn=restricted`.
+- Priority: both pods run under the PriorityClass `ichor-critical` (value
+  1000000), created by the manifest and by the chart (`priorityClass.create`).
+  It ranks above ordinary workloads and below every `system-*` class, so the
+  controller, the only writer to Talos nodes, is evicted last of the user
+  workloads. `system-cluster-critical` is not used: a user namespace may not
+  use it by default.
+- Replicas: the raw install manifest runs one replica of each pod and has no
+  PodDisruptionBudget (a budget of `minAvailable: 1` on one replica would block
+  every node drain). The chart runs two replicas and ships the budgets.
+- Network: `networkPolicy.cilium.enabled: true` renders default-deny plus one
+  allow per flow. Egress to the outside is `world` by default because Talos
+  nodes that have not joined yet are outside the cluster. To narrow it, set
+  `networkPolicy.cilium.externalCIDRs` (the S3 endpoint and the OIDC issuer, on
+  `externalPorts`), `talosCIDRs` (apid on 50000 and the API server on 6443; include
+  the subnet of machines that have not joined) and `uiIngressCIDRs` (who may
+  reach ichor-ui from outside the cluster; in-cluster callers stay allowed). These
+  values apply to the chart's policies; the copy the installer applies keeps
+  `world`.
+- Releases are published only after the verify job passes, from a protected
+  `release` GitHub environment. Maintainers: create the environment with
+  required reviewers and a tag ruleset for `v*` in the repository settings.
+
 ## ichor-ui is HTTPS only
 
 ichor-ui serves TLS on 8443 and no plain HTTP (ADR 0105). The Service port is

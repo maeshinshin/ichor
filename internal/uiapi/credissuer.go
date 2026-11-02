@@ -110,7 +110,7 @@ func (s *Server) credentialAnswer(ctx context.Context, c client.Client, req *ich
 
 func newCredentialRequest(cluster *ichorv1alpha1.TalosCluster, purpose ichorv1alpha1.TalosCredentialPurpose) *ichorv1alpha1.TalosCredentialRequest {
 	return &ichorv1alpha1.TalosCredentialRequest{
-		ObjectMeta: metav1.ObjectMeta{GenerateName: "cred-", Namespace: cluster.Namespace},
+		GenerateName: "cred-", Namespace: cluster.Namespace,
 		Spec: ichorv1alpha1.TalosCredentialRequestSpec{
 			ClusterRef: corev1.LocalObjectReference{Name: cluster.Name}, Purpose: purpose,
 		},

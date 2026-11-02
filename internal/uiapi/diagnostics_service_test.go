@@ -244,7 +244,7 @@ var _ = Describe("DiagnosticsService", func() {
 		}
 
 		mint := rbacv1.PolicyRule{
-			APIGroups: []string{ichorv1alpha1.GroupVersion.Group}, Resources: []string{"taloscredentialrequests"}, Verbs: []string{"create"},
+			APIGroups: []string{ichorv1alpha1.GroupVersion.Group}, Resources: []string{"taloscredentialrequests"}, Verbs: []string{cniVerbCreate},
 		}
 
 		// The admin user may read and download; the nobody user may only read.

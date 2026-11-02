@@ -18,7 +18,6 @@ package controller
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -162,8 +161,6 @@ func (r *TalosCredentialRequestReconciler) issue(ctx context.Context, cr *ichorv
 	case ichorv1alpha1.CredentialPurposeCredentialsKubernetes:
 		crt, notAfter, err = src.IssueKubernetes([]byte(spec.CSR), ttl)
 		trust = src.KubernetesTrust
-	case ichorv1alpha1.CredentialPurposePublic:
-		err = errors.New("unreachable")
 	default:
 		roles, rerr := credentials.TalosRoles(spec.Purpose, spec.TalosRole)
 		if rerr != nil {

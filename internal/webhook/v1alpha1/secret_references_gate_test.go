@@ -95,6 +95,10 @@ var _ = Describe("Secret-references gate", func() {
 		fields := map[string]func(*ichorv1alpha1.TalosCluster){
 			"spec.secretsRef":                 func(c *ichorv1alpha1.TalosCluster) { c.Spec.SecretsRef.Name = "other" },
 			"spec.registries[].authSecretRef": func(c *ichorv1alpha1.TalosCluster) { c.Spec.Registries[0].AuthSecretRef.Name = "reg-b" },
+			// ADR 0108: the credential goes to whatever endpoint the mirror names.
+			"spec.registries[].endpoints": func(c *ichorv1alpha1.TalosCluster) {
+				c.Spec.Registries[0].Endpoints = []string{"https://evil.example"}
+			},
 		}
 
 		for name, mutate := range fields {

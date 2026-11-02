@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"crypto"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"log"
@@ -199,13 +198,7 @@ func internalServer(ctx context.Context, f usersFlags, iss *oidcissuer.Issuer) *
 	mux.Handle("/.well-known/openid-configuration", h)
 	mux.Handle("/oidc/jwks", h)
 
-	return &http.Server{
-		Addr: f.internalAddr, Handler: mux, ReadHeaderTimeout: 10 * time.Second,
-		TLSConfig: &tls.Config{
-			MinVersion:     tls.VersionTLS12,
-			GetCertificate: certreload.GetCertificate(ctx, filepath.Join(f.internalTLSDir, "tls.crt"), filepath.Join(f.internalTLSDir, "tls.key"), certreload.Interval),
-		},
-	}
+	return newInternalHTTPServer(f.internalAddr, mux, certreload.GetCertificate(ctx, filepath.Join(f.internalTLSDir, "tls.crt"), filepath.Join(f.internalTLSDir, "tls.key"), certreload.Interval))
 }
 
 // authProvider is one sign-in choice in /auth/config.

@@ -204,7 +204,7 @@ func (e *env) ticket(rec *httptest.ResponseRecorder) string {
 }
 
 func (e *env) login(ticket, user, password string) *httptest.ResponseRecorder {
-	b, _ := json.Marshal(map[string]string{pTicket: ticket, "username": user, pPassword: password})
+	b, _ := json.Marshal(map[string]string{pTicket: ticket, pUsername: user, pPassword: password})
 	return e.do(e.h, http.MethodPost, "/oidc/login", "application/json", string(b))
 }
 
@@ -321,4 +321,5 @@ const (
 	pRefresh  = "refresh_token"
 	pAudience = "audience"
 	pTicket   = "ticket"
+	pUsername = "username"
 )

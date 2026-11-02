@@ -8,6 +8,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
+const uiAddr = "--addr=:8443"
+
 func uiWith(args []string, env ...corev1.EnvVar) *appsv1.Deployment {
 	return &appsv1.Deployment{Spec: appsv1.DeploymentSpec{Template: corev1.PodTemplateSpec{Spec: corev1.PodSpec{
 		Containers: []corev1.Container{{Name: UIContainer, Args: args, Env: env}},
@@ -22,10 +24,10 @@ func TestUpgradeKeepsAnInstallWithoutSignInOpenAndSaysSo(t *testing.T) {
 		wantInferred  bool
 		wantFlagInArg bool
 	}{
-		{"no sign-in, no flag (pre-0108)", uiWith([]string{"--addr=:8443"}), true, true, true},
-		{"flag already set", uiWith([]string{"--addr=:8443", "--allow-unauthenticated=true"}), true, false, true},
-		{"ichor users", uiWith([]string{"--addr=:8443", "--users-enabled=true", "--external-url=https://i.example.com"}), false, false, false},
-		{"external OIDC by env", uiWith([]string{"--addr=:8443"}, corev1.EnvVar{Name: "ICHOR_OIDC_ISSUER", Value: "https://idp"}), false, false, false},
+		{"no sign-in, no flag (pre-0108)", uiWith([]string{uiAddr}), true, true, true},
+		{"flag already set", uiWith([]string{uiAddr, "--allow-unauthenticated=true"}), true, false, true},
+		{"ichor users", uiWith([]string{uiAddr, "--users-enabled=true", "--external-url=https://i.example.com"}), false, false, false},
+		{"external OIDC by env", uiWith([]string{uiAddr}, corev1.EnvVar{Name: "ICHOR_OIDC_ISSUER", Value: "https://idp"}), false, false, false},
 		{"no live Deployment (first install)", nil, false, false, false},
 	}
 
@@ -36,7 +38,7 @@ func TestUpgradeKeepsAnInstallWithoutSignInOpenAndSaysSo(t *testing.T) {
 				t.Fatalf("allow=%v inferred=%v, want %v %v", s.AllowUnauthenticated, s.InferredAnonymous, tc.wantAllow, tc.wantInferred)
 			}
 
-			dep := uiWith([]string{"--addr=:8443"})
+			dep := uiWith([]string{uiAddr})
 			if err := CustomizeUI(dep, s); err != nil {
 				t.Fatal(err)
 			}

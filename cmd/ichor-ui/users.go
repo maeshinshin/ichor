@@ -73,7 +73,7 @@ type usersFlags struct {
 func (f usersFlags) proxyPrefixes() ([]netip.Prefix, error) {
 	var out []netip.Prefix
 
-	for _, c := range strings.Split(f.trustedProxies, ",") {
+	for c := range strings.SplitSeq(f.trustedProxies, ",") {
 		if c = strings.TrimSpace(c); c == "" {
 			continue
 		}

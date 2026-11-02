@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks'
+import { useState } from 'preact/hooks'
 import { InboxIcon, PlusIcon } from 'lucide-preact'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -18,10 +18,11 @@ import { machineClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
 import { machineDisplayName } from '@/lib/machineName'
 import { notifyWrite } from '@/lib/notify'
-import { describeError, type ErrorShape } from '@/lib/errors'
 import { matchesQuery } from '@/lib/filter'
 import { formatTimestamp } from '@/lib/format'
 import { useCanReclaim } from '@/lib/useCanReclaim'
+import { describeError, type ErrorShape } from '@/lib/errors'
+import { useList } from '@/lib/useList'
 import { useT } from '@/lib/useT'
 import { Link } from '@/router'
 
@@ -30,23 +31,9 @@ import { Link } from '@/router'
 // the approve/reject actions.
 export function MachineList() {
   const t = useT()
-  const [machines, setMachines] = useState<Machine[] | null>(null)
-  const [error, setError] = useState<ErrorShape | null>(null)
+  const { items: machines, setItems: setMachines, error, reload } = useList(async () => (await machineClient.listMachines({})).machines)
   const [query, setQuery] = useState('')
   const canReclaim = useCanReclaim()
-
-  async function reload() {
-    try {
-      setMachines((await machineClient.listMachines({})).machines)
-      setError(null)
-    } catch (err) {
-      setError(describeError(err))
-    }
-  }
-
-  useEffect(() => {
-    reload()
-  }, [])
 
   function replaceMachine(updated: Machine) {
     setMachines((prev) => prev?.map((m) => (sameRef(m, updated) ? updated : m)) ?? prev)

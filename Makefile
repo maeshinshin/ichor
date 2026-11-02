@@ -174,6 +174,17 @@ demo-images: ui-build ## Build the three demo images with crane and push them to
 	$(MAKE) build-installer IMG=ghcr.io/maeshinshin/ichor-controller:$(VERSION) IMG_UI=ghcr.io/maeshinshin/ichor-ui:$(VERSION)
 	VERSION="$(VERSION)" REGISTRY="$(REGISTRY)" test/harness/ui-demo/images.sh
 
+# The release workflow runs the two halves in separate jobs: the build job fetches dependencies and holds no
+# registry token, the push job holds the token and runs no dependency fetch.
+.PHONY: demo-images-build
+demo-images-build: ui-build ## Compile the three image binaries into bin/img (the first half of demo-images, no registry).
+	$(MAKE) build-installer IMG=ghcr.io/maeshinshin/ichor-controller:$(VERSION) IMG_UI=ghcr.io/maeshinshin/ichor-ui:$(VERSION)
+	VERSION="$(VERSION)" test/harness/ui-demo/images.sh build
+
+.PHONY: demo-images-push
+demo-images-push: ## Layer the binaries from demo-images-build on the pinned base and push them (DIGEST_FILE=<path> receives repo@digest lines).
+	VERSION="$(VERSION)" REGISTRY="$(REGISTRY)" test/harness/ui-demo/images.sh push
+
 .PHONY: docker-build-ichor-ui
 docker-build-ichor-ui: ## Build docker image with ichor-ui, the real UI embedded (not the placeholder).
 	$(CONTAINER_TOOL) build -f Dockerfile.ichor-ui -t ${IMG_UI} .
@@ -363,7 +374,7 @@ proto-breaking: ## Check proto/ for breaking changes against main; a no-op until
 
 .PHONY: ui-install
 ui-install: ## Install UI dependencies (npm ci).
-	cd ui && npm ci
+	cd ui && npm ci --ignore-scripts
 
 .PHONY: ui-build
 ui-build: ui-install ## Build the UI; Vite writes straight into cmd/ichor-ui/dist.

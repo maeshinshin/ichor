@@ -87,6 +87,20 @@ type hubble struct {
 	TLS     hubbleTLS `json:"tls"`
 }
 
+// certgen is cilium.certgen: the hubble-generate-certs Job. The chart gives it no tolerations, so on
+// tainted control planes it stays Pending until a worker exists, the agents wait for its secrets and
+// the hand-over never completes. Tolerating the control-plane taint restricts nothing; it only lets
+// Ichor's own Cilium components start on the cluster's first nodes.
+type certgen struct {
+	Tolerations []toleration `json:"tolerations"`
+}
+
+type toleration struct {
+	Key      string `json:"key"`
+	Operator string `json:"operator"`
+	Effect   string `json:"effect"`
+}
+
 // Values is cilium's Helm values, built from Talos's recommended settings
 // (docs.siderolabs.com/kubernetes-guides/cni/deploying-cilium, Talos v1.14
 // docs / Cilium 1.18.0, retrieved 2026-10-25) plus the Hubble CronJob
@@ -102,6 +116,7 @@ type Values struct {
 	Cgroup               cgroup          `json:"cgroup"`
 	Hubble               hubble          `json:"hubble"`
 	TunnelProtocol       string          `json:"tunnelProtocol,omitempty"`
+	Certgen              certgen         `json:"certgen"`
 }
 
 // valuesFor builds the Helm values for kubeProxy. Both modes share the
@@ -122,6 +137,9 @@ func (p Preset) valuesFor(kubeProxy cni.KubeProxyMode) Values {
 			AutoMount: cgroupAutoMount{Enabled: false},
 			HostRoot:  "/sys/fs/cgroup",
 		},
+		Certgen: certgen{Tolerations: []toleration{
+			{Key: "node-role.kubernetes.io/control-plane", Operator: "Exists", Effect: "NoSchedule"},
+		}},
 		Hubble: hubble{
 			Enabled: true,
 			TLS:     hubbleTLS{Auto: hubbleTLSAuto{Enabled: true, Method: "cronJob"}},

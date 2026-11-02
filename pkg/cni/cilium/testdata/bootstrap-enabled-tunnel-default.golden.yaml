@@ -1638,5 +1638,9 @@ spec:
               type: RuntimeDefault
           serviceAccount: hubble-generate-certs
           serviceAccountName: hubble-generate-certs
+          tolerations:
+          - effect: NoSchedule
+            key: node-role.kubernetes.io/control-plane
+            operator: Exists
       ttlSecondsAfterFinished: 1800
   schedule: 0 0 1 */4 *

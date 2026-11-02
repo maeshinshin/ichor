@@ -33,6 +33,12 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
+const (
+	cidrA = "10.1.0.0/24"
+	cidrB = "10.2.0.0/24"
+	addrB = "10.0.0.56"
+)
+
 func storedDiscovery(t *testing.T, k8s client.Client) *ichorv1alpha1.TalosClusterDiscovery {
 	t.Helper()
 
@@ -45,7 +51,7 @@ func storedDiscovery(t *testing.T, k8s client.Client) *ichorv1alpha1.TalosCluste
 }
 
 func TestAddDiscoveryCidrAppendsOnlyThatRange(t *testing.T) {
-	c := discoveryCluster(&ichorv1alpha1.TalosClusterDiscovery{Addresses: []string{knownAddr}, CIDRs: []string{"10.1.0.0/24"}})
+	c := discoveryCluster(&ichorv1alpha1.TalosClusterDiscovery{Addresses: []string{knownAddr}, CIDRs: []string{cidrA}})
 	k8s := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(c).Build()
 
 	resp, err := (&Server{Client: k8s}).AddDiscoveryCidr(context.Background(), connect.NewRequest(
@@ -59,7 +65,7 @@ func TestAddDiscoveryCidrAppendsOnlyThatRange(t *testing.T) {
 	}
 
 	d := storedDiscovery(t, k8s)
-	if !slices.Equal(d.CIDRs, []string{"10.1.0.0/24", "192.168.0.0/24"}) || !slices.Equal(d.Addresses, []string{knownAddr}) {
+	if !slices.Equal(d.CIDRs, []string{cidrA, "192.168.0.0/24"}) || !slices.Equal(d.Addresses, []string{knownAddr}) {
 		t.Fatalf("want the masked range appended and the addresses kept, got %+v", d)
 	}
 
@@ -70,7 +76,7 @@ func TestAddDiscoveryCidrAppendsOnlyThatRange(t *testing.T) {
 
 func TestAddDiscoveryCidrRefusesBadInput(t *testing.T) {
 	c := discoveryCluster(&ichorv1alpha1.TalosClusterDiscovery{
-		CIDRs: []string{"10.1.0.0/24", "10.2.0.0/24", "10.3.0.0/24"},
+		CIDRs: []string{cidrA, cidrB, "10.3.0.0/24"},
 	})
 	k8s := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(c).Build()
 	s := &Server{Client: k8s}
@@ -101,7 +107,7 @@ func TestAddDiscoveryCidrRefusesBadInput(t *testing.T) {
 
 func TestRemoveDiscoveryAddressAndCidr(t *testing.T) {
 	c := discoveryCluster(&ichorv1alpha1.TalosClusterDiscovery{
-		Addresses: []string{knownAddr, "10.0.0.56"}, CIDRs: []string{"10.1.0.0/24", "10.2.0.0/24"},
+		Addresses: []string{knownAddr, addrB}, CIDRs: []string{cidrA, cidrB},
 	})
 	k8s := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(c).Build()
 	s := &Server{Client: k8s}
@@ -114,13 +120,13 @@ func TestRemoveDiscoveryAddressAndCidr(t *testing.T) {
 	}
 
 	rc, err := s.RemoveDiscoveryCidr(context.Background(), connect.NewRequest(
-		&pb.RemoveDiscoveryCidrRequest{Cluster: ref, Cidr: "10.1.0.0/24"}))
+		&pb.RemoveDiscoveryCidrRequest{Cluster: ref, Cidr: cidrA}))
 	if err != nil || rc.Msg.GetAudit().GetAction() != "remove-discovery-cidr" {
 		t.Fatalf("%v %v", rc, err)
 	}
 
 	d := storedDiscovery(t, k8s)
-	if !slices.Equal(d.Addresses, []string{"10.0.0.56"}) || !slices.Equal(d.CIDRs, []string{"10.2.0.0/24"}) {
+	if !slices.Equal(d.Addresses, []string{addrB}) || !slices.Equal(d.CIDRs, []string{cidrB}) {
 		t.Fatalf("got %+v", d)
 	}
 
@@ -139,19 +145,19 @@ func TestRemoveDiscoveryAddressAndCidr(t *testing.T) {
 
 func TestDiscoveryEditsAreWrittenAsTheCaller(t *testing.T) {
 	base := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(discoveryCluster(
-		&ichorv1alpha1.TalosClusterDiscovery{Addresses: []string{knownAddr}, CIDRs: []string{"10.1.0.0/24"}})).Build()
+		&ichorv1alpha1.TalosClusterDiscovery{Addresses: []string{knownAddr}, CIDRs: []string{cidrA}})).Build()
 	user := interceptor.NewClient(base, interceptor.Funcs{
 		Update: func(_ context.Context, _ client.WithWatch, obj client.Object, _ ...client.UpdateOption) error {
-			return apierrors.NewForbidden(schema.GroupResource{Group: ichorv1alpha1.GroupVersion.Group, Resource: "talosclusters"}, obj.GetName(), nil)
+			return apierrors.NewForbidden(schema.GroupResource{Group: ichorv1alpha1.GroupVersion.Group, Resource: resourceTalosClusters}, obj.GetName(), nil)
 		},
 	})
 	s := &Server{Client: base, Impersonate: func(Identity) (client.Client, error) { return user, nil }}
 	ctx := asUser(context.Background())
 	ref := objectRef(testNS, "c")
 
-	_, e1 := s.AddDiscoveryCidr(ctx, connect.NewRequest(&pb.AddDiscoveryCidrRequest{Cluster: ref, Cidr: "10.2.0.0/24"}))
+	_, e1 := s.AddDiscoveryCidr(ctx, connect.NewRequest(&pb.AddDiscoveryCidrRequest{Cluster: ref, Cidr: cidrB}))
 	_, e2 := s.RemoveDiscoveryAddress(ctx, connect.NewRequest(&pb.RemoveDiscoveryAddressRequest{Cluster: ref, Address: knownAddr}))
-	_, e3 := s.RemoveDiscoveryCidr(ctx, connect.NewRequest(&pb.RemoveDiscoveryCidrRequest{Cluster: ref, Cidr: "10.1.0.0/24"}))
+	_, e3 := s.RemoveDiscoveryCidr(ctx, connect.NewRequest(&pb.RemoveDiscoveryCidrRequest{Cluster: ref, Cidr: cidrA}))
 
 	for i, err := range []error{e1, e2, e3} {
 		if connect.CodeOf(err) != connect.CodePermissionDenied {

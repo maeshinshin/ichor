@@ -98,6 +98,10 @@ type initDeps struct {
 // waits for the Cilium hand-over, a
 // reconciliation the CLI only watches.
 func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
+	// One maintenance pin for the whole run: the node that answered the identity read is the node
+	// that receives the configuration.
+	ctx = controller.WithMaintenancePin(ctx, &controller.MaintenancePin{})
+
 	opts, err = prepareInitUsers(opts)
 	if err != nil {
 		return err

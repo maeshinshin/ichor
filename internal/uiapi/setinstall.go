@@ -22,7 +22,6 @@ import (
 	"fmt"
 
 	"connectrpc.com/connect"
-	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
@@ -60,17 +59,14 @@ func (s *Server) SetMachineInstall(
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 
-	now := s.now()
 	m.Spec.Install = install
 
 	if err := s.Update(ctx, m, strictFieldValidation); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("setting install of machine %q: %w", namespacedName(ref), err))
 	}
 
-	audit := &pb.AuditRecord{
-		Actor: s.actorName(ctx), At: timestamppb.New(now), Action: "set-install",
-		Target: objectRef(m.Namespace, m.Name), Reason: req.Msg.GetReason(),
-	}
+	audit := s.opAudit(ctx, "set-install", objectRef(m.Namespace, m.Name))
+	audit.Reason = req.Msg.GetReason()
 
 	return connect.NewResponse(&pb.SetMachineInstallResponse{Machine: machineToPB(m), Audit: audit}), nil
 }

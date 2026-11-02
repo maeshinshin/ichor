@@ -17,6 +17,7 @@ limitations under the License.
 package render
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -25,13 +26,13 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
-// cniDocs returns the CNI-relevant documents of a rendered config: the flannel
-// and kube-proxy documents, joined with their separators.
-func cniDocs(out string) string {
+// cniDocs returns the documents of a rendered config whose kind is one of kinds (the CNI-relevant
+// ones), joined with their separators.
+func cniDocs(out string, kinds ...string) string {
 	var keep []string
 
 	for d := range strings.SplitSeq(out, "---\n") {
-		if strings.Contains(d, "kind: KubeFlannelCNIConfig") || strings.Contains(d, "kind: KubeProxyConfig") {
+		if slices.ContainsFunc(kinds, func(k string) bool { return strings.Contains(d, "kind: "+k) }) {
 			keep = append(keep, d)
 		}
 	}
@@ -68,7 +69,8 @@ func TestUnmanagedRendersTheLiveCNIConfiguration(t *testing.T) {
 		{"none", "replaced", proxyOff},
 	} {
 		t.Run(tc.talosCNI+"/"+tc.proxy, func(t *testing.T) {
-			got := cniDocs(renderFor(t, versionContract, unmanaged(tc.talosCNI, tc.proxy)))
+			out := renderFor(t, versionContract, unmanaged(tc.talosCNI, tc.proxy))
+			got := cniDocs(out, "KubeFlannelCNIConfig", "KubeProxyConfig")
 			if got != tc.want {
 				t.Errorf("CNI documents differ from the live fixture:\n got: %q\nwant: %q", got, tc.want)
 			}

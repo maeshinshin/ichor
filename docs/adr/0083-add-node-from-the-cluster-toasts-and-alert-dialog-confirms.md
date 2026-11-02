@@ -1,7 +1,7 @@
 # 0083. Add a node from the cluster page; toasts; alert-dialog confirms; logs in a code block
 
 Status: Accepted · Date: 2026-10-27 · Design section: UI
-Decided: The cluster page lists its nodes and links to an Add node page that explains how a node joins, shows `spec.discovery` and adds one address through a new `ClusterService.AddDiscoveryAddress` write that passes the same gate as every other write; every successful change shows a sonner toast; every dangerous action confirms in a preactcn `alert-dialog`; the node log lines render in a preactcn `code-block`
+Decided: The cluster page lists its nodes and links to an Add node page that explains how a node joins, shows `spec.discovery` and adds one address through a new `ClusterService.AddDiscoveryAddress` write that passes the same gate as every other write; every successful change shows a sonner toast; every dangerous action confirms in a preactcn `alert-dialog`; the node log lines render in a preactcn `code-block`; amended 2026-11-02: AddDiscoveryCidr, RemoveDiscoveryAddress and RemoveDiscoveryCidr, one Add node input for an address or a range, `ichor cluster discovery`, and the spec write itself starts the scan
 Amends: 0078
 
 ## Context

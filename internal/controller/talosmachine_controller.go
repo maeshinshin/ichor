@@ -284,7 +284,8 @@ type TalosMachineReconciler struct {
 // +kubebuilder:rbac:groups="",namespace=ichor-system,resources=configmaps,verbs=get;list;watch
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch;patch
-// +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;delete
+// +kubebuilder:rbac:groups="",resources=pods,verbs=get;list
+// Deleting a pod is a Role in kube-system only (config/rbac/pod_restart_role.yaml); a drain evicts.
 // +kubebuilder:rbac:groups="",resources=pods/eviction,verbs=create
 // +kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;list
 

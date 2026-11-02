@@ -12,6 +12,28 @@ what it decides, plus the CLI flags the implementation added (`--ca-file`,
 
 Users are off by default. Nothing here applies until you turn them on.
 
+## Without any sign-in (ADR 0108)
+
+With neither Ichor users nor an external OIDC provider (`ichorUI.oidc`), ichor-ui
+has no way to tell callers apart. It then serves read-only calls only and
+refuses every change with "ichor-ui has no sign-in configured"; the UI shows a
+"Read-only" banner saying so. Downloads need an identity and are refused too.
+
+The old open mode, where anyone who can reach ichor-ui writes with its
+ServiceAccount's permissions and is audited as `ichor-ui`, still exists but you
+have to ask for it: `--allow-unauthenticated` on ichor-ui, `ichorUI.allowUnauthenticated=true`
+in the chart. The flag does nothing once users or OIDC are on.
+
+- `ichor init` without `--ui-url` keeps its behaviour: it starts ichor-ui with
+  the flag and prints a warning at the end. `--ui-url` turns users on and
+  drops the flag.
+- `ichor-installer` upgrading an install that ran with no sign-in sets the
+  flag for you and prints a `NOTICE`, so nothing stops working. Turn users or
+  OIDC on, and the flag goes away at the next upgrade.
+- A Helm upgrade does not guess: set `ichorUI.allowUnauthenticated=true` to
+  keep writing, or enable `ichorUI.users` or `ichorUI.oidc`. `helm` prints a
+  note when no sign-in is configured.
+
 ## Before you start
 
 Turning users on needs three things:
@@ -350,6 +372,37 @@ The login cache is a credential on your machine. It is stored in
 
 After a Kubernetes CA rotation, a kubeconfig downloaded earlier fails TLS. Get
 a new one.
+
+## What a sign-in is, and what ends it
+
+- An ID token lasts 5 minutes by default (1 minute to 1 hour). ichor-ui checks
+  it against the user's `notBefore` on every request: **revoking sessions or
+  changing the password ends tokens issued before it**, here within 10 seconds
+  per replica (a cache), and a browser that changes its own password is signed
+  out. The kube-apiserver cannot do this check, so a token already given to
+  `kubectl` lives out its 5 minutes there.
+- A refresh token (CLI only) is single-use: every refresh returns a new one
+  and retires the old. Presenting a retired token ends the whole chain, which is
+  what a stolen copy looks like; the owner signs in again. The state is kept
+  in the user's entry of the `ichor-user-credentials` Secret, so all replicas
+  agree, and it never extends the session: the chain dies at the original
+  lifetime. Tokens issued before the upgrade that added this are accepted once
+  and then rotated.
+- Log and download streams end with "your sign-in expired" when the token does.
+- Wrong passwords slow down, they do not lock out. The counter is per
+  (client address, user name), so a stranger cannot lock `admin` out for you.
+  After 5 failures that pair waits 1 s, 2 s, 4 s and so on up to 15 minutes;
+  one address waits too after 30 failures across names (up to 1 minute), and
+  once a user has 30 failures within an hour from any addresses, every
+  sign-in of that user takes 2 s longer (never refused). Counters are kept per
+  replica, so with N replicas the free guesses are N times as many.
+  Behind a proxy or load balancer the client address is the proxy's unless you
+  list it in `ichorUI.users.trustedProxyCIDRs` (`--trusted-proxy-cidrs`), when
+  the rightmost `X-Forwarded-For` address outside the list is used. Password
+  hashing for sign-in has its own queue, so a flood of sign-ins gets `503
+  Retry-After` and cannot block a password change.
+- A user may grant only roles they hold (admin: any); Kubernetes RBAC alone
+  used to decide this.
 
 ## Disable a user
 

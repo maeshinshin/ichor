@@ -25,7 +25,9 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -92,12 +94,19 @@ var _ = Describe("the controller Job policy against the real Job builders", Orde
 		}, "30s", "100ms").ShouldNot(Succeed())
 	})
 
+	// create admits j as the controller and removes it afterwards: other specs list the Jobs of these
+	// namespaces and must not find these.
+	create := func(j *batchv1.Job) {
+		Expect(controller.Create(ctx, j)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, j, client.PropagationPolicy(metav1.DeletePropagationBackground)) })
+	}
+
 	It("admits the installer Job as built", func() {
 		j := newInstallerJob("ichor-system", "ichor-installer-policy", &ichorv1alpha1.TalosOperation{}, inst, "cilium", false)
-		Expect(controller.Create(ctx, j)).To(Succeed())
+		create(j)
 
 		j = newInstallerJob("ichor-system", "ichor-installer-policy-2", &ichorv1alpha1.TalosOperation{}, inst, "cilium", true)
-		Expect(controller.Create(ctx, j)).To(Succeed())
+		create(j)
 	})
 
 	It("admits the Cilium Helm Job as built, with and without takeover", func() {
@@ -105,7 +114,7 @@ var _ = Describe("the controller Job policy against the real Job builders", Orde
 
 		for i, takeover := range []bool{false, true} {
 			j := newCNIHelmJob("ichor-system", "ichor-cni-policy-"+string(rune('a'+i)), cluster, cni.KubeProxyReplaced, inst, "hash", takeover)
-			Expect(controller.Create(ctx, j)).To(Succeed())
+			create(j)
 		}
 	})
 })

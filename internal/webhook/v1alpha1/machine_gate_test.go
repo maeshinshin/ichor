@@ -48,7 +48,8 @@ var _ = Describe("Endpoint and approval gates on TalosMachine", func() {
 	}
 
 	BeforeEach(func() {
-		write := rbacv1.PolicyRule{APIGroups: []string{ichorGroup}, Resources: []string{"talosmachines"}, Verbs: []string{"create", verbGet, verbUpdate, verbPatch, "delete"}}
+		write := rbacv1.PolicyRule{APIGroups: []string{ichorGroup}, Resources: []string{bgUnitMachines},
+			Verbs: []string{verbCreate, verbGet, verbUpdate, verbPatch, verbDelete}}
 		bindRole("machine-gate-writer", writer, write)
 		bindRole("machine-gate-approver", approver, write, rbacv1.PolicyRule{
 			APIGroups: []string{ichorGroup}, Resources: []string{"talosmachines/approval"}, Verbs: []string{ichorv1alpha1.MachineApproveVerb},

@@ -39,11 +39,11 @@ var _ = Describe("Break-glass webhook on TalosOperation finalizers", func() {
 
 	BeforeEach(func() {
 		edit := rbacv1.PolicyRule{
-			APIGroups: []string{ichorGroup}, Resources: []string{"talosoperations"}, Verbs: []string{verbGet, verbUpdate, verbPatch},
+			APIGroups: []string{ichorGroup}, Resources: []string{resOperations}, Verbs: []string{verbGet, verbUpdate, verbPatch},
 		}
 		bindRole("opfin-editor", editor, edit)
 		bindRole("opfin-glass", glass, edit, rbacv1.PolicyRule{
-			APIGroups: []string{ichorGroup}, Resources: []string{"talosoperations"}, Verbs: []string{BreakGlassVerb},
+			APIGroups: []string{ichorGroup}, Resources: []string{resOperations}, Verbs: []string{BreakGlassVerb},
 		})
 		bindRole("opfin-controller", testControllerUser, edit)
 

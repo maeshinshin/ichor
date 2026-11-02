@@ -84,7 +84,7 @@ func TestBuiltinUserRoles(t *testing.T) {
 		want := fmt.Sprint([]any{map[string]any{
 			"apiGroup": "rbac.authorization.k8s.io", "kind": "Group", "name": "ichor:" + n,
 		}})
-		for label, set := range map[string][]map[string]any{"chart": docs, "kustomize": configDocs} {
+		for label, set := range map[string][]map[string]any{labelChart: docs, "kustomize": configDocs} {
 			bname := "ichor-" + n + "-rolebinding"
 			if label == "kustomize" {
 				bname = n + "-rolebinding"
@@ -111,7 +111,7 @@ func TestBuiltinUserRoles(t *testing.T) {
 		{ichorGroup, "talosclusters/secret-references", verbUpdate, ""},
 		{ichorGroup, "talosetcdbackups/secret-references", verbUpdate, ""},
 		{ichorGroup, "ichorusers/password", verbUpdate, ""},
-		{ichorGroup, "talosclusters", "break-glass", ""},
+		{ichorGroup, "talosclusters", verbBreakGlass, ""},
 		{ichorGroup, "talosclusters/credentials", "download", ""},
 		{ichorGroup, "talosmachines/support-bundle", "download", ""},
 		{ichorGroup, "ichorusers", "create", ""},
@@ -188,7 +188,7 @@ func TestBreakGlassRole(t *testing.T) {
 		"config/rbac/break_glass_role.yaml", "dist/chart/templates/rbac/ichor-break-glass-role.yaml")
 
 	for _, res := range []string{"talosclusters", "talosconfigpatches", "talosmachines"} {
-		if !rbacTriples(cfgRole["rules"].([]any))[rbacTriple{ichorGroup, res, "break-glass", ""}] {
+		if !rbacTriples(cfgRole["rules"].([]any))[rbacTriple{ichorGroup, res, verbBreakGlass, ""}] {
 			t.Errorf("config/rbac/break_glass_role.yaml does not grant break-glass on %s", res)
 		}
 	}
@@ -228,7 +228,7 @@ func TestMachineApprovalRightsAndNoImplicitCustomVerbs(t *testing.T) {
 		}
 
 		for tr := range rbacTriples(allRules(d)) {
-			if tr.verb == "*" || tr.verb == "break-glass" {
+			if tr.verb == "*" || tr.verb == verbBreakGlass {
 				t.Errorf("helper %s grants %s", nameOf(d), tr)
 			}
 		}

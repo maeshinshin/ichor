@@ -28,13 +28,15 @@ import (
 // ADR 0108: the cluster lock is a Lease named after the TalosCluster, written with the controller's
 // cluster-wide Lease rights, so no Ichor object may live where the Kubernetes control plane keeps
 // its own Leases.
+const leaseName = "kube-scheduler"
+
 var _ = Describe("Ichor objects in the Kubernetes system namespaces", func() {
 	for _, ns := range []string{"kube-system", "kube-public", "kube-node-lease"} {
 		It("refuses a TalosCluster, TalosMachine, TalosEtcdBackup and TalosOperation in "+ns, func() {
 			cluster := newTestCluster()
 			cluster.Namespace = ns
 			cluster.GenerateName = ""
-			cluster.Name = "kube-scheduler"
+			cluster.Name = leaseName
 
 			err := k8sClient.Create(ctx, cluster)
 			Expect(err).To(HaveOccurred())
@@ -47,9 +49,9 @@ var _ = Describe("Ichor objects in the Kubernetes system namespaces", func() {
 			backup := &ichorv1alpha1.TalosEtcdBackup{
 				GenerateName: "b-", Namespace: ns,
 				Spec: ichorv1alpha1.TalosEtcdBackupSpec{
-					ClusterRef: corev1.LocalObjectReference{Name: "kube-scheduler"},
+					ClusterRef: corev1.LocalObjectReference{Name: leaseName},
 					Destination: ichorv1alpha1.TalosEtcdBackupDestination{S3: ichorv1alpha1.TalosEtcdBackupS3{
-						Endpoint: "https://s3.example.org", Bucket: "bucket", Prefix: "etcd",
+						Endpoint: "https://s3.example.org", Bucket: secrefBucket, Prefix: "etcd",
 						CredentialsSecretRef: corev1.LocalObjectReference{Name: "s3"},
 					}},
 				},
@@ -59,7 +61,7 @@ var _ = Describe("Ichor objects in the Kubernetes system namespaces", func() {
 			op := &ichorv1alpha1.TalosOperation{
 				GenerateName: "o-", Namespace: ns,
 				Spec: ichorv1alpha1.TalosOperationSpec{
-					Kind: ichorv1alpha1.TalosOperationKindTalos, ClusterRef: corev1.LocalObjectReference{Name: "kube-scheduler"},
+					Kind: ichorv1alpha1.TalosOperationKindTalos, ClusterRef: corev1.LocalObjectReference{Name: leaseName},
 				},
 			}
 			Expect(k8sClient.Create(ctx, op)).NotTo(Succeed())

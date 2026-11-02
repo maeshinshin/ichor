@@ -87,7 +87,7 @@ var _ = Describe("the controller Job policy against the real Job builders", Orde
 		// The policy is bound asynchronously: wait until it denies a Job under another ServiceAccount.
 		Eventually(func() error {
 			j := newInstallerJob("ichor-system", "probe-installer", &ichorv1alpha1.TalosOperation{}, inst, "cilium", false)
-			j.Name, j.Spec.Template.Spec.ServiceAccountName = "", "default"
+			j.Name, j.Spec.Template.Spec.ServiceAccountName = "", "other"
 			j.GenerateName = "probe-"
 
 			return controller.Create(ctx, j)
@@ -110,7 +110,7 @@ var _ = Describe("the controller Job policy against the real Job builders", Orde
 	})
 
 	It("admits the Cilium Helm Job as built, with and without takeover", func() {
-		cluster := &ichorv1alpha1.TalosCluster{Name: "c", Namespace: "default"}
+		cluster := &ichorv1alpha1.TalosCluster{Name: "c", Namespace: testIchorNamespace}
 
 		for i, takeover := range []bool{false, true} {
 			j := newCNIHelmJob("ichor-system", "ichor-cni-policy-"+string(rune('a'+i)), cluster, cni.KubeProxyReplaced, inst, "hash", takeover)

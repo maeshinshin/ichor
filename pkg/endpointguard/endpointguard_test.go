@@ -22,12 +22,16 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
-func clusterWith(d *ichorv1alpha1.TalosClusterDiscovery, n *ichorv1alpha1.TalosClusterNetwork) *ichorv1alpha1.TalosCluster {
+func clusterWith(
+	d *ichorv1alpha1.TalosClusterDiscovery, n *ichorv1alpha1.TalosClusterNetwork,
+) *ichorv1alpha1.TalosCluster {
 	return &ichorv1alpha1.TalosCluster{Spec: ichorv1alpha1.TalosClusterSpec{Discovery: d, Network: n}}
 }
 
 func TestForbidden(t *testing.T) {
-	net := &ichorv1alpha1.TalosClusterNetwork{PodSubnets: []string{"10.248.0.0/16"}, ServiceSubnets: []string{"10.249.0.0/16"}}
+	net := &ichorv1alpha1.TalosClusterNetwork{
+		PodSubnets: []string{"10.248.0.0/16"}, ServiceSubnets: []string{"10.249.0.0/16"},
+	}
 	c := clusterWith(nil, net)
 
 	for _, tc := range []struct {

@@ -1,12 +1,12 @@
 # Build the UI (Vite writes straight into cmd/ichor-ui/dist, matching "make ui-build")
-FROM node:24 AS ui-builder
+FROM node:24@sha256:e7add2a490bb17d97b485b8641bd88455fff7839ade0f5eba493c3508124d413 AS ui-builder
 WORKDIR /workspace
 COPY . .
-RUN cd ui && npm ci && npm run build
+RUN cd ui && npm ci --ignore-scripts && npm run build
 
 # Build the ichor-ui binary with the real UI embedded, not the placeholder
 # (-tags uiembed, docs/adr/0017)
-FROM golang:1.27.3 AS builder
+FROM golang:1.27.3@sha256:2920bb124f1a2e12a1d39f0cab756ae0068441ee1da7655dec7f5e374944095b AS builder
 ARG TARGETOS
 ARG TARGETARCH
 
@@ -27,11 +27,11 @@ COPY --from=ui-builder /workspace/cmd/ichor-ui/dist cmd/ichor-ui/dist
 # was called. For example, if we call make docker-build-ichor-ui in a local env which has the Apple Silicon M1 SO
 # the docker BUILDPLATFORM arg will be linux/arm64 when for Apple x86 it will be linux/amd64. Therefore,
 # by leaving it empty we can ensure that the container and binary shipped on it will have the same platform.
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -tags uiembed -a -o ichor-ui ./cmd/ichor-ui
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -tags uiembed -a -trimpath -ldflags "-s -w" -o ichor-ui ./cmd/ichor-ui
 
 # Use distroless as minimal base image to package the ichor-ui binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
-FROM gcr.io/distroless/static:nonroot
+FROM gcr.io/distroless/static:nonroot@sha256:25ac8f0c3b2334a9eb05452266bd4697864a8c8ef0ef71e5e6480d7f92868329
 WORKDIR /
 COPY --from=builder /workspace/ichor-ui .
 USER 65532:65532

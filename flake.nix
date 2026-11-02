@@ -29,6 +29,9 @@
               goreleaser
               go-containerregistry # crane: pushes images without a container runtime (test/harness/ui-demo)
               govulncheck
+              cosign # keyless signing of the release images and chart (ADR 0108)
+              syft # SBOMs of the release images (ADR 0108)
+              actionlint # syntax check of .github/workflows
               qemu
               cni-plugins
               nodejs

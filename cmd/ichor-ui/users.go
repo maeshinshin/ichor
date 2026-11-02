@@ -241,8 +241,10 @@ type authProvider struct {
 }
 
 // authConfig builds the /auth/config answer. providers lists every sign-in
-// choice; enabled stays top-level because the separately-versioned CLI reads it.
-func authConfig(oidcIssuer, oidcClientID string, users usersFlags) map[string]any {
+// choice; enabled stays top-level because the separately-versioned CLI reads it. With no
+// provider, anonymous says what the server does about it: "readonly" serves reads only, "open"
+// is the explicit --allow-unauthenticated mode; the UI shows why.
+func authConfig(oidcIssuer, oidcClientID string, users usersFlags, allowAnonymous bool) map[string]any {
 	providers := []authProvider{}
 	if oidcIssuer != "" {
 		providers = append(providers, authProvider{ID: uiapi.SourceOIDC, Issuer: oidcIssuer, ClientID: oidcClientID})
@@ -252,5 +254,15 @@ func authConfig(oidcIssuer, oidcClientID string, users usersFlags) map[string]an
 		providers = append(providers, authProvider{ID: uiapi.SourceIchor, Issuer: users.externalURL, ClientID: uiClientID})
 	}
 
-	return map[string]any{"enabled": len(providers) > 0, "providers": providers}
+	out := map[string]any{"enabled": len(providers) > 0, "providers": providers}
+
+	switch {
+	case len(providers) > 0:
+	case allowAnonymous:
+		out["anonymous"] = "open"
+	default:
+		out["anonymous"] = "readonly"
+	}
+
+	return out
 }

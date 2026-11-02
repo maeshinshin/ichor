@@ -98,6 +98,8 @@ func main() {
 	oidcGroupsClaim := flag.String("oidc-groups-claim", os.Getenv("ICHOR_OIDC_GROUPS_CLAIM"), "claim used for Kubernetes groups (default groups)")
 	oidcUserPrefix := flag.String("oidc-username-prefix", os.Getenv("ICHOR_OIDC_USERNAME_PREFIX"), "prefix added to the user name")
 	oidcGroupsPrefix := flag.String("oidc-groups-prefix", os.Getenv("ICHOR_OIDC_GROUPS_PREFIX"), "prefix added to each group")
+	allowAnonymous := flag.Bool("allow-unauthenticated", envTrue("ICHOR_ALLOW_UNAUTHENTICATED"),
+		"serve every call without a sign-in, using this pod's ServiceAccount; without it and without OIDC or Ichor users only read-only calls are served")
 	// Ichor's own users and issuer; off by default.
 	var users usersFlags
 
@@ -217,9 +219,12 @@ func main() {
 
 	if authn != nil {
 		server.Impersonate = uiapi.NewImpersonator(restCfg, client.Options{Scheme: scheme, Mapper: c.RESTMapper()})
+	} else if *allowAnonymous {
+		log.Print("ichor-ui: WARNING: --allow-unauthenticated is set and no sign-in is configured; every client that " +
+			"can reach ichor-ui writes with this pod's ServiceAccount permissions and is audited as \"ichor-ui\"")
 	} else {
-		log.Print("ichor-ui: WARNING: OIDC is not configured; every client that can reach ichor-ui " +
-			"writes with this pod's ServiceAccount permissions and is audited as \"ichor-ui\"")
+		log.Print("ichor-ui: no sign-in is configured (no OIDC, no Ichor users): serving read-only calls only; " +
+			"configure sign-in, or pass --allow-unauthenticated to allow writes without it")
 	}
 
 	server.Settings = liveSettings
@@ -227,7 +232,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/auth/config", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(authConfig(*oidcIssuer, *oidcClientID, users))
+		_ = json.NewEncoder(w).Encode(authConfig(*oidcIssuer, *oidcClientID, users, *allowAnonymous))
 	})
 
 	if issuer != nil {
@@ -243,9 +248,9 @@ func main() {
 	// the exported RPC-latency series comes from.
 	mux.Handle("/metrics", promhttp.Handler())
 
-	mountRPC(mux, server, authn)
+	mountRPC(mux, server, authn, *allowAnonymous)
 
-	srv := httpsServer(*addr, securityHeaders(http.MaxBytesHandler(mux, bodyBackstop)), servingCertificate(ctx, *tlsCert, *tlsKey, *tlsDir))
+	srv := httpsServer(*addr, securityHeaders(http.MaxBytesHandler(mux, bodyBackstop), contentSecurityPolicy(*oidcIssuer != "")), servingCertificate(ctx, *tlsCert, *tlsKey, *tlsDir))
 
 	go func() {
 		log.Printf("ichor-ui: HTTPS listening on %s", *addr)

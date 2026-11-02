@@ -203,7 +203,7 @@ func TestAuthenticateRefusesSystemUsers(t *testing.T) {
 
 func TestInterceptorRequiresTokenAndStoresIdentity(t *testing.T) {
 	p := newFakeIdP(t)
-	wrapped := authInterceptor{newTestAuthenticator(t, p)}.WrapUnary(
+	wrapped := authInterceptor{a: newTestAuthenticator(t, p)}.WrapUnary(
 		func(ctx context.Context, _ connect.AnyRequest) (connect.AnyResponse, error) {
 			id, ok := IdentityFrom(ctx)
 			if !ok {
@@ -233,7 +233,7 @@ func nilIfUser(id Identity) error {
 }
 
 func TestInterceptorDisabledPassesThroughWithoutIdentity(t *testing.T) {
-	wrapped := AuthInterceptor(nil).WrapUnary(func(ctx context.Context, _ connect.AnyRequest) (connect.AnyResponse, error) {
+	wrapped := AuthInterceptor(nil, true).WrapUnary(func(ctx context.Context, _ connect.AnyRequest) (connect.AnyResponse, error) {
 		if _, ok := IdentityFrom(ctx); ok {
 			t.Error("identity set with OIDC disabled")
 		}

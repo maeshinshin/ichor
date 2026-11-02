@@ -27,7 +27,7 @@ func TestStreamEndsWhenTheTokenExpires(t *testing.T) {
 		<-ctx.Done() // a follow-mode log stream with nothing to say
 
 		return ctx.Err()
-	}, connect.WithInterceptors(AuthInterceptor(a)))
+	}, connect.WithInterceptors(AuthInterceptor(a, false)))
 
 	srv := httptest.NewServer(h)
 	defer srv.Close()

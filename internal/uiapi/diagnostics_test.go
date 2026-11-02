@@ -29,6 +29,9 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/resources/network"
 	"github.com/siderolabs/talos/pkg/machinery/resources/runtime"
 	"github.com/siderolabs/talos/pkg/machinery/resources/secrets"
+
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/credentials"
 )
 
 func TestParseBPFFilter(t *testing.T) {
@@ -165,12 +168,17 @@ func keys(m map[string][]byte) []string {
 func TestTalosRolePerScope(t *testing.T) {
 	t.Parallel()
 
-	// The node's RBAC table (Talos v1.14): reader for the bundle's calls,
-	// etcd:backup for EtcdSnapshot, operator for PacketCapture.
+	// The node's RBAC table (Talos v1.14): reader for the bundle's calls, etcd:backup for EtcdSnapshot,
+	// operator for PacketCapture. The controller picks the role from the purpose, which is the scope's name.
 	want := map[DownloadScope]string{ScopeSupportBundle: "os:reader", ScopeEtcdSnapshot: "os:etcd:backup", ScopePacketCapture: "os:operator"}
 	for scope, role := range want {
-		if got := string(scope.talosRole()); got != role {
-			t.Errorf("%s: role %s, want %s", scope, got, role)
+		roles, err := credentials.TalosRoles(ichorv1alpha1.TalosCredentialPurpose(scope), "")
+		if err != nil {
+			t.Fatalf("%s: %v", scope, err)
+		}
+
+		if got := roles.Strings(); len(got) != 1 || got[0] != role {
+			t.Errorf("%s: role %v, want %s", scope, got, role)
 		}
 	}
 }

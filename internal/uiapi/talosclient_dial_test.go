@@ -31,7 +31,7 @@ func TestTalosClientsDialObservedEndpoint(t *testing.T) {
 		t.Errorf("maintenance client endpoints = %v, want [%s]", got, observed)
 	}
 
-	reader, err := NewMachineryNodeTalosClient(ctx, cluster, m, newTestBundle())
+	reader, err := NewMachineryNodeTalosClient(ctx, cluster, m, testTalosIdentity(t))
 	if err != nil {
 		t.Fatalf("NewMachineryNodeTalosClient (reader): %v", err)
 	}
@@ -40,7 +40,7 @@ func TestTalosClientsDialObservedEndpoint(t *testing.T) {
 		t.Errorf("reader client endpoints = %v, want [%s]", got, observed)
 	}
 
-	download, err := NewMachineryDownloadTalosClient(ctx, cluster, m, newTestBundle(), ScopeSupportBundle)
+	download, err := NewMachineryDownloadTalosClient(ctx, cluster, m, testTalosIdentity(t), ScopeSupportBundle)
 	if err != nil {
 		t.Fatalf("NewMachineryDownloadTalosClient: %v", err)
 	}

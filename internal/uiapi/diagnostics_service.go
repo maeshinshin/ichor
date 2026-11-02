@@ -29,7 +29,6 @@ import (
 
 	"connectrpc.com/connect"
 	machineapi "github.com/siderolabs/talos/pkg/machinery/api/machine"
-	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	"golang.org/x/net/bpf"
 	"golang.org/x/sync/errgroup"
 	authv1 "k8s.io/api/authorization/v1"
@@ -76,7 +75,7 @@ var interfaceNameRE = regexp.MustCompile(`^[A-Za-z0-9_.:@-]{1,32}$`)
 // DownloadTalosClientFactory opens the Talos connection for one download,
 // with the Talos role scope needs.
 type DownloadTalosClientFactory func(
-	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, bundle *secrets.Bundle, scope DownloadScope,
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, id *TalosIdentity, scope DownloadScope,
 ) (DownloadTalosClient, error)
 
 // diagnostics is the Server's state for the downloads: a counting semaphore.
@@ -228,12 +227,14 @@ func (s *Server) startDownload(
 			fmt.Errorf("the download was refused because its audit Event could not be recorded: %w", err))
 	}
 
-	bundle, err := loadBundle(ctx, s.Client, s.ControllerNamespace, cluster)
+	// The certificate is asked for as the signed-in user: the webhook checks the same download verb again
+	// and the controller signs it for the least role the call needs, for minutes.
+	id, err := s.issueAsCaller(ctx, cluster, ichorv1alpha1.TalosCredentialPurpose(scope), m.Name, 0, "")
 	if err != nil {
-		return nil, nil, connect.NewError(connect.CodeInternal, err)
+		return nil, nil, connect.NewError(connect.CodePermissionDenied, err)
 	}
 
-	tc, err := s.DownloadTalosClient(ctx, cluster, m, bundle, scope)
+	tc, err := s.DownloadTalosClient(ctx, cluster, m, id, scope)
 	if err != nil {
 		return nil, nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("connecting to machine's Talos API: %w", err))
 	}

@@ -119,9 +119,13 @@ var _ = Describe("CA rotation credentials", func() {
 			APIGroups: []string{ichorv1alpha1.GroupVersion.Group}, Resources: []string{resourceTalosClusters + "/" + CredentialsScope}, Verbs: []string{DownloadVerb},
 		}
 
+		// The webhook (not running in this suite) decides which purposes a creator may ask for; the RBAC
+		// rule only lets the user create the request.
+		mint := rbacv1.PolicyRule{APIGroups: []string{ichorv1alpha1.GroupVersion.Group}, Resources: []string{"taloscredentialrequests"}, Verbs: []string{"create"}}
+
 		// admin: reads, updates, downloads. editor: reads and updates only. reader: reads only.
 		for user, rules := range map[string][]rbacv1.PolicyRule{
-			credAdminUser: {read, write, download}, credEditorUser: {read, write}, credReaderUser: {read},
+			credAdminUser: {read, write, download, mint}, credEditorUser: {read, write, mint}, credReaderUser: {read},
 		} {
 			name := "cred-test-" + user
 			Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, &rbacv1.ClusterRole{Name: name, Rules: rules}))).To(Succeed())

@@ -577,7 +577,8 @@ networkPolicy:
     ## Narrow the `world` egress and ingress. Empty (the default) keeps today's behaviour. Each
     ## list is CIDRs; when set, the rule names them instead of the `world` entity. Only these chart-rendered
     ## policies honour them (the installer's copy in config/cilium-network-policy stays on `world`), so set
-    ## networkPolicy.cilium.enabled: true to use them.
+    ## networkPolicy.cilium.enabled: true (or leave it unset on Cilium) to use them. In dynamic mode talosCIDRs and
+    ## externalCIDRs are fallbacks next to the controller-maintained policy.
     ##   externalCIDRs: where externalPorts may go (the S3 endpoint, the OIDC issuer).
     ##   talosCIDRs: the Talos nodes' addresses for apid (50000) and the API server (6443). Nodes that
     ##     have not joined yet are "world", so include their subnet.

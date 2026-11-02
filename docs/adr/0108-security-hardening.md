@@ -135,6 +135,14 @@ Audit: workload hardening and the supply chain. Fixed here, all of it without a 
 - Network. The Cilium default stays opt-in. The chart's policies gain `externalCIDRs`, `talosCIDRs` and
   `uiIngressCIDRs`; when set they replace the `world` entity for those rules. The installer's static copy keeps
   `world`, because it has no values. FQDN rules and a metrics-namespace restriction are deferred.
+- Network (amended). Supersedes the bullet above for the defaults: the policies are on by default wherever Cilium is
+  the CNI (chart: `networkPolicy.cilium.enabled` unset renders them when the `cilium.io/v2` API is served; `false` is the
+  escape hatch, with a NOTICE on upgrade). The controller and ichor-ui lose their static `world` egress to Talos nodes,
+  API servers and S3; the controller maintains `ichor-controller-talos-egress` with exactly the addresses and names its
+  CRs name, updated before a discovery probe is dialled. DNS egress goes through Cilium's DNS proxy so `toFQDNs` works.
+  The flow table and the Cilium semantics relied on are in ADR 0100's amendment of 2026-11-02. `externalCIDRs`,
+  `talosCIDRs` and `uiIngressCIDRs` remain as static fallbacks; `world` stays only for ichor-ui's 443 (OIDC issuer,
+  pull request host) and its serving port.
 - Workflow hygiene. `go mod tidy` no longer rewrites files in CI (`go mod tidy -diff` and `go mod verify` fail on
   drift); kind is pinned by version and sha256; every job has `timeout-minutes`; `test-chart` no longer runs on
   every branch push; `actionlint` (in the Nix shell) runs in the lint workflow; `npm ci --ignore-scripts` in the

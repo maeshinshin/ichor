@@ -31,7 +31,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 
@@ -567,7 +566,7 @@ var _ = Describe("DiscoveryReconciler.DiscoverAll known addresses", func() {
 	})
 
 	It("probes the address of a Node that a reset by Ichor left behind, but not once it is Ready again", func() {
-		cluster := &ichorv1alpha1.TalosCluster{ObjectMeta: metav1.ObjectMeta{Name: "reset-node-cluster", Namespace: tmNamespace},
+		cluster := &ichorv1alpha1.TalosCluster{Name: "reset-node-cluster", Namespace: tmNamespace,
 			Spec: ichorv1alpha1.TalosClusterSpec{Discovery: &ichorv1alpha1.TalosClusterDiscovery{
 				Addresses: []string{"198.51.100.20", "198.51.100.21"},
 			}}}

@@ -314,7 +314,9 @@ func TestNodeResetByHostnameStoresTheMachineNameAsConfirm(t *testing.T) {
 	}
 
 	s, k8s := opServer(t, objs...)
-	s.Impersonate = func(Identity) (client.Client, error) { return reviewing(k8s, true, new([]authv1.ResourceAttributes)), nil }
+	s.Impersonate = func(Identity) (client.Client, error) {
+		return reviewing(k8s, true, new([]authv1.ResourceAttributes)), nil
+	}
 	user := context.WithValue(context.Background(), identityKey{}, Identity{User: bgUser})
 
 	req := nodeCreateReq(&pb.NodeActionRequest{

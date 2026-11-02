@@ -162,6 +162,10 @@ func (h *BreakGlassHandler) handleOperation(ctx context.Context, req admission.R
 		return admission.Allowed("")
 	}
 
+	if err := refuseSystemNamespace("TalosOperation", req.Namespace); err != nil {
+		return admission.Denied(err.Error())
+	}
+
 	var op ichorv1alpha1.TalosOperation
 	if err := json.Unmarshal(req.Object.Raw, &op); err != nil {
 		return admission.Errored(http.StatusBadRequest, fmt.Errorf("decoding the operation: %w", err))
@@ -420,6 +424,12 @@ func clusterSecretRefChanges(old, updated *ichorv1alpha1.TalosCluster) []string 
 // handleEtcdBackup gates spec.destination.s3.credentialsSecretRef the same way, and the rest of the
 // destination (where the credentials and the snapshots go), and refuses plain http without insecure.
 func (h *BreakGlassHandler) handleEtcdBackup(ctx context.Context, req admission.Request) admission.Response {
+	if req.Operation == opCreate {
+		if err := refuseSystemNamespace("TalosEtcdBackup", req.Namespace); err != nil {
+			return admission.Denied(err.Error())
+		}
+	}
+
 	if (req.Operation != opCreate && req.Operation != opUpdate) || slices.Contains(h.ExemptUsers, req.UserInfo.Username) {
 		return admission.Allowed("")
 	}

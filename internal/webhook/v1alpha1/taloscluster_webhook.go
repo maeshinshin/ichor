@@ -79,6 +79,10 @@ func isUnschedulable(c *ichorv1alpha1.TalosCluster) bool {
 func (v *TalosClusterCustomValidator) ValidateCreate(ctx context.Context, obj *ichorv1alpha1.TalosCluster) (admission.Warnings, error) {
 	talosclusterlog.Info("Validation for TalosCluster upon creation", "name", obj.GetName())
 
+	if err := refuseSystemNamespace("TalosCluster", obj.Namespace); err != nil {
+		return nil, err
+	}
+
 	if err := validateCNICreate(obj); err != nil {
 		return nil, err
 	}

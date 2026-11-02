@@ -71,6 +71,10 @@ type TalosMachineCustomValidator struct {
 func (v *TalosMachineCustomValidator) ValidateCreate(ctx context.Context, obj *ichorv1alpha1.TalosMachine) (admission.Warnings, error) {
 	talosmachinelog.Info("Validation for TalosMachine upon creation", "name", obj.GetName())
 
+	if err := refuseSystemNamespace("TalosMachine", obj.Namespace); err != nil {
+		return nil, err
+	}
+
 	// A machine created already approved is an approval too.
 	if err := v.checkEndpoint(ctx, nil, obj); err != nil {
 		return nil, err

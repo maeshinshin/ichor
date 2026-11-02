@@ -19,11 +19,17 @@ package etcdbackup
 import (
 	"bytes"
 	"context"
+	"crypto/hkdf"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"time"
+
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 // ErrNotFound is what Store.Get returns, wrapped, for a key that does not exist.
@@ -143,9 +149,42 @@ type RestoreMarker struct {
 // PinnedKey is the object key of the pinned snapshot under a backup's prefix.
 func PinnedKey(prefix string) string { return prefix + "/" + PinnedName }
 
-// PutMarker writes m.
-func PutMarker(ctx context.Context, store Store, prefix string, m *RestoreMarker) error {
-	b, err := json.Marshal(m)
+// markerInfo domain-separates the marker's HMAC key from the backup key (both derive from the passphrase).
+const markerInfo = "ichor.maesh.dev/etcd-backup/marker/v1"
+
+// signedMarker is the marker object as stored: the marker's JSON and its HMAC. An object without Marker
+// is a legacy unsigned one (a bare RestoreMarker).
+type signedMarker struct {
+	Marker json.RawMessage `json:"marker"`
+	MAC    string          `json:"mac"`
+}
+
+func markerMAC(passphrase string, body []byte) (string, error) {
+	key, err := hkdf.Key(sha256.New, []byte(passphrase), nil, markerInfo, 32)
+	if err != nil {
+		return "", err
+	}
+
+	h := hmac.New(sha256.New, key)
+	h.Write(body)
+
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// PutMarker writes m, signed with a key derived from passphrase (see Passphrase): someone who can only
+// write to the bucket cannot forge a marker.
+func PutMarker(ctx context.Context, store Store, prefix, passphrase string, m *RestoreMarker) error {
+	body, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+
+	mac, err := markerMAC(passphrase, body)
+	if err != nil {
+		return err
+	}
+
+	b, err := json.Marshal(signedMarker{Marker: body, MAC: mac})
 	if err != nil {
 		return err
 	}
@@ -153,8 +192,11 @@ func PutMarker(ctx context.Context, store Store, prefix string, m *RestoreMarker
 	return store.Put(ctx, prefix+"/"+MarkerName, bytes.NewReader(b), int64(len(b)))
 }
 
-// GetMarker reads the marker; it returns (nil, nil) when there is none.
-func GetMarker(ctx context.Context, store Store, prefix string) (*RestoreMarker, error) {
+// GetMarker reads and verifies the marker; it returns (nil, nil) when there is none. A marker whose HMAC
+// does not match is an error. A legacy unsigned marker (written before signing) is accepted with a
+// warning, because refusing it would strand a restore that is half done across an upgrade; every later
+// PutMarker signs it. ponytail: refuse unsigned markers one release after signing ships.
+func GetMarker(ctx context.Context, store Store, prefix, passphrase string) (*RestoreMarker, error) {
 	rc, err := store.Get(ctx, prefix+"/"+MarkerName)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
@@ -166,8 +208,35 @@ func GetMarker(ctx context.Context, store Store, prefix string) (*RestoreMarker,
 
 	defer func() { _ = rc.Close() }()
 
+	raw, err := io.ReadAll(io.LimitReader(rc, 1<<20))
+	if err != nil {
+		return nil, fmt.Errorf("reading the restore marker: %w", err)
+	}
+
+	var env signedMarker
+	if err := json.Unmarshal(raw, &env); err != nil {
+		return nil, fmt.Errorf("decoding the restore marker: %w", err)
+	}
+
+	body := []byte(env.Marker)
+
+	if len(body) == 0 {
+		logf.FromContext(ctx).Info("the restore marker is not signed (written by an older release); accepting it once, the next write signs it")
+
+		body = raw
+	} else {
+		want, err := markerMAC(passphrase, body)
+		if err != nil {
+			return nil, err
+		}
+
+		if !hmac.Equal([]byte(want), []byte(env.MAC)) {
+			return nil, errors.New("the restore marker's signature does not match: it was not written by this cluster's controller")
+		}
+	}
+
 	var m RestoreMarker
-	if err := json.NewDecoder(io.LimitReader(rc, 1<<20)).Decode(&m); err != nil {
+	if err := json.Unmarshal(body, &m); err != nil {
 		return nil, fmt.Errorf("decoding the restore marker: %w", err)
 	}
 

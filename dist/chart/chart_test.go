@@ -601,21 +601,67 @@ func TestUIOIDC(t *testing.T) {
 		t.Error("OIDC env present by default; it must be off")
 	}
 
-	on := renderChartWithValues(t, "ichor", "ichorUI.oidc.enabled=true",
-		"ichorUI.oidc.issuer=https://idp.example", "ichorUI.oidc.clientId=ichor")
+	base := []string{"ichorUI.oidc.enabled=true", "ichorUI.oidc.issuer=https://idp.example", "ichorUI.oidc.clientId=ichor"}
+	named := append(slices.Clone(base), "ichorUI.oidc.impersonate.groups={oidc:platform}", "ichorUI.oidc.impersonate.users={oidc:alice}")
+
+	on := renderChartWithValues(t, "ichor", named...)
 	onDep := find(on, kindDeployment, ichorUIDeploymentName)
 	if got, _ := containerEnvValue(onDep, "ICHOR_OIDC_ISSUER"); got != "https://idp.example" {
 		t.Errorf("ICHOR_OIDC_ISSUER = %q", got)
 	}
 	checkUIBackendRBACMatchesConfig(t, "ichor", on, true, false)
 
-	narrow := renderChartWithValues(t, "ichor", "ichorUI.oidc.enabled=true",
-		"ichorUI.oidc.issuer=https://idp.example", "ichorUI.oidc.clientId=ichor",
-		"ichorUI.oidc.impersonate.groups={oidc:platform}")
-	role := find(narrow, kindClusterRole, ichorUIRoleName)
-	if !strings.Contains(fmt.Sprint(role["rules"]), "oidc:platform") {
-		t.Errorf("impersonate.groups did not become resourceNames: %v", role["rules"])
+	// Impersonation is by name only. The groups are the built-in ones plus the configured ones,
+	// the users the configured ones; neither rule is ever without resourceNames.
+	imp := impersonationRules(find(on, kindClusterRole, ichorUIRoleName))
+	if got := imp["groups"]; !slices.Equal(got, []string{"ichor:viewer", "ichor:operator", "ichor:admin", "oidc:platform"}) {
+		t.Errorf("impersonated groups = %v", got)
 	}
+	if got := imp["users"]; !slices.Equal(got, []string{"oidc:alice"}) {
+		t.Errorf("impersonated users = %v", got)
+	}
+
+	// Without the names, rendering fails rather than allowing every name.
+	if out, err := renderChartWithValuesErr("ichor", append(slices.Clone(base), "ichorUI.oidc.impersonate.users={oidc:alice}")...); err == nil {
+		t.Errorf("OIDC rendered without impersonate.groups: %s", out)
+	}
+	if out, err := renderChartWithValuesErr("ichor", append(slices.Clone(base), "ichorUI.oidc.impersonate.groups={oidc:platform}")...); err == nil {
+		t.Errorf("OIDC rendered without impersonate.users or anyUser: %s", out)
+	}
+
+	// anyUser is the explicit opt-out for users only; groups stay named.
+	anyUser := renderChartWithValues(t, "ichor", append(slices.Clone(base), "ichorUI.oidc.impersonate.groups={oidc:platform}", "ichorUI.oidc.impersonate.anyUser=true")...)
+	rules, _ := find(anyUser, kindClusterRole, ichorUIRoleName)["rules"].([]any)
+	sawOpenUsers := false
+	for _, r := range rules {
+		rm, _ := r.(map[string]any)
+		if containsStr(rm["resources"], "users") && slices.Contains(stringsOf(rm["verbs"]), "impersonate") && rm["resourceNames"] == nil {
+			sawOpenUsers = true
+		}
+		if containsStr(rm["resources"], "groups") && rm["resourceNames"] == nil {
+			t.Error("a groups rule without resourceNames renders")
+		}
+	}
+	if !sawOpenUsers {
+		t.Error("anyUser=true did not render the open users rule")
+	}
+}
+
+// impersonationRules returns the resourceNames of the impersonate rule of each resource ("users", "groups")
+// in a decoded ClusterRole, and fails the test on a rule that has none.
+func impersonationRules(role map[string]any) map[string][]string {
+	out := map[string][]string{}
+	rules, _ := role["rules"].([]any)
+	for _, r := range rules {
+		rm, _ := r.(map[string]any)
+		if !slices.Contains(stringsOf(rm["verbs"]), "impersonate") {
+			continue
+		}
+		for _, res := range stringsOf(rm["resources"]) {
+			out[res] = append(out[res], stringsOf(rm["resourceNames"])...)
+		}
+	}
+	return out
 }
 
 // TestUIUsers pins's chart switch: off renders nothing of it; on renders the flags, the
@@ -697,9 +743,31 @@ func TestUIUsers(t *testing.T) {
 	}
 
 	both := renderChartWithValues(t, "ichor", "ichorUI.users.enabled=true", "ichorUI.users.externalURL=https://x",
-		"ichorUI.oidc.enabled=true", "ichorUI.oidc.issuer=https://idp", "ichorUI.oidc.clientId=c")
-	if strings.Contains(fmt.Sprint(find(both, kindClusterRole, ichorUIRoleName)["rules"]), "ichor:viewer") {
-		t.Error("with an external IdP too, the groups must stay unrestricted unless configured")
+		"ichorUI.oidc.enabled=true", "ichorUI.oidc.issuer=https://idp", "ichorUI.oidc.clientId=c",
+		"ichorUI.oidc.impersonate.groups={oidc:platform}", "ichorUI.oidc.impersonate.users={oidc:alice}")
+	if got := impersonationRules(find(both, kindClusterRole, ichorUIRoleName))["groups"]; !slices.Contains(got, "oidc:platform") || !slices.Contains(got, "ichor:admin") {
+		t.Errorf("with an external IdP too, the groups are the built-in ones plus the configured: %v", got)
+	}
+
+	// The Ichor users are listed by the controller in a role that renders empty; with users
+	// off there is none.
+	managed := find(on, kindClusterRole, "ichor-ui-impersonate")
+	if managed == nil {
+		t.Fatal("the controller-managed impersonation ClusterRole is not rendered with users.enabled")
+	}
+	if rules, _ := managed["rules"].([]any); len(rules) != 0 {
+		t.Errorf("the managed impersonation role must start empty: %v", rules)
+	}
+	if find(on, "ClusterRoleBinding", "ichor-ui-impersonate") == nil {
+		t.Error("the managed impersonation role is not bound")
+	}
+	if find(off, kindClusterRole, "ichor-ui-impersonate") != nil {
+		t.Error("the managed impersonation role renders by default")
+	}
+	for res, names := range impersonationRules(find(on, kindClusterRole, ichorUIRoleName)) {
+		if res == "users" {
+			t.Errorf("users-only mode must not grant a static users impersonation: %v", names)
+		}
 	}
 }
 
@@ -766,29 +834,30 @@ func checkUIBackendRBACMatchesConfig(t *testing.T, release string, docs []map[st
 	configDocs := loadYAMLDocs(t, ichorUIConfigRolePath)
 	configRole := find(configDocs, kindClusterRole, ichorUIRoleName)
 
-	// The impersonate rule is in the generated role but the chart renders it only
-	// with ichorUI.oidc.enabled, so the default render is compared without it and the OIDC render
-	// (TestUIOIDC) with it.
-	if !oidc && configRole != nil {
+	// The impersonate rules depend on the values (the configured groups and users)
+	// and are pinned by TestUIOIDC and TestUIUsers; the rest of the role is compared whole.
+	withoutImpersonate := func(role map[string]any) map[string]any {
+		if role == nil {
+			return nil
+		}
+
 		var kept []any
-		rules, _ := configRole["rules"].([]any)
+
+		rules, _ := role["rules"].([]any)
 		for _, r := range rules {
 			rm, _ := r.(map[string]any)
 			if !slices.Contains(stringsOf(rm["verbs"]), "impersonate") {
 				kept = append(kept, r)
 			}
 		}
-		configRole = map[string]any{"rules": kept}
+
+		return map[string]any{"rules": kept}
 	}
 
-	// With ichorUI.users.enabled the impersonate groups are narrowed to the built-in roles
-	// (TestUIUsers pins that), so that render compares only the namespaced Role.
-	if !users {
-		checkRBACRulesMatch(t, release,
-			"ClusterRole "+ichorUIRoleName,
-			configRole, find(docs, kindClusterRole, ichorUIRoleName),
-			ichorUIConfigRolePath, "dist/chart/templates/rbac/ichor-ui-role.yaml")
-	}
+	checkRBACRulesMatch(t, release,
+		"ClusterRole "+ichorUIRoleName,
+		withoutImpersonate(configRole), withoutImpersonate(find(docs, kindClusterRole, ichorUIRoleName)),
+		ichorUIConfigRolePath, "dist/chart/templates/rbac/ichor-ui-role.yaml")
 
 	// The namespaced Role carrying the secrets rule: same name as the ClusterRole in
 	// config/ (disambiguated only by kind there), but split into its own chart file
@@ -1457,6 +1526,14 @@ func TestControllerRBACHoldsNoEscalation(t *testing.T) {
 		}
 
 		for triple := range rbacTriples(allRules(d)) {
+			// The one exception: the controller keeps the list of Ichor users that ichor-ui may
+			// impersonate in one named ClusterRole, and needs `escalate` on that role alone to grant the
+			// impersonate right it does not hold. Only the exact name qualifies.
+			if triple.group == "rbac.authorization.k8s.io" && triple.resource == "clusterroles" && triple.names == "ichor-ui-impersonate" &&
+				(triple.verb == "escalate" || triple.verb == verbGetController || triple.verb == "update") {
+				continue
+			}
+
 			switch {
 			case triple.verb == "escalate" || triple.verb == "bind",
 				triple.resource == "customresourcedefinitions" && triple.verb != verbGetController,

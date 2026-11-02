@@ -8,4 +8,5 @@ resources:
 - service_account.yaml
 - role.yaml
 - role_binding.yaml
+- impersonate_role.yaml
 - secrets_role_binding.yaml

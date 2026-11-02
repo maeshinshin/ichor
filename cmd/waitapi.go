@@ -133,9 +133,13 @@ func trustedConfig(get func() (*rest.Config, error), pool *kubetrust.Pool, trust
 // waitForAPIServerDefault probes the in-cluster/kubeconfig API server with the production bounds.
 func waitForAPIServerDefault(ctx context.Context, probeAddr string) (*rest.Config, error) {
 	return waitWithHealth(ctx, probeAddr, func(ctx context.Context) (*rest.Config, error) {
-		return waitForAPIServer(ctx, func() (*rest.Config, error) {
+		get := func() (*rest.Config, error) {
 			return trustedConfig(ctrl.GetConfig, kubetrust.Shared, kubetrust.TrustFile)
-		},
+		}
+		// The Service address may be down for reasons only this controller can repair (apifallback.go).
+		get = withAPIFallback(get, func() []string { return readAPIServers(apiServersFile(kubetrust.TrustFile)) }, apiFallbackAfter, time.Now)
+
+		return waitForAPIServer(ctx, get,
 			func(c *rest.Config) (discovery.ServerGroupsInterface, error) {
 				return discovery.NewDiscoveryClientForConfig(c)
 			},

@@ -167,8 +167,17 @@ var _ = Describe("TalosMachineReconciler provisioning a node in maintenance mode
 			Expect(talos.applyCalls).To(BeEmpty())
 		}
 
-		talos.stage = stageRunning
+		// A volume that failed to come up (TPM key on a TPM-less machine) is named in the message.
+		talos.stage = "booting"
+		talos.volumeFailure = "STATE: stat /dev/tpm0: no such file or directory"
 		got := reconcileOnce()
+		Expect(readyCondition(got).Reason).To(Equal(reasonNodeStarting))
+		Expect(readyCondition(got).Message).To(ContainSubstring("a volume failed"))
+		Expect(readyCondition(got).Message).To(ContainSubstring("stat /dev/tpm0: no such file or directory"))
+		talos.volumeFailure = ""
+
+		talos.stage = stageRunning
+		got = reconcileOnce()
 		Expect(got.Status.Stage).To(Equal(stageRunning))
 		Expect(readyCondition(got).Reason).To(Equal(reasonConverged))
 		Expect(readyCondition(got).Status).To(Equal(metav1.ConditionTrue))

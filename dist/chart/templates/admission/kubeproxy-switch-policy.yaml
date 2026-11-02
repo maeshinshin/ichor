@@ -17,12 +17,21 @@ spec:
         apiVersions: ["v1alpha1"]
         operations: ["UPDATE"]
         resources: ["talosclusters"]
+  # has() guards: an object without spec.cni.kubeProxy reads as "" instead of failing the CEL (and,
+  # with failurePolicy Fail, refusing every update of the cluster).
+  variables:
+    - name: oldProxy
+      expression: >-
+        has(oldObject.spec.cni) && has(oldObject.spec.cni.kubeProxy) ? oldObject.spec.cni.kubeProxy : ""
+    - name: newProxy
+      expression: >-
+        has(object.spec.cni) && has(object.spec.cni.kubeProxy) ? object.spec.cni.kubeProxy : ""
   validations:
     - expression: >-
-        object.spec.cni.kubeProxy == oldObject.spec.cni.kubeProxy ||
+        variables.newProxy == variables.oldProxy ||
         (has(object.metadata.annotations) &&
          "ichor.maesh.dev/confirm-kube-proxy-switch" in object.metadata.annotations &&
-         object.metadata.annotations["ichor.maesh.dev/confirm-kube-proxy-switch"] == object.spec.cni.kubeProxy)
+         object.metadata.annotations["ichor.maesh.dev/confirm-kube-proxy-switch"] == variables.newProxy)
       message: >-
         switching spec.cni.kubeProxy requires the
         ichor.maesh.dev/confirm-kube-proxy-switch annotation set to the new

@@ -45,7 +45,7 @@ func addAddrReq(addr string) *connect.Request[pb.AddDiscoveryAddressRequest] {
 }
 
 func TestAddDiscoveryAddressAppendsOnlyThatAddress(t *testing.T) {
-	c := discoveryCluster(&ichorv1alpha1.TalosClusterDiscovery{Addresses: []string{knownAddr}, CIDRs: []string{"10.1.0.0/24"}})
+	c := discoveryCluster(&ichorv1alpha1.TalosClusterDiscovery{Addresses: []string{knownAddr}, CIDRs: []string{cidrA}})
 	k8s := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(c).Build()
 	s := &Server{Client: k8s}
 
@@ -64,7 +64,7 @@ func TestAddDiscoveryAddressAppendsOnlyThatAddress(t *testing.T) {
 	}
 
 	d := got.Spec.Discovery
-	if d == nil || len(d.Addresses) != 2 || d.Addresses[1] != "10.0.0.56" || len(d.CIDRs) != 1 {
+	if d == nil || len(d.Addresses) != 2 || d.Addresses[1] != addrB || len(d.CIDRs) != 1 {
 		t.Fatalf("want one address appended and the CIDRs kept, got %+v", d)
 	}
 

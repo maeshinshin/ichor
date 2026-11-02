@@ -70,6 +70,8 @@ const (
 // run never happens on the converged path and an apply never happens on a
 // blocked one.
 type fakeTalosClient struct {
+	volumeFailure string
+
 	current    []byte
 	currentErr error
 
@@ -253,6 +255,10 @@ func (f *fakeTalosClient) Shutdown(_ context.Context, force bool) error {
 
 func (f *fakeTalosClient) MachineStage(context.Context) (string, error) {
 	return f.stage, f.stageErr
+}
+
+func (f *fakeTalosClient) VolumeFailures(context.Context) (string, error) {
+	return f.volumeFailure, nil
 }
 
 // kube-apiserver fields (config_rollout_apiserver_test.go, ADR 0080 amendment).

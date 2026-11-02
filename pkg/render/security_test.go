@@ -1,0 +1,356 @@
+/*
+Copyright 2026 maeshinshin.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package render
+
+import (
+	"net/netip"
+	"slices"
+	"strings"
+	"testing"
+
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+)
+
+const (
+	fwController = "192.168.10.0/24"
+	fwNodes      = "10.0.0.0/24"
+)
+
+func secCluster(s *ichorv1alpha1.TalosClusterSecurity) *ichorv1alpha1.TalosCluster {
+	c := testCluster("true")
+	c.Spec.Security = s
+
+	return c
+}
+
+func fwCluster(mut func(*ichorv1alpha1.TalosClusterFirewall)) *ichorv1alpha1.TalosCluster {
+	fw := &ichorv1alpha1.TalosClusterFirewall{
+		Enabled: true, ControllerCIDRs: []string{fwController}, NodeCIDRs: []string{fwNodes},
+	}
+	if mut != nil {
+		mut(fw)
+	}
+
+	return secCluster(&ichorv1alpha1.TalosClusterSecurity{Firewall: fw})
+}
+
+// rules returns the names of every NetworkRuleConfig in out.
+func ruleNames(out string) []string {
+	var names []string
+
+	for doc := range strings.SplitSeq(out, "\n---\n") {
+		if !strings.Contains(doc, metricsRuleKind) {
+			continue
+		}
+
+		for line := range strings.SplitSeq(doc, "\n") {
+			if n, ok := strings.CutPrefix(line, "name: "); ok {
+				names = append(names, n)
+			}
+		}
+	}
+
+	slices.Sort(names)
+
+	return names
+}
+
+func ruleDoc(out, name string) string {
+	return section(out, "name: "+name+"\n")
+}
+
+// TestSecurityDefaultOff proves's rule: a cluster without the options renders the same
+// bytes as one with every option present but off.
+func TestSecurityDefaultOff(t *testing.T) {
+	bundle := testBundle(t)
+
+	for _, role := range []string{roleControlPlane, roleWorker} {
+		m := testMachine("n", role, nil)
+		base := mustRender(t, testCluster("true"), m, bundle, nil)
+
+		for name, s := range map[string]*ichorv1alpha1.TalosClusterSecurity{
+			"empty":    {},
+			"disabled": {Firewall: &ichorv1alpha1.TalosClusterFirewall{}, WireGuard: &ichorv1alpha1.TalosClusterWireGuard{}},
+		} {
+			if got := mustRender(t, secCluster(s), m, bundle, nil); got != base {
+				t.Errorf("%s/%s: render differs from a cluster without spec.security", role, name)
+			}
+		}
+
+		for _, banned := range []string{"NetworkDefaultActionConfig", "ichor-fw-", "KubeAuditPolicyConfig\nconfiguration:\n    apiVersion: audit.k8s.io/v1\n    kind: Policy\n    omitStages", "luks2"} {
+			if strings.Contains(base, banned) {
+				t.Errorf("%s: default render contains %q", role, banned)
+			}
+		}
+	}
+}
+
+func TestFirewall(t *testing.T) {
+	bundle := testBundle(t)
+	cp := testMachine("cp", roleControlPlane, nil)
+	worker := testMachine("w", roleWorker, nil)
+
+	t.Run("control plane gets block and the full rule set", func(t *testing.T) {
+		out := mustRender(t, fwCluster(nil), cp, bundle, nil)
+
+		if !strings.Contains(section(out, metricsDefaultAct), "ingress: block") {
+			t.Fatalf("default action is not block:\n%s", out)
+		}
+
+		want := []string{
+			"ichor-fw-apid", "ichor-fw-cilium-health", "ichor-fw-cilium-tunnel", "ichor-fw-etcd",
+			"ichor-fw-kubelet", "ichor-fw-kubernetes-api", "ichor-fw-trustd",
+		}
+		got := ruleNames(out)
+
+		if strings.Join(got, ",") != strings.Join(want, ",") {
+			t.Fatalf("rules = %v, want %v", got, want)
+		}
+
+		apid := ruleDoc(out, "ichor-fw-apid")
+		for _, s := range []string{fwController, fwNodes, "50000"} {
+			if !strings.Contains(apid, s) {
+				t.Errorf("apid rule lacks %s:\n%s", s, apid)
+			}
+		}
+
+		api := ruleDoc(out, "ichor-fw-kubernetes-api")
+		for _, s := range []string{fwController, fwNodes, "10.244.0.0/16", "10.96.0.0/12", "6443"} {
+			if !strings.Contains(api, s) {
+				t.Errorf("kubernetes-api rule lacks %s:\n%s", s, api)
+			}
+		}
+
+		if etcd := ruleDoc(out, "ichor-fw-etcd"); !strings.Contains(etcd, "2379-2380") || strings.Contains(etcd, fwController) {
+			t.Errorf("etcd rule wrong:\n%s", etcd)
+		}
+
+		if tun := ruleDoc(out, "ichor-fw-cilium-tunnel"); !strings.Contains(tun, "8472") || !strings.Contains(tun, "protocol: udp") {
+			t.Errorf("tunnel rule wrong:\n%s", tun)
+		}
+	})
+
+	t.Run("a worker gets no etcd, trustd or apiserver rule", func(t *testing.T) {
+		got := strings.Join(ruleNames(mustRender(t, fwCluster(nil), worker, bundle, nil)), ",")
+		if got != "ichor-fw-apid,ichor-fw-cilium-health,ichor-fw-cilium-tunnel,ichor-fw-kubelet" {
+			t.Fatalf("worker rules = %s", got)
+		}
+	})
+
+	t.Run("geneve moves the tunnel port", func(t *testing.T) {
+		c := fwCluster(nil)
+		c.Spec.CNI.Tunnel = "geneve"
+
+		if tun := ruleDoc(mustRender(t, c, worker, bundle, nil), "ichor-fw-cilium-tunnel"); !strings.Contains(tun, "6081") {
+			t.Fatalf("no geneve port:\n%s", tun)
+		}
+	})
+
+	t.Run("control planes narrow etcd and kubelet", func(t *testing.T) {
+		out := mustRender(t, fwCluster(func(f *ichorv1alpha1.TalosClusterFirewall) {
+			f.ControlPlaneCIDRs = []string{"10.0.0.10/32"}
+		}), cp, bundle, nil)
+
+		etcd := ruleDoc(out, "ichor-fw-etcd")
+		if !strings.Contains(etcd, "10.0.0.10/32") || strings.Contains(etcd, fwNodes) {
+			t.Fatalf("etcd rule should name only the control plane:\n%s", etcd)
+		}
+	})
+
+	t.Run("wireguard, kubespan, extra sources and allow rules", func(t *testing.T) {
+		c := fwCluster(func(f *ichorv1alpha1.TalosClusterFirewall) {
+			f.KubeSpan = true
+			f.TalosAPICIDRs = []string{"172.16.0.0/12"}
+			f.APIServerCIDRs = []string{"203.0.113.0/24"}
+			f.Allow = []ichorv1alpha1.TalosClusterFirewallRule{
+				{Name: "ingress", Protocol: "tcp", Ports: []string{"80", "443", "8000-8100"}, CIDRs: []string{"0.0.0.0/0"}},
+			}
+		})
+		c.Spec.Security.WireGuard = &ichorv1alpha1.TalosClusterWireGuard{Enabled: true}
+
+		out := mustRender(t, c, cp, bundle, nil)
+
+		for name, want := range map[string]string{
+			"ichor-fw-cilium-wireguard": "51871", "ichor-fw-kubespan": "51820",
+			"ichor-fw-apid": "172.16.0.0/12", "ichor-fw-kubernetes-api": "203.0.113.0/24",
+			"ichor-fw-allow-ingress": "8000-8100",
+		} {
+			if d := ruleDoc(out, name); !strings.Contains(d, want) {
+				t.Errorf("%s lacks %s:\n%s", name, want, d)
+			}
+		}
+	})
+
+	t.Run("the metrics rule coexists", func(t *testing.T) {
+		c := fwCluster(nil)
+		c.Spec.ControlPlaneMetrics = &ichorv1alpha1.TalosClusterControlPlaneMetrics{Enabled: true, AllowedCIDRs: []string{metricsCIDR}}
+
+		if r := ruleDoc(mustRender(t, c, cp, bundle, nil), ruleNameControlPlaneMetrics); r == "" {
+			t.Fatal("metrics rule missing")
+		}
+	})
+
+	t.Run("enabled without sources is an error", func(t *testing.T) {
+		for name, mut := range map[string]func(*ichorv1alpha1.TalosClusterFirewall){
+			"controller": func(f *ichorv1alpha1.TalosClusterFirewall) { f.ControllerCIDRs = nil },
+			"nodes":      func(f *ichorv1alpha1.TalosClusterFirewall) { f.NodeCIDRs = nil },
+			"bad cidr":   func(f *ichorv1alpha1.TalosClusterFirewall) { f.NodeCIDRs = []string{"nope"} },
+			"bad port": func(f *ichorv1alpha1.TalosClusterFirewall) {
+				f.Allow = []ichorv1alpha1.TalosClusterFirewallRule{{Name: "x", Protocol: "tcp", Ports: []string{"0"}, CIDRs: []string{"10.0.0.0/8"}}}
+			},
+		} {
+			if _, _, err := Render(fwCluster(mut), cp, bundle, nil, nil); err == nil {
+				t.Errorf("%s: want an error", name)
+			}
+		}
+	})
+
+	t.Run("controller source preflight", func(t *testing.T) {
+		c := fwCluster(nil)
+
+		if err := ControllerSourceAllowed(c, netip.MustParseAddr("192.168.10.7")); err != nil {
+			t.Errorf("inside: %v", err)
+		}
+
+		if err := ControllerSourceAllowed(c, netip.MustParseAddr("10.9.9.9")); err == nil {
+			t.Error("outside must be refused")
+		}
+
+		if err := ControllerSourceAllowed(testCluster("true"), netip.MustParseAddr("10.9.9.9")); err != nil {
+			t.Errorf("firewall off must not check: %v", err)
+		}
+	})
+}
+
+func TestPodSecurityAndAudit(t *testing.T) {
+	bundle := testBundle(t)
+	cp := testMachine("cp", roleControlPlane, nil)
+	worker := testMachine("w", roleWorker, nil)
+
+	ps := secCluster(&ichorv1alpha1.TalosClusterSecurity{PodSecurity: &ichorv1alpha1.TalosClusterPodSecurity{
+		Enforce: "restricted", ExemptNamespaces: []string{"rook-ceph", "monitoring"},
+	}})
+
+	t.Run("pod security overrides only what is set and keeps kube-system", func(t *testing.T) {
+		doc := section(mustRender(t, ps, cp, bundle, nil), "kind: KubeAdmissionControlConfig")
+		for _, want := range []string{"enforce: restricted", "audit: restricted", "warn: restricted", "- kube-system", "- monitoring", "- rook-ceph"} {
+			if !strings.Contains(doc, want) {
+				t.Errorf("lacks %q:\n%s", want, doc)
+			}
+		}
+
+		if strings.Contains(doc, "enforce: baseline") {
+			t.Errorf("baseline survived:\n%s", doc)
+		}
+	})
+
+	t.Run("a worker is untouched", func(t *testing.T) {
+		if mustRender(t, ps, worker, bundle, nil) != mustRender(t, testCluster("true"), worker, bundle, nil) {
+			t.Fatal("worker render changed")
+		}
+	})
+
+	for _, policy := range []string{"metadata", "rbacChanges", "writes"} {
+		t.Run("audit "+policy, func(t *testing.T) {
+			c := secCluster(&ichorv1alpha1.TalosClusterSecurity{Audit: &ichorv1alpha1.TalosClusterAudit{Policy: policy}})
+			doc := section(mustRender(t, c, cp, bundle, nil), "kind: KubeAuditPolicyConfig")
+
+			if strings.Count(doc, "level:") == 0 {
+				t.Fatalf("no rules:\n%s", doc)
+			}
+
+			switch policy {
+			case "metadata":
+				if strings.Contains(doc, "level: Request") {
+					t.Errorf("metadata preset logs bodies:\n%s", doc)
+				}
+			case "rbacChanges":
+				if !strings.Contains(doc, "RequestResponse") || !strings.Contains(doc, "rbac.authorization.k8s.io") {
+					t.Errorf("rbac rule missing:\n%s", doc)
+				}
+			case "writes":
+				if !strings.Contains(doc, "level: Request\n") {
+					t.Errorf("writes rule missing:\n%s", doc)
+				}
+			}
+
+			// Secrets stay at Metadata and the rule comes first.
+			if policy != "metadata" {
+				if i, j := strings.Index(doc, "secrets"), strings.Index(doc, "level: Request"); i < 0 || j < 0 || i > j {
+					t.Errorf("secrets rule must precede body-logging rules:\n%s", doc)
+				}
+			}
+		})
+	}
+
+	t.Run("a pre-1.14 contract is refused, not silently ignored", func(t *testing.T) {
+		c := ps.DeepCopy()
+		c.Spec.VersionContract = "v1.12"
+
+		if _, _, err := Render(c, cp, bundle, nil, nil); err == nil {
+			t.Fatal("want an error")
+		}
+	})
+}
+
+func TestDiskEncryption(t *testing.T) {
+	bundle := testBundle(t)
+	cp := testMachine("cp", roleControlPlane, nil)
+
+	enc := func(d ichorv1alpha1.TalosClusterDiskEncryption) *ichorv1alpha1.TalosCluster {
+		return secCluster(&ichorv1alpha1.TalosClusterSecurity{DiskEncryption: &d})
+	}
+
+	t.Run("tpm renders STATE and EPHEMERAL, EPHEMERAL locked to STATE", func(t *testing.T) {
+		yes := true
+		out := mustRender(t, enc(ichorv1alpha1.TalosClusterDiskEncryption{Type: "tpm", RequireSecureBoot: &yes}), cp, bundle, nil)
+
+		state, eph := section(out, "name: STATE\n"), section(out, "name: EPHEMERAL\n")
+
+		for name, doc := range map[string]string{"STATE": state, "EPHEMERAL": eph} {
+			for _, want := range []string{"provider: luks2", "tpm:", "checkSecurebootStatusOnEnroll: true"} {
+				if !strings.Contains(doc, want) {
+					t.Errorf("%s lacks %q:\n%s", name, want, doc)
+				}
+			}
+		}
+
+		if strings.Contains(state, "lockToState") || !strings.Contains(eph, "lockToState: true") {
+			t.Errorf("lockToState wrong:\nSTATE:\n%s\nEPHEMERAL:\n%s", state, eph)
+		}
+	})
+
+	t.Run("nodeID and kms", func(t *testing.T) {
+		if out := mustRender(t, enc(ichorv1alpha1.TalosClusterDiskEncryption{Type: "nodeID"}), cp, bundle, nil); !strings.Contains(out, "nodeID: {}") {
+			t.Errorf("no nodeID key:\n%s", out)
+		}
+
+		out := mustRender(t, enc(ichorv1alpha1.TalosClusterDiskEncryption{Type: "kms", KMSEndpoint: "https://kms.example.com:4443"}), cp, bundle, nil)
+		if !strings.Contains(out, "endpoint: https://kms.example.com:4443") {
+			t.Errorf("no kms endpoint:\n%s", out)
+		}
+	})
+
+	t.Run("a plaintext KMS endpoint is refused", func(t *testing.T) {
+		for _, ep := range []string{"", "kms.example.com:4443", "grpc://kms.example.com:4443", "http://kms.example.com"} {
+			c := enc(ichorv1alpha1.TalosClusterDiskEncryption{Type: "kms", KMSEndpoint: ep})
+			if _, _, err := Render(c, cp, bundle, nil, nil); err == nil {
+				t.Errorf("%q: want an error", ep)
+			}
+		}
+	})
+}

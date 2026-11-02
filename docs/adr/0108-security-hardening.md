@@ -264,6 +264,17 @@ Run 2026-11-02 on the KubeVirt harness (prefix `ichor-e2e-s2`): Ichor `v0.0.1870
 
 Not run: KMS, `requireSecureBoot`, a controller scheduled on the worker, strict mode. Teardown: all `ichor-e2e-s2` objects deleted and confirmed; the cached ISO DataVolume untouched.
 
+### Fixes after the hardware run (2026-11-02)
+
+Not yet rechecked on hardware unless a line says so.
+
+1. WireGuard: the managed Cilium values now carry `rollOutCiliumPods: true` whenever `wireGuard.enabled` is set, so the chart puts a `cilium-config` checksum on the agent pod template and the DaemonSet rolls (rolling update) when the Helm Job changes the config. `CNIValuesApplied` was already set only after `daemonSetRolledOut` (observed generation, updated and ready pods), so it now means the agents run the new values. Chosen over a controller-side annotation patch because Helm owns the DaemonSet and the chart already has the switch. Recheck: patch wireGuard on a running cluster, expect `Encryption: Wireguard` with no manual restart.
+2. Firewall lock-out: the TalosCluster webhook refuses a firewall change whose `nodeCIDRs` miss an approved machine's address or whose `controlPlaneCIDRs` miss an approved control plane's (address from the machine's observed or declared endpoint; hostnames are skipped), and warns when `talosAPICIDRs` is empty. The recovery that worked is in the guide.
+3. Reset: a reset asked for by hostname is stored with the machine name as `confirm`, which the TalosOperation CRD compares with `machineRef.name`. A removal whose drain fails (a bare pod) now returns the error so the reconcile is retried with backoff, writes the pod into the `Removal` condition and a Warning Event. There is no force-drain option; the guide says to delete the pod. The Kubernetes Node of a reset machine is annotated `ichor.maesh.dev/reset-by-ichor` and discovery ignores its address while it is not Ready; it is not deleted because the kubelet could register it again.
+4. A node stuck in stage `booting` reports volumes in phase failed and their error in the `Ready` message.
+5. `kubernetesTalosAPIAccess` enabled in a patch at the cluster layer or the worker role is refused at admission, naming `layer: role` with `target.role: controlplane`. Selector and machine layers are not checked at admission (they fail at render with the old message).
+6. Confirmed designed: ADR 0080's amendment leaves API-server restarts to a config rollout. The `APIServerRestartRequired` and `RebootRequired` messages now give `ichor config apply --cluster NAME`, and the guide says so.
+
 ## Hardware results
 
 ### 2026-11-02: Ichor's own hardening, KubeVirt harness (lane s1)

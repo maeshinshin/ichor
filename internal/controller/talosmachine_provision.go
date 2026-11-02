@@ -276,7 +276,12 @@ func (r *TalosMachineReconciler) followStage(
 		reason = reasonNodeRebooting
 	}
 
-	res, err = r.following(ctx, m, reason, fmt.Sprintf("the node is in stage %q on its way to running", stage))
+	message := fmt.Sprintf("the node is in stage %q on its way to running", stage)
+	if failed := volumeFailures(ctx, talos); failed != "" {
+		message += "; a volume failed: " + failed
+	}
+
+	res, err = r.following(ctx, m, reason, message)
 
 	return res, true, err
 }
@@ -337,4 +342,30 @@ func installDiskKnown(rendered []byte) (bool, error) {
 	expr, err := machine.Install().DiskMatchExpression()
 
 	return expr != nil, err
+}
+
+// volumeFailureReader is implemented by a TalosClient that can say which Talos volumes failed.
+// Optional on purpose: a client without it leaves the stage message as it was.
+type volumeFailureReader interface {
+	// VolumeFailures lists the volumes in phase failed with Talos's error message
+	// ("STATE: stat /dev/tpm0: no such file or directory"), joined by "; "; "" when none failed.
+	VolumeFailures(ctx context.Context) (string, error)
+}
+
+// volumeFailures asks talos for failed volumes; a client that cannot, or an error, gives "".
+func volumeFailures(ctx context.Context, talos TalosClient) string {
+	reader, ok := talos.(volumeFailureReader)
+	if !ok {
+		return ""
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, talosCallTimeout)
+	defer cancel()
+
+	failed, err := reader.VolumeFailures(ctx)
+	if err != nil {
+		return ""
+	}
+
+	return failed
 }

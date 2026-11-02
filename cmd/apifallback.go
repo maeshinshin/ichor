@@ -62,7 +62,7 @@ func readAPIServers(path string) []string {
 
 	var out []string
 
-	for _, l := range strings.Fields(string(data)) {
+	for l := range strings.FieldsSeq(string(data)) {
 		if net.ParseIP(l) != nil {
 			out = append(out, l)
 		}
@@ -105,7 +105,7 @@ func withAPIFallback(get func() (*rest.Config, error), addrs func() []string, af
 
 		next := rest.CopyConfig(cfg)
 		next.Host = "https://" + net.JoinHostPort(list[(late/2)%len(list)], apiServerPort)
-		next.TLSClientConfig.ServerName = apiServerName
+		next.ServerName = apiServerName
 
 		return next, nil
 	}

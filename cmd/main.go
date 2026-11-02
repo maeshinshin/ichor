@@ -45,7 +45,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"github.com/maeshinshin/ichor/internal/metricsauth"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
@@ -53,6 +52,7 @@ import (
 	"github.com/maeshinshin/ichor/internal/certreload"
 	"github.com/maeshinshin/ichor/internal/controller"
 	"github.com/maeshinshin/ichor/internal/kubetrust"
+	"github.com/maeshinshin/ichor/internal/metricsauth"
 	"github.com/maeshinshin/ichor/internal/settings"
 	webhookv1alpha1 "github.com/maeshinshin/ichor/internal/webhook/v1alpha1"
 	// +kubebuilder:scaffold:imports

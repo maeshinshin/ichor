@@ -379,6 +379,7 @@ func main() {
 				ExemptUsers: exempt,
 			}), "Failed to create webhook", "webhook", "BreakGlass")
 			must(webhookv1alpha1.SetupMachineReclaimWebhookWithManager(mgr), "Failed to create webhook", "webhook", "MachineReclaim")
+			must(webhookv1alpha1.SetupCredentialRequestWebhookWithManager(mgr), "Failed to create webhook", "webhook", "TalosCredentialRequest")
 			mgr.GetWebhookServer() // idempotent; makes sure the server is a runnable even if no handler did
 			close(webhooksUp)
 		}()
@@ -566,6 +567,9 @@ func main() {
 		ControllerNamespace: ns,
 		Recorder:            mgr.GetEventRecorderFor("ichor-controller"), //nolint:staticcheck // typed against record.EventRecorder, as above
 	}).SetupWithManager(mgr), "Failed to create controller", "controller", "machinereclaim")
+	must((&controller.TalosCredentialRequestReconciler{
+		Client: mgr.GetClient(), Scheme: mgr.GetScheme(), ControllerNamespace: ns,
+	}).SetupWithManager(mgr), "Failed to create controller", "controller", "taloscredentialrequest")
 	// +kubebuilder:scaffold:builder
 
 	must(mgr.AddHealthzCheck("healthz", healthz.Ping), "Failed to set up health check")

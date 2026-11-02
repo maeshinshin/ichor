@@ -27,6 +27,12 @@ import (
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
 )
 
+const (
+	labelConfig    = "config/rbac"
+	labelChart     = "chart"
+	verbBreakGlass = "break-glass"
+)
+
 // TestLeaderElectionRoleIsLeasesOnly guards: the manager locks with a Lease, so the
 // leader-election Role holds no ConfigMap rights, in the chart and in config/rbac alike.
 func TestLeaderElectionRoleIsLeasesOnly(t *testing.T) {
@@ -37,7 +43,7 @@ func TestLeaderElectionRoleIsLeasesOnly(t *testing.T) {
 		t.Fatalf("leader election Role missing: chart=%v config=%v", chartRole != nil, cfgRole != nil)
 	}
 
-	for label, role := range map[string]map[string]any{"chart": chartRole, "config/rbac": cfgRole} {
+	for label, role := range map[string]map[string]any{labelChart: chartRole, labelConfig: cfgRole} {
 		got := rbacTriples(allRules(role))
 		if !got[rbacTriple{"coordination.k8s.io", "leases", "create", ""}] {
 			t.Errorf("%s: the leader-election Role cannot create leases", label)
@@ -53,11 +59,12 @@ func TestLeaderElectionRoleIsLeasesOnly(t *testing.T) {
 
 // TestWebhooksFailFastAndCoverFinalizersAndDeletes guards: every webhook (chart and
 // config/webhook) answers within 5 seconds, so an unavailable manager refuses writes quickly; the
-// break-glass finalizer check also sees TalosOperation updates; the IchorInstallation check sees deletes.
+// break-glass finalizer check also sees TalosOperation updates; the IchorInstallation check sees
+// deletes.
 func TestWebhooksFailFastAndCoverFinalizersAndDeletes(t *testing.T) {
 	docs := renderChart(t, "ichor")
 
-	sets := map[string][]map[string]any{"chart": docs}
+	sets := map[string][]map[string]any{labelChart: docs}
 	for _, f := range []string{"../../config/webhook/manifests.yaml"} {
 		sets["config/webhook"] = loadYAMLDocs(t, f)
 	}
@@ -82,7 +89,7 @@ func TestWebhooksFailFastAndCoverFinalizersAndDeletes(t *testing.T) {
 
 		opsOf := func(name string) string {
 			rules, _ := hooks[name]["rules"].([]any)
-			var ops []string
+			ops := make([]string, 0, len(rules))
 
 			for _, r := range rules {
 				rm, _ := r.(map[string]any)
@@ -115,7 +122,8 @@ func TestKubeProxyPolicyGuardsAbsentFields(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		for _, want := range []string{"has(object.spec.cni)", "has(oldObject.spec.cni)", "has(oldObject.spec.cni.kubeProxy)"} {
+		guards := []string{"has(object.spec.cni)", "has(oldObject.spec.cni)", "has(oldObject.spec.cni.kubeProxy)"}
+		for _, want := range guards {
 			if !strings.Contains(string(b), want) {
 				t.Errorf("%s lacks the guard %q", path, want)
 			}
@@ -158,7 +166,8 @@ func escalationNames(t *testing.T, label string, roles ...map[string]any) map[st
 			names := stringsOf(rm["resourceNames"])
 			for _, res := range stringsOf(rm["resources"]) {
 				if len(names) == 0 {
-					t.Errorf("%s: %s %s grants %v on %s without resourceNames", label, kindOf(role), nameOf(role), verbs, res)
+					t.Errorf("%s: %s %s grants %v on %s without resourceNames",
+						label, kindOf(role), nameOf(role), verbs, res)
 				}
 
 				if out[res] == nil {
@@ -220,24 +229,27 @@ func TestInstallerEscalationNamesEveryRoleOfTheInstallManifest(t *testing.T) {
 	cfgDocs := loadYAMLDocs(t, installerConfigRolePath)
 	chartDocs := renderChartWithValues(t, "ichor", "installer.enabled=true")
 
-	for label, docs := range map[string][]map[string]any{"config/rbac": cfgDocs, "chart": chartDocs} {
+	for label, docs := range map[string][]map[string]any{labelConfig: cfgDocs, labelChart: chartDocs} {
 		cr, rl := "installer-role", "installer-role"
-		if label == "chart" {
+		if label == labelChart {
 			cr, rl = "ichor-installer-role", "ichor-installer-role"
 		}
 
 		clusterLevel := escalationNames(t, label, find(docs, kindClusterRole, cr))
 		if !sameSet(clusterLevel["clusterroles"], setOf(clusterRoles)) {
-			t.Errorf("%s: installer ClusterRole bind/escalate on clusterroles names %v, install.yaml has %v", label, clusterLevel["clusterroles"], clusterRoles)
+			t.Errorf("%s: installer ClusterRole bind/escalate on clusterroles names %v, install.yaml has %v",
+				label, clusterLevel["clusterroles"], clusterRoles)
 		}
 
 		if !sameSet(clusterLevel["roles"], setOf(allRoles)) {
-			t.Errorf("%s: installer ClusterRole bind/escalate on roles names %v, install.yaml has %v", label, clusterLevel["roles"], allRoles)
+			t.Errorf("%s: installer ClusterRole bind/escalate on roles names %v, install.yaml has %v",
+				label, clusterLevel["roles"], allRoles)
 		}
 
 		nsLevel := escalationNames(t, label, find(docs, kindRole, rl))
 		if !sameSet(nsLevel["roles"], setOf(nsRoles)) {
-			t.Errorf("%s: installer Role bind/escalate on roles names %v, install.yaml has %v in ichor-system", label, nsLevel["roles"], nsRoles)
+			t.Errorf("%s: installer Role bind/escalate on roles names %v, install.yaml has %v in ichor-system",
+				label, nsLevel["roles"], nsRoles)
 		}
 	}
 }
@@ -278,8 +290,8 @@ func TestCNIEscalationNamesOnlyCiliumsRoles(t *testing.T) {
 	chartDocs := renderChartWithValues(t, "ichor", "cniHelm.enabled=true")
 
 	for label, role := range map[string]map[string]any{
-		"config/rbac": find(cfgDocs, kindClusterRole, "cni-role"),
-		"chart":       find(chartDocs, kindClusterRole, "ichor-cni-role"),
+		labelConfig: find(cfgDocs, kindClusterRole, "cni-role"),
+		labelChart:  find(chartDocs, kindClusterRole, "ichor-cni-role"),
 	} {
 		got := escalationNames(t, label, role)
 		for res, names := range rendered {
@@ -288,6 +300,125 @@ func TestCNIEscalationNamesOnlyCiliumsRoles(t *testing.T) {
 					t.Errorf("%s: the Cilium chart renders %s %q, which the CNI role cannot bind or escalate", label, res, n)
 				}
 			}
+		}
+	}
+}
+
+func policyValidations(policy map[string]any) (exprs []string, messages []string) {
+	spec, _ := policy["spec"].(map[string]any)
+	list, _ := spec["validations"].([]any)
+
+	for _, v := range list {
+		vm, _ := v.(map[string]any)
+		e, _ := vm["expression"].(string)
+		m, _ := vm["message"].(string)
+		exprs = append(exprs, strings.Join(strings.Fields(e), " "))
+		messages = append(messages, m)
+	}
+
+	return exprs, messages
+}
+
+// TestControllerJobsPolicyMirrorsConfig guards: the chart ships the same Job policies as
+// config/admission (the release namespace and the controller's ServiceAccount substituted), plus its
+// own image-repository rule, and nothing renders with admission.enabled=false.
+func TestControllerJobsPolicyMirrorsConfig(t *testing.T) {
+	cfg := loadYAMLDocs(t, "../../config/admission/controller-jobs-policy.yaml")
+	docs := renderChart(t, "ichor")
+
+	for _, name := range []string{"ichor-controller-jobs", "ichor-controller-job-image"} {
+		want := find(cfg, kindValidatingAdmissionPolicy, name)
+		got := find(docs, kindValidatingAdmissionPolicy, name)
+
+		if want == nil || got == nil {
+			t.Fatalf("policy %s: config=%v chart=%v", name, want != nil, got != nil)
+		}
+
+		wantExprs, _ := policyValidations(want)
+		gotExprs, gotMsgs := policyValidations(got)
+
+		var kept []string
+
+		for i, e := range gotExprs {
+			if strings.Contains(gotMsgs[i], "admission.jobImageRepository") {
+				continue
+			}
+
+			e = strings.ReplaceAll(e, "'default'", "'ichor-system'")
+			kept = append(kept, strings.ReplaceAll(e, "system:serviceaccount:default:", "system:serviceaccount:ichor-system:"))
+		}
+
+		if strings.Join(kept, "\n") != strings.Join(wantExprs, "\n") {
+			t.Errorf("policy %s: chart validations differ from config/admission/controller-jobs-policy.yaml\n"+
+				"chart:  %q\nconfig: %q", name, kept, wantExprs)
+		}
+
+		if find(docs, kindValidatingAdmissionPolicyBind, name+"-binding") == nil {
+			t.Errorf("no binding for %s", name)
+		}
+	}
+
+	off := renderChartWithValues(t, "ichor", "admission.enabled=false")
+	if find(off, kindValidatingAdmissionPolicy, "ichor-controller-jobs") != nil {
+		t.Error("the Job policy renders with admission.enabled=false")
+	}
+
+	noRepo := renderChartWithValues(t, "ichor", "admission.jobImageRepository=")
+	_, msgs := policyValidations(find(noRepo, kindValidatingAdmissionPolicy, "ichor-controller-jobs"))
+
+	for _, m := range msgs {
+		if strings.Contains(m, "admission.jobImageRepository") {
+			t.Error("the image-repository rule renders with an empty admission.jobImageRepository")
+		}
+	}
+}
+
+// TestControllerDeletesPodsOnlyInKubeSystem guards: the controller's cluster-wide rules
+// grant no delete on pods (it evicts to drain); the one direct delete, the stale agent pod of an etcd
+// restore, is a Role in kube-system, in config/rbac and in the chart.
+func TestControllerDeletesPodsOnlyInKubeSystem(t *testing.T) {
+	deletePods := rbacTriple{"", "pods", "delete", ""}
+
+	chartDocs := renderChart(t, "ichor")
+	cfgDocs := loadYAMLDocs(t, "../../config/rbac/pod_restart_role.yaml")
+
+	for _, d := range findAll(chartDocs, kindClusterRole) {
+		if strings.HasSuffix(nameOf(d), "-manager-role") && rbacTriples(allRules(d))[deletePods] {
+			t.Errorf("chart ClusterRole %s grants %s cluster-wide", nameOf(d), deletePods)
+		}
+	}
+
+	for _, d := range loadYAMLDocs(t, controllerConfigRolePath) {
+		if kindOf(d) == kindClusterRole && rbacTriples(allRules(d))[deletePods] {
+			t.Errorf("config/rbac/role.yaml ClusterRole %s grants %s cluster-wide", nameOf(d), deletePods)
+		}
+	}
+
+	for label, docs := range map[string][]map[string]any{labelChart: chartDocs, labelConfig: cfgDocs} {
+		var role map[string]any
+
+		for _, d := range findAll(docs, kindRole) {
+			if namespaceOf(d) == "kube-system" && rbacTriples(allRules(d))[deletePods] {
+				role = d
+			}
+		}
+
+		if role == nil {
+			t.Errorf("%s: no Role in kube-system grants %s", label, deletePods)
+			continue
+		}
+
+		var bound bool
+
+		for _, b := range findAll(docs, kindRoleBinding) {
+			ref, _ := b["roleRef"].(map[string]any)
+			if namespaceOf(b) == "kube-system" && ref["name"] == nameOf(role) {
+				bound = true
+			}
+		}
+
+		if !bound {
+			t.Errorf("%s: Role %s in kube-system has no RoleBinding", label, nameOf(role))
 		}
 	}
 }

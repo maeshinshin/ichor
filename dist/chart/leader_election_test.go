@@ -18,6 +18,7 @@ package chart
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 )
@@ -93,6 +94,31 @@ func TestWebhooksFailFastAndCoverFinalizersAndDeletes(t *testing.T) {
 
 		if !strings.Contains(opsOf("vichorinstallation-v1alpha1.kb.io"), "DELETE") {
 			t.Errorf("%s: vichorinstallation does not see DELETE", label)
+		}
+	}
+}
+
+// TestKubeProxyPolicyGuardsAbsentFields guards ADR 0108: the kube-proxy switch policy reads
+// spec.cni.kubeProxy behind has(), so an object without it cannot make the CEL fail and, with
+// failurePolicy Fail, refuse every update of the cluster. Chart and config/admission agree.
+func TestKubeProxyPolicyGuardsAbsentFields(t *testing.T) {
+	for _, path := range []string{
+		"../../config/admission/kubeproxy-switch-policy.yaml",
+		"templates/admission/kubeproxy-switch-policy.yaml",
+	} {
+		b, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		for _, want := range []string{"has(object.spec.cni)", "has(oldObject.spec.cni)", "has(oldObject.spec.cni.kubeProxy)"} {
+			if !strings.Contains(string(b), want) {
+				t.Errorf("%s lacks the guard %q", path, want)
+			}
+		}
+
+		if strings.Contains(string(b), "== oldObject.spec.cni.kubeProxy") {
+			t.Errorf("%s still reads oldObject.spec.cni.kubeProxy unguarded", path)
 		}
 	}
 }

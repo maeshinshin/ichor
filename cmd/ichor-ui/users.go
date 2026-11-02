@@ -130,7 +130,7 @@ type localVerifier struct {
 	issuer string
 }
 
-func (v localVerifier) Verify(ctx context.Context, raw string) (string, time.Time, error) {
+func (v localVerifier) Verify(ctx context.Context, raw string) (uiapi.TokenInfo, error) {
 	pub := make([]crypto.PublicKey, 0, len(v.keys.Public()))
 
 	for _, k := range v.keys.Public() {
@@ -138,17 +138,17 @@ func (v localVerifier) Verify(ctx context.Context, raw string) (string, time.Tim
 	}
 
 	if len(pub) == 0 {
-		return "", time.Time{}, errors.New("no signing keys")
+		return uiapi.TokenInfo{}, errors.New("no signing keys")
 	}
 
 	tok, err := oidc.NewVerifier(v.issuer, &oidc.StaticKeySet{PublicKeys: pub}, &oidc.Config{
 		ClientID: ichorauth.AudienceUI, SupportedSigningAlgs: []string{ichorauth.SigningAlgorithm},
 	}).Verify(ctx, raw)
 	if err != nil {
-		return "", time.Time{}, err
+		return uiapi.TokenInfo{}, err
 	}
 
-	return tok.Subject, tok.IssuedAt, nil
+	return uiapi.TokenInfo{Subject: tok.Subject, IssuedAt: tok.IssuedAt, Expires: tok.Expiry}, nil
 }
 
 // keysFile is the key list inside the mounted ichor-oidc-signing Secret.

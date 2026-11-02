@@ -46,6 +46,8 @@ type Identity struct {
 	// before anything else; AuthInterceptor then allows only the calls in
 	// mustChangeAllowed.
 	MustChange bool
+	// Expires is when the ID token ends; a stream is closed then.
+	Expires time.Time
 }
 
 // The two places an identity can come from.
@@ -65,7 +67,13 @@ const (
 // LocalVerifier verifies an ID token minted by Ichor's own issuer, in process,
 // against its own keys: signature, issuer, audience "ichor-ui" and expiry.
 type LocalVerifier interface {
-	Verify(ctx context.Context, raw string) (subject string, issuedAt time.Time, err error)
+	Verify(ctx context.Context, raw string) (TokenInfo, error)
+}
+
+// TokenInfo is what a LocalVerifier proves about a token.
+type TokenInfo struct {
+	Subject           string
+	IssuedAt, Expires time.Time
 }
 
 type identityKey struct{}
@@ -190,12 +198,12 @@ func (a *Authenticator) Authenticate(ctx context.Context, header string) (Identi
 // and the roles come from the CR, not from the token, so a role change or a
 // disable takes effect here within seconds.
 func (a *Authenticator) authenticateLocal(ctx context.Context, raw string) (Identity, error) {
-	sub, iat, err := a.local.Verify(ctx, raw)
-	if err != nil || sub == "" || a.users == nil {
+	tok, err := a.local.Verify(ctx, raw)
+	if err != nil || tok.Subject == "" || a.users == nil {
 		return Identity{}, errors.New("invalid ID token")
 	}
 
-	u, err := a.users.Get(ctx, sub)
+	u, err := a.users.Get(ctx, tok.Subject)
 	if err != nil || u.Spec.Disabled {
 		return Identity{}, errors.New("invalid ID token")
 	}
@@ -207,11 +215,11 @@ func (a *Authenticator) authenticateLocal(ctx context.Context, raw string) (Iden
 
 	// RevokeSessions and a password change move notBefore: a token issued before it is dead here
 	// too, not only at the issuer's refresh. Whole seconds, like the token's iat.
-	if iat.Unix() < notBefore.Unix() {
+	if tok.IssuedAt.Unix() < notBefore.Unix() {
 		return Identity{}, errors.New("invalid ID token")
 	}
 
-	id := Identity{User: IchorUserPrefix + u.Name, Source: SourceIchor, DisplayName: u.Spec.DisplayName, MustChange: mc}
+	id := Identity{User: IchorUserPrefix + u.Name, Source: SourceIchor, DisplayName: u.Spec.DisplayName, MustChange: mc, Expires: tok.Expires}
 	for _, r := range u.Spec.Roles {
 		id.Groups = append(id.Groups, IchorGroupPrefix+r)
 	}
@@ -241,7 +249,7 @@ func (a *Authenticator) authenticateExternal(ctx context.Context, raw string) (I
 		}
 	}
 
-	id := Identity{User: a.cfg.UsernamePrefix + name, Source: SourceOIDC}
+	id := Identity{User: a.cfg.UsernamePrefix + name, Source: SourceOIDC, Expires: tok.Expiry}
 	// Never let a token name a Kubernetes built-in identity.
 	if strings.HasPrefix(id.User, "system:") || strings.HasPrefix(id.User, IchorUserPrefix) {
 		return Identity{}, errors.New("ID token names a reserved user")
@@ -315,7 +323,22 @@ func (i authInterceptor) WrapStreamingHandler(next connect.StreamingHandlerFunc)
 			return err
 		}
 
-		return next(ctx, conn)
+		// A stream outlives the check made at its start: end it when the token does, so a
+		// revoked or disabled user cannot keep reading logs for hours.
+		id, ok := IdentityFrom(ctx)
+		if !ok || id.Expires.IsZero() {
+			return next(ctx, conn)
+		}
+
+		sctx, cancel := context.WithDeadline(ctx, id.Expires)
+		defer cancel()
+
+		err = next(sctx, conn)
+		if err != nil && ctx.Err() == nil && sctx.Err() != nil {
+			return connect.NewError(connect.CodeUnauthenticated, errors.New("your sign-in expired; sign in again"))
+		}
+
+		return err
 	}
 }
 

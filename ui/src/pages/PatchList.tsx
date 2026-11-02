@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks'
+import { useState } from 'preact/hooks'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -14,9 +14,10 @@ import type { Patch } from '@/gen/ichor/v1alpha1/patch_pb'
 import { patchClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
 import { notifyDone } from '@/lib/notify'
-import { describeError, type ErrorShape } from '@/lib/errors'
 import { matchesQuery } from '@/lib/filter'
 import { targetKindOf } from '@/lib/patchTarget'
+import { describeError, type ErrorShape } from '@/lib/errors'
+import { useList } from '@/lib/useList'
 import { useT } from '@/lib/useT'
 import { Link } from '@/router'
 
@@ -27,22 +28,8 @@ import { Link } from '@/router'
 // (architecture.md, "CLI and UI": "config editing by layer").
 export function PatchList() {
   const t = useT()
-  const [patches, setPatches] = useState<Patch[] | null>(null)
-  const [error, setError] = useState<ErrorShape | null>(null)
+  const { items: patches, error, reload } = useList(async () => (await patchClient.listPatches({})).patches)
   const [query, setQuery] = useState('')
-
-  async function reload() {
-    try {
-      setPatches((await patchClient.listPatches({})).patches)
-      setError(null)
-    } catch (err) {
-      setError(describeError(err))
-    }
-  }
-
-  useEffect(() => {
-    reload()
-  }, [])
 
   if (error) return <ErrorAlert {...error} />
   if (!patches) return <PageSkeleton label={t('patches.loading')} />

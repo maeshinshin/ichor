@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks'
+import { useState } from 'preact/hooks'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { WorkflowIcon } from 'lucide-preact'
 import { Button } from '@/components/ui/button'
@@ -12,10 +12,10 @@ import { OperationControls } from '@/components/OperationControls'
 import { OperationKind, type Operation } from '@/gen/ichor/v1alpha1/operation_pb'
 import { operationClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
-import { describeError, type ErrorShape } from '@/lib/errors'
 import { matchesQuery } from '@/lib/filter'
 import { operationState, progressCounts } from '@/lib/operations'
 import { opStateTone } from '@/lib/status'
+import { useList } from '@/lib/useList'
 import { useT } from '@/lib/useT'
 import { Link } from '@/router'
 
@@ -25,25 +25,8 @@ import { Link } from '@/router'
 // a rollout is the thing people watch.
 export function OperationList() {
   const t = useT()
-  const [ops, setOps] = useState<Operation[] | null>(null)
-  const [error, setError] = useState<ErrorShape | null>(null)
+  const { items: ops, error, reload } = useList(async () => (await operationClient.listOperations({})).operations.slice().sort((a, b) => Number(b.createdAt?.seconds ?? 0n) - Number(a.createdAt?.seconds ?? 0n)), 5000)
   const [query, setQuery] = useState('')
-
-  async function reload() {
-    try {
-      const res = await operationClient.listOperations({})
-      setOps(res.operations.slice().sort((a, b) => Number(b.createdAt?.seconds ?? 0n) - Number(a.createdAt?.seconds ?? 0n)))
-      setError(null)
-    } catch (err) {
-      setError(describeError(err))
-    }
-  }
-
-  useEffect(() => {
-    reload()
-    const id = setInterval(reload, 5000)
-    return () => clearInterval(id)
-  }, [])
 
   if (error) return <ErrorAlert {...error} />
   if (!ops) return <PageSkeleton label={t('ops.loading')} />

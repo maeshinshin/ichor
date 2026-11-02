@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/cosi-project/runtime/pkg/resource"
@@ -151,6 +152,27 @@ func (t *machineryTalosClient) MachineStage(ctx context.Context) (string, error)
 	}
 
 	return res.TypedSpec().Stage.String(), nil
+}
+
+// VolumeFailures lists the volumes whose VolumeStatus phase is failed with their error message, so a
+// node stuck in stage booting says why (a TPM-sealed STATE volume on a machine without a TPM).
+func (t *machineryTalosClient) VolumeFailures(ctx context.Context) (string, error) {
+	list, err := safe.StateListAll[*blockres.VolumeStatus](ctx, t.c.COSI)
+	if err != nil {
+		return "", fmt.Errorf("listing volume statuses: %w", err)
+	}
+
+	var failed []string
+
+	for vs := range list.All() {
+		if spec := vs.TypedSpec(); spec.Phase == blockres.VolumePhaseFailed {
+			failed = append(failed, vs.Metadata().ID()+": "+spec.ErrorMessage)
+		}
+	}
+
+	slices.Sort(failed)
+
+	return strings.Join(failed, "; "), nil
 }
 
 // Schematic reads the ImageFactorySchematic singleton (runtime namespace). Talos derives it from the

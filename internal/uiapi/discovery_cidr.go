@@ -25,7 +25,6 @@ import (
 	"strings"
 
 	"connectrpc.com/connect"
-	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
@@ -60,10 +59,8 @@ func (s *Server) editDiscovery(
 		return nil, nil, mapOperationWriteError(doing, key, err)
 	}
 
-	audit := &pb.AuditRecord{
-		Actor: s.actorName(ctx), At: timestamppb.New(s.now()), Action: action,
-		Target: objectRef(c.Namespace, c.Name), Reason: reason,
-	}
+	audit := s.opAudit(ctx, action, objectRef(c.Namespace, c.Name))
+	audit.Reason = reason
 
 	return clusterToPB(c), audit, nil
 }

@@ -107,6 +107,7 @@ var _ = Describe("the API server restart class", func() {
 		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
 		Expect(cond.Reason).To(Equal(reasonAPIServerRestartRequired))
 		Expect(cond.Message).To(ContainSubstring("KubeAuthenticationConfig"))
+		Expect(cond.Message).To(ContainSubstring("run `ichor config apply --cluster " + f.cluster.Name + " --follow`"))
 		Expect(got.Status.APIServerRestartPaths).To(ContainElement(HavePrefix("KubeAuthenticationConfig")))
 		Expect(got.Status.RebootPaths).To(BeEmpty())
 		Expect(got.Status.AppliedConfigHash).To(BeEmpty())

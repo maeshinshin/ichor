@@ -73,6 +73,8 @@ func TestWireGuardValues(t *testing.T) {
 
 		wants := map[string]any{
 			"encryption.enabled": true, "encryption.type": "wireguard", "encryption.nodeEncryption": true,
+			// The agents read encryption only at start: the chart must roll them when cilium-config changes.
+			"rollOutCiliumPods": true,
 		}
 
 		for path, want := range wants {

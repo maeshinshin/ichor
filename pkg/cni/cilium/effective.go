@@ -167,6 +167,9 @@ func EffectiveValuesForMode(cluster *ichorv1alpha1.TalosCluster, mode cni.KubePr
 		values.Set(eff, "encryption.enabled", true)
 		values.Set(eff, "encryption.type", "wireguard")
 		values.Set(eff, "encryption.nodeEncryption", w.NodeEncryption)
+		// The agents read encryption only at start and the DaemonSet carries no config hash by
+		// default: this makes the chart roll them (rolling update) when cilium-config changes.
+		values.Set(eff, "rollOutCiliumPods", true)
 	}
 
 	return eff, nil

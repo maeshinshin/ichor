@@ -218,6 +218,14 @@ func TestInterceptorRequiresTokenAndStoresIdentity(t *testing.T) {
 		t.Fatalf("no token: code %v", connect.CodeOf(err))
 	}
 
+	// A malformed token is Unauthenticated (401 for ConnectRPC over HTTP), never Internal (500).
+	for _, bad := range []string{"Bearer nope", "Bearer a.b.c", "Bearer \x00", "Basic abc"} {
+		req.Header().Set("Authorization", bad)
+		if _, err := wrapped(context.Background(), req); connect.CodeOf(err) != connect.CodeUnauthenticated {
+			t.Fatalf("%q: code %v, want unauthenticated", bad, connect.CodeOf(err))
+		}
+	}
+
 	req.Header().Set("Authorization", "Bearer "+p.mint(t, p.key, nil))
 	if _, err := wrapped(context.Background(), req); err != nil {
 		t.Fatalf("valid token: %v", err)

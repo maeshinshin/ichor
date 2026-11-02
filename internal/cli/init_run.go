@@ -297,6 +297,10 @@ func waitForCiliumHandover(
 
 	if err := waitForCNIHandover(ctx, k8sClient, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name},
 		cmp.Or(deps.HandoverWait, defaultHandoverWait), deps.HandoverInterval, deps.Stderr); err != nil {
+		if cluster.Spec.ControlPlane.Schedulable == schedulableFalse {
+			err = fmt.Errorf("%w (the control planes are tainted: if workloads are what is pending, approve a worker with `ichor machine approve`)", err)
+		}
+
 		return fmt.Errorf("init: Cilium was not handed over to Ichor: %w", err)
 	}
 

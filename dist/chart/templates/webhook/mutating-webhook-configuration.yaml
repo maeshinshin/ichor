@@ -27,4 +27,5 @@ webhooks:
     resources:
     - talosclusters
   sideEffects: None
+  timeoutSeconds: 5
 {{- end }}

@@ -16,7 +16,11 @@ limitations under the License.
 
 package chart
 
-import "testing"
+import (
+	"fmt"
+	"strings"
+	"testing"
+)
 
 // TestLeaderElectionRoleIsLeasesOnly guards ADR 0108: the manager locks with a Lease, so the
 // leader-election Role holds no ConfigMap rights, in the chart and in config/rbac alike.
@@ -38,6 +42,57 @@ func TestLeaderElectionRoleIsLeasesOnly(t *testing.T) {
 			if tr.resource == "configmaps" {
 				t.Errorf("%s: the leader-election Role grants %s, which a Lease lock does not use", label, tr)
 			}
+		}
+	}
+}
+
+// TestWebhooksFailFastAndCoverFinalizersAndDeletes guards ADR 0108: every webhook (chart and
+// config/webhook) answers within 5 seconds, so an unavailable manager refuses writes quickly; the
+// break-glass finalizer check also sees TalosOperation updates; the IchorInstallation check sees deletes.
+func TestWebhooksFailFastAndCoverFinalizersAndDeletes(t *testing.T) {
+	docs := renderChart(t, "ichor")
+
+	sets := map[string][]map[string]any{"chart": docs}
+	for _, f := range []string{"../../config/webhook/manifests.yaml"} {
+		sets["config/webhook"] = loadYAMLDocs(t, f)
+	}
+
+	for label, set := range sets {
+		hooks := map[string]map[string]any{}
+
+		for _, kind := range []string{"ValidatingWebhookConfiguration", "MutatingWebhookConfiguration"} {
+			for _, d := range findAll(set, kind) {
+				ws, _ := d["webhooks"].([]any)
+				for _, w := range ws {
+					wm, _ := w.(map[string]any)
+					name, _ := wm["name"].(string)
+					hooks[name] = wm
+
+					if got, ok := wm["timeoutSeconds"].(int64); !ok && fmt.Sprint(wm["timeoutSeconds"]) != "5" {
+						t.Errorf("%s: webhook %s has timeoutSeconds %v, want 5", label, name, got)
+					}
+				}
+			}
+		}
+
+		opsOf := func(name string) string {
+			rules, _ := hooks[name]["rules"].([]any)
+			var ops []string
+
+			for _, r := range rules {
+				rm, _ := r.(map[string]any)
+				ops = append(ops, stringsOf(rm["operations"])...)
+			}
+
+			return strings.Join(ops, ",")
+		}
+
+		if !strings.Contains(opsOf("vbreakglassop-v1alpha1.kb.io"), "UPDATE") {
+			t.Errorf("%s: vbreakglassop does not see UPDATE, so a TalosOperation finalizer can be stripped unchecked", label)
+		}
+
+		if !strings.Contains(opsOf("vichorinstallation-v1alpha1.kb.io"), "DELETE") {
+			t.Errorf("%s: vichorinstallation does not see DELETE", label)
 		}
 	}
 }

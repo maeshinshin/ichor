@@ -46,7 +46,7 @@ func SetupTalosConfigPatchWebhookWithManager(mgr ctrl.Manager, secretNamespace s
 		Complete()
 }
 
-// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-talosconfigpatch,mutating=false,failurePolicy=fail,sideEffects=None,groups=ichor.maesh.dev,resources=talosconfigpatches,verbs=create;update,versions=v1alpha1,name=vtalosconfigpatch-v1alpha1.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-talosconfigpatch,mutating=false,failurePolicy=fail,timeoutSeconds=5,sideEffects=None,groups=ichor.maesh.dev,resources=talosconfigpatches,verbs=create;update,versions=v1alpha1,name=vtalosconfigpatch-v1alpha1.kb.io,admissionReviewVersions=v1
 
 // TalosConfigPatchCustomValidator refuses a TalosConfigPatch that would make the render of a
 // machine it applies to fail. It renders every approved machine of the patch's cluster that the

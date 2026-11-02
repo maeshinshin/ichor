@@ -444,12 +444,12 @@ func checkWebhookInvariants(t *testing.T, release string, docs []map[string]any)
 				"vmachinereclaim-v1alpha1.kb.io": {opCreate, opUpdate},
 				// ADR 0110: a patch is dry-rendered against the machines it selects.
 				"vtalosconfigpatch-v1alpha1.kb.io":  {opCreate, opUpdate},
-				"vichorinstallation-v1alpha1.kb.io": {opCreate, opUpdate},
+				"vichorinstallation-v1alpha1.kb.io": {opCreate, opUpdate, "DELETE"},
 				"vtaloscluster-v1alpha1.kb.io":      {opCreate, opUpdate, opDelete}, // ADR 0099
 				// ADR 0065: break-glass checks writes to existing CRs only.
 				"vbreakglass-v1alpha1.kb.io": {opUpdate},
 				// ADR 0085: and the creation of a node reset by hand.
-				"vbreakglassop-v1alpha1.kb.io": {"CREATE"},
+				"vbreakglassop-v1alpha1.kb.io": {"CREATE", "UPDATE"},
 				// ADR 0094: a change to spec.authentication, on create and update; ADR 0065: and the
 				// delete of a tracked cluster.
 				"vauthentication-v1alpha1.kb.io": {opCreate, opUpdate},

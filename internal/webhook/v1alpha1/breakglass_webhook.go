@@ -55,10 +55,10 @@ const (
 
 var breakglasslog = logf.Log.WithName("breakglass-webhook")
 
-// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-breakglass,mutating=false,failurePolicy=fail,sideEffects=None,groups=ichor.maesh.dev,resources=talosmachines;talosconfigpatches,verbs=update,versions=v1alpha1,name=vbreakglass-v1alpha1.kb.io,admissionReviewVersions=v1
-// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-breakglass,mutating=false,failurePolicy=fail,sideEffects=None,groups=ichor.maesh.dev,resources=talosoperations,verbs=create,versions=v1alpha1,name=vbreakglassop-v1alpha1.kb.io,admissionReviewVersions=v1
-// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-breakglass,mutating=false,failurePolicy=fail,sideEffects=None,groups=ichor.maesh.dev,resources=talosclusters,verbs=create;update,versions=v1alpha1,name=vauthentication-v1alpha1.kb.io,admissionReviewVersions=v1
-// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-breakglass,mutating=false,failurePolicy=fail,sideEffects=None,groups=ichor.maesh.dev,resources=talosetcdbackups,verbs=create;update,versions=v1alpha1,name=vsecretrefs-v1alpha1.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-breakglass,mutating=false,failurePolicy=fail,timeoutSeconds=5,sideEffects=None,groups=ichor.maesh.dev,resources=talosmachines;talosconfigpatches,verbs=update,versions=v1alpha1,name=vbreakglass-v1alpha1.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-breakglass,mutating=false,failurePolicy=fail,timeoutSeconds=5,sideEffects=None,groups=ichor.maesh.dev,resources=talosoperations,verbs=create;update,versions=v1alpha1,name=vbreakglassop-v1alpha1.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-breakglass,mutating=false,failurePolicy=fail,timeoutSeconds=5,sideEffects=None,groups=ichor.maesh.dev,resources=talosclusters,verbs=create;update,versions=v1alpha1,name=vauthentication-v1alpha1.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-breakglass,mutating=false,failurePolicy=fail,timeoutSeconds=5,sideEffects=None,groups=ichor.maesh.dev,resources=talosetcdbackups,verbs=create;update,versions=v1alpha1,name=vsecretrefs-v1alpha1.kb.io,admissionReviewVersions=v1
 // +kubebuilder:rbac:groups=authorization.k8s.io,resources=subjectaccessreviews,verbs=create
 
 // BreakGlassOptions configures the break-glass admission check.
@@ -120,6 +120,13 @@ func (h *BreakGlassHandler) Handle(ctx context.Context, req admission.Request) a
 		return h.handleEtcdBackup(ctx, req)
 	}
 
+	return h.checkFinalizerRemoval(ctx, req)
+}
+
+// checkFinalizerRemoval refuses removing an ichor.maesh.dev finalizer from a deleting object unless
+// the user holds break-glass on it (ADR 0065). Finalizers are the controller's: machine-removal on a
+// TalosMachine, etcd-restore and ca-rotation on a TalosOperation.
+func (h *BreakGlassHandler) checkFinalizerRemoval(ctx context.Context, req admission.Request) admission.Response {
 	if req.Operation != opUpdate {
 		return admission.Allowed("")
 	}
@@ -158,6 +165,10 @@ func (h *BreakGlassHandler) Handle(ctx context.Context, req admission.Request) a
 // typed-name confirmation is a CRD rule (confirm == machineRef.name), so it
 // needs no copy here.
 func (h *BreakGlassHandler) handleOperation(ctx context.Context, req admission.Request) admission.Response {
+	if req.Operation == opUpdate {
+		return h.checkFinalizerRemoval(ctx, req)
+	}
+
 	if req.Operation != opCreate {
 		return admission.Allowed("")
 	}

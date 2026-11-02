@@ -28,6 +28,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/version"
+	"github.com/maeshinshin/ichor/pkg/deleteguard"
 )
 
 // nolint:unused
@@ -61,7 +62,7 @@ type IchorInstallationOptions struct {
 	Recorder         record.EventRecorder
 }
 
-// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-ichorinstallation,mutating=false,failurePolicy=fail,sideEffects=NoneOnDryRun,groups=ichor.maesh.dev,resources=ichorinstallations,verbs=create;update,versions=v1alpha1,name=vichorinstallation-v1alpha1.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-ichorinstallation,mutating=false,failurePolicy=fail,timeoutSeconds=5,sideEffects=NoneOnDryRun,groups=ichor.maesh.dev,resources=ichorinstallations,verbs=create;update;delete,versions=v1alpha1,name=vichorinstallation-v1alpha1.kb.io,admissionReviewVersions=v1
 
 // IchorInstallationCustomValidator refuses a spec.version that is not a semantic version. The
 // CRD pattern accepts a numeric pre-release identifier with a leading zero, which the controller's
@@ -103,8 +104,8 @@ func (v *IchorInstallationCustomValidator) ValidateUpdate(ctx context.Context, o
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type IchorInstallation.
-func (v *IchorInstallationCustomValidator) ValidateDelete(_ context.Context, _ *ichorv1alpha1.IchorInstallation) (admission.Warnings, error) {
-	return nil, nil
+func (v *IchorInstallationCustomValidator) ValidateDelete(_ context.Context, obj *ichorv1alpha1.IchorInstallation) (admission.Warnings, error) {
+	return nil, deleteguard.CheckDelete(obj.GetAnnotations())
 }
 
 // deprecatedReclaim warns about the removed installation switch (ADR 0107): it is kept in the

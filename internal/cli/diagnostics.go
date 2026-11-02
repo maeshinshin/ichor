@@ -277,7 +277,7 @@ func runDownload[M chunk](ctx context.Context, c *apiClients, output string, std
 	}
 
 	if path != "-" {
-		_, _ = fmt.Fprintf(stderr, "ichor: wrote %d bytes to %s (mode 0600). The file may contain secrets; keep it safe.\n", n, path)
+		_, _ = fmt.Fprintf(stderr, "ichor: wrote %d bytes to %s (mode 0600). The file is NOT encrypted and may contain secrets; keep it safe.\n", n, path)
 	}
 
 	return nil
@@ -387,7 +387,7 @@ var etcdSnapshotCmd = &cobra.Command{
 	Short: "Download an etcd snapshot from a control plane node",
 	Long: `snapshot downloads an etcd snapshot taken from one control plane node. THE SNAPSHOT CONTAINS
 EVERY KUBERNETES SECRET in the cluster; keep it as you would the secrets themselves. For scheduled,
-encrypted backups use a TalosEtcdBackup instead. Needs the "download" verb on
+encrypted backups use a TalosEtcdBackup instead. The file is plaintext (not encrypted). Needs the "download" verb on
 talosmachines/etcd-snapshot. The file is written with mode 0600; -o - writes to standard output.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {

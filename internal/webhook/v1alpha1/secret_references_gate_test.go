@@ -37,6 +37,7 @@ const (
 	verbDelete    = "delete"
 	resOperations = "talosoperations"
 	secrefNewK8s  = "v1.36.1"
+	secrefBucket  = "bucket"
 )
 
 // Setting or changing a field that names a Secret the controller reads with its own
@@ -148,7 +149,7 @@ var _ = Describe("Secret-references gate", func() {
 				Spec: ichorv1alpha1.TalosEtcdBackupSpec{
 					ClusterRef: corev1.LocalObjectReference{Name: testClusterName},
 					Destination: ichorv1alpha1.TalosEtcdBackupDestination{S3: ichorv1alpha1.TalosEtcdBackupS3{
-						Endpoint: "https://s3.example.org", Bucket: "bucket", Prefix: "etcd",
+						Endpoint: "https://s3.example.org", Bucket: secrefBucket, Prefix: "etcd",
 						CredentialsSecretRef: corev1.LocalObjectReference{Name: secret},
 					}},
 				},

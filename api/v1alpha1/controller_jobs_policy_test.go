@@ -29,6 +29,8 @@ var _ = Describe("controller Job policy", Ordered, func() {
 		installerImage = "registry.example.org/ichor-installer:v0.0.1"
 		nsInstaller    = "ichor-system"
 		nsCNI          = "kube-system"
+		cniSub         = "cni"
+		defaultName    = "default"
 	)
 
 	var admin, controller, other client.Client
@@ -73,12 +75,12 @@ var _ = Describe("controller Job policy", Ordered, func() {
 
 	cniJob := func() *batchv1.Job {
 		j := job(nsCNI, "ichor-cni", corev1.Container{
-			Name: "cni", Image: installerImage, Args: []string{"cni", "helm", "apply", "--cluster=c"},
+			Name: cniSub, Image: installerImage, Args: []string{cniSub, "helm", "apply", "--cluster=c"},
 			Env:          []corev1.EnvVar{{Name: "KUBERNETES_SERVICE_HOST", Value: "localhost"}, {Name: "HOME", Value: "/tmp"}},
 			VolumeMounts: []corev1.VolumeMount{{Name: "tmp", MountPath: "/tmp"}},
 		}, 1500)
 		j.Spec.Template.Spec.HostNetwork = true
-		j.Spec.Template.Spec.Volumes = []corev1.Volume{{Name: "tmp", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}}}
+		j.Spec.Template.Spec.Volumes = []corev1.Volume{{Name: "tmp", EmptyDir: &corev1.EmptyDirVolumeSource{}}}
 
 		return j
 	}
@@ -116,7 +118,7 @@ var _ = Describe("controller Job policy", Ordered, func() {
 		// The policy is bound asynchronously: wait until it denies.
 		Eventually(func() error {
 			j := installer()
-			j.Spec.Template.Spec.ServiceAccountName = "default"
+			j.Spec.Template.Spec.ServiceAccountName = defaultName
 
 			return controller.Create(ctx, j)
 		}, "30s", "100ms").ShouldNot(Succeed())
@@ -136,11 +138,11 @@ var _ = Describe("controller Job policy", Ordered, func() {
 			Expect(err).To(HaveOccurred(), what)
 			Expect(err.Error()).To(ContainSubstring("denied request"), what)
 		},
-		Entry("another ServiceAccount", func(j *batchv1.Job) { j.Spec.Template.Spec.ServiceAccountName = "default" }, "serviceAccountName"),
+		Entry("another ServiceAccount", func(j *batchv1.Job) { j.Spec.Template.Spec.ServiceAccountName = defaultName }, "serviceAccountName"),
 		Entry("the controller's own ServiceAccount", func(j *batchv1.Job) { j.Spec.Template.Spec.ServiceAccountName = "ichor-controller-manager" }, "serviceAccountName"),
 		Entry("the CNI ServiceAccount in the installer namespace", func(j *batchv1.Job) { j.Spec.Template.Spec.ServiceAccountName = "ichor-cni" }, "namespace pairing"),
 		Entry("a command override", func(j *batchv1.Job) { j.Spec.Template.Spec.Containers[0].Command = []string{"/bin/sh"} }, "command"),
-		Entry("other arguments", func(j *batchv1.Job) { j.Spec.Template.Spec.Containers[0].Args = []string{"cni", "helm", "apply"} }, "args"),
+		Entry("other arguments", func(j *batchv1.Job) { j.Spec.Template.Spec.Containers[0].Args = []string{cniSub, "helm", "apply"} }, "args"),
 		Entry("no arguments", func(j *batchv1.Job) { j.Spec.Template.Spec.Containers[0].Args = nil }, "args"),
 		Entry("a second container", func(j *batchv1.Job) {
 			j.Spec.Template.Spec.Containers = append(j.Spec.Template.Spec.Containers, corev1.Container{Name: "x", Image: installerImage})
@@ -149,7 +151,7 @@ var _ = Describe("controller Job policy", Ordered, func() {
 			j.Spec.Template.Spec.InitContainers = []corev1.Container{{Name: "x", Image: installerImage}}
 		}, "initContainers"),
 		Entry("a hostPath volume", func(j *batchv1.Job) {
-			j.Spec.Template.Spec.Volumes = []corev1.Volume{{Name: "h", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/"}}}}
+			j.Spec.Template.Spec.Volumes = []corev1.Volume{{Name: "h", HostPath: &corev1.HostPathVolumeSource{Path: "/"}}}
 		}, "hostPath"),
 		Entry("host networking for the installer", func(j *batchv1.Job) { j.Spec.Template.Spec.HostNetwork = true }, "hostNetwork"),
 		Entry("hostPID", func(j *batchv1.Job) { j.Spec.Template.Spec.HostPID = true }, "hostPID"),
@@ -168,7 +170,7 @@ var _ = Describe("controller Job policy", Ordered, func() {
 		}, "env"),
 		Entry("no active deadline", func(j *batchv1.Job) { j.Spec.ActiveDeadlineSeconds = nil }, "deadline"),
 		Entry("a day-long deadline", func(j *batchv1.Job) { j.Spec.ActiveDeadlineSeconds = ptr.To[int64](86400) }, "deadline"),
-		Entry("a namespace of its own", func(j *batchv1.Job) { j.Namespace = "default" }, "namespace"),
+		Entry("a namespace of its own", func(j *batchv1.Job) { j.Namespace = defaultName }, "namespace"),
 	)
 
 	It("refuses a Cilium Job in the wrong namespace or with an extra volume kind", func() {
@@ -178,13 +180,13 @@ var _ = Describe("controller Job policy", Ordered, func() {
 
 		j = cniJob()
 		j.Spec.Template.Spec.Volumes = append(j.Spec.Template.Spec.Volumes,
-			corev1.Volume{Name: "s", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: "x"}}})
+			corev1.Volume{Name: "s", Secret: &corev1.SecretVolumeSource{SecretName: "x"}})
 		Expect(controller.Create(context.Background(), j)).NotTo(Succeed())
 	})
 
 	It("does not constrain any other identity", func() {
 		j := installer()
-		j.Spec.Template.Spec.ServiceAccountName = "default"
+		j.Spec.Template.Spec.ServiceAccountName = defaultName
 		Expect(other.Create(context.Background(), j)).To(Succeed())
 	})
 

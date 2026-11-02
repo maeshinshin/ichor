@@ -23,7 +23,6 @@ import (
 	"connectrpc.com/connect"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
@@ -49,7 +48,7 @@ var _ = Describe("NodeService reads of an approved machine still in maintenance 
 		insecure     int
 	)
 
-	dial := func(b *secrets.Bundle) (NodeTalosClient, error) { //nolint:unparam // matches the factory signature
+	dial := func(b *TalosIdentity) (NodeTalosClient, error) { //nolint:unparam // matches the factory signature
 		if b != nil {
 			secureDialed++
 

@@ -421,6 +421,11 @@ message DeleteOperationResponse {
 
 message DownloadCARotationCredentialsRequest {
   ObjectRef operation = 1;
+  // lifetime_seconds is how long the certificates in the files are valid (ADR 0108). 0 means one year,
+  // which is also the maximum. A CA-rotation hand-off must outlive the rotation.
+  int64 lifetime_seconds = 2;
+  // read_only makes the talosconfig os:reader instead of os:admin.
+  bool read_only = 3;
 }
 
 message DownloadCARotationCredentialsResponse {

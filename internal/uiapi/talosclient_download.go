@@ -30,13 +30,12 @@ import (
 	"github.com/cosi-project/runtime/pkg/resource"
 	"github.com/cosi-project/runtime/pkg/resource/meta"
 	"github.com/cosi-project/runtime/pkg/state"
+	"github.com/siderolabs/crypto/x509"
 	"github.com/siderolabs/talos/pkg/machinery/api/common"
 	machineapi "github.com/siderolabs/talos/pkg/machinery/api/machine"
 	"github.com/siderolabs/talos/pkg/machinery/client"
 	clientconfig "github.com/siderolabs/talos/pkg/machinery/client/config"
-	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	"github.com/siderolabs/talos/pkg/machinery/constants"
-	"github.com/siderolabs/talos/pkg/machinery/role"
 	yaml "go.yaml.in/yaml/v4"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -55,21 +54,10 @@ const (
 	ScopePacketCapture DownloadScope = "packet-capture"
 )
 
-// talosRole is the least Talos role that may call the scope's API, read from the
-// node's own RBAC table (internal/app/machined/pkg/system/services/machined.go
-// in Talos v1.14): everything the bundle calls is open to os:reader, EtcdSnapshot
-// to os:etcd:backup, and PacketCapture only to os:operator or os:admin. The
-// certificate is minted per call, so the broader role exists for one capture.
-func (sc DownloadScope) talosRole() role.Role {
-	switch sc {
-	case ScopeEtcdSnapshot:
-		return role.EtcdBackup
-	case ScopePacketCapture:
-		return role.Operator
-	default:
-		return role.Reader
-	}
-}
+// The Talos role of each scope is the controller's to decide (credentials.TalosRoles): the least role that
+// may call the scope's API, read from the node's own RBAC table (internal/app/machined/pkg/system/services/
+// machined.go in Talos v1.14). Everything the bundle calls is open to os:reader, EtcdSnapshot to
+// os:etcd:backup, and PacketCapture only to os:operator or os:admin.
 
 // DownloadTalosClient is the Talos surface the three downloads need from one
 // machine. Like NodeTalosClient it has no method that changes the node.
@@ -90,18 +78,13 @@ type DownloadTalosClient interface {
 // NewMachineryDownloadTalosClient dials m with a certificate for scope's Talos
 // role. bundle is required: a machine that is not approved has no CA trust yet.
 func NewMachineryDownloadTalosClient(
-	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, bundle *secrets.Bundle, scope DownloadScope,
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, id *TalosIdentity, scope DownloadScope,
 ) (DownloadTalosClient, error) {
-	if bundle == nil {
-		return nil, errors.New("downloads need the cluster's secrets bundle")
+	if id == nil {
+		return nil, errors.New("downloads need a certificate for the call")
 	}
 
-	cert, err := bundle.GenerateTalosAPIClientCertificate(role.MakeSet(scope.talosRole()))
-	if err != nil {
-		return nil, fmt.Errorf("generating client certificate: %w", err)
-	}
-
-	cfg := clientconfig.NewConfig(cluster.Name, []string{m.DialEndpoint()}, bundle.Certs.OS.Crt, cert)
+	cfg := clientconfig.NewConfig(cluster.Name, []string{m.DialEndpoint()}, id.CA, &x509.PEMEncodedCertificateAndKey{Crt: id.Crt, Key: id.Key})
 
 	c, err := client.New(ctx, client.WithConfig(cfg))
 	if err != nil {

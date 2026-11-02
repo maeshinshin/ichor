@@ -80,6 +80,8 @@ var _ = BeforeSuite(func() {
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
+
+	startFakeController(ctx, k8sClient)
 })
 
 var _ = AfterSuite(func() {

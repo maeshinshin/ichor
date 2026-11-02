@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -64,7 +63,7 @@ type Server struct {
 	// returning connect.CodeUnavailable, the same "not configured" shape
 	// internal/controller.TalosMachineReconciler.TalosClient uses.
 	NodeTalosClient func(
-		ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, bundle *secrets.Bundle,
+		ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, id *TalosIdentity,
 	) (NodeTalosClient, error)
 
 	// Actor is the name recorded on every AuditRecord. Empty means the
@@ -100,6 +99,9 @@ type Server struct {
 
 	// Settings, when set, is read per call (ADR 0105).
 	Settings *settings.Reader
+
+	// creds holds the identities and public facts the controller issued (credissuer.go).
+	creds credentialCache
 
 	diag     diagnostics
 	diagOnce sync.Once

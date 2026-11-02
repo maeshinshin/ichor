@@ -26,7 +26,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
-	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -114,7 +113,7 @@ var _ = Describe("ichor-ui generated RBAC", func() {
 
 		s := &Server{
 			Client: saClient, ControllerNamespace: testNamespace,
-			NodeTalosClient: func(context.Context, *ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine, *secrets.Bundle) (NodeTalosClient, error) {
+			NodeTalosClient: func(context.Context, *ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine, *TalosIdentity) (NodeTalosClient, error) {
 				return &fakeNodeTalosClient{}, nil
 			},
 		}

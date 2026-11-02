@@ -30,6 +30,7 @@ rules:
   - ichorinstallations.ichor.maesh.dev
   - ichorusers.ichor.maesh.dev
   - machinereclaims.ichor.maesh.dev
+  - taloscredentialrequests.ichor.maesh.dev
   - talosclusters.ichor.maesh.dev
   - talosconfigpatches.ichor.maesh.dev
   - talosetcdbackups.ichor.maesh.dev

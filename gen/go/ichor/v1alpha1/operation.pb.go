@@ -2454,8 +2454,13 @@ func (x *DeleteOperationResponse) GetAudit() *AuditRecord {
 }
 
 type DownloadCARotationCredentialsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Operation     *ObjectRef             `protobuf:"bytes,1,opt,name=operation,proto3" json:"operation,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Operation *ObjectRef             `protobuf:"bytes,1,opt,name=operation,proto3" json:"operation,omitempty"`
+	// lifetime_seconds is how long the certificates in the files are valid (ADR 0108). 0 means one year,
+	// which is also the maximum. A CA-rotation hand-off must outlive the rotation.
+	LifetimeSeconds int64 `protobuf:"varint,2,opt,name=lifetime_seconds,json=lifetimeSeconds,proto3" json:"lifetime_seconds,omitempty"`
+	// read_only makes the talosconfig os:reader instead of os:admin.
+	ReadOnly      bool `protobuf:"varint,3,opt,name=read_only,json=readOnly,proto3" json:"read_only,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2495,6 +2500,20 @@ func (x *DownloadCARotationCredentialsRequest) GetOperation() *ObjectRef {
 		return x.Operation
 	}
 	return nil
+}
+
+func (x *DownloadCARotationCredentialsRequest) GetLifetimeSeconds() int64 {
+	if x != nil {
+		return x.LifetimeSeconds
+	}
+	return 0
+}
+
+func (x *DownloadCARotationCredentialsRequest) GetReadOnly() bool {
+	if x != nil {
+		return x.ReadOnly
+	}
+	return false
 }
 
 type DownloadCARotationCredentialsResponse struct {
@@ -2836,9 +2855,11 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\x16DeleteOperationRequest\x127\n" +
 	"\toperation\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\toperation\"L\n" +
 	"\x17DeleteOperationResponse\x121\n" +
-	"\x05audit\x18\x01 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\"_\n" +
+	"\x05audit\x18\x01 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\"\xa7\x01\n" +
 	"$DownloadCARotationCredentialsRequest\x127\n" +
-	"\toperation\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\toperation\"z\n" +
+	"\toperation\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\toperation\x12)\n" +
+	"\x10lifetime_seconds\x18\x02 \x01(\x03R\x0flifetimeSeconds\x12\x1b\n" +
+	"\tread_only\x18\x03 \x01(\bR\breadOnly\"z\n" +
 	"%DownloadCARotationCredentialsResponse\x12\x1a\n" +
 	"\bfilename\x18\x01 \x01(\tR\bfilename\x12!\n" +
 	"\fcontent_type\x18\x02 \x01(\tR\vcontentType\x12\x12\n" +

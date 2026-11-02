@@ -138,16 +138,7 @@ func Load(ctx context.Context, c client.Client, ichorNamespace string, cluster *
 		return nil, nil, fmt.Errorf("listing the cluster's machines: %w", err)
 	}
 
-	var endpoints []string
-
-	for i := range machines.Items {
-		m := &machines.Items[i]
-		if m.Spec.ClusterRef.Name == cluster.Name && m.Spec.Role == roleControlPlane && m.DeletionTimestamp.IsZero() && m.DialEndpoint() != "" {
-			endpoints = append(endpoints, m.DialEndpoint())
-		}
-	}
-
-	slices.Sort(endpoints)
+	endpoints := Endpoints(machines.Items, cluster.Name)
 
 	return src, endpoints, nil
 }
@@ -159,6 +150,22 @@ func (s *Sources) lifetime() time.Duration {
 	}
 
 	return s.TTL
+}
+
+// Endpoints are the Talos API addresses of the cluster's control-plane machines, sorted.
+func Endpoints(machines []ichorv1alpha1.TalosMachine, cluster string) []string {
+	var endpoints []string
+
+	for i := range machines {
+		m := &machines[i]
+		if m.Spec.ClusterRef.Name == cluster && m.Spec.Role == roleControlPlane && m.DeletionTimestamp.IsZero() && m.DialEndpoint() != "" {
+			endpoints = append(endpoints, m.DialEndpoint())
+		}
+	}
+
+	slices.Sort(endpoints)
+
+	return endpoints
 }
 
 func pemWithNewline(b []byte) []byte {
@@ -183,16 +190,8 @@ func ServerConfig(name, server string) clientcmdapi.Config {
 // by a client certificate signed by the signer. The server, names and namespace stay as they were;
 // only the current context is kept.
 func (s *Sources) Kubeconfig(current clientcmdapi.Config) ([]byte, error) {
-	ctxName := current.CurrentContext
-
-	kctx := current.Contexts[ctxName]
-	if kctx == nil {
-		return nil, errors.New("the current kubeconfig has no current context to copy the server from")
-	}
-
-	cluster := current.Clusters[kctx.Cluster]
-	if cluster == nil || cluster.Server == "" {
-		return nil, fmt.Errorf("the current kubeconfig's context %q names no cluster with a server", ctxName)
+	if _, _, err := kubeconfigParts(current); err != nil {
+		return nil, err
 	}
 
 	ca, err := x509.NewCertificateAuthorityFromCertificateAndKey(s.KubernetesSigner)
@@ -212,6 +211,36 @@ func (s *Sources) Kubeconfig(current clientcmdapi.Config) ([]byte, error) {
 
 	cert := x509.NewCertificateAndKeyFromKeyPair(pair)
 
+	return BuildKubeconfig(current, s.KubernetesTrust, cert.Crt, cert.Key)
+}
+
+func kubeconfigParts(current clientcmdapi.Config) (*clientcmdapi.Context, *clientcmdapi.Cluster, error) {
+	ctxName := current.CurrentContext
+
+	kctx := current.Contexts[ctxName]
+	if kctx == nil {
+		return nil, nil, errors.New("the current kubeconfig has no current context to copy the server from")
+	}
+
+	cluster := current.Clusters[kctx.Cluster]
+	if cluster == nil || cluster.Server == "" {
+		return nil, nil, fmt.Errorf("the current kubeconfig's context %q names no cluster with a server", ctxName)
+	}
+
+	return kctx, cluster, nil
+}
+
+// BuildKubeconfig is current with its cluster's CA data replaced by trust and its user replaced by the
+// client certificate crt and its key. The server, names and namespace stay as they were; only the
+// current context is kept. The controller signs crt for a key the requester holds (ADR 0108).
+func BuildKubeconfig(current clientcmdapi.Config, trust, crt, key []byte) ([]byte, error) {
+	kctx, cluster, err := kubeconfigParts(current)
+	if err != nil {
+		return nil, err
+	}
+
+	ctxName := current.CurrentContext
+
 	userName := kctx.AuthInfo
 	if userName == "" {
 		userName = KubeAdminCommonName
@@ -221,9 +250,9 @@ func (s *Sources) Kubeconfig(current clientcmdapi.Config) ([]byte, error) {
 		APIVersion: "v1", Kind: "Config", CurrentContext: ctxName,
 		Clusters: map[string]*clientcmdapi.Cluster{kctx.Cluster: {
 			Server: cluster.Server, TLSServerName: cluster.TLSServerName, ProxyURL: cluster.ProxyURL,
-			CertificateAuthorityData: s.KubernetesTrust,
+			CertificateAuthorityData: trust,
 		}},
-		AuthInfos: map[string]*clientcmdapi.AuthInfo{userName: {ClientCertificateData: cert.Crt, ClientKeyData: cert.Key}},
+		AuthInfos: map[string]*clientcmdapi.AuthInfo{userName: {ClientCertificateData: crt, ClientKeyData: key}},
 		Contexts: map[string]*clientcmdapi.Context{ctxName: {
 			Cluster: kctx.Cluster, AuthInfo: userName, Namespace: kctx.Namespace,
 		}},
@@ -233,7 +262,7 @@ func (s *Sources) Kubeconfig(current clientcmdapi.Config) ([]byte, error) {
 }
 
 // Talosconfig is a one-context talosconfig named name that trusts the Talos API CAs and presents an
-// os:admin client certificate signed by the signer.
+// os:admin client certificate (os:reader with Reader) signed by the signer.
 func (s *Sources) Talosconfig(name string, endpoints []string) ([]byte, error) {
 	r := role.Admin
 	if s.Reader {
@@ -246,6 +275,12 @@ func (s *Sources) Talosconfig(name string, endpoints []string) ([]byte, error) {
 	}
 
 	return clientconfig.NewConfig(name, endpoints, s.TalosTrust, cert).Bytes()
+}
+
+// BuildTalosconfig is a one-context talosconfig named name that trusts trust and presents the client
+// certificate crt and its key.
+func BuildTalosconfig(name string, endpoints []string, trust, crt, key []byte) ([]byte, error) {
+	return clientconfig.NewConfig(name, endpoints, trust, &x509.PEMEncodedCertificateAndKey{Crt: crt, Key: key}).Bytes()
 }
 
 // VerifyKubeconfig asks the API server who the kubeconfig's credentials are. It proves the file

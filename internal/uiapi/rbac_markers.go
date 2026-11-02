@@ -60,7 +60,14 @@ package uiapi
 // GetEffectiveConfig renders through render.ResolveSystemInputs, which lists TalosStorages with
 // the ServiceAccount (ADR 0050); the caller's own list follows. List only, no informer.
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosstorages,verbs=list
-// +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,verbs=get
+// The secrets bundle and every other Secret are out of reach of this role (ADR 0108): whatever needs a CA
+// key is the controller's. The backend asks it for a certificate or a cluster's public facts by creating a
+// TalosCredentialRequest, in the cluster's namespace, and reads the answer back (get). With Ichor users on
+// it creates them as the signed-in user, so the validating webhook judges that user; it is the
+// ServiceAccount itself only for the purposes `public` and `node-reader`, for which the chart grants the
+// verb `issue` on talosclusters/public and talosclusters/node-reader to this ServiceAccount alone.
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters/public;talosclusters/node-reader,verbs=issue
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=taloscredentialrequests,verbs=create;get
 
 // corev1.Node is itself a cluster-scoped Kubernetes type, unlike the secrets
 // rule above: that one only needs the namespace= qualifier (and so only

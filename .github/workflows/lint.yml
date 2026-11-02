@@ -28,6 +28,9 @@ jobs:
       - name: Run linter
         run: nix develop --command make lint
 
+      - name: Check the workflows
+        run: nix develop --command actionlint
+
       - name: Check goreleaser configuration
         run: nix develop --command bash -c "goreleaser check"
       - name: Build a goreleaser snapshot

@@ -1,0 +1,208 @@
+name: Release
+
+# One workflow for the images and the chart (ADR 0108). A v* tag runs, in order:
+#   verify   the same checks as a PR (module drift, lint, tests, govulncheck, npm audit); contents: read
+#   build    compiles the three image binaries and packages the chart; contents: read, no registry token
+#   publish  pushes by digest, signs (cosign keyless), attaches an SBOM and a provenance attestation;
+#            runs in the protected "release" environment and is the only job with a token
+on:
+  push:
+    tags: ["v*"]
+
+permissions: {}
+
+jobs:
+  verify:
+    name: Verify the tagged commit
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # 31.11.3
+
+      - name: Verify go.mod, go.sum and the module cache
+        run: nix develop --command bash -c "go mod tidy -diff && go mod verify"
+
+      - name: Lint
+        run: nix develop --command make lint-config lint
+
+      - name: Test
+        run: nix develop --command make test
+
+      - name: UI CI (type-check, lint, unit tests, build)
+        run: nix develop --command make ui-ci
+
+      - name: govulncheck
+        run: nix develop --command govulncheck ./...
+
+      - name: npm audit (production dependencies, high and above)
+        run: nix develop --command bash -c "cd ui && npm audit --omit=dev --audit-level=high"
+
+  build:
+    name: Build the image binaries and the chart
+    needs: verify
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # 31.11.3
+
+      # linux/amd64 only, as demo-images builds. The binaries are layered on the pinned distroless base in the
+      # publish job.
+      - name: Build the image binaries
+        env:
+          TAG: ${{ github.ref_name }}
+        run: nix develop --command make demo-images-build VERSION="${TAG}"
+
+      # The chart version drops the leading v; appVersion keeps the tag, which is the image tag.
+      - name: Package the chart
+        env:
+          TAG: ${{ github.ref_name }}
+        run: nix develop --command make helm-package CHART_VERSION="${TAG#v}" APP_VERSION="${TAG}"
+
+      - name: Upload the build output
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-build
+          path: |
+            bin/img/
+            bin/chart/
+          retention-days: 1
+          if-no-files-found: error
+
+  publish:
+    name: Push, sign and attest the images and the chart
+    needs: build
+    # Create the "release" environment in the repository settings with required reviewers (docs/design, Helm guide).
+    environment: release
+    permissions:
+      contents: read
+      packages: write # push to GHCR
+      id-token: write # keyless cosign and the attestations
+      attestations: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # 31.11.3
+
+      - name: Download the build output
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-build
+          path: bin
+
+      - name: Log in to GHCR
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          echo "$GITHUB_TOKEN" | nix develop --command crane auth login ghcr.io --username "$ACTOR" --password-stdin
+          echo "$GITHUB_TOKEN" | nix develop --command helm registry login ghcr.io --username "$ACTOR" --password-stdin
+
+      # ghcr.io/maeshinshin/{ichor-controller,ichor-ui,ichor-installer}:<tag>, the names the chart and the install
+      # manifest carry. The digests land in bin/digests.txt as <repo>@<digest>.
+      - name: Push the images
+        env:
+          TAG: ${{ github.ref_name }}
+        run: nix develop --command make demo-images-push VERSION="${TAG}" REGISTRY=ghcr.io CRANE_INSECURE= DIGEST_FILE=bin/digests.txt
+
+      - name: Push the chart
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          nix develop --command helm push "bin/chart/ichor-${TAG#v}.tgz" oci://ghcr.io/maeshinshin/charts 2>&1 | tee bin/helm-push.txt
+          echo "ghcr.io/maeshinshin/charts/ichor@$(sed -n 's/^Digest: //p' bin/helm-push.txt)" >> bin/digests.txt
+
+      - name: Resolve the digests
+        id: digests
+        run: |
+          for n in ichor-controller ichor-ui ichor-installer ichor; do
+            ref=$(grep "/${n}@" bin/digests.txt)
+            [ -n "$ref" ] || { echo "no digest for ${n}" >&2; exit 1; }
+            echo "${n}=${ref#*@}" >> "$GITHUB_OUTPUT"
+          done
+
+      # Keyless: the signing identity is this workflow run, recorded in the Sigstore transparency log.
+      - name: Sign the images and the chart
+        run: |
+          while read -r ref; do
+            nix develop --command cosign sign --yes "$ref"
+          done < bin/digests.txt
+
+      - name: Generate the SBOMs
+        run: |
+          while read -r ref; do
+            nix develop --command syft "$ref" -o "spdx-json=bin/$(basename "${ref%@*}").spdx.json"
+          done < bin/digests.txt
+
+      - name: Attest provenance, controller
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ghcr.io/maeshinshin/ichor-controller
+          subject-digest: ${{ steps.digests.outputs.ichor-controller }}
+          push-to-registry: true
+
+      - name: Attest provenance, UI
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ghcr.io/maeshinshin/ichor-ui
+          subject-digest: ${{ steps.digests.outputs.ichor-ui }}
+          push-to-registry: true
+
+      - name: Attest provenance, installer
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ghcr.io/maeshinshin/ichor-installer
+          subject-digest: ${{ steps.digests.outputs.ichor-installer }}
+          push-to-registry: true
+
+      - name: Attest provenance, chart
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ghcr.io/maeshinshin/charts/ichor
+          subject-digest: ${{ steps.digests.outputs.ichor }}
+          push-to-registry: true
+
+      - name: Attest the SBOM, controller
+        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        with:
+          subject-name: ghcr.io/maeshinshin/ichor-controller
+          subject-digest: ${{ steps.digests.outputs.ichor-controller }}
+          sbom-path: bin/ichor-controller.spdx.json
+          push-to-registry: true
+
+      - name: Attest the SBOM, UI
+        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        with:
+          subject-name: ghcr.io/maeshinshin/ichor-ui
+          subject-digest: ${{ steps.digests.outputs.ichor-ui }}
+          sbom-path: bin/ichor-ui.spdx.json
+          push-to-registry: true
+
+      - name: Attest the SBOM, installer
+        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        with:
+          subject-name: ghcr.io/maeshinshin/ichor-installer
+          subject-digest: ${{ steps.digests.outputs.ichor-installer }}
+          sbom-path: bin/ichor-installer.spdx.json
+          push-to-registry: true

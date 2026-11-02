@@ -10,8 +10,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
+	"strings"
 	"time"
 
 	jose "github.com/go-jose/go-jose/v4"
@@ -110,6 +113,9 @@ type Config struct {
 	// Refresh, when set, rotates refresh tokens with reuse detection. nil keeps
 	// them stateless and unrotated (tests only).
 	Refresh RefreshStore
+	// TrustedProxies are the peers whose X-Forwarded-For is believed; the rightmost address that
+	// is not itself trusted is then the client. Empty means the TCP peer is the client.
+	TrustedProxies []netip.Prefix
 
 	// Now is the clock; nil means time.Now.
 	Now func() time.Time
@@ -117,9 +123,51 @@ type Config struct {
 
 // Issuer is the OIDC provider. Create it with New.
 type Issuer struct {
-	cfg       Config
-	failures  *Backoff
-	usedCodes *jtiSet
+	cfg         Config
+	failures    *Backoff // per (source, user)
+	srcFailures *Backoff // per source
+	ceiling     *userCeiling
+	usedCodes   *jtiSet
+	usedTickets *jtiSet
+	// Per-source request rates: signing a ticket and answering a token request cost CPU.
+	authzRate, loginRate, tokenRate *bucket
+}
+
+// ErrBusy is returned by PasswordVerifier.VerifyPassword when too many password checks are
+// already queued; the login answers 503 with Retry-After instead of piling up memory-heavy work.
+var ErrBusy = errors.New("oidcissuer: too many password checks in progress")
+
+// clientIP is the source a request counts against: the TCP peer, or with TrustedProxies
+// the client named by X-Forwarded-For.
+func (i *Issuer) clientIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	peer, err := netip.ParseAddr(host)
+	if err != nil || len(i.cfg.TrustedProxies) == 0 || !i.trusted(peer) {
+		return host
+	}
+	hops := strings.Split(strings.Join(r.Header.Values("X-Forwarded-For"), ","), ",")
+	for n := len(hops) - 1; n >= 0; n-- {
+		a, err := netip.ParseAddr(strings.TrimSpace(hops[n]))
+		if err != nil {
+			return host
+		}
+		if !i.trusted(a) {
+			return a.String()
+		}
+	}
+	return host
+}
+
+func (i *Issuer) trusted(a netip.Addr) bool {
+	for _, p := range i.cfg.TrustedProxies {
+		if p.Contains(a.Unmap()) {
+			return true
+		}
+	}
+	return false
 }
 
 // lifetimes returns the ID token and refresh token lifetimes for this issuance.
@@ -168,7 +216,11 @@ func New(cfg Config) (*Issuer, error) {
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
-	return &Issuer{cfg: cfg, failures: NewBackoff(), usedCodes: newJTISet()}, nil
+	return &Issuer{
+		cfg: cfg, failures: NewBackoff(), srcFailures: newSourceBackoff(), ceiling: &userCeiling{},
+		usedCodes: newJTISet(), usedTickets: newJTISet(),
+		authzRate: newBucket(20, 100), loginRate: newBucket(10, 50), tokenRate: newBucket(20, 100),
+	}, nil
 }
 
 // Handler serves discovery, JWKS, authorize, login and token (port 8080 side).
@@ -176,10 +228,10 @@ func (i *Issuer) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET "+endpointDiscovery, i.discovery(i.cfg.Issuer+endpointJWKS))
 	mux.HandleFunc("GET "+endpointJWKS, i.jwks)
-	mux.HandleFunc("GET "+endpointAuthorize, i.authorize)
-	mux.HandleFunc("POST "+endpointLogin, i.login)
-	mux.HandleFunc("POST "+endpointToken, i.token)
-	return mux
+	mux.HandleFunc("GET "+endpointAuthorize, i.limit(i.authzRate, i.authorize))
+	mux.HandleFunc("POST "+endpointLogin, i.limit(i.loginRate, i.login))
+	mux.HandleFunc("POST "+endpointToken, i.limit(i.tokenRate, i.token))
+	return http.MaxBytesHandler(mux, maxFormBytes)
 }
 
 // InternalHandler serves only discovery (with the internal jwks_uri) and the

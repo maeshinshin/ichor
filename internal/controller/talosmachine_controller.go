@@ -412,6 +412,11 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return res, err
 	}
 
+	// A machine that was reset and approved again comes back to its old Node, still cordoned by the drain.
+	if err := r.uncordonRejoinedNode(ctx, m.Status.NodeName); err != nil {
+		log.Error(err, "uncordoning the rejoined node")
+	}
+
 	// Step 3: work out which field paths changed and what that implies. No path means the node
 	// already has the rendered configuration, in the same bytes or in another form (legacy mirrors).
 	paths, err := changedPaths(current, rendered, hash)

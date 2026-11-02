@@ -173,13 +173,13 @@ func markerMAC(passphrase string, body []byte) (string, error) {
 
 // PutMarker writes m, signed with a key derived from passphrase (see Passphrase): someone who can only
 // write to the bucket cannot forge a marker.
-func PutMarker(ctx context.Context, store Store, prefix, passphrase string, m *RestoreMarker) error {
+func PutMarker(ctx context.Context, store Store, prefix string, passphrase Key, m *RestoreMarker) error {
 	body, err := json.Marshal(m)
 	if err != nil {
 		return err
 	}
 
-	mac, err := markerMAC(passphrase, body)
+	mac, err := markerMAC(passphrase.Current, body)
 	if err != nil {
 		return err
 	}
@@ -196,7 +196,7 @@ func PutMarker(ctx context.Context, store Store, prefix, passphrase string, m *R
 // does not match is an error. A legacy unsigned marker (written before signing) is accepted with a
 // warning, because refusing it would strand a restore that is half done across an upgrade; every later
 // PutMarker signs it. ponytail: refuse unsigned markers one release after signing ships.
-func GetMarker(ctx context.Context, store Store, prefix, passphrase string) (*RestoreMarker, error) {
+func GetMarker(ctx context.Context, store Store, prefix string, passphrase Key) (*RestoreMarker, error) {
 	rc, err := store.Get(ctx, prefix+"/"+MarkerName)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
@@ -225,12 +225,23 @@ func GetMarker(ctx context.Context, store Store, prefix, passphrase string) (*Re
 
 		body = raw
 	} else {
-		want, err := markerMAC(passphrase, body)
-		if err != nil {
-			return nil, err
+		// Signed with the current key, or with the v1 key by a release before ADR 0108.
+		ok := false
+
+		for _, pass := range []string{passphrase.Current, passphrase.Legacy} {
+			if pass == "" {
+				continue
+			}
+
+			want, err := markerMAC(pass, body)
+			if err != nil {
+				return nil, err
+			}
+
+			ok = ok || hmac.Equal([]byte(want), []byte(env.MAC))
 		}
 
-		if !hmac.Equal([]byte(want), []byte(env.MAC)) {
+		if !ok {
 			return nil, errors.New("the restore marker's signature does not match: it was not written by this cluster's controller")
 		}
 	}

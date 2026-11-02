@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'preact/hooks'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { operationClient } from '@/lib/connect'
-import { versionLabel, type IchorVersionInfo } from '@/lib/ichorVersion'
+import { versionLabel } from '@/lib/ichorVersion'
+import { useLoad } from '@/lib/useLoad'
 import { useT } from '@/lib/useT'
 
 // The installed Ichor version in the top bar, with a second badge only when the cluster
@@ -10,17 +10,7 @@ import { useT } from '@/lib/useT'
 // shows nothing, because the label is information, not a control.
 export function IchorVersion() {
   const t = useT()
-  const [info, setInfo] = useState<IchorVersionInfo | null>(null)
-  useEffect(() => {
-    let live = true
-    operationClient
-      .getIchorInstallation({})
-      .then((res) => live && setInfo(res))
-      .catch(() => {})
-    return () => {
-      live = false
-    }
-  }, [])
+  const info = useLoad(() => operationClient.getIchorInstallation({}), []).data
 
   const label = versionLabel(info)
   if (!label) return null

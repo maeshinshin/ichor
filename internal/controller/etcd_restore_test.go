@@ -169,7 +169,7 @@ func (f *restoreFixture) hosts() []string {
 }
 
 func (f *restoreFixture) marker() *etcdbackup.RestoreMarker {
-	m, err := etcdbackup.GetMarker(ctx, f.backup.store, testBackupBase)
+	m, err := etcdbackup.GetMarker(ctx, f.backup.store, testBackupBase, mustPass(f.backup.bundle))
 	Expect(err).NotTo(HaveOccurred())
 
 	return m
@@ -642,7 +642,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 
 		It("refuses while another restore is recorded in the storage", func() {
 			f := newRestoreFixture("")
-			Expect(etcdbackup.PutMarker(ctx, f.backup.store, testBackupBase, &etcdbackup.RestoreMarker{
+			Expect(etcdbackup.PutMarker(ctx, f.backup.store, testBackupBase, mustPass(f.backup.bundle), &etcdbackup.RestoreMarker{
 				Namespace: tmNamespace, Operation: "someone-else", Step: ichorv1alpha1.EtcdRestoreStepWiping,
 			})).To(Succeed())
 
@@ -750,7 +750,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 
 			m := f.marker()
 			m.StartedAt = time.Now().Add(-etcdRestoreOverallTimeout - time.Minute)
-			Expect(etcdbackup.PutMarker(ctx, f.backup.store, testBackupBase, m)).To(Succeed())
+			Expect(etcdbackup.PutMarker(ctx, f.backup.store, testBackupBase, mustPass(f.backup.bundle), m)).To(Succeed())
 
 			got := f.reconcile(op)
 			Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
@@ -828,7 +828,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 			f.members(restoreHostB, restoreHostC)
 			m := f.marker()
 			m.OwnWipeAt = time.Now().Add(-time.Minute).UTC()
-			Expect(etcdbackup.PutMarker(ctx, f.backup.store, testBackupBase, m)).To(Succeed())
+			Expect(etcdbackup.PutMarker(ctx, f.backup.store, testBackupBase, mustPass(f.backup.bundle), m)).To(Succeed())
 
 			f.jobs = nil
 			r2 := f.reconciler(restoreHostB) // the replacement runs elsewhere; the marker still names the own node
@@ -943,7 +943,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 
 		It("clears a refused restore's finalizer without touching a marker that is not its own", func() {
 			f := newRestoreFixture("")
-			Expect(etcdbackup.PutMarker(ctx, f.backup.store, testBackupBase, &etcdbackup.RestoreMarker{
+			Expect(etcdbackup.PutMarker(ctx, f.backup.store, testBackupBase, mustPass(f.backup.bundle), &etcdbackup.RestoreMarker{
 				Namespace: tmNamespace, Operation: "someone-else", Step: ichorv1alpha1.EtcdRestoreStepWiping,
 			})).To(Succeed())
 
@@ -988,3 +988,11 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 		})
 	})
 })
+
+// mustPass is the backup passphrase of bundle, which also keys the restore marker's HMAC.
+func mustPass(b *secrets.Bundle) string {
+	pass, err := etcdbackup.Passphrase(b)
+	Expect(err).NotTo(HaveOccurred())
+
+	return pass
+}

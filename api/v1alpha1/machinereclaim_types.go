@@ -46,8 +46,6 @@ const (
 	ReclaimCredentialKey = "talosconfig"
 	// ReclaimLabel marks a credential Secret; the sweeper selects by it.
 	ReclaimLabel = "ichor.maesh.dev/reclaim"
-	// ReclaimExpiryAnnotation holds the Secret's expiry, RFC 3339.
-	ReclaimExpiryAnnotation = "ichor.maesh.dev/reclaim-expires"
 	// ReclaimRequestedByAnnotation and ReclaimConfirmedByAnnotation carry the Kubernetes user that
 	// created the request and that wrote confirmUUID. The writer sets them; the webhook rejects a
 	// value that is not the authenticated user, so they cannot be forged. The controller copies

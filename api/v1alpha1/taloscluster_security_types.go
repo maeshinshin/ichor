@@ -172,13 +172,6 @@ type TalosClusterWireGuard struct {
 	NodeEncryption bool `json:"nodeEncryption,omitempty"`
 }
 
-// Pod Security admission levels.
-const (
-	PodSecurityLevelPrivileged = "privileged"
-	PodSecurityLevelBaseline   = "baseline"
-	PodSecurityLevelRestricted = "restricted"
-)
-
 // TalosClusterPodSecurity is spec.security.podSecurity: the defaults of the kube-apiserver's
 // PodSecurity admission plugin. A level left unset keeps Talos's default (enforce baseline,
 // audit and warn restricted).

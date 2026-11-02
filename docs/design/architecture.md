@@ -110,16 +110,25 @@ with 0600 permissions as the user's backup, and pushed into a Secret that
 becomes the source of truth from then on. CRs reference it; they never contain
 it.
 
-Only the controller holds an `os:admin`-equivalent Talos identity. The UI
-backend holds a read-only one. The browser holds no Talos credentials. For three admin-gated downloads (support bundle, etcd snapshot,
-packet capture; ADR 0084) the UI backend also mints a certificate per call with
-the least Talos role that call needs (`os:reader`, `os:etcd:backup`,
-`os:operator`), only after Kubernetes RBAC has allowed the signed-in user; it has
-no method that changes a node. A fourth admin-gated download (ADR 0093) hands
-the operator the new kubeconfig and talosconfig of a CA rotation that waits in
-`AwaitingCredentials` (ADR 0091); it needs the verb `download` on `talosclusters/credentials`,
-is granted to nobody by default and leaves a Warning Event first. The restore of an etcd snapshot into a live
-cluster is the controller's, not the UI's: the UI backend only lists the
+Only the controller holds a CA private key and so can make any Talos or
+Kubernetes identity (ADR 0108). The UI backend holds none, and its Kubernetes
+role reads no Secret that holds one: for its own reads of the nodes (an
+`os:reader` certificate) and for the three admin-gated downloads (support bundle,
+etcd snapshot, packet capture; ADR 0084) it makes a key pair in memory and asks
+the controller to sign it by creating a `TalosCredentialRequest`. The validating
+webhook checks the Kubernetes permission of the requester (the signed-in user,
+for a download) and the controller signs for the least Talos role the call needs
+(`os:reader`, `os:etcd:backup`, `os:operator`) and for ten minutes; the private
+key never leaves the backend. The browser holds no Talos credentials, and the
+backend has no method that changes a node. A fourth admin-gated download
+(ADR 0093) hands the operator the new kubeconfig and talosconfig of a CA rotation
+that waits in `AwaitingCredentials` (ADR 0091); it is signed the same way, needs the
+verb `download` on `talosclusters/credentials`, is granted to nobody by default,
+leaves a Warning Event first, and lasts a year unless the operator asks for less.
+The backend may impersonate only the users and groups it is given by name
+(ADR 0108): the built-in `ichor:` groups, the Ichor users the controller lists,
+and what the chart values name; never a `system:` group. The restore of an etcd
+snapshot into a live cluster is the controller's, not the UI's: the UI backend only lists the
 snapshots a `TalosEtcdBackup` reports and writes the operation. In the first release the UI is reached through
 `ichor ui` (a port-forward), which needs no https URL.
 
@@ -195,7 +204,12 @@ ValidatingAdmissionPolicy limits what ichor-ui's ServiceAccount may create in
 `ichor-system` to that Secret type.
 
 Approval uses Talos's insecure apply, which does not authenticate the node.
-A separate provisioning network is assumed; the docs say so.
+A separate provisioning network is assumed; the docs say so. Ichor pins what it can:
+the fingerprint of the maintenance certificate seen at discovery (or at the first
+provisioning probe) is recorded in the machine's status, and the controller refuses to
+send the first configuration, which carries the CA keys, to a node that presents another
+one (ADR 0108). An operator who has checked a changed fingerprint accepts it with the
+annotation `ichor.maesh.dev/trust-maintenance-fingerprint`.
 
 ### Deployment
 
@@ -985,7 +999,7 @@ regularly.
 
 Ichor's own Talos client certificates are short-lived and renewed
 automatically; an expired one would lock Ichor out with no way back. CA
-rotation (Talos and Kubernetes) follows the documented Talos procedure and
+rotation (Talos and Kubernetes; the etcd and aggregator CAs, the service-account key and the secretbox key are not rotated, ADR 0108) follows the documented Talos procedure and
 runs through the same machinery as upgrades, except that it waits, after every
 node accepts the new CAs, until the operator has credentials that work with
 both CAs (ADR 0091); otherwise the first stage that changes what the API

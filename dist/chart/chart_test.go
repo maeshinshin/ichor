@@ -981,7 +981,8 @@ func TestManagerToleratesTheControlPlaneTaint(t *testing.T) {
 	}
 
 	// ichor-ui too: a tainted-preset init waits for it before any worker is approved.
-	if ui := podTolerations(findNameSuffix(renderChart(t, "ichor"), kindDeployment, "ichor-ui")); !reflect.DeepEqual(ui, want) {
+	ui := podTolerations(findNameSuffix(renderChart(t, "ichor"), kindDeployment, "ichor-ui"))
+	if !reflect.DeepEqual(ui, want) {
 		t.Errorf("ichor-ui tolerations = %v, want %v", ui, want)
 	}
 }

@@ -377,6 +377,8 @@ func (s *Server) RevokeSessions(ctx context.Context, req *connect.Request[pb.Rev
 	}
 
 	cred.NotBefore = s.now().UTC().Truncate(time.Second)
+	cred.Families = nil // every refresh token dies with the sessions
+
 	if err := s.writeCredential(ctx, u.Name, cred); err != nil {
 		return nil, credentialWriteError(err)
 	}

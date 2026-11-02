@@ -43,6 +43,8 @@ type IssuerBackend struct {
 	// Writer, when set, upgrades a hash made with weaker parameters after a
 	// successful login. nil leaves old hashes as they are.
 	Writer client.Writer
+	// Now is the clock; nil means time.Now.
+	Now func() time.Time
 }
 
 func (b *IssuerBackend) credentials(ctx context.Context) (*corev1.Secret, error) {

@@ -51,7 +51,7 @@ var _ = Describe("TalosCredentialRequest controller (ADR 0108)", func() {
 		cr := &ichorv1alpha1.TalosCredentialRequest{GenerateName: "cred-", Namespace: tmNamespace, Spec: spec}
 		Expect(k8sClient.Create(ctx, cr)).To(Succeed())
 
-		_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: cr.Namespace, Name: cr.Name}})
+		_, err := r.Reconcile(ctx, ctrl.Request{Namespace: cr.Namespace, Name: cr.Name})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: cr.Namespace, Name: cr.Name}, cr)).To(Succeed())
 

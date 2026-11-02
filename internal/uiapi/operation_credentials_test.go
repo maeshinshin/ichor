@@ -121,7 +121,7 @@ var _ = Describe("CA rotation credentials", func() {
 
 		// The webhook (not running in this suite) decides which purposes a creator may ask for; the RBAC
 		// rule only lets the user create the request (ADR 0108).
-		mint := rbacv1.PolicyRule{APIGroups: []string{ichorv1alpha1.GroupVersion.Group}, Resources: []string{"taloscredentialrequests"}, Verbs: []string{"create"}}
+		mint := rbacv1.PolicyRule{APIGroups: []string{ichorv1alpha1.GroupVersion.Group}, Resources: []string{"taloscredentialrequests"}, Verbs: []string{cniVerbCreate}}
 
 		// admin: reads, updates, downloads. editor: reads and updates only. reader: reads only.
 		for user, rules := range map[string][]rbacv1.PolicyRule{

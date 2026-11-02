@@ -36,6 +36,8 @@ const credentialRequestWebhookPath = "/validate-ichor-maesh-dev-v1alpha1-taloscr
 // so a binding that grants a download also grants the certificate that download needs.
 const downloadVerb = "download"
 
+const credentialClusters = "talosclusters"
+
 // +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-taloscredentialrequest,mutating=false,failurePolicy=fail,sideEffects=None,groups=ichor.maesh.dev,resources=taloscredentialrequests,verbs=create,versions=v1alpha1,name=vtaloscredentialrequest-v1alpha1.kb.io,admissionReviewVersions=v1
 
 // CredentialRequestHandler is the gate in front of the controller's signing key (ADR 0108). A
@@ -68,11 +70,11 @@ func credentialPermission(cr *ichorv1alpha1.TalosCredentialRequest) (verb, resou
 
 	switch cr.Spec.Purpose {
 	case ichorv1alpha1.CredentialPurposePublic:
-		return ichorv1alpha1.CredentialIssueVerb, "talosclusters", "public", cluster, true
+		return ichorv1alpha1.CredentialIssueVerb, credentialClusters, "public", cluster, true
 	case ichorv1alpha1.CredentialPurposeNodeReader:
-		return ichorv1alpha1.CredentialIssueVerb, "talosclusters", "node-reader", cluster, true
+		return ichorv1alpha1.CredentialIssueVerb, credentialClusters, "node-reader", cluster, true
 	case ichorv1alpha1.CredentialPurposeCredentialsTalos, ichorv1alpha1.CredentialPurposeCredentialsKubernetes:
-		return downloadVerb, "talosclusters", "credentials", cluster, true
+		return downloadVerb, credentialClusters, "credentials", cluster, true
 	case ichorv1alpha1.CredentialPurposeSupportBundle, ichorv1alpha1.CredentialPurposeEtcdSnapshot,
 		ichorv1alpha1.CredentialPurposePacketCapture:
 		if cr.Spec.MachineRef == nil {

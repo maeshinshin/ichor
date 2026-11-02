@@ -112,7 +112,7 @@ func userServer(t *testing.T, allow bool, objs ...client.Object) *Server {
 }
 
 func ichorCtx(name string) context.Context {
-	return context.WithValue(context.Background(), identityKey{}, Identity{User: IchorUserPrefix + name, Source: SourceIchor})
+	return context.WithValue(context.Background(), identityKey{}, Identity{User: IchorUserPrefix + name, Source: SourceIchor, Groups: []string{ichorAdminGroup}})
 }
 
 func TestAuthenticateLocalTokenReadsRolesFromTheCRAndRefusesDisabled(t *testing.T) {

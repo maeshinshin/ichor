@@ -20,6 +20,7 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"maps"
 	"net"
 	"net/netip"
 	"net/url"
@@ -219,16 +220,7 @@ func collectTargets(ctx context.Context, c client.Reader) (egressTargets, error)
 	return t, nil
 }
 
-func keys(m map[string]bool) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-
-	slices.Sort(out)
-
-	return out
-}
+func keys(m map[string]bool) []string { return slices.Sorted(maps.Keys(m)) }
 
 // parseS3Endpoint is the host and TCP port of "http(s)://host[:port]" (443 and 80 by scheme).
 func parseS3Endpoint(endpoint string) (s3Target, bool) {

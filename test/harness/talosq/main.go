@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 // Command talosq runs one authenticated, read-only talosctl query in the outer namespace for a
-// hardware run: `talosq etcd|version|health TALOSCONFIG NODE [NODE...]`. The talosconfig is read from a
+// hardware run: `talosq etcd|version|health|get TALOSCONFIG NODE [NODE...|RESOURCE]`. The talosconfig is read from a
 // file and never printed.
 package main
 
@@ -31,7 +31,7 @@ const namespace = "ichor-e2e"
 
 func main() {
 	if len(os.Args) < 4 {
-		fmt.Fprintln(os.Stderr, "usage: talosq etcd|version|health TALOSCONFIG NODE [NODE...]")
+		fmt.Fprintln(os.Stderr, "usage: talosq etcd|version|health|get TALOSCONFIG NODE [NODE...|RESOURCE]")
 		os.Exit(2)
 	}
 
@@ -51,6 +51,13 @@ func main() {
 	switch os.Args[1] {
 	case "etcd":
 		out, err = talosctl.EtcdMembers(namespace, os.Args[3], cfg)
+	case "get":
+		if len(os.Args) != 5 {
+			err = fmt.Errorf("usage: talosq get TALOSCONFIG NODE RESOURCE")
+			break
+		}
+
+		out, err = talosctl.GetAuthenticated(namespace, os.Args[3], os.Args[4], cfg)
 	case "version":
 		out, err = talosctl.Version(namespace, os.Args[3], cfg)
 	case "health":

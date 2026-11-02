@@ -53,23 +53,23 @@ func b64(s string) string { return base64.RawURLEncoding.EncodeToString([]byte(s
 
 type fakeLocal map[string]string // token -> subject
 
-func (f fakeLocal) Verify(_ context.Context, raw string) (string, time.Time, error) {
+func (f fakeLocal) Verify(_ context.Context, raw string) (TokenInfo, error) {
 	if sub, ok := f[raw[strings.LastIndex(raw, ".")+1:]]; ok {
-		return sub, time.Now(), nil
+		return TokenInfo{Subject: sub, IssuedAt: time.Now(), Expires: time.Now().Add(time.Hour)}, nil
 	}
 
-	return "", time.Time{}, errors.New("bad")
+	return TokenInfo{}, errors.New("bad")
 }
 
 // fakeLocalAt is fakeLocal with a chosen issue time per token.
 type fakeLocalAt map[string]time.Time
 
-func (f fakeLocalAt) Verify(_ context.Context, raw string) (string, time.Time, error) {
+func (f fakeLocalAt) Verify(_ context.Context, raw string) (TokenInfo, error) {
 	if iat, ok := f[raw[strings.LastIndex(raw, ".")+1:]]; ok {
-		return userAlice, iat, nil
+		return TokenInfo{Subject: userAlice, IssuedAt: iat, Expires: time.Now().Add(time.Hour)}, nil
 	}
 
-	return "", time.Time{}, errors.New("bad")
+	return TokenInfo{}, errors.New("bad")
 }
 
 func newUser(name string, disabled bool, roles ...string) *ichorv1alpha1.IchorUser {

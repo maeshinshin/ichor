@@ -17,7 +17,6 @@ limitations under the License.
 package render
 
 import (
-	"strings"
 	"testing"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -49,26 +48,6 @@ func renderWith(t *testing.T, contract string, mutate func(m *ichorv1alpha1.Talo
 	return string(out)
 }
 
-func wantAll(t *testing.T, out string, want ...string) {
-	t.Helper()
-
-	for _, w := range want {
-		if !strings.Contains(out, w) {
-			t.Errorf("rendered config lacks %q:\n%s", w, out)
-		}
-	}
-}
-
-func wantNone(t *testing.T, out string, absent ...string) {
-	t.Helper()
-
-	for _, w := range absent {
-		if strings.Contains(out, w) {
-			t.Errorf("rendered config has %q but must not:\n%s", w, out)
-		}
-	}
-}
-
 // TestRenderNetwork: spec.network picks the primary link by permanent MAC through a
 // LinkAliasConfig and refers to the alias from the addressing documents. v1.13 and
 // v1.14 both use documents; v1.11 is the legacy machine.network.interfaces form.
@@ -97,22 +76,22 @@ func TestRenderNetwork(t *testing.T) {
 
 		t.Run(name+"/dhcp", func(t *testing.T) {
 			out := renderWith(t, contract, dhcp)
-			wantAll(t, out, append(alias, "kind: DHCPv4Config")...)
-			wantNone(t, out, "kind: LinkConfig", "kind: VLANConfig", "192.168.1.10")
+			requireAll(t, out, append(alias, "kind: DHCPv4Config")...)
+			requireNone(t, out, "kind: LinkConfig", "kind: VLANConfig", "192.168.1.10")
 		})
 
 		t.Run(name+"/static", func(t *testing.T) {
 			out := renderWith(t, contract, static)
-			wantAll(t, out, append(alias, "kind: LinkConfig", "address: 192.168.1.10/24", "gateway: 192.168.1.1",
+			requireAll(t, out, append(alias, "kind: LinkConfig", "address: 192.168.1.10/24", "gateway: 192.168.1.1",
 				"kind: ResolverConfig", "address: 1.1.1.1", "address: 9.9.9.9")...)
-			wantNone(t, out, "kind: DHCPv4Config", "kind: VLANConfig")
+			requireNone(t, out, "kind: DHCPv4Config", "kind: VLANConfig")
 		})
 
 		t.Run(name+"/static on a vlan", func(t *testing.T) {
 			out := renderWith(t, contract, vlan)
-			wantAll(t, out, append(alias, "kind: VLANConfig", "name: net0.100", "vlanID: 100", "parent: net0",
+			requireAll(t, out, append(alias, "kind: VLANConfig", "name: net0.100", "vlanID: 100", "parent: net0",
 				"address: 192.168.1.10/24")...)
-			wantNone(t, out, "kind: DHCPv4Config")
+			requireNone(t, out, "kind: DHCPv4Config")
 		})
 
 		t.Run(name+"/dhcp on a vlan", func(t *testing.T) {
@@ -120,25 +99,25 @@ func TestRenderNetwork(t *testing.T) {
 				dhcp(m)
 				m.Spec.Network.VLANID = 7
 			})
-			wantAll(t, out, "kind: VLANConfig", "name: net0.7", "kind: DHCPv4Config")
+			requireAll(t, out, "kind: VLANConfig", "name: net0.7", "kind: DHCPv4Config")
 		})
 
 		t.Run(name+"/unset renders nothing", func(t *testing.T) {
-			wantNone(t, renderWith(t, contract, func(*ichorv1alpha1.TalosMachine) {}), "LinkAliasConfig", "net0")
+			requireNone(t, renderWith(t, contract, func(*ichorv1alpha1.TalosMachine) {}), "LinkAliasConfig", "net0")
 		})
 	}
 
 	t.Run("v1.11 legacy", func(t *testing.T) {
 		out := renderWith(t, contractV111, static)
-		wantAll(t, out, "interfaces:", "permanentAddr: aa:bb:cc:dd:ee:01", "192.168.1.10/24", "gateway: 192.168.1.1",
+		requireAll(t, out, "interfaces:", "permanentAddr: aa:bb:cc:dd:ee:01", "192.168.1.10/24", "gateway: 192.168.1.1",
 			"network: 0.0.0.0/0", "nameservers:", "1.1.1.1")
-		wantNone(t, out, "LinkAliasConfig")
+		requireNone(t, out, "LinkAliasConfig")
 
 		out = renderWith(t, contractV111, vlan)
-		wantAll(t, out, "vlans:", "vlanId: 100", "192.168.1.10/24")
+		requireAll(t, out, "vlans:", "vlanId: 100", "192.168.1.10/24")
 
 		out = renderWith(t, contractV111, dhcp)
-		wantAll(t, out, "permanentAddr: aa:bb:cc:dd:ee:01", "dhcp: true")
+		requireAll(t, out, "permanentAddr: aa:bb:cc:dd:ee:01", "dhcp: true")
 	})
 
 	t.Run("an IPv6 gateway routes ::/0 in the legacy form", func(t *testing.T) {
@@ -147,7 +126,7 @@ func TestRenderNetwork(t *testing.T) {
 				MAC: testNICMAC, Addressing: "static", Addresses: []string{"fd00::10/64"}, Gateway: "fd00::1",
 			}
 		})
-		wantAll(t, out, "network: ::/0", "gateway: fd00::1")
+		requireAll(t, out, "network: ::/0", "gateway: fd00::1")
 	})
 }
 
@@ -170,7 +149,7 @@ func TestRenderDisks(t *testing.T) {
 
 		t.Run(name, func(t *testing.T) {
 			out := renderWith(t, contract, disks)
-			wantAll(t, out,
+			requireAll(t, out,
 				"kind: VolumeConfig", "name: EPHEMERAL", `disk.serial == "EPH1"`,
 				"kind: UserVolumeConfig", "name: data", `disk.wwid == "naa.1"`, "maxSize: 200GiB",
 				"name: scratch", `"/dev/disk/by-id/x" in disk.symlinks`, "minSize: 1GiB", "grow: true")
@@ -178,6 +157,6 @@ func TestRenderDisks(t *testing.T) {
 	}
 
 	t.Run("unset renders no volume documents", func(t *testing.T) {
-		wantNone(t, renderWith(t, "", func(*ichorv1alpha1.TalosMachine) {}), "kind: UserVolumeConfig", "diskSelector")
+		requireNone(t, renderWith(t, "", func(*ichorv1alpha1.TalosMachine) {}), "kind: UserVolumeConfig", "diskSelector")
 	})
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks'
+import { useState } from 'preact/hooks'
 import { EllipsisIcon, UsersIcon } from 'lucide-preact'
 import { Badge } from '@/components/ui/badge'
 import { ErrorAlert } from '@/components/ErrorAlert'
@@ -11,12 +11,12 @@ import { CreateUserDialog, DeleteUserDialog, EditUserDialog, RevokeUserDialog, S
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import type { User } from '@/gen/ichor/v1alpha1/user_pb'
 import { userClient } from '@/lib/connect'
 import { matchesQuery } from '@/lib/filter'
 import { conditionTone } from '@/lib/conditions'
 import { userError } from '@/lib/users'
-import type { ErrorShape } from '@/lib/errors'
+import type { User } from '@/gen/ichor/v1alpha1/user_pb'
+import { useList } from '@/lib/useList'
 import { useT } from '@/lib/useT'
 
 type Dialog = 'edit' | 'password' | 'revoke' | 'delete'
@@ -26,22 +26,8 @@ type Dialog = 'edit' | 'password' | 'revoke' | 'delete'
 // inline instead of a list.
 export function Users() {
   const t = useT()
-  const [users, setUsers] = useState<User[] | null>(null)
-  const [error, setError] = useState<ErrorShape | null>(null)
+  const { items: users, error, reload } = useList(async () => (await userClient.listUsers({})).users, undefined, userError)
   const [query, setQuery] = useState('')
-
-  async function reload() {
-    try {
-      setUsers((await userClient.listUsers({})).users)
-      setError(null)
-    } catch (err) {
-      setError(userError(err))
-    }
-  }
-
-  useEffect(() => {
-    reload()
-  }, [])
 
   if (error) return <ErrorAlert {...error} />
   if (!users) return <PageSkeleton label={t('users.loading')} />

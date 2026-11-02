@@ -398,9 +398,53 @@ a new one.
   replica, so with N replicas the free guesses are N times as many.
   Behind a proxy or load balancer the client address is the proxy's unless you
   list it in `ichorUI.users.trustedProxyCIDRs` (`--trusted-proxy-cidrs`), when
-  the rightmost `X-Forwarded-For` address outside the list is used. Password
+  the rightmost `X-Forwarded-For` address outside the list is used (see
+  "Client addresses behind a load balancer" below). Password
   hashing for sign-in has its own queue, so a flood of sign-ins gets `503
   Retry-After` and cannot block a password change.
+- A refresh token does not survive an etcd restore. Its state is in the
+  `ichor-user-credentials` Secret, which `ichor restore` rewinds with the rest
+  of Kubernetes, so a token that was refreshed after the snapshot was taken is
+  a retired one in the restored Secret, and presenting it ends the chain (above).
+  This is expected, not a fault: sign in again (`ichor auth login`, or the
+  browser). Measured: after a live restore the admin's refresh token was
+  refused and a new sign-in worked. Users, passwords and roles are restored to
+  the snapshot's state as well, so a password changed after the snapshot is
+  the old one again.
+
+### Client addresses behind a load balancer
+
+The failed-login counters key on the address ichor-ui sees. If every client
+arrives with the same address, they share one counter: a stranger's wrong
+passwords for `admin` then slow `admin` down for everyone. This is the case
+whenever something between the client and the pod replaces the source address:
+
+- a LoadBalancer or NodePort Service with the default `externalTrafficPolicy:
+  Cluster` (the node SNATs the connection, so every client looks like the
+  node; measured on a NodePort behind an L4 load balancer: a workstation and a
+  pod of the outer cluster were indistinguishable),
+- an L4 load balancer that does not keep the client address (no PROXY protocol
+  support in ichor-ui, and none is planned).
+
+Pick one of these:
+
+1. **An L7 proxy that sets `X-Forwarded-For`** (an Ingress controller, a
+   Gateway, nginx, HAProxy in http mode). Set `ichorUI.users.trustedProxyCIDRs`
+   (the flag `--trusted-proxy-cidrs` of ichor-ui; `ichor init` has no option
+   for it, so on an `ichor init` install add it to the arguments of the
+   `ichor-ichor-ui` Deployment) to the proxy's address range, and only to that: ichor-ui then takes the rightmost `X-Forwarded-For` entry that is
+   not in the list. Do not list a range that clients can reach directly, or they
+   can write the header themselves and pick their own counter.
+2. **`externalTrafficPolicy: Local`** on the ichor-ui Service (the chart value
+   `ichorUI.service.externalTrafficPolicy`, or the same field on the Service of
+   an `ichor init` install, which `kubectl patch` sets), so the node does not SNAT and the pod sees the real
+   source. The load balancer must send only to nodes that run an ichor-ui pod
+   (it health-checks them), and it must itself keep the client address.
+3. If neither is possible, accept the shared counter and know its effect: it
+   is a slowdown (up to 15 minutes for one user name), never a lock-out, and
+   an administrator can still be reached with `kubectl` and the break-glass
+   credential below. Pods inside the cluster have their own addresses and are
+   not affected.
 - A user may grant only roles they hold (admin: any); Kubernetes RBAC alone
   used to decide this.
 

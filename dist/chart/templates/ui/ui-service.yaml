@@ -14,6 +14,9 @@ spec:
   {{- if ne .Values.ichorUI.service.type "ClusterIP" }}
   type: {{ .Values.ichorUI.service.type }}
   {{- end }}
+  {{- with .Values.ichorUI.service.externalTrafficPolicy }}
+  externalTrafficPolicy: {{ . }}
+  {{- end }}
   ports:
   # Named so prometheus/ichor-ui-metrics-monitor.yaml's ServiceMonitor can target it
   # by name, the same way metrics/controller-manager-metrics-service.yaml's port is.

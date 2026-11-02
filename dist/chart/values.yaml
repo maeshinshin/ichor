@@ -286,6 +286,9 @@ ichorUI:
   ##
   service:
     type: ClusterIP
+    ## Local keeps the client's address for a LoadBalancer or NodePort Service, which the failed-login
+    ## counters key on (docs/guides/users-and-login.md). Empty leaves the cluster default (Cluster).
+    externalTrafficPolicy: ""
 
   ## Serve this kubernetes.io/tls Secret (tls.crt, tls.key; for example from cert-manager) on the
   ## HTTPS port instead of the Ichor serving certificate. Empty serves the Ichor certificate, whose

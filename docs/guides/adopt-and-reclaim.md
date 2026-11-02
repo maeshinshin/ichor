@@ -190,6 +190,26 @@ it: the Talos and Kubernetes client certificates of the previous
 administrators, and the CA keys held by whoever created the cluster, remain
 valid. Consider `ichor cluster rotate-ca`. Nothing starts a rotation for you.
 
+## Let Ichor find new machines: one address or a whole range
+
+Ichor only looks where the cluster says (ADR 0011). A machine booted from the
+Talos ISO or over PXE waits in maintenance mode until its address, or a range
+that contains it, is listed in the cluster's `spec.discovery`.
+
+- UI: on the cluster's "Add node" page type `192.168.0.50` or
+  `192.168.0.0/24` into the one input and press Add. Each listed address and
+  range has a remove button; removing a range asks first.
+- CLI: `ichor cluster discovery add 192.168.0.0/24` (or an address),
+  `ichor cluster discovery list` and `ichor cluster discovery remove ADDRESS|CIDR`.
+  Name the cluster with `--cluster` unless the namespace has only one.
+
+A range must be IPv4 and `/24` or smaller (at most 256 addresses), and a cluster
+holds at most 4 ranges. It is scanned address by address on the Talos
+maintenance port, and the scan starts as soon as you add it, not at the next
+5 minute pass. Machines found appear as pending on the Add node page (and in
+`ichor machine list`) and wait for approval. Removing an address or range stops
+the scanning only; machines already found stay.
+
 ## Reclaim a machine that another cluster configured ("Reset and add", MachineReclaim)
 
 A node that already runs a configured Talos never reaches maintenance mode, so

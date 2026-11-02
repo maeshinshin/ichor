@@ -87,9 +87,17 @@ manager:
       cpu: 10m
       memory: 128Mi
 
-  ## Manager pod's affinity
+  ## Manager pod's affinity. The default prefers a control plane: after an etcd restore the nodes that were not
+  ## wiped keep a stale kube-proxy, and a controller on one cannot reach the kubernetes Service to repair that.
   ##
-  affinity: {}
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        preference:
+          matchExpressions:
+          - key: node-role.kubernetes.io/control-plane
+            operator: Exists
 
   ## PodDisruptionBudget for the controller (design 2.4). Single-node
   ## clusters should disable this alongside setting replicas: 1 above.

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks'
-import { ArrowLeftIcon, CircleCheckIcon, CircleXIcon, InboxIcon, PowerIcon, RadarIcon, TriangleAlertIcon } from 'lucide-preact'
+import { ArrowLeftIcon, CircleCheckIcon, CircleXIcon, InboxIcon, PowerIcon, RadarIcon, TriangleAlertIcon, XIcon } from 'lucide-preact'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -9,6 +9,7 @@ import { Item, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemSeparator
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ApproveDialog } from '@/components/ApproveDialog'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { ReclaimDialog } from '@/components/ReclaimDialog'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { Field, Fields } from '@/components/PageHeader'
@@ -18,7 +19,7 @@ import { PageTitle } from '@/components/PageTitle'
 import type { Cluster } from '@/gen/ichor/v1alpha1/cluster_pb'
 import { MachineApprovalState, type Machine } from '@/gen/ichor/v1alpha1/machine_pb'
 import { clusterClient, machineClient } from '@/lib/connect'
-import { checkDiscoveryAddress, discoveryOn } from '@/lib/discovery'
+import { checkDiscoveryTarget, discoveryOn, maskCidr } from '@/lib/discovery'
 import { describeError, type ErrorShape } from '@/lib/errors'
 import { notifyWrite } from '@/lib/notify'
 import { useCluster } from '@/lib/useCluster'
@@ -142,6 +143,45 @@ export function AddNode() {
   )
 }
 
+// RemoveCidr confirms first: a range can stand for 256 machines. onRemove throws
+// when the server refuses; the page shows the error, the dialog just stays open.
+function RemoveCidr({ cidr, onRemove }: { cidr: string; onRemove: () => Promise<void> }) {
+  const t = useT()
+  const [open, setOpen] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+
+  async function submit() {
+    setSubmitting(true)
+    try {
+      await onRemove()
+      setOpen(false)
+    } catch {
+      // The page shows the error.
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <ConfirmDialog
+      open={open}
+      onOpenChange={setOpen}
+      trigger={
+        <Button type="button" variant="ghost" size="icon-xs" aria-label={t('addNode.remove', { target: cidr })}>
+          <XIcon aria-hidden="true" />
+        </Button>
+      }
+      title={t('addNode.removeCidrTitle', { cidr })}
+      description={t('addNode.removeCidrDescription')}
+      confirm={{
+        label: submitting ? t('addNode.removing') : t('addNode.removeConfirm'),
+        disabled: submitting,
+        onClick: submit,
+      }}
+    />
+  )
+}
+
 function Discovery({
   cluster,
   configured,
@@ -157,23 +197,45 @@ function Discovery({
   const [error, setError] = useState<ErrorShape | null>(null)
   const canReclaim = useCanReclaim()
 
-  const check = checkDiscoveryAddress(address, cluster.discoveryAddresses)
+  // One input takes an address or a range; a slash means a range.
+  const { kind, check } = checkDiscoveryTarget(address, cluster.discoveryAddresses, cluster.discoveryCidrs)
   const on = discoveryOn(cluster.discoveryAddresses, cluster.discoveryCidrs)
-
+  const problem = check === 'ok' || check === 'empty' ? null : check
 
   async function submit() {
     if (check !== 'ok') return
+    const value = address.trim()
     setSubmitting(true)
     setError(null)
     try {
-      const res = await clusterClient.addDiscoveryAddress({ cluster: cluster.ref, address: address.trim() })
-      onAdded(res.cluster)
-      notifyWrite('toast.discoveryAdded', { address: address.trim() })
+      if (kind === 'cidr') {
+        const res = await clusterClient.addDiscoveryCidr({ cluster: cluster.ref, cidr: value })
+        onAdded(res.cluster)
+        notifyWrite('toast.discoveryCidrAdded', { cidr: maskCidr(value) ?? value })
+      } else {
+        const res = await clusterClient.addDiscoveryAddress({ cluster: cluster.ref, address: value })
+        onAdded(res.cluster)
+        notifyWrite('toast.discoveryAdded', { address: value })
+      }
       setAddress('')
     } catch (err) {
       setError(describeError(err))
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  async function remove(target: string, isCidr: boolean) {
+    setError(null)
+    try {
+      const res = isCidr
+        ? await clusterClient.removeDiscoveryCidr({ cluster: cluster.ref, cidr: target })
+        : await clusterClient.removeDiscoveryAddress({ cluster: cluster.ref, address: target })
+      onAdded(res.cluster)
+      notifyWrite('toast.discoveryRemoved', { target })
+    } catch (err) {
+      setError(describeError(err))
+      throw err
     }
   }
 
@@ -187,9 +249,18 @@ function Discovery({
           ) : (
             <div class="flex flex-wrap gap-1">
               {cluster.discoveryAddresses.map((a) => (
-                <Badge key={a} variant="outline">
-                  {a}
-                </Badge>
+                <span key={a} class="flex items-center gap-1">
+                  <Badge variant="outline">{a}</Badge>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label={t('addNode.remove', { target: a })}
+                    onClick={() => remove(a, false).catch(() => {})}
+                  >
+                    <XIcon aria-hidden="true" />
+                  </Button>
+                </span>
               ))}
             </div>
           )}
@@ -200,9 +271,10 @@ function Discovery({
           ) : (
             <div class="flex flex-wrap gap-1">
               {cluster.discoveryCidrs.map((c) => (
-                <Badge key={c} variant="outline">
-                  {c}
-                </Badge>
+                <span key={c} class="flex items-center gap-1">
+                  <Badge variant="outline">{c}</Badge>
+                  <RemoveCidr cidr={c} onRemove={() => remove(c, true)} />
+                </span>
               ))}
             </div>
           )}
@@ -220,19 +292,21 @@ function Discovery({
           <Input
             id="discovery-address"
             className="max-w-xs"
-            placeholder="192.168.0.50"
+            placeholder={t('addNode.placeholder')}
             value={address}
             onInput={(e) => setAddress((e.target as HTMLInputElement).value)}
-            aria-invalid={check === 'invalid' || check === 'duplicate'}
+            aria-invalid={problem !== null}
           />
           <Button type="submit" disabled={check !== 'ok' || submitting}>
             {submitting ? t('addNode.adding') : t('addNode.add')}
           </Button>
         </div>
-        {(check === 'invalid' || check === 'duplicate') && (
+        {problem && (
           <Alert variant="destructive">
             <CircleXIcon />
-            <AlertDescription>{check === 'invalid' ? t('addNode.invalid') : t('addNode.duplicate')}</AlertDescription>
+            <AlertDescription>
+              {problem === 'duplicate' ? t(kind === 'cidr' ? 'addNode.duplicateCidr' : 'addNode.duplicate') : t(`addNode.${problem}`)}
+            </AlertDescription>
           </Alert>
         )}
         <CardDescription>{t('addNode.cidrHint')}</CardDescription>

@@ -75,6 +75,31 @@ func demoHA() bool { return os.Getenv(demoHAEnv) == "1" || demoExtra() }
 
 func demoExtra() bool { return os.Getenv(demoHAEnv) == "extra" }
 
+// demoScaleEnv=<control planes>x<workers> (e.g. 5x10) makes up-demo create that many VMs:
+// <prefix>-cp, -cp2..-cpN and <prefix>-w, -w2..-wM, and prints every address (scale verification).
+// With ICHOR_UI_DEMO_HA=extra the extra control plane is then <prefix>-cp<N+1>. The VMs avoid
+// the overcommitted talos02 through a node affinity.
+const demoScaleEnv = "ICHOR_UI_DEMO_SCALE"
+
+func demoScale() (cps, workers int) {
+	_, _ = fmt.Sscanf(os.Getenv(demoScaleEnv), "%dx%d", &cps, &workers)
+
+	return cps, workers
+}
+
+func numbered(base string, n int) []string {
+	out := []string{}
+	for i := 1; i <= n; i++ {
+		if i == 1 {
+			out = append(out, base)
+		} else {
+			out = append(out, fmt.Sprintf("%s%d", base, i))
+		}
+	}
+
+	return out
+}
+
 // demoMemory returns the guest memory for a demo VM: the value of env, or defaultDemoMemory when unset.
 // It ends up in the VM manifest, so only a plain Mi/Gi quantity is accepted.
 func demoMemory(env string) (string, error) {
@@ -96,6 +121,10 @@ func demoVMManifest(name, group, memory string, iso isoSource) string {
 	m = strings.Replace(m, "  template:\n    metadata:\n      labels:\n",
 		"  template:\n    metadata:\n      labels:\n        ichor.maesh.dev/e2e-group: "+group+"\n", 1)
 	m = strings.Replace(m, "guest: "+defaultDemoMemory, "guest: "+memory, 1)
+
+	if c, _ := demoScale(); c > 0 {
+		m = strings.Replace(m, "    spec:\n      domain:\n", "    spec:\n      affinity:\n        nodeAffinity:\n          requiredDuringSchedulingIgnoredDuringExecution:\n            nodeSelectorTerms:\n              - matchExpressions:\n                  - {key: kubernetes.io/hostname, operator: NotIn, values: [talos02]}\n      domain:\n", 1)
+	}
 
 	return m
 }
@@ -129,9 +158,24 @@ func upDemo() error {
 		memory = map[string]string{cp: cpMem, cp + "2": cpMem, cp + "3": cpMem}
 	}
 
+	if c, w := demoScale(); c > 0 {
+		names = append(numbered(cp, c), numbered(worker, w)...)
+		memory = map[string]string{}
+		for _, n := range names {
+			memory[n] = workerMem
+		}
+		for _, n := range numbered(cp, c) {
+			memory[n] = cpMem
+		}
+	}
+
 	if demoExtra() {
-		names = []string{cp + "4"}
-		memory = map[string]string{cp + "4": cpMem}
+		extra := cp + "4"
+		if c, _ := demoScale(); c > 0 {
+			extra = fmt.Sprintf("%s%d", cp, c+1)
+		}
+		names = []string{extra}
+		memory = map[string]string{extra: cpMem}
 	}
 
 	iso, err := resolveISO()
@@ -170,8 +214,18 @@ func upDemo() error {
 		}
 	}
 
+	if c, w := demoScale(); c > 0 && !demoExtra() {
+		for _, n := range append(numbered(cp, c), numbered(worker, w)...) {
+			fmt.Println(strings.ToUpper(strings.ReplaceAll(strings.TrimPrefix(n, cp[:len(cp)-len("-cp")]+"-"), "-", "_")) + "_IP=" + ips[n])
+		}
+
+		return nil
+	}
+
 	if demoExtra() {
-		fmt.Println("CP4_IP=" + ips[cp+"4"])
+		for n, ip := range ips {
+			fmt.Println("EXTRA_IP=" + ip + " # " + n)
+		}
 
 		return nil
 	}
@@ -200,6 +254,10 @@ func downDemo() error {
 	vms := []string{cp, worker}
 	if demoHA() {
 		vms = []string{cp, cp + "2", cp + "3", cp + "4"}
+	}
+
+	if c, w := demoScale(); c > 0 {
+		vms = append(numbered(cp, c+1), numbered(worker, w)...)
 	}
 
 	return deleteVMs(vms...)

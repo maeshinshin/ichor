@@ -323,3 +323,12 @@ rules:
   - get
   - list
   - watch
+- apiGroups:
+  - cilium.io
+  resources:
+  - ciliumnetworkpolicies
+  verbs:
+  - create
+  - get
+  - list
+  - update

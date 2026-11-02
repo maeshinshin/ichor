@@ -103,7 +103,7 @@ func main() {
 	// Ichor's own users and issuer; off by default.
 	var users usersFlags
 
-	flag.BoolVar(&users.enabled, "users-enabled", os.Getenv("ICHOR_USERS_ENABLED") == "true", "serve Ichor's own OIDC issuer and accept its users")
+	flag.BoolVar(&users.enabled, "users-enabled", envTrue("ICHOR_USERS_ENABLED"), "serve Ichor's own OIDC issuer and accept its users")
 	flag.StringVar(&users.externalURL, "external-url", os.Getenv("ICHOR_USERS_EXTERNAL_URL"), "https URL of ichor-ui as browsers and the CLI reach it; the issuer of Ichor's tokens")
 	flag.StringVar(&users.internalAddr, "internal-addr", ":8444", "HTTPS address of the listener the kube-apiserver reads discovery and JWKS from")
 	flag.StringVar(&users.internalTLSDir, "internal-tls-dir", "/etc/ichor/oidc-tls", "directory with tls.crt and tls.key of the internal listener")
@@ -259,27 +259,14 @@ func main() {
 
 	srv := httpsServer(*addr, securityHeaders(http.MaxBytesHandler(mux, bodyBackstop), contentSecurityPolicy(*oidcIssuer != "")), servingCertificate(ctx, *tlsCert, *tlsKey, *tlsDir))
 
-	go func() {
-		log.Printf("ichor-ui: HTTPS listening on %s", *addr)
-
-		// The certificate comes from TLSConfig.GetCertificate, so the file arguments stay empty.
-		if err := srv.ListenAndServeTLS("", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalf("ichor-ui: %v", err)
-		}
-	}()
+	listen(srv, "HTTPS listening on "+*addr)
 
 	if *httpAddr != "" {
 		log.Printf("ichor-ui: --http-addr=%s ignored: plaintext was removed; serve HTTPS on %s", *httpAddr, *addr)
 	}
 
 	if internalSrv != nil {
-		go func() {
-			log.Printf("ichor-ui: internal HTTPS listener on %s", users.internalAddr)
-			// The certificate comes from TLSConfig.GetCertificate, so the file arguments stay empty.
-			if err := internalSrv.ListenAndServeTLS("", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
-				log.Fatalf("ichor-ui: %v", err)
-			}
-		}()
+		listen(internalSrv, "internal HTTPS listener on "+users.internalAddr)
 	}
 
 	<-ctx.Done()
@@ -302,3 +289,15 @@ func main() {
 
 // envTrue reports whether the environment variable is "true".
 func envTrue(name string) bool { return os.Getenv(name) == "true" }
+
+// listen starts srv in the background. The certificate comes from
+// TLSConfig.GetCertificate, so the file arguments stay empty.
+func listen(srv *http.Server, what string) {
+	go func() {
+		log.Printf("ichor-ui: %s", what)
+
+		if err := srv.ListenAndServeTLS("", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("ichor-ui: %v", err)
+		}
+	}()
+}

@@ -31,6 +31,11 @@ import (
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
 
+const (
+	secConfirmed      = "true"
+	secNewKubeVersion = "v1.36.9"
+)
+
 func secTestCluster(s *ichorv1alpha1.TalosClusterSecurity) *ichorv1alpha1.TalosCluster {
 	c := newTestCluster()
 	c.Name = "c"
@@ -140,7 +145,7 @@ func TestSecurityDiskEncryptionNeedsConfirmation(t *testing.T) {
 		Name: "m1", Namespace: testNamespace,
 		Spec: ichorv1alpha1.TalosMachineSpec{
 			ClusterRef:    corev1.LocalObjectReference{Name: "c"},
-			Role:          "controlplane",
+			Role:          roleControlPlane,
 			ApprovalState: ichorv1alpha1.MachineApprovalStateApproved,
 		},
 	}
@@ -161,7 +166,7 @@ func TestSecurityDiskEncryptionNeedsConfirmation(t *testing.T) {
 
 	t.Run("the annotation confirms it", func(t *testing.T) {
 		c := secTestCluster(enc("tpm"))
-		c.Annotations = map[string]string{ichorv1alpha1.TalosClusterDiskEncryptionConfirmAnnotation: "true"}
+		c.Annotations = map[string]string{ichorv1alpha1.TalosClusterDiskEncryptionConfirmAnnotation: secConfirmed}
 
 		if _, err := withMachines.ValidateUpdate(ctx, secTestCluster(nil), c); err != nil {
 			t.Fatal(err)
@@ -177,7 +182,7 @@ func TestSecurityDiskEncryptionNeedsConfirmation(t *testing.T) {
 	t.Run("an unrelated edit of an encrypted cluster is not asked again", func(t *testing.T) {
 		old := secTestCluster(enc("tpm"))
 		changed := old.DeepCopy()
-		changed.Spec.KubernetesVersion = "v1.36.2"
+		changed.Spec.KubernetesVersion = secNewKubeVersion
 
 		if _, err := withMachines.ValidateUpdate(ctx, old, changed); err != nil {
 			t.Fatal(err)

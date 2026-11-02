@@ -26,7 +26,6 @@ import (
 
 	"connectrpc.com/connect"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -59,7 +58,7 @@ func (s *Server) AddDiscoveryAddress(
 		return nil, err
 	}
 
-	c := ichorv1alpha1.TalosCluster{ObjectMeta: metav1.ObjectMeta{Namespace: ref.GetNamespace(), Name: ref.GetName()}}
+	c := ichorv1alpha1.TalosCluster{Namespace: ref.GetNamespace(), Name: ref.GetName()}
 	out.AlreadyConfiguredAddresses = s.alreadyConfiguredAddresses(ctx, &c)
 
 	return connect.NewResponse(&pb.AddDiscoveryAddressResponse{Cluster: out, Audit: audit}), nil

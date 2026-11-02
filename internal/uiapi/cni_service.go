@@ -161,7 +161,7 @@ func (s *Server) talosFacts(ctx context.Context, cluster *ichorv1alpha1.TalosClu
 		return nil, nil
 	}
 
-	bundle, err := loadBundle(ctx, s.Client, s.ControllerNamespace, cluster)
+	bundle, err := s.renderBundle(ctx, cluster)
 	if err != nil {
 		return nil, nil
 	}
@@ -171,7 +171,7 @@ func (s *Server) talosFacts(ctx context.Context, cluster *ichorv1alpha1.TalosClu
 		return nil, nil
 	}
 
-	sys, err := render.ResolveSystemInputs(ctx, s.Client, s.ControllerNamespace, cluster)
+	sys, err := render.ResolveSystemInputs(ctx, maskedSecrets{s.Client}, s.ControllerNamespace, cluster)
 	if err != nil {
 		return nil, nil
 	}

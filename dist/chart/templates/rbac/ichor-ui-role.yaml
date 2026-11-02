@@ -72,6 +72,20 @@ rules:
 - apiGroups:
   - ichor.maesh.dev
   resources:
+  - talosclusters/node-reader
+  - talosclusters/public
+  verbs:
+  - issue
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - taloscredentialrequests
+  verbs:
+  - create
+  - get
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
   - talosoperations/ca-rotation
   - talosoperations/etcd-restore
   - talosoperations/node-reset

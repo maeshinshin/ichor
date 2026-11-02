@@ -71,6 +71,13 @@ rules:
 - apiGroups:
   - ichor.maesh.dev
   resources:
+  - talosclusters/node-reader
+  - talosclusters/public
+  verbs:
+  - issue
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
   - talosconfigpatches
   - talosoperations
   verbs:
@@ -79,6 +86,13 @@ rules:
   - get
   - list
   - update
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - taloscredentialrequests
+  verbs:
+  - create
+  - get
 - apiGroups:
   - ichor.maesh.dev
   resources:
@@ -117,7 +131,6 @@ rules:
   - secrets
   verbs:
   - create
-  - get
 - apiGroups:
   - ""
   resourceNames:

@@ -32,19 +32,22 @@ import { t as translateNow } from '@/lib/i18n'
 type LoginState = 'loading' | 'open' | 'choose' | 'ready' | 'error'
 
 // useLogin gates the app on sign-in (docs/adr/0058, 0094). 'open' means ichor-ui has no login
-// configured and writes with its own ServiceAccount, which the banner says. 'choose' shows the
+// configured: ichor-ui then serves reads only, or writes with its own ServiceAccount when started with
+// --allow-unauthenticated (docs/adr/0108); the banner says which. 'choose' shows the
 // one sign-in card (password form and/or the external IdP button); an external IdP that is the only
 // choice is entered directly, as before.
-function useLogin(): { state: LoginState; error: string; providers: AuthProvider[]; signedIn: () => void } {
+function useLogin(): { state: LoginState; error: string; providers: AuthProvider[]; anonymous: 'readonly' | 'open'; signedIn: () => void } {
   const [state, setState] = useState<LoginState>('loading')
   const [error, setError] = useState('')
   const [providers, setProviders] = useState<AuthProvider[]>([])
+  const [anonymous, setAnonymous] = useState<'readonly' | 'open'>('open')
 
   useEffect(() => {
     ;(async () => {
       const cfg = (await (await fetch('/auth/config')).json()) as AuthConfig
       const list = cfg.providers ?? []
       setProviders(list)
+      setAnonymous(cfg.anonymous ?? 'open')
       if (list.length === 0) return setState('open')
       if (await finishLogin(list)) return setState('ready')
       if (tokenUsable(storedToken(), Date.now())) return setState('ready')
@@ -56,7 +59,7 @@ function useLogin(): { state: LoginState; error: string; providers: AuthProvider
     })
   }, [])
 
-  return { state, error, providers, signedIn: () => setState('ready') }
+  return { state, error, providers, anonymous, signedIn: () => setState('ready') }
 }
 
 // useWhoAmI reads who the backend thinks the caller is, once signed in. A failure is not fatal:
@@ -112,7 +115,7 @@ function Authenticated({ path }: { path: string }) {
   return (
     <AppShell
       path={path}
-      signInNotConfigured={login.state === 'open'}
+      signInNotConfigured={login.state === 'open' ? login.anonymous : false}
       me={who.me}
       usersEnabled={usersEnabled}
     >

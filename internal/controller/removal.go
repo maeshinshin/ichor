@@ -55,6 +55,7 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -92,11 +93,16 @@ const removalRenewInterval = time.Minute
 var etcdDialTimeout = 15 * time.Second
 
 const (
-	conditionRemoval           = "Removal"
-	reasonRemovalRefused       = "RemovalRefused"
-	reasonDeadMemberRemoved    = "DeadMemberRemoved"
-	reasonDeadMemberRemoval    = "DeadMemberRemoval"
-	reasonDrainFailed          = "DrainFailed"
+	conditionRemoval        = "Removal"
+	reasonRemovalRefused    = "RemovalRefused"
+	reasonDeadMemberRemoved = "DeadMemberRemoved"
+	reasonDeadMemberRemoval = "DeadMemberRemoval"
+	reasonDrainFailed       = "DrainFailed"
+
+	// nodeResetByIchorAnnotation marks the Kubernetes Node of a machine Ichor reset. The Node stays
+	// (a delete could race the kubelet registering it again), and while it is not Ready discovery
+	// no longer counts its address as a cluster member, so the wiped machine is found again.
+	nodeResetByIchorAnnotation = "ichor.maesh.dev/reset-by-ichor"
 	reasonEvacuationPending    = "StorageEvacuationPending"
 	reasonEvacuationFailed     = "StorageEvacuationFailed"
 	reasonRemovalApproved      = "RemovalApproved"
@@ -439,6 +445,8 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 
 			return r.removalCondition(ctx, m, metav1.ConditionFalse, reasonResetFailed, err.Error())
 		}
+
+		r.markNodeReset(ctx, nodeName)
 	}
 
 	return r.completeRemoval(ctx, m, reset)
@@ -853,4 +861,34 @@ func renewWhile(ctx context.Context, lock *clusterlock.Lock, identity string, in
 	}()
 
 	return func() { close(done) }
+}
+
+// markNodeReset annotates the Kubernetes Node of a machine that was just reset, so discovery does
+// not keep treating its address as a member. Best effort: without it the Node is still deleted by
+// hand as before, so a failure is logged, not returned.
+func (r *TalosMachineReconciler) markNodeReset(ctx context.Context, nodeName string) {
+	if nodeName == "" {
+		return
+	}
+
+	node := &corev1.Node{}
+	if err := r.Get(ctx, types.NamespacedName{Name: nodeName}, node); err != nil {
+		return
+	}
+
+	if _, ok := node.Annotations[nodeResetByIchorAnnotation]; ok {
+		return
+	}
+
+	patch := client.MergeFrom(node.DeepCopy())
+
+	if node.Annotations == nil {
+		node.Annotations = map[string]string{}
+	}
+
+	node.Annotations[nodeResetByIchorAnnotation] = time.Now().UTC().Format(time.RFC3339)
+
+	if err := r.Patch(ctx, node, patch); err != nil {
+		logf.FromContext(ctx).Error(err, "marking the reset node", "node", nodeName)
+	}
 }

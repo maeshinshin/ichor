@@ -141,6 +141,24 @@ func (s *Server) getUser(ctx context.Context, name string) (*ichorv1alpha1.Ichor
 	return &u, nil
 }
 
+// guardGrant refuses a role grant above the caller's own: an Ichor user may add only roles they
+// hold, and admin may add any. Kubernetes RBAC alone decided before, so anyone
+// allowed to update ichorusers could make themselves admin. An external identity (OIDC) has
+// no Ichor roles; for it RBAC remains the only gate.
+func guardGrant(id Identity, current, wanted []string) error {
+	if id.Source != SourceIchor || slices.Contains(id.Groups, IchorGroupPrefix+adminRole) {
+		return nil
+	}
+
+	for _, r := range wanted {
+		if !slices.Contains(current, r) && !slices.Contains(id.Groups, IchorGroupPrefix+r) {
+			return connect.NewError(connect.CodePermissionDenied, fmt.Errorf("you cannot grant the role %q: you do not hold it", r))
+		}
+	}
+
+	return nil
+}
+
 func isEnabledAdmin(u *ichorv1alpha1.IchorUser) bool {
 	return !u.Spec.Disabled && slices.Contains(u.Spec.Roles, adminRole)
 }
@@ -199,12 +217,17 @@ func (s *Server) GetUser(ctx context.Context, req *connect.Request[pb.GetUserReq
 }
 
 func (s *Server) CreateUser(ctx context.Context, req *connect.Request[pb.CreateUserRequest]) (*connect.Response[pb.CreateUserResponse], error) {
-	if _, err := s.requireUsers(ctx); err != nil {
+	id, err := s.requireUsers(ctx)
+	if err != nil {
 		return nil, err
 	}
 
 	m := req.Msg
 	if err := invalidArg(errors.Join(ichorauth.ValidateUserName(m.GetName()), ichorauth.ValidateRoles(m.GetRoles()))); err != nil {
+		return nil, err
+	}
+
+	if err := guardGrant(id, nil, m.GetRoles()); err != nil {
 		return nil, err
 	}
 
@@ -221,7 +244,8 @@ func (s *Server) CreateUser(ctx context.Context, req *connect.Request[pb.CreateU
 }
 
 func (s *Server) UpdateUser(ctx context.Context, req *connect.Request[pb.UpdateUserRequest]) (*connect.Response[pb.UpdateUserResponse], error) {
-	if _, err := s.requireUsers(ctx); err != nil {
+	id, err := s.requireUsers(ctx)
+	if err != nil {
 		return nil, err
 	}
 
@@ -232,6 +256,10 @@ func (s *Server) UpdateUser(ctx context.Context, req *connect.Request[pb.UpdateU
 
 	u, err := s.getUser(ctx, m.GetName())
 	if err != nil {
+		return nil, err
+	}
+
+	if err := guardGrant(id, u.Spec.Roles, m.GetRoles()); err != nil {
 		return nil, err
 	}
 
